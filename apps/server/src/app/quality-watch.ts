@@ -3,6 +3,7 @@ import {
   type Check,
   DEFAULT_RECHECK_MS,
   DEFAULT_RETRY_MS,
+  markInherited,
   nextCheckAt,
   outcomeOf,
   stepOf,
@@ -123,11 +124,16 @@ async function checkOne(deps: WatchDeps, watch: OpenWatch, pass: WatchPass): Pro
       await quality.answerWatch(watch.key, 'ended', now)
       return ok(null)
     }
-    return ok({ issue, ship: await quality.lastShip(watch.issueId, watch.attempt) })
+    const ship = await quality.lastShip(watch.issueId, watch.attempt)
+    // What verify said of the repo before this ship: a make target red the same way then is not this change's.
+    const baseline = ship
+      ? await quality.baselineChecks({ repo: issue.repo, before: ship.at, exceptIssue: watch.issueId })
+      : null
+    return ok({ issue, ship, baseline })
   })
   if (!claimed.ok) return claimed
   if (!claimed.value) return ok(undefined)
-  const { issue: watched, ship } = claimed.value
+  const { issue: watched, ship, baseline } = claimed.value
   const where = await checkoutOf(deps.checkout, watched, watch.attempt)
   if (!where.ok) return releaseThen(release, where)
   const { repo } = where.value
@@ -149,7 +155,7 @@ async function checkOne(deps: WatchDeps, watch: OpenWatch, pass: WatchPass): Pro
   const ran = await deps.proof.run(input, deps.signal)
   // The proof answers an error only when the server is stopping: the checks say nothing, the next server asks again.
   if (!ran.ok || deps.signal.aborted) return releaseThen(release, ok(undefined))
-  const checks = ran.value
+  const checks = markInherited(ran.value, baseline)
 
   const recorded = await deps.uow.run(async ({ work, quality }) => {
     const at = deps.clock.now()
@@ -216,7 +222,12 @@ async function releaseThen(
 }
 
 const record = (checks: readonly Check[]) =>
-  checks.map(({ name, ok: passed, detail }) => ({ name, ok: passed, detail }))
+  checks.map(({ name, ok: passed, detail, inherited }) => ({
+    name,
+    ok: passed,
+    detail,
+    ...(inherited ? { inherited } : {}),
+  }))
 
 /** What the deployed version must hold: the `origin/<default>` the ship found. Closed on every gap. */
 function versionOf(ship: { commits: { landedAt: string | null } | null } | null): NonNullable<ProofInput['version']> {

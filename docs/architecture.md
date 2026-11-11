@@ -256,7 +256,7 @@ through `receive` in `app/intake.ts`; the answer is a triage outcome (`docs/lang
   (`app/quality-projects.ts`): deploy mode, `hold` as the window, `make verify` from a target, URL targets and probes. Only
   mode `make` reads `make version`; a missing version target there is red. A file with no target leaves verify to the
   Makefile, and a repo without a `project.yaml` is read from its Makefile alone (`adapters/quality/projects.ts`). A red check is retried with a doubling delay before it is
-  a regression; a regression returns the Issue to its lead, twice, then it stalls. A checkout that cannot be read is
+  a regression, unless it is a `make` target that failed the same way (numbers aside) in the repo's last finished run before the ship, another Issue's watch: that one is stored `inherited`, counts green, is never retried and stays on the Issue's page; a regression returns the Issue to its lead, twice, then it stalls. A checkout that cannot be read is
   rechecked, never passed. In a project that ships through a pull request (`ship:` `via: pr`) verify also reads the default
   branch's CI for the exact landed commit (`ci` check): green passes, red is red, and a run still running (or not yet visible
   within 10 min of the merge) is neither, so the watch is looked at again after `FACTORY_VERIFY_RECHECK_MS` and does not pass;

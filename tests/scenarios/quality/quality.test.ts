@@ -237,6 +237,30 @@ describe('the watch', () => {
 describe('regression', () => {
   const it = lab(200)
 
+  // Before the stall test: after it the repo's last verify run is red, and the same red is no longer the next Issue's.
+  test(
+    'a red that clears on a retry never reaches the lead',
+    async () => {
+      await scriptReview(it.lw.world, 'covered')
+      const id = await workingIssue(it.lw, 'flaky')
+      await Bun.write(`${it.lw.repo}/red`, '')
+      const sha = await commit(it.lw, 'src/flaky.ts', 'export const flaky = 1\n', 'feat: flaky')
+      await ship(it.lw.world, it.lw.server, id, { call: 'ship-1', commits: [sha] })
+
+      await until(
+        'the first red check',
+        async () => (await show(it.lw.world, it.lw.server, id)).watches[0]?.checks.length,
+      )
+      await Bun.$`rm ${it.lw.repo}/red`
+      await until('the Issue to close', async () => (await stateOf(it.lw.world, id)) === 'closed:done')
+      const watch = (await show(it.lw.world, it.lw.server, id)).watches[0]
+      expect(watch?.answer).toBe('passed')
+      expect(watch?.checks.map((c) => c.outcome)[0]).toBe('red')
+      expect(watch?.checks.at(-1)?.outcome).toBe('green')
+    },
+    LONG,
+  )
+
   test(
     'a red verify is retried, then goes back to the lead; twice back, the third is a stall',
     async () => {
@@ -273,29 +297,6 @@ describe('regression', () => {
       const refused = await ship(it.lw.world, it.lw.server, id, { call: 'ship-4', commits: [sha] })
       expect(refused.code).toBe(5)
       expect(refused.refusal).toContain('regressed')
-    },
-    LONG,
-  )
-
-  test(
-    'a red that clears on a retry never reaches the lead',
-    async () => {
-      await scriptReview(it.lw.world, 'covered')
-      const id = await workingIssue(it.lw, 'flaky')
-      await Bun.write(`${it.lw.repo}/red`, '')
-      const sha = await commit(it.lw, 'src/flaky.ts', 'export const flaky = 1\n', 'feat: flaky')
-      await ship(it.lw.world, it.lw.server, id, { call: 'ship-1', commits: [sha] })
-
-      await until(
-        'the first red check',
-        async () => (await show(it.lw.world, it.lw.server, id)).watches[0]?.checks.length,
-      )
-      await Bun.$`rm ${it.lw.repo}/red`
-      await until('the Issue to close', async () => (await stateOf(it.lw.world, id)) === 'closed:done')
-      const watch = (await show(it.lw.world, it.lw.server, id)).watches[0]
-      expect(watch?.answer).toBe('passed')
-      expect(watch?.checks.map((c) => c.outcome)[0]).toBe('red')
-      expect(watch?.checks.at(-1)?.outcome).toBe('green')
     },
     LONG,
   )

@@ -54,7 +54,12 @@ export interface QualityStore {
   /** a ship, and for an accepted one its evidence, keyed by the ship; a copy that came first is left as it is */
   recordShip(ship: ShipRecord, evidence: readonly StoredEvidence[]): Promise<void>
   /** the newest accepted ship of the attempt: what its watch checks the deployed version against */
-  lastShip(issueId: IssueId, attempt: number): Promise<{ commits: CommitsEvidence | null } | null>
+  lastShip(issueId: IssueId, attempt: number): Promise<{ at: Date; commits: CommitsEvidence | null } | null>
+  /**
+   * The checks of the newest finished run (green or red, never blocked) of any other Issue's watch in the repo before
+   * `before`: what verify said of the repo before this ship. Null when there was none.
+   */
+  baselineChecks(input: { repo: string; before: Date; exceptIssue: IssueId }): Promise<CheckRecord[] | null>
   /** opens a watch; false when it was opened already (the same effect run again) */
   openWatch(watch: WatchRecord): Promise<boolean>
   /** open watches no check holds at `now`; the caller works out which are due */

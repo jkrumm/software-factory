@@ -13,7 +13,9 @@ import type { IssueId } from '../../kernel/ids.ts'
 import type { Key } from '../../kernel/keys.ts'
 
 const OUTCOME = z.enum(['green', 'red', 'blocked'])
-const CheckList = z.array(z.object({ name: z.string(), ok: z.boolean(), detail: z.string() }))
+const CheckList = z.array(
+  z.object({ name: z.string(), ok: z.boolean(), detail: z.string(), inherited: z.boolean().optional() }),
+)
 
 const WatchRow = z.object({
   key: z.string(),
@@ -105,14 +107,25 @@ export function postgresQualityStore(tx: SQL): QualityStore {
 
     async lastShip(issueId, attempt) {
       const [ship] = await tx`
-        SELECT event_key FROM factory.quality_ships
+        SELECT event_key, at FROM factory.quality_ships
         WHERE issue_id = ${issueId} AND attempt = ${attempt} AND result = 'accepted'
         ORDER BY at DESC, id DESC LIMIT 1`
       if (!ship) return null
+      const found = z.object({ event_key: z.string(), at: z.date() }).parse(ship)
       const [row] = await tx`
         SELECT id, source_key, kind, payload FROM factory.quality_evidence
-        WHERE source_key = ${z.object({ event_key: z.string() }).parse(ship).event_key} AND kind = 'commits'`
-      return { commits: row ? (evidenceOf(row).payload as CommitsEvidence) : null }
+        WHERE source_key = ${found.event_key} AND kind = 'commits'`
+      return { at: found.at, commits: row ? (evidenceOf(row).payload as CommitsEvidence) : null }
+    },
+
+    async baselineChecks({ repo, before, exceptIssue }) {
+      const [row] = await tx`
+        SELECT c.checks FROM factory.quality_checks c
+        JOIN factory.quality_watches w ON w.key = c.watch_key
+        JOIN factory.issues i ON i.id = w.issue_id
+        WHERE i.repo = ${repo} AND w.issue_id <> ${exceptIssue} AND c.at < ${before} AND c.outcome <> 'blocked'
+        ORDER BY c.at DESC LIMIT 1`
+      return row ? CheckList.parse(z.object({ checks: z.unknown() }).parse(row).checks) : null
     },
 
     async openWatch(watch) {

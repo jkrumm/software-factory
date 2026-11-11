@@ -529,6 +529,69 @@ describe('the watch', () => {
     expect(await db.sql`SELECT 1 FROM factory.issue_events WHERE kind = 'regressed'`).toHaveLength(0)
   })
 
+  describe('a make target that was red before the ship', () => {
+    const verifyRed = (n: number): Check => ({
+      name: 'make verify',
+      ok: false,
+      detail: `exit 2: drift-check: ${n} pending macOS updates`,
+    })
+
+    /** Another Issue of the repo whose watch ran verify a few minutes before this Issue ships. */
+    async function earlierWatch(checks: Check[]): Promise<void> {
+      const other = await working()
+      value(await ship(other, 'call-other'))
+      await runEffects()
+      clock.advance(5 * 60_000)
+      await db.sql`
+        INSERT INTO factory.quality_checks (watch_key, n, at, outcome, checks)
+        VALUES (${`start_watch:${other}:1`}, 1, ${clock.now()}, ${checks.every((c) => c.ok) ? 'green' : 'red'},
+                ${checks})`
+      await db.sql`UPDATE factory.quality_watches SET answer = 'ended', answered_at = ${clock.now()} WHERE issue_id = ${other}`
+      clock.advance(5 * 60_000)
+    }
+
+    async function regressesWith(now: Check[]): Promise<{ regressed: number; state: string }> {
+      const issueId = await working()
+      value(await ship(issueId))
+      await runEffects()
+      proofAnswer = () => ok(now)
+      clock.advance(30 * 60_000)
+      let regressed = 0
+      for (let minutes = 0; minutes <= 8; minutes++) {
+        regressed += value(await checkWatches(watchDeps())).regressed
+        clock.advance(60_000)
+      }
+      return { regressed, state: (await stateOf(issueId)).state }
+    }
+
+    test('failing the same way is not the Issue’s regression: the watch passes and records the check as inherited', async () => {
+      await earlierWatch([verifyRed(3)])
+      const result = await regressesWith([verifyRed(7)])
+      expect(result).toEqual({ regressed: 0, state: 'closed' })
+      const [row] = await db.sql`
+        SELECT c.checks, c.outcome FROM factory.quality_checks c
+        JOIN factory.quality_watches w ON w.key = c.watch_key WHERE w.answer = 'passed'`
+      expect(row?.outcome).toBe('green')
+      expect(row?.checks).toMatchObject([{ name: 'make verify', ok: false, inherited: true }])
+    })
+
+    test('failing differently than before is still the Issue’s regression', async () => {
+      await earlierWatch([verifyRed(3)])
+      const result = await regressesWith([{ name: 'make verify', ok: false, detail: 'exit 1: a test broke' }])
+      expect(result).toEqual({ regressed: 1, state: 'working' })
+    })
+
+    test('a green run before the ship leaves the red to the Issue', async () => {
+      await earlierWatch([{ name: 'make verify', ok: true, detail: 'exit 0' }])
+      const result = await regressesWith([verifyRed(7)])
+      expect(result).toEqual({ regressed: 1, state: 'working' })
+    })
+
+    test('with no run before the ship the red is the Issue’s', async () => {
+      expect(await regressesWith([verifyRed(7)])).toEqual({ regressed: 1, state: 'working' })
+    })
+  })
+
   test('twice back to the lead, the third regression is a stall', async () => {
     const issueId = await working()
     proofAnswer = () => ok([{ name: 'make verify', ok: false, detail: 'exit 1' }])
