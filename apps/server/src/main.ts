@@ -57,6 +57,7 @@ import { queuePass, queueSummary } from './app/loops/queue.ts'
 import { screenPass, screenSummary } from './app/loops/screen.ts'
 import { triagePass, triageSummary } from './app/loops/triage.ts'
 import { FRICTION_WINDOW_DAYS } from './domains/loops/friction.ts'
+import { confirmedHeartbeat } from './domains/loops/selfwatch.ts'
 import { DEFAULT_STEWARD_RULES } from './domains/loops/stall.ts'
 import { composeRead } from './compose-read.ts'
 import { postgresIntakeStore } from './adapters/intake/store.ts'
@@ -466,7 +467,11 @@ async function main(): Promise<void> {
           }),
           migrations: gitMigrationFiles(repos),
           sharedNumbers: SHARED_NUMBERS,
-          heartbeat: async () => (await readHealth()).heartbeat,
+          heartbeat: () =>
+            confirmedHeartbeat(
+              async () => (await readHealth()).heartbeat,
+              (ms) => Bun.sleep(ms),
+            ),
           file: (body) => intake.api.file(body, 'agent'),
         })
         if (!pass.ok) return pass

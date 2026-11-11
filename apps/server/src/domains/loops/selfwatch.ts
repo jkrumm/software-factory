@@ -232,6 +232,27 @@ export const heartbeatClass = (reason: string | null): 'tick' | 'database' =>
     ? 'tick'
     : 'database'
 
+/** A database miss is read again this many times, `DATABASE_RECHECK_GAP_MS` apart, before it counts. */
+export const DATABASE_RECHECKS = 2
+export const DATABASE_RECHECK_GAP_MS = 5_000
+
+/**
+ * The heartbeat the self-watch judges. One `SELECT 1` that misses its limit while a restart or a test storm loads the
+ * host is not a database that does not answer (a deploy at load 50 filed one, #827), so a database-class miss is read
+ * again after a pause and counts only if every read misses. A tick problem is judged by its own age and is never reread.
+ */
+export async function confirmedHeartbeat(
+  read: () => Promise<HeartbeatFact>,
+  pause: (ms: number) => Promise<void>,
+): Promise<HeartbeatFact> {
+  let beat = await read()
+  for (let again = 0; again < DATABASE_RECHECKS && !beat.ok && heartbeatClass(beat.reason) === 'database'; again++) {
+    await pause(DATABASE_RECHECK_GAP_MS)
+    beat = await read()
+  }
+  return beat
+}
+
 export function heartbeatFindings(heartbeat: HeartbeatFact, now: Date): Finding[] {
   if (heartbeat.ok) return []
   const kind = heartbeatClass(heartbeat.reason)
