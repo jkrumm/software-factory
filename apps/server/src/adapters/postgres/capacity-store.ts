@@ -220,6 +220,10 @@ export function postgresCapacityStore(tx: SQL): CapacityStore {
         ON CONFLICT (project) DO UPDATE SET state = EXCLUDED.state, set_at = EXCLUDED.set_at`
     },
 
+    async removeQueueState(project) {
+      await tx`DELETE FROM factory.capacity_queue_states WHERE project = ${project} AND project <> ${GLOBAL}`
+    },
+
     async slots() {
       const rows: unknown[] = await tx`SELECT * FROM factory.capacity_slots`
       return rows.map((raw): SlotRow => {

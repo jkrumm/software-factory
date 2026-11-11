@@ -18,7 +18,7 @@
  * - lead verbs: what a lead session calls on its own Issue (owner and agent): the `POST /v1/issues/:id/*` verbs (`replan` included: the server gates it on the Replan's approved Spec and its own project's Issues, while `/planning/after|unafter` and `cancel` stay owner only), `ship`,
  *   `quality`, a revision, its own session read, a note to a session, the signal it files, the test slots it takes and the
  *   door routes it sets or removes for its own Issue's repo (`POST /door/routes`, `/door/routes/remove`; `app/intake.ts` holds the repo check).
- * - owner only: everything else, and every route nobody has listed yet (new, cancel, note, answer, prio, reopen, verdicts, projects, queue,
+ * - owner only: everything else, and every route nobody has listed yet (new, cancel, note, seat, answer, prio, reopen, verdicts, projects, queue,
  *   capacity, loops, reading the door's registry). When in doubt, the owner alone.
  * - person: the owner's own judgment and hands, never the orchestrator's: `POST /v1/decisions/:id/worth-asking`,
  *   `POST /v1/artifacts/:id/verdict`, `POST /v1/artifacts/:id/annotations` and its `PATCH`/`DELETE /v1/artifacts/:id/annotations/:annotationId`, `POST /v1/errands/:id/done`, and
@@ -99,6 +99,7 @@ export const POLICY: readonly Rule[] = [
   rule('POST', '/issues/:id/reopen', OWNER),
   rule('POST', '/issues/:id/cancel', OWNER),
   rule('POST', '/issues/:id/note', OWNER),
+  rule('POST', '/issues/:id/seat', OWNER),
   rule('POST', '/issues/:id/answer', OWNER),
   rule('POST', '/issues/:id/prio', OWNER),
   rule('POST', '/v1/decisions/:id/answer', OWNER),

@@ -1,4 +1,5 @@
-import type { ProjectSource, RepoRef } from '../domains/planning/ports.ts'
+import type { CapacityStore } from '../domains/capacity/ports.ts'
+import type { PlanningStore, ProjectSource, RepoRef } from '../domains/planning/ports.ts'
 import { projectName, projectOf, repoTextOf, synced, type StoredProject } from '../domains/planning/sync.ts'
 import { key } from '../kernel/keys.ts'
 import { err, ok, portError, type PortError, type Result } from '../kernel/result.ts'
@@ -68,7 +69,7 @@ export async function syncProjects(
     else errors.push(`${ref.path}: ${read.error.detail}`)
   }
 
-  const stored = await deps.uow.run(async ({ work, planning }) => {
+  const stored = await deps.uow.run(async ({ work, planning, capacity }) => {
     for (const name of retired) await planning.removeProject(name)
     const projects = (await planning.projects()).filter((p) => !retired.includes(p.name))
     const taken = new Map(projects.map((p) => [p.name, p.repo]))
@@ -101,6 +102,7 @@ export async function syncProjects(
         })
       }
     }
+    await dropOrphanQueueStates(planning, capacity)
     return ok({ synced: reads.length, broken, retired, errors })
   })
   return stored
@@ -156,4 +158,16 @@ async function fileBrokenProject(
     if (!settled.ok) return err(portError('refused', JSON.stringify(settled.error)))
   }
   return ok(issue.id)
+}
+
+/**
+ * A queue state kept for a project the planning store no longer has (a retired checkout, a worktree) is dropped: it
+ * governs nothing, and `capacity get` would list it for good. The global state stays.
+ */
+async function dropOrphanQueueStates(planning: PlanningStore, capacity: CapacityStore): Promise<void> {
+  const names = new Set((await planning.projects()).map((project) => project.name))
+  const orphans = [...(await capacity.queueStates()).projects.keys()].filter((name) => !names.has(name))
+  if (orphans.length === 0) return
+  await capacity.lock()
+  for (const name of orphans) await capacity.removeQueueState(name)
 }

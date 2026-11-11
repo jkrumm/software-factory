@@ -382,3 +382,62 @@ describe('settled refines the kind', () => {
     expect(replay(ID, records({})).kind).toBe('feature')
   })
 })
+
+describe('seated sets the seat before a lead works', () => {
+  const seat = { tier: 'opus', effort: 'high', role: 'hard' } as const
+
+  test('settling and queued take it from the owner and the orchestrator, and a replay keeps it', () => {
+    const settling = drive([ev('seated', { tier: 'opus', effort: 'high' }, 'owner')])
+    expect(settling.issue).toMatchObject({ state: 'settling', version: 2, seat: { tier: 'opus', effort: 'high' } })
+    const queued = drive([ev('settled', {}, 'factory'), ev('seated', seat, 'orchestrator')])
+    expect(queued.issue).toMatchObject({ state: 'queued', seat })
+    expect(queued.effects).toEqual([])
+
+    const records: AppliedRecord[] = [
+      {
+        kind: 'filed',
+        payload: { repo: 'r', title: 't', kind: 'bug', origin: 'you' },
+        actor: 'factory',
+        at: NOW,
+        version: 1,
+        transition: { from: null, to: 'settling', wait: null, outcome: null },
+      },
+      {
+        kind: 'seated',
+        payload: seat,
+        actor: 'owner',
+        at: NOW,
+        version: 2,
+        transition: { from: 'settling', to: 'settling', wait: null, outcome: null },
+      },
+    ]
+    expect(replay(ID, records).seat).toEqual(seat)
+  })
+
+  test('a later seat replaces the earlier one, and a role-less seat drops the role', () => {
+    const { issue } = drive([ev('seated', seat, 'owner'), ev('seated', { tier: 'sonnet', effort: 'low' }, 'owner')])
+    expect(issue.seat).toEqual({ tier: 'sonnet', effort: 'low' })
+  })
+
+  test('once a lead started, or the Issue closed, it is refused; only the owner and the orchestrator send it', () => {
+    const working = drive(settledAndWorking).issue
+    expect(detail(apply(working, ev('seated', seat, 'owner'), { now: NOW }))).toContain('settling or queued')
+    const waiting = drive([
+      ...settledAndWorking,
+      ev('deferred', { attempt: 1, until: '2026-03-01T13:00:00Z' }, 'lead'),
+    ]).issue
+    expect(apply(waiting, ev('seated', seat, 'owner'), { now: NOW }).result).toBe('refused')
+    const closed = drive([ev('cancelled', { reason: 'x' }, 'owner')]).issue
+    expect(apply(closed, ev('seated', seat, 'owner'), { now: NOW }).result).toBe('refused')
+    const queued = drive([ev('settled', {}, 'factory')]).issue
+    for (const actor of ['factory', 'lead', 'steward', 'judge'] as const) {
+      expect(apply(queued, ev('seated', seat, actor), { now: NOW }).result).toBe('refused')
+    }
+  })
+
+  test('a restarted attempt, queued again after its lead was gone, takes a seat for the next lead', () => {
+    const gone = ev('lead_gone', { attempt: 1, detail: 'its terminal ended' }, 'factory')
+    const { issue } = drive([...settledAndWorking, gone, ev('seated', seat, 'owner')])
+    expect(issue).toMatchObject({ state: 'queued', attempt: 1, seat })
+  })
+})

@@ -140,6 +140,10 @@ const leadGone = (ctx: Ctx<'lead_gone'>): Cell => {
   return { to: 'waiting', wait: { reason: 'lead_gone', detail }, effects: [] }
 }
 
+/** The seat is set only while no lead works: a lead that started keeps the seat it started on. */
+const seatTaken = (ctx: Ctx<'seated'>): Cell =>
+  refuse(`it is ${ctx.issue.state} (attempt ${ctx.issue.attempt}): the seat is set only while it is settling or queued`)
+
 const noteWorking = (ctx: Ctx<'noted'>): Cell => ({
   to: 'working',
   effects: [noteLead(ctx.issue.id, ctx.issue.attempt, next(ctx.issue), next(ctx.issue))],
@@ -339,6 +343,7 @@ export const TABLE: Table = {
     admitted: refused('triage is not done: it is not queued'),
     lead_started: factoryNews('settling'),
     lead_gone: factoryNews('settling'),
+    seated: () => ({ to: 'settling', effects: [] }),
     noted: () => ({ to: 'settling', effects: [] }),
     asked: noLeadYet,
     answered: said('nothing waits for an answer'),
@@ -362,6 +367,7 @@ export const TABLE: Table = {
     admitted: admit,
     lead_started: factoryNews('queued'),
     lead_gone: factoryNews('queued'),
+    seated: () => ({ to: 'queued', effects: [] }),
     noted: () => ({ to: 'queued', effects: [] }),
     asked: noLeadYet,
     answered: said('nothing waits for an answer'),
@@ -385,6 +391,7 @@ export const TABLE: Table = {
     admitted: said('it is admitted already'),
     lead_started: leadStarted,
     lead_gone: leadGone,
+    seated: seatTaken,
     noted: noteWorking,
     asked: askedBy(ask),
     answered: said('nothing waits for an answer'),
@@ -409,6 +416,7 @@ export const TABLE: Table = {
     lead_started: said('waiting: a lead starts only from queued'),
     lead_gone: said('waiting: the wait ends first, and its note finds the lead gone'),
     // Recorded: the note_lead of whatever ends the wait carries it (resume); a new attempt's brief reads it otherwise.
+    seated: seatTaken,
     noted: () => ({ to: 'waiting', effects: [] }),
     asked: askedWhileWaiting,
     answered: answerWhileWaiting,
@@ -433,6 +441,7 @@ export const TABLE: Table = {
     admitted: said('it is admitted already'),
     lead_started: said('watching: the attempt shipped'),
     lead_gone: said('watching: a regression finds a gone lead when it needs one'),
+    seated: seatTaken,
     noted: noteWatching,
     asked: watchIsOn,
     answered: said('nothing waits for an answer'),
@@ -456,6 +465,7 @@ export const TABLE: Table = {
     admitted: said('it is closed'),
     lead_started: said('it is closed: finalize ends that lead'),
     lead_gone: said('it is closed'),
+    seated: isClosed,
     noted: isClosed,
     asked: isClosed,
     answered: said('it is closed: nothing waits for an answer'),

@@ -45,6 +45,10 @@ export function describeEvent(kind: string, payload: unknown): string {
       return seatWords(payload) ? `A lead started on ${seatWords(payload)}.` : 'A lead started.'
     case 'lead_gone':
       return after('The lead ended', field(payload, 'detail'))
+    case 'seated': {
+      const seat = seatWords({ seat: payload })
+      return seat ? `The lead seat was set to ${seat}.` : 'The lead seat was set.'
+    }
     case 'noted':
       return after('A note reached the lead', field(payload, 'text'))
     case 'asked':

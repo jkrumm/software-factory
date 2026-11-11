@@ -1,3 +1,4 @@
+import { parseSeat } from '@software-factory/contract'
 import { parseLeadKey } from '../domains/leads/names.ts'
 import { fence } from '../domains/intake/rules.ts'
 import { replay } from '../domains/work/machine.ts'
@@ -5,6 +6,7 @@ import type { OwnerActor } from '../kernel/events.ts'
 import type { IssueId } from '../kernel/ids.ts'
 import { key } from '../kernel/keys.ts'
 import { err, ok, type PortError, type Result } from '../kernel/result.ts'
+import { resolveSeat, type SeatRefused, type SeatRoles } from './seat.ts'
 import {
   type IssueWriteError,
   type IssueWrites,
@@ -118,5 +120,27 @@ export async function noteSession(
     actor: input.actor,
     call: input.call,
     via: input.via,
+  })
+}
+
+export type SeatIssueError = IssueWriteError | SeatRefused
+
+/**
+ * The owner sets the seat of an Issue no lead works. A role is looked up now and kept beside what it said, as at
+ * filing. The machine decides whether the Issue takes it (`settling` or `queued`); the call id (or one made now) is in
+ * the key, so a repeated call is one event.
+ */
+export async function seatIssue(
+  deps: Deps & { roles: SeatRoles },
+  input: { issueId: IssueId; seat: unknown; actor: OwnerActor; call?: string | undefined },
+): Promise<Result<Recorded, SeatIssueError | PortError>> {
+  const parsed = parseSeat(input.seat)
+  if (!parsed.ok) return err({ kind: 'seat_refused', field: parsed.field, detail: parsed.detail })
+  const resolved = await resolveSeat(deps.roles, parsed.seat)
+  if (!resolved.ok) return resolved
+  return recordIssueEvent(deps, {
+    issueId: input.issueId,
+    key: key('seated', input.issueId, input.call ?? deps.ids.next('call')),
+    event: { kind: 'seated', payload: resolved.value, actor: input.actor },
   })
 }

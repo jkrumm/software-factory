@@ -20,6 +20,7 @@ import {
   EyeIcon,
   ChatCircleIcon,
   PaperPlaneTiltIcon,
+  SlidersIcon,
 } from '@phosphor-icons/react'
 import type { ReadIssueDetail } from '@software-factory/contract'
 import { EmptyState } from '@/components/kit/empty-state'
@@ -35,6 +36,7 @@ const KIND_ICON: Record<string, Icon> = {
   admitted: PlayIcon,
   lead_started: PlayIcon,
   lead_gone: SkullIcon,
+  seated: SlidersIcon,
   noted: NoteIcon,
   asked: QuestionIcon,
   answered: ChatCircleIcon,

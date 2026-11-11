@@ -37,6 +37,7 @@ interface IssueRow {
   repo: string
   state: ReadIssueCard['state']
   wait_reason: string | null
+  seated: unknown
   outcome: string | null
   filed: { title?: unknown; kind?: unknown; seat?: unknown; lane?: unknown } | null
   created_at: Date
@@ -51,7 +52,7 @@ const isRecord = (value: unknown): value is Record<string, unknown> =>
 
 const text = (value: unknown): string | null => (typeof value === 'string' && value.trim() ? value.trim() : null)
 
-/** The seat a `filed` payload asked for, or null for an Issue that asked for none. */
+/** The seat a `filed` or `seated` payload asked for, or null for an Issue that asked for none. */
 function seatOf(value: unknown): ReadIssueCard['seat'] {
   if (!isRecord(value)) return null
   const tier = text(value.tier)
@@ -62,6 +63,7 @@ function seatOf(value: unknown): ReadIssueCard['seat'] {
 const ISSUE_COLUMNS = (sql: SQL) => sql`
   i.id, i.repo, i.state, i.wait_reason, i.outcome, f.payload AS filed,
   (SELECT s.payload->>'kind' FROM factory.issue_events s WHERE s.issue_id = i.id AND s.kind = 'settled' AND s.result = 'applied' ORDER BY s.version DESC LIMIT 1) AS settled_kind,
+  (SELECT s.payload FROM factory.issue_events s WHERE s.issue_id = i.id AND s.kind = 'seated' AND s.result = 'applied' ORDER BY s.version DESC LIMIT 1) AS seated,
   f.at AS created_at, u.updated_at,
   CASE WHEN i.state = 'closed' THEN u.closed_at END AS closed_at,
   NOT EXISTS (SELECT 1 FROM factory.planning_projects p WHERE p.source = 'file' AND (p.name = i.repo OR p.repo = i.repo OR left(i.repo, length(p.repo) + 1) = p.repo || '/')) AS work`
@@ -194,7 +196,7 @@ function cardOf(input: {
     heldBy: extras.heldBy.get(row.id) ?? null,
     waitingOnOwner:
       open && ((row.state === 'waiting' && OWNER_WAITS.has(row.wait_reason ?? '')) || extras.asking.has(row.id)),
-    seat: seatOf(row.filed?.seat),
+    seat: seatOf(row.seated) ?? seatOf(row.filed?.seat),
     lane: text(row.filed?.lane),
   }
 }

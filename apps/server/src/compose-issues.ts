@@ -1,7 +1,7 @@
 import type { IssueApi } from './api/issues.ts'
 import { answerIssue } from './app/issue-answer.ts'
 import { fileNewIssue, type NewIssueDeps } from './app/issue-new.ts'
-import { cancelIssue, noteIssue, noteSession } from './app/issue-owner.ts'
+import { cancelIssue, noteIssue, noteSession, seatIssue } from './app/issue-owner.ts'
 import type { CheckpointUses } from './app/checkpoints-uses.ts'
 import type { IssueWrites, WriteDeps } from './app/issues.ts'
 
@@ -19,6 +19,7 @@ export function composeIssues(input: {
     file: (request) => fileNewIssue(filing, request),
     cancel: (request) => cancelIssue(writes, request),
     note: (request) => noteIssue(writes, request),
+    seat: (request) => seatIssue({ ...writes, roles: filing.roles }, request),
     answer: (request) => answerIssue(checkpoints, request),
     sessionNote: (request) => noteSession(writes, request),
   }
