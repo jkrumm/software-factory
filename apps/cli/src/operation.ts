@@ -71,6 +71,8 @@ export interface OperationExtension {
   statusHints?: Readonly<Record<number, string>>
   /** the plain rendering of a 2xx answer, instead of the generic `key<TAB>value` lines; empty prints nothing */
   plain?: (data: unknown) => string
+  /** a line on stderr after a 2xx answer, in either format; empty says nothing. Data stays on stdout */
+  notice?: (data: unknown) => string
 }
 
 export const extensionOf = (op: Operation): OperationExtension | undefined => OPERATION_EXTENSIONS[op.operationId]
@@ -284,8 +286,9 @@ export async function runOperation(op: Operation, invocation: Invocation, io: Io
       })
     }
     const text = (extensionOf(op)?.plain ?? plain)(parsed.data)
-    if (invocation.format === 'plain' && text === '') return
-    io.out(render(invocation.format, parsed.data, text))
+    if (!(invocation.format === 'plain' && text === '')) io.out(render(invocation.format, parsed.data, text))
+    const notice = extensionOf(op)?.notice?.(parsed.data)
+    if (notice) io.err(`${notice}\n`)
     return
   }
   const kind = kindForStatus(answer.status)
