@@ -267,6 +267,14 @@ test('a project with hygiene.check false is swept with its reason; the default a
   expect(w.skips).toEqual([reason, undefined])
 })
 
+test('a project that says work: true is never swept', async () => {
+  const closed = { ...project('closed'), project: { hygiene: { check: true }, work: true } } as unknown as StoredProject
+  const w = world([], new Set(), [closed, project('open')])
+  expect(await hygienePass(w.deps)).toMatchObject({ ok: true, value: { due: true, record: { repo: 'open' } } })
+  expect(await hygienePass(w.deps)).toMatchObject({ ok: true, value: { due: false } })
+  expect(w.rows.map((r) => r.repo)).toEqual(['open'])
+})
+
 test('planHygiene treats a no-checkout row as due after the retry gap, not after the week', () => {
   const failedRow = { ...row('a', ago(7 * HOUR)), ref: NO_REF }
   expect(plan([failedRow, row('b', ago(DAY)), row('c', ago(DAY))])).toEqual({ kind: 'full', repo: 'a' })
