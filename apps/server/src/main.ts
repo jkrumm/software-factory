@@ -652,6 +652,8 @@ async function main(): Promise<void> {
         slotExtraLoad: planningEnv.slotExtraLoad,
         seatsMaxBonus: planningEnv.seatsMaxBonus ?? 0,
         reaperGraceMs: loopSettings.reaperGraceMs,
+        swapoutCeilingMb: planningEnv.memoryCeilings.swapoutMbPer300s,
+        swapCeilingPct: planningEnv.memoryCeilings.swapUsedPct,
       },
       visits: uow,
       longWaitMs: loadNeedsSettings(process.env).longWaitMs,

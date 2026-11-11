@@ -195,7 +195,16 @@ async function capacityOf(
 ): Promise<RetroCapacity> {
   const loop = await readCapacityLoop(sql, options)
   const figures = capacityFigures(loop)
-  return { figures, tune: tuneConstant(figures, loop.constants), loop }
+  const heaviest = loop.leadCosts[0] ?? null
+  const memoryShare = loop.idleSeatHours.total > 0 ? loop.idleSeatHoursMemory / loop.idleSeatHours.total : 0
+  return {
+    figures,
+    tune: tuneConstant(figures, loop.constants, {
+      memoryShare,
+      heaviest: heaviest && { repo: heaviest.repo, peakMibP80: heaviest.peakMibP80 },
+    }),
+    loop,
+  }
 }
 
 /**

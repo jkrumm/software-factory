@@ -522,6 +522,7 @@ export function constantRows(
     { key: 'slots', label: 'Test slots', value: String(constants.slots) },
     { key: 'slotsMax', label: 'Test slots at most', value: String(constants.slotsMax) },
     { key: 'slotExtraLoad', label: 'Extra slot below load', value: String(constants.slotExtraLoad) },
+    { key: 'swapoutCeilingMb', label: 'Swapout ceiling', value: `${constants.swapoutCeilingMb} MiB per 5 min` },
     { key: 'reaperGraceMs', label: 'Reaper grace', value: msWords(constants.reaperGraceMs) },
   ]
 }

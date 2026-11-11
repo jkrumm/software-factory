@@ -61,6 +61,13 @@ export async function readCapacityLoop(
       SELECT sum(greatest(seats - leads, 0))::float8 / 60 AS v FROM factory.host_samples
       WHERE queued > 0 AND seats IS NOT NULL AND leads IS NOT NULL AND at >= ${w.from} AND at < ${w.to}`)
 
+    // the same idle minutes with the memory gate shut: the swapout rate or swap in use above the ceilings
+    const memory = options.constants
+    const idleMemory = await total(tx`
+      SELECT sum(greatest(seats - leads, 0))::float8 / 60 AS v FROM factory.host_samples
+      WHERE queued > 0 AND seats IS NOT NULL AND leads IS NOT NULL AND at >= ${w.from} AND at < ${w.to}
+        AND (swapout_mb_per_300s > ${memory.swapoutCeilingMb} OR swap_used_pct > ${memory.swapCeilingPct})`)
+
     const overDay: unknown[] = await tx`
       SELECT to_char(at AT TIME ZONE 'UTC', 'YYYY-MM-DD') AS day, count(*) AS v
       FROM factory.host_samples
@@ -117,6 +124,7 @@ export async function readCapacityLoop(
     return {
       throughput: { total: closed, perDay: perDay(closedDay, 0) },
       idleSeatHours: { total: idle, perDay: perDay(idleDay, 0) },
+      idleSeatHoursMemory: idleMemory,
       minutesOverCeiling: { total: over, perDay: perDay(overDay, 0) },
       slotWait: { n: waitRow.n, p50Ms: waitRow.p50, p90Ms: waitRow.p90, perDayP50: perDay(waitDay, null) },
       topSteps: steps.map((raw) => {
