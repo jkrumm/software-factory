@@ -13,6 +13,8 @@ export const MEMORY_SHARE_HIGH = 0.5
 /** What held the queue in the window: the share of the idle seat-time with the memory gate shut, and the repo whose leads weigh most. */
 export interface QueueHold {
   memoryShare: number
+  /** the gate that held more of the idle seat-time: the swapout rate or swap in use */
+  trigger: 'swapout' | 'swapUsed'
   heaviest: { repo: string; peakMibP80: number } | null
 }
 
@@ -65,7 +67,7 @@ const figure = (figures: readonly RetroCapacityFigure[], key: string): number | 
 export function tuneConstant(
   figures: readonly RetroCapacityFigure[],
   constants: CapacityLoopModel['constants'],
-  hold: QueueHold = { memoryShare: 0, heaviest: null },
+  hold: QueueHold = { memoryShare: 0, trigger: 'swapout', heaviest: null },
 ): RetroCapacityTune | null {
   const over = figure(figures, 'minutes_over_ceiling_per_day') ?? 0
   const idle = figure(figures, 'idle_seat_hours_per_day') ?? 0
@@ -90,10 +92,14 @@ export function tuneConstant(
     const heavy = hold.heaviest
       ? `; the heaviest repo is ${hold.heaviest.repo} (${(hold.heaviest.peakMibP80 / 1024).toFixed(1)} GiB per lead attempt at p80), so lighter leads are the other way`
       : ''
+    const gate =
+      hold.trigger === 'swapout'
+        ? `swapouts above ${constants.swapoutCeilingMb} MiB per 300 s`
+        : `swap in use above ${constants.swapCeilingPct} %`
     return {
-      constant: 'swapoutCeilingMb',
+      constant: hold.trigger === 'swapout' ? 'swapoutCeilingMb' : 'swapCeilingPct',
       direction: 'up',
-      reason: `${idle.toFixed(1)} seat-hours a day sat idle behind a queue, ${Math.round(hold.memoryShare * 100)} % of it with the memory gate shut (swapouts above ${constants.swapoutCeilingMb} MiB per 300 s or swap in use above ${constants.swapCeilingPct} %) and the load over the ceiling only ${Math.round(over)} minutes a day: the load ceiling is not what held it${heavy}`,
+      reason: `${idle.toFixed(1)} seat-hours a day sat idle behind a queue, ${Math.round(hold.memoryShare * 100)} % of it with the memory gate shut (mostly ${gate}) and the load over the ceiling only ${Math.round(over)} minutes a day: the load ceiling is not what held it${heavy}`,
     }
   }
   if (lowLoad && idle >= IDLE_HIGH_PER_DAY)

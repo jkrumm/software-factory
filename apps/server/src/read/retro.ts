@@ -196,11 +196,12 @@ async function capacityOf(
   const loop = await readCapacityLoop(sql, options)
   const figures = capacityFigures(loop)
   const heaviest = loop.leadCosts[0] ?? null
-  const memoryShare = loop.idleSeatHours.total > 0 ? loop.idleSeatHoursMemory / loop.idleSeatHours.total : 0
+  const memoryShare = loop.idleSeatHours.total > 0 ? loop.idleSeatHoursMemory.total / loop.idleSeatHours.total : 0
   return {
     figures,
     tune: tuneConstant(figures, loop.constants, {
       memoryShare,
+      trigger: loop.idleSeatHoursMemory.swapUsed > loop.idleSeatHoursMemory.swapout ? 'swapUsed' : 'swapout',
       heaviest: heaviest && { repo: heaviest.repo, peakMibP80: heaviest.peakMibP80 },
     }),
     loop,

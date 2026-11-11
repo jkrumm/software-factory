@@ -192,7 +192,9 @@ describe('GET /v1/capacity-loop figures', () => {
     expect(model.idleSeatHours.total).toBeCloseTo(await scalar(idle(inWindow('s.at'))), 9)
     expectDays(model.idleSeatHours.perDay, await daily(idle(inDay('s.at'))), 9)
     expect(model.idleSeatHours.total).toBeCloseTo(13 / 60, 9)
-    expect(model.idleSeatHoursMemory).toBeCloseTo(8 / 60, 9)
+    expect(model.idleSeatHoursMemory.total).toBeCloseTo(8 / 60, 9)
+    expect(model.idleSeatHoursMemory.swapout).toBeCloseTo(2 / 60, 9)
+    expect(model.idleSeatHoursMemory.swapUsed).toBeCloseTo(6 / 60, 9)
 
     // minutes over the load ceiling
     const over = (col: string) =>

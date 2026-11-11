@@ -643,8 +643,11 @@ export const CapacityLoopModel = z
     throughput: CapacityTotal,
     /** seats not held by a lead while Issues were queued, in hours: minutes with queued > 0 of max(seats - leads, 0), over 60 */
     idleSeatHours: CapacityTotal,
-    /** of `idleSeatHours`, the hours in minutes the memory gate was shut (swapouts or swap in use above the ceilings in `constants`) */
-    idleSeatHoursMemory: z.number(),
+    /**
+     * of `idleSeatHours`, the hours in minutes the memory gate was shut: `total` for either trigger, `swapout` and `swapUsed`
+     * for each alone (a minute can count in both), against the ceilings in `constants`
+     */
+    idleSeatHoursMemory: z.strictObject({ total: z.number(), swapout: z.number(), swapUsed: z.number() }),
     /** host minutes whose load was above the ceiling in force that minute */
     minutesOverCeiling: CapacityTotal,
     slotWait: z.strictObject({
@@ -698,7 +701,15 @@ export type RetroCapacityFigure = z.infer<typeof RetroCapacityFigure>
 /** The one setting to change first, by fixed rules over the figures (`read/capacity-tuning.ts`). */
 export const RetroCapacityTune = z
   .strictObject({
-    constant: z.enum(['leadsPerAccount', 'seatsMaxBonus', 'loadCeiling', 'slots', 'slotsMax', 'swapoutCeilingMb']),
+    constant: z.enum([
+      'leadsPerAccount',
+      'seatsMaxBonus',
+      'loadCeiling',
+      'slots',
+      'slotsMax',
+      'swapoutCeilingMb',
+      'swapCeilingPct',
+    ]),
     direction: z.enum(['up', 'down']),
     reason: z.string(),
   })

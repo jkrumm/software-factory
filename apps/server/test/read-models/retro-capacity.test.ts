@@ -136,18 +136,30 @@ describe('the fixed tuning rules', () => {
 
   test('idle seats held mostly by the memory gate name the memory ceiling, never the load ceiling', () => {
     const heaviest = { repo: 'basalt-ui', peakMibP80: 2560 }
-    const held = tuneConstant(loop(5, IDLE_HIGH_PER_DAY, null), constants, { memoryShare: 0.9, heaviest })
+    const held = tuneConstant(loop(5, IDLE_HIGH_PER_DAY, null), constants, {
+      memoryShare: 0.9,
+      trigger: 'swapout',
+      heaviest,
+    })
     expect(held).toMatchObject({ constant: 'swapoutCeilingMb', direction: 'up' })
     expect(held?.reason).toContain('basalt-ui')
     expect(held?.reason).toContain('2.5 GiB')
     // half or less of the idle time behind memory: the load ceiling stays the rule
     expect(
-      tuneConstant(loop(5, IDLE_HIGH_PER_DAY, null), constants, { memoryShare: MEMORY_SHARE_HIGH, heaviest }),
+      tuneConstant(loop(5, IDLE_HIGH_PER_DAY, null), constants, {
+        memoryShare: MEMORY_SHARE_HIGH,
+        trigger: 'swapout',
+        heaviest,
+      }),
     ).toMatchObject({ constant: 'loadCeiling' })
+    // swap in use was the gate that held it: that ceiling is the one named
+    expect(
+      tuneConstant(loop(5, IDLE_HIGH_PER_DAY, null), constants, { memoryShare: 0.9, trigger: 'swapUsed', heaviest }),
+    ).toMatchObject({ constant: 'swapCeilingPct', direction: 'up' })
     // no repo cost yet: still the memory constant
-    expect(tuneConstant(loop(5, IDLE_HIGH_PER_DAY, null), constants, { memoryShare: 1, heaviest: null })).toMatchObject(
-      { constant: 'swapoutCeilingMb' },
-    )
+    expect(
+      tuneConstant(loop(5, IDLE_HIGH_PER_DAY, null), constants, { memoryShare: 1, trigger: 'swapout', heaviest: null }),
+    ).toMatchObject({ constant: 'swapoutCeilingMb' })
   })
 
   test('a long slot wait on a quiet machine raises the base slots, never past the maximum', () => {
