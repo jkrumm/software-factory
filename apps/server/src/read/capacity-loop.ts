@@ -61,6 +61,28 @@ export async function readCapacityLoop(
       SELECT sum(greatest(seats - leads, 0))::float8 / 60 AS v FROM factory.host_samples
       WHERE queued > 0 AND seats IS NOT NULL AND leads IS NOT NULL AND at >= ${w.from} AND at < ${w.to}`)
 
+    // the same idle minutes with the memory gate shut: the swapout rate, swap in use, or either, above the ceilings
+    const { swapoutCeilingMb, swapCeilingPct } = options.constants
+    const [memoryRow] = await tx`
+      SELECT
+        sum(greatest(seats - leads, 0)) FILTER (WHERE swapout_mb_per_300s > ${swapoutCeilingMb} OR swap_used_pct > ${swapCeilingPct})::float8 / 60 AS total,
+        sum(greatest(seats - leads, 0)) FILTER (WHERE swapout_mb_per_300s > ${swapoutCeilingMb})::float8 / 60 AS swapout,
+        sum(greatest(seats - leads, 0)) FILTER (WHERE swap_used_pct > ${swapCeilingPct})::float8 / 60 AS swap_used
+      FROM factory.host_samples
+      WHERE queued > 0 AND seats IS NOT NULL AND leads IS NOT NULL AND at >= ${w.from} AND at < ${w.to}`
+    const memoryIdle = z
+      .object({
+        total: z.coerce.number().nullable(),
+        swapout: z.coerce.number().nullable(),
+        swap_used: z.coerce.number().nullable(),
+      })
+      .parse(memoryRow)
+    const idleMemory = {
+      total: memoryIdle.total ?? 0,
+      swapout: memoryIdle.swapout ?? 0,
+      swapUsed: memoryIdle.swap_used ?? 0,
+    }
+
     const overDay: unknown[] = await tx`
       SELECT to_char(at AT TIME ZONE 'UTC', 'YYYY-MM-DD') AS day, count(*) AS v
       FROM factory.host_samples
@@ -117,6 +139,7 @@ export async function readCapacityLoop(
     return {
       throughput: { total: closed, perDay: perDay(closedDay, 0) },
       idleSeatHours: { total: idle, perDay: perDay(idleDay, 0) },
+      idleSeatHoursMemory: idleMemory,
       minutesOverCeiling: { total: over, perDay: perDay(overDay, 0) },
       slotWait: { n: waitRow.n, p50Ms: waitRow.p50, p90Ms: waitRow.p90, perDayP50: perDay(waitDay, null) },
       topSteps: steps.map((raw) => {

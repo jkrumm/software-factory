@@ -6,6 +6,7 @@ import { loadMigrations, migrate } from '../../src/adapters/postgres/migrate.ts'
 import {
   capacityFigures,
   IDLE_HIGH_PER_DAY,
+  MEMORY_SHARE_HIGH,
   OVER_HIGH_PER_DAY,
   tuneConstant,
   WAIT_HIGH_MS,
@@ -27,6 +28,8 @@ const constants = {
   slotExtraLoad: 12,
   seatsMaxBonus: 2,
   reaperGraceMs: 300_000,
+  swapoutCeilingMb: 2048,
+  swapCeilingPct: 80,
 }
 
 let keys = 0
@@ -129,6 +132,34 @@ describe('the fixed tuning rules', () => {
     })
     // the load is not low: no raise
     expect(tuneConstant(loop(OVER_HIGH_PER_DAY / 2, IDLE_HIGH_PER_DAY, null), constants)).toBeNull()
+  })
+
+  test('idle seats held mostly by the memory gate name the memory ceiling, never the load ceiling', () => {
+    const heaviest = { repo: 'basalt-ui', peakMibP80: 2560 }
+    const held = tuneConstant(loop(5, IDLE_HIGH_PER_DAY, null), constants, {
+      memoryShare: 0.9,
+      trigger: 'swapout',
+      heaviest,
+    })
+    expect(held).toMatchObject({ constant: 'swapoutCeilingMb', direction: 'up' })
+    expect(held?.reason).toContain('basalt-ui')
+    expect(held?.reason).toContain('2.5 GiB')
+    // half or less of the idle time behind memory: the load ceiling stays the rule
+    expect(
+      tuneConstant(loop(5, IDLE_HIGH_PER_DAY, null), constants, {
+        memoryShare: MEMORY_SHARE_HIGH,
+        trigger: 'swapout',
+        heaviest,
+      }),
+    ).toMatchObject({ constant: 'loadCeiling' })
+    // swap in use was the gate that held it: that ceiling is the one named
+    expect(
+      tuneConstant(loop(5, IDLE_HIGH_PER_DAY, null), constants, { memoryShare: 0.9, trigger: 'swapUsed', heaviest }),
+    ).toMatchObject({ constant: 'swapCeilingPct', direction: 'up' })
+    // no repo cost yet: still the memory constant
+    expect(
+      tuneConstant(loop(5, IDLE_HIGH_PER_DAY, null), constants, { memoryShare: 1, trigger: 'swapout', heaviest: null }),
+    ).toMatchObject({ constant: 'swapoutCeilingMb' })
   })
 
   test('a long slot wait on a quiet machine raises the base slots, never past the maximum', () => {

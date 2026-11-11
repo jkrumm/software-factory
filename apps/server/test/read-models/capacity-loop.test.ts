@@ -24,6 +24,8 @@ const constants = {
   slotExtraLoad: 12,
   seatsMaxBonus: 2,
   reaperGraceMs: 300_000,
+  swapoutCeilingMb: 2048,
+  swapCeilingPct: 80,
 }
 
 beforeAll(async () => {
@@ -69,6 +71,11 @@ async function seed() {
   for (const [at, load, ceiling, leads, queued, seats] of host)
     await sql`INSERT INTO factory.host_samples (at, load, leads, queued, seats, load_ceiling)
       VALUES (${at}, ${load}, ${leads}, ${queued}, ${seats}, ${ceiling})`
+
+  // the memory gate was shut in two of those minutes: swapouts above the ceiling (idle 2), swap in use above it (idle 6)
+  await sql`UPDATE factory.host_samples SET swapout_mb_per_300s = 3000 WHERE at = ${t('11-04T08:00')}`
+  await sql`UPDATE factory.host_samples SET swapout_mb_per_300s = 100, swap_used_pct = 95 WHERE at = ${t('11-04T08:01')}`
+  await sql`UPDATE factory.host_samples SET swapout_mb_per_300s = 4000 WHERE at = ${t('11-02T10:04')}` // nothing queued: no idle
 
   // test-slot steps: [at, name, peak, duration, wait]
   const steps: Array<[Date, string, number | null, number, number]> = [
@@ -185,6 +192,9 @@ describe('GET /v1/capacity-loop figures', () => {
     expect(model.idleSeatHours.total).toBeCloseTo(await scalar(idle(inWindow('s.at'))), 9)
     expectDays(model.idleSeatHours.perDay, await daily(idle(inDay('s.at'))), 9)
     expect(model.idleSeatHours.total).toBeCloseTo(13 / 60, 9)
+    expect(model.idleSeatHoursMemory.total).toBeCloseTo(8 / 60, 9)
+    expect(model.idleSeatHoursMemory.swapout).toBeCloseTo(2 / 60, 9)
+    expect(model.idleSeatHoursMemory.swapUsed).toBeCloseTo(6 / 60, 9)
 
     // minutes over the load ceiling
     const over = (col: string) =>
