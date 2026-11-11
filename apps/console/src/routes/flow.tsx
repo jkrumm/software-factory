@@ -30,7 +30,9 @@ import {
 } from '@/lib/flow'
 import { useMediaQuery } from '@/lib/media'
 import { useNow } from '@/lib/now'
+import { FlowSkeleton } from '@/components/skeletons'
 import { failureNote } from '@/lib/api'
+import { useScreen } from '@/lib/screen'
 import { useFlow } from '@/lib/queries'
 import { cn } from '@/lib/utils'
 
@@ -148,7 +150,9 @@ const SELECT =
   'h-8 rounded-lg border border-input bg-background px-2.5 text-sm outline-none focus-visible:border-ring focus-visible:ring-3 focus-visible:ring-ring/50'
 
 function Flow() {
-  const { data, error, isPending } = useFlow()
+  const flow = useFlow()
+  const { data, error } = flow
+  const screen = useScreen(flow)
   // the root route validates nothing, so an unknown `state` still reaches here from the raw URL: read it through the guard again
   const search = Route.useSearch()
   const filters: FlowFilters = { ...search, state: columnKeyOf(search.state) }
@@ -159,8 +163,13 @@ function Flow() {
 
   if (!data)
     return (
-      <Page wide>
-        <PageHeader title="Flow" note={isPending ? 'Loading' : failureNote(error)} />
+      <Page full>
+        <PageHeader
+          title="Flow"
+          loading={screen === 'loading'}
+          note={screen === 'failed' ? failureNote(error) : undefined}
+        />
+        {screen === 'loading' ? <FlowSkeleton /> : null}
       </Page>
     )
 

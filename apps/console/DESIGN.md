@@ -88,7 +88,7 @@ it does not.
 | StepRail | One row per event or step: icon, words, a duration bar scaled to the longest, time on the right; a failure is red with its line |
 | Meter, Sparkline, MiniBars | Hand-drawn SVG on tokens, hover tooltip, no animation. A Meter is graphite, warn from 75 %, bad from 90 % (`meterTone`) |
 | InfoHint | A small ⓘ beside a domain word; its text is that word's definition generated from `docs/language.md`, never retyped |
-| EmptyState, Skeleton | One sentence and an icon tile; skeletons at the final height so nothing jumps |
+| EmptyState, Skeleton | One sentence and an icon tile. A skeleton is a quiet block at the final height of what it stands for (`components/skeletons.tsx` holds one per screen, built from the kit's `Skeleton`: a collapsed Needs-you card is 72 to 98 px, a StatCard 273, a board card about 120, the artifact's comments panel 24 rem), so nothing jumps when the content arrives; the screen is `aria-busy` and named. It never reads "Loading" as text |
 
 ## Rules
 
@@ -106,8 +106,19 @@ it does not.
   InfoHint.
 - The page never goes stale: an event invalidates the queries, a reconnect refetches, a persisted snapshot never hides
   live data.
+- **A new bundle never blocks a screen and never shows a banner.** The service worker updates in the background; the page
+  loads the new bundle at the next navigation to another screen, when the tab is hidden, or after 45 s without input, never
+  while something is typed, and at once only for a screen that has no data until it does. A screen that cannot read an answer
+  because the server is newer shows its skeleton, not words; only after 20 s without the new bundle does it say so. An answer
+  that only adds a field is read as it is.
+- **Every route renders its skeleton at once** (Needs you, Flow, Chain, Improve, an Issue, an artifact, an open card's
+  body), and every link to an Issue or an artifact warms its data and its code on hover and focus (the route's loader, run by
+  the router's intent preload; the Needs-you cards do the same for a review's artifact and a Decision), so opening it after a
+  hover renders with no skeleton at all.
 - Fast: routes split, lists over 100 items virtualised, the graph and chart code loaded only where used, interaction
-  answers under 100 ms.
+  answers under 100 ms. A screen's first paint reads only what it shows: the 550 KB list of every Issue is the palette's alone
+  (fetched when the page is idle, watched only while the palette is open), and Needs you reads the open Issues' cards for
+  titles.
 
 ## The screens
 

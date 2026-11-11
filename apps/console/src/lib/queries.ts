@@ -22,10 +22,14 @@ import {
   fetchMachine,
   fetchNeeds,
   fetchSince,
+  onNewerServer,
 } from './api.ts'
 import { useLive } from './live.ts'
 import { pollEvery } from './policy.ts'
 import { checkForUpdate } from './update.ts'
+
+// an answer with fields this bundle does not know is read as it is, and the new bundle is fetched in the background
+onNewerServer(checkForUpdate)
 
 const DAY_MS = 24 * 60 * 60 * 1000
 export const SNAPSHOT_MAX_AGE_MS = 7 * DAY_MS
@@ -196,36 +200,58 @@ export function useHost() {
   })
 }
 
+/** Every Issue card, open and closed (550 KB at 500 Issues): what the command palette searches. */
+export const issueCardsQuery = {
+  queryKey: ['issue-cards'],
+  staleTime: 0,
+  queryFn: ({ signal }: { signal: AbortSignal }) => fetchIssueCards(signal),
+}
+export const artifactListQuery = {
+  queryKey: ['artifact-list'],
+  staleTime: 0,
+  queryFn: ({ signal }: { signal: AbortSignal }) => fetchArtifacts(signal),
+}
+
 /**
- * What the command palette searches. It loads when the palette first opens (`enabled`) and refetches each time it opens,
- * so the lists are as fresh as the stream's last invalidation.
+ * What the command palette searches. Only an open palette observes them (`enabled`), so the stream never refetches 550 KB
+ * of cards behind a closed one; `prefetchPalette` fills the cache when the page is idle, and an open palette shows that at
+ * once and refreshes it.
  */
 export function useIssueCards(enabled: boolean) {
-  return useQuery({
-    queryKey: ['issue-cards'],
-    enabled,
-    staleTime: 0,
-    queryFn: ({ signal }) => fetchIssueCards(signal),
-  })
+  return useQuery({ ...issueCardsQuery, enabled })
 }
 
 export function usePaletteArtifacts(enabled: boolean) {
+  return useQuery({ ...artifactListQuery, enabled })
+}
+
+export function prefetchPalette(): void {
+  void queryClient.prefetchQuery({ ...issueCardsQuery, staleTime: PREFETCH_STALE_MS })
+  void queryClient.prefetchQuery({ ...artifactListQuery, staleTime: PREFETCH_STALE_MS })
+}
+
+/** The open Issues' cards (a twentieth of the palette's list): enough for the title of the Issue a waiting item belongs to. */
+export function useOpenIssueCards() {
+  const live = useLive()
   return useQuery({
-    queryKey: ['artifact-list'],
-    enabled,
-    staleTime: 0,
-    queryFn: ({ signal }) => fetchArtifacts(signal),
+    queryKey: ['issue-cards', 'open'],
+    queryFn: ({ signal }) => fetchIssueCards(signal, 'open'),
+    refetchInterval: pollEvery(live),
   })
 }
 
+/** A prefetched answer (a hover, a focus) is good for this long: opening the item within it shows it with no wait. */
+export const PREFETCH_STALE_MS = 30_000
+
 /** The detail of one item that waits: the same invalidation as the lists, so an answer elsewhere shows at once. */
+export const decisionQuery = (id: string) => ({
+  queryKey: ['decision', id],
+  queryFn: ({ signal }: { signal: AbortSignal }) => fetchDecision(id, signal),
+})
+
 export function useDecision(id: string) {
   const live = useLive()
-  return useQuery({
-    queryKey: ['decision', id],
-    queryFn: ({ signal }) => fetchDecision(id, signal),
-    refetchInterval: pollEvery(live),
-  })
+  return useQuery({ ...decisionQuery(id), refetchInterval: pollEvery(live) })
 }
 
 export function useErrands() {
@@ -237,24 +263,38 @@ export function useErrands() {
   })
 }
 
-/** One artifact revision (the latest when `revision` is undefined); polls like the lists. */
+/** One artifact revision (the latest when `revision` is undefined). */
+export const artifactQuery = (id: string, revision?: number) => ({
+  queryKey: ['artifact', id, revision ?? 'latest'],
+  queryFn: ({ signal }: { signal: AbortSignal }) => fetchArtifact(id, revision, signal),
+})
+
+/** One artifact revision; polls like the lists. */
 export function useArtifact(id: string, revision?: number, enabled = true) {
   const live = useLive()
-  return useQuery({
-    queryKey: ['artifact', id, revision ?? 'latest'],
-    enabled,
-    queryFn: ({ signal }) => fetchArtifact(id, revision, signal),
-    refetchInterval: pollEvery(live),
-  })
+  return useQuery({ ...artifactQuery(id, revision), enabled, refetchInterval: pollEvery(live) })
 }
+
+/** One Issue's page, by number or ref. */
+export const issueQuery = (id: string) => ({
+  queryKey: ['issue', id],
+  queryFn: ({ signal }: { signal: AbortSignal }) => fetchIssue(id, signal),
+})
 
 /** One Issue's page; polls like the lists. An unknown Issue (404) is not retried. */
 export function useIssue(id: string) {
   const live = useLive()
   return useQuery({
-    queryKey: ['issue', id],
-    queryFn: ({ signal }) => fetchIssue(id, signal),
+    ...issueQuery(id),
     retry: (count, error) => !(error instanceof ApiError && error.status === 404) && count < 1,
     refetchInterval: pollEvery(live),
   })
+}
+
+/** Warms what opening a Decision, an artifact or an Issue reads, on a hover or a focus: the page then opens on data. */
+export function prefetchDetail(kind: 'decision' | 'artifact' | 'issue', id: string): void {
+  const staleTime = PREFETCH_STALE_MS
+  if (kind === 'decision') void queryClient.prefetchQuery({ ...decisionQuery(id), staleTime })
+  else if (kind === 'artifact') void queryClient.prefetchQuery({ ...artifactQuery(id), staleTime })
+  else void queryClient.prefetchQuery({ ...issueQuery(id), staleTime })
 }

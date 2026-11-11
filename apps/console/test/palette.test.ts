@@ -147,9 +147,10 @@ describe('the palette loads before it is opened', () => {
     expect(shell).toContain('(open || preloaded) && !mounted')
   })
 
-  test('its data loads on mount, not on the first open', () => {
+  test('its data is fetched when the chunk loads, and watched only while it is open', () => {
     const palette = readFileSync(join(import.meta.dir, '../src/components/palette.tsx'), 'utf8')
-    expect(palette).toContain('useIssueCards(true)')
-    expect(palette).toContain('usePaletteArtifacts(true)')
+    expect(shell).toContain('prefetchPalette()')
+    expect(palette).toContain('useIssueCards(open)')
+    expect(palette).toContain('usePaletteArtifacts(open)')
   })
 })

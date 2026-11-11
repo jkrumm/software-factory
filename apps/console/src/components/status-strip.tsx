@@ -17,7 +17,7 @@ export function StatusStrip({ trailing }: { trailing?: ReactNode }) {
       className="flex min-w-0 flex-wrap items-center gap-x-2 py-1 md:py-0 min-[1280px]:flex-nowrap 2xl:gap-x-4"
     >
       <Counts />
-      <div className="no-scrollbar order-3 flex min-w-0 basis-full items-center gap-x-2 overflow-x-auto min-[1280px]:order-2 min-[1280px]:basis-auto min-[1280px]:overflow-visible 2xl:gap-x-4">
+      <div className="no-scrollbar order-3 flex min-h-7 min-w-0 basis-full items-center gap-x-2 overflow-x-auto min-[1280px]:order-2 min-[1280px]:min-h-0 min-[1280px]:basis-auto min-[1280px]:overflow-visible 2xl:gap-x-4">
         <Accounts />
         <Host />
       </div>

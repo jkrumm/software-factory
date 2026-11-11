@@ -10,7 +10,7 @@ import {
 } from '@phosphor-icons/react'
 import { useQueryClient } from '@tanstack/react-query'
 import { useNavigate } from '@tanstack/react-router'
-import { type ReactNode, useEffect, useMemo, useRef, useState } from 'react'
+import { type ReactNode, useEffect, useMemo, useState } from 'react'
 import { KIND_ICON, type IssueKind } from '@/components/kit/kind-badge'
 import {
   Command,
@@ -112,25 +112,11 @@ export function CommandPalette({ open, onOpenChange }: { open: boolean; onOpenCh
   const queryClient = useQueryClient()
   const [query, setQuery] = useState('')
   const [selected, setSelected] = useState('')
-  // The Issue and artifact lists load when the palette mounts (idle after the first paint, so the first open already has
-  // them) and are fetched again each time it opens.
-  const cards = useIssueCards(true)
-  const artifacts = usePaletteArtifacts(true)
+  // The lists are watched only while the palette is open: the page's idle prefetch (`prefetchPalette`) filled the cache, an
+  // opening shows it at once and refreshes it, and the stream never refetches 550 KB behind a closed palette.
+  const cards = useIssueCards(open)
+  const artifacts = usePaletteArtifacts(open)
   const flow = useFlow().data
-  const { refetch: refetchCards } = cards
-  const { refetch: refetchArtifacts } = artifacts
-
-  const opened = useRef(false)
-  useEffect(() => {
-    if (!open) return
-    // the first open uses what the mount loaded; each later one fetches again
-    if (opened.current) {
-      void refetchCards()
-      void refetchArtifacts()
-    }
-    opened.current = true
-    // eslint-disable-next-line react-hooks/exhaustive-deps -- only an opening refetches
-  }, [open])
 
   const commands = useMemo<CommandAction[]>(
     () => [

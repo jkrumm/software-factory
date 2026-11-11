@@ -1,8 +1,9 @@
 import type { NeedItem } from '@software-factory/contract'
-import { Link } from '@tanstack/react-router'
+import { Link, useRouter } from '@tanstack/react-router'
 import { useEffect, useRef } from 'react'
 import { InfoHint, Lozenge } from '@/components/kit'
 import { issueNumber, metaParts, projectOf, summaryLine } from '@/lib/needs'
+import { prefetchDetail } from '@/lib/queries'
 import { cn } from '@/lib/utils'
 import { BodyOf } from './bodies'
 
@@ -53,6 +54,13 @@ export function NeedCard({
   onVisit: () => void
   onSent: (message: string) => void
 }) {
+  const router = useRouter()
+  /** Pointing at the card or focusing it warms what opening it reads: the artifact (with its page's code) or the Decision. */
+  const warm = () => {
+    if (open) return
+    if (item.kind === 'review') void router.preloadRoute({ to: '/artifacts/$id', params: { id: item.id } })
+    else if (item.kind === 'decision') prefetchDetail('decision', item.id)
+  }
   const card = useRef<HTMLElement>(null)
   const header = useRef<HTMLAnchorElement>(null)
   useEffect(() => {
@@ -67,6 +75,8 @@ export function NeedCard({
     <article
       ref={card}
       data-open={open}
+      onPointerEnter={warm}
+      onFocus={warm}
       className={cn(
         'relative min-w-0 scroll-mt-4 rounded-xl border bg-card text-card-foreground transition-colors',
         !open && 'has-[h3>a:hover]:bg-accent',

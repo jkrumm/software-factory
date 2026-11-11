@@ -6,7 +6,7 @@ import { createRoot } from 'react-dom/client'
 import { startLive } from '@/lib/live'
 import { flowQuery, needsQuery, persister, queryClient, SNAPSHOT_MAX_AGE_MS } from '@/lib/queries'
 import { initTheme } from '@/lib/theme'
-import { startUpdates } from '@/lib/update'
+import { reloadOnNavigation, startUpdates } from '@/lib/update'
 import { router } from './router'
 import './styles/index.css'
 
@@ -16,6 +16,11 @@ startLive(queryClient)
 
 const root = document.getElementById('root')
 if (!root) throw new Error('index.html has no #root')
+
+// a new bundle waiting is loaded by the next navigation to another screen, never in the middle of reading one
+router.subscribe('onBeforeLoad', ({ fromLocation, toLocation, pathChanged }) => {
+  if (fromLocation && pathChanged) reloadOnNavigation(toLocation.href)
+})
 
 // the first screen's data is requested now, in parallel with the rest of the boot
 void queryClient.prefetchQuery(needsQuery)

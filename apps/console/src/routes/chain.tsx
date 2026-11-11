@@ -3,7 +3,9 @@ import { Schedule } from '@/components/chain/schedule'
 import { EmptyState, Page, PageHeader } from '@/components/page'
 import { ActiveFilters, SidebarEntry, SidebarSection } from '@/components/sidebar'
 import { type ChainFilters, chainCounts, chainOf, isolatedNote, projectsOf } from '@/lib/chain'
+import { ChainSkeleton } from '@/components/skeletons'
 import { failureNote } from '@/lib/api'
+import { useScreen } from '@/lib/screen'
 import { chainQuery, queryClient, useChain } from '@/lib/queries'
 
 const text = (value: unknown): string | undefined => (typeof value === 'string' && value !== '' ? value : undefined)
@@ -30,15 +32,23 @@ const SELECT =
   'h-8 rounded-lg border border-input bg-background px-2.5 text-sm outline-none focus-visible:border-ring focus-visible:ring-3 focus-visible:ring-ring/50'
 
 function Chain() {
-  const { data, error, isPending } = useChain()
+  const chain = useChain()
+  const { data, error } = chain
+  const screen = useScreen(chain)
   const filters = Route.useSearch()
   const navigate = useNavigate({ from: Route.fullPath })
   const { default: ChainGraph } = Route.useLoaderData()
 
   if (!data)
     return (
-      <Page wide>
-        <PageHeader title="Chain" note={isPending ? 'Loading' : failureNote(error)} />
+      <Page full>
+        <PageHeader
+          title="Chain"
+          compact
+          loading={screen === 'loading'}
+          note={screen === 'failed' ? failureNote(error) : undefined}
+        />
+        {screen === 'loading' ? <ChainSkeleton /> : null}
       </Page>
     )
 

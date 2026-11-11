@@ -153,12 +153,23 @@ and the app fetches with `cache: 'no-store'`. A restored snapshot is a first pai
 
 `src/lib/update.ts` owns the service worker registration. A long-lived tab or installed app asks for a new worker when it
 becomes visible, when it comes online, on every stream `hello`, every 10 minutes and when an answer does not match the
-contract (`ShapeError` in `src/lib/api.ts`: the server is newer than the bundle). Once the new worker has taken over, the
-page reloads, but only when nothing is being typed (no focused field, no draft in a textarea); otherwise it waits for the
-tab to hide or the field to lose focus. A screen with no data says what happened: "This Console is older than the server -
-updating" for a `ShapeError`, the status for any other answer.
+contract (`ShapeError` in `src/lib/api.ts`: the server is newer than the bundle; an answer that only adds a field is no
+`ShapeError`: it is read as it is and asks for the new bundle in the background). Once the new worker has taken over the
+page does not reload under the owner: it loads the bundle at the next navigation to another screen (`reloadOnNavigation`,
+called from the router's `onBeforeLoad` in `main.tsx`), when the tab hides, or after 45 s without input (`reloadNow` in
+`src/lib/policy.ts` holds the rule, and never while a field has focus or a textarea holds a draft). A screen that has no data
+because of a `ShapeError` is the exception: it shows its skeleton (`useScreen`, `src/lib/screen.ts`) and reloads the moment the
+worker is in; after 20 s without it the screen says "This Console is older than the server. Reload the page to update it".
+Any other failure says the status.
 
 ## Speed
+
+Every screen renders a skeleton at its final height while its first read loads (`src/components/skeletons.tsx`). A link to
+an Issue or an artifact warms the read and the chunk on hover and focus: the two routes have a loader that starts the query
+(`prefetchDetail`, `PREFETCH_STALE_MS`, 30 s) without waiting for it, which the router's intent preload runs, and a Needs-you
+card does the same for its review's artifact and its Decision. The palette's two lists (550 KB at 500 Issues) are fetched when
+the page is idle (`prefetchPalette`) and watched only while the palette is open; Needs you reads the open Issues' cards for
+titles. `tests/e2e/speed.e2e.ts` holds the skeleton, the update and the hover guarantees and shoots every skeleton.
 
 The stream does not invalidate everything. Changes that arrive within 250 ms of each other (at most 1 s after the first of a
 burst) invalidate, once, the lists and the pages they can alter; the aggregates on `/improve` (KPIs, friction, finding

@@ -26,6 +26,13 @@ import {
 } from '@software-factory/contract'
 import type { VERDICT_WORDS } from './artifact.ts'
 
+let newerServer: (() => void) | undefined
+
+/** What happens when an answer carries fields this bundle does not know: the app asks for the new bundle (`queries.ts`). */
+export function onNewerServer(handler: () => void): void {
+  newerServer = handler
+}
+
 /** A non-2xx answer of the API. */
 export class ApiError extends Error {
   constructor(
@@ -52,19 +59,33 @@ export class ShapeError extends Error {
 
 interface Schema<T> {
   parse(data: unknown): T
+  safeParse(
+    data: unknown,
+  ): { success: true; data: T } | { success: false; error: { issues: readonly { code: string }[] } }
 }
 
-function parseShape<T>(path: string, schema: Schema<T>, data: unknown): T {
-  try {
-    return schema.parse(data)
-  } catch (error) {
-    throw new ShapeError(path, error instanceof Error ? error.message : String(error))
+/**
+ * The answer as the schema reads it. A server newer than this bundle usually only adds a field (the contract's objects are
+ * strict, so zod refuses it): an answer whose every issue is an unrecognised key is still this bundle's shape, the
+ * screens read the fields they know, and `onNewer` asks for the new bundle in the background. Anything else (a missing or
+ * retyped field) is a `ShapeError`.
+ */
+export function parseShape<T>(path: string, schema: Schema<T>, data: unknown, onNewer?: () => void): T {
+  const result = schema.safeParse(data)
+  if (result.success) return result.data
+  if (result.error.issues.every((issue) => issue.code === 'unrecognized_keys')) {
+    onNewer?.()
+    return data as T
   }
+  throw new ShapeError(path, JSON.stringify(result.error.issues))
 }
 
-/** What a page says in place of its data when the query has none and is not loading. */
+/** True while a screen has no data because the bundle is older than the server: the new bundle is on its way, the screen shows its skeleton. */
+export const awaitsUpdate = (error: Error | null): boolean => error instanceof ShapeError
+
+/** What a page says in place of its data when the query has none and nothing is coming (`useScreen` says `failed`): for a `ShapeError` only after the new bundle did not arrive in time. */
 export function failureNote(error: Error | null): string {
-  if (error instanceof ShapeError) return 'This Console is older than the server - updating'
+  if (error instanceof ShapeError) return 'This Console is older than the server. Reload the page to update it'
   if (error instanceof ApiError) return `The server answered ${error.status}`
   if (error) return 'The server cannot be reached'
   return 'No data yet'
@@ -74,7 +95,7 @@ export function failureNote(error: Error | null): string {
 async function getJson<T>(path: string, schema: Schema<T>, signal?: AbortSignal): Promise<T> {
   const response = await fetch(path, { signal, cache: 'no-store', headers: { accept: 'application/json' } })
   if (!response.ok) throw new ApiError(response.status, path)
-  return parseShape(path, schema, await response.json())
+  return parseShape(path, schema, await response.json(), () => newerServer?.())
 }
 
 export const fetchNeeds = (signal?: AbortSignal) => getJson('/v1/needs', NeedsModel, signal)
@@ -93,9 +114,9 @@ export const fetchAccounts = (signal?: AbortSignal) => getJson('/v1/accounts', R
 export const fetchMachine = (signal?: AbortSignal) => getJson('/v1/machine', MachineModel, signal)
 /** The host over the last 24 hours, its busiest processes, and the server's version and start time. */
 export const fetchHost = (signal?: AbortSignal) => getJson('/v1/host', HostHistoryModel, signal)
-/** Every Issue card, open and closed, newest activity first: what the command palette searches. */
-export const fetchIssueCards = (signal?: AbortSignal) =>
-  getJson('/v1/issues?state=all&limit=500', ReadIssueCards, signal)
+/** Issue cards, newest activity first: every one, open and closed, for the command palette (`all`, 550 KB at 500 Issues); only the open ones (a twentieth of that) for a title lookup. */
+export const fetchIssueCards = (signal?: AbortSignal, scope: 'all' | 'open' = 'all') =>
+  getJson(`/v1/issues?state=${scope}&limit=500`, ReadIssueCards, signal)
 /** The artifacts, newest first: what the command palette searches. */
 export const fetchArtifacts = (signal?: AbortSignal) => getJson('/v1/artifacts?limit=200', ArtifactList, signal)
 

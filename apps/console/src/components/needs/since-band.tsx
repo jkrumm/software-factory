@@ -10,6 +10,7 @@ import {
   SirenIcon,
 } from '@phosphor-icons/react'
 import { Link } from '@tanstack/react-router'
+import { useEffect, useRef } from 'react'
 import { Fold, InfoHint, Section, SinceRow as SinceRowView, Skeleton } from '@/components/kit'
 import { TONE_TEXT, TONE_TINT } from '@/components/kit/tone'
 import { useMediaQuery } from '@/lib/media'
@@ -17,6 +18,15 @@ import { issueNumber } from '@/lib/needs'
 import { useSince } from '@/lib/queries'
 import { isQuiet, SINCE_HAPPENED, type SinceKey, type SinceRow, sinceRows, visitWords } from '@/lib/since'
 import { cn } from '@/lib/utils'
+
+/** The band's height depends on what happened, so its skeleton takes the height the band had on the last visit (and a typical one before the first). */
+const HEIGHT_KEY = (wide: boolean) => `console-since-height-${wide ? 'wide' : 'compact'}`
+const FALLBACK_HEIGHT = { wide: 310, compact: 392 }
+
+function rememberedHeight(wide: boolean): number {
+  const stored = Number(window.localStorage.getItem(HEIGHT_KEY(wide)))
+  return stored >= 48 ? stored : wide ? FALLBACK_HEIGHT.wide : FALLBACK_HEIGHT.compact
+}
 
 const absolute = (iso: string): string => new Date(iso).toLocaleString()
 
@@ -156,10 +166,14 @@ function CompactBand({ rows, now }: { rows: SinceRow[]; now: number }) {
 export function SinceBand({ now }: { now: number }) {
   const { data, isPending } = useSince()
   const wide = useMediaQuery('(min-width: 768px)')
+  const body = useRef<HTMLDivElement>(null)
+  useEffect(() => {
+    if (body.current) window.localStorage.setItem(HEIGHT_KEY(wide), String(Math.round(body.current.offsetHeight)))
+  }, [data, wide])
   if (isPending) {
     return (
       <Section title="Since you were here" className="mb-8">
-        <Skeleton height={wide ? 112 : 168} />
+        <Skeleton height={rememberedHeight(wide)} rounded="rounded-xl" />
       </Section>
     )
   }
@@ -179,15 +193,17 @@ export function SinceBand({ now }: { now: number }) {
   }
   return (
     <Section title="Since you were here" aside={visit} className="mb-8">
-      {wide ? (
-        <div className="grid grid-cols-[repeat(auto-fill,minmax(20rem,1fr))] gap-x-6 gap-y-6">
-          {rows.map((row) => (
-            <Category key={row.key} row={row} now={now} />
-          ))}
-        </div>
-      ) : (
-        <CompactBand rows={rows} now={now} />
-      )}
+      <div ref={body}>
+        {wide ? (
+          <div className="grid grid-cols-[repeat(auto-fill,minmax(20rem,1fr))] gap-x-6 gap-y-6">
+            {rows.map((row) => (
+              <Category key={row.key} row={row} now={now} />
+            ))}
+          </div>
+        ) : (
+          <CompactBand rows={rows} now={now} />
+        )}
+      </div>
     </Section>
   )
 }
