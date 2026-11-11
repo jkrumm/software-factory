@@ -17,7 +17,7 @@ export interface HealRuleView {
 export interface RepoSignalsView {
   /** the repo as an Issue names it: its directory's name (`repoTextOf`) */
   repo: string
-  /** a repo without a `project.yaml` is a work repo and hears the owner only */
+  /** a repo without a `project.yaml`, or one that says `work: true`, is a work repo and hears the owner only */
   work: boolean
   /** the host named in its project.yaml */
   host: string | null
@@ -39,7 +39,7 @@ export function signalsView(project: StoredProject): RepoSignalsView {
   ]
   return {
     repo: repoTextOf(project),
-    work: project.source === 'defaults',
+    work: project.source === 'defaults' || file.work,
     host: file.host ?? null,
     sources,
     github: github

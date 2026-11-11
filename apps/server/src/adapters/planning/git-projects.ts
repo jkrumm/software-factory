@@ -12,6 +12,8 @@ import { CannotStart, runProcess } from './process.ts'
 export interface GitProjectsOptions {
   /** directories whose direct children are repos */
   roots: readonly string[]
+  /** single repos outside the roots (`FACTORY_REPO_ALLOW`): each is a repo itself, not a directory of repos */
+  allow?: readonly string[]
   timeoutMs: number
 }
 
@@ -95,6 +97,15 @@ export function gitProjectSource(options: GitProjectsOptions): ProjectSource {
   /** The roots after `realpath`, so a path that went through a symlink (`/tmp`) still lies in its root. */
   const realRoots = (): Promise<string[]> => Promise.all(options.roots.map((root) => realpath(root).catch(() => root)))
 
+  const realAllow = (): Promise<string[]> =>
+    Promise.all((options.allow ?? []).map((repo) => realpath(repo).catch(() => repo)))
+
+  /** The allowed repo a path is, or is inside (a worktree of it). */
+  const allowed = (path: string, repos: readonly string[]): RepoRef | null => {
+    const hit = repos.find((repo) => path === repo || path.startsWith(repo.endsWith(sep) ? repo : `${repo}${sep}`))
+    return hit ? { directory: basename(hit), path: hit } : null
+  }
+
   const childOfRoot = (path: string, roots: readonly string[]): RepoRef | null => {
     for (const root of roots) {
       const prefix = root.endsWith(sep) ? root : `${root}${sep}`
@@ -120,6 +131,13 @@ export function gitProjectSource(options: GitProjectsOptions): ProjectSource {
           if (file.code === 0 && file.stdout.trim()) found.push({ directory: entry.name, path })
         }
       }
+      for (const path of await realAllow()) {
+        if (!isProjectDirName(basename(path)) || !(await isRepo(path))) continue
+        const branch = await defaultBranch(path)
+        if (!branch) continue
+        const file = await git(path, ['ls-tree', branch, '--', PROJECT_FILE.path])
+        if (file.code === 0 && file.stdout.trim()) found.push({ directory: basename(path), path })
+      }
       return ok(found)
     },
 
@@ -134,13 +152,15 @@ export function gitProjectSource(options: GitProjectsOptions): ProjectSource {
         const hit = (
           await Promise.all(roots.map(async (root) => ((await isRepo(join(root, repo))) ? join(root, repo) : null)))
         ).find((found) => found !== null)
-        if (!hit) return ok(null)
-        path = hit
+        const byName = (await realAllow()).find((entry) => basename(entry) === repo)
+        const found = hit ?? byName
+        if (!found) return ok(null)
+        path = found
       } else {
         return ok(null)
       }
       // A worktree of a repo is in the repo: the first directory below the root names it.
-      const ref = childOfRoot(path, await realRoots())
+      const ref = childOfRoot(path, await realRoots()) ?? allowed(path, await realAllow())
       if (!ref || !(await isRepo(ref.path))) return ok(null)
       return ok({ directory: basename(ref.path), path: ref.path })
     },

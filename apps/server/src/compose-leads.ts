@@ -65,7 +65,7 @@ export function composeLeads(input: {
     }),
     worktrees: gitWorktrees(),
     branches: gitBranches(input.github),
-    repos: rootedRepos(s.repoRoots),
+    repos: rootedRepos(s.repoRoots, s.repoAllow),
     roles: fileRoles(s.rolesFile),
     seats: input.capacity.seats,
     claims: input.capacity.claims,

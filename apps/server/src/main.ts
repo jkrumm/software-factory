@@ -153,7 +153,10 @@ async function main(): Promise<void> {
   const loopSettings = loadLoopSettings(process.env)
   // The one way to ask agw for a judgment: the Judge, the steward and triage all go through it.
   const agw = agwPort({ bin: settings.agwBin })
-  const planningEnv = planningSettings(process.env, { repoRoots: leadSettings.repoRoots })
+  const planningEnv = planningSettings(process.env, {
+    repoRoots: leadSettings.repoRoots,
+    repoAllow: leadSettings.repoAllow,
+  })
   // Its own reader: the swapout rate of a minute sample counts from the last sample, not from an admission's reading.
   const hostSamples = hostWatch({
     host: hostReader({ sysctlBin: planningEnv.sysctlBin, minSampleMs: 0 }),
@@ -178,7 +181,7 @@ async function main(): Promise<void> {
     longWaitMs: loadNeedsSettings(process.env).longWaitMs,
   })
   const checkout = leadCheckoutOf(uow)
-  const repos = rootedRepos(leadSettings.repoRoots)
+  const repos = rootedRepos(leadSettings.repoRoots, leadSettings.repoAllow)
   const mainCheckoutLines = new MainCheckoutLines()
   const hygieneChecker = createHygieneChecker({ repos, workDir: factoryDataDir(process.env) })
   const projects = projectFileProjects({

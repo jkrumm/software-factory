@@ -135,7 +135,8 @@ export const LANGUAGE = {
     'State: shipped and deployed, the watch is on: the factory runs Verify and the probes, and the Issue closes when they pass',
   window: "An account's 5-hour or weekly reset",
   'window point': "A point of the five-hour Max window that an Issue's sessions used, per Issue",
-  'work repo': 'A repo no project.yaml describes. The read token never sees its words',
+  'work repo':
+    'A repo no project.yaml describes, or whose project.yaml says work: true. The read token never sees its words',
   working: 'State: a lead runs',
   'worth asking': "The owner's flag on an answered Decision. Feeds the ledger and the Judge's precedent",
 } as const satisfies Record<string, string>

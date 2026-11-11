@@ -60,7 +60,8 @@ the record of the rewrite and `docs/rewrite/state.md` its log. A directory listi
   `machine`, `signal`, `read`); a route with no row is 403 for everyone, so a new route gets its row first and
   `apps/server/test/policy.test.ts` fails without one. Only `GET /health` is public. When in doubt, the owner alone.
 - **Trust boundary.** The owner's token and the orchestrator's can start Claude Code with `--dangerously-skip-permissions`: a spawn's repo must be
-  inside `FACTORY_REPO_ROOTS` after `realpath` (`adapters/git/repos.ts`). The API is loopback only; the tailnet and the
+  inside `FACTORY_REPO_ROOTS` after `realpath`, or be one of the repos `FACTORY_REPO_ALLOW` names (colon-separated absolute
+  paths, each one repo and its worktrees, never its siblings; `adapters/git/repos.ts`). Work repos of another organisation are admitted by name through the allowlist, never by adding the directory that holds them as a root. The API is loopback only; the tailnet and the
   owner's GitHub user are the perimeter. `FACTORY_REF=<branch>` deploys that branch, the same boundary.
 - **The Console listener** (`apps/server/src/api/console.ts`) is a second loopback listener (`FACTORY_CONSOLE_PORT`, default 7795; 7794 is the agw gateway's), published on the tailnet by
   dotfiles-private's serve row on :8797 (not by `make deploy`) and started whenever the Console is built. It answers 405 to
@@ -79,7 +80,7 @@ the record of the rewrite and `docs/rewrite/state.md` its log. A directory listi
   the `origin` check compares with the request's own `Host`, so a page rebound to loopback in a browser on the mini passes it.
   The Console (`apps/console`, `README.md` there) holds no logic the API could hold, and
   `apps/console/test/no-raw-colour.test.ts` fails on any raw colour.
-- **Work repos hear only the owner** (NL18, no `project.yaml`), and the read token never sees their words
+- **Work repos hear only the owner** (NL18, no `project.yaml`, or `work: true` in it for a repo the factory builds in but that is not the owner's), and the read token never sees their words
   (`read/surface.ts` keeps shape, ids, states and counts). Their text may go to agw (NL22).
 - **The door** (`apps/door`) holds only `FACTORY_DOOR_TOKEN` (caller `machine`: `POST /signals/alerts`,
   `POST /signals/feedback` and `POST /door/reports`, nothing else), no database credential, and takes the repo from the door route registry

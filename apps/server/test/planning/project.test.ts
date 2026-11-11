@@ -181,6 +181,12 @@ describe('what intake hears', () => {
     return { name: 'x', repo: '/src/x', source, project: parsed.project } as StoredProject
   }
 
+  test('work: true keeps a repo with a project.yaml a work repo', () => {
+    const view = signalsView(stored({ apiVersion: 'factory/v2', name: 'x', work: true }))
+    expect(view.work).toBe(true)
+    expect(signalsView(stored({ apiVersion: 'factory/v2', name: 'x' })).work).toBe(false)
+  })
+
   test('the automatic sources a project lists, its heal rules in milliseconds, and a repo without a file is a work repo', () => {
     const view = signalsView(
       stored({
