@@ -29,7 +29,7 @@ export const REGRESSION_CAUSES = [
 ] as const
 
 /** The Issue events that count as a lead visibly acting after a nudge (a lead's own verb, not a note). */
-const ACTION_KINDS = ['shipped', 'asked', 'deferred', 'closed', 'submitted', 'errand_raised', 'blocked'] as const
+const ACTION_KINDS = ['shipped', 'asked', 'deferred', 'closed', 'submitted', 'errand_raised', 'stalled'] as const
 /** How long after a steward's note a lead's action still counts as its answer. */
 export const NUDGE_ANSWER_MS = 30 * 60_000
 
@@ -65,7 +65,7 @@ async function queuedTime(sql: SQL, w: Window) {
 
 /**
  * Hours of the window when an Issue no `after` edge held sat queued while an account had room, and the hours an Issue like
- * that was queued at all. Read at the top of each hour: the Issue's state then, the best account's readings in that hour.
+ * that was queued at all. Read at the top of each hour: the Issue's state then, the best account's readings in that hour. An hour with no capacity reading at all (the readings are kept a week, or the server was down) is not counted either way, so a window older than the readings is unmeasured, not zero.
  */
 async function idleHours(sql: SQL, w: Window): Promise<{ hours: number; idle: number }> {
   const [row] = await sql`
@@ -79,8 +79,12 @@ async function idleHours(sql: SQL, w: Window): Promise<{ hours: number; idle: nu
     b AS (
       SELECT issue_id, min(created_at) AS b0, max(coalesce(satisfied_at, ${NEVER})) AS b1
       FROM factory.planning_edges GROUP BY issue_id),
+    seen AS (
+      SELECT DISTINCT date_trunc('hour', read_at) AS h FROM factory.capacity_readings
+      WHERE read_at >= ${w.from} AND read_at < ${w.to}),
     free AS (
       SELECT DISTINCT hrs.h FROM hrs
+      JOIN seen ON seen.h = hrs.h
       JOIN q ON q.s <= hrs.h AND hrs.h < q.e
       LEFT JOIN b ON b.issue_id = q.issue_id
       WHERE b.issue_id IS NULL OR NOT (b.b0 <= hrs.h AND hrs.h < b.b1)),
@@ -273,7 +277,7 @@ export async function flowKpis(sql: SQL, w: Window): Promise<Array<Omit<Kpi, 'hi
       count: idle.idle,
       target: TREND,
       measured: true,
-      definition: `Of the hours of the window (read at the top of the hour) in which an Issue no after edge held sat queued, the share in which an enabled, signed-in account that was not exhausted had room: its five-hour window under ${ROOM_FIVE_HOUR_BELOW} % and its week under ${ROOM_WEEKLY_BELOW} %. A queue that waits behind a timer, a repo’s lead cap or a slot shows here.`,
+      definition: `Of the hours of the window (read at the top of the hour) in which an Issue no after edge held sat queued, the share in which an enabled, signed-in account that was not exhausted had room: its five-hour window under ${ROOM_FIVE_HOUR_BELOW} % and its week under ${ROOM_WEEKLY_BELOW} %. Hours with no capacity reading (the readings are kept a week) are left out, so an older window has no data. A queue that waits behind a timer, a repo’s lead cap or a slot shows here.`,
       parts: [],
     }),
     kpi({

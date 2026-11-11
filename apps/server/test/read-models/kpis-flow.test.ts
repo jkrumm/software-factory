@@ -52,6 +52,7 @@ beforeAll(async () => {
     ['issue_2', 'closed', 6, 'dropped'],
     ['issue_3', 'closed', 5, 'cancelled'],
     ['issue_9', 'watching', 3, undefined],
+    ['issue_40', 'working', 4, undefined],
   ] as const)
     await issue(id, state, version, outcome)
 
@@ -98,6 +99,16 @@ beforeAll(async () => {
   await event('issue_9', 1, 'filed', ago(210), { to: 'settling' })
   await event('issue_9', 2, 'admitted', ago(209))
   await event('issue_9', 3, 'shipped', ago(200), { to: 'watching' })
+
+  // issue_40: a lead works, the steward nudges it, and the lead answers with `issue block` (a stalled event) ten minutes later
+  await event('issue_40', 1, 'filed', ago(30), { to: 'settling' })
+  await event('issue_40', 2, 'admitted', ago(30))
+  await event('issue_40', 3, 'noted', ago(30), { actor: 'steward', key: 'noted:issue_40:steward:c3' })
+  await event('issue_40', 4, 'stalled', new Date(ago(30).getTime() + 600_000), {
+    actor: 'lead',
+    to: 'waiting',
+    wait: { reason: 'blocked', holds: null, since: 4, told: 4 },
+  })
 
   // capacity: room at 93 h ago, none at 91 h ago
   await sql`INSERT INTO factory.capacity_readings (account, read_at, enabled, auth_ok, five_hour_used, weekly_used)
@@ -175,19 +186,20 @@ describe('queue time, idle capacity and the lead’s time', () => {
 
   test('idle capacity counts the hours an unblocked Issue was queued and an account had room', async () => {
     const k = (await flow())('idle_capacity')
-    // free hours: issue_1 94..91 h ago (4), issue_2 69..66 (4), issue_3 49..46 (4); room only in the hour of 93 h ago
-    expect(k.n).toBe(12)
+    // free hours: issue_1 94..91 h ago, issue_2 69..66, issue_3 49..46; only 93 h ago and 91 h ago have a reading, and only
+    // the first shows room. An hour with no reading is not counted: the readings are kept a week.
+    expect(k.n).toBe(2)
     expect(k.count).toBe(1)
-    expect(k.value).toBeCloseTo(1 / 12, 6)
+    expect(k.value).toBeCloseTo(0.5, 6)
   })
 
   test('working share divides a lead’s time into working and each wait reason', async () => {
     const k = (await flow())('working_share')
     // working: issue_1 18 h, issue_2 25 h, issue_3 1 h; waiting for a decision 2 h; issue_9 watched 0 h ended before the window
     const working = k.parts.find((p) => p.key === 'working')?.value ?? 0
-    expect(working).toBeCloseTo(44 * H, -3)
+    expect(working).toBeCloseTo((44 + 1 / 6) * H, -3)
     expect(k.parts.find((p) => p.key === 'waiting:decision')?.value).toBeCloseTo(2 * H, -3)
-    expect(k.value).toBeCloseTo(44 / 46, 6)
+    expect(k.value).toBeCloseTo((44 + 1 / 6) / (46 + 1 / 6), 6)
     const sqlWorking = await num(sql`
       WITH ev AS (SELECT to_state, at, lead(at) OVER (PARTITION BY issue_id ORDER BY version) AS nxt
         FROM factory.issue_events WHERE result = 'applied')
@@ -212,8 +224,9 @@ describe('what leads and the loops cost', () => {
   test('amends, nudges, forced-note delay and Errands', async () => {
     const k = await flow()
     expect(k('amend_rate')).toMatchObject({ n: 3, count: 2 })
-    // two steward notes; the one on issue_1 was followed by a lead's ask within 30 minutes, the one on issue_2 only an hour later
-    expect(k('nudges_acted')).toMatchObject({ n: 2, count: 1, value: 0.5 })
+    // three steward notes: on issue_1 a lead's ask followed within 30 minutes, on issue_40 its block (a stalled event), on issue_2
+    // the next action only an hour later
+    expect(k('nudges_acted')).toMatchObject({ n: 3, count: 2 })
     expect(k('forced_note_delay_p50')).toMatchObject({ n: 3, value: 120_000 })
     expect(k('forced_note_delay_p50').parts).toEqual([
       { key: 'p90', label: '90th percentile', value: 504_000, unit: 'ms' },

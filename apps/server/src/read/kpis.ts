@@ -14,7 +14,8 @@ export const TOUCH_EVENTS = ['noted', 'woken', 'cancelled', 'reopened'] as const
  * (`noted:issue_<n>:owner:<call>`). The `via` guard keeps an old orchestrator client that still sends the owner's token
  * (and `--via orchestrator`) out of the count; it can go once the orchestrator's token is in use everywhere.
  * The first note of a filing, an Errand done and a verdict note are the owner's request or answer, not a touch.
- * `avoidableTouches` and the touch evidence of `readFrictionEvidence` both use this, so they agree.
+ * `avoidableTouches` and the touch evidence of `readFrictionEvidence` both use this predicate; the count then collapses a burst
+ * of one kind within `TOUCH_BURST_MS` into one action, while the evidence lists every Issue touched.
  */
 export const ownerTouch = (sql: SQL, kinds: readonly string[]) => sql`
   actor = 'owner' AND result = 'applied' AND kind IN ${sql([...kinds])}
