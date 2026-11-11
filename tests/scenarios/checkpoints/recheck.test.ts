@@ -136,7 +136,12 @@ test('a stale Decision and a stale Errand whose Issue is closed are withdrawn wi
     'errand',
     'raise',
     errandIssue,
-    ...body({ attempt: 1, summary: 'Approve the build in the portal', detail: 'Release > Build 42 > Approve' }),
+    ...body({
+      attempt: 1,
+      summary: 'Approve the build in the portal',
+      detail: 'Release > Build 42 > Approve',
+      tried: 'looked for an API route: none',
+    }),
   )
   expect((await pass()).errands).toEqual([{ errand: raised.errand.id, outcome: 'reached_owner' }])
   const calls = (await askCalls()).length

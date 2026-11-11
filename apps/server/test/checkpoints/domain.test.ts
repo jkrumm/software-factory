@@ -18,7 +18,7 @@ import {
   readDecisionForm,
   scrub,
 } from '../../src/domains/checkpoints/decision.ts'
-import { checkErrandScreen, readErrand, screenByRule } from '../../src/domains/checkpoints/errand.ts'
+import { checkErrandScreen, readErrand, refuseHostClass, screenByRule } from '../../src/domains/checkpoints/errand.ts'
 import {
   decisionPageKey,
   deepLink,
@@ -99,6 +99,19 @@ describe('readDecisionForm', () => {
     )
     expect(fields({ noAnswer: { consequence: 'c', default: 'pino' } })[0]).toContain('noAnswer.waitMinutes')
     expect(fields({ noAnswer: { consequence: 'c', waitMinutes: 5 } })[0]).toContain('noAnswer.default')
+  })
+
+  test('a recommendation that is no option lists the options, every violation at once', () => {
+    const read = readDecisionForm({
+      ...RAW,
+      recommendation: 'use pino because it is fast',
+      noAnswer: { consequence: 'c', default: 'bunyan', waitMinutes: 5 },
+    })
+    expect(read.ok).toBe(false)
+    const fields = read.ok ? [] : read.error.fields
+    expect(fields).toHaveLength(2)
+    for (const field of fields) expect(field).toContain('the options are: pino | winston | drop the table')
+    expect(!read.ok && read.error.detail).toContain('recommendation (not one of the options')
   })
 
   test('a Decision without a default needs only its consequence', () => {
@@ -287,11 +300,43 @@ describe('artifacts', () => {
 
 describe('errands', () => {
   test('an Errand needs its summary', () => {
-    expect(readErrand({ detail: 'x' }).ok).toBe(false)
-    expect(readErrand({ summary: ' Approve the portal ' })).toMatchObject({
+    expect(readErrand({ detail: 'x', tried: 'y' }).ok).toBe(false)
+    expect(readErrand({ summary: ' Approve the portal ', tried: ' looked for a token ' })).toMatchObject({
       ok: true,
-      value: { summary: 'Approve the portal' },
+      value: { summary: 'Approve the portal', tried: 'looked for a token' },
     })
+  })
+
+  test('an Errand names what was tried, and the refusal says so', () => {
+    const read = readErrand({ summary: 'Approve the portal' })
+    expect(read.ok).toBe(false)
+    expect(!read.ok && read.error.fields[0]).toStartWith('tried')
+  })
+
+  test('an Errand for what the host does is refused with the route to take', () => {
+    const refusal = (summary: string, tried = 'looked around', detail: string | null = null) =>
+      refuseHostClass({ summary, detail, tried })
+    // Issue 409: a token mint and a door route.
+    expect(refusal('Mint a door token for kuma and set its route')).toContain('factory door token new')
+    // Issue 412: monitor routes into other repos.
+    expect(refusal('Set the 11 HyperDX monitor routes to the other repos')).toContain(
+      'factory signal file --from agent:',
+    )
+    // Issue 425: installs.
+    expect(refusal('Install exiftool and magick on the mini')).toContain('Makefile target')
+    expect(refusal('Run brew install exiftool')).toContain('Makefile target')
+    // Issue 483: a sudo step, unless the lead shows what it ran without.
+    expect(refusal('Run sudo launchctl bootstrap for the agent')).toContain('without root')
+    expect(
+      refusal('Run sudo launchctl bootstrap for the agent', 'tried it without sudo: the plist needs /Library'),
+    ).toBeNull()
+    // Issues 379 and 443: a verdict pointer for a Report.
+    expect(refusal('Point the owner at the verdict: the Report does not show in Needs you')).toContain(
+      '--repo software-factory',
+    )
+    // A person's hands pass.
+    expect(refusal('Approve the App Store build in the portal')).toBeNull()
+    expect(refusal('Plug the cable into the device')).toBeNull()
   })
 })
 

@@ -58,6 +58,30 @@ const pointerHint = `the filing contract (facts keys, flags, example): ${POINTER
 
 const planLimitsHelp = `docs/plan.yaml limits: at most ${PLAN_LIMITS.maxBytes / 1024} KiB, at most ${PLAN_LIMITS.maxAliases} YAML aliases, at most ${PLAN_LIMITS.maxAfter} "after" keys per row (a plan over any is broken; format in docs/plan.md)`
 
+const decisionHelp = [
+  'A Decision is refused as a whole, every violation named at once, and nothing is raised.',
+  '  --recommendation is the label of one option (case ignored), not a sentence about it',
+  '  --options is a JSON array of 2 to 10 objects {"label","reversible","cost"}: every label different, reversible true or false',
+  '  --no-answer is {"consequence","default","waitMinutes"}: the default is the label of a reversible option and needs waitMinutes (1 to 10080); with neither, nothing is taken without an answer',
+  '  each text at most 4000 characters; --call <id> makes a repeated call one Decision',
+].join('\n')
+
+const errandHelp = [
+  "An Errand is a person's hands (a device, a portal, a physical step) and nothing a token can do. --tried says what you ran first.",
+  'The host does these for you, so an Errand that asks for one is refused with the route:',
+  '  a door token: `factory door token new <source>`; a door route into your own repo: `factory door route-set`; into another repo: `factory signal file --repo <that repo>`',
+  '  an install: a Makefile target of the repo (`brew install` through it)',
+  '  a secret read: `secrets-run`; a sudo step: a way without root first',
+  '  a Report that does not show in Needs you: a signal on software-factory',
+  'Raise the Errand as the last step of a turn and end the turn: `ship`, `defer` and `close` are taken again after the note that it is done.',
+].join('\n')
+
+const submitHelp =
+  'Limits: --title at most 200 characters, --content at most 1000000 characters. A Concept or Spec waits for its verdict (end the turn); a Report never waits.'
+
+const signalKindHint =
+  "a signal's kind is request, feedback or remark; bug, feature or chore is an Issue's kind, set by triage; to choose it yourself file the Issue: `factory issue new --kind bug|feature|chore`"
+
 /** What a command says beyond its generated contract: help text, hints for a rejected field, hints per status. */
 export const OPERATION_EXTENSIONS: Readonly<Record<string, OperationExtension>> = {
   'project.show': { help: planLimitsHelp, plain: projectShowPlain },
@@ -69,6 +93,10 @@ export const OPERATION_EXTENSIONS: Readonly<Record<string, OperationExtension>> 
   },
   'issue.list': { plain: issueListPlain },
   'issue.ship': { notice: shipNotice },
+  'issue.ask': { help: decisionHelp },
+  'errand.raise': { help: errandHelp },
+  'artifact.submit': { help: submitHelp },
+  'signal.file': { fieldHints: { kind: signalKindHint } },
   'issue.new': {
     help: filingGuide(),
     jsonObjectFields: { facts: factsHint, seat: seatHint },

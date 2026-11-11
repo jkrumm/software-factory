@@ -37,6 +37,16 @@ Also:
 - Quote a glob or use \`rg\`: zsh stops on an unmatched \`--include=*\` with "no matches found". \`gh pr merge --admin\` is refused; fix the red run instead.
 - Your tools: Bash, Read, Edit, Write, Agent, Skill. There is no Grep or Glob tool: search with \`rg\` and \`ls\` in Bash. A deferred tool such as Monitor loads with ToolSearch first, and Monitor needs its \`description\` parameter.
 
+# What you do yourself on the mini
+
+An Errand is refused for any of these; each is one command of yours:
+
+- A door token: \`factory door token new <source>\` (offline, on the host). A door route into your own repo: \`factory door route-set\`; a route into another repo is that repo's lead's, so file a signal for it (\`factory signal file --repo <that repo>\`).
+- A secret read: \`secrets-run read op://...\`, or \`secrets-run run --env-file=<tpl> -- <cmd>\`; never \`op\`, which hangs on the mini.
+- A tool install (exiftool, ImageMagick): a target of the repo's Makefile that runs \`brew install\`; add it, run it with \`make -C <worktree> <target>\`.
+- A step that wants sudo: look first for a way without root (brew, a user-level launchd agent, a path under the home directory); raise the Errand only when none exists, and say what you ran in \`--tried\`.
+- A Report that does not show in Needs you is a defect of the factory: a signal on software-factory, never an Errand.
+
 # Verbs
 
 Every verb is a plain command with flags. Name your attempt with \`--attempt <n>\` (the number is in this brief); \`--call <id>\` is optional and makes a repeated call one event. \`factory <group> <verb> --help\` lists every flag. A value that is \`-\` is read from stdin and one that starts with \`@\` from the file it names; write \`@@\` to start a text with a literal \`@\`.
@@ -50,7 +60,7 @@ Every verb is a plain command with flags. Name your attempt with \`--attempt <n>
 - Hand over a Concept, Spec or Report for review: \`factory artifact submit <id> --attempt <n> --kind spec --title "..." --content @file.md\` (\`--content-format markdown|html\`).
 - Revise it after a verdict of changes: \`factory artifact revise <artifact-id> --content @file.md --note "what changed" --attempt <n>\`.
 - Read it with its annotations: \`factory artifact show <artifact-id>\`.
-- Raise an Errand, only for a person's hands (a device, a portal, a physical step), never for a CLI call a token can make: \`factory errand raise <id> --attempt <n> --summary "..." --detail "..."\`.
+- Raise an Errand, only for a person's hands (a device, a portal, a physical step), never for a CLI call a token can make: \`factory errand raise <id> --attempt <n> --summary "..." --detail "..." --tried "what you ran first"\`. It is the last step of a turn: end the turn, and \`ship\`, \`defer\` and \`close\` are refused until the note that it is done. An Errand for something in the list under "What you do yourself" is refused with the route.
 - Route a monitor to your own repo, or remove such a route: \`factory door route-set --source <source> --monitor <monitor> --repo <your repo> --issue <id>\` / \`factory door route-remove --source <source> --monitor <monitor> --issue <id>\`; another repo's route is refused.
 - File follow-up work for another Issue: \`factory signal file --from agent:<repo> --title "..." --text "..."\` (\`--repo <other repo>\` names where it goes; without it, the repo in \`--from\`).
 - Friction with the factory itself (a refusal \`--help\` did not predict, a hidden limit, a wrong state): report it once as a signal on software-factory, \`factory signal file --from agent:<repo> --repo software-factory --title "..." --text "the command, the answer, what you expected"\`. Triage merges duplicates into one Issue; never file that Issue yourself with \`factory issue new\`.

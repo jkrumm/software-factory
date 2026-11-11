@@ -241,6 +241,16 @@ describe('asking', () => {
   })
 })
 
+describe('a call', () => {
+  test('the same call twice is one Decision', async () => {
+    const issueId = await workingIssue()
+    const first = value(await askDecision(deps, { issueId, attempt: 1, form: FORM, call: 'a-1' }))
+    const again = value(await askDecision(deps, { issueId, attempt: 1, form: FORM, call: 'a-1' }))
+    expect(again).toMatchObject({ result: 'replayed', decision: { id: first.decision.id } })
+    expect(await rows('decisions')).toBe(1)
+  })
+})
+
 describe('amending', () => {
   const AMENDED = { question: 'Which logger, pino or winston, should the server use?', recommendation: 'winston' }
 
@@ -1015,7 +1025,7 @@ describe('a Decision raised during a review', () => {
 })
 
 describe('errands', () => {
-  const APPROVE = { summary: 'Approve the App Store build' }
+  const APPROVE = { summary: 'Approve the App Store build', tried: 'looked for an API key route: none' }
   const raise = async (issueId: IssueId, raw: Record<string, unknown> = APPROVE) =>
     value(await raiseErrand(deps, { issueId, attempt: 1, raw }))
   const pageCount = async () => rows('checkpoint_pages')
@@ -1079,7 +1089,11 @@ describe('errands', () => {
 
   test('a rule turns away a command a token can run without calling the screen', async () => {
     const issueId = await workingIssue()
-    const raised = await raise(issueId, { summary: 'Run the migration', detail: 'Run `make deploy` on the host' })
+    const raised = await raise(issueId, {
+      summary: 'Run the migration',
+      detail: 'Run `make deploy` on the host',
+      tried: 'nothing yet',
+    })
     expect(value(await screenErrands(deps))).toEqual([{ errand: raised.errand.id, outcome: 'turned_away' }])
     expect(screenCalls).toEqual([])
     const [event] =
@@ -1143,9 +1157,46 @@ describe('errands', () => {
     expect((await eventsOf(issueId)).filter((kind) => kind === 'errand_done')).toHaveLength(1)
   })
 
+  test('an Errand a host class covers is refused at the raise: nothing is raised and the route is named', async () => {
+    const issueId = await workingIssue()
+    for (const [summary, route] of [
+      ['Mint a door token and set the door route for kuma', 'factory door token new'],
+      ['Install exiftool and magick on the mini', 'Makefile target'],
+      ['Point the owner at the verdict: the Report does not show in Needs you', '--repo software-factory'],
+    ] as const) {
+      const refused = errorOf(await raiseErrand(deps, { issueId, attempt: 1, raw: { summary, tried: 'nothing' } }))
+      expect(refused).toMatchObject({ kind: 'invalid' })
+      expect(JSON.stringify(refused)).toContain(route)
+    }
+    expect(await rows('errands')).toBe(0)
+    expect(await eventsOf(issueId)).not.toContain('errand_raised')
+  })
+
+  test('what the lead tried is never read by the rule screen as the ask', async () => {
+    const issueId = await workingIssue()
+    const raised = await raise(issueId, {
+      summary: 'Rotate the OAuth consent in the Google console',
+      tried: '`gh api /repos/x` returned 403',
+    })
+    expect(raised.errand.detail).toBeNull()
+    expect(value(await screenErrands(deps))).not.toEqual([{ errand: raised.errand.id, outcome: 'turned_away' }])
+  })
+
+  test('the same call twice is one Errand, whatever its summary', async () => {
+    const issueId = await workingIssue()
+    const first = value(await raiseErrand(deps, { issueId, attempt: 1, raw: APPROVE, call: 'e-1' }))
+    const second = value(
+      await raiseErrand(deps, { issueId, attempt: 1, raw: { ...APPROVE, summary: 'Another words' }, call: 'e-1' }),
+    )
+    expect(second).toMatchObject({ result: 'replayed', errand: { id: first.errand.id } })
+    expect(await rows('errands')).toBe(1)
+  })
+
   test('an Errand with no summary is refused with the field named', async () => {
     const issueId = await workingIssue()
-    expect(errorOf(await raiseErrand(deps, { issueId, attempt: 1, raw: { detail: 'x' } }))).toMatchObject({
+    expect(
+      errorOf(await raiseErrand(deps, { issueId, attempt: 1, raw: { detail: 'x', tried: 'a command' } })),
+    ).toMatchObject({
       kind: 'missing_field',
       fields: ['summary'],
     })

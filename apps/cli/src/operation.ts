@@ -67,6 +67,8 @@ export interface OperationExtension {
   help?: string
   /** json body fields that must be an object, by name, with the hint a value that is not one gets */
   jsonObjectFields?: Readonly<Record<string, string>>
+  /** what a body field that the contract refuses is for, by name: appended to the usage error that names it */
+  fieldHints?: Readonly<Record<string, string>>
   /** the hint of a failing answer, by status; wins over the default */
   statusHints?: Readonly<Record<number, string>>
   /** the plain rendering of a 2xx answer, instead of the generic `key<TAB>value` lines; empty prints nothing */

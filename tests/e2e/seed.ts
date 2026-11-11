@@ -96,7 +96,12 @@ export async function seed(lab: Lab): Promise<void> {
     'html',
   )
   const raise = (issue: string, summary: string, detail: string) =>
-    api(url, `/v1/issues/${issue}/errands`, { attempt: 1, summary, detail })
+    api(url, `/v1/issues/${issue}/errands`, {
+      attempt: 1,
+      summary,
+      detail,
+      tried: 'looked for a command or token route: none',
+    })
   await raise(
     key,
     'Rotate the argo deploy key in the portal',
