@@ -84,6 +84,8 @@ export interface IdleLead {
   title: string
   lead: string
   idleSince: Date
+  /** its last turn ended with background work in flight: it waits for that, and is judged by the longer threshold */
+  background: boolean
 }
 
 /** An Issue waiting on a regression, with what its ship deployed (null: no ship evidence is stored). */

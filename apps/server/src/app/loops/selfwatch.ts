@@ -54,6 +54,8 @@ export interface SelfwatchDeps {
   graceMs: number
   /** the steward's threshold for a quiet lead */
   idleLeadMs: number
+  /** the same for a lead whose last turn ended with background work in flight */
+  idleBackgroundMs: number
   ci: CiRuns
   migrations: MigrationFiles
   /** migration numbers two applied files share (`SHARED_NUMBERS`) */
@@ -97,6 +99,7 @@ async function idleLeads(deps: SelfwatchDeps): Out<IdleLead[]> {
       title: idle.facts.title,
       lead: leadKey(id, idle.facts.attempt),
       idleSince: idle.idle.idleSince,
+      background: idle.idle.background,
     })
   }
   return ok(found)
@@ -157,7 +160,9 @@ async function gather(deps: SelfwatchDeps, now: Date): Out<Gathered> {
 
   const idle = await idleLeads(deps)
   if (!idle.ok) return idle
-  gathered.findings.push(...idleFindings(idle.value, now, deps.idleLeadMs))
+  gathered.findings.push(
+    ...idleFindings(idle.value, now, { idleLeadMs: deps.idleLeadMs, idleBackgroundMs: deps.idleBackgroundMs }),
+  )
 
   const regressed = await regressions(deps)
   if (!regressed.ok) return regressed

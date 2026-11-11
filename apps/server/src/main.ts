@@ -239,7 +239,12 @@ async function main(): Promise<void> {
     claimQueued: planning.claimQueued,
     claimFree: planning.claimFree,
     claimStallMs: loopSettings.claimStallMs,
-    rules: { ...DEFAULT_STEWARD_RULES, minStallMs: loopSettings.minStallMs, idleLeadMs: loopSettings.idleLeadMs },
+    rules: {
+      ...DEFAULT_STEWARD_RULES,
+      minStallMs: loopSettings.minStallMs,
+      idleLeadMs: loopSettings.idleLeadMs,
+      idleBackgroundMs: loopSettings.idleBackgroundMs,
+    },
     retryMs: loopSettings.retryMs,
     settleTimeoutMs: loopSettings.settleTimeoutMs,
     blockedChecks: loopSettings.blockedChecks,
@@ -429,6 +434,7 @@ async function main(): Promise<void> {
           branch: loopSettings.selfwatchBranch,
           graceMs: loopSettings.selfwatchGraceMs,
           idleLeadMs: loopSettings.idleLeadMs,
+          idleBackgroundMs: loopSettings.idleBackgroundMs,
           ci: githubCiRuns({
             locate: (repo) => repos.locate(repo),
             token: intakeEnv.github.token,

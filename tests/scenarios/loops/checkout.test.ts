@@ -5,7 +5,8 @@ import { runLoop, working } from './support.ts'
 
 /**
  * A repo's main checkout is shared; a lead works in its own worktree. With a live lead, a main checkout off the default
- * branch is one note to the lead (not one per pass) and a health line, against the real server, Postgres and git.
+ * branch is a health line, and a note only to the lead whose branch it is (once, not one per pass), never to every lead of
+ * the repo, against the real server, Postgres and git.
  */
 let lab: Lab
 
@@ -31,23 +32,36 @@ const notes = async (issue: string): Promise<string[]> => {
   return rows.map((row: { text: string }) => row.text).filter((text: string) => text.includes('main checkout'))
 }
 
-test('a main checkout off its default branch is noted once to the live lead and shows as a health line', async () => {
-  const issue = await working(lab, 'app', 'the lead stays in its worktree')
+test('a main checkout off its default branch is a health line, and reaches no lead unless it is that lead’s branch', async () => {
+  const leads = [
+    await working(lab, 'app', 'the first lead stays in its worktree'),
+    await working(lab, 'app', 'the second lead stays in its worktree'),
+    await working(lab, 'app', 'the third lead stays in its worktree'),
+  ]
+  const noted = async () => (await Promise.all(leads.map(notes))).flat()
   expect((await runLoop(lab, 'steward')).error).toBeNull()
-  expect(await notes(issue)).toEqual([])
+  expect(await noted()).toEqual([])
 
+  // a branch no lead owns (the owner's, or a plan-owning session's): the health line alone, for any number of passes
   await git('checkout', '-q', '-b', 'stray')
-  const ran = await runLoop(lab, 'steward')
-  expect(ran.error).toBeNull()
-  expect(await notes(issue)).toHaveLength(1)
-  expect((await notes(issue))[0]).toContain('stray')
-
-  await runLoop(lab, 'steward')
-  expect(await notes(issue)).toHaveLength(1)
-
+  for (let pass = 0; pass < 2; pass++) expect((await runLoop(lab, 'steward')).error).toBeNull()
+  expect(await noted()).toEqual([])
   const health = await lab.cli(['--format', 'json', 'read', 'health'])
   expect(health.code).toBe(0)
   expect(JSON.stringify(health.json)).toContain('main-checkout:app')
+
+  await git('checkout', '-q', 'main')
+  await runLoop(lab, 'steward')
+  expect(JSON.stringify((await lab.cli(['--format', 'json', 'read', 'health'])).json)).not.toContain('main-checkout:')
+
+  // the branch of one lead: that lead hears it once, and the other two never do
+  const mine = leads[1] as string
+  // (attempt 9: the lead's own branch, attempt 1, is checked out in its worktree)
+  await git('checkout', '-q', '-b', `factory/${mine.slice('issue_'.length)}-9`)
+  for (let pass = 0; pass < 2; pass++) await runLoop(lab, 'steward')
+  expect(await notes(mine)).toHaveLength(1)
+  expect((await notes(mine))[0]).toContain('factory/')
+  expect(await noted()).toHaveLength(1)
 
   await git('checkout', '-q', 'main')
   await runLoop(lab, 'steward')

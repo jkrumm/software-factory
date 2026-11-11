@@ -167,10 +167,15 @@ export function waitFindings(waits: readonly WaitFact[], now: Date, graceMs: num
 
 // ---- 4. lead_idle ---------------------------------------------------------------------------------------------------------
 
-/** A lead whose session has been quiet longer than the steward's threshold (`idleLeadMs`). */
-export function idleFindings(leads: readonly IdleLead[], now: Date, idleLeadMs: number): Finding[] {
+/** A lead whose session has been quiet longer than the steward's threshold (`idleLeadMs`; `idleBackgroundMs` when it waits on background work). */
+export function idleFindings(
+  leads: readonly IdleLead[],
+  now: Date,
+  thresholds: { idleLeadMs: number; idleBackgroundMs: number },
+): Finding[] {
+  const limit = (lead: IdleLead) => (lead.background ? thresholds.idleBackgroundMs : thresholds.idleLeadMs)
   return leads
-    .filter((lead) => now.getTime() - lead.idleSince.getTime() > idleLeadMs)
+    .filter((lead) => now.getTime() - lead.idleSince.getTime() > limit(lead))
     .map((lead) => ({
       kind: 'lead_idle' as const,
       subject: lead.lead,
@@ -178,7 +183,9 @@ export function idleFindings(leads: readonly IdleLead[], now: Date, idleLeadMs: 
       facts: [
         `${lead.issue} (${oneLine(lead.title, 200)}) is working, its lead ${lead.lead} reported nothing`,
         `idle since ${iso(lead.idleSince)}`,
-        `threshold: ${Math.round(idleLeadMs / 60_000)} min (FACTORY_STEWARD_IDLE_MS)`,
+        lead.background
+          ? `threshold: ${Math.round(thresholds.idleBackgroundMs / 60_000)} min (FACTORY_STEWARD_IDLE_BACKGROUND_MS), background work was in flight when its turn ended`
+          : `threshold: ${Math.round(thresholds.idleLeadMs / 60_000)} min (FACTORY_STEWARD_IDLE_MS)`,
       ],
       context: [`Now: ${iso(now)}`, `Idle for ${Math.floor((now.getTime() - lead.idleSince.getTime()) / 60_000)} min`],
       reproduce: `factory issue show ${lead.issue}; factory read overview`,
