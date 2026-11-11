@@ -34,6 +34,7 @@ import type {
   VerdictRecord,
 } from '../domains/checkpoints/ports.ts'
 import type { IssueEvent } from '../domains/work/events.ts'
+import { holdsIn, holdUntil, isHold } from '../kernel/hold.ts'
 import type { Issue } from '../domains/work/issue.ts'
 import { replay } from '../domains/work/machine.ts'
 import type { WorkStore } from '../domains/work/ports.ts'
@@ -303,12 +304,21 @@ export async function answerIn(
       : answering.by === 'judge'
         ? 'judge'
         : 'factory'
-  if (answering.note) {
+  // The Judge's hold on a stall the steward asked about: the Issue waits until a time instead of waking its lead to block again.
+  let hold: string | undefined
+  let note = answering.note
+  if (answering.by === 'judge' && fresh.askedBy === 'steward' && isHold(answering.text)) {
+    const history = await work.history(fresh.issueId)
+    hold = holdUntil(at, history ? holdsIn(history) : 0)
+    note =
+      `${note ?? ''} The Issue waits until ${hold} and you hear this then; if the cause is unchanged by then, report it again with what you checked, and the next wait is longer.`.trim()
+  }
+  if (note) {
     const noted = applied(
       await recordIn(work, deps, {
         issueId: fresh.issueId,
         key: key('noted', 'answer', fresh.id),
-        event: { kind: 'noted', payload: { text: answering.note }, actor },
+        event: { kind: 'noted', payload: { text: note }, actor },
       }),
       'noted',
     )
@@ -318,7 +328,11 @@ export async function answerIn(
     await recordIn(work, deps, {
       issueId: fresh.issueId,
       key: key('answered', fresh.id),
-      event: { kind: 'answered', payload: { decision: fresh.id, answer: answering.text }, actor },
+      event: {
+        kind: 'answered',
+        payload: { decision: fresh.id, answer: answering.text, ...(hold ? { hold } : {}) },
+        actor,
+      },
     }),
     'answered',
   )

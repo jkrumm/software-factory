@@ -261,6 +261,68 @@ test('the same stall after an answered Decision is not asked again, a stall afte
   expect(rows.map((r: { outcome: string }) => r.outcome)).toEqual(['rejected'])
 })
 
+test('a Judge answer to hold is a timed wait, and the lead that blocks again on the same cause gets a longer one, not a second Decision', async () => {
+  const issue = await blocked(lab, 'app', 'waits on the vendor update', 'holding for the vendor update zxcvb')
+  await script(stewardScript, [
+    {
+      match: 'zxcvb',
+      answer: {
+        ...DECISION('Should the vendor update block the Issue?'),
+        decision: {
+          ...DECISION('Should the vendor update block the Issue?').decision,
+          recommendation: 'Hold until the vendor update lands',
+          options: [
+            { label: 'Hold until the vendor update lands', reversible: true, cost: 'the work waits' },
+            { label: 'drop', reversible: true, cost: 'the work is not done; it can be filed again' },
+          ],
+        },
+      },
+    },
+  ])
+  await script(askScript, [
+    {
+      match: 'vendor update',
+      verdict: {
+        verdict: 'answer',
+        answer: 'Hold until the vendor update lands',
+        reason: 'the plan says to wait for it',
+        source: 'plan: docs/plan.md',
+      },
+    },
+  ])
+  const decisionsOf = async () =>
+    DecisionList.parse((await lab.cli(['decision', 'list'])).json).decisions.filter((d) => d.issueId === issue)
+  const untilOf = async () => {
+    const [row] = await lab.world.db
+      .sql`SELECT wait FROM factory.issue_events WHERE issue_id = ${issue} AND result = 'applied' ORDER BY version DESC LIMIT 1`
+    return Date.parse((row.wait as { until: string }).until)
+  }
+  const expire = async () => {
+    await lab.world.db
+      .sql`UPDATE factory.issue_events SET wait = jsonb_set(wait, '{until}', '"2020-01-01T00:00:00.000Z"')
+      WHERE issue_id = ${issue} AND version = (SELECT version FROM factory.issues WHERE id = ${issue})`
+    await runLoop(lab, 'planning')
+  }
+
+  // the Judge's hold: the Issue waits until a time, the lead is not woken
+  expect((await runLoop(lab, 'steward')).summary).toContain('Decisions 1')
+  await lab.cli(['checkpoint', 'pass'])
+  expect(await state(lab, issue)).toMatchObject({ state: 'waiting', wait: 'timer' })
+  const first = (await untilOf()) - Date.now()
+  expect(first).toBeGreaterThan(30 * 60_000)
+
+  // the time comes, the lead blocks again with the same words: held again, longer, and no second Decision or call
+  await expire()
+  expect(await state(lab, issue)).toMatchObject({ state: 'working' })
+  await block(lab, issue, 'holding for the vendor update zxcvb')
+  const calls = (await callsOf(lab, 'factory-steward')).length
+  expect((await runLoop(lab, 'steward')).summary).toContain('Decisions 0')
+  expect(await state(lab, issue)).toMatchObject({ state: 'waiting', wait: 'timer' })
+  expect((await untilOf()) - Date.now()).toBeGreaterThan(first * 1.5)
+  expect((await callsOf(lab, 'factory-steward')).length).toBe(calls)
+  expect(await decisionsOf()).toHaveLength(1)
+})
+
 test('a person’s signal that matches an open Issue only in part asks factory-triage and amends the Issue it names', async () => {
   const open = (await signal('app', 'The login page crashes on submit')).issue as string
   await script(triageScript, [

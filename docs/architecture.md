@@ -174,6 +174,12 @@ through `receive` in `app/intake.ts`; the answer is a triage outcome (`docs/lang
   the answer, stays stalled and asks nothing: the lead blocking again on the same reason, or a re-ship of the same change
   against the same failing check, is one question with one answer. A note delivered while it waited, or a changed detail, is
   news and ends it as before.
+- **A hold is a timed wait** (`kernel/hold.ts`). When the Judge answers a Decision the steward raised with an option
+  that reads as a hold (its label begins with hold, wait, pause or defer), `answered` carries `hold`, a time, and the Issue
+  waits for it as a `timer` wait instead of going back to its lead; the lead hears the Judge's note when the time comes. A
+  repeated `blocked` stall whose Decision was answered so is held again (`decideStall` → `hold`: a `noted` and a steward
+  `deferred` until a time) and raises no Decision. The first hold is one hour, each later hold of the attempt twice the last,
+  at most twelve hours. An answer from the owner, the orchestrator, a policy or a default resumes the lead as before.
 - **The claim deadlock** (`breakClaimDeadlocks` in `app/loops/steward.ts`). A working or watching Issue keeps its repo's
   claim; when it is after an Issue of the same repo that stays queued for lack of a claim, neither can move. The edge gets
   there by the owner (or the orchestrator on his behalf) naming it with `after` (`POST /planning/after`, which takes a

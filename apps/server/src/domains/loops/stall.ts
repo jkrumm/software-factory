@@ -1,5 +1,6 @@
 import type { StewardAnswer, StewardStall } from '@software-factory/contract'
 import type { IssueId } from '../../kernel/ids.ts'
+import { holdUntil } from '../../kernel/hold.ts'
 
 /** Why an Issue stalled (`docs/language.md`, Stall): a wait with a machine cause, the steward's to end. */
 export type StallCause = StewardStall['cause']
@@ -24,6 +25,8 @@ export interface StallFacts {
   episode: number
   /** the same stall as one a Decision of the steward already answered, nothing new since: asking again changes nothing */
   repeatOf: RepeatedStall | null
+  /** the holds this attempt had (timed waits that answered a stall): the next one waits longer */
+  holds: number
   /** notes recorded while it waited that the lead has not heard */
   notes: string[]
   /** the Issue's latest events, one line each */
@@ -35,6 +38,8 @@ export interface StallFacts {
 /** The earlier stall of an Issue that the steward's Decision settled, and the version of that Decision's answer. */
 export interface RepeatedStall {
   answeredAt: number
+  /** the answer was a hold ("wait for it"): the repeat is held until a time, not left stalled */
+  held: boolean
 }
 
 export interface StewardRules {
@@ -63,6 +68,8 @@ export type StallAction =
   | { kind: 'wait'; why: string }
   | { kind: 'wake'; detail: string }
   | { kind: 'requeue'; detail: string }
+  /** a lead's repeated block after a Decision answered "hold": a timed wait with a longer backoff, no new Decision */
+  | { kind: 'hold'; until: string; detail: string }
   | { kind: 'ask' }
 
 /** The wake detail the steward's own wakes begin with: how a later pass counts them from the events alone. */
@@ -93,6 +100,14 @@ export function decideStall(facts: StallFacts, now: Date, rules: StewardRules): 
   // The same cause, the same words, no news from a person since a Decision settled it: a second Decision would be the same
   // question with the same answer. The Issue stays stalled, which the Console shows; a changed cause or a note ends it.
   if (facts.repeatOf) {
+    if (facts.repeatOf.held && facts.cause === 'blocked') {
+      const until = holdUntil(now, facts.holds)
+      return {
+        kind: 'hold',
+        until,
+        detail: `${STEWARD_DETAIL}the same block as the Decision answered at v${facts.repeatOf.answeredAt} (hold ${facts.holds + 1}): held until ${until}`,
+      }
+    }
     return {
       kind: 'wait',
       why: `the same stall as the Decision answered at v${facts.repeatOf.answeredAt}: nothing changed`,

@@ -37,6 +37,7 @@ import { leadKey } from '../../domains/leads/names.ts'
 import type { LeadStore, Seats, Windows } from '../../domains/leads/ports.ts'
 import { deriveSession } from '../../domains/leads/session.ts'
 import { reportedSince } from '../../domains/leads/stop.ts'
+import { holdsIn, isHold } from '../../kernel/hold.ts'
 import type { Issue } from '../../domains/work/issue.ts'
 import { WAITS } from '../../domains/work/issue.ts'
 import type { AppliedRecord } from '../../domains/work/machine.ts'
@@ -156,7 +157,9 @@ export function repeatedStall(
     history.filter((record) => record.version < asked.version),
   ).wait
   if (before?.reason !== cause || !('detail' in before)) return null
-  return sameWords(before.detail, detail) >= SAME_STALL ? { answeredAt: answered.version } : null
+  if (sameWords(before.detail, detail) < SAME_STALL) return null
+  const said = field(answered.payload, 'answer')
+  return { answeredAt: answered.version, held: field(answered.payload, 'hold') !== '' || isHold(said) }
 }
 
 /** What the steward knows of a stalled Issue, from its events alone; `windowOpen` comes from capacity afterwards. */
@@ -186,6 +189,7 @@ export function factsOf(issue: Issue, history: readonly AppliedRecord[]): StallF
     ).length,
     episode: 0,
     repeatOf: repeatedStall(issue.id, history, cause, wait.detail),
+    holds: holdsIn(history),
     notes: history
       .filter((record) => record.kind === 'noted' && record.version > wait.told)
       .map((record) => field(record.payload, 'text')),
@@ -258,7 +262,35 @@ async function raise(deps: StewardDeps, facts: StallFacts, form: unknown): Out<b
   return err(portError('refused', `the Decision was refused: ${detail}`))
 }
 
-type Acted = 'woken' | 'requeued' | 'decision' | 'nothing'
+type Acted = 'woken' | 'requeued' | 'decision' | 'held' | 'nothing'
+
+/**
+ * A repeated block after a Decision answered "hold": the Issue waits until a later time (the lead hears the answer's note
+ * and this one when it ends), where waking the lead now would only bring the same block back. No Decision is raised.
+ */
+async function hold(deps: StewardDeps, facts: StallFacts, until: string, detail: string): Out<boolean> {
+  return deps.uow.run(async ({ work }) => {
+    const noted = await recordIn(work, deps, {
+      issueId: facts.issue,
+      key: key('noted', 'steward-hold', facts.issue, facts.since),
+      event: {
+        kind: 'noted',
+        payload: {
+          text: `${detail.slice(STEWARD_DETAIL.length)}. If the cause is unchanged when you wake, block again with what you checked: the next wait is longer.`,
+        },
+        actor: 'steward',
+      },
+    })
+    if (!noted.ok) return err(portError('refused', JSON.stringify(noted.error)))
+    const deferred = await recordIn(work, deps, {
+      issueId: facts.issue,
+      key: key('deferred', 'steward-hold', facts.issue, facts.since),
+      event: { kind: 'deferred', payload: { attempt: facts.attempt, until }, actor: 'steward' },
+    })
+    if (!deferred.ok) return err(portError('refused', JSON.stringify(deferred.error)))
+    return ok(deferred.value.result === 'applied')
+  })
+}
 
 async function act(deps: StewardDeps, facts: StallFacts, checked: Checked): Out<Acted> {
   switch (checked.kind) {
@@ -389,6 +421,11 @@ async function steward(deps: StewardDeps, id: IssueId, pass: StewardPass): Promi
         reason: action.detail.slice(STEWARD_DETAIL.length),
       })
       break
+    case 'hold': {
+      const held = await hold(deps, facts, action.until, action.detail)
+      acted = held.ok ? ok(held.value ? 'held' : 'nothing') : held
+      break
+    }
     case 'ask': {
       const asking = await ask(deps, facts)
       if (!asking.ok) {
@@ -415,6 +452,7 @@ async function steward(deps: StewardDeps, id: IssueId, pass: StewardPass): Promi
   }
   if (acted.value === 'woken') pass.woken++
   else if (acted.value === 'requeued') pass.requeued++
+  else if (acted.value === 'held') pass.deferred++
   else if (acted.value === 'decision') pass.decisions++
 }
 
@@ -471,6 +509,7 @@ export async function loadIdle(deps: Pick<StewardDeps, 'uow'>, id: IssueId): Out
         stewardWakes: wakes.length,
         episode: view.turns,
         repeatOf: null,
+        holds: 0,
         notes: [],
         history: history.slice(-HISTORY_LINES).map(lineOf),
         windowOpen: null,

@@ -199,6 +199,15 @@ const deferredBy =
   (ctx: Ctx<'deferred'>): Cell =>
     ctx.event.actor === 'steward' ? stewardDefer(ctx) : lead(ctx)
 
+/**
+ * From a wait: the steward holds a lead's repeated block until a time (a timed wait, so the lead is not woken to block again);
+ * every other deferral is a timed wait's own.
+ */
+const heldOrFromTimer = (ctx: Ctx<'deferred'>): Cell =>
+  ctx.event.actor === 'steward' && 'until' in ctx.event.payload && ctx.issue.wait?.reason === 'blocked'
+    ? defer(ctx)
+    : fromTimer(deferredBy(defer))(ctx)
+
 /** A shipped Issue deferred by the steward waits like any dependency, and goes back to its watch. */
 const deferWatching = (ctx: Ctx<'deferred'>): Cell => {
   if (ctx.event.actor !== 'steward') return refuse('it shipped: the watch is on')
@@ -270,7 +279,13 @@ const answerWhileWaiting = (ctx: Ctx<'answered'>): Cell => {
   const { wait } = ctx.issue
   const id = ctx.event.payload.decision
   if (wait?.reason !== 'review' || !wait.decisions?.some((open) => open.id === id)) {
-    return endsCheckpoint(ctx, 'decision', id)
+    const ended = endsCheckpoint(ctx, 'decision', id)
+    const { hold } = ctx.event.payload
+    // A hold answers a stall with "wait for it": the Issue waits until the time, and the lead hears the answer when it ends.
+    if (hold && 'to' in ended && ended.to === 'working' && Date.parse(hold) > ctx.now.getTime()) {
+      return { to: 'waiting', wait: { reason: 'timer', until: hold }, effects: [] }
+    }
+    return ended
   }
   const decisions = wait.decisions.filter((open) => open.id !== id)
   if (wait.verdictGiven && decisions.length === 0) return resume(ctx.issue)
@@ -424,7 +439,7 @@ export const TABLE: Table = {
     verdict_given: verdictWhileWaiting,
     errand_raised: fromTimer(raiseErrand),
     errand_done: (ctx) => endsCheckpoint(ctx, 'errand', ctx.event.payload.errand),
-    deferred: fromTimer(deferredBy(defer)),
+    deferred: heldOrFromTimer,
     stalled: (ctx) =>
       ctx.event.payload.cause === 'blocked' ? fromTimer(stall)(ctx) : ignore('waiting: no lead turn is running'),
     woken: wake,

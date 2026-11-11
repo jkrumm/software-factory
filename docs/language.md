@@ -124,12 +124,12 @@ checkpoint is for that one only: a late one the factory sent is ignored, and a l
 | `seated` | The owner set the seat (tier and effort, or a role of the table, resolved now) the next lead starts on; taken while the Issue is `settling` or `queued`, refused once a lead has started | owner, orchestrator |
 | `noted` | An amend or a note reaches the lead | owner, factory, steward, judge |
 | `asked` | A Decision is raised and the Issue waits for its answer; during a review wait the lead's ask is added to that wait (same `since`, same `told`) | lead, steward (from a stall only) |
-| `answered` | A Decision got its answer; one raised during a review wait leaves the wait's list, and the wait ends with the last item | owner, judge, factory |
+| `answered` | A Decision got its answer; one raised during a review wait leaves the wait's list, and the wait ends with the last item. The Judge's answer to a steward's Decision that reads as a hold carries `hold`, a time: the Issue then waits for it (a `timer` wait) instead of going back to its lead | owner, judge, factory |
 | `submitted` | A Concept or Spec is handed over for review | lead |
 | `verdict_given` | The owner's Verdict on it; with Decisions still open the wait goes on until the last answer, and the lead hears verdict and answers in one note. The factory sends it for a flagged Spec nobody answered in 24 hours (the lead goes on with its defaults) and to withdraw a review its Issue moved past | owner, factory |
 | `errand_raised` | The lead needs the owner's hands | lead |
 | `errand_done` | The owner did the Errand, or the screen turned it away (`turnedAway`: the reason) | owner, judge, factory |
-| `deferred` | The lead waits until a time, or until other Issues close; the steward defers a working or watching Issue behind a queued Issue of its repo that waits for the claim it holds, and says why | lead, steward (behind Issues only) |
+| `deferred` | The lead waits until a time, or until other Issues close; the steward defers a working or watching Issue behind a queued Issue of its repo that waits for the claim it holds, and says why | lead, steward (behind Issues only; until a time only for a repeated `blocked` stall after a hold) |
 | `stalled` | A machine cause stopped the work: `wall`, `unreported`, `blocked` | factory, lead (`blocked`) |
 | `woken` | A wait that needs no person ended; it names the wait | factory, steward, owner |
 | `shipped` | The lead landed and deployed: the watch begins | lead |
