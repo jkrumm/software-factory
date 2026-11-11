@@ -11,7 +11,7 @@ let lab: Lab
 beforeAll(async () => {
   lab = await startLab({
     repos: { app: { project: 'apiVersion: factory/v2\nname: app\nslots: { run: 1m }\n' } },
-    env: { FACTORY_SLOTS: '1' },
+    env: { FACTORY_SLOTS: '1', FACTORY_SLOTS_MAX: '1' },
   })
   await lab.cli(['project', 'sync'])
 })

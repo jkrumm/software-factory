@@ -131,6 +131,7 @@ export {
   Slot,
   SlotBody,
   SlotRelease,
+  StepCost,
 } from './capacity.ts'
 export {
   AfterAnswer,

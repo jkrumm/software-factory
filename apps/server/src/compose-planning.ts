@@ -8,7 +8,7 @@ import type { PlanningApi } from './api/planning.ts'
 import { admissionPass, claimFreeRepos, claimQueued, queueView } from './app/capacity-admit.ts'
 import { capacityForLeads } from './app/capacity-leads.ts'
 import { getQueueStates, setQueueState } from './app/capacity-queue.ts'
-import { giveSlotBack, touchSlot } from './app/capacity-slots.ts'
+import { giveSlotBack, recordStepCost, touchSlot } from './app/capacity-slots.ts'
 import { capacityState, refreshState } from './app/capacity-view.ts'
 import { addAfter, removeAfter, settleIssue, setPrio } from './app/planning-chain.ts'
 import type { PlanningDeps } from './app/planning-deps.ts'
@@ -66,14 +66,21 @@ export function composePlanning(input: {
     loadCeiling: settings.loadCeiling,
     memoryCeilings: settings.memoryCeilings,
   }
+  const host = hostReader({ sysctlBin: settings.sysctlBin, minSampleMs: settings.memorySampleMs })
   const capacity = {
     ...writes,
     limits,
-    host: hostReader({ sysctlBin: settings.sysctlBin, minSampleMs: settings.memorySampleMs }),
+    host,
     accounts: claudeAccountSource({ bin: settings.claudeAccountBin }),
     ranker: claudeAccountRanker({ bin: settings.claudeAccountBin }),
   }
-  const slots = { ...writes, slots: settings.slots }
+  const slots = {
+    ...writes,
+    slots: settings.slots,
+    slotsMax: settings.slotsMax,
+    slotExtraLoad: settings.slotExtraLoad,
+    host,
+  }
 
   /**
    * A project by its name, or by a path inside a source root (realpath, the trust boundary): the name the queue keeps its
@@ -125,7 +132,7 @@ export function composePlanning(input: {
         }),
     },
     capacity: {
-      limits: { ...limits, slots: settings.slots },
+      limits: { ...limits, slots: settings.slots, slotsMax: settings.slotsMax },
       state: () => capacityState(capacity),
       refresh: () => refreshState(capacity),
       admit: () => admissionPass(capacity),
@@ -145,6 +152,7 @@ export function composePlanning(input: {
       },
       touchSlot: (request) => touchSlot(slots, request),
       giveSlotBack: (id) => giveSlotBack(writes, id),
+      recordStepCost: (cost) => recordStepCost(writes, cost),
     },
     leads: capacityForLeads(writes),
     claimQueued: () => claimQueued(capacity),

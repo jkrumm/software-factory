@@ -59,7 +59,13 @@ const SlotDbRow = z.object({
   leased_until: z.date().nullable(),
   granted_at: z.date().nullable(),
   run_ms: z.number().int().nullable(),
+  rss_mib: z.number().int().nullable(),
+  peak_rss_mib: z.number().int().nullable(),
+  why: z.string().nullable(),
 })
+
+const PeakRow = z.object({ peak_rss_mib: z.number().int().nullable() })
+const HostSampleRow = z.object({ at: z.date(), memory_used_pct: z.number().nullable() })
 
 const assignmentOf = (raw: unknown): Assignment => {
   const row = AssignmentRow.parse(raw)
@@ -218,6 +224,9 @@ export function postgresCapacityStore(tx: SQL): CapacityStore {
           leasedUntil: r.leased_until,
           grantedAt: r.granted_at,
           runMs: r.run_ms,
+          rssMib: r.rss_mib,
+          peakRssMib: r.peak_rss_mib,
+          why: r.why,
         }
       })
     },
@@ -227,9 +236,30 @@ export function postgresCapacityStore(tx: SQL): CapacityStore {
       await tx`DELETE FROM factory.capacity_slots`
       for (const r of rows) {
         await tx`
-          INSERT INTO factory.capacity_slots (id, name, requested_at, seen_at, slot, leased_until, granted_at, run_ms)
-          VALUES (${r.id}, ${r.name}, ${r.requestedAt}, ${r.seenAt}, ${r.slot}, ${r.leasedUntil}, ${r.grantedAt}, ${r.runMs})`
+          INSERT INTO factory.capacity_slots (id, name, requested_at, seen_at, slot, leased_until, granted_at, run_ms, rss_mib,
+             peak_rss_mib, why)
+          VALUES (${r.id}, ${r.name}, ${r.requestedAt}, ${r.seenAt}, ${r.slot}, ${r.leasedUntil}, ${r.grantedAt}, ${r.runMs},
+                  ${r.rssMib}, ${r.peakRssMib}, ${r.why})`
       }
+    },
+
+    async recordStepCost(c) {
+      await tx`
+        INSERT INTO factory.step_costs (at, name, repo, peak_rss_mib, cpu_seconds, duration_ms, wait_ms, exit_code)
+        VALUES (${c.at}, ${c.name}, ${c.repo}, ${c.peakRssMib}, ${c.cpuSeconds}, ${c.durationMs}, ${c.waitMs}, ${c.exitCode})`
+    },
+
+    async recentPeaks(name, limit) {
+      const rows: unknown[] = await tx`
+        SELECT peak_rss_mib FROM factory.step_costs WHERE name = ${name} ORDER BY at DESC, id DESC LIMIT ${limit}`
+      return rows.map((raw) => PeakRow.parse(raw).peak_rss_mib)
+    },
+
+    async latestHostSample() {
+      const [raw] = await tx`SELECT at, memory_used_pct FROM factory.host_samples ORDER BY at DESC LIMIT 1`
+      if (!raw) return null
+      const row = HostSampleRow.parse(raw)
+      return { at: row.at, memoryUsedPct: row.memory_used_pct }
     },
   }
 }

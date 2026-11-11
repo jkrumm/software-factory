@@ -45,6 +45,24 @@ export interface CapacityStore {
 
   slots(): Promise<SlotRow[]>
   saveSlots(rows: readonly SlotRow[]): Promise<void>
+  /** appends one finished step to the cost ledger */
+  recordStepCost(cost: StepCostRow): Promise<void>
+  /** a step's peaks, newest first (null: not measured) */
+  recentPeaks(name: string, limit: number): Promise<(number | null)[]>
+  /** the newest minute sample of the host: when, and the share of RAM in use */
+  latestHostSample(): Promise<{ at: Date; memoryUsedPct: number | null } | null>
+}
+
+/** One row of the cost ledger (`factory.step_costs`). */
+export interface StepCostRow {
+  at: Date
+  name: string
+  repo: string | null
+  peakRssMib: number | null
+  cpuSeconds: number | null
+  durationMs: number
+  waitMs: number
+  exitCode: number | null
 }
 
 /** The machine the server runs on. Every reading may fail; admission then goes on without it. */

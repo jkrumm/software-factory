@@ -215,6 +215,13 @@ through `receive` in `app/intake.ts`; the answer is a triage outcome (`docs/lang
   it gets it), a wait past 45 minutes exits 75 without running, and a server that is down runs the command anyway. A command
   runs with `FACTORY_SLOT_ACTIVE=1`; a `slot run` inside one runs its command as it is, so the steps of `make check` do not queue
   again. The host's load in a scenario is the fake `sysctl`'s (`vm.loadavg`), never the machine's.
+  Every step leaves a row in `factory.step_costs` (`POST /slots/:id/cost`: name, repo, peak resident size and CPU seconds of its
+  process tree, duration, wait, exit code; the CLI measures with `ps` every 3 s and the renewals carry the size). The grant is
+  `FACTORY_SLOTS` (default 2) as the base and `FACTORY_SLOTS_MAX` (default 6) as the cap: a lone step is always granted, a step
+  below the base when it fits or its peak is unknown, one beyond the base only with a known peak, host load at most
+  `FACTORY_SLOT_EXTRA_LOAD` (12) and a fit. It fits when its learned peak (the largest of its 8 newest) plus what the running steps
+  still grow by (their learned peak less their size now) stays within the free memory of the newest host sample (not older than
+  5 minutes) less a headroom of 2 GiB or 8 % of RAM; a waiter's `why` is shown in the CLI and the capacity view. No model is called.
 
 ## Quality
 
