@@ -111,8 +111,9 @@ const failingSet = (detail: string): Set<string> => new Set(failingLines(detail)
 
 /**
  * Whether `now` is a failure that was already there in `before`: the failing lines of this run are all among the failing
- * lines of that one. A target that lists its drift prints one more or one fewer item from day to day; that is the same
- * red, while a line the baseline never had is a new failure. A run that printed no line is compared whole.
+ * lines of that one. A target that lists its drift prints fewer items as they are fixed, and numbers (counts, versions,
+ * pids) change; that is the same red, while a line the baseline never had is a new failure, an added drift item
+ * included. A run that printed no line is compared whole.
  */
 function failedBefore(now: string, before: string): boolean {
   const mine = failingSet(now)
@@ -124,7 +125,7 @@ function failedBefore(now: string, before: string): boolean {
 /**
  * Marks each failed `make <target>` check whose failing lines were all failing in `baseline`, the repo's last finished
  * run before the ship: a verify red in a component the change never touched (a pending OS update, a dependency that
- * moved, one more item in a drift list) is not a regression of the Issue. A line the baseline did not have keeps the
+ * moved, a drift list that shrank) is not a regression of the Issue. A line the baseline did not have keeps the
  * check the change's. The version, CI, checkout and probe checks stay the change's: each reads this ship's own commit
  * or the live system. With no baseline, or one that was green, nothing is marked.
  */
