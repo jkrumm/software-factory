@@ -132,10 +132,17 @@ through `receive` in `app/intake.ts`; the answer is a triage outcome (`docs/lang
 
 - **Admission** (`domains/capacity/admission.ts`) is pure and decided again at every claim, in this order: queue state
   (`drain` starts nothing), the host's 1-minute load, its memory (swapouts and swap against ceilings; the memory that a
-  lane's `memory` reserves for its running leads and the candidate counts as swap in use, `docs/plan.md` "Lanes"), the
+  lane's `memory` reserves for its running leads and the candidate counts as swap in use, `docs/plan.md` "Lanes"; then the
+  learned fit: a repo with at least three sampled attempts is refused, kind `memory`, when its p80 lead plus what the running
+  leads will still grow by (their repo's p80 less what their tree holds now, by a sample not older than 3 min) does not fit into
+  the free memory of the newest host sample (not older than 5 min) less headroom (the larger of 2 GiB and 8 % of RAM); it
+  replaces the lanes' `memory` for that repo's leads, never refuses with an unknown figure and never the only lead on the host), the
   candidate's lane (`lanes: {apple: 1}` in `project.yaml` caps the leads of a resource class inside the repo, a fix is
   never held; `domains/capacity/lanes.ts`), the repo's claims (`leads: N` plus one for a fix; `pace` allows one), then an
-  account with room. The first that says no names itself and its numbers as the queue reason. It never spills to another
+  account with room. **Seats:** when work is queued for the account cap and each of the newest five minute samples shows a load
+  of at most a quarter of the ceiling and swap below its ceiling, the pass raises `leadsPerAccount` by the leads that fit into the
+  free memory (`domains/capacity/seats.ts`, at most `FACTORY_SEATS_MAX_BONUS`, default 2, 0 is off); never the repo's `leads: N`, never
+  past an account's window, and the `cap` reason says `(raised by N: the host is idle)`. The first that says no names itself and its numbers as the queue reason. It never spills to another
   account past a window or a cap; with every account closed it waits for the first opening. Owed Issues are served
   before new ones. The gates (windows, lead cap, loaded) stay the factory's; only the order among the accounts that pass
   them comes from the picker, `claude-account rank --lane bulk --json`, polled with the usage readings and stored in

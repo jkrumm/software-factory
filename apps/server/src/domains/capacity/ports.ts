@@ -52,6 +52,25 @@ export interface CapacityStore {
   recentPeaks(name: string, limit: number): Promise<(number | null)[]>
   /** the newest minute sample of the host: when, and the share of RAM in use */
   latestHostSample(): Promise<{ at: Date; memoryUsedPct: number | null } | null>
+  /** the newest minute samples of the host, newest first */
+  recentHostSamples(limit: number): Promise<HostSampleFact[]>
+  /** per repo: the attempts sampled and the peak MiB of the newest ten, newest first (what `learnedLeadMib` takes) */
+  leadPeaks(): Promise<LeadPeaks[]>
+  /** per Issue number: the MiB its lead's tree held at its newest sample since `since` */
+  leadRssSince(since: Date): Promise<Map<number, number>>
+}
+
+export interface HostSampleFact {
+  at: Date
+  load: number | null
+  memoryUsedPct: number | null
+  swapUsedPct: number | null
+}
+
+export interface LeadPeaks {
+  repo: string
+  attempts: number
+  peaksNewestFirst: number[]
 }
 
 /** One row of the cost ledger (`factory.step_costs`). */

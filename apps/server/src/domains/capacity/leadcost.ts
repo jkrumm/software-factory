@@ -80,3 +80,11 @@ export function learnedLeadMib(attemptPeaks: readonly number[]): number | null {
   const sorted = [...newest].sort((a, b) => a - b)
   return sorted[Math.ceil(0.8 * sorted.length) - 1] ?? null
 }
+
+/**
+ * The memory the running leads will still take on: what each repo's lead is learned to peak at, less what its tree holds
+ * now (a lead with no fresh sample holds 0). A lead of a repo with no learned value adds nothing.
+ */
+export function leadGrowthMib(running: readonly { learnedMib: number | null; currentMib: number }[]): number {
+  return running.reduce((sum, lead) => sum + Math.max(0, (lead.learnedMib ?? 0) - lead.currentMib), 0)
+}

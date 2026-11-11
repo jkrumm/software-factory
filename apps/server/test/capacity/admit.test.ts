@@ -128,6 +128,28 @@ describe('admission', () => {
     expect(blind.admitted).toHaveLength(1)
   })
 
+  test("a repo's learned lead cost replaces its lanes' memory: dropped with three attempts, kept with two", async () => {
+    world.accounts.rows = [account('a'), account('b'), account('c')]
+    const seed = async (...attempts: number[]) => {
+      for (const n of attempts) {
+        await world.db.sql`
+          INSERT INTO factory.lead_samples (at, worktree, repo, issue, attempt, rss_mib, procs)
+          VALUES (${new Date(world.clock.now().getTime() - n * 3_600_000)}, ${`/wt/sim-${n}`}, '/src/sim', ${900 + n}, 1, 100, 3)`
+      }
+    }
+    await seed(1, 2)
+    const [one, two] = [
+      await world.queued({ repo: 'sim', lane: 'apple' }),
+      await world.queued({ repo: 'sim', lane: 'apple' }),
+    ]
+    const prior = await pass()
+    expect(prior.admitted.map((a) => a.issue)).toEqual([one])
+    expect(prior.queue.find((e) => e.issue === two)?.reason).toMatchObject({ kind: 'memory' })
+    await seed(3)
+    nextSample()
+    expect((await pass()).admitted.map((a) => a.issue)).toEqual([two])
+  })
+
   test('a lane the project does not declare is unlimited within leads, and a fix is not held by a full lane', async () => {
     world.accounts.rows = [account('a'), account('b'), account('c')]
     const [one, two] = [

@@ -1,4 +1,4 @@
-import { growthMib, LEARNED_RUNS, learnedPeakMib } from '../domains/capacity/costs.ts'
+import { freeMibOf, growthMib, headroomMib, LEARNED_RUNS, learnedPeakMib } from '../domains/capacity/costs.ts'
 import type { HostReader, StepCostRow } from '../domains/capacity/ports.ts'
 import { releaseSlot, type SlotRow, type SlotView, slotLines, touchSlots } from '../domains/capacity/slots.ts'
 import { DEFAULT_SLOT_RUN_MS, durationMs } from '../domains/planning/project.ts'
@@ -27,11 +27,6 @@ async function runLimitMs(
   const run = (await ownerOf(deps, input.cwd))?.project.slots.run
   return (run ? durationMs(run) : undefined) ?? DEFAULT_SLOT_RUN_MS
 }
-
-/** A host sample older than this says nothing about the memory now. */
-const SAMPLE_MAX_AGE_MS = 5 * 60_000
-const MIB_HEADROOM_FLOOR = 2048
-const HEADROOM_SHARE = 0.08
 
 export interface SlotDeps extends PlanningDeps {
   /** `FACTORY_SLOTS`: how many commands run their tests at once on this host */
@@ -71,8 +66,7 @@ export async function touchSlot(
     for (const name of new Set([input.name, ...holders.map((row) => row.name)])) {
       learned.set(name, learnedPeakMib(await capacity.recentPeaks(name, LEARNED_RUNS)))
     }
-    const sample = await capacity.latestHostSample()
-    const used = sample && now.getTime() - sample.at.getTime() <= SAMPLE_MAX_AGE_MS ? sample.memoryUsedPct : null
+    const freeMib = freeMibOf(await capacity.latestHostSample(), ramMib, now)
     const loadNow = load.ok ? load.value : null
     const touched = touchSlots(
       rows,
@@ -85,11 +79,11 @@ export async function touchSlot(
         peakRssMib: input.peakRssMib,
         fit: {
           peakMib: learned.get(input.name) ?? null,
-          freeMib: used === null || ramMib === null ? null : Math.round(ramMib * (1 - used / 100)),
+          freeMib,
           growthMib: growthMib(holders, learned),
           max: deps.slotsMax,
           loadOk: loadNow !== null && loadNow <= deps.slotExtraLoad,
-          headroomMib: Math.max(MIB_HEADROOM_FLOOR, Math.round((ramMib ?? 0) * HEADROOM_SHARE)),
+          headroomMib: headroomMib(ramMib),
           load: loadNow === null ? null : Math.round(loadNow * 10) / 10,
           extraLoad: deps.slotExtraLoad,
         },
