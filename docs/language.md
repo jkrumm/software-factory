@@ -117,7 +117,7 @@ checkpoint is for that one only: a late one the factory sent is ignored, and a l
 | Event | Means | Sent by |
 |-|-|-|
 | `filed` | Triage made it an Issue; it begins `settling` | factory, owner |
-| `settled` | Triage and the chain are done; it may be queued. Carries the refined Kind when triage corrected an owner's or agent's request | factory |
+| `settled` | Triage and the chain are done; it may be queued. Carries the refined Kind when triage corrected an owner's or agent's request, and `checkpoint: spec` when triage flagged it | factory |
 | `admitted` | Capacity lets a lead start: the next attempt | factory |
 | `lead_started` | The attempt's lead runs in its terminal | factory |
 | `lead_gone` | The attempt's lead failed to start or ended; twice a new attempt, the third time a stall | factory |

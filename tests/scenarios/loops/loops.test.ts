@@ -373,6 +373,25 @@ test('an owner request with nothing open beside it still asks factory-triage, wh
   expect(await kindShown(bug)).toBe('bug')
 })
 
+test('triage flags a new public surface checkpoint: spec in the settled event; an answer without it flags nothing', async () => {
+  const route = (await signal('solo', 'Add a public webhook route for deploy events')).issue as string
+  await script(triageScript, [
+    {
+      match: 'webhook route',
+      answer: { amend: null, after: [], kind: null, size: 'medium', checkpoint: 'spec', reason: 'a new API route' },
+    },
+  ])
+  expect((await runLoop(lab, 'triage')).summary).toContain('flagged 1')
+  expect(await settledPayload(route)).toEqual({ checkpoint: 'spec' })
+
+  const plain = (await signal('solo', 'Rename a local variable in the parser')).issue as string
+  await script(triageScript, [
+    { match: 'rename a local', answer: { amend: null, after: [], kind: null, size: 'small', reason: 'local' } },
+  ])
+  expect((await runLoop(lab, 'triage')).summary).toContain('flagged 0')
+  expect(await settledPayload(plain)).toEqual({})
+})
+
 test('a null, an incident or an unchanged kind answer leaves the kind as filed', async () => {
   const issues: string[] = []
   for (const [repo, title] of [

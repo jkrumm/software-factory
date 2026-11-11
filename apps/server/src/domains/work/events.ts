@@ -34,8 +34,8 @@ export const PAYLOADS = {
     /** the filer stated the edges (`--after`, or `--alone` for none): they are final, settling adds none */
     edges: z.literal('stated').optional(),
   }),
-  /** triage and the chain are done: it may be queued; triage may refine an owner or agent request's kind (old events carry none) */
-  settled: z.object({ kind: z.enum(KINDS).optional() }),
+  /** triage and the chain are done: it may be queued; triage may refine an owner or agent request's kind and flag it `checkpoint: spec` (old events carry none) */
+  settled: z.object({ kind: z.enum(KINDS).optional(), checkpoint: z.literal('spec').optional() }),
   /** capacity lets a lead start: the next attempt */
   admitted: z.object({}),
   /** the attempt's lead runs in its terminal */
