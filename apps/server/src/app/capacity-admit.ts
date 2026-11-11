@@ -107,6 +107,8 @@ export interface Snapshot {
   rank: AccountRank | null
   states: QueueStates
   assignments: Assignment[]
+  /** the account each owed lead resumes on: its newest assignment, however old */
+  owedAccounts: Map<IssueId, string>
 }
 
 /** Reads what a host reading and an account poll say, outside any transaction. */
@@ -194,17 +196,21 @@ export async function pollIfDue(deps: CapacityDeps): Promise<string[]> {
 export async function snapshotOf(stores: PlanningStores, now: Date): Promise<Snapshot> {
   const projects = await stores.planning.projects()
   const rows = await stores.reads.open()
+  const claims = await stores.capacity.claims()
+  const taken = new Set(claims.map((claim) => claim.issue))
+  const owedIds = rows.filter((row) => holdsClaim(row.state, row.waitReason) && !taken.has(row.id)).map((row) => row.id)
   return {
     now,
     projects,
     issues: rows.map((row) => ({ ...row, project: projectOf(projects, row.repo)?.name ?? null })),
     edges: await stores.planning.edges(),
     prio: await stores.planning.prios(),
-    claims: await stores.capacity.claims(),
+    claims,
     readings: await stores.capacity.latestReadings(),
     rank: await stores.capacity.latestRank(RANK_LANE),
     states: await stores.capacity.queueStates(),
     assignments: await stores.capacity.recentAssignments(),
+    owedAccounts: latestAccounts(await stores.capacity.latestAssignments(owedIds)),
   }
 }
 
@@ -321,7 +327,7 @@ function growthOf(claims: readonly Claim[], projects: readonly StoredProject[], 
   )
 }
 
-/** The account each Issue was last admitted on (the assignments are newest first). */
+/** The account each Issue was last admitted on (the newest attempt's, so a list of one attempt each or newest first). */
 function latestAccounts(assignments: readonly Assignment[]): Map<IssueId, string> {
   const accounts = new Map<IssueId, string>()
   for (const a of assignments) if (!accounts.has(a.issue)) accounts.set(a.issue, a.account)
@@ -371,7 +377,6 @@ function decide(snap: Snapshot, host: HostInputs, limits: CapacityLimits, bonus:
   const laneByIssue = new Map(snap.issues.map((i) => [i.id, i.lane]))
   const projectByName = new Map(snap.projects.map((p) => [p.name, p]))
   const owed = snap.issues.filter((i) => holdsClaim(i.state, i.waitReason) && !taken.has(i.id) && i.project !== null)
-  const accountByIssue = latestAccounts(snap.assignments)
 
   return ordered.map((row): QueueEntry => {
     const { issue } = row
@@ -385,7 +390,7 @@ function decide(snap: Snapshot, host: HostInputs, limits: CapacityLimits, bonus:
     if (row.reason) return { ...base, reason: { ...row.reason, opensAt: null }, account: null }
     const project = issue.project === null ? undefined : projectByName.get(issue.project)
     if (!project) return { ...base, reason: null, account: null }
-    const leadsByAccount = leadsOnAccounts(claims, owed, accountByIssue)
+    const leadsByAccount = leadsOnAccounts(claims, owed, snap.owedAccounts)
     const learned = host.learned.get(project.name)
     const leadFit: LeadFit = {
       repo: project.name,
@@ -609,7 +614,7 @@ function resumeBlock(snap: Snapshot, row: Snapshot['issues'][number], project: S
     candidate: claimantOf(issue, row.kind),
   })
   if (room.granted) return null
-  const account = latestAccounts(snap.assignments).get(issue)
+  const account = snap.owedAccounts.get(issue)
   const pinned = account ? `; it resumes on account ${account}, whose cap never holds a resume back` : ''
   return `Issue ${issueNumber(issue)} waits for a claim in ${project.name}: ${room.message}${pinned}`
 }
@@ -634,14 +639,13 @@ export async function claimStalled(
     // The claims of Issues that stopped working are not released here (a read), but they are no one's any more.
     const holding = new Set(snap.issues.filter((i) => holdsClaim(i.state, i.waitReason)).map((i) => i.id))
     snap.claims = snap.claims.filter((claim) => holding.has(claim.issue))
-    const accounts = latestAccounts(snap.assignments)
     const stalled: StalledClaim[] = []
     for (const issue of issues) {
       const row = snap.issues.find((i) => i.id === issue)
       const project = row && snap.projects.find((p) => p.name === row.project)
       if (!row || !project || snap.claims.some((c) => c.issue === issue)) continue
       if (resumeBlock(snap, row, project)) continue
-      stalled.push({ issue, account: accounts.get(issue) ?? null })
+      stalled.push({ issue, account: snap.owedAccounts.get(issue) ?? null })
     }
     return ok(stalled)
   })

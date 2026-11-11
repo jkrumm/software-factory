@@ -204,6 +204,14 @@ export function postgresCapacityStore(tx: SQL): CapacityStore {
       return row ? assignmentOf(row) : null
     },
 
+    async latestAssignments(issues) {
+      if (issues.length === 0) return []
+      const rows: unknown[] = await tx`
+        SELECT DISTINCT ON (issue_id) * FROM factory.capacity_assignments
+        WHERE issue_id IN ${tx([...issues])} ORDER BY issue_id, attempt DESC`
+      return rows.map(assignmentOf)
+    },
+
     async queueStates() {
       const rows: unknown[] = await tx`SELECT project, state FROM factory.capacity_queue_states`
       const parsed = rows.map((raw) => z.object({ project: z.string(), state: z.enum(QUEUE_STATES) }).parse(raw))

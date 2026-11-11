@@ -473,6 +473,10 @@ describe('claims and the claim on resume', () => {
     nextSample()
     await pass() // Issue 1 gave its claim back: the account carries one lead
     const three = await world.queued({ repo: 'lab' })
+    // a long wait: more than the newest 200 assignments were written since Issue 1 was admitted
+    await world.db.sql`
+      INSERT INTO factory.capacity_assignments (issue_id, attempt, account, repo, assigned_at)
+      SELECT ${two}, n, 'x', 'solo', ${world.clock.now()} FROM generate_series(2, 250) AS n`
     await answered(one) // Issue 1 is woken and owed: its seat on the account is taken again
     nextSample()
     const result = await pass()
