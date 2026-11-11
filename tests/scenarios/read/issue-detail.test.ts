@@ -5,7 +5,7 @@ import { bearer } from '../harness.ts'
 import type { LeadsWorld } from '../leads/support.ts'
 import { commit, projectMake, scriptReview, ship, startQualityWorld, until } from '../quality/support.ts'
 
-setDefaultTimeout(90_000)
+setDefaultTimeout(240_000)
 
 /**
  * `GET /v1/issues/:id` with real data: an Issue filed by a signal and amended by a second, a note the lead was told, a
@@ -82,7 +82,8 @@ beforeAll(async () => {
   expect((await ship(lw.world, lw.server, issue, { call: 'ship-1', commits: [old] })).code).toBe(5)
   const shipped = await ship(lw.world, lw.server, issue, { call: 'ship-1', commits: [sha] })
   expect(shipped.code).toBe(0)
-  await until('the watch to pass', async () => (await detail()).shipping[1]?.watch?.answer === 'passed', 30_000)
+  // 6 s on an idle host, past 30 s on CI (master red, run 43013487562, Issue 714): an event with a deadline, so a real hang still fails.
+  await until('the watch to pass', async () => (await detail()).shipping[1]?.watch?.answer === 'passed', 120_000)
 })
 
 afterAll(async () => {
