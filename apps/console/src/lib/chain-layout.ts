@@ -1,5 +1,5 @@
 import { Graph, layout } from '@dagrejs/dagre'
-import type { ChainEdge, ChainNode } from '@software-factory/contract'
+import type { ChainEdge } from '@software-factory/contract'
 import { NODE_HEIGHT, NODE_WIDTH } from './chain.ts'
 
 export interface Placed {
@@ -8,7 +8,7 @@ export interface Placed {
 }
 
 /** Positions (top-left) from dagre, left to right: a blocker sits left of the node that waits for it. */
-export function layoutOf(nodes: ChainNode[], edges: ChainEdge[]): Map<string, Placed> {
+export function layoutOf(nodes: { id: string }[], edges: ChainEdge[]): Map<string, Placed> {
   const graph = new Graph()
   graph.setGraph({ rankdir: 'LR', nodesep: 28, ranksep: 160, marginx: 8, marginy: 8 })
   graph.setDefaultEdgeLabel(() => ({}))

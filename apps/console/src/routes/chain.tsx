@@ -1,10 +1,12 @@
 import { createFileRoute, Link, useNavigate } from '@tanstack/react-router'
+import { useCallback, useMemo, useState } from 'react'
 import { Schedule } from '@/components/chain/schedule'
 import { EmptyState, Page, PageHeader } from '@/components/page'
 import { ActiveFilters, SidebarEntry, SidebarSection } from '@/components/sidebar'
 import { type ChainFilters, chainCounts, chainOf, isolatedNote, projectsOf } from '@/lib/chain'
 import { ChainSkeleton } from '@/components/skeletons'
 import { failureNote } from '@/lib/api'
+import { collapseOf, toggled } from '@/lib/chain-collapse'
 import { useScreen } from '@/lib/screen'
 import { chainQuery, queryClient, useChain } from '@/lib/queries'
 
@@ -38,8 +40,22 @@ function Chain() {
   const filters = Route.useSearch()
   const navigate = useNavigate({ from: Route.fullPath })
   const { default: ChainGraph } = Route.useLoaderData()
+  const [expanded, setExpanded] = useState<ReadonlySet<string>>(new Set())
+  const [opened, setOpened] = useState<string | null>(null)
+  const open = useCallback((id: string) => {
+    setExpanded((now) => toggled(now, id))
+    setOpened(id)
+  }, [])
+  const whole = useMemo(() => (data ? chainOf(data, filters) : null), [data, filters])
+  const view = useMemo(() => (whole ? collapseOf(whole, expanded) : null), [whole, expanded])
+  // the rows of the group opened last, for the graph to bring into view; what no longer exists in the view is none
+  const focus = useMemo(() => {
+    if (!whole || !opened || !expanded.has(opened)) return []
+    const group = collapseOf(whole).groups.find((candidate) => candidate.id === opened)
+    return group ? group.members.map((member) => member.id) : []
+  }, [whole, opened, expanded])
 
-  if (!data)
+  if (!data || !whole || !view)
     return (
       <Page full>
         <PageHeader
@@ -52,13 +68,16 @@ function Chain() {
       </Page>
     )
 
-  const view = chainOf(data, filters)
   const projects = [...new Set([...projectsOf(data), ...(filters.project ? [filters.project] : [])])].sort()
   const counts = chainCounts(data)
-  const waiting = view.edges.filter((edge) => !edge.closed).length
+  const waiting = whole.edges.filter((edge) => !edge.closed).length
   const scheduled = data.nodes.filter((node) => node.notBefore && (!filters.project || node.repo === filters.project))
   const isolated = filters.project ? (counts.projects[filters.project]?.isolated ?? 0) : counts.isolated
-  const note = `${waiting} blocked, ${view.edges.length - waiting} done${isolated > 0 ? `. ${isolatedNote(isolated)}` : ''}`
+  const folded =
+    view.groups.length > 0
+      ? `. ${view.folded} of ${whole.nodes.length} nodes are folded into ${view.groups.length} groups`
+      : ''
+  const note = `${waiting} blocked, ${whole.edges.length - waiting} done${folded}${isolated > 0 ? `. ${isolatedNote(isolated)}` : ''}`
 
   return (
     <Page full>
@@ -94,6 +113,28 @@ function Chain() {
             : []
         }
       />
+      {expanded.size > 0 || view.groups.length > 0 ? (
+        <div className="mb-3 flex min-h-7 items-center gap-3 text-sm text-muted-foreground">
+          {expanded.size === 0 ? <span>Groups open on a click</span> : null}
+          {expanded.size > 0 ? (
+            <>
+              <span>
+                {expanded.size} {expanded.size === 1 ? 'group is' : 'groups are'} open
+              </span>
+              <button
+                type="button"
+                className="h-7 rounded-lg bg-accent px-2.5 text-xs text-foreground outline-none transition-colors hover:bg-muted focus-visible:ring-3 focus-visible:ring-ring/50"
+                onClick={() => {
+                  setExpanded(new Set())
+                  setOpened(null)
+                }}
+              >
+                Fold all
+              </button>
+            </>
+          ) : null}
+        </div>
+      ) : null}
       <div className="mb-4 flex flex-wrap gap-3 md:hidden">
         <label className="flex items-center gap-2 text-sm text-muted-foreground">
           Project
@@ -111,14 +152,14 @@ function Chain() {
           </select>
         </label>
       </div>
-      {view.edges.length === 0 ? (
+      {whole.edges.length === 0 ? (
         <EmptyState title="No dependencies">
           {filters.project
             ? `${filters.project} has no Issue or plan row that waits or is waited for.`
             : 'Issues and plan rows that wait for another show here, blocker to dependent.'}
         </EmptyState>
       ) : (
-        <ChainGraph view={view} resetKey={filters.project ?? ''} />
+        <ChainGraph view={view} resetKey={filters.project ?? ''} onOpen={open} focus={focus} />
       )}
       {scheduled.length > 0 ? <Schedule nodes={scheduled} /> : null}
     </Page>

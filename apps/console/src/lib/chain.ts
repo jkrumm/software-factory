@@ -78,7 +78,7 @@ export const issueNumber = (node: ChainNode): string | null =>
   node.kind === 'issue' && /^issue_\d+$/.test(node.id) ? node.id.slice('issue_'.length) : null
 
 /** The text of an edge for a screen reader and its label: who blocks whom, or that the blocker is done. */
-export const edgeText = (edge: ChainEdge, byId: Map<string, ChainNode>): string => {
+export const edgeText = (edge: ChainEdge, byId: Map<string, Pick<ChainNode, 'title'>>): string => {
   const blocker = byId.get(edge.to)?.title ?? 'Unknown'
   const waiting = byId.get(edge.from)?.title ?? 'Unknown'
   return isBlocked(edge) ? `${blocker} blocks ${waiting}` : `${blocker} is done, ${waiting} no longer waits for it`
@@ -224,7 +224,11 @@ export function scheduleOf(nodes: ChainNode[], now: number, gap = 0.2): Schedule
 }
 
 /** "Waits for A" or "Waits for A and 2 more": the blockers of a node that have not closed; none: null. */
-export function waitsForWords(id: string, edges: ChainEdge[], byId: Map<string, ChainNode>): string | null {
+export function waitsForWords(
+  id: string,
+  edges: ChainEdge[],
+  byId: Map<string, Pick<ChainNode, 'title'>>,
+): string | null {
   const open = edges.filter((edge) => edge.from === id && isBlocked(edge))
   const first = open[0] && byId.get(open[0].to)
   if (!first) return null
