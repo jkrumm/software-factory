@@ -1,5 +1,5 @@
 import type { CheckRecord, CiState } from './evidence.ts'
-import { condense } from './output.ts'
+import { condense, failingLines, firstFailing } from './output.ts'
 
 /** One check of verify: pass or fail, never averaged. `detail` is data, whatever the check printed. */
 export interface Check {
@@ -106,19 +106,34 @@ export const failureSignature = (detail: string): string =>
     .replace(/\s+/g, ' ')
     .trim()
 
+/** The set of failing lines of a check's detail, each by `failureSignature`. */
+const failingSet = (detail: string): Set<string> => new Set(failingLines(detail).map(failureSignature))
+
 /**
- * Marks each failed `make <target>` check that failed identically in `baseline`, the repo's last finished run before the
- * ship: a verify red in a component the change never touched (a pending OS update, a dependency that moved) is not a
- * regression of the Issue. The version, CI, checkout and probe checks stay the change's: each reads this ship's own commit
+ * Whether `now` is a failure that was already there in `before`: the failing lines of this run are all among the failing
+ * lines of that one. A target that lists its drift prints one more or one fewer item from day to day; that is the same
+ * red, while a line the baseline never had is a new failure. A run that printed no line is compared whole.
+ */
+function failedBefore(now: string, before: string): boolean {
+  const mine = failingSet(now)
+  if (mine.size === 0) return failureSignature(now) === failureSignature(before)
+  const earlier = failingSet(before)
+  return [...mine].every((line) => earlier.has(line))
+}
+
+/**
+ * Marks each failed `make <target>` check whose failing lines were all failing in `baseline`, the repo's last finished
+ * run before the ship: a verify red in a component the change never touched (a pending OS update, a dependency that
+ * moved, one more item in a drift list) is not a regression of the Issue. A line the baseline did not have keeps the
+ * check the change's. The version, CI, checkout and probe checks stay the change's: each reads this ship's own commit
  * or the live system. With no baseline, or one that was green, nothing is marked.
  */
 export function markInherited(checks: readonly Check[], baseline: readonly CheckRecord[] | null): Check[] {
   if (!baseline) return [...checks]
   return checks.map((check) => {
     if (check.ok || check.blocked || !check.name.startsWith('make ')) return check
-    const signature = failureSignature(check.detail)
     const before = baseline.some(
-      (old) => old.name === check.name && (!old.ok || old.inherited) && failureSignature(old.detail) === signature,
+      (old) => old.name === check.name && (!old.ok || old.inherited) && failedBefore(check.detail, old.detail),
     )
     return before ? { ...check, inherited: true } : check
   })
@@ -154,13 +169,35 @@ export function stepOf(before: readonly Ran[], checks: readonly Check[]): Step {
 }
 
 const MAX_DETAIL = 1_800
+/** How many failing lines head a check in the note, each clipped: what the lead reads first, before any cut output. */
+const HEAD_LINES = 3
+const HEAD_CHARS = 140
+/** Below this a check's share of the budget is no room for its condensed output. */
+const MIN_OUTPUT = 120
+
+const clip = (line: string): string => (line.length <= HEAD_CHARS ? line : `${line.slice(0, HEAD_CHARS - 1)}…`)
 
 /**
- * What the lead reads of a regression: each failed check, by name, with the failing part of what it printed. The budget
- * is shared between them and every cut falls on a line boundary and is marked (`condense`).
+ * What the lead reads of a regression, the failing part first: the names of the failed checks, then for each its first
+ * failing lines, then what it printed (condensed, so the budget is shared and every cut falls on a line boundary and is
+ * marked). A check that printed only a few lines is its name and those lines.
  */
 export function regressionDetail(checks: readonly Check[]): string {
   const failed = checks.filter((check) => !check.ok && !check.inherited)
-  const share = Math.floor(MAX_DETAIL / Math.max(1, failed.length))
-  return failed.map((check) => `${check.name} failed: ${condense(check.detail, share)}`).join('\n')
+  const heads = failed.map((check) => firstFailing(check.detail, HEAD_LINES).map(clip))
+  const isShort = (check: Check): boolean =>
+    failingLines(check.detail).length <= HEAD_LINES && !check.detail.includes('lines cut]')
+  const spent = heads.reduce(
+    (sum, lines, i) => sum + (isShort(failed[i] as Check) ? 0 : lines.join('\n').length + 40),
+    0,
+  )
+  const share = Math.floor(Math.max(0, MAX_DETAIL - spent) / Math.max(1, failed.length))
+  const blocks = failed.map((check, i) => {
+    if (isShort(check)) return `${check.name} failed: ${condense(check.detail, share)}`
+    const head = [`${check.name} failed, first failing lines:`, ...(heads[i] ?? []).map((line) => `  ${line}`)]
+    return (share < MIN_OUTPUT ? head : [...head, 'output:', condense(check.detail, share)]).join('\n')
+  })
+  const names =
+    failed.length > 1 ? [`${failed.length} checks failed: ${failed.map((check) => check.name).join(', ')}`] : []
+  return [...names, ...blocks].join('\n')
 }
