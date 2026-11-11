@@ -66,18 +66,25 @@ export function parseFrameMessage(data: unknown): FrameMessage | null {
   return { type: 'select', quote, path: parsed.data.path.trim(), rect: { top, bottom, left } }
 }
 
+/** The comment popover's width in px (22 rem); its height is measured. */
+export const POPOVER_WIDTH = 352
+
 /**
- * Where the comment box opens in its column: level with the selection's top, kept on screen. `column` is the box's
- * positioned parent, all in the same viewport coordinates as `selectionTop`.
+ * Where the comment popover opens: just below the selection, its left edge on the selection's, flipped above when it does
+ * not fit below and kept inside the viewport. All in viewport coordinates, `box` being the popover's measured size.
  */
-export function composerTop(
-  selectionTop: number,
-  column: { top: number; height: number },
-  boxHeight: number,
-  margin = 8,
-): number {
-  const lowest = Math.max(margin, column.height - boxHeight - margin)
-  return Math.min(Math.max(selectionTop - column.top, margin), lowest)
+export function popoverPosition(
+  selection: SelectionRect,
+  box: { width: number; height: number },
+  viewport: { width: number; height: number },
+  gap = 8,
+): { top: number; left: number } {
+  const left = Math.max(gap, Math.min(selection.left, viewport.width - box.width - gap))
+  const below = selection.bottom + gap
+  const above = selection.top - gap - box.height
+  const top =
+    below + box.height <= viewport.height - gap ? below : above >= gap ? above : viewport.height - box.height - gap
+  return { top: Math.max(gap, top), left }
 }
 
 /** Text nodes of a rendered page in order, each with its block: two blocks are never glued without a space. */

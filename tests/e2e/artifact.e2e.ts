@@ -42,7 +42,7 @@ const SELECT = (text: string) => `(() => {
 })()`
 
 /** The first selection's rect in the viewport of a page or a frame. */
-const RECT = `(() => { const r = getSelection().getRangeAt(0).getBoundingClientRect(); return { top: r.top, bottom: r.bottom } })()`
+const RECT = `(() => { const r = getSelection().getRangeAt(0).getBoundingClientRect(); return { top: r.top, bottom: r.bottom, left: r.left } })()`
 
 const region = (page: Page, name: string) => page.getByRole('region', { name, exact: true })
 
@@ -56,7 +56,9 @@ test('a Markdown Spec: mark text, comment, see it listed and highlighted, then a
   const header = page.locator('main header')
   await expect(header).toContainText('Spec')
   await expect(header).toContainText('Markdown')
-  await expect(header).toContainText('Waiting for your verdict')
+  await expect(header.getByRole('button', { name: 'Give your verdict' })).toBeVisible()
+  // the Issue it belongs to is a link back, by number and title
+  await expect(header.getByRole('link', { name: /^Issue \d+/ })).toBeVisible()
   expect(await page.locator('body').innerText()).not.toMatch(/artifact_|issue_\d+|lead-\d+|#\d+/)
 
   // Escape cancels the box, and the same passage can be chosen again
@@ -67,18 +69,23 @@ test('a Markdown Spec: mark text, comment, see it listed and highlighted, then a
   await expect(composer).toBeHidden()
   await expect.poll(() => page.evaluate('getSelection().isCollapsed')).toBe(true)
 
-  // The box opens in the comments column, level with the passage, and the passage stays painted while it is open.
+  // The document is centred in the column left of the comments panel, its prose capped near 75ch.
+  const column = await region(page, 'Revision 1').boundingBox()
+  const prose = await page.locator('.artifact-prose').boundingBox()
+  if (!column || !prose) throw new Error('no boxes')
+  expect(Math.abs(prose.x + prose.width / 2 - (column.x + column.width / 2))).toBeLessThanOrEqual(2)
+  expect(prose.width).toBeLessThanOrEqual(75 * 11)
+
+  // The box opens beside the selection, just below it on its left edge, and the passage stays painted while it is open.
   await page.evaluate(SELECT(SPEC_QUOTE))
-  const passage = (await page.evaluate(RECT)) as { top: number; bottom: number }
+  const passage = (await page.evaluate(RECT)) as { top: number; bottom: number; left: number }
   await expect(composer).toBeVisible()
   await expect(composer).toContainText(SPEC_QUOTE)
-  const column = await region(page, 'Revision 1').boundingBox()
   const box = await composer.boundingBox()
-  if (!column || !box) throw new Error('no boxes')
-  expect(box.x).toBeGreaterThanOrEqual(column.x + column.width - 1)
-  expect(box.x).toBeGreaterThan(1000)
-  expect(box.y).toBeGreaterThanOrEqual(passage.top - 24)
-  expect(box.y).toBeLessThanOrEqual(passage.bottom)
+  if (!box) throw new Error('no box')
+  expect(box.y).toBeGreaterThanOrEqual(passage.bottom)
+  expect(box.y).toBeLessThanOrEqual(passage.bottom + 24)
+  expect(Math.abs(box.x - passage.left)).toBeLessThanOrEqual(2)
   await expect(composer.getByRole('textbox', { name: 'Comment' })).toBeFocused()
   await expect
     .poll(() => page.evaluate("[...(CSS.highlights.get('annotation-pending') ?? [])].map((range) => range.toString())"))
@@ -94,12 +101,22 @@ test('a Markdown Spec: mark text, comment, see it listed and highlighted, then a
     .poll(() => page.evaluate("[...(CSS.highlights.get('annotation') ?? [])].map((range) => range.toString())"))
     .toEqual([SPEC_QUOTE])
   await expect.poll(() => page.evaluate("CSS.highlights.has('annotation-pending')")).toBe(false)
-  await listed.getByRole('button').first().click()
+
+  // Clicking the comment opens its card and paints its passage as the one in focus; a new selection lets go of it.
+  const card = listed.getByRole('listitem').filter({ hasText: 'Say why not Redis.' })
+  await card.getByRole('button').first().click()
+  await expect(card).toHaveAttribute('aria-current', 'true')
+  await expect
+    .poll(() => page.evaluate("[...(CSS.highlights.get('annotation-active') ?? [])].map((range) => range.toString())"))
+    .toEqual([SPEC_QUOTE])
+  await expect(card.getByRole('button', { name: 'Edit comment' })).toHaveCSS('opacity', '1')
 
   // a second comment, to be deleted
   const second = 'The cost is one more table.'
   await page.evaluate(SELECT(second))
   await expect(composer).toContainText(second)
+  await expect(card).not.toHaveAttribute('aria-current', 'true')
+  await expect.poll(() => page.evaluate("CSS.highlights.has('annotation-active')")).toBe(false)
   await composer.getByRole('textbox', { name: 'Comment' }).fill('Is one table really the cost?')
   await composer.getByRole('button', { name: 'Add comment' }).click()
   await expect(listed).toContainText('Is one table really the cost?')
@@ -149,13 +166,17 @@ test('a Markdown Spec: mark text, comment, see it listed and highlighted, then a
   await page.getByRole('button', { name: 'Add general comment' }).click()
   await expect(region(page, 'General')).toContainText('Overall: good direction.')
 
-  const verdict = region(page, 'Verdict')
+  // The verdict is given from the header, in a popover.
+  await page.getByRole('button', { name: 'Give your verdict' }).click()
+  const verdict = page.getByRole('group', { name: 'Verdict' })
   await verdict.getByRole('button', { name: 'With notes' }).click()
-  await verdict.getByRole('textbox', { name: 'Verdict note' }).fill('Good, but name the lock.')
-  await verdict.getByRole('button', { name: 'Send verdict' }).click()
-  await expect(verdict).toContainText('With notes')
-  await expect(verdict).toContainText('Good, but name the lock.')
+  await page.getByRole('textbox', { name: 'Verdict note' }).fill('Good, but name the lock.')
+  await page.getByRole('button', { name: 'Send verdict' }).click()
   await expect(page.locator('main header')).toContainText('With notes')
+  await expect(page.getByRole('button', { name: 'Give your verdict' })).toHaveCount(0)
+  await page.getByRole('button', { name: 'Your verdict' }).click()
+  await expect(page.getByText('Good, but name the lock.')).toBeVisible()
+  await page.keyboard.press('Escape')
 
   // The API holds both, and the Issue moved on: the verdict ends its wait on the Spec.
   const shown = await detail(apiUrl, spec)
@@ -274,13 +295,12 @@ test.describe('an HTML artifact', () => {
     const inFrame = (await frame.evaluate(RECT)) as { top: number; bottom: number }
     const composer = page.getByRole('form', { name: 'Comment on the selection' })
     await expect(composer).toContainText(claim)
-    // beside the passage: right of the frame, level with the passage (the frame's rect plus the frame's own position)
+    // beside the passage: just below it (the frame's rect plus the frame's own position)
     const frameBox = await page.locator('iframe[title="Artifact"]').boundingBox()
     const box = await composer.boundingBox()
     if (!frameBox || !box) throw new Error('no boxes')
-    expect(box.x).toBeGreaterThanOrEqual(frameBox.x + frameBox.width - 1)
-    expect(box.y).toBeGreaterThanOrEqual(frameBox.y + inFrame.top - 24)
-    expect(box.y).toBeLessThanOrEqual(frameBox.y + inFrame.bottom)
+    expect(box.y).toBeGreaterThanOrEqual(frameBox.y + inFrame.bottom - 1)
+    expect(box.y).toBeLessThanOrEqual(frameBox.y + inFrame.bottom + 24)
     // the frame fills the page's height and width: no box, no border
     expect(frameBox.height).toBeGreaterThan(900)
     expect(frameBox.width).toBeGreaterThan(1100)
@@ -295,6 +315,14 @@ test.describe('an HTML artifact', () => {
     await composer.getByRole('button', { name: 'Add comment' }).click()
     await expect(region(page, 'On the text')).toContainText('Who pays on Saturday?')
     await expect.poll(() => frame.evaluate("CSS.highlights.get('factory')?.size ?? 0")).toBe(1)
+
+    // clicking the comment brings its passage into view and paints it as the one in focus, inside the frame too
+    const card = region(page, 'On the text').getByRole('listitem').filter({ hasText: 'Who pays on Saturday?' })
+    await card.getByRole('button').first().click()
+    await expect(card).toHaveAttribute('aria-current', 'true')
+    await expect
+      .poll(() => frame.evaluate("[...(CSS.highlights.get('factory-active') ?? [])].map((range) => range.toString())"))
+      .toEqual([claim])
 
     const shown = await detail(apiUrl, report)
     expect(shown.annotations).toEqual([

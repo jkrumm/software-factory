@@ -3,7 +3,7 @@
  * It posts the owner's selection out ({type:'factory.select', quote, path, rect:{top,bottom,left}} with the rect relative to the frame's viewport, to `parent`, target origin '*' because the
  * frame's origin is opaque), tells the parent it is ready ({type:'factory.ready'}), and paints what the page sends in
  * ({type:'factory.highlight', quotes:[...]} with the CSS Custom Highlight API; {type:'factory.scroll', quote} brings one
- * into view; {type:'factory.clear'} drops the selection, so the same passage can be chosen again), from `parent` only. It writes nothing and starts nothing: the Console writes only after the owner submits a
+ * into view and paints it as the active one; {type:'factory.deactivate'} drops that; {type:'factory.clear'} drops the selection, so the same passage can be chosen again), from `parent` only. It writes nothing and starts nothing: the Console writes only after the owner submits a
  * comment in its own UI.
  *
  * The text index and the heading path mirror src/lib/artifact.ts (indexText, locateQuote, headingPath); keep them alike.
@@ -18,7 +18,9 @@
 
   const style = document.createElement('style')
   style.textContent =
-    '::highlight(factory),::highlight(factory-pending){background-color:var(--factory-highlight,Mark);color:var(--factory-highlight-ink,MarkText)}'
+    '::highlight(factory){background-color:var(--factory-highlight,Mark);color:var(--factory-highlight-ink,MarkText)}' +
+    '::highlight(factory-pending){background-color:var(--factory-highlight-active,color-mix(in srgb,var(--vx-accent,Mark) 40%,transparent));color:var(--factory-highlight-ink,MarkText)}' +
+    '::highlight(factory-active){background-color:var(--factory-highlight-active,color-mix(in srgb,var(--vx-accent,Mark) 48%,transparent));color:var(--factory-highlight-ink,MarkText);text-decoration:underline;text-decoration-thickness:2px;text-underline-offset:3px}'
   document.head.appendChild(style)
 
   const norm = (s) => String(s).replace(/\s+/g, ' ').trim()
@@ -140,9 +142,14 @@
       if (window.CSS && CSS.highlights) CSS.highlights.delete('factory-pending')
       lastKey = ''
     }
+    if (data.type === 'factory.deactivate' && window.CSS && CSS.highlights) CSS.highlights.delete('factory-active')
     if (data.type === 'factory.scroll' && typeof data.quote === 'string') {
       const range = rangeOf(index(), data.quote)
       range?.startContainer.parentElement?.scrollIntoView({ block: 'center', behavior: 'smooth' })
+      if (window.CSS && CSS.highlights && typeof Highlight !== 'undefined') {
+        if (range) CSS.highlights.set('factory-active', new Highlight(range))
+        else CSS.highlights.delete('factory-active')
+      }
     }
   })
 

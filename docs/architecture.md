@@ -306,10 +306,17 @@ A Concept or Spec is a
 revisable artifact; the owner's verdict arrives as the lead's next turn. Revisions are blobs under the data directory
 named by their hash, never in git. The owner's line (ntfy) carries one page per checkpoint, plus one push for a Concept or Spec revision nobody answered in a day, and nothing else.
 
-The Console shows an artifact at `/artifacts/<id>` (`?revision=n`, `&compare=m` for two revisions side by side): the
-kind and format in words, the verdict state, a revision selector, the comments with "General" (a comment on the whole
-artifact hangs on the title with the path `global`) and "Unanchored" as their own groups, and for a Concept or Spec the
-verdict control. The owner marks text and comments on it; the page posts the quote (the selection with its whitespace
+The Console shows an artifact at `/artifacts/<id>` (`?revision=n`, `&compare=m` for two revisions side by side) as a
+designed page: a header band (a link back to its Issue with the Issue's state and project, the title, the kind and format in
+words, a revision selector, and for a Concept or Spec the verdict control, a button whose popover holds the four words and
+a note), the document centred in the column left of the comments panel (prose capped at 75ch), and the panel: one card per
+comment (author, time, the quoted passage, the words, where in the document), with "General" (a comment on the whole
+artifact hangs on the title with the path `global`) and "Unanchored" as their own groups when more than one group exists,
+and a box for a general comment at its foot. A card is a button: it brings its passage into view and paints it stronger
+(`annotation-active`; `factory.scroll` and `factory.deactivate` in the HTML frame) and shows edit (the owner's own) and
+delete in place. The owner marks text and comments on it; selecting a passage opens the comment box as a popover anchored
+under it (`popoverPosition`, flipped above when there is no room, following the passage through scroll; a bottom sheet below
+`lg`); the page posts the quote (the selection with its whitespace
 folded, which is what the API anchors on) and the nearest heading path, and highlights the anchored comments with the CSS
 Custom Highlight API. Markdown renders through react-markdown without raw HTML, with unsafe URLs refused and no image
 loaded; HTML renders in an `<iframe sandbox="allow-scripts" src="/frame.html">`: a separate document the Console listener serves

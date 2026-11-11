@@ -126,8 +126,20 @@ it does not.
   chart level): Against target (a summary strip of one lamp tile per targeted KPI (status, figure, label, target; compact rows below 80rem, two lines on a phone), with "N of M targets met"), Quality, Pace and gates, Spend (all on one 4-column lattice), Fix commits (the stacked-bar card
   beside its class table), Friction (balanced columns in one panel), then the held finding classes. Each KPI card has
   its target as a dashed line and the distance to it, the last window against the one before.
-- **Artifact**: the document fills the page with its comments in a side panel; selecting a passage opens the comment
-  box beside it; an annotation can be edited and deleted; revisions side by side. The shared templates follow these rules.
+- **Artifact**: a header band (a link back to its Issue with the Issue's Lozenge and project, the title, kind, format,
+  author and age, the revision selector, and for a Concept or Spec the verdict as one button whose popover holds the four
+  words and a note; once given it is a Lozenge). Under it the document, **centred** in the column left of a 24 rem comments
+  panel, running prose capped at 75ch (Markdown and the shared template alike; tables, figures and code fill that measure).
+  The panel is a surface step with one card per comment on the step below it: author (initial tile, name), a mono relative
+  time, the quoted passage as a tinted chip, the words at 13 px, the heading path in mono 11 px, and the revision only when it
+  is not the one shown. A card is a button: it brings its passage into view and paints it stronger (a darker fill and an
+  underline, so it is not only a step in tint), and its card takes the next surface step with a faint shadow, never a ring
+  or a bar; edit (the owner's own) and delete show on the open card, on hover and on focus and work in place. A group heading
+  shows only when more than one group exists. A general comment is the box at the panel's foot. Selecting a passage opens
+  the comment box as a popover anchored under it (above when there is no room, following the passage through scroll), on
+  `popover` and the overlay shadow; below 1024 px it is a bottom sheet. It covers the text under the passage while open;
+  the passage itself stays painted. Revisions side by side stay.
+  The shared templates follow these rules.
 
 ## Done means
 

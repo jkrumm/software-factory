@@ -1,6 +1,5 @@
 import { describe, expect, test } from 'bun:test'
 import {
-  composerTop,
   groupAnnotations,
   headingPath,
   indexText,
@@ -9,6 +8,7 @@ import {
   MAX_QUOTE,
   normalizeQuote,
   parseFrameMessage,
+  popoverPosition,
 } from '../src/lib/artifact.ts'
 
 describe('normalizeQuote', () => {
@@ -117,16 +117,20 @@ describe('groupAnnotations', () => {
   })
 })
 
-describe('composerTop', () => {
-  const column = { top: 100, height: 900 }
-  test('is level with the selection, relative to the column', () => {
-    expect(composerTop(400, column, 200)).toBe(300)
+describe('popoverPosition', () => {
+  const viewport = { width: 1800, height: 1200 }
+  const box = { width: 352, height: 200 }
+  test('opens below the selection, on its left edge', () => {
+    expect(popoverPosition({ top: 300, bottom: 320, left: 500 }, box, viewport)).toEqual({ top: 328, left: 500 })
   })
-  test('stays on screen above and below the column', () => {
-    expect(composerTop(-50, column, 200)).toBe(8)
-    expect(composerTop(5000, column, 200)).toBe(900 - 200 - 8)
+  test('flips above when it does not fit below', () => {
+    expect(popoverPosition({ top: 1100, bottom: 1120, left: 500 }, box, viewport)).toEqual({ top: 892, left: 500 })
   })
-  test('a box taller than the column sits at the top', () => {
-    expect(composerTop(500, column, 2000)).toBe(8)
+  test('stays inside the viewport sideways', () => {
+    expect(popoverPosition({ top: 300, bottom: 320, left: 1700 }, box, viewport).left).toBe(1800 - 352 - 8)
+    expect(popoverPosition({ top: 300, bottom: 320, left: -40 }, box, viewport).left).toBe(8)
+  })
+  test('a box that fits neither side sits at the bottom edge', () => {
+    expect(popoverPosition({ top: 100, bottom: 1100, left: 10 }, { width: 352, height: 400 }, viewport).top).toBe(792)
   })
 })
