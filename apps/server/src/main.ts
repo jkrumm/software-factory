@@ -249,7 +249,7 @@ async function main(): Promise<void> {
     },
     planning: writes,
     claimQueued: planning.claimQueued,
-    claimFree: planning.claimFree,
+    claimStalled: planning.claimStalled,
     claimStallMs: loopSettings.claimStallMs,
     rules: {
       ...DEFAULT_STEWARD_RULES,

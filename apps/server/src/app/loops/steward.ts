@@ -58,9 +58,9 @@ export interface StewardDeps extends WriteDeps {
   planning: PlanningDeps
   /** capacity's side: the Issues queued for lack of a claim in their repo (called outside any transaction) */
   claimQueued(): Promise<Result<{ issue: IssueId; repo: string }[], PortError>>
-  /** capacity's side: of these Issue repos, those whose project has an ordinary claim free right now (called outside any transaction) */
-  claimFree(repos: readonly string[]): Promise<Result<string[], PortError>>
-  /** a note refused for a claim this long while the repo has one free is a stall */
+  /** capacity's side: of these Issues, those a claim would be granted now, in the order that serves resumed leads (called outside any transaction) */
+  claimStalled(issues: readonly IssueId[]): Promise<Result<{ issue: IssueId; account: string | null }[], PortError>>
+  /** a note refused for a claim this long while a claim is free for it is a stall */
   claimStallMs: number
   rules: StewardRules
   retryMs: number
@@ -685,9 +685,11 @@ async function deferHolder(deps: StewardDeps, holder: ClaimHolder): Out<boolean>
 }
 
 /**
- * The claim livelock: a lead's note has been refused for a claim for longer than `claimStallMs` while its repo has an
- * ordinary place free. A full repo is a rightful wait; a free place nobody takes is a stall of the order that serves
- * resumed leads, so it is a problem line on the pass and one note on the Issue (once per run of refusals).
+ * The claim livelock: a lead's note has been refused for a claim for longer than `claimStallMs` while a claim would be
+ * granted to it now. A full repo, or free places that go to resumed leads ahead of it (a herd woken at once), is a
+ * rightful wait; a free place nobody takes is a stall of the order that serves resumed leads, so it is a problem line
+ * on the pass and one note on the Issue (once per run of refusals). The account is named and is never the reason: a
+ * resume is not held by the account cap.
  */
 async function noteClaimStalls(deps: StewardDeps, pass: StewardPass): Promise<void> {
   const refused = await deps.uow.run(async ({ loopReads }) => ok(await loopReads.claimRefusals(PASS_LIMIT)))
@@ -698,18 +700,20 @@ async function noteClaimStalls(deps: StewardDeps, pass: StewardPass): Promise<vo
   const now = deps.clock.now().getTime()
   const overdue = refused.value.filter((r) => now - r.since.getTime() >= deps.claimStallMs)
   if (overdue.length === 0) return
-  const free = await deps.claimFree([...new Set(overdue.map((r) => r.repo))])
-  if (!free.ok) {
-    pass.problems.push(`claim free: ${free.error.detail}`)
+  const stalled = await deps.claimStalled(overdue.map((r) => r.issue))
+  if (!stalled.ok) {
+    pass.problems.push(`claim stalled: ${stalled.error.detail}`)
     return
   }
+  const accountOf = new Map(stalled.value.map((s) => [s.issue, s.account]))
   for (const stall of overdue) {
-    if (!free.value.includes(stall.repo)) continue
+    if (!accountOf.has(stall.issue)) continue
+    const on = accountOf.get(stall.issue) ?? 'no account on file'
     pass.claimStalls++
     pass.problems.push(
-      `Issue ${issueNumber(stall.issue)}: refused for a claim ${stall.refusals} times since ${stall.since.toISOString()} while ${stall.repo} has one free`,
+      `Issue ${issueNumber(stall.issue)}: refused for a claim ${stall.refusals} times since ${stall.since.toISOString()} while a claim in ${stall.repo} is free for it (resumes on ${on})`,
     )
-    const text = `A note to this lead has been refused for a claim ${stall.refusals} times since ${stall.since.toISOString()}, and ${stall.repo} has a claim free: a stall of the resume order, not a full repo.`
+    const text = `A note to this lead has been refused for a claim ${stall.refusals} times since ${stall.since.toISOString()}, and a claim in ${stall.repo} is free for it: a stall of the resume order, not a full repo and not the account cap (it resumes on ${on}, and the cap never holds a resume back).`
     await noteOnce(
       deps,
       pass,
