@@ -153,6 +153,12 @@ test('a quiet lead is never turned into a stall or a Decision: the answer that a
   const kinds = (await eventsOf(lab, issue)).map((event) => event.kind)
   expect(kinds).not.toContain('stalled')
   expect(kinds).not.toContain('asked')
+
+  // the lead resumes and goes quiet again: a new episode, so the workflow is asked about it, not the old answer replayed
+  await hook(lab.world, 'user-prompt-submit', session, { session_id: 'resumed' })
+  await goQuiet(session)
+  expect((await runLoop(lab, 'steward')).summary).toContain('Decisions 0')
+  expect((await callsOf(lab, 'factory-steward')).filter((call) => call.input.issue === issue)).toHaveLength(2)
 })
 
 test('a lead that deferred before going quiet is not nudged', async () => {

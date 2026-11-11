@@ -1,4 +1,4 @@
-import { type IssueId, issueId } from '../../kernel/ids.ts'
+import { type IssueId, issueId, leadBranchIssue } from '../../kernel/ids.ts'
 
 /** A repo's main checkout as the steward reads it: the branch (null: detached HEAD), the default branch (null: unknown), the tracked paths with uncommitted changes. */
 export interface MainCheckoutLook {
@@ -40,9 +40,8 @@ const SHOWN_PATHS = 3
  * session also work there), so they stay on the health line and reach no lead.
  */
 export function checkoutOwner(finding: Pick<MainCheckoutFinding, 'branch'>, live: readonly IssueId[]): IssueId | null {
-  // `leadBranch` in `domains/leads/names.ts` makes these names; a domain reads no other, so the shape is repeated here.
-  const match = finding.branch === null ? null : /^factory\/([1-9][0-9]*)-[1-9][0-9]*$/.exec(finding.branch)
-  const owner = match?.[1] ? issueId(Number(match[1])) : null
+  const number = finding.branch === null ? null : leadBranchIssue(finding.branch)
+  const owner = number === null ? null : issueId(number)
   return owner && live.includes(owner) ? owner : null
 }
 

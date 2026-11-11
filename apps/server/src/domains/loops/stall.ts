@@ -20,6 +20,8 @@ export interface StallFacts {
   regressions: number
   /** how often the steward woke this attempt already */
   stewardWakes: number
+  /** a quiet lead's turn count when it went quiet, so a lead that resumed and went quiet again is a new episode; 0 for a stall */
+  episode: number
   /** the same stall as one a Decision of the steward already answered, nothing new since: asking again changes nothing */
   repeatOf: RepeatedStall | null
   /** notes recorded while it waited that the lead has not heard */
@@ -127,7 +129,7 @@ export const SAME_STALL = 0.5
  */
 export const IDLE_NOTE = 'steward: your session has been idle'
 
-/** How the `unreported` stall of a quiet lead begins (its detail), so the steward finds it again among the events. */
+/** How the detail of a quiet lead's facts begins, as the workflow is given them (the lead is never stalled: it stays `working`). */
 export const IDLE_STALL = "the lead's session has been idle"
 
 /** What a nudge says to a lead that went quiet on a working Issue: how long, its last event, and what to do. */

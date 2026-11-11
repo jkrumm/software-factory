@@ -171,6 +171,7 @@ export function factsOf(issue: Issue, history: readonly AppliedRecord[]): StallF
         record.version > lastAdmitted &&
         field(record.payload, 'detail').startsWith(STEWARD_DETAIL),
     ).length,
+    episode: 0,
     repeatOf: repeatedStall(issue.id, history, cause, wait.detail),
     notes: history
       .filter((record) => record.kind === 'noted' && record.version > wait.told)
@@ -280,7 +281,8 @@ type Asking = { kind: 'act'; checked: Checked } | { kind: 'wait'; why: string } 
 
 /** Asks `factory-steward` once per stall and round: claim and commit, call with no transaction open, record. */
 async function ask(deps: StewardDeps, facts: StallFacts): Out<Asking> {
-  const subject = `wait:${facts.since}`
+  // A quiet lead's episode also moves with its turn: one that resumed and went quiet again is a new subject, not the old answer.
+  const subject = facts.episode ? `wait:${facts.since}:turn${facts.episode}` : `wait:${facts.since}`
   const now = deps.clock.now()
   const policy = policyOf(deps)
   const claimed = await deps.uow.run<Claimed, never>(async (stores) =>
@@ -291,7 +293,10 @@ async function ask(deps: StewardDeps, facts: StallFacts): Out<Asking> {
         subject,
         now,
         policy,
-        keyFor: (round) => key('steward', facts.issue, facts.since, round),
+        keyFor: (round) =>
+          facts.episode
+            ? key('steward', facts.issue, facts.since, facts.episode, round)
+            : key('steward', facts.issue, facts.since, round),
       }),
     ),
   )
@@ -448,6 +453,7 @@ export async function loadIdle(deps: Pick<StewardDeps, 'uow'>, id: IssueId): Out
         restarts: issue.restarts,
         regressions: issue.regressions,
         stewardWakes: wakes.length,
+        episode: view.turns,
         repeatOf: null,
         notes: [],
         history: history.slice(-HISTORY_LINES).map(lineOf),
@@ -479,7 +485,12 @@ async function answerIdle(deps: StewardDeps, idle: Idle, checked: Checked, minut
   if (checked.kind !== 'wake') return ok('nothing')
   const { facts } = idle
   const text = idleNote(minutes, idle.idle.lastEvent, checked.note ?? checked.reason, idle.idle.background)
-  const noted = await noteIdle(deps, facts, text, key('noted', 'steward', 'idle-ask', facts.issue, facts.since))
+  const noted = await noteIdle(
+    deps,
+    facts,
+    text,
+    key('noted', 'steward', 'idle-ask', facts.issue, facts.since, facts.episode),
+  )
   return noted.ok ? ok(noted.value ? 'woken' : 'nothing') : noted
 }
 

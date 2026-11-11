@@ -35,6 +35,7 @@ const stall = (over: Partial<StallFacts> = {}): StallFacts => ({
   restarts: 0,
   regressions: 0,
   stewardWakes: 0,
+  episode: 0,
   repeatOf: null,
   notes: [],
   history: [],
