@@ -10,7 +10,7 @@ import { call, startClientsWorld, type VerbsWorld } from './support.ts'
  * Group B, the dotfiles: its real scripts and hooks run with `factory` on PATH being the new CLI. The dotfiles repo is a
  * read-only reference here (CI has none): each test is skipped when its file is absent. A scratch HOME holds the shim, the
  * stubs the dotfiles' own suites use for everything that is not the factory (the Herdr core's `hc`, the account picker), and
- * `SourceRoot` as a link to the world's repo root, so `rd issue <repo>` files a path the server accepts.
+ * `SourceRoot` as a link to the world's repo root, so `rd work <repo>` resolves a path the server accepts.
  */
 const DOTFILES = join(process.env.DOTFILES_DIR ?? join(homedir(), 'SourceRoot', 'dotfiles'))
 const RD = join(DOTFILES, 'scripts', 'remote-dev.sh')
@@ -77,11 +77,6 @@ beforeAll(async () => {
     await chmod(path, 0o755)
   }
   await write(join(shimDir, 'factory'), `#!/bin/sh\nexec "${process.execPath}" "${CLI}" "$@"\n`)
-  // rd resolves the owner's token through `secrets-run run --env-file=… -- factory …`; here FACTORY_TOKEN is already set.
-  await write(
-    join(shimDir, 'secrets-run'),
-    '#!/usr/bin/env bash\n[ "$1" = run ] || exit 2\nshift\nwhile [ "$#" -gt 0 ] && [ "$1" != -- ]; do shift; done\nshift\nexec "$@"\n',
-  )
   await write(join(shimDir, 'claude-account'), '#!/usr/bin/env bash\necho "unset CLAUDE_CONFIG_DIR"\n')
   await write(join(home, 'SourceRoot', 'dotfiles', 'scripts', 'claude-pretrust.sh'), '#!/usr/bin/env bash\nexit 0\n')
   await write(
@@ -168,50 +163,58 @@ describe('rd', () => {
     expect(existsSync(join(state, 'runs.jsonl'))).toBe(false)
   })
 
-  // scripts/remote-dev.sh:913: factory issue new --repo <path> --title … [--after N]… [--key K] --facts -   (JSON on stdin)
-  rdTest('rd issue files an Issue with facts on stdin, an --after and a --key; the same key files once', async () => {
-    const first = await rd(['issue', 'example', 'Seed the cache', '--key', 'rd-1'], {})
+  // dotfiles a267a16 retired rd issue|issues|signal: the factory CLI is the one Issue path (remote-dev.sh:921).
+  rdTest.each(['issue', 'issues', 'signal'])(
+    'rd %s is retired: exit 2 with a pointer to the factory CLI',
+    async (verb) => {
+      const ran = await rd([verb, 'example', 'x'])
+      expect(ran.code).toBe(2)
+      expect(ran.err).toContain(`rd ${verb} is retired: use the factory CLI`)
+    },
+  )
+
+  test('factory issue new files an Issue with facts, an --after and a --key; the same key files once', async () => {
+    const first = await call(v, ['issue', 'new', '--repo', 'example', '--title', 'Seed the cache', '--key', 'rd-1'])
     expect(first.code).toBe(0)
-    const seed = (JSON.parse(first.out) as { issue: string }).issue
+    const seed = (first.json as { issue: string }).issue
     expect(seed).toMatch(/^issue_\d+$/)
 
-    const filed = await rd(
-      [
-        'issue',
-        'example',
-        'Warm the cache after seeding',
-        '--facts',
-        '-',
-        '--after',
-        seed.slice('issue_'.length),
-        '--key',
-        'rd-2',
-      ],
-      {},
+    const args = [
+      'issue',
+      'new',
+      '--repo',
+      'example',
+      '--title',
+      'Warm the cache after seeding',
+      '--facts',
       '{"host":"mini","count":3}',
-    )
+      '--after',
+      seed.slice('issue_'.length),
+      '--key',
+      'rd-2',
+    ]
+    const filed = await call(v, args)
     expect(filed.err).toBe('')
     expect(filed.code).toBe(0)
-    const body = JSON.parse(filed.out) as { issue: string; state: string; filed: boolean }
+    const body = filed.json as { issue: string; state: string; filed: boolean }
     expect(body).toMatchObject({ state: 'settling', filed: true })
     const [edge] = await v.w.world.db
       .sql`SELECT count(*)::int AS n FROM factory.issue_events WHERE issue_id = ${body.issue} AND kind = 'filed'`
     expect((edge as { n: number }).n).toBe(1)
 
-    const again = await rd(['issue', 'example', 'Warm the cache after seeding', '--key', 'rd-2'])
-    expect(JSON.parse(again.out)).toMatchObject({ issue: body.issue, filed: false })
+    const again = await call(v, args)
+    expect(again.json).toMatchObject({ issue: body.issue, filed: false })
   })
 
-  rdTest('rd issue for a repo outside the roots passes the CLI exit code through (422 is usage, 2)', async () => {
-    const bad = await rd(['issue', 'nosuchrepo', 'x'])
+  test('factory issue new for a repo outside the roots is a usage error, exit 2', async () => {
+    const bad = await call(v, ['issue', 'new', '--repo', 'nosuchrepo', '--title', 'x'])
     expect(bad.code).not.toBe(0)
   })
 
-  // scripts/remote-dev.sh:924: factory issue list "$@"
-  rdTest('rd issues lists the cards', async () => {
-    const listed = await rd(['issues'])
+  test('factory issue list lists the cards', async () => {
+    const listed = await call(v, ['issue', 'list'])
     expect(listed.code).toBe(0)
-    const cards = (JSON.parse(listed.out) as { issues: { ref: string; title: string }[] }).issues
+    const cards = (listed.json as { issues: { ref: string; title: string }[] }).issues
     expect(cards.map((card) => card.title)).toContain('Seed the cache')
   })
 
