@@ -1,4 +1,4 @@
-import type { CiState } from './evidence.ts'
+import type { CheckRecord, CiState } from './evidence.ts'
 import { condense } from './output.ts'
 
 /** One check of verify: pass or fail, never averaged. `detail` is data, whatever the check printed. */
@@ -11,6 +11,11 @@ export interface Check {
    * ours to move, or the default branch's CI for the landed commit has not finished.
    */
   blocked?: boolean
+  /**
+   * a `make` target that failed the same way in the repo's last run before this ship: red, but not this change's, so it
+   * neither fails the watch nor is retried (`markInherited`)
+   */
+  inherited?: boolean
 }
 
 export type Outcome = 'green' | 'red' | 'blocked'
@@ -90,7 +95,33 @@ export function ciCheck(state: CiState, input: { sha: string; mergedAt: Date | n
 
 export function outcomeOf(checks: readonly Check[]): Outcome {
   if (checks.some((check) => check.blocked)) return 'blocked'
-  return checks.every((check) => check.ok) ? 'green' : 'red'
+  return checks.every((check) => check.ok || check.inherited) ? 'green' : 'red'
+}
+
+/** The part of a failure's output that says what failed: numbers (times, counts, shas, pids) and spacing are not. */
+export const failureSignature = (detail: string): string =>
+  detail
+    .replace(/\b[0-9a-f]{7,40}\b/g, '#')
+    .replace(/\d+/g, '#')
+    .replace(/\s+/g, ' ')
+    .trim()
+
+/**
+ * Marks each failed `make <target>` check that failed identically in `baseline`, the repo's last finished run before the
+ * ship: a verify red in a component the change never touched (a pending OS update, a dependency that moved) is not a
+ * regression of the Issue. The version, CI, checkout and probe checks stay the change's: each reads this ship's own commit
+ * or the live system. With no baseline, or one that was green, nothing is marked.
+ */
+export function markInherited(checks: readonly Check[], baseline: readonly CheckRecord[] | null): Check[] {
+  if (!baseline) return [...checks]
+  return checks.map((check) => {
+    if (check.ok || check.blocked || !check.name.startsWith('make ')) return check
+    const signature = failureSignature(check.detail)
+    const before = baseline.some(
+      (old) => old.name === check.name && (!old.ok || old.inherited) && failureSignature(old.detail) === signature,
+    )
+    return before ? { ...check, inherited: true } : check
+  })
 }
 
 /** A run of verify as it stands in the watch's history. */
@@ -129,7 +160,7 @@ const MAX_DETAIL = 1_800
  * is shared between them and every cut falls on a line boundary and is marked (`condense`).
  */
 export function regressionDetail(checks: readonly Check[]): string {
-  const failed = checks.filter((check) => !check.ok)
+  const failed = checks.filter((check) => !check.ok && !check.inherited)
   const share = Math.floor(MAX_DETAIL / Math.max(1, failed.length))
   return failed.map((check) => `${check.name} failed: ${condense(check.detail, share)}`).join('\n')
 }

@@ -105,6 +105,8 @@ export interface CheckRecord {
   name: string
   ok: boolean
   detail: string
+  /** failed the same way before the ship: red, and not counted against it */
+  inherited?: boolean
 }
 
 export const MAX_RECORDED = 100

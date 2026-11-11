@@ -3,6 +3,7 @@ import { deploys, isInert } from '../../src/domains/quality/evidence.ts'
 import {
   type Check,
   ciCheck,
+  markInherited,
   MAX_RETRIES,
   nextCheckAt,
   outcomeOf,
@@ -139,4 +140,36 @@ test('no CI run is blocked for ten minutes after the merge, then passes: the rep
   })
   // with no merge time the commit is old enough
   expect(ciCheck(missing, { sha: SHA, mergedAt: null, now: MERGED }).ok).toBe(true)
+})
+
+test('a make target that failed the same way before the ship is inherited: not red, not in the regression detail', () => {
+  const before = [{ name: 'make verify', ok: false, detail: 'exit 2: drift-check: 3 pending updates (pid 4121)' }]
+  const now: Check = { name: 'make verify', ok: false, detail: 'exit 2: drift-check: 7 pending updates (pid 9)' }
+  const marked = markInherited([now], before)
+  expect(marked).toEqual([{ ...now, inherited: true }])
+  expect(outcomeOf(marked)).toBe('green')
+  expect(stepOf([], marked)).toEqual({ kind: 'pass' })
+  expect(regressionDetail([...marked, { name: 'probe', ok: false, detail: 'HTTP 503, expected 200' }])).toBe(
+    'probe failed: HTTP 503, expected 200',
+  )
+})
+
+test('only a make target inherits, and only from the same failure: another output, a green run, no run, a probe or the version do not', () => {
+  const failing = (name: string, detail: string): Check => ({ name, ok: false, detail })
+  const drift = { name: 'make verify', ok: false, detail: 'exit 2: drift-check failed' }
+  const before = [
+    drift,
+    { name: 'deployed version', ok: false, detail: 'deployed abc is behind' },
+    { name: 'probe', ok: false, detail: 'HTTP 503, expected 200' },
+  ]
+  const inheritedOf = (check: Check, baseline: Parameters<typeof markInherited>[1]) =>
+    markInherited([check], baseline)[0]?.inherited
+  expect(inheritedOf(failing('make verify', 'exit 1: a test broke'), before)).toBeUndefined()
+  expect(inheritedOf(failing('make verify', drift.detail), [{ ...drift, ok: true }])).toBeUndefined()
+  expect(inheritedOf(failing('make verify', drift.detail), null)).toBeUndefined()
+  expect(inheritedOf(failing('deployed version', 'deployed abc is behind'), before)).toBeUndefined()
+  expect(inheritedOf(failing('probe', 'HTTP 503, expected 200'), before)).toBeUndefined()
+  expect(inheritedOf(failing('make verify', drift.detail), before)).toBe(true)
+  // a check that was itself inherited before still counts as the failure that was there
+  expect(inheritedOf(failing('make verify', drift.detail), [{ ...drift, inherited: true }])).toBe(true)
 })

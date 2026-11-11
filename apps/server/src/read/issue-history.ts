@@ -119,8 +119,14 @@ interface WatchRow {
 
 function summaryOf(checks: unknown): string {
   const list = Array.isArray(checks) ? checks.filter(isRecord) : []
-  const failed = list.filter((c) => c.ok !== true)
-  if (failed.length === 0) return list.length === 0 ? 'No checks ran.' : `All ${list.length} checks passed.`
+  const inherited = list.filter((c) => c.ok !== true && c.inherited === true)
+  const failed = list.filter((c) => c.ok !== true && c.inherited !== true)
+  if (failed.length === 0) {
+    if (list.length === 0) return 'No checks ran.'
+    if (inherited.length === 0) return `All ${list.length} checks passed.`
+    const names = inherited.map((c) => String(c.name)).join(', ')
+    return `${list.length - inherited.length} checks passed; ${names} failed the same way before the ship and is not counted.`
+  }
   return failed.map((c) => `${String(c.name)}: ${String(c.detail ?? 'failed')}`).join('; ')
 }
 
