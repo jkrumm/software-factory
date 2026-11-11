@@ -20,6 +20,7 @@ import {
 } from '@/lib/issue-page'
 import { spanWords } from '@/lib/needs'
 import { aboutLine, type SignalPart, signalParts, sourceLabel } from '@/lib/plain'
+import { cn } from '@/lib/utils'
 import { Ago } from './ago'
 import { SourceLink } from './source-link'
 
@@ -35,7 +36,7 @@ const attemptLabels = (n: number): [string, string, string] => [
   `Attempt ${n}`,
 ]
 
-function Figures({ issue }: { issue: Issue }) {
+function Figures({ issue, narrow }: { issue: Issue; narrow?: boolean }) {
   const { insights, sessions } = issue
   const series = attemptSeries(sessions)
   const many = sessions.length >= 2
@@ -57,7 +58,7 @@ function Figures({ issue }: { issue: Issue }) {
         }
       : { chart: null }
   return (
-    <div className="grid grid-cols-1 gap-3 min-[30rem]:grid-cols-2 xl:grid-cols-4">
+    <div className={cn('grid grid-cols-1 gap-3 min-[30rem]:grid-cols-2', !narrow && 'xl:grid-cols-4')}>
       <StatCard
         icon={TimerIcon}
         title="Working time"
@@ -231,7 +232,7 @@ function Triage({ issue, now }: { issue: Issue; now: number }) {
   )
 }
 
-export function Overview({ issue, now }: { issue: Issue; now: number }) {
+export function Overview({ issue, now, narrow }: { issue: Issue; now: number; narrow?: boolean }) {
   // the summary is in the header; an `about` that repeats the title or is a cut fragment says nothing
   const about = aboutLine(issue.about, issue.title, issue.filedTitle)
   return (
@@ -241,7 +242,7 @@ export function Overview({ issue, now }: { issue: Issue; now: number }) {
           <p className="max-w-[75ch] text-[length:var(--vx-text-sm)]">{about}</p>
         </Section>
       ) : null}
-      <Figures issue={issue} />
+      <Figures issue={issue} narrow={narrow} />
       <Section title="Attempts" hint="attempt" aside={<span className="tabular-nums">{issue.sessions.length}</span>}>
         <Attempts issue={issue} now={now} />
       </Section>

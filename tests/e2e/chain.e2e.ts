@@ -127,8 +127,12 @@ test('an Issue node links to its page; a plan row does not link', async ({ page 
   await page.goto('/chain')
   await expect(node(page, 'Draft the export schema').getByRole('link')).toHaveCount(0)
   await node(page, 'Choose the export format').getByRole('link').click()
+  // a plain click opens the peek over the graph (peek.e2e.ts); the page is "Open full page"
+  const panel = page.getByRole('dialog').and(page.locator('[data-peek-panel]'))
+  await expect(panel.getByRole('heading', { level: 1, name: 'Choose the export format' })).toBeVisible()
+  await panel.getByRole('link', { name: 'Open full page' }).click()
   await expect(page).toHaveURL(/\/issues\/\d+$/)
-  await expect(page.getByRole('heading', { name: 'Choose the export format' })).toBeVisible()
+  await expect(page.getByRole('heading', { level: 1, name: 'Choose the export format' })).toBeVisible()
 })
 
 test('no internal id is on the page (a card shows its number)', async ({ page }) => {

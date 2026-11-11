@@ -35,3 +35,6 @@ The Console's components, each depending only on Basalt tokens (`--vx-*` through
   keyboard focus (Escape closes it and the focus it gets back does not reopen it) and on a tap. Its `children` are the
   popover's links; it takes `outcome` (also the icon's accessible name), `happened`, `number` (none for a signal), and
   hides the project below a 20 rem row (a container query).
+- **Peek** is a right-side panel positioned in its parent (`absolute inset-y-0 right-0`; the whole parent on a phone), not
+  modal: no scrim, nothing inert. It takes `label`, `tag`, `onClose` and `page`, a render prop for the "Open full page"
+  link (which carries `data-peek="off"`). Focus moves in on mount and back to the opener on unmount; Escape is the caller's.

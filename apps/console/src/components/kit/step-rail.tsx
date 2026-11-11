@@ -17,6 +17,8 @@ export interface Step {
 export interface StepRailProps {
   steps: Step[]
   className?: string
+  /** Let a step's words run to two lines and give the duration bar less room (a narrow panel), instead of one clamped line. */
+  wrap?: boolean
 }
 
 /** "850 ms", "4.2 s", "3 min": minutes are floored, so a working time reads the same everywhere. */
@@ -27,7 +29,7 @@ export function durationWords(ms: number): string {
 }
 
 /** One row per step: icon, words, a duration bar scaled to the longest, time on the right. A failure is in the destructive text colour with its line. */
-export function StepRail({ steps, className }: StepRailProps) {
+export function StepRail({ steps, className, wrap }: StepRailProps) {
   const longest = Math.max(1, ...steps.map((step) => step.durationMs ?? 0))
   return (
     <ol className={cn('flex flex-col', className)}>
@@ -42,9 +44,11 @@ export function StepRail({ steps, className }: StepRailProps) {
               )}
             >
               <StepIcon className="size-4 shrink-0" aria-hidden="true" />
-              <span className="min-w-0 flex-1 truncate font-medium">{step.label}</span>
+              <span className={cn('min-w-0 flex-1 font-medium', wrap ? 'line-clamp-2 wrap-anywhere' : 'truncate')}>
+                {step.label}
+              </span>
               {step.durationMs === undefined ? null : (
-                <span className="hidden w-64 shrink-0 items-center gap-2 min-[40rem]:flex">
+                <span className={cn('hidden shrink-0 items-center gap-2 min-[40rem]:flex', wrap ? 'w-36' : 'w-64')}>
                   <span className="h-1.5 flex-1 overflow-hidden rounded-full bg-muted" aria-hidden="true">
                     <span
                       className={cn(

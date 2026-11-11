@@ -2,6 +2,7 @@ import { MagnifyingGlassIcon } from '@phosphor-icons/react'
 import { useFormatForDisplay, useHotkey, useHotkeys } from '@tanstack/react-hotkeys'
 import { Link, Outlet, useNavigate } from '@tanstack/react-router'
 import { lazy, Suspense, useEffect, useState } from 'react'
+import { PeekHost } from '@/components/peek/host'
 import { Sidebar, SidebarProvider } from '@/components/sidebar'
 import { StatusStrip } from '@/components/status-strip'
 import { Badge } from '@/components/ui/badge'
@@ -135,9 +136,12 @@ export function Shell() {
                 />
               </div>
             </header>
-            <main className="min-h-0 flex-1 overflow-x-hidden overflow-y-auto">
-              <Outlet />
-            </main>
+            <div className="relative flex min-h-0 flex-1 flex-col">
+              <main className="min-h-0 flex-1 overflow-x-hidden overflow-y-auto">
+                <Outlet />
+              </main>
+              <PeekHost />
+            </div>
             <TabBar count={count} />
           </div>
           <PaletteHost open={paletteOpen} preloaded={preloaded} onOpenChange={setPaletteOpen} />

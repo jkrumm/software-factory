@@ -7,12 +7,13 @@ import { durationWords } from '@/components/kit/step-rail'
 import { ISSUE_STATE_WORDS } from '@/lib/issue'
 import { kindOf, lozengeStateOf, nextActions, regressionCount } from '@/lib/issue-page'
 import { spanWords } from '@/lib/needs'
+import { cn } from '@/lib/utils'
 import { Ago } from './ago'
 import { ProjectChip } from './project-chip'
 import { LINK_CLASS } from './source-link'
 
 /** Title, state, the owner's next moves as links, and the facts. The Console only links: it never starts or cancels. */
-export function Header({ issue, now }: { issue: ReadIssueDetail; now: number }) {
+export function Header({ issue, now, narrow }: { issue: ReadIssueDetail; now: number; narrow?: boolean }) {
   const { insights } = issue
   const kind = kindOf(issue.kind)
   const regressions = regressionCount(issue)
@@ -49,7 +50,7 @@ export function Header({ issue, now }: { issue: ReadIssueDetail; now: number }) 
         </Link>
       </nav>
       <PropertyList
-        className="mt-2 grid-cols-2 gap-y-3 min-[40rem]:grid-cols-3 min-[64rem]:grid-cols-6"
+        className={cn('mt-2 grid-cols-2 gap-y-3 min-[40rem]:grid-cols-3', !narrow && 'min-[64rem]:grid-cols-6')}
         items={[
           { label: 'Phase', value: issue.phase },
           { label: 'Created', value: <Ago iso={issue.createdAt} now={now} className="font-mono text-xs" /> },

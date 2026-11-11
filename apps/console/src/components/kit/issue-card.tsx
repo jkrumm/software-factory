@@ -21,6 +21,8 @@ export type IssueCardProps = Omit<IssueViewProps, 'since'> & {
   reasonTitle?: string
   /** The raised shadow step (a card on a canvas step, such as the chain's) instead of the card step. */
   raised?: boolean
+  /** This is the Issue open beside the board (the peek): the shell takes the next surface step. */
+  selected?: boolean
   /** The Chain's node: a two-line title and a one-line reason, so the card fits a fixed, shorter height. */
   compact?: boolean
 }
@@ -48,6 +50,7 @@ export function IssueCard({
   reasonTitle,
   raised,
   compact,
+  selected,
   onMenu,
   href,
   as,
@@ -57,9 +60,11 @@ export function IssueCard({
   const hasFooter = Boolean(reason) || since !== null
   return (
     <article
+      aria-current={selected ? 'true' : undefined}
       className={cn(
         'group relative flex min-w-0 flex-col gap-1 rounded-xl bg-card p-1 text-card-foreground',
         linked && LINKED_CARD,
+        selected && 'bg-accent',
         className,
       )}
       style={{ boxShadow: raised ? 'var(--vx-shadow-raised)' : 'var(--vx-shadow-card)' }}

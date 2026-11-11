@@ -9,6 +9,7 @@ export { LOZENGE_STATES, LOZENGE_TONES, Lozenge, type LozengeProps, type Lozenge
 export { MenuPopover, type MenuPopoverProps } from './menu-button'
 export { Meter, MeterBar, type MeterBarProps, type MeterProps } from './meter'
 export { MiniBars, type MiniBarsProps } from './mini-bars'
+export { Peek, type PeekPageLink, type PeekProps } from './peek'
 export { PropertyList, type PropertyListProps } from './property-list'
 export { Section, type SectionProps } from './section'
 export { SinceRow, type SinceRowProps } from './since-row'
