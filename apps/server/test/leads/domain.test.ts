@@ -287,8 +287,21 @@ describe('the brief', () => {
   test('the standing orders open every brief and are pinned', () => {
     expect(buildBrief(input).startsWith(STANDING_ORDERS)).toBe(true)
     expect(new Bun.CryptoHasher('sha256').update(STANDING_ORDERS).digest('hex')).toBe(
-      '795d7e9baca12058160860bf7344e46cecfd67ff8780ddc8b7a24de0d20f8d86',
+      'bbb58c860a1f5a626daa7dad24733e56c9aca2d09fb3b93b49b63c97733f6438',
     )
+  })
+
+  test('the standing orders teach how to wait and the host traps, and what an implementer is for', () => {
+    expect(STANDING_ORDERS).toContain("# Waiting, and the host's shell")
+    expect(STANDING_ORDERS).toMatch(/Never sleep-poll/)
+    expect(STANDING_ORDERS).toContain('echo rc=$?')
+    expect(STANDING_ORDERS).toMatch(/Never pipe a waited command into `tail` or `head`/)
+    expect(STANDING_ORDERS).toMatch(/One check per worktree/)
+    expect(STANDING_ORDERS).toMatch(/Kill by pid/)
+    expect(STANDING_ORDERS).toMatch(/no Grep or Glob tool/i)
+    expect(STANDING_ORDERS).toMatch(/Write a change that fits a few files yourself/)
+    expect(STANDING_ORDERS).toMatch(/about 30 minutes/)
+    expect(STANDING_ORDERS).toMatch(/"waiting on its own background work" is not done/)
   })
 
   test('the standing orders name the friction route: a signal on software-factory, never a self-filed Issue', () => {
