@@ -75,6 +75,7 @@ export async function touchSlot(
         name: input.name,
         slots: deps.slots,
         runMs,
+        cwd: input.cwd,
         rssMib: input.rssMib,
         peakRssMib: input.peakRssMib,
         fit: {

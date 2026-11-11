@@ -47,7 +47,7 @@ import { reaperPass, reaperSummary } from './app/loops/reaper.ts'
 import { processKiller, reaperProcesses } from './adapters/planning/reaper-processes.ts'
 import { hygienePass, hygieneSummary } from './app/loops/hygiene.ts'
 import { selfwatchPass, selfwatchSummary } from './app/loops/selfwatch.ts'
-import { githubCiRuns } from './adapters/selfwatch/github.ts'
+import { githubCiLive, githubCiRuns } from './adapters/selfwatch/github.ts'
 import { gitMigrationFiles } from './adapters/selfwatch/git.ts'
 import { SHARED_NUMBERS } from './adapters/postgres/migrate.ts'
 import { MainCheckoutLines } from './app/loops/checkout-lines.ts'
@@ -236,6 +236,11 @@ async function main(): Promise<void> {
   // The loops: every recurring job of the server is one named loop on the runner, each with its interval
   // (`FACTORY_TICK_MS` the default), its trigger and its single-flight pass. Intake's pollers keep their own schedules.
   const watchSettledAt = new Date(startedAt.getTime() + settings.quality.settleMs)
+  const ciLive = githubCiLive({
+    locate: (repo) => repos.locate(repo),
+    token: intakeEnv.github.token,
+    apiUrl: intakeEnv.github.apiUrl,
+  })
   const stewardDeps = {
     ...writes,
     uow,
@@ -251,6 +256,8 @@ async function main(): Promise<void> {
     claimQueued: planning.claimQueued,
     claimStalled: planning.claimStalled,
     claimStallMs: loopSettings.claimStallMs,
+    slots: () => uow.run(async ({ capacity }) => ok(await capacity.slots())),
+    ciLive,
     rules: {
       ...DEFAULT_STEWARD_RULES,
       minStallMs: loopSettings.minStallMs,
@@ -447,6 +454,8 @@ async function main(): Promise<void> {
           graceMs: loopSettings.selfwatchGraceMs,
           idleLeadMs: loopSettings.idleLeadMs,
           idleBackgroundMs: loopSettings.idleBackgroundMs,
+          slots: stewardDeps.slots,
+          ciLive,
           ci: githubCiRuns({
             locate: (repo) => repos.locate(repo),
             token: intakeEnv.github.token,

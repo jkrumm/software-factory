@@ -1,9 +1,18 @@
 import type { StewardAnswer } from '@software-factory/contract'
+import type { Clock } from '../../kernel/clock.ts'
 import { scrub } from '../../kernel/scrub.ts'
 import { readDecisionForm } from '../../domains/checkpoints/decision.ts'
 import type { CallPolicy } from '../../domains/loops/calls.ts'
 import { checkoutOwner, judgeMainCheckout, type MainCheckoutLine } from '../../domains/loops/checkout.ts'
-import type { ClaimHolder, LoopReads, LoopStore, MainCheckouts, StewardWorkflow } from '../../domains/loops/ports.ts'
+import { type SlotRow, slotLiveIn } from '../../domains/capacity/slots.ts'
+import type {
+  CiLive,
+  ClaimHolder,
+  LoopReads,
+  LoopStore,
+  MainCheckouts,
+  StewardWorkflow,
+} from '../../domains/loops/ports.ts'
 import {
   checkAnswer,
   type Checked,
@@ -60,6 +69,10 @@ export interface StewardDeps extends WriteDeps {
   claimQueued(): Promise<Result<{ issue: IssueId; repo: string }[], PortError>>
   /** capacity's side: of these Issues, those a claim would be granted now, in the order that serves resumed leads (called outside any transaction) */
   claimStalled(issues: readonly IssueId[]): Promise<Result<{ issue: IssueId; account: string | null }[], PortError>>
+  /** the host's test slots, read now (called outside any transaction): a slot a lead's command holds or waits for is work in flight */
+  slots(): Promise<Result<SlotRow[], PortError>>
+  /** whether a lead's branch has a CI run queued or in progress (called outside any transaction) */
+  ciLive: CiLive
   /** a note refused for a claim this long while a claim is free for it is a stall */
   claimStallMs: number
   rules: StewardRules
@@ -409,6 +422,8 @@ export interface Idle {
   /** the facts as the workflow takes them: a working Issue with a quiet lead reads as an `unreported` stall */
   facts: StallFacts
   idle: IdleFacts
+  /** where the lead's work runs: the slot commands start in its worktree, CI runs on its branch */
+  work: { repo: string; worktree: string | null; branch: string }
 }
 
 const isIdleNote = (record: AppliedRecord): boolean =>
@@ -438,6 +453,7 @@ export async function loadIdle(deps: Pick<StewardDeps, 'uow'>, id: IssueId): Out
     const lastEvent = last ? `${lineOf(last)} (${last.at.toISOString()})` : 'none'
     const quietSince = lastWake && lastWake.at > view.idleSince ? lastWake.at : view.idleSince
     return ok({
+      work: { repo: issue.repo, worktree: attempt.worktreePath, branch: attempt.branch },
       idle: { idleSince: view.idleSince, quietSince, wakes: wakes.length, lastEvent, background: view.backgroundTasks },
       facts: {
         issue: id,
@@ -510,6 +526,35 @@ async function askIdle(deps: StewardDeps, idle: Idle, minutes: number, pass: Ste
   tally(pass, idle.facts.issue, await answerIdle(deps, idle, asking.value.checked, minutes))
 }
 
+export interface LiveWorkDeps {
+  clock: Clock
+  /** the steward's threshold for a quiet lead: live work is only looked for once the lead has been quiet this long */
+  rules: Pick<StewardRules, 'idleLeadMs'>
+  slots: StewardDeps['slots']
+  ciLive: CiLive
+}
+
+/**
+ * Work the lead started and waits on that its last turn did not list as background work: a test slot its command holds
+ * or queues for (the command started in its worktree), or a CI run of its branch that is queued or in progress. It makes
+ * the quiet lead a waiting one (`background`), for the steward's nudge and self-watch's `lead_idle` alike. A source that
+ * cannot be read is not live; nothing is read before the plain threshold has passed, where the answer decides nothing.
+ */
+export async function countLiveWork(deps: LiveWorkDeps, idle: Idle): Promise<void> {
+  if (idle.idle.background) return
+  if (deps.clock.now().getTime() - idle.idle.idleSince.getTime() < deps.rules.idleLeadMs) return
+  const { work } = idle
+  if (work.worktree) {
+    const rows = await deps.slots()
+    if (rows.ok && slotLiveIn(rows.value, work.worktree, deps.clock.now())) {
+      idle.idle.background = true
+      return
+    }
+  }
+  const ci = await deps.ciLive.running(work.repo, work.branch)
+  if (ci.ok && ci.value) idle.idle.background = true
+}
+
 /** One working Issue: the lead gets a nudge naming the Issue's last event, `maxWakes` times; after that the workflow is asked. */
 async function nudgeIdle(deps: StewardDeps, id: IssueId, pass: StewardPass): Promise<void> {
   const loaded = await loadIdle(deps, id)
@@ -518,6 +563,8 @@ async function nudgeIdle(deps: StewardDeps, id: IssueId, pass: StewardPass): Pro
   if (!idle) return
   pass.quiet++
   const now = deps.clock.now()
+  // Live work is a wait like the background work its turn listed: the longer threshold, and once it ends the usual one.
+  await countLiveWork(deps, idle)
   const action = decideIdle(idle.idle, now, deps.rules)
   if (action.kind === 'wake') {
     const wakeKey = key('noted', 'steward', 'idle', id, idle.facts.attempt, idle.idle.wakes + 1)

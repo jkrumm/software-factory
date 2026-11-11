@@ -45,7 +45,12 @@ describe('the migration that rewrites stored paths to names', () => {
       VALUES ('signal_1', 'agent:x', 'request', 'factory', 'agent', ${main}, 'fp', 't', '', ${NOW}, 'held')`
     await db.sql`INSERT INTO factory.intake_door_routes (source, monitor, repo) VALUES ('kuma', 'm', ${main})`
 
-    expect(await migrate(db.sql, all)).toEqual(['1012_repo_names.sql'])
+    expect(
+      await migrate(
+        db.sql,
+        all.filter((m) => m.name <= '1012_repo_names.sql'),
+      ),
+    ).toEqual(['1012_repo_names.sql'])
 
     for (const table of ['issues', 'capacity_claims', 'intake_signals', 'intake_door_routes']) {
       const rows = await db.sql.unsafe(`SELECT repo FROM factory.${table} WHERE repo LIKE '/%'`)
