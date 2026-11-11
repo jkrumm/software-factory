@@ -160,6 +160,8 @@ function KpiCard({ kpi, model, className }: { kpi: Kpi; model: KpiModel; classNa
             name={kpi.label}
             format={(value) => formatValue(kpi.unit, value)}
           />
+        ) : kpi.measured ? (
+          <NoHistory />
         ) : null
       }
       xLabels={known ? historyXLabels(model.days, model.windows) : undefined}
@@ -174,6 +176,16 @@ function KpiCard({ kpi, model, className }: { kpi: Kpi; model: KpiModel; classNa
 }
 
 const CHART_HEIGHT = 88
+
+/** The chart's place on a measured KPI that has too few windows to draw: a dashed baseline and the reason, no chart role. */
+function NoHistory() {
+  return (
+    <div style={{ height: CHART_HEIGHT }} className="flex flex-col justify-end gap-2">
+      <div className="border-t border-dashed border-border" />
+      <p className="text-xs text-muted-foreground">Not enough windows yet to draw a line</p>
+    </div>
+  )
+}
 
 function FixCard({ model, pending }: { model: FixCommitsModel | undefined; pending: boolean }) {
   const common = {
