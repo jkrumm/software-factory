@@ -140,3 +140,27 @@ function render(lines: readonly string[], kept: ReadonlySet<number>): string {
   if (next < lines.length) out.push(cutMarker(lines.length - next))
   return out.join('\n')
 }
+
+const EXIT_PREFIX = /^exit -?\d+:\s*/
+const CUT_MARKER = /^\[… \d+ lines? cut\]$/
+const LIST_HEAD = /^\d+ of \d+ checks failing:$/
+
+/**
+ * The lines of a recorded check detail (`exit N: <condensed output>`) that say what failed, trimmed: the exit prefix, the
+ * blank lines, the `[… N lines cut]` markers and a failing-list header are not. Two runs of one red target are the same
+ * failure when the lines of the one are among the lines of the other, whatever else the target printed around them.
+ */
+export function failingLines(detail: string): string[] {
+  return detail
+    .replace(EXIT_PREFIX, '')
+    .split('\n')
+    .map((line) => line.trim())
+    .filter((line) => line !== '' && !CUT_MARKER.test(line) && !LIST_HEAD.test(line))
+}
+
+/** The first `count` lines of `failingLines` that name an error, else its first lines: what to read first of a failure. */
+export function firstFailing(detail: string, count: number): string[] {
+  const lines = failingLines(detail)
+  const errors = lines.filter((line) => ERROR.test(line))
+  return (errors.length > 0 ? errors : lines).slice(0, count)
+}

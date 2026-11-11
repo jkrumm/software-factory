@@ -63,7 +63,7 @@ test('a regression detail names every failed check and is cut at line boundaries
   const other: Check = { name: 'probe', ok: false, detail: 'HTTP 503, expected 200' }
   const detail = regressionDetail([green, long, other])
   expect(detail.length).toBeLessThanOrEqual(1_900)
-  expect(detail).toContain('make verify failed: ')
+  expect(detail).toContain('make verify failed, first failing lines:')
   expect(detail).toContain('probe failed: HTTP 503, expected 200')
   expect(detail).toMatch(/\[… \d+ lines cut\]/)
   expect(detail).toContain('line 199 of the output')
@@ -172,4 +172,46 @@ test('only a make target inherits, and only from the same failure: another outpu
   expect(inheritedOf(failing('make verify', drift.detail), before)).toBe(true)
   // a check that was itself inherited before still counts as the failure that was there
   expect(inheritedOf(failing('make verify', drift.detail), [{ ...drift, inherited: true }])).toBe(true)
+})
+
+test('two runs of one red target that differ by a drift line are inherited; a new failing line is not', () => {
+  const drift = (items: string[]) => `exit 2: checking drift\n${items.map((item) => `DRIFT ${item}`).join('\n')}`
+  const before = [{ name: 'make verify', ok: false, detail: drift(['macos 26.1 pending', 'tailscale 1.90 behind']) }]
+  const check = (detail: string): Check => ({ name: 'make verify', ok: false, detail })
+  const inheritedOf = (detail: string) => markInherited([check(detail)], before)[0]?.inherited
+  // one drift line more or fewer, a changed number, a changed exit code: the same red
+  expect(inheritedOf(drift(['macos 26.2 pending', 'tailscale 1.92 behind']))).toBe(true)
+  expect(inheritedOf(drift(['macos 26.1 pending']))).toBe(true)
+  expect(inheritedOf(drift(['macos 26.1 pending', 'tailscale 1.90 behind']).replace('exit 2', 'exit 1'))).toBe(true)
+  // a line the baseline never had is the change's
+  expect(inheritedOf(drift(['macos 26.1 pending', 'weatherorb build broke']))).toBeUndefined()
+  expect(inheritedOf(drift(['macos 26.1 pending', 'tailscale 1.90 behind', 'node 24.1 behind']))).toBeUndefined()
+  expect(inheritedOf('exit 1: a test broke')).toBeUndefined()
+  // a cut marker is no line, and a run that printed nothing is compared whole
+  expect(inheritedOf(`${drift(['macos 26.1 pending'])}\n[… 12 lines cut]`)).toBe(true)
+  expect(
+    markInherited([check('exit 2: ')], [{ name: 'make verify', ok: false, detail: 'exit 2: ' }])[0]?.inherited,
+  ).toBe(true)
+  expect(markInherited([check('exit 2: ')], before)[0]?.inherited).toBeUndefined()
+})
+
+test('the regression note names the failed checks first, then their first failing lines, then the cut output', () => {
+  const output = [
+    ...Array.from({ length: 150 }, (_, n) => `line ${n} of the output`),
+    'ERROR: drift-check: tailscale is behind',
+    'ERROR: drift-check: macos update pending',
+    ...Array.from({ length: 50 }, (_, n) => `tail ${n}`),
+  ].join('\n')
+  const long: Check = { name: 'make verify', ok: false, detail: `exit 2: ${output}` }
+  const probe: Check = { name: 'probe', ok: false, detail: 'HTTP 503, expected 200' }
+  const detail = regressionDetail([long, probe])
+  expect(detail.length).toBeLessThanOrEqual(1_900)
+  const lines = detail.split('\n')
+  expect(lines[0]).toBe('2 checks failed: make verify, probe')
+  expect(lines[1]).toBe('make verify failed, first failing lines:')
+  expect(lines[2]).toBe('  ERROR: drift-check: tailscale is behind')
+  expect(lines[3]).toBe('  ERROR: drift-check: macos update pending')
+  expect(detail.indexOf('output:')).toBeGreaterThan(detail.indexOf('macos update pending'))
+  expect(detail).toMatch(/\[… \d+ lines cut\]/)
+  expect(detail).toContain('probe failed: HTTP 503, expected 200')
 })
