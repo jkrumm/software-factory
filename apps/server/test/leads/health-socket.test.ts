@@ -2,7 +2,7 @@ import { afterEach, describe, expect, test } from 'bun:test'
 import { chmodSync, existsSync, mkdtempSync, rmSync, statSync, writeFileSync } from 'node:fs'
 import { join } from 'node:path'
 import { type SocketListener, listenOnSocket } from '../../src/adapters/socket/listener.ts'
-import { healthOf, tickProblem } from '../../src/read/health.ts'
+import { FIRST_TICK_GRACE_MS, healthOf, tickProblem } from '../../src/read/health.ts'
 import { ok } from '../../src/kernel/result.ts'
 
 const NOW = new Date('2026-11-07T12:00:00Z')
@@ -14,8 +14,12 @@ describe('tick staleness on /health', () => {
     expect(tickProblem({ tickMs: 10_000, now: NOW, startedAt: ago(30_000), tickAt: null })).toBeNull()
   })
 
-  test('no tick yet after a minute, or none for three intervals, is stale', () => {
-    expect(tickProblem({ tickMs: 10_000, now: NOW, startedAt: ago(61_000), tickAt: null })).toBe(
+  test('no tick yet after the first-tick grace, or none for three intervals, is stale', () => {
+    expect(tickProblem({ tickMs: 10_000, now: NOW, startedAt: ago(61_000), tickAt: null })).toBeNull()
+    expect(tickProblem({ tickMs: 10_000, now: NOW, startedAt: ago(FIRST_TICK_GRACE_MS + 1_000), tickAt: null })).toBe(
+      'no tick has succeeded yet',
+    )
+    expect(tickProblem({ tickMs: 10_000, now: NOW, startedAt: ago(61_000), tickAt: null, limitMs: 60_000 })).toBe(
       'no tick has succeeded yet',
     )
     expect(tickProblem({ tickMs: 10_000, now: NOW, startedAt: ago(3_600_000), tickAt: ago(50_000) })).toBeNull()

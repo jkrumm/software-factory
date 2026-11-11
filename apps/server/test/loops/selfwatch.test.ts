@@ -205,6 +205,12 @@ test('heartbeat_stale: a class per reason, never while ok', () => {
   )
   // the seconds in the reason and the clock are context: the evidence is the same
   expect(evidenceHash(later[0] as Finding)).toBe(evidenceHash(tick[0] as Finding))
+  // a restart: no tick yet is the same episode, not changed evidence
+  const restarted = heartbeatFindings(
+    { ok: false, reason: 'no tick has succeeded yet', tickAt: null, queueMovedAt: null },
+    NOW,
+  )
+  expect(evidenceHash(restarted[0] as Finding)).toBe(evidenceHash(tick[0] as Finding))
   const database = heartbeatFindings({ ok: false, reason: 'connection refused', tickAt: null, queueMovedAt: null }, NOW)
   expect(database.map((f) => f.subject)).toEqual(['database'])
 })

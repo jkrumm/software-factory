@@ -4,8 +4,11 @@ import { LOCKS } from './locks.ts'
 /** How long a new server asks for the lock while the old copy is still stopping (a deploy's restart). */
 export const PROCESS_LOCK_WAIT_MS = 45_000
 
-/** A watchdog query that takes longer than this has found a stalled connection. */
-const WATCHDOG_TIMEOUT_MS = 5_000
+/**
+ * A watchdog query that takes longer than this has found a stalled connection. A host at a load of 200 answers a trivial
+ * query in seconds; stopping the server then turns a load spike into a restart whose first tick is late too.
+ */
+const WATCHDOG_TIMEOUT_MS = 30_000
 
 export interface ProcessLock {
   release(): Promise<void>
