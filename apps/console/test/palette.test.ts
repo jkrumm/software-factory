@@ -141,7 +141,7 @@ describe('the palette loads before it is opened', () => {
   const shell = readFileSync(join(import.meta.dir, '../src/components/shell.tsx'), 'utf8')
 
   test('its chunk is fetched on idle and on hover or focus of the search button, and it mounts closed once loaded', () => {
-    expect(shell).toContain('requestIdleCallback(preload')
+    expect(shell).toContain('requestIdleCallback(idle')
     expect(shell).toContain('onPointerEnter={preload}')
     expect(shell).toContain('onFocus={preload}')
     expect(shell).toContain('(open || preloaded) && !mounted')
@@ -149,7 +149,7 @@ describe('the palette loads before it is opened', () => {
 
   test('its data is fetched when the chunk loads, and watched only while it is open', () => {
     const palette = readFileSync(join(import.meta.dir, '../src/components/palette.tsx'), 'utf8')
-    expect(shell).toContain('prefetchPalette()')
+    expect(shell).toContain('setTimeout(prefetchPalette, prefetchAfterMs)')
     expect(palette).toContain('useIssueCards(open)')
     expect(palette).toContain('usePaletteArtifacts(open)')
   })

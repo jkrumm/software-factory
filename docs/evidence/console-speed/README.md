@@ -37,23 +37,23 @@ First load of `/needs-you`, nothing cached but the HTTP cache of the bundle:
   and the screen said "This Console is older than the server - updating" until the new service worker was fetched,
   installed and the page reloaded.
 
-### After (this change, built and served against the same live data)
+### After (deployed as `ac98f31b`, the same calls against the live Console, load average 12)
 
-- First paint of Needs you is its skeleton at **137 ms** in the run on the loaded host (load 75 to 115 during the
-  run, so the request timings are 4 to 20 times the idle ones and are not a comparison); content follows the `needs`
-  answer. A warm load is unchanged (the persisted snapshot), 155 ms before.
-- Title lookup for Needs you: `/v1/issues?state=open&limit=500`, **34 KB decoded, a sixteenth of the 551 KB**.
-- The 551 KB palette list and the artifact list are requested **2.5 s after the first paint** (when idle, behind the
-  palette chunk) instead of with it, and are watched only while the palette is open: the stream no longer refetches them.
-- A hover or focus on a review card starts the artifact read and the page chunk; `speed.e2e.ts` holds the read back for a
-  second after the hover, clicks after it arrives, and counts the frames that contain a skeleton: **0**, both for the open
-  card and for the page behind "Open the full page".
-- An answer with an unknown extra field is read as it is (a test serves one), the new bundle is fetched in the
-  background and loaded at the next navigation to another screen, when the tab is hidden or after 45 s without input.
-  An answer that does not match at all shows the skeleton, never the banner (a test serves one), and says so only after
-  20 s without the new bundle.
+| | Before | After |
+|-|-|-|
+| First paint of Needs you (cold: service worker and storage cleared) | the page, then "Loading" | the skeleton at **223 ms** (FCP 236 ms), content at **412 ms** |
+| First content, warm load (persisted snapshot) | 155 ms | **109 ms**, skeleton at 95 ms |
+| `/v1/needs`, cold, behind the burst | 248 ms | 206 ms |
+| Title lookup for Needs you | `/v1/issues?state=all`: 551 KB decoded, 57 KB wire, 873 ms | `/v1/issues?state=open`: **38 KB** decoded (a fourteenth), 481 ms under the same burst |
+| The palette's 551 KB list | with the first paint, again on every Issue change | requested 4 s after the page is idle (this build requested it with the burst at 313 ms; follow-up commit delays it) and watched only while the palette is open |
+| Open a review after a hover (`speed.e2e.ts`, the read held back 1 s) | "Loading" until the read returned | **0 skeleton frames**, for the card and for the page behind "Open the full page" |
+| Open a review after a hover on the live Console | the read starts at the click | the read (314 KB, 36 ms) and the page chunk start at the hover; the click shows the body in **18 ms**, no skeleton |
+| A server that only added a field | the banner "This Console is older than the server - updating" until the new worker reloaded the page | read as it is; the new bundle loads at the next navigation, a hidden tab or 45 s idle; no banner (`speed.e2e.ts`) |
+| A bundle that does not match the answer | the banner | the skeleton; words only after 20 s without the new bundle (`speed.e2e.ts`) |
 
-Post-deploy numbers (the deployed Console, same calls) are added to this file after the deploy.
+The cold run is a service-worker-less first visit, so the 412 ms includes the browser fetching the bundle; the
+request timings share one host with other leads' test runs (load 12 here, 75 to 150 during the earlier run, whose
+numbers are not used). The owner's MacBook adds its own link to every request and none to the persisted snapshot.
 
 ## Design loop (`apps/console/DESIGN.md`, "How a screen is built")
 
