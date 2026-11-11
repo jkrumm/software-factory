@@ -39,7 +39,9 @@ test('an uncounted figure is a dash with its reason, not a zero or None', () => 
   )
   expect(html).toContain('>–<')
   expect(html).toContain(`title="${REASON}"`)
-  expect(html).toContain(`<p class="text-[length:var(--vx-text-sm)] text-muted-foreground">${REASON}</p>`)
+  expect(html).toContain(
+    `<p class="text-[length:var(--vx-text-sm)] [overflow-wrap:anywhere] text-muted-foreground">${REASON}</p>`,
+  )
   expect(html).toContain(`<span class="sr-only">${REASON}</span>`)
   expect(html).not.toContain('>0<')
   expect(html).not.toContain('None')

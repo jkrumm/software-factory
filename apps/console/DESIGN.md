@@ -56,8 +56,9 @@ laws do not (they are Mantine's; the Console is Base UI and Tailwind on Basalt's
 ## The frame
 
 - **Sidebar.** The logo slot is the app icon, the metallic tile the PWA shows (`/icons/icon-192.png`), then the wordmark "Factory" at the top. The global nav is compact: icon, label, a count, and the
-  key that reaches it (`g n`, `g f`, …) shown on hover. Under a hairline, **the page's own section**: Flow's projects with
-  counts and origins as toggles, Needs you's kinds, Chain's projects, Improve's window. Collapsible to icons.
+  key that reaches it (`g n`, `g f`, …) shown on hover. Under a hairline, **the page's own section**: Flow's projects and origins as toggles, each with what is
+  open behind it as two small figures (a lit lamp and the running count, an hourglass and the pending count; never a closed
+  Issue, and none at all when nothing is open), Needs you's kinds, Chain's projects, Improve's window. Collapsible to icons.
 - **Header strip.** One line from 1280 up, wrapping to two below. In order: counts (working, waiting, queued, each a link to
   Flow filtered to it); one meter per subscription (graphite until 75 % / 90 %, then warn / bad; popover with the used share per
   window and its reset time); host meters for load, memory and swap (same rule; popover with the 24 h charts and their
@@ -91,6 +92,8 @@ it does not.
 
 ## Rules
 
+- The page never scrolls sideways, at any viewport. Shell's `main` clips the x axis; only a container made for it (the Flow
+  board, a carousel) scrolls sideways, inside itself. Text that cannot break wraps anywhere.
 - A meter is graphite; it takes the warn tone from 75 % and the bad tone from 90 % of its ceiling, and no series colour
   otherwise. Colour in the chrome is state only.
 - No coloured left bar on a card, a block or a quote. No gradient, no glow, no emoji.

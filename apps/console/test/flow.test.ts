@@ -8,9 +8,9 @@ import {
   columnWeight,
   countsOf,
   defaultTab,
-  facetCounts,
   type Origin,
   openCount,
+  openSplits,
   originsOf,
   originWord,
   projectsOf,
@@ -139,9 +139,30 @@ test('a state shows one column and leaves the rows alone', () => {
   expect(countsOf(boardOf(data, { state: 'waiting' }))).toEqual(countsOf(boardOf(data)))
 })
 
-test('facet counts cover every column before any filter', () => {
-  expect(facetCounts(data, 'repo')).toEqual({ argo: 2, chat: 2, harbor: 1 })
-  expect(facetCounts(data, 'origin')).toEqual({ feedback: 1, you: 2, github: 1, factory: 1 })
+test('the sidebar counts open Issues as running and pending, never a closed one', () => {
+  // harbor has only a closed Issue: no entry, so its row shows no figure
+  expect(openSplits(data, 'repo')).toEqual({
+    argo: { running: 0, pending: 2 },
+    chat: { running: 0, pending: 2 },
+  })
+  expect(openSplits(data, 'origin')).toEqual({
+    feedback: { running: 0, pending: 1 },
+    you: { running: 0, pending: 2 },
+    github: { running: 0, pending: 1 },
+  })
+})
+
+test('working and watching run; settling, queued and waiting are pending', () => {
+  const states = {
+    ...data.states,
+    working: { count: 2, issues: [issue('issue_6', 'argo', 'you'), issue('issue_7', 'harbor', 'you')] },
+    watching: { count: 1, issues: [issue('issue_8', 'argo', 'you')] },
+  }
+  expect(openSplits({ ...data, states }, 'repo')).toEqual({
+    argo: { running: 2, pending: 2 },
+    chat: { running: 0, pending: 2 },
+    harbor: { running: 1, pending: 0 },
+  })
 })
 
 test('a card has its number, kind and state (the column, or the outcome when closed)', () => {

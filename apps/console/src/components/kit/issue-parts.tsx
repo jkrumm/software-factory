@@ -63,7 +63,7 @@ export function ReasonLine({
       )}
     >
       <ReasonIcon className="mt-0.5 size-3.5 shrink-0" aria-hidden="true" />
-      <span className="min-w-0" title={title ?? reason}>
+      <span className="min-w-0 wrap-anywhere" title={title ?? reason}>
         {reason}
       </span>
     </p>

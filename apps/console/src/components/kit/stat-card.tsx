@@ -193,7 +193,9 @@ export function StatCard({
           </span>
           {delta && !uncounted ? <DeltaPill delta={delta} /> : null}
         </div>
-        {subLine ? <p className="text-[length:var(--vx-text-sm)] text-muted-foreground">{subLine}</p> : null}
+        {subLine ? (
+          <p className="text-[length:var(--vx-text-sm)] [overflow-wrap:anywhere] text-muted-foreground">{subLine}</p>
+        ) : null}
         {picture || xLabels ? (
           <div className="mt-auto flex flex-col gap-2">
             {picture}

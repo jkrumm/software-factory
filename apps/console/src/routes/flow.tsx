@@ -18,8 +18,9 @@ import {
   columnKeyOf,
   countsOf,
   defaultTab,
-  facetCounts,
   type FlowFilters,
+  type OpenSplit,
+  openSplits,
   originsOf,
   originWord,
   projectsOf,
@@ -47,12 +48,12 @@ export const Route = createFileRoute('/flow')({
 })
 
 function FlowSidebar({ data, filters }: { data: FlowModel; filters: FlowFilters }) {
-  const projects = facetCounts(data, 'repo')
-  const origins = facetCounts(data, 'origin')
+  const projects = openSplits(data, 'repo')
+  const origins = openSplits(data, 'origin')
   const entries = (
     name: 'project' | 'origin',
     values: readonly string[],
-    counts: Record<string, number>,
+    splits: Record<string, OpenSplit>,
     word: (value: string) => string,
   ) =>
     values.map((value) => {
@@ -61,7 +62,7 @@ function FlowSidebar({ data, filters }: { data: FlowModel; filters: FlowFilters 
         <SidebarEntry
           key={value}
           label={word(value)}
-          count={counts[value] ?? 0}
+          open={splits[value]}
           pressed={pressed}
           render={(props) => (
             <Link to="/flow" search={{ ...filters, [name]: pressed ? undefined : value }} {...props} />
@@ -255,7 +256,10 @@ function Flow() {
           )}
         </section>
       ) : wide ? (
-        <div className="-mx-1 min-h-[28rem] flex-1 overflow-x-auto px-1">
+        <div
+          data-testid="flow-board"
+          className="-mx-1 min-h-[28rem] flex-1 overflow-x-auto px-1 pb-1 [scrollbar-width:thin]"
+        >
           <div className="grid h-full gap-4" style={{ gridTemplateColumns: boardColumns(columns, counts) }}>
             {columns.map((key) => (
               <section key={key} aria-labelledby={`flow-${key}`} className="flex min-h-0 min-w-0 flex-col gap-2">

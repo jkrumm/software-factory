@@ -60,7 +60,7 @@ async function expectCounts(page: Page, counts: Record<keyof typeof LABEL, numbe
 const pick = (page: Page, group: 'Projects' | 'Origin', label: string) =>
   page
     .getByRole('group', { name: group })
-    .getByRole('link', { name: new RegExp(`^${label}( \\d+)?$`) })
+    .getByRole('link', { name: new RegExp(`^${label}( \\d+ (working|waiting).*)?$`) })
     .click()
 
 /** A word from a number, letters only: intake's fingerprint drops digits, and titles that overlap are amended into one Issue. */
@@ -341,4 +341,111 @@ test.describe('phone', () => {
     )
     expect(overflow).toBeLessThanOrEqual(0)
   })
+})
+
+interface Reach {
+  scrollWidth: number
+  innerWidth: number
+  mainScroll: number
+  mainClient: number
+}
+
+/** How far the page reaches: the document, and the Shell's `main` (the real scroller on this layout). */
+const reach = (page: Page): Promise<Reach> =>
+  page.evaluate<Reach>(`(() => {
+    const main = document.querySelector('main')
+    return {
+      scrollWidth: document.documentElement.scrollWidth,
+      innerWidth: window.innerWidth,
+      mainScroll: main ? main.scrollWidth : -1,
+      mainClient: main ? main.clientWidth : -2,
+    }
+  })()`)
+
+/**
+ * The page never scrolls sideways: not the document, not the Shell's `main` (the real scroller, so `document.scrollWidth`
+ * alone says nothing), and the board is the one thing that scrolls sideways, inside its own container.
+ */
+for (const viewport of [
+  { width: 1280, height: 800 },
+  { width: 390, height: 844 },
+]) {
+  test.describe(`${viewport.width}x${viewport.height}`, () => {
+    test.use({ viewport })
+
+    test('document.scrollWidth equals the viewport width on Flow, and main does not scroll sideways', async ({
+      page,
+    }) => {
+      await page.goto('/flow')
+      await expect(heading(page, 'working').or(page.getByRole('tab', { name: /^Working/ }))).toBeVisible()
+      await page.waitForLoadState('networkidle')
+      const measured = await reach(page)
+      expect(measured.scrollWidth).toBe(measured.innerWidth)
+      expect(measured.mainScroll).toBe(measured.mainClient)
+    })
+  })
+}
+
+test('on a wide screen the board scrolls sideways inside its own container when its columns do not fit', async ({
+  page,
+}) => {
+  await page.setViewportSize({ width: 1280, height: 800 })
+  await page.goto('/flow')
+  const board = page.getByTestId('flow-board')
+  await expect(board).toBeVisible()
+  const scroll = await board.evaluate((node) => node.scrollWidth)
+  const client = await board.evaluate((node) => node.clientWidth)
+  expect(scroll).toBeGreaterThan(client)
+  const measured = await reach(page)
+  expect(measured.mainScroll).toBe(measured.mainClient)
+})
+
+test('the sidebar counts each project by what runs and what waits, and a project with nothing open shows no figure', async ({
+  page,
+  apiUrl,
+}) => {
+  const flow = await flowOf(apiUrl)
+  await page.goto('/flow')
+  const projects = page.getByRole('group', { name: 'Projects' })
+  const repos = new Set([...STATES.flatMap((s) => flow.states[s].issues), ...flow.closedRecently].map((i) => i.repo))
+  for (const repo of repos) {
+    const inRepo = (s: State) => flow.states[s].issues.filter((i) => i.repo === repo).length
+    const running = inRepo('working') + inRepo('watching')
+    const pending = inRepo('settling') + inRepo('queued') + inRepo('waiting')
+    const row = projects.getByRole('link', { name: new RegExp(`^${repo}( \\d+ (working|waiting).*)?$`) })
+    const words = [running ? `${running} working` : null, pending ? `${pending} waiting` : null].filter(Boolean)
+    if (words.length > 0) await expect(row.getByLabel(words.join(', '))).toBeVisible()
+    else await expect(row.getByLabel(/\d+ (working|waiting)/)).toHaveCount(0)
+  }
+})
+
+test.describe('content as long as the live data', () => {
+  const LONG = `Console: phone clipping still live on Improve and every other screen, ${'unbreakable_'.repeat(8)}`
+  for (const viewport of [
+    { width: 1024, height: 768 },
+    { width: 1280, height: 800 },
+    { width: 390, height: 844 },
+  ]) {
+    test(`Flow does not scroll sideways at ${viewport.width}x${viewport.height} with long titles and wait reasons`, async ({
+      page,
+    }) => {
+      await page.setViewportSize(viewport)
+      await page.route('**/v1/flow', async (route) => {
+        const response = await route.fetch()
+        const body = (await response.json()) as Flow
+        for (const state of STATES)
+          for (const item of body.states[state].issues) {
+            item.title = LONG
+            if (item.waitReason) item.waitReason = LONG
+          }
+        for (const item of body.closedRecently) item.title = LONG
+        await route.fulfill({ response, json: body })
+      })
+      await page.goto('/flow')
+      await page.waitForLoadState('networkidle')
+      const measured = await reach(page)
+      expect(measured.scrollWidth).toBe(measured.innerWidth)
+      expect(measured.mainScroll).toBe(measured.mainClient)
+    })
+  }
 })

@@ -45,8 +45,10 @@ row; every column is its own virtualised list (`@tanstack/react-virtual`): only 
 
 **Filters.** Projects and origins are toggles in the sidebar (selects on a phone only) and live in the URL
 (`/flow?project=argo&origin=feedback`), so a filtered view is linkable, and each column header counts what the filters
-leave. `?state=working|waiting|queued|settling|watching|closed` shows only that column, full width as a grid of cards,
+leave. A sidebar row's figures are its *open* Issues, never closed ones (`openSplits` in `src/lib/flow.ts`): a lit lamp and the running count (working, watching), an hourglass and the pending count (waiting, queued, settling); a row with none open shows no figure. `?state=working|waiting|queued|settling|watching|closed` shows only that column, full width as a grid of cards,
 with a "Show all states" link (it never filters rows); on a phone it picks the tab.
+
+**The page never scrolls sideways.** The Shell's `main` clips the x axis (`overflow-x-hidden`), the board scrolls sideways inside its own container (`data-testid="flow-board"`), and text that cannot break (a stat card's sub line, a reason line) wraps anywhere. `tests/e2e/flow.e2e.ts` asserts `document.scrollWidth` equals the viewport width and `main` has no sideways scroll at 1280x800 and 390x844, also with long titles and reasons at 1024.
 
 ## Needs you
 

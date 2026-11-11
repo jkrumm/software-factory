@@ -127,9 +127,14 @@ test('Flow: projects and origins toggle the URL and the board, All clears', asyn
   const inRepo = (s: (typeof STATES)[number]) => flow.states[s].issues.filter((i) => i.repo === repo).length
 
   await page.goto('/flow')
-  const link = toggle(page, 'Projects', new RegExp(`^${repo}\\s*\\d+$`))
+  const link = toggle(page, 'Projects', new RegExp(`^${repo}( \\d+ (working|waiting).*)?$`))
   await expect(link).toHaveAttribute('aria-pressed', 'false')
-  await expect(link).toContainText(String(all.filter((i) => i.repo === repo).length))
+  // the row counts what is open, as running and pending, and never a closed Issue
+  const running = inRepo('working') + inRepo('watching')
+  const pending = inRepo('settling') + inRepo('queued') + inRepo('waiting')
+  const words = [running ? `${running} working` : null, pending ? `${pending} waiting` : null].filter(Boolean)
+  if (words.length > 0) await expect(link.getByLabel(words.join(', '))).toBeVisible()
+  else await expect(link.getByLabel(/\d+ (working|waiting)/)).toHaveCount(0)
   await link.click()
   await expect(page).toHaveURL(new RegExp(`project=${repo}`))
   await expect(link).toHaveAttribute('aria-pressed', 'true')
