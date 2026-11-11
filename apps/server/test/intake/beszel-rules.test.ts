@@ -196,6 +196,26 @@ describe('disk filling fast', () => {
     expect(find(series(200, swung), 'disk').state).not.toBe('breach')
   })
 
+  test('a fill that crossed the free-space floor a minute ago holds until it has lasted sustainMin', () => {
+    // 900 GB disk, a steady 20 GB/h climb that crosses 85% used (765 GB) exactly `crossedAgo` minutes before NOW.
+    const climbing = (crossedAgo: number) => (e: number) => {
+      const used = 765 + (crossedAgo - e) * (20 / 60)
+      return { diskUsedGb: used, diskPct: (used / 900) * 100, diskTotalGb: 900 }
+    }
+    expect(find(series(200, climbing(1)), 'disk').state).toBe('hold')
+    expect(find(series(200, climbing(3)), 'disk').state).toBe('hold')
+    expect(find(series(200, climbing(30)), 'disk').state).toBe('breach')
+  })
+
+  test('a ramp that has gone flat is no fill, however steep the window slope was', () => {
+    // A steady 20 GB/h climb across the window on a 900 GB disk (ends at 86%, under the level threshold), flat for the last 12 min.
+    const ramped = (e: number) => {
+      const used = 710 + (200 - Math.max(e, 12)) * (20 / 60)
+      return { diskUsedGb: used, diskPct: (used / 900) * 100, diskTotalGb: 900 }
+    }
+    expect(find(series(200, ramped), 'disk').state).not.toBe('breach')
+  })
+
   test('a disk past the level threshold still alerts on level', () => {
     const f = find(
       series(200, () => ({ diskUsedGb: 93, diskPct: 93, diskTotalGb: 100 })),
