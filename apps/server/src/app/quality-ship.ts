@@ -94,24 +94,27 @@ async function judge(deps: ShipDeps, issue: Issue, input: ShipInput): Promise<Sh
     reported: input.commits,
   })
   // agw is asked only for what git found on the default branch; any failure of it is a recorded absence, never a refusal (NL23).
-  let review: ReviewOutcome = { read: null, problem: null }
-  if (commits.ok && commits.value.reviewRanges.length > 0) {
+  // The review (agw, minutes under load) and the CI (GitHub) are independent: asked together, so a slow review keeps the
+  // whole of its limit instead of what the CI read left of the call.
+  const readReview = async (): Promise<ReviewOutcome> => {
+    if (!commits.ok || commits.value.reviewRanges.length === 0) return { read: null, problem: null }
     const read = await deps.review.read({ repo, ranges: commits.value.reviewRanges })
-    review = read.ok
+    return read.ok
       ? { read: read.value, problem: null }
       : { read: null, problem: `review could not be read: ${read.error.detail}` }
   }
   // GitHub is asked as agw is: a failure is a recorded `unknown`, never a refusal (NL23).
   // A project that ships by push has no pull request: its ship records no CI at all, which no friction counts.
-  let ci: CiOutcome | null = { read: null, problem: null }
-  const project = commits.ok ? await deps.projects.checksOf(repo) : null
-  if (project?.ok && !project.value.ci) ci = null
-  else if (commits.ok) {
+  const readCi = async (): Promise<CiOutcome | null> => {
+    if (!commits.ok) return { read: null, problem: null }
+    const project = await deps.projects.checksOf(repo)
+    if (project.ok && !project.value.ci) return null
     const read = await deps.ci.ofShip({ repo, commits: commits.value.commits })
-    ci = read.ok
+    return read.ok
       ? { read: read.value, problem: null }
       : { read: null, problem: `CI could not be read: ${read.error.detail}` }
   }
+  const [review, ci] = await Promise.all([readReview(), readCi()])
   return judgeShip({ reported: input.commits, commits, review, ci, acceptance: input.acceptance })
 }
 
