@@ -282,14 +282,13 @@ events since it was raised (`factory-ask` for a Decision, `factory-errand` for a
 hears it and the owner can overrule it with a note. The events travel inside fields the workflows already read, because an
 unknown field is dropped: appended to `checked` for the Judge, to `detail` for the screen, scrubbed, as data. Every look
 is a row in `checkpoint_rechecks` (`outcome` `withdrawn`, `settled` or `kept`; `by` `factory` or `judge`; `reason`;
-`through_version`; at most one per checkpoint and version) and one `rechecked` change on the stream (kind `decision` or
-`errand`, detail the id and the outcome), which the "Since you were here" band reads. A failed call is recorded as
+`through_version`; at most one per checkpoint and version) and one `rechecked` change on the stream (kind `decision`, `errand` or `artifact`, detail the id and the outcome), which the "Since you were here" band reads. A failed call is recorded as
 `kept`, so a dead Judge is not asked again every tick. Call keys: `factory-ask:recheck:<decision>:<version>` and
 `factory-errand:recheck:<errand>:<version>`.
 
 A Concept or Spec is a
 revisable artifact; the owner's verdict arrives as the lead's next turn. Revisions are blobs under the data directory
-named by their hash, never in git. The owner's line (ntfy) carries one page per checkpoint and nothing else.
+named by their hash, never in git. The owner's line (ntfy) carries one page per checkpoint, plus one push for a Concept or Spec revision nobody answered in a day, and nothing else.
 
 The Console shows an artifact at `/artifacts/<id>` (`?revision=n`, `&compare=m` for two revisions side by side): the
 kind and format in words, the verdict state, a revision selector, the comments with "General" (a comment on the whole
