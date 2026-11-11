@@ -804,9 +804,8 @@ export function raiseErrand(
 ): Promise<CheckpointResult<ErrandWritten>> {
   const read = readErrand(input.raw)
   if (!read.ok) return Promise.resolve(read)
-  const { summary, tried } = read.value
-  // What was tried is the screen's and the owner's to read, so it is kept with the steps.
-  const detail = [read.value.detail, `Tried first: ${tried}`].filter(Boolean).join('\n\n')
+  // `tried` is the gate's, never stored: the rule screen reads the stored detail as the ask, and what was run first is not.
+  const { summary, detail } = read.value
   const hostDoes = refuseHostClass(read.value)
   if (hostDoes) return Promise.resolve(err({ kind: 'invalid', detail: hostDoes }))
   return deps.uow.run(async ({ work, checkpoints }) => {

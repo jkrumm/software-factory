@@ -159,6 +159,23 @@ describe('the paths', () => {
       )
     })
 
+    test('a verb that is not taken again later does not name itself as the next one', () => {
+      const submitted = ev('submitted', { attempt: 1, artifact: { id: 'artifact_1', summary: 'Spec' } }, 'lead')
+      const { issue } = drive([...settledAndWorking, submitted])
+      const text = detail(
+        apply(issue, ev('asked', { attempt: 1, decision: { id: 'decision_2', summary: 'Q?' } }, 'lead'), { now: NOW }),
+      )
+      // an ask during a review is taken; a second submit is not
+      expect(text).toContain('applied')
+      const second = detail(
+        apply(issue, ev('submitted', { attempt: 1, artifact: { id: 'artifact_2', summary: 'Other' } }, 'lead'), {
+          now: NOW,
+        }),
+      )
+      expect(second).toContain('then carry on with the work')
+      expect(second).not.toContain('then `artifact submit`')
+    })
+
     test('a defer on an Issue that already waits for others names them', () => {
       const after = ev('deferred', { attempt: 1, after: ['issue_445', 'issue_436'] as IssueId[] }, 'lead')
       expect(refusal([...settledAndWorking, after], 'deferred')).toBe(

@@ -84,14 +84,17 @@ function waitHint(issue: Issue, event: { kind: EventKind; payload?: unknown }): 
   const { wait } = issue
   if (!wait) return ''
   const verb = VERB_WORDS[event.kind] ?? event.kind
+  // `ship`, `defer` and `close` are taken again once the wait ends; the others (a second ask, a second submit) are not what comes next.
+  const repeats = event.kind === 'shipped' || event.kind === 'deferred' || event.kind === 'closed'
+  const later = repeats ? `then \`${verb}\`` : 'then carry on with the work'
   const ends = WAITS[wait.reason].ends
   switch (wait.reason) {
     case 'errand':
-      return `it waits for an Errand (${wait.holds.id}: ${ends}), so \`${verb}\` is not taken now: raise the Errand as the last step, end the turn, and \`${verb}\` after the note that it is done; an Errand's wait is never ended by a verb of yours, so raise one only for a person's hands`
+      return `it waits for an Errand (${wait.holds.id}: ${ends}), so \`${verb}\` is not taken now: raise the Errand as the last step, end the turn, and ${repeats ? `\`${verb}\`` : 'carry on'} after the note that it is done; an Errand's wait is never ended by a verb of yours, so raise one only for a person's hands`
     case 'decision':
-      return `it waits for the answer to a Decision (${wait.holds.id}: ${ends}), so \`${verb}\` is not taken now: end the turn; the answer comes back as a note, then \`${verb}\``
+      return `it waits for the answer to a Decision (${wait.holds.id}: ${ends}), so \`${verb}\` is not taken now: end the turn; the answer comes back as a note, ${later}`
     case 'review':
-      return `it waits for the verdict on an artifact (${wait.holds.id}: ${ends}), so \`${verb}\` is not taken now: end the turn; the verdict comes back as a note, then \`${verb}\``
+      return `it waits for the verdict on an artifact (${wait.holds.id}: ${ends}), so \`${verb}\` is not taken now: end the turn; the verdict comes back as a note, ${later}`
     case 'dependency': {
       const after = wait.after.join(', ')
       if (event.kind === 'deferred') {

@@ -257,7 +257,7 @@ him with the failure in the Judge step's detail; `passed` and `rejected` stay fi
 its open Decision amends that Decision: the form is replaced, the new rendering is the artifact's next revision (note
 `amended`), the steps and unsent pages are cleared so it is settled afresh, and a verdict of a call that was out during
 the amend is dropped (the form digest taken at claim no longer matches). The same form again is a replay; an answered or
-withdrawn Decision is never amended. An Errand names what the lead tried (`tried`, kept in its detail) and is refused at the raise, nothing raised
+withdrawn Decision is never amended. An Errand names what the lead tried (`tried`, a gate: not stored) and is refused at the raise, nothing raised
 and the route named, when it asks for what the host does (`refuseHostClass`: a door token or route, an install, a sudo step with no
 no-sudo attempt shown, a Report missing from Needs you); `call` on an ask or an Errand makes a repeat one event. Every refusal of the state
 machine for a lead verb names the wait, how it ends and the verb to use (`waitHint`, `domains/work/table.ts`). An Errand passes a screen before it reaches the owner, in order: deterministic rules

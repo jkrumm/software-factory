@@ -1,0 +1,122 @@
+{
+  "schemaVersion": 4,
+  "jobId": "rv_ywl5mrbxg5bqjtzdfsfi",
+  "thread": "582c1cb20fec",
+  "round": 1,
+  "tier": "deep",
+  "seat": { "model": "sonnet", "effort": "high", "vote": 1 },
+  "rule": "sensitive path: apps/server/src/domains/work/table.ts",
+  "account": "me",
+  "intent": "Issue 722: a refusal names the legal next verb; Errand raise needs --tried and refuses host-doable classes; --call on errand raise and issue ask; Decision refusals list the options; signal kind hint; limits in help; brief lists what a lead does itself on the mini.",
+  "outcome": "actionable",
+  "summary": "1 important, 1 nit.",
+  "findings": [
+    {
+      "id": "582c1cb20fec-1",
+      "tag": "important",
+      "class": "bug",
+      "file": "apps/server/src/app/checkpoints.ts",
+      "line": 809,
+      "message": "The required `tried` text is appended to the stored Errand detail, and `screenByRule` (via checkpoints-errands.ts:153) reads that stored detail, so what the lead ran first is now scanned as if it were the ask.",
+      "failureScenario": "Summary 'Rotate the OAuth consent in the Google console' (no hands word) with --tried '`gh api /repos/x` returned 403' -> the stored detail holds a backticked `gh` command, so the rule screen turns the Errand away as 'a command a token can run'. Re-raising with the same tried text is turned away again. Conversely, a tried text with a hands word ('opened the portal') switches the rule off for a real command Errand.",
+      "fix": "Store `tried` apart from `detail` (or run screenByRule and refuseHostClass only on summary and the lead's own detail), and add 'Tried first' only to what the owner reads.",
+      "otherInstances": ["apps/server/src/domains/checkpoints/errand.ts:195"],
+      "votes": "1/1",
+      "lineValid": true,
+      "anchored": true
+    },
+    {
+      "id": "582c1cb20fec-2",
+      "tag": "nit",
+      "class": "bug",
+      "file": "apps/server/src/domains/work/table.ts",
+      "line": 92,
+      "message": "waitHint reuses the refused verb as the verb to take later, so some refusals name a verb that is not the legal next one.",
+      "failureScenario": "A lead that runs `artifact submit` during a review wait is told 'the verdict comes back as a note, then `artifact submit`' (the next verb after a verdict of changes is `artifact revise`). A lead that runs `issue ask` during a Decision wait is told 'then `issue ask`'.",
+      "fix": "Map the refused verb to its follow-up (submit to revise, ask to ship or the work it wanted) or word the hint without repeating the verb for submit and ask.",
+      "otherInstances": ["apps/server/src/domains/work/table.ts:94", "apps/server/src/domains/work/table.ts:100"],
+      "lineValid": true,
+      "anchored": true
+    }
+  ],
+  "checked": [
+    "call on ask and errand: written by the CLI flag (apps/cli/src/generated/operations.ts), passed on at apps/server/src/api/checkpoints.ts:194 and :538, and read at apps/server/src/app/checkpoints.ts:157 and :815",
+    "tried: required only in readErrand; all in-repo writers (e2e seed, scenarios, CLI tests) now send it; the console only reads errands",
+    "stored errand detail: written at apps/server/src/app/checkpoints.ts:809, read by screenByRule at apps/server/src/app/checkpoints-errands.ts:153 (finding)",
+    "refuseHostClass: runs before the replay lookup and the transaction, returns kind 'invalid', which api/checkpoints.ts:150 maps to a failure",
+    "waitHint: wait reasons match the WaitSpec union in domains/work/issue.ts; callers are fromTimer at table.ts:412-425; no other code matches the old refusal text except docs/rewrite/reports/8-api-parity.md (historical report)",
+    "Decision fields/detail: `fields` is passed through api/checkpoints.ts:149; no other code matches on the old strings",
+    "fieldHints in body-schema.ts: filing.ts imports only types from operation.ts, so no import cycle; operationIds signal.file, issue.ask, errand.raise and artifact.submit exist in the generated operations",
+    "brief commands: `door token new` exists in apps/cli/src/door.ts; `secrets-run read` and `secrets-run run` match apps/cli/src/credentials.ts",
+    "submit help: MAX_TITLE 200 and MAX_CONTENT 1000000 at domains/checkpoints/artifact.ts:25; the hardcoded copy in the CLI help is guarded by the new test"
+  ],
+  "criteria": [
+    {
+      "item": "State machine refusal text per wait reason (errand, decision, review, dependency, stall) names how the wait ends and the verb to use",
+      "status": "met",
+      "evidence": "apps/server/src/domains/work/table.ts:83"
+    },
+    {
+      "item": "--call on errand raise and issue ask",
+      "status": "met",
+      "evidence": "packages/contract/src/checkpoints.ts:91"
+    },
+    {
+      "item": "Decision refusal lists the options",
+      "status": "met",
+      "evidence": "apps/server/src/domains/checkpoints/decision.ts:95"
+    },
+    {
+      "item": "Signal kind hint says where bug and feature belong",
+      "status": "met",
+      "evidence": "apps/cli/src/filing.ts:55"
+    },
+    { "item": "Limits of submit (and ship) in help", "status": "met", "evidence": "apps/cli/src/filing.ts:52" },
+    {
+      "item": "Errand raise needs --tried",
+      "status": "met",
+      "evidence": "apps/server/src/domains/checkpoints/errand.ts:31"
+    },
+    {
+      "item": "Errand refuses door token or route, install, sudo with no no-sudo attempt, and a Report missing from Needs you, with the route",
+      "status": "met",
+      "evidence": "apps/server/src/domains/checkpoints/errand.ts:323"
+    },
+    {
+      "item": "Brief lists what a lead does itself on the mini",
+      "status": "met",
+      "evidence": "apps/server/src/domains/leads/brief.ts:373"
+    },
+    { "item": "Docs move with the code", "status": "met", "evidence": "docs/architecture.md:260" }
+  ],
+  "stepBack": null,
+  "files": [
+    "apps/cli/src/body-schema.ts",
+    "apps/cli/src/filing.ts",
+    "apps/cli/src/generated/operations.ts",
+    "apps/cli/src/operation.ts",
+    "apps/cli/test/filing.test.ts",
+    "apps/server/src/api/checkpoints.ts",
+    "apps/server/src/app/checkpoints.ts",
+    "apps/server/src/domains/checkpoints/decision.ts",
+    "apps/server/src/domains/checkpoints/errand.ts",
+    "apps/server/src/domains/leads/brief.ts",
+    "apps/server/src/domains/work/table.ts",
+    "apps/server/test/checkpoints/checkpoints.test.ts",
+    "apps/server/test/checkpoints/domain.test.ts",
+    "apps/server/test/leads/domain.test.ts",
+    "apps/server/test/work/machine.test.ts",
+    "docs/architecture.md",
+    "packages/contract/src/checkpoints.ts",
+    "tests/e2e/seed.ts",
+    "tests/scenarios/checkpoints/checkpoints.test.ts",
+    "tests/scenarios/checkpoints/recheck.test.ts",
+    "tests/scenarios/clients/lead.test.ts",
+    "tests/scenarios/clients/replay.test.ts",
+    "tests/scenarios/verbs/brief.test.ts"
+  ],
+  "dropped": { "repeats": 0, "nits": 0 },
+  "base": "a70d89fffeb529bcde3361754440d29157152f38",
+  "diffBase": "a70d89fffeb529bcde3361754440d29157152f38",
+  "head": "81623abaacf82908cbafef04c0b3695767387c79"
+}

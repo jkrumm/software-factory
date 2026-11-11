@@ -1172,6 +1172,16 @@ describe('errands', () => {
     expect(await eventsOf(issueId)).not.toContain('errand_raised')
   })
 
+  test('what the lead tried is never read by the rule screen as the ask', async () => {
+    const issueId = await workingIssue()
+    const raised = await raise(issueId, {
+      summary: 'Rotate the OAuth consent in the Google console',
+      tried: '`gh api /repos/x` returned 403',
+    })
+    expect(raised.errand.detail).toBeNull()
+    expect(value(await screenErrands(deps))).not.toEqual([{ errand: raised.errand.id, outcome: 'turned_away' }])
+  })
+
   test('the same call twice is one Errand, whatever its summary', async () => {
     const issueId = await workingIssue()
     const first = value(await raiseErrand(deps, { issueId, attempt: 1, raw: APPROVE, call: 'e-1' }))
