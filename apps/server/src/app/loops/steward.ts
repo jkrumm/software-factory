@@ -37,7 +37,7 @@ import { leadKey } from '../../domains/leads/names.ts'
 import type { LeadStore, Seats, Windows } from '../../domains/leads/ports.ts'
 import { deriveSession } from '../../domains/leads/session.ts'
 import { reportedSince } from '../../domains/leads/stop.ts'
-import { holdsIn, isHold } from '../../kernel/hold.ts'
+import { holdsIn } from '../../kernel/hold.ts'
 import type { Issue } from '../../domains/work/issue.ts'
 import { WAITS } from '../../domains/work/issue.ts'
 import type { AppliedRecord } from '../../domains/work/machine.ts'
@@ -158,8 +158,7 @@ export function repeatedStall(
   ).wait
   if (before?.reason !== cause || !('detail' in before)) return null
   if (sameWords(before.detail, detail) < SAME_STALL) return null
-  const said = field(answered.payload, 'answer')
-  return { answeredAt: answered.version, held: field(answered.payload, 'hold') !== '' || isHold(said) }
+  return { answeredAt: answered.version, held: field(answered.payload, 'hold') !== '' }
 }
 
 /** What the steward knows of a stalled Issue, from its events alone; `windowOpen` comes from capacity afterwards. */
@@ -278,7 +277,8 @@ async function hold(deps: StewardDeps, facts: StallFacts, until: string, detail:
         payload: {
           text: `${detail.slice(STEWARD_DETAIL.length)}. If the cause is unchanged when you wake, block again with what you checked: the next wait is longer.`,
         },
-        actor: 'steward',
+        // the factory's, not the steward's: a nudge expects the lead to act soon, and this one ends a wait of hours (the nudge KPI)
+        actor: 'factory',
       },
     })
     if (!noted.ok) return err(portError('refused', JSON.stringify(noted.error)))

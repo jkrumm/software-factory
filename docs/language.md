@@ -192,7 +192,7 @@ stateDiagram-v2
 
 | Wait | Exit | Stall | Ends |
 |-|-|-|-|
-| `timer` | no person | no | woken by the clock at the time the lead deferred to |
+| `timer` | no person | no | woken by the clock at the time the lead deferred to, or the factory held it to |
 | `dependency` | no person | no | woken by the chain once every Issue it is after has closed |
 | `wall` | no person | yes | woken when the account's window opens again |
 | `unreported` | no person | yes | woken by the lead's next turn or the steward |

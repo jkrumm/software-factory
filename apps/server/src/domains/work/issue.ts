@@ -32,7 +32,11 @@ export interface Checkpoint {
  * the steward's to end. `exit: 'machine'` ends without a person; `exit: 'person'` needs one and names what it holds.
  */
 export const WAITS = {
-  timer: { exit: 'machine', stall: false, ends: 'woken by the clock at the time the lead deferred to' },
+  timer: {
+    exit: 'machine',
+    stall: false,
+    ends: 'woken by the clock at the time the lead deferred to, or the factory held it to',
+  },
   dependency: { exit: 'machine', stall: false, ends: 'woken by the chain once every Issue it is after has closed' },
   wall: { exit: 'machine', stall: true, ends: "woken when the account's window opens again" },
   unreported: { exit: 'machine', stall: true, ends: "woken by the lead's next turn or the steward" },
