@@ -5,13 +5,17 @@ import {
   RANK_LANE,
   standing,
 } from '../domains/capacity/accounts.ts'
-import { checkAdmission, type RefusalKind } from '../domains/capacity/admission.ts'
+import { checkAdmission, type LeadFit, type RefusalKind } from '../domains/capacity/admission.ts'
+import { freeMibOf, headroomMib } from '../domains/capacity/costs.ts'
+import { DEFAULT_TYPICAL_LEAD_MIB, SEAT_SAMPLE_MAX_AGE_MS, SEAT_SAMPLES, seatBonus } from '../domains/capacity/seats.ts'
+import { learnedLeadMib, leadGrowthMib } from '../domains/capacity/leadcost.ts'
 import { type MemoryCeilings, type MemoryReading, reservedOf } from '../domains/capacity/host.ts'
 import { type LaneInput, laneRoom } from '../domains/capacity/lanes.ts'
 import type { AccountRanker, AccountSource, Assignment, HostReader } from '../domains/capacity/ports.ts'
 import { effectiveState, type QueueStates } from '../domains/capacity/queue-state.ts'
 import { type Claim, type Claimant, claimRoom, holdsClaim } from '../domains/capacity/claims.ts'
 import type { Edge } from '../domains/planning/chain.ts'
+import type { CapacityFacts } from '../domains/loops/ports.ts'
 import type { OpenIssueRow } from '../domains/planning/ports.ts'
 import { type ChainReason, type OpenIssue, orderQueue } from '../domains/planning/queue.ts'
 import { projectOf, type StoredProject } from '../domains/planning/sync.ts'
@@ -27,6 +31,8 @@ export interface CapacityLimits {
   leadsPerAccount: number
   loadCeiling: number
   memoryCeilings: MemoryCeilings
+  /** `FACTORY_SEATS_MAX_BONUS`: the most extra leads per account while the host idles; absent or 0: off */
+  seatsMaxBonus?: number
 }
 
 export interface CapacityDeps extends PlanningDeps {
@@ -42,8 +48,30 @@ export interface HostInputs {
   memory: MemoryReading | null
   /** the machine's RAM in MiB; null: the lanes' memory cannot be counted */
   ramMib: number | null
+  /** the memory free by the newest minute sample (not older than five minutes); null: unknown */
+  freeMib: number | null
+  /** per project name: what a lead is learned to take (null with fewer than three attempts) and the attempts sampled */
+  learned: ReadonlyMap<string, { mib: number | null; attempts: number }>
+  /** per Issue number: the MiB its lead holds by a sample not older than three minutes */
+  rssByIssue: ReadonlyMap<number, number>
+  /** the newest five minute samples, newest first; empty unless all five exist and none is older than six minutes */
+  recent: readonly { load: number | null; swapUsedPct: number | null }[]
   notes: string[]
 }
+
+const NO_HOST: HostInputs = {
+  load: null,
+  memory: null,
+  ramMib: null,
+  freeMib: null,
+  learned: new Map(),
+  rssByIssue: new Map(),
+  recent: [],
+  notes: [],
+}
+
+/** A lead's own sample is read as what it holds now only when it is this fresh. */
+const RSS_MAX_AGE_MS = 3 * 60_000
 
 export type QueueReasonKind = ChainReason['kind'] | RefusalKind
 
@@ -94,10 +122,34 @@ export async function readHost(deps: CapacityDeps): Promise<HostInputs> {
     )
   }
   if (!ram.ok) notes.push(`RAM reading failed (${ram.error.detail}): the memory that lanes reserve is not counted`)
+  const ramMib = ram.ok ? ram.value : null
+  const now = deps.clock.now()
+  const facts = await deps.uow.run(async ({ capacity }) =>
+    ok({
+      latest: await capacity.latestHostSample(),
+      recent: await capacity.recentHostSamples(SEAT_SAMPLES),
+      peaks: await capacity.leadPeaks(),
+      rss: await capacity.leadRssSince(new Date(now.getTime() - RSS_MAX_AGE_MS)),
+    }),
+  )
+  if (!facts.ok)
+    notes.push(`the learned lead costs could not be read (${facts.error.detail}): admission goes on without them`)
+  const fresh = facts.ok
+    ? facts.value.recent.length === SEAT_SAMPLES &&
+      facts.value.recent.every((s) => now.getTime() - s.at.getTime() <= SEAT_SAMPLE_MAX_AGE_MS)
+    : false
   return {
     load: load.ok ? load.value : null,
     memory: memory.ok ? memory.value : null,
-    ramMib: ram.ok ? ram.value : null,
+    ramMib,
+    freeMib: facts.ok ? freeMibOf(facts.value.latest, ramMib, now) : null,
+    learned: new Map(
+      facts.ok
+        ? facts.value.peaks.map((p) => [p.repo, { mib: learnedLeadMib(p.peaksNewestFirst), attempts: p.attempts }])
+        : [],
+    ),
+    rssByIssue: facts.ok ? facts.value.rss : new Map(),
+    recent: facts.ok && fresh ? facts.value.recent.map((s) => ({ load: s.load, swapUsedPct: s.swapUsedPct })) : [],
     notes,
   }
 }
@@ -206,9 +258,12 @@ function reservedMib(
   owed: readonly (OpenIssueRow & { project: string | null })[],
   projects: readonly StoredProject[],
   laneByIssue: ReadonlyMap<IssueId, string | null>,
+  learned: HostInputs['learned'],
 ): number {
+  // What a repo's leads are learned to take replaces the lane's constant; the constant stays the prior for a repo with fewer than three attempts.
   const memoryOf = (issue: IssueId, project: StoredProject | undefined): number => {
     const lane = laneByIssue.get(issue)
+    if (project && learned.get(project.name)?.mib != null) return 0
     return (lane && project?.project.lanes[lane]?.memoryMib) || 0
   }
   const byRepo = new Map(projects.map((p) => [p.repo, p]))
@@ -226,6 +281,47 @@ function reservedMib(
  * are the ones they would meet in turn. Pure: the snapshot and the host readings are passed in.
  */
 export function evaluateQueue(snap: Snapshot, host: HostInputs, limits: CapacityLimits): QueueEntry[] {
+  const base = decide(snap, host, limits, 0)
+  const bonus = seatBonusOf(snap, host, limits, base)
+  return bonus > 0 ? decide(snap, host, limits, bonus) : base
+}
+
+/**
+ * The extra leads per account an idle host allows this pass: for the entries that stay queued for the account cap, as
+ * many leads of the repos' typical learned size as the free memory holds. Never past a window: the pick still follows it.
+ */
+function seatBonusOf(snap: Snapshot, host: HostInputs, limits: CapacityLimits, base: readonly QueueEntry[]): number {
+  const capped = base.filter((entry) => entry.reason?.kind === 'cap')
+  if (capped.length === 0) return 0
+  const learnedOf = (entry: QueueEntry): number | null => {
+    return entry.project === null ? null : (host.learned.get(entry.project)?.mib ?? null)
+  }
+  const known = capped.map(learnedOf).filter((mib): mib is number => mib !== null)
+  return seatBonus({
+    recent: host.recent,
+    loadCeiling: limits.loadCeiling,
+    swapCeilingPct: limits.memoryCeilings.swapUsedPct,
+    queued: capped.length,
+    freeMib: host.freeMib,
+    typicalLeadMib: known.length > 0 ? Math.max(...known) : DEFAULT_TYPICAL_LEAD_MIB,
+    headroomMib: headroomMib(host.ramMib),
+    maxBonus: limits.seatsMaxBonus ?? 0,
+  })
+}
+
+/** What each lead is learned to still take on beyond what it holds, summed over the claims held. */
+function growthOf(claims: readonly Claim[], projects: readonly StoredProject[], host: HostInputs): number {
+  // A claim carries its project's path; what is learned is keyed by the project's name.
+  const nameOf = new Map(projects.map((p) => [p.repo, p.name]))
+  return leadGrowthMib(
+    claims.map((claim) => ({
+      learnedMib: host.learned.get(nameOf.get(claim.repo) ?? '')?.mib ?? null,
+      currentMib: host.rssByIssue.get(issueNumber(claim.issue)) ?? 0,
+    })),
+  )
+}
+
+function decide(snap: Snapshot, host: HostInputs, limits: CapacityLimits, bonus: number): QueueEntry[] {
   const open: OpenIssue[] = snap.issues.map((i) => ({
     id: i.id,
     project: i.project,
@@ -264,6 +360,16 @@ export function evaluateQueue(snap: Snapshot, host: HostInputs, limits: Capacity
     const leadsByAccount = new Map<string, number>()
     for (const claim of claims)
       if (claim.account) leadsByAccount.set(claim.account, (leadsByAccount.get(claim.account) ?? 0) + 1)
+    const learned = host.learned.get(project.name)
+    const leadFit: LeadFit = {
+      repo: project.name,
+      candidateMib: learned?.mib ?? null,
+      attempts: learned?.attempts ?? 0,
+      freeMib: host.freeMib,
+      growthMib: growthOf(claims, snap.projects, host),
+      headroomMib: headroomMib(host.ramMib),
+      running: claims.length,
+    }
     const verdict = checkAdmission({
       lane: laneOf(issue.id, project, claims, owed, laneByIssue),
       now: snap.now,
@@ -276,11 +382,16 @@ export function evaluateQueue(snap: Snapshot, host: HostInputs, limits: Capacity
       loadCeiling: limits.loadCeiling,
       memory: host.memory,
       memoryCeilings: limits.memoryCeilings,
-      reserved: reservedOf(reservedMib(issue.id, project, claims, owed, snap.projects, laneByIssue), host.ramMib),
+      leadFit,
+      reserved: reservedOf(
+        reservedMib(issue.id, project, claims, owed, snap.projects, laneByIssue, host.learned),
+        host.ramMib,
+      ),
       accounts: snap.readings,
       loaded,
       leadsByAccount,
-      leadsPerAccount: limits.leadsPerAccount,
+      leadsPerAccount: limits.leadsPerAccount + bonus,
+      seatBonus: bonus,
       rank: snap.rank,
     })
     if (!verdict.admit) return { ...base, reason: verdict.refusal, account: null }
@@ -413,15 +524,30 @@ export async function queueView(
 }
 
 /**
+ * What capacity holds right now, for the host loop's minute sample: the claims held, the Issues in the queue, the leads
+ * the enabled accounts may hold and the load ceiling. From the stored readings alone (no poll, no host reading).
+ */
+export async function capacityFacts(deps: CapacityDeps): Promise<Result<CapacityFacts, PortError>> {
+  return deps.uow.run(async (stores) => {
+    const snap = await snapshotOf(stores, deps.clock.now())
+    return ok({
+      leads: snap.claims.length,
+      queued: evaluateQueue(snap, NO_HOST, deps.limits).length,
+      seats: snap.readings.filter((r) => r.enabled).length * deps.limits.leadsPerAccount,
+      loadCeiling: deps.limits.loadCeiling,
+    })
+  })
+}
+
+/**
  * The queued Issues that stay queued for lack of a claim, from the stored readings alone: no account poll and no host
  * reading (a null load and memory are skipped, as in a failed reading), so what is left is the chain and the repo's
  * claims. A deadlock is a deadlock whatever the load is, and the steward calls this every pass.
  */
 export async function claimQueued(deps: CapacityDeps): Promise<Result<{ issue: IssueId; repo: string }[], PortError>> {
-  const noHost: HostInputs = { load: null, memory: null, ramMib: null, notes: [] }
   const viewed = await deps.uow.run(async (stores) => {
     const snap = await snapshotOf(stores, deps.clock.now())
-    return ok(evaluateQueue(snap, noHost, deps.limits))
+    return ok(evaluateQueue(snap, NO_HOST, deps.limits))
   })
   if (!viewed.ok) return viewed
   return ok(viewed.value.filter((q) => q.reason?.kind === 'claim').map((q) => ({ issue: q.issue, repo: q.repo })))

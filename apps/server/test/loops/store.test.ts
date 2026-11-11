@@ -147,3 +147,43 @@ test('the backfill classes the Issues the loops filed from their signal text, wi
     await cluster.stop()
   }
 })
+
+// ---- reaper ---------------------------------------------------------------------------------------------------------------
+
+test('the reaper reads attempts with their finalization, records signals, finds the SIGTERMs and prunes by age', async () => {
+  const loops = postgresLoopStore(db.sql)
+  const now = new Date('2026-11-11T12:00:00Z')
+  const days = (n: number) => new Date(now.getTime() - n * 86_400_000)
+  const attempt = async (n: number, path: string | null, finalized: Date | null, keptAt: string | null = null) => {
+    await db.sql`INSERT INTO factory.lead_attempts (issue_id, attempt, branch, worktree_path, first_try_at)
+      VALUES (${`issue_${n}`}, 1, ${`factory/${n}-1`}, ${path}, ${days(40)})`
+    if (finalized)
+      await db.sql`INSERT INTO factory.lead_finalizations (issue_id, attempt, done_at, worktree_kept, worktree_path)
+        VALUES (${`issue_${n}`}, 1, ${finalized}, ${keptAt === null ? null : 'uncommitted changes'}, ${keptAt})`
+  }
+  await attempt(801, '/w/801-1', days(1))
+  await attempt(802, '/w/802-1', null)
+  await attempt(803, null, days(31))
+  await attempt(804, '/w/804-1', days(1), '/w/804-1')
+  expect(await loops.reaperAttempts(days(30))).toEqual([
+    { session: 'lead-801-1', worktree: '/w/801-1', closedAt: days(1), kept: false },
+    { session: 'lead-802-1', worktree: '/w/802-1', closedAt: null, kept: false },
+    { session: 'lead-804-1', worktree: '/w/804-1', closedAt: days(1), kept: true },
+  ])
+
+  const row = (at: Date, pid: number, signal: 'SIGTERM' | 'SIGKILL' | 'dry') => ({
+    at,
+    pid,
+    session: 'lead-801-1',
+    worktree: '/w/801-1',
+    comm: 'chrome',
+    signal,
+    reason: 'session' as const,
+    ageS: 600,
+  })
+  await loops.recordReaped([row(days(40), 1, 'SIGTERM'), row(days(0), 2, 'SIGTERM'), row(days(0), 3, 'dry')])
+  expect(await loops.termedSince(days(1))).toEqual([{ pid: 2, ageS: 600 }])
+  expect(await loops.pruneReaped(days(30))).toBe(1)
+  const [left] = await db.sql`SELECT count(*)::int AS n FROM factory.reaped_processes`
+  expect(left?.n).toBe(2)
+})

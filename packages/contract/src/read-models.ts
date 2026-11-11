@@ -509,3 +509,83 @@ export const SinceModel = z
   })
   .meta({ id: 'SinceModel' })
 export type SinceModel = z.infer<typeof SinceModel>
+
+// -- capacity loop ---------------------------------------------------------------------------------------------------------
+
+/** One UTC day's figure; null when the day has nothing to compute it from (a count is 0, never null). */
+export const CapacityDay = z
+  .strictObject({
+    /** the UTC date, `YYYY-MM-DD` */
+    day: z.string(),
+    value: z.number().nullable(),
+  })
+  .meta({ id: 'CapacityDay' })
+
+export const CapacityTotal = z
+  .strictObject({ total: z.number(), perDay: z.array(CapacityDay) })
+  .meta({ id: 'CapacityTotal' })
+
+export const CapacityStep = z
+  .strictObject({
+    name: z.string(),
+    runs: z.number().int(),
+    maxPeakMib: z.number().int(),
+    p80PeakMib: z.number(),
+    medianDurationMs: z.number(),
+    medianWaitMs: z.number(),
+  })
+  .meta({ id: 'CapacityStep' })
+
+export const CapacityLeadCost = z
+  .strictObject({
+    repo: z.string(),
+    attempts: z.number().int(),
+    peakMibP80: z.number().int(),
+    lastPeakMib: z.number().int(),
+  })
+  .meta({ id: 'CapacityLeadCost' })
+
+export const CapacityReaped = z
+  .strictObject({ comm: z.string(), session: z.string(), reason: z.enum(['session', 'worktree']), at })
+  .meta({ id: 'CapacityReaped' })
+
+/**
+ * What the capacity loop did over the last `days` days (`GET /v1/capacity-loop`), computed in SQL from the host samples,
+ * the test-slot step costs, the lead samples and the reaper's rows, with the settings it tunes.
+ */
+export const CapacityLoopModel = z
+  .strictObject({
+    at,
+    days: z.number().int(),
+    window: z.strictObject({ from: at, to: at }),
+    /** Issues that closed (any outcome, as the cycle KPI counts them) */
+    throughput: CapacityTotal,
+    /** seats not held by a lead while Issues were queued, in hours: minutes with queued > 0 of max(seats - leads, 0), over 60 */
+    idleSeatHours: CapacityTotal,
+    /** host minutes whose load was above the ceiling in force that minute */
+    minutesOverCeiling: CapacityTotal,
+    slotWait: z.strictObject({
+      n: z.number().int(),
+      p50Ms: z.number().nullable(),
+      p90Ms: z.number().nullable(),
+      perDayP50: z.array(CapacityDay),
+    }),
+    /** the 8 steps with the largest peak memory */
+    topSteps: z.array(CapacityStep),
+    /** the 8 repos whose leads take most memory (80th percentile of the newest attempts' peaks) */
+    leadCosts: z.array(CapacityLeadCost),
+    /** processes the reaper signalled (TERM or KILL; a dry decision is not counted) */
+    reaped: z.strictObject({ total: z.number().int(), perDay: z.array(CapacityDay), newest: z.array(CapacityReaped) }),
+    /** the settings in force that this loop tunes */
+    constants: z.strictObject({
+      leadsPerAccount: z.number(),
+      loadCeiling: z.number(),
+      slots: z.number(),
+      slotsMax: z.number(),
+      slotExtraLoad: z.number(),
+      seatsMaxBonus: z.number(),
+      reaperGraceMs: z.number(),
+    }),
+  })
+  .meta({ id: 'CapacityLoopModel' })
+export type CapacityLoopModel = z.infer<typeof CapacityLoopModel>

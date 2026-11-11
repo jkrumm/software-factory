@@ -121,8 +121,9 @@ the record of the rewrite and `docs/rewrite/state.md` its log. A directory listi
 retired-word check, the Issue diagram and generated-CLI freshness checks, `bun test` and the scenarios (`tests/scenarios`:
 a real server and Postgres with fake `hc` and `agw`), then typechecks and builds the Console and runs its Playwright suite
 (`make e2e`, `tests/e2e`) against a seeded server; `make fmt` formats. The tests start a private Postgres cluster with
-`initdb` (on PATH, or `PG_BIN_DIR`); nothing touches a real database. `make test` goes through `factory slot run` when
-`factory` is installed: a lease on the host's test slots, a wait past 45 min exits 75 without running. `make deploy`,
+`initdb` (on PATH, or `PG_BIN_DIR`); nothing touches a real database. `make check` (and `make test`, `make e2e` alone) goes through `factory slot run` when
+`factory` is installed: one lease on the host's test slots for the whole check, "queued for a test slot" on stderr while it waits,
+a wait past 45 min exits 75 without running. `make deploy`,
 `make rollback` and `make verify` act on the mini only; `DRY_RUN=1` prints the plan, `FACTORY_REF=<branch>` proves a branch
 live before it is merged. CI runs `make check` on `ubuntu-latest`.
 

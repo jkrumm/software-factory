@@ -4,6 +4,7 @@ import { type QualityView, type ReopenAnswer, ShipAnswer } from '@software-facto
 import { stateOf as issueState, tick } from '../flow.ts'
 import { factory, type ServerProcess, type World } from '../harness.ts'
 import { type LeadsWorld, startLeadsWorld } from '../leads/support.ts'
+import { patient } from '../patience.ts'
 
 /** The server's environment for a quality scenario: a quick tick, no settle, a short retry. */
 export const QUALITY_ENV = {
@@ -106,7 +107,7 @@ export async function stateOf(world: World, id: string): Promise<string> {
 }
 
 export async function until<T>(what: string, look: () => Promise<T | undefined | false>, ms = 45_000): Promise<T> {
-  const deadline = Date.now() + ms
+  const deadline = Date.now() + patient(ms)
   while (Date.now() < deadline) {
     const found = await look()
     if (found) return found

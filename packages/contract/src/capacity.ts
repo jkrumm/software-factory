@@ -131,6 +131,8 @@ export const CapacityView = z
     queue: QueueStatesView,
     slots: z.object({
       total: z.number().int(),
+      /** the most steps at once when memory and load allow; absent from an older server */
+      max: z.number().int().optional(),
       held: z.array(z.object({ slot: z.number().int(), name: z.string(), grantedAt: z.string() })),
       waiting: z.array(z.string()),
       lines: z.array(z.string()),
@@ -155,6 +157,9 @@ export const SlotBody = z
       .min(1)
       .max(24 * 3_600_000)
       .optional(),
+    /** the resident size of the command's process tree now, and its peak so far */
+    rssMib: z.number().int().min(0).optional(),
+    peakRssMib: z.number().int().min(0).optional(),
   })
   .meta({ id: 'SlotBody' })
 export type SlotBody = z.infer<typeof SlotBody>
@@ -171,9 +176,25 @@ export const Slot = z
     ahead: z.number().int(),
     /** how long the command may run once granted */
     runMs: z.number().int(),
+    /** why the caller waits, when it does */
+    why: z.string().nullable().default(null),
   })
   .meta({ id: 'Slot' })
 export type Slot = z.infer<typeof Slot>
 
 export const SlotRelease = z.object({ released: z.boolean() }).meta({ id: 'SlotRelease' })
 export type SlotRelease = z.infer<typeof SlotRelease>
+
+/** What a finished step cost: `POST /slots/:id/cost`, appended to the ledger the grant rule learns from. */
+export const StepCost = z
+  .object({
+    name: z.string().min(1).max(200),
+    cwd: z.string().min(1).max(4096).optional(),
+    peakRssMib: z.number().int().min(0).nullable(),
+    cpuSeconds: z.number().min(0).nullable(),
+    durationMs: z.number().int().min(0),
+    waitMs: z.number().int().min(0),
+    exitCode: z.number().int().nullable(),
+  })
+  .meta({ id: 'StepCost' })
+export type StepCost = z.infer<typeof StepCost>

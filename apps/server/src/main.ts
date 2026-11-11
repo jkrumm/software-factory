@@ -14,6 +14,7 @@ import { makeNotifier } from './adapters/ntfy/ntfy.ts'
 import { postgresCheckpointStore } from './adapters/postgres/checkpoint-store.ts'
 import { hostReader } from './adapters/planning/host.ts'
 import { hostWatch } from './adapters/planning/host-watch.ts'
+import { processTable } from './adapters/planning/processes.ts'
 import { postgresLoopStore } from './adapters/postgres/loop-store.ts'
 import { postgresVisitStore } from './adapters/postgres/visit-store.ts'
 import { loadMigrations, migrate } from './adapters/postgres/migrate.ts'
@@ -42,6 +43,8 @@ import { loadLoopSettings } from './app/loops/settings.ts'
 import { frictionPass, frictionSummary } from './app/loops/friction.ts'
 import { fixClassesPass, fixClassesSummary } from './app/loops/fix-classes.ts'
 import { hostPass, hostSummary } from './app/loops/host.ts'
+import { reaperPass, reaperSummary } from './app/loops/reaper.ts'
+import { processKiller, reaperProcesses } from './adapters/planning/reaper-processes.ts'
 import { hygienePass, hygieneSummary } from './app/loops/hygiene.ts'
 import { selfwatchPass, selfwatchSummary } from './app/loops/selfwatch.ts'
 import { githubCiRuns } from './adapters/selfwatch/github.ts'
@@ -157,6 +160,15 @@ async function main(): Promise<void> {
     sysctlBin: planningEnv.sysctlBin,
     psBin: process.env.FACTORY_PS_BIN ?? '/bin/ps',
   })
+  const hostProcesses = processTable({
+    rows: () => hostSamples.rows(),
+    lsofBin: process.env.FACTORY_LSOF_BIN ?? '/usr/sbin/lsof',
+  })
+  const reaperProcessTable = reaperProcesses({
+    psBin: process.env.FACTORY_PS_BIN ?? '/bin/ps',
+    lsofBin: process.env.FACTORY_LSOF_BIN ?? '/usr/sbin/lsof',
+  })
+  const reaperKiller = processKiller({ psBin: process.env.FACTORY_PS_BIN ?? '/bin/ps' })
   // Planning and capacity own the projects and the claims; the leads, intake and the checkpoints take their ports.
   const roles = fileRoles(leadSettings.rolesFile)
   const planning = composePlanning({
@@ -494,9 +506,35 @@ async function main(): Promise<void> {
       intervalMs: loopSettings.intervalMs.host,
       onChange: false,
       run: async () => {
-        const pass = await hostPass({ uow, clock: writes.clock, sampler: hostSamples })
+        const pass = await hostPass({
+          uow,
+          clock: writes.clock,
+          sampler: hostSamples,
+          processes: hostProcesses,
+          facts: planning.capacityFacts,
+        })
         if (!pass.ok) return pass
         return ok(hostSummary(pass.value))
+      },
+    },
+    {
+      // Ends the processes of closed lead attempts (by session key and worktree, never by name): a browser a finished lead left
+      // behind lives on under launchd otherwise.
+      name: 'reaper',
+      intervalMs: loopSettings.intervalMs.reaper,
+      onChange: false,
+      run: async () => {
+        const pass = await reaperPass({
+          uow,
+          clock: writes.clock,
+          processes: reaperProcessTable,
+          killer: reaperKiller,
+          graceMs: loopSettings.reaperGraceMs,
+          dry: loopSettings.reaperDry,
+          protect: [1, process.pid],
+        })
+        if (!pass.ok) return pass
+        return ok(reaperSummary(pass.value))
       },
     },
   ]
@@ -594,6 +632,15 @@ async function main(): Promise<void> {
       sql,
       queueReasons,
       machine,
+      capacityConstants: {
+        leadsPerAccount: planningEnv.leadsPerAccount,
+        loadCeiling: planningEnv.loadCeiling,
+        slots: planningEnv.slots,
+        slotsMax: planningEnv.slotsMax,
+        slotExtraLoad: planningEnv.slotExtraLoad,
+        seatsMaxBonus: planningEnv.seatsMaxBonus ?? 0,
+        reaperGraceMs: loopSettings.reaperGraceMs,
+      },
       visits: uow,
       longWaitMs: loadNeedsSettings(process.env).longWaitMs,
       host: { version: settings.version, startedAt, top: () => hostSamples.top() },

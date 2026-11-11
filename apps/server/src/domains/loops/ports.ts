@@ -17,6 +17,7 @@ import type { IssueId } from '../../kernel/ids.ts'
 import type { Key } from '../../kernel/keys.ts'
 import type { PortError, Result } from '../../kernel/result.ts'
 import type { MainCheckoutLook } from './checkout.ts'
+import type { ReaperAttempt, ReaperProc } from './reaper.ts'
 import type { CallLoop, CallOutcome, CallRow } from './calls.ts'
 import type { ClassIssue, FindingLoop } from './classes.ts'
 import type { FixCommit, FixCommitRow } from './fix-classes.ts'
@@ -62,24 +63,90 @@ export interface HygienePassRecord {
 }
 
 /** The loops' own tables, inside one transaction: the agw calls made, so none is made twice, and the friction and hygiene passes. */
-/** One reading of the host as stored (`migrations/1002_host_samples.sql`); a figure that could not be read is null. */
-export interface HostSampleRecord {
+/** What the capacity layer holds at one minute (all null when it could not be read). */
+export interface CapacityFacts {
+  /** the leads running: claims held */
+  leads: number | null
+  /** the Issues queued */
+  queued: number | null
+  /** the leads the enabled accounts may hold */
+  seats: number | null
+  /** the load ceiling in force */
+  loadCeiling: number | null
+}
+
+/** One reading of the host (`migrations/1002_host_samples.sql`); a figure that could not be read is null. */
+export interface HostReading {
   load: number | null
   memoryUsedPct: number | null
   swapUsedPct: number | null
   swapoutMbPer300s: number | null
 }
 
+/** One minute as stored: the reading and the capacity facts (`migrations/1010_lead_samples.sql`). */
+export type HostSampleRecord = HostReading & CapacityFacts
+
+/** What one lead's process tree cost at a sample, by its worktree. */
+export interface LeadSampleRow {
+  worktree: string
+  repo: string
+  issue: number | null
+  attempt: number | null
+  rssMib: number
+  procs: number
+}
+
+/** An attempt's worktree, from `lead_attempts`. */
+export interface AttemptWorktree {
+  path: string
+  repo: string
+  issue: number | null
+  attempt: number | null
+}
+
 /** Reads the host. It never fails: a figure it cannot read is null in the record. */
 export interface HostSampler {
-  sample(): Promise<HostSampleRecord>
+  sample(): Promise<HostReading>
+}
+
+/** A signal the reaper sent (or, `dry`, would have sent) to a process of a closed attempt. */
+export interface ReapedRow {
+  at: Date
+  pid: number
+  session: string
+  worktree: string | null
+  comm: string
+  signal: 'SIGTERM' | 'SIGKILL' | 'dry'
+  reason: 'session' | 'worktree'
+  ageS: number
+}
+
+/** The host's processes with their lead session and directory; null when `ps` or `lsof` could not answer (never an error). */
+export interface ReaperProcesses {
+  read(): Promise<ReaperProc[] | null>
+}
+
+/** Ends a process. False when it was not signalled: gone already, or no longer the process that was decided on. */
+export interface ProcessKiller {
+  signal(target: { pid: number; ageS: number }, signal: 'SIGTERM' | 'SIGKILL'): Promise<boolean>
 }
 
 export interface LoopStore {
-  /** one sample at `at`; a second one at the same instant is ignored */
-  recordHostSample(at: Date, sample: HostSampleRecord): Promise<void>
+  /** the attempts the reaper weighs: those not finalized, and those finalized since `since` */
+  reaperAttempts(since: Date): Promise<ReaperAttempt[]>
+  /** the SIGTERMs recorded since `since`, oldest first */
+  termedSince(since: Date): Promise<{ pid: number; ageS: number }[]>
+  recordReaped(rows: readonly ReapedRow[]): Promise<void>
+  /** drops the rows older than `before`; how many */
+  pruneReaped(before: Date): Promise<number>
+  /** one sample at `at` with the lead rows of that minute; a second one at the same instant is ignored */
+  recordHostSample(at: Date, sample: HostSampleRecord, leads: readonly LeadSampleRow[]): Promise<void>
   /** drops the samples older than `before`; how many */
   pruneHostSamples(before: Date): Promise<number>
+  /** drops the lead samples older than `before`; how many */
+  pruneLeadSamples(before: Date): Promise<number>
+  /** the worktrees of the attempts that are live or ended since `since` */
+  attemptWorktrees(since: Date): Promise<AttemptWorktree[]>
   /** the rounds of one subject, oldest first */
   calls(loop: CallLoop, issue: IssueId, subject: string): Promise<CallRow[]>
   /** false when the round is claimed already (another pass came first) */

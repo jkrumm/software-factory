@@ -5,10 +5,10 @@ import { gitProjectSource } from './adapters/planning/git-projects.ts'
 import { hostReader } from './adapters/planning/host.ts'
 import type { CapacityApi } from './api/capacity.ts'
 import type { PlanningApi } from './api/planning.ts'
-import { admissionPass, claimFreeRepos, claimQueued, queueView } from './app/capacity-admit.ts'
+import { admissionPass, capacityFacts, claimFreeRepos, claimQueued, queueView } from './app/capacity-admit.ts'
 import { capacityForLeads } from './app/capacity-leads.ts'
 import { getQueueStates, setQueueState } from './app/capacity-queue.ts'
-import { giveSlotBack, touchSlot } from './app/capacity-slots.ts'
+import { giveSlotBack, recordStepCost, touchSlot } from './app/capacity-slots.ts'
 import { capacityState, refreshState } from './app/capacity-view.ts'
 import { addAfter, removeAfter, settleIssue, setPrio } from './app/planning-chain.ts'
 import type { PlanningDeps } from './app/planning-deps.ts'
@@ -32,6 +32,8 @@ export interface PlanningComposition {
   capacity: CapacityApi
   /** capacity's side of the leads' ports: the account, the repo claim, the window */
   leads: ReturnType<typeof capacityForLeads>
+  /** the host loop's port: the claims, the queue, the seats and the load ceiling of this minute */
+  capacityFacts: () => ReturnType<typeof capacityFacts>
   /** the steward's port: the Issues queued for lack of a claim, read without polling or sampling the host */
   claimQueued: () => ReturnType<typeof claimQueued>
   /** the steward's port: of given Issue repos, those with an ordinary claim free right now */
@@ -65,15 +67,23 @@ export function composePlanning(input: {
     leadsPerAccount: settings.leadsPerAccount,
     loadCeiling: settings.loadCeiling,
     memoryCeilings: settings.memoryCeilings,
+    seatsMaxBonus: settings.seatsMaxBonus,
   }
+  const host = hostReader({ sysctlBin: settings.sysctlBin, minSampleMs: settings.memorySampleMs })
   const capacity = {
     ...writes,
     limits,
-    host: hostReader({ sysctlBin: settings.sysctlBin, minSampleMs: settings.memorySampleMs }),
+    host,
     accounts: claudeAccountSource({ bin: settings.claudeAccountBin }),
     ranker: claudeAccountRanker({ bin: settings.claudeAccountBin }),
   }
-  const slots = { ...writes, slots: settings.slots }
+  const slots = {
+    ...writes,
+    slots: settings.slots,
+    slotsMax: settings.slotsMax,
+    slotExtraLoad: settings.slotExtraLoad,
+    host,
+  }
 
   /**
    * A project by its name, or by a path inside a source root (realpath, the trust boundary): the name the queue keeps its
@@ -125,7 +135,7 @@ export function composePlanning(input: {
         }),
     },
     capacity: {
-      limits: { ...limits, slots: settings.slots },
+      limits: { ...limits, slots: settings.slots, slotsMax: settings.slotsMax },
       state: () => capacityState(capacity),
       refresh: () => refreshState(capacity),
       admit: () => admissionPass(capacity),
@@ -145,8 +155,10 @@ export function composePlanning(input: {
       },
       touchSlot: (request) => touchSlot(slots, request),
       giveSlotBack: (id) => giveSlotBack(writes, id),
+      recordStepCost: (cost) => recordStepCost(writes, cost),
     },
     leads: capacityForLeads(writes),
+    capacityFacts: () => capacityFacts(capacity),
     claimQueued: () => claimQueued(capacity),
     claimFree: (repos) => claimFreeRepos(capacity, repos),
     signals: projectSignals(writes),

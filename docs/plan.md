@@ -132,7 +132,9 @@ hand-filed Issue; `factory project show` lists the project's `lanes` (leads and 
   leads, and a running lead's heavy step (a booted simulator, one run took about 18 GiB) shows in the reading only after
   it started, so the reservation covers the lead that has just been admitted. It is held for as long as the lead holds
   its claim, so it can count a step twice (reserved and already resident); that errs on the side of waiting. Without a
-  RAM reading nothing is reserved and the pass notes it.
+  RAM reading nothing is reserved and the pass notes it. A repo with three or more sampled attempts is admitted by what its leads were seen to take
+  instead (`docs/architecture.md` "Capacity and leads"): the lane's `memory` is then dropped for it and stays the prior
+  for a repo with fewer; the lane's `leads` cap stays.
 - **An undeclared lane is unlimited** within `leads`. A row naming a lane the project does not declare is a plan
   **warning**, not a broken plan; the lane then limits nothing (a typo is visible in `factory project show`).
 - **What counts as running:** a lead holding its claim, and a resumed lead working without one. A lead waiting on a

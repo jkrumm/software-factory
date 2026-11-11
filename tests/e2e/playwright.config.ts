@@ -1,4 +1,5 @@
 import { join } from 'node:path'
+import { patient } from '../scenarios/patience.ts'
 import { defineConfig, devices } from '@playwright/test'
 
 /**
@@ -13,8 +14,9 @@ export default defineConfig({
   workers: 1,
   fullyParallel: false,
   retries: 0,
-  timeout: 30_000,
-  expect: { timeout: 10_000 },
+  // stretched by the host's load when the run starts (Issue 719): a screenshot that takes 3 s idle took 35 s at load 40
+  timeout: patient(30_000),
+  expect: { timeout: patient(10_000) },
   reporter: [['list']],
   use: {
     ...devices['Desktop Chrome'],

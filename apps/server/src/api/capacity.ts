@@ -11,6 +11,7 @@ import {
   Slot,
   SlotBody,
   SlotRelease,
+  StepCost,
 } from '@software-factory/contract'
 import { Elysia } from 'elysia'
 import * as z from 'zod'
@@ -31,7 +32,7 @@ void queueReasonsMatch
 
 /** The use cases the routes call, bound in `main.ts`. */
 export interface CapacityApi {
-  limits: CapacityLimits & { slots: number }
+  limits: CapacityLimits & { slots: number; slotsMax: number }
   state(): Promise<Result<CapacityState, PortError>>
   refresh(): Promise<Result<AccountState[], PortError>>
   admit(): Promise<Result<PassResult, PortError>>
@@ -45,8 +46,11 @@ export interface CapacityApi {
     name: string
     cwd: string | undefined
     limitMs: number | undefined
+    rssMib: number | undefined
+    peakRssMib: number | undefined
   }): Promise<Result<SlotView, PortError>>
   giveSlotBack(id: string): Promise<Result<boolean, PortError>>
+  recordStepCost(cost: StepCost): Promise<Result<true, PortError>>
 }
 
 const failure = (error: string, code: string): ErrorBody => ErrorBody.parse({ error, code })
@@ -136,6 +140,7 @@ export const capacityRoutes = (api?: CapacityApi) => {
             queue: statesView(s.states),
             slots: {
               total: api.limits.slots,
+              max: api.limits.slotsMax,
               held: s.slots.flatMap((row) =>
                 row.slot !== null && row.grantedAt
                   ? [{ slot: row.slot, name: row.name, grantedAt: row.grantedAt.toISOString() }]
@@ -250,7 +255,14 @@ export const capacityRoutes = (api?: CapacityApi) => {
       '/slots/:id',
       async ({ params, body, status }) => {
         if (!api) return status(503, unbound)
-        const touched = await api.touchSlot({ id: params.id, name: body.name, cwd: body.cwd, limitMs: body.limitMs })
+        const touched = await api.touchSlot({
+          id: params.id,
+          name: body.name,
+          cwd: body.cwd,
+          limitMs: body.limitMs,
+          rssMib: body.rssMib,
+          peakRssMib: body.peakRssMib,
+        })
         return touched.ok ? status(200, slotView(touched.value)) : status(503, unavailable(touched.error))
       },
       {
@@ -273,6 +285,22 @@ export const capacityRoutes = (api?: CapacityApi) => {
         params: z.object({ id: z.string().min(1).max(200) }),
         response: { 200: SlotRelease, ...errorResponses(503) },
         detail: { hide: true, operationId: 'slots.release' },
+      },
+    )
+    .post(
+      '/slots/:id/cost',
+      async ({ body, status }) => {
+        if (!api) return status(503, unbound)
+        const recorded = await api.recordStepCost(body)
+        return recorded.ok
+          ? status(200, SlotRelease.parse({ released: true }))
+          : status(503, unavailable(recorded.error))
+      },
+      {
+        params: z.object({ id: z.string().min(1).max(200) }),
+        body: StepCost,
+        response: { 200: SlotRelease, ...errorResponses(400, 503) },
+        detail: { hide: true, operationId: 'slots.cost' },
       },
     )
 }

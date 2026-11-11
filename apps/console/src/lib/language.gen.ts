@@ -82,6 +82,7 @@ export const LANGUAGE = {
   'queue wait':
     'The time from an Issue filed or reopened to admitted (a lead started); settling and the chain are part of it',
   queued: 'State: ready, held back by capacity or a chain',
+  reaper: 'The loop that ends, by session key and worktree path, the processes a closed lead attempt left behind',
   refusal: 'An Issue event the state machine refused, or a ship the gate refused. Counted as friction',
   regressed:
     'A shipped change that failed its watch: Verify or a probe found it broken after the ship. The lead goes back to work twice, the third time it is a stall',
@@ -96,6 +97,7 @@ export const LANGUAGE = {
   round: 'The nth ask of a workflow about one subject. A subject has a limited number of rounds',
   screen:
     'The Judge looks at a held signal (the screen loop, factory-screen) and promotes it, dismisses it with a reason (a duplicate names the open Issue) or leaves it held with a recommendation the owner reads in Needs you. A signal is screened once; a failed call is retried with a backoff, five times at most',
+  seat: "One lead the accounts may hold at once (leads per account, plus the bonus the host's idle minutes earn). A seat is idle when work is queued and no lead holds it",
   'session state':
     "What a lead's session is, derived from its hook events: starting (no hook yet), working (a turn is running), idle (its last turn ended), compacted (its context was just compacted, no turn since), walled (its account hit a limit), gone (its session ended or its terminal is gone)",
   settler:
@@ -114,6 +116,8 @@ export const LANGUAGE = {
   steward:
     'The supervisor loop over stalled Issues. Acts deterministically first (wake, re-check, requeue, deliver) and asks an agw workflow when a call needs judgment',
   surface: 'Console, Herdr, Iris, Argo, ntfy',
+  'test slot':
+    "A lease on the host's test capacity that factory slot run takes for a make check, test or e2e step; it waits while the host is busy and records what the step cost",
   touch: 'The owner acting on an Issue',
   triage:
     'Deciding what a signal becomes: a new Issue, an amendment to an open one, part of an incident, held, or dropped',

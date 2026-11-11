@@ -88,8 +88,13 @@ export function hostReader(options: HostOptions): HostReader {
     },
 
     async load() {
-      const one = loadavg()[0]
-      return one === undefined ? err(portError('unreadable', 'no load average')) : ok(one)
+      // `vm.loadavg` is `{ 1.20 3.40 5.60 }`: read through the same tool as the memory, so a scenario's fake host
+      // decides the load and the real machine's cannot make a test fail. Where sysctl has no such key, the OS call.
+      const text = await sysctl('vm.loadavg')
+      const one = text.ok ? Number(/\{?\s*([\d.]+)/.exec(text.value)?.[1]) : Number.NaN
+      if (Number.isFinite(one)) return ok(one)
+      const fallback = loadavg()[0]
+      return fallback === undefined ? err(portError('unreadable', 'no load average')) : ok(fallback)
     },
   }
 }

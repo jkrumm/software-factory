@@ -13,3 +13,4 @@ ship:
 signals:
   github: { author: jkrumm, since: 2026-11-07T06:30:00Z, checks: true } # the owner's new issues come in; anyone else's need the label
 leads: 3
+slots: { run: 60m } # the whole `make check` runs in one slot

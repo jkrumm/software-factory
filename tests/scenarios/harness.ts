@@ -4,6 +4,7 @@ import { join } from 'node:path'
 import * as z from 'zod'
 import { startTestCluster, type TestCluster } from '../support/pg.ts'
 import { hostEnv, installHost } from './host.ts'
+import { patient } from './patience.ts'
 
 const ROOT = join(import.meta.dir, '..', '..')
 const SERVER_MAIN = join(ROOT, 'apps', 'server', 'src', 'main.ts')
@@ -170,7 +171,7 @@ export async function startServer(
   }
   if (options.ready === false) return server
 
-  const deadline = Date.now() + BOOT_TIMEOUT_MS
+  const deadline = Date.now() + patient(BOOT_TIMEOUT_MS)
   while (Date.now() < deadline) {
     if (proc.exitCode !== null) throw new Error(`the server exited ${proc.exitCode} before it answered:\n${output}`)
     const answered = await fetch(`${url}/health`).then(

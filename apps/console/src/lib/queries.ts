@@ -7,6 +7,7 @@ import {
   fetchAccounts,
   fetchArtifact,
   fetchArtifacts,
+  fetchCapacityLoop,
   fetchChain,
   fetchDecision,
   fetchErrands,
@@ -123,6 +124,16 @@ export function useKpis(days: number) {
   return useQuery({
     queryKey: ['kpis', days],
     queryFn: ({ signal }) => fetchKpis(days, signal),
+    refetchInterval: pollEvery(live),
+  })
+}
+
+/** What the capacity loop did over the last `days` days. */
+export function useCapacityLoop(days: number) {
+  const live = useLive()
+  return useQuery({
+    queryKey: ['capacity-loop', days],
+    queryFn: ({ signal }) => fetchCapacityLoop(days, signal),
     refetchInterval: pollEvery(live),
   })
 }

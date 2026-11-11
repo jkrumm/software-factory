@@ -1,10 +1,11 @@
 import { realpathSync } from 'node:fs'
 import { constants } from 'node:os'
 import { send } from '@software-factory/client'
-import { DEFAULT_SLOT_RUN_MS, Slot } from '@software-factory/contract'
+import { DEFAULT_SLOT_RUN_MS, Slot, type StepCost } from '@software-factory/contract'
 import { usage } from './exit.ts'
 import { credentialOf } from './credentials.ts'
 import { DEFAULT_URL, type Io } from './operation.ts'
+import { readProcesses, treeMeter } from './process-tree.ts'
 
 /** How long a caller waits for a slot before it gives up with `EX_TEMPFAIL` (`FACTORY_SLOT_WAIT_MS`). */
 const DEFAULT_SLOT_WAIT_MS = 45 * 60_000
@@ -27,6 +28,8 @@ const MAX_SLOT_POLL_MS = 5_000
 const MAX_SLOT_NAME = 200
 /** The lease is renewed this often while the command runs; the server lets it lapse after 30 s. */
 const RENEW_MS = 10_000
+/** How often the command's process tree is measured while it runs. */
+const MEASURE_MS = 3_000
 
 const number = (value: string | undefined, fallback: number): number => {
   const n = Number(value)
@@ -98,13 +101,32 @@ async function acquire(input: {
   stopped: () => boolean
 }): Promise<'granted' | 'open' | 'stopped' | { outage: string } | number> {
   const { ask, io, waitMs, pollMs, open } = input
-  const deadline = Date.now() + waitMs
+  const started = Date.now()
+  const deadline = started + waitMs
   const seconds = Math.round(waitMs / 1000)
+  let queued = false
+  let told: string | null = null
   for (;;) {
     input.engage()
     const answer = await ask()
     if (answer.kind === 'outage') return { outage: answer.why }
-    if (answer.slot.granted) return 'granted'
+    if (answer.slot.granted) {
+      if (queued) io.err(`factory: got a test slot after ${Math.round((Date.now() - started) / 1000)}s\n`)
+      return 'granted'
+    }
+    const why = answer.slot.why
+    // The all-busy case keeps its wording; any other reason is said as the server gave it, and again when it changes.
+    const reason = why === null || why.startsWith('all ') ? 'all busy' : why
+    if (!queued) {
+      queued = true
+      told = reason
+      io.err(
+        `factory: queued for a test slot (${reason}, ${answer.slot.ahead} waiting ahead); waiting up to ${Math.round(waitMs / 60_000)} min\n`,
+      )
+    } else if (reason !== told) {
+      told = reason
+      io.err(`factory: still queued for a test slot (${reason}, ${answer.slot.ahead} waiting ahead)\n`)
+    }
     if (input.stopped()) return 'stopped'
     if (Date.now() >= deadline) break
     await sleep(pollMs)
@@ -115,6 +137,31 @@ async function acquire(input: {
   }
   io.err(`factory: no test slot within ${seconds}s; not running (set FACTORY_SLOT_OPEN=1 to run anyway)\n`)
   return EX_TEMPFAIL
+}
+
+/** The finished step's cost, appended to the server's ledger. Best effort: a failure changes nothing. */
+async function reportCost(input: {
+  base: string
+  path: string
+  token: string | undefined
+  cost: StepCost
+}): Promise<void> {
+  try {
+    await send({ base: input.base, method: 'POST', path: `${input.path}/cost`, body: input.cost, token: input.token })
+  } catch {
+    // the ledger is a convenience
+  }
+}
+
+/** A command inside a slot its caller holds: run as it is, no queue, and the exit code is the command's. */
+async function runHeld(program: string, args: string[], io: Io): Promise<number> {
+  try {
+    const child = Bun.spawn([program, ...args], { stdin: 'inherit', stdout: 'inherit', stderr: 'inherit', env: io.env })
+    return exitCodeOf({ exitCode: await child.exited, signalCode: child.signalCode })
+  } catch (error) {
+    io.err(`factory: cannot run ${program}: ${error instanceof Error ? error.message : String(error)}\n`)
+    return 127
+  }
 }
 
 /**
@@ -130,6 +177,8 @@ async function acquire(input: {
 export async function slotRun(input: { name?: string; command: string[] }, io: Io): Promise<number> {
   const [program, ...args] = input.command
   if (!program) throw usage('usage: slot run [--name <label>] -- <cmd> [args…]')
+  // Inside a slot already (the whole `make check` runs in one): the steps below it are that slot's, they do not queue again.
+  if (io.env.FACTORY_SLOT_ACTIVE === '1') return runHeld(program, args, io)
 
   const base = io.env.FACTORY_URL || DEFAULT_URL
   const { token, failure } = await credentialOf(io.env)
@@ -151,10 +200,24 @@ export async function slotRun(input: { name?: string; command: string[] }, io: I
       return undefined
     }
   })()
+  // Once the command runs under a slot, its process tree is measured and the renewals carry the sizes.
+  let meter: ReturnType<typeof treeMeter> | undefined
   // The limit the server resolved for the grant; a server that does not say leaves it to the env or the default.
   let grantedRunMs: number | undefined
   const ask = async (): Promise<Asked> => {
-    const answer = await send({ base, method: 'PUT', path, body: { name, cwd, limitMs: envLimit }, token })
+    const answer = await send({
+      base,
+      method: 'PUT',
+      path,
+      body: {
+        name,
+        cwd,
+        limitMs: envLimit,
+        rssMib: meter?.rssMib ?? undefined,
+        peakRssMib: meter?.peakRssMib ?? undefined,
+      },
+      token,
+    })
     if (!answer.reached) return { kind: 'outage', why: answer.reason }
     if (answer.status >= 500) return { kind: 'outage', why: `the server answered ${answer.status}` }
     if (answer.status === 401 || answer.status === 403) {
@@ -187,6 +250,7 @@ export async function slotRun(input: { name?: string; command: string[] }, io: I
   const signals: NodeJS.Signals[] = ['SIGINT', 'SIGTERM', 'SIGHUP']
   for (const signal of signals) process.on(signal, onSignal)
 
+  const askedAt = Date.now()
   try {
     const outcome = await acquire({
       ask,
@@ -204,6 +268,7 @@ export async function slotRun(input: { name?: string; command: string[] }, io: I
       io.err(`factory: no test slot (${outcome.outage}); running without one\n`)
     }
     const holding = outcome === 'granted'
+    const waitedMs = Date.now() - askedAt
     if (!holding) await release()
     if (stopped) return 128 + (constants.signals[stopped] ?? 1)
 
@@ -212,12 +277,28 @@ export async function slotRun(input: { name?: string; command: string[] }, io: I
         stdin: 'inherit',
         stdout: 'inherit',
         stderr: 'inherit',
-        env: io.env,
+        env: holding ? { ...io.env, FACTORY_SLOT_ACTIVE: '1' } : io.env,
         detached: true,
       })
     } catch (error) {
       io.err(`factory: cannot run ${program}: ${error instanceof Error ? error.message : String(error)}\n`)
       return 127
+    }
+    const startedAt = Date.now()
+    // Measured at once and then every few seconds, so even a short command has a size; a failed `ps` is skipped.
+    let measuring: Promise<void> = Promise.resolve()
+    let measureTimer: ReturnType<typeof setInterval> | undefined
+    if (holding) {
+      const tree = treeMeter(child.pid)
+      meter = tree
+      const measure = () => {
+        measuring = measuring.then(async () => {
+          const rows = await readProcesses()
+          if (rows) tree.sample(rows)
+        })
+      }
+      measure()
+      measureTimer = setInterval(measure, MEASURE_MS)
     }
     // The lease is renewed while the command runs. A renewal that is answered "wait" means the lease had lapsed (the server
     // was out of reach for longer than it lasts) and the slot is someone else's: said once, and the line is left.
@@ -263,10 +344,29 @@ export async function slotRun(input: { name?: string; command: string[] }, io: I
       clearTimeout(limitTimer)
       ended = true
       if (renew) clearInterval(renew)
+      if (measureTimer) clearInterval(measureTimer)
       // An answer still on its way would put the holder back after the slot is given up.
       await renewing
+      await measuring
     }
-    return limited ? EX_RUN_LIMIT : exitCodeOf(child)
+    const exitCode = limited ? EX_RUN_LIMIT : exitCodeOf(child)
+    if (holding && meter) {
+      await reportCost({
+        base,
+        path,
+        token,
+        cost: {
+          name,
+          ...(cwd === undefined ? {} : { cwd }),
+          peakRssMib: meter.peakRssMib,
+          cpuSeconds: meter.cpuSeconds,
+          durationMs: Date.now() - startedAt,
+          waitMs: waitedMs,
+          exitCode,
+        },
+      })
+    }
+    return exitCode
   } finally {
     for (const signal of signals) process.off(signal, onSignal)
     await release()

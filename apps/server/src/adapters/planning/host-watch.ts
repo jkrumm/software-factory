@@ -8,7 +8,7 @@ export interface HostWatchOptions {
   host: HostReader
   /** `sysctl`, for `hw.memsize` */
   sysctlBin: string
-  /** `ps`, the macOS one: `-Ao pid=,pcpu=,rss=,comm=` */
+  /** `ps`, the macOS one: `-Ao pid=,ppid=,pcpu=,rss=,comm=` */
   psBin: string
   /** concurrent readers within this long share one `ps` */
   cacheMs?: number
@@ -27,6 +27,8 @@ export interface HostSampleReading {
 export interface HostWatch {
   sample(): Promise<HostSampleReading>
   top(): Promise<{ topByCpu: HostProcess[]; topByMemory: HostProcess[] }>
+  /** the same cached `ps` rows; null when `ps` failed */
+  rows(): Promise<PsRow[] | null>
 }
 
 /**
@@ -52,7 +54,7 @@ export function hostWatch(options: HostWatchOptions): HostWatch {
 
   const processes = (): Promise<PsRow[] | null> => {
     if (cached && now() - cached.at < cacheMs) return cached.rows
-    const rows = run([options.psBin, '-Ao', 'pid=,pcpu=,rss=,comm=']).then((text) =>
+    const rows = run([options.psBin, '-Ao', 'pid=,ppid=,pcpu=,rss=,comm=']).then((text) =>
       text === null ? null : parsePs(text),
     )
     cached = { at: now(), rows }
@@ -68,6 +70,8 @@ export function hostWatch(options: HostWatchOptions): HostWatch {
   }
 
   return {
+    rows: processes,
+
     async top() {
       const rows = await processes()
       return rows ? topProcesses(rows) : { topByCpu: [], topByMemory: [] }

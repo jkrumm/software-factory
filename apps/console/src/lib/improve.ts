@@ -1,4 +1,11 @@
-import type { FindingClass, FixCommitsModel, FrictionCount, Kpi, KpiKey } from '@software-factory/contract'
+import type {
+  CapacityLoopModel,
+  FindingClass,
+  FixCommitsModel,
+  FrictionCount,
+  Kpi,
+  KpiKey,
+} from '@software-factory/contract'
 import type { Tone } from '../components/kit/tone'
 import type { LANGUAGE } from './language.gen'
 
@@ -438,4 +445,59 @@ export function fixCard(model: Pick<FixCommitsModel, 'classes' | 'weeks'>): FixC
     total: totals.reduce((a, b) => a + b, 0),
     busiest,
   }
+}
+
+// ---- the capacity section: what the capacity loop did, all figures computed by the API -------------------------------------
+
+/** The domain word each capacity card's title carries an InfoHint for. */
+export const CAPACITY_HINT = {
+  throughput: 'issue',
+  idle: 'seat',
+  wait: 'test slot',
+  reaped: 'reaper',
+} as const satisfies Record<string, InfoWord>
+
+/** A wait or duration: milliseconds under a second, else the KPI duration words. */
+export const msWords = (ms: number | null): string =>
+  ms === null ? '–' : ms < 1000 ? `${Math.round(ms)} ms` : formatValue('ms', ms)
+
+/** Memory: MiB under a GiB, else GiB with one decimal. */
+export const mibWords = (mib: number): string =>
+  mib < 1024 ? `${Math.round(mib)} MiB` : `${(mib / 1024).toFixed(1)} GiB`
+
+/** Hours with one decimal. */
+export const hoursWords = (hours: number): string => `${hours.toFixed(1)} h`
+
+/** Per-day points as a chart reads them: the values (a null is a gap) and the tooltip lines. */
+export const dayValues = (points: CapacityLoopModel['throughput']['perDay']): (number | null)[] =>
+  points.map((p) => p.value)
+export const dayLabels = (points: CapacityLoopModel['throughput']['perDay']): string[] =>
+  points.map((p) => shortDate(p.day))
+
+/** Start, what a point is, end: the three x labels of a per-day chart. */
+export function dayXLabels(points: CapacityLoopModel['throughput']['perDay']): [string, string, string] {
+  const first = points[0]
+  const last = points.at(-1)
+  return [first ? shortDate(first.day) : '', 'UTC days', last ? shortDate(last.day) : '']
+}
+
+/** Issues closed per day over the window, one decimal. */
+export const perDayWords = (total: number, days: number): string => `${(total / days).toFixed(1)} per day`
+
+/** "2026-11-05 09:01" from an ISO time (UTC, as the API says it). */
+export const stampWords = (iso: string): string => iso.slice(0, 16).replace('T', ' ')
+
+/** The settings in force, in the order the retro reads them, each with its words. */
+export function constantRows(
+  constants: CapacityLoopModel['constants'],
+): { key: string; label: string; value: string }[] {
+  return [
+    { key: 'leadsPerAccount', label: 'Leads per account', value: String(constants.leadsPerAccount) },
+    { key: 'seatsMaxBonus', label: 'Seat bonus at most', value: String(constants.seatsMaxBonus) },
+    { key: 'loadCeiling', label: 'Load ceiling', value: String(constants.loadCeiling) },
+    { key: 'slots', label: 'Test slots', value: String(constants.slots) },
+    { key: 'slotsMax', label: 'Test slots at most', value: String(constants.slotsMax) },
+    { key: 'slotExtraLoad', label: 'Extra slot below load', value: String(constants.slotExtraLoad) },
+    { key: 'reaperGraceMs', label: 'Reaper grace', value: msWords(constants.reaperGraceMs) },
+  ]
 }

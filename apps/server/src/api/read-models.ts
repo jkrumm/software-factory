@@ -1,4 +1,5 @@
 import {
+  CapacityLoopModel,
   DaysQuery,
   DEFAULT_DAYS,
   ErrorBody,
@@ -21,6 +22,7 @@ import type * as z from 'zod'
 import type { UnitOfWork } from '../app/unit-of-work.ts'
 import { registerVisit, type VisitStore } from '../app/visit.ts'
 import { findingClasses } from '../app/loops/finding-classes.ts'
+import { type CapacityConstants, readCapacityLoop } from '../read/capacity-loop.ts'
 import { readChain } from '../read/chain.ts'
 import { type QueueReasons, readFlow } from '../read/flow.ts'
 import { readFixCommits } from '../read/fix-commits.ts'
@@ -49,6 +51,8 @@ export interface ReadModelDeps {
   }
   /** the owner's visit marker; absent, `GET /v1/since` moves nothing and reads from the stored start */
   visits?: UnitOfWork<{ visits: VisitStore }>
+  /** the settings in force the capacity loop tunes; absent, `GET /v1/capacity-loop` is 503 */
+  capacityConstants?: CapacityConstants
   now?: () => Date
   /** how long a timed wait with Issues behind it must last to reach Needs you; absent, the default (`FACTORY_LONG_WAIT_MS`) */
   longWaitMs?: number
@@ -240,6 +244,26 @@ export const readModelRoutes = (deps: ReadModelDeps | undefined, caller: (reques
           operationId: 'read.friction',
           summary:
             'counted waste over the last days (1 to 90, default 7): avoidable touches, refusals, stalls, lost leads, undelivered notes, unreviewed ships, regressions, who settled Decisions, held signals',
+        },
+      },
+    )
+    .get(
+      '/capacity-loop',
+      async ({ query }) => {
+        if (!deps?.capacityConstants) return unavailable
+        return Response.json(
+          CapacityLoopModel.parse(
+            await readCapacityLoop(deps.sql, { now: now(), days: days(query), constants: deps.capacityConstants }),
+          ),
+        )
+      },
+      {
+        query: DaysQuery,
+        response: { 200: CapacityLoopModel, ...errorResponses(400, 422, 503) },
+        detail: {
+          operationId: 'read.capacity-loop',
+          summary:
+            'what the capacity loop did over the last days (1 to 90, default 7): Issues closed, idle seat-hours with work queued, minutes over the load ceiling, test-slot wait, the steps and repos that take most memory, processes the reaper ended, and the settings in force that tune it',
         },
       },
     )

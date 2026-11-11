@@ -31,7 +31,12 @@ async function routes(): Promise<{ method: string; route: string }[]> {
       .filter((method) => METHODS.includes(method))
       .map((method) => ({ method: method.toUpperCase(), route: path.replace(/\{([^}]+)\}/g, ':$1') })),
   )
-  return [...found, { method: 'PUT', route: '/slots/:id' }, { method: 'DELETE', route: '/slots/:id' }]
+  return [
+    ...found,
+    { method: 'PUT', route: '/slots/:id' },
+    { method: 'DELETE', route: '/slots/:id' },
+    { method: 'POST', route: '/slots/:id/cost' },
+  ]
 }
 
 const PERSON_ROUTES = [

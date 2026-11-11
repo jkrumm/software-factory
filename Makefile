@@ -1,5 +1,5 @@
 .DEFAULT_GOAL := help
-.PHONY: help check merge-guard test e2e fmt deploy rollback verify version rehearse
+.PHONY: help check check-steps merge-guard test e2e fmt deploy rollback verify version rehearse
 
 help:
 	@echo "make check   install, format, lint, shellcheck, tsc, Console tsc, tokens, artifact templates and InfoHint definitions, e2e tsc, boundaries, retired words, public scan, Issue diagram, generated CLI, tests, scenarios, Console build and Playwright (the merge gate)"
@@ -15,6 +15,11 @@ help:
 
 # Tests start a private Postgres cluster (initdb) in a temp dir: PG_BIN_DIR points at the binaries when they are not on PATH.
 check:
+	@$(call slot,check) $(MAKE) --no-print-directory check-steps
+
+# The whole check is one lease on a test slot (a lead sees "queued for a test slot" and waits, it does not poll the load);
+# the test steps below it run inside that lease (FACTORY_SLOT_ACTIVE) and do not queue again.
+check-steps:
 	@echo "==> install (bun install --frozen-lockfile)"
 	@bun install --frozen-lockfile
 	@echo "==> format (oxfmt --check)"
@@ -53,11 +58,16 @@ check:
 # The tests run in one of the host's test slots (FL7) when `factory` is installed, so parallel checks do not pile their
 # load onto each other; without it (CI) the bare command. That is the installed CLI of the running core until the
 # cutover. It fails open: a server that is down or a full house runs the tests anyway.
-SLOT = $(if $(shell command -v factory 2>/dev/null),factory slot run --name "$(notdir $(CURDIR)) test" --,)
+# Not the checkout directory: every lead works in its own worktree (factory-719-1 ...), and the ledger and the grant rule
+# learn a step's peak by its exact name, so a name per directory would never carry a peak from one lead to the next.
+SLOT_PROJECT = software-factory
+slot = $(if $(shell command -v factory 2>/dev/null),factory slot run --name "$(SLOT_PROJECT) $(1)" --,)
+SLOT = $(call slot,test)
 
 # Every test file may start a private Postgres cluster in beforeAll and a scenario drives real processes; initdb alone takes seconds
 # on a loaded runner. Bun 1.4 ignores `timeout` in bunfig.toml (tests ran at 5 s on CI), so the flag carries it.
-TEST_TIMEOUT = --timeout 30000
+# The per-test limit stretches with the host's load per core (up to 6x): at load 40 a test that takes 3 s idle takes minutes (Issue 719).
+TEST_TIMEOUT = --timeout $(shell bun -e 'import {cpus,loadavg} from "node:os"; console.log(Math.round(30000*Math.min(6,Math.max(1,loadavg()[0]/cpus().length))))')
 
 test:
 	@echo "==> unit tests (bun test apps packages scripts integrations)"

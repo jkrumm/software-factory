@@ -37,6 +37,9 @@ check, `docs/architecture.md`).
 | **Owed** | Working in a repo without a claim, because the wait that gave it up has ended. Owed Issues are served first, so a new lead never takes the place a resumed one waits for. Among themselves they are served by the earliest wait end, then the Issue number; an owed lead is held up only by those ahead of it in that order, never by itself or one behind it. A note refused for a claim for `FACTORY_CLAIM_STALL_MS` while the repo has a place free is a steward stall | |
 | **Window** | An account's 5-hour or weekly reset | |
 | **Line** | Stop the line: while a repo's alert is unsolved, only its fix is admitted | |
+| **Seat** | One lead the accounts may hold at once (`leads` per account, plus the bonus the host's idle minutes earn). A seat is idle when work is queued and no lead holds it | |
+| **Test slot** | A lease on the host's test capacity that `factory slot run` takes for a `make check`, test or e2e step; it waits while the host is busy and records what the step cost | |
+| **Reaper** | The loop that ends, by session key and worktree path, the processes a closed lead attempt left behind | |
 
 ## Who works
 

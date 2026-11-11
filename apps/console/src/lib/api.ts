@@ -1,5 +1,6 @@
 import {
   ArtifactDetail,
+  CapacityLoopModel,
   ArtifactList,
   ArtifactReply,
   ChainModel,
@@ -82,6 +83,8 @@ export const fetchSince = (signal?: AbortSignal) => getJson('/v1/since', SinceMo
 export const fetchChain = (signal?: AbortSignal) => getJson('/v1/chain', ChainModel, signal)
 export const fetchFlow = (signal?: AbortSignal) => getJson('/v1/flow', FlowModel, signal)
 export const fetchKpis = (days: number, signal?: AbortSignal) => getJson(`/v1/kpis?days=${days}`, KpiModel, signal)
+export const fetchCapacityLoop = (days: number, signal?: AbortSignal) =>
+  getJson(`/v1/capacity-loop?days=${days}`, CapacityLoopModel, signal)
 export const fetchFriction = (days: number, signal?: AbortSignal) =>
   getJson(`/v1/friction?days=${days}`, FrictionModel, signal)
 export const fetchFindingClasses = (signal?: AbortSignal) => getJson('/v1/finding-classes', FindingClassesModel, signal)

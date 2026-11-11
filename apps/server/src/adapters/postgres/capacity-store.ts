@@ -2,7 +2,7 @@ import type { SQL } from 'bun'
 import * as z from 'zod'
 import type { AccountReading } from '../../domains/capacity/accounts.ts'
 import type { Claim } from '../../domains/capacity/claims.ts'
-import type { Assignment, CapacityStore } from '../../domains/capacity/ports.ts'
+import type { Assignment, CapacityStore, HostSampleFact, LeadPeaks } from '../../domains/capacity/ports.ts'
 import { QUEUE_STATES, type QueueStates } from '../../domains/capacity/queue-state.ts'
 import type { SlotRow } from '../../domains/capacity/slots.ts'
 import { type IssueId, issueId } from '../../kernel/ids.ts'
@@ -59,7 +59,22 @@ const SlotDbRow = z.object({
   leased_until: z.date().nullable(),
   granted_at: z.date().nullable(),
   run_ms: z.number().int().nullable(),
+  rss_mib: z.number().int().nullable(),
+  peak_rss_mib: z.number().int().nullable(),
+  why: z.string().nullable(),
 })
+
+const PeakRow = z.object({ peak_rss_mib: z.number().int().nullable() })
+const HostSampleRow = z.object({ at: z.date(), memory_used_pct: z.number().nullable() })
+
+const HostFactRow = z.object({
+  at: z.date(),
+  load: z.number().nullable(),
+  memory_used_pct: z.number().nullable(),
+  swap_used_pct: z.number().nullable(),
+})
+const PeakFactRow = z.object({ repo: z.string(), peak: z.number().int(), n: z.coerce.number().int() })
+const RssRow = z.object({ issue: z.number().int(), rss_mib: z.number().int() })
 
 const assignmentOf = (raw: unknown): Assignment => {
   const row = AssignmentRow.parse(raw)
@@ -218,6 +233,9 @@ export function postgresCapacityStore(tx: SQL): CapacityStore {
           leasedUntil: r.leased_until,
           grantedAt: r.granted_at,
           runMs: r.run_ms,
+          rssMib: r.rss_mib,
+          peakRssMib: r.peak_rss_mib,
+          why: r.why,
         }
       })
     },
@@ -227,9 +245,72 @@ export function postgresCapacityStore(tx: SQL): CapacityStore {
       await tx`DELETE FROM factory.capacity_slots`
       for (const r of rows) {
         await tx`
-          INSERT INTO factory.capacity_slots (id, name, requested_at, seen_at, slot, leased_until, granted_at, run_ms)
-          VALUES (${r.id}, ${r.name}, ${r.requestedAt}, ${r.seenAt}, ${r.slot}, ${r.leasedUntil}, ${r.grantedAt}, ${r.runMs})`
+          INSERT INTO factory.capacity_slots (id, name, requested_at, seen_at, slot, leased_until, granted_at, run_ms, rss_mib,
+             peak_rss_mib, why)
+          VALUES (${r.id}, ${r.name}, ${r.requestedAt}, ${r.seenAt}, ${r.slot}, ${r.leasedUntil}, ${r.grantedAt}, ${r.runMs},
+                  ${r.rssMib}, ${r.peakRssMib}, ${r.why})`
       }
+    },
+
+    async recordStepCost(c) {
+      await tx`
+        INSERT INTO factory.step_costs (at, name, repo, peak_rss_mib, cpu_seconds, duration_ms, wait_ms, exit_code)
+        VALUES (${c.at}, ${c.name}, ${c.repo}, ${c.peakRssMib}, ${c.cpuSeconds}, ${c.durationMs}, ${c.waitMs}, ${c.exitCode})`
+    },
+
+    async recentPeaks(name, limit) {
+      const rows: unknown[] = await tx`
+        SELECT peak_rss_mib FROM factory.step_costs WHERE name = ${name} ORDER BY at DESC, id DESC LIMIT ${limit}`
+      return rows.map((raw) => PeakRow.parse(raw).peak_rss_mib)
+    },
+
+    async latestHostSample() {
+      const [raw] = await tx`SELECT at, memory_used_pct FROM factory.host_samples ORDER BY at DESC LIMIT 1`
+      if (!raw) return null
+      const row = HostSampleRow.parse(raw)
+      return { at: row.at, memoryUsedPct: row.memory_used_pct }
+    },
+
+    async recentHostSamples(limit) {
+      const rows: unknown[] = await tx`
+        SELECT at, load, memory_used_pct, swap_used_pct FROM factory.host_samples ORDER BY at DESC LIMIT ${limit}`
+      return rows.map((raw): HostSampleFact => {
+        const row = HostFactRow.parse(raw)
+        return { at: row.at, load: row.load, memoryUsedPct: row.memory_used_pct, swapUsedPct: row.swap_used_pct }
+      })
+    },
+
+    async leadPeaks() {
+      const rows: unknown[] = await tx`
+        WITH peaks AS (
+          SELECT repo, worktree, max(rss_mib) AS peak, max(at) AS last_at
+          FROM factory.lead_samples GROUP BY repo, worktree
+        ), ranked AS (
+          SELECT repo, peak, last_at, row_number() OVER (PARTITION BY repo ORDER BY last_at DESC, worktree) AS newest,
+            count(*) OVER (PARTITION BY repo) AS n
+          FROM peaks
+        )
+        SELECT repo, peak, n FROM ranked WHERE newest <= 10 ORDER BY repo, newest`
+      const byRepo = new Map<string, LeadPeaks>()
+      for (const raw of rows) {
+        const row = PeakFactRow.parse(raw)
+        const found = byRepo.get(row.repo) ?? { repo: row.repo, attempts: row.n, peaksNewestFirst: [] }
+        found.peaksNewestFirst.push(row.peak)
+        byRepo.set(row.repo, found)
+      }
+      return [...byRepo.values()]
+    },
+
+    async leadRssSince(since) {
+      const rows: unknown[] = await tx`
+        SELECT DISTINCT ON (issue) issue, rss_mib FROM factory.lead_samples
+        WHERE at >= ${since} AND issue IS NOT NULL ORDER BY issue, at DESC`
+      return new Map(
+        rows.map((raw) => {
+          const row = RssRow.parse(raw)
+          return [row.issue, row.rss_mib]
+        }),
+      )
     },
   }
 }

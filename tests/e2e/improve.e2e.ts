@@ -1,5 +1,7 @@
 import {
+  CAPACITY_HINT,
   comparisonWords,
+  constantRows,
   distanceWords,
   drawsHistory,
   fixCard,
@@ -10,9 +12,13 @@ import {
   FRICTION_GROUP_HINT,
   FRICTION_GROUP_LABEL,
   historyLabels,
+  hoursWords,
   kpiChange,
   KPI_HINT,
   kpiFooter,
+  mibWords,
+  msWords,
+  perDayWords,
   perIssueWords,
   shortDate,
   STATUS_WORD,
@@ -22,7 +28,7 @@ import {
   targetTally,
   windowWords,
 } from '../../apps/console/src/lib/improve.ts'
-import type { Kpi, KpiModel } from '@software-factory/contract'
+import type { CapacityLoopModel, Kpi, KpiModel } from '@software-factory/contract'
 import type { Locator, Page } from '@playwright/test'
 import { expect, test } from './fixtures.ts'
 import { expectHint } from './hints.ts'
@@ -301,4 +307,72 @@ test('fix commits by class read what the API says, the weeks oldest first, with 
   }
   const total = table.getByRole('row').filter({ has: page.getByRole('rowheader', { name: 'Total' }) })
   await expect(total.getByRole('cell')).toHaveText(fixWeekTotals(model).map(String))
+})
+
+test('the capacity section reads what the API computed: cards, steps, lead costs, the reaper and the settings', async ({
+  page,
+  apiUrl,
+}) => {
+  const model = await api<CapacityLoopModel>(apiUrl, '/v1/capacity-loop?days=7')
+  // the seed's figures, so a read that drifted from the rows fails here and not only against itself
+  expect(model.minutesOverCeiling.total).toBe(2)
+  expect(model.idleSeatHours.total).toBeCloseTo(2, 9)
+  expect(model.slotWait.n).toBe(6)
+  expect(model.slotWait.p50Ms).toBeCloseTo(2000, 6)
+  expect(model.slotWait.p90Ms).toBeCloseTo(55_000, 6)
+  expect(model.reaped.total).toBe(3)
+  expect(model.topSteps.map((s) => s.name)).toEqual([
+    'software-factory check',
+    'software-factory e2e',
+    'software-factory test',
+  ])
+  expect(model.leadCosts.map((l) => [l.repo, l.attempts, l.peakMibP80])).toEqual([
+    ['argo', 3, 2200],
+    ['zeta', 2, 900],
+  ])
+
+  await page.goto('/improve')
+  const section = page.getByRole('region', { name: 'Capacity' })
+  await expect(section).toBeVisible()
+  const cards = section.getByRole('group', { name: 'Capacity figures' })
+  await expect(cards.getByRole('heading')).toHaveText([
+    'Issues closed',
+    'Idle seat-hours with work queued',
+    'Minutes over the load ceiling',
+    'Test slot wait',
+  ])
+  await expect(cardOf(page, 'Issues closed').getByText(perDayWords(model.throughput.total, model.days))).toBeVisible()
+  await expect(
+    cardOf(page, 'Idle seat-hours with work queued').getByText(hoursWords(2), { exact: true }).first(),
+  ).toBeVisible()
+  await expect(cardOf(page, 'Minutes over the load ceiling').getByText('2', { exact: true }).first()).toBeVisible()
+  const wait = cardOf(page, 'Test slot wait')
+  await expect(wait.getByText(msWords(2000), { exact: true }).first()).toBeVisible()
+  await expect(wait.getByText(`Median; 90th percentile ${msWords(55_000)}`, { exact: true })).toBeVisible()
+  await expectHint(cardOf(page, 'Idle seat-hours with work queued'), CAPACITY_HINT.idle)
+  await expectHint(cardOf(page, 'Test slot wait'), CAPACITY_HINT.wait)
+
+  const steps = section.getByRole('table', { name: /Test-slot steps/ })
+  const check = steps
+    .getByRole('row')
+    .filter({ has: page.getByRole('rowheader', { name: 'software-factory check', exact: true }) })
+  const top = model.topSteps[0]
+  if (!top) throw new Error('no step in the API answer')
+  await expect(check.getByRole('cell')).toHaveText([
+    String(top.runs),
+    mibWords(top.maxPeakMib),
+    mibWords(top.p80PeakMib),
+    msWords(top.medianDurationMs),
+    msWords(top.medianWaitMs),
+  ])
+  const costs = section.getByRole('table', { name: /Memory a lead takes/ })
+  const argo = costs.getByRole('row').filter({ has: page.getByRole('rowheader', { name: 'argo', exact: true }) })
+  await expect(argo.getByRole('cell')).toHaveText(['3', mibWords(2200), mibWords(1800)])
+
+  await expect(section.getByText(/^3 processes of closed attempts ended by the/)).toBeVisible()
+  await expectHint(section, CAPACITY_HINT.reaped)
+  const settings = section.getByLabel('Settings in force')
+  const rows = constantRows(model.constants)
+  await expect(settings.locator('dt')).toHaveText(rows.map((r) => r.label))
+  await expect(settings.locator('dd')).toHaveText(rows.map((r) => r.value))
 })

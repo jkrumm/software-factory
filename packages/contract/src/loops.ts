@@ -310,6 +310,7 @@ export const LOOP_NAMES = [
   'fix-classes',
   'selfwatch',
   'host',
+  'reaper',
 ] as const
 export type LoopName = (typeof LOOP_NAMES)[number]
 

@@ -3,6 +3,7 @@ import type { PortError, Result } from '../../kernel/result.ts'
 import type { AccountRank, AccountReading } from './accounts.ts'
 import type { Claim } from './claims.ts'
 import type { MemoryReading } from './host.ts'
+import type { ProcInfo } from './leadcost.ts'
 import type { QueueState, QueueStates } from './queue-state.ts'
 import type { SlotRow } from './slots.ts'
 
@@ -45,6 +46,43 @@ export interface CapacityStore {
 
   slots(): Promise<SlotRow[]>
   saveSlots(rows: readonly SlotRow[]): Promise<void>
+  /** appends one finished step to the cost ledger */
+  recordStepCost(cost: StepCostRow): Promise<void>
+  /** a step's peaks, newest first (null: not measured) */
+  recentPeaks(name: string, limit: number): Promise<(number | null)[]>
+  /** the newest minute sample of the host: when, and the share of RAM in use */
+  latestHostSample(): Promise<{ at: Date; memoryUsedPct: number | null } | null>
+  /** the newest minute samples of the host, newest first */
+  recentHostSamples(limit: number): Promise<HostSampleFact[]>
+  /** per repo: the attempts sampled and the peak MiB of the newest ten, newest first (what `learnedLeadMib` takes) */
+  leadPeaks(): Promise<LeadPeaks[]>
+  /** per Issue number: the MiB its lead's tree held at its newest sample since `since` */
+  leadRssSince(since: Date): Promise<Map<number, number>>
+}
+
+export interface HostSampleFact {
+  at: Date
+  load: number | null
+  memoryUsedPct: number | null
+  swapUsedPct: number | null
+}
+
+export interface LeadPeaks {
+  repo: string
+  attempts: number
+  peaksNewestFirst: number[]
+}
+
+/** One row of the cost ledger (`factory.step_costs`). */
+export interface StepCostRow {
+  at: Date
+  name: string
+  repo: string | null
+  peakRssMib: number | null
+  cpuSeconds: number | null
+  durationMs: number
+  waitMs: number
+  exitCode: number | null
 }
 
 /** The machine the server runs on. Every reading may fail; admission then goes on without it. */
@@ -69,3 +107,8 @@ export interface AccountRanker {
 }
 
 export type { PortError }
+
+/** The host's process table with each process's directory; null when it could not be read (never an error). */
+export interface ProcessReader {
+  read(): Promise<ProcInfo[] | null>
+}

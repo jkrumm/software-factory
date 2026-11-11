@@ -19,10 +19,12 @@ import {
 } from '../../src/domains/capacity/host.ts'
 import { holdsClaim } from '../../src/domains/capacity/claims.ts'
 import { laneRoom } from '../../src/domains/capacity/lanes.ts'
+import { growthMib, learnedPeakMib } from '../../src/domains/capacity/costs.ts'
 import {
   releaseSlot,
   SLOT_LEASE_MS,
   type SlotRow,
+  type SlotFit,
   slotLines,
   touchSlots,
   WAITER_TTL_MS,
@@ -400,8 +402,9 @@ describe('lanes', () => {
 })
 
 describe('test slots', () => {
-  const call = (rows: SlotRow[], who: string, at: Date, slots = 2) =>
-    touchSlots(rows, { id: who, name: who, slots, runMs: 1_800_000 }, at)
+  const open: SlotFit = { peakMib: null, freeMib: null, growthMib: 0, max: 2, loadOk: true, headroomMib: 2048 }
+  const call = (rows: SlotRow[], who: string, at: Date, slots = 2, fit: SlotFit = { ...open, max: slots }) =>
+    touchSlots(rows, { id: who, name: who, slots, runMs: 1_800_000, fit }, at)
 
   test('the first callers get the slots, the third waits in line behind them', () => {
     const a = call([], 'a', now)
@@ -441,6 +444,122 @@ describe('test slots', () => {
     const renewed = call(first.rows, 'a', at(20_000))
     expect(renewed.view).toMatchObject({ granted: true, slot: 1, runMs: 1_800_000 })
     expect(renewed.rows[0]?.leasedUntil).toEqual(at(20_000 + SLOT_LEASE_MS))
+  })
+
+  describe('the memory rule', () => {
+    // two base slots, up to four; the step needs 18000 MiB, the host has 30000 free with 2048 headroom
+    const fit: SlotFit = { peakMib: 18_000, freeMib: 30_000, growthMib: 0, max: 4, loadOk: true, headroomMib: 2048 }
+    const withHolders = (count: number): SlotRow[] =>
+      Array.from({ length: count }, (_, i) => ({
+        id: `h${i}`,
+        name: `h${i}`,
+        requestedAt: now,
+        seenAt: now,
+        slot: i + 1,
+        leasedUntil: at(SLOT_LEASE_MS),
+        grantedAt: now,
+        runMs: 1_800_000,
+        rssMib: null,
+        peakRssMib: null,
+        why: null,
+      }))
+    const cases: { name: string; holders: number; fit: Partial<SlotFit>; granted: boolean; why?: string }[] = [
+      { name: 'a lone step is always granted', holders: 0, fit: { freeMib: 100 }, granted: true },
+      { name: 'the second step is granted while it fits', holders: 1, fit: {}, granted: true },
+      {
+        name: 'the second step waits when peak and growth do not fit, and says memory',
+        holders: 1,
+        fit: { growthMib: 10_000 },
+        granted: false,
+        why: 'waiting for memory: needs 17.6 GiB',
+      },
+      { name: 'an unknown peak grants a base slot', holders: 1, fit: { peakMib: null }, granted: true },
+      { name: 'an unknown free memory grants a base slot', holders: 1, fit: { freeMib: null }, granted: true },
+      {
+        name: 'a slot beyond the base is granted when it fits and the load is low',
+        holders: 2,
+        fit: { freeMib: 60_000 },
+        granted: true,
+      },
+      {
+        name: 'a slot beyond the base needs the load to allow it',
+        holders: 2,
+        fit: { freeMib: 60_000, loadOk: false, load: 14, extraLoad: 12 },
+        granted: false,
+        why: 'load 14 is over 12',
+      },
+      {
+        name: 'a slot beyond the base needs a known peak',
+        holders: 2,
+        fit: { peakMib: null, freeMib: 60_000 },
+        granted: false,
+        why: 'no learned peak',
+      },
+      {
+        name: 'a slot beyond the base needs known free memory',
+        holders: 2,
+        fit: { freeMib: null },
+        granted: false,
+        why: 'free-memory',
+      },
+      {
+        name: 'a slot beyond the base waits when it does not fit',
+        holders: 2,
+        fit: { freeMib: 15_000 },
+        granted: false,
+        why: 'waiting for memory',
+      },
+      { name: 'max is a hard cap', holders: 4, fit: { freeMib: 900_000 }, granted: false, why: 'all 4 slots are busy' },
+    ]
+    for (const c of cases) {
+      test(c.name, () => {
+        const asked = call(withHolders(c.holders), 'w', now, 2, { ...fit, ...c.fit })
+        expect(asked.view.granted).toBe(c.granted)
+        if (c.why) expect(asked.view.why).toContain(c.why)
+        else if (c.granted) expect(asked.view.why).toBeNull()
+      })
+    }
+
+    test('the reason is a line of the view while the waiter asks, and a grant clears it', () => {
+      const held = withHolders(1)
+      const waiting = call(held, 'w', now, 2, { ...fit, growthMib: 10_000 })
+      expect(slotLines(waiting.rows, now)).toEqual([`test slot wait "w": ${waiting.view.why}`])
+      expect(slotLines(waiting.rows, at(WAITER_TTL_MS + 1))).toEqual([])
+      const later = call(waiting.rows, 'w', at(1000), 2, fit)
+      expect(later.view).toMatchObject({ granted: true, why: null })
+    })
+
+    test('a renewal saves the size of the holder and keeps its peak', () => {
+      const first = call([], 'a', now)
+      const input = { id: 'a', name: 'a', slots: 2, runMs: 1, fit: open }
+      const sized = touchSlots(first.rows, { ...input, rssMib: 900, peakRssMib: 900 }, at(1000))
+      const smaller = touchSlots(sized.rows, { ...input, rssMib: 400, peakRssMib: 400 }, at(2000))
+      expect(smaller.rows[0]).toMatchObject({ rssMib: 400, peakRssMib: 900 })
+    })
+  })
+
+  describe('the ledger', () => {
+    test('the learned peak is the largest of the 8 newest measured peaks', () => {
+      expect(learnedPeakMib([])).toBeNull()
+      expect(learnedPeakMib([null, null])).toBeNull()
+      expect(learnedPeakMib([null, 300, 900, null])).toBe(900)
+      expect(learnedPeakMib([100, 100, 100, 100, 100, 100, 100, 100, 5000])).toBe(100)
+    })
+
+    test('growth is what each holder is learned to reach less what it holds, never negative', () => {
+      const learned = new Map<string, number | null>([
+        ['a', 8000],
+        ['b', 100],
+        ['c', null],
+      ])
+      const holders = [
+        { name: 'a', rssMib: 3000 },
+        { name: 'b', rssMib: 400 },
+        { name: 'c', rssMib: null },
+        { name: 'a', rssMib: null },
+      ]
+      expect(growthMib(holders, learned)).toBe(5000 + 8000)
+    })
   })
 
   test('a slot held past half its limit has a line, derived at read', () => {

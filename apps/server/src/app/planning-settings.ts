@@ -16,7 +16,13 @@ const Env = z.object({
   FACTORY_LOAD_CEILING: whole(1, 100_000).optional(),
   FACTORY_SWAPOUT_CEILING_MB: whole(1, 10_000_000).optional(),
   FACTORY_SWAP_CEILING_PCT: whole(1, 1000).optional(),
+  /** the most extra leads per account while the host idles with work queued; 0 turns it off */
+  FACTORY_SEATS_MAX_BONUS: whole(0, 4).optional(),
   FACTORY_SLOTS: whole(1, 64).optional(),
+  /** the most test steps at once when memory and load allow; below FACTORY_SLOTS it is FACTORY_SLOTS */
+  FACTORY_SLOTS_MAX: whole(1, 64).optional(),
+  /** the host load up to which a step beyond the base slots is granted */
+  FACTORY_SLOT_EXTRA_LOAD: whole(1, 100_000).optional(),
   FACTORY_CLAUDE_ACCOUNT_BIN: z.string().min(1).optional(),
   FACTORY_SYSCTL_BIN: z.string().min(1).optional(),
   /** a swapout rate is the delta between two readings; readings closer than this return the last one */
@@ -33,7 +39,10 @@ export interface PlanningSettings {
   leadsPerAccount: number
   loadCeiling: number
   memoryCeilings: MemoryCeilings
+  seatsMaxBonus: number
   slots: number
+  slotsMax: number
+  slotExtraLoad: number
 }
 
 /** The planning and capacity settings from the environment; throws one message naming every bad key. */
@@ -67,6 +76,9 @@ export function planningSettings(
       swapoutMbPer300s: e.FACTORY_SWAPOUT_CEILING_MB ?? DEFAULT_SWAPOUT_CEILING_MB,
       swapUsedPct: e.FACTORY_SWAP_CEILING_PCT ?? DEFAULT_SWAP_CEILING_PCT,
     },
+    seatsMaxBonus: e.FACTORY_SEATS_MAX_BONUS ?? 2,
     slots: e.FACTORY_SLOTS ?? 2,
+    slotsMax: Math.max(e.FACTORY_SLOTS ?? 2, e.FACTORY_SLOTS_MAX ?? 6),
+    slotExtraLoad: e.FACTORY_SLOT_EXTRA_LOAD ?? 12,
   }
 }
