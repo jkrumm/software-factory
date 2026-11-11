@@ -155,6 +155,18 @@ test('an artifact opens in the peek with its document and comments', async ({ pa
   await expect(page).toHaveURL(/\/needs-you$/)
 })
 
+test('an artifact with revisions switches revision inside the panel and has no comparison there', async ({ page }) => {
+  const { revised } = JSON.parse(process.env.E2E_ARTIFACTS ?? '{}') as { revised: string }
+  await page.goto(`/needs-you?peek=artifacts/${revised}`)
+  await expect(panel(page)).toBeVisible()
+  await expect(panel(page).getByLabel('Compare with')).toHaveCount(0)
+  const revisions = panel(page).getByRole('navigation', { name: 'Revisions' })
+  await revisions.getByRole('link', { name: '1', exact: true }).click()
+  await expect(page).toHaveURL(/peekRevision=1/)
+  await expect(panel(page)).toBeVisible()
+  await expect(revisions.getByRole('link', { name: '1', exact: true })).toHaveAttribute('aria-current', 'page')
+})
+
 test('Escape belongs to the palette while it is open, and to a field while it has focus', async ({ page, apiUrl }) => {
   const working = await firstWorking(apiUrl)
   await page.goto(`/flow?peek=issues/${numberOf(working.id)}`)

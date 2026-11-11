@@ -9,9 +9,6 @@ export type Peek =
   | { kind: 'issue'; id: string; tab?: Exclude<TabKey, 'overview'> }
   | { kind: 'artifact'; id: string; revision?: number }
 
-/** The three search keys a peek owns. */
-export const PEEK_KEYS = ['peek', 'peekTab', 'peekRevision'] as const
-
 export type PeekSearch = Partial<{ peek: string; peekTab: string; peekRevision: number }>
 
 const text = (value: unknown): string | undefined => (typeof value === 'string' && value !== '' ? value : undefined)
@@ -81,6 +78,3 @@ export interface ClickLike {
 /** A plain primary click: the one that opens the peek. Any modifier is the browser's own (a new tab) or the full page. */
 export const isPlainClick = (event: ClickLike): boolean =>
   event.button === 0 && !event.metaKey && !event.ctrlKey && !event.shiftKey && !event.altKey && !event.defaultPrevented
-
-/** The two ends of the same peek: the same thing shown. */
-export const samePeek = (a: Peek | null, b: Peek | null): boolean => JSON.stringify(a) === JSON.stringify(b)

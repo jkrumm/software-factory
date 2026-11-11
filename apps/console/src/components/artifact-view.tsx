@@ -164,14 +164,13 @@ export function ArtifactView({
                     to="/artifacts/$id"
                     params={{ id }}
                     search={{ revision: n, compare }}
-                    data-peek="off"
                     aria-current={n === detail.revision ? 'page' : undefined}
                     className="rounded-md px-2 py-0.5 tabular-nums hover:bg-accent aria-[current=page]:bg-muted aria-[current=page]:font-semibold aria-[current=page]:text-foreground"
                   >
                     {n}
                   </Link>
                 ))}
-                {revisions.length > 1 ? (
+                {revisions.length > 1 && !peek ? (
                   <label className="ml-1 flex items-center gap-2">
                     Compare with
                     <select
