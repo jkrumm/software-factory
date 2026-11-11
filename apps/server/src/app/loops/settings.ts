@@ -69,7 +69,7 @@ export interface LoopSettings {
   queueGapMs: number
   settleTimeoutMs: number
   blockedChecks: number
-  /** a note refused for a claim this long while the repo has one free is a stall */
+  /** a note refused for a claim this long while a claim would be granted to that lead is a stall */
   claimStallMs: number
   /** a checkpoint at the owner this long is looked at again; 0 is off */
   recheckAfterMs: number

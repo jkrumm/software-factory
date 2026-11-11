@@ -40,6 +40,8 @@ export interface CapacityStore {
   recentAssignments(): Promise<Assignment[]>
   assignmentOf(issue: IssueId, attempt: number): Promise<Assignment | null>
   latestAssignment(issue: IssueId): Promise<Assignment | null>
+  /** the newest assignment of each of these Issues, however old (`recentAssignments` is the newest rows only) */
+  latestAssignments(issues: readonly IssueId[]): Promise<Assignment[]>
 
   queueStates(): Promise<QueueStates>
   setQueueState(project: string | null, state: QueueState, at: Date): Promise<void>

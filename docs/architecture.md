@@ -144,7 +144,12 @@ through `receive` in `app/intake.ts`; the answer is a triage outcome (`docs/lang
   free memory (`domains/capacity/seats.ts`, at most `FACTORY_SEATS_MAX_BONUS`, default 2, 0 is off); never the repo's `leads: N`, never
   past an account's window, and the `cap` reason says `(raised by N: the host is idle)`. The first that says no names itself and its numbers as the queue reason. It never spills to another
   account past a window or a cap; with every account closed it waits for the first opening. Owed Issues are served
-  before new ones. The gates (windows, lead cap, loaded) stay the factory's; only the order among the accounts that pass
+  before new ones, in the repo and on the account: a woken lead is the same session on the account it was admitted on, so the
+  account cap never refuses its resume (only the repo's claims and its lane do), and from the moment its wait ends it counts in
+  its account's leads, so a new lead cannot take the seat it will run on. A lead in a wait that gave its claim up is idle and
+  counts nowhere. A herd woken at once (a red master closing and waking a dozen deferred leads) takes the repo's places in
+  order of its waits, oldest first, up to `leads: N`; the steward counts a refusal for a claim as a stall only when a claim
+  would be granted to that lead now, and names the account it resumes on. The gates (windows, lead cap, loaded) stay the factory's; only the order among the accounts that pass
   them comes from the picker, `claude-account rank --lane bulk --json`, polled with the usage readings and stored in
   `capacity_ranks`. A missing or stale rank (older than a reading may be) falls back to the lowest weekly use and shows
   as the health line `account-rank`; it never blocks admission.

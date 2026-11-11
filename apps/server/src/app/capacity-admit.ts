@@ -107,6 +107,8 @@ export interface Snapshot {
   rank: AccountRank | null
   states: QueueStates
   assignments: Assignment[]
+  /** the account each owed lead resumes on: its newest assignment, however old */
+  owedAccounts: Map<IssueId, string>
 }
 
 /** Reads what a host reading and an account poll say, outside any transaction. */
@@ -194,17 +196,21 @@ export async function pollIfDue(deps: CapacityDeps): Promise<string[]> {
 export async function snapshotOf(stores: PlanningStores, now: Date): Promise<Snapshot> {
   const projects = await stores.planning.projects()
   const rows = await stores.reads.open()
+  const claims = await stores.capacity.claims()
+  const taken = new Set(claims.map((claim) => claim.issue))
+  const owedIds = rows.filter((row) => holdsClaim(row.state, row.waitReason) && !taken.has(row.id)).map((row) => row.id)
   return {
     now,
     projects,
     issues: rows.map((row) => ({ ...row, project: projectOf(projects, row.repo)?.name ?? null })),
     edges: await stores.planning.edges(),
     prio: await stores.planning.prios(),
-    claims: await stores.capacity.claims(),
+    claims,
     readings: await stores.capacity.latestReadings(),
     rank: await stores.capacity.latestRank(RANK_LANE),
     states: await stores.capacity.queueStates(),
     assignments: await stores.capacity.recentAssignments(),
+    owedAccounts: latestAccounts(await stores.capacity.latestAssignments(owedIds)),
   }
 }
 
@@ -321,6 +327,33 @@ function growthOf(claims: readonly Claim[], projects: readonly StoredProject[], 
   )
 }
 
+/** The account each Issue was last admitted on (the newest attempt's, so a list of one attempt each or newest first). */
+function latestAccounts(assignments: readonly Assignment[]): Map<IssueId, string> {
+  const accounts = new Map<IssueId, string>()
+  for (const a of assignments) if (!accounts.has(a.issue)) accounts.set(a.issue, a.account)
+  return accounts
+}
+
+/**
+ * The leads on each account for the cap: every claim, and every owed lead on the account it will resume on. A woken
+ * lead is pinned to its own account and takes its place back whatever the cap says (see `resumeClaim`), so from the
+ * moment its wait ends the seat is its: a new lead must not take it, or the account would run over the cap the moment
+ * the resume lands. Only owed leads count. A lead still in a wait that gave its claim up is idle and uses nothing.
+ */
+function leadsOnAccounts(
+  claims: readonly Claim[],
+  owed: readonly { id: IssueId }[],
+  accountByIssue: ReadonlyMap<IssueId, string>,
+): Map<string, number> {
+  const leads = new Map<string, number>()
+  const add = (account: string | null | undefined) => {
+    if (account) leads.set(account, (leads.get(account) ?? 0) + 1)
+  }
+  for (const claim of claims) add(claim.account)
+  for (const o of owed) add(accountByIssue.get(o.id))
+  return leads
+}
+
 function decide(snap: Snapshot, host: HostInputs, limits: CapacityLimits, bonus: number): QueueEntry[] {
   const open: OpenIssue[] = snap.issues.map((i) => ({
     id: i.id,
@@ -357,9 +390,7 @@ function decide(snap: Snapshot, host: HostInputs, limits: CapacityLimits, bonus:
     if (row.reason) return { ...base, reason: { ...row.reason, opensAt: null }, account: null }
     const project = issue.project === null ? undefined : projectByName.get(issue.project)
     if (!project) return { ...base, reason: null, account: null }
-    const leadsByAccount = new Map<string, number>()
-    for (const claim of claims)
-      if (claim.account) leadsByAccount.set(claim.account, (leadsByAccount.get(claim.account) ?? 0) + 1)
+    const leadsByAccount = leadsOnAccounts(claims, owed, snap.owedAccounts)
     const learned = host.learned.get(project.name)
     const leadFit: LeadFit = {
       repo: project.name,
@@ -554,24 +585,69 @@ export async function claimQueued(deps: CapacityDeps): Promise<Result<{ issue: I
 }
 
 /**
- * Of the given Issue repos, those whose project has an ordinary place free right now: fewer ordinary claims held by a
- * working lead than `leads` (a fix's extra place is not counted). The steward asks it to tell a refusal for a claim
- * that is rightly full from one that livelocks.
+ * What keeps a lead back from a wait out of its repo's claim, or null when it would take it now: its lane's cap, then
+ * the repo's claims with the resumed leads served first (oldest wait first, then the lower Issue). The account is
+ * never a reason: the lead is pinned to the account it was admitted on and resumes there whatever the cap says. The
+ * resume itself and the steward's stall check both ask this, so the two cannot disagree about who is waiting.
  */
-export async function claimFreeRepos(
+function resumeBlock(snap: Snapshot, row: Snapshot['issues'][number], project: StoredProject): string | null {
+  const issue = row.id
+  // A lead back from a wait gave its lane place up with its claim, so a lead of the lane may have started meanwhile.
+  // Only the lane's claim holders count here: another owed lead of the lane would otherwise wait for this one.
+  const laneFree = laneRoom({
+    lane: laneOf(issue, project, snap.claims, [], new Map(snap.issues.map((i) => [i.id, i.lane]))),
+    urgent: row.kind === 'incident',
+  })
+  if (!laneFree.granted) {
+    return `Issue ${issueNumber(issue)} waits for its lane in ${project.name}: ${laneFree.message}`
+  }
+  const owed = snap.issues
+    .filter(
+      (i) =>
+        i.project === project.name && holdsClaim(i.state, i.waitReason) && !snap.claims.some((s) => s.issue === i.id),
+    )
+    .map((i) => claimantOf(i.id, i.kind, i.since))
+  const room = claimRoom({
+    leads: project.project.leads,
+    holders: snap.claims.filter((s) => s.repo === project.repo).map((s) => ({ issue: s.issue, urgent: s.urgent })),
+    owed,
+    candidate: claimantOf(issue, row.kind),
+  })
+  if (room.granted) return null
+  const account = snap.owedAccounts.get(issue)
+  const pinned = account ? `; it resumes on account ${account}, whose cap never holds a resume back` : ''
+  return `Issue ${issueNumber(issue)} waits for a claim in ${project.name}: ${room.message}${pinned}`
+}
+
+export interface StalledClaim {
+  issue: IssueId
+  /** the account the lead resumes on; null: none on file */
+  account: string | null
+}
+
+/**
+ * Of these Issues, whose refusal for a claim is a stall: the repo's claim would be granted to them right now, in the
+ * order that serves resumed leads (`resumeBlock`), so nothing explains the refusal. A repo that is full, or whose
+ * free places go to resumed leads ahead of the Issue (a herd woken at once waits its turn), is a rightful wait.
+ */
+export async function claimStalled(
   deps: CapacityDeps,
-  repos: readonly string[],
-): Promise<Result<string[], PortError>> {
+  issues: readonly IssueId[],
+): Promise<Result<StalledClaim[], PortError>> {
   return deps.uow.run(async (stores) => {
     const snap = await snapshotOf(stores, deps.clock.now())
+    // The claims of Issues that stopped working are not released here (a read), but they are no one's any more.
     const holding = new Set(snap.issues.filter((i) => holdsClaim(i.state, i.waitReason)).map((i) => i.id))
-    const free = repos.filter((repo) => {
-      const project = projectOf(snap.projects, repo)
-      if (!project) return false
-      const held = snap.claims.filter((c) => c.repo === project.repo && !c.urgent && holding.has(c.issue)).length
-      return held < project.project.leads
-    })
-    return ok(free)
+    snap.claims = snap.claims.filter((claim) => holding.has(claim.issue))
+    const stalled: StalledClaim[] = []
+    for (const issue of issues) {
+      const row = snap.issues.find((i) => i.id === issue)
+      const project = row && snap.projects.find((p) => p.name === row.project)
+      if (!row || !project || snap.claims.some((c) => c.issue === issue)) continue
+      if (resumeBlock(snap, row, project)) continue
+      stalled.push({ issue, account: snap.owedAccounts.get(issue) ?? null })
+    }
+    return ok(stalled)
   })
 }
 
@@ -592,9 +668,11 @@ export interface ResumeClaim {
  * **The claim on resume.** The machine has no claim wait, so the wait is here, at the one place that matters: a lead
  * whose wait ended (an answer, a verdict, a timer, a wake) takes its repo's claim back before anyone tells it so. The
  * `note_lead` effect that ends the wait calls this first and answers `refused` while the repo is full, which the
- * outbox retries with its backoff, so no lead works in a repo without a place (or beside another lead of a capped lane). Only the repo's claims are looked at: a
- * resume is never kept out by the load, the memory or an account's window, and it keeps the account it was admitted
- * on. Meanwhile admission counts the Issue as owed, so no new lead takes the place it waits for.
+ * outbox retries with its backoff, so no lead works in a repo without a place (or beside another lead of a capped lane).
+ * Only the repo's claims are looked at: a resume is never kept out by the load, the memory, an account's window or its
+ * cap. The lead is the same session on the account it was admitted on and cannot move, so the cap governs new leads
+ * only. Meanwhile admission counts the Issue as owed, in the repo's claims and on its account, so no new lead takes
+ * the place or the seat it waits for. Owed leads take a place in the order of their waits, oldest first.
  */
 export async function resumeClaim(deps: PlanningDeps, issue: IssueId): Promise<Result<ResumeClaim, PortError>> {
   return deps.uow.run(async (stores) => {
@@ -607,33 +685,8 @@ export async function resumeClaim(deps: PlanningDeps, issue: IssueId): Promise<R
     const project = snap.projects.find((p) => p.name === row.project)
     // A repo that is no project any more has no claim to wait for.
     if (!project) return ok<ResumeClaim>({ result: 'held' })
-    const owed = snap.issues
-      .filter(
-        (i) =>
-          i.project === project.name && holdsClaim(i.state, i.waitReason) && !snap.claims.some((s) => s.issue === i.id),
-      )
-      .map((i) => claimantOf(i.id, i.kind, i.since))
-    // A lead back from a wait gave its lane place up with its claim, so a lead of the lane may have started meanwhile.
-    // Only the lane's claim holders count here: another owed lead of the lane would otherwise wait for this one.
-    const laneFree = laneRoom({
-      lane: laneOf(issue, project, snap.claims, [], new Map(snap.issues.map((i) => [i.id, i.lane]))),
-      urgent: row.kind === 'incident',
-    })
-    if (!laneFree.granted) {
-      return err(
-        portError('refused', `Issue ${issueNumber(issue)} waits for its lane in ${project.name}: ${laneFree.message}`),
-      )
-    }
-    const room = claimRoom({
-      leads: project.project.leads,
-      holders: snap.claims.filter((s) => s.repo === project.repo).map((s) => ({ issue: s.issue, urgent: s.urgent })),
-      owed,
-      candidate: claimantOf(issue, row.kind),
-    })
-    if (!room.granted)
-      return err(
-        portError('refused', `Issue ${issueNumber(issue)} waits for a claim in ${project.name}: ${room.message}`),
-      )
+    const block = resumeBlock(snap, row, project)
+    if (block) return err(portError('refused', block))
     const assignment = await stores.capacity.latestAssignment(issue)
     await stores.capacity.takeClaim({
       issue,
