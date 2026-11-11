@@ -1,7 +1,9 @@
 import * as z from 'zod'
 import { type CiLine, type CiRead, type CiState, ciStateOf } from '../../domains/quality/evidence.ts'
 import type { Ci } from '../../domains/quality/ports.ts'
+import { statusVerdict } from '../../kernel/checks.ts'
 import { err, ok, portError, type PortError, type Result } from '../../kernel/result.ts'
+import { CheckRuns, CommitStatus, githubGet } from '../github/checks.ts'
 import { parseRemote } from '../intake/github.ts'
 import { gitIn } from './git.ts'
 import type { Run } from './process.ts'
@@ -20,21 +22,6 @@ const Pulls = z.array(
     head: z.looseObject({ sha: z.string().min(1) }),
   }),
 )
-
-const CheckRuns = z.looseObject({
-  check_runs: z.array(
-    z.looseObject({
-      name: z.string(),
-      status: z.string(),
-      conclusion: z.string().nullish(),
-      html_url: z.string().nullish(),
-    }),
-  ),
-})
-
-const CommitStatus = z.looseObject({
-  statuses: z.array(z.looseObject({ context: z.string(), state: z.string(), target_url: z.string().nullish() })),
-})
 
 export interface GithubCiOptions {
   /** `FACTORY_GITHUB_TOKEN`; without it nothing is read */
@@ -56,26 +43,12 @@ export function githubCi(options: GithubCiOptions): Ci {
   const doFetch = options.fetch ?? fetch
 
   async function read<T>(url: string, schema: z.ZodType<T>): Promise<Result<T, PortError>> {
-    let response: Response
-    try {
-      response = await doFetch(url, {
-        headers: {
-          Authorization: `Bearer ${options.token ?? ''}`,
-          Accept: 'application/vnd.github+json',
-          'X-GitHub-Api-Version': '2022-11-28',
-          'User-Agent': 'software-factory',
-        },
-        signal: AbortSignal.timeout(HTTP_TIMEOUT_MS),
-      })
-    } catch (error) {
-      const timedOut = error instanceof Error && error.name === 'TimeoutError'
-      return err(
-        portError(timedOut ? 'timeout' : 'unreadable', `github did not answer: ${timedOut ? 'timeout' : 'error'}`),
-      )
-    }
-    if (response.status !== 200) return err(portError('unreadable', `github ${response.status}`))
-    const parsed = schema.safeParse(await response.json().catch(() => undefined))
-    return parsed.success ? ok(parsed.data) : err(portError('unreadable', 'github answered with an unexpected body'))
+    const done = await githubGet(doFetch, options.token, url, schema, HTTP_TIMEOUT_MS)
+    if (done.ok) return ok(done.value)
+    const { failure } = done
+    if (typeof failure === 'number') return err(portError('unreadable', `github ${failure}`))
+    if (failure === 'unparsable') return err(portError('unreadable', 'github answered with an unexpected body'))
+    return err(portError(failure === 'timeout' ? 'timeout' : 'unreadable', `github did not answer: ${failure}`))
   }
 
   async function slugOf(repo: string): Promise<Result<string, PortError>> {
@@ -102,12 +75,15 @@ export function githubCi(options: GithubCiOptions): Ci {
         conclusion: run.conclusion ?? null,
         url: run.html_url ?? null,
       })),
-      ...combined.value.statuses.map((status) => ({
-        name: status.context,
-        status: status.state === 'pending' ? 'pending' : 'completed',
-        conclusion: status.state === 'success' ? 'success' : status.state === 'pending' ? null : 'failure',
-        url: status.target_url ?? null,
-      })),
+      ...combined.value.statuses.map((status) => {
+        const verdict = statusVerdict(status.state)
+        return {
+          name: status.context,
+          status: verdict ? 'completed' : 'pending',
+          conclusion: verdict === 'green' ? 'success' : verdict === 'red' ? 'failure' : null,
+          url: status.target_url ?? null,
+        }
+      }),
     ]
     return ok(ciStateOf(lines))
   }

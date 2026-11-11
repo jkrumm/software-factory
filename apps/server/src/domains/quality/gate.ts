@@ -14,7 +14,13 @@ import {
 } from './evidence.ts'
 
 export type ShipVerdict =
-  | { accepted: true; commits: CommitsEvidence; review: ReviewEvidence; acceptance: AcceptanceEvidence; ci: CiEvidence }
+  | {
+      accepted: true
+      commits: CommitsEvidence
+      review: ReviewEvidence
+      acceptance: AcceptanceEvidence
+      ci: CiEvidence | null
+    }
   /** `error` is the verb's own: what the lead reads, naming what is missing */
   | { accepted: false; error: string }
 
@@ -39,8 +45,8 @@ export function judgeShip(input: {
   reported: readonly string[]
   commits: Result<CommitRead>
   review: ReviewOutcome
-  /** the pull request's CI; recorded like the review, never judged */
-  ci: CiOutcome
+  /** the pull request's CI; recorded like the review, never judged; null where the project ships by push (nothing recorded) */
+  ci: CiOutcome | null
   /** the lead's acceptance lines, parsed; recorded, never judged */
   acceptance: AcceptanceEvidence
 }): ShipVerdict {
@@ -63,6 +69,6 @@ export function judgeShip(input: {
     },
     review: reviewOf({ ranges: read.reviewRanges, ...input.review }),
     acceptance: input.acceptance,
-    ci: ciOf(input.ci),
+    ci: input.ci && ciOf(input.ci),
   }
 }

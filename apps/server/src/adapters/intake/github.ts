@@ -5,6 +5,8 @@ import type { Received, RepoSignals, Triaged } from '../../domains/intake/model.
 import type { IntakeSink, ProjectSignals, Writeback } from '../../domains/intake/ports.ts'
 import { fingerprintOf } from '../../domains/intake/rules.ts'
 import type { Clock } from '../../kernel/clock.ts'
+import { conclusionVerdict, statusVerdict } from '../../kernel/checks.ts'
+import { CheckRuns, CommitStatus, githubGet, githubHeaders } from '../github/checks.ts'
 import { helperEnv, runProcess } from './process.ts'
 import type { RunProcess } from './process.ts'
 
@@ -24,9 +26,6 @@ const CANNOT_WRITE = new Set([403, 404, 410, 422])
 /** The most one request reads; a head with more checks than this logs one line and the rest is unseen. */
 const CHECKS_PAGE_SIZE = 100
 const MAX_CHECK_NAME_CHARS = 200
-/** A check run that ended in one of these is red. `cancelled` is not: nothing says it was a failure. */
-const RED_CONCLUSIONS = new Set(['failure', 'timed_out', 'startup_failure'])
-const RED_STATES = new Set(['failure', 'error'])
 const LOOP_MARKER = /<!-- factory-loop:([A-Za-z0-9._-]+) -->/
 
 export interface GithubPollerDeps {
@@ -62,23 +61,6 @@ const Issues = z.array(
 type GithubIssue = z.output<typeof Issues>[number]
 
 const GithubRepo = z.looseObject({ default_branch: z.string().min(1) })
-
-const CheckRuns = z.looseObject({
-  check_runs: z.array(
-    z.looseObject({
-      name: z.string(),
-      head_sha: z.string(),
-      status: z.string(),
-      conclusion: z.string().nullish(),
-      html_url: z.string().nullish(),
-    }),
-  ),
-})
-
-const CommitStatus = z.looseObject({
-  sha: z.string(),
-  statuses: z.array(z.looseObject({ context: z.string(), state: z.string(), target_url: z.string().nullish() })),
-})
 
 const PULLS_PAGE_SIZE = 100
 const Pulls = z.array(z.looseObject({ head: z.looseObject({ ref: z.string() }) }))
@@ -227,29 +209,15 @@ export function githubPoller(deps: GithubPollerDeps): { enabled: boolean; pass()
   const request = (url: string, write?: { method: 'POST' | 'PATCH'; body: unknown }): Promise<Response> =>
     doFetch(url, {
       ...(write ? { method: write.method, body: JSON.stringify(write.body) } : {}),
-      headers: {
-        Authorization: `Bearer ${deps.token ?? ''}`,
-        Accept: 'application/vnd.github+json',
-        'X-GitHub-Api-Version': '2022-11-28',
-        'User-Agent': 'software-factory',
-        ...(write ? { 'Content-Type': 'application/json' } : {}),
-      },
+      headers: { ...githubHeaders(deps.token), ...(write ? { 'Content-Type': 'application/json' } : {}) },
       signal: AbortSignal.timeout(HTTP_TIMEOUT_MS),
     })
 
   /** One 200 JSON answer in the shape asked for; anything else throws an HttpError. */
   async function read<T>(url: string, schema: z.ZodType<T>): Promise<T> {
-    const response = await request(url)
-    if (response.status !== 200) throw new HttpError(response.status)
-    let json: unknown
-    try {
-      json = await response.json()
-    } catch {
-      throw new HttpError('unparsable')
-    }
-    const parsed = schema.safeParse(json)
-    if (!parsed.success) throw new HttpError('unparsable')
-    return parsed.data
+    const done = await githubGet(doFetch, deps.token, url, schema, HTTP_TIMEOUT_MS)
+    if (done.ok) return done.value
+    throw new HttpError(done.failure === 'timeout' ? 'error' : done.failure)
   }
 
   async function file(received: Received): Promise<Triaged | undefined> {
@@ -401,8 +369,9 @@ export function githubPoller(deps: GithubPollerDeps): { enabled: boolean; pass()
 
       const checks = new Map<string, Check>()
       for (const item of runs.check_runs) {
-        const state = item.status === 'completed' ? stateOfConclusion(item.conclusion) : undefined
-        if (!state) continue
+        const verdict = item.status === 'completed' ? conclusionVerdict(item.conclusion) : undefined
+        if (!verdict) continue
+        const state = verdict === 'red' ? 'down' : 'up'
         checks.set(item.name, {
           name: item.name,
           sha: item.head_sha,
@@ -413,8 +382,9 @@ export function githubPoller(deps: GithubPollerDeps): { enabled: boolean; pass()
         })
       }
       for (const status of combined.statuses) {
-        const state = RED_STATES.has(status.state) ? 'down' : status.state === 'success' ? 'up' : undefined
-        if (!state || checks.has(status.context)) continue
+        const verdict = statusVerdict(status.state)
+        if (!verdict || checks.has(status.context)) continue
+        const state = verdict === 'red' ? 'down' : 'up'
         checks.set(status.context, {
           name: status.context,
           sha: combined.sha,
@@ -609,11 +579,6 @@ export function githubPoller(deps: GithubPollerDeps): { enabled: boolean; pass()
       await writeBack()
     },
   }
-}
-
-const stateOfConclusion = (conclusion: string | null | undefined): 'down' | 'up' | undefined => {
-  if (conclusion === 'success') return 'up'
-  return conclusion && RED_CONCLUSIONS.has(conclusion) ? 'down' : undefined
 }
 
 function sentenceOf(back: Writeback): string {

@@ -203,6 +203,7 @@ async function main(): Promise<void> {
     commits: new GitCommits(),
     review: new AgwReview({ bin: settings.agwBin }),
     ci,
+    projects,
     checkout,
   }
   const draining = new AbortController()

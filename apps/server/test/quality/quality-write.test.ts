@@ -108,7 +108,7 @@ const ci: Ci = {
   },
   ofCommit: async () => err(portError('refused', 'no token')),
 }
-const deps = (): ShipDeps => ({ uow, clock, ids, commits, review, ci, checkout })
+const deps = (): ShipDeps => ({ uow, clock, ids, commits, review, ci, projects: watch(), checkout })
 const watchDeps = (extra: Partial<WatchDeps> = {}): WatchDeps => ({
   uow,
   clock,
@@ -138,7 +138,7 @@ beforeEach(async () => {
   proofAnswer = () => ok([{ name: 'make verify', ok: true, detail: 'exit 0' }])
   proofRuns = 0
   duringProof = async () => {}
-  project = { windowMs: 30 * 60_000, deployMode: 'none', makeVerify: true, probes: [] }
+  project = { windowMs: 30 * 60_000, deployMode: 'none', makeVerify: true, ci: true, probes: [] }
 })
 
 const value = <T, E>(result: Result<T, E>): T => {
@@ -196,6 +196,15 @@ async function runEffects(): Promise<void> {
 }
 
 describe('the ship gate', () => {
+  test('a project that ships by push records no CI evidence and never asks GitHub', async () => {
+    project = { ...project, ci: false }
+    const issueId = await working()
+    const shipped = value(await ship(issueId))
+    expect(shipped.result).toBe('applied')
+    expect(shipped.evidence.map((e) => e.kind)).toEqual(['commits', 'review', 'acceptance'])
+    expect(inside).not.toContain('ci')
+  })
+
   test('merged commits are evidence: the ship records them, its review and the Issue watching', async () => {
     const issueId = await working()
     const shipped = value(await ship(issueId))

@@ -1,3 +1,5 @@
+import { conclusionVerdict } from '../../kernel/checks.ts'
+
 /** `base..head`, as agw's review commands take a range. */
 export interface ReviewRange {
   base: string
@@ -199,19 +201,13 @@ export interface CiLine {
   url: string | null
 }
 
-/** A conclusion that says the check failed; `cancelled`, `skipped` and `neutral` say nothing of the code. */
-const RED_CONCLUSIONS = new Set(['failure', 'timed_out', 'startup_failure'])
-const GREEN_CONCLUSIONS = new Set(['success'])
-
 /** Any red is red (the first failing check named), then any unfinished is running, then at least one success is green. */
 export function ciStateOf(lines: readonly CiLine[]): CiState {
-  const red = lines.find(
-    (line) => line.status === 'completed' && line.conclusion && RED_CONCLUSIONS.has(line.conclusion),
-  )
+  const red = lines.find((line) => line.status === 'completed' && conclusionVerdict(line.conclusion) === 'red')
   if (red) return { status: 'red', url: red.url, reason: `${red.name} ${red.conclusion}` }
   const running = lines.find((line) => line.status !== 'completed')
   if (running) return { status: 'running', url: running.url, reason: `${running.name} is still running` }
-  if (lines.some((line) => line.conclusion && GREEN_CONCLUSIONS.has(line.conclusion)))
+  if (lines.some((line) => conclusionVerdict(line.conclusion) === 'green'))
     return { status: 'green', url: null, reason: null }
   return {
     status: 'missing',

@@ -232,11 +232,12 @@ export function fakeCi(): FakeCi {
       if (what === 'check-runs')
         return Response.json({
           check_runs: (runs.get(sha) ?? []).map((run) => ({
+            head_sha: sha,
             ...run,
             html_url: `https://github.com/o/example/runs/${run.name}`,
           })),
         })
-      if (what === 'status') return Response.json({ statuses: [] })
+      if (what === 'status') return Response.json({ sha, statuses: [] })
       return new Response('not found', { status: 404 })
     },
   })

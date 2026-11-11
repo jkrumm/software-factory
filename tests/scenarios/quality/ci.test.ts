@@ -49,8 +49,20 @@ async function landed(it: { lw: LeadsWorld; github: FakeCi }, name: string, pull
   return { id, sha, head: `head-${name}`, landedAt: await gitIn(it.lw, 'rev-parse', 'origin/master') }
 }
 
-describe('ship evidence: the CI of the pull request', () => {
+describe('ship evidence: a project that ships by push', () => {
   const it = lab(projectMake(60), 60_000)
+
+  test('records no CI at all and never asks GitHub', async () => {
+    const { id, sha } = await landed(it, 'pushed', null)
+    const shipped = await ship(it.lw.world, it.lw.server, id, { call: 'ship-1', commits: [sha] })
+    expect(shipped.json.result).toBe('applied')
+    expect(shipped.json.evidence.map((e) => e.kind)).toEqual(['commits', 'review', 'acceptance'])
+    expect(it.github.requests).toEqual([])
+  })
+})
+
+describe('ship evidence: the CI of the pull request', () => {
+  const it = lab(projectPr(60), 60_000)
 
   test('a green pull request is recorded with its number and head', async () => {
     const { id, sha, head } = await landed(it, 'green', 7)

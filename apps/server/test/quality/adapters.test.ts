@@ -281,11 +281,17 @@ test('github CI: the merged pull request of the named commits and the conclusion
       ],
       '/repos/o/app/commits/h9/check-runs': {
         check_runs: [
-          { name: 'build', status: 'completed', conclusion: 'success' },
-          { name: 'test', status: 'completed', conclusion: 'failure', html_url: 'https://github.com/o/app/runs/2' },
+          { name: 'build', head_sha: 'h9', status: 'completed', conclusion: 'success' },
+          {
+            name: 'test',
+            head_sha: 'h9',
+            status: 'completed',
+            conclusion: 'failure',
+            html_url: 'https://github.com/o/app/runs/2',
+          },
         ],
       },
-      '/repos/o/app/commits/h9/status': { statuses: [] },
+      '/repos/o/app/commits/h9/status': { sha: 'h9', statuses: [] },
     },
     seen,
   )
@@ -335,9 +341,10 @@ test('github CI: a commit status counts beside the check runs; a head with a pen
   const repo = await withOrigin('https://github.com/o/app.git')
   const fetch = github({
     '/repos/o/app/commits/s1/check-runs': {
-      check_runs: [{ name: 'build', status: 'completed', conclusion: 'success' }],
+      check_runs: [{ name: 'build', head_sha: 'h9', status: 'completed', conclusion: 'success' }],
     },
     '/repos/o/app/commits/s1/status': {
+      sha: 's1',
       statuses: [{ context: 'lint', state: 'pending', target_url: 'https://x/lint' }],
     },
   })
