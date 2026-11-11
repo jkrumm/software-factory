@@ -19,6 +19,13 @@ export interface SettlingFacts {
 
 export type Refined = 'feature' | 'bug' | 'chore' | 'docs'
 
+/** What triage corrected or flagged on the Issue when it settled it. */
+export interface Refinement {
+  kind?: Refined | undefined
+  /** `spec`: a new public surface, a data model, a dependency of weight or an unseen screen: the lead owes a Spec first */
+  checkpoint?: 'spec' | undefined
+}
+
 /** The open Issues of the repo, other than this one, that an edge may name. */
 export const MAX_CANDIDATES = 40
 
@@ -67,7 +74,7 @@ export interface DroppedEdge {
 }
 
 export type SettleChecked =
-  | { ok: true; after: IssueId[]; dropped: DroppedEdge[]; reason: string; kind: Refined | undefined }
+  | { ok: true; after: IssueId[]; dropped: DroppedEdge[]; reason: string; refinement: Refinement }
   | { ok: false; why: string }
 
 /**
@@ -101,5 +108,6 @@ export function checkSettle(
     refinable(facts) && answer.kind && REFINED_KINDS.includes(answer.kind) && answer.kind !== facts.kind
       ? (answer.kind as Refined)
       : undefined
-  return { ok: true, after, dropped, reason: answer.reason, kind: refined }
+  const checkpoint = facts.kind !== 'incident' && answer.checkpoint === 'spec' ? 'spec' : undefined
+  return { ok: true, after, dropped, reason: answer.reason, refinement: { kind: refined, checkpoint } }
 }

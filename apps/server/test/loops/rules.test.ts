@@ -243,7 +243,7 @@ test('edges are held to what the answer was shown: no unseen Issue, not itself, 
     after: [id(12)],
     dropped: [],
     reason: 'builds on it',
-    kind: undefined,
+    refinement: { kind: undefined, checkpoint: undefined },
   })
   expect(checkSettle(shown, settling(), triaged({ after: [] }), never)).toMatchObject({ ok: true, after: [] })
   expect(checkSettle(shown, settling(), triaged({ after: ['issue_99'] }), never)).toMatchObject({ ok: false })
@@ -278,7 +278,7 @@ test('an edge that inverts the chain or names a later Issue is dropped with its 
       { issue: id(30), why: 'issue_30 was filed after issue_20' },
     ],
     reason: 'builds on it',
-    kind: undefined,
+    refinement: { kind: undefined, checkpoint: undefined },
   })
   // a satisfied edge holds nobody back
   expect(
@@ -294,7 +294,7 @@ test('an edge that inverts the chain or names a later Issue is dropped with its 
 test('a kind is refined only for an owner or agent request, and only to a different feature, bug, chore or docs', () => {
   const kindOf = (facts: Partial<SettlingFacts>, kind: TriageAnswer['kind']) => {
     const checked = checkSettle(shown, settling(facts), triaged({ kind }), never)
-    return checked.ok ? checked.kind : 'refused'
+    return checked.ok ? checked.refinement.kind : 'refused'
   }
   expect(kindOf({}, 'docs')).toBe('docs')
   expect(kindOf({ origin: 'factory' }, 'bug')).toBe('bug')
@@ -304,6 +304,18 @@ test('a kind is refined only for an owner or agent request, and only to a differ
   expect(kindOf({ origin: 'github' }, 'docs')).toBeUndefined()
   expect(kindOf({ fromAlert: true, kind: 'bug' }, 'docs')).toBeUndefined()
   expect(kindOf({ kind: 'incident' }, 'docs')).toBeUndefined()
+})
+
+test('a Spec checkpoint is flagged by triage for any asked Issue, never for an incident, and only as `spec`', () => {
+  const flagOf = (facts: Partial<SettlingFacts>, checkpoint: TriageAnswer['checkpoint']) => {
+    const checked = checkSettle(shown, settling(facts), triaged({ checkpoint }), never)
+    return checked.ok ? checked.refinement.checkpoint : 'refused'
+  }
+  expect(flagOf({}, 'spec')).toBe('spec')
+  expect(flagOf({ origin: 'github' }, 'spec')).toBe('spec')
+  expect(flagOf({}, null)).toBeUndefined()
+  expect(flagOf({}, undefined)).toBeUndefined()
+  expect(flagOf({ kind: 'incident' }, 'spec')).toBeUndefined()
 })
 
 test('the settle request shows at most 40 open Issues, cleaned, and the Issue’s own words', () => {

@@ -39,11 +39,14 @@ function evolve(
   transition: Transition,
   payload: unknown,
 ): Issue {
-  const refined = kind === 'settled' ? PAYLOADS.settled.parse(payload).kind : undefined
+  const settled = kind === 'settled' ? PAYLOADS.settled.parse(payload) : undefined
+  const refined = settled?.kind
+  const checkpoint = settled?.checkpoint ?? issue.checkpoint
   return {
     ...issue,
     ...(kind === 'seated' ? { seat: PAYLOADS.seated.parse(payload) } : {}),
     kind: refined ?? issue.kind,
+    ...(checkpoint ? { checkpoint } : {}),
     version,
     state: transition.to,
     wait: transition.wait,

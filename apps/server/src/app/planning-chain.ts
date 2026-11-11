@@ -74,9 +74,12 @@ export interface Settled {
  */
 export async function settleIssue(
   deps: PlanningDeps,
-  input: { issue: IssueId; after: readonly IssueId[]; kind?: Kind },
+  input: { issue: IssueId; after: readonly IssueId[]; kind?: Kind | undefined; checkpoint?: 'spec' | undefined },
 ): Promise<Result<Settled, PlanningError | PortError>> {
-  const settledPayload = input.kind ? { kind: input.kind } : {}
+  const settledPayload = {
+    ...(input.kind ? { kind: input.kind } : {}),
+    ...(input.checkpoint ? { checkpoint: input.checkpoint } : {}),
+  }
   return deps.uow.run(async (stores) => {
     // The cycle check reads the open edges and then writes one: two verbs at once must not both pass it.
     await stores.capacity.lock()

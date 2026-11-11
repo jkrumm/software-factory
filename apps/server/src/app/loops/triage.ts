@@ -2,7 +2,7 @@ import type { TriageAnswer } from '@software-factory/contract'
 import type { CallPolicy } from '../../domains/loops/calls.ts'
 import { cycleThrough } from '../../domains/planning/chain.ts'
 import type { LoopReads, LoopStore, SettleWorkflow, SettlingRow } from '../../domains/loops/ports.ts'
-import { checkSettle, MAX_CANDIDATES, type Refined, settleRequest, settleRule } from '../../domains/loops/settle.ts'
+import { checkSettle, MAX_CANDIDATES, type Refinement, settleRequest, settleRule } from '../../domains/loops/settle.ts'
 import { MAX_ROUNDS } from '../../domains/loops/stall.ts'
 import type { WorkStore } from '../../domains/work/ports.ts'
 import { AGW_HANG_GUARD_MS } from '../../kernel/agw.ts'
@@ -36,6 +36,8 @@ export interface TriagePass {
   chained: number
   /** settled with a kind `factory-triage` corrected */
   refined: number
+  /** settled with `checkpoint: spec` set by `factory-triage` */
+  flagged: number
   asked: number
   /** edges of an answer left out: one that inverts an existing edge, one that names an Issue filed later */
   dropped: number
@@ -54,13 +56,23 @@ const policyOf = (deps: TriageDeps): CallPolicy => ({
 })
 
 /** Settles with no edges; a repeat of the call settles nothing twice. */
-async function settleWithout(deps: TriageDeps, issue: IssueId, pass: TriagePass, kind?: Refined): Promise<void> {
-  const settled = await settleIssue(deps.planning, { issue, after: [], kind })
+async function settleWithout(
+  deps: TriageDeps,
+  issue: IssueId,
+  pass: TriagePass,
+  refinement: Refinement = {},
+): Promise<void> {
+  const settled = await settleIssue(deps.planning, { issue, after: [], ...refinement })
   if (!settled.ok) pass.problems.push(`${issue}: ${JSON.stringify(settled.error)}`.slice(0, 300))
   else if (settled.value.result === 'settled') {
     pass.settled++
-    if (kind) pass.refined++
+    countRefinement(pass, refinement)
   }
+}
+
+function countRefinement(pass: TriagePass, refinement: Refinement): void {
+  if (refinement.kind) pass.refined++
+  if (refinement.checkpoint) pass.flagged++
 }
 
 /**
@@ -72,12 +84,12 @@ async function settleAfter(
   issue: IssueId,
   after: IssueId[],
   pass: TriagePass,
-  kind?: Refined,
+  refinement: Refinement = {},
 ): Promise<void> {
-  const settled = await settleIssue(deps.planning, { issue, after, kind })
+  const settled = await settleIssue(deps.planning, { issue, after, ...refinement })
   if (settled.ok) {
     if (settled.value.result === 'settled') {
-      if (kind) pass.refined++
+      countRefinement(pass, refinement)
       if (after.length > 0) pass.chained++
       else pass.settled++
     }
@@ -86,7 +98,8 @@ async function settleAfter(
   const planned = 'kind' in settled.error ? settled.error.kind : ''
   if (planned === 'cycle' || planned === 'issue_closed' || planned === 'unknown_issue') {
     pass.refused++
-    await settleWithout(deps, issue, pass)
+    // The refused answer's kind is dropped with its edges; the Spec flag does not depend on them and stands.
+    await settleWithout(deps, issue, pass, { checkpoint: refinement.checkpoint })
     return
   }
   pass.problems.push(`${issue}: ${JSON.stringify(settled.error)}`.slice(0, 300))
@@ -136,7 +149,7 @@ async function askTriage(deps: TriageDeps, row: SettlingRow, pass: TriagePass): 
   // checked again against these, an Issue that closed since is simply no longer one it may name.
   if (plan.kind === 'answered') {
     const checked = checkSettle(shown, row, plan.row.answer as TriageAnswer, waitsForIssue)
-    if (checked.ok) await settleAfter(deps, row.issue, checked.after, pass, checked.kind)
+    if (checked.ok) await settleAfter(deps, row.issue, checked.after, pass, checked.refinement)
     else await settleWithout(deps, row.issue, pass)
     return
   }
@@ -173,7 +186,7 @@ async function askTriage(deps: TriageDeps, row: SettlingRow, pass: TriagePass): 
     pass.problems.push(`${row.issue}: ${recorded.error.detail}`)
     return
   }
-  if (checked?.ok) await settleAfter(deps, row.issue, checked.after, pass, checked.kind)
+  if (checked?.ok) await settleAfter(deps, row.issue, checked.after, pass, checked.refinement)
   else if (checked && !checked.ok) pass.refused++
 }
 
@@ -188,6 +201,7 @@ export async function triagePass(deps: TriageDeps): Out<TriagePass> {
     settled: 0,
     chained: 0,
     refined: 0,
+    flagged: 0,
     asked: 0,
     dropped: 0,
     refused: 0,
@@ -204,4 +218,4 @@ export async function triagePass(deps: TriageDeps): Out<TriagePass> {
 }
 
 export const triageSummary = (pass: TriagePass): string =>
-  `looked at ${pass.looked} settling; settled ${pass.settled}, chained ${pass.chained}, refined ${pass.refined}, asked ${pass.asked}, dropped ${pass.dropped}, refused ${pass.refused}${pass.problems.length ? `; ${pass.problems.length} problem(s): ${pass.problems.slice(0, 3).join(' | ')}` : ''}`
+  `looked at ${pass.looked} settling; settled ${pass.settled}, chained ${pass.chained}, refined ${pass.refined}, flagged ${pass.flagged}, asked ${pass.asked}, dropped ${pass.dropped}, refused ${pass.refused}${pass.problems.length ? `; ${pass.problems.length} problem(s): ${pass.problems.slice(0, 3).join(' | ')}` : ''}`

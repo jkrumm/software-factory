@@ -147,6 +147,8 @@ export const TriageAnswer = z.object({
   after: z.array(IssueId).max(10),
   kind: z.enum(['feature', 'bug', 'chore', 'docs', 'incident']).nullable(),
   size: z.enum(['small', 'medium', 'large']).nullable(),
+  /** settle mode: `spec` when the change is a new public surface, a data model, a dependency of weight or an unseen screen */
+  checkpoint: z.literal('spec').nullable().optional(),
   reason: Line,
 })
 export type TriageAnswer = z.infer<typeof TriageAnswer>
