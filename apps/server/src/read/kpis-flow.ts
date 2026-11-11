@@ -180,7 +180,8 @@ async function firstWatches(sql: SQL, w: Window) {
     SELECT w.answer, extract(epoch FROM w.answered_at - w.started_at) * 1000 AS ms,
       (SELECT array_agg((c->>'name') || '|' || coalesce(c->>'detail', ''))
         FROM (SELECT k.checks FROM factory.quality_checks k WHERE k.watch_key = w.key ORDER BY k.n DESC LIMIT 1) l,
-        jsonb_array_elements(l.checks) c WHERE (c->>'ok')::boolean = false) AS failed
+        jsonb_array_elements(l.checks) c
+        WHERE (c->>'ok')::boolean = false AND coalesce((c->>'inherited')::boolean, false) = false) AS failed
     FROM factory.quality_watches w
     WHERE w.watch = 1 AND w.answer IN ('passed', 'regressed') AND w.answered_at >= ${w.from} AND w.answered_at < ${w.to}`
   return rows.map((raw) =>

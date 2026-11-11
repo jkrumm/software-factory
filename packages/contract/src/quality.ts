@@ -119,7 +119,9 @@ export const QualityView = z
             n: z.number().int(),
             at: z.iso.datetime({ offset: true }),
             outcome: z.enum(['green', 'red', 'blocked']),
-            checks: z.array(z.object({ name: z.string(), ok: z.boolean(), detail: z.string() })),
+            checks: z.array(
+              z.object({ name: z.string(), ok: z.boolean(), detail: z.string(), inherited: z.boolean().optional() }),
+            ),
           }),
         ),
       }),

@@ -63,7 +63,8 @@ async function regressed(sql: SQL, w: Window): Promise<RetroSample[]> {
     SELECT k.issue_id,
       (SELECT array_agg((c->>'name') || '|' || coalesce(c->>'detail', ''))
         FROM (SELECT x.checks FROM factory.quality_checks x WHERE x.watch_key = k.key ORDER BY x.n DESC LIMIT 1) l,
-        jsonb_array_elements(l.checks) c WHERE (c->>'ok')::boolean = false) AS failed
+        jsonb_array_elements(l.checks) c
+        WHERE (c->>'ok')::boolean = false AND coalesce((c->>'inherited')::boolean, false) = false) AS failed
     FROM factory.quality_watches k
     WHERE k.watch = 1 AND k.answer = 'regressed' AND k.answered_at >= ${w.from} AND k.answered_at < ${w.to}
     ORDER BY k.answered_at DESC LIMIT ${SAMPLE_SIZE}`
