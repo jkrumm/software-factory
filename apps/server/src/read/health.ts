@@ -15,10 +15,13 @@ export interface HealthFacts {
   loops?: readonly HealthLoop[]
 }
 
+/** How long a server that has not ticked yet is given for its first pass: a restart on a loaded host takes minutes. */
+export const FIRST_TICK_GRACE_MS = 5 * 60_000
+
 /**
  * Why a tick that should run every `tickMs` is stale, or null. A server that has not had time for its first pass is not
- * stale yet; a tick of 0 is off (the scenarios drive it) and is never judged. Three missed intervals, and at least a
- * minute, make a stale tick.
+ * stale yet (`FIRST_TICK_GRACE_MS`); a tick of 0 is off (the
+ * scenarios drive it) and is never judged. Three missed intervals, and at least a minute, make a stale tick.
  */
 export function tickProblem(input: {
   tickMs: number
@@ -31,7 +34,8 @@ export function tickProblem(input: {
   if (input.tickMs === 0) return null
   const limit = input.limitMs ?? Math.max(3 * input.tickMs, 60_000)
   if (input.tickAt === null) {
-    return input.now.getTime() - input.startedAt.getTime() > limit ? 'no tick has succeeded yet' : null
+    const grace = input.limitMs ?? Math.max(limit, FIRST_TICK_GRACE_MS)
+    return input.now.getTime() - input.startedAt.getTime() > grace ? 'no tick has succeeded yet' : null
   }
   const age = input.now.getTime() - input.tickAt.getTime()
   return age > limit ? `the last successful tick was ${Math.round(age / 1000)} s ago` : null

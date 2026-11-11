@@ -240,9 +240,11 @@ export function heartbeatFindings(heartbeat: HeartbeatFact, now: Date): Finding[
       kind: 'heartbeat_stale',
       subject: kind,
       title: `Self-watch: the heartbeat is stale: ${kind === 'tick' ? 'the leads tick has stopped' : 'the database does not answer'}`,
-      facts: [`heartbeat class: ${kind}`, `tickAt: ${heartbeat.tickAt ?? 'never'}`],
-      // the queue moves when this very signal is filed: it is never part of the evidence
+      // the class alone: the last tick's time moves with every restart and recovery, so it is never part of the evidence
+      facts: [`heartbeat class: ${kind}`],
       context: [
+        `tickAt: ${heartbeat.tickAt ?? 'never'}`,
+        // the queue moves when this very signal is filed
         `queueMovedAt: ${heartbeat.queueMovedAt ?? 'never'}`,
         `Reason: ${oneLine(heartbeat.reason ?? 'none')}`,
         `Now: ${iso(now)}`,
