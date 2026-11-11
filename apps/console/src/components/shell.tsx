@@ -34,20 +34,25 @@ function PaletteHost({
   )
 }
 
-/** Fetches the palette chunk when the browser is idle after the first paint; `preload` does it at once (hover, focus). */
+/** The palette's 550 KB lists wait this long after the page is idle, so they never share the first seconds with what the screen shows. */
+const PALETTE_PREFETCH_DELAY_MS = 4000
+
+/** Fetches the palette chunk when the browser is idle after the first paint (its lists a few seconds later); `preload` does both at once (hover, focus). */
 function usePalettePreload(): { preloaded: boolean; preload: () => void } {
   const [preloaded, setPreloaded] = useState(false)
-  const preload = () =>
+  const load = (prefetchAfterMs: number) =>
     void loadPalette().then(() => {
       setPreloaded(true)
-      prefetchPalette()
+      setTimeout(prefetchPalette, prefetchAfterMs)
     })
+  const preload = () => load(0)
   useEffect(() => {
+    const idle = () => load(PALETTE_PREFETCH_DELAY_MS)
     if (typeof requestIdleCallback === 'function') {
-      const id = requestIdleCallback(preload, { timeout: 2000 })
+      const id = requestIdleCallback(idle, { timeout: 2000 })
       return () => cancelIdleCallback(id)
     }
-    const id = setTimeout(preload, 200)
+    const id = setTimeout(idle, 200)
     return () => clearTimeout(id)
   }, [])
   return { preloaded, preload }

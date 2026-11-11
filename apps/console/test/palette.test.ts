@@ -149,7 +149,7 @@ describe('the palette loads before it is opened', () => {
 
   test('its data is fetched when the chunk loads, and watched only while it is open', () => {
     const palette = readFileSync(join(import.meta.dir, '../src/components/palette.tsx'), 'utf8')
-    expect(shell).toContain('prefetchPalette()')
+    expect(shell).toContain('setTimeout(prefetchPalette, prefetchAfterMs)')
     expect(palette).toContain('useIssueCards(open)')
     expect(palette).toContain('usePaletteArtifacts(open)')
   })
