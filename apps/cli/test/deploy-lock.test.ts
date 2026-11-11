@@ -171,6 +171,16 @@ describe('factory deploy-lock', () => {
       expect(lines[i + 1]).toBe(`${tag} end`)
     }
   })
+
+  test('a lock released while a waiter looks at it is taken again, never exit 75 (#833)', async () => {
+    for (let round = 0; round < 4; round++) {
+      const runs = Array.from({ length: 12 }, () => start('app', ['true'], { FACTORY_DEPLOY_LOCK_POLL_MS: '5' }))
+      for (const run of runs) {
+        const result = await run.done
+        expect({ code: result.code, err: result.err }).toEqual({ code: 0, err: '' })
+      }
+    }
+  })
 })
 
 describe('factory merge-lock', () => {
