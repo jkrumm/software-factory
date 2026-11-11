@@ -34,8 +34,16 @@ const PS_ROWS = `    1     0   0.1    12288 /sbin/launchd
  1750     1   0.3   819200 /System/Library/CoreServices/WindowServer
 `
 
+/**
+ * The host's `ps` in three shapes: the capacity reading (`ps.txt`), the reaper's table with the environment appended
+ * (`-Eww`, `ps-env.txt`; a file `ps-env.fail` makes it fail) and the age of one pid (`-o etime= -p`: a day, always older than a test's row).
+ */
 const PS = (host: string) => `#!/bin/sh
-cat "${host}/ps.txt"
+case "$*" in
+  *-Eww*) [ -e "${host}/ps-env.fail" ] && exit 1; cat "${host}/ps-env.txt";;
+  *etime=*) echo "1-00:00:00";;
+  *) cat "${host}/ps.txt";;
+esac
 `
 
 /** `lsof -nP -a -d cwd -Fpn`: the directories in `lsof.txt`; a file `lsof.fail` makes it fail. */
@@ -125,6 +133,29 @@ export async function setProcesses(
   if (options.lsofFails) await writeFile(join(host, 'lsof.fail'), '')
 }
 
+/** One process in the reaper's table: its pid, age ("mm:ss" form) and the environment words appended to its command. */
+export interface SessionProcess {
+  pid: number
+  etime?: string
+  command?: string
+  env?: string[]
+}
+
+/** What the reaper's `ps -Eww` answers from now on; `psFails` makes it exit 1. */
+export async function setSessionProcesses(
+  bin: string,
+  processes: SessionProcess[],
+  options: { psFails?: boolean } = {},
+): Promise<void> {
+  const host = dir(bin)
+  const rows = processes.map((p) =>
+    `${p.pid} 1 ${p.etime ?? '30:00'} ${p.command ?? '/bin/sleep 300'} ${(p.env ?? []).join(' ')}`.trimEnd(),
+  )
+  await writeFile(join(host, 'ps-env.txt'), `    1     0 10-00:00:00 /sbin/launchd\n${rows.join('\n')}\n`)
+  await rm(join(host, 'ps-env.fail'), { force: true })
+  if (options.psFails) await writeFile(join(host, 'ps-env.fail'), '')
+}
+
 /** What the host's memory reads. */
 export async function setMemory(bin: string, input: { swapUsedMb: number; swapouts?: number }): Promise<void> {
   const host = dir(bin)
@@ -145,6 +176,7 @@ export async function installHost(bin: string): Promise<void> {
   await chmod(join(host, 'ps'), 0o755)
   await chmod(join(host, 'lsof'), 0o755)
   await setProcesses(bin, [])
+  await setSessionProcesses(bin, [])
   await chmod(picker, 0o755)
   await chmod(sysctl, 0o755)
   await setAccounts(bin, [{ id: 'me' }])

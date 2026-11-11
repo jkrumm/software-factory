@@ -43,6 +43,8 @@ import { loadLoopSettings } from './app/loops/settings.ts'
 import { frictionPass, frictionSummary } from './app/loops/friction.ts'
 import { fixClassesPass, fixClassesSummary } from './app/loops/fix-classes.ts'
 import { hostPass, hostSummary } from './app/loops/host.ts'
+import { reaperPass, reaperSummary } from './app/loops/reaper.ts'
+import { processKiller, reaperProcesses } from './adapters/planning/reaper-processes.ts'
 import { hygienePass, hygieneSummary } from './app/loops/hygiene.ts'
 import { selfwatchPass, selfwatchSummary } from './app/loops/selfwatch.ts'
 import { githubCiRuns } from './adapters/selfwatch/github.ts'
@@ -162,6 +164,11 @@ async function main(): Promise<void> {
     rows: () => hostSamples.rows(),
     lsofBin: process.env.FACTORY_LSOF_BIN ?? '/usr/sbin/lsof',
   })
+  const reaperProcessTable = reaperProcesses({
+    psBin: process.env.FACTORY_PS_BIN ?? '/bin/ps',
+    lsofBin: process.env.FACTORY_LSOF_BIN ?? '/usr/sbin/lsof',
+  })
+  const reaperKiller = processKiller({ psBin: process.env.FACTORY_PS_BIN ?? '/bin/ps' })
   // Planning and capacity own the projects and the claims; the leads, intake and the checkpoints take their ports.
   const roles = fileRoles(leadSettings.rolesFile)
   const planning = composePlanning({
@@ -508,6 +515,26 @@ async function main(): Promise<void> {
         })
         if (!pass.ok) return pass
         return ok(hostSummary(pass.value))
+      },
+    },
+    {
+      // Ends the processes of closed lead attempts (by session key and worktree, never by name): a browser a finished lead left
+      // behind lives on under launchd otherwise.
+      name: 'reaper',
+      intervalMs: loopSettings.intervalMs.reaper,
+      onChange: false,
+      run: async () => {
+        const pass = await reaperPass({
+          uow,
+          clock: writes.clock,
+          processes: reaperProcessTable,
+          killer: reaperKiller,
+          graceMs: loopSettings.reaperGraceMs,
+          dry: loopSettings.reaperDry,
+          protect: [1, process.pid],
+        })
+        if (!pass.ok) return pass
+        return ok(reaperSummary(pass.value))
       },
     },
   ]

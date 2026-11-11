@@ -1710,7 +1710,7 @@ export const OPERATIONS: readonly Operation[] = [
     method: 'POST',
     path: '/v1/loops/{name}/run',
     summary:
-      'one pass of one loop now (leads, planning, watch, settle, send, steward, triage, queue, friction, hygiene, screen, fix-classes, selfwatch, host); a pass already running is waited for, not started again',
+      'one pass of one loop now (leads, planning, watch, settle, send, steward, triage, queue, friction, hygiene, screen, fix-classes, selfwatch, host, reaper); a pass already running is waited for, not started again',
     pathParams: ['name'],
     queryParams: [],
     body: false,

@@ -22,6 +22,11 @@ const Env = z.object({
   FACTORY_LOOP_FIX_CLASSES_MS: ms.optional(),
   FACTORY_LOOP_SELFWATCH_MS: ms.optional(),
   FACTORY_LOOP_HOST_MS: ms.optional(),
+  FACTORY_LOOP_REAPER_MS: ms.optional(),
+  /** a closed attempt's processes are left this long (at least 1 minute) before the reaper ends them */
+  FACTORY_REAPER_GRACE_MS: z.coerce.number().int().min(60_000).optional(),
+  /** 1: the reaper decides and records with signal `dry`, and sends nothing */
+  FACTORY_REAPER_DRY: z.enum(['0', '1']).optional(),
   /** a timer or dependency wait is overdue this long after its exit */
   FACTORY_SELFWATCH_GRACE_MS: ms.optional(),
   /** the age that makes the leads tick stale, in place of three intervals and a minute: a scenario's way to a stale heartbeat */
@@ -74,6 +79,8 @@ export interface LoopSettings {
   selfwatchGraceMs: number
   selfwatchBranch: string | null
   heartbeatStaleMs: number | null
+  reaperGraceMs: number
+  reaperDry: boolean
 }
 
 export const DEFAULT_TICK_MS = 10_000
@@ -96,6 +103,13 @@ const fixClassesTickMs = (tickMs: number): number => (tickMs === 0 ? 0 : FIX_CLA
 /** The host is sampled once a minute, unless the tick is off (0). */
 const HOST_TICK_MS = 60_000
 const hostTickMs = (tickMs: number): number => (tickMs === 0 ? 0 : HOST_TICK_MS)
+
+/** The reaper looks at the process table every 5 minutes, unless the tick is off (0). */
+const REAPER_TICK_MS = 5 * 60_000
+const reaperTickMs = (tickMs: number): number => (tickMs === 0 ? 0 : REAPER_TICK_MS)
+
+/** A closed attempt's processes are left this long before they are ended. */
+export const DEFAULT_REAPER_GRACE_MS = 5 * 60_000
 
 /** The self-watch reads GitHub and git: at most one pass in this long, unless the tick is off (0). */
 const SELFWATCH_MIN_TICK_MS = 5 * 60_000
@@ -128,6 +142,7 @@ export function loadLoopSettings(env: Record<string, string | undefined>): LoopS
     'fix-classes': e.FACTORY_LOOP_FIX_CLASSES_MS,
     selfwatch: e.FACTORY_LOOP_SELFWATCH_MS,
     host: e.FACTORY_LOOP_HOST_MS,
+    reaper: e.FACTORY_LOOP_REAPER_MS,
   }
   return {
     intervalMs: Object.fromEntries(
@@ -144,7 +159,9 @@ export function loadLoopSettings(env: Record<string, string | undefined>): LoopS
                   ? selfwatchTickMs(tickMs)
                   : name === 'host'
                     ? hostTickMs(tickMs)
-                    : tickMs),
+                    : name === 'reaper'
+                      ? reaperTickMs(tickMs)
+                      : tickMs),
       ]),
     ) as Record<LoopName, number>,
     tickMs,
@@ -163,5 +180,7 @@ export function loadLoopSettings(env: Record<string, string | undefined>): LoopS
     selfwatchGraceMs: e.FACTORY_SELFWATCH_GRACE_MS ?? DEFAULT_WAIT_GRACE_MS,
     selfwatchBranch: e.FACTORY_SELFWATCH_BRANCH ?? null,
     heartbeatStaleMs: e.FACTORY_HEARTBEAT_STALE_MS ?? null,
+    reaperGraceMs: e.FACTORY_REAPER_GRACE_MS ?? DEFAULT_REAPER_GRACE_MS,
+    reaperDry: e.FACTORY_REAPER_DRY === '1',
   }
 }

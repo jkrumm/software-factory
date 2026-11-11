@@ -17,6 +17,7 @@ import type { IssueId } from '../../kernel/ids.ts'
 import type { Key } from '../../kernel/keys.ts'
 import type { PortError, Result } from '../../kernel/result.ts'
 import type { MainCheckoutLook } from './checkout.ts'
+import type { ReaperAttempt, ReaperProc } from './reaper.ts'
 import type { CallLoop, CallOutcome, CallRow } from './calls.ts'
 import type { ClassIssue, FindingLoop } from './classes.ts'
 import type { FixCommit, FixCommitRow } from './fix-classes.ts'
@@ -108,7 +109,36 @@ export interface HostSampler {
   sample(): Promise<HostReading>
 }
 
+/** A signal the reaper sent (or, `dry`, would have sent) to a process of a closed attempt. */
+export interface ReapedRow {
+  at: Date
+  pid: number
+  session: string
+  worktree: string | null
+  comm: string
+  signal: 'SIGTERM' | 'SIGKILL' | 'dry'
+  reason: 'session' | 'worktree'
+  ageS: number
+}
+
+/** The host's processes with their lead session and directory; null when `ps` or `lsof` could not answer (never an error). */
+export interface ReaperProcesses {
+  read(): Promise<ReaperProc[] | null>
+}
+
+/** Ends a process. False when it was not signalled: gone already, or no longer the process that was decided on. */
+export interface ProcessKiller {
+  signal(target: { pid: number; ageS: number }, signal: 'SIGTERM' | 'SIGKILL'): Promise<boolean>
+}
+
 export interface LoopStore {
+  /** the attempts the reaper weighs: those not finalized, and those finalized since `since` */
+  reaperAttempts(since: Date): Promise<ReaperAttempt[]>
+  /** the SIGTERMs recorded since `since`, oldest first */
+  termedSince(since: Date): Promise<{ pid: number; ageS: number }[]>
+  recordReaped(rows: readonly ReapedRow[]): Promise<void>
+  /** drops the rows older than `before`; how many */
+  pruneReaped(before: Date): Promise<number>
   /** one sample at `at` with the lead rows of that minute; a second one at the same instant is ignored */
   recordHostSample(at: Date, sample: HostSampleRecord, leads: readonly LeadSampleRow[]): Promise<void>
   /** drops the samples older than `before`; how many */

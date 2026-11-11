@@ -21,6 +21,18 @@ export function parseLsofCwd(output: string): Map<number, string> {
 export const joinProcesses = (rows: readonly PsRow[], cwds: ReadonlyMap<number, string>): ProcInfo[] =>
   rows.map((row) => ({ pid: row.pid, ppid: row.ppid, rssKib: row.rssKib, cwd: cwds.get(row.pid) ?? null }))
 
+/** The working directory of every process `lsof` can see; null when it timed out or failed outright. */
+export async function readCwds(lsofBin: string, timeoutMs: number): Promise<Map<number, string> | null> {
+  try {
+    const out = await runProcess([lsofBin, '-nP', '-a', '-d', 'cwd', '-Fpn'], { timeoutMs })
+    // lsof exits 1 when it could not look at some process but still lists the rest
+    if (out.timedOut || (out.code !== 0 && out.stdout.trim() === '')) return null
+    return parseLsofCwd(out.stdout)
+  } catch {
+    return null
+  }
+}
+
 export interface ProcessTableOptions {
   /** the rows of the host's one `ps` (cached by `hostWatch`: no second `ps` per tick) */
   rows: () => Promise<PsRow[] | null>
@@ -36,22 +48,11 @@ export interface ProcessTable {
 export function processTable(options: ProcessTableOptions): ProcessTable {
   const timeoutMs = options.timeoutMs ?? 10_000
 
-  const directories = async (): Promise<Map<number, string> | null> => {
-    try {
-      const out = await runProcess([options.lsofBin, '-nP', '-a', '-d', 'cwd', '-Fpn'], { timeoutMs })
-      // lsof exits 1 when it could not look at some process but still lists the rest
-      if (out.timedOut || (out.code !== 0 && out.stdout.trim() === '')) return null
-      return parseLsofCwd(out.stdout)
-    } catch {
-      return null
-    }
-  }
-
   return {
     async read() {
       const rows = await options.rows()
       if (rows === null) return null
-      const cwds = await directories()
+      const cwds = await readCwds(options.lsofBin, timeoutMs)
       return cwds === null ? null : joinProcesses(rows, cwds)
     },
   }
