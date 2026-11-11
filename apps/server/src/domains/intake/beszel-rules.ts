@@ -298,6 +298,10 @@ function diskFill(samples: readonly Sample[], now: Date, t: Thresholds['disk']) 
         thirds[1] - thirds[0] >= SUSTAINED_SHARE * net &&
         thirds[2] - thirds[1] >= SUSTAINED_SHARE * net
       if (!sustained) return { met: false, hoursToFull: null }
+      // Still filling: a write that has stopped is a transient, however steep the window's slope was.
+      const tailStart = points.find((s) => s.at.getTime() > last.at.getTime() - t.sustainMin * MIN)
+      const tailGrowth = tailStart ? (used(last) ?? 0) - (used(tailStart) ?? 0) : 0
+      if (tailGrowth < SUSTAINED_SHARE * perHour * (t.sustainMin / 60)) return { met: false, hoursToFull: null }
       const hoursToFull = Math.max(0, total - newest) / perHour
       return { met: hoursToFull < t.fillHours, hoursToFull }
     },
@@ -340,6 +344,8 @@ function disk(samples: readonly Sample[], now: Date, t: Thresholds['disk']): Fin
   }
   if (fill.state === 'breach') {
     const minutes = fill.since ? Math.round((now.getTime() - fill.since.getTime()) / MIN) : 0
+    // Like the level, a fill speaks only once it has held for `sustainMin`: the first minute of a burst is not a trend.
+    if (minutes < t.sustainMin) return hold('disk')
     return {
       ...base,
       state: 'breach',
