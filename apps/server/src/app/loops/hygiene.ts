@@ -305,7 +305,7 @@ export async function hygienePass(deps: HygieneDeps): Promise<Result<HygienePass
     ok({ rows: await loops.hygienePasses(), projects: await planning.projects() }),
   )
   if (!read.ok) return read
-  const projects = read.value.projects.filter((p) => p.source === 'file')
+  const projects = read.value.projects.filter((p) => p.source === 'file' && !p.project.work)
   const byText = new Map(projects.map((p) => [repoTextOf(p), p]))
   const allowed =
     deps.repos === null

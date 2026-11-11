@@ -194,6 +194,11 @@ export const ProjectFile = z
       .array(ShipRule)
       .min(1)
       .default(() => [{ paths: ['**'], via: 'push' as const }]),
+    /**
+     * `true`: the repo stays a work repo though it has a `project.yaml`: the read token never sees its words and it hears
+     * the owner only. For a repo of another organisation that the factory builds in.
+     */
+    work: z.boolean().default(false),
     /** how many leads may work in the repo at once (one more for a fix while the line is stopped) */
     leads: z.number().int().min(1).max(8).default(1),
     /**

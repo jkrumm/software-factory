@@ -50,7 +50,9 @@ export async function fixClassesPass(deps: FixClassesDeps): Promise<Result<FixCl
   if (!read.ok) return read
   const projects = read.value.filter(
     (p) =>
-      p.source === 'file' && (deps.repos === null || deps.repos.includes(p.name) || deps.repos.includes(repoTextOf(p))),
+      p.source === 'file' &&
+      !p.project.work &&
+      (deps.repos === null || deps.repos.includes(p.name) || deps.repos.includes(repoTextOf(p))),
   )
   const pass: FixClassesPass = { repos: 0, byRule: 0, byWorkflow: 0, left: 0, problems: [] }
   for (const project of projects) {

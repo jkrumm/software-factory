@@ -110,6 +110,36 @@ describe('the git source', () => {
   })
 })
 
+describe('an allowed repo outside the roots', () => {
+  test('discover and resolve see it and its worktrees, and no sibling of it', async () => {
+    const outside = await mkdtemp('/tmp/factory-allow-')
+    try {
+      const real = await realpath(outside)
+      const files = { 'project.yaml': 'apiVersion: factory/v2\nname: x\nleads: 1\n' }
+      for (const name of ['workrepo', 'product']) {
+        const path = join(outside, name)
+        await mkdir(path, { recursive: true })
+        await git(path, 'init', '-q', '-b', 'main')
+        await writeFile(join(path, 'project.yaml'), files['project.yaml'])
+        await git(path, 'add', '-A')
+        await git(path, 'commit', '-q', '-m', 'init')
+      }
+      const allowed = gitProjectSource({ roots: [root], allow: [join(outside, 'workrepo')], timeoutMs: 20_000 })
+      expect(value(await allowed.discover()).map((r) => r.directory)).toContain('workrepo')
+      expect(value(await allowed.discover()).map((r) => r.directory)).not.toContain('product')
+      const workrepo = { directory: 'workrepo', path: join(real, 'workrepo') }
+      expect(value(await allowed.resolve('workrepo'))).toEqual(workrepo)
+      expect(value(await allowed.resolve(join(outside, 'workrepo')))).toEqual(workrepo)
+      await mkdir(join(outside, 'workrepo', '.claude', 'worktrees', 'x'), { recursive: true })
+      expect(value(await allowed.resolve(join(outside, 'workrepo', '.claude', 'worktrees', 'x')))).toEqual(workrepo)
+      expect(value(await allowed.resolve(join(outside, 'product')))).toBeNull()
+      expect(value(await source().resolve(join(outside, 'workrepo')))).toBeNull()
+    } finally {
+      await rm(outside, { recursive: true, force: true })
+    }
+  })
+})
+
 describe('a linked worktree', () => {
   test('beside its repo is not a project: discover lists the repo once, resolve and present refuse the worktree', async () => {
     const own = await realpath(await mkdtemp('/tmp/factory-worktree-'))

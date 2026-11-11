@@ -9,6 +9,7 @@ const Env = z.object({
   HC_SESSION: z.string().min(1).optional(),
   FACTORY_CLAUDE_BIN: z.string().min(1).optional(),
   FACTORY_REPO_ROOTS: z.string().min(1).optional(),
+  FACTORY_REPO_ALLOW: z.string().min(1).optional(),
   FACTORY_ROLES_FILE: z.string().min(1).optional(),
   FACTORY_ACCOUNTS_FILE: z.string().min(1).optional(),
   FACTORY_PRETRUST_BIN: z.string().min(1).optional(),
@@ -34,6 +35,8 @@ export interface LeadSettings {
   claudeBin: string | undefined
   /** the directories a lead's repo must be inside */
   repoRoots: string[]
+  /** single repos admitted outside the roots: absolute paths of the repos themselves */
+  repoAllow: string[]
   rolesFile: string
   accountsFile: string
   /** unset when dotfiles' script is not there: the folder-trust dialog is then the owner's */
@@ -62,6 +65,10 @@ export function loadLeadSettings(env: Record<string, string | undefined>): LeadS
   if (roots.some((root) => !root.startsWith('/'))) {
     throw new Error(`FACTORY_REPO_ROOTS must be colon-separated absolute paths, got: ${e.FACTORY_REPO_ROOTS}`)
   }
+  const allow = (e.FACTORY_REPO_ALLOW ?? '').split(':').filter(Boolean)
+  if (allow.some((repo) => !repo.startsWith('/'))) {
+    throw new Error(`FACTORY_REPO_ALLOW must be colon-separated absolute paths, got: ${e.FACTORY_REPO_ALLOW}`)
+  }
   const pretrust = e.FACTORY_PRETRUST_BIN ?? `${e.HOME}/SourceRoot/dotfiles/scripts/claude-pretrust.sh`
   return {
     tickMs: e.FACTORY_TICK_MS ?? 10_000,
@@ -69,6 +76,7 @@ export function loadLeadSettings(env: Record<string, string | undefined>): LeadS
     hcSession: e.HC_SESSION,
     claudeBin: e.FACTORY_CLAUDE_BIN,
     repoRoots: roots,
+    repoAllow: allow,
     rolesFile: e.FACTORY_ROLES_FILE ?? DEFAULT_ROLES_FILE,
     accountsFile: e.FACTORY_ACCOUNTS_FILE ?? `${e.HOME}/SourceRoot/dotfiles/config/claude-accounts.json`,
     pretrustBin: e.FACTORY_PRETRUST_BIN ?? (existsSync(pretrust) ? pretrust : undefined),

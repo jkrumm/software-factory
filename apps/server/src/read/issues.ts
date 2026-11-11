@@ -66,7 +66,7 @@ const ISSUE_COLUMNS = (sql: SQL) => sql`
   (SELECT s.payload FROM factory.issue_events s WHERE s.issue_id = i.id AND s.kind = 'seated' AND s.result = 'applied' ORDER BY s.version DESC LIMIT 1) AS seated,
   f.at AS created_at, u.updated_at,
   CASE WHEN i.state = 'closed' THEN u.closed_at END AS closed_at,
-  NOT EXISTS (SELECT 1 FROM factory.planning_projects p WHERE p.source = 'file' AND (p.name = i.repo OR p.repo = i.repo OR left(i.repo, length(p.repo) + 1) = p.repo || '/')) AS work`
+  NOT EXISTS (SELECT 1 FROM factory.planning_projects p WHERE p.source = 'file' AND COALESCE(p.project->>'work', 'false') <> 'true' AND (p.name = i.repo OR p.repo = i.repo OR left(i.repo, length(p.repo) + 1) = p.repo || '/')) AS work`
 
 const ISSUE_JOINS = (sql: SQL) => sql`
   FROM factory.issues i

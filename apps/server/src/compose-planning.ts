@@ -62,7 +62,11 @@ export function composePlanning(input: {
   const sync = {
     ...writes,
     roles,
-    source: gitProjectSource({ roots: settings.repoRoots, timeoutMs: settings.gitTimeoutMs }),
+    source: gitProjectSource({
+      roots: settings.repoRoots,
+      allow: settings.repoAllow,
+      timeoutMs: settings.gitTimeoutMs,
+    }),
   }
   const limits = {
     leadsPerAccount: settings.leadsPerAccount,
@@ -90,7 +94,7 @@ export function composePlanning(input: {
    * A project by its name, or by a path inside a source root (realpath, the trust boundary): the name the queue keeps its
    * states under. A path outside the roots is `refused`.
    */
-  const repos = rootedRepos(settings.repoRoots)
+  const repos = rootedRepos(settings.repoRoots, settings.repoAllow)
   async function projectName(text: string): Promise<Result<string, PortError>> {
     if (!text.includes('/')) return ok(text)
     const located = await repos.locate(text)

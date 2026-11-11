@@ -24,7 +24,7 @@ What failure looks like here:
 - **Admission lets too much through.** `domains/capacity/` (`admission.ts`, `claims.ts`, `accounts.ts`, `slots.ts`) decide drain, pace and
   account choice, and are decided again at every claim; a second implementation elsewhere is a second copy.
 - **The trust boundary opens.** The token can start Claude Code with `--dangerously-skip-permissions`: `repo` and `space` must be
-  inside `FACTORY_REPO_ROOTS` after `realpath` (`adapters/git/repos.ts`); the API is loopback only, bearer-authenticated, JSON only, 64 KiB
+  inside `FACTORY_REPO_ROOTS` after `realpath`, or exactly one of the repos `FACTORY_REPO_ALLOW` lists (`adapters/git/repos.ts`); the API is loopback only, bearer-authenticated, JSON only, 64 KiB
   (`api/auth.ts`, `api/policy.ts`); the door holds only its own `machine` token and takes the repo from `door_routes`, never the payload.
 - **A hook breaks the session or loses facts.** `factory hook` exits 0 whatever happens (except the Stop send-back) and keeps
   stdout empty, because Claude Code injects it into context (one exception: a `session-start` with `source: compact` in an

@@ -67,6 +67,42 @@ describe('the trust boundary', () => {
   })
 })
 
+describe('the repo allowlist', () => {
+  const work = () => join(base, 'work')
+  beforeAll(() => {
+    mkdirSync(join(work(), 'workrepo', '.claude', 'worktrees', 'x'), { recursive: true })
+    mkdirSync(join(work(), 'work-evil'), { recursive: true })
+    mkdirSync(join(work(), 'product'), { recursive: true })
+    symlinkSync(join(work(), 'product'), join(work(), 'work-link'))
+  })
+  const locate = (repo: string) => rootedRepos([join(base, 'root')], [join(work(), 'workrepo')]).locate(repo)
+
+  test('the listed repo is in by path, by name and as a worktree; its siblings are not', async () => {
+    const workrepo = await locate(join(work(), 'workrepo'))
+    expect(workrepo).toEqual({ ok: true, value: join(work(), 'workrepo') })
+    expect(await locate('workrepo')).toEqual(workrepo)
+    expect(await locate(join(work(), 'workrepo', '.claude', 'worktrees', 'x'))).toMatchObject({ ok: true })
+    for (const refused of [
+      work(),
+      join(work(), 'product'),
+      join(work(), 'work-evil'),
+      join(work(), 'work-link'),
+      'product',
+    ]) {
+      expect((await locate(refused)).ok).toBe(false)
+    }
+  })
+
+  test('the settings read it as absolute paths', () => {
+    expect(loadLeadSettings({ HOME: '/home/x' }).repoAllow).toEqual([])
+    expect(loadLeadSettings({ HOME: '/home/x', FACTORY_REPO_ALLOW: '/a/one:/b/two' }).repoAllow).toEqual([
+      '/a/one',
+      '/b/two',
+    ])
+    expect(() => loadLeadSettings({ HOME: '/home/x', FACTORY_REPO_ALLOW: 'relative' })).toThrow(/FACTORY_REPO_ALLOW/)
+  })
+})
+
 describe('the spool replay', () => {
   const dirOf = () => mkdtempSync(join(base, 'spool-'))
   const append = (dir: string, session: string, kind: SpoolLine['kind'], at = '2026-11-07T10:00:00.000Z') => {
@@ -267,6 +303,7 @@ describe('names and settings', () => {
     expect(settings).toMatchObject({
       tickMs: 10_000,
       repoRoots: ['/home/x/SourceRoot'],
+      repoAllow: [],
       socket: '/home/x/.local/share/factory/hook.sock',
       spoolDir: '/home/x/.local/share/factory/spool',
       startBudgetMs: 1_800_000,

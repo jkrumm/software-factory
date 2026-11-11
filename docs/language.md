@@ -19,7 +19,7 @@ check, `docs/architecture.md`).
 | **Screen** | The Judge looks at a held signal (the `screen` loop, `factory-screen`) and promotes it, dismisses it with a reason (a duplicate names the open Issue) or leaves it held with a recommendation the owner reads in Needs you. A signal is screened once; a failed call is retried with a backoff, five times at most | |
 | **Probe** | A test signal a lead marks (`probe: true`) so it is stored dismissed and never held; its ack is `dropped`, detail `probe` | |
 | **Door route** | The registry that says which repo a monitor files in. The owner's estate, kept by the factory, not by git | |
-| **Work repo** | A repo no `project.yaml` describes. The read token never sees its words | |
+| **Work repo** | A repo no `project.yaml` describes, or whose `project.yaml` says `work: true`. The read token never sees its words | |
 | **Issue** | One unit of work: one repo, one branch, one ship. Warp's work item | Item, task, ticket. A GitHub issue is a signal |
 | **State** | Where an Issue is: `settling` (triage is not done), `queued` (ready, held back by capacity or a chain), `working` (a lead runs), `waiting` (a named wait), `watching` (shipped and deployed, the watch is on: the factory runs Verify and the probes, and the Issue closes when they pass), `closed`. The only field a person reads to know what an Issue is doing | Phase, as a field |
 | **Outcome** | How a closed Issue ended: `done`, `dropped` (its lead gave it up, with a reason), `healed` (an incident that went away before a lead started), `cancelled` (the owner's stop) | |

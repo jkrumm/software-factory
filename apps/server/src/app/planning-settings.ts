@@ -12,6 +12,8 @@ const whole = (min: number, max: number) => z.coerce.number().int().min(min).max
 const Env = z.object({
   /** `FACTORY_REPO_ROOTS`: directories whose direct children are the repos the factory may read as projects */
   FACTORY_REPO_ROOTS: z.string().optional(),
+  /** `FACTORY_REPO_ALLOW`: single repos outside the roots the factory may read as projects (absolute paths) */
+  FACTORY_REPO_ALLOW: z.string().optional(),
   FACTORY_LEADS_PER_ACCOUNT: whole(1, 16).optional(),
   FACTORY_LOAD_CEILING: whole(1, 100_000).optional(),
   FACTORY_SWAPOUT_CEILING_MB: whole(1, 10_000_000).optional(),
@@ -32,6 +34,7 @@ const Env = z.object({
 
 export interface PlanningSettings {
   repoRoots: string[]
+  repoAllow: string[]
   gitTimeoutMs: number
   claudeAccountBin: string
   sysctlBin: string
@@ -48,7 +51,7 @@ export interface PlanningSettings {
 /** The planning and capacity settings from the environment; throws one message naming every bad key. */
 export function planningSettings(
   env: Record<string, string | undefined>,
-  options: { home?: string; repoRoots?: readonly string[] } = {},
+  options: { home?: string; repoRoots?: readonly string[]; repoAllow?: readonly string[] } = {},
 ): PlanningSettings {
   const home = options.home ?? env.HOME ?? '/'
   const parsed = Env.safeParse(env)
@@ -64,8 +67,16 @@ export function planningSettings(
     : [...(options.repoRoots ?? [])]
   const relative = repoRoots.find((root) => !isAbsolute(root))
   if (relative) throw new Error(`FACTORY_REPO_ROOTS: ${relative} is not an absolute path`)
+  const repoAllow = e.FACTORY_REPO_ALLOW
+    ? e.FACTORY_REPO_ALLOW.split(':')
+        .map((repo) => repo.trim())
+        .filter(Boolean)
+    : [...(options.repoAllow ?? [])]
+  const relativeAllow = repoAllow.find((repo) => !isAbsolute(repo))
+  if (relativeAllow) throw new Error(`FACTORY_REPO_ALLOW: ${relativeAllow} is not an absolute path`)
   return {
     repoRoots,
+    repoAllow,
     gitTimeoutMs: e.FACTORY_GIT_TIMEOUT_MS ?? 20_000,
     claudeAccountBin: e.FACTORY_CLAUDE_ACCOUNT_BIN ?? `${home}/.local/bin/claude-account`,
     sysctlBin: e.FACTORY_SYSCTL_BIN ?? '/usr/sbin/sysctl',

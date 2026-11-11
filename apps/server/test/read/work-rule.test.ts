@@ -27,6 +27,8 @@ const REPOS = [
   '/src/100%', // a percent sign in a project path
   '/src/100x/sub', // what a percent wildcard would wrongly match
   'chat', // a project with defaults only
+  'workrepo', // a project whose project.yaml says work: true
+  '/src/workrepo/sub', // below it
   '/src/unlisted', // no project at all
 ]
 
@@ -42,8 +44,10 @@ beforeAll(async () => {
     ['my_app', '/src/my_app', 'file'],
     ['100', '/src/100%', 'file'],
     ['chat', '/src/chat', 'defaults'],
+    ['workrepo', '/src/workrepo', 'file'],
   ] as const) {
-    await sql`INSERT INTO factory.planning_projects (name, repo, source, project) VALUES (${name}, ${repo}, ${source}, '{}')`
+    const project = name === 'workrepo' ? { work: true } : {}
+    await sql`INSERT INTO factory.planning_projects (name, repo, source, project) VALUES (${name}, ${repo}, ${source}, ${project})`
   }
   for (const [index, repo] of REPOS.entries()) {
     const n = index + 1
@@ -91,4 +95,6 @@ test('the cards and the briefs say what isWorkRepo says, for every repo', async 
   expect(byRepo.get('/src/100x/sub')).toBe(true)
   expect(byRepo.get('/src/unlisted')).toBe(true)
   expect(byRepo.get('chat')).toBe(true)
+  expect(byRepo.get('workrepo')).toBe(true)
+  expect(byRepo.get('/src/workrepo/sub')).toBe(true)
 })
