@@ -579,7 +579,7 @@ const CAPACITY_TITLE = {
 
 function CapacityCards({ model }: { model: CapacityLoopModel }) {
   const { constants } = model
-  const subtitle = `Last ${model.days} days, UTC days`
+  const subtitle = `${model.days} days, UTC days`
   const wait = model.slotWait
   return (
     <div className="@container">
@@ -806,7 +806,7 @@ function CapacityReaped({ model }: { model: CapacityLoopModel }) {
 
 function CapacitySection({ model, pending }: { model: CapacityLoopModel | undefined; pending: boolean }) {
   return (
-    <section aria-labelledby="improve-capacity" className="grid gap-4">
+    <section aria-labelledby="improve-capacity" className="mt-10 grid gap-4">
       <h2 id="improve-capacity" className="text-sm font-medium text-muted-foreground">
         Capacity
       </h2>
@@ -870,8 +870,8 @@ function Improve() {
           <FrictionSection model={friction.data} pending={friction.isPending} />
           <FindingClassesSection model={classes.data} />
         </div>
-        <CapacitySection model={capacity.data} pending={capacity.isPending} />
       </div>
+      <CapacitySection model={capacity.data} pending={capacity.isPending} />
     </Page>
   )
 }
