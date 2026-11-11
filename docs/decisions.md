@@ -216,3 +216,12 @@ Report `docs/strategy/2026-11-next/report.html`, definition `docs/strategy/2026-
   exact-head rule already closes). Baseline for the measurement the Issue asks for, over the burn-in: `make check` median 3
   runs per Issue (p90 8, max 28), 32 h in 1021 foreground runs across all projects; software-factory Issues closed `done`
   (121): median working time 25 min, median elapsed 96 min. The after is counted from Issues that finish on this rule.
+- **NL29 One merge window per repo (Issue 747, 2026-11-11).** NL28's exact-head rule livelocked once five leads ran: CI took
+  14-17 min, master took a merge every 5-15 min, and PRs of Issues 664, 714 and 698 were rebased and re-pushed four to five
+  times each, every time green on a head that no longer contained master. NL28 had rejected a merge queue; the measurement
+  reverses that, but the answer is no service: `factory merge-lock --project <repo> -- <cmd>` is the deploy lock's host-local
+  pid symlink under `<project>.merge.lock` (waits 90 min, closed), and the brief has the lead run rebase, push, CI wait,
+  `make merge-guard` and merge inside it, so master cannot move under a CI run. The guard's rule is unchanged (no path-overlap
+  exception). The same brief line now says the CI wait is `MERGE_GUARD_ARGS=--wait` only where the repo's guard has it
+  (iris and basalt-ui do not), else `gh pr checks <n> --watch`. A lead outside the window (a human, a repo without the CLI)
+  can still race; the guard refuses it as before. Counted after: rebases per merged PR.
