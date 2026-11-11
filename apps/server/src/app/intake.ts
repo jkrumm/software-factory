@@ -53,6 +53,7 @@ import {
   type Topology,
 } from '../domains/intake/rules.ts'
 import { leadBranch } from '../domains/leads/names.ts'
+import { repoNameOf } from '../domains/planning/sync.ts'
 import type { WorkStore } from '../domains/work/ports.ts'
 import type { Issue } from '../domains/work/issue.ts'
 import { replay } from '../domains/work/machine.ts'
@@ -780,8 +781,42 @@ export function createIntake(deps: IntakeDeps) {
 
   // ---- the owner's and agents' entry, and the door's ----
 
+  /**
+   * The project name a repo text stands for: a name, a path inside a source root or a linked worktree below one. A
+   * project the factory knows answers with its own text; any other path falls back to its main checkout's directory
+   * name. The one place a repo is normalized, so nothing downstream stores or counts a path.
+   */
+  async function repoNameFor(text: string): Out<string> {
+    const found = await deps.projects.find(text)
+    if (!found.ok) return found
+    return ok(found.value?.repo ?? repoNameOf(text))
+  }
+
+  /**
+   * An agent names itself `agent:<who>`; a lead types the name of its worktree (`factory-<issue>-<attempt>`), which is
+   * the Issue's, so it files as the Issue's project, and a path or a worktree of a project files as the project.
+   */
+  async function sourceFor(from: string): Out<string> {
+    const who = from.startsWith('agent:') ? from.slice('agent:'.length) : null
+    if (!who) return ok(from)
+    const lead = /^factory-([1-9][0-9]*)-[1-9][0-9]*$/.exec(who)
+    if (lead) {
+      const issue = await uow.run(async (s) => ok(await loadIssue(s.work, `issue_${lead[1]}` as IssueId)))
+      if (!issue.ok) return issue
+      // a second directory of a taken name is stored by its path, which is no source name: the filer keeps what it typed
+      if (issue.value && !issue.value.repo.startsWith('/')) return ok(`agent:${issue.value.repo}`)
+    }
+    const named = await repoNameFor(who)
+    if (!named.ok) return named
+    return ok(named.value.startsWith('/') ? from : `agent:${named.value}`)
+  }
+
   async function file(body: SignalRequest, caller: RequestCaller): Out<Triaged> {
-    const signal = envelopeOfRequest(body, caller)
+    const from = await sourceFor(body.from)
+    if (!from.ok) return from
+    const repo = body.repo ? await repoNameFor(body.repo) : null
+    if (repo && !repo.ok) return repo
+    const signal = envelopeOfRequest({ ...body, from: from.value, repo: repo?.value ?? body.repo }, caller)
     if (!signal.ok) return signal
     return receive({ signal: signal.value, alert: null })
   }
@@ -791,11 +826,12 @@ export function createIntake(deps: IntakeDeps) {
     if (!probe.ok) return probe
     const row = probe.value
     if (!row) return refuse('not_found', `no signal ${id}`)
-    const repo = body.repo ?? row.received.signal.repo
-    if (!repo) return refuse('no_repo', 'this signal names no repo: promote it with one')
-    const found = await deps.projects.find(repo)
+    const asked = body.repo ?? row.received.signal.repo
+    if (!asked) return refuse('no_repo', 'this signal names no repo: promote it with one')
+    const found = await deps.projects.find(asked)
     if (!found.ok) return found
-    if (!found.value) return refuse('unknown_project', `${repo} is not a project the factory knows`)
+    if (!found.value) return refuse('unknown_project', `${asked} is not a project the factory knows`)
+    const repo = found.value.repo
     return uow.run(async (s): Out<Triaged> => {
       await s.intake.lock(`promote:${id}`)
       const current = await s.intake.signal(id)
@@ -1003,10 +1039,11 @@ export function createIntake(deps: IntakeDeps) {
     if (!found.value) return refuse('unknown_project', `${input.repo} is not a project the factory knows`)
     // A route into a work repo would let a monitor file there: the work repo hears the owner only.
     if (found.value.work) return refuse('unknown_project', `${input.repo} is a work repo: it hears the owner only`)
+    const named = { ...input, repo: found.value.repo }
     return uow.run(async (s) => {
-      const setBy = await setterOf(s, input, caller)
+      const setBy = await setterOf(s, named, caller)
       if (!setBy.ok) return setBy
-      return ok(await s.intake.setRoute(input.source, input.monitor, input.repo, setBy.value))
+      return ok(await s.intake.setRoute(named.source, named.monitor, named.repo, setBy.value))
     })
   }
 

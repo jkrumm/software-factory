@@ -28,6 +28,10 @@ the record of the rewrite and `docs/rewrite/state.md` its log. A directory listi
   `version` guards the write; a count or a timer that `issue_events` can answer is never a column. A lead's session state is
   derived from its hook events when read. The transition table (`domains/work/table.ts`) is total: a new state or event
   fills every cell, and `docs/language.md`'s diagram is regenerated (`make check` fails when it is stale).
+- **A repo is stored as its project name, never as a path.** Every write that takes a repo (`signal file`, `signal promote`, `door route-set`,
+  `issue new`) resolves a name, a path or a linked worktree to the directory name of the main checkout (`repoNameOf`,
+  `projectOf`) and stores that; an agent signal's source is `agent:<project name>` (a lead's `agent:factory-<issue>-<n>`
+  resolves to its Issue's project). Only a second directory of a taken name (`<name>~<hash>`) is stored as its path.
 - **Every effect has a deterministic key** (`kernel/keys.ts`: terminal labels, prompt ids, comment markers, signal
   fingerprints), so a replayed pass never spawns, prompts or posts twice. The Runner looks before it acts: a terminal
   carries `factory.key=<spawn key>`.

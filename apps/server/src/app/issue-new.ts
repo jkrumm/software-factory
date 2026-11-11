@@ -1,5 +1,5 @@
 import { cleanText, parseSeat, type ResolvedSeat } from '@software-factory/contract'
-import { projectOf, repoTextOf } from '../domains/planning/sync.ts'
+import { projectOf, repoNameOf, repoTextOf } from '../domains/planning/sync.ts'
 import type { Issue } from '../domains/work/issue.ts'
 import type { OwnerActor } from '../kernel/events.ts'
 import type { IssueId } from '../kernel/ids.ts'
@@ -96,7 +96,7 @@ export async function fileNewIssue(
       event: {
         kind: 'filed',
         payload: {
-          repo: project ? repoTextOf(project) : located.value,
+          repo: project ? repoTextOf(project) : repoNameOf(located.value),
           title: cleanText(input.title) || 'untitled',
           kind: input.source === 'alert' ? 'incident' : 'feature',
           origin: input.source === 'alert' ? 'application' : 'you',
