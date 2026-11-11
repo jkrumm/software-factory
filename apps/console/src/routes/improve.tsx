@@ -1,4 +1,5 @@
 import type {
+  CapacityLoopModel,
   FindingClassesModel,
   FixCommitsModel,
   FrictionModel,
@@ -9,11 +10,13 @@ import type {
 import {
   CaretRightIcon,
   ChatCircleDotsIcon,
+  CheckCircleIcon,
   CurrencyDollarIcon,
   FileTextIcon,
   GaugeIcon,
   HandPointingIcon,
   HourglassIcon,
+  ArmchairIcon,
   type Icon,
   ProhibitIcon,
   ScalesIcon,
@@ -22,14 +25,19 @@ import {
   WrenchIcon,
 } from '@phosphor-icons/react'
 import { createFileRoute, Link } from '@tanstack/react-router'
-import { InfoHint, MenuPopover, Section, Skeleton, Sparkline, StackedBars, StatCard } from '@/components/kit'
+import { Fold, InfoHint, MenuPopover, Section, Skeleton, Sparkline, StackedBars, StatCard } from '@/components/kit'
 import { EmptyState, Page, PageHeader } from '@/components/page'
 import { SidebarEntry, SidebarSection, useSidebarCollapsed } from '@/components/sidebar'
 import { LINKED_CARD } from '@/components/kit/card-link'
 import { TONE_MARK } from '@/components/kit/tone'
 import { buttonVariants } from '@/components/ui/button'
 import {
+  CAPACITY_HINT,
   chartTarget,
+  constantRows,
+  dayLabels,
+  dayValues,
+  dayXLabels,
   classWords,
   comparisonWords,
   DEFAULT_WINDOW,
@@ -47,10 +55,14 @@ import {
   historyLabels,
   historyValues,
   historyXLabels,
+  hoursWords,
   kpiChange,
   KPI_HINT,
   kpiFooter,
   lineTone,
+  mibWords,
+  msWords,
+  perDayWords,
   perIssueWords,
   shortDate,
   STATUS_WORD,
@@ -59,12 +71,13 @@ import {
   targetStatus,
   targetTally,
   targetWords,
+  stampWords,
   WINDOW_DAYS,
   windowOf,
   windowWords,
 } from '@/lib/improve'
 import { failureNote } from '@/lib/api'
-import { useFindingClasses, useFixCommits, useFriction, useKpis } from '@/lib/queries'
+import { useCapacityLoop, useFindingClasses, useFixCommits, useFriction, useKpis } from '@/lib/queries'
 import { cn } from '@/lib/utils'
 
 export const Route = createFileRoute('/improve')({
@@ -557,12 +570,274 @@ function FixBand({ model, pending }: { model: FixCommitsModel | undefined; pendi
   )
 }
 
+const CAPACITY_TITLE = {
+  throughput: 'Issues closed',
+  idle: 'Idle seat-hours with work queued',
+  over: 'Minutes over the load ceiling',
+  wait: 'Test slot wait',
+} as const
+
+function CapacityCards({ model }: { model: CapacityLoopModel }) {
+  const { constants } = model
+  const subtitle = `Last ${model.days} days, UTC days`
+  const wait = model.slotWait
+  return (
+    <div className="@container">
+      <div
+        aria-label="Capacity figures"
+        role="group"
+        className="grid grid-cols-[repeat(auto-fill,minmax(21rem,1fr))] gap-4"
+      >
+        <StatCard
+          icon={CheckCircleIcon}
+          title={CAPACITY_TITLE.throughput}
+          hint={CAPACITY_HINT.throughput}
+          subtitle={subtitle}
+          value={perDayWords(model.throughput.total, model.days)}
+          sub={`${model.throughput.total} closed in the window`}
+          chart={
+            <Sparkline
+              values={dayValues(model.throughput.perDay)}
+              labels={dayLabels(model.throughput.perDay)}
+              tone="neutral"
+              name="Issues closed per day"
+              format={(value) => `${value} closed`}
+            />
+          }
+          xLabels={dayXLabels(model.throughput.perDay)}
+          footer={[
+            { label: 'Closed', value: String(model.throughput.total) },
+            { label: 'Window', value: `${model.days} days` },
+          ]}
+        />
+        <StatCard
+          icon={ArmchairIcon}
+          title={CAPACITY_TITLE.idle}
+          hint={CAPACITY_HINT.idle}
+          subtitle={subtitle}
+          value={hoursWords(model.idleSeatHours.total)}
+          sub="Seats no lead held while Issues waited"
+          chart={
+            <Sparkline
+              values={dayValues(model.idleSeatHours.perDay)}
+              labels={dayLabels(model.idleSeatHours.perDay)}
+              tone="neutral"
+              name="Idle seat-hours per day"
+              format={hoursWords}
+            />
+          }
+          xLabels={dayXLabels(model.idleSeatHours.perDay)}
+          footer={[
+            { label: 'Leads per account', value: String(constants.leadsPerAccount) },
+            { label: 'Seat bonus at most', value: String(constants.seatsMaxBonus) },
+          ]}
+        />
+        <StatCard
+          icon={GaugeIcon}
+          title={CAPACITY_TITLE.over}
+          subtitle={subtitle}
+          value={String(model.minutesOverCeiling.total)}
+          sub="Host minutes above the ceiling in force"
+          chart={
+            <Sparkline
+              values={dayValues(model.minutesOverCeiling.perDay)}
+              labels={dayLabels(model.minutesOverCeiling.perDay)}
+              tone="neutral"
+              name="Minutes over the load ceiling per day"
+              format={(value) => `${value} min`}
+            />
+          }
+          xLabels={dayXLabels(model.minutesOverCeiling.perDay)}
+          footer={[
+            { label: 'Load ceiling', value: String(constants.loadCeiling) },
+            { label: 'Extra slot below load', value: String(constants.slotExtraLoad) },
+          ]}
+        />
+        <StatCard
+          icon={HourglassIcon}
+          title={CAPACITY_TITLE.wait}
+          hint={CAPACITY_HINT.wait}
+          subtitle={subtitle}
+          value={wait.n === 0 ? 'No data' : msWords(wait.p50Ms)}
+          sub={wait.n === 0 ? 'No steps recorded yet' : `Median; 90th percentile ${msWords(wait.p90Ms)}`}
+          chart={
+            wait.n === 0 ? null : (
+              <Sparkline
+                values={dayValues(wait.perDayP50)}
+                labels={dayLabels(wait.perDayP50)}
+                tone="neutral"
+                name="Median test slot wait per day"
+                format={(value) => msWords(value)}
+              />
+            )
+          }
+          xLabels={wait.n === 0 ? undefined : dayXLabels(wait.perDayP50)}
+          footer={[
+            {
+              label: '90th percentile',
+              value: wait.n === 0 ? null : msWords(wait.p90Ms),
+              note: 'No steps recorded yet',
+            },
+            { label: 'Steps recorded', value: String(wait.n) },
+          ]}
+        />
+      </div>
+    </div>
+  )
+}
+
+function CapacityTables({ model }: { model: CapacityLoopModel }) {
+  return (
+    <div className="grid items-start gap-8 xl:grid-cols-2">
+      <section aria-label="Steps by memory">
+        <Fold title="Steps by peak memory" count={model.topSteps.length} defaultOpen>
+          {model.topSteps.length === 0 ? (
+            <p className="py-2 text-sm text-muted-foreground">No steps recorded yet.</p>
+          ) : (
+            <div className={cn(PANEL, 'overflow-x-auto')} style={PANEL_SHADOW}>
+              <table className="w-full text-sm">
+                <caption className="sr-only">Test-slot steps with the largest peak memory in the window</caption>
+                <thead className="text-left text-xs text-muted-foreground">
+                  <tr>
+                    <th scope="col" className="px-4 py-2 font-medium">
+                      Step
+                    </th>
+                    <th scope="col" className="px-4 py-2 text-right font-medium">
+                      Runs
+                    </th>
+                    <th scope="col" className="px-4 py-2 text-right font-medium">
+                      Peak
+                    </th>
+                    <th scope="col" className="px-4 py-2 text-right font-medium">
+                      80th pct
+                    </th>
+                    <th scope="col" className="px-4 py-2 text-right font-medium">
+                      Duration
+                    </th>
+                    <th scope="col" className="px-4 py-2 text-right font-medium">
+                      Wait
+                    </th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {model.topSteps.map((step) => (
+                    <tr key={step.name} className="border-t">
+                      <th scope="row" className="px-4 py-2 text-left font-medium">
+                        {step.name}
+                      </th>
+                      <td className="px-4 py-2 text-right tabular-nums">{step.runs}</td>
+                      <td className="px-4 py-2 text-right tabular-nums">{mibWords(step.maxPeakMib)}</td>
+                      <td className="px-4 py-2 text-right tabular-nums">{mibWords(step.p80PeakMib)}</td>
+                      <td className="px-4 py-2 text-right tabular-nums">{msWords(step.medianDurationMs)}</td>
+                      <td className="px-4 py-2 text-right tabular-nums">{msWords(step.medianWaitMs)}</td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+          )}
+        </Fold>
+      </section>
+      <section aria-label="Lead cost per repo">
+        <Fold title="Lead cost per repo" count={model.leadCosts.length} defaultOpen>
+          {model.leadCosts.length === 0 ? (
+            <p className="py-2 text-sm text-muted-foreground">No lead samples recorded yet.</p>
+          ) : (
+            <div className={cn(PANEL, 'overflow-x-auto')} style={PANEL_SHADOW}>
+              <table className="w-full text-sm">
+                <caption className="sr-only">Memory a lead takes per repo, from its process tree samples</caption>
+                <thead className="text-left text-xs text-muted-foreground">
+                  <tr>
+                    <th scope="col" className="px-4 py-2 font-medium">
+                      Repo
+                    </th>
+                    <th scope="col" className="px-4 py-2 text-right font-medium">
+                      Attempts
+                    </th>
+                    <th scope="col" className="px-4 py-2 text-right font-medium">
+                      80th pct
+                    </th>
+                    <th scope="col" className="px-4 py-2 text-right font-medium">
+                      Last
+                    </th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {model.leadCosts.map((cost) => (
+                    <tr key={cost.repo} className="border-t">
+                      <th scope="row" className="px-4 py-2 text-left font-medium">
+                        {cost.repo}
+                      </th>
+                      <td className="px-4 py-2 text-right tabular-nums">{cost.attempts}</td>
+                      <td className="px-4 py-2 text-right tabular-nums">{mibWords(cost.peakMibP80)}</td>
+                      <td className="px-4 py-2 text-right tabular-nums">{mibWords(cost.lastPeakMib)}</td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+          )}
+        </Fold>
+      </section>
+    </div>
+  )
+}
+
+function CapacityReaped({ model }: { model: CapacityLoopModel }) {
+  const newest = model.reaped.newest[0]
+  return (
+    <p className="flex flex-wrap items-center gap-x-1 text-sm text-muted-foreground">
+      <span>
+        <span className="text-foreground tabular-nums">{model.reaped.total}</span> processes of closed attempts ended by
+        the
+      </span>
+      <span className="inline-flex items-center">
+        reaper
+        <InfoHint word={CAPACITY_HINT.reaped} className="-my-1" />
+      </span>
+      <span>
+        {newest
+          ? `in the window; the newest ${newest.comm} (by ${newest.reason}) at ${stampWords(newest.at)}`
+          : 'in the window'}
+      </span>
+    </p>
+  )
+}
+
+function CapacitySection({ model, pending }: { model: CapacityLoopModel | undefined; pending: boolean }) {
+  return (
+    <section aria-labelledby="improve-capacity" className="grid gap-4">
+      <h2 id="improve-capacity" className="text-sm font-medium text-muted-foreground">
+        Capacity
+      </h2>
+      {model ? (
+        <>
+          <CapacityCards model={model} />
+          <CapacityTables model={model} />
+          <CapacityReaped model={model} />
+          <dl aria-label="Settings in force" className="flex flex-wrap gap-x-6 gap-y-1 text-xs text-muted-foreground">
+            {constantRows(model.constants).map((row) => (
+              <div key={row.key} className="flex gap-1.5">
+                <dt>{row.label}</dt>
+                <dd className="text-foreground tabular-nums">{row.value}</dd>
+              </div>
+            ))}
+          </dl>
+        </>
+      ) : (
+        <p className="text-sm text-muted-foreground">{pending ? 'Loading' : 'No data yet'}</p>
+      )}
+    </section>
+  )
+}
+
 function Improve() {
   const { days = DEFAULT_WINDOW } = Route.useSearch()
   const kpis = useKpis(days)
   const friction = useFriction(days)
   const classes = useFindingClasses()
   const fixes = useFixCommits()
+  const capacity = useCapacityLoop(days)
 
   if (!kpis.data) {
     return (
@@ -595,6 +870,7 @@ function Improve() {
           <FrictionSection model={friction.data} pending={friction.isPending} />
           <FindingClassesSection model={classes.data} />
         </div>
+        <CapacitySection model={capacity.data} pending={capacity.isPending} />
       </div>
     </Page>
   )

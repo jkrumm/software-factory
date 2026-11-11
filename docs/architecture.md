@@ -422,6 +422,8 @@ events, decisions and evidence from the old schema (`apps/server/scripts/import/
 the KPIs keep their history. Usage and cost come from the `usage` schema by join, never copied.
 `GET /v1/kpis?days=N` also returns each KPI's `history` (six consecutive windows of N days, oldest first, the last the current one; usage KPIs only for the last two) and the `windows` behind it.
 
+`GET /v1/capacity-loop?days=N` (`factory read capacity-loop`, Improve's "Capacity" section) shows what the capacity loop did, computed in SQL by `read/capacity-loop.ts` over the window and per UTC day: Issues closed (an applied event into `closed`, as the cycle KPI counts), idle seat-hours (minutes with work queued of `max(seats - leads, 0)`, over 60, only where all three facts were read), minutes whose load was above the ceiling of that minute, the test-slot wait (`percentile_cont` p50, p90), the eight steps with the largest peak memory, the lead cost per repo (`read/lead-costs.ts`), the processes the reaper signalled (a dry decision is not counted) and the settings in force that tune the loop, so the weekly retro can name the one to change. `apps/server/test/read-models/capacity-loop.test.ts` restates every figure in plain SQL over seeded rows and fails when one drifts.
+
 ## Tests
 
 - **Unit** where logic is pure and dense: the machine, correlation, the gate, admission, the queue order.

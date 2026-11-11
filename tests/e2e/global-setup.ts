@@ -5,6 +5,7 @@ import { join } from 'node:path'
 import { freePort, startServer, startWorld, type ServerProcess } from '../scenarios/harness.ts'
 import { makeEstate } from '../scenarios/intake/support.ts'
 import { startLab } from '../scenarios/planning/lab.ts'
+import { seedCapacity } from './seed-capacity.ts'
 import { seedHost } from './seed-host.ts'
 import { seedKpiHistory } from './seed-kpis.ts'
 import { LEAD_REPOS, seed } from './seed.ts'
@@ -59,6 +60,7 @@ export default async function globalSetup(): Promise<() => Promise<void>> {
   process.env.E2E_HISTORY = JSON.stringify(await seedHistory(lab))
   process.env.E2E_CHAIN = JSON.stringify(await seedChain(lab))
   await seedHost(world.db.sql)
+  await seedCapacity(world.db.sql)
   await seedKpiHistory(world.db.sql, 'argo')
   await seed(lab)
   const consoleUrl = `http://127.0.0.1:${consolePort}`
