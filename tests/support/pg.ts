@@ -1,5 +1,5 @@
 import { randomBytes } from 'node:crypto'
-import { mkdtemp, readdir, rm, writeFile } from 'node:fs/promises'
+import { mkdtemp, readdir, rm, stat, writeFile } from 'node:fs/promises'
 import { createServer } from 'node:net'
 import { join } from 'node:path'
 import { SQL } from 'bun'
@@ -51,13 +51,44 @@ async function pgBinDir(): Promise<string> {
   return join('/usr/lib/postgresql', newest, 'bin')
 }
 
+const CLUSTER_PREFIX = 'factory-pg-'
+/** A test file's cluster lives for minutes; one this old belongs to a run that was killed before its teardown. */
+const STALE_CLUSTER_MS = 2 * 60 * 60 * 1000
+
+/** Stops the cluster under `root` if one runs (`pg_ctl` checks the pid file) and removes the directory. */
+async function stopClusterAt(bin: string, root: string): Promise<void> {
+  if (await Bun.file(join(root, 'data', 'postmaster.pid')).exists())
+    await run([join(bin, 'pg_ctl'), '-D', join(root, 'data'), '-m', 'immediate', '-w', 'stop']).catch(() => {})
+  await rm(root, { recursive: true, force: true })
+}
+
+let swept = false
+
+/**
+ * Once per process: stops and removes the clusters of runs that died without their teardown (a killed check, a timed
+ * out start). Each leaked postmaster holds a System V shared memory segment and macOS allows 32 of them
+ * (`kern.sysv.shmmni`), so a few dozen leaks make every later `initdb` fail with "could not create shared memory segment".
+ */
+async function sweepStaleClusters(bin: string): Promise<void> {
+  if (swept) return
+  swept = true
+  const now = Date.now()
+  const names = await readdir('/tmp').catch(() => [] as string[])
+  for (const name of names) {
+    if (!name.startsWith(CLUSTER_PREFIX)) continue
+    const root = join('/tmp', name)
+    const info = await stat(root).catch(() => null)
+    if (info && now - info.birthtimeMs > STALE_CLUSTER_MS) await stopClusterAt(bin, root)
+  }
+}
+
 /**
  * Starts a cluster in a temp dir. It listens on 127.0.0.1 because Bun's SQL client takes no unix socket from a URL, and
  * a server process gets its database as `DATABASE_URL`; the random password keeps other local users out.
  */
 export async function startTestCluster(): Promise<TestCluster> {
   // /tmp, not os.tmpdir(): macOS temp paths can push the socket path past its length limit.
-  const root = await mkdtemp('/tmp/factory-pg-')
+  const root = await mkdtemp(`/tmp/${CLUSTER_PREFIX}`)
   const data = join(root, 'data')
   const pwfile = join(root, 'pw')
   const password = randomBytes(18).toString('hex')
@@ -66,13 +97,14 @@ export async function startTestCluster(): Promise<TestCluster> {
   const port = await freePort()
   const serverOptions = `-c listen_addresses=127.0.0.1 -c unix_socket_directories=${root} -c fsync=off -c port=${port}`
 
-  let started = false
+  // `pg_ctl stop` is attempted whenever a postmaster.pid exists, not only after a `start` that returned: a `start -w`
+  // that timed out on a loaded host leaves a running postmaster behind.
   const stopCluster = async () => {
-    if (started) await run([join(bin, 'pg_ctl'), '-D', data, '-m', 'immediate', '-w', 'stop']).catch(() => {})
-    await rm(root, { recursive: true, force: true })
+    await stopClusterAt(bin, root)
   }
 
   try {
+    await sweepStaleClusters(bin)
     await run([
       join(bin, 'initdb'),
       '-U',
@@ -86,7 +118,6 @@ export async function startTestCluster(): Promise<TestCluster> {
       data,
     ])
     await run([join(bin, 'pg_ctl'), '-D', data, '-w', '-l', join(root, 'pg.log'), '-o', serverOptions, 'start'])
-    started = true
   } catch (error) {
     await stopCluster()
     throw error
