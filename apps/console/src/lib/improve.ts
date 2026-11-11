@@ -174,6 +174,7 @@ export const FRICTION_GROUP_LABEL: Record<FrictionCount['group'], string> = {
   undelivered_note: 'Notes that never arrived',
   unreviewed_ship: 'Ships without a review',
   unstated_acceptance: 'Ships that state nothing against the acceptance',
+  unproven_ci: 'Ships whose CI was red or missing',
   regression: 'Regressions',
   decision_settled: 'Decisions settled by default',
   signal: 'Signals',

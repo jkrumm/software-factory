@@ -248,6 +248,23 @@ export interface IntakeSink {
   /** GitHub Issues that closed and were not answered yet */
   pendingWritebacks(limit: number): Promise<Result<Writeback[], PortError>>
   wroteBack(issueId: IssueId, result: string): Promise<Result<void, PortError>>
+  /**
+   * A red default branch was filed as `red.issue` and the open pull requests are `red.pulls`: every other Issue of the
+   * project whose lead works or watches on one of those branches is noted once. Returns how many were noted.
+   */
+  noteRedBranch(red: RedBranch): Promise<Result<number, PortError>>
+}
+
+export interface RedBranch {
+  /** the Issue that was filed for the failing check */
+  issue: IssueId
+  /** the project's repo */
+  repo: string
+  branch: string
+  check: string
+  link: string | null
+  /** the head branch of every open pull request of the repo */
+  pulls: string[]
 }
 
 export interface SubjectState {

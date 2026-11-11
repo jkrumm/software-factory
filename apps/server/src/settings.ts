@@ -1,6 +1,6 @@
 import * as z from 'zod'
 import { PROCESS_LOCK_WAIT_MS } from './adapters/postgres/process-lock.ts'
-import { DEFAULT_RETRY_MS } from './domains/quality/watch.ts'
+import { DEFAULT_RECHECK_MS, DEFAULT_RETRY_MS } from './domains/quality/watch.ts'
 import { SHUTDOWN_DEADLINE_MS } from './shutdown.ts'
 
 const DEFAULT_SETTLE_MS = 2 * 60_000
@@ -25,6 +25,7 @@ const Env = z.object({
   FACTORY_TEST_CLOCK_OFFSET_MS: z.coerce.number().int().optional(),
   FACTORY_WATCH_WINDOW_MS: z.coerce.number().int().min(0).optional(),
   FACTORY_VERIFY_RETRY_MS: z.coerce.number().int().min(1).optional(),
+  FACTORY_VERIFY_RECHECK_MS: z.coerce.number().int().min(1).optional(),
   FACTORY_VERIFY_SETTLE_MS: z.coerce.number().int().min(0).optional(),
 })
 
@@ -59,6 +60,8 @@ export interface Settings {
     windowMs: number
     /** the first retry of a red check; it doubles for each one after */
     retryMs: number
+    /** how long after a blocked check (a checkout not ours to move, CI still running) verify looks again */
+    recheckMs: number
     /** how long after the server starts no check runs: a restart is a deploy */
     settleMs: number
   }
@@ -109,6 +112,7 @@ export function loadSettings(env: Record<string, string | undefined>): Settings 
     quality: {
       windowMs: parsed.data.FACTORY_WATCH_WINDOW_MS ?? 0,
       retryMs: parsed.data.FACTORY_VERIFY_RETRY_MS ?? DEFAULT_RETRY_MS,
+      recheckMs: parsed.data.FACTORY_VERIFY_RECHECK_MS ?? DEFAULT_RECHECK_MS,
       settleMs: parsed.data.FACTORY_VERIFY_SETTLE_MS ?? DEFAULT_SETTLE_MS,
     },
   }

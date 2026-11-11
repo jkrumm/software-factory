@@ -25,6 +25,7 @@ import { loadLeadSettings } from './adapters/leads/settings.ts'
 import { postgresUnitOfWork } from './adapters/postgres/unit-of-work.ts'
 import { postgresWorkStore } from './adapters/postgres/work-store.ts'
 import { GitCommits } from './adapters/quality/git.ts'
+import { githubCi } from './adapters/quality/ci.ts'
 import { makefileProjects } from './adapters/quality/projects.ts'
 import { MakeAndProbes } from './adapters/quality/proof.ts'
 import { AgwReview } from './adapters/quality/review.ts'
@@ -196,10 +197,13 @@ async function main(): Promise<void> {
   // The hook socket comes after the lock and the migrations: a second copy never reaches it.
   const socket = await leads.listen()
 
+  const ci = githubCi({ token: intakeEnv.github.token, apiUrl: intakeEnv.github.apiUrl })
   const shipping = {
     ...writes,
     commits: new GitCommits(),
     review: new AgwReview({ bin: settings.agwBin }),
+    ci,
+    projects,
     checkout,
   }
   const draining = new AbortController()
@@ -291,8 +295,8 @@ async function main(): Promise<void> {
           ...writes,
           projects,
           checkout,
-          proof: new MakeAndProbes(),
-          timing: { ...DEFAULT_TIMING, retryMs: settings.quality.retryMs },
+          proof: new MakeAndProbes({ ci }),
+          timing: { ...DEFAULT_TIMING, retryMs: settings.quality.retryMs, recheckMs: settings.quality.recheckMs },
           settledAt: watchSettledAt,
           signal: draining.signal,
         })

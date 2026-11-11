@@ -1,12 +1,14 @@
 import { afterEach, expect, test } from 'bun:test'
 import { type GitRepo, startGitRepo } from '@software-factory/tests/git-repo'
+import { githubCi } from '../../src/adapters/quality/ci.ts'
 import { makefileProjects } from '../../src/adapters/quality/projects.ts'
 import { MakeAndProbes } from '../../src/adapters/quality/proof.ts'
 import { AgwReview } from '../../src/adapters/quality/review.ts'
 import type { Run } from '../../src/adapters/quality/process.ts'
 import { NO_VERSION_TARGET } from '../../src/domains/quality/watch.ts'
 import type { Check } from '../../src/domains/quality/watch.ts'
-import type { Result } from '../../src/kernel/result.ts'
+import type { Ci } from '../../src/domains/quality/ports.ts'
+import { err, ok, portError, type Result } from '../../src/kernel/result.ts'
 
 const repos: GitRepo[] = []
 afterEach(async () => {
@@ -248,4 +250,136 @@ test('a project’s other make target runs beside verify, each its own check; a 
     ['make verify', true],
     ['make no-such-target', false],
   ])
+})
+
+const github = (routes: Record<string, unknown>, seen: string[] = []): typeof fetch =>
+  (async (input: string | URL | Request) => {
+    const path = new URL(String(input)).pathname
+    seen.push(path)
+    return path in routes ? Response.json(routes[path]) : new Response('not found', { status: 404 })
+  }) as typeof fetch
+
+const withOrigin = async (url: string) => {
+  const repo = await fresh()
+  await repo.git('remote', 'set-url', 'origin', url)
+  return repo
+}
+
+test('github CI: the merged pull request of the named commits and the conclusion of its head', async () => {
+  const repo = await withOrigin('git@github.com:o/app.git')
+  const seen: string[] = []
+  const fetch = github(
+    {
+      '/repos/o/app/commits/c1/pulls': [{ number: 4, merged_at: null, head: { sha: 'h0' } }],
+      '/repos/o/app/commits/c2/pulls': [
+        {
+          number: 9,
+          html_url: 'https://github.com/o/app/pull/9',
+          merged_at: '2026-01-01T00:00:00Z',
+          head: { sha: 'h9' },
+        },
+      ],
+      '/repos/o/app/commits/h9/check-runs': {
+        check_runs: [
+          { name: 'build', head_sha: 'h9', status: 'completed', conclusion: 'success' },
+          {
+            name: 'test',
+            head_sha: 'h9',
+            status: 'completed',
+            conclusion: 'failure',
+            html_url: 'https://github.com/o/app/runs/2',
+          },
+        ],
+      },
+      '/repos/o/app/commits/h9/status': { sha: 'h9', statuses: [] },
+    },
+    seen,
+  )
+  const ci = githubCi({ token: 't', apiUrl: 'https://api.example.test', fetch })
+  expect(await ci.ofShip({ repo: repo.path, commits: ['c1', 'c2', 'c3'] })).toEqual({
+    ok: true,
+    value: { status: 'red', pr: 9, headSha: 'h9', url: 'https://github.com/o/app/runs/2', reason: 'test failure' },
+  })
+  expect(seen.some((path) => path.includes('c3'))).toBe(false)
+})
+
+test('github CI: no pull request is missing; no token, no github origin and a failing github are errors', async () => {
+  const repo = await withOrigin('https://github.com/o/app.git')
+  const none = github({ '/repos/o/app/commits/c1/pulls': [] })
+  expect(
+    await githubCi({ token: 't', apiUrl: 'https://api.example.test', fetch: none }).ofShip({
+      repo: repo.path,
+      commits: ['c1'],
+    }),
+  ).toMatchObject({
+    ok: true,
+    value: { status: 'missing', pr: null, headSha: null },
+  })
+  const down = githubCi({ token: 't', apiUrl: 'https://api.example.test', fetch: github({}) })
+  expect(await down.ofShip({ repo: repo.path, commits: ['c1'] })).toMatchObject({
+    ok: false,
+    error: { detail: 'github 404' },
+  })
+  const tokenless = githubCi({ token: null, apiUrl: 'https://api.example.test', fetch: none })
+  expect(await tokenless.ofCommit({ repo: repo.path, sha: 'c1' })).toMatchObject({
+    ok: false,
+    error: { detail: 'no token' },
+  })
+  const local = await fresh()
+  expect(
+    await githubCi({ token: 't', apiUrl: 'https://api.example.test', fetch: none }).ofCommit({
+      repo: local.path,
+      sha: 'c1',
+    }),
+  ).toMatchObject({
+    ok: false,
+    error: { detail: expect.stringContaining('no github.com origin') },
+  })
+})
+
+test('github CI: a commit status counts beside the check runs; a head with a pending status is running', async () => {
+  const repo = await withOrigin('https://github.com/o/app.git')
+  const fetch = github({
+    '/repos/o/app/commits/s1/check-runs': {
+      check_runs: [{ name: 'build', head_sha: 'h9', status: 'completed', conclusion: 'success' }],
+    },
+    '/repos/o/app/commits/s1/status': {
+      sha: 's1',
+      statuses: [{ context: 'lint', state: 'pending', target_url: 'https://x/lint' }],
+    },
+  })
+  expect(
+    await githubCi({ token: 't', apiUrl: 'https://api.example.test', fetch }).ofCommit({ repo: repo.path, sha: 's1' }),
+  ).toEqual({
+    ok: true,
+    value: { status: 'running', url: 'https://x/lint', reason: 'lint is still running' },
+  })
+})
+
+test('the ci check reads the landed commit; a CI that cannot be read does not hold the watch; unset reads nothing', async () => {
+  const repo = await fresh()
+  const asked: string[] = []
+  const ci: Ci = {
+    ofShip: async () => err(portError('refused', 'unused')),
+    ofCommit: async ({ sha }) => {
+      asked.push(sha)
+      return ok({ status: 'red', url: null, reason: 'build failure' })
+    },
+  }
+  const now = '2026-01-01T12:05:00.000Z'
+  const input = {
+    repo: repo.path,
+    makeVerify: false,
+    probes: [],
+    ci: { landedAt: 'abcdef0123', mergedAt: '2026-01-01T12:00:00.000Z', now },
+  }
+  expect(checks(await new MakeAndProbes({ ci }).run(input, signal()))).toEqual([
+    { name: 'ci', ok: false, detail: 'build failure for abcdef0' },
+  ])
+  expect(asked).toEqual(['abcdef0123'])
+  const unread: Ci = { ...ci, ofCommit: async () => err(portError('refused', 'no token')) }
+  expect(checks(await new MakeAndProbes({ ci: unread }).run(input, signal()))).toEqual([
+    { name: 'ci', ok: true, detail: 'CI was not read: no token' },
+  ])
+  expect(checks(await new MakeAndProbes({ ci }).run({ ...input, ci: undefined }, signal()))).toEqual([])
 })

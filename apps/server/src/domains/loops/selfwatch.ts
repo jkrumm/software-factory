@@ -1,3 +1,4 @@
+import { isRedConclusion } from '../../kernel/checks.ts'
 import {
   type CiRun,
   type Finding,
@@ -19,9 +20,6 @@ export const DEFAULT_WAIT_GRACE_MS = 10 * 60_000
 /** The most evidence lines a signal carries, header and reproduce line included. */
 const MAX_LINES = 8
 const MAX_LISTED = 3
-
-/** A run that ended in one of these is red; `cancelled`, `neutral`, `skipped` and the like say nothing about the code. */
-const RED_CONCLUSIONS = new Set(['failure', 'timed_out', 'startup_failure'])
 
 const short = (sha: string): string => sha.slice(0, 7)
 const iso = (date: Date): string => date.toISOString()
@@ -49,13 +47,13 @@ const spelled = (id: string): string =>
 export function ciFindings(runs: readonly CiRun[], branch: string): Finding[] {
   const byWorkflow = new Map<string, CiRun[]>()
   for (const run of runs) {
-    if (run.conclusion !== 'success' && !RED_CONCLUSIONS.has(run.conclusion)) continue
+    if (run.conclusion !== 'success' && !isRedConclusion(run.conclusion)) continue
     byWorkflow.set(run.workflow, [...(byWorkflow.get(run.workflow) ?? []), run])
   }
   const found: Finding[] = []
   for (const [workflow, list] of [...byWorkflow].sort(([a], [b]) => byText(a, b))) {
     const newest = [...list].sort((a, b) => byText(b.at, a.at) || byText(b.id, a.id)).slice(0, 2)
-    if (newest.length < 2 || !newest.every((run) => RED_CONCLUSIONS.has(run.conclusion))) continue
+    if (newest.length < 2 || !newest.every((run) => isRedConclusion(run.conclusion))) continue
     found.push({
       kind: 'ci_red',
       subject: workflow,

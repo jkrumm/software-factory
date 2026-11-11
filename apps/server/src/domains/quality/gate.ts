@@ -2,6 +2,9 @@ import type { Result } from '../../kernel/result.ts'
 import {
   type CommitRead,
   type AcceptanceEvidence,
+  type CiEvidence,
+  type CiRead,
+  ciOf,
   type CommitsEvidence,
   deploys,
   MAX_RECORDED,
@@ -11,13 +14,25 @@ import {
 } from './evidence.ts'
 
 export type ShipVerdict =
-  | { accepted: true; commits: CommitsEvidence; review: ReviewEvidence; acceptance: AcceptanceEvidence }
+  | {
+      accepted: true
+      commits: CommitsEvidence
+      review: ReviewEvidence
+      acceptance: AcceptanceEvidence
+      ci: CiEvidence | null
+    }
   /** `error` is the verb's own: what the lead reads, naming what is missing */
   | { accepted: false; error: string }
 
 /** What came back from agw for the ship's ranges: its answer, or why there is none. */
 export interface ReviewOutcome {
   read: ReviewRead | null
+  problem: string | null
+}
+
+/** What came back from the CI port for the ship's commits: its answer, or why there is none. */
+export interface CiOutcome {
+  read: CiRead | null
   problem: string | null
 }
 
@@ -30,6 +45,8 @@ export function judgeShip(input: {
   reported: readonly string[]
   commits: Result<CommitRead>
   review: ReviewOutcome
+  /** the pull request's CI; recorded like the review, never judged; null where the project ships by push (nothing recorded) */
+  ci: CiOutcome | null
   /** the lead's acceptance lines, parsed; recorded, never judged */
   acceptance: AcceptanceEvidence
 }): ShipVerdict {
@@ -52,5 +69,6 @@ export function judgeShip(input: {
     },
     review: reviewOf({ ranges: read.reviewRanges, ...input.review }),
     acceptance: input.acceptance,
+    ci: input.ci && ciOf(input.ci),
   }
 }

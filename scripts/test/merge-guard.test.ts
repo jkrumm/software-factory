@@ -4,6 +4,7 @@ import { mkdir, mkdtemp, rm, writeFile } from 'node:fs/promises'
 import { join } from 'node:path'
 import { SHARED_NUMBERS as MIGRATOR_SHARED } from '../../apps/server/src/adapters/postgres/migrate.ts'
 import {
+  awaitHead,
   evaluate,
   masterRed,
   nextFree,
@@ -43,13 +44,14 @@ async function commit(dir: string, files: Record<string, string>, message: strin
   git(dir, 'commit', '-q', '-m', message)
 }
 
-function portsFor(cwd: string, runs: CiRun[] | null): GuardPorts {
+function portsFor(cwd: string, runs: CiRun[] | null, head: CiRun[] | null = [GREEN]): GuardPorts {
   return {
     git(args) {
       const out = spawnSync('git', args, { cwd, encoding: 'utf8' })
       return out.status === 0 ? out.stdout.trim() : null
     },
     ciRuns: () => runs,
+    headRuns: () => head,
   }
 }
 
@@ -137,12 +139,70 @@ describe('master red', () => {
     expect(evaluate(portsFor(dir, [RED]), { allowRed: true }).refusals).toEqual([])
   })
 
-  test('a running or unreadable CI is refused; a cancelled run is skipped', () => {
-    expect(masterRed([RUNNING, GREEN])).toContain('still running')
+  test('a running master is no refusal; unreadable is; a finished run decides; cancelled is skipped', () => {
+    expect(masterRed([RUNNING, GREEN])).toBeNull()
+    expect(masterRed([RUNNING, RED])).toContain('failure')
     expect(masterRed(null)).toContain('cannot be read')
-    expect(masterRed([])).toContain('no finished CI run')
+    expect(masterRed([])).toBeNull()
     expect(masterRed([CANCELLED, GREEN])).toBeNull()
     expect(masterRed([CANCELLED, RED])).toContain('failure')
+  })
+
+  test('a running master with a green head clears; allow-red skips master only', async () => {
+    const dir = await leadAdding('one', '0003_one.sql')
+    git(dir, 'fetch', '-q', 'origin', 'master')
+    expect(evaluate(portsFor(dir, [RUNNING], [GREEN])).refusals).toEqual([])
+    expect(evaluate(portsFor(dir, [RED], [RED]), { allowRed: true }).refusals).toEqual([
+      expect.stringContaining('finished failure (https://ci/red)'),
+    ])
+  })
+})
+
+describe('the head needs green CI', () => {
+  let n = 0
+  async function head(runs: CiRun[] | null): Promise<string[]> {
+    const dir = await leadAdding(`head${n++}`, '0003_one.sql')
+    git(dir, 'fetch', '-q', 'origin', 'master')
+    return evaluate(portsFor(dir, [GREEN], runs)).refusals
+  }
+
+  test('green clears; cancelled then green clears', async () => {
+    expect(await head([GREEN])).toEqual([])
+    expect(await head([CANCELLED, GREEN])).toEqual([])
+  })
+
+  test('running, red, none and unreadable are refused with the reason', async () => {
+    expect(await head([RUNNING])).toEqual([expect.stringContaining('still running (https://ci/running)')])
+    expect(await head([RED])).toEqual([expect.stringContaining('green CI on the exact head')])
+    expect(await head([])).toEqual([expect.stringContaining('CI has not run on')])
+    expect(await head([CANCELLED])).toEqual([expect.stringContaining('CI has not run on')])
+    expect(await head(null)).toEqual([expect.stringContaining('cannot be read')])
+  })
+
+  test('wait polls until the run completes, then clears; on timeout it is refused as running', async () => {
+    const dir = await leadAdding('one', '0003_one.sql')
+    git(dir, 'fetch', '-q', 'origin', 'master')
+    let polls = 0
+    const base = portsFor(dir, [GREEN])
+    const ports: GuardPorts = { ...base, headRuns: () => (++polls < 3 ? [RUNNING] : [GREEN]) }
+    let clock = 0
+    const lines: string[] = []
+    const options = {
+      minutes: 45,
+      sleep: async (ms: number) => void (clock += ms),
+      now: () => clock,
+      log: (line: string) => void lines.push(line),
+    }
+    await awaitHead(ports, options)
+    expect(polls).toBe(3)
+    expect(lines).toHaveLength(1)
+    expect(evaluate(ports).refusals).toEqual([])
+
+    clock = 0
+    const stuck: GuardPorts = { ...base, headRuns: () => [RUNNING] }
+    await awaitHead(stuck, { ...options, minutes: 2 })
+    expect(clock).toBe(120_000)
+    expect(evaluate(stuck).refusals).toEqual([expect.stringContaining('still running')])
   })
 })
 

@@ -1,6 +1,6 @@
-import { judgeShip, type ReviewOutcome, type ShipVerdict } from '../domains/quality/gate.ts'
+import { type CiOutcome, judgeShip, type ReviewOutcome, type ShipVerdict } from '../domains/quality/gate.ts'
 import type { AcceptanceEvidence } from '../domains/quality/evidence.ts'
-import type { Commits, LeadCheckout, Review } from '../domains/quality/ports.ts'
+import type { Ci, Commits, LeadCheckout, Projects, Review } from '../domains/quality/ports.ts'
 import type { QualityStore, StoredEvidence } from '../domains/quality/store.ts'
 import type { AnyIssueEvent } from '../domains/work/events.ts'
 import type { Issue } from '../domains/work/issue.ts'
@@ -22,6 +22,9 @@ export interface ShipDeps {
   ids: IdSource
   commits: Commits
   review: Review
+  ci: Ci
+  /** whether the project ships by pull request: a push-shipping project has no pull request whose CI to read */
+  projects: Projects
   checkout: LeadCheckout
 }
 
@@ -94,12 +97,23 @@ async function judge(deps: ShipDeps, issue: Issue, input: ShipInput): Promise<Sh
       ? { read: read.value, problem: null }
       : { read: null, problem: `review could not be read: ${read.error.detail}` }
   }
-  return judgeShip({ reported: input.commits, commits, review, acceptance: input.acceptance })
+  // GitHub is asked as agw is: a failure is a recorded `unknown`, never a refusal (NL23).
+  // A project that ships by push has no pull request: its ship records no CI at all, which no friction counts.
+  let ci: CiOutcome | null = { read: null, problem: null }
+  const project = commits.ok ? await deps.projects.checksOf(repo) : null
+  if (project?.ok && !project.value.ci) ci = null
+  else if (commits.ok) {
+    const read = await deps.ci.ofShip({ repo, commits: commits.value.commits })
+    ci = read.ok
+      ? { read: read.value, problem: null }
+      : { read: null, problem: `CI could not be read: ${read.error.detail}` }
+  }
+  return judgeShip({ reported: input.commits, commits, review, ci, acceptance: input.acceptance })
 }
 
 /**
  * The lead's `ship`. The merged commits are checked outside any transaction: git for where they landed, agw for the
- * review. A ship the gate refuses is stored as refused with the verb's error and moves nothing. An accepted one records
+ * review, GitHub for the CI of its pull request. A ship the gate refuses is stored as refused with the verb's error and moves nothing. An accepted one records
  * `shipped` on the Issue (which plans the watch), its commits as evidence, its review as evidence or the record
  * that there was none, and what it states of the acceptance, in one transaction. The same call again gets the first answer without asking git.
  */
@@ -159,6 +173,7 @@ export async function shipIssue(
       { id: deps.ids.next('evidence'), kind: 'commits', payload: verdict.commits },
       { id: deps.ids.next('evidence'), kind: 'review', payload: verdict.review },
       { id: deps.ids.next('evidence'), kind: 'acceptance', payload: verdict.acceptance },
+      ...(verdict.ci ? [{ id: deps.ids.next('evidence'), kind: 'ci' as const, payload: verdict.ci }] : []),
     ]
     await quality.recordShip({ ...ship, result: 'accepted', detail: null }, evidence)
     return ok({ result, detail: null, issue: recorded.value.issue, evidence })

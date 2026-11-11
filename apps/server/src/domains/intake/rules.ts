@@ -21,11 +21,12 @@ export function originOf(source: string): OriginName {
 
 /**
  * What the Issue is when intake files it. Alerts of the monitoring sources are incidents (one root cause seen through
- * many signals); a failing check or job is a bug; the rest is a request, which triage refines.
+ * many signals); a failing check on the default branch is one too, since a red default branch stops every merge and
+ * takes the urgent claim; a failing job is a bug; the rest is a request, which triage refines.
  */
 export function issueKindOf(received: Received): IssueKindName {
   const { signal } = received
-  if (signal.kind === 'alert') return signal.source === 'checks' || signal.source === 'launchd' ? 'bug' : 'incident'
+  if (signal.kind === 'alert') return signal.source === 'launchd' ? 'bug' : 'incident'
   return signal.kind === 'remark' ? 'chore' : 'feature'
 }
 

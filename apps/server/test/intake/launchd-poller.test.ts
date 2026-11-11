@@ -58,6 +58,7 @@ function setup(options: { projects?: RepoSignals[]; open?: string[]; receive?: '
     },
     subjects: (source) => Promise.resolve(ok(source === 'launchd' ? (options.open ?? []).map(openJob) : [])),
     pendingWritebacks: () => Promise.resolve(ok([])),
+    noteRedBranch: () => Promise.resolve(ok(0)),
     wroteBack: () => Promise.resolve(ok(undefined)),
   }
   const projects: ProjectSignals = {

@@ -249,17 +249,42 @@ export interface FakeGithub {
   requests: string[]
   comments: { number: number; body: string }[]
   closed: number[]
+  /** the default branch of the repo `o/rail`: its head's check runs (`name` and `conclusion`) and the open pull requests' head branches */
+  rail: { runs: { name: string; conclusion: string | null }[]; pulls: string[] }
   stop(): void
 }
 
 export function fakeGithub(): FakeGithub {
-  const state: FakeGithub = { url: '', issues: [], requests: [], comments: [], closed: [], stop: () => undefined }
+  const state: FakeGithub = {
+    url: '',
+    issues: [],
+    requests: [],
+    comments: [],
+    closed: [],
+    rail: { runs: [], pulls: [] },
+    stop: () => undefined,
+  }
   const server = Bun.serve({
     hostname: '127.0.0.1',
     port: 0,
     async fetch(req) {
       const url = new URL(req.url)
       state.requests.push(`${req.method} ${url.pathname}${url.search}`)
+      const sha = 'c'.repeat(40)
+      if (url.pathname === '/repos/o/rail') return Response.json({ default_branch: 'main' })
+      if (url.pathname === '/repos/o/rail/commits/main/check-runs') {
+        return Response.json({
+          check_runs: state.rail.runs.map((run) => ({
+            ...run,
+            head_sha: sha,
+            status: 'completed',
+            html_url: `https://github.com/o/rail/actions/runs/${run.name}`,
+          })),
+        })
+      }
+      if (url.pathname === '/repos/o/rail/commits/main/status') return Response.json({ sha, statuses: [] })
+      if (url.pathname === '/repos/o/rail/pulls')
+        return Response.json(state.rail.pulls.map((ref) => ({ head: { ref } })))
       const issues = /^\/repos\/[^/]+\/[^/]+\/issues$/.exec(url.pathname)
       if (issues && req.method === 'GET') {
         const label = url.searchParams.get('labels')

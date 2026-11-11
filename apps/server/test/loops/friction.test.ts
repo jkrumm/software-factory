@@ -65,6 +65,7 @@ test('a rate-judged pattern needs its count, its rate and the minimum sample', (
     ['ship_refused:why', 'refusal'],
     ['unreviewed_ship', 'unreviewed_ship'],
     ['unstated_acceptance', 'unstated_acceptance'],
+    ['unproven_ci', 'unproven_ci'],
     ['touch:woken', 'avoidable_touch'],
     ['signal_held:feedback', 'signal'],
   ]

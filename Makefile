@@ -3,7 +3,7 @@
 
 help:
 	@echo "make check   install, format, lint, shellcheck, tsc, Console tsc, tokens, artifact templates and InfoHint definitions, e2e tsc, boundaries, retired words, public scan, Issue diagram, generated CLI, tests, scenarios, Console build and Playwright (the merge gate)"
-	@echo "make merge-guard  run right before merging a PR: refuses unless the branch contains origin/master, its migration numbers are free and master's last CI run is green (MERGE_GUARD_ARGS=--allow-red only for the change that fixes a red master)"
+	@echo "make merge-guard  run right before merging a PR: refuses unless the branch contains origin/master, its migration numbers are free, the head's CI finished green and master's last finished CI run is not red (MERGE_GUARD_ARGS=--wait waits for the head's CI; --allow-red only for the change that fixes a red master)"
 	@echo "make test    the unit tests and the scenarios"
 	@echo "make e2e     build the Console and run its Playwright suite against a seeded server (tests/e2e; screenshots land in tests/e2e/out/screenshots)"
 	@echo "make fmt     apply formatting"

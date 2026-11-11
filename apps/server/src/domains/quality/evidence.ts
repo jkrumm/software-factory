@@ -1,3 +1,5 @@
+import { conclusionVerdict } from '../../kernel/checks.ts'
+
 /** `base..head`, as agw's review commands take a range. */
 export interface ReviewRange {
   base: string
@@ -164,4 +166,66 @@ export function reviewOf(input: {
     uncovered: read.uncovered,
     reason: `agw does not cover the range${named ? `: ${named}` : ''}`,
   }
+}
+
+/** What CI says of one commit: never `unknown`, which is only the record of a read that failed. */
+export type CiState = {
+  status: 'green' | 'red' | 'running' | 'missing'
+  /** the failing (or running) check's page, else the pull request's; null when there is none */
+  url: string | null
+  /** the failing check by name, or why there is nothing to read */
+  reason: string | null
+}
+
+/** CI of the pull request a ship landed through: its number and head, and what CI said of that head. */
+export type CiRead = CiState & { pr: number | null; headSha: string | null }
+
+/**
+ * The CI conclusion of the pull request a ship landed through. Recorded with its reason and never a refusal (NL23);
+ * `red` and `missing` are what the friction loop counts.
+ */
+export interface CiEvidence {
+  status: CiState['status'] | 'unknown'
+  pr: number | null
+  headSha: string | null
+  url: string | null
+  reason: string | null
+}
+
+/** One check run or commit status of a commit, as GitHub gave it. */
+export interface CiLine {
+  name: string
+  /** `completed`, or anything else for one that has not finished */
+  status: string
+  conclusion: string | null
+  url: string | null
+}
+
+/** Any red is red (the first failing check named), then any unfinished is running, then at least one success is green. */
+export function ciStateOf(lines: readonly CiLine[]): CiState {
+  const red = lines.find((line) => line.status === 'completed' && conclusionVerdict(line.conclusion) === 'red')
+  if (red) return { status: 'red', url: red.url, reason: `${red.name} ${red.conclusion}` }
+  const running = lines.find((line) => line.status !== 'completed')
+  if (running) return { status: 'running', url: running.url, reason: `${running.name} is still running` }
+  if (lines.some((line) => conclusionVerdict(line.conclusion) === 'green'))
+    return { status: 'green', url: null, reason: null }
+  return {
+    status: 'missing',
+    url: null,
+    reason: lines.length === 0 ? 'no check ran' : 'no check concluded in success or failure',
+  }
+}
+
+/** The ship's CI as evidence, from what the port answered (null: it could not be asked). */
+export function ciOf(input: { read: CiRead | null; problem: string | null }): CiEvidence {
+  const { read } = input
+  if (!read)
+    return {
+      status: 'unknown',
+      pr: null,
+      headSha: null,
+      url: null,
+      reason: input.problem ?? 'no CI was asked: none of the commits is on the default branch',
+    }
+  return { status: read.status, pr: read.pr, headSha: read.headSha, url: read.url, reason: read.reason }
 }

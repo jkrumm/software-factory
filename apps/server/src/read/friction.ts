@@ -162,6 +162,17 @@ export async function readFriction(sql: SQL, options: { now: Date; days: number 
         AND at >= ${w.from} AND at < ${w.to}`),
   )
 
+  // Ships before the CI was recorded have no ci row, and `running` or `unknown` is not a verdict: only red and missing count.
+  add(
+    'unproven_ci',
+    'unproven_ci',
+    'Ships whose CI was red or missing',
+    await one(sql`
+      SELECT count(*) AS n FROM factory.quality_evidence
+      WHERE kind = 'ci' AND payload->>'status' IN ('red', 'missing')
+        AND at >= ${w.from} AND at < ${w.to}`),
+  )
+
   add(
     'regression',
     'regression',

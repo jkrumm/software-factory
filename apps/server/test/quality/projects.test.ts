@@ -113,3 +113,11 @@ test('a target that verifies by another make target is carried, not dropped', as
     value: { makeVerify: false, makeTargets: ['verify-apple'] },
   })
 })
+
+test('a project that ships by pull request is checked for CI; one that ships by push is not', async () => {
+  const pr = projectsOf(stored('file', { ship: [{ paths: ['**'], via: 'pr' }] }))
+  expect(await pr.checksOf('/roots/app')).toMatchObject({ ok: true, value: { ci: true } })
+  const push = await projectsOf(stored('file', { ship: [{ paths: ['**'], via: 'push' }] })).checksOf('/roots/app')
+  expect(push).toMatchObject({ ok: true })
+  expect(push.ok && 'ci' in push.value).toBe(false)
+})
