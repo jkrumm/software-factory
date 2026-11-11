@@ -60,6 +60,11 @@ PLIST="$HOME/Library/LaunchAgents/$LABEL.plist"
 HEALTH_URL="http://127.0.0.1:$PORT/health"
 # A cold start migrates the schema first: 60 s is generous.
 HEALTH_WAIT_SECS="${HEALTH_WAIT_SECS:-60}"
+# A release put back on purpose (a rollback target, a redeploy of the live sha) is started up to this many times, with
+# this pause between: a Postgres lock timeout at start (issue 830) cleared by itself minutes later, and the one
+# attempt that met it left the whole factory down with its plist removed.
+RESTART_ATTEMPTS="${RESTART_ATTEMPTS:-3}"
+RESTART_PAUSE_SECS="${RESTART_PAUSE_SECS:-20}"
 SELF="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)/$(basename "${BASH_SOURCE[0]}")"
 SELF_DIR="$(dirname "$SELF")"
 LOCK="$DATA_DIR/deploy.lock"
@@ -200,6 +205,21 @@ wait_healthy() { # $1 sha
   return 1
 }
 
+# Starts a release that was healthy before and waits for it, again after a pause when it is not (stopping it first, so the
+# next start finds the process lock free). Each failed attempt prints the log tails. Returns 0 once healthy.
+restart_until_healthy() { # $1 release dir, $2 sha, $3 unload wait
+  local attempt=1
+  while :; do
+    if start_service "$1" "$2" && wait_healthy "$2"; then return 0; fi
+    (( attempt >= RESTART_ATTEMPTS )) && return 1
+    echo "[deploy] ${2:0:12} did not become healthy (attempt $attempt of $RESTART_ATTEMPTS); trying again in ${RESTART_PAUSE_SECS}s" >&2
+    tail_logs
+    stop_service "$3" || echo "[deploy] WARNING: could not unload the service" >&2
+    sleep "$RESTART_PAUSE_SECS"
+    attempt=$((attempt + 1))
+  done
+}
+
 is_sha() { [[ "$1" =~ ^[0-9a-f]{40}$ ]]; }
 
 # The only place a release is deleted: the name must be a full sha, and both path parts are guarded against empty.
@@ -267,8 +287,7 @@ roll_back() { # $1 failed sha, $2 previous sha ("" = none), $3 unload wait, $4 l
     if [[ -n "$4" && "$4" == "$1" ]]; then
       # A redeploy of the live sha: same release, so the plist on disk is the live one. Start it once more.
       echo "[deploy] redeploy of the live sha ${1:0:12}: starting again from its plist" >&2
-      [[ -f "$PLIST" ]] && launchctl bootstrap "gui/$(id -u)" "$PLIST" 2>/dev/null
-      if wait_healthy "$1" >/dev/null 2>&1; then
+      if restart_until_healthy "$RELEASES/$1" "$1" "$3" >/dev/null 2>&1; then
         echo "[deploy] ${1:0:12} is up again. deployed-sha unchanged." >&2
       else
         echo "[deploy] ${1:0:12} is still not healthy. deployed-sha unchanged." >&2
@@ -285,7 +304,7 @@ roll_back() { # $1 failed sha, $2 previous sha ("" = none), $3 unload wait, $4 l
     remove_failed_plist "$1"
     return 0
   fi
-  if start_service "$RELEASES/$2" "$2" && wait_healthy "$2"; then
+  if restart_until_healthy "$RELEASES/$2" "$2" "$3"; then
     echo "[deploy] rollback OK: ${2:0:12} is healthy again. deployed-sha unchanged." >&2
   else
     stop_service "$3"
@@ -461,7 +480,7 @@ rollback() {
 
   log "rolling back ${live:-none} -> ${prev:0:12} ($(core_of "$release")), stopping the service"
   stop_service "$unload_secs" || die "still loaded ${unload_secs}s after bootout; not bootstrapping over it. Retry the rollback."
-  if start_service "$release" "$prev" && wait_healthy "$prev"; then
+  if restart_until_healthy "$release" "$prev" "$unload_secs"; then
     ln -sfn "$release" "$CURRENT" || die "updating $CURRENT failed"
     ln -sf "$CURRENT/$(cli_of "$release")" "$CLI_LINK" || die "linking $CLI_LINK failed"
     [[ -z "$live" ]] || write_atomic "$PREV_FILE" "$live"
@@ -473,7 +492,7 @@ rollback() {
   echo "[deploy] ERROR: ${prev:0:12} did not become healthy within ${HEALTH_WAIT_SECS}s" >&2
   tail_logs
   stop_service "$unload_secs" || echo "[deploy] WARNING: could not unload the service" >&2
-  if [[ -n "$live" && -f "$(template_of "$RELEASES/$live")" ]] && start_service "$RELEASES/$live" "$live" && wait_healthy "$live"; then
+  if [[ -n "$live" && -f "$(template_of "$RELEASES/$live")" ]] && restart_until_healthy "$RELEASES/$live" "$live" "$unload_secs"; then
     echo "[deploy] ROLLBACK FAILED: ${live:0:12} is running again. deployed-sha unchanged." >&2
   else
     stop_service "$unload_secs" || true
