@@ -3,6 +3,7 @@ import * as z from 'zod'
 import { HISTORY_WINDOWS, type Kpi, type KpiModel } from '@software-factory/contract'
 import { boundedRead } from './bounded.ts'
 import { percentile, per, windowOf } from './stats.ts'
+import { flowKpis } from './kpis-flow.ts'
 
 /** The owner's actions on an Issue that the factory should have settled; the events that count are these kinds. */
 export const TOUCH_EVENTS = ['noted', 'woken', 'cancelled', 'reopened'] as const
@@ -48,11 +49,14 @@ export const issuesFiled = (sql: SQL, w: Window): Promise<number> =>
     sql`SELECT count(*) AS n FROM factory.issue_events WHERE kind = 'filed' AND result = 'applied' AND at >= ${w.from} AND at < ${w.to}`,
   )
 
+/** Owner touches of one kind this close together are one action: a person sending the same steer to a dozen Issues, or an owner script cancelling a re-planned batch. */
+export const TOUCH_BURST_MS = 60_000
+
 /**
  * Avoidable touches by kind: an owner action on an Issue the factory should have settled. A Decision the owner answered and
  * did not mark worth asking, an owner note sent to a lead, an owner wake, a cancel, a reopen. Not the first note of a
  * filing, not the orchestrator steering a lead, not a verdict on a Concept or Spec and not an Errand done: the owner
- * wanted those.
+ * wanted those. Touches of one kind within `TOUCH_BURST_MS` of the one before count once (one action fanned across Issues).
  */
 export async function avoidableTouches(sql: SQL, w: Window): Promise<Record<string, number>> {
   const counts: Record<string, number> = {
@@ -62,9 +66,11 @@ export async function avoidableTouches(sql: SQL, w: Window): Promise<Record<stri
   }
   for (const kind of TOUCH_EVENTS) counts[kind] = 0
   const events: unknown[] = await sql`
-    SELECT kind, count(*) AS n FROM factory.issue_events
-    WHERE ${ownerTouch(sql, TOUCH_EVENTS)} AND at >= ${w.from} AND at < ${w.to}
-    GROUP BY kind`
+    WITH t AS (
+      SELECT kind, at, lag(at) OVER (PARTITION BY kind ORDER BY at) AS prev FROM factory.issue_events
+      WHERE ${ownerTouch(sql, TOUCH_EVENTS)} AND at >= ${w.from} AND at < ${w.to})
+    SELECT kind, count(*) FILTER (WHERE prev IS NULL OR at - prev > ${TOUCH_BURST_MS / 1000}::int * interval '1 second') AS n
+    FROM t GROUP BY kind`
   for (const raw of events) {
     const row = z.object({ kind: z.string() }).and(Count).parse(raw)
     counts[row.kind] = row.n
@@ -247,9 +253,12 @@ async function usageOf(
 
 const NONE = { kind: 'unset', min: null, max: null } as const
 
-const kpi = (k: Omit<Kpi, 'target' | 'history'> & { target?: Kpi['target'] }): Omit<Kpi, 'history'> => ({
+const kpi = (
+  k: Omit<Kpi, 'target' | 'history' | 'parts'> & { target?: Kpi['target']; parts?: Kpi['parts'] },
+): Omit<Kpi, 'history'> => ({
   ...k,
   target: k.target ?? NONE,
+  parts: k.parts ?? [],
 })
 
 type KpiOptions = { now: Date; usageTimeoutMs?: number; pointsCache?: PointsCache }
@@ -303,7 +312,7 @@ async function kpisOf(
       target: { kind: 'between', min: 0.05, max: 0.07 },
       measured: true,
       definition:
-        'Owner actions in the window on an Issue the factory should have settled, divided by the Issues filed in the window: a Decision the owner answered and did not mark worth asking, an owner note, an owner wake, a cancel, a reopen. The first note of a filing, anything the orchestrator did (it is reported separately, as its own friction line), a verdict on a Concept or Spec and a done Errand are not counted: those are the request or the owner wanted them.',
+        'Owner actions in the window on an Issue the factory should have settled, divided by the Issues filed in the window: a Decision the owner answered and did not mark worth asking, an owner note, an owner wake, a cancel, a reopen. The first note of a filing, anything the orchestrator did (it is reported separately, as its own friction line), a verdict on a Concept or Spec and a done Errand are not counted: those are the request or the owner wanted them. Touches of one kind within a minute of the one before count once: one steer sent to a dozen Issues, or one re-planned batch cancelled, is one action. The orchestrator is excluded only while it writes with its own token (`FACTORY_ORCHESTRATOR_TOKEN`); a session still on the owner token is counted as the owner.',
     }),
     kpi({
       key: 'asks',
@@ -363,7 +372,7 @@ async function kpisOf(
       target: { kind: 'at_least', min: 0.9, max: null },
       measured: true,
       definition:
-        "Of the first watches (the window after an Issue's first ship) that ended in the window as passed or regressed, the share that passed. A watch that ended because its Issue moved on is not counted.",
+        "Of the first watches (the window after an Issue's first ship) that ended in the window as passed or regressed, the share that passed. A watch that ended because its Issue moved on is not counted. A pass is as strong as its watch: read it beside the first watch's dwell and the regressions by cause.",
     }),
     kpi({
       key: 'refusals',
@@ -443,6 +452,7 @@ async function kpisOf(
       definition:
         "Dollars the usage schema priced for the sessions of the Issues filed in the window (a session tagged with the Issue's number, or a Claude session its lead reported, with its subagents), divided by those Issues. Joined at read, never copied. Null while the usage schema is not there.",
     }),
+    ...(await flowKpis(sql, w)),
   ]
 }
 

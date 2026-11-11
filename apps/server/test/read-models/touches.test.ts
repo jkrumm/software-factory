@@ -178,7 +178,13 @@ describe('the orchestrator steers on its own line', () => {
   test('an owner note stays an owner touch and is not steering', async () => {
     const before = await countsOf()
     const id = await working('owner note')
-    value(await noteIssue({ uow, clock, ids }, { issueId: id, text: 'by hand', actor: 'owner', call: 'p1' }))
+    // an hour after the notes above: touches of one kind within a minute count as one action
+    value(
+      await noteIssue(
+        { uow, clock: fixedClock('2026-03-01T13:00:00Z'), ids },
+        { issueId: id, text: 'by hand', actor: 'owner', call: 'p1' },
+      ),
+    )
     const after = await countsOf()
     expect(after.touch('noted') - before.touch('noted')).toBe(1)
     expect(after.steer('noted') - before.steer('noted')).toBe(0)

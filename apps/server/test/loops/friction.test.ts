@@ -1,5 +1,5 @@
 import { expect, test } from 'bun:test'
-import type { FrictionCount } from '@software-factory/contract'
+import type { FrictionCount, SignalRequest } from '@software-factory/contract'
 import {
   isRetired,
   MAX_SIGNALS_PER_PASS,
@@ -13,9 +13,10 @@ import {
 } from '../../src/domains/loops/friction.ts'
 import type { ClassIssue } from '../../src/domains/loops/classes.ts'
 import type { FrictionPassRecord, LoopReads, LoopStore } from '../../src/domains/loops/ports.ts'
-import { frictionPass, type FrictionDeps } from '../../src/app/loops/friction.ts'
+import { frictionPass, frictionSummary, type FrictionDeps } from '../../src/app/loops/friction.ts'
+import { RETRO_TITLE } from '../../src/domains/loops/retro.ts'
 import { sequentialIds } from '../../src/kernel/ids.ts'
-import { ok } from '../../src/kernel/result.ts'
+import { err, ok } from '../../src/kernel/result.ts'
 
 /** 40 Issues closed: well past the minimum sample, and `n / 40` is each count's rate. */
 const CLOSED = 40
@@ -177,7 +178,7 @@ test('a pattern without Issues says so', () => {
 const DAY = 86_400_000
 const passNow = new Date('2026-11-20T12:00:00Z')
 
-function frictionWorld(classes: Record<string, ClassIssue[]>) {
+function frictionWorld(classes: Record<string, ClassIssue[]>, failRetro = false) {
   const recorded: { issue: string; class: string; key: string }[] = []
   const records: FrictionPassRecord[] = []
   const loops = {
@@ -189,6 +190,7 @@ function frictionWorld(classes: Record<string, ClassIssue[]>) {
   } as unknown as LoopStore
   const loopReads = { classIssues: async () => classes } as unknown as LoopReads
   let filed = 0
+  const bodies: SignalRequest[] = []
   const deps: FrictionDeps = {
     uow: { run: async (work) => work({ loops, loopReads }), inTransaction: () => false },
     clock: { now: () => passNow },
@@ -203,10 +205,13 @@ function frictionWorld(classes: Record<string, ClassIssue[]>) {
       counts: [count('lead_gone', 'lead_gone', 9), count('regression', 'regression', 9)],
     }),
     evidence: async () => ({}),
-    file: async () =>
-      ok({ outcome: 'filed', detail: 'new', issue: `issue_${++filed}`, signal: null, reason: null }) as never,
+    file: async (body) => {
+      bodies.push(body)
+      if (failRetro && body.title === RETRO_TITLE) return err({ kind: 'unreadable', detail: 'intake is down' }) as never
+      return ok({ outcome: 'filed', detail: 'new', issue: `issue_${++filed}`, signal: null, reason: null }) as never
+    },
   }
-  return { deps, recorded, records }
+  return { deps, recorded, records, bodies }
 }
 
 const noisyFriction = (): ClassIssue[] =>
@@ -231,4 +236,24 @@ test('with no history every class files', async () => {
   expect(w.records[0]?.filed).toHaveLength(2)
   expect(w.records[0]?.overBudget).toEqual([])
   expect(w.recorded).toHaveLength(2)
+})
+
+test('every pass files the weekly retro signal once, and a failure to file it never stops the pass', async () => {
+  const w = frictionWorld({})
+  const pass = await frictionPass(w.deps)
+  const retro = w.bodies.filter((b) => b.title === RETRO_TITLE)
+  expect(retro).toHaveLength(1)
+  expect(retro[0]).toMatchObject({ from: 'agent:software-factory', repo: 'software-factory', kind: 'request' })
+  expect(retro[0]?.text).toContain('factory retro --days 7')
+  expect(retro[0]?.text).toContain('Retro: 2026-11-20 kpi=<KPI key>')
+  expect(pass.ok && pass.value.due && frictionSummary(pass.value)).toContain('retro filed (new)')
+
+  const down = frictionWorld({}, true)
+  const failed = await frictionPass(down.deps)
+  expect(failed.ok).toBe(true)
+  expect(down.records).toHaveLength(1)
+  expect(down.records[0]?.filed).toHaveLength(2)
+  expect(failed.ok && failed.value.due && frictionSummary(failed.value)).toContain(
+    'retro not filed: unreadable: intake is down',
+  )
 })

@@ -47,10 +47,20 @@ const CARD_ORDER = [
   'worth_asking',
   'specs_per_100',
   'owner_decisions_per_100',
+  'first_watch_dwell_p50',
+  'regression_cause',
   'queue_wait_p90',
   'queue_wait_p50',
   'cycle_p50',
   'refusals',
+  'queue_time',
+  'idle_capacity',
+  'working_share',
+  'dropped_after_lead',
+  'amend_rate',
+  'nudges_acted',
+  'forced_note_delay_p50',
+  'errands_turned_away',
   'window_points',
   'cost',
 ]
@@ -58,6 +68,8 @@ const BAND_HEADINGS = [
   'Against target',
   'Quality',
   'Pace and gates',
+  'Where time goes',
+  'The loops',
   'Spend',
   'Fix commits',
   'Friction',
@@ -77,7 +89,7 @@ const cardKpis = (model: KpiModel): Kpi[] =>
 
 /** Each KPI card shows what the lib makes of the API's figure, history and target: figure, change, distance, footer. */
 async function expectCards(page: Page, model: KpiModel) {
-  expect(model.kpis).toHaveLength(13)
+  expect(model.kpis).toHaveLength(23)
   expect(model.windows).toHaveLength(6)
   for (const kpi of cardKpis(model)) {
     const card = cardOf(page, kpi.label)

@@ -216,6 +216,16 @@ export const KPI_KEYS = [
   'fix_commits',
   'window_points',
   'cost',
+  'queue_time',
+  'idle_capacity',
+  'working_share',
+  'dropped_after_lead',
+  'amend_rate',
+  'nudges_acted',
+  'forced_note_delay_p50',
+  'errands_turned_away',
+  'regression_cause',
+  'first_watch_dwell_p50',
 ] as const
 export type KpiKey = (typeof KPI_KEYS)[number]
 
@@ -238,13 +248,26 @@ export const KpiPoint = z
   })
   .meta({ id: 'KpiPoint' })
 
+const KPI_UNITS = ['per_issue', 'per_100_issues', 'share', 'ms', 'usd', 'points'] as const
+
+/** One slice of a KPI that is a breakdown (queued time by reason, time by state): same unit as the KPI, never a target. */
+export const KpiPart = z
+  .strictObject({
+    key: z.string(),
+    label: z.string(),
+    value: z.number(),
+    unit: z.enum(KPI_UNITS),
+  })
+  .meta({ id: 'KpiPart' })
+export type KpiPart = z.infer<typeof KpiPart>
+
 export const Kpi = z
   .strictObject({
     key: z.enum(KPI_KEYS),
     label: z.string(),
     /** null when nothing was counted (`n` is 0) or the number is not measured */
     value: z.number().nullable(),
-    unit: z.enum(['per_issue', 'per_100_issues', 'share', 'ms', 'usd', 'points']),
+    unit: z.enum(KPI_UNITS),
     /** what the value was divided by: Issues, answered Decisions, passed watches, measured Issues */
     n: z.number().int(),
     /** the numerator: the events counted (a duration's samples are `n`) */
@@ -254,6 +277,8 @@ export const Kpi = z
     measured: z.boolean(),
     /** exactly what was counted */
     definition: z.string(),
+    /** the breakdown of the current window, when the figure is one (empty otherwise); history keeps the headline only */
+    parts: z.array(KpiPart),
     /** `HISTORY_WINDOWS` points, oldest first, one per window of `KpiModel.windows`; the last is `value` and `n` */
     history: z.array(KpiPoint).length(HISTORY_WINDOWS),
   })
@@ -327,6 +352,87 @@ export const FrictionModel = z
   })
   .meta({ id: 'FrictionModel' })
 export type FrictionModel = z.infer<typeof FrictionModel>
+
+// -- retro ---------------------------------------------------------------------------------------------------------------
+
+/** A lead session of the window: where its transcript is, for the transcript pass (`factory retro`). */
+export const RetroSession = z
+  .strictObject({
+    issue: z.string(),
+    attempt: z.number().int(),
+    model: z.string().nullable(),
+    account: z.string().nullable(),
+    /** null when the lead's hook did not report one, and for the read token */
+    transcriptPath: z.string().nullable(),
+  })
+  .meta({ id: 'RetroSession' })
+export type RetroSession = z.infer<typeof RetroSession>
+
+/** One Issue of a sample a reader goes through: why it is in the sample, in the factory's own words. */
+export const RetroSample = z
+  .strictObject({
+    issue: z.string(),
+    why: z.string(),
+    /** the duration that put it in (cycle for the slowest), when it is one */
+    ms: z.number().nullable(),
+  })
+  .meta({ id: 'RetroSample' })
+export type RetroSample = z.infer<typeof RetroSample>
+
+/**
+ * An earlier retro signal against the number it was filed to move: its marker line (`Retro: <date> kpi=<key>
+ * before=<value> direction=<up|down>`), the Issue it became and when that shipped, and the KPI now.
+ */
+export const RetroLedgerEntry = z
+  .strictObject({
+    signal: z.string(),
+    title: z.string(),
+    filedAt: at,
+    issue: z.string().nullable(),
+    /** the Issue's state, or null while the signal has none */
+    state: z.string().nullable(),
+    outcome: z.string().nullable(),
+    shippedAt: at.nullable(),
+    kpi: z.string(),
+    before: z.number().nullable(),
+    direction: z.enum(['up', 'down']),
+    /** the KPI over this retro's window; null when the KPI is not measured or has no data */
+    now: z.number().nullable(),
+    /**
+     * `not_shipped`: no ship yet. `partial`: the window began before the ship, so it mixes both. `after`: the whole window
+     * is after the ship. `unknown`: no number to compare.
+     */
+    measured: z.enum(['not_shipped', 'partial', 'after', 'unknown']),
+    /** better or worse than `before` by more than 5 % in the signal's direction; flat inside; null unless `after` or `partial` */
+    moved: z.enum(['better', 'worse', 'flat']).nullable(),
+  })
+  .meta({ id: 'RetroLedgerEntry' })
+export type RetroLedgerEntry = z.infer<typeof RetroLedgerEntry>
+
+/**
+ * What the weekly retro reads, all of it from the event log and the tables (no model): the KPI table with its history, the
+ * friction counts, the lead sessions with their transcripts (the CLI reads those: `factory retro`), samples of Issues worth
+ * reading and the ledger of the earlier retro signals.
+ */
+export const RetroModel = z
+  .strictObject({
+    at,
+    days: z.number().int(),
+    window: z.strictObject({ from: at, to: at }),
+    kpis: KpiModel,
+    friction: FrictionModel,
+    sessions: z.array(RetroSession),
+    samples: z.strictObject({
+      regressed: z.array(RetroSample),
+      stalled: z.array(RetroSample),
+      slowest: z.array(RetroSample),
+      refused: z.array(RetroSample),
+      dropped: z.array(RetroSample),
+    }),
+    ledger: z.array(RetroLedgerEntry),
+  })
+  .meta({ id: 'RetroModel' })
+export type RetroModel = z.infer<typeof RetroModel>
 
 // -- finding classes -----------------------------------------------------------------------------------------------------
 
@@ -589,3 +695,11 @@ export const CapacityLoopModel = z
   })
   .meta({ id: 'CapacityLoopModel' })
 export type CapacityLoopModel = z.infer<typeof CapacityLoopModel>
+
+/**
+ * The line a retro signal carries so the next retro can find it: `Retro: 2026-11-17 kpi=queue_time before=4273327645
+ * direction=down` (`before=none` when the KPI had no number). The date is the retro's day, `kpi` a `KPI_KEYS` entry,
+ * `direction` where the number should go.
+ */
+export const RETRO_MARKER =
+  /^Retro: (\d{4}-\d{2}-\d{2}) kpi=([a-z0-9_]+) before=(none|-?\d+(?:\.\d+)?) direction=(up|down)$/m

@@ -1,4 +1,5 @@
 import type { FrictionModel, SignalRequest } from '@software-factory/contract'
+import { RETRO_TITLE, RETRO_WINDOW_DAYS, retroText } from '../../domains/loops/retro.ts'
 import {
   FRICTION_PASS_EVERY_MS,
   FRICTION_WINDOW_DAYS,
@@ -35,7 +36,8 @@ export interface FrictionDeps {
   file(body: SignalRequest): Promise<Result<Triaged, IntakeError>>
 }
 
-export type FrictionPass = { due: false; lastAt: Date } | { due: true; record: FrictionPassRecord }
+/** `retro`: what filing the weekly retro signal came to, in words (it is not a friction pattern and has no row in the record). */
+export type FrictionPass = { due: false; lastAt: Date } | { due: true; record: FrictionPassRecord; retro: string }
 
 const reasonOf = (error: IntakeError): string => ('detail' in error ? `${error.kind}: ${error.detail}` : error.kind)
 
@@ -95,13 +97,32 @@ export async function frictionPass(deps: FrictionDeps): Promise<Result<FrictionP
     failed: [],
   }
   for (const pattern of over.file) await fileOne(deps, gate, pattern, facts, evidence[pattern.key] ?? [], record)
+  const retro = await fileRetro(deps, model.window.to)
 
   const recorded = await deps.uow.run(async ({ loops }) => {
     await loops.recordFrictionPass(record)
     return ok(undefined)
   })
   if (!recorded.ok) return recorded
-  return ok({ due: true, record })
+  return ok({ due: true, record, retro })
+}
+
+/**
+ * The weekly retro: one signal on this repo whose lead reviews the week (`domains/loops/retro.ts`). Filed after the patterns,
+ * so a pattern is never held back by it; a failure is named in the pass line and never stops the pass. A replay is intake's
+ * fingerprint: an amend of the open retro Issue, or a drop while one closed lately.
+ */
+async function fileRetro(deps: FrictionDeps, to: string): Promise<string> {
+  const filed = await deps.file({
+    from: FRICTION_SOURCE,
+    kind: 'request',
+    title: RETRO_TITLE,
+    text: retroText({ to, days: RETRO_WINDOW_DAYS }),
+    repo: FRICTION_REPO,
+    probe: false,
+  })
+  if (!filed.ok) return `not filed: ${reasonOf(filed.error).slice(0, 200)}`
+  return `${filed.value.outcome} (${filed.value.detail})`
 }
 
 async function fileOne(
@@ -139,6 +160,7 @@ export const frictionSummary = (pass: FrictionPass): string => {
   if (!pass.due) return `not due (last pass ${pass.lastAt.toISOString()})`
   const { record } = pass
   const parts = [`filed ${record.filed.length} signal(s) for ${FRICTION_WINDOW_DAYS} days`]
+  parts.push(`retro ${pass.retro}`)
   if (record.overBudget.length > 0) parts.push(`over budget, not filed: ${named(record.overBudget)}`)
   if (record.failed.length > 0) {
     parts.push(`failed: ${record.failed.map((f) => `${f.key} (${f.reason})`).join('; ')}`)

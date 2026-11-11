@@ -11,6 +11,7 @@ import {
   HostHistoryModel,
   KpiModel,
   MachineModel,
+  RetroModel,
   SinceModel,
   NeedsModel,
   ChainModel,
@@ -29,6 +30,7 @@ import { readFixCommits } from '../read/fix-commits.ts'
 import { readFriction } from '../read/friction.ts'
 import { readHostSamples } from '../read/host.ts'
 import { readKpis } from '../read/kpis.ts'
+import { readRetro } from '../read/retro.ts'
 import { loopReads } from '../read/loops.ts'
 import { needsModel, readNeeds } from '../read/needs.ts'
 import { readSince, storedSince } from '../read/since.ts'
@@ -228,6 +230,23 @@ export const readModelRoutes = (deps: ReadModelDeps | undefined, caller: (reques
           operationId: 'read.kpis',
           summary:
             'the KPI table over the last days (1 to 90, default 7), each with its value, sample size, target, whether it is measured, and what exactly was counted',
+        },
+      },
+    )
+    .get(
+      '/retro',
+      async ({ query, request }) => {
+        if (!deps) return unavailable
+        const redact = caller(request) === 'read'
+        return Response.json(RetroModel.parse(await readRetro(deps.sql, { now: now(), days: days(query), redact })))
+      },
+      {
+        query: DaysQuery,
+        response: { 200: RetroModel, ...errorResponses(400, 422, 503) },
+        detail: {
+          operationId: 'read.retro',
+          summary:
+            'what the weekly retro reads from the database over the last days (1 to 90, default 7): the KPI table with its history, the friction counts, the lead sessions with their transcript paths, samples of Issues worth reading and the ledger of the earlier retro signals; `factory retro` adds the transcript pass',
         },
       },
     )
