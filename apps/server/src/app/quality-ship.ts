@@ -1,3 +1,4 @@
+import { SPEC_WAIT_HOURS } from '@software-factory/contract'
 import { type CiOutcome, judgeShip, type ReviewOutcome, type ShipVerdict } from '../domains/quality/gate.ts'
 import type { AcceptanceEvidence } from '../domains/quality/evidence.ts'
 import type { Ci, Commits, LeadCheckout, Projects, Review } from '../domains/quality/ports.ts'
@@ -47,6 +48,9 @@ export interface ShipAnswer {
   /** what the ship proved: its commits, and its review or the record that there was none */
   evidence: StoredEvidence[]
 }
+
+/** What a flagged Issue's ship is refused with until its lead has submitted a Spec. */
+export const SPEC_OWED = `ship refused: this Issue carries the checkpoint \`spec\` and no Spec was submitted: hand over a one-page Spec with \`factory artifact submit --kind spec\` (at most three open choices, each with your default); with no verdict in ${SPEC_WAIT_HOURS} hours you go on with your defaults`
 
 const shipped = (attempt: number): AnyIssueEvent => ({ kind: 'shipped', payload: { attempt }, actor: 'lead' })
 
@@ -126,10 +130,15 @@ export async function shipIssue(
   const loaded = await deps.uow.run(async ({ work, quality }) => {
     const history = await work.history(input.issueId)
     if (!history) return err<IssueWriteError>({ kind: 'unknown_issue', issueId: input.issueId })
-    return ok({ issue: replay(input.issueId, history), accepted: await quality.shipAccepted(eventKey) })
+    const issue = replay(input.issueId, history)
+    return ok({
+      issue,
+      accepted: await quality.shipAccepted(eventKey),
+      specOwed: issue.checkpoint === 'spec' && !(await quality.specSubmitted(input.issueId)),
+    })
   })
   if (!loaded.ok) return loaded
-  const { issue, accepted } = loaded.value
+  const { issue, accepted, specOwed } = loaded.value
 
   if (accepted) {
     return deps.uow.run(async ({ work, quality }) => {
@@ -145,7 +154,7 @@ export async function shipIssue(
     })
   }
 
-  const verdict = await judge(deps, issue, input)
+  const verdict: ShipVerdict = specOwed ? { accepted: false, error: SPEC_OWED } : await judge(deps, issue, input)
   return deps.uow.run<ShipAnswer, IssueWriteError>(async ({ work, quality }) => {
     const at = deps.clock.now()
     const ship = {

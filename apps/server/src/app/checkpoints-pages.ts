@@ -5,6 +5,7 @@ import { ok, type PortError, type Result } from '../kernel/result.ts'
 import { type CheckpointDeps, type CheckpointError } from './checkpoints.ts'
 import { screenErrands, type ErrandScreened } from './checkpoints-errands.ts'
 import { recheckOpen, type Rechecked } from './checkpoints-recheck.ts'
+import { recheckReviews, type ReviewLooked } from './checkpoints-reviews.ts'
 import { type SettleDeps, settleOpen, type Settled } from './checkpoints-settle.ts'
 
 export interface PageDeps extends CheckpointDeps {
@@ -65,6 +66,7 @@ export interface PassReport {
   decisions: Settled[]
   errands: ErrandScreened[]
   rechecks: Rechecked[]
+  reviews: ReviewLooked[]
   pages: PagesSent
 }
 
@@ -74,11 +76,19 @@ export async function runCheckpointPass(
 ): Promise<Result<PassReport, CheckpointError | PortError>> {
   const rechecks = await recheckOpen(deps)
   if (!rechecks.ok) return rechecks
+  const reviews = await recheckReviews(deps)
+  if (!reviews.ok) return reviews
   const decisions = await settleOpen(deps)
   if (!decisions.ok) return decisions
   const errands = await screenErrands(deps)
   if (!errands.ok) return errands
   const pages = await sendDuePages(deps)
   if (!pages.ok) return pages
-  return ok({ decisions: decisions.value, errands: errands.value, rechecks: rechecks.value, pages: pages.value })
+  return ok({
+    decisions: decisions.value,
+    errands: errands.value,
+    rechecks: rechecks.value,
+    reviews: reviews.value,
+    pages: pages.value,
+  })
 }

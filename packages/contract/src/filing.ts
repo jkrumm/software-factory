@@ -1,4 +1,5 @@
 import { NEW_ISSUE_TEXT_MAX } from './issues.ts'
+import { SPEC_WAIT_HOURS } from './lane.ts'
 import { EFFORTS, TIERS } from './roles.ts'
 
 /**
@@ -56,6 +57,15 @@ export const FILING = {
     ],
     example: 'apple',
   },
+  checkpoint: {
+    shape:
+      'optional; `spec` makes the lead hand over a one-page Spec before it builds, and the ship is refused without one',
+    notes: [
+      'Set it for a new public surface (an API, a CLI verb, a contract), a new data model or a migration that changes meaning, a new dependency of weight, or a UI screen the owner has not seen.',
+      `The Spec has at most three open choices, each with the lead's default; with no verdict in ${SPEC_WAIT_HOURS} hours the lead goes on with its defaults, so the queue never waits on the owner.`,
+    ],
+    example: 'spec',
+  },
   text: {
     maxChars: NEW_ISSUE_TEXT_MAX,
     meaning: 'optional prose shown to the lead before the facts',
@@ -66,6 +76,7 @@ export const FILING = {
     { flag: '--facts', meaning: 'the facts object as JSON; @file reads a file, - reads stdin' },
     { flag: '--seat', meaning: 'optional lead seat as JSON: {"tier":"opus","effort":"high"} or {"role":"lead"}' },
     { flag: '--lane', meaning: "optional resource class, capped by the repo's `lanes:` in project.yaml (`apple`)" },
+    { flag: '--checkpoint', meaning: 'optional gate: `spec` makes the lead submit a one-page Spec before it builds' },
     { flag: '--text', meaning: `optional prose before the facts, up to ${NEW_ISSUE_TEXT_MAX} characters` },
     {
       flag: '--after',

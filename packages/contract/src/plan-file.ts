@@ -1,6 +1,6 @@
 import { parse, YAMLParseError } from 'yaml'
 import * as z from 'zod'
-import { LaneName } from './lane.ts'
+import { CheckpointName, LaneName } from './lane.ts'
 import { PLAN_LIMITS } from './planning.ts'
 import { PlanSeat } from './seat.ts'
 
@@ -53,6 +53,8 @@ export const PlanRow = z
     seat: PlanSeat.optional(),
     /** the resource class its Issue runs in; the target project's `lanes:` caps how many of a lane run at once */
     lane: LaneName.optional(),
+    /** `spec`: the row's lead owes a one-page Spec before it builds, and the ship is refused without one */
+    checkpoint: CheckpointName.optional(),
     /** a project name; default: the project whose plan this is */
     repo: z.string().regex(PROJECT_NAME, 'a project name').optional(),
     /** rows that must be done first, in this file or in another project's plan */
@@ -66,7 +68,16 @@ export const PlanRow = z
   // These issues carry the row's path (`rows.<i>`): a nested refinement inherits its element's position.
   .superRefine((row, ctx) => {
     if (row.issue !== undefined) {
-      for (const field of ['after', 'not_before', 'stable_days', 'repo', 'kind', 'seat', 'lane'] as const) {
+      for (const field of [
+        'after',
+        'not_before',
+        'stable_days',
+        'repo',
+        'kind',
+        'seat',
+        'lane',
+        'checkpoint',
+      ] as const) {
         if (row[field] !== undefined)
           ctx.addIssue({ code: 'custom', message: `row ${row.key}: an adopted row (issue) has no ${field}` })
       }

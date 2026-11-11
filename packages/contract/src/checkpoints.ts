@@ -314,6 +314,8 @@ export const PassReply = z
         outcome: z.enum(['withdrawn', 'settled', 'kept']),
       }),
     ),
+    /** the Concepts and Specs that waited a day for the owner: withdrawn, a flagged Issue's Spec defaulted, or pushed once */
+    reviews: z.array(z.object({ artifact: z.string(), outcome: z.enum(['withdrawn', 'defaulted', 'pushed']) })),
     pages: z.object({
       sent: z.array(z.string()),
       failed: z.array(z.object({ key: z.string(), error: z.string() })),

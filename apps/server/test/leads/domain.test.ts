@@ -302,7 +302,7 @@ describe('the brief', () => {
   test('the standing orders open every brief and are pinned', () => {
     expect(buildBrief(input).startsWith(STANDING_ORDERS)).toBe(true)
     expect(new Bun.CryptoHasher('sha256').update(STANDING_ORDERS).digest('hex')).toBe(
-      'be8d80985e9a7d6b1f566733f8f3ff09a1476585aaf2902d6c787ebb7bec5917',
+      '22848237489c988d32c08b6e4dfa3e703362be2ffdbabbf84fe24efbfbdde008',
     )
   })
 
@@ -317,6 +317,35 @@ describe('the brief', () => {
     expect(STANDING_ORDERS).toMatch(/Write a change that fits a few files yourself/)
     expect(STANDING_ORDERS).toMatch(/about 30 minutes/)
     expect(STANDING_ORDERS).toMatch(/"waiting on its own background work" is not done/)
+  })
+
+  test('architecture and taste are a Spec, not a Decision, and the Spec rule says when one is due', () => {
+    expect(STANDING_ORDERS).toMatch(
+      /an architecture or look-and-feel choice that later Issues will build on is a Spec \(order 3\), never a Decision/,
+    )
+    expect(STANDING_ORDERS).toContain('3. A Spec is due before you build when the Issue carries the checkpoint `spec`')
+    for (const trigger of [
+      'a new public surface',
+      'a new data model or a migration that changes meaning',
+      'a new dependency of weight',
+      'a UI screen the owner has not seen',
+    ]) {
+      expect(STANDING_ORDERS).toContain(trigger)
+    }
+    expect(STANDING_ORDERS).toMatch(
+      /one page: what you will build, then at most three open choices, each with your default/,
+    )
+    expect(STANDING_ORDERS).toContain('with no verdict in 24 hours you go on with your defaults')
+    expect(STANDING_ORDERS).toMatch(/Most Issues need none/)
+  })
+
+  test('a flagged Issue says so under Checkpoint, and an unflagged one does not', () => {
+    const flagged = buildBrief({ ...input, issue: { ...input.issue, checkpoint: 'spec' } })
+    expect(flagged).toContain('## Checkpoint')
+    expect(flagged).toContain('carries the checkpoint `spec`')
+    expect(flagged).toContain('`factory issue ship` is refused until a Spec is submitted')
+    expect(flagged.indexOf('## Checkpoint')).toBeGreaterThan(flagged.indexOf('## As filed'))
+    expect(buildBrief(input)).not.toContain('## Checkpoint')
   })
 
   test('the standing orders name the friction route: a signal on software-factory, never a self-filed Issue', () => {

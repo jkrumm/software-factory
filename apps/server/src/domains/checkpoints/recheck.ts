@@ -10,7 +10,7 @@ export type RecheckOutcome = (typeof RECHECK_OUTCOMES)[number]
 /** One look at a checkpoint that stayed in front of the owner. Stored as a fact; whether another is due is derived. */
 export interface Recheck {
   checkpointId: string
-  kind: 'decision' | 'errand'
+  kind: 'decision' | 'errand' | 'artifact'
   issueId: IssueId
   /** the Issue's version the look had seen: the next look needs an event beyond it */
   throughVersion: number
@@ -43,6 +43,19 @@ export interface LogEntry {
 }
 
 export const REASON_MAX = 300
+
+/** A Concept or Spec the owner has not answered this long is looked at once (the Console marks an ask stale at the same age). */
+export const STALE_REVIEW_MS = 24 * 3_600_000
+
+/** The latest revision of a Concept or Spec nobody gave a verdict on, and when it was handed over. */
+export interface ReviewWait {
+  artifact: string
+  issueId: IssueId
+  kind: 'concept' | 'spec'
+  title: string
+  revision: number
+  at: Date
+}
 
 /**
  * Due when it has waited `afterMs` since it reached the owner or was last looked at, and the Issue has an event the last

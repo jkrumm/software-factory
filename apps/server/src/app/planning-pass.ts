@@ -111,6 +111,7 @@ async function fileFor(
         origin: 'factory',
         ...(seat?.ok ? { seat: seat.value } : {}),
         ...(row.lane ? { lane: row.lane } : {}),
+        ...(row.checkpoint ? { checkpoint: row.checkpoint } : {}),
       },
       actor: 'factory',
     },

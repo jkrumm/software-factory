@@ -93,6 +93,8 @@ export interface Issue {
   origin: Origin
   /** the seat asked for at filing, resolved; absent: the lead row of the role table */
   seat?: { tier: Tier; effort: Effort; role?: string }
+  /** `spec`: the lead owes a one-page Spec before it builds, and cannot ship without one */
+  checkpoint?: 'spec'
   /** the lead number: 0 until admitted, one more with every admission */
   attempt: number
   /** how many times it shipped; the current watch is this number */

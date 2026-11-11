@@ -671,13 +671,21 @@ export function deleteAnnotation(
  */
 export function giveVerdict(
   deps: CheckpointDeps,
-  input: { artifactId: ArtifactId; verdict: unknown; note: string | null; revision: number | null },
+  input: {
+    artifactId: ArtifactId
+    verdict: unknown
+    note: string | null
+    revision: number | null
+    /** `factory`: the verdict a wait that ran out stands for (a flagged Issue's Spec, an artifact its Issue moved past); default the owner */
+    by?: 'owner' | 'factory'
+  },
 ): Promise<CheckpointResult<ArtifactWritten & { verdict: VerdictRecord }>> {
   const verdict = VERDICTS.find((candidate) => candidate === input.verdict)
   if (!verdict) {
     const field = `verdict (${VERDICTS.join(', ')})`
     return Promise.resolve(err({ kind: 'missing_field', fields: [field], detail: `a verdict needs: ${field}` }))
   }
+  const by = input.by ?? 'owner'
   return deps.uow.run(async ({ work, checkpoints }) => {
     const artifact = await checkpoints.artifact(input.artifactId)
     if (!artifact) return err(notFound('artifact', input.artifactId))
@@ -708,12 +716,12 @@ export function giveVerdict(
     let move: IssueMove | null = null
     if (waitsForReview(artifact.kind) && waitingOn(issue, 'review', artifact.id)) {
       if (note || verdict === 'with_notes' || verdict === 'changes') {
-        const text = `The owner's verdict on "${artifact.title}" (revision ${revision}): ${labelOf[verdict]}${note ? `. ${note}` : ''}. Read it with: factory artifact show ${artifact.id}`
+        const text = `${by === 'factory' ? 'No verdict from the owner' : "The owner's verdict"} on "${artifact.title}" (revision ${revision}): ${labelOf[verdict]}${note ? `. ${note}` : ''}. Read it with: factory artifact show ${artifact.id}`
         const noted = applied(
           await recordIn(work, deps, {
             issueId: artifact.issueId,
             key: key('noted', 'verdict', artifact.id, revision),
-            event: { kind: 'noted', payload: { text }, actor: 'owner' },
+            event: { kind: 'noted', payload: { text }, actor: by },
           }),
           'noted',
         )
@@ -723,7 +731,7 @@ export function giveVerdict(
         await recordIn(work, deps, {
           issueId: artifact.issueId,
           key: key('verdict_given', artifact.id, revision),
-          event: { kind: 'verdict_given', payload: { artifact: artifact.id, verdict }, actor: 'owner' },
+          event: { kind: 'verdict_given', payload: { artifact: artifact.id, verdict }, actor: by },
         }),
         'verdict_given',
       )

@@ -23,6 +23,7 @@ import {
   submitArtifact,
 } from '../../src/app/checkpoints.ts'
 import { type PageDeps, sendDuePages } from '../../src/app/checkpoints-pages.ts'
+import { lookAtReview, recheckReviews } from '../../src/app/checkpoints-reviews.ts'
 import { screenErrands } from '../../src/app/checkpoints-errands.ts'
 import { type SettleDeps, settleDecision, settleOpen } from '../../src/app/checkpoints-settle.ts'
 import { fileIssue, recordIssueEvent } from '../../src/app/issues.ts'
@@ -137,13 +138,13 @@ const record = async (issueId: IssueId, name: string, event: AnyIssueEvent) =>
   value(await recordIssueEvent(deps, { issueId, key: key('test', issueId, name), event }))
 
 /** An Issue with a lead working: attempt 1. */
-async function workingIssue(repo = 'example'): Promise<IssueId> {
+async function workingIssue(repo = 'example', extra: { checkpoint?: 'spec' } = {}): Promise<IssueId> {
   const filed = value(
     await fileIssue(deps, {
       key: key('filed', deps.ids.next('signal')),
       event: {
         kind: 'filed',
-        payload: { repo, title: 'the probe fails', kind: 'bug', origin: 'you' },
+        payload: { repo, title: 'the probe fails', kind: 'bug', origin: 'you', ...extra },
         actor: 'factory',
       },
     }),
@@ -1272,5 +1273,104 @@ describe('blobs', () => {
     expect(x?.blob).toBe(`${String(x?.sha256).slice(0, 2)}/${String(x?.sha256)}`)
     expect(errorOf(await fileBlobStore(blobDir).get('../../etc/passwd'))).toMatchObject({ kind: 'refused' })
     expect(errorOf(await fileBlobStore(blobDir).get(`00/${'0'.repeat(64)}`))).toMatchObject({ kind: 'gone' })
+  })
+})
+
+describe('a Concept or Spec the owner has not answered for a day', () => {
+  const SPEC = { kind: 'spec', title: 'The queue spec', content: '# Queue\n\nOne page.' }
+  const HOUR = 3_600_000
+  const later = (hours: number) => clock.set(new Date(clock.now().getTime() + hours * HOUR))
+  const rechecks = async () =>
+    await db.sql`SELECT checkpoint_id, kind, outcome, by, through_version FROM factory.checkpoint_rechecks ORDER BY at, checkpoint_id`
+
+  test('a flagged Issue takes its lead its defaults after the wait: a verdict by the factory, one note, the lead goes on', async () => {
+    const issueId = await workingIssue('example', { checkpoint: 'spec' })
+    const { artifact } = value(await submitArtifact(deps, { issueId, attempt: 1, raw: SPEC }))
+    later(23)
+    expect(value(await recheckReviews(deps))).toEqual([])
+    later(2)
+    expect(value(await recheckReviews(deps))).toEqual([{ artifact: artifact.id, outcome: 'defaulted' }])
+
+    const [issue] = await db.sql`SELECT state FROM factory.issues WHERE id = ${issueId}`
+    expect(issue).toMatchObject({ state: 'working' })
+    expect(await effectsOf(issueId, 'note_lead')).toBe(1)
+    expect(await eventsOf(issueId)).toEqual([
+      'filed',
+      'settled',
+      'admitted',
+      'lead_started',
+      'submitted',
+      'noted',
+      'verdict_given',
+    ])
+    const [verdict] = await db.sql`SELECT verdict, note FROM factory.verdicts WHERE artifact_id = ${artifact.id}`
+    expect(verdict).toMatchObject({ verdict: 'looks_good' })
+    expect(String(verdict.note)).toContain('no verdict in 24 hours')
+    const [note] = await db.sql`
+      SELECT payload->>'text' AS text, actor FROM factory.issue_events WHERE issue_id = ${issueId} AND kind = 'noted' AND actor = 'factory'`
+    expect(String(note.text)).toStartWith('No verdict from the owner on "The queue spec"')
+    expect(await rechecks()).toEqual([
+      { checkpoint_id: artifact.id, kind: 'artifact', outcome: 'settled', by: 'factory', through_version: 1 },
+    ])
+
+    // a second pass changes nothing
+    expect(value(await recheckReviews(deps))).toEqual([])
+    expect(await effectsOf(issueId, 'note_lead')).toBe(1)
+  })
+
+  test('an Issue without the checkpoint is pushed once, never defaulted, and a later pass leaves it', async () => {
+    const issueId = await workingIssue()
+    const { artifact } = value(await submitArtifact(deps, { issueId, attempt: 1, raw: SPEC }))
+    expect(await rows('checkpoint_pages')).toBe(1)
+    later(25)
+    expect(value(await recheckReviews(deps))).toEqual([{ artifact: artifact.id, outcome: 'pushed' }])
+    expect(await rows('checkpoint_pages')).toBe(2)
+    expect(await rows('verdicts')).toBe(0)
+    const [issue] = await db.sql`SELECT state, wait_reason FROM factory.issues WHERE id = ${issueId}`
+    expect(issue).toMatchObject({ state: 'waiting', wait_reason: 'review' })
+    later(48)
+    expect(value(await recheckReviews(deps))).toEqual([])
+    expect(await rows('checkpoint_pages')).toBe(2)
+    expect((await rechecks())[0]).toMatchObject({ kind: 'artifact', outcome: 'kept' })
+  })
+
+  test('a Spec whose Issue closed meanwhile is withdrawn, and its pages are never sent', async () => {
+    const issueId = await workingIssue('example', { checkpoint: 'spec' })
+    const { artifact } = value(await submitArtifact(deps, { issueId, attempt: 1, raw: SPEC }))
+    await record(issueId, 'cancelled', { kind: 'cancelled', payload: { reason: 'not needed' }, actor: 'owner' })
+    later(25)
+    expect(value(await recheckReviews(deps))).toEqual([{ artifact: artifact.id, outcome: 'withdrawn' }])
+    const [verdict] = await db.sql`SELECT verdict, note FROM factory.verdicts WHERE artifact_id = ${artifact.id}`
+    expect(verdict).toMatchObject({ verdict: 'no_longer_applies', note: 'the Issue is closed' })
+    expect((await rechecks())[0]).toMatchObject({ outcome: 'withdrawn' })
+  })
+
+  test('a revision after Changes is looked at again from its own hand-over', async () => {
+    const issueId = await workingIssue('example', { checkpoint: 'spec' })
+    const { artifact } = value(await submitArtifact(deps, { issueId, attempt: 1, raw: SPEC }))
+    value(await giveVerdict(deps, { artifactId: artifact.id, verdict: 'changes', note: null, revision: null }))
+    later(30)
+    value(await reviseArtifact(deps, { artifactId: artifact.id, attempt: 1, content: '# Queue\n\nv2', note: 'x' }))
+    later(23)
+    expect(value(await recheckReviews(deps))).toEqual([])
+    later(2)
+    expect(value(await recheckReviews(deps))).toEqual([{ artifact: artifact.id, outcome: 'defaulted' }])
+  })
+
+  test('lookAtReview: a Concept of a flagged Issue is pushed, never defaulted', () => {
+    const wait = {
+      artifact: 'artifact_1',
+      issueId: 'issue_1' as IssueId,
+      kind: 'concept' as const,
+      title: 't',
+      revision: 1,
+      at: new Date(0),
+    }
+    const now = new Date(30 * HOUR)
+    expect(lookAtReview({ wait, now, closed: false, waiting: true, flaggedSpec: true }).outcome).toBe('pushed')
+    expect(
+      lookAtReview({ wait: { ...wait, kind: 'spec' }, now, closed: false, waiting: true, flaggedSpec: true }).outcome,
+    ).toBe('defaulted')
+    expect(lookAtReview({ wait, now, closed: false, waiting: false, flaggedSpec: false }).outcome).toBe('withdrawn')
   })
 })

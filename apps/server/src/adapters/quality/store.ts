@@ -80,6 +80,12 @@ export function postgresQualityStore(tx: SQL): QualityStore {
       return row !== undefined
     },
 
+    async specSubmitted(issueId) {
+      const [row] = await tx`
+        SELECT 1 AS found FROM factory.artifacts WHERE issue_id = ${issueId} AND kind = 'spec' LIMIT 1`
+      return row !== undefined
+    },
+
     async recordShip(ship, evidence) {
       const rows = await tx`
         INSERT INTO factory.quality_ships (id, issue_id, attempt, event_key, at, result, detail, reported)

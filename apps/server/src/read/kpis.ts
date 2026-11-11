@@ -275,6 +275,8 @@ async function kpisOf(
   const worth = await one(sql`
     SELECT count(*) AS n FROM factory.decisions
     WHERE settled_by = 'owner' AND worth_asking IS TRUE AND answered_at >= ${w.from} AND answered_at < ${w.to}`)
+  const specs = await one(sql`
+    SELECT count(*) AS n FROM factory.artifacts WHERE kind = 'spec' AND created_at >= ${w.from} AND created_at < ${w.to}`)
   const firstWatches = await one(sql`
     SELECT count(*) AS n FROM factory.quality_watches WHERE watch = 1 AND answer IN ('passed', 'regressed') AND answered_at >= ${w.from} AND answered_at < ${w.to}`)
   const firstPassed = await one(sql`
@@ -314,6 +316,30 @@ async function kpisOf(
       measured: true,
       definition:
         'Decisions raised in the window that the factory did not settle itself (the owner answered them, or they still wait), divided by the Issues filed in the window.',
+    }),
+    kpi({
+      key: 'specs_per_100',
+      label: 'Specs per 100 Issues',
+      value: issues === 0 ? null : (specs / issues) * 100,
+      unit: 'per_100_issues',
+      n: issues,
+      count: specs,
+      target: { kind: 'trend', min: null, max: null },
+      measured: true,
+      definition:
+        'Specs the leads submitted in the window (a lead hands one over when the Issue carries the checkpoint spec, or the change is a new public surface, a data model, a dependency of weight or a screen the owner has not seen), per 100 Issues filed in the window. Near zero for weeks means the Spec path is silent.',
+    }),
+    kpi({
+      key: 'owner_decisions_per_100',
+      label: 'Owner-settled Decisions per 100 Issues',
+      value: issues === 0 ? null : (byOwner / issues) * 100,
+      unit: 'per_100_issues',
+      n: issues,
+      count: byOwner,
+      target: { kind: 'trend', min: null, max: null },
+      measured: true,
+      definition:
+        'Decisions the owner answered himself in the window (not the Judge, a policy or a default), per 100 Issues filed in the window. Read beside Specs per 100 Issues: both near zero means nothing reaches him.',
     }),
     kpi({
       key: 'worth_asking',

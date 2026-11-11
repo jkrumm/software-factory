@@ -30,6 +30,8 @@ export function formatValue(unit: Kpi['unit'], value: number): string {
   switch (unit) {
     case 'per_issue':
       return value.toFixed(2)
+    case 'per_100_issues':
+      return value.toFixed(1)
     case 'share':
       return `${Math.round(value * 100)}%`
     case 'usd':
@@ -131,6 +133,8 @@ const SAMPLE_NOUN: Record<KpiKey, readonly [string, string]> = {
   avoidable_touches: ['Issue', 'Issues'],
   asks: ['Issue', 'Issues'],
   worth_asking: ['Decision', 'Decisions'],
+  specs_per_100: ['Issue', 'Issues'],
+  owner_decisions_per_100: ['Issue', 'Issues'],
   first_verification_passes: ['watch', 'watches'],
   refusals: ['Issue', 'Issues'],
   cycle_p50: ['sample', 'samples'],
@@ -152,6 +156,8 @@ export const KPI_HINT = {
   avoidable_touches: 'avoidable touch',
   asks: 'ask',
   worth_asking: 'worth asking',
+  specs_per_100: 'spec',
+  owner_decisions_per_100: 'decision',
   first_verification_passes: 'first verification pass',
   refusals: 'refusal',
   cycle_p50: 'cycle',

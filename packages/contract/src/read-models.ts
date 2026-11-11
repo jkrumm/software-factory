@@ -206,6 +206,8 @@ export const KPI_KEYS = [
   'avoidable_touches',
   'asks',
   'worth_asking',
+  'specs_per_100',
+  'owner_decisions_per_100',
   'first_verification_passes',
   'refusals',
   'cycle_p50',
@@ -242,7 +244,7 @@ export const Kpi = z
     label: z.string(),
     /** null when nothing was counted (`n` is 0) or the number is not measured */
     value: z.number().nullable(),
-    unit: z.enum(['per_issue', 'share', 'ms', 'usd', 'points']),
+    unit: z.enum(['per_issue', 'per_100_issues', 'share', 'ms', 'usd', 'points']),
     /** what the value was divided by: Issues, answered Decisions, passed watches, measured Issues */
     n: z.number().int(),
     /** the numerator: the events counted (a duration's samples are `n`) */
