@@ -2,6 +2,7 @@ import { afterAll, beforeAll, expect, test } from 'bun:test'
 import { ChangeList, ErrorBody, ReadIssueCards, ReadIssueDetail, ReadOverview } from '@software-factory/contract'
 import { bearer, type ServerProcess, startWorld, type World } from '../harness.ts'
 import { type Estate, makeEstate, startIntakeServer, until } from '../intake/support.ts'
+import { patient } from '../patience.ts'
 
 /**
  * The read API and the change stream against the real server process: an Issue filed through `POST /signals` shows on the
@@ -51,7 +52,7 @@ function frames(response: Response) {
     seen,
     /** reads until a frame satisfies `done` (the frames before it are in `seen`) */
     async until(done: (frame: Frame) => boolean, timeoutMs = 15_000): Promise<Frame> {
-      const deadline = Date.now() + timeoutMs
+      const deadline = Date.now() + patient(timeoutMs)
       for (;;) {
         const end = buffer.indexOf('\n\n')
         if (end >= 0) {

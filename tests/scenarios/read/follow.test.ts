@@ -2,6 +2,7 @@ import { afterAll, beforeAll, expect, test } from 'bun:test'
 import { join } from 'node:path'
 import { bearer, type ServerProcess, startWorld, TOKENS, type World } from '../harness.ts'
 import { type Estate, makeEstate, startIntakeServer } from '../intake/support.ts'
+import { patient } from '../patience.ts'
 
 /** `factory follow` as a process against the real server: a frame arrives, SIGTERM ends it with exit 0 and nothing on stderr. */
 const CLI = join(import.meta.dir, '..', '..', '..', 'apps', 'cli', 'bin', 'factory.ts')
@@ -39,7 +40,7 @@ test('follow prints the hello and a filed Issue, and SIGTERM ends it with exit 0
   const decoder = new TextDecoder()
   let buffer = ''
   const next = async (match: (event: string) => boolean): Promise<void> => {
-    const deadline = Date.now() + 15_000
+    const deadline = Date.now() + patient(15_000)
     for (;;) {
       const end = buffer.indexOf('\n')
       if (end >= 0) {

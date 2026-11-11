@@ -2,6 +2,7 @@ import { join } from 'node:path'
 import { AdmitAnswer, LoopRunReply, type TickAnswer } from '@software-factory/contract'
 import { readState, statePathOf, withState } from './fakes/hc-state.ts'
 import { type Caller, factory, type ServerProcess, type World } from './harness.ts'
+import { patient } from './patience.ts'
 
 /**
  * How a scenario moves an Issue: only through the routes and the loops a client has. It files with `issue new`, a signal or
@@ -100,7 +101,7 @@ const ADMISSION_WAIT_MS = 120_000
 /** Settles an Issue and admits passes until it is its turn (an account takes one lead per poll); throws if it never is within the wait. */
 export async function admitted(flow: Flow, issue: string, after: string[] = []): Promise<void> {
   await settle(flow, issue, after)
-  const deadline = Date.now() + ADMISSION_WAIT_MS
+  const deadline = Date.now() + patient(ADMISSION_WAIT_MS)
   for (;;) {
     const passed = await admit(flow)
     // A server whose planning loop runs on its own may have admitted it between the passes.

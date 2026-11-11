@@ -2,6 +2,7 @@ import { chmod, mkdir, mkdtemp, rm, writeFile } from 'node:fs/promises'
 import { join } from 'node:path'
 import { stateOf } from '../flow.ts'
 import { bearer, freePort, startServer, TOKENS, type ServerProcess, type World } from '../harness.ts'
+import { patient } from '../patience.ts'
 
 const ROOT = join(import.meta.dir, '..', '..', '..')
 const DOOR_MAIN = join(ROOT, 'apps', 'door', 'src', 'main.ts')
@@ -97,7 +98,7 @@ export async function until<T>(
   probe: () => Promise<T | null | undefined | false>,
   timeoutMs = 15_000,
 ): Promise<T> {
-  const deadline = Date.now() + timeoutMs
+  const deadline = Date.now() + patient(timeoutMs)
   for (;;) {
     const found = await probe()
     if (found) return found

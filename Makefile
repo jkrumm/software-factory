@@ -66,7 +66,8 @@ SLOT = $(call slot,test)
 
 # Every test file may start a private Postgres cluster in beforeAll and a scenario drives real processes; initdb alone takes seconds
 # on a loaded runner. Bun 1.4 ignores `timeout` in bunfig.toml (tests ran at 5 s on CI), so the flag carries it.
-TEST_TIMEOUT = --timeout 30000
+# The per-test limit stretches with the host's load per core (up to 6x): at load 40 a test that takes 3 s idle takes minutes (Issue 719).
+TEST_TIMEOUT = --timeout $(shell bun -e 'import {cpus,loadavg} from "node:os"; console.log(Math.round(30000*Math.min(6,Math.max(1,loadavg()[0]/cpus().length))))')
 
 test:
 	@echo "==> unit tests (bun test apps packages scripts integrations)"

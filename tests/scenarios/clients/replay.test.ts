@@ -2,6 +2,7 @@ import { afterAll, beforeAll, describe, expect, test } from 'bun:test'
 import { bearer, type Caller } from '../harness.ts'
 import { REQUESTS, RETIRED, type ClientRequest } from './requests.ts'
 import { addWorkRepo, call, fieldsOf, startClientsWorld, type VerbsWorld } from './support.ts'
+import { patient } from '../patience.ts'
 
 /**
  * Group C, the recorded requests: what the Herdr board, Hermes, Iris, agw and the repo's own scripts ask of the factory,
@@ -553,7 +554,7 @@ function frames(response: Response) {
   return {
     seen,
     async until(done: (frame: Frame) => boolean, timeoutMs = 15_000): Promise<Frame> {
-      const deadline = Date.now() + timeoutMs
+      const deadline = Date.now() + patient(timeoutMs)
       for (;;) {
         const end = buffer.indexOf('\n\n')
         if (end >= 0) {
