@@ -1,14 +1,21 @@
+import { ArrowLeftIcon } from '@phosphor-icons/react'
 import { createFileRoute, Link } from '@tanstack/react-router'
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import * as z from 'zod'
-import { Annotations, Composer, Verdict } from '@/components/artifact-panel'
+import { Annotations, Composer, type Focus, VerdictControl } from '@/components/artifact-panel'
 import { ArtifactContent, type Selected } from '@/components/artifact-content'
+import { Ago } from '@/components/issue/ago'
+import { ProjectChip } from '@/components/issue/project-chip'
+import { Lozenge } from '@/components/kit/lozenge'
 import { EmptyState } from '@/components/page'
 import { Badge } from '@/components/ui/badge'
-import { ageWords } from '@/lib/age'
-import { FORMAT_WORDS, GLOBAL_PATH, KIND_WORDS, VERDICT_WORDS } from '@/lib/artifact'
+import { FORMAT_WORDS, GLOBAL_PATH, KIND_WORDS } from '@/lib/artifact'
+import { ISSUE_STATE_WORDS } from '@/lib/issue'
+import { lozengeStateOf } from '@/lib/issue-page'
 import { useMediaQuery } from '@/lib/media'
-import { useArtifact } from '@/lib/queries'
+import { useNow } from '@/lib/now'
+import { issueNumber } from '@/lib/policy'
+import { useArtifact, useIssue } from '@/lib/queries'
 import { cn } from '@/lib/utils'
 
 const Search = z.object({
@@ -21,7 +28,33 @@ export const Route = createFileRoute('/artifacts/$id')({
   component: ArtifactPage,
 })
 
-const ago = (iso: string) => ageWords(Date.now() - Date.parse(iso))
+/** The Issue this artifact belongs to: its number and title as a link back, with its state and project. */
+function IssueCrumb({ issueId }: { issueId: string }) {
+  const number = issueNumber(issueId)
+  const { data: issue } = useIssue(String(number ?? issueId))
+  if (number === null) return null
+  return (
+    <div className="flex min-w-0 flex-wrap items-center gap-x-2 gap-y-1 text-[length:var(--vx-text-sm)]">
+      <Link
+        to="/issues/$id"
+        params={{ id: String(number) }}
+        className="inline-flex min-w-0 items-center gap-1.5 rounded-md text-muted-foreground outline-none transition-colors hover:text-foreground focus-visible:ring-3 focus-visible:ring-ring/50"
+      >
+        <ArrowLeftIcon aria-hidden="true" className="size-3.5 shrink-0" />
+        <span className="shrink-0 font-mono text-xs">Issue {number}</span>
+        {issue ? <span className="truncate">{issue.title}</span> : null}
+      </Link>
+      {issue ? (
+        <>
+          <Lozenge state={lozengeStateOf(issue)}>
+            {issue.state === 'closed' ? undefined : ISSUE_STATE_WORDS[issue.state]}
+          </Lozenge>
+          <ProjectChip name={issue.repoName} />
+        </>
+      ) : null}
+    </div>
+  )
+}
 
 function ArtifactPage() {
   const { id } = Route.useParams()
@@ -29,25 +62,43 @@ function ArtifactPage() {
   const navigate = Route.useNavigate()
   const primary = useArtifact(id, revision)
   const other = useArtifact(id, compare, compare !== undefined)
+  const now = useNow(30_000)
   const [selected, setSelected] = useState<Selected | null>(null)
   const [cleared, setCleared] = useState(0)
-  const [focus, setFocus] = useState<{ quote: string; tick: number } | null>(null)
+  const [focus, setFocus] = useState<Focus | null>(null)
   const docScroll = useRef<HTMLDivElement>(null)
   const wide = useMediaQuery('(min-width: 1024px)')
-  const [anchorTop, setAnchorTop] = useState(0)
-  const onSelect = useCallback((next: Selected) => setSelected(next), [])
-  const onFocus = useCallback((quote: string) => setFocus((was) => ({ quote, tick: (was?.tick ?? 0) + 1 })), [])
+  const [anchor, setAnchor] = useState<Selected['rect'] | null>(null)
+  // a new selection leaves the comment that was open
+  const onSelect = useCallback((next: Selected) => {
+    setSelected(next)
+    setFocus(null)
+  }, [])
+  const onFocus = useCallback(
+    (annotation: { id: string; quote: string }) =>
+      setFocus((was) => ({ id: annotation.id, quote: annotation.quote, tick: (was?.tick ?? 0) + 1 })),
+    [],
+  )
 
-  // The comment box is level with the passage; a Markdown passage can follow the document's own scroll.
+  // The comment box stays on its passage: a Markdown passage is followed through any scroll of the page or its column.
   useEffect(() => {
-    if (!selected) return
-    setAnchorTop(selected.rect.top)
+    if (!selected) {
+      setAnchor(null)
+      return
+    }
+    setAnchor(selected.rect)
     const { range } = selected
-    const scroller = docScroll.current
-    if (!range || !scroller) return
-    const follow = () => setAnchorTop(range.getBoundingClientRect().top)
-    scroller.addEventListener('scroll', follow, { passive: true })
-    return () => scroller.removeEventListener('scroll', follow)
+    if (!range) return
+    const follow = () => {
+      const { top, bottom, left } = range.getBoundingClientRect()
+      setAnchor({ top, bottom, left })
+    }
+    window.addEventListener('scroll', follow, { passive: true, capture: true })
+    window.addEventListener('resize', follow)
+    return () => {
+      window.removeEventListener('scroll', follow, { capture: true })
+      window.removeEventListener('resize', follow)
+    }
   }, [selected])
 
   const detail = primary.data
@@ -72,70 +123,76 @@ function ArtifactPage() {
 
   const { artifact } = detail
   const reviewable = artifact.kind === 'concept' || artifact.kind === 'spec'
-  const given = detail.verdicts.find((verdict) => verdict.revision === detail.revision)
   const revisions = artifact.revisions.map((r) => r.n)
   const comparing = compare !== undefined && other.data
   const pick = (next: { revision?: number; compare?: number }) =>
     void navigate({ search: { revision: detail.revision, compare, ...next } })
-  const pad = artifact.format === 'html' ? '' : 'px-4 py-4 md:px-8 md:py-6'
+  const pad = artifact.format === 'html' ? '' : 'px-4 py-6 md:px-8 md:py-8'
   const part = 'flex min-h-0 min-w-0 flex-col'
 
   return (
-    <div className="grid w-full lg:h-full lg:min-h-[40rem] lg:grid-cols-[minmax(0,1fr)_25rem]">
+    <div className="grid w-full lg:h-full lg:min-h-[40rem] lg:grid-cols-[minmax(0,1fr)_24rem]">
       <div className="flex min-w-0 flex-col lg:min-h-0">
-        <header className="flex flex-wrap items-center gap-x-4 gap-y-1.5 px-4 pt-5 pb-3 md:px-8 lg:flex-nowrap">
-          <h1 className="min-w-0 font-heading text-xl font-semibold tracking-tight lg:truncate" title={artifact.title}>
-            {artifact.title}
-          </h1>
-          <div className="flex shrink-0 flex-wrap items-center gap-x-2 gap-y-1 text-sm whitespace-nowrap text-muted-foreground lg:flex-nowrap">
-            <Badge variant="secondary">{KIND_WORDS[artifact.kind]}</Badge>
-            <span className="max-2xl:hidden">{FORMAT_WORDS[artifact.format]}</span>
-            <span className="max-2xl:hidden">· by {artifact.author === 'lead' ? 'the lead' : 'the factory'}</span>
-            <span className="max-2xl:hidden">· {ago(artifact.createdAt)}</span>
-            {reviewable ? (
-              <Badge variant={given ? 'default' : 'outline'}>
-                {given ? `${VERDICT_WORDS[given.verdict]} · ${ago(given.at)}` : 'Waiting for your verdict'}
-              </Badge>
-            ) : null}
-          </div>
-          <nav
-            aria-label="Revisions"
-            className="flex shrink-0 flex-wrap items-center gap-2 text-sm whitespace-nowrap lg:ml-auto lg:flex-nowrap"
-          >
-            <span className="text-muted-foreground">Revision</span>
-            {revisions.map((n) => (
-              <Link
-                key={n}
-                to="/artifacts/$id"
-                params={{ id }}
-                search={{ revision: n, compare }}
-                aria-current={n === detail.revision ? 'page' : undefined}
-                className="rounded-md px-2 py-0.5 tabular-nums hover:bg-accent aria-[current=page]:bg-primary aria-[current=page]:text-primary-foreground"
+        <header className="flex flex-col gap-3 border-b px-4 pt-5 pb-4 md:px-8">
+          <IssueCrumb issueId={artifact.issueId} />
+          <div className="flex flex-wrap items-start justify-between gap-x-6 gap-y-3">
+            <div className="flex min-w-0 flex-1 basis-80 flex-col gap-2">
+              <h1
+                className="font-heading text-xl font-semibold tracking-tight [text-wrap:balance]"
+                title={artifact.title}
               >
-                {n}
-              </Link>
-            ))}
-            {revisions.length > 1 ? (
-              <label className="ml-1 flex items-center gap-2">
-                Compare with
-                <select
-                  aria-label="Compare with"
-                  className="rounded-md bg-muted px-2 py-1"
-                  value={compare ?? ''}
-                  onChange={(event) => pick({ compare: event.target.value ? Number(event.target.value) : undefined })}
-                >
-                  <option value="">None</option>
-                  {revisions
-                    .filter((n) => n !== detail.revision)
-                    .map((n) => (
-                      <option key={n} value={n}>
-                        Revision {n}
-                      </option>
-                    ))}
-                </select>
-              </label>
-            ) : null}
-          </nav>
+                {artifact.title}
+              </h1>
+              <div className="flex flex-wrap items-center gap-x-2 gap-y-1 text-xs text-muted-foreground">
+                <Badge variant="secondary">{KIND_WORDS[artifact.kind]}</Badge>
+                <span>{FORMAT_WORDS[artifact.format]}</span>
+                <span>· by {artifact.author === 'lead' ? 'the lead' : 'the factory'}</span>
+                <span>
+                  · <Ago iso={artifact.createdAt} now={now} className="font-mono" />
+                </span>
+              </div>
+            </div>
+            <div className="flex flex-wrap items-center gap-x-4 gap-y-2">
+              <nav aria-label="Revisions" className="flex items-center gap-2 text-sm whitespace-nowrap">
+                <span className="text-muted-foreground">Revision</span>
+                {revisions.map((n) => (
+                  <Link
+                    key={n}
+                    to="/artifacts/$id"
+                    params={{ id }}
+                    search={{ revision: n, compare }}
+                    aria-current={n === detail.revision ? 'page' : undefined}
+                    className="rounded-md px-2 py-0.5 tabular-nums hover:bg-accent aria-[current=page]:bg-muted aria-[current=page]:font-semibold aria-[current=page]:text-foreground"
+                  >
+                    {n}
+                  </Link>
+                ))}
+                {revisions.length > 1 ? (
+                  <label className="ml-1 flex items-center gap-2">
+                    Compare with
+                    <select
+                      aria-label="Compare with"
+                      className="rounded-md bg-muted px-2 py-1"
+                      value={compare ?? ''}
+                      onChange={(event) =>
+                        pick({ compare: event.target.value ? Number(event.target.value) : undefined })
+                      }
+                    >
+                      <option value="">None</option>
+                      {revisions
+                        .filter((n) => n !== detail.revision)
+                        .map((n) => (
+                          <option key={n} value={n}>
+                            Revision {n}
+                          </option>
+                        ))}
+                    </select>
+                  </label>
+                ) : null}
+              </nav>
+              {reviewable ? <VerdictControl key={detail.revision} detail={detail} now={now} /> : null}
+            </div>
+          </div>
         </header>
 
         <div ref={docScroll} className="flex min-w-0 flex-col lg:min-h-0 lg:flex-1 lg:overflow-y-auto">
@@ -175,27 +232,24 @@ function ArtifactPage() {
           </div>
         </div>
       </div>
-      <div className="relative bg-card lg:min-h-0">
-        <aside className="flex min-w-0 flex-col gap-5 p-4 lg:h-full lg:overflow-y-auto">
-          {reviewable ? <Verdict key={detail.revision} detail={detail} /> : null}
-          <Annotations detail={detail} onFocus={onFocus} />
-        </aside>
-        {selected ? (
-          <Composer
-            key={`${selected.quote}|${selected.path}`}
-            id={id}
-            revision={detail.revision}
-            selected={selected}
-            anchorTop={anchorTop}
-            docked={!wide}
-            onDone={() => {
-              setSelected(null)
-              window.getSelection()?.removeAllRanges()
-              setCleared((n) => n + 1)
-            }}
-          />
-        ) : null}
-      </div>
+      <aside aria-label="Comments" className="flex min-w-0 flex-col bg-card lg:min-h-0">
+        <Annotations detail={detail} focusId={focus?.id ?? null} now={now} onFocus={onFocus} />
+      </aside>
+      {selected && anchor ? (
+        <Composer
+          key={`${selected.quote}|${selected.path}`}
+          id={id}
+          revision={detail.revision}
+          selected={selected}
+          anchor={anchor}
+          docked={!wide}
+          onDone={() => {
+            setSelected(null)
+            window.getSelection()?.removeAllRanges()
+            setCleared((n) => n + 1)
+          }}
+        />
+      ) : null}
     </div>
   )
 }

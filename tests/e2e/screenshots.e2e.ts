@@ -60,9 +60,20 @@ for (const variant of VARIANTS) {
         await page.goto(path)
         await expect(page.getByRole('status').filter({ hasText: 'Live' })).toBeVisible()
         await page.waitForLoadState('networkidle')
-        // the edit and delete actions show on hover: shoot the edited comment with them
-        if (name === 'artifact-report')
-          await page.getByRole('region', { name: 'On the text' }).getByRole('listitem').nth(2).hover()
+        // the owner is on the edited comment: its card is open with edit and delete, its passage painted in focus
+        if (name === 'artifact-report') {
+          await page
+            .getByRole('region', { name: 'On the text' })
+            .getByRole('listitem')
+            .nth(2)
+            .getByRole('button')
+            .first()
+            .click()
+          // the frame paints the passage in focus once the message has arrived
+          const frame = await (await page.locator('iframe[title="Artifact"]').elementHandle())?.contentFrame()
+          if (!frame) throw new Error('no frame')
+          await expect.poll(() => frame.evaluate("CSS.highlights.has('factory-active')")).toBe(true)
+        }
         await shot(name)
         if (name === 'chain') {
           // The graph fills the viewport and the schedule sits under it: a shorter window scrolls inside the Shell, so shoot a tall one too.
@@ -170,6 +181,15 @@ for (const variant of VARIANTS) {
       await composer.getByRole('textbox', { name: 'Comment' }).fill('Say why not Redis, and what a move would cost.')
       await page.screenshot({
         path: join(OUT, `${variant.name}-artifact-spec.png`),
+        fullPage: true,
+        animations: 'disabled',
+      })
+      // the verdict, from the header
+      await page.keyboard.press('Escape')
+      await page.getByRole('button', { name: 'Give your verdict' }).click()
+      await expect(page.getByRole('group', { name: 'Verdict' })).toBeVisible()
+      await page.screenshot({
+        path: join(OUT, `${variant.name}-artifact-spec-verdict.png`),
         fullPage: true,
         animations: 'disabled',
       })

@@ -1,8 +1,9 @@
 import type { NeedItem } from '@software-factory/contract'
+import { ArrowSquareOutIcon } from '@phosphor-icons/react'
 import { Link } from '@tanstack/react-router'
 import { type ReactNode, useState } from 'react'
 import { InfoHint, Lozenge, PropertyList } from '@/components/kit'
-import { Button } from '@/components/ui/button'
+import { Button, buttonVariants } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Textarea } from '@/components/ui/textarea'
 import { annotateArtifact, answerDecision, finishErrand, dismissSignal, giveVerdict, promoteSignal } from '@/lib/api'
@@ -294,9 +295,10 @@ function ReviewBody({ item, onSent }: BodyProps) {
         <Link
           to="/artifacts/$id"
           params={{ id: data.artifact.id }}
-          className="w-fit text-sm text-primary underline underline-offset-4"
+          className={cn(buttonVariants({ variant: 'outline', size: 'sm' }), 'mt-1 w-fit')}
         >
           Open the full page
+          <ArrowSquareOutIcon aria-hidden="true" data-icon="inline-end" />
         </Link>
       </div>
       {preview ? <p className="max-w-[75ch] text-sm text-muted-foreground">{preview}</p> : null}

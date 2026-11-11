@@ -5,6 +5,7 @@ import { parseFrameMessage, type SelectionRect } from '@/lib/artifact'
 import {
   clearHighlights,
   clearPending,
+  paintActive,
   paintHighlights,
   paintPending,
   scrollToQuote,
@@ -98,6 +99,11 @@ function MarkdownContent({ content, primary, quotes, focus, onSelect, cleared }:
   useEffect(() => {
     if (primary && focus && root.current) scrollToQuote(root.current, focus.quote)
   }, [primary, focus])
+  // the passage in focus is painted again whenever the text or the comments change under it, without scrolling to it
+  useEffect(() => {
+    if (primary && root.current) paintActive(root.current, focus?.quote ?? null)
+  }, [primary, focus, content, quotes])
+  useEffect(() => () => paintActive(document.body, null), [])
 
   return (
     <div ref={root} className="artifact-prose">
@@ -106,6 +112,11 @@ function MarkdownContent({ content, primary, quotes, focus, onSelect, cleared }:
         skipHtml
         urlTransform={defaultUrlTransform}
         components={{
+          table: ({ node: _node, ...props }) => (
+            <div className="my-3 overflow-x-auto">
+              <table {...props} />
+            </div>
+          ),
           a: ({ node: _node, ...props }) => <a {...props} target="_blank" rel="noreferrer noopener" />,
           img: ({ alt }) => <span className="italic text-muted-foreground">{alt ? `[image: ${alt}]` : '[image]'}</span>,
         }}
@@ -166,7 +177,8 @@ function HtmlContent({ content, primary, quotes, focus, onSelect, cleared }: Omi
   }, [primary, quotes])
 
   useEffect(() => {
-    if (primary && focus) send({ type: 'factory.scroll', quote: focus.quote })
+    if (!primary || !ready.current) return
+    send(focus ? { type: 'factory.scroll', quote: focus.quote } : { type: 'factory.deactivate' })
   }, [primary, focus])
 
   useEffect(() => {

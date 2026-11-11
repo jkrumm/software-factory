@@ -90,15 +90,25 @@
 }
 
 /* Marked text in an artifact: the CSS Custom Highlight API, so the page's DOM is not touched. */
-::highlight(annotation),
+::highlight(annotation) {
+  background-color: color-mix(in srgb, var(--vx-accent) 22%, transparent);
+}
+/* The passage a comment box is open on: stronger than the commented ones, so it is the one the box belongs to. */
 ::highlight(annotation-pending) {
-  background-color: color-mix(in srgb, var(--vx-accent) 30%, transparent);
+  background-color: color-mix(in srgb, var(--vx-accent) 40%, transparent);
+}
+/* The passage of the comment the owner is on: stronger, and underlined so it is not only a step in tint. */
+::highlight(annotation-active) {
+  background-color: color-mix(in srgb, var(--vx-accent) 48%, transparent);
+  text-decoration: underline;
+  text-decoration-thickness: 2px;
+  text-underline-offset: 3px;
 }
 
 /* The rendered Markdown of an artifact. */
 .artifact-prose {
   @apply text-base leading-7 wrap-break-word;
-  max-width: 88ch;
+  max-width: 75ch;
   margin-inline: auto;
 }
 .artifact-prose > :first-child {
@@ -123,8 +133,7 @@
 .artifact-prose ul,
 .artifact-prose ol,
 .artifact-prose blockquote,
-.artifact-prose pre,
-.artifact-prose table {
+.artifact-prose pre {
   @apply my-3;
 }
 .artifact-prose ul {
@@ -155,7 +164,7 @@
   @apply bg-transparent p-0;
 }
 .artifact-prose table {
-  @apply block w-full overflow-x-auto border-collapse text-sm;
+  @apply w-full border-collapse text-sm;
 }
 .artifact-prose th,
 .artifact-prose td {

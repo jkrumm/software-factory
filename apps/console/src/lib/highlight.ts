@@ -44,6 +44,16 @@ export function scrollToQuote(root: Element, quote: string): void {
   element?.scrollIntoView({ block: 'center', behavior: 'smooth' })
 }
 
+const ACTIVE = 'annotation-active'
+
+/** The passage of the comment the owner is on, painted stronger than the others (null drops it). */
+export function paintActive(root: Element, quote: string | null): void {
+  if (typeof Highlight === 'undefined') return
+  const found = quote === null ? undefined : rangesOf(root, [quote])[0]
+  if (found) CSS.highlights.set(ACTIVE, new Highlight(found.range))
+  else CSS.highlights.delete(ACTIVE)
+}
+
 const PENDING = 'annotation-pending'
 
 /** Keeps a selection painted while the comment box has the focus (a focused field takes the real selection away). */
