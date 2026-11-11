@@ -12,7 +12,7 @@ What is not built yet is the last section.
 apps/
   server/     Elysia app: domains, application services, adapters, read models; migrations in apps/server/migrations
   door/       the alert door: loopback, one token (`machine`), posts alerts and refusal reports to the server
-  cli/        `factory`: commands generated from the OpenAPI document, plus the hook, slot, deploy-lock, follow, role and issue schema verbs
+  cli/        `factory`: commands generated from the OpenAPI document, plus the hook, slot, deploy-lock, merge-lock, follow, role and issue schema verbs
 packages/
   contract/   zod schemas: every request, response and event; the OpenAPI source; the spool format the hook shares
   client/     typed client (Eden) and the CLI's transport, including the change-stream follower
