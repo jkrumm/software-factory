@@ -174,8 +174,12 @@ test('a Markdown Spec: mark text, comment, see it listed and highlighted, then a
   await page.getByRole('button', { name: 'Send verdict' }).click()
   await expect(page.locator('main header')).toContainText('With notes')
   await expect(page.getByRole('button', { name: 'Give your verdict' })).toHaveCount(0)
-  await page.getByRole('button', { name: 'Your verdict' }).click()
-  await expect(page.getByText('Good, but name the lock.')).toBeVisible()
+  // the form's popover is on its way out as the verdict arrives: open the verdict's own once it is gone
+  await expect(page.getByRole('textbox', { name: 'Verdict note' })).toHaveCount(0)
+  await expect(async () => {
+    await page.getByRole('button', { name: 'Your verdict' }).click()
+    await expect(page.getByText('Good, but name the lock.')).toBeVisible({ timeout: 2000 })
+  }).toPass()
   await page.keyboard.press('Escape')
 
   // The API holds both, and the Issue moved on: the verdict ends its wait on the Spec.
