@@ -16,6 +16,7 @@ beforeAll(async () => {
       duo: { project: 'apiVersion: factory/v2\nname: duo\nleads: 2\n' },
       mem: { project: 'apiVersion: factory/v2\nname: mem\n' },
       swap: { project: 'apiVersion: factory/v2\nname: swap\n' },
+      capped: { project: 'apiVersion: factory/v2\nname: capped\nleads: 1\n' },
       solo: { project: 'apiVersion: factory/v2\nname: solo\n' },
       ordered: { project: 'apiVersion: factory/v2\nname: ordered\n' },
     },
@@ -150,6 +151,21 @@ test('stop the line admits only the fix in its project; other projects go on', a
     kind: 'line',
     message: expect.stringContaining('production of solo is red'),
   })
+})
+
+test('an incident takes the +1 place of a repo at its leads cap, ahead of ordinary work', async () => {
+  await lab.accounts([{ id: 'a' }, { id: 'b' }, { id: 'c' }])
+  const ordinary = await lab.file('capped', 'ordinary work fills the one place')
+  await settle(ordinary)
+  expect((await admit()).admitted.map((a) => a.issue)).toEqual([ordinary])
+
+  const next = await lab.file('capped', 'more ordinary work')
+  const incident = await lab.file('capped', 'the default branch is red', 'incident')
+  for (const issue of [next, incident]) await settle(issue)
+  const result = await admit()
+  expect(result.admitted.map((a) => a.issue)).toEqual([incident])
+  expect(await stateOf(incident)).toBe('working')
+  expect(await stateOf(next)).toBe('queued')
 })
 
 test('prio orders the queue before age, and never an incident behind it', async () => {

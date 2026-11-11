@@ -32,6 +32,7 @@ import type {
   IntakeTopology,
   OpenIssues,
   PendingRow,
+  RedBranch,
   ProjectSignals,
   Runbook,
   SignalRow,
@@ -51,11 +52,12 @@ import {
   overlap,
   type Topology,
 } from '../domains/intake/rules.ts'
+import { leadBranch } from '../domains/leads/names.ts'
 import type { WorkStore } from '../domains/work/ports.ts'
 import type { Issue } from '../domains/work/issue.ts'
 import { replay } from '../domains/work/machine.ts'
 import type { IssueId } from '../kernel/ids.ts'
-import { idOf, issueRef } from '../kernel/ids.ts'
+import { idOf, issueNumber, issueRef } from '../kernel/ids.ts'
 import { key as keyOf, type Key } from '../kernel/keys.ts'
 import { err, ok, portError, type PortError, type Result } from '../kernel/result.ts'
 import { fileIn, type IssueWriteError, recordIn, type WriteDeps } from './issues.ts'
@@ -1164,6 +1166,39 @@ export function createIntake(deps: IntakeDeps) {
 
   // ---- what the pollers ask ----
 
+  /**
+   * The Issues of the project whose lead works or watches on a branch with an open pull request, each noted once: the
+   * key is the red Issue and the noted one, so a replay finds the note. The pull requests were read before, outside
+   * any transaction.
+   */
+  async function noteRedBranch(red: RedBranch): Out<number> {
+    const open = await deps.openIssues.inRepo(red.repo)
+    if (!open.ok) return open
+    const candidates = open.value.filter(
+      (issue) => issue.id !== red.issue && (issue.state === 'working' || issue.state === 'watching'),
+    )
+    if (candidates.length === 0) return ok(0)
+    const pulls = new Set(red.pulls)
+    const link = red.link ? ` (${red.link})` : ''
+    const text = `the default branch ${red.branch} is red: the check ${JSON.stringify(red.check)} is failing${link}. Your pull request's merge will be refused by merge-guard until it is green; Issue ${issueNumber(red.issue)} is fixing it.`
+    return uow.run(async (s) => {
+      let told = 0
+      for (const candidate of candidates) {
+        const issue = await loadIssue(s.work, candidate.id)
+        if (!issue || (issue.state !== 'working' && issue.state !== 'watching')) continue
+        if (!pulls.has(leadBranch(issue.id, issue.attempt))) continue
+        const noted = await recordIn(s.work, deps, {
+          issueId: issue.id,
+          key: keyOf('noted', 'red-branch', red.issue, issue.id),
+          event: { kind: 'noted', payload: { text }, actor: 'factory' },
+        })
+        if (!noted.ok) return noted
+        if (noted.value.result === 'applied') told++
+      }
+      return ok(told)
+    })
+  }
+
   const sink: IntakeSink = {
     receive: async (r) => {
       const out = await receive(r)
@@ -1209,6 +1244,11 @@ export function createIntake(deps: IntakeDeps) {
         }
         return ok(pending)
       })
+      return out.ok ? out : err(failureOf(out.error))
+    },
+
+    noteRedBranch: async (red) => {
+      const out = await noteRedBranch(red)
       return out.ok ? out : err(failureOf(out.error))
     },
 

@@ -99,6 +99,7 @@ function setup(
     },
     subjects: () => Promise.resolve(options.subjectsFail ? err(portError('timeout', 'slow')) : ok(state.episodes)),
     pendingWritebacks: () => Promise.resolve(ok([])),
+    noteRedBranch: () => Promise.resolve(ok(0)),
     wroteBack: () => Promise.resolve(ok(undefined)),
   }
   const poller = beszelPoller({

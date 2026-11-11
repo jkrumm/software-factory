@@ -123,14 +123,15 @@ describe('correlation, origin and kind', () => {
     expect(groupOf(topology, received({ source: 'beszel' }, 'vps:memory'), 'argo', 'homelab')).toBe('host:vps')
   })
 
-  test('origin is a word a person uses; an alert is an incident, a failing check a bug', () => {
+  test('origin is a word a person uses; an alert is an incident, a failing check on the default branch too', () => {
     expect(originOf('kuma')).toBe('infrastructure')
     expect(originOf('hyperdx')).toBe('application')
     expect(originOf('checks')).toBe('github')
     expect(originOf('feedback:argo')).toBe('feedback')
     expect(originOf('owner:hermes')).toBe('you')
     expect(issueKindOf(received({ source: 'kuma' }))).toBe('incident')
-    expect(issueKindOf(received({ source: 'checks' }))).toBe('bug')
+    expect(issueKindOf(received({ source: 'checks' }))).toBe('incident')
+    expect(issueKindOf(received({ source: 'launchd' }))).toBe('bug')
     expect(issueKindOf({ signal: signal({ kind: 'request' }), alert: null })).toBe('feature')
   })
 

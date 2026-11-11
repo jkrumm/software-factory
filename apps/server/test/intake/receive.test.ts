@@ -150,6 +150,76 @@ const events = (id: string) =>
 const send = (id: IssueId, name: string, event: AnyIssueEvent) =>
   recordIssueEvent({ uow, clock, ids }, { issueId: id, key: key(id, name), event })
 
+describe('a red default branch', () => {
+  const working = async (subject: string, repo: string) => {
+    const filed = done(await intake.receive(down('kuma', subject, `${subject}@1`, repo)))
+    const id = filed.issue as IssueId
+    await send(id, 'settled', { kind: 'settled', payload: {}, actor: 'factory' })
+    await send(id, 'admitted', { kind: 'admitted', payload: {}, actor: 'factory' })
+    return id
+  }
+  const red = (event = 'down@a'): Received => ({
+    ...down('checks', 'o/r:ci', event, 'argo', 'Failing check "ci" on o/r (main)'),
+    signal: alertSignal({
+      source: 'checks',
+      repo: 'argo',
+      title: 'Failing check "ci" on o/r (main)',
+      fingerprint: 'checks:o/r:ci',
+    }),
+  })
+  const notes = async (id: string) =>
+    (await db.sql`SELECT payload->>'text' AS text, actor FROM factory.issue_events WHERE issue_id = ${id} AND kind = 'noted'`) as {
+      text: string
+      actor: string
+    }[]
+
+  test('a failing default-branch check files an incident, not a bug', async () => {
+    projects[1] = project('argo', { sources: ['checks'] })
+    const filed = done(await intake.receive(red()))
+    expect(filed).toMatchObject({ outcome: 'filed', detail: 'new', issue: 'issue_1' })
+    const [first] =
+      await db.sql`SELECT payload->>'kind' AS kind FROM factory.issue_events WHERE issue_id = 'issue_1' AND kind = 'filed'`
+    expect(first?.kind).toBe('incident')
+  })
+
+  test('a check that turns green before a lead starts closes the incident as healed', async () => {
+    projects[1] = project('argo', { sources: ['checks'] })
+    done(await intake.receive(red()))
+    const green: Received = {
+      ...up('checks', 'o/r:ci', 'up@b', 'argo'),
+      signal: { ...red().signal, title: 'Passing check' },
+    }
+    expect(done(await intake.receive(green))).toMatchObject({ outcome: 'amended', detail: 'healed', issue: 'issue_1' })
+    expect(await issues()).toEqual([{ id: 'issue_1', repo: 'argo', state: 'closed', outcome: 'healed' }])
+  })
+
+  test('the working and watching leads of the project with an open pull request are noted once, nobody else', async () => {
+    projects[1] = project('argo', { sources: ['checks', 'kuma'] })
+    const withPull = await working('a', 'argo')
+    const withoutPull = await working('b', 'argo')
+    const queued = done(await intake.receive(down('kuma', 'c', 'c@1', 'argo'))).issue as IssueId
+    const elsewhere = await working('d', 'vps')
+    const fix = done(await intake.receive(red())).issue as IssueId
+    const pulls = ['factory/1-1', 'factory/3-1', 'factory/4-1', 'feature']
+    const input = { issue: fix, repo: 'argo', branch: 'main', check: 'ci', link: 'https://example.com/run/1', pulls }
+
+    const told = await intake.sink.noteRedBranch(input)
+    expect(told).toEqual({ ok: true, value: 1 })
+    const [note, ...rest] = await notes(withPull)
+    expect(rest).toEqual([])
+    expect(note?.actor).toBe('factory')
+    expect(note?.text).toContain('"ci"')
+    expect(note?.text).toContain('https://example.com/run/1')
+    expect(note?.text).toContain('merge-guard')
+    expect(note?.text).toContain(`Issue ${fix.replace('issue_', '')} is fixing it`)
+    for (const other of [withoutPull, queued, elsewhere, fix]) expect(await notes(other)).toEqual([])
+
+    // a replay of the same filing, or the next poll's, notes nobody again
+    expect(await intake.sink.noteRedBranch(input)).toEqual({ ok: true, value: 0 })
+    expect(await notes(withPull)).toHaveLength(1)
+  })
+})
+
 describe('a stateful source: one episode per subject', () => {
   test('a down files an Issue, a replay is one effect, a down on the open episode amends it', async () => {
     const first = done(await intake.receive(down('checks', 'o/r:ci', 'down@a', 'argo')))

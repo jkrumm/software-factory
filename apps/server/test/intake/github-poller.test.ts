@@ -1,10 +1,10 @@
 import { describe, expect, test } from 'bun:test'
 import { githubPoller } from '../../src/adapters/intake/github.ts'
 import type { ProcessResult } from '../../src/adapters/intake/process.ts'
-import type { Received, RepoSignals } from '../../src/domains/intake/model.ts'
-import type { IntakeSink, ProjectSignals, SubjectState, Writeback } from '../../src/domains/intake/ports.ts'
+import type { Received, RepoSignals, Triaged } from '../../src/domains/intake/model.ts'
+import type { IntakeSink, ProjectSignals, RedBranch, SubjectState, Writeback } from '../../src/domains/intake/ports.ts'
 import { fingerprintOf } from '../../src/domains/intake/rules.ts'
-import { issueId } from '../../src/kernel/ids.ts'
+import { type IssueId, issueId } from '../../src/kernel/ids.ts'
 import { err, ok, portError } from '../../src/kernel/result.ts'
 
 const TOKEN = 'ghp_secret_token_value'
@@ -58,6 +58,8 @@ function setup(
     subjects?: SubjectState[]
     writebacks?: Writeback[]
     receive?: 'fail'
+    /** what the sink answers a filing: the Issue and how it was taken (default: new, no id) */
+    answered?: { issue: IssueId; detail: Triaged['detail'] }
     apiUrl?: string | null
     backlog?: boolean
   } = {},
@@ -65,6 +67,7 @@ function setup(
   const calls: Call[] = []
   const logged: string[] = []
   const received: Received[] = []
+  const redBranches: RedBranch[] = []
   const wroteBack: { issueId: string; result: string }[] = []
   const world = { labelled: [] as unknown[], own: [] as unknown[], everyone: [] as unknown[] }
 
@@ -96,11 +99,23 @@ function setup(
     receive(value) {
       received.push(value)
       if (options.receive === 'fail') return Promise.resolve(err(portError('unreadable', 'store down')))
-      return Promise.resolve(ok({ outcome: 'filed', detail: 'new', issue: null, signal: null, reason: null }))
+      return Promise.resolve(
+        ok({
+          outcome: 'filed',
+          detail: options.answered?.detail ?? 'new',
+          issue: options.answered?.issue ?? null,
+          signal: null,
+          reason: null,
+        }),
+      )
     },
     subjects: (_source, prefix) =>
       Promise.resolve(ok((options.subjects ?? []).filter((state) => state.subject.startsWith(prefix)))),
     pendingWritebacks: () => Promise.resolve(ok(options.writebacks ?? [])),
+    noteRedBranch(red) {
+      redBranches.push(red)
+      return Promise.resolve(ok(red.pulls.length))
+    },
     wroteBack(id, result) {
       wroteBack.push({ issueId: id, result })
       return Promise.resolve(ok(undefined))
@@ -121,7 +136,7 @@ function setup(
     run,
     log: (line) => logged.push(line),
   })
-  return { poller, calls, logged, received, wroteBack, world }
+  return { poller, calls, logged, received, redBranches, wroteBack, world }
 }
 
 const subjectsOf = (received: Received[]) => received.map((r) => r.alert?.subject)
@@ -598,6 +613,78 @@ describe('the GitHub red checks source', () => {
       event: `down@${SHA1}:ci/legacy`,
       status: 'down',
       facts: { kind: 'status', result: 'error', sha: SHA1, url: 'https://ci.example.com/1' },
+    })
+  })
+
+  describe('the leads with an open pull request', () => {
+    const FILED = { issue: issueId(9), detail: 'new' as const }
+    const pulls = (...refs: string[]) => Response.json(refs.map((ref) => ({ head: { ref }, number: 1 })))
+
+    test('a new red Issue sends the open pull requests head branches with the check and its link, once per filing', async () => {
+      const { world, answer, run } = checksWorld()
+      world.runs = [run('ci', 'failure')]
+      const gh = setup({
+        projects: [WITH_CHECKS],
+        answered: FILED,
+        answer: (url) => (url.includes('/pulls?state=open') ? pulls('factory/3-1', 'feature') : answer(url)),
+      })
+      await gh.poller.pass()
+      expect(gh.redBranches).toEqual([
+        {
+          issue: FILED.issue,
+          repo: 'r',
+          branch: 'main',
+          check: 'ci',
+          link: 'https://github.com/o/r/actions/runs/ci',
+          pulls: ['factory/3-1', 'feature'],
+        },
+      ])
+    })
+
+    test('an amendment of an open Issue, an up and an unreadable list send nothing', async () => {
+      const { world, answer, run } = checksWorld()
+      world.runs = [run('ci', 'failure')]
+      const amended = setup({
+        projects: [WITH_CHECKS],
+        answered: { issue: FILED.issue, detail: 'repeat' },
+        answer: (url) => (url.includes('/pulls?') ? pulls('factory/3-1') : answer(url)),
+      })
+      await amended.poller.pass()
+      expect(amended.calls.some((c) => c.url.includes('/pulls'))).toBe(false)
+      expect(amended.redBranches).toEqual([])
+
+      world.sha = SHA2
+      world.runs = [run('ci', 'success')]
+      const healed = setup({
+        projects: [WITH_CHECKS],
+        answered: FILED,
+        subjects: [open('o/r:ci')],
+        answer: (url) => (url.includes('/pulls?') ? pulls('factory/3-1') : answer(url)),
+      })
+      await healed.poller.pass()
+      expect(healed.calls.some((c) => c.url.includes('/pulls'))).toBe(false)
+
+      world.runs = [run('ci', 'failure')]
+      const broken = setup({
+        projects: [WITH_CHECKS],
+        answered: FILED,
+        answer: (url) => (url.includes('/pulls?') ? new Response('boom', { status: 502 }) : answer(url)),
+      })
+      await broken.poller.pass()
+      expect(broken.redBranches).toEqual([])
+      expect(broken.logged).toEqual(['github intake: o/r pull requests 502, the leads are not told'])
+    })
+
+    test('no open pull request sends nothing', async () => {
+      const { world, answer, run } = checksWorld()
+      world.runs = [run('ci', 'failure')]
+      const gh = setup({
+        projects: [WITH_CHECKS],
+        answered: FILED,
+        answer: (url) => (url.includes('/pulls?') ? pulls() : answer(url)),
+      })
+      await gh.poller.pass()
+      expect(gh.redBranches).toEqual([])
     })
   })
 
