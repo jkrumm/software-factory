@@ -39,6 +39,8 @@ export function candidates(issue: Issue, now: Date): AnyIssueEvent[] {
     e('lead_started', { attempt: stale, terminal: 'lead' }, 'factory'),
     e('lead_gone', { attempt, detail: 'its terminal ended' }, 'factory'),
     e('lead_gone', { attempt: stale, detail: 'its terminal ended' }, 'factory'),
+    e('seated', { tier: 'opus', effort: 'high' }, 'owner'),
+    e('seated', { tier: 'opus', effort: 'high' }, 'factory'),
     e('noted', { text: 'also look at the logs' }, 'owner'),
     e('noted', { text: 'an amend' }, 'factory'),
     e('asked', { attempt, decision: checkpoint('decision') }, 'lead'),

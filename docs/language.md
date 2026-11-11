@@ -121,6 +121,7 @@ checkpoint is for that one only: a late one the factory sent is ignored, and a l
 | `admitted` | Capacity lets a lead start: the next attempt | factory |
 | `lead_started` | The attempt's lead runs in its terminal | factory |
 | `lead_gone` | The attempt's lead failed to start or ended; twice a new attempt, the third time a stall | factory |
+| `seated` | The owner set the seat (tier and effort, or a role of the table, resolved now) the next lead starts on; taken while the Issue is `settling` or `queued`, refused once a lead has started | owner, orchestrator |
 | `noted` | An amend or a note reaches the lead | owner, factory, steward, judge |
 | `asked` | A Decision is raised and the Issue waits for its answer; during a review wait the lead's ask is added to that wait (same `since`, same `told`) | lead, steward (from a stall only) |
 | `answered` | A Decision got its answer; one raised during a review wait leaves the wait's list, and the wait ends with the last item | owner, judge, factory |

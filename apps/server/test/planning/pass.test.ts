@@ -1,5 +1,6 @@
 import { afterAll, beforeAll, beforeEach, describe, expect, test } from 'bun:test'
 import { planningPass } from '../../src/app/planning-pass.ts'
+import { getQueueStates, setQueueState } from '../../src/app/capacity-queue.ts'
 import { addAfter, removeAfter, setPrio, settleIssue } from '../../src/app/planning-chain.ts'
 import { projectSignals } from '../../src/app/planning-signals.ts'
 import { projectStates } from '../../src/app/planning-views.ts'
@@ -87,6 +88,20 @@ describe('syncing the projects', () => {
     const filedRows = await world.db.sql`SELECT project FROM factory.planning_filed_rows WHERE project = 'app-tune'`
     expect(filedRows.length).toBe(2)
     expect(value(await syncProjects(world.deps, { fetch: false })).retired).toEqual([])
+  })
+
+  test('a queue state kept for a project the store does not have is dropped; the global state and a living project stay', async () => {
+    world.source.add('app', { project: PROJECT('app') })
+    value(await syncProjects(world.deps, { fetch: false }))
+    for (const project of ['app', 'homelab-w7', 'worktrees']) {
+      value(await setQueueState(world.deps, { project, state: 'drain' }))
+    }
+    value(await setQueueState(world.deps, { project: null, state: 'pace' }))
+
+    value(await syncProjects(world.deps, { fetch: false }))
+    const kept = value(await getQueueStates(world.deps))
+    expect(kept.global).toBe('pace')
+    expect([...kept.projects]).toEqual([['app', 'drain']])
   })
 
   test('a broken project.yaml keeps the last valid content and files one Issue per content, settled', async () => {

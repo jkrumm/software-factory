@@ -12,6 +12,7 @@ export {
   NewIssueBody,
   NoteAnswer,
   NoteBody,
+  SeatBody,
   SessionNoteBody,
 } from './issues.ts'
 export * from './filing.ts'

@@ -47,6 +47,8 @@ export const PAYLOADS = {
   }),
   /** the attempt's lead failed to start or ended */
   lead_gone: z.object({ attempt, detail: text }),
+  /** the owner set the seat the next lead starts on, resolved (a role is kept beside what it said); only before a lead works */
+  seated: z.object({ tier: z.enum(TIERS), effort: z.enum(EFFORTS), role: text.optional() }),
   /** an amend or a note reaches the lead */
   noted: z.object({ text, via: z.enum(['orchestrator']).optional() }),
   /** the lead raised a Decision and waits for its answer (or the steward did, for a stall it cannot end by itself) */
@@ -110,6 +112,7 @@ export const SENDERS: { [K in EventKind]: readonly Actor[] } = {
   admitted: ['factory'],
   lead_started: ['factory'],
   lead_gone: ['factory'],
+  seated: ['owner', 'orchestrator'],
   noted: ['owner', 'orchestrator', 'factory', 'steward', 'judge'],
   asked: ['lead', 'steward'],
   answered: ['owner', 'orchestrator', 'judge', 'factory'],

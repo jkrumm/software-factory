@@ -43,6 +43,8 @@ export interface CapacityStore {
 
   queueStates(): Promise<QueueStates>
   setQueueState(project: string | null, state: QueueState, at: Date): Promise<void>
+  /** drops a project's state; the global one stays */
+  removeQueueState(project: string): Promise<void>
 
   slots(): Promise<SlotRow[]>
   saveSlots(rows: readonly SlotRow[]): Promise<void>

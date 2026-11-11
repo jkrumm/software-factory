@@ -7,6 +7,7 @@ import {
   NewIssueBody,
   NoteAnswer,
   NoteBody,
+  SeatBody,
   SessionNoteBody,
 } from '@software-factory/contract'
 import { Elysia } from 'elysia'
@@ -14,8 +15,9 @@ import * as z from 'zod'
 import type { Answered } from '../app/checkpoints.ts'
 import type { IssueAnswerError } from '../app/issue-answer.ts'
 import type { NewIssueError, NewIssueInput, NewIssued } from '../app/issue-new.ts'
-import type { NoteInput, NoteOutcome, SessionNoteError } from '../app/issue-owner.ts'
+import type { NoteInput, NoteOutcome, SeatIssueError, SessionNoteError } from '../app/issue-owner.ts'
 import { took } from '../app/issue-owner.ts'
+import type { Recorded } from '../app/issues.ts'
 import type { Written } from './written.ts'
 import { err, portError, type PortError, type Result } from '../kernel/result.ts'
 import type { OwnerActor } from '../kernel/events.ts'
@@ -31,6 +33,12 @@ export interface IssueApi {
   file(input: NewIssueInput): Promise<Result<NewIssued, NewIssueError | PortError>>
   cancel(input: { issueId: IssueId; reason: string; actor: OwnerActor; call?: string | undefined }): Promise<Written>
   note(input: NoteInput): Promise<Result<NoteOutcome, NoteError>>
+  seat(input: {
+    issueId: IssueId
+    seat: unknown
+    actor: OwnerActor
+    call?: string | undefined
+  }): Promise<Result<Recorded, SeatIssueError | PortError>>
   answer(input: {
     issueId: IssueId
     answer: string
@@ -49,7 +57,7 @@ export interface IssueApi {
 type NoteError = Parameters<typeof writeFailure>[0]
 
 const gone = async () => err(portError('gone', 'the Issue verbs are not wired into this server'))
-const unwired: IssueApi = { file: gone, cancel: gone, note: gone, answer: gone, sessionNote: gone }
+const unwired: IssueApi = { file: gone, cancel: gone, note: gone, seat: gone, answer: gone, sessionNote: gone }
 
 const unknownIssue = (text: string): Response =>
   Response.json(failure(`no Issue ${text}`, 'not_found'), { status: 404 })
@@ -224,6 +232,35 @@ export const issueRoutes = (wired: IssueApi | undefined) => {
           summary:
             "the owner's note for the lead, which hears it as a note; with wake, a wait the owner may end is ended too",
           'x-cli': { args: ['text'] },
+        },
+      },
+    )
+    .post(
+      '/issues/:id/seat',
+      async ({ params, body, request }) => {
+        const issueId = issueRef(params.id)
+        if (!issueId) return unknownIssue(params.id)
+        const { call, ...named } = body
+        const seated = await api.seat({
+          issueId,
+          seat: Object.fromEntries(Object.entries(named).filter(([, value]) => value !== undefined)),
+          actor: ownerActorOf(request),
+          call,
+        })
+        if (!seated.ok && seated.error.kind === 'seat_refused') {
+          const { field, detail } = seated.error
+          return Response.json(failure(`${field}: ${detail}`, 'seat_refused'), { status: 422 })
+        }
+        return verbResponse(seated as Written)
+      },
+      {
+        params: Params,
+        body: SeatBody,
+        response: { 200: LeadVerbAnswer, ...errorResponses(400, 404, 409, 422, 503) },
+        detail: {
+          operationId: 'issue.seat',
+          summary:
+            'the owner sets the lead seat (tier and effort, or a role) of an Issue no lead has started; refused once one has',
         },
       },
     )

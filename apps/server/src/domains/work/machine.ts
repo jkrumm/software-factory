@@ -42,6 +42,7 @@ function evolve(
   const refined = kind === 'settled' ? PAYLOADS.settled.parse(payload).kind : undefined
   return {
     ...issue,
+    ...(kind === 'seated' ? { seat: PAYLOADS.seated.parse(payload) } : {}),
     kind: refined ?? issue.kind,
     version,
     state: transition.to,

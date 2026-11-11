@@ -418,3 +418,57 @@ test('a seat is resolved at filing: tier and effort are kept, a role is stored w
   expect(replay.code).toBe(0)
   expect(replay.json).toMatchObject({ issue: byRole.json?.issue, filed: false })
 })
+
+test('issue seat: an Issue no lead has started takes a seat or a role; a started one, a bad seat and the agent token are refused', async () => {
+  const filed = await v.run([
+    'issue',
+    'new',
+    '--repo',
+    'example',
+    '--title',
+    'Filed before seats',
+    '--key',
+    'late-seat',
+  ])
+  const id = String(filed.json?.issue)
+
+  const set = await v.run(['issue', 'seat', id, '--tier', 'opus', '--effort', 'high', '--call', 's1'])
+  expect(set.json).toMatchObject({ result: 'applied', issue: { id, state: 'settling' } })
+  expect((await v.run(['issue', 'seat', id, '--tier', 'opus', '--effort', 'high', '--call', 's1'])).json).toMatchObject(
+    {
+      result: 'replayed',
+    },
+  )
+  expect((await v.run(['issue', 'show', id])).json).toMatchObject({ seat: { tier: 'opus', effort: 'high' } })
+
+  const byRole = await v.run(['issue', 'seat', id, '--role', 'reviewer'], 'orchestrator')
+  expect(byRole.json).toMatchObject({ result: 'applied' })
+  expect((await v.run(['issue', 'show', id])).json).toMatchObject({
+    seat: { tier: 'sonnet', effort: 'medium', role: 'reviewer' },
+  })
+
+  const refusals: [string[], string][] = [
+    [['--tier', 'opus'], 'seat.effort'],
+    [['--role', 'no-such-role'], 'seat.role'],
+    [['--role', 'lead', '--tier', 'opus', '--effort', 'high'], 'seat'],
+    [[], 'seat'],
+  ]
+  for (const [flags, field] of refusals) {
+    const out = await v.run(['issue', 'seat', id, ...flags])
+    expect(out.error?.code).toBe('seat_refused')
+    expect(out.error?.message).toContain(field)
+  }
+  // a tier outside the list never leaves the CLI: the body schema is the contract's
+  expect((await v.run(['issue', 'seat', id, '--tier', 'gpt', '--effort', 'high'])).code).not.toBe(0)
+  expect((await v.run(['issue', 'seat', id, '--role', 'reviewer'], 'agent')).code).not.toBe(0)
+  expect((await v.run(['issue', 'seat', 'issue_999', '--role', 'reviewer'])).code).toBe(4)
+
+  // The lead starts on the seat set, and once it has the seat is refused with the machine's reason.
+  await admitted(v.w, id)
+  await v.w.tick()
+  const [started] = await v.events(id, 'lead_started')
+  expect(started?.payload.seat).toEqual({ tier: 'sonnet', effort: 'medium' })
+  const late = await v.run(['issue', 'seat', id, '--tier', 'opus', '--effort', 'max'])
+  expect(late.code).toBe(5)
+  expect(late.error?.message).toContain('settling or queued')
+})

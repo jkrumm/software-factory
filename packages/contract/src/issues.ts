@@ -1,6 +1,7 @@
 import * as z from 'zod'
 import { CheckpointName, LaneName } from './lane.ts'
 import { QualityIssue } from './quality.ts'
+import { EFFORTS, RoleName, TIERS } from './roles.ts'
 import { SeatInput } from './seat.ts'
 
 /** The most Issues one request (issue new, settle, after, defer) or one plan row may wait for; the plan check and the API share it. */
@@ -57,6 +58,20 @@ export const CancelBody = z
   .strictObject({ reason: z.string().trim().min(1).max(4_000), call: Call.optional() })
   .meta({ id: 'CancelBody' })
 export type CancelBody = z.infer<typeof CancelBody>
+
+/**
+ * `issue seat`: sets the lead's seat of an Issue no lead is working: `tier` and `effort` together, or a `role` of the
+ * table (resolved now, as at filing). The server checks the shape (422 `seat_refused`, naming the field).
+ */
+export const SeatBody = z
+  .strictObject({
+    tier: z.enum(TIERS).optional(),
+    effort: z.enum(EFFORTS).optional(),
+    role: RoleName.optional(),
+    call: Call.optional(),
+  })
+  .meta({ id: 'SeatBody' })
+export type SeatBody = z.infer<typeof SeatBody>
 
 /** The orchestrator steering a lead on the owner's token: not an owner touch. */
 const Via = z.enum(['orchestrator'])
