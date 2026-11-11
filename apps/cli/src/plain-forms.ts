@@ -1,4 +1,4 @@
-import type { ProjectView, ReadIssueCards } from '@software-factory/contract'
+import type { ProjectView, ReadIssueCards, ShipAnswer } from '@software-factory/contract'
 
 // `data` is the answer runOperation already parsed with the operation's response schema.
 
@@ -20,4 +20,17 @@ export function projectShowPlain(data: unknown): string {
   for (const warning of project.plan.warnings) lines.push(`warning: ${warning}`)
   for (const row of project.plan.rows) lines.push([row.key, row.state, row.issue ?? '-', row.reason ?? '-'].join('\t'))
   return lines.join('\n')
+}
+
+/**
+ * `issue ship`: a ship the review does not cover is recorded, never refused, so the answer is the only place the lead
+ * hears it. One line per range: the command that reviews it. A review agw could not read is named with its reason.
+ */
+export function shipNotice(data: unknown): string {
+  const review = (data as ShipAnswer).evidence.find((line) => line.kind === 'review')
+  if (!review || review.status === 'covered' || review.status === 'not_required') return ''
+  if (review.status === 'unknown') return `review: not read (${review.reason ?? 'no reason given'})`
+  const named = review.uncovered.map((c) => `${c.sha.slice(0, 12)} needs ${c.required}`).join(', ')
+  const ranges = review.ranges.map((r) => `${r.base.slice(0, 12)}..${r.head.slice(0, 12)}`).join(' ')
+  return `review: uncovered${named ? ` (${named})` : ''}. Recorded as uncovered. Run /review on ${ranges || 'the shipped range'}, or say in the report why it has none.`
 }

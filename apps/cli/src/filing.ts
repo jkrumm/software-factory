@@ -1,6 +1,6 @@
 import { FILING, PLAN_LIMITS } from '@software-factory/contract'
 import type { OperationExtension } from './operation.ts'
-import { issueListPlain, projectShowPlain } from './plain-forms.ts'
+import { issueListPlain, projectShowPlain, shipNotice } from './plain-forms.ts'
 
 const POINTER = 'factory issue schema'
 
@@ -68,6 +68,7 @@ export const OPERATION_EXTENSIONS: Readonly<Record<string, OperationExtension>> 
     help: "An Issue's `after` edges are not in this answer: `factory read chain --format plain` lists what blocks each Issue (`blocking.issue_<n>`).",
   },
   'issue.list': { plain: issueListPlain },
+  'issue.ship': { notice: shipNotice },
   'issue.new': {
     help: filingGuide(),
     jsonObjectFields: { facts: factsHint, seat: seatHint },
