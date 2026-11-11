@@ -8,7 +8,7 @@ import { Badge } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/components/ui/tooltip'
 import { NAV } from '@/lib/nav'
-import { useNeeds } from '@/lib/queries'
+import { prefetchPalette, useNeeds } from '@/lib/queries'
 
 const loadPalette = () => import('@/components/palette').then((m) => ({ default: m.CommandPalette }))
 // cmdk and its dialog are a chunk of their own; it is fetched on idle after the first paint (or on hover), not with it
@@ -37,7 +37,11 @@ function PaletteHost({
 /** Fetches the palette chunk when the browser is idle after the first paint; `preload` does it at once (hover, focus). */
 function usePalettePreload(): { preloaded: boolean; preload: () => void } {
   const [preloaded, setPreloaded] = useState(false)
-  const preload = () => void loadPalette().then(() => setPreloaded(true))
+  const preload = () =>
+    void loadPalette().then(() => {
+      setPreloaded(true)
+      prefetchPalette()
+    })
   useEffect(() => {
     if (typeof requestIdleCallback === 'function') {
       const id = requestIdleCallback(preload, { timeout: 2000 })

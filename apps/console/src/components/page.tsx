@@ -1,12 +1,28 @@
 import type { ReactNode } from 'react'
+import { Skeleton } from '@/components/kit/skeleton'
 
 export { EmptyState } from '@/components/kit/empty-state'
 
-/** `compact` puts the note on the title's line and tightens the space under it (a screen that fills the viewport). */
-export function PageHeader({ title, note, compact }: { title: string; note?: string; compact?: boolean }) {
+/**
+ * `compact` puts the note on the title's line and tightens the space under it (a screen that fills the viewport).
+ * `loading` holds the note's line with a skeleton, so the content below does not move when the note arrives.
+ */
+export function PageHeader({
+  title,
+  note,
+  compact,
+  loading,
+}: {
+  title: string
+  note?: string
+  compact?: boolean
+  loading?: boolean
+}) {
   return (
     <header className={compact ? 'mb-3 flex flex-wrap items-baseline gap-x-3 gap-y-0.5' : 'mb-6 flex flex-col gap-1'}>
       <h1 className="font-heading text-2xl font-semibold tracking-tight">{title}</h1>
+      {loading ? <Skeleton height={20} width={compact ? 160 : 144} /> : null}
+      {loading && compact ? <Skeleton height={20} width="60%" className="sm:hidden" /> : null}
       {note ? <p className="text-sm text-muted-foreground">{note}</p> : null}
     </header>
   )

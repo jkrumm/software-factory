@@ -12,7 +12,8 @@ import { Tabs, TabsList, TabsPanel, TabsTab } from '@/components/ui/tabs'
 import { ApiError } from '@/lib/api'
 import { checkpointTally, TAB_KEYS, TAB_LABEL, type TabKey, tabCounts, tabOf } from '@/lib/issue-page'
 import { useNow } from '@/lib/now'
-import { useIssue } from '@/lib/queries'
+import { useScreen } from '@/lib/screen'
+import { chainQuery, PREFETCH_STALE_MS, prefetchDetail, queryClient, useIssue } from '@/lib/queries'
 import { cn } from '@/lib/utils'
 
 export const Route = createFileRoute('/issues/$id')({
@@ -20,6 +21,14 @@ export const Route = createFileRoute('/issues/$id')({
   validateSearch: (search: Record<string, unknown>): { tab?: TabKey } => {
     const tab = tabOf(search.tab)
     return tab === 'overview' ? {} : { tab }
+  },
+  /**
+   * Starts the reads of the page without waiting for them (a hover or focus on any link to it runs this through the router's
+   * intent preload): the page opens on its skeleton or, after a hover, on data. The chain is the aside's.
+   */
+  loader: ({ params }) => {
+    prefetchDetail('issue', params.id)
+    void queryClient.prefetchQuery({ ...chainQuery, staleTime: PREFETCH_STALE_MS })
   },
   component: IssuePage,
 })
@@ -29,7 +38,9 @@ function IssuePage() {
   const { tab } = Route.useSearch()
   const navigate = useNavigate({ from: Route.fullPath })
   const now = useNow(30_000)
-  const { data, error } = useIssue(id)
+  const issue = useIssue(id)
+  const { data, error } = issue
+  const screen = useScreen(issue)
 
   if (!data) {
     if (error instanceof ApiError && error.status === 404)
@@ -38,7 +49,7 @@ function IssuePage() {
           <EmptyState title="No such Issue">It may have a different number than the link says.</EmptyState>
         </Page>
       )
-    if (error)
+    if (screen === 'failed')
       return (
         <Page wide>
           <EmptyState title="This Issue is not available">

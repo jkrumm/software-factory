@@ -24,6 +24,7 @@ import {
 } from '@/lib/needs'
 import { artifactPreview, plainExcerpt } from '@/lib/plain'
 import { useArtifact, useDecision, useErrands } from '@/lib/queries'
+import { CardBodySkeleton } from '@/components/skeletons'
 import { useSettle } from '@/lib/settle'
 import { cn } from '@/lib/utils'
 
@@ -117,8 +118,6 @@ const ScreenNote = ({ note }: { note: string | null }) =>
     </section>
   ) : null
 
-const Loading = () => <p className="text-sm text-muted-foreground">Loading</p>
-
 function DecisionBody({ item, issueTitle, onSent }: BodyProps) {
   const { data } = useDecision(item.id)
   const [text, setText] = useState('')
@@ -128,7 +127,7 @@ function DecisionBody({ item, issueTitle, onSent }: BodyProps) {
     onSent: () => onSent(SENT),
     onConflict: () => onSent(SETTLED),
   })
-  if (!data) return <Loading />
+  if (!data) return <CardBodySkeleton />
   const open = data.status === 'open'
   const answerWith = (answer: string) => settle.send(answer)
   const recommended = optionIndex(data.options, data.recommendation)
@@ -282,7 +281,7 @@ function ReviewBody({ item, onSent }: BodyProps) {
       setCommented(true)
     },
   })
-  if (!data) return <Loading />
+  if (!data) return <CardBodySkeleton />
   const remarks = [...data.annotations, ...data.unanchored]
   const preview = artifactPreview(data.artifact.format, data.content)
   return (

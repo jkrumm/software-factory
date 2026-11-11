@@ -8,6 +8,8 @@ import { Ago } from '@/components/issue/ago'
 import { ProjectChip } from '@/components/issue/project-chip'
 import { Lozenge } from '@/components/kit/lozenge'
 import { EmptyState } from '@/components/page'
+import { ArtifactSkeleton } from '@/components/skeletons'
+import { useScreen } from '@/lib/screen'
 import { Badge } from '@/components/ui/badge'
 import { FORMAT_WORDS, GLOBAL_PATH, KIND_WORDS } from '@/lib/artifact'
 import { ISSUE_STATE_WORDS } from '@/lib/issue'
@@ -15,7 +17,7 @@ import { lozengeStateOf } from '@/lib/issue-page'
 import { useMediaQuery } from '@/lib/media'
 import { useNow } from '@/lib/now'
 import { issueNumber } from '@/lib/policy'
-import { useArtifact, useIssue } from '@/lib/queries'
+import { artifactQuery, PREFETCH_STALE_MS, prefetchDetail, queryClient, useArtifact, useIssue } from '@/lib/queries'
 import { cn } from '@/lib/utils'
 
 const Search = z.object({
@@ -25,6 +27,21 @@ const Search = z.object({
 
 export const Route = createFileRoute('/artifacts/$id')({
   validateSearch: Search,
+  loaderDeps: ({ search }) => ({ revision: search.revision }),
+  /**
+   * Starts the artifact's read without waiting for it, and the Issue's behind it (the header's link back names the Issue by
+   * the artifact's `issueId`, so it cannot start earlier): a hover or focus on any link to the page runs this through the
+   * router's intent preload, together with the page's chunk, and the page then opens on data.
+   */
+  loader: ({ params, deps }) => {
+    void queryClient
+      .fetchQuery({ ...artifactQuery(params.id, deps.revision), staleTime: PREFETCH_STALE_MS })
+      .then((detail) => {
+        const number = issueNumber(detail.artifact.issueId)
+        if (number !== null) prefetchDetail('issue', String(number))
+      })
+      .catch(() => undefined)
+  },
   component: ArtifactPage,
 })
 
@@ -61,6 +78,7 @@ function ArtifactPage() {
   const { revision, compare } = Route.useSearch()
   const navigate = Route.useNavigate()
   const primary = useArtifact(id, revision)
+  const screen = useScreen(primary)
   const other = useArtifact(id, compare, compare !== undefined)
   const now = useNow(30_000)
   const [selected, setSelected] = useState<Selected | null>(null)
@@ -108,17 +126,13 @@ function ArtifactPage() {
   )
 
   if (!detail) {
-    if (primary.isError)
+    if (screen === 'failed')
       return (
         <Shell>
           <EmptyState title="This artifact is not available" />
         </Shell>
       )
-    return (
-      <Shell>
-        <p className="text-sm text-muted-foreground">Loading…</p>
-      </Shell>
-    )
+    return <ArtifactSkeleton />
   }
 
   const { artifact } = detail

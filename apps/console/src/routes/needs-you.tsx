@@ -4,12 +4,14 @@ import { useRef, useState } from 'react'
 import { InfoHint, type InfoWord } from '@/components/kit'
 import { NeedCard } from '@/components/needs/card'
 import { SinceBand } from '@/components/needs/since-band'
+import { NeedsSkeleton } from '@/components/skeletons'
 import { EmptyState, Page, PageHeader } from '@/components/page'
 import { ActiveFilters, type FilterChip, SidebarEntry, SidebarSection } from '@/components/sidebar'
 import { failureNote } from '@/lib/api'
 import { KIND_LABEL, kindCounts, needsNote, projectCounts, projectsOfNeeds, visibleNeeds } from '@/lib/needs'
 import { useNow } from '@/lib/now'
-import { useIssueCards, useNeeds } from '@/lib/queries'
+import { useOpenIssueCards, useNeeds } from '@/lib/queries'
+import { useScreen } from '@/lib/screen'
 
 interface NeedsSearch {
   item?: string
@@ -46,13 +48,15 @@ export const Route = createFileRoute('/needs-you')({
 })
 
 function NeedsYou() {
-  const { data, error, isPending, dataUpdatedAt } = useNeeds()
+  const needs = useNeeds()
+  const { data, error, dataUpdatedAt } = needs
+  const screen = useScreen(needs)
   const { item: openId, kind: rawKind, project } = Route.useSearch()
   // an unknown `kind` still reaches here from the raw URL (the root route validates nothing)
   const only = NEED_KINDS.find((k) => k === rawKind)
   const navigate = useNavigate({ from: Route.fullPath })
   const now = useNow(30_000)
-  const cards = useIssueCards(true)
+  const cards = useOpenIssueCards()
   const [sent, setSent] = useState<string | null>(null)
   // a snapshot restored from storage may be older than the item: say it is settled only on data fetched since the page opened
   const openedAt = useRef(Date.now())
@@ -71,8 +75,13 @@ function NeedsYou() {
   if (!data)
     return (
       <Page wide>
-        <PageHeader title="Needs you" note={isPending ? 'Loading' : failureNote(error)} />
+        <PageHeader
+          title="Needs you"
+          loading={screen === 'loading'}
+          note={screen === 'failed' ? failureNote(error) : undefined}
+        />
         <SinceBand now={now} />
+        {screen === 'loading' ? <NeedsSkeleton /> : null}
       </Page>
     )
 
