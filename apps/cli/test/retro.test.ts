@@ -45,6 +45,7 @@ beforeAll(() => {
       dropped: [{ issue: 'issue_7', why: 'y', ms: null }],
     },
     ledger: [],
+    capacity: null,
   }
 })
 afterAll(() => rmSync(dir, { recursive: true, force: true }))

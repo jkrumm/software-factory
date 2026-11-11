@@ -4,11 +4,15 @@ import {
   type FrictionModel,
   type KpiModel,
   RETRO_MARKER,
+  type RetroCapacity,
+  type RetroCapacityFigure,
   type RetroLedgerEntry,
   type RetroModel,
   type RetroSample,
   type RetroSession,
 } from '@software-factory/contract'
+import { capacityFigures, tuneConstant } from './capacity-tuning.ts'
+import { type CapacityConstants, readCapacityLoop } from './capacity-loop.ts'
 import { readFriction } from './friction.ts'
 import { readKpis, type Window } from './kpis.ts'
 import { REGRESSION_CAUSES, regressionCause } from './kpis-flow.ts'
@@ -123,7 +127,11 @@ export function movedOf(before: number, now: number, direction: 'up' | 'down'): 
 }
 
 /** The retro signals the factory has seen (`RETRO_MARKER` in their text), against the KPIs as they are now. */
-export async function ledgerOf(sql: SQL, kpis: KpiModel): Promise<RetroLedgerEntry[]> {
+export async function ledgerOf(
+  sql: SQL,
+  kpis: KpiModel,
+  capacity: readonly RetroCapacityFigure[] = [],
+): Promise<RetroLedgerEntry[]> {
   const rows: unknown[] = await sql`
     SELECT s.id, s.title, s.text, s.received_at, s.issue_id, i.state, i.outcome,
       (SELECT max(e.at) FROM factory.issue_events e
@@ -149,7 +157,7 @@ export async function ledgerOf(sql: SQL, kpis: KpiModel): Promise<RetroLedgerEnt
     if (!marker) continue
     const [, , key, rawBefore, direction] = marker
     const before = rawBefore === 'none' ? null : Number(rawBefore)
-    const now = kpis.kpis.find((k) => k.key === key)?.value ?? null
+    const now = kpis.kpis.find((k) => k.key === key)?.value ?? capacity.find((f) => f.key === key)?.value ?? null
     const measured =
       row.shipped_at === null
         ? 'not_shipped'
@@ -180,18 +188,34 @@ export async function ledgerOf(sql: SQL, kpis: KpiModel): Promise<RetroLedgerEnt
   return entries
 }
 
+/** The capacity loop over the window, its per-day figures and the one setting the fixed rules would change first. */
+async function capacityOf(
+  sql: SQL,
+  options: { now: Date; days: number; constants: CapacityConstants },
+): Promise<RetroCapacity> {
+  const loop = await readCapacityLoop(sql, options)
+  const figures = capacityFigures(loop)
+  return { figures, tune: tuneConstant(figures, loop.constants), loop }
+}
+
 /**
  * What the weekly retro reads from the database over the last `days` days: the KPI table (with its history, so the window
  * before is in it), the friction counts, the lead sessions with their transcript paths (the CLI reads those), samples of
  * the Issues worth reading and the ledger of the earlier retro signals. `redact` (the read token) drops transcript paths
  * and the words of the samples: a work repository's words never leave it.
  */
-export async function readRetro(sql: SQL, options: { now: Date; days: number; redact?: boolean }): Promise<RetroModel> {
+export async function readRetro(
+  sql: SQL,
+  options: { now: Date; days: number; redact?: boolean; capacityConstants?: CapacityConstants },
+): Promise<RetroModel> {
   const { now, days } = options
   const w = windowOf(now, days)
   const kpis = await readKpis(sql, { now, days })
   const friction: FrictionModel = await readFriction(sql, { now, days })
   const sessions = await sessionsOf(sql, w)
+  const capacity = options.capacityConstants
+    ? await capacityOf(sql, { now, days, constants: options.capacityConstants })
+    : null
   const model: RetroModel = {
     at: now.toISOString(),
     days,
@@ -206,7 +230,8 @@ export async function readRetro(sql: SQL, options: { now: Date; days: number; re
       refused: await refused(sql, w),
       dropped: await dropped(sql, w),
     },
-    ledger: await ledgerOf(sql, kpis),
+    ledger: await ledgerOf(sql, kpis, capacity?.figures),
+    capacity,
   }
   if (!options.redact) return model
   const bare = (list: RetroSample[]): RetroSample[] => list.map((s) => ({ ...s, why: '' }))

@@ -245,7 +245,7 @@ test('every pass files the weekly retro signal once, and a failure to file it ne
   expect(retro).toHaveLength(1)
   expect(retro[0]).toMatchObject({ from: 'agent:software-factory', repo: 'software-factory', kind: 'request' })
   expect(retro[0]?.text).toContain('factory retro --days 7')
-  expect(retro[0]?.text).toContain('Retro: 2026-11-20 kpi=<KPI key>')
+  expect(retro[0]?.text).toContain('Retro: 2026-11-20 kpi=<KPI or capacity figure key>')
   expect(pass.ok && pass.value.due && frictionSummary(pass.value)).toContain('retro filed (new)')
 
   const down = frictionWorld({}, true)

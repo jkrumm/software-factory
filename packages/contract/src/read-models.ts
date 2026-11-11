@@ -409,31 +409,6 @@ export const RetroLedgerEntry = z
   .meta({ id: 'RetroLedgerEntry' })
 export type RetroLedgerEntry = z.infer<typeof RetroLedgerEntry>
 
-/**
- * What the weekly retro reads, all of it from the event log and the tables (no model): the KPI table with its history, the
- * friction counts, the lead sessions with their transcripts (the CLI reads those: `factory retro`), samples of Issues worth
- * reading and the ledger of the earlier retro signals.
- */
-export const RetroModel = z
-  .strictObject({
-    at,
-    days: z.number().int(),
-    window: z.strictObject({ from: at, to: at }),
-    kpis: KpiModel,
-    friction: FrictionModel,
-    sessions: z.array(RetroSession),
-    samples: z.strictObject({
-      regressed: z.array(RetroSample),
-      stalled: z.array(RetroSample),
-      slowest: z.array(RetroSample),
-      refused: z.array(RetroSample),
-      dropped: z.array(RetroSample),
-    }),
-    ledger: z.array(RetroLedgerEntry),
-  })
-  .meta({ id: 'RetroModel' })
-export type RetroModel = z.infer<typeof RetroModel>
-
 // -- finding classes -----------------------------------------------------------------------------------------------------
 
 export const FindingClass = z
@@ -696,9 +671,75 @@ export const CapacityLoopModel = z
   .meta({ id: 'CapacityLoopModel' })
 export type CapacityLoopModel = z.infer<typeof CapacityLoopModel>
 
+/** The capacity figures a retro signal can name in its marker (`kpi=<key>`), besides the `KPI_KEYS`; all per day or p90. */
+export const CAPACITY_FIGURE_KEYS = [
+  'closed_per_day',
+  'minutes_over_ceiling_per_day',
+  'idle_seat_hours_per_day',
+  'slot_wait_p90_ms',
+] as const
+
+export const RetroCapacityFigure = z
+  .strictObject({
+    key: z.enum(CAPACITY_FIGURE_KEYS),
+    label: z.string(),
+    /** null when nothing was measured (no slot step ran) */
+    value: z.number().nullable(),
+    unit: z.enum(['count', 'minutes', 'hours', 'ms']),
+  })
+  .meta({ id: 'RetroCapacityFigure' })
+export type RetroCapacityFigure = z.infer<typeof RetroCapacityFigure>
+
+/** The one setting to change first, by fixed rules over the figures (`read/capacity-tuning.ts`). */
+export const RetroCapacityTune = z
+  .strictObject({
+    constant: z.enum(['leadsPerAccount', 'seatsMaxBonus', 'loadCeiling', 'slots', 'slotsMax']),
+    direction: z.enum(['up', 'down']),
+    reason: z.string(),
+  })
+  .meta({ id: 'RetroCapacityTune' })
+export type RetroCapacityTune = z.infer<typeof RetroCapacityTune>
+
+export const RetroCapacity = z
+  .strictObject({
+    figures: z.array(RetroCapacityFigure),
+    /** null when nothing is out of range */
+    tune: RetroCapacityTune.nullable(),
+    loop: CapacityLoopModel,
+  })
+  .meta({ id: 'RetroCapacity' })
+export type RetroCapacity = z.infer<typeof RetroCapacity>
+
+/**
+ * What the weekly retro reads, all of it from the event log and the tables (no model): the KPI table with its history, the
+ * friction counts, the lead sessions with their transcripts (the CLI reads those: `factory retro`), samples of Issues worth
+ * reading, the ledger of the earlier retro signals and the capacity loop's figures with the one setting to change.
+ */
+export const RetroModel = z
+  .strictObject({
+    at,
+    days: z.number().int(),
+    window: z.strictObject({ from: at, to: at }),
+    kpis: KpiModel,
+    friction: FrictionModel,
+    sessions: z.array(RetroSession),
+    samples: z.strictObject({
+      regressed: z.array(RetroSample),
+      stalled: z.array(RetroSample),
+      slowest: z.array(RetroSample),
+      refused: z.array(RetroSample),
+      dropped: z.array(RetroSample),
+    }),
+    ledger: z.array(RetroLedgerEntry),
+    /** the capacity loop over the window; null when the server holds no capacity settings */
+    capacity: RetroCapacity.nullable(),
+  })
+  .meta({ id: 'RetroModel' })
+export type RetroModel = z.infer<typeof RetroModel>
+
 /**
  * The marker a retro signal ends with so the next retro can find it: `Retro: 2026-11-17 kpi=queue_time before=4273327645
- * direction=down` (`before=none` when the KPI had no number). The date is the retro's day, `kpi` a `KPI_KEYS` entry,
+ * direction=down` (`before=none` when the KPI had no number). The date is the retro's day, `kpi` a `KPI_KEYS` or `CAPACITY_FIGURE_KEYS` entry,
  * `direction` where the number should go. Intake keeps a signal's text on one line (newlines become spaces), so the marker
  * is found anywhere in the text, never by a line start.
  */

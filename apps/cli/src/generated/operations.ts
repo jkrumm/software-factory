@@ -1848,7 +1848,7 @@ export const OPERATIONS: readonly Operation[] = [
     method: 'GET',
     path: '/v1/retro',
     summary:
-      'what the weekly retro reads from the database over the last days (1 to 90, default 7): the KPI table with its history, the friction counts, the lead sessions with their transcript paths, samples of Issues worth reading and the ledger of the earlier retro signals; `factory retro` adds the transcript pass',
+      'what the weekly retro reads from the database over the last days (1 to 90, default 7): the KPI table with its history, the friction counts, the lead sessions with their transcript paths, samples of Issues worth reading and the ledger of the earlier retro signals, the capacity loop’s figures with the one setting to change; `factory retro` adds the transcript pass',
     pathParams: [],
     queryParams: ['days'],
     body: false,
