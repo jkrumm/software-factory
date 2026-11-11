@@ -126,7 +126,7 @@ export function Shell() {
                 />
               </div>
             </header>
-            <main className="min-h-0 flex-1 overflow-y-auto">
+            <main className="min-h-0 flex-1 overflow-x-hidden overflow-y-auto">
               <Outlet />
             </main>
             <TabBar count={count} />

@@ -76,12 +76,28 @@ export const columnKeyOf = (value: unknown): ColumnKey | undefined => COLUMN_KEY
 /** The columns to show: only the chosen one with a `state`, else all of them. */
 export const visibleColumns = (state?: ColumnKey): readonly ColumnKey[] => (state ? [state] : COLUMN_KEYS)
 
-/** How many cards each project or origin has across every column, before any filter. */
-export function facetCounts(data: FlowModel, field: 'repo' | 'origin'): Record<string, number> {
-  const board = boardOf(data)
-  const counts: Record<string, number> = {}
-  for (const key of COLUMN_KEYS) for (const card of board[key]) counts[card[field]] = (counts[card[field]] ?? 0) + 1
-  return counts
+/** What a project or origin has open, split as the owner reads it: what runs now and what waits for something. */
+export interface OpenSplit {
+  /** working, and watching (a lead still open after the deploy) */
+  running: number
+  /** waiting, queued and settling: an Issue that has not started or cannot go on */
+  pending: number
+}
+
+/**
+ * The open Issues of each project or origin, split into running and pending, before any filter. A closed Issue is never
+ * counted, so a value whose Issues all closed has no entry at all.
+ */
+export function openSplits(data: FlowModel, field: 'repo' | 'origin'): Record<string, OpenSplit> {
+  const splits: Record<string, OpenSplit> = {}
+  for (const state of FLOW_STATES) {
+    const side = state === 'working' || state === 'watching' ? 'running' : 'pending'
+    for (const issue of data.states[state].issues) {
+      const split = (splits[issue[field]] ??= { running: 0, pending: 0 })
+      split[side] += 1
+    }
+  }
+  return splits
 }
 
 export type Board = Record<ColumnKey, FlowCard[]>

@@ -1,4 +1,4 @@
-import { SidebarSimpleIcon, XIcon } from '@phosphor-icons/react'
+import { HourglassIcon, SidebarSimpleIcon, XIcon } from '@phosphor-icons/react'
 import { useFormatForDisplay } from '@tanstack/react-hotkeys'
 import { Link } from '@tanstack/react-router'
 import { createContext, type ReactElement, type ReactNode, use, useCallback, useMemo, useState } from 'react'
@@ -6,7 +6,7 @@ import { createPortal } from 'react-dom'
 import { InfoHint, type InfoWord } from '@/components/kit'
 import { Logo } from '@/components/logo'
 import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip'
-import { boardOf, countsOf, openCount } from '@/lib/flow'
+import { boardOf, countsOf, type OpenSplit, openCount } from '@/lib/flow'
 import { NAV, type NavItem } from '@/lib/nav'
 import { useFlow } from '@/lib/queries'
 import { cn } from '@/lib/utils'
@@ -110,10 +110,49 @@ export function ActiveFilters({ chips }: { chips: FilterChip[] }) {
   )
 }
 
-/** One toggle of a page section: a label and the count behind it. `render` returns the link or button that carries the props. */
+/**
+ * What runs and what waits, as two small figures: a lit lamp and the running count, an hourglass and the pending count.
+ * A zero keeps its slot empty so the figures of every row line up; with both at zero nothing shows.
+ */
+function OpenFigures({ running, pending }: OpenSplit) {
+  if (running + pending === 0) return null
+  const words = [running ? `${running} working` : null, pending ? `${pending} waiting` : null]
+    .filter(Boolean)
+    .join(', ')
+  return (
+    <span
+      aria-label={words}
+      title={`${words}${pending ? ' (waiting, queued or settling)' : ''}`}
+      className="flex shrink-0 items-center gap-2 text-xs font-normal tabular-nums"
+    >
+      <span aria-hidden className="flex w-8 shrink-0 items-center gap-1">
+        {running ? (
+          <>
+            <span className="mx-[3px] size-1.5 shrink-0 rounded-full bg-good" />
+            <span className="w-[2ch] text-right text-foreground">{running}</span>
+          </>
+        ) : null}
+      </span>
+      <span aria-hidden className="flex w-8 shrink-0 items-center gap-1">
+        {pending ? (
+          <>
+            <HourglassIcon className="size-3 shrink-0" />
+            <span className="w-[2ch] text-right">{pending}</span>
+          </>
+        ) : null}
+      </span>
+    </span>
+  )
+}
+
+/**
+ * One toggle of a page section: a label and the count behind it, or `open` for a split of what runs and what waits.
+ * `render` returns the link or button that carries the props.
+ */
 export function SidebarEntry({
   label,
   count,
+  open,
   pressed,
   current,
   hint,
@@ -121,6 +160,8 @@ export function SidebarEntry({
 }: {
   label: string
   count?: number
+  /** The open Issues behind this row, split into running and pending; a row with none shows no figure. */
+  open?: OpenSplit
   pressed?: boolean
   current?: boolean
   /** A domain word to define: its InfoHint sits beside the row, never inside the toggle. */
@@ -144,6 +185,7 @@ export function SidebarEntry({
         />
         <span className="min-w-0 flex-1 truncate">{label}</span>
         {count === undefined ? null : <span className="text-xs font-normal tabular-nums">{count}</span>}
+        {open ? <OpenFigures {...open} /> : null}
       </>
     ),
   })
