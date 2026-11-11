@@ -83,7 +83,7 @@ export interface HostReading {
   swapoutMbPer300s: number | null
 }
 
-/** One minute as stored: the reading and the capacity facts (`migrations/1009_lead_samples.sql`). */
+/** One minute as stored: the reading and the capacity facts (`migrations/1010_lead_samples.sql`). */
 export type HostSampleRecord = HostReading & CapacityFacts
 
 /** What one lead's process tree cost at a sample, by its worktree. */
