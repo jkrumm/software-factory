@@ -302,7 +302,7 @@ describe('the brief', () => {
   test('the standing orders open every brief and are pinned', () => {
     expect(buildBrief(input).startsWith(STANDING_ORDERS)).toBe(true)
     expect(new Bun.CryptoHasher('sha256').update(STANDING_ORDERS).digest('hex')).toBe(
-      'fd5d13f0f538db9ffb026fdc815af6e0df365e927289834dd63cf1671e4429b3',
+      '762f254dec2a1817994077a74089e7965b02db872d56d272fceeb0d2027a732f',
     )
   })
 
@@ -313,6 +313,7 @@ describe('the brief', () => {
     expect(STANDING_ORDERS).toMatch(/Never pipe a waited command into `tail` or `head`/)
     expect(STANDING_ORDERS).toMatch(/One check per worktree/)
     expect(STANDING_ORDERS).toMatch(/Kill by pid/)
+    expect(STANDING_ORDERS).toContain('--thread factory-<issue number>')
     expect(STANDING_ORDERS).toMatch(/no Grep or Glob tool/i)
     expect(STANDING_ORDERS).toMatch(/Write a change that fits a few files yourself/)
     expect(STANDING_ORDERS).toMatch(/about 30 minutes/)
