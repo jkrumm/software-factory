@@ -42,9 +42,19 @@ const AcceptanceEvidence = z.object({
   statements: z.array(z.object({ status: z.enum(['met', 'not_met']), text: z.string() })),
 })
 
-/** What a ship proved: its merged commits, its review or the record that there was none, and what it states of the acceptance. */
+const CiEvidence = z.object({
+  kind: z.literal('ci'),
+  /** the pull request's CI for the merged head; `red`, `missing` and `unknown` are recorded with the reason, never a refusal */
+  status: z.enum(['green', 'red', 'running', 'missing', 'unknown']),
+  pr: z.number().int().nullable(),
+  headSha: z.string().nullable(),
+  url: z.string().nullable(),
+  reason: z.string().nullable(),
+})
+
+/** What a ship proved: its merged commits, its review or the record that there was none, what it states of the acceptance, and the CI of its pull request. */
 export const QualityEvidence = z
-  .discriminatedUnion('kind', [CommitsEvidence, ReviewEvidence, AcceptanceEvidence])
+  .discriminatedUnion('kind', [CommitsEvidence, ReviewEvidence, AcceptanceEvidence, CiEvidence])
   .meta({ id: 'QualityEvidence' })
 export type QualityEvidence = z.infer<typeof QualityEvidence>
 

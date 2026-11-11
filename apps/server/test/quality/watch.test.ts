@@ -2,6 +2,7 @@ import { expect, test } from 'bun:test'
 import { deploys, isInert } from '../../src/domains/quality/evidence.ts'
 import {
   type Check,
+  ciCheck,
   MAX_RETRIES,
   nextCheckAt,
   outcomeOf,
@@ -99,4 +100,43 @@ test('docs, text, licences and tests are inert; everything else deploys', () => 
   expect(deploys(['project.yaml', 'docs/plan.yaml'])).toBe(false)
   expect(deploys(['project.yaml', 'apps/server/src/a.ts'])).toBe(true)
   expect(deploys(['docs/a.md', 'src/a.ts'])).toBe(true)
+})
+
+const SHA = 'abcdef0123456789'
+const MERGED = new Date('2026-01-01T12:00:00Z')
+const minutesAfter = (n: number) => new Date(MERGED.getTime() + n * 60_000)
+const when = (now: Date) => ({ sha: SHA, mergedAt: MERGED, now })
+
+test('CI green passes and red names the failing check with its page', () => {
+  expect(ciCheck({ status: 'green', url: null, reason: null }, when(minutesAfter(1)))).toEqual({
+    name: 'ci',
+    ok: true,
+    detail: 'CI green for abcdef0',
+  })
+  expect(
+    ciCheck({ status: 'red', url: 'https://example.com/run/1', reason: 'build failure' }, when(minutesAfter(1))),
+  ).toEqual({ name: 'ci', ok: false, detail: 'build failure for abcdef0 (https://example.com/run/1)' })
+})
+
+test('CI still running is blocked (neither a pass nor a regression) until an hour after the merge, then red', () => {
+  const running = { status: 'running' as const, url: null, reason: 'build is still running' }
+  const early = ciCheck(running, when(minutesAfter(59)))
+  expect(early).toMatchObject({ ok: false, blocked: true, detail: expect.stringContaining('still running') })
+  expect(outcomeOf([early])).toBe('blocked')
+  const late = ciCheck(running, when(minutesAfter(61)))
+  expect(late.blocked).toBeUndefined()
+  expect(late).toMatchObject({ ok: false, detail: expect.stringContaining('CI did not finish') })
+  expect(outcomeOf([late])).toBe('red')
+})
+
+test('no CI run is blocked for ten minutes after the merge, then passes: the repo may have none', () => {
+  const missing = { status: 'missing' as const, url: null, reason: 'no check ran' }
+  expect(ciCheck(missing, when(minutesAfter(9)))).toMatchObject({ ok: false, blocked: true })
+  expect(ciCheck(missing, when(minutesAfter(10)))).toEqual({
+    name: 'ci',
+    ok: true,
+    detail: 'no CI run found for abcdef0',
+  })
+  // with no merge time the commit is old enough
+  expect(ciCheck(missing, { sha: SHA, mergedAt: null, now: MERGED }).ok).toBe(true)
 })

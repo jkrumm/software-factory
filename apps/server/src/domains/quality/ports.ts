@@ -1,6 +1,6 @@
 import type { IssueId } from '../../kernel/ids.ts'
 import type { Result } from '../../kernel/result.ts'
-import type { CommitRead, ReviewRange, ReviewRead } from './evidence.ts'
+import type { CiRead, CiState, CommitRead, ReviewRange, ReviewRead } from './evidence.ts'
 import type { Check, ProjectChecks } from './watch.ts'
 
 /**
@@ -23,6 +23,14 @@ export interface Review {
   read(input: { repo: string; ranges: readonly ReviewRange[] }): Promise<Result<ReviewRead>>
 }
 
+/** GitHub's CI, read only. Any failure is an error result: the ship records it as `unknown`, the watch does not hold on it. */
+export interface Ci {
+  /** the pull request the named commits landed through (the first of at most three that has one) and the CI of its head */
+  ofShip(input: { repo: string; commits: readonly string[] }): Promise<Result<CiRead>>
+  /** the CI of one commit as the default branch has it */
+  ofCommit(input: { repo: string; sha: string }): Promise<Result<CiState>>
+}
+
 /** What the watch's verify runs; `signal` is the server stopping, and nothing of a check may outlive it. */
 export interface ProofInput {
   repo: string
@@ -35,6 +43,11 @@ export interface ProofInput {
    * `origin/<default>` the ship found, or why there is none, which is red. Unset: the change deploys nothing.
    */
   version?: { landedAt: string } | { problem: string }
+  /**
+   * Set where the project ships by pull request: the default branch's CI for the landed commit must be green. `mergedAt`
+   * (null when unknown) and `now` are ISO times, passed in so the check stays deterministic.
+   */
+  ci?: { landedAt: string; mergedAt: string | null; now: string }
   probes: ProjectChecks['probes']
 }
 

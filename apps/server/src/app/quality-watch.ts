@@ -140,6 +140,10 @@ async function checkOne(deps: WatchDeps, watch: OpenWatch, pass: WatchPass): Pro
     ...(project.value.makeTargets?.length ? { makeTargets: project.value.makeTargets } : {}),
     probes: project.value.probes,
     ...(project.value.deployMode === 'make' && ship?.commits?.deploys !== false ? { version: versionOf(ship) } : {}),
+    // CI applies to an inert change too: only a project that ships by pull request, and a landed commit, are asked.
+    ...(project.value.ci && ship?.commits?.landedAt
+      ? { ci: { landedAt: ship.commits.landedAt, mergedAt: ship.commits.mergedAt, now: now.toISOString() } }
+      : {}),
   }
   // The checks: git, make and HTTP, with a process timeout each, never inside a transaction.
   const ran = await deps.proof.run(input, deps.signal)

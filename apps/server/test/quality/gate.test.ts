@@ -1,5 +1,11 @@
 import { expect, test } from 'bun:test'
-import { type CommitRead, parseAcceptance, type ReviewRead } from '../../src/domains/quality/evidence.ts'
+import {
+  type CiLine,
+  type CommitRead,
+  ciStateOf,
+  parseAcceptance,
+  type ReviewRead,
+} from '../../src/domains/quality/evidence.ts'
 import { judgeShip } from '../../src/domains/quality/gate.ts'
 import { err, ok, portError } from '../../src/kernel/result.ts'
 
@@ -14,7 +20,7 @@ const none = { read: null, problem: null }
 const covered: ReviewRead = { tier: 'standard', covered: true, uncovered: [] }
 
 test('a ship that names no commit is refused with its error named', () => {
-  const verdict = judgeShip({ reported: [], commits: ok(read), review: none, acceptance: { statements: [] } })
+  const verdict = judgeShip({ reported: [], commits: ok(read), review: none, ci: none, acceptance: { statements: [] } })
   expect(verdict).toEqual({ accepted: false, error: 'ship refused: ship names no merged commit' })
 })
 
@@ -23,6 +29,7 @@ test('commits git refuses are refused with git’s reason; a git that fails is s
     reported: ['abc'],
     commits: err(portError('refused', 'commit abc is not on origin/master: merge it first')),
     review: none,
+    ci: none,
     acceptance: { statements: [] },
   })
   expect(refused).toEqual({
@@ -33,6 +40,7 @@ test('commits git refuses are refused with git’s reason; a git that fails is s
     reported: ['abc'],
     commits: err(portError('timeout', 'git fetch did not finish')),
     review: none,
+    ci: none,
     acceptance: { statements: [] },
   })
   expect(failed).toEqual({
@@ -46,6 +54,7 @@ test('merged commits are evidence: what landed, what it touched, whether it depl
     reported: ['abc'],
     commits: ok(read),
     review: { read: covered, problem: null },
+    ci: none,
     acceptance: { statements: [] },
   })
   expect(verdict).toMatchObject({
@@ -69,7 +78,13 @@ test('a review is evidence when it exists; its absence is recorded with the reas
     },
   ]
   const statuses = absent.map((review) => {
-    const verdict = judgeShip({ reported: ['abc'], commits: ok(read), review, acceptance: { statements: [] } })
+    const verdict = judgeShip({
+      reported: ['abc'],
+      commits: ok(read),
+      review,
+      ci: none,
+      acceptance: { statements: [] },
+    })
     if (!verdict.accepted) throw new Error('a missing review must not refuse')
     return [verdict.review.status, verdict.review.reason]
   })
@@ -85,6 +100,7 @@ test('a change that needs no review is a review that exists', () => {
     reported: ['abc'],
     commits: ok({ ...read, paths: ['docs/a.md'] }),
     review: { read: { tier: 'none', covered: true, uncovered: [] }, problem: null },
+    ci: none,
     acceptance: { statements: [] },
   })
   expect(verdict).toMatchObject({ accepted: true, commits: { deploys: false }, review: { status: 'not_required' } })
@@ -105,4 +121,60 @@ test('the lead’s acceptance lines are parsed: met, or not met with why; anythi
   for (const line of ['done', 'met:', 'unmet: x']) {
     expect(parseAcceptance([line])).toMatchObject({ ok: false, error: expect.stringContaining('must read "met:') })
   }
+})
+
+test('the ship records the pull request CI, and a CI that could not be read is `unknown`, never a refusal (NL23)', () => {
+  const green = {
+    status: 'green' as const,
+    pr: 7,
+    headSha: 'c'.repeat(40),
+    url: 'https://example.com/pr/7',
+    reason: null,
+  }
+  const seen = judgeShip({
+    reported: ['abc'],
+    commits: ok(read),
+    review: none,
+    ci: { read: green, problem: null },
+    acceptance: { statements: [] },
+  })
+  expect(seen).toMatchObject({ accepted: true, ci: green })
+  const unread = judgeShip({
+    reported: ['abc'],
+    commits: ok(read),
+    review: none,
+    ci: { read: null, problem: 'CI could not be read: no token' },
+    acceptance: { statements: [] },
+  })
+  expect(unread).toMatchObject({
+    accepted: true,
+    ci: { status: 'unknown', pr: null, headSha: null, url: null, reason: 'CI could not be read: no token' },
+  })
+})
+
+const line = (name: string, status: string, conclusion: string | null, url: string | null = null): CiLine => ({
+  name,
+  status,
+  conclusion,
+  url,
+})
+
+test('CI is red with any failure, running with any unfinished check, green with a success and nothing else', () => {
+  expect(ciStateOf([line('a', 'completed', 'success'), line('b', 'completed', 'failure', 'https://x/b')])).toEqual({
+    status: 'red',
+    url: 'https://x/b',
+    reason: 'b failure',
+  })
+  // a failure beats a run still going
+  expect(ciStateOf([line('a', 'in_progress', null), line('b', 'completed', 'timed_out')]).status).toBe('red')
+  expect(ciStateOf([line('a', 'completed', 'success'), line('b', 'queued', null)])).toMatchObject({
+    status: 'running',
+    reason: 'b is still running',
+  })
+  expect(ciStateOf([line('a', 'completed', 'success'), line('b', 'completed', 'skipped')]).status).toBe('green')
+})
+
+test('no check, or none that concluded, is missing: a cancelled run alone proves nothing', () => {
+  expect(ciStateOf([])).toEqual({ status: 'missing', url: null, reason: 'no check ran' })
+  expect(ciStateOf([line('a', 'completed', 'cancelled')]).status).toBe('missing')
 })

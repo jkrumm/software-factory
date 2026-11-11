@@ -51,9 +51,13 @@ export const projectMake = (holdSeconds = 0): string =>
  */
 export async function startQualityWorld(
   env: Record<string, string> = {},
-  options: { makefile?: string; project?: string | null } = {},
+  options: { makefile?: string; project?: string | null; github?: FakeCi } = {},
 ): Promise<LeadsWorld> {
-  const lw = await startLeadsWorld({ ...QUALITY_ENV, ...env })
+  const github: Record<string, string> = options.github
+    ? { FACTORY_GITHUB_TOKEN: 'ghp_fake_0123456789', FACTORY_GITHUB_API_URL: options.github.url }
+    : {}
+  const lw = await startLeadsWorld({ ...QUALITY_ENV, FACTORY_GITHUB_POLL: 'off', ...github, ...env })
+  if (options.github) await asGithubOrigin(lw)
   await commit(lw, 'Makefile', options.makefile ?? MAKEFILE, 'chore: make contract')
   if (options.project === null) {
     await gitIn(lw, 'rm', '-q', 'project.yaml')
@@ -158,4 +162,92 @@ export async function scriptReview(world: World, mode: 'covered' | 'none' | 'unc
   const file = join(world.bin, 'review-mode')
   if (mode === null) await Bun.write(file, '').then(() => Bun.file(file).delete())
   else await writeFile(file, mode)
+}
+
+/** The project file of a project that ships by pull request: the Watch also reads CI for the landed commit. */
+export const projectPr = (holdSeconds = 0): string =>
+  `${projectMake(holdSeconds)}ship:\n  - { paths: ['**'], via: pr }\n`
+
+/**
+ * The repo's origin reads as a github.com address (the CI reader names the repository by it) while fetch and push still
+ * go to the bare repo: `url.<bare>.insteadOf` rewrites for git's transport and `remote.origin.url` stays as written.
+ */
+async function asGithubOrigin(lw: LeadsWorld): Promise<void> {
+  const bare = await git(lw.repo, 'remote', 'get-url', 'origin')
+  await git(lw.repo, 'config', `url.${bare}.insteadOf`, FAKE_ORIGIN)
+  await git(lw.repo, 'remote', 'set-url', 'origin', FAKE_ORIGIN)
+}
+
+const FAKE_ORIGIN = 'https://github.com/o/example.git'
+
+export interface FakeCiRun {
+  name: string
+  status: 'completed' | 'in_progress'
+  conclusion: 'success' | 'failure' | null
+}
+
+/** A GitHub API that serves pull requests of a commit and check runs of a commit, as the scenario sets them. */
+export interface FakeCi {
+  url: string
+  /** the commit landed through pull request `number`, whose head is `head` */
+  pull(sha: string, number: number, head: string): void
+  /** the check runs of a commit from now on */
+  runs(sha: string, runs: FakeCiRun[]): void
+  /** every request answers 500 */
+  down(on: boolean): void
+  /** `path` of every request, in order */
+  requests: string[]
+  stop(): void
+}
+
+export function fakeCi(): FakeCi {
+  const pulls = new Map<string, { number: number; head: string }>()
+  const runs = new Map<string, FakeCiRun[]>()
+  let down = false
+  const requests: string[] = []
+  const server = Bun.serve({
+    hostname: '127.0.0.1',
+    port: 0,
+    fetch(req) {
+      const path = new URL(req.url).pathname
+      requests.push(path)
+      if (down) return new Response('down', { status: 500 })
+      const found = /^\/repos\/o\/example\/commits\/([^/]+)\/(pulls|check-runs|status)$/.exec(path)
+      const [, sha = '', what] = found ?? []
+      if (what === 'pulls') {
+        const pull = pulls.get(sha)
+        return Response.json(
+          pull
+            ? [
+                {
+                  number: pull.number,
+                  html_url: `https://github.com/o/example/pull/${pull.number}`,
+                  merged_at: '2026-11-11T10:00:00Z',
+                  head: { sha: pull.head },
+                },
+              ]
+            : [],
+        )
+      }
+      if (what === 'check-runs')
+        return Response.json({
+          check_runs: (runs.get(sha) ?? []).map((run) => ({
+            ...run,
+            html_url: `https://github.com/o/example/runs/${run.name}`,
+          })),
+        })
+      if (what === 'status') return Response.json({ statuses: [] })
+      return new Response('not found', { status: 404 })
+    },
+  })
+  return {
+    url: `http://127.0.0.1:${server.port}`,
+    pull: (sha, number, head) => void pulls.set(sha, { number, head }),
+    runs: (sha, list) => void runs.set(sha, list),
+    down: (on) => {
+      down = on
+    },
+    requests,
+    stop: () => void server.stop(true),
+  }
 }

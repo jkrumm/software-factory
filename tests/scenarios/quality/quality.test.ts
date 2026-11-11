@@ -102,7 +102,7 @@ describe('ship: the gate', () => {
     const again = await ship(it.lw.world, it.lw.server, id, { call: 'ship-1', commits: [sha] })
     expect(again.code).toBe(0)
     expect(again.json.result).toBe('replayed')
-    expect(again.json.evidence.map((e) => e.kind)).toEqual(['commits', 'review', 'acceptance'])
+    expect(again.json.evidence.map((e) => e.kind)).toEqual(['commits', 'review', 'acceptance', 'ci'])
     expect(await agwCalls()).toBe(asked)
     expect((await show(it.lw.world, it.lw.server, id)).ships).toHaveLength(1)
   })
@@ -211,7 +211,7 @@ describe('the watch', () => {
         ],
       })
       const evidence = (await show(it.lw.world, it.lw.server, id)).ships[0]?.evidence ?? []
-      expect(evidence.map((e) => e.kind)).toEqual(['commits', 'review', 'acceptance'])
+      expect(evidence.map((e) => e.kind)).toEqual(['commits', 'review', 'acceptance', 'ci'])
     },
     LONG,
   )

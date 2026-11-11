@@ -1,6 +1,6 @@
 import type { SQL } from 'bun'
 import * as z from 'zod'
-import type { AcceptanceEvidence, CommitsEvidence, ReviewEvidence } from '../../domains/quality/evidence.ts'
+import type { AcceptanceEvidence, CiEvidence, CommitsEvidence, ReviewEvidence } from '../../domains/quality/evidence.ts'
 import type {
   OpenWatch,
   QualityStore,
@@ -52,7 +52,7 @@ const ShipRow = z.object({
 const EvidenceRow = z.object({
   id: z.string(),
   source_key: z.string(),
-  kind: z.enum(['commits', 'review', 'acceptance']),
+  kind: z.enum(['commits', 'review', 'acceptance', 'ci']),
   payload: z.unknown(),
 })
 
@@ -66,6 +66,8 @@ const evidenceOf = (raw: unknown): StoredEvidence => {
       return { id: row.id, kind: 'review', payload: row.payload as ReviewEvidence }
     case 'acceptance':
       return { id: row.id, kind: 'acceptance', payload: row.payload as AcceptanceEvidence }
+    case 'ci':
+      return { id: row.id, kind: 'ci', payload: row.payload as CiEvidence }
   }
 }
 

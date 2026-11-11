@@ -1,3 +1,4 @@
+import type { CiState } from './evidence.ts'
 import { condense } from './output.ts'
 
 /** One check of verify: pass or fail, never averaged. `detail` is data, whatever the check printed. */
@@ -5,7 +6,10 @@ export interface Check {
   name: string
   ok: boolean
   detail: string
-  /** the check could not look at the code at all (the checkout is not ours to move): neither a pass nor a regression */
+  /**
+   * the check cannot say yet: neither a pass nor a regression, looked at again after `recheckMs`. The checkout is not
+   * ours to move, or the default branch's CI for the landed commit has not finished.
+   */
   blocked?: boolean
 }
 
@@ -26,6 +30,8 @@ export interface ProjectChecks {
   makeVerify: boolean
   /** other `make <target>` the project's targets verify by, each run and judged like `make verify` */
   makeTargets?: string[]
+  /** the project ships by pull request, so CI is read for the landed commit; set only when true */
+  ci?: boolean
   probes: Probe[]
 }
 
@@ -45,6 +51,42 @@ export const DEFAULT_RECHECK_MS = 5 * 60_000
 /** The red line where the Makefile has no `version`: a probe the owner adds, never a lead. */
 export const NO_VERSION_TARGET =
   'no `make version` target: it is a probe, so the owner adds it (it prints the deployed commit sha) and a lead does not: `factory issue block` with this reason'
+
+/** CI not yet visible for a commit this long after it merged is taken to mean the repo has none. */
+export const CI_VISIBLE_MS = 10 * 60_000
+/** CI still running this long after the merge did not finish. */
+export const CI_RUNNING_MAX_MS = 60 * 60_000
+
+/**
+ * What the default branch's CI says of the landed commit, as a check named `ci`. Green is a pass and red names the
+ * failing check; a run still going, or none visible in the first ten minutes, is `blocked` (looked at again, no
+ * regression); one still going after an hour is red, and none after ten minutes passes (the repo may have no CI). With
+ * no merge time the commit is taken as old enough for both.
+ */
+export function ciCheck(state: CiState, input: { sha: string; mergedAt: Date | null; now: Date }): Check {
+  const name = 'ci'
+  const short = input.sha.slice(0, 7)
+  const age = input.mergedAt ? input.now.getTime() - input.mergedAt.getTime() : Number.POSITIVE_INFINITY
+  const link = state.url ? ` (${state.url})` : ''
+  switch (state.status) {
+    case 'green':
+      return { name, ok: true, detail: `CI green for ${short}` }
+    case 'red':
+      return { name, ok: false, detail: `${state.reason ?? 'a check failed'} for ${short}${link}` }
+    case 'running':
+      if (age > CI_RUNNING_MAX_MS)
+        return { name, ok: false, detail: `CI did not finish: ${state.reason ?? 'still running'} for ${short}${link}` }
+      return { name, ok: false, blocked: true, detail: `CI is still running for ${short}${link}` }
+    case 'missing':
+      if (age >= CI_VISIBLE_MS) return { name, ok: true, detail: `no CI run found for ${short}` }
+      return {
+        name,
+        ok: false,
+        blocked: true,
+        detail: `CI is not visible yet for ${short}: still running or not started`,
+      }
+  }
+}
 
 export function outcomeOf(checks: readonly Check[]): Outcome {
   if (checks.some((check) => check.blocked)) return 'blocked'

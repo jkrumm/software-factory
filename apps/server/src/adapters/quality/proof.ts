@@ -1,6 +1,6 @@
-import type { Proof, ProofInput } from '../../domains/quality/ports.ts'
+import type { Ci, Proof, ProofInput } from '../../domains/quality/ports.ts'
 import { condense } from '../../domains/quality/output.ts'
-import { type Check, NO_VERSION_TARGET } from '../../domains/quality/watch.ts'
+import { type Check, ciCheck, NO_VERSION_TARGET } from '../../domains/quality/watch.ts'
 import { err, ok, portError, type Result } from '../../kernel/result.ts'
 import { type CheckoutSync, deployedHolds, syncCheckout } from './git.ts'
 import { CannotExecute, childEnv, EXIT_STOPPED, EXIT_TIMEOUT, type Run, runProcess } from './process.ts'
@@ -46,18 +46,23 @@ export class MakeAndProbes implements Proof {
       run?: Run
       sync?: (repo: string, signal: AbortSignal) => Promise<CheckoutSync>
       fetch?: typeof fetch
+      /** GitHub's CI, for a project that ships by pull request; without it that check is left out */
+      ci?: Ci
     } = {},
   ) {}
 
   async run(
-    { repo, makeVerify, makeTargets = [], version, probes }: ProofInput,
+    { repo, makeVerify, makeTargets = [], version, probes, ci }: ProofInput,
     signal: AbortSignal,
   ): Promise<Result<Check[]>> {
     const sync = makeVerify || makeTargets.length > 0 || version ? await this.sync(repo, signal) : undefined
-    const checks = await Promise.all(probes.map((probe) => this.probe(probe, signal)))
+    const [ciChecks, checks] = await Promise.all([
+      this.ci(repo, ci),
+      Promise.all(probes.map((probe) => this.probe(probe, signal))),
+    ])
     if (signal.aborted) return err(portError('gone', 'the server is stopping'))
     if (sync?.state === 'blocked')
-      return ok([{ name: 'checkout', ok: false, blocked: true, detail: sync.detail }, ...checks])
+      return ok([{ name: 'checkout', ok: false, blocked: true, detail: sync.detail }, ...ciChecks, ...checks])
     const advanced: Check[] = sync?.state === 'advanced' ? [{ name: 'checkout', ok: true, detail: sync.detail }] : []
     const deployed = version ? [await this.version(repo, version, signal)] : []
     const verify: Check[] = []
@@ -65,7 +70,24 @@ export class MakeAndProbes implements Proof {
       verify.push(await this.makeVerify(repo, target, signal))
     // A check the server killed on its way down says nothing about production: the next server asks again.
     if (signal.aborted) return err(portError('gone', 'the server is stopping'))
-    return ok([...advanced, ...deployed, ...verify, ...checks])
+    return ok([...advanced, ...deployed, ...verify, ...ciChecks, ...checks])
+  }
+
+  /**
+   * The default branch's CI for the exact landed commit. A CI that cannot be read is no hold on the watch: it passes with
+   * the reason as its detail (the ship recorded it the same way), so a missing token never stops a project's Issues.
+   */
+  private async ci(repo: string, input: ProofInput['ci']): Promise<Check[]> {
+    if (!input || !this.options.ci) return []
+    const read = await this.options.ci.ofCommit({ repo, sha: input.landedAt })
+    if (!read.ok) return [{ name: 'ci', ok: true, detail: `CI was not read: ${read.error.detail}` }]
+    return [
+      ciCheck(read.value, {
+        sha: input.landedAt,
+        mergedAt: input.mergedAt ? new Date(input.mergedAt) : null,
+        now: new Date(input.now),
+      }),
+    ]
   }
 
   private async sync(repo: string, signal: AbortSignal): Promise<CheckoutSync> {

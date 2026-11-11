@@ -31,6 +31,7 @@ export function checksOfFile(project: ProjectFile): Omit<ProjectChecks, 'makeVer
     deployMode: mode,
     ...(targets.length > 0 ? { makeVerify: targets.some((target) => target.verify === MAKE_VERIFY) } : {}),
     ...(makeTargets.length > 0 ? { makeTargets: [...new Set(makeTargets)] } : {}),
+    ...(project.ship.some((rule) => rule.via === 'pr') ? { ci: true } : {}),
     probes: [
       ...targets
         .filter((target) => /^https?:\/\//.test(target.verify))
