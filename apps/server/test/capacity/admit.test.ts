@@ -134,7 +134,7 @@ describe('admission', () => {
       for (const n of attempts) {
         await world.db.sql`
           INSERT INTO factory.lead_samples (at, worktree, repo, issue, attempt, rss_mib, procs)
-          VALUES (${new Date(world.clock.now().getTime() - n * 3_600_000)}, ${`/wt/sim-${n}`}, '/src/sim', ${900 + n}, 1, 100, 3)`
+          VALUES (${new Date(world.clock.now().getTime() - n * 3_600_000)}, ${`/wt/sim-${n}`}, 'sim', ${900 + n}, 1, 100, 3)`
       }
     }
     await seed(1, 2)

@@ -4,7 +4,7 @@ import { type Lab, startLab } from '../planning/lab.ts'
 
 /**
  * Admission by what a repo's lead has been seen to take (the learned fit). The host sample and the lead samples are
- * seeded rows; the host loop is kept from writing its own.
+ * seeded rows, with the project name as `repo` as the host loop writes it (`loop-closes.test.ts` runs the host loop itself); the host loop is kept from writing its own.
  */
 let lab: Lab
 
@@ -54,17 +54,16 @@ const hostSamples = async (rows: { load: number; used: number; swap?: number }[]
 }
 
 test('a heavy repo whose second lead would not fit stays queued with the numbers, a small repo is admitted', async () => {
-  const root = lab.root
   // four past attempts of the heavy repo, peaks 14000..18000 MiB (p80 18000), three of the small one at 400 MiB
   for (const [index, peak] of [14_000, 15_000, 16_000, 18_000].entries()) {
     await sql()`
       INSERT INTO factory.lead_samples (at, worktree, repo, issue, attempt, rss_mib, procs)
-      VALUES (now() - ${index + 1} * interval '1 day', ${`/wt/heavy-${index}`}, ${`${root}/heavy`}, ${9000 + index}, 1, ${peak}, 5)`
+      VALUES (now() - ${index + 1} * interval '1 day', ${`/wt/heavy-${index}`}, ${'heavy'}, ${9000 + index}, 1, ${peak}, 5)`
   }
   for (const index of [0, 1, 2]) {
     await sql()`
       INSERT INTO factory.lead_samples (at, worktree, repo, issue, attempt, rss_mib, procs)
-      VALUES (now() - ${index + 1} * interval '1 day', ${`/wt/small-${index}`}, ${`${root}/small`}, ${9100 + index}, 1, 400, 2)`
+      VALUES (now() - ${index + 1} * interval '1 day', ${`/wt/small-${index}`}, ${'small'}, ${9100 + index}, 1, 400, 2)`
   }
   // 32 GiB, 5 % in use
   await hostSamples([{ load: 1, used: 5 }])
@@ -79,7 +78,7 @@ test('a heavy repo whose second lead would not fit stays queued with the numbers
   expect(reasonOf(answer, second)).toMatchObject({
     kind: 'memory',
     message:
-      `memory: a lead of ${root}/heavy takes ~17.6 GiB (p80 of 4 past leads), the host has 30.4 GiB free ` +
+      `memory: a lead of heavy takes ~17.6 GiB (p80 of 4 past leads), the host has 30.4 GiB free ` +
       'after 18 GiB the running leads will still grow, headroom 2.6 GiB',
   })
 }, 60_000)

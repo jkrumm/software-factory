@@ -72,12 +72,12 @@ async function seed() {
 
   // test-slot steps: [at, name, peak, duration, wait]
   const steps: Array<[Date, string, number | null, number, number]> = [
-    [t('11-02T10:00'), 'make check', 3000, 600_000, 1000],
-    [t('11-02T10:10'), 'make check', 4000, 700_000, 5000],
-    [t('11-04T08:00'), 'make check', 3500, 650_000, 3000],
-    [t('11-04T08:10'), 'make test', 1200, 100_000, 200],
-    [t('11-05T09:00'), 'make test', null, 90_000, 400], // peak unread: counts for the wait, not for memory
-    [t('10-30T09:00'), 'make check', 9999, 1, 99_999], // before the window
+    [t('11-02T10:00'), 'software-factory check', 3000, 600_000, 1000],
+    [t('11-02T10:10'), 'software-factory check', 4000, 700_000, 5000],
+    [t('11-04T08:00'), 'software-factory check', 3500, 650_000, 3000],
+    [t('11-04T08:10'), 'software-factory test', 1200, 100_000, 200],
+    [t('11-05T09:00'), 'software-factory test', null, 90_000, 400], // peak unread: counts for the wait, not for memory
+    [t('10-30T09:00'), 'software-factory check', 9999, 1, 99_999], // before the window
     ...Array.from({ length: 9 }, (_, i): [Date, string, number | null, number, number] => [
       t('11-05T10:00'),
       `step ${i + 1}`,
@@ -228,7 +228,7 @@ describe('GET /v1/capacity-loop figures', () => {
         medianWaitMs: Number(r.wait),
       })),
     )
-    expect(model.topSteps[0]).toMatchObject({ name: 'make check', runs: 3, maxPeakMib: 4000 })
+    expect(model.topSteps[0]).toMatchObject({ name: 'software-factory check', runs: 3, maxPeakMib: 4000 })
 
     // lead costs: peak per worktree, the newest 10 attempts, nearest rank 0.8, the newest attempt's peak
     const leadRows: Array<Record<string, string | number>> = await sql.unsafe(

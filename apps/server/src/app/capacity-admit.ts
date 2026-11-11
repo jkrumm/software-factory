@@ -50,7 +50,7 @@ export interface HostInputs {
   ramMib: number | null
   /** the memory free by the newest minute sample (not older than five minutes); null: unknown */
   freeMib: number | null
-  /** per repo: what a lead is learned to take (null with fewer than three attempts) and the attempts sampled */
+  /** per project name: what a lead is learned to take (null with fewer than three attempts) and the attempts sampled */
   learned: ReadonlyMap<string, { mib: number | null; attempts: number }>
   /** per Issue number: the MiB its lead holds by a sample not older than three minutes */
   rssByIssue: ReadonlyMap<number, number>
@@ -263,7 +263,7 @@ function reservedMib(
   // What a repo's leads are learned to take replaces the lane's constant; the constant stays the prior for a repo with fewer than three attempts.
   const memoryOf = (issue: IssueId, project: StoredProject | undefined): number => {
     const lane = laneByIssue.get(issue)
-    if (project && learned.get(project.repo)?.mib != null) return 0
+    if (project && learned.get(project.name)?.mib != null) return 0
     return (lane && project?.project.lanes[lane]?.memoryMib) || 0
   }
   const byRepo = new Map(projects.map((p) => [p.repo, p]))
@@ -294,8 +294,7 @@ function seatBonusOf(snap: Snapshot, host: HostInputs, limits: CapacityLimits, b
   const capped = base.filter((entry) => entry.reason?.kind === 'cap')
   if (capped.length === 0) return 0
   const learnedOf = (entry: QueueEntry): number | null => {
-    const repo = snap.projects.find((p) => p.name === entry.project)?.repo ?? entry.repo
-    return host.learned.get(repo)?.mib ?? null
+    return entry.project === null ? null : (host.learned.get(entry.project)?.mib ?? null)
   }
   const known = capped.map(learnedOf).filter((mib): mib is number => mib !== null)
   return seatBonus({
@@ -311,10 +310,12 @@ function seatBonusOf(snap: Snapshot, host: HostInputs, limits: CapacityLimits, b
 }
 
 /** What each lead is learned to still take on beyond what it holds, summed over the claims held. */
-function growthOf(claims: readonly Claim[], host: HostInputs): number {
+function growthOf(claims: readonly Claim[], projects: readonly StoredProject[], host: HostInputs): number {
+  // A claim carries its project's path; what is learned is keyed by the project's name.
+  const nameOf = new Map(projects.map((p) => [p.repo, p.name]))
   return leadGrowthMib(
     claims.map((claim) => ({
-      learnedMib: host.learned.get(claim.repo)?.mib ?? null,
+      learnedMib: host.learned.get(nameOf.get(claim.repo) ?? '')?.mib ?? null,
       currentMib: host.rssByIssue.get(issueNumber(claim.issue)) ?? 0,
     })),
   )
@@ -359,13 +360,13 @@ function decide(snap: Snapshot, host: HostInputs, limits: CapacityLimits, bonus:
     const leadsByAccount = new Map<string, number>()
     for (const claim of claims)
       if (claim.account) leadsByAccount.set(claim.account, (leadsByAccount.get(claim.account) ?? 0) + 1)
-    const learned = host.learned.get(project.repo)
+    const learned = host.learned.get(project.name)
     const leadFit: LeadFit = {
-      repo: project.repo,
+      repo: project.name,
       candidateMib: learned?.mib ?? null,
       attempts: learned?.attempts ?? 0,
       freeMib: host.freeMib,
-      growthMib: growthOf(claims, host),
+      growthMib: growthOf(claims, snap.projects, host),
       headroomMib: headroomMib(host.ramMib),
       running: claims.length,
     }

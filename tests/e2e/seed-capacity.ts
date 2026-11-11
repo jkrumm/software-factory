@@ -30,12 +30,12 @@ export async function seedCapacity(sql: SQL, now = Date.now()): Promise<void> {
       VALUES (${at}, ${load}, ${leads}, ${queued}, ${seats}, ${load === null ? null : 8})`
 
   const steps: Array<[number, string, number, number, number]> = [
-    [40, 'make check', 2500, 600_000, 1000],
-    [38, 'make check', 3100, 650_000, 20_000],
-    [36, 'make check', 2800, 620_000, 90_000],
-    [34, 'make test', 900, 90_000, 500],
-    [32, 'make test', 1100, 110_000, 700],
-    [30, 'make e2e', 1800, 300_000, 3000],
+    [40, 'software-factory check', 2500, 600_000, 1000],
+    [38, 'software-factory check', 3100, 650_000, 20_000],
+    [36, 'software-factory check', 2800, 620_000, 90_000],
+    [34, 'software-factory test', 900, 90_000, 500],
+    [32, 'software-factory test', 1100, 110_000, 700],
+    [30, 'software-factory e2e', 1800, 300_000, 3000],
   ]
   for (const [hoursAgo, name, peak, duration, wait] of steps)
     await sql`INSERT INTO factory.step_costs (at, name, repo, peak_rss_mib, duration_ms, wait_ms)

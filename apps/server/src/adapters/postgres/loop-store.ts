@@ -27,6 +27,7 @@ const AttemptWorktreeRow = z.object({
   attempt: z.number().int(),
   repo_path: z.string().nullable(),
   repo: z.string().nullable(),
+  project: z.string().nullable(),
 })
 
 const ReaperAttemptRow = z.object({
@@ -34,6 +35,8 @@ const ReaperAttemptRow = z.object({
   attempt: z.number().int(),
   worktree_path: z.string().nullable(),
   done_at: z.date().nullable(),
+  // set only when the finalization kept the worktree (`worktree_kept` alone can be a branch note of a removed one)
+  kept_path: z.string().nullable(),
 })
 
 const callOf = (raw: unknown): CallRow => {
@@ -257,15 +260,22 @@ export function postgresLoopStore(tx: SQL): LoopStore {
 
     async attemptWorktrees(since) {
       const rows: unknown[] = await tx`
-        SELECT a.worktree_path, a.issue_id, a.attempt, a.repo_path, i.repo
-        FROM factory.lead_attempts a LEFT JOIN factory.issues i ON i.id = a.issue_id
+        SELECT a.worktree_path, a.issue_id, a.attempt, a.repo_path, i.repo, pr.name AS project
+        FROM factory.lead_attempts a
+        LEFT JOIN factory.issues i ON i.id = a.issue_id
+        LEFT JOIN LATERAL (
+          SELECT p.name FROM factory.planning_projects p
+          WHERE p.name = i.repo OR p.repo = i.repo OR p.repo = a.repo_path
+          ORDER BY (p.name = i.repo) DESC, p.name LIMIT 1
+        ) pr ON true
         WHERE a.worktree_path IS NOT NULL AND (a.gone_at IS NULL OR a.gone_at >= ${since})
         ORDER BY a.issue_id, a.attempt`
       return rows.map((raw) => {
         const row = AttemptWorktreeRow.parse(raw)
         return {
           path: row.worktree_path,
-          repo: row.repo ?? row.repo_path?.split('/').filter(Boolean).at(-1) ?? '',
+          // The project's name, the one key a lead's cost is learned and looked up by (an Issue's repo text can be a path).
+          repo: row.project ?? row.repo ?? row.repo_path?.split('/').filter(Boolean).at(-1) ?? '',
           issue: Number(row.issue_id.slice('issue_'.length)),
           attempt: row.attempt,
         }
@@ -274,7 +284,7 @@ export function postgresLoopStore(tx: SQL): LoopStore {
 
     async reaperAttempts(since) {
       const rows: unknown[] = await tx`
-        SELECT a.issue_id, a.attempt, a.worktree_path, f.done_at
+        SELECT a.issue_id, a.attempt, a.worktree_path, f.done_at, f.worktree_path AS kept_path
         FROM factory.lead_attempts a
         LEFT JOIN factory.lead_finalizations f ON f.issue_id = a.issue_id AND f.attempt = a.attempt
         WHERE f.done_at IS NULL OR f.done_at >= ${since}
@@ -285,6 +295,7 @@ export function postgresLoopStore(tx: SQL): LoopStore {
           session: `lead-${row.issue_id.slice('issue_'.length)}-${row.attempt}`,
           worktree: row.worktree_path,
           closedAt: row.done_at,
+          kept: row.kept_path !== null,
         }
       })
     },

@@ -321,7 +321,11 @@ test('the capacity section reads what the API computed: cards, steps, lead costs
   expect(model.slotWait.p50Ms).toBeCloseTo(2000, 6)
   expect(model.slotWait.p90Ms).toBeCloseTo(55_000, 6)
   expect(model.reaped.total).toBe(3)
-  expect(model.topSteps.map((s) => s.name)).toEqual(['make check', 'make e2e', 'make test'])
+  expect(model.topSteps.map((s) => s.name)).toEqual([
+    'software-factory check',
+    'software-factory e2e',
+    'software-factory test',
+  ])
   expect(model.leadCosts.map((l) => [l.repo, l.attempts, l.peakMibP80])).toEqual([
     ['argo', 3, 2200],
     ['zeta', 2, 900],
@@ -349,7 +353,9 @@ test('the capacity section reads what the API computed: cards, steps, lead costs
   await expectHint(cardOf(page, 'Test slot wait'), CAPACITY_HINT.wait)
 
   const steps = section.getByRole('table', { name: /Test-slot steps/ })
-  const check = steps.getByRole('row').filter({ has: page.getByRole('rowheader', { name: 'make check', exact: true }) })
+  const check = steps
+    .getByRole('row')
+    .filter({ has: page.getByRole('rowheader', { name: 'software-factory check', exact: true }) })
   const top = model.topSteps[0]
   if (!top) throw new Error('no step in the API answer')
   await expect(check.getByRole('cell')).toHaveText([

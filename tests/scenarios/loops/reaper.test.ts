@@ -1,5 +1,5 @@
 import { afterAll, beforeAll, expect, test } from 'bun:test'
-import { setSessionProcesses } from '../host.ts'
+import { setProcesses, setSessionProcesses } from '../host.ts'
 import { type Lab, startLab } from '../planning/lab.ts'
 import { runLoop } from './support.ts'
 
@@ -38,12 +38,14 @@ afterAll(async () => {
 
 const sql = () => lab.world.db.sql
 
-const attempt = async (issue: number, finalizedAt: Date | null) => {
+const attempt = async (issue: number, finalizedAt: Date | null, keptAt: string | null = null) => {
   await sql()`
     INSERT INTO factory.lead_attempts (issue_id, attempt, branch, worktree_path, first_try_at)
     VALUES (${`issue_${issue}`}, 1, ${`factory/${issue}-1`}, ${`/nowhere/worktrees/${issue}-1`}, now())`
   if (finalizedAt)
-    await sql()`INSERT INTO factory.lead_finalizations (issue_id, attempt, done_at) VALUES (${`issue_${issue}`}, 1, ${finalizedAt})`
+    await sql()`
+      INSERT INTO factory.lead_finalizations (issue_id, attempt, done_at, worktree_kept, worktree_path)
+      VALUES (${`issue_${issue}`}, 1, ${finalizedAt}, ${keptAt === null ? null : 'uncommitted changes'}, ${keptAt})`
 }
 
 test('a process of a closed attempt is ended and recorded; a live attempt and an unknown key are left alone', async () => {
@@ -89,6 +91,29 @@ test('a process of a closed attempt is ended and recorded; a live attempt and an
 test('a second pass finds nothing left to reap', async () => {
   const ran = await runLoop(lab, 'reaper')
   expect(ran.summary).toBe('nothing to reap')
+})
+
+test('a shell in a kept worktree is left; one in a removed worktree is ended by its path', async () => {
+  const old = new Date(Date.now() - 2 * 86_400_000)
+  await attempt(9004, old, '/nowhere/worktrees/9004-1')
+  await attempt(9005, old)
+  const rescue = sleeper(null)
+  const stale = sleeper(null)
+  await setSessionProcesses(lab.world.bin, [
+    { pid: rescue.pid, env: [] },
+    { pid: stale.pid, env: [] },
+  ])
+  await setProcesses(lab.world.bin, [
+    { pid: rescue.pid, ppid: 1, rssKib: 1024, cwd: '/nowhere/worktrees/9004-1/src' },
+    { pid: stale.pid, ppid: 1, rssKib: 1024, cwd: '/nowhere/worktrees/9005-1' },
+  ])
+  const ran = await runLoop(lab, 'reaper')
+  expect(ran.error).toBeNull()
+  expect(await goneWithin(stale, 5_000)).toBe(true)
+  expect(alive(rescue)).toBe(true)
+  const rows = await sql()`SELECT pid, reason FROM factory.reaped_processes WHERE pid = ${stale.pid}`
+  expect(rows).toEqual([{ pid: stale.pid, reason: 'worktree' }])
+  await setSessionProcesses(lab.world.bin, [])
 })
 
 test('a process table that cannot be read fails the pass and ends nothing', async () => {

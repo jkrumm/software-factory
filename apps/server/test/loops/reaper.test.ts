@@ -20,8 +20,8 @@ const proc = (pid: number, over: Partial<ReaperProc> = {}): ReaperProc => ({
   cwd: null,
   ...over,
 })
-const closed: ReaperAttempt = { session: 'lead-5-1', worktree: '/w/app/5-1', closedAt: ago(HOUR) }
-const liveOne: ReaperAttempt = { session: 'lead-6-1', worktree: '/w/app/6-1', closedAt: null }
+const closed: ReaperAttempt = { session: 'lead-5-1', worktree: '/w/app/5-1', closedAt: ago(HOUR), kept: false }
+const liveOne: ReaperAttempt = { session: 'lead-6-1', worktree: '/w/app/6-1', closedAt: null, kept: false }
 
 const decide = (procs: ReaperProc[], over: Partial<ReapingInput> = {}) =>
   decideReaping({
@@ -66,8 +66,8 @@ test('a boundary: /a/b does not own /a/bc', () => {
 })
 
 test('inside the grace after the close a process is left, after it is reaped', () => {
-  const young: ReaperAttempt = { ...closed, closedAt: ago(GRACE - 1_000) }
-  const old: ReaperAttempt = { ...closed, closedAt: ago(GRACE + 1_000) }
+  const young: ReaperAttempt = { ...closed, closedAt: ago(GRACE - 1_000), kept: false }
+  const old: ReaperAttempt = { ...closed, closedAt: ago(GRACE + 1_000), kept: false }
   const p = proc(40, { session: 'lead-5-1' })
   const a = decide([p], { attempts: [young] })
   expect([...a.term, ...a.kill]).toEqual([])
@@ -76,13 +76,13 @@ test('inside the grace after the close a process is left, after it is reaped', (
 })
 
 test('an attempt without a close is live: gone but not finalized keeps its processes', () => {
-  const unfinished: ReaperAttempt = { session: 'lead-5-1', worktree: '/w/app/5-1', closedAt: null }
+  const unfinished: ReaperAttempt = { session: 'lead-5-1', worktree: '/w/app/5-1', closedAt: null, kept: false }
   const out = decide([proc(50, { session: 'lead-5-1' }), proc(51, { cwd: '/w/app/5-1' })], { attempts: [unfinished] })
   expect([...out.term, ...out.kill]).toEqual([])
 })
 
 test('a live twin with the closed key protects the session', () => {
-  const twin: ReaperAttempt = { session: 'lead-5-1', worktree: '/w/other', closedAt: null }
+  const twin: ReaperAttempt = { session: 'lead-5-1', worktree: '/w/other', closedAt: null, kept: false }
   const out = decide([proc(60, { session: 'lead-5-1' })], { attempts: [closed, twin] })
   expect([...out.term, ...out.kill]).toEqual([])
   expect(out.skipped.live).toBe(1)
@@ -113,7 +113,22 @@ test('a leak termed before and still the same process is killed; a younger one o
 })
 
 test('the longest closed worktree wins when two contain the directory', () => {
-  const outer: ReaperAttempt = { session: 'lead-7-1', worktree: '/w/app', closedAt: ago(HOUR) }
+  const outer: ReaperAttempt = { session: 'lead-7-1', worktree: '/w/app', closedAt: ago(HOUR), kept: false }
   const out = decide([proc(80, { cwd: '/w/app/5-1/x' })], { attempts: [outer, closed] })
   expect(out.term[0]?.session).toBe('lead-5-1')
+})
+
+test("a process in a kept worktree and no session is untouched; with the closed attempt's session it is still reaped", () => {
+  const kept: ReaperAttempt = { ...closed, kept: true }
+  const shell = decide([proc(90, { cwd: '/w/app/5-1/src' })], { attempts: [kept] })
+  expect([shell.term, shell.kill]).toEqual([[], []])
+  const lead = decide([proc(91, { cwd: '/w/app/5-1/src', session: 'lead-5-1' })], { attempts: [kept] })
+  expect(pids(lead.term)).toEqual([91])
+  expect(lead.term[0]?.reason).toBe('session')
+})
+
+test('a process in a removed worktree (not kept) with no session is reaped by the path', () => {
+  const out = decide([proc(92, { cwd: '/w/app/5-1/src' })])
+  expect(pids(out.term)).toEqual([92])
+  expect(out.term[0]?.reason).toBe('worktree')
 })

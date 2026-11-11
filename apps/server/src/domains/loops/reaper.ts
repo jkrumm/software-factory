@@ -20,6 +20,8 @@ export interface ReaperAttempt {
   session: string
   worktree: string | null
   closedAt: Date | null
+  /** the finalization kept the worktree (unmerged or uncommitted work): the owner may work in it, so a path never marks a leak */
+  kept: boolean
 }
 
 export interface Leak {
@@ -58,7 +60,7 @@ const inside = (cwd: string, path: string): boolean => cwd === path || cwd.start
 /**
  * Which processes belong to a closed lead attempt and must end. A process is a leak when its session names a closed attempt
  * (closed for longer than the grace, no live attempt with the same key), or its directory lies inside such an attempt's
- * worktree and inside no live attempt's. Nothing else is touched: an unknown session or directory, a live attempt's
+ * worktree (one the finalization removed, not a kept one) and inside no live attempt's. Nothing else is touched: an unknown session or directory, a live attempt's
  * process, one inside the grace, a protected pid or any ancestor of one. A leak SIGTERMed before and still the same
  * process (same pid, not younger than recorded: a smaller age is a reused pid) is escalated to SIGKILL.
  */
@@ -102,7 +104,7 @@ export function decideReaping(input: ReapingInput): Reaping {
     if (!attempt && cwd !== null) {
       reason = 'worktree'
       for (const candidate of closed) {
-        if (candidate.worktree === null) continue
+        if (candidate.worktree === null || candidate.kept) continue
         const tree = trimmed(candidate.worktree)
         if (inside(cwd, tree) && (!attempt || tree.length > trimmed(attempt.worktree ?? '').length)) attempt = candidate
       }

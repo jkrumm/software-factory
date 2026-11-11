@@ -58,7 +58,10 @@ check-steps:
 # The tests run in one of the host's test slots (FL7) when `factory` is installed, so parallel checks do not pile their
 # load onto each other; without it (CI) the bare command. That is the installed CLI of the running core until the
 # cutover. It fails open: a server that is down or a full house runs the tests anyway.
-slot = $(if $(shell command -v factory 2>/dev/null),factory slot run --name "$(notdir $(CURDIR)) $(1)" --,)
+# Not the checkout directory: every lead works in its own worktree (factory-719-1 ...), and the ledger and the grant rule
+# learn a step's peak by its exact name, so a name per directory would never carry a peak from one lead to the next.
+SLOT_PROJECT = software-factory
+slot = $(if $(shell command -v factory 2>/dev/null),factory slot run --name "$(SLOT_PROJECT) $(1)" --,)
 SLOT = $(call slot,test)
 
 # Every test file may start a private Postgres cluster in beforeAll and a scenario drives real processes; initdb alone takes seconds

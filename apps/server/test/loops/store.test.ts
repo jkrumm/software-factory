@@ -154,18 +154,21 @@ test('the reaper reads attempts with their finalization, records signals, finds 
   const loops = postgresLoopStore(db.sql)
   const now = new Date('2026-11-11T12:00:00Z')
   const days = (n: number) => new Date(now.getTime() - n * 86_400_000)
-  const attempt = async (n: number, path: string | null, finalized: Date | null) => {
+  const attempt = async (n: number, path: string | null, finalized: Date | null, keptAt: string | null = null) => {
     await db.sql`INSERT INTO factory.lead_attempts (issue_id, attempt, branch, worktree_path, first_try_at)
       VALUES (${`issue_${n}`}, 1, ${`factory/${n}-1`}, ${path}, ${days(40)})`
     if (finalized)
-      await db.sql`INSERT INTO factory.lead_finalizations (issue_id, attempt, done_at) VALUES (${`issue_${n}`}, 1, ${finalized})`
+      await db.sql`INSERT INTO factory.lead_finalizations (issue_id, attempt, done_at, worktree_kept, worktree_path)
+        VALUES (${`issue_${n}`}, 1, ${finalized}, ${keptAt === null ? null : 'uncommitted changes'}, ${keptAt})`
   }
   await attempt(801, '/w/801-1', days(1))
   await attempt(802, '/w/802-1', null)
   await attempt(803, null, days(31))
+  await attempt(804, '/w/804-1', days(1), '/w/804-1')
   expect(await loops.reaperAttempts(days(30))).toEqual([
-    { session: 'lead-801-1', worktree: '/w/801-1', closedAt: days(1) },
-    { session: 'lead-802-1', worktree: '/w/802-1', closedAt: null },
+    { session: 'lead-801-1', worktree: '/w/801-1', closedAt: days(1), kept: false },
+    { session: 'lead-802-1', worktree: '/w/802-1', closedAt: null, kept: false },
+    { session: 'lead-804-1', worktree: '/w/804-1', closedAt: days(1), kept: true },
   ])
 
   const row = (at: Date, pid: number, signal: 'SIGTERM' | 'SIGKILL' | 'dry') => ({
