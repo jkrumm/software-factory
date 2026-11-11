@@ -7,6 +7,7 @@ import type {
   KpiModel,
 } from '@software-factory/contract'
 import {
+  CaretRightIcon,
   ChatCircleDotsIcon,
   CurrencyDollarIcon,
   GaugeIcon,
@@ -20,9 +21,11 @@ import {
   WrenchIcon,
 } from '@phosphor-icons/react'
 import { createFileRoute, Link } from '@tanstack/react-router'
-import { Fold, InfoHint, MenuPopover, Skeleton, Sparkline, StackedBars, StatCard } from '@/components/kit'
+import { InfoHint, MenuPopover, Section, Skeleton, Sparkline, StackedBars, StatCard } from '@/components/kit'
 import { EmptyState, Page, PageHeader } from '@/components/page'
 import { SidebarEntry, SidebarSection, useSidebarCollapsed } from '@/components/sidebar'
+import { LINKED_CARD } from '@/components/kit/card-link'
+import { TONE_MARK } from '@/components/kit/tone'
 import { buttonVariants } from '@/components/ui/button'
 import {
   chartTarget,
@@ -49,6 +52,12 @@ import {
   lineTone,
   perIssueWords,
   shortDate,
+  STATUS_WORD,
+  statusTone,
+  summaryKpis,
+  targetStatus,
+  targetTally,
+  targetWords,
   WINDOW_DAYS,
   windowOf,
   windowWords,
@@ -64,19 +73,16 @@ export const Route = createFileRoute('/improve')({
   component: Improve,
 })
 
-/** The KPIs in the Console's own order, the headline measures first (not the table order of `docs/product.md`); the fix-commit card follows them (its data is `/v1/fix-commits`). */
-const CARD_ORDER: readonly KpiKey[] = [
-  'first_verification_passes',
-  'avoidable_touches',
-  'asks',
-  'worth_asking',
-  'refusals',
-  'queue_wait_p90',
-  'queue_wait_p50',
-  'cycle_p50',
-  'window_points',
-  'cost',
-]
+/** The KPI bands in the Console's own order, the headline measures first; the fix-commit band follows them (its data is `/v1/fix-commits`). */
+const QUALITY: readonly KpiKey[] = ['first_verification_passes', 'avoidable_touches', 'asks', 'worth_asking']
+const PACE_AND_GATES: readonly KpiKey[] = ['queue_wait_p90', 'queue_wait_p50', 'cycle_p50', 'refusals']
+const SPEND: readonly KpiKey[] = ['window_points', 'cost']
+
+/** Every card band shares one lattice: 1 column, 2 from `@3xl`, 4 from `@7xl`. */
+const LATTICE = 'grid-cols-1 @3xl:grid-cols-2 @7xl:grid-cols-4'
+
+/** A card spans a header, a body and a footer row of the band's grid, so a row shares one height per part; the grid's `gap-4` sits between rows, the card `gap-y-1` between its parts. */
+const BAND_CARD = 'row-span-3 grid grid-rows-subgrid gap-y-1 self-stretch'
 
 const KPI_ICON: Record<KpiKey, Icon> = {
   first_verification_passes: SealCheckIcon,
@@ -130,11 +136,13 @@ function WindowSection({ days }: { days: number }) {
   )
 }
 
-function KpiCard({ kpi, model }: { kpi: Kpi; model: KpiModel }) {
+function KpiCard({ kpi, model, className }: { kpi: Kpi; model: KpiModel; className?: string }) {
   const change = kpiChange(kpi)
   const known = drawsHistory(kpi)
   return (
     <StatCard
+      id={`kpi-${kpi.key}`}
+      className={cn(BAND_CARD, className)}
       icon={KPI_ICON[kpi.key]}
       title={kpi.label}
       hint={KPI_HINT[kpi.key]}
@@ -173,7 +181,6 @@ function FixCard({ model, pending }: { model: FixCommitsModel | undefined; pendi
     title: 'Fix commits per week',
     hint: KPI_HINT.fix_commits,
     subtitle: 'This week against the one before',
-    className: '@3xl:col-span-2',
   }
   if (!model || !model.measured) {
     return (
@@ -222,51 +229,152 @@ function FixCard({ model, pending }: { model: FixCommitsModel | undefined; pendi
   )
 }
 
-function CardGrid({
-  model,
-  fixes,
-  fixesPending,
-}: {
-  model: KpiModel
-  fixes: FixCommitsModel | undefined
-  fixesPending: boolean
-}) {
+/** One DOM, two layouts: a compact row of a shared panel, and from `@7xl` a tile of its own (status, figure, label, target). */
+function SummaryTile({ kpi }: { kpi: Kpi }) {
+  const status = targetStatus(kpi)
+  const id = `kpi-${kpi.key}`
+  const figure = kpi.measured && kpi.value !== null
   return (
-    <div className="@container">
-      <div aria-label="Key figures" role="group" className="grid grid-cols-[repeat(auto-fill,minmax(21rem,1fr))] gap-4">
-        {CARD_ORDER.flatMap((key) => model.kpis.filter((kpi) => kpi.key === key)).map((kpi) => (
-          <KpiCard key={kpi.key} kpi={kpi} model={model} />
-        ))}
-        <FixCard model={fixes} pending={fixesPending} />
-      </div>
+    <li className="min-w-0 @7xl:flex @7xl:rounded-xl @7xl:bg-card @7xl:shadow-[var(--vx-shadow-card)]">
+      <a
+        href={`#${id}`}
+        title="Jump to the card"
+        onClick={(event) => {
+          const card = document.getElementById(id)
+          if (!card) return
+          event.preventDefault()
+          card.scrollIntoView({ block: 'center', behavior: 'smooth' })
+        }}
+        className={cn(
+          LINKED_CARD,
+          'relative grid min-h-11 min-w-0 flex-1 grid-cols-[1fr_auto_auto] items-center gap-x-3 gap-y-0.5 px-4 py-2 outline-none focus-visible:ring-3 focus-visible:ring-ring/50',
+          '@md:flex @md:gap-3',
+          '@7xl:flex-col @7xl:items-stretch @7xl:gap-1 @7xl:rounded-xl @7xl:py-3',
+        )}
+      >
+        <span className="col-start-1 row-start-1 flex shrink-0 items-center gap-2 text-[length:var(--vx-text-sm)] font-medium @md:min-w-24 @7xl:order-1 @7xl:min-w-0">
+          <span
+            aria-hidden="true"
+            className="size-2 shrink-0 rounded-full"
+            style={{ backgroundColor: TONE_MARK[statusTone(status)] }}
+          />
+          {STATUS_WORD[status]}
+        </span>
+        <span
+          title={kpi.label}
+          className="col-start-1 row-start-2 min-w-0 text-[length:var(--vx-text-sm)] leading-tight font-semibold tracking-tight @md:flex-1 @md:truncate @7xl:order-3 @7xl:line-clamp-2 @7xl:min-h-[2.5em] @7xl:flex-none @7xl:whitespace-normal"
+        >
+          {kpi.label}
+        </span>
+        <span
+          className={cn(
+            'col-start-2 row-start-1 shrink-0 justify-self-end tabular-nums @7xl:order-2',
+            figure
+              ? 'text-[length:var(--vx-text-md)] font-semibold @7xl:text-[length:var(--vx-text-xl)]'
+              : 'text-[length:var(--vx-text-sm)] text-muted-foreground',
+          )}
+        >
+          {formatKpi(kpi)}
+        </span>
+        <span className="col-start-2 row-start-2 shrink-0 justify-self-end text-[length:var(--vx-text-sm)] text-muted-foreground @7xl:order-4">
+          {targetWords(kpi)}
+        </span>
+        <CaretRightIcon
+          aria-hidden="true"
+          className="col-start-3 row-span-2 row-start-1 size-3.5 shrink-0 text-muted-foreground @7xl:absolute @7xl:top-3 @7xl:right-4"
+        />
+      </a>
+    </li>
+  )
+}
+
+function SummaryStrip({ model }: { model: KpiModel }) {
+  const kpis = summaryKpis(model.kpis)
+  if (kpis.length === 0) return null
+  const { met, judged } = targetTally(kpis)
+  return (
+    <div data-shot="improve-summary">
+      <Section title="Against target" aside={judged > 0 ? `${met} of ${judged} targets met` : undefined}>
+        <ul
+          aria-label="Targets"
+          className={cn(
+            'grid grid-cols-1 divide-y rounded-xl bg-card shadow-[var(--vx-shadow-card)]',
+            '@7xl:auto-cols-fr @7xl:grid-flow-col @7xl:gap-4 @7xl:divide-y-0 @7xl:rounded-none @7xl:bg-transparent @7xl:shadow-none',
+          )}
+        >
+          {kpis.map((kpi) => (
+            <SummaryTile key={kpi.key} kpi={kpi} />
+          ))}
+        </ul>
+      </Section>
     </div>
   )
 }
 
-function FrictionGroup({
-  group,
-  counts,
+function KpiBand({
+  title,
+  aside,
+  keys,
+  model,
+  shot,
+  cardClassName,
 }: {
-  group: keyof typeof FRICTION_GROUP_LABEL
-  counts: FrictionModel['counts']
+  title: string
+  aside?: string
+  keys: readonly KpiKey[]
+  model: KpiModel
+  shot: string
+  /** Added to every card of the band (a column span). */
+  cardClassName?: string
 }) {
-  const rows = counts.filter((c) => c.group === group)
-  if (rows.length === 0) return null
-  const title = FRICTION_GROUP_LABEL[group]
-  const hint = group in FRICTION_GROUP_HINT ? FRICTION_GROUP_HINT[group as keyof typeof FRICTION_GROUP_HINT] : null
+  const kpis = keys.flatMap((key) => model.kpis.filter((kpi) => kpi.key === key))
+  if (kpis.length === 0) return null
   return (
-    <div className={cn(PANEL, 'px-4 py-3')} style={PANEL_SHADOW}>
+    <div data-shot={shot}>
+      <Section title={title} aside={aside}>
+        <div className={cn('grid gap-4', LATTICE)}>
+          {kpis.map((kpi) => (
+            <KpiCard key={kpi.key} kpi={kpi} model={model} className={cardClassName} />
+          ))}
+        </div>
+      </Section>
+    </div>
+  )
+}
+
+type FrictionRows = FrictionModel['counts']
+
+/** One heading, rows with hairlines; every group has the same row pitch. */
+function FrictionGroup({
+  title,
+  hint,
+  rows,
+}: {
+  title: string
+  hint: (typeof FRICTION_GROUP_HINT)[keyof typeof FRICTION_GROUP_HINT] | null
+  rows: FrictionRows
+}) {
+  return (
+    <div className="mb-4 break-inside-avoid">
       <h3 className="mb-1 flex items-center gap-0.5 text-sm font-medium">
         {title}
         {hint ? <InfoHint word={hint} className="-my-1" /> : null}
       </h3>
       <ul aria-label={title} className="divide-y text-sm">
         {rows.map((row) => (
-          <li key={row.key} className="flex items-baseline justify-between gap-4 py-1.5">
+          <li
+            key={row.key}
+            className={cn(
+              'flex items-baseline justify-between gap-4 py-1.5',
+              row.count === 0 && 'text-muted-foreground',
+            )}
+          >
             <span className="min-w-0 [overflow-wrap:anywhere]">{row.label}</span>
             <span className="flex shrink-0 gap-4 tabular-nums">
-              <span aria-label="Count">{row.count}</span>
-              <span aria-label="Per Issue closed" className="w-12 text-right text-muted-foreground">
+              <span aria-label="Count" className="w-10 text-right">
+                {row.count}
+              </span>
+              <span aria-label="Per Issue closed" className="w-14 text-right text-muted-foreground">
                 {perIssueWords(row.perIssue)}
               </span>
             </span>
@@ -277,111 +385,153 @@ function FrictionGroup({
   )
 }
 
+type FrictionGroupKey = keyof typeof FRICTION_GROUP_LABEL
+
 function FrictionBody({ model }: { model: FrictionModel }) {
+  const hintOf = (group: FrictionGroupKey) =>
+    group in FRICTION_GROUP_HINT ? FRICTION_GROUP_HINT[group as keyof typeof FRICTION_GROUP_HINT] : null
+  const groups = (Object.keys(FRICTION_GROUP_LABEL) as FrictionGroupKey[])
+    .map((group) => ({ group, rows: model.counts.filter((c) => c.group === group) }))
+    .filter(({ rows }) => rows.length > 0)
+  /** A group of one row without a hint is not worth a heading of its own: they share "Also counted", where the first stood. */
+  const single = ({ group, rows }: (typeof groups)[number]) => rows.length === 1 && !hintOf(group)
+  const alsoCounted = groups.filter(single).flatMap(({ rows }) => rows)
+  const firstSingle = groups.find(single)
   return (
-    <>
-      <p className="text-sm text-muted-foreground">
-        {model.issues} Issues filed, {model.closed} closed in the window
-        {model.since ? `. Counted since ${model.since.slice(0, 10)}` : ''}
-      </p>
+    <div className={cn(PANEL, 'p-4')} style={PANEL_SHADOW}>
       {model.counts.length === 0 ? <EmptyState title="Nothing counted" /> : null}
-      {(Object.keys(FRICTION_GROUP_LABEL) as (keyof typeof FRICTION_GROUP_LABEL)[]).map((group) => (
-        <FrictionGroup key={group} group={group} counts={model.counts} />
-      ))}
-    </>
+      <div className="columns-1 gap-x-8 @3xl:columns-2 @6xl:columns-3">
+        {groups.map((entry) => {
+          if (!single(entry)) {
+            return (
+              <FrictionGroup
+                key={entry.group}
+                title={FRICTION_GROUP_LABEL[entry.group]}
+                hint={hintOf(entry.group)}
+                rows={entry.rows}
+              />
+            )
+          }
+          if (entry !== firstSingle) return null
+          return <FrictionGroup key="also-counted" title="Also counted" hint={null} rows={alsoCounted} />
+        })}
+      </div>
+    </div>
   )
 }
 
 function FrictionSection({ model, pending }: { model: FrictionModel | undefined; pending: boolean }) {
+  const aside = model
+    ? `${model.issues} Issues filed, ${model.closed} closed in the window${model.since ? `. Counted since ${model.since.slice(0, 10)}` : ''}. Rows: count, then per Issue closed`
+    : undefined
   return (
-    <section aria-labelledby="improve-friction" className="grid gap-3">
-      <h2 id="improve-friction" className="text-sm font-medium text-muted-foreground">
-        Friction
-      </h2>
-      {model ? (
-        <FrictionBody model={model} />
-      ) : (
-        <p className="text-sm text-muted-foreground">{pending ? 'Loading' : 'No data yet'}</p>
-      )}
-    </section>
+    <div data-shot="improve-friction">
+      <Section title="Friction" aside={aside}>
+        {model ? (
+          <FrictionBody model={model} />
+        ) : (
+          <p className="text-sm text-muted-foreground">{pending ? 'Loading' : 'No data yet'}</p>
+        )}
+      </Section>
+    </div>
   )
 }
 
 function FindingClassesSection({ model }: { model: FindingClassesModel | undefined }) {
   const quiet = (model?.classes ?? []).filter((c) => c.status !== 'open')
   return (
-    <section aria-labelledby="improve-held-classes" className="grid gap-3">
-      <h2 id="improve-held-classes" className="text-sm font-medium text-muted-foreground">
-        Held finding classes
-      </h2>
-      {quiet.length === 0 ? (
-        <p className="text-sm text-muted-foreground">{model ? 'No finding class is held.' : 'Loading'}</p>
-      ) : (
-        <ul aria-label="Held finding classes" className={cn(PANEL, 'divide-y px-4 text-sm')} style={PANEL_SHADOW}>
-          {quiet.map((c) => (
-            <li key={`${c.loop}/${c.class}`} className="flex flex-col gap-0.5 py-2">
-              <span>
-                {c.loop} · {c.class}{' '}
-                <span className="text-muted-foreground">{c.status === 'held' ? 'held' : 'on probation'}</span>
-              </span>
-              <span className="text-muted-foreground">{classWords(c)}</span>
-            </li>
+    <div data-shot="improve-held">
+      <Section title="Held finding classes">
+        {quiet.length === 0 ? (
+          <p className="text-sm text-muted-foreground">{model ? 'No finding class is held.' : 'Loading'}</p>
+        ) : (
+          <ul aria-label="Held finding classes" className={cn(PANEL, 'divide-y px-4 text-sm')} style={PANEL_SHADOW}>
+            {quiet.map((c) => (
+              <li key={`${c.loop}/${c.class}`} className="flex flex-col gap-0.5 py-2">
+                <span>
+                  {c.loop} · {c.class}{' '}
+                  <span className="text-muted-foreground">{c.status === 'held' ? 'held' : 'on probation'}</span>
+                </span>
+                <span className="text-muted-foreground">{classWords(c)}</span>
+              </li>
+            ))}
+          </ul>
+        )}
+      </Section>
+    </div>
+  )
+}
+
+function FixClassesPanel({ model }: { model: FixCommitsModel }) {
+  const rows = fixClassRows(model)
+  return (
+    <section
+      aria-label="Fix commits by class"
+      className={cn(PANEL, 'flex min-w-0 flex-col overflow-x-auto')}
+      style={PANEL_SHADOW}
+    >
+      <h3 className="flex items-baseline gap-2 px-4 pt-3 pb-1 text-sm font-medium">
+        Fix commits by class
+        <span className="text-muted-foreground tabular-nums">{fixWeekTotals(model).reduce((a, b) => a + b, 0)}</span>
+      </h3>
+      <table className="h-full w-full flex-1 text-sm">
+        <caption className="sr-only">Fix commits per class, by the week ending on the date shown</caption>
+        <thead className="text-left text-xs text-muted-foreground">
+          <tr>
+            <th scope="col" className="w-px px-4 py-2 font-medium whitespace-nowrap">
+              Class
+            </th>
+            {fixWeeksOldestFirst(model).map((week) => (
+              <th
+                key={fixWeekLabel(week)}
+                scope="col"
+                title={fixWeekLabel(week)}
+                className="px-2.5 py-2 text-right font-medium whitespace-nowrap"
+              >
+                {shortDate(week.to)}
+              </th>
+            ))}
+          </tr>
+        </thead>
+        <tbody>
+          {rows.map((row) => (
+            <tr key={row.key} className="border-t">
+              <th scope="row" className="w-px px-4 py-2 text-left font-medium whitespace-nowrap" title={row.meaning}>
+                {row.key}
+              </th>
+              {row.counts.map((n, i) => (
+                <td key={i} className="px-2.5 py-2 text-right tabular-nums">
+                  {n}
+                </td>
+              ))}
+            </tr>
           ))}
-        </ul>
-      )}
+          <tr className="border-t font-medium">
+            <th scope="row" className="w-px px-4 py-2 text-left whitespace-nowrap">
+              Total
+            </th>
+            {fixWeekTotals(model).map((n, i) => (
+              <td key={i} className="px-2.5 py-2 text-right tabular-nums">
+                {n}
+              </td>
+            ))}
+          </tr>
+        </tbody>
+      </table>
     </section>
   )
 }
 
-function FixClassesSection({ model }: { model: FixCommitsModel | undefined }) {
-  if (!model || !model.measured) return null
-  const rows = fixClassRows(model)
+function FixBand({ model, pending }: { model: FixCommitsModel | undefined; pending: boolean }) {
   return (
-    <section aria-label="Fix commits by class">
-      <Fold title="Fix commits by class" count={fixWeekTotals(model).reduce((a, b) => a + b, 0)}>
-        <div className={cn(PANEL, 'overflow-x-auto')} style={PANEL_SHADOW}>
-          <table className="w-full text-sm">
-            <caption className="sr-only">Fix commits per class, by the week ending on the date shown</caption>
-            <thead className="text-left text-xs text-muted-foreground">
-              <tr>
-                <th scope="col" className="px-4 py-2 font-medium">
-                  Class
-                </th>
-                {fixWeeksOldestFirst(model).map((week) => (
-                  <th key={fixWeekLabel(week)} scope="col" className="px-4 py-2 text-right font-medium">
-                    {fixWeekLabel(week)}
-                  </th>
-                ))}
-              </tr>
-            </thead>
-            <tbody>
-              {rows.map((row) => (
-                <tr key={row.key} className="border-t">
-                  <th scope="row" className="px-4 py-2 text-left font-medium" title={row.meaning}>
-                    {row.key}
-                  </th>
-                  {row.counts.map((n, i) => (
-                    <td key={i} className="px-4 py-2 text-right tabular-nums">
-                      {n}
-                    </td>
-                  ))}
-                </tr>
-              ))}
-              <tr className="border-t font-medium">
-                <th scope="row" className="px-4 py-2 text-left">
-                  Total
-                </th>
-                {fixWeekTotals(model).map((n, i) => (
-                  <td key={i} className="px-4 py-2 text-right tabular-nums">
-                    {n}
-                  </td>
-                ))}
-              </tr>
-            </tbody>
-          </table>
+    <div data-shot="improve-fix">
+      <Section title="Fix commits">
+        <div className="grid grid-cols-1 gap-4 @4xl:grid-cols-2">
+          <FixCard model={model} pending={pending} />
+          {model?.measured ? <FixClassesPanel model={model} /> : null}
         </div>
-      </Fold>
-    </section>
+      </Section>
+    </div>
   )
 }
 
@@ -407,14 +557,21 @@ function Improve() {
       <PageHeader title="Improve" note={`Last ${model.days} days, ${windowWords(model.window)}`} />
       <WindowSwitch days={days} />
       <WindowSection days={days} />
-      <div className="grid gap-8">
-        <CardGrid model={model} fixes={fixes.data} fixesPending={fixes.isPending} />
-        <div className="grid items-start gap-8 xl:grid-cols-2">
+      <div role="group" aria-label="Key figures" className="@container">
+        <div className="grid gap-10">
+          <SummaryStrip model={model} />
+          <KpiBand title="Quality" keys={QUALITY} model={model} shot="improve-target" />
+          <KpiBand title="Pace and gates" keys={PACE_AND_GATES} model={model} shot="improve-pace" />
+          <KpiBand
+            title="Spend"
+            keys={SPEND}
+            model={model}
+            shot="improve-spend"
+            cardClassName="@3xl:col-span-1 @7xl:col-span-2"
+          />
+          <FixBand model={fixes.data} pending={fixes.isPending} />
           <FrictionSection model={friction.data} pending={friction.isPending} />
-          <div className="grid gap-8">
-            <FindingClassesSection model={classes.data} />
-            <FixClassesSection model={fixes.data} />
-          </div>
+          <FindingClassesSection model={classes.data} />
         </div>
       </div>
     </Page>
