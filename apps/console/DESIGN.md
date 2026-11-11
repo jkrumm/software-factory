@@ -137,7 +137,7 @@ it does not.
   opens collapsed** (`lib/chain-collapse.ts`): every open Issue, the plan rows that may file now (20 per project), and the 6 newest
   closed Issues beside them are cards; the rest of a project's plan is folded into **group nodes** of the card's size, a dashed
   card (a plan row's outline) with the count, "Not filed yet" and its reason ("Wait for open Issues to close", "3 steps from
-  filing"), one group per after-depth (six and more share the last), plus one for the closed Issues past the budget. A group is a
+  filing"), one group per after-depth (four and more share the last), plus one for the closed Issues past the budget. A group is a
   button that opens in place into its rows; "Fold all" closes them. Folds never show an internal id; the page note says how many
   nodes are folded. Smaller chains are drawn whole. Under it a schedule puts every
   row that waits on a date on a time axis from now, with a gridline per day or week (a row past 120 days sits in "Later",

@@ -1,6 +1,6 @@
 import { ArrowsOutSimpleIcon, CheckCircleIcon, ClockIcon, StackIcon } from '@phosphor-icons/react'
 import { ProjectChip } from '@/components/kit/issue-parts'
-import { type ChainGroup, STEP_CAP } from '@/lib/chain-collapse'
+import { type ChainGroup, READY_BUDGET, STEP_CAP } from '@/lib/chain-collapse'
 import { dateWords, utcWords } from '@/lib/chain'
 import { cn } from '@/lib/utils'
 
@@ -14,7 +14,7 @@ export function groupTitle(group: Pick<ChainGroup, 'bucket' | 'members'>): strin
 /** Where a group's members stand, as one line. */
 export function groupReason(group: Pick<ChainGroup, 'bucket' | 'step'>): string {
   if (group.bucket === 'done') return 'Done, no longer block'
-  if (group.bucket === 'ready') return 'Ready to file, past the first 20'
+  if (group.bucket === 'ready') return `Ready to file, past the first ${READY_BUDGET}`
   const step = group.step ?? 1
   if (step === 1) return 'Wait for open Issues to close'
   return `${step >= STEP_CAP ? `${STEP_CAP} or more` : step} steps from filing`
