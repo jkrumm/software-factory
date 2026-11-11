@@ -54,7 +54,12 @@ export const PAYLOADS = {
   /** the lead raised a Decision and waits for its answer (or the steward did, for a stall it cannot end by itself) */
   asked: z.object({ attempt, decision: checkpoint }),
   /** a Decision got its answer */
-  answered: z.object({ decision: text, answer: text }),
+  answered: z.object({
+    decision: text,
+    answer: text,
+    /** the answer to a stall was a hold: the Issue waits until this time instead of going back to its lead (`kernel/hold.ts`) */
+    hold: z.iso.datetime({ offset: true }).optional(),
+  }),
   /** the lead handed a Concept or Spec over for review and waits for the verdict */
   submitted: z.object({ attempt, artifact: checkpoint }),
   /** the owner's verdict on that artifact */

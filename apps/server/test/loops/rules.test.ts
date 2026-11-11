@@ -37,6 +37,7 @@ const stall = (over: Partial<StallFacts> = {}): StallFacts => ({
   stewardWakes: 0,
   episode: 0,
   repeatOf: null,
+  holds: 0,
   notes: [],
   history: [],
   windowOpen: null,
@@ -383,10 +384,28 @@ test('a lead waiting on background work is nudged only past the longer threshold
 })
 
 test('a repeated stall that a Decision settled is not asked again; a note from a person still ends it', () => {
-  const repeat = stall({ repeatOf: { answeredAt: 14 } })
+  const repeat = stall({ repeatOf: { answeredAt: 14, held: false } })
   expect(decideStall(repeat, NOW, rules)).toMatchObject({ kind: 'wait' })
   expect(decideStall(stall(), NOW, rules)).toEqual({ kind: 'ask' })
   expect(decideStall({ ...repeat, notes: ['use the v2 endpoint'] }, NOW, rules)).toMatchObject({ kind: 'wake' })
+})
+
+test('a repeated block after a hold answer is held until a later time, each hold twice as long, and raises no Decision', () => {
+  const first = decideStall(stall({ repeatOf: { answeredAt: 14, held: true }, holds: 1 }), NOW, rules)
+  const second = decideStall(stall({ repeatOf: { answeredAt: 14, held: true }, holds: 2 }), NOW, rules)
+  expect(first).toMatchObject({ kind: 'hold' })
+  expect(second).toMatchObject({ kind: 'hold' })
+  const gap = (action: unknown) => Date.parse((action as { until: string }).until) - NOW.getTime()
+  expect(gap(second)).toBe(gap(first) * 2)
+  // only a lead's block is held; a note from a person still ends it
+  expect(
+    decideStall(stall({ cause: 'regressed', repeatOf: { answeredAt: 14, held: true } }), NOW, rules),
+  ).toMatchObject({
+    kind: 'wait',
+  })
+  expect(
+    decideStall(stall({ repeatOf: { answeredAt: 14, held: true }, notes: ['use the v2 endpoint'] }), NOW, rules),
+  ).toMatchObject({ kind: 'wake' })
 })
 
 test('two stall details read alike by their words, whatever the digits', () => {
