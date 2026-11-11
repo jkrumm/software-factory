@@ -49,6 +49,8 @@ export interface QualityView {
 export interface QualityStore {
   /** whether this call's ship was accepted already: a repeat gets the first answer without asking git */
   shipAccepted(eventKey: Key): Promise<boolean>
+  /** whether a Spec was submitted for the Issue (any attempt): what a flagged Issue's ship is held to */
+  specSubmitted(issueId: IssueId): Promise<boolean>
   /** a ship, and for an accepted one its evidence, keyed by the ship; a copy that came first is left as it is */
   recordShip(ship: ShipRecord, evidence: readonly StoredEvidence[]): Promise<void>
   /** the newest accepted ship of the attempt: what its watch checks the deployed version against */

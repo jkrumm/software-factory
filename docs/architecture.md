@@ -218,7 +218,7 @@ through `receive` in `app/intake.ts`; the answer is a triage outcome (`docs/lang
 
 - **Ship** (`app/quality-ship.ts`, `domains/quality/gate.ts`): the lead names merged commits; git must find them on the
   default branch, read by the factory, never taken from the lead. Without that the ship is refused with the error named and
-  counted as friction. A review is recorded as evidence when agw's ledger covers the range, and its absence is recorded
+  counted as friction; so is the ship of an Issue flagged `checkpoint: spec` with no Spec submitted ("The Spec checkpoint", under Checkpoints). A review is recorded as evidence when agw's ledger covers the range, and its absence is recorded
   with its reason; it never refuses a ship (NL23). Whether a rebased, squash-merged change still counts as reviewed is
   agw's judgment (`covered`), not the factory's; `factory issue ship` prints one stderr line naming the range to `/review`
   when the answer is `uncovered`, or the reason when it was not read. The lead also states one line per acceptance line of the Issue
@@ -282,14 +282,13 @@ events since it was raised (`factory-ask` for a Decision, `factory-errand` for a
 hears it and the owner can overrule it with a note. The events travel inside fields the workflows already read, because an
 unknown field is dropped: appended to `checked` for the Judge, to `detail` for the screen, scrubbed, as data. Every look
 is a row in `checkpoint_rechecks` (`outcome` `withdrawn`, `settled` or `kept`; `by` `factory` or `judge`; `reason`;
-`through_version`; at most one per checkpoint and version) and one `rechecked` change on the stream (kind `decision` or
-`errand`, detail the id and the outcome), which the "Since you were here" band reads. A failed call is recorded as
+`through_version`; at most one per checkpoint and version) and one `rechecked` change on the stream (kind `decision`, `errand` or `artifact`, detail the id and the outcome), which the "Since you were here" band reads. A failed call is recorded as
 `kept`, so a dead Judge is not asked again every tick. Call keys: `factory-ask:recheck:<decision>:<version>` and
 `factory-errand:recheck:<errand>:<version>`.
 
 A Concept or Spec is a
 revisable artifact; the owner's verdict arrives as the lead's next turn. Revisions are blobs under the data directory
-named by their hash, never in git. The owner's line (ntfy) carries one page per checkpoint and nothing else.
+named by their hash, never in git. The owner's line (ntfy) carries one page per checkpoint, plus one push for a Concept or Spec revision nobody answered in a day, and nothing else.
 
 The Console shows an artifact at `/artifacts/<id>` (`?revision=n`, `&compare=m` for two revisions side by side): the
 kind and format in words, the verdict state, a revision selector, the comments with "General" (a comment on the whole
@@ -301,6 +300,28 @@ loaded; HTML renders in an `<iframe sandbox="allow-scripts" src="/frame.html">`:
 under its own CSP (no request can leave it, and unlike a `srcdoc` frame it does not inherit the page's policy, which keeps
 `script-src 'self'`). The page sends the artifact to the frame by `postMessage`; the injected annotator posts selections
 back, and the page believes only its own frame's well-formed messages. Templates for a lead are in `apps/console/templates/`.
+
+**The Spec checkpoint** (issue 725). The owner wants few asks and the essential ones: an architecture or look-and-feel choice that
+later Issues build on, a new public surface, a data model or migration of meaning, a dependency of weight, a UI screen he has
+not seen. Those are a one-page Spec, never a Decision (order 2 and 3 of the standing orders, `domains/leads/brief.ts`; the
+brief test pins the wording). Three parts:
+
+- *The flag.* `checkpoint: spec` on a plan row, `factory issue new --checkpoint spec` or the `filed` event (`filed.checkpoint`,
+  kept on the Issue as `checkpoint`; old events carry none). The filer sets it. Triage does not yet: `factory-triage` returns no
+  such field, so setting it from a settle answer waits for the workflow. The brief of a flagged Issue carries a "Checkpoint"
+  section.
+- *The gate.* `shipIssue` refuses a flagged Issue's ship until a Spec exists for it (any attempt; a Concept does not count),
+  before any git read, as a refused ship on the record (so `refusals` counts it) with `SPEC_OWED` as the verb's error.
+- *The timeout.* A Concept or Spec the owner has not answered for 24 hours is looked at once per revision by
+  `recheckReviews` (`app/checkpoints-reviews.ts`, run by `settle` and `checkpoint pass` after `recheckOpen`; no model, no port):
+  its Issue closed or no longer waiting: withdrawn (verdict `no_longer_applies` by the factory, pages cancelled); a Spec of a
+  flagged Issue: **defaulted** (verdict `looks_good` by the factory with a note, `verdict_given` and `noted` by actor `factory`, so the lead hears
+  "no verdict, go on with your defaults" once and the owner can still overrule with a note); anything else: pushed once (a
+  second page, key `page:review:push:<artifact>:<revision>`). Each look is a `checkpoint_rechecks` row of kind `artifact`
+  (`through_version` is the revision seen, so a revision is looked at once). `SPEC_WAIT_HOURS` (contract, `lane.ts`) is the
+  one number; the brief and the gate's message quote it.
+
+Improve counts `specs_per_100` and `owner_decisions_per_100` (trend only), so a silent path shows as two near-zero lines.
 
 ## Loops and agw
 

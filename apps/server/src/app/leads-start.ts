@@ -133,6 +133,7 @@ export async function startLead(deps: LeadDeps, effect: StartEffect): Promise<Re
         title: current.title,
         kind: current.kind,
         origin: current.origin,
+        ...(current.checkpoint ? { checkpoint: current.checkpoint } : {}),
       },
       attempt,
       worktree: { path: worktree, branch },

@@ -1,5 +1,5 @@
 import * as z from 'zod'
-import { LaneName } from './lane.ts'
+import { CheckpointName, LaneName } from './lane.ts'
 import { QualityIssue } from './quality.ts'
 import { SeatInput } from './seat.ts'
 
@@ -34,6 +34,8 @@ export const NewIssueBody = z
     seat: SeatInput.optional(),
     /** the resource class it runs in; the repo's `project.yaml` `lanes:` caps how many leads of a lane run at once */
     lane: LaneName.optional(),
+    /** `spec`: its lead owes a one-page Spec before it builds, and the ship is refused without one */
+    checkpoint: CheckpointName.optional(),
     text: Text.optional(),
     key: z.string().trim().min(1).max(200).optional(),
     /** `request` is a person's ask; `alert` is something that broke */

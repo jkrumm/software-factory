@@ -153,8 +153,12 @@ const record = async (issueId: IssueId, name: string, event: AnyIssueEvent) =>
   value(await recordIssueEvent({ uow, clock, ids }, { issueId, key: key(name, issueId), event }))
 
 /** An Issue whose attempt 1 has a lead working. */
-async function working(): Promise<IssueId> {
-  const filed = ev('filed', { repo: '/repo/example', title: 'the probe fails', kind: 'bug', origin: 'you' }, 'factory')
+async function working(extra: { checkpoint?: 'spec' } = {}): Promise<IssueId> {
+  const filed = ev(
+    'filed',
+    { repo: '/repo/example', title: 'the probe fails', kind: 'bug', origin: 'you', ...extra },
+    'factory',
+  )
   if (filed.kind !== 'filed') throw new Error('unreachable')
   const { issue } = value(await fileIssue({ uow, clock, ids }, { key: key('filed', ids.next('signal')), event: filed }))
   await record(issue.id, 'settled', ev('settled', {}, 'factory'))
@@ -196,6 +200,43 @@ async function runEffects(): Promise<void> {
 }
 
 describe('the ship gate', () => {
+  test('a flagged Issue is refused with no Spec, never asks git, and ships once a Spec is submitted', async () => {
+    const id = await working({ checkpoint: 'spec' })
+    const refused = value(await ship(id))
+    expect(refused.result).toBe('refused')
+    expect(refused.detail).toContain('checkpoint `spec`')
+    expect(refused.detail).toContain('factory artifact submit --kind spec')
+    expect(commitReads).toBe(0)
+    expect((await stateOf(id)).state).toBe('working')
+
+    // a Concept is not a Spec: the checkpoint wants the one-page Spec
+    await db.sql`
+      INSERT INTO factory.artifacts (id, key, issue_id, kind, title, format, author, created_at)
+      VALUES ('artifact_c', 'k-c', ${id}, 'concept', 'a concept', 'markdown', 'lead', ${clock.now()})`
+    expect(value(await ship(id, 'call-2')).result).toBe('refused')
+
+    await db.sql`
+      INSERT INTO factory.artifacts (id, key, issue_id, kind, title, format, author, created_at)
+      VALUES ('artifact_s', 'k-s', ${id}, 'spec', 'the Spec', 'markdown', 'lead', ${clock.now()})`
+    const accepted = value(await ship(id, 'call-3'))
+    expect(accepted.result).toBe('applied')
+    expect(commitReads).toBe(1)
+    expect((await stateOf(id)).state).toBe('watching')
+  })
+
+  test('a refusal for the missing Spec is a refused ship on the record, counted as a refusal', async () => {
+    const id = await working({ checkpoint: 'spec' })
+    await ship(id)
+    const [row] = await db.sql`SELECT result, detail FROM factory.quality_ships WHERE issue_id = ${id}`
+    expect(row).toMatchObject({ result: 'refused' })
+    expect(String(row.detail)).toContain('no Spec was submitted')
+  })
+
+  test('an Issue without the checkpoint ships with no Spec', async () => {
+    const id = await working()
+    expect(value(await ship(id)).result).toBe('applied')
+  })
+
   test('a project that ships by push records no CI evidence and never asks GitHub', async () => {
     project = { ...project, ci: false }
     const issueId = await working()

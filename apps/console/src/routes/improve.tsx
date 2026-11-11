@@ -10,6 +10,7 @@ import {
   CaretRightIcon,
   ChatCircleDotsIcon,
   CurrencyDollarIcon,
+  FileTextIcon,
   GaugeIcon,
   HandPointingIcon,
   HourglassIcon,
@@ -74,7 +75,14 @@ export const Route = createFileRoute('/improve')({
 })
 
 /** The KPI bands in the Console's own order, the headline measures first; the fix-commit band follows them (its data is `/v1/fix-commits`). */
-const QUALITY: readonly KpiKey[] = ['first_verification_passes', 'avoidable_touches', 'asks', 'worth_asking']
+const QUALITY: readonly KpiKey[] = [
+  'first_verification_passes',
+  'avoidable_touches',
+  'asks',
+  'worth_asking',
+  'specs_per_100',
+  'owner_decisions_per_100',
+]
 const PACE_AND_GATES: readonly KpiKey[] = ['queue_wait_p90', 'queue_wait_p50', 'cycle_p50', 'refusals']
 const SPEND: readonly KpiKey[] = ['window_points', 'cost']
 
@@ -89,6 +97,8 @@ const KPI_ICON: Record<KpiKey, Icon> = {
   avoidable_touches: HandPointingIcon,
   asks: ChatCircleDotsIcon,
   worth_asking: ScalesIcon,
+  specs_per_100: FileTextIcon,
+  owner_decisions_per_100: ChatCircleDotsIcon,
   refusals: ProhibitIcon,
   queue_wait_p90: HourglassIcon,
   queue_wait_p50: HourglassIcon,

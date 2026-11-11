@@ -19,6 +19,8 @@ export interface NewIssueInput {
   seat?: Record<string, unknown> | undefined
   /** the resource class, already a valid lane name */
   lane?: string | undefined
+  /** `spec`: the lead owes a Spec before it builds */
+  checkpoint?: 'spec' | undefined
   text?: string | undefined
   /** a repeated key files nothing again */
   key?: string | undefined
@@ -100,6 +102,7 @@ export async function fileNewIssue(
           origin: input.source === 'alert' ? 'application' : 'you',
           ...(seat ? { seat } : {}),
           ...(input.lane ? { lane: input.lane } : {}),
+          ...(input.checkpoint ? { checkpoint: input.checkpoint } : {}),
           ...(input.after.length > 0 || input.alone ? { edges: 'stated' as const } : {}),
         },
         actor: input.actor,

@@ -252,6 +252,15 @@ const errandOf = (raw: unknown): ErrandRecord => {
   }
 }
 
+const StaleReviewRow = z.object({
+  id: z.string(),
+  issue_id: z.string(),
+  kind: z.enum(['concept', 'spec']),
+  title: z.string(),
+  n: z.number().int(),
+  created_at: z.date(),
+})
+
 const RecheckRow = z.object({
   kind: z.enum(['decision', 'errand']),
   id: z.string(),
@@ -634,6 +643,31 @@ export function postgresCheckpointStore(tx: SQL): CheckpointStore {
           reachedAt: row.reached_at,
           lastCheckedAt: row.last_at,
           throughVersion: row.through_version,
+        }
+      })
+    },
+
+    async staleReviews({ before, limit }) {
+      const rows: unknown[] = await tx`
+        SELECT a.id, a.issue_id, a.kind, a.title, r.n, r.created_at
+        FROM factory.artifacts a
+        JOIN LATERAL (
+          SELECT n, created_at FROM factory.artifact_revisions WHERE artifact_id = a.id ORDER BY n DESC LIMIT 1
+        ) r ON true
+        WHERE a.kind IN ('concept', 'spec') AND r.created_at <= ${before}
+          AND NOT EXISTS (SELECT 1 FROM factory.verdicts v WHERE v.artifact_id = a.id AND v.revision = r.n)
+          AND NOT EXISTS (
+            SELECT 1 FROM factory.checkpoint_rechecks c WHERE c.checkpoint_id = a.id AND c.through_version = r.n)
+        ORDER BY r.created_at, a.id LIMIT ${limit}`
+      return rows.map((raw) => {
+        const row = StaleReviewRow.parse(raw)
+        return {
+          artifact: row.id,
+          issueId: row.issue_id as IssueId,
+          kind: row.kind,
+          title: row.title,
+          revision: row.n,
+          at: row.created_at,
         }
       })
     },

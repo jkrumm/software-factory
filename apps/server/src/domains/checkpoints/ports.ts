@@ -15,7 +15,7 @@ import type {
 } from './decision.ts'
 import type { ErrandId } from './errand.ts'
 import type { Page } from './page.ts'
-import type { Recheck, RecheckCandidate } from './recheck.ts'
+import type { Recheck, RecheckCandidate, ReviewWait } from './recheck.ts'
 
 /** A step on a Decision's way to an answer. `open`: it reached the owner. */
 export const STEP_OUTCOMES = ['answered', 'passed', 'rejected', 'failed', 'open'] as const
@@ -233,6 +233,11 @@ export interface CheckpointStore {
    * that reached him, oldest first, each with its last recheck; one rechecked since `reachedBefore` is left out.
    */
   recheckCandidates(input: { reachedBefore: Date; limit: number }): Promise<RecheckCandidate[]>
+  /**
+   * Concepts and Specs whose latest revision was handed over at `before` or earlier, with no verdict and no look at that
+   * revision yet, oldest first.
+   */
+  staleReviews(input: { before: Date; limit: number }): Promise<ReviewWait[]>
   /** false when the checkpoint has a recheck at that version already */
   insertRecheck(recheck: Recheck): Promise<boolean>
 

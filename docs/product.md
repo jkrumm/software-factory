@@ -72,6 +72,7 @@ Read in 7-day windows, on the Console's Improve screen.
 | Refusals per Issue | 1.18 | at most 0.25 |
 | Cycle p50, queue wait p90 | 37 min, 8.8 h | set after parallel leads |
 | Fix commits per week, by class | measured from the first pass of the `fix-classes` loop, four weeks on Improve | falling |
+| Specs, and Decisions the owner answered himself, per 100 Issues | not measured | trend only; two near-zero lines mean the path is silent |
 | Window points per Issue | not measured | trend only |
 
 ### Fix classes
