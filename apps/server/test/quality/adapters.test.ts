@@ -221,6 +221,24 @@ test('agw review: an uncovered commit is named with the level it needs and agwâ€
   })
 })
 
+test('agw review: every range shares one limit, so batches of ranges do not add their waits up', async () => {
+  let clock = 0
+  const limits: number[] = []
+  const run: Run = async (cmd, timeoutMs) => {
+    limits.push(timeoutMs)
+    await Promise.resolve() // the work takes its time after every call of the batch has been started
+    clock += 40_000
+    return cmd[2] === 'route'
+      ? { exitCode: 0, stdout: JSON.stringify({ tier: 'light' }) }
+      : { exitCode: 0, stdout: JSON.stringify({ covered: true, commits: [], uncovered: [] }) }
+  }
+  const review = new AgwReview({ bin: 'agw', run, timeoutMs: 100_000, now: () => clock })
+  // five ranges: a batch of four, then one; the second batch gets what the first left of the 100 s
+  await review.read({ repo: '/r', ranges: Array.from({ length: 5 }, () => range) })
+  expect(limits.slice(0, 8).every((ms) => ms === 100_000)).toBe(true)
+  expect(limits.slice(8)).toEqual([1, 1])
+})
+
 test('agw review: a failing, silent or unexpected agw is an error result', async () => {
   expect(await agw({}).read({ repo: '/r', ranges: [range] })).toMatchObject({
     ok: false,
