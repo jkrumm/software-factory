@@ -84,7 +84,8 @@ through `receive` in `app/intake.ts`; the answer is a triage outcome (`docs/lang
 
 - **Sources.** The owner (`factory signal`, Hermes through the narrow `signal` caller as `owner:hermes`), agents
   (`agent:<repo>`), the alert door (Kuma and HyperDX), and three pollers: GitHub (the owner's new issues and failing
-  checks; anyone else's need the label and are held), Beszel (host rules from `config/infra.json`) and launchd (a
+  checks, a failing one filed as an `incident` so it takes the fix's place beyond the repo's `leads` and the lead of every
+  other Issue of the repo with an open pull request is noted once; anyone else's need the label and are held), Beszel (host rules from `config/infra.json`) and launchd (a
   LaunchAgent's state). `repo` comes from the route, the door registry or the caller, never from an outside payload.
   **App feedback** is a door source of its own: `POST /feedback/<app>` with the app's token (`feedback-<app>` in the door's
   tokens file) becomes `POST /signals/feedback`, one envelope for every app (`FeedbackRequest`: app, version, route, title,
@@ -211,7 +212,10 @@ through `receive` in `app/intake.ts`; the answer is a triage outcome (`docs/lang
   with its reason; it never refuses a ship (NL23). The lead also states one line per acceptance line of the Issue
   (`--acceptance "met: ..."` or `"not met: ..."`; the factory parses no criteria), recorded as `acceptance` evidence and shown on the
   Issue page; a malformed line is refused (422), a `not met` never refuses, and a ship that states nothing is counted as
-  friction (`unstated_acceptance`) like an unreviewed one. `evidence.ts` decides whether the paths deploy at all; its inert paths
+  friction (`unstated_acceptance`) like an unreviewed one. The pull request the commits landed through is read from GitHub
+  (`adapters/quality/ci.ts`, the `Ci` port) and its head's CI recorded as `ci` evidence (`green`, `red`, `running`, `missing`
+  when no pull request or no check was found, `unknown` when GitHub could not be read); it never refuses a ship, and a red
+  or missing one is counted as friction (`unproven_ci`). `evidence.ts` decides whether the paths deploy at all; its inert paths
   equal `scripts/verify.sh`'s.
 - **Watch and verify** (`domains/quality/watch.ts`, `app/quality-watch.ts`): the project's `make verify` and probes run on
   their own loop, so a slow verify never holds the leads' pass. What the watch runs is the synced `project.yaml`
@@ -219,7 +223,11 @@ through `receive` in `app/intake.ts`; the answer is a triage outcome (`docs/lang
   mode `make` reads `make version`; a missing version target there is red. A file with no target leaves verify to the
   Makefile, and a repo without a `project.yaml` is read from its Makefile alone (`adapters/quality/projects.ts`). A red check is retried with a doubling delay before it is
   a regression; a regression returns the Issue to its lead, twice, then it stalls. A checkout that cannot be read is
-  rechecked, never passed.
+  rechecked, never passed. In a project that ships through a pull request (`ship:` `via: pr`) verify also reads the default
+  branch's CI for the exact landed commit (`ci` check): green passes, red is red, and a run still running (or not yet visible
+  within 10 min of the merge) is neither, so the watch is looked at again after `FACTORY_VERIFY_RECHECK_MS` and does not pass;
+  one running past an hour is red, and no run at all after 10 min passes with that said (the repo may have none). A pending
+  CI wins over a red `make verify` until it settles (`outcomeOf`: blocked first).
 - **Reopen** (`app/quality-reopen.ts`) is the owner's, within 30 days of closing.
 
 ## Checkpoints

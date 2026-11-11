@@ -198,3 +198,21 @@ Report `docs/strategy/2026-11-next/report.html`, definition `docs/strategy/2026-
   open if two Apple repos are measured fighting for the mini. The owner's measurement (one booted simulator ~18 GiB, load 279,
   swap 18.7 of 19.4 GiB with ten leads, 2026-11-10) added a lane's `memory`: running leads of the lane reserve it against
   the memory ceiling, because the admission gate sees a heavy step only after it has started.
+- **NL28 A merge needs green CI on its exact head, and a red default branch is a fix (Issue 718, 2026-11-11).** The
+  burn-in retro (2026-11-07..10, 308 lead sessions) found a PR merged 17 s after it opened with its CI red 5 min later and
+  master red for 4 h, a force-pushed rebase merged with no CI run on it, and a red-master fix queued 3 h 14 min behind a full
+  repo. The rules: `scripts/merge-guard.ts` refuses a head with no finished green `ci.yml` run on its exact sha (`--wait`
+  polls for it; `--allow-red` never skips it); a master run still running is no refusal, because the head contains
+  `origin/master` and its green CI proved that combination, but a red one is; a ship records the PR head's CI as `ci`
+  evidence and counts red or missing as friction (`unproven_ci`), never refusing (NL23); the Watch does not pass while the
+  default branch's run for the landed commit runs or is red; a failing default-branch check is filed as an `incident`
+  (the fix's place beyond `leads`, lane-exempt, the line stops) and the leads with an open PR in the repo are noted once.
+  The per-account lead cap still holds an urgent fix back; raising it would put a fourth lead on one Max account, so it
+  waits for a measured case. **The rebase rule (the second Issue folded in):** a lead runs `make check` before its first
+  push and after every change it authors, and a rebase that only brings in master's commits is not re-run locally: CI on the
+  rebased head is the same full check and the one the merge needs anyway, so the lead waits once (`--wait`) instead of
+  once locally (27-70 min under test-slot contention) and again on CI (12-16 min). Rejected: a path-overlap or docs-only
+  rule (a second rule to get wrong, and CI proves it anyway) and a merge queue (a service to build for a problem the
+  exact-head rule already closes). Baseline for the measurement the Issue asks for, over the burn-in: `make check` median 3
+  runs per Issue (p90 8, max 28), 32 h in 1021 foreground runs across all projects; software-factory Issues closed `done`
+  (121): median working time 25 min, median elapsed 96 min. The after is counted from Issues that finish on this rule.
