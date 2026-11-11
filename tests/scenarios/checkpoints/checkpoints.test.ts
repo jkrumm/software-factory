@@ -368,6 +368,7 @@ test('an Errand raised by the lead and done by the owner: paged once, and the le
       attempt: 1,
       summary: 'Approve the App Store build in the portal',
       detail: 'Release > Build 42 > Approve',
+      tried: 'looked for an API route: none',
     }),
   )
   expect(raised).toMatchObject({ result: 'applied', issue: { state: 'waiting', waitReason: 'errand' } })

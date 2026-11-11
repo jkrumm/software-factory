@@ -92,7 +92,16 @@ export function readDecisionForm(raw: unknown): Result<DecisionForm, MissingFiel
 
   const find = (label: string) => options.find((option) => option.label.toLowerCase() === label.toLowerCase())
   const recommended = find(recommendation)
-  if (recommendation !== '' && !recommended) problems.push('recommendation (not one of the options)')
+  const labelList =
+    labels.length > 0
+      ? `the options are: ${options
+          .map((option) => option.label)
+          .filter(Boolean)
+          .join(' | ')}`
+      : 'no option has a label yet'
+  if (recommendation !== '' && !recommended) {
+    problems.push(`recommendation (not one of the options: it is the label of one, ${labelList})`)
+  }
 
   const rawNo = isRecord(body.noAnswer) ? body.noAnswer : {}
   const consequence = need('noAnswer.consequence', rawNo.consequence)
@@ -107,7 +116,8 @@ export function readDecisionForm(raw: unknown): Result<DecisionForm, MissingFiel
   let chosen: string | null = null
   if (fallback !== null) {
     const option = find(fallback)
-    if (!option) problems.push('noAnswer.default (not one of the options)')
+    if (!option)
+      problems.push(`noAnswer.default (not one of the options: it is the label of a reversible one, ${labelList})`)
     else if (!option.reversible)
       problems.push(`noAnswer.default (${option.label} is not reversible: only a reversible option is a default)`)
     else chosen = option.label
@@ -120,7 +130,7 @@ export function readDecisionForm(raw: unknown): Result<DecisionForm, MissingFiel
     return err({
       kind: 'missing_field',
       fields: problems,
-      detail: `a Decision needs: ${problems.join(', ')}. Nothing was raised: ask again with every field.`,
+      detail: `a Decision needs: ${problems.join('; ')}. Nothing was raised: ask again with every field.`,
     })
   }
   return ok({

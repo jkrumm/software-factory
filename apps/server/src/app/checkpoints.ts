@@ -19,7 +19,7 @@ import {
   readDecisionForm,
   type Settler,
 } from '../domains/checkpoints/decision.ts'
-import { type ErrandId, readErrand } from '../domains/checkpoints/errand.ts'
+import { type ErrandId, readErrand, refuseHostClass } from '../domains/checkpoints/errand.ts'
 import { deepLink, reviewPage } from '../domains/checkpoints/page.ts'
 import type {
   AnnotationRecord,
@@ -144,7 +144,7 @@ export interface Asked {
  */
 export async function askDecision(
   deps: CheckpointDeps,
-  input: { issueId: IssueId; attempt: number; form: unknown; by?: 'lead' | 'steward'; salt?: string },
+  input: { issueId: IssueId; attempt: number; form: unknown; by?: 'lead' | 'steward'; salt?: string; call?: string },
 ): Promise<CheckpointResult<Asked>> {
   const read = readDecisionForm(input.form)
   if (!read.ok) return read
@@ -152,7 +152,10 @@ export async function askDecision(
   const blob = await deps.blobs.put(renderDecisionForm(form))
   if (!blob.ok) return blob
   // The same ask again is the same Decision; a caller that asks about a new situation (the steward, a later stall) salts it.
-  const hash = digest(input.salt ? `${form.question}\n${input.salt}` : form.question)
+  // A `call` names the call: the same one again is the same Decision, whatever its words.
+  const hash = digest(
+    input.call ? `call:${input.call}` : input.salt ? `${form.question}\n${input.salt}` : form.question,
+  )
 
   return deps.uow.run(async ({ work, checkpoints }) => {
     const askKey = key('ask', input.issueId, input.attempt, hash)
@@ -797,15 +800,19 @@ export interface ErrandWritten {
 /** `factory errand raise`: the lead needs the owner's hands. The Issue waits; the screen (`checkpoints-errands.ts`) decides whether it reaches the owner. */
 export function raiseErrand(
   deps: CheckpointDeps,
-  input: { issueId: IssueId; attempt: number; raw: unknown },
+  input: { issueId: IssueId; attempt: number; raw: unknown; call?: string },
 ): Promise<CheckpointResult<ErrandWritten>> {
   const read = readErrand(input.raw)
   if (!read.ok) return Promise.resolve(read)
-  const { summary, detail } = read.value
+  const { summary, tried } = read.value
+  // What was tried is the screen's and the owner's to read, so it is kept with the steps.
+  const detail = [read.value.detail, `Tried first: ${tried}`].filter(Boolean).join('\n\n')
+  const hostDoes = refuseHostClass(read.value)
+  if (hostDoes) return Promise.resolve(err({ kind: 'invalid', detail: hostDoes }))
   return deps.uow.run(async ({ work, checkpoints }) => {
     const issue = await issueOf(work, input.issueId)
     if (!issue) return err({ kind: 'unknown_issue', issueId: input.issueId })
-    const errandKey = key('errand', input.issueId, input.attempt, digest(summary))
+    const errandKey = key('errand', input.issueId, input.attempt, digest(input.call ? `call:${input.call}` : summary))
     const existing = await checkpoints.errandByKey(errandKey)
     if (existing) return ok<ErrandWritten>({ result: 'replayed', errand: existing, issue: moveOf(issue) })
 

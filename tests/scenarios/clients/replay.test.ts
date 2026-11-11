@@ -73,7 +73,19 @@ beforeAll(async () => {
   if (asked.code !== 0) throw new Error(`ask: ${asked.err}`)
   const raised = await call(
     v,
-    ['errand', 'raise', errand, '--attempt', '1', '--summary', 'plug it in', '--detail', 'the cable'],
+    [
+      'errand',
+      'raise',
+      errand,
+      '--attempt',
+      '1',
+      '--summary',
+      'plug it in',
+      '--detail',
+      'the cable',
+      '--tried',
+      'looked for a command',
+    ],
     'agent',
     lead(errand),
   )

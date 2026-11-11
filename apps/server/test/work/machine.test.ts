@@ -122,9 +122,49 @@ describe('the paths', () => {
       ...settledAndWorking,
       ev('stalled', { attempt: 1, cause: 'blocked', detail: 'no API' }, 'lead'),
     ])
-    expect(detail(apply(blocked.issue, ev('shipped', { attempt: 1 }, 'lead'), { now: NOW }))).toBe(
-      'refused: it waits for blocked: shipped is taken only from a timed wait',
-    )
+    const refused = detail(apply(blocked.issue, ev('shipped', { attempt: 1 }, 'lead'), { now: NOW }))
+    expect(refused).toContain('refused: it waits (blocked: ')
+    expect(refused).toContain('`ship` is taken only from a timed wait or while working')
+    expect(refused).toContain("steward's to end")
+  })
+
+  describe('a refused lead verb names the verb that does what the lead wanted', () => {
+    const refusal = (events: AnyIssueEvent[], kind: 'shipped' | 'deferred') => {
+      const { issue } = drive(events)
+      const verb =
+        kind === 'shipped'
+          ? ev('shipped', { attempt: 1 }, 'lead')
+          : ev('deferred', { attempt: 1, until: '2030-01-01T00:00:00Z' }, 'lead')
+      return detail(apply(issue, verb, { now: NOW }))
+    }
+
+    test('ship and defer after an Errand: raise it last, end the turn, ship after the done note', () => {
+      const errand = ev('errand_raised', { attempt: 1, errand: { id: 'errand_1', summary: 'plug it in' } }, 'lead')
+      for (const kind of ['shipped', 'deferred'] as const) {
+        const text = refusal([...settledAndWorking, errand], kind)
+        expect(text).toContain('it waits for an Errand (errand_1')
+        expect(text).toContain('end the turn')
+        expect(text).toContain(`\`${kind === 'shipped' ? 'ship' : 'defer'}\` after the note that it is done`)
+      }
+    })
+
+    test('ship while a Decision or a review is open says the answer or verdict comes back as a note', () => {
+      const asked = ev('asked', { attempt: 1, decision: { id: 'decision_1', summary: 'Q?' } }, 'lead')
+      expect(refusal([...settledAndWorking, asked], 'shipped')).toContain(
+        'the answer comes back as a note, then `ship`',
+      )
+      const submitted = ev('submitted', { attempt: 1, artifact: { id: 'artifact_1', summary: 'Spec' } }, 'lead')
+      expect(refusal([...settledAndWorking, submitted], 'shipped')).toContain(
+        'the verdict comes back as a note, then `ship`',
+      )
+    })
+
+    test('a defer on an Issue that already waits for others names them', () => {
+      const after = ev('deferred', { attempt: 1, after: ['issue_445', 'issue_436'] as IssueId[] }, 'lead')
+      expect(refusal([...settledAndWorking, after], 'deferred')).toBe(
+        'refused: it is already waiting for issue_445, issue_436: it resumes by itself when they close, so end the turn',
+      )
+    })
   })
 
   describe('a Decision raised during a review wait', () => {
@@ -203,9 +243,9 @@ describe('the paths', () => {
         ...settledAndWorking,
         ev('errand_raised', { attempt: 1, errand: { id: 'errand_1', summary: 'plug it in' } }, 'lead'),
       ])
-      expect(detail(apply(errand.issue, ev('asked', { attempt: 1, decision }, 'lead'), { now: NOW }))).toBe(
-        'refused: it waits for errand: asked is taken only from a timed wait',
-      )
+      const refused = detail(apply(errand.issue, ev('asked', { attempt: 1, decision }, 'lead'), { now: NOW }))
+      expect(refused).toContain('refused: it waits for an Errand (errand_1: ')
+      expect(refused).toContain('raise the Errand as the last step, end the turn')
     })
   })
 

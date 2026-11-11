@@ -141,6 +141,37 @@ describe('the filing contract', () => {
     expect(errorLine(other.err).hint).not.toMatch(/\brd\b/)
   })
 
+  test('errand raise and issue ask take --call, as ship and defer do', async () => {
+    answer = { status: 200, body: {} }
+    for (const argv of [
+      ['errand', 'raise', '1', '--attempt', '1', '--summary', 's', '--tried', 't', '--call', 'e-1'],
+      ['issue', 'ask', '1', '--attempt', '1', '--question', 'q', '--call', 'a-1'],
+    ]) {
+      sentBody = ''
+      const result = await cli(argv)
+      expect(result.err).not.toContain('Unknown option')
+      expect(JSON.parse(sentBody)).toMatchObject({ call: argv.at(-1) })
+    }
+  })
+
+  test('a signal kind of bug names the allowed kinds and where bug and feature belong', async () => {
+    const result = await cli(['signal', 'file', '--from', 'agent:x', '--kind', 'bug', '--title', 't'])
+    expect(result.code).toBe(2)
+    const error = errorLine(result.err)
+    expect(error.message).toContain('must be one of request, feedback, remark')
+    expect(error.hint).toContain('factory issue new --kind bug|feature|chore')
+  })
+
+  test('the limits the server holds are in the help of the verbs they bound', async () => {
+    const { MAX_CONTENT, MAX_TITLE } = await import('../../server/src/domains/checkpoints/artifact.ts')
+    const submit = (await cli(['artifact', 'submit', '--help'])).out
+    expect(submit).toContain(`--title at most ${MAX_TITLE} characters`)
+    expect(submit).toContain(`--content at most ${MAX_CONTENT} characters`)
+    expect((await cli(['issue', 'ship', '--help'])).out).toContain('1-500 characters')
+    const errand = (await cli(['errand', 'raise', '--help'])).out
+    for (const word of ['--tried', 'factory door token new', 'secrets-run']) expect(errand).toContain(word)
+  })
+
   test('a 422 on issue new points to issue schema', async () => {
     answer = { status: 422, body: { error: 'facts must be an object', code: 'invalid_body' } }
     const result = await cli(['issue', 'new', '--repo', 'r', '--title', 't'])

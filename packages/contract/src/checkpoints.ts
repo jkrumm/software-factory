@@ -88,6 +88,8 @@ export const AskBody = z
     options: z.array(OptionInput).optional(),
     /** a JSON object `{consequence, default, waitMinutes}` */
     noAnswer: NoAnswerInput.optional(),
+    /** makes a repeated call one event, as on `ship` and `defer` */
+    call: z.string().trim().min(1).max(128).optional(),
   })
   .meta({ id: 'AskBody' })
 export type AskBody = z.infer<typeof AskBody>
@@ -224,6 +226,10 @@ export const ErrandBody = z
     attempt: z.number().int().min(1),
     summary: z.string().optional(),
     detail: z.string().optional(),
+    /** what was tried before asking for a person's hands: the commands, the tokens, the routes. Required. */
+    tried: z.string().optional(),
+    /** makes a repeated call one event, as on `ship` and `defer` */
+    call: z.string().trim().min(1).max(128).optional(),
   })
   .meta({ id: 'ErrandBody' })
 

@@ -190,8 +190,8 @@ export const checkpointRoutes = (uses: CheckpointUses) =>
       async ({ params, body }) => {
         const issueId = issueRef(params.id)
         if (!issueId) return unknownId('Issue', params.id)
-        const { attempt, ...form } = body
-        const result = await uses.ask({ issueId, attempt, form })
+        const { attempt, call, ...form } = body
+        const result = await uses.ask({ issueId, attempt, form, ...(call ? { call } : {}) })
         if (!result.ok) return failed(result.error)
         return Response.json(
           AskReply.parse({
@@ -534,8 +534,8 @@ export const checkpointRoutes = (uses: CheckpointUses) =>
       async ({ params, body }) => {
         const issueId = issueRef(params.id)
         if (!issueId) return unknownId('Issue', params.id)
-        const { attempt, ...raw } = body
-        const result = await uses.raiseErrand({ issueId, attempt, raw })
+        const { attempt, call, ...raw } = body
+        const result = await uses.raiseErrand({ issueId, attempt, raw, ...(call ? { call } : {}) })
         if (!result.ok) return failed(result.error)
         return Response.json(
           ErrandReply.parse({

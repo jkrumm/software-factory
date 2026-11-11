@@ -1,5 +1,6 @@
 import * as z from 'zod'
 import { usage } from './exit.ts'
+import { OPERATION_EXTENSIONS } from './filing.ts'
 import type { BodyField, Operation } from './operation.ts'
 
 /**
@@ -198,9 +199,12 @@ export function validateBody(op: Operation, body: unknown): void {
   const lines = parsed.error.issues.map((issue) => `${issue.path.join('.') || 'body'}: ${describe(issue, body)}`)
   const shown = lines.slice(0, MAX_REPORTED)
   if (lines.length > shown.length) shown.push(`and ${lines.length - shown.length} more`)
+  const fieldHints = OPERATION_EXTENSIONS[op.operationId]?.fieldHints ?? {}
+  const named = [...new Set(parsed.error.issues.map((issue) => String(issue.path[0] ?? '')))]
+  const advice = named.flatMap((name) => (fieldHints[name] ? [`${name}: ${fieldHints[name]}`] : []))
   throw usage(
     `${op.command.join(' ')}: ${shown.join('; ')}`,
-    `factory ${op.command.join(' ')} --schema prints the body's JSON Schema`,
+    [...advice, `factory ${op.command.join(' ')} --schema prints the body's JSON Schema`].join('. '),
   )
 }
 

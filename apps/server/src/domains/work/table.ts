@@ -65,13 +65,52 @@ const byLead =
     return cell(ctx)
   }
 
-/** A timed wait takes the lead's verbs as working does; every other wait keeps its own exit. */
+/** A lead's verb as the lead types it, for the refusal that names it. */
+const VERB_WORDS: Partial<Record<EventKind, string>> = {
+  shipped: 'ship',
+  deferred: 'defer',
+  closed: 'close',
+  submitted: 'artifact submit',
+  asked: 'issue ask',
+  errand_raised: 'errand raise',
+  stalled: 'block',
+}
+
+/**
+ * What a refused lead verb says about the wait that refuses it: what the Issue waits for, how that ends, and the verb
+ * that does what the lead wanted. A lead that raised an Errand and shipped in the same turn is the case this exists for.
+ */
+function waitHint(issue: Issue, event: { kind: EventKind; payload?: unknown }): string {
+  const { wait } = issue
+  if (!wait) return ''
+  const verb = VERB_WORDS[event.kind] ?? event.kind
+  const ends = WAITS[wait.reason].ends
+  switch (wait.reason) {
+    case 'errand':
+      return `it waits for an Errand (${wait.holds.id}: ${ends}), so \`${verb}\` is not taken now: raise the Errand as the last step, end the turn, and \`${verb}\` after the note that it is done; an Errand's wait is never ended by a verb of yours, so raise one only for a person's hands`
+    case 'decision':
+      return `it waits for the answer to a Decision (${wait.holds.id}: ${ends}), so \`${verb}\` is not taken now: end the turn; the answer comes back as a note, then \`${verb}\``
+    case 'review':
+      return `it waits for the verdict on an artifact (${wait.holds.id}: ${ends}), so \`${verb}\` is not taken now: end the turn; the verdict comes back as a note, then \`${verb}\``
+    case 'dependency': {
+      const after = wait.after.join(', ')
+      if (event.kind === 'deferred') {
+        return `it is already waiting for ${after}: it resumes by itself when they close, so end the turn`
+      }
+      return `it waits for ${after} to close, so \`${verb}\` is not taken now: end the turn; it resumes by itself`
+    }
+    case 'timer':
+      return ''
+    default:
+      return `it waits (${wait.reason}: ${ends}); \`${verb}\` is taken only from a timed wait or while working: a stall is the steward's to end, so end the turn`
+  }
+}
+
+/** A timed wait takes the lead's verbs as working does; every other wait keeps its own exit, and the refusal names it. */
 const fromTimer =
-  <C extends { issue: Issue; event: { kind: EventKind } }>(cell: (ctx: C) => Cell) =>
+  <C extends { issue: Issue; event: { kind: EventKind; payload?: unknown } }>(cell: (ctx: C) => Cell) =>
   (ctx: C): Cell =>
-    ctx.issue.wait?.reason === 'timer'
-      ? cell(ctx)
-      : refuse(`it waits for ${ctx.issue.wait?.reason}: ${ctx.event.kind} is taken only from a timed wait`)
+    ctx.issue.wait?.reason === 'timer' ? cell(ctx) : refuse(waitHint(ctx.issue, ctx.event))
 
 const noLeadYet = refused('no lead works it yet')
 const watchIsOn = refused('it shipped: the watch is on, and verify ends it')

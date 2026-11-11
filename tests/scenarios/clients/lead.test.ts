@@ -52,7 +52,8 @@ test('every verb the brief names is a command of the CLI', async () => {
   ]) {
     expect(names).toContain(verb)
   }
-  for (const name of names) {
+  // `door token` is an offline, hand-written verb: it has no generated help to ask.
+  for (const name of names.filter((pair) => pair !== 'door token')) {
     const [group, verb] = name.split(' ') as [string, string]
     const help = await call(v, [group, verb, '--help'], 'none')
     expect({ name, code: help.code }).toEqual({ name, code: 0 })
@@ -181,7 +182,19 @@ test('artifact submit, show and revise; errand raise; defer; signal file', async
   ])
   expect(revised.code).toBe(0)
 
-  const errand = await asLead(['errand', 'raise', issue, '--attempt', '1', '--summary', 'plug it in', '--detail', 'x'])
+  const errand = await asLead([
+    'errand',
+    'raise',
+    issue,
+    '--attempt',
+    '1',
+    '--summary',
+    'plug it in',
+    '--detail',
+    'x',
+    '--tried',
+    'a command',
+  ])
   expect(errand.code).toBe(0)
   expect(fieldsOf((errand.json as { errand: unknown }).errand, { id: 'string' })).toEqual([])
 

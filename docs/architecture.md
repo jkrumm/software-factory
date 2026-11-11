@@ -257,7 +257,10 @@ him with the failure in the Judge step's detail; `passed` and `rejected` stay fi
 its open Decision amends that Decision: the form is replaced, the new rendering is the artifact's next revision (note
 `amended`), the steps and unsent pages are cleared so it is settled afresh, and a verdict of a call that was out during
 the amend is dropped (the form digest taken at claim no longer matches). The same form again is a replay; an answered or
-withdrawn Decision is never amended. An Errand passes a screen before it reaches the owner, in order: deterministic rules
+withdrawn Decision is never amended. An Errand names what the lead tried (`tried`, kept in its detail) and is refused at the raise, nothing raised
+and the route named, when it asks for what the host does (`refuseHostClass`: a door token or route, an install, a sudo step with no
+no-sudo attempt shown, a Report missing from Needs you); `call` on an ask or an Errand makes a repeat one event. Every refusal of the state
+machine for a lead verb names the wait, how it ends and the verb to use (`waitHint`, `domains/work/table.ts`). An Errand passes a screen before it reaches the owner, in order: deterministic rules
 (`screenByRule`: a command a token can run and no hands word), then `factory-errand`, then the owner. The Issue waits from
 the raise, but the owner is not paged and the Errand is not in Needs or the human queue until `errands.reached_owner_at`
 is set. A turn-away ends the Issue's errand wait with `errand_done` (actor `factory` for a rule, `judge` for the workflow,

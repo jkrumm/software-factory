@@ -121,7 +121,19 @@ test('the lead calls its verbs in the forms the brief lists, with the agent toke
   expect(heard).toContain(`factory artifact show ${artifact}`)
 
   const errand = await v.run(
-    ['errand', 'raise', issue, '--attempt', '1', '--summary', 'plug it in', '--detail', 'the cable'],
+    [
+      'errand',
+      'raise',
+      issue,
+      '--attempt',
+      '1',
+      '--summary',
+      'plug it in',
+      '--detail',
+      'the cable',
+      '--tried',
+      'a command',
+    ],
     'agent',
   )
   expect(errand.code).toBe(0)
