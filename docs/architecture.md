@@ -210,9 +210,11 @@ through `receive` in `app/intake.ts`; the answer is a triage outcome (`docs/lang
   cleans every `factory/<issue>-*` branch, local and on origin (`adapters/git/branches.ts`): a dropped or cancelled
   Issue's go, the others when their work is on origin's default (ancestry, an empty merge, a shipped commit, a merged
   pull request); the rest are kept and the reason is recorded with the worktree's.
-- **Test slots** (`domains/capacity/slots.ts`): a host-wide semaphore around `make test`, so parallel checks do not pile
-  their load; `factory slot run` takes a slot, a wait past 45 minutes exits 75 without running, and a server that is down
-  runs the tests anyway.
+- **Test slots** (`domains/capacity/slots.ts`): a host-wide semaphore around the whole `make check`, so parallel checks do not
+  pile their load; `factory slot run` takes a slot, says once on stderr that it is queued for one (and how long it waited when
+  it gets it), a wait past 45 minutes exits 75 without running, and a server that is down runs the command anyway. A command
+  runs with `FACTORY_SLOT_ACTIVE=1`; a `slot run` inside one runs its command as it is, so the steps of `make check` do not queue
+  again. The host's load in a scenario is the fake `sysctl`'s (`vm.loadavg`), never the machine's.
 
 ## Quality
 

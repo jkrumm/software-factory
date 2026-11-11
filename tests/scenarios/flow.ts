@@ -94,15 +94,20 @@ export async function admit(flow: Flow): Promise<AdmitAnswer> {
   return AdmitAnswer.parse((await must(flow, ['capacity', 'admit'])).json)
 }
 
-/** Settles an Issue and admits passes until it is its turn (an account takes one lead per poll); throws if it never is. */
+/** How long a scenario waits for an Issue's turn: an event with a deadline, never a count of passes (a loaded host is slow, not wrong). */
+const ADMISSION_WAIT_MS = 120_000
+
+/** Settles an Issue and admits passes until it is its turn (an account takes one lead per poll); throws if it never is within the wait. */
 export async function admitted(flow: Flow, issue: string, after: string[] = []): Promise<void> {
   await settle(flow, issue, after)
-  for (let round = 0; round < 12; round++) {
+  const deadline = Date.now() + ADMISSION_WAIT_MS
+  for (;;) {
     const passed = await admit(flow)
     // A server whose planning loop runs on its own may have admitted it between the passes.
     if (passed.admitted.some((a) => a.issue === issue) || (await stateOf(flow.world, issue)).state === 'working') return
+    if (Date.now() >= deadline) break
   }
-  throw new Error(`${issue} was not admitted in 12 passes`)
+  throw new Error(`${issue} was not admitted in ${ADMISSION_WAIT_MS / 1000} s`)
 }
 
 /** One pass of a loop now (`loop run <name>`); a failed pass throws. */

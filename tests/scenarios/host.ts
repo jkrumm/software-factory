@@ -16,6 +16,7 @@ case "$2" in
   hw.pagesize) echo 16384;;
   vm.compressor.swapper.swapouts_total) cat "${host}/swapouts";;
   hw.memsize) echo 34359738368;;
+  vm.loadavg) echo "{ $(cat "${host}/load") 0.50 0.50 }";;
   vm.swapusage) echo "total = 40960.00M  used = $(cat "${host}/swapused").00M  free = 1.00M  (encrypted)";;
 esac
 `
@@ -88,6 +89,11 @@ export async function setAccounts(bin: string, rows: AccountRow[]): Promise<void
   )
 }
 
+/** What the host's 1-minute load reads; a world starts at an idle 0.5 whatever the real machine is doing. */
+export async function setLoad(bin: string, load: number): Promise<void> {
+  await writeFile(join(dir(bin), 'load'), String(load))
+}
+
 /** What the host's memory reads. */
 export async function setMemory(bin: string, input: { swapUsedMb: number; swapouts?: number }): Promise<void> {
   const host = dir(bin)
@@ -109,4 +115,5 @@ export async function installHost(bin: string): Promise<void> {
   await chmod(sysctl, 0o755)
   await setAccounts(bin, [{ id: 'me' }])
   await setMemory(bin, { swapUsedMb: 1024 })
+  await setLoad(bin, 0.5)
 }

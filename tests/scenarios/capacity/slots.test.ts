@@ -21,7 +21,7 @@ afterAll(async () => {
 })
 
 const slotRows = () => lab.world.db.sql`SELECT id, name, slot FROM factory.capacity_slots ORDER BY requested_at`
-const env = { FACTORY_SLOT_POLL_MS: '50' }
+const env = { FACTORY_SLOT_POLL_MS: '50', FACTORY_SLOT_ACTIVE: '' }
 
 test("a command runs in a slot, the slot is leased while it runs and freed when it ends; the exit code is the command's", async () => {
   const marker = join(lab.root, 'ran')
@@ -151,3 +151,30 @@ test('a huge FACTORY_SLOT_POLL_MS is clamped so a waiter asks again before the s
   expect(Date.now() - started).toBeLessThan(15_000)
   await holder
 }, 20_000)
+
+test('a caller in line says it is queued, and a command inside a held slot runs without queueing', async () => {
+  const marker = join(lab.root, 'nested')
+  const holder = lab.cli(['slot', 'run', '--name', 'holder', '--', 'sleep', '2'], env)
+  for (let i = 0; i < 40 && (await slotRows()).length === 0; i++) await Bun.sleep(50)
+
+  const queued = await lab.cli(['slot', 'run', '--name', 'late', '--', 'true'], { ...env, FACTORY_SLOT_WAIT_MS: '300' })
+  expect(queued.code).toBe(75)
+  expect(queued.err).toContain('queued for a test slot (all busy, 0 waiting ahead)')
+
+  // the whole `make check` is one lease: what runs inside it is not queued again, whatever the slots are doing
+  const nested = await lab.cli(['slot', 'run', '--name', 'inner', '--', 'touch', marker], {
+    ...env,
+    FACTORY_SLOT_ACTIVE: '1',
+    FACTORY_SLOT_WAIT_MS: '300',
+  })
+  expect(nested.code).toBe(0)
+  expect(existsSync(marker)).toBe(true)
+  expect((await slotRows()).map((r: { name: string }) => r.name)).toEqual(['holder'])
+
+  // and the command in a granted slot is told so
+  const probe = join(lab.root, 'held')
+  expect((await holder).code).toBe(0)
+  const granted = await lab.cli(['slot', 'run', '--', 'sh', '-c', `echo "$FACTORY_SLOT_ACTIVE" > ${probe}`], env)
+  expect(granted.code).toBe(0)
+  expect((await Bun.file(probe).text()).trim()).toBe('1')
+})

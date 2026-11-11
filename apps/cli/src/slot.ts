@@ -98,13 +98,24 @@ async function acquire(input: {
   stopped: () => boolean
 }): Promise<'granted' | 'open' | 'stopped' | { outage: string } | number> {
   const { ask, io, waitMs, pollMs, open } = input
-  const deadline = Date.now() + waitMs
+  const started = Date.now()
+  const deadline = started + waitMs
   const seconds = Math.round(waitMs / 1000)
+  let queued = false
   for (;;) {
     input.engage()
     const answer = await ask()
     if (answer.kind === 'outage') return { outage: answer.why }
-    if (answer.slot.granted) return 'granted'
+    if (answer.slot.granted) {
+      if (queued) io.err(`factory: got a test slot after ${Math.round((Date.now() - started) / 1000)}s\n`)
+      return 'granted'
+    }
+    if (!queued) {
+      queued = true
+      io.err(
+        `factory: queued for a test slot (all busy, ${answer.slot.ahead} waiting ahead); waiting up to ${Math.round(waitMs / 60_000)} min\n`,
+      )
+    }
     if (input.stopped()) return 'stopped'
     if (Date.now() >= deadline) break
     await sleep(pollMs)
@@ -115,6 +126,17 @@ async function acquire(input: {
   }
   io.err(`factory: no test slot within ${seconds}s; not running (set FACTORY_SLOT_OPEN=1 to run anyway)\n`)
   return EX_TEMPFAIL
+}
+
+/** A command inside a slot its caller holds: run as it is, no queue, and the exit code is the command's. */
+async function runHeld(program: string, args: string[], io: Io): Promise<number> {
+  try {
+    const child = Bun.spawn([program, ...args], { stdin: 'inherit', stdout: 'inherit', stderr: 'inherit', env: io.env })
+    return exitCodeOf({ exitCode: await child.exited, signalCode: child.signalCode })
+  } catch (error) {
+    io.err(`factory: cannot run ${program}: ${error instanceof Error ? error.message : String(error)}\n`)
+    return 127
+  }
 }
 
 /**
@@ -130,6 +152,8 @@ async function acquire(input: {
 export async function slotRun(input: { name?: string; command: string[] }, io: Io): Promise<number> {
   const [program, ...args] = input.command
   if (!program) throw usage('usage: slot run [--name <label>] -- <cmd> [args…]')
+  // Inside a slot already (the whole `make check` runs in one): the steps below it are that slot's, they do not queue again.
+  if (io.env.FACTORY_SLOT_ACTIVE === '1') return runHeld(program, args, io)
 
   const base = io.env.FACTORY_URL || DEFAULT_URL
   const { token, failure } = await credentialOf(io.env)
@@ -212,7 +236,7 @@ export async function slotRun(input: { name?: string; command: string[] }, io: I
         stdin: 'inherit',
         stdout: 'inherit',
         stderr: 'inherit',
-        env: io.env,
+        env: holding ? { ...io.env, FACTORY_SLOT_ACTIVE: '1' } : io.env,
         detached: true,
       })
     } catch (error) {
