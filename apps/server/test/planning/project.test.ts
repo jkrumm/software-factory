@@ -18,7 +18,7 @@ describe('project.yaml', () => {
     const parsed = parseProject(yaml(await Bun.file(join(ROOT, 'project.yaml')).text()), 'software-factory')
     expect(parsed.ok).toBe(true)
     if (!parsed.ok) return
-    expect(parsed.project.leads).toBe(3)
+    expect(parsed.project.leads).toBe(5)
     expect(parsed.project.ship).toEqual([{ paths: ['**'], via: 'pr' }])
     expect(parsed.project.signals.github?.author).toBe('jkrumm')
     expect(parsed.project.deploy.targets[0]?.verify).toBe('make verify')
