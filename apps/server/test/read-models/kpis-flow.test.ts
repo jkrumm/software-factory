@@ -308,7 +308,7 @@ describe('the retro model', () => {
 
   test('the bundle holds the sessions, the samples and the ledger of the earlier retro signals', async () => {
     await sql`INSERT INTO factory.intake_signals (id, source, kind, origin, trust, repo, fingerprint, title, text, received_at, state, issue_id) VALUES
-      ('signal_r1', 'agent:software-factory', 'request', 'factory', 'agent', 'app', 'r1', 'Shorter queue', ${'why\nRetro: 2026-10-30 kpi=amend_rate before=0.2 direction=down'}, ${ago(300)}, 'filed', 'issue_9'),
+      ('signal_r1', 'agent:software-factory', 'request', 'factory', 'agent', 'app', 'r1', 'Shorter queue', ${'why Retro: 2026-10-30 kpi=amend_rate before=0.2 direction=down'}, ${ago(300)}, 'filed', 'issue_9'),
       ('signal_r2', 'agent:software-factory', 'request', 'factory', 'agent', 'app', 'r2', 'Not shipped yet', ${'Retro: 2026-10-30 kpi=queue_time before=none direction=down'}, ${ago(300)}, 'filed', 'issue_2'),
       ('signal_r3', 'agent:software-factory', 'request', 'factory', 'agent', 'app', 'r3', 'Not a marker', 'Retro: soon', ${ago(300)}, 'filed', 'issue_2')`
     const model = RetroModel.parse(await readRetro(sql, { now: NOW, days: 7 }))

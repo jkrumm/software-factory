@@ -128,7 +128,7 @@ export async function ledgerOf(sql: SQL, kpis: KpiModel): Promise<RetroLedgerEnt
       (SELECT max(e.at) FROM factory.issue_events e
         WHERE e.issue_id = s.issue_id AND e.kind = 'shipped' AND e.result = 'applied') AS shipped_at
     FROM factory.intake_signals s LEFT JOIN factory.issues i ON i.id = s.issue_id
-    WHERE s.text ~ '(^|\n)Retro: [0-9]{4}-[0-9]{2}-[0-9]{2} kpi=' ORDER BY s.received_at`
+    WHERE s.text ~ 'Retro: [0-9]{4}-[0-9]{2}-[0-9]{2} kpi=[a-z0-9_]+ before=' ORDER BY s.received_at`
   const windowFrom = new Date(kpis.window.from).getTime()
   const entries: RetroLedgerEntry[] = []
   for (const raw of rows) {

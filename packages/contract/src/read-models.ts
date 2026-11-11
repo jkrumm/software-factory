@@ -697,9 +697,10 @@ export const CapacityLoopModel = z
 export type CapacityLoopModel = z.infer<typeof CapacityLoopModel>
 
 /**
- * The line a retro signal carries so the next retro can find it: `Retro: 2026-11-17 kpi=queue_time before=4273327645
+ * The marker a retro signal ends with so the next retro can find it: `Retro: 2026-11-17 kpi=queue_time before=4273327645
  * direction=down` (`before=none` when the KPI had no number). The date is the retro's day, `kpi` a `KPI_KEYS` entry,
- * `direction` where the number should go.
+ * `direction` where the number should go. Intake keeps a signal's text on one line (newlines become spaces), so the marker
+ * is found anywhere in the text, never by a line start.
  */
 export const RETRO_MARKER =
-  /^Retro: (\d{4}-\d{2}-\d{2}) kpi=([a-z0-9_]+) before=(none|-?\d+(?:\.\d+)?) direction=(up|down)$/m
+  /Retro: (\d{4}-\d{2}-\d{2}) kpi=([a-z0-9_]+) before=(none|-?\d+(?:\.\d+)?) direction=(up|down)(?![a-z])/
