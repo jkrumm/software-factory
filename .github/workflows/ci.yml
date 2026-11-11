@@ -26,5 +26,6 @@ jobs:
       # the lockfile's @playwright/test launches. --with-deps needs apt; when the runner's mirror is down (2026-11-11:
       # 'Temporary failure resolving azure.archive.ubuntu.com' for over an hour) the browser alone still installs and the
       # runner image already carries Chromium's libraries, so a real gap shows up as a red e2e run, not a stuck install.
-      - run: bun install --frozen-lockfile && (bunx playwright install --with-deps chromium || bunx playwright install chromium)
+      # The apt attempt is bounded: apt's own retries took ~20 min to give up, the fallback needs seconds.
+      - run: bun install --frozen-lockfile && (timeout 180 bunx playwright install --with-deps chromium || bunx playwright install chromium)
       - run: make check
