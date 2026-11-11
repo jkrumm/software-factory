@@ -21,6 +21,14 @@ const Row = z.object({
   finished_at: z.date().nullable(),
 })
 
+const AttemptWorktreeRow = z.object({
+  worktree_path: z.string(),
+  issue_id: z.string(),
+  attempt: z.number().int(),
+  repo_path: z.string().nullable(),
+  repo: z.string().nullable(),
+})
+
 const callOf = (raw: unknown): CallRow => {
   const row = Row.parse(raw)
   return {
@@ -216,16 +224,45 @@ export function postgresLoopStore(tx: SQL): LoopStore {
           ${JSON.stringify(pass.filed)}::jsonb, ${JSON.stringify(pass.overBudget)}::jsonb, ${JSON.stringify(pass.failed)}::jsonb)`
     },
 
-    async recordHostSample(at, sample) {
+    async recordHostSample(at, sample, leads) {
       await tx`
-        INSERT INTO factory.host_samples (at, load, memory_used_pct, swap_used_pct, swapout_mb_per_300s)
-        VALUES (${at}, ${sample.load}, ${sample.memoryUsedPct}, ${sample.swapUsedPct}, ${sample.swapoutMbPer300s})
+        INSERT INTO factory.host_samples (at, load, memory_used_pct, swap_used_pct, swapout_mb_per_300s, leads, queued, seats, load_ceiling)
+        VALUES (${at}, ${sample.load}, ${sample.memoryUsedPct}, ${sample.swapUsedPct}, ${sample.swapoutMbPer300s},
+          ${sample.leads}, ${sample.queued}, ${sample.seats}, ${sample.loadCeiling})
         ON CONFLICT (at) DO NOTHING`
+      for (const lead of leads) {
+        await tx`
+          INSERT INTO factory.lead_samples (at, worktree, repo, issue, attempt, rss_mib, procs)
+          VALUES (${at}, ${lead.worktree}, ${lead.repo}, ${lead.issue}, ${lead.attempt}, ${lead.rssMib}, ${lead.procs})
+          ON CONFLICT (at, worktree) DO NOTHING`
+      }
     },
 
     async pruneHostSamples(before) {
       const rows: unknown[] = await tx`DELETE FROM factory.host_samples WHERE at < ${before} RETURNING at`
       return rows.length
+    },
+
+    async pruneLeadSamples(before) {
+      const rows: unknown[] = await tx`DELETE FROM factory.lead_samples WHERE at < ${before} RETURNING at`
+      return rows.length
+    },
+
+    async attemptWorktrees(since) {
+      const rows: unknown[] = await tx`
+        SELECT a.worktree_path, a.issue_id, a.attempt, a.repo_path, i.repo
+        FROM factory.lead_attempts a LEFT JOIN factory.issues i ON i.id = a.issue_id
+        WHERE a.worktree_path IS NOT NULL AND (a.gone_at IS NULL OR a.gone_at >= ${since})
+        ORDER BY a.issue_id, a.attempt`
+      return rows.map((raw) => {
+        const row = AttemptWorktreeRow.parse(raw)
+        return {
+          path: row.worktree_path,
+          repo: row.repo ?? row.repo_path?.split('/').filter(Boolean).at(-1) ?? '',
+          issue: Number(row.issue_id.slice('issue_'.length)),
+          attempt: row.attempt,
+        }
+      })
     },
 
     async passes() {

@@ -5,7 +5,7 @@ import { gitProjectSource } from './adapters/planning/git-projects.ts'
 import { hostReader } from './adapters/planning/host.ts'
 import type { CapacityApi } from './api/capacity.ts'
 import type { PlanningApi } from './api/planning.ts'
-import { admissionPass, claimFreeRepos, claimQueued, queueView } from './app/capacity-admit.ts'
+import { admissionPass, capacityFacts, claimFreeRepos, claimQueued, queueView } from './app/capacity-admit.ts'
 import { capacityForLeads } from './app/capacity-leads.ts'
 import { getQueueStates, setQueueState } from './app/capacity-queue.ts'
 import { giveSlotBack, recordStepCost, touchSlot } from './app/capacity-slots.ts'
@@ -32,6 +32,8 @@ export interface PlanningComposition {
   capacity: CapacityApi
   /** capacity's side of the leads' ports: the account, the repo claim, the window */
   leads: ReturnType<typeof capacityForLeads>
+  /** the host loop's port: the claims, the queue, the seats and the load ceiling of this minute */
+  capacityFacts: () => ReturnType<typeof capacityFacts>
   /** the steward's port: the Issues queued for lack of a claim, read without polling or sampling the host */
   claimQueued: () => ReturnType<typeof claimQueued>
   /** the steward's port: of given Issue repos, those with an ordinary claim free right now */
@@ -155,6 +157,7 @@ export function composePlanning(input: {
       recordStepCost: (cost) => recordStepCost(writes, cost),
     },
     leads: capacityForLeads(writes),
+    capacityFacts: () => capacityFacts(capacity),
     claimQueued: () => claimQueued(capacity),
     claimFree: (repos) => claimFreeRepos(capacity, repos),
     signals: projectSignals(writes),

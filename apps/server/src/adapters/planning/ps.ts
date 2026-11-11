@@ -1,28 +1,30 @@
 import type { HostProcess } from '@software-factory/contract'
 import { basename } from 'node:path'
 
-/** One process of `ps -Ao pid=,pcpu=,rss=,comm=` before the lists are cut: rss in KiB. */
+/** One process of `ps -Ao pid=,ppid=,pcpu=,rss=,comm=` before the lists are cut: rss in KiB. */
 export interface PsRow {
   pid: number
+  ppid: number
   command: string
   cpuPct: number
   rssKib: number
 }
 
-const LINE = /^\s*(\d+)\s+(\d+(?:[.,]\d+)?)\s+(\d+)\s+(\S.*?)\s*$/
+const LINE = /^\s*(\d+)\s+(\d+)\s+(\d+(?:[.,]\d+)?)\s+(\d+)\s+(\S.*?)\s*$/
 
-/** The rows of `ps -Ao pid=,pcpu=,rss=,comm=`; a line that does not parse is skipped. `command` is the executable's basename (the name may hold spaces). */
+/** The rows of `ps -Ao pid=,ppid=,pcpu=,rss=,comm=`; a line that does not parse is skipped. `command` is the executable's basename (the name may hold spaces). */
 export function parsePs(output: string): PsRow[] {
   const rows: PsRow[] = []
   for (const line of output.split('\n')) {
     const match = LINE.exec(line)
     if (!match) continue
-    const command = basename(match[4] ?? '')
+    const command = basename(match[5] ?? '')
     if (command === '') continue
     rows.push({
       pid: Number(match[1]),
-      cpuPct: Number((match[2] ?? '0').replace(',', '.')),
-      rssKib: Number(match[3]),
+      ppid: Number(match[2]),
+      cpuPct: Number((match[3] ?? '0').replace(',', '.')),
+      rssKib: Number(match[4]),
       command,
     })
   }

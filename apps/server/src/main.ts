@@ -14,6 +14,7 @@ import { makeNotifier } from './adapters/ntfy/ntfy.ts'
 import { postgresCheckpointStore } from './adapters/postgres/checkpoint-store.ts'
 import { hostReader } from './adapters/planning/host.ts'
 import { hostWatch } from './adapters/planning/host-watch.ts'
+import { processTable } from './adapters/planning/processes.ts'
 import { postgresLoopStore } from './adapters/postgres/loop-store.ts'
 import { postgresVisitStore } from './adapters/postgres/visit-store.ts'
 import { loadMigrations, migrate } from './adapters/postgres/migrate.ts'
@@ -156,6 +157,10 @@ async function main(): Promise<void> {
     host: hostReader({ sysctlBin: planningEnv.sysctlBin, minSampleMs: 0 }),
     sysctlBin: planningEnv.sysctlBin,
     psBin: process.env.FACTORY_PS_BIN ?? '/bin/ps',
+  })
+  const hostProcesses = processTable({
+    rows: () => hostSamples.rows(),
+    lsofBin: process.env.FACTORY_LSOF_BIN ?? '/usr/sbin/lsof',
   })
   // Planning and capacity own the projects and the claims; the leads, intake and the checkpoints take their ports.
   const roles = fileRoles(leadSettings.rolesFile)
@@ -494,7 +499,13 @@ async function main(): Promise<void> {
       intervalMs: loopSettings.intervalMs.host,
       onChange: false,
       run: async () => {
-        const pass = await hostPass({ uow, clock: writes.clock, sampler: hostSamples })
+        const pass = await hostPass({
+          uow,
+          clock: writes.clock,
+          sampler: hostSamples,
+          processes: hostProcesses,
+          facts: planning.capacityFacts,
+        })
         if (!pass.ok) return pass
         return ok(hostSummary(pass.value))
       },

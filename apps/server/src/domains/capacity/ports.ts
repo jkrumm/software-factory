@@ -3,6 +3,7 @@ import type { PortError, Result } from '../../kernel/result.ts'
 import type { AccountRank, AccountReading } from './accounts.ts'
 import type { Claim } from './claims.ts'
 import type { MemoryReading } from './host.ts'
+import type { ProcInfo } from './leadcost.ts'
 import type { QueueState, QueueStates } from './queue-state.ts'
 import type { SlotRow } from './slots.ts'
 
@@ -87,3 +88,8 @@ export interface AccountRanker {
 }
 
 export type { PortError }
+
+/** The host's process table with each process's directory; null when it could not be read (never an error). */
+export interface ProcessReader {
+  read(): Promise<ProcInfo[] | null>
+}

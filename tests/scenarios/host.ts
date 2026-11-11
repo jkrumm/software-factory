@@ -1,4 +1,4 @@
-import { chmod, writeFile } from 'node:fs/promises'
+import { chmod, rm, writeFile } from 'node:fs/promises'
 import { join } from 'node:path'
 
 /** One account of the fake picker: the readings the host would show for it. */
@@ -21,20 +21,27 @@ case "$2" in
 esac
 `
 
-/** `ps -Ao pid=,pcpu=,rss=,comm=` of a believable busy host: paths, a name with spaces, rss in KiB. */
-const PS = `#!/bin/sh
-cat <<'EOT'
-    1   0.1    12288 /sbin/launchd
-  412  96.4  2411520 /Applications/Google Chrome.app/Contents/MacOS/Google Chrome
-  733  41.2  1843200 /opt/tools/bin/bun
-  901  28.7   987136 /usr/local/bin/postgres
- 1204  17.3  3145728 /Applications/Claude Code.app/Contents/MacOS/claude
- 1318  12.9   524288 /opt/homebrew/bin/node
- 1422   8.4   262144 /usr/bin/ssh
- 1533   5.6  1572864 /Applications/Xcode.app/Contents/MacOS/Xcode
- 1647   2.1   131072 /usr/sbin/mDNSResponder
- 1750   0.3   819200 /System/Library/CoreServices/WindowServer
-EOT
+/** `ps -Ao pid=,ppid=,pcpu=,rss=,comm=` of a believable busy host: paths, a name with spaces, rss in KiB. */
+const PS_ROWS = `    1     0   0.1    12288 /sbin/launchd
+  412     1  96.4  2411520 /Applications/Google Chrome.app/Contents/MacOS/Google Chrome
+  733     1  41.2  1843200 /opt/tools/bin/bun
+  901     1  28.7   987136 /usr/local/bin/postgres
+ 1204     1  17.3  3145728 /Applications/Claude Code.app/Contents/MacOS/claude
+ 1318     1  12.9   524288 /opt/homebrew/bin/node
+ 1422     1   8.4   262144 /usr/bin/ssh
+ 1533     1   5.6  1572864 /Applications/Xcode.app/Contents/MacOS/Xcode
+ 1647     1   2.1   131072 /usr/sbin/mDNSResponder
+ 1750     1   0.3   819200 /System/Library/CoreServices/WindowServer
+`
+
+const PS = (host: string) => `#!/bin/sh
+cat "${host}/ps.txt"
+`
+
+/** `lsof -nP -a -d cwd -Fpn`: the directories in `lsof.txt`; a file `lsof.fail` makes it fail. */
+const LSOF = (host: string) => `#!/bin/sh
+[ -e "${host}/lsof.fail" ] && exit 1
+cat "${host}/lsof.txt"
 `
 
 const PICKER = (host: string) => `#!/bin/sh
@@ -49,6 +56,7 @@ export const hostEnv = (bin: string): Record<string, string> => ({
   FACTORY_CLAUDE_ACCOUNT_BIN: join(dir(bin), 'claude-account'),
   FACTORY_SYSCTL_BIN: join(dir(bin), 'sysctl'),
   FACTORY_PS_BIN: join(dir(bin), 'ps'),
+  FACTORY_LSOF_BIN: join(dir(bin), 'lsof'),
   FACTORY_MEMORY_SAMPLE_MS: '0',
   FACTORY_ACCOUNTS_FILE: join(dir(bin), 'registry.json'),
 })
@@ -94,6 +102,29 @@ export async function setLoad(bin: string, load: number): Promise<void> {
   await writeFile(join(dir(bin), 'load'), String(load))
 }
 
+/** One process of the fake host: its parent, its resident memory and its working directory. */
+export interface FakeProcess {
+  pid: number
+  ppid: number
+  rssKib: number
+  cwd: string
+  command?: string
+}
+
+/** What `ps` and `lsof` answer from now on: the default busy host plus these processes; `lsofFails` makes `lsof` exit 1. */
+export async function setProcesses(
+  bin: string,
+  processes: FakeProcess[],
+  options: { lsofFails?: boolean } = {},
+): Promise<void> {
+  const host = dir(bin)
+  const rows = processes.map((p) => `${p.pid} ${p.ppid} 0.0 ${p.rssKib} ${p.command ?? '/opt/tools/bin/bun'}`)
+  await writeFile(join(host, 'ps.txt'), `${PS_ROWS}${rows.join('\n')}\n`)
+  await writeFile(join(host, 'lsof.txt'), processes.map((p) => `p${p.pid}\nn${p.cwd}\n`).join(''))
+  await rm(join(host, 'lsof.fail'), { force: true })
+  if (options.lsofFails) await writeFile(join(host, 'lsof.fail'), '')
+}
+
 /** What the host's memory reads. */
 export async function setMemory(bin: string, input: { swapUsedMb: number; swapouts?: number }): Promise<void> {
   const host = dir(bin)
@@ -109,8 +140,11 @@ export async function installHost(bin: string): Promise<void> {
   const sysctl = join(host, 'sysctl')
   await writeFile(picker, PICKER(host))
   await writeFile(sysctl, SYSCTL(host))
-  await writeFile(join(host, 'ps'), PS)
+  await writeFile(join(host, 'ps'), PS(host))
+  await writeFile(join(host, 'lsof'), LSOF(host))
   await chmod(join(host, 'ps'), 0o755)
+  await chmod(join(host, 'lsof'), 0o755)
+  await setProcesses(bin, [])
   await chmod(picker, 0o755)
   await chmod(sysctl, 0o755)
   await setAccounts(bin, [{ id: 'me' }])

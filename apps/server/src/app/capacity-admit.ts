@@ -12,6 +12,7 @@ import type { AccountRanker, AccountSource, Assignment, HostReader } from '../do
 import { effectiveState, type QueueStates } from '../domains/capacity/queue-state.ts'
 import { type Claim, type Claimant, claimRoom, holdsClaim } from '../domains/capacity/claims.ts'
 import type { Edge } from '../domains/planning/chain.ts'
+import type { CapacityFacts } from '../domains/loops/ports.ts'
 import type { OpenIssueRow } from '../domains/planning/ports.ts'
 import { type ChainReason, type OpenIssue, orderQueue } from '../domains/planning/queue.ts'
 import { projectOf, type StoredProject } from '../domains/planning/sync.ts'
@@ -410,6 +411,23 @@ export async function queueView(
     return ok(evaluateQueue(snap, host, deps.limits))
   })
   return viewed.ok ? ok({ queue: viewed.value, notes: host.notes }) : viewed
+}
+
+/**
+ * What capacity holds right now, for the host loop's minute sample: the claims held, the Issues in the queue, the leads
+ * the enabled accounts may hold and the load ceiling. From the stored readings alone (no poll, no host reading).
+ */
+export async function capacityFacts(deps: CapacityDeps): Promise<Result<CapacityFacts, PortError>> {
+  const noHost: HostInputs = { load: null, memory: null, ramMib: null, notes: [] }
+  return deps.uow.run(async (stores) => {
+    const snap = await snapshotOf(stores, deps.clock.now())
+    return ok({
+      leads: snap.claims.length,
+      queued: evaluateQueue(snap, noHost, deps.limits).length,
+      seats: snap.readings.filter((r) => r.enabled).length * deps.limits.leadsPerAccount,
+      loadCeiling: deps.limits.loadCeiling,
+    })
+  })
 }
 
 /**
