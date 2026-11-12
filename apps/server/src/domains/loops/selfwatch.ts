@@ -226,7 +226,10 @@ export function inertRegressionFindings(
 
 // ---- 6. heartbeat_stale ---------------------------------------------------------------------------------------------------
 
-/** `tick`: the leads' tick is stale (`tickProblem`); `database`: anything else `healthOf` reports. */
+/**
+ * `tick`: the leads' tick is a failure (`judgeTick`: its reasons start `no tick has succeeded` or `the last successful tick`);
+ * `database`: anything else `healthOf` reports.
+ */
 export const heartbeatClass = (reason: string | null): 'tick' | 'database' =>
   reason !== null && (reason.startsWith('no tick has succeeded') || reason.startsWith('the last successful tick'))
     ? 'tick'

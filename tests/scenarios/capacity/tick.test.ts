@@ -18,7 +18,7 @@ rows:
 beforeAll(async () => {
   lab = await startLab({
     repos: { app: { project: 'apiVersion: factory/v2\nname: app\n', plan: PLAN } },
-    env: { FACTORY_TICK_MS: '200' },
+    env: { FACTORY_TICK_MS: '200', FACTORY_HEALTH_PROBE_MS: '100' },
   })
 })
 
@@ -50,7 +50,11 @@ test('the tick reads the project, files the plan row, settles it and admits it, 
 })
 
 test('/health says when the queue last moved', async () => {
-  const health = Health.parse(await (await fetch(`${lab.server.url}/health`)).json())
+  // /health serves the database facts its probe read, at most FACTORY_HEALTH_PROBE_MS ago
+  const health = await until(async () => {
+    const read = Health.parse(await (await fetch(`${lab.server.url}/health`)).json())
+    return read.heartbeat.queueMovedAt === null ? undefined : read
+  }, 'move the queue')
   expect(health.heartbeat.queueMovedAt).not.toBeNull()
   expect(Date.now() - Date.parse(health.heartbeat.queueMovedAt ?? '')).toBeLessThan(60_000)
 })

@@ -18,6 +18,7 @@ const NEVER: Record<string, string> = {
   FACTORY_BESZEL_PASSWORD: 'secret (needs an .env.tpl ref before the Beszel source can run)',
   FACTORY_VERSION: "the plist's: the deployed sha",
   FACTORY_TEST_MODE: 'scenarios only; the server refuses the test settings outside a test',
+  FACTORY_HEALTH_PROBE_MS: 'scenarios only: how often /health re-reads the database facts',
   FACTORY_TEST_CLOCK_OFFSET_MS: 'scenarios only',
   FACTORY_URL: "the leads' terminals and the CLI read it; the server's own URL follows its port",
   FACTORY_SESSION: "the lead's terminal sets it",

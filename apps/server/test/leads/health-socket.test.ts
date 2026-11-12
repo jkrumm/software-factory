@@ -2,33 +2,13 @@ import { afterEach, describe, expect, test } from 'bun:test'
 import { chmodSync, existsSync, mkdtempSync, rmSync, statSync, writeFileSync } from 'node:fs'
 import { join } from 'node:path'
 import { type SocketListener, listenOnSocket } from '../../src/adapters/socket/listener.ts'
-import { FIRST_TICK_GRACE_MS, healthOf, tickProblem } from '../../src/read/health.ts'
+import { healthOf } from '../../src/read/health.ts'
 import { ok } from '../../src/kernel/result.ts'
 
 const NOW = new Date('2026-11-07T12:00:00Z')
 const ago = (ms: number) => new Date(NOW.getTime() - ms)
 
-describe('tick staleness on /health', () => {
-  test('a tick that is off, or has had no time for its first pass, is not stale', () => {
-    expect(tickProblem({ tickMs: 0, now: NOW, startedAt: ago(3_600_000), tickAt: null })).toBeNull()
-    expect(tickProblem({ tickMs: 10_000, now: NOW, startedAt: ago(30_000), tickAt: null })).toBeNull()
-  })
-
-  test('no tick yet after the first-tick grace, or none for three intervals, is stale', () => {
-    expect(tickProblem({ tickMs: 10_000, now: NOW, startedAt: ago(61_000), tickAt: null })).toBeNull()
-    expect(tickProblem({ tickMs: 10_000, now: NOW, startedAt: ago(FIRST_TICK_GRACE_MS + 1_000), tickAt: null })).toBe(
-      'no tick has succeeded yet',
-    )
-    expect(tickProblem({ tickMs: 10_000, now: NOW, startedAt: ago(61_000), tickAt: null, limitMs: 60_000 })).toBe(
-      'no tick has succeeded yet',
-    )
-    expect(tickProblem({ tickMs: 10_000, now: NOW, startedAt: ago(3_600_000), tickAt: ago(50_000) })).toBeNull()
-    expect(tickProblem({ tickMs: 10_000, now: NOW, startedAt: ago(3_600_000), tickAt: ago(61_000) })).toBe(
-      'the last successful tick was 61 s ago',
-    )
-    expect(tickProblem({ tickMs: 120_000, now: NOW, startedAt: ago(3_600_000), tickAt: ago(300_000) })).toBeNull()
-  })
-
+describe('what /health makes of its facts', () => {
   test('a stale tick is unhealthy with the heartbeat names unchanged; the database still comes first', () => {
     const stale = healthOf({
       version: 'v',
@@ -54,6 +34,23 @@ describe('tick staleness on /health', () => {
       healthOf({ version: 'v', databaseFailure: 'down', tickAt: null, queueMovedAt: null, tickFailure: 'x' }).reason,
     ).toBe('down')
     expect(healthOf({ version: 'v', databaseFailure: null, tickAt: null, queueMovedAt: null }).status).toBe('ok')
+  })
+
+  test('a notice is the reason of a factory that is still ok; a failure outranks it', () => {
+    const starting = healthOf({
+      version: 'v',
+      databaseFailure: null,
+      tickAt: null,
+      queueMovedAt: null,
+      notice: 'starting',
+    })
+    expect(starting.status).toBe('ok')
+    expect(starting.reason).toBe('starting')
+    expect(starting.heartbeat).toEqual({ ok: true, reason: 'starting', tickAt: null, queueMovedAt: null })
+    expect(
+      healthOf({ version: 'v', databaseFailure: null, tickAt: null, queueMovedAt: null, notice: 'n', tickFailure: 'f' })
+        .reason,
+    ).toBe('f')
   })
 
   test('door lines and loops inform: the status stays ok and the heartbeat names are the same', () => {
