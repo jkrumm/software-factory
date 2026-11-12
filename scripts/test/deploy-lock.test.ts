@@ -68,6 +68,19 @@ describe('deploy.sh take_lock', () => {
     expect(present(lock)).toBe(false)
   })
 
+  test('a deploy writes its start and its end to deploys.log, with the exit code', async () => {
+    const proc = Bun.spawn(['bash', '-c', `source "${DEPLOY}"; take_lock; exit 3`], {
+      env: { ...process.env, FACTORY_ROOT: root, HOME: root },
+      stdout: 'pipe',
+      stderr: 'pipe',
+    })
+    expect(await proc.exited).toBe(3)
+    const lines = (await Bun.file(join(root, 'data', 'deploys.log')).text()).trim().split('\n')
+    expect(lines).toHaveLength(2)
+    expect(lines[0]).toMatch(/^\d{4}-\d\d-\d\dT[\d:]+Z start pid=\d+ ref=master$/)
+    expect(lines[1]).toMatch(/^\d{4}-\d\d-\d\dT[\d:]+Z end pid=\d+ rc=3$/)
+  })
+
   test('a live holder is refused and the lock is left alone', async () => {
     const holder = livePid()
     await symlink(String(holder), lock)

@@ -422,7 +422,14 @@ model, not a signal: an agent-trust signal files an Issue, and no loops page exi
 - **One contract** in `packages/contract` builds every body; a body that does not parse is exit 9.
 - **Reads** (`/v1/*`, `read/`): needs, flow, chain, Issues, sessions, signals, accounts, queue, loops, friction, finding classes, fix commits, kpis, retro (`GET /v1/retro`: the KPI table with history, the friction counts, the lead sessions with their transcript paths, samples of Issues worth reading and the ledger of earlier retro signals; the read token gets no path and no words), host, since (the Console's "since you were here" band: `read/since.ts` counts what the event log, Decisions, Errands, signals and incidents say after a start; only the owner's read moves the one-row `console_visit` marker, `app/visit.ts`: a read 30 minutes after the last starts a new visit at the old `seen_at`, the first looks back 24 h) and
   the change stream. Health lines (`read/lines.ts`) are kinds `door`, `account`, `account-rank`, `loop`, `checkout` (a blocked watch) and `main-checkout` (a shared main checkout off its branch or dirty under a live lead). The stream (`read/stream.ts`) resumes from an opaque cursor without losing or doubling a change.
-  `GET /health` carries the heartbeat.
+  `GET /health` carries the heartbeat and answers from memory: a background probe (`read/health-probe.ts`, every
+  `FACTORY_HEALTH_PROBE_MS`, 10 s, one read at a time) holds the database facts (`queueMovedAt`, the door lines, a database error),
+  so a request never waits for Postgres and answers within a second at load 200. `ok` is false only for a stopped factory:
+  no successful leads tick for 20 min (`TICK_DEAD_MS`; `FACTORY_HEARTBEAT_STALE_MS` replaces it for a scenario), no first tick
+  5 min after a start, or a database that errors for 5 min. Everything short of that is `ok` with a `reason` that says so:
+  `starting` (before the first tick, up to 5 min), `deploying` (`scripts/deploy.sh` holds `data/deploy.lock` for a live pid, up to
+  30 min; it also appends its start and end to `data/deploys.log`), `starved: …` (a tick older than three intervals and a minute: the
+  process is alive, with the age and the load) or `failing: …` (the same, with the tick's error).
 - The hook socket is a plain `Bun.serve` unix listener beside the API: its contract (mode 0600, empty stdout) is the
   hook's, not the API's.
 

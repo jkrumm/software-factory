@@ -100,6 +100,8 @@ function worldEnv(world: World, extra: Record<string, string>): Record<string, s
     LC_ALL: 'C',
     HC_BIN: join(world.bin, 'hc'),
     // The world's own hook socket, spool and archive, never the host's; and no tick unless a scenario asks for one.
+    // Its own data directory too: /health reads the deploy lock there, and the host's may be mid-deploy.
+    FACTORY_DATA_DIR: join(world.bin, 'data'),
     FACTORY_SOCKET: join(world.bin, 'hook.sock'),
     FACTORY_SPOOL_DIR: join(world.bin, 'spool'),
     FACTORY_ARCHIVE_DIR: join(world.bin, 'archive'),

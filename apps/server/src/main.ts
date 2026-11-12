@@ -1,4 +1,4 @@
-import { connect, ping } from './adapters/postgres/connection.ts'
+import { connect } from './adapters/postgres/connection.ts'
 import { agwAmend } from './adapters/agw/amend.ts'
 import { agwErrandScreen } from './adapters/agw/errand.ts'
 import { agwJudge } from './adapters/agw/judge.ts'
@@ -35,6 +35,7 @@ import { createApp } from './api/app.ts'
 import { apiForward, consoleHandler } from './api/console.ts'
 import { loadConsoleSettings } from './console-settings.ts'
 import { loadNeedsSettings } from './read/needs-settings.ts'
+import { loadavg } from 'node:os'
 import { join } from 'node:path'
 import { checkpointUses } from './app/checkpoints-uses.ts'
 import { createLoopRunner, type LoopRunner, type LoopSpec } from './app/loops/runner.ts'
@@ -79,7 +80,9 @@ import { composeLeads } from './compose-leads.ts'
 import { type Clock, systemClock } from './kernel/clock.ts'
 import { err, ok, portError } from './kernel/result.ts'
 import { systemIds } from './kernel/ids.ts'
-import { healthOf, tickProblem } from './read/health.ts'
+import { deployingSince } from './read/deploy-window.ts'
+import { healthOf, judgeTick } from './read/health.ts'
+import { startHealthProbe } from './read/health-probe.ts'
 import { planningSettings } from './app/planning-settings.ts'
 import { postgresOpenIssues } from './read/open-issues.ts'
 import { queueMovedAt } from './read/queue.ts'
@@ -587,14 +590,35 @@ async function main(): Promise<void> {
       memoryCeilings: limits.memoryCeilings,
     }
   }
-  // The same health `GET /health` answers: the self-watch loop reads its heartbeat from here.
+  // The same health `GET /health` answers: the self-watch loop reads its heartbeat from here. Nothing in it waits for the
+  // database: the probe reads it in the background, and a request is answered from what the probe and the runner hold.
+  const healthProbe = startHealthProbe({
+    everyMs: settings.healthProbeMs,
+    now: () => new Date(),
+    read: async () => {
+      await sql`SELECT 1`
+      const door = await intake
+        .doorLines(DOOR_LINES_RECENT_MS)
+        .catch((error: unknown) => [`the door's lines could not be read: ${String(error)}`])
+      return { queueMovedAt: (await queueMovedAt(sql))?.toISOString() ?? null, doorLines: door }
+    },
+  })
+  const dataDir = factoryDataDir(process.env)
   const readHealth = async () => {
     const tickAt = runner.lastOkAt('leads')
-    const door = await intake
-      .doorLines(DOOR_LINES_RECENT_MS)
-      .catch((error: unknown) => [`the door's lines could not be read: ${String(error)}`])
+    const probed = healthProbe.snapshot()
+    const tick = judgeTick({
+      tickMs: leadsTick,
+      now: new Date(),
+      startedAt,
+      tickAt,
+      deployingSince: deployingSince(dataDir),
+      tickError: runner.view().find((loop) => loop.name === 'leads')?.lastError ?? null,
+      load: loadavg()[0] ?? null,
+      ...(loopSettings.heartbeatStaleMs === null ? {} : { limitMs: loopSettings.heartbeatStaleMs }),
+    })
     return healthOf({
-      lines: door.map((text) => ({ source: 'door', text, since: null })),
+      lines: probed.doorLines.map((text) => ({ source: 'door', text, since: null })),
       loops: runner.view().map((loop) => ({
         name: loop.name,
         ok: loop.lastError === null,
@@ -604,16 +628,11 @@ async function main(): Promise<void> {
         intervalMs: loop.intervalMs,
       })),
       version: settings.version,
-      databaseFailure: await ping(sql),
+      databaseFailure: probed.databaseFailure,
       tickAt: tickAt?.toISOString() ?? null,
-      queueMovedAt: (await queueMovedAt(sql))?.toISOString() ?? null,
-      tickFailure: tickProblem({
-        tickMs: leadsTick,
-        now: new Date(),
-        startedAt,
-        tickAt,
-        ...(loopSettings.heartbeatStaleMs === null ? {} : { limitMs: loopSettings.heartbeatStaleMs }),
-      }),
+      queueMovedAt: probed.queueMovedAt,
+      tickFailure: tick.failure,
+      notice: tick.notice,
     })
   }
   const app = createApp({
@@ -671,6 +690,15 @@ async function main(): Promise<void> {
     },
   }).listen({ hostname: HOSTNAME, port: settings.port, idleTimeout: IDLE_TIMEOUT_S })
   console.log(`listening on http://${HOSTNAME}:${settings.port} (version ${settings.version})`)
+  // From here /health answers, and `/health` is quick (it waits for nothing), so a stop can arrive before the steps below
+  // exist: it is kept and run as soon as they do, never left to the default signal action (exit 143, the lock and the pool unclosed).
+  let stopRequested: string | null = null
+  let stopNow: ((signal: string) => Promise<void>) | null = null
+  for (const signal of ['SIGTERM', 'SIGINT'] as const)
+    process.on(signal, () => {
+      if (stopNow) void stopNow(signal)
+      else stopRequested = signal
+    })
 
   // The Console's listener: loopback too, published on the tailnet by the dotfiles-private serve row; the perimeter is the
   // tailnet ACL, there is no per-request identity. Only reads and the owner's eight answer verbs (`WRITES` in console.ts) pass,
@@ -712,10 +740,12 @@ async function main(): Promise<void> {
       { name: 'hook socket.stop', run: () => socket.stop() },
       { name: 'intake.stop', run: () => intake.stop() },
       { name: 'lock.release', run: () => lock.release() },
+      { name: 'health.probe.stop', run: async () => healthProbe.stop() },
       { name: 'database.close', run: () => sql.close() },
     ],
   })
-  for (const signal of ['SIGTERM', 'SIGINT'] as const) process.on(signal, () => void stop(signal))
+  stopNow = stop
+  if (stopRequested !== null) void stop(stopRequested)
 }
 
 main().catch((error: unknown) => fail(error instanceof Error ? error.message : String(error)))

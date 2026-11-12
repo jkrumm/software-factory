@@ -104,7 +104,8 @@ the record of the rewrite and `docs/rewrite/state.md` its log. A directory listi
   `scripts/env-file.sh` allow-lists (a key not on its list refuses the start; the old core's keys stay listed so an old file
   and a rollback still launch). Read at launch: an edit takes a restart.
 - **Heartbeat names** on `GET /health` (`ok`, `reason`, `tickAt`, `queueMovedAt`) are read by a pusher outside this repo:
-  do not rename them.
+  do not rename them. `ok` is false only for a stopped factory (`docs/architecture.md`); a restart (`starting`), a deploy
+  (`deploying`) and a starved host (`starved: …`) are ok with that `reason`. `/health` never queries the database in the request.
 - **Retired words fail `make check`** (`scripts/retired-words.ts`, the Retires column of `docs/language.md`). An exception
   is a line with its reason in `scripts/retired-words.allow`; a stale line fails too.
 

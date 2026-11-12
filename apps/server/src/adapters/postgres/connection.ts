@@ -1,8 +1,5 @@
 import { SQL } from 'bun'
 
-/** A database answer slower than this counts as no answer for `/health`. */
-const PING_TIMEOUT_MS = 2_000
-
 /** Session limits every pooled connection starts with, so a hung query or lock wait fails instead of wedging the tick. */
 export interface SessionTimeouts {
   statementMs: number
@@ -31,21 +28,4 @@ export function connect(url: string, timeouts: Partial<SessionTimeouts> = {}): S
       idle_in_transaction_session_timeout: idleInTransactionMs,
     },
   })
-}
-
-/** Null when the database answers, else why it did not. */
-export async function ping(sql: SQL): Promise<string | null> {
-  let timer: ReturnType<typeof setTimeout> | undefined
-  const timeout = new Promise<string>((resolve) => {
-    timer = setTimeout(() => resolve(`the database did not answer within ${PING_TIMEOUT_MS} ms`), PING_TIMEOUT_MS)
-  })
-  const query = sql`SELECT 1`.then(
-    () => null,
-    (error: unknown) => `the database failed: ${error instanceof Error ? error.message : String(error)}`,
-  )
-  try {
-    return await Promise.race([query, timeout])
-  } finally {
-    clearTimeout(timer)
-  }
 }

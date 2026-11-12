@@ -3,7 +3,8 @@ import * as z from 'zod'
 /**
  * What the Uptime Kuma pusher reads from `GET /health` (`.heartbeat.ok`, `.reason`, `.tickAt`, `.queueMovedAt`): a
  * client outside this repo, so the four names stay. `tickAt` is the last successful tick and `queueMovedAt` the last
- * change of the queue; both are null until there is one.
+ * change of the queue; both are null until there is one. `ok` is false only for a stopped factory; while it is true,
+ * `reason` may still say why the factory is not at full pace: `starting`, `deploying`, `starved: …`, `failing: …`.
  */
 export const Heartbeat = z
   .object({

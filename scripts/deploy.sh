@@ -403,8 +403,17 @@ lock_holder() {
   return 0
 }
 
+# One line per deploy start and end beside the lock (`$DATA_DIR/deploys.log`). While the lock is held by a live pid the server
+# answers /health ok with the reason `deploying` (apps/server/src/read/deploy-window.ts), so a deploy's restart is no outage.
+# Best-effort: a failed write costs a line, never a deploy.
+record_deploy() { # $1 start|end, $2 detail
+  { mkdir -p "$DATA_DIR" && printf '%s %s pid=%s %s\n' "$(date -u +%Y-%m-%dT%H:%M:%SZ)" "$1" "$$" "${2:-}" >> "$DATA_DIR/deploys.log"; } 2>/dev/null || true
+}
+
 release_lock() {
+  local rc=$?
   [[ "$(lock_holder)" == "$$" ]] || return 0
+  record_deploy end "rc=$rc"
   rm -rf "$LOCK"
 }
 
@@ -412,7 +421,7 @@ release_lock() {
 take_lock() {
   local holder
   if ln -s "$$" "$LOCK" 2>/dev/null; then
-    if [[ -L "$LOCK" && "$(readlink "$LOCK")" == "$$" ]]; then trap release_lock EXIT; return 0; fi
+    if [[ -L "$LOCK" && "$(readlink "$LOCK")" == "$$" ]]; then record_deploy start "ref=$REF"; trap release_lock EXIT; return 0; fi
     # $LOCK is a legacy directory: ln put the link inside it. Take that back and treat the lock as held.
     [[ -d "$LOCK" && ! -L "$LOCK" ]] && rm -f "$LOCK/$$"
   fi
@@ -431,6 +440,7 @@ take_lock() {
     rmdir "$LOCK.reclaim"; die "cannot take the deploy lock $LOCK"
   fi
   rmdir "$LOCK.reclaim"
+  record_deploy start "ref=$REF"
   trap release_lock EXIT
 }
 
