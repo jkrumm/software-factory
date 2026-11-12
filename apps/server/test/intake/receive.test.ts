@@ -48,6 +48,7 @@ let runbookAnswer: () => Result<RunbookRun>
 let triageCalls: number
 let triageAnswer: () => Result<{ amend: IssueId | null; settled?: IssueId | null; reason?: string }>
 let triageSettled: ClosedIssue[]
+let triageOffered: IssueId[]
 let intake: Intake
 let uow: ReturnType<typeof makeUow>
 let ids = sequentialIds()
@@ -76,8 +77,9 @@ const runbook: Runbook = {
   },
 }
 const triage: TriageWorkflow = {
-  amendOrNew: ({ settled }) => {
+  amendOrNew: ({ settled, candidates }) => {
     triageCalls++
+    triageOffered = candidates.map((issue) => issue.id)
     triageSettled = [...settled]
     return Promise.resolve(triageAnswer())
   },
@@ -99,6 +101,7 @@ beforeEach(async () => {
   runbookAnswer = () => ok({ ran: true, exit: 0, tail: 'restarted' })
   triageCalls = 0
   triageSettled = []
+  triageOffered = []
   triageAnswer = () => err(portError('gone', 'no workflow'))
   uow = makeUow()
   ids = sequentialIds()
@@ -1122,5 +1125,46 @@ describe('a repo is stored as its project name, never as a path', () => {
     )
     expect(dropped.outcome).toBe('dropped')
     expect(await db.sql`SELECT repo FROM factory.intake_signals WHERE repo LIKE '/%'`).toEqual([])
+  })
+})
+
+describe("a lead's follow-up never lands on its own Issue", () => {
+  const request = (from: string, title: string, filer?: string): SignalRequest => ({
+    from,
+    kind: 'request',
+    title,
+    text: 'adjust the briefs of the later plan rows',
+    repo: 'argo',
+    probe: false,
+    ...(filer ? { filer } : {}),
+  })
+  const notes = () => db.sql`SELECT issue_id FROM factory.issue_events WHERE kind = 'noted'`
+
+  test('a title that matches the filer Issue clearly files a new Issue and notes nothing', async () => {
+    const title = 'v3 lint briefs read the merged rule table'
+    done(await intake.file(request('owner:hermes', title), 'owner'))
+    const follow = `${title} via tableOf`
+    expect(done(await intake.file(request('agent:argo', follow, 'issue_1'), 'agent'))).toMatchObject({
+      outcome: 'filed',
+      issue: 'issue_2',
+    })
+    expect(await notes()).toEqual([])
+  })
+
+  test('the same follow-up with no filer still amends the Issue', async () => {
+    const title = 'v3 lint briefs read the merged rule table'
+    done(await intake.file(request('owner:hermes', title), 'owner'))
+    expect(done(await intake.file(request('agent:argo', `${title} via tableOf`), 'agent'))).toMatchObject({
+      outcome: 'amended',
+      issue: 'issue_1',
+    })
+  })
+
+  test('the workflow is not offered the filer Issue; a bare number names it too', async () => {
+    done(await intake.file(request('owner:hermes', 'Login page crashes on submit'), 'owner'))
+    triageAnswer = () => ok({ amend: 'issue_1' as IssueId })
+    const out = done(await intake.file(request('agent:argo', 'Sessions expire too early', '1'), 'agent'))
+    expect(triageOffered).toEqual([])
+    expect(out).toMatchObject({ outcome: 'filed', issue: 'issue_2' })
   })
 })

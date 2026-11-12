@@ -712,7 +712,7 @@ export function createIntake(deps: IntakeDeps) {
 
   // ---- receive ----
 
-  async function receive(r: Received): Out<Triaged> {
+  async function receive(r: Received, filer: IssueId | null = null): Out<Triaged> {
     const { signal, alert } = r
     // The loop guard: a change a loop made never fires an automatic sender again.
     if (signal.madeBy !== null && (signal.trust === 'machine' || signal.trust === 'agent')) {
@@ -756,15 +756,17 @@ export function createIntake(deps: IntakeDeps) {
 
     // A person's or an agent's signal: amend an open Issue when the title clearly says so; otherwise the workflow sees
     // the open Issues and the ones closed in the last day, unless the fingerprint already settles it.
-    const open = signal.repo ? await deps.openIssues.inRepo(signal.repo) : ok<OpenIssue[]>([])
-    if (!open.ok) return open
-    const match = matchOpen(signal.title, open.value)
+    // The Issue whose lead files this is never a candidate: its follow-up is work for others, not a note on itself.
+    const inRepo = signal.repo ? await deps.openIssues.inRepo(signal.repo) : ok<OpenIssue[]>([])
+    if (!inRepo.ok) return inRepo
+    const open = inRepo.value.filter((issue) => issue.id !== filer)
+    const match = matchOpen(signal.title, open)
     let decision: Decision = { amend: match.kind === 'match' ? match.issue.id : null }
     if (match.kind !== 'match') {
       const known = await uow.run(async (s) => ok(await fingerprintKnown(s, r)))
       if (!known.ok) return known
       if (!known.value) {
-        const ordered = open.value
+        const ordered = open
           .map((issue) => ({ issue, score: overlap(signal.title, issue.title) }))
           .sort((a, b) => b.score - a.score || a.issue.id.localeCompare(b.issue.id))
           .slice(0, MAX_OPEN_SHOWN)
@@ -818,7 +820,10 @@ export function createIntake(deps: IntakeDeps) {
     if (repo && !repo.ok) return repo
     const signal = envelopeOfRequest({ ...body, from: from.value, repo: repo?.value ?? body.repo }, caller)
     if (!signal.ok) return signal
-    return receive({ signal: signal.value, alert: null })
+    return receive(
+      { signal: signal.value, alert: null },
+      body.filer ? issueIdOf(body.filer.replace(/^(\d)/, 'issue_$1')) : null,
+    )
   }
 
   async function promote(id: string, body: PromoteRequest, by: 'owner' | 'judge' = 'owner'): Out<Triaged> {

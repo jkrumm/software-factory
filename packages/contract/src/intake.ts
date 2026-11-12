@@ -1,5 +1,5 @@
 import * as z from 'zod'
-import { ISSUE_ID_META } from './issues.ts'
+import { ISSUE_ID_META, IssueRefInput } from './issues.ts'
 
 /** A NUL, or half of a surrogate pair: what Postgres cannot store in text or JSON. */
 // oxlint-disable-next-line no-control-regex -- the NUL is exactly what is removed
@@ -138,6 +138,8 @@ export const SignalRequest = z
     link: z.string().max(1024).nullish(),
     /** a test signal: stored dismissed, never held, never work */
     probe: z.boolean().default(false),
+    /** the Issue whose lead files this: filled by the CLI from a lead's session; its own Issue is never amended by it */
+    filer: IssueRefInput.optional(),
   })
   .refine((body) => !body.from.startsWith('agent') || /^agent:/.test(body.from), {
     message: 'an agent names its repo: agent:<repo>',

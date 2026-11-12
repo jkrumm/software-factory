@@ -789,6 +789,7 @@ export const OPERATIONS: readonly Operation[] = [
       { name: 'repo', flag: 'repo', kind: 'string', repeatable: false, required: false, untyped: false },
       { name: 'link', flag: 'link', kind: 'string', repeatable: false, required: false, untyped: false },
       { name: 'probe', flag: 'probe', kind: 'boolean', repeatable: false, required: false, untyped: false },
+      { name: 'filer', flag: 'filer', kind: 'string', repeatable: false, required: false, untyped: false },
     ],
     args: [],
     bodySchema: SignalRequest,
