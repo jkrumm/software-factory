@@ -125,6 +125,19 @@ test('filed with a Spec: stored once, queued behind its verdict, admitted after 
   expect(await stateOf(world, issue)).toMatchObject({ state: 'queued', wait: null })
   expect(await look(issue)).toEqual({ admitted: false, reason: 'spec' })
 
+  // the owner can see it where he answers: Needs you and the asks
+  const open = async () => ({
+    needs: ((await cli('read', 'needs')).json as { items: { kind: string; id: string }[] }).items.filter(
+      (item) => item.kind === 'review' && item.id === artifact?.id,
+    ),
+    asks: ((await cli('read', 'asks')).json as { asks: { id: string }[] }).asks.filter(
+      (ask) => ask.id === artifact?.id,
+    ),
+  })
+  const waiting = await open()
+  expect(waiting.needs).toHaveLength(1)
+  expect(waiting.asks).toHaveLength(1)
+
   // the owner's verdict, with a note: it ends the hold and the lead hears the note
   const verdict = await ok(
     (json) => ArtifactReply.parse(json),
@@ -135,6 +148,7 @@ test('filed with a Spec: stored once, queued behind its verdict, admitted after 
   )
   expect(verdict).toMatchObject({ result: 'applied', verdict: { verdict: 'with_notes' } })
   expect(await stateOf(world, issue)).toMatchObject({ state: 'queued' })
+  expect(await open()).toEqual({ needs: [], asks: [] })
   expect((await look(issue)).admitted || (await stateOf(world, issue)).state === 'working').toBe(true)
   await tick(lab)
 
