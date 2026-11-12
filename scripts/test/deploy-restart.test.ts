@@ -53,7 +53,7 @@ describe('restart_until_healthy', () => {
 })
 
 /** Sources deploy.sh, stubs `load_avg` with the given readings in turn (the last repeats) and runs `wait_calm_host`. */
-async function calm(loads: number[], env: Record<string, string>): Promise<{ code: number; out: string; err: string }> {
+async function calm(loads: number[], env: Record<string, string>, liveUp = 'true'): Promise<{ code: number; out: string; err: string }> {
   const script = `
     source "${DEPLOY}"
     readings=(${loads.join(' ')}); counter=$(mktemp); echo 0 > "$counter"
@@ -61,6 +61,7 @@ async function calm(loads: number[], env: Record<string, string>): Promise<{ cod
       local i; i=$(<"$counter"); echo $((i + 1)) > "$counter"
       echo "\${readings[$i]:-\${readings[\${#readings[@]}-1]}}"
     }
+    live_is_up() { ${liveUp}; }
     sleep() { :; }
     wait_calm_host; rc=$?
     echo "reads=$(<"$counter")"
@@ -93,6 +94,12 @@ describe('wait_calm_host', () => {
     const { code, err } = await calm([250], env)
     expect(code).toBe(1)
     expect(err).toContain('stayed above 96')
+  })
+
+  test('a live service that is down is not waited for', async () => {
+    const { code, out } = await calm([250], env, 'false')
+    expect(code).toBe(0)
+    expect(out).toContain('reads=0')
   })
 
   test('LOAD_MAX=0 turns the gate off', async () => {

@@ -203,10 +203,14 @@ is_healthy() { # $1 sha
 # The one-minute load average, whole number.
 load_avg() { sysctl -n vm.loadavg 2>/dev/null | awk '{ printf "%d", $2 }'; }
 
+# The deployed release answers /health: the gate protects a working service, so a service that is down has nothing to wait for.
+live_is_up() { local sha; sha=$(read_sha "$SHA_FILE") && [[ -n "$sha" ]] && is_healthy "$sha"; }
+
 # Returns 0 once the load is at or under LOAD_MAX, 1 when it stays above for LOAD_WAIT_SECS. Called before anything is stopped.
 wait_calm_host() {
   local i=0 load
   (( LOAD_MAX > 0 )) || return 0
+  live_is_up || return 0
   load=$(load_avg)
   while [[ "$load" =~ ^[0-9]+$ ]] && (( load > LOAD_MAX )); do
     if (( i >= LOAD_WAIT_SECS )); then
@@ -489,6 +493,7 @@ rollback() {
     log "would roll back ${live:-none} ($( [[ -n "$live" && -d "$RELEASES/$live" ]] && core_of "$RELEASES/$live" || echo "release not on disk")) -> ${prev:0:12} ($(core_of "$release")), release $release"
     log "rendered $PLIST (points at the release, not at current):"
     render_plist "$(template_of "$release")" "$release" "$prev"
+    act "while the live service is healthy, wait up to ${LOAD_WAIT_SECS}s for the one-minute load average to be at most ${LOAD_MAX} (now $(load_avg)); still above: refuse, nothing changed"
     act "launchctl bootout $LABEL, wait up to ${unload_secs}s for the unload"
     act launchctl bootstrap "gui/$(id -u)" "$PLIST"
     act "wait up to ${HEALTH_WAIT_SECS}s for $HEALTH_URL = ok, version $prev"
@@ -567,7 +572,7 @@ main() {
     if env_file_ok "$SELF_DIR/.."; then log "the settings file is accepted by the launcher of this tree"; else log "WARNING: the settings file is refused by the launcher of this tree (a real deploy stops before it changes anything)"; fi
     log "rendered $PLIST (points at the release, not at current):"
     render_plist "$(template_of "$SELF_DIR/..")" "$RELEASES/$sha" "$sha"
-    act "wait up to ${LOAD_WAIT_SECS}s for the one-minute load average to be at most ${LOAD_MAX} (now $(load_avg)); still above: refuse, nothing changed"
+    act "while the live service is healthy, wait up to ${LOAD_WAIT_SECS}s for the one-minute load average to be at most ${LOAD_MAX} (now $(load_avg)); still above: refuse, nothing changed"
     act "launchctl bootout $LABEL, wait up to $(unload_wait_secs "$(template_of "$SELF_DIR/..")")s for the unload"
     act launchctl bootstrap "gui/$(id -u)" "$PLIST"
     act "wait up to ${HEALTH_WAIT_SECS}s for $HEALTH_URL = ok, version $sha"
