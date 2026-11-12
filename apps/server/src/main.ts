@@ -78,6 +78,7 @@ import { reopenIssue } from './app/quality-reopen.ts'
 import { shipIssue } from './app/quality-ship.ts'
 import { checkWatches, DEFAULT_TIMING, startWatchPort } from './app/quality-watch.ts'
 import { factoryDataDir, loadCheckpointSettings } from './checkpoint-settings.ts'
+import { storedChecks } from './app/leads-checks.ts'
 import { composeLeads } from './compose-leads.ts'
 import { type Clock, systemClock } from './kernel/clock.ts'
 import { err, ok, portError } from './kernel/result.ts'
@@ -212,6 +213,7 @@ async function main(): Promise<void> {
     ids: systemIds,
     settings: leadSettings,
     capacity: planning.leads,
+    checks: storedChecks(uow),
     startWatch: startWatchPort({ uow, clock, projects, checkout }),
     github: intakeEnv.github,
   })

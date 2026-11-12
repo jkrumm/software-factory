@@ -70,6 +70,21 @@ const Slots = z.strictObject({
     .optional(),
 })
 
+/** `make <target>`: the one command form a check tier takes, so the brief quotes data and never a free shell line. */
+const MakeCommand = z.string().regex(/^make [A-Za-z0-9][A-Za-z0-9_.-]*$/, '`make <target>`')
+
+/**
+ * `checks:`: the repo's check tiers. `fast` is what a lead runs locally before each push; `full` is the complete gate,
+ * which CI runs on the pull request head when `ci` is true (the lead then relies on that run and `merge-guard` still
+ * demands it green). A project without `checks:` is `null`: its lead runs `make check` as before.
+ */
+const Checks = z.strictObject({
+  fast: MakeCommand,
+  full: MakeCommand.default('make check'),
+  ci: z.boolean().default(false),
+})
+export type CheckTiers = z.output<typeof Checks>
+
 /**
  * `hygiene:`: what the hygiene loop may run on the project. `check: false` says the project's `make check` needs a lab
  * the factory host does not have (inputs only a person may supply); the loop skips that probe and names `reason` in its
@@ -208,6 +223,8 @@ export const ProjectFile = z
      */
     lanes: z.record(LaneName, Lane).default({}),
     slots: Slots.default({}),
+    /** check tiers: a fast local check and the full gate (CI's when `ci` is true); `null` keeps one `make check` */
+    checks: Checks.nullable().default(null),
     hygiene: Hygiene.default(() => Hygiene.parse({})),
     signals: Signals.default({}),
     heal: z.array(HealRule).max(32).default([]),

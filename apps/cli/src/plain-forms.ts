@@ -15,6 +15,10 @@ export function projectShowPlain(data: unknown): string {
   const lines = [
     `${project.name} branch=${project.branch ?? '-'} leads=${project.leads} synced=${project.syncedAt ?? '-'}`,
   ]
+  if (project.checks) {
+    const { fast, full, ci } = project.checks
+    lines.push(`checks: fast=${JSON.stringify(fast)} full=${JSON.stringify(full)} ci=${ci}`)
+  }
   if (project.planError) lines.push(`planError: ${project.planError}`)
   if (!project.plan) return [...lines, 'no plan'].join('\n')
   for (const warning of project.plan.warnings) lines.push(`warning: ${warning}`)

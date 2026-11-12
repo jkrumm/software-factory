@@ -39,6 +39,8 @@ export function composeLeads(input: {
   ids: IdSource
   settings: LeadSettings
   capacity: Pick<LeadDeps, 'seats' | 'claims' | 'windows'>
+  /** the project's check tiers (`project.yaml` `checks:`), read from the stored project */
+  checks: LeadDeps['checks']
   /** quality's port: opens the Watch after a ship. The one outbox runs it with the leads' ports. */
   startWatch: EffectPorts['start_watch']
   /** `FACTORY_GITHUB_TOKEN` and API base: with no token a merged pull request is not asked about */
@@ -66,6 +68,7 @@ export function composeLeads(input: {
     worktrees: gitWorktrees(),
     branches: gitBranches(input.github),
     repos: rootedRepos(s.repoRoots, s.repoAllow),
+    checks: input.checks,
     roles: fileRoles(s.rolesFile),
     seats: input.capacity.seats,
     claims: input.capacity.claims,

@@ -1,6 +1,7 @@
 import type {
   LeadStore,
   Claims,
+  Checks,
   Repos,
   Roles,
   Seats,
@@ -32,6 +33,8 @@ export interface LeadDeps {
   worktrees: Worktrees
   branches: LeadBranches
   repos: Repos
+  /** the project's check tiers, for the brief */
+  checks: Checks
   roles: Roles
   /** capacity's: the account, the claim, the window (package 3) */
   seats: Seats

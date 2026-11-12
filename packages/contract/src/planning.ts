@@ -46,6 +46,8 @@ export const ProjectView = z
     lanes: z.record(z.string(), z.object({ leads: z.number().int(), memoryMib: z.number().int().nullable() })),
     /** the test-slot run limit, `45m`; null: the default */
     slotRun: z.string().nullable(),
+    /** the check tiers (`checks:`): `fast` is the lead's local check, `full` the complete gate, run by CI when `ci`; null: one `make check` */
+    checks: z.object({ fast: z.string(), full: z.string(), ci: z.boolean() }).nullable(),
     /** the automatic sources the project listens to; a work repo lists none and hears the owner only */
     signals: z.record(z.string(), z.unknown()),
     /** the content now on the default branch does not parse; the fields above are the last valid ones */

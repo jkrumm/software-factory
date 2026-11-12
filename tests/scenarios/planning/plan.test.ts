@@ -27,7 +27,10 @@ beforeAll(async () => {
     env: { FACTORY_LEADS_PER_ACCOUNT: '16' },
     repos: {
       app: { project: 'apiVersion: factory/v2\nname: app\n', plan: PLAN },
-      lib: { project: 'apiVersion: factory/v2\nname: lib\nleads: 3\nslots: { run: 45m }\n' },
+      lib: {
+        project:
+          'apiVersion: factory/v2\nname: lib\nleads: 3\nslots: { run: 45m }\nchecks: { fast: make check-fast, ci: true }\n',
+      },
     },
   })
 })
@@ -60,6 +63,9 @@ test('projects are read from the default branch: leads, the slot limit and the s
     ['app', 'file', 1, null, 'origin/main'],
     ['lib', 'file', 3, '45m', 'origin/main'],
   ])
+  expect(list.projects.map((p) => p.checks)).toEqual([null, { fast: 'make check-fast', full: 'make check', ci: true }])
+  expect((await show('lib')).checks).toEqual({ fast: 'make check-fast', full: 'make check', ci: true })
+  expect((await show('app')).checks).toBeNull()
   expect((await lab.cli(['project', 'show', 'nothing'])).code).toBe(4)
 })
 

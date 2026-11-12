@@ -97,6 +97,19 @@ export interface Repos {
   locate(repo: string): Promise<Result<string>>
 }
 
+/** The project's check tiers (`project.yaml` `checks:`), as the brief states them. */
+export interface CheckTiers {
+  fast: string
+  full: string
+  /** CI runs `full` on the pull request head, so the lead relies on that run */
+  ci: boolean
+}
+
+/** The check tiers of the project a repo belongs to; `null` for a project with none: its lead runs `make check` as before. */
+export interface Checks {
+  of(repo: string): Promise<Result<CheckTiers | null>>
+}
+
 /** The role table, as it is when asked: the `lead` row when a lead starts, any row when an Issue is filed with a seat. */
 export interface Roles {
   lead(): Promise<Result<{ tier: Tier; effort: Effort }>>

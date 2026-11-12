@@ -349,6 +349,21 @@ describe('the brief', () => {
     expect(buildBrief(input)).not.toContain('## Checkpoint')
   })
 
+  test('a project with check tiers gets a section that says fast locally and full in CI; one without gets none', () => {
+    const sharded = buildBrief({ ...input, checks: { fast: 'make check-fast', full: 'make check', ci: true } })
+    expect(sharded).toContain('## Checks in this repo')
+    expect(sharded).toContain('run `make check-fast` before the first push and after every change you author')
+    expect(sharded).toContain('The complete gate (`make check`) runs in CI on the pull request head')
+    expect(sharded).toContain('`make merge-guard` still demands a finished green CI run on the exact head')
+    expect(sharded).toContain('that one suite, inside a slot')
+    expect(sharded.indexOf('## Checks in this repo')).toBeGreaterThan(sharded.indexOf('## As filed'))
+    expect(sharded.startsWith(STANDING_ORDERS)).toBe(true)
+    const local = buildBrief({ ...input, checks: { fast: 'make quick', full: 'make check', ci: false } })
+    expect(local).toContain('CI does not run `make check` for this repo')
+    expect(buildBrief(input)).not.toContain('## Checks in this repo')
+    expect(buildBrief({ ...input, checks: null })).toBe(buildBrief(input))
+  })
+
   test('the standing orders name the friction route: a signal on software-factory, never a self-filed Issue', () => {
     expect(STANDING_ORDERS).toContain('factory signal file --from agent:<repo> --repo software-factory')
     expect(STANDING_ORDERS).toContain('never file that Issue yourself')

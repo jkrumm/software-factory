@@ -139,6 +139,7 @@ const view = ({ project, plan }: ProjectState): ProjectView =>
     leads: project.project.leads,
     lanes: project.project.lanes,
     slotRun: project.project.slots.run ?? null,
+    checks: project.project.checks,
     signals: project.project.signals,
     projectError: project.projectError,
     plan:
