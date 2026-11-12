@@ -18,7 +18,8 @@ interface Waiting {
 
 /**
  * What waits on the owner. The asks are the open Decisions and the Concepts and Specs awaiting a verdict (the artifact of an
- * Issue in a `review` wait with no verdict on its newest revision); the human queue is the open Errands. Oldest first.
+ * Issue in a `review` wait, or the Spec its filer attached to an Issue no lead has started, with no verdict on its newest
+ * revision); the human queue is the open Errands. Oldest first.
  */
 export async function readAsks(sql: SQL, now: Date): Promise<{ asks: ReadAsk[]; humanQueue: ReadAsk[] }> {
   const decisions: { id: string; issue_id: string; question: string; asked_at: Date }[] = await sql`
@@ -26,7 +27,9 @@ export async function readAsks(sql: SQL, now: Date): Promise<{ asks: ReadAsk[]; 
     WHERE answered_at IS NULL AND withdrawn_at IS NULL ORDER BY asked_at, id`
   const reviews: { id: string; issue_id: string; title: string; created_at: Date }[] = await sql`
     SELECT a.id, a.issue_id, a.title, a.created_at FROM factory.artifacts a
-    JOIN factory.issues i ON i.id = a.issue_id AND i.state = 'waiting' AND i.wait_reason = 'review'
+    JOIN factory.issues i ON i.id = a.issue_id
+      AND ((i.state = 'waiting' AND i.wait_reason = 'review')
+        OR (a.key LIKE 'filed-spec:%' AND i.state IN ('settling', 'queued')))
     WHERE a.kind IN ('concept', 'spec')
       AND NOT EXISTS (
         SELECT 1 FROM factory.verdicts v

@@ -126,18 +126,32 @@ export async function readNeeds(sql: SQL, now: Date, options: { longWaitMs?: num
     WHERE d.answered_at IS NULL AND d.withdrawn_at IS NULL
       AND EXISTS (SELECT 1 FROM factory.decision_steps s WHERE s.decision_id = d.id AND s.step = 'owner' AND s.outcome = 'open')
     ORDER BY d.asked_at DESC, d.id DESC`
+  // A Spec its filer attached holds its Issue in the queue, not in a wait: it is under review while it has no verdict on
+  // its latest revision and the Issue has no lead yet (the same predicate as `spec_pending` in `read/planning.ts`).
   const reviews: unknown[] = await sql`
-    SELECT i.id AS issue_id, i.repo, e.wait->'holds'->>'id' AS artifact_id, a.title, a.kind,
-      e.wait->'holds'->>'summary' AS summary, e.at,
-      (SELECT f.payload->>'origin' FROM factory.issue_events f WHERE f.issue_id = i.id AND f.kind = 'filed' AND f.version = 1) AS origin
-    FROM factory.issues i
-    JOIN LATERAL (
-      SELECT x.wait, x.at FROM factory.issue_events x
-      WHERE x.issue_id = i.id AND x.result = 'applied' ORDER BY x.version DESC LIMIT 1
-    ) e ON true
-    LEFT JOIN factory.artifacts a ON a.id = e.wait->'holds'->>'id'
-    WHERE i.state = 'waiting' AND i.wait_reason = 'review' AND e.wait->>'verdictGiven' IS NULL
-    ORDER BY e.at DESC, i.id DESC`
+    SELECT * FROM (
+      SELECT i.id AS issue_id, i.repo, e.wait->'holds'->>'id' AS artifact_id, a.title, a.kind,
+        e.wait->'holds'->>'summary' AS summary, e.at,
+        (SELECT f.payload->>'origin' FROM factory.issue_events f WHERE f.issue_id = i.id AND f.kind = 'filed' AND f.version = 1) AS origin
+      FROM factory.issues i
+      JOIN LATERAL (
+        SELECT x.wait, x.at FROM factory.issue_events x
+        WHERE x.issue_id = i.id AND x.result = 'applied' ORDER BY x.version DESC LIMIT 1
+      ) e ON true
+      LEFT JOIN factory.artifacts a ON a.id = e.wait->'holds'->>'id'
+      WHERE i.state = 'waiting' AND i.wait_reason = 'review' AND e.wait->>'verdictGiven' IS NULL
+      UNION ALL
+      SELECT i.id AS issue_id, i.repo, a.id AS artifact_id, a.title, a.kind, NULL::text AS summary, r.created_at AS at,
+        (SELECT f.payload->>'origin' FROM factory.issue_events f WHERE f.issue_id = i.id AND f.kind = 'filed' AND f.version = 1) AS origin
+      FROM factory.artifacts a
+      JOIN factory.issues i ON i.id = a.issue_id AND i.state IN ('settling', 'queued')
+      JOIN LATERAL (
+        SELECT n, created_at FROM factory.artifact_revisions WHERE artifact_id = a.id ORDER BY n DESC LIMIT 1
+      ) r ON true
+      WHERE a.key LIKE 'filed-spec:%'
+        AND NOT EXISTS (SELECT 1 FROM factory.verdicts v WHERE v.artifact_id = a.id AND v.revision = r.n)
+    ) reviews
+    ORDER BY at DESC, issue_id DESC`
   const errands: unknown[] = await sql`
     SELECT r.id, r.issue_id, i.repo, r.summary, r.detail, r.raised_at, r.screen_note,
       (SELECT f.payload->>'origin' FROM factory.issue_events f WHERE f.issue_id = r.issue_id AND f.kind = 'filed' AND f.version = 1) AS origin

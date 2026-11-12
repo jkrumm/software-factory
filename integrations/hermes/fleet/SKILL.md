@@ -36,7 +36,7 @@ Speak these. One word per thing; the retired word is the one to avoid.
 | **Held** | a signal quarantined, or a `down` waiting out its heal grace; becomes work only when promoted (the owner's or the Judge's call) | |
 | **Plan row** | a planned change in a project's plan, not yet filed; part of the chain | wave, track |
 | **Chain** | the dependency graph of Issues and plan rows, across projects: it decides what can run at once | linked Issues |
-| **Queue reason** | why a queued Issue still waits, as one plain sentence: `chain`, `line`, `finalizing`, `unknown_project`, `drain`, `load`, `memory`, `claim`, `window`, `cap` | hold |
+| **Queue reason** | why a queued Issue still waits, as one plain sentence: `chain`, `line`, `finalizing`, `spec`, `unknown_project`, `drain`, `load`, `memory`, `lane`, `claim`, `window`, `cap` | hold |
 | **Claim** | a lead's place in its repo (leads per repo are limited); a full repo keeps the rest queued | |
 | **Line** | "stop the line": while a repo's alert is unsolved, only its fix is admitted | |
 | **Window** | an account's 5-hour or weekly reset; a lead whose account hit one is `walled` | |
