@@ -1,6 +1,7 @@
 import type { SQL } from 'bun'
 import * as z from 'zod'
 import type { ClassIssue } from '../domains/loops/classes.ts'
+import type { DigestIssue } from '../kernel/digest-scope.ts'
 import type { LoopReads } from '../domains/loops/ports.ts'
 import type { IssueId } from '../kernel/ids.ts'
 
@@ -36,6 +37,18 @@ const QueueRowSchema = z.object({
 })
 
 const Holder = z.object({ id: z.string(), state: z.enum(['working', 'watching']), blockers: z.array(z.string()) })
+
+const DigestRow = z.object({
+  id: z.string(),
+  repo: z.string(),
+  state: z.enum(['settling', 'queued', 'working', 'waiting', 'watching', 'closed']),
+  title: z.string(),
+  kind: z.string().nullable(),
+  wait_reason: z.string().nullable(),
+  outcome: z.string().nullable(),
+  at: z.date(),
+  after: z.array(z.string()),
+})
 
 const Refusal = z.object({ id: z.string(), repo: z.string(), since: z.date(), refusals: z.number().int() })
 
@@ -101,6 +114,38 @@ export function loopReads(tx: SQL): LoopReads {
   }
 
   return {
+    async digestIssues(since) {
+      // an open Issue's `at` is when it entered its state, a closed one's when it closed; the kind is the settled one, else the filed one
+      const rows: unknown[] = await tx`
+        SELECT i.id, i.repo, i.state, f.payload->>'title' AS title, i.wait_reason, i.outcome,
+          COALESCE((SELECT k.payload->>'kind' FROM factory.issue_events k WHERE k.issue_id = i.id AND k.kind = 'settled' AND k.result = 'applied' ORDER BY k.version DESC LIMIT 1), f.payload->>'kind') AS kind,
+          COALESCE(s.at, f.at) AS at,
+          COALESCE((SELECT array_agg(e.after_issue ORDER BY e.after_issue) FROM factory.planning_edges e WHERE e.issue_id = i.id AND e.satisfied_at IS NULL), '{}') AS after
+        FROM factory.issues i
+        JOIN factory.issue_events f ON f.issue_id = i.id AND f.kind = 'filed' AND f.version = 1
+        LEFT JOIN LATERAL (
+          SELECT x.at FROM factory.issue_events x
+          WHERE x.issue_id = i.id AND x.result = 'applied' AND x.to_state IS DISTINCT FROM x.from_state
+          ORDER BY x.version DESC LIMIT 1
+        ) s ON true
+        WHERE i.state <> 'closed' OR COALESCE(s.at, f.at) >= ${since}
+        ORDER BY i.id`
+      return rows.map((raw): DigestIssue => {
+        const row = DigestRow.parse(raw)
+        return {
+          id: row.id as IssueId,
+          repo: row.repo,
+          state: row.state,
+          title: row.title,
+          kind: row.kind ?? 'chore',
+          waitReason: row.state === 'waiting' ? row.wait_reason : null,
+          outcome: row.outcome,
+          at: row.at,
+          after: row.after as IssueId[],
+        }
+      })
+    },
+
     async stalled(limit) {
       const rows: { id: string }[] = await tx`
         SELECT id FROM factory.issues

@@ -313,6 +313,7 @@ export const LOOP_NAMES = [
   'selfwatch',
   'host',
   'reaper',
+  'digest',
 ] as const
 export type LoopName = (typeof LOOP_NAMES)[number]
 
@@ -353,3 +354,49 @@ export const LoopRunReply = z
   })
   .meta({ id: 'LoopRunReply' })
 export type LoopRunReply = z.infer<typeof LoopRunReply>
+
+// ---- factory digest ------------------------------------------------------------------------------------------------------
+
+const DigestId = z.string().regex(/^[A-Za-z0-9._-]{1,64}$/, 'an identifier')
+const DigestInstant = z.string().regex(/^[0-9TZ:.+-]{1,40}$/, 'an ISO-8601 instant')
+const DigestTitle = z.string().min(1).max(500)
+
+/** What `agw factory digest` is sent for one project: its Issues of the last 7 days, the stdin of the call. */
+export const DigestRequest = z.object({
+  project: z.string().min(1).max(200),
+  window: z.object({ from: DigestInstant, to: DigestInstant }),
+  done: z
+    .array(
+      z.object({
+        id: DigestId,
+        title: DigestTitle,
+        kind: z.string().min(1).max(40),
+        closedAt: DigestInstant,
+        outcome: z.string().min(1).max(40),
+      }),
+    )
+    .max(100),
+  working: z
+    .array(
+      z.object({ id: DigestId, title: DigestTitle, kind: z.string().min(1).max(40), since: DigestInstant.optional() }),
+    )
+    .max(60),
+  queued: z.array(z.object({ id: DigestId, title: DigestTitle, after: z.array(DigestId).max(10).optional() })).max(60),
+  waiting: z.array(z.object({ id: DigestId, title: DigestTitle, reason: z.string().min(1).max(300) })).max(60),
+  previous: z.object({ headline: z.string().max(500), at: DigestInstant }).optional(),
+})
+export type DigestRequest = z.infer<typeof DigestRequest>
+
+/** A digest line and the Issues it is about. */
+export const DigestBullet = z.strictObject({ text: Line, ids: z.array(IssueId).min(1).max(20) })
+export type DigestBullet = z.infer<typeof DigestBullet>
+
+/** The digest `agw factory digest` answers (its own schema is strict too; the factory checks the ids against what it sent). */
+export const DigestAnswer = z.strictObject({
+  headline: z.string().min(1).max(140),
+  shipped: z.array(DigestBullet).max(5),
+  next: z.array(DigestBullet).max(4),
+  risks: z.array(DigestBullet).max(3),
+  themes: z.array(z.string().min(1).max(30)).max(5),
+})
+export type DigestAnswer = z.infer<typeof DigestAnswer>
