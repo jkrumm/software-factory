@@ -215,7 +215,9 @@ never one, and a stored project whose directory is gone, or is a worktree, is re
 answer): its row is removed and nothing is filed for it; the rows it filed stay recorded.
 
 The server reads the default branch: a plan on a feature branch, or not yet pushed, is not seen. `factory project sync
---fetch true` reads the remote now instead of waiting for the next pass.
+--fetch true` reads the remote now instead of waiting for the next pass. A plan (or `project.yaml`) that does not parse
+is listed under `broken` in the answer on every sync until it is fixed, and named on stderr (`broken: <project> <file>:
+<message>`); an empty `broken` means every file parsed.
 
 ## Replan
 

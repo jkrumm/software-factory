@@ -1,6 +1,6 @@
 import { describe, expect, test } from 'bun:test'
 import type { ShipAnswer } from '@software-factory/contract'
-import { shipNotice } from '../src/plain-forms.ts'
+import { shipNotice, syncNotice } from '../src/plain-forms.ts'
 
 const SHA = 'a'.repeat(40)
 const BASE = 'b'.repeat(40)
@@ -46,5 +46,30 @@ describe('shipNotice', () => {
       'review: not read (agw review covered exited 1)',
     )
     expect(shipNotice({ ...shipped(review({})), evidence: [] })).toBe('')
+  })
+})
+
+describe('syncNotice', () => {
+  const answer = (broken: { project: string; file: 'project.yaml' | 'docs/plan.yaml'; message: string }[]) => ({
+    synced: 3,
+    broken: broken.map((b) => ({ ...b, issue: null })),
+    retired: [],
+    errors: [],
+  })
+
+  test('a clean sync says nothing', () => {
+    expect(syncNotice(answer([]))).toBe('')
+  })
+
+  test('each file that does not parse is one line with its project and message', () => {
+    const notice = syncNotice(
+      answer([
+        { project: 'basalt-ui', file: 'docs/plan.yaml', message: 'rows.4.after: at most 20' },
+        { project: 'lib', file: 'project.yaml', message: 'leads: expected number' },
+      ]),
+    )
+    expect(notice).toBe(
+      'broken: basalt-ui docs/plan.yaml: rows.4.after: at most 20\nbroken: lib project.yaml: leads: expected number',
+    )
   })
 })

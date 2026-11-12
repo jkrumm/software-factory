@@ -1,6 +1,6 @@
 import { FILING, PLAN_LIMITS } from '@software-factory/contract'
 import type { OperationExtension } from './operation.ts'
-import { issueListPlain, projectShowPlain, shipNotice } from './plain-forms.ts'
+import { issueListPlain, projectShowPlain, shipNotice, syncNotice } from './plain-forms.ts'
 
 const POINTER = 'factory issue schema'
 
@@ -90,7 +90,8 @@ const signalKindHint =
 export const OPERATION_EXTENSIONS: Readonly<Record<string, OperationExtension>> = {
   'project.show': { help: planLimitsHelp, plain: projectShowPlain },
   'project.sync': {
-    help: "--fetch true asks every repo's remote for new commits first (the way to read a plan you just pushed); omitted or false, the default branch is read as last fetched. A fetching sync can take over 20 s.",
+    help: "--fetch true asks every repo's remote for new commits first (the way to read a plan you just pushed); omitted or false, the default branch is read as last fetched. A fetching sync can take over 20 s. A project.yaml or docs/plan.yaml that does not parse is listed under `broken` on every sync until it is fixed, and named on stderr.",
+    notice: syncNotice,
   },
   'issue.show': {
     help: "An Issue's `after` edges are not in this answer: `factory read chain --format plain` lists what blocks each Issue (`blocking.issue_<n>`).",
