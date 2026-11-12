@@ -124,6 +124,16 @@ describe('factory deploy-lock', () => {
     expect(await readlink(join(locks, 'app.lock'))).toBe('garbage')
   })
 
+  test('a lock path that stays a regular file (readlink EINVAL): exit 75 after a short re-read, the file is kept (#895)', async () => {
+    await mkdir(locks, { recursive: true })
+    await writeFile(join(locks, 'app.lock'), '')
+    const result = await start('app', marker('a', '0')).done
+    expect(result.code).toBe(75)
+    expect(result.err).toContain('cannot read')
+    expect(await marksOf()).toEqual([])
+    expect(await Bun.file(join(locks, 'app.lock')).exists()).toBe(true)
+  })
+
   test('a held reclaim lock: exit 75, the command did not run', async () => {
     await mkdir(join(locks, 'app.lock.reclaim'), { recursive: true })
     await symlink(String(await deadPid()), join(locks, 'app.lock'))
