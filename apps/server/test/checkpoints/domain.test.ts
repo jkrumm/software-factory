@@ -419,7 +419,13 @@ describe('refuseNoOpDefault', () => {
     },
   )
 
-  test.each(['pino', 'Wait for Issue 12 to land, then ship', 'Merge when CI is green'])('%s is a choice', (label) => {
+  test.each([
+    'pino',
+    'Wait for Issue 12 to land, then ship',
+    'Wait for Issue 12 to land then ship',
+    'Hold the release and ship the hotfix instead',
+    'Merge when CI is green',
+  ])('%s is a choice', (label) => {
     expect(refuseNoOpDefault(withLabel(label))).toBeNull()
   })
 

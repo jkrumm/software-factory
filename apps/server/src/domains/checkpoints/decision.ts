@@ -143,12 +143,12 @@ export function readDecisionForm(raw: unknown): Result<DecisionForm, MissingFiel
 }
 
 /**
- * Labels that are no choice: "keep waiting", "wait for review", "do nothing", "hold". A label that goes on to a plan after
- * a comma or colon ("Wait for Issue 12 to land, then ship") is not matched.
+ * Labels that are no choice: "keep waiting", "wait for review", "do nothing", "hold". A label that goes on to a plan
+ * ("Wait for Issue 12 to land, then ship", "Hold the release and ship the hotfix instead") is not matched.
  */
 const NO_OP_LABELS: readonly RegExp[] = [
   /^(?:keep|continue|stay|remain|just|simply)\b.{0,12}\b(?:waiting|wait|blocked|paused)\b/i,
-  /^(?:wait(?:ing)?|do(?:ing)? nothing|no[- ]?op|no action|nothing|hold|leave (?:it )?(?:as is|open|alone))\b[^,;:]{0,60}$/i,
+  /^(?:wait(?:ing)?|do(?:ing)? nothing|no[- ]?op|no action|nothing|hold|leave (?:it )?(?:as is|open|alone))\b[^,;:]{0,30}$/i,
 ]
 
 /**
