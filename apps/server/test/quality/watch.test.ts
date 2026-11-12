@@ -1,5 +1,6 @@
 import { expect, test } from 'bun:test'
 import { deploys, isInert } from '../../src/domains/quality/evidence.ts'
+import { globMatches } from '../../src/kernel/glob.ts'
 import {
   type Check,
   ciCheck,
@@ -101,6 +102,18 @@ test('docs, text, licences and tests are inert; everything else deploys', () => 
   expect(deploys(['project.yaml', 'docs/plan.yaml'])).toBe(false)
   expect(deploys(['project.yaml', 'apps/server/src/a.ts'])).toBe(true)
   expect(deploys(['docs/a.md', 'src/a.ts'])).toBe(true)
+})
+
+test('deploy.paths: a path deploys only if a glob names it and it is not inert; none declared changes nothing', () => {
+  const paths = ['apps/**', 'Makefile']
+  expect(deploys(['core/src/a.ts'], paths)).toBe(false)
+  expect(deploys(['core/src/a.ts', 'docs/x.md'], paths)).toBe(false)
+  expect(deploys(['core/src/a.ts', 'apps/server/a.ts'], paths)).toBe(true)
+  expect(deploys(['Makefile'], paths)).toBe(true)
+  expect(deploys(['apps/server/a.test.ts', 'apps/README.md'], paths)).toBe(false)
+  expect(isInert('core/a.ts', paths)).toBe(true)
+  expect(isInert('core/a.ts', [])).toBe(false)
+  expect(deploys(['core/src/a.ts'], [])).toBe(true)
 })
 
 const SHA = 'abcdef0123456789'
@@ -214,4 +227,16 @@ test('the regression note names the failed checks first, then their first failin
   expect(detail.indexOf('output:')).toBeGreaterThan(detail.indexOf('macos update pending'))
   expect(detail).toMatch(/\[… \d+ lines cut\]/)
   expect(detail).toContain('probe failed: HTTP 503, expected 200')
+})
+
+test('globs: ** crosses directories, * and ? stay in one segment, the rest is literal', () => {
+  expect(globMatches('apps/**', 'apps/a/b.ts')).toBe(true)
+  expect(globMatches('apps/**', 'apps')).toBe(false)
+  expect(globMatches('**/x.ts', 'x.ts')).toBe(true)
+  expect(globMatches('**/x.ts', 'a/b/x.ts')).toBe(true)
+  expect(globMatches('src/*.ts', 'src/a.ts')).toBe(true)
+  expect(globMatches('src/*.ts', 'src/a/b.ts')).toBe(false)
+  expect(globMatches('a?.ts', 'ab.ts')).toBe(true)
+  expect(globMatches('a.b', 'axb')).toBe(false)
+  expect(globMatches('Makefile', 'Makefile')).toBe(true)
 })

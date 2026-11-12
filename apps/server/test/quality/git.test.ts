@@ -229,6 +229,17 @@ test('the deployed commit must hold where the work landed', async () => {
   })
 })
 
+test('deploy.paths: a deployed commit behind only by paths the project does not deploy still holds', async () => {
+  const repo = await fresh()
+  const deployed = await repo.commit('apps/a.ts', '1\n')
+  const core = await repo.commit('core/b.ts', '2\n')
+  const deployPaths = ['apps/**']
+  expect(await deployedHolds(repo.path, deployed, core, { deployPaths })).toMatchObject({ ok: true })
+  expect(await deployedHolds(repo.path, deployed, core)).toMatchObject({ ok: false })
+  const app = await repo.commit('apps/c.ts', '3\n')
+  expect(await deployedHolds(repo.path, deployed, app, { deployPaths })).toMatchObject({ ok: false })
+})
+
 test('a deployed commit behind where the work landed only by changes no deploy carries still holds it', async () => {
   const repo = await fresh()
   const deployed = await repo.commit('src/a.ts', '1\n')

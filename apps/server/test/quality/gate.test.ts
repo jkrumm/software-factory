@@ -49,6 +49,26 @@ test('commits git refuses are refused with git’s reason; a git that fails is s
   })
 })
 
+test('a ship touching no path of the project’s deploy.paths records deploys false', () => {
+  const verdict = judgeShip({
+    reported: ['abc'],
+    commits: ok({ ...read, paths: ['core/a.ts'] }),
+    review: none,
+    ci: none,
+    acceptance: { statements: [] },
+    deployPaths: ['apps/**'],
+  })
+  expect(verdict.accepted && verdict.commits.deploys).toBe(false)
+  const plain = judgeShip({
+    reported: ['abc'],
+    commits: ok({ ...read, paths: ['core/a.ts'] }),
+    review: none,
+    ci: none,
+    acceptance: { statements: [] },
+  })
+  expect(plain.accepted && plain.commits.deploys).toBe(true)
+})
+
 test('merged commits are evidence: what landed, what it touched, whether it deploys', () => {
   const verdict = judgeShip({
     reported: ['abc'],

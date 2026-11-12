@@ -42,6 +42,8 @@ const Probe = z.strictObject({
   expect: z.number().int().min(100).max(599).default(200),
 })
 
+const DeployGlob = z.string().min(1)
+
 const Deploy = z.strictObject({
   /** `auto`: a push deploys · `make`: `make deploy` · `agentic`: the lead deploys · `none` */
   mode: z.enum(['auto', 'make', 'agentic', 'none']).default('none'),
@@ -54,6 +56,11 @@ const Deploy = z.strictObject({
       return ms !== undefined && ms <= MAX_WATCH_MS
     }, 'a duration like 30m, 2h or 1d, at most 7d')
     .default('0m'),
+  /**
+   * globs of the paths a deploy carries (`apps/**`, `Makefile`). Empty: every path that is not inert deploys. Set: a ship
+   * touching none of them records no deploy and no watch, as a rewrite built beside the running system must.
+   */
+  paths: z.array(DeployGlob).default([]),
   /** paths whose change needs a migration to be run */
   migrations: z.array(z.string().min(1)).default([]),
   probes: z.array(Probe).default([]),
