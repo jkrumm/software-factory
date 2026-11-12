@@ -12,7 +12,9 @@
       "medianN": 10,
       "fillHours": 24,
       "growthGbPerHour": 0.5,
-      "minPct": 85
+      "minPct": 85,
+      "declineFreeMin": 240,
+      "declineGb": 5
     },
     "load": { "perThread": 3, "fallbackAbsolute": 20, "sustainMin": 15, "clearMin": 10 },
     "silent": { "staleMin": 10, "clearMin": 10 }
