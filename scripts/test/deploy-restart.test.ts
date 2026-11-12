@@ -51,3 +51,53 @@ describe('restart_until_healthy', () => {
     expect(out).toBe('starts=3 stops=2')
   })
 })
+
+/** Sources deploy.sh, stubs `load_avg` with the given readings in turn (the last repeats) and runs `wait_calm_host`. */
+async function calm(loads: number[], env: Record<string, string>): Promise<{ code: number; out: string; err: string }> {
+  const script = `
+    source "${DEPLOY}"
+    readings=(${loads.join(' ')}); counter=$(mktemp); echo 0 > "$counter"
+    load_avg() { # a subshell call: the count lives in a file
+      local i; i=$(<"$counter"); echo $((i + 1)) > "$counter"
+      echo "\${readings[$i]:-\${readings[\${#readings[@]}-1]}}"
+    }
+    sleep() { :; }
+    wait_calm_host; rc=$?
+    echo "reads=$(<"$counter")"
+    exit $rc`
+  const proc = Bun.spawn(['bash', '-c', script], { env: { ...process.env, ...env }, stdout: 'pipe', stderr: 'pipe' })
+  const [out, err, code] = await Promise.all([
+    new Response(proc.stdout).text(),
+    new Response(proc.stderr).text(),
+    proc.exited,
+  ])
+  return { code, out: out.trim(), err }
+}
+
+describe('wait_calm_host', () => {
+  const env = { LOAD_MAX: '96', LOAD_WAIT_SECS: '30', LOAD_POLL_SECS: '10' }
+
+  test('a calm host passes at once', async () => {
+    const { code, out } = await calm([20], env)
+    expect(code).toBe(0)
+    expect(out).toContain('reads=1')
+  })
+
+  test('a loaded host is waited for until the load falls', async () => {
+    const { code, out } = await calm([250, 200, 90], env)
+    expect(code).toBe(0)
+    expect(out).toContain('reads=3')
+  })
+
+  test('a host that stays loaded refuses after LOAD_WAIT_SECS', async () => {
+    const { code, err } = await calm([250], env)
+    expect(code).toBe(1)
+    expect(err).toContain('stayed above 96')
+  })
+
+  test('LOAD_MAX=0 turns the gate off', async () => {
+    const { code, out } = await calm([250], { ...env, LOAD_MAX: '0' })
+    expect(code).toBe(0)
+    expect(out).toContain('reads=0')
+  })
+})

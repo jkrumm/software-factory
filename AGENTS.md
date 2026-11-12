@@ -132,7 +132,7 @@ a real server and Postgres with fake `hc` and `agw`), then typechecks and builds
 a wait past 45 min exits 75 without running. `make deploy`,
 `make rollback` and `make verify` act on the mini only; `DRY_RUN=1` prints the plan, `FACTORY_REF=<branch>` proves a branch
 live before it is merged. A rollback target is started up to `RESTART_ATTEMPTS` (3) times, `RESTART_PAUSE_SECS` (20) apart,
-before the deploy gives up and removes the plist: a Postgres lock timeout at start (issue 830) clears by itself.
+before the deploy gives up and removes the plist: a Postgres lock timeout at start (issue 830) clears by itself. The health wait is `HEALTH_WAIT_SECS` (180); before it stops anything, a deploy or rollback waits up to `LOAD_WAIT_SECS` (600) for the one-minute load to fall to `LOAD_MAX` (8 per core, 0 = off) and otherwise refuses with the live service untouched (issue 885: at load 200+ the new release and its rollback both missed 60 s).
 
 **Check tiers** (`project.yaml` `checks:`, `docs/plan.md` "Check tiers"). A lead runs `make check-fast` (everything of `make check` that is not a test run, then the unit tests of the files the branch changed: `bun test --changed` against the merge base with `origin/master`; `CHECK_FAST_ALL=1` runs all of them) and leaves the rest to CI: `.github/workflows/ci.yml` runs the full gate on `ubuntu-latest` as jobs `static` (`make check-fast` with `CHECK_FAST_ALL=1`), `scenarios` (`make test-scenarios`, `SHARD=i/2`) and `e2e` (`make e2e`, `E2E_SHARD=i/3`, Playwright's own shard flag). The run is green only when every job is, which is all `merge-guard` reads. `make check` stays the whole gate locally (a change to the test layout, the Makefile or CI runs it); to reproduce one CI failure run that suite alone inside a slot.
 

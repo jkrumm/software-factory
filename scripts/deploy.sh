@@ -58,8 +58,13 @@ BIN_DIR="$HOME/.local/bin"
 CLI_LINK="$BIN_DIR/factory"
 PLIST="$HOME/Library/LaunchAgents/$LABEL.plist"
 HEALTH_URL="http://127.0.0.1:$PORT/health"
-# A cold start migrates the schema first: 60 s is generous.
-HEALTH_WAIT_SECS="${HEALTH_WAIT_SECS:-60}"
+# A cold start migrates the schema first. 60 s was enough on an idle host and not at a load of 200+ (issue 885: the new release
+# and its rollback both missed it; 240 s was healthy), so the default leaves a loaded host room.
+HEALTH_WAIT_SECS="${HEALTH_WAIT_SECS:-180}"
+# The live service is not stopped while the host is starved: a deploy waits up to LOAD_WAIT_SECS for the one-minute load average
+# to fall to LOAD_MAX (default 8 per core), then refuses with nothing changed. LOAD_MAX=0 turns the gate off.
+LOAD_WAIT_SECS="${LOAD_WAIT_SECS:-600}"
+LOAD_MAX="${LOAD_MAX:-$(( $(sysctl -n hw.ncpu 2>/dev/null || echo 4) * 8 ))}"
 # A release put back on purpose (a rollback target, a redeploy of the live sha) is started up to this many times, with
 # this pause between: a Postgres lock timeout at start (issue 830) cleared by itself minutes later, and the one
 # attempt that met it left the whole factory down with its plist removed.
@@ -193,6 +198,26 @@ is_healthy() { # $1 sha
   local body
   body=$(curl -fsS --max-time 2 "$HEALTH_URL" 2>/dev/null) \
     && [[ "$(printf '%s' "$body" | jq -r '.status + " " + .version' 2>/dev/null)" == "ok $1" ]]
+}
+
+# The one-minute load average, whole number.
+load_avg() { sysctl -n vm.loadavg 2>/dev/null | awk '{ printf "%d", $2 }'; }
+
+# Returns 0 once the load is at or under LOAD_MAX, 1 when it stays above for LOAD_WAIT_SECS. Called before anything is stopped.
+wait_calm_host() {
+  local i=0 load
+  (( LOAD_MAX > 0 )) || return 0
+  load=$(load_avg)
+  while [[ "$load" =~ ^[0-9]+$ ]] && (( load > LOAD_MAX )); do
+    if (( i >= LOAD_WAIT_SECS )); then
+      echo "[deploy] host load $load stayed above $LOAD_MAX for ${LOAD_WAIT_SECS}s" >&2
+      return 1
+    fi
+    (( i == 0 )) && log "host load $load is above $LOAD_MAX: waiting up to ${LOAD_WAIT_SECS}s before stopping the service"
+    sleep "${LOAD_POLL_SECS:-10}"; i=$((i + ${LOAD_POLL_SECS:-10}))
+    load=$(load_avg)
+  done
+  return 0
 }
 
 wait_healthy() { # $1 sha
@@ -487,6 +512,7 @@ rollback() {
   # one deploy or rollback at a time
   mkdir -p "$DATA_DIR" "$HOME/Library/LaunchAgents" "$HOME/Library/Logs" "$BIN_DIR"
   take_lock
+  wait_calm_host || die "the host is starved (load above $LOAD_MAX); the live service was not touched. Retry when it calms, or set LOAD_MAX"
 
   log "rolling back ${live:-none} -> ${prev:0:12} ($(core_of "$release")), stopping the service"
   stop_service "$unload_secs" || die "still loaded ${unload_secs}s after bootout; not bootstrapping over it. Retry the rollback."
@@ -541,6 +567,7 @@ main() {
     if env_file_ok "$SELF_DIR/.."; then log "the settings file is accepted by the launcher of this tree"; else log "WARNING: the settings file is refused by the launcher of this tree (a real deploy stops before it changes anything)"; fi
     log "rendered $PLIST (points at the release, not at current):"
     render_plist "$(template_of "$SELF_DIR/..")" "$RELEASES/$sha" "$sha"
+    act "wait up to ${LOAD_WAIT_SECS}s for the one-minute load average to be at most ${LOAD_MAX} (now $(load_avg)); still above: refuse, nothing changed"
     act "launchctl bootout $LABEL, wait up to $(unload_wait_secs "$(template_of "$SELF_DIR/..")")s for the unload"
     act launchctl bootstrap "gui/$(id -u)" "$PLIST"
     act "wait up to ${HEALTH_WAIT_SECS}s for $HEALTH_URL = ok, version $sha"
@@ -595,6 +622,7 @@ main() {
     die "the Console build failed; the live release is untouched"
   fi
   [[ -f "$(template_of "$release")" ]] || die "$(template_of "$release") missing"
+  wait_calm_host || die "the host is starved (load above $LOAD_MAX); the live service was not touched. Retry when it calms, or set LOAD_MAX"
   check_refs "$release"
   env_file_ok "$release" || die "the settings file is refused by ${sha:0:12}'s launcher (remove or rename the keys it names); nothing was changed"
   unload_secs=$(unload_wait_secs "$(template_of "$release")")
