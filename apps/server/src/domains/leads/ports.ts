@@ -202,9 +202,19 @@ export interface BriefSignal {
   at: Date
 }
 
+/** The Spec a filer attached to an Issue (`issue new --spec`), as the brief shows it: read-only, from the checkpoints' tables. */
+export interface BriefSpec {
+  artifact: string
+  title: string
+  /** the verdict on its latest revision (a factory default after 24 hours says so in its note); null while there is none */
+  verdict: { verdict: string; note: string | null } | null
+}
+
 export interface LeadStore {
   /** the signals an Issue was filed from or joined, oldest first, at most `limit` */
   signalsOf(issue: IssueId, limit: number): Promise<BriefSignal[]>
+  /** the Spec the Issue was filed with, or null */
+  filedSpecOf(issue: IssueId): Promise<BriefSpec | null>
 
   attempt(issue: IssueId, attempt: number): Promise<LeadAttempt | null>
   /** the attempt's row, made on the first try; every later try counts */

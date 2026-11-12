@@ -11,6 +11,7 @@ const issue = (n: number, extra: Partial<OpenIssue> = {}): OpenIssue => ({
   state: 'queued',
   waitReason: null,
   finalizing: false,
+  specPending: false,
   ...extra,
 })
 const edge = (from: number, to: number, satisfied = false): Edge => ({ issue: id(from), after: id(to), satisfied })
@@ -106,5 +107,35 @@ describe('the queue order', () => {
       prio: new Map(),
     })
     expect(rows.map((r) => r.reason?.kind)).toEqual(['unknown_project', 'finalizing'])
+  })
+
+  test('an Issue whose filed Spec has no verdict stays queued behind the others, and its blocker is named first', () => {
+    expect(order([issue(1, { specPending: true }), issue(2)])).toEqual([
+      [2, null],
+      [1, 'spec'],
+    ])
+    // Higher prio does not lift a held Issue over a free one: a reason ranks below every candidate.
+    expect(order([issue(1, { specPending: true }), issue(2)], [], [[1, 5]])).toEqual([
+      [2, null],
+      [1, 'spec'],
+    ])
+    expect(order([issue(3, { specPending: true }), issue(4)], [edge(3, 9)])).toEqual([
+      [4, null],
+      [3, 'chain'],
+    ])
+  })
+
+  test('a held Issue is released into the chain as it was: the same edges still hold it back afterwards', () => {
+    const edges = [edge(1, 9)]
+    expect(order([issue(1)], edges)).toEqual([[1, 'chain']])
+    expect(order([issue(1, { specPending: true })], edges)).toEqual([[1, 'chain']])
+    expect(order([issue(1)], [])).toEqual([[1, null]])
+  })
+
+  test('an incident held by its filed Spec stops no line: nothing could run it yet', () => {
+    expect(order([issue(1, { kind: 'incident', specPending: true }), issue(2)])).toEqual([
+      [2, null],
+      [1, 'spec'],
+    ])
   })
 })

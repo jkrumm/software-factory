@@ -376,6 +376,17 @@ brief test pins the wording). Three parts:
   (`domains/loops/retro.ts`) groups them into recurring preferences and files a signal per preference seen twice or more, to
   write it into the repo's `AGENTS.md`, `apps/console/DESIGN.md` or the lead brief, with that KPI as the marker.
 
+*A Spec that comes with the Issue* (issue 911). A filer that already wrote the Spec (`factory issue new --spec @file`, body
+`spec` and `specTitle`) hands it over at filing: `fileNewIssue` stores it in the filing transaction as an artifact of the
+new Issue (kind `spec`, revision 1, author `factory`, key `filed-spec:<issue>`, which is the only mark that tells it from a
+lead's Spec) and plans the owner's review page; `spec` implies `checkpoint: spec`. No wait begins (the machine's waits start
+from `working`): the Issue settles and queues as any Issue, and `orderQueue` gives it the queue reason `spec` while the
+latest revision of that Spec has no verdict (`OpenIssue.specPending`, read in `read/planning.ts`; a held incident stops no line). A
+verdict on it (the owner's, or the factory's `looks_good` after 24 hours: `recheckReviews` also looks at a filed Spec whose
+Issue is settling or queued) records only its note (`giveVerdict`, `noted`), since there is no wait to end; the Issue is
+then admitted and the lead's brief has a Checkpoint section naming the artifact and its verdict instead of the order to
+submit one. The ship gate counts it like any Spec. A lead that finds it wrong revises it (`artifact revise`).
+
 Improve counts `specs_per_100` and `owner_decisions_per_100` (trend only), so a silent path shows as two near-zero lines.
 
 ## Loops and agw

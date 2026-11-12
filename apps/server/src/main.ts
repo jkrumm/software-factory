@@ -659,7 +659,13 @@ async function main(): Promise<void> {
     planning: planning.planning,
     issues: composeIssues({
       writes,
-      filing: { ...writes, locate: (repo) => repos.locate(repo), roles },
+      filing: {
+        ...writes,
+        locate: (repo) => repos.locate(repo),
+        roles,
+        blobs: fileBlobStore(checkpointSettings.blobDir),
+        consoleUrl: checkpointSettings.line.consoleUrl,
+      },
       checkpoints,
     }),
     capacity: planning.capacity,

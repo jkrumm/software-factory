@@ -149,6 +149,9 @@ export const issueRoutes = (wired: IssueApi | undefined) => {
         if (body.alone && (body.after?.length ?? 0) > 0) {
           return Response.json(failure('alone and after contradict each other: give one', 'refused'), { status: 422 })
         }
+        if (body.specTitle !== undefined && body.spec === undefined) {
+          return Response.json(failure('specTitle titles a Spec: give spec too', 'refused'), { status: 422 })
+        }
         const after: IssueId[] = []
         for (const text of body.after ?? []) {
           const id = issueRef(text)
@@ -162,6 +165,8 @@ export const issueRoutes = (wired: IssueApi | undefined) => {
           seat: body.seat,
           lane: body.lane,
           checkpoint: body.checkpoint,
+          spec: body.spec,
+          specTitle: body.specTitle,
           text: body.text,
           key: body.key,
           source: body.source ?? 'request',
