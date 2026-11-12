@@ -183,6 +183,8 @@ function trendAt(
     perHour: number
     last: Sample
     points: Sample[]
+    /** every sample up to the one being judged, not only the window's */
+    history: readonly Sample[]
   }) => Pick<Trend, 'met' | 'hoursToFull'>,
 ): Trend {
   const stop = (samples[end] as Sample).at.getTime()
@@ -195,7 +197,14 @@ function trendAt(
   const timeOf = (group: Sample[]) => (group[Math.floor(group.length / 2)] as Sample).at.getTime()
   const hours = (timeOf(recent) - timeOf(old)) / (60 * MIN)
   const perHour = hours > 0 ? (newest - oldest) / hours : 0
-  const verdict = judge({ newest, oldest, perHour, last: points.at(-1) as Sample, points })
+  const verdict = judge({
+    newest,
+    oldest,
+    perHour,
+    last: points.at(-1) as Sample,
+    points,
+    history: samples.slice(0, end + 1),
+  })
   return { ...verdict, newest, oldest, perHour }
 }
 
@@ -275,9 +284,27 @@ function thirdMedians(points: readonly Sample[], value: (s: Sample) => number | 
 /** Each third of a window must carry at least this share of the net growth: a burst at one end, or a swing that came back, does not. */
 const SUSTAINED_SHARE = 0.25
 
+/** The largest fall from an earlier peak among the samples of the last `spanMin` minutes (GB). */
+function largestDecline(history: readonly Sample[], spanMin: number, used: (s: Sample) => number | null): number {
+  const newest = history.at(-1)
+  if (!newest) return 0
+  const from = newest.at.getTime() - spanMin * MIN
+  let peak = -Infinity
+  let decline = 0
+  for (const s of history) {
+    const v = used(s)
+    if (v === null || s.at.getTime() < from) continue
+    peak = Math.max(peak, v)
+    decline = Math.max(decline, peak - v)
+  }
+  return decline
+}
+
 /**
  * Fills toward full: the net growth over the window is sustained (each third of it carries a share, so a short burst or
  * a reversed swing is not a fill), the disk is past the free-space floor (`minPct`), and at that rate it is full within `fillHours`.
+ * A fill has no decline in the last `declineFreeMin` minutes (longer than a scratch round): a sawtooth that builds
+ * and frees a copy each round rises at a steep slope for its build, but nets nothing.
  */
 function diskFill(samples: readonly Sample[], now: Date, t: Thresholds['disk']) {
   const used = (s: Sample) => (s.diskUsedGb !== null && s.diskTotalGb !== null ? s.diskUsedGb : null)
@@ -286,11 +313,12 @@ function diskFill(samples: readonly Sample[], now: Date, t: Thresholds['disk']) 
     n: t.medianN,
     clearMin: t.clearMin,
     value: used,
-    judge: ({ newest, oldest, perHour, last, points }) => {
+    judge: ({ newest, oldest, perHour, last, points, history }) => {
       const total = last.diskTotalGb
       const pct = last.diskPct
       if (total === null || pct === null || perHour <= t.growthGbPerHour || pct < t.minPct)
         return { met: false, hoursToFull: null }
+      if (largestDecline(history, t.declineFreeMin, used) >= t.declineGb) return { met: false, hoursToFull: null }
       const thirds = thirdMedians(points, used)
       const net = newest - oldest
       const sustained =

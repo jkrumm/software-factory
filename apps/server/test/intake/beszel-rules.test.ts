@@ -196,6 +196,18 @@ describe('disk filling fast', () => {
     expect(find(series(200, swung), 'disk').state).not.toBe('breach')
   })
 
+  test('a round-build sawtooth is no fill: a build 150 min in is steep, but the last round freed its copy 225 min ago', () => {
+    // 900 GB disk at ~87%; a 0.2 GB/min build for the last 150 min. `freedAgo` is when the previous round's copy was removed.
+    const sawtooth = (freedAgo: number | null) => (e: number) => ({
+      diskUsedGb: 780 + (e < 150 ? (150 - e) * 0.2 : freedAgo !== null && e >= freedAgo ? 30 : 0),
+      diskPct: 87,
+      diskTotalGb: 900,
+    })
+    expect(find(series(240, sawtooth(225)), 'disk').state).not.toBe('breach')
+    // The same climb with no decline before it is a fill.
+    expect(find(series(240, sawtooth(null)), 'disk').state).toBe('breach')
+  })
+
   test('a fill that crossed the free-space floor a minute ago holds until it has lasted sustainMin', () => {
     // 900 GB disk, a steady 20 GB/h climb that crosses 85% used (765 GB) exactly `crossedAgo` minutes before NOW.
     const climbing = (crossedAgo: number) => (e: number) => {
