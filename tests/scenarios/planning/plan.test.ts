@@ -181,8 +181,12 @@ test('a broken project.yaml keeps the last valid one and files one Issue for tha
   await lab.commit('lib', { 'project.yaml': 'apiVersion: factory/v2\nname: lib\nleads: 99\n' })
   const before = await issueCount()
   const synced = await lab.cli(['project', 'sync'])
+  // app's cyclic plan from the test above is still broken, and every sync lists it
   expect(synced.json).toMatchObject({
-    broken: [{ project: 'lib', file: 'project.yaml', issue: `issue_${before + 1}` }],
+    broken: [
+      { project: 'app', file: 'docs/plan.yaml', issue: null },
+      { project: 'lib', file: 'project.yaml', issue: `issue_${before + 1}` },
+    ],
   })
   await lab.cli(['project', 'sync'])
   expect(await issueCount()).toBe(before + 1)
@@ -202,9 +206,9 @@ test('a linked worktree beside its repo is not a project: sync lists the repo on
   expect(await proc.exited).toBe(0)
   const before = await issueCount()
   const synced = await lab.cli(['project', 'sync'])
-  // lib's broken project.yaml from the test above is still broken; it is the only one the sync reports
+  // app's cyclic plan and lib's broken project.yaml from the tests above are still broken; the sync lists both
   expect(synced.json).toMatchObject({ synced: 2, retired: [], errors: [] })
-  expect((synced.json as { broken: { project: string }[] }).broken.map((b) => b.project)).toEqual(['lib'])
+  expect((synced.json as { broken: { project: string }[] }).broken.map((b) => b.project)).toEqual(['app', 'lib'])
   const list = ProjectList.parse((await lab.cli(['project', 'list'])).json)
   expect(list.projects.map((p) => p.name)).toEqual(['app', 'lib'])
   expect(await issueCount()).toBe(before)

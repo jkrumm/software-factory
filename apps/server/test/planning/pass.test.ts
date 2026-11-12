@@ -225,6 +225,16 @@ describe('the plan files its rows', () => {
     expect(app?.project.planError?.message).toContain('cycle')
     expect(app?.plan?.rows).toHaveLength(2)
   })
+
+  test('a plan that stays broken is listed by every sync, not only the first to see it', async () => {
+    world.source.add('app', { project: PROJECT('app'), plan: plan('p1', [row('a', { after: ['b'] }), row('b')]) })
+    value(await syncProjects(world.deps, { fetch: false }))
+    world.source.set('app', { plan: plan('p2', [row('a', { after: ['b'] }), row('b', { after: ['a'] })]) })
+    for (let i = 0; i < 2; i++) {
+      const again = value(await syncProjects(world.deps, { fetch: false }))
+      expect(again.broken).toMatchObject([{ file: 'docs/plan.yaml', message: expect.stringContaining('cycle') }])
+    }
+  })
 })
 
 describe('what intake hears', () => {

@@ -88,7 +88,8 @@ export async function syncProjects(
       })
       taken.set(next.name, next.repo)
       await planning.saveProject(next)
-      if (next.planError && next.planError.sha !== previous?.planError?.sha) {
+      // every sync lists a plan that does not parse, not only the first to see it: a pass may have seen it already
+      if (next.planError) {
         broken.push({ project: next.name, file: 'docs/plan.yaml', message: next.planError.message, issue: null })
       }
       if (next.projectError) {

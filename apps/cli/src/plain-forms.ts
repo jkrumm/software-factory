@@ -1,4 +1,4 @@
-import type { ProjectView, ReadIssueCards, ShipAnswer } from '@software-factory/contract'
+import type { ProjectSyncAnswer, ProjectView, ReadIssueCards, ShipAnswer } from '@software-factory/contract'
 
 // `data` is the answer runOperation already parsed with the operation's response schema.
 
@@ -33,4 +33,11 @@ export function shipNotice(data: unknown): string {
   const named = review.uncovered.map((c) => `${c.sha.slice(0, 12)} needs ${c.required}`).join(', ')
   const ranges = review.ranges.map((r) => `${r.base.slice(0, 12)}..${r.head.slice(0, 12)}`).join(' ')
   return `review: uncovered${named ? ` (${named})` : ''}. Recorded as uncovered. Run /review on ${ranges || 'the shipped range'}, or say in the report why it has none.`
+}
+
+/** `project sync`: a file that does not parse is named on stderr, one line each, so the session that pushed it sees it at once. */
+export function syncNotice(data: unknown): string {
+  return (data as ProjectSyncAnswer).broken
+    .map((file) => `broken: ${file.project} ${file.file}: ${file.message}`)
+    .join('\n')
 }
