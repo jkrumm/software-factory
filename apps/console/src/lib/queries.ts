@@ -21,6 +21,7 @@ import {
   fetchKpis,
   fetchMachine,
   fetchNeeds,
+  fetchProjectDigests,
   fetchSince,
   onNewerServer,
 } from './api.ts'
@@ -88,6 +89,19 @@ export function useSince() {
       return fetchSince(signal)
     },
     refetchOnWindowFocus: true,
+  })
+}
+
+/**
+ * The project digests: the factory makes one every few hours, but the counts on each are read now, so the strip is read once
+ * a minute. A server without the route (404) just has no strip.
+ */
+export function useProjectDigests() {
+  return useQuery({
+    queryKey: ['project-digests'],
+    queryFn: ({ signal }) => fetchProjectDigests(signal),
+    refetchInterval: 60_000,
+    retry: (count, error) => !(error instanceof ApiError && error.status === 404) && count < 1,
   })
 }
 
