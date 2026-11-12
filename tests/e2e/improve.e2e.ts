@@ -47,6 +47,7 @@ const CARD_ORDER = [
   'worth_asking',
   'specs_per_100',
   'owner_decisions_per_100',
+  'verdict_changes_share',
   'first_watch_dwell_p50',
   'regression_cause',
   'queue_wait_p90',

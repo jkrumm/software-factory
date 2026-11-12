@@ -357,12 +357,24 @@ brief test pins the wording). Three parts:
   before any git read, as a refused ship on the record (so `refusals` counts it) with `SPEC_OWED` as the verb's error.
 - *The timeout.* A Concept or Spec the owner has not answered for 24 hours is looked at once per revision by
   `recheckReviews` (`app/checkpoints-reviews.ts`, run by `settle` and `checkpoint pass` after `recheckOpen`; no model, no port):
-  its Issue closed or no longer waiting: withdrawn (verdict `no_longer_applies` by the factory, pages cancelled); a Spec of a
-  flagged Issue: **defaulted** (verdict `looks_good` by the factory with a note, `verdict_given` and `noted` by actor `factory`, so the lead hears
-  "no verdict, go on with your defaults" once and the owner can still overrule with a note); anything else: pushed once (a
-  second page, key `page:review:push:<artifact>:<revision>`). Each look is a `checkpoint_rechecks` row of kind `artifact`
+  its Issue closed or no longer waiting: withdrawn (verdict `no_longer_applies` by the factory, pages cancelled); anything
+  else, Concept or Spec, flagged Issue or not: **defaulted** (verdict `looks_good` by the factory with a note, `verdict_given`
+  and `noted` by actor `factory`, so the lead hears "no verdict, go on with your defaults" once and the owner can still
+  overrule with a note). Nothing stays in Needs you past the wait: there is no second push, because it would fall on the same
+  hour as the default. A Report never waits on the owner. Each look is a `checkpoint_rechecks` row of kind `artifact`
   (`through_version` is the revision seen, so a revision is looked at once). `SPEC_WAIT_HOURS` (contract, `lane.ts`) is the
   one number; the brief and the gate's message quote it.
+- *A Decision is a choice.* `askDecision` refuses a lead's Decision whose recommendation or default is to keep waiting
+  (`refuseNoOpDefault`, `domains/checkpoints/decision.ts`: "Keep waiting", "Wait for review", "Do nothing", "Hold") with
+  422 `invalid_request` naming `factory errand raise`: what it waits for is a person's chore (approve a PR, rotate a key,
+  click in a UI), and a chore is an Errand. The steward's asks are exempt: a hold is a real answer to a stall. Order 2 of the
+  brief says the same.
+- *Taste.* The owner's verdict notes and annotations are the one signal of what he likes. `factory retro` carries them as
+  `taste` (`read/retro-taste.ts`: his own verdicts with a note or a `with_notes`/`changes`, never the factory's defaults, and
+  his annotations, each with artifact, repo and Issue; words dropped for the read token), and `verdict_changes_share` (his
+  `with_notes` and `changes` over all his verdicts of the window, lower is better) is a KPI. Part 2d of the retro text
+  (`domains/loops/retro.ts`) groups them into recurring preferences and files a signal per preference seen twice or more, to
+  write it into the repo's `AGENTS.md`, `apps/console/DESIGN.md` or the lead brief, with that KPI as the marker.
 
 Improve counts `specs_per_100` and `owner_decisions_per_100` (trend only), so a silent path shows as two near-zero lines.
 

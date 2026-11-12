@@ -302,7 +302,7 @@ describe('the brief', () => {
   test('the standing orders open every brief and are pinned', () => {
     expect(buildBrief(input).startsWith(STANDING_ORDERS)).toBe(true)
     expect(new Bun.CryptoHasher('sha256').update(STANDING_ORDERS).digest('hex')).toBe(
-      'eb8db4c48fb7515a609ae53a556cd1d33d79620e14013f65a27c760eee7f82a6',
+      'de9f2e4e3a24034d8c757122c775193f8c9f02302970c32b7a323f6540887a38',
     )
   })
 
@@ -445,6 +445,7 @@ describe('the brief', () => {
   test('uses the language, never the retired words, and names the review rule', () => {
     expect(STANDING_ORDERS).toMatch(/Decision/)
     expect(STANDING_ORDERS).toMatch(/Errand/)
+    expect(STANDING_ORDERS).toMatch(/recommendation or default is to keep waiting is refused/)
     expect(STANDING_ORDERS).toMatch(/Watch/)
     expect(STANDING_ORDERS).toMatch(/once per ship range, standard or deep/)
     expect(STANDING_ORDERS).toMatch(/never refuses a ship/)

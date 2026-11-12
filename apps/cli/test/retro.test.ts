@@ -45,6 +45,7 @@ beforeAll(() => {
       dropped: [{ issue: 'issue_7', why: 'y', ms: null }],
     },
     ledger: [],
+    taste: { verdicts: [], annotations: [] },
     capacity: null,
     build: { repos: [], unreadable: [], figures: [] },
   }

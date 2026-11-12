@@ -206,6 +206,7 @@ export const KPI_KEYS = [
   'avoidable_touches',
   'asks',
   'worth_asking',
+  'verdict_changes_share',
   'specs_per_100',
   'owner_decisions_per_100',
   'first_verification_passes',
@@ -408,6 +409,42 @@ export const RetroLedgerEntry = z
   })
   .meta({ id: 'RetroLedgerEntry' })
 export type RetroLedgerEntry = z.infer<typeof RetroLedgerEntry>
+
+/**
+ * What the owner said about an artifact in the window, in his words: the notes of his verdicts and his annotations, each with
+ * the artifact, repo and Issue it was about, so a recurring preference can be written down where the next lead reads it.
+ * Words are dropped for the read token (a work repository's words never leave it).
+ */
+export const RetroTaste = z
+  .strictObject({
+    verdicts: z.array(
+      z.strictObject({
+        artifact: z.string(),
+        kind: z.enum(['concept', 'spec', 'report']),
+        title: z.string(),
+        repo: z.string(),
+        issue: z.string(),
+        verdict: z.enum(['looks_good', 'with_notes', 'changes']),
+        note: z.string().nullable(),
+        at,
+      }),
+    ),
+    annotations: z.array(
+      z.strictObject({
+        artifact: z.string(),
+        kind: z.enum(['concept', 'spec', 'report']),
+        title: z.string(),
+        repo: z.string(),
+        issue: z.string(),
+        revision: z.number().int(),
+        quote: z.string(),
+        comment: z.string(),
+        at,
+      }),
+    ),
+  })
+  .meta({ id: 'RetroTaste' })
+export type RetroTaste = z.infer<typeof RetroTaste>
 
 // -- finding classes -----------------------------------------------------------------------------------------------------
 
@@ -863,6 +900,8 @@ export const RetroModel = z
       dropped: z.array(RetroSample),
     }),
     ledger: z.array(RetroLedgerEntry),
+    /** the owner's verdict notes and annotations of the window */
+    taste: RetroTaste,
     /** the capacity loop over the window; null when the server holds no capacity settings */
     capacity: RetroCapacity.nullable(),
     /** what each repo's local checks and CI cost over the window */

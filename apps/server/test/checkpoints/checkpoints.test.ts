@@ -216,6 +216,25 @@ describe('asking', () => {
     expect(await eventsOf(issueId)).toEqual(['filed', 'settled', 'admitted', 'lead_started'])
   })
 
+  test('a lead Decision whose recommended default is to keep waiting is refused with the Errand hint, nothing stored', async () => {
+    const issueId = await workingIssue()
+    const waiting = {
+      ...FORM,
+      question: 'PR #102 is green but needs an approving review',
+      recommendation: 'Keep waiting',
+      options: [
+        { label: 'Keep waiting', reversible: true, cost: 'nothing moves until someone approves' },
+        { label: 'Merge around it', reversible: false, cost: 'bypasses the review rule' },
+      ],
+      noAnswer: { consequence: 'The PR stays open', default: 'Keep waiting', waitMinutes: 60 },
+    }
+    const error = errorOf(await askDecision(deps, { issueId, attempt: 1, form: waiting }))
+    expect(error).toMatchObject({ kind: 'invalid' })
+    expect(error.kind === 'invalid' && error.detail).toContain('factory errand raise')
+    expect(await rows('decisions')).toBe(0)
+    expect(await eventsOf(issueId)).toEqual(['filed', 'settled', 'admitted', 'lead_started'])
+  })
+
   test('the same ask again is the same Decision: one row, one asked event', async () => {
     const issueId = await workingIssue()
     const first = await ask(issueId)
@@ -1318,21 +1337,28 @@ describe('a Concept or Spec the owner has not answered for a day', () => {
     expect(await effectsOf(issueId, 'note_lead')).toBe(1)
   })
 
-  test('an Issue without the checkpoint is pushed once, never defaulted, and a later pass leaves it', async () => {
-    const issueId = await workingIssue()
-    const { artifact } = value(await submitArtifact(deps, { issueId, attempt: 1, raw: SPEC }))
-    expect(await rows('checkpoint_pages')).toBe(1)
-    later(25)
-    expect(value(await recheckReviews(deps))).toEqual([{ artifact: artifact.id, outcome: 'pushed' }])
-    expect(await rows('checkpoint_pages')).toBe(2)
-    expect(await rows('verdicts')).toBe(0)
-    const [issue] = await db.sql`SELECT state, wait_reason FROM factory.issues WHERE id = ${issueId}`
-    expect(issue).toMatchObject({ state: 'waiting', wait_reason: 'review' })
-    later(48)
-    expect(value(await recheckReviews(deps))).toEqual([])
-    expect(await rows('checkpoint_pages')).toBe(2)
-    expect((await rechecks())[0]).toMatchObject({ kind: 'artifact', outcome: 'kept' })
-  })
+  test.each(['spec', 'concept'] as const)(
+    'an unflagged Issue takes its defaults for a %s after the wait too, and the lead goes on',
+    async (kind) => {
+      const issueId = await workingIssue()
+      const { artifact } = value(await submitArtifact(deps, { issueId, attempt: 1, raw: { ...SPEC, kind } }))
+      later(23)
+      expect(value(await recheckReviews(deps))).toEqual([])
+      later(2)
+      expect(value(await recheckReviews(deps))).toEqual([{ artifact: artifact.id, outcome: 'defaulted' }])
+      const [verdict] = await db.sql`SELECT verdict, note FROM factory.verdicts WHERE artifact_id = ${artifact.id}`
+      expect(verdict).toMatchObject({ verdict: 'looks_good' })
+      expect(String(verdict.note)).toContain('no verdict in 24 hours')
+      const [issue] = await db.sql`SELECT state FROM factory.issues WHERE id = ${issueId}`
+      expect(issue).toMatchObject({ state: 'working' })
+      expect(await effectsOf(issueId, 'note_lead')).toBe(1)
+      expect((await rechecks())[0]).toMatchObject({ kind: 'artifact', outcome: 'settled', by: 'factory' })
+      // a later pass leaves it, and no second page was ever planned
+      later(48)
+      expect(value(await recheckReviews(deps))).toEqual([])
+      expect(await rows('checkpoint_pages')).toBe(1)
+    },
+  )
 
   test('a Spec whose Issue closed meanwhile is withdrawn, and its pages are never sent', async () => {
     const issueId = await workingIssue('example', { checkpoint: 'spec' })
@@ -1357,7 +1383,7 @@ describe('a Concept or Spec the owner has not answered for a day', () => {
     expect(value(await recheckReviews(deps))).toEqual([{ artifact: artifact.id, outcome: 'defaulted' }])
   })
 
-  test('lookAtReview: a Concept of a flagged Issue is pushed, never defaulted', () => {
+  test('lookAtReview: a Concept or Spec is defaulted whatever the checkpoint, withdrawn when its Issue moved on', () => {
     const wait = {
       artifact: 'artifact_1',
       issueId: 'issue_1' as IssueId,
@@ -1366,11 +1392,9 @@ describe('a Concept or Spec the owner has not answered for a day', () => {
       revision: 1,
       at: new Date(0),
     }
-    const now = new Date(30 * HOUR)
-    expect(lookAtReview({ wait, now, closed: false, waiting: true, flaggedSpec: true }).outcome).toBe('pushed')
-    expect(
-      lookAtReview({ wait: { ...wait, kind: 'spec' }, now, closed: false, waiting: true, flaggedSpec: true }).outcome,
-    ).toBe('defaulted')
-    expect(lookAtReview({ wait, now, closed: false, waiting: false, flaggedSpec: false }).outcome).toBe('withdrawn')
+    expect(lookAtReview({ wait, closed: false, waiting: true }).outcome).toBe('defaulted')
+    expect(lookAtReview({ wait: { ...wait, kind: 'spec' }, closed: false, waiting: true }).outcome).toBe('defaulted')
+    expect(lookAtReview({ wait, closed: false, waiting: false }).outcome).toBe('withdrawn')
+    expect(lookAtReview({ wait, closed: true, waiting: true }).outcome).toBe('withdrawn')
   })
 })

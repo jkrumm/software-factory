@@ -98,6 +98,7 @@ const QUALITY: readonly KpiKey[] = [
   'worth_asking',
   'specs_per_100',
   'owner_decisions_per_100',
+  'verdict_changes_share',
   'first_watch_dwell_p50',
   'regression_cause',
 ]
@@ -119,6 +120,7 @@ const KPI_ICON: Record<KpiKey, Icon> = {
   worth_asking: ScalesIcon,
   specs_per_100: FileTextIcon,
   owner_decisions_per_100: ChatCircleDotsIcon,
+  verdict_changes_share: FileTextIcon,
   refusals: ProhibitIcon,
   queue_wait_p90: HourglassIcon,
   queue_wait_p50: HourglassIcon,
