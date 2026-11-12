@@ -28,11 +28,11 @@ afterAll(async () => {
   await rm(dir, { recursive: true, force: true })
 })
 
-async function cli(argv: string[]) {
+async function cli(argv: string[], env: Record<string, string> = {}) {
   let out = ''
   let err = ''
   const code = await run(argv, {
-    env: { FACTORY_URL: server.url.href },
+    env: { FACTORY_URL: server.url.href, ...env },
     out: (text) => {
       out += text
     },
@@ -161,6 +161,17 @@ describe('the filing contract', () => {
     const error = errorLine(result.err)
     expect(error.message).toContain('must be one of request, feedback, remark')
     expect(error.hint).toContain('factory issue new --kind bug|feature|chore')
+  })
+
+  test("a lead's signal names its Issue as the filer; a session that is no lead's names none", async () => {
+    answer = { status: 200, body: {} }
+    const file = ['signal', 'file', '--from', 'agent:x', '--title', 't']
+    await cli(file, { FACTORY_SESSION: 'lead-926-2' })
+    expect(JSON.parse(sentBody)).toMatchObject({ filer: 'issue_926' })
+    await cli(file, { FACTORY_SESSION: 'implementer-3' })
+    expect(JSON.parse(sentBody)).not.toHaveProperty('filer')
+    await cli(file)
+    expect(JSON.parse(sentBody)).not.toHaveProperty('filer')
   })
 
   test('the limits the server holds are in the help of the verbs they bound', async () => {

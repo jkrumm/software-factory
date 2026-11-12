@@ -245,6 +245,11 @@ async function request(op: Operation, invocation: Invocation, ioOf: Io) {
     body = { ...(isObject(body) ? body : {}), ...fields }
   }
   if (op.body && body === undefined) body = {}
+  // A lead's follow-up signal says whose it is: the server never amends the filer's own Issue with it.
+  const lead = /^lead-([1-9][0-9]*)-[1-9][0-9]*$/.exec(io.env.FACTORY_SESSION ?? '')
+  if (op.operationId === 'signal.file' && lead && isObject(body) && body.filer === undefined) {
+    body = { ...body, filer: `issue_${lead[1]}` }
+  }
   // The contract's own limits, checked before anything is sent: Issue ids are normalised, then every issue is named.
   if (op.body) {
     body = normalizeBody(op, body)
