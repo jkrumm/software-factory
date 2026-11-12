@@ -120,7 +120,10 @@ export function gitProjectSource(options: GitProjectsOptions): ProjectSource {
     async discover() {
       const found: RepoRef[] = []
       for (const root of options.roots) {
-        const entries = await readdir(root, { withFileTypes: true }).catch(() => [])
+        // By name: the directory order is the filesystem's, and every list the sync makes follows this one.
+        const entries = (await readdir(root, { withFileTypes: true }).catch(() => [])).sort((a, b) =>
+          a.name < b.name ? -1 : a.name > b.name ? 1 : 0,
+        )
         for (const entry of entries) {
           if (!entry.isDirectory() || entry.name.startsWith('.') || !isProjectDirName(entry.name)) continue
           const path = await realpath(join(root, entry.name)).catch(() => null)

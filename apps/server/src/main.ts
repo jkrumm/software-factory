@@ -36,7 +36,7 @@ import { createApp } from './api/app.ts'
 import { apiForward, consoleHandler } from './api/console.ts'
 import { loadConsoleSettings } from './console-settings.ts'
 import { loadNeedsSettings } from './read/needs-settings.ts'
-import { loadavg } from 'node:os'
+import { availableParallelism, loadavg } from 'node:os'
 import { join } from 'node:path'
 import { checkpointUses } from './app/checkpoints-uses.ts'
 import { createLoopRunner, type LoopRunner, type LoopSpec } from './app/loops/runner.ts'
@@ -631,6 +631,7 @@ async function main(): Promise<void> {
       deployingSince: deployingSince(dataDir),
       tickError: runner.view().find((loop) => loop.name === 'leads')?.lastError ?? null,
       load: loadavg()[0] ?? null,
+      cores: availableParallelism(),
       ...(loopSettings.heartbeatStaleMs === null ? {} : { limitMs: loopSettings.heartbeatStaleMs }),
     })
     return healthOf({

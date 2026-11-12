@@ -427,7 +427,7 @@ model, not a signal: an agent-trust signal files an Issue, and no loops page exi
   `FACTORY_HEALTH_PROBE_MS`, 10 s, one read at a time) holds the database facts (`queueMovedAt`, the door lines, a database error),
   so a request never waits for Postgres and answers within a second at load 200. `ok` is false only for a stopped factory:
   no successful leads tick for 20 min (`TICK_DEAD_MS`; `FACTORY_HEARTBEAT_STALE_MS` replaces it for a scenario), no first tick
-  5 min after a start, or a database that errors for 5 min. Everything short of that is `ok` with a `reason` that says so:
+  5 min after a start on a host that is not starved (a load of twice the CPU count or more keeps `starved: no tick has succeeded yet` ok until the 20 min), or a database that errors for 5 min. Everything short of that is `ok` with a `reason` that says so:
   `starting` (before the first tick, up to 5 min), `deploying` (`scripts/deploy.sh` holds `data/deploy.lock` for a live pid, up to
   30 min; it also appends its start and end to `data/deploys.log`), `starved: …` (a tick older than three intervals and a minute: the
   process is alive, with the age and the load) or `failing: …` (the same, with the tick's error).
