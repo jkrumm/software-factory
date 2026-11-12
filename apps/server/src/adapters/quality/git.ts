@@ -1,3 +1,6 @@
+import { mkdtemp, rm } from 'node:fs/promises'
+import { tmpdir } from 'node:os'
+import { join } from 'node:path'
 import { type CommitRead, deploys, type ReviewRange } from '../../domains/quality/evidence.ts'
 import type { Commits } from '../../domains/quality/ports.ts'
 import { err, ok, portError, type Result } from '../../kernel/result.ts'
@@ -449,6 +452,8 @@ export interface CheckoutSync {
   /** `advanced`: fast-forwarded; `current`: nothing to pull; `unknown`: no answer from the remote; `blocked`: behind and not ours to move */
   state: 'current' | 'advanced' | 'unknown' | 'blocked'
   detail: string
+  /** on `blocked`: the remote's default branch (`origin/<it>`) a throwaway worktree can read instead of the owner's checkout */
+  ref?: string
 }
 
 const firstLine = (text: string): string => text.trim().split('\n')[0]?.trim() ?? ''
@@ -481,6 +486,7 @@ export async function syncCheckout(repo: string, options: GitOptions = {}): Prom
   if (on !== branch) {
     return {
       state: 'blocked',
+      ref: remote,
       detail: `${repo} is ${on ? `on branch ${on}` : 'on a detached HEAD'}, not ${branch}, and ${behind} commits behind ${remote}`,
     }
   }
@@ -490,20 +496,49 @@ export async function syncCheckout(repo: string, options: GitOptions = {}): Prom
     const shown = paths.slice(0, 3).join(', ')
     return {
       state: 'blocked',
+      ref: remote,
       detail: `${repo} has uncommitted changes (${shown}${paths.length > 3 ? ', …' : ''}) and is ${behind} commits behind ${remote}`,
     }
   }
   if (ahead > 0)
-    return { state: 'blocked', detail: `${repo} diverged from ${remote}: ${ahead} ahead, ${behind} behind` }
+    return {
+      state: 'blocked',
+      ref: remote,
+      detail: `${repo} diverged from ${remote}: ${ahead} ahead, ${behind} behind`,
+    }
   const merged = await git(['merge', '--ff-only', remote])
   if (merged.exitCode !== 0) {
     return {
       state: 'blocked',
+      ref: remote,
       detail: `${repo} could not fast-forward to ${remote}: ${firstLine(merged.stdout) || `git exit ${merged.exitCode}`}`,
     }
   }
   const sha = await git(['rev-parse', 'HEAD'])
   return { state: 'advanced', detail: `fast-forwarded ${repo} ${behind} commits to ${sha.stdout.trim().slice(0, 12)}` }
+}
+
+/**
+ * Runs `work` in a throwaway detached worktree of `ref` (a checkout the factory may not move is not where a check reads
+ * the shipped commit). The worktree is gone when `work` returns or throws. Undefined: it could not be made.
+ */
+export async function inScratchWorktree<T>(
+  repo: string,
+  ref: string,
+  work: (path: string) => Promise<T>,
+  options: GitOptions = {},
+): Promise<T | undefined> {
+  const base = await mkdtemp(join(tmpdir(), 'factory-verify-'))
+  const path = join(base, 'tree')
+  try {
+    const added = await gitIn(repo, ['worktree', 'add', '--detach', '-q', path, ref], options).catch(() => undefined)
+    if (added?.exitCode !== 0) return undefined
+    return await work(path)
+  } finally {
+    await gitIn(repo, ['worktree', 'remove', '--force', path], options).catch(() => undefined)
+    await gitIn(repo, ['worktree', 'prune'], options).catch(() => undefined)
+    await rm(base, { recursive: true, force: true })
+  }
 }
 
 /**
