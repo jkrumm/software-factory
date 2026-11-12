@@ -7,7 +7,7 @@ import { type IssueId, issueNumber } from '../../kernel/ids.ts'
  * sent, when a project needs a new digest, and what is kept of the answer. Pure; the model is the agw workflow's.
  */
 
-export { countsOf, DIGEST_WINDOW_MS, groupByProject, projectOfRepo } from '../../kernel/digest-scope.ts'
+export { countsOf, DIGEST_WINDOW_MS, groupByProject } from '../../kernel/digest-scope.ts'
 export type { DigestCounts, DigestIssue, DigestProject, DigestState } from '../../kernel/digest-scope.ts'
 
 /** The agw route the digest is made on, stored with each digest (`agw routes` maps it to a model). */

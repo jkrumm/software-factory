@@ -3,9 +3,9 @@ import type { SQL } from 'bun'
 import * as z from 'zod'
 import { countsOf, DIGEST_WINDOW_MS, groupByProject } from '../kernel/digest-scope.ts'
 import { loopReads } from './loops.ts'
-import { REDACTED_REPO, REDACTED_TITLE } from './work.ts'
+import { isWorkRepo, loadOpenProjects, REDACTED_REPO, REDACTED_TITLE } from './work.ts'
 
-const Project = z.object({ name: z.string(), repo: z.string(), work: z.boolean() })
+const Project = z.object({ name: z.string(), repo: z.string() })
 
 const Latest = z.object({ project: z.string(), at: z.date(), digest: z.unknown() })
 
@@ -20,9 +20,11 @@ export async function readProjectDigests(
 ): Promise<ProjectDigestsModel> {
   const { now } = options
   const projectRows: unknown[] = await sql`
-    SELECT name, repo, COALESCE(project->>'work', 'false') = 'true' AS work
+    SELECT name, repo
     FROM factory.planning_projects WHERE source = 'file' ORDER BY name`
   const projects = projectRows.map((raw) => Project.parse(raw))
+  // the one rule for a work repo (`read/work.ts`): a project with a `project.yaml` that does not say `work: true` is open
+  const open = options.redact ? await loadOpenProjects(sql) : []
   const issues = await loopReads(sql).digestIssues(new Date(now.getTime() - DIGEST_WINDOW_MS))
   const groups = groupByProject(projects, issues)
   const latestRows: unknown[] = await sql`
@@ -37,7 +39,7 @@ export async function readProjectDigests(
     const digest = DigestAnswer.safeParse(typeof stored.digest === 'string' ? JSON.parse(stored.digest) : stored.digest)
     if (!digest.success) continue
     const counts = countsOf(group, now)
-    const hide = options.redact === true && project.work
+    const hide = options.redact === true && isWorkRepo(project.name, open)
     entries.push({
       project: hide ? REDACTED_REPO : project.name,
       at: stored.at.toISOString(),

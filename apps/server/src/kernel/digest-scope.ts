@@ -1,4 +1,5 @@
 import type { IssueId } from './ids.ts'
+import { projectOf } from './project-of.ts'
 
 /**
  * What the project digests share between the digest loop (`domains/loops/digest.ts`) and the read of them
@@ -34,15 +35,6 @@ export interface DigestIssue {
   after: IssueId[]
 }
 
-/** The project a repo text (a name, a path, a worktree below a path) belongs to: the longest repo wins. */
-export function projectOfRepo<P extends DigestProject>(projects: readonly P[], repo: string): P | undefined {
-  const byName = projects.find((p) => p.name === repo)
-  if (byName) return byName
-  return projects
-    .filter((p) => repo === p.repo || repo.startsWith(`${p.repo}/`))
-    .sort((a, b) => b.repo.length - a.repo.length)[0]
-}
-
 /** Issues by the name of their project; an Issue of no listed project is left out. */
 export function groupByProject(
   projects: readonly DigestProject[],
@@ -50,7 +42,7 @@ export function groupByProject(
 ): Map<string, DigestIssue[]> {
   const groups = new Map<string, DigestIssue[]>()
   for (const issue of issues) {
-    const project = projectOfRepo(projects, issue.repo)
+    const project = projectOf(projects, issue.repo)
     if (!project) continue
     const group = groups.get(project.name) ?? []
     group.push(issue)

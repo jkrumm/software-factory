@@ -7,9 +7,9 @@ import {
   groupByProject,
   inputHash,
   planDigests,
-  projectOfRepo,
   requestOf,
 } from '../../src/domains/loops/digest.ts'
+import { projectOf } from '../../src/kernel/project-of.ts'
 
 const NOW = new Date('2026-11-12T12:00:00Z')
 const hours = (n: number) => new Date(NOW.getTime() - n * 3_600_000)
@@ -36,11 +36,11 @@ const projects = [
 
 describe('project of a repo', () => {
   test('a name, a path and a worktree below a path are one project; a stranger is none', () => {
-    expect(projectOfRepo(projects, 'app')?.name).toBe('app')
-    expect(projectOfRepo(projects, '/src/shop')?.name).toBe('shop')
-    expect(projectOfRepo(projects, '/src/shop/.claude/worktrees/factory-1-1')?.name).toBe('shop')
-    expect(projectOfRepo(projects, '/other/app')?.name).toBe('app~ab12')
-    expect(projectOfRepo(projects, 'loose')).toBeUndefined()
+    expect(projectOf(projects, 'app')?.name).toBe('app')
+    expect(projectOf(projects, '/src/shop')?.name).toBe('shop')
+    expect(projectOf(projects, '/src/shop/.claude/worktrees/factory-1-1')?.name).toBe('shop')
+    expect(projectOf(projects, '/other/app')?.name).toBe('app~ab12')
+    expect(projectOf(projects, 'loose')).toBeUndefined()
   })
 
   test('issues are grouped by project and a repo with no project is left out', () => {
