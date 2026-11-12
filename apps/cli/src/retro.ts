@@ -11,7 +11,7 @@ import { type TranscriptReport, transcriptPass } from './retro-transcripts.ts'
 
 const USAGE = 'usage: retro [--days <1-90>] [--digests <dir>] [--no-transcripts] [--format json|plain]'
 
-/** The transcript pass reads every lead transcript of the window: tens of MB each. The server's answer is quick. */
+/** The transcript pass reads every lead transcript of the window: tens of MB each. The server's answer is quick (its GitHub read of the CI times ends at 40 s). */
 const READ_TIMEOUT_MS = 60_000
 
 export interface RetroBundle extends RetroModel {

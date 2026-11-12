@@ -11,10 +11,12 @@ import {
   type RetroSample,
   type RetroSession,
 } from '@software-factory/contract'
+import type { CiTimes } from '../domains/loops/ports.ts'
 import { capacityFigures, tuneConstant } from './capacity-tuning.ts'
 import { type CapacityConstants, readCapacityLoop } from './capacity-loop.ts'
 import { readFriction } from './friction.ts'
 import { readKpis, type Window } from './kpis.ts'
+import { readRetroBuild } from './retro-build.ts'
 import { REGRESSION_CAUSES, regressionCause } from './kpis-flow.ts'
 import { windowOf } from './stats.ts'
 import { plain } from './words.ts'
@@ -191,10 +193,10 @@ export async function ledgerOf(
 /** The capacity loop over the window, its per-day figures and the one setting the fixed rules would change first. */
 async function capacityOf(
   sql: SQL,
-  options: { now: Date; days: number; constants: CapacityConstants },
+  options: { now: Date; days: number; constants: CapacityConstants; build: readonly RetroCapacityFigure[] },
 ): Promise<RetroCapacity> {
   const loop = await readCapacityLoop(sql, options)
-  const figures = capacityFigures(loop)
+  const figures = [...capacityFigures(loop), ...options.build]
   const heaviest = loop.leadCosts[0] ?? null
   const memoryShare = loop.idleSeatHours.total > 0 ? loop.idleSeatHoursMemory.total / loop.idleSeatHours.total : 0
   return {
@@ -216,15 +218,16 @@ async function capacityOf(
  */
 export async function readRetro(
   sql: SQL,
-  options: { now: Date; days: number; redact?: boolean; capacityConstants?: CapacityConstants },
+  options: { now: Date; days: number; redact?: boolean; capacityConstants?: CapacityConstants; ciTimes?: CiTimes },
 ): Promise<RetroModel> {
   const { now, days } = options
   const w = windowOf(now, days)
   const kpis = await readKpis(sql, { now, days })
   const friction: FrictionModel = await readFriction(sql, { now, days })
   const sessions = await sessionsOf(sql, w)
+  const build = await readRetroBuild(sql, { now, days, ...(options.ciTimes ? { ciTimes: options.ciTimes } : {}) })
   const capacity = options.capacityConstants
-    ? await capacityOf(sql, { now, days, constants: options.capacityConstants })
+    ? await capacityOf(sql, { now, days, constants: options.capacityConstants, build: build.figures })
     : null
   const model: RetroModel = {
     at: now.toISOString(),
@@ -240,8 +243,9 @@ export async function readRetro(
       refused: await refused(sql, w),
       dropped: await dropped(sql, w),
     },
-    ledger: await ledgerOf(sql, kpis, capacity?.figures),
+    ledger: await ledgerOf(sql, kpis, capacity?.figures ?? build.figures),
     capacity,
+    build,
   }
   if (!options.redact) return model
   const bare = (list: RetroSample[]): RetroSample[] => list.map((s) => ({ ...s, why: '' }))

@@ -46,6 +46,7 @@ beforeAll(() => {
     },
     ledger: [],
     capacity: null,
+    build: { repos: [], unreadable: [], figures: [] },
   }
 })
 afterAll(() => rmSync(dir, { recursive: true, force: true }))

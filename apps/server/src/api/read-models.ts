@@ -22,6 +22,7 @@ import { Elysia } from 'elysia'
 import type * as z from 'zod'
 import type { UnitOfWork } from '../app/unit-of-work.ts'
 import { registerVisit, type VisitStore } from '../app/visit.ts'
+import type { CiTimes } from '../domains/loops/ports.ts'
 import { findingClasses } from '../app/loops/finding-classes.ts'
 import { type CapacityConstants, readCapacityLoop } from '../read/capacity-loop.ts'
 import { readChain } from '../read/chain.ts'
@@ -53,6 +54,8 @@ export interface ReadModelDeps {
   }
   /** the owner's visit marker; absent, `GET /v1/since` moves nothing and reads from the stored start */
   visits?: UnitOfWork<{ visits: VisitStore }>
+  /** the duration of a repo's finished CI runs; absent, `GET /v1/retro` has check figures only */
+  ciTimes?: CiTimes
   /** the settings in force the capacity loop tunes; absent, `GET /v1/capacity-loop` is 503 */
   capacityConstants?: CapacityConstants
   now?: () => Date
@@ -245,6 +248,7 @@ export const readModelRoutes = (deps: ReadModelDeps | undefined, caller: (reques
               days: days(query),
               redact,
               capacityConstants: deps.capacityConstants,
+              ...(deps.ciTimes ? { ciTimes: deps.ciTimes } : {}),
             }),
           ),
         )

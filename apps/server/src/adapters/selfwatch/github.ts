@@ -1,5 +1,5 @@
 import * as z from 'zod'
-import type { CiLive, CiRuns } from '../../domains/loops/ports.ts'
+import type { CiLive, CiRuns, CiRunTime, CiTimes } from '../../domains/loops/ports.ts'
 import { err, ok, portError, type PortError, type Result } from '../../kernel/result.ts'
 import { parseRemote } from '../intake/github.ts'
 import { gitIn } from '../quality/git.ts'
@@ -146,5 +146,69 @@ export function githubCiLive(options: GithubCiOptions): CiLive {
       if (!runs.ok) return runs
       return ok(runs.value.workflow_runs.some((run) => run.status && run.status !== FINISHED))
     },
+  }
+}
+
+const TIMES_PAGE_SIZE = 100
+/** At most this many pages of runs are read for a repo: 300 runs of the window. */
+const TIMES_MAX_PAGES = 3
+const MINUTE_MS = 60_000
+
+const TimedRuns = z.looseObject({
+  workflow_runs: z.array(
+    z.looseObject({
+      event: z.string(),
+      head_branch: z.string().nullish(),
+      conclusion: z.string().nullish(),
+      run_attempt: z.number().int().nullish(),
+      run_started_at: z.string().nullish(),
+      updated_at: z.string(),
+    }),
+  ),
+})
+
+/**
+ * How long the repo's finished CI runs took since a date: pushes to the default branch and pull request runs, ended
+ * green or red (a cancelled or skipped run says nothing about the duration). A run is `flaky` when it ended green on a
+ * rerun. Reads only, newest first, at most three pages; errors are `githubCiRuns`'s.
+ */
+export function githubCiTimes(options: GithubCiOptions): CiTimes {
+  const { api, read, slugOf } = githubReader(options)
+
+  return async (repo, since) => {
+    const found = await slugOf(repo)
+    if (!found.ok) return found
+    const info = await read(`${api}/repos/${found.value}`, GithubRepo)
+    if (!info.ok) return info
+    const runs: CiRunTime[] = []
+    let truncated = false
+    for (let page = 1; page <= TIMES_MAX_PAGES; page++) {
+      const answer = await read(
+        `${api}/repos/${found.value}/actions/runs?status=completed&created=%3E%3D${since.toISOString().slice(0, 10)}&per_page=${TIMES_PAGE_SIZE}&page=${page}`,
+        TimedRuns,
+      )
+      if (!answer.ok) return answer
+      for (const run of answer.value.workflow_runs) {
+        const conclusion = run.conclusion
+        if ((conclusion !== 'success' && conclusion !== 'failure') || !run.run_started_at) continue
+        const kind =
+          run.event === 'push' && run.head_branch === info.value.default_branch
+            ? 'default'
+            : run.event === 'pull_request' || run.event === 'pull_request_target'
+              ? 'pr'
+              : null
+        const ms = Date.parse(run.updated_at) - Date.parse(run.run_started_at)
+        if (!kind || !Number.isFinite(ms) || ms < 0) continue
+        runs.push({
+          kind,
+          minutes: ms / MINUTE_MS,
+          conclusion,
+          flaky: conclusion === 'success' && (run.run_attempt ?? 1) > 1,
+        })
+      }
+      if (answer.value.workflow_runs.length < TIMES_PAGE_SIZE) break
+      truncated = page === TIMES_MAX_PAGES
+    }
+    return ok({ runs, truncated })
   }
 }
