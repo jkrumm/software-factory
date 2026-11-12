@@ -80,6 +80,7 @@ describe.skipIf(!canRun)('the plans', () => {
     )
     expect(out).not.toContain('old door')
     expect(out).toContain('the settings file is accepted')
+    expect(out).toContain('one-minute load average')
     expect(out).not.toContain('packages/cli')
   })
 
@@ -95,6 +96,7 @@ describe.skipIf(!canRun)('the plans', () => {
     expect(out).toContain(`${join(work, 'releases', OLD_SHA)}/scripts/launch-door.sh`)
     expect(out).not.toContain('new door (apps/door)')
     expect(out).toContain('the two trade places')
+    expect(out).toContain('one-minute load average')
   })
 
   test('a rollback refuses, before stopping anything, a settings file the old launcher would refuse', async () => {
