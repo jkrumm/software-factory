@@ -2,7 +2,7 @@ import { afterAll, beforeAll, describe, expect, test } from 'bun:test'
 import { mkdir, mkdtemp, rm, writeFile } from 'node:fs/promises'
 import { join } from 'node:path'
 import { PLAN_LIMITS } from '@software-factory/contract'
-import { issueListPlain, projectShowPlain } from '../src/plain-forms.ts'
+import { artifactListPlain, issueListPlain, projectShowPlain } from '../src/plain-forms.ts'
 import { run } from '../src/run.ts'
 
 const ROOT = join(import.meta.dir, '..', '..', '..')
@@ -187,6 +187,26 @@ describe('plain forms', () => {
     const data = { issues: [card('issue_2', 'working', 'argo', 'Fix it'), card('issue_1', 'open', 'chat', 'Other')] }
     expect(issueListPlain(data)).toBe('issue_2\tworking\targo\tFix it\nissue_1\topen\tchat\tOther')
     expect(issueListPlain({ issues: [] })).toBe('')
+  })
+
+  test('artifact list is one tab-separated line per artifact, and nothing for none', () => {
+    const artifact = (id: string, issueId: string, kind: string, title: string) => ({
+      id,
+      issueId,
+      kind,
+      title,
+      createdAt: '2026-11-12T15:35:05.175Z',
+    })
+    const data = {
+      artifacts: [
+        artifact('artifact_2', 'issue_5', 'spec', 'A spec'),
+        artifact('decision_1', 'issue_5', 'decision', 'Ask'),
+      ],
+    }
+    expect(artifactListPlain(data)).toBe(
+      'artifact_2\tissue_5\tspec\t2026-11-12\tA spec\ndecision_1\tissue_5\tdecision\t2026-11-12\tAsk',
+    )
+    expect(artifactListPlain({ artifacts: [] })).toBe('')
   })
 
   test('project show is a header, the plan error and warnings, then one line per row', () => {

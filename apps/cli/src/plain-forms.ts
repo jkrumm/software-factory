@@ -1,4 +1,10 @@
-import type { ProjectSyncAnswer, ProjectView, ReadIssueCards, ShipAnswer } from '@software-factory/contract'
+import type {
+  ArtifactList,
+  ProjectSyncAnswer,
+  ProjectView,
+  ReadIssueCards,
+  ShipAnswer,
+} from '@software-factory/contract'
 
 // `data` is the answer runOperation already parsed with the operation's response schema.
 
@@ -6,6 +12,13 @@ import type { ProjectSyncAnswer, ProjectView, ReadIssueCards, ShipAnswer } from 
 export function issueListPlain(data: unknown): string {
   return (data as ReadIssueCards).issues
     .map((card) => [card.ref, card.state, card.repoName, card.title].join('\t'))
+    .join('\n')
+}
+
+/** `artifact list --format plain`: one line per artifact, `<id>\t<issue>\t<kind>\t<date>\t<title>`; no artifact, no output. */
+export function artifactListPlain(data: unknown): string {
+  return (data as ArtifactList).artifacts
+    .map((a) => [a.id, a.issueId, a.kind, a.createdAt.slice(0, 10), a.title].join('\t'))
     .join('\n')
 }
 
