@@ -24,6 +24,22 @@ describe('a restart is not an outage', () => {
     expect(verdict.failure).toMatch(/^no tick has succeeded yet; /)
   })
 
+  test('on a starved host a first tick that is late is ok until twenty minutes, saying so; an idle host is not given the time', () => {
+    const late = FIRST_TICK_GRACE_MS + 60_000
+    expect(judge({ startedAt: ago(late), tickAt: null, load: 263.5, cores: 12 })).toEqual({
+      failure: null,
+      notice: 'starved: no tick has succeeded yet; the process is alive but starved (load 263.5)',
+    })
+    expect(judge({ startedAt: ago(TICK_DEAD_MS + 1_000), tickAt: null, load: 263.5, cores: 12 }).failure).toStartWith(
+      'no tick has succeeded yet; ',
+    )
+    // twice the cores is the line; below it, or with the load or cores unknown, the five minutes stand
+    expect(judge({ startedAt: ago(late), tickAt: null, load: 24, cores: 12 }).notice).toStartWith('starved:')
+    expect(judge({ startedAt: ago(late), tickAt: null, load: 23.9, cores: 12 }).failure).not.toBeNull()
+    expect(judge({ startedAt: ago(late), tickAt: null, load: 263.5 }).failure).not.toBeNull()
+    expect(judge({ startedAt: ago(late), tickAt: null, cores: 12 }).failure).not.toBeNull()
+  })
+
   test('a held deploy is ok and says deploying, over a missing tick', () => {
     expect(judge({ startedAt: ago(30 * MIN), tickAt: null, deployingSince: ago(2 * MIN) })).toEqual({
       failure: null,

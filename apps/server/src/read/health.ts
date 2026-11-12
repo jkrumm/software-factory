@@ -24,6 +24,9 @@ export const TICK_DEAD_MS = 20 * 60_000
 /** A deploy that has held its lock this long is not trusted to be running any more: it is a stopped factory again. */
 export const DEPLOY_MAX_MS = 30 * 60_000
 
+/** A load average this many times the CPU count is a starved host: a first tick that has not come yet is the host's, not the server's. */
+export const STARVED_LOAD_PER_CORE = 2
+
 export interface TickInput {
   tickMs: number
   now: Date
@@ -35,6 +38,8 @@ export interface TickInput {
   tickError?: string | null
   /** the host's one-minute load average, for the starved reason */
   load?: number | null
+  /** the host's CPU count: a load of twice this or more is a host too busy to start anything (`STARVED_LOAD_PER_CORE`) */
+  cores?: number
   /** the age that makes a tick dead, in place of `TICK_DEAD_MS`, and the grace of the first tick (`FACTORY_HEARTBEAT_STALE_MS`, for a scenario) */
   limitMs?: number
 }
@@ -53,7 +58,8 @@ const ok = (notice: string | null = null): TickJudgement => ({ failure: null, no
  * scenarios drive it) and is never judged. Only a stopped factory is a failure:
  *
  * - a deploy that holds its lock is `deploying`, ok, for up to `DEPLOY_MAX_MS`;
- * - a server that has not had its first pass is `starting`, ok, for `FIRST_TICK_GRACE_MS`; after that, no tick is a failure;
+ * - a server that has not had its first pass is `starting`, ok, for `FIRST_TICK_GRACE_MS`; after that, no tick is a failure
+ *   on an idle host, and on a starved one (load at `STARVED_LOAD_PER_CORE` per core) it is ok, saying so, until `TICK_DEAD_MS`;
  * - a tick older than three intervals (and a minute) is ok but says why: starved (the process is alive, the host is
  *   loaded) or failing (its error); only `TICK_DEAD_MS` without a success is a failure.
  */
@@ -66,7 +72,9 @@ export function judgeTick(input: TickInput): TickJudgement {
   const why = whyStopped(input)
   if (input.tickAt === null) {
     const grace = input.limitMs ?? FIRST_TICK_GRACE_MS
-    if (now.getTime() - input.startedAt.getTime() <= grace) return ok('starting')
+    const sinceStart = now.getTime() - input.startedAt.getTime()
+    if (sinceStart <= grace) return ok('starting')
+    if (starvedHost(input) && sinceStart <= dead) return ok(`starved: no tick has succeeded yet; ${why}`)
     return { failure: `no tick has succeeded yet; ${why}`, notice: null }
   }
   const age = now.getTime() - input.tickAt.getTime()
@@ -77,6 +85,12 @@ export function judgeTick(input: TickInput): TickJudgement {
   }
   return ok()
 }
+
+const starvedHost = (input: TickInput): boolean =>
+  input.load !== null &&
+  input.load !== undefined &&
+  input.cores !== undefined &&
+  input.load >= STARVED_LOAD_PER_CORE * input.cores
 
 function whyStopped(input: TickInput): string {
   if (input.tickError) return `the tick fails: ${input.tickError}`
