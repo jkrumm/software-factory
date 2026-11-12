@@ -69,6 +69,8 @@ export interface HostSampleFact {
   load: number | null
   memoryUsedPct: number | null
   swapUsedPct: number | null
+  /** that minute's swapouts, scaled to 300 s */
+  swapoutMbPer300s: number | null
 }
 
 export interface LeadPeaks {

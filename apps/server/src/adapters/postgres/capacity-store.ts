@@ -73,6 +73,7 @@ const HostFactRow = z.object({
   load: z.number().nullable(),
   memory_used_pct: z.number().nullable(),
   swap_used_pct: z.number().nullable(),
+  swapout_mb_per_300s: z.number().nullable(),
 })
 const PeakFactRow = z.object({ repo: z.string(), peak: z.number().int(), n: z.coerce.number().int() })
 const RssRow = z.object({ issue: z.number().int(), rss_mib: z.number().int() })
@@ -287,10 +288,16 @@ export function postgresCapacityStore(tx: SQL): CapacityStore {
 
     async recentHostSamples(limit) {
       const rows: unknown[] = await tx`
-        SELECT at, load, memory_used_pct, swap_used_pct FROM factory.host_samples ORDER BY at DESC LIMIT ${limit}`
+        SELECT at, load, memory_used_pct, swap_used_pct, swapout_mb_per_300s FROM factory.host_samples ORDER BY at DESC LIMIT ${limit}`
       return rows.map((raw): HostSampleFact => {
         const row = HostFactRow.parse(raw)
-        return { at: row.at, load: row.load, memoryUsedPct: row.memory_used_pct, swapUsedPct: row.swap_used_pct }
+        return {
+          at: row.at,
+          load: row.load,
+          memoryUsedPct: row.memory_used_pct,
+          swapUsedPct: row.swap_used_pct,
+          swapoutMbPer300s: row.swapout_mb_per_300s,
+        }
       })
     },
 
