@@ -60,6 +60,8 @@ export const PlanRow = z
     /** rows that must be done first, in this file or in another project's plan */
     after: z.array(RowRef).optional(),
     not_before: NotBefore.optional(),
+    /** whole days the row also waits after the latest close of its `after` rows; needs `after` */
+    after_days: z.number().int().min(1).max(365).optional(),
     /** retired (NL6, memory is the limit on parallel leads): read so an old file parses, never evaluated */
     stable_days: z.number().int().min(1).max(365).optional(),
     /** adopt an Issue filed by hand: the row is done when it closes, and nothing is filed for it */
@@ -71,6 +73,7 @@ export const PlanRow = z
       for (const field of [
         'after',
         'not_before',
+        'after_days',
         'stable_days',
         'repo',
         'kind',
@@ -88,6 +91,11 @@ export const PlanRow = z
     if (row.facts === undefined)
       ctx.addIssue({ code: 'custom', message: `row ${row.key}: facts is required unless issue is set` })
     const afterCount = row.after?.length ?? 0
+    if (row.after_days !== undefined && afterCount === 0)
+      ctx.addIssue({
+        code: 'custom',
+        message: `row ${row.key}: after_days counts from its after rows, so it needs after`,
+      })
     if (afterCount > PLAN_LIMITS.maxAfter)
       ctx.addIssue({
         code: 'custom',

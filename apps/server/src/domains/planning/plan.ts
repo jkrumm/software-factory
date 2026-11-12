@@ -50,8 +50,15 @@ export interface PlanFacts {
   filed: ReadonlyMap<string, IssueId>
   /** the state of every Issue a row names */
   states: ReadonlyMap<IssueId, 'closed' | 'open'>
+  /** when each closed Issue a row names closed */
+  closedAt: ReadonlyMap<IssueId, Date>
   now: Date
 }
+
+const DAY_MS = 86_400_000
+
+/** the end of an `after_days` window that began at `closedMs` */
+export const afterDaysEnd = (closedMs: number, days: number): number => closedMs + days * DAY_MS
 
 const refOf = (project: string, key: string): string => `${project}:${key}`
 
@@ -89,6 +96,16 @@ export function rowStatuses(facts: PlanFacts): RowStatus[] {
   const cycle = findCycle(edges)
   const inCycle = new Set(cycle)
 
+  /** the latest close among a row's `after` rows; 0 where none is known (an unknown close time never holds a row) */
+  const latestClose = (row: PlanRow, project: string): number =>
+    Math.max(
+      0,
+      ...(row.after ?? []).map((on) => {
+        const id = issueOf(resolveRef(project, on))
+        return id ? (facts.closedAt.get(id)?.getTime() ?? 0) : 0
+      }),
+    )
+
   const out: RowStatus[] = []
   for (const [ref, { project, row }] of rows) {
     const id = issueOf(ref)
@@ -118,6 +135,12 @@ export function rowStatuses(facts: PlanFacts): RowStatus[] {
     let reason: string | null = null
     if (unmet.length > 0) {
       reason = `after ${unmet.map((on) => (rows.has(on) ? on : `${on} (no such row)`)).join(', ')}`
+    } else if (
+      row.after_days !== undefined &&
+      afterDaysEnd(latestClose(row, project), row.after_days) > facts.now.getTime()
+    ) {
+      const closed = latestClose(row, project)
+      reason = `after_days ${row.after_days}: closed ${new Date(closed).toISOString()}, until ${new Date(afterDaysEnd(closed, row.after_days)).toISOString()}`
     } else if (row.not_before !== undefined && facts.now.getTime() < notBeforeMs(row.not_before)) {
       reason = `not before ${row.not_before}`
     } else if (!known) {

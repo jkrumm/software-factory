@@ -94,7 +94,7 @@ async function seed() {
         { key: 'docs', title: 'Docs sweep', facts: {}, kind: 'docs', after: ['other'] },
         { key: 'other', title: 'Other', facts: {}, not_before: '2020-01-02T03:04:05' },
         { key: 'filed-one', title: 'Filed one', facts: {} },
-        { key: 'ship', title: 'Ship it', facts: {}, after: ['filed-one'] },
+        { key: 'ship', title: 'Ship it', facts: {}, after: ['filed-one'], after_days: 3 },
       ],
     })}::text::jsonb),
     ('work-app', '/src/work-app', 'defaults', '{}'::jsonb, NULL)`
@@ -329,7 +329,7 @@ describe('the fixture', () => {
         ['issue_8', 'issue', 'settling'],
         ['row:app:docs', 'row', 'waiting'],
         ['row:app:other', 'row', 'filable'],
-        ['row:app:ship', 'row', 'filable'],
+        ['row:app:ship', 'row', 'waiting'],
       ].sort(),
     )
     expect(chain.edges.map((e) => `${e.from}>${e.to}:${e.closed}`).sort()).toEqual([
@@ -346,6 +346,8 @@ describe('the fixture', () => {
       notBefore: '2020-01-02T03:04:05.000Z',
     })
     expect(byId('row:app:docs')).toMatchObject({ issueKind: 'docs', notBefore: null })
+    // issue_1 closed 48 h ago and the row waits 3 days after it
+    expect(byId('row:app:ship')).toMatchObject({ notBefore: ago(-24).toISOString() })
     expect(byId('issue_2')).toMatchObject({ waitReason: 'decision', notBefore: null, since: expect.any(String) })
     expect(byId('issue_5')).toMatchObject({ issueKind: 'bug', since: ago(3.9).toISOString(), waitReason: null })
     expect(byId('issue_1')?.issueKind).toBe('feature')

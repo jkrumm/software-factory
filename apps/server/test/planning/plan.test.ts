@@ -37,7 +37,7 @@ describe('docs/plan.yaml', () => {
     if (!result.ok) return
     expect(result.warnings).toEqual([])
     const used = new Set(result.plan.rows.flatMap((r) => Object.keys(r)))
-    for (const key of ['key', 'title', 'facts', 'kind', 'lane', 'repo', 'after', 'not_before', 'issue'])
+    for (const key of ['key', 'title', 'facts', 'kind', 'lane', 'repo', 'after', 'after_days', 'not_before', 'issue'])
       expect(used.has(key)).toBe(true)
     const adopted = result.plan.rows.find((r) => r.issue !== undefined)
     expect(adopted && Object.keys(adopted).sort()).toEqual(['issue', 'key'])
@@ -128,11 +128,13 @@ describe('row states', () => {
     plans: Record<string, PlanFile>,
     filed: Record<string, number> = {},
     closed: [number, 'open' | 'closed'][] = [],
+    closedAt: [number, string][] = [],
   ) => ({
     plans: Object.entries(plans).map(([project, p]) => ({ project, plan: p })),
     projects: new Set(['app', 'lib']),
     filed: new Map(Object.entries(filed).map(([k, n]) => [k, issueId(n)])),
     states: states(closed),
+    closedAt: new Map(closedAt.map(([n, at]) => [issueId(n), new Date(at)])),
     now,
   })
   const stateOf = (statuses: ReturnType<typeof rowStatuses>, project: string, key: string) =>
@@ -178,6 +180,58 @@ describe('row states', () => {
       reason: 'unknown project ghost',
       target: null,
     })
+  })
+
+  test('after_days holds a row until that many days after the latest close among its after rows', () => {
+    const p = plan([row('a'), row('b'), row('c', { after: ['a', 'b'], after_days: 7 })])
+    const filed = { 'app:a': 1, 'app:b': 2 }
+    const closed: [number, 'closed'][] = [
+      [1, 'closed'],
+      [2, 'closed'],
+    ]
+    const within = rowStatuses(
+      facts({ app: p }, filed, closed, [
+        [1, '2026-11-01T00:00:00Z'],
+        [2, '2026-11-04T06:00:00Z'],
+      ]),
+    )
+    expect(stateOf(within, 'app', 'c')).toMatchObject({
+      state: 'waiting',
+      reason: 'after_days 7: closed 2026-11-04T06:00:00.000Z, until 2026-11-11T06:00:00.000Z',
+    })
+    const past = rowStatuses(
+      facts({ app: p }, filed, closed, [
+        [1, '2026-11-01T00:00:00Z'],
+        [2, '2026-11-03T00:00:00Z'],
+      ]),
+    )
+    expect(stateOf(past, 'app', 'c')?.state).toBe('filable')
+    // an after row still open keeps the plain `after` reason; the window starts at its close
+    const open = rowStatuses(facts({ app: p }, filed, [[1, 'closed']], [[1, '2026-11-01T00:00:00Z']]))
+    expect(stateOf(open, 'app', 'c')?.reason).toBe('after app:b')
+  })
+
+  test('after_days and not_before both have to be past; an unknown close time never holds a row', () => {
+    const p = plan([row('a'), row('b', { after: ['a'], after_days: 1, not_before: '2026-11-12' })])
+    const at = (iso: string) => rowStatuses(facts({ app: p }, { 'app:a': 1 }, [[1, 'closed']], [[1, iso]]))
+    expect(stateOf(at('2026-11-01T00:00:00Z'), 'app', 'b')?.reason).toBe('not before 2026-11-12')
+    expect(stateOf(at('2026-11-09T12:00:00Z'), 'app', 'b')?.reason).toContain('after_days 1')
+    expect(stateOf(rowStatuses(facts({ app: p }, { 'app:a': 1 }, [[1, 'closed']])), 'app', 'b')?.reason).toBe(
+      'not before 2026-11-12',
+    )
+  })
+
+  test('after_days needs after, and an adopted row has none', () => {
+    expect(parsePlan({ version: 1, rows: [row('a', { after_days: 3 })] })).toMatchObject({
+      ok: false,
+      message: expect.stringContaining('after_days counts from its after rows'),
+    })
+    expect(parsePlan({ version: 1, rows: [{ key: 'a', issue: 5, after_days: 3 }] })).toMatchObject({
+      ok: false,
+      message: expect.stringContaining('no after_days'),
+    })
+    expect(parsePlan({ version: 1, rows: [row('a'), row('b', { after: ['a'], after_days: 0 })] }).ok).toBe(false)
+    expect(parsePlan({ version: 1, rows: [row('a'), row('b', { after: ['a'], after_days: 7 })] }).ok).toBe(true)
   })
 
   test('an adopted row is done when its Issue closes, and nothing is filed for it', () => {

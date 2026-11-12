@@ -70,6 +70,25 @@ export function readIssues(tx: SQL): IssueReads {
       )
     },
 
+    async closedAtOf(ids) {
+      if (ids.length === 0) return new Map()
+      const rows: unknown[] = await tx`
+        SELECT i.id, c.at
+        FROM factory.issues i
+        JOIN LATERAL (
+          SELECT x.at FROM factory.issue_events x
+          WHERE x.issue_id = i.id AND x.result = 'applied' AND x.to_state = 'closed' AND x.from_state IS DISTINCT FROM 'closed'
+          ORDER BY x.version DESC LIMIT 1
+        ) c ON true
+        WHERE i.state = 'closed' AND i.id IN ${tx([...ids])}`
+      return new Map(
+        rows.map((raw) => {
+          const row = z.object({ id: z.string(), at: z.date() }).parse(raw)
+          return [idOf(row.id), row.at] as const
+        }),
+      )
+    },
+
     async repoStatesOf(ids) {
       if (ids.length === 0) return new Map()
       const rows: unknown[] = await tx`SELECT id, repo, state FROM factory.issues WHERE id IN ${tx([...ids])}`

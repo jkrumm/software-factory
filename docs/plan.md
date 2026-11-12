@@ -28,6 +28,7 @@ rows:
     title: Document the paged export
     lane: docs
     after: [export-paging, intake]
+    after_days: 7
     not_before: 2026-12-01
     facts:
       why: |-
@@ -74,6 +75,7 @@ a broken plan.
 | `repo` | The project the Issue is filed in; default: the project whose plan this is. A row may target another repo |
 | `after` | Rows that must be done first, in this file (`export-paging`) or another project's plan (`other-project:schema-change`). At most 20 per row (the most `issue new --after` accepts); a plan with more is broken. Drop edges already implied through other rows (a transitive reduction): if `c` waits for `b` and `b` for `a`, `c` needs no `after: [a]` |
 | `not_before` | A date (`2026-12-01`, midnight UTC) or a datetime (`2026-12-01T09:00:00Z`; with no offset it is UTC). The row is not filed before then |
+| `after_days` | Whole days, 1 to 365; needs `after`. The row also waits until that many days after the **latest close** among its `after` rows (any outcome, like `after`), so "delete v1 a week after the cutover" needs no date written in advance. The wait reason names the close and the end of the window; it combines with `not_before` (both must be past) |
 | `issue` | Adopts an Issue you filed by hand: its number (`149`). See below |
 | `stable_days` | Retired. Read so an old file parses, flagged as a warning, never evaluated. Do not write it |
 
@@ -83,8 +85,8 @@ A row is in one of four states, derived on every read and never stored:
 
 | State | Meaning |
 |-|-|
-| `waiting` | An `after` row is not done, its `not_before` has not come, its `repo` is not a project the factory knows, or it is in a cycle. The reason says which |
-| `filable` | No Issue yet, every `after` row done, its time come. The next planning pass files it |
+| `waiting` | An `after` row is not done, its `after_days` window has not run out, its `not_before` has not come, its `repo` is not a project the factory knows, or it is in a cycle. The reason says which |
+| `filable` | No Issue yet, every `after` row done, its `after_days` window run out, its time come. The next planning pass files it |
 | `open` | It has an Issue that is not closed |
 | `done` | Its Issue is closed, whatever the outcome. A row whose Issue was dropped or stalled out still releases the rows that wait for it |
 
@@ -173,7 +175,7 @@ checks: { fast: make check-fast, full: make check, ci: true }
 
 A row with `issue: <n>` adopts an Issue you filed by hand (`factory issue new`). Nothing is filed for it; the
 row is done when that Issue closes, so other rows can wait for it with `after`. An adopted row is `key` and `issue` and
-nothing else: `after`, `not_before`, `stable_days`, `repo`, `kind`, `seat` and `lane` are refused on it. Put the order on the Issue
+nothing else: `after`, `after_days`, `not_before`, `stable_days`, `repo`, `kind`, `seat` and `lane` are refused on it. Put the order on the Issue
 (`--after`), or on the rows that wait for it.
 
 `factory planning unafter --issue <id> --after <id>` (`--after` repeats) removes stored `after` edges (set by `planning after`,
