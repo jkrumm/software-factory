@@ -115,13 +115,31 @@ test('a ship that found nowhere it landed reds the version check with that reaso
   expect(only).toEqual({ name: 'deployed version', ok: false, detail: 'no landed commit' })
 })
 
-test('a checkout that is not ours to move is blocked: neither version nor verify run on the stale tree', async () => {
+test('a checkout that is not ours to move stays as it is: version and verify read origin’s default in a scratch worktree', async () => {
   const repo = await fresh()
   const other = await repo.other()
-  await other.commit('n.ts', 'n\n')
+  const landed = await other.commit('n.ts', 'n\n')
   await repo.git('checkout', '-q', '-b', 'side')
-  const got = checks(await verify(repo, { landedAt: other.path }))
-  expect(got).toMatchObject([{ name: 'checkout', ok: false, blocked: true }])
+  const before = await repo.git('rev-parse', 'HEAD')
+  const got = checks(await verify(repo, { landedAt: landed }))
+  expect(got).toMatchObject([
+    { name: 'checkout', ok: true, detail: expect.stringContaining('on branch side') },
+    { name: 'deployed version', ok: true },
+    { name: 'make verify', ok: true },
+  ])
+  expect(await repo.git('rev-parse', 'HEAD')).toBe(before)
+  expect(await repo.git('branch', '--show-current')).toBe('side')
+  expect(await repo.git('worktree', 'list')).not.toContain('factory-verify-')
+})
+
+test('a blocked checkout whose scratch worktree cannot be made is a blocked check, and nothing runs', async () => {
+  const repo = await fresh()
+  const got = checks(
+    await new MakeAndProbes({
+      sync: async () => ({ state: 'blocked', detail: 'on another branch', ref: 'origin/nowhere' }),
+    }).run({ repo: repo.path, makeVerify: true, probes: [] }, signal()),
+  )
+  expect(got).toMatchObject([{ name: 'checkout', ok: false, blocked: true, detail: 'on another branch' }])
 })
 
 test('a probe passes on the status the project expects, redirects included', async () => {

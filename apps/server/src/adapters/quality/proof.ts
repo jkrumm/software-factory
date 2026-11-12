@@ -2,7 +2,7 @@ import type { Ci, Proof, ProofInput } from '../../domains/quality/ports.ts'
 import { condense } from '../../domains/quality/output.ts'
 import { type Check, ciCheck, NO_VERSION_TARGET } from '../../domains/quality/watch.ts'
 import { err, ok, portError, type Result } from '../../kernel/result.ts'
-import { type CheckoutSync, deployedHolds, syncCheckout } from './git.ts'
+import { type CheckoutSync, deployedHolds, inScratchWorktree, syncCheckout } from './git.ts'
 import { CannotExecute, childEnv, EXIT_STOPPED, EXIT_TIMEOUT, type Run, runProcess } from './process.ts'
 
 const MAKE_TIMEOUT_MS = 10 * 60_000
@@ -37,8 +37,9 @@ exit "$st"`
  * Verify: `make version` (the deployed commit, which must hold where the work landed), `make verify` in the repo, and an
  * HTTP GET per probe. Every check runs, the version check red or not, so the lead sees every signal. The only write to
  * the checkout is the first step: `syncCheckout` fast-forwards it to `origin/<default>` so that `make` reads what was
- * merged. A checkout it may not move (another branch, a tracked change, diverged) is a `blocked` check, and `make
- * version` and `make verify` then do not run on a stale tree.
+ * merged. A checkout it may not move (another branch, a tracked change, diverged) is the owner's and stays as it is:
+ * `make version` and `make verify` then run in a throwaway worktree of `origin/<default>`, and only when that cannot
+ * be made is the checkout a `blocked` check.
  */
 export class MakeAndProbes implements Proof {
   constructor(
@@ -51,26 +52,48 @@ export class MakeAndProbes implements Proof {
     } = {},
   ) {}
 
-  async run(
-    { repo, makeVerify, makeTargets = [], version, probes, ci }: ProofInput,
-    signal: AbortSignal,
-  ): Promise<Result<Check[]>> {
+  async run(input: ProofInput, signal: AbortSignal): Promise<Result<Check[]>> {
+    const { repo, makeVerify, makeTargets = [], version, probes, ci } = input
     const sync = makeVerify || makeTargets.length > 0 || version ? await this.sync(repo, signal) : undefined
     const [ciChecks, checks] = await Promise.all([
       this.ci(repo, ci),
       Promise.all(probes.map((probe) => this.probe(probe, signal))),
     ])
     if (signal.aborted) return err(portError('gone', 'the server is stopping'))
-    if (sync?.state === 'blocked')
-      return ok([{ name: 'checkout', ok: false, blocked: true, detail: sync.detail }, ...ciChecks, ...checks])
+    if (sync?.state === 'blocked') {
+      // The checkout is the owner's and is never touched: the shipped commit is read in a throwaway worktree of it.
+      const { ref } = sync
+      const scratch = ref
+        ? await inScratchWorktree(repo, ref, (tree) => this.checks(tree, repo, input, signal), {
+            run: this.options.run,
+            signal,
+          })
+        : undefined
+      if (signal.aborted) return err(portError('gone', 'the server is stopping'))
+      if (!scratch)
+        return ok([{ name: 'checkout', ok: false, blocked: true, detail: sync.detail }, ...ciChecks, ...checks])
+      const held: Check = { name: 'checkout', ok: true, detail: `${sync.detail}; read in a scratch worktree of ${ref}` }
+      return ok([held, ...scratch, ...ciChecks, ...checks])
+    }
     const advanced: Check[] = sync?.state === 'advanced' ? [{ name: 'checkout', ok: true, detail: sync.detail }] : []
-    const deployed = version ? [await this.version(repo, version, signal)] : []
-    const verify: Check[] = []
-    for (const target of [...(makeVerify ? ['verify'] : []), ...makeTargets])
-      verify.push(await this.makeVerify(repo, target, signal))
+    const here = await this.checks(repo, repo, input, signal)
     // A check the server killed on its way down says nothing about production: the next server asks again.
     if (signal.aborted) return err(portError('gone', 'the server is stopping'))
-    return ok([...advanced, ...deployed, ...verify, ...ciChecks, ...checks])
+    return ok([...advanced, ...here, ...ciChecks, ...checks])
+  }
+
+  /** `make version` and `make verify` in `tree`; git questions (does the deployed commit hold where it landed) go to `repo`. */
+  private async checks(
+    tree: string,
+    repo: string,
+    { makeVerify, makeTargets = [], version }: ProofInput,
+    signal: AbortSignal,
+  ): Promise<Check[]> {
+    const deployed = version ? [await this.version(tree, repo, version, signal)] : []
+    const verify: Check[] = []
+    for (const target of [...(makeVerify ? ['verify'] : []), ...makeTargets])
+      verify.push(await this.makeVerify(tree, target, signal))
+    return [...deployed, ...verify]
   }
 
   /**
@@ -101,6 +124,7 @@ export class MakeAndProbes implements Proof {
   }
 
   private async version(
+    tree: string,
     repo: string,
     version: NonNullable<ProofInput['version']>,
     signal: AbortSignal,
@@ -111,7 +135,7 @@ export class MakeAndProbes implements Proof {
     const run = this.options.run ?? runProcess
     try {
       // Always run it: a read of the Makefile cannot see a target an include built by variable names, and only make knows it has none.
-      const done = await run(['sh', '-c', VERSION_SCRIPT, 'sh', repo], VERSION_TIMEOUT_MS, {
+      const done = await run(['sh', '-c', VERSION_SCRIPT, 'sh', tree], VERSION_TIMEOUT_MS, {
         env: childEnv({ GIT_TERMINAL_PROMPT: '0', LC_ALL: 'C' }),
         group: true,
         signal,
