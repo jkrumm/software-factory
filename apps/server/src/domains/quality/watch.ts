@@ -35,6 +35,8 @@ export interface ProjectChecks {
   makeVerify: boolean
   /** other `make <target>` the project's targets verify by, each run and judged like `make verify` */
   makeTargets?: string[]
+  /** `deploy.paths` of the project file; unset or empty: every path that is not inert deploys */
+  deployPaths?: string[]
   /** the project ships by pull request, so CI is read for the landed commit; set only when true */
   ci?: boolean
   probes: Probe[]

@@ -20,7 +20,7 @@ export PATH="$HOME/.local/bin:/opt/homebrew/bin:/usr/local/bin:$PATH"
 fail() { echo "verify: FAIL: $*" >&2; exit 1; }
 ok() { echo "verify: ok: $*"; }
 
-# A path nothing deploys. Mirrors `isInert` in apps/server/src/domains/quality/evidence.ts (what the ship gate reads as no deploy): keep them equal.
+# A path nothing deploys. Mirrors `isInert` in apps/server/src/domains/quality/evidence.ts (what the ship gate reads as no deploy): keep them equal. A project's `deploy.paths` (project.yaml) narrows the server's reading further; this script is the factory's own, which sets none.
 inert_path() {
   case "$1" in
     docs/* | project.yaml | *.md | *.mdx | *.txt | LICENSE* | */LICENSE* | .gitignore | */.gitignore) return 0 ;;

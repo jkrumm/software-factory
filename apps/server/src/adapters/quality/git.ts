@@ -545,13 +545,13 @@ export async function inScratchWorktree<T>(
  * Whether the deployed commit `make version` printed holds `landedAt`, the `origin/<default>` the ship found: that sha
  * is the deployed one or an ancestor of it. Only reads: a deployed commit the repo has not seen yet is fetched for.
  * `merge-base --is-ancestor` says 1 for "not an ancestor"; any other exit is a git that could not compare, which is not
- * the same as "not deployed".
+ * the same as "not deployed". `deployPaths` is the project's `deploy.paths`: a commit behind `landedAt` only by paths it does not list holds it too.
  */
 export async function deployedHolds(
   repo: string,
   deployed: string,
   landedAt: string,
-  options: GitOptions = {},
+  { deployPaths, ...options }: GitOptions & { deployPaths?: readonly string[] } = {},
 ): Promise<{ ok: boolean; detail: string }> {
   const git = (args: string[]) => gitIn(repo, args, options)
   const resolve = (ref: string) => git(['rev-parse', '-q', '--verify', `${ref}^{commit}`])
@@ -574,7 +574,7 @@ export async function deployedHolds(
     const behind = await git(['merge-base', '--is-ancestor', full, landedAt])
     if (behind.exitCode === 0) {
       const changed = await git(['-c', 'core.quotePath=false', 'diff', '--name-only', '-z', full, landedAt])
-      if (changed.exitCode === 0 && !deploys(changed.stdout.split('\0').filter(Boolean))) {
+      if (changed.exitCode === 0 && !deploys(changed.stdout.split('\0').filter(Boolean), deployPaths)) {
         return {
           ok: true,
           detail: `deployed ${full.slice(0, 12)} is behind ${landedAt.slice(0, 12)}, where the work landed, only by changes no deploy carries`,

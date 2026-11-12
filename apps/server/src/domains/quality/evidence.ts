@@ -1,4 +1,5 @@
 import { conclusionVerdict } from '../../kernel/checks.ts'
+import { globMatches } from '../../kernel/glob.ts'
 
 /** `base..head`, as agw's review commands take a range. */
 export interface ReviewRange {
@@ -119,7 +120,7 @@ const TEST_FILE = /\.(test|spec)\./
  * A path no deploy carries: documents (`docs/plan.yaml` is one), text, licences, tests and the root `project.yaml`, which
  * the server reads from the default branch when it syncs projects. Mirrors `scripts/verify.sh`'s `inert_path`.
  */
-export function isInert(path: string): boolean {
+export function isBuiltinInert(path: string): boolean {
   return (
     path.startsWith('docs/') ||
     path === 'project.yaml' ||
@@ -131,7 +132,17 @@ export function isInert(path: string): boolean {
   )
 }
 
-export const deploys = (paths: readonly string[]): boolean => paths.some((path) => !isInert(path))
+/**
+ * A path no deploy of the project carries: built-in inert, or (where the project declares `deploy.paths`) matched by none
+ * of its globs. With none declared, which is the default, only the built-in floor applies.
+ */
+export function isInert(path: string, deployPaths: readonly string[] = []): boolean {
+  if (isBuiltinInert(path)) return true
+  return deployPaths.length > 0 && !deployPaths.some((glob) => globMatches(glob, path))
+}
+
+export const deploys = (paths: readonly string[], deployPaths: readonly string[] = []): boolean =>
+  paths.some((path) => !isInert(path, deployPaths))
 
 /** The review as evidence, from what agw answered for the ship's ranges (null: it could not be asked). */
 export function reviewOf(input: {

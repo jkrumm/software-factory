@@ -49,6 +49,8 @@ export function judgeShip(input: {
   ci: CiOutcome | null
   /** the lead's acceptance lines, parsed; recorded, never judged */
   acceptance: AcceptanceEvidence
+  /** the project's `deploy.paths`; empty: every path that is not inert deploys */
+  deployPaths?: readonly string[]
 }): ShipVerdict {
   const refuse = (why: string): ShipVerdict => ({ accepted: false, error: `ship refused: ${why}` })
   if (input.reported.length === 0) return refuse('ship names no merged commit')
@@ -64,7 +66,7 @@ export function judgeShip(input: {
       commits: read.commits.slice(0, MAX_RECORDED),
       landedAt: read.landedAt,
       mergedAt: read.mergedAt?.toISOString() ?? null,
-      deploys: deploys(read.paths),
+      deploys: deploys(read.paths, input.deployPaths),
       paths: read.paths.slice(0, MAX_RECORDED),
     },
     review: reviewOf({ ranges: read.reviewRanges, ...input.review }),

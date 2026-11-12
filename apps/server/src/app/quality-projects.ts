@@ -21,7 +21,7 @@ const MAKE_VERIFY = 'make verify'
  * `undefined` where the file names no target, so the caller can fall back to what the Makefile offers.
  */
 export function checksOfFile(project: ProjectFile): Omit<ProjectChecks, 'makeVerify'> & { makeVerify?: boolean } {
-  const { targets, hold, mode, probes } = project.deploy
+  const { targets, hold, mode, probes, paths } = project.deploy
   const makeTargets = targets.flatMap((target) => {
     const named = /^make (\S+)$/.exec(target.verify)?.[1]
     return named && named !== 'verify' ? [named] : []
@@ -29,6 +29,7 @@ export function checksOfFile(project: ProjectFile): Omit<ProjectChecks, 'makeVer
   return {
     windowMs: durationMs(hold) ?? 0,
     deployMode: mode,
+    ...(paths.length > 0 ? { deployPaths: paths } : {}),
     ...(targets.length > 0 ? { makeVerify: targets.some((target) => target.verify === MAKE_VERIFY) } : {}),
     ...(makeTargets.length > 0 ? { makeTargets: [...new Set(makeTargets)] } : {}),
     ...(project.ship.some((rule) => rule.via === 'pr') ? { ci: true } : {}),

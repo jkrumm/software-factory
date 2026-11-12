@@ -23,7 +23,7 @@ import {
 } from '../../domains/loops/selfwatch-model.ts'
 import { leadKey } from '../../domains/leads/names.ts'
 import type { LeadStore } from '../../domains/leads/ports.ts'
-import { isInert } from '../../domains/quality/evidence.ts'
+import { isBuiltinInert } from '../../domains/quality/evidence.ts'
 import type { QualityStore } from '../../domains/quality/store.ts'
 import { replay } from '../../domains/work/machine.ts'
 import type { WorkStore } from '../../domains/work/ports.ts'
@@ -170,7 +170,7 @@ async function gather(deps: SelfwatchDeps, now: Date): Out<Gathered> {
 
   const regressed = await regressions(deps)
   if (!regressed.ok) return regressed
-  gathered.findings.push(...inertRegressionFindings(regressed.value, isInert))
+  gathered.findings.push(...inertRegressionFindings(regressed.value, isBuiltinInert))
 
   gathered.findings.push(...heartbeatFindings(await deps.heartbeat(), now))
   return ok(gathered)

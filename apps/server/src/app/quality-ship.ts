@@ -105,9 +105,9 @@ async function judge(deps: ShipDeps, issue: Issue, input: ShipInput): Promise<Sh
   }
   // GitHub is asked as agw is: a failure is a recorded `unknown`, never a refusal (NL23).
   // A project that ships by push has no pull request: its ship records no CI at all, which no friction counts.
+  const project = await deps.projects.checksOf(repo)
   const readCi = async (): Promise<CiOutcome | null> => {
     if (!commits.ok) return { read: null, problem: null }
-    const project = await deps.projects.checksOf(repo)
     if (project.ok && !project.value.ci) return null
     const read = await deps.ci.ofShip({ repo, commits: commits.value.commits })
     return read.ok
@@ -115,7 +115,14 @@ async function judge(deps: ShipDeps, issue: Issue, input: ShipInput): Promise<Sh
       : { read: null, problem: `CI could not be read: ${read.error.detail}` }
   }
   const [review, ci] = await Promise.all([readReview(), readCi()])
-  return judgeShip({ reported: input.commits, commits, review, ci, acceptance: input.acceptance })
+  return judgeShip({
+    reported: input.commits,
+    commits,
+    review,
+    ci,
+    acceptance: input.acceptance,
+    ...(project.ok && project.value.deployPaths ? { deployPaths: project.value.deployPaths } : {}),
+  })
 }
 
 /**

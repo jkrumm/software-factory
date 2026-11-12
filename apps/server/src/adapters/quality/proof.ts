@@ -154,7 +154,14 @@ export class MakeAndProbes implements Proof {
       const printed = done.stdout.trim()
       if (!SHA.test(printed))
         return red(`make version printed ${JSON.stringify(tail(printed))}: one line, the deployed commit sha`)
-      return { name, ...(await deployedHolds(repo, printed, version.landedAt, { run: this.options.run, signal })) }
+      return {
+        name,
+        ...(await deployedHolds(repo, printed, version.landedAt, {
+          run: this.options.run,
+          signal,
+          deployPaths: version.deployPaths,
+        })),
+      }
     } catch (error) {
       // Neither make nor git failing to answer is a retry: the lead is told, with the other checks beside it.
       return red(error instanceof Error ? error.message : String(error))

@@ -42,7 +42,7 @@ export interface ProofInput {
    * Set where the deployed version must hold what was shipped (a change that deploys, under deploy mode `make`): the
    * `origin/<default>` the ship found, or why there is none, which is red. Unset: the change deploys nothing.
    */
-  version?: { landedAt: string } | { problem: string }
+  version?: { landedAt: string; deployPaths?: string[] } | { problem: string }
   /**
    * Set where the project ships by pull request: the default branch's CI for the landed commit must be green. `mergedAt`
    * (null when unknown) and `now` are ISO times, passed in so the check stays deterministic.

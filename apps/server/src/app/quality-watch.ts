@@ -145,7 +145,9 @@ async function checkOne(deps: WatchDeps, watch: OpenWatch, pass: WatchPass): Pro
     makeVerify: project.value.makeVerify,
     ...(project.value.makeTargets?.length ? { makeTargets: project.value.makeTargets } : {}),
     probes: project.value.probes,
-    ...(project.value.deployMode === 'make' && ship?.commits?.deploys !== false ? { version: versionOf(ship) } : {}),
+    ...(project.value.deployMode === 'make' && ship?.commits?.deploys !== false
+      ? { version: versionOf(ship, project.value.deployPaths) }
+      : {}),
     // CI applies to an inert change too: only a project that ships by pull request, and a landed commit, are asked.
     ...(project.value.ci && ship?.commits?.landedAt
       ? { ci: { landedAt: ship.commits.landedAt, mergedAt: ship.commits.mergedAt, now: now.toISOString() } }
@@ -230,10 +232,13 @@ const record = (checks: readonly Check[]) =>
   }))
 
 /** What the deployed version must hold: the `origin/<default>` the ship found. Closed on every gap. */
-function versionOf(ship: { commits: { landedAt: string | null } | null } | null): NonNullable<ProofInput['version']> {
+function versionOf(
+  ship: { commits: { landedAt: string | null } | null } | null,
+  deployPaths: string[] | undefined,
+): NonNullable<ProofInput['version']> {
   if (!ship?.commits)
     return { problem: 'no accepted ship of this attempt is on record to check the deployed version against' }
   if (!ship.commits.landedAt)
     return { problem: 'the ship recorded no landed commit on origin to check the deployed version against' }
-  return { landedAt: ship.commits.landedAt }
+  return { landedAt: ship.commits.landedAt, ...(deployPaths ? { deployPaths } : {}) }
 }

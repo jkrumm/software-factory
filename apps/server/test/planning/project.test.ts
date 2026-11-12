@@ -25,6 +25,15 @@ describe('project.yaml', () => {
     expect(parsed.project.checks).toEqual({ fast: 'make check-fast', full: 'make check', ci: true })
   })
 
+  test('deploy.paths: empty by default, globs accepted, an empty or non-string entry refused', () => {
+    const parse = (paths: string) =>
+      parseProject(yaml(`apiVersion: factory/v2\nname: lab\ndeploy: { paths: ${paths} }`), 'lab')
+    expect(defaultProject('lab').deploy.paths).toEqual([])
+    const set = parse("['apps/**', Makefile]")
+    expect(set.ok && set.project.deploy.paths).toEqual(['apps/**', 'Makefile'])
+    for (const bad of ["['']", '[1]', 'apps']) expect(parse(bad).ok).toBe(false)
+  })
+
   test('checks: none by default (one make check), tiers fill full and ci, anything but a make target is refused', () => {
     const parse = (checks: string) => parseProject(yaml(`apiVersion: factory/v2\nname: lab\nchecks: ${checks}`), 'lab')
     expect(defaultProject('lab').checks).toBeNull()

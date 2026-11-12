@@ -258,8 +258,11 @@ through `receive` in `app/intake.ts`; the answer is a triage outcome (`docs/lang
   (`adapters/quality/ci.ts`, the `Ci` port) and its head's CI recorded as `ci` evidence (`green`, `red`, `running`, `missing`
   when no pull request or no check was found, `unknown` when GitHub could not be read); it never refuses a ship, and a red
   or missing one is counted as friction (`unproven_ci`). A project that ships by push (no `via: pr` rule) or has no
-  `project.yaml` records no `ci` evidence and asks GitHub nothing. `evidence.ts` decides whether the paths deploy at all; its inert paths
-  equal `scripts/verify.sh`'s.
+  `project.yaml` records no `ci` evidence and asks GitHub nothing. `evidence.ts` decides whether the paths deploy at all; its built-in inert
+  paths equal `scripts/verify.sh`'s. A project's `deploy.paths` (globs in `project.yaml`; empty by default, which changes nothing) narrows
+  that further: with some declared, a path deploys only if a glob names it and it is not built-in inert, so a rewrite built beside the
+  running system ships with `deploys: false` (no deploy, no version check). The gate, the watch's version check (`deployedHolds`) and
+  `ProjectChecks.deployPaths` all read it; `scripts/verify.sh` stays the built-in floor.
 - **Watch and verify** (`domains/quality/watch.ts`, `app/quality-watch.ts`): the project's `make verify` and probes run on
   their own loop, so a slow verify never holds the leads' pass. What the watch runs is the synced `project.yaml`
   (`app/quality-projects.ts`): deploy mode, `hold` as the window, `make verify` from a target, URL targets and probes. Only
