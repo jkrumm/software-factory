@@ -39,6 +39,7 @@ const Plan = z.object({
       repo: z.string().optional(),
       after: z.array(z.string()).optional(),
       not_before: z.string().optional(),
+      after_days: z.number().int().optional(),
       issue: z.number().int().optional(),
     }),
   ),
@@ -179,9 +180,14 @@ export async function readChain(
       notBefore: null,
     }))
   const rowNodes = unfiled.map(({ project, row }): ChainNode => {
-    const waiting =
-      unique.some((edge) => edge.from === rowId(project, row.key) && !edge.closed) ||
-      (row.not_before !== undefined && notBeforeMs(row.not_before) > now.getTime())
+    // the `after_days` window ends that many days after the latest close among the row's blockers (once all are closed)
+    const mine = unique.filter((edge) => edge.from === rowId(project, row.key))
+    const windowEnd =
+      row.after_days === undefined || mine.some((edge) => !edge.closed)
+        ? 0
+        : Math.max(0, ...mine.map((edge) => issues.get(edge.to)?.since?.getTime() ?? 0)) + row.after_days * 86_400_000
+    const until = Math.max(row.not_before === undefined ? 0 : notBeforeMs(row.not_before), windowEnd)
+    const waiting = mine.some((edge) => !edge.closed) || until > now.getTime()
     return {
       id: rowId(project, row.key),
       kind: 'row',
@@ -191,7 +197,7 @@ export async function readChain(
       issueKind: kindOf(row.kind ?? 'feature'),
       since: null,
       waitReason: null,
-      notBefore: row.not_before === undefined ? null : new Date(notBeforeMs(row.not_before)).toISOString(),
+      notBefore: until === 0 ? null : new Date(until).toISOString(),
     }
   })
 

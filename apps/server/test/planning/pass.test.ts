@@ -205,6 +205,24 @@ describe('the plan files its rows', () => {
     expect(value(await planningPass(world.deps)).filed).toHaveLength(1)
   })
 
+  test('a row with after_days is filed on the first pass after the window that began at the close', async () => {
+    world.source.add('app', {
+      project: PROJECT('app'),
+      plan: plan('p1', [row('first'), row('second', { after: ['first'], after_days: 7 })]),
+    })
+    value(await planningPass(world.deps))
+    await world.send(issueId(1), 'cancelled', 'cancelled', { reason: 'not needed' }, 'owner')
+    expect(value(await planningPass(world.deps)).filed).toEqual([])
+    const [waiting] = await states()
+    expect(waiting?.plan?.rows.find((r) => r.key === 'second')?.reason).toBe(
+      'after_days 7: closed 2026-11-07T12:00:00.000Z, until 2026-11-14T12:00:00.000Z',
+    )
+    world.clock.set(new Date('2026-11-14T11:59:59Z'))
+    expect(value(await planningPass(world.deps)).filed).toEqual([])
+    world.clock.set(new Date('2026-11-14T12:00:01Z'))
+    expect(value(await planningPass(world.deps)).filed).toEqual([{ project: 'app', row: 'second', issue: issueId(2) }])
+  })
+
   test('a plan row filed by two passes at once is one Issue (the row key is the filed event key)', async () => {
     world.source.add('app', { project: PROJECT('app'), plan: plan('p1', [row('a')]) })
     value(await syncProjects(world.deps, { fetch: false }))

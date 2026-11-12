@@ -40,12 +40,17 @@ export async function planViews(stores: PlanningStores, now: Date): Promise<Plan
   const adopted = plans.flatMap(({ plan }) =>
     plan.rows.flatMap((row) => (row.issue === undefined ? [] : [issueIdOf(row.issue)])),
   )
-  const states = await stores.reads.statesOf([...filed.values(), ...adopted])
+  const ids = [...filed.values(), ...adopted]
+  const states = await stores.reads.statesOf(ids)
+  const closedAt = plans.some(({ plan }) => plan.rows.some((row) => row.after_days !== undefined))
+    ? await stores.reads.closedAtOf(ids)
+    : new Map<IssueId, Date>()
   const statuses = rowStatuses({
     plans,
     projects: new Set(projects.map((p) => p.name)),
     filed,
     states,
+    closedAt,
     now,
   })
   return withPlan.map((p) => ({
