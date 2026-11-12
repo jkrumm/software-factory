@@ -16,7 +16,7 @@ import {
   waitFindings,
 } from '../../src/domains/loops/selfwatch.ts'
 import type { CiRun, Finding, HeartbeatFact, SelfwatchRow } from '../../src/domains/loops/selfwatch-model.ts'
-import { isInert } from '../../src/domains/quality/evidence.ts'
+import { isBuiltinInert } from '../../src/domains/quality/evidence.ts'
 
 const NOW = new Date('2026-11-08T12:00:00Z')
 const minutes = (n: number) => new Date(NOW.getTime() - n * 60_000)
@@ -184,15 +184,15 @@ test('inert_regression: only a ship whose stored paths are all inert', () => {
     ship,
   })
   const inert = { commits: ['a'.repeat(40)], paths: ['docs/x.md', 'apps/server/test/a.test.ts'], deploys: false }
-  const found = inertRegressionFindings([reg(inert)], isInert)
+  const found = inertRegressionFindings([reg(inert)], isBuiltinInert)
   expect(found).toHaveLength(1)
   expect(found[0]?.facts.join('\n')).toContain('docs/x.md')
-  expect(inertRegressionFindings([reg({ ...inert, paths: ['docs/x.md', 'apps/server/src/a.ts'] })], isInert)).toEqual(
-    [],
-  )
-  expect(inertRegressionFindings([reg({ ...inert, deploys: true })], isInert)).toEqual([])
-  expect(inertRegressionFindings([reg({ ...inert, paths: [] })], isInert)).toEqual([])
-  expect(inertRegressionFindings([reg(null)], isInert)).toEqual([])
+  expect(
+    inertRegressionFindings([reg({ ...inert, paths: ['docs/x.md', 'apps/server/src/a.ts'] })], isBuiltinInert),
+  ).toEqual([])
+  expect(inertRegressionFindings([reg({ ...inert, deploys: true })], isBuiltinInert)).toEqual([])
+  expect(inertRegressionFindings([reg({ ...inert, paths: [] })], isBuiltinInert)).toEqual([])
+  expect(inertRegressionFindings([reg(null)], isBuiltinInert)).toEqual([])
 })
 
 test('heartbeat_stale: a class per reason, never while ok', () => {

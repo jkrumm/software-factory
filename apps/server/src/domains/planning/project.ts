@@ -58,7 +58,7 @@ const Deploy = z.strictObject({
     .default('0m'),
   /**
    * globs of the paths a deploy carries (`apps/**`, `Makefile`). Empty: every path that is not inert deploys. Set: a ship
-   * touching none of them records no deploy and no watch, as a rewrite built beside the running system must.
+   * touching none of them records no deploy and no deployed-version check, as a rewrite built beside the running system must.
    */
   paths: z.array(DeployGlob).default([]),
   /** paths whose change needs a migration to be run */
