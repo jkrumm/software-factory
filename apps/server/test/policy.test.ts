@@ -88,6 +88,15 @@ describe('the policy table', () => {
     }
   })
 
+  test('the project digests are a read route: owner, orchestrator, agent and the read token (which gets no words of a work repo)', async () => {
+    expect(allowed('GET', '/v1/projects/digests')).toEqual(['owner', 'orchestrator', 'agent', 'read'])
+    expect(ruleFor('GET', '/v1/projects/digests')?.route).toBe('/v1/projects/digests')
+    expect((await routes()).some(({ method, route }) => method === 'GET' && route === '/v1/projects/digests')).toBe(
+      true,
+    )
+    expect(allowed('GET', '/projects')).toEqual(['owner', 'orchestrator'])
+  })
+
   test("the machine is allowed on exactly the door's three calls", async () => {
     const machine = (await routes())
       .filter(({ method, route }) => {

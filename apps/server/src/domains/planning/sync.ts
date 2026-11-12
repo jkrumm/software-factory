@@ -130,14 +130,7 @@ export function synced(input: {
 export const repoTextOf = (project: Pick<StoredProject, 'name' | 'repo'>): string =>
   project.name.includes('~') ? project.repo : project.name
 
-/** The project a repo text (a project name, a path, a worktree below a path) belongs to: the longest repo wins. */
-export function projectOf(projects: readonly StoredProject[], repo: string): StoredProject | undefined {
-  const byName = projects.find((p) => p.name === repo)
-  if (byName) return byName
-  return projects
-    .filter((p) => repo === p.repo || repo.startsWith(`${p.repo}/`))
-    .sort((a, b) => b.repo.length - a.repo.length)[0]
-}
+export { projectOf } from '../../kernel/project-of.ts'
 
 /**
  * The name a repo text goes by when no project claims it: a name as it is; a path, or a linked worktree below one

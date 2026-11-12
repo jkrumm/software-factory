@@ -4,6 +4,7 @@ import { agwErrandScreen } from './adapters/agw/errand.ts'
 import { agwJudge } from './adapters/agw/judge.ts'
 import { agwPort } from './adapters/agw/port.ts'
 import { agwFixClasses } from './adapters/agw/fix-classes.ts'
+import { agwDigest } from './adapters/agw/digest.ts'
 import { agwHygiene } from './adapters/agw/hygiene.ts'
 import { agwQueue } from './adapters/agw/queue.ts'
 import { agwScreen } from './adapters/agw/screen.ts'
@@ -55,6 +56,7 @@ import { MainCheckoutLines } from './app/loops/checkout-lines.ts'
 import { gitMainCheckouts } from './adapters/quality/main-checkouts.ts'
 import { stewardPass, stewardSummary } from './app/loops/steward.ts'
 import { queuePass, queueSummary } from './app/loops/queue.ts'
+import { digestPass, digestPassSummary } from './app/loops/digest.ts'
 import { screenPass, screenSummary } from './app/loops/screen.ts'
 import { triagePass, triageSummary } from './app/loops/triage.ts'
 import { FRICTION_WINDOW_DAYS } from './domains/loops/friction.ts'
@@ -535,6 +537,18 @@ async function main(): Promise<void> {
         })
         if (!pass.ok) return pass
         return ok(hostSummary(pass.value))
+      },
+    },
+    {
+      // One `agw factory digest` call per project whose Issues changed: the summary the Console shows on Flow. Interval only.
+      name: 'digest',
+      intervalMs: loopSettings.intervalMs.digest,
+      onChange: false,
+      run: async () => {
+        const pass = await digestPass({ uow, clock: writes.clock, workflow: agwDigest(agw) })
+        if (!pass.ok) return pass
+        said('digest', pass.value.problems)
+        return ok(digestPassSummary(pass.value))
       },
     },
     {

@@ -3,6 +3,7 @@ import type { SQL } from 'bun'
 import * as z from 'zod'
 import type { CallLoop, CallRow } from '../../domains/loops/calls.ts'
 import type { HygienePassRecord, LoopStore } from '../../domains/loops/ports.ts'
+import type { DigestAnswer } from '@software-factory/contract'
 import type { QueueAskRow } from '../../domains/loops/queue.ts'
 import { FINDING_KINDS } from '../../domains/loops/selfwatch-model.ts'
 import type { IssueId } from '../../kernel/ids.ts'
@@ -82,6 +83,8 @@ const SelfwatchRowSchema = z.object({
   signal_id: z.string().nullable(),
   cleared_at: z.date().nullable(),
 })
+
+const LatestDigestRow = z.object({ project: z.string(), at: z.date(), input_hash: z.string(), headline: z.string() })
 
 const json = (value: unknown): unknown => (typeof value === 'string' ? JSON.parse(value) : value)
 
@@ -251,6 +254,24 @@ export function postgresLoopStore(tx: SQL): LoopStore {
     async pruneHostSamples(before) {
       const rows: unknown[] = await tx`DELETE FROM factory.host_samples WHERE at < ${before} RETURNING at`
       return rows.length
+    },
+
+    async latestDigests() {
+      const rows: unknown[] = await tx`
+        SELECT DISTINCT ON (project) project, at, input_hash, digest->>'headline' AS headline
+        FROM factory.project_digests ORDER BY project, at DESC, id DESC`
+      const latest = new Map<string, { hash: string; at: Date; headline: string }>()
+      for (const raw of rows) {
+        const row = LatestDigestRow.parse(raw)
+        latest.set(row.project, { hash: row.input_hash, at: row.at, headline: row.headline })
+      }
+      return latest
+    },
+
+    async recordDigest(record) {
+      await tx`
+        INSERT INTO factory.project_digests (project, at, input_hash, route, digest)
+        VALUES (${record.project}, ${record.at}, ${record.hash}, ${record.route}, ${JSON.stringify(record.digest satisfies DigestAnswer)}::text::jsonb)`
     },
 
     async pruneLeadSamples(before) {

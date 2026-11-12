@@ -2,6 +2,7 @@ import { createFileRoute, Link, useNavigate } from '@tanstack/react-router'
 import type { FlowModel } from '@software-factory/contract'
 import { CheckCircleIcon, HourglassIcon, QueueIcon, RocketLaunchIcon } from '@phosphor-icons/react'
 import { type ReactNode, useState } from 'react'
+import { DigestStrip } from '@/components/flow/digest-strip'
 import { FlowCardView } from '@/components/flow/card'
 import { EmptyColumn } from '@/components/flow/empty'
 import { FlowList } from '@/components/flow/list'
@@ -33,7 +34,7 @@ import { useNow } from '@/lib/now'
 import { FlowSkeleton } from '@/components/skeletons'
 import { failureNote } from '@/lib/api'
 import { useScreen } from '@/lib/screen'
-import { useFlow } from '@/lib/queries'
+import { useFlow, useProjectDigests } from '@/lib/queries'
 import { cn } from '@/lib/utils'
 
 const text = (value: unknown): string | undefined => (typeof value === 'string' && value !== '' ? value : undefined)
@@ -151,6 +152,7 @@ const SELECT =
 
 function Flow() {
   const flow = useFlow()
+  const digests = useProjectDigests()
   const { data, error } = flow
   const screen = useScreen(flow)
   // the root route validates nothing, so an unknown `state` still reaches here from the raw URL: read it through the guard again
@@ -193,6 +195,7 @@ function Flow() {
   return (
     <Page full>
       <PageHeader title="Flow" note={boardNote(counts)} />
+      <DigestStrip digests={digests.data?.projects ?? []} now={now} project={filters.project} />
       <StatRow data={data} now={now} />
       <FlowSidebar data={data} filters={filters} />
       <ActiveFilters

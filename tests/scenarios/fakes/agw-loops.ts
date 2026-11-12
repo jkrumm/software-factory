@@ -27,6 +27,29 @@ export async function loopsFake(args: string[]): Promise<number> {
   const input = JSON.parse(stdin) as Record<string, unknown>
   const words = JSON.stringify(input).toLowerCase()
 
+  if (args[0] === 'factory' && args[1] === 'digest') {
+    // the digest names its project in the request: a script entry matches on it (`"project":"app"`); nothing scripted answers a
+    // digest that cites the first Issue the request names
+    const scripted = scriptOf('FACTORY_FAKE_DIGEST_SCRIPT').find((entry) => words.includes(entry.match.toLowerCase()))
+    if (scripted?.fail) {
+      process.stderr.write('fake agw: factory digest scripted to fail\n')
+      return 1
+    }
+    const listed = (name: string): { id: string }[] =>
+      Array.isArray(input[name]) ? (input[name] as { id: string }[]) : []
+    const first = [...listed('done'), ...listed('working'), ...listed('queued'), ...listed('waiting')]
+    return done(
+      'factory.digest',
+      args,
+      scripted?.answer ?? {
+        headline: `${String(input.project)}: nothing scripted`,
+        shipped: [],
+        next: first[0] ? [{ text: 'the first Issue goes on', ids: [first[0].id] }] : [],
+        risks: [],
+        themes: [],
+      },
+    )
+  }
   if (args[0] === 'factory-steward') {
     const scripted = scriptOf('FACTORY_FAKE_STEWARD_SCRIPT').find((entry) => words.includes(entry.match.toLowerCase()))
     return done(

@@ -60,6 +60,7 @@ import {
   PlanningPassAnswer,
   PrioAnswer,
   PrioBody,
+  ProjectDigestsModel,
   ProjectList,
   ProjectSyncAnswer,
   ProjectView,
@@ -1767,7 +1768,7 @@ export const OPERATIONS: readonly Operation[] = [
     method: 'POST',
     path: '/v1/loops/{name}/run',
     summary:
-      'one pass of one loop now (leads, planning, watch, settle, send, steward, triage, queue, friction, hygiene, screen, fix-classes, selfwatch, host, reaper); a pass already running is waited for, not started again',
+      'one pass of one loop now (leads, planning, watch, settle, send, steward, triage, queue, friction, hygiene, screen, fix-classes, selfwatch, host, reaper, digest); a pass already running is waited for, not started again',
     pathParams: ['name'],
     queryParams: [],
     body: false,
@@ -1841,6 +1842,21 @@ export const OPERATIONS: readonly Operation[] = [
       500: ErrorBody,
       503: ErrorBody,
     },
+  },
+  {
+    operationId: 'read.project-digests',
+    command: ['read', 'project-digests'],
+    method: 'GET',
+    path: '/v1/projects/digests',
+    summary:
+      "each project's newest digest (headline, shipped, next and risks bullets citing Issues, themes) made every few hours by agw's factory digest, for projects with an Issue open or closed in the last 7 days, with counts (done in 7 days, working, queued, waiting) read from the Issues now; the read token gets the counts of a work project and no words",
+    pathParams: [],
+    queryParams: [],
+    body: false,
+    queryFlags: [],
+    bodyFields: [],
+    args: [],
+    responses: { 200: ProjectDigestsModel, 401: ErrorBody, 403: ErrorBody, 500: ErrorBody, 503: ErrorBody },
   },
   {
     operationId: 'read.retro',

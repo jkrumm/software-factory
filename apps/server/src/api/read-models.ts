@@ -15,6 +15,7 @@ import {
   SinceModel,
   NeedsModel,
   ChainModel,
+  ProjectDigestsModel,
   type QueueReason as QueueReasonSchema,
 } from '@software-factory/contract'
 import type { SQL } from 'bun'
@@ -26,6 +27,7 @@ import type { CiTimes } from '../domains/loops/ports.ts'
 import { findingClasses } from '../app/loops/finding-classes.ts'
 import { type CapacityConstants, readCapacityLoop } from '../read/capacity-loop.ts'
 import { readChain } from '../read/chain.ts'
+import { readProjectDigests } from '../read/digests.ts'
 import { type QueueReasons, readFlow } from '../read/flow.ts'
 import { readFixCommits } from '../read/fix-commits.ts'
 import { readFriction } from '../read/friction.ts'
@@ -134,6 +136,22 @@ export const readModelRoutes = (deps: ReadModelDeps | undefined, caller: (reques
           operationId: 'read.flow',
           summary:
             'the Issues by state (settling, queued, working, waiting, watching), what closed in the last day, counts per project and the queue state per scope',
+        },
+      },
+    )
+    .get(
+      '/projects/digests',
+      async ({ request }) => {
+        if (!deps) return unavailable
+        const redact = caller(request) === 'read'
+        return Response.json(ProjectDigestsModel.parse(await readProjectDigests(deps.sql, { now: now(), redact })))
+      },
+      {
+        response: { 200: ProjectDigestsModel, ...errorResponses(503) },
+        detail: {
+          operationId: 'read.project-digests',
+          summary:
+            "each project's newest digest (headline, shipped, next and risks bullets citing Issues, themes) made every few hours by agw's factory digest, for projects with an Issue open or closed in the last 7 days, with counts (done in 7 days, working, queued, waiting) read from the Issues now; the read token gets the counts of a work project and no words",
         },
       },
     )

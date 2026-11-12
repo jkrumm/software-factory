@@ -33,6 +33,8 @@ field. The address logic is pure (`lib/peek.ts`); the panel's content is its own
 Settling, Queued, Working, Waiting, Watching and Closed recently (the last 24 hours), from `GET /v1/flow`, refreshed by the
 stream like every other screen.
 
+**Digest strip.** Above the stat row, one card per project with a digest (`GET /v1/projects/digests`, `components/flow/digest-strip.tsx`): the project (a link that filters the board), the digest's age, the headline, the four counts (done in 7 days, working, queued, waiting: read from the Issues, not from the digest), and a button that opens the shipped, next and risks bullets, each citing its Issues by a link. Collapsed to the headline and the counts; with `?project=` the strip shows that project alone, opened. No digest, no strip.
+
 **Stat row.** Four kit `StatCard`s: Working, Waiting, Queued (a line of the Issues in that state at eight daily samples,
 `trend` in the model) and Shipped this week (bars of the done and healed closes per day, against the 7 days before). They
 are factory-wide, never narrowed by the filters; each opens `/flow?state=<state>` (Shipped: `closed`), the same view the

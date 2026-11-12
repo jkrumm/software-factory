@@ -1,4 +1,6 @@
 import type {
+  DigestAnswer,
+  DigestRequest,
   FixClassesAnswer,
   FixClassesRequest,
   HygieneAnswer,
@@ -17,6 +19,7 @@ import type { IssueId } from '../../kernel/ids.ts'
 import type { Key } from '../../kernel/keys.ts'
 import type { PortError, Result } from '../../kernel/result.ts'
 import type { MainCheckoutLook } from './checkout.ts'
+import type { DigestIssue, DigestRecord, LatestDigest } from './digest.ts'
 import type { ReaperAttempt, ReaperProc } from './reaper.ts'
 import type { CallLoop, CallOutcome, CallRow } from './calls.ts'
 import type { ClassIssue, FindingLoop } from './classes.ts'
@@ -132,6 +135,10 @@ export interface ProcessKiller {
 }
 
 export interface LoopStore {
+  /** the newest stored digest of each project, by project name */
+  latestDigests(): Promise<Map<string, LatestDigest>>
+  /** a new row: digests are facts, the newest one is read */
+  recordDigest(record: DigestRecord): Promise<void>
   /** the attempts the reaper weighs: those not finalized, and those finalized since `since` */
   reaperAttempts(since: Date): Promise<ReaperAttempt[]>
   /** the SIGTERMs recorded since `since`, oldest first */
@@ -255,6 +262,8 @@ export interface ClaimRefusal {
 
 /** Read-only SQL on other domains' tables (`docs/architecture.md`: cross-domain SQL lives in `read/`). */
 export interface LoopReads {
+  /** every Issue not closed and every one closed at or after `since`, with its open `after` edges (the digest loop and its read) */
+  digestIssues(since: Date): Promise<DigestIssue[]>
   /** open `note_lead` effects whose runs were refused for a claim (`waits for a claim in`), oldest first */
   claimRefusals(limit: number): Promise<ClaimRefusal[]>
   /** Issues waiting for a stall (`wall`, `unreported`, `blocked`, `lead_gone`, `regressed`), oldest first */
@@ -306,6 +315,11 @@ export interface QueueWorkflow {
 /** `factory-hygiene`: the documents a sweep picked, read against the code they describe in a checkout. */
 export interface HygieneWorkflow {
   ask(request: HygieneRequest, key: Key): Promise<Result<HygieneAnswer, PortError>>
+}
+
+/** `factory digest`: one project's recent, running and queued Issues summarised. */
+export interface DigestWorkflow {
+  digest(request: DigestRequest, key: Key): Promise<Result<DigestAnswer, PortError>>
 }
 
 /** `factory-fix-classes`: the class of each fix commit the rules did not settle. */

@@ -14,6 +14,7 @@ import {
   FixCommitsModel,
   FrictionModel,
   HostHistoryModel,
+  ProjectDigestsModel,
   KpiModel,
   MachineModel,
   NeedsModel,
@@ -102,6 +103,8 @@ export const fetchNeeds = (signal?: AbortSignal) => getJson('/v1/needs', NeedsMo
 /** What happened since the owner's last visit. The owner's read moves the visit marker: only the Needs-you screen calls it. */
 export const fetchSince = (signal?: AbortSignal) => getJson('/v1/since', SinceModel, signal)
 export const fetchChain = (signal?: AbortSignal) => getJson('/v1/chain', ChainModel, signal)
+export const fetchProjectDigests = (signal?: AbortSignal) =>
+  getJson('/v1/projects/digests', ProjectDigestsModel, signal)
 export const fetchFlow = (signal?: AbortSignal) => getJson('/v1/flow', FlowModel, signal)
 export const fetchKpis = (days: number, signal?: AbortSignal) => getJson(`/v1/kpis?days=${days}`, KpiModel, signal)
 export const fetchCapacityLoop = (days: number, signal?: AbortSignal) =>

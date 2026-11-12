@@ -530,6 +530,47 @@ export const HostHistoryModel = z
   .meta({ id: 'HostHistoryModel' })
 export type HostHistoryModel = z.infer<typeof HostHistoryModel>
 
+// -- project digests -------------------------------------------------------------------------------------------------------
+
+/** One digest line and the Issues it is about (each id links to its page). */
+export const ProjectDigestBullet = z
+  .strictObject({ text: z.string(), ids: z.array(IssueRef) })
+  .meta({ id: 'ProjectDigestBullet' })
+
+/** What a project has: counts from the event log, never from the model. */
+export const ProjectDigestCounts = z
+  .strictObject({
+    /** closed done or healed in the last 7 days */
+    done7d: z.number().int().min(0),
+    /** working or watching now */
+    working: z.number().int().min(0),
+    /** settling or queued now */
+    queued: z.number().int().min(0),
+    waiting: z.number().int().min(0),
+  })
+  .meta({ id: 'ProjectDigestCounts' })
+
+/** One project's newest digest with its live counts. The read token sees the counts of a work project and no words. */
+export const ProjectDigest = z
+  .strictObject({
+    project: z.string(),
+    /** when the digest was made */
+    at,
+    headline: z.string(),
+    shipped: z.array(ProjectDigestBullet),
+    next: z.array(ProjectDigestBullet),
+    risks: z.array(ProjectDigestBullet),
+    themes: z.array(z.string()),
+    counts: ProjectDigestCounts,
+  })
+  .meta({ id: 'ProjectDigest' })
+export type ProjectDigest = z.infer<typeof ProjectDigest>
+
+export const ProjectDigestsModel = z
+  .strictObject({ at, projects: z.array(ProjectDigest) })
+  .meta({ id: 'ProjectDigestsModel' })
+export type ProjectDigestsModel = z.infer<typeof ProjectDigestsModel>
+
 // -- since you were here ---------------------------------------------------------------------------------------------------
 
 export const SinceItem = z
