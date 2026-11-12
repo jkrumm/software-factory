@@ -104,6 +104,8 @@ export async function syncProjects(
       }
     }
     await dropOrphanQueueStates(planning, capacity)
+    // by project, then file: the directory listing the repos came from has no order a client may rely on
+    broken.sort((x, y) => x.project.localeCompare(y.project) || x.file.localeCompare(y.file))
     return ok({ synced: reads.length, broken, retired, errors })
   })
   return stored
