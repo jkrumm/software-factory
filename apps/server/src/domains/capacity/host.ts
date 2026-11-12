@@ -68,6 +68,26 @@ export const describeMemory = (
 export const describeLoad = (load: number, ceiling: number): string =>
   `load average ${Math.round(load * 10) / 10} (ceiling ${ceiling})`
 
+/** The span the heartbeat grades swapouts over, and the minute samples that make it up. */
+export const SUSTAIN_WINDOW_MS = 300_000
+
+/**
+ * The swapouts of the last 300 s from the minute samples (each is one minute's delta scaled to 300 s, so five of them
+ * average to the window's real total). Swapouts come in bursts (0, 0, 11349, 0), so the reading of one instant admits
+ * a lead between bursts while the host thrashes; the window holds the gate shut until five minutes pass quietly.
+ * A sample with no figure or older than the window counts as nothing, a missing minute as 0.
+ */
+export function sustainedSwapoutMb(
+  samples: readonly { at: Date; swapoutMbPer300s: number | null }[],
+  now: Date,
+): number {
+  const inWindow = samples.filter(
+    (s) => s.swapoutMbPer300s !== null && now.getTime() - s.at.getTime() <= SUSTAIN_WINDOW_MS,
+  )
+  const sum = inWindow.reduce((total, s) => total + (s.swapoutMbPer300s ?? 0), 0)
+  return Math.round(sum / 5)
+}
+
 const MIB = 1024 * 1024
 const UNITS: Record<string, number> = { K: 1024, M: MIB, G: 1024 * MIB }
 const WINDOW_S = 300

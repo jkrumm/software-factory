@@ -138,6 +138,26 @@ test('a swapout rate over its ceiling keeps it out too, from two readings of the
   expect(last.admitted.map((a) => a.issue)).toEqual([issue])
 })
 
+test('swapouts in the last five minute samples keep it out though the counter stands still now (Issue 858)', async () => {
+  const sql = lab.world.db.sql
+  await lab.memory({ swapUsedMb: 1024, swapouts: 1_001_000 })
+  const issue = await lab.file('mem', 'queued during a lull between swapout bursts')
+  await settle(issue)
+  // newest first: 0, 11349, 0, 1507, 6027 MiB per 300 s, one sample a minute: 3777 MiB in the last five minutes
+  await sql`DELETE FROM factory.host_samples`
+  for (const [ago, mb] of [0, 11349, 0, 1507, 6027].entries()) {
+    await sql`
+      INSERT INTO factory.host_samples (at, load, memory_used_pct, swap_used_pct, swapout_mb_per_300s)
+      VALUES (now() - ${ago} * interval '1 minute', 5, 20, 10, ${mb})`
+  }
+  const reason = (await order()).find((e) => e.issue === issue)?.reason
+  expect(reason?.kind).toBe('memory')
+  expect(reason?.message).toContain('swapouts 3777 MiB/300s (ceiling 2048)')
+  // five quiet minutes: the burst has left the window
+  await sql`DELETE FROM factory.host_samples`
+  expect((await order()).find((e) => e.issue === issue)?.reason?.kind).not.toBe('memory')
+})
+
 test('stop the line admits only the fix in its project; other projects go on', async () => {
   await lab.accounts([{ id: 'a' }, { id: 'b' }, { id: 'c' }])
   const feature = await lab.file('solo', 'a feature while production is red')

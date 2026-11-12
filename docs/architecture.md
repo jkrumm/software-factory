@@ -131,7 +131,7 @@ through `receive` in `app/intake.ts`; the answer is a triage outcome (`docs/lang
 ## Capacity and leads
 
 - **Admission** (`domains/capacity/admission.ts`) is pure and decided again at every claim, in this order: queue state
-  (`drain` starts nothing), the host's 1-minute load, its memory (swapouts and swap against ceilings; the memory that a
+  (`drain` starts nothing), the host's 1-minute load, its memory (swapouts and swap against ceilings; the swapouts are the higher of the pass's own rate and the minute samples' last 300 s, `sustainedSwapoutMb`, so a lull between bursts does not open the gate; the memory that a
   lane's `memory` reserves for its running leads and the candidate counts as swap in use, `docs/plan.md` "Lanes"; then the
   learned fit: a repo with at least three sampled attempts is refused, kind `memory`, when its p80 lead plus what the running
   leads will still grow by (their repo's p80 less what their tree holds now, by a sample not older than 3 min) does not fit into

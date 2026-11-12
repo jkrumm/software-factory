@@ -9,7 +9,7 @@ import { checkAdmission, type LeadFit, type RefusalKind } from '../domains/capac
 import { freeMibOf, headroomMib } from '../domains/capacity/costs.ts'
 import { DEFAULT_TYPICAL_LEAD_MIB, SEAT_SAMPLE_MAX_AGE_MS, SEAT_SAMPLES, seatBonus } from '../domains/capacity/seats.ts'
 import { learnedLeadMib, leadGrowthMib } from '../domains/capacity/leadcost.ts'
-import { type MemoryCeilings, type MemoryReading, reservedOf } from '../domains/capacity/host.ts'
+import { type MemoryCeilings, type MemoryReading, reservedOf, sustainedSwapoutMb } from '../domains/capacity/host.ts'
 import { type LaneInput, laneRoom } from '../domains/capacity/lanes.ts'
 import type { AccountRanker, AccountSource, Assignment, HostReader } from '../domains/capacity/ports.ts'
 import { effectiveState, type QueueStates } from '../domains/capacity/queue-state.ts'
@@ -142,7 +142,17 @@ export async function readHost(deps: CapacityDeps): Promise<HostInputs> {
     : false
   return {
     load: load.ok ? load.value : null,
-    memory: memory.ok ? memory.value : null,
+    // The instant reading (a rate since the last pass) and the minute samples' 300 s window: the higher gates, so a lull
+    // between swapout bursts does not open the gate (Issue 858).
+    memory: memory.ok
+      ? {
+          ...memory.value,
+          swapoutMbPer300s: Math.max(
+            memory.value.swapoutMbPer300s,
+            facts.ok ? sustainedSwapoutMb(facts.value.recent, now) : 0,
+          ),
+        }
+      : null,
     ramMib,
     freeMib: facts.ok ? freeMibOf(facts.value.latest, ramMib, now) : null,
     learned: new Map(

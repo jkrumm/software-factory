@@ -15,6 +15,7 @@ import {
   overLoad,
   overMemory,
   reservedOf,
+  sustainedSwapoutMb,
   swapUsedBytes,
 } from '../../src/domains/capacity/host.ts'
 import { holdsClaim } from '../../src/domains/capacity/claims.ts'
@@ -132,6 +133,34 @@ describe('the host', () => {
     )
     expect(overLoad(60.1, 60)).toBe(true)
     expect(overLoad(60, 60)).toBe(false)
+  })
+
+  test('swapouts are graded over the last 300 s of minute samples, so a lull between bursts keeps the gate shut (Issue 858)', () => {
+    const now = new Date('2026-11-12T06:58:00Z')
+    const at = (minutesAgo: number) => new Date(now.getTime() - minutesAgo * 60_000)
+    // 06:54 to 06:58 of the incident's neighbour: 6027, 0, 1507, 0, 11349 per 300 s -> 18,883 MiB in five minutes / 5
+    const burst = [
+      { at: at(0), swapoutMbPer300s: 0 },
+      { at: at(1), swapoutMbPer300s: 11349 },
+      { at: at(2), swapoutMbPer300s: 0 },
+      { at: at(3), swapoutMbPer300s: 1507 },
+      { at: at(4), swapoutMbPer300s: 6027 },
+    ]
+    expect(sustainedSwapoutMb(burst, now)).toBe(3777)
+    expect(sustainedSwapoutMb(burst, now)).toBeGreaterThan(2048)
+    // the burst leaves the window: five quiet minutes open the gate
+    expect(sustainedSwapoutMb(burst, new Date(now.getTime() + 5 * 60_000))).toBe(0)
+    // unreadable and stale samples count as nothing
+    expect(
+      sustainedSwapoutMb(
+        [
+          { at: at(0), swapoutMbPer300s: null },
+          { at: at(9), swapoutMbPer300s: 9000 },
+        ],
+        now,
+      ),
+    ).toBe(0)
+    expect(sustainedSwapoutMb([], now)).toBe(0)
   })
 
   test('vm.swapusage is read in bytes; the swapout counter gives a rate from two samples and starts over on a reboot', () => {
