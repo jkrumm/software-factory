@@ -9,10 +9,10 @@ import { percentile, windowOf } from './stats.ts'
 export const SLOWEST_STEPS = 5
 
 /** Repos whose CI is read at once. */
-const CI_CONCURRENCY = 4
+const CI_CONCURRENCY = 8
 
-/** The whole CI read ends here: a repo not answered by then is unreadable (the CLI waits 60 s for the bundle). */
-export const CI_READ_DEADLINE_MS = 40_000
+/** The whole CI read ends here: a repo not answered by then is unreadable (the CLI waits 120 s for the bundle). */
+export const CI_READ_DEADLINE_MS = 80_000
 
 const MINUTE_MS = 60_000
 
@@ -135,7 +135,14 @@ export async function readRetroBuild(
   const { ciTimes } = options
   if (ciTimes) {
     const deadline = Date.now() + (options.ciDeadlineMs ?? CI_READ_DEADLINE_MS)
-    const answers = await inBatches(names, CI_CONCURRENCY, async (repo) => {
+    // the repos with the most work first, so a read that runs out of time loses the quietest ones
+    const busiest = [...names].sort(
+      (a, b) =>
+        (checks.totals.get(b)?.total_ms ?? 0) - (checks.totals.get(a)?.total_ms ?? 0) ||
+        (checks.closed.get(b) ?? 0) - (checks.closed.get(a) ?? 0) ||
+        a.localeCompare(b),
+    )
+    const answers = await inBatches(busiest, CI_CONCURRENCY, async (repo) => {
       const left = deadline - Date.now()
       let timer: ReturnType<typeof setTimeout> | undefined
       const late = new Promise<Awaited<ReturnType<CiTimes>>>((resolve) => {
@@ -163,6 +170,7 @@ export async function readRetroBuild(
       readOf.set(repo, answer.value)
       allRuns.push(...answer.value.runs)
     }
+    unreadable.sort((a, b) => a.repo.localeCompare(b.repo))
   }
 
   const repos: RetroBuildRepo[] = names.map((repo) => {
