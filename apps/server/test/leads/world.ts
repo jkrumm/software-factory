@@ -22,6 +22,7 @@ import type {
   Windows,
   WorktreeRemoval,
   Worktrees,
+  CheckTiers,
 } from '../../src/domains/leads/ports.ts'
 import type { AnyIssueEvent } from '../../src/domains/work/events.ts'
 import type { Clock } from '../../src/kernel/clock.ts'
@@ -161,6 +162,8 @@ export interface World {
   } & Claims
   transcripts: { archived: unknown[]; error: PortError | null } & Transcripts
   repoError: PortError | null
+  /** the check tiers the fake project has; null: none */
+  checkTiers: CheckTiers | null
   seatError: PortError | null
   windowReset: Date | null
   /** files, settles and admits an Issue in the repo `example`; returns its id */
@@ -209,6 +212,7 @@ export async function startWorld(): Promise<World> {
       },
     },
     repoError: null,
+    checkTiers: null,
     seatError: null,
     windowReset: null,
     deps: undefined as unknown as LeadDeps,
@@ -249,6 +253,7 @@ export async function startWorld(): Promise<World> {
     worktrees,
     branches,
     repos,
+    checks: { of: async () => ok(world.checkTiers) },
     roles,
     seats,
     claims: world.claims,
@@ -298,6 +303,7 @@ export async function startWorld(): Promise<World> {
     world.transcripts.archived = []
     world.transcripts.error = null
     world.repoError = null
+    world.checkTiers = null
     world.seatError = null
     world.windowReset = null
     world.deps.ids = sequentialIds()

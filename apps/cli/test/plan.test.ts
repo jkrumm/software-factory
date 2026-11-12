@@ -204,6 +204,11 @@ describe('plain forms', () => {
         'b\twaiting\t-\tafter app:a',
       ].join('\n'),
     )
+    expect(
+      projectShowPlain({ ...base, checks: { fast: 'make check-fast', full: 'make check', ci: true }, plan: null }),
+    ).toBe(
+      'app branch=main leads=2 synced=2026-11-10T09:00:00Z\nchecks: fast="make check-fast" full="make check" ci=true\nno plan',
+    )
     expect(projectShowPlain({ ...base, plan: null })).toBe(
       'app branch=main leads=2 synced=2026-11-10T09:00:00Z\nno plan',
     )

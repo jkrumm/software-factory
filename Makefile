@@ -1,8 +1,9 @@
 .DEFAULT_GOAL := help
-.PHONY: help check check-steps merge-guard test e2e fmt deploy rollback verify version rehearse
+.PHONY: help check check-fast check-steps check-fast-steps check-static test test-unit test-unit-changed test-scenarios merge-guard e2e fmt deploy rollback verify version rehearse
 
 help:
 	@echo "make check   install, format, lint, shellcheck, tsc, Console tsc, tokens, artifact templates and InfoHint definitions, e2e tsc, boundaries, retired words, public scan, Issue diagram, generated CLI, tests, scenarios, Console build and Playwright (the merge gate)"
+	@echo "make check-fast  the lead's local check (project.yaml checks.fast): everything of make check up to the tests, then the unit tests of the files the branch changed (CHECK_FAST_ALL=1: all of them); CI runs the full gate sharded"
 	@echo "make merge-guard  run right before merging a PR: refuses unless the branch contains origin/master, its migration numbers are free, the head's CI finished green and master's last finished CI run is not red (MERGE_GUARD_ARGS=--wait waits for the head's CI; --allow-red only for the change that fixes a red master)"
 	@echo "make test    the unit tests and the scenarios"
 	@echo "make e2e     build the Console and run its Playwright suite against a seeded server (tests/e2e; screenshots land in tests/e2e/out/screenshots)"
@@ -17,9 +18,23 @@ help:
 check:
 	@$(call slot,check) $(MAKE) --no-print-directory check-steps
 
+# The lead's check after each change (project.yaml `checks.fast`): its own slot name, so the ledger learns its peak apart from the whole gate's.
+check-fast:
+	@$(call slot,check-fast) $(MAKE) --no-print-directory check-fast-steps
+
 # The whole check is one lease on a test slot (a lead sees "queued for a test slot" and waits, it does not poll the load);
 # the test steps below it run inside that lease (FACTORY_SLOT_ACTIVE) and do not queue again.
-check-steps:
+check-steps: check-static
+	@$(MAKE) --no-print-directory test
+	@$(MAKE) --no-print-directory e2e
+	@echo "==> check passed"
+
+check-fast-steps: check-static
+	@$(MAKE) --no-print-directory test-unit-changed
+	@echo "==> check-fast passed (CI runs the scenarios and the Console suite)"
+
+# Everything that is not a test run: CI's `static` job runs these through check-fast.
+check-static:
 	@echo "==> install (bun install --frozen-lockfile)"
 	@bun install --frozen-lockfile
 	@echo "==> format (oxfmt --check)"
@@ -51,9 +66,6 @@ check-steps:
 	@echo "==> generated CLI is current (apps/cli/scripts/generate.ts --check)"
 	@bun apps/cli/scripts/generate.ts --check
 	@echo "==> next free migration number (scripts/merge-guard.ts): $$(bun scripts/merge-guard.ts --next-migration)"
-	@$(MAKE) --no-print-directory test
-	@$(MAKE) --no-print-directory e2e
-	@echo "==> check passed"
 
 # The tests run in one of the host's test slots (FL7) when `factory` is installed, so parallel checks do not pile their
 # load onto each other; without it (CI) the bare command. That is the installed CLI of the running core until the
@@ -69,18 +81,31 @@ SLOT = $(call slot,test)
 # The per-test limit stretches with the host's load per core (up to 6x): at load 40 a test that takes 3 s idle takes minutes (Issue 719).
 TEST_TIMEOUT = --timeout $(shell bun -e 'import {cpus,loadavg} from "node:os"; console.log(Math.round(30000*Math.min(6,Math.max(1,loadavg()[0]/cpus().length))))')
 
-test:
+test: test-unit test-scenarios
+
+test-unit:
 	@echo "==> unit tests (bun test apps packages scripts integrations)"
 	@$(SLOT) bun test $(TEST_TIMEOUT) ./apps ./packages ./scripts ./integrations
-	@echo "==> scenarios (bun test tests)"
-	@$(SLOT) bun test $(TEST_TIMEOUT) ./tests
+
+# The unit tests of what the branch changed (bun follows the imports from each changed file; committed and uncommitted
+# changes against the merge base with origin/master). CHECK_FAST_ALL=1 (CI's `static` job) runs every unit test.
+UNIT_BASE = $(shell git merge-base HEAD origin/master 2>/dev/null)
+test-unit-changed:
+	@if [ -n "$(CHECK_FAST_ALL)" ] || [ -z "$(UNIT_BASE)" ]; then $(MAKE) --no-print-directory test-unit; else \
+	  echo "==> unit tests of the changed files (bun test --changed=$(UNIT_BASE))"; \
+	  $(SLOT) bun test $(TEST_TIMEOUT) --changed=$(UNIT_BASE) --pass-with-no-tests ./apps ./packages ./scripts ./integrations; fi
+
+# SHARD=1/2 runs the first of two shards of the scenarios (CI's matrix); unset, all of them.
+test-scenarios:
+	@echo "==> scenarios (bun test tests$(if $(SHARD), --shard=$(SHARD)))"
+	@$(SLOT) bun test $(TEST_TIMEOUT) $(if $(SHARD),--shard=$(SHARD)) ./tests
 
 # The Console is built first (the global setup serves apps/console/dist); `bun test` never collects tests/e2e (*.e2e.ts). Playwright runs under Bun.
 e2e:
 	@echo "==> console build (apps/console/dist)"
 	@bun run --cwd apps/console build
-	@echo "==> e2e (playwright, tests/e2e)"
-	@$(SLOT) bunx --bun playwright test -c tests/e2e/playwright.config.ts
+	@echo "==> e2e (playwright, tests/e2e$(if $(E2E_SHARD), --shard=$(E2E_SHARD)))"
+	@$(SLOT) bunx --bun playwright test -c tests/e2e/playwright.config.ts $(if $(E2E_SHARD),--shard=$(E2E_SHARD))
 
 fmt:
 	@bunx --no-install oxfmt --write .

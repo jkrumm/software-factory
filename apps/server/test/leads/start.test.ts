@@ -55,6 +55,18 @@ describe('start_lead', () => {
     ])
   })
 
+  test('the brief carries the project check tiers when it has them, and none when it has none', async () => {
+    const plain = await w.admitted()
+    await startLead(w.deps, effect(plain))
+    expect(w.terminals.started[0]?.prompt).not.toContain('## Checks in this repo')
+
+    await w.reset()
+    w.checkTiers = { fast: 'make check-fast', full: 'make check', ci: true }
+    const tiered = await w.admitted()
+    await startLead(w.deps, effect(tiered))
+    expect(w.terminals.started[0]?.prompt).toContain('run `make check-fast` before the first push')
+  })
+
   test('a replay finds the lead that runs: nothing is made or started twice, the fact is recorded once', async () => {
     const issue = await w.admitted()
     await startLead(w.deps, effect(issue))

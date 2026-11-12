@@ -1,7 +1,7 @@
 import { describe, expect, test } from 'bun:test'
 import { join } from 'node:path'
 import { parseYamlText } from '../../src/adapters/planning/git-projects.ts'
-import { defaultProject, parseProject } from '../../src/domains/planning/project.ts'
+import { defaultProject, parseProject, ProjectFile } from '../../src/domains/planning/project.ts'
 import { signalsView } from '../../src/domains/planning/signals.ts'
 import { projectName, projectOf, type StoredProject, synced } from '../../src/domains/planning/sync.ts'
 
@@ -22,6 +22,27 @@ describe('project.yaml', () => {
     expect(parsed.project.ship).toEqual([{ paths: ['**'], via: 'pr' }])
     expect(parsed.project.signals.github?.author).toBe('jkrumm')
     expect(parsed.project.deploy.targets[0]?.verify).toBe('make verify')
+    expect(parsed.project.checks).toEqual({ fast: 'make check-fast', full: 'make check', ci: true })
+  })
+
+  test('checks: none by default (one make check), tiers fill full and ci, anything but a make target is refused', () => {
+    const parse = (checks: string) => parseProject(yaml(`apiVersion: factory/v2\nname: lab\nchecks: ${checks}`), 'lab')
+    expect(defaultProject('lab').checks).toBeNull()
+    const tiers = parse('{ fast: make check-fast }')
+    expect(tiers.ok && tiers.project.checks).toEqual({ fast: 'make check-fast', full: 'make check', ci: false })
+    const sharded = parse('{ fast: make check-fast, full: make ci-full, ci: true }')
+    expect(sharded.ok && sharded.project.checks).toEqual({ fast: 'make check-fast', full: 'make ci-full', ci: true })
+    for (const bad of [
+      '{ full: make check }',
+      '{ fast: bun test }',
+      '{ fast: "make a; rm -rf /" }',
+      '{ fast: make a, x: 1 }',
+    ])
+      expect(parse(bad).ok).toBe(false)
+    // a stored project reads back through the same schema, and an old stored row has no checks at all
+    const stored = ProjectFile.parse(sharded.ok ? sharded.project : null)
+    expect(stored.checks?.ci).toBe(true)
+    expect(ProjectFile.parse({ apiVersion: 'factory/v2', name: 'lab' }).checks).toBeNull()
   })
 
   test('lanes cap the leads of a resource class: none by default, a lane name and a cap of 1 to 8', () => {

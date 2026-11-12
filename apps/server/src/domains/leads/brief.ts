@@ -1,6 +1,6 @@
 import { SPEC_WAIT_HOURS } from '@software-factory/contract'
 import type { IssueId } from '../../kernel/ids.ts'
-import type { BriefSignal } from './ports.ts'
+import type { BriefSignal, CheckTiers } from './ports.ts'
 
 /**
  * What every lead is told, word for word: a constant, so a brief opens with the same text every time and the prompt
@@ -95,6 +95,8 @@ export interface BriefInput {
   notes: readonly BriefNote[]
   /** notes beyond the ones listed */
   notesMore: number
+  /** the project's check tiers; absent for a project with none */
+  checks?: CheckTiers | null
   /** the signals the Issue was filed from (an alert's title, text and facts), oldest first */
   signals?: readonly BriefSignal[]
   /** the attempt before this one, when it left its work behind */
@@ -144,6 +146,19 @@ export function fitNotes(notes: readonly BriefNote[]): { shown: BriefNote[]; mor
 }
 
 /**
+ * What a repo with `checks:` changes in orders 6 and 7: the lead's local check is `fast`, and `full` is CI's. The
+ * commands are `make <target>` by the schema, so quoting them is quoting data.
+ */
+export function checksSection({ fast, full, ci }: CheckTiers): string {
+  const gate = ci
+    ? `The complete gate (\`${full}\`) runs in CI on the pull request head. Where orders 6 and 7 say \`make check\`, run \`${fast}\` before the first push and after every change you author, and rely on CI for the rest (run \`${full}\` locally only for a change to the test layout, the Makefile or CI itself): \`make merge-guard\` still demands a finished green CI run on the exact head, so nothing ships unchecked. Rerun a heavy suite locally only to reproduce a CI failure: that one suite, inside a slot (\`factory slot run -- <command>\`), never the whole gate.`
+    : `Where orders 6 and 7 say \`make check\`, run \`${fast}\` before each push and after every change you author, and \`${full}\` once before the first push and after a change that touches what \`${fast}\` does not run. CI does not run \`${full}\` for this repo.`
+  return `## Checks in this repo
+
+This repo has check tiers: \`fast\` is \`${fast}\`, \`full\` is \`${full}\`${ci ? ', run by CI' : ''}. ${gate}`
+}
+
+/**
  * The lead's first prompt: the standing orders and the verbs, which are the same in every brief, then what is this
  * attempt's. Anything that came from outside (the title, a note) is data in a fence.
  */
@@ -167,6 +182,7 @@ ${fenced(filed)}`,
 
 This Issue carries the checkpoint \`spec\`: submit a one-page Spec (order 3) before you build, and \`factory issue ship\` is refused until a Spec is submitted. With no verdict in ${SPEC_WAIT_HOURS} hours you go on with the defaults it names.`)
   }
+  if (input.checks) parts.push(checksSection(input.checks))
   const signals = (input.signals ?? []).slice(0, MAX_BRIEF_SIGNALS)
   if (signals.length > 0) {
     parts.push(`## The signals it was filed from

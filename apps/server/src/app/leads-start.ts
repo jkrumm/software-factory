@@ -125,6 +125,8 @@ export async function startLead(deps: LeadDeps, effect: StartEffect): Promise<Re
     if (!role.ok) return fail(role.error)
 
     const notes = notesBefore(history, attempt)
+    // A project's check tiers change what the brief tells the lead to run; a read that fails is the brief of today.
+    const tiers = await deps.checks.of(repoPath)
     const prompt = buildBrief({
       issue: {
         id: issue,
@@ -139,6 +141,7 @@ export async function startLead(deps: LeadDeps, effect: StartEffect): Promise<Re
       worktree: { path: worktree, branch },
       notes: notes.shown,
       notesMore: notes.more,
+      checks: tiers.ok ? tiers.value : null,
       signals,
       ...(previous ? { previous } : {}),
     })

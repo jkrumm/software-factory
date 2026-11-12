@@ -145,6 +145,30 @@ hand-filed Issue; `factory project show` lists the project's `lanes` (leads and 
 - A lane is a cap, not an order: it never replaces `after`, and a row that needs what another shipped still says `after`.
 - The lane is fixed when the Issue is filed. An adopted row (`issue`) has no `lane`.
 
+## Check tiers
+
+The mini is the bottleneck for parallel leads and most of its load is checks: every lead ran the whole `make check`
+locally, then `merge-guard` demanded the same suite green in CI on the exact head. `checks:` in `project.yaml` splits the
+gate:
+
+```yaml
+checks: { fast: make check-fast, full: make check, ci: true }
+```
+
+- **`fast`** (required): what a lead runs locally before each push and after each change it authors (format, lint,
+  types, scans, the unit tests of what the branch changed). **`full`** (default `make check`): the complete gate.
+  **`ci: true`**: CI runs `full` on the pull request head, so the lead relies on that run; hosted runners for a public
+  repo, `runs-on: [self-hosted, vps]` for a private one (never the self-hosted runner for a public repo), sharded with a
+  matrix where the suite allows. Both commands are `make <target>`: the brief quotes them as data.
+- **The brief** (`domains/leads/brief.ts`) gets a `## Checks in this repo` section for such a project: run `fast`
+  where the standing orders say `make check`; with `ci: true` leave the full gate to CI (`merge-guard` still demands
+  its green run on the exact head); rerun one heavy suite locally only to reproduce a CI failure, inside a slot. A
+  project without `checks:` gets no section and keeps one `make check`.
+- **Slots.** The slot name is the step (`software-factory check-fast` beside `software-factory check`), so the ledger
+  learns the fast tier's peak apart from the whole gate's.
+- `factory project show` prints `checks` (`null` for none). Another project's `checks:` is its own repo's to adopt: the
+  Makefile target and the CI workflow it names are that repo's.
+
 ## Adopting an Issue
 
 A row with `issue: <n>` adopts an Issue you filed by hand (`factory issue new`). Nothing is filed for it; the
