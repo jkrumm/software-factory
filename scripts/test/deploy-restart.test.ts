@@ -53,7 +53,11 @@ describe('restart_until_healthy', () => {
 })
 
 /** Sources deploy.sh, stubs `load_avg` with the given readings in turn (the last repeats) and runs `wait_calm_host`. */
-async function calm(loads: number[], env: Record<string, string>, liveUp = 'true'): Promise<{ code: number; out: string; err: string }> {
+async function calm(
+  loads: number[],
+  env: Record<string, string>,
+  liveUp = 'true',
+): Promise<{ code: number; out: string; err: string }> {
   const script = `
     source "${DEPLOY}"
     readings=(${loads.join(' ')}); counter=$(mktemp); echo 0 > "$counter"
