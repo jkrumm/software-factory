@@ -77,3 +77,15 @@ test('a project name on a card filters the board to it', async ({ page }) => {
     .click()
   await expect(page).toHaveURL(/project=harbor/)
 })
+
+test('with more than one project the strip is one row, and "Show all" lays every card out', async ({ page }) => {
+  await page.goto('/flow')
+  const strip = page.getByTestId('digest-strip')
+  await expect(strip).toContainText('2 projects')
+  const toggle = strip.getByRole('button', { name: 'Show all 2' })
+  await expect(toggle).toHaveAttribute('aria-expanded', 'false')
+  await expect(strip.getByRole('list')).toHaveCSS('display', 'flex')
+  await toggle.click()
+  await expect(strip.getByRole('button', { name: 'Show one row' })).toHaveAttribute('aria-expanded', 'true')
+  await expect(strip.getByRole('list')).toHaveCSS('display', 'grid')
+})
