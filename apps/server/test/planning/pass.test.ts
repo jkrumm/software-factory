@@ -235,6 +235,18 @@ describe('the plan files its rows', () => {
       expect(again.broken).toMatchObject([{ file: 'docs/plan.yaml', message: expect.stringContaining('cycle') }])
     }
   })
+
+  test('the broken list is ordered by project, not by the order the repos were found in', async () => {
+    world.source.add('lib', { project: PROJECT('lib') })
+    world.source.add('app', { project: PROJECT('app'), plan: plan('p1', [row('a', { after: ['b'] }), row('b')]) })
+    value(await syncProjects(world.deps, { fetch: false }))
+    world.source.set('app', { plan: plan('p2', [row('a', { after: ['b'] }), row('b', { after: ['a'] })]) })
+    world.source.set('lib', {
+      project: { state: 'text', sha: 'bad', value: { apiVersion: 'factory/v2', name: 'lib', leads: 99 } },
+    })
+    const pass = value(await syncProjects(world.deps, { fetch: false }))
+    expect(pass.broken.map((b) => b.project)).toEqual(['app', 'lib'])
+  })
 })
 
 describe('what intake hears', () => {
