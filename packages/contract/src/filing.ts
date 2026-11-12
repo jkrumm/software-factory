@@ -66,6 +66,16 @@ export const FILING = {
     ],
     example: 'spec',
   },
+  spec: {
+    shape:
+      'optional; a Spec you already wrote (markdown), handed over with the Issue: `--spec @docs/v2/spec.md`; it implies `--checkpoint spec`',
+    notes: [
+      'The Spec is stored with the Issue and shown to the owner as a Spec with a verdict; no lead copies it. The Issue is filed and settled as always, and the queue holds it (reason `spec`) until the Spec has a verdict.',
+      `With no verdict in ${SPEC_WAIT_HOURS} hours the factory records a looks_good for you and the lead starts on the defaults the Spec names, so the queue never waits on the owner. The lead reads the verdict and builds; it does not submit another Spec.`,
+      'The title is the first `# ` heading of the file, else the Issue title; `--spec-title` sets it. Keep the open choices (at most three, each with a default and what changing it later costs) in the file: that is what the owner answers.',
+    ],
+    example: '@docs/v2/spec.md',
+  },
   text: {
     maxChars: NEW_ISSUE_TEXT_MAX,
     meaning: 'optional prose shown to the lead before the facts',
@@ -77,6 +87,15 @@ export const FILING = {
     { flag: '--seat', meaning: 'optional lead seat as JSON: {"tier":"opus","effort":"high"} or {"role":"lead"}' },
     { flag: '--lane', meaning: "optional resource class, capped by the repo's `lanes:` in project.yaml (`apple`)" },
     { flag: '--checkpoint', meaning: 'optional gate: `spec` makes the lead submit a one-page Spec before it builds' },
+    {
+      flag: '--spec',
+      meaning:
+        'optional Spec you wrote, markdown (`@file` reads a file): stored with the Issue, which the queue holds until the owner gives a verdict (24 hours at most); implies `--checkpoint spec`',
+    },
+    {
+      flag: '--spec-title',
+      meaning: 'optional title of that Spec; default: its first `# ` heading, else the Issue title',
+    },
     { flag: '--text', meaning: `optional prose before the facts, up to ${NEW_ISSUE_TEXT_MAX} characters` },
     {
       flag: '--after',

@@ -372,6 +372,7 @@ describe('the chain', () => {
       state: 'queued',
       waitReason: null,
       finalizing: false,
+      specPending: false,
     })
     const edges = value(await world.deps.uow.run(async ({ planning }) => ok(await planning.edges())))
     const rows = orderQueue({ open: [open(b)], edges, prio: new Map() })

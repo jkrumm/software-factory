@@ -55,6 +55,8 @@ export interface ReviewWait {
   title: string
   revision: number
   at: Date
+  /** the Spec its filer attached to the Issue (`issue new --spec`): the queue holds the Issue for it, no wait does */
+  filed: boolean
 }
 
 /**

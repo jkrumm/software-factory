@@ -259,6 +259,7 @@ const StaleReviewRow = z.object({
   title: z.string(),
   n: z.number().int(),
   created_at: z.date(),
+  filed: z.boolean(),
 })
 
 const RecheckRow = z.object({
@@ -649,7 +650,7 @@ export function postgresCheckpointStore(tx: SQL): CheckpointStore {
 
     async staleReviews({ before, limit }) {
       const rows: unknown[] = await tx`
-        SELECT a.id, a.issue_id, a.kind, a.title, r.n, r.created_at
+        SELECT a.id, a.issue_id, a.kind, a.title, r.n, r.created_at, a.key LIKE 'filed-spec:%' AS filed
         FROM factory.artifacts a
         JOIN LATERAL (
           SELECT n, created_at FROM factory.artifact_revisions WHERE artifact_id = a.id ORDER BY n DESC LIMIT 1
@@ -668,6 +669,7 @@ export function postgresCheckpointStore(tx: SQL): CheckpointStore {
           title: row.title,
           revision: row.n,
           at: row.created_at,
+          filed: row.filed,
         }
       })
     },

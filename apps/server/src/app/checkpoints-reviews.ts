@@ -16,6 +16,9 @@ const REVIEW_LIMIT = 50
 
 const SPEC_WAIT_MS = SPEC_WAIT_HOURS * 3_600_000
 
+/** A filed Spec holds its Issue in the queue: until a lead starts, the Issue is settling or queued. */
+const holdsFiledSpec = (issue: { state: string }): boolean => issue.state === 'settling' || issue.state === 'queued'
+
 type Step<T> = Promise<Result<T, CheckpointError | PortError>>
 
 type Look = { outcome: ReviewLooked['outcome']; reason: string }
@@ -89,7 +92,7 @@ export async function recheckReviews(deps: SettleDeps): Step<ReviewLooked[]> {
     const look = lookAtReview({
       wait,
       closed: issue.value.state === 'closed',
-      waiting: waitingOn(issue.value, 'review', wait.artifact),
+      waiting: waitingOn(issue.value, 'review', wait.artifact) || (wait.filed && holdsFiledSpec(issue.value)),
     })
     const applied = await apply(deps, wait, look)
     if (!applied.ok) {

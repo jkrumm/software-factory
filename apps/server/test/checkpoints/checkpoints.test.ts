@@ -1391,6 +1391,7 @@ describe('a Concept or Spec the owner has not answered for a day', () => {
       title: 't',
       revision: 1,
       at: new Date(0),
+      filed: false,
     }
     expect(lookAtReview({ wait, closed: false, waiting: true }).outcome).toBe('defaulted')
     expect(lookAtReview({ wait: { ...wait, kind: 'spec' }, closed: false, waiting: true }).outcome).toBe('defaulted')

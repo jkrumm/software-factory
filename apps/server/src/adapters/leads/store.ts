@@ -29,6 +29,13 @@ const AttemptRow = z.object({
   gone_at: z.date().nullable(),
 })
 
+const SpecRow = z.object({
+  id: z.string(),
+  title: z.string(),
+  verdict: z.string().nullable(),
+  note: z.string().nullable(),
+})
+
 const attemptOf = (raw: unknown): LeadAttempt => {
   const row = AttemptRow.parse(raw)
   return {
@@ -107,6 +114,22 @@ export function postgresLeadStore(tx: SQL): LeadStore {
         const row = SignalRow.parse(raw)
         return { source: row.source, title: row.title, text: row.text, facts: row.facts ?? null, at: row.received_at }
       })
+    },
+
+    async filedSpecOf(issue) {
+      const [raw] = await tx`
+        SELECT a.id, a.title, v.verdict, v.note
+        FROM factory.artifacts a
+        JOIN LATERAL (SELECT max(n) AS n FROM factory.artifact_revisions WHERE artifact_id = a.id) r ON true
+        LEFT JOIN factory.verdicts v ON v.artifact_id = a.id AND v.revision = r.n
+        WHERE a.issue_id = ${issue} AND a.key LIKE 'filed-spec:%'`
+      if (!raw) return null
+      const row = SpecRow.parse(raw)
+      return {
+        artifact: row.id,
+        title: row.title,
+        verdict: row.verdict ? { verdict: row.verdict, note: row.note } : null,
+      }
     },
 
     async attempt(issue, attempt) {

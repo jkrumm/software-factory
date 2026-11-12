@@ -7,6 +7,8 @@ export {
   ISSUE_ID_META,
   IssueRefInput,
   MAX_AFTER_IDS,
+  NEW_ISSUE_SPEC_MAX,
+  NEW_ISSUE_SPEC_TITLE_MAX,
   NEW_ISSUE_TEXT_MAX,
   NewIssueAnswer,
   NewIssueBody,
