@@ -147,9 +147,14 @@ function DigestCard({
   )
 }
 
+/** What a project has open now: the strip puts the projects with work in flight or queued first. */
+const openWork = (digest: ProjectDigest): number => digest.counts.working + digest.counts.queued + digest.counts.waiting
+
 /**
- * The strip above the Flow board: one card per project with a digest, newest digest first is not the order, the projects'
- * names are. `project` (the board's filter) shows that project alone and opens it. Nothing renders without a digest.
+ * The strip above the Flow board: one card per project with a digest, the projects with open work first (then the most
+ * done in 7 days, then the name). By default one scrollable row, so the board stays on screen with dozens of projects;
+ * "Show all" lays every card out as a grid. `project` (the board's filter) shows that project alone and opens it. Nothing
+ * renders without a digest.
  */
 export function DigestStrip({
   digests,
@@ -161,8 +166,14 @@ export function DigestStrip({
   project?: string
 }) {
   const [opened, setOpened] = useState<ReadonlySet<string>>(new Set())
-  const shown = project ? digests.filter((digest) => digest.project === project) : digests
+  const [all, setAll] = useState(false)
+  const shown = project
+    ? digests.filter((digest) => digest.project === project)
+    : [...digests].sort(
+        (a, b) => openWork(b) - openWork(a) || b.counts.done7d - a.counts.done7d || a.project.localeCompare(b.project),
+      )
   if (shown.length === 0) return null
+  const many = !project && shown.length > 1
   const toggle = (name: string) =>
     setOpened((was) => {
       const next = new Set(was)
@@ -171,9 +182,29 @@ export function DigestStrip({
     })
   return (
     <div role="group" aria-label="Project digests" data-testid="digest-strip" className="mb-4">
-      <ul className="grid grid-cols-[repeat(auto-fill,minmax(min(100%,22rem),1fr))] items-start gap-3">
+      {many ? (
+        <div className="mb-2 flex items-center gap-3 text-xs text-muted-foreground">
+          <span>{shown.length} projects</span>
+          <button
+            type="button"
+            aria-expanded={all}
+            onClick={() => setAll(!all)}
+            className="ml-auto rounded-md px-1.5 py-1 outline-none transition-colors hover:bg-accent hover:text-foreground focus-visible:ring-3 focus-visible:ring-ring/50"
+          >
+            {all ? 'Show one row' : `Show all ${shown.length}`}
+          </button>
+        </div>
+      ) : null}
+      <ul
+        className={cn(
+          'items-start gap-3',
+          many && !all
+            ? '-mx-1 flex snap-x snap-mandatory overflow-x-auto px-1 pb-1 [scrollbar-width:thin]'
+            : 'grid grid-cols-[repeat(auto-fill,minmax(min(100%,22rem),1fr))]',
+        )}
+      >
         {shown.map((digest) => (
-          <li key={digest.project} className="min-w-0">
+          <li key={digest.project} className={cn('min-w-0', many && !all && 'w-[22rem] shrink-0 snap-start')}>
             <DigestCard
               digest={digest}
               now={now}
