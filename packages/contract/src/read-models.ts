@@ -685,6 +685,8 @@ export const CAPACITY_FIGURE_KEYS = [
   'minutes_over_ceiling_per_day',
   'idle_seat_hours_per_day',
   'slot_wait_p90_ms',
+  'check_minutes_per_issue',
+  'ci_p50_minutes',
 ] as const
 
 export const RetroCapacityFigure = z
@@ -697,6 +699,79 @@ export const RetroCapacityFigure = z
   })
   .meta({ id: 'RetroCapacityFigure' })
 export type RetroCapacityFigure = z.infer<typeof RetroCapacityFigure>
+
+export const RetroBuildStep = z
+  .strictObject({
+    /** the step's name as `factory slot run` was given it, a lead's `factory-<n>-<attempt> ` prefix dropped */
+    name: z.string(),
+    runs: z.number().int(),
+    medianMs: z.number(),
+    p90Ms: z.number(),
+    totalMinutes: z.number(),
+  })
+  .meta({ id: 'RetroBuildStep' })
+
+export const RetroBuildCiKind = z
+  .strictObject({ runs: z.number().int(), p50Minutes: z.number(), p90Minutes: z.number() })
+  .meta({ id: 'RetroBuildCiKind' })
+
+export const RetroBuildCi = z
+  .strictObject({
+    /** finished runs on the default branch (a push) that ended green or red */
+    defaultBranch: RetroBuildCiKind.nullable(),
+    /** finished runs on pull request heads */
+    pullRequest: RetroBuildCiKind.nullable(),
+    /** minutes of every run counted */
+    totalMinutes: z.number(),
+    /** more finished runs were in the window than were read (the newest 300): every figure here covers the newest days only */
+    truncated: z.boolean(),
+    /** runs that passed on a rerun (a run attempt above 1), as a share of the finished runs; null with no runs */
+    flakyShare: z.number().nullable(),
+  })
+  .meta({ id: 'RetroBuildCi' })
+
+export const RetroBuildRepo = z
+  .strictObject({
+    repo: z.string(),
+    /** Issues closed in the window (any outcome, as `closed_per_day` counts them) */
+    closedIssues: z.number().int(),
+    check: z.strictObject({
+      /** finished test-slot steps (`factory slot run`) */
+      runs: z.number().int(),
+      /** runs x duration */
+      totalMinutes: z.number(),
+      /** null with no Issue closed */
+      runsPerIssue: z.number().nullable(),
+      minutesPerIssue: z.number().nullable(),
+      /** minutes spent waiting for a test slot, and the p90 of one wait */
+      waitMinutes: z.number(),
+      waitP90Ms: z.number().nullable(),
+      /** the steps with the most total minutes, at most 5 */
+      slowestSteps: z.array(RetroBuildStep),
+    }),
+    /** null when GitHub could not be read for the repo: it is under `unreadable` */
+    ci: RetroBuildCi.nullable(),
+    /** check plus CI minutes per closed Issue; null with no Issue closed, or no CI read and no check run */
+    minutesPerIssue: z.number().nullable(),
+  })
+  .meta({ id: 'RetroBuildRepo' })
+export type RetroBuildRepo = z.infer<typeof RetroBuildRepo>
+
+/**
+ * What it costs to build in each repo over the window (`build` of `GET /v1/retro`): local check minutes from the test-slot
+ * step costs and CI from GitHub's finished workflow runs. `repos` is sorted by `minutesPerIssue`, highest first, those
+ * without one after, by total minutes. `figures` are the two keys a retro signal may name (`check_minutes_per_issue`,
+ * `ci_p50_minutes`), totals over all repos.
+ */
+export const RetroBuild = z
+  .strictObject({
+    repos: z.array(RetroBuildRepo),
+    /** repos whose CI could not be read (no token, no github.com origin, a timeout, a bad answer), with why */
+    unreadable: z.array(z.strictObject({ repo: z.string(), reason: z.string() })),
+    figures: z.array(RetroCapacityFigure),
+  })
+  .meta({ id: 'RetroBuild' })
+export type RetroBuild = z.infer<typeof RetroBuild>
 
 /** The one setting to change first, by fixed rules over the figures (`read/capacity-tuning.ts`). */
 export const RetroCapacityTune = z
@@ -749,6 +824,8 @@ export const RetroModel = z
     ledger: z.array(RetroLedgerEntry),
     /** the capacity loop over the window; null when the server holds no capacity settings */
     capacity: RetroCapacity.nullable(),
+    /** what each repo's local checks and CI cost over the window */
+    build: RetroBuild,
   })
   .meta({ id: 'RetroModel' })
 export type RetroModel = z.infer<typeof RetroModel>

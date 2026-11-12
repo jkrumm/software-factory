@@ -246,6 +246,14 @@ test('every pass files the weekly retro signal once, and a failure to file it ne
   expect(retro[0]).toMatchObject({ from: 'agent:software-factory', repo: 'software-factory', kind: 'request' })
   expect(retro[0]?.text).toContain('factory retro --days 7')
   expect(retro[0]?.text).toContain('Retro: 2026-11-20 kpi=<KPI or capacity figure key>')
+  // part 2c, after 2b and before the ledger: the build speed, its two figures and the guard that keeps the coverage
+  const text = retro[0]?.text ?? ''
+  expect(text.indexOf('2b. Capacity')).toBeLessThan(text.indexOf('2c. Build speed'))
+  expect(text.indexOf('2c. Build speed')).toBeLessThan(text.indexOf('3. The ledger'))
+  expect(text).toContain('kpi=check_minutes_per_issue')
+  expect(text).toContain('kpi=ci_p50_minutes')
+  expect(text).toContain('`build.repos`')
+  expect(text).toContain('same coverage of what ships')
   expect(pass.ok && pass.value.due && frictionSummary(pass.value)).toContain('retro filed (new)')
 
   const down = frictionWorld({}, true)

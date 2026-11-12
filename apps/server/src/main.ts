@@ -47,7 +47,7 @@ import { reaperPass, reaperSummary } from './app/loops/reaper.ts'
 import { processKiller, reaperProcesses } from './adapters/planning/reaper-processes.ts'
 import { hygienePass, hygieneSummary } from './app/loops/hygiene.ts'
 import { selfwatchPass, selfwatchSummary } from './app/loops/selfwatch.ts'
-import { githubCiLive, githubCiRuns } from './adapters/selfwatch/github.ts'
+import { githubCiLive, githubCiRuns, githubCiTimes } from './adapters/selfwatch/github.ts'
 import { gitMigrationFiles } from './adapters/selfwatch/git.ts'
 import { SHARED_NUMBERS } from './adapters/postgres/migrate.ts'
 import { MainCheckoutLines } from './app/loops/checkout-lines.ts'
@@ -649,6 +649,11 @@ async function main(): Promise<void> {
       sql,
       queueReasons,
       machine,
+      ciTimes: githubCiTimes({
+        locate: (repo) => repos.locate(repo),
+        token: intakeEnv.github.token,
+        apiUrl: intakeEnv.github.apiUrl,
+      }),
       capacityConstants: {
         leadsPerAccount: planningEnv.leadsPerAccount,
         loadCeiling: planningEnv.loadCeiling,

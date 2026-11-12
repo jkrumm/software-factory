@@ -323,6 +323,21 @@ export interface CiRuns {
   latest(repo: string, branch: string | null): Promise<Result<{ branch: string; runs: CiRun[] }, PortError>>
 }
 
+/** One finished CI run: how long it took, where it ran, how it ended and whether it passed only on a rerun. */
+export interface CiRunTime {
+  kind: 'default' | 'pr'
+  minutes: number
+  conclusion: 'success' | 'failure'
+  /** passed on a rerun: a run attempt above 1 that ended green */
+  flaky: boolean
+}
+
+/** The finished workflow runs of a repo created since a date (called outside any transaction); an error names why GitHub could not be read. */
+export type CiTimes = (
+  repo: string,
+  since: Date,
+) => Promise<Result<{ runs: CiRunTime[]; truncated: boolean }, PortError>>
+
 /** Whether a branch has a workflow run that is queued or in progress (called outside any transaction). */
 export interface CiLive {
   running(repo: string, branch: string): Promise<Result<boolean, PortError>>
