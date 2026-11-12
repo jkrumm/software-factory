@@ -11,8 +11,8 @@ test('an origin on github.com is owner/name over https, with or without a user p
 })
 
 test('a host that only looks like github.com is not one', () => {
-  expect(parseRemote('https://github.com.evil.example/o/r.git')).toBeUndefined()
-  expect(parseRemote('https://evil@github.com.evil.example/o/r.git')).toBeUndefined()
-  expect(parseRemote('https://x@gitlab.com/o/r.git')).toBeUndefined()
+  expect(parseRemote('https://github.com.example.net/o/r.git')).toBeUndefined()
+  expect(parseRemote('https://evil@github.com.example.net/o/r.git')).toBeUndefined()
+  expect(parseRemote('https://git.example.com/o/r.git')).toBeUndefined()
   expect(parseRemote('https://github.com/../x')).toBeUndefined()
 })
