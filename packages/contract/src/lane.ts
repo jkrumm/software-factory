@@ -15,5 +15,5 @@ export type LaneName = z.infer<typeof LaneName>
 export const CheckpointName = z.literal('spec').meta({ id: 'CheckpointName' })
 export type CheckpointName = z.infer<typeof CheckpointName>
 
-/** How long a flagged Issue's Spec waits for the owner's verdict before the lead takes its own defaults. */
+/** How long a Concept or Spec waits for the owner's verdict before the lead takes its own defaults. */
 export const SPEC_WAIT_HOURS = 24

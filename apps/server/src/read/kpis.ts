@@ -44,6 +44,16 @@ export interface Window {
 
 const one = async (rows: Promise<unknown[]>): Promise<number> => Count.parse((await rows)[0]).n
 
+/**
+ * The owner's own verdicts on a Concept, Spec or Report: one the factory gave for him (a wait that ran out, `verdict_given`
+ * by actor `factory`) and a withdrawal (`no_longer_applies`) are not his. Shared by the verdict KPI and the retro's taste.
+ */
+export const ownerVerdict = (sql: SQL, w: Window) => sql`
+  v.verdict IN ('looks_good', 'with_notes', 'changes') AND v.at >= ${w.from} AND v.at < ${w.to}
+  AND NOT EXISTS (
+    SELECT 1 FROM factory.issue_events e
+    WHERE e.key = 'verdict_given:' || v.artifact_id || ':' || v.revision AND e.actor = 'factory')`
+
 /** Issues filed in the window: what every per-Issue figure divides by. */
 export const issuesFiled = (sql: SQL, w: Window): Promise<number> =>
   one(
@@ -285,6 +295,10 @@ async function kpisOf(
   const worth = await one(sql`
     SELECT count(*) AS n FROM factory.decisions
     WHERE settled_by = 'owner' AND worth_asking IS TRUE AND answered_at >= ${w.from} AND answered_at < ${w.to}`)
+  const verdicts = await one(sql`SELECT count(*) AS n FROM factory.verdicts v WHERE ${ownerVerdict(sql, w)}`)
+  const verdictsChanged = await one(
+    sql`SELECT count(*) AS n FROM factory.verdicts v WHERE ${ownerVerdict(sql, w)} AND v.verdict IN ('with_notes', 'changes')`,
+  )
   const specs = await one(sql`
     SELECT count(*) AS n FROM factory.artifacts WHERE kind = 'spec' AND created_at >= ${w.from} AND created_at < ${w.to}`)
   const firstWatches = await one(sql`
@@ -362,6 +376,18 @@ async function kpisOf(
       measured: true,
       definition:
         'Of the Decisions the owner answered in the window, the share he flagged worth asking. The flag is his, so an unflagged answer counts against the share.',
+    }),
+    kpi({
+      key: 'verdict_changes_share',
+      label: 'Owner verdicts that ask for changes',
+      value: per(verdictsChanged, verdicts),
+      unit: 'share',
+      n: verdicts,
+      count: verdictsChanged,
+      target: { kind: 'trend', min: null, max: null },
+      measured: true,
+      definition:
+        "Of the owner's own verdicts on a Concept, Spec or Report in the window (the defaults the factory gave when a wait ran out, and withdrawals, are not his), the share that was good with notes or changes. Lower is better: a lead that already knows his taste gets looks_good. The retro writes recurring notes down where the next lead reads them.",
     }),
     kpi({
       key: 'first_verification_passes',

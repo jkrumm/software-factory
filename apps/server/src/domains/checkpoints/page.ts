@@ -21,9 +21,6 @@ export interface Page {
 export const decisionPageKey = (decision: string): Key => key('page', 'decision', decision)
 /** A revision pages once; a revised artifact is a new revision and pages again. */
 export const reviewPageKey = (artifact: string, revision: number): Key => key('page', 'review', artifact, revision)
-/** The one push of a revision that stayed unanswered for a day; the first page keeps its own key. */
-export const reviewPushKey = (artifact: string, revision: number): Key =>
-  key('page', 'review', 'push', artifact, revision)
 export const errandPageKey = (errand: string): Key => key('page', 'errand', errand)
 
 /** The Console's page for a checkpoint. `base` is a setting until the Console exists. */
@@ -98,18 +95,6 @@ export function reviewPage(
     title: about.kind === 'concept' ? 'Concept to review' : 'Spec to review',
     body: `${issueHead(about.issue)} waits for your verdict on ${quote(about.title)} (revision ${about.revision})`,
     link: about.link,
-  }
-}
-
-/** The second and last page of a revision nobody answered in a day. */
-export function reviewPushPage(
-  about: About & { artifact: string; revision: number; kind: 'concept' | 'spec'; title: string },
-): Page {
-  return {
-    ...reviewPage(about),
-    key: reviewPushKey(about.artifact, about.revision),
-    title: about.kind === 'concept' ? 'Concept still waiting' : 'Spec still waiting',
-    body: `${issueHead(about.issue)} still waits for your verdict on ${quote(about.title)} (revision ${about.revision}) after a day`,
   }
 }
 

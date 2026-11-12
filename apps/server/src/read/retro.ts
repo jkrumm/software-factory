@@ -17,6 +17,7 @@ import { type CapacityConstants, readCapacityLoop } from './capacity-loop.ts'
 import { readFriction } from './friction.ts'
 import { readKpis, type Window } from './kpis.ts'
 import { readRetroBuild } from './retro-build.ts'
+import { readTaste } from './retro-taste.ts'
 import { REGRESSION_CAUSES, regressionCause } from './kpis-flow.ts'
 import { windowOf } from './stats.ts'
 import { plain } from './words.ts'
@@ -213,7 +214,7 @@ async function capacityOf(
 /**
  * What the weekly retro reads from the database over the last `days` days: the KPI table (with its history, so the window
  * before is in it), the friction counts, the lead sessions with their transcript paths (the CLI reads those), samples of
- * the Issues worth reading and the ledger of the earlier retro signals. `redact` (the read token) drops transcript paths
+ * the Issues worth reading, the ledger of the earlier retro signals and the owner's taste (his verdict notes and annotations). `redact` (the read token) drops transcript paths
  * and the words of the samples: a work repository's words never leave it.
  */
 export async function readRetro(
@@ -244,6 +245,7 @@ export async function readRetro(
       dropped: await dropped(sql, w),
     },
     ledger: await ledgerOf(sql, kpis, capacity?.figures ?? build.figures),
+    taste: await readTaste(sql, w),
     capacity,
     build,
   }
@@ -260,5 +262,9 @@ export async function readRetro(
       dropped: bare(model.samples.dropped),
     },
     ledger: model.ledger.map((e) => ({ ...e, title: '' })),
+    taste: {
+      verdicts: model.taste.verdicts.map((v) => ({ ...v, title: '', note: null })),
+      annotations: model.taste.annotations.map((a) => ({ ...a, title: '', quote: '', comment: '' })),
+    },
   }
 }

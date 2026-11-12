@@ -16,6 +16,7 @@ import {
   matchPolicy,
   precedentTerms,
   readDecisionForm,
+  refuseNoOpDefault,
   scrub,
 } from '../../src/domains/checkpoints/decision.ts'
 import { checkErrandScreen, readErrand, refuseHostClass, screenByRule } from '../../src/domains/checkpoints/errand.ts'
@@ -401,5 +402,36 @@ describe("the owner's line", () => {
 
   test('the backoff doubles from 30 s to 5 min', () => {
     expect([1, 2, 3, 4, 5, 6].map(pageBackoffMs)).toEqual([30_000, 60_000, 120_000, 240_000, 300_000, 300_000])
+  })
+})
+
+describe('refuseNoOpDefault', () => {
+  const withLabel = (label: string): DecisionForm => ({
+    ...form(),
+    recommendation: label,
+    noAnswer: { consequence: 'x', default: null, waitMinutes: null },
+  })
+
+  test.each(['Keep waiting', 'keep waiting for the review', 'Wait for review', 'Do nothing', 'Hold', 'No-op'])(
+    '%s is no choice',
+    (label) => {
+      expect(refuseNoOpDefault(withLabel(label))).toContain('factory errand raise')
+    },
+  )
+
+  test.each([
+    'pino',
+    'Wait for Issue 12 to land, then ship',
+    'Wait for Issue 12 to land then ship',
+    'Hold the release and ship the hotfix instead',
+    'Merge when CI is green',
+  ])('%s is a choice', (label) => {
+    expect(refuseNoOpDefault(withLabel(label))).toBeNull()
+  })
+
+  test('a no-op default is refused even when the recommendation is real', () => {
+    const base = form()
+    const read = { ...base, noAnswer: { consequence: 'x', default: 'Keep waiting', waitMinutes: 30 } }
+    expect(refuseNoOpDefault(read)).toContain('"Keep waiting"')
   })
 })

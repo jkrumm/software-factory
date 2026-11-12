@@ -17,6 +17,7 @@ import {
   type DecisionId,
   type MissingFields,
   readDecisionForm,
+  refuseNoOpDefault,
   type Settler,
 } from '../domains/checkpoints/decision.ts'
 import { type ErrandId, readErrand, refuseHostClass } from '../domains/checkpoints/errand.ts'
@@ -150,6 +151,9 @@ export async function askDecision(
   const read = readDecisionForm(input.form)
   if (!read.ok) return read
   const form = read.value
+  // The steward's ask is about a stall, where a hold ("wait for it") is a real answer; a lead's is a choice for the owner.
+  const noChoice = (input.by ?? 'lead') === 'lead' ? refuseNoOpDefault(form) : null
+  if (noChoice) return err({ kind: 'invalid', detail: noChoice })
   const blob = await deps.blobs.put(renderDecisionForm(form))
   if (!blob.ok) return blob
   // The same ask again is the same Decision; a caller that asks about a new situation (the steward, a later stall) salts it.
