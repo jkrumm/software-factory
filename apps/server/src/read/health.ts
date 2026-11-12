@@ -74,7 +74,8 @@ export function judgeTick(input: TickInput): TickJudgement {
     const grace = input.limitMs ?? FIRST_TICK_GRACE_MS
     const sinceStart = now.getTime() - input.startedAt.getTime()
     if (sinceStart <= grace) return ok('starting')
-    if (starvedHost(input) && sinceStart <= dead) return ok(`starved: no tick has succeeded yet; ${why}`)
+    if (starvedHost(input) && sinceStart <= dead)
+      return ok(`${input.tickError ? 'failing' : 'starved'}: no tick has succeeded yet; ${why}`)
     return { failure: `no tick has succeeded yet; ${why}`, notice: null }
   }
   const age = now.getTime() - input.tickAt.getTime()

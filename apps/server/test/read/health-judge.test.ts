@@ -33,6 +33,9 @@ describe('a restart is not an outage', () => {
     expect(judge({ startedAt: ago(TICK_DEAD_MS + 1_000), tickAt: null, load: 263.5, cores: 12 }).failure).toStartWith(
       'no tick has succeeded yet; ',
     )
+    expect(judge({ startedAt: ago(late), tickAt: null, load: 40, cores: 12, tickError: 'crashed: boom' }).notice).toBe(
+      'failing: no tick has succeeded yet; the tick fails: crashed: boom',
+    )
     // twice the cores is the line; below it, or with the load or cores unknown, the five minutes stand
     expect(judge({ startedAt: ago(late), tickAt: null, load: 24, cores: 12 }).notice).toStartWith('starved:')
     expect(judge({ startedAt: ago(late), tickAt: null, load: 23.9, cores: 12 }).failure).not.toBeNull()
