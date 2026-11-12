@@ -20,6 +20,9 @@ const Call = z.string().trim().min(1).max(128)
 /** the longest `text` an Issue is filed with */
 export const NEW_ISSUE_TEXT_MAX = 20_000
 const Text = z.string().trim().min(1).max(NEW_ISSUE_TEXT_MAX)
+/** the longest Spec an Issue is filed with (the artifact limit) and the longest title it gets */
+export const NEW_ISSUE_SPEC_MAX = 1_000_000
+export const NEW_ISSUE_SPEC_TITLE_MAX = 200
 
 /**
  * `issue new`: the owner files an Issue. `repo` is an absolute path inside a configured source root or a repo's directory
@@ -37,6 +40,10 @@ export const NewIssueBody = z
     lane: LaneName.optional(),
     /** `spec`: its lead owes a one-page Spec before it builds, and the ship is refused without one */
     checkpoint: CheckpointName.optional(),
+    /** a Spec the filer already wrote (markdown): stored with the Issue, which waits in the queue for its verdict; implies the `spec` checkpoint */
+    spec: z.string().trim().min(1).max(NEW_ISSUE_SPEC_MAX).optional(),
+    /** its title; default: the first `# ` heading of the Spec, else the Issue title */
+    specTitle: z.string().trim().min(1).max(NEW_ISSUE_SPEC_TITLE_MAX).optional(),
     text: Text.optional(),
     key: z.string().trim().min(1).max(200).optional(),
     /** `request` is a person's ask; `alert` is something that broke */

@@ -1365,6 +1365,7 @@ describe('a Concept or Spec the owner has not answered for a day', () => {
       title: 't',
       revision: 1,
       at: new Date(0),
+      filed: false,
     }
     const now = new Date(30 * HOUR)
     expect(lookAtReview({ wait, now, closed: false, waiting: true, flaggedSpec: true }).outcome).toBe('pushed')

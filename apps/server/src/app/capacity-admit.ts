@@ -372,6 +372,7 @@ function decide(snap: Snapshot, host: HostInputs, limits: CapacityLimits, bonus:
     state: i.state,
     waitReason: i.waitReason,
     finalizing: i.finalizing,
+    specPending: i.specPending,
   }))
   const ordered = orderQueue({ open, edges: snap.edges, prio: snap.prio })
   const claims = [...snap.claims]

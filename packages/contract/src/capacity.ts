@@ -6,6 +6,7 @@ export const QUEUE_REASONS = [
   'chain',
   'line',
   'finalizing',
+  'spec',
   'unknown_project',
   'drain',
   'load',

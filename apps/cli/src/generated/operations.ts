@@ -277,6 +277,8 @@ export const OPERATIONS: readonly Operation[] = [
       { name: 'seat', flag: 'seat', kind: 'json', repeatable: false, required: false, untyped: false },
       { name: 'lane', flag: 'lane', kind: 'string', repeatable: false, required: false, untyped: false },
       { name: 'checkpoint', flag: 'checkpoint', kind: 'string', repeatable: false, required: false, untyped: false },
+      { name: 'spec', flag: 'spec', kind: 'string', repeatable: false, required: false, untyped: false },
+      { name: 'specTitle', flag: 'spec-title', kind: 'string', repeatable: false, required: false, untyped: false },
       { name: 'text', flag: 'text', kind: 'string', repeatable: false, required: false, untyped: false },
       { name: 'key', flag: 'key', kind: 'string', repeatable: false, required: false, untyped: false },
       { name: 'source', flag: 'source', kind: 'string', repeatable: false, required: false, untyped: false },

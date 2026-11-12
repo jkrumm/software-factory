@@ -728,19 +728,28 @@ export function giveVerdict(
     const record: VerdictRecord = { artifactId: artifact.id, revision, verdict, note, at }
     await checkpoints.insertVerdict({ ...record, key: verdictKey })
     let move: IssueMove | null = null
-    if (waitsForReview(artifact.kind) && waitingOn(issue, 'review', artifact.id)) {
-      if (note || verdict === 'with_notes' || verdict === 'changes') {
-        const text = `${by === 'factory' ? 'No verdict from the owner' : "The owner's verdict"} on "${artifact.title}" (revision ${revision}): ${labelOf[verdict]}${note ? `. ${note}` : ''}. Read it with: factory artifact show ${artifact.id}`
-        const noted = applied(
-          await recordIn(work, deps, {
-            issueId: artifact.issueId,
-            key: key('noted', 'verdict', artifact.id, revision),
-            event: { kind: 'noted', payload: { text }, actor: by },
-          }),
-          'noted',
-        )
-        if (!noted.ok) return noted
-      }
+    // The Spec its filer attached holds the Issue in the queue, not in a wait: the verdict has no wait to end, and only
+    // its note is left for the lead that starts next.
+    const heldInQueue =
+      artifact.key.startsWith('filed-spec:') && (issue.state === 'settling' || issue.state === 'queued')
+    const verdictNote = async (): Promise<Result<unknown, CheckpointError | PortError>> => {
+      if (!note && verdict !== 'with_notes' && verdict !== 'changes') return ok(null)
+      const text = `${by === 'factory' ? 'No verdict from the owner' : "The owner's verdict"} on "${artifact.title}" (revision ${revision}): ${labelOf[verdict]}${note ? `. ${note}` : ''}. Read it with: factory artifact show ${artifact.id}`
+      return applied(
+        await recordIn(work, deps, {
+          issueId: artifact.issueId,
+          key: key('noted', 'verdict', artifact.id, revision),
+          event: { kind: 'noted', payload: { text }, actor: by },
+        }),
+        'noted',
+      )
+    }
+    if (heldInQueue) {
+      const noted = await verdictNote()
+      if (!noted.ok) return noted
+    } else if (waitsForReview(artifact.kind) && waitingOn(issue, 'review', artifact.id)) {
+      const noted = await verdictNote()
+      if (!noted.ok) return noted
       const recorded = applied(
         await recordIn(work, deps, {
           issueId: artifact.issueId,

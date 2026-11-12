@@ -76,7 +76,7 @@ export const LANGUAGE = {
     "A repo the factory knows, described by its project.yaml. signals: says which automatic sources it listens to; a work repo listens to the owner only. host: names the host its alerts sit on (a key of config/infra.json's hosts), so its Kuma and HyperDX alerts join that host's incident with Beszel's",
   promote: "A held signal becomes work: the owner's or the Judge's call",
   'queue reason':
-    'Why a queued Issue stays queued, in one plain sentence that names the cause and its numbers. Its kind: chain, line, finalizing, unknown_project, drain, load, memory, lane, claim, window, cap',
+    'Why a queued Issue stays queued, in one plain sentence that names the cause and its numbers. Its kind: chain, line, finalizing, spec, unknown_project, drain, load, memory, lane, claim, window, cap',
   'queue state':
     'run (admission decides), pace (one lead per project, spending toward the weekly pace), drain (no new lead), for the whole queue or one project. The more restrictive of the two applies',
   'queue wait':

@@ -1,7 +1,7 @@
 import type { Effort, Tier } from '@software-factory/contract'
 import { buildBrief, fitNotes, MAX_BRIEF_SIGNALS } from '../domains/leads/brief.ts'
 import { leadBranch, leadKey, tabName } from '../domains/leads/names.ts'
-import type { BriefSignal, LeadAttempt } from '../domains/leads/ports.ts'
+import type { BriefSignal, BriefSpec, LeadAttempt } from '../domains/leads/ports.ts'
 import type { EffectOf } from '../domains/work/effects.ts'
 import type { Issue } from '../domains/work/issue.ts'
 import type { AppliedRecord } from '../domains/work/machine.ts'
@@ -30,6 +30,7 @@ type Look =
       row: LeadAttempt
       previous: PreviousAttempt | null
       signals: BriefSignal[]
+      filedSpec: BriefSpec | null
     }
 
 /** The notes recorded before the attempt's admission: the new lead has no memory, so all of them. */
@@ -81,11 +82,12 @@ export async function startLead(deps: LeadDeps, effect: StartEffect): Promise<Re
           }
         : null
     const signals = await leads.signalsOf(issue, MAX_BRIEF_SIGNALS)
-    return ok({ stop: false, issue: loaded.issue, history: loaded.history, row, previous, signals })
+    const filedSpec = await leads.filedSpecOf(issue)
+    return ok({ stop: false, issue: loaded.issue, history: loaded.history, row, previous, signals, filedSpec })
   })
   if (!looked.ok) return looked
   if (looked.value.stop) return ok(undefined)
-  const { issue: current, history, row, previous, signals } = looked.value
+  const { issue: current, history, row, previous, signals, filedSpec } = looked.value
 
   const spent = deps.clock.now().getTime() - row.firstTryAt.getTime() > deps.startBudgetMs
   // A refusal retrying cannot fix is the lead gone; so is a start that has outlived its budget.
@@ -143,6 +145,7 @@ export async function startLead(deps: LeadDeps, effect: StartEffect): Promise<Re
       notesMore: notes.more,
       checks: tiers.ok ? tiers.value : null,
       signals,
+      filedSpec,
       ...(previous ? { previous } : {}),
     })
     const started = await deps.terminals.start({

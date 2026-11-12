@@ -15,6 +15,8 @@ export interface OpenIssue {
   waitReason: string | null
   /** a lead of an earlier attempt is still being finalized */
   finalizing: boolean
+  /** the Spec its filer attached has no verdict yet: the owner has not seen it, and the 24 hours have not run out */
+  specPending: boolean
 }
 
 /** Why a queued Issue is not a candidate this round, in the words of the chain. */
@@ -22,6 +24,7 @@ export type ChainReason =
   | { kind: 'chain'; message: string; waitsFor: IssueId[] }
   | { kind: 'line'; message: string }
   | { kind: 'finalizing'; message: string }
+  | { kind: 'spec'; message: string }
   | { kind: 'unknown_project'; message: string }
 
 export interface Ordered {
@@ -43,7 +46,7 @@ export function stoppedProjects(open: readonly OpenIssue[], edges: readonly Edge
   for (const issue of open) {
     if (!isFix(issue) || issue.project === null) continue
     if (issue.state !== 'queued' && issue.state !== 'working') continue
-    if (issue.finalizing || openBlockers(edges, issue.id).length > 0) continue
+    if (issue.finalizing || issue.specPending || openBlockers(edges, issue.id).length > 0) continue
     if (!stopped.has(issue.project)) stopped.set(issue.project, issue.id)
   }
   return stopped
@@ -51,7 +54,7 @@ export function stoppedProjects(open: readonly OpenIssue[], edges: readonly Edge
 
 /**
  * The queued Issues in the order they are looked at, first rule first: the fix of a stopped line (an incident), then
- * dependencies (an Issue with an open blocker is no candidate: it follows the others, carrying its reason), then the
+ * dependencies (an Issue with an open blocker, or a filed Spec without a verdict, is no candidate: it follows the others, carrying its reason), then the
  * owner's `prio` (higher first, never overridden), then age (the lower Issue number). Each Issue carries the chain's
  * reason when it is not a candidate.
  */
@@ -77,6 +80,9 @@ function reasonOf(issue: OpenIssue, edges: readonly Edge[], stopped: ReadonlyMap
   if (blockers.length > 0) {
     const list = blockers.map((b) => `Issue ${issueNumber(b)}`).join(', ')
     return { kind: 'chain', message: `waits for ${list} to close`, waitsFor: blockers }
+  }
+  if (issue.specPending) {
+    return { kind: 'spec', message: "the Spec it was filed with waits for the owner's verdict (24 hours at most)" }
   }
   if (issue.project === null) {
     return { kind: 'unknown_project', message: 'its repo is no project the factory has read yet' }
