@@ -1,9 +1,9 @@
 import { DESK_CHECKS, DESK_RESCREENS, deskDue, nextPush } from '../../domains/checkpoints/desk.ts'
+import type { ErrandId } from '../../domains/checkpoints/errand.ts'
 import type { DeskStore, PushPort } from '../../domains/checkpoints/ports.ts'
-import { CHECK_FAILS_NOTED, checkVerdict } from '../../domains/checkpoints/request.ts'
-import { exitedNote, STILL_NEEDED_NOTE } from '../../kernel/run.ts'
 import { ok, type PortError, type Result } from '../../kernel/result.ts'
 import { rescreenErrand, resolveErrand } from '../checkpoints-errands.ts'
+import { runCheck } from './errands.ts'
 import type { SettleDeps } from '../checkpoints-settle.ts'
 import type { UnitOfWork } from '../unit-of-work.ts'
 
@@ -11,8 +11,6 @@ export interface DeskDeps {
   settle: SettleDeps
   desk: UnitOfWork<{ desk: DeskStore }>
   push: PushPort
-  /** a pass runs when it is due; `force` runs it now (the loop's manual run) */
-  force?: boolean
 }
 
 export interface DeskPass {
@@ -49,7 +47,7 @@ export async function deskPass(deps: DeskDeps): Out<DeskPass> {
   )
   if (!state.ok) return state
   const pass: DeskPass = { ran: false, looked: 0, resolved: 0, turnedAway: 0, pushed: null, problems: [] }
-  if (!deps.force && !deskDue({ now, ...state.value })) return ok(pass)
+  if (!deskDue({ now, ...state.value })) return ok(pass)
   await deps.desk.run(async ({ desk }) => ok(await desk.recordPass(now)))
   pass.ran = true
 
@@ -59,31 +57,26 @@ export async function deskPass(deps: DeskDeps): Out<DeskPass> {
   let checks = 0
   let rescreens = 0
   const left = []
+  // the errands loop's own check step, with an Issue's Errand closed through its wait
+  const checked = { kept: 0, checkedOut: 0, unrunnable: 0, problems: pass.problems }
+  const checkDeps = {
+    uow: settle.uow,
+    clock: settle.clock,
+    checks: settle.checks,
+    resolve: async (errand: { id: ErrandId }, why: string) => {
+      const closed = await resolveErrand(settle, errand.id, why)
+      if (!closed.ok) pass.problems.push(`${errand.id}: ${JSON.stringify(closed.error)}`.slice(0, 300))
+      return closed.ok && closed.value
+    },
+  }
   for (const errand of read.value) {
     if (errand.checkCommand !== null && checks < DESK_CHECKS) {
       checks++
-      const run = await settle.checks.run(errand.checkCommand)
-      const verdict = checkVerdict(run)
-      if (verdict === 'not_needed') {
-        const closed = await resolveErrand(settle, errand.id, exitedNote(run.exit, run.output))
-        if (!closed.ok) pass.problems.push(`${errand.id}: ${JSON.stringify(closed.error)}`.slice(0, 300))
-        else if (closed.value) {
-          pass.resolved++
-          continue
-        }
-      } else {
-        const fails = verdict === 'needed' ? 0 : errand.checkFails + 1
-        const note =
-          verdict === 'needed'
-            ? errand.checkNote?.startsWith(STILL_NEEDED_NOTE)
-              ? errand.checkNote
-              : 'the check exited 0: still needed'
-            : fails >= CHECK_FAILS_NOTED
-              ? `the check could not run ${fails} times in a row; the request stays open`
-              : 'the check could not run'
-        await settle.uow.run(async ({ checkpoints }) =>
-          ok(await checkpoints.recordCheck(errand.id, { at: settle.clock.now(), note, fails })),
-        )
+      const before = checked.checkedOut
+      await runCheck(checkDeps, errand, errand.checkCommand, checked)
+      if (checked.checkedOut > before) {
+        pass.resolved++
+        continue
       }
     }
     left.push(errand)

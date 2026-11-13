@@ -554,7 +554,7 @@ model, not a signal: an agent-trust signal files an Issue, and no loops page exi
 The API stays loopback. The door and the Console are published on the tailnet by dotfiles-private's `tailscale serve`
 rows (the Console on :8797, to its loopback listener), and the perimeter is the tailnet ACL by device tag (a grant of
 `tag:mac` and `tag:phone` to `tag:devhost` on tcp:8797), as Collie's (NL25); the deploy publishes nothing. There is no
-per-request identity: anything that reaches :8797 reads what the owner reads, and no more than reads and the eight answer
+per-request identity: anything that reaches :8797 reads what the owner reads, and no more than reads and the nine answer
 verbs below, never a session start. The door holds only its own token; the orchestrator's is the owner's rights minus eight owner-only routes, and the Console proxy never uses it. Nothing that can start Claude Code is reachable from
 another node. The Console listener reads, and forwards exactly the owner's nine answer verbs (a Decision's answer, an artifact's verdict,
 annotation and its edit and delete, an Errand done, a held signal promoted or dismissed), guarded against a cross-site page (JSON only bar a delete, no cross-site fetch

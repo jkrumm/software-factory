@@ -94,6 +94,8 @@ export function prReview(options: PrReviewOptions = {}): ReviewPort {
         return err(portError('unreadable', `${ref} names no repo checkout to look in`))
       }
       const target = named ?? prNumber(ref)
+      // a ref the tool would read as a flag is never passed on
+      if (target.startsWith('-')) return err(portError('refused', `${ref} is not a pull request`))
       const command = gitlab
         ? ['glab', 'mr', 'view', target, '-F', 'json']
         : ['gh', 'pr', 'view', target, '--json', 'state,reviewDecision,reviews,comments,author']
