@@ -36,7 +36,7 @@ Also:
 - Name the worktree: \`make -C <worktree> ...\` with the path above. A background shell does not start where you are.
 - One check per worktree: while your @implementer runs one, do not start your own; two in one tree ran for 31 minutes.
 - Kill by pid. \`pkill -f\` is refused by a hook, and an until-loop on \`pgrep -f 'make check'\` matches itself and never ends.
-- Quote a glob or use \`rg\`: zsh stops on an unmatched \`--include=*\` with "no matches found". \`gh pr merge --admin\` is refused; fix the red run instead.
+- Quote a glob or use \`rg\`: zsh stops on an unmatched \`--include=*\` with "no matches found". \`gh pr merge --admin\` is refused; fix the red run instead. The exception: a repo whose \`project.yaml\` says its PRs are admin-merged (the owner's \`ADMIN_MERGE_REPOS\`): there you merge it yourself with \`gh pr merge <n> -R <owner>/<repo> --squash --admin\` once CI is green and /review is clean. Never raise an Errand asking the owner to approve or merge your PR: a PR from the owner's own account cannot be approved by the owner.
 - Your tools: Bash, Read, Edit, Write, Agent, Skill. There is no Grep or Glob tool: search with \`rg\` and \`ls\` in Bash. A deferred tool such as Monitor loads with ToolSearch first, and Monitor needs its \`description\` parameter.
 
 # What you do yourself on the mini
