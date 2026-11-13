@@ -6,6 +6,7 @@ apps/server/src/adapters/hc/terminals.ts wave  # USAGE_LANE=wave is the usage tr
 apps/server/src/read/asks.ts human queue  # the legacy read API's wire name `humanQueue` (open Errands), read by existing clients
 apps/server/src/read/reader.ts human queue  # the legacy read API's wire name `humanQueue` (open Errands), read by existing clients
 apps/server/src/read/surface.ts human queue  # the legacy read API's wire name `humanQueue` (open Errands), read by existing clients
+apps/server/test/loops/errands.test.ts human queue  # reads the legacy read API's wire name `humanQueue` (open Errands)
 apps/server/test/read/api.test.ts human queue  # the legacy read API's wire name `humanQueue` (open Errands), read by existing clients
 packages/contract/src/read.ts human queue  # the legacy read API's wire name `humanQueue` (open Errands), read by existing clients
 tests/scenarios/clients/requests.ts human queue  # the recorded requests read the legacy wire name `humanQueue`

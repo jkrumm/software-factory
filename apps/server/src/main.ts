@@ -5,6 +5,8 @@ import { agwJudge } from './adapters/agw/judge.ts'
 import { agwPort } from './adapters/agw/port.ts'
 import { agwFixClasses } from './adapters/agw/fix-classes.ts'
 import { agwDigest } from './adapters/agw/digest.ts'
+import { agwErrandNeeded } from './adapters/agw/errand-needed.ts'
+import { shellCheckRunner } from './adapters/shell/check-runner.ts'
 import { agwHygiene } from './adapters/agw/hygiene.ts'
 import { agwQueue } from './adapters/agw/queue.ts'
 import { agwScreen } from './adapters/agw/screen.ts'
@@ -57,6 +59,7 @@ import { gitMainCheckouts } from './adapters/quality/main-checkouts.ts'
 import { stewardPass, stewardSummary } from './app/loops/steward.ts'
 import { queuePass, queueSummary } from './app/loops/queue.ts'
 import { digestPass, digestPassSummary } from './app/loops/digest.ts'
+import { errandsPass, errandsSummary } from './app/loops/errands.ts'
 import { screenPass, screenSummary } from './app/loops/screen.ts'
 import { triagePass, triageSummary } from './app/loops/triage.ts'
 import { FRICTION_WINDOW_DAYS } from './domains/loops/friction.ts'
@@ -556,6 +559,24 @@ async function main(): Promise<void> {
         if (!pass.ok) return pass
         said('digest', pass.value.problems)
         return ok(digestPassSummary(pass.value))
+      },
+    },
+    {
+      // The open requests for the owner's hands (no Issue): each one's check runs, the expired close, and one with no check is read
+      // once a day by `factory-errand-needed`. Interval only: a new request waits for the next pass.
+      name: 'errands',
+      intervalMs: loopSettings.intervalMs.errands,
+      onChange: false,
+      run: async () => {
+        const pass = await errandsPass({
+          uow,
+          clock: writes.clock,
+          checks: shellCheckRunner(),
+          needed: agwErrandNeeded(agw),
+        })
+        if (!pass.ok) return pass
+        said('errands', pass.value.problems)
+        return ok(errandsSummary(pass.value))
       },
     },
     {

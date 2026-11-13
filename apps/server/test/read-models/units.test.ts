@@ -62,6 +62,8 @@ const need = (id: string, work: boolean, kind: ScopedNeed['kind'] = 'decision'):
   artifact: null,
   origin: null,
   source: null,
+  command: null,
+  host: null,
   sourceLink: null,
   wait: null,
   work,

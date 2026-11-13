@@ -7,7 +7,8 @@ import { needsModel, readNeeds } from '../../src/read/needs.ts'
 import { loadNeedsSettings } from '../../src/read/needs-settings.ts'
 
 /**
- * A timed wait that other open Issues wait behind reaches Needs you with its until-time and the count held; a leaf, a short
+ * A timed wait that other open Issues wait behind reaches Needs you with its until-time and the count held only once its time
+ * has passed and the Issue is still asleep (until then it is information: Flow shows the waiting Issue); a leaf, a short
  * wait and a wait that ended do not. Seeded with SQL over a real Postgres.
  */
 let db: TestCluster
@@ -70,12 +71,12 @@ async function waitingAfter(n: number, blockers: string[]) {
   return id
 }
 
-const longWaits = async (options?: { longWaitMs?: number }) =>
-  (await readNeeds(sql, NOW, options)).items.filter((item) => item.kind === 'long_wait')
+const longWaits = async (options?: { longWaitMs?: number }, now = NOW) =>
+  (await readNeeds(sql, now, options)).items.filter((item) => item.kind === 'long_wait')
 
 describe('a timed wait with Issues behind it', () => {
-  test('a 2 h deferral with 3 dependents appears with its until-time and the count 3', async () => {
-    const head = await deferred(1, at(-HOUR / 2), at(1.5 * HOUR))
+  test('a deferral past its time with 3 dependents appears with its until-time and the count 3', async () => {
+    const head = await deferred(1, at(-3 * HOUR), at(-HOUR / 2))
     await after(2, head)
     await after(3, head, 'settling')
     await waitingAfter(4, [head])
@@ -89,12 +90,12 @@ describe('a timed wait with Issues behind it', () => {
         issue: head,
         repo: 'app',
         title: 'Wait for the cooldown',
-        since: at(-HOUR / 2).toISOString(),
-        ageMs: HOUR / 2,
+        since: at(-3 * HOUR).toISOString(),
+        ageMs: 3 * HOUR,
         stale: false,
         link: { type: 'issue', id: head },
         origin: 'you',
-        wait: { reason: 'timer', until: at(1.5 * HOUR).toISOString(), held: 3 },
+        wait: { reason: 'timer', until: at(-HOUR / 2).toISOString(), held: 3 },
         redacted: false,
       }),
     ])
@@ -103,7 +104,7 @@ describe('a timed wait with Issues behind it', () => {
   })
 
   test('dependents count through the chain, once each, and a closed one is not held', async () => {
-    const head = await deferred(1, at(-HOUR), at(3 * HOUR))
+    const head = await deferred(1, at(-4 * HOUR), at(-HOUR))
     const middle = await after(2, head)
     await after(3, middle)
     await waitingAfter(4, [head, middle])
@@ -114,7 +115,7 @@ describe('a timed wait with Issues behind it', () => {
   })
 
   test('a satisfied edge holds nobody back', async () => {
-    const head = await deferred(1, at(-HOUR), at(3 * HOUR))
+    const head = await deferred(1, at(-4 * HOUR), at(-HOUR))
     await after(2, head)
     await sql`UPDATE factory.planning_edges SET satisfied_at = ${at(-HOUR)}`
 
@@ -123,6 +124,16 @@ describe('a timed wait with Issues behind it', () => {
 })
 
 describe('what stays off Needs you', () => {
+  test('a timer still running is information, not a request: it stays off until its time has passed', async () => {
+    const head = await deferred(1, at(-HOUR), at(3 * HOUR))
+    await after(2, head)
+
+    expect(await longWaits()).toEqual([])
+    expect(needsModel(await readNeeds(sql, NOW), { redact: false }).counts.long_wait).toBe(0)
+    // the same Issue, once its time has gone by
+    expect(await longWaits(undefined, at(3 * HOUR + 60_000))).toHaveLength(1)
+  })
+
   test('a deferred leaf Issue does not appear', async () => {
     await deferred(1, at(-HOUR), at(5 * HOUR))
     await sql`INSERT INTO factory.issues (id, repo, state, version) VALUES ('issue_2', 'app', 'queued', 1)`
@@ -132,7 +143,7 @@ describe('what stays off Needs you', () => {
   })
 
   test('a wait shorter than the threshold does not appear, whatever is held behind it', async () => {
-    const head = await deferred(1, at(-10 * 60_000), at(40 * 60_000))
+    const head = await deferred(1, at(-50 * 60_000), at(-10 * 60_000))
     await after(2, head)
 
     expect(await longWaits()).toEqual([])
@@ -150,7 +161,7 @@ describe('what stays off Needs you', () => {
 
 describe('the entry clears with the wait', () => {
   test('when the Issue resumes', async () => {
-    const head = await deferred(1, at(-HOUR), at(3 * HOUR))
+    const head = await deferred(1, at(-4 * HOUR), at(-HOUR))
     await after(2, head)
     expect(await longWaits()).toHaveLength(1)
 
@@ -161,7 +172,7 @@ describe('the entry clears with the wait', () => {
   })
 
   test('when the Issue closes', async () => {
-    const head = await deferred(1, at(-HOUR), at(3 * HOUR))
+    const head = await deferred(1, at(-4 * HOUR), at(-HOUR))
     await after(2, head)
     expect(await longWaits()).toHaveLength(1)
 
@@ -172,7 +183,7 @@ describe('the entry clears with the wait', () => {
   })
 
   test('a deferral again starts a new wait from its own event', async () => {
-    const head = await deferred(1, at(-HOUR), at(3 * HOUR))
+    const head = await deferred(1, at(-4 * HOUR), at(-HOUR))
     await after(2, head)
     await sql`UPDATE factory.issues SET version = 3 WHERE id = ${head}`
     await event(head, 3, 'deferred', at(-5 * 60_000), 'waiting', {
@@ -188,13 +199,13 @@ describe('the entry clears with the wait', () => {
 
 describe('under the read token', () => {
   test('a work repo’s words go, its until-time and count stay', async () => {
-    const head = await deferred(1, at(-HOUR), at(3 * HOUR))
+    const head = await deferred(1, at(-4 * HOUR), at(-HOUR))
     await after(2, head)
 
     const read = needsModel(await readNeeds(sql, NOW), { redact: true })
     expect(read.items[0]).toMatchObject({
       redacted: true,
-      wait: { reason: 'timer', until: at(3 * HOUR).toISOString(), held: 1 },
+      wait: { reason: 'timer', until: at(-HOUR).toISOString(), held: 1 },
     })
     expect(read.items[0]?.title).not.toContain('cooldown')
   })

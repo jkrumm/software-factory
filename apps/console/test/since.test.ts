@@ -31,6 +31,7 @@ const model = (over: Partial<SinceModel['categories']> = {}): SinceModel => ({
     dropped: category(0),
     judge: category(0),
     screen: category(0),
+    errands: category(0),
     filed: { count: 0, byOrigin: [], items: [] },
     incidents: category(0),
     ...over,
@@ -47,6 +48,7 @@ describe('sinceRows', () => {
       'Dropped',
       'Settled by the Judge',
       'Turned away',
+      'Errands closed without you',
       'New Issues',
       'Incidents',
     ])

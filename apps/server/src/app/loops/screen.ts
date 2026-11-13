@@ -2,6 +2,9 @@ import type { Intake } from '../intake.ts'
 import type { IntakeStore, OpenIssues, ScreenWorkflow, Screening } from '../../domains/intake/ports.ts'
 import {
   checkScreen,
+  decideFinal,
+  FINAL_SCREEN_MS,
+  isFinalScreen,
   MAX_SCREEN_ATTEMPTS,
   SCREEN_BATCH,
   screenBackoffMs,
@@ -65,8 +68,9 @@ async function screenOne(deps: ScreenDeps, row: SignalRow, names: string[], pass
   }
 
   const attempt = row.screening.attempts
+  const final = isFinalScreen(row, deps.clock.now())
   const answered = await deps.workflow.screen(
-    screenRequest(row, open.value, names, scrub),
+    screenRequest(row, open.value, names, scrub, final),
     key('screen', row.id, attempt),
   )
   const fail = async (why: string): Promise<void> => {
@@ -84,13 +88,15 @@ async function screenOne(deps: ScreenDeps, row: SignalRow, names: string[], pass
 
   const target = screenTarget(signal.repo, answered.value)
   let repoKnown = false
-  if (answered.value.verdict === 'promote' && target !== null) {
+  if ((answered.value.verdict === 'promote' || final) && target !== null) {
     const found = await deps.projects.find(target)
     if (!found.ok) return fail(found.error.detail)
     repoKnown = found.value !== null && !found.value.work
   }
-  const checked = checkScreen({ signalRepo: signal.repo, openIssues: open.value, repoKnown }, answered.value)
-  if (checked.action === 'refused') return fail(checked.why)
+  const screened = checkScreen({ signalRepo: signal.repo, openIssues: open.value, repoKnown }, answered.value)
+  if (screened.action === 'refused') return fail(screened.why)
+  // the last look after 72 hours decides: the held signal leaves Needs you
+  const checked = final ? decideFinal(screened, { target, repoKnown }) : screened
 
   if (checked.action === 'leave') {
     const stored = await deps.uow.run(async ({ intake }) =>
@@ -111,7 +117,7 @@ async function screenOne(deps: ScreenDeps, row: SignalRow, names: string[], pass
 
   const acted =
     checked.action === 'promote'
-      ? await deps.promote(row.id, { repo: checked.repo }, 'judge')
+      ? await deps.promote(row.id, { repo: checked.repo }, 'judge', checked.steer)
       : await deps.dismiss(row.id, { reason: checked.reason }, 'judge')
   if (acted.ok) {
     if (checked.action === 'promote') pass.promoted++
@@ -145,7 +151,7 @@ export async function screenPass(deps: ScreenDeps): Out<ScreenPass> {
     problems: [],
   }
   const due = await deps.uow.run(async ({ intake }) =>
-    ok(await intake.screenable(deps.clock.now(), MAX_SCREEN_ATTEMPTS, SCREEN_BATCH)),
+    ok(await intake.screenable(deps.clock.now(), MAX_SCREEN_ATTEMPTS, SCREEN_BATCH, FINAL_SCREEN_MS)),
   )
   if (!due.ok) return due
   if (due.value.length === 0) return ok(pass)

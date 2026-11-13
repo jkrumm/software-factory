@@ -826,7 +826,13 @@ export function createIntake(deps: IntakeDeps) {
     )
   }
 
-  async function promote(id: string, body: PromoteRequest, by: 'owner' | 'judge' = 'owner'): Out<Triaged> {
+  /** `steer`: what the lead of the new Issue is told first (a note from the factory). */
+  async function promote(
+    id: string,
+    body: PromoteRequest,
+    by: 'owner' | 'judge' = 'owner',
+    steer?: string,
+  ): Out<Triaged> {
     const probe = await uow.run(async (s) => ok(await s.intake.signal(id)))
     if (!probe.ok) return probe
     const row = probe.value
@@ -854,6 +860,14 @@ export function createIntake(deps: IntakeDeps) {
       })
       if (!filed.ok) return filed
       const issue = filed.value.issue.id
+      if (steer) {
+        const steered = await recordIn(s.work, deps, {
+          issueId: issue,
+          key: keyOf('noted', 'promote', id),
+          event: { kind: 'noted', payload: { text: steer }, actor: 'factory' },
+        })
+        if (!steered.ok) return steered
+      }
       await s.intake.setSignal(id, { state: 'promoted', issueId: issue, repo })
       // A promoted signal is found by its fingerprint next time (an alert by its subject too): a duplicate amends the Issue.
       const fromBacklog = (r.alert?.facts as { backlog?: unknown } | null)?.backlog === true

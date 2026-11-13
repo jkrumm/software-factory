@@ -21,6 +21,7 @@ import {
   type Settler,
 } from '../domains/checkpoints/decision.ts'
 import { type ErrandId, readErrand, refuseHostClass } from '../domains/checkpoints/errand.ts'
+import { readRequest } from '../domains/checkpoints/request.ts'
 import { deepLink, reviewPage } from '../domains/checkpoints/page.ts'
 import type {
   AnnotationRecord,
@@ -881,6 +882,18 @@ export function raiseErrand(
       screenBy: null,
       screenNote: null,
       turnedAwayAt: null,
+      source: null,
+      command: null,
+      checkCommand: null,
+      host: null,
+      expiresAt: null,
+      requestKey: null,
+      closedKind: null,
+      closedBy: null,
+      checkAt: null,
+      checkNote: null,
+      checkFails: 0,
+      neededAt: null,
     })
     if (!stored) return err({ kind: 'version_conflict', issueId: input.issueId, expected: issue.version })
     const errand = await checkpoints.errand(id)
@@ -893,32 +906,41 @@ export function raiseErrand(
   })
 }
 
-/** The owner's hands did it: `errand_done` ends the wait and the lead hears it as its next turn. */
+/** How the owner closes an Errand: his hands did it, or he found it needless. */
+export type ErrandOutcome = 'done' | 'not_needed'
+
+/**
+ * The owner's hands did it, or he says it is not needed: `errand_done` ends the Issue's wait and the lead hears it as its
+ * next turn (a "not needed" says so in the note). A standalone Errand has no Issue to tell.
+ */
 export function finishErrand(
   deps: CheckpointDeps,
-  input: { errandId: ErrandId; note: string | null },
+  input: { errandId: ErrandId; note: string | null; outcome?: ErrandOutcome },
 ): Promise<CheckpointResult<ErrandWritten>> {
+  const outcome = input.outcome ?? 'done'
   return deps.uow.run(async ({ work, checkpoints }) => {
     const errand = await checkpoints.errand(input.errandId)
     if (!errand) return err(notFound('Errand', input.errandId))
-    const issue = await issueOf(work, errand.issueId)
-    if (!issue) return err({ kind: 'unknown_issue', issueId: errand.issueId })
-    if (errand.doneAt) return ok<ErrandWritten>({ result: 'replayed', errand, issue: moveOf(issue) })
+    const issue = errand.issueId ? await issueOf(work, errand.issueId) : null
+    if (errand.issueId && !issue) return err({ kind: 'unknown_issue', issueId: errand.issueId })
+    if (errand.doneAt) return ok<ErrandWritten>({ result: 'replayed', errand, issue: issue ? moveOf(issue) : null })
 
     const at = deps.clock.now()
     const note = input.note?.trim() || null
     let move: IssueMove | null = null
-    if (waitingOn(issue, 'errand', errand.id)) {
-      if (note) {
+    if (errand.issueId && issue && waitingOn(issue, 'errand', errand.id)) {
+      const said =
+        outcome === 'not_needed'
+          ? `The owner says the Errand "${errand.summary}" is not needed${note ? `: ${note}` : ''}. Go on without it.`
+          : note
+            ? `The owner did the Errand "${errand.summary}": ${note}`
+            : null
+      if (said) {
         const noted = applied(
           await recordIn(work, deps, {
             issueId: errand.issueId,
             key: key('noted', 'errand', errand.id),
-            event: {
-              kind: 'noted',
-              payload: { text: `The owner did the Errand "${errand.summary}": ${note}` },
-              actor: 'owner',
-            },
+            event: { kind: 'noted', payload: { text: said }, actor: 'owner' },
           }),
           'noted',
         )
@@ -935,11 +957,80 @@ export function finishErrand(
       if (!recorded.ok) return recorded
       move = moveOf(recorded.value.issue, recorded.value.effects)
     }
-    await checkpoints.finishErrand(errand.id, at, note)
+    await checkpoints.finishErrand(errand.id, at, note, { kind: outcome, by: 'owner' })
     await checkpoints.cancelPages(errand.id, at)
     const done = await checkpoints.errand(errand.id)
     if (!done) throw new Error(`errand ${errand.id} vanished inside its own transaction`)
     return ok<ErrandWritten>({ result: 'applied', errand: done, issue: move })
+  })
+}
+
+export interface ErrandRequested {
+  result: 'applied' | 'replayed'
+  errand: ErrandRecord
+  /** the open requests this one replaced (same key) */
+  superseded: ErrandId[]
+}
+
+/**
+ * `factory errand request`: a request for the owner's hands that no Issue raised (`ask-human.sh`). It reaches the owner at
+ * once: there is no lead to turn it away and the asker has already decided it needs a person. A request with a key that an
+ * open one holds replaces it; the same request again (same key and text) is a replay and changes nothing.
+ */
+export function requestErrand(
+  deps: CheckpointDeps,
+  input: { raw: unknown },
+): Promise<CheckpointResult<ErrandRequested>> {
+  const at = deps.clock.now()
+  const read = readRequest(input.raw, at)
+  if (!read.ok) return Promise.resolve(read)
+  const request = read.value
+  return deps.uow.run(async ({ checkpoints }) => {
+    // the expiry is relative to now, so it is not part of what makes a request the same one
+    const same = digest(
+      JSON.stringify([request.summary, request.detail, request.command, request.check, request.host, request.key]),
+    )
+    const sameKey = key('errand_request', request.source, request.key ?? 'unkeyed', same)
+    const existing = await checkpoints.errandByKey(sameKey)
+    if (existing && !existing.doneAt)
+      return ok<ErrandRequested>({ result: 'replayed', errand: existing, superseded: [] })
+    const id = deps.ids.next('errand')
+    // asked again after the first was closed: a new Errand, under a key of its own
+    const errandKey = existing ? key('errand_request', id) : sameKey
+    const superseded = request.key ? await checkpoints.supersedeRequests(request.key, id, at) : []
+    const stored = await checkpoints.insertErrand({
+      id,
+      key: errandKey,
+      issueId: null,
+      attempt: null,
+      summary: request.summary,
+      detail: request.detail,
+      raisedAt: at,
+      doneAt: null,
+      doneNote: null,
+      reachedOwnerAt: at,
+      screenTries: 0,
+      screenRetryAt: null,
+      screenBy: null,
+      screenNote: null,
+      turnedAwayAt: null,
+      source: request.source,
+      command: request.command,
+      checkCommand: request.check,
+      host: request.host,
+      expiresAt: request.expiresAt,
+      requestKey: request.key,
+      closedKind: null,
+      closedBy: null,
+      checkAt: null,
+      checkNote: null,
+      checkFails: 0,
+      neededAt: null,
+    })
+    if (!stored) return err({ kind: 'invalid', detail: `the request ${errandKey} is stored already` })
+    const errand = await checkpoints.errand(id)
+    if (!errand) throw new Error(`errand ${id} vanished inside its own transaction`)
+    return ok<ErrandRequested>({ result: 'applied', errand, superseded })
   })
 }
 

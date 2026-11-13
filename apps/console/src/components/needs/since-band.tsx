@@ -1,6 +1,7 @@
 import type { SinceItem } from '@software-factory/contract'
 import {
   ArrowCounterClockwiseIcon,
+  BroomIcon,
   FunnelIcon,
   type Icon,
   PlusCircleIcon,
@@ -37,6 +38,7 @@ const SINCE_ICON: Record<SinceKey, Icon> = {
   dropped: ProhibitIcon,
   judge: ScalesIcon,
   screen: FunnelIcon,
+  errands: BroomIcon,
   filed: PlusCircleIcon,
   incidents: SirenIcon,
 }

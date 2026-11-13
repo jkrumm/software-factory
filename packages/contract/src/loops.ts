@@ -314,6 +314,7 @@ export const LOOP_NAMES = [
   'host',
   'reaper',
   'digest',
+  'errands',
 ] as const
 export type LoopName = (typeof LOOP_NAMES)[number]
 

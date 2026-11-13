@@ -10,6 +10,7 @@ import {
 } from '../../domains/checkpoints/decision.ts'
 import type { ErrandId } from '../../domains/checkpoints/errand.ts'
 import type { Page } from '../../domains/checkpoints/page.ts'
+import { HOSTS } from '../../domains/checkpoints/request.ts'
 import {
   type AnnotationRecord,
   type ArtifactRecord,
@@ -118,8 +119,8 @@ const VerdictRow = z.object({
 const ErrandRow = z.object({
   id: z.string(),
   key: z.string(),
-  issue_id: z.string(),
-  attempt: z.number().int(),
+  issue_id: z.string().nullable(),
+  attempt: z.number().int().nullable(),
   summary: z.string(),
   detail: z.string().nullable(),
   raised_at: z.date(),
@@ -131,6 +132,18 @@ const ErrandRow = z.object({
   screen_by: z.enum(['rule', 'judge', 'failed']).nullable(),
   screen_note: z.string().nullable(),
   turned_away_at: z.date().nullable(),
+  source: z.string().nullable(),
+  command: z.string().nullable(),
+  check_command: z.string().nullable(),
+  host: z.enum(HOSTS).nullable(),
+  expires_at: z.date().nullable(),
+  request_key: z.string().nullable(),
+  closed_kind: z.enum(['done', 'not_needed', 'expired', 'superseded', 'turned_away']).nullable(),
+  closed_by: z.enum(['owner', 'check', 'judge', 'loop', 'request']).nullable(),
+  check_at: z.date().nullable(),
+  check_note: z.string().nullable(),
+  check_fails: z.number().int(),
+  needed_at: z.date().nullable(),
 })
 
 const PageRow = z.object({
@@ -236,7 +249,7 @@ const errandOf = (raw: unknown): ErrandRecord => {
   return {
     id: row.id as ErrandId,
     key: row.key as Key,
-    issueId: row.issue_id as IssueId,
+    issueId: row.issue_id as IssueId | null,
     attempt: row.attempt,
     summary: row.summary,
     detail: row.detail,
@@ -249,6 +262,18 @@ const errandOf = (raw: unknown): ErrandRecord => {
     screenBy: row.screen_by,
     screenNote: row.screen_note,
     turnedAwayAt: row.turned_away_at,
+    source: row.source,
+    command: row.command,
+    checkCommand: row.check_command,
+    host: row.host,
+    expiresAt: row.expires_at,
+    requestKey: row.request_key,
+    closedKind: row.closed_kind,
+    closedBy: row.closed_by,
+    checkAt: row.check_at,
+    checkNote: row.check_note,
+    checkFails: row.check_fails,
+    neededAt: row.needed_at,
   }
 }
 
@@ -544,8 +569,10 @@ export function postgresCheckpointStore(tx: SQL): CheckpointStore {
 
     async insertErrand(e) {
       const rows: unknown[] = await tx`
-        INSERT INTO factory.errands (id, key, issue_id, attempt, summary, detail, raised_at)
-        VALUES (${e.id}, ${e.key}, ${e.issueId}, ${e.attempt}, ${e.summary}, ${e.detail}, ${e.raisedAt})
+        INSERT INTO factory.errands (id, key, issue_id, attempt, summary, detail, raised_at, reached_owner_at, screen_by,
+          source, command, check_command, host, expires_at, request_key)
+        VALUES (${e.id}, ${e.key}, ${e.issueId}, ${e.attempt}, ${e.summary}, ${e.detail}, ${e.raisedAt}, ${e.reachedOwnerAt},
+          ${e.screenBy}, ${e.source}, ${e.command}, ${e.checkCommand}, ${e.host}, ${e.expiresAt}, ${e.requestKey})
         ON CONFLICT (key) DO NOTHING
         RETURNING id`
       return rows.length === 1
@@ -570,9 +597,40 @@ export function postgresCheckpointStore(tx: SQL): CheckpointStore {
       return rows.map(errandOf)
     },
 
-    async finishErrand(id, at, note) {
+    async finishErrand(id, at, note, how = { kind: 'done', by: 'owner' }) {
       const rows: unknown[] = await tx`
-        UPDATE factory.errands SET done_at = ${at}, done_note = ${note} WHERE id = ${id} AND done_at IS NULL RETURNING id`
+        UPDATE factory.errands SET done_at = ${at}, done_note = ${note}, closed_kind = ${how.kind}, closed_by = ${how.by}
+        WHERE id = ${id} AND done_at IS NULL RETURNING id`
+      return rows.length === 1
+    },
+
+    async supersedeRequests(requestKey, by, at) {
+      const rows: unknown[] = await tx`
+        UPDATE factory.errands
+        SET done_at = ${at}, done_note = ${`Superseded by a newer request (${by})`}, closed_kind = 'superseded', closed_by = 'request'
+        WHERE request_key = ${requestKey} AND done_at IS NULL AND id <> ${by} RETURNING id`
+      return rows.map((raw) => z.object({ id: z.string() }).parse(raw).id as ErrandId)
+    },
+
+    async requests({ closedSince, limit }) {
+      const rows: unknown[] = await tx`
+        SELECT * FROM factory.errands
+        WHERE issue_id IS NULL AND (done_at IS NULL OR done_at >= ${closedSince})
+        ORDER BY raised_at, id LIMIT ${limit}`
+      return rows.map(errandOf)
+    },
+
+    async recordCheck(id, run) {
+      const rows: unknown[] = await tx`
+        UPDATE factory.errands SET check_at = ${run.at}, check_note = ${run.note}, check_fails = ${run.fails}
+        WHERE id = ${id} AND done_at IS NULL RETURNING id`
+      return rows.length === 1
+    },
+
+    async recordNeeded(id, run) {
+      const rows: unknown[] = await tx`
+        UPDATE factory.errands SET needed_at = ${run.at}, check_note = ${run.note}
+        WHERE id = ${id} AND done_at IS NULL RETURNING id`
       return rows.length === 1
     },
 
@@ -609,7 +667,7 @@ export function postgresCheckpointStore(tx: SQL): CheckpointStore {
     async turnAwayErrand(id, away) {
       const rows: unknown[] = await tx`
         UPDATE factory.errands
-        SET done_at = ${away.at}, turned_away_at = ${away.at}, done_note = ${away.reason},
+        SET done_at = ${away.at}, turned_away_at = ${away.at}, done_note = ${away.reason}, closed_kind = 'turned_away',
             screen_note = ${away.reason}, screen_by = ${away.by}, screen_retry_at = NULL
         WHERE id = ${id} AND done_at IS NULL RETURNING id`
       return rows.length === 1
@@ -625,7 +683,7 @@ export function postgresCheckpointStore(tx: SQL): CheckpointStore {
           UNION ALL
           SELECT 'errand', e.id, e.issue_id, e.reached_owner_at
           FROM factory.errands e
-          WHERE e.done_at IS NULL AND e.reached_owner_at <= ${reachedBefore}
+          WHERE e.done_at IS NULL AND e.issue_id IS NOT NULL AND e.reached_owner_at <= ${reachedBefore}
         )
         SELECT r.kind, r.id, r.issue_id, r.reached_at, last.at AS last_at, last.through_version
         FROM reached r

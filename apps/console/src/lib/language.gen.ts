@@ -8,12 +8,16 @@ export const LANGUAGE = {
   attempt: 'Lead number n of an Issue',
   'avoidable touch':
     'A touch the factory should have settled: a Decision answered and not marked worth asking, an owner note, wake, cancel or reopen. Not the first note of a filing, a verdict on a Concept or Spec, or a done Errand',
+  'back at desk':
+    'The Needs-you view (?mode=desk) of the open Errands by where the hands must be, each with its command to copy and Done and Not needed buttons',
   caller:
     "Who a request comes from, decided by its token: owner, orchestrator (the owner's delegate agent: the owner's rights bar eight routes, its own actor in the log), agent (a lead session), machine (the alert door), read (the surfaces)",
   cancelled: "Outcome: the owner's stop",
   chain: 'The dependency graph of Issues and plan rows, across projects. What decides what can run at once',
   change:
     'One row of the change stream: a kind, ids and states, never words. Its cursor (<txid>.<seq>) resumes the stream without losing or doubling a change',
+  check:
+    'A shell command a request carries that exits 0 while the request is still needed. The errands loop runs it every hour (30 s, no model): exit 1 to 125 closes the request as not_needed with the output, anything that could not answer (missing command, timeout, signal) keeps it open with a note',
   checkpoint:
     'Where the factory stops for a person: a Decision, a review of a Concept or Spec, an Errand. Never a merge',
   claim:
@@ -89,6 +93,8 @@ export const LANGUAGE = {
   replan:
     "An Issue whose lead proposes changes to a project's plan as a Spec with Decisions, and applies them on the owner's verdict (factory issue replan, gated on the approved Spec and the project's own Issues). Filed by the owner (factory planning replan <project>) or by the planning pass when a long wait has Issues behind it; one open per project",
   report: 'For information, never waits. A spike is a Report with a verdict',
+  request:
+    'An Errand no Issue raised (factory errand request, what ask-human.sh posts): no lead and no screen, it reaches the owner at once. It carries the command to run, where the hands must be (macbook, iphone, portal, any), a check, an expiry (7 days when it has no check), and a key that replaces an older open request with the same key',
   review:
     "The lead's own check of its change, once per ship range, standard or deep. Part of the lead's work, never a factory step",
   'review status':
@@ -115,6 +121,8 @@ export const LANGUAGE = {
     'Where an Issue is: settling (triage is not done), queued (ready, held back by capacity or a chain), working (a lead runs), waiting (a named wait), watching (shipped and deployed, the watch is on: the factory runs Verify and the probes, and the Issue closes when they pass), closed. The only field a person reads to know what an Issue is doing',
   steward:
     'The supervisor loop over stalled Issues. Acts deterministically first (wake, re-check, requeue, deliver) and asks an agw workflow when a call needs judgment',
+  'still-needed look':
+    'The factory-errand-needed workflow reading a request that has no check, once a day from its first day: only a not_needed with a reason closes it. Closures by the check, the look, the expiry or a newer request are the "Errands closed without you" band of the next since read',
   surface: 'Console, Herdr, Iris, Argo, ntfy',
   'taste pass':
     "The weekly retro's reading of the owner's verdict notes and comments: a preference seen twice becomes a rule in the repo's AGENTS.md or DESIGN.md",

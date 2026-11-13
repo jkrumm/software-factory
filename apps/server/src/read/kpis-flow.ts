@@ -170,7 +170,7 @@ async function errandCounts(sql: SQL, w: Window) {
     SELECT count(*) AS n,
       count(*) FILTER (WHERE turned_away_at IS NOT NULL AND screen_by = 'rule') AS rule,
       count(*) FILTER (WHERE turned_away_at IS NOT NULL AND screen_by = 'judge') AS judge
-    FROM factory.errands WHERE raised_at >= ${w.from} AND raised_at < ${w.to}`
+    FROM factory.errands WHERE issue_id IS NOT NULL AND raised_at >= ${w.from} AND raised_at < ${w.to}`
   return z.object({ n: z.coerce.number(), rule: z.coerce.number(), judge: z.coerce.number() }).parse(row)
 }
 

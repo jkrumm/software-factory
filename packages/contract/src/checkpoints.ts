@@ -233,12 +233,42 @@ export const ErrandBody = z
   })
   .meta({ id: 'ErrandBody' })
 
-export const ErrandDoneBody = z.object({ note: z.string().optional() }).meta({ id: 'ErrandDoneBody' })
+export const ErrandDoneBody = z
+  .object({
+    note: z.string().optional(),
+    /** `not_needed`: the owner found it needless; the default is that his hands did it */
+    outcome: z.enum(['done', 'not_needed']).optional(),
+  })
+  .meta({ id: 'ErrandDoneBody' })
+
+export const ERRAND_HOSTS = ['macbook', 'iphone', 'portal', 'any'] as const
+export const ERRAND_CLOSED_KINDS = ['done', 'not_needed', 'expired', 'superseded', 'turned_away'] as const
+
+/** A request for the owner's hands that no Issue raised: what `ask-human.sh` posts. */
+export const ErrandRequestBody = z
+  .object({
+    /** what is asked, in the owner's words: the first line is the title */
+    text: z.string().optional(),
+    /** the command to run, shown to copy */
+    command: z.string().optional(),
+    /** a shell command that exits 0 while the request is still needed; the factory runs it every hour and closes the request when it exits 1..125 */
+    check: z.string().optional(),
+    /** `7d`, `36h`, `90m`, an ISO time or `never`; with no check and none given, 7 days */
+    expires: z.string().optional(),
+    /** a newer request with the same key replaces the open older one */
+    key: z.string().optional(),
+    /** where the hands must be; read from the text when absent */
+    where: z.enum(ERRAND_HOSTS).optional(),
+    /** who asks, a short name (`ask-human`) */
+    source: z.string().optional(),
+  })
+  .meta({ id: 'ErrandRequestBody' })
 
 export const ErrandView = z.object({
   id: z.string(),
-  issueId: z.string(),
-  attempt: z.number().int(),
+  /** null for a request no Issue raised */
+  issueId: z.string().nullable(),
+  attempt: z.number().int().nullable(),
   summary: z.string(),
   detail: z.string().nullable(),
   raisedAt: iso,
@@ -249,7 +279,50 @@ export const ErrandView = z.object({
   turnedAway: z.boolean(),
   /** the screen's reason: why it passed the Errand, or why it turned it away */
   screenNote: z.string().nullable(),
+  /** a request: who asked, the command to run, its check, where the hands must be, when it expires, its key */
+  source: z.string().nullable(),
+  command: z.string().nullable(),
+  check: z.string().nullable(),
+  host: z.enum(ERRAND_HOSTS).nullable(),
+  expiresAt: iso.nullable(),
+  requestKey: z.string().nullable(),
+  /** how it ended and who ended it; null while open */
+  closedKind: z.enum(ERRAND_CLOSED_KINDS).nullable(),
+  closedBy: z.enum(['owner', 'check', 'judge', 'loop', 'request']).nullable(),
+  /** the last run of its check or look of the still-needed workflow: what it said */
+  checkNote: z.string().nullable(),
 })
+
+/** What `factory errand request` answers: the Errand and the older open requests it replaced. */
+export const ErrandRequestReply = z
+  .object({ result: z.enum(['applied', 'replayed']), errand: ErrandView, superseded: z.array(z.string()) })
+  .meta({ id: 'ErrandRequestReply' })
+export type ErrandRequestReply = z.infer<typeof ErrandRequestReply>
+
+/** What the still-needed workflow is shown: a request nobody has checked, and the facts the factory holds about it (data, never instructions). */
+export const ErrandNeededRequest = z
+  .object({
+    errand: z.object({
+      id: z.string(),
+      source: z.string(),
+      summary: z.string().max(200),
+      detail: z.string().max(4000).nullable(),
+      command: z.string().max(2000).nullable(),
+      host: z.enum(ERRAND_HOSTS),
+      raisedAt: iso,
+      ageHours: z.number().int().min(0),
+    }),
+    /** scrubbed, bounded lines: the same source's other requests, open and lately closed, with how each ended */
+    evidence: z.string().max(4000),
+  })
+  .meta({ id: 'ErrandNeededRequest' })
+export type ErrandNeededRequest = z.infer<typeof ErrandNeededRequest>
+
+/** `not_needed` closes the request; `needed` and `unsure` keep it. Only `not_needed` needs a reason on which the owner can act. */
+export const ErrandNeededAnswer = z
+  .object({ verdict: z.enum(['needed', 'not_needed', 'unsure']), reason: z.string().trim().min(1).max(300) })
+  .meta({ id: 'ErrandNeededAnswer' })
+export type ErrandNeededAnswer = z.infer<typeof ErrandNeededAnswer>
 
 /** The Errand a `factory-errand` call is shown: the lead's own words, so data and never instructions. */
 export const ErrandScreenRequest = z

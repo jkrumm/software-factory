@@ -198,11 +198,16 @@ export function postgresIntakeStore(tx: SQL): IntakeStore {
       return rows.map(signalOf)
     },
 
-    async screenable(now, maxAttempts, limit) {
+    async screenable(now, maxAttempts, limit, finalAfterMs) {
+      const finalBefore = new Date(now.getTime() - finalAfterMs)
       const rows: Row[] = await tx`
         SELECT * FROM factory.intake_signals
-        WHERE state = 'held' AND screened_at IS NULL AND screen_attempts < ${maxAttempts}
-          AND (screen_retry_at IS NULL OR screen_retry_at <= ${now})
+        WHERE state = 'held' AND (screen_retry_at IS NULL OR screen_retry_at <= ${now})
+          AND (
+            (screened_at IS NULL AND screen_attempts < ${maxAttempts})
+            OR (received_at <= ${finalBefore}
+                AND (screened_at IS NULL OR screened_at < received_at + make_interval(secs => ${finalAfterMs / 1000})))
+          )
         ORDER BY received_at, id LIMIT ${limit}`
       return rows.map(signalOf)
     },

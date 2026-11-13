@@ -139,8 +139,11 @@ export interface IntakeStore {
     patch: { state: SignalState; issueId: IssueId | null; repo?: string | null; dismissal?: Dismissal },
   ): Promise<void>
   signals(state: SignalState | null, limit: number): Promise<SignalRow[]>
-  /** held signals not screened yet whose retry is due and whose failed calls are under `maxAttempts`, oldest first */
-  screenable(now: Date, maxAttempts: number, limit: number): Promise<SignalRow[]>
+  /**
+   * held signals whose retry is due, oldest first: those not screened yet with failed calls under `maxAttempts`, and those
+   * held `finalAfterMs` that have not been screened since they got that old (their failed calls are not capped)
+   */
+  screenable(now: Date, maxAttempts: number, limit: number, finalAfterMs: number): Promise<SignalRow[]>
   /** records a screening on a signal that is still held; false when it is not */
   setScreening(id: string, screening: Screening): Promise<boolean>
 
