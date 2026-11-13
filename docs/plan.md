@@ -28,6 +28,7 @@ rows:
     title: Document the paged export
     lane: docs
     after: [export-paging, intake]
+    after_needs: shipped
     after_days: 7
     not_before: 2026-12-01
     facts:
@@ -75,6 +76,7 @@ a broken plan.
 | `checkpoint` | `spec`: the row's lead owes a one-page Spec before it builds (a new public surface, a data model or a migration of meaning, a dependency of weight, an architecture or look-and-feel choice later Issues build on, a UI screen the owner has not seen). Its ship is refused until a Spec is submitted; with no verdict in 24 hours the lead goes on with the defaults the Spec names |
 | `repo` | The project the Issue is filed in; default: the project whose plan this is. A row may target another repo |
 | `after` | Rows that must be done first, in this file (`export-paging`) or another project's plan (`other-project:schema-change`). At most 20 per row (the most `issue new --after` accepts); a plan with more is broken. Drop edges already implied through other rows (a transitive reduction): if `c` waits for `b` and `b` for `a`, `c` needs no `after: [a]` |
+| `after_needs` | `closed` (the default: an `after` row releases the row when its Issue closes in any outcome) or `shipped`: every `after` row must have closed `done` or `healed`. An `after` row that closed `dropped` or `cancelled` then **holds** the row: it stays `waiting` with the reason `held: <row> (<Issue> closed <outcome>); …` and the planning pass files a Replan for the project (see Replan). Needs `after`; one value for all the row's `after` rows. For a chain whose next row needs what the previous one shipped |
 | `not_before` | A date (`2026-12-01`, midnight UTC) or a datetime (`2026-12-01T09:00:00Z`; with no offset it is UTC). The row is not filed before then |
 | `after_days` | Whole days, 1 to 365; needs `after`. The row also waits until that many days after the **latest close** among its `after` rows (any outcome, like `after`), so "delete v1 a week after the cutover" needs no date written in advance. The wait reason names the close and the end of the window; it combines with `not_before` (both must be past) |
 | `issue` | Adopts an Issue you filed by hand: its number (`149`). See below |
@@ -86,10 +88,10 @@ A row is in one of four states, derived on every read and never stored:
 
 | State | Meaning |
 |-|-|
-| `waiting` | An `after` row is not done, its `after_days` window has not run out, its `not_before` has not come, its `repo` is not a project the factory knows, or it is in a cycle. The reason says which |
+| `waiting` | An `after` row is not done (or, with `after_needs: shipped`, closed without shipping: the reason starts `held:`), its `after_days` window has not run out, its `not_before` has not come, its `repo` is not a project the factory knows, or it is in a cycle. The reason says which |
 | `filable` | No Issue yet, every `after` row done, its `after_days` window run out, its time come. The next planning pass files it |
 | `open` | It has an Issue that is not closed |
-| `done` | Its Issue is closed, whatever the outcome. A row whose Issue was dropped or stalled out still releases the rows that wait for it |
+| `done` | Its Issue is closed, whatever the outcome. A row whose Issue was dropped or cancelled still releases the rows that wait for it, unless such a row says `after_needs: shipped` |
 
 The planning loop runs on its own; `factory planning pass` runs one now. The Issue is filed with the row's `title`,
 `facts`, `kind` and `repo`, and the lead sees `Plan row <key>.` before the facts. A row is filed once: its Issue is
@@ -252,7 +254,9 @@ A Replan is an Issue (`Replan: <project>`) whose lead rereads the plan against t
 proposes changes as a Spec: new, changed or dropped rows, `after` edges to add or remove, Issues to cancel or re-file.
 Every non-obvious choice is a Decision raised before the Spec is submitted. The owner files it with
 `factory planning replan <project> [--ask "..."]`; the planning pass files one when a timed wait of
-`FACTORY_LONG_WAIT_MS` or more has Issues behind it. One is open per project at a time; asking again while it is open
+`FACTORY_LONG_WAIT_MS` or more has Issues behind it, and when a row with `after_needs: shipped` is held behind a
+dropped or cancelled row (trigger `held`: its note names each held row and the Issue holding it; one Replan covers
+every held row of the project, and a hold that was answered with "no plan change needed" files no second one). One is open per project at a time; asking again while it is open
 adds the words to it as a note. On a verdict of Looks good or With notes the lead edits `docs/plan.yaml` through the
 project's ship path and applies edge changes and cancellations with `factory issue replan <id> --attempt <n> --body '<json>'`. The server gates
 that verb: the Issue must be a Replan its lead works on (current attempt), its latest Spec revision must carry a Looks

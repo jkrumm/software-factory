@@ -77,6 +77,18 @@ export function readIssues(tx: SQL): IssueReads {
       )
     },
 
+    async outcomesOf(ids) {
+      if (ids.length === 0) return new Map()
+      const rows: unknown[] = await tx`
+        SELECT id, outcome FROM factory.issues WHERE state = 'closed' AND outcome IS NOT NULL AND id IN ${tx([...ids])}`
+      return new Map(
+        rows.map((raw) => {
+          const row = z.object({ id: z.string(), outcome: z.string() }).parse(raw)
+          return [idOf(row.id), row.outcome] as const
+        }),
+      )
+    },
+
     async closedAtOf(ids) {
       if (ids.length === 0) return new Map()
       const rows: unknown[] = await tx`

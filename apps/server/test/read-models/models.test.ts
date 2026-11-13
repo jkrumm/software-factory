@@ -353,6 +353,29 @@ describe('the fixture', () => {
     expect(byId('issue_1')?.issueKind).toBe('feature')
   })
 
+  test('chain: a row that needs its blocker shipped stays waiting behind a cancelled one, and a plain row is filable', async () => {
+    const [{ plan }] = await sql`SELECT plan FROM factory.planning_projects WHERE name = 'app'`
+    const original = typeof plan === 'string' ? JSON.parse(plan) : plan
+    const withHeld = {
+      ...original,
+      rows: [
+        ...original.rows,
+        { key: 'gone', issue: 9 },
+        { key: 'needs-gone', title: 'Needs it', facts: {}, after: ['gone'], after_needs: 'shipped' },
+        { key: 'any-gone', title: 'Any close', facts: {}, after: ['gone'] },
+      ],
+    }
+    await sql`UPDATE factory.planning_projects SET plan = ${json(withHeld)}::text::jsonb WHERE name = 'app'`
+    try {
+      const chain = ChainModel.parse(await readChain(sql, NOW))
+      const state = (id: string) => chain.nodes.find((n) => n.id === id)?.state
+      expect(state('row:app:needs-gone')).toBe('waiting')
+      expect(state('row:app:any-gone')).toBe('filable')
+    } finally {
+      await sql`UPDATE factory.planning_projects SET plan = ${json(original)}::text::jsonb WHERE name = 'app'`
+    }
+  })
+
   test('kpis over 7 days: each definition’s count, with the usage schema absent', async () => {
     const model = KpiModel.parse(await readKpis(sql, { now: NOW, days: 7 }))
     const by = Object.fromEntries(model.kpis.map((k) => [k.key, k]))

@@ -1,8 +1,16 @@
 import { cleanText } from '@software-factory/contract'
 import type { IssueId } from '../../kernel/ids.ts'
 
-export const REPLAN_TRIGGERS = ['owner', 'stalled'] as const
+export const REPLAN_TRIGGERS = ['owner', 'stalled', 'held'] as const
 export type ReplanTrigger = (typeof REPLAN_TRIGGERS)[number]
+
+/** A plan row held behind `after` rows that closed without shipping (`after_needs: shipped`), for a `held` Replan. */
+export interface HeldRow {
+  /** `project:key` */
+  row: string
+  /** the `after` rows that closed without shipping: `project:key`, Issue, outcome */
+  by: readonly { row: string; issue: string; outcome: string }[]
+}
 
 /** The chain head a stalled Replan was filed for: a timed wait with Issues behind it. */
 export interface StalledHead {
@@ -19,6 +27,8 @@ export interface ReplanInput {
   trigger: ReplanTrigger
   ask?: string | undefined
   stalled?: StalledHead | undefined
+  /** the rows a `held` Replan was filed for */
+  held?: readonly HeldRow[] | undefined
 }
 
 const ASK_MAX = 2000
@@ -72,5 +82,13 @@ export function replanNote(input: ReplanInput): string {
       `waiting behind it: ${head.held}`,
     )
   }
+  for (const held of input.held ?? [])
+    lines.push(
+      `held row: ${held.row} (after_needs shipped), held by ${held.by.map((b) => `${b.row} (${b.issue} closed ${b.outcome})`).join(', ')}`,
+    )
+  if (input.held?.length)
+    lines.push(
+      'held rows shipped nothing to build on: decide per row to re-file the dropped row, point the row at a replacement, remove the edge or set after_needs closed, or drop the row.',
+    )
   return [lines.join('\n'), PLAYBOOK].join('\n\n')
 }

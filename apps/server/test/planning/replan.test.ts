@@ -47,7 +47,17 @@ describe('replanNote', () => {
     expect(replanNote({ project: 'app', trigger: 'owner' }).length).toBeLessThan(4096)
   })
 
-  test('the triggers', () => expect([...REPLAN_TRIGGERS]).toEqual(['owner', 'stalled']))
+  test('the triggers', () => expect([...REPLAN_TRIGGERS]).toEqual(['owner', 'stalled', 'held']))
+
+  test('a held note names each held row and what holds it', () => {
+    const note = replanNote({
+      project: 'app',
+      trigger: 'held',
+      held: [{ row: 'app:b', by: [{ row: 'app:a', issue: 'issue_1', outcome: 'dropped' }] }],
+    })
+    expect(note).toContain('trigger: held')
+    expect(note).toContain('held row: app:b (after_needs shipped), held by app:a (issue_1 closed dropped)')
+  })
 })
 
 describe('outsideProject', () => {

@@ -15,6 +15,10 @@ export type PlanKind = (typeof PLAN_KINDS)[number]
 
 export const PLAN_VERSION = 1
 
+/** What an `after` row's close must be for the row to be released: `closed` (any outcome) or `shipped` (`done` or `healed`). */
+export const AFTER_NEEDS = ['closed', 'shipped'] as const
+export type AfterNeeds = (typeof AFTER_NEEDS)[number]
+
 export const PlanKey = z
   .string()
   .regex(/^[a-z0-9][a-z0-9-]*$/, 'a key like `docs-sweep`: lowercase letters, digits, dashes')
@@ -61,6 +65,8 @@ export const PlanRow = z
     repo: z.string().regex(PROJECT_NAME, 'a project name').optional(),
     /** rows that must be done first, in this file or in another project's plan */
     after: z.array(RowRef).optional(),
+    /** `shipped`: every `after` row must have shipped (closed `done` or `healed`); a dropped or cancelled one holds the row. Default `closed`: any close releases it (RS14) */
+    after_needs: z.enum(AFTER_NEEDS).optional(),
     not_before: NotBefore.optional(),
     /** whole days the row also waits after the latest close of its `after` rows; needs `after` */
     after_days: z.number().int().min(1).max(365).optional(),
@@ -74,6 +80,7 @@ export const PlanRow = z
     if (row.issue !== undefined) {
       for (const field of [
         'after',
+        'after_needs',
         'not_before',
         'after_days',
         'stable_days',
@@ -98,6 +105,11 @@ export const PlanRow = z
       ctx.addIssue({
         code: 'custom',
         message: `row ${row.key}: after_days counts from its after rows, so it needs after`,
+      })
+    if (row.after_needs !== undefined && afterCount === 0)
+      ctx.addIssue({
+        code: 'custom',
+        message: `row ${row.key}: after_needs judges its after rows, so it needs after`,
       })
     if (afterCount > PLAN_LIMITS.maxAfter)
       ctx.addIssue({

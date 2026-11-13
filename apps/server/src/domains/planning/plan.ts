@@ -22,6 +22,17 @@ export const MAX_PLAN_BYTES = PLAN_LIMITS.maxBytes
 export const ROW_STATES = ['done', 'open', 'filable', 'waiting'] as const
 export type RowState = (typeof ROW_STATES)[number]
 
+/** How an Issue closes when it shipped: what an `after_needs: shipped` row requires of every row it waits for. */
+export const SHIPPED_OUTCOMES: ReadonlySet<string> = new Set(['done', 'healed'])
+
+/** An `after` row that closed without shipping, and so holds a row that needs it shipped. */
+export interface HeldBy {
+  /** the `after` row, `project:key` */
+  row: string
+  issue: IssueId
+  outcome: string
+}
+
 /** One row as the factory sees it now (derived at read, never stored). */
 export interface RowStatus {
   project: string
@@ -33,6 +44,8 @@ export interface RowStatus {
   reason: string | null
   /** the project the row's Issue is filed in; null when the row names a project nobody knows */
   target: string | null
+  /** the `after` rows that closed without shipping, for a row with `after_needs: shipped`: it waits, `held`, until the plan changes */
+  heldBy: readonly HeldBy[]
 }
 
 /** A project's plan as stored. */
@@ -50,6 +63,8 @@ export interface PlanFacts {
   filed: ReadonlyMap<string, IssueId>
   /** the state of every Issue a row names */
   states: ReadonlyMap<IssueId, 'closed' | 'open'>
+  /** how each closed Issue a row names closed (`done`, `healed`, `dropped`, `cancelled`) */
+  outcomes: ReadonlyMap<IssueId, string>
   /** when each closed Issue a row names closed */
   closedAt: ReadonlyMap<IssueId, Date>
   now: Date
@@ -69,6 +84,8 @@ const resolveRef = (project: string, ref: string): string => (ref.includes(':') 
  * Every row of every plan with its state: `done` (its Issue is closed, whatever the outcome: a stopped row releases
  * what waits for it, RS14), `open` (it has an Issue that is not closed), `filable` (no Issue yet, every `after` row
  * done, its time come) or `waiting` with the reason. A row's Issue is the adopted `issue`, else the one filed for it.
+ * A row with `after_needs: shipped` is instead held (`waiting`, reason `held: …`, `heldBy` set) while any `after` row
+ * closed without shipping (`dropped`, `cancelled`): only a plan change, or that Issue reopening, releases it.
  * A cycle across plans (a row waiting, through other projects' rows, for itself) keeps every row in it waiting.
  */
 export function rowStatuses(facts: PlanFacts): RowStatus[] {
@@ -111,6 +128,17 @@ export function rowStatuses(facts: PlanFacts): RowStatus[] {
     const id = issueOf(ref)
     const target = row.repo ?? project
     const known = facts.projects.has(target)
+    const heldBy: HeldBy[] =
+      row.after_needs === 'shipped' && !id
+        ? (row.after ?? []).flatMap((on) => {
+            const ref = resolveRef(project, on)
+            const dep = issueOf(ref)
+            const outcome = dep ? facts.outcomes.get(dep) : undefined
+            return dep && outcome !== undefined && !SHIPPED_OUTCOMES.has(outcome)
+              ? [{ row: ref, issue: dep, outcome }]
+              : []
+          })
+        : []
     const status = (state: RowState, reason: string | null = null): RowStatus => ({
       project,
       key: row.key,
@@ -118,6 +146,7 @@ export function rowStatuses(facts: PlanFacts): RowStatus[] {
       issue: id,
       reason,
       target: known ? target : null,
+      heldBy: state === 'waiting' ? heldBy : [],
     })
     if (doneRows.has(ref)) {
       out.push(status('done'))
@@ -133,7 +162,9 @@ export function rowStatuses(facts: PlanFacts): RowStatus[] {
     }
     const unmet = (row.after ?? []).map((on) => resolveRef(project, on)).filter((on) => !doneRows.has(on))
     let reason: string | null = null
-    if (unmet.length > 0) {
+    if (heldBy.length > 0) {
+      reason = `held: ${heldBy.map((h) => `${h.row} (${h.issue} closed ${h.outcome})`).join(', ')}; after_needs shipped, so the row waits for a plan change`
+    } else if (unmet.length > 0) {
       reason = `after ${unmet.map((on) => (rows.has(on) ? on : `${on} (no such row)`)).join(', ')}`
     } else if (
       row.after_days !== undefined &&
