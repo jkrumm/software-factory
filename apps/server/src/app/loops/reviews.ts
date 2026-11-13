@@ -36,7 +36,7 @@ type Out<T> = Promise<Result<T, PortError>>
 
 /**
  * One pass of the `reviews` loop: every Issue that waits on a pull request's review is looked at through `gh` (GitHub) or
- * `glab` (GitLab), outside any transaction, in the repo's checkout. An approval, a request for changes, a merge, a close, or
+ * `glab` (the merge-request host), outside any transaction, in the repo's checkout. An approval, a request for changes, a merge, a close, or
  * a review or comment by someone else that the first look did not see ends the wait with `woken`; the lead hears what
  * happened. A look that fails changes nothing and is named in the pass. The wake is named by the wait's `since` and keyed by
  * it, so a replayed pass wakes once.

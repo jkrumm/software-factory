@@ -1,7 +1,7 @@
 import type { PortError, Result } from '../../kernel/result.ts'
 
 /**
- * A pull request (GitHub) or merge request (GitLab) as the `reviews` loop reads it: whether it is still open, what the
+ * A pull request or merge request as the `reviews` loop reads it: whether it is still open, what the
  * reviewers decided, and how many reviews and comments others than its author made.
  */
 export interface PrLook {

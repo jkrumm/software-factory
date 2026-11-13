@@ -3,3 +3,4 @@ apps/door/test/door.test.ts secret  # a made-up bearer proving the door refuses 
 apps/server/test/checkpoints/domain.test.ts ipv4  # a private address the owner's-line redaction must turn into [host]
 scripts/public-scan.ts *  # the rules themselves name what they forbid
 scripts/test/public-scan.test.ts *  # the fixtures that prove each rule is caught
+apps/server/src/adapters/reviews/pr.ts work-repo  # the review poll must recognise a merge-request host by its remote URL

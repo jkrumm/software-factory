@@ -18,8 +18,8 @@ const GithubPr = z.looseObject({
   comments: z.array(z.looseObject({ author: Person.nullish() })).default([]),
 })
 
-/** `glab mr view -F json`: the merge request as GitLab's API has it. Approvals are read where the output carries them. */
-const GitlabMr = z.looseObject({
+/** `glab mr view -F json`: the merge request as the host's API has it. Approvals are read where the output carries them. */
+const MergeRequest = z.looseObject({
   state: z.string(),
   author: Person.nullish(),
   user_notes_count: z.number().int().nullish(),
@@ -52,8 +52,8 @@ function githubLook(raw: unknown): PrLook | null {
   return { state, decision, others: reviews.length + byOthers(pr.comments).length }
 }
 
-function gitlabLook(raw: unknown): PrLook | null {
-  const parsed = GitlabMr.safeParse(raw)
+function mergeRequestLook(raw: unknown): PrLook | null {
+  const parsed = MergeRequest.safeParse(raw)
   if (!parsed.success) return null
   const mr = parsed.data
   const state = mr.state === 'merged' ? 'merged' : mr.state === 'closed' ? 'closed' : 'open'
@@ -71,7 +71,7 @@ export interface PrReviewOptions {
 }
 
 /**
- * The review poll's reads, through the host's own tools: `gh pr view` for GitHub, `glab mr view` for GitLab, run in the
+ * The review poll's reads, through the host's own tools: `gh pr view` for GitHub, `glab mr view` for merge requests, run in the
  * repo's checkout so the repo and its account come from the checkout. Reads only. A tool that is missing, fails or answers
  * with something else is an error result naming it, never a wake.
  */
@@ -86,7 +86,7 @@ export function prReview(options: PrReviewOptions = {}): ReviewPort {
   return {
     async look({ cwd, ref, work }): Promise<Result<PrLook, PortError>> {
       const named = /^https?:\/\//.test(ref) ? ref : null
-      const gitlab =
+      const mergeRequest =
         named !== null
           ? /\/-\/merge_requests\/|gitlab/i.test(named)
           : cwd !== null && /gitlab/i.test(await remoteOf(cwd))
@@ -96,12 +96,14 @@ export function prReview(options: PrReviewOptions = {}): ReviewPort {
       const target = named ?? prNumber(ref)
       // a ref the tool would read as a flag is never passed on
       if (target.startsWith('-')) return err(portError('refused', `${ref} is not a pull request`))
-      const command = gitlab
+      const command = mergeRequest
         ? ['glab', 'mr', 'view', target, '-F', 'json']
         : ['gh', 'pr', 'view', target, '--json', 'state,reviewDecision,reviews,comments,author']
       // a URL names its repo; a bare number is the checkout's
       const where = cwd === null ? command : ['sh', '-c', 'cd "$1" && shift && exec "$@"', 'sh', cwd, ...command]
-      const env = childEnv(!gitlab && work && options.workGhConfigDir ? { GH_CONFIG_DIR: options.workGhConfigDir } : {})
+      const env = childEnv(
+        !mergeRequest && work && options.workGhConfigDir ? { GH_CONFIG_DIR: options.workGhConfigDir } : {},
+      )
       let done
       try {
         done = await run(where, TIMEOUT_MS, { env })
@@ -116,7 +118,7 @@ export function prReview(options: PrReviewOptions = {}): ReviewPort {
       } catch {
         return err(portError('unreadable', `${command[0]} did not answer with JSON for ${target}`))
       }
-      const look = gitlab ? gitlabLook(raw) : githubLook(raw)
+      const look = mergeRequest ? mergeRequestLook(raw) : githubLook(raw)
       return look
         ? ok(look)
         : err(portError('unreadable', `${command[0]} answered with an unexpected body for ${target}`))
