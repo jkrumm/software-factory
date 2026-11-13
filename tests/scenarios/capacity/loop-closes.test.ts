@@ -50,12 +50,12 @@ test('lead samples written by the host loop, under the project name, are what ad
   expect(await sql()`SELECT DISTINCT repo FROM factory.lead_samples`).toEqual([{ repo: 'heavy' }])
   expect((await sql()`SELECT count(DISTINCT worktree)::int AS n FROM factory.lead_samples`)[0]?.n).toBe(3)
 
-  // the processes are gone; 32 GiB host, 5 % in use
+  // the processes are gone; 32 GiB host, 50 % in use
   await setProcesses(lab.world.bin, [])
   await sql()`DELETE FROM factory.host_samples`
   await sql()`
     INSERT INTO factory.host_samples (at, load, memory_used_pct, swap_used_pct, swapout_mb_per_300s)
-    VALUES (now(), 1, 5, 10, 0)`
+    VALUES (now(), 1, 50, 10, 0)`
 
   const file = async (title: string) => {
     const issue = await lab.file('heavy', title)

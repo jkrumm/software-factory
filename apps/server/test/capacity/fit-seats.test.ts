@@ -1,7 +1,6 @@
 import { describe, expect, test } from 'bun:test'
 import { type AdmissionInputs, checkAdmission, type LeadFit } from '../../src/domains/capacity/admission.ts'
 import { freeMibOf, headroomMib } from '../../src/domains/capacity/costs.ts'
-import { leadGrowthMib } from '../../src/domains/capacity/leadcost.ts'
 import { type SeatInputs, seatBonus } from '../../src/domains/capacity/seats.ts'
 
 const now = new Date('2026-11-07T12:00:00Z')
@@ -41,7 +40,6 @@ const fit = (extra: Partial<LeadFit> = {}): LeadFit => ({
   candidateMib: 18_000,
   attempts: 5,
   freeMib: 30_000,
-  growthMib: 0,
   headroomMib: 2_621,
   running: 1,
   ...extra,
@@ -49,13 +47,17 @@ const fit = (extra: Partial<LeadFit> = {}): LeadFit => ({
 
 describe('the learned fit rule', () => {
   const cases: { name: string; fit: LeadFit | null; refused: boolean }[] = [
-    { name: 'a heavy lead that does not fit beside the running ones', fit: fit({ growthMib: 14_000 }), refused: true },
+    {
+      name: 'a heavy lead that does not fit beside the running ones',
+      fit: fit({ candidateMib: 28_000 }),
+      refused: true,
+    },
     { name: 'a heavy lead that fits', fit: fit(), refused: false },
-    { name: 'a small repo beside a heavy lead', fit: fit({ candidateMib: 600, growthMib: 14_000 }), refused: false },
-    { name: 'an unknown learned cost', fit: fit({ candidateMib: null, growthMib: 99_000 }), refused: false },
-    { name: 'an unknown free memory', fit: fit({ freeMib: null, growthMib: 99_000 }), refused: false },
+    { name: 'a small repo beside a heavy lead', fit: fit({ candidateMib: 600, freeMib: 4_000 }), refused: false },
+    { name: 'an unknown learned cost', fit: fit({ candidateMib: null, freeMib: 1_000 }), refused: false },
+    { name: 'an unknown free memory', fit: fit({ freeMib: null }), refused: false },
     { name: 'a lone lead on a host with little free', fit: fit({ freeMib: 1_000, running: 0 }), refused: false },
-    { name: 'a running lead with nothing to grow', fit: fit({ freeMib: 1_000, running: 1 }), refused: true },
+    { name: 'a running lead and little free memory', fit: fit({ freeMib: 1_000, running: 1 }), refused: true },
     { name: 'no fit given', fit: null, refused: false },
   ]
   for (const c of cases) {
@@ -67,25 +69,25 @@ describe('the learned fit rule', () => {
   }
 
   test('the refusal names the numbers', () => {
-    const verdict = checkAdmission(inputs({ leadFit: fit({ growthMib: 14_336, freeMib: 24_576 }) }))
+    const verdict = checkAdmission(inputs({ leadFit: fit({ candidateMib: 18_000, freeMib: 18_432 }) }))
     expect(verdict).toMatchObject({
       admit: false,
       refusal: {
         kind: 'memory',
         message:
-          'memory: a lead of heavy takes ~17.6 GiB (p80 of 5 past leads), the host has 24 GiB free after 14 GiB the running leads will still grow, headroom 2.6 GiB',
+          'memory: a lead of heavy takes ~17.6 GiB (p80 of 5 past leads), the host has 18 GiB free, headroom 2.6 GiB',
       },
     })
   })
 
   test('the fit comes after the swap ceilings and before the lane', () => {
     const swap = checkAdmission(
-      inputs({ leadFit: fit({ growthMib: 14_000 }), memory: { swapoutMbPer300s: 0, swapUsedPct: 90 } }),
+      inputs({ leadFit: fit({ candidateMib: 28_000 }), memory: { swapoutMbPer300s: 0, swapUsedPct: 90 } }),
     )
     expect(swap).toMatchObject({ admit: false, refusal: { message: expect.stringContaining('short of memory') } })
     const lane = checkAdmission(
       inputs({
-        leadFit: fit({ growthMib: 14_000 }),
+        leadFit: fit({ candidateMib: 28_000 }),
         lane: { name: 'apple', cap: 1, holders: ['issue_9' as never] },
       }),
     )
@@ -104,71 +106,36 @@ describe('the learned fit rule', () => {
   })
 })
 
-describe('growth of the running leads', () => {
-  test('learned less what each holds now, never negative; unlearned adds nothing', () => {
-    expect(
-      leadGrowthMib(
-        [
-          { learnedMib: 18_000, currentMib: 4_000 },
-          { learnedMib: 2_000, currentMib: 3_000 },
-          { learnedMib: null, currentMib: 500 },
-          { learnedMib: 1_000, currentMib: 0 },
-        ],
-        4,
-      ),
-    ).toBe(15_000)
-    expect(leadGrowthMib([], 2)).toBe(0)
+describe('admission on a busy but idle host (6 leads running, test peaks are held back by the slot grant)', () => {
+  const candidate = (repo: string, candidateMib: number, memory = { swapoutMbPer300s: 0, swapUsedPct: 10 }) =>
+    checkAdmission(
+      inputs({ memory, leadFit: fit({ repo, candidateMib, freeMib: 7_168, headroomMib: 2_662, running: 6 }) }),
+    )
+
+  test('a dotfiles and a software-factory lead are admitted on memory', () => {
+    expect(candidate('dotfiles', 717).admit).toBe(true)
+    expect(candidate('software-factory', 1_536).admit).toBe(true)
   })
 
-  test('only as many of the largest gaps as can peak at once are summed', () => {
-    const leads = [100, 900, 300, 700, 500, 200, 800].map((gap) => ({ learnedMib: gap + 50, currentMib: 50 }))
-    expect(leadGrowthMib(leads, 2)).toBe(1_700)
-    expect(leadGrowthMib(leads, 7)).toBe(3_500)
-    expect(leadGrowthMib(leads, 99)).toBe(3_500)
-    expect(leadGrowthMib(leads, 0)).toBe(900)
-  })
-
-  describe('admission on a busy but idle host (7 leads, 2 test slots)', () => {
-    const gib = (n: number) => Math.round(n * 1_024)
-    const running = [
-      ...Array.from({ length: 4 }, () => ({ learnedMib: gib(3.6), currentMib: gib(0.5) })),
-      ...Array.from({ length: 2 }, () => ({ learnedMib: gib(0.7), currentMib: gib(0.3) })),
-      { learnedMib: gib(1.5), currentMib: gib(0.5) },
-    ]
-    const candidate = (name: string, mib: number, memory = { swapoutMbPer300s: 0, swapUsedPct: 10 }) =>
-      checkAdmission(
-        inputs({
-          memory,
-          leadFit: fit({
-            repo: name,
-            candidateMib: gib(mib),
-            freeMib: gib(12.8),
-            growthMib: leadGrowthMib(running, 2),
-            headroomMib: headroomMib(32_768),
-            running: running.length,
-          }),
-        }),
-      )
-
-    test('a dotfiles and a software-factory lead are admitted on memory', () => {
-      expect(candidate('dotfiles', 0.7).admit).toBe(true)
-      expect(candidate('software-factory', 1.2).admit).toBe(true)
-    })
-
-    test('counting every peak at once would have refused', () => {
-      const all = checkAdmission(
-        inputs({ leadFit: fit({ candidateMib: gib(0.7), freeMib: gib(12.8), growthMib: leadGrowthMib(running, 7) }) }),
-      )
-      expect(all.admit).toBe(false)
-    })
-
-    test('swapout over its ceiling still refuses', () => {
-      const verdict = candidate('dotfiles', 0.7, { swapoutMbPer300s: 3_000, swapUsedPct: 10 })
-      expect(verdict).toMatchObject({ admit: false, refusal: { message: expect.stringContaining('short of memory') } })
+  test('a lead that does not fit the free memory less headroom is refused with the numbers', () => {
+    expect(candidate('weatherorb', 6_334)).toMatchObject({
+      admit: false,
+      refusal: {
+        kind: 'memory',
+        message:
+          'memory: a lead of weatherorb takes ~6.2 GiB (p80 of 5 past leads), the host has 7 GiB free, headroom 2.6 GiB',
+      },
     })
   })
 
-  test('free memory and headroom from the newest sample', () => {
+  test('swapout over its ceiling still refuses', () => {
+    const verdict = candidate('dotfiles', 717, { swapoutMbPer300s: 3_000, swapUsedPct: 10 })
+    expect(verdict).toMatchObject({ admit: false, refusal: { message: expect.stringContaining('short of memory') } })
+  })
+})
+
+describe('free memory and headroom', () => {
+  test('from the newest sample', () => {
     const at = new Date(now.getTime() - 60_000)
     expect(freeMibOf({ at, memoryUsedPct: 50 }, 32_768, now)).toBe(16_384)
     expect(freeMibOf({ at: new Date(now.getTime() - 301_000), memoryUsedPct: 50 }, 32_768, now)).toBeNull()
