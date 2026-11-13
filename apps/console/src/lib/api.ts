@@ -159,8 +159,12 @@ export const giveVerdict = (id: string, verdict: string, note: string) =>
   postJson(`/v1/artifacts/${encodeURIComponent(id)}/verdict`, { verdict, ...(note ? { note } : {}) }, ArtifactReply)
 export const annotateArtifact = (id: string, quote: string, comment: string) =>
   postJson(`/v1/artifacts/${encodeURIComponent(id)}/annotations`, { quote, comment, author: 'owner' }, ArtifactReply)
-export const finishErrand = (id: string, note: string) =>
-  postJson(`/v1/errands/${encodeURIComponent(id)}/done`, note ? { note } : {}, ErrandReply)
+export const finishErrand = (id: string, note: string, outcome: 'done' | 'not_needed' = 'done') =>
+  postJson(
+    `/v1/errands/${encodeURIComponent(id)}/done`,
+    { ...(note ? { note } : {}), ...(outcome === 'not_needed' ? { outcome } : {}) },
+    ErrandReply,
+  )
 export const promoteSignal = (id: string, repo: string | null) =>
   postJson(`/signals/${encodeURIComponent(id)}/promote`, repo ? { repo } : {}, SignalAck)
 

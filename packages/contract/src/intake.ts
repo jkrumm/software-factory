@@ -346,6 +346,8 @@ export const ScreenRequest = z
     openIssues: z.array(z.object({ id: z.string(), title: z.string(), kind: z.string(), state: z.string() })).max(40),
     /** the names of the projects the factory knows that are not work repos */
     projects: z.array(z.string()).max(60),
+    /** the signal has been held 72 hours and was screened before: this is the last look, and `promote` or `dismiss` is wanted, not `leave` */
+    final: z.boolean().optional(),
   })
   .meta({ id: 'ScreenRequest' })
 export type ScreenRequest = z.infer<typeof ScreenRequest>

@@ -93,6 +93,17 @@ export async function readSince(sql: SQL, options: { now: Date; since: Date; red
     ) x ORDER BY x.at DESC, x.issue_id DESC NULLS LAST LIMIT ${SINCE_ITEMS}`,
   )
 
+  // A request closed without the owner: the title says how, so the band reads on its own ("Re-seal the cache (no longer needed)").
+  const closedErrands = parse(
+    await sql`
+    SELECT NULL::text AS issue_id, NULL::text AS repo, e.summary || ' (' ||
+        CASE e.closed_kind WHEN 'expired' THEN 'expired' WHEN 'superseded' THEN 'replaced by a newer request' ELSE 'no longer needed' END || ')' AS title,
+      e.done_at AS at, count(*) OVER () AS total
+    FROM factory.errands e
+    WHERE e.issue_id IS NULL AND e.done_at > ${since} AND e.closed_by IN ('check', 'judge', 'loop', 'request')
+    ORDER BY e.done_at DESC, e.id DESC LIMIT ${SINCE_ITEMS}`,
+  )
+
   const filedRows = await eventRows(sql, since, 'filed', null)
   const byOrigin = z.array(z.object({ origin: z.string(), n: z.coerce.number().int() })).parse(
     await sql`
@@ -130,6 +141,7 @@ export async function readSince(sql: SQL, options: { now: Date; since: Date; red
       dropped: category(await eventRows(sql, since, 'closed', 'dropped')),
       judge: category(decisions),
       screen: category(screened),
+      errands: category(closedErrands),
       filed,
       incidents: category(incidents),
     },

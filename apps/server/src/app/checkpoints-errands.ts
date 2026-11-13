@@ -8,8 +8,9 @@ import {
 } from '../domains/checkpoints/errand.ts'
 import { deepLink, errandPage } from '../domains/checkpoints/page.ts'
 import type { ErrandRecord } from '../domains/checkpoints/ports.ts'
+import type { IssueId } from '../kernel/ids.ts'
 import { key } from '../kernel/keys.ts'
-import { ok, type PortError, type Result } from '../kernel/result.ts'
+import { err, ok, type PortError, type Result } from '../kernel/result.ts'
 import { applied, type CheckpointError, type CheckpointStores, issueOf, waitingOn } from './checkpoints.ts'
 import { PASS_LIMIT, type SettleDeps } from './checkpoints-settle.ts'
 import { recordIn } from './issues.ts'
@@ -36,13 +37,16 @@ async function openUnder(
   stores: CheckpointStores,
   deps: SettleDeps,
   id: ErrandId,
-): Promise<{ errand: ErrandRecord; title: string; repo: string; kind: string } | 'dropped' | 'finished'> {
+): Promise<
+  { errand: ErrandRecord; issueId: IssueId; title: string; repo: string; kind: string } | 'dropped' | 'finished'
+> {
   const { work, checkpoints } = stores
   const errand = await checkpoints.lockErrand(id)
-  if (!errand || errand.doneAt || errand.reachedOwnerAt) return 'dropped'
+  // a standalone Errand (no Issue) is never screened: it reached the owner at intake
+  if (!errand || errand.doneAt || errand.reachedOwnerAt || !errand.issueId) return 'dropped'
   const issue = await issueOf(work, errand.issueId)
   if (issue && waitingOn(issue, 'errand', errand.id)) {
-    return { errand, title: issue.title, repo: issue.repo, kind: issue.kind }
+    return { errand, issueId: errand.issueId, title: issue.title, repo: issue.repo, kind: issue.kind }
   }
   const at = deps.clock.now()
   await checkpoints.finishErrand(errand.id, at, 'the Issue no longer waits for it')
@@ -54,7 +58,7 @@ async function openUnder(
 async function reachOwner(
   stores: CheckpointStores,
   deps: SettleDeps,
-  found: { errand: ErrandRecord; repo: string },
+  found: { errand: ErrandRecord; issueId: IssueId; repo: string },
   by: 'judge' | 'failed',
   note: string,
 ): Promise<void> {
@@ -63,7 +67,7 @@ async function reachOwner(
   await stores.checkpoints.reachOwner(errand.id, { at, by, note, tries: errand.screenTries })
   await stores.checkpoints.planPage(
     errandPage({
-      issue: { id: errand.issueId, repo: found.repo },
+      issue: { id: found.issueId, repo: found.repo },
       link: deepLink(deps.consoleUrl, errand.id),
       errand: errand.id,
       summary: errand.summary,
@@ -80,10 +84,12 @@ export async function turnAway(
   by: 'rule' | 'judge',
   reason: string,
 ): Promise<Result<null, CheckpointError>> {
+  const { issueId } = errand
+  if (!issueId) return err({ kind: 'invalid', detail: 'a request no Issue raised has no lead to turn away' })
   const at = deps.clock.now()
   const recorded = applied(
     await recordIn(stores.work, deps, {
-      issueId: errand.issueId,
+      issueId,
       key: key('errand_done', errand.id),
       event: {
         kind: 'errand_done',
@@ -156,7 +162,7 @@ async function screenErrand(deps: SettleDeps, id: ErrandId): Step<ErrandScreened
       errand,
       request: {
         errand: { id: errand.id, summary: errand.summary, detail: errand.detail },
-        issue: { id: errand.issueId, repo: found.repo, title: found.title, kind: found.kind },
+        issue: { id: found.issueId, repo: found.repo, title: found.title, kind: found.kind },
       },
     })
   })

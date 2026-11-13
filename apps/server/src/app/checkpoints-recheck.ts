@@ -128,7 +128,7 @@ async function lookErrand(deps: SettleDeps, seen: Seen, errand: ErrandRecord): P
         summary: errand.summary,
         detail: recheckErrandDetail(errand.detail, eventLines(events, 2800), deps.recheckAfterMs),
       },
-      issue: { id: errand.issueId, repo: issue.repo, title: issue.title, kind: issue.kind },
+      issue: { id: issue.id, repo: issue.repo, title: issue.title, kind: issue.kind },
     },
     seen: issue.version,
   }
@@ -145,7 +145,7 @@ async function lockedAtOwner(
     return decision.steps.find((step) => step.step === 'owner')?.outcome === 'open' ? { decision } : null
   }
   const errand = await checkpoints.lockErrand(candidate.id as ErrandId)
-  return errand && !errand.doneAt && errand.reachedOwnerAt ? { errand } : null
+  return errand?.issueId && !errand.doneAt && errand.reachedOwnerAt ? { errand } : null
 }
 
 /**
@@ -256,7 +256,7 @@ async function recordErrand(
     if (!fresh || fresh.doneAt || !fresh.reachedOwnerAt) return ok('dropped')
     const found = await issueAndLog(stores, candidate)
     if (!unmoved(found?.issue, seen)) return ok('dropped')
-    const base = { checkpointId: errand.id, kind: 'errand', issueId: errand.issueId, throughVersion: seen } as const
+    const base = { checkpointId: errand.id, kind: 'errand', issueId: candidate.issueId, throughVersion: seen } as const
 
     if (!answer.ok) {
       await record(stores, deps, {

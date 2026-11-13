@@ -1,6 +1,7 @@
 import type { SQL } from 'bun'
 import * as z from 'zod'
 import type { NeedItem, NeedKind, NeedsModel } from '@software-factory/contract'
+import { hostOf } from '../kernel/hands.ts'
 import { readLongWaits } from './long-waits.ts'
 import { DEFAULT_LONG_WAIT_MS } from './needs-settings.ts'
 import { plain } from './words.ts'
@@ -31,6 +32,7 @@ export function needsModel(needs: ScopedNeeds, options: { redact: boolean }): Ne
       title: hide ? REDACTED_TITLE : item.title,
       summary: hide ? REDACTED_SUMMARY : item.summary,
       judge: hide ? null : item.judge,
+      command: hide ? null : item.command,
       sourceLink: hide ? null : item.sourceLink,
       redacted: hide,
     }
@@ -87,13 +89,16 @@ const ReviewRow = z.object({
 
 const ErrandRow = z.object({
   id: z.string(),
-  issue_id: z.string(),
-  repo: z.string(),
+  issue_id: z.string().nullable(),
+  repo: z.string().nullable(),
   summary: z.string(),
   detail: z.string().nullable(),
   raised_at: z.date(),
   screen_note: z.string().nullable(),
   origin: z.string().nullable(),
+  source: z.string().nullable(),
+  command: z.string().nullable(),
+  host: z.enum(['macbook', 'iphone', 'portal', 'any']).nullable(),
 })
 
 const SignalRow = z.object({
@@ -111,12 +116,16 @@ const SignalRow = z.object({
 
 /**
  * Everything that waits on the owner, newest first within a kind: Decisions that reached him (the owner's step is open),
- * Concepts and Specs under review, open Errands of Issues still open, held signals, and the long timed waits other Issues
- * wait behind (`longWaitMs` and up). Read-only SQL.
+ * Concepts and Specs under review, open Errands (a lead's, whose Issue is still open, and requests no Issue raised), held
+ * signals, and the long timed waits other Issues wait behind (`longWaitMs` and up) whose time has passed. Read-only SQL.
  */
 export async function readNeeds(sql: SQL, now: Date, options: { longWaitMs?: number } = {}): Promise<ScopedNeeds> {
   const open = await loadOpenProjects(sql)
-  const longWaits = await readLongWaits(sql, options.longWaitMs ?? DEFAULT_LONG_WAIT_MS)
+  // A timer that is still running is information, not a request: Flow shows the waiting Issue. It reaches the owner only once
+  // its time has passed and the Issue is still not awake.
+  const longWaits = (await readLongWaits(sql, options.longWaitMs ?? DEFAULT_LONG_WAIT_MS)).filter(
+    (wait) => Date.parse(wait.until) <= now.getTime(),
+  )
 
   const decisions: unknown[] = await sql`
     SELECT d.id, d.issue_id, d.repo, d.question, d.artifact_id, d.recommendation, d.asked_at, d.no_answer,
@@ -153,10 +162,10 @@ export async function readNeeds(sql: SQL, now: Date, options: { longWaitMs?: num
     ) reviews
     ORDER BY at DESC, issue_id DESC`
   const errands: unknown[] = await sql`
-    SELECT r.id, r.issue_id, i.repo, r.summary, r.detail, r.raised_at, r.screen_note,
+    SELECT r.id, r.issue_id, i.repo, r.summary, r.detail, r.raised_at, r.screen_note, r.source, r.command, r.host,
       (SELECT f.payload->>'origin' FROM factory.issue_events f WHERE f.issue_id = r.issue_id AND f.kind = 'filed' AND f.version = 1) AS origin
-    FROM factory.errands r JOIN factory.issues i ON i.id = r.issue_id
-    WHERE r.done_at IS NULL AND r.reached_owner_at IS NOT NULL AND i.state <> 'closed'
+    FROM factory.errands r LEFT JOIN factory.issues i ON i.id = r.issue_id
+    WHERE r.done_at IS NULL AND r.reached_owner_at IS NOT NULL AND (r.issue_id IS NULL OR i.state <> 'closed')
     ORDER BY r.raised_at DESC, r.id DESC`
   const signals: unknown[] = await sql`
     SELECT id, repo, title, text, received_at, issue_id, screen_note, origin, source, link
@@ -187,6 +196,8 @@ export async function readNeeds(sql: SQL, now: Date, options: { longWaitMs?: num
         artifact: row.artifact_id,
         origin: row.origin,
         source: null,
+        command: null,
+        host: null,
         sourceLink: null,
         wait: null,
         work: isWorkRepo(row.repo, open),
@@ -209,6 +220,8 @@ export async function readNeeds(sql: SQL, now: Date, options: { longWaitMs?: num
         artifact: null,
         origin: row.origin,
         source: null,
+        command: null,
+        host: null,
         sourceLink: null,
         wait: null,
         work: isWorkRepo(row.repo, open),
@@ -229,10 +242,14 @@ export async function readNeeds(sql: SQL, now: Date, options: { longWaitMs?: num
         link: { type: 'errand', id: row.id },
         artifact: null,
         origin: row.origin,
-        source: null,
+        source: row.source,
+        command: row.command,
+        // a lead's Errand names no host: it is read from its words, as a request's is at intake
+        host: row.host ?? hostOf(`${row.summary}\n${row.detail ?? ''}`),
         sourceLink: null,
         wait: null,
-        work: isWorkRepo(row.repo, open),
+        // a request no Issue raised names no repo, so it may be about a work repo: the read token never sees its words
+        work: row.repo === null || isWorkRepo(row.repo, open),
       }
     }),
     ...signals.map((raw): ScopedNeed => {
@@ -251,6 +268,8 @@ export async function readNeeds(sql: SQL, now: Date, options: { longWaitMs?: num
         artifact: null,
         origin: row.origin,
         source: sourceWords(row.source, row.origin),
+        command: null,
+        host: null,
         sourceLink: row.link,
         wait: null,
         work: isWorkRepo(row.repo, open),
@@ -270,6 +289,8 @@ export async function readNeeds(sql: SQL, now: Date, options: { longWaitMs?: num
       artifact: null,
       origin: wait.origin,
       source: null,
+      command: null,
+      host: null,
       sourceLink: null,
       wait: { reason: 'timer', until: wait.until, held: wait.held },
       work: isWorkRepo(wait.repo, open),

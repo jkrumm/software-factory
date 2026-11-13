@@ -38,8 +38,11 @@ export const NeedItem = z
     artifact: z.string().nullable(),
     /** where it came from, in the words of `SIGNAL_ORIGINS`: a held signal's own origin, else the Issue's; null when unknown */
     origin: z.string().nullable(),
-    /** a held signal's source in a person's word (never a tool name); null for everything else */
+    /** a held signal's source in a person's word (never a tool name); a request's asker (`ask-human`); null for everything else */
     source: z.string().nullable(),
+    /** a request's command to copy, and where the hands must be; null for everything else and for a work-repo item the caller may not read */
+    command: z.string().nullable(),
+    host: z.enum(['macbook', 'iphone', 'portal', 'any']).nullable(),
     /** a held signal's link to the thing it is about; null for everything else and for a work-repo item the caller may not read */
     sourceLink: z.string().nullable(),
     /** a long wait: why the Issue waits, when it ends and how many open Issues wait behind it; null for everything else */
@@ -661,6 +664,8 @@ export const SinceModel = z
       judge: SinceCategory,
       /** signals the Judge turned away and Errands screened off */
       screen: SinceCategory,
+      /** requests for the owner's hands that closed without him: their check said no, they expired, a newer request replaced them, or the still-needed look found them needless */
+      errands: SinceCategory,
       filed: SinceFiled,
       /** incidents opened */
       incidents: SinceCategory,

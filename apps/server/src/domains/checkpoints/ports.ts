@@ -1,4 +1,9 @@
-import type { ErrandScreenAnswer, ErrandScreenRequest } from '@software-factory/contract'
+import type {
+  ErrandNeededAnswer,
+  ErrandNeededRequest,
+  ErrandScreenAnswer,
+  ErrandScreenRequest,
+} from '@software-factory/contract'
 import type { IssueId } from '../../kernel/ids.ts'
 import type { Key } from '../../kernel/keys.ts'
 import type { PortError, Result } from '../../kernel/result.ts'
@@ -14,6 +19,7 @@ import type {
   StepName,
 } from './decision.ts'
 import type { ErrandId } from './errand.ts'
+import type { CheckRun, Host } from './request.ts'
 import type { Page } from './page.ts'
 import type { Recheck, RecheckCandidate, ReviewWait } from './recheck.ts'
 
@@ -122,8 +128,9 @@ export interface VerdictRecord {
 export interface ErrandRecord {
   id: ErrandId
   key: Key
-  issueId: IssueId
-  attempt: number
+  /** null for a standalone Errand: a request nobody's Issue raised (`request.ts`) */
+  issueId: IssueId | null
+  attempt: number | null
   summary: string
   detail: string | null
   raisedAt: Date
@@ -137,7 +144,26 @@ export interface ErrandRecord {
   screenBy: 'rule' | 'judge' | 'failed' | null
   screenNote: string | null
   turnedAwayAt: Date | null
+  /** a standalone Errand: who asked, the command to run, the check that exits 0 while it is needed, where the hands must be, its expiry, its request key */
+  source: string | null
+  command: string | null
+  checkCommand: string | null
+  host: Host | null
+  expiresAt: Date | null
+  requestKey: string | null
+  /** how it ended, and who ended it; null while open and for Errands closed before these were kept */
+  closedKind: ClosedKind | null
+  closedBy: ClosedBy | null
+  /** the last run of the check, what it said, and the runs in a row that could not answer */
+  checkAt: Date | null
+  checkNote: string | null
+  checkFails: number
+  /** the last look of the still-needed workflow */
+  neededAt: Date | null
 }
+
+export type ClosedKind = 'done' | 'not_needed' | 'expired' | 'superseded' | 'turned_away'
+export type ClosedBy = 'owner' | 'check' | 'judge' | 'loop' | 'request'
 
 /** `failing`: unsent after the attempts a healthy line needs; it is still tried, and the error says why. */
 export type PageStatus = 'pending' | 'sent' | 'failing' | 'cancelled'
@@ -215,8 +241,16 @@ export interface CheckpointStore {
   errand(id: ErrandId): Promise<ErrandRecord | null>
   errandByKey(key: Key): Promise<ErrandRecord | null>
   errands(filter: { issueId?: IssueId; open?: boolean; limit: number }): Promise<ErrandRecord[]>
-  /** false when it is done already */
-  finishErrand(id: ErrandId, at: Date, note: string | null): Promise<boolean>
+  /** false when it is done already; `how` defaults to the owner's hands */
+  finishErrand(id: ErrandId, at: Date, note: string | null, how?: { kind: ClosedKind; by: ClosedBy }): Promise<boolean>
+  /** closes the open Errands that hold this request key as superseded; their ids */
+  supersedeRequests(requestKey: string, by: ErrandId, at: Date): Promise<ErrandId[]>
+  /** the standalone Errands that are open or were closed at `closedSince` or later, oldest first */
+  requests(input: { closedSince: Date; limit: number }): Promise<ErrandRecord[]>
+  /** what the last run of an Errand's check came to: `fails` is the runs in a row that could not answer */
+  recordCheck(id: ErrandId, run: { at: Date; note: string; fails: number }): Promise<boolean>
+  /** the still-needed workflow looked and kept it */
+  recordNeeded(id: ErrandId, run: { at: Date; note: string }): Promise<boolean>
   /** the open Errands the screen has not let through, oldest first, whose retry is due */
   unscreenedErrands(now: Date, limit: number): Promise<ErrandRecord[]>
   lockErrand(id: ErrandId): Promise<ErrandRecord | null>
@@ -269,6 +303,16 @@ export interface JudgePort {
 /** The Errand screen: the `factory-errand` agw workflow. The key names the Errand and the try. */
 export interface ErrandScreenPort {
   screen(request: ErrandScreenRequest, key: Key): Promise<Result<ErrandScreenAnswer>>
+}
+
+/** The still-needed look: the `factory-errand-needed` agw workflow. The key names the Errand and the day. */
+export interface ErrandNeededPort {
+  judge(request: ErrandNeededRequest, key: Key): Promise<Result<ErrandNeededAnswer>>
+}
+
+/** Runs an Errand's `check` command: one shell, a timeout, the output cut. Never throws; a command that could not run says so in the run. */
+export interface CheckRunner {
+  run(command: string): Promise<CheckRun>
 }
 
 /** The owner's line. One call, never inside a transaction. */

@@ -9,7 +9,7 @@ export { agoWords }
 type InfoWord = keyof typeof LANGUAGE
 
 /** The band's categories, in the order they read. */
-export const SINCE_KEYS = ['shipped', 'failed', 'dropped', 'judge', 'screen', 'filed', 'incidents'] as const
+export const SINCE_KEYS = ['shipped', 'failed', 'dropped', 'judge', 'screen', 'errands', 'filed', 'incidents'] as const
 export type SinceKey = (typeof SINCE_KEYS)[number]
 
 export const SINCE_LABEL: Record<SinceKey, string> = {
@@ -18,6 +18,7 @@ export const SINCE_LABEL: Record<SinceKey, string> = {
   dropped: 'Dropped',
   judge: 'Settled by the Judge',
   screen: 'Turned away',
+  errands: 'Errands closed without you',
   filed: 'New Issues',
   incidents: 'Incidents',
 }
@@ -29,6 +30,7 @@ export const SINCE_TONE: Record<SinceKey, Tone> = {
   dropped: 'neutral',
   judge: 'accent',
   screen: 'neutral',
+  errands: 'neutral',
   filed: 'accent',
   incidents: 'warn',
 }
@@ -40,6 +42,7 @@ export const SINCE_HAPPENED: Record<SinceKey, string> = {
   dropped: 'Its lead gave it up, with a reason; nothing shipped.',
   judge: 'The Judge settled a Decision on it before it reached you.',
   screen: 'The screen turned it away before it reached you.',
+  errands: 'Its check said it was no longer needed, it expired, or a newer request replaced it.',
   filed: 'It was filed as a new Issue.',
   incidents: 'An incident was opened for it.',
 }

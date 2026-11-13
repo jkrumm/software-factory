@@ -1,14 +1,23 @@
 import { NEED_KINDS, type NeedItem } from '@software-factory/contract'
 import { createFileRoute, Link, useNavigate } from '@tanstack/react-router'
-import { useRef, useState } from 'react'
+import { useEffect, useRef, useState } from 'react'
 import { InfoHint, type InfoWord } from '@/components/kit'
+import { Desk } from '@/components/needs/desk'
 import { NeedCard } from '@/components/needs/card'
 import { SinceBand } from '@/components/needs/since-band'
 import { NeedsSkeleton } from '@/components/skeletons'
 import { EmptyState, Page, PageHeader } from '@/components/page'
 import { ActiveFilters, type FilterChip, SidebarEntry, SidebarSection } from '@/components/sidebar'
 import { failureNote } from '@/lib/api'
-import { KIND_LABEL, kindCounts, needsNote, projectCounts, projectsOfNeeds, visibleNeeds } from '@/lib/needs'
+import {
+  KIND_LABEL,
+  kindCounts,
+  needsNote,
+  needsTitle,
+  projectCounts,
+  projectsOfNeeds,
+  visibleNeeds,
+} from '@/lib/needs'
 import { useNow } from '@/lib/now'
 import { useOpenIssueCards, useNeeds } from '@/lib/queries'
 import { useScreen } from '@/lib/screen'
@@ -17,6 +26,8 @@ interface NeedsSearch {
   item?: string
   kind?: NeedItem['kind']
   project?: string
+  /** `desk`: Back at desk, the open Errands grouped by what the hands must do */
+  mode?: 'desk'
 }
 
 /** The words an InfoHint defines for a kind's heading and its sidebar entry. */
@@ -34,7 +45,7 @@ const SELECT =
 export const Route = createFileRoute('/needs-you')({
   /**
    * `item` is the deep link of one item: `/needs-you?item=<key>`, also where `/checkpoints/<key>` lands. `kind` shows one
-   * kind and `project` one project (the repo, or "App feedback"); both are linkable.
+   * kind and `project` one project (the repo, or "App feedback"); both are linkable. `mode=desk` is Back at desk.
    */
   validateSearch: (search: Record<string, unknown>): NeedsSearch => {
     const kind = NEED_KINDS.find((k) => k === search.kind)
@@ -42,6 +53,7 @@ export const Route = createFileRoute('/needs-you')({
       ...(typeof search.item === 'string' && search.item !== '' ? { item: search.item } : {}),
       ...(kind ? { kind } : {}),
       ...(typeof search.project === 'string' && search.project !== '' ? { project: search.project } : {}),
+      ...(search.mode === 'desk' ? { mode: 'desk' as const } : {}),
     }
   },
   component: NeedsYou,
@@ -51,7 +63,8 @@ function NeedsYou() {
   const needs = useNeeds()
   const { data, error, dataUpdatedAt } = needs
   const screen = useScreen(needs)
-  const { item: openId, kind: rawKind, project } = Route.useSearch()
+  const { item: openId, kind: rawKind, project, mode } = Route.useSearch()
+  const desk = mode === 'desk'
   // an unknown `kind` still reaches here from the raw URL (the root route validates nothing)
   const only = NEED_KINDS.find((k) => k === rawKind)
   const navigate = useNavigate({ from: Route.fullPath })
@@ -60,6 +73,15 @@ function NeedsYou() {
   const [sent, setSent] = useState<string | null>(null)
   // a snapshot restored from storage may be older than the item: say it is settled only on data fetched since the page opened
   const openedAt = useRef(Date.now())
+
+  // the tab says how many wait: every need on the list, the Errands at the desk
+  const waiting = data ? data.items.filter((i) => !desk || i.kind === 'errand').length : 0
+  useEffect(() => {
+    document.title = needsTitle(waiting, desk)
+    return () => {
+      document.title = 'Software Factory'
+    }
+  }, [waiting, desk])
 
   const filters: NeedsSearch = { ...(only ? { kind: only } : {}), ...(project ? { project } : {}) }
   const onSent = (message: string) => {
@@ -111,6 +133,48 @@ function NeedsYou() {
     )
   }
 
+  const errandCount = data.items.filter((i) => i.kind === 'errand').length
+  const modes = (
+    <nav aria-label="View" className="mb-4 flex items-center gap-4 text-sm">
+      <Link
+        to="/needs-you"
+        search={{}}
+        aria-current={desk ? undefined : 'page'}
+        className={
+          desk ? 'text-muted-foreground underline-offset-4 hover:underline' : 'font-medium underline underline-offset-4'
+        }
+      >
+        Everything ({total})
+      </Link>
+      <Link
+        to="/needs-you"
+        search={{ mode: 'desk' }}
+        aria-current={desk ? 'page' : undefined}
+        className={
+          desk ? 'font-medium underline underline-offset-4' : 'text-muted-foreground underline-offset-4 hover:underline'
+        }
+      >
+        Back at desk ({errandCount})
+      </Link>
+    </nav>
+  )
+  if (desk) {
+    return (
+      <Page wide>
+        <PageHeader title="Back at desk" note="What needs your hands, by where they must be." />
+        {modes}
+        {notice}
+        {errandCount === 0 ? (
+          <EmptyState title="Nothing needs your hands">
+            An errand shows here when it needs a device or a portal.
+          </EmptyState>
+        ) : (
+          <Desk items={data.items} onSent={onSent} />
+        )}
+      </Page>
+    )
+  }
+
   const titles = new Map((cards.data?.issues ?? []).map((card) => [card.ref, card.title]))
   const visible = visibleNeeds(data.items, filters, openId)
   const kinds = kindCounts(data.items, project)
@@ -147,6 +211,7 @@ function NeedsYou() {
         note={needsNote(visible.length, total, only !== undefined || project !== undefined)}
       />
       <SinceBand now={now} />
+      {modes}
       <SidebarSection title="Kinds">
         <SidebarEntry
           label="All"

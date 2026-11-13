@@ -1,7 +1,9 @@
 import { describe, expect, test } from 'bun:test'
 import type { NeedItem } from '@software-factory/contract'
 import {
+  deskGroups,
   decisionParts,
+  needsTitle,
   needsNote,
   repeatsTitle,
   defaultLine,
@@ -183,4 +185,32 @@ test('a question that is the card title is not repeated', () => {
 test('an age is one phrase', () => {
   expect(metaWords({ kind: 'held_signal', ageMs: 5_000 })).toBe('Received just now')
   expect(metaWords({ kind: 'errand', ageMs: 5_000 })).toBe('Raised just now')
+})
+
+describe('Back at desk', () => {
+  const errand = (id: string, host: NeedItem['host'], ageMs: number): NeedItem =>
+    ({ id, kind: 'errand', repo: null, source: 'ask-human', host, ageMs }) as unknown as NeedItem
+
+  test('the Errands are grouped by where the hands must be, the oldest first, and the other kinds are left out', () => {
+    const items = [
+      errand('e1', 'iphone', 5),
+      errand('e2', 'macbook', 10),
+      errand('e3', 'macbook', 30),
+      errand('e4', null, 1),
+      need('d1', 'decision', 'argo'),
+    ]
+    expect(deskGroups(items).map((g) => [g.host, g.label, g.items.map((i) => i.id)])).toEqual([
+      ['macbook', 'On the MacBook', ['e3', 'e2']],
+      ['iphone', 'On the iPhone', ['e1']],
+      ['any', 'Anywhere', ['e4']],
+    ])
+    expect(deskGroups([need('d1', 'decision', 'argo')])).toEqual([])
+  })
+
+  test('the tab title carries the count, and a request with no repo is a Request, not App feedback', () => {
+    expect(needsTitle(3, true)).toBe('(3) Back at desk \u00b7 Software Factory')
+    expect(needsTitle(0, false)).toBe('Needs you \u00b7 Software Factory')
+    expect(originOf({ repo: null, kind: 'errand', source: 'ask-human' })).toBe('Requests')
+    expect(originOf({ repo: null, kind: 'held_signal', source: 'GitHub' })).toBe('App feedback')
+  })
 })

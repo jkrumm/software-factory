@@ -11,7 +11,7 @@ const LINK =
   'relative z-10 rounded-sm underline-offset-4 outline-none hover:underline focus-visible:ring-3 focus-visible:ring-ring/50'
 
 /** The project as a chip that opens Flow filtered to it; an item that names none shows the word, plain. */
-export function ProjectChip({ item }: { item: Pick<NeedItem, 'repo'> }) {
+export function ProjectChip({ item }: { item: Pick<NeedItem, 'repo' | 'kind' | 'source'> }) {
   const chip =
     'inline-flex h-5 shrink-0 items-center rounded-md bg-muted px-1.5 text-xs text-muted-foreground transition-colors'
   if (item.repo === null) return <span className={chip}>{projectOf(item)}</span>

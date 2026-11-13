@@ -362,3 +362,60 @@ test('a write the allow-list refuses stays refused through the listener, and a c
   expect(cross.status()).toBe(403)
   await owner.dispose()
 })
+
+test('Back at desk groups the Errands by where the hands must be, copies a command and closes each way', async ({
+  page,
+  apiUrl,
+  context,
+}) => {
+  await context.grantPermissions(['clipboard-read', 'clipboard-write'])
+  type Requested = { errand: { id: string } }
+  const mac = await api<Requested>(apiUrl, '/v1/errands/requests', {
+    source: 'ask-human',
+    text: 'Reseal the secrets cache on the MacBook',
+    command: 'make secrets-seed',
+    key: 'e2e-reseal',
+    expires: 'never',
+  })
+  const phone = await api<Requested>(apiUrl, '/v1/errands/requests', {
+    source: 'ask-human',
+    text: 'Add the ntfy topics to the iPhone',
+    where: 'iphone',
+    expires: 'never',
+  })
+
+  await page.goto('/needs-you?mode=desk')
+  await expect(page).toHaveTitle(/^\(\d+\) Back at desk/)
+  const macGroup = page.getByRole('heading', { name: /^On the MacBook/ })
+  const phoneGroup = page.getByRole('heading', { name: /^On the iPhone/ })
+  await expect(macGroup).toBeVisible()
+  await expect(phoneGroup).toBeVisible()
+  // the MacBook comes before the iPhone
+  const macBox = await macGroup.boundingBox()
+  const phoneBox = await phoneGroup.boundingBox()
+  expect(macBox && phoneBox && macBox.y < phoneBox.y).toBe(true)
+
+  const macCard = page.locator('article').filter({ hasText: 'Reseal the secrets cache' })
+  await expect(macCard.locator('code')).toHaveText('make secrets-seed')
+  await macCard.getByRole('button', { name: 'Copy the command' }).click()
+  await expect(macCard.getByRole('button', { name: 'Copy the command' })).toHaveText('Copied')
+  expect(await page.evaluate('navigator.clipboard.readText()')).toBe('make secrets-seed')
+
+  // not needed closes the request as the owner's word, done as his hands
+  const phoneCard = page.locator('article').filter({ hasText: 'Add the ntfy topics' })
+  await phoneCard.getByRole('button', { name: 'Not needed' }).click()
+  await expect(phoneCard).toHaveCount(0)
+  await macCard.getByRole('button', { name: 'Done' }).click()
+  await expect(macCard).toHaveCount(0)
+
+  const { errands } = await api<{ errands: { id: string; closedKind: string | null; closedBy: string | null }[] }>(
+    apiUrl,
+    '/v1/errands',
+  )
+  expect(errands.find((e) => e.id === phone.errand.id)).toMatchObject({ closedKind: 'not_needed', closedBy: 'owner' })
+  expect(errands.find((e) => e.id === mac.errand.id)).toMatchObject({ closedKind: 'done', closedBy: 'owner' })
+
+  // the list view still shows the tab as Needs you, with what is left
+  await page.goto('/needs-you')
+  await expect(page).toHaveTitle(/^\(\d+\) Needs you/)
+})

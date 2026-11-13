@@ -24,6 +24,7 @@ const Env = z.object({
   FACTORY_LOOP_HOST_MS: ms.optional(),
   FACTORY_LOOP_REAPER_MS: ms.optional(),
   FACTORY_LOOP_DIGEST_MS: ms.optional(),
+  FACTORY_LOOP_ERRANDS_MS: ms.optional(),
   /** a closed attempt's processes are left this long (at least 1 minute) before the reaper ends them */
   FACTORY_REAPER_GRACE_MS: z.coerce.number().int().min(60_000).optional(),
   /** 1: the reaper decides and records with signal `dry`, and sends nothing */
@@ -109,6 +110,10 @@ const hostTickMs = (tickMs: number): number => (tickMs === 0 ? 0 : HOST_TICK_MS)
 export const DIGEST_TICK_MS = 3 * 3_600_000
 const digestTickMs = (tickMs: number): number => (tickMs === 0 ? 0 : DIGEST_TICK_MS)
 
+/** The open requests for the owner's hands are looked at every hour, unless the tick is off (0). */
+export const ERRANDS_TICK_MS = 3_600_000
+const errandsTickMs = (tickMs: number): number => (tickMs === 0 ? 0 : ERRANDS_TICK_MS)
+
 /** The reaper looks at the process table every 5 minutes, unless the tick is off (0). */
 const REAPER_TICK_MS = 5 * 60_000
 const reaperTickMs = (tickMs: number): number => (tickMs === 0 ? 0 : REAPER_TICK_MS)
@@ -149,6 +154,7 @@ export function loadLoopSettings(env: Record<string, string | undefined>): LoopS
     host: e.FACTORY_LOOP_HOST_MS,
     reaper: e.FACTORY_LOOP_REAPER_MS,
     digest: e.FACTORY_LOOP_DIGEST_MS,
+    errands: e.FACTORY_LOOP_ERRANDS_MS,
   }
   return {
     intervalMs: Object.fromEntries(
@@ -169,7 +175,9 @@ export function loadLoopSettings(env: Record<string, string | undefined>): LoopS
                       ? reaperTickMs(tickMs)
                       : name === 'digest'
                         ? digestTickMs(tickMs)
-                        : tickMs),
+                        : name === 'errands'
+                          ? errandsTickMs(tickMs)
+                          : tickMs),
       ]),
     ) as Record<LoopName, number>,
     tickMs,
