@@ -6,7 +6,7 @@ import { err, ok, portError, type PortError, type Result } from '../../kernel/re
 import { appSpaces, nameTab as nameTabInDoc, real, seedSpace, type Rpc } from './app-doc.ts'
 import { CannotExecute, HcClient, HcError } from './client.ts'
 import { DEFAULT_PROCESS_TIMEOUT_MS, runProcess } from './process.ts'
-import { atPrompt } from './screen.ts'
+import { apiErrorAbove, atPrompt, inputBoxText } from './screen.ts'
 
 export interface HcTerminalsOptions {
   /** the command to run, normally `HC_BIN` */
@@ -44,6 +44,7 @@ const Terminal = z
   .object({
     address: z.string(),
     labels: z.record(z.string(), z.string()).default({}),
+    name: z.string().nullable().default(null),
     state: z.string(),
     status: Status.nullable().default(null),
     reported: z.boolean().default(false),
@@ -187,10 +188,19 @@ export class HcTerminals implements Terminals {
       const forced = input.force && status === 'working'
       // A terminal that never reported a status says nothing about a dialog: the screen must show the input box.
       const unreported = status === undefined && (await this.showsPrompt(input.terminal, budget))
-      if (status !== 'idle' && status !== 'done' && !forced && !unreported) return ok('busy')
+      // A turn that ended on an API error is `blocked` (or `error`, for one in the middle of a response) to the core, which reads "Please run /login" as a dialog. The screen
+      // knows better: the error line above an empty prompt. Only then is the core's override used, and never over a draft.
+      const errored =
+        (status === 'blocked' || status === 'error') && (await this.apiErrorPrompt(input.terminal, budget)) === 'empty'
+      if (status !== 'idle' && status !== 'done' && !forced && !unreported && !errored) return ok('busy')
       try {
         const guard = status === 'idle' ? { if: 'idle' } : forced ? { if: 'working' } : {}
-        await this.rpc('terminal.send', { terminal: input.terminal, text: input.text, ...guard }, Empty, budget)
+        await this.rpc(
+          'terminal.send',
+          { terminal: input.terminal, text: input.text, ...guard, ...(errored ? { force: true } : {}) },
+          Empty,
+          budget,
+        )
         return ok('typed')
       } catch (error) {
         if (!(error instanceof HcError)) throw error
@@ -203,6 +213,56 @@ export class HcTerminals implements Terminals {
           ),
         )
       }
+    } catch (error) {
+      return err(asPortError(error))
+    }
+  }
+
+  /**
+   * `terminal.send` takes `force` ("Refuses a blocked program unless `force`") and `terminal.keys` takes `{ terminal, keys: string[] }`:
+   * both read off herdr-core's own `rpc.discover` (core 2026-11), which is the contract this file speaks.
+   */
+  async resume(input: { terminal: string; text: string }): Promise<Result<'continued' | 'draft' | 'busy'>> {
+    const budget = this.budget()
+    try {
+      const terminal = await this.rpc('terminal.get', { terminal: input.terminal }, Terminal, budget)
+      if (terminal.state !== 'live') return err(portError('gone', `${input.terminal} has finished; nothing was typed`))
+      const prompt = await this.apiErrorPrompt(input.terminal, budget)
+      if (prompt === 'none') return ok('busy')
+      try {
+        if (prompt === 'draft') {
+          // A send would append to the draft: it is submitted instead, which starts the turn the agent was about to run.
+          await this.rpc('terminal.keys', { terminal: input.terminal, keys: ['enter'] }, Empty, budget)
+          return ok('draft')
+        }
+        await this.rpc('terminal.send', { terminal: input.terminal, text: input.text, force: true }, Empty, budget)
+        return ok('continued')
+      } catch (error) {
+        if (!(error instanceof HcError)) throw error
+        if (error.refusal?.kind === 'status_mismatch') return ok('busy')
+        return err(
+          portError(
+            error.refusal ? 'refused' : 'timeout',
+            error.refusal ? error.message : `uncertain: ${error.message}`,
+          ),
+        )
+      }
+    } catch (error) {
+      return err(asPortError(error))
+    }
+  }
+
+  async planErrors(): Promise<Result<string[]>> {
+    const budget = this.budget()
+    try {
+      const listed = await this.rpc('terminal.list', {}, TerminalList, budget)
+      const plans = listed.terminals.filter((t) => t.state === 'live' && t.name?.startsWith('plan-'))
+      const hit: string[] = []
+      for (const terminal of plans) {
+        if ((await this.apiErrorPrompt(terminal.address, budget)) !== 'none')
+          hit.push(terminal.name ?? terminal.address)
+      }
+      return ok(hit)
     } catch (error) {
       return err(asPortError(error))
     }
@@ -312,6 +372,21 @@ export class HcTerminals implements Terminals {
       (space) => space.folder !== undefined && real(space.folder) === root,
     )
     return { id: known?.id ?? defaultSpaceId(root), seed: known === undefined }
+  }
+
+  /**
+   * What the screen shows of an agent whose turn may have ended on an API error: `empty` (the error line above an empty
+   * prompt), `draft` (the same with text waiting in the box), or `none` (anything else: a dialog, a running turn, no error).
+   */
+  private async apiErrorPrompt(terminal: string, budget: Budget): Promise<'empty' | 'draft' | 'none'> {
+    try {
+      const { text } = await this.rpc('terminal.read', { terminal }, Screen, budget)
+      if (apiErrorAbove(text) === null || !atPrompt(text, { pressOnly: true })) return 'none'
+      return inputBoxText(text) === '' ? 'empty' : 'draft'
+    } catch (error) {
+      if (error instanceof HcError) return 'none'
+      throw error
+    }
   }
 
   private async showsPrompt(terminal: string, budget: Budget): Promise<boolean> {

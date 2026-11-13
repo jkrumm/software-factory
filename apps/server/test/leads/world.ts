@@ -69,6 +69,8 @@ export class FakeTerminals implements Terminals {
   named: { tab: string; name: string }[] = []
   startError: PortError | null = null
   typeAnswers: Result<'typed' | 'busy'>[] = []
+  resumed: { terminal: string; text: string }[] = []
+  resumeAnswers: Result<'continued' | 'draft' | 'busy'>[] = []
   next = 1
 
   async find(k: string) {
@@ -86,6 +88,14 @@ export class FakeTerminals implements Terminals {
   async type(input: { terminal: string; text: string; force: boolean }) {
     this.typed.push(input)
     return this.typeAnswers.shift() ?? ok('typed' as const)
+  }
+  async resume(input: { terminal: string; text: string }) {
+    this.resumed.push(input)
+    return this.resumeAnswers.shift() ?? ok('continued' as const)
+  }
+  planErrored: string[] = []
+  async planErrors() {
+    return ok(this.planErrored)
   }
   async close(k: string) {
     this.closed.push(k)
@@ -109,6 +119,8 @@ export class FakeTerminals implements Terminals {
     this.named = []
     this.startError = null
     this.typeAnswers = []
+    this.resumed = []
+    this.resumeAnswers = []
   }
 }
 

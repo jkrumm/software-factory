@@ -8,7 +8,7 @@ derives the lead's state from the events.
 | `SessionStart` | `factory hook session-start` | the session began (or resumed, or compacted) |
 | `UserPromptSubmit` | `factory hook user-prompt-submit` | a prompt arrived |
 | `Stop` | `factory hook stop` | the turn ended; the one hook that can answer |
-| `StopFailure` (matcher `rate_limit`) | `factory hook stop-failure` | the account hit a limit |
+| `StopFailure` (every error type) | `factory hook stop-failure` | the turn ended on an API error: a rate limit is the account's wall, any other error (a Cloudflare 403, overloaded, a 401) is an `api_error` the server reads and answers |
 | `Notification` (permission, idle and quota prompts) | `factory hook notification` | the session waits for someone |
 | `SessionEnd` | `factory hook session-end` | the session ended |
 

@@ -43,3 +43,25 @@ export function atPrompt(screen: string, options: { pressOnly?: boolean } = {}):
   if (DIALOG.test([...found.lines.slice(1), ...found.after].join('\n'))) return false
   return options.pressOnly === true || inputBoxText(screen) === ''
 }
+
+/**
+ * The API error line the conversation ends on, when it does: one of the last few lines above the input box says
+ * "API Error" (Claude Code renders a failed turn as `⏺ Please run /login · API Error: 403 Attention Required! | Cloudflare`).
+ * Only the lines just above the box count: an older error further up is history, and a screen with no box has no answer.
+ * herdr-core takes this very line for a login dialog and calls the agent `blocked (auth)`; the screen shows an empty prompt
+ * under it, no dialog, no running turn.
+ */
+export function apiErrorAbove(screen: string): string | null {
+  const found = box(screen)
+  if (!found) return null
+  const lines = screen.split('\n')
+  const rules = lines.flatMap((line, i) => (RULE.test(line) ? [i] : []))
+  const top = rules.at(-2)
+  if (top === undefined) return null
+  const above = lines
+    .slice(0, top)
+    .filter((line) => line.trim() !== '')
+    .slice(-4)
+  const hit = above.findLast((line) => /API Error|Please run \/login/i.test(line))
+  return hit ? hit.trim() : null
+}

@@ -34,6 +34,7 @@ import {
   stallRequest,
   type StewardRules,
 } from '../../domains/loops/stall.ts'
+import { DEFAULT_RESUME_RULES, type ResumeRules, resumePrefix, spent } from '../../domains/leads/apierror.ts'
 import { leadKey } from '../../domains/leads/names.ts'
 import type { LeadStore, Seats, Windows } from '../../domains/leads/ports.ts'
 import { deriveSession } from '../../domains/leads/session.ts'
@@ -75,6 +76,8 @@ export interface StewardDeps extends WriteDeps {
   slots(): Promise<Result<SlotRow[], PortError>>
   /** whether a lead's branch has a CI run queued or in progress (called outside any transaction) */
   ciLive: CiLive
+  /** the API-error path's resume rules (the settings'): a session whose resumes are spent is a quiet lead again */
+  resume?: ResumeRules
   /** a note refused for a claim this long while a claim is free for it is a stall */
   claimStallMs: number
   rules: StewardRules
@@ -472,7 +475,10 @@ const isIdleNote = (record: AppliedRecord): boolean =>
  * A working Issue whose lead session went quiet: its turn ended, no tool runs, nothing was reported since the turn began
  * (`working` and mid-turn sessions are never read here). Null for every other Issue.
  */
-export async function loadIdle(deps: Pick<StewardDeps, 'uow'>, id: IssueId): Out<Idle | null> {
+export async function loadIdle(
+  deps: Pick<StewardDeps, 'uow'> & { resume?: ResumeRules },
+  id: IssueId,
+): Out<Idle | null> {
   return deps.uow.run<Idle | null, never>(async ({ work, leads }) => {
     const history = await work.history(id)
     if (!history) return ok(null)
@@ -483,6 +489,17 @@ export async function loadIdle(deps: Pick<StewardDeps, 'uow'>, id: IssueId): Out
     if (!attempt?.terminal || attempt.goneAt) return ok(null)
     const view = deriveSession(await leads.hookFacts(leadKey(id, issue.attempt)))
     if (!view.idleSince) return ok(null)
+    // A session that ended its turn on an API error is the API-error path's: a transient error is resumed on a backoff, an
+    // auth error waits for the owner's login, and a nudge typed into it would only meet the same error. Once its resumes are
+    // spent (or the error is neither kind) it is a quiet lead like any other.
+    const incident = view.apiIncident
+    if (incident && incident.kind.class !== 'other') {
+      const prefix = resumePrefix(leadKey(id, issue.attempt), incident.key)
+      const resumes = (await leads.resumesOf(id, issue.attempt)).filter((delivery) => delivery.key.startsWith(prefix))
+      if (!spent({ resumes: resumes.map((delivery) => delivery.claimedAt) }, deps.resume ?? DEFAULT_RESUME_RULES)) {
+        return ok(null)
+      }
+    }
     if (view.lastTurnAt && reportedSince(history, issue.attempt, view.lastTurnAt)) return ok(null)
 
     const lastAdmitted = history.findLast((record) => record.kind === 'admitted')?.version ?? 0

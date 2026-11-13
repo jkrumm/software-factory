@@ -3,12 +3,14 @@ import type { SQL } from 'bun'
 import * as z from 'zod'
 import {
   FINALIZE_STEPS,
+  type AuthMarkRow,
   type Delivery,
   type Finalization,
   type FinalizeStep,
   type LeadAttempt,
   type LeadStore,
 } from '../../domains/leads/ports.ts'
+import { INCIDENT_GAP_MS } from '../../domains/leads/apierror.ts'
 import type { HookFact } from '../../domains/leads/session.ts'
 import { type IssueId } from '../../kernel/ids.ts'
 
@@ -68,12 +70,34 @@ const DeliveryRow = z.object({
   key: z.string(),
   issue_id: z.string(),
   attempt: z.number().int(),
-  kind: z.enum(['brief', 'note']),
+  kind: z.enum(['brief', 'note', 'resume']),
   text: z.string(),
   claimed_at: z.date(),
   typed_at: z.date().nullable(),
   forced: z.boolean(),
 })
+
+const MarkRow = z.object({
+  account: z.string(),
+  marked_at: z.date(),
+  cleared_at: z.date().nullable(),
+  errand_key: z.string(),
+  label: z.string(),
+})
+
+const deliveryOf = (raw: unknown): Delivery => {
+  const parsed = DeliveryRow.parse(raw)
+  return {
+    key: parsed.key,
+    issueId: parsed.issue_id as IssueId,
+    attempt: parsed.attempt,
+    kind: parsed.kind,
+    text: parsed.text,
+    claimedAt: parsed.claimed_at,
+    typedAt: parsed.typed_at,
+    forced: parsed.forced,
+  } satisfies Delivery
+}
 
 const FinalizationRow = z.object({
   issue_id: z.string(),
@@ -189,18 +213,62 @@ export function postgresLeadStore(tx: SQL): LeadStore {
 
     async delivery(key) {
       const [row] = await tx`SELECT * FROM factory.lead_deliveries WHERE key = ${key}`
-      if (!row) return null
-      const parsed = DeliveryRow.parse(row)
-      return {
-        key: parsed.key,
-        issueId: parsed.issue_id as IssueId,
-        attempt: parsed.attempt,
-        kind: parsed.kind,
-        text: parsed.text,
-        claimedAt: parsed.claimed_at,
-        typedAt: parsed.typed_at,
-        forced: parsed.forced,
-      } satisfies Delivery
+      return row ? deliveryOf(row) : null
+    },
+
+    async resumesOf(issue, attempt) {
+      const rows: unknown[] = await tx`
+        SELECT * FROM factory.lead_deliveries
+        WHERE issue_id = ${issue} AND attempt = ${attempt} AND kind = 'resume' ORDER BY claimed_at, key`
+      return rows.map(deliveryOf)
+    },
+
+    async authMarks() {
+      const rows: unknown[] = await tx`SELECT * FROM factory.account_auth_marks ORDER BY account`
+      return rows.map((raw): AuthMarkRow => {
+        const row = MarkRow.parse(raw)
+        return {
+          account: row.account,
+          markedAt: row.marked_at,
+          clearedAt: row.cleared_at,
+          errandKey: row.errand_key,
+          label: row.label,
+        }
+      })
+    },
+
+    async markAuth({ account, at, errandKey, label }) {
+      await tx`
+        INSERT INTO factory.account_auth_marks (account, marked_at, errand_key, label)
+        VALUES (${account}, ${at}, ${errandKey}, ${label})
+        ON CONFLICT (account) DO UPDATE
+          SET marked_at = EXCLUDED.marked_at, cleared_at = NULL, errand_key = EXCLUDED.errand_key, label = EXCLUDED.label
+          WHERE factory.account_auth_marks.cleared_at IS NOT NULL`
+    },
+
+    async unclaimDelivery(key) {
+      await tx`DELETE FROM factory.lead_deliveries WHERE key = ${key} AND kind = 'resume' AND typed_at IS NULL`
+    },
+
+    async clearAuth(account, at) {
+      await tx`
+        UPDATE factory.account_auth_marks SET cleared_at = ${at} WHERE account = ${account} AND cleared_at IS NULL`
+    },
+
+    async recordEdge({ key, firstAt, lastAt, leads, plans, at }) {
+      // The same outage again (the leads fail once more after a resume) starts within the incident gap of the row's end.
+      const [same] = await tx`
+        SELECT key FROM factory.api_edge_incidents
+        WHERE last_at >= ${new Date(firstAt.getTime() - INCIDENT_GAP_MS)} AND first_at <= ${lastAt}
+        ORDER BY first_at LIMIT 1`
+      const into = same ? z.object({ key: z.string() }).parse(same).key : key
+      await tx`
+        INSERT INTO factory.api_edge_incidents (key, first_at, last_at, leads, plans, recorded_at)
+        VALUES (${into}, ${firstAt}, ${lastAt}, ${leads}, ${plans}, ${at})
+        ON CONFLICT (key) DO UPDATE
+          SET leads = greatest(factory.api_edge_incidents.leads, EXCLUDED.leads),
+              plans = greatest(factory.api_edge_incidents.plans, EXCLUDED.plans),
+              last_at = greatest(factory.api_edge_incidents.last_at, EXCLUDED.last_at)`
     },
 
     async claimDelivery(delivery) {

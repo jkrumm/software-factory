@@ -153,6 +153,30 @@ through `receive` in `app/intake.ts`; the answer is a triage outcome (`docs/lang
   them comes from the picker, `claude-account rank --lane bulk --json`, polled with the usage readings and stored in
   `capacity_ranks`. A missing or stale rank (older than a reading may be) falls back to the lowest weekly use and shows
   as the health line `account-rank`; it never blocks admission.
+- **A turn that ends on an API error** (`domains/leads/apierror.ts`, `app/leads-api-errors.ts`, a step of the leads tick). Claude Code
+  fires `StopFailure`, never `Stop`, when a turn ends on an API error (hooks reference, "StopFailure": `error`, `error_details`,
+  `last_assistant_message`), so the session looks mid-turn to anything that waits for a `Stop`. The hook (every `error` type now,
+  no matcher) spools it as `api_error` (a `rate_limit` stays the `limit_stop` wall); a session whose hook did not run is found
+  by its transcript: a turn open and silent for `FACTORY_API_DETECT_MS` has the end of its transcript read (`TranscriptTails`,
+  the last `assistant`/`user` record with `isApiErrorMessage`, its `error` and `apiErrorStatus`) at most every
+  `FACTORY_API_PROBE_MS`, and the same fact is stored. `deriveSession` reads an `api_error` as the end of the turn
+  (`SessionView.apiIncident`: the errors since the last clean `turn_ended`), so a note waiting for the turn to end is delivered.
+  `kindOfApiError` reads the fields before the words: a 401 or an expired or revoked token is **auth**; a 429, 5xx, a
+  timeout or reset, `server_error` (also mid-response, which adds "your last response may be cut off, re-check what you did" to
+  the note) and a 403 typed `authentication_failed` (a Cloudflare challenge: 10 of 10 on 2026-11-13, none needed a login, though
+  Claude Code prints "Please run /login") are **transient**; anything else is left to the steward. Transient: one `continue`
+  (a `resume` delivery, key `resume:<session>:<incident>:<n>`) after 1 minute, then 3, 10, 10, 10, five at most per incident; three
+  or more leads failing within five minutes are one **edge incident**: one clock, one `continue` per `FACTORY_API_STAGGER_MS`
+  (30 s) among them, and one `api_edge_incidents` row (leads, window, and the owner's `plan-*` sessions in the same state,
+  counted and never resumed) that the friction read shows as `api_transient` (informational, never a finding). Auth: the
+  account gets an `account_auth_marks` row that capacity reads as "not signed in" (no admissions on it, nothing moved), and
+  one Errand "log in account X" (request key `account-login:<account>`, no check: the picker still says the login is fine); its
+  closing clears the mark and the account's leads are resumed like a transient error. The screen is read before anything is typed
+  (`HcTerminals.resume`, and `type` for a note): herdr-core calls this state `blocked` or `error` and refuses a send, so the
+  API-error line above an empty prompt is what permits the core's `force`, a draft in the box is submitted and not appended to,
+  and any other screen (a dialog, a running turn) is left alone. The steward's idle nudge skips a session in an incident until
+  its five resumes are spent. `api_blocked_minutes_per_day` (from the error to the next turn that started) is in the retro's
+  capacity figures.
 - **The quiet lead** (`nudgeIdle` in `app/loops/steward.ts`, `decideIdle` in `domains/loops/stall.ts`). A `working` Issue is
   no stall, so the steward reads each one's lead session (`deriveSession`: `idleSince` is the end of its last turn). A
   turn that ended with nothing reported since it began, in a live terminal, for `FACTORY_STEWARD_IDLE_MS` (10 minutes),

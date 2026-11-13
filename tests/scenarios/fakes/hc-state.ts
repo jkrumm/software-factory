@@ -18,6 +18,10 @@ export interface FakeTerminal {
   screen: string
   /** every text typed into it with `terminal.send`, in order */
   sent: string[]
+  /** the sends made with `force`, as indexes into `sent` */
+  forced?: number[]
+  /** every `terminal.keys` call, in order */
+  keys?: string[][]
 }
 
 export interface FakeHcState {

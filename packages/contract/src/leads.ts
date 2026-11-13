@@ -105,6 +105,14 @@ export const TickAnswer = z
     outbox: z.object({ ran: z.number().int(), failed: z.number().int() }),
     replayed: z.number().int(),
     lost: z.number().int(),
+    /** the API-error path: sessions found by their transcript, `continue`s typed, accounts marked and cleared, edge incidents recorded */
+    apiErrors: z.object({
+      detected: z.number().int(),
+      resumed: z.number().int(),
+      marked: z.number().int(),
+      cleared: z.number().int(),
+      edges: z.number().int(),
+    }),
   })
   .meta({ id: 'TickAnswer' })
 export type TickAnswer = z.infer<typeof TickAnswer>

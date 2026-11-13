@@ -225,3 +225,15 @@ Report `docs/strategy/2026-11-next/report.html`, definition `docs/strategy/2026-
   exception). The same brief line now says the CI wait is `MERGE_GUARD_ARGS=--wait` only where the repo's guard has it
   (iris and basalt-ui do not), else `gh pr checks <n> --watch`. A lead outside the window (a human, a repo without the CLI)
   can still race; the guard refuses it as before. Counted after: rebases per merged PR.
+
+- **NL30 A turn that ends on an API error is answered by class, from the fields (Issue 992, 2026-11-13).** Between 09:47 and
+  10:20 UTC Claude Code printed "Please run /login · API Error: 403 Attention Required! | Cloudflare" on all three accounts (typed
+  `authentication_failed`, `apiErrorStatus` 403); six leads sat blocked for an hour, because the turn ended with `StopFailure`
+  and no `Stop`, the factory's notes waited for a turn end that never came, and herdr-core read the line as a login dialog and
+  refused every send. The factory now stores the error (`api_error`), reads it as the turn's end, tells transient from auth by
+  `error`, `apiErrorStatus` and the text (a 403 `authentication_failed` is the edge, a 401 is a login), resumes a transient
+  one with `continue` after 1, 3, 10, 10 and 10 minutes (staggered across an edge incident), and for a login marks the account
+  and raises one Errand. Rejected: a model to triage it (the fields settle it), moving a lead to another account on a 401
+  (the lead's session and credentials are the account's; nothing is moved automatically), and `hc send --force` on every blocked
+  terminal (a real dialog would take the typed text as its answer: the screen must show the error above an empty prompt). The owner's
+  plan sessions are counted in the edge incident's row, never resumed. Counted after: `api_blocked_minutes_per_day`, `api_transient` rows.

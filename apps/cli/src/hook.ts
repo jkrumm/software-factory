@@ -105,10 +105,19 @@ export function toEvent(
         }),
       }
     case 'stop-failure':
-      // Only a rate limit is a wall; the other errors (overloaded, server_error, ...) end a turn the session recovers from.
+      // A rate limit is a wall. Any other API error (a Cloudflare 403, overloaded, server_error, a 401, ...) ends the turn
+      // with no `Stop`: it is its own fact, and the server reads it from the rendered error text (the `error` field alone
+      // cannot: a transient Cloudflare 403 arrives as `authentication_failed`).
       return input.error === 'rate_limit'
         ? { kind: 'limit_stop', payload: pick({ error: 'rate_limit', details: text(input.error_details) }) }
-        : undefined
+        : {
+            kind: 'api_error',
+            payload: pick({
+              error: text(input.error, 64),
+              details: text(input.error_details, 300),
+              message: text(input.last_assistant_message, 400),
+            }),
+          }
     case 'notification':
       return fromNotification(input)
     case 'session-end':
