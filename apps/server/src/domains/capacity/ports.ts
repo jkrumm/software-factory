@@ -2,6 +2,7 @@ import type { IssueId } from '../../kernel/ids.ts'
 import type { PortError, Result } from '../../kernel/result.ts'
 import type { AccountRank, AccountReading } from './accounts.ts'
 import type { Claim } from './claims.ts'
+import type { SnapshotProc } from './classes.ts'
 import type { MemoryReading } from './host.ts'
 import type { ProcInfo } from './leadcost.ts'
 import type { QueueState, QueueStates } from './queue-state.ts'
@@ -119,4 +120,23 @@ export type { PortError }
 /** The host's process table with each process's directory; null when it could not be read (never an error). */
 export interface ProcessReader {
   read(): Promise<ProcInfo[] | null>
+}
+
+/** One minute's class snapshot as read: the processes and the host signals beside them (a figure not read is null). */
+export interface HostSnapshotReading {
+  procs: SnapshotProc[]
+  /** the process count of `top`'s header */
+  processes: number | null
+  cpuIdlePct: number | null
+  /** `kern.memorystatus_vm_pressure_level`: 1 normal, 2 warning, 4 critical */
+  pressureLevel: number | null
+  compressorMib: number | null
+  vmFreeGib: number | null
+  /** the CPU the readings' helper processes took since the last snapshot */
+  collectorCpuMs: number
+}
+
+/** Reads the class snapshot; null when `top` could not be read (never an error). */
+export interface HostSnapshotReader {
+  read(): Promise<HostSnapshotReading | null>
 }

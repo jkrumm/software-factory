@@ -1,9 +1,9 @@
 import type { HostProcess } from '@software-factory/contract'
 import type { HostReader } from '../../domains/capacity/ports.ts'
 import { parsePs, type PsRow, topProcesses } from './ps.ts'
-import { parseTopFootprints } from './top.ts'
+import { parseTop, type TopSnapshot } from './top.ts'
 import { memoryUsedPct } from './vm-memory.ts'
-import { runProcess } from './process.ts'
+import { type TextRunner, textRunner } from './process.ts'
 
 export interface HostWatchOptions {
   /** the swap and load readings, as admission takes them (`hostReader`) */
@@ -16,6 +16,8 @@ export interface HostWatchOptions {
   topBin?: string
   /** `vm_stat`, for the wired and compressor pages (default `/usr/bin/vm_stat`) */
   vmStatBin?: string
+  /** runs the helpers and counts their CPU (the host loop's collector cost); a fresh one when absent */
+  runner?: TextRunner
   /** concurrent readers within this long share one `ps` */
   cacheMs?: number
   timeoutMs?: number
@@ -37,6 +39,8 @@ export interface HostWatch {
   rows(): Promise<PsRow[] | null>
   /** the physical footprint in KiB of every process, from one `top` snapshot cached like the rows; null when `top` failed or is not configured */
   footprints(): Promise<Map<number, number> | null>
+  /** that `top` snapshot: per pid the parent, footprint and CPU time, and the header's process count and CPU idle */
+  topSnapshot(): Promise<TopSnapshot | null>
 }
 
 /**
@@ -50,15 +54,8 @@ export function hostWatch(options: HostWatchOptions): HostWatch {
   const timeoutMs = options.timeoutMs ?? 5_000
   let cached: { at: number; rows: Promise<PsRow[] | null> } | null = null
   let ramBytes: number | null = null
-
-  const run = async (cmd: string[]): Promise<string | null> => {
-    try {
-      const out = await runProcess(cmd, { timeoutMs })
-      return out.timedOut || out.code !== 0 ? null : out.stdout
-    } catch {
-      return null
-    }
-  }
+  const runner = options.runner ?? textRunner(timeoutMs)
+  const run = (cmd: string[]): Promise<string | null> => runner.run(cmd)
 
   const processes = (): Promise<PsRow[] | null> => {
     if (cached && now() - cached.at < cacheMs) return cached.rows
@@ -69,17 +66,21 @@ export function hostWatch(options: HostWatchOptions): HostWatch {
     return rows
   }
 
-  let cachedFootprints: { at: number; footprints: Promise<Map<number, number> | null> } | null = null
-  const footprints = (): Promise<Map<number, number> | null> => {
+  let cachedTop: { at: number; snapshot: Promise<TopSnapshot | null> } | null = null
+  const topSnapshot = (): Promise<TopSnapshot | null> => {
     const topBin = options.topBin
     if (topBin === undefined) return Promise.resolve(null)
-    if (cachedFootprints && now() - cachedFootprints.at < cacheMs) return cachedFootprints.footprints
-    const found = run([topBin, '-l', '1', '-n', '5000', '-stats', 'pid,mem']).then((text) => {
-      const parsed = text === null ? null : parseTopFootprints(text)
-      return parsed === null || parsed.size === 0 ? null : parsed
+    if (cachedTop && now() - cachedTop.at < cacheMs) return cachedTop.snapshot
+    const found = run([topBin, '-l', '1', '-n', '5000', '-stats', 'pid,ppid,mem,time']).then((text) => {
+      const parsed = text === null ? null : parseTop(text)
+      return parsed === null || parsed.rows.size === 0 ? null : parsed
     })
-    cachedFootprints = { at: now(), footprints: found }
+    cachedTop = { at: now(), snapshot: found }
     return found
+  }
+  const footprints = async (): Promise<Map<number, number> | null> => {
+    const snapshot = await topSnapshot()
+    return snapshot === null ? null : new Map([...snapshot.rows].map(([pid, row]) => [pid, row.kib]))
   }
 
   const memsize = async (): Promise<number | null> => {
@@ -102,6 +103,7 @@ export function hostWatch(options: HostWatchOptions): HostWatch {
   return {
     rows: processes,
     footprints,
+    topSnapshot,
 
     async top() {
       const rows = await processes()

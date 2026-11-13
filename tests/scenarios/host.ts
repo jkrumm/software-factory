@@ -71,6 +71,11 @@ printf 'Processes: 10 total\\n\\nPID    MEM  \\n'
 cat "${host}/top.txt"
 `
 
+/** `launchctl list`: no job the class rules would name, so the real host's labels never reach a scenario. */
+const LAUNCHCTL = `#!/bin/sh
+printf 'PID\\tStatus\\tLabel\\n'
+`
+
 const PICKER = (host: string) => `#!/bin/sh
 case "$1" in
   rank) cat "${host}/rank.json";;
@@ -86,6 +91,8 @@ export const hostEnv = (bin: string): Record<string, string> => ({
   FACTORY_VM_STAT_BIN: join(dir(bin), 'vm_stat'),
   FACTORY_LSOF_BIN: join(dir(bin), 'lsof'),
   FACTORY_TOP_BIN: join(dir(bin), 'top'),
+  FACTORY_LAUNCHCTL_BIN: join(dir(bin), 'launchctl'),
+  FACTORY_VM_VOLUME: dir(bin),
   FACTORY_MEMORY_SAMPLE_MS: '0',
   FACTORY_ACCOUNTS_FILE: join(dir(bin), 'registry.json'),
 })
@@ -206,6 +213,8 @@ export async function installHost(bin: string): Promise<void> {
   await writeFile(join(host, 'ps'), PS(host))
   await writeFile(join(host, 'lsof'), LSOF(host))
   await writeFile(join(host, 'top'), TOP(host))
+  await writeFile(join(host, 'launchctl'), LAUNCHCTL)
+  await chmod(join(host, 'launchctl'), 0o755)
   await writeFile(join(host, 'vm_stat'), VM_STAT)
   await chmod(join(host, 'vm_stat'), 0o755)
   await chmod(join(host, 'ps'), 0o755)

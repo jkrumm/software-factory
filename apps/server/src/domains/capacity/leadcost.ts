@@ -34,15 +34,18 @@ const inside = (cwd: string, path: string): boolean => cwd === path || cwd.start
 const trimmed = (path: string): string => (path.length > 1 ? path.replace(/\/+$/, '') : path)
 
 /**
- * What each lead's process tree costs. A process belongs to the worktree with the longest path that contains its working
- * directory (on a path boundary: `/a/b` does not contain `/a/bc`); everything started under it follows, whatever its own
- * directory is (a browser a lead launched). A process is counted once, for the first worktree in the list that claims it.
- * A worktree with no process is left out. Each tree is summed twice, as resident memory and as physical footprint.
+ * Which worktree (its index in the list) each process belongs to: the worktree with the longest path that contains the
+ * process's working directory (on a path boundary: `/a/b` does not contain `/a/bc`), and everything started under such a
+ * process, whatever its own directory is (a browser a lead launched). A process is claimed once, by the first worktree in
+ * the list whose tree reaches it. A process no worktree claims is not in the map.
  */
-export function attribute(procs: readonly ProcInfo[], worktrees: readonly WorktreeRef[]): LeadCost[] {
+export function worktreeOwners(
+  procs: readonly { pid: number; ppid: number; cwd: string | null }[],
+  worktrees: readonly { path: string }[],
+): Map<number, number> {
   const paths = worktrees.map((w) => trimmed(w.path))
-  const children = new Map<number, ProcInfo[]>()
-  for (const proc of procs) children.set(proc.ppid, [...(children.get(proc.ppid) ?? []), proc])
+  const children = new Map<number, number[]>()
+  for (const proc of procs) children.set(proc.ppid, [...(children.get(proc.ppid) ?? []), proc.pid])
 
   const ownerOf = (cwd: string): number => {
     let best = -1
@@ -51,30 +54,46 @@ export function attribute(procs: readonly ProcInfo[], worktrees: readonly Worktr
     })
     return best
   }
-  const roots = new Map<number, ProcInfo[]>()
+  const roots = new Map<number, number[]>()
   for (const proc of procs) {
     if (proc.cwd === null) continue
     const owner = ownerOf(proc.cwd)
-    if (owner >= 0) roots.set(owner, [...(roots.get(owner) ?? []), proc])
+    if (owner >= 0) roots.set(owner, [...(roots.get(owner) ?? []), proc.pid])
   }
 
-  const claimed = new Set<number>()
+  const owners = new Map<number, number>()
+  worktrees.forEach((_, index) => {
+    const stack = [...(roots.get(index) ?? [])]
+    while (stack.length > 0) {
+      const pid = stack.pop() as number
+      if (owners.has(pid)) continue
+      owners.set(pid, index)
+      stack.push(...(children.get(pid) ?? []))
+    }
+  })
+  return owners
+}
+
+/**
+ * What each lead's process tree costs. A process belongs to the worktree with the longest path that contains its working
+ * directory (on a path boundary: `/a/b` does not contain `/a/bc`); everything started under it follows, whatever its own
+ * directory is (a browser a lead launched). A process is counted once, for the first worktree in the list that claims it.
+ * A worktree with no process is left out. Each tree is summed twice, as resident memory and as physical footprint.
+ */
+export function attribute(procs: readonly ProcInfo[], worktrees: readonly WorktreeRef[]): LeadCost[] {
+  const owners = worktreeOwners(procs, worktrees)
   const costs: LeadCost[] = []
   worktrees.forEach((worktree, index) => {
     let rssKib = 0
     let footprintKib = 0
     let measured = 0
     let count = 0
-    const stack = [...(roots.get(index) ?? [])]
-    while (stack.length > 0) {
-      const proc = stack.pop() as ProcInfo
-      if (claimed.has(proc.pid)) continue
-      claimed.add(proc.pid)
+    for (const proc of procs) {
+      if (owners.get(proc.pid) !== index) continue
       rssKib += proc.rssKib
       footprintKib += proc.footprintKib ?? proc.rssKib
       if (proc.footprintKib !== null) measured += 1
       count += 1
-      stack.push(...(children.get(proc.pid) ?? []))
     }
     if (count > 0) {
       costs.push({
