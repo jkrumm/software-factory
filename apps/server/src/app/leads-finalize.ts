@@ -64,8 +64,9 @@ export async function finalizeLead(deps: LeadDeps, effect: FinalizeEffect): Prom
             shipped: await shippedCommits(quality, issue, loaded.issue.attempt),
           }
         : null
-    // A worktree is judged against the shipped commits too, while the Issue is still open: a squash leaves its branch off the base.
-    const shipped = closing?.shipped ?? (loaded ? await shippedCommits(quality, issue, loaded.issue.attempt) : [])
+    // A worktree is judged against what THIS attempt shipped, closed Issue or not: a squash leaves its branch off the base,
+    // and another attempt's landed commit says nothing about this attempt's own commits.
+    const shipped = (await quality.lastShip(issue, attempt))?.commits?.commits ?? []
     return ok({ finalization, repo: loaded?.issue.repo ?? null, row, facts, closing, shipped })
   })
   if (!read.ok) return read

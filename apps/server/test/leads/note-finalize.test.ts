@@ -227,6 +227,7 @@ describe('finalize', () => {
     expect(w.branches.cleaned).toEqual([
       { repo: '/roots/example', issue: 1, closed: 'cancelled', shipped: ['abc1234'] },
     ])
+    expect(w.worktrees.removed).toMatchObject([{ branch: 'factory/1-1', shipped: ['abc1234'] }])
     const [row] = await w.db.sql`SELECT worktree_kept FROM factory.lead_finalizations WHERE issue_id = ${issue}`
     expect(row?.worktree_kept).toBe('branch factory/1-1 kept: its commits are not on origin/master')
 
