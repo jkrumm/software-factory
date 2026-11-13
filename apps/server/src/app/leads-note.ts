@@ -69,6 +69,7 @@ export async function noteLead(deps: LeadDeps, effect: NoteEffect): Promise<Resu
   }
 
   const force = deps.clock.now().getTime() - delivery.claimedAt.getTime() >= deps.forceNoteAfterMs
+  await deps.typePace?.()
   const typed = await deps.terminals.type({ terminal: live.address, text: delivery.text, force })
   if (!typed.ok) return typed
   if (typed.value === 'busy') {

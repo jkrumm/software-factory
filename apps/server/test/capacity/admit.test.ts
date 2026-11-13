@@ -215,6 +215,20 @@ describe('admission', () => {
     expect(result.notes).toEqual(['load reading failed (no loadavg): new leads are admitted without it'])
   })
 
+  test('a host that booted 5 min ago admits nothing new, whatever the load: the reason names the boot', async () => {
+    const issue = await world.queued({ repo: 'app' })
+    world.host.uptimeValue = ok(5 * 60_000)
+    const result = await pass()
+    expect(result.admitted).toEqual([])
+    expect(result.queue.find((e) => e.issue === issue)?.reason).toMatchObject({ kind: 'boot' })
+    expect(result.queue.find((e) => e.issue === issue)?.reason?.message).toContain('host booted 5 min ago')
+    world.host.uptimeValue = { ok: false, error: { kind: 'unreadable', detail: 'no boottime' } }
+    const unread = await pass()
+    expect(unread.admitted.map((a) => a.issue)).toEqual([issue])
+    expect(unread.notes).toContain('uptime reading failed (no boottime): the boot grace does not apply this pass')
+    world.host.uptimeValue = ok(24 * 3_600_000)
+  })
+
   test('a drain of the whole queue keeps every project out; nothing running is touched', async () => {
     const a = await world.queued({ repo: 'app' })
     await pass()

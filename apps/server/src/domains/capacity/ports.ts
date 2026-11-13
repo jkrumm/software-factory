@@ -98,6 +98,8 @@ export interface HostReader {
   ramMib(): Promise<Result<number>>
   /** the 1-minute load average */
   load(): Promise<Result<number>>
+  /** how long the host has been up, in ms (`kern.boottime`); the boot grace counts from it */
+  uptimeMs(): Promise<Result<number>>
 }
 
 /** The accounts and their windows, as the running core reads them (`claude-account usage --json`). */

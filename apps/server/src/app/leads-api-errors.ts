@@ -206,6 +206,7 @@ async function resume(deps: LeadDeps, step: Extract<Step, { kind: 'resume' }>): 
   const found = await deps.terminals.find(pending.session)
   const live = found.ok ? found.value.find((terminal) => terminal.live) : undefined
   if (!live) return release()
+  await deps.typePace?.()
   const typed = await deps.terminals.resume({ terminal: live.address, text })
   if (typed.ok && typed.value === 'busy') return release()
   if (!typed.ok) return false

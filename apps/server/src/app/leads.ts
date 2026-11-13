@@ -50,6 +50,8 @@ export interface LeadDeps {
   graceMs: number
   /** the API-error path's ports; unset, a turn that ended on an API error is neither found nor answered */
   apiErrors?: ApiErrorPorts
+  /** waits its turn before a note or nudge is typed into a lead: after a server start, one per 10 s; unset, no wait */
+  typePace?: () => Promise<void>
 }
 
 /** The Issue and its applied events, or null when there is no such Issue. */

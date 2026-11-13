@@ -303,8 +303,16 @@ describe('the brief', () => {
   test('the standing orders open every brief and are pinned', () => {
     expect(buildBrief(input).startsWith(STANDING_ORDERS)).toBe(true)
     expect(new Bun.CryptoHasher('sha256').update(STANDING_ORDERS).digest('hex')).toBe(
-      '6ca8b7dd0ae57307a498ae702927ab0b1ef76c188d1043debd2bcc01fc1a0cc1',
+      '3943e417d44b4cb974546874b21f0c5e272d30689576a87faceefe5967410771',
     )
+  })
+
+  test('the standing orders carry the HerdrCore constraint', () => {
+    expect(STANDING_ORDERS).toContain('dotfiles/docs/incident-2026-11-13-mini-panic.md')
+    expect(STANDING_ORDERS).toMatch(/never restart, stop, update or start the core/)
+    expect(STANDING_ORDERS).toContain('never reboot the host, kill a process or restart the core to prove a change')
+    expect(STANDING_ORDERS).toContain("the owner's `make herdr-core-update`")
+    expect(STANDING_ORDERS).toContain('states a one-line rollback')
   })
 
   test('the standing orders teach how to wait and the host traps, and what an implementer is for', () => {

@@ -127,3 +127,9 @@ export function memoryReadingOf(input: {
     swapUsedPct: Math.round((input.swapUsedBytes / input.ramBytes) * 1000) / 10,
   }
 }
+
+/** The boot time in seconds from `kern.boottime` (`{ sec = 1731520000, usec = 1234 } Thu Nov 13 …`); null when not understood. */
+export function bootTimeSeconds(boottime: string): number | null {
+  const sec = /sec\s*=\s*(\d+)/.exec(boottime)?.[1]
+  return sec === undefined ? null : Number(sec)
+}

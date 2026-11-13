@@ -1,5 +1,11 @@
 import { loadavg } from 'node:os'
-import { memoryReadingOf, type MemoryReading, type SwapSample, swapUsedBytes } from '../../domains/capacity/host.ts'
+import {
+  bootTimeSeconds,
+  memoryReadingOf,
+  type MemoryReading,
+  type SwapSample,
+  swapUsedBytes,
+} from '../../domains/capacity/host.ts'
 import type { HostReader } from '../../domains/capacity/ports.ts'
 import { err, ok, portError, type PortError, type Result } from '../../kernel/result.ts'
 import { CannotStart, runProcess } from './process.ts'
@@ -85,6 +91,14 @@ export function hostReader(options: HostOptions): HostReader {
       const bytes = count('hw.memsize', text.value)
       if (!bytes.ok) return bytes
       return bytes.value > 0 ? ok(Math.round(bytes.value / MIB)) : err(portError('unreadable', 'hw.memsize is 0'))
+    },
+
+    async uptimeMs() {
+      const text = await sysctl('kern.boottime')
+      if (!text.ok) return text
+      const bootedAt = bootTimeSeconds(text.value)
+      if (bootedAt === null) return err(portError('unreadable', `kern.boottime not understood: ${text.value}`))
+      return ok(Math.max(0, now() - bootedAt * 1000))
     },
 
     async load() {

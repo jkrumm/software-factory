@@ -131,7 +131,10 @@ through `receive` in `app/intake.ts`; the answer is a triage outcome (`docs/lang
 ## Capacity and leads
 
 - **Admission** (`domains/capacity/admission.ts`) is pure and decided again at every claim, in this order: queue state
-  (`drain` starts nothing), the host's 1-minute load, its memory (swapouts and swap against ceilings; the swapouts are the higher of the pass's own rate and the minute samples' last 300 s, `sustainedSwapoutMb`, so a lull between bursts does not open the gate; the memory that a
+  (`drain` starts nothing), the **boot grace** (kind `boot`, `domains/capacity/boot.ts`: while the host's uptime, from `kern.boottime`, is under 30 min,
+  no new lead until the five newest minute samples, all taken since the boot, show a load under a quarter of the ceiling and the newest
+  sample's memory is under 80 % in use, then at most one lead per 2 min; resumed leads count against the seats as always; the reason reads
+  "host booted N min ago: …"; an unreadable uptime applies no grace and says so as a note), the host's 1-minute load, its memory (swapouts and swap against ceilings; the swapouts are the higher of the pass's own rate and the minute samples' last 300 s, `sustainedSwapoutMb`, so a lull between bursts does not open the gate; the memory that a
   lane's `memory` reserves for its running leads and the candidate counts as swap in use, `docs/plan.md` "Lanes"; then the
   learned fit: a repo with at least three sampled attempts is refused, kind `memory`, when its p80 lead does not fit into
   the free memory of the newest host sample (not older than 5 min) less headroom (the larger of 2 GiB and 8 % of RAM); the running leads' test peaks are not reserved here, the slot grant holds them back (`SlotFit`); it
@@ -249,7 +252,10 @@ through `receive` in `app/intake.ts`; the answer is a triage outcome (`docs/lang
 - **Start** (`app/leads-start.ts`): claim and look, make the worktree (`factory/<issue>-<attempt>`), then the terminal,
   then record the lead started. The terminal is found by its `factory.key` label before one is made, so a replay after a
   crash attaches to the lead that runs. The prompt is the brief (`domains/leads/brief.ts`): standing orders that are
-  byte-identical in every brief so the prompt cache serves them, then the Issue as filed, its facts and its notes.
+  byte-identical in every brief so the prompt cache serves them (they carry the HerdrCore constraint: no lead restarts, stops,
+  updates or starts the core or reboots to prove a change), then the Issue as filed, its facts and its notes. Notes and
+  API-error nudges typed into leads are paced for 10 min after a server start, one per 10 s (`app/type-pace.ts`, `FACTORY_TYPE_GAP_MS`, 0 is off), so a restart's
+  backlog does not land at once.
 - **Hooks.** `factory hook` appends to the spool, then posts to the unix socket (mode 0600) within 300 ms. The server
   replays the spool with idempotent keys. Session state is derived from the events when read, never stored.
 - **Notes** (`app/leads-note.ts`) are typed into the lead's terminal once: the delivery key is claimed before the typing, a
