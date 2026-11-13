@@ -17,10 +17,16 @@ import { ok, type PortError, type Result } from '../../kernel/result.ts'
 import { scrub } from '../../kernel/scrub.ts'
 import type { UnitOfWork } from '../unit-of-work.ts'
 
-export interface ErrandsDeps {
+/** What running one Errand's check needs; the desk pass shares it. */
+export interface CheckDeps {
   uow: UnitOfWork<{ checkpoints: CheckpointStore }>
   clock: Clock
   checks: CheckRunner
+  /** ends an Errand whose check says it is no longer needed; default: close the request (no Issue to tell) */
+  resolve?: (errand: ErrandRecord, why: string) => Promise<boolean>
+}
+
+export interface ErrandsDeps extends CheckDeps {
   needed: ErrandNeededPort
 }
 
@@ -52,7 +58,7 @@ const cut = (text: string, max = 300): string => text.replace(/\s+/g, ' ').trim(
 
 /** Closes the Errand if it is still open; false when it was closed under the pass (the owner acted first). */
 async function close(
-  deps: ErrandsDeps,
+  deps: CheckDeps,
   errand: ErrandRecord,
   kind: 'not_needed' | 'expired',
   by: 'check' | 'judge' | 'loop',
@@ -64,14 +70,19 @@ async function close(
   return done.ok && done.value
 }
 
-async function noteCheck(deps: ErrandsDeps, errand: ErrandRecord, note: string, fails: number): Promise<void> {
+async function noteCheck(deps: CheckDeps, errand: ErrandRecord, note: string, fails: number): Promise<void> {
   await deps.uow.run(async ({ checkpoints }) =>
     ok(await checkpoints.recordCheck(errand.id, { at: deps.clock.now(), note, fails })),
   )
 }
 
 /** Runs the Errand's check, outside any transaction, and acts on the answer. */
-async function runCheck(deps: ErrandsDeps, errand: ErrandRecord, command: string, pass: ErrandsPass): Promise<void> {
+export async function runCheck(
+  deps: CheckDeps,
+  errand: ErrandRecord,
+  command: string,
+  pass: Pick<ErrandsPass, 'kept' | 'checkedOut' | 'unrunnable' | 'problems'>,
+): Promise<void> {
   const run = await deps.checks.run(command)
   const verdict = checkVerdict(run)
   if (verdict === 'needed') {
@@ -83,7 +94,10 @@ async function runCheck(deps: ErrandsDeps, errand: ErrandRecord, command: string
   }
   if (verdict === 'not_needed') {
     const said = exitedNote(run.exit, run.output)
-    if (await close(deps, errand, 'not_needed', 'check', said)) pass.checkedOut++
+    const closed = deps.resolve
+      ? await deps.resolve(errand, said)
+      : await close(deps, errand, 'not_needed', 'check', said)
+    if (closed) pass.checkedOut++
     return
   }
   pass.unrunnable++

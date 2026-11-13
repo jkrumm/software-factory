@@ -27,10 +27,18 @@ function item(record: HistoryRecord): string | null {
     }
     case 'errand_done': {
       const turnedAway = field(record, 'turnedAway')
+      const resolved = field(record, 'resolved')
+      const awaits = field(record, 'awaits')
+      if (typeof resolved === 'string')
+        return `the Errand ${oneLine(field(record, 'errand'))} is no longer needed: ${oneLine(resolved)}`
+      if (typeof turnedAway === 'string' && typeof (awaits as { review?: unknown } | null)?.review === 'string')
+        return `the Errand ${oneLine(field(record, 'errand'))} was turned back before it reached the owner: ${oneLine(turnedAway)}. The Issue now waits on the review of ${oneLine((awaits as { review: string }).review)}; the factory polls it and tells you when it is approved, gets changes requested or a new review comment, merges or closes`
       if (typeof turnedAway === 'string')
         return `the Errand ${oneLine(field(record, 'errand'))} was turned away before it reached the owner: ${oneLine(turnedAway)}. Do it yourself, or raise it again with a different summary if it needs a person's hands (the same words are the same Errand)`
       return `the Errand ${oneLine(field(record, 'errand'))} is done`
     }
+    case 'errand_turned_back':
+      return `the Errand ${oneLine(field(record, 'errand'))} was turned back by the owner, not done: ${oneLine(field(record, 'note'))}. Do what it says instead of waiting for a person`
     case 'woken':
       return `your wait is over: ${oneLine(field(record, 'detail'))}`
     case 'regressed':

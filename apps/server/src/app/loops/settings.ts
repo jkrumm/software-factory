@@ -1,5 +1,6 @@
 import * as z from 'zod'
 import { LOOP_NAMES, type LoopName } from '@software-factory/contract'
+import { REVIEW_POLL_MS } from '../../domains/loops/reviews.ts'
 import { DEFAULT_WAIT_GRACE_MS } from '../../domains/loops/selfwatch.ts'
 import { DEFAULT_STEWARD_RULES } from '../../domains/loops/stall.ts'
 
@@ -25,6 +26,12 @@ const Env = z.object({
   FACTORY_LOOP_REAPER_MS: ms.optional(),
   FACTORY_LOOP_DIGEST_MS: ms.optional(),
   FACTORY_LOOP_ERRANDS_MS: ms.optional(),
+  FACTORY_LOOP_REVIEWS_MS: ms.optional(),
+  FACTORY_LOOP_DESK_MS: ms.optional(),
+  /** the `gh` config directory the review poll uses in a work repo, whose account is not the owner's */
+  FACTORY_GH_CONFIG_DIR_WORK: z.string().trim().min(1).optional(),
+  /** the script the desk pass pushes a MacBook command through; unset, the dotfiles' own copy */
+  FACTORY_ASK_HUMAN_BIN: z.string().trim().min(1).optional(),
   /** a closed attempt's processes are left this long (at least 1 minute) before the reaper ends them */
   FACTORY_REAPER_GRACE_MS: z.coerce.number().int().min(60_000).optional(),
   /** 1: the reaper decides and records with signal `dry`, and sends nothing */
@@ -83,6 +90,10 @@ export interface LoopSettings {
   heartbeatStaleMs: number | null
   reaperGraceMs: number
   reaperDry: boolean
+  /** the `gh` config directory for work repos, null when none is set */
+  ghConfigDirWork: string | null
+  /** the ask-human script's path, null for the dotfiles' own copy */
+  askHumanBin: string | null
 }
 
 export const DEFAULT_TICK_MS = 10_000
@@ -113,6 +124,11 @@ const digestTickMs = (tickMs: number): number => (tickMs === 0 ? 0 : DIGEST_TICK
 /** The open requests for the owner's hands are looked at every hour, unless the tick is off (0). */
 export const ERRANDS_TICK_MS = 3_600_000
 const errandsTickMs = (tickMs: number): number => (tickMs === 0 ? 0 : ERRANDS_TICK_MS)
+
+/** A pull request's review is looked at every 15 minutes, and the desk pass is asked whether it is due as often, unless the tick is off (0). */
+const reviewsTickMs = (tickMs: number): number => (tickMs === 0 ? 0 : REVIEW_POLL_MS)
+const DESK_TICK_MS = 15 * 60_000
+const deskTickMs = (tickMs: number): number => (tickMs === 0 ? 0 : DESK_TICK_MS)
 
 /** The reaper looks at the process table every 5 minutes, unless the tick is off (0). */
 const REAPER_TICK_MS = 5 * 60_000
@@ -155,6 +171,8 @@ export function loadLoopSettings(env: Record<string, string | undefined>): LoopS
     reaper: e.FACTORY_LOOP_REAPER_MS,
     digest: e.FACTORY_LOOP_DIGEST_MS,
     errands: e.FACTORY_LOOP_ERRANDS_MS,
+    reviews: e.FACTORY_LOOP_REVIEWS_MS,
+    desk: e.FACTORY_LOOP_DESK_MS,
   }
   return {
     intervalMs: Object.fromEntries(
@@ -177,7 +195,11 @@ export function loadLoopSettings(env: Record<string, string | undefined>): LoopS
                         ? digestTickMs(tickMs)
                         : name === 'errands'
                           ? errandsTickMs(tickMs)
-                          : tickMs),
+                          : name === 'reviews'
+                            ? reviewsTickMs(tickMs)
+                            : name === 'desk'
+                              ? deskTickMs(tickMs)
+                              : tickMs),
       ]),
     ) as Record<LoopName, number>,
     tickMs,
@@ -198,5 +220,7 @@ export function loadLoopSettings(env: Record<string, string | undefined>): LoopS
     heartbeatStaleMs: e.FACTORY_HEARTBEAT_STALE_MS ?? null,
     reaperGraceMs: e.FACTORY_REAPER_GRACE_MS ?? DEFAULT_REAPER_GRACE_MS,
     reaperDry: e.FACTORY_REAPER_DRY === '1',
+    ghConfigDirWork: e.FACTORY_GH_CONFIG_DIR_WORK ?? null,
+    askHumanBin: e.FACTORY_ASK_HUMAN_BIN ?? null,
   }
 }

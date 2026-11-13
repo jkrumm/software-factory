@@ -248,6 +248,12 @@ export const ErrandBody = z
     detail: z.string().optional(),
     /** what was tried before asking for a person's hands: the commands, the tokens, the routes. Required. */
     tried: z.string().optional(),
+    /**
+     * a shell command that exits 0 while the Errand is still needed. Set it for anything a machine can observe (an
+     * unreachable accessory: `home doctor`; a token that must be rotated: the command that tests it). The factory runs it
+     * when the owner is back at the desk and every few hours, and closes the Errand, ending the wait, when it exits 1..125.
+     */
+    check: z.string().optional(),
     /** makes a repeated call one event, as on `ship` and `defer` */
     call: z.string().trim().min(1).max(128).optional(),
   })
@@ -272,8 +278,21 @@ export const ErrandDoneBody = z
   })
   .meta({ id: 'ErrandDoneBody' })
 
+/** The owner's or the orchestrator's "turned back": the Errand is not done, and the lead hears the note. */
+export const ErrandTurnBackBody = z
+  .object({ note: z.string().trim().min(1).max(2000) })
+  .meta({ id: 'ErrandTurnBackBody' })
+export type ErrandTurnBackBody = z.infer<typeof ErrandTurnBackBody>
+
 export const ERRAND_HOSTS = ['macbook', 'iphone', 'portal', 'any'] as const
-export const ERRAND_CLOSED_KINDS = ['done', 'not_needed', 'expired', 'superseded', 'turned_away'] as const
+export const ERRAND_CLOSED_KINDS = [
+  'done',
+  'not_needed',
+  'expired',
+  'superseded',
+  'turned_away',
+  'turned_back',
+] as const
 
 /** A request for the owner's hands that no Issue raised: what `ask-human.sh` posts. */
 export const ErrandRequestBody = z
@@ -319,7 +338,7 @@ export const ErrandView = z.object({
   requestKey: z.string().nullable(),
   /** how it ended and who ended it; null while open */
   closedKind: z.enum(ERRAND_CLOSED_KINDS).nullable(),
-  closedBy: z.enum(['owner', 'check', 'judge', 'loop', 'request']).nullable(),
+  closedBy: z.enum(['owner', 'orchestrator', 'check', 'judge', 'loop', 'request']).nullable(),
   /** the last run of its check or look of the still-needed workflow: what it said */
   checkNote: z.string().nullable(),
   /** the last pushed run that came back unsuccessful (a failure, a timeout, still running); null when none did */

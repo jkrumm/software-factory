@@ -17,6 +17,7 @@ import {
   ErrandReply,
   ErrandRequestBody,
   ErrandRequestReply,
+  ErrandTurnBackBody,
   ErrorBody,
   ISSUE_ID_META,
   PageList,
@@ -664,6 +665,32 @@ export const checkpointRoutes = (uses: CheckpointUses) =>
         detail: {
           operationId: 'errand.done',
           summary: 'the owner did it, or found it not needed (`outcome`): the lead hears it as its next turn',
+        },
+      },
+    )
+    .post(
+      '/errands/:id/turn-back',
+      async ({ params, body, request }) => {
+        const id = idOf('errand', params.id)
+        if (!id) return unknownId('Errand', params.id)
+        const result = await uses.turnBackErrand({ errandId: id, note: body.note, by: ownerActorOf(request) })
+        if (!result.ok) return failed(result.error)
+        return Response.json(
+          ErrandReply.parse({
+            result: result.value.result,
+            errand: errandView(result.value.errand),
+            issue: result.value.issue,
+          }),
+        )
+      },
+      {
+        params: Id,
+        body: ErrandTurnBackBody,
+        response: RESPONSES(ErrandReply, 400, 404, 409, 422, 503),
+        detail: {
+          operationId: 'errand.turn-back',
+          summary:
+            'the owner or the orchestrator turns an Errand back, not done: the note says what to do instead, and the lead hears it as its next turn',
         },
       },
     )

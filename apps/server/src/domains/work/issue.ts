@@ -49,7 +49,12 @@ export const WAITS = {
     stall: false,
     ends: 'verdict given on the Concept or Spec by the owner, and every Decision the lead raised about it answered',
   },
-  errand: { exit: 'person', stall: false, ends: "errand done by the owner's hands" },
+  errand: { exit: 'person', stall: false, ends: "errand done by the owner's hands, or turned back with a note" },
+  external: {
+    exit: 'machine',
+    stall: false,
+    ends: 'woken by the review poll when the pull request is approved, gets changes requested or a new review comment, merges or closes',
+  },
 } as const satisfies Record<string, { exit: 'machine' | 'person'; stall: boolean; ends: string }>
 
 export type WaitReason = keyof typeof WAITS
@@ -64,6 +69,8 @@ export type WaitSpec =
   | { reason: 'dependency'; after: IssueId[]; watching?: true }
   | { reason: StallCause; detail: string }
   | { reason: Exclude<PersonReason, 'review'>; holds: Checkpoint }
+  /** a pull request waits on a review by someone else: `holds.id` names it (a URL or `#<number>`), the poll wakes the wait */
+  | { reason: 'external'; holds: Checkpoint }
   /**
    * `holds` is the artifact. The lead may raise Decisions about it while it is reviewed: `decisions` are the ones still
    * open, `verdictGiven` is set once the verdict came first. The wait ends when the verdict is given and none is open.

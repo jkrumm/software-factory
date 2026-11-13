@@ -79,7 +79,14 @@ export function claimRoom(input: {
  * place that Issue needs. A stall (a wall, an unreported stop, a block, a regression) keeps it: the lead is alive and
  * the steward ends the stall.
  */
-export const CLAIM_FREEING_WAITS: ReadonlySet<string> = new Set(['timer', 'dependency', 'decision', 'review', 'errand'])
+export const CLAIM_FREEING_WAITS: ReadonlySet<string> = new Set([
+  'timer',
+  'dependency',
+  'decision',
+  'review',
+  'errand',
+  'external',
+])
 
 /** Whether an Issue in this state is a lead working in its repo, so it holds a claim. */
 export function holdsClaim(state: string, waitReason: string | null): boolean {

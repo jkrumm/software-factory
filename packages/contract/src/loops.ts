@@ -315,6 +315,8 @@ export const LOOP_NAMES = [
   'reaper',
   'digest',
   'errands',
+  'reviews',
+  'desk',
 ] as const
 export type LoopName = (typeof LOOP_NAMES)[number]
 

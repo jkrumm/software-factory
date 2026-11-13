@@ -202,7 +202,15 @@ export interface IdleRecord {
   version: number
 }
 
-const NEWS_KINDS: readonly string[] = ['verdict_given', 'answered', 'woken', 'errand_done', 'reopened', 'regressed']
+const NEWS_KINDS: readonly string[] = [
+  'verdict_given',
+  'answered',
+  'woken',
+  'errand_done',
+  'errand_turned_back',
+  'reopened',
+  'regressed',
+]
 
 const payloadOf = (record: IdleRecord): Record<string, unknown> =>
   typeof record.payload === 'object' && record.payload !== null ? (record.payload as Record<string, unknown>) : {}

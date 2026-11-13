@@ -142,8 +142,8 @@ const ErrandRow = z.object({
   host: z.enum(HOSTS).nullable(),
   expires_at: z.date().nullable(),
   request_key: z.string().nullable(),
-  closed_kind: z.enum(['done', 'not_needed', 'expired', 'superseded', 'turned_away']).nullable(),
-  closed_by: z.enum(['owner', 'check', 'judge', 'loop', 'request']).nullable(),
+  closed_kind: z.enum(['done', 'not_needed', 'expired', 'superseded', 'turned_away', 'turned_back']).nullable(),
+  closed_by: z.enum(['owner', 'orchestrator', 'check', 'judge', 'loop', 'request']).nullable(),
   check_at: z.date().nullable(),
   check_note: z.string().nullable(),
   check_fails: z.number().int(),
@@ -154,6 +154,7 @@ const ErrandRow = z.object({
   run_at: z.date().nullable(),
   run_head: z.string().nullable(),
   run_tail: z.string().nullable(),
+  pushed_at: z.date().nullable(),
 })
 
 const PageRow = z.object({
@@ -293,6 +294,7 @@ const errandOf = (raw: unknown): ErrandRecord => {
     runAt: row.run_at,
     runHead: row.run_head,
     runTail: row.run_tail,
+    pushedAt: row.pushed_at,
   }
 }
 
@@ -669,6 +671,18 @@ export function postgresCheckpointStore(tx: SQL): CheckpointStore {
         UPDATE factory.errands SET needed_at = ${run.at}, check_note = ${run.note}
         WHERE id = ${id} AND done_at IS NULL RETURNING id`
       return rows.length === 1
+    },
+
+    async recordPush(id, at) {
+      const rows: unknown[] = await tx`
+        UPDATE factory.errands SET pushed_at = ${at} WHERE id = ${id} AND done_at IS NULL RETURNING id`
+      return rows.length === 1
+    },
+
+    async openErrands(limit) {
+      const rows: unknown[] = await tx`
+        SELECT * FROM factory.errands WHERE done_at IS NULL ORDER BY raised_at, id LIMIT ${limit}`
+      return rows.map(errandOf)
     },
 
     async unscreenedErrands(now, limit) {

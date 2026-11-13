@@ -63,10 +63,16 @@ export function describeEvent(kind: string, payload: unknown): string {
       return 'An errand for the owner was raised.'
     case 'errand_done': {
       const turnedAway = field(payload, 'turnedAway')
+      const resolved = field(payload, 'resolved')
+      if (resolved) return `An errand was no longer needed: ${cut(plainText(resolved))}`
       return turnedAway ? `An errand was turned away: ${cut(plainText(turnedAway))}` : 'The errand was done.'
     }
-    case 'deferred':
-      return 'Deferred.'
+    case 'errand_turned_back':
+      return `An errand was turned back: ${cut(plainText(field(payload, 'note') ?? ''))}`
+    case 'deferred': {
+      const review = field(payload, 'review')
+      return review ? `Waiting on the review of ${cut(plainText(review))}.` : 'Deferred.'
+    }
     case 'stalled':
       return after('Stalled', field(payload, 'detail'))
     case 'woken':
@@ -152,6 +158,7 @@ const WAIT_SENTENCE: Record<string, string> = {
   decision: 'Waiting for the owner to decide.',
   review: 'Waiting for the owner to review.',
   errand: "Waiting for the owner's hands.",
+  external: "Waiting on someone else's review of its pull request.",
 }
 
 /** A plain word for what the Issue is doing now. */
@@ -172,7 +179,7 @@ export function phaseOf(input: { state: string; reason: string | null }): string
           ? 'waiting for your review'
           : input.reason === 'errand'
             ? 'waiting for your hands'
-            : input.reason === 'timer' || input.reason === 'dependency'
+            : input.reason === 'timer' || input.reason === 'dependency' || input.reason === 'external'
               ? 'waiting'
               : 'stalled'
     default:

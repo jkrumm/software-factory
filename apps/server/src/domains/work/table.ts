@@ -104,6 +104,8 @@ function waitHint(issue: Issue, event: { kind: EventKind; payload?: unknown }): 
     }
     case 'timer':
       return ''
+    case 'external':
+      return `it waits on the review of ${wait.holds.id} (${ends}), so \`${verb}\` is not taken now: end the turn; the poll wakes it with what the reviewer did, ${later}`
     default:
       return `it waits (${wait.reason}: ${ends}); \`${verb}\` is taken only from a timed wait or while working: a stall is the steward's to end, so end the turn`
   }
@@ -184,6 +186,13 @@ const defer = byLead((ctx: Ctx<'deferred'>): Cell => {
     if (Date.parse(payload.until) <= ctx.now.getTime()) return refuse('deferred needs a time ahead of now')
     return { to: 'waiting', wait: { reason: 'timer', until: payload.until }, effects: [] }
   }
+  if ('review' in payload) {
+    return {
+      to: 'waiting',
+      wait: { reason: 'external', holds: { id: payload.review, summary: `the review of ${payload.review}` } },
+      effects: [],
+    }
+  }
   if (payload.after.includes(ctx.issue.id)) return refuse('an Issue is not after itself')
   return { to: 'waiting', wait: { reason: 'dependency', after: [...new Set(payload.after)] }, effects: [] }
 })
@@ -192,6 +201,7 @@ const defer = byLead((ctx: Ctx<'deferred'>): Cell => {
 const stewardDefer = (ctx: Ctx<'deferred'>): Cell => {
   const { payload } = ctx.event
   if ('until' in payload) return refuse('the steward defers only behind other Issues, never until a time')
+  if ('review' in payload) return refuse('the steward defers only behind other Issues, never on a review')
   return defer(ctx)
 }
 const deferredBy =
@@ -259,6 +269,22 @@ function endsCheckpoint(ctx: { issue: Issue }, reason: WaitReason, id: string): 
   if (wait?.reason !== reason || !('holds' in wait)) return ignore(`it waits for ${wait?.reason}, not a ${reason}`)
   if (wait.holds.id !== id) return ignore(`it waits for ${reason} ${wait.holds.id}, not ${id}`)
   return resume(ctx.issue)
+}
+
+/**
+ * An Errand's wait ends. A turn-away that names a review (`awaits`: the screen found the Errand asks the owner to approve
+ * or merge a pull request someone else must review) does not send the lead back to work: the Issue waits on that review,
+ * and the lead hears the turn-away and what the reviewer did together when the poll wakes it.
+ */
+const errandEnded = (ctx: Ctx<'errand_done'>): Cell => {
+  const { awaits, errand } = ctx.event.payload
+  const ended = endsCheckpoint(ctx, 'errand', errand)
+  if (!awaits || !('to' in ended)) return ended
+  return {
+    to: 'waiting',
+    wait: { reason: 'external', holds: { id: awaits.review, summary: `the review of ${awaits.review}` } },
+    effects: [],
+  }
 }
 
 /** A review wait takes the lead's `asked` for a Decision about the artifact; the steward's ask is for a stall only. */
@@ -366,6 +392,7 @@ export const TABLE: Table = {
     verdict_given: said('nothing waits for a verdict'),
     errand_raised: noLeadYet,
     errand_done: said('nothing waits for an errand'),
+    errand_turned_back: said('nothing waits for an errand'),
     deferred: noLeadYet,
     stalled: said('settling: no lead is working'),
     woken: said('it is not waiting'),
@@ -390,6 +417,7 @@ export const TABLE: Table = {
     verdict_given: said('nothing waits for a verdict'),
     errand_raised: noLeadYet,
     errand_done: said('nothing waits for an errand'),
+    errand_turned_back: said('nothing waits for an errand'),
     deferred: noLeadYet,
     stalled: said('queued: no lead is working'),
     woken: said('it is not waiting'),
@@ -414,6 +442,7 @@ export const TABLE: Table = {
     verdict_given: said('nothing waits for a verdict'),
     errand_raised: raiseErrand,
     errand_done: said('nothing waits for an errand'),
+    errand_turned_back: said('nothing waits for an errand'),
     deferred: deferredBy(defer),
     stalled: stall,
     woken: said('it is not waiting'),
@@ -438,7 +467,8 @@ export const TABLE: Table = {
     submitted: fromTimer(submit),
     verdict_given: verdictWhileWaiting,
     errand_raised: fromTimer(raiseErrand),
-    errand_done: (ctx) => endsCheckpoint(ctx, 'errand', ctx.event.payload.errand),
+    errand_done: errandEnded,
+    errand_turned_back: (ctx) => endsCheckpoint(ctx, 'errand', ctx.event.payload.errand),
     deferred: heldOrFromTimer,
     stalled: (ctx) =>
       ctx.event.payload.cause === 'blocked' ? fromTimer(stall)(ctx) : ignore('waiting: no lead turn is running'),
@@ -464,6 +494,7 @@ export const TABLE: Table = {
     verdict_given: said('nothing waits for a verdict'),
     errand_raised: watchIsOn,
     errand_done: said('nothing waits for an errand'),
+    errand_turned_back: said('nothing waits for an errand'),
     deferred: deferWatching,
     stalled: (ctx) => (ctx.event.actor === 'lead' ? refuse('it shipped: the watch is on') : ignore('watching')),
     woken: said('it is not waiting'),
@@ -488,6 +519,7 @@ export const TABLE: Table = {
     verdict_given: said('it is closed: nothing waits for a verdict'),
     errand_raised: isClosed,
     errand_done: said('it is closed: nothing waits for an errand'),
+    errand_turned_back: said('it is closed: nothing waits for an errand'),
     deferred: isClosed,
     stalled: said('it is closed'),
     woken: said('it is closed'),

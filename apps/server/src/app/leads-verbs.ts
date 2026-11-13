@@ -43,7 +43,9 @@ export const deferIssue = (deps: Deps, issueId: IssueId, body: DeferBody): Promi
     kind: 'deferred',
     payload: body.until
       ? { attempt: body.attempt, until: body.until }
-      : { attempt: body.attempt, after: (body.after ?? []) as IssueId[] },
+      : body.review
+        ? { attempt: body.attempt, review: body.review }
+        : { attempt: body.attempt, after: (body.after ?? []) as IssueId[] },
     actor: 'lead',
   })
 

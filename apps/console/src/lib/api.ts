@@ -165,6 +165,8 @@ export const finishErrand = (id: string, note: string, outcome: 'done' | 'not_ne
     { ...(note ? { note } : {}), ...(outcome === 'not_needed' ? { outcome } : {}) },
     ErrandReply,
   )
+export const turnBackErrand = (id: string, note: string) =>
+  postJson(`/v1/errands/${encodeURIComponent(id)}/turn-back`, { note }, ErrandReply)
 export const promoteSignal = (id: string, repo: string | null) =>
   postJson(`/signals/${encodeURIComponent(id)}/promote`, repo ? { repo } : {}, SignalAck)
 
