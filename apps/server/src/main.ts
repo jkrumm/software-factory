@@ -18,7 +18,7 @@ import { postgresCheckpointStore } from './adapters/postgres/checkpoint-store.ts
 import { hostReader } from './adapters/planning/host.ts'
 import { hostWatch } from './adapters/planning/host-watch.ts'
 import { textRunner } from './adapters/planning/process.ts'
-import { cachedCwds, processTable } from './adapters/planning/processes.ts'
+import { processTable, sharedCwds } from './adapters/planning/processes.ts'
 import { hostSnapshot } from './adapters/planning/snapshot.ts'
 import { postgresLoopStore } from './adapters/postgres/loop-store.ts'
 import { postgresVisitStore } from './adapters/postgres/visit-store.ts'
@@ -194,7 +194,7 @@ async function main(): Promise<void> {
     vmStatBin: process.env.FACTORY_VM_STAT_BIN,
     runner: hostRunner,
   })
-  const hostCwds = cachedCwds({ runner: hostRunner, lsofBin })
+  const hostCwds = sharedCwds({ runner: hostRunner, lsofBin })
   const hostProcesses = processTable({
     rows: () => hostSamples.rows(),
     footprints: () => hostSamples.footprints(),

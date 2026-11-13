@@ -64,7 +64,7 @@ const LSOF = (host: string) => `#!/bin/sh
 cat "${host}/lsof.txt"
 `
 
-/** `top -l 1 -n <count> -stats pid,mem`: the footprints in `top.txt` under top's own header; a file `top.fail` makes it fail. */
+/** `top -l 1 -n <count> -stats pid,ppid,mem,time`: the rows of `top.txt` under top's own header; a file `top.fail` makes it fail. */
 const TOP = (host: string) => `#!/bin/sh
 [ -e "${host}/top.fail" ] && exit 1
 printf 'Processes: 10 total\\n\\nPID    MEM  \\n'
@@ -164,7 +164,9 @@ export async function setProcesses(
   await writeFile(join(host, 'lsof.txt'), processes.map((p) => `p${p.pid}\nn${p.cwd}\n`).join(''))
   await writeFile(
     join(host, 'top.txt'),
-    processes.flatMap((p) => (p.footprintKib === undefined ? [] : [`${p.pid}  ${p.footprintKib}K\n`])).join(''),
+    processes
+      .flatMap((p) => (p.footprintKib === undefined ? [] : [`${p.pid}  ${p.ppid}  ${p.footprintKib}K  00:01.00\n`]))
+      .join(''),
   )
   await rm(join(host, 'lsof.fail'), { force: true })
   await rm(join(host, 'top.fail'), { force: true })

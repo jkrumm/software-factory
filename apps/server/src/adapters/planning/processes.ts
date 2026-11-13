@@ -44,27 +44,27 @@ export async function readCwds(lsofBin: string, timeoutMs: number): Promise<Map<
 }
 
 /**
- * `readCwds` through a metered runner, shared for `cacheMs`: the lead costs and the class snapshot of one host pass read
- * one `lsof`.
+ * `readCwds` through a metered runner, shared while it runs: the lead costs and the class snapshot of one host pass both
+ * ask at the pass's start and read one `lsof`; a later call (the next pass) reads afresh.
  */
-export function cachedCwds(options: {
+export function sharedCwds(options: {
   runner: TextRunner
   lsofBin: string
   timeoutMs?: number
-  cacheMs?: number
-  now?: () => number
 }): () => Promise<Map<number, string> | null> {
-  const now = options.now ?? Date.now
-  let cached: { at: number; cwds: Promise<Map<number, string> | null> } | null = null
+  let running: Promise<Map<number, string> | null> | null = null
   return () => {
-    if (cached && now() - cached.at < (options.cacheMs ?? 10_000)) return cached.cwds
+    if (running) return running
     const cwds = options.runner
       .run([options.lsofBin, '-nP', '-a', '-d', 'cwd', '-Fpn'], {
         timeoutMs: options.timeoutMs ?? 10_000,
         partial: true,
       })
       .then((text) => (text === null ? null : parseLsofCwd(text)))
-    cached = { at: now(), cwds }
+      .finally(() => {
+        running = null
+      })
+    running = cwds
     return cwds
   }
 }
@@ -75,7 +75,7 @@ export interface ProcessTableOptions {
   /** the physical footprint of every process in KiB; null (or not given) leaves every footprint unknown */
   footprints?: () => Promise<ReadonlyMap<number, number> | null>
   lsofBin: string
-  /** the directories, when another reader shares them (`cachedCwds`); else one `lsof` of its own */
+  /** the directories, when another reader shares them (`sharedCwds`); else one `lsof` of its own */
   cwds?: () => Promise<Map<number, string> | null>
   timeoutMs?: number
 }
@@ -90,12 +90,13 @@ export function processTable(options: ProcessTableOptions): ProcessTable {
 
   return {
     async read() {
-      const rows = await options.rows()
-      if (rows === null) return null
-      const [cwds, footprints] = await Promise.all([
+      // all three asked at once: a shared reader started by another caller of the same pass is joined, not repeated
+      const [rows, cwds, footprints] = await Promise.all([
+        options.rows(),
         options.cwds ? options.cwds() : readCwds(options.lsofBin, timeoutMs),
         options.footprints ? options.footprints().catch(() => null) : null,
       ])
+      if (rows === null) return null
       return cwds === null ? null : joinProcesses(rows, cwds, footprints)
     },
   }

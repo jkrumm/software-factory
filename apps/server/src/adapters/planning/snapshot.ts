@@ -130,7 +130,7 @@ export function joinSnapshot(input: {
 export interface HostSnapshotOptions {
   /** the minute's `top`, cached with the lead costs' (`hostWatch.topSnapshot`) */
   top: () => Promise<TopSnapshot | null>
-  /** the minute's directories, shared with the lead costs (`cachedCwds`) */
+  /** the minute's directories, shared with the lead costs (`sharedCwds`) */
   cwds: () => Promise<Map<number, string> | null>
   runner: TextRunner
   psBin: string
@@ -151,15 +151,19 @@ export function hostSnapshot(options: HostSnapshotOptions): HostSnapshotReader {
   const run = (cmd: string[], partial = false) => options.runner.run(cmd, { partial })
   return {
     async read() {
-      const top = await options.top()
-      if (top === null) return null
-      const [psText, launchctlText, cwds, sysctlText, vmFreeGib] = await Promise.all([
+      // all asked at once: the shared top and lsof of the pass are joined, not repeated
+      const [top, psText, launchctlText, cwds, sysctlText, vmFreeGib] = await Promise.all([
+        options.top(),
         run([options.psBin, '-Eww', '-Ao', 'pid=,ppid=,user=,command=']),
         run([options.launchctlBin, 'list']),
         options.cwds().catch(() => null),
         run([options.sysctlBin, '-n', 'kern.memorystatus_vm_pressure_level', 'vm.compressor_bytes_used']),
         freeGib(options.vmVolume),
       ])
+      if (top === null) {
+        options.runner.takeCpuMs()
+        return null
+      }
       const commands = psText === null ? new Map<number, CommandFacts>() : parseCommandPs(psText)
       const vmPids = [...commands].filter(([, facts]) => facts.name === VM_PROCESS).map(([pid]) => pid)
       const lsofText =
