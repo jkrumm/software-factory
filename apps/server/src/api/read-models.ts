@@ -2,6 +2,7 @@ import {
   CapacityLoopModel,
   DaysQuery,
   DEFAULT_DAYS,
+  DEFAULT_HOURS,
   ErrorBody,
   FindingClassesModel,
   FixCommitsModel,
@@ -9,9 +10,11 @@ import {
   FrictionModel,
   type HostProcess,
   HostHistoryModel,
+  HoursQuery,
   KpiModel,
   MachineModel,
   RetroModel,
+  ThroughputModel,
   SinceModel,
   NeedsModel,
   ChainModel,
@@ -34,6 +37,7 @@ import { readFriction } from '../read/friction.ts'
 import { readHostSamples } from '../read/host.ts'
 import { readKpis } from '../read/kpis.ts'
 import { readRetro } from '../read/retro.ts'
+import { readThroughput } from '../read/throughput.ts'
 import { loopReads } from '../read/loops.ts'
 import { needsModel, readNeeds } from '../read/needs.ts'
 import { readSince, storedSince } from '../read/since.ts'
@@ -314,6 +318,23 @@ export const readModelRoutes = (deps: ReadModelDeps | undefined, caller: (reques
           operationId: 'read.capacity-loop',
           summary:
             'what the capacity loop did over the last days (1 to 90, default 7): Issues closed, idle seat-hours with work queued, minutes over the load ceiling, test-slot wait, the steps and repos that take most memory, processes the reaper ended, and the settings in force that tune it',
+        },
+      },
+    )
+    .get(
+      '/throughput',
+      async ({ query }) => {
+        if (!deps) return unavailable
+        const hours = query.hours === undefined ? DEFAULT_HOURS : Number(query.hours)
+        return Response.json(ThroughputModel.parse(await readThroughput(deps.sql, { now: now(), hours })))
+      },
+      {
+        query: HoursQuery,
+        response: { 200: ThroughputModel, ...errorResponses(400, 422, 503) },
+        detail: {
+          operationId: 'read.throughput',
+          summary:
+            'where the host memory and CPU went over the last hours (1 to 336, default 24): footprint, peak and CPU by process class, by repo and by tenant, the host signals (pressure, load, idle CPU, compressor, swap) and the notable processes',
         },
       },
     )

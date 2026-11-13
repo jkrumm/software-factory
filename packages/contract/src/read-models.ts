@@ -314,6 +314,17 @@ export const DaysQuery = z.object({
 export type DaysQuery = z.infer<typeof DaysQuery>
 export const DEFAULT_DAYS = 7
 
+/** `?hours=24`: a whole number of hours, 1 to 336 (14 days, as long as the minute rows are kept). */
+export const HoursQuery = z.object({
+  hours: z
+    .string()
+    .regex(/^[0-9]{1,3}$/, 'a whole number of hours, 1 to 336')
+    .refine((text) => Number(text) >= 1 && Number(text) <= 336, 'a whole number of hours, 1 to 336')
+    .optional(),
+})
+export type HoursQuery = z.infer<typeof HoursQuery>
+export const DEFAULT_HOURS = 24
+
 // -- friction ------------------------------------------------------------------------------------------------------------
 
 export const FrictionCount = z
@@ -774,6 +785,108 @@ export const CapacityLoopModel = z
   })
   .meta({ id: 'CapacityLoopModel' })
 export type CapacityLoopModel = z.infer<typeof CapacityLoopModel>
+
+const nullableNumber = z.number().nullable()
+
+/**
+ * Where the host's memory and CPU went over the last `hours` hours (`GET /v1/throughput`), computed in SQL from the
+ * host samples, the per-minute class rows and the notable-process rows, over `[now - hours, now)`. A key's per-minute
+ * total is the sum of its rows' `footprint_mib` (and `cpu_ms`) at one minute; its `footprintMib` is the sum of those
+ * totals over the window's minutes divided by `host.minutes`, so a minute the key is absent counts 0.
+ */
+export const ThroughputModel = z
+  .strictObject({
+    at,
+    hours: z.number().int(),
+    window: z.strictObject({ from: at, to: at }),
+    host: z.strictObject({
+      /** snapshot minutes in the window: the distinct minutes with class rows; the divisor of every mean below */
+      minutes: z.number().int(),
+      /** the minute rows of `host_samples`; every figure is null when the window has no reading of it (p50 is `percentile_cont(0.5)`) */
+      signals: z.strictObject({
+        /** host minutes by the kernel's memory pressure level: 1 normal, 2 warning, 4 critical, unread when null */
+        pressureMinutes: z.strictObject({
+          normal: z.number().int(),
+          warning: z.number().int(),
+          critical: z.number().int(),
+          unread: z.number().int(),
+        }),
+        load: z.strictObject({ p50: nullableNumber, max: nullableNumber }),
+        cpuIdlePct: z.strictObject({ p50: nullableNumber, min: nullableNumber }),
+        compressorMib: z.strictObject({ p50: nullableNumber, max: nullableNumber }),
+        swapUsedPct: z.strictObject({ p50: nullableNumber, max: nullableNumber }),
+        processes: z.strictObject({ p50: nullableNumber, max: nullableNumber }),
+        /** free space of the swap volume: the smallest reading, and the newest */
+        vmFreeGib: z.strictObject({ min: nullableNumber, last: nullableNumber }),
+      }),
+      /** the CPU the collector's own child processes took, over the minutes it was measured */
+      collector: z.strictObject({
+        /** minutes with `collector_cpu_ms` read */
+        minutes: z.number().int(),
+        /** sum of `collector_cpu_ms` over 1000 */
+        cpuSeconds: z.number(),
+        /** `cpuSeconds` over `minutes * 60`: the share of one core; null when no minute was measured */
+        coreShare: nullableNumber,
+      }),
+      /** all seven classes (lead, step, tenant, factory, system, owner, other), zeros when absent, largest footprint first then by name */
+      byClass: z.array(
+        z.strictObject({
+          class: z.string(),
+          /** mean MiB per minute, over `host.minutes`, an integer */
+          footprintMib: z.number().int(),
+          /** the largest per-minute total */
+          peakMib: z.number().int(),
+          /** sum of `cpu_ms` (nulls ignored) over 1000, one decimal */
+          cpuSeconds: z.number(),
+          /** `cpuSeconds` over `host.minutes * 60`, two decimals (0 with no minutes): the mean cores in use */
+          cores: z.number(),
+          /** mean processes per minute, one decimal */
+          procs: z.number(),
+        }),
+      ),
+      /** lead and step rows with a repo, per repo: the 20 largest by footprint, then repo name */
+      byRepo: z.array(
+        z.strictObject({
+          repo: z.string(),
+          footprintMib: z.number().int(),
+          peakMib: z.number().int(),
+          cpuSeconds: z.number(),
+          /** the part of `footprintMib` that is leads, by the same mean rule */
+          leadMib: z.number().int(),
+          /** the part of `footprintMib` that is steps */
+          stepMib: z.number().int(),
+        }),
+      ),
+      /** tenant rows with a tenant, per tenant: the 20 largest by footprint, then tenant name */
+      byTenant: z.array(
+        z.strictObject({
+          tenant: z.string(),
+          footprintMib: z.number().int(),
+          peakMib: z.number().int(),
+          cpuSeconds: z.number(),
+        }),
+      ),
+      /** notable processes grouped by name, class, repo and tenant (a null groups with a null): the 15 with the largest peak, then name */
+      topProcesses: z.array(
+        z.strictObject({
+          name: z.string(),
+          class: z.string(),
+          repo: z.string().nullable(),
+          tenant: z.string().nullable(),
+          /** the largest `footprint_mib` of the group */
+          peakMib: z.number().int(),
+          /** sum of `cpu_ms` (nulls ignored) over 1000, one decimal */
+          cpuSeconds: z.number(),
+          /** minutes the group was a notable process */
+          minutes: z.number().int(),
+          /** the largest `grown_mib` of the group, null when it never grew */
+          grownMib: z.number().int().nullable(),
+        }),
+      ),
+    }),
+  })
+  .meta({ id: 'ThroughputModel' })
+export type ThroughputModel = z.infer<typeof ThroughputModel>
 
 /** The capacity figures a retro signal can name in its marker (`kpi=<key>`), besides the `KPI_KEYS`; all per day or p90. */
 export const CAPACITY_FIGURE_KEYS = [
