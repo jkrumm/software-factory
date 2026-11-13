@@ -232,7 +232,7 @@ export interface CheckpointStore {
   insertAnnotation(annotation: AnnotationRecord): Promise<boolean>
   annotationByKey(key: Key): Promise<AnnotationRecord | null>
   annotation(id: string): Promise<AnnotationRecord | null>
-  /** true when the comment changed; the same comment again changes nothing */
+  /** true when the comment changed; the same comment again changes nothing. New words clear the lead's answer to the old ones. */
   editAnnotation(id: string, comment: string, key: Key, at: Date): Promise<boolean>
   /** true when a row was removed */
   deleteAnnotation(id: string): Promise<boolean>

@@ -538,7 +538,8 @@ export function postgresCheckpointStore(tx: SQL): CheckpointStore {
 
     async editAnnotation(id, comment, key, at) {
       const rows: unknown[] = await tx`
-        UPDATE factory.annotations SET comment = ${comment}, key = ${key}, edited_at = ${at}
+        UPDATE factory.annotations SET comment = ${comment}, key = ${key}, edited_at = ${at},
+          disposition = NULL, disposition_note = NULL, disposed_at = NULL
         WHERE id = ${id} AND comment IS DISTINCT FROM ${comment}
         RETURNING id`
       return rows.length === 1

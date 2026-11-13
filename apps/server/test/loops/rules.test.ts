@@ -10,6 +10,7 @@ import {
   DEFAULT_STEWARD_RULES,
   decideIdle,
   fallbackDecision,
+  idleClockStart,
   readIdleHistory,
   REVISE_NOTE,
   IDLE_NOTE,
@@ -523,4 +524,20 @@ test('a changes verdict with no revision after 60 minutes idle produces the spec
     readIdleHistory([record(7, 'verdict_given', 70, { artifact: 'artifact_1', verdict: 'with_notes' })], 2)
       .pendingRevision,
   ).toBeNull()
+})
+
+test("self-watch counts a lead idle on the steward's clock: after the verdict grace, and after the revise note is due", () => {
+  const quiet = idle({ idleSince: minutesAgo(5), verdictAt: minutesAgo(5) })
+  expect(idleClockStart(quiet, rules)).toEqual(new Date(minutesAgo(5).getTime() + rules.verdictGraceMs))
+  const owed = idle({
+    idleSince: minutesAgo(50),
+    verdictAt: minutesAgo(50),
+    pendingRevision: { artifact: 'artifact_1', version: 7, verdictAt: minutesAgo(50), noted: false },
+  })
+  expect(idleClockStart(owed, rules)).toEqual(new Date(minutesAgo(50).getTime() + rules.reviseAfterMs))
+  const told = idle({
+    idleSince: minutesAgo(50),
+    pendingRevision: { artifact: 'artifact_1', version: 7, verdictAt: minutesAgo(50), noted: true },
+  })
+  expect(idleClockStart(told, rules)).toEqual(minutesAgo(50))
 })

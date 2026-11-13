@@ -1,7 +1,7 @@
 import type { SignalRequest } from '@software-factory/contract'
 import type { Triaged } from '../../domains/intake/model.ts'
 import type { CiRuns, LoopReads, LoopStore, MigrationFiles } from '../../domains/loops/ports.ts'
-import { DEFAULT_STEWARD_RULES } from '../../domains/loops/stall.ts'
+import { DEFAULT_STEWARD_RULES, idleClockStart } from '../../domains/loops/stall.ts'
 import {
   ciFindings,
   heartbeatFindings,
@@ -103,13 +103,8 @@ async function idleLeads(deps: SelfwatchDeps): Out<IdleLead[]> {
       issue: id,
       title: idle.facts.title,
       lead: leadKey(id, idle.facts.attempt),
-      // a verdict just delivered is a wait the steward honours: the quiet is counted from the end of that grace
-      idleSince: new Date(
-        Math.max(
-          idle.idle.idleSince.getTime(),
-          idle.idle.verdictAt ? idle.idle.verdictAt.getTime() + DEFAULT_STEWARD_RULES.verdictGraceMs : 0,
-        ),
-      ),
+      // the steward's own idle clock: a verdict's grace and a revision still owed are waits it honours
+      idleSince: idleClockStart(idle.idle, DEFAULT_STEWARD_RULES),
       background: idle.idle.background,
     })
   }

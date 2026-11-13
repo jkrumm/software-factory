@@ -884,6 +884,20 @@ describe('artifacts', () => {
     // a later answer replaces the earlier one; an applied one needs no note
     expect(value(await reply({ disposition: 'applied' }))).toMatchObject({ result: 'applied' })
     expect((await showAnnotations(artifact.id))[0]).toMatchObject({ disposition: 'applied', dispositionNote: '' })
+    // new words from the owner are not answered by the reply to the old ones
+    value(
+      await editAnnotation(deps, {
+        artifactId: artifact.id,
+        annotationId: mine?.id ?? '',
+        raw: { comment: 'drop retries' },
+      }),
+    )
+    expect((await showAnnotations(artifact.id))[0]).toMatchObject({
+      comment: 'drop retries',
+      disposition: null,
+      dispositionNote: null,
+      disposedAt: null,
+    })
   })
 
   test('the owner edits and deletes an annotation; a repeat is harmless and another artifact is not found', async () => {

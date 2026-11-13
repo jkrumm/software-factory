@@ -323,6 +323,21 @@ export function decideIdle(facts: IdleFacts, now: Date, rules: StewardRules): St
   return { kind: 'ask' }
 }
 
+/**
+ * When a quiet lead counts as idle for self-watch's `lead_idle`: the steward's own clock, so the two never disagree. The
+ * session's idle clock, moved to the end of the verdict grace, and for a `changes` verdict still owed its revision to the
+ * time the steward's one specific note is due.
+ */
+export function idleClockStart(
+  facts: Pick<IdleFacts, 'idleSince' | 'verdictAt' | 'pendingRevision'>,
+  rules: StewardRules,
+): Date {
+  const grace = facts.verdictAt ? facts.verdictAt.getTime() + rules.verdictGraceMs : 0
+  const revise =
+    facts.pendingRevision && !facts.pendingRevision.noted ? facts.idleSince.getTime() + rules.reviseAfterMs : 0
+  return new Date(Math.max(facts.idleSince.getTime(), grace, revise))
+}
+
 /** The facts as the workflow takes them: cut to its limits, credentials scrubbed by the caller's `clean`. */
 export function stallRequest(facts: StallFacts, now: Date, clean: (text: string) => string): StewardStall {
   const cut = (text: string, max: number) => clean(text).slice(0, max)
