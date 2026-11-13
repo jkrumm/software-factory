@@ -17,6 +17,9 @@ export const MAX_SUMMARY_LINE = 200
 export const KEY_RE = /^[A-Za-z0-9._:/@-]{1,80}$/
 const SOURCE_RE = /^[a-z0-9][a-z0-9._:-]{0,39}$/
 
+/** Sources whose requests go through the Errand screen like a lead's Errand: an agent's `ask-human`, which may ask for what a token can do. */
+export const SCREENED_SOURCES: readonly string[] = ['ask-human']
+
 /** An Errand with no check and no expiry of its own is closed as expired after this long. */
 export const DEFAULT_EXPIRY_MS = 7 * 24 * 3_600_000
 
@@ -116,6 +119,7 @@ export function checkVerdict(run: CheckRun): CheckVerdict {
 }
 
 export const CHECK_TIMEOUT_MS = 30_000
+/** The text of a check that never ran, cut. A ran check's output is kept as its first and last lines (`kernel/run.ts`). */
 export const CHECK_OUTPUT_MAX = 2048
 /** Checks one pass runs; the rest wait for the next. */
 export const CHECKS_PER_PASS = 20

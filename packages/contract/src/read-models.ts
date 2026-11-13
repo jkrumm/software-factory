@@ -45,6 +45,8 @@ export const NeedItem = z
     host: z.enum(['macbook', 'iphone', 'portal', 'any']).nullable(),
     /** a held signal's link to the thing it is about; null for everything else and for a work-repo item the caller may not read */
     sourceLink: z.string().nullable(),
+    /** an Errand whose last run failed or whose check overruled a done: "tried, failed: <first error line>" or the check's note; null for everything else and for a work-repo item the caller may not read */
+    tried: z.string().nullable(),
     /** a long wait: why the Issue waits, when it ends and how many open Issues wait behind it; null for everything else */
     wait: z.strictObject({ reason: z.literal('timer'), until: at, held: z.number().int().min(1) }).nullable(),
     /** the title and summary were replaced: the item is work-repo text and the caller may not read it */

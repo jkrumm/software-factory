@@ -1402,6 +1402,7 @@ export const OPERATIONS: readonly Operation[] = [
     bodyFields: [
       { name: 'note', flag: 'note', kind: 'string', repeatable: false, required: false, untyped: false },
       { name: 'outcome', flag: 'outcome', kind: 'string', repeatable: false, required: false, untyped: false },
+      { name: 'run', flag: 'run', kind: 'json', repeatable: false, required: false, untyped: false },
     ],
     args: [],
     bodySchema: ErrandDoneBody,

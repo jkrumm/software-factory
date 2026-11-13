@@ -9,6 +9,7 @@ import {
   STEPS,
 } from '../../domains/checkpoints/decision.ts'
 import type { ErrandId } from '../../domains/checkpoints/errand.ts'
+import { RUN_STATUSES } from '../../kernel/run.ts'
 import type { Page } from '../../domains/checkpoints/page.ts'
 import { HOSTS } from '../../domains/checkpoints/request.ts'
 import {
@@ -147,6 +148,12 @@ const ErrandRow = z.object({
   check_note: z.string().nullable(),
   check_fails: z.number().int(),
   needed_at: z.date().nullable(),
+  run_attempts: z.number().int(),
+  run_status: z.enum(RUN_STATUSES).nullable(),
+  run_exit: z.number().int().nullable(),
+  run_at: z.date().nullable(),
+  run_head: z.string().nullable(),
+  run_tail: z.string().nullable(),
 })
 
 const PageRow = z.object({
@@ -280,6 +287,12 @@ const errandOf = (raw: unknown): ErrandRecord => {
     checkNote: row.check_note,
     checkFails: row.check_fails,
     neededAt: row.needed_at,
+    runAttempts: row.run_attempts,
+    runStatus: row.run_status,
+    runExit: row.run_exit,
+    runAt: row.run_at,
+    runHead: row.run_head,
+    runTail: row.run_tail,
   }
 }
 
@@ -638,6 +651,15 @@ export function postgresCheckpointStore(tx: SQL): CheckpointStore {
     async recordCheck(id, run) {
       const rows: unknown[] = await tx`
         UPDATE factory.errands SET check_at = ${run.at}, check_note = ${run.note}, check_fails = ${run.fails}
+        WHERE id = ${id} AND done_at IS NULL RETURNING id`
+      return rows.length === 1
+    },
+
+    async recordRun(id, run) {
+      const rows: unknown[] = await tx`
+        UPDATE factory.errands
+        SET run_attempts = run_attempts + 1, run_status = ${run.status}, run_exit = ${run.exit}, run_at = ${run.at},
+            run_head = ${run.head}, run_tail = ${run.tail}
         WHERE id = ${id} AND done_at IS NULL RETURNING id`
       return rows.length === 1
     },

@@ -2,6 +2,11 @@ import { CHECK_OUTPUT_MAX, CHECK_TIMEOUT_MS, type CheckRun } from '../../domains
 import type { CheckRunner } from '../../domains/checkpoints/ports.ts'
 import { CannotExecute, EXIT_STOPPED, EXIT_TIMEOUT, type Run, runProcess } from '../quality/process.ts'
 
+/** A very long output keeps its two ends; the reader (`run.ts`) cuts it to its first and last lines. */
+const bounded = (text: string): string =>
+  text.length <= STDOUT_MAX ? text : `${text.slice(0, STDOUT_MAX / 2)}\n…\n${text.slice(-STDOUT_MAX / 2)}`
+const STDOUT_MAX = 65_536
+
 /**
  * An Errand's `check`: `sh -c` in its own process group (a timeout takes what it started along), stderr folded into stdout,
  * 30 seconds, the output cut. The server's own secrets stay out of its environment (`childEnv`). The command is the asker's:
@@ -18,7 +23,8 @@ export function shellCheckRunner(run: Run = runProcess, timeoutMs = CHECK_TIMEOU
         }
         // the newline ends a trailing `# comment` before the closing parenthesis
         const result = await run(['sh', '-c', `(${command}\n) 2>&1`], timeoutMs, { group: true })
-        const output = result.stdout.trim().slice(0, CHECK_OUTPUT_MAX)
+        // head and tail, not head alone: the reason is at the top and how it stopped is at the end
+        const output = bounded(result.stdout.trim())
         if (result.exitCode === EXIT_TIMEOUT) return { exit: null, timedOut: true, output }
         if (result.exitCode === EXIT_STOPPED) return { exit: null, timedOut: false, output }
         return { exit: result.exitCode, timedOut: false, output }

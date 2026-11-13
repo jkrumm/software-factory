@@ -25,6 +25,7 @@ import {
 } from '../../src/app/checkpoints.ts'
 import { type PageDeps, sendDuePages } from '../../src/app/checkpoints-pages.ts'
 import { lookAtReview, recheckReviews } from '../../src/app/checkpoints-reviews.ts'
+import { requestErrand } from '../../src/app/checkpoints.ts'
 import { screenErrands } from '../../src/app/checkpoints-errands.ts'
 import { type SettleDeps, settleDecision, settleOpen } from '../../src/app/checkpoints-settle.ts'
 import { fileIssue, recordIssueEvent } from '../../src/app/issues.ts'
@@ -118,6 +119,7 @@ beforeEach(async () => {
     ids: sequentialIds(),
     blobs: fileBlobStore(blobDir),
     consoleUrl: 'https://console.example.test',
+    checks: { run: async () => ({ exit: 0, timedOut: false, output: '' }) },
     policies,
     judge,
     errandScreen,
@@ -1173,6 +1175,41 @@ describe('errands', () => {
     expect(await pageCount()).toBe(0)
     expect((await readNeeds(db.sql, clock.now())).items).toEqual([])
     expect(value(await screenErrands(deps))).toEqual([])
+  })
+
+  describe('a request from ask-human', () => {
+    const ask = async (text: string, command: string | null = null) =>
+      value(await requestErrand(deps, { raw: { source: 'ask-human', text, ...(command ? { command } : {}) } }))
+
+    test('waits for the screen like a lead Errand: held out of Needs-you, then reaches the owner without a page', async () => {
+      const made = await ask('Approve the sign-in dialog on the MacBook')
+      expect(made.errand.reachedOwnerAt).toBeNull()
+      expect((await readNeeds(db.sql, clock.now())).items).toEqual([])
+      expect(value(await screenErrands(deps))).toEqual([{ errand: made.errand.id, outcome: 'reached_owner' }])
+      expect(screenCalls).toEqual([{ errand: made.errand.id, key: key('factory-errand', made.errand.id, 1) }])
+      expect(await pageCount()).toBe(0)
+      expect((await readNeeds(db.sql, clock.now())).items).toMatchObject([
+        { kind: 'errand', id: made.errand.id, issue: null, judge: 'a person must approve it', source: 'ask-human' },
+      ])
+    })
+
+    test('one an agent can do is turned away with the reason, as the Errand note', async () => {
+      const made = await ask('Merge the pull request', 'gh pr merge 12')
+      screenAnswer = () => ok({ verdict: 'turn_away', reason: 'gh can merge it with a token' })
+      expect(value(await screenErrands(deps))).toEqual([{ errand: made.errand.id, outcome: 'turned_away' }])
+      expect(value(await raiseErrandRead(made.errand.id))).toMatchObject({
+        doneNote: 'gh can merge it with a token',
+        closedKind: 'turned_away',
+        screenBy: 'judge',
+      })
+      expect((await readNeeds(db.sql, clock.now())).items).toEqual([])
+    })
+
+    test('the first look by rule turns away a plain command without calling the screen', async () => {
+      const made = await ask('Run `make deploy` on the host')
+      expect(value(await screenErrands(deps))).toEqual([{ errand: made.errand.id, outcome: 'turned_away' }])
+      expect(screenCalls).toEqual([])
+    })
   })
 
   test('a rule turns away a command a token can run without calling the screen', async () => {

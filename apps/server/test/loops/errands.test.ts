@@ -70,6 +70,7 @@ beforeEach(async () => {
     ids: sequentialIds(),
     blobs: { put: async () => err(portError('unreadable', 'x')), get: async () => err(portError('unreadable', 'x')) },
     consoleUrl: 'https://console.example.test',
+    checks: runner,
   }
 })
 
@@ -78,7 +79,7 @@ const value = <T, E>(result: Result<T, E>): T => {
   return result.value
 }
 const request = async (raw: Record<string, unknown>) =>
-  value(await requestErrand(deps, { raw: { source: 'ask-human', ...raw } }))
+  value(await requestErrand(deps, { raw: { source: 'test-agent', ...raw } }))
 const pass = async () => value(await errandsPass({ uow: deps.uow, clock, checks: runner, needed: judge }))
 const errandRow = async (id: string) => (await db.sql`SELECT * FROM factory.errands WHERE id = ${id}`)[0]
 const since = async (at: Date) => (await readSince(db.sql, { now: clock.now(), since: at })).categories.errands
@@ -90,7 +91,7 @@ describe('a request', () => {
     expect(made.errand).toMatchObject({
       issueId: null,
       attempt: null,
-      source: 'ask-human',
+      source: 'test-agent',
       command: 'make secrets-seed',
       host: 'macbook',
       reachedOwnerAt: clock.now(),
@@ -109,7 +110,7 @@ describe('a request', () => {
         title: 'Reseal the cache on the MacBook',
         command: 'make secrets-seed',
         host: 'macbook',
-        source: 'ask-human',
+        source: 'test-agent',
         redacted: false,
       }),
     ])
@@ -310,6 +311,122 @@ describe('the still-needed look at a request with no check', () => {
     neededCalls.length = 0
     await pass()
     expect(neededCalls).toHaveLength(1)
+  })
+})
+
+describe('done', () => {
+  const done = async (id: string, input: Partial<Parameters<typeof finishErrand>[1]> = {}) =>
+    value(await finishErrand(deps, { errandId: id as never, note: null, ...input }))
+  const lines = (n: number, prefix = 'line') => Array.from({ length: n }, (_, i) => `${prefix} ${i + 1}`).join('\n')
+
+  test('a run that failed (exit 2) leaves the Errand open with the exit, the head and the tail', async () => {
+    const made = await request({ text: 'Reseal the cache', command: 'make secrets-seed' })
+    const output = `error: the vault is locked\n${lines(98)}\nexit trap`
+    const result = await done(made.errand.id, {
+      note: 'ran on the MacBook and failed',
+      run: { status: 'failed', exit: 2, output },
+    })
+    expect(result).toMatchObject({
+      result: 'applied',
+      errand: { doneAt: null, runAttempts: 1, runStatus: 'failed', runExit: 2 },
+    })
+    const row = await errandRow(made.errand.id)
+    expect(row).toMatchObject({ done_at: null, closed_kind: null, run_attempts: 1, run_exit: 2 })
+    expect(row?.run_head.split('\n')).toHaveLength(20)
+    expect(row?.run_head.split('\n')[0]).toBe('error: the vault is locked')
+    expect(row?.run_tail.split('\n')).toHaveLength(20)
+    expect(row?.run_tail.endsWith('exit trap')).toBe(true)
+    // Needs-you lists it as open and says what was tried
+    const needs = needsModel(await readNeeds(db.sql, clock.now()), { redact: false })
+    expect(needs.items).toMatchObject([
+      { id: made.errand.id, tried: 'tried, failed: error: the vault is locked', redacted: false },
+    ])
+    expect(needsModel(await readNeeds(db.sql, clock.now()), { redact: true }).items[0]?.tried).toBeNull()
+    // a second failed run counts
+    await done(made.errand.id, { run: { status: 'failed', exit: 1, output: 'denied' } })
+    expect((await errandRow(made.errand.id))?.run_attempts).toBe(2)
+    expect(needsModel(await readNeeds(db.sql, clock.now()), { redact: false }).items[0]?.tried).toBe(
+      'tried, failed (2 tries): denied',
+    )
+  })
+
+  test('the words ask-human.sh wrote for a failed run are a failed run too; so are a timeout and a run still going', async () => {
+    const legacy = await request({ text: 'First' })
+    await done(legacy.errand.id, { note: 'ran on the MacBook and failed (exit 2): sudo: a password is required' })
+    expect(await errandRow(legacy.errand.id)).toMatchObject({ done_at: null, run_status: 'failed', run_exit: 2 })
+    expect((await errandRow(legacy.errand.id))?.run_head).toBe('sudo: a password is required')
+
+    const slow = await request({ text: 'Second' })
+    await done(slow.errand.id, { run: { status: 'timeout', exit: 124, output: 'Waiting for the dialog' } })
+    expect(await errandRow(slow.errand.id)).toMatchObject({ done_at: null, run_status: 'timeout', run_exit: 124 })
+
+    const going = await request({ text: 'Third' })
+    await done(going.errand.id, { run: { status: 'running' } })
+    expect(await errandRow(going.errand.id)).toMatchObject({ done_at: null, run_status: 'running', run_exit: null })
+  })
+
+  test('a run that succeeded closes it as before', async () => {
+    const made = await request({ text: 'Reseal the cache' })
+    const result = await done(made.errand.id, {
+      note: 'answered on the MacBook (exit 0)',
+      run: { status: 'done', exit: 0 },
+    })
+    expect(result.errand).toMatchObject({ closedKind: 'done', closedBy: 'owner' })
+  })
+
+  test('done with a check that still says needed leaves it open and says why; the hourly pass keeps the note', async () => {
+    const made = await request({ text: 'Remove the sudoers file', check: 'test ! -f /etc/sudoers.d/x' })
+    checks['test ! -f /etc/sudoers.d/x'] = { exit: 0, timedOut: false, output: '' }
+    const result = await done(made.errand.id, { note: 'clicked by mistake' })
+    expect(result.errand).toMatchObject({
+      doneAt: null,
+      checkNote: 'marked done but the check says still needed',
+    })
+    expect(checkCalls).toEqual(['test ! -f /etc/sudoers.d/x'])
+    expect(needsModel(await readNeeds(db.sql, clock.now()), { redact: false }).items).toMatchObject([
+      { id: made.errand.id, tried: 'marked done but the check says still needed' },
+    ])
+    await pass()
+    expect((await errandRow(made.errand.id))?.check_note).toBe('marked done but the check says still needed')
+    // once the check agrees, done closes it
+    checks['test ! -f /etc/sudoers.d/x'] = { exit: 1, timedOut: false, output: '' }
+    expect((await done(made.errand.id, { note: 'removed it' })).errand).toMatchObject({ closedKind: 'done' })
+  })
+
+  test('done with a check that exits 1 closes it and keeps the check’s head and tail in the note', async () => {
+    const made = await request({ text: 'Remove it', check: 'gone' })
+    checks.gone = { exit: 1, timedOut: false, output: lines(60) }
+    const result = await done(made.errand.id, { note: 'removed' })
+    expect(result.errand).toMatchObject({ closedKind: 'done', closedBy: 'owner' })
+    const note = result.errand.doneNote ?? ''
+    expect(note).toStartWith('removed · its check exited 1:\nline 1\n')
+    expect(note).toContain('… 20 lines left out …')
+    expect(note).toEndWith('line 60')
+  })
+
+  test('a check that cannot answer leaves it closed as before; not needed skips the check', async () => {
+    const made = await request({ text: 'Broken check', check: 'missing' })
+    checks.missing = { exit: 127, timedOut: false, output: 'not found' }
+    expect((await done(made.errand.id, { note: 'did it' })).errand).toMatchObject({
+      closedKind: 'done',
+      doneNote: 'did it',
+    })
+
+    const other = await request({ text: 'Needless', check: 'still' })
+    checkCalls.length = 0
+    const closed = await done(other.errand.id, { note: 'not needed', outcome: 'not_needed' })
+    expect(closed.errand).toMatchObject({ closedKind: 'not_needed' })
+    expect(checkCalls).toEqual([])
+  })
+
+  test('a loop closure by the check keeps the head and the tail of a long output', async () => {
+    const made = await request({ text: 'Long output', check: 'long' })
+    checks.long = { exit: 1, timedOut: false, output: lines(50) }
+    await pass()
+    const note = (await errandRow(made.errand.id))?.done_note as string
+    expect(note).toContain('line 1\n')
+    expect(note).toContain('… 10 lines left out …')
+    expect(note).toEndWith('line 50')
   })
 })
 
