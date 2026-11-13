@@ -135,7 +135,8 @@ describe('firstH1', () => {
 
 describe('headingIds', () => {
   test('slugs, numbers a repeat, and never leaves one empty', () => {
-    expect(slugOf('Options & Cost: 2nd try')).toBe('options-cost-2nd-try')
+    expect(slugOf('Options & Cost: 2nd try')).toBe('options--cost-2nd-try')
+    expect(slugOf('snake_case — a note')).toBe('snake_case--a-note')
     expect(headingIds(['Risks', 'Cost', 'Risks', 'Risks', '???'])).toEqual([
       'risks',
       'cost',

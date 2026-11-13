@@ -204,13 +204,16 @@ export function firstH1(markdown: string): string | null {
   return match?.[1] ? match[1].replace(/[*_`]/g, '') : null
 }
 
-/** A heading's anchor: lower-case words joined by `-`, the way GitHub makes them (letters and digits of any script). */
+/**
+ * A heading's anchor, the way GitHub makes it: lower-case, everything but letters, digits, `_` and `-` dropped, and each
+ * space a `-` (so "Options & Cost" is `options--cost`).
+ */
 export function slugOf(text: string): string {
   return text
-    .toLowerCase()
-    .replace(/[^\p{L}\p{N}\s-]/gu, '')
     .trim()
-    .replace(/\s+/g, '-')
+    .toLowerCase()
+    .replace(/[^\p{L}\p{N}\s_-]/gu, '')
+    .replace(/\s/g, '-')
 }
 
 /** The ids of headings in order: the slug, a repeat getting `-1`, `-2`; an empty slug is `section`. */

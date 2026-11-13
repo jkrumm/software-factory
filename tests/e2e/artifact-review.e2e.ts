@@ -335,6 +335,18 @@ test('links in an HTML artifact work through the page: the frame has no network'
   if (!inner) throw new Error('no frame')
   await expect.poll(() => inner.evaluate('scrollY')).toBe(0)
 
+  // The artifact's own script can post what it likes: a link message with no click behind it goes nowhere. Playwright's
+  // evaluate counts as a gesture, so the script posts after the transient activation (5 s) has run out.
+  let opened = 0
+  context.on('page', () => (opened += 1))
+  const sameOrigin = `${new URL(page.url()).origin}/issues/1`
+  await inner.evaluate(
+    `setTimeout(() => { parent.postMessage({ type: 'factory.link', href: ${JSON.stringify(EXTERNAL_URL)} }, '*'); parent.postMessage({ type: 'factory.link', href: ${JSON.stringify(sameOrigin)} }, '*') }, 5500)`,
+  )
+  await page.waitForTimeout(6500)
+  expect(opened).toBe(0)
+  expect(page.url()).toBe(origin)
+
   const [tab] = await Promise.all([context.waitForEvent('page'), frame.locator('#external').click()])
   await tab.waitForLoadState()
   expect(tab.url()).toBe(EXTERNAL_URL)

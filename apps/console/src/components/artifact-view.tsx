@@ -56,19 +56,20 @@ function IssueCrumb({ issueId, peek }: { issueId: string; peek?: boolean }) {
  * The artifact: header, document and comments. The page lays them out in the viewport (the document and the comments
  * scroll apart); in a `peek` they stack and the panel scrolls as one. A comparison is the page's alone.
  */
-export function ArtifactView({
-  id,
-  revision,
-  compare,
-  onPick,
-  peek,
-}: {
+export interface ArtifactViewProps {
   id: string
   revision: number | undefined
   compare?: number
   onPick: (next: { revision?: number; compare?: number }) => void
   peek?: boolean
-}) {
+}
+
+/** Keyed on the artifact: the writes still on their way (and the selection, the open comment) belong to one artifact only. */
+export function ArtifactView(props: ArtifactViewProps) {
+  return <ArtifactViewOf key={props.id} {...props} />
+}
+
+function ArtifactViewOf({ id, revision, compare, onPick, peek }: ArtifactViewProps) {
   const primary = useArtifact(id, revision)
   const screen = useScreen(primary)
   const other = useArtifact(id, compare, compare !== undefined)

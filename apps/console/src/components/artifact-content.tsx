@@ -319,6 +319,9 @@ function HtmlContent({
       if (message?.type === 'section' && primary)
         handlers.current.onSection(headings.current[message.index]?.id ?? null)
       if (message?.type === 'link') {
+        // The artifact's own script runs in the frame and can post any message: only a link the owner has just clicked is
+        // followed. A click in the frame gives this window a transient user activation; a posted message does not.
+        if (!navigator.userActivation?.isActive) return
         // the frame has no network and no way out: the page opens what it is asked to, in a tab that cannot reach back
         const target = linkTarget(message.href, window.location.origin)
         if (target.kind === 'external') window.open(target.url, '_blank', 'noopener,noreferrer')
