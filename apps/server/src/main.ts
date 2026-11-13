@@ -71,6 +71,9 @@ import { createFixCommitReader } from './adapters/hygiene/fix-commits.ts'
 import { createHygieneChecker } from './adapters/hygiene/index.ts'
 import { fileRoles } from './adapters/leads/roles.ts'
 import { composeIntake } from './compose-intake.ts'
+import { loadUptimeEnv } from './adapters/uptime/settings.ts'
+import { uptimePoller } from './adapters/uptime/poller.ts'
+import { selfPaced } from './adapters/intake/schedule.ts'
 import { composePlanning } from './compose-planning.ts'
 import { leadCheckoutOf } from './app/quality-checkout.ts'
 import { showQuality } from './app/quality-read.ts'
@@ -196,6 +199,8 @@ async function main(): Promise<void> {
     fallback: makefileProjects({ windowMs: settings.quality.windowMs }),
   })
   const intakeEnv = loadIntakeEnv(process.env)
+  const uptimeEnv = loadUptimeEnv(process.env)
+  const uptime = uptimePoller({ clock, url: uptimeEnv.url, token: uptimeEnv.token })
   const intake = await composeIntake({
     sql,
     uow,
@@ -686,6 +691,7 @@ async function main(): Promise<void> {
       blockedStreak: loopSettings.blockedChecks,
       mainCheckouts: () => mainCheckoutLines.current(),
       queueReasons,
+      uptime: () => uptime.snapshot(),
     }),
     readModels: {
       sql,
@@ -747,6 +753,9 @@ async function main(): Promise<void> {
   if (consoleServer) console.log(`console listening on http://${HOSTNAME}:${consoleServer.port}`)
   else console.log(`console not started: ${join(consoleSettings.dir, 'index.html')} is not built`)
   intake.start()
+  const stopUptime = uptime.enabled
+    ? selfPaced('uptime', uptimeEnv.everyMs, () => uptime.pass(), { firstMs: 1_000 })
+    : null
   await runner.start()
 
   // Active connections are closed (`stop(true)`): an SSE stream never completes on its own, and without the flag Bun
@@ -762,6 +771,7 @@ async function main(): Promise<void> {
       { name: 'loops.stop', run: () => runner.stop(10_000) },
       { name: 'hook socket.stop', run: () => socket.stop() },
       { name: 'intake.stop', run: () => intake.stop() },
+      { name: 'uptime.stop', run: async () => void (await stopUptime?.()) },
       { name: 'lock.release', run: () => lock.release() },
       { name: 'health.probe.stop', run: async () => healthProbe.stop() },
       { name: 'database.close', run: () => sql.close() },

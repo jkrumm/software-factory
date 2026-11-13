@@ -366,6 +366,21 @@ export const ReadHealthLine = z
   .meta({ id: 'ReadHealthLine' })
 export type ReadHealthLine = z.infer<typeof ReadHealthLine>
 
+/** The monitors' count (Uptime Kuma, through the Argo snapshot): `null` in the overview is off, never read, or older than 10 minutes. */
+export const ReadUptime = z
+  .object({
+    up: z.number().int(),
+    down: z.number().int(),
+    /** every counted monitor: groups and paused ones are left out, pending and maintenance count here only */
+    total: z.number().int(),
+    /** the names of the monitors that are down: sorted, at most 10 */
+    downNames: z.array(z.string()).max(10),
+    /** when the snapshot was read */
+    at: iso,
+  })
+  .meta({ id: 'ReadUptime' })
+export type ReadUptime = z.infer<typeof ReadUptime>
+
 export const ReadOverview = z
   .object({
     version: z.literal(READ_API_VERSION),
@@ -377,6 +392,7 @@ export const ReadOverview = z
     humanQueue: z.array(ReadAsk),
     health: z.array(ReadHealthLine),
     accounts: z.array(ReadAccountQuota),
+    uptime: ReadUptime.nullable(),
     /** the open Issues, newest activity first */
     issues: z.array(ReadIssueCard),
     /** `effective` is the whole queue's state; `spawns` stays empty (a lead's start is not a queue row any more); `projects` are the per-project states */
