@@ -6,6 +6,7 @@ import { postgresLoopStore } from '../src/adapters/postgres/loop-store.ts'
 import { postgresUnitOfWork } from '../src/adapters/postgres/unit-of-work.ts'
 import { hostWatch } from '../src/adapters/planning/host-watch.ts'
 import { parsePs, residentBytes, topProcesses } from '../src/adapters/planning/ps.ts'
+import { memoryUsedPct } from '../src/adapters/planning/vm-memory.ts'
 import { readLeadCosts } from '../src/read/lead-costs.ts'
 import { createApp } from '../src/api/app.ts'
 import { hostPass } from '../src/app/loops/host.ts'
@@ -35,6 +36,23 @@ test('ps: top lists are cut and ordered, rss becomes MiB', () => {
   expect(residentBytes(parsePs('1 0 0 1 a\n2 0 0 3 b'))).toBe(4096)
 })
 
+const VM_STAT = `Mach Virtual Memory Statistics: (page size of 16384 bytes)
+Pages free:                                   109766.
+Pages wired down:                             139712.
+Pages purgeable:                                1624.
+Pages stored in compressor:                   853868.
+Pages occupied by compressor:                 467083.
+`
+
+test('memoryUsedPct: app + wired + compressed over RAM, null when anything is missing or malformed', () => {
+  const sysctl = '943379\n1554\n16384\n'
+  expect(memoryUsedPct(sysctl, VM_STAT, 34359738368)).toBe(73.8)
+  expect(memoryUsedPct(sysctl, 'nothing useful', 34359738368)).toBeNull()
+  expect(memoryUsedPct('x\ny\nz', VM_STAT, 34359738368)).toBeNull()
+  expect(memoryUsedPct('', VM_STAT, 34359738368)).toBeNull()
+  expect(memoryUsedPct(sysctl, VM_STAT, 0)).toBeNull()
+})
+
 const script = (body: string) => `#!/bin/sh\n${body}\n`
 const fakeBin = async (name: string, body: string) => {
   const path = `${await Bun.$`mktemp -d`.text().then((t) => t.trim())}/${name}`
@@ -46,14 +64,21 @@ const fakeBin = async (name: string, body: string) => {
 test('hostWatch: one ps serves readers within the cache; a failed ps gives empty lists and a null memory', async () => {
   const counter = `${await Bun.$`mktemp -d`.text().then((t) => t.trim())}/n`
   const ps = await fakeBin('ps', `echo x >> ${counter}\nprintf '%s\\n' '  7  1  50.0  1048576 /bin/thing'`)
-  const sysctl = await fakeBin('sysctl', 'echo 4294967296')
+  const sysctl = await fakeBin(
+    'sysctl',
+    `case "$2" in hw.memsize) echo 4294967296;; *) printf '200000\\n0\\n4096\\n';; esac`,
+  )
+  const vmStat = await fakeBin(
+    'vm_stat',
+    `printf '%s\\n' 'Mach Virtual Memory Statistics: (page size of 4096 bytes)' 'Pages wired down:   40000.' 'Pages occupied by compressor:   22144.'`,
+  )
   const host = {
     load: async () => ({ ok: true as const, value: 1.5 }),
     memory: async () => ({ ok: false as const, error: { kind: 'gone' as const, detail: 'x' } }),
     ramMib: async () => ({ ok: true as const, value: 4096 }),
   }
   let t = 0
-  const watch = hostWatch({ host, sysctlBin: sysctl, psBin: ps, now: () => t })
+  const watch = hostWatch({ host, sysctlBin: sysctl, psBin: ps, vmStatBin: vmStat, now: () => t })
   const [a, b] = await Promise.all([watch.top(), watch.top()])
   expect(a).toEqual(b)
   expect(a.topByCpu).toEqual([{ pid: 7, command: 'thing', cpuPct: 50, memoryMb: 1024 }])
