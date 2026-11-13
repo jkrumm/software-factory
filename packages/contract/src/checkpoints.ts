@@ -164,6 +164,18 @@ export const AnnotateBody = z
 
 export const EditAnnotationBody = z.object({ comment: z.string().optional() }).meta({ id: 'EditAnnotationBody' })
 
+/** How a lead handled one of the owner's annotations: made the change, filed it for later, or said no. */
+export const DISPOSITIONS = ['applied', 'deferred', 'declined'] as const
+
+/** The lead's answer to an annotation: the disposition, and a note (a deferral names the Issue or signal it filed, a decline its reason). */
+export const AnnotationReplyBody = z
+  .object({
+    attempt: z.number().int().min(1).optional(),
+    disposition: z.enum(DISPOSITIONS).optional(),
+    note: z.string().optional(),
+  })
+  .meta({ id: 'AnnotationReplyBody' })
+
 export const VerdictBody = z
   .object({
     verdict: z.enum(VERDICTS).optional(),
@@ -190,6 +202,12 @@ export const ArtifactReply = z
   .meta({ id: 'ArtifactReply' })
 export type ArtifactReply = z.infer<typeof ArtifactReply>
 
+export const AnnotationDisposition = z.object({
+  disposition: z.enum(DISPOSITIONS),
+  note: z.string(),
+  at: iso,
+})
+
 export const AnnotationView = z.object({
   id: z.string(),
   revision: z.number().int(),
@@ -199,6 +217,8 @@ export const AnnotationView = z.object({
   author: z.enum(['owner', 'lead']),
   at: iso,
   editedAt: iso.nullable(),
+  /** the lead's answer; null until it gives one */
+  disposition: AnnotationDisposition.nullable(),
 })
 
 export const ArtifactDetail = z

@@ -1,6 +1,6 @@
 import type { SQL } from 'bun'
 import * as z from 'zod'
-import { ARTIFACT_KINDS, FORMATS, type ArtifactId, VERDICTS } from '../../domains/checkpoints/artifact.ts'
+import { ARTIFACT_KINDS, DISPOSITIONS, FORMATS, type ArtifactId, VERDICTS } from '../../domains/checkpoints/artifact.ts'
 import {
   type DecisionId,
   JUDGE_BACKOFF_MS,
@@ -106,6 +106,9 @@ const AnnotationRow = z.object({
   author: z.enum(['owner', 'lead']),
   at: z.date(),
   edited_at: z.date().nullable(),
+  disposition: z.enum(DISPOSITIONS).nullable(),
+  disposition_note: z.string().nullable(),
+  disposed_at: z.date().nullable(),
 })
 
 const VerdictRow = z.object({
@@ -230,6 +233,9 @@ const annotationOf = (raw: unknown): AnnotationRecord => {
     author: row.author,
     at: row.at,
     editedAt: row.edited_at,
+    disposition: row.disposition,
+    dispositionNote: row.disposition_note,
+    disposedAt: row.disposed_at,
   }
 }
 
@@ -540,6 +546,14 @@ export function postgresCheckpointStore(tx: SQL): CheckpointStore {
 
     async deleteAnnotation(id) {
       const rows: unknown[] = await tx`DELETE FROM factory.annotations WHERE id = ${id} RETURNING id`
+      return rows.length === 1
+    },
+
+    async disposeAnnotation(id, disposition, note, at) {
+      const rows: unknown[] = await tx`
+        UPDATE factory.annotations SET disposition = ${disposition}, disposition_note = ${note}, disposed_at = ${at}
+        WHERE id = ${id} AND (disposition IS DISTINCT FROM ${disposition} OR disposition_note IS DISTINCT FROM ${note})
+        RETURNING id`
       return rows.length === 1
     },
 

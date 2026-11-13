@@ -22,7 +22,7 @@ function item(record: HistoryRecord): string | null {
       const artifact = field(record, 'artifact')
       const verdict = `the verdict on ${oneLine(artifact)} is ${oneLine(field(record, 'verdict'))}`
       return field(record, 'verdict') === 'changes'
-        ? `${verdict}; read the annotations with \`factory artifact show ${String(artifact)}\`, then \`factory artifact revise ${String(artifact)} --content @file\``
+        ? `${verdict}; read the annotations with \`factory artifact show ${String(artifact)}\`, answer each with \`factory artifact annotation-reply ${String(artifact)} <annotation-id> --disposition applied|deferred|declined --note <text>\`, then submit the revised artifact with \`factory artifact revise ${String(artifact)} --content @file\` (a push alone does not answer the verdict)`
         : verdict
     }
     case 'errand_done': {

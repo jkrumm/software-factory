@@ -40,6 +40,13 @@ export interface OpenWatch extends WatchRecord {
   ran: Ran[]
 }
 
+export interface UndisposedAnnotation {
+  id: string
+  artifact: string
+  revision: number
+  quote: string
+}
+
 export interface QualityView {
   ships: (Omit<ShipRecord, 'issueId'> & { evidence: StoredEvidence[] })[]
   watches: (WatchRecord & { checks: { n: number; at: Date; outcome: Outcome; checks: CheckRecord[] }[] })[]
@@ -51,6 +58,8 @@ export interface QualityStore {
   shipAccepted(eventKey: Key): Promise<boolean>
   /** whether a Spec was submitted for the Issue (any attempt): what a flagged Issue's ship is held to */
   specSubmitted(issueId: IssueId): Promise<boolean>
+  /** the owner's annotations on the Issue's Specs and Concepts that its lead has not answered with a disposition, oldest first */
+  undisposedAnnotations(issueId: IssueId): Promise<UndisposedAnnotation[]>
   /** a ship, and for an accepted one its evidence, keyed by the ship; a copy that came first is left as it is */
   recordShip(ship: ShipRecord, evidence: readonly StoredEvidence[]): Promise<void>
   /** the newest accepted ship of the attempt: what its watch checks the deployed version against */

@@ -10,6 +10,7 @@ import {
   annotateArtifact,
   deleteAnnotation,
   editAnnotation,
+  replyAnnotation,
   answerDecision,
   askDecision,
   finishErrand,
@@ -830,6 +831,59 @@ describe('artifacts', () => {
     // Looked at on the revision it was made on, it is anchored again.
     const first = value(await showArtifact(deps, { artifactId: artifact.id, revision: 1 }))
     expect(first.annotations.every((a) => a.anchor === 'anchored')).toBe(true)
+  })
+
+  test('the lead answers an annotation with a disposition: its own attempt only, a note for a deferral and a decline, a repeat is a replay', async () => {
+    const issueId = await workingIssue()
+    const artifact = value(
+      await submitArtifact(deps, {
+        issueId,
+        attempt: 1,
+        raw: { kind: 'spec', title: 'Plan', content: 'Retries are three.' },
+      }),
+    ).artifact
+    value(
+      await annotateArtifact(deps, {
+        artifactId: artifact.id,
+        revision: null,
+        author: 'owner',
+        raw: { quote: 'Retries are three', comment: 'make it five' },
+      }),
+    )
+    value(
+      await annotateArtifact(deps, {
+        artifactId: artifact.id,
+        revision: null,
+        author: 'lead',
+        raw: { quote: 'Retries', comment: 'a lead note' },
+      }),
+    )
+    const [mine, leads] = await showAnnotations(artifact.id)
+    expect(mine?.disposition).toBeNull()
+    const reply = (raw: unknown, attempt: number | null = 1, annotationId = mine?.id ?? '') =>
+      replyAnnotation(deps, { artifactId: artifact.id, annotationId, attempt, raw })
+
+    expect(errorOf(await reply({ disposition: 'maybe' }))).toMatchObject({ kind: 'missing_field' })
+    expect(errorOf(await reply({ disposition: 'declined' }))).toMatchObject({ kind: 'missing_field' })
+    expect(errorOf(await reply({ disposition: 'deferred', note: '  ' }))).toMatchObject({ kind: 'missing_field' })
+    expect(errorOf(await reply({ disposition: 'applied' }, null))).toMatchObject({ kind: 'missing_field' })
+    expect(errorOf(await reply({ disposition: 'applied' }, 2))).toMatchObject({ kind: 'invalid' })
+    expect(errorOf(await reply({ disposition: 'applied' }, 1, leads?.id))).toMatchObject({ kind: 'invalid' })
+    expect(errorOf(await reply({ disposition: 'applied' }, 1, 'annotation_none'))).toMatchObject({ kind: 'not_found' })
+
+    expect(value(await reply({ disposition: 'declined', note: '  Redis adds a second store.  ' }))).toMatchObject({
+      result: 'applied',
+      issue: null,
+    })
+    const [declined] = await showAnnotations(artifact.id)
+    expect(declined).toMatchObject({ disposition: 'declined', dispositionNote: 'Redis adds a second store.' })
+    expect(declined?.disposedAt).not.toBeNull()
+    expect(value(await reply({ disposition: 'declined', note: 'Redis adds a second store.' }))).toMatchObject({
+      result: 'replayed',
+    })
+    // a later answer replaces the earlier one; an applied one needs no note
+    expect(value(await reply({ disposition: 'applied' }))).toMatchObject({ result: 'applied' })
+    expect((await showAnnotations(artifact.id))[0]).toMatchObject({ disposition: 'applied', dispositionNote: '' })
   })
 
   test('the owner edits and deletes an annotation; a repeat is harmless and another artifact is not found', async () => {

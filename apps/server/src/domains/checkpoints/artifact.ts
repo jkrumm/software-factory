@@ -79,6 +79,31 @@ export function readComment(raw: unknown): Result<string, MissingFields> {
   return ok(comment)
 }
 
+/** How a lead handled one of the owner's annotations. */
+export const DISPOSITIONS = ['applied', 'deferred', 'declined'] as const
+export type Disposition = (typeof DISPOSITIONS)[number]
+
+export interface DispositionInput {
+  disposition: Disposition
+  /** a deferral names the Issue or signal it filed, a decline its reason; empty only for `applied` */
+  note: string
+}
+
+/** Reads the lead's answer to an annotation: a disposition, and a note that a deferral and a decline cannot go without. */
+export function readDisposition(raw: unknown): Result<DispositionInput, MissingFields> {
+  const body = isRecord(raw) ? raw : {}
+  const problems: string[] = []
+  const disposition = DISPOSITIONS.find((candidate) => candidate === body.disposition)
+  if (!disposition) problems.push(`disposition (${DISPOSITIONS.join(', ')})`)
+  const note = filled(body.note)?.trim() ?? ''
+  if (note.length > MAX_COMMENT) problems.push(`note (longer than ${MAX_COMMENT} characters)`)
+  if (disposition && disposition !== 'applied' && note === '') {
+    problems.push(`note (${disposition === 'deferred' ? 'the Issue or signal it filed' : 'the reason'})`)
+  }
+  if (problems.length > 0 || !disposition) return refused(problems, 'an annotation reply')
+  return ok({ disposition, note })
+}
+
 /** Reads an annotation: the quote it hangs on, an optional path hint (a heading path, a selector), and the comment. */
 export function readAnnotation(raw: unknown): Result<AnnotationInput, MissingFields> {
   const body = isRecord(raw) ? raw : {}

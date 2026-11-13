@@ -44,6 +44,8 @@ export {
 } from './quality.ts'
 export {
   AnnotateBody,
+  AnnotationReplyBody,
+  DISPOSITIONS,
   AnswerBody,
   ArtifactDetail,
   ArtifactList,

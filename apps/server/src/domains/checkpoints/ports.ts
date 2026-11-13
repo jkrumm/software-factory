@@ -7,7 +7,7 @@ import type {
 import type { IssueId } from '../../kernel/ids.ts'
 import type { Key } from '../../kernel/keys.ts'
 import type { PortError, Result } from '../../kernel/result.ts'
-import type { ArtifactId, ArtifactKind, Format, Verdict } from './artifact.ts'
+import type { ArtifactId, ArtifactKind, Disposition, Format, Verdict } from './artifact.ts'
 import type {
   DecisionForm,
   DecisionId,
@@ -115,6 +115,10 @@ export interface AnnotationRecord {
   at: Date
   /** when the owner last changed the comment; null while it is as first written */
   editedAt: Date | null
+  /** the lead's answer: null until it gives one (the reply is replaced by a later one) */
+  disposition: Disposition | null
+  dispositionNote: string | null
+  disposedAt: Date | null
 }
 
 export interface VerdictRecord {
@@ -233,6 +237,8 @@ export interface CheckpointStore {
   /** true when a row was removed */
   deleteAnnotation(id: string): Promise<boolean>
   annotations(id: ArtifactId): Promise<AnnotationRecord[]>
+  /** the lead's answer to an annotation, kept in place of an earlier one; true when it changed the row */
+  disposeAnnotation(id: string, disposition: Disposition, note: string, at: Date): Promise<boolean>
   insertVerdict(verdict: VerdictRecord & { key: Key }): Promise<boolean>
   verdictByKey(key: Key): Promise<VerdictRecord | null>
   verdicts(id: ArtifactId): Promise<VerdictRecord[]>

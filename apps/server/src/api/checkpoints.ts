@@ -9,6 +9,7 @@ import {
   DecisionList,
   DecisionReply,
   DecisionView,
+  AnnotationReplyBody,
   EditAnnotationBody,
   ErrandBody,
   ErrandDoneBody,
@@ -110,6 +111,10 @@ const annotationView = (a: AnnotationRecord) => ({
   author: a.author,
   at: iso(a.at),
   editedAt: a.editedAt ? iso(a.editedAt) : null,
+  disposition:
+    a.disposition && a.disposedAt
+      ? { disposition: a.disposition, note: a.dispositionNote ?? '', at: iso(a.disposedAt) }
+      : null,
 })
 
 const errandView = (e: ErrandRecord) => ({
@@ -478,6 +483,38 @@ export const checkpointRoutes = (uses: CheckpointUses) =>
         body: EditAnnotationBody,
         response: RESPONSES(ArtifactReply, 400, 404, 422, 503),
         detail: { operationId: 'artifact.annotation-edit', summary: "the owner changes an annotation's comment" },
+      },
+    )
+    .post(
+      '/artifacts/:id/annotations/:annotationId/reply',
+      async ({ params, body }) => {
+        const id = idOf('artifact', params.id) ?? idOf('decision', params.id)
+        if (!id) return unknownId('artifact', params.id)
+        const result = await uses.replyAnnotation({
+          artifactId: id as string as ArtifactId,
+          annotationId: params.annotationId,
+          attempt: body.attempt ?? null,
+          raw: { disposition: body.disposition, note: body.note },
+        })
+        if (!result.ok) return failed(result.error)
+        const { artifact, revisions, issue } = result.value
+        return Response.json(
+          ArtifactReply.parse({
+            result: result.value.result,
+            artifact: summaryOf(artifact, revisions),
+            verdict: null,
+            issue,
+          }),
+        )
+      },
+      {
+        params: AnnotationIds,
+        body: AnnotationReplyBody,
+        response: RESPONSES(ArtifactReply, 400, 404, 422, 503),
+        detail: {
+          operationId: 'artifact.annotation-reply',
+          summary: "the lead answers one of the owner's annotations: applied, deferred or declined, with a note",
+        },
       },
     )
     .delete(

@@ -2,7 +2,7 @@ import { SPEC_WAIT_HOURS } from '@software-factory/contract'
 import { type CiOutcome, judgeShip, type ReviewOutcome, type ShipVerdict } from '../domains/quality/gate.ts'
 import type { AcceptanceEvidence } from '../domains/quality/evidence.ts'
 import type { Ci, Commits, LeadCheckout, Projects, Review } from '../domains/quality/ports.ts'
-import type { QualityStore, StoredEvidence } from '../domains/quality/store.ts'
+import type { QualityStore, StoredEvidence, UndisposedAnnotation } from '../domains/quality/store.ts'
 import type { AnyIssueEvent } from '../domains/work/events.ts'
 import type { Issue } from '../domains/work/issue.ts'
 import { replay } from '../domains/work/machine.ts'
@@ -51,6 +51,13 @@ export interface ShipAnswer {
 
 /** What a flagged Issue's ship is refused with until its lead has submitted a Spec. */
 export const SPEC_OWED = `ship refused: this Issue carries the checkpoint \`spec\` and no Spec was submitted: hand over a one-page Spec with \`factory artifact submit --kind spec\` (at most three open choices, each with your default); with no verdict in ${SPEC_WAIT_HOURS} hours you go on with your defaults`
+
+/** What a ship is refused with while the owner's annotations on its Specs and Concepts are unanswered: each one named, with the verb that answers it. */
+export function annotationsOwed(owed: readonly UndisposedAnnotation[]): string {
+  const cut = (quote: string) => (quote.length > 60 ? `${quote.slice(0, 59)}…` : quote)
+  const list = owed.map((a) => `${a.id} on ${a.artifact} revision ${a.revision} (${JSON.stringify(cut(a.quote))})`)
+  return `ship refused: ${owed.length} annotation(s) of the owner on this Issue's Spec or Concept have no disposition: ${list.join('; ')}. Answer each with \`factory artifact annotation-reply <artifact-id> <annotation-id> --attempt <n> --disposition applied|deferred|declined --note <text>\` (a deferral names the Issue or signal it filed, a decline its reason)`
+}
 
 const shipped = (attempt: number): AnyIssueEvent => ({ kind: 'shipped', payload: { attempt }, actor: 'lead' })
 
@@ -145,10 +152,11 @@ export async function shipIssue(
       issue,
       accepted: await quality.shipAccepted(eventKey),
       specOwed: issue.checkpoint === 'spec' && !(await quality.specSubmitted(input.issueId)),
+      annotationsOwed: await quality.undisposedAnnotations(input.issueId),
     })
   })
   if (!loaded.ok) return loaded
-  const { issue, accepted, specOwed } = loaded.value
+  const { issue, accepted, specOwed, annotationsOwed: owed } = loaded.value
 
   if (accepted) {
     return deps.uow.run(async ({ work, quality }) => {
@@ -164,7 +172,11 @@ export async function shipIssue(
     })
   }
 
-  const verdict: ShipVerdict = specOwed ? { accepted: false, error: SPEC_OWED } : await judge(deps, issue, input)
+  const verdict: ShipVerdict = specOwed
+    ? { accepted: false, error: SPEC_OWED }
+    : owed.length > 0
+      ? { accepted: false, error: annotationsOwed(owed) }
+      : await judge(deps, issue, input)
   return deps.uow.run<ShipAnswer, IssueWriteError>(async ({ work, quality }) => {
     const at = deps.clock.now()
     const ship = {

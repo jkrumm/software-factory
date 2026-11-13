@@ -270,6 +270,7 @@ describe('the note a lead is typed', () => {
     ])
     expect(text).toContain('`factory artifact show artifact_1`')
     expect(text).toContain('`factory artifact revise artifact_1 --content @file`')
+    expect(text).toContain('factory artifact annotation-reply artifact_1 <annotation-id>')
     const good = noteText(issueId(12), [
       { kind: 'verdict_given', payload: { artifact: 'artifact_1', verdict: 'looks_good' }, at, version: 9 },
     ])
@@ -302,7 +303,7 @@ describe('the brief', () => {
   test('the standing orders open every brief and are pinned', () => {
     expect(buildBrief(input).startsWith(STANDING_ORDERS)).toBe(true)
     expect(new Bun.CryptoHasher('sha256').update(STANDING_ORDERS).digest('hex')).toBe(
-      'de9f2e4e3a24034d8c757122c775193f8c9f02302970c32b7a323f6540887a38',
+      'be29ab76ec8348f30fa02c9cb5cfedc98ff8b482f367fba214f8f0764dac3b8f',
     )
   })
 
@@ -392,6 +393,7 @@ describe('the brief', () => {
       'factory artifact submit <id> --attempt <n>',
       'factory artifact revise <artifact-id> --content @file.md',
       'factory artifact show <artifact-id>',
+      'factory artifact annotation-reply <artifact-id> <annotation-id> --attempt <n> --disposition applied|deferred|declined --note <text>',
       'factory errand raise <id> --attempt <n>',
       'factory signal file --from agent:<repo>',
     ]) {

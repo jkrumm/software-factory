@@ -180,6 +180,9 @@ export function locateQuote(index: TextIndex, quote: string): Span | null {
 
 export const KIND_WORDS = { concept: 'Concept', spec: 'Spec', decision: 'Decision', report: 'Report' } as const
 export const FORMAT_WORDS = { markdown: 'Markdown', html: 'HTML' } as const
+/** How the lead handled a comment: the word, and the tone the owner reads it in (a decline is not an error, so it is not red). */
+export const DISPOSITION_WORDS = { applied: 'Applied', deferred: 'Deferred', declined: 'Declined' } as const
+export const DISPOSITION_TONE = { applied: 'good', deferred: 'warn', declined: 'neutral' } as const
 export const VERDICT_WORDS = {
   looks_good: 'Looks good',
   with_notes: 'With notes',

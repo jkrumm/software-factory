@@ -17,6 +17,7 @@ interface Detail {
     comment: string
     revision: number
     editedAt: string | null
+    disposition: { disposition: string; note: string; at: string } | null
   }[]
   unanchored: { quote: string; path: string | null; comment: string }[]
   verdicts: { revision: number; verdict: string; note: string | null }[]
@@ -221,6 +222,25 @@ test('a Markdown Spec: mark text, comment, see it listed and highlighted, then a
   expect(words).toContain('Say why not Redis, with the cost.')
   expect(words).not.toContain('Say why not Redis.')
   expect(words).not.toContain('Is one table really the cost?')
+
+  // The lead answers the comment: the disposition and its note show under it, and nothing shows under the one it left alone.
+  const answered = read.annotations.find((a) => a.quote === SPEC_QUOTE)
+  if (!answered) throw new Error('the Spec lost its comment')
+  expect(answered.disposition).toBeNull()
+  await api(apiUrl, `/v1/artifacts/${spec}/annotations/${answered.id}/reply`, {
+    attempt: 1,
+    disposition: 'declined',
+    note: 'Redis adds a second store to run.',
+  })
+  expect((await detail(apiUrl, spec)).annotations.find((a) => a.id === answered.id)?.disposition).toMatchObject({
+    disposition: 'declined',
+    note: 'Redis adds a second store to run.',
+  })
+  await page.reload()
+  const replied = page.getByRole('listitem').filter({ hasText: 'Say why not Redis, with the cost.' })
+  await expect(replied.getByTestId('disposition')).toContainText('Declined')
+  await expect(replied.getByTestId('disposition')).toContainText('Redis adds a second store to run.')
+  await expect(page.getByTestId('disposition')).toHaveCount(1)
 })
 
 /** A throwaway server on a free port that counts every request it gets. */

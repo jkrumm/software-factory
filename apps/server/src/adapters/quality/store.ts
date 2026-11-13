@@ -58,6 +58,13 @@ const EvidenceRow = z.object({
   payload: z.unknown(),
 })
 
+const UndisposedRow = z.object({
+  id: z.string(),
+  artifact_id: z.string(),
+  revision: z.number().int(),
+  quote: z.string(),
+})
+
 /** The payloads are this adapter's own writes: checked for their shape only, as `work-store` does for waits. */
 const evidenceOf = (raw: unknown): StoredEvidence => {
   const row = EvidenceRow.parse(raw)
@@ -86,6 +93,19 @@ export function postgresQualityStore(tx: SQL): QualityStore {
       const [row] = await tx`
         SELECT 1 AS found FROM factory.artifacts WHERE issue_id = ${issueId} AND kind = 'spec' LIMIT 1`
       return row !== undefined
+    },
+
+    async undisposedAnnotations(issueId) {
+      const rows: unknown[] = await tx`
+        SELECT n.id, n.artifact_id, n.revision, n.quote
+        FROM factory.annotations n
+        JOIN factory.artifacts a ON a.id = n.artifact_id
+        WHERE a.issue_id = ${issueId} AND a.kind IN ('spec', 'concept') AND n.author = 'owner' AND n.disposition IS NULL
+        ORDER BY n.at, n.id`
+      return rows.map((raw) => {
+        const row = UndisposedRow.parse(raw)
+        return { id: row.id, artifact: row.artifact_id, revision: row.revision, quote: row.quote }
+      })
     },
 
     async recordShip(ship, evidence) {

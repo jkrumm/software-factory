@@ -24,6 +24,7 @@ import {
   idleNote,
   type IdleFacts,
   MAX_ROUNDS,
+  readIdleHistory,
   type RepeatedStall,
   SAME_STALL,
   sameWords,
@@ -489,20 +490,32 @@ export async function loadIdle(deps: Pick<StewardDeps, 'uow'>, id: IssueId): Out
     const lastWake = wakes.at(-1)
     const last = history.findLast((record) => !isIdleNote(record))
     const lastEvent = last ? `${lineOf(last)} (${last.at.toISOString()})` : 'none'
-    const quietSince = lastWake && lastWake.at > view.idleSince ? lastWake.at : view.idleSince
+    // The idle clock starts at the later of the end of the lead's turn and the last news it heard (a verdict, a note, the end of a wait).
+    const heard = readIdleHistory(history, lastAdmitted)
+    const idleSince = heard.newsAt && heard.newsAt > view.idleSince ? heard.newsAt : view.idleSince
+    const quietSince = lastWake && lastWake.at > idleSince ? lastWake.at : idleSince
     return ok({
       work: { repo: issue.repo, worktree: attempt.worktreePath, branch: attempt.branch },
-      idle: { idleSince: view.idleSince, quietSince, wakes: wakes.length, lastEvent, background: view.backgroundTasks },
+      idle: {
+        idleSince,
+        quietSince,
+        verdictAt: heard.verdictAt,
+        attempt: issue.attempt,
+        pendingRevision: heard.pendingRevision,
+        wakes: wakes.length,
+        lastEvent,
+        background: view.backgroundTasks,
+      },
       facts: {
         issue: id,
         repo: issue.repo,
         title: issue.title,
         kind: issue.kind,
         cause: 'unreported',
-        detail: `${IDLE_STALL} since ${view.idleSince.toISOString()} on a working Issue, with nothing reported and no tool running; the Issue's last event: ${lastEvent}`,
+        detail: `${IDLE_STALL} since ${idleSince.toISOString()} on a working Issue, with nothing reported and no tool running; the Issue's last event: ${lastEvent}`,
         // the idle episode: the version of the last wake, so a later episode is a new subject of the workflow
         since: lastWake?.version || issue.version,
-        stalledAt: view.idleSince,
+        stalledAt: idleSince,
         attempt: issue.attempt,
         restarts: issue.restarts,
         regressions: issue.regressions,
@@ -606,7 +619,9 @@ async function nudgeIdle(deps: StewardDeps, id: IssueId, pass: StewardPass): Pro
   await countLiveWork(deps, idle)
   const action = decideIdle(idle.idle, now, deps.rules)
   if (action.kind === 'wake') {
-    const wakeKey = key('noted', 'steward', 'idle', id, idle.facts.attempt, idle.idle.wakes + 1)
+    const wakeKey = action.revise
+      ? key('noted', 'steward', 'revise', id, action.revise.artifact, action.revise.version)
+      : key('noted', 'steward', 'idle', id, idle.facts.attempt, idle.idle.wakes + 1)
     const noted = await noteIdle(deps, idle.facts, action.detail, wakeKey)
     return tally(pass, id, noted.ok ? ok(noted.value ? 'woken' : 'nothing') : noted)
   }
