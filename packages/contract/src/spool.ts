@@ -10,6 +10,7 @@ export const EVENT_KINDS = [
   'turn_started',
   'turn_ended',
   'limit_stop',
+  'api_error',
   'quota_resume',
   'prompt_blocked',
   'prompt_idle',

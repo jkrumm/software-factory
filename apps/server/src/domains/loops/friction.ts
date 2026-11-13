@@ -12,8 +12,8 @@ export const MAX_SIGNALS_PER_PASS = 5
 /** Evidence Issue refs shown in one signal. */
 export const MAX_EVIDENCE = 5
 
-/** The groups whose counts are findings; `decision_settled` is informational and has no row. */
-type Judged = Exclude<FrictionCount['group'], 'decision_settled'>
+/** The groups whose counts are findings; `decision_settled` and `api_transient` (an edge incident the factory answered itself) are informational and have no row. */
+type Judged = Exclude<FrictionCount['group'], 'decision_settled' | 'api_transient'>
 
 /**
  * What makes a count a finding, with the reason in one line. `min` is the least count; `rate` is the share of Issues
@@ -117,7 +117,8 @@ const isAggregate = (key: string): boolean => key.endsWith(':total')
 export function patternsOver(counts: readonly FrictionCount[], closed: number): Pattern[] {
   const over: Pattern[] = []
   for (const c of counts) {
-    if (c.group === 'decision_settled' || isAggregate(c.key) || isRetired(c.key)) continue
+    if (c.group === 'decision_settled' || c.group === 'api_transient' || isAggregate(c.key) || isRetired(c.key))
+      continue
     const rule = ruleOf(c.key, c.group)
     if (c.count < rule.min) continue
     if (rule.rate !== null && (closed < MIN_CLOSED || c.perIssue === null || c.perIssue < rule.rate)) continue

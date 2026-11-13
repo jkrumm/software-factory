@@ -7,12 +7,13 @@ import { HcTerminals, claudeProjectsDirs } from './adapters/hc/terminals.ts'
 import { SpoolReplayer } from './adapters/leads/spool.ts'
 import { fileRoles } from './adapters/leads/roles.ts'
 import type { LeadSettings } from './adapters/leads/settings.ts'
-import { fileTranscripts } from './adapters/leads/transcripts.ts'
+import { fileTranscripts, fileTranscriptTails } from './adapters/leads/transcripts.ts'
 import { listenOnSocket, type SocketListener } from './adapters/socket/listener.ts'
 import type { LeadRoutes } from './api/leads.ts'
 import type { LeadDeps, LeadsUow } from './app/leads.ts'
 import { replayLines, recordHook, stopCheck } from './app/leads-hooks.ts'
 import { leadSession } from './app/leads-session.ts'
+import { apiErrorMemory, apiErrorPorts } from './app/leads-api-errors.ts'
 import { leadPorts, leadTick } from './app/leads-tick.ts'
 import { blockIssue, closeIssue, deferIssue } from './app/leads-verbs.ts'
 import type { EffectPorts } from './domains/work/ports.ts'
@@ -45,6 +46,8 @@ export function composeLeads(input: {
   startWatch: EffectPorts['start_watch']
   /** `FACTORY_GITHUB_TOKEN` and API base: with no token a merged pull request is not asked about */
   github: { token: string | null; apiUrl: string }
+  /** the checkpoints' side of the Errand "log in account X" */
+  loginErrands: NonNullable<LeadDeps['apiErrors']>['errands']
 }): LeadsComposition {
   const { settings: s } = input
   if (!s.agentToken)
@@ -80,6 +83,16 @@ export function composeLeads(input: {
     startBudgetMs: s.startBudgetMs,
     forceNoteAfterMs: s.forceNoteAfterMs,
     graceMs: s.graceMs,
+    apiErrors: apiErrorPorts({
+      tails: fileTranscriptTails({
+        projectsDirs: () => claudeProjectsDirs({ accountsFile: s.accountsFile, home: s.home }),
+      }),
+      errands: input.loginErrands,
+      delaysMs: s.resumeDelaysMs,
+      staggerMs: s.resumeStaggerMs,
+      detectAfterMs: s.apiErrorDetectMs,
+      probeEveryMs: s.apiErrorProbeMs,
+    }),
   }
   const ports: EffectPorts = { ...leadPorts(deps), start_watch: input.startWatch }
   const replayer = new SpoolReplayer({
@@ -89,7 +102,9 @@ export function composeLeads(input: {
       await replayLines(deps, lines)
     },
   })
-  const tick = () => leadTick({ leads: deps, ports, replaySpool: async () => (await replayer.replay()).lines })
+  const memory = apiErrorMemory()
+  const tick = () =>
+    leadTick({ leads: deps, ports, replaySpool: async () => (await replayer.replay()).lines, apiErrorMemory: memory })
 
   return {
     routes: {

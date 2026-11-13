@@ -1,3 +1,4 @@
+import type { ResumeRules } from '../../domains/leads/apierror.ts'
 import type { SignalRequest } from '@software-factory/contract'
 import type { Triaged } from '../../domains/intake/model.ts'
 import type { CiRuns, LoopReads, LoopStore, MigrationFiles } from '../../domains/loops/ports.ts'
@@ -47,6 +48,8 @@ export type SelfwatchStores = {
 export interface SelfwatchDeps {
   uow: UnitOfWork<SelfwatchStores>
   clock: Clock
+  /** the API-error path's resume rules: the steward's, so the two agree on when a lead in an incident is quiet */
+  resume?: ResumeRules
   /** the one repo watched, as intake and the Issues know it */
   repo: string
   /** the branch whose CI is read; null is the repo's default branch */

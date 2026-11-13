@@ -1,6 +1,7 @@
 import { existsSync } from 'node:fs'
 import { fileURLToPath } from 'node:url'
 import * as z from 'zod'
+import { RESUME_DELAYS_MS, STAGGER_MS } from '../../domains/leads/apierror.ts'
 
 const Env = z.object({
   HOME: z.string().min(1),
@@ -19,6 +20,14 @@ const Env = z.object({
   FACTORY_START_BUDGET_MS: z.coerce.number().int().min(0).optional(),
   FACTORY_GRACE_MS: z.coerce.number().int().min(0).optional(),
   FACTORY_FORCE_NOTE_MS: z.coerce.number().int().min(0).optional(),
+  /** the waits before each `continue` after an API error, comma-separated ms (the length is the number of resumes) */
+  FACTORY_API_RESUME_MS: z
+    .string()
+    .regex(/^\d+(,\d+){0,9}$/)
+    .optional(),
+  FACTORY_API_STAGGER_MS: z.coerce.number().int().min(0).optional(),
+  FACTORY_API_DETECT_MS: z.coerce.number().int().min(0).optional(),
+  FACTORY_API_PROBE_MS: z.coerce.number().int().min(0).optional(),
   /** the agent token (`settings.ts`) and the API port: what a lead's `factory` calls the API with */
   FACTORY_AGENT_TOKEN: z.string().min(1).optional(),
   PORT: z.coerce.number().int().min(1).max(65_535).optional(),
@@ -48,6 +57,14 @@ export interface LeadSettings {
   startBudgetMs: number
   graceMs: number
   forceNoteAfterMs: number
+  /** the waits before each `continue` after a transient API error: 1 min, 3, 10, 10, 10 */
+  resumeDelaysMs: number[]
+  /** between two `continue`s into the leads of one edge incident */
+  resumeStaggerMs: number
+  /** a turn open and silent this long has the end of its transcript read for an API error */
+  apiErrorDetectMs: number
+  /** a session's transcript is read at most this often */
+  apiErrorProbeMs: number
   /** `FACTORY_TOKEN` of a lead's terminal: the agent token, never the owner's; unset, the lead's CLI will answer 401 */
   agentToken: string | undefined
   /** `FACTORY_URL` of a lead's terminal: the API's loopback address; unset without a `PORT` */
@@ -87,6 +104,10 @@ export function loadLeadSettings(env: Record<string, string | undefined>): LeadS
     startBudgetMs: e.FACTORY_START_BUDGET_MS ?? 30 * 60_000,
     graceMs: e.FACTORY_GRACE_MS ?? 120_000,
     forceNoteAfterMs: e.FACTORY_FORCE_NOTE_MS ?? 5 * 60_000,
+    resumeDelaysMs: e.FACTORY_API_RESUME_MS ? e.FACTORY_API_RESUME_MS.split(',').map(Number) : [...RESUME_DELAYS_MS],
+    resumeStaggerMs: e.FACTORY_API_STAGGER_MS ?? STAGGER_MS,
+    apiErrorDetectMs: e.FACTORY_API_DETECT_MS ?? 45_000,
+    apiErrorProbeMs: e.FACTORY_API_PROBE_MS ?? 20_000,
     agentToken: e.FACTORY_AGENT_TOKEN,
     apiUrl: e.PORT ? `http://127.0.0.1:${e.PORT}` : undefined,
   }

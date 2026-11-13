@@ -75,7 +75,17 @@ async function handle(request: Request): Promise<unknown> {
         if (typeof guard === 'string' && terminal.status?.state !== guard) {
           throw new Refusal('status_mismatch', `the terminal is ${terminal.status?.state}, not ${guard}`)
         }
+        // The core refuses a blocked program unless forced: typing would answer its dialog.
+        if ((terminal.status?.state === 'blocked' || terminal.status?.state === 'error') && p.force !== true) {
+          throw new Refusal('blocked', `${address} is blocked: typing would answer its dialog`)
+        }
         terminal.sent.push(String(p.text ?? ''))
+        if (p.force === true) (terminal.forced ??= []).push(terminal.sent.length - 1)
+        return {}
+      }
+      case 'terminal.keys': {
+        if (terminal?.state !== 'live') throw new Refusal('not_found', `no live terminal ${address}`)
+        ;(terminal.keys ??= []).push((p.keys ?? []) as string[])
         return {}
       }
       case 'terminal.kill':

@@ -118,14 +118,19 @@ export async function runLoop(flow: Flow, name: string): Promise<LoopRunReply> {
   return reply
 }
 
-const TICK = /^spool (\d+) lines, (\d+) lead\(s\) lost, outbox (\{.*\})$/
+const TICK = /^spool (\d+) lines, (\d+) lead\(s\) lost, outbox (\{.*\}), api errors (\{.*\})$/
 
 /** One pass of the leads' loop (spool, lost leads, the outbox: it starts the admitted leads), as the tick answered before. */
 export async function tick(flow: Flow): Promise<TickAnswer> {
   const { summary } = await runLoop(flow, 'leads')
   const match = TICK.exec(summary ?? '')
   if (!match) throw new Error(`the leads loop said: ${summary}`)
-  return { replayed: Number(match[1]), lost: Number(match[2]), outbox: JSON.parse(match[3] ?? '{}') }
+  return {
+    replayed: Number(match[1]),
+    lost: Number(match[2]),
+    outbox: JSON.parse(match[3] ?? '{}'),
+    apiErrors: JSON.parse(match[4] ?? '{}'),
+  }
 }
 
 /** Where an Issue stands, read-only. */

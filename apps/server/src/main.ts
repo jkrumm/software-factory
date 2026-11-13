@@ -86,6 +86,8 @@ import { checkWatches, DEFAULT_TIMING, startWatchPort } from './app/quality-watc
 import { factoryDataDir, loadCheckpointSettings } from './checkpoint-settings.ts'
 import { storedChecks } from './app/leads-checks.ts'
 import { composeLeads } from './compose-leads.ts'
+import { loginErrands } from './app/login-errands.ts'
+import { resumeRulesOf } from './app/leads-api-errors.ts'
 import { type Clock, systemClock } from './kernel/clock.ts'
 import { err, ok, portError } from './kernel/result.ts'
 import { systemIds } from './kernel/ids.ts'
@@ -213,6 +215,19 @@ async function main(): Promise<void> {
     projects: planning.signals,
     triage: agwAmend(agw),
   })
+  const checkpointSettings = loadCheckpointSettings(process.env)
+  const checkpoints = checkpointUses({
+    ...writes,
+    blobs: fileBlobStore(checkpointSettings.blobDir),
+    consoleUrl: checkpointSettings.line.consoleUrl,
+    notifier: makeNotifier(checkpointSettings.line),
+    // The Judge asks `factory-ask` through the agw port. The standing policy is each project's `policy:` in its
+    // `project.yaml`; a JSON file named by the environment overrides it, as an explicit stand-in.
+    judge: agwJudge(agw),
+    errandScreen: agwErrandScreen(agw),
+    recheckAfterMs: loopSettings.recheckAfterMs,
+    policies: checkpointSettings.policyFile ? fileStandingPolicies(checkpointSettings.policyFile) : planning.policies,
+  })
   // One outbox runs every effect: the leads' tick, with quality's port for the Watch.
   const leads = composeLeads({
     sql,
@@ -224,6 +239,7 @@ async function main(): Promise<void> {
     checks: storedChecks(uow),
     startWatch: startWatchPort({ uow, clock, projects, checkout }),
     github: intakeEnv.github,
+    loginErrands: loginErrands(checkpoints),
   })
   // The hook socket comes after the lock and the migrations: a second copy never reaches it.
   const socket = await leads.listen()
@@ -239,19 +255,6 @@ async function main(): Promise<void> {
   }
   const draining = new AbortController()
 
-  const checkpointSettings = loadCheckpointSettings(process.env)
-  const checkpoints = checkpointUses({
-    ...writes,
-    blobs: fileBlobStore(checkpointSettings.blobDir),
-    consoleUrl: checkpointSettings.line.consoleUrl,
-    notifier: makeNotifier(checkpointSettings.line),
-    // The Judge asks `factory-ask` through the agw port. The standing policy is each project's `policy:` in its
-    // `project.yaml`; a JSON file named by the environment overrides it, as an explicit stand-in.
-    judge: agwJudge(agw),
-    errandScreen: agwErrandScreen(agw),
-    recheckAfterMs: loopSettings.recheckAfterMs,
-    policies: checkpointSettings.policyFile ? fileStandingPolicies(checkpointSettings.policyFile) : planning.policies,
-  })
   // The loops: every recurring job of the server is one named loop on the runner, each with its interval
   // (`FACTORY_TICK_MS` the default), its trigger and its single-flight pass. Intake's pollers keep their own schedules.
   const watchSettledAt = new Date(startedAt.getTime() + settings.quality.settleMs)
@@ -259,6 +262,10 @@ async function main(): Promise<void> {
     locate: (repo) => repos.locate(repo),
     token: intakeEnv.github.token,
     apiUrl: intakeEnv.github.apiUrl,
+  })
+  const resumeRules = resumeRulesOf({
+    delaysMs: leadSettings.resumeDelaysMs,
+    staggerMs: leadSettings.resumeStaggerMs,
   })
   const stewardDeps = {
     ...writes,
@@ -288,6 +295,7 @@ async function main(): Promise<void> {
     blockedChecks: loopSettings.blockedChecks,
     checkouts: gitMainCheckouts(repos),
     findings: mainCheckoutLines,
+    resume: resumeRules,
   }
   const lines = new Map<string, string>()
   /** A problem that stands is said once, not on every pass. */
@@ -311,7 +319,9 @@ async function main(): Promise<void> {
         const ticked = await leads.tick()
         if (!ticked.ok) return ticked
         const t = ticked.value
-        return ok(`spool ${t.replayed} lines, ${t.lost} lead(s) lost, outbox ${JSON.stringify(t.outbox)}`)
+        return ok(
+          `spool ${t.replayed} lines, ${t.lost} lead(s) lost, outbox ${JSON.stringify(t.outbox)}, api errors ${JSON.stringify(t.apiErrors)}`,
+        )
       },
     },
     {
@@ -474,6 +484,7 @@ async function main(): Promise<void> {
           idleLeadMs: loopSettings.idleLeadMs,
           idleBackgroundMs: loopSettings.idleBackgroundMs,
           slots: stewardDeps.slots,
+          resume: resumeRules,
           ciLive,
           ci: githubCiRuns({
             locate: (repo) => repos.locate(repo),

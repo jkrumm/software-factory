@@ -1,4 +1,5 @@
 import type { EventKind } from '@software-factory/contract/spool'
+import { type ApiIncident, kindOfPayload, INCIDENT_GAP_MS } from './apierror.ts'
 
 /** One hook event of a session as it is stored: `seq` is the order of arrival, which breaks a tie in `at`. */
 export interface HookFact {
@@ -33,18 +34,37 @@ export interface SessionView {
    * listed it): it pauses until that work wakes it, so it is waiting, not quiet. A later turn, or a session that is not idle, clears it.
    */
   backgroundTasks: boolean
+  /**
+   * The incident of API errors the session is in: its latest turn ended on an `api_error` (no `Stop` fires for one, so the
+   * error is what ends the turn) and no turn has ended cleanly since. Null for a session that is not in one; a later turn
+   * start does not close it, only a turn that ends does, so a resume that fails again is the same incident.
+   */
+  apiIncident: ApiIncident | null
   claudeSession: string | null
   transcriptPath: string | null
 }
 
 const text = (value: unknown): string | null => (typeof value === 'string' && value ? value : null)
 
+/** The incident an `api_error` fact opens, or grows when it follows another within `INCIDENT_GAP_MS`. */
+function nextIncident(previous: ApiIncident | null, fact: HookFact): ApiIncident {
+  const { text: message, ...kind } = kindOfPayload(fact.payload)
+  if (previous && fact.at.getTime() - previous.lastAt.getTime() <= INCIDENT_GAP_MS) {
+    return { ...previous, lastAt: fact.at, errors: previous.errors + 1, kind, text: message }
+  }
+  return { key: fact.key, firstAt: fact.at, lastAt: fact.at, errors: 1, kind, text: message }
+}
+
 const inOrder = (a: HookFact, b: HookFact): number => a.at.getTime() - b.at.getTime() || a.seq - b.seq
 
-/** The end of the last turn, or the start of the session if no turn ended since: when a quiet session went quiet. */
+/** The end of the last turn (an API error ends one too), or the start of the session if no turn ended since: when a quiet session went quiet. */
 function quietSince(state: SessionState, current: readonly HookFact[]): Date | null {
   if (state !== 'idle' && state !== 'compacted') return null
-  return current.findLast((fact) => fact.kind === 'turn_ended' || fact.kind === 'session_started')?.at ?? null
+  return (
+    current.findLast(
+      (fact) => fact.kind === 'turn_ended' || fact.kind === 'api_error' || fact.kind === 'session_started',
+    )?.at ?? null
+  )
 }
 
 /**
@@ -71,6 +91,7 @@ export function deriveSession(facts: readonly HookFact[]): SessionView {
   let open = false
   let walled = false
   let turnStartedAt: Date | null = null
+  let apiIncident: ApiIncident | null = null
   for (const fact of current) {
     // A hook event is proof of life: it withdraws a lost pane, never a session that ended.
     if (fact.kind !== 'pane_gone') paneGone = false
@@ -89,7 +110,14 @@ export function deriveSession(facts: readonly HookFact[]): SessionView {
         break
       case 'turn_ended':
         open = false
+        apiIncident = null
         break
+      case 'api_error': {
+        // The error is the turn's end: no Stop hook follows it.
+        open = false
+        apiIncident = nextIncident(apiIncident, fact)
+        break
+      }
       case 'limit_stop':
         walled = true
         break
@@ -119,6 +147,7 @@ export function deriveSession(facts: readonly HookFact[]): SessionView {
     idleSince: quietSince(state, current),
     walled,
     backgroundTasks: state === 'idle' && lastEnd?.payload.backgroundTasks === true,
+    apiIncident: gone ? null : apiIncident,
     claudeSession: text(start?.payload.claudeSessionId),
     transcriptPath: text(start?.payload.transcriptPath),
   }

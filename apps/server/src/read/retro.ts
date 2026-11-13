@@ -12,6 +12,7 @@ import {
   type RetroSession,
 } from '@software-factory/contract'
 import type { CiTimes } from '../domains/loops/ports.ts'
+import { apiBlockedMinutes } from './api-errors.ts'
 import { capacityFigures, tuneConstant } from './capacity-tuning.ts'
 import { type CapacityConstants, readCapacityLoop } from './capacity-loop.ts'
 import { readFriction } from './friction.ts'
@@ -197,7 +198,14 @@ async function capacityOf(
   options: { now: Date; days: number; constants: CapacityConstants; build: readonly RetroCapacityFigure[] },
 ): Promise<RetroCapacity> {
   const loop = await readCapacityLoop(sql, options)
-  const figures = [...capacityFigures(loop), ...options.build]
+  const window = windowOf(options.now, options.days)
+  const apiBlocked: RetroCapacityFigure = {
+    key: 'api_blocked_minutes_per_day',
+    label: 'Minutes a day leads spent blocked on API errors',
+    value: (await apiBlockedMinutes(sql, window)) / Math.max(1, loop.days),
+    unit: 'minutes',
+  }
+  const figures = [...capacityFigures(loop), apiBlocked, ...options.build]
   const heaviest = loop.leadCosts[0] ?? null
   const memoryShare = loop.idleSeatHours.total > 0 ? loop.idleSeatHoursMemory.total / loop.idleSeatHours.total : 0
   return {

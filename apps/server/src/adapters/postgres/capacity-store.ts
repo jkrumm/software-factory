@@ -118,10 +118,15 @@ export function postgresCapacityStore(tx: SQL): CapacityStore {
     },
 
     async latestReadings() {
+      // An account the API-error path marked (a lead's turn ended on a 401) is not signed in whatever the picker says, until
+      // the owner's login Errand closes: `auth_ok` is what stops new admissions on it (`standing`).
       const rows: unknown[] = await tx`
-        SELECT DISTINCT ON (account) account, read_at, sampled_at, enabled, auth_ok, five_hour_used, weekly_used,
-          five_hour_resets_at, weekly_resets_at, exhausted_until
-        FROM factory.capacity_readings ORDER BY account, id DESC`
+        SELECT DISTINCT ON (r.account) r.account, r.read_at, r.sampled_at, r.enabled,
+          (r.auth_ok AND NOT EXISTS (
+            SELECT 1 FROM factory.account_auth_marks m WHERE m.account = r.account AND m.cleared_at IS NULL
+          )) AS auth_ok,
+          r.five_hour_used, r.weekly_used, r.five_hour_resets_at, r.weekly_resets_at, r.exhausted_until
+        FROM factory.capacity_readings r ORDER BY r.account, r.id DESC`
       return rows.map((raw): AccountReading => {
         const r = ReadingRow.parse(raw)
         return {

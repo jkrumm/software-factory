@@ -1,6 +1,7 @@
 import type { Effort, Tier } from '@software-factory/contract'
 import type { IssueId } from '../../kernel/ids.ts'
 import type { Result } from '../../kernel/result.ts'
+import type { ResumeRules } from './apierror.ts'
 import type { HookFact } from './session.ts'
 
 // --- the world, behind ports ------------------------------------------------------------------------------------
@@ -42,8 +43,24 @@ export interface Terminals {
   find(key: string): Promise<Result<TerminalInfo[]>>
   /** the key's running agent if there is one, else a new terminal with the prompt as the program's last argument */
   start(input: StartTerminal): Promise<Result<TerminalInfo>>
-  /** `busy` unless the agent waits at its prompt; `force` also types into a working agent, which queues it for its next turn */
+  /**
+   * `busy` unless the agent waits at its prompt; `force` also types into a working agent, which queues it for its next turn.
+   * An agent whose turn ended on an API error is blocked as far as herdr-core can tell (it takes "Please run /login" for a
+   * dialog), yet it sits at an empty prompt: the screen shows that, and then the text is typed with the core's own override.
+   */
   type(input: { terminal: string; text: string; force: boolean }): Promise<Result<'typed' | 'busy'>>
+  /**
+   * Gets an agent whose turn ended on an API error going again. The screen is looked at first: the API error line above an
+   * empty prompt is what permits a forced send. A draft in the prompt box is submitted (`draft`: it is what the agent was
+   * about to run, and a send would append to it); a screen that is not that state (a dialog, a running turn, no error line)
+   * is `busy` and nothing is typed.
+   */
+  resume(input: { terminal: string; text: string }): Promise<Result<'continued' | 'draft' | 'busy'>>
+  /**
+   * The names of the owner's own plan sessions (live terminals named `plan-*`) whose screen shows an API error above the
+   * prompt. Read only: they are counted in an edge incident's friction row, never resumed.
+   */
+  planErrors(): Promise<Result<string[]>>
   /** ends the key's terminals and takes them away; none left is what was asked for */
   close(key: string): Promise<Result<void>>
   /**
@@ -137,6 +154,54 @@ export interface Windows {
   wall(account: string): Promise<Result<{ resetAt: Date | null }>>
 }
 
+/** What the end of a session's transcript says of its last turn when that turn ended on an API error. */
+export interface TranscriptApiError {
+  at: Date
+  /** Claude Code's `error` type, when the line has one */
+  error: string | null
+  /** Claude Code's `apiErrorStatus`, when it has one */
+  status: number | null
+  /** the rendered error text */
+  text: string
+}
+
+/**
+ * The end of a lead's transcript. A turn that ends on an API error fires no `Stop`; Claude Code only writes the error as the
+ * assistant's last line, so this is how a session whose `StopFailure` hook never ran (or is not installed) is found.
+ */
+export interface TranscriptTails {
+  /** the error the transcript ends on, or null when its last message is not one (or the file says nothing) */
+  apiError(path: string): Promise<Result<TranscriptApiError | null>>
+}
+
+/** An account's login mark: capacity reads an open one as "not signed in". */
+export interface AuthMarkRow {
+  account: string
+  markedAt: Date
+  clearedAt: Date | null
+  errandKey: string
+  label: string
+}
+
+/** The Errand "log in account X" and whether it is still open, on the checkpoints' side. */
+export interface LoginErrands {
+  /** raises it once per key: the same words are the same Errand */
+  raise(input: { account: string; key: string; label: string }): Promise<Result<void>>
+  /** the request keys of the open Errands of this kind */
+  open(): Promise<Result<ReadonlySet<string>>>
+}
+
+/** What the API-error path needs beyond the leads' own ports. */
+export interface ApiErrorPorts {
+  tails: TranscriptTails
+  errands: LoginErrands
+  rules: ResumeRules
+  /** a session whose open turn has been silent this long has the end of its transcript read for an API error */
+  detectAfterMs: number
+  /** a session's transcript is read at most this often */
+  probeEveryMs: number
+}
+
 /** Copies the attempt's transcripts where they outlive Claude Code's own cleanup. */
 export interface Transcripts {
   archive(input: {
@@ -172,7 +237,7 @@ export interface Delivery {
   key: string
   issueId: IssueId
   attempt: number
-  kind: 'brief' | 'note'
+  kind: 'brief' | 'note' | 'resume'
   text: string
   claimedAt: Date
   typedAt: Date | null
@@ -242,6 +307,20 @@ export interface LeadStore {
     receivedAt: Date
   }): Promise<boolean>
   hookFacts(session: string): Promise<HookFact[]>
+
+  /** the `continue` deliveries of an attempt, oldest first */
+  resumesOf(issue: IssueId, attempt: number): Promise<Delivery[]>
+  authMarks(): Promise<AuthMarkRow[]>
+  /** marks the account (or marks it again after the owner cleared it) */
+  markAuth(input: { account: string; at: Date; errandKey: string; label: string }): Promise<void>
+  /** takes back a `continue` claim that typed nothing (an untyped claim only), so the next pass tries again */
+  unclaimDelivery(key: string): Promise<void>
+  clearAuth(account: string, at: Date): Promise<void>
+  /**
+   * one row per edge incident, its leads and window kept at the largest seen; a burst that starts within the incident gap
+   * of an earlier row's end is the same outage (the same leads failing again) and grows that row
+   */
+  recordEdge(input: { key: string; firstAt: Date; lastAt: Date; leads: number; plans: number; at: Date }): Promise<void>
 
   delivery(key: string): Promise<Delivery | null>
   /** false when the key is claimed already */

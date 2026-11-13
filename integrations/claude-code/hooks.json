@@ -35,7 +35,6 @@
     ],
     "StopFailure": [
       {
-        "matcher": "rate_limit",
         "hooks": [
           {
             "type": "command",

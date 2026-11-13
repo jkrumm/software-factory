@@ -331,6 +331,7 @@ export const FrictionCount = z
       'regression',
       'decision_settled',
       'signal',
+      'api_transient',
     ]),
     label: z.string(),
     count: z.number().int(),
@@ -773,6 +774,7 @@ export const CAPACITY_FIGURE_KEYS = [
   'slot_wait_p90_ms',
   'check_minutes_per_issue',
   'ci_p50_minutes',
+  'api_blocked_minutes_per_day',
 ] as const
 
 export const RetroCapacityFigure = z

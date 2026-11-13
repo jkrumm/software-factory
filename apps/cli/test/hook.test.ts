@@ -147,14 +147,30 @@ describe('the payload becomes the §3 event', () => {
       { reason: 'prompt_input_exit' },
       { kind: 'session_ended', payload: { reason: 'prompt_input_exit' } },
     ],
+    // Any API error but a rate limit is an `api_error`; the server reads it from the rendered text, not from `error`.
+    [
+      'stop-failure',
+      {
+        error: 'authentication_failed',
+        error_details: '403',
+        last_assistant_message: 'Please run /login · API Error: 403 Attention Required! | Cloudflare',
+      },
+      {
+        kind: 'api_error',
+        payload: {
+          error: 'authentication_failed',
+          details: '403',
+          message: 'Please run /login · API Error: 403 Attention Required! | Cloudflare',
+        },
+      },
+    ],
+    ['stop-failure', { error: 'overloaded' }, { kind: 'api_error', payload: { error: 'overloaded' } }],
+    ['stop-failure', {}, { kind: 'api_error' }],
   ])('%s %j', (event, input, expected) => {
     expect(toEvent(event, input)).toEqual(expected as ReturnType<typeof toEvent>)
   })
 
   test.each([
-    ['stop-failure', { error: 'overloaded' }],
-    ['stop-failure', { error: 'server_error' }],
-    ['stop-failure', {}],
     ['notification', { notification_type: 'agent_completed' }],
     ['notification', { notification_type: 'auth_success' }],
     ['notification', { notification_type: 'quota_auto_resume_other' }],

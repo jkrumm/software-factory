@@ -1,6 +1,7 @@
 import type { SQL } from 'bun'
 import * as z from 'zod'
 import type { FrictionCount, FrictionModel } from '@software-factory/contract'
+import { readEdgeIncidents } from './api-errors.ts'
 import { avoidableTouches, issuesFiled, orchestratorSteering, type Window } from './kpis.ts'
 import { per, windowOf } from './stats.ts'
 import { plain } from './words.ts'
@@ -130,6 +131,20 @@ export async function readFriction(sql: SQL, options: { now: Date; days: number 
       SELECT count(*) AS n FROM factory.issue_events
       WHERE kind = 'lead_gone' AND result = 'applied' AND at >= ${w.from} AND at < ${w.to}`),
   )
+
+  // An edge incident (leads that hit transient API errors together) is recorded once with its leads and window; the factory
+  // answered it by itself, so it is a row to see, never a finding.
+  const edges = await readEdgeIncidents(sql, w)
+  add('api_transient', 'api_transient:total', 'Edge incidents: leads hit transient API errors together', edges.length)
+  for (const edge of edges) {
+    const minutes = Math.max(1, Math.round((edge.lastAt.getTime() - edge.firstAt.getTime()) / 60_000))
+    add(
+      'api_transient',
+      `api_transient:${edge.firstAt.toISOString()}`,
+      `${edge.leads} leads${edge.plans > 0 ? ` and ${edge.plans} plan sessions (not resumed)` : ''} hit transient API errors within ${minutes} min of ${edge.firstAt.toISOString()}`,
+      edge.leads,
+    )
+  }
 
   add(
     'undelivered_note',

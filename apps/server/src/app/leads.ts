@@ -1,4 +1,5 @@
 import type {
+  ApiErrorPorts,
   LeadStore,
   Claims,
   Checks,
@@ -47,6 +48,8 @@ export interface LeadDeps {
   forceNoteAfterMs: number
   /** a terminal lost this soon after the lead started or last spoke is not yet called gone */
   graceMs: number
+  /** the API-error path's ports; unset, a turn that ended on an API error is neither found nor answered */
+  apiErrors?: ApiErrorPorts
 }
 
 /** The Issue and its applied events, or null when there is no such Issue. */

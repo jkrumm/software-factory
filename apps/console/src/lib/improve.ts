@@ -217,6 +217,7 @@ export const FRICTION_GROUP_LABEL: Record<FrictionCount['group'], string> = {
   regression: 'Regressions',
   decision_settled: 'Decisions settled by default',
   signal: 'Signals',
+  api_transient: 'Leads hit by transient API errors',
 }
 
 /** The friction groups whose heading is a domain word a stranger would not know. */

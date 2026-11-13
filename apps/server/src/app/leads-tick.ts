@@ -5,6 +5,7 @@ import { startLead } from './leads-start.ts'
 import { noteLead } from './leads-note.ts'
 import { finalizeLead } from './leads-finalize.ts'
 import { followLeads } from './leads-follow.ts'
+import { type ApiErrorMemory, handleApiErrors } from './leads-api-errors.ts'
 import { type LeadDeps } from './leads.ts'
 import { runOutbox } from './outbox.ts'
 
@@ -22,10 +23,12 @@ export interface LeadTickDeps {
   ports: EffectPorts
   /** stores what the hooks spooled since the last pass; returns how many lines were new */
   replaySpool: () => Promise<number>
+  /** what the API-error path keeps between passes */
+  apiErrorMemory: ApiErrorMemory
 }
 
 /**
- * One pass of the lead tick: the spool's lines are stored, the leads whose terminal is gone are found (and the tabs of those that run named), then the outbox
+ * One pass of the lead tick: the spool's lines are stored, the leads whose terminal is gone are found (and the tabs of those that run named), the sessions whose turn ended on an API error are found and answered, then the outbox
  * runs (claim, call, record). Every step finds its own work done, so a pass twice in a row does nothing twice. A step
  * that fails does not hold the others back.
  */
@@ -35,7 +38,12 @@ export async function leadTick(deps: LeadTickDeps): Promise<Result<TickAnswer, P
     return 0
   })
   const lost = await followLeads(deps.leads)
+  // Before the outbox: a note waiting on a session that ended on an API error is typed in this very pass, not the next.
+  const apiErrors = await handleApiErrors(deps.leads, deps.apiErrorMemory).catch((error: unknown) => {
+    console.error(`api error path failed: ${error instanceof Error ? error.message : String(error)}`)
+    return { detected: 0, resumed: 0, marked: 0, cleared: 0, edges: 0 }
+  })
   const outbox = await runOutbox({ uow: deps.leads.uow, clock: deps.leads.clock, ports: deps.ports })
   if (!outbox.ok) return outbox
-  return ok({ outbox: outbox.value, replayed, lost })
+  return ok({ outbox: outbox.value, replayed, lost, apiErrors })
 }
