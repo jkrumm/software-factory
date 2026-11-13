@@ -5,7 +5,7 @@ import type { Lab } from '../scenarios/planning/lab.ts'
 import { api } from './seed.ts'
 
 /** one repo per lead these artifacts need: a project takes one lead at a time (the lab is started with them) */
-export const ARTIFACT_REPOS = ['ember', 'flint', 'forge']
+export const ARTIFACT_REPOS = ['ember', 'flint', 'forge', 'gable']
 
 export const SPEC_QUOTE = 'We keep the queue in Postgres because it is already running.'
 export const KEPT = 'The lock decides who takes the next row.'
@@ -67,6 +67,60 @@ ${SPEC_QUOTE} The cost is one more table, and a failed row is retried by the sam
 The queue ran 2,000 rows through one worker in 11 seconds on the staging copy, with no row taken twice.
 `
 
+const FILLER = (topic: string) =>
+  [1, 2, 3, 4]
+    .map(
+      (n) =>
+        `Paragraph ${n} on ${topic}: the weather service answers in under a second, the cache holds the last forecast for ten minutes, and a stale answer is shown with its age rather than hidden. The queue behind it retries a failed fetch twice before the lead is told.`,
+    )
+    .join('\n\n')
+
+export const REVIEW_QUOTE = 'The cache holds the last forecast for ten minutes.'
+export const EXTERNAL_URL = 'https://example.com/weatherorb-v2'
+
+/** A long Spec with headings to scroll through and one link of each kind: web, anchor, a Console page, and one with no destination. */
+export const reviewMd = (specId: string) => `# Weather rollout
+
+## Context
+
+The tile shows the forecast from [WeatherOrb V2](${EXTERNAL_URL}). ${REVIEW_QUOTE} Read [the risks](#risks) first, or the
+[storage spec](/artifacts/${specId}), or the [vault note](weatherorb-v2.md).
+
+${FILLER('context')}
+
+## Options
+
+${FILLER('the options')}
+
+## Risks
+
+${FILLER('the risks')}
+
+## Proof
+
+${FILLER('the proof')}
+
+## Rollout
+
+${FILLER('the rollout')}
+
+## Open questions
+
+${FILLER('the open questions')}
+`
+
+export const LINKS_HTML = `<!doctype html>
+<html><head><meta charset="utf-8"><title>Links</title><style>body{font-family:system-ui;padding:1rem}section{min-height:900px}</style></head>
+<body>
+<h1>Link report</h1>
+<section><h2 id="intro">Intro</h2>
+<p id="web">Read <a id="external" href="${EXTERNAL_URL}">WeatherOrb V2</a>, or jump <a id="anchor" href="#later">to the end</a>, or open <a id="page" href="/issues/1">an Issue</a>.</p>
+<p id="claim">The probe ships on Friday and nobody pays for it.</p></section>
+<section><h2 id="middle">Middle</h2><p>Nothing happens here.</p></section>
+<section><h2 id="later">Later</h2><p>The end of the report.</p></section>
+</body></html>
+`
+
 export const REPORT_HTML = `<!doctype html>
 <html><head><meta charset="utf-8"><title>Probe</title><style>body{font-family:system-ui;padding:1rem}</style></head>
 <body>
@@ -110,6 +164,10 @@ export interface SeededArtifacts {
   shotSpec: string
   /** a Report in the shared HTML template with four comments, one of them edited */
   shotReport: string
+  /** a long Spec with a link of each kind, to be reviewed (read only: the tests that write use the others) */
+  review: string
+  /** an HTML Report with an external link, an anchor, a Console link and headings to scroll through */
+  links: string
 }
 
 /** The shared HTML template, filled in the way a lead would: the result first, a table, a picture, the risks. */
@@ -190,5 +248,13 @@ export async function seedArtifacts(lab: Lab): Promise<SeededArtifacts> {
   if (!risky) throw new Error('the Report comment was not stored')
   const edit = { comment: 'Which risk would we not take, and why?' }
   await api(url, `/v1/artifacts/${shotReport}/annotations/${risky.id}`, edit, 'PATCH')
-  return { spec, report, revised, shotSpec, shotReport }
+  const reviewIssue = await lead('gable', 'Roll out the weather tile')
+  const review = await submit(reviewIssue, { kind: 'spec', title: 'Weather rollout', content: reviewMd(spec) })
+  const links = await submit(reportIssue, {
+    kind: 'report',
+    title: 'The link report',
+    contentFormat: 'html',
+    content: LINKS_HTML,
+  })
+  return { spec, report, revised, shotSpec, shotReport, review, links }
 }

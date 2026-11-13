@@ -44,7 +44,20 @@ const FrameSelect = z.object({
   path: z.string().max(MAX_PATH),
   rect: FrameRectShape,
 })
+const MAX_HREF = 2048
+const MAX_HEADING = 300
+const MAX_HEADINGS = 500
+
 const FrameReady = z.object({ type: z.literal('factory.ready') })
+const FrameOpen = z.object({ type: z.literal('factory.open'), quote: z.string().min(1).max(MAX_QUOTE) })
+const FrameLink = z.object({ type: z.literal('factory.link'), href: z.string().min(1).max(MAX_HREF) })
+const FrameHeadings = z.object({
+  type: z.literal('factory.headings'),
+  items: z
+    .array(z.object({ level: z.number().int().min(1).max(6), text: z.string().max(MAX_HEADING) }))
+    .max(MAX_HEADINGS),
+})
+const FrameSection = z.object({ type: z.literal('factory.section'), index: z.number().int().min(-1).max(MAX_HEADINGS) })
 
 /** Where a selection sits: top, bottom and left edges, in the coordinates of the viewport the rect is relative to. */
 export interface SelectionRect {
@@ -53,11 +66,35 @@ export interface SelectionRect {
   left: number
 }
 
-export type FrameMessage = { type: 'select'; quote: string; path: string; rect: SelectionRect } | { type: 'ready' }
+export type FrameMessage =
+  | { type: 'select'; quote: string; path: string; rect: SelectionRect }
+  | { type: 'ready' }
+  /** a click on a highlighted passage: the quote that was painted there */
+  | { type: 'open'; quote: string }
+  /** a click on a link that leaves the frame: an absolute http(s) URL, to be opened by the page */
+  | { type: 'link'; href: string }
+  /** the document's headings in order, and the index of the one the reader is in (-1 before the first) */
+  | { type: 'headings'; items: Heading[] }
+  | { type: 'section'; index: number }
 
 /** The message a frame posted, or null for anything that is not exactly one. */
 export function parseFrameMessage(data: unknown): FrameMessage | null {
   if (FrameReady.safeParse(data).success) return { type: 'ready' }
+  const open = FrameOpen.safeParse(data)
+  if (open.success) {
+    const quote = normalizeQuote(open.data.quote)
+    return quote === '' ? null : { type: 'open', quote }
+  }
+  const link = FrameLink.safeParse(data)
+  if (link.success) return /^https?:\/\//i.test(link.data.href) ? { type: 'link', href: link.data.href } : null
+  const headings = FrameHeadings.safeParse(data)
+  if (headings.success)
+    return {
+      type: 'headings',
+      items: headings.data.items.map((item) => ({ level: item.level, text: normalizeQuote(item.text) })),
+    }
+  const section = FrameSection.safeParse(data)
+  if (section.success) return { type: 'section', index: section.data.index }
   const parsed = FrameSelect.safeParse(data)
   if (!parsed.success) return null
   const quote = normalizeQuote(parsed.data.quote)
@@ -141,26 +178,6 @@ export function locateQuote(index: TextIndex, quote: string): Span | null {
   return { start: first, end: [last[0], last[1] + 1] }
 }
 
-export interface AnnotationLike {
-  path: string | null
-}
-
-/**
- * The page's groups: General (the global comments, whichever list the API put them in), the anchored ones, and the
- * Unanchored ones. A global comment's quote is the title, so the API may call it either.
- */
-export function groupAnnotations<T extends AnnotationLike>(
-  anchored: readonly T[],
-  unanchored: readonly T[],
-): { general: T[]; anchored: T[]; unanchored: T[] } {
-  const isGeneral = (a: T) => a.path === GLOBAL_PATH
-  return {
-    general: [...anchored, ...unanchored].filter(isGeneral),
-    anchored: anchored.filter((a) => !isGeneral(a)),
-    unanchored: unanchored.filter((a) => !isGeneral(a)),
-  }
-}
-
 export const KIND_WORDS = { concept: 'Concept', spec: 'Spec', decision: 'Decision', report: 'Report' } as const
 export const FORMAT_WORDS = { markdown: 'Markdown', html: 'HTML' } as const
 export const VERDICT_WORDS = {
@@ -169,3 +186,113 @@ export const VERDICT_WORDS = {
   changes: 'Changes',
   no_longer_applies: 'No longer applies',
 } as const
+
+/**
+ * A heading path as a card shows it: the leading segment goes when it is the document's own name (its title, or its first
+ * H1), since only one document is open and every path would start with it.
+ */
+export function displayPath(path: string, names: readonly string[]): string {
+  const segments = path.split(' > ')
+  const first = normalizeQuote(segments[0] ?? '').toLowerCase()
+  if (segments.length > 1 && names.some((name) => normalizeQuote(name).toLowerCase() === first)) segments.shift()
+  return segments.join(' > ')
+}
+
+/** The text of a Markdown document's first H1, or null: the document's name as its own text gives it. */
+export function firstH1(markdown: string): string | null {
+  const match = /^#[ \t]+(.+?)[ \t]*#*[ \t]*$/m.exec(markdown)
+  return match?.[1] ? match[1].replace(/[*_`]/g, '') : null
+}
+
+/**
+ * A heading's anchor, the way GitHub makes it: lower-case, everything but letters, digits, `_` and `-` dropped, and each
+ * space a `-` (so "Options & Cost" is `options--cost`).
+ */
+export function slugOf(text: string): string {
+  return text
+    .trim()
+    .toLowerCase()
+    .replace(/[^\p{L}\p{N}\s_-]/gu, '')
+    .replace(/\s/g, '-')
+}
+
+/** The ids of headings in order: the slug, a repeat getting `-1`, `-2`; an empty slug is `section`. */
+export function headingIds(texts: readonly string[]): string[] {
+  const seen = new Map<string, number>()
+  return texts.map((text) => {
+    const base = slugOf(text) || 'section'
+    const n = seen.get(base) ?? 0
+    seen.set(base, n + 1)
+    return n === 0 ? base : `${base}-${n}`
+  })
+}
+
+export interface TocItem extends Heading {
+  id: string
+}
+
+/** What a link in a document does: scroll to a heading, open a new tab, open a Console page, or nothing. */
+export type LinkTarget =
+  | { kind: 'anchor'; id: string }
+  | { kind: 'external'; url: string }
+  | { kind: 'route'; path: string }
+  | { kind: 'none' }
+
+const CONSOLE_PAGE = /^\/(issues|artifacts)\/[^/?#]+/
+
+/**
+ * Where a link goes. `#id` scrolls inside the document; an absolute http(s) URL opens in a new tab, unless it is a page of
+ * this Console (`origin`), which opens in place; a path to an Issue or an artifact is a Console page. Anything else (a
+ * relative file, a wiki name, `mailto:`) has no destination here and is `none`.
+ */
+export function linkTarget(href: string | undefined, origin: string): LinkTarget {
+  const value = (href ?? '').trim()
+  if (value === '') return { kind: 'none' }
+  if (value.startsWith('#')) {
+    if (value.length === 1) return { kind: 'none' }
+    try {
+      return { kind: 'anchor', id: decodeURIComponent(value.slice(1)) }
+    } catch {
+      return { kind: 'anchor', id: value.slice(1) }
+    }
+  }
+  if (value.startsWith('/') && !value.startsWith('//'))
+    return CONSOLE_PAGE.test(value) ? { kind: 'route', path: value } : { kind: 'none' }
+  let url: URL
+  try {
+    url = new URL(value)
+  } catch {
+    return { kind: 'none' }
+  }
+  if (url.protocol !== 'http:' && url.protocol !== 'https:') return { kind: 'none' }
+  if (url.origin === origin && CONSOLE_PAGE.test(url.pathname))
+    return { kind: 'route', path: `${url.pathname}${url.search}` }
+  return { kind: 'external', url: url.href }
+}
+
+export interface RevisionOf {
+  revision: number
+}
+
+/**
+ * The comments of the revision shown, and the others: earlier revisions' first (a comment from before the text changed),
+ * then later ones (the owner is looking at an older revision).
+ */
+export function splitByRevision<T extends RevisionOf>(
+  items: readonly T[],
+  shown: number,
+): { current: T[]; previous: T[]; later: T[] } {
+  return {
+    current: items.filter((item) => item.revision === shown),
+    previous: items.filter((item) => item.revision < shown),
+    later: items.filter((item) => item.revision > shown),
+  }
+}
+
+/** What each verdict does to the lead, in the words the verdict control shows under its button. */
+export const VERDICT_CONSEQUENCES = {
+  looks_good: 'The lead builds as written.',
+  with_notes: 'The lead builds and applies your comments.',
+  changes: 'The lead revises and resubmits before building.',
+  no_longer_applies: 'The lead drops this artifact and goes on.',
+} as const satisfies Record<keyof typeof VERDICT_WORDS, string>

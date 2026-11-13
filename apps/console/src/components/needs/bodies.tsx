@@ -3,6 +3,7 @@ import { ArrowSquareOutIcon } from '@phosphor-icons/react'
 import { Link } from '@tanstack/react-router'
 import { type ReactNode, useState } from 'react'
 import { InfoHint, Lozenge, PropertyList } from '@/components/kit'
+import { VERDICT_CONSEQUENCES } from '@/lib/artifact'
 import { Button, buttonVariants } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Textarea } from '@/components/ui/textarea'
@@ -118,6 +119,9 @@ const ScreenNote = ({ note }: { note: string | null }) =>
     </section>
   ) : null
 
+/** What any option does to the lead: the Decision's answer comes back to it as a note, and it goes on with that choice. */
+const ANSWER_CONSEQUENCE = 'The lead goes on with this choice.'
+
 function DecisionBody({ item, issueTitle, onSent }: BodyProps) {
   const { data } = useDecision(item.id)
   const [text, setText] = useState('')
@@ -168,10 +172,15 @@ function DecisionBody({ item, issueTitle, onSent }: BodyProps) {
           <p className="text-base font-semibold">{data.recommendation}</p>
           {data.checked ? <Prose>{data.checked}</Prose> : null}
           {open ? (
-            <div>
-              <Button disabled={settle.disabled} onClick={() => answerWith(data.recommendation)}>
+            <div className="grid gap-1">
+              <Button
+                className="justify-self-start"
+                disabled={settle.disabled}
+                onClick={() => answerWith(data.recommendation)}
+              >
                 Take the recommendation
               </Button>
+              <p className="text-xs text-muted-foreground">{ANSWER_CONSEQUENCE}</p>
             </div>
           ) : null}
         </div>
@@ -207,14 +216,16 @@ function DecisionBody({ item, issueTitle, onSent }: BodyProps) {
                 </p>
               ) : null}
               {open ? (
-                <div className="mt-auto pt-1">
+                <div className="mt-auto grid gap-1 pt-1">
                   <Button
+                    className="justify-self-start"
                     variant={isRecommended ? 'default' : 'outline'}
                     disabled={settle.disabled}
                     onClick={() => answerWith(option.label)}
                   >
                     {isRecommended ? 'Take the recommendation' : `Choose ${option.label}`}
                   </Button>
+                  <p className="text-xs text-muted-foreground">{ANSWER_CONSEQUENCE}</p>
                 </div>
               ) : null}
             </li>
@@ -245,10 +256,16 @@ function DecisionBody({ item, issueTitle, onSent }: BodyProps) {
             value={text}
             onChange={(event) => setText(event.target.value)}
           />
-          <div>
-            <Button type="submit" variant="secondary" disabled={settle.disabled || !text.trim()}>
+          <div className="grid gap-1">
+            <Button
+              className="justify-self-start"
+              type="submit"
+              variant="secondary"
+              disabled={settle.disabled || !text.trim()}
+            >
               Send answer
             </Button>
+            <p className="text-xs text-muted-foreground">The lead reads your words as the answer and goes on.</p>
           </div>
         </form>
       ) : (
@@ -322,18 +339,24 @@ function ReviewBody({ item, onSent }: BodyProps) {
           value={note}
           onChange={(event) => setNote(event.target.value)}
         />
-        <div className="flex flex-wrap gap-2 pt-1">
+        <div className="grid grid-cols-[repeat(auto-fill,minmax(11rem,1fr))] gap-x-3 gap-y-2 pt-1">
           {VERDICTS.map((entry) => (
-            <Button
-              key={entry.value}
-              variant={entry.value === 'looks_good' ? 'default' : 'outline'}
-              disabled={verdict.disabled || (entry.needsNote && !note.trim())}
-              onClick={() => verdict.send(entry.value)}
-            >
-              {entry.label}
-            </Button>
+            <div key={entry.value} className="flex flex-col gap-1">
+              <Button
+                variant={entry.value === 'looks_good' ? 'default' : 'outline'}
+                disabled={verdict.disabled || (entry.needsNote && !note.trim())}
+                onClick={() => verdict.send(entry.value)}
+              >
+                {entry.label}
+              </Button>
+              <p className="px-1 text-xs text-muted-foreground">{VERDICT_CONSEQUENCES[entry.value]}</p>
+            </div>
           ))}
         </div>
+        <p className="flex items-center gap-0.5 text-xs text-muted-foreground">
+          <span>Your verdicts and comments also feed the weekly retro's taste pass.</span>
+          <InfoHint word="taste pass" />
+        </p>
         <Problem words={verdict.error} />
       </Labelled>
       <Labelled label="Comment on a passage">

@@ -231,6 +231,21 @@ the frame has loaded; `frame/frame.js` writes it into the document and adds `fra
 believes only its parent or its own frame's window, in the exact shape (zod on the page). A quote is the selected text with
 whitespace folded to single spaces: the API anchors it on the artifact's readable text.
 
+**Reviewing** (`lib/review.ts`, `components/artifact-comments.tsx`, `artifact-toc.tsx`). A comment, an edit and a delete show
+at once and are sent in the background: each write is kept in local state, marked "Sending", until the server has answered and
+the artifact has been read back; a failed one stays on its card with the error, Retry and Discard (Undo, Keep), the text never
+lost. A click on a highlighted passage (Markdown directly; the frame posts `factory.open` with the quote) opens its card in
+edit mode when the comment is the owner's and scrolls the card into view; a click on a card scrolls the document to its passage.
+The sidebar lists the comments of the revision shown; the rest fold under "Previous revision (N)" (or "Later revision"), each
+marked "carried" (its quote is still in the text, still highlighted) or "resolved by revision". A card leaves the document's own
+name off its heading path. Links: `#anchor` scrolls inside the document, an `http(s)` link opens a new tab (the frame posts
+`factory.link`; the page opens it with `noopener`), a link to an Issue or an artifact opens that page, anything else is plain
+text with its target in the tooltip. The table of contents is the document's headings (the frame posts `factory.headings`
+and `factory.section`, and takes `factory.goto`): from 1800 px the right column is 36 rem, a third contents and two thirds
+comments, the section in view marked as the document scrolls (the last headings at the end of the document count as in view);
+narrower, a collapsible "Contents" bar under the header. Each verdict and Decision button carries a one-line consequence
+(`VERDICT_CONSEQUENCES`) and the verdict control says verdicts and comments feed the retro's taste pass.
+
 ## The Issue page
 
 `/issues/<n>` (the Issue's number; the API takes `12` or `issue_12`) reads `GET /v1/issues/:id` and `GET /v1/chain`, nothing

@@ -1,6 +1,9 @@
 import { describe, expect, test } from 'bun:test'
 import {
-  groupAnnotations,
+  linkTarget,
+  displayPath,
+  firstH1,
+  headingIds,
   headingPath,
   indexText,
   locateQuote,
@@ -9,7 +12,12 @@ import {
   normalizeQuote,
   parseFrameMessage,
   popoverPosition,
+  slugOf,
+  splitByRevision,
 } from '../src/lib/artifact.ts'
+
+/** A script URL the page must never follow, written so the linter does not take it for one. */
+const SCRIPT_URL = ['javascript', 'alert(1)'].join(':')
 
 describe('normalizeQuote', () => {
   test('folds whitespace to single spaces and trims', () => {
@@ -107,13 +115,99 @@ describe('indexText and locateQuote', () => {
   })
 })
 
-describe('groupAnnotations', () => {
-  test('global comments are General whichever list the API put them in', () => {
-    const a = { id: 'a', path: 'Options' }
-    const g1 = { id: 'g1', path: 'global' }
-    const g2 = { id: 'g2', path: 'global' }
-    const u = { id: 'u', path: null }
-    expect(groupAnnotations([a, g1], [g2, u])).toEqual({ general: [g1, g2], anchored: [a], unanchored: [u] })
+describe('displayPath', () => {
+  test('drops the leading segment when it is the document name, any case', () => {
+    expect(displayPath('Queue storage > Options > Cost', ['The storage spec', 'queue storage'])).toBe('Options > Cost')
+    expect(displayPath('The storage spec > Options', ['The storage spec'])).toBe('Options')
+  })
+  test('keeps a path whose first segment is a real section, and a path of one segment', () => {
+    expect(displayPath('Options > Cost', ['Queue storage'])).toBe('Options > Cost')
+    expect(displayPath('Queue storage', ['Queue storage'])).toBe('Queue storage')
+  })
+})
+
+describe('firstH1', () => {
+  test('is the first level-1 heading, without its markup', () => {
+    expect(firstH1('intro\n\n# Queue `storage`\n\n## Options')).toBe('Queue storage')
+    expect(firstH1('## Only a second level')).toBeNull()
+  })
+})
+
+describe('headingIds', () => {
+  test('slugs, numbers a repeat, and never leaves one empty', () => {
+    expect(slugOf('Options & Cost: 2nd try')).toBe('options--cost-2nd-try')
+    expect(slugOf('snake_case — a note')).toBe('snake_case--a-note')
+    expect(headingIds(['Risks', 'Cost', 'Risks', 'Risks', '???'])).toEqual([
+      'risks',
+      'cost',
+      'risks-1',
+      'risks-2',
+      'section',
+    ])
+  })
+})
+
+describe('linkTarget', () => {
+  const origin = 'https://console.example'
+  test('an anchor scrolls', () => {
+    expect(linkTarget('#risks', origin)).toEqual({ kind: 'anchor', id: 'risks' })
+    expect(linkTarget('#cost%20of%20it', origin)).toEqual({ kind: 'anchor', id: 'cost of it' })
+    expect(linkTarget('#', origin)).toEqual({ kind: 'none' })
+  })
+  test('a web link opens a tab', () => {
+    expect(linkTarget('https://example.com/a?b=1', origin)).toEqual({
+      kind: 'external',
+      url: 'https://example.com/a?b=1',
+    })
+  })
+  test('a page of the Console opens in place, as a path or as an absolute URL of this origin', () => {
+    expect(linkTarget('/artifacts/artifact_1', origin)).toEqual({ kind: 'route', path: '/artifacts/artifact_1' })
+    expect(linkTarget('/issues/12?tab=activity', origin)).toEqual({ kind: 'route', path: '/issues/12?tab=activity' })
+    expect(linkTarget('https://console.example/issues/12', origin)).toEqual({ kind: 'route', path: '/issues/12' })
+  })
+  test('anything without a destination here is none', () => {
+    for (const href of [
+      undefined,
+      '',
+      'WeatherOrb V2.md',
+      './notes',
+      '//evil.example/x',
+      '/flow',
+      'mailto:a@b.c',
+      SCRIPT_URL,
+    ])
+      expect(linkTarget(href, origin)).toEqual({ kind: 'none' })
+  })
+})
+
+describe('splitByRevision', () => {
+  test('the shown revision, the earlier ones and the later ones', () => {
+    const at = (revision: number) => ({ revision })
+    expect(splitByRevision([at(1), at(2), at(3), at(2)], 2)).toEqual({
+      current: [at(2), at(2)],
+      previous: [at(1)],
+      later: [at(3)],
+    })
+  })
+})
+
+describe('the frame messages of the review', () => {
+  test('a click on a passage, a link out, the headings and the section', () => {
+    expect(parseFrameMessage({ type: 'factory.open', quote: ' a  quote ' })).toEqual({ type: 'open', quote: 'a quote' })
+    expect(parseFrameMessage({ type: 'factory.open', quote: '   ' })).toBeNull()
+    expect(parseFrameMessage({ type: 'factory.link', href: 'https://example.com/x' })).toEqual({
+      type: 'link',
+      href: 'https://example.com/x',
+    })
+    expect(parseFrameMessage({ type: 'factory.link', href: SCRIPT_URL })).toBeNull()
+    expect(parseFrameMessage({ type: 'factory.link', href: '/relative' })).toBeNull()
+    expect(parseFrameMessage({ type: 'factory.headings', items: [{ level: 2, text: ' Risks\n' }] })).toEqual({
+      type: 'headings',
+      items: [{ level: 2, text: 'Risks' }],
+    })
+    expect(parseFrameMessage({ type: 'factory.headings', items: [{ level: 9, text: 'x' }] })).toBeNull()
+    expect(parseFrameMessage({ type: 'factory.section', index: -1 })).toEqual({ type: 'section', index: -1 })
+    expect(parseFrameMessage({ type: 'factory.section', index: 1.5 })).toBeNull()
   })
 })
 

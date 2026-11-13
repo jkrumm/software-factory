@@ -44,6 +44,34 @@ export function scrollToQuote(root: Element, quote: string): void {
   element?.scrollIntoView({ block: 'center', behavior: 'smooth' })
 }
 
+/** The caret position under a point, in whichever form the browser offers it. */
+function caretAt(x: number, y: number): { node: Node; offset: number } | null {
+  const doc = document as Document & {
+    caretPositionFromPoint?: (x: number, y: number) => { offsetNode: Node; offset: number } | null
+  }
+  if (doc.caretPositionFromPoint) {
+    const at = doc.caretPositionFromPoint(x, y)
+    return at ? { node: at.offsetNode, offset: at.offset } : null
+  }
+  const range = document.caretRangeFromPoint?.(x, y)
+  return range ? { node: range.startContainer, offset: range.startOffset } : null
+}
+
+/** The quote of the highlighted passage under a point (the narrowest when passages overlap), or null. */
+export function quoteAt(root: Element, quotes: readonly string[], x: number, y: number): string | null {
+  const caret = caretAt(x, y)
+  if (!caret || !root.contains(caret.node)) return null
+  let best: { quote: string; size: number } | null = null
+  for (const { quote, range } of rangesOf(root, quotes)) {
+    // the caret snaps to the nearest character, so a click past the end of a line must not count: the point must be on the text
+    const on = [...range.getClientRects()].some((r) => x >= r.left && x <= r.right && y >= r.top && y <= r.bottom)
+    if (!on || !range.isPointInRange(caret.node, caret.offset)) continue
+    const size = range.toString().length
+    if (!best || size < best.size) best = { quote, size }
+  }
+  return best?.quote ?? null
+}
+
 const ACTIVE = 'annotation-active'
 
 /** The passage of the comment the owner is on, painted stronger than the others (null drops it). */

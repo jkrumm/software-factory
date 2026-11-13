@@ -70,6 +70,7 @@ check, `docs/architecture.md`).
 | **Errand** | Something only the owner's hands can do: a portal step, a device run, a 1Password prompt. It reaches the owner only after the screen (rules, then `factory-errand`) passes it | Hands-only asks, the separate human queue |
 | **Turn away** | An Errand the screen refuses because a token or CLI could do it: the Issue's errand wait ends and the lead hears the reason | |
 | **Verdict** | The owner's answer on an artifact: Looks good, With notes, Changes, No longer applies | |
+| **Taste pass** | The weekly retro's reading of the owner's verdict notes and comments: a preference seen twice becomes a rule in the repo's `AGENTS.md` or `DESIGN.md` | |
 | **Worth asking** | The owner's flag on an answered Decision. Feeds the ledger and the Judge's precedent | |
 | **Ask** | The lead's verb that raises a Decision (`factory issue ask`) | |
 | **Settler** | Who settled a Decision, in the order tried: `policy`, `judge`, `default`, `owner`; or `orchestrator`, answering for the owner | |

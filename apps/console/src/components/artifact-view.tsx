@@ -1,7 +1,9 @@
 import { ArrowLeftIcon } from '@phosphor-icons/react'
 import { Link } from '@tanstack/react-router'
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
-import { Annotations, Composer, type Focus, VerdictControl } from '@/components/artifact-panel'
+import { Annotations, type Focus } from '@/components/artifact-comments'
+import { Composer, VerdictControl } from '@/components/artifact-panel'
+import { TocBar, TocColumn } from '@/components/artifact-toc'
 import { ArtifactContent, type Selected } from '@/components/artifact-content'
 import { Ago } from '@/components/issue/ago'
 import { ProjectChip } from '@/components/issue/project-chip'
@@ -10,7 +12,7 @@ import { Skeleton } from '@/components/kit/skeleton'
 import { EmptyState } from '@/components/page'
 import { ArtifactSkeleton } from '@/components/skeletons'
 import { Badge } from '@/components/ui/badge'
-import { FORMAT_WORDS, GLOBAL_PATH, KIND_WORDS } from '@/lib/artifact'
+import { FORMAT_WORDS, GLOBAL_PATH, KIND_WORDS, type TocItem } from '@/lib/artifact'
 import { ISSUE_STATE_WORDS } from '@/lib/issue'
 import { lozengeStateOf } from '@/lib/issue-page'
 import { useMediaQuery } from '@/lib/media'
@@ -18,6 +20,7 @@ import { useNow } from '@/lib/now'
 import { useScreen } from '@/lib/screen'
 import { issueNumber } from '@/lib/policy'
 import { useArtifact, useIssue } from '@/lib/queries'
+import { highlightQuotes, type ReviewItem, reviewItems, useReview } from '@/lib/review'
 import { cn } from '@/lib/utils'
 
 /** The Issue this artifact belongs to: its number and title as a link back, with its state and project. */
@@ -53,19 +56,20 @@ function IssueCrumb({ issueId, peek }: { issueId: string; peek?: boolean }) {
  * The artifact: header, document and comments. The page lays them out in the viewport (the document and the comments
  * scroll apart); in a `peek` they stack and the panel scrolls as one. A comparison is the page's alone.
  */
-export function ArtifactView({
-  id,
-  revision,
-  compare,
-  onPick,
-  peek,
-}: {
+export interface ArtifactViewProps {
   id: string
   revision: number | undefined
   compare?: number
   onPick: (next: { revision?: number; compare?: number }) => void
   peek?: boolean
-}) {
+}
+
+/** Keyed on the artifact: the writes still on their way (and the selection, the open comment) belong to one artifact only. */
+export function ArtifactView(props: ArtifactViewProps) {
+  return <ArtifactViewOf key={props.id} {...props} />
+}
+
+function ArtifactViewOf({ id, revision, compare, onPick, peek }: ArtifactViewProps) {
   const primary = useArtifact(id, revision)
   const screen = useScreen(primary)
   const other = useArtifact(id, compare, compare !== undefined)
@@ -81,9 +85,16 @@ export function ArtifactView({
     setSelected(next)
     setFocus(null)
   }, [])
+  const review = useReview(id)
+  const [toc, setToc] = useState<TocItem[]>([])
+  const [section, setSection] = useState<string | null>(null)
+  const [jump, setJump] = useState<{ id: string; tick: number } | null>(null)
+  const tocSide = useMediaQuery('(min-width: 1800px)') && !peek
+  const onJump = useCallback((to: string) => setJump((was) => ({ id: to, tick: (was?.tick ?? 0) + 1 })), [])
+  // a click on a card brings its passage into view in the document
   const onFocus = useCallback(
-    (annotation: { id: string; quote: string }) =>
-      setFocus((was) => ({ id: annotation.id, quote: annotation.quote, tick: (was?.tick ?? 0) + 1 })),
+    (item: ReviewItem) =>
+      setFocus((was) => ({ id: item.id, quote: item.quote, tick: (was?.tick ?? 0) + 1, scroll: true, edit: false })),
     [],
   )
 
@@ -109,9 +120,18 @@ export function ArtifactView({
   }, [selected])
 
   const detail = primary.data
-  const quotes = useMemo(
-    () => detail?.annotations.filter((a) => a.path !== GLOBAL_PATH).map((a) => a.quote) ?? [],
-    [detail],
+  const items = useMemo(() => (detail ? reviewItems(detail, review.pending) : []), [detail, review.pending])
+  const quotes = useMemo(() => highlightQuotes(items), [items])
+  // a click on a highlighted passage opens its comment: for the owner's own, in edit mode; the passage is already in view
+  const onOpen = useCallback(
+    (quote: string) => {
+      const found = items.filter((i) => i.anchored && i.path !== GLOBAL_PATH && i.quote === quote)
+      const item = found.find((i) => i.author === 'owner' && !i.id.startsWith('pending:')) ?? found[0]
+      if (!item) return
+      const edit = item.author === 'owner' && !item.id.startsWith('pending:')
+      setFocus((was) => ({ id: item.id, quote, tick: (was?.tick ?? 0) + 1, scroll: false, edit }))
+    },
+    [items],
   )
 
   if (!detail) {
@@ -134,7 +154,13 @@ export function ArtifactView({
   const part = 'flex min-h-0 min-w-0 flex-col'
 
   return (
-    <div className={cn('grid w-full', !peek && 'lg:h-full lg:min-h-[40rem] lg:grid-cols-[minmax(0,1fr)_24rem]')}>
+    <div
+      className={cn(
+        'grid w-full',
+        !peek &&
+          'lg:h-full lg:min-h-[40rem] lg:grid-cols-[minmax(0,1fr)_24rem] min-[1800px]:grid-cols-[minmax(0,1fr)_36rem]',
+      )}
+    >
       <div className={cn('flex min-w-0 flex-col', !peek && 'lg:min-h-0')}>
         <header className={cn('flex flex-col gap-3 border-b px-4 pt-5 pb-4', !peek && 'md:px-8')}>
           <IssueCrumb issueId={artifact.issueId} peek={peek} />
@@ -198,6 +224,7 @@ export function ArtifactView({
           </div>
         </header>
 
+        {tocSide ? null : <TocBar items={toc} section={section} onJump={onJump} />}
         <div
           ref={docScroll}
           className={cn('flex min-w-0 flex-col', !peek && 'lg:min-h-0 lg:flex-1 lg:overflow-y-auto')}
@@ -219,6 +246,10 @@ export function ArtifactView({
                 quotes={quotes}
                 focus={focus}
                 onSelect={onSelect}
+                onOpen={onOpen}
+                onHeadings={setToc}
+                onSection={setSection}
+                jump={jump}
                 cleared={cleared}
                 stacked={peek}
               />
@@ -234,6 +265,10 @@ export function ArtifactView({
                   quotes={[]}
                   focus={null}
                   onSelect={onSelect}
+                  onOpen={onOpen}
+                  onHeadings={setToc}
+                  onSection={setSection}
+                  jump={null}
                   cleared={0}
                 />
               </section>
@@ -241,13 +276,29 @@ export function ArtifactView({
           </div>
         </div>
       </div>
-      <aside aria-label="Comments" className={cn('flex min-w-0 flex-col bg-card', !peek && 'lg:min-h-0')}>
-        <Annotations detail={detail} focusId={focus?.id ?? null} now={now} onFocus={onFocus} />
-      </aside>
+      <div
+        className={cn(
+          'flex min-w-0 flex-col',
+          tocSide && 'grid grid-cols-3 grid-rows-[minmax(0,1fr)]',
+          !peek && 'lg:min-h-0',
+        )}
+      >
+        {tocSide ? (
+          <div className="col-span-1 flex min-h-0 min-w-0 flex-col">
+            <TocColumn items={toc} section={section} onJump={onJump} />
+          </div>
+        ) : null}
+        <aside
+          aria-label="Comments"
+          className={cn('flex min-w-0 flex-1 flex-col bg-card', tocSide && 'col-span-2', !peek && 'lg:min-h-0')}
+        >
+          <Annotations detail={detail} items={items} review={review} focus={focus} now={now} onFocus={onFocus} />
+        </aside>
+      </div>
       {selected && anchor ? (
         <Composer
           key={`${selected.quote}|${selected.path}`}
-          id={id}
+          review={review}
           revision={detail.revision}
           selected={selected}
           anchor={anchor}

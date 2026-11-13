@@ -95,7 +95,9 @@ test('a Markdown Spec: mark text, comment, see it listed and highlighted, then a
 
   const listed = region(page, 'On the text')
   await expect(listed).toContainText('Say why not Redis.')
-  await expect(listed).toContainText('Queue storage > Options > Cost')
+  // the document's own name is not repeated on the card
+  await expect(listed).toContainText('Options > Cost')
+  await expect(listed).not.toContainText('Queue storage >')
   await expect(composer).toBeHidden()
   await expect
     .poll(() => page.evaluate("[...(CSS.highlights.get('annotation') ?? [])].map((range) => range.toString())"))
@@ -364,7 +366,7 @@ test.describe('an HTML artifact', () => {
   })
 })
 
-test('a new revision keeps one anchored comment and moves the other to Unanchored; compare shows both', async ({
+test('a new revision keeps one anchored comment and resolves the other; compare shows both', async ({
   page,
   apiUrl,
 }) => {
@@ -374,9 +376,15 @@ test('a new revision keeps one anchored comment and moves the other to Unanchore
   expect(shown.unanchored.map((a) => a.quote)).toEqual([DROPPED])
 
   await page.goto(`/artifacts/${revised}?revision=2`)
-  await expect(region(page, 'On the text')).toContainText('Name the lock.')
-  await expect(region(page, 'Unanchored')).toContainText('Why a minute?')
-  await expect(region(page, 'Unanchored')).not.toContainText('Name the lock.')
+  // both comments were made on revision 1: they fold under "Previous revision", marked by what the new text did to them
+  await expect(region(page, 'On the text')).toHaveCount(0)
+  const previous = region(page, 'Previous revision')
+  await expect(previous).toBeHidden()
+  await page.getByRole('button', { name: /^Previous revision/ }).click()
+  await expect(previous.getByRole('listitem').filter({ hasText: 'Name the lock.' })).toContainText('carried')
+  await expect(previous.getByRole('listitem').filter({ hasText: 'Why a minute?' })).toContainText(
+    'resolved by revision',
+  )
   await expect
     .poll(() => page.evaluate("[...(CSS.highlights.get('annotation') ?? [])].map((range) => range.toString())"))
     .toEqual([KEPT])
