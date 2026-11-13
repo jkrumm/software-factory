@@ -17,6 +17,7 @@ case "$2" in
   vm.page_pageable_internal_count) printf '600000\n5648\n16384\n';;
   vm.compressor.swapper.swapouts_total) cat "${host}/swapouts";;
   hw.memsize) echo 34359738368;;
+  kern.boottime) echo "{ sec = $(( $(date +%s) - 86400 )), usec = 0 } a day ago";;
   vm.loadavg) echo "{ $(cat "${host}/load") 0.50 0.50 }";;
   vm.swapusage) echo "total = 40960.00M  used = $(cat "${host}/swapused").00M  free = 1.00M  (encrypted)";;
 esac

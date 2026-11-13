@@ -28,6 +28,7 @@ Also:
 - Never run \`find\`, \`fd\` or \`bfs\` from \`/\` or \`$HOME\`: one such search took 470% CPU and pushed the machine's load to 282. Search a targeted directory.
 - Do not hold an Issue open to watch something over time: ship, and state in the report what is still to be counted. A deferral is for a short, named event, and it gives up your place until it ends.
 - No lead edits a probe within the Issue it ships.
+- The HerdrCore constraint (the "Standing constraint" section of \`dotfiles/docs/incident-2026-11-13-mini-panic.md\`) binds every lead: never restart, stop, update or start the core (\`hc server restart\`, \`hc server stop\`, \`hc update\`, a core an agent started), and never reboot the host, kill a process or restart the core to prove a change. The one update path is the owner's \`make herdr-core-update\`, by hand. A change near the core states a one-line rollback; \`hc-resume\` changes alter pace and order only.
 
 # Waiting, and the host's shell
 

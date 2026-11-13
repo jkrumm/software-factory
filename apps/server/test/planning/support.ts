@@ -90,6 +90,11 @@ export class FakeHost implements HostReader {
   async ramMib() {
     return this.ramMibValue
   }
+  /** a host up for a day, unless a test says it just booted */
+  uptimeValue: Result<number> = ok(24 * 3_600_000)
+  async uptimeMs() {
+    return this.uptimeValue
+  }
 }
 
 export class FakeAccounts implements AccountSource {

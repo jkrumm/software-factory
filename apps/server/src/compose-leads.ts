@@ -17,6 +17,7 @@ import { apiErrorMemory, apiErrorPorts } from './app/leads-api-errors.ts'
 import { leadPorts, leadTick } from './app/leads-tick.ts'
 import { blockIssue, closeIssue, deferIssue } from './app/leads-verbs.ts'
 import type { EffectPorts } from './domains/work/ports.ts'
+import { typePacer } from './app/type-pace.ts'
 import type { Clock } from './kernel/clock.ts'
 import type { IdSource } from './kernel/ids.ts'
 import type { PortError, Result } from './kernel/result.ts'
@@ -83,6 +84,7 @@ export function composeLeads(input: {
     startBudgetMs: s.startBudgetMs,
     forceNoteAfterMs: s.forceNoteAfterMs,
     graceMs: s.graceMs,
+    typePace: typePacer({ clock: input.clock }),
     apiErrors: apiErrorPorts({
       tails: fileTranscriptTails({
         projectsDirs: () => claudeProjectsDirs({ accountsFile: s.accountsFile, home: s.home }),

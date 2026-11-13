@@ -9,6 +9,7 @@ export const QUEUE_REASONS = [
   'spec',
   'unknown_project',
   'drain',
+  'boot',
   'load',
   'memory',
   'lane',

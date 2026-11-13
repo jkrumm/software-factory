@@ -5,6 +5,7 @@ import {
   RANK_LANE,
   standing,
 } from '../domains/capacity/accounts.ts'
+import type { BootSample } from '../domains/capacity/boot.ts'
 import { checkAdmission, type LeadFit, type RefusalKind } from '../domains/capacity/admission.ts'
 import { freeMibOf, headroomMib } from '../domains/capacity/costs.ts'
 import { DEFAULT_TYPICAL_LEAD_MIB, SEAT_SAMPLE_MAX_AGE_MS, SEAT_SAMPLES, seatBonus } from '../domains/capacity/seats.ts'
@@ -48,6 +49,10 @@ export interface HostInputs {
   memory: MemoryReading | null
   /** the machine's RAM in MiB; null: the lanes' memory cannot be counted */
   ramMib: number | null
+  /** how long the host has been up; null: unread, and the boot grace does not apply */
+  uptimeMs: number | null
+  /** the newest minute samples of the host, newest first, for the boot grace */
+  samples: readonly BootSample[]
   /** the memory free by the newest minute sample (not older than five minutes); null: unknown */
   freeMib: number | null
   /** per project name: what a lead is learned to take (null with fewer than three attempts) and the attempts sampled */
@@ -63,6 +68,8 @@ const NO_HOST: HostInputs = {
   load: null,
   memory: null,
   ramMib: null,
+  uptimeMs: null,
+  samples: [],
   freeMib: null,
   learned: new Map(),
   rssByIssue: new Map(),
@@ -125,6 +132,8 @@ export async function readHost(deps: CapacityDeps): Promise<HostInputs> {
   }
   if (!ram.ok) notes.push(`RAM reading failed (${ram.error.detail}): the memory that lanes reserve is not counted`)
   const ramMib = ram.ok ? ram.value : null
+  const uptime = await deps.host.uptimeMs()
+  if (!uptime.ok) notes.push(`uptime reading failed (${uptime.error.detail}): the boot grace does not apply this pass`)
   const now = deps.clock.now()
   const facts = await deps.uow.run(async ({ capacity }) =>
     ok({
@@ -154,6 +163,9 @@ export async function readHost(deps: CapacityDeps): Promise<HostInputs> {
         }
       : null,
     ramMib,
+    uptimeMs: uptime.ok ? uptime.value : null,
+    // Without the samples the grace has nothing to go on, and a booting host admits nothing.
+    samples: facts.ok ? facts.value.recent : [],
     freeMib: facts.ok ? freeMibOf(facts.value.latest, ramMib, now) : null,
     learned: new Map(
       facts.ok
@@ -376,6 +388,11 @@ function decide(snap: Snapshot, host: HostInputs, limits: CapacityLimits, bonus:
   const laneByIssue = new Map(snap.issues.map((i) => [i.id, i.lane]))
   const projectByName = new Map(snap.projects.map((p) => [p.name, p]))
   const owed = snap.issues.filter((i) => holdsClaim(i.state, i.waitReason) && !taken.has(i.id) && i.project !== null)
+  // The boot grace's gap: the newest admission of any lead, and each one this look admits in turn.
+  let lastAdmittedAt: Date | null = snap.assignments.reduce<Date | null>(
+    (newest, a) => (newest === null || a.assignedAt > newest ? a.assignedAt : newest),
+    null,
+  )
 
   return ordered.map((row): QueueEntry => {
     const { issue } = row
@@ -407,6 +424,16 @@ function decide(snap: Snapshot, host: HostInputs, limits: CapacityLimits, bonus:
       holders: claims.filter((s) => s.repo === project.repo).map((s) => ({ issue: s.issue, urgent: s.urgent })),
       owed: owed.filter((o) => o.project === project.name).map((o) => claimantOf(o.id, o.kind, o.since)),
       candidate: claimantOf(issue.id, issue.kind),
+      boot:
+        host.uptimeMs === null
+          ? null
+          : {
+              uptimeMs: host.uptimeMs,
+              samples: host.samples,
+              lastAdmittedAt,
+              load: host.load,
+              loadCeiling: limits.loadCeiling,
+            },
       load: host.load,
       loadCeiling: limits.loadCeiling,
       memory: host.memory,
@@ -432,6 +459,7 @@ function decide(snap: Snapshot, host: HostInputs, limits: CapacityLimits, bonus:
       takenAt: snap.now,
     })
     loaded.add(verdict.account.account)
+    lastAdmittedAt = snap.now
     return { ...base, reason: null, account: verdict.account.account }
   })
 }
