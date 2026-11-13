@@ -15,6 +15,7 @@ import { createReader } from '../../src/read/reader.ts'
 const OWNER = 'owner-token-0123456789'
 const READER = 'read-token-0123456789'
 const NOW = '2026-11-07T12:00:00.000Z'
+const UPTIME = { up: 67, down: 3, total: 70, downNames: ['a', 'b', 'c'], at: NOW }
 
 let db: TestCluster
 let app: ReturnType<typeof createApp>
@@ -75,6 +76,7 @@ beforeAll(async () => {
     blockedStreak: 3,
     mainCheckouts: () => [],
     streamPollMs: 20,
+    uptime: () => UPTIME,
   })
   app = createApp({
     tokens: { owner: OWNER, read: READER },
@@ -257,6 +259,11 @@ describe('as the owner', () => {
     })
     expect(body.issues).toHaveLength(2)
     expect(body.accounts).toHaveLength(1)
+  })
+
+  test('the overview carries uptime, and the read token sees it unredacted', async () => {
+    expect((await json('/v1/overview')).body.uptime).toEqual(UPTIME)
+    expect((await json('/v1/overview', READER)).body.uptime).toEqual(UPTIME)
   })
 })
 

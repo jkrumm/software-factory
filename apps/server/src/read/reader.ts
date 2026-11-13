@@ -8,6 +8,7 @@ import {
   type ReadIssueDetail,
   type ReadOverview,
   type ReadSessionCard,
+  type ReadUptime,
 } from '@software-factory/contract'
 import { readAccounts } from './accounts.ts'
 import { readAsks } from './asks.ts'
@@ -33,6 +34,8 @@ export interface ReadDeps extends SessionDeps, LineSources {
   streamPollMs: number
   /** why each queued Issue stays queued (the capacity use case reads the host); absent or failing, a queued card says the general sentence */
   queueReasons?: () => Promise<QueueReasons | null>
+  /** the monitors' last good count, or null (off, never read, too old); absent is null */
+  uptime?: () => ReadUptime | null
 }
 
 /** `redact`: the caller holds the read token, and a work repo loses its text (`surface.ts`). */
@@ -103,6 +106,7 @@ export function createReader(deps: ReadDeps): ReadApi {
       humanQueue,
       health,
       accounts,
+      uptime: deps.uptime?.() ?? null,
       issues,
       queue: {
         effective: states.find((row) => row.project === '')?.state ?? 'run',

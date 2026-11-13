@@ -18,6 +18,7 @@ export const SECRET_ENV: readonly string[] = [
   'FACTORY_DB_PASSWORD',
   'DATABASE_URL',
   'FACTORY_GITHUB_TOKEN',
+  'FACTORY_UPTIME_TOKEN',
   'NTFY_TOKEN',
 ]
 

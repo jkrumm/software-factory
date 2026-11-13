@@ -99,6 +99,7 @@ test('an Issue filed through the real route shows on the cards, the detail and t
 
   const overview = ReadOverview.parse(await (await get('/v1/overview')).json())
   expect(overview.version).toBe('v1')
+  expect(overview.uptime).toBeNull()
   expect(overview.issues.map((c) => c.ref)).toContain(ack.issue)
 }, 30_000)
 

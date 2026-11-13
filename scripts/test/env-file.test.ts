@@ -16,6 +16,7 @@ const NEVER: Record<string, string> = {
   FACTORY_DB_PASSWORD: 'secret (.env.tpl); launch.sh builds DATABASE_URL from it',
   FACTORY_BESZEL_EMAIL: 'secret (needs an .env.tpl ref before the Beszel source can run)',
   FACTORY_BESZEL_PASSWORD: 'secret (needs an .env.tpl ref before the Beszel source can run)',
+  FACTORY_UPTIME_TOKEN: 'secret (.env.tpl)',
   FACTORY_VERSION: "the plist's: the deployed sha",
   FACTORY_TEST_MODE: 'scenarios only; the server refuses the test settings outside a test',
   FACTORY_HEALTH_PROBE_MS: 'scenarios only: how often /health re-reads the database facts',
