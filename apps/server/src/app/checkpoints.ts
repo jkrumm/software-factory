@@ -1098,7 +1098,8 @@ export interface ErrandRequested {
 
 /**
  * `factory errand request`: a request for the owner's hands that no Issue raised (`ask-human.sh`). It reaches the owner at
- * once: there is no lead to turn it away and the asker has already decided it needs a person. A request with a key that an
+ * once, except from a screened source (`SCREENED_SOURCES`: `ask-human`), which waits for the Errand screen: there is no
+ * lead to tell, and the asker has already decided it needs a person. A request with a key that an
  * open one holds replaces it; the same request again (same key and text) is a replay and changes nothing.
  */
 export function requestErrand(

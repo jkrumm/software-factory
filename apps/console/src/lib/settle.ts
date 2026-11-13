@@ -8,10 +8,10 @@ import { errorWords } from './needs.ts'
  * already (409, which also calls `onConflict`: the card is about to leave), and turns a refusal into the words the card shows. `disabled` is true while it is sent and while the
  * connection chip says Offline.
  */
-export function useSettle<V>(options: {
-  send: (value: V) => Promise<unknown>
+export function useSettle<V, R = unknown>(options: {
+  send: (value: V) => Promise<R>
   keys: string[][]
-  onSent?: () => void
+  onSent?: (reply: R) => void
   onConflict?: () => void
 }) {
   const client = useQueryClient()
@@ -19,9 +19,9 @@ export function useSettle<V>(options: {
   const refresh = () => Promise.all(options.keys.map((queryKey) => client.invalidateQueries({ queryKey })))
   const mutation = useMutation({
     mutationFn: options.send,
-    onSuccess: async () => {
+    onSuccess: async (reply) => {
       await refresh()
-      options.onSent?.()
+      options.onSent?.(reply)
     },
     onError: (error) => {
       if (!(error instanceof ApiError) || error.status !== 409) return

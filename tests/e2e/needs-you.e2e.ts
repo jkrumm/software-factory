@@ -371,14 +371,14 @@ test('Back at desk groups the Errands by where the hands must be, copies a comma
   await context.grantPermissions(['clipboard-read', 'clipboard-write'])
   type Requested = { errand: { id: string } }
   const mac = await api<Requested>(apiUrl, '/v1/errands/requests', {
-    source: 'ask-human',
+    source: 'e2e-agent',
     text: 'Reseal the secrets cache on the MacBook',
     command: 'make secrets-seed',
     key: 'e2e-reseal',
     expires: 'never',
   })
   const phone = await api<Requested>(apiUrl, '/v1/errands/requests', {
-    source: 'ask-human',
+    source: 'e2e-agent',
     text: 'Add the ntfy topics to the iPhone',
     where: 'iphone',
     expires: 'never',

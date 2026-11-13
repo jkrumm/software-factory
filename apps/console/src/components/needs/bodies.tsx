@@ -1,4 +1,4 @@
-import type { ErrandList, NeedItem } from '@software-factory/contract'
+import type { ErrandList, ErrandReply, NeedItem } from '@software-factory/contract'
 import { ArrowSquareOutIcon } from '@phosphor-icons/react'
 import { Link } from '@tanstack/react-router'
 import { type ReactNode, useState } from 'react'
@@ -13,6 +13,7 @@ import {
   agoWords,
   ARTIFACT_KIND_LABEL,
   decisionParts,
+  doneWords,
   repeatsTitle,
   defaultLine,
   defaultWords,
@@ -413,10 +414,10 @@ function ReviewBody({ item, onSent }: BodyProps) {
 function ErrandBody({ item, issueTitle, onSent }: BodyProps) {
   const { data } = useErrands()
   const [note, setNote] = useState('')
-  const settle = useSettle<void>({
+  const settle = useSettle<void, ErrandReply>({
     send: () => finishErrand(item.id, note.trim()),
     keys: [['needs'], ['errands']],
-    onSent: () => onSent(SENT),
+    onSent: (reply) => onSent(reply.errand.doneAt === null ? doneWords(reply) : SENT),
     onConflict: () => onSent(SETTLED),
   })
   const errand = data?.errands.find((entry) => entry.id === item.id)

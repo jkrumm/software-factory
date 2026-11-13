@@ -94,7 +94,7 @@ export const LANGUAGE = {
     "An Issue whose lead proposes changes to a project's plan as a Spec with Decisions, and applies them on the owner's verdict (factory issue replan, gated on the approved Spec and the project's own Issues). Filed by the owner (factory planning replan <project>) or by the planning pass when a long wait has Issues behind it; one open per project",
   report: 'For information, never waits. A spike is a Report with a verdict',
   request:
-    'An Errand no Issue raised (factory errand request, what ask-human.sh posts): no lead and no screen, it reaches the owner at once. It carries the command to run, where the hands must be (macbook, iphone, portal, any), a check, an expiry (7 days when it has no check), and a key that replaces an older open request with the same key',
+    'An Errand no Issue raised (factory errand request, what ask-human.sh posts): no lead; it reaches the owner at once, except a request from ask-human, which passes the Errand screen first (one an agent can do is closed with the reason). It carries the command to run, where the hands must be (macbook, iphone, portal, any), a check, an expiry (7 days when it has no check), and a key that replaces an older open request with the same key',
   review:
     "The lead's own check of its change, once per ship range, standard or deep. Part of the lead's work, never a factory step",
   'review status':

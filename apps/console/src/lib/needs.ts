@@ -213,3 +213,7 @@ export function deskGroups(items: readonly NeedItem[]): { host: DeskHost; label:
 /** The browser tab's title: the count of what waits on the owner, or the page's name alone. */
 export const needsTitle = (count: number, desk: boolean): string =>
   `${count > 0 ? `(${count}) ` : ''}${desk ? 'Back at desk' : 'Needs you'} \u00b7 Software Factory`
+
+/** What a done on an Errand says: the server leaves it open when its check still says it is needed. */
+export const doneWords = (reply: { errand: { doneAt: string | null } }): string =>
+  reply.errand.doneAt === null ? 'Not done: its check says it is still needed' : 'Marked done'

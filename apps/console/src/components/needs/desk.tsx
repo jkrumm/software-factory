@@ -1,10 +1,10 @@
-import type { NeedItem } from '@software-factory/contract'
+import type { ErrandReply, NeedItem } from '@software-factory/contract'
 import { CheckIcon, CopyIcon } from '@phosphor-icons/react'
 import { useState } from 'react'
 import { Section } from '@/components/kit'
 import { Button } from '@/components/ui/button'
 import { finishErrand } from '@/lib/api'
-import { agoWords, deskGroups } from '@/lib/needs'
+import { agoWords, deskGroups, doneWords } from '@/lib/needs'
 import { plainExcerpt } from '@/lib/plain'
 import { useSettle } from '@/lib/settle'
 
@@ -33,10 +33,10 @@ function Command({ command }: { command: string }) {
 /** One Errand at the desk: what to do, the command to copy, and the two ways to close it. */
 function DeskItem({ item, onSent }: { item: NeedItem; onSent: (message: string) => void }) {
   const keys = [['needs'], ['errands']]
-  const done = useSettle<void>({
+  const done = useSettle<void, ErrandReply>({
     send: () => finishErrand(item.id, ''),
     keys,
-    onSent: () => onSent('Marked done'),
+    onSent: (reply) => onSent(doneWords(reply)),
     onConflict: () => onSent(SETTLED),
   })
   const needless = useSettle<void>({
