@@ -258,6 +258,17 @@ export const ErrandDoneBody = z
     note: z.string().optional(),
     /** `not_needed`: the owner found it needless; the default is that his hands did it */
     outcome: z.enum(['done', 'not_needed']).optional(),
+    /**
+     * what the command pushed for this Errand came to. Anything but `done` (a non-zero exit, 124, `running`) is not done: the
+     * Errand stays open and records the run. `output` is kept as its first and last 20 lines.
+     */
+    run: z
+      .object({
+        status: z.enum(['done', 'failed', 'timeout', 'running']),
+        exit: z.number().int().nullable().optional(),
+        output: z.string().optional(),
+      })
+      .optional(),
   })
   .meta({ id: 'ErrandDoneBody' })
 
@@ -311,6 +322,18 @@ export const ErrandView = z.object({
   closedBy: z.enum(['owner', 'check', 'judge', 'loop', 'request']).nullable(),
   /** the last run of its check or look of the still-needed workflow: what it said */
   checkNote: z.string().nullable(),
+  /** the last pushed run that came back unsuccessful (a failure, a timeout, still running); null when none did */
+  lastRun: z
+    .object({
+      status: z.enum(['failed', 'timeout', 'running']),
+      exit: z.number().int().nullable(),
+      at: iso,
+      attempts: z.number().int(),
+      /** the output's first 20 lines and its last 20 (empty when the whole output fits in the head) */
+      head: z.string(),
+      tail: z.string(),
+    })
+    .nullable(),
 })
 
 /** What `factory errand request` answers: the Errand and the older open requests it replaced. */

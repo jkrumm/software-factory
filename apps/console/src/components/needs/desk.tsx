@@ -58,6 +58,7 @@ function DeskItem({ item, onSent }: { item: NeedItem; onSent: (message: string) 
           {[item.repo ?? item.source, `raised ${agoWords(item.ageMs)}`].filter(Boolean).join(' · ')}
         </p>
       </div>
+      {item.tried ? <p className="text-sm text-destructive [overflow-wrap:anywhere]">{item.tried}</p> : null}
       {item.command ? <Command command={item.command} /> : null}
       <div className="flex flex-wrap items-center gap-2">
         <Button type="button" disabled={done.disabled || needless.disabled} onClick={() => done.send()}>

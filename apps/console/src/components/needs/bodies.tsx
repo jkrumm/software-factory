@@ -1,4 +1,4 @@
-import type { NeedItem } from '@software-factory/contract'
+import type { ErrandList, NeedItem } from '@software-factory/contract'
 import { ArrowSquareOutIcon } from '@phosphor-icons/react'
 import { Link } from '@tanstack/react-router'
 import { type ReactNode, useState } from 'react'
@@ -117,6 +117,19 @@ const ScreenNote = ({ note }: { note: string | null }) =>
       </h4>
       <Prose>{note}</Prose>
     </section>
+  ) : null
+
+/** What the last attempt at an Errand said: the run that failed (with its first and last lines) or the check that overruled a done. */
+const LastTry = ({ tried, run }: { tried: string | null; run: ErrandList['errands'][number]['lastRun'] | undefined }) =>
+  tried ? (
+    <Labelled label="Last try">
+      <Prose>{tried}</Prose>
+      {run && (run.head || run.tail) ? (
+        <pre className="max-h-64 overflow-auto rounded-md bg-muted p-2 text-xs whitespace-pre-wrap [overflow-wrap:anywhere]">
+          {run.tail ? `${run.head}\n…\n${run.tail}` : run.head}
+        </pre>
+      ) : null}
+    </Labelled>
   ) : null
 
 /** What any option does to the lead: the Decision's answer comes back to it as a note, and it goes on with that choice. */
@@ -425,6 +438,7 @@ function ErrandBody({ item, issueTitle, onSent }: BodyProps) {
           { label: 'Raised', value: <When item={item} /> },
         ]}
       />
+      <LastTry tried={item.tried} run={errand?.lastRun} />
       <ScreenNote note={item.judge} />
       <form
         className="grid gap-2"

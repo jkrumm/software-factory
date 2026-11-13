@@ -22,13 +22,15 @@ import {
   type Settler,
 } from '../domains/checkpoints/decision.ts'
 import { type ErrandId, readErrand, refuseHostClass } from '../domains/checkpoints/errand.ts'
-import { readRequest } from '../domains/checkpoints/request.ts'
+import { type CheckRun, checkVerdict, readRequest, SCREENED_SOURCES } from '../domains/checkpoints/request.ts'
+import { exitedNote, headTail, runFailureOf, STILL_NEEDED_NOTE } from '../kernel/run.ts'
 import { deepLink, reviewPage } from '../domains/checkpoints/page.ts'
 import type {
   AnnotationRecord,
   ArtifactRecord,
   BlobStore,
   CheckpointStore,
+  CheckRunner,
   DecisionFilter,
   DecisionRecord,
   ErrandRecord,
@@ -55,6 +57,8 @@ export interface CheckpointDeps extends WriteDeps {
   blobs: BlobStore
   /** the base of a checkpoint's deep link; a placeholder setting until the Console exists */
   consoleUrl: string
+  /** runs an Errand's `check` when the owner marks it done (outside any transaction) */
+  checks: CheckRunner
 }
 
 export type CheckpointError =
@@ -939,6 +943,12 @@ export function raiseErrand(
       checkNote: null,
       checkFails: 0,
       neededAt: null,
+      runAttempts: 0,
+      runStatus: null,
+      runExit: null,
+      runAt: null,
+      runHead: null,
+      runTail: null,
     })
     if (!stored) return err({ kind: 'version_conflict', issueId: input.issueId, expected: issue.version })
     const errand = await checkpoints.errand(id)
@@ -954,15 +964,84 @@ export function raiseErrand(
 /** How the owner closes an Errand: his hands did it, or he found it needless. */
 export type ErrandOutcome = 'done' | 'not_needed'
 
+/** What a pushed run reports when it comes back: see `ErrandDoneBody.run`. */
+export interface ErrandRun {
+  status: 'done' | 'failed' | 'timeout' | 'running'
+  exit?: number | null | undefined
+  output?: string | undefined
+}
+
+/**
+ * Marks an Errand done, unless it is not: a run that came back unsuccessful (a non-zero exit, a timeout, still running)
+ * leaves it open with the run recorded, and a request whose check still says it is needed is reopened. Only then does
+ * `closeErrand` end it.
+ *
+ * The check runs outside any transaction; each outcome is written in a transaction of its own that finds the Errand open
+ * or answers as a replay.
+ */
+export async function finishErrand(
+  deps: CheckpointDeps,
+  input: { errandId: ErrandId; note: string | null; outcome?: ErrandOutcome; run?: ErrandRun },
+): Promise<CheckpointResult<ErrandWritten>> {
+  const outcome = input.outcome ?? 'done'
+  if (outcome === 'not_needed') return closeErrand(deps, { ...input, outcome })
+
+  const failure = runFailureOf({ run: input.run, note: input.note?.trim() || null })
+  if (failure) return keepOpen(deps, input.errandId, { kind: 'run', failure })
+
+  const found = await deps.uow.run(async ({ checkpoints }) => ok(await checkpoints.errand(input.errandId)))
+  if (!found.ok) return found
+  const checkCommand = found.value?.doneAt ? null : (found.value?.checkCommand ?? null)
+  if (checkCommand === null) return closeErrand(deps, { ...input, outcome })
+
+  const run = await deps.checks.run(checkCommand)
+  const verdict = checkVerdict(run)
+  if (verdict === 'needed') return keepOpen(deps, input.errandId, { kind: 'still_needed' })
+  const said = input.note?.trim() ?? ''
+  const checked = verdict === 'not_needed' ? checkedNote(run) : ''
+  return closeErrand(deps, {
+    ...input,
+    outcome,
+    note: [said, checked].filter((part) => part !== '').join(' · ') || null,
+  })
+}
+
+/** What the owner's done adds to its note when the check agreed: the check's exit and its output. */
+const checkedNote = (run: CheckRun): string => exitedNote(run.exit, run.output)
+
+type KeptOpen = { kind: 'run'; failure: NonNullable<ReturnType<typeof runFailureOf>> } | { kind: 'still_needed' }
+
+/** The Errand stays open and says why: the run that failed, or the check that overruled the done. A replay when it is done already. */
+function keepOpen(deps: CheckpointDeps, errandId: ErrandId, why: KeptOpen): Promise<CheckpointResult<ErrandWritten>> {
+  return deps.uow.run(async ({ work, checkpoints }) => {
+    const errand = await checkpoints.lockErrand(errandId)
+    if (!errand) return err(notFound('Errand', errandId))
+    if (errand.doneAt) {
+      const issue = errand.issueId ? await issueOf(work, errand.issueId) : null
+      return ok<ErrandWritten>({ result: 'replayed', errand, issue: issue ? moveOf(issue) : null })
+    }
+    const at = deps.clock.now()
+    if (why.kind === 'run') {
+      const { head, tail } = headTail(why.failure.output)
+      await checkpoints.recordRun(errand.id, { at, status: why.failure.status, exit: why.failure.exit, head, tail })
+    } else {
+      await checkpoints.recordCheck(errand.id, { at, note: STILL_NEEDED_NOTE, fails: 0 })
+    }
+    const kept = await checkpoints.errand(errand.id)
+    if (!kept) throw new Error(`errand ${errand.id} vanished inside its own transaction`)
+    return ok<ErrandWritten>({ result: 'applied', errand: kept, issue: null })
+  })
+}
+
 /**
  * The owner's hands did it, or he says it is not needed: `errand_done` ends the Issue's wait and the lead hears it as its
  * next turn (a "not needed" says so in the note). A standalone Errand has no Issue to tell.
  */
-export function finishErrand(
+function closeErrand(
   deps: CheckpointDeps,
-  input: { errandId: ErrandId; note: string | null; outcome?: ErrandOutcome },
+  input: { errandId: ErrandId; note: string | null; outcome: ErrandOutcome },
 ): Promise<CheckpointResult<ErrandWritten>> {
-  const outcome = input.outcome ?? 'done'
+  const { outcome } = input
   return deps.uow.run(async ({ work, checkpoints }) => {
     const errand = await checkpoints.errand(input.errandId)
     if (!errand) return err(notFound('Errand', input.errandId))
@@ -1053,7 +1132,8 @@ export function requestErrand(
       raisedAt: at,
       doneAt: null,
       doneNote: null,
-      reachedOwnerAt: at,
+      // a request from a source the screen reads waits for it (`checkpoints-errands.ts`); the rest reach the owner at once
+      reachedOwnerAt: SCREENED_SOURCES.includes(request.source) ? null : at,
       screenTries: 0,
       screenRetryAt: null,
       screenBy: null,
@@ -1071,6 +1151,12 @@ export function requestErrand(
       checkNote: null,
       checkFails: 0,
       neededAt: null,
+      runAttempts: 0,
+      runStatus: null,
+      runExit: null,
+      runAt: null,
+      runHead: null,
+      runTail: null,
     })
     if (!stored) return err({ kind: 'invalid', detail: `the request ${errandKey} is stored already` })
     const errand = await checkpoints.errand(id)

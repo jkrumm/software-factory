@@ -19,6 +19,7 @@ import type {
   StepName,
 } from './decision.ts'
 import type { ErrandId } from './errand.ts'
+import type { RunStatus } from '../../kernel/run.ts'
 import type { CheckRun, Host } from './request.ts'
 import type { Page } from './page.ts'
 import type { Recheck, RecheckCandidate, ReviewWait } from './recheck.ts'
@@ -164,6 +165,13 @@ export interface ErrandRecord {
   checkFails: number
   /** the last look of the still-needed workflow */
   neededAt: Date | null
+  /** the last pushed run that came back unsuccessful, and how many have (`run.ts`); the output as its first and last lines */
+  runAttempts: number
+  runStatus: RunStatus | null
+  runExit: number | null
+  runAt: Date | null
+  runHead: string | null
+  runTail: string | null
 }
 
 export type ClosedKind = 'done' | 'not_needed' | 'expired' | 'superseded' | 'turned_away'
@@ -253,6 +261,11 @@ export interface CheckpointStore {
   supersedeRequests(requestKey: string, by: ErrandId, at: Date): Promise<ErrandId[]>
   /** the standalone Errands that are open or were closed at `closedSince` or later, oldest first */
   requests(input: { closedSince: Date; limit: number }): Promise<ErrandRecord[]>
+  /** an unsuccessful run of the Errand's command: it stays open, and this is what it came to; false when it is done already */
+  recordRun(
+    id: ErrandId,
+    run: { at: Date; status: RunStatus; exit: number | null; head: string; tail: string },
+  ): Promise<boolean>
   /** what the last run of an Errand's check came to: `fails` is the runs in a row that could not answer */
   recordCheck(id: ErrandId, run: { at: Date; note: string; fails: number }): Promise<boolean>
   /** the still-needed workflow looked and kept it */

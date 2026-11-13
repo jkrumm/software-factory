@@ -1,5 +1,6 @@
 import { expect, test } from 'bun:test'
 import { shellCheckRunner } from '../../src/adapters/shell/check-runner.ts'
+import { exitedNote } from '../../src/kernel/run.ts'
 import { checkVerdict } from '../../src/domains/checkpoints/request.ts'
 
 /** The real shell: what a check's exit and output come to. Short commands only. */
@@ -27,7 +28,13 @@ test('a missing command and a timeout say nothing about the need', async () => {
   expect(checkVerdict(await slow.run('sleep 5'))).toBe('unrunnable')
 })
 
-test('the output is cut', async () => {
-  const run = await runner.run('head -c 20000 /dev/zero | tr "\\0" "a"; exit 1')
-  expect(run.output.length).toBeLessThanOrEqual(2048)
+test('a huge output keeps both its ends, and what is quoted of it is its first and last lines', async () => {
+  const run = await runner.run('head -c 200000 /dev/zero | tr "\\0" "a"; exit 1')
+  expect(run.output.length).toBeLessThanOrEqual(65_536 + 8)
+  expect(exitedNote(run.exit, run.output).length).toBeLessThan(9000)
+  const lines = await runner.run('seq 1 100; exit 1')
+  const quoted = exitedNote(lines.exit, lines.output)
+  expect(quoted).toStartWith('its check exited 1:\n1\n2\n')
+  expect(quoted).toContain('… 60 lines left out …')
+  expect(quoted).toEndWith('\n99\n100')
 })

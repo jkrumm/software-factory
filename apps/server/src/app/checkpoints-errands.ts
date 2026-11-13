@@ -10,7 +10,7 @@ import { deepLink, errandPage } from '../domains/checkpoints/page.ts'
 import type { ErrandRecord } from '../domains/checkpoints/ports.ts'
 import type { IssueId } from '../kernel/ids.ts'
 import { key } from '../kernel/keys.ts'
-import { err, ok, type PortError, type Result } from '../kernel/result.ts'
+import { ok, type PortError, type Result } from '../kernel/result.ts'
 import { applied, type CheckpointError, type CheckpointStores, issueOf, waitingOn } from './checkpoints.ts'
 import { PASS_LIMIT, type SettleDeps } from './checkpoints-settle.ts'
 import { recordIn } from './issues.ts'
@@ -29,21 +29,29 @@ type Verdict =
   | { kind: 'reach'; by: 'judge' | 'failed'; note: string }
   | { kind: 'failed'; why: string }
 
+/** What the screen is told of a request no Issue raised: who asked stands for the repo, and there is no Issue. */
+const STANDALONE_KIND = 'request'
+
 /**
  * The Errand under its lock, while it is still open, unscreened and waited for. An Errand the Issue no longer waits for is
- * finished on the spot (no event, no page); anything else that moved under the call drops the result.
+ * finished on the spot (no event, no page); anything else that moved under the call drops the result. A request no Issue
+ * raised (a screened source: `ask-human`) has no Issue to wait for it.
  */
 async function openUnder(
   stores: CheckpointStores,
   deps: SettleDeps,
   id: ErrandId,
 ): Promise<
-  { errand: ErrandRecord; issueId: IssueId; title: string; repo: string; kind: string } | 'dropped' | 'finished'
+  { errand: ErrandRecord; issueId: IssueId | null; title: string; repo: string; kind: string } | 'dropped' | 'finished'
 > {
   const { work, checkpoints } = stores
   const errand = await checkpoints.lockErrand(id)
-  // a standalone Errand (no Issue) is never screened: it reached the owner at intake
-  if (!errand || errand.doneAt || errand.reachedOwnerAt || !errand.issueId) return 'dropped'
+  if (!errand || errand.doneAt || errand.reachedOwnerAt) return 'dropped'
+  if (!errand.issueId) {
+    return errand.source === null
+      ? 'dropped'
+      : { errand, issueId: null, title: errand.summary, repo: errand.source, kind: STANDALONE_KIND }
+  }
   const issue = await issueOf(work, errand.issueId)
   if (issue && waitingOn(issue, 'errand', errand.id)) {
     return { errand, issueId: errand.issueId, title: issue.title, repo: issue.repo, kind: issue.kind }
@@ -54,17 +62,27 @@ async function openUnder(
   return 'finished'
 }
 
+/** A request carries the command to run too; the screen sees it, the first look by rule reads the words only. */
+const screenedDetail = (errand: ErrandRecord): string | null => {
+  if (errand.command === null) return errand.detail
+  return `${errand.detail ?? ''}\nCommand to run${errand.host ? ` (${errand.host})` : ''}: ${errand.command}`
+    .trim()
+    .slice(0, 4000)
+}
+
 /** The Errand reaches the owner: recorded and paged (the page's key is the Errand's) in one transaction. */
 async function reachOwner(
   stores: CheckpointStores,
   deps: SettleDeps,
-  found: { errand: ErrandRecord; issueId: IssueId; repo: string },
+  found: { errand: ErrandRecord; issueId: IssueId | null; repo: string },
   by: 'judge' | 'failed',
   note: string,
 ): Promise<void> {
   const at = deps.clock.now()
   const { errand } = found
   await stores.checkpoints.reachOwner(errand.id, { at, by, note, tries: errand.screenTries })
+  // a request no Issue raised is on the owner's list through its row; only an Issue's Errand is paged
+  if (!found.issueId) return
   await stores.checkpoints.planPage(
     errandPage({
       issue: { id: found.issueId, repo: found.repo },
@@ -85,21 +103,23 @@ export async function turnAway(
   reason: string,
 ): Promise<Result<null, CheckpointError>> {
   const { issueId } = errand
-  if (!issueId) return err({ kind: 'invalid', detail: 'a request no Issue raised has no lead to turn away' })
   const at = deps.clock.now()
-  const recorded = applied(
-    await recordIn(stores.work, deps, {
-      issueId,
-      key: key('errand_done', errand.id),
-      event: {
-        kind: 'errand_done',
-        payload: { errand: errand.id, turnedAway: reason },
-        actor: by === 'rule' ? 'factory' : 'judge',
-      },
-    }),
-    'errand_done',
-  )
-  if (!recorded.ok) return recorded
+  // a request no Issue raised has no lead to tell: the reason is the Errand's note, which the asker reads when it closes
+  if (issueId) {
+    const recorded = applied(
+      await recordIn(stores.work, deps, {
+        issueId,
+        key: key('errand_done', errand.id),
+        event: {
+          kind: 'errand_done',
+          payload: { errand: errand.id, turnedAway: reason },
+          actor: by === 'rule' ? 'factory' : 'judge',
+        },
+      }),
+      'errand_done',
+    )
+    if (!recorded.ok) return recorded
+  }
   await stores.checkpoints.turnAwayErrand(errand.id, { at, by, reason })
   await stores.checkpoints.cancelPages(errand.id, at)
   return ok(null)
@@ -161,8 +181,8 @@ async function screenErrand(deps: SettleDeps, id: ErrandId): Step<ErrandScreened
     return ok({
       errand,
       request: {
-        errand: { id: errand.id, summary: errand.summary, detail: errand.detail },
-        issue: { id: found.issueId, repo: found.repo, title: found.title, kind: found.kind },
+        errand: { id: errand.id, summary: errand.summary, detail: screenedDetail(errand) },
+        issue: { id: found.issueId ?? errand.id, repo: found.repo, title: found.title, kind: found.kind },
       },
     })
   })

@@ -220,6 +220,7 @@ async function main(): Promise<void> {
     ...writes,
     blobs: fileBlobStore(checkpointSettings.blobDir),
     consoleUrl: checkpointSettings.line.consoleUrl,
+    checks: shellCheckRunner(),
     notifier: makeNotifier(checkpointSettings.line),
     // The Judge asks `factory-ask` through the agw port. The standing policy is each project's `policy:` in its
     // `project.yaml`; a JSON file named by the environment overrides it, as an explicit stand-in.
@@ -277,6 +278,7 @@ async function main(): Promise<void> {
       ...writes,
       blobs: fileBlobStore(checkpointSettings.blobDir),
       consoleUrl: checkpointSettings.line.consoleUrl,
+      checks: shellCheckRunner(),
     },
     planning: writes,
     claimQueued: planning.claimQueued,

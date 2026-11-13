@@ -10,6 +10,7 @@ import {
   NEEDED_AFTER_MS,
   NEEDED_PER_PASS,
 } from '../../domains/checkpoints/request.ts'
+import { exitedNote, STILL_NEEDED_NOTE } from '../../kernel/run.ts'
 import type { Clock } from '../../kernel/clock.ts'
 import { key } from '../../kernel/keys.ts'
 import { ok, type PortError, type Result } from '../../kernel/result.ts'
@@ -75,11 +76,13 @@ async function runCheck(deps: ErrandsDeps, errand: ErrandRecord, command: string
   const verdict = checkVerdict(run)
   if (verdict === 'needed') {
     pass.kept++
-    await noteCheck(deps, errand, 'the check exited 0: still needed', 0)
+    // an owner's done that the check overruled keeps saying so until the Errand closes
+    const kept = errand.checkNote?.startsWith(STILL_NEEDED_NOTE) ? errand.checkNote : 'the check exited 0: still needed'
+    await noteCheck(deps, errand, kept, 0)
     return
   }
   if (verdict === 'not_needed') {
-    const said = `its check exited ${run.exit}${run.output === '' ? '' : `: ${cut(run.output, 600)}`}`
+    const said = exitedNote(run.exit, run.output)
     if (await close(deps, errand, 'not_needed', 'check', said)) pass.checkedOut++
     return
   }

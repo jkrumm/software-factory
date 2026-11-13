@@ -138,6 +138,17 @@ const errandView = (e: ErrandRecord) => ({
   closedKind: e.closedKind,
   closedBy: e.closedBy,
   checkNote: e.checkNote,
+  lastRun:
+    e.runStatus && e.runAt
+      ? {
+          status: e.runStatus,
+          exit: e.runExit,
+          at: iso(e.runAt),
+          attempts: e.runAttempts,
+          head: e.runHead ?? '',
+          tail: e.runTail ?? '',
+        }
+      : null,
 })
 
 const pageView = (p: PageRecord) => ({
@@ -635,6 +646,7 @@ export const checkpointRoutes = (uses: CheckpointUses) =>
           errandId: id,
           note: body.note ?? null,
           ...(body.outcome ? { outcome: body.outcome } : {}),
+          ...(body.run ? { run: body.run } : {}),
         })
         if (!result.ok) return failed(result.error)
         return Response.json(

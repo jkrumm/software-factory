@@ -339,8 +339,11 @@ payload `turnedAway`: the reason), sets the Errand done with the reason as its n
 
 **A request is an Errand no Issue raised** (`app/checkpoints.ts` `requestErrand`, `domains/checkpoints/request.ts`, `POST /v1/errands/requests`,
 `factory errand request`; callers owner, orchestrator and agent). `errands.issue_id` is null, there is no `errand_raised`
-event, no lead, no screen and no page: it reaches the owner at intake (`reached_owner_at = raised_at`; an owner already told
-by the asker's own dialog needs no second push). Why not an Issue that holds it: an Issue per request files work no lead can do,
+event, no lead and no page: it reaches the owner at intake (`reached_owner_at = raised_at`; an owner already told
+by the asker's own dialog needs no second push), except a request from a screened source (`SCREENED_SOURCES`: `ask-human`),
+which waits for the Errand screen like a lead's Errand (the rules, then `factory-errand` with the command added to the detail and
+the asker as the repo). A turn-away closes it `turned_away` with the reason as its note (there is no lead to tell); a pass puts it
+in Needs without a page. Why not an Issue that holds it: an Issue per request files work no lead can do,
 `errand_done` would wake it, and the work table has no "waiting on an Errand, no lead" cell. It carries `source`, `command`, `host`
 (`macbook|iphone|portal|any`, from the asker or read from the words, `kernel/hands.ts`), `check_command`, `expires_at` (7 days
 when it has no check and none was given; `never` and a check keep it) and `request_key`: a new request with the key of an open
@@ -349,7 +352,14 @@ Errand). `closed_kind` and `closed_by` say how any Errand ended (`done`, `not_ne
 by `owner`, `check`, `judge`, `loop`, `request`); the owner closes one as `not_needed` with `outcome` on `POST /v1/errands/:id/done`
 (the Console's existing verb, no ninth one), and a lead's Errand closed that way tells its lead so. The `check` is a shell command
 the server runs, so only the callers that can run a shell may set one (`api/policy.ts`); it runs through `sh -c` in its own process
-group, 30 s, 2 KiB of output, the server's secrets left out of its environment (`adapters/shell/check-runner.ts`).
+group, 30 s, the server's secrets left out of its environment (`adapters/shell/check-runner.ts`); wherever the factory quotes output it
+keeps the first 20 lines and the last 20 (`kernel/run.ts`), because the reason is at the top.
+**A done is not always done** (`finishErrand`, `POST /v1/errands/:id/done`). A result that says the pushed run failed (`run.status`
+`failed`, `timeout` or `running`, or a non-zero `run.exit`; the words `ask-human.sh` wrote before it sent `run`, `ran on the MacBook
+and failed (exit N)`, count too) leaves the Errand open and records the run (`run_*` columns: tries, status, exit, head, tail); Needs
+shows `tried, failed: <first error line>` (`tried`) and the Console its output. A done on an Errand with a `check` runs the check at
+once, outside any transaction: exit 0 reopens it with `check_note` `marked done but the check says still needed` (the hourly pass
+keeps that note), exit 1..125 closes it with the check's output in the note, a check that could not answer closes it as before.
 A failed or refused call is tried again after the Judge's 5-minute backoff, three tries in all (`errands.screen_tries`);
 after the third the Errand reaches the owner unscreened (`screen_by` `failed`).
 
