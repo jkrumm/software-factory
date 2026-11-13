@@ -111,7 +111,7 @@ describe('factory plan check', () => {
     expect(linesOf(result.out, result.path)).toEqual([3])
   })
 
-  test('a file over 64 KiB is an error and is not parsed', async () => {
+  test('a file over the byte limit is an error and is not parsed', async () => {
     const result = await checkText(`# ${'x'.repeat(PLAN_LIMITS.maxBytes)}\n${file(row('a'))}`)
     expect(result.code).toBe(2)
     expect(result.out).toContain('larger than')

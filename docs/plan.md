@@ -58,7 +58,7 @@ A one-line fact that contains `: ` (a colon and a space) is not a string to YAML
 parse: quote it or write it as a block scalar, as the example does (`why: |-` and the text indented below; `|-` keeps no
 trailing newline).
 
-`version` is `1`. `rows` has at least one row. Unknown keys anywhere are refused: the file is strict. A file over 64 KiB, or with more than 100 YAML aliases, is
+`version` is `1`. `rows` has at least one row. Unknown keys anywhere are refused: the file is strict. A file over 1 MiB, or with more than 100 YAML aliases, is
 a broken plan.
 
 ## A row

@@ -8,7 +8,7 @@ export const IssueRef = z
   .meta(ISSUE_ID_META)
 
 /** The limits of a project's `docs/plan.yaml`: a plan over either is broken. The server enforces them, the CLI states them. */
-export const PLAN_LIMITS = { maxBytes: 64 * 1024, maxAliases: 100, maxAfter: MAX_AFTER_IDS } as const
+export const PLAN_LIMITS = { maxBytes: 1024 * 1024, maxAliases: 100, maxAfter: MAX_AFTER_IDS } as const
 
 export const ROW_STATES = ['done', 'open', 'filable', 'waiting'] as const
 
