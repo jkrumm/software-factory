@@ -254,7 +254,7 @@ through `receive` in `app/intake.ts`; the answer is a triage outcome (`docs/lang
   crash attaches to the lead that runs. The prompt is the brief (`domains/leads/brief.ts`): standing orders that are
   byte-identical in every brief so the prompt cache serves them (they carry the HerdrCore constraint: no lead restarts, stops,
   updates or starts the core or reboots to prove a change), then the Issue as filed, its facts and its notes. Notes and
-  API-error nudges typed into leads are paced for 10 min after a server start, one per 10 s (`app/type-pace.ts`), so a restart's
+  API-error nudges typed into leads are paced for 10 min after a server start, one per 10 s (`app/type-pace.ts`, `FACTORY_TYPE_GAP_MS`, 0 is off), so a restart's
   backlog does not land at once.
 - **Hooks.** `factory hook` appends to the spool, then posts to the unix socket (mode 0600) within 300 ms. The server
   replays the spool with idempotent keys. Session state is derived from the events when read, never stored.

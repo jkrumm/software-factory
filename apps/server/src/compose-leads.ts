@@ -84,7 +84,7 @@ export function composeLeads(input: {
     startBudgetMs: s.startBudgetMs,
     forceNoteAfterMs: s.forceNoteAfterMs,
     graceMs: s.graceMs,
-    typePace: typePacer({ clock: input.clock }),
+    typePace: typePacer({ clock: input.clock, gapMs: s.typeGapMs }),
     apiErrors: apiErrorPorts({
       tails: fileTranscriptTails({
         projectsDirs: () => claudeProjectsDirs({ accountsFile: s.accountsFile, home: s.home }),

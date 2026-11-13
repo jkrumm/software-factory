@@ -2,6 +2,7 @@ import { existsSync } from 'node:fs'
 import { fileURLToPath } from 'node:url'
 import * as z from 'zod'
 import { RESUME_DELAYS_MS, STAGGER_MS } from '../../domains/leads/apierror.ts'
+import { TYPE_GAP_MS } from '../../domains/leads/type-gap.ts'
 
 const Env = z.object({
   HOME: z.string().min(1),
@@ -26,6 +27,8 @@ const Env = z.object({
     .regex(/^\d+(,\d+){0,9}$/)
     .optional(),
   FACTORY_API_STAGGER_MS: z.coerce.number().int().min(0).optional(),
+  /** the gap between two notes or nudges typed into leads in the first minutes after a server start; 0 is off */
+  FACTORY_TYPE_GAP_MS: z.coerce.number().int().min(0).optional(),
   FACTORY_API_DETECT_MS: z.coerce.number().int().min(0).optional(),
   FACTORY_API_PROBE_MS: z.coerce.number().int().min(0).optional(),
   /** the agent token (`settings.ts`) and the API port: what a lead's `factory` calls the API with */
@@ -61,6 +64,8 @@ export interface LeadSettings {
   resumeDelaysMs: number[]
   /** between two `continue`s into the leads of one edge incident */
   resumeStaggerMs: number
+  /** between two notes or nudges typed into leads after a server start (`app/type-pace.ts`) */
+  typeGapMs: number
   /** a turn open and silent this long has the end of its transcript read for an API error */
   apiErrorDetectMs: number
   /** a session's transcript is read at most this often */
@@ -106,6 +111,7 @@ export function loadLeadSettings(env: Record<string, string | undefined>): LeadS
     forceNoteAfterMs: e.FACTORY_FORCE_NOTE_MS ?? 5 * 60_000,
     resumeDelaysMs: e.FACTORY_API_RESUME_MS ? e.FACTORY_API_RESUME_MS.split(',').map(Number) : [...RESUME_DELAYS_MS],
     resumeStaggerMs: e.FACTORY_API_STAGGER_MS ?? STAGGER_MS,
+    typeGapMs: e.FACTORY_TYPE_GAP_MS ?? TYPE_GAP_MS,
     apiErrorDetectMs: e.FACTORY_API_DETECT_MS ?? 45_000,
     apiErrorProbeMs: e.FACTORY_API_PROBE_MS ?? 20_000,
     agentToken: e.FACTORY_AGENT_TOKEN,

@@ -107,6 +107,8 @@ function worldEnv(world: World, extra: Record<string, string>): Record<string, s
     FACTORY_ARCHIVE_DIR: join(world.bin, 'archive'),
     FACTORY_PRETRUST_BIN: '/usr/bin/true',
     FACTORY_TICK_MS: '0',
+    // a fresh server paces the notes it types; a scenario does not wait ten seconds for each
+    FACTORY_TYPE_GAP_MS: '0',
     FACTORY_AGW_BIN: join(world.bin, 'agw'),
     FACTORY_FAKE_LOG: join(world.bin, 'calls.jsonl'),
     ...hostEnv(world.bin),

@@ -1,7 +1,6 @@
+import { TYPE_GAP_MS } from '../domains/leads/type-gap.ts'
 import type { Clock } from '../kernel/clock.ts'
 
-/** After a server start, at most one note or nudge typed into a lead per this long (Issue 1039). */
-export const TYPE_GAP_MS = 10_000
 /** How long after the server's start the gap is kept: the backlog of a restart or a boot drains in this time. */
 export const TYPE_WINDOW_MS = 10 * 60_000
 
