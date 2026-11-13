@@ -158,6 +158,33 @@ test('the lead calls its verbs in the forms the brief lists, with the agent toke
   )
   expect(revised.code).toBe(0)
 
+  // The owner's comment is not answered yet: the ship is refused, naming it and the verb that answers it.
+  const annotationId = String((shown.json as { annotations: { id: string }[] }).annotations[0]?.id)
+  const owed = await v.run(['issue', 'ship', issue, '--attempt', '1', '--call', 's0', '--commit', 'aaaa111'], 'agent')
+  expect(owed.code).toBe(5)
+  expect(owed.error?.message).toContain(annotationId)
+  expect(owed.error?.message).toContain('factory artifact annotation-reply')
+  const replied = await v.run(
+    [
+      'artifact',
+      'annotation-reply',
+      artifact,
+      annotationId,
+      '--attempt',
+      '1',
+      '--disposition',
+      'applied',
+      '--note',
+      'the revision says how',
+    ],
+    'agent',
+  )
+  expect(replied.code).toBe(0)
+  const answered = await v.run(['artifact', 'show', artifact, '--revision', '1'], 'agent')
+  expect(answered.json).toMatchObject({
+    annotations: [{ comment: 'how?', disposition: { disposition: 'applied', note: 'the revision says how' } }],
+  })
+
   // A repeated flag is a list: the gate names the commits it could not find.
   const ship = await v.run(
     ['issue', 'ship', issue, '--attempt', '1', '--call', 's1', '--commit', 'aaaa111', '--commit', 'bbbb222'],

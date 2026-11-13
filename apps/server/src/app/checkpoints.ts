@@ -6,6 +6,7 @@ import {
   type ArtifactKind,
   readAnnotation,
   readComment,
+  readDisposition,
   readSubmission,
   renderDecisionForm,
   type Verdict,
@@ -642,6 +643,9 @@ export function annotateArtifact(
       author: input.author,
       at: deps.clock.now(),
       editedAt: null,
+      disposition: null,
+      dispositionNote: null,
+      disposedAt: null,
     })
     return ok(await written(checkpoints, artifact.id, 'applied', null))
   })
@@ -663,6 +667,47 @@ export function editAnnotation(
     // The replay key follows the words, so the old text can be commented again as a new annotation.
     const editKey = key('annotate-edit', annotation.id, digest(read.value))
     const changed = await checkpoints.editAnnotation(annotation.id, read.value, editKey, deps.clock.now())
+    return ok(await written(checkpoints, artifact.id, changed ? 'applied' : 'replayed', null))
+  })
+}
+
+/**
+ * The lead's answer to one of the owner's annotations: applied, deferred (the note names what it filed) or declined (the
+ * note says why). The lead of the Issue's current attempt only; a later reply replaces an earlier one and the same
+ * reply again is a replay. The Issue's ship waits until every annotation has one.
+ */
+export function replyAnnotation(
+  deps: CheckpointDeps,
+  input: { artifactId: ArtifactId; annotationId: string; attempt: number | null; raw: unknown },
+): Promise<CheckpointResult<ArtifactWritten>> {
+  const read = readDisposition(input.raw)
+  if (!read.ok) return Promise.resolve(read)
+  if (input.attempt === null) {
+    return Promise.resolve(
+      err({ kind: 'missing_field', fields: ['attempt'], detail: 'an annotation reply needs: attempt' }),
+    )
+  }
+  return deps.uow.run(async ({ work, checkpoints }) => {
+    const artifact = await checkpoints.artifact(input.artifactId)
+    if (!artifact) return err(notFound('artifact', input.artifactId))
+    const annotation = await checkpoints.annotation(input.annotationId)
+    if (!annotation || annotation.artifactId !== artifact.id) return err(notFound('annotation', input.annotationId))
+    if (annotation.author !== 'owner')
+      return err({ kind: 'invalid', detail: "only the owner's annotations are answered" })
+    const issue = await issueOf(work, artifact.issueId)
+    if (!issue) return err({ kind: 'unknown_issue', issueId: artifact.issueId })
+    if (issue.attempt !== input.attempt) {
+      return err({
+        kind: 'invalid',
+        detail: `attempt ${input.attempt} is not the Issue's current attempt (${issue.attempt}): only its own lead answers`,
+      })
+    }
+    const changed = await checkpoints.disposeAnnotation(
+      annotation.id,
+      read.value.disposition,
+      read.value.note,
+      deps.clock.now(),
+    )
     return ok(await written(checkpoints, artifact.id, changed ? 'applied' : 'replayed', null))
   })
 }

@@ -10,6 +10,9 @@ import {
   DEFAULT_STEWARD_RULES,
   decideIdle,
   fallbackDecision,
+  idleClockStart,
+  readIdleHistory,
+  REVISE_NOTE,
   IDLE_NOTE,
   type IdleFacts,
   SAME_STALL,
@@ -338,6 +341,9 @@ const idle = (over: Partial<IdleFacts> = {}): IdleFacts => ({
   wakes: 0,
   lastEvent: 'v7 regressed: the probe failed',
   background: false,
+  verdictAt: null,
+  attempt: 1,
+  pendingRevision: null,
   ...over,
 })
 
@@ -432,4 +438,106 @@ test('the next wake waits another threshold from the last one', () => {
   expect(decideIdle(idle({ wakes: 2, quietSince: new Date(NOW.getTime() - 60_000) }), NOW, rules)).toMatchObject({
     kind: 'wait',
   })
+})
+
+const minutesAgo = (minutes: number) => new Date(NOW.getTime() - minutes * 60_000)
+const record = (version: number, kind: string, minutes: number, payload: unknown = {}, actor = 'owner') => ({
+  version,
+  kind,
+  actor,
+  payload,
+  at: minutesAgo(minutes),
+})
+
+test('a verdict followed by 25 minutes of silence produces no idle nudge; after the grace the usual one comes', () => {
+  // the lead has been quiet for 25 minutes since it heard the verdict
+  const heard = idle({ idleSince: minutesAgo(25), quietSince: minutesAgo(25), verdictAt: minutesAgo(25) })
+  expect(decideIdle(heard, NOW, rules)).toMatchObject({ kind: 'wait' })
+  const later = idle({ idleSince: minutesAgo(31), quietSince: minutesAgo(31), verdictAt: minutesAgo(31) })
+  expect(decideIdle(later, NOW, rules)).toMatchObject({ kind: 'wake' })
+})
+
+test('the idle clock starts at the last news the lead heard, not at an older turn end', () => {
+  const history = readIdleHistory(
+    [
+      record(2, 'admitted', 200),
+      record(5, 'submitted', 100, { attempt: 1, artifact: { id: 'artifact_1' } }, 'lead'),
+      record(6, 'noted', 24),
+      record(7, 'verdict_given', 24, { artifact: 'artifact_1', verdict: 'looks_good' }),
+      record(8, 'noted', 4, { text: `${IDLE_NOTE} for 9 minute(s)` }, 'steward'),
+    ],
+    2,
+  )
+  expect(history.newsAt).toEqual(minutesAgo(24))
+  expect(history.verdictAt).toEqual(minutesAgo(24))
+  expect(history.pendingRevision).toBeNull()
+  // the events of an earlier attempt are not news
+  expect(readIdleHistory([record(3, 'verdict_given', 5, { artifact: 'a', verdict: 'changes' })], 4)).toEqual({
+    newsAt: null,
+    verdictAt: null,
+    pendingRevision: null,
+  })
+})
+
+test('a changes verdict with no revision after 60 minutes idle produces the specific revise note, once', () => {
+  const verdict = record(7, 'verdict_given', 70, { artifact: 'artifact_1', verdict: 'changes' })
+  const owed = readIdleHistory([record(2, 'admitted', 300), verdict], 2)
+  expect(owed.pendingRevision).toMatchObject({ artifact: 'artifact_1', version: 7, noted: false })
+  const facts = (minutes: number, pendingRevision = owed.pendingRevision) =>
+    idle({
+      idleSince: minutesAgo(minutes),
+      quietSince: minutesAgo(minutes),
+      verdictAt: owed.verdictAt,
+      pendingRevision,
+    })
+  // 40 minutes idle: past the verdict grace and the generic threshold, yet the generic nudge is held back for the revise note
+  expect(decideIdle(facts(40), NOW, rules)).toMatchObject({ kind: 'wait' })
+  const note = decideIdle(facts(61), NOW, rules)
+  if (note.kind !== 'wake') throw new Error('unreachable')
+  expect(note.detail).toStartWith(REVISE_NOTE)
+  expect(note.detail).not.toStartWith(IDLE_NOTE)
+  expect(note.detail).toContain('factory artifact revise artifact_1')
+  expect(note.revise).toEqual({ artifact: 'artifact_1', version: 7 })
+
+  // once told, the pending revision no longer holds the generic nudge back, and the note is not sent again
+  const told = readIdleHistory(
+    [record(2, 'admitted', 300), verdict, record(9, 'noted', 5, { text: note.detail }, 'steward')],
+    2,
+  )
+  expect(told.pendingRevision?.noted).toBe(true)
+  const again = decideIdle(facts(61, told.pendingRevision), NOW, rules)
+  expect(again).toMatchObject({ kind: 'wake' })
+  if (again.kind === 'wake') expect(again.revise).toBeUndefined()
+
+  // a revision submitted after the verdict clears it
+  const revised = readIdleHistory(
+    [
+      record(2, 'admitted', 300),
+      verdict,
+      record(8, 'submitted', 65, { attempt: 1, artifact: { id: 'artifact_1' } }, 'lead'),
+    ],
+    2,
+  )
+  expect(revised.pendingRevision).toBeNull()
+  // a verdict of looks_good owes none
+  expect(
+    readIdleHistory([record(7, 'verdict_given', 70, { artifact: 'artifact_1', verdict: 'with_notes' })], 2)
+      .pendingRevision,
+  ).toBeNull()
+})
+
+test("self-watch counts a lead idle on the steward's clock: after the verdict grace, and after the revise note is due", () => {
+  const quiet = idle({ idleSince: minutesAgo(5), verdictAt: minutesAgo(5) })
+  expect(idleClockStart(quiet, rules)).toEqual(new Date(minutesAgo(5).getTime() + rules.verdictGraceMs))
+  const owed = idle({
+    idleSince: minutesAgo(50),
+    verdictAt: minutesAgo(50),
+    pendingRevision: { artifact: 'artifact_1', version: 7, verdictAt: minutesAgo(50), noted: false },
+  })
+  expect(idleClockStart(owed, rules)).toEqual(new Date(minutesAgo(50).getTime() + rules.reviseAfterMs))
+  const told = idle({
+    idleSince: minutesAgo(50),
+    pendingRevision: { artifact: 'artifact_1', version: 7, verdictAt: minutesAgo(50), noted: true },
+  })
+  expect(idleClockStart(told, rules)).toEqual(minutesAgo(50))
 })

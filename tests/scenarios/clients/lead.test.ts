@@ -47,6 +47,7 @@ test('every verb the brief names is a command of the CLI', async () => {
     'artifact submit',
     'artifact revise',
     'artifact show',
+    'artifact annotation-reply',
     'errand raise',
     'signal file',
   ]) {

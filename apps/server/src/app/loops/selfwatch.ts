@@ -1,6 +1,7 @@
 import type { SignalRequest } from '@software-factory/contract'
 import type { Triaged } from '../../domains/intake/model.ts'
 import type { CiRuns, LoopReads, LoopStore, MigrationFiles } from '../../domains/loops/ports.ts'
+import { DEFAULT_STEWARD_RULES, idleClockStart } from '../../domains/loops/stall.ts'
 import {
   ciFindings,
   heartbeatFindings,
@@ -102,7 +103,8 @@ async function idleLeads(deps: SelfwatchDeps): Out<IdleLead[]> {
       issue: id,
       title: idle.facts.title,
       lead: leadKey(id, idle.facts.attempt),
-      idleSince: idle.idle.idleSince,
+      // the steward's own idle clock: a verdict's grace and a revision still owed are waits it honours
+      idleSince: idleClockStart(idle.idle, DEFAULT_STEWARD_RULES),
       background: idle.idle.background,
     })
   }

@@ -3,10 +3,19 @@ import { useEffect, useRef, useState } from 'react'
 import type { ArtifactDetail } from '@software-factory/contract'
 import { Ago } from '@/components/issue/ago'
 import { Fold } from '@/components/kit/fold'
+import { Lozenge } from '@/components/kit/lozenge'
 import { TONE_TINT } from '@/components/kit/tone'
 import { Button } from '@/components/ui/button'
 import { Textarea } from '@/components/ui/textarea'
-import { displayPath, firstH1, GLOBAL_PATH, normalizeQuote, splitByRevision } from '@/lib/artifact'
+import {
+  DISPOSITION_TONE,
+  DISPOSITION_WORDS,
+  displayPath,
+  firstH1,
+  GLOBAL_PATH,
+  normalizeQuote,
+  splitByRevision,
+} from '@/lib/artifact'
 import type { Review, ReviewItem } from '@/lib/review'
 import { cn } from '@/lib/utils'
 
@@ -182,6 +191,21 @@ function AnnotationItem({
       <span className="text-[length:var(--vx-text-sm)] leading-5 whitespace-pre-wrap [overflow-wrap:anywhere]">
         {item.comment}
       </span>
+      {item.disposition ? (
+        <span className="flex flex-col gap-1 border-l-2 border-border pl-2" data-testid="disposition">
+          <span className="flex items-center gap-2">
+            <Lozenge tone={DISPOSITION_TONE[item.disposition.disposition]}>
+              {DISPOSITION_WORDS[item.disposition.disposition]}
+            </Lozenge>
+            <Ago iso={item.disposition.at} now={now} className="font-mono text-xs text-muted-foreground" />
+          </span>
+          {item.disposition.note ? (
+            <span className="text-[length:var(--vx-text-sm)] leading-5 whitespace-pre-wrap [overflow-wrap:anywhere]">
+              {item.disposition.note}
+            </span>
+          ) : null}
+        </span>
+      ) : null}
       {mark || path || isGeneral ? (
         <span className="flex min-w-0 items-center gap-2 font-mono text-[11px] text-muted-foreground">
           {mark ? <span className="shrink-0 rounded-sm px-1.5 py-0.5 font-sans text-xs">{mark}</span> : null}

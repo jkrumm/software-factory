@@ -168,6 +168,17 @@ through `receive` in `app/intake.ts`; the answer is a triage outcome (`docs/lang
   begin with `IDLE_NOTE`), `maxWakes` per attempt and each after another threshold of quiet; after that `factory-steward` is
   asked, and its answer can only be one more such note: a quiet lead is never stalled or turned into a Decision (the options
   of one, pause, drop, a fresh lead, are applied by nothing); self-watch files it for the owner's side.
+  The idle clock starts at the later of the turn's end and the last news the lead heard (`readIdleHistory`: a verdict, an owner's
+  or Judge's note, a Decision's answer, the end of a wait, an Errand done), and no idle nudge comes within
+  `verdictGraceMs` (30 minutes) of a verdict: the lead is reading and answering it. After a `changes` verdict the Issue waits on the lead's revision
+  (`PendingRevision`): the generic nudge is held back, and after `reviseAfterMs` (60 minutes) of quiet the lead gets one note that begins with
+  `REVISE_NOTE` and names `factory artifact revise <id>`, keyed by the artifact and the verdict, so it is sent once.
+- **Annotation dispositions.** A lead answers each of the owner's annotations with `factory artifact annotation-reply` (`POST
+  /v1/artifacts/:id/annotations/:annotationId/reply`, a lead verb gated on the Issue's current attempt): `applied`, `deferred` (the note
+  names the Issue or signal it filed) or `declined` (the note says why), stored on the annotation (`disposition`, `disposition_note`,
+  `disposed_at`). `factory issue ship` is refused while an owner annotation on any of the Issue's Specs or Concepts has none, naming
+  each. The Console shows the disposition under the comment; the retro's taste part carries it, and an annotation declined twice for the same reason is a
+  candidate standing rule.
 - **A repeated stall is not asked twice** (`repeatedStall` in `app/loops/steward.ts`, `decideStall`). A stall of the same
   cause as the one the steward's last Decision of this attempt answered, whose detail reads alike (`sameWords`: the share of
   words, digits dropped, at least `SAME_STALL`), with no `noted` by the owner or the orchestrator and no `reopened` since

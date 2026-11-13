@@ -175,3 +175,39 @@ test('a lead that deferred before going quiet is not nudged', async () => {
   await runLoop(lab, 'steward')
   expect(await idleNotes(issue)).toEqual([])
 })
+
+test('a lead that just heard the owner’s verdict is not nudged: a changes verdict owes a revision, and the generic note waits for it', async () => {
+  const issue = await working(lab, 'app', 'the verdict on the queue spec')
+  const session = await open(issue)
+  const submitted = await lab.cli([
+    'artifact',
+    'submit',
+    issue,
+    '--body',
+    JSON.stringify({ attempt: 1, kind: 'spec', title: 'The queue spec', content: '# Queue\n\nPostgres.' }),
+  ])
+  expect(submitted.code).toBe(0)
+  const artifact = (submitted.json as { artifact: { id: string } }).artifact.id
+  await goQuiet(session)
+  expect(await state(lab, issue)).toMatchObject({ state: 'waiting', wait: 'review' })
+
+  // the owner answers; the idle thresholds are 0 here, yet a verdict has its grace and `changes` its own 60 minutes
+  await must(lab, ['artifact', 'verdict', artifact, '--body', JSON.stringify({ verdict: 'changes', note: 'shorter' })])
+  expect(await state(lab, issue)).toMatchObject({ state: 'working' })
+  for (let pass = 0; pass < 2; pass++) {
+    expect((await runLoop(lab, 'steward')).summary).toContain('woken 0')
+  }
+  expect(await idleNotes(issue)).toEqual([])
+  expect((await callsOf(lab, 'factory-steward')).filter((call) => call.input.issue === issue)).toEqual([])
+
+  // the lead's revision puts the Issue back in review, and no idle nudge is owed
+  const revised = await lab.cli([
+    'artifact',
+    'revise',
+    artifact,
+    '--body',
+    JSON.stringify({ attempt: 1, content: '# Queue\n\nPostgres, shorter.' }),
+  ])
+  expect(revised.code).toBe(0)
+  expect(await state(lab, issue)).toMatchObject({ state: 'waiting', wait: 'review' })
+})

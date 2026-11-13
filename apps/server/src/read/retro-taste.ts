@@ -28,12 +28,14 @@ const Annotation = z.object({
   revision: z.coerce.number().int(),
   quote: z.string(),
   comment: z.string(),
+  disposition: z.enum(['applied', 'deferred', 'declined']).nullable(),
+  disposition_note: z.string().nullable(),
   at: z.coerce.date(),
 })
 
 /**
  * What the owner said in the window, in his words: the notes of his own verdicts (never the factory's defaults, see
- * `ownerVerdict`) that say something or ask for more, and every annotation he wrote, each with its artifact, repo and Issue.
+ * `ownerVerdict`) that say something or ask for more, and every annotation he wrote, each with its artifact, repo and Issue and, for an annotation, how the lead handled it (`disposition`, `dispositionNote`).
  * A `looks_good` without a note is a count in `verdict_changes_share`, not a preference, so it is not listed.
  */
 export async function readTaste(sql: SQL, w: Window): Promise<RetroTaste> {
@@ -45,7 +47,8 @@ export async function readTaste(sql: SQL, w: Window): Promise<RetroTaste> {
     WHERE ${ownerVerdict(sql, w)} AND (v.note IS NOT NULL OR v.verdict <> 'looks_good')
     ORDER BY v.at DESC, a.id LIMIT ${TASTE_LIMIT}`
   const annotations: unknown[] = await sql`
-    SELECT a.id AS artifact, a.kind, a.title, i.repo, a.issue_id AS issue, n.revision, n.quote, n.comment, n.at
+    SELECT a.id AS artifact, a.kind, a.title, i.repo, a.issue_id AS issue, n.revision, n.quote, n.comment, n.disposition,
+           n.disposition_note, n.at
     FROM factory.annotations n
     JOIN factory.artifacts a ON a.id = n.artifact_id AND a.kind IN ('concept', 'spec', 'report')
     JOIN factory.issues i ON i.id = a.issue_id
@@ -57,8 +60,8 @@ export async function readTaste(sql: SQL, w: Window): Promise<RetroTaste> {
       return { ...row, at: row.at.toISOString() }
     }),
     annotations: annotations.map((raw) => {
-      const row = Annotation.parse(raw)
-      return { ...row, at: row.at.toISOString() }
+      const { disposition_note: dispositionNote, ...row } = Annotation.parse(raw)
+      return { ...row, dispositionNote, at: row.at.toISOString() }
     }),
   }
 }

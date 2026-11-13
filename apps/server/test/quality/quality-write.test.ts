@@ -224,6 +224,42 @@ describe('the ship gate', () => {
     expect((await stateOf(id)).state).toBe('watching')
   })
 
+  test('a ship is refused while an annotation on its Spec has no disposition, naming each, and goes through after the replies', async () => {
+    const id = await working()
+    await db.sql`
+      INSERT INTO factory.artifacts (id, key, issue_id, kind, title, format, author, created_at)
+      VALUES ('artifact_d', 'k-d', ${id}, 'spec', 'the Spec', 'markdown', 'lead', ${clock.now()})`
+    await db.sql`
+      INSERT INTO factory.artifact_revisions (artifact_id, n, key, blob, sha256, bytes, note, created_at)
+      VALUES ('artifact_d', 1, 'k-r', 'blob', 'sha', 1, null, ${clock.now()})`
+    for (const n of [1, 2]) {
+      await db.sql`
+        INSERT INTO factory.annotations (id, key, artifact_id, revision, quote, path, comment, author, at)
+        VALUES (${`annotation_${n}`}, ${`k-a${n}`}, 'artifact_d', 1, ${`quote ${n}`}, null, 'widen it', 'owner', ${clock.now()})`
+    }
+    // the lead's own comment is not the owner's to be answered
+    await db.sql`
+      INSERT INTO factory.annotations (id, key, artifact_id, revision, quote, path, comment, author, at)
+      VALUES ('annotation_l', 'k-al', 'artifact_d', 1, 'lead quote', null, 'noted', 'lead', ${clock.now()})`
+    const refused = value(await ship(id, 'call-a'))
+    expect(refused.result).toBe('refused')
+    expect(refused.detail).toContain('2 annotation(s)')
+    expect(refused.detail).toContain('annotation_1')
+    expect(refused.detail).toContain('annotation_2')
+    expect(refused.detail).not.toContain('annotation_l')
+    expect(refused.detail).toContain('factory artifact annotation-reply')
+    expect(commitReads).toBe(0)
+
+    await db.sql`UPDATE factory.annotations SET disposition = 'applied', disposed_at = ${clock.now()} WHERE id = 'annotation_1'`
+    const half = value(await ship(id, 'call-b'))
+    expect(half.detail).toContain('1 annotation(s)')
+    expect(half.detail).toContain('annotation_2')
+    expect(half.detail).not.toContain('annotation_1')
+
+    await db.sql`UPDATE factory.annotations SET disposition = 'declined', disposition_note = 'no', disposed_at = ${clock.now()} WHERE id = 'annotation_2'`
+    expect(value(await ship(id, 'call-c')).result).toBe('applied')
+  })
+
   test('a refusal for the missing Spec is a refused ship on the record, counted as a refusal', async () => {
     const id = await working({ checkpoint: 'spec' })
     await ship(id)

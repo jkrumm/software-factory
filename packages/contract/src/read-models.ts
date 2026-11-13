@@ -442,6 +442,9 @@ export const RetroTaste = z
         revision: z.number().int(),
         quote: z.string(),
         comment: z.string(),
+        /** how the lead handled it; null until it answered */
+        disposition: z.enum(['applied', 'deferred', 'declined']).nullable(),
+        dispositionNote: z.string().nullable(),
         at,
       }),
     ),

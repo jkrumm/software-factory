@@ -54,6 +54,10 @@ export interface StewardRules {
    * and is not quiet, so only a wait far past a long implementer or check (30 to 67 minutes measured) reads as a frozen task
    */
   idleBackgroundMs: number
+  /** a lead that just heard a verdict is rightly reading and answering it: no idle nudge this long after the verdict */
+  verdictGraceMs: number
+  /** after a `changes` verdict the Issue waits on the lead's revision: an idle lead is told so once after this long */
+  reviseAfterMs: number
 }
 
 export const DEFAULT_STEWARD_RULES: StewardRules = {
@@ -61,12 +65,15 @@ export const DEFAULT_STEWARD_RULES: StewardRules = {
   maxWakes: 2,
   idleLeadMs: 10 * 60_000,
   idleBackgroundMs: 90 * 60_000,
+  verdictGraceMs: 30 * 60_000,
+  reviseAfterMs: 60 * 60_000,
 }
 
 /** What the rules say. `ask`: they do not, so the `factory-steward` workflow is asked. */
 export type StallAction =
   | { kind: 'wait'; why: string }
-  | { kind: 'wake'; detail: string }
+  /** `revise`: the one note of a `changes` verdict still owed a revision, keyed by its artifact and verdict */
+  | { kind: 'wake'; detail: string; revise?: { artifact: string; version: number } }
   | { kind: 'requeue'; detail: string }
   /** a lead's repeated block after a Decision answered "hold": a timed wait with a longer backoff, no new Decision */
   | { kind: 'hold'; until: string; detail: string }
@@ -156,12 +163,113 @@ export function idleNote(minutes: number, lastEvent: string, extra = '', backgro
   return [head, extra, tail].filter(Boolean).join(' ')
 }
 
+/**
+ * The text of the one note a lead owes a revision hears: it begins with it so a later pass reads the note from the events
+ * alone, and it is no idle wake (the idle wakes are counted by `IDLE_NOTE`).
+ */
+export const REVISE_NOTE = 'steward: your revision is owed'
+
+/** What a lead is told when the owner's `changes` verdict has had no revision for `reviseAfterMs` while it sat idle. */
+export function reviseNote(artifact: string, attempt: number, minutes: number): string {
+  return `${REVISE_NOTE}: the owner's verdict on ${artifact} was changes ${minutes} minute(s) ago and no revised artifact was submitted. Submit the revised artifact with \`factory artifact revise ${artifact} --content @file.md --attempt ${attempt}\` (a push alone does not answer the verdict), answering each annotation with \`factory artifact annotation-reply\` first.`
+}
+
+/** A `changes` verdict the lead has not answered with a revision yet. */
+export interface PendingRevision {
+  artifact: string
+  /** the version of its `verdict_given` event: what the one note is keyed by */
+  version: number
+  verdictAt: Date
+  /** the lead was told already (`REVISE_NOTE`) */
+  noted: boolean
+}
+
+/** What the Issue's events say of the news the lead heard and the revision it owes: the idle clock's inputs. */
+export interface IdleHistory {
+  /** the last verdict, note from the owner, answer, wait end or reopening that reached the lead; null when none did this attempt */
+  newsAt: Date | null
+  /** the last verdict on an artifact of the Issue */
+  verdictAt: Date | null
+  pendingRevision: PendingRevision | null
+}
+
+/** The slice of an applied event the idle clock reads. */
+export interface IdleRecord {
+  kind: string
+  payload: unknown
+  actor?: string
+  at: Date
+  version: number
+}
+
+const NEWS_KINDS: readonly string[] = ['verdict_given', 'answered', 'woken', 'errand_done', 'reopened', 'regressed']
+
+const payloadOf = (record: IdleRecord): Record<string, unknown> =>
+  typeof record.payload === 'object' && record.payload !== null ? (record.payload as Record<string, unknown>) : {}
+
+const artifactOf = (record: IdleRecord): string | null => {
+  const value = payloadOf(record).artifact
+  if (typeof value === 'string') return value
+  const id = typeof value === 'object' && value !== null ? (value as { id?: unknown }).id : undefined
+  return typeof id === 'string' ? id : null
+}
+
+/**
+ * Reads the idle clock's inputs from the events after the attempt's admission (`since`, a version). News is a verdict, an
+ * owner's or orchestrator's or Judge's note, a Decision's answer, the end of a wait (`woken`), an Errand done, a reopening or a
+ * regression: the lead is rightly busy with it, or was, so its quiet is counted from there. The steward's own notes are not news.
+ * A `changes` verdict is pending until a later `submitted` names its artifact.
+ */
+export function readIdleHistory(records: readonly IdleRecord[], since: number): IdleHistory {
+  const current = records.filter((record) => record.version > since)
+  const news = current.findLast(
+    (record) => NEWS_KINDS.includes(record.kind) || (record.kind === 'noted' && record.actor !== 'steward'),
+  )
+  const verdicts = current.filter((record) => record.kind === 'verdict_given')
+  const owed = verdicts.findLast(
+    (verdict) =>
+      payloadOf(verdict).verdict === 'changes' &&
+      artifactOf(verdict) !== null &&
+      !current.some(
+        (record) =>
+          record.kind === 'submitted' && record.version > verdict.version && artifactOf(record) === artifactOf(verdict),
+      ),
+  )
+  const artifact = owed ? artifactOf(owed) : null
+  return {
+    newsAt: news?.at ?? null,
+    verdictAt: verdicts.at(-1)?.at ?? null,
+    pendingRevision:
+      owed && artifact
+        ? {
+            artifact,
+            version: owed.version,
+            verdictAt: owed.at,
+            noted: current.some(
+              (record) =>
+                record.kind === 'noted' &&
+                record.actor === 'steward' &&
+                record.version > owed.version &&
+                typeof payloadOf(record).text === 'string' &&
+                (payloadOf(record).text as string).startsWith(`${REVISE_NOTE}: the owner's verdict on ${artifact} `),
+            ),
+          }
+        : null,
+  }
+}
+
 /** What the steward knows of a working Issue whose lead is idle. */
 export interface IdleFacts {
-  /** when the session went quiet: its last turn ended */
+  /** when the idle clock starts: the later of the session going quiet (its last turn ended) and the last news the lead heard */
   idleSince: Date
   /** the later of that and the last idle wake: the next wake waits another `idleLeadMs` from here */
   quietSince: Date
+  /** when the owner's last verdict on an artifact of the Issue reached it: no idle nudge until `verdictGraceMs` has passed since; null when none did */
+  verdictAt: Date | null
+  /** the attempt the lead is on */
+  attempt: number
+  /** a `changes` verdict still waiting for the lead's revision */
+  pendingRevision: PendingRevision | null
   /** idle wakes this attempt */
   wakes: number
   /** the Issue's latest event that is no idle wake, one line */
@@ -174,9 +282,29 @@ export interface IdleFacts {
  * A lead whose turn ended with nothing reported and no tool running (a running tool is a `working` session, which is
  * never read here) is woken with a note naming its last event, `maxWakes` times per attempt, each after another
  * `idleLeadMs` of quiet (`idleBackgroundMs` when background work was in flight as the turn ended); after that the
- * workflow is asked, and it may only note the lead: an idle lead is never turned into a Decision.
+ * workflow is asked, and it may only note the lead: an idle lead is never turned into a Decision. The quiet starts at the last
+ * news the lead heard, and no idle wake comes within `verdictGraceMs` of a verdict. While a `changes` verdict waits for its
+ * revision the generic wake is held back: after `reviseAfterMs` of quiet the lead gets one specific note, once, naming
+ * `factory artifact revise`.
  */
 export function decideIdle(facts: IdleFacts, now: Date, rules: StewardRules): StallAction {
+  const pending = facts.pendingRevision
+  if (pending && !pending.noted) {
+    const quiet = now.getTime() - facts.quietSince.getTime()
+    if (quiet < rules.reviseAfterMs) return { kind: 'wait', why: 'a revision is owed; the lead has time' }
+    return {
+      kind: 'wake',
+      detail: reviseNote(
+        pending.artifact,
+        facts.attempt,
+        Math.floor((now.getTime() - pending.verdictAt.getTime()) / 60_000),
+      ),
+      revise: { artifact: pending.artifact, version: pending.version },
+    }
+  }
+  if (facts.verdictAt && now.getTime() < facts.verdictAt.getTime() + rules.verdictGraceMs) {
+    return { kind: 'wait', why: 'a verdict was just delivered' }
+  }
   const quiet = now.getTime() - facts.quietSince.getTime()
   if (quiet < (facts.background ? rules.idleBackgroundMs : rules.idleLeadMs)) {
     return { kind: 'wait', why: 'not idle long enough' }
@@ -193,6 +321,21 @@ export function decideIdle(facts: IdleFacts, now: Date, rules: StewardRules): St
     }
   }
   return { kind: 'ask' }
+}
+
+/**
+ * When a quiet lead counts as idle for self-watch's `lead_idle`: the steward's own clock, so the two never disagree. The
+ * session's idle clock, moved to the end of the verdict grace, and for a `changes` verdict still owed its revision to the
+ * time the steward's one specific note is due.
+ */
+export function idleClockStart(
+  facts: Pick<IdleFacts, 'idleSince' | 'verdictAt' | 'pendingRevision'>,
+  rules: StewardRules,
+): Date {
+  const grace = facts.verdictAt ? facts.verdictAt.getTime() + rules.verdictGraceMs : 0
+  const revise =
+    facts.pendingRevision && !facts.pendingRevision.noted ? facts.idleSince.getTime() + rules.reviseAfterMs : 0
+  return new Date(Math.max(facts.idleSince.getTime(), grace, revise))
 }
 
 /** The facts as the workflow takes them: cut to its limits, credentials scrubbed by the caller's `clean`. */
