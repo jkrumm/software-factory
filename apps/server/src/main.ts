@@ -753,8 +753,9 @@ async function main(): Promise<void> {
   if (consoleServer) console.log(`console listening on http://${HOSTNAME}:${consoleServer.port}`)
   else console.log(`console not started: ${join(consoleSettings.dir, 'index.html')} is not built`)
   intake.start()
-  const stopUptime =
-    uptimeEnv.everyMs !== null && uptime.enabled ? selfPaced('uptime', uptimeEnv.everyMs, () => uptime.pass()) : null
+  const stopUptime = uptime.enabled
+    ? selfPaced('uptime', uptimeEnv.everyMs, () => uptime.pass(), { firstMs: 1_000 })
+    : null
   await runner.start()
 
   // Active connections are closed (`stop(true)`): an SSE stream never completes on its own, and without the flag Bun

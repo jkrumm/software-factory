@@ -13,5 +13,3 @@ NTFY_TOKEN=op://common/ntfy/TOKEN
 # The Beszel intake (a read-only hub user); FACTORY_BESZEL_URL is a non-secret setting in ~/.config/factory/env.
 FACTORY_BESZEL_EMAIL=op://mini/beszel/EMAIL
 FACTORY_BESZEL_PASSWORD=op://mini/beszel/PASSWORD
-# The uptime count in the overview (Argo's Kuma snapshot); FACTORY_UPTIME_URL is a non-secret setting in ~/.config/factory/env.
-FACTORY_UPTIME_TOKEN=op://common/api/SECRET
