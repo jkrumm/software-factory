@@ -14,11 +14,22 @@ const dir = (bin: string): string => join(bin, 'host')
 const SYSCTL = (host: string) => `#!/bin/sh
 case "$2" in
   hw.pagesize) echo 16384;;
+  vm.page_pageable_internal_count) printf '600000\n5648\n16384\n';;
   vm.compressor.swapper.swapouts_total) cat "${host}/swapouts";;
   hw.memsize) echo 34359738368;;
   vm.loadavg) echo "{ $(cat "${host}/load") 0.50 0.50 }";;
   vm.swapusage) echo "total = 40960.00M  used = $(cat "${host}/swapused").00M  free = 1.00M  (encrypted)";;
 esac
+`
+
+/**
+ * `vm_stat`'s wired and compressor pages. With the pageable and purgeable counts of `sysctl` above, memory in use is
+ * 744,352 pages of 16 KiB: about 11 GiB of 32.
+ */
+const VM_STAT = `#!/bin/sh
+echo "Mach Virtual Memory Statistics: (page size of 16384 bytes)"
+echo "Pages wired down:                             100000."
+echo "Pages occupied by compressor:                  50000."
 `
 
 /** `ps -Ao pid=,ppid=,pcpu=,rss=,comm=` of a believable busy host: paths, a name with spaces, rss in KiB. */
@@ -64,6 +75,7 @@ export const hostEnv = (bin: string): Record<string, string> => ({
   FACTORY_CLAUDE_ACCOUNT_BIN: join(dir(bin), 'claude-account'),
   FACTORY_SYSCTL_BIN: join(dir(bin), 'sysctl'),
   FACTORY_PS_BIN: join(dir(bin), 'ps'),
+  FACTORY_VM_STAT_BIN: join(dir(bin), 'vm_stat'),
   FACTORY_LSOF_BIN: join(dir(bin), 'lsof'),
   FACTORY_MEMORY_SAMPLE_MS: '0',
   FACTORY_ACCOUNTS_FILE: join(dir(bin), 'registry.json'),
@@ -173,6 +185,8 @@ export async function installHost(bin: string): Promise<void> {
   await writeFile(sysctl, SYSCTL(host))
   await writeFile(join(host, 'ps'), PS(host))
   await writeFile(join(host, 'lsof'), LSOF(host))
+  await writeFile(join(host, 'vm_stat'), VM_STAT)
+  await chmod(join(host, 'vm_stat'), 0o755)
   await chmod(join(host, 'ps'), 0o755)
   await chmod(join(host, 'lsof'), 0o755)
   await setProcesses(bin, [])

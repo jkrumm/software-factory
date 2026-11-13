@@ -1,15 +1,18 @@
 import type { HostProcess } from '@software-factory/contract'
 import type { HostReader } from '../../domains/capacity/ports.ts'
-import { parsePs, type PsRow, residentBytes, topProcesses } from './ps.ts'
+import { parsePs, type PsRow, topProcesses } from './ps.ts'
+import { memoryUsedPct } from './vm-memory.ts'
 import { runProcess } from './process.ts'
 
 export interface HostWatchOptions {
   /** the swap and load readings, as admission takes them (`hostReader`) */
   host: HostReader
-  /** `sysctl`, for `hw.memsize` */
+  /** `sysctl`, for `hw.memsize` and the page counts */
   sysctlBin: string
   /** `ps`, the macOS one: `-Ao pid=,ppid=,pcpu=,rss=,comm=` */
   psBin: string
+  /** `vm_stat`, for the wired and compressor pages (default `/usr/bin/vm_stat`) */
+  vmStatBin?: string
   /** concurrent readers within this long share one `ps` */
   cacheMs?: number
   timeoutMs?: number
@@ -33,7 +36,7 @@ export interface HostWatch {
 
 /**
  * The host as the Live popover shows it: the top processes of one timed `ps` (cached for 10 s, so many readers cost one),
- * and the minute sample (load, memory in use as resident memory over RAM, swap). Every failure is empty or null, never an
+ * and the minute sample (load, memory in use as the kernel's app, wired and compressed memory over RAM, swap). Every failure is empty or null, never an
  * error: a host that cannot answer is a gap in the chart.
  */
 export function hostWatch(options: HostWatchOptions): HostWatch {
@@ -69,6 +72,15 @@ export function hostWatch(options: HostWatchOptions): HostWatch {
     return n
   }
 
+  const memoryUsed = async (): Promise<number | null> => {
+    const [ram, counts, vmStat] = await Promise.all([
+      memsize(),
+      run([options.sysctlBin, '-n', 'vm.page_pageable_internal_count', 'vm.page_purgeable_count', 'hw.pagesize']),
+      run([options.vmStatBin ?? '/usr/bin/vm_stat']),
+    ])
+    return ram && counts !== null && vmStat !== null ? memoryUsedPct(counts, vmStat, ram) : null
+  }
+
   return {
     rows: processes,
 
@@ -78,15 +90,14 @@ export function hostWatch(options: HostWatchOptions): HostWatch {
     },
 
     async sample(): Promise<HostSampleReading> {
-      const [load, memory, rows, ram] = await Promise.all([
+      const [load, memory, used] = await Promise.all([
         options.host.load().catch(() => null),
         options.host.memory().catch(() => null),
-        processes(),
-        memsize(),
+        memoryUsed(),
       ])
       return {
         load: load?.ok ? load.value : null,
-        memoryUsedPct: rows && ram ? Math.round((residentBytes(rows) / ram) * 1000) / 10 : null,
+        memoryUsedPct: used,
         swapUsedPct: memory?.ok ? memory.value.swapUsedPct : null,
         swapoutMbPer300s: memory?.ok ? memory.value.swapoutMbPer300s : null,
       }

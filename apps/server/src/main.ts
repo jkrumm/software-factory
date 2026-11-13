@@ -185,6 +185,7 @@ async function main(): Promise<void> {
     host: hostReader({ sysctlBin: planningEnv.sysctlBin, minSampleMs: 0 }),
     sysctlBin: planningEnv.sysctlBin,
     psBin: process.env.FACTORY_PS_BIN ?? '/bin/ps',
+    vmStatBin: process.env.FACTORY_VM_STAT_BIN,
   })
   const hostProcesses = processTable({
     rows: () => hostSamples.rows(),
