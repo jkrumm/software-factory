@@ -376,3 +376,67 @@ rows:
       why: "The owner reviews when there is real work to judge; v1 is that."
       change: "Check every point of the owner's review of 2026-11-09 (apps/console/DESIGN.md 'What v0 got wrong') against the live Console; write a Report artifact with screenshots of every screen at 1800x1200 dark and light and on the phone, the measured interaction times, what is still not built, and at most three questions worth his time; ask for his verdict through the artifact page."
       acceptance: "The owner's verdict is recorded; his comments become signals on this repo."
+  # The throughput loop: measure, account, control, improve (Spec artifact_01a1d638-1830-73c7-b2f3-e439055e6d39, verdict
+  # with notes 2026-11-13; research docs/research/2026-11-13-throughput-tooling.md). Every control row runs in shadow
+  # first: it records what it would have decided beside the live rule for 48 hours and switches on only if swapouts and
+  # pressure did not rise in the minutes it would have admitted more. The boot grace (issue 1039) and the swap gates stay
+  # the floor. Moving tenants off the mini (the Colima VMs, the company services) is the vps plan of issue 1050, which the
+  # owner asked to combine with this one: its figures come from tp-measure, its moves are not rows here.
+  - key: tp-measure
+    issue: 1044
+  - key: tp-account
+    after: [tp-measure]
+    title: "Throughput: where a lead's hours and a project's slot-minutes go"
+    facts:
+      why: "Of about 260 lead-hours in two days (2026-11-11 to 13) 35 h were model turns, 68 h test steps and 22 h slot waits; the rest (CI, the merge lock, the owner, idle) is recorded nowhere, so nothing can say which wait to cut."
+      what: "apps/server/src/read/throughput.ts and its contract model (the `lead` and `project` parts beside `host`), the merge lock (apps/cli/src/deploy-lock.ts) and a table for its wait and hold, the self-watch's CI reads for a CI-run ledger per head, docs/architecture.md."
+      change: "Split each Issue's lead wall time into in a turn, in a step, waiting for a slot, for CI, for the merge lock, for the owner, and idle, from lead_hook_events, step_costs, a new merge-lock record (wait and hold per lead, written by `factory merge-lock`) and a CI-run ledger (duration, queue, result per head). Add a project scorecard to `factory read throughput`: slot-minutes per closed Issue, check p50 and p90 per tier, failed-run minutes, peak memory, slot wait, CI duration, the local to CI split, and the lead time split."
+      acceptance: "For every Issue closed in a seeded week the split sums to the lead's wall time within 2% (a test restates it in SQL); `factory read throughput` carries the scorecard per project; make check-fast passes and CI is green."
+  - key: tp-leads
+    after: [tp-measure]
+    title: "Throughput: the load ceiling in multiples of the cores and a process-count cap, shadow first"
+    facts:
+      why: "Seats sat idle with work queued (249 idle seat-hours in two days), while the fixed load ceiling of 120 never bound: load reached 201 and 213 before the 2026-11-13 panic and 273 after boot. Issue 1040, which the Spec folded into this row, shipped first: lead admission against free memory alone (#291) and the footprint per lead (#293); what is left is the ceiling and the process storm."
+      what: "apps/server/src/domains/capacity/admission.ts and host.ts, apps/server/src/app/capacity-admit.ts, a shadow-decision table, the capacity settings, docs/architecture.md. The admission floor of issue 1039 (boot grace) stays."
+      change: "Express the load ceiling in multiples of the cores (default: no new lead above 3x) and add a cap on the host's process count (from host_samples.processes), because the panic class is process storms, not memory. Measure each repo's lead cost at rest from the lead class rows of host_class_samples (a lead with no step running) and show it beside the learned peak. Run both rules in shadow for 48 hours: store per admission minute what the shadow rule would have decided beside the live one; switch on only if swapouts and pressure level did not rise in the minutes it would have admitted more."
+      acceptance: "The shadow table shows 48 hours of decisions; after switch-on, idle seat-hours with work queued are under 10 a day and swapouts per day are not above the 7 days before (both from `factory read capacity-loop`); make check-fast passes and CI is green."
+  - key: tp-slots
+    after: [tp-measure]
+    title: "Throughput: the test-slot count follows memory pressure, steps run at background priority, shadow first"
+    facts:
+      why: "The two test slots were about 78% busy with a slot wait p90 of 7 minutes while the load average sat at 6 to 10 on 12 cores; one fixed count is either too tight on a quiet host or too loose under pressure."
+      what: "apps/server/src/domains/capacity/slots.ts, the slot grant, apps/cli/src/slot.ts (the run's priority), a shadow-decision table, docs/architecture.md."
+      change: "Move the slot count between 1 and a ceiling, AIMD on the pressure signals tp-measure records: one more after 5 quiet minutes at pressure level 1 with a waiter in line, halved at level 2 or when swap grows, one at level 4; no extra slot above 2x the cores in load. The learned-peak fit of a step stays. Run steps under `taskpolicy -b` once a test on this host shows interactive sessions stay responsive under a full test load. Shadow 48 hours first, as tp-leads."
+      acceptance: "After switch-on, the slot wait p90 is under 2 minutes over 7 days and no minute is at pressure level 4 (`factory read throughput`, `factory read capacity-loop`); the taskpolicy test is in the Report; make check-fast passes and CI is green."
+  - key: tp-tests
+    after: [tp-measure]
+    title: "Throughput: test results per run, flake rate and failed-run minutes"
+    facts:
+      why: "Failed local runs cost slot-minutes (software-factory's full check failed in 63% of runs before check tiers), and a flaky test cannot be told from a broken one without results per test."
+      what: "`factory slot run` (apps/cli/src/slot.ts) collects JUnit files the step names, a new results table, apps/server/src/read/throughput.ts, docs/architecture.md."
+      change: "Have bun test, Playwright and pytest write JUnit in the repos' check targets (a convention in docs/plan.md's check tiers), let `factory slot run` post the JUnit of its run beside the step cost, and store one row per test result (OTel `cicd.*` names where they exist). Derive the flake rate (the same commit with both results) and the minutes lost to failed runs per project into the scorecard."
+      acceptance: "A seeded flaky test is named in `factory read throughput` within a day of its first flake; the failed-run minutes per project match step_costs in a test; make check-fast passes and CI is green."
+  - key: tp-alerts
+    after: [tp-measure]
+    title: "Throughput: runaway daemons, swap growth and process storms raise door signals"
+    facts:
+      why: "The 2026-11-13 panic was preceded by hours of load above 200; reports of the same watchdog panic name daemons (fseventsd) growing by many GiB. Nothing tells the owner while it happens."
+      what: "The host loop (apps/server/src/app/loops/host.ts), host_process_samples and host_samples, the signal intake, docs/architecture.md."
+      change: "Raise one signal (deterministic fingerprint per process or condition) when a process grows by more than 1 GiB in an hour (from host_process_samples), swap grows for 15 minutes in a row, or the process count passes the cap of tp-leads. A signal repeats only after the condition cleared."
+      acceptance: "A drill process growing by 1 GiB an hour raises exactly one signal; a seeded swap rise of 15 minutes raises one; make check-fast passes and CI is green."
+  - key: tp-loop
+    after: [tp-account, tp-tests]
+    title: "Throughput: a daily ranking of what costs most, one improvement Issue per project, and a ledger that checks the after"
+    facts:
+      why: "Measured costs only pay off when someone acts on the largest one and checks it moved; the retro does this weekly and by hand."
+      what: "A new daily loop (apps/server/src/app/loops/), the retro's markers (apps/server/src/domains/loops/retro.ts: `kpi= before= direction=` plus `after=`), project.yaml `budgets:`, docs/architecture.md, docs/plan.md."
+      change: "Each day rank findings by cost without a model: slot-minutes of failed runs, slot-minutes per closed Issue against the project's 14-day median, a step's peak memory, a class over its budget, a process growing without bound, queued hours by reason. Keep one open improvement Issue per project, filed with the measured before, the target and the query. Three days after its ship the ledger reads the after and reopens the finding if it did not move. `budgets: { fast: 90s, peak: 2GiB, fail: 10% }` in project.yaml makes a breach a signal the day it happens."
+      acceptance: "The first three improvement Issues carry their before and, three days after their ship, their after; a seeded budget breach raises one signal the same day; make check-fast passes and CI is green."
+  - key: tp-console
+    after: [tp-account, tp-loop]
+    title: "Throughput: a Console page and the retro's section"
+    facts:
+      why: "The owner reads the factory on the Console; throughput needs one page that shows where the host's memory and the leads' hours go, against budgets."
+      what: "apps/console (a new route under apps/console/DESIGN.md's rules), the retro bundle (apps/server/src/read/retro.ts), tests/e2e."
+      change: "Build the page from `factory read throughput`: footprint by class against the class budgets, the top tenants and processes, the pressure and swap timeline, the lead time split and the project scorecard, and the open improvement Issues with their before and after. Add the same figures to the weekly retro's bundle. Load the dataviz skill first; screenshots at 1800x1200 dark and light."
+      acceptance: "Playwright on seeded rows; screenshots in evidence; the owner's verdict on the page is recorded."
