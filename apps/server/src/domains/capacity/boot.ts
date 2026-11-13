@@ -1,3 +1,5 @@
+import { SEAT_SAMPLE_MAX_AGE_MS, SEAT_SAMPLES } from './seats.ts'
+
 /**
  * The boot grace (Issue 1039). Right after the host boots, hc-resume brings every session back at once and the host
  * is busy for minutes; the factory has no say in that, but it can start nothing new on top of it. While the uptime is
@@ -6,10 +8,9 @@
  * `BOOT_ADMIT_GAP_MS`. Leads that resume are not touched: they hold their seats as always.
  */
 export const BOOT_GRACE_MS = 30 * 60_000
-/** Minute samples, since the boot, that must all be calm. */
-export const BOOT_CALM_SAMPLES = 5
-/** None of them may be older than this: a gap in the minute samples says nothing. */
-export const BOOT_SAMPLE_MAX_AGE_MS = 6 * 60_000
+/** Minute samples, since the boot, that must all be calm: the seats' five, none older than the seats' six minutes. */
+export const BOOT_CALM_SAMPLES = SEAT_SAMPLES
+export const BOOT_SAMPLE_MAX_AGE_MS = SEAT_SAMPLE_MAX_AGE_MS
 /** The newest sample's memory in use must be below this share of RAM, percent. */
 export const BOOT_MEMORY_PCT = 80
 /** Once calm, one new lead per this long until the grace ends. */
