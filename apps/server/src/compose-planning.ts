@@ -73,7 +73,6 @@ export function composePlanning(input: {
     loadCeiling: settings.loadCeiling,
     memoryCeilings: settings.memoryCeilings,
     seatsMaxBonus: settings.seatsMaxBonus,
-    slots: settings.slots,
   }
   const host = hostReader({ sysctlBin: settings.sysctlBin, minSampleMs: settings.memorySampleMs })
   const capacity = {
@@ -141,7 +140,7 @@ export function composePlanning(input: {
         }),
     },
     capacity: {
-      limits: { ...limits, slotsMax: settings.slotsMax },
+      limits: { ...limits, slots: settings.slots, slotsMax: settings.slotsMax },
       state: () => capacityState(capacity),
       refresh: () => refreshState(capacity),
       admit: () => admissionPass(capacity),

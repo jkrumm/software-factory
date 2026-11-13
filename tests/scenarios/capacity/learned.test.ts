@@ -65,8 +65,8 @@ test('a heavy repo whose second lead would not fit stays queued with the numbers
       INSERT INTO factory.lead_samples (at, worktree, repo, issue, attempt, rss_mib, procs)
       VALUES (now() - ${index + 1} * interval '1 day', ${`/wt/small-${index}`}, ${'small'}, ${9100 + index}, 1, 400, 2)`
   }
-  // 32 GiB, 5 % in use
-  await hostSamples([{ load: 1, used: 5 }])
+  // 32 GiB, 50 % in use
+  await hostSamples([{ load: 1, used: 50 }])
 
   const first = await queued('heavy', 'the lone heavy lead')
   expect((await admit()).admitted.map((a) => a.issue)).toEqual([first])
@@ -78,7 +78,6 @@ test('a heavy repo whose second lead would not fit stays queued with the numbers
   expect(reasonOf(answer, second)).toMatchObject({
     kind: 'memory',
     message:
-      `memory: a lead of heavy takes ~17.6 GiB (p80 of 4 past leads), the host has 30.4 GiB free ` +
-      'after 18 GiB the running leads will still grow, headroom 2.6 GiB',
+      `memory: a lead of heavy takes ~17.6 GiB (p80 of 4 past leads), the host has 16 GiB free, ` + 'headroom 2.6 GiB',
   })
 }, 60_000)

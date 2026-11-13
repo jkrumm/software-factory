@@ -27,7 +27,10 @@ export interface Refusal {
   opensAt: Date | null
 }
 
-/** What a repo's lead is learned to take, against what the host has free; every figure in MiB. */
+/**
+ * What a repo's lead is learned to take, against what the host has free; every figure in MiB. The running leads' test
+ * peaks are not reserved here: tests run inside the host's test slots, and the slot grant checks their memory.
+ */
 export interface LeadFit {
   repo: string
   /** the learned p80 of the candidate's repo; null: fewer than three attempts */
@@ -36,8 +39,6 @@ export interface LeadFit {
   attempts: number
   /** free by the newest host sample; null: unknown */
   freeMib: number | null
-  /** what the running leads are learned to take on beyond what they hold now */
-  growthMib: number
   headroomMib: number
   /** the leads that hold a claim; a host that runs none always has room for one */
   running: number
@@ -132,11 +133,10 @@ const gib = (mib: number): number => Math.round((mib / 1024) * 10) / 10
 /** The refusal of a lead that would not fit by what its repo's leads are learned to take; null: it fits or nothing is known. */
 function fitRefusal(fit: LeadFit): string | null {
   if (fit.candidateMib === null || fit.freeMib === null) return null
-  if (fit.running === 0 && fit.growthMib === 0) return null
-  if (fit.candidateMib + fit.growthMib <= fit.freeMib - fit.headroomMib) return null
+  if (fit.running === 0) return null
+  if (fit.candidateMib <= fit.freeMib - fit.headroomMib) return null
   return (
     `memory: a lead of ${fit.repo} takes ~${gib(fit.candidateMib)} GiB (p80 of ${fit.attempts} past leads), ` +
-    `the host has ${gib(fit.freeMib)} GiB free after ${gib(fit.growthMib)} GiB the running leads will still grow, ` +
-    `headroom ${gib(fit.headroomMib)} GiB`
+    `the host has ${gib(fit.freeMib)} GiB free, headroom ${gib(fit.headroomMib)} GiB`
   )
 }
