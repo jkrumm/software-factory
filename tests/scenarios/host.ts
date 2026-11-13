@@ -64,6 +64,13 @@ const LSOF = (host: string) => `#!/bin/sh
 cat "${host}/lsof.txt"
 `
 
+/** `top -l 1 -n <count> -stats pid,mem`: the footprints in `top.txt` under top's own header; a file `top.fail` makes it fail. */
+const TOP = (host: string) => `#!/bin/sh
+[ -e "${host}/top.fail" ] && exit 1
+printf 'Processes: 10 total\\n\\nPID    MEM  \\n'
+cat "${host}/top.txt"
+`
+
 const PICKER = (host: string) => `#!/bin/sh
 case "$1" in
   rank) cat "${host}/rank.json";;
@@ -78,6 +85,7 @@ export const hostEnv = (bin: string): Record<string, string> => ({
   FACTORY_PS_BIN: join(dir(bin), 'ps'),
   FACTORY_VM_STAT_BIN: join(dir(bin), 'vm_stat'),
   FACTORY_LSOF_BIN: join(dir(bin), 'lsof'),
+  FACTORY_TOP_BIN: join(dir(bin), 'top'),
   FACTORY_MEMORY_SAMPLE_MS: '0',
   FACTORY_ACCOUNTS_FILE: join(dir(bin), 'registry.json'),
 })
@@ -128,22 +136,33 @@ export interface FakeProcess {
   pid: number
   ppid: number
   rssKib: number
+  /** what `top` lists for it (physical footprint); a process left without one is not in `top.txt` */
+  footprintKib?: number
   cwd: string
   command?: string
 }
 
-/** What `ps` and `lsof` answer from now on: the default busy host plus these processes; `lsofFails` makes `lsof` exit 1. */
+/**
+ * What `ps`, `lsof` and `top` answer from now on: the default busy host plus these processes; `lsofFails` makes `lsof`
+ * exit 1 and `topFails` makes `top` exit 1.
+ */
 export async function setProcesses(
   bin: string,
   processes: FakeProcess[],
-  options: { lsofFails?: boolean } = {},
+  options: { lsofFails?: boolean; topFails?: boolean } = {},
 ): Promise<void> {
   const host = dir(bin)
   const rows = processes.map((p) => `${p.pid} ${p.ppid} 0.0 ${p.rssKib} ${p.command ?? '/opt/tools/bin/bun'}`)
   await writeFile(join(host, 'ps.txt'), `${PS_ROWS}${rows.join('\n')}\n`)
   await writeFile(join(host, 'lsof.txt'), processes.map((p) => `p${p.pid}\nn${p.cwd}\n`).join(''))
+  await writeFile(
+    join(host, 'top.txt'),
+    processes.flatMap((p) => (p.footprintKib === undefined ? [] : [`${p.pid}  ${p.footprintKib}K\n`])).join(''),
+  )
   await rm(join(host, 'lsof.fail'), { force: true })
+  await rm(join(host, 'top.fail'), { force: true })
   if (options.lsofFails) await writeFile(join(host, 'lsof.fail'), '')
+  if (options.topFails) await writeFile(join(host, 'top.fail'), '')
 }
 
 /** One process in the reaper's table: its pid, age ("mm:ss" form) and the environment words appended to its command. */
@@ -186,10 +205,12 @@ export async function installHost(bin: string): Promise<void> {
   await writeFile(sysctl, SYSCTL(host))
   await writeFile(join(host, 'ps'), PS(host))
   await writeFile(join(host, 'lsof'), LSOF(host))
+  await writeFile(join(host, 'top'), TOP(host))
   await writeFile(join(host, 'vm_stat'), VM_STAT)
   await chmod(join(host, 'vm_stat'), 0o755)
   await chmod(join(host, 'ps'), 0o755)
   await chmod(join(host, 'lsof'), 0o755)
+  await chmod(join(host, 'top'), 0o755)
   await setProcesses(bin, [])
   await setSessionProcesses(bin, [])
   await chmod(picker, 0o755)

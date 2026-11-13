@@ -1,8 +1,12 @@
-/** One process of the host's table: its parent, its resident memory in KiB and the directory it works in (null: unknown). */
+/**
+ * One process of the host's table: its parent, its resident memory in KiB, its physical footprint in KiB (null: `top`
+ * did not list it) and the directory it works in (null: unknown).
+ */
 export interface ProcInfo {
   pid: number
   ppid: number
   rssKib: number
+  footprintKib: number | null
   cwd: string | null
 }
 
@@ -15,7 +19,13 @@ export interface WorktreeRef {
 }
 
 export interface LeadCost extends WorktreeRef {
+  /** the summed resident memory: shared pages are counted once per process */
   rssMib: number
+  /**
+   * The summed physical footprint, which leaves shared clean pages out; a process `top` did not list counts at its
+   * resident size. Null when no process of the tree had a footprint (`top` failed): then only RSS is known.
+   */
+  footprintMib: number | null
   procs: number
 }
 
@@ -27,7 +37,7 @@ const trimmed = (path: string): string => (path.length > 1 ? path.replace(/\/+$/
  * What each lead's process tree costs. A process belongs to the worktree with the longest path that contains its working
  * directory (on a path boundary: `/a/b` does not contain `/a/bc`); everything started under it follows, whatever its own
  * directory is (a browser a lead launched). A process is counted once, for the first worktree in the list that claims it.
- * A worktree with no process is left out.
+ * A worktree with no process is left out. Each tree is summed twice, as resident memory and as physical footprint.
  */
 export function attribute(procs: readonly ProcInfo[], worktrees: readonly WorktreeRef[]): LeadCost[] {
   const paths = worktrees.map((w) => trimmed(w.path))
@@ -52,6 +62,8 @@ export function attribute(procs: readonly ProcInfo[], worktrees: readonly Worktr
   const costs: LeadCost[] = []
   worktrees.forEach((worktree, index) => {
     let rssKib = 0
+    let footprintKib = 0
+    let measured = 0
     let count = 0
     const stack = [...(roots.get(index) ?? [])]
     while (stack.length > 0) {
@@ -59,10 +71,19 @@ export function attribute(procs: readonly ProcInfo[], worktrees: readonly Worktr
       if (claimed.has(proc.pid)) continue
       claimed.add(proc.pid)
       rssKib += proc.rssKib
+      footprintKib += proc.footprintKib ?? proc.rssKib
+      if (proc.footprintKib !== null) measured += 1
       count += 1
       stack.push(...(children.get(proc.pid) ?? []))
     }
-    if (count > 0) costs.push({ ...worktree, rssMib: Math.round(rssKib / 1024), procs: count })
+    if (count > 0) {
+      costs.push({
+        ...worktree,
+        rssMib: Math.round(rssKib / 1024),
+        footprintMib: measured > 0 ? Math.round(footprintKib / 1024) : null,
+        procs: count,
+      })
+    }
   })
   return costs
 }

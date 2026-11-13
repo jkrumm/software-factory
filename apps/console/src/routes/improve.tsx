@@ -771,7 +771,10 @@ function CapacityTables({ model }: { model: CapacityLoopModel }) {
           ) : (
             <div className={cn(PANEL, 'overflow-x-auto')} style={PANEL_SHADOW}>
               <table className="w-full text-sm">
-                <caption className="sr-only">Memory a lead takes per repo, from its process tree samples</caption>
+                <caption className="sr-only">
+                  Memory a lead takes per repo, from its process tree samples, as summed resident memory and as physical
+                  footprint
+                </caption>
                 <thead className="text-left text-xs text-muted-foreground">
                   <tr>
                     <th scope="col" className="px-4 py-2 font-medium">
@@ -786,6 +789,12 @@ function CapacityTables({ model }: { model: CapacityLoopModel }) {
                     <th scope="col" className="px-4 py-2 text-right font-medium">
                       Last
                     </th>
+                    <th scope="col" className="px-4 py-2 text-right font-medium">
+                      Footprint 80th pct
+                    </th>
+                    <th scope="col" className="px-4 py-2 text-right font-medium">
+                      Footprint / RSS
+                    </th>
                   </tr>
                 </thead>
                 <tbody>
@@ -797,6 +806,12 @@ function CapacityTables({ model }: { model: CapacityLoopModel }) {
                       <td className="px-4 py-2 text-right tabular-nums">{cost.attempts}</td>
                       <td className="px-4 py-2 text-right tabular-nums">{mibWords(cost.peakMibP80)}</td>
                       <td className="px-4 py-2 text-right tabular-nums">{mibWords(cost.lastPeakMib)}</td>
+                      <td className="px-4 py-2 text-right tabular-nums">
+                        {cost.footprintMibP80 === null ? 'none yet' : mibWords(cost.footprintMibP80)}
+                      </td>
+                      <td className="px-4 py-2 text-right tabular-nums">
+                        {cost.footprintToRss === null ? 'none yet' : `${Math.round(cost.footprintToRss * 100)} %`}
+                      </td>
                     </tr>
                   ))}
                 </tbody>

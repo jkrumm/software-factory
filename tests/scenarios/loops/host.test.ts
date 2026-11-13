@@ -34,8 +34,22 @@ test('a lead is costed by its process tree and the minute carries the capacity f
   const worktree = attempt?.worktree_path as string
   expect(worktree).toContain('.claude/worktrees/')
   await setProcesses(lab.world.bin, [
-    { pid: 5001, ppid: 1, rssKib: 2 * 1024 * 1024, cwd: worktree, command: '/Applications/Claude Code.app/claude' },
-    { pid: 5002, ppid: 5001, rssKib: 1024 * 1024, cwd: '/tmp/some-browser-profile', command: '/opt/chrome' },
+    {
+      pid: 5001,
+      ppid: 1,
+      rssKib: 2 * 1024 * 1024,
+      footprintKib: 1024 * 1024,
+      cwd: worktree,
+      command: '/Applications/Claude Code.app/claude',
+    },
+    {
+      pid: 5002,
+      ppid: 5001,
+      rssKib: 1024 * 1024,
+      footprintKib: 256 * 1024,
+      cwd: '/tmp/some-browser-profile',
+      command: '/opt/chrome',
+    },
     { pid: 5003, ppid: 1, rssKib: 512 * 1024, cwd: '/tmp/not-a-lead' },
   ])
 
@@ -43,9 +57,18 @@ test('a lead is costed by its process tree and the minute carries the capacity f
   expect(ran.error).toBeNull()
   expect(ran.summary).toContain('1 lead row(s)')
 
-  const rows = await sql()`SELECT worktree, repo, issue, attempt, rss_mib, procs FROM factory.lead_samples`
+  const rows =
+    await sql()`SELECT worktree, repo, issue, attempt, rss_mib, footprint_mib, procs FROM factory.lead_samples`
   expect(rows).toEqual([
-    { worktree, repo: 'app', issue: Number(lead.slice('issue_'.length)), attempt: 1, rss_mib: 3072, procs: 2 },
+    {
+      worktree,
+      repo: 'app',
+      issue: Number(lead.slice('issue_'.length)),
+      attempt: 1,
+      rss_mib: 3072,
+      footprint_mib: 1280,
+      procs: 2,
+    },
   ])
 
   const [claims] = await sql()`SELECT count(*)::int AS n FROM factory.capacity_claims`

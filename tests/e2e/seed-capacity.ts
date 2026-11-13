@@ -50,9 +50,9 @@ export async function seedCapacity(sql: SQL, now = Date.now()): Promise<void> {
   ]
   for (const [repo, attempt, peak] of leads)
     for (let m = 0; m < 3; m++)
-      await sql`INSERT INTO factory.lead_samples (at, worktree, repo, issue, attempt, rss_mib, procs)
+      await sql`INSERT INTO factory.lead_samples (at, worktree, repo, issue, attempt, rss_mib, footprint_mib, procs)
         VALUES (${minute(60 - attempt * 5 - (repo === 'zeta' ? 20 : 0), m)}, ${`/work/${repo}-${attempt}`}, ${repo}, ${attempt}, 1,
-          ${Math.round((peak * (m + 1)) / 3)}, 4)`
+          ${Math.round((peak * (m + 1)) / 3)}, ${repo === 'argo' ? Math.round(((peak * (m + 1)) / 3) * 0.6) : null}, 4)`
 
   const reaped: Array<[number, number, string, string, string]> = [
     [20, 501, 'node', 'SIGTERM', 'session'],

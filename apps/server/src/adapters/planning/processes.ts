@@ -17,9 +17,19 @@ export function parseLsofCwd(output: string): Map<number, string> {
   return cwds
 }
 
-/** The process table joined with each process's directory. */
-export const joinProcesses = (rows: readonly PsRow[], cwds: ReadonlyMap<number, string>): ProcInfo[] =>
-  rows.map((row) => ({ pid: row.pid, ppid: row.ppid, rssKib: row.rssKib, cwd: cwds.get(row.pid) ?? null }))
+/** The process table joined with each process's directory and, when `top` could be read, its physical footprint (null for a process top did not list). */
+export const joinProcesses = (
+  rows: readonly PsRow[],
+  cwds: ReadonlyMap<number, string>,
+  footprints: ReadonlyMap<number, number> | null = null,
+): ProcInfo[] =>
+  rows.map((row) => ({
+    pid: row.pid,
+    ppid: row.ppid,
+    rssKib: row.rssKib,
+    footprintKib: footprints?.get(row.pid) ?? null,
+    cwd: cwds.get(row.pid) ?? null,
+  }))
 
 /** The working directory of every process `lsof` can see; null when it timed out or failed outright. */
 export async function readCwds(lsofBin: string, timeoutMs: number): Promise<Map<number, string> | null> {
@@ -36,6 +46,8 @@ export async function readCwds(lsofBin: string, timeoutMs: number): Promise<Map<
 export interface ProcessTableOptions {
   /** the rows of the host's one `ps` (cached by `hostWatch`: no second `ps` per tick) */
   rows: () => Promise<PsRow[] | null>
+  /** the physical footprint of every process in KiB; null (or not given) leaves every footprint unknown */
+  footprints?: () => Promise<ReadonlyMap<number, number> | null>
   lsofBin: string
   timeoutMs?: number
 }
@@ -52,8 +64,11 @@ export function processTable(options: ProcessTableOptions): ProcessTable {
     async read() {
       const rows = await options.rows()
       if (rows === null) return null
-      const cwds = await readCwds(options.lsofBin, timeoutMs)
-      return cwds === null ? null : joinProcesses(rows, cwds)
+      const [cwds, footprints] = await Promise.all([
+        readCwds(options.lsofBin, timeoutMs),
+        options.footprints ? options.footprints().catch(() => null) : null,
+      ])
+      return cwds === null ? null : joinProcesses(rows, cwds, footprints)
     },
   }
 }

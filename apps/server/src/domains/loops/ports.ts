@@ -96,6 +96,8 @@ export interface LeadSampleRow {
   issue: number | null
   attempt: number | null
   rssMib: number
+  /** the physical footprint; null when `top` could not be read (`migrations/1021_lead_footprint.sql`) */
+  footprintMib: number | null
   procs: number
 }
 
