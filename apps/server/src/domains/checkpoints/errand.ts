@@ -13,11 +13,14 @@ export interface ErrandInput {
 /** An Errand as a lead raises it: also what it tried before it asked for a person's hands. */
 export interface ErrandRaised extends ErrandInput {
   tried: string
+  /** a shell command that exits 0 while the Errand is still needed, for what a machine can observe; null when there is none */
+  check: string | null
 }
 
 export const MAX_SUMMARY = 200
 export const MAX_DETAIL = 4000
 export const MAX_TRIED = 2000
+export const MAX_CHECK = 2000
 
 /** Reads an Errand: one line for the owner, and the steps his hands must take. */
 export function readErrand(raw: unknown): Result<ErrandRaised, MissingFields> {
@@ -31,10 +34,12 @@ export function readErrand(raw: unknown): Result<ErrandRaised, MissingFields> {
   const tried = typeof body.tried === 'string' ? body.tried.trim() : ''
   if (tried === '') problems.push('tried (what you ran or checked before asking for a person\'s hands: --tried "...")')
   if (tried.length > MAX_TRIED) problems.push(`tried (longer than ${MAX_TRIED} characters)`)
+  const check = typeof body.check === 'string' && body.check.trim() !== '' ? body.check.trim() : null
+  if (check !== null && check.length > MAX_CHECK) problems.push(`check (longer than ${MAX_CHECK} characters)`)
   if (problems.length > 0) {
     return err({ kind: 'missing_field', fields: problems, detail: `an Errand needs: ${problems.join(', ')}` })
   }
-  return ok({ summary, detail, tried })
+  return ok({ summary, detail, tried, check })
 }
 
 interface HostClass {
@@ -200,6 +205,33 @@ export function screenByRule(input: ErrandInput): { verdict: 'turn_away'; reason
     return COMMAND_WORDS.includes(first)
   })
   return named ? { verdict: 'turn_away', reason: TURN_AWAY_BY_RULE } : null
+}
+
+/** A pull request or merge request named in the text: its URL, else `#<number>` after the words that name one. */
+const PR_URL = /https?:\/\/[^\s)>\]"'`]+\/(?:pull|-\/merge_requests)\/\d+/i
+const PR_NUMBER = /\b(?:pr|pull request|mr|merge request)\s*#?(\d+)\b|\bpull\/(\d+)\b/i
+/** What the Errand asks of the owner about it: approve it, merge it (an admin merge), or bypass the review rule. */
+const REVIEW_ASK =
+  /\bapprov(?:e|es|ed|al|ing)\b|\badmin[- ]?merge|\bbypass(?:ing)?\b|\bmerge\b|\bsquash\b|\bsign[- ]?off\b|\blgtm\b|\brequired review|\breview rule/
+
+/**
+ * A pull request's review is the reviewer's, not the owner's. An Errand that asks the owner to approve or merge a named pull
+ * request, or to bypass its review rule, is turned back (the burn-in of 2026-11-13: the owner was asked to approve his own
+ * work account's pull request in a work repo, which GitHub refuses, and to bypass the team's review). The Issue waits on the
+ * pull request instead: the `reviews` loop wakes it when the reviewer acts. Null when the text names no pull request or asks
+ * for something else; a text with no number is left to the screen and the lead brief (`factory issue defer --review`).
+ */
+export function screenByReview(input: ErrandInput): { review: string; reason: string } | null {
+  const text = `${input.summary}\n${input.detail ?? ''}`
+  if (!REVIEW_ASK.test(text.toLowerCase())) return null
+  const url = PR_URL.exec(text)?.[0]
+  const number = PR_NUMBER.exec(text)
+  const review = url ?? (number ? `#${number[1] ?? number[2]}` : null)
+  if (review === null) return null
+  return {
+    review,
+    reason: `A pull request's review is a reviewer's, not the owner's: he cannot approve a pull request his own account opened, and a review rule is never bypassed, so this is not a person's hands. The Issue now waits on the review of ${review}: the factory polls it every 15 minutes and tells you when it is approved, gets changes requested or a new review comment, merges or closes. Next time use \`factory issue defer --review <url>\` instead of an Errand.`,
+  }
 }
 
 export type ErrandScreenChecked =

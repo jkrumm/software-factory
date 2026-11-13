@@ -172,10 +172,12 @@ export interface ErrandRecord {
   runAt: Date | null
   runHead: string | null
   runTail: string | null
+  /** the last time the desk pass pushed its command to the MacBook */
+  pushedAt: Date | null
 }
 
-export type ClosedKind = 'done' | 'not_needed' | 'expired' | 'superseded' | 'turned_away'
-export type ClosedBy = 'owner' | 'check' | 'judge' | 'loop' | 'request'
+export type ClosedKind = 'done' | 'not_needed' | 'expired' | 'superseded' | 'turned_away' | 'turned_back'
+export type ClosedBy = 'owner' | 'orchestrator' | 'check' | 'judge' | 'loop' | 'request'
 
 /** `failing`: unsent after the attempts a healthy line needs; it is still tried, and the error says why. */
 export type PageStatus = 'pending' | 'sent' | 'failing' | 'cancelled'
@@ -270,6 +272,10 @@ export interface CheckpointStore {
   recordCheck(id: ErrandId, run: { at: Date; note: string; fails: number }): Promise<boolean>
   /** the still-needed workflow looked and kept it */
   recordNeeded(id: ErrandId, run: { at: Date; note: string }): Promise<boolean>
+  /** the desk pass pushed the Errand's command to the MacBook; false when it is done already */
+  recordPush(id: ErrandId, at: Date): Promise<boolean>
+  /** every open Errand, an Issue's and a request, oldest first */
+  openErrands(limit: number): Promise<ErrandRecord[]>
   /** the open Errands the screen has not let through, oldest first, whose retry is due */
   unscreenedErrands(now: Date, limit: number): Promise<ErrandRecord[]>
   lockErrand(id: ErrandId): Promise<ErrandRecord | null>
@@ -337,4 +343,16 @@ export interface CheckRunner {
 /** The owner's line. One call, never inside a transaction. */
 export interface Notifier {
   send(page: Page): Promise<Result<void>>
+}
+
+/** Pushes a request's command to the MacBook as a dialog the owner answers (`ask-human.sh push <errand>`): one call, never inside a transaction. The answer closes the Errand on its own. */
+export interface PushPort {
+  push(errand: ErrandId): Promise<Result<{ exit: number }>>
+}
+
+/** The desk pass's own record: when it last ran, and when the owner last came back after a long absence. */
+export interface DeskStore {
+  lastPassAt(): Promise<Date | null>
+  recordPass(at: Date): Promise<void>
+  returnedAt(): Promise<Date | null>
 }

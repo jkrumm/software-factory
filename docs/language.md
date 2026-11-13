@@ -49,7 +49,7 @@ check, `docs/architecture.md`).
 | **Attempt** | Lead number *n* of an Issue | |
 | **Session state** | What a lead's session is, derived from its hook events: `starting` (no hook yet), `working` (a turn is running), `idle` (its last turn ended), `compacted` (its context was just compacted, no turn since), `walled` (its account hit a limit), `gone` (its session ended or its terminal is gone) | |
 | **Delivery** | What was typed into a lead: its brief, or a note. Keyed, so a replay types nothing twice | |
-| **Defer** | The lead's verb for a wait it can name: until a time, or until other Issues close (`factory issue defer`). The event is `deferred` | The old verb `wait` |
+| **Defer** | The lead's verb for a wait it can name: until a time, until other Issues close, or on the review of its pull request (`--review`, which is the `external` wait) (`factory issue defer`). The event is `deferred` | The old verb `wait` |
 | **Steward** | The supervisor loop over stalled Issues. Acts deterministically first (wake, re-check, requeue, deliver) and asks an agw workflow when a call needs judgment | "Never a model" |
 | **Judge** | The agw workflow that tries to settle a Decision before the owner sees it | Ask judge |
 | **Loop** | A named recurring job with a trigger, a budget and one way to act. Its judgment is an agw workflow with its own prompt, tools and skills | Scorer, babysitter |
@@ -73,6 +73,9 @@ check, `docs/architecture.md`).
 | **Still-needed look** | The `factory-errand-needed` workflow reading a request that has no check, once a day from its first day: only a `not_needed` with a reason closes it. Closures by the check, the look, the expiry or a newer request are the "Errands closed without you" band of the next since read | |
 | **Back at desk** | The Needs-you view (`?mode=desk`) of the open Errands by where the hands must be, each with its command to copy and Done and Not needed buttons | |
 | **Turn away** | An Errand the screen refuses because a token or CLI could do it: the Issue's errand wait ends and the lead hears the reason | |
+| **Turn back** | The owner's or the orchestrator's verb that ends an Errand wait without doing it (`factory errand turn-back <id> --note ...`, the Console's Turn back button): the Errand closes `turned_back` and the lead hears the note as its next turn | |
+| **Review wait** | The `external` wait: the Issue's pull request waits on a required review by someone else (a lead's `defer --review`, or an Errand that asks the owner to approve or merge a pull request, which the screen turns away). The `reviews` loop reads it every 15 minutes through `gh` or `glab` and wakes the lead on an approval, a request for changes, a new review comment, a merge or a close. It is never in Needs you | An Errand to approve one's own pull request |
+| **Desk pass** | The `desk` loop's one pass over every open Errand when the owner reads the Console after two hours or more away, and every six hours otherwise: each check runs (the resolved ones close and wake their lead), the rest are screened again, and one MacBook command is pushed through `ask-human.sh push` | |
 | **Verdict** | The owner's answer on an artifact: Looks good, With notes, Changes, No longer applies | |
 | **Taste pass** | The weekly retro's reading of the owner's verdict notes and comments: a preference seen twice becomes a rule in the repo's `AGENTS.md` or `DESIGN.md` | |
 | **Worth asking** | The owner's flag on an answered Decision. Feeds the ledger and the Judge's precedent | |
@@ -133,7 +136,8 @@ checkpoint is for that one only: a late one the factory sent is ignored, and a l
 | `submitted` | A Concept or Spec is handed over for review | lead |
 | `verdict_given` | The owner's Verdict on it; with Decisions still open the wait goes on until the last answer, and the lead hears verdict and answers in one note. The factory sends it for a Concept or Spec nobody answered in 24 hours, flagged Issue or not (the lead goes on with its defaults) and to withdraw a review its Issue moved past | owner, factory |
 | `errand_raised` | The lead needs the owner's hands | lead |
-| `errand_done` | The owner did the Errand, or the screen turned it away (`turnedAway`: the reason) | owner, judge, factory |
+| `errand_done` | The owner did the Errand, or something ended its wait without his hands: the screen turned it away (`turnedAway`: the reason; with `awaits` the Issue then waits on that pull request's review), or the desk pass found its check no longer needed (`resolved`) | owner, judge, factory |
+| `errand_turned_back` | The owner or the orchestrator turned the Errand back: not done, and `note` says what to do instead; the lead hears it as its next turn | owner, orchestrator |
 | `deferred` | The lead waits until a time, or until other Issues close; the steward defers a working or watching Issue behind a queued Issue of its repo that waits for the claim it holds, and says why | lead, steward (behind Issues only; until a time only for a repeated `blocked` stall after a hold) |
 | `stalled` | A machine cause stopped the work: `wall`, `unreported`, `blocked` | factory, lead (`blocked`) |
 | `woken` | A wait that needs no person ended; it names the wait | factory, steward, owner |
@@ -181,11 +185,11 @@ stateDiagram-v2
   queued --> working: admitted
   queued --> closed: cancelled, closed
   working --> queued: lead_gone
-  working --> waiting: lead_gone (lead_gone), asked (decision), submitted (review), errand_raised (errand), deferred (timer, dependency), stalled (wall, unreported, blocked)
+  working --> waiting: lead_gone (lead_gone), asked (decision), submitted (review), errand_raised (errand), deferred (timer, dependency, external), stalled (wall, unreported, blocked)
   working --> watching: shipped
   working --> closed: cancelled, closed
   waiting --> queued: woken (lead_gone)
-  waiting --> working: answered (decision, review), verdict_given (review), errand_done (errand), woken (timer, dependency, wall, unreported, blocked, regressed)
+  waiting --> working: answered (decision, review), verdict_given (review), errand_done (errand), errand_turned_back (errand), woken (timer, dependency, wall, unreported, blocked, regressed, external)
   waiting --> watching: woken (dependency), shipped (timer)
   waiting --> closed: cancelled, closed (timer)
   watching --> working: regressed
@@ -206,7 +210,8 @@ stateDiagram-v2
 | `regressed` | no person | yes | woken by the steward, or turned into a Decision |
 | `decision` | a person | no | answered by standing policy, the Judge, a default, or the owner |
 | `review` | a person | no | verdict given on the Concept or Spec by the owner, and every Decision the lead raised about it answered |
-| `errand` | a person | no | errand done by the owner's hands |
+| `errand` | a person | no | errand done by the owner's hands, or turned back with a note |
+| `external` | no person | no | woken by the review poll when the pull request is approved, gets changes requested or a new review comment, merges or closes |
 
 Outcomes of `closed`: `done`, `dropped`, `healed`, `cancelled`.
 

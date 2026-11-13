@@ -20,6 +20,10 @@ import { hostWatch } from './adapters/planning/host-watch.ts'
 import { processTable } from './adapters/planning/processes.ts'
 import { postgresLoopStore } from './adapters/postgres/loop-store.ts'
 import { postgresVisitStore } from './adapters/postgres/visit-store.ts'
+import { postgresReviewStore } from './adapters/postgres/review-store.ts'
+import { postgresDeskStore } from './adapters/postgres/desk-store.ts'
+import { prReview } from './adapters/reviews/pr.ts'
+import { askHumanPush } from './adapters/shell/ask-human.ts'
 import { loadMigrations, migrate } from './adapters/postgres/migrate.ts'
 import { acquireProcessLock } from './adapters/postgres/process-lock.ts'
 import { postgresCapacityStore } from './adapters/postgres/capacity-store.ts'
@@ -59,7 +63,9 @@ import { gitMainCheckouts } from './adapters/quality/main-checkouts.ts'
 import { stewardPass, stewardSummary } from './app/loops/steward.ts'
 import { queuePass, queueSummary } from './app/loops/queue.ts'
 import { digestPass, digestPassSummary } from './app/loops/digest.ts'
+import { deskPass, deskSummary } from './app/loops/desk.ts'
 import { errandsPass, errandsSummary } from './app/loops/errands.ts'
+import { reviewsPass, reviewsSummary } from './app/loops/reviews.ts'
 import { screenPass, screenSummary } from './app/loops/screen.ts'
 import { triagePass, triageSummary } from './app/loops/triage.ts'
 import { FRICTION_WINDOW_DAYS } from './domains/loops/friction.ts'
@@ -150,6 +156,8 @@ async function main(): Promise<void> {
     loops: postgresLoopStore(tx),
     loopReads: loopReads(tx),
     visits: postgresVisitStore(tx),
+    reviews: postgresReviewStore(tx),
+    desk: postgresDeskStore(tx),
   }))
   // A test moves this clock to reach a date a real one would take 30 days to (settings refuse it outside test mode).
   const clock: Clock =
@@ -216,7 +224,7 @@ async function main(): Promise<void> {
     triage: agwAmend(agw),
   })
   const checkpointSettings = loadCheckpointSettings(process.env)
-  const checkpoints = checkpointUses({
+  const checkpointDeps = {
     ...writes,
     blobs: fileBlobStore(checkpointSettings.blobDir),
     consoleUrl: checkpointSettings.line.consoleUrl,
@@ -228,7 +236,8 @@ async function main(): Promise<void> {
     errandScreen: agwErrandScreen(agw),
     recheckAfterMs: loopSettings.recheckAfterMs,
     policies: checkpointSettings.policyFile ? fileStandingPolicies(checkpointSettings.policyFile) : planning.policies,
-  })
+  }
+  const checkpoints = checkpointUses(checkpointDeps)
   // One outbox runs every effect: the leads' tick, with quality's port for the Watch.
   const leads = composeLeads({
     sql,
@@ -593,6 +602,41 @@ async function main(): Promise<void> {
       },
     },
     {
+      // The Issues that wait on someone else's review of a pull request: each pull request is read through gh or glab, and an
+      // approval, a request for changes, a new review comment, a merge or a close wakes the lead.
+      name: 'reviews',
+      intervalMs: loopSettings.intervalMs.reviews,
+      onChange: false,
+      run: async () => {
+        const pass = await reviewsPass({
+          uow,
+          clock: writes.clock,
+          ids: writes.ids,
+          port: prReview({ workGhConfigDir: loopSettings.ghConfigDirWork }),
+        })
+        if (!pass.ok) return pass
+        said('reviews', pass.value.problems)
+        return ok(reviewsSummary(pass.value))
+      },
+    },
+    {
+      // The desk pass over the open Errands, when the owner is back after two hours or more and every six hours: checks, a second
+      // screen, and one MacBook command pushed. The loop asks every 15 minutes whether it is due.
+      name: 'desk',
+      intervalMs: loopSettings.intervalMs.desk,
+      onChange: false,
+      run: async () => {
+        const pass = await deskPass({
+          settle: checkpointDeps,
+          desk: uow,
+          push: askHumanPush({ bin: loopSettings.askHumanBin, home: process.env.HOME ?? '' }),
+        })
+        if (!pass.ok) return pass
+        said('desk', pass.value.problems)
+        return ok(deskSummary(pass.value))
+      },
+    },
+    {
       // Ends the processes of closed lead attempts (by session key and worktree, never by name): a browser a finished lead left
       // behind lives on under launchd otherwise.
       name: 'reaper',
@@ -764,7 +808,7 @@ async function main(): Promise<void> {
     })
 
   // The Console's listener: loopback too, published on the tailnet by the dotfiles-private serve row; the perimeter is the
-  // tailnet ACL, there is no per-request identity. Only reads and the owner's eight answer verbs (`WRITES` in console.ts) pass,
+  // tailnet ACL, there is no per-request identity. Only reads and the owner's nine answer verbs (`WRITES` in console.ts) pass,
   // and the owner token is held by this closure alone. It starts whenever the Console is built. It binds before
   // the loops start, so a bad port or a taken one refuses the boot before any pass has run.
   const consoleSettings = loadConsoleSettings(process.env)

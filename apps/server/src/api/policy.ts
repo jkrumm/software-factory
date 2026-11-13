@@ -112,6 +112,7 @@ export const POLICY: readonly Rule[] = [
   rule('DELETE', '/v1/artifacts/:id/annotations/:annotationId', PERSON),
   rule('POST', '/v1/artifacts/:id/verdict', PERSON),
   rule('POST', '/v1/errands/:id/done', PERSON),
+  rule('POST', '/v1/errands/:id/turn-back', OWNER),
   rule('POST', '/v1/checkpoints/pass', OWNER),
   rule('POST', '/v1/loops/:name/run', OWNER),
   rule('POST', '/signals/:id/promote', PERSON),

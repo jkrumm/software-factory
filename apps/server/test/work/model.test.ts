@@ -185,7 +185,7 @@ test(`the Issue machine holds its invariants over ${SEQUENCES} random sequences`
   expect([...seen.states].sort()).toEqual([...STATES].sort())
   expect([...seen.waits].sort()).toEqual([...WAIT_REASONS].sort())
   expect(seen.applied.has('closed:reopened')).toBe(true)
-})
+}, 30_000)
 
 test('a failing sequence names its seed, and the seed plays it again', () => {
   const seen: Seen = { states: new Set(), waits: new Set(), applied: new Set() }

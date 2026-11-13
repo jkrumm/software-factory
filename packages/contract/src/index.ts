@@ -60,6 +60,7 @@ export {
   ERRAND_HOSTS,
   ErrandBody,
   ErrandDoneBody,
+  ErrandTurnBackBody,
   ErrandList,
   ErrandReply,
   ErrandNeededAnswer,

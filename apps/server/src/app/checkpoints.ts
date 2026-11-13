@@ -933,7 +933,7 @@ export function raiseErrand(
       turnedAwayAt: null,
       source: null,
       command: null,
-      checkCommand: null,
+      checkCommand: read.value.check,
       host: null,
       expiresAt: null,
       requestKey: null,
@@ -949,6 +949,7 @@ export function raiseErrand(
       runAt: null,
       runHead: null,
       runTail: null,
+      pushedAt: null,
     })
     if (!stored) return err({ kind: 'version_conflict', issueId: input.issueId, expected: issue.version })
     const errand = await checkpoints.errand(id)
@@ -1039,9 +1040,16 @@ function keepOpen(deps: CheckpointDeps, errandId: ErrandId, why: KeptOpen): Prom
  */
 function closeErrand(
   deps: CheckpointDeps,
-  input: { errandId: ErrandId; note: string | null; outcome: ErrandOutcome },
+  input: {
+    errandId: ErrandId
+    note: string | null
+    outcome: ErrandOutcome | 'turned_back'
+    /** who closes it: the owner, or his delegate for a turn-back */
+    by?: 'owner' | 'orchestrator'
+  },
 ): Promise<CheckpointResult<ErrandWritten>> {
   const { outcome } = input
+  const by = input.by ?? 'owner'
   return deps.uow.run(async ({ work, checkpoints }) => {
     const errand = await checkpoints.errand(input.errandId)
     if (!errand) return err(notFound('Errand', input.errandId))
@@ -1053,12 +1061,15 @@ function closeErrand(
     const note = input.note?.trim() || null
     let move: IssueMove | null = null
     if (errand.issueId && issue && waitingOn(issue, 'errand', errand.id)) {
+      // a turn-back carries its note in `errand_done` itself, which the lead reads as one item
       const said =
-        outcome === 'not_needed'
-          ? `The owner says the Errand "${errand.summary}" is not needed${note ? `: ${note}` : ''}. Go on without it.`
-          : note
-            ? `The owner did the Errand "${errand.summary}": ${note}`
-            : null
+        outcome === 'turned_back'
+          ? null
+          : outcome === 'not_needed'
+            ? `The owner says the Errand "${errand.summary}" is not needed${note ? `: ${note}` : ''}. Go on without it.`
+            : note
+              ? `The owner did the Errand "${errand.summary}": ${note}`
+              : null
       if (said) {
         const noted = applied(
           await recordIn(work, deps, {
@@ -1074,19 +1085,33 @@ function closeErrand(
         await recordIn(work, deps, {
           issueId: errand.issueId,
           key: key('errand_done', errand.id),
-          event: { kind: 'errand_done', payload: { errand: errand.id }, actor: 'owner' },
+          event:
+            outcome === 'turned_back'
+              ? { kind: 'errand_turned_back', payload: { errand: errand.id, note: note ?? '' }, actor: by }
+              : { kind: 'errand_done', payload: { errand: errand.id }, actor: 'owner' },
         }),
-        'errand_done',
+        outcome === 'turned_back' ? 'errand_turned_back' : 'errand_done',
       )
       if (!recorded.ok) return recorded
       move = moveOf(recorded.value.issue, recorded.value.effects)
     }
-    await checkpoints.finishErrand(errand.id, at, note, { kind: outcome, by: 'owner' })
+    await checkpoints.finishErrand(errand.id, at, note, { kind: outcome, by })
     await checkpoints.cancelPages(errand.id, at)
     const done = await checkpoints.errand(errand.id)
     if (!done) throw new Error(`errand ${errand.id} vanished inside its own transaction`)
     return ok<ErrandWritten>({ result: 'applied', errand: done, issue: move })
   })
+}
+
+/**
+ * The owner or the orchestrator turns an Errand back: it is not done, and the lead hears the note as its next turn
+ * ("do this yourself"). The Errand closes `turned_back`; a request no Issue raised closes the same way with no one to tell.
+ */
+export function turnBackErrand(
+  deps: CheckpointDeps,
+  input: { errandId: ErrandId; note: string; by: 'owner' | 'orchestrator' },
+): Promise<CheckpointResult<ErrandWritten>> {
+  return closeErrand(deps, { errandId: input.errandId, note: input.note, outcome: 'turned_back', by: input.by })
 }
 
 export interface ErrandRequested {
@@ -1158,6 +1183,7 @@ export function requestErrand(
       runAt: null,
       runHead: null,
       runTail: null,
+      pushedAt: null,
     })
     if (!stored) return err({ kind: 'invalid', detail: `the request ${errandKey} is stored already` })
     const errand = await checkpoints.errand(id)

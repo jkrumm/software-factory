@@ -7,7 +7,15 @@ import { VERDICT_CONSEQUENCES } from '@/lib/artifact'
 import { Button, buttonVariants } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Textarea } from '@/components/ui/textarea'
-import { annotateArtifact, answerDecision, finishErrand, dismissSignal, giveVerdict, promoteSignal } from '@/lib/api'
+import {
+  annotateArtifact,
+  answerDecision,
+  finishErrand,
+  dismissSignal,
+  giveVerdict,
+  promoteSignal,
+  turnBackErrand,
+} from '@/lib/api'
 import { originWord } from '@/lib/flow'
 import {
   agoWords,
@@ -420,6 +428,12 @@ function ErrandBody({ item, issueTitle, onSent }: BodyProps) {
     onSent: (reply) => onSent(reply.errand.doneAt === null ? doneWords(reply) : SENT),
     onConflict: () => onSent(SETTLED),
   })
+  const turnBack = useSettle<void, ErrandReply>({
+    send: () => turnBackErrand(item.id, note.trim()),
+    keys: [['needs'], ['errands']],
+    onSent: () => onSent('Turned back: the lead hears your note'),
+    onConflict: () => onSent(SETTLED),
+  })
   const errand = data?.errands.find((entry) => entry.id === item.id)
   return (
     <div className="grid gap-4">
@@ -450,17 +464,25 @@ function ErrandBody({ item, issueTitle, onSent }: BodyProps) {
       >
         <Input
           aria-label="Note"
-          placeholder="A note for the lead (optional)"
+          placeholder="A note for the lead (optional; needed to turn it back)"
           value={note}
           onChange={(event) => setNote(event.target.value)}
         />
-        <div>
-          <Button type="submit" disabled={settle.disabled}>
+        <div className="flex flex-wrap items-center gap-2">
+          <Button type="submit" disabled={settle.disabled || turnBack.disabled}>
             Done
+          </Button>
+          <Button
+            type="button"
+            variant="outline"
+            disabled={settle.disabled || turnBack.disabled || note.trim() === ''}
+            onClick={() => turnBack.send()}
+          >
+            Turn back
           </Button>
         </div>
       </form>
-      <Problem words={settle.error} />
+      <Problem words={settle.error ?? turnBack.error} />
     </div>
   )
 }

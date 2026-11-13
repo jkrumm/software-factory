@@ -53,9 +53,14 @@ export const DeferBody = z
     attempt: z.number().int().min(1),
     until: z.iso.datetime({ offset: true }).optional(),
     after: z.array(IssueRefInput).min(1).max(MAX_AFTER_IDS).optional(),
+    /** a pull request or merge request that waits on a required review by someone else: its URL or `#<number>`; the factory polls it and wakes the lead */
+    review: z.string().trim().min(1).max(500).optional(),
     call: Call,
   })
-  .refine((body) => (body.until === undefined) !== (body.after === undefined), 'give either until or after')
+  .refine(
+    (body) => [body.until, body.after, body.review].filter((given) => given !== undefined).length === 1,
+    'give exactly one of until, after or review',
+  )
   .meta({ id: 'DeferBody' })
 export type DeferBody = z.infer<typeof DeferBody>
 

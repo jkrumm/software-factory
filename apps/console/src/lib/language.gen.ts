@@ -31,8 +31,10 @@ export const LANGUAGE = {
     'One question as a form: recommendation, what was checked, cost per option, what happens with no answer. Refused when incomplete; it reaches the owner only after the Judge saw it; a second ask on the open one amends it. Raised while its Concept or Spec waits for review, it is about that artifact and waits together with the review',
   'decision status': 'open, answered, or withdrawn (the Issue no longer waits for it: it closed or was cancelled)',
   defer:
-    "The lead's verb for a wait it can name: until a time, or until other Issues close (factory issue defer). The event is deferred",
+    "The lead's verb for a wait it can name: until a time, until other Issues close, or on the review of its pull request (--review, which is the external wait) (factory issue defer). The event is deferred",
   delivery: 'What was typed into a lead: its brief, or a note. Keyed, so a replay types nothing twice',
+  'desk pass':
+    "The desk loop's one pass over every open Errand when the owner reads the Console after two hours or more away, and every six hours otherwise: each check runs (the resolved ones close and wake their lead), the rest are screened again, and one MacBook command is pushed through ask-human.sh push",
   dismiss:
     'A held signal the owner or the Judge turns away, with a reason; it files nothing and stays on record as dismissed',
   'door route':
@@ -99,6 +101,8 @@ export const LANGUAGE = {
     "The lead's own check of its change, once per ship range, standard or deep. Part of the lead's work, never a factory step",
   'review status':
     "Of a ship's review: covered, not_required, uncovered, unknown. Recorded with its reason, never a refusal",
+  'review wait':
+    "The external wait: the Issue's pull request waits on a required review by someone else (a lead's defer --review, or an Errand that asks the owner to approve or merge a pull request, which the screen turns away). The reviews loop reads it every 15 minutes through gh or glab and wakes the lead on an approval, a request for changes, a new review comment, a merge or a close. It is never in Needs you",
   revision: "One version of an artifact's content. A Decision has one; a Concept or Spec gains one with each revise",
   round: 'The nth ask of a workflow about one subject. A subject has a limited number of rounds',
   screen:
@@ -135,6 +139,8 @@ export const LANGUAGE = {
     'What triage did with a signal: filed, amended, incident, held (quarantined, or a down waiting out its heal grace), dropped. Its detail says why: new, matched, replayed, repeat, joined, regression, healed, quiet, unrouted, quarantined, promoted; for a drop work_repo, no_project, not_listened, loop_guard, no_repo, probe, settled (the workflow found an Issue closed in the last day already settles it)',
   'turn away':
     "An Errand the screen refuses because a token or CLI could do it: the Issue's errand wait ends and the lead hears the reason",
+  'turn back':
+    "The owner's or the orchestrator's verb that ends an Errand wait without doing it (factory errand turn-back <id> --note ..., the Console's Turn back button): the Errand closes turned_back and the lead hears the note as its next turn",
   verdict: "The owner's answer on an artifact: Looks good, With notes, Changes, No longer applies",
   verify: 'The check that ends the watch: make verify, probes',
   wait: 'A pause with a named exit',

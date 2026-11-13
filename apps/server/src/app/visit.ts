@@ -1,3 +1,4 @@
+import { cameBack } from '../domains/checkpoints/desk.ts'
 import { FIRST_WINDOW_MS, VISIT_GAP_MS } from '../kernel/visit.ts'
 import { ok, type PortError, type Result } from '../kernel/result.ts'
 import type { UnitOfWork } from './unit-of-work.ts'
@@ -5,6 +6,8 @@ import type { UnitOfWork } from './unit-of-work.ts'
 export interface VisitMarker {
   seenAt: Date
   sinceAt: Date
+  /** the last time he came back after two hours or more away (the first read counts); the desk pass reads it */
+  returnedAt: Date | null
 }
 
 /** The owner's visit marker (`migrations/1003_console_visit.sql`), inside one transaction. */
@@ -16,7 +19,8 @@ export interface VisitStore {
 
 /**
  * The owner reads the band at `now`: the first visit looks back 24 hours; a read more than 30 minutes after the last
- * one starts a new visit, whose band begins where the last one was seen; any other read only moves `seenAt`. Answers
+ * one starts a new visit, whose band begins where the last one was seen; any other read only moves `seenAt`. A read two
+ * hours or more after the last one also marks that he is back (`returnedAt`), which makes the desk pass due. Answers
  * where the band begins.
  */
 export async function registerVisit(
@@ -30,7 +34,8 @@ export async function registerVisit(
       : now.getTime() - marker.seenAt.getTime() > VISIT_GAP_MS
         ? marker.seenAt
         : marker.sinceAt
-    await visits.save({ seenAt: now, sinceAt })
+    const returnedAt = cameBack(marker?.seenAt ?? null, now) ? now : (marker?.returnedAt ?? null)
+    await visits.save({ seenAt: now, sinceAt, returnedAt })
     return ok(sinceAt)
   })
 }

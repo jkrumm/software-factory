@@ -66,13 +66,26 @@ export const PAYLOADS = {
   verdict_given: z.object({ artifact: text, verdict: z.enum(VERDICTS) }),
   /** the lead needs the owner's hands */
   errand_raised: z.object({ attempt, errand: checkpoint }),
-  /** the owner did the errand, or the screen turned it away (`turnedAway`: why) */
-  errand_done: z.object({ errand: text, turnedAway: text.optional() }),
-  /** the lead waits until a time, or until other Issues close (the steward defers a holder behind a queued Issue that needs its claim) */
+  /**
+   * the owner did the errand, or something ended its wait without his hands: the screen turned it away (`turnedAway`: why;
+   * with `awaits` the Issue then waits on that pull request's review), or a pass found its check no longer needed
+   * (`resolved`: what the check said)
+   */
+  errand_done: z.object({
+    errand: text,
+    turnedAway: text.optional(),
+    resolved: text.optional(),
+    awaits: z.object({ review: text }).optional(),
+  }),
+  /** the owner or the orchestrator turned the Errand back: not done, and `note` says what to do instead */
+  errand_turned_back: z.object({ errand: text, note: text }),
+  /** the lead waits until a time, until other Issues close, or on the review of its pull request (the steward defers a holder behind a queued Issue that needs its claim) */
   deferred: z.union([
     z.object({ attempt, until: z.iso.datetime({ offset: true }) }),
     // `why` is the steward's: it defers a holder behind the Issue that waits for the claim the holder keeps
     z.object({ attempt, after: z.array(issueRef).min(1).max(MAX_AFTER_IDS), why: text.optional() }),
+    // a pull request or merge request, named by its URL or `#<number>`; the review poll wakes the wait
+    z.object({ attempt, review: text }),
   ]),
   /** a machine cause stopped the work: the steward's to end */
   stalled: z.object({ attempt, cause: z.enum(['wall', 'unreported', 'blocked']), detail: text }),
@@ -125,6 +138,7 @@ export const SENDERS: { [K in EventKind]: readonly Actor[] } = {
   verdict_given: ['owner', 'factory'],
   errand_raised: ['lead'],
   errand_done: ['owner', 'judge', 'factory'],
+  errand_turned_back: ['owner', 'orchestrator'],
   deferred: ['lead', 'steward'],
   stalled: ['lead', 'factory'],
   woken: ['factory', 'steward', 'owner', 'orchestrator'],
