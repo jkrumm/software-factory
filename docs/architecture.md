@@ -263,7 +263,9 @@ through `receive` in `app/intake.ts`; the answer is a triage outcome (`docs/lang
   (the hook exits 2); the second time the Issue stalls as `unreported`. A stop with background work still running is no
   stop.
 - **Finalize** (`app/leads-finalize.ts`), once per attempt and in this order: the claim goes back, the terminals close,
-  the transcripts are archived, the worktree and branch are removed when clean. When the Issue is closed, the same step
+  the transcripts are archived, the worktree and branch are removed when clean and its work is on origin's default
+  (the worktree is found by the path it was made at, because a lead may detach HEAD or rename the branch; its HEAD and the
+  branch must be on the base, or a shipped commit must be, which a squash leaves as the only trace). When the Issue is closed, the same step
   cleans every `factory/<issue>-*` branch, local and on origin (`adapters/git/branches.ts`): a dropped or cancelled
   Issue's go, the others when their work is on origin's default (ancestry, an empty merge, a shipped commit, a merged
   pull request); the rest are kept and the reason is recorded with the worktree's.

@@ -252,12 +252,14 @@ describe('git worktrees', () => {
   test('remove takes a clean worktree whose branch is on the base; one with changes or commits is kept, and says why', async () => {
     const work = await repo()
     const clean = await value(trees.create({ repo: work, branch: 'factory/2-1' }))
-    expect(await value(trees.remove({ repo: work, branch: 'factory/2-1' }))).toEqual({ removed: true })
+    expect(await value(trees.remove({ repo: work, branch: 'factory/2-1', path: null, shipped: [] }))).toEqual({
+      removed: true,
+    })
     expect(existsSync(clean.path)).toBe(false)
 
     const dirty = await value(trees.create({ repo: work, branch: 'factory/3-1' }))
     writeFileSync(join(dirty.path, 'new.txt'), 'x')
-    expect(await value(trees.remove({ repo: work, branch: 'factory/3-1' }))).toEqual({
+    expect(await value(trees.remove({ repo: work, branch: 'factory/3-1', path: null, shipped: [] }))).toEqual({
       kept: 'it has uncommitted changes',
       path: dirty.path,
     })
@@ -266,13 +268,71 @@ describe('git worktrees', () => {
     writeFileSync(join(ahead.path, 'b.txt'), 'b')
     await git(ahead.path, 'add', '.')
     await git(ahead.path, 'commit', '-q', '-m', 'work')
-    expect(await value(trees.remove({ repo: work, branch: 'factory/4-1' }))).toEqual({
+    expect(await value(trees.remove({ repo: work, branch: 'factory/4-1', path: null, shipped: [] }))).toEqual({
       kept: 'its commits are not on origin/master',
       path: ahead.path,
     })
     // pushed and merged on the remote: now it is on the base
     await git(ahead.path, 'push', '-q', 'origin', 'factory/4-1:master')
-    expect(await value(trees.remove({ repo: work, branch: 'factory/4-1' }))).toEqual({ removed: true })
+    expect(await value(trees.remove({ repo: work, branch: 'factory/4-1', path: null, shipped: [] }))).toEqual({
+      removed: true,
+    })
+  })
+
+  const input = (work: string, branch: string, path: string | null, shipped: string[] = []) => ({
+    repo: work,
+    branch,
+    path,
+    shipped,
+  })
+
+  test('remove finds a worktree whose lead detached HEAD or renamed the branch, by the path it was made at', async () => {
+    const work = await repo()
+    const detached = await value(trees.create({ repo: work, branch: 'factory/6-1' }))
+    await git(detached.path, 'checkout', '-q', '--detach')
+    expect(await value(trees.remove(input(work, 'factory/6-1', detached.path)))).toEqual({ removed: true })
+    expect(existsSync(detached.path)).toBe(false)
+
+    const renamed = await value(trees.create({ repo: work, branch: 'factory/7-1' }))
+    await git(renamed.path, 'branch', '-m', 'factory/7-1-once')
+    expect(await value(trees.remove(input(work, 'factory/7-1', renamed.path)))).toEqual({ removed: true })
+    expect(existsSync(renamed.path)).toBe(false)
+  })
+
+  test('remove keeps a detached worktree holding commits that are on no base', async () => {
+    const work = await repo()
+    const tree = await value(trees.create({ repo: work, branch: 'factory/8-1' }))
+    await git(tree.path, 'checkout', '-q', '--detach')
+    writeFileSync(join(tree.path, 'd.txt'), 'd')
+    await git(tree.path, 'add', '.')
+    await git(tree.path, 'commit', '-q', '-m', 'loose')
+    expect(await value(trees.remove(input(work, 'factory/8-1', tree.path)))).toEqual({
+      kept: 'its commits are not on origin/master',
+      path: tree.path,
+    })
+    expect(existsSync(tree.path)).toBe(true)
+  })
+
+  test('remove takes a squash-merged worktree once a shipped commit is on the base, though master moved on', async () => {
+    const work = await repo()
+    const tree = await value(trees.create({ repo: work, branch: 'factory/9-1' }))
+    writeFileSync(join(tree.path, 'a.txt'), 'branch\n')
+    await git(tree.path, 'commit', '-q', '-am', 'work')
+    // squash: master gets the change as a new commit, then changes the same file again
+    await git(work, 'checkout', '-q', 'master')
+    writeFileSync(join(work, 'a.txt'), 'squashed\n')
+    await git(work, 'commit', '-q', '-am', 'squash (#9)')
+    const squash = await git(work, 'rev-parse', 'HEAD')
+    writeFileSync(join(work, 'a.txt'), 'later\n')
+    await git(work, 'commit', '-q', '-am', 'later')
+    await git(work, 'push', '-q', 'origin', 'master')
+
+    expect(await value(trees.remove(input(work, 'factory/9-1', tree.path)))).toEqual({
+      kept: 'its commits are not on origin/master',
+      path: tree.path,
+    })
+    expect(await value(trees.remove(input(work, 'factory/9-1', tree.path, [squash])))).toEqual({ removed: true })
+    expect(existsSync(tree.path)).toBe(false)
   })
 
   test('a branch somebody else made, with commits and no finished setup, is left as it is', async () => {

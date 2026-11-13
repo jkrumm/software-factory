@@ -21,6 +21,7 @@ import type {
   LeadBranches,
   Windows,
   WorktreeRemoval,
+  WorktreeRemovalInput,
   Worktrees,
   CheckTiers,
 } from '../../src/domains/leads/ports.ts'
@@ -126,7 +127,7 @@ export class FakeTerminals implements Terminals {
 
 export class FakeWorktrees implements Worktrees {
   created: { repo: string; branch: string }[] = []
-  removed: { repo: string; branch: string }[] = []
+  removed: WorktreeRemovalInput[] = []
   createError: PortError | null = null
   removal: WorktreeRemoval = { removed: true }
   async create(input: { repo: string; branch: string }) {
@@ -134,7 +135,7 @@ export class FakeWorktrees implements Worktrees {
     this.created.push(input)
     return ok({ path: `/w/${input.branch.replace('/', '-')}`, base: 'origin/master', sha: 'a'.repeat(40) })
   }
-  async remove(input: { repo: string; branch: string }) {
+  async remove(input: WorktreeRemovalInput) {
     this.removed.push(input)
     return ok(this.removal)
   }

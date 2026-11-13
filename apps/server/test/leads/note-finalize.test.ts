@@ -158,7 +158,9 @@ describe('finalize', () => {
     expect(w.transcripts.archived).toMatchObject([
       { attempt: 1, sessions: [{ claudeSession: 'c-1', transcriptPath: '/x/c-1.jsonl' }] },
     ])
-    expect(w.worktrees.removed).toEqual([{ repo: '/roots/example', branch: 'factory/1-1' }])
+    expect(w.worktrees.removed).toMatchObject([
+      { repo: '/roots/example', branch: 'factory/1-1', path: expect.any(String), shipped: [] },
+    ])
 
     expect((await finalizeLead(w.deps, effect)).ok).toBe(true)
     expect(w.claims.released).toHaveLength(1)
@@ -225,6 +227,7 @@ describe('finalize', () => {
     expect(w.branches.cleaned).toEqual([
       { repo: '/roots/example', issue: 1, closed: 'cancelled', shipped: ['abc1234'] },
     ])
+    expect(w.worktrees.removed).toMatchObject([{ branch: 'factory/1-1', shipped: ['abc1234'] }])
     const [row] = await w.db.sql`SELECT worktree_kept FROM factory.lead_finalizations WHERE issue_id = ${issue}`
     expect(row?.worktree_kept).toBe('branch factory/1-1 kept: its commits are not on origin/master')
 
