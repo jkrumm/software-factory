@@ -6,6 +6,7 @@ import { postgresLoopStore } from '../src/adapters/postgres/loop-store.ts'
 import { postgresUnitOfWork } from '../src/adapters/postgres/unit-of-work.ts'
 import { hostWatch } from '../src/adapters/planning/host-watch.ts'
 import { parsePs, residentBytes, topProcesses } from '../src/adapters/planning/ps.ts'
+import { parseTopFootprints } from '../src/adapters/planning/top.ts'
 import { memoryUsedPct } from '../src/adapters/planning/vm-memory.ts'
 import { readLeadCosts } from '../src/read/lead-costs.ts'
 import { createApp } from '../src/api/app.ts'
@@ -60,6 +61,68 @@ const fakeBin = async (name: string, body: string) => {
   await Bun.$`chmod +x ${path}`.quiet()
   return path
 }
+
+// `top -l 1 -n 5000 -stats pid,mem` of the mini (2026-11-13, trimmed): a header, then one row per process in K, M or G
+const TOP_OUTPUT = `Processes: 843 total, 5 running, 2 stuck, 836 sleeping, 5239 threads
+2026/11/13 23:23:03
+Load Avg: 6.87, 6.51, 5.50
+PhysMem: 30G used (2352M wired, 14G compressor), 923M unused.
+
+PID    MEM
+99855  16M
+97653  2544K
+463    1536M+
+645    1.5G
+601    81M-
+broken line
+7      12X
+`
+
+test('top: footprints parse to KiB from K, M and G (a decimal too), a header or odd line is skipped', () => {
+  expect([...parseTopFootprints(TOP_OUTPUT)]).toEqual([
+    [99855, 16 * 1024],
+    [97653, 2544],
+    [463, 1536 * 1024],
+    [645, 1.5 * 1024 * 1024],
+    [601, 81 * 1024],
+  ])
+  expect(parseTopFootprints('').size).toBe(0)
+  expect(parseTopFootprints('5 10M\n5 20M\n').get(5)).toBe(10 * 1024)
+})
+
+test('hostWatch: one top serves readers within the cache; a failed, empty or absent top is null', async () => {
+  const counter = `${await Bun.$`mktemp -d`.text().then((t) => t.trim())}/n`
+  const top = await fakeBin('top', `echo x >> ${counter}\nprintf '%s\\n' 'PID    MEM' '7  300M' '8  4096K'`)
+  const host = {
+    load: async () => ({ ok: true as const, value: 1 }),
+    memory: async () => ({ ok: false as const, error: { kind: 'gone' as const, detail: 'x' } }),
+    ramMib: async () => ({ ok: true as const, value: 4096 }),
+  }
+  let t = 0
+  const watch = hostWatch({
+    host,
+    sysctlBin: '/nonexistent/sysctl',
+    psBin: '/nonexistent/ps',
+    topBin: top,
+    now: () => t,
+  })
+  const [a, b] = await Promise.all([watch.footprints(), watch.footprints()])
+  expect(a).toEqual(b)
+  expect([...(a ?? [])]).toEqual([
+    [7, 300 * 1024],
+    [8, 4096],
+  ])
+  expect((await Bun.file(counter).text()).trim().split('\n')).toHaveLength(1)
+  t = 11_000
+  await watch.footprints()
+  expect((await Bun.file(counter).text()).trim().split('\n')).toHaveLength(2)
+
+  const failing = await fakeBin('top-fails', 'exit 1')
+  const empty = await fakeBin('top-empty', `printf '%s\\n' 'PID    MEM'`)
+  for (const topBin of [failing, empty, '/nonexistent/top', undefined]) {
+    expect(await hostWatch({ host, sysctlBin: '/x', psBin: '/x', topBin }).footprints()).toBeNull()
+  }
+})
 
 test('hostWatch: one ps serves readers within the cache; a failed ps gives empty lists and a null memory', async () => {
   const counter = `${await Bun.$`mktemp -d`.text().then((t) => t.trim())}/n`
@@ -147,9 +210,9 @@ test('a pass with a process table stores the facts and one row per lead, and pru
     sampler: { sample: async () => ({ load: 1, memoryUsedPct: 5, swapUsedPct: 1, swapoutMbPer300s: 0 }) },
     processes: {
       read: async () => [
-        { pid: 10, ppid: 1, rssKib: 2048, cwd: base },
-        { pid: 11, ppid: 10, rssKib: 1024, cwd: '/elsewhere' },
-        { pid: 20, ppid: 1, rssKib: 4096, cwd: '/work/app/.claude/worktrees/factory-8-1' },
+        { pid: 10, ppid: 1, rssKib: 2048, footprintKib: 1024, cwd: base },
+        { pid: 11, ppid: 10, rssKib: 1024, footprintKib: 512, cwd: '/elsewhere' },
+        { pid: 20, ppid: 1, rssKib: 4096, footprintKib: null, cwd: '/work/app/.claude/worktrees/factory-8-1' },
       ],
     },
     facts: async () => ({ ok: true, value: { leads: 1, queued: 2, seats: 16, loadCeiling: 6.5 } }),
@@ -158,10 +221,10 @@ test('a pass with a process table stores the facts and one row per lead, and pru
   const [sample] = await db.sql`SELECT leads, queued, seats, load_ceiling FROM factory.host_samples WHERE at = ${now}`
   expect(sample).toEqual({ leads: 1, queued: 2, seats: 16, load_ceiling: 6.5 })
   const rows =
-    await db.sql`SELECT worktree, repo, issue, attempt, rss_mib, procs FROM factory.lead_samples ORDER BY worktree`
+    await db.sql`SELECT worktree, repo, issue, attempt, rss_mib, footprint_mib, procs FROM factory.lead_samples ORDER BY worktree`
   expect(rows).toEqual([
-    { worktree: '/recent', repo: 'app', issue: null, attempt: null, rss_mib: 10, procs: 1 },
-    { worktree: base, repo: 'app', issue: 7, attempt: 1, rss_mib: 3, procs: 2 },
+    { worktree: '/recent', repo: 'app', issue: null, attempt: null, rss_mib: 10, footprint_mib: null, procs: 1 },
+    { worktree: base, repo: 'app', issue: 7, attempt: 1, rss_mib: 3, footprint_mib: 2, procs: 2 },
   ])
   await db.sql`DELETE FROM factory.lead_samples`
   await db.sql`DELETE FROM factory.lead_attempts`
@@ -187,9 +250,40 @@ test('readLeadCosts: per repo, the attempts, the p80 of the newest ten attempt p
   for (const [min, repo, worktree, mib] of rows) {
     await db.sql`INSERT INTO factory.lead_samples (at, worktree, repo, rss_mib, procs) VALUES (${at(min)}, ${worktree}, ${repo}, ${mib}, 2)`
   }
+  const none = { footprintAttempts: 0, footprintMibP80: null, lastFootprintMib: null, footprintToRss: null }
   expect(await readLeadCosts(db.sql)).toEqual([
-    { repo: 'a', attempts: 5, peakMibP80: 400, lastPeakMib: 500 },
-    { repo: 'b', attempts: 2, peakMibP80: 90, lastPeakMib: 90 },
+    { repo: 'a', attempts: 5, peakMibP80: 400, lastPeakMib: 500, ...none },
+    { repo: 'b', attempts: 2, peakMibP80: 90, lastPeakMib: 90, ...none },
+  ])
+  await db.sql`DELETE FROM factory.lead_samples`
+})
+
+test('readLeadCosts: the footprint figures come from the attempts that have one, and the ratio is their median', async () => {
+  const at = (min: number) => new Date(Date.UTC(2026, 10, 10, 12, min))
+  // repo c: w1 and w2 predate the footprint; w3..w5 have one (peak 60 of 100, 100 of 200, 150 of 300), w6 lost it to a failed top
+  const rows: [number, string, number, number | null][] = [
+    [0, 'w1', 100, null],
+    [1, 'w2', 100, null],
+    [2, 'w3', 100, 40],
+    [3, 'w3', 90, 60],
+    [4, 'w4', 200, 100],
+    [5, 'w5', 300, 150],
+    [6, 'w6', 400, null],
+  ]
+  for (const [min, worktree, rss, footprint] of rows) {
+    await db.sql`INSERT INTO factory.lead_samples (at, worktree, repo, rss_mib, footprint_mib, procs) VALUES (${at(min)}, ${worktree}, 'c', ${rss}, ${footprint}, 2)`
+  }
+  expect(await readLeadCosts(db.sql)).toEqual([
+    {
+      repo: 'c',
+      attempts: 6,
+      peakMibP80: 300,
+      lastPeakMib: 400,
+      footprintAttempts: 3,
+      footprintMibP80: 150,
+      lastFootprintMib: 150,
+      footprintToRss: 0.5,
+    },
   ])
   await db.sql`DELETE FROM factory.lead_samples`
 })

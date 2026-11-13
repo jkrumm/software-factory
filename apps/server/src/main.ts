@@ -185,10 +185,12 @@ async function main(): Promise<void> {
     host: hostReader({ sysctlBin: planningEnv.sysctlBin, minSampleMs: 0 }),
     sysctlBin: planningEnv.sysctlBin,
     psBin: process.env.FACTORY_PS_BIN ?? '/bin/ps',
+    topBin: process.env.FACTORY_TOP_BIN ?? '/usr/bin/top',
     vmStatBin: process.env.FACTORY_VM_STAT_BIN,
   })
   const hostProcesses = processTable({
     rows: () => hostSamples.rows(),
+    footprints: () => hostSamples.footprints(),
     lsofBin: process.env.FACTORY_LSOF_BIN ?? '/usr/sbin/lsof',
   })
   const reaperProcessTable = reaperProcesses({

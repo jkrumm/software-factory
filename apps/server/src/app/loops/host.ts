@@ -53,6 +53,7 @@ export async function hostPass(deps: HostPassDeps): Promise<Result<HostPass, Por
           issue: cost.issue,
           attempt: cost.attempt,
           rssMib: cost.rssMib,
+          footprintMib: cost.footprintMib,
           procs: cost.procs,
         }))
   return deps.uow.run(async ({ loops }) => {

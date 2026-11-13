@@ -259,6 +259,10 @@ describe('GET /v1/capacity-loop figures', () => {
           attempts: Number(r.attempts),
           peakMibP80: sorted[Math.ceil(0.8 * sorted.length) - 1] ?? Number.NaN,
           lastPeakMib: Number(r.last_peak),
+          footprintAttempts: 0,
+          footprintMibP80: null,
+          lastFootprintMib: null,
+          footprintToRss: null,
         }
       })
       .sort((a, b) => b.peakMibP80 - a.peakMibP80 || a.repo.localeCompare(b.repo))

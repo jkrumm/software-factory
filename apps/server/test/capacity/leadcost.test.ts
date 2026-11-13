@@ -3,10 +3,17 @@ import { attribute, learnedLeadMib, type ProcInfo, type WorktreeRef } from '../.
 import { joinProcesses, parseLsofCwd, processTable } from '../../src/adapters/planning/processes.ts'
 
 const tree = (path: string, issue: number): WorktreeRef => ({ path, repo: 'app', issue, attempt: 1 })
-const proc = (pid: number, ppid: number, rssMib: number, cwd: string | null): ProcInfo => ({
+const proc = (
+  pid: number,
+  ppid: number,
+  rssMib: number,
+  cwd: string | null,
+  footprintMib: number | null = null,
+): ProcInfo => ({
   pid,
   ppid,
   rssKib: rssMib * 1024,
+  footprintKib: footprintMib === null ? null : footprintMib * 1024,
   cwd,
 })
 
@@ -20,7 +27,24 @@ test('attribute: a child with a foreign cwd is counted with its lead', () => {
     ],
     [tree('/w/a', 1)],
   )
-  expect(costs).toEqual([{ path: '/w/a', repo: 'app', issue: 1, attempt: 1, rssMib: 1100, procs: 3 }])
+  expect(costs).toEqual([
+    { path: '/w/a', repo: 'app', issue: 1, attempt: 1, rssMib: 1100, footprintMib: null, procs: 3 },
+  ])
+})
+
+test('attribute: the footprint is summed beside RSS, shared pages left out', () => {
+  const costs = attribute(
+    [proc(10, 1, 300, '/w/a', 120), proc(11, 10, 700, '/elsewhere', 400), proc(12, 11, 100, null, 30)],
+    [tree('/w/a', 1)],
+  )
+  expect(costs.map((c) => [c.rssMib, c.footprintMib])).toEqual([[1100, 550]])
+})
+
+test('attribute: a process top did not list counts at its RSS in the footprint; none listed is null', () => {
+  const tree1 = attribute([proc(10, 1, 300, '/w/a', 120), proc(11, 10, 200, null)], [tree('/w/a', 1)])
+  expect(tree1.map((c) => [c.rssMib, c.footprintMib])).toEqual([[500, 320]])
+  const tree2 = attribute([proc(10, 1, 300, '/w/a'), proc(11, 10, 200, null)], [tree('/w/a', 1)])
+  expect(tree2.map((c) => [c.rssMib, c.footprintMib])).toEqual([[500, null]])
 })
 
 test('attribute: the longest prefix wins, and /a/b is not inside /a/bc', () => {
@@ -68,8 +92,27 @@ test('parseLsofCwd: pid and path lines pair up; noise is skipped', () => {
     [12, '/w/a b'],
     [13, '/'],
   ])
-  expect(joinProcesses([{ pid: 12, ppid: 1, cpuPct: 0, rssKib: 5, command: 'x' }], cwds)).toEqual([
-    { pid: 12, ppid: 1, rssKib: 5, cwd: '/w/a b' },
+  const rows = [{ pid: 12, ppid: 1, cpuPct: 0, rssKib: 5, command: 'x' }]
+  expect(joinProcesses(rows, cwds)).toEqual([{ pid: 12, ppid: 1, rssKib: 5, footprintKib: null, cwd: '/w/a b' }])
+  expect(joinProcesses(rows, cwds, new Map([[12, 3]]))).toEqual([
+    { pid: 12, ppid: 1, rssKib: 5, footprintKib: 3, cwd: '/w/a b' },
+  ])
+})
+
+test('processTable: the footprints join in; a failed or throwing top leaves them null, never an error', async () => {
+  const rows = async () => [{ pid: 12, ppid: 1, cpuPct: 0, rssKib: 5, command: 'x' }]
+  const lsofBin = '/usr/bin/true'
+  expect(await processTable({ rows, lsofBin, footprints: async () => new Map([[12, 3]]) }).read()).toEqual([
+    { pid: 12, ppid: 1, rssKib: 5, footprintKib: 3, cwd: null },
+  ])
+  expect(await processTable({ rows, lsofBin, footprints: async () => null }).read()).toEqual([
+    { pid: 12, ppid: 1, rssKib: 5, footprintKib: null, cwd: null },
+  ])
+  const throwing = async (): Promise<null> => {
+    throw new Error('top')
+  }
+  expect(await processTable({ rows, lsofBin, footprints: throwing }).read()).toEqual([
+    { pid: 12, ppid: 1, rssKib: 5, footprintKib: null, cwd: null },
   ])
 })
 

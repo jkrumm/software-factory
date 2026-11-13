@@ -1,6 +1,7 @@
 import type { HostProcess } from '@software-factory/contract'
 import type { HostReader } from '../../domains/capacity/ports.ts'
 import { parsePs, type PsRow, topProcesses } from './ps.ts'
+import { parseTopFootprints } from './top.ts'
 import { memoryUsedPct } from './vm-memory.ts'
 import { runProcess } from './process.ts'
 
@@ -11,6 +12,8 @@ export interface HostWatchOptions {
   sysctlBin: string
   /** `ps`, the macOS one: `-Ao pid=,ppid=,pcpu=,rss=,comm=` */
   psBin: string
+  /** `top`, the macOS one, for each process's physical footprint; without it every footprint is unknown */
+  topBin?: string
   /** `vm_stat`, for the wired and compressor pages (default `/usr/bin/vm_stat`) */
   vmStatBin?: string
   /** concurrent readers within this long share one `ps` */
@@ -32,6 +35,8 @@ export interface HostWatch {
   top(): Promise<{ topByCpu: HostProcess[]; topByMemory: HostProcess[] }>
   /** the same cached `ps` rows; null when `ps` failed */
   rows(): Promise<PsRow[] | null>
+  /** the physical footprint in KiB of every process, from one `top` snapshot cached like the rows; null when `top` failed or is not configured */
+  footprints(): Promise<Map<number, number> | null>
 }
 
 /**
@@ -64,6 +69,19 @@ export function hostWatch(options: HostWatchOptions): HostWatch {
     return rows
   }
 
+  let cachedFootprints: { at: number; footprints: Promise<Map<number, number> | null> } | null = null
+  const footprints = (): Promise<Map<number, number> | null> => {
+    const topBin = options.topBin
+    if (topBin === undefined) return Promise.resolve(null)
+    if (cachedFootprints && now() - cachedFootprints.at < cacheMs) return cachedFootprints.footprints
+    const found = run([topBin, '-l', '1', '-n', '5000', '-stats', 'pid,mem']).then((text) => {
+      const parsed = text === null ? null : parseTopFootprints(text)
+      return parsed === null || parsed.size === 0 ? null : parsed
+    })
+    cachedFootprints = { at: now(), footprints: found }
+    return found
+  }
+
   const memsize = async (): Promise<number | null> => {
     if (ramBytes !== null) return ramBytes
     const n = Number((await run([options.sysctlBin, '-n', 'hw.memsize']))?.trim())
@@ -83,6 +101,7 @@ export function hostWatch(options: HostWatchOptions): HostWatch {
 
   return {
     rows: processes,
+    footprints,
 
     async top() {
       const rows = await processes()

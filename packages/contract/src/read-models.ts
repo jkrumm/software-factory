@@ -712,6 +712,13 @@ export const CapacityLeadCost = z
     attempts: z.number().int(),
     peakMibP80: z.number().int(),
     lastPeakMib: z.number().int(),
+    /** attempts with a physical footprint recorded (`top` answered); 0 until the first one */
+    footprintAttempts: z.number().int(),
+    /** the same figures as the RSS ones, from the summed physical footprint of the attempts that have one; null with none */
+    footprintMibP80: z.number().int().nullable(),
+    lastFootprintMib: z.number().int().nullable(),
+    /** median over those attempts of (footprint peak / RSS peak), two decimals: how much of summed RSS is not private memory */
+    footprintToRss: z.number().nullable(),
   })
   .meta({ id: 'CapacityLeadCost' })
 
