@@ -71,6 +71,18 @@ describe('docs/plan.yaml', () => {
     })
   })
 
+  test("a row prio is an integer within the verb's range, and an adopted row has none", () => {
+    const rows = (prio: unknown) => ({ version: 1, rows: [row('a', { prio })] })
+    expect(parsePlan(rows(5)).ok).toBe(true)
+    expect(parsePlan(rows(-1000)).ok).toBe(true)
+    expect(parsePlan(rows(1001)).ok).toBe(false)
+    expect(parsePlan(rows(1.5)).ok).toBe(false)
+    expect(parsePlan({ version: 1, rows: [{ key: 'a', issue: 5, prio: 1 }] })).toMatchObject({
+      ok: false,
+      message: expect.stringContaining('no prio'),
+    })
+  })
+
   test('a row with more after keys than issue new accepts is refused, naming the row and its count', () => {
     const keys = (n: number) => Array.from({ length: n }, (_, i) => `d${i}`)
     const rows = (n: number) => [...keys(n).map((k) => row(k)), row('top', { after: keys(n) })]

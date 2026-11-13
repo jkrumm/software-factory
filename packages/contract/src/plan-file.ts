@@ -53,6 +53,8 @@ export const PlanRow = z
     seat: PlanSeat.optional(),
     /** the resource class its Issue runs in; the target project's `lanes:` caps how many of a lane run at once */
     lane: LaneName.optional(),
+    /** the queue priority its Issue is filed with, as `factory issue prio` sets it: higher runs first among the queued; default 0 */
+    prio: z.number().int().min(-1000).max(1000).optional(),
     /** `spec`: the row's lead owes a one-page Spec before it builds, and the ship is refused without one */
     checkpoint: CheckpointName.optional(),
     /** a project name; default: the project whose plan this is */
@@ -79,6 +81,7 @@ export const PlanRow = z
         'kind',
         'seat',
         'lane',
+        'prio',
         'checkpoint',
       ] as const) {
         if (row[field] !== undefined)

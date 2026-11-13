@@ -206,7 +206,7 @@ export interface PrioInput {
 }
 
 /**
- * The owner's `prio` of an Issue: higher runs first within its class, and nothing but this verb sets it (no loop does). The newest by
+ * The owner's `prio` of an Issue: higher runs first within its class, and nothing but this verb and a plan row's `prio` at filing sets it (no loop does). The newest by
  * time wins; the same key again is a replay.
  */
 export async function setPrio(
