@@ -82,6 +82,7 @@ export function reviewItems(detail: ArtifactDetail, pending: readonly Delivery[]
       author: 'owner',
       at: d.at,
       editedAt: null,
+      disposition: null,
       anchored: true,
       delivery: live(d) ? d : null,
     })
