@@ -1,5 +1,6 @@
 import { cleanText } from '@software-factory/contract'
 import {
+  type HeldRow,
   outsideProject,
   replanNote,
   replanTitle,
@@ -23,6 +24,7 @@ export interface ReplanInput {
   trigger: ReplanTrigger
   ask?: string | undefined
   stalled?: StalledHead | undefined
+  held?: readonly HeldRow[] | undefined
   /** who files an owner Replan; the stalled trigger files as the factory */
   actor: OwnerActor
 }
@@ -70,9 +72,14 @@ export async function fileReplan(
     }
 
     const head = input.stalled
+    // A held Replan is keyed by the first held row and the Issue that holds it: the same hold files once, even after
+    // that Replan closed with "no plan change needed"; a new hold (another dropped Issue) files again.
+    const firstHold = input.held?.[0]
     const base = owner
       ? key('replan', project.name, deps.ids.next('replan'))
-      : key('replan', project.name, head?.issue ?? 'none', head?.since ?? 'none')
+      : input.trigger === 'held'
+        ? key('replan', project.name, 'held', firstHold?.row ?? 'none', firstHold?.by[0]?.issue ?? 'none')
+        : key('replan', project.name, head?.issue ?? 'none', head?.since ?? 'none')
     const filed = await fileIn(stores.work, deps, {
       key: base,
       event: {
@@ -96,7 +103,9 @@ export async function fileReplan(
       key: key(base, 'note'),
       event: {
         kind: 'noted',
-        payload: { text: replanNote({ project: project.name, trigger: input.trigger, ask, stalled: head }) },
+        payload: {
+          text: replanNote({ project: project.name, trigger: input.trigger, ask, stalled: head, held: input.held }),
+        },
         actor: 'factory',
       },
     })

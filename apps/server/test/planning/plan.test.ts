@@ -37,7 +37,19 @@ describe('docs/plan.yaml', () => {
     if (!result.ok) return
     expect(result.warnings).toEqual([])
     const used = new Set(result.plan.rows.flatMap((r) => Object.keys(r)))
-    for (const key of ['key', 'title', 'facts', 'kind', 'lane', 'repo', 'after', 'after_days', 'not_before', 'issue'])
+    for (const key of [
+      'key',
+      'title',
+      'facts',
+      'kind',
+      'lane',
+      'repo',
+      'after',
+      'after_needs',
+      'after_days',
+      'not_before',
+      'issue',
+    ])
       expect(used.has(key)).toBe(true)
     const adopted = result.plan.rows.find((r) => r.issue !== undefined)
     expect(adopted && Object.keys(adopted).sort()).toEqual(['issue', 'key'])
@@ -141,11 +153,13 @@ describe('row states', () => {
     filed: Record<string, number> = {},
     closed: [number, 'open' | 'closed'][] = [],
     closedAt: [number, string][] = [],
+    outcomes: [number, string][] = [],
   ) => ({
     plans: Object.entries(plans).map(([project, p]) => ({ project, plan: p })),
     projects: new Set(['app', 'lib']),
     filed: new Map(Object.entries(filed).map(([k, n]) => [k, issueId(n)])),
     states: states(closed),
+    outcomes: new Map(outcomes.map(([n, outcome]) => [issueId(n), outcome])),
     closedAt: new Map(closedAt.map(([n, at]) => [issueId(n), new Date(at)])),
     now,
   })
@@ -231,6 +245,92 @@ describe('row states', () => {
     expect(stateOf(rowStatuses(facts({ app: p }, { 'app:a': 1 }, [[1, 'closed']])), 'app', 'b')?.reason).toBe(
       'not before 2026-11-12',
     )
+  })
+
+  describe('after_needs shipped', () => {
+    const p = plan([
+      row('a'),
+      row('b', { after: ['a'], after_needs: 'shipped' }),
+      row('c', { after: ['a'] }),
+      row('d', { after: ['lib:x'], after_needs: 'shipped' }),
+    ])
+    const at = (outcome: string, extra: Record<string, number> = {}) =>
+      rowStatuses(facts({ app: p }, { 'app:a': 1, ...extra }, [[1, 'closed']], [], [[1, outcome]]))
+
+    test.each(['dropped', 'cancelled'])('a %s predecessor holds the row and releases the plain one', (outcome) => {
+      const statuses = at(outcome)
+      expect(stateOf(statuses, 'app', 'b')).toMatchObject({
+        state: 'waiting',
+        reason: expect.stringContaining(`held: app:a (issue_1 closed ${outcome})`),
+        heldBy: [{ row: 'app:a', issue: 'issue_1', outcome }],
+      })
+      expect(stateOf(statuses, 'app', 'c')).toMatchObject({ state: 'filable', heldBy: [] })
+      expect(filable(statuses).map((s) => s.key)).toEqual(['c'])
+    })
+
+    test.each(['done', 'healed'])('a %s predecessor releases the row', (outcome) => {
+      expect(stateOf(at(outcome), 'app', 'b')).toMatchObject({ state: 'filable', heldBy: [] })
+    })
+
+    test('an open predecessor keeps the usual reason, and a held one wins over an unmet one', () => {
+      const open = rowStatuses(facts({ app: p }, { 'app:a': 1 }, [[1, 'open']]))
+      expect(stateOf(open, 'app', 'b')).toMatchObject({ reason: 'after app:a', heldBy: [] })
+      const two = plan([row('a'), row('b'), row('c', { after: ['a', 'b'], after_needs: 'shipped' })])
+      const mixed = rowStatuses(
+        facts(
+          { app: two },
+          { 'app:a': 1, 'app:b': 2 },
+          [
+            [1, 'closed'],
+            [2, 'open'],
+          ],
+          [],
+          [[1, 'dropped']],
+        ),
+      )
+      expect(stateOf(mixed, 'app', 'c')?.reason).toContain('held: app:a')
+    })
+
+    test('a reopened predecessor releases the hold by itself, and a row with an Issue is never held', () => {
+      const reopened = rowStatuses(facts({ app: p }, { 'app:a': 1 }, [[1, 'open']], [], []))
+      expect(stateOf(reopened, 'app', 'b')?.heldBy).toEqual([])
+      const filed = rowStatuses(
+        facts(
+          { app: p },
+          { 'app:a': 1, 'app:b': 2 },
+          [
+            [1, 'closed'],
+            [2, 'open'],
+          ],
+          [],
+          [[1, 'dropped']],
+        ),
+      )
+      expect(stateOf(filed, 'app', 'b')).toMatchObject({ state: 'open', heldBy: [] })
+    })
+
+    test('it judges a row of another project too, and an unknown outcome never holds', () => {
+      const lib = plan([row('x')])
+      const held = rowStatuses(facts({ app: p, lib }, { 'lib:x': 7 }, [[7, 'closed']], [], [[7, 'dropped']]))
+      expect(stateOf(held, 'app', 'd')).toMatchObject({
+        state: 'waiting',
+        heldBy: [{ row: 'lib:x', outcome: 'dropped' }],
+      })
+      const unknown = rowStatuses(facts({ app: p, lib }, { 'lib:x': 7 }, [[7, 'closed']]))
+      expect(stateOf(unknown, 'app', 'd')?.state).toBe('filable')
+    })
+
+    test('the field needs after, and an adopted row has none', () => {
+      expect(parsePlan({ version: 1, rows: [row('a', { after_needs: 'shipped' })] })).toMatchObject({
+        ok: false,
+        message: expect.stringContaining('after_needs judges its after rows'),
+      })
+      expect(parsePlan({ version: 1, rows: [{ key: 'a', issue: 3, after_needs: 'shipped' }] })).toMatchObject({
+        ok: false,
+        message: expect.stringContaining('an adopted row (issue) has no after_needs'),
+      })
+      expect(parsePlan({ version: 1, rows: [row('a'), row('b', { after: ['a'], after_needs: 'any' })] }).ok).toBe(false)
+    })
   })
 
   test('after_days needs after, and an adopted row has none', () => {

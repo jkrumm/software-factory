@@ -107,6 +107,8 @@ export interface IssueReads {
   open(): Promise<OpenIssueRow[]>
   /** of these Issues, which exist and which are closed */
   statesOf(ids: readonly IssueId[]): Promise<Map<IssueId, 'open' | 'closed'>>
+  /** of these Issues, how each closed: `done`, `healed`, `dropped` or `cancelled` (an Issue that is not closed is absent) */
+  outcomesOf(ids: readonly IssueId[]): Promise<Map<IssueId, string>>
   /** of these Issues, when each closed (an Issue that is not closed is absent) */
   closedAtOf(ids: readonly IssueId[]): Promise<Map<IssueId, Date>>
   /** of these Issues, the repo text each was filed for and whether it is open (an unknown Issue is absent) */
