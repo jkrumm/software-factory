@@ -158,7 +158,9 @@ describe('finalize', () => {
     expect(w.transcripts.archived).toMatchObject([
       { attempt: 1, sessions: [{ claudeSession: 'c-1', transcriptPath: '/x/c-1.jsonl' }] },
     ])
-    expect(w.worktrees.removed).toEqual([{ repo: '/roots/example', branch: 'factory/1-1' }])
+    expect(w.worktrees.removed).toMatchObject([
+      { repo: '/roots/example', branch: 'factory/1-1', path: expect.any(String), shipped: [] },
+    ])
 
     expect((await finalizeLead(w.deps, effect)).ok).toBe(true)
     expect(w.claims.released).toHaveLength(1)

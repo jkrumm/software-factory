@@ -64,10 +64,12 @@ export async function finalizeLead(deps: LeadDeps, effect: FinalizeEffect): Prom
             shipped: await shippedCommits(quality, issue, loaded.issue.attempt),
           }
         : null
-    return ok({ finalization, repo: loaded?.issue.repo ?? null, row, facts, closing })
+    // A worktree is judged against the shipped commits too, while the Issue is still open: a squash leaves its branch off the base.
+    const shipped = closing?.shipped ?? (loaded ? await shippedCommits(quality, issue, loaded.issue.attempt) : [])
+    return ok({ finalization, repo: loaded?.issue.repo ?? null, row, facts, closing, shipped })
   })
   if (!read.ok) return read
-  const { finalization, repo, row, facts, closing } = read.value
+  const { finalization, repo, row, facts, closing, shipped } = read.value
   if (finalization?.doneAt) {
     if (!effect.payload.closed || closing === null || repo === null) return ok(undefined)
     return cleanClosed(deps, issue, repo, closing)
@@ -129,7 +131,12 @@ export async function finalizeLead(deps: LeadDeps, effect: FinalizeEffect): Prom
       let path: string | null = null
       if (row?.worktreePath != null) {
         const removal = located.ok
-          ? await deps.worktrees.remove({ repo: located.value, branch: leadBranch(issue, attempt) })
+          ? await deps.worktrees.remove({
+              repo: located.value,
+              branch: leadBranch(issue, attempt),
+              path: row.worktreePath,
+              shipped,
+            })
           : ok({ kept: `the repo ${repo} cannot be found: ${located.error.detail}`, path: row.worktreePath })
         if (!removal.ok) return removal
         if ('kept' in removal.value) {

@@ -1,6 +1,6 @@
-import { existsSync } from 'node:fs'
+import { existsSync, realpathSync } from 'node:fs'
 import { join } from 'node:path'
-import type { Worktree, WorktreeRemoval, Worktrees } from '../../domains/leads/ports.ts'
+import type { Worktree, WorktreeRemoval, WorktreeRemovalInput, Worktrees } from '../../domains/leads/ports.ts'
 import { err, ok, portError, type PortError, type Result } from '../../kernel/result.ts'
 import { CannotExecute, childEnv, EXIT_TIMEOUT, runProcess } from '../hc/process.ts'
 
@@ -153,16 +153,60 @@ export function gitWorktrees(options: GitWorktreesOptions = {}): Worktrees {
 
   const onBase = (repo: string, branch: string, base: string) => refOnBase(gitIn, repo, `refs/heads/${branch}`, base)
 
-  async function remove(input: { repo: string; branch: string }): Promise<WorktreeRemoval> {
-    const { repo, branch } = input
+  /** Every path `git worktree list --porcelain` gives, with the branch it has checked out (none when detached). */
+  async function entries(repo: string): Promise<{ path: string; branch: string | null }[]> {
+    const listing = (await gitIn(repo, 'worktree', 'list', '--porcelain')) ?? ''
+    return listing.split('\n\n').flatMap((block) => {
+      const lines = block.split('\n')
+      const path = lines.find((line) => line.startsWith('worktree '))?.slice('worktree '.length)
+      const branch = lines.find((line) => line.startsWith('branch refs/heads/'))?.slice('branch refs/heads/'.length)
+      return path ? [{ path, branch: branch ?? null }] : []
+    })
+  }
+
+  const real = (path: string): string => {
+    try {
+      return realpathSync(path)
+    } catch {
+      return path
+    }
+  }
+
+  /**
+   * The attempt's worktree: by the path it was made at (a lead may detach HEAD or rename its branch, which leaves the
+   * branch name pointing at nothing), else by the branch. None means git no longer knows one.
+   */
+  async function find(repo: string, branch: string, path: string | null): Promise<string | null> {
+    const all = await entries(repo)
+    if (path) {
+      const wanted = real(path)
+      const byPath = all.find((entry) => entry.path === path || real(entry.path) === wanted)
+      if (byPath) return byPath.path
+    }
+    return all.find((entry) => entry.branch === branch)?.path ?? null
+  }
+
+  /** A shipped commit already on the base: the merge (squash or rebase) rewrote the branch, the work is there. */
+  async function landed(repo: string, shipped: readonly string[], base: string): Promise<boolean> {
+    for (const sha of shipped) {
+      if (!/^[0-9a-f]{7,64}$/.test(sha)) continue
+      if ((await gitIn(repo, 'merge-base', '--is-ancestor', sha, base)) !== undefined) return true
+    }
+    return false
+  }
+
+  async function remove(input: WorktreeRemovalInput): Promise<WorktreeRemoval> {
+    const { repo, branch, shipped } = input
     await gitIn(repo, 'worktree', 'prune')
-    const path = (await listed(repo, branch)) ?? null
+    const path = await find(repo, branch, input.path)
     if (path && (await gitIn(path, 'status', '--porcelain')) !== '') return { kept: 'it has uncommitted changes', path }
     // A failed fetch reads what the last one left, which can only keep more.
     await probe([git, '-C', repo, 'fetch', '-q', 'origin'])
     const base = await originDefault(repo)
     if (!base) return { kept: `${repo} has no origin default branch to check it against`, path }
-    if (!(await onBase(repo, branch, base))) return { kept: `its commits are not on ${base}`, path }
+    // The tree's own HEAD counts as much as the branch: a detached lead's commits sit on no branch.
+    const safe = (await onBase(repo, branch, base)) && (path === null || (await refOnBase(gitIn, path, 'HEAD', base)))
+    if (!safe && !(await landed(repo, shipped, base))) return { kept: `its commits are not on ${base}`, path }
     if (path && (await gitIn(repo, 'worktree', 'remove', path)) === undefined) {
       return { kept: 'git worktree remove refused', path }
     }

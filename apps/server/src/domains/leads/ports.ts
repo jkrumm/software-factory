@@ -80,10 +80,19 @@ export interface Worktree {
 
 export type WorktreeRemoval = { removed: true } | { kept: string; path: string | null }
 
+export interface WorktreeRemovalInput {
+  repo: string
+  branch: string
+  /** where the attempt's worktree was made: found by it first, because a lead may have detached or renamed the branch */
+  path: string | null
+  /** the commits the attempt shipped: one on the base means the work landed, however the merge rewrote it */
+  shipped: readonly string[]
+}
+
 /** git on the host. `create` is idempotent per branch; `remove` takes the worktree away only when nothing would be lost. */
 export interface Worktrees {
   create(input: { repo: string; branch: string }): Promise<Result<Worktree>>
-  remove(input: { repo: string; branch: string }): Promise<Result<WorktreeRemoval>>
+  remove(input: WorktreeRemovalInput): Promise<Result<WorktreeRemoval>>
 }
 
 /** How the Issue ended, as far as its branches care: a dropped or cancelled one has no work worth keeping. */
