@@ -82,9 +82,16 @@ export function learnedLeadMib(attemptPeaks: readonly number[]): number | null {
 }
 
 /**
- * The memory the running leads will still take on: what each repo's lead is learned to peak at, less what its tree holds
- * now (a lead with no fresh sample holds 0). A lead of a repo with no learned value adds nothing.
+ * The memory the running leads will still take on at once: what each repo's lead is learned to peak at, less what its
+ * tree holds now (a lead with no fresh sample holds 0; a repo with no learned value adds nothing). A learned peak is the
+ * whole process tree, and the peaks are test runs, which only happen inside the host's test slots: at most `concurrent`
+ * (the slot total, never below 1) leads are at their peak at once, so only the `concurrent` largest gaps are summed.
  */
-export function leadGrowthMib(running: readonly { learnedMib: number | null; currentMib: number }[]): number {
-  return running.reduce((sum, lead) => sum + Math.max(0, (lead.learnedMib ?? 0) - lead.currentMib), 0)
+export function leadGrowthMib(
+  running: readonly { learnedMib: number | null; currentMib: number }[],
+  concurrent: number,
+): number {
+  const gaps = running.map((lead) => Math.max(0, (lead.learnedMib ?? 0) - lead.currentMib))
+  gaps.sort((a, b) => b - a)
+  return gaps.slice(0, Math.max(1, concurrent)).reduce((sum, gap) => sum + gap, 0)
 }

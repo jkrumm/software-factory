@@ -33,6 +33,8 @@ export interface CapacityLimits {
   memoryCeilings: MemoryCeilings
   /** `FACTORY_SEATS_MAX_BONUS`: the most extra leads per account while the host idles; absent or 0: off */
   seatsMaxBonus?: number
+  /** `FACTORY_SLOTS`, the `slots.total` of `factory capacity get`: how many leads can run tests (their memory peaks) at once; absent: 2 */
+  slots?: number
 }
 
 export interface CapacityDeps extends PlanningDeps {
@@ -69,6 +71,9 @@ const NO_HOST: HostInputs = {
   recent: [],
   notes: [],
 }
+
+/** The slot total when the limits carry none (`FACTORY_SLOTS`'s default). */
+const DEFAULT_SLOTS = 2
 
 /** A lead's own sample is read as what it holds now only when it is this fresh. */
 const RSS_MAX_AGE_MS = 3 * 60_000
@@ -325,8 +330,13 @@ function seatBonusOf(snap: Snapshot, host: HostInputs, limits: CapacityLimits, b
   })
 }
 
-/** What each lead is learned to still take on beyond what it holds, summed over the claims held. */
-function growthOf(claims: readonly Claim[], projects: readonly StoredProject[], host: HostInputs): number {
+/** What the leads are learned to still take on beyond what they hold: the largest gaps, as many as test slots run at once. */
+function growthOf(
+  claims: readonly Claim[],
+  projects: readonly StoredProject[],
+  host: HostInputs,
+  limits: CapacityLimits,
+): number {
   // A claim carries its project's path; what is learned is keyed by the project's name.
   const nameOf = new Map(projects.map((p) => [p.repo, p.name]))
   return leadGrowthMib(
@@ -334,6 +344,7 @@ function growthOf(claims: readonly Claim[], projects: readonly StoredProject[], 
       learnedMib: host.learned.get(nameOf.get(claim.repo) ?? '')?.mib ?? null,
       currentMib: host.rssByIssue.get(issueNumber(claim.issue)) ?? 0,
     })),
+    Math.max(1, limits.slots ?? DEFAULT_SLOTS),
   )
 }
 
@@ -408,7 +419,7 @@ function decide(snap: Snapshot, host: HostInputs, limits: CapacityLimits, bonus:
       candidateMib: learned?.mib ?? null,
       attempts: learned?.attempts ?? 0,
       freeMib: host.freeMib,
-      growthMib: growthOf(claims, snap.projects, host),
+      growthMib: growthOf(claims, snap.projects, host, limits),
       headroomMib: headroomMib(host.ramMib),
       running: claims.length,
     }
