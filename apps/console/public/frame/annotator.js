@@ -3,7 +3,10 @@
  * It posts the owner's selection out ({type:'factory.select', quote, path, rect:{top,bottom,left}} with the rect relative to the frame's viewport, to `parent`, target origin '*' because the
  * frame's origin is opaque), tells the parent it is ready ({type:'factory.ready'}), and paints what the page sends in
  * ({type:'factory.highlight', quotes:[...]} with the CSS Custom Highlight API; {type:'factory.scroll', quote} brings one
- * into view and paints it as the active one; {type:'factory.deactivate'} drops that; {type:'factory.clear'} drops the selection, so the same passage can be chosen again), from `parent` only. It writes nothing and starts nothing: the Console writes only after the owner submits a
+ * into view (unless `center` is false) and paints it as the active one; {type:'factory.deactivate'} drops that; {type:'factory.clear'} drops the selection, so the same passage can be chosen again; {type:'factory.goto', index} scrolls to the index-th heading), from `parent` only. It also posts a click on a painted passage ({type:'factory.open', quote}), a click on a link that
+ * leaves the frame ({type:'factory.link', href}: the frame has no network and no way out, the page opens it), the headings in
+ * order ({type:'factory.headings', items:[{level,text}]}) and the one the reader is in ({type:'factory.section', index}).
+ * A `#anchor` link scrolls here. It writes nothing and starts nothing: the Console writes only after the owner submits a
  * comment in its own UI.
  *
  * The text index and the heading path mirror src/lib/artifact.ts (indexText, locateQuote, headingPath); keep them alike.
@@ -94,15 +97,104 @@
     return range
   }
 
+  /** the passages that are painted, to tell which one a click is on */
+  let painted = []
   function paint(quotes) {
     if (!window.CSS || !CSS.highlights || typeof Highlight === 'undefined') return
     const idx = index()
-    const ranges = quotes.flatMap((quote) => {
+    painted = quotes.flatMap((quote) => {
       const range = typeof quote === 'string' ? rangeOf(idx, quote) : null
-      return range ? [range] : []
+      return range ? [{ quote: norm(quote).slice(0, MAX_QUOTE), range }] : []
     })
-    CSS.highlights.set('factory', new Highlight(...ranges))
+    CSS.highlights.set('factory', new Highlight(...painted.map((found) => found.range)))
   }
+
+  function caretAt(x, y) {
+    if (document.caretPositionFromPoint) {
+      const at = document.caretPositionFromPoint(x, y)
+      return at ? { node: at.offsetNode, offset: at.offset } : null
+    }
+    const range = document.caretRangeFromPoint ? document.caretRangeFromPoint(x, y) : null
+    return range ? { node: range.startContainer, offset: range.startOffset } : null
+  }
+
+  /** the narrowest painted passage under a point: the caret snaps to the nearest character, so the point must be on the text */
+  function quoteAt(x, y) {
+    const caret = painted.length ? caretAt(x, y) : null
+    if (!caret) return null
+    let best = null
+    for (const found of painted) {
+      const on = Array.from(found.range.getClientRects()).some(
+        (r) => x >= r.left && x <= r.right && y >= r.top && y <= r.bottom,
+      )
+      if (!on || !found.range.isPointInRange(caret.node, caret.offset)) continue
+      const size = found.range.toString().length
+      if (!best || size < best.size) best = { quote: found.quote, size }
+    }
+    return best ? best.quote : null
+  }
+
+  const headingElements = () => Array.from(document.querySelectorAll('h1,h2,h3,h4,h5,h6'))
+  const SECTION_OFFSET = 48
+  let lastSection = -2
+  function section() {
+    let at = -1
+    // at the very end of the document the last headings can never reach the top: the last one on screen is the section
+    const atEnd = window.scrollY > 0 && window.scrollY + window.innerHeight >= document.documentElement.scrollHeight - 2
+    headingElements().forEach((h, i) => {
+      const top = h.getBoundingClientRect().top
+      if (top <= SECTION_OFFSET || (atEnd && top < window.innerHeight)) at = i
+    })
+    if (at === lastSection) return
+    lastSection = at
+    parent.postMessage({ type: 'factory.section', index: at }, '*')
+  }
+  let sectionFrame = 0
+  window.addEventListener(
+    'scroll',
+    () => {
+      cancelAnimationFrame(sectionFrame)
+      sectionFrame = requestAnimationFrame(section)
+    },
+    { passive: true },
+  )
+
+  document.addEventListener('click', (event) => {
+    const link = event.target instanceof Element ? event.target.closest('a[href]') : null
+    if (link) {
+      // nothing navigates inside the frame: an anchor scrolls, a web link is the page's to open
+      event.preventDefault()
+      const raw = link.getAttribute('href') || ''
+      if (raw.startsWith('#')) {
+        let id = raw.slice(1)
+        try {
+          id = decodeURIComponent(id)
+        } catch {
+          // an id that is not valid percent-encoding is used as written
+        }
+        const target = id ? document.getElementById(id) || document.getElementsByName(id)[0] : null
+        if (target) target.scrollIntoView({ block: 'start', behavior: 'smooth' })
+        else if (!id) window.scrollTo({ top: 0, behavior: 'smooth' })
+      } else if (/^https?:\/\//i.test(link.href)) {
+        parent.postMessage({ type: 'factory.link', href: link.href.slice(0, 2048) }, '*')
+      }
+      return
+    }
+    const sel = window.getSelection()
+    if (sel && !sel.isCollapsed) return
+    const quote = quoteAt(event.clientX, event.clientY)
+    if (quote) parent.postMessage({ type: 'factory.open', quote }, '*')
+  })
+
+  let hoverFrame = 0
+  document.addEventListener('mousemove', (event) => {
+    const { clientX, clientY, target } = event
+    cancelAnimationFrame(hoverFrame)
+    hoverFrame = requestAnimationFrame(() => {
+      const over = !(target instanceof Element && target.closest('a[href]')) && quoteAt(clientX, clientY) !== null
+      document.documentElement.style.cursor = over ? 'pointer' : ''
+    })
+  })
 
   let lastKey = ''
   function post() {
@@ -145,7 +237,8 @@
     if (data.type === 'factory.deactivate' && window.CSS && CSS.highlights) CSS.highlights.delete('factory-active')
     if (data.type === 'factory.scroll' && typeof data.quote === 'string') {
       const range = rangeOf(index(), data.quote)
-      range?.startContainer.parentElement?.scrollIntoView({ block: 'center', behavior: 'smooth' })
+      if (data.center !== false)
+        range?.startContainer.parentElement?.scrollIntoView({ block: 'center', behavior: 'smooth' })
       if (window.CSS && CSS.highlights && typeof Highlight !== 'undefined') {
         if (range) CSS.highlights.set('factory-active', new Highlight(range))
         else CSS.highlights.delete('factory-active')
@@ -153,5 +246,23 @@
     }
   })
 
+  window.addEventListener('message', (event) => {
+    if (event.source !== parent) return
+    const data = event.data
+    if (data?.type !== 'factory.goto' || !Number.isInteger(data.index)) return
+    const heading = headingElements()[data.index]
+    if (heading) heading.scrollIntoView({ block: 'start', behavior: 'smooth' })
+  })
+
   parent.postMessage({ type: 'factory.ready' }, '*')
+  parent.postMessage(
+    {
+      type: 'factory.headings',
+      items: headingElements()
+        .slice(0, 500)
+        .map((h) => ({ level: Number(h.tagName.charAt(1)), text: norm(h.textContent || '').slice(0, 300) })),
+    },
+    '*',
+  )
+  section()
 })()

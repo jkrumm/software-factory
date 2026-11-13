@@ -116,6 +116,8 @@ export const LANGUAGE = {
   steward:
     'The supervisor loop over stalled Issues. Acts deterministically first (wake, re-check, requeue, deliver) and asks an agw workflow when a call needs judgment',
   surface: 'Console, Herdr, Iris, Argo, ntfy',
+  'taste pass':
+    "The weekly retro's reading of the owner's verdict notes and comments: a preference seen twice becomes a rule in the repo's AGENTS.md or DESIGN.md",
   'test slot':
     "A lease on the host's test capacity that factory slot run takes for a make check, test or e2e step; it waits while the host is busy and records what the step cost",
   touch: 'The owner acting on an Issue',

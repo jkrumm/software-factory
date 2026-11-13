@@ -1,7 +1,9 @@
-import { useEffect, useRef } from 'react'
+import { useRouter } from '@tanstack/react-router'
+import { type ReactNode, useEffect, useRef } from 'react'
 import Markdown, { defaultUrlTransform } from 'react-markdown'
 import remarkGfm from 'remark-gfm'
-import { parseFrameMessage, type SelectionRect } from '@/lib/artifact'
+import { linkTarget, parseFrameMessage, type SelectionRect, type TocItem } from '@/lib/artifact'
+import { isPlainClick } from '@/lib/peek'
 import { cn } from '@/lib/utils'
 import {
   clearHighlights,
@@ -9,9 +11,11 @@ import {
   paintActive,
   paintHighlights,
   paintPending,
+  quoteAt,
   scrollToQuote,
   selectionIn,
 } from '@/lib/highlight'
+import { collectHeadings, readingArea, scrollParentOf, scrollToId, sectionIndex } from '@/lib/toc'
 
 export interface Selected {
   quote: string
@@ -29,13 +33,65 @@ export interface ContentProps {
   primary: boolean
   /** the quotes of the anchored annotations to paint */
   quotes: readonly string[]
-  /** the quote to bring into view; `tick` makes the same quote scroll twice */
-  focus: { quote: string; tick: number } | null
+  /** the quote to paint as the comment in focus; `tick` makes the same quote scroll twice; `scroll: false` paints without scrolling */
+  focus: { quote: string; tick: number; scroll?: boolean } | null
   onSelect: (selected: Selected) => void
+  /** a click on a highlighted passage: its quote */
+  onOpen: (quote: string) => void
+  /** the document's headings once it is rendered (the primary one only) */
+  onHeadings: (items: TocItem[]) => void
+  /** the heading of the section the reader is in, null before the first */
+  onSection: (id: string | null) => void
+  /** a heading to scroll to; `tick` makes the same one scroll twice */
+  jump: { id: string; tick: number } | null
   /** rises whenever the composer closes: the frame drops its selection, so the same passage can be chosen again */
   cleared: number
   /** the content sits in a panel that scrolls as one (the peek): the frame takes its own height, not the column's */
   stacked?: boolean
+}
+
+/** A link in Markdown: an anchor scrolls the document, an external one opens a tab, a Console page opens in place, the rest is text. */
+function MarkdownLink({ href, children }: { href?: string; children?: ReactNode }) {
+  const router = useRouter()
+  const target = linkTarget(href, window.location.origin)
+  if (target.kind === 'none')
+    return (
+      <span className="underline decoration-dotted underline-offset-2" title={href ? `No page for ${href}` : undefined}>
+        {children}
+      </span>
+    )
+  if (target.kind === 'anchor')
+    return (
+      <a
+        href={`#${encodeURIComponent(target.id)}`}
+        onClick={(event) => {
+          event.preventDefault()
+          const root = event.currentTarget.closest('.artifact-prose')
+          if (root) scrollToId(root, target.id)
+        }}
+      >
+        {children}
+      </a>
+    )
+  if (target.kind === 'route')
+    return (
+      <a
+        href={target.path}
+        onClick={(event) => {
+          // in a peek the document-level handler has already taken a plain click; elsewhere the router goes there
+          if (event.defaultPrevented || !isPlainClick(event.nativeEvent)) return
+          event.preventDefault()
+          router.history.push(target.path)
+        }}
+      >
+        {children}
+      </a>
+    )
+  return (
+    <a href={target.url} target="_blank" rel="noopener noreferrer">
+      {children}
+    </a>
+  )
 }
 
 /**
@@ -43,8 +99,20 @@ export interface ContentProps {
  * (`javascript:`, `data:` and the like become empty), and an image is never loaded (the Console's CSP is `img-src 'self'
  * data:`, and a network image would be a request the owner did not make): its alt text shows instead.
  */
-function MarkdownContent({ content, primary, quotes, focus, onSelect, cleared }: Omit<ContentProps, 'format'>) {
+function MarkdownContent({
+  content,
+  primary,
+  quotes,
+  focus,
+  onSelect,
+  cleared,
+  onOpen,
+  onHeadings,
+  onSection,
+  jump,
+}: Omit<ContentProps, 'format'>) {
   const root = useRef<HTMLDivElement>(null)
+  const hover = useRef(0)
 
   // A selection is committed when the drag ends (mouse up, touch end, key up), or after it has rested for a moment (touch
   // handles end no event); never while the button is still down, so the composer does not take focus mid-drag.
@@ -100,7 +168,7 @@ function MarkdownContent({ content, primary, quotes, focus, onSelect, cleared }:
   }, [primary, quotes, content])
 
   useEffect(() => {
-    if (primary && focus && root.current) scrollToQuote(root.current, focus.quote)
+    if (primary && focus && focus.scroll !== false && root.current) scrollToQuote(root.current, focus.quote)
   }, [primary, focus])
   // the passage in focus is painted again whenever the text or the comments change under it, without scrolling to it
   useEffect(() => {
@@ -108,8 +176,64 @@ function MarkdownContent({ content, primary, quotes, focus, onSelect, cleared }:
   }, [primary, focus, content, quotes])
   useEffect(() => () => paintActive(document.body, null), [])
 
+  // The table of contents: the headings get their anchors once the text is in, and the section in view follows the scroll.
+  useEffect(() => {
+    if (!primary || !root.current) return
+    const { items, elements } = collectHeadings(root.current)
+    onHeadings(items)
+    const area = scrollParentOf(root.current)
+    let frame = 0
+    let last: string | null | undefined
+    const follow = () => {
+      cancelAnimationFrame(frame)
+      frame = requestAnimationFrame(() => {
+        const at = sectionIndex(elements, readingArea(area))
+        const id = items[at]?.id ?? null
+        if (id === last) return
+        last = id
+        onSection(id)
+      })
+    }
+    follow()
+    window.addEventListener('scroll', follow, { passive: true, capture: true })
+    window.addEventListener('resize', follow)
+    return () => {
+      cancelAnimationFrame(frame)
+      window.removeEventListener('scroll', follow, { capture: true })
+      window.removeEventListener('resize', follow)
+    }
+  }, [primary, content, onHeadings, onSection])
+
+  useEffect(() => {
+    if (jump && root.current) scrollToId(root.current, jump.id)
+  }, [jump])
+
+  const passageAt = (event: React.MouseEvent) =>
+    primary && root.current && !(event.target as Element).closest('a')
+      ? quoteAt(root.current, quotes, event.clientX, event.clientY)
+      : null
+
   return (
-    <div ref={root} className="artifact-prose">
+    <div
+      ref={root}
+      className="artifact-prose"
+      onClick={(event) => {
+        // a drag that ends on a highlight selects text; only a plain click opens the comment
+        if (window.getSelection()?.isCollapsed === false) return
+        const quote = passageAt(event)
+        if (quote) onOpen(quote)
+      }}
+      onMouseMove={(event) => {
+        const { clientX, clientY, target } = event
+        cancelAnimationFrame(hover.current)
+        hover.current = requestAnimationFrame(() => {
+          if (!root.current) return
+          const over =
+            primary && !(target as Element).closest('a') && quoteAt(root.current, quotes, clientX, clientY) !== null
+          root.current.style.cursor = over ? 'pointer' : ''
+        })
+      }}
+    >
       <Markdown
         remarkPlugins={[remarkGfm]}
         skipHtml
@@ -120,7 +244,7 @@ function MarkdownContent({ content, primary, quotes, focus, onSelect, cleared }:
               <table {...props} />
             </div>
           ),
-          a: ({ node: _node, ...props }) => <a {...props} target="_blank" rel="noreferrer noopener" />,
+          a: ({ node: _node, href, children }) => <MarkdownLink href={href}>{children}</MarkdownLink>,
           img: ({ alt }) => <span className="italic text-muted-foreground">{alt ? `[image: ${alt}]` : '[image]'}</span>,
         }}
       >
@@ -140,11 +264,28 @@ const FRAME_SANDBOX = 'allow-scripts'
  * write follows only the owner's submit in the Console's own UI. The parent keys this component on the revision, so a new
  * revision is a new frame.
  */
-function HtmlContent({ content, primary, quotes, focus, onSelect, cleared, stacked }: Omit<ContentProps, 'format'>) {
+function HtmlContent({
+  content,
+  primary,
+  quotes,
+  focus,
+  onSelect,
+  cleared,
+  stacked,
+  onOpen,
+  onHeadings,
+  onSection,
+  jump,
+}: Omit<ContentProps, 'format'>) {
   const frame = useRef<HTMLIFrameElement>(null)
+  const router = useRouter()
   const ready = useRef(false)
   const latest = useRef(quotes)
   latest.current = quotes
+  /** the frame names a heading by its index; the page's table of contents by an id */
+  const headings = useRef<TocItem[]>([])
+  const handlers = useRef({ onOpen, onHeadings, onSection })
+  handlers.current = { onOpen, onHeadings, onSection }
 
   const send = (message: unknown) => frame.current?.contentWindow?.postMessage(message, '*')
 
@@ -170,10 +311,23 @@ function HtmlContent({ content, primary, quotes, focus, onSelect, cleared, stack
           },
         })
       }
+      if (message?.type === 'open' && primary) handlers.current.onOpen(message.quote)
+      if (message?.type === 'headings' && primary) {
+        headings.current = message.items.map((item, i) => ({ ...item, id: `frame-${i}` }))
+        handlers.current.onHeadings(headings.current)
+      }
+      if (message?.type === 'section' && primary)
+        handlers.current.onSection(headings.current[message.index]?.id ?? null)
+      if (message?.type === 'link') {
+        // the frame has no network and no way out: the page opens what it is asked to, in a tab that cannot reach back
+        const target = linkTarget(message.href, window.location.origin)
+        if (target.kind === 'external') window.open(target.url, '_blank', 'noopener,noreferrer')
+        if (target.kind === 'route') router.history.push(target.path)
+      }
     }
     window.addEventListener('message', onMessage)
     return () => window.removeEventListener('message', onMessage)
-  }, [primary, onSelect])
+  }, [primary, onSelect, router])
 
   useEffect(() => {
     if (primary && ready.current) send({ type: 'factory.highlight', quotes })
@@ -181,12 +335,21 @@ function HtmlContent({ content, primary, quotes, focus, onSelect, cleared, stack
 
   useEffect(() => {
     if (!primary || !ready.current) return
-    send(focus ? { type: 'factory.scroll', quote: focus.quote } : { type: 'factory.deactivate' })
+    send(
+      focus
+        ? { type: 'factory.scroll', quote: focus.quote, center: focus.scroll !== false }
+        : { type: 'factory.deactivate' },
+    )
   }, [primary, focus])
 
   useEffect(() => {
     if (primary && cleared > 0) send({ type: 'factory.clear' })
   }, [primary, cleared])
+
+  useEffect(() => {
+    const index = jump ? headings.current.findIndex((item) => item.id === jump.id) : -1
+    if (index !== -1) send({ type: 'factory.goto', index })
+  }, [jump])
 
   return (
     <iframe

@@ -169,11 +169,13 @@ click, and keeps the working screen where it was.
   its target as a dashed line and the distance to it, the last window against the one before.
 - **Artifact**: a header band (a link back to its Issue with the Issue's Lozenge and project, the title, kind, format,
   author and age, the revision selector, and for a Concept or Spec the verdict as one button whose popover holds the four
-  words and a note; once given it is a Lozenge). Under it the document, **centred** in the column left of a 24 rem comments
-  panel, running prose capped at 75ch (Markdown and the shared template alike; tables, figures and code fill that measure).
+  words, each with a one-line consequence under it, and a note; once given it is a Lozenge). Under it the document, **centred** in the column left of a 24 rem comments
+  panel (from 1800 px a 36 rem column: the document's table of contents a third, the comments two thirds; narrower, the contents are a collapsible bar under the header), running prose capped at 75ch (Markdown and the shared template alike; tables, figures and code fill that measure).
   The panel is a surface step with one card per comment on the step below it: author (initial tile, name), a mono relative
-  time, the quoted passage as a tinted chip, the words at 13 px, the heading path in mono 11 px, and the revision only when it
-  is not the one shown. A card is a button: it brings its passage into view and paints it stronger (a darker fill and an
+  time, the quoted passage as a tinted chip, the words at 13 px, the heading path in mono 11 px without the document's own name.
+  The revision shown's comments list first; earlier ones fold under "Previous revision (N)", each marked carried or resolved by
+  revision. A write shows at once, marked Sending, and a failed one stays with its reason and a retry. A click on a highlight in
+  the document opens its card in edit mode. A card is a button: it brings its passage into view and paints it stronger (a darker fill and an
   underline, so it is not only a step in tint), and its card takes the next surface step with a faint shadow, never a ring
   or a bar; edit (the owner's own) and delete show on the open card, on hover and on focus and work in place. A group heading
   shows only when more than one group exists. A general comment is the box at the panel's foot. Selecting a passage opens
