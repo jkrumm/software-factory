@@ -14,7 +14,12 @@ const IssueRow = z.object({
   wait_reason: z.string().nullable(),
   kind: z.string().nullable(),
   since: z.date().nullable(),
+  /** how a closed Issue closed; only the closed-blocker read selects it */
+  outcome: z.string().nullish(),
 })
+
+/** Same set as `SHIPPED_OUTCOMES` in the planning domain (read/ imports only types from a domain). */
+const SHIPPED = new Set(['done', 'healed'])
 
 const kindOf = (kind: string | null | undefined): ChainNode['issueKind'] =>
   FLOW_KINDS.find((known) => known === kind) ?? 'chore'
@@ -38,6 +43,7 @@ const Plan = z.object({
       kind: z.string().optional(),
       repo: z.string().optional(),
       after: z.array(z.string()).optional(),
+      after_needs: z.string().optional(),
       not_before: z.string().optional(),
       after_days: z.number().int().optional(),
       issue: z.number().int().optional(),
@@ -143,7 +149,7 @@ export async function readChain(
     missing.length === 0
       ? []
       : await sql`
-          SELECT i.id, i.repo, i.state, i.wait_reason, COALESCE(f.payload->>'title', i.id) AS title,
+          SELECT i.id, i.repo, i.state, i.wait_reason, i.outcome, COALESCE(f.payload->>'title', i.id) AS title,
             COALESCE((SELECT k.payload->>'kind' FROM factory.issue_events k WHERE k.issue_id = i.id AND k.kind = 'settled' AND k.result = 'applied' ORDER BY k.version DESC LIMIT 1), f.payload->>'kind') AS kind, COALESCE(s.at, f.at) AS since
           FROM factory.issues i
           LEFT JOIN factory.issue_events f ON f.issue_id = i.id AND f.kind = 'filed' AND f.version = 1
@@ -187,7 +193,14 @@ export async function readChain(
         ? 0
         : Math.max(0, ...mine.map((edge) => issues.get(edge.to)?.since?.getTime() ?? 0)) + row.after_days * 86_400_000
     const until = Math.max(row.not_before === undefined ? 0 : notBeforeMs(row.not_before), windowEnd)
-    const waiting = mine.some((edge) => !edge.closed) || until > now.getTime()
+    // `after_needs: shipped`: a blocker that closed without shipping holds the row for good (RS14 amendment)
+    const held =
+      row.after_needs === 'shipped' &&
+      mine.some((edge) => {
+        const outcome = issues.get(edge.to)?.outcome
+        return edge.closed && outcome != null && !SHIPPED.has(outcome)
+      })
+    const waiting = held || mine.some((edge) => !edge.closed) || until > now.getTime()
     return {
       id: rowId(project, row.key),
       kind: 'row',
