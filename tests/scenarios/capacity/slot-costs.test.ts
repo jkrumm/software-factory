@@ -11,7 +11,7 @@ beforeAll(async () => {
     env: { FACTORY_SLOTS: '2', FACTORY_SLOTS_MAX: '2' },
   })
   await lab.cli(['project', 'sync'])
-  // a host sample exists: the fake host shows about 11 GB resident of 32 GiB
+  // a host sample exists: the fake host shows about 11 GiB in use of 32 GiB
   expect((await lab.cli(['loop', 'run', 'host'])).code).toBe(0)
 })
 
