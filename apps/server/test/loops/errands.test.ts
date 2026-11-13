@@ -12,6 +12,7 @@ import type { CheckRun } from '../../src/domains/checkpoints/request.ts'
 import { type FixedClock, fixedClock } from '../../src/kernel/clock.ts'
 import { sequentialIds } from '../../src/kernel/ids.ts'
 import { err, ok, portError, type Result } from '../../src/kernel/result.ts'
+import { readAsks } from '../../src/read/asks.ts'
 import { needsModel, readNeeds } from '../../src/read/needs.ts'
 import { readSince } from '../../src/read/since.ts'
 
@@ -310,4 +311,20 @@ describe('the still-needed look at a request with no check', () => {
     await pass()
     expect(neededCalls).toHaveLength(1)
   })
+})
+
+test('a request is in the read API’s asks overview with no Issue, hidden from a work-repo reader', async () => {
+  const made = await request({ text: 'Reseal the cache', command: 'make secrets-seed' })
+  const { humanQueue, asks } = await readAsks(db.sql, clock.now())
+  expect(asks).toEqual([])
+  expect(humanQueue).toEqual([
+    expect.objectContaining({
+      id: made.errand.id,
+      kind: 'errand',
+      issue: null,
+      issueRef: null,
+      repo: null,
+      visible: false,
+    }),
+  ])
 })

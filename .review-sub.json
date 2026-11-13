@@ -1,0 +1,166 @@
+{
+  "schemaVersion": 4,
+  "jobId": "rv_fyroc4cyspkvfpk5dlcl",
+  "thread": "26d039d45ca6",
+  "round": 1,
+  "tier": "deep",
+  "seat": { "model": "sonnet", "effort": "high", "vote": 1 },
+  "rule": "sensitive path: apps/server/migrations/1015_standalone_errands.sql (+4)",
+  "account": "iu",
+  "intent": "Issue 967: standalone Errands (requests) with check/expiry/key, an hourly errands loop with a still-needed look, long_wait only past due, a 72h final screen of held signals, Console Back at desk, and the since band 'Errands closed without you'.",
+  "outcome": "actionable",
+  "summary": "3 important.",
+  "findings": [
+    {
+      "id": "26d039d45ca6-1",
+      "tag": "important",
+      "class": "bug",
+      "file": "apps/server/src/read/asks.ts",
+      "line": 73,
+      "message": "readAsks selects every open Errand that reached the owner, now including standalone ones with issue_id NULL, and calls issueNumberOf(w.issue_id), which does null.slice and throws.",
+      "failureScenario": "POST /v1/errands/requests stores an Errand with issue_id NULL and reached_owner_at set; the next overview or asks read (read/reader.ts:82, :166) throws a TypeError instead of listing it, so the read surfaces break while any request is open.",
+      "fix": "Make readAsks null-safe for issue_id (issue null, issueRef null, repo null, visible false), or filter standalone errands out of this read, and add a test with an open request.",
+      "otherInstances": ["apps/server/src/read/asks.ts:65", "apps/server/src/read/asks.ts:68"],
+      "votes": "1/1",
+      "lineValid": true,
+      "anchored": false
+    },
+    {
+      "id": "26d039d45ca6-2",
+      "tag": "important",
+      "class": "bug",
+      "file": "apps/server/src/adapters/shell/check-runner.ts",
+      "line": 24,
+      "message": "The check is wrapped as `(${command}) 2>&1`, so a trailing `# comment` swallows the closing paren; sh exits 2 with a syntax error, and checkVerdict maps 1..125 to not_needed.",
+      "failureScenario": "A request posted with check `test -f /tmp/seal # sealed` is closed as no longer needed by the next hourly errands pass although the check never ran, which contradicts the documented rule that a check that could not answer never closes the request.",
+      "fix": "Put a newline before the closing paren (`(${command}\\n) 2>&1`), or pass the command to sh -c unwrapped and merge stderr via the spawn options; consider treating sh's exit 2 as unrunnable.",
+      "otherInstances": ["apps/server/src/domains/checkpoints/request.ts:1817"],
+      "votes": "1/1",
+      "lineValid": true,
+      "anchored": true
+    },
+    {
+      "id": "26d039d45ca6-3",
+      "tag": "important",
+      "class": "bug",
+      "file": "tests/scenarios/loops/loops.test.ts",
+      "line": 58,
+      "message": "The change registers a new loop `errands` (main.ts, between digest and reaper) but this scenario test still asserts the exact list of sixteen loop names.",
+      "failureScenario": "The scenarios suite runs the real main.ts; GET /v1/loops now returns 17 names, so the toEqual at line 58 fails.",
+      "fix": "Add 'errands' between 'digest' and 'reaper' in the expected list and update the 'sixteen' wording.",
+      "votes": "1/1",
+      "lineValid": true,
+      "anchored": false
+    }
+  ],
+  "checked": [
+    "errands.issue_id nullable: every reader of factory.errands traced. needs.ts uses a LEFT JOIN and is fine; kpis-flow.ts and recheckCandidates are filtered; unscreenedErrands is gated by reached_owner_at; read/asks.ts:39 is NOT null-safe (finding 1)",
+    "LOOP_NAMES 'errands': written at packages/contract/src/loops.ts:317, registered at main.ts:562, settings at settings.ts, env allow-list at scripts/env-file.sh; the loops scenario test at tests/scenarios/loops/loops.test.ts:58 was not updated (finding 3)",
+    "check command execution: runProcess childEnv strips secrets (adapters/quality/process.ts:31), group kill and timeout work, and policy.ts:74 allows owner, orchestrator and agent only; the wrapper's syntax-error path is finding 2",
+    "closed_by/closed_kind: written by finishErrand, supersedeRequests and turnAwayErrand in checkpoint-store.ts; read by read/since.ts:2193 (band) and api/checkpoints.ts errandView",
+    "final screen: screenable SQL (intake/store.ts) and isFinalScreen agree; promote passes the steer into a noted event (app/intake.ts:1254)",
+    "requestErrand replay and supersede flow: errandByKey, supersedeRequests and the open-key unique index agree; the owner-closed-while-check-ran race is guarded by done_at IS NULL",
+    "migration 1015: number is unique (1014 was the latest), the ALTERs are additive, and the one UPDATE is bounded to turned_away rows",
+    "the agw workflow factory-errand-needed is defined outside this repo (unverified)"
+  ],
+  "criteria": [
+    {
+      "item": "Standalone Errands (requests) with command, host, check, expiry and key, via `factory errand request` and POST /v1/errands/requests",
+      "status": "met",
+      "evidence": "apps/server/src/app/checkpoints.ts:1171"
+    },
+    {
+      "item": "Hourly errands loop runs checks (exit 1..125 closes, a check that cannot answer keeps it) and closes expired requests",
+      "status": "unclear",
+      "evidence": "apps/server/src/app/loops/errands.ts:1437 (a shell syntax error exit 2 still closes; see check-runner.ts:24)"
+    },
+    {
+      "item": "A still-needed workflow reads check-less requests",
+      "status": "met",
+      "evidence": "apps/server/src/app/loops/errands.ts:1375"
+    },
+    {
+      "item": "long_wait appears in Needs only once its timer is past due",
+      "status": "met",
+      "evidence": "apps/server/src/read/needs.ts:2105"
+    },
+    {
+      "item": "A held signal 72 h old gets a final screening that promotes with a steer or dismisses",
+      "status": "met",
+      "evidence": "apps/server/src/domains/intake/screen.ts:1955"
+    },
+    {
+      "item": "Console Back at desk (?mode=desk) with the command to copy, Done, Not needed, and the count in the tab title",
+      "status": "met",
+      "evidence": "apps/console/src/routes/needs-you.tsx:475"
+    },
+    {
+      "item": "Since band 'Errands closed without you'",
+      "status": "met",
+      "evidence": "apps/server/src/read/since.ts:2186"
+    },
+    {
+      "item": "Docs move with the code (AGENTS.md, architecture.md, language.md)",
+      "status": "met",
+      "evidence": "docs/architecture.md:2975"
+    }
+  ],
+  "stepBack": null,
+  "files": [
+    "AGENTS.md",
+    "apps/cli/src/generated/operations.ts",
+    "apps/console/src/components/needs/card.tsx",
+    "apps/console/src/components/needs/desk.tsx",
+    "apps/console/src/components/needs/since-band.tsx",
+    "apps/console/src/lib/api.ts",
+    "apps/console/src/lib/language.gen.ts",
+    "apps/console/src/lib/needs.ts",
+    "apps/console/src/lib/since.ts",
+    "apps/console/src/routes/needs-you.tsx",
+    "apps/console/test/needs.test.ts",
+    "apps/console/test/since.test.ts",
+    "apps/server/migrations/1015_standalone_errands.sql",
+    "apps/server/src/adapters/agw/errand-needed.ts",
+    "apps/server/src/adapters/intake/store.ts",
+    "apps/server/src/adapters/postgres/checkpoint-store.ts",
+    "apps/server/src/adapters/shell/check-runner.ts",
+    "apps/server/src/api/checkpoints.ts",
+    "apps/server/src/api/policy.ts",
+    "apps/server/src/app/checkpoints-errands.ts",
+    "apps/server/src/app/checkpoints-recheck.ts",
+    "apps/server/src/app/checkpoints-uses.ts",
+    "apps/server/src/app/checkpoints.ts",
+    "apps/server/src/app/intake.ts",
+    "apps/server/src/app/loops/errands.ts",
+    "apps/server/src/app/loops/screen.ts",
+    "apps/server/src/app/loops/settings.ts",
+    "apps/server/src/domains/checkpoints/ports.ts",
+    "apps/server/src/domains/checkpoints/request.ts",
+    "apps/server/src/domains/intake/ports.ts",
+    "apps/server/src/domains/intake/screen.ts",
+    "apps/server/src/kernel/hands.ts",
+    "apps/server/src/main.ts",
+    "apps/server/src/read/kpis-flow.ts",
+    "apps/server/src/read/needs.ts",
+    "apps/server/src/read/since.ts",
+    "apps/server/test/checkpoints/request.test.ts",
+    "apps/server/test/intake/screen-final.test.ts",
+    "apps/server/test/intake/screen.test.ts",
+    "apps/server/test/loops/errands.test.ts",
+    "apps/server/test/read-models/long-waits.test.ts",
+    "apps/server/test/read-models/units.test.ts",
+    "docs/architecture.md",
+    "docs/language.md",
+    "packages/contract/src/checkpoints.ts",
+    "packages/contract/src/index.ts",
+    "packages/contract/src/intake.ts",
+    "packages/contract/src/loops.ts",
+    "packages/contract/src/read-models.ts",
+    "scripts/env-file.sh",
+    "tests/e2e/needs-you.e2e.ts"
+  ],
+  "dropped": { "repeats": 0, "nits": 0 },
+  "base": "0d4ee99d735f683d86f319fad1eba6e6f946df81",
+  "diffBase": "0d4ee99d735f683d86f319fad1eba6e6f946df81",
+  "head": "f92716092ab1bdf95f82cae1f0803a7815586863"
+}

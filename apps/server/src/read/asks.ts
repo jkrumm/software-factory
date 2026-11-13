@@ -11,7 +11,8 @@ export const LINE_TEXT_MAX = 240
 interface Waiting {
   id: string
   kind: 'decision' | 'review' | 'errand'
-  issue_id: string
+  /** null for a request no Issue raised */
+  issue_id: string | null
   text: string
   at: Date
 }
@@ -36,7 +37,7 @@ export async function readAsks(sql: SQL, now: Date): Promise<{ asks: ReadAsk[]; 
         WHERE v.artifact_id = a.id
           AND v.revision = (SELECT max(r.n) FROM factory.artifact_revisions r WHERE r.artifact_id = a.id))
     ORDER BY a.created_at, a.id`
-  const errands: { id: string; issue_id: string; summary: string; raised_at: Date }[] = await sql`
+  const errands: { id: string; issue_id: string | null; summary: string; raised_at: Date }[] = await sql`
     SELECT id, issue_id, summary, raised_at FROM factory.errands
     WHERE done_at IS NULL AND reached_owner_at IS NOT NULL ORDER BY raised_at, id`
   const waiting: Waiting[] = [
@@ -62,15 +63,18 @@ export async function readAsks(sql: SQL, now: Date): Promise<{ asks: ReadAsk[]; 
       at: e.raised_at,
     })),
   ]
-  const briefs = await loadBriefs(sql, [...new Set(waiting.map((w) => w.issue_id))])
+  const briefs = await loadBriefs(
+    sql,
+    [...new Set(waiting.map((w) => w.issue_id))].filter((id): id is string => id !== null),
+  )
   const lines = waiting.map((w): ReadAsk => {
     const words = fallbackWords(w.text, 'ask')
-    const brief = briefs.get(w.issue_id)
+    const brief = w.issue_id === null ? undefined : briefs.get(w.issue_id)
     return {
       id: w.id,
       kind: w.kind,
       source: w.kind,
-      issue: issueNumberOf(w.issue_id),
+      issue: w.issue_id === null ? null : issueNumberOf(w.issue_id),
       issueRef: w.issue_id,
       short: words.short,
       summary: words.summary,

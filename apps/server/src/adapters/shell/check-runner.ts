@@ -11,7 +11,13 @@ export function shellCheckRunner(run: Run = runProcess, timeoutMs = CHECK_TIMEOU
   return {
     async run(command): Promise<CheckRun> {
       try {
-        const result = await run(['sh', '-c', `(${command}) 2>&1`], timeoutMs, { group: true })
+        // a command that does not parse never ran: `sh -n` says so, and only a check that ran may close a request
+        const syntax = await run(['sh', '-n', '-c', command], timeoutMs, { group: true })
+        if (syntax.exitCode !== 0) {
+          return { exit: null, timedOut: false, output: 'the check is not valid shell' }
+        }
+        // the newline ends a trailing `# comment` before the closing parenthesis
+        const result = await run(['sh', '-c', `(${command}\n) 2>&1`], timeoutMs, { group: true })
         const output = result.stdout.trim().slice(0, CHECK_OUTPUT_MAX)
         if (result.exitCode === EXIT_TIMEOUT) return { exit: null, timedOut: true, output }
         if (result.exitCode === EXIT_STOPPED) return { exit: null, timedOut: false, output }
