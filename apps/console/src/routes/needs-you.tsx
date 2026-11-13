@@ -86,7 +86,7 @@ function NeedsYou() {
   const filters: NeedsSearch = { ...(only ? { kind: only } : {}), ...(project ? { project } : {}) }
   const onSent = (message: string) => {
     setSent(message)
-    void navigate({ search: filters, replace: true })
+    void navigate({ search: { ...filters, ...(desk ? { mode: 'desk' as const } : {}) }, replace: true })
   }
   const setFilter = (name: 'kind' | 'project', value: string) =>
     void navigate({
