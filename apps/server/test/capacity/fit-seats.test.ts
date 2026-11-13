@@ -107,14 +107,65 @@ describe('the learned fit rule', () => {
 describe('growth of the running leads', () => {
   test('learned less what each holds now, never negative; unlearned adds nothing', () => {
     expect(
-      leadGrowthMib([
-        { learnedMib: 18_000, currentMib: 4_000 },
-        { learnedMib: 2_000, currentMib: 3_000 },
-        { learnedMib: null, currentMib: 500 },
-        { learnedMib: 1_000, currentMib: 0 },
-      ]),
+      leadGrowthMib(
+        [
+          { learnedMib: 18_000, currentMib: 4_000 },
+          { learnedMib: 2_000, currentMib: 3_000 },
+          { learnedMib: null, currentMib: 500 },
+          { learnedMib: 1_000, currentMib: 0 },
+        ],
+        4,
+      ),
     ).toBe(15_000)
-    expect(leadGrowthMib([])).toBe(0)
+    expect(leadGrowthMib([], 2)).toBe(0)
+  })
+
+  test('only as many of the largest gaps as can peak at once are summed', () => {
+    const leads = [100, 900, 300, 700, 500, 200, 800].map((gap) => ({ learnedMib: gap + 50, currentMib: 50 }))
+    expect(leadGrowthMib(leads, 2)).toBe(1_700)
+    expect(leadGrowthMib(leads, 7)).toBe(3_500)
+    expect(leadGrowthMib(leads, 99)).toBe(3_500)
+    expect(leadGrowthMib(leads, 0)).toBe(900)
+  })
+
+  describe('admission on a busy but idle host (7 leads, 2 test slots)', () => {
+    const gib = (n: number) => Math.round(n * 1_024)
+    const running = [
+      ...Array.from({ length: 4 }, () => ({ learnedMib: gib(3.6), currentMib: gib(0.5) })),
+      ...Array.from({ length: 2 }, () => ({ learnedMib: gib(0.7), currentMib: gib(0.3) })),
+      { learnedMib: gib(1.5), currentMib: gib(0.5) },
+    ]
+    const candidate = (name: string, mib: number, memory = { swapoutMbPer300s: 0, swapUsedPct: 10 }) =>
+      checkAdmission(
+        inputs({
+          memory,
+          leadFit: fit({
+            repo: name,
+            candidateMib: gib(mib),
+            freeMib: gib(12.8),
+            growthMib: leadGrowthMib(running, 2),
+            headroomMib: headroomMib(32_768),
+            running: running.length,
+          }),
+        }),
+      )
+
+    test('a dotfiles and a software-factory lead are admitted on memory', () => {
+      expect(candidate('dotfiles', 0.7).admit).toBe(true)
+      expect(candidate('software-factory', 1.2).admit).toBe(true)
+    })
+
+    test('counting every peak at once would have refused', () => {
+      const all = checkAdmission(
+        inputs({ leadFit: fit({ candidateMib: gib(0.7), freeMib: gib(12.8), growthMib: leadGrowthMib(running, 7) }) }),
+      )
+      expect(all.admit).toBe(false)
+    })
+
+    test('swapout over its ceiling still refuses', () => {
+      const verdict = candidate('dotfiles', 0.7, { swapoutMbPer300s: 3_000, swapUsedPct: 10 })
+      expect(verdict).toMatchObject({ admit: false, refusal: { message: expect.stringContaining('short of memory') } })
+    })
   })
 
   test('free memory and headroom from the newest sample', () => {

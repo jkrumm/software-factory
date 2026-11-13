@@ -134,7 +134,7 @@ through `receive` in `app/intake.ts`; the answer is a triage outcome (`docs/lang
   (`drain` starts nothing), the host's 1-minute load, its memory (swapouts and swap against ceilings; the swapouts are the higher of the pass's own rate and the minute samples' last 300 s, `sustainedSwapoutMb`, so a lull between bursts does not open the gate; the memory that a
   lane's `memory` reserves for its running leads and the candidate counts as swap in use, `docs/plan.md` "Lanes"; then the
   learned fit: a repo with at least three sampled attempts is refused, kind `memory`, when its p80 lead plus what the running
-  leads will still grow by (their repo's p80 less what their tree holds now, by a sample not older than 3 min) does not fit into
+  leads will still grow by (their repo's p80 less what their tree holds now, by a sample not older than 3 min; only as many of the largest gaps as the test slots run at once, `FACTORY_SLOTS`, since a peak is a test run) does not fit into
   the free memory of the newest host sample (not older than 5 min) less headroom (the larger of 2 GiB and 8 % of RAM); it
   replaces the lanes' `memory` for that repo's leads, never refuses with an unknown figure and never the only lead on the host), the
   candidate's lane (`lanes: {apple: 1}` in `project.yaml` caps the leads of a resource class inside the repo, a fix is
