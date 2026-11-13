@@ -380,7 +380,10 @@ test('the capacity section reads what the API computed: cards, steps, lead costs
   ])
   const costs = section.getByRole('table', { name: /Memory a lead takes/ })
   const argo = costs.getByRole('row').filter({ has: page.getByRole('rowheader', { name: 'argo', exact: true }) })
-  await expect(argo.getByRole('cell')).toHaveText(['3', mibWords(2200), mibWords(1800)])
+  // argo's footprints are 60 % of its RSS; zeta has none recorded yet
+  await expect(argo.getByRole('cell')).toHaveText(['3', mibWords(2200), mibWords(1800), mibWords(1320), '60 %'])
+  const zeta = costs.getByRole('row').filter({ has: page.getByRole('rowheader', { name: 'zeta', exact: true }) })
+  await expect(zeta.getByRole('cell')).toHaveText(['2', mibWords(900), mibWords(900), 'none yet', 'none yet'])
 
   await expect(section.getByText(/^3 processes of closed attempts ended by the/)).toBeVisible()
   await expectHint(section, CAPACITY_HINT.reaped)
