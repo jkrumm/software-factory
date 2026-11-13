@@ -182,6 +182,19 @@ describe('the plan files its rows', () => {
     expect(stored?.plan_warnings).toEqual([expect.stringContaining('row typo: lane appel is not declared')])
   })
 
+  test('a row with a prio files an Issue that carries it into the queue order, once', async () => {
+    world.source.add('app', {
+      project: PROJECT('app'),
+      plan: plan('p1', [row('late', { prio: 0 }), row('urgent', { prio: 50 }), row('plain')]),
+    })
+    value(await planningPass(world.deps))
+    value(await planningPass(world.deps))
+    const prios = await world.db.sql`SELECT issue_id, value, actor FROM factory.planning_prios ORDER BY id`
+    expect(
+      prios.map((p: { issue_id: string; value: number; actor: string }) => [p.issue_id, p.value, p.actor]),
+    ).toEqual([[issueId(2), 50, 'plan']])
+  })
+
   test('a row whose role does not resolve files nothing and the pass names the field', async () => {
     world.source.add('app', { project: PROJECT('app'), plan: plan('p1', [row('lost', { seat: { role: 'gone' } })]) })
     const pass = value(await planningPass(world.deps))

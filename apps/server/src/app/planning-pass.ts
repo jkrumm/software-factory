@@ -135,6 +135,16 @@ async function fileFor(
     event: { kind: 'settled', payload: {}, actor: 'factory' },
   })
   if (!settled.ok) return err(portError('refused', JSON.stringify(settled.error)))
+  // The plan is the owner's file, so a row's `prio` is the owner's priority for its Issue; the key makes a replay record nothing twice.
+  if (row.prio !== undefined && row.prio !== 0) {
+    await stores.planning.recordPrio({
+      key: key('plan', source, row.key, 'prio'),
+      issue,
+      value: row.prio,
+      actor: 'plan',
+      at: deps.clock.now(),
+    })
+  }
   await stores.planning.recordFiledRow({ project: source, key: row.key, issue, at: deps.clock.now() })
   return ok({ project: source, row: row.key, issue })
 }
