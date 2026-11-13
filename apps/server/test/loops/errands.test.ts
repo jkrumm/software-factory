@@ -315,9 +315,9 @@ describe('the still-needed look at a request with no check', () => {
 
 test('a request is in the read API’s asks overview with no Issue, hidden from a work-repo reader', async () => {
   const made = await request({ text: 'Reseal the cache', command: 'make secrets-seed' })
-  const { humanQueue, asks } = await readAsks(db.sql, clock.now())
+  const { humanQueue: errands, asks } = await readAsks(db.sql, clock.now())
   expect(asks).toEqual([])
-  expect(humanQueue).toEqual([
+  expect(errands).toEqual([
     expect.objectContaining({
       id: made.errand.id,
       kind: 'errand',
