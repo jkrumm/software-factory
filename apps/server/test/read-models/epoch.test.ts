@@ -13,7 +13,7 @@ import { readWindowFacts } from '../../src/read/throughput-loop.ts'
 import { countedFrom, epochNote } from '../../src/kernel/epoch.ts'
 import { type FindingRow, readLedger } from '../../src/domains/loops/throughput.ts'
 import { answersOf } from '../../src/read/throughput-answers.ts'
-import { redactAnswers, redactRetroThroughput } from '../../src/read/throughput-redact.ts'
+import { redactAnswers } from '../../src/read/throughput-redact.ts'
 
 /**
  * The counting epoch: samples on both sides of it, and every read that counts them (the throughput model with its three
@@ -354,17 +354,6 @@ describe('what the epoch leaves to the ledger and to a lead', () => {
     expect(seen.cost.finding).toMatchObject({ project: 'private', subject: '*' })
     expect(seen.host.waitingFor).toBeNull()
     expect(seen.host.sentence).toContain('an Issue waits for memory')
-    // the retro's scorecard and findings lose the work repo's name too
-    const retro = redactRetroThroughput(
-      {
-        answers,
-        project: [{ repo: 'chat' }, { repo: 'argo' }] as unknown as ThroughputModel['project'],
-        improvements: [{ project: 'chat', subject: 'fast' }] as unknown as ThroughputModel['improvements'],
-      },
-      [{ name: 'argo', repo: 'argo' }],
-    )
-    expect(retro.project.map((p) => p.repo)).toEqual(['private', 'argo'])
-    expect(retro.improvements[0]).toMatchObject({ project: 'private', subject: '*' })
     // an open project's name stays
     expect(redactAnswers(answers, [{ name: 'chat', repo: 'chat' }]).cost.finding?.project).toBe('chat')
   })

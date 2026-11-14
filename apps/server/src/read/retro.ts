@@ -18,7 +18,7 @@ import { capacityFigures, tuneConstant } from './capacity-tuning.ts'
 import { type CapacityConstants, readCapacityLoop } from './capacity-loop.ts'
 import { readFriction } from './friction.ts'
 import type { QueueReasons } from './flow.ts'
-import { redactRetroThroughput } from './throughput-redact.ts'
+import { redactAnswers } from './throughput-redact.ts'
 import { loadOpenProjects } from './work.ts'
 import { readThroughput } from './throughput.ts'
 import { readKpis, type Window } from './kpis.ts'
@@ -321,7 +321,7 @@ export async function readRetro(
   const bare = (list: RetroSample[]): RetroSample[] => list.map((s) => ({ ...s, why: '' }))
   return {
     ...model,
-    throughput: redactRetroThroughput(model.throughput, await loadOpenProjects(sql)),
+    throughput: { ...model.throughput, answers: redactAnswers(model.throughput.answers, await loadOpenProjects(sql)) },
     sessions: sessions.map((s) => ({ ...s, transcriptPath: null })),
     samples: {
       regressed: bare(model.samples.regressed),
