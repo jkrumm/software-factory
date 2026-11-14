@@ -2,6 +2,7 @@ import type {
   ReadAccountQuota,
   ReadAskLine,
   ReadEdgeLine,
+  ReadErrandLine,
   ReadEvidenceLine,
   ReadInsights,
   ReadIssueCard,
@@ -11,6 +12,7 @@ import type {
 } from '@software-factory/contract'
 import { basename } from 'node:path'
 import type { SQL } from 'bun'
+import { DESK_EVERY_MS } from '../kernel/run.ts'
 import { loadArtifacts, loadNotes, loadShipping, loadTriage } from './issue-history.ts'
 import { describeEvent, phaseOf, stateSentence } from './describe.ts'
 import type { QueueReasons } from './flow.ts'
@@ -310,6 +312,44 @@ export async function loadEdges(sql: SQL, id: string): Promise<ReadIssueDetail['
   return { after: after.sort(order), before: before.sort(order) }
 }
 
+interface ErrandRow {
+  id: string
+  summary: string
+  raised_at: Date
+  done_at: Date | null
+  closed_kind: string | null
+  reached_owner_at: Date | null
+  check_command: string | null
+  check_at: Date | null
+  check_note: string | null
+}
+
+/**
+ * The Issue's Errands, oldest first. An open Errand with a check is next checked by the desk pass: six hours after the last
+ * pass at the latest (the owner's return, or `factory errand check`, runs it sooner), at once when that is already past.
+ */
+export async function loadErrands(sql: SQL, id: string, now: Date): Promise<ReadErrandLine[]> {
+  const rows: ErrandRow[] = await sql`
+    SELECT id, summary, raised_at, done_at, closed_kind, reached_owner_at, check_command, check_at, check_note
+    FROM factory.errands WHERE issue_id = ${id} ORDER BY raised_at, id`
+  if (rows.length === 0) return []
+  const [pass]: { at: Date }[] = await sql`SELECT at FROM factory.desk_pass`
+  const next = new Date(Math.max(now.getTime(), (pass?.at.getTime() ?? 0) + DESK_EVERY_MS))
+  return rows.map((row) => ({
+    id: row.id,
+    summary: row.summary,
+    state: row.done_at ? 'closed' : 'open',
+    raisedAt: row.raised_at.toISOString(),
+    closedAt: row.done_at?.toISOString() ?? null,
+    closedKind: row.closed_kind,
+    reachedOwner: row.reached_owner_at !== null,
+    hasCheck: row.check_command !== null,
+    lastCheckedAt: row.check_at?.toISOString() ?? null,
+    checkNote: row.check_note,
+    nextCheckAt: !row.done_at && row.check_command !== null ? next.toISOString() : null,
+  }))
+}
+
 /** `GET /v1/issues/:id`: the card with its timeline, evidence, asks and sessions; undefined for no such Issue. */
 export async function issueDetail(
   deps: SessionDeps,
@@ -378,6 +418,7 @@ export async function issueDetail(
     asks,
     artifacts,
     shipping,
+    errands: await loadErrands(sql, row.id, deps.clock.now()),
     sessions,
     edges: await loadEdges(sql, row.id),
   }

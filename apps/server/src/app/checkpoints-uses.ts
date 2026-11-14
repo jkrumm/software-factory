@@ -23,6 +23,7 @@ import {
   submitArtifact,
 } from './checkpoints.ts'
 import { type PageDeps, runCheckpointPass, sendDuePages } from './checkpoints-pages.ts'
+import { checkErrandNow } from './checkpoints-check.ts'
 import { screenErrands } from './checkpoints-errands.ts'
 import { previewSpecScreen, screenSpecs } from './checkpoints-specs.ts'
 import { recheckOpen } from './checkpoints-recheck.ts'
@@ -51,6 +52,7 @@ export function checkpointUses(deps: SettleDeps & PageDeps) {
     raiseErrand: (input: Parameters<typeof raiseErrand>[1]) => raiseErrand(deps, input),
     finishErrand: (input: Parameters<typeof finishErrand>[1]) => finishErrand(deps, input),
     turnBackErrand: (input: Parameters<typeof turnBackErrand>[1]) => turnBackErrand(deps, input),
+    checkErrand: (input: Parameters<typeof checkErrandNow>[1]) => checkErrandNow(deps, input),
     requestErrand: (input: Parameters<typeof requestErrand>[1]) => requestErrand(deps, input),
     errands: (filter: Parameters<typeof listErrands>[1]) => listErrands(deps, filter),
     pages: (limit: number) => listPages(deps, limit),

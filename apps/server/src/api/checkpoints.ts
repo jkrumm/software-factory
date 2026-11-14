@@ -12,6 +12,7 @@ import {
   AnnotationReplyBody,
   EditAnnotationBody,
   ErrandBody,
+  ErrandCheckReply,
   ErrandDoneBody,
   ErrandList,
   ErrandReply,
@@ -736,6 +737,31 @@ export const checkpointRoutes = (uses: CheckpointUses) =>
           operationId: 'errand.turn-back',
           summary:
             'the owner or the orchestrator turns an Errand back, not done: the note says what to do instead, and the lead hears it as its next turn',
+        },
+      },
+    )
+    .post(
+      '/errands/:id/check',
+      async ({ params }) => {
+        const id = idOf('errand', params.id)
+        if (!id) return unknownId('Errand', params.id)
+        const result = await uses.checkErrand({ errandId: id })
+        if (!result.ok) return failed(result.error)
+        return Response.json(
+          ErrandCheckReply.parse({
+            outcome: result.value.outcome,
+            note: result.value.note,
+            errand: errandView(result.value.errand),
+          }),
+        )
+      },
+      {
+        params: Id,
+        response: RESPONSES(ErrandCheckReply, 400, 404, 422, 503),
+        detail: {
+          operationId: 'errand.check',
+          summary:
+            "run the Errand's check now instead of at the desk pass: exit 1..125 closes it and ends the wait, exit 0 keeps it",
         },
       },
     )

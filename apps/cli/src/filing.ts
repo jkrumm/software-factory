@@ -90,6 +90,7 @@ const errandHelp = [
   '  a Report that does not show in Needs you: a signal on software-factory',
   "A step on the owner's MacBook (a sudo prompt, a Touch ID, a `hc run`): `--cmd '<the command he runs>' --host macbook`. The factory pushes it to the MacBook as a dialog when he is back, one at a time, and the answer closes the Errand. Never queue an `ask-human.sh` request beside an Errand: an Errand with no command beside your queued request is refused.",
   'Raise the Errand as the last step of a turn and end the turn: `ship`, `defer` and `close` are taken again after the note that it is done.',
+  "An Errand with a `--check` closes itself when the check exits 1..125 (at the owner's return or every 6 hours); `factory errand check <id>` runs it now, and `factory issue show` lists `errands` with when it last ran and runs next.",
 ].join('\n')
 
 const submitHelp =
@@ -107,7 +108,10 @@ export const OPERATION_EXTENSIONS: Readonly<Record<string, OperationExtension>> 
     notice: syncNotice,
   },
   'issue.show': {
-    help: "`edges.after` lists what the Issue waits on and `edges.before` the open Issues that wait on it: stored `after` edges (`via: edge`, what `factory issue replan` edits) and a lead's own dependency wait (`via: wait`). `factory read chain --format plain` shows the whole chain (`blocking.issue_<n>`).",
+    help: "`edges.after` lists what the Issue waits on and `edges.before` the open Issues that wait on it: stored `after` edges (`via: edge`, what `factory issue replan` edits) and a lead's own dependency wait (`via: wait`). `factory read chain --format plain` shows the whole chain (`blocking.issue_<n>`). `errands` lists the Issue's Errands with `lastCheckedAt`, the check's `checkNote` and `nextCheckAt` (the desk pass runs the check then at the latest; `factory errand check <id>` runs it now).",
+  },
+  'errand.check': {
+    help: "Runs the Errand's own check now (the shell command given to `errand raise --check`) instead of waiting for the desk pass. Exit 1..125 closes the Errand and ends the Issue's wait (you hear it as a note); exit 0 keeps it (`outcome: needed`); a check that could not run says why (`unrunnable`). An Errand with no check answers `no_check`; one closed already answers `already_closed`.",
   },
   'issue.list': { plain: issueListPlain },
   'artifact.list': {

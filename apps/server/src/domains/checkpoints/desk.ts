@@ -1,9 +1,8 @@
+import { DESK_EVERY_MS } from '../../kernel/run.ts'
 import type { ErrandRecord } from './ports.ts'
 
 /** The owner is back at the desk after this long without a Console read. */
 export const PRESENCE_GAP_MS = 2 * 3_600_000
-/** The desk pass runs at least this often, whether or not he came back. */
-export const DESK_EVERY_MS = 6 * 3_600_000
 /** While he is away, a pushed command is pushed again no sooner than this (it waits in a dialog until then). */
 export const PUSH_AGAIN_MS = 6 * 3_600_000
 /** Checks, re-screens and pushes one pass makes. */

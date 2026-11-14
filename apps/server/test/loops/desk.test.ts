@@ -11,6 +11,7 @@ import { postgresVisitStore } from '../../src/adapters/postgres/visit-store.ts'
 import { postgresWorkStore } from '../../src/adapters/postgres/work-store.ts'
 import { prReview } from '../../src/adapters/reviews/pr.ts'
 import { finishErrand, raiseErrand, requestErrand, turnBackErrand } from '../../src/app/checkpoints.ts'
+import { checkErrandNow } from '../../src/app/checkpoints-check.ts'
 import { screenErrands } from '../../src/app/checkpoints-errands.ts'
 import type { SettleDeps } from '../../src/app/checkpoints-settle.ts'
 import { fileIssue, recordIssueEvent } from '../../src/app/issues.ts'
@@ -25,6 +26,7 @@ import { type FixedClock, fixedClock } from '../../src/kernel/clock.ts'
 import { type IssueId, sequentialIds } from '../../src/kernel/ids.ts'
 import { key } from '../../src/kernel/keys.ts'
 import { err, ok, portError, type Result } from '../../src/kernel/result.ts'
+import { loadErrands } from '../../src/read/issues.ts'
 import { readNeeds } from '../../src/read/needs.ts'
 
 /**
@@ -329,6 +331,83 @@ describe('the desk pass', () => {
     const again = value(await deskPass({ settle: deps, desk: deps.uow as never, push }))
     expect(again).toMatchObject({ ran: true, returned: true, pushed: [first.errand.id, second.errand.id] })
     expect(pushed).toEqual([first.errand.id, first.errand.id, second.errand.id])
+  })
+
+  test("a lead's check now closes an Errand its check answers and wakes the lead, with no desk pass", async () => {
+    const issueId = await workingIssue('example')
+    const raised = await raise(issueId, { summary: 'Install the sysctl profile', check: 'sysctl-done' })
+    value(await screenErrands(deps))
+    const effectsBefore = await noteEffects(issueId)
+
+    // still needed: exit 0 keeps it open and says so
+    const kept = value(await checkErrandNow(deps, { errandId: raised.errand.id }))
+    expect(kept).toMatchObject({ outcome: 'needed' })
+    expect(await errandRow(raised.errand.id)).toMatchObject({ done_at: null, check_at: clock.now() })
+
+    checks['sysctl-done'] = { exit: 1, timedOut: false, output: 'value changed' }
+    const closed = value(await checkErrandNow(deps, { errandId: raised.errand.id }))
+    expect(closed.outcome).toBe('closed')
+    expect(closed.note).toContain('value changed')
+    expect(await errandRow(raised.errand.id)).toMatchObject({ closed_kind: 'not_needed', closed_by: 'check' })
+    expect(await issueRow(issueId)).toMatchObject({ state: 'working' })
+    expect(await noteEffects(issueId)).toBe(effectsBefore + 1)
+
+    // asked again it is a replay, never a second wake
+    expect(value(await checkErrandNow(deps, { errandId: raised.errand.id })).outcome).toBe('already_closed')
+    expect(await noteEffects(issueId)).toBe(effectsBefore + 1)
+  })
+
+  test('a check that cannot run is noted, and an Errand with no check says so', async () => {
+    const issueId = await workingIssue('example')
+    const checked = await raise(issueId, { summary: 'Plug it in', check: 'no-such-tool' })
+    const otherIssue = await workingIssue('example')
+    const bare = await raise(otherIssue, { summary: 'Click the portal' })
+    value(await screenErrands(deps))
+    checks['no-such-tool'] = { exit: null, timedOut: false, output: 'not found' }
+
+    const unrunnable = value(await checkErrandNow(deps, { errandId: checked.errand.id }))
+    expect(unrunnable.outcome).toBe('unrunnable')
+    expect(unrunnable.note).toContain('could not run')
+    expect(await errandRow(checked.errand.id)).toMatchObject({ done_at: null, check_fails: 1 })
+    expect(value(await checkErrandNow(deps, { errandId: bare.errand.id })).outcome).toBe('no_check')
+    const missing = await checkErrandNow(deps, { errandId: 'errand_missing' as never })
+    expect(missing).toMatchObject({ ok: false, error: { kind: 'not_found' } })
+  })
+
+  test('issue show lists the Errands with when their check last ran and next runs', async () => {
+    const issueId = await workingIssue('example')
+    const raised = await raise(issueId, { summary: 'Install the profile', check: 'sysctl-done' })
+    const otherIssue = await workingIssue('example')
+    await raise(otherIssue, { summary: 'Click the portal' })
+    value(await screenErrands(deps))
+
+    // no desk pass yet: the next check is due at once
+    const first = await loadErrands(db.sql, issueId, clock.now())
+    expect(first.map((line) => line.summary)).toEqual(['Install the profile'])
+    expect(first[0]).toMatchObject({
+      state: 'open',
+      hasCheck: true,
+      lastCheckedAt: null,
+      nextCheckAt: clock.now().toISOString(),
+    })
+    expect((await loadErrands(db.sql, otherIssue, clock.now()))[0]).toMatchObject({
+      hasCheck: false,
+      nextCheckAt: null,
+    })
+
+    value(await deskPass({ settle: deps, desk: deps.uow as never, push }))
+    const passAt = clock.now()
+    clock.set(new Date(passAt.getTime() + 2 * HOUR))
+    const waiting = await loadErrands(db.sql, issueId, clock.now())
+    expect(waiting[0]).toMatchObject({
+      lastCheckedAt: passAt.toISOString(),
+      nextCheckAt: new Date(passAt.getTime() + 6 * HOUR).toISOString(),
+    })
+
+    checks['sysctl-done'] = { exit: 1, timedOut: false, output: 'changed' }
+    value(await checkErrandNow(deps, { errandId: raised.errand.id }))
+    const done = await loadErrands(db.sql, issueId, clock.now())
+    expect(done[0]).toMatchObject({ state: 'closed', closedKind: 'not_needed', nextCheckAt: null })
   })
 
   test('is due when the owner comes back after two hours, and not for a short absence', async () => {

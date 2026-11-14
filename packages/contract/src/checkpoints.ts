@@ -508,6 +508,18 @@ export const ErrandReply = z
   .meta({ id: 'ErrandReply' })
 export type ErrandReply = z.infer<typeof ErrandReply>
 
+/** What `factory errand check` answers: the check ran now, and what it said. */
+export const ErrandCheckReply = z
+  .object({
+    /** `needed`: exit 0, the Errand stays; `closed`: exit 1..125, it closed and the lead is told; `unrunnable`: the check could not answer; `no_check`: the Errand carries none; `already_closed`: it was done before the call */
+    outcome: z.enum(['needed', 'closed', 'unrunnable', 'no_check', 'already_closed']),
+    /** the check's own words: its exit and output, or why it could not run */
+    note: z.string().nullable(),
+    errand: ErrandView,
+  })
+  .meta({ id: 'ErrandCheckReply' })
+export type ErrandCheckReply = z.infer<typeof ErrandCheckReply>
+
 export const ErrandList = z.object({ errands: z.array(ErrandView) }).meta({ id: 'ErrandList' })
 export type ErrandList = z.infer<typeof ErrandList>
 
