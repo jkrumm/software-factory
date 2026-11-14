@@ -28,6 +28,7 @@ const Env = z.object({
   FACTORY_LOOP_ERRANDS_MS: ms.optional(),
   FACTORY_LOOP_REVIEWS_MS: ms.optional(),
   FACTORY_LOOP_DESK_MS: ms.optional(),
+  FACTORY_LOOP_THROUGHPUT_MS: ms.optional(),
   /** the `gh` config directory the review poll uses in a work repo, whose account is not the owner's */
   FACTORY_GH_CONFIG_DIR_WORK: z.string().trim().min(1).optional(),
   /** the script the desk pass pushes a MacBook command through; unset, the dotfiles' own copy */
@@ -130,6 +131,10 @@ const reviewsTickMs = (tickMs: number): number => (tickMs === 0 ? 0 : REVIEW_POL
 const DESK_TICK_MS = 15 * 60_000
 const deskTickMs = (tickMs: number): number => (tickMs === 0 ? 0 : DESK_TICK_MS)
 
+/** The throughput loop ranks what cost most once a day, unless the tick is off (0). */
+export const THROUGHPUT_TICK_MS = 24 * 3_600_000
+const throughputTickMs = (tickMs: number): number => (tickMs === 0 ? 0 : THROUGHPUT_TICK_MS)
+
 /** The reaper looks at the process table every 5 minutes, unless the tick is off (0). */
 const REAPER_TICK_MS = 5 * 60_000
 const reaperTickMs = (tickMs: number): number => (tickMs === 0 ? 0 : REAPER_TICK_MS)
@@ -173,6 +178,7 @@ export function loadLoopSettings(env: Record<string, string | undefined>): LoopS
     errands: e.FACTORY_LOOP_ERRANDS_MS,
     reviews: e.FACTORY_LOOP_REVIEWS_MS,
     desk: e.FACTORY_LOOP_DESK_MS,
+    throughput: e.FACTORY_LOOP_THROUGHPUT_MS,
   }
   return {
     intervalMs: Object.fromEntries(
@@ -199,7 +205,9 @@ export function loadLoopSettings(env: Record<string, string | undefined>): LoopS
                             ? reviewsTickMs(tickMs)
                             : name === 'desk'
                               ? deskTickMs(tickMs)
-                              : tickMs),
+                              : name === 'throughput'
+                                ? throughputTickMs(tickMs)
+                                : tickMs),
       ]),
     ) as Record<LoopName, number>,
     tickMs,

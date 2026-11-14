@@ -139,8 +139,10 @@ export async function ledgerOf(
   const rows: unknown[] = await sql`
     SELECT s.id, s.title, s.text, s.received_at, s.issue_id, i.state, i.outcome,
       (SELECT max(e.at) FROM factory.issue_events e
-        WHERE e.issue_id = s.issue_id AND e.kind = 'shipped' AND e.result = 'applied') AS shipped_at
+        WHERE e.issue_id = s.issue_id AND e.kind = 'shipped' AND e.result = 'applied') AS shipped_at,
+      f.after AS loop_after
     FROM factory.intake_signals s LEFT JOIN factory.issues i ON i.id = s.issue_id
+      LEFT JOIN factory.throughput_findings f ON f.signal_id = s.id
     WHERE s.text ~ 'Retro: [0-9]{4}-[0-9]{2}-[0-9]{2} kpi=[a-z0-9_]+ before=' ORDER BY s.received_at`
   const windowFrom = new Date(kpis.window.from).getTime()
   const entries: RetroLedgerEntry[] = []
@@ -155,19 +157,25 @@ export async function ledgerOf(
         state: z.string().nullable(),
         outcome: z.string().nullable(),
         shipped_at: z.coerce.date().nullable(),
+        loop_after: z.coerce.number().nullable(),
       })
       .parse(raw)
     const marker = RETRO_MARKER.exec(row.text)
     if (!marker) continue
     const [, , key, rawBefore, direction] = marker
     const before = rawBefore === 'none' ? null : Number(rawBefore)
-    const now = kpis.kpis.find((k) => k.key === key)?.value ?? capacity.find((f) => f.key === key)?.value ?? null
+    // A throughput finding carries its own after, read over the 3 days past its ship: that is a clean window, the KPI table has no such figure.
+    const now =
+      row.loop_after ??
+      kpis.kpis.find((k) => k.key === key)?.value ??
+      capacity.find((f) => f.key === key)?.value ??
+      null
     const measured =
       row.shipped_at === null
         ? 'not_shipped'
         : before === null || now === null
           ? 'unknown'
-          : row.shipped_at.getTime() <= windowFrom
+          : row.loop_after !== null || row.shipped_at.getTime() <= windowFrom
             ? 'after'
             : 'partial'
     entries.push({

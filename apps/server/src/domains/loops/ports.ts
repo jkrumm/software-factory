@@ -34,6 +34,7 @@ import type {
   SelfwatchRow,
   WaitFact,
 } from './selfwatch-model.ts'
+import type { FindingRow, LedgerChange } from './throughput.ts'
 import type { QueueAskRow, QueueEdge, RefusedEdge, QueueIssue } from './queue.ts'
 
 /** One weekly friction pass as recorded (`migrations/0950_friction.sql`). */
@@ -287,6 +288,10 @@ export interface LoopStore {
   selfwatchRows(): Promise<SelfwatchRow[]>
   /** the pass's changes in one transaction: filed rows upserted whole, seen rows touched, absent rows cleared */
   applySelfwatch(change: SelfwatchChange): Promise<void>
+  /** the throughput loop's findings, oldest first (`migrations/1027_throughput_findings.sql`) */
+  throughputFindings(): Promise<FindingRow[]>
+  recordThroughputFinding(row: FindingRow): Promise<void>
+  applyThroughputLedger(changes: readonly LedgerChange[]): Promise<void>
 }
 
 /** An Issue that is still `settling`, with what triage needs to know of it. */

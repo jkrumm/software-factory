@@ -77,6 +77,48 @@ const Slots = z.strictObject({
     .optional(),
 })
 
+const SIZE = /^(\d+(?:\.\d+)?)(MiB|GiB)$/
+const PERCENT = /^(\d+(?:\.\d+)?)%$/
+
+/**
+ * `budgets:`: what a project's checks may cost, each a bound whose breach is a signal the day it happens (the throughput loop).
+ * `fast` is the median of a day's fast-tier check runs, `peak` the largest peak memory of one step, `fail` the share of a day's
+ * steps that exited non-zero. A key left out is no budget.
+ */
+const Budgets = z.strictObject({
+  fast: z
+    .string()
+    .refine((text) => {
+      const ms = durationMs(text)
+      return ms !== undefined && ms >= 1000
+    }, 'a duration like 90s or 2m')
+    .optional(),
+  peak: z.string().regex(SIZE, 'a size like 2GiB or 512MiB').optional(),
+  fail: z
+    .string()
+    .refine((text) => {
+      const share = PERCENT.exec(text)?.[1]
+      return share !== undefined && Number(share) > 0 && Number(share) <= 100
+    }, 'a share like 10%')
+    .optional(),
+})
+
+/** A project's budgets as numbers: milliseconds, MiB, a share of 1; each `null` when the project sets none. */
+export function budgetsOf(project: Pick<ProjectFile, 'budgets'>): {
+  fastMs: number | null
+  peakMib: number | null
+  failShare: number | null
+} {
+  const { fast, peak, fail } = project.budgets
+  const size = peak === undefined ? null : SIZE.exec(peak)
+  const share = fail === undefined ? null : PERCENT.exec(fail)
+  return {
+    fastMs: fast === undefined ? null : (durationMs(fast) ?? null),
+    peakMib: size ? Number(size[1]) * (size[2] === 'GiB' ? 1024 : 1) : null,
+    failShare: share ? Number(share[1]) / 100 : null,
+  }
+}
+
 /** `make <target>`: the one command form a check tier takes, so the brief quotes data and never a free shell line. */
 const MakeCommand = z.string().regex(/^make [A-Za-z0-9][A-Za-z0-9_.-]*$/, '`make <target>`')
 
@@ -230,6 +272,7 @@ export const ProjectFile = z
      */
     lanes: z.record(LaneName, Lane).default({}),
     slots: Slots.default({}),
+    budgets: Budgets.default({}),
     /** check tiers: a fast local check and the full gate (CI's when `ci` is true); `null` keeps one `make check` */
     checks: Checks.nullable().default(null),
     hygiene: Hygiene.default(() => Hygiene.parse({})),
