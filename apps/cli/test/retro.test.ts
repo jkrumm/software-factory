@@ -48,6 +48,37 @@ beforeAll(() => {
     taste: { verdicts: [], annotations: [] },
     capacity: null,
     build: { repos: [], unreadable: [], figures: [] },
+    throughput: {
+      hours: 168,
+      host: {
+        minutes: 0,
+        signals: {
+          pressureMinutes: { normal: 0, warning: 0, critical: 0, unread: 0 },
+          load: { p50: null, max: null },
+          cpuIdlePct: { p50: null, min: null },
+          compressorMib: { p50: null, max: null },
+          swapUsedPct: { p50: null, max: null },
+          processes: { p50: null, max: null },
+          vmFreeGib: { min: null, last: null },
+        },
+        byClass: [],
+      },
+      lead: {
+        closed: 0,
+        wallSeconds: 0,
+        split: {
+          turnSeconds: 0,
+          stepSeconds: 0,
+          slotWaitSeconds: 0,
+          ciSeconds: 0,
+          mergeLockSeconds: 0,
+          ownerSeconds: 0,
+          idleSeconds: 0,
+        },
+      },
+      project: [],
+      improvements: [],
+    },
   }
 })
 afterAll(() => rmSync(dir, { recursive: true, force: true }))

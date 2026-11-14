@@ -10,12 +10,14 @@ import {
   type RetroModel,
   type RetroSample,
   type RetroSession,
+  type RetroThroughput,
 } from '@software-factory/contract'
 import type { CiTimes } from '../domains/loops/ports.ts'
 import { apiBlockedMinutes } from './api-errors.ts'
 import { capacityFigures, tuneConstant } from './capacity-tuning.ts'
 import { type CapacityConstants, readCapacityLoop } from './capacity-loop.ts'
 import { readFriction } from './friction.ts'
+import { readThroughput } from './throughput.ts'
 import { readKpis, type Window } from './kpis.ts'
 import { readRetroBuild } from './retro-build.ts'
 import { readTaste } from './retro-taste.ts'
@@ -200,6 +202,18 @@ export async function ledgerOf(
   return entries
 }
 
+/** Hours the throughput read goes back at most: the per-minute rows are kept 14 days. */
+const THROUGHPUT_MAX_HOURS = 336
+
+/** The throughput figures of the retro's window (capped at 14 days): the host's classes, pressure and swap, the lead split, the scorecard, the improvements. */
+async function throughputOf(sql: SQL, options: { now: Date; days: number }): Promise<RetroThroughput> {
+  const hours = Math.min(THROUGHPUT_MAX_HOURS, options.days * 24)
+  const model = await readThroughput(sql, { now: options.now, hours })
+  const { minutes, signals, byClass } = model.host
+  const { issues: _issues, ...lead } = model.lead
+  return { hours, host: { minutes, signals, byClass }, lead, project: model.project, improvements: model.improvements }
+}
+
 /** The capacity loop over the window, its per-day figures and the one setting the fixed rules would change first. */
 async function capacityOf(
   sql: SQL,
@@ -264,6 +278,7 @@ export async function readRetro(
     taste: await readTaste(sql, w),
     capacity,
     build,
+    throughput: await throughputOf(sql, { now, days }),
   }
   if (!options.redact) return model
   const bare = (list: RetroSample[]): RetroSample[] => list.map((s) => ({ ...s, why: '' }))

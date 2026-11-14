@@ -7,6 +7,7 @@ import { readAccount } from './throughput-account.ts'
 const TOP_KEYS = 20
 const TOP_PROCESSES = 15
 const TOP_FLAKY = 20
+const TOP_FINDINGS = 50
 const CLASSES = ['lead', 'step', 'tenant', 'factory', 'system', 'owner', 'other'] as const
 
 const num = z.coerce.number()
@@ -67,6 +68,28 @@ const FlakyRow = z.object({
   first_flake: z.coerce.date(),
   last_flake: z.coerce.date(),
 })
+
+const TimelineRow = z.object({ at: z.coerce.date(), level: z.coerce.number().nullable(), swap: nullNum, load: nullNum })
+const FindingRow = z.object({
+  id: z.string(),
+  project: z.string(),
+  kpi: z.string(),
+  subject: z.string(),
+  before: num,
+  target: num,
+  after: nullNum,
+  direction: z.enum(['up', 'down']),
+  unit: z.string(),
+  cost_minutes: num,
+  status: z.string(),
+  issue_id: z.string().nullable(),
+  filed_at: z.coerce.date(),
+  shipped_at: z.coerce.date().nullable(),
+  after_at: z.coerce.date().nullable(),
+})
+
+/** The timeline's bucket: 5 minutes up to a day, 15 up to three days, else an hour. */
+export const bucketMinutesOf = (hours: number): number => (hours <= 24 ? 5 : hours <= 72 ? 15 : 60)
 
 const round = (value: number, decimals: number) => Math.round(value * 10 ** decimals) / 10 ** decimals
 
@@ -181,12 +204,25 @@ export async function readThroughput(sql: SQL, options: { now: Date; hours: numb
       FROM per_pair GROUP BY repo, suite, name
       ORDER BY count(*) DESC, max(flaked_at) DESC, repo, suite, name LIMIT ${TOP_FLAKY}`
 
+    const bucketMinutes = bucketMinutesOf(hours)
+    const bucketSeconds = bucketMinutes * 60
+    const timelineRows: unknown[] = await tx`
+      SELECT to_timestamp(floor(extract(epoch FROM at) / ${bucketSeconds}::int) * ${bucketSeconds}::int) AS at,
+        max(pressure_level) AS level, max(swap_used_pct)::float8 AS swap, max(load)::float8 AS load
+      FROM factory.host_samples WHERE at >= ${from} AND at < ${to} GROUP BY 1 ORDER BY 1`
+    const findingRows: unknown[] = await tx`
+      SELECT id, project, kpi, subject, before, target, after, direction, unit, cost_minutes, status, issue_id, filed_at,
+        shipped_at, after_at
+      FROM factory.throughput_findings ORDER BY filed_at DESC, id LIMIT ${TOP_FINDINGS}`
+
     const seconds = (ms: number | null) => round((ms ?? 0) / 1000, 1)
     const found = new Map(classRows.map((raw) => ClassRow.parse(raw)).map((r) => [r.class, r]))
+    const classTotal = [...found.values()].reduce((sum, r) => sum + r.fp, 0)
     const byClass = CLASSES.map((name) => {
       const r = found.get(name)
       const cpuSeconds = seconds(r?.cpu ?? null)
       return {
+        share: classTotal === 0 ? 0 : round((r?.fp ?? 0) / classTotal, 4),
         class: name,
         footprintMib: mean(r?.fp ?? 0),
         peakMib: r?.peak ?? 0,
@@ -237,6 +273,13 @@ export async function readThroughput(sql: SQL, options: { now: Date; hours: numb
           const r = TenantRow.parse(raw)
           return { tenant: r.tenant, footprintMib: mean(r.fp), peakMib: r.peak, cpuSeconds: seconds(r.cpu) }
         }),
+        timeline: {
+          bucketMinutes,
+          points: timelineRows.map((raw) => {
+            const r = TimelineRow.parse(raw)
+            return { at: r.at.toISOString(), pressureLevel: r.level, swapUsedPct: r.swap, load: r.load }
+          }),
+        },
         topProcesses: processRows.map((raw) => {
           const r = ProcessRow.parse(raw)
           return {
@@ -251,6 +294,26 @@ export async function readThroughput(sql: SQL, options: { now: Date; hours: numb
           }
         }),
       },
+      improvements: findingRows.map((raw) => {
+        const r = FindingRow.parse(raw)
+        return {
+          id: r.id,
+          project: r.project,
+          kpi: r.kpi,
+          subject: r.subject,
+          before: r.before,
+          target: r.target,
+          after: r.after,
+          direction: r.direction,
+          unit: r.unit,
+          costMinutes: r.cost_minutes,
+          status: r.status,
+          issue: r.issue_id,
+          filedAt: r.filed_at.toISOString(),
+          shippedAt: r.shipped_at?.toISOString() ?? null,
+          afterAt: r.after_at?.toISOString() ?? null,
+        }
+      }),
       tests: {
         byProject: runRows.map((raw) => {
           const r = RunRow.parse(raw)
