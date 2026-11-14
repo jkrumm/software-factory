@@ -246,7 +246,7 @@ through `receive` in `app/intake.ts`; the answer is a triage outcome (`docs/lang
   makes a replayed pass, or the same wait after its Replan closed, a no-op. A failure of the step is an entry in the
   pass's `errors`. The lead applies an approved proposal with `factory issue replan` (`POST /v1/issues/:id/replan`, a lead
   verb; `applyReplan`): gated on the Issue being a Replan, the current attempt working it, its latest Spec revision
-  approved (`looks_good`/`with_notes`) and every dependent or cancel target being an Issue of the Replan's project, then
+  approved (`looks_good`/`with_notes`) and every dependent or cancel target being an Issue of the Replan's project (a removed edge's dependent may be another project's open Issue when all its heads in that edge are this project's), then
   edges added and removed and Issues cancelled through `addAfter`, `removeAfter` and `cancelIssue` as the orchestrator
   (the avoidable-touch counts read the owner alone). `/planning/after|unafter` and `cancel` stay owner only: a lead never
   edits the chain except through an approved Spec.

@@ -53,13 +53,18 @@ Do not touch Issues outside this repo. A proposal with no change is valid: close
 /**
  * Of the Issues a Replan's call changes, those it may not: unknown, filed for another repo, or the Replan itself. An
  * edge's dependent must also be open; a cancel target may be closed (the cancel then reports it, so a replayed call
- * is answered rather than refused).
+ * is answered rather than refused). One exception frees: a removed edge's dependent may belong to another repo when
+ * every Issue it waits after is an Issue of the Replan's own project (a stalled head of this project holds a dependent
+ * of another one; removing the edge only frees it), and an unknown or closed head still refuses.
  */
 export function outsideProject(input: {
   replan: IssueId
   /** the repo text of the Replan's project */
   repo: string
+  /** dependents of added edges */
   dependents: readonly IssueId[]
+  /** removed edges: the dependent and the Issues it no longer waits after */
+  removals: readonly { issue: IssueId; after: readonly IssueId[] }[]
   cancels: readonly IssueId[]
   known: ReadonlyMap<IssueId, { repo: string; state: 'open' | 'closed' }>
 }): IssueId[] {
@@ -67,7 +72,17 @@ export function outsideProject(input: {
     const found = input.known.get(issue)
     return issue === input.replan || !found || found.repo !== input.repo || (needsOpen && found.state !== 'open')
   }
-  const bad = [...input.dependents.filter((i) => outside(i, true)), ...input.cancels.filter((i) => outside(i, false))]
+  const own = (issue: IssueId): boolean => !outside(issue, false)
+  const removed = (edge: { issue: IssueId; after: readonly IssueId[] }): boolean => {
+    const found = input.known.get(edge.issue)
+    if (edge.issue === input.replan || found?.state !== 'open') return true
+    return found.repo !== input.repo && !(edge.after.length > 0 && edge.after.every(own))
+  }
+  const bad = [
+    ...input.dependents.filter((i) => outside(i, true)),
+    ...input.removals.filter(removed).map((edge) => edge.issue),
+    ...input.cancels.filter((i) => outside(i, false)),
+  ]
   return [...new Set(bad)]
 }
 

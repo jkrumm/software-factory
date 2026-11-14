@@ -173,7 +173,8 @@ function detailOf(error: PlanningError | PortError): string {
 /**
  * A Replan's lead applies its approved proposal: edges added and removed, Issues cancelled. The gate runs first and
  * refuses the whole call (nothing applied) unless the Issue is a Replan, the lead's current attempt works on it, its
- * latest Spec revision is approved, and every dependent or cancel target is an Issue of the Replan's own project.
+ * latest Spec revision is approved, and every dependent or cancel target is an Issue of the Replan's own project (a removed edge's
+ * dependent may be another project's Issue when every Issue it waits after is this project's: removing it only frees).
  * Then each op runs through the owner's functions, as the orchestrator, and answers for itself: a refused op does not
  * stop the others, and a replayed call changes nothing more.
  */
@@ -198,10 +199,24 @@ export async function applyReplan(
 
     const project = (await stores.planning.projects()).find((p) => p.name === replan.project)
     if (!project) return err({ kind: 'unknown_project', project: replan.project })
-    const dependents = [...input.edges.add, ...input.edges.remove].map((edge) => edge.issue)
+    const dependents = input.edges.add.map((edge) => edge.issue)
     const cancels = input.cancel.map((target) => target.issue)
-    const known = await stores.reads.repoStatesOf([input.issue, ...dependents, ...cancels])
-    const outside = outsideProject({ replan: input.issue, repo: repoTextOf(project), dependents, cancels, known })
+    const heads = input.edges.remove.flatMap((edge) => edge.after)
+    const known = await stores.reads.repoStatesOf([
+      input.issue,
+      ...dependents,
+      ...input.edges.remove.map((edge) => edge.issue),
+      ...heads,
+      ...cancels,
+    ])
+    const outside = outsideProject({
+      replan: input.issue,
+      repo: repoTextOf(project),
+      dependents,
+      removals: input.edges.remove,
+      cancels,
+      known,
+    })
     if (outside.length > 0) return err({ kind: 'outside_project', project: project.name, issues: outside })
     return ok(null)
   })
