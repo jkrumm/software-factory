@@ -492,13 +492,33 @@ record_deploy() { # $1 start|end, $2 detail
 # that runs. `mark_down` opens it, `mark_up` closes it (a rollback closes it too: the factory is back, on the old release). The
 # `end` line carries it as `unreachable_s=N`; a deploy that ended with the server still down says `unreachable_s=N down=1`,
 # N counted to the end. `factory read throughput` sums it per day.
+# The two halves of it, to see where it goes: `stopped_s` (told to stop to the old process and its children gone: the SIGTERM
+# shutdown, whose steps the old server prints as `stopped in …`) and `started_s` (that to /health ok: the launcher, the lock,
+# the migrations and the boot, which the new server prints as `listening … (boot …)`). Whole seconds; `mark_stopped` counts the
+# first stop only, so a rollback's own stops do not move it.
 DOWN_AT=""
+STOPPED_AT=""
 UP_S=""
-mark_down() { DOWN_AT=$(date +%s); UP_S=""; }
-mark_up() { [[ -n "$DOWN_AT" && -z "$UP_S" ]] && UP_S=$(( $(date +%s) - DOWN_AT )); return 0; }
+STOPPED_S=""
+STARTED_S=""
+mark_down() { DOWN_AT=$(date +%s); STOPPED_AT=""; UP_S=""; STOPPED_S=""; STARTED_S=""; }
+mark_stopped() {
+  [[ -n "$DOWN_AT" && -z "$STOPPED_AT" ]] || return 0
+  STOPPED_AT=$(date +%s); STOPPED_S=$(( STOPPED_AT - DOWN_AT ))
+}
+mark_up() {
+  [[ -n "$DOWN_AT" && -z "$UP_S" ]] || return 0
+  local now; now=$(date +%s)
+  UP_S=$(( now - DOWN_AT ))
+  [[ -n "$STOPPED_AT" ]] && STARTED_S=$(( now - STOPPED_AT ))
+  return 0
+}
 unreachable_detail() {
   [[ -n "$DOWN_AT" ]] || return 0
-  if [[ -n "$UP_S" ]]; then echo "unreachable_s=$UP_S"; else echo "unreachable_s=$(( $(date +%s) - DOWN_AT )) down=1"; fi
+  local phases=""
+  [[ -n "$STOPPED_S" ]] && phases=" stopped_s=$STOPPED_S"
+  [[ -n "$STARTED_S" ]] && phases="$phases started_s=$STARTED_S"
+  if [[ -n "$UP_S" ]]; then echo "unreachable_s=$UP_S$phases"; else echo "unreachable_s=$(( $(date +%s) - DOWN_AT ))$phases down=1"; fi
 }
 
 release_lock() {
@@ -584,6 +604,7 @@ rollback() {
   log "rolling back ${live:-none} -> ${prev:0:12} ($(core_of "$release")), stopping the service"
   mark_down
   stop_service "$unload_secs" || die "still loaded ${unload_secs}s after bootout; not bootstrapping over it. Retry the rollback."
+  mark_stopped
   if restart_until_healthy "$release" "$prev" "$unload_secs"; then
     mark_up
     ln -sfn "$release" "$CURRENT" || die "updating $CURRENT failed"
@@ -723,6 +744,7 @@ main() {
   log "deploying ${sha:0:12} ($(core_of "$release")) (live: ${old:-none}), stopping the service"
   mark_down
   stop_service "$unload_secs" || die "still loaded ${unload_secs}s after bootout (ExitTimeOut + 10); not bootstrapping over it. It may still be shutting down: retry the deploy."
+  mark_stopped
   if ! start_service "$release" "$sha"; then
     echo "[deploy] ERROR: launchctl bootstrap failed at ${sha:0:12}" >&2
     roll_back "$sha" "$prev" "$unload_secs" "$old"
@@ -734,7 +756,7 @@ main() {
     return 1
   fi
   mark_up
-  log "unreachable for ${UP_S}s (the old process told to stop to /health at ${sha:0:12})"
+  log "unreachable for ${UP_S}s: stopping ${STOPPED_S}s, starting ${STARTED_S}s (the old process told to stop to /health at ${sha:0:12})"
 
   # --- healthy: current, the CLI, then the marker ("deployed" means the CLI is usable too)
   ln -sfn "$release" "$CURRENT" || die "updating $CURRENT failed"

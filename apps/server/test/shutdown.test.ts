@@ -69,3 +69,33 @@ test('a second signal does nothing', async () => {
   await Promise.all([stop('SIGTERM'), stop('SIGINT')])
   expect([runs, exits]).toEqual([1, [0]])
 })
+
+test('the stop says how long it took and names the steps that took a while', async () => {
+  let clock = 0
+  const lines: string[] = []
+  await createShutdown({
+    deadlineMs: 1_000,
+    exit: () => undefined,
+    report: (line) => lines.push(line),
+    now: () => clock,
+    steps: [
+      { name: 'draining', run: async () => void (clock += 10) },
+      { name: 'loops.stop', run: async () => void (clock += 9_800) },
+      { name: 'lock.release', run: async () => void (clock += 90) },
+    ],
+  })('SIGTERM')
+  expect(lines).toEqual(['stopped in 9.9s (loops.stop 9.8s)'])
+})
+
+test('a stop with no slow step says only the total', async () => {
+  let clock = 0
+  const lines: string[] = []
+  await createShutdown({
+    deadlineMs: 1_000,
+    exit: () => undefined,
+    report: (line) => lines.push(line),
+    now: () => clock,
+    steps: [{ name: 'a', run: async () => void (clock += 120) }],
+  })('SIGTERM')
+  expect(lines).toEqual(['stopped in 0.1s'])
+})
