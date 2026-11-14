@@ -115,14 +115,15 @@ export async function noteLead(deps: LeadDeps, effect: NoteEffect): Promise<Resu
   const seat = await deps.seats.seat({ issue, attempt })
   if (!seat.ok) return seat
   // An attempt with no assignment answers `default`: nothing to move to.
+  // A session that cannot be started again (no id on file) is not ended for it: the note is typed to it where it runs.
   const movedTo =
-    resume.account && seat.value.account !== 'default' && seat.value.account !== resume.account
+    resume.account && resume.session && seat.value.account !== 'default' && seat.value.account !== resume.account
       ? seat.value.account
       : null
   if (movedTo && (live || dormant)) {
     if (!dormant) {
       const marked = await deps.uow.run(async ({ leads }) => {
-        await leads.markDormant(issue, attempt, deps.clock.now())
+        await leads.markDormant(issue, attempt, deps.clock.now(), movedTo)
         return ok(undefined)
       })
       if (!marked.ok) return marked

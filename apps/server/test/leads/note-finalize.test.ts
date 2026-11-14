@@ -146,6 +146,16 @@ describe('note_lead', () => {
     expect(w.terminals.revived).toHaveLength(1)
   })
 
+  test('a lead with no session id on file is not ended for a move: the note is typed to it where it runs', async () => {
+    w.seatAccount = 'me'
+    const { effect } = await withNote()
+    w.seatAccount = 'other'
+    expect((await noteLead(w.deps, effect)).ok).toBe(true)
+    expect(w.terminals.dormant).toEqual([])
+    expect(w.terminals.revived).toEqual([])
+    expect(w.terminals.typed).toHaveLength(1)
+  })
+
   test('a lead on the account its attempt belongs to is typed to, never moved', async () => {
     w.seatAccount = 'me'
     const { effect } = await withNote()

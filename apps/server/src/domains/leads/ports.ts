@@ -354,7 +354,7 @@ export interface LeadStore {
   ): Promise<void>
   markGone(issue: IssueId, attempt: number, at: Date): Promise<void>
   /** the lead is dormant (marking twice keeps the first time) */
-  markDormant(issue: IssueId, attempt: number, at: Date): Promise<void>
+  markDormant(issue: IssueId, attempt: number, at: Date, account?: string): Promise<void>
   /** the dormant lead runs again: the mark and the failed resumes are cleared */
   markRevived(
     issue: IssueId,

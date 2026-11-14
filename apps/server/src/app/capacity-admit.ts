@@ -386,7 +386,7 @@ function latestAccounts(assignments: readonly Assignment[]): Map<IssueId, string
 
 /**
  * The leads on each account for the cap: every claim, and every owed lead on the account it will resume on. A woken
- * lead is pinned to its own account and takes its place back whatever the cap says (see `resumeClaim`), so from the
+ * lead is pinned to the account of its latest assignment and takes its place back whatever the cap says (see `resumeClaim`), so from the
  * moment its wait ends the seat is its: a new lead must not take it, or the account would run over the cap the moment
  * the resume lands. Only owed leads count. A lead still in a wait that gave its claim up is idle and uses nothing.
  */
@@ -779,7 +779,7 @@ export async function claimQueued(deps: CapacityDeps): Promise<Result<{ issue: I
 /**
  * What keeps a lead back from a wait out of its repo's claim, or null when it would take it now: its lane's cap, then
  * the repo's claims with the resumed leads served first (oldest wait first, then the lower Issue). The account is
- * never a reason: the lead is pinned to the account it was admitted on and resumes there whatever the cap says. The
+ * never a reason: the lead is pinned to the account of its latest assignment (`moveWalled` changes it only while the lead is walled) and resumes there whatever the cap says. The
  * resume itself and the steward's stall check both ask this, so the two cannot disagree about who is waiting.
  */
 function resumeBlock(snap: Snapshot, row: Snapshot['issues'][number], project: StoredProject): string | null {
@@ -862,8 +862,8 @@ export interface ResumeClaim {
  * `note_lead` effect that ends the wait calls this first and answers `refused` while the repo is full, which the
  * outbox retries with its backoff, so no lead works in a repo without a place (or beside another lead of a capped lane).
  * Only the repo's claims are looked at: a resume is never kept out by the load, the memory, an account's window or its
- * cap. The lead is the same session on the account it was admitted on and cannot move, so the cap governs new leads
- * only. Meanwhile admission counts the Issue as owed, in the repo's claims and on its account, so no new lead takes
+ * cap. The lead is the same session on the account of its latest assignment and moves only when it is walled (`moveWalled`),
+ * so the cap governs new leads only. Meanwhile admission counts the Issue as owed, in the repo's claims and on its account, so no new lead takes
  * the place or the seat it waits for. Owed leads take a place in the order of their waits, oldest first.
  */
 export async function resumeClaim(deps: PlanningDeps, issue: IssueId): Promise<Result<ResumeClaim, PortError>> {
