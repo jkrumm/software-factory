@@ -23,11 +23,11 @@ rows:
   - key: later
     title: Not yet
     facts: { what: a step with a date }
-    not_before: 2099-01-01T10:00:00Z
+    not_before: 2099-01-01T10:00:00+02:00
   - key: cross
     title: Waits for a work repo
     facts: { what: a step behind the work repo }
-    after: [bare:step]
+    after: [bare:step, ghost:step]
 `
 
 beforeAll(async () => {
@@ -61,7 +61,7 @@ test('a lead reads the rows of a project with their state, their words and their
     ['private-work', 'open', 'A step in a work repo', [], "the work repo's build"],
     ['adopted', 'open', null, [], null],
     ['later', 'waiting', 'Not yet', [], 'a step with a date'],
-    ['cross', 'waiting', 'Waits for a work repo', ['bare:step'], 'a step behind the work repo'],
+    ['cross', 'waiting', 'Waits for a work repo', ['bare:step', 'ghost:step'], 'a step behind the work repo'],
   ])
   expect(model.rows.find((r) => r.key === 'screens')?.reason).toBe('after app:tokens')
 })
@@ -80,11 +80,14 @@ test('the owner reads a work project and the target of a row filed into it; the 
   expect(asRead.rows.find((r) => r.key === 'tokens')?.target).toBe('app')
   // nor does it learn the work project a row waits for, in the keys or in the reason
   const cross = asRead.rows.find((r) => r.key === 'cross')
-  expect(cross?.after).toEqual(['private:step'])
-  expect(cross?.reason).toBe('after private:step (no such row)')
-  expect(asRead.rows.find((r) => r.key === 'later')?.reason).toBe('not before 2099-01-01T10:00:00Z')
+  expect(cross?.after).toEqual(['private:step', 'private:step'])
+  expect(cross?.reason).toBe('after private:step (no such row), private:step (no such row)')
+  expect(asRead.rows.find((r) => r.key === 'later')?.reason).toBe('not before 2099-01-01T10:00:00+02:00')
   expect(JSON.stringify(asRead)).not.toContain('bare')
-  expect(asOwner.rows.find((r) => r.key === 'cross')?.reason).toBe('after bare:step (no such row)')
+  expect(JSON.stringify(asRead)).not.toContain('ghost')
+  expect(asOwner.rows.find((r) => r.key === 'cross')?.reason).toBe(
+    'after bare:step (no such row), ghost:step (no such row)',
+  )
 })
 
 test('an unknown project is exit 4 for every caller, and --format plain prints one line per row', async () => {
