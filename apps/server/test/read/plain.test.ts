@@ -190,7 +190,21 @@ describe('the read token', () => {
       ...card(true),
       ranOn: null,
       edges: { after: [], before: [] },
-      errands: [],
+      errands: [
+        {
+          id: 'errand_1',
+          summary: 'secret',
+          state: 'open',
+          raisedAt: '2026-11-07T10:00:00.000Z',
+          closedAt: null,
+          closedKind: null,
+          reachedOwner: true,
+          hasCheck: true,
+          lastCheckedAt: '2026-11-07T10:30:00.000Z',
+          checkNote: 'secret',
+          nextCheckAt: '2026-11-07T16:30:00.000Z',
+        },
+      ],
       timeline: [{ at: '2026-11-07T10:00:00.000Z', kind: 'asked', text: 'secret words', session: 'lead-12-1' }],
       evidence: [{ kind: 'review', link: 'https://secret', note: 'secret', at: '2026-11-07T10:00:00.000Z' }],
       asks: [
@@ -277,6 +291,13 @@ describe('the read token', () => {
     expect(red.artifacts[0]).toMatchObject({ id: 'artifact_1', revisions: 2, verdict: 'looks_good' })
     expect(red.shipping[0]).toMatchObject({ result: 'accepted', commits: [], watch: { answer: 'passed' } })
     expect(red.shipping[1]?.detail).toBe('')
+    expect(red.errands[0]).toMatchObject({
+      id: 'errand_1',
+      state: 'open',
+      checkNote: null,
+      lastCheckedAt: '2026-11-07T10:30:00.000Z',
+      nextCheckAt: '2026-11-07T16:30:00.000Z',
+    })
   })
 
   test('an ask and a health line of a work repo get an opaque id and no text', () => {

@@ -31,6 +31,7 @@ export async function checkErrandNow(
   if (errand.checkCommand === null) return ok({ outcome: 'no_check', note: null, errand })
 
   const pass = { kept: 0, checkedOut: 0, unrunnable: 0, problems: [] as string[] }
+  const refusals: Extract<Awaited<ReturnType<typeof resolveErrand>>, { ok: false }>[] = []
   await runCheck(
     {
       uow: deps.uow,
@@ -38,6 +39,7 @@ export async function checkErrandNow(
       checks: deps.checks,
       resolve: async (found, why) => {
         const closed = await resolveErrand(deps, found.id, why)
+        if (!closed.ok) refusals.push(closed)
         return closed.ok && closed.value
       },
     },
@@ -45,6 +47,8 @@ export async function checkErrandNow(
     errand.checkCommand,
     pass,
   )
+  // the check said "not needed" but the close was refused: say so, never "needed"
+  if (refusals[0]) return refusals[0]
   const after = await deps.uow.run(async ({ checkpoints }) => ok(await checkpoints.errand(input.errandId)))
   if (!after.ok) return after
   const now = after.value ?? errand

@@ -65,6 +65,7 @@ export function redactIssueDetail(detail: ReadIssueDetail): ReadIssueDetail {
     triage: detail.triage.map((t) => ({ ...t, title: HIDDEN, text: '', link: null, source: '' })),
     notes: detail.notes.map((n) => ({ ...n, text: '' })),
     artifacts: detail.artifacts.map((a) => ({ ...a, title: ITEM_WORDS })),
+    errands: detail.errands.map((e) => ({ ...e, summary: ITEM_WORDS, checkNote: null })),
     shipping: detail.shipping.map((s) => ({
       ...s,
       detail: s.detail === null ? null : '',
