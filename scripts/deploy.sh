@@ -496,12 +496,17 @@ record_deploy() { # $1 start|end, $2 detail
 # shutdown, whose steps the old server prints as `stopped in …`) and `started_s` (that to /health ok: the launcher, the lock,
 # the migrations and the boot, which the new server prints as `listening … (boot …)`). Whole seconds; `mark_stopped` counts the
 # first stop only, so a rollback's own stops do not move it.
+# The one-minute load beside them (`load_down=N` when the old process was told to stop, `load_up=N` when /health answered), so a
+# slow boot reads from the log: a restart that floods the host shows as load_up far above load_down. Only a window `mark_down`
+# opened carries them.
 DOWN_AT=""
 STOPPED_AT=""
 UP_S=""
 STOPPED_S=""
 STARTED_S=""
-mark_down() { DOWN_AT=$(date +%s); STOPPED_AT=""; UP_S=""; STOPPED_S=""; STARTED_S=""; }
+LOAD_DOWN=""
+LOAD_UP=""
+mark_down() { DOWN_AT=$(date +%s); STOPPED_AT=""; UP_S=""; STOPPED_S=""; STARTED_S=""; LOAD_DOWN=$(load_avg); LOAD_UP=""; }
 mark_stopped() {
   [[ -n "$DOWN_AT" && -z "$STOPPED_AT" ]] || return 0
   STOPPED_AT=$(date +%s); STOPPED_S=$(( STOPPED_AT - DOWN_AT ))
@@ -511,6 +516,7 @@ mark_up() {
   local now; now=$(date +%s)
   UP_S=$(( now - DOWN_AT ))
   [[ -n "$STOPPED_AT" ]] && STARTED_S=$(( now - STOPPED_AT ))
+  [[ -n "$LOAD_DOWN" ]] && LOAD_UP=$(load_avg)
   return 0
 }
 unreachable_detail() {
@@ -518,6 +524,8 @@ unreachable_detail() {
   local phases=""
   [[ -n "$STOPPED_S" ]] && phases=" stopped_s=$STOPPED_S"
   [[ -n "$STARTED_S" ]] && phases="$phases started_s=$STARTED_S"
+  [[ -n "$LOAD_DOWN" ]] && phases="$phases load_down=$LOAD_DOWN"
+  [[ -n "$LOAD_UP" ]] && phases="$phases load_up=$LOAD_UP"
   if [[ -n "$UP_S" ]]; then echo "unreachable_s=$UP_S$phases"; else echo "unreachable_s=$(( $(date +%s) - DOWN_AT ))$phases down=1"; fi
 }
 

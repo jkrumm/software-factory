@@ -9,6 +9,8 @@ import { credentialOf } from './credentials.ts'
 import { DEFAULT_URL, type Io } from './operation.ts'
 import { collectJunit } from './junit.ts'
 import { readProcesses, treeMeter } from './process-tree.ts'
+import { type LocalTry, localSlots } from './local-slots.ts'
+import { restartPatience } from './restart-wait.ts'
 
 /** How long a caller waits for a slot before it gives up with `EX_TEMPFAIL` (`FACTORY_SLOT_WAIT_MS`). */
 const DEFAULT_SLOT_WAIT_MS = 45 * 60_000
@@ -96,13 +98,23 @@ export function exitCodeOf(proc: { exitCode: number | null; signalCode: NodeJS.S
   return 128 + (signal ?? 1)
 }
 
-/** What one call to the server came back with: the slot, or why the caller should run without one. */
-type Asked = { kind: 'slot'; slot: Slot } | { kind: 'outage'; why: string }
+/**
+ * What one call to the server came back with: the slot, or why the server is of no use. `away`: a server that is not
+ * there (unreachable, timed out, a 5xx), which a restart explains and a caller waits out; otherwise it answered with
+ * something this CLI cannot use (a refused token, a body it does not know), and waiting would change nothing.
+ */
+type Asked = { kind: 'slot'; slot: Slot } | { kind: 'outage'; why: string; away: boolean }
 
 /**
  * Asks until the slot is granted. `granted`: it is ours. `open`: run without one (the wait ran out under
  * `FACTORY_SLOT_OPEN=1`). `stopped`: this process was told to stop. A number is the exit code of a wait that ran out,
- * `EX_TEMPFAIL`: the command does not run.
+ * `EX_TEMPFAIL`: the command does not run. `outage`: the server is gone, and the command runs (`onHost`: under one of the
+ * host's own slots, which the caller releases).
+ *
+ * A server that is away is waited for first, as every other CLI call does (`restartWaitMs`: 90 s, longer while a deploy
+ * runs): a restart is over by then and the callers take their slots from it. Past that, and at once when the server
+ * answered with something unusable, the host-local slots are taken (`takeLocal`), each poll asking the server again so a
+ * server that comes back takes the line over.
  */
 async function acquire(input: {
   ask: () => Promise<Asked>
@@ -110,19 +122,48 @@ async function acquire(input: {
   waitMs: number
   pollMs: number
   open: boolean
+  restartWaitMs: () => number
+  takeLocal: () => LocalTry
   engage: () => void
   stopped: () => boolean
-}): Promise<'granted' | 'open' | 'stopped' | { outage: string } | number> {
+}): Promise<'granted' | 'open' | 'stopped' | { outage: string; onHost: boolean } | number> {
   const { ask, io, waitMs, pollMs, open } = input
   const started = Date.now()
   const deadline = started + waitMs
   const seconds = Math.round(waitMs / 1000)
   let queued = false
   let told: string | null = null
+  let awaySince: number | undefined
+  let waitingForServer = false
+  let waitingForLocal = false
   for (;;) {
     input.engage()
     const answer = await ask()
-    if (answer.kind === 'outage') return { outage: answer.why }
+    if (answer.kind === 'outage') {
+      awaySince ??= Date.now()
+      if (answer.away && Date.now() - awaySince + pollMs <= input.restartWaitMs()) {
+        if (!waitingForServer) {
+          waitingForServer = true
+          io.err(`factory: test-slot server not answering (${answer.why}); waiting for it to come back\n`)
+        }
+      } else {
+        const local = input.takeLocal()
+        if (local === 'taken') return { outage: answer.why, onHost: true }
+        if (typeof local === 'object') {
+          io.err(`factory: no local test slot (${local.unavailable})\n`)
+          return { outage: answer.why, onHost: false }
+        }
+        if (!waitingForLocal) {
+          waitingForLocal = true
+          io.err(`factory: test-slot server not answering (${answer.why}); queued for a host-local slot\n`)
+        }
+      }
+      if (input.stopped()) return 'stopped'
+      if (Date.now() >= deadline) break
+      await sleep(pollMs)
+      continue
+    }
+    awaySince = undefined
     if (answer.slot.granted) {
       if (queued) io.err(`factory: got a test slot after ${Math.round((Date.now() - started) / 1000)}s\n`)
       return 'granted'
@@ -205,9 +246,14 @@ async function runHeld(program: string, args: string[], io: Io): Promise<number>
 /**
  * `factory slot run [--name <label>] -- <cmd> [args…]`: takes one of the host's test slots from the server, runs the
  * command with this process's own stdin, stdout and stderr, renews the lease while it runs and gives the slot back when
- * it ends or this process is told to stop. The exit code is the command's. **Open only on an outage:** a server that
- * does not answer runs the command anyway with one line on stderr (a dead factory must not block the work that repairs
- * it). **Closed on contention:** no slot within `FACTORY_SLOT_WAIT_MS` (45 min) is one stderr line and exit 75 without
+ * it ends or this process is told to stop. The exit code is the command's. **An outage never opens the gate for everyone
+ * at once.** A server that does not answer is waited for first, as every CLI call waits out a restart (90 s,
+ * `FACTORY_RESTART_WAIT_MS`; 10 minutes while a deploy holds its lock), the caller asking again each poll so it takes its
+ * slot from the server the moment that is back. A server still gone after that runs the command under one of
+ * `FACTORY_SLOTS` (default 2) host-local slots, lock files taken the way the deploy lock is (a dead holder is reclaimed), so
+ * the work that repairs a dead factory is never blocked for good and the host is never flooded; a host that cannot make the
+ * lock files runs it without a slot, one line on stderr. A command that runs keeps running whatever the server does.
+ * **Closed on contention:** no slot within `FACTORY_SLOT_WAIT_MS` (45 min) is one stderr line and exit 75 without
  * running the command, unless `FACTORY_SLOT_OPEN=1` says to run it anyway. A command that runs past its run limit
  * (`FACTORY_SLOT_RUN_MS`, else the project's `slots.run`, else 30 min; the server resolves it) has its whole process
  * group sent SIGTERM, then SIGKILL after `FACTORY_SLOT_KILL_GRACE_MS` (5 s), and the exit code is 124.
@@ -252,17 +298,22 @@ export async function slotRun(input: { name?: string; command: string[] }, io: I
       },
       token,
     })
-    if (!answer.reached) return { kind: 'outage', why: answer.reason }
-    if (answer.status >= 500) return { kind: 'outage', why: `the server answered ${answer.status}` }
+    if (!answer.reached) return { kind: 'outage', why: answer.reason, away: true }
+    if (answer.status >= 500) return { kind: 'outage', why: `the server answered ${answer.status}`, away: true }
     if (answer.status === 401 || answer.status === 403) {
       return {
         kind: 'outage',
+        away: false,
         why: `the server refused the token (${answer.status}): set FACTORY_TOKEN${failure ? ` (${failure})` : ''}`,
       }
     }
     const parsed = Slot.safeParse(answer.json)
     if (!parsed.success)
-      return { kind: 'outage', why: `the server answered ${answer.status} with a body this CLI does not know` }
+      return {
+        kind: 'outage',
+        why: `the server answered ${answer.status} with a body this CLI does not know`,
+        away: false,
+      }
     if (parsed.data.granted && grantedRunMs === undefined) grantedRunMs = parsed.data.runMs
     return { kind: 'slot', slot: parsed.data }
   }
@@ -284,6 +335,8 @@ export async function slotRun(input: { name?: string; command: string[] }, io: I
   const signals: NodeJS.Signals[] = ['SIGINT', 'SIGTERM', 'SIGHUP']
   for (const signal of signals) process.on(signal, onSignal)
 
+  // The host-local slots of an outage: held (a lock file naming this pid) until this process is done, whatever ends it.
+  const local = localSlots(io.env)
   const askedAt = Date.now()
   // Where the command leaves its JUnit files (the repos' check targets write them there: docs/plan.md "Check tiers").
   let junitDir: string | undefined
@@ -294,6 +347,8 @@ export async function slotRun(input: { name?: string; command: string[] }, io: I
       waitMs,
       pollMs,
       open,
+      restartWaitMs: restartPatience(io.env, () => undefined).limitMs,
+      takeLocal: local.take,
       engage: () => {
         engaged = true
       },
@@ -301,9 +356,14 @@ export async function slotRun(input: { name?: string; command: string[] }, io: I
     })
     if (typeof outcome === 'number') return outcome
     if (typeof outcome === 'object') {
-      io.err(`factory: no test slot (${outcome.outage}); running without one\n`)
+      io.err(
+        outcome.onHost
+          ? `factory: no test slot (${outcome.outage}); running under one of the ${local.count} host-local slots\n`
+          : `factory: no test slot (${outcome.outage}); running without one\n`,
+      )
     }
     const holding = outcome === 'granted'
+    const localHeld = typeof outcome === 'object' && outcome.onHost
     const waitedMs = Date.now() - askedAt
     if (!holding) await release()
     if (stopped) return 128 + (constants.signals[stopped] ?? 1)
@@ -318,9 +378,15 @@ export async function slotRun(input: { name?: string; command: string[] }, io: I
         stdin: 'inherit',
         stdout: 'inherit',
         stderr: 'inherit',
-        env: holding
-          ? { ...io.env, FACTORY_SLOT_ACTIVE: '1', ...(junitDir === undefined ? {} : { FACTORY_JUNIT_DIR: junitDir }) }
-          : io.env,
+        // A host-local slot is a slot too: the steps below the command (a `make check` runs several) do not queue again.
+        env:
+          holding || localHeld
+            ? {
+                ...io.env,
+                FACTORY_SLOT_ACTIVE: '1',
+                ...(junitDir === undefined ? {} : { FACTORY_JUNIT_DIR: junitDir }),
+              }
+            : io.env,
         detached: true,
       })
     } catch (error) {
@@ -420,6 +486,7 @@ export async function slotRun(input: { name?: string; command: string[] }, io: I
   } finally {
     for (const signal of signals) process.off(signal, onSignal)
     if (junitDir !== undefined) await rm(junitDir, { recursive: true, force: true }).catch(() => undefined)
+    local.release()
     await release()
   }
 }

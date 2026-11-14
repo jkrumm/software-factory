@@ -30,6 +30,13 @@
     <string>__SHA__</string>
   </dict>
 
+  <!-- Interactive: the same resource band as herdr-core and everything a lead runs under it. Left unspecified, launchd throttles a
+       job's CPU and I/O (`man launchd.plist`): at load 150 on 2026-11-14 the server ran at priority 20 against the leads' 31 and got
+       0 to 2 % CPU while runnable, so /health took 5 to 7 s and the Console answered 502. The control plane must not rank below the
+       work it controls. -->
+  <key>ProcessType</key>
+  <string>Interactive</string>
+
   <key>RunAtLoad</key>
   <true/>
   <key>KeepAlive</key>
