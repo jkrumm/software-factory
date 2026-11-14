@@ -19,7 +19,7 @@
  *   `quality`, a revision, its answer to an annotation (`POST /v1/artifacts/:id/annotations/:annotationId/reply`; the server gates it on the Issue's current attempt), a request for the owner's hands that no Issue raised (`POST /v1/errands/requests`: its `check` is a shell command the `errands` loop runs, so only a caller that can run shell itself may set one), an Errand's check run now (`POST /v1/errands/:id/check`: it runs the command the Errand already carries), its own session read, a note to a session, the signal it files, the test slots it takes, a repo's relearn point (`POST /capacity/relearn`: an Issue's own ship step may set one, any repo; the actor is recorded as `agent`) and the
  *   door routes it sets or removes for its own Issue's repo (`POST /door/routes`, `/door/routes/remove`; `app/intake.ts` holds the repo check).
  * - owner only: everything else, and every route nobody has listed yet (new, cancel, note, seat, answer, prio, reopen, verdicts, projects, queue,
- *   capacity, loops, reading the door's registry). When in doubt, the owner alone.
+ *   capacity writes, loops, reading the door's registry; `GET /capacity` is the one capacity read a lead has). When in doubt, the owner alone.
  * - person: the owner's own judgment and hands, never the orchestrator's: `POST /v1/decisions/:id/worth-asking`,
  *   `POST /v1/artifacts/:id/verdict`, `POST /v1/artifacts/:id/needed` (his "needed me" mark), `POST /v1/artifacts/:id/annotations` and its `PATCH`/`DELETE /v1/artifacts/:id/annotations/:annotationId`, `POST /v1/errands/:id/done`, `POST /v1/errands/:id/approve` (his yes: the server runs the Errand's command on the mini), and
  *   `POST /signals/:id/promote` and `/dismiss` (releasing or refusing quarantined outside text).
@@ -137,7 +137,8 @@ export const POLICY: readonly Rule[] = [
   rule('POST', '/planning/after', OWNER),
   rule('POST', '/planning/unafter', OWNER),
   rule('POST', '/planning/replan', OWNER),
-  rule('GET', '/capacity', OWNER),
+  // the settings in force (an acceptance line names `factory capacity get`): a lead reads them, the read token does not
+  rule('GET', '/capacity', LEAD),
   rule('POST', '/capacity/refresh', OWNER),
   rule('POST', '/capacity/admit', OWNER),
   rule('POST', '/capacity/relearn', LEAD),
