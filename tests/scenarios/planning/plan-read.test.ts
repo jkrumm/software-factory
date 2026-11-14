@@ -20,6 +20,10 @@ rows:
     repo: bare
   - key: adopted
     issue: 1
+  - key: later
+    title: Not yet
+    facts: { what: a step with a date }
+    not_before: 2099-01-01T10:00:00Z
   - key: cross
     title: Waits for a work repo
     facts: { what: a step behind the work repo }
@@ -56,6 +60,7 @@ test('a lead reads the rows of a project with their state, their words and their
     ['screens', 'waiting', 'The screens', ['tokens'], 'the three screens'],
     ['private-work', 'open', 'A step in a work repo', [], "the work repo's build"],
     ['adopted', 'open', null, [], null],
+    ['later', 'waiting', 'Not yet', [], 'a step with a date'],
     ['cross', 'waiting', 'Waits for a work repo', ['bare:step'], 'a step behind the work repo'],
   ])
   expect(model.rows.find((r) => r.key === 'screens')?.reason).toBe('after app:tokens')
@@ -77,6 +82,7 @@ test('the owner reads a work project and the target of a row filed into it; the 
   const cross = asRead.rows.find((r) => r.key === 'cross')
   expect(cross?.after).toEqual(['private:step'])
   expect(cross?.reason).toBe('after private:step (no such row)')
+  expect(asRead.rows.find((r) => r.key === 'later')?.reason).toBe('not before 2099-01-01T10:00:00Z')
   expect(JSON.stringify(asRead)).not.toContain('bare')
   expect(asOwner.rows.find((r) => r.key === 'cross')?.reason).toBe('after bare:step (no such row)')
 })

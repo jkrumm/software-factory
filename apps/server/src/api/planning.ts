@@ -154,11 +154,12 @@ const isWorkProject = ({ project }: ProjectState): boolean => project.source ===
 /**
  * What the read token sees of text that may name another project: a `<project>:<key>` ref (an `after` key, a reason) of a
  * project that is not open reads `private:<key>`, and `unknown project <name>` (the name may be a work repo's) loses it.
+ * The timestamps a reason carries (`closed 2026-01-01T10:00:00.000Z`) are not refs and stay as written.
  */
 const maskWork = (text: string, open: ReadonlySet<string>): string =>
   text
-    .replace(/(?<![\w.~-])([A-Za-z0-9][A-Za-z0-9._~-]*):(?=[a-z0-9])/g, (ref, project: string) =>
-      open.has(project) ? ref : 'private:',
+    .replace(/(?<![\w.~:-])([A-Za-z0-9][A-Za-z0-9._~-]*):(?=[a-z0-9])/g, (ref, project: string) =>
+      open.has(project) || /^\d{4}-\d{2}-\d{2}T\d{2}$/.test(project) ? ref : 'private:',
     )
     .replace(/^unknown project .*$/, 'unknown project')
 
