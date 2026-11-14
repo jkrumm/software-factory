@@ -310,4 +310,17 @@ describe('the outbox: claim, commit, call, record', () => {
     expect(fake.calls.map((c) => c.key)).toEqual([`start_lead:${id}:1`, `start_lead:${id}:1`])
     expect(fake.acts).toEqual([`start_lead:${id}:1`])
   })
+
+  test('a drain starts no effect and gives the claim back: the next pass runs it at once, not after the lease', async () => {
+    await shippedIssue()
+    const fake = fakePorts()
+    const drain = new AbortController()
+    drain.abort()
+    expect(value(await runOutbox({ uow, clock, ports: fake.ports, signal: drain.signal }))).toEqual({
+      ran: 0,
+      failed: 0,
+    })
+    expect(fake.calls).toEqual([])
+    expect(value(await runOutbox({ uow, clock, ports: fake.ports }))).toEqual({ ran: 1, failed: 0 })
+  })
 })

@@ -25,6 +25,8 @@ export interface LeadTickDeps {
   replaySpool: () => Promise<number>
   /** what the API-error path keeps between passes */
   apiErrorMemory: ApiErrorMemory
+  /** the server's drain: once aborted, the pass starts no further step */
+  signal?: AbortSignal
 }
 
 /**
@@ -37,13 +39,24 @@ export async function leadTick(deps: LeadTickDeps): Promise<Result<TickAnswer, P
     console.error(`spool replay failed: ${error instanceof Error ? error.message : String(error)}`)
     return 0
   })
-  const lost = await followLeads(deps.leads)
+  // A drain ends the pass before its next step, never inside one: every step finds its own work done, so the next boot
+  // takes up what was skipped, and an effect is claimed (leased for minutes) only when it is about to run.
+  const draining = () => deps.signal?.aborted === true
+  const lost = draining() ? 0 : await followLeads(deps.leads, deps.signal)
   // Before the outbox: a note waiting on a session that ended on an API error is typed in this very pass, not the next.
-  const apiErrors = await handleApiErrors(deps.leads, deps.apiErrorMemory).catch((error: unknown) => {
-    console.error(`api error path failed: ${error instanceof Error ? error.message : String(error)}`)
-    return { detected: 0, resumed: 0, marked: 0, cleared: 0, edges: 0 }
+  const apiErrors = draining()
+    ? { detected: 0, resumed: 0, marked: 0, cleared: 0, edges: 0 }
+    : await handleApiErrors(deps.leads, deps.apiErrorMemory).catch((error: unknown) => {
+        console.error(`api error path failed: ${error instanceof Error ? error.message : String(error)}`)
+        return { detected: 0, resumed: 0, marked: 0, cleared: 0, edges: 0 }
+      })
+  if (draining()) return ok({ outbox: { ran: 0, failed: 0 }, replayed, lost, apiErrors })
+  const outbox = await runOutbox({
+    uow: deps.leads.uow,
+    clock: deps.leads.clock,
+    ports: deps.ports,
+    ...(deps.signal ? { signal: deps.signal } : {}),
   })
-  const outbox = await runOutbox({ uow: deps.leads.uow, clock: deps.leads.clock, ports: deps.ports })
   if (!outbox.ok) return outbox
   return ok({ outbox: outbox.value, replayed, lost, apiErrors })
 }

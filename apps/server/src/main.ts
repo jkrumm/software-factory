@@ -366,7 +366,7 @@ async function main(): Promise<void> {
       // A worktree made or removed takes minutes and must not hold the next pass back.
       maxPasses: 4,
       run: async () => {
-        const ticked = await leads.tick()
+        const ticked = await leads.tick(draining.signal)
         if (!ticked.ok) return ticked
         const t = ticked.value
         return ok(
