@@ -300,13 +300,14 @@ function Ranked({
 }
 
 function Tenants({ model }: { model: Model }) {
-  const { byTenant, byRepo, topProcesses } = model.host
+  const { byTenant, byRepo, topProcesses, tenantBudget } = model.host
+  const budgetNote = `${mibWords(tenantBudget.footprintMib)} on average of a ${mibWords(tenantBudget.budgetMib)} budget${tenantBudget.over ? ', over it' : ''}`
   return (
     <Section title="Where it goes" aside="Largest first, by peak memory">
       <div className="grid gap-6 @container lg:grid-cols-3">
         <Ranked
           label="Memory by tenant"
-          head="Tenants"
+          head={`Tenants: ${budgetNote}`}
           empty="No tenant held memory."
           rows={byTenant.map((t) => ({ key: t.tenant, name: t.tenant, mean: t.footprintMib, peak: t.peakMib }))}
         />

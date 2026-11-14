@@ -68,6 +68,7 @@ describe('the ranking', () => {
     steps: [],
     processes: [],
     queued: [],
+    tenants: { hours: 0, classMib: 0, members: [], day: [] },
     ...over,
   })
 
@@ -225,6 +226,7 @@ describe('the daily pass', () => {
   const deps = () => ({
     uow,
     clock,
+    tenants: { project: 'dotfiles', budgetMib: 6144 },
     projects: async () =>
       ['alpha', 'beta', 'delta', 'software-factory'].map((project) => ({
         project,
@@ -380,5 +382,190 @@ describe('the daily pass', () => {
     expect(loadLoopSettings({}).intervalMs.throughput).toBe(24 * HOUR)
     expect(loadLoopSettings({ FACTORY_TICK_MS: '0' }).intervalMs.throughput).toBe(0)
     expect(loadLoopSettings({ FACTORY_LOOP_THROUGHPUT_MS: '60000' }).intervalMs.throughput).toBe(60_000)
+  })
+})
+
+describe('standing memory of the tenant class', () => {
+  const tenants = (over: Partial<WindowFacts['tenants']> = {}): WindowFacts => ({
+    days: 7,
+    runs: [],
+    perIssue: [],
+    steps: [],
+    processes: [],
+    queued: [],
+    tenants: { hours: 168, classMib: 0, members: [], day: [], ...over },
+  })
+  const policy = { project: 'dotfiles', budgetMib: 6144 }
+
+  test('a class over its budget is one finding naming the three largest tenants; the excess is slot-minutes', () => {
+    const ranked = rankCandidates(
+      tenants({
+        classMib: 16_896,
+        members: [
+          { tenant: 'vm:colima', mib: 5632 },
+          { tenant: 'vm:docker', mib: 4096 },
+          { tenant: 'postgres', mib: 2048 },
+          { tenant: 'small', mib: 512 },
+        ],
+      }),
+      policy,
+    )
+    expect(ranked).toHaveLength(1)
+    const [finding] = ranked
+    expect(finding).toMatchObject({
+      project: 'dotfiles',
+      kpi: 'tenant_class_mib',
+      subject: '*',
+      value: 16_896,
+      target: 6144,
+    })
+    expect(finding?.label).toContain('vm:colima 5.5 GiB, vm:docker 4 GiB, postgres 2 GiB')
+    expect(finding?.label).not.toContain('small')
+    // 10752 MiB over, in slots of 2048 MiB, held for the 7 days
+    expect(finding?.costMinutes).toBe((10_752 / 2048) * 7 * 1440)
+    expect(rankCandidates(tenants({ classMib: 6144, members: [{ tenant: 'vm:colima', mib: 6144 }] }), policy)).toEqual(
+      [],
+    )
+  })
+
+  test('a tenant 1 GiB above its own median is a finding; a short past, a smaller rise and no policy are not', () => {
+    const day = [
+      { tenant: 'vm:colima', mib: 6656, medianMib: 5632 },
+      { tenant: 'vm:docker', mib: 4000, medianMib: 3500 },
+      { tenant: 'new', mib: 3000, medianMib: null },
+    ]
+    const ranked = rankCandidates(tenants({ day }), policy)
+    expect(ranked.map((c) => [c.kpi, c.subject, c.value, c.target, c.costMinutes])).toEqual([
+      ['tenant_growth_mib', 'vm:colima', 6656, 5632, (1024 / 2048) * 24 * 60],
+    ])
+    expect(rankCandidates(tenants({ day }))).toEqual([])
+  })
+
+  test('the after is the same figure over another window; a window with no reading has none', () => {
+    const window = tenants({ classMib: 9000, members: [{ tenant: 'vm:colima', mib: 5632 }] })
+    expect(figureOf(window, { project: 'dotfiles', kpi: 'tenant_class_mib', subject: '*' })).toBe(9000)
+    expect(figureOf(window, { project: 'dotfiles', kpi: 'tenant_growth_mib', subject: 'vm:colima' })).toBe(5632)
+    expect(figureOf(window, { project: 'dotfiles', kpi: 'tenant_growth_mib', subject: 'vm:gone' })).toBe(0)
+    const empty = tenants({ hours: 0 })
+    expect(figureOf(empty, { project: 'dotfiles', kpi: 'tenant_class_mib', subject: '*' })).toBeNull()
+  })
+
+  describe('seeded rollups', () => {
+    const T1 = new Date('2026-11-14T03:00:00Z')
+    const hoursBack = (n: number): Date => new Date(T1.getTime() - n * HOUR)
+    const filed: { title: string; text: string; repo: string }[] = []
+    let n = 0
+    const file = async (body: { title: string; text: string; repo?: string }) => {
+      n++
+      filed.push({ title: body.title, text: body.text, repo: body.repo ?? '' })
+      const issue = `issue_${1500 + n}`
+      await db.sql`INSERT INTO factory.issues (id, repo, state, version) VALUES (${issue}, ${body.repo ?? ''}, 'queued', 1)`
+      await db.sql`INSERT INTO factory.intake_signals (id, key, source, kind, origin, trust, repo, fingerprint, title, text, received_at, state, issue_id)
+        VALUES (${`sig_t${n}`}, ${`k_sig_t${n}`}, 'agent', 'request', 'factory', 'agent', ${body.repo ?? ''}, ${`fpt_${n}`}, ${body.title}, ${body.text.replaceAll('\n', ' ')}, ${T1}, 'filed', ${issue})`
+      return ok({
+        outcome: 'filed' as const,
+        detail: 'filed' as never,
+        issue: issue as never,
+        signal: `sig_t${n}`,
+        reason: null,
+      })
+    }
+    const deps = (project: string, budgetMib: number) => ({
+      uow,
+      clock: { now: () => T1 },
+      tenants: { project, budgetMib },
+      projects: async () => [{ project, repo: project, peakMib: null as number | null }],
+      facts: (
+        window: { from: Date; to: Date },
+        options: { baseline: boolean; peakBudgetMib: ReadonlyMap<string, number> },
+      ) => readWindowFacts(db.sql, { ...window, ...options }),
+      fates: (ids: readonly string[]) => readIssueFates(db.sql, ids),
+      file: file as never,
+    })
+    const facts = (to: Date, days: number) =>
+      readWindowFacts(db.sql, {
+        from: new Date(to.getTime() - days * DAY),
+        to,
+        baseline: true,
+        peakBudgetMib: new Map(),
+      })
+
+    beforeAll(async () => {
+      // 15 days of complete hours: colima 5632 MiB, docker 4000, postgres 2100, a small one 500; the newest 24 hours colima holds 1500 more
+      const rows: Record<string, unknown>[] = []
+      for (let back = 1; back <= 15 * 24; back++) {
+        const hour = new Date(hoursBack(back))
+        for (const [tenant, base] of [
+          ['vm:colima', 5632 + (back <= 24 ? 1500 : 0)],
+          ['vm:docker', 4000],
+          ['homebrew.mxcl.postgresql', 2100],
+          ['svc.small', 500],
+        ] as const) {
+          rows.push({
+            hour,
+            class: 'tenant',
+            repo: '',
+            tenant,
+            mib_minutes: base * 60,
+            peak_mib: base,
+            cpu_seconds: 0,
+            minutes: 60,
+          })
+        }
+      }
+      await db.sql`INSERT INTO factory.host_class_hours ${db.sql(rows)}`
+    })
+
+    test('the window reads the class mean, each tenant and the median of the 14 days before the newest day', async () => {
+      const read = (await facts(T1, 7)).tenants
+      expect(read.hours).toBe(168)
+      // colima: six days at 5632 and one at 7132
+      expect(read.members.map((m) => [m.tenant, m.mib])).toEqual([
+        ['vm:colima', 5846],
+        ['vm:docker', 4000],
+        ['homebrew.mxcl.postgresql', 2100],
+        ['svc.small', 500],
+      ])
+      expect(read.classMib).toBe(12_446)
+      expect(read.day.find((d) => d.tenant === 'vm:colima')).toEqual({
+        tenant: 'vm:colima',
+        mib: 7132,
+        medianMib: 5632,
+      })
+      expect(read.day.find((d) => d.tenant === 'svc.small')).toEqual({ tenant: 'svc.small', mib: 500, medianMib: 500 })
+      // too short a past: three days of rollups say nothing about growth
+      const early = (await facts(new Date(T1.getTime() - 12 * DAY), 1)).tenants
+      expect(early.day.every((d) => d.medianMib === null)).toBe(true)
+    })
+
+    test('the class over its budget is filed once, on the owner of the host configuration, until its Issue ships', async () => {
+      const pass = await throughputPass(deps('dotfiles', 6144))
+      expect(pass.ok && pass.value.filed.map((f) => [f.project, f.kpi, f.subject])).toEqual([
+        ['dotfiles', 'tenant_class_mib', '*'],
+      ])
+      const body = filed.find((f) => f.repo === 'dotfiles')
+      expect(body?.text).toContain('vm:colima 5.7 GiB, vm:docker 3.9 GiB, homebrew.mxcl.postgresql 2.1 GiB')
+      expect(body?.text).toContain('Measured before: 12446 MiB')
+      expect(RETRO_MARKER.exec(body?.text ?? '')?.slice(2, 5)).toEqual(['tenant_class_mib', '12446', 'down'])
+      const again = await throughputPass(deps('dotfiles', 6144))
+      expect(again.ok && again.value.filed).toEqual([])
+      expect(again.ok && again.value.held).toEqual(['dotfiles'])
+    })
+
+    test('a tenant that grew is filed with no budget set, once, and a project that is not followed is named', async () => {
+      const pass = await throughputPass(deps('hostcfg', 1_000_000))
+      expect(pass.ok && pass.value.filed.map((f) => [f.project, f.kpi, f.subject, f.costMinutes])).toEqual([
+        ['hostcfg', 'tenant_growth_mib', 'vm:colima', 1054.7],
+      ])
+      const again = await throughputPass(deps('hostcfg', 1_000_000))
+      expect(again.ok && again.value.filed).toEqual([])
+      const unfollowed = await throughputPass({
+        ...deps('hostcfg', 6144),
+        tenants: { project: 'elsewhere', budgetMib: 6144 },
+      })
+      expect(unfollowed.ok && unfollowed.value.notes).toEqual([
+        'standing memory not filed: elsewhere is not a followed project',
+      ])
+    })
   })
 })

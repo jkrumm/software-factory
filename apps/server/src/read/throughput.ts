@@ -3,6 +3,7 @@ import * as z from 'zod'
 import type { ThroughputModel } from '@software-factory/contract'
 import { boundedRead } from './bounded.ts'
 import { readDeployDays } from './deploy-log.ts'
+import { DEFAULT_TENANT_BUDGET_MIB, DEFAULT_TENANT_PROJECT } from '../kernel/throughput-limits.ts'
 import { readAccount } from './throughput-account.ts'
 
 const TOP_KEYS = 20
@@ -102,7 +103,7 @@ const round = (value: number, decimals: number) => Math.round(value * 10 ** deci
  */
 export async function readThroughput(
   sql: SQL,
-  options: { now: Date; hours: number; dataDir?: string },
+  options: { now: Date; hours: number; dataDir?: string; tenantBudget?: { project: string; budgetMib: number } },
 ): Promise<ThroughputModel> {
   const { now, hours } = options
   const from = new Date(now.getTime() - hours * 3_600_000)
@@ -236,6 +237,8 @@ export async function readThroughput(
       }
     }).sort((a, b) => b.footprintMib - a.footprintMib || a.class.localeCompare(b.class))
 
+    const budgetMib = options.tenantBudget?.budgetMib ?? DEFAULT_TENANT_BUDGET_MIB
+    const tenantMib = byClass.find((c) => c.class === 'tenant')?.footprintMib ?? 0
     const collectorSeconds = (signals.collector_ms ?? 0) / 1000
     const account = await readAccount(tx, from, to)
     return {
@@ -262,6 +265,12 @@ export async function readThroughput(
           coreShare: signals.collector_minutes === 0 ? null : collectorSeconds / (signals.collector_minutes * 60),
         },
         byClass,
+        tenantBudget: {
+          budgetMib,
+          footprintMib: tenantMib,
+          over: tenantMib > budgetMib,
+          project: options.tenantBudget?.project ?? DEFAULT_TENANT_PROJECT,
+        },
         byRepo: repoRows.map((raw) => {
           const r = RepoRow.parse(raw)
           return {

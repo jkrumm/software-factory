@@ -72,6 +72,8 @@ export interface ReadModelDeps {
   capacityConstants?: CapacityConstants
   /** the data directory `scripts/deploy.sh` writes `deploys.log` into; absent, `GET /v1/throughput` has no deploys */
   dataDir?: string
+  /** the tenant class's budget and the repo its findings are filed on; absent, the defaults */
+  tenantBudget?: { project: string; budgetMib: number }
   now?: () => Date
   /** how long a timed wait with Issues behind it must last to reach Needs you; absent, the default (`FACTORY_LONG_WAIT_MS`) */
   longWaitMs?: number
@@ -353,7 +355,7 @@ export const readModelRoutes = (deps: ReadModelDeps | undefined, caller: (reques
         if (!deps) return unavailable
         const hours = query.hours === undefined ? DEFAULT_HOURS : Number(query.hours)
         const model = ThroughputModel.parse(
-          await readThroughput(deps.sql, { now: now(), hours, dataDir: deps.dataDir }),
+          await readThroughput(deps.sql, { now: now(), hours, dataDir: deps.dataDir, tenantBudget: deps.tenantBudget }),
         )
         // a lead's read keeps every figure and loses the names of work repos and tenants
         const who = caller(request)

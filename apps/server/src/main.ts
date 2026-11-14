@@ -591,6 +591,7 @@ async function main(): Promise<void> {
         const pass = await throughputPass({
           uow,
           clock: writes.clock,
+          tenants: { project: planningEnv.tenantProject, budgetMib: planningEnv.tenantBudgetMib },
           projects: async () =>
             (await projectBudgets()).map((b) => ({ project: b.project, repo: b.repo, peakMib: b.peakMib })),
           facts: (window, options) => readWindowFacts(sql, { ...window, ...options }),
@@ -902,6 +903,7 @@ async function main(): Promise<void> {
     readModels: {
       sql,
       dataDir,
+      tenantBudget: { project: planningEnv.tenantProject, budgetMib: planningEnv.tenantBudgetMib },
       queueReasons,
       machine,
       ciTimes: githubCiTimes({
