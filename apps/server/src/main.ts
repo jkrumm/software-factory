@@ -301,9 +301,9 @@ async function main(): Promise<void> {
     github: intakeEnv.github,
     loginErrands: loginErrands(checkpoints),
     host: {
-      // One read answers a minute of passes: `ps -E` and a host-wide `lsof` are too much for every tick of a lead that stays a candidate.
+      // One read answers a minute of passes (never longer than the threshold itself): `ps -E` and a host-wide `lsof` are too much for every tick of a lead that stays a candidate.
       processes: cachedFor(
-        60_000,
+        Math.min(60_000, leadSettings.quiesceAfterMs ?? 0),
         async () =>
           (await reaperProcessTable.read())?.map(({ pid, ppid, session }) => ({ pid, ppid, session })) ?? null,
       ),
