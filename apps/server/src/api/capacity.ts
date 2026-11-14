@@ -24,7 +24,7 @@ import type { QueueState, QueueStates } from '../domains/capacity/queue-state.ts
 import type { Relearn } from '../domains/capacity/ports.ts'
 import type { SlotView } from '../domains/capacity/slots.ts'
 import type { PortError, Result } from '../kernel/result.ts'
-import { ownerActorOf } from './auth.ts'
+import { callerOf, ownerActorOf } from './auth.ts'
 import { errorResponses } from './errors.ts'
 
 /** The contract's list of reasons and the server's are one list: a reason added on one side fails `tsc` until it is on the other. */
@@ -274,7 +274,7 @@ export const capacityRoutes = (api?: CapacityApi) => {
         const set = await api.setRelearn({
           repo: body.repo,
           at: body.at === undefined ? null : new Date(body.at),
-          actor: ownerActorOf(request),
+          actor: callerOf(request) === 'agent' ? 'agent' : ownerActorOf(request),
         })
         if (set.ok) {
           const r = set.value

@@ -132,6 +132,13 @@ describe('the policy table', () => {
     expect(signal).toEqual(['POST /signals'])
   })
 
+  test("a lead may set a repo's relearn point, and nothing else of the capacity routes", () => {
+    expect(allowed('POST', '/capacity/relearn')).toEqual(['owner', 'orchestrator', 'agent'])
+    for (const route of ['/capacity/refresh', '/capacity/admit'] as const) {
+      expect(allowed('POST', route)).toEqual(['owner', 'orchestrator'])
+    }
+  })
+
   test('an agent is not allowed on an owner verb', () => {
     for (const [method, route] of [
       ['POST', '/issues/:id/reopen'],

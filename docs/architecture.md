@@ -151,7 +151,7 @@ through `receive` in `app/intake.ts`; the answer is a triage outcome (`docs/lang
   newest ten attempts' peaks, except that a falling cost is believed sooner than a rising one: when the newest three **settled**
   attempts (ended, no sample for 10 min, or run 30 min) all peak below that p80, it is the largest of the three (the refusal
   says so). Too early is still caught by the swap and pressure ceilings and the slot grant; too late is idle seats with work
-  queued. `factory capacity relearn --repo <name> [--at <time>]` (owner and orchestrator; `lead_relearn`, `migrations/1034_lead_relearn.sql`;
+  queued. `factory capacity relearn --repo <name> [--at <time>]` (owner, orchestrator and a lead, whose `set_by` reads `agent`: an Issue's own ship step may set a point; `lead_relearn`, `migrations/1034_lead_relearn.sql`;
   default now, never in the future) ignores the repo's samples before the time: with fewer than three attempts after it the repo is
   on its lane's memory prior as a new repo is, and `factory queue order` carries a note per repo with a point (and the refusal
   says "learned from the attempts since …"). `read/lead-costs.ts` keeps the same window and point, with its plain p80, beside it. The
