@@ -29,6 +29,9 @@ export default async function globalSetup(): Promise<() => Promise<void>> {
   const estate = await makeEstate(world, [{ repo: 'argo' }, { repo: 'chat', work: true }, { repo: 'orion' }])
   const consolePort = await freePort()
   const dataDir = await mkdtemp(join(tmpdir(), 'factory-e2e-data-'))
+  // the counting epoch ten days back: the day's and the week's windows are whole, the fortnight's is cut (the seeded rows are relative to now)
+  const epochFile = join(dataDir, 'throughput.json')
+  await Bun.write(epochFile, JSON.stringify({ epoch: new Date(Date.now() - 240 * 3_600_000).toISOString() }))
   // the owner's line: a page being sent is what puts a Decision on the owner's list
   const ntfy = Bun.serve({ port: 0, hostname: '127.0.0.1', fetch: () => new Response('ok') })
   // `chat` is the work repo of the estate (outside text redacted for the read token); these have project files, so leads run in them
@@ -42,6 +45,7 @@ export default async function globalSetup(): Promise<() => Promise<void>> {
     FACTORY_CONSOLE_PORT: String(consolePort),
     FACTORY_CONSOLE_DIR: DIST,
     FACTORY_DATA_DIR: dataDir,
+    FACTORY_THROUGHPUT_FILE: epochFile,
   }
   const lab = await startLab({
     world,

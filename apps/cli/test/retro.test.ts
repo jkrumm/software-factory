@@ -50,6 +50,34 @@ beforeAll(() => {
     build: { repos: [], unreadable: [], figures: [] },
     throughput: {
       hours: 168,
+      epoch: null,
+      answers: {
+        host: {
+          limit: false,
+          level: 'unread',
+          sentence: 'The host read no memory pressure in this window.',
+          swapUsedPct: null,
+          memoryUsedPct: null,
+          pressuredMinutes: 0,
+          readMinutes: 0,
+          waitingFor: null,
+        },
+        queue: {
+          sentence: 'No Issue waited for a cost of the factory in this window.',
+          binding: null,
+          perDay: [],
+          byReason: [],
+        },
+        cost: {
+          kind: 'none',
+          sentence: 'Nothing open costs more than its target.',
+          figure: null,
+          unit: null,
+          perDay: [],
+          budgetMib: 6144,
+          finding: null,
+        },
+      },
       host: {
         minutes: 0,
         signals: {

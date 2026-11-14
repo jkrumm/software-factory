@@ -43,6 +43,8 @@ export interface ThroughputProject {
 export interface ThroughputDeps {
   uow: UnitOfWork<{ loops: LoopStore }>
   clock: Clock
+  /** the counting epoch: a finding filed before it is not measured, and a ranking window shorter than a day after it files nothing */
+  epoch?: Date | null
   /** the tenant class's budget and the repo its findings are filed on (`FACTORY_TENANT_BUDGET_MIB`, `FACTORY_TENANT_PROJECT`) */
   tenants: TenantPolicy
   projects(): Promise<ThroughputProject[]>
@@ -87,6 +89,9 @@ export async function projectBudgets(uow: UnitOfWork<{ planning: PlanningStore }
   }))
 }
 
+/** A ranking window the epoch cut shorter than this many days files nothing: a day's cost is not a week's. */
+export const MIN_RANK_DAYS = 1
+
 /** One pass files at most this many improvements; the next day's pass takes the rest. */
 export const MAX_IMPROVEMENTS_PER_PASS = 5
 
@@ -120,14 +125,21 @@ export async function throughputPass(deps: ThroughputDeps): Promise<Result<Throu
   } catch (error) {
     pass.notes.push(`issue fates not read: ${error instanceof Error ? error.message : String(error)}`)
   }
-  const changes = await readLedger(rows, fates, now, async (row, window) => {
-    try {
-      return figureOf(await deps.facts(window, { baseline: false, peakBudgetMib, shapes }), row)
-    } catch (error) {
-      pass.notes.push(`after of ${row.id} not read: ${error instanceof Error ? error.message : String(error)}`)
-      return undefined
-    }
-  })
+  const epoch = deps.epoch ?? null
+  const changes = await readLedger(
+    rows,
+    fates,
+    now,
+    async (row, window) => {
+      try {
+        return figureOf(await deps.facts(window, { baseline: false, peakBudgetMib, shapes }), row)
+      } catch (error) {
+        pass.notes.push(`after of ${row.id} not read: ${error instanceof Error ? error.message : String(error)}`)
+        return undefined
+      }
+    },
+    epoch,
+  )
   if (changes.length > 0) {
     const applied = await deps.uow.run(async ({ loops }) => {
       await loops.applyThroughputLedger(changes)
@@ -166,6 +178,12 @@ export async function throughputPass(deps: ThroughputDeps): Promise<Result<Throu
     )
   } catch (error) {
     pass.notes.push(`costs not read: ${error instanceof Error ? error.message : String(error)}`)
+    return ok(pass)
+  }
+  if (facts.days < MIN_RANK_DAYS) {
+    pass.notes.push(
+      `ranking waits: counting since ${epoch?.toISOString() ?? 'the epoch'}, under ${MIN_RANK_DAYS} day so far`,
+    )
     return ok(pass)
   }
   const held = heldSubjects(rows, now)

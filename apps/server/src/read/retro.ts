@@ -17,6 +17,7 @@ import { apiBlockedMinutes } from './api-errors.ts'
 import { capacityFigures, tuneConstant } from './capacity-tuning.ts'
 import { type CapacityConstants, readCapacityLoop } from './capacity-loop.ts'
 import { readFriction } from './friction.ts'
+import type { QueueReasons } from './flow.ts'
 import { readThroughput } from './throughput.ts'
 import { readKpis, type Window } from './kpis.ts'
 import { readRetroBuild } from './retro-build.ts'
@@ -206,21 +207,39 @@ export async function ledgerOf(
 const THROUGHPUT_MAX_HOURS = 336
 
 /** The throughput figures of the retro's window (capped at 14 days): the host's classes, pressure and swap, the lead split, the scorecard, the improvements. */
-async function throughputOf(sql: SQL, options: { now: Date; days: number }): Promise<RetroThroughput> {
+async function throughputOf(
+  sql: SQL,
+  options: { now: Date; days: number; epoch: Date | null; queue: QueueReasons | null },
+): Promise<RetroThroughput> {
   const hours = Math.min(THROUGHPUT_MAX_HOURS, options.days * 24)
-  const model = await readThroughput(sql, { now: options.now, hours })
+  const model = await readThroughput(sql, { now: options.now, hours, epoch: options.epoch, queue: options.queue })
   const { minutes, signals, byClass } = model.host
   const { issues: _issues, ...lead } = model.lead
-  return { hours, host: { minutes, signals, byClass }, lead, project: model.project, improvements: model.improvements }
+  return {
+    hours,
+    epoch: model.epoch,
+    answers: model.answers,
+    host: { minutes, signals, byClass },
+    lead,
+    project: model.project,
+    improvements: model.improvements,
+  }
 }
 
 /** The capacity loop over the window, its per-day figures and the one setting the fixed rules would change first. */
 async function capacityOf(
   sql: SQL,
-  options: { now: Date; days: number; constants: CapacityConstants; build: readonly RetroCapacityFigure[] },
+  options: {
+    now: Date
+    days: number
+    constants: CapacityConstants
+    build: readonly RetroCapacityFigure[]
+    epoch: Date | null
+  },
 ): Promise<RetroCapacity> {
   const loop = await readCapacityLoop(sql, options)
-  const window = windowOf(options.now, options.days)
+  // the window the loop counted: the epoch may have cut it, and the figure is per counted day
+  const window = { from: new Date(loop.window.from), to: new Date(loop.window.to) }
   const apiBlocked: RetroCapacityFigure = {
     key: 'api_blocked_minutes_per_day',
     label: 'Minutes a day leads spent blocked on API errors',
@@ -249,7 +268,17 @@ async function capacityOf(
  */
 export async function readRetro(
   sql: SQL,
-  options: { now: Date; days: number; redact?: boolean; capacityConstants?: CapacityConstants; ciTimes?: CiTimes },
+  options: {
+    now: Date
+    days: number
+    redact?: boolean
+    capacityConstants?: CapacityConstants
+    ciTimes?: CiTimes
+    /** the counting epoch: the throughput and capacity parts count nothing before it */
+    epoch?: Date | null
+    /** why each queued Issue stays queued now */
+    queue?: QueueReasons | null
+  },
 ): Promise<RetroModel> {
   const { now, days } = options
   const w = windowOf(now, days)
@@ -258,7 +287,13 @@ export async function readRetro(
   const sessions = await sessionsOf(sql, w)
   const build = await readRetroBuild(sql, { now, days, ...(options.ciTimes ? { ciTimes: options.ciTimes } : {}) })
   const capacity = options.capacityConstants
-    ? await capacityOf(sql, { now, days, constants: options.capacityConstants, build: build.figures })
+    ? await capacityOf(sql, {
+        now,
+        days,
+        constants: options.capacityConstants,
+        build: build.figures,
+        epoch: options.epoch ?? null,
+      })
     : null
   const model: RetroModel = {
     at: now.toISOString(),
@@ -278,7 +313,7 @@ export async function readRetro(
     taste: await readTaste(sql, w),
     capacity,
     build,
-    throughput: await throughputOf(sql, { now, days }),
+    throughput: await throughputOf(sql, { now, days, epoch: options.epoch ?? null, queue: options.queue ?? null }),
   }
   if (!options.redact) return model
   const bare = (list: RetroSample[]): RetroSample[] => list.map((s) => ({ ...s, why: '' }))

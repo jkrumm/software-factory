@@ -282,6 +282,7 @@ describe('readThroughput', () => {
       unit: 'MiB',
       costMinutes: 90,
       status: 'moved',
+      reason: null,
       issue: 'issue_9',
       filedAt: '2026-11-03T08:00:00.000Z',
       shippedAt: '2026-11-04T08:00:00.000Z',

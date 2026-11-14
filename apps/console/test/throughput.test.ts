@@ -2,12 +2,16 @@ import { expect, test } from 'bun:test'
 import type { ThroughputModel } from '@software-factory/contract'
 import {
   classRows,
+  dayWords,
+  epochLine,
+  hoursWords,
   kpiValue,
   levelHeight,
   minutesWords,
   msWords,
   percentWords,
   progress,
+  queueWords,
   splitRows,
   throughputWindowOf,
 } from '../src/lib/throughput.ts'
@@ -99,4 +103,19 @@ test('progress is the share of the way to the target, null without an after', ()
   expect(progress(finding(100, 50, 120))).toBe(-0.4)
   expect(progress(finding(100, 50, null))).toBeNull()
   expect(progress(finding(50, 50, 40))).toBeNull()
+})
+
+test('the queue and epoch words: a reason by name, hours with a decimal, a day short, and what a cut window says', () => {
+  expect(queueWords('memory')).toBe('Host memory')
+  expect(queueWords('unheard')).toBe('unheard')
+  expect(hoursWords(9)).toBe('9.0 h')
+  expect(dayWords('2026-11-13')).toBe('13 Nov')
+  const epoch = (cut: boolean) =>
+    ({
+      hours: 168,
+      epoch: { at: '2026-11-12T00:00:00.000Z', cut, countingSince: cut ? '2026-11-12T00:00:00.000Z' : null },
+    }) as ThroughputModel
+  expect(epochLine(epoch(false))).toStartWith('Counting since ')
+  expect(epochLine(epoch(true))).toContain('the 7 days window starts there')
+  expect(epochLine({ hours: 24, epoch: null } as ThroughputModel)).toBeNull()
 })

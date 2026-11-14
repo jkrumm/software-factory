@@ -859,6 +859,16 @@ export const CapacityReaped = z
   .meta({ id: 'CapacityReaped' })
 
 /**
+ * The counting epoch (`config/throughput.json`) as a read says it: the time before which no sample counts, whether it
+ * cut the asked window short, and where the counted window really starts when it did (`countingSince`, else null). A
+ * figure over earlier days (a median) is absent until 3 days after the epoch.
+ */
+export const ThroughputEpoch = z
+  .strictObject({ at, cut: z.boolean(), countingSince: at.nullable() })
+  .meta({ id: 'ThroughputEpoch' })
+export type ThroughputEpoch = z.infer<typeof ThroughputEpoch>
+
+/**
  * What the capacity loop did over the last `days` days (`GET /v1/capacity-loop`), computed in SQL from the host samples,
  * the test-slot step costs, the lead samples and the reaper's rows, with the settings it tunes.
  */
@@ -866,7 +876,10 @@ export const CapacityLoopModel = z
   .strictObject({
     at,
     days: z.number().int(),
+    /** the counted window: `from` is the asked start, or the epoch when it cut the window */
     window: z.strictObject({ from: at, to: at }),
+    /** the counting epoch; null where none is configured */
+    epoch: ThroughputEpoch.nullable(),
     /** Issues that closed (any outcome, as the cycle KPI counts them) */
     throughput: CapacityTotal,
     /** seats not held by a lead while Issues were queued, in hours: minutes with queued > 0 of max(seats - leads, 0), over 60 */
@@ -968,6 +981,64 @@ export type CapacityLoopModel = z.infer<typeof CapacityLoopModel>
 const nullableNumber = z.number().nullable()
 
 /**
+ * The three questions the Throughput page and the retro answer first, each as one sentence with its figure and trend, so
+ * nothing on top needs interpretation. Computed by the server (`read/throughput-answers.ts`); the Console draws them.
+ */
+export const ThroughputAnswers = z
+  .strictObject({
+    /** is the host the limit right now: the newest pressure level, swap and memory read, and what the head of the queue needs */
+    host: z.strictObject({
+      limit: z.boolean(),
+      level: z.enum(['normal', 'warning', 'critical', 'unread']),
+      sentence: z.string(),
+      /** the newest host minute: swap in use and resident memory, percent of RAM; null when unread */
+      swapUsedPct: nullableNumber,
+      memoryUsedPct: nullableNumber,
+      /** minutes at warning or critical in the counted window, of the minutes read */
+      pressuredMinutes: z.number().int(),
+      readMinutes: z.number().int(),
+      /** the queue's own reason text when an Issue waits for memory (it names the free memory against what the lead takes) */
+      waitingFor: z.string().nullable(),
+    }),
+    /** what queued Issues wait for: the reason kind with most queued hours that is a cost of the factory */
+    queue: z.strictObject({
+      sentence: z.string(),
+      binding: z.strictObject({ kind: z.string(), hours: z.number(), issues: z.number().int() }).nullable(),
+      /** the binding reason's queued hours per UTC day of the counted window, oldest first */
+      perDay: z.array(z.strictObject({ day: z.string(), hours: z.number() })),
+      /** every reason's hours in the window, most first (the detail) */
+      byReason: z.array(z.strictObject({ kind: z.string(), hours: z.number(), issues: z.number().int() })),
+    }),
+    /** the largest avoidable cost: the tenant class over its budget, else the open improvement with the most minutes */
+    cost: z.strictObject({
+      kind: z.enum(['tenant', 'improvement', 'none']),
+      sentence: z.string(),
+      /** tenant: MiB over the budget; improvement: its cost in minutes; none: null */
+      figure: nullableNumber,
+      unit: z.enum(['MiB', 'minutes']).nullable(),
+      /** tenant: the class's mean MiB per UTC day against `budgetMib` */
+      perDay: z.array(z.strictObject({ day: z.string(), mib: z.number() })),
+      budgetMib: z.number().int(),
+      /** improvement: the finding, with its figures before, target and after */
+      finding: z
+        .strictObject({
+          id: z.string(),
+          project: z.string(),
+          kpi: z.string(),
+          subject: z.string(),
+          before: z.number(),
+          target: z.number(),
+          after: nullableNumber,
+          unit: z.string(),
+          issue: z.string().nullable(),
+        })
+        .nullable(),
+    }),
+  })
+  .meta({ id: 'ThroughputAnswers' })
+export type ThroughputAnswers = z.infer<typeof ThroughputAnswers>
+
+/**
  * One closed Issue's lead wall time, or the sum over Issues, split into the seven places it went, in seconds. The places
  * are exclusive and take time in this order, each only what the ones before it did not: the owner (the Issue waited on a
  * person), a step (a `factory slot run` was running), a slot (one was queued), the merge lock (queued for the window), CI
@@ -1002,7 +1073,11 @@ export const ThroughputModel = z
   .strictObject({
     at,
     hours: z.number().int(),
+    /** the counted window: `from` is the asked start, or the epoch when it cut the window */
     window: z.strictObject({ from: at, to: at }),
+    /** the counting epoch; null where none is configured */
+    epoch: ThroughputEpoch.nullable(),
+    answers: ThroughputAnswers,
     host: z.strictObject({
       /** snapshot minutes in the window: the distinct minutes with class rows; the divisor of every mean below */
       minutes: z.number().int(),
@@ -1286,6 +1361,8 @@ export const ThroughputModel = z
         costMinutes: z.number(),
         /** open, shipped (waiting for its after), moved, flat, worse, dropped or unmeasured */
         status: z.string(),
+        /** why a row is `unmeasured` when the read says so (filed before the epoch), else null */
+        reason: z.string().nullable(),
         issue: z.string().nullable(),
         filedAt: at,
         shippedAt: at.nullable(),
@@ -1427,6 +1504,8 @@ export type RetroCapacity = z.infer<typeof RetroCapacity>
 export const RetroThroughput = z
   .strictObject({
     hours: z.number().int(),
+    epoch: ThroughputEpoch.nullable(),
+    answers: ThroughputAnswers,
     host: ThroughputModel.shape.host.pick({ minutes: true, signals: true, byClass: true }),
     lead: ThroughputModel.shape.lead.omit({ issues: true }),
     project: ThroughputModel.shape.project,
