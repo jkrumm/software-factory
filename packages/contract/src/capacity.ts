@@ -162,6 +162,8 @@ export const SlotBody = z
     /** the resident size of the command's process tree now, and its peak so far */
     rssMib: z.number().int().min(0).optional(),
     peakRssMib: z.number().int().min(0).optional(),
+    /** a renewal of a command that runs under a slot: if the lease lapsed meanwhile, the slot is taken back, not queued for */
+    holding: z.boolean().optional(),
   })
   .meta({ id: 'SlotBody' })
 export type SlotBody = z.infer<typeof SlotBody>

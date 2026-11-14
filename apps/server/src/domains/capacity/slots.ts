@@ -95,6 +95,8 @@ export function touchSlots(
     cwd?: string | undefined
     rssMib?: number | undefined
     peakRssMib?: number | undefined
+    /** the caller's command is running under this slot: a lapsed lease is taken back whatever the fit says */
+    holding?: boolean | undefined
   },
   now: Date,
 ): { rows: SlotRow[]; view: SlotView } {
@@ -142,6 +144,20 @@ export function touchSlots(
   if (mine.slot !== null) return { rows: [...others, mine], view: view(mine, 0) }
 
   const taken = new Set(others.flatMap((row) => (row.slot === null ? [] : [row.slot])))
+  // A command already running uses the machine whether or not the lease lapsed (the server was out of reach, the host
+  // stalled): it gets a slot back at once, past the limit if need be, so the budget keeps counting it.
+  if (input.holding) {
+    const free = Array.from({ length: taken.size + 1 }, (_, i) => i + 1).find((n) => !taken.has(n)) ?? taken.size + 1
+    const reclaimed: SlotRow = {
+      ...mine,
+      slot: free,
+      leasedUntil: leaseEnd,
+      grantedAt: now,
+      runMs: input.runMs,
+      why: null,
+    }
+    return { rows: [...others, reclaimed], view: view(reclaimed, 0) }
+  }
   const line = [...others.filter((row) => row.slot === null), mine].sort(
     (a, b) => a.requestedAt.getTime() - b.requestedAt.getTime() || a.id.localeCompare(b.id),
   )
