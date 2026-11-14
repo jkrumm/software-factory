@@ -25,7 +25,15 @@ import type { CallLoop, CallOutcome, CallRow } from './calls.ts'
 import type { ClassIssue, FindingLoop } from './classes.ts'
 import type { FixCommit, FixCommitRow } from './fix-classes.ts'
 import type { SweepReport } from './hygiene-model.ts'
-import type { CiRun, MigrationSnapshot, SelfwatchChange, SelfwatchRow, WaitFact } from './selfwatch-model.ts'
+import type {
+  CiRun,
+  HostMinute,
+  MigrationSnapshot,
+  ProcessMinute,
+  SelfwatchChange,
+  SelfwatchRow,
+  WaitFact,
+} from './selfwatch-model.ts'
 import type { QueueAskRow, QueueEdge, RefusedEdge, QueueIssue } from './queue.ts'
 
 /** One weekly friction pass as recorded (`migrations/0950_friction.sql`). */
@@ -345,6 +353,10 @@ export interface LoopReads {
   liveRepos(limit: number): Promise<{ repo: string; issues: IssueId[] }[]>
   /** the timer and dependency waits of the repo's Issues, with the times their exit is judged from (self-watch) */
   openWaits(repo: string): Promise<WaitFact[]>
+  /** the notable processes of the host's minutes since `since`, oldest first (self-watch: runaway growth) */
+  processMinutes(since: Date): Promise<ProcessMinute[]>
+  /** the host's minute samples since `since`, oldest first (self-watch: swap growth, the process count) */
+  hostMinutes(since: Date): Promise<HostMinute[]>
 }
 
 /** The main checkout of a repo, read now (called outside any transaction). `null`: not locatable, not ours to look at. */

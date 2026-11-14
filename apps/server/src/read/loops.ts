@@ -71,6 +71,20 @@ const ClassRow = z.object({
   outcome: z.enum(['done', 'healed', 'dropped', 'cancelled']).nullable(),
 })
 
+const ProcessMinuteRow = z.object({
+  at: z.date(),
+  pid: z.number().int(),
+  name: z.string(),
+  class: z.string(),
+  footprint_mib: z.number().int(),
+})
+
+const HostMinuteRow = z.object({
+  at: z.date(),
+  swap_used_pct: z.number().nullable(),
+  processes: z.number().int().nullable(),
+})
+
 const WaitRowSchema = z.object({
   id: z.string(),
   title: z.string(),
@@ -335,6 +349,24 @@ export function loopReads(tx: SQL): LoopReads {
         until: w.wait.until ?? null,
         after: (w.wait.after ?? []).map((id) => ({ issue: id, closedAt: closed.get(id) ?? null })),
       }))
+    },
+
+    async processMinutes(since) {
+      const rows: unknown[] = await tx`
+        SELECT at, pid, name, class, footprint_mib FROM factory.host_process_samples WHERE at >= ${since} ORDER BY at, pid`
+      return rows.map((raw) => {
+        const row = ProcessMinuteRow.parse(raw)
+        return { at: row.at, pid: row.pid, name: row.name, class: row.class, footprintMib: row.footprint_mib }
+      })
+    },
+
+    async hostMinutes(since) {
+      const rows: unknown[] = await tx`
+        SELECT at, swap_used_pct, processes FROM factory.host_samples WHERE at >= ${since} ORDER BY at`
+      return rows.map((raw) => {
+        const row = HostMinuteRow.parse(raw)
+        return { at: row.at, swapUsedPct: row.swap_used_pct, processes: row.processes }
+      })
     },
 
     async classIssues(loop) {

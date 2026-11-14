@@ -72,7 +72,7 @@ import { reviewsPass, reviewsSummary } from './app/loops/reviews.ts'
 import { screenPass, screenSummary } from './app/loops/screen.ts'
 import { triagePass, triageSummary } from './app/loops/triage.ts'
 import { FRICTION_WINDOW_DAYS } from './domains/loops/friction.ts'
-import { confirmedHeartbeat } from './domains/loops/selfwatch.ts'
+import { confirmedHeartbeat, DEFAULT_PROCESS_CAP } from './domains/loops/selfwatch.ts'
 import { DEFAULT_STEWARD_RULES } from './domains/loops/stall.ts'
 import { composeRead } from './compose-read.ts'
 import { postgresIntakeStore } from './adapters/intake/store.ts'
@@ -503,8 +503,8 @@ async function main(): Promise<void> {
       },
     },
     {
-      // Six deterministic conditions of the factory itself (red CI, a migration number clash, an overdue wait, an idle lead, a
-      // regression of inert paths, a stale heartbeat), filed once per subject as signals on the factory's own repo.
+      // Nine deterministic conditions of the factory itself (red CI, a migration number clash, an overdue wait, an idle lead, a
+      // regression of inert paths, a stale heartbeat, a process growing without bound, swap growth, a process storm), filed once per subject as signals on the factory's own repo.
       name: 'selfwatch',
       intervalMs: loopSettings.intervalMs.selfwatch,
       onChange: false,
@@ -527,6 +527,7 @@ async function main(): Promise<void> {
           }),
           migrations: gitMigrationFiles(repos),
           sharedNumbers: SHARED_NUMBERS,
+          processCap: DEFAULT_PROCESS_CAP,
           heartbeat: () =>
             confirmedHeartbeat(
               async () => (await readHealth()).heartbeat,
