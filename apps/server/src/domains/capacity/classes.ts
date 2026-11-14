@@ -1,4 +1,4 @@
-import { SHARED_MEMORY_PROGRAMS } from '../../kernel/throughput-limits.ts'
+import { isSharedMemoryProgram } from '../../kernel/throughput-limits.ts'
 import { type WorktreeRef, worktreeOwners } from './leadcost.ts'
 
 /** Who a process works for (`migrations/1022_host_classes.sql`). */
@@ -210,7 +210,7 @@ export interface ClassRow {
 }
 
 /**
- * The memory a minute's processes add up to. The processes of a shared-memory program (`SHARED_MEMORY_PROGRAMS`: a
+ * The memory a minute's processes add up to. The processes of a shared-memory program (`isSharedMemoryProgram`: a
  * database cluster's postmaster, io workers, checkpointer and writer) each count the pages of one mapping they touched, so
  * summing them counts it once per process (2026-11-14: 5.3 GiB for a 2.5 GiB cluster). A cluster is a process and its
  * same-named children; it counts its largest process whole, and each other process at the size of the cluster's smallest
@@ -218,11 +218,11 @@ export interface ClassRow {
  */
 function countedKib(procs: readonly ClassedProc[]): Map<number, number> {
   const counted = new Map(procs.map((proc) => [proc.pid, proc.footprintKib]))
-  const shared = procs.filter((proc) => SHARED_MEMORY_PROGRAMS.has(proc.name))
+  const shared = procs.filter((proc) => isSharedMemoryProgram(proc.name))
   const byPid = new Map(shared.map((proc) => [proc.pid, proc]))
   const clusters = new Map<number, ClassedProc[]>()
   for (const proc of shared) {
-    const root = byPid.get(proc.ppid)?.name === proc.name ? proc.ppid : proc.pid
+    const root = byPid.has(proc.ppid) ? proc.ppid : proc.pid
     clusters.set(root, [...(clusters.get(root) ?? []), proc])
   }
   for (const members of clusters.values()) {

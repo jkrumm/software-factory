@@ -1,5 +1,5 @@
 import { isRedConclusion } from '../../kernel/checks.ts'
-import { SHARED_MEMORY_PROGRAMS } from '../../kernel/throughput-limits.ts'
+import { isSharedMemoryProgram } from '../../kernel/throughput-limits.ts'
 import {
   type CiRun,
   type Finding,
@@ -318,7 +318,7 @@ export function processGrowthFindings(samples: readonly ProcessMinute[], now: Da
   const byProcess = new Map<string, ProcessMinute[]>()
   for (const sample of samples) {
     if (sample.at.getTime() < now.getTime() - GROWTH_WINDOW_MS) continue
-    if (SHARED_MEMORY_PROGRAMS.has(sample.name)) continue
+    if (isSharedMemoryProgram(sample.name)) continue
     const key = `${sample.name}:${sample.pid}`
     byProcess.set(key, [...(byProcess.get(key) ?? []), sample])
   }

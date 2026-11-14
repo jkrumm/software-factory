@@ -278,7 +278,7 @@ test('classRows: one cluster of a shared-memory program counts its mapping once,
     step: null,
   })
   const pg = (pid: number, ppid: number, footprintMib: number) =>
-    classed({ pid, ppid, name: 'postgres', footprintKib: mib(footprintMib) })
+    classed({ pid, ppid, name: ppid === 1 ? 'postgres' : 'postgres:', footprintKib: mib(footprintMib) })
   // the 2026-11-14 cluster: postmaster 92, checkpointer 2120, three io workers, writer 991; a second cluster beside it
   const rows = classRows([
     pg(100, 1, 92),

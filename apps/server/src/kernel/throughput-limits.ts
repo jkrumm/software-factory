@@ -12,7 +12,9 @@ export const PROCESS_GROWTH_MIB = 1024
  * of one cluster read 1.7 to 2.1 GiB, 2026-11-14). Growth of such a process is not a leak, and neither growth rule reads it;
  * the class rows count a cluster's mapping once (`classRows`).
  */
-export const SHARED_MEMORY_PROGRAMS: ReadonlySet<string> = new Set(['postgres'])
+const SHARED_MEMORY_PROGRAMS: ReadonlySet<string> = new Set(['postgres'])
+/** Whether a process name is one of those programs; a child that sets its process title (`postgres: io worker 0`) is named `postgres:`. */
+export const isSharedMemoryProgram = (name: string): boolean => SHARED_MEMORY_PROGRAMS.has(name.replace(/:$/, ''))
 /** The runs of a day a budget is judged on: fewer than this many is too few to say. */
 export const MIN_FAST_RUNS = 3
 export const MIN_FAIL_RUNS = 5
