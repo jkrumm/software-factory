@@ -1,4 +1,4 @@
-import { lstatSync, mkdirSync, readlinkSync, rmdirSync, rmSync, symlinkSync } from 'node:fs'
+import { lstatSync, mkdirSync, readlinkSync, rmdirSync, rmSync, statSync, symlinkSync } from 'node:fs'
 
 /** A lock path that reads EINVAL (not yet a readable symlink) is read again this often, for at most ~1 s. */
 const READ_RETRIES = 100
@@ -44,6 +44,20 @@ function holderOf(lock: string): { pid: number } | { gone: true } | { unreadable
     : { unreadable: `its target is "${target}", not a pid` }
 }
 
+/** A reclaim takes milliseconds: a `.reclaim` directory this old belongs to a reclaimer that died. */
+const STALE_RECLAIM_MS = 30_000
+
+/** Removes a stale reclaim directory; true when it did (or another caller just had). */
+function staleReclaim(reclaim: string): boolean {
+  try {
+    if (Date.now() - statSync(reclaim).mtimeMs < STALE_RECLAIM_MS) return false
+    rmdirSync(reclaim)
+    return true
+  } catch (error) {
+    return (error as NodeJS.ErrnoException).code === 'ENOENT'
+  }
+}
+
 /**
  * One try at a pid lock, a symlink to our pid (`symlinkSync` is atomic and the pid is in place from the first moment).
  * `taken`: ours. `held`: a live process has it. `retry`: it was released or retaken while we looked, look again at once.
@@ -67,6 +81,9 @@ export function tryTake(lock: string): 'taken' | 'retry' | { held: number } | { 
   try {
     mkdirSync(reclaim)
   } catch (error) {
+    // A reclaimer killed between its mkdir and rmdir leaves the directory behind for good: one far older than any
+    // reclaim takes is removed, and the lock looked at again.
+    if (staleReclaim(reclaim)) return 'retry'
     return {
       failed: `cannot reclaim ${lock}: ${reclaim} (${reason(error)}); someone else is reclaiming, or a crashed reclaim needs a manual rm`,
       transient: true,

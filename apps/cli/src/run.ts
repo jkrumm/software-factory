@@ -44,7 +44,7 @@ const HAND_WRITTEN: readonly [string, string][] = [
   ['role get <role>', 'one role: {"role", "tier", "effort"}; unknown is exit 4'],
   [
     'slot run [--name <label>] -- <cmd>',
-    "run <cmd> in one of the host's test slots (exit 75: no slot in time; open if the server is down)",
+    "run <cmd> in one of the host's test slots (exit 75: no slot in time; a server that is down is waited for, then a host-local slot)",
   ],
   [
     'deploy-lock --project <name> -- <cmd>',

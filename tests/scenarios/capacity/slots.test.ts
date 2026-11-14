@@ -1,6 +1,6 @@
 import { afterAll, beforeAll, expect, test } from 'bun:test'
 import { existsSync } from 'node:fs'
-import { mkdir, symlink } from 'node:fs/promises'
+import { mkdir, symlink, utimes } from 'node:fs/promises'
 import { join } from 'node:path'
 import { CapacityView, Slot } from '@software-factory/contract'
 import { bearer } from '../harness.ts'
@@ -212,6 +212,10 @@ test('a caller is never blocked for good: slots held by dead pids are reclaimed,
   await dead.exited
   await symlink(String(dead.pid), join(dir, 'slot-1.lock'))
   await symlink(String(dead.pid), join(dir, 'slot-2.lock'))
+  // a reclaimer that was killed mid-way left its directory on the first slot: old enough to be nobody's
+  await mkdir(join(dir, 'slot-1.lock.reclaim'))
+  const longAgo = new Date(Date.now() - 10 * 60_000)
+  await utimes(join(dir, 'slot-1.lock.reclaim'), longAgo, longAgo)
   const marker = join(lab.root, 'reclaimed')
   const reclaimed = await lab.cli(['slot', 'run', '--', 'touch', marker], gone('dead'))
   expect(reclaimed.code).toBe(0)
