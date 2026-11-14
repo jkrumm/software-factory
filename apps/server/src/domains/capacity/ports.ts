@@ -124,7 +124,8 @@ export interface ProcessReader {
 
 /** One minute's class snapshot as read: the processes and the host signals beside them (a figure not read is null). */
 export interface HostSnapshotReading {
-  procs: SnapshotProc[]
+  /** null when `ps`, `launchctl` or `lsof` could not be read: the classes would be wrong, the signals still hold */
+  procs: SnapshotProc[] | null
   /** the process count of `top`'s header */
   processes: number | null
   cpuIdlePct: number | null

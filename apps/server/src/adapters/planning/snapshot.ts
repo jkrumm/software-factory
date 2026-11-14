@@ -22,8 +22,9 @@ const SESSION = /(?:^|\s)FACTORY_SESSION=(lead-\d+-\d+)(?:\s|$)/
 const SLOT_ACTIVE = /(?:^|\s)FACTORY_SLOT_ACTIVE=1(?:\s|$)/
 // the program itself, run as `factory slot run ...` or `bun <path>/factory slot run ...`: never a shell or a prompt quoting it
 const SLOT_HOLDER = /^(?:\S*bun\s+)?(?:\S*\/)?factory slot run(?:\s+--name\s+(.+?))?\s+--\s/
-// a bundle's executable keeps its spaces (`Google Chrome Helper (Renderer)`) up to the first option
-const BUNDLE_EXE = /^(\/.*?\.app\/Contents\/MacOS\/[^/]+?)(?=\s+-|\s*$)/
+// a bundle's executable keeps its spaces (`Google Chrome Helper (Renderer)`) up to the first option or, with no option,
+// the first word of the environment `-E` appends (`NAME=value`)
+const BUNDLE_EXE = /^(\/.*?\.app\/Contents\/MacOS\/[^/]+?)(?=\s+-|\s+[A-Za-z_][A-Za-z0-9_]*=|\s*$)/
 const LIMA = /\/_lima\/(?!_)([^/\s]+)\//
 const LIMA_NETWORK = /\/_lima\/_networks\//
 
@@ -164,19 +165,26 @@ export function hostSnapshot(options: HostSnapshotOptions): HostSnapshotReader {
         options.runner.takeCpuMs()
         return null
       }
+      // without the command facts, the labels or the directories the class rules would put whole trees in the wrong
+      // class: the minute keeps its signals and stores no classes
+      const complete = psText !== null && launchctlText !== null && cwds !== null
       const commands = psText === null ? new Map<number, CommandFacts>() : parseCommandPs(psText)
       const vmPids = [...commands].filter(([, facts]) => facts.name === VM_PROCESS).map(([pid]) => pid)
       const lsofText =
-        vmPids.length === 0 ? null : await run([options.lsofBin, '-nP', '-p', vmPids.join(','), '-Fpn'], true)
+        !complete || vmPids.length === 0
+          ? null
+          : await run([options.lsofBin, '-nP', '-p', vmPids.join(','), '-Fpn'], true)
       const [pressure, compressor] = (sysctlText ?? '').trim().split('\n').map(Number)
       return {
-        procs: joinSnapshot({
-          top,
-          commands,
-          labels: launchctlText === null ? new Map() : parseLaunchctl(launchctlText),
-          cwds: cwds ?? new Map(),
-          vms: lsofText === null ? new Map() : parseLsofInstances(lsofText),
-        }),
+        procs: complete
+          ? joinSnapshot({
+              top,
+              commands,
+              labels: parseLaunchctl(launchctlText),
+              cwds,
+              vms: lsofText === null ? new Map() : parseLsofInstances(lsofText),
+            })
+          : null,
         processes: top.processes,
         cpuIdlePct: top.cpuIdlePct,
         pressureLevel: pressure !== undefined && [1, 2, 4].includes(pressure) ? pressure : null,

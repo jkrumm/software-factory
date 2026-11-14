@@ -66,7 +66,7 @@ export interface HostPass {
   pruned: number
   /** the lead rows stored; null: the process table could not be read, no lead rows were recorded */
   leadRows: number | null
-  /** the class rows stored; null: `top` could not be read, no snapshot was recorded */
+  /** the class rows stored; null: `top`, `ps`, `launchctl` or `lsof` could not be read, no classes were recorded */
   classRows: number | null
 }
 
@@ -104,7 +104,8 @@ export async function hostPass(deps: HostPassDeps): Promise<Result<HostPass, Por
 
   let classes: ClassSampleRow[] | null = null
   let notable: ProcessSampleRow[] = []
-  if (snapshot !== null) {
+  // a degraded snapshot (no procs) stores its signals only; the memory is kept, so the next minute's CPU covers both
+  if (snapshot?.procs) {
     const memory = deps.memory.current
     const procs = assignClasses({
       procs: snapshot.procs,
@@ -163,5 +164,7 @@ export const hostSummary = (pass: HostPass): string =>
   [
     `sampled the host, pruned ${pass.pruned}`,
     pass.leadRows === null ? 'no lead rows (the process table could not be read)' : `${pass.leadRows} lead row(s)`,
-    pass.classRows === null ? 'no class snapshot (top could not be read)' : `${pass.classRows} class row(s)`,
+    pass.classRows === null
+      ? 'no class snapshot (top, ps, launchctl or lsof could not be read)'
+      : `${pass.classRows} class row(s)`,
   ].join(', ')

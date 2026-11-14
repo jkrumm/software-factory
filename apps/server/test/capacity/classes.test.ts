@@ -75,6 +75,12 @@ test('ps -E: user, executable (a bundle keeps its spaces), session, slot holder 
   expect(facts.get(33013)).toMatchObject({ name: 'claude', slot: null, session: 'lead-1044-1' })
   expect(facts.get(69768)?.slot).toBe('')
   expect(exeOf('/Applications/X.app/Contents/MacOS/X')).toBe('/Applications/X.app/Contents/MacOS/X')
+  // no option, the environment follows at once (a path in it must not end the name early)
+  expect(
+    exeOf(
+      '/Applications/Google Chrome.app/Contents/MacOS/Google Chrome __CFBundleIdentifier=com.google.Chrome TMPDIR=/var/x/',
+    ),
+  ).toBe('/Applications/Google Chrome.app/Contents/MacOS/Google Chrome')
   expect(limaInstance('/home/me/.colima/_lima/colima-teamchat/diffdisk')).toBe('colima-teamchat')
   expect(limaInstance('/tmp/x')).toBeNull()
 })

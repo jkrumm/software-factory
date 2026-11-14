@@ -11,6 +11,8 @@ import { memoryUsedPct } from '../src/adapters/planning/vm-memory.ts'
 import { readLeadCosts } from '../src/read/lead-costs.ts'
 import { createApp } from '../src/api/app.ts'
 import { hostPass } from '../src/app/loops/host.ts'
+import { textRunner } from '../src/adapters/planning/process.ts'
+import { hostSnapshot } from '../src/adapters/planning/snapshot.ts'
 import { emptySnapshotMemory, type SnapshotProc } from '../src/domains/capacity/classes.ts'
 
 const PS = `    1     0   0.1    12288 /sbin/launchd
@@ -157,6 +159,42 @@ test('hostWatch: one ps serves readers within the cache; a failed ps gives empty
   const broken = hostWatch({ host, sysctlBin: '/nonexistent/sysctl', psBin: '/nonexistent/ps' })
   expect(await broken.top()).toEqual({ topByCpu: [], topByMemory: [] })
   expect(await broken.sample()).toMatchObject({ memoryUsedPct: null })
+})
+
+test('hostSnapshot: a full reading joins every helper; a failed ps, launchctl or lsof keeps the signals and no procs', async () => {
+  const top = await fakeBin(
+    'top',
+    `printf '%s\\n' 'Processes: 2 total' 'CPU usage: 1.0% user, 2.0% sys, 97.0% idle' 'PID PPID MEM TIME' '7  1  300M 00:01.00' '8  7  4096K 00:00.50'`,
+  )
+  const ps = await fakeBin('ps', `printf '%s\\n' '7 1 me /opt/bin/worker' '8 7 me /opt/bin/child'`)
+  const launchctl = await fakeBin('launchctl', `printf 'PID\\tStatus\\tLabel\\n7\\t0\\tcom.example.worker\\n'`)
+  const sysctl = await fakeBin('sysctl', `printf '2\\n1073741824\\n'`)
+  const failing = await fakeBin('fails', 'exit 1')
+  const reader = (overrides: { psBin?: string; launchctlBin?: string; cwds?: Map<number, string> | null }) => {
+    const runner = textRunner(5_000)
+    const watch = hostWatch({ host: {} as never, sysctlBin: sysctl, psBin: ps, topBin: top, runner })
+    return hostSnapshot({
+      top: () => watch.topSnapshot(),
+      cwds: async () => (overrides.cwds === undefined ? new Map([[7, '/srv']]) : overrides.cwds),
+      runner,
+      psBin: overrides.psBin ?? ps,
+      launchctlBin: overrides.launchctlBin ?? launchctl,
+      lsofBin: failing,
+      sysctlBin: sysctl,
+      vmVolume: '/',
+    })
+  }
+  const full = await reader({}).read()
+  expect(full).toMatchObject({ processes: 2, cpuIdlePct: 97, pressureLevel: 2, compressorMib: 1024 })
+  expect(full?.vmFreeGib).toBeGreaterThan(0)
+  expect(full?.procs?.map((p) => [p.pid, p.name, p.label, p.cwd])).toEqual([
+    [7, 'worker', 'com.example.worker', '/srv'],
+    [8, 'child', null, null],
+  ])
+  for (const degraded of [{ psBin: failing }, { launchctlBin: failing }, { cwds: null }]) {
+    const reading = await reader(degraded).read()
+    expect(reading).toMatchObject({ procs: null, processes: 2, pressureLevel: 2 })
+  }
 })
 
 let db: TestCluster
