@@ -29,8 +29,9 @@ const MIN_SLOT_POLL_MS = 100
 const MAX_SLOT_POLL_MS = 5_000
 /** The server refuses a longer slot name (`SlotBody`). */
 const MAX_SLOT_NAME = 200
-/** The lease is renewed this often while the command runs; the server lets it lapse after 30 s. */
-const RENEW_MS = 10_000
+/** The lease is renewed this often while the command runs (`FACTORY_SLOT_RENEW_MS`); the server lets it lapse after 30 s. */
+const DEFAULT_RENEW_MS = 10_000
+const MIN_RENEW_MS = 50
 /** How often the command's process tree is measured while it runs. */
 const MEASURE_MS = 3_000
 
@@ -350,18 +351,21 @@ export async function slotRun(input: { name?: string; command: string[] }, io: I
     let warned = false
     let renewalPending = false
     const renew = holding
-      ? setInterval(() => {
-          if (ended || warned || renewalPending) return
-          renewalPending = true
-          renewing = renewing.then(async () => {
-            const answer = await ask()
-            renewalPending = false
-            if (ended || warned || answer.kind === 'outage' || answer.slot.granted) return
-            warned = true
-            io.err('factory: the test slot lease lapsed while the command ran; it runs on without a slot\n')
-            await release()
-          })
-        }, RENEW_MS)
+      ? setInterval(
+          () => {
+            if (ended || warned || renewalPending) return
+            renewalPending = true
+            renewing = renewing.then(async () => {
+              const answer = await ask()
+              renewalPending = false
+              if (ended || warned || answer.kind === 'outage' || answer.slot.granted) return
+              warned = true
+              io.err('factory: the test slot lease lapsed while the command ran; it runs on without a slot\n')
+              await release()
+            })
+          },
+          Math.max(MIN_RENEW_MS, number(io.env.FACTORY_SLOT_RENEW_MS, DEFAULT_RENEW_MS)),
+        )
       : undefined
     // Past its run limit the whole process group gets SIGTERM, and SIGKILL if any of it is left after the grace.
     const proc = child

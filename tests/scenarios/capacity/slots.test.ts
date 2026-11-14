@@ -178,3 +178,29 @@ test('a caller in line says it is queued, and a command inside a held slot runs 
   expect(granted.code).toBe(0)
   expect((await Bun.file(probe).text()).trim()).toBe('1')
 })
+
+test('a command whose lease lapsed while it ran takes a slot back on its next renewal, even with the others full', async () => {
+  const running = lab.cli(['slot', 'run', '--name', 'long', '--', 'sleep', '3'], {
+    ...env,
+    FACTORY_SLOT_RENEW_MS: '200',
+  })
+  for (let i = 0; i < 40 && (await slotRows()).length === 0; i++) await Bun.sleep(50)
+  // the lease lapses (the server was out of reach) and another caller takes the one slot meanwhile
+  await lab.world.db.sql`DELETE FROM factory.capacity_slots WHERE name = 'long'`
+  await lab.world.db
+    .sql`INSERT INTO factory.capacity_slots (id, name, requested_at, seen_at, slot, leased_until, granted_at, run_ms)
+    VALUES ('other', 'other', now(), now(), 1, now() + interval '1 hour', now(), 60000)`
+  let rows: Awaited<ReturnType<typeof slotRows>> = []
+  for (let i = 0; i < 40 && !rows.some((r: { name: string }) => r.name === 'long'); i++) {
+    await Bun.sleep(50)
+    rows = await slotRows()
+  }
+  expect(rows.map((r: { name: string; slot: number }) => [r.name, r.slot])).toEqual([
+    ['other', 1],
+    ['long', 2],
+  ])
+  const result = await running
+  expect(result.code).toBe(0)
+  expect(result.err).not.toContain('lapsed')
+  await lab.world.db.sql`DELETE FROM factory.capacity_slots WHERE id = 'other'`
+}, 20_000)
