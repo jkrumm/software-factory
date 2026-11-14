@@ -113,6 +113,7 @@ import {
   UnafterBody,
   VerdictBody,
   VerdictView,
+  WaitCensusModel,
   WorthBody,
 } from '@software-factory/contract'
 import type { Operation } from '../operation.ts'
@@ -2245,6 +2246,29 @@ export const OPERATIONS: readonly Operation[] = [
     args: [],
     responses: {
       200: ThroughputModel,
+      400: ErrorBody,
+      401: ErrorBody,
+      403: ErrorBody,
+      422: ErrorBody,
+      500: ErrorBody,
+      503: ErrorBody,
+    },
+  },
+  {
+    operationId: 'read.waits',
+    command: ['read', 'waits'],
+    method: 'GET',
+    path: '/v1/waits',
+    summary:
+      'the waits that began over the last days (1 to 90, default 7), by reason and length (count, p50, p90, under 30 minutes up to a day or more), who ended them, and the ones no person was needed to end (a Decision or review the Judge, a default or a check ended): which waits a lead could have avoided or shortened',
+    pathParams: [],
+    queryParams: ['days'],
+    body: false,
+    queryFlags: [],
+    bodyFields: [],
+    args: [],
+    responses: {
+      200: WaitCensusModel,
       400: ErrorBody,
       401: ErrorBody,
       403: ErrorBody,

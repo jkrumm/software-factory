@@ -319,6 +319,77 @@ export const DaysQuery = z.object({
 export type DaysQuery = z.infer<typeof DaysQuery>
 export const DEFAULT_DAYS = 7
 
+// -- wait census ---------------------------------------------------------------------------------------------------------
+
+export const WAIT_ENDERS = ['owner', 'judge', 'steward', 'factory', 'open'] as const
+
+export const WaitCensusReason = z
+  .strictObject({
+    /** a `WAITS` key of the work domain */
+    reason: z.string(),
+    /** the wait's exit is a person */
+    person: z.boolean(),
+    count: z.number().int(),
+    /** of `count`, the waits still going (their duration runs to `at`) */
+    open: z.number().int(),
+    totalSeconds: z.number(),
+    p50Seconds: z.number().nullable(),
+    p90Seconds: z.number().nullable(),
+    /** the waits by length: under 30 minutes, under 2 hours, under 24 hours, 24 hours or more */
+    buckets: z.strictObject({
+      lt30m: z.number().int(),
+      lt2h: z.number().int(),
+      lt24h: z.number().int(),
+      gte24h: z.number().int(),
+    }),
+    /** who ended them: the actor of the event that left the wait */
+    endedBy: z.strictObject({
+      owner: z.number().int(),
+      judge: z.number().int(),
+      steward: z.number().int(),
+      factory: z.number().int(),
+      open: z.number().int(),
+    }),
+    /** the waits no person's hands were needed to end (a person wait the Judge, a default or a check ended): a lead could have gone on at once */
+    avoidableCount: z.number().int(),
+    avoidableSeconds: z.number(),
+  })
+  .meta({ id: 'WaitCensusReason' })
+
+export const WaitCensusLong = z
+  .strictObject({
+    issue: IssueRef,
+    reason: z.string(),
+    seconds: z.number(),
+    open: z.boolean(),
+    endedBy: z.enum(WAIT_ENDERS),
+    avoidable: z.boolean(),
+  })
+  .meta({ id: 'WaitCensusLong' })
+
+/**
+ * The waits that began over the last `days` days, counted by reason and length (`GET /v1/waits`, `factory read waits`),
+ * and which of them nobody's hands were needed to end. Computed from `issue_events`: a wait is the span from the applied
+ * event that began it to the next applied event that left it. Ids, reasons and numbers only.
+ */
+export const WaitCensusModel = z
+  .strictObject({
+    at,
+    days: z.number().int(),
+    window: z.strictObject({ from: at, to: at }),
+    waits: z.number().int(),
+    totalSeconds: z.number(),
+    avoidableSeconds: z.number(),
+    /** `avoidableSeconds` over `totalSeconds`; null with no wait */
+    avoidableShare: z.number().nullable(),
+    /** every reason, the one that cost most time first */
+    byReason: z.array(WaitCensusReason),
+    /** the 10 longest waits */
+    longest: z.array(WaitCensusLong),
+  })
+  .meta({ id: 'WaitCensusModel' })
+export type WaitCensusModel = z.infer<typeof WaitCensusModel>
+
 /** `?hours=24`: a whole number of hours, 1 to 336 (14 days, as long as the minute rows are kept). */
 export const HoursQuery = z.object({
   hours: z
