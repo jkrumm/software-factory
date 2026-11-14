@@ -78,11 +78,11 @@ export async function seedThroughput(sql: SQL, now = Date.now()): Promise<void> 
  * world's steps (`seedCapacity`), and the steps' share of the split is covered by the server's read tests. Returns the Issues it gave a lead.
  */
 export async function seedLeadTime(sql: SQL): Promise<string[]> {
-  const closed: Array<{ issue_id: string; at: Date; repo: string }> = await sql`
-    SELECT e.issue_id, e.at, i.repo FROM factory.issue_events e JOIN factory.issues i ON i.id = e.issue_id
+  const closed: Array<{ issue_id: string; at: Date }> = await sql`
+    SELECT e.issue_id, e.at FROM factory.issue_events e
     WHERE e.result = 'applied' AND e.to_state = 'closed' AND e.at > now() - interval '20 hours'
     ORDER BY e.at DESC LIMIT 4`
-  for (const [n, { issue_id: issue, at, repo }] of closed.entries()) {
+  for (const [n, { issue_id: issue, at }] of closed.entries()) {
     const number = issue.replace('issue_', '')
     const at3 = new Date(at.getTime() - 3 * HOUR - n * 20 * MINUTE)
     const at2 = new Date(at3.getTime() + 30 * MINUTE)
