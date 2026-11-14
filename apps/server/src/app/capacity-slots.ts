@@ -5,10 +5,22 @@ import {
   LEARNED_RUNS,
   learnedPeakMib,
   SAMPLE_MAX_AGE_MS,
+  stepNameOf,
+  stepPrior,
 } from '../domains/capacity/costs.ts'
+import { DEFAULT_SWAPOUT_CEILING_MB } from '../domains/capacity/host.ts'
 import type { HostReader, MergeWindowRow, StepCostRow } from '../domains/capacity/ports.ts'
 import { type AimMode, LOAD_PER_CORE, SWAP_WINDOW, swapGrowing } from '../domains/capacity/slot-aim.ts'
-import { releaseSlot, type SlotRow, type SlotView, slotLines, touchSlots } from '../domains/capacity/slots.ts'
+import {
+  DEFAULT_PASS_AFTER_MS,
+  releaseSlot,
+  type SlotRow,
+  type SlotView,
+  type PeakFrom,
+  slotLines,
+  touchSlots,
+  WAITER_TTL_MS,
+} from '../domains/capacity/slots.ts'
 import { DEFAULT_SLOT_RUN_MS, durationMs } from '../domains/planning/project.ts'
 import { ok, type PortError, type Result } from '../kernel/result.ts'
 import type { PlanningDeps } from './planning-deps.ts'
@@ -25,6 +37,22 @@ async function ownerOf(deps: PlanningDeps, cwd: string | undefined) {
   )
   return found.ok ? found.value : undefined
 }
+
+async function projectsOf(deps: PlanningDeps) {
+  const found = await deps.uow.run(async ({ planning }) => ok(await planning.projects()))
+  return found.ok ? found.value : []
+}
+
+/** The project whose repo is `cwd` or contains it (the longest repo wins, so a worktree matches). */
+function ownerIn<P extends { repo: string }>(projects: readonly P[], cwd: string | undefined): P | undefined {
+  if (cwd === undefined) return undefined
+  return projects
+    .filter((p) => cwd === p.repo || cwd.startsWith(`${p.repo}/`))
+    .sort((a, b) => b.repo.length - a.repo.length)[0]
+}
+
+/** Only the runs of the last two weeks size a step that has none of its own. */
+const PRIOR_WINDOW_MS = 14 * 86_400_000
 
 /** The run limit of a grant: the caller's own, else the `slots.run` of the project that owns the caller's directory, else the default. */
 async function runLimitMs(
@@ -50,6 +78,10 @@ export interface SlotDeps extends PlanningDeps {
    */
   slotAim: AimMode
   cores: number
+  /** `FACTORY_SLOT_PASS_MIN` in ms: how long a waiter may be passed by smaller steps before nothing passes it */
+  slotPassMs?: number
+  /** the swapout rate above which a finished run's peak is not learned from */
+  swapoutCeilingMb?: number
 }
 
 /**
@@ -70,6 +102,7 @@ export async function touchSlot(
   },
 ): Promise<Result<SlotView, PortError>> {
   const runMs = await runLimitMs(deps, input)
+  const projects = await projectsOf(deps)
   const [ram, load] = await Promise.all([deps.host.ramMib(), deps.host.load()])
   const ramMib = ram.ok ? ram.value : null
   return deps.uow.run(async ({ capacity }) => {
@@ -77,10 +110,54 @@ export async function touchSlot(
     const now = deps.clock.now()
     const rows = await capacity.slots()
     const holders = rows.filter((row) => row.slot !== null && (row.leasedUntil?.getTime() ?? 0) >= now.getTime())
-    const learned = new Map<string, number | null>()
-    for (const name of new Set([input.name, ...holders.map((row) => row.name)])) {
-      learned.set(name, learnedPeakMib(await capacity.recentPeaks(name, LEARNED_RUNS)))
+    const waiting = rows.filter((row) => row.slot === null && row.seenAt.getTime() >= now.getTime() - WAITER_TTL_MS)
+    const ceiling = deps.swapoutCeilingMb ?? DEFAULT_SWAPOUT_CEILING_MB
+    // The size of a step: what it is learned to peak at, else a prior from its project (`stepPrior`). A worktree's step is its
+    // project's (`stepNameOf`), whose old rows under the worktree names seed the figure.
+    const sized = new Map<string, { key: string; mib: number; from: PeakFrom }>()
+    const projectSteps = new Map<string, Map<string, number | null>>()
+    const sizeOf = async (name: string, cwd: string | null | undefined) => {
+      const owner = ownerIn(projects, cwd ?? undefined)
+      const key = stepNameOf(name, cwd, owner?.name)
+      const cacheKey = `${owner?.repo ?? ''}\n${key}`
+      const cached = sized.get(cacheKey)
+      if (cached) return cached
+      const legacy =
+        owner && key.startsWith(`${owner.name} `)
+          ? { repo: owner.repo, words: key.slice(owner.name.length) }
+          : undefined
+      const learnedMib = learnedPeakMib(await capacity.recentPeaks(key, LEARNED_RUNS, ceiling, legacy))
+      let result: { key: string; mib: number; from: PeakFrom }
+      if (learnedMib !== null) result = { key, mib: learnedMib, from: 'learned' }
+      else {
+        let steps = owner ? projectSteps.get(owner.repo) : undefined
+        if (owner && !steps) {
+          const since = new Date(now.getTime() - PRIOR_WINDOW_MS)
+          const peaks = await capacity.projectPeaks(owner.repo, owner.name, since, LEARNED_RUNS, ceiling)
+          steps = new Map([...peaks].map(([step, list]) => [step, learnedPeakMib(list)]))
+          projectSteps.set(owner.repo, steps)
+        }
+        const prior = stepPrior(key, steps ?? new Map())
+        result = { key, mib: prior.mib, from: prior.from }
+      }
+      sized.set(cacheKey, result)
+      return result
     }
+    const mine = await sizeOf(input.name, input.cwd)
+    const learned = new Map<string, number | null>()
+    for (const holder of holders)
+      learned.set((await sizeOf(holder.name, holder.cwd)).key, (await sizeOf(holder.name, holder.cwd)).mib)
+    const peaksByName = new Map<string, number | null>()
+    const peakFromByName = new Map<string, PeakFrom>()
+    for (const waiter of waiting) {
+      const size = await sizeOf(waiter.name, waiter.cwd)
+      peaksByName.set(waiter.name, size.mib)
+      peakFromByName.set(waiter.name, size.from)
+    }
+    const growth = growthMib(
+      await Promise.all(holders.map(async (h) => ({ name: (await sizeOf(h.name, h.cwd)).key, rssMib: h.rssMib }))),
+      learned,
+    )
     const hostSamples = await capacity.recentHostSamples(SWAP_WINDOW)
     const newestSample = hostSamples[0]
     const freeMib = freeMibOf(newestSample ?? null, ramMib, now)
@@ -104,10 +181,14 @@ export async function touchSlot(
         rssMib: input.rssMib,
         peakRssMib: input.peakRssMib,
         holding: input.holding,
+        passAfterMs: deps.slotPassMs ?? DEFAULT_PASS_AFTER_MS,
         fit: {
-          peakMib: learned.get(input.name) ?? null,
+          peakMib: mine.mib,
+          peakFrom: mine.from,
+          peaksByName,
+          peakFromByName,
           freeMib,
-          growthMib: growthMib(holders, learned),
+          growthMib: growth,
           max: aimed ?? deps.slotsMax,
           loadOk: loadNow !== null && loadNow <= (aimed === null ? deps.slotExtraLoad : LOAD_PER_CORE * deps.cores),
           headroomMib: headroomMib(ramMib),
@@ -129,9 +210,12 @@ export async function recordStepCost(
   input: Omit<StepCostRow, 'at' | 'repo' | 'cwd'> & { cwd?: string | undefined },
 ): Promise<Result<true, PortError>> {
   const { cwd, ...cost } = input
-  const repo = (await ownerOf(deps, cwd))?.repo ?? null
+  const owner = await ownerOf(deps, cwd)
+  const repo = owner?.repo ?? null
   return deps.uow.run(async ({ capacity }) => {
-    await capacity.recordStepCost({ ...cost, at: deps.clock.now(), repo, cwd: cwd ?? null })
+    // a worktree's step is stored under its project's name, so every lead's run teaches the same step
+    const name = stepNameOf(cost.name, cwd, owner?.name)
+    await capacity.recordStepCost({ ...cost, name, at: deps.clock.now(), repo, cwd: cwd ?? null })
     return ok(true as const)
   })
 }

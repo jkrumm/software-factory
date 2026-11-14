@@ -1,10 +1,16 @@
 /** How many of a step's newest peaks its learned peak is taken from. */
 export const LEARNED_RUNS = 8
 
-/** The largest of the newest peaks (newest first) that were measured; null when none was. */
+/**
+ * The p80 (nearest rank) of the newest measured peaks, newest first: a step usually peaks near it, and one inflated run
+ * (a peak measured while the host thrashed) does not reserve its size for the next eight. Null when none was measured.
+ */
 export function learnedPeakMib(peaksNewestFirst: readonly (number | null)[]): number | null {
-  const peaks = peaksNewestFirst.slice(0, LEARNED_RUNS).filter((peak): peak is number => peak !== null)
-  return peaks.length === 0 ? null : Math.max(...peaks)
+  const peaks = peaksNewestFirst
+    .slice(0, LEARNED_RUNS)
+    .filter((peak): peak is number => peak !== null)
+    .sort((a, b) => a - b)
+  return peaks.length === 0 ? null : (peaks[Math.ceil(peaks.length * 0.8) - 1] ?? null)
 }
 
 /** The memory the running steps will still take on: what each is learned to peak at, less what it holds now. */
@@ -33,4 +39,41 @@ export function freeMibOf(
   if (!sample || sample.memoryUsedPct === null || ramMib === null) return null
   if (now.getTime() - sample.at.getTime() > SAMPLE_MAX_AGE_MS) return null
   return Math.round(ramMib * (1 - sample.memoryUsedPct / 100))
+}
+
+/** The peak a step with nothing learned and nothing like it in its project is sized at: about the p85 of every step peak on 2026-11-14 (p50 0.3 GiB, p80 1.7, p90 2.5). */
+export const DEFAULT_PRIOR_MIB = 2048
+
+/**
+ * The name a step is learned and stored under. A caller in a linked worktree (`<repo>/.claude/worktrees/<dir>`) may name its step
+ * after the worktree directory (`factory-1146-1 unit`): every lead's step would be new to the server, so the directory word is
+ * replaced by the project's name (`basalt-ui unit`), the way a repo is always stored as its project name. Any other name stays.
+ */
+export function stepNameOf(name: string, cwd: string | null | undefined, project: string | null | undefined): string {
+  if (!cwd || !project) return name
+  const space = name.indexOf(' ')
+  const first = space === -1 ? name : name.slice(0, space)
+  const parts = cwd.split('/')
+  const at = parts.lastIndexOf('worktrees')
+  if (at === -1 || parts[at + 1] !== first) return name
+  return `${project}${space === -1 ? '' : name.slice(space)}`
+}
+
+/** The last word of a step's name: what it runs (`unit`, `make check-fast`'s `check-fast`). */
+export const stepKindOf = (name: string): string => name.slice(name.lastIndexOf(' ') + 1)
+
+/**
+ * The size an unknown step is given, as the largest learned peak of a step with the same last word in its project, else the
+ * project's largest learned peak, else `DEFAULT_PRIOR_MIB`.
+ */
+export function stepPrior(
+  name: string,
+  projectPeaks: ReadonlyMap<string, number | null>,
+): { mib: number; from: 'kind' | 'project' | 'default' } {
+  const kind = stepKindOf(name)
+  const known = [...projectPeaks].flatMap(([step, peak]) => (peak === null ? [] : [{ step, peak }]))
+  const sameKind = known.filter((k) => stepKindOf(k.step) === kind)
+  if (sameKind.length > 0) return { mib: Math.max(...sameKind.map((k) => k.peak)), from: 'kind' }
+  if (known.length > 0) return { mib: Math.max(...known.map((k) => k.peak)), from: 'project' }
+  return { mib: DEFAULT_PRIOR_MIB, from: 'default' }
 }

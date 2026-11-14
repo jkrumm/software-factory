@@ -57,8 +57,26 @@ export interface CapacityStore {
   recordStepCost(cost: StepCostRow): Promise<void>
   /** appends one finished `factory merge-lock` call: its wait and its hold */
   recordMergeWindow(window: MergeWindowRow): Promise<void>
-  /** a step's peaks, newest first (null: not measured) */
-  recentPeaks(name: string, limit: number): Promise<(number | null)[]>
+  /**
+   * a step's peaks, newest first (null: not measured), of the runs that did not end under host pressure (a pressure level
+   * above normal or a swapout rate above `swapoutCeilingMb` in the host sample around the end). `legacy` adds the rows a
+   * worktree's own step name left in that repo before steps were stored under the project's name (`factory-<n>-<a>` and
+   * the same words after it).
+   */
+  recentPeaks(
+    name: string,
+    limit: number,
+    swapoutCeilingMb: number,
+    legacy?: { repo: string; words: string },
+  ): Promise<(number | null)[]>
+  /** the same for every step of a repo (its absolute path): each name, the worktree names of old rows read as `project`'s, with its newest peaks, of the runs since `since` */
+  projectPeaks(
+    repo: string,
+    project: string,
+    since: Date,
+    limit: number,
+    swapoutCeilingMb: number,
+  ): Promise<Map<string, (number | null)[]>>
   /** the newest minute sample of the host: when, and the share of RAM in use */
   latestHostSample(): Promise<{ at: Date; memoryUsedPct: number | null } | null>
   /** the newest minute samples of the host, newest first */

@@ -89,6 +89,8 @@ export function composePlanning(input: {
     slots: settings.slots,
     slotsMax: settings.slotsMax,
     slotExtraLoad: settings.slotExtraLoad,
+    slotPassMs: settings.slotPassMs,
+    swapoutCeilingMb: settings.memoryCeilings.swapoutMbPer300s,
     slotAim: settings.slotAim,
     cores: settings.cores,
     host,

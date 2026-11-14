@@ -44,6 +44,8 @@ const Env = z.object({
   FACTORY_SLOTS_MAX: whole(1, 64).optional(),
   /** the host load up to which a step beyond the base slots is granted */
   FACTORY_SLOT_EXTRA_LOAD: whole(1, 100_000).optional(),
+  /** the minutes a waiter in the test-slot line may be passed by smaller steps before nothing passes it any more */
+  FACTORY_SLOT_PASS_MIN: whole(1, 1440).optional(),
   /** the slot count that follows memory pressure: `off`, `shadow` (record beside the live rule, the default) or `on` */
   FACTORY_SLOT_AIM: z.enum(['off', 'shadow', 'on']).optional(),
   /** the tenant class's budget in MiB: the daily throughput ranking files the class's average footprint above it */
@@ -81,6 +83,7 @@ export interface PlanningSettings {
   slots: number
   slotsMax: number
   slotExtraLoad: number
+  slotPassMs: number
   slotAim: AimMode
   /** the tenant class's budget (launchd jobs and VMs), MiB; over it, the daily ranking files a finding */
   tenantBudgetMib: number
@@ -158,6 +161,7 @@ export function planningSettings(
     slots: e.FACTORY_SLOTS ?? 2,
     slotsMax: Math.max(e.FACTORY_SLOTS ?? 2, e.FACTORY_SLOTS_MAX ?? 6),
     slotExtraLoad: e.FACTORY_SLOT_EXTRA_LOAD ?? 12,
+    slotPassMs: (e.FACTORY_SLOT_PASS_MIN ?? 10) * 60_000,
     slotAim: e.FACTORY_SLOT_AIM ?? 'shadow',
     tenantBudgetMib: e.FACTORY_TENANT_BUDGET_MIB ?? DEFAULT_TENANT_BUDGET_MIB,
     tenantProject: e.FACTORY_TENANT_PROJECT ?? DEFAULT_TENANT_PROJECT,
