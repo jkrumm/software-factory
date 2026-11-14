@@ -150,7 +150,7 @@ function fitRefusal(fit: LeadFit): string | null {
   if (fit.running === 0) return null
   if (fit.candidateMib <= fit.freeMib - fit.headroomMib) return null
   return (
-    `memory: a lead of ${fit.repo} takes ~${gib(fit.candidateMib)} GiB (p80 of ${fit.attempts} past leads), ` +
+    `memory: a lead of ${fit.repo} takes ~${gib(fit.candidateMib)} GiB outside test slots (p80 of ${fit.attempts} past leads), ` +
     `the host has ${gib(fit.freeMib)} GiB free, headroom ${gib(fit.headroomMib)} GiB`
   )
 }

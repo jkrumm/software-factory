@@ -240,6 +240,23 @@ test('a pass writes one row and prunes what is older than 14 days', async () => 
   expect(await db.sql`SELECT 1 FROM factory.lead_samples`).toHaveLength(0)
 })
 
+const snapProc = (pid: number, ppid: number, extra: Partial<SnapshotProc> = {}): SnapshotProc => ({
+  pid,
+  ppid,
+  footprintKib: 1024,
+  cpuMs: null,
+  name: `p${pid}`,
+  user: 'me',
+  exe: `/opt/bin/p${pid}`,
+  label: null,
+  session: null,
+  slot: null,
+  slotActive: false,
+  vm: null,
+  cwd: null,
+  ...extra,
+})
+
 test('a pass with a process table stores the facts and one row per lead, and prunes lead samples after 30 days', async () => {
   const uow = postgresUnitOfWork(db.sql, (tx) => ({ loops: postgresLoopStore(tx) }))
   const now = new Date()
@@ -260,20 +277,50 @@ test('a pass with a process table stores the facts and one row per lead, and pru
       read: async () => [
         { pid: 10, ppid: 1, rssKib: 2048, footprintKib: 1024, cwd: base },
         { pid: 11, ppid: 10, rssKib: 1024, footprintKib: 512, cwd: '/elsewhere' },
+        // a slot run under the lead (3 GiB) and the step it started: left out of the lead's cost
+        { pid: 12, ppid: 10, rssKib: 1024, footprintKib: 512, cwd: base },
+        { pid: 13, ppid: 12, rssKib: 3 * 1024 * 1024, footprintKib: 3 * 1024 * 1024, cwd: base },
         { pid: 20, ppid: 1, rssKib: 4096, footprintKib: null, cwd: '/work/app/.claude/worktrees/factory-8-1' },
       ],
     },
-    ...noSnapshot(),
+    snapshot: {
+      read: async () => ({
+        procs: [
+          snapProc(10, 1),
+          snapProc(11, 10),
+          snapProc(12, 10, { slot: 'factory-7-1 make check-fast' }),
+          snapProc(13, 12),
+          snapProc(20, 1),
+        ],
+        processes: 5,
+        cpuIdlePct: null,
+        pressureLevel: null,
+        compressorMib: null,
+        vmFreeGib: null,
+        collectorCpuMs: 0,
+      }),
+    },
+    memory: { current: emptySnapshotMemory() },
+    self: { pid: 1, dirs: [] },
     facts: async () => ({ ok: true, value: { leads: 1, queued: 2, seats: 16, loadCeiling: 6.5 } }),
   })
-  expect(pass).toEqual({ ok: true, value: { pruned: 0, leadRows: 1, classRows: null } })
+  expect(pass).toMatchObject({ ok: true, value: { pruned: 0, leadRows: 1 } })
   const [sample] = await db.sql`SELECT leads, queued, seats, load_ceiling FROM factory.host_samples WHERE at = ${now}`
   expect(sample).toEqual({ leads: 1, queued: 2, seats: 16, load_ceiling: 6.5 })
   const rows =
-    await db.sql`SELECT worktree, repo, issue, attempt, rss_mib, footprint_mib, procs FROM factory.lead_samples ORDER BY worktree`
+    await db.sql`SELECT worktree, repo, issue, attempt, rss_mib, footprint_mib, procs, outside_slots FROM factory.lead_samples ORDER BY worktree`
   expect(rows).toEqual([
-    { worktree: '/recent', repo: 'app', issue: null, attempt: null, rss_mib: 10, footprint_mib: null, procs: 1 },
-    { worktree: base, repo: 'app', issue: 7, attempt: 1, rss_mib: 3, footprint_mib: 2, procs: 2 },
+    {
+      worktree: '/recent',
+      repo: 'app',
+      issue: null,
+      attempt: null,
+      rss_mib: 10,
+      footprint_mib: null,
+      procs: 1,
+      outside_slots: true,
+    },
+    { worktree: base, repo: 'app', issue: 7, attempt: 1, rss_mib: 3, footprint_mib: 2, procs: 2, outside_slots: true },
   ])
   await db.sql`DELETE FROM factory.lead_samples`
   await db.sql`DELETE FROM factory.lead_attempts`
@@ -453,6 +500,15 @@ test('readLeadCosts: per repo, the attempts, the p80 of the newest ten attempt p
     { repo: 'a', attempts: 5, peakMibP80: 400, lastPeakMib: 500, ...none },
     { repo: 'b', attempts: 2, peakMibP80: 90, lastPeakMib: 90, ...none },
   ])
+  await db.sql`DELETE FROM factory.lead_samples`
+})
+
+test('readLeadCosts: rows from before the slots were left out (outside_slots false) are not counted', async () => {
+  const at = (min: number) => new Date(Date.UTC(2026, 10, 10, 12, min))
+  await db.sql`INSERT INTO factory.lead_samples (at, worktree, repo, rss_mib, procs, outside_slots) VALUES
+    (${at(0)}, 'o1', 'z', 9000, 2, false), (${at(1)}, 'o2', 'z', 9000, 2, false),
+    (${at(2)}, 'n1', 'z', 500, 2, true), (${at(3)}, 'n2', 'z', 600, 2, true), (${at(4)}, 'o3', 'y', 9000, 2, false)`
+  expect(await readLeadCosts(db.sql)).toMatchObject([{ repo: 'z', attempts: 2, peakMibP80: 600, lastPeakMib: 600 }])
   await db.sql`DELETE FROM factory.lead_samples`
 })
 

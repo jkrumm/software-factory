@@ -5,6 +5,7 @@ import {
   emptySnapshotMemory,
   notableProcs,
   remember,
+  stepNames,
   type SnapshotMemory,
 } from '../../domains/capacity/classes.ts'
 import { attribute } from '../../domains/capacity/leadcost.ts'
@@ -64,7 +65,7 @@ const NO_SIGNALS: HostSignals = {
 
 export interface HostPass {
   pruned: number
-  /** the lead rows stored; null: the process table could not be read, no lead rows were recorded */
+  /** the lead rows stored; null: the process table or the class snapshot could not be read, no lead rows were recorded */
   leadRows: number | null
   /** the class rows stored; null: `top`, `ps`, `launchctl` or `lsof` could not be read, no classes were recorded */
   classRows: number | null
@@ -89,10 +90,12 @@ export async function hostPass(deps: HostPassDeps): Promise<Result<HostPass, Por
     deps.snapshot.read().catch(() => null),
     deps.facts(),
   ])
+  // A lead's cost leaves out what runs under a slot run (the slot grant weighs that on its own), told by the class
+  // snapshot's holders and `FACTORY_SLOT_ACTIVE`; without that snapshot no minute can say which processes those are.
   const leads =
-    table === null
+    table === null || !snapshot?.procs
       ? null
-      : attribute(table, known.value).map((cost) => ({
+      : attribute(table, known.value, new Set(stepNames(snapshot.procs).keys())).map((cost) => ({
           worktree: cost.path,
           repo: cost.repo,
           issue: cost.issue,
@@ -164,7 +167,9 @@ export async function hostPass(deps: HostPassDeps): Promise<Result<HostPass, Por
 export const hostSummary = (pass: HostPass): string =>
   [
     `sampled the host, pruned ${pass.pruned}`,
-    pass.leadRows === null ? 'no lead rows (the process table could not be read)' : `${pass.leadRows} lead row(s)`,
+    pass.leadRows === null
+      ? 'no lead rows (the process table or the class snapshot could not be read)'
+      : `${pass.leadRows} lead row(s)`,
     pass.classRows === null
       ? 'no class snapshot (top, ps, launchctl or lsof could not be read)'
       : `${pass.classRows} class row(s)`,

@@ -69,6 +69,33 @@ const inside = (cwd: string, dir: string): boolean => cwd === dir || cwd.startsW
 /** A slot run's name as the step costs read it: a lead's `factory-<issue>-<attempt> ` prefix is dropped. */
 export const stepName = (slot: string): string => slot.replace(LEAD_PREFIX, '')
 
+/**
+ * What runs under a slot run: each `factory slot run` holder's tree (pid to the step's name), and a process inside a held
+ * slot whose holder is not seen (name null). The class `step` is exactly these, and the lead cost leaves them out.
+ */
+export function stepNames(procs: readonly SnapshotProc[]): Map<number, string | null> {
+  const children = new Map<number, number[]>()
+  for (const proc of procs) {
+    if (proc.pid !== proc.ppid) children.set(proc.ppid, [...(children.get(proc.ppid) ?? []), proc.pid])
+  }
+  const steps = new Map<number, string | null>()
+  for (const proc of procs) {
+    if (proc.slot === null) continue
+    const name = stepName(proc.slot) || null
+    const stack = [proc.pid]
+    const seen = new Set<number>()
+    while (stack.length > 0) {
+      const pid = stack.pop() as number
+      if (seen.has(pid)) continue
+      seen.add(pid)
+      if (!steps.has(pid)) steps.set(pid, name)
+      stack.push(...(children.get(pid) ?? []))
+    }
+  }
+  for (const proc of procs) if (proc.slotActive && !steps.has(proc.pid)) steps.set(proc.pid, null)
+  return steps
+}
+
 const isSystemUser = (user: string | null): boolean => user === 'root' || (user?.startsWith('_') ?? false)
 
 /**
@@ -138,14 +165,7 @@ export function assignClasses(input: ClassInput): ClassedProc[] {
     return { repo: worktree?.repo ?? null, issue: worktree?.issue ?? session.issue }
   }
 
-  // steps: each holder's tree carries its name; a process inside a held slot whose holder is not seen has none
-  const steps = new Map<number, string | null>()
-  for (const proc of input.procs) {
-    if (proc.slot === null) continue
-    const name = stepName(proc.slot) || null
-    for (const pid of descendants([proc.pid])) if (!steps.has(pid)) steps.set(pid, name)
-  }
-  for (const proc of input.procs) if (proc.slotActive && !steps.has(proc.pid)) steps.set(proc.pid, null)
+  const steps = stepNames(input.procs)
 
   // the factory's jobs
   const factoryJobs = new Set<number>([jobOf(input.selfPid)])

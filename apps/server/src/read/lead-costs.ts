@@ -2,7 +2,7 @@ import type { SQL } from 'bun'
 import * as z from 'zod'
 import { boundedRead } from './bounded.ts'
 
-/** What a repo's leads cost, from the minute samples of their process trees. */
+/** What a repo's leads cost outside test slots, from the minute samples of their process trees (what runs under a slot run is left out). */
 export interface RepoLeadCost {
   repo: string
   /** the attempts sampled */
@@ -49,7 +49,7 @@ export async function readLeadCosts(sql: SQL): Promise<RepoLeadCost[]> {
     const found: unknown[] = await tx`
       WITH peaks AS (
         SELECT repo, worktree, max(rss_mib) AS peak, max(footprint_mib) AS fp_peak, max(at) AS last_at
-        FROM factory.lead_samples GROUP BY repo, worktree
+        FROM factory.lead_samples WHERE outside_slots GROUP BY repo, worktree
       ), ranked AS (
         SELECT repo, peak, row_number() OVER (PARTITION BY repo ORDER BY last_at DESC, worktree) AS newest
         FROM peaks

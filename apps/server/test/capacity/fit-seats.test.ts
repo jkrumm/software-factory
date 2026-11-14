@@ -75,7 +75,7 @@ describe('the learned fit rule', () => {
       refusal: {
         kind: 'memory',
         message:
-          'memory: a lead of heavy takes ~17.6 GiB (p80 of 5 past leads), the host has 18 GiB free, headroom 2.6 GiB',
+          'memory: a lead of heavy takes ~17.6 GiB outside test slots (p80 of 5 past leads), the host has 18 GiB free, headroom 2.6 GiB',
       },
     })
   })
@@ -123,7 +123,7 @@ describe('admission on a busy but idle host (6 leads running, test peaks are hel
       refusal: {
         kind: 'memory',
         message:
-          'memory: a lead of weatherorb takes ~6.2 GiB (p80 of 5 past leads), the host has 7 GiB free, headroom 2.6 GiB',
+          'memory: a lead of weatherorb takes ~6.2 GiB outside test slots (p80 of 5 past leads), the host has 7 GiB free, headroom 2.6 GiB',
       },
     })
   })

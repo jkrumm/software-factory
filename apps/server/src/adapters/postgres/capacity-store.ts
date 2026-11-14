@@ -380,7 +380,7 @@ export function postgresCapacityStore(tx: SQL): CapacityStore {
       const rows: unknown[] = await tx`
         WITH peaks AS (
           SELECT repo, worktree, max(rss_mib) AS peak, max(at) AS last_at
-          FROM factory.lead_samples GROUP BY repo, worktree
+          FROM factory.lead_samples WHERE outside_slots GROUP BY repo, worktree
         ), ranked AS (
           SELECT repo, peak, last_at, row_number() OVER (PARTITION BY repo ORDER BY last_at DESC, worktree) AS newest,
             count(*) OVER (PARTITION BY repo) AS n
