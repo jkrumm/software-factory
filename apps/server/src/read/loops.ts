@@ -87,6 +87,28 @@ const HostMinuteRow = z.object({
   processes: z.number().int().nullable(),
 })
 
+const CapacityMinuteRow = z.object({
+  at: z.date(),
+  load: z.number().nullable(),
+  load_ceiling: z.number().nullable(),
+  leads: z.number().int().nullable(),
+  seats: z.number().int().nullable(),
+  memory_used_pct: z.number().nullable(),
+  swap_used_pct: z.number().nullable(),
+  swapout_mb_per_300s: z.number().nullable(),
+  compressor_mib: z.number().int().nullable(),
+  pressure_level: z.number().int().nullable(),
+})
+
+const SlotMinuteRow = z.object({
+  at: z.date(),
+  live_slots: z.number().int(),
+  holders: z.number().int(),
+  waiters: z.number().int(),
+})
+
+const QueueReasonRow = z.object({ kind: z.string(), count: z.coerce.number().int(), since: z.date() })
+
 const WaitRowSchema = z.object({
   id: z.string(),
   title: z.string(),
@@ -371,6 +393,43 @@ export function loopReads(tx: SQL): LoopReads {
         const row = HostMinuteRow.parse(raw)
         return { at: row.at, swapUsedPct: row.swap_used_pct, processes: row.processes }
       })
+    },
+
+    async capacityMinutes(since) {
+      const rows: unknown[] = await tx`
+        SELECT at, load, load_ceiling, leads, seats, memory_used_pct, swap_used_pct, swapout_mb_per_300s, compressor_mib, pressure_level
+        FROM factory.host_samples WHERE at >= ${since} ORDER BY at`
+      return rows.map((raw) => {
+        const row = CapacityMinuteRow.parse(raw)
+        return {
+          at: row.at,
+          load: row.load,
+          loadCeiling: row.load_ceiling,
+          leads: row.leads,
+          seats: row.seats,
+          memoryUsedPct: row.memory_used_pct,
+          swapUsedPct: row.swap_used_pct,
+          swapoutMbPer300s: row.swapout_mb_per_300s,
+          compressorMib: row.compressor_mib,
+          pressureLevel: row.pressure_level,
+        }
+      })
+    },
+
+    async slotMinutes(since) {
+      const rows: unknown[] = await tx`
+        SELECT at, live_slots, holders, waiters FROM factory.slot_shadow WHERE at >= ${since} ORDER BY at`
+      return rows.map((raw) => {
+        const row = SlotMinuteRow.parse(raw)
+        return { at: row.at, liveSlots: row.live_slots, holders: row.holders, waiters: row.waiters }
+      })
+    },
+
+    async queueReasons() {
+      const rows: unknown[] = await tx`
+        SELECT kind, count(*) AS count, min(from_at) AS since FROM factory.queue_intervals WHERE to_at IS NULL
+        GROUP BY kind ORDER BY count(*) DESC, kind`
+      return rows.map((raw) => QueueReasonRow.parse(raw))
     },
 
     specPrecedents: (limit) => readSpecPrecedents(tx, limit),

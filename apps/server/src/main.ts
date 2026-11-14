@@ -66,6 +66,8 @@ import { selfwatchPass, selfwatchSummary } from './app/loops/selfwatch.ts'
 import { ciLedgerPass } from './app/loops/ci-ledger.ts'
 import { githubCiLedger, githubCiLive, githubCiRuns, githubCiTimes } from './adapters/selfwatch/github.ts'
 import { gitMigrationFiles } from './adapters/selfwatch/git.ts'
+import { hostOverload } from './adapters/selfwatch/overload.ts'
+import { routeTimer } from './api/route-timer.ts'
 import { SHARED_NUMBERS } from './adapters/postgres/migrate.ts'
 import { MainCheckoutLines } from './app/loops/checkout-lines.ts'
 import { gitMainCheckouts } from './adapters/quality/main-checkouts.ts'
@@ -200,6 +202,8 @@ async function main(): Promise<void> {
   const startedAt = new Date()
   /** The one repo the self-watch loop watches: the factory itself. */
   const SELFWATCH_REPO = 'software-factory'
+  /** Times the server's own routes: the self-watch's `routes_slow` and the heartbeat's `routeP95Ms` read the same figure. */
+  const routes = routeTimer()
   const leadSettings = loadLeadSettings(process.env)
   const loopSettings = loadLoopSettings(process.env)
   // The one way to ask agw for a judgment: the Judge, the steward and triage all go through it.
@@ -552,7 +556,7 @@ async function main(): Promise<void> {
       },
     },
     {
-      // Ten deterministic conditions (a project's `budgets:` breach among them, filed on that project's repo) (red CI, a migration number clash, an overdue wait, an idle lead, a
+      // Fourteen deterministic conditions (a project `budgets:` breach among them, filed on that project repo, and four of the factory own capacity: load over the ceiling, the slot line, gates passed, slow routes) (red CI, a migration number clash, an overdue wait, an idle lead, a
       // regression of inert paths, a stale heartbeat, a process growing without bound, swap growth, a process storm), filed once per subject as signals on the factory's own repo.
       name: 'selfwatch',
       intervalMs: loopSettings.intervalMs.selfwatch,
@@ -577,6 +581,10 @@ async function main(): Promise<void> {
           migrations: gitMigrationFiles(repos),
           sharedNumbers: SHARED_NUMBERS,
           processCap: DEFAULT_PROCESS_CAP,
+          memoryCeilings: planningEnv.memoryCeilings,
+          serverPid: process.pid,
+          routes: () => routes.snapshot(),
+          overload: hostOverload({ dataDir }),
           budgets: async (now) => readBudgetFacts(sql, { now, budgets: await projectBudgets(), epoch }),
           heartbeat: () =>
             confirmedHeartbeat(
@@ -901,12 +909,14 @@ async function main(): Promise<void> {
       queueMovedAt: probed.queueMovedAt,
       tickFailure: tick.failure,
       notice: tick.notice,
+      routes: routes.snapshot(),
     })
   }
   const app = createApp({
     tokens: settings.tokens,
     intake: intake.api,
     health: { read: readHealth },
+    routes,
     planning: planning.planning,
     issues: composeIssues({
       writes,

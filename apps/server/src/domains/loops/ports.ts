@@ -27,12 +27,15 @@ import type { ClassIssue, FindingLoop } from './classes.ts'
 import type { FixCommit, FixCommitRow } from './fix-classes.ts'
 import type { SweepReport } from './hygiene-model.ts'
 import type {
+  CapacityMinute,
   CiRun,
   HostMinute,
   MigrationSnapshot,
   ProcessMinute,
+  QueueReasonCount,
   SelfwatchChange,
   SelfwatchRow,
+  SlotMinute,
   WaitFact,
 } from './selfwatch-model.ts'
 import type { FindingRow, LedgerChange } from './throughput.ts'
@@ -373,6 +376,12 @@ export interface LoopReads {
   processMinutes(since: Date): Promise<ProcessMinute[]>
   /** the host's minute samples since `since`, oldest first (self-watch: swap growth, the process count) */
   hostMinutes(since: Date): Promise<HostMinute[]>
+  /** the host's minute samples with their capacity facts since `since`, oldest first (self-watch: load, gates passed) */
+  capacityMinutes(since: Date): Promise<CapacityMinute[]>
+  /** the test slots' minutes since `since`, oldest first (self-watch: the slot line); none while the slot aim is `off` */
+  slotMinutes(since: Date): Promise<SlotMinute[]>
+  /** the queued Issues by the reason they stay queued, from the open queue intervals (the incident's evidence) */
+  queueReasons(): Promise<QueueReasonCount[]>
   /** the owner's newest needed-me marks on Specs, newest first: triage's precedents for the `spec` flag */
   specPrecedents(limit: number): Promise<SpecPrecedent[]>
 }
@@ -415,6 +424,14 @@ export interface FixClassesWorkflow {
 /** The fix commits of one project's default branch, read from git (called outside any transaction). */
 export interface FixCommitReader {
   read(repo: string, since: Date): Promise<Result<FixCommit[], PortError>>
+}
+
+/** What the host itself says for an overload incident's evidence (called outside any transaction; every call has a process timeout). */
+export interface OverloadHost {
+  /** every process with its scheduling priority, as `ps -axo pid=,pri=,pcpu=,rss=,command=` prints them */
+  processes(): Promise<Result<string, PortError>>
+  /** the last `count` lines of `deploys.log`; none when it cannot be read */
+  deployLines(count: number): Promise<string[]>
 }
 
 /** The newest completed workflow runs of a repo's branch (called outside any transaction). `branch` null is the repo's default branch. */

@@ -15,6 +15,8 @@ export interface HealthFacts {
   /** the door's health lines; they inform and never change the status */
   lines?: readonly HealthLine[]
   loops?: readonly HealthLoop[]
+  /** the server's own routes over the last five minutes, timed in the process (`api/route-timer.ts`); left out, the heartbeat carries no figure */
+  routes?: { p95Ms: number | null; samples: number }
 }
 
 /** How long a server that has not ticked yet is given for its first pass: a restart on a loaded host takes minutes. */
@@ -110,7 +112,13 @@ export function healthOf(facts: HealthFacts): Health {
     status: failure === null ? 'ok' : 'unhealthy',
     version: facts.version,
     reason,
-    heartbeat: { ok: failure === null, reason, tickAt: facts.tickAt, queueMovedAt: facts.queueMovedAt },
+    heartbeat: {
+      ok: failure === null,
+      reason,
+      tickAt: facts.tickAt,
+      queueMovedAt: facts.queueMovedAt,
+      ...(facts.routes ? { routeP95Ms: facts.routes.p95Ms, routeSamples: facts.routes.samples } : {}),
+    },
     lines: [...(facts.lines ?? [])],
     loops: [...(facts.loops ?? [])],
   }

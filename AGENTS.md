@@ -106,7 +106,7 @@ the record of the rewrite and `docs/rewrite/state.md` its log. A directory listi
 - **A request's `check` is a shell command the server runs** (`errands` loop, `adapters/shell/check-runner.ts`): only the callers that can run a shell themselves may set one (owner, orchestrator, agent in `api/policy.ts`), never `machine`, `signal` or `read`. It runs outside any transaction, 30 s, in its own process group, without the server's secrets. Exit 1..125 closes the request; a check that could not answer never does.
 - **The throughput epoch** (`config/throughput.json`, one ISO time; `FACTORY_THROUGHPUT_FILE` overrides the path): no throughput read, ranking window or median counts a sample before it, and a window it cuts says so (`epoch.cut`, `window.from`). No row is deleted; moving it back is one line. A bad or missing file stops the start. `docs/architecture.md` "The counting epoch and the three answers".
 - **Heartbeat names** on `GET /health` (`ok`, `reason`, `tickAt`, `queueMovedAt`) are read by a pusher outside this repo:
-  do not rename them. `ok` is false only for a stopped factory (`docs/architecture.md`); a restart (`starting`), a deploy
+  do not rename them (`routeP95Ms` and `routeSamples` are additive, for the same pusher). `ok` is false only for a stopped factory (`docs/architecture.md`); a restart (`starting`), a deploy
   (`deploying`) and a starved host (`starved: …`) are ok with that `reason`. `/health` never queries the database in the request.
 - **Retired words fail `make check`** (`scripts/retired-words.ts`, the Retires column of `docs/language.md`). An exception
   is a line with its reason in `scripts/retired-words.allow`; a stale line fails too.

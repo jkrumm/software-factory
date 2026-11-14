@@ -567,3 +567,82 @@ test('process_growth, swap_growth, process_storm: a drill process, a swap rise a
     expect((await rowOf(key))?.cleared_at).not.toBeNull()
   expect((await signalsOf('process_growth')).length).toBe(1)
 })
+
+test('load_over_ceiling: a host over the ceiling for ten samples files one incident with the evidence block, once, and clears', async () => {
+  const db = sql()
+  await db`DELETE FROM factory.host_samples`
+  await db`
+    INSERT INTO factory.host_samples (at, load, load_ceiling)
+    SELECT date_trunc('minute', now()) - (m || ' minutes')::interval, 200, 60 FROM generate_series(0, 9) AS m`
+
+  await pass()
+  const [filed, ...more] = await signalsOf('load_over_ceiling')
+  expect(more).toEqual([])
+  expect(filed?.repo).toBe(REPO)
+  expect(filed?.title).toContain('load of the host has been over the load ceiling')
+  // the evidence block: what a lead reads to find the cause instead of the symptom
+  for (const part of [
+    'Evidence at the time of filing:',
+    'Test slot lines (',
+    'Queue by reason:',
+    'Host at ',
+    'load 200 (ceiling 60)',
+    'busiest processes of',
+    'Scheduling priority (ps -o pri',
+    'Last deploy lines',
+  ])
+    expect(filed?.text).toContain(part)
+
+  // the same condition on the next passes files nothing, and a longer run is the same evidence
+  await db`
+    INSERT INTO factory.host_samples (at, load, load_ceiling)
+    SELECT date_trunc('minute', now()) + interval '1 minute', 220, 60`
+  await pass()
+  await pass()
+  expect(await signalsOf('load_over_ceiling')).toHaveLength(1)
+  expect((await rowOf('load_over_ceiling:host'))?.cleared_at).toBeNull()
+
+  // the newest samples fall under the ceiling: the row clears, and the evidence is read again only for a new incident
+  await db`UPDATE factory.host_samples SET load = 5 WHERE at >= date_trunc('minute', now()) - interval '2 minutes'`
+  await pass()
+  expect((await rowOf('load_over_ceiling:host'))?.cleared_at).not.toBeNull()
+  expect(await signalsOf('load_over_ceiling')).toHaveLength(1)
+  await db`DELETE FROM factory.host_samples`
+})
+
+test('slot_line and gates_passed: the stored slot minutes and capacity facts file one signal each, and clear', async () => {
+  const db = sql()
+  await db`DELETE FROM factory.host_samples`
+  await db`DELETE FROM factory.slot_shadow`
+  // fifteen minutes with twelve callers waiting for a slot
+  await db`
+    INSERT INTO factory.slot_shadow (at, live_slots, live_max, aim_slots, holders, waiters, swap_growing, reason)
+    SELECT date_trunc('minute', now()) - (m || ' minutes')::interval, 2, 4, 2, 2, 12, false, 'drill' FROM generate_series(0, 14) AS m`
+  // leads that rose from 3 to 9 in two samples that both read load over the ceiling
+  await db`
+    INSERT INTO factory.host_samples (at, load, load_ceiling, leads, seats)
+    VALUES (date_trunc('minute', now()) - interval '1 minute', 150, 60, 3, 12), (date_trunc('minute', now()), 160, 60, 9, 12)`
+
+  await pass()
+  const [slot, ...slotMore] = await signalsOf('slot_line')
+  expect(slotMore).toEqual([])
+  expect(slot?.title).toContain('more than eight callers')
+  const [gates, ...gatesMore] = await signalsOf('gates_passed')
+  expect(gatesMore).toEqual([])
+  expect(gates?.text).toContain('a lead was admitted while the load was over its ceiling')
+  expect(gates?.text).toContain('leads 3 to 9')
+  expect(gates?.text).toContain('Evidence at the time of filing:')
+
+  await pass()
+  expect(await signalsOf('slot_line')).toHaveLength(1)
+  expect(await signalsOf('gates_passed')).toHaveLength(1)
+
+  // the line shortens and the leads settle: both clear
+  await db`UPDATE factory.slot_shadow SET waiters = 0 WHERE at >= date_trunc('minute', now()) - interval '1 minute'`
+  await db`UPDATE factory.host_samples SET leads = 3`
+  await pass()
+  expect((await rowOf('slot_line:waiting'))?.cleared_at).not.toBeNull()
+  expect((await rowOf('gates_passed:host'))?.cleared_at).not.toBeNull()
+  await db`DELETE FROM factory.host_samples`
+  await db`DELETE FROM factory.slot_shadow`
+})
