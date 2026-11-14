@@ -208,6 +208,15 @@ export function postgresCapacityStore(tx: SQL): CapacityStore {
         ON CONFLICT (issue_id, attempt) DO NOTHING`
     },
 
+    async reassign(issue, attempt, account, at) {
+      const rows: unknown[] = await tx`
+        UPDATE factory.capacity_assignments SET account = ${account}, assigned_at = ${at}
+        WHERE issue_id = ${issue} AND attempt = ${attempt} RETURNING issue_id`
+      if (rows.length === 0) return false
+      await tx`UPDATE factory.capacity_claims SET account = ${account} WHERE issue_id = ${issue}`
+      return true
+    },
+
     async recentAssignments() {
       const rows: unknown[] = await tx`SELECT * FROM factory.capacity_assignments ORDER BY assigned_at DESC LIMIT 200`
       return rows.map(assignmentOf)

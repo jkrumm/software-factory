@@ -28,6 +28,8 @@ type Look =
       delivery: Pick<Delivery, 'claimedAt' | 'text'>
       working: boolean
       dormant: Dormant | null
+      /** what starting the session again needs, dormant or not: a lead moved to another account is started again while it runs */
+      resume: Dormant
       /** when the lead's hooks say its turn ended with none begun since; null while a turn runs or none was seen */
       idleSince: Date | null
     }
@@ -69,6 +71,7 @@ export async function noteLead(deps: LeadDeps, effect: NoteEffect): Promise<Resu
         delivery: existing,
         working,
         dormant: dormantOf(row, loaded.issue, view.claudeSession),
+        resume: resumeOf(row, loaded.issue, view.claudeSession),
         idleSince,
       })
     }
@@ -79,11 +82,18 @@ export async function noteLead(deps: LeadDeps, effect: NoteEffect): Promise<Resu
     const claimedAt = deps.clock.now()
     await leads.claimDelivery({ key: deliveryKey, issueId: issue, attempt, kind: 'note', text, claimedAt })
     const dormant = dormantOf(row, loaded.issue, view.claudeSession)
-    return ok({ done: false, delivery: { claimedAt, text }, working, dormant, idleSince })
+    return ok({
+      done: false,
+      delivery: { claimedAt, text },
+      working,
+      dormant,
+      resume: resumeOf(row, loaded.issue, view.claudeSession),
+      idleSince,
+    })
   })
   if (!looked.ok) return looked
   if (looked.value.done) return ok(undefined)
-  const { delivery, working, dormant, idleSince } = looked.value
+  const { delivery, working, dormant, resume, idleSince } = looked.value
 
   const found = await deps.terminals.find(name)
   if (!found.ok) return found
@@ -98,6 +108,37 @@ export async function noteLead(deps: LeadDeps, effect: NoteEffect): Promise<Resu
     const resumed = await deps.claims.resume({ issue, attempt })
     // A closed Issue has nothing to tell: its finalize is the claim's end.
     if (!resumed.ok) return resumed.error.kind === 'gone' ? ok(undefined) : resumed
+  }
+
+  // The account the attempt belongs to now. A lead whose account ran out is given another one (`seats.move`) and woken:
+  // its session ends and starts again there, the same session, so the wake is the first message it reads.
+  const seat = await deps.seats.seat({ issue, attempt })
+  if (!seat.ok) return seat
+  // An attempt with no assignment answers `default`: nothing to move to.
+  const movedTo =
+    resume.account && seat.value.account !== 'default' && seat.value.account !== resume.account
+      ? seat.value.account
+      : null
+  if (movedTo && (live || dormant)) {
+    if (!dormant) {
+      const marked = await deps.uow.run(async ({ leads }) => {
+        await leads.markDormant(issue, attempt, deps.clock.now())
+        return ok(undefined)
+      })
+      if (!marked.ok) return marked
+    }
+    // Ending twice, or a session already ended, is the same as once.
+    const ended = await deps.terminals.quiesce(name)
+    if (!ended.ok) return ended
+    return reviveAndTell(deps, {
+      issue,
+      attempt,
+      name,
+      deliveryKey,
+      text: delivery.text,
+      dormant: resume,
+      account: movedTo,
+    })
   }
 
   if (!live) {
@@ -127,12 +168,23 @@ export async function noteLead(deps: LeadDeps, effect: NoteEffect): Promise<Resu
   return marked.ok ? ok(undefined) : marked
 }
 
-const dormantOf = (
-  row: { dormantAt: Date | null; worktreePath: string | null; repoPath: string | null; account: string | null },
-  issue: Issue,
-  session: string | null,
-): Dormant | null =>
-  row.dormantAt ? { session, worktree: row.worktreePath, repoPath: row.repoPath, account: row.account, issue } : null
+type AttemptRow = {
+  dormantAt: Date | null
+  worktreePath: string | null
+  repoPath: string | null
+  account: string | null
+}
+
+const resumeOf = (row: AttemptRow, issue: Issue, session: string | null): Dormant => ({
+  session,
+  worktree: row.worktreePath,
+  repoPath: row.repoPath,
+  account: row.account,
+  issue,
+})
+
+const dormantOf = (row: AttemptRow, issue: Issue, session: string | null): Dormant | null =>
+  row.dormantAt ? resumeOf(row, issue, session) : null
 
 const clearDormant = (deps: LeadDeps, issue: IssueId, attempt: number) =>
   deps.uow.run(async ({ leads }) => {
@@ -146,10 +198,20 @@ const clearDormant = (deps: LeadDeps, issue: IssueId, attempt: number) =>
  */
 async function reviveAndTell(
   deps: LeadDeps,
-  input: { issue: IssueId; attempt: number; name: string; deliveryKey: string; text: string; dormant: Dormant },
+  input: {
+    issue: IssueId
+    attempt: number
+    name: string
+    deliveryKey: string
+    text: string
+    dormant: Dormant
+    /** the account the session starts on when it is not the one it ran on: a lead moved off an account that ran out */
+    account?: string
+  },
 ): Promise<Result<void, PortError>> {
   const { issue, attempt, name, deliveryKey, text, dormant } = input
-  if (!dormant.session || !dormant.worktree || !dormant.repoPath || !dormant.account) {
+  const account = input.account ?? dormant.account
+  if (!dormant.session || !dormant.worktree || !dormant.repoPath || !account) {
     return leadGone(deps, issue, attempt, 'the lead was dormant without a session to resume')
   }
   const seat = await seatOf(deps, dormant.issue)
@@ -162,7 +224,7 @@ async function reviveAndTell(
     prompt: text,
     tier: seat.value.tier,
     effort: seat.value.effort,
-    account: dormant.account,
+    account,
     tabName: tabName(dormant.issue.title),
     session: dormant.session,
   })
@@ -181,6 +243,7 @@ async function reviveAndTell(
       address: started.value.address,
       tab: started.value.tab,
       space: started.value.space,
+      ...(input.account ? { account: input.account } : {}),
     })
     return ok(undefined)
   })

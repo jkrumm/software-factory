@@ -162,6 +162,12 @@ export interface Roles {
 /** Capacity's: the account a lead runs on, the repo claim it holds, the window that can run out. Package 3 brings the real ones. */
 export interface Seats {
   seat(input: { issue: IssueId; attempt: number }): Promise<Result<{ account: string }>>
+  /**
+   * Gives a walled attempt (its Issue waits as a `wall` stall) to another account that is open and has room, and its claim
+   * with it. Null: it does not wait on a wall, or no other account takes it. The lead's session moves when the caller's wake
+   * is delivered: its terminal is then started again on `seat`'s account.
+   */
+  move(input: { issue: IssueId; attempt: number }): Promise<Result<{ from: string; to: string } | null>>
 }
 
 export interface Claims {
@@ -353,7 +359,7 @@ export interface LeadStore {
   markRevived(
     issue: IssueId,
     attempt: number,
-    terminal?: { address: string; tab: string | null; space: string | null },
+    terminal?: { address: string; tab: string | null; space: string | null; account?: string },
   ): Promise<void>
   /** a resume of the dormant session failed; the count of failures including this one */
   reviveFailed(issue: IssueId, attempt: number): Promise<number>

@@ -209,6 +209,12 @@ export function postgresLeadStore(tx: SQL): LeadStore {
         await tx`
           UPDATE factory.lead_attempts SET terminal = ${terminal.address}, tab = ${terminal.tab}, space = ${terminal.space}
           WHERE issue_id = ${issue} AND attempt = ${attempt}`
+        // A session started again on another account runs on that one from now on.
+        if (terminal.account) {
+          await tx`
+            UPDATE factory.lead_attempts SET account = ${terminal.account}
+            WHERE issue_id = ${issue} AND attempt = ${attempt}`
+        }
       }
     },
 

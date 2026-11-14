@@ -1,6 +1,6 @@
-import type { WindowLimits } from '../domains/capacity/accounts.ts'
+import { ok } from '../kernel/result.ts'
 import type { Claims, Seats, Windows } from '../domains/leads/ports.ts'
-import { accountOf, releaseClaim, resumeClaim, windowOf } from './capacity-admit.ts'
+import { accountOf, type CapacityLimits, moveWalled, releaseClaim, resumeClaim, windowOf } from './capacity-admit.ts'
 import type { PlanningDeps } from './planning-deps.ts'
 
 /**
@@ -12,7 +12,7 @@ import type { PlanningDeps } from './planning-deps.ts'
  */
 export function capacityForLeads(
   deps: PlanningDeps,
-  limits?: WindowLimits,
+  limits?: CapacityLimits,
 ): { seats: Seats; claims: Claims; windows: Windows } {
   return {
     seats: {
@@ -20,6 +20,7 @@ export function capacityForLeads(
         const account = await accountOf(deps, issue, attempt)
         return account.ok ? { ok: true, value: { account: account.value ?? 'default' } } : account
       },
+      move: async ({ issue, attempt }) => (limits ? moveWalled(deps, limits, { issue, attempt }) : ok(null)),
     },
     claims: {
       release: async ({ issue }) => {
@@ -31,6 +32,6 @@ export function capacityForLeads(
         return resumed.ok ? { ok: true, value: undefined } : resumed
       },
     },
-    windows: { wall: (account, since) => windowOf(deps, account, limits, since) },
+    windows: { wall: (account, since) => windowOf(deps, account, limits?.windowLimits, since) },
   }
 }

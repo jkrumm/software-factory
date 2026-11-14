@@ -54,10 +54,10 @@ test('a young stall is left alone: the lead’s next turn may end it', () => {
   expect(decideStall(young, NOW, rules)).toMatchObject({ kind: 'wait' })
 })
 
-test('a wall is woken when the window is open or unknown, and left while it is closed', () => {
+test('a wall is woken when the window is open or unknown, and moved to another account while it is closed', () => {
   expect(decideStall(stall({ cause: 'wall', windowOpen: true }), NOW, rules)).toMatchObject({ kind: 'wake' })
   expect(decideStall(stall({ cause: 'wall', windowOpen: null }), NOW, rules)).toMatchObject({ kind: 'wake' })
-  expect(decideStall(stall({ cause: 'wall', windowOpen: false }), NOW, rules)).toMatchObject({ kind: 'wait' })
+  expect(decideStall(stall({ cause: 'wall', windowOpen: false }), NOW, rules)).toEqual({ kind: 'move' })
 })
 
 test('a note that arrived while it waited is delivered: a wake, or a requeue for a lead that is gone', () => {

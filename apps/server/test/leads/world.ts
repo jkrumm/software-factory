@@ -197,6 +197,8 @@ export interface World {
   /** the check tiers the fake project has; null: none */
   checkTiers: CheckTiers | null
   seatError: PortError | null
+  /** the account the fake capacity gives every attempt */
+  seatAccount: string
   windowReset: Date | null
   /** files, settles and admits an Issue in the repo `example`; returns its id */
   admitted(notes?: string[], seat?: ResolvedSeat): Promise<IssueId>
@@ -246,6 +248,7 @@ export async function startWorld(): Promise<World> {
     repoError: null,
     checkTiers: null,
     seatError: null,
+    seatAccount: 'default',
     windowReset: null,
     deps: undefined as unknown as LeadDeps,
     admitted: async () => {
@@ -274,7 +277,8 @@ export async function startWorld(): Promise<World> {
           : err(portError('refused', `no role "${name}"`)),
   }
   const seats: Seats = {
-    seat: async () => (world.seatError ? err(world.seatError) : ok({ account: 'default' })),
+    seat: async () => (world.seatError ? err(world.seatError) : ok({ account: world.seatAccount })),
+    move: async () => ok(null),
   }
   const windows: Windows = { wall: async () => ok({ resetAt: world.windowReset }) }
   world.deps = {
@@ -337,6 +341,7 @@ export async function startWorld(): Promise<World> {
     world.repoError = null
     world.checkTiers = null
     world.seatError = null
+    world.seatAccount = 'default'
     world.windowReset = null
     world.deps.ids = sequentialIds()
     clock.at_(0)

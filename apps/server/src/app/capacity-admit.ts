@@ -2,6 +2,7 @@ import {
   type AccountRank,
   type AccountReading,
   DEFAULT_LIMITS,
+  pickAccount,
   POLL_EVERY_MS,
   RANK_LANE,
   standing,
@@ -403,6 +404,18 @@ function leadsOnAccounts(
   return leads
 }
 
+/** The accounts that took a lead after their latest sample: the sample does not show it yet. */
+function loadedAccounts(snap: Snapshot): Set<string> {
+  const loaded = new Set<string>()
+  for (const reading of snap.readings) {
+    if (!reading.sampledAt) continue
+    if (snap.assignments.some((a) => a.account === reading.account && a.assignedAt >= (reading.sampledAt as Date))) {
+      loaded.add(reading.account)
+    }
+  }
+  return loaded
+}
+
 function decide(snap: Snapshot, host: HostInputs, limits: CapacityLimits, bonus: number): QueueEntry[] {
   const open: OpenIssue[] = snap.issues.map((i) => ({
     id: i.id,
@@ -416,13 +429,7 @@ function decide(snap: Snapshot, host: HostInputs, limits: CapacityLimits, bonus:
   const ordered = orderQueue({ open, edges: snap.edges, prio: snap.prio })
   const claims = [...snap.claims]
   const taken = new Set(claims.map((s) => s.issue))
-  const loaded = new Set<string>()
-  for (const reading of snap.readings) {
-    if (!reading.sampledAt) continue
-    if (snap.assignments.some((a) => a.account === reading.account && a.assignedAt >= (reading.sampledAt as Date))) {
-      loaded.add(reading.account)
-    }
-  }
+  const loaded = loadedAccounts(snap)
   const repoOf = new Map(snap.issues.map((i) => [i.id, i.repo]))
   const laneByIssue = new Map(snap.issues.map((i) => [i.id, i.lane]))
   const projectByName = new Map(snap.projects.map((p) => [p.name, p]))
@@ -914,5 +921,52 @@ export async function windowOf(
     if (!stand.open) return ok({ resetAt: stand.until })
     const behind = since !== undefined && reading.sampledAt !== null && reading.sampledAt < since
     return ok({ resetAt: behind ? tightestReset(reading, now, limits) : null })
+  })
+}
+
+export interface AccountMove {
+  from: string
+  to: string
+}
+
+/**
+ * **A walled lead moves to another open account.** The lead's account ran out (a `wall` stall of its attempt) and the
+ * window is still closed: instead of waiting for it, the attempt is given to the account the picker would give a new
+ * lead (`pickAccount`: open, below its cap and its window limits, never the account it left), and its claim goes with it.
+ * The lead's session follows when its wake is delivered (`noteLead` starts the same session again under the new account;
+ * the transcripts of every account lie in one `projects/` directory, so nothing is copied). The prompt cache is per account,
+ * so the resumed session reads its whole context uncached once: cheaper than hours of waiting for a window, which is why
+ * nothing else moves a running lead. Null when the Issue no longer waits on a wall of this attempt, or no other account has room.
+ * The caller wakes the Issue afterwards; a pass that dies between the two is found by the next, which sees the new account open.
+ */
+export async function moveWalled(
+  deps: PlanningDeps,
+  limits: CapacityLimits,
+  input: { issue: IssueId; attempt: number },
+): Promise<Result<AccountMove | null, PortError>> {
+  return deps.uow.run(async (stores) => {
+    await stores.capacity.lock()
+    const now = deps.clock.now()
+    const snap = await snapshotOf(stores, now)
+    const row = snap.issues.find((i) => i.id === input.issue)
+    if (row?.state !== 'waiting' || row.waitReason !== 'wall') return ok(null)
+    const latest = await stores.capacity.latestAssignment(input.issue)
+    if (!latest || latest.attempt !== input.attempt) return ok(null)
+    const taken = new Set(snap.claims.map((c) => c.issue))
+    const owed = snap.issues.filter((i) => holdsClaim(i.state, i.waitReason) && !taken.has(i.id))
+    const pick = pickAccount({
+      readings: snap.readings.filter((r) => r.account !== latest.account),
+      loaded: loadedAccounts(snap),
+      leads: leadsOnAccounts(snap.claims, owed, snap.owedAccounts),
+      leadsPerAccount: limits.leadsPerAccount,
+      ...(limits.accountLeads ? { accountCaps: limits.accountLeads } : {}),
+      limits: limits.windowLimits,
+      now,
+      pace: row.project !== null && effectiveState(snap.states, row.project) === 'pace',
+      rank: snap.rank,
+    })
+    if (!pick.picked) return ok(null)
+    if (!(await stores.capacity.reassign(input.issue, input.attempt, pick.picked.account, now))) return ok(null)
+    return ok({ from: latest.account, to: pick.picked.account })
   })
 }

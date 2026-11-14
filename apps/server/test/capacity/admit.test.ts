@@ -3,6 +3,7 @@ import {
   accountOf,
   admissionPass,
   claimStalled,
+  moveWalled,
   queueView,
   releaseClaim,
   resumeClaim,
@@ -621,6 +622,50 @@ describe('claims and the claim on resume', () => {
     await pass()
     const [{ claims }] = await world.db.sql`SELECT count(*)::int AS claims FROM factory.capacity_claims`
     expect(claims).toBe(0)
+  })
+})
+
+describe('a walled lead moves to another account', () => {
+  const wall = (issue: ReturnType<typeof issueId>) =>
+    world.send(issue, 'wall', 'stalled', { attempt: 1, cause: 'wall', detail: 'the account ran out' }, 'factory')
+  const claimOf = async (issue: ReturnType<typeof issueId>) =>
+    (await world.db.sql`SELECT account FROM factory.capacity_claims WHERE issue_id = ${issue}`)[0]?.account
+  const limits = { leadsPerAccount: 2, loadCeiling: 60, memoryCeilings: { swapoutMbPer300s: 2048, swapUsedPct: 75 } }
+
+  test('the attempt and its claim go to the open account with room; the account it left is never the answer', async () => {
+    world.accounts.rows = [account('me'), account('other', { weeklyUsed: 60 })]
+    const one = await world.queued({ repo: 'solo' })
+    expect((await pass()).admitted).toEqual([{ issue: one, attempt: 1, account: 'me', repo: 'solo' }])
+    await wall(one)
+    world.accounts.rows = [account('me', { fiveHourUsed: 100 }), account('other', { weeklyUsed: 60 })]
+    nextSample()
+    await pass()
+    expect(value(await moveWalled(world.deps, limits, { issue: one, attempt: 1 }))).toEqual({ from: 'me', to: 'other' })
+    expect(value(await accountOf(world.deps, one, 1))).toBe('other')
+    expect(await claimOf(one)).toBe('other')
+    // moved once: the same call finds no other account open and room (me is closed)
+    expect(value(await moveWalled(world.deps, limits, { issue: one, attempt: 1 }))).toBeNull()
+  })
+
+  test('no other open account, a full one, or an Issue that is not on a wall: it stays where it is', async () => {
+    world.accounts.rows = [account('me'), account('other', { weeklyUsed: 60 })]
+    const one = await world.queued({ repo: 'solo' })
+    await pass()
+    // not waiting on a wall: nothing moves
+    expect(value(await moveWalled(world.deps, limits, { issue: one, attempt: 1 }))).toBeNull()
+    await wall(one)
+    // the other account is at its cap
+    expect(
+      value(await moveWalled(world.deps, { ...limits, leadsPerAccount: 0 }, { issue: one, attempt: 1 })),
+    ).toBeNull()
+    // the other account is closed too
+    world.accounts.rows = [account('me', { fiveHourUsed: 100 }), account('other', { fiveHourUsed: 100 })]
+    nextSample()
+    await pass()
+    expect(value(await moveWalled(world.deps, limits, { issue: one, attempt: 1 }))).toBeNull()
+    // an attempt that is no longer the Issue's newest
+    expect(value(await moveWalled(world.deps, limits, { issue: one, attempt: 2 }))).toBeNull()
+    expect(await claimOf(one)).toBe('me')
   })
 })
 

@@ -125,6 +125,36 @@ describe('note_lead', () => {
     expect(w.terminals.typed).toHaveLength(2)
   })
 
+  test('a lead whose attempt was given another account is started again there, same session, with the note as its first message', async () => {
+    w.seatAccount = 'me'
+    const { issue, effect } = await withNote()
+    await w.db.sql`
+      INSERT INTO factory.lead_hook_events (key, session, issue_id, attempt, kind, at, received_at, payload)
+      VALUES ('lead-1-1:session_started:0', 'lead-1-1', ${issue}, 1, 'session_started', ${w.clock.now()}, ${w.clock.now()},
+        ${JSON.stringify({ claudeSessionId: 'c-1', transcriptPath: '/x/c-1.jsonl' })}::text::jsonb)`
+    w.seatAccount = 'other'
+    expect((await noteLead(w.deps, effect)).ok).toBe(true)
+    expect(w.terminals.dormant).toEqual(['lead-1-1'])
+    expect(w.terminals.typed).toHaveLength(0)
+    expect(w.terminals.revived).toHaveLength(1)
+    expect(w.terminals.revived[0]).toMatchObject({ key: 'lead-1-1', account: 'other', session: 'c-1' })
+    expect(w.terminals.revived[0]?.prompt).toContain('mind the migration')
+    const [row] = await w.db.sql`SELECT account, dormant_at FROM factory.lead_attempts WHERE issue_id = ${issue}`
+    expect(row).toMatchObject({ account: 'other', dormant_at: null })
+    // the same effect again starts nothing twice
+    expect((await noteLead(w.deps, effect)).ok).toBe(true)
+    expect(w.terminals.revived).toHaveLength(1)
+  })
+
+  test('a lead on the account its attempt belongs to is typed to, never moved', async () => {
+    w.seatAccount = 'me'
+    const { effect } = await withNote()
+    expect((await noteLead(w.deps, effect)).ok).toBe(true)
+    expect(w.terminals.dormant).toEqual([])
+    expect(w.terminals.revived).toEqual([])
+    expect(w.terminals.typed).toHaveLength(1)
+  })
+
   test('a lead whose terminal is gone is the lead gone, and nothing is typed', async () => {
     const { issue, effect } = await withNote()
     w.terminals.lose('lead-1-1')

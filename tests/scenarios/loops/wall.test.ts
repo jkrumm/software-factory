@@ -1,7 +1,8 @@
 import { afterAll, beforeAll, expect, test } from 'bun:test'
 import { join } from 'node:path'
 import { mkdtemp, rm } from 'node:fs/promises'
-import { hitWall, hook, sessionOf } from '../flow.ts'
+import { readState, statePathOf } from '../fakes/hc-state.ts'
+import { hitWall, hook, sessionOf, tick } from '../flow.ts'
 import { type Lab, startLab } from '../planning/lab.ts'
 import { eventsOf, runLoop, script, state, working } from './support.ts'
 
@@ -75,4 +76,45 @@ test('a lead whose account is exhausted waits for the reset: no lead_idle, no nu
   expect((await runLoop(lab, 'steward')).summary).toContain('woken 1')
   expect(await state(lab, issue)).toMatchObject({ state: 'working', wait: null })
   expect((await eventsOf(lab, issue)).slice(-1)).toEqual([{ kind: 'woken', actor: 'steward' }])
+}, 90_000)
+
+test('a lead whose account is exhausted moves to another open account: the same session starts again there', async () => {
+  await lab.accounts([{ id: 'me', five_hour: 30, seven_day: 40 }])
+  expect((await lab.cli(['capacity', 'refresh'])).code).toBe(0)
+  const issue = await working(lab, REPO, 'the account runs out and another has room')
+  const session = sessionOf(issue)
+  await hook(lab.world, 'session-start', session, { source: 'startup', session_id: `c-${issue}` })
+  await hook(lab.world, 'user-prompt-submit', session, { session_id: `c-${issue}` })
+  const account = async () =>
+    (await lab.world.db.sql`SELECT account FROM factory.lead_attempts WHERE issue_id = ${issue}`)[0]?.account
+
+  expect(await account()).toBe('me')
+  await lab.accounts([
+    { id: 'me', five_hour: 100, seven_day: 40 },
+    { id: 'other', five_hour: 20, seven_day: 30 },
+  ])
+  expect((await lab.cli(['capacity', 'refresh'])).code).toBe(0)
+  expect((await hitWall(lab.world, issue)).code).toBe(0)
+  expect(await state(lab, issue)).toMatchObject({ state: 'waiting', wait: 'wall' })
+
+  expect((await runLoop(lab, 'steward')).summary).toContain('woken 1')
+  expect(await state(lab, issue)).toMatchObject({ state: 'working', wait: null })
+  const assigned = await lab.world.db.sql`
+    SELECT a.account AS assigned, c.account AS claimed FROM factory.capacity_assignments a
+    JOIN factory.capacity_claims c ON c.issue_id = a.issue_id WHERE a.issue_id = ${issue}`
+  expect(assigned[0]).toMatchObject({ assigned: 'other', claimed: 'other' })
+
+  // the wake is delivered: the session ends on `me` and starts again, `--resume`, on `other`
+  expect((await tick(lab)).outbox).toMatchObject({ failed: 0 })
+  expect(await account()).toBe('other')
+  const terminals = Object.values(readState(statePathOf(join(lab.world.bin, 'calls.jsonl'))).terminals).filter(
+    (terminal) => terminal.labels['factory.key'] === session,
+  )
+  const live = terminals.filter((terminal) => terminal.state === 'live')
+  expect(live).toHaveLength(1)
+  expect(live[0]?.env.CLAUDE_ACCOUNT_PICKED).toBe('other')
+  const resume = live[0]?.argv.indexOf('--resume') ?? -1
+  expect(resume).toBeGreaterThan(0)
+  expect(live[0]?.argv[resume + 1]).toBe(`c-${issue}`)
+  expect(live[0]?.argv.at(-1)).toContain('the lead continues on account other')
 }, 90_000)

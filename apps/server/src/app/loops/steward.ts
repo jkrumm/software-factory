@@ -418,6 +418,23 @@ async function steward(deps: StewardDeps, id: IssueId, pass: StewardPass): Promi
     case 'wake':
       acted = await act(deps, facts, { kind: 'wake', note: null, reason: action.detail.slice(STEWARD_DETAIL.length) })
       break
+    case 'move': {
+      // The account's window is closed: another open account with room takes the lead, which is then woken so that its
+      // session starts again there. No such account: it waits for its window as before.
+      const moved = await deps.seats.move({ issue: id, attempt: facts.attempt })
+      if (!moved.ok) {
+        pass.problems.push(`${id}: ${moved.error.detail}`)
+        return
+      }
+      if (!moved.value) return
+      const { from, to } = moved.value
+      acted = await act(deps, facts, {
+        kind: 'wake',
+        note: null,
+        reason: `account ${from} is out until its window resets: the lead continues on account ${to} (its session resumes there; the first turn reads the context uncached)`,
+      })
+      break
+    }
     case 'requeue':
       acted = await act(deps, facts, {
         kind: 'requeue',
