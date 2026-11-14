@@ -197,8 +197,8 @@ describe('the check', () => {
     expect(await errandRow(broken.errand.id)).toMatchObject({ done_at: null, check_fails: 1 })
     await pass()
     const third = await pass()
-    // the broken check was said once, on the first pass
-    expect(third.problems).toEqual([])
+    // said as broken on the first pass, and again when it could not run three times in a row
+    expect(third.problems).toHaveLength(1)
     expect(errandsSummary(third)).toContain('could not run 3 times in a row')
     expect(await errandRow(broken.errand.id)).toMatchObject({ done_at: null, check_fails: 3 })
     // the check that works again resets the count

@@ -114,10 +114,13 @@ export async function runCheck(
       `${CHECK_BROKEN_NOTE}: ${line || `exit ${run.exit}`}; the owner's done still closes it`,
       fails,
     )
-    if (fails === 1) {
-      pass.problems.push(`${errand.id}: ${CHECK_BROKEN_NOTE}: ${line}`)
-      await deps.broken?.(errand, line)
-    }
+    if (fails === 1) await deps.broken?.(errand, line)
+    if (fails === 1 || fails === CHECK_FAILS_NOTED)
+      pass.problems.push(
+        fails === 1
+          ? `${errand.id}: ${CHECK_BROKEN_NOTE}: ${line}`
+          : `${errand.id}: its check could not run ${fails} times in a row (${line})`,
+      )
     return
   }
   const why = run.timedOut

@@ -29,13 +29,13 @@ const SECRET =
 const PHYSICAL =
   /\b(?:device|phone|iphone|ipad|tap|click|portal|dashboard|browser|sign in|log in|login|captcha|2fa|otp|qr|plug|cable|hardware|physical|router|bulb|light|button|app store|testflight|visual)\b/i
 
-/** `ssh mini '<command>'`: the command is the part after the host, and it runs on the mini. */
+/** A command addressed to the mini over ssh: the command is the part after the host, and it runs there. */
 const SSH_MINI = /^\s*ssh\s+(?:-\S+\s+(?:\S+\s+)?)*mini\s+([\s\S]+)$/
 
 /** The deploy gate's release of a commit: whoever types it, it is one yes of the owner's. */
 const GATE_RELEASE = /\bdeploy-release\b|\bgate\.py\s+release\b|\bgate\s+release\b/i
 
-/** The command as the mini runs it: `ssh mini 'x'` is `x` there. Null when the command is not addressed to the mini. */
+/** The command as the mini runs it: `ssh <alias> 'x'` is `x` there. Null when the command is not addressed to the mini. */
 export function miniPart(command: string): string | null {
   return SSH_MINI.exec(command)?.[1]?.trim() ?? null
 }
@@ -78,7 +78,7 @@ export function needOf(input: NeedInput, modelNeed?: Need | null): Need {
 }
 
 /**
- * `ssh mini '<x>'` as the shell on the mini runs it: ssh joins its arguments with spaces and hands the line to the login
+ * A command addressed to the mini as the shell on the mini runs it: ssh joins its arguments with spaces and hands the line to the login
  * shell, so the part after the host is shell text, quotes included. Run here, that is `eval` of the same text.
  */
 export function miniShellLine(command: string): string {

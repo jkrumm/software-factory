@@ -58,7 +58,7 @@ const week: Seen[] = [
   {
     id: 'gate-make',
     summary: "Release the colleague's commit 78088f16",
-    command: "ssh mini 'make -C ~/IuRoot/epos-tool-athena deploy-release SHA=78088f16'",
+    command: "ssh mini 'make -C ~/<work-root>/<work-repo> deploy-release SHA=78088f16'",
     host: 'macbook',
     class: 'C',
   },
@@ -72,7 +72,7 @@ const week: Seen[] = [
   {
     id: 'gate-standalone',
     summary: "Release the colleague's commit 78088f16",
-    command: 'make -C ~/IuRoot/epos-tool-athena deploy-release SHA=78088f16',
+    command: 'make -C ~/<work-root>/<work-repo> deploy-release SHA=78088f16',
     host: 'macbook',
     class: 'C',
   },

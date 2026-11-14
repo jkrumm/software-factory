@@ -468,7 +468,7 @@ describe('the desk pass', () => {
     value(await deskPass({ settle: deps, desk: deps.uow as never, push }))
     clock.set(new Date(clock.now().getTime() + HOUR))
     const queued = await reached(issueId, {
-      summary: 'Approve the queued dialog',
+      summary: 'Approve the queued dialog with Touch ID',
       cmd: 'make maxvnodes-install',
       host: 'macbook',
     })
