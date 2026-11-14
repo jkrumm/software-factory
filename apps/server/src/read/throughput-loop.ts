@@ -351,13 +351,16 @@ const share = (value: number): string => `${Math.round(value * 1000) / 10}%`
 /**
  * Each set budget against the last 24 hours of the project's steps: `fast` the median of the fast-tier runs (at least
  * `MIN_FAST_RUNS` of them), `peak` the largest peak memory of one step, `fail` the share of steps that exited non-zero (at
- * least `MIN_FAIL_RUNS` steps). A budget the day has too few runs to judge is not over.
+ * least `MIN_FAIL_RUNS` steps). A budget the day has too few runs to judge is not over, and neither is a median or a share
+ * over a window the counting epoch cut under a day: it is one lead's red-green loop, not the project's day (the ranking
+ * waits the same way, `MIN_RANK_DAYS`). `peak` is a maximum: a step over it is over in any window.
  */
 export async function readBudgetFacts(
   sql: SQL,
   options: { now: Date; budgets: readonly ProjectBudgets[]; epoch?: Date | null },
 ): Promise<BudgetFact[]> {
   const from = countedFrom(new Date(options.now.getTime() - DAY_MS), options.epoch ?? null)
+  const wholeDay = options.now.getTime() - from.getTime() >= DAY_MS
   const wanted = options.budgets.filter((b) => b.fastMs !== null || b.peakMib !== null || b.failShare !== null)
   if (wanted.length === 0) return []
   const steps = await boundedRead(sql, 20_000, (tx) => stepRows(tx, from, options.now))
@@ -376,7 +379,7 @@ export async function readBudgetFacts(
         budget: 'fast',
         limit: seconds(b.fastMs),
         value: `the median of ${fast.length} fast runs is ${seconds(median)}`,
-        over: fast.length >= MIN_FAST_RUNS && median > b.fastMs,
+        over: wholeDay && fast.length >= MIN_FAST_RUNS && median > b.fastMs,
       })
     }
     if (b.peakMib !== null) {
@@ -399,7 +402,7 @@ export async function readBudgetFacts(
         budget: 'fail',
         limit: share(b.failShare),
         value: `${failed} of ${mine.length} steps failed (${share(rate)})`,
-        over: mine.length >= MIN_FAIL_RUNS && rate > b.failShare,
+        over: wholeDay && mine.length >= MIN_FAIL_RUNS && rate > b.failShare,
       })
     }
   }
