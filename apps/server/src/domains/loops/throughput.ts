@@ -264,7 +264,7 @@ export async function readLedger(
   return changes
 }
 
-/** What stands in the way of a project's next improvement: an Issue still open, or one shipped and waiting for its after. */
+/** A project holds one open improvement: while its Issue is not shipped nothing else is filed for it (a shipped one waits for its after without holding, `heldSubjects` keeps its subject out of the ranking). */
 export const holdsProject = (rows: readonly FindingRow[], project: string): boolean =>
   rows.some((r) => r.project === project && r.status === 'open')
 
