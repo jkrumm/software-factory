@@ -52,6 +52,7 @@ import { projectFileProjects } from './app/quality-projects.ts'
 import { loadLoopSettings } from './app/loops/settings.ts'
 import { frictionPass, frictionSummary } from './app/loops/friction.ts'
 import { fixClassesPass, fixClassesSummary } from './app/loops/fix-classes.ts'
+import { slotAimPass } from './app/capacity-aim.ts'
 import { freshHostMemory, hostPass, hostSummary } from './app/loops/host.ts'
 import { reaperPass, reaperSummary } from './app/loops/reaper.ts'
 import { processKiller, reaperProcesses } from './adapters/planning/reaper-processes.ts'
@@ -593,7 +594,19 @@ async function main(): Promise<void> {
           facts: planning.capacityFacts,
         })
         if (!pass.ok) return pass
-        return ok(hostSummary(pass.value))
+        // the slot aim moves on the sample just stored; its failure is said, never a failed host pass
+        const aim = await slotAimPass({
+          ...writes,
+          mode: planningEnv.slotAim,
+          slots: planningEnv.slots,
+          slotsMax: planningEnv.slotsMax,
+          cores: planningEnv.cores,
+        })
+        return ok(
+          aim.ok
+            ? `${hostSummary(pass.value)}; ${aim.value}`
+            : `${hostSummary(pass.value)}; slot aim: ${aim.error.detail}`,
+        )
       },
     },
     {
@@ -815,6 +828,7 @@ async function main(): Promise<void> {
         slots: planningEnv.slots,
         slotsMax: planningEnv.slotsMax,
         slotExtraLoad: planningEnv.slotExtraLoad,
+        slotAim: planningEnv.slotAim,
         seatsMaxBonus: planningEnv.seatsMaxBonus ?? 0,
         reaperGraceMs: loopSettings.reaperGraceMs,
         swapoutCeilingMb: planningEnv.memoryCeilings.swapoutMbPer300s,

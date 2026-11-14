@@ -34,6 +34,7 @@ const constants = {
   loadPerCore: 3,
   processCap: 1800,
   cores: 12,
+  slotAim: 'shadow' as const,
 }
 
 let keys = 0

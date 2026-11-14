@@ -161,6 +161,15 @@ export function touchSlots(
   return { rows: [...others, granted], view: view(granted, 0) }
 }
 
+/** The steps holding a live slot and the callers still asking for one. */
+export function slotCounts(rows: readonly SlotRow[], now: Date): { holders: number; waiters: number } {
+  const t = now.getTime()
+  return {
+    holders: rows.filter((row) => row.slot !== null && (row.leasedUntil?.getTime() ?? 0) >= t).length,
+    waiters: rows.filter((row) => row.slot === null && row.seenAt.getTime() >= t - WAITER_TTL_MS).length,
+  }
+}
+
 /** Gives the slot back (or leaves the line). */
 export const releaseSlot = (rows: readonly SlotRow[], id: string): { rows: SlotRow[]; had: boolean } => ({
   rows: rows.filter((row) => row.id !== id),

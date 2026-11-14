@@ -3,6 +3,7 @@ import * as z from 'zod'
 import type { AccountReading } from '../../domains/capacity/accounts.ts'
 import type { Claim } from '../../domains/capacity/claims.ts'
 import type { Assignment, CapacityStore, HostSampleFact, LeadPeaks } from '../../domains/capacity/ports.ts'
+import type { AimState } from '../../domains/capacity/slot-aim.ts'
 import { QUEUE_STATES, type QueueStates } from '../../domains/capacity/queue-state.ts'
 import type { SlotRow } from '../../domains/capacity/slots.ts'
 import { type IssueId, issueId } from '../../kernel/ids.ts'
@@ -75,7 +76,9 @@ const HostFactRow = z.object({
   swap_used_pct: z.number().nullable(),
   swapout_mb_per_300s: z.number().nullable(),
   processes: z.number().int().nullable(),
+  pressure_level: z.number().int().nullable(),
 })
+const AimRow = z.object({ target: z.number().int(), quiet_since: z.date().nullable() })
 const PeakFactRow = z.object({ repo: z.string(), peak: z.number().int(), n: z.coerce.number().int() })
 const RssRow = z.object({ issue: z.number().int(), rss_mib: z.number().int() })
 
@@ -324,7 +327,7 @@ export function postgresCapacityStore(tx: SQL): CapacityStore {
 
     async recentHostSamples(limit) {
       const rows: unknown[] = await tx`
-        SELECT at, load, memory_used_pct, swap_used_pct, swapout_mb_per_300s, processes FROM factory.host_samples ORDER BY at DESC LIMIT ${limit}`
+        SELECT at, load, memory_used_pct, swap_used_pct, swapout_mb_per_300s, processes, pressure_level FROM factory.host_samples ORDER BY at DESC LIMIT ${limit}`
       return rows.map((raw): HostSampleFact => {
         const row = HostFactRow.parse(raw)
         return {
@@ -334,8 +337,37 @@ export function postgresCapacityStore(tx: SQL): CapacityStore {
           swapUsedPct: row.swap_used_pct,
           swapoutMbPer300s: row.swapout_mb_per_300s,
           processes: row.processes,
+          pressureLevel: row.pressure_level,
         }
       })
+    },
+
+    async slotAim() {
+      const [raw] = await tx`SELECT target, quiet_since FROM factory.slot_aim WHERE id = 1`
+      if (!raw) return null
+      const row = AimRow.parse(raw)
+      return { target: row.target, quietSince: row.quiet_since } satisfies AimState
+    },
+
+    async saveSlotAim(state, at) {
+      await tx`
+        INSERT INTO factory.slot_aim (id, target, quiet_since, changed_at) VALUES (1, ${state.target}, ${state.quietSince}, ${at})
+        ON CONFLICT (id) DO UPDATE SET target = EXCLUDED.target, quiet_since = EXCLUDED.quiet_since,
+          changed_at = CASE WHEN factory.slot_aim.target = EXCLUDED.target THEN factory.slot_aim.changed_at ELSE EXCLUDED.changed_at END`
+    },
+
+    async recordSlotShadow(r) {
+      await tx`
+        INSERT INTO factory.slot_shadow (at, live_slots, live_max, aim_slots, holders, waiters, pressure_level, swap_used_pct,
+          swapout_mb_per_300s, swap_growing, load, reason)
+        VALUES (${r.at}, ${r.liveSlots}, ${r.liveMax}, ${r.aimSlots}, ${r.holders}, ${r.waiters}, ${r.pressureLevel},
+          ${r.swapUsedPct}, ${r.swapoutMbPer300s}, ${r.swapGrowing}, ${r.load}, ${r.reason})
+        ON CONFLICT (at) DO NOTHING`
+    },
+
+    async pruneSlotShadow(before) {
+      const rows: unknown[] = await tx`DELETE FROM factory.slot_shadow WHERE at < ${before} RETURNING at`
+      return rows.length
     },
 
     async leadPeaks() {

@@ -294,6 +294,19 @@ through `receive` in `app/intake.ts`; the answer is a triage outcome (`docs/lang
   `FACTORY_SLOT_EXTRA_LOAD` (12) and a fit. It fits when its learned peak (the largest of its 8 newest) plus what the running steps
   still grow by (their learned peak less their size now) stays within the free memory of the newest host sample (not older than
   5 minutes) less a headroom of 2 GiB or 8 % of RAM; a waiter's `why` is shown in the CLI and the capacity view. No model is called.
+  **The slot aim** (`domains/capacity/slot-aim.ts`, `app/capacity-aim.ts`, `FACTORY_SLOT_AIM` = `off` | `shadow` (default) | `on`):
+  once a minute, right after the host loop stored its sample, the count of slots moves between 1 and `FACTORY_SLOTS_MAX`,
+  starting at `FACTORY_SLOTS`, AIMD on the sample's pressure level (`kern.memorystatus_vm_pressure_level`) and swap in use: level 4
+  drops to one slot; level 2, or swap in use up by half a point of RAM over the newest five samples, halves it; one more after
+  five quiet minutes (level 1, swap steady) with a waiter in line and a 1-minute load of at most twice the cores; an unread
+  pressure holds the count. `factory.slot_aim` keeps the count and the minute the quiet began. In `shadow` every minute also
+  stores a row in `factory.slot_shadow` (the aim and the live rule's base and cap, holders and waiters, the reading, the reason;
+  kept 14 days) and the grant is unchanged; `factory read capacity-loop` shows, over its window, the swapouts and the share above
+  pressure level 1 in the minutes the aim allowed more than the live base against the others (`slotAim.moreSlots` / `otherwise`).
+  Switch on (`FACTORY_SLOT_AIM=on`) after 48 hours of shadow only if the first did not rise for the worse. Under `on` the aimed
+  count is both the base and the cap of a grant, a step still needs its learned-peak fit, and the load gate beyond the live
+  rule's `FACTORY_SLOT_EXTRA_LOAD` is twice the cores; running steps are never touched. Steps run at normal priority: a test of
+  `taskpolicy -b` and its neighbours is in `docs/research/2026-11-14-taskpolicy-steps.md`.
 
 ## Quality
 
