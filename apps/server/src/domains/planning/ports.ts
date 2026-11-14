@@ -33,7 +33,13 @@ export interface PlanningStore {
 
   edges(): Promise<Edge[]>
   /** false when the edge exists already */
-  addEdge(edge: { issue: IssueId; after: IssueId; key: string; at: Date }): Promise<boolean>
+  addEdge(edge: {
+    issue: IssueId
+    after: IssueId
+    key: string
+    at: Date
+    inferredBy?: string | undefined
+  }): Promise<boolean>
   /** false when no open (unsatisfied) edge was stored */
   removeEdge(edge: { issue: IssueId; after: IssueId }): Promise<boolean>
   markSatisfied(edges: readonly { issue: IssueId; after: IssueId }[], at: Date): Promise<void>

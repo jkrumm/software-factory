@@ -77,6 +77,15 @@ describe('the queue order', () => {
     expect(rows[1]?.reason).toMatchObject({ kind: 'chain', message: 'waits for Issue 9 to close', waitsFor: [id(9)] })
   })
 
+  test('an inferred edge says by whom and why in the wait reason; a stated one stays plain', () => {
+    const inferred: Edge = { ...edge(1, 9), inferredBy: 'triage: builds on its registry' }
+    const rows = orderQueue({ open: [issue(1)], edges: [inferred, edge(1, 8)], prio: new Map() })
+    expect(rows[0]?.reason).toMatchObject({
+      kind: 'chain',
+      message: 'waits for Issue 9 (inferred by triage: builds on its registry), Issue 8 to close',
+    })
+  })
+
   test('stop the line: while an incident is queued or working in a project, only fixes are candidates there', () => {
     const open = [
       issue(1),

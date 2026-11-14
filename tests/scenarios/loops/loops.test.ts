@@ -485,7 +485,7 @@ test('a null, an incident or an unchanged kind answer leaves the kind as filed',
 test('triage names edges: the Issue waits for the Issue it was shown, and a refused answer leaves it settling until the steward settles it', async () => {
   const blocker = (await signal('app', 'Replace the session store entirely')).issue as string
   await runLoop(lab, 'triage')
-  const waits = (await signal('app', 'Add session expiry to the new store')).issue as string
+  const waits = (await signal('app', `Add session expiry to the new store, after ${blocker}`)).issue as string
   await script(triageScript, [
     {
       match: 'session expiry',
@@ -497,6 +497,8 @@ test('triage names edges: the Issue waits for the Issue it was shown, and a refu
   expect(await state(lab, waits)).toMatchObject({ state: 'queued' })
   const edges = await lab.world.db.sql`SELECT after_issue FROM factory.planning_edges WHERE issue_id = ${waits}`
   expect(edges.map((e: { after_issue: string }) => e.after_issue)).toEqual([blocker])
+  const inferred = await lab.world.db.sql`SELECT inferred_by FROM factory.planning_edges WHERE issue_id = ${waits}`
+  expect(inferred[0]?.inferred_by).toBe('triage: builds on the store')
 
   // an answer that names an Issue it was not shown is refused
   const stuck = (await signal('app', 'Document the retry policy')).issue as string

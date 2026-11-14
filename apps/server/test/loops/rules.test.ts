@@ -206,6 +206,7 @@ const settling = (over: Partial<SettlingFacts> = {}): SettlingFacts => ({
   fromAlert: false,
   statedEdges: false,
   text: '',
+  prio: 0,
   ...over,
 })
 const shown = [
@@ -240,9 +241,10 @@ const triaged = (over: Partial<TriageAnswer>): TriageAnswer => ({
 })
 
 const never = () => false
+const builds = { text: 'builds on Issue 12, issue_15, #11 and issue_30' }
 
 test('edges are held to what the answer was shown: no unseen Issue, not itself, none twice, no amend', () => {
-  expect(checkSettle(shown, settling(), triaged({ after: ['issue_12'] }), never)).toEqual({
+  expect(checkSettle(shown, settling(builds), triaged({ after: ['issue_12'] }), never)).toEqual({
     ok: true,
     after: [id(12)],
     dropped: [],
@@ -252,7 +254,7 @@ test('edges are held to what the answer was shown: no unseen Issue, not itself, 
   expect(checkSettle(shown, settling(), triaged({ after: [] }), never)).toMatchObject({ ok: true, after: [] })
   expect(checkSettle(shown, settling(), triaged({ after: ['issue_99'] }), never)).toMatchObject({ ok: false })
   expect(checkSettle(shown, settling(), triaged({ after: ['issue_20'] }), never)).toMatchObject({ ok: false })
-  expect(checkSettle(shown, settling(), triaged({ after: ['issue_12', 'issue_12'] }), never)).toMatchObject({
+  expect(checkSettle(shown, settling(builds), triaged({ after: ['issue_12', 'issue_12'] }), never)).toMatchObject({
     ok: false,
   })
   expect(checkSettle(shown, settling(), triaged({ amend: 'issue_12' }), never)).toMatchObject({ ok: false })
@@ -269,7 +271,7 @@ test('an edge that inverts the chain or names a later Issue is dropped with its 
   const waits = (edges: typeof chain) => (blocker: IssueId) => cycleThrough(edges, id(20), blocker) !== undefined
   const checked = checkSettle(
     open,
-    settling(),
+    settling(builds),
     triaged({ after: ['issue_12', 'issue_15', 'issue_30', 'issue_11'] }),
     waits(chain),
   )
@@ -288,7 +290,7 @@ test('an edge that inverts the chain or names a later Issue is dropped with its 
   expect(
     checkSettle(
       shown,
-      settling(),
+      settling(builds),
       triaged({ after: ['issue_12'] }),
       waits([{ issue: id(12), after: id(20), satisfied: true }]),
     ),
@@ -573,4 +575,46 @@ test("self-watch counts a lead idle on the steward's clock: after the verdict gr
     pendingRevision: { artifact: 'artifact_1', version: 7, verdictAt: minutesAgo(50), noted: true },
   })
   expect(idleClockStart(told, rules)).toEqual(minutesAgo(50))
+})
+
+test('an edge needs the filed words to name its blocker: a shared topic is dropped with its reason', () => {
+  const topic = settling({ text: 'Postgres needs its own process type; the registry also touches deploys' })
+  expect(checkSettle(shown, topic, triaged({ after: ['issue_12'] }), never)).toEqual({
+    ok: true,
+    after: [],
+    dropped: [
+      { issue: id(12), why: 'the filed words never name issue_12: a shared topic is no evidence it builds on it' },
+    ],
+    reason: 'builds on it',
+    refinement: { kind: undefined, checkpoint: undefined },
+  })
+  for (const text of ['builds on Issue 12', 'after issue_12 lands', 'needs #12 first']) {
+    expect(checkSettle(shown, settling({ text }), triaged({ after: ['issue_12'] }), never)).toMatchObject({
+      after: [id(12)],
+    })
+  }
+  expect(
+    checkSettle(shown, settling({ title: 'Follow up Issue 12' }), triaged({ after: ['issue_12'] }), never),
+  ).toMatchObject({
+    after: [id(12)],
+  })
+  // a number that only starts with the blocker's is no mention of it
+  expect(
+    checkSettle(shown, settling({ text: 'see Issue 123' }), triaged({ after: ['issue_12'] }), never),
+  ).toMatchObject({
+    after: [],
+  })
+})
+
+test('an Issue the owner ranked at prio 400 or above is never chained by inference, even when it names the blocker', () => {
+  const text = 'builds on Issue 12'
+  const ranked = checkSettle(shown, settling({ text, prio: 400 }), triaged({ after: ['issue_12'], kind: 'bug' }), never)
+  expect(ranked).toMatchObject({
+    ok: true,
+    after: [],
+    dropped: [{ issue: id(12), why: "issue_20 is ranked prio 400: the owner's rank is not chained by inference" }],
+  })
+  expect(checkSettle(shown, settling({ text, prio: 399 }), triaged({ after: ['issue_12'] }), never)).toMatchObject({
+    after: [id(12)],
+  })
 })

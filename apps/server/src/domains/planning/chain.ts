@@ -8,6 +8,8 @@ export interface Edge {
   issue: IssueId
   after: IssueId
   satisfied: boolean
+  /** who inferred the edge and why (`triage: <reason>`); absent for an edge somebody stated */
+  inferredBy?: string | undefined
 }
 
 /** The blockers of an Issue that have not closed yet. */

@@ -307,6 +307,8 @@ export interface SettlingRow {
   /** the filer stated its edges: triage adds none */
   statedEdges: boolean
   text: string
+  /** the owner's `prio` of it, 0 when he ranked none */
+  prio: number
 }
 
 /** A watch whose last checks were all blocked: the checkout could not be moved to the shipped commit. */
