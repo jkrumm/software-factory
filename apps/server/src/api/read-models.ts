@@ -72,6 +72,8 @@ export interface ReadModelDeps {
   capacityConstants?: CapacityConstants
   /** the data directory `scripts/deploy.sh` writes `deploys.log` into; absent, `GET /v1/throughput` has no deploys */
   dataDir?: string
+  /** the counting epoch (`config/throughput.json`): the throughput, capacity-loop and retro reads count nothing before it; absent, everything counts */
+  epoch?: Date | null
   /** the tenant class's budget and the repo its findings are filed on; absent, the defaults */
   tenantBudget?: { project: string; budgetMib: number }
   now?: () => Date
@@ -282,6 +284,8 @@ export const readModelRoutes = (deps: ReadModelDeps | undefined, caller: (reques
               days: days(query),
               redact,
               capacityConstants: deps.capacityConstants,
+              epoch: deps.epoch ?? null,
+              queue: await deps.queueReasons?.().catch(() => null),
               ...(deps.ciTimes ? { ciTimes: deps.ciTimes } : {}),
             }),
           ),
@@ -335,7 +339,12 @@ export const readModelRoutes = (deps: ReadModelDeps | undefined, caller: (reques
         if (!deps?.capacityConstants) return unavailable
         return Response.json(
           CapacityLoopModel.parse(
-            await readCapacityLoop(deps.sql, { now: now(), days: days(query), constants: deps.capacityConstants }),
+            await readCapacityLoop(deps.sql, {
+              now: now(),
+              days: days(query),
+              constants: deps.capacityConstants,
+              epoch: deps.epoch ?? null,
+            }),
           ),
         )
       },
@@ -355,7 +364,14 @@ export const readModelRoutes = (deps: ReadModelDeps | undefined, caller: (reques
         if (!deps) return unavailable
         const hours = query.hours === undefined ? DEFAULT_HOURS : Number(query.hours)
         const model = ThroughputModel.parse(
-          await readThroughput(deps.sql, { now: now(), hours, dataDir: deps.dataDir, tenantBudget: deps.tenantBudget }),
+          await readThroughput(deps.sql, {
+            now: now(),
+            hours,
+            dataDir: deps.dataDir,
+            tenantBudget: deps.tenantBudget,
+            epoch: deps.epoch ?? null,
+            queue: await deps.queueReasons?.().catch(() => null),
+          }),
         )
         // a lead's read keeps every figure and loses the names of work repos and tenants
         const who = caller(request)

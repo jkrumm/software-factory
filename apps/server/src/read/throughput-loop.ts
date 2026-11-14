@@ -9,6 +9,7 @@ import type {
   WaitFact,
   WindowFacts,
 } from '../domains/loops/throughput.ts'
+import { countedFrom, isCut, MIN_CUT_BASELINE_DAYS } from '../kernel/epoch.ts'
 import {
   BASELINE_DAYS,
   DEFAULT_PEAK_MIB,
@@ -128,9 +129,15 @@ const median = (values: readonly number[]): number =>
  * median over the `BASELINE_DAYS` buckets of that length before them: a bucket is a day of the host being sampled, a
  * tenant absent in one counts 0, and fewer than `MIN_TENANT_BASELINE_DAYS` such buckets leave the median null.
  */
-async function readTenantFacts(tx: SQL, from: Date, to: Date, baseline: boolean): Promise<TenantFacts> {
-  const dayFrom = new Date(to.getTime() - TENANT_DAY_HOURS * HOUR_MS)
-  const since = new Date(dayFrom.getTime() - BASELINE_DAYS * TENANT_DAY_HOURS * HOUR_MS)
+async function readTenantFacts(
+  tx: SQL,
+  from: Date,
+  to: Date,
+  baseline: boolean,
+  epoch: Date | null = null,
+): Promise<TenantFacts> {
+  const dayFrom = countedFrom(new Date(to.getTime() - TENANT_DAY_HOURS * HOUR_MS), epoch)
+  const since = countedFrom(new Date(dayFrom.getTime() - BASELINE_DAYS * TENANT_DAY_HOURS * HOUR_MS), epoch)
   const start = baseline ? new Date(Math.min(from.getTime(), since.getTime())) : from
   const hourRows: unknown[] = await tx`
     SELECT DISTINCT hour FROM factory.host_class_hours
@@ -207,10 +214,14 @@ export async function readWindowFacts(
     baseline: boolean
     /** per project: its `leads` and lane caps, named in a claim or lane wait's finding; absent: not named */
     shapes?: ReadonlyMap<string, ProjectShape>
+    /** the counting epoch: the window starts there when it is later, and a baseline it cuts needs 3 days after it */
+    epoch?: Date | null
   },
 ): Promise<WindowFacts> {
-  const { from, to } = options
-  const days = (to.getTime() - from.getTime()) / DAY_MS
+  const epoch = options.epoch ?? null
+  const from = countedFrom(options.from, epoch)
+  const { to } = options
+  const days = Math.max(0, (to.getTime() - from.getTime()) / DAY_MS)
   return boundedRead(sql, 20_000, async (tx) => {
     const steps = await stepRows(tx, from, to)
 
@@ -246,7 +257,10 @@ export async function readWindowFacts(
 
     const baseline = new Map<string, number>()
     if (options.baseline) {
-      const since = new Date(from.getTime() - BASELINE_DAYS * DAY_MS)
+      const wanted = new Date(from.getTime() - BASELINE_DAYS * DAY_MS)
+      const since = countedFrom(wanted, epoch)
+      // a baseline the epoch cuts is a median of the days after it: with fewer than 3 of them there is none
+      const needed = isCut(wanted, epoch) ? MIN_CUT_BASELINE_DAYS : 1
       const rows: unknown[] = await tx`
         WITH slot AS (
           SELECT ${tx.unsafe(REPO_OF_STEP)} AS repo, date_trunc('day', at) AS d, sum(duration_ms) / 60000.0 AS m
@@ -257,7 +271,8 @@ export async function readWindowFacts(
           WHERE e.result = 'applied' AND e.to_state = 'closed' AND e.outcome = 'done' AND e.at >= ${since} AND e.at < ${from}
           GROUP BY 1, 2)
         SELECT slot.repo, percentile_cont(0.5) WITHIN GROUP (ORDER BY slot.m / done.c)::float8 AS median
-        FROM slot JOIN done ON done.repo = slot.repo AND done.d = slot.d GROUP BY slot.repo`
+        FROM slot JOIN done ON done.repo = slot.repo AND done.d = slot.d GROUP BY slot.repo
+        HAVING count(*) >= ${needed}`
       for (const raw of rows) {
         const r = z.object({ repo: z.string(), median: num }).parse(raw)
         baseline.set(r.repo, r.median)
@@ -278,7 +293,7 @@ export async function readWindowFacts(
       WHERE q.kind IN ${tx(Object.values(WAIT_SUBJECTS).flat())} AND q.from_at < ${to} AND coalesce(q.to_at, ${to}) > ${from}
       GROUP BY q.kind, q.project, coalesce(f.payload->>'lane', '')`
 
-    const tenants = await readTenantFacts(tx, from, to, options.baseline)
+    const tenants = await readTenantFacts(tx, from, to, options.baseline, epoch)
     const projects = new Set([...runs.keys(), ...closed.keys()])
     return {
       days,
@@ -340,9 +355,9 @@ const share = (value: number): string => `${Math.round(value * 1000) / 10}%`
  */
 export async function readBudgetFacts(
   sql: SQL,
-  options: { now: Date; budgets: readonly ProjectBudgets[] },
+  options: { now: Date; budgets: readonly ProjectBudgets[]; epoch?: Date | null },
 ): Promise<BudgetFact[]> {
-  const from = new Date(options.now.getTime() - DAY_MS)
+  const from = countedFrom(new Date(options.now.getTime() - DAY_MS), options.epoch ?? null)
   const wanted = options.budgets.filter((b) => b.fastMs !== null || b.peakMib !== null || b.failShare !== null)
   if (wanted.length === 0) return []
   const steps = await boundedRead(sql, 20_000, (tx) => stepRows(tx, from, options.now))

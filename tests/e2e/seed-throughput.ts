@@ -47,6 +47,25 @@ export async function seedThroughput(sql: SQL, now = Date.now()): Promise<void> 
     }
   }
 
+  // the queue: two Issues that waited, one three hours for memory and one an hour for a claim, and the tenant class by the
+  // hour (complete hours, so the answers' per-day figures have rows); the Issues carry no event, so Flow does not list them
+  for (const id of ['issue_9101', 'issue_9102'])
+    await sql`INSERT INTO factory.issues (id, repo, state, outcome, version) VALUES (${id}, 'argo', 'closed', 'cancelled', 2)`
+  for (const [issue, kind, from, to] of [
+    ['issue_9101', 'memory', 14 * 60, 11 * 60],
+    ['issue_9102', 'claim', 6 * 60, 5 * 60],
+  ] as const)
+    await sql`INSERT INTO factory.queue_intervals (issue_id, project, kind, message, from_at, to_at)
+      VALUES (${issue}, 'argo', ${kind}, 'seeded wait', ${ago(from)}, ${ago(to)})`
+  const hourStart = Math.floor(now / HOUR) * HOUR
+  for (let h = 1; h <= 30; h++)
+    for (const [tenant, mib] of [
+      ['vm:build', 6400],
+      ['svc.dns', 900],
+    ] as const)
+      await sql`INSERT INTO factory.host_class_hours (hour, class, repo, tenant, mib_minutes, peak_mib, cpu_seconds, minutes)
+        VALUES (${new Date(hourStart - h * HOUR)}, 'tenant', '', ${tenant}, ${mib * 60}, ${mib}, 0, 60)`
+
   const finding = async (
     id: string,
     project: string,
@@ -68,7 +87,7 @@ export async function seedThroughput(sql: SQL, now = Date.now()): Promise<void> 
   await finding('tpf_moved', 'argo', 'step_peak_mib', 'full', [4300, 2048, 1900, 'MiB'], 'moved', 200)
   await finding('tpf_flat', 'zeta', 'slot_minutes_per_issue', '*', [60, 45, 58, 'minutes'], 'flat', 150)
   await finding('tpf_worse', 'zeta', 'process_growth_mib', 'node', [1400, 700, 2100, 'MiB'], 'worse', 120)
-  await finding('tpf_wait', 'software-factory', 'queued_minutes', '*', [310, 155, null, 'minutes'], 'shipped', 60)
+  await finding('tpf_wait', 'software-factory', 'queued_minutes', '*', [310, 155, null, 'minutes'], 'shipped', 260)
 }
 
 /**

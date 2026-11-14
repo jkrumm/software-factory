@@ -3,6 +3,7 @@ import * as z from 'zod'
 import type { CapacityLoopModel } from '@software-factory/contract'
 import { OWNED_ELSEWHERE_KINDS } from '../kernel/throughput-limits.ts'
 import { boundedRead } from './bounded.ts'
+import { countedFrom, epochNote } from '../kernel/epoch.ts'
 import { readLeadCosts } from './lead-costs.ts'
 import { windowOf } from './stats.ts'
 
@@ -24,11 +25,15 @@ const Total = z.object({ v: z.coerce.number().nullable() })
  */
 export async function readCapacityLoop(
   sql: SQL,
-  options: { now: Date; days: number; constants: CapacityConstants },
+  options: { now: Date; days: number; constants: CapacityConstants; epoch?: Date | null },
 ): Promise<CapacityLoopModel> {
-  const { now, days } = options
-  const w = windowOf(now, days)
-  const leadCosts = await readLeadCosts(sql)
+  const { now } = options
+  const epoch = options.epoch ?? null
+  const asked = windowOf(options.now, options.days)
+  const w = { from: countedFrom(asked.from, epoch), to: asked.to }
+  // the days the counted window spans: the asked days, fewer when the epoch cut it (a per-day figure divides by these)
+  const days = Math.max(1, Math.min(options.days, Math.ceil((w.to.getTime() - w.from.getTime()) / DAY_MS)))
+  const leadCosts = await readLeadCosts(sql, epoch)
 
   const body = await boundedRead(sql, 10_000, async (tx) => {
     // every UTC date the window touches, so a day with no rows is a 0 (or null for a percentile), not a gap
@@ -312,6 +317,7 @@ export async function readCapacityLoop(
     at: now.toISOString(),
     days,
     window: { from: w.from.toISOString(), to: w.to.toISOString() },
+    epoch: epochNote(asked.from, epoch),
     ...body,
     leadCosts: [...leadCosts].sort((a, b) => b.peakMibP80 - a.peakMibP80 || a.repo.localeCompare(b.repo)).slice(0, TOP),
     constants: options.constants,

@@ -3,8 +3,11 @@ import * as z from 'zod'
 import type { ThroughputModel } from '@software-factory/contract'
 import { boundedRead } from './bounded.ts'
 import { readDeployDays } from './deploy-log.ts'
+import { countedFrom, epochNote } from '../kernel/epoch.ts'
 import { DEFAULT_TENANT_BUDGET_MIB, DEFAULT_TENANT_PROJECT } from '../kernel/throughput-limits.ts'
+import type { QueueReasons } from './flow.ts'
 import { readAccount } from './throughput-account.ts'
+import { answersOf, readAnswerFacts } from './throughput-answers.ts'
 
 const TOP_KEYS = 20
 const TOP_PROCESSES = 15
@@ -95,18 +98,33 @@ export const bucketMinutesOf = (hours: number): number => (hours <= 24 ? 5 : hou
 
 const round = (value: number, decimals: number) => Math.round(value * 10 ** decimals) / 10 ** decimals
 
+/** Why a finding the epoch left unjudged reads `unmeasured`. */
+export const BEFORE_EPOCH = 'filed before the counting epoch'
+
 /**
- * Where the host's memory and CPU went over the last `hours` hours, over the window `[now - hours, now)`: sums and peaks
+ * Where the host's memory and CPU went over the last `hours` hours, over the window `[now - hours, now)` (starting at the
+ * epoch when that is later, which the model says: `epoch.cut`, `window.from`): sums and peaks
  * come from SQL over the per-minute class rows, the means divide by the window's snapshot minutes here. A key's
  * per-minute total is the sum of its rows at that minute, so a minute the key is absent counts 0 in its mean. The test
  * restates every figure in plain SQL over seeded rows.
  */
 export async function readThroughput(
   sql: SQL,
-  options: { now: Date; hours: number; dataDir?: string; tenantBudget?: { project: string; budgetMib: number } },
+  options: {
+    now: Date
+    hours: number
+    dataDir?: string
+    tenantBudget?: { project: string; budgetMib: number }
+    /** the counting epoch: nothing before it counts; absent, everything does */
+    epoch?: Date | null
+    /** why each queued Issue stays queued now; absent, the host answer names no waiting Issue */
+    queue?: QueueReasons | null
+  },
 ): Promise<ThroughputModel> {
   const { now, hours } = options
-  const from = new Date(now.getTime() - hours * 3_600_000)
+  const epoch = options.epoch ?? null
+  const asked = new Date(now.getTime() - hours * 3_600_000)
+  const from = countedFrom(asked, epoch)
   const to = now
 
   const body = await boundedRead(sql, 10_000, async (tx) => {
@@ -240,7 +258,44 @@ export async function readThroughput(
     const budgetMib = options.tenantBudget?.budgetMib ?? DEFAULT_TENANT_BUDGET_MIB
     const tenantMib = byClass.find((c) => c.class === 'tenant')?.footprintMib ?? 0
     const collectorSeconds = (signals.collector_ms ?? 0) / 1000
+    const improvements = findingRows.map((raw) => {
+      const r = FindingRow.parse(raw)
+      // a finding not yet judged whose `before` was read on the other side of the epoch has nothing to be compared with
+      const before = epoch !== null && r.filed_at < epoch && (r.status === 'open' || r.status === 'shipped')
+      return {
+        id: r.id,
+        project: r.project,
+        kpi: r.kpi,
+        subject: r.subject,
+        before: r.before,
+        target: r.target,
+        after: r.after,
+        direction: r.direction,
+        unit: r.unit,
+        costMinutes: r.cost_minutes,
+        status: before ? 'unmeasured' : r.status,
+        reason: before ? BEFORE_EPOCH : null,
+        issue: r.issue_id,
+        filedAt: r.filed_at.toISOString(),
+        shippedAt: r.shipped_at?.toISOString() ?? null,
+        afterAt: r.after_at?.toISOString() ?? null,
+      }
+    })
     const account = await readAccount(tx, from, to)
+    const tenantBudget = { budgetMib, footprintMib: tenantMib, over: tenantMib > budgetMib }
+    const answers = answersOf({
+      window: { from, to },
+      pressure: {
+        normal: signals.normal,
+        warning: signals.warning,
+        critical: signals.critical,
+        unread: signals.unread,
+      },
+      ...(await readAnswerFacts(tx, { from, to })),
+      tenant: tenantBudget,
+      findings: improvements,
+      queue: options.queue ?? null,
+    })
     return {
       ...account,
       host: {
@@ -307,26 +362,8 @@ export async function readThroughput(
           }
         }),
       },
-      improvements: findingRows.map((raw) => {
-        const r = FindingRow.parse(raw)
-        return {
-          id: r.id,
-          project: r.project,
-          kpi: r.kpi,
-          subject: r.subject,
-          before: r.before,
-          target: r.target,
-          after: r.after,
-          direction: r.direction,
-          unit: r.unit,
-          costMinutes: r.cost_minutes,
-          status: r.status,
-          issue: r.issue_id,
-          filedAt: r.filed_at.toISOString(),
-          shippedAt: r.shipped_at?.toISOString() ?? null,
-          afterAt: r.after_at?.toISOString() ?? null,
-        }
-      }),
+      improvements,
+      answers,
       tests: {
         byProject: runRows.map((raw) => {
           const r = RunRow.parse(raw)
@@ -363,6 +400,7 @@ export async function readThroughput(
     at: now.toISOString(),
     hours,
     window: { from: from.toISOString(), to: to.toISOString() },
+    epoch: epochNote(asked, epoch),
     ...body,
     deploys: { days },
   }

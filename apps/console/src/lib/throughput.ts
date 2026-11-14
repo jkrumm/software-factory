@@ -150,7 +150,40 @@ export const STATUS: Record<string, { label: string; tone: Tone }> = {
 export const issueNumber = (id: string): string => id.replace(/^issue_/, '')
 
 /** The share of the way from `before` to `target` that `after` got, 0 to 1 (more than 1 passed it); null with no after or no distance. */
-export const progress = (finding: ThroughputModel['improvements'][number]): number | null => {
+export const progress = (
+  finding: Pick<ThroughputModel['improvements'][number], 'before' | 'target' | 'after'>,
+): number | null => {
   if (finding.after === null || finding.before === finding.target) return null
   return (finding.before - finding.after) / (finding.before - finding.target)
+}
+
+/** What a queue reason is, as a name for a table row (the kind's own word is `queued for` plus this). */
+export const QUEUE_WORDS: Record<string, string> = {
+  memory: 'Host memory',
+  load: 'Host load',
+  window: 'An account whose window is closed',
+  cap: 'An account at its lead cap',
+  lane: "A lane's cap",
+  claim: 'A free claim in the repo',
+  drain: 'A drain',
+  boot: 'The boot grace',
+}
+export const queueWords = (kind: string): string => QUEUE_WORDS[kind] ?? kind
+
+/** Hours with one decimal: "9.0 h". */
+export const hoursWords = (hours: number): string => `${hours.toFixed(1)} h`
+
+/** A UTC day ("2026-11-13") as the page labels it: "13 Nov". */
+export const dayWords = (day: string): string =>
+  new Date(`${day}T00:00:00Z`).toLocaleDateString('en-GB', { day: 'numeric', month: 'short', timeZone: 'UTC' })
+
+/** The counting epoch's start as a line: "Counting since 14 Nov, 18:00", and what the window picked loses when it cuts it. */
+export function epochLine(model: ThroughputModel): string | null {
+  if (!model.epoch) return null
+  const at = new Date(model.epoch.at)
+  // two calls, not one with both styles: the date and time of one call are joined by "at" in one engine and a comma in another
+  const since = `${at.toLocaleDateString('en-GB', { dateStyle: 'medium' })}, ${at.toLocaleTimeString('en-GB', { timeStyle: 'short' })}`
+  return model.epoch.cut
+    ? `Counting since ${since}: the ${windowName(model.hours)} window starts there, and a median over earlier days waits for 3 days.`
+    : `Counting since ${since}.`
 }

@@ -114,6 +114,7 @@ import { queueMovedAt } from './read/queue.ts'
 import { queueReasonMap } from './api/read-models.ts'
 import { readFriction } from './read/friction.ts'
 import { readBudgetFacts, readIssueFates, readWindowFacts } from './read/throughput-loop.ts'
+import { loadEpoch } from './adapters/throughput-epoch.ts'
 import { projectBudgets as readProjectBudgets, throughputPass, throughputSummary } from './app/loops/throughput.ts'
 import { readFrictionEvidence } from './read/friction-evidence.ts'
 import { loopReads } from './read/loops.ts'
@@ -202,6 +203,8 @@ async function main(): Promise<void> {
   const loopSettings = loadLoopSettings(process.env)
   // The one way to ask agw for a judgment: the Judge, the steward and triage all go through it.
   const agw = agwPort({ bin: settings.agwBin })
+  // The counting epoch: a missing or bad `config/throughput.json` stops the start, so no read quietly counts everything.
+  const epoch = loadEpoch(process.env.FACTORY_THROUGHPUT_FILE || undefined)
   const planningEnv = planningSettings(process.env, {
     repoRoots: leadSettings.repoRoots,
     repoAllow: leadSettings.repoAllow,
@@ -573,7 +576,7 @@ async function main(): Promise<void> {
           migrations: gitMigrationFiles(repos),
           sharedNumbers: SHARED_NUMBERS,
           processCap: DEFAULT_PROCESS_CAP,
-          budgets: async (now) => readBudgetFacts(sql, { now, budgets: await projectBudgets() }),
+          budgets: async (now) => readBudgetFacts(sql, { now, budgets: await projectBudgets(), epoch }),
           heartbeat: () =>
             confirmedHeartbeat(
               async () => (await readHealth()).heartbeat,
@@ -617,6 +620,7 @@ async function main(): Promise<void> {
           uow,
           clock: writes.clock,
           tenants: { project: planningEnv.tenantProject, budgetMib: planningEnv.tenantBudgetMib },
+          epoch,
           projects: async () =>
             (await projectBudgets()).map((b) => ({
               project: b.project,
@@ -624,7 +628,7 @@ async function main(): Promise<void> {
               peakMib: b.peakMib,
               shape: b.shape,
             })),
-          facts: (window, options) => readWindowFacts(sql, { ...window, ...options }),
+          facts: (window, options) => readWindowFacts(sql, { ...window, ...options, epoch }),
           fates: (ids) => readIssueFates(sql, ids),
           file: (body) => intake.api.file(body, 'agent'),
         })
@@ -933,6 +937,7 @@ async function main(): Promise<void> {
     readModels: {
       sql,
       dataDir,
+      epoch,
       tenantBudget: { project: planningEnv.tenantProject, budgetMib: planningEnv.tenantBudgetMib },
       queueReasons,
       machine,

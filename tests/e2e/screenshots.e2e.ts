@@ -94,11 +94,12 @@ for (const variant of VARIANTS) {
           await page.setViewportSize({ width, height })
         }
         if (name === 'throughput' || name === 'throughput-7d') {
-          // The bands run taller than the viewport (the lead time, the scorecard and the improvements sit under the charts): shoot a tall one too.
+          // One detail opened: the cost's classes and tenants sit one step under the three answers. Tall, so the open detail is whole.
           const { width, height } = page.viewportSize() ?? variant.viewport
-          await page.setViewportSize({ width, height: width < 600 ? 5200 : 2400 })
+          await page.getByRole('button', { name: /^The cost: memory by class/ }).click()
+          await page.setViewportSize({ width, height: width < 600 ? 5200 : 2000 })
           await page.waitForLoadState('networkidle')
-          await shot(`${name}-tall`)
+          await shot(`${name}-detail`)
           await page.setViewportSize({ width, height })
         }
         if (name === 'kit') {

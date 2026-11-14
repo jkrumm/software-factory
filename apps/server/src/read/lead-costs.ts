@@ -48,13 +48,13 @@ const Row = z.object({
  * over the newest ten attempts that have one (rows from before the footprint was recorded, or minutes `top` failed, have
  * none), with the median of footprint peak over RSS peak: the calibration of one against the other.
  */
-export async function readLeadCosts(sql: SQL): Promise<RepoLeadCost[]> {
+export async function readLeadCosts(sql: SQL, epoch: Date | null = null): Promise<RepoLeadCost[]> {
   const rows = await boundedRead(sql, 5_000, async (tx) => {
     const found: unknown[] = await tx`
       WITH counted AS (
         SELECT s.repo, s.worktree, s.at, s.rss_mib, s.footprint_mib FROM factory.lead_samples s
         LEFT JOIN factory.lead_relearn r ON r.repo = s.repo
-        WHERE s.outside_slots AND (r.at IS NULL OR s.at >= r.at)
+        WHERE s.outside_slots AND (r.at IS NULL OR s.at >= r.at) AND s.at >= coalesce(${epoch}::timestamptz, '-infinity')
       ), lasts AS (
         SELECT repo, worktree, max(at) AS last_at FROM counted GROUP BY repo, worktree
       ), peaks AS (
@@ -94,7 +94,7 @@ export async function readLeadCosts(sql: SQL): Promise<RepoLeadCost[]> {
     const rest: unknown[] = await tx`
       SELECT l.repo, count(*) AS minutes, percentile_cont(0.5) WITHIN GROUP (ORDER BY l.footprint_mib)::float8 AS p50
       FROM factory.host_class_samples l
-      WHERE l.class = 'lead' AND l.repo IS NOT NULL AND NOT EXISTS (
+      WHERE l.class = 'lead' AND l.repo IS NOT NULL AND l.at >= coalesce(${epoch}::timestamptz, '-infinity') AND NOT EXISTS (
         SELECT 1 FROM factory.host_class_samples s WHERE s.class = 'step' AND s.at = l.at AND s.issue = l.issue)
       GROUP BY l.repo`
     return { found, rest }
