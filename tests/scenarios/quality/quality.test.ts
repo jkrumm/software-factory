@@ -1,5 +1,6 @@
 import { afterAll, beforeAll, describe, expect, setDefaultTimeout, test } from 'bun:test'
 import { tick } from '../flow.ts'
+import { factory } from '../harness.ts'
 import type { LeadsWorld } from '../leads/support.ts'
 import {
   commit,
@@ -178,6 +179,56 @@ describe('ship: the gate', () => {
     expect(new Set(asked.map((call) => `${call.args[0]} ${call.args[1]}`))).toEqual(
       new Set(['review route', 'review covered']),
     )
+  })
+})
+
+// Its own world: the Errand's screen is an agw call, which the gate's "review reads only" test counts.
+describe('ship: after an Errand', () => {
+  const it = lab(60_000)
+
+  test('a ship the machine refused while an Errand was open is decided again under the same call id once the Errand is done (#1166)', async () => {
+    await scriptReview(it.lw.world, 'covered')
+    const id = await workingIssue(it.lw, 'errand then ship')
+    const sha = await commit(it.lw, 'src/e.ts', 'export const e = 1\n', 'feat: e')
+    const env = { FACTORY_URL: it.lw.server.url }
+
+    const raised = await factory(
+      it.lw.world,
+      [
+        'errand',
+        'raise',
+        id,
+        '--attempt',
+        '1',
+        '--summary',
+        'plug it in',
+        '--detail',
+        'the cable',
+        '--tried',
+        'a command',
+        '--format',
+        'json',
+      ],
+      env,
+    )
+    expect(raised.code).toBe(0)
+    const errand = String((JSON.parse(raised.out) as { errand: { id: string } }).errand.id)
+
+    const waiting = await ship(it.lw.world, it.lw.server, id, { call: 'ship-1', commits: [sha] })
+    expect(waiting.code).toBe(5)
+    expect(waiting.refusal).toContain('it waits for an Errand')
+
+    const done = await factory(it.lw.world, ['errand', 'done', errand, '--note', 'done', '--format', 'json'], env)
+    expect(done.code).toBe(0)
+
+    const shipped = await ship(it.lw.world, it.lw.server, id, { call: 'ship-1', commits: [sha] })
+    expect(shipped.code).toBe(0)
+    expect(shipped.json.result).toBe('applied')
+    expect(await stateOf(it.lw.world, id)).toBe('watching')
+
+    // the call that was accepted is still one: the same call again replays it
+    const again = await ship(it.lw.world, it.lw.server, id, { call: 'ship-1', commits: [sha] })
+    expect(again.json.result).toBe('replayed')
   })
 })
 

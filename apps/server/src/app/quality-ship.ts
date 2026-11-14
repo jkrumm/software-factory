@@ -9,7 +9,7 @@ import { replay } from '../domains/work/machine.ts'
 import type { WorkStore } from '../domains/work/ports.ts'
 import type { Clock } from '../kernel/clock.ts'
 import type { IdSource, IssueId } from '../kernel/ids.ts'
-import { key } from '../kernel/keys.ts'
+import { type Key, key } from '../kernel/keys.ts'
 import { err, ok, type PortError, type Result } from '../kernel/result.ts'
 import { type IssueWriteError, type Recorded, recordIn } from './issues.ts'
 import type { UnitOfWork } from './unit-of-work.ts'
@@ -133,6 +133,21 @@ async function judge(deps: ShipDeps, issue: Issue, input: ShipInput): Promise<Sh
 }
 
 /**
+ * The key of the `shipped` event this call stands for. A call the machine refused (the Issue waited for an Errand) stored
+ * its refusal under the call's key, and the same call again would replay that refusal for ever, though the wait has
+ * ended since: a refused or ignored call is decided again, under the next key in line (`ship-1`, `ship-1:retry:1`, ...).
+ * An applied one is the answer of every repeat.
+ */
+async function shipKey(work: WorkStore, input: ShipInput): Promise<Key> {
+  const base = key('shipped', input.issueId, input.attempt, input.call)
+  for (let retry = 0; ; retry++) {
+    const candidate = retry === 0 ? base : key('shipped', input.issueId, input.attempt, input.call, 'retry', retry)
+    const stored = await work.eventByKey(candidate)
+    if (!stored || stored.result === 'applied') return candidate
+  }
+}
+
+/**
  * The lead's `ship`. The merged commits are checked outside any transaction: git for where they landed, agw for the
  * review, GitHub for the CI of its pull request. A ship the gate refuses is stored as refused with the verb's error and moves nothing. An accepted one records
  * `shipped` on the Issue (which plans the watch), its commits as evidence, its review as evidence or the record
@@ -142,13 +157,14 @@ export async function shipIssue(
   deps: ShipDeps,
   input: ShipInput,
 ): Promise<Result<ShipAnswer, IssueWriteError | PortError>> {
-  const eventKey = key('shipped', input.issueId, input.attempt, input.call)
   const event = shipped(input.attempt)
   const loaded = await deps.uow.run(async ({ work, quality }) => {
     const history = await work.history(input.issueId)
     if (!history) return err<IssueWriteError>({ kind: 'unknown_issue', issueId: input.issueId })
     const issue = replay(input.issueId, history)
+    const eventKey = await shipKey(work, input)
     return ok({
+      eventKey,
       issue,
       accepted: await quality.shipAccepted(eventKey),
       specOwed: issue.checkpoint === 'spec' && !(await quality.specSubmitted(input.issueId)),
@@ -156,7 +172,7 @@ export async function shipIssue(
     })
   })
   if (!loaded.ok) return loaded
-  const { issue, accepted, specOwed, annotationsOwed: owed } = loaded.value
+  const { eventKey, issue, accepted, specOwed, annotationsOwed: owed } = loaded.value
 
   if (accepted) {
     return deps.uow.run(async ({ work, quality }) => {
