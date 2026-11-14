@@ -24,7 +24,11 @@ const untimed = (request: Request): boolean => {
   )
 }
 
-/** The 95th percentile by nearest rank; null for no value. */
+/**
+ * The 95th percentile by nearest rank; null for no value. Nearest rank on purpose (not `percentile()` of `read/stats.ts`,
+ * which interpolates): the figure is a monitor's, and one answer that hangs among a few must show as itself, not be averaged
+ * with its neighbour.
+ */
 export function p95Of(values: readonly number[]): number | null {
   if (values.length === 0) return null
   const sorted = [...values].sort((a, b) => a - b)

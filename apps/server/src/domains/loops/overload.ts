@@ -1,3 +1,4 @@
+import { scrub } from '../../kernel/scrub.ts'
 import { FRESH_MS, MINUTE_GAP_MS } from './selfwatch.ts'
 import type { CapacityMinute, Finding, PsRow, QueueReasonCount, RouteLatency, SlotMinute } from './selfwatch-model.ts'
 
@@ -36,8 +37,15 @@ const freshRun = <T extends { at: Date }>(run: readonly T[], now: Date): boolean
 /** The one-minute load must stay over the load ceiling in this many consecutive host samples. */
 export const LOAD_SAMPLES = 10
 
-export function loadOverCeilingFindings(minutes: readonly CapacityMinute[], now: Date): Finding[] {
-  const run = tailRun(minutes, (m) => m.load !== null && m.loadCeiling !== null && m.load > m.loadCeiling)
+export function loadOverCeilingFindings(
+  minutes: readonly CapacityMinute[],
+  rules: Pick<AdmissionRules, 'overLoad'>,
+  now: Date,
+): Finding[] {
+  const run = tailRun(
+    minutes,
+    (m) => m.load !== null && m.loadCeiling !== null && rules.overLoad(m.load, m.loadCeiling),
+  )
   const first = run[0]
   const last = run[run.length - 1]
   if (!first || !last || run.length < LOAD_SAMPLES || !freshRun(run, now)) return []
@@ -107,53 +115,70 @@ export function slotLineFindings(minutes: readonly SlotMinute[], now: Date): Fin
 /** The newest samples within this long of the newest one are looked at for a lead that was admitted past a gate. */
 export const GATE_WINDOW_MS = 10 * 60_000
 
-export interface MemoryLimits {
-  swapoutMbPer300s: number
-  swapUsedPct: number
+/**
+ * The admission rules, as the capacity layer holds them (`overLoad`, `overMemory` in `domains/capacity/host.ts`): passed in
+ * by the app, so these conditions judge by the very comparisons admission makes and a changed rule moves both.
+ */
+export interface AdmissionRules {
+  overLoad(load: number, ceiling: number): boolean
+  overMemory(reading: { swapoutMbPer300s: number; swapUsedPct: number }): boolean
 }
 
-const overLoadOf = (m: CapacityMinute): boolean => m.load !== null && m.loadCeiling !== null && m.load > m.loadCeiling
-const overMemoryOf = (m: CapacityMinute, limits: MemoryLimits): boolean =>
-  (m.swapUsedPct !== null && m.swapUsedPct > limits.swapUsedPct) ||
-  (m.swapoutMbPer300s !== null && m.swapoutMbPer300s > limits.swapoutMbPer300s)
+/** A lead admitted: an Issue's `admitted` event (an attempt begins). A resume of a waiting lead is no admission and has none. */
+export interface Admission {
+  at: Date
+  issue: string
+}
+
+const loadOver = (m: CapacityMinute, rules: AdmissionRules): boolean =>
+  m.load !== null && m.loadCeiling !== null && rules.overLoad(m.load, m.loadCeiling)
+const memoryOver = (m: CapacityMinute, rules: AdmissionRules): boolean =>
+  m.swapUsedPct !== null &&
+  m.swapoutMbPer300s !== null &&
+  rules.overMemory({ swapUsedPct: m.swapUsedPct, swapoutMbPer300s: m.swapoutMbPer300s })
 
 /**
- * More leads working than the admission rules allow. By two samples a minute apart, a lead was admitted past the load rule
- * when the leads rose while the load was over its ceiling in both, and past the memory rule when they rose while the swap
- * rule was over its ceilings in both (a lead the rule let in sees one of the two samples under). A host with more leads than
- * the accounts have seats is past the cap. Judged over the last ten minutes; one signal, the reasons are its facts.
+ * More leads working than the admission rules allow, judged per admission (an `admitted` event; a lead that resumes from a
+ * wait takes its claim again without these gates and is no admission). Each is set against the host samples on either side
+ * of it, within `MINUTE_GAP_MS`: it passed the load rule when the load was over its ceiling in both, the memory rule when
+ * swap use or the swapout rate was over its ceiling in both (a lead the rule let in has one of the two under), and the cap
+ * when the leads already filled the accounts' seats in the sample after it. Judged over the ten minutes before the newest
+ * sample; one signal, the passed gates are its facts.
  */
-export function gatesPassedFindings(minutes: readonly CapacityMinute[], limits: MemoryLimits, now: Date): Finding[] {
+export function gatesPassedFindings(
+  minutes: readonly CapacityMinute[],
+  admissions: readonly Admission[],
+  rules: AdmissionRules,
+  now: Date,
+): Finding[] {
   const ordered = byTime(minutes)
   const newest = ordered[ordered.length - 1]
   if (!newest || now.getTime() - newest.at.getTime() > FRESH_MS) return []
-  const window = ordered.filter((m) => newest.at.getTime() - m.at.getTime() <= GATE_WINDOW_MS)
   const facts: string[] = []
   const context: string[] = []
-  const rose = (rule: (m: CapacityMinute) => boolean): string | null => {
-    for (let i = 1; i < window.length; i++) {
-      const before = window[i - 1]
-      const after = window[i]
-      if (!before || !after || before.leads === null || after.leads === null) continue
-      if (after.at.getTime() - before.at.getTime() > MINUTE_GAP_MS) continue
-      if (after.leads > before.leads && rule(before) && rule(after))
-        return `leads ${before.leads} to ${after.leads} at ${iso(after.at)}, load ${after.load?.toFixed(1) ?? 'unread'} (ceiling ${after.loadCeiling ?? 'unread'}), swap ${after.swapUsedPct ?? 'unread'}%, swapouts ${after.swapoutMbPer300s ?? 'unread'} MiB/300s`
-    }
-    return null
+  const passed: { load?: string; memory?: string; seats?: string } = {}
+  for (const admission of byTime(admissions)) {
+    if (newest.at.getTime() - admission.at.getTime() > GATE_WINDOW_MS) continue
+    const t = admission.at.getTime()
+    const before = [...ordered].reverse().find((m) => m.at.getTime() <= t)
+    const after = ordered.find((m) => m.at.getTime() >= t)
+    if (!before || !after || t - before.at.getTime() > MINUTE_GAP_MS || after.at.getTime() - t > MINUTE_GAP_MS) continue
+    const seen = `${admission.issue} admitted at ${iso(admission.at)}: load ${after.load?.toFixed(1) ?? 'unread'} (ceiling ${after.loadCeiling ?? 'unread'}), swap ${after.swapUsedPct ?? 'unread'}%, swapouts ${after.swapoutMbPer300s ?? 'unread'} MiB/300s, ${after.leads ?? 'unread'} leads of ${after.seats ?? 'unread'} seats`
+    if (loadOver(before, rules) && loadOver(after, rules)) passed.load ??= seen
+    if (memoryOver(before, rules) && memoryOver(after, rules)) passed.memory ??= seen
+    if (after.leads !== null && after.seats !== null && after.leads > after.seats) passed.seats ??= seen
   }
-  const load = rose(overLoadOf)
-  if (load) {
+  if (passed.load) {
     facts.push('a lead was admitted while the load was over its ceiling')
-    context.push(`load rule: ${load}`)
+    context.push(`load rule: ${passed.load}`)
   }
-  const memory = rose((m) => overMemoryOf(m, limits))
-  if (memory) {
+  if (passed.memory) {
     facts.push('a lead was admitted while swap was over its ceiling')
-    context.push(`memory rule: ${memory}`)
+    context.push(`memory rule: ${passed.memory}`)
   }
-  if (newest.leads !== null && newest.seats !== null && newest.leads > newest.seats) {
-    facts.push('more leads work than the accounts have seats')
-    context.push(`seat cap: ${newest.leads} leads work, ${newest.seats} seats at ${iso(newest.at)}`)
+  if (passed.seats) {
+    facts.push('a lead was admitted while the leads already filled the accounts seats')
+    context.push(`seat cap: ${passed.seats}`)
   }
   if (facts.length === 0) return []
   return [
@@ -283,7 +308,7 @@ export function overloadEvidence(input: EvidenceInputs): string[] {
   const lines: string[] = ['Evidence at the time of filing:']
 
   lines.push(`- Test slot lines (${input.slotLines.length}):${input.slotLines.length === 0 ? ' none' : ''}`)
-  for (const line of input.slotLines.slice(0, SLOT_LINES_LISTED)) lines.push(`- slot line: ${oneLine(line)}`)
+  for (const line of input.slotLines.slice(0, SLOT_LINES_LISTED)) lines.push(`- slot line: ${oneLine(scrub(line))}`)
   if (input.slotLines.length > SLOT_LINES_LISTED)
     lines.push(`- slot lines: and ${input.slotLines.length - SLOT_LINES_LISTED} more`)
 
@@ -313,12 +338,12 @@ export function overloadEvidence(input: EvidenceInputs): string[] {
     lines.push(`- The ${busiest.length} busiest processes of ${rows.length} by CPU:`)
     for (const row of busiest)
       lines.push(
-        `- process pid=${row.pid} pri=${row.pri} cpu=${row.pcpu}% rss=${row.rssMib}MiB cmd=${oneLine(row.command, 140)}`,
+        `- process pid=${row.pid} pri=${row.pri} cpu=${row.pcpu}% rss=${row.rssMib}MiB cmd=${oneLine(scrub(row.command), 140)}`,
       )
     lines.push(`- ${priorityLine(rows, input.serverPid)}`)
   }
 
   lines.push(`- Last deploy lines:${input.deployLines.length === 0 ? ' none read' : ''}`)
-  for (const line of input.deployLines) lines.push(`- deploy log: ${oneLine(line, 200)}`)
+  for (const line of input.deployLines) lines.push(`- deploy log: ${oneLine(scrub(line), 200)}`)
   return lines
 }

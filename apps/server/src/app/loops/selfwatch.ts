@@ -2,12 +2,13 @@ import type { ResumeRules } from '../../domains/leads/apierror.ts'
 import type { SignalRequest } from '@software-factory/contract'
 import type { Triaged } from '../../domains/intake/model.ts'
 import type { CapacityStore } from '../../domains/capacity/ports.ts'
+import { type MemoryCeilings, overLoad, overMemory } from '../../domains/capacity/host.ts'
 import { slotLines } from '../../domains/capacity/slots.ts'
 import type { CiRuns, LoopReads, LoopStore, MigrationFiles, OverloadHost } from '../../domains/loops/ports.ts'
 import {
+  type AdmissionRules,
   gatesPassedFindings,
   loadOverCeilingFindings,
-  type MemoryLimits,
   OVERLOAD_KINDS,
   overloadEvidence,
   routesSlowFindings,
@@ -92,7 +93,7 @@ export interface SelfwatchDeps {
   /** every project's budgets against its last day of runs; unset (a host with no step costs) judges none */
   budgets?: (now: Date) => Promise<BudgetFact[]>
   /** the memory ceilings admission holds (`gates_passed` reads a lead admitted past them) */
-  memoryCeilings: MemoryLimits
+  memoryCeilings: MemoryCeilings
   /** this process's pid: the server in the evidence's priority line */
   serverPid: number
   /** the server's own routes over the last five minutes, timed in the process; absent, `routes_slow` is not judged */
@@ -271,12 +272,18 @@ async function gather(deps: SelfwatchDeps, now: Date): Out<Gathered> {
     ok({
       minutes: await loopReads.capacityMinutes(new Date(now.getTime() - OVERLOAD_LOOKBACK_MS)),
       slots: await loopReads.slotMinutes(new Date(now.getTime() - OVERLOAD_LOOKBACK_MS)),
+      admissions: await loopReads.admissions(new Date(now.getTime() - OVERLOAD_LOOKBACK_MS)),
     }),
   )
   if (!capacity.ok) return capacity
+  // the comparisons admission itself makes (`domains/capacity/host.ts`), so a changed rule moves these conditions with it
+  const rules: AdmissionRules = {
+    overLoad,
+    overMemory: (reading) => overMemory(reading, deps.memoryCeilings),
+  }
   gathered.findings.push(
-    ...loadOverCeilingFindings(capacity.value.minutes, now),
-    ...gatesPassedFindings(capacity.value.minutes, deps.memoryCeilings, now),
+    ...loadOverCeilingFindings(capacity.value.minutes, rules, now),
+    ...gatesPassedFindings(capacity.value.minutes, capacity.value.admissions, rules, now),
     ...slotLineFindings(capacity.value.slots, now),
   )
   if (!hostSampleIsFresh(capacity.value.minutes, now)) {

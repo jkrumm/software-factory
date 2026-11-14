@@ -618,10 +618,13 @@ test('slot_line and gates_passed: the stored slot minutes and capacity facts fil
   await db`
     INSERT INTO factory.slot_shadow (at, live_slots, live_max, aim_slots, holders, waiters, swap_growing, reason)
     SELECT date_trunc('minute', now()) - (m || ' minutes')::interval, 2, 4, 2, 2, 12, false, 'drill' FROM generate_series(0, 14) AS m`
-  // leads that rose from 3 to 9 in two samples that both read load over the ceiling
+  // a lead admitted (a real `admitted` event) between two samples that both read the load over the ceiling
+  const admittedIssue = await working(lab, REPO, 'admitted while the host is over its load ceiling')
   await db`
     INSERT INTO factory.host_samples (at, load, load_ceiling, leads, seats)
-    VALUES (date_trunc('minute', now()) - interval '1 minute', 150, 60, 3, 12), (date_trunc('minute', now()), 160, 60, 9, 12)`
+    SELECT a.at + o.shift, 150, 60, 4, 12
+    FROM (SELECT max(at) AS at FROM factory.issue_events WHERE issue_id = ${admittedIssue} AND kind = 'admitted' AND result = 'applied') a,
+      (VALUES (interval '-30 seconds'), (interval '30 seconds')) AS o(shift)`
 
   await pass()
   const [slot, ...slotMore] = await signalsOf('slot_line')
@@ -630,16 +633,16 @@ test('slot_line and gates_passed: the stored slot minutes and capacity facts fil
   const [gates, ...gatesMore] = await signalsOf('gates_passed')
   expect(gatesMore).toEqual([])
   expect(gates?.text).toContain('a lead was admitted while the load was over its ceiling')
-  expect(gates?.text).toContain('leads 3 to 9')
+  expect(gates?.text).toContain(`${admittedIssue} admitted at`)
   expect(gates?.text).toContain('Evidence at the time of filing:')
 
   await pass()
   expect(await signalsOf('slot_line')).toHaveLength(1)
   expect(await signalsOf('gates_passed')).toHaveLength(1)
 
-  // the line shortens and the leads settle: both clear
+  // the line shortens and the load falls under the ceiling: both clear
   await db`UPDATE factory.slot_shadow SET waiters = 0 WHERE at >= date_trunc('minute', now()) - interval '1 minute'`
-  await db`UPDATE factory.host_samples SET leads = 3`
+  await db`UPDATE factory.host_samples SET load = 5`
   await pass()
   expect((await rowOf('slot_line:waiting'))?.cleared_at).not.toBeNull()
   expect((await rowOf('gates_passed:host'))?.cleared_at).not.toBeNull()

@@ -1,5 +1,7 @@
 import { expect, test } from 'bun:test'
 import {
+  type Admission,
+  type AdmissionRules,
   gatesPassedFindings,
   LOAD_SAMPLES,
   loadOverCeilingFindings,
@@ -19,7 +21,11 @@ import type { CapacityMinute, Finding, SlotMinute } from '../../src/domains/loop
 
 const NOW = new Date('2026-11-14T20:00:00Z')
 const ago = (n: number) => new Date(NOW.getTime() - n * 60_000)
-const LIMITS = { swapoutMbPer300s: 2048, swapUsedPct: 75 }
+const RULES: AdmissionRules = {
+  overLoad: (load, ceiling) => load > ceiling,
+  overMemory: (reading) => reading.swapoutMbPer300s > 2048 || reading.swapUsedPct > 75,
+}
+const overCeiling = (minutes: CapacityMinute[], now: Date) => loadOverCeilingFindings(minutes, RULES, now)
 
 const minute = (over: Partial<CapacityMinute> & { at: Date }): CapacityMinute => ({
   load: 10,
@@ -41,34 +47,34 @@ const loads = (values: (number | null)[], ceiling: number | null = 60): Capacity
 // ---- load_over_ceiling ------------------------------------------------------------------------------------------------------
 
 test('load_over_ceiling: ten consecutive samples over the ceiling fire once, with the figures as context', () => {
-  const found = loadOverCeilingFindings(loads(Array(LOAD_SAMPLES).fill(200)), NOW)
+  const found = overCeiling(loads(Array(LOAD_SAMPLES).fill(200)), NOW)
   expect(found).toHaveLength(1)
   expect(found[0]?.kind).toBe('load_over_ceiling')
   expect(found[0]?.subject).toBe('host')
   expect(found[0]?.context.join('\n')).toContain('10 samples in a row')
   // a longer run is the same evidence: one signal until it clears
-  const longer = loadOverCeilingFindings(loads(Array(25).fill(150)), NOW)
+  const longer = overCeiling(loads(Array(25).fill(150)), NOW)
   expect(evidenceHash(longer[0] as Finding)).toBe(evidenceHash(found[0] as Finding))
 })
 
 test('load_over_ceiling: nine samples, a dip, a missing reading, a gap or a stale host do not fire (and a falling load clears)', () => {
-  expect(loadOverCeilingFindings(loads(Array(LOAD_SAMPLES - 1).fill(200)), NOW)).toEqual([])
+  expect(overCeiling(loads(Array(LOAD_SAMPLES - 1).fill(200)), NOW)).toEqual([])
   // the ceiling is a strict bound: a load equal to it is not over it
-  expect(loadOverCeilingFindings(loads(Array(LOAD_SAMPLES).fill(60)), NOW)).toEqual([])
+  expect(overCeiling(loads(Array(LOAD_SAMPLES).fill(60)), NOW)).toEqual([])
   // one sample under the ceiling in the middle breaks the run; only the tail counts
   const dip = Array(15).fill(200)
   dip[8] = 20
-  expect(loadOverCeilingFindings(loads(dip), NOW)).toEqual([])
-  expect(loadOverCeilingFindings(loads(Array(20).fill(null)), NOW)).toEqual([])
-  expect(loadOverCeilingFindings(loads(Array(LOAD_SAMPLES).fill(200), null), NOW)).toEqual([])
+  expect(overCeiling(loads(dip), NOW)).toEqual([])
+  expect(overCeiling(loads(Array(20).fill(null)), NOW)).toEqual([])
+  expect(overCeiling(loads(Array(LOAD_SAMPLES).fill(200), null), NOW)).toEqual([])
   const gap = loads(Array(LOAD_SAMPLES).fill(200)).map((m, i) =>
     i < 5 ? { ...m, at: new Date(m.at.getTime() - 600_000) } : m,
   )
-  expect(loadOverCeilingFindings(gap, NOW)).toEqual([])
+  expect(overCeiling(gap, NOW)).toEqual([])
   // the host loop stopped: the newest sample is not now
-  expect(loadOverCeilingFindings(loads(Array(LOAD_SAMPLES).fill(200)), new Date(NOW.getTime() + 600_000))).toEqual([])
+  expect(overCeiling(loads(Array(LOAD_SAMPLES).fill(200)), new Date(NOW.getTime() + 600_000))).toEqual([])
   // cleared: the newest sample is back under the ceiling
-  expect(loadOverCeilingFindings(loads([...Array(12).fill(200), 30]), NOW)).toEqual([])
+  expect(overCeiling(loads([...Array(12).fill(200), 30]), NOW)).toEqual([])
 })
 
 // ---- slot_line --------------------------------------------------------------------------------------------------------------
@@ -114,66 +120,79 @@ test('slot_line: a base slot empty while callers wait fires after five minutes, 
 
 // ---- gates_passed -----------------------------------------------------------------------------------------------------------
 
-test('gates_passed: leads that rose while the load was over the ceiling in both samples were admitted past the load rule', () => {
+const admit = (minutesAgo: number, issue = 'issue_1'): Admission => ({
+  at: new Date(ago(minutesAgo).getTime() + 30_000),
+  issue,
+})
+
+test('gates_passed: a lead admitted between two samples that both read the load over the ceiling passed the load rule', () => {
   const rows = [
     minute({ at: ago(3), load: 180, leads: 4 }),
-    minute({ at: ago(2), load: 190, leads: 4 }),
-    minute({ at: ago(1), load: 200, leads: 9 }),
-    minute({ at: ago(0), load: 200, leads: 9 }),
+    minute({ at: ago(2), load: 190, leads: 5 }),
+    minute({ at: ago(1), load: 200, leads: 5 }),
+    minute({ at: ago(0), load: 200, leads: 5 }),
   ]
-  const found = gatesPassedFindings(rows, LIMITS, NOW)
+  const found = gatesPassedFindings(rows, [admit(3)], RULES, NOW)
   expect(found).toHaveLength(1)
   expect(found[0]?.facts).toEqual(['a lead was admitted while the load was over its ceiling'])
-  expect(found[0]?.context.join('\n')).toContain('leads 4 to 9')
-  // the same minutes with a load under the ceiling in the earlier sample: the rule let it in
-  const under = rows.map((m, i) => (i === 1 ? { ...m, load: 10 } : m))
-  expect(gatesPassedFindings(under, LIMITS, NOW)).toEqual([])
-  // leads that fell, or stayed, are no admission
+  expect(found[0]?.context.join('\n')).toContain('issue_1 admitted at')
+  // a load under the ceiling in the sample before: the rule had room, it let the lead in
+  const under = rows.map((m, i) => (i === 0 ? { ...m, load: 10 } : m))
+  expect(gatesPassedFindings(under, [admit(3)], RULES, NOW)).toEqual([])
+  // no admission, no finding: leads that rose with no `admitted` event are a lead resuming from a wait, which asks no gate
+  expect(gatesPassedFindings(rows, [], RULES, NOW)).toEqual([])
+  // an admission with no sample on either side within a minute and a half cannot be judged
   expect(
     gatesPassedFindings(
-      rows.map((m) => ({ ...m, leads: 4 })),
-      LIMITS,
+      rows,
+      [admit(3)].map((a) => ({ ...a, at: ago(40) })),
+      RULES,
       NOW,
     ),
   ).toEqual([])
 })
 
-test('gates_passed: the memory rule and the seat cap are their own reasons of the one signal, and it clears when the window passes', () => {
+test('gates_passed: the memory rule and the seat cap are their own facts of the one signal, and it clears when the window passes', () => {
   const swap = [
     minute({ at: ago(2), swapUsedPct: 80, leads: 2 }),
     minute({ at: ago(1), swapUsedPct: 82, leads: 3 }),
     minute({ at: ago(0), swapUsedPct: 82, leads: 3 }),
   ]
-  expect(gatesPassedFindings(swap, LIMITS, NOW)[0]?.facts).toEqual([
+  expect(gatesPassedFindings(swap, [admit(2)], RULES, NOW)[0]?.facts).toEqual([
     'a lead was admitted while swap was over its ceiling',
   ])
   const swapouts = swap.map((m) => ({ ...m, swapUsedPct: 10, swapoutMbPer300s: 5000 }))
-  expect(gatesPassedFindings(swapouts, LIMITS, NOW)).toHaveLength(1)
+  expect(gatesPassedFindings(swapouts, [admit(2)], RULES, NOW)).toHaveLength(1)
 
-  const seats = [minute({ at: ago(1), leads: 3, seats: 4 }), minute({ at: ago(0), leads: 9, seats: 4 })]
-  const found = gatesPassedFindings(seats, LIMITS, NOW)
-  expect(found[0]?.facts).toEqual(['more leads work than the accounts have seats'])
-  // every reason together keeps one signal; the facts are stable, no clock in them
+  // the cap: the leads already fill the seats in the sample after the admission
+  const seats = [minute({ at: ago(1), leads: 4, seats: 4 }), minute({ at: ago(0), leads: 5, seats: 4 })]
+  expect(gatesPassedFindings(seats, [admit(1)], RULES, NOW)[0]?.facts).toEqual([
+    'a lead was admitted while the leads already filled the accounts seats',
+  ])
+  // leads above the seats with no admission are resumes (a resume ignores the account cap): not a finding
+  expect(gatesPassedFindings(seats, [], RULES, NOW)).toEqual([])
+
+  // every gate together keeps one signal; the facts are stable, no clock in them
   const all = [
     minute({ at: ago(2), load: 100, swapUsedPct: 90, leads: 3, seats: 4 }),
     minute({ at: ago(1), load: 100, swapUsedPct: 90, leads: 9, seats: 4 }),
     minute({ at: ago(0), load: 100, swapUsedPct: 90, leads: 9, seats: 4 }),
   ]
-  const both = gatesPassedFindings(all, LIMITS, NOW)
+  const both = gatesPassedFindings(all, [admit(2), admit(1, 'issue_2')], RULES, NOW)
   expect(both).toHaveLength(1)
   expect(both[0]?.facts).toHaveLength(3)
 
-  // cleared: the rising pair is older than the ten-minute window of the newest sample
+  // cleared: the admission is older than the ten-minute window of the newest sample
   const old = [
     minute({ at: ago(30), load: 100, leads: 3 }),
     minute({ at: ago(29), load: 100, leads: 9 }),
     minute({ at: ago(0), load: 5, leads: 9 }),
   ]
-  expect(gatesPassedFindings(old, LIMITS, NOW)).toEqual([])
-  // within the allowed seats and under every ceiling: nothing, and a stale host says nothing
-  expect(gatesPassedFindings([minute({ at: ago(0) })], LIMITS, NOW)).toEqual([])
-  expect(gatesPassedFindings(seats, LIMITS, new Date(NOW.getTime() + 600_000))).toEqual([])
-  expect(gatesPassedFindings([], LIMITS, NOW)).toEqual([])
+  expect(gatesPassedFindings(old, [admit(30)], RULES, NOW)).toEqual([])
+  // under every ceiling and inside the seats: nothing, and a stale host says nothing
+  expect(gatesPassedFindings([minute({ at: ago(1) }), minute({ at: ago(0) })], [admit(1)], RULES, NOW)).toEqual([])
+  expect(gatesPassedFindings(seats, [admit(1)], RULES, new Date(NOW.getTime() + 600_000))).toEqual([])
+  expect(gatesPassedFindings([], [admit(1)], RULES, NOW)).toEqual([])
 })
 
 // ---- routes_slow ------------------------------------------------------------------------------------------------------------
@@ -293,7 +312,7 @@ test('overloadEvidence: slot lines with reasons, queue by reason, host memory, t
 })
 
 test('a signal carries the evidence block after the eight lines, which never move the evidence hash', () => {
-  const [found] = loadOverCeilingFindings(loads(Array(LOAD_SAMPLES).fill(200)), NOW)
+  const [found] = overCeiling(loads(Array(LOAD_SAMPLES).fill(200)), NOW)
   const finding = found as Finding
   const withEvidence: Finding = { ...finding, evidence: ['Evidence at the time of filing:', '  a line'] }
   expect(evidenceHash(withEvidence)).toBe(evidenceHash(finding))
@@ -303,4 +322,24 @@ test('a signal carries the evidence block after the eight lines, which never mov
   expect(signalText(finding, 'software-factory')).not.toContain('Evidence at the time')
   expect(OVERLOAD_KINDS.has(finding.kind)).toBe(true)
   expect(OVERLOAD_KINDS.has('ci_red')).toBe(false)
+})
+
+test('overloadEvidence: a credential in a command line or a log line never reaches the signal text', () => {
+  const text = overloadEvidence({
+    now: NOW,
+    slotLines: [],
+    queue: [],
+    host: null,
+    ps: {
+      output:
+        ' 900 31 5.0 1024 curl -H Authorization: Bearer abcdef0123456789abcdef --token=hunter2hunter2 https://u:pw@example.com',
+    },
+    serverPid: 1,
+    deployLines: ['2026-11-14T19:00:00Z start pid=1 API_KEY=sk-abcdefghijklmnop'],
+  }).join('\n')
+  expect(text).toContain('pid=900')
+  expect(text).not.toContain('abcdef0123456789abcdef')
+  expect(text).not.toContain('hunter2hunter2')
+  expect(text).not.toContain('u:pw@')
+  expect(text).not.toContain('sk-abcdefghijklmnop')
 })
