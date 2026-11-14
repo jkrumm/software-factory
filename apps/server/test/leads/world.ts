@@ -66,7 +66,7 @@ const info = (address: string, live = true): TerminalInfo => ({
 export class FakeTerminals implements Terminals {
   terminals = new Map<string, TerminalInfo[]>()
   started: StartTerminal[] = []
-  typed: { terminal: string; text: string; force: boolean }[] = []
+  typed: { terminal: string; text: string; force: boolean; idle?: boolean }[] = []
   closed: string[] = []
   named: { tab: string; name: string }[] = []
   startError: PortError | null = null
@@ -87,7 +87,7 @@ export class FakeTerminals implements Terminals {
     this.terminals.set(input.key, [made])
     return ok(made)
   }
-  async type(input: { terminal: string; text: string; force: boolean }) {
+  async type(input: { terminal: string; text: string; force: boolean; idle?: boolean }) {
     this.typed.push(input)
     return this.typeAnswers.shift() ?? ok('typed' as const)
   }

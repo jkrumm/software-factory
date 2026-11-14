@@ -184,7 +184,8 @@ through `receive` in `app/intake.ts`; the answer is a triage outcome (`docs/lang
   no stall, so the steward reads each one's lead session (`deriveSession`: `idleSince` is the end of its last turn). A
   turn that ended with nothing reported since it began, in a live terminal, for `FACTORY_STEWARD_IDLE_MS` (10 minutes),
   gets a `noted` event by the steward that names the Issue's last event (a regression, a note) and tells the lead to
-  check its background tasks and report. A session mid-turn, whatever a tool in it is doing, is never read. A turn that
+  check its background tasks and report. A report (a Decision asked, a deferral) settles the quiet only while no news came after it: an answer, verdict or note
+  that arrived after the report with no turn begun since is unheard, and the quiet counts from it (issue 1190). A session mid-turn, whatever a tool in it is doing, is never read. A turn that
   ended with background work in flight (a subagent, a check, a shell: the Stop hook lists it and `turn_ended` carries
   `backgroundTasks`, `SessionView.backgroundTasks`) is waiting, not quiet: it is nudged only after
   `FACTORY_STEWARD_IDLE_BACKGROUND_MS` (90 minutes, past the longest implementer wait measured), as a frozen task, and
@@ -260,7 +261,9 @@ through `receive` in `app/intake.ts`; the answer is a triage outcome (`docs/lang
 - **Hooks.** `factory hook` appends to the spool, then posts to the unix socket (mode 0600) within 300 ms. The server
   replays the spool with idempotent keys. Session state is derived from the events when read, never stored.
 - **Notes** (`app/leads-note.ts`) are typed into the lead's terminal once: the delivery key is claimed before the typing, a
-  lead mid-turn is asked again until its turn ends, and a lead whose terminal is gone is the lead gone. Before the typing
+  lead mid-turn is asked again until its turn ends, and a lead whose terminal is gone is the lead gone. A lead whose hooks
+  say its turn ended for `forceNoteAfterMs` is typed to whatever herdr-core's status reads, when the screen shows an empty input
+  box (no dialog, no running turn): a resumed session read `working` for a day while it sat at its prompt (issue 1190). Before the typing
   the lead takes its repo's claim back (`resumeClaim` through `claims.resume`): a wait that ended left it without one, and
   a full repo refuses so the outbox tries again later. Trust follows the stored actor: a `noted` whose actor is `owner`
   is typed as "a note from the owner" and binds the lead (the contract says so); the factory's, steward's and Judge's

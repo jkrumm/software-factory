@@ -74,6 +74,32 @@ describe('note_lead', () => {
     expect(w.terminals.typed).toHaveLength(3)
   })
 
+  test('a lead whose hooks say its turn ended is typed with idle once it has been quiet for the force time', async () => {
+    const { issue, effect } = await withNote()
+    const hookEvent = (kind: string, n: number) =>
+      w.db.sql`
+        INSERT INTO factory.lead_hook_events (key, session, issue_id, attempt, kind, at, received_at)
+        VALUES (${`lead-1-1:${kind}:${n}`}, 'lead-1-1', ${issue}, 1, ${kind}, ${w.clock.now()}, ${w.clock.now()})`
+    await hookEvent('session_started', 0)
+    w.clock.advance(1_000)
+    await hookEvent('turn_started', 1)
+    w.clock.advance(1_000)
+    // the turn is running: the core's status is the only word
+    w.terminals.typeAnswers = [ok('busy'), ok('busy'), ok('typed')]
+    expect((await noteLead(w.deps, effect)).ok).toBe(false)
+    expect(w.terminals.typed.map((t) => t.idle)).toEqual([false])
+
+    await hookEvent('turn_ended', 1)
+    w.clock.advance(60_000)
+    expect((await noteLead(w.deps, effect)).ok).toBe(false)
+    expect(w.terminals.typed.map((t) => t.idle)).toEqual([false, false])
+
+    // quiet for the force time by the hooks: the adapter may believe the screen over the core's status
+    w.clock.advance(5 * 60_000)
+    expect((await noteLead(w.deps, effect)).ok).toBe(true)
+    expect(w.terminals.typed.map((t) => t.idle)).toEqual([false, false, true])
+  })
+
   test('typing that may have happened (the core did not say) is confirmed by the turn that began after it, never typed twice', async () => {
     const { issue, effect } = await withNote()
     w.terminals.typeAnswers = [{ ok: false, error: portError('timeout', 'uncertain: hc timed out') }]

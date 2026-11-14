@@ -49,8 +49,11 @@ export interface Terminals {
    * `busy` unless the agent waits at its prompt; `force` also types into a working agent, which queues it for its next turn.
    * An agent whose turn ended on an API error is blocked as far as herdr-core can tell (it takes "Please run /login" for a
    * dialog), yet it sits at an empty prompt: the screen shows that, and then the text is typed with the core's own override.
+   * `idle`: the lead's own hooks say its turn ended and none began since, for a while. The core's status can disagree with
+   * that for good (a resumed session read `working` or `blocked` for a day while it sat at its prompt), so a screen that
+   * shows an empty input box, no dialog and no running turn is taken over the status and the text is typed with the override.
    */
-  type(input: { terminal: string; text: string; force: boolean }): Promise<Result<'typed' | 'busy'>>
+  type(input: { terminal: string; text: string; force: boolean; idle?: boolean }): Promise<Result<'typed' | 'busy'>>
   /**
    * Gets an agent whose turn ended on an API error going again. The screen is looked at first: the API error line above an
    * empty prompt is what permits a forced send. A draft in the prompt box is submitted (`draft`: it is what the agent was

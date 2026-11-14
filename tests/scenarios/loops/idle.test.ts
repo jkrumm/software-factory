@@ -176,6 +176,43 @@ test('a lead that deferred before going quiet is not nudged', async () => {
   expect(await idleNotes(issue)).toEqual([])
 })
 
+test('a Decision answered after the lead reported it, while its turn ended unheard, is news the lead still owes: it is nudged (issue 1190)', async () => {
+  const issue = await working(lab, 'app', 'the answer missed the turn')
+  const session = await open(issue)
+  await must(lab, [
+    'issue',
+    'ask',
+    issue,
+    '--attempt',
+    '1',
+    '--question',
+    'Which database?',
+    '--recommendation',
+    'staging',
+    '--checked',
+    'the config',
+    '--options',
+    '[{"label":"staging","reversible":true,"cost":"none"},{"label":"production","reversible":false,"cost":"risk"}]',
+    '--no-answer',
+    '{"consequence":"the lead stays blocked"}',
+  ])
+  // the answer lands, the lead's turn ends before it is typed, and no turn begins after the answer
+  await must(lab, ['issue', 'answer', issue, 'staging'])
+  await hook(lab.world, 'stop', session, { stop_hook_active: false })
+  expect(await state(lab, issue)).toMatchObject({ state: 'working' })
+
+  const ran = await runLoop(lab, 'steward')
+  expect(ran.error).toBeNull()
+  expect(ran.summary).toContain('woken 1')
+  expect(await idleNotes(issue)).toHaveLength(1)
+
+  // once its next turn begins it heard the answer: no more nudges while it works
+  await hook(lab.world, 'user-prompt-submit', session, { session_id: 'heard' })
+  const version = (await state(lab, issue)).version
+  await runLoop(lab, 'steward')
+  expect((await state(lab, issue)).version).toBe(version)
+})
+
 test('a lead that just heard the owner’s verdict is not nudged: a changes verdict owes a revision, and the generic note waits for it', async () => {
   const issue = await working(lab, 'app', 'the verdict on the queue spec')
   const session = await open(issue)
