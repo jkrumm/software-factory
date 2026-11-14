@@ -8,6 +8,7 @@ import {
   DATABASE_RECHECKS,
   evidenceHash,
   heartbeatFindings,
+  hostSampleIsFresh,
   idleFindings,
   inertRegressionFindings,
   migrationFindings,
@@ -470,4 +471,13 @@ test('process_storm: the count over the cap for three samples in a row, with a r
   expect(processStormFindings(count(3000, null, 3200), 2500, NOW)).toEqual([])
   expect(processStormFindings(count(3000, 3100), 2500, NOW)).toEqual([])
   expect(processStormFindings(count(3000, 3100, 3200), 2500, new Date(NOW.getTime() + 600_000))).toEqual([])
+})
+
+test('swap_growth: one skipped host tick does not break the run; the host samples are fresh only within three minutes', () => {
+  const rising = Array.from({ length: 17 }, (_, i) => 20 + i * 0.5)
+  const skipped = swap(rising).filter((_, i) => i !== 9)
+  expect(swapGrowthFindings(skipped, NOW)).toHaveLength(1)
+  expect(hostSampleIsFresh(swap([1, 2]), NOW)).toBe(true)
+  expect(hostSampleIsFresh(swap([1, 2]), new Date(NOW.getTime() + 600_000))).toBe(false)
+  expect(hostSampleIsFresh([], NOW)).toBe(false)
 })

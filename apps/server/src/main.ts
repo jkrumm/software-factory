@@ -503,8 +503,8 @@ async function main(): Promise<void> {
       },
     },
     {
-      // Six deterministic conditions of the factory itself (red CI, a migration number clash, an overdue wait, an idle lead, a
-      // regression of inert paths, a stale heartbeat), filed once per subject as signals on the factory's own repo.
+      // Nine deterministic conditions of the factory itself (red CI, a migration number clash, an overdue wait, an idle lead, a
+      // regression of inert paths, a stale heartbeat, a process growing without bound, swap growth, a process storm), filed once per subject as signals on the factory's own repo.
       name: 'selfwatch',
       intervalMs: loopSettings.intervalMs.selfwatch,
       onChange: false,

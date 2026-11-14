@@ -294,8 +294,8 @@ const FRESH_MS = 3 * 60_000
 export const SWAP_RISE_MINUTES = 15
 /** The rise over those minutes, in points of swap use, below which a flat reading is noise. */
 const SWAP_MIN_RISE_PCT = 0.5
-/** Two minute samples further apart than this are not consecutive. */
-const MINUTE_GAP_MS = 90_000
+/** Two minute samples further apart than this are not consecutive: one skipped host tick under load does not break a run. */
+const MINUTE_GAP_MS = 150_000
 
 /** The process count must stay over the cap this many samples in a row: one `top` reading can be a spike of a build. */
 export const STORM_SAMPLES = 3

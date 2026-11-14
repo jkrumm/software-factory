@@ -550,6 +550,15 @@ test('process_growth, swap_growth, process_storm: a drill process, a swap rise a
   expect((await signalsOf('swap_growth')).length).toBe(1)
   expect((await signalsOf('process_storm')).length).toBe(1)
 
+  // a host loop that stopped says nothing: the samples are twenty minutes old, the open rows stay
+  await db`UPDATE factory.host_samples SET at = at - interval '20 minutes'`
+  await db`UPDATE factory.host_process_samples SET at = at - interval '7 minutes' WHERE pid = 4242`
+  expect(await pass()).toContain('host samples not fresh')
+  for (const key of ['process_growth:drilld:4242', 'swap_growth:host', 'process_storm:host'])
+    expect((await rowOf(key))?.cleared_at).toBeNull()
+  await db`UPDATE factory.host_samples SET at = at + interval '20 minutes'`
+  await db`UPDATE factory.host_process_samples SET at = at + interval '7 minutes' WHERE pid = 4242`
+
   // the conditions clear: the host's newest minutes are low, the process is gone
   await db`DELETE FROM factory.host_process_samples WHERE pid = 4242`
   await db`UPDATE factory.host_samples SET swap_used_pct = 1, processes = 700 WHERE at >= date_trunc('minute', now()) - interval '5 minutes'`

@@ -200,16 +200,16 @@ async function gather(deps: SelfwatchDeps, now: Date): Out<Gathered> {
     ...swapGrowthFindings(host.value.minutes, now),
     ...processStormFindings(host.value.minutes, deps.processCap, now),
   )
-  // a host loop that stopped says nothing about the swap or the count: their open rows are left as they are
+  // a host loop that stopped (a stall, a restart) says nothing about a process, the swap or the count: their open rows stay
   if (!hostSampleIsFresh(host.value.minutes, now)) {
-    gathered.unread.add('swap_growth').add('process_storm')
-    gathered.notes.push('host samples not fresh: swap and process count not judged')
+    gathered.unread.add('process_growth').add('swap_growth').add('process_storm')
+    gathered.notes.push('host samples not fresh: process growth, swap and process count not judged')
   }
   return ok(gathered)
 }
 
 /**
- * One tick of the self-watch loop: six deterministic conditions of the factory itself, filed through intake as signals on
+ * One tick of the self-watch loop: nine deterministic conditions of the factory itself (CI, migrations, waits, leads, regressions, the heartbeat, and the host's process growth, swap and process count), filed through intake as signals on
  * the watched repo. A subject is filed once; while it stays open and its evidence is the same nothing is filed, a changed
  * evidence is filed again under the same title (intake amends the open Issue), and a subject that no longer holds is
  * cleared. At most `MAX_SELFWATCH_FILINGS` a pass, the rest on the next. A row is written only after intake took the signal, so a
