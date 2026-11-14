@@ -2,15 +2,28 @@ import { noteText } from '../domains/leads/note.ts'
 import { leadKey } from '../domains/leads/names.ts'
 import { deriveSession } from '../domains/leads/session.ts'
 import type { Delivery } from '../domains/leads/ports.ts'
+import type { Issue } from '../domains/work/issue.ts'
 import type { EffectOf } from '../domains/work/effects.ts'
 import type { IssueId } from '../kernel/ids.ts'
 import { err, ok, portError, type PortError, type Result } from '../kernel/result.ts'
-import { leadGone } from './leads-start.ts'
+import { leadGone, seatOf } from './leads-start.ts'
+import { tabName } from '../domains/leads/names.ts'
 import { type LeadDeps, loadIssue } from './leads.ts'
 
 type NoteEffect = EffectOf<'note_lead'> & { issueId: IssueId }
 
-type Look = { done: true } | { done: false; delivery: Pick<Delivery, 'claimedAt' | 'text'>; working: boolean }
+/** What starting a dormant lead's session again needs, read in the same look as the delivery. */
+interface Dormant {
+  session: string | null
+  worktree: string | null
+  repoPath: string | null
+  account: string | null
+  issue: Issue
+}
+
+type Look =
+  | { done: true }
+  | { done: false; delivery: Pick<Delivery, 'claimedAt' | 'text'>; working: boolean; dormant: Dormant | null }
 
 /**
  * `note_lead`: the Issue's events from `from` to `version` typed into the lead's terminal, once. The effect's key is the
@@ -39,9 +52,11 @@ export async function noteLead(deps: LeadDeps, effect: NoteEffect): Promise<Resu
       const view = deriveSession(await leads.hookFacts(name))
       if (view.lastTurnAt && view.lastTurnAt > existing.claimedAt) {
         await leads.markTyped(deliveryKey, view.lastTurnAt, false)
+        // A resumed session's first turn is that proof too: the lead runs again.
+        await leads.markRevived(issue, attempt)
         return ok({ done: true })
       }
-      return ok({ done: false, delivery: existing, working })
+      return ok({ done: false, delivery: existing, working, dormant: dormantOf(row, loaded.issue, view.claudeSession) })
     }
     const text = noteText(
       issue,
@@ -49,16 +64,19 @@ export async function noteLead(deps: LeadDeps, effect: NoteEffect): Promise<Resu
     )
     const claimedAt = deps.clock.now()
     await leads.claimDelivery({ key: deliveryKey, issueId: issue, attempt, kind: 'note', text, claimedAt })
-    return ok({ done: false, delivery: { claimedAt, text }, working })
+    const dormant = dormantOf(row, loaded.issue, deriveSession(await leads.hookFacts(name)).claudeSession)
+    return ok({ done: false, delivery: { claimedAt, text }, working, dormant })
   })
   if (!looked.ok) return looked
   if (looked.value.done) return ok(undefined)
-  const { delivery, working } = looked.value
+  const { delivery, working, dormant } = looked.value
 
   const found = await deps.terminals.find(name)
   if (!found.ok) return found
-  const live = found.value.find((terminal) => terminal.live)
-  if (!live) return leadGone(deps, issue, attempt, 'its terminal was gone when a note arrived')
+  // A dormant lead's live terminal must run the agent: a shell the core put in place of a lost program is no lead.
+  const live = found.value.find((terminal) => terminal.live && (!dormant || terminal.agent))
+  // A dormant lead has no process by design; the wake starts its session again, below.
+  if (!live && !dormant) return leadGone(deps, issue, attempt, 'its terminal was gone when a note arrived')
 
   // A wait that ended left the lead without a claim: it takes its repo's place back before it is told, and a full repo
   // refuses so the outbox tries again. A lead that is waiting again by now has nothing to take.
@@ -67,6 +85,14 @@ export async function noteLead(deps: LeadDeps, effect: NoteEffect): Promise<Resu
     // A closed Issue has nothing to tell: its finalize is the claim's end.
     if (!resumed.ok) return resumed.error.kind === 'gone' ? ok(undefined) : resumed
   }
+
+  if (!live) {
+    return dormant
+      ? reviveAndTell(deps, { issue, attempt, name, deliveryKey, text: delivery.text, dormant })
+      : leadGone(deps, issue, attempt, 'its terminal was gone when a note arrived')
+  }
+  // Dormant but its process never ended (the quiesce failed): the lead runs, so the mark goes and the note is typed.
+  if (dormant) await clearDormant(deps, issue, attempt)
 
   const force = deps.clock.now().getTime() - delivery.claimedAt.getTime() >= deps.forceNoteAfterMs
   await deps.typePace?.()
@@ -78,6 +104,66 @@ export async function noteLead(deps: LeadDeps, effect: NoteEffect): Promise<Resu
   const at = deps.clock.now()
   const marked = await deps.uow.run(async ({ leads }) => {
     await leads.markTyped(deliveryKey, at, force)
+    return ok(undefined)
+  })
+  return marked.ok ? ok(undefined) : marked
+}
+
+const dormantOf = (
+  row: { dormantAt: Date | null; worktreePath: string | null; repoPath: string | null; account: string | null },
+  issue: Issue,
+  session: string | null,
+): Dormant | null =>
+  row.dormantAt ? { session, worktree: row.worktreePath, repoPath: row.repoPath, account: row.account, issue } : null
+
+const clearDormant = (deps: LeadDeps, issue: IssueId, attempt: number) =>
+  deps.uow.run(async ({ leads }) => {
+    await leads.markRevived(issue, attempt)
+    return ok(undefined)
+  })
+
+/**
+ * The wake of a dormant lead: its session starts again with the note as its first message, so there is nothing to type. A
+ * start that fails is tried again by the outbox; the third failure, or one a retry cannot fix, is the lead gone.
+ */
+async function reviveAndTell(
+  deps: LeadDeps,
+  input: { issue: IssueId; attempt: number; name: string; deliveryKey: string; text: string; dormant: Dormant },
+): Promise<Result<void, PortError>> {
+  const { issue, attempt, name, deliveryKey, text, dormant } = input
+  if (!dormant.session || !dormant.worktree || !dormant.repoPath || !dormant.account) {
+    return leadGone(deps, issue, attempt, 'the lead was dormant without a session to resume')
+  }
+  const seat = await seatOf(deps, dormant.issue)
+  if (!seat.ok) return seat
+  await deps.typePace?.()
+  const started = await deps.terminals.revive({
+    key: name,
+    cwd: dormant.worktree,
+    space: dormant.repoPath,
+    prompt: text,
+    tier: seat.value.tier,
+    effort: seat.value.effort,
+    account: dormant.account,
+    tabName: tabName(dormant.issue.title),
+    session: dormant.session,
+  })
+  if (!started.ok) {
+    const failed = await deps.uow.run(async ({ leads }) => ok(await leads.reviveFailed(issue, attempt)))
+    const tries = failed.ok ? failed.value : 0
+    if (started.error.kind === 'refused' || tries >= (deps.quiesce?.maxReviveTries ?? 3)) {
+      return leadGone(deps, issue, attempt, `its dormant session could not be resumed: ${started.error.detail}`)
+    }
+    return started
+  }
+  const at = deps.clock.now()
+  const marked = await deps.uow.run(async ({ leads }) => {
+    await leads.markTyped(deliveryKey, at, false)
+    await leads.markRevived(issue, attempt, {
+      address: started.value.address,
+      tab: started.value.tab,
+      space: started.value.space,
+    })
     return ok(undefined)
   })
   return marked.ok ? ok(undefined) : marked

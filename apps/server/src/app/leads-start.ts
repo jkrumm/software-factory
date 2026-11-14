@@ -189,7 +189,7 @@ export async function startLead(deps: LeadDeps, effect: StartEffect): Promise<Re
 }
 
 /** The tier and effort the lead starts on: the Issue's seat as filed, else the table's `lead` row. */
-async function seatOf(deps: LeadDeps, issue: Issue): Promise<Result<{ tier: Tier; effort: Effort }, PortError>> {
+export async function seatOf(deps: LeadDeps, issue: Issue): Promise<Result<{ tier: Tier; effort: Effort }, PortError>> {
   if (!issue.seat) return deps.roles.lead()
   return ok({ tier: issue.seat.tier, effort: issue.seat.effort })
 }

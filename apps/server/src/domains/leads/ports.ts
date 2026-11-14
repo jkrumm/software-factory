@@ -11,6 +11,8 @@ export interface TerminalInfo {
   address: string
   /** running; a finished terminal ended, whatever it was running */
   live: boolean
+  /** what runs in it is the agent itself, not the shell the core put in its place */
+  agent: boolean
   /** the agent in it reported (a status or a turn): it started */
   reported: boolean
   status: string | null
@@ -61,6 +63,17 @@ export interface Terminals {
    * prompt. Read only: they are counted in an edge incident's friction row, never resumed.
    */
   planErrors(): Promise<Result<string[]>>
+  /**
+   * Ends the key's running agent and keeps its finished terminal: the lead is dormant, its worktree and session stay. Ending
+   * twice, or a key with nothing running, is the same as once.
+   */
+  quiesce(key: string): Promise<Result<void>>
+  /**
+   * Starts a dormant lead's session again, `claude --resume <session>` with the prompt as its first message, under the same
+   * key and tab. The model and effort it ran on are read from the finished terminal's argv; `tier` and `effort` are only
+   * for a core that no longer has it. A live agent under the key is the lead already running: nothing is started.
+   */
+  revive(input: StartTerminal & { session: string }): Promise<Result<TerminalInfo>>
   /** ends the key's terminals and takes them away; none left is what was asked for */
   close(key: string): Promise<Result<void>>
   /**
@@ -211,6 +224,25 @@ export interface ApiErrorPorts {
   probeEveryMs: number
 }
 
+/** One process of the host as quiescing reads it: a lead's tree is the processes that carry its `FACTORY_SESSION`. */
+export interface QuiesceProcess {
+  pid: number
+  ppid: number
+  session: string | null
+}
+
+/** What quiescing needs of the host, beyond the leads' own ports. */
+export interface QuiescePorts {
+  /** a lead whose Issue has waited this long, quiet, is dormant */
+  afterMs: number
+  /** the host's process table; null when `ps` could not answer (nothing is dormant on a guess) */
+  processes(): Promise<QuiesceProcess[] | null>
+  /** the working directories of the slots granted now: a slot held from a lead's worktree keeps it running */
+  slotCwds(): Promise<string[]>
+  /** failed resumes after which the dormant lead is called gone */
+  maxReviveTries: number
+}
+
 /** Copies the attempt's transcripts where they outlive Claude Code's own cleanup. */
 export interface Transcripts {
   archive(input: {
@@ -239,6 +271,10 @@ export interface LeadAttempt {
   tries: number
   startedAt: Date | null
   goneAt: Date | null
+  /** the lead's `claude` was ended while its Issue waited; the wake starts the session again */
+  dormantAt: Date | null
+  /** resumes of the dormant session that failed since it was dormant */
+  reviveTries: number
 }
 
 export interface Delivery {
@@ -304,6 +340,16 @@ export interface LeadStore {
     input: { terminal: string; tab: string | null; space: string | null; at: Date },
   ): Promise<void>
   markGone(issue: IssueId, attempt: number, at: Date): Promise<void>
+  /** the lead is dormant (marking twice keeps the first time) */
+  markDormant(issue: IssueId, attempt: number, at: Date): Promise<void>
+  /** the dormant lead runs again: the mark and the failed resumes are cleared */
+  markRevived(
+    issue: IssueId,
+    attempt: number,
+    terminal?: { address: string; tab: string | null; space: string | null },
+  ): Promise<void>
+  /** a resume of the dormant session failed; the count of failures including this one */
+  reviveFailed(issue: IssueId, attempt: number): Promise<number>
   /** attempts with a terminal that are not marked gone: the ones to look at */
   followed(): Promise<LeadAttempt[]>
 

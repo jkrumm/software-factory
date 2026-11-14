@@ -29,6 +29,8 @@ const AttemptRow = z.object({
   tries: z.number().int(),
   started_at: z.date().nullable(),
   gone_at: z.date().nullable(),
+  dormant_at: z.date().nullable(),
+  revive_tries: z.number().int(),
 })
 
 const SpecRow = z.object({
@@ -55,6 +57,8 @@ const attemptOf = (raw: unknown): LeadAttempt => {
     tries: row.tries,
     startedAt: row.started_at,
     goneAt: row.gone_at,
+    dormantAt: row.dormant_at,
+    reviveTries: row.revive_tries,
   }
 }
 
@@ -188,6 +192,32 @@ export function postgresLeadStore(tx: SQL): LeadStore {
       await tx`
         UPDATE factory.lead_attempts SET gone_at = ${at}
         WHERE issue_id = ${issue} AND attempt = ${attempt} AND gone_at IS NULL`
+    },
+
+    async markDormant(issue, attempt, at) {
+      await tx`
+        UPDATE factory.lead_attempts SET dormant_at = ${at}
+        WHERE issue_id = ${issue} AND attempt = ${attempt} AND dormant_at IS NULL`
+    },
+
+    async markRevived(issue, attempt, terminal) {
+      await tx`
+        UPDATE factory.lead_attempts SET dormant_at = NULL, revive_tries = 0
+        WHERE issue_id = ${issue} AND attempt = ${attempt}`
+      // The session runs in a new terminal: what the API serves as the lead's address must be that one.
+      if (terminal) {
+        await tx`
+          UPDATE factory.lead_attempts SET terminal = ${terminal.address}, tab = ${terminal.tab}, space = ${terminal.space}
+          WHERE issue_id = ${issue} AND attempt = ${attempt}`
+      }
+    },
+
+    async reviveFailed(issue, attempt) {
+      const [row] = await tx`
+        UPDATE factory.lead_attempts SET revive_tries = revive_tries + 1
+        WHERE issue_id = ${issue} AND attempt = ${attempt}
+        RETURNING revive_tries`
+      return z.object({ revive_tries: z.number().int() }).parse(row).revive_tries
     },
 
     async followed() {

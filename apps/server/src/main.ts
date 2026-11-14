@@ -133,6 +133,17 @@ const PASS_GRACE_MS = 10_000
 /** A door source refused within this long is a health line; an older refusal has passed. */
 const DOOR_LINES_RECENT_MS = 24 * 3_600_000
 
+/** `read`'s answer, kept for `ms`: the next call inside that time gets the same one. */
+function cachedFor<T>(ms: number, read: () => Promise<T>): () => Promise<T> {
+  let kept: { at: number; value: T } | null = null
+  return async () => {
+    if (kept && Date.now() - kept.at < ms) return kept.value
+    const value = await read()
+    kept = { at: Date.now(), value }
+    return value
+  }
+}
+
 const fail = (message: string): never => {
   console.error(message)
   process.exit(1)
@@ -289,6 +300,20 @@ async function main(): Promise<void> {
     startWatch: startWatchPort({ uow, clock, projects, checkout }),
     github: intakeEnv.github,
     loginErrands: loginErrands(checkpoints),
+    host: {
+      // One read answers a minute of passes (never longer than the threshold itself): `ps -E` and a host-wide `lsof` are too much for every tick of a lead that stays a candidate.
+      processes: cachedFor(
+        Math.min(60_000, leadSettings.quiesceAfterMs ?? 0),
+        async () =>
+          (await reaperProcessTable.read())?.map(({ pid, ppid, session }) => ({ pid, ppid, session })) ?? null,
+      ),
+      slotCwds: async () => {
+        const rows = await uow.run(async ({ capacity }) => ok(await capacity.slots()))
+        // A table that cannot be read says nothing of the slots: nothing is dormant on it.
+        if (!rows.ok) throw new Error(rows.error.detail)
+        return rows.value.flatMap((row) => (row.slot !== null && row.cwd ? [row.cwd] : []))
+      },
+    },
   })
   // The hook socket comes after the lock and the migrations: a second copy never reaches it.
   const socket = await leads.listen()

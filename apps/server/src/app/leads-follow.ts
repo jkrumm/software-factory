@@ -50,7 +50,8 @@ export async function followLeads(deps: LeadDeps, signal?: AbortSignal): Promise
       if (signal?.aborted || deps.clock.now().getTime() - namingStart >= NAME_TABS_BUDGET_MS) continue
       await deps.terminals.nameTab({ tab, name: tabName(title) })
     }
-    if (!working || found.value.some((terminal) => terminal.live)) continue
+    // A dormant lead has no process by design: its wake starts the session again, and a failed start takes the lost path.
+    if (!working || row.dormantAt || found.value.some((terminal) => terminal.live)) continue
     const quiet = deps.clock.now().getTime() - Math.max(row.startedAt?.getTime() ?? 0, since?.getTime() ?? 0)
     if (quiet < deps.graceMs) continue
     const at = deps.clock.now()

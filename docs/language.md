@@ -101,6 +101,7 @@ check, `docs/architecture.md`).
 | **Verify** | The check that ends the watch: `make verify`, probes | |
 | **Wait** | A pause with a named exit | |
 | **Stall** | A wait with a machine cause, the steward's to end | Park |
+| **Dormant** | A lead whose Issue waits for a person, a timer or another Issue and whose `claude` the factory **quiesced** (ended); its attempt, worktree and session stay, and the wake **revives** the session. Not a stall: nothing is wrong | |
 | **Touch** | The owner acting on an Issue | Zero-touch |
 | **Avoidable touch** | A touch the factory should have settled: a Decision answered and not marked worth asking, an owner note, wake, cancel or reopen. Not the first note of a filing, a verdict on a Concept or Spec, or a done Errand | |
 | **Friction** | Any counted waste: an avoidable touch, a refusal, an undelivered note | |
