@@ -894,6 +894,34 @@ describe('test slots', () => {
       expect(behind.view.granted).toBe(true)
     })
 
+    test("the line behind a waiter says how that waiter's size is known, not the caller's", () => {
+      let rows = call([], 'h', now, 2, { ...open, max: 6 }).rows
+      const guessed = { ...mem(0, 5120), peakFrom: 'default' as const }
+      rows = touchSlots(
+        rows,
+        { id: 'big', name: 'big', slots: 2, runMs: 1, fit: guessed, passAfterMs: 10 * MIN },
+        at(1000),
+      ).rows
+      const blocked = touchSlots(
+        rows.map((r) =>
+          r.id === 'h'
+            ? { ...r, leasedUntil: at(12 * MIN) }
+            : { ...r, seenAt: at(11 * MIN - 1000), passedAt: at(0), passedBy: 'x' },
+        ),
+        {
+          id: 's1',
+          name: 's1',
+          slots: 2,
+          runMs: 1,
+          fit: { ...mem(0, 300), peakFromByName: new Map([['big', 'default' as const]]) },
+          passAfterMs: 10 * MIN,
+        },
+        at(11 * MIN),
+      )
+      expect(blocked.view.why).toContain('a guess: nothing of this project learned yet')
+      expect(blocked.view.why).not.toContain('learned from the last runs')
+    })
+
     test('a small step that does not fit either does not pass', () => {
       const rows = call([], 'h', now, 2, { ...open, max: 6 }).rows
       const big = ask(rows, 'big', 1000, 0, 5120)

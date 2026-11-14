@@ -148,7 +148,12 @@ export async function touchSlot(
     for (const holder of holders)
       learned.set((await sizeOf(holder.name, holder.cwd)).key, (await sizeOf(holder.name, holder.cwd)).mib)
     const peaksByName = new Map<string, number | null>()
-    for (const waiter of waiting) peaksByName.set(waiter.name, (await sizeOf(waiter.name, waiter.cwd)).mib)
+    const peakFromByName = new Map<string, PeakFrom>()
+    for (const waiter of waiting) {
+      const size = await sizeOf(waiter.name, waiter.cwd)
+      peaksByName.set(waiter.name, size.mib)
+      peakFromByName.set(waiter.name, size.from)
+    }
     const growth = growthMib(
       await Promise.all(holders.map(async (h) => ({ name: (await sizeOf(h.name, h.cwd)).key, rssMib: h.rssMib }))),
       learned,
@@ -181,6 +186,7 @@ export async function touchSlot(
           peakMib: mine.mib,
           peakFrom: mine.from,
           peaksByName,
+          peakFromByName,
           freeMib,
           growthMib: growth,
           max: aimed ?? deps.slotsMax,

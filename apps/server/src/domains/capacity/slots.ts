@@ -45,6 +45,8 @@ export interface SlotFit {
   peakFrom?: PeakFrom
   /** the learned peak of each waiter's step by name, for the waiters ahead of the caller (a missing name is unknown) */
   peaksByName?: ReadonlyMap<string, number | null>
+  /** how each of those peaks was known; a missing name reads as learned */
+  peakFromByName?: ReadonlyMap<string, PeakFrom>
   freeMib: number | null
   /** what the running steps will still grow by */
   growthMib: number
@@ -208,6 +210,7 @@ export function touchSlots(
     const theirs = decide(taken.size, input.slots, {
       ...input.fit,
       peakMib: input.fit.peaksByName?.get(waiter.name) ?? null,
+      peakFrom: input.fit.peakFromByName?.get(waiter.name) ?? 'learned',
     })
     if (theirs.grant) return wait(`waiting for the ${ahead} ahead in line`)
     if (waiter.passedAt !== null && now.getTime() - waiter.passedAt.getTime() >= passAfterMs)
