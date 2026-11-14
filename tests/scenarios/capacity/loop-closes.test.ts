@@ -41,7 +41,11 @@ test('lead samples written by the host loop, under the project name, are what ad
   }
   await setProcesses(
     lab.world.bin,
-    worktrees.map((cwd, index) => ({ pid: 6001 + index, ppid: 1, rssKib: (peaksGib[index] ?? 0) * 1024 * 1024, cwd })),
+    worktrees.map((cwd, index) => {
+      const kib = (peaksGib[index] ?? 0) * 1024 * 1024
+      // `top` lists them: the class snapshot, which tells a slot run apart, is what lead rows need
+      return { pid: 6001 + index, ppid: 1, rssKib: kib, footprintKib: kib, cwd }
+    }),
   )
   // the server shares one `ps` between readers for 10 s: the table the lab started with must age out
   await Bun.sleep(10_500)

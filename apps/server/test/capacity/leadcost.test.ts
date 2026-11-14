@@ -32,6 +32,20 @@ test('attribute: a child with a foreign cwd is counted with its lead', () => {
   ])
 })
 
+test('attribute: a 3 GiB process under a slot run and 0.5 GiB elsewhere cost 0.5 GiB', () => {
+  const procs = [
+    proc(10, 1, 300, '/w/a'),
+    proc(11, 10, 212, '/elsewhere'),
+    proc(12, 10, 10, '/w/a'),
+    proc(13, 12, 3072, '/w/a'),
+  ]
+  const costs = attribute(procs, [tree('/w/a', 1)], new Set([12, 13]))
+  expect(costs.map((c) => [c.rssMib, c.procs])).toEqual([[512, 2]])
+  expect(attribute(procs, [tree('/w/a', 1)]).map((c) => c.rssMib)).toEqual([3594])
+  // a worktree with nothing but a slot run has no cost
+  expect(attribute([proc(12, 1, 10, '/w/a')], [tree('/w/a', 1)], new Set([12]))).toEqual([])
+})
+
 test('attribute: the footprint is summed beside RSS, shared pages left out', () => {
   const costs = attribute(
     [proc(10, 1, 300, '/w/a', 120), proc(11, 10, 700, '/elsewhere', 400), proc(12, 11, 100, null, 30)],

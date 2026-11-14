@@ -269,8 +269,8 @@ export function postgresLoopStore(tx: SQL): LoopStore {
         ON CONFLICT (at) DO NOTHING`
       for (const lead of leads) {
         await tx`
-          INSERT INTO factory.lead_samples (at, worktree, repo, issue, attempt, rss_mib, footprint_mib, procs)
-          VALUES (${at}, ${lead.worktree}, ${lead.repo}, ${lead.issue}, ${lead.attempt}, ${lead.rssMib}, ${lead.footprintMib}, ${lead.procs})
+          INSERT INTO factory.lead_samples (at, worktree, repo, issue, attempt, rss_mib, footprint_mib, procs, outside_slots)
+          VALUES (${at}, ${lead.worktree}, ${lead.repo}, ${lead.issue}, ${lead.attempt}, ${lead.rssMib}, ${lead.footprintMib}, ${lead.procs}, true)
           ON CONFLICT (at, worktree) DO NOTHING`
       }
     },

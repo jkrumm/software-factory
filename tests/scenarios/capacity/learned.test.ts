@@ -78,6 +78,7 @@ test('a heavy repo whose second lead would not fit stays queued with the numbers
   expect(reasonOf(answer, second)).toMatchObject({
     kind: 'memory',
     message:
-      `memory: a lead of heavy takes ~17.6 GiB (p80 of 4 past leads), the host has 16 GiB free, ` + 'headroom 2.6 GiB',
+      `memory: a lead of heavy takes ~17.6 GiB outside test slots (p80 of 4 past leads), the host has 16 GiB free, ` +
+      'headroom 2.6 GiB',
   })
 }, 60_000)

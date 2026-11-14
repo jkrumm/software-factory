@@ -79,8 +79,14 @@ export function worktreeOwners(
  * directory (on a path boundary: `/a/b` does not contain `/a/bc`); everything started under it follows, whatever its own
  * directory is (a browser a lead launched). A process is counted once, for the first worktree in the list that claims it.
  * A worktree with no process is left out. Each tree is summed twice, as resident memory and as physical footprint.
+ * A process in `inSlot` (what runs under a `factory slot run`: the slot grant checks it against free memory before it
+ * starts) is left out of the sum, and a worktree whose every process is one has no cost.
  */
-export function attribute(procs: readonly ProcInfo[], worktrees: readonly WorktreeRef[]): LeadCost[] {
+export function attribute(
+  procs: readonly ProcInfo[],
+  worktrees: readonly WorktreeRef[],
+  inSlot: ReadonlySet<number> = new Set(),
+): LeadCost[] {
   const owners = worktreeOwners(procs, worktrees)
   const costs: LeadCost[] = []
   worktrees.forEach((worktree, index) => {
@@ -89,7 +95,7 @@ export function attribute(procs: readonly ProcInfo[], worktrees: readonly Worktr
     let measured = 0
     let count = 0
     for (const proc of procs) {
-      if (owners.get(proc.pid) !== index) continue
+      if (owners.get(proc.pid) !== index || inSlot.has(proc.pid)) continue
       rssKib += proc.rssKib
       footprintKib += proc.footprintKib ?? proc.rssKib
       if (proc.footprintKib !== null) measured += 1
@@ -111,7 +117,7 @@ const PEAKS_KEPT = 10
 const PEAKS_NEEDED = 3
 
 /**
- * What a new lead is expected to take: the 80th percentile (nearest rank) of the newest ten attempts' peak MiB, newest
+ * What a new lead is expected to take outside test slots: the 80th percentile (nearest rank) of the newest ten attempts' peak MiB, newest
  * first as given. Null with fewer than three attempts: a guess from one or two is worse than none.
  */
 export function learnedLeadMib(attemptPeaks: readonly number[]): number | null {
