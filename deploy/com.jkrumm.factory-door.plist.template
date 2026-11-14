@@ -40,6 +40,12 @@
   <key>ThrottleInterval</key>
   <integer>30</integer>
 
+  <!-- Interactive, because launchd throttles a job with no ProcessType (CPU and I/O, priority 20 on the mini) and the leads'
+       work runs unthrottled under herdr-core (31): with every core busy the control plane starved first. The door takes
+       alerts and feedback while the host is busy, which is when they come (Issue 1250). -->
+  <key>ProcessType</key>
+  <string>Interactive</string>
+
   <key>StandardOutPath</key>
   <string>__HOME__/Library/Logs/factory-door.out.log</string>
   <key>StandardErrorPath</key>

@@ -45,6 +45,12 @@
   <key>ExitTimeOut</key>
   <integer>240</integer>
 
+  <!-- Interactive, because launchd throttles a job with no ProcessType (CPU and I/O, priority 20 on the mini) and the leads'
+       work runs unthrottled under herdr-core (31): with every core busy the control plane starved first. On 2026-11-14 at
+       load 200 the server took 73 s to boot, /health 5 s to answer and the Console timed out (Issue 1250). -->
+  <key>ProcessType</key>
+  <string>Interactive</string>
+
   <key>StandardOutPath</key>
   <string>__HOME__/Library/Logs/software-factory.out.log</string>
   <key>StandardErrorPath</key>
