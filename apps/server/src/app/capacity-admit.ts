@@ -1,9 +1,12 @@
 import {
   type AccountRank,
   type AccountReading,
+  DEFAULT_LIMITS,
   POLL_EVERY_MS,
   RANK_LANE,
   standing,
+  tightestReset,
+  type WindowLimits,
 } from '../domains/capacity/accounts.ts'
 import type { BootSample } from '../domains/capacity/boot.ts'
 import { checkAdmission, type LeadFit, type RefusalKind, REFUSALS } from '../domains/capacity/admission.ts'
@@ -30,7 +33,12 @@ import type { PlanningDeps, PlanningStores } from './planning-deps.ts'
 import { satisfyEdges } from './planning-pass.ts'
 
 export interface CapacityLimits {
+  /** the cap of an account `accountLeads` does not name */
   leadsPerAccount: number
+  /** each named account's own cap (`FACTORY_ACCOUNT_LEADS`) */
+  accountLeads?: ReadonlyMap<string, number>
+  /** the percent of a window at which an account takes no new lead (`FACTORY_FIVE_HOUR_LIMIT`, `FACTORY_WEEKLY_LIMIT`); absent: 100 */
+  windowLimits?: WindowLimits
   loadCeiling: number
   /** no new lead above this many processes (the throughput rule once switched on); null or absent: no cap */
   processCap?: number | null
@@ -483,6 +491,8 @@ function decide(snap: Snapshot, host: HostInputs, limits: CapacityLimits, bonus:
       loaded,
       leadsByAccount,
       leadsPerAccount: limits.leadsPerAccount + bonus,
+      accountLeads: limits.accountLeads,
+      windowLimits: limits.windowLimits,
       seatBonus: bonus,
       rank: snap.rank,
     })
@@ -737,7 +747,9 @@ export async function capacityFacts(deps: CapacityDeps): Promise<Result<Capacity
     return ok({
       leads: snap.claims.length,
       queued: evaluateQueue(snap, NO_HOST, deps.limits).length,
-      seats: snap.readings.filter((r) => r.enabled).length * deps.limits.leadsPerAccount,
+      seats: snap.readings
+        .filter((r) => r.enabled)
+        .reduce((sum, r) => sum + (deps.limits.accountLeads?.get(r.account) ?? deps.limits.leadsPerAccount), 0),
       loadCeiling: deps.limits.loadCeiling,
     })
   })
@@ -881,15 +893,26 @@ export async function accountOf(
   return deps.uow.run(async ({ capacity }) => ok((await capacity.assignmentOf(issue, attempt))?.account ?? null))
 }
 
-/** When an account's window opens again by its newest reading, if the reading says: what a lead that hit the wall waits for. */
+/**
+ * When an account's window opens again by its newest reading: what a lead that hit the wall at `since` waits for. A
+ * reading that closes the account says when. A reading below the limits that was sampled before the wall has not caught
+ * up with it: it names the window nearest its limit, the one the lead ran into, so a lead is never woken into a wall the
+ * reading does not show yet. A reading below the limits sampled after the wall (or with no `since`) says the account is
+ * open. Null when no reset is known, and then the lead is woken at once.
+ */
 export async function windowOf(
   deps: PlanningDeps,
   account: string,
+  limits: WindowLimits = DEFAULT_LIMITS,
+  since?: Date,
 ): Promise<Result<{ resetAt: Date | null }, PortError>> {
   return deps.uow.run(async ({ capacity }) => {
     const reading = (await capacity.latestReadings()).find((r) => r.account === account)
     if (!reading) return ok({ resetAt: null })
-    const stand = standing(reading, deps.clock.now())
-    return ok({ resetAt: stand.open ? null : stand.until })
+    const now = deps.clock.now()
+    const stand = standing(reading, now, { limits })
+    if (!stand.open) return ok({ resetAt: stand.until })
+    const behind = since !== undefined && reading.sampledAt !== null && reading.sampledAt < since
+    return ok({ resetAt: behind ? tightestReset(reading, now, limits) : null })
   })
 }

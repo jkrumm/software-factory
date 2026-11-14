@@ -19,6 +19,7 @@ function stored(source: StoredProject['source'], yaml: Record<string, unknown> =
     project: parsed.project,
     projectSha: null,
     projectError: null,
+    projectWarnings: [],
     plan: null,
     planSha: null,
     planError: null,

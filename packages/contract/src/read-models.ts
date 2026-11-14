@@ -956,6 +956,11 @@ export const CapacityLoopModel = z
     /** the settings in force that this loop tunes */
     constants: z.strictObject({
       leadsPerAccount: z.number(),
+      /** the accounts that have a cap of their own (`FACTORY_ACCOUNT_LEADS`); the rest take `leadsPerAccount` */
+      accountLeads: z.record(z.string(), z.number()),
+      /** the percent of its 5-hour window and of its week at which an account takes no new lead */
+      fiveHourLimit: z.number(),
+      weeklyLimit: z.number(),
       loadCeiling: z.number(),
       slots: z.number(),
       slotsMax: z.number(),

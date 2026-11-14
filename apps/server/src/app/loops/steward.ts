@@ -222,7 +222,7 @@ async function load(deps: StewardDeps, id: IssueId): Out<StallFacts | null> {
   if (facts.cause === 'wall') {
     // Capacity answers outside the transaction: the account the attempt runs on, and when its window opens again.
     const seat = await deps.seats.seat({ issue: id, attempt: facts.attempt })
-    const wall = seat.ok ? await deps.windows.wall(seat.value.account) : seat
+    const wall = seat.ok ? await deps.windows.wall(seat.value.account, facts.stalledAt) : seat
     if (wall.ok) facts.windowOpen = wall.value.resetAt === null || wall.value.resetAt <= deps.clock.now()
   }
   return ok(facts)

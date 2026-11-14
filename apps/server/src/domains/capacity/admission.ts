@@ -1,4 +1,4 @@
-import { type AccountReading, type AccountRank, pickAccount } from './accounts.ts'
+import { type AccountReading, type AccountRank, pickAccount, type WindowLimits } from './accounts.ts'
 import { type BootInputs, bootRefusal } from './boot.ts'
 import { type Claimant, claimRoom } from './claims.ts'
 import {
@@ -86,8 +86,13 @@ export interface AdmissionInputs {
   loaded: ReadonlySet<string>
   /** leads that hold a claim on each account */
   leadsByAccount: ReadonlyMap<string, number>
+  /** the cap of an account `accountLeads` does not name; the idle host's raise is already in it */
   leadsPerAccount: number
-  /** extra leads per account the idle host allows this pass (already in `leadsPerAccount`); named in a `cap` refusal */
+  /** an account's own cap (`FACTORY_ACCOUNT_LEADS`), before the idle host's raise */
+  accountLeads?: ReadonlyMap<string, number>
+  /** the limits the windows close an account at; absent: 100 % */
+  windowLimits?: WindowLimits
+  /** extra leads per account the idle host allows this pass (already in `leadsPerAccount`, added to `accountLeads`); named in a `cap` refusal */
   seatBonus?: number
   /** the picker's order of accounts; the gates above stay, only the pick among open accounts follows it */
   rank?: AccountRank | null
@@ -135,18 +140,20 @@ export function checkAdmission(input: AdmissionInputs): Admission {
     candidate: input.candidate,
   })
   if (!room.granted) return no('claim', `no claim free in the repo: ${room.message}`)
+  const raise = input.seatBonus ?? 0
   const pick = pickAccount({
     readings: input.accounts,
     loaded: input.loaded,
     leads: input.leadsByAccount,
     leadsPerAccount: input.leadsPerAccount,
+    accountCaps: new Map([...(input.accountLeads ?? [])].map(([account, cap]) => [account, cap + raise])),
+    limits: input.windowLimits,
     now: input.now,
     pace,
     rank: input.rank,
   })
   if (pick.picked) return { admit: true, account: pick.picked }
   if (!pick.capped) return no('window', pick.why, pick.opensAt)
-  const raise = input.seatBonus ?? 0
   return no('cap', raise > 0 ? `${pick.why} (raised by ${raise}: the host is idle)` : pick.why)
 }
 

@@ -229,6 +229,15 @@ describe('plain forms', () => {
     ).toBe(
       'app branch=main leads=2 synced=2026-11-10T09:00:00Z\nchecks: fast="make check-fast" full="make check" ci=true\nno plan',
     )
+    expect(
+      projectShowPlain({
+        ...base,
+        projectWarnings: ['leads is 100, above the most a repo or lane takes: clamped to 64'],
+        plan: null,
+      }),
+    ).toBe(
+      'app branch=main leads=2 synced=2026-11-10T09:00:00Z\nprojectWarning: leads is 100, above the most a repo or lane takes: clamped to 64\nno plan',
+    )
     expect(projectShowPlain({ ...base, plan: null })).toBe(
       'app branch=main leads=2 synced=2026-11-10T09:00:00Z\nno plan',
     )

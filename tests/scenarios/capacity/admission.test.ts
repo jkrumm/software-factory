@@ -14,14 +14,18 @@ beforeAll(async () => {
     leads: true,
     repos: {
       duo: { project: 'apiVersion: factory/v2\nname: duo\nleads: 2\n' },
-      mem: { project: 'apiVersion: factory/v2\nname: mem\n' },
-      swap: { project: 'apiVersion: factory/v2\nname: swap\n' },
+      mem: { project: 'apiVersion: factory/v2\nname: mem\nleads: 1\n' },
+      swap: { project: 'apiVersion: factory/v2\nname: swap\nleads: 1\n' },
       capped: { project: 'apiVersion: factory/v2\nname: capped\nleads: 1\n' },
-      solo: { project: 'apiVersion: factory/v2\nname: solo\n' },
-      ordered: { project: 'apiVersion: factory/v2\nname: ordered\n' },
-      shade: { project: 'apiVersion: factory/v2\nname: shade\n' },
+      solo: { project: 'apiVersion: factory/v2\nname: solo\nleads: 1\n' },
+      ordered: { project: 'apiVersion: factory/v2\nname: ordered\nleads: 1\n' },
+      shade: { project: 'apiVersion: factory/v2\nname: shade\nleads: 1\n' },
     },
-    accounts: [{ id: 'a' }, { id: 'b' }],
+    // a 5-hour window above 70 %: an account takes one new lead per sample
+    accounts: [
+      { id: 'a', five_hour: 80 },
+      { id: 'b', five_hour: 80 },
+    ],
     // the lead cap per account is unit-tested; here it would couple the scenarios through the accounts
     env: { FACTORY_LEADS_PER_ACCOUNT: '16', FACTORY_PROCESS_CAP: '100' },
   })

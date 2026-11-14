@@ -33,7 +33,7 @@ export async function recordHook(deps: LeadDeps, line: SpoolLine): Promise<Resul
       ok((await leads.attempt(lead.issue, lead.attempt))?.account ?? null),
     )
     if (account.ok && account.value) {
-      const window = await deps.windows.wall(account.value)
+      const window = await deps.windows.wall(account.value, new Date(line.at))
       if (window.ok && window.value.resetAt)
         wall = `the account's window opens again at ${window.value.resetAt.toISOString()}`
     }

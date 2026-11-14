@@ -59,7 +59,7 @@ describe('syncing the projects', () => {
     value(await syncProjects(world.deps, { fetch: false }))
     const [work] = await states()
     expect(work?.project).toMatchObject({ name: 'work', source: 'defaults' })
-    expect(work?.project.project.leads).toBe(1)
+    expect(work?.project.project.leads).toBe(4)
     expect(issue).toBe(issueId(1))
   })
 
@@ -108,7 +108,7 @@ describe('syncing the projects', () => {
     world.source.add('app', { project: PROJECT('app', '{"leads":3}') })
     value(await syncProjects(world.deps, { fetch: false }))
     world.source.set('app', {
-      project: { state: 'text', sha: 'bad1', value: { apiVersion: 'factory/v2', name: 'app', leads: 99 } },
+      project: { state: 'text', sha: 'bad1', value: { apiVersion: 'factory/v2', name: 'app', leads: 0 } },
     })
     const first = value(await syncProjects(world.deps, { fetch: false }))
     expect(first.broken).toMatchObject([{ project: 'app', file: 'project.yaml', issue: issueId(1) }])
@@ -116,7 +116,7 @@ describe('syncing the projects', () => {
     expect(await issues()).toEqual(['issue_1:queued'])
     expect((await states())[0]?.project.project.leads).toBe(3)
     world.source.set('app', {
-      project: { state: 'text', sha: 'bad2', value: { apiVersion: 'factory/v2', name: 'app', leads: 98 } },
+      project: { state: 'text', sha: 'bad2', value: { apiVersion: 'factory/v2', name: 'app', leads: -1 } },
     })
     value(await syncProjects(world.deps, { fetch: false }))
     expect(await issues()).toEqual(['issue_1:queued', 'issue_2:queued'])
@@ -273,7 +273,7 @@ describe('the plan files its rows', () => {
     value(await syncProjects(world.deps, { fetch: false }))
     world.source.set('app', { plan: plan('p2', [row('a', { after: ['b'] }), row('b', { after: ['a'] })]) })
     world.source.set('lib', {
-      project: { state: 'text', sha: 'bad', value: { apiVersion: 'factory/v2', name: 'lib', leads: 99 } },
+      project: { state: 'text', sha: 'bad', value: { apiVersion: 'factory/v2', name: 'lib', leads: 0 } },
     })
     const pass = value(await syncProjects(world.deps, { fetch: false }))
     expect(pass.broken.map((b) => b.project)).toEqual(['app', 'lib'])

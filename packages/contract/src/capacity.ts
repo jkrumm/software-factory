@@ -77,6 +77,10 @@ export const AccountView = z.object({
   /** 1-based place in the order new leads are given accounts; null: not ranked, or the rank is stale */
   rank: z.number().int().nullable(),
   rankReason: z.string().nullable(),
+  /** the leads that hold a claim on the account now */
+  leads: z.number().int(),
+  /** the most leads it carries at once (`FACTORY_ACCOUNT_LEADS`, else `FACTORY_LEADS_PER_ACCOUNT`); an idle host raises it for a pass */
+  cap: z.number().int(),
 })
 
 export type AccountView = z.infer<typeof AccountView>

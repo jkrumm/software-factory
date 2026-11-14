@@ -86,6 +86,8 @@ export const ProjectView = z
     signals: z.record(z.string(), z.unknown()),
     /** the content now on the default branch does not parse; the fields above are the last valid ones */
     projectError: FileError.nullable(),
+    /** what reading `project.yaml` changed without refusing it: a `leads` above the bound (64) clamped to it */
+    projectWarnings: z.array(z.string()),
     plan: z
       .object({ sha: z.string().nullable(), warnings: z.array(z.string()), rows: z.array(PlanRowStatus) })
       .nullable(),

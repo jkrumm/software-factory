@@ -209,6 +209,9 @@ describe('GET /v1/retro `build`', () => {
         ciTimes: github(),
         capacityConstants: {
           leadsPerAccount: 3,
+          accountLeads: {},
+          fiveHourLimit: 100,
+          weeklyLimit: 100,
           loadCeiling: 8,
           slots: 2,
           slotsMax: 6,

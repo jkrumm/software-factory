@@ -1,3 +1,4 @@
+import type { WindowLimits } from '../domains/capacity/accounts.ts'
 import type { Claims, Seats, Windows } from '../domains/leads/ports.ts'
 import { accountOf, releaseClaim, resumeClaim, windowOf } from './capacity-admit.ts'
 import type { PlanningDeps } from './planning-deps.ts'
@@ -9,7 +10,10 @@ import type { PlanningDeps } from './planning-deps.ts'
  * An attempt with no account on file (one imported as already working) runs on `default`: no `CLAUDE_CONFIG_DIR`, whatever account the
  * terminal's launcher picks. Admission by the pass always stores one.
  */
-export function capacityForLeads(deps: PlanningDeps): { seats: Seats; claims: Claims; windows: Windows } {
+export function capacityForLeads(
+  deps: PlanningDeps,
+  limits?: WindowLimits,
+): { seats: Seats; claims: Claims; windows: Windows } {
   return {
     seats: {
       seat: async ({ issue, attempt }) => {
@@ -27,6 +31,6 @@ export function capacityForLeads(deps: PlanningDeps): { seats: Seats; claims: Cl
         return resumed.ok ? { ok: true, value: undefined } : resumed
       },
     },
-    windows: { wall: (account) => windowOf(deps, account) },
+    windows: { wall: (account, since) => windowOf(deps, account, limits, since) },
   }
 }

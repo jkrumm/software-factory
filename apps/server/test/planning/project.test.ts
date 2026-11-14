@@ -54,7 +54,7 @@ describe('project.yaml', () => {
     expect(ProjectFile.parse({ apiVersion: 'factory/v2', name: 'lab' }).checks).toBeNull()
   })
 
-  test('lanes cap the leads of a resource class: none by default, a lane name and a cap of 1 to 8', () => {
+  test('lanes cap the leads of a resource class: none by default, a lane name and a cap of 1 to 64', () => {
     const parse = (lanes: string) => parseProject(yaml(`apiVersion: factory/v2\nname: lab\nlanes: ${lanes}`), 'lab')
     expect(defaultProject('lab').lanes).toEqual({})
     const ok = parse('{ apple: 1, web-ui: 3 }')
@@ -72,7 +72,8 @@ describe('project.yaml', () => {
     expect(parse('{ apple: { leads: 1, memory: 2000000GiB } }').ok).toBe(false)
     expect(parse('{ apple: { leads: 1, ram: 4GiB } }').ok).toBe(false)
     expect(parse('{ apple: 0 }').ok).toBe(false)
-    expect(parse('{ apple: 9 }').ok).toBe(false)
+    expect(parse('{ apple: 65 }').ok).toBe(true)
+    expect(parse('{ apple: 1.5 }').ok).toBe(false)
     expect(parse('{ Apple: 1 }').ok).toBe(false)
   })
 
@@ -122,7 +123,7 @@ describe('project.yaml', () => {
       message: expect.stringContaining('lead'),
     })
     expect(parseProject(yaml('apiVersion: factory/v1\nname: x'), 'x')).toMatchObject({ ok: false })
-    expect(parseProject(yaml(`${base}leads: 9`), 'x')).toMatchObject({
+    expect(parseProject(yaml(`${base}leads: 0`), 'x')).toMatchObject({
       ok: false,
       message: expect.stringContaining('leads'),
     })
@@ -153,10 +154,52 @@ describe('sync', () => {
   const sync = (previous: StoredProject | null, input: ReturnType<typeof read>) =>
     synced({ previous, name: 'x', directory: 'x', repo: '/src/x', read: input, now: at })
 
-  test('no project.yaml: the defaults, one lead, no deploy', () => {
+  test('no project.yaml: the defaults, four leads, no deploy', () => {
     const stored = sync(null, read({ state: 'absent' }))
     expect(stored).toMatchObject({ source: 'defaults', projectError: null, plan: null, branch: 'origin/main' })
     expect(stored.project).toEqual(defaultProject('x'))
+    expect(stored.project.leads).toBe(4)
+  })
+
+  test('a project that states no leads gets 4; the bound is 64 for the repo and for a lane', () => {
+    const base = 'apiVersion: factory/v2\nname: x\n'
+    expect(parseProject(yaml(base), 'x')).toMatchObject({ ok: true, project: { leads: 4 }, warnings: [] })
+    expect(parseProject(yaml(`${base}leads: 64\nlanes: { apple: 64, sim: { leads: 64 } }`), 'x')).toMatchObject({
+      ok: true,
+      project: { leads: 64, lanes: { apple: { leads: 64 }, sim: { leads: 64 } } },
+      warnings: [],
+    })
+  })
+
+  test('a leads above the bound is clamped and named, never a refused file; other bad values still refuse it', () => {
+    const base = 'apiVersion: factory/v2\nname: x\n'
+    const parsed = parseProject(
+      yaml(`${base}leads: 100\nlanes: { apple: 70, sim: { leads: 65, memory: 2GiB }, web: 2 }`),
+      'x',
+    )
+    expect(parsed).toMatchObject({
+      ok: true,
+      project: { leads: 64, lanes: { apple: { leads: 64 }, sim: { leads: 64, memoryMib: 2048 }, web: { leads: 2 } } },
+    })
+    expect(parsed.ok && parsed.warnings).toEqual([
+      'leads is 100, above the most a repo or lane takes: clamped to 64',
+      'lanes.apple is 70, above the most a repo or lane takes: clamped to 64',
+      'lanes.sim.leads is 65, above the most a repo or lane takes: clamped to 64',
+    ])
+    expect(parseProject(yaml(`${base}leads: 100.5`), 'x')).toMatchObject({ ok: false })
+    expect(parseProject(yaml(`${base}leads: many`), 'x')).toMatchObject({ ok: false })
+    const stored = sync(
+      null,
+      read({ state: 'text', sha: 'a', value: { apiVersion: 'factory/v2', name: 'x', leads: 12000 } }),
+    )
+    expect(stored).toMatchObject({ projectError: null, projectSha: 'a', project: { leads: 64 } })
+    expect(stored.projectWarnings).toEqual(['leads is 12000, above the most a repo or lane takes: clamped to 64'])
+    // a later file with nothing to clamp clears the warning
+    const fixed = sync(
+      stored,
+      read({ state: 'text', sha: 'b', value: { apiVersion: 'factory/v2', name: 'x', leads: 12 } }),
+    )
+    expect(fixed.projectWarnings).toEqual([])
   })
 
   test('a file that stops parsing keeps the last valid content and records the error once per content', () => {
@@ -165,7 +208,7 @@ describe('sync', () => {
     expect(good.project.leads).toBe(3)
     const broken = sync(
       good,
-      read({ state: 'text', sha: 'b', value: { apiVersion: 'factory/v2', name: 'x', leads: 99 } }),
+      read({ state: 'text', sha: 'b', value: { apiVersion: 'factory/v2', name: 'x', leads: 0 } }),
     )
     expect(broken.project.leads).toBe(3)
     expect(broken.projectError).toMatchObject({ sha: 'b', message: expect.stringContaining('leads') })

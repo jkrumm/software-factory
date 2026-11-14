@@ -248,7 +248,10 @@ describe('admission', () => {
   })
 
   test('each lead is admitted on an account; one account takes one new lead per sample', async () => {
-    world.accounts.rows = [account('a', { weeklyUsed: 10 }), account('b', { weeklyUsed: 50 })]
+    world.accounts.rows = [
+      account('a', { weeklyUsed: 10, fiveHourUsed: 80 }),
+      account('b', { weeklyUsed: 50, fiveHourUsed: 80 }),
+    ]
     await world.queued({ repo: 'app' })
     await world.queued({ repo: 'app' })
     const result = await pass()
@@ -258,7 +261,8 @@ describe('admission', () => {
     expect(value(await accountOf(world.deps, issueId(2), 2))).toBeNull()
   })
 
-  test('with one account and leads: 2, the second lead waits for the next sample (window)', async () => {
+  test('with one account with its 5-hour window above 70 % and leads: 2, the second lead waits for the next sample (window)', async () => {
+    world.accounts.rows = [account('me', { fiveHourUsed: 80 })]
     await world.queued({ repo: 'app' })
     const two = await world.queued({ repo: 'app' })
     const result = await pass()
@@ -321,12 +325,12 @@ describe('admission', () => {
   })
 
   test('every account closed: never spills, and the reason names when the first one opens', async () => {
-    world.accounts.rows = [account('a', { fiveHourUsed: 90 })]
+    world.accounts.rows = [account('a', { fiveHourUsed: 100 })]
     const issue = await world.queued({ repo: 'app' })
     const result = await pass()
     const reason = result.queue.find((e) => e.issue === issue)?.reason
     expect(reason).toMatchObject({ kind: 'window', opensAt: new Date('2026-11-07T15:00:00Z') })
-    expect(reason?.message).toContain('5-hour window at 90%')
+    expect(reason?.message).toContain('5-hour window at 100%')
   })
 
   test('prio orders the queue, higher first, before age', async () => {
@@ -393,6 +397,7 @@ describe('admission', () => {
   })
 
   test('the queue view shows the order and the reasons without admitting anything', async () => {
+    world.accounts.rows = [account('me', { fiveHourUsed: 80 })]
     await world.queued({ repo: 'app' })
     const second = await world.queued({ repo: 'app' })
     const view = value(await queueView(world.deps))
@@ -559,6 +564,7 @@ describe('claims and the claim on resume', () => {
   }
 
   test('a woken lead holds its account seat from the moment its wait ends: a new lead does not take it, and the resume then fits the cap', async () => {
+    world.accounts.rows = [account('me', { fiveHourUsed: 80 })]
     const one = await world.queued({ repo: 'app' })
     const two = await world.queued({ repo: 'solo' })
     expect((await pass()).admitted.map((a) => a.issue)).toEqual([one])
@@ -578,7 +584,7 @@ describe('claims and the claim on resume', () => {
     expect(result.admitted).toEqual([])
     expect(result.queue.find((e) => e.issue === three)?.reason).toMatchObject({
       kind: 'cap',
-      message: 'every open account carries 2 leads already',
+      message: 'every open account is at its lead cap: me 2 of 2',
     })
     expect(value(await resumeClaim(world.deps, one))).toEqual({ result: 'taken' })
     const [claim] = await world.db.sql`SELECT account FROM factory.capacity_claims WHERE issue_id = ${one}`
@@ -586,6 +592,7 @@ describe('claims and the claim on resume', () => {
   })
 
   test('a woken lead resumes on its own account whatever the cap: the account cap never refuses a resume', async () => {
+    world.accounts.rows = [account('me', { fiveHourUsed: 80 })]
     const one = await world.queued({ repo: 'app' })
     const two = await world.queued({ repo: 'solo' })
     const three = await world.queued({ repo: 'lab' })
@@ -630,12 +637,25 @@ describe('the ports other packages take', () => {
     expect(n).toBe(0)
   })
 
-  test('the window of an account is when its newest reading says it opens again; an open or unknown account has none', async () => {
+  test('the window of an account is when its newest reading says it opens again; an unknown account or reset has none', async () => {
     const port = capacityForLeads(world.deps)
-    world.accounts.rows = [account('me', { fiveHourUsed: 90 }), account('open')]
+    world.accounts.rows = [
+      account('me', { fiveHourUsed: 100 }),
+      // the wall came before the sample: the window nearest its limit is the one that closes
+      account('behind', { fiveHourUsed: 97, weeklyUsed: 40 }),
+      account('week', { fiveHourUsed: null, weeklyUsed: 98 }),
+      account('open', { fiveHourResetsAt: null, weeklyResetsAt: null }),
+    ]
     value(await admissionPass(world.deps))
+    const hit = new Date(world.clock.now().getTime() + 1_000)
     expect(value(await port.windows.wall('me'))).toEqual({ resetAt: new Date('2026-11-07T15:00:00Z') })
-    expect(value(await port.windows.wall('open'))).toEqual({ resetAt: null })
+    expect(value(await port.windows.wall('behind', hit))).toEqual({ resetAt: new Date('2026-11-07T15:00:00Z') })
+    expect(value(await port.windows.wall('week', hit))).toEqual({ resetAt: new Date('2026-11-10T00:00:00Z') })
+    // a sample taken after the wall that shows the account open: it is open
+    expect(value(await port.windows.wall('behind', new Date(world.clock.now().getTime() - 60_000)))).toEqual({
+      resetAt: null,
+    })
+    expect(value(await port.windows.wall('open', hit))).toEqual({ resetAt: null })
     expect(value(await port.windows.wall('nobody'))).toEqual({ resetAt: null })
   })
 
@@ -668,8 +688,11 @@ describe('the ports other packages take', () => {
 })
 
 describe('the picker rank', () => {
-  test('an ok rank is stored and orders the pick: its head is admitted though another account has lower weekly use', async () => {
-    world.accounts.rows = [account('a', { weeklyUsed: 60 }), account('b', { weeklyUsed: 10 })]
+  test('an ok rank is stored and orders accounts with the same room: its head is admitted though another account has lower weekly use', async () => {
+    world.accounts.rows = [
+      account('a', { weeklyUsed: 60, fiveHourUsed: 80 }),
+      account('b', { weeklyUsed: 10, fiveHourUsed: 80 }),
+    ]
     world.ranker.rows = [
       { account: 'a', reason: 'home', weight: 0.4 },
       { account: 'b', reason: 'home', weight: 0.1 },
@@ -682,6 +705,16 @@ describe('the picker rank', () => {
     expect(stored?.lane).toBe('bulk')
     const ordering = typeof stored?.ordering === 'string' ? JSON.parse(stored.ordering) : stored?.ordering
     expect(ordering.map((r: { account: string }) => r.account)).toEqual(['a', 'b'])
+  })
+
+  test('the account with the most room is admitted before the head of the rank', async () => {
+    world.accounts.rows = [account('a', { weeklyUsed: 90 }), account('b', { weeklyUsed: 10 })]
+    world.ranker.rows = [
+      { account: 'a', reason: 'home', weight: 0.4 },
+      { account: 'b', reason: 'home', weight: 0.1 },
+    ]
+    await world.queued({ repo: 'solo' })
+    expect((await pass()).admitted.map((a) => a.account)).toEqual(['b'])
   })
 
   test('a failed rank read admits by lowest weekly use and puts a note in the pass notes', async () => {

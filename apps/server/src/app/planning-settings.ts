@@ -11,6 +11,7 @@ import {
   type MemoryCeilings,
 } from '../domains/capacity/host.ts'
 import { DEFAULT_TENANT_BUDGET_MIB, DEFAULT_TENANT_PROJECT } from '../kernel/throughput-limits.ts'
+import { DEFAULT_WINDOW_LIMIT, type WindowLimits } from '../domains/capacity/accounts.ts'
 import type { AimMode } from '../domains/capacity/slot-aim.ts'
 
 const whole = (min: number, max: number) => z.coerce.number().int().min(min).max(max)
@@ -20,7 +21,13 @@ const Env = z.object({
   FACTORY_REPO_ROOTS: z.string().optional(),
   /** `FACTORY_REPO_ALLOW`: single repos outside the roots the factory may read as projects (absolute paths) */
   FACTORY_REPO_ALLOW: z.string().optional(),
-  FACTORY_LEADS_PER_ACCOUNT: whole(1, 16).optional(),
+  /** the cap of an account `FACTORY_ACCOUNT_LEADS` does not name */
+  FACTORY_LEADS_PER_ACCOUNT: whole(1, 64).optional(),
+  /** an account's own cap: `iu=20,me=10,me2=10` */
+  FACTORY_ACCOUNT_LEADS: z.string().optional(),
+  /** an account takes new leads until its 5-hour window / week is at this percent (default 100: reached, not reserved) */
+  FACTORY_FIVE_HOUR_LIMIT: whole(1, 100).optional(),
+  FACTORY_WEEKLY_LIMIT: whole(1, 100).optional(),
   FACTORY_LOAD_CEILING: whole(1, 100_000).optional(),
   /** `shadow` (default): the fixed ceiling is live and the throughput rule is only recorded; `on`: the throughput rule is live */
   FACTORY_LOAD_RULE: z.enum(['shadow', 'on']).optional(),
@@ -58,6 +65,10 @@ export interface PlanningSettings {
   sysctlBin: string
   memorySampleMs: number
   leadsPerAccount: number
+  /** each named account's own cap (`FACTORY_ACCOUNT_LEADS`); an account not in it takes `leadsPerAccount` */
+  accountLeads: Map<string, number>
+  /** the percent of a window at which an account takes no new lead */
+  windowLimits: WindowLimits
   /** the fixed load ceiling (`FACTORY_LOAD_CEILING`); live while the throughput rule is in shadow */
   loadCeiling: number
   loadRule: 'shadow' | 'on'
@@ -75,6 +86,24 @@ export interface PlanningSettings {
   tenantBudgetMib: number
   /** where tenant findings are filed: a tenant is a job or VM no project's lead can shrink */
   tenantProject: string
+}
+
+const ACCOUNT_NAME = /^[A-Za-z0-9][A-Za-z0-9._-]{0,63}$/
+
+/** `iu=20,me=10`: each account's cap; throws on a name that is no account's, a cap outside 1..64 or a name twice. */
+function accountLeadsOf(text: string | undefined): Map<string, number> {
+  const caps = new Map<string, number>()
+  for (const part of (text ?? '').split(',').map((p) => p.trim())) {
+    if (part === '') continue
+    const [name, value, ...rest] = part.split('=').map((p) => p.trim())
+    const cap = Number(value)
+    if (!name || !ACCOUNT_NAME.test(name) || rest.length > 0 || !Number.isInteger(cap) || cap < 1 || cap > 64) {
+      throw new Error(`FACTORY_ACCOUNT_LEADS: "${part}" is not <account>=<1..64>`)
+    }
+    if (caps.has(name)) throw new Error(`FACTORY_ACCOUNT_LEADS: ${name} is named twice`)
+    caps.set(name, cap)
+  }
+  return caps
 }
 
 /** The planning and capacity settings from the environment; throws one message naming every bad key. */
@@ -111,6 +140,11 @@ export function planningSettings(
     sysctlBin: e.FACTORY_SYSCTL_BIN ?? '/usr/sbin/sysctl',
     memorySampleMs: e.FACTORY_MEMORY_SAMPLE_MS ?? 30_000,
     leadsPerAccount: e.FACTORY_LEADS_PER_ACCOUNT ?? 2,
+    accountLeads: accountLeadsOf(e.FACTORY_ACCOUNT_LEADS),
+    windowLimits: {
+      fiveHour: e.FACTORY_FIVE_HOUR_LIMIT ?? DEFAULT_WINDOW_LIMIT,
+      weekly: e.FACTORY_WEEKLY_LIMIT ?? DEFAULT_WINDOW_LIMIT,
+    },
     loadCeiling: e.FACTORY_LOAD_CEILING ?? DEFAULT_LOAD_CEILING,
     loadRule: e.FACTORY_LOAD_RULE ?? 'shadow',
     loadPerCore: e.FACTORY_LOAD_PER_CORE ?? DEFAULT_LOAD_PER_CORE,
