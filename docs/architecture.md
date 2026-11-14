@@ -406,7 +406,7 @@ rules and `factory-errand`, 10 a pass) and an Errand an agent can do now is turn
 (`adapters/shell/ask-human.ts`, `FACTORY_ASK_HUMAN_BIN` or the dotfiles' copy), whose dialog answer closes the Errand on its own: an Errand that reached the owner with a command and host `macbook`, an Issue's or a request, whose
 pushed run is not still going in a MacBook terminal. A return pushes every one, oldest raised first, one dialog at a time (the push waits for the click, so the next follows an answer or a time-out; a push the MacBook did not answer
 ends the run); while he is away it is one, never pushed first, else pushed longest ago, none within 6 hours. A lead's `errand raise --check <cmd>`
-stores the check on its Errand, so anything a machine can observe closes itself, and `--cmd <command> --host macbook` (the MacBook when a command is given alone) stores what the owner runs, which is what makes
+stores the check on its Errand, so anything a machine can observe closes itself (the lead runs it now with `factory errand check <id>`, `POST /v1/errands/:id/check`: `app/checkpoints-check.ts`, the same `runCheck` and `resolveErrand` as the pass; `factory issue show` lists the Issue's Errands with `lastCheckedAt`, `checkNote` and `nextCheckAt`, six hours after the last pass at the latest), and `--cmd <command> --host macbook` (the MacBook when a command is given alone) stores what the owner runs, which is what makes
 "approve the queued dialog" pushable. An Errand raised with no command while the same lead (`FACTORY_SESSION` `lead-<issue>-<attempt>`) has an unanswered `ask-human.sh` queue file (`adapters/checkpoints/queued-asks.ts`, `$XDG_STATE_HOME/human-queue`)
 is refused with the verb to use, so the factory holds the one list; the brief says the same.
 

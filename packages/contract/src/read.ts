@@ -305,6 +305,31 @@ export const ReadEdgeLine = z
   .meta({ id: 'ReadEdgeLine' })
 export type ReadEdgeLine = z.infer<typeof ReadEdgeLine>
 
+/** One Errand of an Issue as the desk sees it: whether it still holds the Issue, and when its check last ran and runs next. */
+export const ReadErrandLine = z
+  .object({
+    /** `errand_<uuid>` */
+    id: z.string(),
+    summary: z.string(),
+    state: z.enum(['open', 'closed']),
+    raisedAt: iso,
+    closedAt: iso.nullable(),
+    /** how it ended: done, not_needed, expired, superseded, turned_away or turned_back; null while open */
+    closedKind: z.string().nullable(),
+    /** the screen let it through to the owner */
+    reachedOwner: z.boolean(),
+    /** it carries a check (a shell command that exits 0 while the Errand is needed) */
+    hasCheck: z.boolean(),
+    /** the last run of the check; null before one */
+    lastCheckedAt: iso.nullable(),
+    /** what the last run said */
+    checkNote: z.string().nullable(),
+    /** an open Errand with a check: when the desk pass next runs it, at the latest (his return or `factory errand check` runs it sooner); null otherwise */
+    nextCheckAt: iso.nullable(),
+  })
+  .meta({ id: 'ReadErrandLine' })
+export type ReadErrandLine = z.infer<typeof ReadErrandLine>
+
 export const ReadIssueDetail = ReadIssueCard.extend({
   /** the tier and effort the latest lead actually started on; null before one started (or for an older lead) */
   ranOn: z.object({ tier: z.string(), effort: z.string() }).nullable(),
@@ -317,6 +342,8 @@ export const ReadIssueDetail = ReadIssueCard.extend({
   asks: z.array(ReadAskLine),
   artifacts: z.array(ReadArtifactLine),
   shipping: z.array(ReadShipLine),
+  /** the Issue's Errands, oldest first, with when each one's check ran and runs */
+  errands: z.array(ReadErrandLine),
   sessions: z.array(ReadSessionCard),
   /** what this Issue waits on (`after`) and the open Issues that wait on it (`before`): the stored edges and the dependency waits, so a blocker is never only a count */
   edges: z.object({ after: z.array(ReadEdgeLine), before: z.array(ReadEdgeLine) }),
