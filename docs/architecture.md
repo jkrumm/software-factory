@@ -475,6 +475,14 @@ no secret is `approval`, and with a command it reaches the owner by rule (`scree
 MacBook with no physical step is `place`; a device, hardware, a portal or a visual check is `hands`. The desk pass pushes a MacBook
 dialog (`pushQueue`) only for `secret` and `hands`: a `place` waits on Needs you with its command to copy (his "Push what waits"
 button still pushes it), an `approval` never goes to the MacBook.
+**The one place the factory runs itself** (`app/checkpoints-sync.ts`, `isSyncCommand`): a `place` Errand whose command is exactly
+`git -C ~/SourceRoot/dotfiles pull --ff-only`, optionally followed by `make herdr-app-setup`, is run through the MacBook's
+`dotfiles-sync` verb (`ssh -o BatchMode=yes <FACTORY_ASK_HUMAN_HOST> dotfiles-sync`, no arguments, `adapters/shell/ask-human.ts`
+`askHumanSync`) on every tick of the `desk` loop, not only when its pass is due, with no dialog and no copy-paste. One call serves
+every such open Errand. Exit 0 goes through the owner's done (`finishErrand`: the Errand's check decides, the lead hears it);
+any other answer (1 refused or a target failed, 126 the MacBook's gate predates the verb, 255 unreachable) changes nothing: it
+stays on Needs you with its command and the loop names the exit. It records no failed run, so a dirty MacBook tree never retires
+the Errand. Any other place command is the owner's.
 **Approve** (`POST /v1/errands/:id/approve`, `factory errand approve <id>`, the Console's button; owner only, the orchestrator is
 refused). On an `approval` Errand that reached him, the server runs the command on the mini (`app/checkpoints-approve.ts`:
 `ssh <alias> '<x>'` is run as `<x>` here, the server's secrets left out, a 30-minute hang guard), answers at once, and records what it

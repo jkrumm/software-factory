@@ -11,6 +11,7 @@ import { postgresVisitStore } from '../../src/adapters/postgres/visit-store.ts'
 import { postgresWorkStore } from '../../src/adapters/postgres/work-store.ts'
 import { prReview } from '../../src/adapters/reviews/pr.ts'
 import { finishErrand, raiseErrand, requestErrand, turnBackErrand } from '../../src/app/checkpoints.ts'
+import { syncPlaceErrands } from '../../src/app/checkpoints-sync.ts'
 import { approveErrand } from '../../src/app/checkpoints-approve.ts'
 import { checkErrandNow } from '../../src/app/checkpoints-check.ts'
 import { screenErrands } from '../../src/app/checkpoints-errands.ts'
@@ -21,7 +22,7 @@ import { errandsPass } from '../../src/app/loops/errands.ts'
 import { endRequest } from '../../src/app/checkpoints-errands.ts'
 import { reviewsPass } from '../../src/app/loops/reviews.ts'
 import { registerVisit } from '../../src/app/visit.ts'
-import type { PushPort } from '../../src/domains/checkpoints/ports.ts'
+import type { PushPort, SyncPort } from '../../src/domains/checkpoints/ports.ts'
 import type { CheckRun } from '../../src/domains/checkpoints/request.ts'
 import type { ReviewPort } from '../../src/domains/loops/reviews.ts'
 import type { AnyIssueEvent } from '../../src/domains/work/events.ts'
@@ -571,6 +572,88 @@ describe('the desk pass', () => {
 })
 
 const RELEASE = "ssh mini 'make -C ~/gate deploy-release SHA=78088f16'"
+
+describe('a place Errand that is the dotfiles sync', () => {
+  const SYNC = 'git -C ~/SourceRoot/dotfiles pull --ff-only && make herdr-app-setup'
+  let syncCalls: number
+  let syncAnswer: Result<{ exit: number; output: string }>
+  const port: SyncPort = {
+    sync: () => {
+      expect(deps.uow.inTransaction()).toBe(false)
+      syncCalls++
+      return Promise.resolve(syncAnswer)
+    },
+  }
+  beforeEach(() => {
+    syncCalls = 0
+    syncAnswer = ok({ exit: 0, output: 'dotfiles: level' })
+  })
+  const reachedSync = async (issueId: IssueId, extra: Record<string, unknown> = {}) => {
+    const raised = await raise(issueId, { summary: 'Sync the MacBook dotfiles', cmd: SYNC, host: 'macbook', ...extra })
+    value(await screenErrands(deps))
+    return raised.errand.id
+  }
+
+  test('is closed by one call of the verb on exit 0, and the lead hears it', async () => {
+    const issueId = await workingIssue('example')
+    const first = await reachedSync(issueId)
+    const second = value(
+      await requestErrand(deps, {
+        raw: { source: 'ask-human', text: 'Sync the MacBook dotfiles', command: SYNC, key: 'sync', where: 'macbook' },
+      }),
+    ).errand.id
+    value(await screenErrands(deps))
+    expect(await errandRow(first)).toMatchObject({ need: 'place' })
+    const effects = await noteEffects(issueId)
+
+    const pass = value(await syncPlaceErrands(deps, port))
+    // the same command from a request joins the open Errand: one Errand, one call
+    expect(second).toBe(first)
+    expect(pass).toMatchObject({ looked: 1, synced: 1, problems: [] })
+    expect(syncCalls).toBe(1)
+    expect(await errandRow(first)).toMatchObject({ done_note: expect.stringContaining('dotfiles-sync (exit 0)') })
+    expect((await errandRow(first))?.done_at).not.toBeNull()
+    expect(await noteEffects(issueId)).toBeGreaterThan(effects)
+    // nothing is open: the next tick makes no call
+    expect(value(await syncPlaceErrands(deps, port)).looked).toBe(0)
+    expect(syncCalls).toBe(1)
+  })
+
+  test('an Errand check that still says it is needed keeps it open', async () => {
+    const issueId = await workingIssue('example')
+    const id = await reachedSync(issueId, { check: 'dotfiles-behind' })
+    checks['dotfiles-behind'] = { exit: 0, timedOut: false, output: 'behind' }
+    expect(value(await syncPlaceErrands(deps, port))).toMatchObject({ looked: 1, synced: 0 })
+    expect((await errandRow(id))?.done_at).toBeNull()
+  })
+
+  test('a refusal, an old gate or an unreachable MacBook leaves it on Needs you with the reason', async () => {
+    const issueId = await workingIssue('example')
+    const id = await reachedSync(issueId)
+    for (const exit of [1, 126, 255]) {
+      syncAnswer = ok({ exit, output: 'dirty tree' })
+      const pass = value(await syncPlaceErrands(deps, port))
+      expect(pass.synced).toBe(0)
+      expect(pass.problems[0]).toContain(`exited ${exit}`)
+    }
+    syncAnswer = err(portError('gone', 'ssh could not start'))
+    expect(value(await syncPlaceErrands(deps, port)).problems[0]).toContain('ssh could not start')
+    // it was never run on the MacBook as far as the Errand is concerned: no failed try is counted against it
+    expect(await errandRow(id)).toMatchObject({ done_at: null, run_attempts: 0 })
+    expect((await readNeeds(db.sql, clock.now())).items.map((item) => item.id)).toContain(id)
+  })
+
+  test('any other place command is left alone, and the desk pass never pushes the sync as a dialog', async () => {
+    const issueId = await workingIssue('example')
+    const other = await reachedSync(issueId, {
+      cmd: 'git -C ~/SourceRoot/dotfiles pull --ff-only && make sudoers-install',
+      summary: 'Another place',
+    })
+    expect(value(await syncPlaceErrands(deps, port)).looked).toBe(0)
+    expect(syncCalls).toBe(0)
+    expect((await errandRow(other))?.done_at).toBeNull()
+  })
+})
 
 describe('an Errand that needs only his yes', () => {
   const reach = async (issueId: IssueId, extra: Record<string, unknown> = {}) => {

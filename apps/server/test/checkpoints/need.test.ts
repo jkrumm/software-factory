@@ -1,5 +1,12 @@
 import { describe, expect, test } from 'bun:test'
-import { isApprovalCommand, miniPart, miniShellLine, needByRule, needOf } from '../../src/domains/checkpoints/need.ts'
+import {
+  isApprovalCommand,
+  isSyncCommand,
+  miniPart,
+  miniShellLine,
+  needByRule,
+  needOf,
+} from '../../src/domains/checkpoints/need.ts'
 import { pushQueue } from '../../src/domains/checkpoints/desk.ts'
 import type { ErrandRecord } from '../../src/domains/checkpoints/ports.ts'
 
@@ -168,5 +175,37 @@ describe('a command addressed to the mini runs there as the shell there would ru
     expect(await run('ssh mini \'printf %s "a b" && echo "$((1 + 2))"\'')).toBe('a b3')
     expect(await run('echo plain')).toBe('plain')
     expect(miniShellLine('make x')).toBe('make x')
+  })
+})
+
+describe('the one place command the factory runs itself', () => {
+  test('is the dotfiles fast-forward, optionally with herdr-app-setup, and nothing else', () => {
+    for (const ok of [
+      'git -C ~/SourceRoot/dotfiles pull --ff-only',
+      'git -C $HOME/SourceRoot/dotfiles pull --ff-only && make herdr-app-setup',
+      'git -C ~/SourceRoot/dotfiles pull --ff-only; make -C ~/SourceRoot/dotfiles herdr-app-setup',
+      '  git  -C ~/SourceRoot/dotfiles pull --ff-only \n&& make herdr-app-setup ',
+    ])
+      expect(isSyncCommand(ok)).toBe(true)
+    for (const no of [
+      'git -C ~/SourceRoot/dotfiles pull',
+      'git -C ~/SourceRoot/dotfiles pull --ff-only && make sudoers-install',
+      'git -C ~/SourceRoot/dotfiles pull --ff-only && rm -rf ~',
+      'git -C ~/SourceRoot/other pull --ff-only',
+      'git -C ~/SourceRoot/dotfiles pull --ff-only | sh',
+      'git -C ~/SourceRoot/dotfiles pull --ff-only && make herdr-app-setup && make x',
+    ])
+      expect(isSyncCommand(no)).toBe(false)
+  })
+
+  test('is a place by rule, so it is never pushed as a dialog', () => {
+    expect(
+      needByRule({
+        summary: 'Sync the MacBook',
+        detail: null,
+        command: 'git -C ~/SourceRoot/dotfiles pull --ff-only',
+        host: 'macbook',
+      }),
+    ).toBe('place')
   })
 })

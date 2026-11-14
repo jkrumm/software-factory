@@ -437,6 +437,15 @@ export interface PushPort {
   probe(): Promise<boolean>
 }
 
+/**
+ * The MacBook's dotfiles sync verb over the dedicated ssh key (no arguments, nothing typed): fast-forwards its dotfiles from
+ * the public repo and runs the make targets the pulled range touched. Exit 0 level or converged, 1 refused (dirty tree, not
+ * master, diverged) or a target failed, 126 the MacBook's gate predates the verb, 255 unreachable.
+ */
+export interface SyncPort {
+  sync(): Promise<Result<{ exit: number; output: string }>>
+}
+
 /** The desk pass's own record: when it last ran, when the owner last came back, and whether the MacBook last answered. */
 export interface DeskStore {
   lastPassAt(): Promise<Date | null>

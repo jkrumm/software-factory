@@ -86,6 +86,17 @@ export function miniShellLine(command: string): string {
   return inner === null ? command : `eval "set -- ${inner.replace(/(["\\$`])/g, '\\$1')}"; sh -c "$*"`
 }
 
+/**
+ * The one `place` command the factory runs itself: the MacBook's dotfiles brought level with the public repo, optionally
+ * followed by `make herdr-app-setup` (the MacBook's own sync verb runs the make targets its pulled range touched, so the
+ * line says the same thing). Anything else, a flag or another word included, stays on Needs you.
+ */
+const SYNC_COMMAND =
+  /^git -C (?:~|\$HOME)\/SourceRoot\/dotfiles pull --ff-only(?:\s*(?:&&|;)\s*make (?:-C (?:~|\$HOME)\/SourceRoot\/dotfiles )?herdr-app-setup)?$/
+
+/** Whether a command is exactly the dotfiles sync (whitespace aside). */
+export const isSyncCommand = (command: string): boolean => SYNC_COMMAND.test(command.replace(/\s+/g, ' ').trim())
+
 /** Runs of a pushed or approved command that came back unsuccessful before it is no longer offered unchanged. */
 export const MAX_RUN_TRIES = 2
 

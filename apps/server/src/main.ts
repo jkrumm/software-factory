@@ -27,7 +27,7 @@ import { postgresVisitStore } from './adapters/postgres/visit-store.ts'
 import { postgresReviewStore } from './adapters/postgres/review-store.ts'
 import { postgresDeskStore } from './adapters/postgres/desk-store.ts'
 import { prReview } from './adapters/reviews/pr.ts'
-import { askHumanPush } from './adapters/shell/ask-human.ts'
+import { askHumanPush, askHumanSync } from './adapters/shell/ask-human.ts'
 import { loadMigrations, migrate } from './adapters/postgres/migrate.ts'
 import { acquireProcessLock } from './adapters/postgres/process-lock.ts'
 import { postgresCapacityStore } from './adapters/postgres/capacity-store.ts'
@@ -50,6 +50,7 @@ import { availableParallelism, loadavg } from 'node:os'
 import { join } from 'node:path'
 import { APPROVED_RUN_HANG_GUARD_MS } from './app/checkpoints-approve.ts'
 import { endRequest, tellCheckBroken } from './app/checkpoints-errands.ts'
+import { syncPlaceErrands, syncSummary } from './app/checkpoints-sync.ts'
 import { checkpointUses } from './app/checkpoints-uses.ts'
 import { createLoopRunner, type LoopRunner, type LoopSpec } from './app/loops/runner.ts'
 import { projectFileProjects } from './app/quality-projects.ts'
@@ -774,6 +775,9 @@ async function main(): Promise<void> {
       run: async () => {
         const force = deskForced
         deskForced = false
+        // a `place` Errand that is exactly the dotfiles sync is run through the MacBook's verb on every tick, not only when the pass is due
+        const synced = await syncPlaceErrands(checkpointDeps, askHumanSync({ host: loopSettings.askHumanHost }))
+        if (synced.ok) said('desk sync', synced.value.problems)
         const pass = await deskPass({
           settle: checkpointDeps,
           desk: uow,
@@ -786,7 +790,8 @@ async function main(): Promise<void> {
         })
         if (!pass.ok) return pass
         said('desk', pass.value.problems)
-        return ok(deskSummary(pass.value))
+        const syncLine = synced.ok ? syncSummary(synced.value) : ''
+        return ok(syncLine === '' ? deskSummary(pass.value) : `${deskSummary(pass.value)}; ${syncLine}`)
       },
     },
     {
