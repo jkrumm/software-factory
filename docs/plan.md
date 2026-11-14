@@ -279,7 +279,8 @@ adds the words to it as a note. On a verdict of Looks good or With notes the lea
 project's ship path and applies edge changes and cancellations with `factory issue replan <id> --attempt <n> --body '<json>'`. The server gates
 that verb: the Issue must be a Replan its lead works on (current attempt), its latest Spec revision must carry a Looks
 good or With notes verdict, and every Issue it re-edges or cancels must be an Issue of the Replan's own project (a
-blocker may be any open Issue). The whole call is refused otherwise, nothing applied; each op then answers for itself, and
+blocker may be any open Issue; one exception: a removed edge's dependent may be another project's open Issue when every Issue it
+waits after is of this project, since removing the edge only frees it). The whole call is refused otherwise, nothing applied; each op then answers for itself, and
 a repeated `call` changes nothing more. The owner-only edge and cancel routes stay shut to a lead: the verb is what an
 approved Spec buys. It acts as the orchestrator, so the owner-touch counts stay the owner's alone.
 

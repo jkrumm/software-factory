@@ -114,7 +114,7 @@ export function failureOf(error: PlanningError | PortError): Failure {
       return {
         status: 409,
         body: failure(
-          `${error.issues.map(nameOf).join(', ')} not open Issues of project ${error.project} (a Replan changes its own project only); nothing was applied`,
+          `${error.issues.map(nameOf).join(', ')} not open Issues of project ${error.project} (a Replan changes its own project only; a removed edge may free another project's Issue waiting after this project's); nothing was applied`,
           'outside_project',
           { issues: error.issues },
         ),

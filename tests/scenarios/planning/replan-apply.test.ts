@@ -138,6 +138,36 @@ test('an approved Replan Spec lets its lead change the chain and cancel, inside 
   expect(notReplan.err).toContain('not_a_replan')
   expect((await replanVerb({ attempt: 1 })).code).not.toBe(0)
 
+  // A removed edge frees a dependent of the other project when its head is ours; never when its head is not.
+  const waiter = await fileIssue(lab, { repo: 'lib', title: 'A lib Issue behind C' })
+  await settle(lab, waiter, [c, blocker])
+  const wrongHead = await replanVerb({
+    attempt: 1,
+    call: 'free',
+    edges: { add: [], remove: [{ issue: waiter, after: [c, blocker] }] },
+  })
+  expect(wrongHead.code).toBe(5)
+  expect(wrongHead.err).toContain('outside_project')
+  expect(
+    (await replanVerb({ attempt: 1, call: 'free', edges: { add: [{ issue: waiter, after: [d] }], remove: [] } })).err,
+  ).toContain('outside_project')
+  const freed = ReplanApplyAnswer.parse(
+    (
+      await must(
+        lab,
+        [
+          'issue',
+          'replan',
+          replan,
+          ...replanBody({ attempt: 1, call: 'free', edges: { add: [], remove: [{ issue: waiter, after: [c] }] } }),
+        ],
+        'agent',
+      )
+    ).json,
+  )
+  expect(freed.results).toEqual([{ op: 'remove', issue: waiter, ok: true, detail: '1 edge(s) removed' }])
+  expect((await chain())[waiter]).toEqual([blocker])
+
   // The approved call applies, as the orchestrator, and says what each op did.
   const applied = ReplanApplyAnswer.parse(
     (await must(lab, ['issue', 'replan', replan, ...replanBody(apply)], 'agent')).json,

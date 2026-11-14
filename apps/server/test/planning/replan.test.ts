@@ -77,7 +77,7 @@ describe('outsideProject', () => {
     [other, { repo: 'lib', state: 'open' }],
   ])
   const gate = (dependents: ReturnType<typeof issueId>[], cancels: ReturnType<typeof issueId>[]) =>
-    outsideProject({ replan, repo: 'app', dependents, cancels, known })
+    outsideProject({ replan, repo: 'app', dependents, removals: [], cancels, known })
 
   test('the project own open Issues pass', () => expect(gate([own], [own])).toEqual([]))
   test('another repo, an unknown Issue and the Replan itself are outside', () => {
@@ -86,5 +86,16 @@ describe('outsideProject', () => {
   test('a closed dependent is outside, a closed cancel target is answered by the cancel', () => {
     expect(gate([closed], [])).toEqual([closed])
     expect(gate([], [closed])).toEqual([])
+  })
+  test('a removed edge may free another repo Issue only when every head is of the project', () => {
+    const free = (issue: ReturnType<typeof issueId>, after: ReturnType<typeof issueId>[]) =>
+      outsideProject({ replan, repo: 'app', dependents: [], removals: [{ issue, after }], cancels: [], known })
+    expect(free(other, [own])).toEqual([])
+    expect(free(other, [own, closed])).toEqual([])
+    expect(free(other, [own, other])).toEqual([other])
+    expect(free(other, [issueId(99)])).toEqual([other])
+    expect(free(other, [])).toEqual([other])
+    expect(free(closed, [own])).toEqual([closed])
+    expect(free(issueId(99), [own])).toEqual([issueId(99)])
   })
 })
