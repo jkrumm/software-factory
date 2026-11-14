@@ -20,6 +20,10 @@ rows:
     repo: bare
   - key: adopted
     issue: 1
+  - key: cross
+    title: Waits for a work repo
+    facts: { what: a step behind the work repo }
+    after: [bare:step]
 `
 
 beforeAll(async () => {
@@ -52,6 +56,7 @@ test('a lead reads the rows of a project with their state, their words and their
     ['screens', 'waiting', 'The screens', ['tokens'], 'the three screens'],
     ['private-work', 'open', 'A step in a work repo', [], "the work repo's build"],
     ['adopted', 'open', null, [], null],
+    ['cross', 'waiting', 'Waits for a work repo', ['bare:step'], 'a step behind the work repo'],
   ])
   expect(model.rows.find((r) => r.key === 'screens')?.reason).toBe('after app:tokens')
 })
@@ -68,6 +73,12 @@ test('the owner reads a work project and the target of a row filed into it; the 
   const asRead = ProjectPlanModel.parse(JSON.parse((await plan('app', 'read')).out))
   expect(asRead.rows.find((r) => r.key === 'private-work')?.target).toBe('private')
   expect(asRead.rows.find((r) => r.key === 'tokens')?.target).toBe('app')
+  // nor does it learn the work project a row waits for, in the keys or in the reason
+  const cross = asRead.rows.find((r) => r.key === 'cross')
+  expect(cross?.after).toEqual(['private:step'])
+  expect(cross?.reason).toBe('after private:step (no such row)')
+  expect(JSON.stringify(asRead)).not.toContain('bare')
+  expect(asOwner.rows.find((r) => r.key === 'cross')?.reason).toBe('after bare:step (no such row)')
 })
 
 test('an unknown project is exit 4 for every caller, and --format plain prints one line per row', async () => {

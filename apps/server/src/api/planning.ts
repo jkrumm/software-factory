@@ -151,7 +151,19 @@ const view = ({ project, plan }: ProjectState): ProjectView =>
 /** A work project: no `project.yaml` of its own, or one that says `work: true` (`read/work.ts`, the one rule). */
 const isWorkProject = ({ project }: ProjectState): boolean => project.source === 'defaults' || project.project.work
 
+/**
+ * What the read token sees of text that may name another project: a `<project>:<key>` ref (an `after` key, a reason) of a
+ * project that is not open reads `private:<key>`, and `unknown project <name>` (the name may be a work repo's) loses it.
+ */
+const maskWork = (text: string, open: ReadonlySet<string>): string =>
+  text
+    .replace(/(?<![\w.~-])([A-Za-z0-9][A-Za-z0-9._~-]*):(?=[a-z0-9])/g, (ref, project: string) =>
+      open.has(project) ? ref : 'private:',
+    )
+    .replace(/^unknown project .*$/, 'unknown project')
+
 const planModel = (state: ProjectState, openTargets: ReadonlySet<string>, redact: boolean): ProjectPlanModel => {
+  const mask = (text: string): string => (redact ? maskWork(text, openTargets) : text)
   const written = new Map((state.project.plan?.rows ?? []).map((row) => [row.key, row]))
   return ProjectPlanModel.parse({
     project: state.project.name,
@@ -167,10 +179,10 @@ const planModel = (state: ProjectState, openTargets: ReadonlySet<string>, redact
         kind: source?.kind ?? null,
         state: row.state,
         issue: row.issue,
-        reason: row.reason,
-        // the read token never learns the name of a work project a row files into
+        reason: row.reason === null ? null : mask(row.reason),
+        // the read token never learns the name of a work project a row files into, or waits for (`mask`)
         target: redact && row.target !== null && !openTargets.has(row.target) ? 'private' : row.target,
-        after: source?.after ?? [],
+        after: (source?.after ?? []).map(mask),
         what: typeof what === 'string' ? what : null,
       }
     }),
