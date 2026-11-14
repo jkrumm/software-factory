@@ -17,7 +17,7 @@ export const NAME_TABS_BUDGET_MS = 15_000
  * whatever its Issue waits for (`nameTab`: the app adopts a tab after the start, so the start cannot). Returns how many
  * leads were found gone.
  */
-export async function followLeads(deps: LeadDeps): Promise<number> {
+export async function followLeads(deps: LeadDeps, signal?: AbortSignal): Promise<number> {
   const followed = await deps.uow.run(async ({ work, leads }) => {
     const out: { row: LeadAttempt; since: Date | null; title: string; working: boolean }[] = []
     for (const row of await leads.followed()) {
@@ -47,7 +47,7 @@ export async function followLeads(deps: LeadDeps): Promise<number> {
     // The label marks a tab the factory made; the name comes from the title, so a lead started before the label carried it is named too.
     for (const { live, tab, tabName: made } of found.value) {
       if (!live || !tab || !made) continue
-      if (deps.clock.now().getTime() - namingStart >= NAME_TABS_BUDGET_MS) continue
+      if (signal?.aborted || deps.clock.now().getTime() - namingStart >= NAME_TABS_BUDGET_MS) continue
       await deps.terminals.nameTab({ tab, name: tabName(title) })
     }
     if (!working || found.value.some((terminal) => terminal.live)) continue

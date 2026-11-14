@@ -24,8 +24,8 @@ import type { PortError, Result } from './kernel/result.ts'
 
 export interface LeadsComposition {
   routes: LeadRoutes
-  /** one pass of the lead tick: spool, lost leads, outbox */
-  tick(): Promise<Result<TickAnswer, PortError>>
+  /** one pass of the lead tick: spool, lost leads, outbox; with `signal` a drain ends it before its next step */
+  tick(signal?: AbortSignal): Promise<Result<TickAnswer, PortError>>
   /** the hook socket, bound; stopping it removes the file */
   listen(): Promise<SocketListener>
 }
@@ -105,8 +105,14 @@ export function composeLeads(input: {
     },
   })
   const memory = apiErrorMemory()
-  const tick = () =>
-    leadTick({ leads: deps, ports, replaySpool: async () => (await replayer.replay()).lines, apiErrorMemory: memory })
+  const tick = (signal?: AbortSignal) =>
+    leadTick({
+      leads: deps,
+      ports,
+      replaySpool: async () => (await replayer.replay()).lines,
+      apiErrorMemory: memory,
+      ...(signal ? { signal } : {}),
+    })
 
   return {
     routes: {

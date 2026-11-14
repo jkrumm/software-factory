@@ -45,6 +45,8 @@ export interface WorkStore {
   /** each Issue's oldest open effect that is due and free, held until `until` */
   claimEffects(input: { now: Date; until: Date; limit: number }): Promise<ClaimedEffect[]>
   recordRun(key: Key, run: EffectRun): Promise<void>
+  /** gives claimed effects back, unrun and uncounted: the next pass may take them at once instead of after the lease */
+  releaseEffects(keys: readonly Key[]): Promise<void>
 }
 
 /**

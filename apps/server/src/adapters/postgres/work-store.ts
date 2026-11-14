@@ -187,5 +187,10 @@ export function postgresWorkStore(tx: SQL): WorkStore {
         VALUES (${key}, ${run.at}, false, ${run.error.kind}, ${run.error.detail})`
       await tx`UPDATE factory.issue_effects SET not_before = ${run.retryAt}, claimed_until = NULL WHERE key = ${key}`
     },
+
+    async releaseEffects(keys) {
+      for (const key of keys)
+        await tx`UPDATE factory.issue_effects SET claimed_until = NULL WHERE key = ${key} AND done_at IS NULL`
+    },
   }
 }

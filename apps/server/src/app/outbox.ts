@@ -12,6 +12,8 @@ export interface OutboxDeps {
   leaseMs?: number
   /** effects per pass */
   limit?: number
+  /** once aborted (the server's drain) no further effect is started; the claimed ones left are given back */
+  signal?: AbortSignal
 }
 
 const LEASE_MS = 15 * 60_000
@@ -48,8 +50,17 @@ export async function runOutbox(deps: OutboxDeps): Promise<Result<{ ran: number;
   )
   if (!claimed.ok) return claimed
   let failed = 0
-  for (const effect of claimed.value) {
+  let ran = 0
+  for (const [index, effect] of claimed.value.entries()) {
+    if (deps.signal?.aborted) {
+      // Unrun and uncounted: without this the lease holds them past the restart, for minutes.
+      const rest = claimed.value.slice(index).map((left) => left.key)
+      const released = await deps.uow.run(async ({ work }) => ok(await work.releaseEffects(rest)))
+      if (!released.ok) return released
+      break
+    }
     if (deps.uow.inTransaction()) throw new Error('a port is never called inside a transaction')
+    ran++
     const result = await call(deps.ports, effect)
     const at = deps.clock.now()
     if (!result.ok) failed++
@@ -64,5 +75,5 @@ export async function runOutbox(deps: OutboxDeps): Promise<Result<{ ran: number;
     const recorded = await deps.uow.run(async ({ work }) => ok(await work.recordRun(effect.key, run)))
     if (!recorded.ok) return recorded
   }
-  return ok({ ran: claimed.value.length, failed })
+  return ok({ ran, failed })
 }
