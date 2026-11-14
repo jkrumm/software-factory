@@ -5,7 +5,7 @@
  * the largest is the one worth a lead's time.
  */
 import type { Finding } from './selfwatch-model.ts'
-import { BASELINE_DAYS, DEFAULT_PEAK_MIB, PROCESS_GROWTH_MIB } from '../../kernel/throughput-limits.ts'
+import { BASELINE_DAYS, DEFAULT_PEAK_MIB, FACTORY_PROJECT, PROCESS_GROWTH_MIB } from '../../kernel/throughput-limits.ts'
 
 export const THROUGHPUT_KPIS = [
   'failed_run_minutes',
@@ -138,7 +138,7 @@ export function rankCandidates(facts: WindowFacts): Candidate[] {
       unit: 'minutes/day',
       target: round(perDay * TARGET_SHARE),
       costMinutes: round(q.minutes),
-      query: `\`factory read kpis\` queue_time for the cut, the project's Issues from filed to admitted, divided by the ${days} days`,
+      query: `\`factory read kpis\` queue_time for the cut, every project's Issues from filed to admitted, divided by the ${days} days`,
     })
   }
   return found.toSorted(
@@ -182,7 +182,8 @@ export function figureOf(
       )
     case 'queued_minutes': {
       const q = facts.queued.find((x) => x.project === finding.project)
-      return q ? round(q.minutes / days) : 0
+      // the queue is the factory's: a finding of an earlier rule on another project has nothing to read
+      return q ? round(q.minutes / days) : finding.project === FACTORY_PROJECT ? 0 : null
     }
   }
 }

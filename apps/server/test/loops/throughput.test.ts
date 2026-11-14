@@ -112,6 +112,8 @@ describe('the ranking', () => {
     expect(figureOf(f, { project: 'b', kpi: 'failed_run_minutes', subject: '*' })).toBeNull()
     expect(figureOf(f, { project: 'a', kpi: 'step_peak_mib', subject: 'full' })).toBe(3000)
     expect(figureOf(f, { project: 'a', kpi: 'process_growth_mib', subject: 'x' })).toBe(0)
+    expect(figureOf(f, { project: 'software-factory', kpi: 'queued_minutes', subject: '*' })).toBe(0)
+    expect(figureOf(f, { project: 'a', kpi: 'queued_minutes', subject: '*' })).toBeNull()
   })
 
   test('moved, flat or worse against the before, ten percent being flat', () => {

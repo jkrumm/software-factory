@@ -6,13 +6,12 @@ import {
   DEFAULT_PEAK_MIB,
   MIN_FAIL_RUNS,
   MIN_FAST_RUNS,
+  FACTORY_PROJECT,
   PROCESS_GROWTH_MIB,
 } from '../kernel/throughput-limits.ts'
 import { boundedRead } from './bounded.ts'
 import { REPO_OF_STEP } from './retro-build.ts'
 
-/** The project the queue's wait and a process of no repo are filed on. */
-const FACTORY_PROJECT = 'software-factory'
 const DAY_MS = 86_400_000
 const num = z.coerce.number()
 
