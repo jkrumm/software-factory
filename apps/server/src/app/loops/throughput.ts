@@ -6,6 +6,8 @@ import { budgetsOf } from '../../domains/planning/project.ts'
 import { repoTextOf } from '../../domains/planning/sync.ts'
 import {
   type Candidate,
+  alreadyAtTarget,
+  AFTER_DAYS,
   figureOf,
   type FindingRow,
   heldSubjects,
@@ -133,10 +135,15 @@ export async function throughputPass(deps: ThroughputDeps): Promise<Result<Throu
 
   // 2. the ranking
   let facts: WindowFacts
+  let recent: WindowFacts
   try {
     facts = await deps.facts(
       { from: new Date(now.getTime() - RANK_DAYS * DAY_MS), to: now },
       { baseline: true, peakBudgetMib },
+    )
+    recent = await deps.facts(
+      { from: new Date(now.getTime() - AFTER_DAYS * DAY_MS), to: now },
+      { baseline: false, peakBudgetMib },
     )
   } catch (error) {
     pass.notes.push(`costs not read: ${error instanceof Error ? error.message : String(error)}`)
@@ -151,6 +158,8 @@ export async function throughputPass(deps: ThroughputDeps): Promise<Result<Throu
     if (!byProject.has(candidate.project) || top.has(candidate.project) || pass.held.includes(candidate.project))
       continue
     if (held.has(subjectKey(candidate))) continue
+    // a cost the newest days already left behind (fixed, or a burst that ended) is not asked for again
+    if (alreadyAtTarget(recent, candidate)) continue
     top.set(candidate.project, candidate)
   }
   const date = now.toISOString().slice(0, 10)

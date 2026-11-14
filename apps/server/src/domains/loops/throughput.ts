@@ -5,7 +5,7 @@
  * the largest is the one worth a lead's time.
  */
 import type { Finding } from './selfwatch-model.ts'
-import { BASELINE_DAYS, DEFAULT_PEAK_MIB, PROCESS_GROWTH_MIB } from '../../kernel/throughput-limits.ts'
+import { BASELINE_DAYS, DEFAULT_PEAK_MIB, QUEUE_PROJECT, PROCESS_GROWTH_MIB } from '../../kernel/throughput-limits.ts'
 
 export const THROUGHPUT_KPIS = [
   'failed_run_minutes',
@@ -41,7 +41,7 @@ export interface WindowFacts {
   steps: { project: string; tier: string; runs: number; peakP90Mib: number; budgetMib: number; overMinutes: number }[]
   /** a process whose footprint grew between its first and last notable minute in the window */
   processes: { name: string; class: string; project: string; grownMib: number; minutes: number }[]
-  /** minutes Issues of the project spent queued (filed or reopened to admitted) for admissions in the window */
+  /** minutes Issues of every project spent queued (filed or reopened to admitted) for admissions in the window: one row, on the factory, whose queue it is */
   queued: { project: string; minutes: number; admissions: number }[]
 }
 
@@ -138,7 +138,7 @@ export function rankCandidates(facts: WindowFacts): Candidate[] {
       unit: 'minutes/day',
       target: round(perDay * TARGET_SHARE),
       costMinutes: round(q.minutes),
-      query: `\`factory read kpis\` queue_time for the cut, the project's Issues from filed to admitted, divided by the ${days} days`,
+      query: `\`factory read kpis\` queue_time for the cut, every project's Issues from filed to admitted, divided by the ${days} days`,
     })
   }
   return found.toSorted(
@@ -182,7 +182,8 @@ export function figureOf(
       )
     case 'queued_minutes': {
       const q = facts.queued.find((x) => x.project === finding.project)
-      return q ? round(q.minutes / days) : 0
+      // the queue is the factory's: a finding of an earlier rule on another project has nothing to read
+      return q ? round(q.minutes / days) : finding.project === QUEUE_PROJECT ? 0 : null
     }
   }
 }
@@ -391,4 +392,14 @@ export interface ProjectBudgets {
   fastMs: number | null
   peakMib: number | null
   failShare: number | null
+}
+
+/**
+ * Whether a candidate's cost is already gone: its figure over the newest days (`recent`, the window a ship is measured over)
+ * is at or under the target. A cost fixed days ago still sits in the 7-day total, and an Issue filed for it could only be
+ * closed. A figure the recent days cannot give (no run, no closed Issue) says nothing, so the candidate stands.
+ */
+export function alreadyAtTarget(recent: WindowFacts, candidate: Candidate): boolean {
+  const figure = figureOf(recent, candidate)
+  return figure !== null && figure <= candidate.target
 }

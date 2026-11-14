@@ -6,6 +6,7 @@ import {
   DEFAULT_PEAK_MIB,
   MIN_FAIL_RUNS,
   MIN_FAST_RUNS,
+  QUEUE_PROJECT,
   PROCESS_GROWTH_MIB,
 } from '../kernel/throughput-limits.ts'
 import { boundedRead } from './bounded.ts'
@@ -114,15 +115,13 @@ export async function readWindowFacts(
       FROM factory.host_process_samples WHERE at >= ${from} AND at < ${to}
       GROUP BY pid, name, class, repo HAVING max(footprint_mib) - min(footprint_mib) >= ${PROCESS_GROWTH_MIB}`
     const queued: unknown[] = await tx`
-      SELECT i.repo, sum(extract(epoch FROM (a.at - s.at)) / 60.0)::float8 AS minutes, count(*) AS admissions
+      SELECT coalesce(sum(extract(epoch FROM (a.at - s.at)) / 60.0), 0)::float8 AS minutes, count(*) AS admissions
       FROM factory.issue_events a
-      JOIN factory.issues i ON i.id = a.issue_id
       JOIN LATERAL (
         SELECT x.at FROM factory.issue_events x
         WHERE x.issue_id = a.issue_id AND x.result = 'applied' AND x.kind IN ('filed', 'reopened') AND x.version < a.version
         ORDER BY x.version DESC LIMIT 1) s ON true
-      WHERE a.kind = 'admitted' AND a.result = 'applied' AND a.at >= ${from} AND a.at < ${to}
-      GROUP BY i.repo`
+      WHERE a.kind = 'admitted' AND a.result = 'applied' AND a.at >= ${from} AND a.at < ${to}`
 
     const projects = new Set([...runs.keys(), ...closed.keys()])
     return {
@@ -157,15 +156,16 @@ export async function readWindowFacts(
         return {
           name: r.name,
           class: r.class,
-          project: r.repo === '' ? 'software-factory' : r.repo,
+          project: r.repo === '' ? QUEUE_PROJECT : r.repo,
           grownMib: r.grown,
           minutes: r.minutes,
         }
       }),
-      queued: queued.map((raw) => {
-        const r = z.object({ repo: z.string(), minutes: num, admissions: num }).parse(raw)
-        return { project: r.repo, minutes: r.minutes, admissions: r.admissions }
-      }),
+      // the queue is the factory's: no project's lead can shorten it, so its wait is one figure, filed on the factory
+      queued: queued
+        .map((raw) => z.object({ minutes: num, admissions: num }).parse(raw))
+        .filter((r) => r.admissions > 0)
+        .map((r) => ({ project: QUEUE_PROJECT, minutes: r.minutes, admissions: r.admissions })),
     }
   })
 }

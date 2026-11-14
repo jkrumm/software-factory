@@ -112,6 +112,8 @@ describe('the ranking', () => {
     expect(figureOf(f, { project: 'b', kpi: 'failed_run_minutes', subject: '*' })).toBeNull()
     expect(figureOf(f, { project: 'a', kpi: 'step_peak_mib', subject: 'full' })).toBe(3000)
     expect(figureOf(f, { project: 'a', kpi: 'process_growth_mib', subject: 'x' })).toBe(0)
+    expect(figureOf(f, { project: 'software-factory', kpi: 'queued_minutes', subject: '*' })).toBe(0)
+    expect(figureOf(f, { project: 'a', kpi: 'queued_minutes', subject: '*' })).toBeNull()
   })
 
   test('moved, flat or worse against the before, ten percent being flat', () => {
@@ -223,7 +225,11 @@ describe('the daily pass', () => {
     uow,
     clock,
     projects: async () =>
-      ['alpha', 'beta', 'gamma'].map((project) => ({ project, repo: project, peakMib: null as number | null })),
+      ['alpha', 'beta', 'delta', 'software-factory'].map((project) => ({
+        project,
+        repo: project,
+        peakMib: null as number | null,
+      })),
     facts: (
       window: { from: Date; to: Date },
       options: { baseline: boolean; peakBudgetMib: ReadonlyMap<string, number> },
@@ -237,9 +243,12 @@ describe('the daily pass', () => {
     for (let i = 0; i < 10; i++) {
       await step({ repo: 'alpha', at: ago((i + 1) * 10 * HOUR), ms: 20 * 60_000, exit: i < 4 ? 1 : 0 })
     }
+    // delta: 60 slot-minutes of failed runs five days ago, fixed since: its newest days are clean
+    for (let i = 0; i < 3; i++) await step({ repo: 'delta', at: ago(5 * DAY + i * HOUR), ms: 20 * 60_000, exit: 1 })
+    for (const hours of [5, 30]) await step({ repo: 'delta', at: ago(hours * HOUR), ms: 20 * 60_000 })
     // beta: a full check peaking at 4 GiB, five runs of 10 minutes: 50 minutes over the default budget of 2 GiB
     for (let i = 0; i < 5; i++) await step({ repo: 'beta', at: ago((i + 1) * 12 * HOUR), ms: 10 * 60_000, peak: 4096 })
-    // gamma: an Issue waited three hours between filing and its admission
+    // the queue is the factory's: an Issue of any project an Issue waited three hours between filing and its admission
     await db.sql`INSERT INTO factory.issues (id, repo, state, outcome, version) VALUES ('issue_700', 'gamma', 'closed', 'done', 3)`
     await event('issue_700', 'filed', ago(30 * HOUR), { version: 1, to: 'queued' })
     await event('issue_700', 'admitted', ago(27 * HOUR), { version: 2, to: 'working' })
@@ -250,7 +259,7 @@ describe('the daily pass', () => {
     expect(pass.ok).toBe(true)
     if (!pass.ok) return
     expect(pass.value.filed.map((f) => [f.project, f.kpi, f.costMinutes])).toEqual([
-      ['gamma', 'queued_minutes', 180],
+      ['software-factory', 'queued_minutes', 180],
       ['alpha', 'failed_run_minutes', 80],
       ['beta', 'step_peak_mib', 50],
     ])
@@ -267,7 +276,7 @@ describe('the daily pass', () => {
     ).toEqual([
       ['alpha', 11.4, 5.7, 'open'],
       ['beta', 4096, 2048, 'open'],
-      ['gamma', 25.7, 12.9, 'open'],
+      ['software-factory', 25.7, 12.9, 'open'],
     ])
     expect(
       rows.every((r: { issue_id: string | null; query: string }) => r.issue_id !== null && r.query.length > 10),
@@ -281,11 +290,21 @@ describe('the daily pass', () => {
     expect(marker?.slice(1)).toEqual(['2026-11-14', 'failed_run_minutes', '11.4', 'down'])
   })
 
+  test('a cost the newest days already left behind is not filed, though it sits in the 7-day total', async () => {
+    const [row] = await db.sql`SELECT count(*)::int AS n FROM factory.throughput_findings WHERE project = 'delta'`
+    expect(row?.n).toBe(0)
+    expect(
+      rankCandidates(
+        await readWindowFacts(db.sql, { from: ago(7 * DAY), to: T0, baseline: false, peakBudgetMib: new Map() }),
+      ).map((c) => c.project),
+    ).toContain('delta')
+  })
+
   test('a second pass the same day files nothing: each project has an improvement open', async () => {
     const before = filedBodies.length
     const pass = await throughputPass(deps())
     expect(pass.ok && pass.value.filed).toEqual([])
-    expect(pass.ok && pass.value.held.toSorted()).toEqual(['alpha', 'beta', 'gamma'])
+    expect(pass.ok && pass.value.held.toSorted()).toEqual(['alpha', 'beta', 'software-factory'])
     expect(filedBodies.length).toBe(before)
   })
 
@@ -299,8 +318,8 @@ describe('the daily pass', () => {
       await event(id, 'shipped', shipAt, { version: version++, to: 'watching' })
       await db.sql`UPDATE factory.issues SET state = 'closed', outcome = 'done' WHERE id = ${id}`
     }
-    // gamma's Issue closed without a ship
-    await db.sql`UPDATE factory.issues SET state = 'closed', outcome = 'dropped' WHERE id = ${issueOf('gamma')}`
+    // the queue finding's Issue closed without a ship
+    await db.sql`UPDATE factory.issues SET state = 'closed', outcome = 'dropped' WHERE id = ${issueOf('software-factory')}`
     // the three days after the ship: alpha's runs all passed, beta's step still peaks at 4 GiB
     for (let i = 0; i < 4; i++)
       await step({ repo: 'alpha', at: new Date(shipAt.getTime() + (i + 1) * 10 * HOUR), ms: 20 * 60_000 })
@@ -313,7 +332,7 @@ describe('the daily pass', () => {
     expect(marked.ok && marked.value.ledger.map((l) => [l.project, l.status]).toSorted()).toEqual([
       ['alpha', 'shipped'],
       ['beta', 'shipped'],
-      ['gamma', 'dropped'],
+      ['software-factory', 'dropped'],
     ])
 
     // not yet three days: nothing is read
