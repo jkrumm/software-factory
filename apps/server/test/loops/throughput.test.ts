@@ -199,6 +199,34 @@ describe('a seeded budget breach', () => {
     expect(planSelfwatch(found, [row(T0)], T0).file.map((a) => a.why)).toEqual(['reappeared'])
   })
 
+  test('a window the counting epoch cut under a day judges no share or median, but still a peak', async () => {
+    for (let i = 0; i < 5; i++) {
+      await step({
+        repo: 'cut',
+        name: 'cut check-fast',
+        at: ago((i + 1) * 5 * 60_000),
+        ms: 600_000,
+        exit: i < 2 ? 1 : 0,
+        peak: 3000,
+      })
+    }
+    const budgets = [{ project: 'cut', repo: 'cut', fastMs: 90_000, peakMib: 2048, failShare: 0.3 }]
+    const over = (epoch: Date | null) =>
+      readBudgetFacts(db.sql, { now: T0, budgets, epoch }).then((facts) => facts.map((f) => [f.budget, f.over]))
+    expect(await over(null)).toEqual([
+      ['fast', true],
+      ['peak', true],
+      ['fail', true],
+    ])
+    expect(await over(ago(HOUR))).toEqual([
+      ['fast', false],
+      ['peak', true],
+      ['fail', false],
+    ])
+    // an epoch a whole day back cuts nothing the day would not
+    expect(await over(ago(DAY))).toEqual(await over(null))
+  })
+
   test('too few runs say nothing, and a budget left out is not judged', async () => {
     await step({ repo: 'few', name: 'few check-fast', at: ago(HOUR), ms: 600_000, peak: 100 })
     const facts = await readBudgetFacts(db.sql, {
