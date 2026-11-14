@@ -322,6 +322,11 @@ export function postgresLoopStore(tx: SQL): LoopStore {
       return classes.length + processes.length
     },
 
+    async pruneTestResults(before) {
+      const rows: unknown[] = await tx`DELETE FROM factory.test_results WHERE at < ${before} RETURNING id`
+      return rows.length
+    },
+
     async pruneClassHours(before) {
       const rows: unknown[] = await tx`DELETE FROM factory.host_class_hours WHERE hour < ${before} RETURNING hour`
       return rows.length

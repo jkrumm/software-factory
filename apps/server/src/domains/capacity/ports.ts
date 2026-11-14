@@ -90,6 +90,19 @@ export interface StepCostRow {
   durationMs: number
   waitMs: number
   exitCode: number | null
+  /** the commit the step ran on, and whether the tree had uncommitted changes (null: not read) */
+  commit?: string | undefined
+  dirty?: boolean | undefined
+  /** the test results the step wrote as JUnit (`factory.test_results`), stored beside the cost */
+  tests?: readonly TestResultRow[] | undefined
+}
+
+/** One test result of a step: a suite, a test, its status and how long it took. */
+export interface TestResultRow {
+  suite: string
+  name: string
+  status: 'pass' | 'fail' | 'skip'
+  durationMs: number
 }
 
 /** The machine the server runs on. Every reading may fail; admission then goes on without it. */
