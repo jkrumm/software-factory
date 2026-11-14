@@ -1140,6 +1140,20 @@ describe('errands', () => {
     expect(raised.errand.reachedOwnerAt).toBeNull()
   })
 
+  test('a root step for the MacBook is raised and reaches the owner by rule, without the screen model', async () => {
+    const issueId = await workingIssue()
+    const raised = await raise(issueId, {
+      summary: 'Install the launchd daemon and sysctl',
+      tried: 'looked for a way without root: none',
+      cmd: 'sudo make install-daemon',
+      host: 'macbook',
+    })
+    expect(raised).toMatchObject({ result: 'applied' })
+    expect(value(await screenErrands(deps))).toEqual([{ errand: raised.errand.id, outcome: 'reached_owner' }])
+    expect(screenCalls).toEqual([])
+    expect(await pageCount()).toBe(1)
+  })
+
   test('a pass reaches the owner: visible, paged once, replay safe, and the owner finishes it', async () => {
     const issueId = await workingIssue()
     const raised = await raise(issueId)

@@ -86,7 +86,7 @@ const errandHelp = [
   'The host does these for you, so an Errand that asks for one is refused with the route:',
   '  a door token: `factory door token new <source>`; a door route into your own repo: `factory door route-set`; into another repo: `factory signal file --repo <that repo>`',
   '  an install: a Makefile target of the repo (`brew install` through it)',
-  '  a secret read: `secrets-run`; a sudo step: a way without root first',
+  "  a secret read: `secrets-run`; a sudo step: a way without root first, else the owner's MacBook command (`--cmd`, `--host macbook`); the mini's sudo password is MacBook-only, never read it",
   '  a Report that does not show in Needs you: a signal on software-factory',
   "A step on the owner's MacBook (a sudo prompt, a Touch ID, a `hc run`): `--cmd '<the command he runs>' --host macbook`. The factory pushes it to the MacBook as a dialog when he is back, one at a time, and the answer closes the Errand. Never queue an `ask-human.sh` request beside an Errand: an Errand with no command beside your queued request is refused.",
   'Raise the Errand as the last step of a turn and end the turn: `ship`, `defer` and `close` are taken again after the note that it is done.',
