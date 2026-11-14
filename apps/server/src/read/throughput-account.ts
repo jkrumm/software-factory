@@ -1,6 +1,7 @@
 import type { SQL } from 'bun'
 import * as z from 'zod'
 import type { LeadSplit, ThroughputModel } from '@software-factory/contract'
+import { REPO_OF_STEP } from './retro-build.ts'
 
 /** The Issues of the lead part's list. */
 const TOP_ISSUES = 50
@@ -9,9 +10,6 @@ const num = z.coerce.number()
 const nullNum = z.coerce.number().nullable()
 
 const round = (value: number, decimals: number) => Math.round(value * 10 ** decimals) / 10 ** decimals
-
-/** The repo a step belongs to: the directory name of the project's checkout (`step_costs.repo` is a path). */
-const REPO_OF_STEP = `regexp_replace(rtrim(repo, '/'), '^.*/', '')`
 
 /** The tier of a step: `<project> check-fast` is `fast`, `<project> check` is `full`, any other step its own last word. */
 const TIER_OF_STEP = `CASE regexp_replace(name, '^.* ', '')
@@ -125,7 +123,7 @@ async function readLeadSplits(tx: SQL, from: Date, to: Date) {
            AND (s.cwd = a.worktree_path OR left(s.cwd, length(a.worktree_path) + 1) = a.worktree_path || '/')
          ORDER BY a.attempt DESC LIMIT 1),
         CASE WHEN s.name ~ '^factory-[0-9]+-[0-9]+ ' THEN 'issue_' || substring(s.name FROM '^factory-([0-9]+)-') END) AS issue_id
-      FROM factory.step_costs s),
+      FROM factory.step_costs s WHERE s.at >= (SELECT min(lower(wall)) FROM walls)),
     stepped AS (
       SELECT w.issue_id, w.closed_at,
         range_agg(tstzrange(s.at - s.duration_ms * interval '1 millisecond', s.at, '[)') * w.wall) AS step_mr,
@@ -139,7 +137,7 @@ async function readLeadSplits(tx: SQL, from: Date, to: Date) {
          WHERE m.cwd IS NOT NULL AND a.worktree_path IS NOT NULL
            AND (m.cwd = a.worktree_path OR left(m.cwd, length(a.worktree_path) + 1) = a.worktree_path || '/')
          ORDER BY a.attempt DESC LIMIT 1), '') AS issue_id
-      FROM factory.merge_windows m),
+      FROM factory.merge_windows m WHERE m.released_at >= (SELECT min(lower(wall)) FROM walls)),
     locked AS (
       SELECT w.issue_id, w.closed_at, range_agg(tstzrange(m.requested_at, m.got, '[)') * w.wall) AS mr
       FROM walls w JOIN lock_issue m ON m.issue_id = w.issue_id

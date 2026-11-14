@@ -79,6 +79,15 @@ const groupAlive = (pid: number): boolean => {
 
 const sleep = (ms: number) => new Promise<void>((resolve) => setTimeout(resolve, ms))
 
+/** The directory the caller runs in, symlinks resolved: the form the server matches a step or a merge window to a lead's worktree by. */
+export function callerCwd(): string | undefined {
+  try {
+    return realpathSync(process.cwd())
+  } catch {
+    return undefined
+  }
+}
+
 /** The exit code a child's end stands for: its own, or 128 plus the signal that killed it, as a shell reports it. */
 export function exitCodeOf(proc: { exitCode: number | null; signalCode: NodeJS.Signals | number | null }): number {
   if (proc.exitCode !== null) return proc.exitCode
@@ -221,13 +230,7 @@ export async function slotRun(input: { name?: string; command: string[] }, io: I
   const path = `/slots/${encodeURIComponent(id)}`
   const envLimit = limitOf(io.env.FACTORY_SLOT_RUN_MS)
   const graceMs = number(io.env.FACTORY_SLOT_KILL_GRACE_MS, DEFAULT_KILL_GRACE_MS)
-  const cwd = (() => {
-    try {
-      return realpathSync(process.cwd())
-    } catch {
-      return undefined
-    }
-  })()
+  const cwd = callerCwd()
   // Once the command runs under a slot, its process tree is measured and the renewals carry the sizes.
   let meter: ReturnType<typeof treeMeter> | undefined
   // The limit the server resolved for the grant; a server that does not say leaves it to the env or the default.

@@ -1,11 +1,11 @@
-import { lstatSync, mkdirSync, readlinkSync, realpathSync, rmdirSync, rmSync, symlinkSync } from 'node:fs'
+import { lstatSync, mkdirSync, readlinkSync, rmdirSync, rmSync, symlinkSync } from 'node:fs'
 import { constants, homedir } from 'node:os'
 import { join } from 'node:path'
 import { send } from '@software-factory/client'
 import { credentialOf } from './credentials.ts'
 import { usage } from './exit.ts'
 import { DEFAULT_URL, type Io } from './operation.ts'
-import { EX_TEMPFAIL, exitCodeOf, signalGroup } from './slot.ts'
+import { callerCwd, EX_TEMPFAIL, exitCodeOf, signalGroup } from './slot.ts'
 
 const USAGE = 'usage: deploy-lock --project <name> -- <cmd> [args…]'
 const MERGE_USAGE = 'usage: merge-lock --project <name> -- <cmd> [args…]'
@@ -168,13 +168,7 @@ async function reportWindow(
   try {
     const { token } = await credentialOf(io.env)
     if (!token) return
-    const cwd = (() => {
-      try {
-        return realpathSync(process.cwd())
-      } catch {
-        return undefined
-      }
-    })()
+    const cwd = callerCwd()
     await send({
       base: io.env.FACTORY_URL || DEFAULT_URL,
       method: 'POST',
