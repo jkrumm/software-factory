@@ -246,6 +246,8 @@ export async function slotRun(input: { name?: string; command: string[] }, io: I
         limitMs: envLimit,
         rssMib: meter?.rssMib ?? undefined,
         peakRssMib: meter?.peakRssMib ?? undefined,
+        // Set once the command runs: a lease that lapsed meanwhile is taken back, not queued for.
+        holding: meter ? true : undefined,
       },
       token,
     })
@@ -340,8 +342,9 @@ export async function slotRun(input: { name?: string; command: string[] }, io: I
       measure()
       measureTimer = setInterval(measure, MEASURE_MS)
     }
-    // The lease is renewed while the command runs. A renewal that is answered "wait" means the lease had lapsed (the server
-    // was out of reach for longer than it lasts) and the slot is someone else's: said once, and the line is left.
+    // The lease is renewed while the command runs. A lease that lapsed (the server was out of reach for longer than it
+    // lasts) is taken back by the renewal; an answer of "wait" is only a server that does not know `holding`: said once,
+    // and the line is left.
     let renewing: Promise<void> = Promise.resolve()
     let ended = false
     let warned = false

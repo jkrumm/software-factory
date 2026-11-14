@@ -49,6 +49,7 @@ export interface CapacityApi {
     limitMs: number | undefined
     rssMib: number | undefined
     peakRssMib: number | undefined
+    holding: boolean | undefined
   }): Promise<Result<SlotView, PortError>>
   giveSlotBack(id: string): Promise<Result<boolean, PortError>>
   recordStepCost(cost: StepCost): Promise<Result<true, PortError>>
@@ -271,6 +272,7 @@ export const capacityRoutes = (api?: CapacityApi) => {
           limitMs: body.limitMs,
           rssMib: body.rssMib,
           peakRssMib: body.peakRssMib,
+          holding: body.holding,
         })
         return touched.ok ? status(200, slotView(touched.value)) : status(503, unavailable(touched.error))
       },

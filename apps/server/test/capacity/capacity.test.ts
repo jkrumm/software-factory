@@ -509,6 +509,29 @@ describe('test slots', () => {
     expect(call(line.rows, 'b', at(1000 + WAITER_TTL_MS + 1), 1).rows.some((r) => r.id === 'ghost')).toBe(false)
   })
 
+  test('a running command whose lease lapsed takes a slot back, past the limit when the others hold theirs', () => {
+    const held = call([], 'a', now, 1)
+    const lapsed = at(SLOT_LEASE_MS + 1)
+    const taken = call(held.rows, 'b', lapsed, 1)
+    expect(taken.view.granted).toBe(true)
+    const waiting = call(taken.rows, 'c', lapsed, 1)
+    expect(waiting.view.granted).toBe(false)
+    const back = touchSlots(
+      waiting.rows,
+      { id: 'a', name: 'a', slots: 1, runMs: 1_800_000, fit: { ...open, max: 1 }, holding: true },
+      lapsed,
+    )
+    expect(back.view).toMatchObject({ granted: true, slot: 2, ahead: 0 })
+    expect(
+      back.rows
+        .filter((r) => r.slot !== null)
+        .map((r) => r.id)
+        .sort(),
+    ).toEqual(['a', 'b'])
+    // without the flag the same call is a waiter in line
+    expect(call(waiting.rows, 'a', lapsed, 1).view.granted).toBe(false)
+  })
+
   test('a renewal keeps the lease and the slot; the grant fixes the run limit', () => {
     const first = call([], 'a', now)
     const renewed = call(first.rows, 'a', at(20_000))

@@ -59,6 +59,7 @@ export async function touchSlot(
     limitMs?: number | undefined
     rssMib?: number | undefined
     peakRssMib?: number | undefined
+    holding?: boolean | undefined
   },
 ): Promise<Result<SlotView, PortError>> {
   const runMs = await runLimitMs(deps, input)
@@ -89,6 +90,7 @@ export async function touchSlot(
         cwd: input.cwd,
         rssMib: input.rssMib,
         peakRssMib: input.peakRssMib,
+        holding: input.holding,
         fit: {
           peakMib: learned.get(input.name) ?? null,
           freeMib,
