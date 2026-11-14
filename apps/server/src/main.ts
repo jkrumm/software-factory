@@ -72,7 +72,7 @@ import { reviewsPass, reviewsSummary } from './app/loops/reviews.ts'
 import { screenPass, screenSummary } from './app/loops/screen.ts'
 import { triagePass, triageSummary } from './app/loops/triage.ts'
 import { FRICTION_WINDOW_DAYS } from './domains/loops/friction.ts'
-import { confirmedHeartbeat } from './domains/loops/selfwatch.ts'
+import { confirmedHeartbeat, DEFAULT_PROCESS_CAP } from './domains/loops/selfwatch.ts'
 import { DEFAULT_STEWARD_RULES } from './domains/loops/stall.ts'
 import { composeRead } from './compose-read.ts'
 import { postgresIntakeStore } from './adapters/intake/store.ts'
@@ -527,6 +527,7 @@ async function main(): Promise<void> {
           }),
           migrations: gitMigrationFiles(repos),
           sharedNumbers: SHARED_NUMBERS,
+          processCap: DEFAULT_PROCESS_CAP,
           heartbeat: () =>
             confirmedHeartbeat(
               async () => (await readHealth()).heartbeat,

@@ -12,10 +12,20 @@ import {
   inertRegressionFindings,
   migrationFindings,
   planSelfwatch,
+  processGrowthFindings,
+  processStormFindings,
   signalText,
+  swapGrowthFindings,
   waitFindings,
 } from '../../src/domains/loops/selfwatch.ts'
-import type { CiRun, Finding, HeartbeatFact, SelfwatchRow } from '../../src/domains/loops/selfwatch-model.ts'
+import type {
+  CiRun,
+  Finding,
+  HeartbeatFact,
+  HostMinute,
+  ProcessMinute,
+  SelfwatchRow,
+} from '../../src/domains/loops/selfwatch-model.ts'
 import { isBuiltinInert } from '../../src/domains/quality/evidence.ts'
 
 const NOW = new Date('2026-11-08T12:00:00Z')
@@ -391,4 +401,73 @@ test('settings: the loop is every five minutes at least, off when the tick is of
   expect(set.selfwatchGraceMs).toBe(5000)
   expect(set.selfwatchBranch).toBe('scratch')
   expect(loadLoopSettings({}).selfwatchGraceMs).toBe(10 * 60_000)
+})
+
+const proc = (minutesAgo: number, footprintMib: number, pid = 410, name = 'fseventsd'): ProcessMinute => ({
+  at: minutes(minutesAgo),
+  pid,
+  name,
+  class: 'system',
+  footprintMib,
+})
+
+test('process_growth: more than 1 GiB in the last hour of a process still there, once per process', () => {
+  const growing = [proc(60, 800), proc(30, 1300), proc(1, 1900)]
+  const found = processGrowthFindings(growing, NOW)
+  expect(found.map((f) => f.subject)).toEqual(['fseventsd:410'])
+  expect(found[0]?.title).toContain('fseventsd')
+  // the figures move every minute: the evidence of the same episode does not
+  const later = processGrowthFindings([proc(60, 800), proc(30, 1300), proc(1, 2400)], NOW)
+  expect(evidenceHash(later[0] as Finding)).toBe(evidenceHash(found[0] as Finding))
+  // exactly the limit, a short life, a process that ended, an old sample and a shrinking one are no finding
+  expect(processGrowthFindings([proc(60, 800), proc(1, 1824)], NOW)).toEqual([])
+  expect(processGrowthFindings([proc(20, 100), proc(1, 3000)], NOW)).toEqual([])
+  expect(processGrowthFindings([proc(60, 800), proc(10, 3000)], NOW)).toEqual([])
+  expect(processGrowthFindings([proc(90, 100), proc(80, 3000)], NOW)).toEqual([])
+  expect(processGrowthFindings([proc(60, 3000), proc(1, 1000)], NOW)).toEqual([])
+  // two processes of one name are two subjects; a pid reuse under another name is a third
+  const two = processGrowthFindings(
+    [...growing, ...growing.map((m) => ({ ...m, pid: 411 })), ...growing.map((m) => ({ ...m, name: 'mds' }))],
+    NOW,
+  )
+  expect(two.map((f) => f.subject)).toEqual(['fseventsd:410', 'fseventsd:411', 'mds:410'])
+})
+
+const swap = (rises: (number | null)[], processes: number | null = null): HostMinute[] =>
+  rises.map((swapUsedPct, i) => ({ at: minutes(rises.length - 1 - i), swapUsedPct, processes }))
+
+test('swap_growth: 15 minutes in a row that never fell and ended higher', () => {
+  const rising = Array.from({ length: 16 }, (_, i) => 20 + i * 0.5)
+  expect(swapGrowthFindings(swap(rising), NOW).map((f) => f.subject)).toEqual(['host'])
+  // equal minutes in between still count, a fall, a missing reading or too few minutes do not
+  const plateau = rising.map((v, i) => (i === 7 ? (rising[6] as number) : v))
+  expect(swapGrowthFindings(swap(plateau), NOW)).toHaveLength(1)
+  expect(swapGrowthFindings(swap(rising.map((v, i) => (i === 8 ? 1 : v))), NOW)).toEqual([])
+  expect(swapGrowthFindings(swap(rising.map((v, i) => (i === 8 ? null : v))), NOW)).toEqual([])
+  expect(swapGrowthFindings(swap(rising.slice(1)), NOW)).toEqual([])
+  // swap that sits at one level, or rises by noise, is not growth
+  expect(swapGrowthFindings(swap(rising.map(() => 40)), NOW)).toEqual([])
+  expect(swapGrowthFindings(swap(rising.map((_, i) => 40 + i * 0.01)), NOW)).toEqual([])
+  // a gap in the minutes breaks the run; a host loop that stopped is no growth now
+  const gap = swap(rising).map((m, i) => (i < 8 ? { ...m, at: new Date(m.at.getTime() - 300_000) } : m))
+  expect(swapGrowthFindings(gap, NOW)).toEqual([])
+  expect(swapGrowthFindings(swap(rising), new Date(NOW.getTime() + 600_000))).toEqual([])
+  // the run is the tail: a longer rise is the same evidence
+  const longer = [10, 12, ...rising]
+  expect(evidenceHash(swapGrowthFindings(swap(longer), NOW)[0] as Finding)).toBe(
+    evidenceHash(swapGrowthFindings(swap(rising), NOW)[0] as Finding),
+  )
+})
+
+test('process_storm: the count over the cap for three samples in a row, with a reading', () => {
+  const count = (...counts: (number | null)[]) =>
+    swap(
+      counts.map(() => 1),
+      null,
+    ).map((m, i) => ({ ...m, processes: counts[i] ?? null }))
+  expect(processStormFindings(count(600, 3000, 3100, 3200), 2500, NOW).map((f) => f.subject)).toEqual(['host'])
+  expect(processStormFindings(count(3000, 3100, 2500), 2500, NOW)).toEqual([])
+  expect(processStormFindings(count(3000, null, 3200), 2500, NOW)).toEqual([])
+  expect(processStormFindings(count(3000, 3100), 2500, NOW)).toEqual([])
+  expect(processStormFindings(count(3000, 3100, 3200), 2500, new Date(NOW.getTime() + 600_000))).toEqual([])
 })

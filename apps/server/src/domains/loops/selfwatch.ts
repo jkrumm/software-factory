@@ -3,8 +3,10 @@ import {
   type CiRun,
   type Finding,
   type HeartbeatFact,
+  type HostMinute,
   type IdleLead,
   type MigrationSnapshot,
+  type ProcessMinute,
   type RegressionFact,
   type SelfwatchRow,
   subjectKeyOf,
@@ -274,6 +276,128 @@ export function heartbeatFindings(heartbeat: HeartbeatFact, now: Date): Finding[
         `Now: ${iso(now)}`,
       ],
       reproduce: 'curl the server GET /health; factory read loops',
+    },
+  ]
+}
+
+// ---- 7. process_growth, 8. swap_growth, 9. process_storm -------------------------------------------------------------------
+
+/** A process that grew by more than this within `GROWTH_WINDOW_MS` is a runaway (the daemons of the 2026-11-13 panic grew by many GiB). */
+export const GROWTH_MIB = 1024
+export const GROWTH_WINDOW_MS = 60 * 60_000
+/** A growth is judged on a process seen at least this long: a test step that starts and peaks within minutes is not a leak. */
+const GROWTH_MIN_SPAN_MS = 30 * 60_000
+/** A reading older than this is not the host as it is now: a process that ended, a host loop that stopped. */
+const FRESH_MS = 3 * 60_000
+
+/** Swap use that rose over this many minute samples, never falling, is a swap that grows. */
+export const SWAP_RISE_MINUTES = 15
+/** The rise over those minutes, in points of swap use, below which a flat reading is noise. */
+const SWAP_MIN_RISE_PCT = 0.5
+/** Two minute samples further apart than this are not consecutive. */
+const MINUTE_GAP_MS = 90_000
+
+/** The process count must stay over the cap this many samples in a row: one `top` reading can be a spike of a build. */
+export const STORM_SAMPLES = 3
+/** Until `tp-leads` brings its own cap, the host's process count past which the host is in a process storm. */
+export const DEFAULT_PROCESS_CAP = 2500
+
+/** Whether the newest minute sample is recent enough to say what the host is doing now. */
+export const hostSampleIsFresh = (minutes: readonly HostMinute[], now: Date): boolean =>
+  minutes.some((minute) => now.getTime() - minute.at.getTime() <= FRESH_MS)
+
+const mib = (n: number): string => `${Math.round(n)} MiB`
+
+/**
+ * A process (by pid and program name) whose footprint rose by more than 1 GiB between the first and the last of its
+ * samples in the last hour, seen over at least 30 minutes and still present. The evidence is the process and the limit; the
+ * figures move every minute and are context, so the signal is filed once and repeats only after the growth has cleared.
+ */
+export function processGrowthFindings(samples: readonly ProcessMinute[], now: Date): Finding[] {
+  const byProcess = new Map<string, ProcessMinute[]>()
+  for (const sample of samples) {
+    if (sample.at.getTime() < now.getTime() - GROWTH_WINDOW_MS) continue
+    const key = `${sample.name}:${sample.pid}`
+    byProcess.set(key, [...(byProcess.get(key) ?? []), sample])
+  }
+  const found: Finding[] = []
+  for (const [subject, list] of [...byProcess].sort(([a], [b]) => byText(a, b))) {
+    const ordered = [...list].sort((a, b) => a.at.getTime() - b.at.getTime())
+    const first = ordered[0]
+    const last = ordered[ordered.length - 1]
+    if (!first || !last || first === last) continue
+    if (now.getTime() - last.at.getTime() > FRESH_MS) continue
+    if (last.at.getTime() - first.at.getTime() < GROWTH_MIN_SPAN_MS) continue
+    const grown = last.footprintMib - first.footprintMib
+    if (grown <= GROWTH_MIB) continue
+    found.push({
+      kind: 'process_growth',
+      subject,
+      title: `Self-watch: process ${oneLine(first.name, 60)} grew by more than one GiB in an hour`,
+      facts: [
+        `${first.name} (pid ${first.pid}, class ${first.class}) grew by more than ${GROWTH_MIB} MiB within one hour`,
+      ],
+      context: [
+        `From ${mib(first.footprintMib)} at ${iso(first.at)} to ${mib(last.footprintMib)} at ${iso(last.at)}: ${mib(grown)}`,
+        `Now: ${iso(now)}`,
+      ],
+      reproduce: `factory read host (the host loop's notable processes); ps -o pid,rss,command -p ${first.pid}`,
+    })
+  }
+  return found
+}
+
+/**
+ * Swap use that did not fall and ended higher over the last 15 minutes in a row: 16 consecutive minute samples, every one
+ * read, the newest not older than 3 minutes. Cleared at the first minute it falls or a reading is missing.
+ */
+export function swapGrowthFindings(minutes: readonly HostMinute[], now: Date): Finding[] {
+  const ordered = [...minutes].sort((a, b) => a.at.getTime() - b.at.getTime())
+  const run: { at: Date; pct: number }[] = []
+  for (const minute of ordered) {
+    const previous = run[run.length - 1]
+    const consecutive = previous !== undefined && minute.at.getTime() - previous.at.getTime() <= MINUTE_GAP_MS
+    if (minute.swapUsedPct === null) {
+      run.length = 0
+      continue
+    }
+    if (previous !== undefined && (!consecutive || minute.swapUsedPct < previous.pct)) run.length = 0
+    run.push({ at: minute.at, pct: minute.swapUsedPct })
+  }
+  const last = run[run.length - 1]
+  if (!last || now.getTime() - last.at.getTime() > FRESH_MS || run.length < SWAP_RISE_MINUTES + 1) return []
+  const start = run[run.length - 1 - SWAP_RISE_MINUTES]
+  if (!start || last.pct - start.pct < SWAP_MIN_RISE_PCT) return []
+  return [
+    {
+      kind: 'swap_growth',
+      subject: 'host',
+      title: 'Self-watch: swap use of the host has grown for fifteen minutes in a row',
+      facts: [`swap use never fell and rose over ${SWAP_RISE_MINUTES} minute samples in a row`],
+      context: [
+        `From ${start.pct.toFixed(1)}% at ${iso(start.at)} to ${last.pct.toFixed(1)}% at ${iso(last.at)}`,
+        `Now: ${iso(now)}`,
+      ],
+      reproduce: 'factory read host; factory read throughput (the host signals and the notable processes)',
+    },
+  ]
+}
+
+/** The host's process count over `cap` for the last 3 samples, the newest not older than 3 minutes. */
+export function processStormFindings(minutes: readonly HostMinute[], cap: number, now: Date): Finding[] {
+  const ordered = [...minutes].sort((a, b) => a.at.getTime() - b.at.getTime())
+  const tail = ordered.slice(-STORM_SAMPLES)
+  const last = tail[tail.length - 1]
+  if (!last || tail.length < STORM_SAMPLES || now.getTime() - last.at.getTime() > FRESH_MS) return []
+  if (!tail.every((minute) => minute.processes !== null && minute.processes > cap)) return []
+  return [
+    {
+      kind: 'process_storm',
+      subject: 'host',
+      title: 'Self-watch: the process count of the host is over its cap',
+      facts: [`the process count stayed over the cap of ${cap} for ${STORM_SAMPLES} samples in a row`],
+      context: [`Now ${last.processes} processes at ${iso(last.at)}`, `Now: ${iso(now)}`],
+      reproduce: 'factory read host; ps -A | wc -l',
     },
   ]
 }

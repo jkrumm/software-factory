@@ -11,7 +11,13 @@ import {
   MAX_SELFWATCH_FILINGS,
   migrationFindings,
   planSelfwatch,
+  processGrowthFindings,
+  processStormFindings,
   signalText,
+  swapGrowthFindings,
+  GROWTH_WINDOW_MS,
+  hostSampleIsFresh,
+  SWAP_RISE_MINUTES,
   waitFindings,
 } from '../../domains/loops/selfwatch.ts'
 import {
@@ -67,6 +73,8 @@ export interface SelfwatchDeps {
   migrations: MigrationFiles
   /** migration numbers two applied files share (`SHARED_NUMBERS`) */
   sharedNumbers: ReadonlySet<string>
+  /** the host's process count above which a storm is filed (`DEFAULT_PROCESS_CAP` until the capacity layer has its own) */
+  processCap: number
   /** `GET /health`'s heartbeat, as `healthOf` computes it */
   heartbeat(): Promise<HeartbeatFact>
   /** intake's entry for an agent (`intake.api.file`): its fingerprint rules decide a repeat */
@@ -178,6 +186,25 @@ async function gather(deps: SelfwatchDeps, now: Date): Out<Gathered> {
   gathered.findings.push(...inertRegressionFindings(regressed.value, isBuiltinInert))
 
   gathered.findings.push(...heartbeatFindings(await deps.heartbeat(), now))
+
+  // the host's own samples: the hour of notable processes, and the minutes the swap and process-count rules read
+  const host = await deps.uow.run(async ({ loopReads }) =>
+    ok({
+      processes: await loopReads.processMinutes(new Date(now.getTime() - GROWTH_WINDOW_MS)),
+      minutes: await loopReads.hostMinutes(new Date(now.getTime() - (SWAP_RISE_MINUTES + 5) * 60_000)),
+    }),
+  )
+  if (!host.ok) return host
+  gathered.findings.push(
+    ...processGrowthFindings(host.value.processes, now),
+    ...swapGrowthFindings(host.value.minutes, now),
+    ...processStormFindings(host.value.minutes, deps.processCap, now),
+  )
+  // a host loop that stopped says nothing about the swap or the count: their open rows are left as they are
+  if (!hostSampleIsFresh(host.value.minutes, now)) {
+    gathered.unread.add('swap_growth').add('process_storm')
+    gathered.notes.push('host samples not fresh: swap and process count not judged')
+  }
   return ok(gathered)
 }
 

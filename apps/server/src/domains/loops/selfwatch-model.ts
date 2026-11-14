@@ -1,4 +1,4 @@
-/** The six conditions the self-watch loop looks for; the kind is the first half of a finding's stable key. */
+/** The nine conditions the self-watch loop looks for; the kind is the first half of a finding's stable key. */
 export const FINDING_KINDS = [
   'ci_red',
   'migration_clash',
@@ -6,6 +6,9 @@ export const FINDING_KINDS = [
   'lead_idle',
   'inert_regression',
   'heartbeat_stale',
+  'process_growth',
+  'swap_growth',
+  'process_storm',
 ] as const
 export type FindingKind = (typeof FINDING_KINDS)[number]
 
@@ -102,4 +105,20 @@ export interface HeartbeatFact {
   reason: string | null
   tickAt: string | null
   queueMovedAt: string | null
+}
+
+/** One notable process of one minute (`host_process_samples`), as the growth rule reads it. */
+export interface ProcessMinute {
+  at: Date
+  pid: number
+  name: string
+  class: string
+  footprintMib: number
+}
+
+/** One minute of the host (`host_samples`), as the swap and process-count rules read it; null when not read. */
+export interface HostMinute {
+  at: Date
+  swapUsedPct: number | null
+  processes: number | null
 }

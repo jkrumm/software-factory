@@ -521,3 +521,40 @@ test('a lab with a plain heartbeat files none', async () => {
   await pass()
   expect(await signalsOf('heartbeat_stale')).toEqual([])
 })
+
+test('process_growth, swap_growth, process_storm: a drill process, a swap rise and a process storm each file one signal, once, and clear', async () => {
+  const db = sql()
+  // a process growing by 1.2 GiB over the last hour, one sample every 5 minutes
+  await db`
+    INSERT INTO factory.host_process_samples (at, pid, ppid, name, class, footprint_mib, why)
+    SELECT date_trunc('minute', now()) - (m || ' minutes')::interval, 4242, 1, 'drilld', 'system', 1000 + (60 - m) * 20, 'growth'
+    FROM generate_series(0, 60, 5) AS m`
+  // swap use rising over the last 16 minutes, and a process count over the cap for the last 3 minutes
+  await db`
+    INSERT INTO factory.host_samples (at, swap_used_pct, processes)
+    SELECT date_trunc('minute', now()) - (m || ' minutes')::interval, 30 + (15 - m) * 0.5, CASE WHEN m < 3 THEN 9000 ELSE 800 END
+    FROM generate_series(0, 15) AS m`
+
+  const summary = await pass()
+  expect(summary).toContain('filed 3')
+  const [growth, ...g] = await signalsOf('process_growth')
+  expect(g).toEqual([])
+  expect(growth?.repo).toBe(REPO)
+  expect(growth?.title).toContain('drilld')
+  expect((await signalsOf('swap_growth')).length).toBe(1)
+  expect((await signalsOf('process_storm')).length).toBe(1)
+
+  // the same condition, a minute on: nothing new
+  await pass()
+  expect((await signalsOf('process_growth')).length).toBe(1)
+  expect((await signalsOf('swap_growth')).length).toBe(1)
+  expect((await signalsOf('process_storm')).length).toBe(1)
+
+  // the conditions clear: the host's newest minutes are low, the process is gone
+  await db`DELETE FROM factory.host_process_samples WHERE pid = 4242`
+  await db`UPDATE factory.host_samples SET swap_used_pct = 1, processes = 700 WHERE at >= date_trunc('minute', now()) - interval '5 minutes'`
+  await pass()
+  for (const key of ['process_growth:drilld:4242', 'swap_growth:host', 'process_storm:host'])
+    expect((await rowOf(key))?.cleared_at).not.toBeNull()
+  expect((await signalsOf('process_growth')).length).toBe(1)
+})
