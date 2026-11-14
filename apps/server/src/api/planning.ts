@@ -7,6 +7,7 @@ import {
   PrioAnswer,
   PrioBody,
   ProjectList,
+  ProjectPlanModel,
   ProjectSyncAnswer,
   ProjectView,
   ReplanAnswer,
@@ -30,7 +31,7 @@ import type { ProjectState } from '../app/planning-views.ts'
 import { type IssueId, idOf, issueNumber } from '../kernel/ids.ts'
 import type { OwnerActor } from '../kernel/events.ts'
 import type { PortError, Result } from '../kernel/result.ts'
-import { ownerActorOf } from './auth.ts'
+import { callerOf, ownerActorOf } from './auth.ts'
 import { errorResponses } from './errors.ts'
 import { issueRef } from './issue-ref.ts'
 
@@ -147,6 +148,72 @@ const view = ({ project, plan }: ProjectState): ProjectView =>
     planError: project.planError?.message ?? null,
   })
 
+/** A work project: no `project.yaml` of its own, or one that says `work: true` (`read/work.ts`, the one rule). */
+const isWorkProject = ({ project }: ProjectState): boolean => project.source === 'defaults' || project.project.work
+
+/** The projects the read token may and may not hear of: the stored ones with a `project.yaml` of their own, and the work ones. */
+interface Scope {
+  open: ReadonlySet<string>
+  work: ReadonlySet<string>
+}
+
+/** The project part of a `<project>:<key>` ref; null for a key of the row's own project. */
+const projectOf = (ref: string): string | null => (ref.includes(':') ? (ref.split(':')[0] ?? null) : null)
+
+/**
+ * What the read token sees of a plan row's words: an `after` key of a project that is not open reads `private:<key>`; in
+ * the reason the same names (the work projects, and the prefixes of this row's own `after` keys, which a work repo with
+ * no stored project can only be) read `private:`, and `unknown project <name>` loses its name. Only known names are
+ * replaced, never a pattern: a timestamp's colon is no ref.
+ */
+function maskerFor(
+  scope: Scope,
+  after: readonly string[],
+): { key: (ref: string) => string; reason: (text: string) => string } {
+  const hidden = new Set(scope.work)
+  for (const ref of after) {
+    const project = projectOf(ref)
+    if (project !== null && !scope.open.has(project)) hidden.add(project)
+  }
+  const names = [...hidden].map((name) => name.replace(/[.*+?^${}()|[\]\\]/g, '\\$&'))
+  const refs = names.length === 0 ? null : new RegExp(`(?<![\\w.~-])(?:${names.join('|')}):`, 'g')
+  return {
+    key: (ref) => {
+      const project = projectOf(ref)
+      return project !== null && !scope.open.has(project) ? `private:${ref.slice(project.length + 1)}` : ref
+    },
+    reason: (text) => (refs ? text.replace(refs, 'private:') : text).replace(/^unknown project .*$/, 'unknown project'),
+  }
+}
+
+const planModel = (state: ProjectState, scope: Scope | null): ProjectPlanModel => {
+  const written = new Map((state.project.plan?.rows ?? []).map((row) => [row.key, row]))
+  const words = scope ? maskerFor(scope, []).reason : (text: string) => text
+  return ProjectPlanModel.parse({
+    project: state.project.name,
+    sha: state.plan?.sha ?? null,
+    error: state.plan?.error == null ? null : words(state.plan.error),
+    warnings: (state.plan?.warnings ?? []).map(words),
+    rows: (state.plan?.rows ?? []).map((row) => {
+      const source = written.get(row.key)
+      const what = source?.facts?.what
+      const mask = scope ? maskerFor(scope, source?.after ?? []) : null
+      return {
+        key: row.key,
+        title: source?.title ?? null,
+        kind: source?.kind ?? null,
+        state: row.state,
+        issue: row.issue,
+        reason: row.reason === null || !mask ? row.reason : mask.reason(row.reason),
+        // the read token never learns the name of a work project a row files into, or waits for (`mask`)
+        target: scope && row.target !== null && scope.work.has(row.target) ? 'private' : row.target,
+        after: mask ? (source?.after ?? []).map(mask.key) : (source?.after ?? []),
+        what: typeof what === 'string' ? what : null,
+      }
+    }),
+  })
+}
+
 const syncAnswer = (result: SyncResult): ProjectSyncAnswer => ProjectSyncAnswer.parse(result)
 
 /**
@@ -185,6 +252,34 @@ export const planningRoutes = (api?: PlanningApi) => {
           operationId: 'project.show',
           summary:
             'one project: its project.yaml in force and every plan row with its state (the plan format: docs/plan.md)',
+        },
+      },
+    )
+    .get(
+      '/v1/projects/:name/plan',
+      async ({ params, request, status }) => {
+        if (!api) return status(503, unbound)
+        const projects = await api.projects()
+        if (!projects.ok) return status(503, failureOf(projects.error).body)
+        // the read token hears no word of a work project, not even that it exists (NL18); a lead and the owner read all
+        const redact = callerOf(request) === 'read'
+        const found = projects.value.find((p) => p.project.name === params.name)
+        if (!found || (redact && isWorkProject(found))) {
+          return status(404, failure(`no project ${params.name}`, 'not_found'))
+        }
+        const scope: Scope = {
+          open: new Set(projects.value.filter((p) => !isWorkProject(p)).map((p) => p.project.name)),
+          work: new Set(projects.value.filter(isWorkProject).map((p) => p.project.name)),
+        }
+        return status(200, planModel(found, redact ? scope : null))
+      },
+      {
+        params: z.object({ name: z.string() }),
+        response: { 200: ProjectPlanModel, ...errorResponses(404, 503) },
+        detail: {
+          operationId: 'project.plan',
+          summary:
+            "one project's plan rows with their state (open: its Issue is not closed; done: it closed; filable: due, not filed; waiting: see reason), each with its title, kind, after rows and what it owns; for a lead judging whether an open row owns a gap",
         },
       },
     )

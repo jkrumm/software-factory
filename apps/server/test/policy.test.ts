@@ -102,6 +102,14 @@ describe('the policy table', () => {
     expect(allowed('GET', '/projects')).toEqual(['owner', 'orchestrator'])
   })
 
+  test("a project's plan rows are a read route: a lead reads them, while project show stays the owner's", async () => {
+    expect(allowed('GET', '/v1/projects/:name/plan')).toEqual(['owner', 'orchestrator', 'agent', 'read'])
+    expect((await routes()).some(({ method, route }) => method === 'GET' && route === '/v1/projects/:name/plan')).toBe(
+      true,
+    )
+    expect(allowed('GET', '/projects/:name')).toEqual(['owner', 'orchestrator'])
+  })
+
   test("the machine is allowed on exactly the door's three calls", async () => {
     const machine = (await routes())
       .filter(({ method, route }) => {
