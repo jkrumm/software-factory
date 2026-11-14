@@ -141,9 +141,9 @@ const memoryOver = (m: CapacityMinute, rules: AdmissionRules): boolean =>
  * More leads working than the admission rules allow, judged per admission (an `admitted` event; a lead that resumes from a
  * wait takes its claim again without these gates and is no admission). Each is set against the host samples on either side
  * of it, within `MINUTE_GAP_MS`: it passed the load rule when the load was over its ceiling in both, the memory rule when
- * swap use or the swapout rate was over its ceiling in both (a lead the rule let in has one of the two under), and the cap
- * when the leads already filled the accounts' seats in the sample after it. Judged over the ten minutes before the newest
- * sample; one signal, the passed gates are its facts.
+ * swap use or the swapout rate was over its ceiling in both (a lead the rule let in has one of the two under). The seat cap
+ * is not judged: the idle host's seat bonus lets leads exceed `host_samples.seats` by the rule. Judged over the ten minutes
+ * before the newest sample; one signal, the passed gates are its facts.
  */
 export function gatesPassedFindings(
   minutes: readonly CapacityMinute[],
@@ -156,7 +156,7 @@ export function gatesPassedFindings(
   if (!newest || now.getTime() - newest.at.getTime() > FRESH_MS) return []
   const facts: string[] = []
   const context: string[] = []
-  const passed: { load?: string; memory?: string; seats?: string } = {}
+  const passed: { load?: string; memory?: string } = {}
   for (const admission of byTime(admissions)) {
     if (newest.at.getTime() - admission.at.getTime() > GATE_WINDOW_MS) continue
     const t = admission.at.getTime()
@@ -166,7 +166,6 @@ export function gatesPassedFindings(
     const seen = `${admission.issue} admitted at ${iso(admission.at)}: load ${after.load?.toFixed(1) ?? 'unread'} (ceiling ${after.loadCeiling ?? 'unread'}), swap ${after.swapUsedPct ?? 'unread'}%, swapouts ${after.swapoutMbPer300s ?? 'unread'} MiB/300s, ${after.leads ?? 'unread'} leads of ${after.seats ?? 'unread'} seats`
     if (loadOver(before, rules) && loadOver(after, rules)) passed.load ??= seen
     if (memoryOver(before, rules) && memoryOver(after, rules)) passed.memory ??= seen
-    if (after.leads !== null && after.seats !== null && after.leads > after.seats) passed.seats ??= seen
   }
   if (passed.load) {
     facts.push('a lead was admitted while the load was over its ceiling')
@@ -175,10 +174,6 @@ export function gatesPassedFindings(
   if (passed.memory) {
     facts.push('a lead was admitted while swap was over its ceiling')
     context.push(`memory rule: ${passed.memory}`)
-  }
-  if (passed.seats) {
-    facts.push('a lead was admitted while the leads already filled the accounts seats')
-    context.push(`seat cap: ${passed.seats}`)
   }
   if (facts.length === 0) return []
   return [

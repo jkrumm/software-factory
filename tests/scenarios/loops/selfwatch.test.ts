@@ -614,6 +614,9 @@ test('slot_line and gates_passed: the stored slot minutes and capacity facts fil
   const db = sql()
   await db`DELETE FROM factory.host_samples`
   await db`DELETE FROM factory.slot_shadow`
+  // the load samples of the test before also read a lead admitted past the load rule (the Issues the file admitted): settle that row first
+  await pass()
+  const gatesBefore = (await signalsOf('gates_passed')).length
   // fifteen minutes with twelve callers waiting for a slot
   await db`
     INSERT INTO factory.slot_shadow (at, live_slots, live_max, aim_slots, holders, waiters, swap_growing, reason)
@@ -630,15 +633,16 @@ test('slot_line and gates_passed: the stored slot minutes and capacity facts fil
   const [slot, ...slotMore] = await signalsOf('slot_line')
   expect(slotMore).toEqual([])
   expect(slot?.title).toContain('more than eight callers')
-  const [gates, ...gatesMore] = await signalsOf('gates_passed')
-  expect(gatesMore).toEqual([])
+  const gatesNow = await signalsOf('gates_passed')
+  expect(gatesNow).toHaveLength(gatesBefore + 1)
+  const gates = gatesNow[gatesNow.length - 1]
   expect(gates?.text).toContain('a lead was admitted while the load was over its ceiling')
   expect(gates?.text).toContain(`${admittedIssue} admitted at`)
   expect(gates?.text).toContain('Evidence at the time of filing:')
 
   await pass()
   expect(await signalsOf('slot_line')).toHaveLength(1)
-  expect(await signalsOf('gates_passed')).toHaveLength(1)
+  expect(await signalsOf('gates_passed')).toHaveLength(gatesBefore + 1)
 
   // the line shortens and the load falls under the ceiling: both clear
   await db`UPDATE factory.slot_shadow SET waiters = 0 WHERE at >= date_trunc('minute', now()) - interval '1 minute'`

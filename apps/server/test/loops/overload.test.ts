@@ -152,7 +152,7 @@ test('gates_passed: a lead admitted between two samples that both read the load 
   ).toEqual([])
 })
 
-test('gates_passed: the memory rule and the seat cap are their own facts of the one signal, and it clears when the window passes', () => {
+test('gates_passed: the memory rule is its own fact of the one signal, and it clears when the window passes', () => {
   const swap = [
     minute({ at: ago(2), swapUsedPct: 80, leads: 2 }),
     minute({ at: ago(1), swapUsedPct: 82, leads: 3 }),
@@ -164,13 +164,9 @@ test('gates_passed: the memory rule and the seat cap are their own facts of the 
   const swapouts = swap.map((m) => ({ ...m, swapUsedPct: 10, swapoutMbPer300s: 5000 }))
   expect(gatesPassedFindings(swapouts, [admit(2)], RULES, NOW)).toHaveLength(1)
 
-  // the cap: the leads already fill the seats in the sample after the admission
+  // the seat cap is not judged: the idle host's seat bonus lets leads exceed the seats by the rule
   const seats = [minute({ at: ago(1), leads: 4, seats: 4 }), minute({ at: ago(0), leads: 5, seats: 4 })]
-  expect(gatesPassedFindings(seats, [admit(1)], RULES, NOW)[0]?.facts).toEqual([
-    'a lead was admitted while the leads already filled the accounts seats',
-  ])
-  // leads above the seats with no admission are resumes (a resume ignores the account cap): not a finding
-  expect(gatesPassedFindings(seats, [], RULES, NOW)).toEqual([])
+  expect(gatesPassedFindings(seats, [admit(1)], RULES, NOW)).toEqual([])
 
   // every gate together keeps one signal; the facts are stable, no clock in them
   const all = [
@@ -180,7 +176,7 @@ test('gates_passed: the memory rule and the seat cap are their own facts of the 
   ]
   const both = gatesPassedFindings(all, [admit(2), admit(1, 'issue_2')], RULES, NOW)
   expect(both).toHaveLength(1)
-  expect(both[0]?.facts).toHaveLength(3)
+  expect(both[0]?.facts).toHaveLength(2)
 
   // cleared: the admission is older than the ten-minute window of the newest sample
   const old = [
