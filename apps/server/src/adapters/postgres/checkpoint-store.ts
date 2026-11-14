@@ -169,6 +169,7 @@ const JoinRow = z.object({
   issue_id: z.string(),
   attempt: z.number().int(),
   joined_at: z.date(),
+  key: z.string(),
 })
 
 const PageRow = z.object({
@@ -880,22 +881,29 @@ export function postgresCheckpointStore(tx: SQL): CheckpointStore {
       const [row] = await tx`
         SELECT * FROM factory.errands
         WHERE done_at IS NULL AND turned_away_at IS NULL
+          AND (issue_id IS NULL OR EXISTS (SELECT 1 FROM factory.issues i WHERE i.id = errands.issue_id AND i.state <> 'closed'))
           AND ((${command}::text IS NOT NULL AND command = ${command}) OR (${check}::text IS NOT NULL AND check_command = ${check}))
         ORDER BY raised_at, id LIMIT 1`
       return row ? errandOf(row) : null
     },
 
+    async joinedErrand(key) {
+      const [row] = await tx`
+        SELECT e.* FROM factory.errands e JOIN factory.errand_joins j ON j.errand_id = e.id WHERE j.key = ${key}`
+      return row ? errandOf(row) : null
+    },
+
     async joinErrand(join) {
       const rows: unknown[] = await tx`
-        INSERT INTO factory.errand_joins (errand_id, issue_id, attempt, joined_at)
-        VALUES (${join.errandId}, ${join.issueId}, ${join.attempt}, ${join.joinedAt})
-        ON CONFLICT (errand_id, issue_id) DO NOTHING RETURNING errand_id`
+        INSERT INTO factory.errand_joins (errand_id, issue_id, attempt, joined_at, key)
+        VALUES (${join.errandId}, ${join.issueId}, ${join.attempt}, ${join.joinedAt}, ${join.key})
+        ON CONFLICT DO NOTHING RETURNING errand_id`
       return rows.length === 1
     },
 
     async joinsOf(id) {
       const rows: unknown[] = await tx`
-        SELECT errand_id, issue_id, attempt, joined_at FROM factory.errand_joins WHERE errand_id = ${id}
+        SELECT errand_id, issue_id, attempt, joined_at, key FROM factory.errand_joins WHERE errand_id = ${id}
         ORDER BY joined_at, issue_id`
       return rows.map((raw) => {
         const row = JoinRow.parse(raw)
@@ -904,6 +912,7 @@ export function postgresCheckpointStore(tx: SQL): CheckpointStore {
           issueId: row.issue_id as IssueId,
           attempt: row.attempt,
           joinedAt: row.joined_at,
+          key: row.key as Key,
         }
       })
     },

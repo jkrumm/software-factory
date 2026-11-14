@@ -49,6 +49,7 @@ import { loadNeedsSettings } from './read/needs-settings.ts'
 import { availableParallelism, loadavg } from 'node:os'
 import { join } from 'node:path'
 import { APPROVED_RUN_HANG_GUARD_MS } from './app/checkpoints-approve.ts'
+import { endRequest, tellCheckBroken } from './app/checkpoints-errands.ts'
 import { checkpointUses } from './app/checkpoints-uses.ts'
 import { createLoopRunner, type LoopRunner, type LoopSpec } from './app/loops/runner.ts'
 import { projectFileProjects } from './app/quality-projects.ts'
@@ -695,6 +696,14 @@ async function main(): Promise<void> {
           clock: writes.clock,
           checks: shellCheckRunner(),
           needed: agwErrandNeeded(agw),
+          // a request an Issue joined ends for that Issue too
+          end: async (errand, how) => {
+            const ended = await endRequest(checkpointDeps, errand.id, how)
+            return ended.ok && ended.value
+          },
+          broken: async (errand, line) => {
+            await tellCheckBroken(checkpointDeps, errand, line)
+          },
         })
         if (!pass.ok) return pass
         said('errands', pass.value.problems)

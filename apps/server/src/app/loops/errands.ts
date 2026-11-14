@@ -28,6 +28,11 @@ export interface CheckDeps {
   resolve?: (errand: ErrandRecord, why: string) => Promise<boolean>
   /** tells the lead whose Issue waits on the Errand that its check is broken (once); a request has no one to tell */
   broken?: (errand: ErrandRecord, line: string) => Promise<void>
+  /** ends a request by the loop's own finding and tells the Issues that joined it; default: close the row (no one joined) */
+  end?: (
+    errand: ErrandRecord,
+    how: { kind: 'not_needed' | 'expired'; by: 'check' | 'judge' | 'loop'; why: string },
+  ) => Promise<boolean>
 }
 
 export interface ErrandsDeps extends CheckDeps {
@@ -68,6 +73,7 @@ async function close(
   by: 'check' | 'judge' | 'loop',
   why: string,
 ): Promise<boolean> {
+  if (deps.end) return deps.end(errand, { kind, by, why })
   const done = await deps.uow.run(async ({ checkpoints }) =>
     ok(await checkpoints.finishErrand(errand.id, deps.clock.now(), closedNote(kind, why), { kind, by })),
   )

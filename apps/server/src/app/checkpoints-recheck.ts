@@ -21,7 +21,14 @@ import { type AppliedRecord, replay } from '../domains/work/machine.ts'
 import type { Issue } from '../domains/work/issue.ts'
 import { key } from '../kernel/keys.ts'
 import { ok, type PortError, type Result } from '../kernel/result.ts'
-import { answerIn, type CheckpointError, type CheckpointStores, formDigest, waitingOn } from './checkpoints.ts'
+import {
+  answerIn,
+  type CheckpointError,
+  type CheckpointStores,
+  endJoined,
+  formDigest,
+  waitingOn,
+} from './checkpoints.ts'
 import { turnAway } from './checkpoints-errands.ts'
 import { PASS_LIMIT, type SettleDeps } from './checkpoints-settle.ts'
 
@@ -114,6 +121,9 @@ async function lookErrand(deps: SettleDeps, seen: Seen, errand: ErrandRecord): P
   const { stores, at, issue, waiting, closed, events, base } = seen
   const reason = withdrawalReason({ waiting, closed, replacedBy: null })
   if (reason) {
+    const ended = await endJoined(stores, deps, errand, { turnedAway: `${reason}: raise it again if it still applies` })
+    if (!ended.ok)
+      throw new Error(`errand ${errand.id} could not end its joined Issues: ${JSON.stringify(ended.error)}`)
     await stores.checkpoints.finishErrand(errand.id, at, reason)
     await stores.checkpoints.cancelPages(errand.id, at)
     await record(stores, deps, { ...base, outcome: 'withdrawn', by: 'factory', reason })

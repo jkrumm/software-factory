@@ -20,6 +20,7 @@ import {
   type CheckpointError,
   type CheckpointStores,
   eachJoined,
+  endJoined,
   issueOf,
   retireFailed,
   waitingOn,
@@ -71,6 +72,11 @@ async function openUnder(
     return { errand, issueId: errand.issueId, title: issue.title, repo: issue.repo, kind: issue.kind }
   }
   const at = deps.clock.now()
+  // whoever joined it is told: the Errand is gone, and the lead raises it again
+  const ended = await endJoined(stores, deps, errand, {
+    turnedAway: 'the Issue that raised it no longer waits for it, so it ended: raise it again if it still applies',
+  })
+  if (!ended.ok) throw new Error(`errand ${errand.id} could not end its joined Issues: ${JSON.stringify(ended.error)}`)
   await checkpoints.finishErrand(errand.id, at, 'the Issue no longer waits for it')
   await checkpoints.cancelPages(errand.id, at)
   return 'finished'
@@ -420,5 +426,34 @@ export async function assignNeeds(deps: SettleDeps, limit = PASS_LIMIT): Step<nu
       if (await checkpoints.setNeed(errand.id, needOf(errand))) assigned++
     }
     return ok(assigned)
+  })
+}
+
+/**
+ * A request (no Issue raised it) ends by a loop's own finding: its check says it is not needed, it expired, or the
+ * still-needed look said so. Every Issue that joined it hears the end in the same transaction. False when it closed under
+ * the call.
+ */
+export async function endRequest(
+  deps: SettleDeps,
+  id: ErrandId,
+  how: { kind: 'not_needed' | 'expired'; by: 'check' | 'judge' | 'loop'; why: string },
+): Step<boolean> {
+  return deps.uow.run<boolean, CheckpointError>(async (stores) => {
+    const errand = await stores.checkpoints.lockErrand(id)
+    if (!errand || errand.doneAt) return ok(false)
+    const at = deps.clock.now()
+    const ended = await endJoined(
+      stores,
+      deps,
+      errand,
+      how.kind === 'expired'
+        ? { turnedAway: `it expired (${how.why}): raise it again if it still applies` }
+        : { resolved: how.why },
+    )
+    if (!ended.ok) return ended
+    await stores.checkpoints.finishErrand(errand.id, at, closedNote(how.kind, how.why), { kind: how.kind, by: how.by })
+    await stores.checkpoints.cancelPages(errand.id, at)
+    return ok(true)
   })
 }

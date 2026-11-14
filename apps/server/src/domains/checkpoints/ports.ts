@@ -219,6 +219,8 @@ export interface ErrandJoin {
   issueId: IssueId
   attempt: number
   joinedAt: Date
+  /** the key of the raise that joined: a repeat of that call finds this join */
+  key: Key
 }
 
 export type ClosedKind = 'done' | 'not_needed' | 'expired' | 'superseded' | 'turned_away' | 'turned_back'
@@ -353,8 +355,10 @@ export interface CheckpointStore {
   needlessErrands(limit: number): Promise<ErrandRecord[]>
   /** stores what an Errand that has none needs; false when it has one or is done */
   setNeed(id: ErrandId, need: Need): Promise<boolean>
-  /** the open Errand that has this command or this check, oldest first (a `null` matches nothing); one that was turned away is not open */
+  /** the open Errand that has this command or this check, oldest first (a `null` matches nothing); one that was turned away, or whose raising Issue is closed, is not open */
   openMatching(input: { command: string | null; check: string | null }): Promise<ErrandRecord | null>
+  /** the Errand an earlier raise under this key joined, open or closed */
+  joinedErrand(key: Key): Promise<ErrandRecord | null>
   /** an Issue waits on this Errand too; false when it does already */
   joinErrand(join: ErrandJoin): Promise<boolean>
   /** the Issues that joined it, oldest first */

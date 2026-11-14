@@ -11,6 +11,8 @@ CREATE TABLE factory.errand_joins (
   errand_id text        NOT NULL REFERENCES factory.errands (id),
   issue_id  text        NOT NULL,
   attempt   integer     NOT NULL,
+  -- the raise's own key: the same call again finds its join instead of joining twice
+  key       text        NOT NULL UNIQUE,
   joined_at timestamptz NOT NULL,
   PRIMARY KEY (errand_id, issue_id)
 );

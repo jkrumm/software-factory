@@ -151,8 +151,8 @@ The server's second listener serves `apps/console/dist` as static files and forw
 API with the owner token; an extension-less path falls back to `index.html`. So the app calls same-origin `/v1/...`, with no
 auth header and no base URL, and every response is parsed with the schema from `@software-factory/contract`. The service
 worker never caches `/v1`: the last snapshot lives in the Query persister (`localStorage`, key `console-snapshot`, 7 days,
-invalidated by the build id; artifact and Issue detail queries stay out of it, being large). The listener forwards exactly ten writes, the owner's answers (a Decision's answer, an
-artifact's verdict and its needed-me mark, a comment and the edit or deletion of one, an Errand done, a held signal promoted or dismissed with a reason); the app posts JSON to them same-origin, and
+invalidated by the build id; artifact and Issue detail queries stay out of it, being large). The listener forwards exactly eleven writes, the owner's answers (a Decision's answer, an
+artifact's verdict and its needed-me mark, a comment and the edit or deletion of one, an Errand done, an Errand approved, a held signal promoted or dismissed with a reason); the app posts JSON to them same-origin, and
 `/checkpoints/<id>` (the link of the owner's pages) redirects to `/needs-you?item=<id>`. `GET /v1/stream` (server-sent events) invalidates the queries a change can alter (`affected` in `src/lib/policy.ts`: a frame's `kind`, `ref` and `detail` name them; a frame that does not parse, or has an unknown kind, alters all but the strip's readings); while it is not open the
 queries poll every 15 s and the strip's Live says `Polling`, and while it is open they still poll once a minute, because the
 stream's keepalive is an SSE comment `EventSource` cannot see: a watchdog (`src/lib/live.ts`) also replaces the connection

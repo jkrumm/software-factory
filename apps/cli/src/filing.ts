@@ -116,7 +116,7 @@ export const OPERATION_EXTENSIONS: Readonly<Record<string, OperationExtension>> 
     help: "The owner's yes on an `approval` Errand: an Errand whose command runs on the mini and asks only for his yes (the deploy gate's release of a colleague's commit is the example). The server runs the command itself, with its secrets left out, and records what it came to like a pushed run: exit 0 goes through his done, so the Errand's check decides whether it closes; a failure leaves it open, and the second failure ends it with a note that the command must be corrected. Answers at once (`started`); read the outcome on the Errand. Owner token only: an agent's or the orchestrator's token is refused. Needs you shows the same command with an Approve button.",
   },
   'errand.check': {
-    help: "Runs the Errand's own check now (the shell command given to `errand raise --check`) instead of waiting for the desk pass. Exit 1..125 closes the Errand and ends the Issue's wait (you hear it as a note); exit 0 keeps it (`outcome: needed`); a check that could not run says why (`unrunnable`). An Errand with no check answers `no_check`; one closed already answers `already_closed`.",
+    help: "Runs the Errand's own check now (the shell command given to `errand raise --check`) instead of waiting for the desk pass. Exit 1..125 closes the Errand and ends the Issue's wait (you hear it as a note); exit 0 keeps it (`outcome: needed`); a check that could not run says why (`unrunnable`), and one whose command was not found is `broken` (its exit says nothing; the owner's done still closes the Errand). An Errand with no check answers `no_check`; one closed already answers `already_closed`.",
   },
   'issue.list': { plain: issueListPlain },
   'artifact.list': {

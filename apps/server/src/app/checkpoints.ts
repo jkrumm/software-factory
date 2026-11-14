@@ -147,6 +147,29 @@ export async function eachJoined(
   return ok(null)
 }
 
+/**
+ * An Errand ends by a path that has no owner's hands in it (its Issue stopped waiting, a newer request replaced it, the
+ * recheck withdrew it): every Issue that joined it still waiting hears `errand_done` with why, so none waits on a closed
+ * Errand. `payload` carries `resolved` (it is no longer needed) or `turnedAway` (it ended and the lead should raise it again).
+ */
+export function endJoined(
+  stores: CheckpointStores,
+  deps: CheckpointDeps,
+  errand: Pick<ErrandRecord, 'id'>,
+  payload: { resolved: string } | { turnedAway: string },
+): Promise<Result<null, CheckpointError>> {
+  return eachJoined(stores, errand, async (issueId) =>
+    applied(
+      await recordIn(stores.work, deps, {
+        issueId,
+        key: key('errand_done', errand.id, issueId),
+        event: { kind: 'errand_done', payload: { errand: errand.id, ...payload }, actor: 'factory' },
+      }),
+      'errand_done',
+    ),
+  )
+}
+
 /** An event the machine must apply: anything else (refused, ignored, replayed) is the caller's error, and rolls back. */
 export function applied(recorded: Result<Recorded, IssueWriteError>, what: string): Result<Recorded, CheckpointError> {
   if (!recorded.ok) return recorded
@@ -1012,6 +1035,10 @@ async function raiseChecked(
     const existing = await checkpoints.errandByKey(errandKey)
     if (existing) return ok<ErrandWritten>({ result: 'replayed', errand: existing, issue: moveOf(issue) })
 
+    // a repeat of a raise that joined: the same Errand again
+    const earlier = await checkpoints.joinedErrand(errandKey)
+    if (earlier) return ok<ErrandWritten>({ result: 'replayed', errand: earlier, issue: moveOf(issue) })
+
     // the same command or the same check as an open Errand: the Issue waits on that one, and the owner is paged once
     const same = await checkpoints.openMatching({ command: read.command, check: read.check })
     if (same) {
@@ -1031,7 +1058,13 @@ async function raiseChecked(
         'errand_raised',
       )
       if (!joined.ok) return joined
-      await checkpoints.joinErrand({ errandId: same.id, issueId: input.issueId, attempt: input.attempt, joinedAt: at })
+      await checkpoints.joinErrand({
+        errandId: same.id,
+        issueId: input.issueId,
+        attempt: input.attempt,
+        joinedAt: at,
+        key: errandKey,
+      })
       return ok<ErrandWritten>({
         result: 'joined',
         errand: same,
@@ -1329,7 +1362,7 @@ export function requestErrand(
   const read = readRequest(input.raw, at)
   if (!read.ok) return Promise.resolve(read)
   const request = read.value
-  return deps.uow.run(async ({ checkpoints }) => {
+  return deps.uow.run(async ({ work, checkpoints }) => {
     // the expiry is relative to now, so it is not part of what makes a request the same one
     const same = digest(
       JSON.stringify([request.summary, request.detail, request.command, request.check, request.host, request.key]),
@@ -1348,6 +1381,17 @@ export function requestErrand(
     // asked again after the first was closed: a new Errand, under a key of its own
     const errandKey = existing ? key('errand_request', id) : sameKey
     const superseded = request.key ? await checkpoints.supersedeRequests(request.key, id, at) : []
+    for (const gone of superseded) {
+      const ended = await endJoined(
+        { work, checkpoints },
+        deps,
+        { id: gone },
+        {
+          turnedAway: `a newer request replaced it (${id}): raise it again if it still applies`,
+        },
+      )
+      if (!ended.ok) return ended
+    }
     const stored = await checkpoints.insertErrand({
       id,
       key: errandKey,

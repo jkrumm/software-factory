@@ -17,6 +17,8 @@ import { screenErrands } from '../../src/app/checkpoints-errands.ts'
 import type { SettleDeps } from '../../src/app/checkpoints-settle.ts'
 import { fileIssue, recordIssueEvent } from '../../src/app/issues.ts'
 import { deskPass } from '../../src/app/loops/desk.ts'
+import { errandsPass } from '../../src/app/loops/errands.ts'
+import { endRequest } from '../../src/app/checkpoints-errands.ts'
 import { reviewsPass } from '../../src/app/loops/reviews.ts'
 import { registerVisit } from '../../src/app/visit.ts'
 import type { PushPort } from '../../src/domains/checkpoints/ports.ts'
@@ -729,5 +731,61 @@ describe('an Errand that needs only his yes', () => {
       SELECT payload FROM factory.issue_events WHERE issue_id = ${issueId} AND kind = 'errand_done'`
     expect(event?.payload.turnedAway).toContain('failed 2 times')
     expect(ran).toHaveLength(2)
+  })
+
+  test('a request an Issue joined ends for that Issue when the errands loop closes it, when it is replaced, and a repeat of the join is one join', async () => {
+    const asked = value(
+      await requestErrand(deps, {
+        raw: { source: 'test-agent', text: 'Release 78088f16', command: RELEASE, check: 'gate-pending', key: 'gate' },
+      }),
+    )
+    const issueId = await workingIssue()
+    const joined = await raise(issueId, { summary: 'Release it for me', cmd: RELEASE, call: 'one' })
+    expect(joined).toMatchObject({ result: 'joined', errand: { id: asked.errand.id } })
+    expect(await issueRow(issueId)).toMatchObject({ state: 'waiting', wait_reason: 'errand' })
+    // the same call again: the same join, not a second one
+    expect(await raise(issueId, { summary: 'Release it for me', cmd: RELEASE, call: 'one' })).toMatchObject({
+      result: 'replayed',
+    })
+    expect((await db.sql`SELECT count(*)::int AS n FROM factory.errand_joins`)[0]?.n).toBe(1)
+
+    // the loop's own finding closes the request, and the joined Issue hears it
+    checks['gate-pending'] = { exit: 1, timedOut: false, output: 'released' }
+    const pass = value(
+      await errandsPass({
+        uow: deps.uow as never,
+        clock,
+        checks: deps.checks,
+        needed: { judge: () => Promise.resolve(err(portError('gone', 'no look'))) },
+        end: async (errand, how) => {
+          const ended = await endRequest(deps, errand.id, how)
+          return ended.ok && ended.value
+        },
+      }),
+    )
+    expect(pass).toMatchObject({ checkedOut: 1 })
+    expect(await errandRow(asked.errand.id)).toMatchObject({ closed_kind: 'not_needed', closed_by: 'check' })
+    expect(await issueRow(issueId)).toMatchObject({ state: 'working' })
+  })
+
+  test('a request replaced under its key ends for the Issues that joined it', async () => {
+    const first = value(
+      await requestErrand(deps, { raw: { source: 'test-agent', text: 'Release', command: RELEASE, key: 'gate' } }),
+    )
+    const issueId = await workingIssue()
+    await raise(issueId, { summary: 'Release it for me', cmd: RELEASE })
+    expect(await issueRow(issueId)).toMatchObject({ state: 'waiting' })
+    const fixed = value(
+      await requestErrand(deps, {
+        raw: {
+          source: 'test-agent',
+          text: 'Release',
+          command: "ssh mini 'make -C ~/gate deploy-release SHA=feedbeef'",
+          key: 'gate',
+        },
+      }),
+    )
+    expect(fixed.superseded).toEqual([first.errand.id])
+    expect(await issueRow(issueId)).toMatchObject({ state: 'working' })
   })
 })
