@@ -149,17 +149,23 @@ const Hygiene = z
     path: ['reason'],
   })
 
+/** The most leads a repo, or a lane of it, may state: a value above is clamped to it, with a warning, never refused. */
+export const MAX_LEADS = 64
+
+/** The leads of a repo whose `project.yaml` states none (and of a repo with none). */
+export const DEFAULT_LEADS = 4
+
 const LANE_MEMORY = /^(\d+(?:\.\d+)?)(MiB|GiB)$/
 const MAX_LANE_MEMORY_MIB = 1024 * 1024
 
 /** One lane: a cap on its leads, or `{leads, memory}` with the host memory each running lead of the lane reserves (`18GiB`). */
 const Lane = z
   .union([
-    z.number().int().min(1).max(8),
+    z.number().int().min(1).max(MAX_LEADS),
     // a stored project is read back through this schema: its lanes are already `{leads, memoryMib}`
-    z.strictObject({ leads: z.number().int().min(1).max(8), memoryMib: z.number().int().min(0).nullable() }),
+    z.strictObject({ leads: z.number().int().min(1).max(MAX_LEADS), memoryMib: z.number().int().min(0).nullable() }),
     z.strictObject({
-      leads: z.number().int().min(1).max(8),
+      leads: z.number().int().min(1).max(MAX_LEADS),
       memory: z
         .string()
         .regex(LANE_MEMORY, 'a size like 18GiB or 512MiB')
@@ -264,7 +270,7 @@ export const ProjectFile = z
      */
     work: z.boolean().default(false),
     /** how many leads may work in the repo at once (one more for a fix while the line is stopped) */
-    leads: z.number().int().min(1).max(8).default(1),
+    leads: z.number().int().min(1).max(MAX_LEADS).default(DEFAULT_LEADS),
     /**
      * resource classes inside the repo: `{apple: 1}` lets one lead of lane apple run at once; `{apple: {leads: 1, memory:
      * 18GiB}}` also reserves that memory on the host for every running lead of the lane. A lane a row or Issue names and
@@ -286,20 +292,50 @@ export const ProjectFile = z
   .transform(({ jobs: _jobs, ticktick: _ticktick, ...kept }) => kept)
 export type ProjectFile = z.output<typeof ProjectFile>
 
-/** What a repo without a `project.yaml` runs on: one lead, no deploy, ship by push. */
+/** What a repo without a `project.yaml` runs on: `DEFAULT_LEADS` leads, no deploy, ship by push. */
 export const defaultProject = (name: string): ProjectFile =>
   ProjectFile.parse({ apiVersion: PROJECT_API_VERSION, name })
 
-export type ProjectParse = { ok: true; project: ProjectFile } | { ok: false; message: string }
+export type ProjectParse = { ok: true; project: ProjectFile; warnings: string[] } | { ok: false; message: string }
 
 export { issuesMessage }
 
-/** A parsed YAML document as a project whose name is the directory's. Never throws. */
+const isRecord = (value: unknown): value is Record<string, unknown> =>
+  typeof value === 'object' && value !== null && !Array.isArray(value)
+
+/**
+ * A `leads` above `MAX_LEADS`, of the repo or of a lane, is clamped to it and named in a warning: a value over a bound
+ * must not take the whole file out of force. Anything else that is not a whole number from 1 stays the schema's error.
+ */
+function clampLeads(raw: unknown): { raw: unknown; warnings: string[] } {
+  if (!isRecord(raw)) return { raw, warnings: [] }
+  const warnings: string[] = []
+  const clamp = (value: unknown, where: string): unknown => {
+    if (typeof value !== 'number' || !Number.isInteger(value) || value <= MAX_LEADS) return value
+    warnings.push(`${where} is ${value}, above the most a repo or lane takes: clamped to ${MAX_LEADS}`)
+    return MAX_LEADS
+  }
+  const next: Record<string, unknown> = { ...raw, ...('leads' in raw ? { leads: clamp(raw.leads, 'leads') } : {}) }
+  if (isRecord(raw.lanes)) {
+    next.lanes = Object.fromEntries(
+      Object.entries(raw.lanes).map(([name, lane]) => [
+        name,
+        isRecord(lane) && 'leads' in lane
+          ? { ...lane, leads: clamp(lane.leads, `lanes.${name}.leads`) }
+          : clamp(lane, `lanes.${name}`),
+      ]),
+    )
+  }
+  return { raw: next, warnings }
+}
+
+/** A parsed YAML document as a project whose name is the directory's, with the warnings of what was clamped. Never throws. */
 export function parseProject(raw: unknown, directoryName: string): ProjectParse {
-  const parsed = ProjectFile.safeParse(raw)
+  const clamped = clampLeads(raw)
+  const parsed = ProjectFile.safeParse(clamped.raw)
   if (!parsed.success) return { ok: false, message: issuesMessage(parsed.error) }
   if (parsed.data.name !== directoryName) {
     return { ok: false, message: `name is "${parsed.data.name}", the directory is "${directoryName}"` }
   }
-  return { ok: true, project: parsed.data }
+  return { ok: true, project: parsed.data, warnings: clamped.warnings }
 }

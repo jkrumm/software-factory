@@ -175,8 +175,12 @@ export interface Claims {
 }
 
 export interface Windows {
-  /** when the account's window opens again, if capacity knows */
-  wall(account: string): Promise<Result<{ resetAt: Date | null }>>
+  /**
+   * when the account's window opens again, if capacity knows. `since` is when the lead hit the wall: a reading sampled
+   * before it that shows the account open has not caught up with the wall, so the wait is for the window nearest its
+   * limit to reset; a reading sampled after it that shows the account open means it is open.
+   */
+  wall(account: string, since?: Date): Promise<Result<{ resetAt: Date | null }>>
 }
 
 /** What the end of a session's transcript says of its last turn when that turn ended on an API error. */

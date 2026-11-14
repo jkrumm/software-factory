@@ -36,6 +36,8 @@ export interface StoredProject {
   projectSha: string | null
   /** the content now on the default branch does not parse; `project` is the last valid one */
   projectError: FileError | null
+  /** what reading `project.yaml` changed without refusing it: a `leads` clamped to its bound */
+  projectWarnings: string[]
   plan: PlanFile | null
   planSha: string | null
   planError: FileError | null
@@ -78,6 +80,7 @@ export function synced(input: {
     project: defaultProject(input.directory),
     projectSha: null,
     projectError: null,
+    projectWarnings: [],
     plan: null,
     planSha: null,
     planError: null,
@@ -94,13 +97,20 @@ export function synced(input: {
       project: defaultProject(input.directory),
       projectSha: null,
       projectError: null,
+      projectWarnings: [],
     })
   } else if (file.state === 'unreadable') {
     next.projectError = { message: file.message, sha: file.sha }
   } else {
     const parsed = parseProject(file.value, input.directory)
     if (parsed.ok) {
-      Object.assign(next, { source: 'file', project: parsed.project, projectSha: file.sha, projectError: null })
+      Object.assign(next, {
+        source: 'file',
+        project: parsed.project,
+        projectSha: file.sha,
+        projectError: null,
+        projectWarnings: parsed.warnings,
+      })
     } else {
       next.projectError = { message: parsed.message, sha: file.sha }
     }

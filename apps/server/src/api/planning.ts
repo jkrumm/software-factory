@@ -143,6 +143,7 @@ const view = ({ project, plan }: ProjectState): ProjectView =>
     checks: project.project.checks,
     signals: project.project.signals,
     projectError: project.projectError,
+    projectWarnings: project.projectWarnings,
     plan:
       plan || project.plan ? { sha: project.planSha, warnings: project.planWarnings, rows: plan?.rows ?? [] } : null,
     planError: project.planError?.message ?? null,

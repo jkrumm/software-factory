@@ -92,6 +92,8 @@ const accountView = (a: AccountState): AccountView =>
     opensAt: iso(a.opensAt),
     rank: a.rank,
     rankReason: a.rankReason,
+    leads: a.leads,
+    cap: a.cap,
   })
 
 const entryView = (entry: QueueEntry) => ({

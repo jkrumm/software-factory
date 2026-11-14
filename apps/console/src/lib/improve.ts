@@ -539,12 +539,24 @@ export const perDayWords = (total: number, days: number): string => `${(total / 
 /** "2026-11-05 09:01" from an ISO time (UTC, as the API says it). */
 export const stampWords = (iso: string): string => iso.slice(0, 16).replace('T', ' ')
 
+/** "2, iu 20, me 10": the cap of an account that has no cap of its own, then each one that has. */
+export const leadsWords = (constants: CapacityLoopModel['constants']): string =>
+  [
+    String(constants.leadsPerAccount),
+    ...Object.entries(constants.accountLeads).map(([name, cap]) => `${name} ${cap}`),
+  ].join(', ')
+
 /** The settings in force, in the order the retro reads them, each with its words. */
 export function constantRows(
   constants: CapacityLoopModel['constants'],
 ): { key: string; label: string; value: string }[] {
   return [
-    { key: 'leadsPerAccount', label: 'Leads per account', value: String(constants.leadsPerAccount) },
+    { key: 'leadsPerAccount', label: 'Leads per account', value: leadsWords(constants) },
+    {
+      key: 'windowLimits',
+      label: 'Account limits',
+      value: `${constants.fiveHourLimit} % of 5 hours, ${constants.weeklyLimit} % of the week`,
+    },
     { key: 'seatsMaxBonus', label: 'Seat bonus at most', value: String(constants.seatsMaxBonus) },
     { key: 'loadCeiling', label: 'Load ceiling', value: String(constants.loadCeiling) },
     { key: 'slots', label: 'Test slots', value: String(constants.slots) },

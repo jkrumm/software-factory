@@ -5,6 +5,7 @@ import {
   RANK_LANE,
   rankIsFresh,
   standing,
+  type WindowLimits,
 } from '../domains/capacity/accounts.ts'
 import type { Claim } from '../domains/capacity/claims.ts'
 import type { MemoryReading } from '../domains/capacity/host.ts'
@@ -22,10 +23,19 @@ export interface AccountState {
   /** 1-based place in the applied order; null: not ranked, or the rank is stale */
   rank: number | null
   rankReason: string | null
+  /** the leads that hold a claim on it */
+  leads: number
+  /** the most leads it carries at once, before an idle host's raise */
+  cap: number
 }
 
-export const accountState = (reading: AccountReading, now: Date, rank: AccountRank | null = null): AccountState => {
-  const stand = standing(reading, now)
+export const accountState = (
+  reading: AccountReading,
+  now: Date,
+  options: { rank?: AccountRank | null; limits?: WindowLimits; leads?: number; cap: number },
+): AccountState => {
+  const rank = options.rank ?? null
+  const stand = standing(reading, now, { limits: options.limits })
   const index = rank && rankIsFresh(rank, now) ? rank.order.findIndex((r) => r.account === reading.account) : -1
   return {
     reading,
@@ -35,6 +45,8 @@ export const accountState = (reading: AccountReading, now: Date, rank: AccountRa
     opensAt: stand.open ? null : stand.until,
     rank: index < 0 ? null : index + 1,
     rankReason: index < 0 ? null : (rank?.order[index]?.reason ?? null),
+    leads: options.leads ?? 0,
+    cap: options.cap,
   }
 }
 
@@ -49,14 +61,27 @@ export interface CapacityState {
   slotLines: string[]
 }
 
+const optionsOf = (
+  deps: CapacityDeps,
+  reading: AccountReading,
+  seen: { rank: AccountRank | null; claims: readonly Claim[] },
+) => ({
+  rank: seen.rank,
+  limits: deps.limits.windowLimits,
+  leads: seen.claims.filter((claim) => claim.account === reading.account).length,
+  cap: deps.limits.accountLeads?.get(reading.account) ?? deps.limits.leadsPerAccount,
+})
+
 /** The poll, now: what `factory capacity refresh` runs. */
 export async function refreshState(deps: CapacityDeps): Promise<Result<AccountState[], PortError>> {
   const polled = await refreshAccounts(deps)
   if (!polled.ok) return polled
   const now = deps.clock.now()
-  const rank = await deps.uow.run(async ({ capacity }) => ok(await capacity.latestRank(RANK_LANE)))
-  if (!rank.ok) return rank
-  return ok(polled.value.map((reading) => accountState(reading, now, rank.value)))
+  const seen = await deps.uow.run(async ({ capacity }) =>
+    ok({ rank: await capacity.latestRank(RANK_LANE), claims: await capacity.claims() }),
+  )
+  if (!seen.ok) return seen
+  return ok(polled.value.map((reading) => accountState(reading, now, optionsOf(deps, reading, seen.value))))
 }
 
 /** Accounts and their windows, the host, who holds which claim, the queue states and the test slots. Reads (and polls when the readings are old). */
@@ -67,12 +92,15 @@ export async function capacityState(deps: CapacityDeps): Promise<Result<Capacity
   return deps.uow.run(async ({ capacity }) => {
     const slots = await capacity.slots()
     const rank = await capacity.latestRank(RANK_LANE)
+    const claims = await capacity.claims()
     return ok<CapacityState>({
-      accounts: (await capacity.latestReadings()).map((reading) => accountState(reading, now, rank)),
+      accounts: (await capacity.latestReadings()).map((reading) =>
+        accountState(reading, now, optionsOf(deps, reading, { rank, claims })),
+      ),
       rank,
       rankFresh: rank !== null && rankIsFresh(rank, now),
       host: { load: host.load, memory: host.memory, notes: [...notes, ...host.notes] },
-      claims: await capacity.claims(),
+      claims,
       states: await capacity.queueStates(),
       slots,
       slotLines: slotLines(slots, now),

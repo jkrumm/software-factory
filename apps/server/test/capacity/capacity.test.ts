@@ -4,7 +4,9 @@ import {
   type AccountReading,
   pickAccount,
   READING_MAX_AGE_MS,
+  roomLeft,
   standing,
+  tightestReset,
   WEEK_MS,
 } from '../../src/domains/capacity/accounts.ts'
 import { type AdmissionInputs, checkAdmission } from '../../src/domains/capacity/admission.ts'
@@ -54,10 +56,15 @@ const id = (n: number): IssueId => issueId(n)
 const claimant = (n: number, urgent = false): Claimant => ({ issue: id(n), urgent })
 
 describe('accounts and their windows', () => {
-  test('an account below 85 % of its 5-hour window and 95 % of its week is open', () => {
+  test('an account is open until a window is reached: at 100 % by default, at the setting when one is given', () => {
     expect(standing(reading('a'), now)).toEqual({ open: true })
-    expect(standing(reading('a', { fiveHourUsed: 85 }), now)).toMatchObject({ open: false, until: at(3_600_000) })
-    expect(standing(reading('a', { weeklyUsed: 95 }), now)).toMatchObject({ open: false, until: at(WEEK_MS / 2) })
+    expect(standing(reading('a', { fiveHourUsed: 85, weeklyUsed: 97 }), now)).toEqual({ open: true })
+    expect(standing(reading('a', { fiveHourUsed: 100 }), now)).toMatchObject({ open: false, until: at(3_600_000) })
+    expect(standing(reading('a', { weeklyUsed: 100 }), now)).toMatchObject({ open: false, until: at(WEEK_MS / 2) })
+    const limits = { fiveHour: 85, weekly: 95 }
+    expect(standing(reading('a', { fiveHourUsed: 85 }), now, { limits })).toMatchObject({ open: false })
+    expect(standing(reading('a', { weeklyUsed: 94 }), now, { limits })).toEqual({ open: true })
+    expect(standing(reading('a', { weeklyUsed: 95 }), now, { limits })).toMatchObject({ open: false })
   })
 
   test('a window without a number counts as unused, both without is no sample; disabled and signed-out are closed', () => {
@@ -77,12 +84,19 @@ describe('accounts and their windows', () => {
 
   test('under pace, weekly use above the elapsed share of the week closes it until the share catches up', () => {
     const r = reading('a', { weeklyUsed: 80, weeklyResetsAt: at(WEEK_MS / 2) })
-    const s = standing(r, now, true)
+    const s = standing(r, now, { pace: true })
     expect(s).toMatchObject({ open: false })
     expect(s.open ? null : s.until?.getTime()).toBe(at(WEEK_MS / 2).getTime() - WEEK_MS + 0.8 * WEEK_MS)
   })
 
-  test('it picks the open account with the least weekly use, never one a lead started on since its sample', () => {
+  test('room left is the tightest window in points of its limit; a window with no number does not count', () => {
+    expect(roomLeft(reading('a', { fiveHourUsed: 20, weeklyUsed: 30 }))).toBe(70)
+    expect(roomLeft(reading('a', { fiveHourUsed: 90, weeklyUsed: 30 }))).toBe(10)
+    expect(roomLeft(reading('a', { fiveHourUsed: null, weeklyUsed: 25 }))).toBe(75)
+    expect(roomLeft(reading('a', { fiveHourUsed: 20, weeklyUsed: 30 }), { fiveHour: 85, weekly: 95 })).toBe(65)
+  })
+
+  test('it picks the open account with the most room in its tightest window, never one a lead started on since its sample', () => {
     const readings = [
       reading('a', { weeklyUsed: 50 }),
       reading('b', { weeklyUsed: 10 }),
@@ -90,7 +104,86 @@ describe('accounts and their windows', () => {
     ]
     const input = { readings, loaded: new Set<string>(), leads: new Map<string, number>(), leadsPerAccount: 2, now }
     expect(pickAccount(input)).toMatchObject({ picked: { account: 'b' } })
-    expect(pickAccount({ ...input, loaded: new Set(['b']) })).toMatchObject({ picked: { account: 'a' } })
+    // `b` has a 5-hour window at 20 %: below the pacing point, a lead started since its sample does not hold it back
+    expect(pickAccount({ ...input, loaded: new Set(['b']) })).toMatchObject({ picked: { account: 'b' } })
+    const busy = readings.map((r) => (r.account === 'b' ? { ...r, fiveHourUsed: 80 } : r))
+    expect(pickAccount({ ...input, readings: busy, loaded: new Set(['b']) })).toMatchObject({
+      picked: { account: 'a' },
+    })
+  })
+
+  test('a week closer to its end weighs as much as a 5-hour window: the smaller room decides', () => {
+    const readings = [
+      reading('week', { fiveHourUsed: 10, weeklyUsed: 80 }),
+      reading('hours', { fiveHourUsed: 60, weeklyUsed: 10 }),
+    ]
+    const input = { readings, loaded: new Set<string>(), leads: new Map<string, number>(), leadsPerAccount: 2, now }
+    expect(pickAccount(input)).toMatchObject({ picked: { account: 'hours' } })
+  })
+
+  test('a nearly full account gets a lead only when the roomier ones are at their caps', () => {
+    const readings = [reading('full', { weeklyUsed: 92 }), reading('roomy', { weeklyUsed: 20 })]
+    const base = { readings, loaded: new Set<string>(), leadsPerAccount: 2, now }
+    expect(pickAccount({ ...base, leads: new Map([['roomy', 1]]) })).toMatchObject({ picked: { account: 'roomy' } })
+    expect(pickAccount({ ...base, leads: new Map([['roomy', 2]]) })).toMatchObject({ picked: { account: 'full' } })
+  })
+
+  test('an account takes leads up to its own cap; one not named takes the default', () => {
+    const readings = [reading('iu', { fiveHourUsed: null, weeklyUsed: 25 }), reading('me', { weeklyUsed: 60 })]
+    const accountCaps = new Map([['iu', 20]])
+    const base = { readings, loaded: new Set<string>(), leadsPerAccount: 10, accountCaps, now }
+    expect(pickAccount({ ...base, leads: new Map([['iu', 19]]) })).toMatchObject({ picked: { account: 'iu' } })
+    expect(pickAccount({ ...base, leads: new Map([['iu', 20]]) })).toMatchObject({ picked: { account: 'me' } })
+    const full = pickAccount({
+      ...base,
+      leads: new Map([
+        ['iu', 20],
+        ['me', 10],
+      ]),
+    })
+    expect(full).toMatchObject({ picked: null, capped: true })
+    expect(full.picked === null && full.why).toContain('iu 20 of 20, me 10 of 10')
+  })
+
+  test('an account with no 5-hour window takes leads at once; one with a window above 70 % takes one per sample', () => {
+    const none = reading('iu', { fiveHourUsed: null, weeklyUsed: 25 })
+    const high = reading('me', { fiveHourUsed: 80 })
+    const low = reading('lo', { fiveHourUsed: 70 })
+    const loaded = new Set(['iu', 'me', 'lo'])
+    const base = { loaded, leads: new Map<string, number>(), leadsPerAccount: 20, now }
+    expect(pickAccount({ ...base, readings: [none] })).toMatchObject({ picked: { account: 'iu' } })
+    expect(pickAccount({ ...base, readings: [low] })).toMatchObject({ picked: { account: 'lo' } })
+    expect(pickAccount({ ...base, readings: [high] })).toMatchObject({
+      picked: null,
+      why: 'the open accounts took a lead since their last sample',
+      capped: false,
+    })
+  })
+
+  test('an account at 97 % of its week still takes a lead by default, and is refused at the limit', () => {
+    const base = { loaded: new Set<string>(), leads: new Map<string, number>(), leadsPerAccount: 2, now }
+    expect(pickAccount({ ...base, readings: [reading('a', { weeklyUsed: 97 })] })).toMatchObject({
+      picked: { account: 'a' },
+    })
+    const refused = pickAccount({ ...base, readings: [reading('a', { weeklyUsed: 100 })] })
+    expect(refused).toMatchObject({ picked: null, opensAt: at(WEEK_MS / 2) })
+    expect(refused.picked === null && refused.why).toContain('week at 100% (limit 100%)')
+    expect(
+      pickAccount({ ...base, readings: [reading('a', { weeklyUsed: 97 })], limits: { fiveHour: 100, weekly: 95 } }),
+    ).toMatchObject({ picked: null })
+  })
+
+  test('the reset a lead that hit the wall waits for: the closing window, else the one nearest its limit', () => {
+    const closed = reading('a', { fiveHourUsed: 100 })
+    expect(standing(closed, now)).toMatchObject({ open: false, until: at(3_600_000) })
+    const behind = reading('a', { fiveHourUsed: 97, weeklyUsed: 40 })
+    expect(tightestReset(behind, now)).toEqual(at(3_600_000))
+    expect(tightestReset(reading('a', { fiveHourUsed: null, weeklyUsed: 97 }), now)).toEqual(at(WEEK_MS / 2))
+    expect(tightestReset(reading('a', { fiveHourUsed: 20, weeklyUsed: 95 }), now)).toEqual(at(WEEK_MS / 2))
+    expect(tightestReset(reading('a', { fiveHourUsed: 97, fiveHourResetsAt: null }), now)).toBeNull()
+    // a rate limit far from any window is a throttle: no wait for a reset
+    expect(tightestReset(reading('a', { fiveHourUsed: 50, weeklyUsed: 60 }), now)).toBeNull()
+    expect(tightestReset(reading('a', { fiveHourUsed: 97, fiveHourResetsAt: at(-1) }), now)).toBeNull()
   })
 
   test('an account at its lead cap is passed over; with none left the reason says cap', () => {
@@ -109,10 +202,13 @@ describe('accounts and their windows', () => {
   })
 
   test('never spills: with every account closed it says why and when the first one opens; stale readings admit nothing', () => {
-    const closed = [reading('a', { fiveHourUsed: 90 }), reading('b', { weeklyUsed: 96, weeklyResetsAt: at(7_200_000) })]
+    const closed = [
+      reading('a', { fiveHourUsed: 100 }),
+      reading('b', { weeklyUsed: 100, weeklyResetsAt: at(7_200_000) }),
+    ]
     const pick = pickAccount({ readings: closed, loaded: new Set(), leads: new Map(), leadsPerAccount: 2, now })
     expect(pick).toMatchObject({ picked: null, opensAt: at(3_600_000), capped: false })
-    expect(pick.picked === null && pick.why).toContain('a 5-hour window at 90%')
+    expect(pick.picked === null && pick.why).toContain('a 5-hour window at 100%')
     const stale = [reading('a', { readAt: at(-11 * 60_000) })]
     expect(
       pickAccount({ readings: stale, loaded: new Set(), leads: new Map(), leadsPerAccount: 2, now }),
@@ -158,6 +254,28 @@ describe('the host', () => {
       processCap: 1200,
       shadow: null,
     })
+  })
+
+  test('the account caps and the window limits: defaults, the named caps, and refusals of what is no cap', () => {
+    const settings = (env: Record<string, string>) => planningSettings(env, { cores: 12 })
+    expect(settings({})).toMatchObject({ leadsPerAccount: 2, windowLimits: { fiveHour: 100, weekly: 100 } })
+    expect([...settings({}).accountLeads]).toEqual([])
+    const named = settings({
+      FACTORY_ACCOUNT_LEADS: 'iu=20, me=10,me2=10',
+      FACTORY_LEADS_PER_ACCOUNT: '64',
+      FACTORY_FIVE_HOUR_LIMIT: '90',
+      FACTORY_WEEKLY_LIMIT: '97',
+    })
+    expect([...named.accountLeads]).toEqual([
+      ['iu', 20],
+      ['me', 10],
+      ['me2', 10],
+    ])
+    expect(named).toMatchObject({ leadsPerAccount: 64, windowLimits: { fiveHour: 90, weekly: 97 } })
+    for (const bad of ['iu', 'iu=0', 'iu=65', 'iu=x', 'iu=2=3', 'iu=2,iu=3', '=4'])
+      expect(() => settings({ FACTORY_ACCOUNT_LEADS: bad })).toThrow('FACTORY_ACCOUNT_LEADS')
+    expect(() => settings({ FACTORY_LEADS_PER_ACCOUNT: '65' })).toThrow('FACTORY_LEADS_PER_ACCOUNT')
+    expect(() => settings({ FACTORY_WEEKLY_LIMIT: '101' })).toThrow('FACTORY_WEEKLY_LIMIT')
   })
 
   test('swapouts are graded over the last 300 s of minute samples, so a lull between bursts keeps the gate shut (Issue 858)', () => {
@@ -346,7 +464,7 @@ describe('admission', () => {
       load: 99,
       memory: { swapoutMbPer300s: 5000, swapUsedPct: 90 },
       holders: [claimant(9)],
-      accounts: [reading('a', { fiveHourUsed: 99 })],
+      accounts: [reading('a', { fiveHourUsed: 100 })],
     })
     const kind = (extra: Partial<AdmissionInputs>) => {
       const verdict = checkAdmission({ ...everything, ...extra })
@@ -358,6 +476,44 @@ describe('admission', () => {
     expect(kind({ state: 'run', load: 1, memory: null })).toBe('claim')
     expect(kind({ state: 'run', load: 1, memory: null, holders: [] })).toBe('window')
     expect(kind({ state: 'run', load: 1, memory: null, holders: [], accounts: [reading('a')] })).toBe('admit')
+  })
+
+  test('two accounts with caps of 20 and 10 take leads up to their own cap; the cap refusal names each account and number', () => {
+    const accounts = [
+      reading('iu', { fiveHourUsed: null, weeklyUsed: 25 }),
+      reading('me', { fiveHourUsed: 40, weeklyUsed: 40 }),
+    ]
+    const accountLeads = new Map([
+      ['iu', 20],
+      ['me', 10],
+    ])
+    const held = (iu: number, me: number) =>
+      new Map([
+        ['iu', iu],
+        ['me', me],
+      ])
+    const verdict = (iu: number, me: number, extra: Partial<AdmissionInputs> = {}) =>
+      checkAdmission(inputs({ accounts, accountLeads, leadsPerAccount: 2, leadsByAccount: held(iu, me), ...extra }))
+    expect(verdict(19, 0)).toMatchObject({ admit: true, account: { account: 'iu' } })
+    expect(verdict(20, 9)).toMatchObject({ admit: true, account: { account: 'me' } })
+    const full = verdict(20, 10)
+    expect(full).toMatchObject({ admit: false, refusal: { kind: 'cap' } })
+    if (!full.admit) expect(full.refusal.message).toContain('iu 20 of 20, me 10 of 10')
+    // the idle host's raise is on top of each account's own cap
+    const raised = verdict(20, 10, { leadsPerAccount: 3, seatBonus: 1 })
+    expect(raised).toMatchObject({ admit: true, account: { account: 'iu' } })
+    expect(verdict(21, 11, { leadsPerAccount: 3, seatBonus: 1 })).toMatchObject({ admit: false })
+  })
+
+  test('an account at 97 % of its week takes a lead by default, and is refused at the limit', () => {
+    const at97 = [reading('a', { weeklyUsed: 97 })]
+    expect(checkAdmission(inputs({ accounts: at97 }))).toMatchObject({ admit: true })
+    const refused = checkAdmission(inputs({ accounts: [reading('a', { weeklyUsed: 100 })] }))
+    expect(refused).toMatchObject({ admit: false, refusal: { kind: 'window', opensAt: at(WEEK_MS / 2) } })
+    expect(checkAdmission(inputs({ accounts: at97, windowLimits: { fiveHour: 100, weekly: 95 } }))).toMatchObject({
+      admit: false,
+      refusal: { kind: 'window' },
+    })
   })
 
   test('a process count over its cap keeps a new lead out with the numbers; none known, or no cap, admits', () => {
@@ -711,12 +867,13 @@ describe('a slot is live work of the lead whose worktree its command started in'
   })
 })
 
-describe('the picker rank orders the open accounts, the gates stay', () => {
+describe('the picker rank breaks a tie in room, the gates stay', () => {
   const hour = 3_600_000
   const readings = [
-    reading('iu', { weeklyUsed: 80, weeklyResetsAt: at(32 * hour) }),
-    reading('me', { weeklyUsed: 54, weeklyResetsAt: at(46 * hour) }),
-    reading('me2', { weeklyUsed: 11, weeklyResetsAt: at(132 * hour) }),
+    // the 5-hour window is the tightest of each (25 points of room), so the rank decides
+    reading('iu', { fiveHourUsed: 75, weeklyUsed: 70, weeklyResetsAt: at(32 * hour) }),
+    reading('me', { fiveHourUsed: 75, weeklyUsed: 54, weeklyResetsAt: at(46 * hour) }),
+    reading('me2', { fiveHourUsed: 75, weeklyUsed: 11, weeklyResetsAt: at(132 * hour) }),
   ]
   const rank = (accounts: string[], readAt = now): AccountRank => ({
     lane: 'bulk',
@@ -727,11 +884,19 @@ describe('the picker rank orders the open accounts, the gates stay', () => {
   const base = { readings, loaded: new Set<string>(), leads: new Map<string, number>(), leadsPerAccount: 2, now }
   const order = ['me', 'me2', 'iu']
 
-  test('the head of a fresh rank is picked over the account with the lowest weekly use', () => {
+  test('among accounts with the same room the head of a fresh rank is picked over the lowest weekly use', () => {
     expect(pickAccount({ ...base, rank: rank(order) })).toMatchObject({ picked: { account: 'me' } })
   })
 
-  test('an account at its lead cap or loaded since its sample is passed over to the next in the rank', () => {
+  test('the most room beats the rank: a ranked account near its limit goes after one with room', () => {
+    const near = [
+      reading('me', { fiveHourUsed: 95, weeklyUsed: 54 }),
+      ...readings.slice(1).filter((r) => r.account !== 'me'),
+    ]
+    expect(pickAccount({ ...base, readings: near, rank: rank(order) })).toMatchObject({ picked: { account: 'me2' } })
+  })
+
+  test('an account at its lead cap or (with a 5-hour window above 70 %) loaded since its sample is passed over to the next in the rank', () => {
     const capped = new Map([['me', 2]])
     expect(pickAccount({ ...base, rank: rank(order), leads: capped })).toMatchObject({ picked: { account: 'me2' } })
     expect(pickAccount({ ...base, rank: rank(order), loaded: new Set(['me']) })).toMatchObject({
@@ -753,7 +918,7 @@ describe('the picker rank orders the open accounts, the gates stay', () => {
   })
 
   test('a ranked account that is closed is still refused', () => {
-    const closed = [reading('me', { weeklyUsed: 96 }), ...readings.slice(2)]
+    const closed = [reading('me', { fiveHourUsed: 75, weeklyUsed: 100 }), ...readings.slice(2)]
     expect(pickAccount({ ...base, readings: closed, rank: rank(order) })).toMatchObject({ picked: { account: 'me2' } })
     expect(pickAccount({ ...base, readings: [closed[0] as AccountReading], rank: rank(order) })).toMatchObject({
       picked: null,

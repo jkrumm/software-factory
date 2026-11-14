@@ -113,7 +113,7 @@ the latest lead started on.
 
 `leads: N` caps the leads in a repo, but work inside one repo is not equally heavy: server rows are cheap, an Apple row
 runs xcodebuild and a simulator on the one mini. Give each kind of row a `lane` and cap the heavy lane in the repo's
-`project.yaml`:
+`project.yaml` (a lane's `leads`, like the repo's, is at most 64; a larger value is clamped, with a warning in `factory project show`):
 
 ```yaml
 leads: 2

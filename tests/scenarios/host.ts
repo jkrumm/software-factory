@@ -4,7 +4,8 @@ import { join } from 'node:path'
 /** One account of the fake picker: the readings the host would show for it. */
 export interface AccountRow {
   id: string
-  five_hour?: number
+  /** null: the account has no 5-hour window (an Ultra seat) */
+  five_hour?: number | null
   seven_day?: number
   enabled?: boolean
 }
@@ -108,9 +109,9 @@ export async function setAccounts(bin: string, rows: AccountRow[]): Promise<void
         id: row.id,
         enabled: row.enabled ?? true,
         auth_ok: true,
-        five_hour: row.five_hour ?? 10,
+        five_hour: row.five_hour === undefined ? 10 : row.five_hour,
         seven_day: row.seven_day ?? 20,
-        five_hour_resets_at: now + 3600,
+        five_hour_resets_at: row.five_hour === null ? null : now + 3600,
         seven_day_resets_at: now + 3 * 86_400,
         // sampled at the poll itself: a later poll is a later sample, which is what frees an account for a new lead
         age_s: 0,

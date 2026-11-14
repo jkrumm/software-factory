@@ -70,6 +70,8 @@ export function composePlanning(input: {
   }
   const limits = {
     leadsPerAccount: settings.leadsPerAccount,
+    accountLeads: settings.accountLeads,
+    windowLimits: settings.windowLimits,
     ...hostRule(settings),
     memoryCeilings: settings.memoryCeilings,
     seatsMaxBonus: settings.seatsMaxBonus,
@@ -169,7 +171,7 @@ export function composePlanning(input: {
       recordStepCost: (cost) => recordStepCost(writes, cost),
       recordMergeWindow: (window) => recordMergeWindow(writes, window),
     },
-    leads: capacityForLeads(writes),
+    leads: capacityForLeads(writes, settings.windowLimits),
     capacityFacts: () => capacityFacts(capacity),
     claimQueued: () => claimQueued(capacity),
     claimStalled: (issues) => claimStalled(capacity, issues),

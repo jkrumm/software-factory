@@ -953,6 +953,9 @@ async function main(): Promise<void> {
       }),
       capacityConstants: {
         leadsPerAccount: planningEnv.leadsPerAccount,
+        accountLeads: Object.fromEntries(planningEnv.accountLeads),
+        fiveHourLimit: planningEnv.windowLimits.fiveHour,
+        weeklyLimit: planningEnv.windowLimits.weekly,
         loadCeiling: hostRule(planningEnv).loadCeiling,
         loadRule: planningEnv.loadRule,
         loadPerCore: planningEnv.loadPerCore,

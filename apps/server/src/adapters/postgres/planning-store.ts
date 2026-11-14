@@ -16,6 +16,7 @@ const ProjectRow = z.object({
   project: z.unknown(),
   project_sha: z.string().nullable(),
   project_error: z.unknown(),
+  project_warnings: z.array(z.string()),
   plan: z.unknown(),
   plan_sha: z.string().nullable(),
   plan_error: z.unknown(),
@@ -35,6 +36,7 @@ function projectOf(raw: unknown): StoredProject {
     project: ProjectFile.parse(row.project),
     projectSha: row.project_sha,
     projectError: errorOf(row.project_error),
+    projectWarnings: row.project_warnings,
     plan: row.plan == null ? null : PlanFile.parse(row.plan),
     planSha: row.plan_sha,
     planError: errorOf(row.plan_error),
@@ -68,15 +70,16 @@ export function postgresPlanningStore(tx: SQL): PlanningStore {
       // The stored copy of the parsed files is re-parsed on every read, so what is written is what the schema outputs.
       await tx`
         INSERT INTO factory.planning_projects
-          (name, repo, source, project, project_sha, project_error, plan, plan_sha, plan_error, plan_warnings, branch, synced_at)
+          (name, repo, source, project, project_sha, project_error, project_warnings, plan, plan_sha, plan_error, plan_warnings, branch, synced_at)
         VALUES (
           ${project.name}, ${project.repo}, ${project.source}, ${project.project}, ${project.projectSha},
-          ${project.projectError}, ${project.plan}, ${project.planSha}, ${project.planError},
+          ${project.projectError}, ${JSON.stringify(project.projectWarnings)}::text::jsonb, ${project.plan}, ${project.planSha}, ${project.planError},
           ${JSON.stringify(project.planWarnings)}::text::jsonb, ${project.branch}, ${project.syncedAt}
         )
         ON CONFLICT (name) DO UPDATE SET
           repo = EXCLUDED.repo, source = EXCLUDED.source, project = EXCLUDED.project,
-          project_sha = EXCLUDED.project_sha, project_error = EXCLUDED.project_error, plan = EXCLUDED.plan,
+          project_sha = EXCLUDED.project_sha, project_error = EXCLUDED.project_error, project_warnings = EXCLUDED.project_warnings,
+          plan = EXCLUDED.plan,
           plan_sha = EXCLUDED.plan_sha, plan_error = EXCLUDED.plan_error, plan_warnings = EXCLUDED.plan_warnings,
           branch = EXCLUDED.branch, synced_at = EXCLUDED.synced_at`
     },

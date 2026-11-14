@@ -60,7 +60,7 @@ test('projects are read from the default branch: leads, the slot limit and the s
   expect(synced.json).toMatchObject({ synced: 2, broken: [], retired: [], errors: [] })
   const list = ProjectList.parse((await lab.cli(['project', 'list'])).json)
   expect(list.projects.map((p) => [p.name, p.source, p.leads, p.slotRun, p.branch])).toEqual([
-    ['app', 'file', 1, null, 'origin/main'],
+    ['app', 'file', 4, null, 'origin/main'],
     ['lib', 'file', 3, '45m', 'origin/main'],
   ])
   expect(list.projects.map((p) => p.checks)).toEqual([null, { fast: 'make check-fast', full: 'make check', ci: true }])
@@ -184,7 +184,7 @@ test('an Issue behind a blocker stays queued, naming it, until the blocker close
 })
 
 test('a broken project.yaml keeps the last valid one and files one Issue for that content', async () => {
-  await lab.commit('lib', { 'project.yaml': 'apiVersion: factory/v2\nname: lib\nleads: 99\n' })
+  await lab.commit('lib', { 'project.yaml': 'apiVersion: factory/v2\nname: lib\nleads: 0\n' })
   const before = await issueCount()
   const synced = await lab.cli(['project', 'sync'])
   // app's cyclic plan from the test above is still broken, and every sync lists it
@@ -217,6 +217,19 @@ test('a linked worktree beside its repo is not a project: sync lists the repo on
   expect((synced.json as { broken: { project: string }[] }).broken.map((b) => b.project)).toEqual(['app', 'lib'])
   const list = ProjectList.parse((await lab.cli(['project', 'list'])).json)
   expect(list.projects.map((p) => p.name)).toEqual(['app', 'lib'])
+  expect(await issueCount()).toBe(before)
+})
+
+test('a leads above the bound is clamped to 64 and named in project show: the file stays in force and files nothing', async () => {
+  await lab.commit('lib', { 'project.yaml': 'apiVersion: factory/v2\nname: lib\nleads: 100\nlanes: { apple: 70 }\n' })
+  const before = await issueCount()
+  await lab.cli(['project', 'sync'])
+  const lib = await show('lib')
+  expect(lib).toMatchObject({ leads: 64, projectError: null, lanes: { apple: { leads: 64 } } })
+  expect(lib.projectWarnings).toEqual([
+    'leads is 100, above the most a repo or lane takes: clamped to 64',
+    'lanes.apple is 70, above the most a repo or lane takes: clamped to 64',
+  ])
   expect(await issueCount()).toBe(before)
 })
 

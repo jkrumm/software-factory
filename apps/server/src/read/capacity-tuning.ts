@@ -83,7 +83,17 @@ export function tuneConstant(
         reason: `${seen}: stop raising seats past the account cap`,
       }
     if (constants.leadsPerAccount > 1)
-      return { constant: 'leadsPerAccount', direction: 'down', reason: `${seen}: fewer leads per account` }
+      return {
+        constant: 'leadsPerAccount',
+        direction: 'down',
+        reason: `${seen}: fewer leads per account${
+          Object.keys(constants.accountLeads).length > 0
+            ? ` (the caps FACTORY_ACCOUNT_LEADS names stay: ${Object.entries(constants.accountLeads)
+                .map(([name, cap]) => `${name} ${cap}`)
+                .join(', ')})`
+            : ''
+        }`,
+      }
     if (constants.slotsMax > constants.slots)
       return { constant: 'slotsMax', direction: 'down', reason: `${seen}: fewer steps beyond the base slots` }
     return null

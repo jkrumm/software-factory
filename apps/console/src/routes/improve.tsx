@@ -73,6 +73,7 @@ import {
   targetStatus,
   targetTally,
   targetWords,
+  leadsWords,
   stampWords,
   WINDOW_DAYS,
   windowOf,
@@ -656,7 +657,7 @@ function CapacityCards({ model }: { model: CapacityLoopModel }) {
           }
           xLabels={dayXLabels(model.idleSeatHours.perDay)}
           footer={[
-            { label: 'Leads per account', value: String(constants.leadsPerAccount) },
+            { label: 'Leads per account', value: leadsWords(constants) },
             { label: 'Seat bonus at most', value: String(constants.seatsMaxBonus) },
           ]}
         />
