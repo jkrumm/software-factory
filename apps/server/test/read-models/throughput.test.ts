@@ -344,10 +344,28 @@ describe('GET /v1/throughput', () => {
   const get = (path: string, token: string) =>
     app.handle(new Request(`http://localhost${path}`, { headers: { authorization: `Bearer ${token}` } }))
 
-  test('the owner and the orchestrator read it; the lead and the read token do not', async () => {
-    for (const token of [TOKENS.owner, TOKENS.orchestrator])
-      expect((await get('/v1/throughput', token)).status).toBe(200)
-    for (const token of [TOKENS.agent, TOKENS.read]) expect((await get('/v1/throughput', token)).status).toBe(403)
+  test('the owner and the orchestrator read it whole; the lead reads it with work names redacted; the read token not at all', async () => {
+    await sql`INSERT INTO factory.planning_projects (name, repo, source, project) VALUES ('app', '/src/app', 'file', '{}'::jsonb)`
+    try {
+      for (const token of [TOKENS.owner, TOKENS.orchestrator]) {
+        const whole = ThroughputModel.parse(await (await get('/v1/throughput', token)).json())
+        expect(whole.host.byTenant.map((row) => row.tenant)).toContain('svc.one')
+        expect(whole.host.byRepo.map((row) => row.repo)).toContain('lib')
+      }
+      expect((await get('/v1/throughput', TOKENS.read)).status).toBe(403)
+      const lead = ThroughputModel.parse(await (await get('/v1/throughput', TOKENS.agent)).json())
+      const whole = ThroughputModel.parse(await (await get('/v1/throughput', TOKENS.owner)).json())
+      expect(lead.host.byTenant.every((row) => row.tenant === 'private')).toBe(true)
+      expect(lead.host.byRepo.map((row) => row.repo)).toContain('app')
+      expect(lead.host.byRepo.map((row) => row.repo)).not.toContain('lib')
+      expect(lead.host.topProcesses.every((row) => row.tenant === null || row.tenant === 'private')).toBe(true)
+      // the figures are the owner's
+      expect(lead.host.byRepo.map((row) => row.footprintMib)).toEqual(whole.host.byRepo.map((row) => row.footprintMib))
+      expect(lead.host.byClass).toEqual(whole.host.byClass)
+      expect(JSON.stringify(lead)).not.toContain('svc.')
+    } finally {
+      await sql`DELETE FROM factory.planning_projects WHERE name = 'app'`
+    }
   })
 
   test('hours: 1 to 336, default 24; anything else is a 422 with an ErrorBody', async () => {

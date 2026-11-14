@@ -38,6 +38,8 @@ import { readHostSamples } from '../read/host.ts'
 import { readKpis } from '../read/kpis.ts'
 import { readRetro } from '../read/retro.ts'
 import { readThroughput } from '../read/throughput.ts'
+import { redactThroughput } from '../read/throughput-redact.ts'
+import { loadOpenProjects } from '../read/work.ts'
 import { loopReads } from '../read/loops.ts'
 import { needsModel, readNeeds } from '../read/needs.ts'
 import { readSince, storedSince } from '../read/since.ts'
@@ -329,12 +331,16 @@ export const readModelRoutes = (deps: ReadModelDeps | undefined, caller: (reques
     )
     .get(
       '/throughput',
-      async ({ query }) => {
+      async ({ query, request }) => {
         if (!deps) return unavailable
         const hours = query.hours === undefined ? DEFAULT_HOURS : Number(query.hours)
-        return Response.json(
-          ThroughputModel.parse(await readThroughput(deps.sql, { now: now(), hours, dataDir: deps.dataDir })),
+        const model = ThroughputModel.parse(
+          await readThroughput(deps.sql, { now: now(), hours, dataDir: deps.dataDir }),
         )
+        // a lead's read keeps every figure and loses the names of work repos and tenants
+        const who = caller(request)
+        if (who === 'owner' || who === 'orchestrator') return Response.json(model)
+        return Response.json(ThroughputModel.parse(redactThroughput(model, await loadOpenProjects(deps.sql))))
       },
       {
         query: HoursQuery,
