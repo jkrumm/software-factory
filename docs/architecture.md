@@ -606,7 +606,7 @@ model, not a signal: an agent-trust signal files an Issue, and no loops page exi
   no successful leads tick for 20 min (`TICK_DEAD_MS`; `FACTORY_HEARTBEAT_STALE_MS` replaces it for a scenario), no first tick
   5 min after a start on a host that is not starved (a load of twice the CPU count or more keeps `starved: no tick has succeeded yet` ok until the 20 min), or a database that errors for 5 min. Everything short of that is `ok` with a `reason` that says so:
   `starting` (before the first tick, up to 5 min), `deploying` (`scripts/deploy.sh` holds `data/deploy.lock` for a live pid, up to
-  30 min; it also appends its start and end to `data/deploys.log`, the end with `unreachable_s=N`, the seconds from stopping the old process to `/health` at the new sha, which `GET /v1/throughput` sums per day as `deploys.days`), `starved: …` (a tick older than three intervals and a minute: the
+  30 min; it also appends its start and end to `data/deploys.log`, the end with `unreachable_s=N`, the seconds from stopping the old process to `/health` at the new sha, which `GET /v1/throughput` sums per day as `deploys.days`, and `stopped_s=N started_s=N`, its two halves: the old process told to stop to gone, then to `/health` ok), `starved: …` (a tick older than three intervals and a minute: the
   process is alive, with the age and the load) or `failing: …` (the same, with the tick's error).
 - The hook socket is a plain `Bun.serve` unix listener beside the API: its contract (mode 0600, empty stdout) is the
   hook's, not the API's.

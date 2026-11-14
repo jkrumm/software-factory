@@ -148,8 +148,10 @@ async function main(): Promise<void> {
     return
   }
 
+  const lockedAtS = process.uptime()
   const applied = await migrate(sql, await loadMigrations())
   if (applied.length) console.log(`migrated: ${applied.join(', ')}`)
+  const migratedAtS = process.uptime()
 
   // The composition: each domain's store on the transaction's connection, the ports the use cases get.
   const uow = postgresUnitOfWork(sql, (tx) => ({
@@ -914,7 +916,13 @@ async function main(): Promise<void> {
       host: { version: settings.version, startedAt, top: () => hostSamples.top() },
     },
   }).listen({ hostname: HOSTNAME, port: settings.port, idleTimeout: IDLE_TIMEOUT_S })
-  console.log(`listening on http://${HOSTNAME}:${settings.port} (version ${settings.version})`)
+  // Where a restart's seconds go after the process exists (`scripts/deploy.sh` prints the whole of it as `started_s`): the lock
+  // wait (the old process still holding it), the migrations, the rest of the composition, all counted from the process start.
+  const bootS = (seconds: number) => seconds.toFixed(1)
+  console.log(
+    `listening on http://${HOSTNAME}:${settings.port} (version ${settings.version}; boot ${bootS(process.uptime())}s: ` +
+      `lock ${bootS(lockedAtS)}s, migrations ${bootS(migratedAtS - lockedAtS)}s, rest ${bootS(process.uptime() - migratedAtS)}s)`,
+  )
   // From here /health answers, and `/health` is quick (it waits for nothing), so a stop can arrive before the steps below
   // exist: it is kept and run as soon as they do, never left to the default signal action (exit 143, the lock and the pool unclosed).
   let stopRequested: string | null = null

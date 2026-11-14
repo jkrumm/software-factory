@@ -93,4 +93,18 @@ describe('the unreachable seconds of a deploy', () => {
     )
     expect(result.out).toBe('unreachable_s=10')
   })
+
+  test('the end line splits the window into stopped_s and started_s; only the first stop counts', async () => {
+    const result = await sh(
+      'DOWN_AT=$(( $(date +%s) - 30 )); STOPPED_AT=$(( $(date +%s) - 12 )); STOPPED_S=18; mark_stopped; mark_up; unreachable_detail',
+    )
+    expect(result.out).toBe('unreachable_s=30 stopped_s=18 started_s=12')
+  })
+
+  test('a window still open names the stop it has seen; one with no stop yet names neither half', async () => {
+    const stopped = await sh('DOWN_AT=$(( $(date +%s) - 20 )); STOPPED_S=14; unreachable_detail')
+    expect(stopped.out).toMatch(/^unreachable_s=2[0-1] stopped_s=14 down=1$/)
+    const early = await sh('DOWN_AT=$(( $(date +%s) - 3 )); unreachable_detail')
+    expect(early.out).toMatch(/^unreachable_s=[3-4] down=1$/)
+  })
 })
