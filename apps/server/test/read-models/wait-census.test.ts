@@ -118,6 +118,15 @@ describe('the wait census', () => {
     })
   })
 
+  test('the orchestrator is the owner’s hands; a lead or the factory is not a person', async () => {
+    await waited(1, 'decision', at(-5 * HOUR), at(-4 * HOUR), 'orchestrator')
+    await waited(2, 'errand', at(-5 * HOUR), at(-4 * HOUR), 'lead')
+
+    const model = await census()
+    expect(row(model, 'decision')).toMatchObject({ endedBy: { owner: 1, factory: 0 }, avoidableCount: 0 })
+    expect(row(model, 'errand')).toMatchObject({ endedBy: { owner: 0, factory: 1 }, avoidableCount: 1 })
+  })
+
   test('a wait is counted by the time it began; one before the window is not', async () => {
     await waited(1, 'timer', at(-8 * 24 * HOUR), at(-7 * 24 * HOUR))
     await waited(2, 'timer', at(-2 * HOUR), at(-HOUR))

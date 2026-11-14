@@ -39,7 +39,9 @@ const WaitRow = z.object({
 /** Who ended a wait: the actor of the event that left it, or `open` while it goes on. */
 const enderOf = (row: z.infer<typeof WaitRow>): Ender => {
   if (row.ended === null) return 'open'
-  return row.actor === 'owner' || row.actor === 'judge' || row.actor === 'steward' ? row.actor : 'factory'
+  // the orchestrator holds the owner's rights and is his hands; a lead or the factory's own code is no person
+  if (row.actor === 'owner' || row.actor === 'orchestrator') return 'owner'
+  return row.actor === 'judge' || row.actor === 'steward' ? row.actor : 'factory'
 }
 
 /**
