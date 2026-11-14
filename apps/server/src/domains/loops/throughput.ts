@@ -400,9 +400,15 @@ export async function readLedger(
   fates: ReadonlyMap<string, IssueFate>,
   now: Date,
   measure: (row: FindingRow, window: { from: Date; to: Date }) => Promise<number | null | undefined>,
+  /** the counting epoch: a shipped finding filed before it has no `before` on this side, so it is `unmeasured`, never judged */
+  epoch: Date | null = null,
 ): Promise<LedgerChange[]> {
   const changes: LedgerChange[] = []
   for (const row of rows) {
+    if (epoch !== null && row.status === 'shipped' && row.filedAt < epoch) {
+      changes.push({ id: row.id, patch: { status: 'unmeasured', afterAt: now } })
+      continue
+    }
     if (row.status === 'open' && row.issueId) {
       const fate = fates.get(row.issueId)
       if (fate?.shippedAt) changes.push({ id: row.id, patch: { status: 'shipped', shippedAt: fate.shippedAt } })

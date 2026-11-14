@@ -11,6 +11,9 @@ import { readCapacityLoop } from '../../src/read/capacity-loop.ts'
 import { readThroughput } from '../../src/read/throughput.ts'
 import { readWindowFacts } from '../../src/read/throughput-loop.ts'
 import { countedFrom, epochNote } from '../../src/kernel/epoch.ts'
+import { type FindingRow, readLedger } from '../../src/domains/loops/throughput.ts'
+import { answersOf } from '../../src/read/throughput-answers.ts'
+import { redactAnswers } from '../../src/read/throughput-redact.ts'
 
 /**
  * The counting epoch: samples on both sides of it, and every read that counts them (the throughput model with its three
@@ -275,5 +278,83 @@ describe('the epoch itself', () => {
     await Bun.write(bad, '{"epoch":"yesterday"}')
     expect(() => loadEpoch(bad)).toThrow()
     expect(() => loadEpoch(`${dir.trim()}/missing.json`)).toThrow()
+  })
+})
+
+describe('what the epoch leaves to the ledger and to a lead', () => {
+  const row = (filedAt: Date): FindingRow => ({
+    id: 'f',
+    project: 'chat',
+    kpi: 'failed_run_minutes',
+    subject: '*',
+    before: 60,
+    target: 30,
+    direction: 'down',
+    unit: 'minutes',
+    costMinutes: 90,
+    query: 'q',
+    signalId: null,
+    issueId: 'issue_1',
+    filedAt,
+    shippedAt: t('11-11T00:00'),
+    after: null,
+    afterAt: null,
+    status: 'shipped',
+    reopens: null,
+  })
+
+  test('a shipped finding filed before the epoch is written unmeasured, never measured against a before from the other side', async () => {
+    let measured = 0
+    const measure = async () => {
+      measured++
+      return 10
+    }
+    const before = await readLedger([row(t('11-10T00:00'))], new Map(), NOW, measure, EPOCH)
+    expect(before).toEqual([{ id: 'f', patch: { status: 'unmeasured', afterAt: NOW } }])
+    expect(measured).toBe(0)
+    const after = await readLedger([row(t('11-13T00:00'))], new Map(), NOW, measure, EPOCH)
+    expect(after[0]?.patch.status).toBe('moved')
+    expect(measured).toBe(1)
+  })
+
+  test('a lead is not told a work repo by the answers: the finding, its sentence and the queue wait text are rewritten', () => {
+    const answers = answersOf({
+      window: { from: EPOCH, to: NOW },
+      pressure: { normal: 1, warning: 0, critical: 0, unread: 0 },
+      newest: { level: 1, swapUsedPct: 5, memoryUsedPct: 40 },
+      tenant: { budgetMib: 6144, footprintMib: 100, over: false },
+      tenantDays: [],
+      intervals: [],
+      findings: [
+        {
+          id: 'f',
+          project: 'chat',
+          kpi: 'failed_run_minutes',
+          subject: '*',
+          before: 60,
+          target: 30,
+          after: null,
+          direction: 'down',
+          unit: 'minutes',
+          costMinutes: 90,
+          status: 'open',
+          reason: null,
+          issue: null,
+          filedAt: EPOCH.toISOString(),
+          shippedAt: null,
+          afterAt: null,
+        },
+      ],
+      queue: new Map([['issue_1', { kind: 'memory', message: 'memory: a lead of chat takes ~5 GiB', opensAt: null }]]),
+    })
+    expect(answers.cost.sentence).toContain('chat')
+    expect(answers.host.sentence).toContain('a lead of chat')
+    const seen = redactAnswers(answers, [{ name: 'argo', repo: 'argo' }])
+    expect(JSON.stringify(seen)).not.toContain('chat')
+    expect(seen.cost.finding).toMatchObject({ project: 'private', subject: '*' })
+    expect(seen.host.waitingFor).toBeNull()
+    expect(seen.host.sentence).toContain('an Issue waits for memory')
+    // an open project's name stays
+    expect(redactAnswers(answers, [{ name: 'chat', repo: 'chat' }]).cost.finding?.project).toBe('chat')
   })
 })

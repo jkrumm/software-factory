@@ -109,6 +109,35 @@ export interface AnswerFacts {
   queue: QueueReasons | null
 }
 
+/** The host answer's sentence. `waitingText` is the queue's own words for the wait (it can name a repo); null leaves them out. */
+export function hostSentence(h: {
+  level: ThroughputAnswers['host']['level']
+  limit: boolean
+  swapUsedPct: number | null
+  pressuredMinutes: number
+  readMinutes: number
+  waiting: boolean
+  waitingText: string | null
+}): string {
+  if (h.level === 'unread' && !h.waiting) return 'The host read no memory pressure in this window.'
+  const swap = h.swapUsedPct === null ? '' : `, swap ${round(h.swapUsedPct)} % of RAM`
+  const wait = h.waiting ? `; an Issue waits for memory${h.waitingText ? ` (${h.waitingText})` : ''}` : ''
+  const spell =
+    h.readMinutes === 0
+      ? ''
+      : ` ${h.pressuredMinutes} of ${h.readMinutes} minutes in this window were at warning or critical.`
+  return `${h.limit ? 'Yes' : 'No'}: memory pressure is ${h.level} now${swap}${wait}.${spell}`
+}
+
+/** The cost answer's sentence for an open improvement; a caller that must not learn the project passes the redacted word. */
+export const improvementSentence = (f: {
+  project: string
+  kpi: string
+  subject: string
+  costMinutes: number
+}): string =>
+  `The largest open improvement is ${f.project}, ${f.kpi.replaceAll('_', ' ')}${f.subject === '*' ? '' : ` of ${f.subject}`}: ${Math.round(f.costMinutes)} minutes of capacity.`
+
 /** The three answers from the window's facts. Pure: the page and the retro say the same words. */
 export function answersOf(facts: AnswerFacts): ThroughputAnswers {
   const { pressure, newest } = facts
@@ -117,12 +146,15 @@ export function answersOf(facts: AnswerFacts): ThroughputAnswers {
   const read = pressure.normal + pressured
   const waiting = [...(facts.queue?.values() ?? [])].find((r) => r.kind === 'memory') ?? null
   const limit = level === 'warning' || level === 'critical' || waiting !== null
-  const swap = newest?.swapUsedPct == null ? null : `${round(newest.swapUsedPct)} % of RAM`
-  const spell = read === 0 ? '' : ` ${pressured} of ${read} minutes in this window were at warning or critical.`
-  const hostSentence =
-    level === 'unread' && waiting === null
-      ? 'The host read no memory pressure in this window.'
-      : `${limit ? 'Yes' : 'No'}: memory pressure is ${level} now${swap ? `, swap ${swap}` : ''}${waiting ? `; an Issue waits for memory (${waiting.message})` : ''}.${spell}`
+  const hostSentenceText = hostSentence({
+    level,
+    limit,
+    swapUsedPct: newest?.swapUsedPct ?? null,
+    pressuredMinutes: pressured,
+    readMinutes: read,
+    waiting: waiting !== null,
+    waitingText: waiting?.message ?? null,
+  })
 
   const { byReason, perDay } = queueHours(
     facts.intervals.filter((iv) => !(OWNED_ELSEWHERE_KINDS as readonly string[]).includes(iv.kind)),
@@ -149,7 +181,7 @@ export function answersOf(facts: AnswerFacts): ThroughputAnswers {
     : finding
       ? {
           kind: 'improvement',
-          sentence: `The largest open improvement is ${finding.project}, ${finding.kpi.replaceAll('_', ' ')}${finding.subject === '*' ? '' : ` of ${finding.subject}`}: ${Math.round(finding.costMinutes)} minutes of capacity.`,
+          sentence: improvementSentence(finding),
           figure: finding.costMinutes,
           unit: 'minutes',
           perDay: [],
@@ -180,7 +212,7 @@ export function answersOf(facts: AnswerFacts): ThroughputAnswers {
     host: {
       limit,
       level,
-      sentence: hostSentence,
+      sentence: hostSentenceText,
       swapUsedPct: newest?.swapUsedPct ?? null,
       memoryUsedPct: newest?.memoryUsedPct ?? null,
       pressuredMinutes: pressured,

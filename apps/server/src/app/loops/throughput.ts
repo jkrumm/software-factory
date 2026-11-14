@@ -126,16 +126,20 @@ export async function throughputPass(deps: ThroughputDeps): Promise<Result<Throu
     pass.notes.push(`issue fates not read: ${error instanceof Error ? error.message : String(error)}`)
   }
   const epoch = deps.epoch ?? null
-  // a finding shipped but filed before the epoch has no `before` on this side of it: it stays unmeasured, never judged
-  const measurable = rows.filter((r) => !(epoch !== null && r.status === 'shipped' && r.filedAt < epoch))
-  const changes = await readLedger(measurable, fates, now, async (row, window) => {
-    try {
-      return figureOf(await deps.facts(window, { baseline: false, peakBudgetMib, shapes }), row)
-    } catch (error) {
-      pass.notes.push(`after of ${row.id} not read: ${error instanceof Error ? error.message : String(error)}`)
-      return undefined
-    }
-  })
+  const changes = await readLedger(
+    rows,
+    fates,
+    now,
+    async (row, window) => {
+      try {
+        return figureOf(await deps.facts(window, { baseline: false, peakBudgetMib, shapes }), row)
+      } catch (error) {
+        pass.notes.push(`after of ${row.id} not read: ${error instanceof Error ? error.message : String(error)}`)
+        return undefined
+      }
+    },
+    epoch,
+  )
   if (changes.length > 0) {
     const applied = await deps.uow.run(async ({ loops }) => {
       await loops.applyThroughputLedger(changes)

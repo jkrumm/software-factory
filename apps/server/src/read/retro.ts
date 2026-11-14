@@ -18,6 +18,8 @@ import { capacityFigures, tuneConstant } from './capacity-tuning.ts'
 import { type CapacityConstants, readCapacityLoop } from './capacity-loop.ts'
 import { readFriction } from './friction.ts'
 import type { QueueReasons } from './flow.ts'
+import { redactAnswers } from './throughput-redact.ts'
+import { loadOpenProjects } from './work.ts'
 import { readThroughput } from './throughput.ts'
 import { readKpis, type Window } from './kpis.ts'
 import { readRetroBuild } from './retro-build.ts'
@@ -238,7 +240,8 @@ async function capacityOf(
   },
 ): Promise<RetroCapacity> {
   const loop = await readCapacityLoop(sql, options)
-  const window = windowOf(options.now, options.days)
+  // the window the loop counted: the epoch may have cut it, and the figure is per counted day
+  const window = { from: new Date(loop.window.from), to: new Date(loop.window.to) }
   const apiBlocked: RetroCapacityFigure = {
     key: 'api_blocked_minutes_per_day',
     label: 'Minutes a day leads spent blocked on API errors',
@@ -318,6 +321,7 @@ export async function readRetro(
   const bare = (list: RetroSample[]): RetroSample[] => list.map((s) => ({ ...s, why: '' }))
   return {
     ...model,
+    throughput: { ...model.throughput, answers: redactAnswers(model.throughput.answers, await loadOpenProjects(sql)) },
     sessions: sessions.map((s) => ({ ...s, transcriptPath: null })),
     samples: {
       regressed: bare(model.samples.regressed),
