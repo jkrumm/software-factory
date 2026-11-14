@@ -21,8 +21,8 @@ export interface ComposedIntake {
   doorLines(finishedMs: number): Promise<string[]>
   /** starts the pollers and the settle pass on their schedules */
   start(): void
-  /** stops them and waits for the pass in flight */
-  stop(): Promise<void>
+  /** stops them and waits for the pass in flight, `graceMs` at most */
+  stop(graceMs?: number): Promise<void>
 }
 
 /**
@@ -86,7 +86,7 @@ export async function composeIntake(input: {
     uid: process.getuid?.() ?? 0,
   })
 
-  const stops: (() => Promise<void>)[] = []
+  const stops: ((graceMs?: number) => Promise<void>)[] = []
   return {
     api: intake,
     async doorLines(finishedMs) {
@@ -109,8 +109,8 @@ export async function composeIntake(input: {
         if (every !== null && enabled) stops.push(selfPaced(name, every, pass))
       }
     },
-    async stop() {
-      await Promise.all(stops.map((stop) => stop()))
+    async stop(graceMs) {
+      await Promise.all(stops.map((stop) => stop(graceMs)))
     },
   }
 }
