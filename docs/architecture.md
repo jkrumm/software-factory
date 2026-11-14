@@ -304,8 +304,10 @@ through `receive` in `app/intake.ts`; the answer is a triage outcome (`docs/lang
   kept 14 days) and the grant is unchanged; `factory read capacity-loop` shows, over its window, the swapouts and the share above
   pressure level 1 in the minutes the aim allowed more than the live base against the others (`slotAim.moreSlots` / `otherwise`).
   Switch on (`FACTORY_SLOT_AIM=on`) after 48 hours of shadow only if the first did not rise for the worse. Under `on` the aimed
-  count is both the base and the cap of a grant, a step still needs its learned-peak fit, and the load gate beyond the live
-  rule's `FACTORY_SLOT_EXTRA_LOAD` is twice the cores; running steps are never touched. Steps run at normal priority: a test of
+  count is the cap of a grant (the base stays `FACTORY_SLOTS`, lowered to the aim when that is less), a step beyond the base
+  keeps the learned-peak fit and its load gate is twice the cores instead of `FACTORY_SLOT_EXTRA_LOAD`; running steps are never
+  touched. `factory capacity` still shows the configured `FACTORY_SLOTS` and `FACTORY_SLOTS_MAX`; the aimed count and mode are
+  in `slotAim` of `factory read capacity-loop`. Steps run at normal priority: a test of
   `taskpolicy -b` and its neighbours is in `docs/research/2026-11-14-taskpolicy-steps.md`.
 
 ## Quality

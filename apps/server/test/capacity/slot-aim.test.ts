@@ -163,4 +163,15 @@ describe('the aim pass and the grant', () => {
     const live = value(await touchSlot(slotDeps('shadow'), { id: 'b', name: 'b' }))
     expect(live.granted).toBe(true)
   })
+
+  test('under on a slot beyond the live base still needs a learned peak and the load within twice the cores', async () => {
+    await world.db.sql`
+      INSERT INTO factory.slot_aim (id, target, quiet_since, changed_at) VALUES (1, 4, NULL, ${AT})`
+    const deps = { ...world.deps, slots: 2, slotsMax: 6, slotExtraLoad: 12, slotAim: 'on' as const, cores: 12 }
+    expect(value(await touchSlot(deps, { id: 'a', name: 'a' })).granted).toBe(true)
+    expect(value(await touchSlot(deps, { id: 'b', name: 'b' })).granted).toBe(true)
+    const third = value(await touchSlot(deps, { id: 'c', name: 'c' }))
+    expect(third.granted).toBe(false)
+    expect(third.why).toContain('no learned peak')
+  })
 })

@@ -37,7 +37,10 @@ export interface SlotDeps extends PlanningDeps {
   /** `FACTORY_SLOT_EXTRA_LOAD`: the load up to which a step beyond the base slots is granted */
   slotExtraLoad: number
   host: HostReader
-  /** `FACTORY_SLOT_AIM`: with `on`, the slot count is the aim's (1 to `slotsMax`) and the load gate twice the cores */
+  /**
+   * `FACTORY_SLOT_AIM`: with `on`, the aim (1 to `slotsMax`) is the cap, the base stays `slots` (lowered to the aim when
+   * that is less), and a slot beyond the base keeps its learned-peak fit with the load gate at twice the cores
+   */
   slotAim: AimMode
   cores: number
 }
@@ -81,7 +84,7 @@ export async function touchSlot(
       {
         id: input.id,
         name: input.name,
-        slots: aimed ?? deps.slots,
+        slots: aimed === null ? deps.slots : Math.min(deps.slots, aimed),
         runMs,
         cwd: input.cwd,
         rssMib: input.rssMib,
