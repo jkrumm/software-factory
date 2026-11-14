@@ -75,6 +75,8 @@ export type StallAction =
   /** `revise`: the one note of a `changes` verdict still owed a revision, keyed by its artifact and verdict */
   | { kind: 'wake'; detail: string; revise?: { artifact: string; version: number } }
   | { kind: 'requeue'; detail: string }
+  /** a `wall` stall whose window is closed: another open account may take the lead (`seats.move`); no room is a wait */
+  | { kind: 'move' }
   /** a lead's repeated block after a Decision answered "hold": a timed wait with a longer backoff, no new Decision */
   | { kind: 'hold'; until: string; detail: string }
   | { kind: 'ask' }
@@ -100,7 +102,7 @@ export function decideStall(facts: StallFacts, now: Date, rules: StewardRules): 
       ? { kind: 'requeue', detail: `${STEWARD_DETAIL}a note arrived: a new attempt reads it` }
       : { kind: 'wake', detail: `${STEWARD_DETAIL}delivers ${facts.notes.length} note(s) that arrived while it waited` }
   }
-  if (facts.cause === 'wall') return { kind: 'wait', why: "the account's window is still closed" }
+  if (facts.cause === 'wall') return { kind: 'move' }
   if (facts.cause === 'unreported' && facts.stewardWakes < rules.maxWakes) {
     return { kind: 'wake', detail: `${STEWARD_DETAIL}it stopped without reporting: it is asked to report` }
   }

@@ -173,7 +173,7 @@ export function composePlanning(input: {
       recordStepCost: (cost) => recordStepCost(writes, cost),
       recordMergeWindow: (window) => recordMergeWindow(writes, window),
     },
-    leads: capacityForLeads(writes, settings.windowLimits),
+    leads: capacityForLeads(writes, limits),
     capacityFacts: () => capacityFacts(capacity),
     claimQueued: () => claimQueued(capacity),
     claimStalled: (issues) => claimStalled(capacity, issues),

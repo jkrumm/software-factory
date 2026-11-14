@@ -194,10 +194,16 @@ export function postgresLeadStore(tx: SQL): LeadStore {
         WHERE issue_id = ${issue} AND attempt = ${attempt} AND gone_at IS NULL`
     },
 
-    async markDormant(issue, attempt, at) {
+    async markDormant(issue, attempt, at, account) {
       await tx`
         UPDATE factory.lead_attempts SET dormant_at = ${at}
         WHERE issue_id = ${issue} AND attempt = ${attempt} AND dormant_at IS NULL`
+      // A session ended to start again on another account belongs to that account from here, whatever happens to the start.
+      if (account) {
+        await tx`
+          UPDATE factory.lead_attempts SET account = ${account}
+          WHERE issue_id = ${issue} AND attempt = ${attempt}`
+      }
     },
 
     async markRevived(issue, attempt, terminal) {
@@ -209,6 +215,12 @@ export function postgresLeadStore(tx: SQL): LeadStore {
         await tx`
           UPDATE factory.lead_attempts SET terminal = ${terminal.address}, tab = ${terminal.tab}, space = ${terminal.space}
           WHERE issue_id = ${issue} AND attempt = ${attempt}`
+        // A session started again on another account runs on that one from now on.
+        if (terminal.account) {
+          await tx`
+            UPDATE factory.lead_attempts SET account = ${terminal.account}
+            WHERE issue_id = ${issue} AND attempt = ${attempt}`
+        }
       }
     },
 

@@ -39,6 +39,11 @@ export interface CapacityStore {
   /** gives these Issues' claims back; says which Issues held one */
   releaseClaims(issues: readonly IssueId[]): Promise<IssueId[]>
   assign(assignment: Assignment): Promise<void>
+  /**
+   * Moves an attempt to another account: its assignment (stamped `at`, so the account counts as loaded until its next
+   * sample) and, when it holds one, its claim. Says whether the attempt had an assignment.
+   */
+  reassign(issue: IssueId, attempt: number, account: string, at: Date): Promise<boolean>
   /** the newest assignments: the leads an account's latest sample may not show yet */
   recentAssignments(): Promise<Assignment[]>
   assignmentOf(issue: IssueId, attempt: number): Promise<Assignment | null>
