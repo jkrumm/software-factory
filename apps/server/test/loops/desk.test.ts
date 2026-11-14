@@ -753,7 +753,7 @@ describe('an Errand that needs only his yes', () => {
     checks['gate-pending'] = { exit: 1, timedOut: false, output: 'released' }
     const pass = value(
       await errandsPass({
-        uow: deps.uow as never,
+        uow: deps.uow,
         clock,
         checks: deps.checks,
         needed: { judge: () => Promise.resolve(err(portError('gone', 'no look'))) },
