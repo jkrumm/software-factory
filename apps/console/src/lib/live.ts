@@ -11,7 +11,8 @@ import {
   WATCHDOG_TICK_MS,
   type Change,
 } from './policy.ts'
-import { markFailing, markRecovered } from './restart.ts'
+import { fetchMachine } from './api.ts'
+import { markRecovered } from './restart.ts'
 import { checkForUpdate } from './update.ts'
 
 const INVALIDATE_DEBOUNCE_MS = 250
@@ -130,7 +131,8 @@ export function startLive(queryClient: QueryClient): () => void {
       })
     }
     es.onerror = () => {
-      if (greeted) markFailing()
+      // A dropped stream is a restart only if the server does not answer either: the probe's network error marks it, an answer clears it.
+      if (greeted) void fetchMachine().catch(() => undefined)
       close()
       if (!greeted) cursor = undefined
       delay = nextBackoff(delay)

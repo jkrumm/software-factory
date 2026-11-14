@@ -18,6 +18,8 @@ const NEVER: Record<string, string> = {
   FACTORY_BESZEL_PASSWORD: 'secret (needs an .env.tpl ref before the Beszel source can run)',
   FACTORY_UPTIME_TOKEN: 'secret (.env.server.tpl)',
   FACTORY_VERSION: "the plist's: the deployed sha",
+  FACTORY_LAUNCH_ENTRY:
+    "deploy.sh's, for one launch of the migration dry check: a settings file must never redirect the server's start",
   FACTORY_TEST_MODE: 'scenarios only; the server refuses the test settings outside a test',
   FACTORY_HEALTH_PROBE_MS: 'scenarios only: how often /health re-reads the database facts',
   FACTORY_TEST_CLOCK_OFFSET_MS: 'scenarios only',
