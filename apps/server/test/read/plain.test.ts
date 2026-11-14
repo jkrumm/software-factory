@@ -189,6 +189,7 @@ describe('the read token', () => {
     const detail: ReadIssueDetail = {
       ...card(true),
       ranOn: null,
+      edges: { after: [], before: [] },
       timeline: [{ at: '2026-11-07T10:00:00.000Z', kind: 'asked', text: 'secret words', session: 'lead-12-1' }],
       evidence: [{ kind: 'review', link: 'https://secret', note: 'secret', at: '2026-11-07T10:00:00.000Z' }],
       asks: [

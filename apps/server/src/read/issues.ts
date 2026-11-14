@@ -1,6 +1,7 @@
 import type {
   ReadAccountQuota,
   ReadAskLine,
+  ReadEdgeLine,
   ReadEvidenceLine,
   ReadInsights,
   ReadIssueCard,
@@ -261,6 +262,54 @@ interface DecisionRow {
   asked_at: Date
 }
 
+/**
+ * The chain at one Issue, as the chain reads it: stored `after` edges and the dependency wait of an open Issue. `after` is
+ * what this Issue waits on (satisfied edges included, marked); `before` the open Issues that wait on it.
+ */
+export async function loadEdges(sql: SQL, id: string): Promise<ReadIssueDetail['edges']> {
+  const stored: { other: string; open: boolean; satisfied: boolean; side: 'after' | 'before' }[] = await sql`
+    SELECT e.after_issue AS other, (o.state <> 'closed') AS open, (e.satisfied_at IS NOT NULL) AS satisfied, 'after' AS side
+    FROM factory.planning_edges e JOIN factory.issues o ON o.id = e.after_issue
+    WHERE e.issue_id = ${id}
+    UNION ALL
+    SELECT e.issue_id AS other, (o.state <> 'closed') AS open, (e.satisfied_at IS NOT NULL) AS satisfied, 'before' AS side
+    FROM factory.planning_edges e JOIN factory.issues o ON o.id = e.issue_id AND o.state <> 'closed'
+    WHERE e.after_issue = ${id}`
+  const waits: { id: string; after: unknown }[] = await sql`
+    SELECT i.id, e.wait->'after' AS after
+    FROM factory.issues i
+    JOIN LATERAL (
+      SELECT x.wait FROM factory.issue_events x
+      WHERE x.issue_id = i.id AND x.result = 'applied' ORDER BY x.version DESC LIMIT 1
+    ) e ON true
+    WHERE i.state = 'waiting' AND i.wait_reason = 'dependency'
+      AND (i.id = ${id} OR e.wait->'after' @> ${JSON.stringify([id])}::text::jsonb)`
+  const states = new Map<string, boolean>()
+  const afterIds = waits.find((wait) => wait.id === id)?.after
+  const own = Array.isArray(afterIds) ? afterIds.filter((v): v is string => typeof v === 'string') : []
+  if (own.length > 0) {
+    const rows: { id: string; state: string }[] =
+      await sql`SELECT id, state FROM factory.issues WHERE id IN ${sql(own)}`
+    for (const row of rows) states.set(row.id, row.state !== 'closed')
+  }
+  const line = (issue: string, via: 'edge' | 'wait', open: boolean, satisfied: boolean): ReadEdgeLine => ({
+    issue,
+    via,
+    open,
+    satisfied,
+  })
+  const after = [
+    ...stored.filter((e) => e.side === 'after').map((e) => line(e.other, 'edge', e.open, e.satisfied)),
+    ...own.map((issue) => line(issue, 'wait', states.get(issue) ?? false, false)),
+  ]
+  const before = [
+    ...stored.filter((e) => e.side === 'before').map((e) => line(e.other, 'edge', true, e.satisfied)),
+    ...waits.filter((wait) => wait.id !== id).map((wait) => line(wait.id, 'wait', true, false)),
+  ]
+  const order = (a: ReadEdgeLine, b: ReadEdgeLine) => issueNumberOf(a.issue) - issueNumberOf(b.issue)
+  return { after: after.sort(order), before: before.sort(order) }
+}
+
 /** `GET /v1/issues/:id`: the card with its timeline, evidence, asks and sessions; undefined for no such Issue. */
 export async function issueDetail(
   deps: SessionDeps,
@@ -330,5 +379,6 @@ export async function issueDetail(
     artifacts,
     shipping,
     sessions,
+    edges: await loadEdges(sql, row.id),
   }
 }

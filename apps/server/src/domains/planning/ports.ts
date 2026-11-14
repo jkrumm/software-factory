@@ -96,6 +96,8 @@ export interface LongWaitRow {
   since: Date
   until: string
   held: number
+  /** the Issues counted in `held`, each with the open Issues it waits on directly */
+  heldIssues: { issue: string; after: string[] }[]
 }
 
 /**

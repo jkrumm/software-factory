@@ -3,6 +3,8 @@ import { NeedsModel } from '@software-factory/contract'
 import { startTestCluster, type TestCluster } from '@software-factory/tests/pg'
 import type { SQL } from 'bun'
 import { loadMigrations, migrate } from '../../src/adapters/postgres/migrate.ts'
+import { loadEdges } from '../../src/read/issues.ts'
+import { readLongWaits } from '../../src/read/long-waits.ts'
 import { needsModel, readNeeds } from '../../src/read/needs.ts'
 import { loadNeedsSettings } from '../../src/read/needs-settings.ts'
 
@@ -112,6 +114,43 @@ describe('a timed wait with Issues behind it', () => {
     await sql`UPDATE factory.issues SET state = 'closed', outcome = 'done' WHERE id = ${closed}`
 
     expect((await longWaits())[0]?.wait).toMatchObject({ held: 3 })
+  })
+
+  test('each held Issue is listed with what it waits on directly, so a middle blocker shows', async () => {
+    const head = await deferred(1, at(-4 * HOUR), at(-HOUR))
+    const middle = await after(2, head)
+    await after(3, middle)
+    await waitingAfter(4, [head, middle])
+
+    const [wait] = await readLongWaits(sql, HOUR)
+    expect(wait?.held).toBe(3)
+    expect(wait?.heldIssues).toEqual([
+      { issue: 'issue_2', after: ['issue_1'] },
+      { issue: 'issue_3', after: ['issue_2'] },
+      { issue: 'issue_4', after: ['issue_1', 'issue_2'] },
+    ])
+  })
+
+  test('an Issue shows its stored edges and dependency waits, and who waits on it', async () => {
+    const head = await deferred(1, at(-4 * HOUR), at(-HOUR))
+    const middle = await after(2, head)
+    await waitingAfter(4, [head, middle])
+
+    expect(await loadEdges(sql, middle)).toEqual({
+      after: [{ issue: head, via: 'edge', open: true, satisfied: false }],
+      before: [{ issue: 'issue_4', via: 'wait', open: true, satisfied: false }],
+    })
+    expect(await loadEdges(sql, 'issue_4')).toEqual({
+      after: [
+        { issue: head, via: 'wait', open: true, satisfied: false },
+        { issue: middle, via: 'wait', open: true, satisfied: false },
+      ],
+      before: [],
+    })
+    expect((await loadEdges(sql, head)).before).toEqual([
+      { issue: middle, via: 'edge', open: true, satisfied: false },
+      { issue: 'issue_4', via: 'wait', open: true, satisfied: false },
+    ])
   })
 
   test('a satisfied edge holds nobody back', async () => {

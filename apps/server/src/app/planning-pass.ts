@@ -251,6 +251,7 @@ async function replanStalled(deps: PlanningDeps, longWaitMs: number): Promise<st
         since: wait.since.toISOString(),
         until: wait.until,
         held: wait.held,
+        heldIssues: wait.heldIssues,
       },
       actor: 'owner',
     })

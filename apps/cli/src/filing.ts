@@ -98,7 +98,7 @@ export const OPERATION_EXTENSIONS: Readonly<Record<string, OperationExtension>> 
     notice: syncNotice,
   },
   'issue.show': {
-    help: "An Issue's `after` edges are not in this answer: `factory read chain --format plain` lists what blocks each Issue (`blocking.issue_<n>`).",
+    help: "`edges.after` lists what the Issue waits on and `edges.before` the open Issues that wait on it: stored `after` edges (`via: edge`, what `factory issue replan` edits) and a lead's own dependency wait (`via: wait`). `factory read chain --format plain` shows the whole chain (`blocking.issue_<n>`).",
   },
   'issue.list': { plain: issueListPlain },
   'artifact.list': {

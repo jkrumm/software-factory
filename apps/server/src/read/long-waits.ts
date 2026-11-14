@@ -1,5 +1,6 @@
 import type { SQL } from 'bun'
 import * as z from 'zod'
+import { issueNumberOf } from './sessions.ts'
 
 /** A timed wait with other open Issues held behind it, for as long as it lasts. */
 export interface LongWait {
@@ -13,6 +14,8 @@ export interface LongWait {
   until: string
   /** the open Issues that wait on it, directly or through other Issues */
   held: number
+  /** each of them with the open Issues it waits on directly: the chain from the head, edge by edge */
+  heldIssues: { issue: string; after: string[] }[]
 }
 
 const TimerRow = z.object({
@@ -23,6 +26,8 @@ const TimerRow = z.object({
   until: z.string(),
   began: z.date(),
 })
+const byIssueNumber = (a: string, b: string): number => issueNumberOf(a) - issueNumberOf(b)
+
 const EdgeRow = z.object({ issue_id: z.string(), after_issue: z.string() })
 const WaitRow = z.object({ id: z.string(), after: z.array(z.string()) })
 
@@ -62,9 +67,13 @@ export async function readLongWaits(sql: SQL, thresholdMs: number): Promise<Long
     ) e ON true
     WHERE i.state = 'waiting' AND i.wait_reason = 'dependency'`
 
-  // blocker -> the open Issues that wait directly on it
+  // blocker -> the open Issues that wait directly on it; Issue -> what it waits on directly
   const dependents = new Map<string, Set<string>>()
-  const link = (issue: string, after: string) => dependents.set(after, (dependents.get(after) ?? new Set()).add(issue))
+  const blockers = new Map<string, Set<string>>()
+  const link = (issue: string, after: string) => {
+    dependents.set(after, (dependents.get(after) ?? new Set()).add(issue))
+    blockers.set(issue, (blockers.get(issue) ?? new Set()).add(after))
+  }
   for (const raw of stored) {
     const edge = EdgeRow.parse(raw)
     link(edge.issue_id, edge.after_issue)
@@ -74,7 +83,7 @@ export async function readLongWaits(sql: SQL, thresholdMs: number): Promise<Long
     for (const after of wait.after) link(wait.id, after)
   }
 
-  const heldBehind = (head: string): number => {
+  const heldBehind = (head: string): Set<string> => {
     const seen = new Set<string>()
     const queue = [head]
     for (let next = queue.pop(); next !== undefined; next = queue.pop()) {
@@ -84,12 +93,12 @@ export async function readLongWaits(sql: SQL, thresholdMs: number): Promise<Long
         queue.push(dependent)
       }
     }
-    return seen.size
+    return seen
   }
 
   return long.flatMap((row) => {
     const held = heldBehind(row.id)
-    return held === 0
+    return held.size === 0
       ? []
       : [
           {
@@ -99,7 +108,11 @@ export async function readLongWaits(sql: SQL, thresholdMs: number): Promise<Long
             origin: row.origin,
             since: row.began,
             until: new Date(row.until).toISOString(),
-            held,
+            held: held.size,
+            heldIssues: [...held].sort(byIssueNumber).map((issue) => ({
+              issue,
+              after: [...(blockers.get(issue) ?? [])].sort(byIssueNumber),
+            })),
           },
         ]
   })

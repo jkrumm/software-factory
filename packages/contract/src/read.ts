@@ -290,6 +290,21 @@ export const ReadShipLine = z
   .meta({ id: 'ReadShipLine' })
 export type ReadShipLine = z.infer<typeof ReadShipLine>
 
+/** One edge of the chain at an Issue: the other Issue, how the edge is stored and whether it still holds anything back. */
+export const ReadEdgeLine = z
+  .object({
+    /** `issue_<n>` */
+    issue: z.string(),
+    /** `edge`: a stored `after` edge (what `factory issue replan` edits); `wait`: the Issue's own dependency wait (`defer --after`) */
+    via: z.enum(['edge', 'wait']),
+    /** the other Issue is not closed */
+    open: z.boolean(),
+    /** a stored edge the chain already marked met; always false for a wait */
+    satisfied: z.boolean(),
+  })
+  .meta({ id: 'ReadEdgeLine' })
+export type ReadEdgeLine = z.infer<typeof ReadEdgeLine>
+
 export const ReadIssueDetail = ReadIssueCard.extend({
   /** the tier and effort the latest lead actually started on; null before one started (or for an older lead) */
   ranOn: z.object({ tier: z.string(), effort: z.string() }).nullable(),
@@ -303,6 +318,8 @@ export const ReadIssueDetail = ReadIssueCard.extend({
   artifacts: z.array(ReadArtifactLine),
   shipping: z.array(ReadShipLine),
   sessions: z.array(ReadSessionCard),
+  /** what this Issue waits on (`after`) and the open Issues that wait on it (`before`): the stored edges and the dependency waits, so a blocker is never only a count */
+  edges: z.object({ after: z.array(ReadEdgeLine), before: z.array(ReadEdgeLine) }),
 }).meta({ id: 'ReadIssueDetail' })
 export type ReadIssueDetail = z.infer<typeof ReadIssueDetail>
 
