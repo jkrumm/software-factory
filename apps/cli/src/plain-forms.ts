@@ -1,5 +1,6 @@
 import type {
   ArtifactList,
+  ProjectPlanModel,
   ProjectSyncAnswer,
   ProjectView,
   ReadIssueCards,
@@ -36,6 +37,17 @@ export function projectShowPlain(data: unknown): string {
   if (!project.plan) return [...lines, 'no plan'].join('\n')
   for (const warning of project.plan.warnings) lines.push(`warning: ${warning}`)
   for (const row of project.plan.rows) lines.push([row.key, row.state, row.issue ?? '-', row.reason ?? '-'].join('\t'))
+  return lines.join('\n')
+}
+
+/** `project plan --format plain`: the plan's error and warnings, then one line per row, `<key>\t<state>\t<issue>\t<reason>\t<title>`. */
+export function projectPlanPlain(data: unknown): string {
+  const plan = data as ProjectPlanModel
+  const lines: string[] = []
+  if (plan.error) lines.push(`planError: ${plan.error}`)
+  for (const warning of plan.warnings) lines.push(`warning: ${warning}`)
+  for (const row of plan.rows)
+    lines.push([row.key, row.state, row.issue ?? '-', row.reason ?? '-', row.title ?? '-'].join('\t'))
   return lines.join('\n')
 }
 

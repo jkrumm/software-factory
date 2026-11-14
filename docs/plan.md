@@ -247,6 +247,16 @@ prints the project's `project.yaml` in force and every plan row with its state, 
 plan that does not parse shows `planError` with the file's message and its position in the plan (`rows.3.after.0: ...`), and keeps the last valid plan in force; fix the file
 and the next read replaces it. `warnings` lists what is read but retired.
 
+```
+factory project plan <name> [--format plain]
+```
+
+is the same rows for a lead: every caller of the read class (a lead's token too) may call it, where `project show` is the
+owner's. A row carries its `state` (`open`: its Issue exists and is not closed; `done`: it closed, whatever the outcome;
+`filable`; `waiting` with its `reason`), its `title`, `kind`, `after` keys and `what` (`facts.what`), so a lead can tell whether
+an open row owns a gap without reading the plan from git. The read token gets a 404 for a work project and `private` for a
+row target that is one.
+
 A project is a repo with its own `.git` directory directly under a repo root. A linked worktree (`.git` is a file) is
 never one, and a stored project whose directory is gone, or is a worktree, is retired on the next sync (`retired` in the
 answer): its row is removed and nothing is filed for it; the rows it filed stay recorded.

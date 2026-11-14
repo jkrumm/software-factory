@@ -7,6 +7,7 @@ import {
   PrioAnswer,
   PrioBody,
   ProjectList,
+  ProjectPlanModel,
   ProjectSyncAnswer,
   ProjectView,
   ReplanAnswer,
@@ -30,7 +31,7 @@ import type { ProjectState } from '../app/planning-views.ts'
 import { type IssueId, idOf, issueNumber } from '../kernel/ids.ts'
 import type { OwnerActor } from '../kernel/events.ts'
 import type { PortError, Result } from '../kernel/result.ts'
-import { ownerActorOf } from './auth.ts'
+import { callerOf, ownerActorOf } from './auth.ts'
 import { errorResponses } from './errors.ts'
 import { issueRef } from './issue-ref.ts'
 
@@ -147,6 +148,35 @@ const view = ({ project, plan }: ProjectState): ProjectView =>
     planError: project.planError?.message ?? null,
   })
 
+/** A work project: no `project.yaml` of its own, or one that says `work: true` (`read/work.ts`, the one rule). */
+const isWorkProject = ({ project }: ProjectState): boolean => project.source === 'defaults' || project.project.work
+
+const planModel = (state: ProjectState, openTargets: ReadonlySet<string>, redact: boolean): ProjectPlanModel => {
+  const written = new Map((state.project.plan?.rows ?? []).map((row) => [row.key, row]))
+  return ProjectPlanModel.parse({
+    project: state.project.name,
+    sha: state.plan?.sha ?? null,
+    error: state.plan?.error ?? null,
+    warnings: state.plan?.warnings ?? [],
+    rows: (state.plan?.rows ?? []).map((row) => {
+      const source = written.get(row.key)
+      const what = source?.facts?.what
+      return {
+        key: row.key,
+        title: source?.title ?? null,
+        kind: source?.kind ?? null,
+        state: row.state,
+        issue: row.issue,
+        reason: row.reason,
+        // the read token never learns the name of a work project a row files into
+        target: redact && row.target !== null && !openTargets.has(row.target) ? 'private' : row.target,
+        after: source?.after ?? [],
+        what: typeof what === 'string' ? what : null,
+      }
+    }),
+  })
+}
+
 const syncAnswer = (result: SyncResult): ProjectSyncAnswer => ProjectSyncAnswer.parse(result)
 
 /**
@@ -185,6 +215,31 @@ export const planningRoutes = (api?: PlanningApi) => {
           operationId: 'project.show',
           summary:
             'one project: its project.yaml in force and every plan row with its state (the plan format: docs/plan.md)',
+        },
+      },
+    )
+    .get(
+      '/v1/projects/:name/plan',
+      async ({ params, request, status }) => {
+        if (!api) return status(503, unbound)
+        const projects = await api.projects()
+        if (!projects.ok) return status(503, failureOf(projects.error).body)
+        // the read token hears no word of a work project, not even that it exists (NL18); a lead and the owner read all
+        const redact = callerOf(request) === 'read'
+        const found = projects.value.find((p) => p.project.name === params.name)
+        if (!found || (redact && isWorkProject(found))) {
+          return status(404, failure(`no project ${params.name}`, 'not_found'))
+        }
+        const open = new Set(projects.value.filter((p) => !isWorkProject(p)).map((p) => p.project.name))
+        return status(200, planModel(found, open, redact))
+      },
+      {
+        params: z.object({ name: z.string() }),
+        response: { 200: ProjectPlanModel, ...errorResponses(404, 503) },
+        detail: {
+          operationId: 'project.plan',
+          summary:
+            "one project's plan rows with their state (open: its Issue is not closed; done: it closed; filable: due, not filed; waiting: see reason), each with its title, kind, after rows and what it owns; for a lead judging whether an open row owns a gap",
         },
       },
     )

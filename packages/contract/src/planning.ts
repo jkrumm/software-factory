@@ -28,6 +28,40 @@ export const PlanRowStatus = z
   .meta({ id: 'PlanRowStatus' })
 export type PlanRowStatus = z.infer<typeof PlanRowStatus>
 
+/** One row of a project's plan as a lead reads it: its derived state and the words that say what the row owns. */
+export const PlanRowView = z
+  .object({
+    key: z.string(),
+    /** the row's title; null for a row that adopts an Issue filed by hand */
+    title: z.string().nullable(),
+    kind: z.string().nullable(),
+    /** `open`: its Issue is not closed; `done`: its Issue closed; `filable`: due, not filed yet; `waiting`: see `reason` */
+    state: z.enum(ROW_STATES),
+    issue: IssueRef.nullable(),
+    reason: z.string().nullable(),
+    /** the project the row's Issue is filed in */
+    target: z.string().nullable(),
+    /** the row keys it waits for, as written in the plan */
+    after: z.array(z.string()),
+    /** the row's `facts.what`: the part of the repo it owns; null when the row says none */
+    what: z.string().nullable(),
+  })
+  .meta({ id: 'PlanRowView' })
+export type PlanRowView = z.infer<typeof PlanRowView>
+
+/** A project's plan rows with their states, for a lead that must tell whether an open row owns a gap. */
+export const ProjectPlanModel = z
+  .object({
+    project: z.string(),
+    sha: z.string().nullable(),
+    /** the plan now on the default branch does not parse; `rows` are the last valid plan's */
+    error: z.string().nullable(),
+    warnings: z.array(z.string()),
+    rows: z.array(PlanRowView),
+  })
+  .meta({ id: 'ProjectPlanModel' })
+export type ProjectPlanModel = z.infer<typeof ProjectPlanModel>
+
 const FileError = z.object({ message: z.string(), sha: z.string().nullable() })
 
 /** A project the factory has read: its `project.yaml` in force and its plan. */
