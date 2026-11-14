@@ -415,8 +415,11 @@ describe('the desk pass', () => {
     value(await screenErrands(deps))
     // the away pass pushes one; the MacBook does not answer, which ends the run and marks it down
     pushExit = 69
-    value(await deskPass({ settle: deps, desk: deps.uow as never, push }))
+    const away = value(await deskPass({ settle: deps, desk: deps.uow as never, push }))
     expect(pushed).toEqual([queued])
+    // a dialog that never appeared is not counted as pushed, and the pass says why
+    expect(away.pushed).toEqual([])
+    expect(away.problems[0]).toContain('the MacBook did not answer')
     expect(probes).toBe(0)
 
     // still down: the probe says so, nothing is due

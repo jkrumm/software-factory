@@ -723,7 +723,11 @@ async function main(): Promise<void> {
         const pass = await deskPass({
           settle: checkpointDeps,
           desk: uow,
-          push: askHumanPush({ bin: loopSettings.askHumanBin, home: process.env.HOME ?? '' }),
+          push: askHumanPush({
+            bin: loopSettings.askHumanBin,
+            home: process.env.HOME ?? '',
+            host: loopSettings.askHumanHost,
+          }),
           force,
         })
         if (!pass.ok) return pass

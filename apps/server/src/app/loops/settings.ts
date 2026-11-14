@@ -33,6 +33,8 @@ const Env = z.object({
   FACTORY_GH_CONFIG_DIR_WORK: z.string().trim().min(1).optional(),
   /** the script the desk pass pushes a MacBook command through; unset, the dotfiles' own copy */
   FACTORY_ASK_HUMAN_BIN: z.string().trim().min(1).optional(),
+  /** the ssh alias of the MacBook, for the probe whose answer counts as the owner's return; unset, no probe runs */
+  FACTORY_ASK_HUMAN_HOST: z.string().trim().min(1).optional(),
   /** a closed attempt's processes are left this long (at least 1 minute) before the reaper ends them */
   FACTORY_REAPER_GRACE_MS: z.coerce.number().int().min(60_000).optional(),
   /** 1: the reaper decides and records with signal `dry`, and sends nothing */
@@ -95,6 +97,7 @@ export interface LoopSettings {
   ghConfigDirWork: string | null
   /** the ask-human script's path, null for the dotfiles' own copy */
   askHumanBin: string | null
+  askHumanHost: string | null
 }
 
 export const DEFAULT_TICK_MS = 10_000
@@ -230,5 +233,6 @@ export function loadLoopSettings(env: Record<string, string | undefined>): LoopS
     reaperDry: e.FACTORY_REAPER_DRY === '1',
     ghConfigDirWork: e.FACTORY_GH_CONFIG_DIR_WORK ?? null,
     askHumanBin: e.FACTORY_ASK_HUMAN_BIN ?? null,
+    askHumanHost: e.FACTORY_ASK_HUMAN_HOST ?? null,
   }
 }

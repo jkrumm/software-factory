@@ -135,10 +135,15 @@ export async function deskPass(deps: DeskDeps): Out<DeskPass> {
       pass.problems.push(`${next.id}: push: ${pushed.error.detail}`.slice(0, 300))
       break
     }
-    pass.pushed.push(next.id)
     const up = pushed.value.exit !== PUSH_UNREACHABLE
     await deps.desk.run(async ({ desk }) => ok(await desk.setMacbook(up, null)))
-    if (!up) break
+    if (!up) {
+      pass.problems.push(
+        `${next.id}: the MacBook did not answer (exit ${PUSH_UNREACHABLE}); the push waits for its return`,
+      )
+      break
+    }
+    pass.pushed.push(next.id)
   }
   return ok(pass)
 }

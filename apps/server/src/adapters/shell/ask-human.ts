@@ -16,7 +16,13 @@ const PROBE_TIMEOUT_MS = 15_000
  * stays as the script left it. `bin` is the script's path; unset, the dotfiles' own copy is used. `probe` asks the same ssh
 alias the script pushes through whether the MacBook answers: the gate's reachability verb, which runs nothing.
  */
-export function askHumanPush(options: { bin: string | null; home: string; run?: Run; host?: string }): PushPort {
+export function askHumanPush(options: {
+  bin: string | null
+  home: string
+  run?: Run
+  /** the ssh alias of the MacBook (the one `ask-human.sh` pushes through); unset, the probe never runs */
+  host?: string | null
+}): PushPort {
   const run = options.run ?? runProcess
   const bin = options.bin ?? join(options.home, 'SourceRoot', 'dotfiles', 'scripts', 'ask-human.sh')
   return {
@@ -29,9 +35,11 @@ export function askHumanPush(options: { bin: string | null; home: string; run?: 
       }
     },
     async probe() {
+      const host = options.host
+      if (!host) return false
       try {
         const done = await run(
-          ['ssh', '-o', 'BatchMode=yes', '-o', 'ConnectTimeout=8', options.host ?? 'iumac', 'true'],
+          ['ssh', '-o', 'BatchMode=yes', '-o', 'ConnectTimeout=8', host, 'true'],
           PROBE_TIMEOUT_MS,
           { group: true },
         )

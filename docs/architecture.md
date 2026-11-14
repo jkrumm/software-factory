@@ -382,8 +382,8 @@ closes `turned_back` by `owner` or `orchestrator`. It is the one way the orchest
 
 **The desk pass** (`desk` loop, every 15 minutes it asks whether it is due; `app/loops/desk.ts`, `domains/checkpoints/desk.ts`). The owner's return is an
 event: the `GET /v1/since` read that starts a new visit (two hours or more after the last, `console_visit.returned_at`) starts the pass at once (`ReadModelDeps.onReturn`),
-and so does the MacBook answering the ask-human ssh probe (the reachability verb of the mini's MacBook key) after a push found it unreachable (`desk_presence`: the push's exit 69 marks it down, the tick's probe
-marks it back, which counts as a return) and the Console's button "Push what waits to my MacBook" (`POST /v1/desk/push`, `factory desk push`, owner only; it answers at once and
+and so does the MacBook answering the ask-human ssh probe (the reachability verb of the mini's MacBook key; its ssh alias is `FACTORY_ASK_HUMAN_HOST`, unset: no probe) after a push found it unreachable (`desk_presence`: the push's exit 69 marks it down, the tick's probe
+marks it back, which counts as a return) and the Console's button "Push what waits to my MacBook" (`POST /v1/desk/push`, `factory desk push`, owner and orchestrator; it answers at once and
 the pass runs with `force`). The pass is due on a return, on the button, when it never ran, and in any case every 6 hours. One pass over every open Errand, an Issue's and a request: each `check` runs (30 a pass) and an Errand
 whose check exits 1..125 closes `not_needed` by `check`, telling its lead with `errand_done` (`resolved`); the rest that reached the owner are screened again (`rescreenErrand`: the same
 rules and `factory-errand`, 10 a pass) and an Errand an agent can do now is turned away as at the first screen; then the MacBook commands are pushed through `ask-human.sh push`
