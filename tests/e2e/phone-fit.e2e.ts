@@ -107,7 +107,15 @@ const liveShaped = async (page: Page) => {
   })
 }
 
-for (const path of ['/improve', '/improve?days=30', '/improve?days=90', '/needs-you', '/flow']) {
+for (const path of [
+  '/improve',
+  '/improve?days=30',
+  '/improve?days=90',
+  '/throughput',
+  '/throughput?hours=168',
+  '/needs-you',
+  '/flow',
+]) {
   test(`nothing reaches past the right edge of the phone on ${path}`, async ({ page }) => {
     await page.goto(path)
     await settle(page)

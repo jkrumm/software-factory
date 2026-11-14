@@ -25,6 +25,7 @@ import {
   SignalAck,
   SignalDismissed,
   SinceModel,
+  ThroughputModel,
 } from '@software-factory/contract'
 import type { VERDICT_WORDS } from './artifact.ts'
 
@@ -110,6 +111,9 @@ export const fetchFlow = (signal?: AbortSignal) => getJson('/v1/flow', FlowModel
 export const fetchKpis = (days: number, signal?: AbortSignal) => getJson(`/v1/kpis?days=${days}`, KpiModel, signal)
 export const fetchCapacityLoop = (days: number, signal?: AbortSignal) =>
   getJson(`/v1/capacity-loop?days=${days}`, CapacityLoopModel, signal)
+/** Where the host's memory and CPU and the leads' hours went over the last `hours` hours. */
+export const fetchThroughput = (hours: number, signal?: AbortSignal) =>
+  getJson(`/v1/throughput?hours=${hours}`, ThroughputModel, signal)
 export const fetchFriction = (days: number, signal?: AbortSignal) =>
   getJson(`/v1/friction?days=${days}`, FrictionModel, signal)
 export const fetchFindingClasses = (signal?: AbortSignal) => getJson('/v1/finding-classes', FindingClassesModel, signal)

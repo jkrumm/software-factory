@@ -13,6 +13,8 @@ const SCREENS = [
   { name: 'chain', path: '/chain' },
   { name: 'improve', path: '/improve' },
   { name: 'improve-30', path: '/improve?days=30' },
+  { name: 'throughput', path: '/throughput' },
+  { name: 'throughput-7d', path: '/throughput?hours=168' },
   { name: 'kit', path: '/kit' },
 ] as const
 
@@ -87,6 +89,14 @@ for (const variant of VARIANTS) {
           // The bands run taller than the viewport (Friction and the held classes sit under the cards): shoot a tall one too.
           const { width, height } = page.viewportSize() ?? variant.viewport
           await page.setViewportSize({ width, height: width < 600 ? 4200 : 2200 })
+          await page.waitForLoadState('networkidle')
+          await shot(`${name}-tall`)
+          await page.setViewportSize({ width, height })
+        }
+        if (name === 'throughput' || name === 'throughput-7d') {
+          // The bands run taller than the viewport (the lead time, the scorecard and the improvements sit under the charts): shoot a tall one too.
+          const { width, height } = page.viewportSize() ?? variant.viewport
+          await page.setViewportSize({ width, height: width < 600 ? 5200 : 2400 })
           await page.waitForLoadState('networkidle')
           await shot(`${name}-tall`)
           await page.setViewportSize({ width, height })

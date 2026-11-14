@@ -8,6 +8,7 @@ import { startLab } from '../scenarios/planning/lab.ts'
 import { seedDigests } from './seed-digests.ts'
 import { seedCapacity } from './seed-capacity.ts'
 import { seedHost } from './seed-host.ts'
+import { seedLeadTime, seedThroughput } from './seed-throughput.ts'
 import { seedKpiHistory } from './seed-kpis.ts'
 import { LEAD_REPOS, seed } from './seed.ts'
 import { ARTIFACT_REPOS, seedArtifacts } from './seed-artifacts.ts'
@@ -61,10 +62,12 @@ export default async function globalSetup(): Promise<() => Promise<void>> {
   process.env.E2E_HISTORY = JSON.stringify(await seedHistory(lab))
   process.env.E2E_CHAIN = JSON.stringify(await seedChain(lab))
   await seedHost(world.db.sql)
+  await seedThroughput(world.db.sql)
   await seedCapacity(world.db.sql)
   await seedKpiHistory(world.db.sql, 'argo')
   await seed(lab)
   process.env.E2E_DIGESTS = JSON.stringify(await seedDigests(lab.server.url, world.db.sql))
+  await seedLeadTime(world.db.sql)
   const consoleUrl = `http://127.0.0.1:${consolePort}`
   // the same environment the lab used, so the restarted server keeps the Console port and the repos
   const serverEnv = { FACTORY_REPO_ROOTS: lab.root, FACTORY_GRACE_MS: '0', ...labEnv }

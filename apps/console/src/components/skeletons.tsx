@@ -124,6 +124,29 @@ export function ImproveSkeleton() {
   )
 }
 
+/** The Throughput page: the stat row, then the class table, the three charts and a table (a StatCard is 273 px, a chart card about 160). */
+export function ThroughputSkeleton() {
+  return (
+    <div {...busy('Loading the throughput figures')} className="grid gap-10">
+      <div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-4">
+        {Array.from({ length: 4 }, (_, card) => (
+          <Skeleton key={card} height={273} rounded="rounded-xl" className={cn(card > 1 && 'hidden sm:block')} />
+        ))}
+      </div>
+      {[
+        { title: 140, height: 300 },
+        { title: 180, height: 160 },
+        { title: 120, height: 280 },
+      ].map(({ title, height }) => (
+        <div key={title} className="grid gap-4">
+          <Skeleton height={20} width={title} />
+          <Skeleton height={height} rounded="rounded-xl" />
+        </div>
+      ))}
+    </div>
+  )
+}
+
 /** The artifact page: its header band, the document column and the 24 rem comments panel with its composer slot. */
 export function ArtifactSkeleton() {
   return (

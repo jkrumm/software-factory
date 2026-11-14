@@ -9,6 +9,7 @@ const NAV = [
   { label: 'Flow', path: '/flow', key: 'F' },
   { label: 'Chain', path: '/chain', key: 'C' },
   { label: 'Improve', path: '/improve', key: 'I' },
+  { label: 'Throughput', path: '/throughput', key: 'T' },
 ] as const
 
 const STATES = ['settling', 'queued', 'working', 'waiting', 'watching'] as const

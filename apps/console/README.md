@@ -2,10 +2,10 @@
 
 The owner's place for decisions, on a phone and a desktop: a Vite + React SPA (Base UI through shadcn, Tailwind 4, Basalt
 tokens, TanStack Router, Query and Hotkeys), installable as a PWA. It holds no logic the API could hold. This is the shell:
-a sidebar, a one-line header strip, the command palette, and the screens (Needs you, Flow, the Issue page, the Chain, Improve).
+a sidebar, a one-line header strip, the command palette, and the screens (Needs you, Flow, the Issue page, the Chain, Improve, Throughput).
 
-**Sidebar** (`components/sidebar.tsx`, from `md` up; a tab bar below): the logo slot and wordmark, the four screens with their
-keys (`g n`, `g f`, `g c`, `g i`) and counts, then the page's own section. A page fills that section with
+**Sidebar** (`components/sidebar.tsx`, from `md` up; a tab bar below): the logo slot and wordmark, the five screens with their
+keys (`g n`, `g f`, `g c`, `g i`, `g t`) and counts, then the page's own section. A page fills that section with
 `<SidebarSection title>` (a portal into the sidebar's slot, gone when the page unmounts): Flow's projects and origins,
 Needs you's kinds and projects (`?kind=`, `?project=`), Chain's projects, Improve's window. Each is a toggle on a search param, and the page's own
 select or switch stays below `md`. Collapsed to icons (14 rem or 3.5 rem, kept in `localStorage` as `console-sidebar`) the

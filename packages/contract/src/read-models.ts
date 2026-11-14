@@ -950,6 +950,8 @@ export const ThroughputModel = z
           cores: z.number(),
           /** mean processes per minute, one decimal */
           procs: z.number(),
+          /** the class's part of the footprint of all seven classes together, 0 to 1, four decimals (0 with no footprint) */
+          share: z.number(),
         }),
       ),
       /** lead and step rows with a repo, per repo: the 20 largest by footprint, then repo name */
@@ -991,6 +993,22 @@ export const ThroughputModel = z
           grownMib: z.number().int().nullable(),
         }),
       ),
+      /**
+       * the host signals over the window in equal buckets (5 minutes up to 24 hours, 15 up to 72, else 60), oldest first, a
+       * bucket with no sample left out: the worst pressure level and the largest swap use and load of the bucket
+       */
+      timeline: z.strictObject({
+        bucketMinutes: z.number().int(),
+        points: z.array(
+          z.strictObject({
+            at,
+            /** the largest kernel pressure level read in the bucket (1, 2 or 4), null when none was read */
+            pressureLevel: z.number().int().nullable(),
+            swapUsedPct: nullableNumber,
+            load: nullableNumber,
+          }),
+        ),
+      }),
     }),
     /**
      * Test runs per project and the flaky tests, from `step_costs` and `test_results` over the same window (by `at`, the
@@ -1124,6 +1142,32 @@ export const ThroughputModel = z
         }),
       }),
     ),
+    /**
+     * The throughput loop's findings (`throughput_findings`), the 50 newest by filing, whatever the window: what each measured
+     * before it was filed, the target, the figure read three days after its Issue shipped, and where it stands.
+     */
+    improvements: z.array(
+      z.strictObject({
+        id: z.string(),
+        project: z.string(),
+        /** `failed_run_minutes`, `slot_minutes_per_issue`, `step_peak_mib`, `process_growth_mib` or `queued_minutes` */
+        kpi: z.string(),
+        /** a step's tier, a process name, or `*` for the whole project */
+        subject: z.string(),
+        before: z.number(),
+        target: z.number(),
+        after: nullableNumber,
+        direction: z.enum(['up', 'down']),
+        unit: z.string(),
+        costMinutes: z.number(),
+        /** open, shipped (waiting for its after), moved, flat, worse, dropped or unmeasured */
+        status: z.string(),
+        issue: z.string().nullable(),
+        filedAt: at,
+        shippedAt: at.nullable(),
+        afterAt: at.nullable(),
+      }),
+    ),
   })
   .meta({ id: 'ThroughputModel' })
 export type ThroughputModel = z.infer<typeof ThroughputModel>
@@ -1252,6 +1296,22 @@ export const RetroCapacity = z
 export type RetroCapacity = z.infer<typeof RetroCapacity>
 
 /**
+ * The throughput figures of the retro's window (`ThroughputModel` over the same hours, capped at 14 days): where the
+ * host's memory went by class, the pressure and swap it ran at, the lead time split, the project scorecard and the
+ * improvements with their before and after. Numbers and project names only.
+ */
+export const RetroThroughput = z
+  .strictObject({
+    hours: z.number().int(),
+    host: ThroughputModel.shape.host.pick({ minutes: true, signals: true, byClass: true }),
+    lead: ThroughputModel.shape.lead.omit({ issues: true }),
+    project: ThroughputModel.shape.project,
+    improvements: ThroughputModel.shape.improvements,
+  })
+  .meta({ id: 'RetroThroughput' })
+export type RetroThroughput = z.infer<typeof RetroThroughput>
+
+/**
  * What the weekly retro reads, all of it from the event log and the tables (no model): the KPI table with its history, the
  * friction counts, the lead sessions with their transcripts (the CLI reads those: `factory retro`), samples of Issues worth
  * reading, the ledger of the earlier retro signals and the capacity loop's figures with the one setting to change.
@@ -1278,6 +1338,8 @@ export const RetroModel = z
     capacity: RetroCapacity.nullable(),
     /** what each repo's local checks and CI cost over the window */
     build: RetroBuild,
+    /** where the host's memory and the leads' hours went over the window */
+    throughput: RetroThroughput,
   })
   .meta({ id: 'RetroModel' })
 export type RetroModel = z.infer<typeof RetroModel>

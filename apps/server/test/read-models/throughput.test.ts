@@ -113,6 +113,13 @@ async function seed() {
   await processRow(t('10:00'), 'kernel_task', 'system', null, null, 1500, null, 'top', null)
   await processRow(t('10:01'), 'kernel_task', 'system', null, null, 1400, 10, 'top', 120)
   await processRow(t('11:59', '11-06'), 'huge', 'other', null, null, 99_999, 99_999, 'large', null)
+  const finding = (id: string, project: string, kpi: string, before: number, status: string, filed: string) =>
+    sql`INSERT INTO factory.throughput_findings (id, project, kpi, subject, before, target, direction, unit, cost_minutes, query, filed_at, status)
+      VALUES (${id}, ${project}, ${kpi}, 'fast', ${before}, 2048, 'down', 'MiB', 90, 'factory read throughput', ${new Date(filed)}, ${status})`
+  await finding('finding_a', 'app', 'failed_run_minutes', 60, 'open', '2026-11-01T08:00:00Z')
+  await finding('finding_b', 'lib', 'step_peak_mib', 3000, 'moved', '2026-11-03T08:00:00Z')
+  await sql`UPDATE factory.throughput_findings SET issue_id = 'issue_9', shipped_at = '2026-11-04T08:00:00Z',
+    after = 1800, after_at = '2026-11-07T08:00:00Z' WHERE id = 'finding_b'`
   for (let i = 0; i < 16; i++)
     await processRow(t('10:03'), `small${String(i).padStart(2, '0')}`, 'other', null, null, 10 + i, 1, 'top', null)
 }
@@ -169,6 +176,7 @@ describe('readThroughput', () => {
       cpuSeconds: 1.5,
       cores: 0.01,
       procs: 2.8,
+      share: 0.2495,
     })
     // system: 8000 / 4, peak 2100, cpu 8 s (one null ignored), 200 procs / 4
     expect(byClass.find((c) => c.class === 'system')).toEqual({
@@ -178,6 +186,7 @@ describe('readThroughput', () => {
       cpuSeconds: 8,
       cores: 0.03,
       procs: 50,
+      share: 0.5597,
     })
     expect(byClass.find((c) => c.class === 'factory')).toEqual({
       class: 'factory',
@@ -186,7 +195,19 @@ describe('readThroughput', () => {
       cpuSeconds: 0,
       cores: 0,
       procs: 0,
+      share: 0,
     })
+    // the shares of the seven classes add to one, each against plain SQL
+    expect(byClass.reduce((sum, c) => sum + c.share, 0)).toBeCloseTo(1, 3)
+    const total = await one(
+      sql`SELECT sum(footprint_mib)::float8 AS fp FROM factory.host_class_samples WHERE at >= ${FROM} AND at < ${NOW}`,
+    )
+    for (const c of byClass) {
+      const part = await one(
+        sql`SELECT coalesce(sum(footprint_mib), 0)::float8 AS fp FROM factory.host_class_samples WHERE class = ${c.class} AND at >= ${FROM} AND at < ${NOW}`,
+      )
+      expect(c.share).toBeCloseTo((part.fp as number) / (total.fp as number), 4)
+    }
     // a key's mean over every minute of the window, against plain SQL
     for (const c of byClass) {
       const expected = await one(sql`
@@ -198,6 +219,57 @@ describe('readThroughput', () => {
       expect(c.footprintMib).toBe(expected.fp as number)
       expect(c.peakMib).toBe(expected.peak as number)
     }
+  })
+
+  test('the timeline: the worst pressure and the largest swap use and load of each bucket', async () => {
+    const { timeline } = (await read()).host
+    // 24 hours: 5-minute buckets; 10:00 to 10:04 are one bucket, the sample outside the window is none
+    expect(timeline.bucketMinutes).toBe(5)
+    expect(timeline.points).toEqual([{ at: t('10:00').toISOString(), pressureLevel: 4, swapUsedPct: 30, load: 10 }])
+    const sqlBucket = await one(sql`
+      SELECT max(pressure_level)::int AS level, max(swap_used_pct)::float8 AS swap, max(load)::float8 AS load
+      FROM factory.host_samples WHERE at >= ${FROM} AND at < ${NOW}`)
+    expect(timeline.points[0]).toMatchObject({
+      pressureLevel: sqlBucket.level as number,
+      swapUsedPct: sqlBucket.swap as number,
+      load: sqlBucket.load as number,
+    })
+    // 72 hours: 15-minute buckets, 4 days: hourly
+    const day3 = await read(72)
+    expect(day3.host.timeline.bucketMinutes).toBe(15)
+    const day4 = await read(96)
+    expect(day4.host.timeline.bucketMinutes).toBe(60)
+    expect(day4.host.timeline.points.map((p) => p.at)).toEqual([
+      new Date('2026-11-06T11:00:00Z').toISOString(),
+      new Date('2026-11-07T10:00:00Z').toISOString(),
+    ])
+    expect((await read(1)).host.timeline.points).toEqual([])
+  })
+
+  test('improvements: the loop findings, newest filing first, whatever the window', async () => {
+    const { improvements } = await read(1)
+    expect(improvements.map((f) => [f.id, f.status])).toEqual([
+      ['finding_b', 'moved'],
+      ['finding_a', 'open'],
+    ])
+    expect(improvements[0]).toEqual({
+      id: 'finding_b',
+      project: 'lib',
+      kpi: 'step_peak_mib',
+      subject: 'fast',
+      before: 3000,
+      target: 2048,
+      after: 1800,
+      direction: 'down',
+      unit: 'MiB',
+      costMinutes: 90,
+      status: 'moved',
+      issue: 'issue_9',
+      filedAt: '2026-11-03T08:00:00.000Z',
+      shippedAt: '2026-11-04T08:00:00.000Z',
+      afterAt: '2026-11-07T08:00:00.000Z',
+    })
+    expect(improvements[1]).toMatchObject({ after: null, issue: null, shippedAt: null, afterAt: null })
   })
 
   test('byRepo: lead and step rows with a repo, split by class', async () => {

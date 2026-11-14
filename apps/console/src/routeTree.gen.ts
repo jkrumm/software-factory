@@ -15,6 +15,7 @@ import { Route as FlowRouteImport } from './routes/flow'
 import { Route as ImproveRouteImport } from './routes/improve'
 import { Route as KitRouteImport } from './routes/kit'
 import { Route as NeedsYouRouteImport } from './routes/needs-you'
+import { Route as ThroughputRouteImport } from './routes/throughput'
 import { Route as ArtifactsIdRouteImport } from './routes/artifacts.$id'
 import { Route as CheckpointsIdRouteImport } from './routes/checkpoints.$id'
 import { Route as IssuesIdRouteImport } from './routes/issues.$id'
@@ -49,6 +50,11 @@ const NeedsYouRoute = NeedsYouRouteImport.update({
   path: '/needs-you',
   getParentRoute: () => rootRouteImport,
 } as any)
+const ThroughputRoute = ThroughputRouteImport.update({
+  id: '/throughput',
+  path: '/throughput',
+  getParentRoute: () => rootRouteImport,
+} as any)
 const ArtifactsIdRoute = ArtifactsIdRouteImport.update({
   id: '/artifacts/$id',
   path: '/artifacts/$id',
@@ -72,6 +78,7 @@ export interface FileRoutesByFullPath {
   '/improve': typeof ImproveRoute
   '/kit': typeof KitRoute
   '/needs-you': typeof NeedsYouRoute
+  '/throughput': typeof ThroughputRoute
   '/artifacts/$id': typeof ArtifactsIdRoute
   '/checkpoints/$id': typeof CheckpointsIdRoute
   '/issues/$id': typeof IssuesIdRoute
@@ -83,6 +90,7 @@ export interface FileRoutesByTo {
   '/improve': typeof ImproveRoute
   '/kit': typeof KitRoute
   '/needs-you': typeof NeedsYouRoute
+  '/throughput': typeof ThroughputRoute
   '/artifacts/$id': typeof ArtifactsIdRoute
   '/checkpoints/$id': typeof CheckpointsIdRoute
   '/issues/$id': typeof IssuesIdRoute
@@ -95,6 +103,7 @@ export interface FileRoutesById {
   '/improve': typeof ImproveRoute
   '/kit': typeof KitRoute
   '/needs-you': typeof NeedsYouRoute
+  '/throughput': typeof ThroughputRoute
   '/artifacts/$id': typeof ArtifactsIdRoute
   '/checkpoints/$id': typeof CheckpointsIdRoute
   '/issues/$id': typeof IssuesIdRoute
@@ -108,6 +117,7 @@ export interface FileRouteTypes {
     | '/improve'
     | '/kit'
     | '/needs-you'
+    | '/throughput'
     | '/artifacts/$id'
     | '/checkpoints/$id'
     | '/issues/$id'
@@ -119,6 +129,7 @@ export interface FileRouteTypes {
     | '/improve'
     | '/kit'
     | '/needs-you'
+    | '/throughput'
     | '/artifacts/$id'
     | '/checkpoints/$id'
     | '/issues/$id'
@@ -130,6 +141,7 @@ export interface FileRouteTypes {
     | '/improve'
     | '/kit'
     | '/needs-you'
+    | '/throughput'
     | '/artifacts/$id'
     | '/checkpoints/$id'
     | '/issues/$id'
@@ -142,6 +154,7 @@ export interface RootRouteChildren {
   ImproveRoute: typeof ImproveRoute
   KitRoute: typeof KitRoute
   NeedsYouRoute: typeof NeedsYouRoute
+  ThroughputRoute: typeof ThroughputRoute
   ArtifactsIdRoute: typeof ArtifactsIdRoute
   CheckpointsIdRoute: typeof CheckpointsIdRoute
   IssuesIdRoute: typeof IssuesIdRoute
@@ -191,6 +204,13 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof NeedsYouRouteImport
       parentRoute: typeof rootRouteImport
     }
+    '/throughput': {
+      id: '/throughput'
+      path: '/throughput'
+      fullPath: '/throughput'
+      preLoaderRoute: typeof ThroughputRouteImport
+      parentRoute: typeof rootRouteImport
+    }
     '/artifacts/$id': {
       id: '/artifacts/$id'
       path: '/artifacts/$id'
@@ -222,6 +242,7 @@ const rootRouteChildren: RootRouteChildren = {
   ImproveRoute: ImproveRoute,
   KitRoute: KitRoute,
   NeedsYouRoute: NeedsYouRoute,
+  ThroughputRoute: ThroughputRoute,
   ArtifactsIdRoute: ArtifactsIdRoute,
   CheckpointsIdRoute: CheckpointsIdRoute,
   IssuesIdRoute: IssuesIdRoute,
