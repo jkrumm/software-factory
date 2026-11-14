@@ -13,6 +13,7 @@ import {
   type Reserved,
 } from './host.ts'
 import { type LaneInput, laneRoom } from './lanes.ts'
+import type { LeadGrowth } from './leadcost.ts'
 import type { QueueState } from './queue-state.ts'
 
 /**
@@ -53,6 +54,8 @@ export interface LeadFit {
   headroomMib: number
   /** the leads that hold a claim; a host that runs none always has room for one */
   running: number
+  /** what the young leads (under the age their figure counts as settled) are still learned to grow by; absent: none */
+  growing?: LeadGrowth
 }
 
 export interface AdmissionInputs {
@@ -163,14 +166,19 @@ const gib = (mib: number): number => Math.round((mib / 1024) * 10) / 10
 function fitRefusal(fit: LeadFit): string | null {
   if (fit.candidateMib === null || fit.freeMib === null) return null
   if (fit.running === 0) return null
-  if (fit.candidateMib <= fit.freeMib - fit.headroomMib) return null
+  const growth = fit.growing?.mib ?? 0
+  if (fit.candidateMib <= fit.freeMib - growth - fit.headroomMib) return null
   const basis =
     fit.basis === 'falling'
       ? `the largest of the newest 3 settled leads, all below the p80 of ${gib(fit.p80Mib ?? fit.candidateMib)} GiB`
       : `p80 of ${fit.attempts} past leads`
   const since = fit.relearnedAt ? `, learned from the attempts since ${fit.relearnedAt.toISOString()}` : ''
+  const growing =
+    fit.growing && growth > 0
+      ? `, of which ${fit.growing.leads} young ${fit.growing.leads === 1 ? 'lead still takes' : 'leads still take'} ${gib(growth)} GiB more`
+      : ''
   return (
     `memory: a lead of ${fit.repo} takes ~${gib(fit.candidateMib)} GiB outside test slots (${basis}${since}), ` +
-    `the host has ${gib(fit.freeMib)} GiB free, headroom ${gib(fit.headroomMib)} GiB`
+    `the host has ${gib(fit.freeMib)} GiB free${growing}, headroom ${gib(fit.headroomMib)} GiB`
   )
 }

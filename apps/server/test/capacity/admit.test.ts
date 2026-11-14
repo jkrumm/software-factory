@@ -189,6 +189,36 @@ describe('admission', () => {
     expect(after[0]?.peaksNewestFirst.map((p) => p.peakMib).sort((a, b) => a - b)).toEqual([500, 700, 2100])
   })
 
+  test('six queued Issues of one repo with room for three by learned size: three are admitted, the rest follow as memory is really free', async () => {
+    world.accounts.rows = ['a', 'b', 'c', 'd', 'e', 'f'].map((name) => account(name))
+    world.source.add('wide', { project: PROJECT('wide', 8) })
+    value(await syncProjects(world.deps, { fetch: false }))
+    const at = () => world.clock.now()
+    // three settled attempts learn 1600 MiB for the repo
+    for (const n of [1, 2, 3]) {
+      await world.db.sql`
+        INSERT INTO factory.lead_samples (at, worktree, repo, issue, attempt, rss_mib, procs)
+        VALUES (${new Date(at().getTime() - n * 3_600_000)}, ${`/wt/wide-${n}`}, 'wide', ${900 + n}, 1, 1600, 3)`
+    }
+    // 32 GiB, 76.7 % used: 7 635 MiB free, 5 014 past the 2 621 headroom: room for three leads of 1600 MiB, not four
+    const sample = (usedPct: number) =>
+      world.db.sql`
+        INSERT INTO factory.host_samples (at, load, memory_used_pct, swap_used_pct, swapout_mb_per_300s)
+        VALUES (${at()}, 1, ${usedPct}, 10, 0)`
+    await sample(76.7)
+    const issues: Awaited<ReturnType<typeof world.queued>>[] = []
+    for (let i = 0; i < 6; i++) issues.push(await world.queued({ repo: 'wide' }))
+    const first = await pass()
+    expect(first.admitted.map((a) => a.issue)).toEqual(issues.slice(0, 3))
+    const waiting = first.queue.find((e) => e.issue === issues[3])?.reason
+    expect(waiting).toMatchObject({ kind: 'memory', part: 'fit' })
+    expect(waiting?.message).toContain('3 young leads still take 4.7 GiB more')
+    // the leads have not grown and the host really has room: the others follow
+    nextSample()
+    await sample(40)
+    expect((await pass()).admitted.map((a) => a.issue)).toEqual(issues.slice(3))
+  })
+
   test('a relearn point drops a repo back to its lane prior until three attempts follow it, and queue order says so', async () => {
     world.accounts.rows = [account('a'), account('b'), account('c'), account('d')]
     const seed = async (hoursAgo: number, rssMib: number) => {

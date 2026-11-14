@@ -13,7 +13,7 @@ import type { BootSample } from '../domains/capacity/boot.ts'
 import { checkAdmission, type LeadFit, type RefusalKind, REFUSALS } from '../domains/capacity/admission.ts'
 import { freeMibOf, headroomMib } from '../domains/capacity/costs.ts'
 import { DEFAULT_TYPICAL_LEAD_MIB, SEAT_SAMPLE_MAX_AGE_MS, SEAT_SAMPLES, seatBonus } from '../domains/capacity/seats.ts'
-import { learnLeadCost } from '../domains/capacity/leadcost.ts'
+import { type LeadGrowth, leadGrowth, learnLeadCost } from '../domains/capacity/leadcost.ts'
 import { type MemoryCeilings, type MemoryReading, reservedOf, sustainedSwapoutMb } from '../domains/capacity/host.ts'
 import { type LaneInput, laneRoom } from '../domains/capacity/lanes.ts'
 import type { AccountRanker, AccountSource, Assignment, HostReader, ShadowDecision } from '../domains/capacity/ports.ts'
@@ -344,6 +344,22 @@ function reservedMib(
 }
 
 /**
+ * What the running leads are still learned to grow by, host-wide (memory is the host's): a claim younger than the age its
+ * figure counts as settled takes its repo's learned size less what its newest sample holds. A lead this pass admitted
+ * has no sample and takes the whole figure, so one pass cannot admit several against the same reading.
+ */
+function youngGrowth(claims: readonly Claim[], snap: Snapshot, host: HostInputs): LeadGrowth {
+  const nameOf = new Map(snap.projects.map((p) => [p.repo, p.name]))
+  return leadGrowth(
+    claims.map((claim) => ({
+      learnedMib: host.learned.get(nameOf.get(claim.repo) ?? '')?.mib ?? null,
+      heldMib: host.rssByIssue.get(issueNumber(claim.issue)) ?? null,
+      ageMs: snap.now.getTime() - claim.takenAt.getTime(),
+    })),
+  )
+}
+
+/**
  * Every queued Issue in queue order with the reason it stays queued, or nothing when it may be admitted. Each Issue is
  * decided as if the ones before it were admitted (they take a claim and an account), so the reasons of the later ones
  * are the ones they would meet in turn. Pure: the snapshot and the host readings are passed in.
@@ -464,6 +480,7 @@ function decide(snap: Snapshot, host: HostInputs, limits: CapacityLimits, bonus:
       freeMib: host.freeMib,
       headroomMib: headroomMib(host.ramMib),
       running: claims.length,
+      growing: youngGrowth(claims, snap, host),
     }
     const verdict = checkAdmission({
       lane: laneOf(issue.id, project, claims, owed, laneByIssue),
