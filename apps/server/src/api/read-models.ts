@@ -16,6 +16,7 @@ import {
   RetroModel,
   ThroughputModel,
   SinceModel,
+  WaitCensusModel,
   NeedsModel,
   ChainModel,
   ProjectDigestsModel,
@@ -29,6 +30,7 @@ import { registerVisit, type VisitStore } from '../app/visit.ts'
 import type { CiTimes } from '../domains/loops/ports.ts'
 import { findingClasses } from '../app/loops/finding-classes.ts'
 import { type CapacityConstants, readCapacityLoop } from '../read/capacity-loop.ts'
+import { readWaitCensus } from '../read/wait-census.ts'
 import { readChain } from '../read/chain.ts'
 import { readProjectDigests } from '../read/digests.ts'
 import { type QueueReasons, readFlow } from '../read/flow.ts'
@@ -306,6 +308,22 @@ export const readModelRoutes = (deps: ReadModelDeps | undefined, caller: (reques
           operationId: 'read.friction',
           summary:
             'counted waste over the last days (1 to 90, default 7): avoidable touches, refusals, stalls, lost leads, undelivered notes, unreviewed ships, regressions, who settled Decisions, held signals',
+        },
+      },
+    )
+    .get(
+      '/waits',
+      async ({ query }) => {
+        if (!deps) return unavailable
+        return Response.json(WaitCensusModel.parse(await readWaitCensus(deps.sql, { now: now(), days: days(query) })))
+      },
+      {
+        query: DaysQuery,
+        response: { 200: WaitCensusModel, ...errorResponses(400, 422, 503) },
+        detail: {
+          operationId: 'read.waits',
+          summary:
+            'the waits that began over the last days (1 to 90, default 7), by reason and length (count, p50, p90, under 30 minutes up to a day or more), who ended them, and the ones no person was needed to end (a Decision or review the Judge, a default or a check ended): which waits a lead could have avoided or shortened',
         },
       },
     )
