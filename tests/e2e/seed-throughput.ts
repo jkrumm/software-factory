@@ -73,8 +73,9 @@ export async function seedThroughput(sql: SQL, now = Date.now()): Promise<void> 
 
 /**
  * The lead time of the Issues the world closed (call it after the world is seeded): each gets one lead attempt that
- * started three hours before its close, a turn of 30 minutes, a check step of 10 minutes that waited 2 for a slot, and
- * the rest idle, so the page's lead band has a split to read. Returns the Issues it gave a lead.
+ * started three hours before its close, a turn of 30 minutes and
+ * the rest idle, so the page's lead band has a split to read. No step row is added: Improve's capacity section counts the
+ * world's steps (`seedCapacity`), and the steps' share of the split is covered by the server's read tests. Returns the Issues it gave a lead.
  */
 export async function seedLeadTime(sql: SQL): Promise<string[]> {
   const closed: Array<{ issue_id: string; at: Date; repo: string }> = await sql`
@@ -93,9 +94,6 @@ export async function seedLeadTime(sql: SQL): Promise<string[]> {
     ] as const)
       await sql`INSERT INTO factory.lead_hook_events (key, session, issue_id, attempt, kind, at, received_at)
         VALUES (${`${issue}-${kind}`}, ${`lead-${number}-1`}, ${issue}, 1, ${kind}, ${when}, ${when})`
-    await sql`INSERT INTO factory.step_costs (at, name, repo, peak_rss_mib, duration_ms, wait_ms, cwd)
-      VALUES (${new Date(at2.getTime() + 15 * MINUTE)}, ${`factory-${number}-1 ${repo} check`}, ${repo}, 2400, ${10 * MINUTE}, ${2 * MINUTE},
-        ${`/work/factory-${number}-1`})`
   }
   return closed.map((c) => c.issue_id)
 }
