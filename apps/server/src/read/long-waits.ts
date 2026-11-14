@@ -1,5 +1,6 @@
 import type { SQL } from 'bun'
 import * as z from 'zod'
+import { issueNumberOf } from './sessions.ts'
 
 /** A timed wait with other open Issues held behind it, for as long as it lasts. */
 export interface LongWait {
@@ -25,8 +26,7 @@ const TimerRow = z.object({
   until: z.string(),
   began: z.date(),
 })
-const numberOf = (id: string): number => Number(id.replace(/\D/g, ''))
-const byIssueNumber = (a: string, b: string): number => numberOf(a) - numberOf(b)
+const byIssueNumber = (a: string, b: string): number => issueNumberOf(a) - issueNumberOf(b)
 
 const EdgeRow = z.object({ issue_id: z.string(), after_issue: z.string() })
 const WaitRow = z.object({ id: z.string(), after: z.array(z.string()) })

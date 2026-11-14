@@ -262,8 +262,6 @@ interface DecisionRow {
   asked_at: Date
 }
 
-const numberOf = (id: string): number => Number(id.replace(/\D/g, ''))
-
 /**
  * The chain at one Issue, as the chain reads it: stored `after` edges and the dependency wait of an open Issue. `after` is
  * what this Issue waits on (satisfied edges included, marked); `before` the open Issues that wait on it.
@@ -308,7 +306,7 @@ export async function loadEdges(sql: SQL, id: string): Promise<ReadIssueDetail['
     ...stored.filter((e) => e.side === 'before').map((e) => line(e.other, 'edge', true, e.satisfied)),
     ...waits.filter((wait) => wait.id !== id).map((wait) => line(wait.id, 'wait', true, false)),
   ]
-  const order = (a: ReadEdgeLine, b: ReadEdgeLine) => numberOf(a.issue) - numberOf(b.issue)
+  const order = (a: ReadEdgeLine, b: ReadEdgeLine) => issueNumberOf(a.issue) - issueNumberOf(b.issue)
   return { after: after.sort(order), before: before.sort(order) }
 }
 
