@@ -1,7 +1,8 @@
 /**
  * `bun apps/server/src/migrate-check.ts`: runs this release's pending migrations against the live database inside a
  * transaction that is rolled back, so `scripts/deploy.sh` learns before it stops the old server whether the new one will
- * get past its migrations. Needs `DATABASE_URL` (the deploy runs it through `secrets-run`). Exit 0: they apply (or none
+ * get past its migrations. Needs `DATABASE_URL`: the deploy runs it through the release's `scripts/launch.sh`
+ * (`FACTORY_LAUNCH_ENTRY`), which builds it as the server's start does. Exit 0: they apply (or none
  * is pending); 3: a lock the live server holds could not be had in time, which says nothing about the migrations; 1: a
  * migration is refused, with the database's words on stderr.
  */
