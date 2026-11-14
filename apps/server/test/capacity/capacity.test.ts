@@ -723,6 +723,8 @@ describe('test slots', () => {
         peakRssMib: null,
         why: null,
         cwd: null,
+        passedAt: null,
+        passedBy: null,
       }))
     const cases: { name: string; holders: number; fit: Partial<SlotFit>; granted: boolean; why?: string }[] = [
       { name: 'a lone step is always granted', holders: 0, fit: { freeMib: 100 }, granted: true },
@@ -799,12 +801,116 @@ describe('test slots', () => {
     })
   })
 
+  describe('small steps pass a big one that does not fit', () => {
+    const MIN = 60_000
+    // two base slots, up to six; the host has 1 GiB to give once the headroom is kept
+    const mem = (growthMib: number, peakMib: number): SlotFit => ({
+      peakMib,
+      peaksByName: new Map([
+        ['big', 5120],
+        ['s1', 300],
+        ['s2', 300],
+        ['s3', 300],
+        ['s4', 300],
+      ]),
+      freeMib: 3072,
+      growthMib,
+      max: 6,
+      loadOk: true,
+      headroomMib: 2048,
+    })
+    const ask = (rows: SlotRow[], who: string, ms: number, growth: number, peak: number) =>
+      touchSlots(
+        rows,
+        { id: who, name: who, slots: 2, runMs: 1_800_000, fit: mem(growth, peak), passAfterMs: 10 * MIN },
+        at(ms),
+      )
+
+    test('the three small steps are granted in turn and the big one keeps its place; after the window nothing passes it', () => {
+      let rows = call([], 'h', now, 2, { ...open, max: 6 }).rows
+      const big = ask(rows, 'big', 1000, 0, 5120)
+      expect(big.view).toMatchObject({ granted: false })
+      expect(big.view.why).toContain('waiting for memory')
+      rows = big.rows
+      const grants: boolean[] = []
+      for (const [i, name] of ['s1', 's2', 's3'].entries()) {
+        const small = ask(rows, name, 2000 + i * 1000, i * 300, 300)
+        grants.push(small.view.granted)
+        rows = small.rows
+      }
+      expect(grants).toEqual([true, true, true])
+      const bigRow = rows.find((r) => r.id === 'big')
+      expect(bigRow).toMatchObject({ slot: null, passedBy: 's1', passedAt: at(2000) })
+      // the big one still asks, and its line says who passed it
+      const again = ask(rows, 'big', 5000, 900, 5120)
+      expect(again.view.granted).toBe(false)
+      expect(again.view.why).toContain('passed by "s1"')
+      rows = again.rows
+
+      // after the window: a fourth small step does not pass, whatever it would fit
+      const late = 2000 + 10 * MIN
+      // (the running steps renew their leases and the big one keeps asking, as the CLI does every few seconds)
+      for (let ms = 15_000; ms < late; ms += 10_000) {
+        for (const id of ['h', 's1', 's2', 's3']) rows = ask(rows, id, ms, 900, 300).rows
+        rows = ask(rows, 'big', ms, 900, 5120).rows
+      }
+      expect(rows.find((r) => r.id === 'big')).toMatchObject({ slot: null, passedAt: at(2000) })
+      // (more memory has come free since: 1.2 GiB of steps fit now, the big one still does not)
+      const s4 = touchSlots(
+        rows,
+        {
+          id: 's4',
+          name: 's4',
+          slots: 2,
+          runMs: 1_800_000,
+          fit: { ...mem(900, 300), freeMib: 4096 },
+          passAfterMs: 10 * MIN,
+        },
+        at(late),
+      )
+      expect(s4.view).toMatchObject({ granted: false, ahead: 1 })
+      expect(s4.view.why).toContain('"big" ahead was passed for 10 min and nothing passes it')
+      // the steps end, memory frees: the big one is next, the small one waits behind it
+      rows = ['h', 's1', 's2', 's3'].reduce((acc, id) => releaseSlot(acc, id).rows, s4.rows)
+      const roomy: SlotFit = { ...mem(0, 5120), freeMib: 30_000 }
+      const next = touchSlots(
+        rows,
+        { id: 'big', name: 'big', slots: 2, runMs: 1_800_000, fit: roomy, passAfterMs: 10 * MIN },
+        at(late + 1000),
+      )
+      expect(next.view).toMatchObject({ granted: true })
+      const behind = touchSlots(
+        next.rows,
+        {
+          id: 's4',
+          name: 's4',
+          slots: 2,
+          runMs: 1_800_000,
+          fit: { ...roomy, peakMib: 300, growthMib: 5120 },
+          passAfterMs: 10 * MIN,
+        },
+        at(late + 1500),
+      )
+      expect(behind.view.granted).toBe(true)
+    })
+
+    test('a small step that does not fit either does not pass', () => {
+      const rows = call([], 'h', now, 2, { ...open, max: 6 }).rows
+      const big = ask(rows, 'big', 1000, 0, 5120)
+      const small = ask(big.rows, 's1', 2000, 900, 300)
+      expect(small.view.granted).toBe(false)
+      expect(big.rows.find((r) => r.id === 'big')?.passedAt).toBeNull()
+    })
+  })
+
   describe('the ledger', () => {
-    test('the learned peak is the largest of the 8 newest measured peaks', () => {
+    test('the learned peak is the p80 of the 8 newest measured peaks, so one inflated run does not set it', () => {
       expect(learnedPeakMib([])).toBeNull()
       expect(learnedPeakMib([null, null])).toBeNull()
       expect(learnedPeakMib([null, 300, 900, null])).toBe(900)
       expect(learnedPeakMib([100, 100, 100, 100, 100, 100, 100, 100, 5000])).toBe(100)
+      expect(learnedPeakMib([7600, 5500, 5600, 5500, 5400])).toBe(5600)
+      expect(learnedPeakMib([5400, 5500, 5600, 5500, 5500, 5500, 7600, 7600])).toBe(7600)
     })
 
     test('growth is what each holder is learned to reach less what it holds, never negative', () => {
@@ -846,6 +952,8 @@ describe('a slot is live work of the lead whose worktree its command started in'
     peakRssMib: null,
     why: null,
     cwd: '/w/factory-1-1/apps/server',
+    passedAt: null,
+    passedBy: null,
     ...extra,
   })
 

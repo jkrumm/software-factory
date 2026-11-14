@@ -183,7 +183,7 @@ describe('the aim pass and the grant', () => {
     expect(value(await touchSlot(deps, { id: 'b', name: 'b' })).granted).toBe(true)
   })
 
-  test('under on a slot beyond the live base still needs a learned peak and the load within twice the cores', async () => {
+  test('under on a slot beyond the live base still needs a free-memory reading (a step with no peak is sized by a prior)', async () => {
     await world.db.sql`
       INSERT INTO factory.slot_aim (id, target, quiet_since, changed_at) VALUES (1, 4, NULL, ${AT})`
     const deps = { ...world.deps, slots: 2, slotsMax: 6, slotExtraLoad: 12, slotAim: 'on' as const, cores: 12 }
@@ -191,6 +191,6 @@ describe('the aim pass and the grant', () => {
     expect(value(await touchSlot(deps, { id: 'b', name: 'b' })).granted).toBe(true)
     const third = value(await touchSlot(deps, { id: 'c', name: 'c' }))
     expect(third.granted).toBe(false)
-    expect(third.why).toContain('no learned peak')
+    expect(third.why).toContain('no recent free-memory reading')
   })
 })

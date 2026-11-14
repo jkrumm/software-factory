@@ -20,11 +20,31 @@ export interface SlotRow {
   why: string | null
   /** the caller's working directory, when it sent one */
   cwd: string | null
+  /** when a step behind this waiter was first granted past it, and which one: the start of the passing window */
+  passedAt: Date | null
+  passedBy: string | null
 }
 
+/** How long a waiter may be passed by smaller steps before nothing passes it any more (`FACTORY_SLOT_PASS_MIN`). */
+export const DEFAULT_PASS_AFTER_MS = 10 * 60_000
+
 /** What the memory rule is given: the learned peak of the caller's step, the host's free memory, and the base the extras are measured from. */
+/** Where a step's size comes from: its own learned runs, else a prior from the steps of its project. */
+export type PeakFrom = 'learned' | 'kind' | 'project' | 'default'
+
+const PEAK_SOURCE: Record<PeakFrom, string> = {
+  learned: 'learned from the last runs',
+  kind: 'a guess: the largest step of this kind in the project, none of this one run yet',
+  project: "a guess: the project's largest step, none of this one run yet",
+  default: 'a guess: nothing of this project learned yet',
+}
+
 export interface SlotFit {
   peakMib: number | null
+  /** how `peakMib` was known; absent means learned */
+  peakFrom?: PeakFrom
+  /** the learned peak of each waiter's step by name, for the waiters ahead of the caller (a missing name is unknown) */
+  peaksByName?: ReadonlyMap<string, number | null>
   freeMib: number | null
   /** what the running steps will still grow by */
   growthMib: number
@@ -68,7 +88,7 @@ function decide(holders: number, base: number, fit: SlotFit): { grant: true } | 
   const fits = known && peakMib + fit.growthMib <= freeMib - fit.headroomMib
   const memory = (): { grant: false; why: string } => ({
     grant: false,
-    why: `waiting for memory: needs ${gib(peakMib ?? 0)} (learned from the last runs), ${gib(Math.max(0, (freeMib ?? 0) - fit.growthMib))} free after ${gib(fit.growthMib)} the running steps still grow, headroom ${gib(fit.headroomMib)}`,
+    why: `waiting for memory: needs ${gib(peakMib ?? 0)} (${PEAK_SOURCE[fit.peakFrom ?? 'learned']}), ${gib(Math.max(0, (freeMib ?? 0) - fit.growthMib))} free after ${gib(fit.growthMib)} the running steps still grow, headroom ${gib(fit.headroomMib)}`,
   })
   if (holders < base) return !known || fits ? { grant: true } : memory()
   if (!fit.loadOk) {
@@ -101,6 +121,8 @@ export function touchSlots(
     peakRssMib?: number | undefined
     /** the caller's command is running under this slot: a lapsed lease is taken back whatever the fit says */
     holding?: boolean | undefined
+    /** how long a waiter may be passed before nothing passes it any more */
+    passAfterMs?: number | undefined
   },
   now: Date,
 ): { rows: SlotRow[]; view: SlotView } {
@@ -133,6 +155,8 @@ export function touchSlots(
         peakRssMib: null,
         why: null,
         cwd: input.cwd ?? null,
+        passedAt: null,
+        passedBy: null,
       }
   const others = kept.filter((row) => row.id !== input.id)
   const view = (row: SlotRow, ahead: number, why: string | null = null): SlotView => ({
@@ -166,19 +190,41 @@ export function touchSlots(
     (a, b) => a.requestedAt.getTime() - b.requestedAt.getTime() || a.id.localeCompare(b.id),
   )
   const ahead = line.findIndex((row) => row.id === input.id)
+  const passAfterMs = input.passAfterMs ?? DEFAULT_PASS_AFTER_MS
+  const passedNote = (row: SlotRow): string =>
+    row.passedAt === null
+      ? ''
+      : ` (passed by "${row.passedBy ?? '?'}" since ${Math.floor((now.getTime() - row.passedAt.getTime()) / 60_000)} min; nothing passes it after ${Math.round(passAfterMs / 60_000)} min)`
   const verdict = decide(taken.size, input.slots, input.fit)
   const wait = (why: string): { rows: SlotRow[]; view: SlotView } => ({
     rows: [...others, { ...mine, why }],
     view: view(mine, ahead, why),
   })
-  // Only the waiter first in line is given a slot; the ones behind it wait for their turn, for the same reason.
-  if (!verdict.grant) return wait(verdict.why)
-  if (ahead > 0) return wait(`waiting for the ${ahead} ahead in line`)
+  if (!verdict.grant) return wait(verdict.why + passedNote(mine))
+  // The slot goes to the first waiter in line that fits: a waiter ahead that does not fit is passed, unless it has been
+  // passed for the whole window (then it holds the line), and one that fits takes the slot on its own next call.
+  const passed: SlotRow[] = []
+  for (const waiter of line.slice(0, ahead)) {
+    const theirs = decide(taken.size, input.slots, {
+      ...input.fit,
+      peakMib: input.fit.peaksByName?.get(waiter.name) ?? null,
+    })
+    if (theirs.grant) return wait(`waiting for the ${ahead} ahead in line`)
+    if (waiter.passedAt !== null && now.getTime() - waiter.passedAt.getTime() >= passAfterMs)
+      return wait(
+        `"${waiter.name}" ahead was passed for ${Math.round(passAfterMs / 60_000)} min and nothing passes it now: ${theirs.why}`,
+      )
+    passed.push(waiter)
+  }
   const max = Math.max(input.slots, input.fit.max)
   const slot = Array.from({ length: max }, (_, i) => i + 1).find((n) => !taken.has(n))
   if (slot === undefined) return wait(`all ${max} slots are busy`)
   const granted: SlotRow = { ...mine, slot, leasedUntil: leaseEnd, grantedAt: now, runMs: input.runMs, why: null }
-  return { rows: [...others, granted], view: view(granted, 0) }
+  const passedIds = new Set(passed.map((row) => row.id))
+  const rest = others.map((row) =>
+    passedIds.has(row.id) ? { ...row, passedAt: row.passedAt ?? now, passedBy: row.passedBy ?? mine.name } : row,
+  )
+  return { rows: [...rest, granted], view: view(granted, 0) }
 }
 
 /** The steps holding a live slot and the callers still asking for one. */

@@ -65,9 +65,12 @@ const SlotDbRow = z.object({
   peak_rss_mib: z.number().int().nullable(),
   why: z.string().nullable(),
   cwd: z.string().nullable(),
+  passed_at: z.date().nullable(),
+  passed_by: z.string().nullable(),
 })
 
 const PeakRow = z.object({ peak_rss_mib: z.number().int().nullable() })
+const ProjectPeakRow = z.object({ step: z.string(), peak_rss_mib: z.number().int().nullable() })
 const HostSampleRow = z.object({ at: z.date(), memory_used_pct: z.number().nullable() })
 
 const HostFactRow = z.object({
@@ -267,6 +270,8 @@ export function postgresCapacityStore(tx: SQL): CapacityStore {
           peakRssMib: r.peak_rss_mib,
           why: r.why,
           cwd: r.cwd,
+          passedAt: r.passed_at,
+          passedBy: r.passed_by,
         }
       })
     },
@@ -277,9 +282,9 @@ export function postgresCapacityStore(tx: SQL): CapacityStore {
       for (const r of rows) {
         await tx`
           INSERT INTO factory.capacity_slots (id, name, requested_at, seen_at, slot, leased_until, granted_at, run_ms, rss_mib,
-             peak_rss_mib, why, cwd)
+             peak_rss_mib, why, cwd, passed_at, passed_by)
           VALUES (${r.id}, ${r.name}, ${r.requestedAt}, ${r.seenAt}, ${r.slot}, ${r.leasedUntil}, ${r.grantedAt}, ${r.runMs},
-                  ${r.rssMib}, ${r.peakRssMib}, ${r.why}, ${r.cwd})`
+                  ${r.rssMib}, ${r.peakRssMib}, ${r.why}, ${r.cwd}, ${r.passedAt}, ${r.passedBy})`
       }
     },
 
@@ -325,10 +330,41 @@ export function postgresCapacityStore(tx: SQL): CapacityStore {
         VALUES (${w.project}, ${w.cwd}, ${w.requestedAt}, ${w.acquiredAt}, ${w.releasedAt}, ${w.exitCode})`
     },
 
-    async recentPeaks(name, limit) {
+    async recentPeaks(name, limit, swapoutCeilingMb, legacy) {
+      // A run that ended while the host was under pressure (level above normal, or swapout above the ceiling in a sample
+      // within 90 s of its end) measured a thrashing host, not the step.
       const rows: unknown[] = await tx`
-        SELECT peak_rss_mib FROM factory.step_costs WHERE name = ${name} ORDER BY at DESC, id DESC LIMIT ${limit}`
+        SELECT peak_rss_mib FROM factory.step_costs c
+        WHERE (name = ${name}
+            OR (${legacy?.repo ?? null}::text IS NOT NULL AND repo = ${legacy?.repo ?? null} AND name ~ '^factory-[0-9]+-[0-9]+ '
+                AND substr(name, strpos(name, ' ')) = ${legacy?.words ?? null}))
+          AND NOT EXISTS (
+            SELECT 1 FROM factory.host_samples h
+            WHERE h.at BETWEEN c.at - interval '90 seconds' AND c.at + interval '90 seconds'
+              AND (h.pressure_level > 1 OR h.swapout_mb_per_300s > ${swapoutCeilingMb}))
+        ORDER BY at DESC, id DESC LIMIT ${limit}`
       return rows.map((raw) => PeakRow.parse(raw).peak_rss_mib)
+    },
+
+    async projectPeaks(repo, project, since, limit, swapoutCeilingMb) {
+      const rows: unknown[] = await tx`
+        SELECT step, peak_rss_mib FROM (
+          SELECT regexp_replace(c.name, '^factory-[0-9]+-[0-9]+ ', ${`${project} `}) AS step, c.peak_rss_mib,
+                 row_number() OVER (PARTITION BY regexp_replace(c.name, '^factory-[0-9]+-[0-9]+ ', ${`${project} `})
+                                    ORDER BY c.at DESC, c.id DESC) AS rn
+          FROM factory.step_costs c
+          WHERE c.repo = ${repo} AND c.at >= ${since}
+            AND NOT EXISTS (
+              SELECT 1 FROM factory.host_samples h
+              WHERE h.at BETWEEN c.at - interval '90 seconds' AND c.at + interval '90 seconds'
+                AND (h.pressure_level > 1 OR h.swapout_mb_per_300s > ${swapoutCeilingMb}))
+        ) newest WHERE rn <= ${limit}`
+      const peaks = new Map<string, (number | null)[]>()
+      for (const raw of rows) {
+        const row = ProjectPeakRow.parse(raw)
+        peaks.set(row.step, [...(peaks.get(row.step) ?? []), row.peak_rss_mib])
+      }
+      return peaks
     },
 
     async latestHostSample() {
