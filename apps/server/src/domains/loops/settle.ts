@@ -1,4 +1,4 @@
-import type { TriageAnswer, TriageCandidate, TriageRequest } from '@software-factory/contract'
+import type { SpecPrecedent, TriageAnswer, TriageCandidate, TriageRequest } from '@software-factory/contract'
 import { type IssueId, issueNumber } from '../../kernel/ids.ts'
 
 /** What triage knows of one Issue that is still `settling`. */
@@ -48,10 +48,18 @@ function refinable(facts: Pick<SettlingFacts, 'kind' | 'origin' | 'fromAlert'>):
 
 const REFINED_KINDS: readonly string[] = ['feature', 'bug', 'chore', 'docs']
 
+/**
+ * Triage's `spec` flag stands only on work of a session or more. An hour's change (or one triage could not size) is its
+ * lead's to decide: the owner said on 2026-11-14 that a one-line limit raise (Issue 1024) and four more Specs triage made
+ * owed should not have reached him (Issue 1096).
+ */
+const SPEC_SIZES: readonly string[] = ['medium', 'large']
+
 export function settleRequest(
   facts: SettlingFacts,
   candidates: readonly TriageCandidate[],
   clean: (text: string) => string,
+  precedents: readonly SpecPrecedent[] = [],
 ): Extract<TriageRequest, { mode: 'settle' }> {
   return {
     mode: 'settle',
@@ -64,6 +72,11 @@ export function settleRequest(
       kind: facts.kind,
       origin: facts.origin,
     },
+    precedents: precedents.map((p) => ({
+      ...p,
+      title: clean(p.title).slice(0, 200),
+      note: p.note === null ? null : clean(p.note).slice(0, 2000),
+    })),
   }
 }
 
@@ -108,6 +121,9 @@ export function checkSettle(
     refinable(facts) && answer.kind && REFINED_KINDS.includes(answer.kind) && answer.kind !== facts.kind
       ? (answer.kind as Refined)
       : undefined
-  const checkpoint = facts.kind !== 'incident' && answer.checkpoint === 'spec' ? 'spec' : undefined
+  const checkpoint =
+    facts.kind !== 'incident' && answer.checkpoint === 'spec' && SPEC_SIZES.includes(answer.size ?? '')
+      ? 'spec'
+      : undefined
   return { ok: true, after, dropped, reason: answer.reason, refinement: { kind: refined, checkpoint } }
 }

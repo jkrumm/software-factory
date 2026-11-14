@@ -6,7 +6,7 @@ import { compressResponse } from './compress.ts'
 export interface ConsoleHandlerOptions {
   /** the Console build */
   dir: string
-  /** answers `/health`, `/v1/*` and the nine answer verbs (`WRITES`) from the API; the caller decides what credentials it carries */
+  /** answers `/health`, `/v1/*` and the ten answer verbs (`WRITES`) from the API; the caller decides what credentials it carries */
   forward: (request: Request) => Promise<Response>
 }
 
@@ -100,10 +100,11 @@ export function apiForward(options: {
 
 const forwarded = (path: string): boolean => path === '/health' || path === '/v1' || path.startsWith('/v1/')
 
-/** The owner's nine answer verbs: the only writes the listener forwards. None starts a session or cancels or reopens an Issue; promote files one only from a held signal, dismiss files nothing. */
+/** The owner's ten answer verbs: the only writes the listener forwards. None starts a session or cancels or reopens an Issue; promote files one only from a held signal, dismiss files nothing. */
 const WRITES: { method: string; path: RegExp }[] = [
   { method: 'POST', path: /^\/v1\/decisions\/[^/]+\/answer$/ },
   { method: 'POST', path: /^\/v1\/artifacts\/[^/]+\/verdict$/ },
+  { method: 'POST', path: /^\/v1\/artifacts\/[^/]+\/needed$/ },
   { method: 'POST', path: /^\/v1\/artifacts\/[^/]+\/annotations$/ },
   { method: 'PATCH', path: /^\/v1\/artifacts\/[^/]+\/annotations\/[^/]+$/ },
   { method: 'DELETE', path: /^\/v1\/artifacts\/[^/]+\/annotations\/[^/]+$/ },
@@ -174,7 +175,7 @@ function fileOf(dir: string, rawPath: string): string | null {
 
 /**
  * The Console listener's handler. No per-request identity: the perimeter is the tailnet ACL. Gates in a fixed order, for
- * every path: a read method (or one of the nine answer verbs, `WRITES`, which also need a same-origin JSON body of at most 64 KiB), then either the API's slice
+ * every path: a read method (or one of the ten answer verbs, `WRITES`, which also need a same-origin JSON body of at most 64 KiB), then either the API's slice
  * (`/health`, `/v1/*`, the verbs) or a static file. Nothing else that writes or starts a session passes. A text answer to a GET is
  * compressed (br or gzip, whatever the client accepts), a static file once; the event stream is never touched.
  */
@@ -223,7 +224,7 @@ export function consoleHandler(options: ConsoleHandlerOptions): (request: Reques
     })
   }
 
-  /** One of the nine answer verbs: a same-origin JSON body of at most 64 KiB (a DELETE has none), forwarded verbatim. */
+  /** One of the ten answer verbs: a same-origin JSON body of at most 64 KiB (a DELETE has none), forwarded verbatim. */
   const write = async (request: Request): Promise<Response> => {
     const json = (request.headers.get('content-type') ?? '').toLowerCase().startsWith('application/json')
     if (request.method !== 'DELETE' && !json) {
@@ -241,7 +242,7 @@ export function consoleHandler(options: ConsoleHandlerOptions): (request: Reques
     const rawPath = new URL(request.url).pathname
     if (isWrite(request, rawPath)) return write(request)
     if (request.method !== 'GET' && request.method !== 'HEAD') {
-      return errorResponse(405, 'the Console listener reads, and takes nine answers', 'method_not_allowed', {
+      return errorResponse(405, 'the Console listener reads, and takes ten answers', 'method_not_allowed', {
         allow: 'GET, HEAD',
       })
     }

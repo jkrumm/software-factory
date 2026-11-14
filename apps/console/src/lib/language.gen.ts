@@ -67,6 +67,8 @@ export const LANGUAGE = {
   'long wait':
     'An Issue in a timed wait of an hour or more with other open Issues waiting behind it. It appears in Needs you until the wait ends',
   loop: 'A named recurring job with a trigger, a budget and one way to act. Its judgment is an agw workflow with its own prompt, tools and skills',
+  'needed me':
+    'The owner\'s one-click mark on a verdict of a Spec or Report: did it need him. The newest marks teach the Spec screen and triage the next time; "Specs at the owner not needed" counts the no\'s',
   needs:
     'What waits on the owner right now: open Decisions, artifacts awaiting a verdict, open Errands, held signals, long waits',
   origin: 'Where it came from, in words a person uses: you, application, infrastructure, GitHub, feedback, factory',
@@ -118,6 +120,8 @@ export const LANGUAGE = {
     "The gate's answer to a ship that does not hold; recorded, and counted as friction. A review never refuses a ship: it is recorded as evidence",
   signal: 'Anything that arrives and may become work. Has a kind, an origin and a trust level',
   spec: 'A larger plan to review',
+  'spec screen':
+    "The look a Spec revision passes before it reaches the owner: rules, then factory-spec-screen with the owner's newest needed-me marks as precedents. It passes what is his (a screen or look he has not seen, product direction, spend, security policy, other people or company data, a change that cannot be undone, defaults that lead to materially different work) and settles the rest with the factory's looks_good and its reason, so the lead builds at once",
   stale: 'A Needs you item that has waited more than 24 hours',
   stall: "A wait with a machine cause, the steward's to end",
   starting: 'Session state: no hook yet',

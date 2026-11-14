@@ -301,6 +301,12 @@ async function kpisOf(
   )
   const specs = await one(sql`
     SELECT count(*) AS n FROM factory.artifacts WHERE kind = 'spec' AND created_at >= ${w.from} AND created_at < ${w.to}`)
+  const specsAtOwner = await one(sql`
+    SELECT count(*) AS n FROM factory.verdicts v JOIN factory.artifacts a ON a.id = v.artifact_id AND a.kind = 'spec'
+    WHERE ${ownerVerdict(sql, w)}`)
+  const specsNotNeeded = await one(sql`
+    SELECT count(*) AS n FROM factory.verdicts v JOIN factory.artifacts a ON a.id = v.artifact_id AND a.kind = 'spec'
+    WHERE ${ownerVerdict(sql, w)} AND v.needed_me IS FALSE`)
   const firstWatches = await one(sql`
     SELECT count(*) AS n FROM factory.quality_watches WHERE watch = 1 AND answer IN ('passed', 'regressed') AND answered_at >= ${w.from} AND answered_at < ${w.to}`)
   const firstPassed = await one(sql`
@@ -376,6 +382,18 @@ async function kpisOf(
       measured: true,
       definition:
         'Of the Decisions the owner answered in the window, the share he flagged worth asking. The flag is his, so an unflagged answer counts against the share.',
+    }),
+    kpi({
+      key: 'specs_not_needed',
+      label: 'Specs at the owner not needed',
+      value: per(specsNotNeeded, specsAtOwner),
+      unit: 'share',
+      n: specsAtOwner,
+      count: specsNotNeeded,
+      target: { kind: 'at_most', min: null, max: 0.2 },
+      measured: true,
+      definition:
+        "Of the owner's own verdicts on a Spec in the window (the Spec screen passed it to him; the factory's looks_good on a Spec it settled, and a default after the wait, are not his), the share he marked not needed (`needed me: no`). An unmarked verdict does not count against it. Each mark is a precedent for the Spec screen and triage at once; the friction lines name who made each such Spec owed: triage, the filer, a Replan or the lead.",
     }),
     kpi({
       key: 'verdict_changes_share',

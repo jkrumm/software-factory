@@ -3,6 +3,7 @@ import * as z from 'zod'
 import type { ClassIssue } from '../domains/loops/classes.ts'
 import type { DigestIssue } from '../kernel/digest-scope.ts'
 import type { LoopReads } from '../domains/loops/ports.ts'
+import { readSpecPrecedents } from './spec-screen.ts'
 import type { IssueId } from '../kernel/ids.ts'
 
 const KINDS = ['feature', 'bug', 'chore', 'docs', 'incident'] as const
@@ -368,6 +369,8 @@ export function loopReads(tx: SQL): LoopReads {
         return { at: row.at, swapUsedPct: row.swap_used_pct, processes: row.processes }
       })
     },
+
+    specPrecedents: (limit) => readSpecPrecedents(tx, limit),
 
     async classIssues(loop) {
       const out: Record<string, ClassIssue[]> = {}

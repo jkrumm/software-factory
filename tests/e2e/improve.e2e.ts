@@ -45,6 +45,7 @@ const CARD_ORDER = [
   'avoidable_touches',
   'asks',
   'worth_asking',
+  'specs_not_needed',
   'specs_per_100',
   'owner_decisions_per_100',
   'verdict_changes_share',
@@ -90,7 +91,7 @@ const cardKpis = (model: KpiModel): Kpi[] =>
 
 /** Each KPI card shows what the lib makes of the API's figure, history and target: figure, change, distance, footer. */
 async function expectCards(page: Page, model: KpiModel) {
-  expect(model.kpis).toHaveLength(24)
+  expect(model.kpis).toHaveLength(25)
   expect(model.windows).toHaveLength(6)
   for (const kpi of cardKpis(model)) {
     const card = cardOf(page, kpi.label)

@@ -107,6 +107,7 @@ const SUMMARY_ORDER: readonly KpiKey[] = [
   'avoidable_touches',
   'asks',
   'worth_asking',
+  'specs_not_needed',
   'refusals',
   'queue_wait_p90',
   'queue_wait_p50',
@@ -140,6 +141,7 @@ const SAMPLE_NOUN: Record<KpiKey, readonly [string, string]> = {
   avoidable_touches: ['Issue', 'Issues'],
   asks: ['Issue', 'Issues'],
   worth_asking: ['Decision', 'Decisions'],
+  specs_not_needed: ['Spec verdict', 'Spec verdicts'],
   specs_per_100: ['Issue', 'Issues'],
   owner_decisions_per_100: ['Issue', 'Issues'],
   verdict_changes_share: ['verdict', 'verdicts'],
@@ -174,6 +176,7 @@ export const KPI_HINT = {
   avoidable_touches: 'avoidable touch',
   asks: 'ask',
   worth_asking: 'worth asking',
+  specs_not_needed: 'needed me',
   specs_per_100: 'spec',
   owner_decisions_per_100: 'decision',
   verdict_changes_share: 'verdict',
@@ -218,6 +221,7 @@ export const FRICTION_GROUP_LABEL: Record<FrictionCount['group'], string> = {
   decision_settled: 'Decisions settled by default',
   signal: 'Signals',
   api_transient: 'Leads hit by transient API errors',
+  spec_unneeded: 'Specs that did not need the owner',
 }
 
 /** The friction groups whose heading is a domain word a stranger would not know. */

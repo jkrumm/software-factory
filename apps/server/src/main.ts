@@ -11,6 +11,7 @@ import { shellCheckRunner } from './adapters/shell/check-runner.ts'
 import { agwHygiene } from './adapters/agw/hygiene.ts'
 import { agwQueue } from './adapters/agw/queue.ts'
 import { agwScreen } from './adapters/agw/screen.ts'
+import { agwSpecScreen } from './adapters/agw/spec-screen.ts'
 import { agwSettle, agwSteward } from './adapters/agw/steward.ts'
 import { fileBlobStore } from './adapters/blobs/filesystem.ts'
 import { fileStandingPolicies } from './adapters/checkpoints/policies.ts'
@@ -262,6 +263,7 @@ async function main(): Promise<void> {
     // `project.yaml`; a JSON file named by the environment overrides it, as an explicit stand-in.
     judge: agwJudge(agw),
     errandScreen: agwErrandScreen(agw),
+    specScreen: agwSpecScreen(agw),
     recheckAfterMs: loopSettings.recheckAfterMs,
     policies: checkpointSettings.policyFile ? fileStandingPolicies(checkpointSettings.policyFile) : planning.policies,
   }
@@ -923,7 +925,7 @@ async function main(): Promise<void> {
     })
 
   // The Console's listener: loopback too, published on the tailnet by the dotfiles-private serve row; the perimeter is the
-  // tailnet ACL, there is no per-request identity. Only reads and the owner's nine answer verbs (`WRITES` in console.ts) pass,
+  // tailnet ACL, there is no per-request identity. Only reads and the owner's ten answer verbs (`WRITES` in console.ts) pass,
   // and the owner token is held by this closure alone. It starts whenever the Console is built. It binds before
   // the loops start, so a bad port or a taken one refuses the boot before any pass has run.
   const consoleSettings = loadConsoleSettings(process.env)

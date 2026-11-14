@@ -185,6 +185,14 @@ test('a Markdown Spec: mark text, comment, see it listed and highlighted, then a
   }).toPass()
   await page.keyboard.press('Escape')
 
+  // "Needed me" is one click on the given verdict and survives a reload.
+  const needed = page.getByRole('group', { name: 'Needed me' })
+  await needed.getByRole('button', { name: 'No' }).click()
+  await expect(needed.getByRole('button', { name: 'No' })).toHaveAttribute('aria-pressed', 'true')
+  await page.reload()
+  await expect(needed.getByRole('button', { name: 'No' })).toHaveAttribute('aria-pressed', 'true')
+  await expect(needed.getByRole('button', { name: 'Yes' })).toHaveAttribute('aria-pressed', 'false')
+
   // The API holds both, and the Issue moved on: the verdict ends its wait on the Spec.
   const shown = await detail(apiUrl, spec)
   expect(await api(apiUrl, `/v1/issues/${shown.artifact.issueId}`)).toMatchObject({ state: 'working' })

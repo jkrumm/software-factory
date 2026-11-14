@@ -13,6 +13,7 @@ import type { Precedent } from '../domains/checkpoints/decision.ts'
 import { decisionPage, deepLink } from '../domains/checkpoints/page.ts'
 import {
   type ErrandScreenPort,
+  type SpecScreenPort,
   type JudgePort,
   type DecisionRecord,
   type DecisionStatus,
@@ -36,6 +37,7 @@ export interface SettleDeps extends CheckpointDeps {
   policies: StandingPolicies
   judge: JudgePort
   errandScreen: ErrandScreenPort
+  specScreen: SpecScreenPort
   /** a checkpoint at the owner this long is looked at once more (`FACTORY_CHECKPOINT_RECHECK_MS`); 0 is off */
   recheckAfterMs: number
 }

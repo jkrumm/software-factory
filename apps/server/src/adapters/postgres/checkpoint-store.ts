@@ -20,10 +20,13 @@ import {
   type ErrandRecord,
   type PageRecord,
   type RevisionRecord,
+  type SpecScreenRecord,
   STEP_OUTCOMES,
   type Step,
   type VerdictRecord,
 } from '../../domains/checkpoints/ports.ts'
+import { SPEC_SOURCES } from '@software-factory/contract'
+import { readSpecPrecedents } from '../../read/spec-screen.ts'
 import type { RecheckCandidate } from '../../domains/checkpoints/recheck.ts'
 import { type IssueId } from '../../kernel/ids.ts'
 import type { Key } from '../../kernel/keys.ts'
@@ -118,6 +121,7 @@ const VerdictRow = z.object({
   verdict: z.enum(VERDICTS),
   note: z.string().nullable(),
   at: z.date(),
+  needed_me: z.boolean().nullable().optional(),
 })
 
 const ErrandRow = z.object({
@@ -254,6 +258,34 @@ const verdictOf = (raw: unknown): VerdictRecord => {
     revision: row.revision,
     verdict: row.verdict,
     note: row.note,
+    at: row.at,
+    neededMe: row.needed_me ?? null,
+  }
+}
+
+const SpecScreenRow = z.object({
+  artifact_id: z.string(),
+  revision: z.number().int(),
+  outcome: z.enum(['passed', 'settled']).nullable(),
+  by: z.enum(['rule', 'judge', 'failed']).nullable(),
+  source: z.enum(SPEC_SOURCES),
+  note: z.string().nullable(),
+  tries: z.number().int(),
+  retry_at: z.date().nullable(),
+  at: z.date(),
+})
+
+const specScreenOf = (raw: unknown): SpecScreenRecord => {
+  const row = SpecScreenRow.parse(raw)
+  return {
+    artifactId: row.artifact_id as ArtifactId,
+    revision: row.revision,
+    outcome: row.outcome,
+    by: row.by,
+    source: row.source,
+    note: row.note,
+    tries: row.tries,
+    retryAt: row.retry_at,
     at: row.at,
   }
 }
@@ -596,6 +628,102 @@ export function postgresCheckpointStore(tx: SQL): CheckpointStore {
       const rows: unknown[] = await tx`SELECT * FROM factory.verdicts WHERE artifact_id = ${id} ORDER BY revision`
       return rows.map(verdictOf)
     },
+
+    async setNeededMe(id, revision, needed, at) {
+      const [artifact] = await tx`SELECT id FROM factory.artifacts WHERE id = ${id}`
+      if (!artifact) return 'unknown'
+      const [row]: { needed_me: boolean | null }[] = await tx`
+        SELECT needed_me FROM factory.verdicts WHERE artifact_id = ${id} AND revision = ${revision} FOR UPDATE`
+      if (!row) return 'no_verdict'
+      if (row.needed_me === needed) return 'unchanged'
+      await tx`
+        UPDATE factory.verdicts SET needed_me = ${needed}, needed_at = ${at}
+        WHERE artifact_id = ${id} AND revision = ${revision}`
+      return 'set'
+    },
+
+    async unscreenedSpecs(now, limit) {
+      const rows: unknown[] = await tx`
+        SELECT a.id, r.n
+        FROM factory.artifacts a
+        JOIN factory.issues i ON i.id = a.issue_id
+        JOIN LATERAL (
+          SELECT n, created_at FROM factory.artifact_revisions WHERE artifact_id = a.id ORDER BY n DESC LIMIT 1
+        ) r ON true
+        LEFT JOIN factory.spec_screens s ON s.artifact_id = a.id AND s.revision = r.n
+        WHERE a.kind = 'spec' AND i.state <> 'closed'
+          AND NOT EXISTS (SELECT 1 FROM factory.verdicts v WHERE v.artifact_id = a.id AND v.revision = r.n)
+          AND (s.artifact_id IS NULL OR (s.outcome IS NULL AND (s.retry_at IS NULL OR s.retry_at <= ${now})))
+        ORDER BY r.created_at, a.id LIMIT ${limit}`
+      return rows.map((raw) => {
+        const row = z.object({ id: z.string(), n: z.number().int() }).parse(raw)
+        return { artifact: row.id as ArtifactId, revision: row.n }
+      })
+    },
+
+    async lockSpecRevision(id, revision, options = { lock: true }) {
+      const [artifactRow] = options.lock
+        ? await tx`SELECT * FROM factory.artifacts WHERE id = ${id} AND kind = 'spec' FOR UPDATE`
+        : await tx`SELECT * FROM factory.artifacts WHERE id = ${id} AND kind = 'spec'`
+      if (!artifactRow) return null
+      const artifact = artifactOf(artifactRow)
+      const revisions: unknown[] = await tx`
+        SELECT * FROM factory.artifact_revisions WHERE artifact_id = ${id} ORDER BY n DESC LIMIT 1`
+      const latest = revisions[0] ? revisionOf(revisions[0]) : null
+      if (!latest || latest.n !== revision) return null
+      const [origin] = await tx`
+        SELECT
+          EXISTS (SELECT 1 FROM factory.replans p WHERE p.issue_id = ${artifact.issueId}) AS replan,
+          EXISTS (
+            SELECT 1 FROM factory.issue_events e
+            WHERE e.issue_id = ${artifact.issueId} AND e.kind = 'settled' AND e.result = 'applied'
+              AND e.payload->>'checkpoint' = 'spec'
+          ) AS triaged,
+          EXISTS (
+            SELECT 1 FROM factory.issue_events e
+            WHERE e.issue_id = ${artifact.issueId} AND e.kind = 'filed' AND e.result = 'applied'
+              AND e.payload->>'checkpoint' = 'spec'
+          ) AS filed`
+      const facts = z.object({ replan: z.boolean(), triaged: z.boolean(), filed: z.boolean() }).parse(origin)
+      const verdicts: unknown[] = await tx`
+        SELECT * FROM factory.verdicts WHERE artifact_id = ${id} ORDER BY revision`
+      const all = verdicts.map(verdictOf)
+      const [screenRow] = await tx`
+        SELECT * FROM factory.spec_screens WHERE artifact_id = ${id} AND revision = ${revision}`
+      return {
+        artifact,
+        revision: latest,
+        origin: {
+          replan: facts.replan,
+          filedSpec: artifact.key.startsWith('filed-spec:'),
+          triaged: facts.triaged,
+          filedWithCheckpoint: facts.filed,
+        },
+        answered: all.some((v) => v.revision === revision),
+        earlier: all.filter((v) => v.revision < revision).map((v) => v.verdict),
+        screen: screenRow ? specScreenOf(screenRow) : null,
+      }
+    },
+
+    async specScreen(id, revision) {
+      const [row] = await tx`SELECT * FROM factory.spec_screens WHERE artifact_id = ${id} AND revision = ${revision}`
+      return row ? specScreenOf(row) : null
+    },
+
+    async recordSpecScreen(s) {
+      const rows: unknown[] = await tx`
+        INSERT INTO factory.spec_screens (artifact_id, revision, outcome, by, source, note, tries, retry_at, at)
+        VALUES (${s.artifactId}, ${s.revision}, ${s.outcome}, ${s.by}, ${s.source}, ${s.note?.slice(0, 300) ?? null},
+                ${s.tries}, ${s.retryAt}, ${s.at})
+        ON CONFLICT (artifact_id, revision) DO UPDATE SET
+          outcome = EXCLUDED.outcome, by = EXCLUDED.by, source = EXCLUDED.source, note = EXCLUDED.note,
+          tries = EXCLUDED.tries, retry_at = EXCLUDED.retry_at, at = EXCLUDED.at
+        WHERE factory.spec_screens.outcome IS NULL
+        RETURNING revision`
+      return rows.length === 1
+    },
+
+    specPrecedents: (limit) => readSpecPrecedents(tx, limit),
 
     async insertErrand(e) {
       const rows: unknown[] = await tx`

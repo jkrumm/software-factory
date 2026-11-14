@@ -125,6 +125,8 @@ test('filed with a Spec: stored once, queued behind its verdict, admitted after 
   expect(await stateOf(world, issue)).toMatchObject({ state: 'queued', wait: null })
   expect(await look(issue)).toEqual({ admitted: false, reason: 'spec' })
 
+  // a filed Spec passes the Spec screen by rule at the next checkpoint pass
+  await cli('checkpoint', 'pass')
   // the owner can see it where he answers: Needs you and the asks
   const open = async () => ({
     needs: ((await cli('read', 'needs')).json as { items: { kind: string; id: string }[] }).items.filter(

@@ -526,9 +526,10 @@ test('a Decision reaches Needs you only after the Judge saw it, and is amended b
   expect(next.decision.id).not.toBe(id)
 })
 
-test('only the Judge and the Errand screen called agw', async () => {
+test('only the Spec screen, the Judge and the Errand screen called agw', async () => {
   const calls = (await world.calls()).filter((call) => call.tool === 'agw')
   expect(calls.map((call) => call.args[0])).toEqual([
+    'factory-spec-screen',
     'factory-ask',
     'factory-ask',
     'factory-ask',

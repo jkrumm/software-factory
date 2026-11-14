@@ -4,6 +4,7 @@ import type { Clock } from '../kernel/clock.ts'
 import { ok, type PortError, type Result } from '../kernel/result.ts'
 import { type CheckpointDeps, type CheckpointError } from './checkpoints.ts'
 import { screenErrands, type ErrandScreened } from './checkpoints-errands.ts'
+import { screenSpecs, type SpecScreened } from './checkpoints-specs.ts'
 import { recheckOpen, type Rechecked } from './checkpoints-recheck.ts'
 import { recheckReviews, type ReviewLooked } from './checkpoints-reviews.ts'
 import { type SettleDeps, settleOpen, type Settled } from './checkpoints-settle.ts'
@@ -65,6 +66,7 @@ export async function sendDuePages(
 export interface PassReport {
   decisions: Settled[]
   errands: ErrandScreened[]
+  specs: SpecScreened[]
   rechecks: Rechecked[]
   reviews: ReviewLooked[]
   pages: PagesSent
@@ -82,11 +84,14 @@ export async function runCheckpointPass(
   if (!decisions.ok) return decisions
   const errands = await screenErrands(deps)
   if (!errands.ok) return errands
+  const specs = await screenSpecs(deps)
+  if (!specs.ok) return specs
   const pages = await sendDuePages(deps)
   if (!pages.ok) return pages
   return ok({
     decisions: decisions.value,
     errands: errands.value,
+    specs: specs.value,
     rechecks: rechecks.value,
     reviews: reviews.value,
     pages: pages.value,

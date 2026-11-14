@@ -61,7 +61,8 @@ export const FILING = {
     shape:
       'optional; `spec` makes the lead hand over a one-page Spec before it builds, and the ship is refused without one',
     notes: [
-      'Set it for a new public surface (an API, a CLI verb, a contract), a new data model or a migration that changes meaning, a new dependency of weight, or a UI screen the owner has not seen.',
+      "Set it for a new public surface (an API, a CLI verb, a contract), a new data model or a migration that changes meaning, a new dependency of weight, or a UI screen the owner has not seen, and only for work of a session or more. Never for an hour's change (a constant, a limit, a config line) or a change inside an existing surface: its lead decides those.",
+      "A Spec passes the Spec screen before it reaches the owner: one that is not his to read (no unseen screen or look, product direction, spend, security policy, other people or company data, irreversible change, or defaults that lead to materially different work) gets the factory's looks_good and its lead builds at once.",
       `The Spec has at most three open choices, each with the lead's default; with no verdict in ${SPEC_WAIT_HOURS} hours the lead goes on with its defaults, so the queue never waits on the owner.`,
     ],
     example: 'spec',

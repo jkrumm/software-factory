@@ -27,6 +27,7 @@ import { type PageDeps, sendDuePages } from '../../src/app/checkpoints-pages.ts'
 import { lookAtReview, recheckReviews } from '../../src/app/checkpoints-reviews.ts'
 import { requestErrand } from '../../src/app/checkpoints.ts'
 import { screenErrands } from '../../src/app/checkpoints-errands.ts'
+import { screenSpecs } from '../../src/app/checkpoints-specs.ts'
 import { type SettleDeps, settleDecision, settleOpen } from '../../src/app/checkpoints-settle.ts'
 import { fileIssue, recordIssueEvent } from '../../src/app/issues.ts'
 import { readNeeds } from '../../src/read/needs.ts'
@@ -123,6 +124,7 @@ beforeEach(async () => {
     policies,
     judge,
     errandScreen,
+    specScreen: { screen: () => Promise.resolve(ok({ verdict: 'pass', reason: "the owner's to read" })) },
     recheckAfterMs: 0,
     notifier,
   }
@@ -710,6 +712,8 @@ describe('artifacts', () => {
   test('a revision after Changes waits again and pages for the new revision; a stale verdict is refused', async () => {
     const issueId = await workingIssue()
     const { artifact } = value(await submitArtifact(deps, { issueId, attempt: 1, raw: SPEC }))
+    // a Spec is paged once the screen passes it: the first revision by the workflow
+    expect(value(await screenSpecs(deps))).toMatchObject([{ revision: 1, outcome: 'passed' }])
     value(await giveVerdict(deps, { artifactId: artifact.id, verdict: 'changes', note: null, revision: null }))
     const revised = value(
       await reviseArtifact(deps, {
@@ -719,6 +723,8 @@ describe('artifacts', () => {
         note: 'named it',
       }),
     )
+    // the screen passes both revisions: the first by the workflow, the second by rule (the owner asked for it)
+    expect(value(await screenSpecs(deps))).toMatchObject([{ revision: 2, outcome: 'passed' }])
     expect(revised).toMatchObject({ issue: { state: 'waiting', waitReason: 'review' } })
     expect(revised.artifact.id).toBe(artifact.id)
     expect(await rows('artifact_revisions')).toBe(2)
@@ -746,6 +752,8 @@ describe('artifacts', () => {
     const issueId = await workingIssue()
     value(await submitArtifact(deps, { issueId, attempt: 1, raw: SPEC }))
     expect(value(await submitArtifact(deps, { issueId, attempt: 1, raw: SPEC }))).toMatchObject({ result: 'replayed' })
+    value(await screenSpecs(deps))
+    value(await screenSpecs(deps))
     expect(await rows('artifacts')).toBe(1)
     expect(await rows('checkpoint_pages')).toBe(1)
     expect(value(await sendDuePages(deps)).sent).toHaveLength(1)
@@ -1027,6 +1035,7 @@ describe('a Decision raised during a review', () => {
   async function reviewed() {
     const issueId = await workingIssue()
     const { artifact } = value(await submitArtifact(deps, { issueId, attempt: 1, raw: SPEC }))
+    value(await screenSpecs(deps))
     return { issueId, artifactId: artifact.id }
   }
   const verdictOf = (artifactId: ArtifactId) =>
@@ -1461,7 +1470,8 @@ describe('a Concept or Spec the owner has not answered for a day', () => {
       // a later pass leaves it, and no second page was ever planned
       later(48)
       expect(value(await recheckReviews(deps))).toEqual([])
-      expect(await rows('checkpoint_pages')).toBe(1)
+      // a Spec nobody screened was never paged; a Concept is paged at once
+      expect(await rows('checkpoint_pages')).toBe(kind === 'concept' ? 1 : 0)
     },
   )
 

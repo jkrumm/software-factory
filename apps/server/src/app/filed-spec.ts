@@ -1,5 +1,4 @@
 import { NEW_ISSUE_SPEC_TITLE_MAX } from '@software-factory/contract'
-import { deepLink, reviewPage } from '../domains/checkpoints/page.ts'
 import type { BlobStore, CheckpointStore } from '../domains/checkpoints/ports.ts'
 import type { Clock } from '../kernel/clock.ts'
 import type { IdSource, IssueId } from '../kernel/ids.ts'
@@ -77,16 +76,6 @@ export async function attachSpec(
     note: null,
     createdAt: at,
   })
-  await checkpoints.planPage(
-    reviewPage({
-      issue,
-      link: deepLink(deps.consoleUrl, id),
-      artifact: id,
-      revision: 1,
-      kind: 'spec',
-      title: spec.title,
-    }),
-    at,
-  )
+  // The owner is paged when the Spec screen passes it to him (`checkpoints-specs.ts`): a filed Spec passes by rule.
   return ok(null)
 }
