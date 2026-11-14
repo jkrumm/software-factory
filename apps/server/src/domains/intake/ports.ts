@@ -187,8 +187,11 @@ export interface IntakeStore {
     now: Date
   }): Promise<void>
   unrouted(limit: number): Promise<UnroutedRow[]>
+  unroutedOne(source: string, monitor: string): Promise<UnroutedRow | null>
   dueUnrouted(now: Date, graceMs: number, limit: number): Promise<UnroutedRow[]>
   markUnroutedFiled(source: string, monitor: string, event: string, issueId: IssueId, now: Date): Promise<void>
+  /** Held for the owner instead of filed: `filedAt` set, no Issue. */
+  markUnroutedHeld(source: string, monitor: string, event: string, now: Date): Promise<void>
 
   doorSources(): Promise<DoorSourceRow[]>
   doorStarted(sources: readonly string[], now: Date): Promise<void>
@@ -205,6 +208,8 @@ export interface ProjectSignals {
   find(repo: string): Promise<Result<RepoSignals | null>>
   /** every project with automatic sources to poll, not paused */
   polled(): Promise<Result<RepoSignals[]>>
+  /** the names of the projects that are not work repos, sorted */
+  names(): Promise<Result<string[]>>
 }
 
 /** Which host each repo's alerts sit on: the projects' `signals:` and `config/infra.json`'s hosts. */

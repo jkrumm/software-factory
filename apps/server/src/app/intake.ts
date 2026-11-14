@@ -15,6 +15,7 @@ import {
   storable,
 } from '@software-factory/contract'
 import { doorSourceLines, unroutedLines } from '../domains/intake/health.ts'
+import { placeByName } from '../domains/intake/place.ts'
 import { NOT_SCREENED } from '../domains/intake/screen.ts'
 import type {
   Alert,
@@ -39,6 +40,7 @@ import type {
   SignalState,
   SubjectState,
   TriageWorkflow,
+  UnroutedRow,
   Writeback,
 } from '../domains/intake/ports.ts'
 import {
@@ -89,6 +91,8 @@ export interface IntakeSettings {
   unroutedGraceMs: number
   /** where an unrouted monitor's Issue is filed when no repo can be told from its name */
   homeRepo: string | null
+  /** a monitor that stays down this long with no route and no place is held for the owner */
+  unroutedHeldMs: number
 }
 
 export const DEFAULT_INTAKE_SETTINGS: IntakeSettings = {
@@ -96,6 +100,7 @@ export const DEFAULT_INTAKE_SETTINGS: IntakeSettings = {
   fingerprintWindowMs: 24 * 60 * 60_000,
   unroutedGraceMs: 10 * 60_000,
   homeRepo: null,
+  unroutedHeldMs: 6 * 3_600_000,
 }
 
 export interface IntakeDeps extends WriteDeps {
@@ -1081,11 +1086,38 @@ export function createIntake(deps: IntakeDeps) {
     // A route into a work repo would let a monitor file there: the work repo hears the owner only.
     if (found.value.work) return refuse('unknown_project', `${input.repo} is a work repo: it hears the owner only`)
     const named = { ...input, repo: found.value.repo }
+    const info = found.value
+    // Kuma notifies on a change only: a monitor that is down now says nothing more, so its last alert is filed here.
+    // The topology is read before the transaction, never inside it.
+    const topology = await deps.topology.load()
+    if (!topology.ok) return topology
     return uow.run(async (s) => {
       const setBy = await setterOf(s, named, caller)
       if (!setBy.ok) return setBy
-      return ok(await s.intake.setRoute(named.source, named.monitor, named.repo, setBy.value))
+      return routeIn(s, named, setBy.value, info, topology.value)
     })
+  }
+
+  /** Stores the route and, when the monitor was counted as down with no route, files its last alert in the route's repo. */
+  async function routeIn(
+    s: Stores,
+    route: { source: string; monitor: string; repo: string },
+    setBy: string,
+    info: RepoSignals,
+    topology: Topology,
+  ): Out<Awaited<ReturnType<IntakeStore['setRoute']>>> {
+    await s.intake.lock(`subject:${route.source}:${route.monitor}`)
+    const waiting = await s.intake.unroutedOne(route.source, route.monitor)
+    const stored = await s.intake.setRoute(route.source, route.monitor, route.repo, setBy)
+    if (waiting?.status !== 'down' || waiting.group) return ok(stored)
+    const received = unroutedSignal(waiting, route.repo, waiting.lastTitle, '')
+    const filed = await downIn(s, received, received.alert as Alert, { info, topology })
+    if (!filed.ok) return filed
+    // The held signal this monitor became while it had no route is answered by the Issue.
+    const held = await s.intake.signalByKey(keyOf('held', waiting.source, waiting.monitor))
+    if (held?.state === 'held' && filed.value.issue)
+      await s.intake.setSignal(held.id, { state: 'promoted', issueId: filed.value.issue, repo: route.repo })
+    return ok(stored)
   }
 
   const removeRoute = (input: { source: string; monitor: string; issue?: string }, caller: RequestCaller) =>
@@ -1166,8 +1198,11 @@ export function createIntake(deps: IntakeDeps) {
     })
   }
 
-  /** Home for an unrouted monitor's down: the repo of a route of the same source for `<name> - Push|Door`, else the home repo. */
-  async function placeFor(source: string, monitor: string): Promise<{ repo: string; mapped: boolean } | null> {
+  /**
+   * Where an unrouted monitor belongs: the repo of a route of the same source for `<name> - Push|Door`, else the project
+   * its name says (`placeByName`), else nothing. Both are `mapped`: the monitor gets that route.
+   */
+  async function placeFor(source: string, monitor: string, names: readonly string[]): Promise<string | null> {
     const base = monitor.replace(SUFFIX, '')
     if (base !== monitor && base) {
       const known = await uow.run(async (s) => ok(await s.intake.routes()))
@@ -1176,53 +1211,93 @@ export function createIntake(deps: IntakeDeps) {
             (route) => route.source === source && route.monitor.toLowerCase().startsWith(`${base.toLowerCase()} - `),
           )
         : undefined
-      if (hit) return { repo: hit.repo, mapped: true }
+      if (hit) return hit.repo
     }
-    return settings.homeRepo ? { repo: settings.homeRepo, mapped: false } : null
+    return placeByName(monitor, names)
   }
 
   const HOME_TITLE = 'No door route for a monitor that is down, pick its repo: '
   const HOME_ASK =
     'No door route exists for this monitor, so its alerts reach no repo. Decide which repo it belongs to and add the route with `factory door route-set`; fix the monitor if it is down for a reason of its own.'
 
+  const unroutedSignal = (row: UnroutedRow, repo: string | null, title: string, text: string): Received => ({
+    signal: {
+      source: row.source,
+      kind: 'alert',
+      origin: originOf(row.source),
+      trust: 'machine',
+      repo,
+      fingerprint: `${row.source}:${row.monitor}`,
+      title,
+      text,
+      link: null,
+      madeBy: null,
+      probe: false,
+    },
+    alert: {
+      subject: row.monitor,
+      event: row.lastEvent,
+      status: 'down',
+      facts: { unrouted: true, downSince: row.downSince?.toISOString() ?? null },
+    },
+  })
+
+  /**
+   * A monitor with no route, in three steps and never the owner first: (1) one the factory can place by its name gets
+   * that route, up or down, and files its last alert when it is down; (2) one down past the grace with no place is
+   * filed in the home repo, asking for a route; (3) with no home repo, one down past `unroutedHeldMs` is held in
+   * Needs you, once.
+   */
   async function fileUnrouted(topology: Topology): Promise<Result<void, IntakeError>> {
+    const names = await deps.projects.names()
+    if (!names.ok) return names
+    const all = await uow.run(async (s) => ok(await s.intake.unrouted(200)))
+    if (!all.ok) return all
+    let routed = 0
+    for (const row of all.value) {
+      if (routed >= UNROUTED_BATCH) break
+      const repo = await placeFor(row.source, row.monitor, names.value)
+      if (!repo) continue
+      const found = await deps.projects.find(repo)
+      if (!found.ok || !found.value || found.value.work) continue
+      const info = found.value
+      const out = await uow.run(async (s) => {
+        // A route set meanwhile (by the owner) stays his.
+        if (await s.intake.routeFor(row.source, row.monitor)) return ok(null)
+        return routeIn(s, { source: row.source, monitor: row.monitor, repo: info.repo }, 'factory:name', info, topology)
+      })
+      if (!out.ok) return out
+      routed++
+    }
+
     const due = await uow.run(async (s) =>
       ok(await s.intake.dueUnrouted(clock.now(), settings.unroutedGraceMs, UNROUTED_BATCH)),
     )
     if (!due.ok) return due
     for (const row of due.value) {
-      const place = await placeFor(row.source, row.monitor)
-      if (!place) continue
-      const received: Received = {
-        signal: {
-          source: row.source,
-          kind: 'alert',
-          origin: originOf(row.source),
-          trust: 'machine',
-          repo: place.repo,
-          fingerprint: `${row.source}:${row.monitor}`,
-          title: place.mapped ? row.lastTitle : `${HOME_TITLE}${row.lastTitle}`,
-          text: place.mapped ? '' : HOME_ASK,
-          link: null,
-          madeBy: null,
-          probe: false,
-        },
-        alert: {
-          subject: row.monitor,
-          event: row.lastEvent,
-          status: 'down',
-          facts: { unrouted: true, downSince: row.downSince?.toISOString() ?? null },
-        },
+      const title = `${HOME_TITLE}${row.lastTitle}`
+      const home = settings.homeRepo ? await deps.projects.find(settings.homeRepo) : null
+      if (home && !home.ok) return home
+      const info = home?.ok ? home.value : null
+      if (info && !info.work) {
+        const received = unroutedSignal(row, info.repo, title, HOME_ASK)
+        const out = await uow.run(async (s) => {
+          await s.intake.lock(`subject:${row.source}:${row.monitor}`)
+          const filed = await downIn(s, received, received.alert as Alert, { info, topology })
+          if (filed.ok && filed.value.issue)
+            await s.intake.markUnroutedFiled(row.source, row.monitor, row.lastEvent, filed.value.issue, clock.now())
+          return filed
+        })
+        if (!out.ok) return out
+        continue
       }
-      const found = await deps.projects.find(place.repo)
-      if (!found.ok || !found.value || found.value.work) continue
-      const info = found.value
+      if (!row.downSince || clock.now().getTime() - row.downSince.getTime() < settings.unroutedHeldMs) continue
+      const held = unroutedSignal(row, null, title, HOME_ASK)
       const out = await uow.run(async (s) => {
         await s.intake.lock(`subject:${row.source}:${row.monitor}`)
-        const filed = await downIn(s, received, received.alert as Alert, { info, topology })
-        if (filed.ok && filed.value.issue)
-          await s.intake.markUnroutedFiled(row.source, row.monitor, row.lastEvent, filed.value.issue, clock.now())
-        return filed
+        const stored = await hold(s, held, undefined, 'a monitor down with no route and no repo to place it in')
+        if (stored.ok) await s.intake.markUnroutedHeld(row.source, row.monitor, row.lastEvent, clock.now())
+        return stored
       })
       if (!out.ok) return out
     }

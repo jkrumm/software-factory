@@ -66,6 +66,15 @@ const projectPort: ProjectSignals = {
       ),
     ),
   polled: () => Promise.resolve(ok(projects)),
+  names: () =>
+    Promise.resolve(
+      ok(
+        projects
+          .filter((p) => !p.work)
+          .map((p) => p.repo)
+          .sort(),
+      ),
+    ),
 }
 const topology: IntakeTopology = {
   load: () => Promise.resolve(ok({ hostOfRepo: new Map([['vps', 'vps']]), hosts: new Set(['vps', 'homelab']) })),
@@ -840,8 +849,68 @@ describe('the door', () => {
       ok: false,
     })
     expect((await intake.setRoute({ source: 'kuma', monitor: 'web - Push', repo: 'argo' }, 'owner')).ok).toBe(true)
-    expect(done(await intake.alert(alert({ event: 'e2' })))).toMatchObject({ outcome: 'filed' })
+    // the monitor was down when the route came: its last alert is filed now, and the next one amends that Issue
     expect(await issues()).toEqual([{ id: 'issue_1', repo: 'argo', state: 'settling', outcome: null }])
+    expect(done(await intake.alert(alert({ event: 'e2' })))).toMatchObject({ outcome: 'amended', issue: 'issue_1' })
+    expect(await issues()).toHaveLength(1)
+  })
+
+  test('a route for a monitor that is up files nothing', async () => {
+    done(await intake.alert(alert({ status: 'up', event: 'u1' })))
+    expect((await intake.setRoute({ source: 'kuma', monitor: 'web - Push', repo: 'vps' }, 'owner')).ok).toBe(true)
+    expect(await issues()).toEqual([])
+  })
+
+  test('a monitor whose name says a project gets that route, up or down, without the owner', async () => {
+    projects.push(project('weather-orb'))
+    done(await intake.alert(alert({ monitor: 'WeatherOrb Watchdog', status: 'up', event: 'u1' })))
+    done(await intake.alert(alert({ monitor: 'weatherorb heartbeat', event: 'd1' })))
+    done(await intake.alert(alert({ monitor: 'mystery', event: 'd2' })))
+    expect((await intake.settle()).ok).toBe(true)
+    expect(await db.sql`SELECT monitor, repo, set_by FROM factory.intake_door_routes ORDER BY monitor`).toEqual([
+      { monitor: 'WeatherOrb Watchdog', repo: 'weather-orb', set_by: 'factory:name' },
+      { monitor: 'weatherorb heartbeat', repo: 'weather-orb', set_by: 'factory:name' },
+    ])
+    // only the one that was down filed, in the repo its name says; the unplaceable one stays unrouted
+    expect(await issues()).toEqual([{ id: 'issue_1', repo: 'weather-orb', state: 'settling', outcome: null }])
+    const listed = await intake.routes()
+    expect(listed.ok && listed.value.unrouted.map((row) => row.monitor)).toEqual(['mystery'])
+  })
+
+  test('a down monitor nobody can place becomes a held signal after hours, once, and a route answers it', async () => {
+    intake = createIntake({
+      uow,
+      clock,
+      ids,
+      projects: projectPort,
+      topology,
+      openIssues: postgresOpenIssues(db.sql),
+      triage,
+      runbook,
+      settings: { ...DEFAULT_INTAKE_SETTINGS, homeRepo: null },
+    })
+    done(await intake.alert(alert({ monitor: 'mystery', event: 'd1' })))
+    clock.advance(DEFAULT_INTAKE_SETTINGS.unroutedHeldMs - 60_000)
+    expect((await intake.settle()).ok).toBe(true)
+    expect(await db.sql`SELECT id FROM factory.intake_signals`).toEqual([])
+
+    clock.advance(120_000)
+    expect((await intake.settle()).ok).toBe(true)
+    expect((await intake.settle()).ok).toBe(true)
+    const held = await db.sql`SELECT id, state, repo, title FROM factory.intake_signals`
+    expect(held).toEqual([
+      { id: expect.any(String), state: 'held', repo: null, title: expect.stringContaining('pick its repo') },
+    ])
+    const lines = await intake.healthLines(72 * 3_600_000)
+    expect(lines.ok && lines.value).toEqual([expect.stringContaining('held for the owner')])
+
+    expect((await intake.setRoute({ source: 'kuma', monitor: 'mystery', repo: 'vps' }, 'owner')).ok).toBe(true)
+    expect(await issues()).toEqual([{ id: 'issue_1', repo: 'vps', state: 'settling', outcome: null }])
+    expect(await db.sql`SELECT state, issue_id FROM factory.intake_signals WHERE state = 'held'`).toEqual([])
+    expect(await db.sql`SELECT state, issue_id FROM factory.intake_signals ORDER BY id`).toContainEqual({
+      state: 'promoted',
+      issue_id: 'issue_1',
+    })
   })
 
   test('an up with nothing open is counted on the route; a replayed up is not counted twice', async () => {

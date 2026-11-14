@@ -408,6 +408,12 @@ export function postgresIntakeStore(tx: SQL): IntakeStore {
       return rows.map(unroutedOf)
     },
 
+    async unroutedOne(source, monitor) {
+      const [row]: Row[] = await tx`
+        SELECT * FROM factory.intake_door_unrouted WHERE source = ${source} AND monitor = ${monitor}`
+      return row ? unroutedOf(row) : null
+    },
+
     async dueUnrouted(now, graceMs, limit) {
       const rows: Row[] = await tx`
         SELECT u.* FROM factory.intake_door_unrouted u
@@ -421,6 +427,12 @@ export function postgresIntakeStore(tx: SQL): IntakeStore {
     async markUnroutedFiled(source, monitor, event, issueId, now) {
       await tx`
         UPDATE factory.intake_door_unrouted SET filed_at = ${now}, filed_issue = ${issueId}
+        WHERE source = ${source} AND monitor = ${monitor} AND last_event = ${event}`
+    },
+
+    async markUnroutedHeld(source, monitor, event, now) {
+      await tx`
+        UPDATE factory.intake_door_unrouted SET filed_at = ${now}
         WHERE source = ${source} AND monitor = ${monitor} AND last_event = ${event}`
     },
 

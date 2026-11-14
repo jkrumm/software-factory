@@ -92,6 +92,12 @@ through `receive` in `app/intake.ts`; the answer is a triage outcome (`docs/lang
   text, link). It is a signal from `feedback:<app>`, trust `outside`, whose text opens with an `app/version/route` header;
   the repo is the door route `(feedback, <app>)` or none, and the fingerprint is the repo (or app) and the title, never the
   version or route, so one complaint from two builds is one.
+  **A monitor with no route** is counted, and the settle pass deals with it without the owner: one whose name says a
+  project (`domains/intake/place.ts`: the project name is a run of the monitor's words, the longest and only match) or
+  that has a `<name> - Push|Door` sibling routed gets that route (`set_by` `factory:name`), up or down; one down past
+  10 min with no place is filed in `FACTORY_HOME_REPO` when set, else, past `unroutedHeldMs` (6 h), held once as a signal
+  with no repo (the owner or the Judge promotes it with one). Setting a route for a monitor that is down files its last
+  alert in that repo (Kuma notifies on a change only) and answers the held signal.
 - **Backlog sweep.** With `FACTORY_GITHUB_BACKLOG=1` the GitHub poller's first pass after a start also reads every open issue
   of each polled project (oldest first, pull requests out) and files it through `receive`: the label's and the author's as
   `machine`, everyone else's `outside` (held). It carries `writeback: false` and no `admitted`, so nothing is ever written to

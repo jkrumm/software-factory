@@ -124,6 +124,7 @@ function setup(
   const projects: ProjectSignals = {
     find: () => Promise.resolve(ok(null)),
     polled: () => Promise.resolve(ok(options.projects ?? [project()])),
+    names: () => Promise.resolve(ok([])),
   }
   const poller = githubPoller({
     sink,
