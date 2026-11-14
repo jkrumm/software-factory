@@ -305,7 +305,14 @@ test('/health keeps its heartbeat names and adds the door lines and the loops', 
     lines: unknown[]
     loops: { name: string; ok: boolean; intervalMs: number }[]
   }
-  expect(Object.keys(health.heartbeat).sort()).toEqual(['ok', 'queueMovedAt', 'reason', 'tickAt'])
+  expect(Object.keys(health.heartbeat).sort()).toEqual([
+    'ok',
+    'queueMovedAt',
+    'reason',
+    'routeP95Ms',
+    'routeSamples',
+    'tickAt',
+  ])
   expect(Array.isArray(health.lines)).toBe(true)
   expect(health.loops.map((l) => l.name)).toContain('leads')
   expect(health.loops.every((l) => typeof l.ok === 'boolean' && typeof l.intervalMs === 'number')).toBe(true)
