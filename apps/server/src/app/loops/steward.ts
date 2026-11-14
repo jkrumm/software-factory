@@ -500,15 +500,20 @@ export async function loadIdle(
         return ok(null)
       }
     }
-    if (view.lastTurnAt && reportedSince(history, issue.attempt, view.lastTurnAt)) return ok(null)
-
     const lastAdmitted = history.findLast((record) => record.kind === 'admitted')?.version ?? 0
+    const heard = readIdleHistory(history, lastAdmitted)
+    // A report ends the quiet only while nothing came after it: an answer, a verdict or a note that arrived since is news the
+    // lead has not heard when no turn began after it (it was typed mid-turn and missed, or is still waiting to be typed), and
+    // the Issue is back with the lead, so a report before that news settles nothing (issue 1190).
+    const unheard = heard.newsAt !== null && (view.lastTurnAt === null || heard.newsAt > view.lastTurnAt)
+    const reportFrom = unheard && heard.newsAt ? heard.newsAt : view.lastTurnAt
+    if (reportFrom && reportedSince(history, issue.attempt, reportFrom)) return ok(null)
+
     const wakes = history.filter((record) => record.version > lastAdmitted && isIdleNote(record))
     const lastWake = wakes.at(-1)
     const last = history.findLast((record) => !isIdleNote(record))
     const lastEvent = last ? `${lineOf(last)} (${last.at.toISOString()})` : 'none'
     // The idle clock starts at the later of the end of the lead's turn and the last news it heard (a verdict, a note, the end of a wait).
-    const heard = readIdleHistory(history, lastAdmitted)
     const idleSince = heard.newsAt && heard.newsAt > view.idleSince ? heard.newsAt : view.idleSince
     const quietSince = lastWake && lastWake.at > idleSince ? lastWake.at : idleSince
     return ok({

@@ -23,7 +23,14 @@ interface Dormant {
 
 type Look =
   | { done: true }
-  | { done: false; delivery: Pick<Delivery, 'claimedAt' | 'text'>; working: boolean; dormant: Dormant | null }
+  | {
+      done: false
+      delivery: Pick<Delivery, 'claimedAt' | 'text'>
+      working: boolean
+      dormant: Dormant | null
+      /** when the lead's hooks say its turn ended with none begun since; null while a turn runs or none was seen */
+      idleSince: Date | null
+    }
 
 /**
  * `note_lead`: the Issue's events from `from` to `version` typed into the lead's terminal, once. The effect's key is the
@@ -47,16 +54,23 @@ export async function noteLead(deps: LeadDeps, effect: NoteEffect): Promise<Resu
     if (!row?.terminal || row.goneAt) return ok({ done: true })
     const existing = await leads.delivery(deliveryKey)
     if (existing?.typedAt) return ok({ done: true })
+    const view = deriveSession(await leads.hookFacts(name))
+    const idleSince = view.state === 'idle' ? view.idleSince : null
     if (existing) {
       // Claimed, never confirmed: a turn that began since proves the lead took it.
-      const view = deriveSession(await leads.hookFacts(name))
       if (view.lastTurnAt && view.lastTurnAt > existing.claimedAt) {
         await leads.markTyped(deliveryKey, view.lastTurnAt, false)
         // A resumed session's first turn is that proof too: the lead runs again.
         await leads.markRevived(issue, attempt)
         return ok({ done: true })
       }
-      return ok({ done: false, delivery: existing, working, dormant: dormantOf(row, loaded.issue, view.claudeSession) })
+      return ok({
+        done: false,
+        delivery: existing,
+        working,
+        dormant: dormantOf(row, loaded.issue, view.claudeSession),
+        idleSince,
+      })
     }
     const text = noteText(
       issue,
@@ -64,12 +78,12 @@ export async function noteLead(deps: LeadDeps, effect: NoteEffect): Promise<Resu
     )
     const claimedAt = deps.clock.now()
     await leads.claimDelivery({ key: deliveryKey, issueId: issue, attempt, kind: 'note', text, claimedAt })
-    const dormant = dormantOf(row, loaded.issue, deriveSession(await leads.hookFacts(name)).claudeSession)
-    return ok({ done: false, delivery: { claimedAt, text }, working, dormant })
+    const dormant = dormantOf(row, loaded.issue, view.claudeSession)
+    return ok({ done: false, delivery: { claimedAt, text }, working, dormant, idleSince })
   })
   if (!looked.ok) return looked
   if (looked.value.done) return ok(undefined)
-  const { delivery, working, dormant } = looked.value
+  const { delivery, working, dormant, idleSince } = looked.value
 
   const found = await deps.terminals.find(name)
   if (!found.ok) return found
@@ -94,9 +108,13 @@ export async function noteLead(deps: LeadDeps, effect: NoteEffect): Promise<Resu
   // Dormant but its process never ended (the quiesce failed): the lead runs, so the mark goes and the note is typed.
   if (dormant) await clearDormant(deps, issue, attempt)
 
-  const force = deps.clock.now().getTime() - delivery.claimedAt.getTime() >= deps.forceNoteAfterMs
+  const now = deps.clock.now().getTime()
+  const force = now - delivery.claimedAt.getTime() >= deps.forceNoteAfterMs
+  // The hooks know the turn is over; the core's status can say otherwise for good (issue 1190), so after the same wait the
+  // screen decides: an empty input box takes the note whatever the status reads.
+  const idle = idleSince !== null && now - idleSince.getTime() >= deps.forceNoteAfterMs
   await deps.typePace?.()
-  const typed = await deps.terminals.type({ terminal: live.address, text: delivery.text, force })
+  const typed = await deps.terminals.type({ terminal: live.address, text: delivery.text, force, idle })
   if (!typed.ok) return typed
   if (typed.value === 'busy') {
     return err(portError('refused', 'the lead is mid-turn; it hears the note when its turn ends'))

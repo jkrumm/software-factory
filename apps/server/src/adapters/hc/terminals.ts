@@ -215,7 +215,12 @@ export class HcTerminals implements Terminals {
     }
   }
 
-  async type(input: { terminal: string; text: string; force: boolean }): Promise<Result<'typed' | 'busy'>> {
+  async type(input: {
+    terminal: string
+    text: string
+    force: boolean
+    idle?: boolean
+  }): Promise<Result<'typed' | 'busy'>> {
     const budget = this.budget()
     try {
       const terminal = await this.rpc('terminal.get', { terminal: input.terminal }, Terminal, budget)
@@ -229,12 +234,29 @@ export class HcTerminals implements Terminals {
       // knows better: the error line above an empty prompt. Only then is the core's override used, and never over a draft.
       const errored =
         (status === 'blocked' || status === 'error') && (await this.apiErrorPrompt(input.terminal, budget)) === 'empty'
-      if (status !== 'idle' && status !== 'done' && !forced && !unreported && !errored) return ok('busy')
+      // The lead's hooks say its turn is over, the core's status says otherwise: only a screen at an empty input box (no dialog,
+      // no running turn) is believed over the status, and the text is then typed with the core's own override.
+      const atEmptyPrompt =
+        input.idle === true &&
+        status !== 'idle' &&
+        status !== 'done' &&
+        !forced &&
+        !unreported &&
+        !errored &&
+        (await this.showsPrompt(input.terminal, budget))
+      if (status !== 'idle' && status !== 'done' && !forced && !unreported && !errored && !atEmptyPrompt) {
+        return ok('busy')
+      }
       try {
         const guard = status === 'idle' ? { if: 'idle' } : forced ? { if: 'working' } : {}
         await this.rpc(
           'terminal.send',
-          { terminal: input.terminal, text: input.text, ...guard, ...(errored ? { force: true } : {}) },
+          {
+            terminal: input.terminal,
+            text: input.text,
+            ...guard,
+            ...(errored || atEmptyPrompt ? { force: true } : {}),
+          },
           Empty,
           budget,
         )
