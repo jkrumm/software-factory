@@ -36,11 +36,19 @@ describe('replanNote', () => {
         since: '2026-11-10T00:00:00.000Z',
         until: '2026-11-11T00:00:00.000Z',
         held: 3,
+        heldIssues: [
+          { issue: 'issue_5', after: ['issue_4'] },
+          { issue: 'issue_6', after: ['issue_5', 'issue_9'] },
+          { issue: 'issue_7', after: [] },
+        ],
       },
     })
     expect(note).toContain('trigger: stalled')
     expect(note).toContain('stalled head: issue_4')
     expect(note).toContain('waiting behind it: 3')
+    expect(note).toContain('waiting issue: issue_5, waits directly on issue_4')
+    expect(note).toContain('waiting issue: issue_6, waits directly on issue_5, issue_9')
+    expect(note).toContain('waiting issue: issue_7, waits directly on nothing stored')
   })
 
   test('stays well under 4 KB', () => {

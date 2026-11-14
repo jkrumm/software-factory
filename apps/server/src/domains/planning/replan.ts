@@ -18,8 +18,10 @@ export interface StalledHead {
   title: string
   since: string
   until: string
-  /** the open Issues that wait behind it */
+  /** the open Issues that wait behind it, directly or through other Issues */
   held: number
+  /** each of them with the open Issues it waits on directly: the real blockers, which are not always the head */
+  heldIssues: readonly { issue: string; after: readonly string[] }[]
 }
 
 export interface ReplanInput {
@@ -34,6 +36,8 @@ export interface ReplanInput {
 const ASK_MAX = 2000
 /** A head's title can come from an alert's text: quoted and clipped, it stays one line of data. */
 const TITLE_MAX = 200
+/** The held Issues a brief lists; a long chain is read with `factory issue show`. */
+const HELD_LISTED = 20
 
 export const replanTitle = (project: string): string => `Replan: ${project}`
 
@@ -79,8 +83,11 @@ export function replanNote(input: ReplanInput): string {
       `title: ${JSON.stringify(cleanText(head.title).slice(0, TITLE_MAX))}`,
       `wait since: ${head.since}`,
       `wait until: ${head.until}`,
-      `waiting behind it: ${head.held}`,
+      `waiting behind it: ${head.held} (directly or through other Issues)`,
     )
+    for (const held of head.heldIssues.slice(0, HELD_LISTED))
+      lines.push(`waiting issue: ${held.issue}, waits directly on ${held.after.join(', ') || 'nothing stored'}`)
+    if (head.heldIssues.length > HELD_LISTED) lines.push(`(${head.heldIssues.length - HELD_LISTED} more not listed)`)
   }
   for (const held of input.held ?? [])
     lines.push(
