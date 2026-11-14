@@ -29,6 +29,7 @@ import {
   type SelfwatchRow,
   subjectKeyOf,
 } from '../../domains/loops/selfwatch-model.ts'
+import { type BudgetFact, budgetFindings } from '../../domains/loops/throughput.ts'
 import { leadKey } from '../../domains/leads/names.ts'
 import type { LeadStore } from '../../domains/leads/ports.ts'
 import { isBuiltinInert } from '../../domains/quality/evidence.ts'
@@ -75,6 +76,8 @@ export interface SelfwatchDeps {
   sharedNumbers: ReadonlySet<string>
   /** the host's process count above which a storm is filed (`DEFAULT_PROCESS_CAP` until the capacity layer has its own) */
   processCap: number
+  /** every project's budgets against its last day of runs; unset (a host with no step costs) judges none */
+  budgets?: (now: Date) => Promise<BudgetFact[]>
   /** `GET /health`'s heartbeat, as `healthOf` computes it */
   heartbeat(): Promise<HeartbeatFact>
   /** intake's entry for an agent (`intake.api.file`): its fingerprint rules decide a repeat */
@@ -205,11 +208,19 @@ async function gather(deps: SelfwatchDeps, now: Date): Out<Gathered> {
     gathered.unread.add('process_growth').add('swap_growth').add('process_storm')
     gathered.notes.push('host samples not fresh: process growth, swap and process count not judged')
   }
+  if (deps.budgets) {
+    try {
+      gathered.findings.push(...budgetFindings(await deps.budgets(now)))
+    } catch (error) {
+      gathered.unread.add('budget_breach')
+      gathered.notes.push(`budgets not read: ${error instanceof Error ? error.message : String(error)}`)
+    }
+  }
   return ok(gathered)
 }
 
 /**
- * One tick of the self-watch loop: nine deterministic conditions of the factory itself (CI, migrations, waits, leads, regressions, the heartbeat, and the host's process growth, swap and process count), filed through intake as signals on
+ * One tick of the self-watch loop: ten deterministic conditions (CI, migrations, waits, leads, regressions, the heartbeat, the host's process growth, swap and process count, and a project's `budgets:` breached over the last day), filed through intake as signals on
  * the watched repo. A subject is filed once; while it stays open and its evidence is the same nothing is filed, a changed
  * evidence is filed again under the same title (intake amends the open Issue), and a subject that no longer holds is
  * cleared. At most `MAX_SELFWATCH_FILINGS` a pass, the rest on the next. A row is written only after intake took the signal, so a
@@ -238,11 +249,11 @@ export async function selfwatchPass(deps: SelfwatchDeps): Promise<Result<Selfwat
     const { finding } = action
     const id = key('selfwatch', finding.kind, finding.subject, action.hash)
     const filed = await deps.file({
-      from: `agent:${deps.repo}`,
+      from: `agent:${finding.repo ?? deps.repo}`,
       kind: 'request',
       title: finding.title.slice(0, 512),
-      text: signalText(finding, deps.repo),
-      repo: deps.repo,
+      text: signalText(finding, finding.repo ?? deps.repo),
+      repo: finding.repo ?? deps.repo,
       probe: false,
     })
     if (!filed.ok) {

@@ -14,4 +14,5 @@ signals:
   github: { author: jkrumm, since: 2026-11-07T06:30:00Z, checks: true } # the owner's new issues come in; anyone else's need the label
 leads: 5
 slots: { run: 30m } # `make check-fast` runs in one slot; a rerun of one heavy suite to reproduce a CI failure fits
+budgets: { fast: 5m, peak: 4GiB, fail: 30% } # the throughput loop (docs/architecture.md): a day over one of these is a signal on this repo
 checks: { fast: make check-fast, full: make check, ci: true } # leads run fast locally; CI runs the full gate sharded (.github/workflows/ci.yml)

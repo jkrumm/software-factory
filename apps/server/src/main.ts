@@ -109,6 +109,8 @@ import { postgresOpenIssues } from './read/open-issues.ts'
 import { queueMovedAt } from './read/queue.ts'
 import { queueReasonMap } from './api/read-models.ts'
 import { readFriction } from './read/friction.ts'
+import { readBudgetFacts, readIssueFates, readWindowFacts } from './read/throughput-loop.ts'
+import { projectBudgets as readProjectBudgets, throughputPass, throughputSummary } from './app/loops/throughput.ts'
 import { readFrictionEvidence } from './read/friction-evidence.ts'
 import { loopReads } from './read/loops.ts'
 import { readIssues } from './read/planning.ts'
@@ -343,6 +345,8 @@ async function main(): Promise<void> {
     const result = await run()
     return result.ok ? ok(`${what} ran`) : err(portError('refused', JSON.stringify(result.error)))
   }
+  const projectBudgets = () => readProjectBudgets(uow)
+
   const specs: LoopSpec[] = [
     {
       name: 'leads',
@@ -504,7 +508,7 @@ async function main(): Promise<void> {
       },
     },
     {
-      // Nine deterministic conditions of the factory itself (red CI, a migration number clash, an overdue wait, an idle lead, a
+      // Ten deterministic conditions (a project's `budgets:` breach among them, filed on that project's repo) (red CI, a migration number clash, an overdue wait, an idle lead, a
       // regression of inert paths, a stale heartbeat, a process growing without bound, swap growth, a process storm), filed once per subject as signals on the factory's own repo.
       name: 'selfwatch',
       intervalMs: loopSettings.intervalMs.selfwatch,
@@ -529,6 +533,7 @@ async function main(): Promise<void> {
           migrations: gitMigrationFiles(repos),
           sharedNumbers: SHARED_NUMBERS,
           processCap: DEFAULT_PROCESS_CAP,
+          budgets: async (now) => readBudgetFacts(sql, { now, budgets: await projectBudgets() }),
           heartbeat: () =>
             confirmedHeartbeat(
               async () => (await readHealth()).heartbeat,
@@ -560,6 +565,26 @@ async function main(): Promise<void> {
             .filter(Boolean)
             .join('; '),
         )
+      },
+    },
+    {
+      // Once a day, without a model: the costs of the last 7 days ranked, one improvement signal per project with its measured before, and the ledger reading the after 3 days past a ship (moved, or the finding comes back).
+      name: 'throughput',
+      intervalMs: loopSettings.intervalMs.throughput,
+      onChange: false,
+      run: async () => {
+        const pass = await throughputPass({
+          uow,
+          clock: writes.clock,
+          projects: async () =>
+            (await projectBudgets()).map((b) => ({ project: b.project, repo: b.repo, peakMib: b.peakMib })),
+          facts: (window, options) => readWindowFacts(sql, { ...window, ...options }),
+          fates: (ids) => readIssueFates(sql, ids),
+          file: (body) => intake.api.file(body, 'agent'),
+        })
+        if (!pass.ok) return pass
+        said('throughput', [...pass.value.notes, ...pass.value.failed.map((f) => `${f.key}: ${f.reason}`)])
+        return ok(throughputSummary(pass.value))
       },
     },
     {

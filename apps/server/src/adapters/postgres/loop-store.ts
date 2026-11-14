@@ -6,6 +6,7 @@ import type { HygienePassRecord, LoopStore } from '../../domains/loops/ports.ts'
 import type { DigestAnswer } from '@software-factory/contract'
 import type { QueueAskRow } from '../../domains/loops/queue.ts'
 import { FINDING_KINDS } from '../../domains/loops/selfwatch-model.ts'
+import { THROUGHPUT_KPIS } from '../../domains/loops/throughput.ts'
 import type { IssueId } from '../../kernel/ids.ts'
 
 const Row = z.object({
@@ -82,6 +83,27 @@ const SelfwatchRowSchema = z.object({
   last_filed_at: z.date(),
   signal_id: z.string().nullable(),
   cleared_at: z.date().nullable(),
+})
+
+const ThroughputRowSchema = z.object({
+  id: z.string(),
+  project: z.string(),
+  kpi: z.enum(THROUGHPUT_KPIS),
+  subject: z.string(),
+  before: z.coerce.number(),
+  target: z.coerce.number(),
+  direction: z.enum(['up', 'down']),
+  unit: z.string(),
+  cost_minutes: z.coerce.number(),
+  query: z.string(),
+  signal_id: z.string().nullable(),
+  issue_id: z.string().nullable(),
+  filed_at: z.date(),
+  shipped_at: z.date().nullable(),
+  after: z.coerce.number().nullable(),
+  after_at: z.date().nullable(),
+  status: z.enum(['open', 'shipped', 'moved', 'flat', 'worse', 'dropped', 'unmeasured']),
+  reopens: z.string().nullable(),
 })
 
 const LatestDigestRow = z.object({ project: z.string(), at: z.date(), input_hash: z.string(), headline: z.string() })
@@ -488,6 +510,51 @@ export function postgresLoopStore(tx: SQL): LoopStore {
           INSERT INTO factory.fix_commits (repo, sha, committed_at, subject, scope, class, by, reason)
           VALUES (${row.repo}, ${row.sha}, ${row.committedAt}, ${row.subject}, ${row.scope}, ${row.class}, ${row.by}, ${row.reason})
           ON CONFLICT (repo, sha) DO NOTHING`
+      }
+    },
+
+    async throughputFindings() {
+      const rows: unknown[] = await tx`SELECT * FROM factory.throughput_findings ORDER BY filed_at, id`
+      return rows.map((raw) => {
+        const row = ThroughputRowSchema.parse(raw)
+        return {
+          id: row.id,
+          project: row.project,
+          kpi: row.kpi,
+          subject: row.subject,
+          before: row.before,
+          target: row.target,
+          direction: row.direction,
+          unit: row.unit,
+          costMinutes: row.cost_minutes,
+          query: row.query,
+          signalId: row.signal_id,
+          issueId: row.issue_id,
+          filedAt: row.filed_at,
+          shippedAt: row.shipped_at,
+          after: row.after,
+          afterAt: row.after_at,
+          status: row.status,
+          reopens: row.reopens,
+        }
+      })
+    },
+
+    async recordThroughputFinding(row) {
+      await tx`
+        INSERT INTO factory.throughput_findings
+          (id, project, kpi, subject, before, target, direction, unit, cost_minutes, query, signal_id, issue_id, filed_at, status, reopens)
+          VALUES (${row.id}, ${row.project}, ${row.kpi}, ${row.subject}, ${row.before}, ${row.target}, ${row.direction}, ${row.unit}, ${row.costMinutes}, ${row.query}, ${row.signalId}, ${row.issueId}, ${row.filedAt}, ${row.status}, ${row.reopens})
+        ON CONFLICT (id) DO NOTHING`
+    },
+
+    async applyThroughputLedger(changes) {
+      for (const { id, patch } of changes) {
+        await tx`
+          UPDATE factory.throughput_findings SET
+            status = coalesce(${patch.status ?? null}, status), shipped_at = coalesce(${patch.shippedAt ?? null}, shipped_at),
+            after = coalesce(${patch.after ?? null}, after), after_at = coalesce(${patch.afterAt ?? null}, after_at)
+          WHERE id = ${id}`
       }
     },
 

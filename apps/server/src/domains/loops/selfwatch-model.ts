@@ -1,4 +1,4 @@
-/** The nine conditions the self-watch loop looks for; the kind is the first half of a finding's stable key. */
+/** The ten conditions the self-watch loop looks for; the kind is the first half of a finding's stable key. */
 export const FINDING_KINDS = [
   'ci_red',
   'migration_clash',
@@ -9,6 +9,7 @@ export const FINDING_KINDS = [
   'process_growth',
   'swap_growth',
   'process_storm',
+  'budget_breach',
 ] as const
 export type FindingKind = (typeof FINDING_KINDS)[number]
 
@@ -17,6 +18,8 @@ export interface Finding {
   kind: FindingKind
   /** what the condition is about (a workflow, a migration number, an Issue and its wait): with the kind, the key */
   subject: string
+  /** the repo the signal is filed on when it is not the watched one (a project's budget breach) */
+  repo?: string
   /** carries the subject in words: intake fingerprints the title without digits and punctuation */
   title: string
   /** the evidence that identifies the condition: hashed, so it must not hold a clock */

@@ -317,6 +317,7 @@ export const LOOP_NAMES = [
   'errands',
   'reviews',
   'desk',
+  'throughput',
 ] as const
 export type LoopName = (typeof LOOP_NAMES)[number]
 

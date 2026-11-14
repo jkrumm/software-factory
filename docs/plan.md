@@ -178,6 +178,7 @@ checks: { fast: make check-fast, full: make check, ci: true }
   the `junit` reporter with `outputFile` built from `process.env.FACTORY_JUNIT_DIR`, pytest `--junitxml=$FACTORY_JUNIT_DIR/<name>.xml`.
   Make expands the variable before the slot starts, so put the flags on a target that runs inside the `check` slot, or run it as
   `factory slot run -- make <target>`. Another project's Makefile is its own repo's to adopt.
+- **Budgets.** `budgets: { fast: 90s, peak: 2GiB, fail: 10% }` (each key optional) bounds what a project's checks may cost: `fast` the median of a day's fast-tier runs, `peak` the largest peak memory of one step, `fail` the share of a day's steps that exited non-zero. A breach is a signal on the project's repo the day it happens and again only after the figure was back inside (`docs/architecture.md`, `selfwatch`); `peak` is also the target of the throughput loop's memory finding.
 - `factory project show` prints `checks` (`null` for none). Another project's `checks:` is its own repo's to adopt: the
   Makefile target and the CI workflow it names are that repo's.
 
