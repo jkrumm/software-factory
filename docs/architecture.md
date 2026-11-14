@@ -365,6 +365,22 @@ the raise, but the owner is not paged and the Errand is not in Needs or the huma
 is set. A turn-away ends the Issue's errand wait with `errand_done` (actor `factory` for a rule, `judge` for the workflow,
 payload `turnedAway`: the reason), sets the Errand done with the reason as its note, and the lead hears it as its next turn.
 
+**A Spec passes a screen before it reaches the owner** (issue 1096; `domains/checkpoints/spec-screen.ts`, `app/checkpoints-specs.ts`,
+in the `settle` pass after the Errands). Each Spec revision with no verdict is looked at once (`factory.spec_screens`, one row per
+revision; a Concept is not screened): first the rules (`screenSpecByRule`: a revision after the owner's `changes` passes, a filed
+Spec passes, a Replan whose fenced `replan` block changes no plan row and cancels nothing is settled), then `factory-spec-screen`
+with the Spec (scrubbed, cut at 20,000 characters), its Issue and the owner's 12 newest needed-me marks on Specs as precedents. A
+pass sets `outcome = passed` and plans the review page: only then is the Spec in Needs you and the asks. A settle is the
+factory's `looks_good` (actor `factory`, so the owner-verdict figures leave it out) with the reason as its note, in the same
+transaction: the lead builds on its defaults at once and the artifact stays readable. A failed call is retried after 5 minutes,
+and after the third the Spec passes unscreened (`by = failed`). `source` records who made the Spec owed (`triage`, `filer`,
+`replan`, `lead`). The owner marks a verdict `needed me: yes|no` (`POST /v1/artifacts/:id/needed`, `factory artifact needed`,
+the Console's verdict bar; `verdicts.needed_me`); the newest marks are in the next screen's request and in triage's settle
+request (`precedents`), the KPI `specs_not_needed` counts the no's against his own Spec verdicts, and the friction group
+`spec_unneeded` names each one's source. `factory artifact screen <id>` (owner and orchestrator) shows the screen's look and the
+rule or the request the next look would use, writing nothing: the request is the replay input for `agw factory-spec-screen`.
+Triage's `checkpoint: spec` stands only with a size of `medium` or `large` (`checkSettle`).
+
 **A pull request's review is not the owner's hands** (issue 1020). A pull request that waits on a required review by someone else
 (the owner cannot approve one his own work account opened, and a review rule is never bypassed) puts the Issue in the `external`
 wait, which a machine ends: the `reviews` loop reads each such pull request every 15 minutes through `gh` (pull requests) or `glab` (merge requests)
@@ -522,7 +538,7 @@ last one is up, at once if it never ran, so a 6-hour loop still passes on a serv
 | `leads` | spool replay, start, notes, finalize, the outbox | none |
 | `planning` | read projects, file plan rows (`docs/plan.md`) whose `after` rows closed, mark the chain, wake dependency waits and timer waits whose time has come, file a Replan for a project whose chain head is in a long wait (one open per project) | none |
 | `watch` | verify and probes | none |
-| `settle`, `send` | rechecks of checkpoints at the owner past `FACTORY_CHECKPOINT_RECHECK_MS`, Decision steps, unscreened Errands, pages | `factory-ask` (the Judge); `factory-errand` (the Errand screen): stdin `ErrandScreenRequest` `{ errand: { id, summary, detail\|null }, issue: { id, repo, title, kind } }` labelled untrusted data; stdout `ErrandScreenAnswer` `{ verdict: pass\|turn_away, reason (1..300) }`; call key `factory-errand:<errand>:<try>` |
+| `settle`, `send` | rechecks of checkpoints at the owner past `FACTORY_CHECKPOINT_RECHECK_MS`, Decision steps, unscreened Errands and Spec revisions, pages | `factory-ask` (the Judge); `factory-spec-screen` (the Spec screen): stdin `SpecScreenRequest` `{ spec: { id, revision, title, source, content, format }, issue: { id, repo, title, kind }, precedents[] }` labelled untrusted data, stdout `SpecScreenAnswer` `{ verdict: pass\|settle, reason (1..300) }`, call key `factory-spec-screen:<artifact>:<revision>:<try>`; `factory-errand` (the Errand screen): stdin `ErrandScreenRequest` `{ errand: { id, summary, detail\|null }, issue: { id, repo, title, kind } }` labelled untrusted data; stdout `ErrandScreenAnswer` `{ verdict: pass\|turn_away, reason (1..300) }`; call key `factory-errand:<errand>:<try>` |
 | `steward` | wake, re-check, requeue, deliver (`domains/loops/stall.ts`), nudge a quiet lead, note a watch whose checkout stays blocked, break a claim deadlock; while a project has a live lead, read its main checkout once a pass from local refs (`domains/loops/checkout.ts`): off the default branch or with tracked uncommitted changes, it is a `main-checkout` health line and, when its branch is a live lead's (`factory/<n>-<attempt>`), one note to that lead (once per branch state and clean/dirty); a branch no lead owns names no session and reaches no lead, no model | `factory-steward`: what a stalled Issue needs when the rules do not say |
 | `triage` | fingerprint, routes, correlation window | `factory-triage`: kind, amend-or-new-or-already-settled (open and last-day closed Issues), likely `after` edges, `checkpoint: spec` for a change that needs a Spec first |
 | `queue` | per repo: cycles in the chain, the queued Issues that wait for nothing (an ask needs two), the queue's shape (asked once per shape; an edge the loop added is part of it), a budget (one ask per repo per `FACTORY_QUEUE_GAP_MS`, three repos a pass), the edges checked and added through planning (never against the owner's `prio`) | `factory-queue`: `after` edges and a tie-break order; the order is recorded in `queue_asks`, never applied |
@@ -588,9 +604,9 @@ model, not a signal: an agent-trust signal files an Issue, and no loops page exi
 The API stays loopback. The door and the Console are published on the tailnet by dotfiles-private's `tailscale serve`
 rows (the Console on :8797, to its loopback listener), and the perimeter is the tailnet ACL by device tag (a grant of
 `tag:mac` and `tag:phone` to `tag:devhost` on tcp:8797), as Collie's (NL25); the deploy publishes nothing. There is no
-per-request identity: anything that reaches :8797 reads what the owner reads, and no more than reads and the nine answer
-verbs below, never a session start. The door holds only its own token; the orchestrator's is the owner's rights minus eight owner-only routes, and the Console proxy never uses it. Nothing that can start Claude Code is reachable from
-another node. The Console listener reads, and forwards exactly the owner's nine answer verbs (a Decision's answer, an artifact's verdict,
+per-request identity: anything that reaches :8797 reads what the owner reads, and no more than reads and the ten answer
+verbs below, never a session start. The door holds only its own token; the orchestrator's is the owner's rights minus nine owner-only routes, and the Console proxy never uses it. Nothing that can start Claude Code is reachable from
+another node. The Console listener reads, and forwards exactly the owner's ten answer verbs (a Decision's answer, an artifact's verdict and its needed-me mark,
 annotation and its edit and delete, an Errand done, a held signal promoted or dismissed), guarded against a cross-site page (JSON only bar a delete, no cross-site fetch
 metadata, no foreign `origin`, 64 KiB); it starts no session and cancels or reopens no Issue, and promote files one only
 from a signal already held and dismiss files nothing. The artifact frame (`/frame.html`, `/frame/*`) is the one document the page frames and is
@@ -624,7 +640,7 @@ Rows in `docs/plan.yaml` carry each of these.
 
 - **The Console** (NL1): `apps/console` (Vite, React, shadcn on Base UI, Tailwind 4 with Basalt's tokens, TanStack
   Router, Query and Table, a PWA), `tests/e2e` (Playwright), and the second loopback listener, published by dotfiles-private's serve row;
-  it is read-only apart from the nine answer verbs, its perimeter is the tailnet ACL (NL25), and it can never spawn a session. The shell and Needs you (the answers
+  it is read-only apart from the ten answer verbs, its perimeter is the tailnet ACL (NL25), and it can never spawn a session. The shell and Needs you (the answers
   in place; `/checkpoints/<id>`, the link of the owner's pages, lands on its item) the Flow board, the read-only Issue page (`/issues/<n>`, linked from a Needs you card) and the Chain are built; the other screens are not.
 - **The 30-minute forward** (NL5): an unsolved alert reaching the owner. The old core's `FACTORY_ALERT_*` settings stay in
   the env allow-list for a rollback and the new core reads none of them.

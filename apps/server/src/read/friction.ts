@@ -1,8 +1,9 @@
 import type { SQL } from 'bun'
 import * as z from 'zod'
-import type { FrictionCount, FrictionModel } from '@software-factory/contract'
+import type { FrictionCount, FrictionModel, SpecSource } from '@software-factory/contract'
 import { readEdgeIncidents } from './api-errors.ts'
 import { avoidableTouches, issuesFiled, orchestratorSteering, type Window } from './kpis.ts'
+import { specSourceSql } from './spec-screen.ts'
 import { per, windowOf } from './stats.ts'
 import { plain } from './words.ts'
 
@@ -32,6 +33,14 @@ const STEERS: Record<string, string> = {
   woken: 'Waits the orchestrator woke by hand',
   cancelled: 'Issues the orchestrator cancelled',
   reopened: 'Issues the orchestrator reopened',
+}
+
+/** Who made a Spec owed that the owner marked not needed: the friction line names its source, so the rule behind it is found. */
+const SPEC_SOURCES_SAID: Record<SpecSource, string> = {
+  triage: 'Specs triage made owed that did not need the owner',
+  filer: 'Specs the filer made owed that did not need the owner',
+  replan: 'Replan Specs that did not need the owner',
+  lead: 'Specs a lead judged due that did not need the owner',
 }
 
 const SETTLERS: Record<string, string> = {
@@ -196,6 +205,17 @@ export async function readFriction(sql: SQL, options: { now: Date; days: number 
       SELECT count(*) AS n FROM factory.quality_watches
       WHERE answer = 'regressed' AND answered_at >= ${w.from} AND answered_at < ${w.to}`),
   )
+
+  const unneeded = await grouped(sql`
+    SELECT ${specSourceSql(sql)} AS key, NULL::text AS detail, count(*) AS n
+    FROM factory.verdicts v
+    JOIN factory.artifacts a ON a.id = v.artifact_id AND a.kind = 'spec'
+    LEFT JOIN factory.spec_screens s ON s.artifact_id = v.artifact_id AND s.revision = v.revision
+    WHERE v.needed_me IS FALSE AND v.at >= ${w.from} AND v.at < ${w.to}
+    GROUP BY 1`)
+  for (const [source, label] of Object.entries(SPEC_SOURCES_SAID)) {
+    add('spec_unneeded', `spec_unneeded:${source}`, label, unneeded.find((row) => row.key === source)?.n ?? 0)
+  }
 
   const settled = await grouped(sql`
     SELECT settled_by AS key, NULL::text AS detail, count(*) AS n FROM factory.decisions

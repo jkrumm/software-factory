@@ -8,7 +8,7 @@ import { Button } from '@/components/ui/button'
 import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover'
 import { Textarea } from '@/components/ui/textarea'
 import { InfoHint } from '@/components/kit/info-hint'
-import { postVerdict } from '@/lib/api'
+import { postNeeded, postVerdict } from '@/lib/api'
 import { POPOVER_WIDTH, popoverPosition, VERDICT_CONSEQUENCES, VERDICT_WORDS } from '@/lib/artifact'
 import type { Review } from '@/lib/review'
 import { cn } from '@/lib/utils'
@@ -116,6 +116,19 @@ export function Composer({
   )
 }
 
+/** What the Spec screen did with the revision shown, one quiet line; a pass says nothing. */
+export function ScreenLine({ detail }: { detail: ArtifactDetail }) {
+  const { screen } = detail
+  if (!screen || screen.outcome === 'passed') return null
+  const lead = screen.outcome === 'settled' ? 'Settled by the Spec screen' : 'The Spec screen holds it'
+  return (
+    <p className="basis-full text-xs text-muted-foreground">
+      {lead}
+      {screen.note ? `: ${screen.note}` : '.'}
+    </p>
+  )
+}
+
 const VERDICT_TONE: Record<keyof typeof VERDICT_WORDS, Tone> = {
   looks_good: 'good',
   with_notes: 'accent',
@@ -139,23 +152,50 @@ export function VerdictControl({ detail, now }: { detail: ArtifactDetail; now: n
     }),
   )
 
+  const marking = useWrite(detail.artifact.id, (needed: boolean) =>
+    postNeeded(detail.artifact.id, { needed, revision: detail.revision }),
+  )
+
   if (given) {
     return (
-      <Popover>
-        <PopoverTrigger
-          aria-label="Your verdict"
-          className="inline-flex cursor-pointer items-center gap-2 rounded-md text-xs text-muted-foreground outline-none focus-visible:ring-3 focus-visible:ring-ring/50"
+      <div className="inline-flex flex-wrap items-center gap-3">
+        <Popover>
+          <PopoverTrigger
+            aria-label="Your verdict"
+            className="inline-flex cursor-pointer items-center gap-2 rounded-md text-xs text-muted-foreground outline-none focus-visible:ring-3 focus-visible:ring-ring/50"
+          >
+            <Lozenge tone={VERDICT_TONE[given.verdict]}>{VERDICT_WORDS[given.verdict]}</Lozenge>
+            <Ago iso={given.at} now={now} className="font-mono" />
+          </PopoverTrigger>
+          <PopoverContent align="end" className="flex flex-col gap-1">
+            <p className="font-heading font-semibold">Your verdict</p>
+            <p>{VERDICT_WORDS[given.verdict]}</p>
+            <p className="text-xs text-muted-foreground">{VERDICT_CONSEQUENCES[given.verdict]}</p>
+            <p className="text-muted-foreground">{given.note ?? 'No note.'}</p>
+          </PopoverContent>
+        </Popover>
+        <div
+          role="group"
+          aria-label="Needed me"
+          className="inline-flex items-center gap-1 text-xs text-muted-foreground"
         >
-          <Lozenge tone={VERDICT_TONE[given.verdict]}>{VERDICT_WORDS[given.verdict]}</Lozenge>
-          <Ago iso={given.at} now={now} className="font-mono" />
-        </PopoverTrigger>
-        <PopoverContent align="end" className="flex flex-col gap-1">
-          <p className="font-heading font-semibold">Your verdict</p>
-          <p>{VERDICT_WORDS[given.verdict]}</p>
-          <p className="text-xs text-muted-foreground">{VERDICT_CONSEQUENCES[given.verdict]}</p>
-          <p className="text-muted-foreground">{given.note ?? 'No note.'}</p>
-        </PopoverContent>
-      </Popover>
+          <span>Needed me</span>
+          {([true, false] as const).map((needed) => (
+            <Button
+              key={String(needed)}
+              type="button"
+              size="xs"
+              variant={given.neededMe === needed ? 'default' : 'outline'}
+              aria-pressed={given.neededMe === needed}
+              disabled={marking.isPending}
+              onClick={() => given.neededMe !== needed && marking.mutate(needed)}
+            >
+              {needed ? 'Yes' : 'No'}
+            </Button>
+          ))}
+        </div>
+        <Failure error={marking.error} what="mark" />
+      </div>
     )
   }
   const latest = detail.artifact.revisions.at(-1)?.n

@@ -2,7 +2,7 @@ import { ArrowLeftIcon } from '@phosphor-icons/react'
 import { Link } from '@tanstack/react-router'
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { Annotations, type Focus } from '@/components/artifact-comments'
-import { Composer, VerdictControl } from '@/components/artifact-panel'
+import { Composer, ScreenLine, VerdictControl } from '@/components/artifact-panel'
 import { TocBar, TocColumn } from '@/components/artifact-toc'
 import { ArtifactContent, type Selected } from '@/components/artifact-content'
 import { Ago } from '@/components/issue/ago'
@@ -220,6 +220,7 @@ function ArtifactViewOf({ id, revision, compare, onPick, peek }: ArtifactViewPro
                 ) : null}
               </nav>
               {reviewable ? <VerdictControl key={detail.revision} detail={detail} now={now} /> : null}
+              <ScreenLine detail={detail} />
             </div>
           </div>
         </header>

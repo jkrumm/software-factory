@@ -184,12 +184,41 @@ export const VerdictBody = z
   })
   .meta({ id: 'VerdictBody' })
 
-export const VerdictView = z.object({
+export const VerdictView = z
+  .object({
+    revision: z.number().int(),
+    verdict: z.enum(VERDICTS),
+    note: z.string().nullable(),
+    at: iso,
+    /** the owner's mark: did this Spec or Report need him; null while unmarked */
+    neededMe: z.boolean().nullable().default(null),
+  })
+  .meta({ id: 'VerdictView' })
+
+/** The owner's one-click mark on a verdict: did it need him (`factory artifact needed <id> --needed yes|no`). */
+export const NeededBody = z
+  .object({
+    needed: z.boolean(),
+    /** the revision whose verdict is marked; default the latest with a verdict */
+    revision: z.number().int().min(1).optional(),
+  })
+  .meta({ id: 'NeededBody' })
+
+/** Who made a Spec owed, as the screen saw it: factory-triage's flag, the filer's, the Replan's own proposal, the lead's judgment. */
+export const SPEC_SOURCES = ['triage', 'filer', 'replan', 'lead'] as const
+export type SpecSource = (typeof SPEC_SOURCES)[number]
+
+/** What the Spec screen came to on one revision: `held` while a failed call waits for its retry. */
+export const SpecScreenView = z.object({
   revision: z.number().int(),
-  verdict: z.enum(VERDICTS),
+  outcome: z.enum(['held', 'passed', 'settled']),
+  by: z.enum(['rule', 'judge', 'failed']).nullable(),
+  source: z.enum(SPEC_SOURCES),
   note: z.string().nullable(),
+  tries: z.number().int(),
   at: iso,
 })
+export type SpecScreenView = z.infer<typeof SpecScreenView>
 
 /** A write on an artifact; `issue` is null when no event touched the Issue (a Report, an annotation). */
 export const ArtifactReply = z
@@ -232,6 +261,8 @@ export const ArtifactDetail = z
     /** annotations whose quote is gone from it: the "Unanchored" group */
     unanchored: z.array(AnnotationView),
     verdicts: z.array(VerdictView),
+    /** the Spec screen's look at the revision shown; null for a Concept, a Report, and a Spec not looked at yet */
+    screen: SpecScreenView.nullable().default(null),
   })
   .meta({ id: 'ArtifactDetail' })
 export type ArtifactDetail = z.infer<typeof ArtifactDetail>
@@ -409,6 +440,69 @@ export const ErrandScreenAnswer = z
   .meta({ id: 'ErrandScreenAnswer' })
 export type ErrandScreenAnswer = z.infer<typeof ErrandScreenAnswer>
 
+/** How much of a Spec the screen reads; a longer one is cut, and the cut is said. */
+export const SPEC_SCREEN_CONTENT_MAX = 20_000
+export const SPEC_SCREEN_PRECEDENTS = 12
+
+/**
+ * One of the owner's marks on a Spec: what it was, who made it owed, what the screen did with it, and whether it needed him,
+ * with his verdict note. The newest marks are the screen's and triage's precedents; the owner's words are data.
+ */
+export const SpecPrecedent = z.object({
+  title: z.string().max(200),
+  repo: z.string(),
+  source: z.enum(SPEC_SOURCES),
+  /** what the screen did with it; null for a Spec handed over before the screen */
+  screened: z.enum(['passed', 'settled']).nullable(),
+  needed: z.boolean(),
+  verdict: z.enum(VERDICTS),
+  note: z.string().max(2000).nullable(),
+})
+export type SpecPrecedent = z.infer<typeof SpecPrecedent>
+
+/** The Spec a `factory-spec-screen` call is shown: the lead's words and the owner's are data, never instructions. */
+export const SpecScreenRequest = z
+  .object({
+    spec: z.object({
+      id: z.string(),
+      revision: z.number().int().min(1),
+      title: z.string().max(200),
+      source: z.enum(SPEC_SOURCES),
+      /** the Spec as written, cut to `SPEC_SCREEN_CONTENT_MAX` */
+      content: z.string().max(SPEC_SCREEN_CONTENT_MAX + 100),
+      format: z.enum(['markdown', 'html']),
+    }),
+    issue: z.object({ id: z.string(), repo: z.string(), title: z.string(), kind: z.string() }),
+    precedents: z.array(SpecPrecedent).max(SPEC_SCREEN_PRECEDENTS),
+  })
+  .meta({ id: 'SpecScreenRequest' })
+export type SpecScreenRequest = z.infer<typeof SpecScreenRequest>
+
+/**
+ * What `factory-spec-screen` says: the Spec is the owner's to read (`pass`: a screen or look he has not seen, product
+ * direction, spend, security policy, other people or company data, a change that cannot be undone, or open choices whose
+ * defaults lead to materially different work), or the lead may build on its defaults (`settle`), with the reason it hears.
+ */
+export const SpecScreenAnswer = z
+  .object({ verdict: z.enum(['pass', 'settle']), reason: z.string().trim().min(1).max(300) })
+  .meta({ id: 'SpecScreenAnswer' })
+export type SpecScreenAnswer = z.infer<typeof SpecScreenAnswer>
+
+/**
+ * `factory artifact screen <id>`: the screen's look at the latest revision, and what the next look would decide by rule or
+ * send to the workflow (the precedents as they stand now). `request` is null when a rule decides or nothing is left to screen.
+ */
+export const SpecScreenPreview = z
+  .object({
+    artifact: z.string(),
+    revision: z.number().int(),
+    screen: SpecScreenView.nullable(),
+    rule: z.object({ outcome: z.enum(['passed', 'settled']), reason: z.string() }).nullable(),
+    request: SpecScreenRequest.nullable(),
+  })
+  .meta({ id: 'SpecScreenPreview' })
+export type SpecScreenPreview = z.infer<typeof SpecScreenPreview>
+
 export const ErrandReply = z
   .object({ result: z.enum(['applied', 'replayed']), errand: ErrandView, issue: IssueMove.nullable() })
   .meta({ id: 'ErrandReply' })
@@ -450,6 +544,16 @@ export const PassReply = z
     errands: z.array(
       z.object({ errand: z.string(), outcome: z.enum(['held', 'reached_owner', 'turned_away', 'dropped']) }),
     ),
+    /** the Spec revisions the screen looked at: passed to the owner, settled by the factory, held for a retry, or dropped */
+    specs: z
+      .array(
+        z.object({
+          artifact: z.string(),
+          revision: z.number().int(),
+          outcome: z.enum(['held', 'passed', 'settled', 'dropped']),
+        }),
+      )
+      .default([]),
     rechecks: z.array(
       z.object({
         checkpoint: z.string(),

@@ -1,4 +1,5 @@
 import * as z from 'zod'
+import { SPEC_SCREEN_PRECEDENTS, SpecPrecedent } from './checkpoints.ts'
 
 /**
  * The shapes the factory sends the agw workflows and parses back, and the routes that show the loops. The workflow
@@ -137,6 +138,8 @@ export const TriageRequest = z.discriminatedUnion('mode', [
       kind: z.enum(['feature', 'bug', 'chore', 'docs', 'incident']),
       origin: z.string().min(1).max(40),
     }),
+    /** the owner's newest needed-me marks on Specs (data): what made a Spec owed that did not need him, and what did */
+    precedents: z.array(SpecPrecedent).max(SPEC_SCREEN_PRECEDENTS).default([]),
   }),
 ])
 export type TriageRequest = z.infer<typeof TriageRequest>

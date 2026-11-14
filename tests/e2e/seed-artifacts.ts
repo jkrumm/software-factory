@@ -256,5 +256,7 @@ export async function seedArtifacts(lab: Lab): Promise<SeededArtifacts> {
     contentFormat: 'html',
     content: LINKS_HTML,
   })
+  // a Spec reaches the owner once the Spec screen passes it (the fake agw passes it)
+  await api(url, '/v1/checkpoints/pass', {})
   return { spec, report, revised, shotSpec, shotReport, review, links }
 }

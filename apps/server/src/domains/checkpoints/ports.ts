@@ -3,7 +3,12 @@ import type {
   ErrandNeededRequest,
   ErrandScreenAnswer,
   ErrandScreenRequest,
+  SpecPrecedent,
+  SpecScreenAnswer,
+  SpecScreenRequest,
+  SpecSource,
 } from '@software-factory/contract'
+import type { SpecOrigin } from './spec-screen.ts'
 import type { IssueId } from '../../kernel/ids.ts'
 import type { Key } from '../../kernel/keys.ts'
 import type { PortError, Result } from '../../kernel/result.ts'
@@ -128,6 +133,33 @@ export interface VerdictRecord {
   verdict: Verdict
   note: string | null
   at: Date
+  /** the owner's mark: did it need him; null while unmarked */
+  neededMe: boolean | null
+}
+
+/** The Spec screen's look at one revision (`spec-screen.ts`); `outcome` null while a failed call waits for its retry. */
+export interface SpecScreenRecord {
+  artifactId: ArtifactId
+  revision: number
+  outcome: 'passed' | 'settled' | null
+  by: 'rule' | 'judge' | 'failed' | null
+  source: SpecSource
+  note: string | null
+  tries: number
+  retryAt: Date | null
+  at: Date
+}
+
+/** A Spec revision as the screen reads it: the artifact, the revision, where it came from, and what came before. */
+export interface UnscreenedSpec {
+  artifact: ArtifactRecord
+  revision: RevisionRecord
+  origin: SpecOrigin
+  /** a verdict on this revision already: the screen has nothing left to decide */
+  answered: boolean
+  /** the verdicts on its earlier revisions, oldest first */
+  earlier: Verdict[]
+  screen: SpecScreenRecord | null
 }
 
 export interface ErrandRecord {
@@ -252,6 +284,23 @@ export interface CheckpointStore {
   insertVerdict(verdict: VerdictRecord & { key: Key }): Promise<boolean>
   verdictByKey(key: Key): Promise<VerdictRecord | null>
   verdicts(id: ArtifactId): Promise<VerdictRecord[]>
+  /** the owner's mark on the verdict of a revision: `unchanged` when it had that value, `no_verdict` when the revision has none */
+  setNeededMe(
+    id: ArtifactId,
+    revision: number,
+    needed: boolean,
+    at: Date,
+  ): Promise<'set' | 'unchanged' | 'no_verdict' | 'unknown'>
+
+  /** the Spec revisions the screen has not decided, oldest first: the latest revision, no verdict, a retry that is due */
+  unscreenedSpecs(now: Date, limit: number): Promise<{ artifact: ArtifactId; revision: number }[]>
+  /** one Spec revision with what the screen reads, its row locked; null when it is not the latest Spec revision */
+  lockSpecRevision(id: ArtifactId, revision: number): Promise<UnscreenedSpec | null>
+  specScreen(id: ArtifactId, revision: number): Promise<SpecScreenRecord | null>
+  /** writes the screen's look; false when the revision was decided already */
+  recordSpecScreen(screen: SpecScreenRecord): Promise<boolean>
+  /** the owner's newest marks on Specs, newest first: the screen's and triage's precedents */
+  specPrecedents(limit: number): Promise<SpecPrecedent[]>
 
   insertErrand(errand: ErrandRecord): Promise<boolean>
   errand(id: ErrandId): Promise<ErrandRecord | null>
@@ -328,6 +377,11 @@ export interface JudgePort {
 /** The Errand screen: the `factory-errand` agw workflow. The key names the Errand and the try. */
 export interface ErrandScreenPort {
   screen(request: ErrandScreenRequest, key: Key): Promise<Result<ErrandScreenAnswer>>
+}
+
+/** The Spec screen: the `factory-spec-screen` agw workflow. The key names the artifact, the revision and the try. */
+export interface SpecScreenPort {
+  screen(request: SpecScreenRequest, key: Key): Promise<Result<SpecScreenAnswer>>
 }
 
 /** The still-needed look: the `factory-errand-needed` agw workflow. The key names the Errand and the day. */

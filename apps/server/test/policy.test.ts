@@ -43,6 +43,7 @@ async function routes(): Promise<{ method: string; route: string }[]> {
 const PERSON_ROUTES = [
   ['POST', '/v1/decisions/:id/worth-asking'],
   ['POST', '/v1/artifacts/:id/verdict'],
+  ['POST', '/v1/artifacts/:id/needed'],
   ['POST', '/v1/artifacts/:id/annotations'],
   ['PATCH', '/v1/artifacts/:id/annotations/:annotationId'],
   ['DELETE', '/v1/artifacts/:id/annotations/:annotationId'],

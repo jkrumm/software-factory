@@ -1,4 +1,4 @@
-import type { TriageAnswer } from '@software-factory/contract'
+import { SPEC_SCREEN_PRECEDENTS, type TriageAnswer } from '@software-factory/contract'
 import type { CallPolicy } from '../../domains/loops/calls.ts'
 import { cycleThrough } from '../../domains/planning/chain.ts'
 import type { LoopReads, LoopStore, SettleWorkflow, SettlingRow } from '../../domains/loops/ports.ts'
@@ -157,7 +157,14 @@ async function askTriage(deps: TriageDeps, row: SettlingRow, pass: TriagePass): 
   if (plan.kind !== 'claimed') return
 
   pass.asked++
-  const answered = await deps.workflow.settle(settleRequest(row, shown, scrub), plan.key)
+  // The owner's newest needed-me marks go with the request: a mark changes the next settle, not next week's retro.
+  const precedents = await deps.uow.run(async ({ loopReads }) =>
+    ok(await loopReads.specPrecedents(SPEC_SCREEN_PRECEDENTS)),
+  )
+  const answered = await deps.workflow.settle(
+    settleRequest(row, shown, scrub, precedents.ok ? precedents.value : []),
+    plan.key,
+  )
   const checked = answered.ok ? checkSettle(shown, row, answered.value, waitsForIssue) : null
   if (checked?.ok) pass.dropped += checked.dropped.length
   const recorded = await deps.uow.run(async ({ loops }) => {

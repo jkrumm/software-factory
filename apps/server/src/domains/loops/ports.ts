@@ -9,6 +9,7 @@ import type {
   LoopName,
   QueueAnswer,
   QueueRequest,
+  SpecPrecedent,
   StewardAnswer,
   StewardStall,
   TriageAnswer,
@@ -370,6 +371,8 @@ export interface LoopReads {
   processMinutes(since: Date): Promise<ProcessMinute[]>
   /** the host's minute samples since `since`, oldest first (self-watch: swap growth, the process count) */
   hostMinutes(since: Date): Promise<HostMinute[]>
+  /** the owner's newest needed-me marks on Specs, newest first: triage's precedents for the `spec` flag */
+  specPrecedents(limit: number): Promise<SpecPrecedent[]>
 }
 
 /** The main checkout of a repo, read now (called outside any transaction). `null`: not locatable, not ours to look at. */

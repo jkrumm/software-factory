@@ -120,6 +120,7 @@ beforeEach(async () => {
         return Promise.resolve(screenAnswer())
       },
     },
+    specScreen: { screen: () => Promise.resolve(err(portError('gone', 'no screen'))) },
     recheckAfterMs: 0,
   }
 })

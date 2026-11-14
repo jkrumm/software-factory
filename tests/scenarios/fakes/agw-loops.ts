@@ -15,7 +15,7 @@ const scriptOf = (env: string): Scripted[] => {
 }
 
 /**
- * `agw factory-steward`, `agw factory-triage`, `agw factory-queue`, `agw factory-hygiene`, `agw factory-fix-classes` (nothing scripted: every commit is `other`), `agw factory-screen` and `agw factory-errand` (passes unless `FACTORY_FAKE_ERRAND_SCRIPT` says otherwise), input on stdin. A scenario scripts them with JSON files
+ * `agw factory-steward`, `agw factory-triage`, `agw factory-queue`, `agw factory-hygiene`, `agw factory-fix-classes` (nothing scripted: every commit is `other`), `agw factory-screen`, `agw factory-errand` (passes unless `FACTORY_FAKE_ERRAND_SCRIPT` says otherwise) and `agw factory-spec-screen` (passes unless `FACTORY_FAKE_SPEC_SCREEN_SCRIPT` says otherwise), input on stdin. A scenario scripts them with JSON files
  * (`FACTORY_FAKE_STEWARD_SCRIPT`, `FACTORY_FAKE_TRIAGE_SCRIPT`, `FACTORY_FAKE_QUEUE_SCRIPT`, `FACTORY_FAKE_HYGIENE_SCRIPT`, `FACTORY_FAKE_FIX_CLASSES_SCRIPT`, `FACTORY_FAKE_SCREEN_SCRIPT`): `[{ "match": "<phrase>", "answer": {…} }]`, the phrase read
  * from the Issue's title, the stall's detail or the signal's words. Nothing scripted answers "I cannot tell" (steward `none`,
  * triage the empty answer). Every call is logged with its stdin.
@@ -90,6 +90,20 @@ export async function loopsFake(args: string[]): Promise<number> {
       'factory-errand',
       args,
       scripted?.answer ?? { verdict: 'pass', reason: 'nothing scripted: it needs a person' },
+    )
+  }
+  if (args[0] === 'factory-spec-screen') {
+    const scripted = scriptOf('FACTORY_FAKE_SPEC_SCREEN_SCRIPT').find((entry) =>
+      words.includes(entry.match.toLowerCase()),
+    )
+    if (scripted?.fail) {
+      process.stderr.write('fake agw: factory-spec-screen scripted to fail\n')
+      return 1
+    }
+    return done(
+      'factory-spec-screen',
+      args,
+      scripted?.answer ?? { verdict: 'pass', reason: "nothing scripted: it is the owner's to read" },
     )
   }
   if (args[0] === 'factory-fix-classes') {

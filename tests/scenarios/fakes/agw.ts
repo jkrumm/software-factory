@@ -19,6 +19,7 @@ process.exitCode =
         workflow === 'factory-fix-classes' ||
         workflow === 'factory-screen' ||
         workflow === 'factory-errand' ||
+        workflow === 'factory-spec-screen' ||
         (workflow === 'factory' && args[1] === 'digest')
       ? await loopsFake(args)
       : workflow === 'run' && args[1] === 'wait'

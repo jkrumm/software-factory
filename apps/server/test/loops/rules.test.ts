@@ -310,16 +310,49 @@ test('a kind is refined only for an owner or agent request, and only to a differ
   expect(kindOf({ kind: 'incident' }, 'docs')).toBeUndefined()
 })
 
-test('a Spec checkpoint is flagged by triage for any asked Issue, never for an incident, and only as `spec`', () => {
-  const flagOf = (facts: Partial<SettlingFacts>, checkpoint: TriageAnswer['checkpoint']) => {
-    const checked = checkSettle(shown, settling(facts), triaged({ checkpoint }), never)
+test('a Spec checkpoint is flagged by triage for any asked Issue of a session or more, never for an incident, and only as `spec`', () => {
+  const flagOf = (
+    facts: Partial<SettlingFacts>,
+    checkpoint: TriageAnswer['checkpoint'],
+    size: TriageAnswer['size'] = 'medium',
+  ) => {
+    const checked = checkSettle(shown, settling(facts), triaged({ checkpoint, size }), never)
     return checked.ok ? checked.refinement.checkpoint : 'refused'
   }
   expect(flagOf({}, 'spec')).toBe('spec')
+  expect(flagOf({}, 'spec', 'large')).toBe('spec')
   expect(flagOf({ origin: 'github' }, 'spec')).toBe('spec')
   expect(flagOf({}, null)).toBeUndefined()
   expect(flagOf({}, undefined)).toBeUndefined()
   expect(flagOf({ kind: 'incident' }, 'spec')).toBeUndefined()
+  // a one-line config change is an hour's work, and an unsized Issue is its lead's to judge: no Spec is owed (Issue 1096)
+  expect(flagOf({ title: 'Raise the plan file limit to 256 KiB' }, 'spec', 'small')).toBeUndefined()
+  expect(flagOf({}, 'spec', null)).toBeUndefined()
+})
+
+test('the settle request carries the owner’s newest needed-me marks, cleaned', () => {
+  const request = settleRequest(settling({}), [], (t) => t.replace(/abcd\w+/g, '[x]'), [
+    {
+      title: 'Raise the limit token=abcd1234',
+      repo: 'example',
+      source: 'triage',
+      screened: 'passed',
+      needed: false,
+      verdict: 'looks_good',
+      note: 'not needed abcdefgh',
+    },
+  ])
+  expect(request.precedents).toEqual([
+    {
+      title: 'Raise the limit token=[x]',
+      repo: 'example',
+      source: 'triage',
+      screened: 'passed',
+      needed: false,
+      verdict: 'looks_good',
+      note: 'not needed [x]',
+    },
+  ])
 })
 
 test('the settle request shows at most 40 open Issues, cleaned, and the Issue’s own words', () => {

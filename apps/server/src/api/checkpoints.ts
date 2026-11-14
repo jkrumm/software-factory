@@ -22,9 +22,12 @@ import {
   ISSUE_ID_META,
   PageList,
   PassReply,
+  NeededBody,
   ReviseBody,
+  SpecScreenPreview,
   SubmitBody,
   VerdictBody,
+  VerdictView,
   WorthBody,
 } from '@software-factory/contract'
 import { Elysia } from 'elysia'
@@ -40,6 +43,7 @@ import {
   type ErrandRecord,
   type PageRecord,
   type RevisionRecord,
+  type SpecScreenRecord,
   statusOf,
   type VerdictRecord,
 } from '../domains/checkpoints/ports.ts'
@@ -101,7 +105,21 @@ const verdictView = (v: VerdictRecord) => ({
   verdict: v.verdict,
   note: v.note,
   at: iso(v.at),
+  neededMe: v.neededMe,
 })
+
+const screenView = (s: SpecScreenRecord | null) =>
+  s === null
+    ? null
+    : {
+        revision: s.revision,
+        outcome: s.outcome ?? 'held',
+        by: s.by,
+        source: s.source,
+        note: s.note,
+        tries: s.tries,
+        at: iso(s.at),
+      }
 
 const annotationView = (a: AnnotationRecord) => ({
   id: a.id,
@@ -398,6 +416,7 @@ export const checkpointRoutes = (uses: CheckpointUses) =>
               .filter((a) => a.anchor === 'unanchored')
               .map((a) => annotationView(a.annotation)),
             verdicts: detail.verdicts.map(verdictView),
+            screen: screenView(detail.screen),
           }),
         )
       },
@@ -585,6 +604,45 @@ export const checkpointRoutes = (uses: CheckpointUses) =>
           operationId: 'artifact.verdict',
           summary:
             "the owner's verdict: looks_good, with_notes, changes or no_longer_applies; it reaches the lead as its next turn",
+        },
+      },
+    )
+    .post(
+      '/artifacts/:id/needed',
+      async ({ params, body }) => {
+        const id = idOf('artifact', params.id)
+        if (!id) return unknownId('artifact', params.id)
+        const result = await uses.needed({ artifactId: id, needed: body.needed, revision: body.revision ?? null })
+        if (!result.ok) return failed(result.error)
+        return Response.json(VerdictView.parse(verdictView(result.value)))
+      },
+      {
+        params: Id,
+        body: NeededBody,
+        response: RESPONSES(VerdictView, 400, 404, 422, 503),
+        detail: {
+          operationId: 'artifact.needed',
+          summary:
+            "the owner's mark on a verdict: did this Spec or Report need him; it teaches the Spec screen and triage",
+        },
+      },
+    )
+    .get(
+      '/artifacts/:id/screen',
+      async ({ params }) => {
+        const id = idOf('artifact', params.id)
+        if (!id) return unknownId('artifact', params.id)
+        const result = await uses.screen(id)
+        if (!result.ok) return failed(result.error)
+        return Response.json(SpecScreenPreview.parse(result.value))
+      },
+      {
+        params: Id,
+        response: RESPONSES(SpecScreenPreview, 400, 404, 422, 503),
+        detail: {
+          operationId: 'artifact.screen',
+          summary:
+            "the Spec screen's look at the latest revision, and the rule or the workflow request (with the owner's newest marks) its next look would use; writes nothing",
         },
       },
     )

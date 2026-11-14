@@ -79,6 +79,8 @@ check, `docs/architecture.md`).
 | **Verdict** | The owner's answer on an artifact: Looks good, With notes, Changes, No longer applies | |
 | **Taste pass** | The weekly retro's reading of the owner's verdict notes and comments: a preference seen twice becomes a rule in the repo's `AGENTS.md` or `DESIGN.md` | |
 | **Worth asking** | The owner's flag on an answered Decision. Feeds the ledger and the Judge's precedent | |
+| **Spec screen** | The look a Spec revision passes before it reaches the owner: rules, then `factory-spec-screen` with the owner's newest needed-me marks as precedents. It passes what is his (a screen or look he has not seen, product direction, spend, security policy, other people or company data, a change that cannot be undone, defaults that lead to materially different work) and settles the rest with the factory's looks_good and its reason, so the lead builds at once | |
+| **Needed me** | The owner's one-click mark on a verdict of a Spec or Report: did it need him. The newest marks teach the Spec screen and triage the next time; "Specs at the owner not needed" counts the no's | |
 | **Ask** | The lead's verb that raises a Decision (`factory issue ask`) | |
 | **Settler** | Who settled a Decision, in the order tried: `policy`, `judge`, `default`, `owner`; or `orchestrator`, answering for the owner | |
 | **Decision status** | `open`, `answered`, or `withdrawn` (the Issue no longer waits for it: it closed or was cancelled) | |

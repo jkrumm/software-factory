@@ -43,6 +43,7 @@ import type {
   ErrandRecord,
   PageRecord,
   RevisionRecord,
+  SpecScreenRecord,
   VerdictRecord,
 } from '../domains/checkpoints/ports.ts'
 import type { IssueEvent } from '../domains/work/events.ts'
@@ -523,7 +524,8 @@ export async function submitArtifact(
       note: null,
       createdAt: at,
     })
-    if (waitsForReview(submission.kind)) {
+    // A Spec is paged by the screen once it passes it to the owner (`checkpoints-specs.ts`); a Concept at once.
+    if (submission.kind === 'concept') {
       await checkpoints.planPage(
         reviewPage({
           issue: { id: issue.id, repo: issue.repo },
@@ -602,7 +604,8 @@ export async function reviseArtifact(
       createdAt: at,
     })
     if (!stored) return err({ kind: 'version_conflict', issueId: artifact.issueId, expected: issue.version })
-    if (waitsForReview(artifact.kind)) {
+    // A Spec revision is paged by the screen once it passes it to the owner (`checkpoints-specs.ts`); a Concept at once.
+    if (artifact.kind === 'concept') {
       await checkpoints.planPage(
         reviewPage({
           issue: { id: issue.id, repo: issue.repo },
@@ -762,8 +765,31 @@ export function giveVerdict(
     const field = `verdict (${VERDICTS.join(', ')})`
     return Promise.resolve(err({ kind: 'missing_field', fields: [field], detail: `a verdict needs: ${field}` }))
   }
-  const by = input.by ?? 'owner'
-  return deps.uow.run(async ({ work, checkpoints }) => {
+  return deps.uow.run((stores) =>
+    verdictIn(stores, deps, {
+      artifactId: input.artifactId,
+      verdict,
+      note: input.note,
+      revision: input.revision,
+      by: input.by ?? 'owner',
+    }),
+  )
+}
+
+/** A verdict inside a transaction the caller holds: the Spec screen gives its looks_good with its own record in one. */
+export async function verdictIn(
+  { work, checkpoints }: CheckpointStores,
+  deps: CheckpointDeps,
+  input: {
+    artifactId: ArtifactId
+    verdict: Verdict
+    note: string | null
+    revision: number | null
+    by: 'owner' | 'factory'
+  },
+): Promise<CheckpointResult<ArtifactWritten & { verdict: VerdictRecord }>> {
+  const { verdict, by } = input
+  {
     const artifact = await checkpoints.artifact(input.artifactId)
     if (!artifact) return err(notFound('artifact', input.artifactId))
     if (artifact.kind === 'decision') {
@@ -788,7 +814,7 @@ export function giveVerdict(
 
     const at = deps.clock.now()
     const note = input.note?.trim() || null
-    const record: VerdictRecord = { artifactId: artifact.id, revision, verdict, note, at }
+    const record: VerdictRecord = { artifactId: artifact.id, revision, verdict, note, at, neededMe: null }
     await checkpoints.insertVerdict({ ...record, key: verdictKey })
     let move: IssueMove | null = null
     // The Spec its filer attached holds the Issue in the queue, not in a wait: the verdict has no wait to end, and only
@@ -826,6 +852,35 @@ export function giveVerdict(
     }
     await checkpoints.cancelPages(artifact.id, at)
     return ok({ ...(await written(checkpoints, artifact.id, 'applied', move)), verdict: record })
+  }
+}
+
+/**
+ * The owner's one-click mark on a verdict of a Spec, Concept or Report: did it need him. Stored like a Decision's
+ * worth-asking flag; the newest marks are the Spec screen's and triage's precedents, and the "Specs at the owner not
+ * needed" KPI counts them. The revision defaults to the latest one with a verdict.
+ */
+export function markNeeded(
+  deps: CheckpointDeps,
+  input: { artifactId: ArtifactId; needed: boolean; revision: number | null },
+): Promise<CheckpointResult<VerdictRecord>> {
+  return deps.uow.run(async ({ checkpoints }) => {
+    const artifact = await checkpoints.artifact(input.artifactId)
+    if (!artifact) return err(notFound('artifact', input.artifactId))
+    if (artifact.kind === 'decision') {
+      return err({ kind: 'invalid', detail: 'a Decision is marked worth asking: factory decision worth-asking <id>' })
+    }
+    const verdicts = await checkpoints.verdicts(artifact.id)
+    const revision = input.revision ?? verdicts.at(-1)?.revision ?? null
+    if (revision === null) return err({ kind: 'invalid', detail: `${artifact.id} has no verdict to mark yet` })
+    const set = await checkpoints.setNeededMe(artifact.id, revision, input.needed, deps.clock.now())
+    if (set === 'unknown') return err(notFound('artifact', input.artifactId))
+    if (set === 'no_verdict') {
+      return err({ kind: 'invalid', detail: `revision ${revision} of ${artifact.id} has no verdict to mark` })
+    }
+    const marked = (await checkpoints.verdicts(artifact.id)).find((v) => v.revision === revision)
+    if (!marked) throw new Error(`the verdict of ${artifact.id} revision ${revision} vanished inside its transaction`)
+    return ok(marked)
   })
 }
 
@@ -838,6 +893,8 @@ export interface ArtifactDetail {
   /** every annotation, anchored or not in the revision shown; an unanchored one is the "Unanchored" group */
   annotations: { annotation: AnnotationRecord; anchor: Anchor }[]
   verdicts: VerdictRecord[]
+  /** the Spec screen's look at the revision shown; null for a Concept, a Report, and a Spec not looked at yet */
+  screen: SpecScreenRecord | null
 }
 
 /** An artifact with one revision's content and its annotations sorted into anchored and "Unanchored" by that content. */
@@ -848,16 +905,19 @@ export async function showArtifact(
   const rows = await deps.uow.run(async ({ checkpoints }) => {
     const artifact = await checkpoints.artifact(input.artifactId)
     if (!artifact) return err(notFound('artifact', input.artifactId))
+    const revisions = await checkpoints.revisions(artifact.id)
+    const shown = input.revision ?? revisions.at(-1)?.n ?? 0
     return ok({
       artifact,
-      revisions: await checkpoints.revisions(artifact.id),
+      revisions,
+      shown,
       annotations: await checkpoints.annotations(artifact.id),
       verdicts: await checkpoints.verdicts(artifact.id),
+      screen: artifact.kind === 'spec' ? await checkpoints.specScreen(artifact.id, shown) : null,
     })
   })
   if (!rows.ok) return rows
-  const { artifact, revisions, annotations, verdicts } = rows.value
-  const shown = input.revision ?? revisions.at(-1)?.n ?? 0
+  const { artifact, revisions, annotations, verdicts, shown, screen } = rows.value
   const revision = revisions.find((candidate) => candidate.n === shown)
   if (!revision) return err({ kind: 'invalid', detail: `${artifact.id} has no revision ${shown}` })
   const content = await deps.blobs.get(revision.blob)
@@ -872,6 +932,7 @@ export async function showArtifact(
       anchor: anchorOf(content.value, artifact.format, annotation.quote),
     })),
     verdicts,
+    screen,
   })
 }
 

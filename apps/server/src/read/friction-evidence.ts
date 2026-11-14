@@ -2,6 +2,7 @@ import type { SQL } from 'bun'
 import * as z from 'zod'
 import { orchestratorSteer, ownerTouch, TOUCH_EVENTS, type Window } from './kpis.ts'
 import { frictionWindow } from './friction.ts'
+import { specSourceSql } from './spec-screen.ts'
 import { plain } from './words.ts'
 
 /** Refs shown per pattern. */
@@ -95,6 +96,14 @@ async function refsOf(sql: SQL, w: Window, key: string): Promise<string[] | null
     return issueIds(sql`
       SELECT issue_id FROM factory.quality_watches
       WHERE answer = 'regressed' AND answered_at >= ${w.from} AND answered_at < ${w.to} ORDER BY answered_at DESC`)
+  }
+  if (head === 'spec_unneeded') {
+    return issueIds(sql`
+      SELECT a.issue_id FROM factory.verdicts v
+      JOIN factory.artifacts a ON a.id = v.artifact_id AND a.kind = 'spec'
+      LEFT JOIN factory.spec_screens s ON s.artifact_id = v.artifact_id AND s.revision = v.revision
+      WHERE v.needed_me IS FALSE AND ${specSourceSql(sql)} = ${tail} AND v.at >= ${w.from} AND v.at < ${w.to}
+      ORDER BY v.at DESC`)
   }
   if (key === 'touch:decision_answered') {
     return issueIds(sql`

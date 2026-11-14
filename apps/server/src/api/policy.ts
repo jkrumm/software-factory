@@ -11,7 +11,7 @@
  * below. No token, or an unknown one, is 401 `unauthorized`; a known caller the row does not list is 403 `forbidden`.
  * The first row that matches wins, so a narrower row goes before a wider one.
  *
- * **The classes** (the owner is on every row but `public`; the orchestrator is on every row the owner is, bar the eight `PERSON` rows):
+ * **The classes** (the owner is on every row but `public`; the orchestrator is on every row the owner is, bar the nine `PERSON` rows):
  * - public: `GET /health`, the only route without a token.
  * - read: `GET /v1/*`, for owner, agent and read, except `GET /v1/errands` (the owner's hands) and a lead's own session read
  *   (`GET /v1/issues/:id/lead`), which are placed before it. A GET outside `/v1` is the owner's.
@@ -21,7 +21,7 @@
  * - owner only: everything else, and every route nobody has listed yet (new, cancel, note, seat, answer, prio, reopen, verdicts, projects, queue,
  *   capacity, loops, reading the door's registry). When in doubt, the owner alone.
  * - person: the owner's own judgment and hands, never the orchestrator's: `POST /v1/decisions/:id/worth-asking`,
- *   `POST /v1/artifacts/:id/verdict`, `POST /v1/artifacts/:id/annotations` and its `PATCH`/`DELETE /v1/artifacts/:id/annotations/:annotationId`, `POST /v1/errands/:id/done`, and
+ *   `POST /v1/artifacts/:id/verdict`, `POST /v1/artifacts/:id/needed` (his "needed me" mark), `POST /v1/artifacts/:id/annotations` and its `PATCH`/`DELETE /v1/artifacts/:id/annotations/:annotationId`, `POST /v1/errands/:id/done`, and
  *   `POST /signals/:id/promote` and `/dismiss` (releasing or refusing quarantined outside text).
  * - orchestrator: the owner's delegate agent. It has the owner's rights on every other row (it steers, cancels, reopens, files and
  *   answers) so the log and the owner-touch counts can tell it from the owner; its token is the only difference.
@@ -92,6 +92,8 @@ export const POLICY: readonly Rule[] = [
   rule('GET', '/v1/decisions/:id', LEAD),
   rule('GET', '/v1/artifacts', LEAD),
   rule('GET', '/v1/artifacts/:id', LEAD),
+  // the screen request carries the owner's verdict notes on other projects' Specs as precedents: his and his delegate's only
+  rule('GET', '/v1/artifacts/:id/screen', OWNER),
   rule('GET', '/v1/pages', LEAD),
   // tenant and repo names of work repos: the read token and a lead do not see them
   rule('GET', '/v1/throughput', OWNER),
@@ -114,6 +116,7 @@ export const POLICY: readonly Rule[] = [
   rule('PATCH', '/v1/artifacts/:id/annotations/:annotationId', PERSON),
   rule('DELETE', '/v1/artifacts/:id/annotations/:annotationId', PERSON),
   rule('POST', '/v1/artifacts/:id/verdict', PERSON),
+  rule('POST', '/v1/artifacts/:id/needed', PERSON),
   rule('POST', '/v1/errands/:id/done', PERSON),
   rule('POST', '/v1/errands/:id/turn-back', OWNER),
   rule('POST', '/v1/checkpoints/pass', OWNER),

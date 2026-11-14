@@ -69,6 +69,11 @@ export const THRESHOLDS: Record<Judged, Rule> = {
     rate: 0.2,
     why: 'held signals from one source on one in five closed Issues is a route or a trust rule to settle',
   },
+  spec_unneeded: {
+    min: 2,
+    rate: null,
+    why: 'two Specs in a week from one source that the owner marked not needed is a rule that sends him what its lead could decide',
+  },
 }
 
 /** Touches the owner uses to steer and to triage: they file only at a higher rate than a touch that is a failure. */
