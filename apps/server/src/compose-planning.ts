@@ -15,7 +15,7 @@ import type { PlanningDeps } from './app/planning-deps.ts'
 import { planningPass } from './app/planning-pass.ts'
 import type { SeatRoles } from './app/seat.ts'
 import { standingPolicies } from './app/planning-policies.ts'
-import type { PlanningSettings } from './app/planning-settings.ts'
+import { hostRule, type PlanningSettings } from './app/planning-settings.ts'
 import { projectSignals } from './app/planning-signals.ts'
 import { syncProjects } from './app/planning-sync.ts'
 import { projectStates } from './app/planning-views.ts'
@@ -70,7 +70,7 @@ export function composePlanning(input: {
   }
   const limits = {
     leadsPerAccount: settings.leadsPerAccount,
-    loadCeiling: settings.loadCeiling,
+    ...hostRule(settings),
     memoryCeilings: settings.memoryCeilings,
     seatsMaxBonus: settings.seatsMaxBonus,
   }

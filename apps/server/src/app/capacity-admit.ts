@@ -6,13 +6,13 @@ import {
   standing,
 } from '../domains/capacity/accounts.ts'
 import type { BootSample } from '../domains/capacity/boot.ts'
-import { checkAdmission, type LeadFit, type RefusalKind } from '../domains/capacity/admission.ts'
+import { checkAdmission, type LeadFit, type RefusalKind, REFUSALS } from '../domains/capacity/admission.ts'
 import { freeMibOf, headroomMib } from '../domains/capacity/costs.ts'
 import { DEFAULT_TYPICAL_LEAD_MIB, SEAT_SAMPLE_MAX_AGE_MS, SEAT_SAMPLES, seatBonus } from '../domains/capacity/seats.ts'
 import { learnedLeadMib } from '../domains/capacity/leadcost.ts'
 import { type MemoryCeilings, type MemoryReading, reservedOf, sustainedSwapoutMb } from '../domains/capacity/host.ts'
 import { type LaneInput, laneRoom } from '../domains/capacity/lanes.ts'
-import type { AccountRanker, AccountSource, Assignment, HostReader } from '../domains/capacity/ports.ts'
+import type { AccountRanker, AccountSource, Assignment, HostReader, ShadowDecision } from '../domains/capacity/ports.ts'
 import { effectiveState, type QueueStates } from '../domains/capacity/queue-state.ts'
 import { type Claim, type Claimant, claimRoom, holdsClaim } from '../domains/capacity/claims.ts'
 import type { Edge } from '../domains/planning/chain.ts'
@@ -31,6 +31,10 @@ import { satisfyEdges } from './planning-pass.ts'
 export interface CapacityLimits {
   leadsPerAccount: number
   loadCeiling: number
+  /** no new lead above this many processes (the throughput rule once switched on); null or absent: no cap */
+  processCap?: number | null
+  /** the throughput rule run beside the live one and recorded per minute (`admission_shadow`); null or absent: none */
+  shadow?: { loadCeiling: number; processCap: number } | null
   memoryCeilings: MemoryCeilings
   /** `FACTORY_SEATS_MAX_BONUS`: the most extra leads per account while the host idles; absent or 0: off */
   seatsMaxBonus?: number
@@ -46,6 +50,8 @@ export interface CapacityDeps extends PlanningDeps {
 /** What the host said this pass; a reading that could not be taken is null and admission goes on without it. */
 export interface HostInputs {
   load: number | null
+  /** the host's process count by the newest minute sample, not older than three minutes; null: unknown */
+  processes: number | null
   memory: MemoryReading | null
   /** the machine's RAM in MiB; null: the lanes' memory cannot be counted */
   ramMib: number | null
@@ -66,6 +72,7 @@ export interface HostInputs {
 
 const NO_HOST: HostInputs = {
   load: null,
+  processes: null,
   memory: null,
   ramMib: null,
   uptimeMs: null,
@@ -149,8 +156,10 @@ export async function readHost(deps: CapacityDeps): Promise<HostInputs> {
     ? facts.value.recent.length === SEAT_SAMPLES &&
       facts.value.recent.every((s) => now.getTime() - s.at.getTime() <= SEAT_SAMPLE_MAX_AGE_MS)
     : false
+  const newest = facts.ok ? facts.value.recent[0] : undefined
   return {
     load: load.ok ? load.value : null,
+    processes: newest && now.getTime() - newest.at.getTime() <= RSS_MAX_AGE_MS ? newest.processes : null,
     // The instant reading (a rate since the last pass) and the minute samples' 300 s window: the higher gates, so a lull
     // between swapout bursts does not open the gate (Issue 858).
     memory: memory.ok
@@ -436,6 +445,8 @@ function decide(snap: Snapshot, host: HostInputs, limits: CapacityLimits, bonus:
             },
       load: host.load,
       loadCeiling: limits.loadCeiling,
+      processes: host.processes,
+      processCap: limits.processCap ?? null,
       memory: host.memory,
       memoryCeilings: limits.memoryCeilings,
       leadFit,
@@ -534,6 +545,72 @@ async function admitOne(
   })
 }
 
+const REFUSAL_KINDS: ReadonlySet<string> = new Set(REFUSALS)
+
+/**
+ * What the shadow rule would have decided beside the live one, for the look `snap` and `host` give: the Issues each rule
+ * would admit this look and the refusal of the first Issue that nothing in the chain keeps out. Null when no rule is
+ * shadowed or nothing is queued for the host's rules.
+ */
+export function shadowDecision(
+  snap: Snapshot,
+  host: HostInputs,
+  limits: CapacityLimits,
+): Omit<ShadowDecision, 'at'> | null {
+  const { shadow } = limits
+  if (!shadow) return null
+  const live = evaluateQueue(snap, host, limits)
+  const candidates = live.filter((entry) => entry.reason === null || REFUSAL_KINDS.has(entry.reason.kind))
+  if (candidates.length === 0) return null
+  const rule: CapacityLimits = {
+    ...limits,
+    loadCeiling: shadow.loadCeiling,
+    processCap: shadow.processCap,
+    shadow: null,
+  }
+  const shadowed = evaluateQueue(snap, host, rule)
+  const admits = (queue: readonly QueueEntry[]) => queue.filter((e) => e.reason === null && e.account !== null).length
+  // Both looks order the queue alike: the refusals named are those of the first Issue the two rules decide differently,
+  // else of the first one nothing in the chain keeps out.
+  const differing = live.findIndex((entry, i) => (entry.reason === null) !== (shadowed[i]?.reason === null))
+  const first = differing >= 0 ? differing : live.indexOf(candidates[0] as QueueEntry)
+  const shadowHead = shadowed[first]?.reason ?? null
+  return {
+    candidates: candidates.length,
+    liveAdmits: admits(live),
+    shadowAdmits: admits(shadowed),
+    liveRefusal: live[first]?.reason?.kind ?? null,
+    shadowRefusal: shadowHead?.kind ?? null,
+    shadowMessage: shadowHead?.message ?? null,
+    load: host.load,
+    loadCeiling: limits.loadCeiling,
+    shadowLoadCeiling: shadow.loadCeiling,
+    processes: host.processes,
+    processCap: shadow.processCap,
+  }
+}
+
+/** Stores the minute's shadow decision (one row per minute, the first look of it); a failure is a note, never the pass's. */
+async function recordShadow(deps: CapacityDeps, host: HostInputs, notes: string[]): Promise<void> {
+  if (!deps.limits.shadow) return
+  const now = deps.clock.now()
+  const stored = await deps.uow.run(async (stores) => {
+    const snap = await snapshotOf(stores, now)
+    const decision = shadowDecision(snap, host, deps.limits)
+    if (decision) {
+      await stores.capacity.recordShadow(
+        { at: new Date(Math.floor(now.getTime() / 60_000) * 60_000), ...decision },
+        new Date(now.getTime() - SHADOW_KEEP_MS),
+      )
+    }
+    return ok(undefined)
+  })
+  if (!stored.ok) notes.push(`the shadow decision could not be stored (${stored.error.detail})`)
+}
+
+/** The shadow decisions are kept two weeks, as the host samples they are read against. */
+export const SHADOW_KEEP_MS = 14 * 86_400_000
+
 /** The most Issues one pass admits; the rest wait for the next. */
 export const PASS_LIMIT = 20
 
@@ -549,6 +626,7 @@ export async function admissionPass(
   const notes = await pollIfDue(deps)
   const host = await readHost(deps)
   notes.push(...host.notes)
+  await recordShadow(deps, host, notes)
   const admitted: Admitted[] = []
   const skip = new Set<IssueId>()
   let queue: QueueEntry[] = []

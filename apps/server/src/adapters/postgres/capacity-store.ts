@@ -74,6 +74,7 @@ const HostFactRow = z.object({
   memory_used_pct: z.number().nullable(),
   swap_used_pct: z.number().nullable(),
   swapout_mb_per_300s: z.number().nullable(),
+  processes: z.number().int().nullable(),
 })
 const PeakFactRow = z.object({ repo: z.string(), peak: z.number().int(), n: z.coerce.number().int() })
 const RssRow = z.object({ issue: z.number().int(), rss_mib: z.number().int() })
@@ -323,7 +324,7 @@ export function postgresCapacityStore(tx: SQL): CapacityStore {
 
     async recentHostSamples(limit) {
       const rows: unknown[] = await tx`
-        SELECT at, load, memory_used_pct, swap_used_pct, swapout_mb_per_300s FROM factory.host_samples ORDER BY at DESC LIMIT ${limit}`
+        SELECT at, load, memory_used_pct, swap_used_pct, swapout_mb_per_300s, processes FROM factory.host_samples ORDER BY at DESC LIMIT ${limit}`
       return rows.map((raw): HostSampleFact => {
         const row = HostFactRow.parse(raw)
         return {
@@ -332,6 +333,7 @@ export function postgresCapacityStore(tx: SQL): CapacityStore {
           memoryUsedPct: row.memory_used_pct,
           swapUsedPct: row.swap_used_pct,
           swapoutMbPer300s: row.swapout_mb_per_300s,
+          processes: row.processes,
         }
       })
     },
@@ -355,6 +357,16 @@ export function postgresCapacityStore(tx: SQL): CapacityStore {
         byRepo.set(row.repo, found)
       }
       return [...byRepo.values()]
+    },
+
+    async recordShadow(d, keepSince) {
+      await tx`
+        INSERT INTO factory.admission_shadow (at, candidates, live_admits, shadow_admits, live_refusal, shadow_refusal,
+          shadow_message, load, load_ceiling, shadow_load_ceiling, processes, process_cap)
+        VALUES (${d.at}, ${d.candidates}, ${d.liveAdmits}, ${d.shadowAdmits}, ${d.liveRefusal}, ${d.shadowRefusal},
+          ${d.shadowMessage}, ${d.load}, ${d.loadCeiling}, ${d.shadowLoadCeiling}, ${d.processes}, ${d.processCap})
+        ON CONFLICT (at) DO NOTHING`
+      await tx`DELETE FROM factory.admission_shadow WHERE at < ${keepSince}`
     },
 
     async leadRssSince(since) {

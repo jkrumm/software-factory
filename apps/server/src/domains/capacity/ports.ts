@@ -63,6 +63,31 @@ export interface CapacityStore {
   leadPeaks(): Promise<LeadPeaks[]>
   /** per Issue number: the MiB its lead's tree held at its newest sample since `since` */
   leadRssSince(since: Date): Promise<Map<number, number>>
+  /** stores the minute's shadow decision (the first of a minute stays) and drops those before `keepSince` */
+  recordShadow(decision: ShadowDecision, keepSince: Date): Promise<void>
+}
+
+/**
+ * What the throughput rule (the load ceiling in multiples of the cores, the process cap) would have decided in a minute
+ * beside the live rule (`factory.admission_shadow`): the Issues each would admit, and the refusal of the first Issue
+ * that only the host's rules keep out (null: it is admitted).
+ */
+export interface ShadowDecision {
+  /** the minute */
+  at: Date
+  /** the queued Issues that nothing in the chain keeps out */
+  candidates: number
+  liveAdmits: number
+  shadowAdmits: number
+  liveRefusal: string | null
+  shadowRefusal: string | null
+  shadowMessage: string | null
+  load: number | null
+  loadCeiling: number
+  shadowLoadCeiling: number
+  processes: number | null
+  /** the shadow rule's cap */
+  processCap: number
 }
 
 export interface HostSampleFact {
@@ -72,6 +97,8 @@ export interface HostSampleFact {
   swapUsedPct: number | null
   /** that minute's swapouts, scaled to 300 s */
   swapoutMbPer300s: number | null
+  /** the process count of that minute's `top` header; null: not read */
+  processes: number | null
 }
 
 export interface LeadPeaks {

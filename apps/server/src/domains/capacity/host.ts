@@ -52,6 +52,21 @@ export const overMemory = (
 
 export const overLoad = (load: number, ceiling: number): boolean => load > ceiling
 
+/** The load ceiling of the throughput rule, in multiples of the host's cores: no new lead above 3x. */
+export const DEFAULT_LOAD_PER_CORE = 3
+/**
+ * The process count above which no new lead is admitted under the throughput rule. The panic class is a process storm
+ * (hundreds of git and test processes), not memory; a quiet host with a few leads runs ~900.
+ */
+export const DEFAULT_PROCESS_CAP = 1800
+
+/** The load ceiling of the throughput rule for a host of `cores` cores. */
+export const loadCeilingOf = (cores: number, perCore: number): number => Math.max(1, Math.round(cores * perCore))
+
+export const overProcesses = (processes: number, cap: number): boolean => processes > cap
+
+export const describeProcesses = (processes: number, cap: number): string => `${processes} processes (cap ${cap})`
+
 /** The reason's numbers: what was read and what the ceilings are. */
 export const describeMemory = (
   reading: MemoryReading,

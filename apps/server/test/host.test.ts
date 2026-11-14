@@ -441,7 +441,14 @@ test('readLeadCosts: per repo, the attempts, the p80 of the newest ten attempt p
   for (const [min, repo, worktree, mib] of rows) {
     await db.sql`INSERT INTO factory.lead_samples (at, worktree, repo, rss_mib, procs) VALUES (${at(min)}, ${worktree}, ${repo}, ${mib}, 2)`
   }
-  const none = { footprintAttempts: 0, footprintMibP80: null, lastFootprintMib: null, footprintToRss: null }
+  const none = {
+    footprintAttempts: 0,
+    footprintMibP80: null,
+    lastFootprintMib: null,
+    footprintToRss: null,
+    restMibP50: null,
+    restMinutes: 0,
+  }
   expect(await readLeadCosts(db.sql)).toEqual([
     { repo: 'a', attempts: 5, peakMibP80: 400, lastPeakMib: 500, ...none },
     { repo: 'b', attempts: 2, peakMibP80: 90, lastPeakMib: 90, ...none },
@@ -474,6 +481,8 @@ test('readLeadCosts: the footprint figures come from the attempts that have one,
       footprintMibP80: 150,
       lastFootprintMib: 150,
       footprintToRss: 0.5,
+      restMibP50: null,
+      restMinutes: 0,
     },
   ])
   await db.sql`DELETE FROM factory.lead_samples`
