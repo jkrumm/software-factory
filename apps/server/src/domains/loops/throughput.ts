@@ -5,7 +5,7 @@
  * the largest is the one worth a lead's time.
  */
 import type { Finding } from './selfwatch-model.ts'
-import { BASELINE_DAYS, DEFAULT_PEAK_MIB, FACTORY_PROJECT, PROCESS_GROWTH_MIB } from '../../kernel/throughput-limits.ts'
+import { BASELINE_DAYS, DEFAULT_PEAK_MIB, QUEUE_PROJECT, PROCESS_GROWTH_MIB } from '../../kernel/throughput-limits.ts'
 
 export const THROUGHPUT_KPIS = [
   'failed_run_minutes',
@@ -183,7 +183,7 @@ export function figureOf(
     case 'queued_minutes': {
       const q = facts.queued.find((x) => x.project === finding.project)
       // the queue is the factory's: a finding of an earlier rule on another project has nothing to read
-      return q ? round(q.minutes / days) : finding.project === FACTORY_PROJECT ? 0 : null
+      return q ? round(q.minutes / days) : finding.project === QUEUE_PROJECT ? 0 : null
     }
   }
 }
@@ -392,4 +392,14 @@ export interface ProjectBudgets {
   fastMs: number | null
   peakMib: number | null
   failShare: number | null
+}
+
+/**
+ * Whether a candidate's cost is already gone: its figure over the newest days (`recent`, the window a ship is measured over)
+ * is at or under the target. A cost fixed days ago still sits in the 7-day total, and an Issue filed for it could only be
+ * closed. A figure the recent days cannot give (no run, no closed Issue) says nothing, so the candidate stands.
+ */
+export function alreadyAtTarget(recent: WindowFacts, candidate: Candidate): boolean {
+  const figure = figureOf(recent, candidate)
+  return figure !== null && figure <= candidate.target
 }

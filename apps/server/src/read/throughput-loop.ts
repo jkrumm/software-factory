@@ -6,7 +6,7 @@ import {
   DEFAULT_PEAK_MIB,
   MIN_FAIL_RUNS,
   MIN_FAST_RUNS,
-  FACTORY_PROJECT,
+  QUEUE_PROJECT,
   PROCESS_GROWTH_MIB,
 } from '../kernel/throughput-limits.ts'
 import { boundedRead } from './bounded.ts'
@@ -156,7 +156,7 @@ export async function readWindowFacts(
         return {
           name: r.name,
           class: r.class,
-          project: r.repo === '' ? FACTORY_PROJECT : r.repo,
+          project: r.repo === '' ? QUEUE_PROJECT : r.repo,
           grownMib: r.grown,
           minutes: r.minutes,
         }
@@ -165,7 +165,7 @@ export async function readWindowFacts(
       queued: queued
         .map((raw) => z.object({ minutes: num, admissions: num }).parse(raw))
         .filter((r) => r.admissions > 0)
-        .map((r) => ({ project: FACTORY_PROJECT, minutes: r.minutes, admissions: r.admissions })),
+        .map((r) => ({ project: QUEUE_PROJECT, minutes: r.minutes, admissions: r.admissions })),
     }
   })
 }

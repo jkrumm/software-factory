@@ -225,7 +225,7 @@ describe('the daily pass', () => {
     uow,
     clock,
     projects: async () =>
-      ['alpha', 'beta', 'software-factory'].map((project) => ({
+      ['alpha', 'beta', 'delta', 'software-factory'].map((project) => ({
         project,
         repo: project,
         peakMib: null as number | null,
@@ -243,6 +243,9 @@ describe('the daily pass', () => {
     for (let i = 0; i < 10; i++) {
       await step({ repo: 'alpha', at: ago((i + 1) * 10 * HOUR), ms: 20 * 60_000, exit: i < 4 ? 1 : 0 })
     }
+    // delta: 60 slot-minutes of failed runs five days ago, fixed since: its newest days are clean
+    for (let i = 0; i < 3; i++) await step({ repo: 'delta', at: ago(5 * DAY + i * HOUR), ms: 20 * 60_000, exit: 1 })
+    for (const hours of [5, 30]) await step({ repo: 'delta', at: ago(hours * HOUR), ms: 20 * 60_000 })
     // beta: a full check peaking at 4 GiB, five runs of 10 minutes: 50 minutes over the default budget of 2 GiB
     for (let i = 0; i < 5; i++) await step({ repo: 'beta', at: ago((i + 1) * 12 * HOUR), ms: 10 * 60_000, peak: 4096 })
     // the queue is the factory's: an Issue of any project an Issue waited three hours between filing and its admission
@@ -285,6 +288,16 @@ describe('the daily pass', () => {
     // the retro's ledger reads the marker the text ends with
     const marker = RETRO_MARKER.exec(alpha?.text ?? '')
     expect(marker?.slice(1)).toEqual(['2026-11-14', 'failed_run_minutes', '11.4', 'down'])
+  })
+
+  test('a cost the newest days already left behind is not filed, though it sits in the 7-day total', async () => {
+    const [row] = await db.sql`SELECT count(*)::int AS n FROM factory.throughput_findings WHERE project = 'delta'`
+    expect(row?.n).toBe(0)
+    expect(
+      rankCandidates(
+        await readWindowFacts(db.sql, { from: ago(7 * DAY), to: T0, baseline: false, peakBudgetMib: new Map() }),
+      ).map((c) => c.project),
+    ).toContain('delta')
   })
 
   test('a second pass the same day files nothing: each project has an improvement open', async () => {
