@@ -444,7 +444,9 @@ newer_on_ref() { # $1 sha
 migration_dry_check() { # $1 release dir
   local script="$1/apps/server/src/migrate-check.ts" out rc
   [[ -f "$script" && -f "$1/.env.tpl" ]] || return 0
-  out=$(cd "$1" && secrets-run run --env-file="$1/.env.tpl" -- bun "$script" 2>&1); rc=$?
+  # Through the release's own launcher: it resolves the refs and builds DATABASE_URL from FACTORY_DB_PASSWORD, as the server's start does.
+  [[ -f "$1/scripts/launch.sh" ]] || return 0
+  out=$(FACTORY_LAUNCH_ENTRY=apps/server/src/migrate-check.ts /bin/bash "$1/scripts/launch.sh" 2>&1); rc=$?
   case "$rc" in
     0) log "migrations: $out" ;;
     3) log "WARNING: the migration dry check could not take a lock the live server holds; the migrations run for real after the stop" ;;
