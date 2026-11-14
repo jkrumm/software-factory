@@ -1,6 +1,13 @@
-import { freeMibOf, growthMib, headroomMib, LEARNED_RUNS, learnedPeakMib } from '../domains/capacity/costs.ts'
+import {
+  freeMibOf,
+  growthMib,
+  headroomMib,
+  LEARNED_RUNS,
+  learnedPeakMib,
+  SAMPLE_MAX_AGE_MS,
+} from '../domains/capacity/costs.ts'
 import type { HostReader, MergeWindowRow, StepCostRow } from '../domains/capacity/ports.ts'
-import { type AimMode, LOAD_PER_CORE } from '../domains/capacity/slot-aim.ts'
+import { type AimMode, LOAD_PER_CORE, SWAP_WINDOW, swapGrowing } from '../domains/capacity/slot-aim.ts'
 import { releaseSlot, type SlotRow, type SlotView, slotLines, touchSlots } from '../domains/capacity/slots.ts'
 import { DEFAULT_SLOT_RUN_MS, durationMs } from '../domains/planning/project.ts'
 import { ok, type PortError, type Result } from '../kernel/result.ts'
@@ -74,7 +81,13 @@ export async function touchSlot(
     for (const name of new Set([input.name, ...holders.map((row) => row.name)])) {
       learned.set(name, learnedPeakMib(await capacity.recentPeaks(name, LEARNED_RUNS)))
     }
-    const freeMib = freeMibOf(await capacity.latestHostSample(), ramMib, now)
+    const hostSamples = await capacity.recentHostSamples(SWAP_WINDOW)
+    const newestSample = hostSamples[0]
+    const freeMib = freeMibOf(newestSample ?? null, ramMib, now)
+    const swapRising =
+      newestSample !== undefined &&
+      now.getTime() - newestSample.at.getTime() <= SAMPLE_MAX_AGE_MS &&
+      swapGrowing(hostSamples)
     const loadNow = load.ok ? load.value : null
     const aimed =
       deps.slotAim === 'on'
@@ -98,6 +111,7 @@ export async function touchSlot(
           max: aimed ?? deps.slotsMax,
           loadOk: loadNow !== null && loadNow <= (aimed === null ? deps.slotExtraLoad : LOAD_PER_CORE * deps.cores),
           headroomMib: headroomMib(ramMib),
+          swapGrowing: swapRising,
           load: loadNow === null ? null : Math.round(loadNow * 10) / 10,
           extraLoad: aimed === null ? deps.slotExtraLoad : LOAD_PER_CORE * deps.cores,
         },

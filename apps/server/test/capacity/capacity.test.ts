@@ -485,6 +485,17 @@ describe('test slots', () => {
     expect(c.view).toMatchObject({ granted: false, ahead: 0, runMs: 1_800_000 })
   })
 
+  test('while swap in use grows, a second step waits whatever memory is free; the first is never held back', () => {
+    const growing: SlotFit = { ...open, freeMib: 60_000, swapGrowing: true }
+    const a = call([], 'a', now, 2, growing)
+    const b = call(a.rows, 'b', now, 2, growing)
+    expect(a.view.granted).toBe(true)
+    expect(b.view).toMatchObject({ granted: false })
+    expect(b.view.why).toContain('swap in use is growing')
+    const settled = call(b.rows, 'b', at(1000), 2, { ...growing, swapGrowing: false })
+    expect(settled.view.granted).toBe(true)
+  })
+
   test('a slot goes back, and the waiter first in line takes it on its next call', () => {
     let rows = call(call([], 'a', now).rows, 'b', now).rows
     rows = call(rows, 'c', at(1000)).rows
