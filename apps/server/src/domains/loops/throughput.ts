@@ -10,7 +10,7 @@ import {
   DEFAULT_PEAK_MIB,
   QUEUE_PROJECT,
   PROCESS_GROWTH_MIB,
-  SHARED_MEMORY_PROGRAMS,
+  isSharedMemoryProgram,
 } from '../../kernel/throughput-limits.ts'
 
 export const THROUGHPUT_KPIS = [
@@ -119,7 +119,7 @@ export function rankCandidates(facts: WindowFacts): Candidate[] {
     })
   }
   for (const p of facts.processes) {
-    if (p.grownMib < PROCESS_GROWTH_MIB || SHARED_MEMORY_PROGRAMS.has(p.name)) continue
+    if (p.grownMib < PROCESS_GROWTH_MIB || isSharedMemoryProgram(p.name)) continue
     found.push({
       project: p.project,
       kpi: 'process_growth_mib',

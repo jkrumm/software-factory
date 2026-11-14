@@ -1,6 +1,7 @@
 import { expect, test } from 'bun:test'
 import {
   assignClasses,
+  type ClassedProc,
   classRows,
   cpuSince,
   emptySnapshotMemory,
@@ -263,4 +264,33 @@ test('cpuSince, remember and notableProcs: differences, reused pids, the growth 
   expect(notable[0]?.pid).toBe(119)
   // a remembered pid keeps only the readings within ten minutes
   expect(remember(grow(1), m, t0 + 16 * 60_000).sizes.get(7)).toEqual([{ at: t0 + 16 * 60_000, kib: 1 }])
+})
+
+test('classRows: one cluster of a shared-memory program counts its mapping once, not once per process', () => {
+  const mib = (n: number) => n * 1024
+  const classed = (proc: Pick<ClassedProc, 'pid' | 'ppid' | 'name' | 'footprintKib'>): ClassedProc => ({
+    ...proc,
+    cpuMs: null,
+    class: 'tenant',
+    repo: null,
+    tenant: 'sh.brew.postgresql@18',
+    issue: null,
+    step: null,
+  })
+  const pg = (pid: number, ppid: number, footprintMib: number) =>
+    classed({ pid, ppid, name: ppid === 1 ? 'postgres' : 'postgres:', footprintKib: mib(footprintMib) })
+  // the 2026-11-14 cluster: postmaster 92, checkpointer 2120, three io workers, writer 991; a second cluster beside it
+  const rows = classRows([
+    pg(100, 1, 92),
+    pg(101, 100, 2120),
+    pg(102, 100, 2063),
+    pg(103, 100, 1745),
+    pg(104, 100, 1800),
+    pg(105, 100, 991),
+    pg(200, 1, 90),
+    pg(201, 200, 500),
+    classed({ pid: 300, ppid: 1, name: 'bun', footprintKib: mib(400) }),
+  ])
+  // largest 2120 + five others at 92 each = 2580; the second cluster 500 + 90; bun whole
+  expect(rows[0]).toMatchObject({ footprintMib: 2580 + 590 + 400, procs: 9 })
 })
