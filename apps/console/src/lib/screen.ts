@@ -1,5 +1,6 @@
 import { useEffect, useState } from 'react'
-import { awaitsUpdate } from './api.ts'
+import { awaitsUpdate, failureNote } from './api.ts'
+import { useRestarting } from './connection.ts'
 import { awaitUpdate } from './update.ts'
 
 /** How long a screen shows its skeleton for a new bundle that does not come before it says so. */
@@ -41,4 +42,11 @@ export function useScreen({
   if (data) return 'ready'
   if (isPending || (waitingForUpdate && !stalled)) return 'loading'
   return 'failed'
+}
+
+/** What a screen says under its title: the restart's note on the skeleton, the failure's words once it failed. */
+export function useScreenNote(screen: Screen, error: Error | null): string | undefined {
+  const restarting = useRestarting()
+  if (screen === 'loading' && restarting) return failureNote(null, true)
+  return screen === 'failed' ? failureNote(error, restarting) : undefined
 }

@@ -143,7 +143,8 @@ export function historySpan(samples: readonly Pick<HostSample, 'at'>[]): number 
 }
 
 /** The stream in the owner's words. */
-export function streamWords(connection: { live: boolean; offline: boolean }): string {
+export function streamWords(connection: { live: boolean; offline: boolean; restarting?: boolean }): string {
+  if (connection.restarting) return 'Server restarting, reconnecting'
   if (connection.offline) return 'No connection to the server'
   return connection.live ? 'Connected to the event stream' : 'Polling every 15 s'
 }

@@ -11,6 +11,7 @@ import {
   WATCHDOG_TICK_MS,
   type Change,
 } from './policy.ts'
+import { markFailing, markRecovered } from './restart.ts'
 import { checkForUpdate } from './update.ts'
 
 const INVALIDATE_DEBOUNCE_MS = 250
@@ -111,11 +112,13 @@ export function startLive(queryClient: QueryClient): () => void {
       delay = undefined
       cursor = event.lastEventId || cursor
       setLive(true)
+      markRecovered()
       if (firstHello) {
         firstHello = false
         void queryClient.invalidateQueries(undefined, { cancelRefetch: false })
         return
       }
+      // after a drop (a restart): every query refetches, those in error state too; `invalidateQueries` does not skip them
       note(null)
     })
     for (const kind of CHANGE_KINDS) {
@@ -127,6 +130,7 @@ export function startLive(queryClient: QueryClient): () => void {
       })
     }
     es.onerror = () => {
+      if (greeted) markFailing()
       close()
       if (!greeted) cursor = undefined
       delay = nextBackoff(delay)

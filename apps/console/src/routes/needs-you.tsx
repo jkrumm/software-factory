@@ -8,7 +8,6 @@ import { SinceBand } from '@/components/needs/since-band'
 import { NeedsSkeleton } from '@/components/skeletons'
 import { EmptyState, Page, PageHeader } from '@/components/page'
 import { ActiveFilters, type FilterChip, SidebarEntry, SidebarSection } from '@/components/sidebar'
-import { failureNote } from '@/lib/api'
 import {
   KIND_LABEL,
   kindCounts,
@@ -20,7 +19,7 @@ import {
 } from '@/lib/needs'
 import { useNow } from '@/lib/now'
 import { useOpenIssueCards, useNeeds } from '@/lib/queries'
-import { useScreen } from '@/lib/screen'
+import { useScreen, useScreenNote } from '@/lib/screen'
 
 interface NeedsSearch {
   item?: string
@@ -63,6 +62,7 @@ function NeedsYou() {
   const needs = useNeeds()
   const { data, error, dataUpdatedAt } = needs
   const screen = useScreen(needs)
+  const note = useScreenNote(screen, error)
   const { item: openId, kind: rawKind, project, mode } = Route.useSearch()
   const desk = mode === 'desk'
   // an unknown `kind` still reaches here from the raw URL (the root route validates nothing)
@@ -97,11 +97,7 @@ function NeedsYou() {
   if (!data)
     return (
       <Page wide>
-        <PageHeader
-          title="Needs you"
-          loading={screen === 'loading'}
-          note={screen === 'failed' ? failureNote(error) : undefined}
-        />
+        <PageHeader title="Needs you" loading={screen === 'loading'} note={note} />
         <SinceBand now={now} />
         {screen === 'loading' ? <NeedsSkeleton /> : null}
       </Page>

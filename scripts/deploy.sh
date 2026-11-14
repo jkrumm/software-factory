@@ -70,6 +70,11 @@ LOAD_MAX="${LOAD_MAX:-$(( $(sysctl -n hw.ncpu 2>/dev/null || echo 4) * 8 ))}"
 # attempt that met it left the whole factory down with its plist removed.
 RESTART_ATTEMPTS="${RESTART_ATTEMPTS:-3}"
 RESTART_PAUSE_SECS="${RESTART_PAUSE_SECS:-20}"
+# Master moving while a release builds: the deploy builds the newer commit instead, at most this many releases in all.
+DEPLOY_ROUNDS="${DEPLOY_ROUNDS:-3}"
+# The stop and the health wait look this often (a fifth of a second): a poll of a whole second added half a second, on average, to each.
+POLL_SECS=0.2
+POLLS_PER_SEC=5
 SELF="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)/$(basename "${BASH_SOURCE[0]}")"
 SELF_DIR="$(dirname "$SELF")"
 LOCK="$DATA_DIR/deploy.lock"
@@ -175,9 +180,10 @@ stop_service() { # $1 max seconds to wait
   pids=($(service_pids))
   mark_deliberate_restart
   launchctl bootout "gui/$(id -u)/$LABEL" 2>/dev/null
-  while (( i < $1 )); do
+  # Polled every POLL_SECS: the seconds between the process ending and the next start are the factory's outage.
+  while (( i < $1 * POLLS_PER_SEC )); do
     if ! loaded && ! any_alive "${pids[@]:-}"; then return 0; fi
-    sleep 1; i=$((i + 1))
+    sleep "$POLL_SECS"; i=$((i + 1))
   done
   return 1
 }
@@ -226,9 +232,9 @@ wait_calm_host() {
 
 wait_healthy() { # $1 sha
   local i=0
-  while (( i < HEALTH_WAIT_SECS )); do
+  while (( i < HEALTH_WAIT_SECS * POLLS_PER_SEC )); do
     is_healthy "$1" && return 0
-    sleep 1; i=$((i + 1))
+    sleep "$POLL_SECS"; i=$((i + 1))
   done
   echo "[deploy] not healthy at ${1:0:12}" >&2
   return 1
@@ -317,6 +323,7 @@ roll_back() { # $1 failed sha, $2 previous sha ("" = none), $3 unload wait, $4 l
       # A redeploy of the live sha: same release, so the plist on disk is the live one. Start it once more.
       echo "[deploy] redeploy of the live sha ${1:0:12}: starting again from its plist" >&2
       if restart_until_healthy "$RELEASES/$1" "$1" "$3" >/dev/null 2>&1; then
+        mark_up
         echo "[deploy] ${1:0:12} is up again. deployed-sha unchanged." >&2
       else
         echo "[deploy] ${1:0:12} is still not healthy. deployed-sha unchanged." >&2
@@ -334,6 +341,7 @@ roll_back() { # $1 failed sha, $2 previous sha ("" = none), $3 unload wait, $4 l
     return 0
   fi
   if restart_until_healthy "$RELEASES/$2" "$2" "$3"; then
+    mark_up
     echo "[deploy] rollback OK: ${2:0:12} is healthy again. deployed-sha unchanged." >&2
   else
     stop_service "$3"
@@ -411,6 +419,45 @@ check_refs() { # $1 release dir
   [[ -z "$missing" ]] || die "cannot read${missing} through secrets-run (seed them: make secrets-seed on the MacBook); nothing was changed"
 }
 
+# Behind the lock the newest commit is deployed, so merges that waited share one restart: the deploy that ran first took the
+# newest it found, and the ones after it find that live and restart nothing. FACTORY_DEPLOY_FORCE=1 restarts anyway (a changed
+# settings file, a service that must be started again).
+already_live() { # $1 sha
+  [[ -z "${FACTORY_DEPLOY_FORCE:-}" && "$(read_sha "$SHA_FILE")" == "$1" ]] && is_healthy "$1"
+}
+
+# Prints the commit $REF is at now when it is not $1 (and succeeds); fails when it is $1, when a fetch fails (a hiccup never
+# holds a deploy back) and under FACTORY_DEPLOY_FORCE (a redeploy of exactly what was asked).
+newer_on_ref() { # $1 sha
+  local newest
+  [[ -z "${FACTORY_DEPLOY_FORCE:-}" ]] || return 1
+  git -C "$REPO_DIR" fetch --quiet --prune origin "$REF" 2>/dev/null || return 1
+  newest=$(git -C "$REPO_DIR" rev-parse FETCH_HEAD 2>/dev/null) || return 1
+  [[ -n "$newest" && "$newest" != "$1" ]] || return 1
+  echo "$newest"
+}
+
+# The release's pending migrations run against the live database in a transaction that is rolled back, before anything is
+# stopped (apps/server/src/migrate-check.ts): a migration the database refuses refuses the deploy, instead of a stop, a failed
+# start and a rollback of minutes. A lock the live server holds is only a warning: it says nothing about the migrations.
+# Output that is not the check's own (secrets-run failing, a missing binary) is a warning too; check_refs already proved the refs.
+migration_dry_check() { # $1 release dir
+  local script="$1/apps/server/src/migrate-check.ts" out rc
+  [[ -f "$script" && -f "$1/.env.tpl" ]] || return 0
+  out=$(cd "$1" && secrets-run run --env-file="$1/.env.tpl" -- bun "$script" 2>&1); rc=$?
+  case "$rc" in
+    0) log "migrations: $out" ;;
+    3) log "WARNING: the migration dry check could not take a lock the live server holds; the migrations run for real after the stop" ;;
+    *)
+      if [[ "$out" == *"migrate-check:"* ]]; then
+        echo "$out" >&2
+        die "a pending migration of ${1##*/} is refused by the database; nothing was stopped"
+      fi
+      log "WARNING: the migration dry check did not run (exit $rc): ${out:0:300}"
+      ;;
+  esac
+}
+
 # The settings file (~/.config/factory/env) must be accepted by the release about to start: each release's launcher refuses a key its
 # own allow-list lacks (exit 78), and a refused start loops under KeepAlive. Checked before anything is stopped.
 env_file_ok() { # $1 release dir
@@ -439,10 +486,23 @@ record_deploy() { # $1 start|end, $2 detail
   { mkdir -p "$DATA_DIR" && printf '%s %s pid=%s %s\n' "$(date -u +%Y-%m-%dT%H:%M:%SZ)" "$1" "$$" "${2:-}" >> "$DATA_DIR/deploys.log"; } 2>/dev/null || true
 }
 
+# How long the server was unreachable: from the moment the old process is told to stop to /health answering ok at the version
+# that runs. `mark_down` opens it, `mark_up` closes it (a rollback closes it too: the factory is back, on the old release). The
+# `end` line carries it as `unreachable_s=N`; a deploy that ended with the server still down says `unreachable_s=N down=1`,
+# N counted to the end. `factory read throughput` sums it per day.
+DOWN_AT=""
+UP_S=""
+mark_down() { DOWN_AT=$(date +%s); UP_S=""; }
+mark_up() { [[ -n "$DOWN_AT" && -z "$UP_S" ]] && UP_S=$(( $(date +%s) - DOWN_AT )); return 0; }
+unreachable_detail() {
+  [[ -n "$DOWN_AT" ]] || return 0
+  if [[ -n "$UP_S" ]]; then echo "unreachable_s=$UP_S"; else echo "unreachable_s=$(( $(date +%s) - DOWN_AT )) down=1"; fi
+}
+
 release_lock() {
   local rc=$?
   [[ "$(lock_holder)" == "$$" ]] || return 0
-  record_deploy end "rc=$rc"
+  record_deploy end "rc=$rc $(unreachable_detail) ${DEPLOY_NOTE:-}"
   rm -rf "$LOCK"
 }
 
@@ -520,8 +580,10 @@ rollback() {
   wait_calm_host || die "the host is starved (load above $LOAD_MAX); the live service was not touched. Retry when it calms, or set LOAD_MAX"
 
   log "rolling back ${live:-none} -> ${prev:0:12} ($(core_of "$release")), stopping the service"
+  mark_down
   stop_service "$unload_secs" || die "still loaded ${unload_secs}s after bootout; not bootstrapping over it. Retry the rollback."
   if restart_until_healthy "$release" "$prev" "$unload_secs"; then
+    mark_up
     ln -sfn "$release" "$CURRENT" || die "updating $CURRENT failed"
     ln -sf "$CURRENT/$(cli_of "$release")" "$CLI_LINK" || die "linking $CLI_LINK failed"
     [[ -z "$live" ]] || write_atomic "$PREV_FILE" "$live"
@@ -569,6 +631,8 @@ main() {
     act "export $sha to $RELEASES/$sha and bun install --frozen-lockfile there"
     act "build the Console there (bun run --cwd apps/console build); a failed build removes the release and stops the deploy, the live release untouched"
     act "check every ref of .env.tpl through secrets-run (those of .env.server.tpl only warn)"
+    act "fetch master again once the release is built: a newer commit is built and deployed instead (up to $DEPLOY_ROUNDS releases); a sha that is live and healthy already restarts nothing (FACTORY_DEPLOY_FORCE=1 restarts it)"
+    act "dry-run the release's pending migrations against the live database (rolled back, 3 s lock timeout): a refused migration stops the deploy before anything is stopped"
     if env_file_ok "$SELF_DIR/.."; then log "the settings file is accepted by the launcher of this tree"; else log "WARNING: the settings file is refused by the launcher of this tree (a real deploy stops before it changes anything)"; fi
     log "rendered $PLIST (points at the release, not at current):"
     render_plist "$(template_of "$SELF_DIR/..")" "$RELEASES/$sha" "$sha"
@@ -592,7 +656,7 @@ main() {
   # --- one deploy at a time
   mkdir -p "$DATA_DIR" "$RELEASES" "$HOME/Library/LaunchAgents" "$HOME/Library/Logs" "$BIN_DIR"
   # The re-executed copy is the same process (exec keeps the pid), so it inherits the lock instead of taking it.
-  if [[ -n "${FACTORY_DEPLOY_REEXEC:-}" && "$(lock_holder)" == "$$" ]]; then
+  if [[ -n "${FACTORY_DEPLOY_REEXEC:-}${FACTORY_DEPLOY_HELD:-}" && "$(lock_holder)" == "$$" ]]; then
     trap release_lock EXIT
   else
     take_lock
@@ -607,6 +671,13 @@ main() {
     fi
     git -C "$REPO_DIR" fetch --quiet --prune origin "$REF" || die "git fetch origin $REF failed (network or credential helper)"
     sha=$(git -C "$REPO_DIR" rev-parse FETCH_HEAD)
+    # Behind the lock the newest commit is deployed, so several merges that waited share one restart: the deploy that
+    # ran first took the newest one it found, and the ones after it find that live and restart nothing.
+    if already_live "$sha"; then
+      log "deploy OK: ${sha:0:12} is live already; nothing restarted (FACTORY_DEPLOY_FORCE=1 restarts it anyway)"
+      DEPLOY_NOTE="skipped=live"
+      return 0
+    fi
   else
     sha="$FACTORY_DEPLOY_SHA"
   fi
@@ -631,6 +702,16 @@ main() {
   check_refs "$release"
   env_file_ok "$release" || die "the settings file is refused by ${sha:0:12}'s launcher (remove or rename the keys it names); nothing was changed"
   unload_secs=$(unload_wait_secs "$(template_of "$release")")
+  # Master may have moved while this release was built (a build is a minute): deploy the newest, not the one fetched first.
+  # Up to DEPLOY_ROUNDS rebuilds, so a busy hour cannot keep a deploy from ever stopping the service.
+  local newest round="${FACTORY_DEPLOY_ROUND:-1}"
+  if (( round < DEPLOY_ROUNDS )) && newest=$(newer_on_ref "$sha"); then
+    log "$REF moved to ${newest:0:12} while ${sha:0:12} was built: deploying the newest (round $((round + 1)) of $DEPLOY_ROUNDS)"
+    trap - EXIT
+    FACTORY_DEPLOY_ROUND=$((round + 1)) FACTORY_DEPLOY_HELD=1 FACTORY_DEPLOY_REEXEC="" FACTORY_DEPLOY_SHA="" \
+      exec /bin/bash "$SELF"
+  fi
+  migration_dry_check "$release"
 
   # The release that is live now is the rollback target, unless it is the one being deployed again.
   old=$(read_sha "$SHA_FILE")
@@ -638,6 +719,7 @@ main() {
 
   # --- switch
   log "deploying ${sha:0:12} ($(core_of "$release")) (live: ${old:-none}), stopping the service"
+  mark_down
   stop_service "$unload_secs" || die "still loaded ${unload_secs}s after bootout (ExitTimeOut + 10); not bootstrapping over it. It may still be shutting down: retry the deploy."
   if ! start_service "$release" "$sha"; then
     echo "[deploy] ERROR: launchctl bootstrap failed at ${sha:0:12}" >&2
@@ -649,6 +731,8 @@ main() {
     roll_back "$sha" "$prev" "$unload_secs" "$old"
     return 1
   fi
+  mark_up
+  log "unreachable for ${UP_S}s (the old process told to stop to /health at ${sha:0:12})"
 
   # --- healthy: current, the CLI, then the marker ("deployed" means the CLI is usable too)
   ln -sfn "$release" "$CURRENT" || die "updating $CURRENT failed"

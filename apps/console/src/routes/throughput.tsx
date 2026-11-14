@@ -8,9 +8,8 @@ import { buttonVariants } from '@/components/ui/button'
 import { EmptyState, Page, PageHeader } from '@/components/page'
 import { SidebarEntry, SidebarSection, useSidebarCollapsed } from '@/components/sidebar'
 import { ThroughputSkeleton } from '@/components/skeletons'
-import { failureNote } from '@/lib/api'
 import { useThroughput } from '@/lib/queries'
-import { useScreen } from '@/lib/screen'
+import { useScreen, useScreenNote } from '@/lib/screen'
 import {
   CLASS_LABEL,
   classRows,
@@ -613,15 +612,12 @@ function Throughput() {
   const { hours = DEFAULT_THROUGHPUT_WINDOW } = Route.useSearch()
   const query = useThroughput(hours)
   const screen = useScreen(query)
+  const note = useScreenNote(screen, query.error)
   const model = query.data
   if (!model) {
     return (
       <Page fluid>
-        <PageHeader
-          title="Throughput"
-          loading={screen === 'loading'}
-          note={screen === 'failed' ? failureNote(query.error) : undefined}
-        />
+        <PageHeader title="Throughput" loading={screen === 'loading'} note={note} />
         <WindowSwitch hours={hours} />
         <WindowSection hours={hours} />
         {screen === 'loading' ? <ThroughputSkeleton /> : null}

@@ -1145,6 +1145,24 @@ export const ThroughputModel = z
       }),
     ),
     /**
+     * The deploys that ended in the window, by UTC day, from `data/deploys.log` (empty where the server has no such log): how
+     * many ran, how many restarted the server, how many found their commit live and restarted nothing, how many ended red, and
+     * the seconds the server was unreachable (from stopping the old process to `/health` at the new sha, `scripts/deploy.sh`).
+     */
+    deploys: z.strictObject({
+      days: z.array(
+        z.strictObject({
+          day: z.string(),
+          deploys: z.number().int(),
+          restarts: z.number().int(),
+          skipped: z.number().int(),
+          failed: z.number().int(),
+          unreachableSeconds: z.number().int(),
+          longestSeconds: z.number().int(),
+        }),
+      ),
+    }),
+    /**
      * The throughput loop's findings (`throughput_findings`), the 50 newest by filing, whatever the window: what each measured
      * before it was filed, the target, the figure read three days after its Issue shipped, and where it stands.
      */

@@ -884,6 +884,7 @@ async function main(): Promise<void> {
     }),
     readModels: {
       sql,
+      dataDir,
       queueReasons,
       machine,
       ciTimes: githubCiTimes({

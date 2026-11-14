@@ -28,6 +28,7 @@ import {
 } from './api.ts'
 import { useLive } from './live.ts'
 import { pollEvery } from './policy.ts'
+import { retryDelay, retryNetworkError } from './restart.ts'
 import { checkForUpdate } from './update.ts'
 
 // an answer with fields this bundle does not know is read as it is, and the new bundle is fetched in the background
@@ -48,7 +49,9 @@ export const queryClient = new QueryClient({
     queries: {
       staleTime: 5_000,
       gcTime: SNAPSHOT_MAX_AGE_MS,
-      retry: (count, error) => !(error instanceof ShapeError) && count < 1,
+      // a server restart is waited out: a network error is retried with backoff for as long as the restart window is open
+      retry: (count, error) => retryNetworkError(error) || (!(error instanceof ShapeError) && count < 1),
+      retryDelay,
     },
   },
 })
@@ -102,7 +105,8 @@ export function useProjectDigests() {
     queryKey: ['project-digests'],
     queryFn: ({ signal }) => fetchProjectDigests(signal),
     refetchInterval: 60_000,
-    retry: (count, error) => !(error instanceof ApiError && error.status === 404) && count < 1,
+    retry: (count, error) =>
+      retryNetworkError(error) || (!(error instanceof ApiError && error.status === 404) && count < 1),
   })
 }
 
@@ -221,7 +225,8 @@ export function useHost() {
     queryKey: ['host'],
     queryFn: ({ signal }) => fetchHost(signal),
     refetchInterval: 30_000,
-    retry: (count, error) => !(error instanceof ApiError && error.status === 404) && count < 1,
+    retry: (count, error) =>
+      retryNetworkError(error) || (!(error instanceof ApiError && error.status === 404) && count < 1),
   })
 }
 
@@ -311,7 +316,8 @@ export function useIssue(id: string) {
   const live = useLive()
   return useQuery({
     ...issueQuery(id),
-    retry: (count, error) => !(error instanceof ApiError && error.status === 404) && count < 1,
+    retry: (count, error) =>
+      retryNetworkError(error) || (!(error instanceof ApiError && error.status === 404) && count < 1),
     refetchInterval: pollEvery(live),
   })
 }

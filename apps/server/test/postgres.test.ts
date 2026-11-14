@@ -88,6 +88,54 @@ describe('migrate', () => {
     expect(await rejection(migrate(db.sql, await loadMigrations()))).toContain('old core schema')
   })
 
+  test('a dry run names what would apply and leaves nothing, and a refused migration fails it as the start would', async () => {
+    await migrate(db.sql, [m('0001_a.sql', 'CREATE TABLE factory.a (id int)')])
+    const next = [
+      m('0001_a.sql', 'CREATE TABLE factory.a (id int)'),
+      m('0002_b.sql', 'CREATE TABLE factory.b (id int)'),
+    ]
+    expect(await migrate(db.sql, next, { dryRun: true })).toEqual(['0002_b.sql'])
+    const [row] = await db.sql`SELECT to_regclass('factory.b') IS NULL AS absent`
+    expect(row?.absent).toBe(true)
+    expect(await migrate(db.sql, next)).toEqual(['0002_b.sql'])
+    const broken = [...next, m('0003_c.sql', 'SELECT nope')]
+    expect(await rejection(migrate(db.sql, broken, { dryRun: true }))).toContain('nope')
+  })
+
+  test('a dry run that cannot get a lock the live server holds gives up (55P03) instead of queueing behind it', async () => {
+    await migrate(db.sql, [m('0001_a.sql', 'CREATE TABLE factory.a (id int)')])
+    const next = [
+      m('0001_a.sql', 'CREATE TABLE factory.a (id int)'),
+      m('0002_b.sql', 'ALTER TABLE factory.a ADD COLUMN x int'),
+    ]
+    let release: () => void = () => {}
+    const held = new Promise<void>((resolve) => {
+      release = resolve
+    })
+    let locked: () => void = () => {}
+    const taken = new Promise<void>((resolve) => {
+      locked = resolve
+    })
+    const holder = db.sql.begin(async (tx) => {
+      await tx`LOCK TABLE factory.a IN ACCESS SHARE MODE`
+      await tx`LOCK TABLE factory.a IN ACCESS EXCLUSIVE MODE`
+      locked()
+      await held
+    })
+    await taken
+    const started = Date.now()
+    let state: unknown
+    try {
+      await migrate(db.sql, next, { dryRun: true })
+    } catch (error) {
+      state = (error as { errno?: unknown }).errno
+    }
+    release()
+    await holder
+    expect(state).toBe('55P03')
+    expect(Date.now() - started).toBeLessThan(15_000)
+  })
+
   test('a failing migration applies nothing', async () => {
     const migrations = [m('0001_a.sql', 'CREATE TABLE factory.a (id int)'), m('0002_b.sql', 'SELECT nope')]
     expect(await rejection(migrate(db.sql, migrations))).toContain('nope')

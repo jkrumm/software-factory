@@ -1,7 +1,8 @@
-import { send } from '@software-factory/client'
+import { sendPatient } from '@software-factory/client'
 import { ErrorBody, Health } from '@software-factory/contract'
 import type * as z from 'zod'
 import { authHint, type Credential, credentialOf, tokenFromEnv } from './credentials.ts'
+import { restartPatience } from './restart-wait.ts'
 import { FactoryError, kindForStatus, usage } from './exit.ts'
 import { OPERATION_EXTENSIONS } from './filing.ts'
 import { issueIdOf, normalizeBody, validateBody } from './body-schema.ts'
@@ -269,15 +270,19 @@ export async function runOperation(op: Operation, invocation: Invocation, io: Io
   // `GET /health` is open: it never waits for a token to be resolved.
   const credential: Credential =
     op.operationId === 'health.get' ? { token: tokenFromEnv(io.env) } : await credentialOf(io.env)
-  const answer = await send({
-    base,
-    method: op.method,
-    path,
-    query,
-    body,
-    token: credential.token,
-    timeoutMs: timeoutOf(op),
-  })
+  const answer = await sendPatient(
+    {
+      base,
+      method: op.method,
+      path,
+      query,
+      body,
+      token: credential.token,
+      timeoutMs: timeoutOf(op),
+    },
+    // `health get` is what monitors and `make verify` read to learn the server is down: it never waits.
+    op.operationId === 'health.get' ? { limitMs: () => 0 } : restartPatience(io.env, (text) => io.err(text)),
+  )
   if (!answer.reached) {
     throw new FactoryError('network', `server unreachable at ${base}: ${answer.reason}`, {
       hint: 'is the server up? make verify checks the deployment; factory version works offline',

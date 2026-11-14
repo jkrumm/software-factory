@@ -29,6 +29,7 @@ import {
   VerdictView,
 } from '@software-factory/contract'
 import type { VERDICT_WORDS } from './artifact.ts'
+import { isNetworkError, markFailing, markRecovered } from './restart.ts'
 
 let newerServer: (() => void) | undefined
 
@@ -87,17 +88,33 @@ export function parseShape<T>(path: string, schema: Schema<T>, data: unknown, on
 /** True while a screen has no data because the bundle is older than the server: the new bundle is on its way, the screen shows its skeleton. */
 export const awaitsUpdate = (error: Error | null): boolean => error instanceof ShapeError
 
+/** What a page without data says while the server restarts: its skeleton is up and the retries bring the data. */
+export const RESTART_NOTE = 'The server is restarting. This page reloads by itself'
+
 /** What a page says in place of its data when the query has none and nothing is coming (`useScreen` says `failed`): for a `ShapeError` only after the new bundle did not arrive in time. */
-export function failureNote(error: Error | null): string {
+export function failureNote(error: Error | null, restarting = false): string {
+  if (restarting && (!error || isNetworkError(error))) return RESTART_NOTE
   if (error instanceof ShapeError) return 'This Console is older than the server. Reload the page to update it'
   if (error instanceof ApiError) return `The server answered ${error.status}`
   if (error) return 'The server cannot be reached'
   return 'No data yet'
 }
 
+/** `fetch` that tells the restart state whether the server answered at all (an HTTP status, even an error, is an answer). */
+async function fetchOrMark(path: string, init: RequestInit): Promise<Response> {
+  try {
+    const response = await fetch(path, init)
+    markRecovered()
+    return response
+  } catch (error) {
+    if (isNetworkError(error)) markFailing()
+    throw error
+  }
+}
+
 /** Same-origin GET of a `/v1` path, parsed with the contract's schema: the server's listener adds the credential. */
 async function getJson<T>(path: string, schema: Schema<T>, signal?: AbortSignal): Promise<T> {
-  const response = await fetch(path, { signal, cache: 'no-store', headers: { accept: 'application/json' } })
+  const response = await fetchOrMark(path, { signal, cache: 'no-store', headers: { accept: 'application/json' } })
   if (!response.ok) throw new ApiError(response.status, path)
   return parseShape(path, schema, await response.json(), () => newerServer?.())
 }
@@ -131,7 +148,7 @@ export const fetchArtifacts = (signal?: AbortSignal) => getJson('/v1/artifacts?l
 
 /** Same-origin write (POST, PATCH, DELETE) of an optional JSON body to one of the answer verbs the listener forwards; a refusal throws with the API's own words. */
 async function sendJson<T>(method: string, path: string, body: unknown, schema: Schema<T>): Promise<T> {
-  const response = await fetch(path, {
+  const response = await fetchOrMark(path, {
     method,
     headers: { accept: 'application/json', ...(body === undefined ? {} : { 'content-type': 'application/json' }) },
     ...(body === undefined ? {} : { body: JSON.stringify(body) }),

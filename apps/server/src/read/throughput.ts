@@ -2,6 +2,7 @@ import type { SQL } from 'bun'
 import * as z from 'zod'
 import type { ThroughputModel } from '@software-factory/contract'
 import { boundedRead } from './bounded.ts'
+import { readDeployDays } from './deploy-log.ts'
 import { readAccount } from './throughput-account.ts'
 
 const TOP_KEYS = 20
@@ -99,7 +100,10 @@ const round = (value: number, decimals: number) => Math.round(value * 10 ** deci
  * per-minute total is the sum of its rows at that minute, so a minute the key is absent counts 0 in its mean. The test
  * restates every figure in plain SQL over seeded rows.
  */
-export async function readThroughput(sql: SQL, options: { now: Date; hours: number }): Promise<ThroughputModel> {
+export async function readThroughput(
+  sql: SQL,
+  options: { now: Date; hours: number; dataDir?: string },
+): Promise<ThroughputModel> {
   const { now, hours } = options
   const from = new Date(now.getTime() - hours * 3_600_000)
   const to = now
@@ -345,5 +349,12 @@ export async function readThroughput(sql: SQL, options: { now: Date; hours: numb
     }
   })
 
-  return { at: now.toISOString(), hours, window: { from: from.toISOString(), to: to.toISOString() }, ...body }
+  const days = await readDeployDays(options.dataDir, { from, to })
+  return {
+    at: now.toISOString(),
+    hours,
+    window: { from: from.toISOString(), to: to.toISOString() },
+    ...body,
+    deploys: { days },
+  }
 }
