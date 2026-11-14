@@ -130,7 +130,7 @@ export async function settleIssue(
  */
 export async function addAfter(
   deps: PlanningDeps,
-  input: { issue: IssueId; after: readonly IssueId[]; running?: boolean },
+  input: { issue: IssueId; after: readonly IssueId[]; running?: boolean; inferredBy?: string | undefined },
 ): Promise<Result<{ edges: number }, PlanningError | PortError>> {
   return deps.uow.run(async (stores) => {
     await stores.capacity.lock()
@@ -151,7 +151,7 @@ export async function addAfter(
         detail: `Issue ${issueNumber(input.issue)} is ${open.state}: only a settling or queued Issue takes an edge${input.running ? ', or a working or watching one from the owner' : ' (a working lead defers with its own verb)'}`,
       })
     }
-    const edges = await addEdges(stores, deps, input.issue, input.after)
+    const edges = await addEdges(stores, deps, input.issue, input.after, input.inferredBy)
     return edges.ok ? ok({ edges: edges.value }) : edges
   })
 }

@@ -110,7 +110,11 @@ async function applyAnswer(
   const applied: QueueEdge[] = []
   const refused: RefusedEdge[] = [...checked.refused]
   for (const edge of checked.accepted) {
-    const added = await addAfter(deps.planning, { issue: edge.issue, after: [edge.after] })
+    const added = await addAfter(deps.planning, {
+      issue: edge.issue,
+      after: [edge.after],
+      inferredBy: `queue: ${edge.reason}`.slice(0, 200),
+    })
     if (added.ok && added.value.edges > 0) applied.push(edge)
     else if (added.ok) refused.push({ issue: edge.issue, after: edge.after, why: 'the edge exists already' })
     else {
