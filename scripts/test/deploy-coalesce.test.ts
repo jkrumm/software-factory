@@ -101,6 +101,15 @@ describe('the unreachable seconds of a deploy', () => {
     expect(result.out).toBe('unreachable_s=30 stopped_s=18 started_s=12')
   })
 
+  test('mark_down and mark_up put the one-minute load on the end line: when the old process was told to stop, when /health answered', async () => {
+    const result = await sh(
+      'load_avg() { echo 7; }; mark_down; load_avg() { echo 152; }; DOWN_AT=$(( $(date +%s) - 40 )); mark_up; unreachable_detail',
+    )
+    expect(result.out).toBe('unreachable_s=40 load_down=7 load_up=152')
+    const open = await sh('load_avg() { echo 9; }; mark_down; unreachable_detail')
+    expect(open.out).toMatch(/^unreachable_s=[0-1] load_down=9 down=1$/)
+  })
+
   test('a window still open names the stop it has seen; one with no stop yet names neither half', async () => {
     const stopped = await sh('DOWN_AT=$(( $(date +%s) - 20 )); STOPPED_S=14; unreachable_detail')
     expect(stopped.out).toMatch(/^unreachable_s=2[0-1] stopped_s=14 down=1$/)

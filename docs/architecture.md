@@ -309,7 +309,12 @@ through `receive` in `app/intake.ts`; the answer is a triage outcome (`docs/lang
   pull request); the rest are kept and the reason is recorded with the worktree's.
 - **Test slots** (`domains/capacity/slots.ts`): a host-wide semaphore around the whole `make check`, so parallel checks do not
   pile their load; `factory slot run` takes a slot, says once on stderr that it is queued for one (and how long it waited when
-  it gets it), a wait past 45 minutes exits 75 without running, and a server that is down runs the command anyway. A command
+  it gets it), and a wait past 45 minutes exits 75 without running. A server that is down never opens the gate for everyone at
+  once (2026-11-14: a deploy's restart let nine waiting steps start together, load 15 to 206, and the boot took 72.8 s): the
+  caller first waits the restart out as every CLI call does (90 s, 10 minutes while a deploy holds its lock) and takes its slot
+  from the server the moment that answers; a server still gone after that gives it one of `FACTORY_SLOTS` (default 2)
+  host-local slots, lock files in `~/.local/state/factory/local-slots` taken like the deploy lock (a pid symlink, only a dead
+  holder reclaimed), so the work that repairs a dead factory still runs and the host is not flooded. A command
   runs with `FACTORY_SLOT_ACTIVE=1`; a `slot run` inside one runs its command as it is, so the steps of `make check` do not queue
   again. While swap in use grows (`swapGrowing`: the newest of five minute samples is 0.5 points of RAM above the lowest older one), only the first step runs, whatever memory is free: the memory rule reads free pages, and swap filling up beside 70 % free is the host paging out what a second run would touch. The host's load in a scenario is the fake `sysctl`'s (`vm.loadavg`), never the machine's.
   Every step leaves a row in `factory.step_costs` (`POST /slots/:id/cost`: name, repo, the directory it ran in, peak resident size and CPU seconds of its
@@ -653,7 +658,7 @@ model, not a signal: an agent-trust signal files an Issue, and no loops page exi
   (`FACTORY_RESTART_WAIT_MS`), 10 minutes while `data/deploy.lock` names a live pid (`FACTORY_DEPLOY_WAIT_MS`), and says
   `server restarting (deploy), waiting` once on stderr; then the usual `server unreachable` (exit 7). A refused connection is
   retried for every verb (nothing reached the server); a reset or a timeout only for a read, since Bun's `ECONNRESET` does not
-  say whether the request was read. `health get` (monitors, `make verify`), the hook and `slot run` never wait. The Console
+  say whether the request was read. `health get` (monitors, `make verify`), and the hook never wait; `slot run` waits a restart out like every other call, then takes a host-local slot. The Console
   shows "Server restarting, reconnecting" for up to 3 minutes after the stream drops or a fetch gets no answer, keeps the data
   on screen, retries with a backoff and refetches everything when the stream greets again (`apps/console/src/lib/restart.ts`).
   `scripts/deploy.sh` restarts less: a deploy whose commit is live and healthy restarts nothing (`FACTORY_DEPLOY_FORCE=1`

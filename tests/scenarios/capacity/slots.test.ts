@@ -1,5 +1,6 @@
 import { afterAll, beforeAll, expect, test } from 'bun:test'
 import { existsSync } from 'node:fs'
+import { mkdir, symlink, utimes } from 'node:fs/promises'
 import { join } from 'node:path'
 import { CapacityView, Slot } from '@software-factory/contract'
 import { bearer } from '../harness.ts'
@@ -107,13 +108,139 @@ test("a command past its run limit is killed and the exit is 124; the limit is t
   expect((await put(undefined)).runMs).toBe(30 * 60_000)
 })
 
-test('with the server down the command runs anyway, with one line on stderr', async () => {
+/**
+ * A server that is gone: the port nothing listens on. `FACTORY_RESTART_WAIT_MS=0` skips the restart wait (the next tests
+ * give it time); the host-local slots are lock files in a directory of the test's own.
+ */
+const gone = (name: string, extra: Record<string, string> = {}) => ({
+  ...env,
+  FACTORY_URL: 'http://127.0.0.1:1',
+  FACTORY_RESTART_WAIT_MS: '0',
+  FACTORY_SLOTS: '2',
+  FACTORY_LOCAL_SLOT_DIR: join(lab.root, name),
+  ...extra,
+})
+
+test('with the server down the command runs, under a host-local slot, with one line on stderr', async () => {
   const marker = join(lab.root, 'open')
-  const result = await lab.cli(['slot', 'run', '--', 'touch', marker], { ...env, FACTORY_URL: 'http://127.0.0.1:1' })
+  const result = await lab.cli(
+    ['slot', 'run', '--', 'sh', '-c', `echo "$FACTORY_SLOT_ACTIVE" > ${marker}`],
+    gone('down'),
+  )
   expect(result.code).toBe(0)
   expect(result.err).toContain('no test slot')
-  expect(result.err).toContain('running without one')
+  expect(result.err).toContain('running under one of the 2 host-local slots')
+  // the steps below the command do not queue again
+  expect((await Bun.file(marker).text()).trim()).toBe('1')
+})
+
+test('with the server down six callers run at most two at a time, and all six finish', async () => {
+  const log = join(lab.root, 'concurrency')
+  const step = `echo + >> ${log}; sleep 0.4; echo - >> ${log}`
+  const results = await Promise.all(
+    Array.from({ length: 6 }, (_, i) =>
+      lab.cli(['slot', 'run', '--name', `c${i}`, '--', 'sh', '-c', step], gone('six')),
+    ),
+  )
+  expect(results.map((r) => r.code)).toEqual([0, 0, 0, 0, 0, 0])
+  let running = 0
+  let peak = 0
+  const lines = (await Bun.file(log).text()).trim().split('\n')
+  for (const line of lines) {
+    running += line === '+' ? 1 : -1
+    peak = Math.max(peak, running)
+  }
+  expect(lines.filter((l) => l === '+')).toHaveLength(6)
+  expect(peak).toBe(2)
+  expect(results.filter((r) => r.err.includes('queued for a host-local slot')).length).toBeGreaterThanOrEqual(1)
+  // every slot went back
+  expect(await Array.fromAsync(new Bun.Glob('*.lock').scan(join(lab.root, 'six')))).toEqual([])
+})
+
+test('a server that comes back inside the wait gives the callers their slots: none runs without one', async () => {
+  // a front that answers 503 until it is told the server is back, then passes everything through
+  let up = false
+  const refused = new Set<string>()
+  const front = Bun.serve({
+    port: 0,
+    fetch: (request) => {
+      if (!up) refused.add(new URL(request.url).pathname)
+      return up
+        ? fetch(new URL(new URL(request.url).pathname, lab.server.url), {
+            method: request.method,
+            headers: request.headers,
+            body: request.body,
+          })
+        : new Response('restarting', { status: 503 })
+    },
+  })
+  try {
+    const dir = join(lab.root, 'back')
+    const marker = join(lab.root, 'back-active')
+    const callers = Array.from({ length: 3 }, (_, i) =>
+      lab.cli(
+        ['slot', 'run', '--name', `b${i}`, '--', 'sh', '-c', `echo "$FACTORY_SLOT_ACTIVE" >> ${marker}; sleep 0.2`],
+        {
+          ...gone('back', { FACTORY_URL: `http://127.0.0.1:${front.port}`, FACTORY_RESTART_WAIT_MS: '30000' }),
+        },
+      ),
+    )
+    // the server is back once every caller has been refused at least once (a bun start is slow under load)
+    for (let i = 0; i < 1200 && refused.size < 3; i++) await Bun.sleep(50)
+    expect(refused.size).toBe(3)
+    up = true
+    const results = await Promise.all(callers)
+    expect(results.map((r) => r.code)).toEqual([0, 0, 0])
+    for (const result of results) {
+      expect(result.err).toContain('waiting for it to come back')
+      expect(result.err).not.toContain('running without one')
+      expect(result.err).not.toContain('host-local')
+    }
+    expect((await Bun.file(marker).text()).trim().split('\n')).toEqual(['1', '1', '1'])
+    // none of them took a local slot: the directory was never made
+    expect(existsSync(dir)).toBe(false)
+    expect(await slotRows()).toEqual([])
+  } finally {
+    await front.stop(true)
+  }
+})
+
+test('a caller is never blocked for good: slots held by dead pids are reclaimed, slots held by live ones are waited for', async () => {
+  const dir = join(lab.root, 'dead')
+  await mkdir(dir, { recursive: true })
+  const dead = Bun.spawn(['true'])
+  await dead.exited
+  await symlink(String(dead.pid), join(dir, 'slot-1.lock'))
+  await symlink(String(dead.pid), join(dir, 'slot-2.lock'))
+  // a reclaimer that was killed mid-way left its directory on the first slot: old enough to be nobody's
+  await mkdir(join(dir, 'slot-1.lock.reclaim'))
+  const longAgo = new Date(Date.now() - 10 * 60_000)
+  await utimes(join(dir, 'slot-1.lock.reclaim'), longAgo, longAgo)
+  const marker = join(lab.root, 'reclaimed')
+  const reclaimed = await lab.cli(['slot', 'run', '--', 'touch', marker], gone('dead'))
+  expect(reclaimed.code).toBe(0)
   expect(existsSync(marker)).toBe(true)
+
+  // the same with both held by a process that lives (this one): the caller waits its time out and does not run
+  const busy = join(lab.root, 'busy')
+  await mkdir(busy, { recursive: true })
+  await symlink(String(process.pid), join(busy, 'slot-1.lock'))
+  await symlink(String(process.pid), join(busy, 'slot-2.lock'))
+  const never = join(lab.root, 'busy-never')
+  const waited = await lab.cli(['slot', 'run', '--', 'touch', never], gone('busy', { FACTORY_SLOT_WAIT_MS: '500' }))
+  expect(waited.code).toBe(75)
+  expect(existsSync(never)).toBe(false)
+  // with the slots made unusable the command runs without one, as before
+  const blocked = join(lab.root, 'blocked-file')
+  await Bun.write(blocked, '')
+  const open = join(lab.root, 'unusable')
+  const unusable = await lab.cli(['slot', 'run', '--', 'touch', open], {
+    ...gone('blocked'),
+    FACTORY_LOCAL_SLOT_DIR: join(blocked, 'x'),
+  })
+  expect(unusable.code).toBe(0)
+  expect(unusable.err).toContain('running without one')
+  expect(existsSync(open)).toBe(true)
 })
 
 test('a command that does not exist exits 127; a missing command is a usage error', async () => {
