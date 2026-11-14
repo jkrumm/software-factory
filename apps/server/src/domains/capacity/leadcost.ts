@@ -115,6 +115,29 @@ export function attribute(
 
 const PEAKS_KEPT = 10
 const PEAKS_NEEDED = 3
+/** The newest attempts a read hands over: the ten of the p80, and room for the settled three when several still run. */
+export const PEAKS_FETCHED = 20
+/** An attempt's peak counts its samples of the six hours before its last one. */
+export const LEARN_WINDOW_MS = 6 * 60 * 60_000
+/** An attempt with no sample for this long has ended. */
+export const ENDED_AFTER_MS = 10 * 60_000
+/** An attempt that has run this long is believed on the way down although it has not ended. */
+export const SETTLED_RUN_MS = 30 * 60_000
+
+/** One attempt's peak as learned from: its worktree's largest sample of its last six hours, and whether the attempt is done enough to be believed on the way down. */
+export interface AttemptPeak {
+  peakMib: number
+  /** the attempt has ended, or has run for 30 minutes: its peak is no longer a figure still growing */
+  settled: boolean
+}
+
+/** What a repo's lead is learned to take, and by which rule: `falling` is the largest of the newest three settled attempts. */
+export interface LearnedLead {
+  mib: number
+  basis: 'p80' | 'falling'
+  /** the p80 of the newest ten, which a falling figure is below */
+  p80Mib: number
+}
 
 /**
  * What a new lead is expected to take outside test slots: the 80th percentile (nearest rank) of the newest ten attempts' peak MiB, newest
@@ -125,4 +148,20 @@ export function learnedLeadMib(attemptPeaks: readonly number[]): number | null {
   if (newest.length < PEAKS_NEEDED) return null
   const sorted = [...newest].sort((a, b) => a - b)
   return sorted[Math.ceil(0.8 * sorted.length) - 1] ?? null
+}
+
+/**
+ * A falling cost is believed sooner than a rising one. When the newest three settled attempts all peak below the p80 of
+ * the newest ten, the learned cost is the largest of those three; otherwise it is the p80. Admitting too early on a
+ * falling figure is still caught by the swap and pressure ceilings and the slot grant, while admitting too late leaves
+ * seats idle with work queued. `attempts` are newest first; null with fewer than three.
+ */
+export function learnLeadCost(attempts: readonly AttemptPeak[]): LearnedLead | null {
+  const p80 = learnedLeadMib(attempts.map((a) => a.peakMib))
+  if (p80 === null) return null
+  const settled = attempts.filter((a) => a.settled).slice(0, PEAKS_NEEDED)
+  if (settled.length === PEAKS_NEEDED && settled.every((a) => a.peakMib < p80)) {
+    return { mib: Math.max(...settled.map((a) => a.peakMib)), basis: 'falling', p80Mib: p80 }
+  }
+  return { mib: p80, basis: 'p80', p80Mib: p80 }
 }

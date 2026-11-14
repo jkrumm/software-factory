@@ -156,6 +156,8 @@ export {
   QueueSetBody,
   QueueStatesView,
   RefreshAnswer,
+  RelearnBody,
+  RelearnView,
   Slot,
   SlotBody,
   SlotRelease,

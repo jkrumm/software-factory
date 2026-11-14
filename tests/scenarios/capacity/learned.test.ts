@@ -54,7 +54,7 @@ const hostSamples = async (rows: { load: number; used: number; swap?: number }[]
 }
 
 test('a heavy repo whose second lead would not fit stays queued with the numbers, a small repo is admitted', async () => {
-  // four past attempts of the heavy repo, peaks 14000..18000 MiB (p80 18000), three of the small one at 400 MiB
+  // four past attempts of the heavy repo, peaks 14000..18000 MiB (p80 18000; the newest three, 14000..16000, all below it: the figure falls to 16000), three of the small one at 400 MiB
   for (const [index, peak] of [14_000, 15_000, 16_000, 18_000].entries()) {
     await sql()`
       INSERT INTO factory.lead_samples (at, worktree, repo, issue, attempt, rss_mib, procs)
@@ -78,7 +78,31 @@ test('a heavy repo whose second lead would not fit stays queued with the numbers
   expect(reasonOf(answer, second)).toMatchObject({
     kind: 'memory',
     message:
-      `memory: a lead of heavy takes ~17.6 GiB outside test slots (p80 of 4 past leads), the host has 16 GiB free, ` +
+      `memory: a lead of heavy takes ~15.6 GiB outside test slots (the largest of the newest 3 settled leads, all below the p80 of 17.6 GiB), the host has 16 GiB free, ` +
       'headroom 2.6 GiB',
   })
+}, 60_000)
+
+test('a relearn point drops the repo to its lane prior, queue order says so, and a point in the future is refused', async () => {
+  // the heavy repo's second lead is held by the 15.6 GiB figure of the test above
+  const held = (await lab.cli(['queue', 'order'])).json as {
+    queue: { issue: string; reason: { kind: string } | null }[]
+  }
+  expect(held.queue.find((e) => e.reason?.kind === 'memory')).toBeDefined()
+
+  const set = await lab.cli(['capacity', 'relearn', '--repo', 'heavy'])
+  expect(set.code).toBe(0)
+  expect(set.json).toMatchObject({ repo: 'heavy', setBy: 'owner' })
+
+  // no attempt follows the point: fewer than three, so no learned figure and the lane's prior (none declared) lets it in
+  const order = (await lab.cli(['queue', 'order'])).json as {
+    queue: { reason: { kind: string } | null }[]
+    notes: string[]
+  }
+  expect(order.queue.some((e) => e.reason?.kind === 'memory')).toBe(false)
+  expect(order.notes.some((n) => n.startsWith('heavy: lead cost learned from after the relearn point'))).toBe(true)
+  expect((await admit()).admitted).toHaveLength(1)
+
+  const future = await lab.cli(['capacity', 'relearn', '--repo', 'heavy', '--at', '2999-01-01T00:00:00Z'])
+  expect(future.code).not.toBe(0)
 }, 60_000)

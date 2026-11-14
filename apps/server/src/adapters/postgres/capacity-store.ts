@@ -3,6 +3,7 @@ import * as z from 'zod'
 import type { AccountReading } from '../../domains/capacity/accounts.ts'
 import type { Claim } from '../../domains/capacity/claims.ts'
 import type { Assignment, CapacityStore, HostSampleFact, LeadPeaks } from '../../domains/capacity/ports.ts'
+import { ENDED_AFTER_MS, LEARN_WINDOW_MS, PEAKS_FETCHED, SETTLED_RUN_MS } from '../../domains/capacity/leadcost.ts'
 import type { AimState } from '../../domains/capacity/slot-aim.ts'
 import { QUEUE_STATES, type QueueStates } from '../../domains/capacity/queue-state.ts'
 import type { SlotRow } from '../../domains/capacity/slots.ts'
@@ -79,7 +80,13 @@ const HostFactRow = z.object({
   pressure_level: z.number().int().nullable(),
 })
 const AimRow = z.object({ target: z.number().int(), quiet_since: z.date().nullable() })
-const PeakFactRow = z.object({ repo: z.string(), peak: z.number().int(), n: z.coerce.number().int() })
+const PeakFactRow = z.object({
+  repo: z.string(),
+  peak: z.number().int(),
+  n: z.coerce.number().int(),
+  settled: z.boolean(),
+})
+const RelearnRow = z.object({ repo: z.string(), at: z.date(), set_at: z.date(), set_by: z.string() })
 const RssRow = z.object({ issue: z.number().int(), rss_mib: z.number().int() })
 
 const assignmentOf = (raw: unknown): Assignment => {
@@ -376,25 +383,51 @@ export function postgresCapacityStore(tx: SQL): CapacityStore {
       return rows.length
     },
 
-    async leadPeaks() {
+    async leadPeaks(now) {
+      // An attempt's peak is its worktree's largest sample of the six hours before its last one, from the relearn point
+      // on: a long-lived worktree does not carry a step it no longer runs. Settled: ended (no sample for ten minutes) or run for 30.
       const rows: unknown[] = await tx`
-        WITH peaks AS (
-          SELECT repo, worktree, max(rss_mib) AS peak, max(at) AS last_at
-          FROM factory.lead_samples WHERE outside_slots GROUP BY repo, worktree
+        WITH counted AS (
+          SELECT s.repo, s.worktree, s.at, s.rss_mib FROM factory.lead_samples s
+          LEFT JOIN factory.lead_relearn r ON r.repo = s.repo
+          WHERE s.outside_slots AND (r.at IS NULL OR s.at >= r.at)
+        ), lasts AS (
+          SELECT repo, worktree, max(at) AS last_at FROM counted GROUP BY repo, worktree
+        ), peaks AS (
+          SELECT c.repo, c.worktree, max(c.rss_mib) AS peak, l.last_at, min(c.at) AS first_at
+          FROM counted c JOIN lasts l ON l.repo = c.repo AND l.worktree = c.worktree
+          WHERE c.at >= l.last_at - ${LEARN_WINDOW_MS / 1000} * interval '1 second'
+          GROUP BY c.repo, c.worktree, l.last_at
         ), ranked AS (
-          SELECT repo, peak, last_at, row_number() OVER (PARTITION BY repo ORDER BY last_at DESC, worktree) AS newest,
+          SELECT repo, peak, last_at, first_at, row_number() OVER (PARTITION BY repo ORDER BY last_at DESC, worktree) AS newest,
             count(*) OVER (PARTITION BY repo) AS n
           FROM peaks
         )
-        SELECT repo, peak, n FROM ranked WHERE newest <= 10 ORDER BY repo, newest`
+        SELECT repo, peak, n,
+          (last_at <= ${new Date(now.getTime() - ENDED_AFTER_MS)} OR last_at - first_at >= ${SETTLED_RUN_MS / 1000} * interval '1 second') AS settled
+        FROM ranked WHERE newest <= ${PEAKS_FETCHED} ORDER BY repo, newest`
       const byRepo = new Map<string, LeadPeaks>()
       for (const raw of rows) {
         const row = PeakFactRow.parse(raw)
         const found = byRepo.get(row.repo) ?? { repo: row.repo, attempts: row.n, peaksNewestFirst: [] }
-        found.peaksNewestFirst.push(row.peak)
+        found.peaksNewestFirst.push({ peakMib: row.peak, settled: row.settled })
         byRepo.set(row.repo, found)
       }
       return [...byRepo.values()]
+    },
+
+    async relearns() {
+      const rows: unknown[] = await tx`SELECT repo, at, set_at, set_by FROM factory.lead_relearn ORDER BY repo`
+      return rows.map((raw) => {
+        const row = RelearnRow.parse(raw)
+        return { repo: row.repo, at: row.at, setAt: row.set_at, setBy: row.set_by }
+      })
+    },
+
+    async setRelearn(r) {
+      await tx`
+        INSERT INTO factory.lead_relearn (repo, at, set_at, set_by) VALUES (${r.repo}, ${r.at}, ${r.setAt}, ${r.setBy})
+        ON CONFLICT (repo) DO UPDATE SET at = EXCLUDED.at, set_at = EXCLUDED.set_at, set_by = EXCLUDED.set_by`
     },
 
     async recordShadow(d, keepSince) {

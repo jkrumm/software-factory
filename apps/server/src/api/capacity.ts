@@ -9,6 +9,8 @@ import {
   QueueSetBody,
   QueueStatesView,
   RefreshAnswer,
+  RelearnBody,
+  RelearnView,
   Slot,
   SlotBody,
   SlotRelease,
@@ -19,8 +21,10 @@ import * as z from 'zod'
 import type { CapacityLimits, PassResult, QueueEntry, QueueReasonKind } from '../app/capacity-admit.ts'
 import type { AccountState, CapacityState } from '../app/capacity-view.ts'
 import type { QueueState, QueueStates } from '../domains/capacity/queue-state.ts'
+import type { Relearn } from '../domains/capacity/ports.ts'
 import type { SlotView } from '../domains/capacity/slots.ts'
 import type { PortError, Result } from '../kernel/result.ts'
+import { ownerActorOf } from './auth.ts'
 import { errorResponses } from './errors.ts'
 
 /** The contract's list of reasons and the server's are one list: a reason added on one side fails `tsc` until it is on the other. */
@@ -42,6 +46,8 @@ export interface CapacityApi {
   queueStates(project?: string): Promise<Result<QueueStates, PortError>>
   /** `project` is a name or a path inside a source root; a path outside the roots is `refused` */
   setQueueState(input: { project: string | null; state: QueueState }): Promise<Result<QueueStates, PortError>>
+  /** `repo` is a name or a path inside a source root; `at` null: now. A point in the future is `refused`. */
+  setRelearn(input: { repo: string; at: Date | null; actor: string }): Promise<Result<Relearn, PortError>>
   touchSlot(input: {
     id: string
     name: string
@@ -258,6 +264,36 @@ export const capacityRoutes = (api?: CapacityApi) => {
           operationId: 'queue.set',
           summary: 'set the queue state of the whole queue or one project: run, pace or drain',
           'x-cli': { args: ['state'] },
+        },
+      },
+    )
+    .post(
+      '/capacity/relearn',
+      async ({ body, request, status }) => {
+        if (!api) return status(503, unbound)
+        const set = await api.setRelearn({
+          repo: body.repo,
+          at: body.at === undefined ? null : new Date(body.at),
+          actor: ownerActorOf(request),
+        })
+        if (set.ok) {
+          const r = set.value
+          return status(
+            200,
+            RelearnView.parse({ repo: r.repo, at: r.at.toISOString(), setAt: r.setAt.toISOString(), setBy: r.setBy }),
+          )
+        }
+        return set.error.kind === 'refused'
+          ? status(422, failure(set.error.detail, 'invalid'))
+          : status(503, unavailable(set.error))
+      },
+      {
+        body: RelearnBody,
+        response: { 200: RelearnView, ...errorResponses(400, 422, 503) },
+        detail: {
+          operationId: 'capacity.relearn',
+          summary:
+            'a repo’s lead cost is learned only from the attempts since this time (default now); with fewer than three the repo falls back to its lane’s memory',
         },
       },
     )

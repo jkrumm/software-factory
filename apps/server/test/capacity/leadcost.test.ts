@@ -1,5 +1,12 @@
 import { expect, test } from 'bun:test'
-import { attribute, learnedLeadMib, type ProcInfo, type WorktreeRef } from '../../src/domains/capacity/leadcost.ts'
+import {
+  attribute,
+  learnedLeadMib,
+  learnLeadCost,
+  type AttemptPeak,
+  type ProcInfo,
+  type WorktreeRef,
+} from '../../src/domains/capacity/leadcost.ts'
 import { joinProcesses, parseLsofCwd, processTable } from '../../src/adapters/planning/processes.ts'
 
 const tree = (path: string, issue: number): WorktreeRef => ({ path, repo: 'app', issue, attempt: 1 })
@@ -135,4 +142,38 @@ test('processTable: a failed ps or lsof is null, never an error', async () => {
   expect(await processTable({ rows, lsofBin: '/nonexistent/lsof' }).read()).toBeNull()
   expect(await processTable({ rows: async () => null, lsofBin: '/usr/bin/true' }).read()).toBeNull()
   expect(await processTable({ rows, lsofBin: '/usr/bin/false' }).read()).toBeNull()
+})
+
+const gib = (n: number, settled = true): AttemptPeak => ({ peakMib: n * 1024, settled })
+const repeat = (n: number, peak: AttemptPeak): AttemptPeak[] => Array.from({ length: n }, () => peak)
+
+test('learnLeadCost: ten attempts at 8 GiB followed by three at 3 GiB learn 3 GiB', () => {
+  const newestFirst = [...repeat(3, gib(3)), ...repeat(10, gib(8))]
+  expect(learnLeadCost(newestFirst)).toEqual({ mib: 3 * 1024, basis: 'falling', p80Mib: 8 * 1024 })
+})
+
+test('learnLeadCost: three at 8 GiB after ten at 3 GiB still learn by the p80 rule', () => {
+  const newestFirst = [...repeat(3, gib(8)), ...repeat(10, gib(3))]
+  expect(learnLeadCost(newestFirst)).toEqual({ mib: 8 * 1024, basis: 'p80', p80Mib: 8 * 1024 })
+  // one of the newest three still high: no fall is believed
+  expect(learnLeadCost([gib(3), gib(3), gib(8), ...repeat(10, gib(8))])?.basis).toBe('p80')
+})
+
+test('learnLeadCost: the falling figure is the largest of the three, and only settled attempts count', () => {
+  const old = repeat(10, gib(8))
+  expect(learnLeadCost([gib(2), gib(4), gib(3), ...old])).toMatchObject({ mib: 4 * 1024, basis: 'falling' })
+  // a running attempt that has just started is not one of the three: the newest settled three are
+  expect(learnLeadCost([gib(1, false), gib(2), gib(4), gib(3), ...old])).toMatchObject({
+    mib: 4 * 1024,
+    basis: 'falling',
+  })
+  // fewer than three settled: the p80 rule
+  expect(learnLeadCost([gib(1, false), gib(2), gib(4), ...old.map((a) => ({ ...a, settled: false }))])?.basis).toBe(
+    'p80',
+  )
+})
+
+test('learnLeadCost: fewer than three attempts learn nothing', () => {
+  expect(learnLeadCost([gib(3), gib(3)])).toBeNull()
+  expect(learnLeadCost([])).toBeNull()
 })

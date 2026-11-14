@@ -9,7 +9,7 @@ import type { BootSample } from '../domains/capacity/boot.ts'
 import { checkAdmission, type LeadFit, type RefusalKind, REFUSALS } from '../domains/capacity/admission.ts'
 import { freeMibOf, headroomMib } from '../domains/capacity/costs.ts'
 import { DEFAULT_TYPICAL_LEAD_MIB, SEAT_SAMPLE_MAX_AGE_MS, SEAT_SAMPLES, seatBonus } from '../domains/capacity/seats.ts'
-import { learnedLeadMib } from '../domains/capacity/leadcost.ts'
+import { learnLeadCost } from '../domains/capacity/leadcost.ts'
 import { type MemoryCeilings, type MemoryReading, reservedOf, sustainedSwapoutMb } from '../domains/capacity/host.ts'
 import { type LaneInput, laneRoom } from '../domains/capacity/lanes.ts'
 import type { AccountRanker, AccountSource, Assignment, HostReader, ShadowDecision } from '../domains/capacity/ports.ts'
@@ -62,8 +62,13 @@ export interface HostInputs {
   samples: readonly BootSample[]
   /** the memory free by the newest minute sample (not older than five minutes); null: unknown */
   freeMib: number | null
-  /** per project name: what a lead is learned to take (null with fewer than three attempts) and the attempts sampled */
-  learned: ReadonlyMap<string, { mib: number | null; attempts: number }>
+  /** per project name: what a lead is learned to take (null with fewer than three attempts since the relearn point), by which rule, and the attempts sampled */
+  learned: ReadonlyMap<
+    string,
+    { mib: number | null; attempts: number; basis: 'p80' | 'falling' | null; p80Mib: number | null }
+  >
+  /** per project name: the relearn point, when the repo has one */
+  relearns: ReadonlyMap<string, Date>
   /** per Issue number: the MiB its lead holds by a sample not older than three minutes */
   rssByIssue: ReadonlyMap<number, number>
   /** the newest five minute samples, newest first; empty unless all five exist and none is older than six minutes */
@@ -80,6 +85,7 @@ const NO_HOST: HostInputs = {
   samples: [],
   freeMib: null,
   learned: new Map(),
+  relearns: new Map(),
   rssByIssue: new Map(),
   recent: [],
   notes: [],
@@ -149,7 +155,8 @@ export async function readHost(deps: CapacityDeps): Promise<HostInputs> {
     ok({
       latest: await capacity.latestHostSample(),
       recent: await capacity.recentHostSamples(SEAT_SAMPLES),
-      peaks: await capacity.leadPeaks(),
+      peaks: await capacity.leadPeaks(now),
+      relearns: await capacity.relearns(),
       rss: await capacity.leadRssSince(new Date(now.getTime() - RSS_MAX_AGE_MS)),
     }),
   )
@@ -181,9 +188,21 @@ export async function readHost(deps: CapacityDeps): Promise<HostInputs> {
     freeMib: facts.ok ? freeMibOf(facts.value.latest, ramMib, now) : null,
     learned: new Map(
       facts.ok
-        ? facts.value.peaks.map((p) => [p.repo, { mib: learnedLeadMib(p.peaksNewestFirst), attempts: p.attempts }])
+        ? facts.value.peaks.map((p) => {
+            const lead = learnLeadCost(p.peaksNewestFirst)
+            return [
+              p.repo,
+              {
+                mib: lead?.mib ?? null,
+                attempts: p.attempts,
+                basis: lead?.basis ?? null,
+                p80Mib: lead?.p80Mib ?? null,
+              },
+            ]
+          })
         : [],
     ),
+    relearns: new Map(facts.ok ? facts.value.relearns.map((r) => [r.repo, r.at]) : []),
     rssByIssue: facts.ok ? facts.value.rss : new Map(),
     recent: facts.ok && fresh ? facts.value.recent.map((s) => ({ load: s.load, swapUsedPct: s.swapUsedPct })) : [],
     notes,
@@ -424,6 +443,9 @@ function decide(snap: Snapshot, host: HostInputs, limits: CapacityLimits, bonus:
       repo: project.name,
       candidateMib: learned?.mib ?? null,
       attempts: learned?.attempts ?? 0,
+      basis: learned?.basis ?? 'p80',
+      p80Mib: learned?.p80Mib ?? null,
+      relearnedAt: host.relearns.get(project.name) ?? null,
       freeMib: host.freeMib,
       headroomMib: headroomMib(host.ramMib),
       running: claims.length,
@@ -678,6 +700,18 @@ export async function admissionPass(
   return ok({ admitted, queue, notes })
 }
 
+/** One line per repo with a relearn point: since when its lead cost is learned and what that gives now. */
+function relearnNotes(host: HostInputs): string[] {
+  return [...host.relearns].map(([repo, at]) => {
+    const learned = host.learned.get(repo)
+    const figure =
+      learned?.mib != null
+        ? `a lead takes ~${Math.round((learned.mib / 1024) * 10) / 10} GiB (${learned.basis === 'falling' ? 'the largest of the newest 3 settled leads' : `p80 of the newest ${Math.min(learned.attempts, 10)}`})`
+        : `${learned?.attempts ?? 0} attempts since, fewer than three: the lane's memory prior`
+    return `${repo}: lead cost learned from after the relearn point ${at.toISOString()}: ${figure}`
+  })
+}
+
 /** The queue as it stands, in order, with the reason each Issue stays queued. Reads only. */
 export async function queueView(
   deps: CapacityDeps,
@@ -685,6 +719,7 @@ export async function queueView(
   const notes = await pollIfDue(deps)
   const host = await readHost(deps)
   host.notes.unshift(...notes)
+  host.notes.push(...relearnNotes(host))
   const viewed = await deps.uow.run(async (stores) => {
     const snap = await snapshotOf(stores, deps.clock.now())
     return ok(evaluateQueue(snap, host, deps.limits))

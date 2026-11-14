@@ -11,7 +11,7 @@ import { capacityForLeads } from '../../src/app/capacity-leads.ts'
 import { standingPolicies } from '../../src/app/planning-policies.ts'
 import { loopReads } from '../../src/read/loops.ts'
 import { queueMovedAt } from '../../src/read/queue.ts'
-import { setQueueState } from '../../src/app/capacity-queue.ts'
+import { setQueueState, setRelearn } from '../../src/app/capacity-queue.ts'
 import { setPrio } from '../../src/app/planning-chain.ts'
 import { syncProjects } from '../../src/app/planning-sync.ts'
 import { issueId } from '../../src/kernel/ids.ts'
@@ -148,6 +148,87 @@ describe('admission', () => {
     await seed(3)
     nextSample()
     expect((await pass()).admitted.map((a) => a.issue)).toEqual([two])
+  })
+
+  test("a repo's lead peaks: from the relearn point, the last six hours of an attempt, and ended or 30 minutes in", async () => {
+    const now = world.clock.now()
+    const at = (minutesAgo: number) => new Date(now.getTime() - minutesAgo * 60_000)
+    const sample = async (worktree: string, minutesAgo: number, rssMib: number, repo = 'sim') => {
+      await world.db.sql`
+        INSERT INTO factory.lead_samples (at, worktree, repo, issue, attempt, rss_mib, procs)
+        VALUES (${at(minutesAgo)}, ${worktree}, ${repo}, 1, 1, ${rssMib}, 3)`
+    }
+    // a long-lived worktree: 9000 MiB eight hours before its last sample, 2000 since: only the last six hours count
+    await sample('/wt/long', 600, 9000)
+    await sample('/wt/long', 31, 2000)
+    await sample('/wt/long', 1, 2100)
+    // an attempt that has just begun (running 2 minutes) is not settled; one that ran 40 minutes is, and one that ended is
+    await sample('/wt/new', 2, 500)
+    await sample('/wt/new', 1, 500)
+    await sample('/wt/run', 41, 700)
+    await sample('/wt/run', 1, 700)
+    await sample('/wt/ended', 120, 800)
+    const [peaks] = value(
+      await world.deps.uow.run(async ({ capacity }) => ({ ok: true as const, value: await capacity.leadPeaks(now) })),
+    )
+    expect(peaks?.attempts).toBe(4)
+    expect(Object.fromEntries(peaks?.peaksNewestFirst.map((p) => [p.peakMib, p.settled]) ?? [])).toEqual({
+      500: false,
+      700: true,
+      800: true,
+      2100: true,
+    })
+    // a relearn point 90 minutes ago drops the sample before it: the ended attempt has none left and leaves the figure
+    await world.db
+      .sql`INSERT INTO factory.lead_relearn (repo, at, set_at, set_by) VALUES ('sim', ${at(90)}, ${now}, 'owner')`
+    const after = value(
+      await world.deps.uow.run(async ({ capacity }) => ({ ok: true as const, value: await capacity.leadPeaks(now) })),
+    )
+    expect(after[0]?.attempts).toBe(3)
+    expect(after[0]?.peaksNewestFirst.map((p) => p.peakMib).sort((a, b) => a - b)).toEqual([500, 700, 2100])
+  })
+
+  test('a relearn point drops a repo back to its lane prior until three attempts follow it, and queue order says so', async () => {
+    world.accounts.rows = [account('a'), account('b'), account('c'), account('d')]
+    const seed = async (hoursAgo: number, rssMib: number) => {
+      await world.db.sql`
+        INSERT INTO factory.lead_samples (at, worktree, repo, issue, attempt, rss_mib, procs)
+        VALUES (${new Date(world.clock.now().getTime() - hoursAgo * 3_600_000)}, ${`/wt/sim-${hoursAgo}`}, 'sim', ${900 + hoursAgo}, 1, ${rssMib}, 3)`
+    }
+    for (const hours of [10, 11, 12]) await seed(hours, 100)
+    const [one, two] = [
+      await world.queued({ repo: 'sim', lane: 'apple' }),
+      await world.queued({ repo: 'sim', lane: 'apple' }),
+    ]
+    // learned 100 MiB replaces the lane's 18 GiB: both fit
+    expect((await pass()).admitted.map((a) => a.issue)).toEqual([one, two])
+    for (const n of [one, two]) {
+      await world.send(n, 'lead_started', 'lead_started', { attempt: 1, terminal: `t${n}` })
+      await world.send(n, 'closed', 'closed', { attempt: 1, outcome: 'done', reason: 'done' }, 'lead')
+    }
+    nextSample()
+    // the relearn point (now) leaves no attempt after it: the prior holds, one lead at a time
+    value(await setRelearn(world.deps, { repo: 'sim', at: null, actor: 'owner' }))
+    const [three, four] = [
+      await world.queued({ repo: 'sim', lane: 'apple' }),
+      await world.queued({ repo: 'sim', lane: 'apple' }),
+    ]
+    const held = await pass()
+    expect(held.admitted.map((a) => a.issue)).toEqual([three])
+    expect(held.queue.find((e) => e.issue === four)?.reason).toMatchObject({ kind: 'memory' })
+    const view = value(await queueView(world.deps))
+    expect(
+      view.notes.some(
+        (n) => n.includes('sim: lead cost learned from after the relearn point') && n.includes('fewer than three'),
+      ),
+    ).toBe(true)
+    // a point in the future is refused
+    const future = await setRelearn(world.deps, {
+      repo: 'sim',
+      at: new Date(world.clock.now().getTime() + 60_000),
+      actor: 'owner',
+    })
+    expect(future.ok).toBe(false)
   })
 
   test('a lane the project does not declare is unlimited within leads, and a fix is not held by a full lane', async () => {

@@ -98,6 +98,26 @@ export const QueueSetBody = z
   .meta({ id: 'QueueSetBody' })
 export type QueueSetBody = z.infer<typeof QueueSetBody>
 
+export const RelearnBody = z
+  .object({
+    /** a project name, or a path of a repo the factory knows */
+    repo: z.string().min(1),
+    /** ISO time from which the repo's lead samples are learned from; absent: now. Not in the future. */
+    at: z.string().datetime({ offset: true }).optional(),
+  })
+  .meta({ id: 'RelearnBody' })
+export type RelearnBody = z.infer<typeof RelearnBody>
+
+export const RelearnView = z
+  .object({
+    repo: z.string(),
+    at: z.string(),
+    setAt: z.string(),
+    setBy: z.string(),
+  })
+  .meta({ id: 'RelearnView' })
+export type RelearnView = z.infer<typeof RelearnView>
+
 export const CapacityView = z
   .object({
     accounts: z.array(AccountView),

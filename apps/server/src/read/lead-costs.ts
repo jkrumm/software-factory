@@ -2,12 +2,15 @@ import type { SQL } from 'bun'
 import * as z from 'zod'
 import { boundedRead } from './bounded.ts'
 
+/** An attempt's peak counts its samples of the six hours before its last one (`domains/capacity/leadcost.ts` `LEARN_WINDOW_MS`, which `read/` may not import). */
+const LEARN_WINDOW_MS = 6 * 60 * 60_000
+
 /** What a repo's leads cost outside test slots, from the minute samples of their process trees (what runs under a slot run is left out). */
 export interface RepoLeadCost {
   repo: string
   /** the attempts sampled */
   attempts: number
-  /** 80th percentile (nearest rank) of the newest 10 attempts' peak MiB */
+  /** 80th percentile (nearest rank) of the newest 10 attempts' peak MiB; admission takes the largest of the newest three settled attempts instead when all are below it (`learnLeadCost`) */
   peakMibP80: number
   /** the peak MiB of the newest attempt */
   lastPeakMib: number
@@ -38,7 +41,8 @@ const Row = z.object({
 })
 
 /**
- * Per repo: the peak of every attempt (its worktree's largest sample), then the 80th percentile of the newest ten
+ * Per repo: the peak of every attempt (its worktree's largest sample of its last six hours, from the repo's relearn point on, the
+ * population admission learns from), then the 80th percentile of the newest ten
  * attempts' peaks (nearest rank, as `learnedLeadMib` takes it, but with no minimum of attempts: the caller decides
  * whether `attempts` is enough) and the newest attempt's peak. The same two figures again from the physical footprint,
  * over the newest ten attempts that have one (rows from before the footprint was recorded, or minutes `top` failed, have
@@ -47,9 +51,17 @@ const Row = z.object({
 export async function readLeadCosts(sql: SQL): Promise<RepoLeadCost[]> {
   const rows = await boundedRead(sql, 5_000, async (tx) => {
     const found: unknown[] = await tx`
-      WITH peaks AS (
-        SELECT repo, worktree, max(rss_mib) AS peak, max(footprint_mib) AS fp_peak, max(at) AS last_at
-        FROM factory.lead_samples WHERE outside_slots GROUP BY repo, worktree
+      WITH counted AS (
+        SELECT s.repo, s.worktree, s.at, s.rss_mib, s.footprint_mib FROM factory.lead_samples s
+        LEFT JOIN factory.lead_relearn r ON r.repo = s.repo
+        WHERE s.outside_slots AND (r.at IS NULL OR s.at >= r.at)
+      ), lasts AS (
+        SELECT repo, worktree, max(at) AS last_at FROM counted GROUP BY repo, worktree
+      ), peaks AS (
+        SELECT c.repo, c.worktree, max(c.rss_mib) AS peak, max(c.footprint_mib) AS fp_peak, l.last_at
+        FROM counted c JOIN lasts l ON l.repo = c.repo AND l.worktree = c.worktree
+        WHERE c.at >= l.last_at - ${LEARN_WINDOW_MS / 1000} * interval '1 second'
+        GROUP BY c.repo, c.worktree, l.last_at
       ), ranked AS (
         SELECT repo, peak, row_number() OVER (PARTITION BY repo ORDER BY last_at DESC, worktree) AS newest
         FROM peaks
