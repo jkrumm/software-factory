@@ -87,7 +87,7 @@ export function elapsedWeekShare(reading: AccountReading, now: Date): number | n
 
 /**
  * How much of its tightest window an account has left, in percentage points of its limit; windows with no number do not
- * count, and an account with none has all of it. A point of the 5-hour window weighs as much as a point of the week: the
+ * count; an account with none (which `standing` closes first, so it never reaches the pick) has 0. A point of the 5-hour window weighs as much as a point of the week: the
  * smaller room decides, so an account is never the roomiest by a window that is not its tightest.
  */
 export function roomLeft(reading: AccountReading, limits: WindowLimits = DEFAULT_LIMITS): number {

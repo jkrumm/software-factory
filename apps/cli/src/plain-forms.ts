@@ -23,7 +23,7 @@ export function artifactListPlain(data: unknown): string {
     .join('\n')
 }
 
-/** `project show --format plain`: a header, the plan's error and warnings, then one line per plan row. */
+/** `project show --format plain`: a header, the `project.yaml` warnings (a `leads` clamped), the plan's error and warnings, then one line per plan row. */
 export function projectShowPlain(data: unknown): string {
   const project = data as ProjectView
   const lines = [
@@ -33,6 +33,7 @@ export function projectShowPlain(data: unknown): string {
     const { fast, full, ci } = project.checks
     lines.push(`checks: fast=${JSON.stringify(fast)} full=${JSON.stringify(full)} ci=${ci}`)
   }
+  for (const warning of project.projectWarnings ?? []) lines.push(`projectWarning: ${warning}`)
   if (project.planError) lines.push(`planError: ${project.planError}`)
   if (!project.plan) return [...lines, 'no plan'].join('\n')
   for (const warning of project.plan.warnings) lines.push(`warning: ${warning}`)
