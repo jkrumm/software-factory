@@ -15,6 +15,7 @@ import { type LaneInput, laneRoom } from '../domains/capacity/lanes.ts'
 import type { AccountRanker, AccountSource, Assignment, HostReader, ShadowDecision } from '../domains/capacity/ports.ts'
 import { effectiveState, type QueueStates } from '../domains/capacity/queue-state.ts'
 import { type Claim, type Claimant, claimRoom, holdsClaim } from '../domains/capacity/claims.ts'
+import { planWaits, type SeenWait, waitKindOf } from '../domains/capacity/waits.ts'
 import type { Edge } from '../domains/planning/chain.ts'
 import type { CapacityFacts } from '../domains/loops/ports.ts'
 import type { OpenIssueRow } from '../domains/planning/ports.ts'
@@ -95,6 +96,8 @@ export interface QueueReason {
   message: string
   /** when a reading says the reason may end */
   opensAt: Date | null
+  /** `fit`: the memory refusal is the learned cost of the candidate's lead (see `waitKindOf`) */
+  part?: 'fit'
 }
 
 export interface QueueEntry {
@@ -611,6 +614,36 @@ async function recordShadow(deps: CapacityDeps, host: HostInputs, notes: string[
 /** The shadow decisions are kept two weeks, as the host samples they are read against. */
 export const SHADOW_KEEP_MS = 14 * 86_400_000
 
+/** The queue intervals are kept 400 days, as the hourly class rollups (a few rows per Issue). */
+export const WAITS_KEEP_MS = 400 * 86_400_000
+
+/**
+ * Records what the last look found each queued Issue waiting for (`factory.queue_intervals`): an Issue with a reason has an
+ * open interval of that kind, a new one begins only when the kind changes, and an Issue that left the queue (admitted,
+ * closed) or has no reason any more ends its interval at this look. A failure is a note, never the pass's.
+ */
+async function recordWaits(deps: CapacityDeps, queue: readonly QueueEntry[], notes: string[]): Promise<void> {
+  const seen: SeenWait[] = queue.flatMap((entry) =>
+    entry.reason
+      ? [
+          {
+            issue: entry.issue,
+            project: entry.project ?? entry.repo,
+            kind: waitKindOf(entry.reason),
+            message: entry.reason.message,
+          },
+        ]
+      : [],
+  )
+  const stored = await deps.uow.run(async ({ capacity }) => {
+    await capacity.lock()
+    const now = deps.clock.now()
+    await capacity.applyWaits(now, planWaits(await capacity.openWaits(), seen), new Date(now.getTime() - WAITS_KEEP_MS))
+    return ok(undefined)
+  })
+  if (!stored.ok) notes.push(`the queue intervals could not be stored (${stored.error.detail})`)
+}
+
 /** The most Issues one pass admits; the rest wait for the next. */
 export const PASS_LIMIT = 20
 
@@ -641,6 +674,7 @@ export async function admissionPass(
     }
     admitted.push(step.value.admitted)
   }
+  await recordWaits(deps, queue, notes)
   return ok({ admitted, queue, notes })
 }
 

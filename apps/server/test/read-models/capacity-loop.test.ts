@@ -82,6 +82,20 @@ async function seed() {
   await sql`UPDATE factory.host_samples SET swapout_mb_per_300s = 100, swap_used_pct = 95 WHERE at = ${t('11-04T08:01')}`
   await sql`UPDATE factory.host_samples SET swapout_mb_per_300s = 4000 WHERE at = ${t('11-02T10:04')}` // nothing queued: no idle
 
+  // queue intervals: [issue, kind, from, to (null: open)]. 10:00 memory; 10:02 memory and claim together; 11-04 08:00 only an
+  // `after` edge (chain), then 08:01 the memory fit beside it; issue_5 has been waiting for an account cap since 11-06 12:00
+  const waits: Array<[string, string, Date, Date | null]> = [
+    ['issue_5', 'memory', t('11-02T10:00'), t('11-02T10:03')],
+    ['issue_1', 'claim', t('11-02T10:02'), t('11-02T10:04')],
+    ['issue_2', 'chain', t('11-04T08:00'), t('11-04T08:02')],
+    ['issue_5', 'memory_fit', t('11-04T08:01'), t('11-04T08:02')],
+    ['issue_5', 'cap', t('11-06T12:00'), null],
+    ['issue_4', 'claim', t('10-30T09:00'), t('10-30T10:00')], // before the window
+  ]
+  for (const [issue, kind, from, to] of waits)
+    await sql`INSERT INTO factory.queue_intervals (issue_id, project, kind, message, from_at, to_at)
+      VALUES (${issue}, 'app', ${kind}, 'because', ${from}, ${to})`
+
   // test-slot steps: [at, name, peak, duration, wait]
   const steps: Array<[Date, string, number | null, number, number]> = [
     [t('11-02T10:00'), 'software-factory check', 3000, 600_000, 1000],
@@ -200,6 +214,26 @@ describe('GET /v1/capacity-loop figures', () => {
     expect(model.idleSeatHoursMemory.total).toBeCloseTo(8 / 60, 9)
     expect(model.idleSeatHoursMemory.swapout).toBeCloseTo(2 / 60, 9)
     expect(model.idleSeatHoursMemory.swapUsed).toBeCloseTo(6 / 60, 9)
+
+    // what the queue waited for: queued hours by kind clipped to the window (an open interval runs to its end), the idle
+    // seat-hours split among the kinds queued in the minute, the owner's kinds (an `after` edge) only when nothing else waits
+    const hours = (minutes: number) => minutes / 60
+    const wanted = [
+      { kind: 'cap', queuedHours: 24, issues: 1, idleSeatHours: 0 },
+      { kind: 'memory', queuedHours: hours(3), issues: 1, idleSeatHours: hours(3.5) },
+      { kind: 'chain', queuedHours: hours(2), issues: 1, idleSeatHours: hours(2) },
+      { kind: 'claim', queuedHours: hours(2), issues: 1, idleSeatHours: hours(1.5) },
+      { kind: 'memory_fit', queuedHours: hours(1), issues: 1, idleSeatHours: hours(6) },
+    ]
+    expect(model.queueByReason.map((r) => r.kind)).toEqual(wanted.map((r) => r.kind))
+    wanted.forEach((w, i) => {
+      const got = model.queueByReason[i]
+      expect(got?.issues).toBe(w.issues)
+      expect(got?.queuedHours).toBeCloseTo(w.queuedHours, 9)
+      expect(got?.idleSeatHours).toBeCloseTo(w.idleSeatHours, 9)
+    })
+    // the split loses nothing: every idle seat-hour is in one kind
+    expect(model.queueByReason.reduce((sum, r) => sum + r.idleSeatHours, 0)).toBeCloseTo(model.idleSeatHours.total, 9)
 
     // minutes over the load ceiling
     const over = (col: string) =>

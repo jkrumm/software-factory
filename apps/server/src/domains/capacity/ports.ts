@@ -8,6 +8,7 @@ import type { ProcInfo } from './leadcost.ts'
 import type { QueueState, QueueStates } from './queue-state.ts'
 import type { AimState } from './slot-aim.ts'
 import type { SlotRow } from './slots.ts'
+import type { OpenWait, WaitPlan } from './waits.ts'
 
 /** A lead's account, chosen when it was admitted. Package 4's `start_lead` reads the account of its attempt. */
 export interface Assignment {
@@ -68,6 +69,10 @@ export interface CapacityStore {
   leadRssSince(since: Date): Promise<Map<number, number>>
   /** stores the minute's shadow decision (the first of a minute stays) and drops those before `keepSince` */
   recordShadow(decision: ShadowDecision, keepSince: Date): Promise<void>
+  /** the open queue intervals: one per Issue that is queued for a reason as of the last recorded look */
+  openWaits(): Promise<OpenWait[]>
+  /** closes and opens queue intervals at `at` (`planWaits`), and drops the closed ones that ended before `keepSince` */
+  applyWaits(at: Date, plan: WaitPlan, keepSince: Date): Promise<void>
   /** the aimed slot count and the minute since which the host has been quiet; null before the first minute */
   slotAim(): Promise<AimState | null>
   saveSlotAim(state: AimState, at: Date): Promise<void>

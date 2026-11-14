@@ -844,6 +844,16 @@ export const SlotAimMinutes = z
   })
   .meta({ id: 'SlotAimMinutes' })
 
+/** One reason kind the queue waited for in the window. */
+export const CapacityReason = z
+  .strictObject({
+    kind: z.string(),
+    queuedHours: z.number(),
+    issues: z.number().int(),
+    idleSeatHours: z.number(),
+  })
+  .meta({ id: 'CapacityReason' })
+
 export const CapacityReaped = z
   .strictObject({ comm: z.string(), session: z.string(), reason: z.enum(['session', 'worktree']), at })
   .meta({ id: 'CapacityReaped' })
@@ -866,6 +876,15 @@ export const CapacityLoopModel = z
      * for each alone (a minute can count in both), against the ceilings in `constants`
      */
     idleSeatHoursMemory: z.strictObject({ total: z.number(), swapout: z.number(), swapUsed: z.number() }),
+    /**
+     * what the queue waited for over the window, by reason kind (`factory.queue_intervals`), the kind with most queued hours
+     * first: the hours Issues were queued for it, how many Issues, and the share of `idleSeatHours` that fell in minutes
+     * when an Issue was queued for it. A minute's idle seat-hours are split equally among the distinct kinds queued in it,
+     * leaving out the kinds that are no cost of the factory (an `after` edge, a Spec at the owner) unless only those wait;
+     * `unrecorded` is a minute no interval covers. The kinds are the queue's (`memory` is the host's reading, `memory_fit`
+     * the learned cost of a repo's lead against the free memory).
+     */
+    queueByReason: z.array(CapacityReason),
     /** host minutes whose load was above the ceiling in force that minute */
     minutesOverCeiling: CapacityTotal,
     slotWait: z.strictObject({

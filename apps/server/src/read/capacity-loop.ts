@@ -1,6 +1,7 @@
 import type { SQL } from 'bun'
 import * as z from 'zod'
 import type { CapacityLoopModel } from '@software-factory/contract'
+import { OWNED_ELSEWHERE_KINDS } from '../kernel/throughput-limits.ts'
 import { boundedRead } from './bounded.ts'
 import { readLeadCosts } from './lead-costs.ts'
 import { windowOf } from './stats.ts'
@@ -82,6 +83,44 @@ export async function readCapacityLoop(
       swapout: memoryIdle.swapout ?? 0,
       swapUsed: memoryIdle.swap_used ?? 0,
     }
+
+    // what the queue waited for: intervals clipped to the window, and the idle minutes split among the kinds queued in them
+    const queuedRows: unknown[] = await tx`
+      SELECT kind, count(DISTINCT issue_id) AS issues,
+        sum(extract(epoch FROM least(coalesce(to_at, ${w.to}), ${w.to}) - greatest(from_at, ${w.from})))::float8 / 3600 AS hours
+      FROM factory.queue_intervals
+      WHERE from_at < ${w.to} AND coalesce(to_at, ${w.to}) > ${w.from} GROUP BY kind`
+    const idleRows: unknown[] = await tx`
+      WITH idle AS (
+        SELECT at, greatest(seats - leads, 0) AS seats FROM factory.host_samples
+        WHERE queued > 0 AND seats IS NOT NULL AND leads IS NOT NULL AND greatest(seats - leads, 0) > 0
+          AND at >= ${w.from} AND at < ${w.to}),
+      ivs AS (
+        SELECT kind, from_at, to_at FROM factory.queue_intervals
+        WHERE from_at < ${w.to} AND coalesce(to_at, ${w.to}) > ${w.from}),
+      kinds AS (
+        SELECT idle.at, idle.seats,
+          coalesce(
+            array_agg(DISTINCT q.kind) FILTER (WHERE q.kind NOT IN ${tx([...OWNED_ELSEWHERE_KINDS])}),
+            array_agg(DISTINCT q.kind) FILTER (WHERE q.kind IS NOT NULL),
+            ARRAY['unrecorded']) AS kinds
+        FROM idle LEFT JOIN ivs q ON q.from_at <= idle.at AND coalesce(q.to_at, ${w.to}) > idle.at
+        GROUP BY idle.at, idle.seats)
+      SELECT kind, sum(seats::float8 / 60 / cardinality(kinds)) AS hours FROM kinds, unnest(kinds) AS kind GROUP BY kind`
+    const Queued = z.object({ kind: z.string(), issues: z.coerce.number().int(), hours: z.coerce.number().nullable() })
+    const Idle = z.object({ kind: z.string(), hours: z.coerce.number().nullable() })
+    const idleByKind = new Map(idleRows.map((raw) => Idle.parse(raw)).map((r) => [r.kind, r.hours ?? 0]))
+    const queuedByKind = new Map(queuedRows.map((raw) => Queued.parse(raw)).map((r) => [r.kind, r]))
+    const queueByReason = [...new Set([...queuedByKind.keys(), ...idleByKind.keys()])]
+      .map((kind) => ({
+        kind,
+        queuedHours: queuedByKind.get(kind)?.hours ?? 0,
+        issues: queuedByKind.get(kind)?.issues ?? 0,
+        idleSeatHours: idleByKind.get(kind) ?? 0,
+      }))
+      .toSorted(
+        (a, b) => b.queuedHours - a.queuedHours || b.idleSeatHours - a.idleSeatHours || a.kind.localeCompare(b.kind),
+      )
 
     const overDay: unknown[] = await tx`
       SELECT to_char(at AT TIME ZONE 'UTC', 'YYYY-MM-DD') AS day, count(*) AS v
@@ -231,6 +270,7 @@ export async function readCapacityLoop(
       throughput: { total: closed, perDay: perDay(closedDay, 0) },
       idleSeatHours: { total: idle, perDay: perDay(idleDay, 0) },
       idleSeatHoursMemory: idleMemory,
+      queueByReason,
       minutesOverCeiling: { total: over, perDay: perDay(overDay, 0) },
       slotAim,
       slotWait: { n: waitRow.n, p50Ms: waitRow.p50, p90Ms: waitRow.p90, perDayP50: perDay(waitDay, null) },

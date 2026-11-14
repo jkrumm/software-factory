@@ -14,6 +14,8 @@ import {
   TENANT_DAY_HOURS,
   TENANT_GROWTH_MIB,
   isSharedMemoryProgram,
+  WAIT_SUBJECTS,
+  type WaitSubject,
 } from '../../kernel/throughput-limits.ts'
 
 export const THROUGHPUT_KPIS = [
@@ -52,8 +54,8 @@ export interface WindowFacts {
   steps: { project: string; tier: string; runs: number; peakP90Mib: number; budgetMib: number; overMinutes: number }[]
   /** a process whose footprint grew between its first and last notable minute in the window */
   processes: { name: string; class: string; project: string; grownMib: number; minutes: number }[]
-  /** minutes Issues of every project spent queued (filed or reopened to admitted) for admissions in the window: one row, on the factory, whose queue it is */
-  queued: { project: string; minutes: number; admissions: number }[]
+  /** the minutes queued Issues waited for a reason a lead can cut, per reason and the project it is acted on */
+  waits: WaitFact[]
   /** the tenant class (launchd jobs and VMs) as the hourly rollups of the window give it */
   tenants: TenantFacts
 }
@@ -79,6 +81,33 @@ export interface TenantPolicy {
   budgetMib: number
 }
 
+/** A project's `leads` and the cap it sets on each lane (`leads` of the lane; null: none), as its project.yaml declares them. */
+export interface ProjectShape {
+  leads: number
+  lanes: ReadonlyMap<string, number | null>
+}
+
+/**
+ * Queue minutes (`factory.queue_intervals`) clipped to the window, for one reason of `WAIT_SUBJECTS`. A memory or account wait
+ * is the factory's to cut (`project` is the factory); a claim or lane wait is a repo's (`project` is that repo), whose
+ * `leads` and lanes the finding names.
+ */
+export interface WaitFact {
+  reason: WaitSubject
+  project: string
+  minutes: number
+  /** the distinct Issues that waited */
+  issues: number
+  /** the repos the waiting Issues belonged to, the most minutes first */
+  repos: { project: string; minutes: number }[]
+  /** memory only: the minutes of `minutes` that were the lead-fit refusal (a repo's lead learned to take more than is free) */
+  fitMinutes: number
+  /** claim and lane: the project's `leads`; null when not known */
+  leads: number | null
+  /** claim and lane: the lanes the waiting Issues were filed in, with the project's cap on each (null: none) and the minutes waited */
+  lanes: { name: string; leads: number | null; minutes: number }[]
+}
+
 /** One thing that costs capacity, with the figure that measures it. */
 export interface Candidate {
   project: string
@@ -99,6 +128,46 @@ const READ = 'factory read throughput --hours 168'
 const MINUTES_PER_DAY = 1440
 
 const gib = (mib: number): string => `${round(mib / 1024)} GiB`
+
+const minutesText = (minutes: number): string => `${Math.round(minutes)} min`
+const hitMost = (repos: WaitFact['repos']): string =>
+  repos.length === 0
+    ? ''
+    : `; hit most: ${repos
+        .slice(0, 3)
+        .map((r) => `${r.project} ${minutesText(r.minutes)}`)
+        .join(', ')}`
+const lanesText = (lanes: WaitFact['lanes']): string =>
+  lanes.length === 0
+    ? ''
+    : `; lanes: ${lanes.map((l) => `${l.name}${l.leads === null ? '' : ` (leads: ${l.leads})`} ${minutesText(l.minutes)}`).join(', ')}`
+const leadsText = (leads: number | null): string => (leads === null ? '' : ` (\`leads: ${leads}\` in its project.yaml)`)
+
+/** What a wait finding says it measured, and who it hit. */
+function waitLabel(q: WaitFact): string {
+  const issues = `${q.issues} Issue${q.issues === 1 ? '' : 's'}`
+  switch (q.reason) {
+    case 'memory': {
+      const fit = q.fitMinutes > 0 ? `, ${minutesText(q.fitMinutes)} of it a lead that did not fit the free memory` : ''
+      return `${round(q.minutes)} minutes queued for host memory by ${issues}${fit}${hitMost(q.repos)}`
+    }
+    case 'account':
+      return `${round(q.minutes)} minutes queued for an account (its window closed, or its lead cap) by ${issues}${hitMost(q.repos)}`
+    case 'claim':
+      return `${round(q.minutes)} minutes ${issues} of ${q.project} queued for a free claim in the repo${leadsText(q.leads)}${lanesText(q.lanes)}`
+    case 'lane':
+      return `${round(q.minutes)} minutes ${issues} of ${q.project} queued for a lane's cap${leadsText(q.leads)}${lanesText(q.lanes)}`
+  }
+}
+
+/** The read that shows a wait finding's figure again. */
+function waitQuery(q: WaitFact, days: number): string {
+  const kinds = WAIT_SUBJECTS[q.reason].map((k) => `.kind == "${k}"`).join(' or ')
+  const all = `\`factory read capacity-loop --days ${days} | .queueByReason[] | select(${kinds})\` (queuedHours, divided by the ${days} days)`
+  return q.project === QUEUE_PROJECT
+    ? all
+    : `the queue_intervals of ${q.project} of kind ${WAIT_SUBJECTS[q.reason].join(' or ')} (the minutes between from_at and to_at in the window, divided by the ${days} days); ${all} for every project together`
+}
 
 /** What the window's facts rank as costs, largest first (then project, kpi, subject). */
 export function rankCandidates(facts: WindowFacts, tenants: TenantPolicy | null = null): Candidate[] {
@@ -163,19 +232,19 @@ export function rankCandidates(facts: WindowFacts, tenants: TenantPolicy | null 
       query: `${READ} | .host.topProcesses[] | select(.name == "${p.name}") | .grownMib`,
     })
   }
-  for (const q of facts.queued) {
+  for (const q of facts.waits) {
     if (q.minutes < MIN_COST_MINUTES) continue
     const perDay = q.minutes / days
     found.push({
       project: q.project,
       kpi: 'queued_minutes',
-      subject: '*',
-      label: `${round(q.minutes)} minutes queued over ${q.admissions} admissions`,
+      subject: q.reason,
+      label: waitLabel(q),
       value: round(perDay),
       unit: 'minutes/day',
       target: round(perDay * TARGET_SHARE),
       costMinutes: round(q.minutes),
-      query: `\`factory read kpis\` queue_time for the cut, every project's Issues from filed to admitted, divided by the ${days} days`,
+      query: waitQuery(q, days),
     })
   }
   if (tenants) found.push(...tenantCandidates(facts, tenants))
@@ -263,9 +332,10 @@ export function figureOf(
           .map((x) => x.grownMib),
       )
     case 'queued_minutes': {
-      const q = facts.queued.find((x) => x.project === finding.project)
-      // the queue is the factory's: a finding of an earlier rule on another project has nothing to read
-      return q ? round(q.minutes / days) : finding.project === QUEUE_PROJECT ? 0 : null
+      // the one figure of the first rule (`*`: every wait from filing to admission) is not recorded by reason: nothing to read
+      if (finding.subject === '*') return null
+      const q = facts.waits.find((x) => x.project === finding.project && x.reason === finding.subject)
+      return q ? round(q.minutes / days) : 0
     }
     case 'tenant_class_mib':
       return facts.tenants.hours === 0 ? null : round(facts.tenants.classMib, 0)
@@ -406,6 +476,14 @@ const num = (value: number): string => {
   return text.includes('.') ? text.replace(/\.?0+$/, '') : text
 }
 
+/** What a `queued_minutes` subject waited for, in a title. */
+const QUEUE_WAITS: Record<string, string> = {
+  memory: 'host memory',
+  account: 'an account',
+  claim: 'a claim',
+  lane: 'a lane',
+}
+
 /** The improvement signal's title: stable per project and figure, so a repeat of an open Issue amends it. */
 export const improvementTitle = (c: Pick<Candidate, 'project' | 'kpi' | 'subject'>): string => {
   const what: Record<ThroughputKpi, string> = {
@@ -413,7 +491,7 @@ export const improvementTitle = (c: Pick<Candidate, 'project' | 'kpi' | 'subject
     slot_minutes_per_issue: 'bring the slot-minutes per closed Issue back to the median',
     step_peak_mib: `bring the ${c.subject} step’s peak memory under its budget`,
     process_growth_mib: `stop ${c.subject} growing without bound`,
-    queued_minutes: 'cut the time Issues wait queued',
+    queued_minutes: `cut the time Issues wait queued for ${QUEUE_WAITS[c.subject] ?? 'a reason'}`,
     tenant_class_mib: 'bring the standing memory of the tenant class under its budget',
     tenant_growth_mib: `bring ${c.subject} back to the memory it usually holds`,
   }
@@ -489,6 +567,8 @@ export interface ProjectBudgets {
   fastMs: number | null
   peakMib: number | null
   failShare: number | null
+  /** its `leads` and lane caps, named by a claim or lane wait's finding */
+  shape?: ProjectShape
 }
 
 /**

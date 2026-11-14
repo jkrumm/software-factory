@@ -56,6 +56,7 @@ import {
   historyValues,
   historyXLabels,
   hoursWords,
+  queueReasonWords,
   kpiChange,
   KPI_HINT,
   kpiFooter,
@@ -757,6 +758,50 @@ function CapacityTables({ model }: { model: CapacityLoopModel }) {
                       <td className="px-4 py-2 text-right tabular-nums">{mibWords(step.p80PeakMib)}</td>
                       <td className="px-4 py-2 text-right tabular-nums">{msWords(step.medianDurationMs)}</td>
                       <td className="px-4 py-2 text-right tabular-nums">{msWords(step.medianWaitMs)}</td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+          )}
+        </Fold>
+      </section>
+      <section aria-label="Queue waits by reason">
+        <Fold title="Queue waits by reason" count={model.queueByReason.length} defaultOpen>
+          {model.queueByReason.length === 0 ? (
+            <p className="py-2 text-sm text-muted-foreground">No queue wait recorded in the window.</p>
+          ) : (
+            <div className={cn(PANEL, 'overflow-x-auto')} style={PANEL_SHADOW}>
+              <table className="w-full text-sm">
+                <caption className="sr-only">
+                  Hours queued Issues waited, and idle seat-hours that fell in minutes they waited, by the reason they
+                  stayed queued
+                </caption>
+                <thead className="text-left text-xs text-muted-foreground">
+                  <tr>
+                    <th scope="col" className="px-4 py-2 font-medium">
+                      Reason
+                    </th>
+                    <th scope="col" className="px-4 py-2 text-right font-medium">
+                      Issues
+                    </th>
+                    <th scope="col" className="px-4 py-2 text-right font-medium">
+                      Queued
+                    </th>
+                    <th scope="col" className="px-4 py-2 text-right font-medium">
+                      Idle seats
+                    </th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {model.queueByReason.map((reason) => (
+                    <tr key={reason.kind} className="border-t">
+                      <th scope="row" className="px-4 py-2 text-left font-medium">
+                        {queueReasonWords(reason.kind)}
+                      </th>
+                      <td className="px-4 py-2 text-right tabular-nums">{reason.issues}</td>
+                      <td className="px-4 py-2 text-right tabular-nums">{hoursWords(reason.queuedHours)}</td>
+                      <td className="px-4 py-2 text-right tabular-nums">{hoursWords(reason.idleSeatHours)}</td>
                     </tr>
                   ))}
                 </tbody>

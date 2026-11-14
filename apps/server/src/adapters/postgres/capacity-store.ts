@@ -407,6 +407,26 @@ export function postgresCapacityStore(tx: SQL): CapacityStore {
       await tx`DELETE FROM factory.admission_shadow WHERE at < ${keepSince}`
     },
 
+    async openWaits() {
+      const rows: unknown[] = await tx`SELECT id, issue_id, kind FROM factory.queue_intervals WHERE to_at IS NULL`
+      return rows.map((raw) => {
+        const row = z.object({ id: z.coerce.number().int(), issue_id: z.string(), kind: z.string() }).parse(raw)
+        return { id: row.id, issue: row.issue_id, kind: row.kind }
+      })
+    },
+
+    async applyWaits(at, plan, keepSince) {
+      if (plan.close.length > 0) {
+        await tx`UPDATE factory.queue_intervals SET to_at = ${at} WHERE id IN ${tx([...plan.close])}`
+      }
+      for (const w of plan.start) {
+        await tx`
+          INSERT INTO factory.queue_intervals (issue_id, project, kind, message, from_at)
+          VALUES (${w.issue}, ${w.project}, ${w.kind}, ${w.message}, ${at})`
+      }
+      await tx`DELETE FROM factory.queue_intervals WHERE to_at IS NOT NULL AND to_at < ${keepSince}`
+    },
+
     async leadRssSince(since) {
       const rows: unknown[] = await tx`
         SELECT DISTINCT ON (issue) issue, rss_mib FROM factory.lead_samples
