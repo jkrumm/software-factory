@@ -97,7 +97,7 @@ export function screenSpecByRule(input: RuleInput): RuleOutcome | null {
   }
   if (input.origin.replan) {
     const block = replanBlockOf(input.content)
-    if (block && block.plan.length === 0 && block.cancel.length === 0) {
+    if (block?.plan.length === 0 && block.cancel.length === 0) {
       const freed = block.edges.remove.length
       return {
         outcome: 'settled',
