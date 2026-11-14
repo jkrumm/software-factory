@@ -404,7 +404,7 @@ marks it back, which counts as a return) and the Console's button "Push what wai
 the pass runs with `force`). The pass is due on a return, on the button, when it never ran, and in any case every 6 hours. One pass over every open Errand, an Issue's and a request: each `check` runs (30 a pass) and an Errand
 whose check exits 1..125 closes `not_needed` by `check`, telling its lead with `errand_done` (`resolved`); the rest that reached the owner are screened again (`rescreenErrand`: the same
 rules and `factory-errand`, 10 a pass) and an Errand an agent can do now is turned away as at the first screen; then the MacBook commands are pushed through `ask-human.sh push`
-(`adapters/shell/ask-human.ts`, `FACTORY_ASK_HUMAN_BIN` or the dotfiles' copy), whose dialog answer closes the Errand on its own: an Errand that reached the owner with a command and host `macbook`, an Issue's or a request, whose
+(`adapters/shell/ask-human.ts`, `FACTORY_ASK_HUMAN_BIN` or the dotfiles' copy), whose dialog answer closes the Errand on its own: an Errand that reached the owner with a command, host `macbook` and need `secret` or `hands` (an `approval` has its button, a `place` waits for his own push button), an Issue's or a request, whose
 pushed run is not still going in a MacBook terminal. A return pushes every one, oldest raised first, one dialog at a time (the push waits for the click, so the next follows an answer or a time-out; a push the MacBook did not answer
 ends the run); while he is away it is one, never pushed first, else pushed longest ago, none within 6 hours. A lead's `errand raise --check <cmd>`
 stores the check on its Errand, so anything a machine can observe closes itself (the lead runs it now with `factory errand check <id>`, `POST /v1/errands/:id/check`: `app/checkpoints-check.ts`, the same `runCheck` and `resolveErrand` as the pass; `factory issue show` lists the Issue's Errands with `lastCheckedAt`, `checkNote` and `nextCheckAt`, six hours after the last pass at the latest), and `--cmd <command> --host macbook` (the MacBook when a command is given alone) stores what the owner runs, which is what makes
@@ -434,6 +434,36 @@ and failed (exit N)`, count too) leaves the Errand open and records the run (`ru
 shows `tried, failed: <first error line>` (`tried`) and the Console its output. A done on an Errand with a `check` runs the check at
 once, outside any transaction: exit 0 reopens it with `check_note` `marked done but the check says still needed` (the hourly pass
 keeps that note), exit 1..125 closes it with the check's output in the note, a check that could not answer closes it as before.
+**What an Errand needs** (`errands.need`: `secret`, `hands`, `approval`, `place`; `domains/checkpoints/need.ts`). Set when the screen
+lets it through and shown on Needs you; an Errand that was open before the column existed gets it from `assignNeeds` in the
+`settle` pass. The rule over the Errand's shape decides first, and the screen model (`ErrandScreenAnswer.need`, optional, never
+`approval`) only the rest, `hands` by default. A secret word (1Password, a biometric, sudo, the secrets reseal) is `secret`.
+A command addressed to the mini (`ssh <alias> '...'`) or the deploy gate's release (`deploy-release`, `gate.py release`) that names
+no secret is `approval`, and with a command it reaches the owner by rule (`screenByNeed`), no model asked. Another command for the
+MacBook with no physical step is `place`; a device, hardware, a portal or a visual check is `hands`. The desk pass pushes a MacBook
+dialog (`pushQueue`) only for `secret` and `hands`: a `place` waits on Needs you with its command to copy (his "Push what waits"
+button still pushes it), an `approval` never goes to the MacBook.
+**Approve** (`POST /v1/errands/:id/approve`, `factory errand approve <id>`, the Console's button; owner only, the orchestrator is
+refused). On an `approval` Errand that reached him, the server runs the command on the mini (`app/checkpoints-approve.ts`:
+`ssh <alias> '<x>'` is run as `<x>` here, the server's secrets left out, a 30-minute hang guard), answers at once, and records what it
+came to as a pushed run: exit 0 goes through his done (`finishErrand`, so the Errand's check decides, and the lead hears it),
+a failure leaves it open with the first and last lines. **What this guards and what it does not.** The route is owner-only, so a
+lead's agent token and the orchestrator's are refused. An agent on the mini is not kept from the owner token, though: with
+`FACTORY_TOKEN` empty the CLI resolves it through `secrets-run` (`credentials.ts`), and the Console listener has no per-request
+identity. So Approve is a recorded consent of the same strength as `errand done` and a Decision's answer, not a barrier, and it
+gives an agent nothing it lacks: the command runs as the user the agent already is. What the MacBook dialog had that Approve does
+not is a click on another machine; the Decision on this Issue (decision_01a1d9e5) put that trade to the owner, and reverting is one
+condition in `pushQueue` plus the route.
+**Repeats join.** A lead's Errand, or a request, with the same command or the same check as an open Errand does not raise another:
+the Issue waits on the open one (`errand_raised` with its id, a row in `errand_joins`), the owner is paged once, and the Errand's
+end (`errand_done`, a turn-back, a check that closes it, a retire) is written to every joined Issue in the same transaction
+(`eachJoined`). A request under a key that an open one holds replaces it as before, and joins only when its command is the same.
+**A command that fails twice ends** (`MAX_RUN_TRIES`, `retireFailed`): a pushed or approved run that came back unsuccessful the
+second time is not offered a third time. The Errand closes `turned_back` by `loop`; its lead (and every joined lead) hears
+`errand_done` with `turnedAway` saying the command failed twice and must be corrected, a request's asker reads the same words as
+its note. **Checks run with `/usr/sbin` and `/sbin` on the PATH** (`checkPath`: the server's launchd PATH has neither), and a
+check whose output says a command was not found, or that exits 127, is `broken` (`checkVerdict`): never "still needed", noted
+as `the check is broken: ...` on Needs you and put once on the lead's record (`tellCheckBroken`: a `noted` event a waiting lead reads at its next turn), and the owner's done closes the Errand.
 A failed or refused call is tried again after the Judge's 5-minute backoff, three tries in all (`errands.screen_tries`);
 after the third the Errand reaches the owner unscreened (`screen_by` `failed`).
 
@@ -617,10 +647,10 @@ model, not a signal: an agent-trust signal files an Issue, and no loops page exi
 The API stays loopback. The door and the Console are published on the tailnet by dotfiles-private's `tailscale serve`
 rows (the Console on :8797, to its loopback listener), and the perimeter is the tailnet ACL by device tag (a grant of
 `tag:mac` and `tag:phone` to `tag:devhost` on tcp:8797), as Collie's (NL25); the deploy publishes nothing. There is no
-per-request identity: anything that reaches :8797 reads what the owner reads, and no more than reads and the ten answer
-verbs below, never a session start. The door holds only its own token; the orchestrator's is the owner's rights minus nine owner-only routes, and the Console proxy never uses it. Nothing that can start Claude Code is reachable from
-another node. The Console listener reads, and forwards exactly the owner's ten answer verbs (a Decision's answer, an artifact's verdict and its needed-me mark,
-annotation and its edit and delete, an Errand done, a held signal promoted or dismissed), guarded against a cross-site page (JSON only bar a delete, no cross-site fetch
+per-request identity: anything that reaches :8797 reads what the owner reads, and no more than reads and the eleven answer
+verbs below, never a session start. The door holds only its own token; the orchestrator's is the owner's rights minus ten owner-only routes, and the Console proxy never uses it. Nothing that can start Claude Code is reachable from
+another node. The Console listener reads, and forwards exactly the owner's eleven answer verbs (a Decision's answer, an artifact's verdict and its needed-me mark,
+annotation and its edit and delete, an Errand done, an Errand approved, a held signal promoted or dismissed), guarded against a cross-site page (JSON only bar a delete, no cross-site fetch
 metadata, no foreign `origin`, 64 KiB); it starts no session and cancels or reopens no Issue, and promote files one only
 from a signal already held and dismiss files nothing. The artifact frame (`/frame.html`, `/frame/*`) is the one document the page frames and is
 served under its own CSP (scripts, no network, sandboxed), not the page's, whose `script-src` stays `'self'`.
@@ -653,7 +683,7 @@ Rows in `docs/plan.yaml` carry each of these.
 
 - **The Console** (NL1): `apps/console` (Vite, React, shadcn on Base UI, Tailwind 4 with Basalt's tokens, TanStack
   Router, Query and Table, a PWA), `tests/e2e` (Playwright), and the second loopback listener, published by dotfiles-private's serve row;
-  it is read-only apart from the ten answer verbs, its perimeter is the tailnet ACL (NL25), and it can never spawn a session. The shell and Needs you (the answers
+  it is read-only apart from the eleven answer verbs, its perimeter is the tailnet ACL (NL25), and it can never spawn a session. The shell and Needs you (the answers
   in place; `/checkpoints/<id>`, the link of the owner's pages, lands on its item) the Flow board, the read-only Issue page (`/issues/<n>`, linked from a Needs you card) and the Chain are built; the other screens are not.
 - **The 30-minute forward** (NL5): an unsolved alert reaching the owner. The old core's `FACTORY_ALERT_*` settings stay in
   the env allow-list for a rollback and the new core reads none of them.

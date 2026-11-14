@@ -69,7 +69,8 @@ describe('what a check’s exit says', () => {
     expect(checkVerdict(run(2))).toBe('not_needed')
     expect(checkVerdict(run(125))).toBe('not_needed')
     expect(checkVerdict(run(126))).toBe('unrunnable')
-    expect(checkVerdict(run(127))).toBe('unrunnable')
+    // a command that is not found is a broken check, not a check that answered
+    expect(checkVerdict(run(127))).toBe('broken')
     expect(checkVerdict(run(137))).toBe('unrunnable')
     expect(checkVerdict(run(null))).toBe('unrunnable')
     expect(checkVerdict(run(1, true))).toBe('unrunnable')

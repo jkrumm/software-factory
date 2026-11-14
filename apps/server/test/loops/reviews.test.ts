@@ -123,6 +123,8 @@ describe('the desk pass is due', () => {
       host: 'macbook',
       source: 'ask-human',
       pushedAt: null,
+      need: 'hands',
+      runAttempts: 0,
       ...patch,
     }) as unknown as ErrandRecord
   const ids = (list: ErrandRecord[]) => list.map((e) => String(e.id))

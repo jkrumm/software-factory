@@ -3,9 +3,10 @@ import type { ErrandId } from '../domains/checkpoints/errand.ts'
 import type { ErrandRecord } from '../domains/checkpoints/ports.ts'
 import { err, ok } from '../kernel/result.ts'
 import type { CheckpointResult } from './checkpoints.ts'
-import { resolveErrand } from './checkpoints-errands.ts'
+import { resolveErrand, tellCheckBroken } from './checkpoints-errands.ts'
 import type { SettleDeps } from './checkpoints-settle.ts'
 import { runCheck } from './loops/errands.ts'
+import { CHECK_BROKEN_NOTE } from '../domains/checkpoints/request.ts'
 
 export interface ErrandChecked {
   outcome: ErrandCheckReply['outcome']
@@ -37,6 +38,9 @@ export async function checkErrandNow(
       uow: deps.uow,
       clock: deps.clock,
       checks: deps.checks,
+      broken: async (found, line) => {
+        await tellCheckBroken(deps, found, line)
+      },
       resolve: async (found, why) => {
         const closed = await resolveErrand(deps, found.id, why)
         if (!closed.ok) refusals.push(closed)
@@ -53,5 +57,10 @@ export async function checkErrandNow(
   if (!after.ok) return after
   const now = after.value ?? errand
   if (now.doneAt) return ok({ outcome: 'closed', note: now.doneNote, errand: now })
-  return ok({ outcome: pass.unrunnable > 0 ? 'unrunnable' : 'needed', note: now.checkNote, errand: now })
+  const broken = now.checkNote?.startsWith(CHECK_BROKEN_NOTE) === true
+  return ok({
+    outcome: broken ? 'broken' : pass.unrunnable > 0 ? 'unrunnable' : 'needed',
+    note: now.checkNote,
+    errand: now,
+  })
 }

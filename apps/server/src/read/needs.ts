@@ -1,7 +1,8 @@
 import type { SQL } from 'bun'
 import * as z from 'zod'
 import type { NeedItem, NeedKind, NeedsModel } from '@software-factory/contract'
-import { RUN_STATUSES, STILL_NEEDED_NOTE, triedLine } from '../kernel/run.ts'
+import { ERRAND_NEEDS } from '@software-factory/contract'
+import { CHECK_BROKEN_NOTE, RUN_STATUSES, STILL_NEEDED_NOTE, triedLine } from '../kernel/run.ts'
 import { hostOf } from '../kernel/hands.ts'
 import { readLongWaits } from './long-waits.ts'
 import { screenPassed } from './spec-screen.ts'
@@ -109,6 +110,8 @@ const ErrandRow = z.object({
   run_head: z.string().nullable(),
   check_at: z.date().nullable(),
   check_note: z.string().nullable(),
+  need: z.enum(ERRAND_NEEDS).nullable(),
+  joined: z.number().int(),
 })
 
 /** What the last attempt at an Errand said, newest first: a run that came back unsuccessful, or a check that overruled a done. */
@@ -126,7 +129,9 @@ function triedOf(row: z.infer<typeof ErrandRow>): string | null {
         }
       : null
   const check =
-    row.check_note?.startsWith(STILL_NEEDED_NOTE) && row.check_at ? { at: row.check_at, line: row.check_note } : null
+    (row.check_note?.startsWith(STILL_NEEDED_NOTE) || row.check_note?.startsWith(CHECK_BROKEN_NOTE)) && row.check_at
+      ? { at: row.check_at, line: row.check_note }
+      : null
   const latest = run && check ? (run.at.getTime() >= check.at.getTime() ? run : check) : (run ?? check)
   return latest ? plain(latest.line, 300) : null
 }
@@ -195,7 +200,8 @@ export async function readNeeds(sql: SQL, now: Date, options: { longWaitMs?: num
     ORDER BY at DESC, issue_id DESC`
   const errands: unknown[] = await sql`
     SELECT r.id, r.issue_id, i.repo, r.summary, r.detail, r.raised_at, r.screen_note, r.source, r.command, r.host,
-      r.run_status, r.run_exit, r.run_at, r.run_attempts, r.run_head, r.check_at, r.check_note,
+      r.run_status, r.run_exit, r.run_at, r.run_attempts, r.run_head, r.check_at, r.check_note, r.need,
+      (SELECT count(*)::int FROM factory.errand_joins j WHERE j.errand_id = r.id) AS joined,
       (SELECT f.payload->>'origin' FROM factory.issue_events f WHERE f.issue_id = r.issue_id AND f.kind = 'filed' AND f.version = 1) AS origin
     FROM factory.errands r LEFT JOIN factory.issues i ON i.id = r.issue_id
     WHERE r.done_at IS NULL AND r.reached_owner_at IS NOT NULL AND (r.issue_id IS NULL OR i.state <> 'closed')
@@ -233,6 +239,8 @@ export async function readNeeds(sql: SQL, now: Date, options: { longWaitMs?: num
         host: null,
         sourceLink: null,
         tried: null,
+        need: null,
+        joined: 0,
         wait: null,
         work: isWorkRepo(row.repo, open),
       }
@@ -258,6 +266,8 @@ export async function readNeeds(sql: SQL, now: Date, options: { longWaitMs?: num
         host: null,
         sourceLink: null,
         tried: null,
+        need: null,
+        joined: 0,
         wait: null,
         work: isWorkRepo(row.repo, open),
       }
@@ -283,6 +293,8 @@ export async function readNeeds(sql: SQL, now: Date, options: { longWaitMs?: num
         host: row.host ?? hostOf(`${row.summary}\n${row.detail ?? ''}`),
         sourceLink: null,
         tried: triedOf(row),
+        need: row.need,
+        joined: row.joined,
         wait: null,
         // a request no Issue raised names no repo, so it may be about a work repo: the read token never sees its words
         work: row.repo === null || isWorkRepo(row.repo, open),
@@ -308,6 +320,8 @@ export async function readNeeds(sql: SQL, now: Date, options: { longWaitMs?: num
         host: null,
         sourceLink: row.link,
         tried: null,
+        need: null,
+        joined: 0,
         wait: null,
         work: isWorkRepo(row.repo, open),
       }
@@ -330,6 +344,8 @@ export async function readNeeds(sql: SQL, now: Date, options: { longWaitMs?: num
       host: null,
       sourceLink: null,
       tried: null,
+      need: null,
+      joined: 0,
       wait: { reason: 'timer', until: wait.until, held: wait.held },
       work: isWorkRepo(wait.repo, open),
     })),

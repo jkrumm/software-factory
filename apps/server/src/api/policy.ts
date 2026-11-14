@@ -11,7 +11,7 @@
  * below. No token, or an unknown one, is 401 `unauthorized`; a known caller the row does not list is 403 `forbidden`.
  * The first row that matches wins, so a narrower row goes before a wider one.
  *
- * **The classes** (the owner is on every row but `public`; the orchestrator is on every row the owner is, bar the nine `PERSON` rows):
+ * **The classes** (the owner is on every row but `public`; the orchestrator is on every row the owner is, bar the ten `PERSON` rows):
  * - public: `GET /health`, the only route without a token.
  * - read: `GET /v1/*`, for owner, agent and read, except `GET /v1/errands` (the owner's hands) and a lead's own session read
  *   (`GET /v1/issues/:id/lead`), which are placed before it. A GET outside `/v1` is the owner's.
@@ -21,7 +21,7 @@
  * - owner only: everything else, and every route nobody has listed yet (new, cancel, note, seat, answer, prio, reopen, verdicts, projects, queue,
  *   capacity, loops, reading the door's registry). When in doubt, the owner alone.
  * - person: the owner's own judgment and hands, never the orchestrator's: `POST /v1/decisions/:id/worth-asking`,
- *   `POST /v1/artifacts/:id/verdict`, `POST /v1/artifacts/:id/needed` (his "needed me" mark), `POST /v1/artifacts/:id/annotations` and its `PATCH`/`DELETE /v1/artifacts/:id/annotations/:annotationId`, `POST /v1/errands/:id/done`, and
+ *   `POST /v1/artifacts/:id/verdict`, `POST /v1/artifacts/:id/needed` (his "needed me" mark), `POST /v1/artifacts/:id/annotations` and its `PATCH`/`DELETE /v1/artifacts/:id/annotations/:annotationId`, `POST /v1/errands/:id/done`, `POST /v1/errands/:id/approve` (his yes: the server runs the Errand's command on the mini), and
  *   `POST /signals/:id/promote` and `/dismiss` (releasing or refusing quarantined outside text).
  * - orchestrator: the owner's delegate agent. It has the owner's rights on every other row (it steers, cancels, reopens, files and
  *   answers) so the log and the owner-touch counts can tell it from the owner; its token is the only difference.
@@ -119,6 +119,7 @@ export const POLICY: readonly Rule[] = [
   rule('POST', '/v1/artifacts/:id/verdict', PERSON),
   rule('POST', '/v1/artifacts/:id/needed', PERSON),
   rule('POST', '/v1/errands/:id/done', PERSON),
+  rule('POST', '/v1/errands/:id/approve', PERSON),
   rule('POST', '/v1/errands/:id/turn-back', OWNER),
   rule('POST', '/v1/checkpoints/pass', OWNER),
   rule('POST', '/v1/loops/:name/run', OWNER),

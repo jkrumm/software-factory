@@ -8,6 +8,7 @@ import {
   DecisionView,
   ErrandList,
   DeskPushReply,
+  ErrandApproveReply,
   ErrandReply,
   ErrorBody,
   FlowModel,
@@ -188,6 +189,9 @@ export const finishErrand = (id: string, note: string, outcome: 'done' | 'not_ne
     { ...(note ? { note } : {}), ...(outcome === 'not_needed' ? { outcome } : {}) },
     ErrandReply,
   )
+/** The owner's Approve on an `approval` Errand: the server runs its command on the mini; what it came to lands on the Errand. */
+export const approveErrand = (id: string) =>
+  postJson(`/v1/errands/${encodeURIComponent(id)}/approve`, {}, ErrandApproveReply)
 /** The button "Push what waits to my MacBook": the desk pass now, as on his return. */
 export const pushDesk = () => postJson('/v1/desk/push', {}, DeskPushReply)
 export const turnBackErrand = (id: string, note: string) =>

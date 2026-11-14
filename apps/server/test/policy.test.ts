@@ -48,6 +48,7 @@ const PERSON_ROUTES = [
   ['PATCH', '/v1/artifacts/:id/annotations/:annotationId'],
   ['DELETE', '/v1/artifacts/:id/annotations/:annotationId'],
   ['POST', '/v1/errands/:id/done'],
+  ['POST', '/v1/errands/:id/approve'],
   ['POST', '/signals/:id/promote'],
   ['POST', '/signals/:id/dismiss'],
 ] as const

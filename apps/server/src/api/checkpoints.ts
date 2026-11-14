@@ -11,6 +11,7 @@ import {
   DecisionView,
   AnnotationReplyBody,
   EditAnnotationBody,
+  ErrandApproveReply,
   ErrandBody,
   ErrandCheckReply,
   ErrandDoneBody,
@@ -140,6 +141,8 @@ const errandView = (e: ErrandRecord) => ({
   command: e.command,
   check: e.checkCommand,
   host: e.host,
+  need: e.need,
+  approvedAt: e.approvedAt ? iso(e.approvedAt) : null,
   expiresAt: e.expiresAt ? iso(e.expiresAt) : null,
   requestKey: e.requestKey,
   closedKind: e.closedKind,
@@ -737,6 +740,27 @@ export const checkpointRoutes = (uses: CheckpointUses) =>
           operationId: 'errand.turn-back',
           summary:
             'the owner or the orchestrator turns an Errand back, not done: the note says what to do instead, and the lead hears it as its next turn',
+        },
+      },
+    )
+    .post(
+      '/errands/:id/approve',
+      async ({ params }) => {
+        const id = idOf('errand', params.id)
+        if (!id) return unknownId('Errand', params.id)
+        const result = await uses.approveErrand({ errandId: id })
+        if (!result.ok) return failed(result.error)
+        // answers at once: the command runs on and records what it came to
+        void result.value.done
+        return Response.json(ErrandApproveReply.parse({ errand: errandView(result.value.errand), started: true }))
+      },
+      {
+        params: Id,
+        response: RESPONSES(ErrandApproveReply, 400, 404, 409, 422, 503),
+        detail: {
+          operationId: 'errand.approve',
+          summary:
+            "the owner's yes on an `approval` Errand: its command runs on the mini (server-side, secrets left out) and what it came to is recorded; his token only, an agent's and the orchestrator's are refused. Answers at once; the Errand closes by its check when the command exits 0",
         },
       },
     )

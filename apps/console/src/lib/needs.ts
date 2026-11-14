@@ -210,9 +210,26 @@ export function deskGroups(items: readonly NeedItem[]): { host: DeskHost; label:
   })
 }
 
-/** The Errands whose command the factory can push to the MacBook as a dialog: the ones the button sends. */
+/** What an Errand needs from the owner, in his words. */
+export const NEED_LABEL: Record<NonNullable<NeedItem['need']>, string> = {
+  secret: 'A secret only you have',
+  hands: 'Your hands',
+  approval: 'Your yes only',
+  place: 'Your MacBook, no secret',
+}
+
+/** An approval whose command the server runs on the mini when he presses Approve: no dialog, no MacBook. */
+export const isApproval = (item: NeedItem): boolean =>
+  item.kind === 'errand' && item.need === 'approval' && item.command !== null
+
+/** The Errands whose command the factory can push to the MacBook as a dialog: the ones the button sends (an approval runs on the mini, a place is pushed on his button only). */
 export const macbookCommands = (items: readonly NeedItem[]): number =>
-  items.filter((item) => item.kind === 'errand' && item.command !== null && item.host === 'macbook').length
+  items.filter(
+    (item) => item.kind === 'errand' && item.command !== null && item.host === 'macbook' && !isApproval(item),
+  ).length
+
+/** What Approve's answer says: the command is running on the mini now. */
+export const approveWords = 'Approved: running on the mini, the Errand closes by its check'
 
 /** What the button's answer says. */
 export const pushWords = (reply: { started: boolean }): string =>
@@ -225,5 +242,9 @@ export const needsTitle = (count: number, desk: boolean): string =>
   `${count > 0 ? `(${count}) ` : ''}${desk ? 'Back at desk' : 'Needs you'} \u00b7 Software Factory`
 
 /** What a done on an Errand says: the server leaves it open when its check still says it is needed. */
-export const doneWords = (reply: { errand: { doneAt: string | null } }): string =>
-  reply.errand.doneAt === null ? 'Not done: its check says it is still needed' : 'Marked done'
+export const doneWords = (reply: { errand: { doneAt: string | null; closedKind?: string | null } }): string =>
+  reply.errand.doneAt === null
+    ? 'Not done: its check says it is still needed'
+    : reply.errand.closedKind === 'turned_back'
+      ? 'Closed: its command failed twice, the lead is told to correct it'
+      : 'Marked done'

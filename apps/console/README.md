@@ -258,7 +258,7 @@ log in words as a StepRail per attempt. Evidence: each ship with its commits, re
 the evidence. Checkpoints: Decisions with their options, artifacts, the notes you sent; the tab shows how many wait on you.
 The pure model (tabs, groups, series, chain links, tones) is `src/lib/issue-page.ts`. Every figure is the API's, only
 phrased; no id is on screen. A Needs you card and a Flow card link to it. It is read-only on purpose: the listener forwards
-ten answer verbs and none of them is a note or a cancel, and the Console never cancels an Issue or starts a session. An open
+eleven answer verbs and none of them is a note or a cancel, and the Console never cancels an Issue or starts a session. An open
 Decision links to `/needs-you?item=<id>`, an artifact to `/artifacts/<id>`, where the answer is given.
 `tests/e2e/issue.e2e.ts` compares the page's numbers with the API's.
 

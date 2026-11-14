@@ -11,6 +11,7 @@ import { postgresVisitStore } from '../../src/adapters/postgres/visit-store.ts'
 import { postgresWorkStore } from '../../src/adapters/postgres/work-store.ts'
 import { prReview } from '../../src/adapters/reviews/pr.ts'
 import { finishErrand, raiseErrand, requestErrand, turnBackErrand } from '../../src/app/checkpoints.ts'
+import { approveErrand } from '../../src/app/checkpoints-approve.ts'
 import { checkErrandNow } from '../../src/app/checkpoints-check.ts'
 import { screenErrands } from '../../src/app/checkpoints-errands.ts'
 import type { SettleDeps } from '../../src/app/checkpoints-settle.ts'
@@ -39,6 +40,10 @@ const clock: FixedClock = fixedClock('2026-11-13T08:00:00Z')
 const HOUR = 3_600_000
 let deps: SettleDeps
 let checks: Record<string, CheckRun>
+/** what the commands an approved Errand runs on the mini were given, and what they come to */
+let ran: string[]
+let commandRuns: Record<string, CheckRun>
+let commandExit: CheckRun
 let screened: string[]
 let screenAnswer: () => Result<ErrandScreenAnswer>
 let pushed: string[]
@@ -86,6 +91,9 @@ beforeEach(async () => {
   await migrate(db.sql, await loadMigrations())
   clock.set(new Date('2026-11-13T08:00:00Z'))
   checks = {}
+  ran = []
+  commandRuns = {}
+  commandExit = { exit: 0, timedOut: false, output: 'released' }
   screened = []
   pushed = []
   pushExit = 75
@@ -111,6 +119,13 @@ beforeEach(async () => {
       run: (command) => {
         expect(deps.uow.inTransaction()).toBe(false)
         return Promise.resolve(checks[command] ?? { exit: 0, timedOut: false, output: '' })
+      },
+    },
+    commands: {
+      run: (command) => {
+        expect(deps.uow.inTransaction()).toBe(false)
+        ran.push(command)
+        return Promise.resolve(commandRuns[command] ?? commandExit)
       },
     },
     policies: { rulesFor: () => Promise.resolve(ok([])) },
@@ -309,7 +324,7 @@ describe('the desk pass', () => {
     value(await screenErrands(deps))
     checks['home doctor'] = { exit: 1, timedOut: false, output: 'all accessories respond' }
     const first = value(await macbook('Reseal the cache', 'make secrets-seed', 'reseal'))
-    const second = value(await macbook('Reload the keys', 'make keys', 'keys'))
+    const second = value(await macbook('Reload the keys with Touch ID', 'make keys', 'keys'))
     // ask-human errands go through the screen first
     expect(value(await screenErrands(deps)).map((s) => s.outcome)).toEqual(['reached_owner', 'reached_owner'])
     const effectsBefore = await noteEffects(issueId)
@@ -457,7 +472,7 @@ describe('the desk pass', () => {
       cmd: 'make maxvnodes-install',
       host: 'macbook',
     })
-    const request = value(await macbook('Reload the keys', 'make keys', 'keys')).errand.id
+    const request = value(await macbook('Reload the keys with Touch ID', 'make keys', 'keys')).errand.id
     value(await screenErrands(deps))
     expect(await errandRow(queued)).toMatchObject({ command: 'make maxvnodes-install', host: 'macbook' })
     // away: the loop's tick finds nothing due
@@ -477,8 +492,12 @@ describe('the desk pass', () => {
 
   test('his button runs the pass at once, as on a return', async () => {
     const issueId = await workingIssue('example')
-    const queued = await reached(issueId, { summary: 'Approve the queued dialog', cmd: 'make x', host: 'macbook' })
-    const request = value(await macbook('Reload the keys', 'make keys', 'keys')).errand.id
+    const queued = await reached(issueId, {
+      summary: 'Approve the queued dialog with Touch ID',
+      cmd: 'make x',
+      host: 'macbook',
+    })
+    const request = value(await macbook('Reload the keys with Touch ID', 'make keys', 'keys')).errand.id
     value(await screenErrands(deps))
     value(await deskPass({ settle: deps, desk: deps.uow as never, push }))
     expect(pushed).toEqual([queued])
@@ -490,8 +509,12 @@ describe('the desk pass', () => {
 
   test('the MacBook answering after it was unreachable counts as his return', async () => {
     const issueId = await workingIssue('example')
-    const queued = await reached(issueId, { summary: 'Approve the queued dialog', cmd: 'make x', host: 'macbook' })
-    const request = value(await macbook('Reload the keys', 'make keys', 'keys')).errand.id
+    const queued = await reached(issueId, {
+      summary: 'Approve the queued dialog with Touch ID',
+      cmd: 'make x',
+      host: 'macbook',
+    })
+    const request = value(await macbook('Reload the keys with Touch ID', 'make keys', 'keys')).errand.id
     value(await screenErrands(deps))
     // the away pass pushes one; the MacBook does not answer, which ends the run and marks it down
     pushExit = 69
@@ -543,4 +566,168 @@ describe('the desk pass', () => {
 
   const finishErrandReplay = async (errandId: string) =>
     value(await finishErrand(deps, { errandId: errandId as never, note: null })).result
+})
+
+const RELEASE = "ssh mini 'make -C ~/gate deploy-release SHA=78088f16'"
+
+describe('an Errand that needs only his yes', () => {
+  const reach = async (issueId: IssueId, extra: Record<string, unknown> = {}) => {
+    const raised = await raise(issueId, {
+      summary: "Release the colleague's commit 78088f16",
+      cmd: RELEASE,
+      check: 'gate-pending',
+      ...extra,
+    })
+    return raised
+  }
+
+  test('a gate release is an approval by rule, never goes to the MacBook, and Approve runs it on the mini and closes it by its check', async () => {
+    const issueId = await workingIssue()
+    const raised = await reach(issueId)
+    expect(value(await screenErrands(deps))).toEqual([{ errand: raised.errand.id, outcome: 'reached_owner' }])
+    // the shape decided: no model was asked, and the screen says what it is
+    expect(screened).toEqual([])
+    expect(await errandRow(raised.errand.id)).toMatchObject({ need: 'approval', screen_by: 'rule' })
+    const [need] = (await readNeeds(db.sql, clock.now())).items
+    expect(need).toMatchObject({ id: raised.errand.id, need: 'approval', command: RELEASE })
+
+    // the desk pass, the owner back: nothing is pushed to the MacBook for it
+    const pass = value(await deskPass({ settle: deps, desk: deps.uow as never, push, force: true }))
+    expect(pass).toMatchObject({ ran: true, returned: true, pushed: [] })
+    expect(pushed).toEqual([])
+
+    // the gate has not released yet, then his Approve runs the command here and the check says it is done
+    checks['gate-pending'] = { exit: 1, timedOut: false, output: 'released' }
+    const approved = value(await approveErrand(deps, { errandId: raised.errand.id }))
+    expect(approved.errand).toMatchObject({ approvedAt: expect.any(Date), runStatus: 'running' })
+    await approved.done
+    // `ssh mini '<x>'` ran as <x> here, never as an ssh to itself
+    expect(ran).toHaveLength(1)
+    expect(ran[0]).not.toContain('ssh')
+    expect(ran[0]).toContain('make -C ~/gate deploy-release SHA=78088f16')
+    expect(await errandRow(raised.errand.id)).toMatchObject({ closed_kind: 'done', closed_by: 'owner' })
+    expect((await errandRow(raised.errand.id))?.done_note).toContain('its check exited 1')
+    expect(await issueRow(issueId)).toMatchObject({ state: 'working' })
+    expect(pushed).toEqual([])
+  })
+
+  test('an Approve whose command ran but whose check still says it is needed leaves it open, with no run going', async () => {
+    const issueId = await workingIssue()
+    const raised = await reach(issueId)
+    value(await screenErrands(deps))
+    const approved = value(await approveErrand(deps, { errandId: raised.errand.id }))
+    await approved.done
+    expect(await errandRow(raised.errand.id)).toMatchObject({
+      done_at: null,
+      run_status: null,
+      check_note: 'marked done but the check says still needed',
+    })
+  })
+
+  test('Approve is refused for what is not an approval, for a closed Errand and while its command runs', async () => {
+    const issueId = await workingIssue()
+    const secret = await raise(issueId, { summary: 'Reseal', cmd: 'make secrets-seed', host: 'macbook' })
+    value(await screenErrands(deps))
+    expect(await errandRow(secret.errand.id)).toMatchObject({ need: 'secret' })
+    const refused = await approveErrand(deps, { errandId: secret.errand.id })
+    expect(refused).toMatchObject({ ok: false, error: { kind: 'machine_refused' } })
+    expect(ran).toEqual([])
+
+    const other = await workingIssue()
+    const gate = await reach(other, { check: undefined })
+    // still unscreened: it has not reached the owner
+    expect(await approveErrand(deps, { errandId: gate.errand.id })).toMatchObject({ ok: false })
+    value(await screenErrands(deps))
+    const first = value(await approveErrand(deps, { errandId: gate.errand.id }))
+    // a second press while the first runs does not run it twice
+    expect(await approveErrand(deps, { errandId: gate.errand.id })).toMatchObject({ ok: false })
+    await first.done
+    expect(ran).toHaveLength(1)
+    expect(await errandRow(gate.errand.id)).toMatchObject({ closed_kind: 'done' })
+    expect(await approveErrand(deps, { errandId: gate.errand.id })).toMatchObject({ ok: false })
+  })
+
+  test('a second Issue with the same command joins the open Errand: one Errand, one page, and both Issues hear it end', async () => {
+    const first = await workingIssue()
+    const second = await workingIssue()
+    const raised = await reach(first)
+    value(await screenErrands(deps))
+    const joined = await reach(second, { summary: 'Release it for my Issue too' })
+    expect(joined.result).toBe('joined')
+    expect(joined.errand.id).toBe(raised.errand.id)
+    expect(await issueRow(second)).toMatchObject({ state: 'waiting', wait_reason: 'errand' })
+    expect((await db.sql`SELECT count(*)::int AS n FROM factory.errands`)[0]?.n).toBe(1)
+    expect((await db.sql`SELECT count(*)::int AS n FROM factory.errand_joins`)[0]?.n).toBe(1)
+    expect((await readNeeds(db.sql, clock.now())).items).toMatchObject([{ id: raised.errand.id, joined: 1 }])
+    // a request with the same command is that Errand too
+    const asked = value(
+      await requestErrand(deps, {
+        raw: { source: 'ask-human', text: 'Release 78088f16', command: RELEASE, key: 'gate' },
+      }),
+    )
+    expect(asked).toMatchObject({ result: 'joined', errand: { id: raised.errand.id }, superseded: [] })
+
+    checks['gate-pending'] = { exit: 1, timedOut: false, output: 'released' }
+    const approved = value(await approveErrand(deps, { errandId: raised.errand.id }))
+    await approved.done
+    expect(await issueRow(first)).toMatchObject({ state: 'working' })
+    expect(await issueRow(second)).toMatchObject({ state: 'working' })
+  })
+
+  test('a request under the same key with another command replaces the open one; the same command joins', async () => {
+    const ask = (command: string) =>
+      requestErrand(deps, { raw: { source: 'test-agent', text: 'Release the commit', command, key: 'gate' } })
+    const first = value(await ask(RELEASE))
+    expect(first.result).toBe('applied')
+    const corrected = value(await ask("ssh mini 'make -C ~/gate deploy-release SHA=feedbeef'"))
+    expect(corrected).toMatchObject({ result: 'applied', superseded: [first.errand.id] })
+    expect(value(await ask("ssh mini 'make -C ~/gate deploy-release SHA=feedbeef'")).result).toBe('replayed')
+  })
+
+  test('a check that cannot find its command is broken: the owner and the lead are told, and his done closes it', async () => {
+    const issueId = await workingIssue()
+    const raised = await raise(issueId, { summary: 'Raise the vnode limit', check: 'sysctl-check' })
+    value(await screenErrands(deps))
+    // `[ "$(sysctl -n kern.maxvnodes)" != 526336 ]` with no sysctl on the PATH: exit 0 and a not-found line
+    checks['sysctl-check'] = { exit: 0, timedOut: false, output: 'sh: sysctl: command not found' }
+    const checked = value(await checkErrandNow(deps, { errandId: raised.errand.id }))
+    expect(checked.outcome).toBe('broken')
+    expect(await errandRow(raised.errand.id)).toMatchObject({ done_at: null })
+    expect((await errandRow(raised.errand.id))?.check_note).toContain(
+      'the check is broken: sh: sysctl: command not found',
+    )
+    // the lead's Issue keeps waiting; the note is on its record for the turn it next gets, once however often the check runs
+    value(await checkErrandNow(deps, { errandId: raised.errand.id }))
+    const told = await db.sql`
+      SELECT payload FROM factory.issue_events WHERE issue_id = ${issueId} AND kind = 'noted'`
+    expect(told).toHaveLength(1)
+    expect(told[0]?.payload.text).toContain('is broken')
+    const [need] = (await readNeeds(db.sql, clock.now())).items
+    expect(need?.tried).toContain('the check is broken')
+    // his done is accepted: the check says nothing
+    const closed = value(await finishErrand(deps, { errandId: raised.errand.id, note: 'it is 526336' }))
+    expect(closed.errand).toMatchObject({ closedKind: 'done' })
+    expect(closed.errand.doneNote).toContain('the check is broken')
+    expect(await issueRow(issueId)).toMatchObject({ state: 'working' })
+  })
+
+  test('a command that failed twice is not offered a third time: the lead is told to correct it', async () => {
+    const issueId = await workingIssue()
+    const raised = await raise(issueId, { summary: 'Release it', cmd: RELEASE })
+    value(await screenErrands(deps))
+    commandExit = { exit: 2, timedOut: false, output: "error: 'abc' is not a commit" }
+    const once = value(await approveErrand(deps, { errandId: raised.errand.id }))
+    await once.done
+    expect(await errandRow(raised.errand.id)).toMatchObject({ done_at: null, run_attempts: 1, run_status: 'failed' })
+    expect((await readNeeds(db.sql, clock.now())).items[0]?.tried).toContain('is not a commit')
+    const twice = value(await approveErrand(deps, { errandId: raised.errand.id }))
+    await twice.done
+    expect(await errandRow(raised.errand.id)).toMatchObject({ closed_kind: 'turned_back', closed_by: 'loop' })
+    expect((await errandRow(raised.errand.id))?.done_note).toContain('raise it again with a corrected command')
+    expect(await issueRow(issueId)).toMatchObject({ state: 'working' })
+    const [event] = await db.sql`
+      SELECT payload FROM factory.issue_events WHERE issue_id = ${issueId} AND kind = 'errand_done'`
+    expect(event?.payload.turnedAway).toContain('failed 2 times')
+    expect(ran).toHaveLength(2)
+  })
 })

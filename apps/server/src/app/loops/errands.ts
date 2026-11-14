@@ -1,6 +1,8 @@
 import type { ErrandNeededAnswer } from '@software-factory/contract'
 import type { CheckRunner, CheckpointStore, ErrandNeededPort, ErrandRecord } from '../../domains/checkpoints/ports.ts'
 import {
+  brokenLine,
+  CHECK_BROKEN_NOTE,
   CHECK_FAILS_NOTED,
   CHECKS_PER_PASS,
   checkVerdict,
@@ -24,6 +26,8 @@ export interface CheckDeps {
   checks: CheckRunner
   /** ends an Errand whose check says it is no longer needed; default: close the request (no Issue to tell) */
   resolve?: (errand: ErrandRecord, why: string) => Promise<boolean>
+  /** tells the lead whose Issue waits on the Errand that its check is broken (once); a request has no one to tell */
+  broken?: (errand: ErrandRecord, line: string) => Promise<void>
 }
 
 export interface ErrandsDeps extends CheckDeps {
@@ -102,6 +106,20 @@ export async function runCheck(
   }
   pass.unrunnable++
   const fails = errand.checkFails + 1
+  if (verdict === 'broken') {
+    const line = brokenLine(run.output)
+    await noteCheck(
+      deps,
+      errand,
+      `${CHECK_BROKEN_NOTE}: ${line || `exit ${run.exit}`}; the owner's done still closes it`,
+      fails,
+    )
+    if (fails === 1) {
+      pass.problems.push(`${errand.id}: ${CHECK_BROKEN_NOTE}: ${line}`)
+      await deps.broken?.(errand, line)
+    }
+    return
+  }
   const why = run.timedOut
     ? 'timed out'
     : run.exit === null

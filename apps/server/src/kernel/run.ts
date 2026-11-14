@@ -105,6 +105,9 @@ export function triedLine(run: { status: RunStatus; exit: number | null; head: s
 /** The desk pass runs at least this often, whether or not the owner came back; the read of an Errand's next check says it too. */
 export const DESK_EVERY_MS = 6 * 3_600_000
 
+/** What a check whose command was not found leaves as check_note, before the line that says what was not found. */
+export const CHECK_BROKEN_NOTE = 'the check is broken'
+
 /** What an owner's done leaves as check_note when its check says the request is still needed. */
 export const STILL_NEEDED_NOTE = 'marked done but the check says still needed'
 

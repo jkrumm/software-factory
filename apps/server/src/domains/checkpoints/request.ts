@@ -2,6 +2,8 @@ import { err, ok, type Result } from '../../kernel/result.ts'
 import { type Host, HOSTS, hostOf } from '../../kernel/hands.ts'
 import type { MissingFields } from './decision.ts'
 
+export { CHECK_BROKEN_NOTE } from '../../kernel/run.ts'
+
 export { type Host, HOSTS, hostOf }
 
 /**
@@ -98,8 +100,11 @@ export function readRequest(raw: unknown, now: Date): Result<RequestInput, Missi
   })
 }
 
-/** How a check ended. `needed`: exit 0. `not_needed`: exit 1..125. `unrunnable`: the check itself could not answer. */
-export type CheckVerdict = 'needed' | 'not_needed' | 'unrunnable'
+/**
+ * How a check ended. `needed`: exit 0. `not_needed`: exit 1..125. `unrunnable`: the check itself could not answer (timeout, a
+ * signal, never started). `broken`: a command in it was not found, so whatever it exited with says nothing.
+ */
+export type CheckVerdict = 'needed' | 'not_needed' | 'unrunnable' | 'broken'
 
 export interface CheckRun {
   /** null: the process did not start, was killed by a signal or timed out */
@@ -108,15 +113,25 @@ export interface CheckRun {
   output: string
 }
 
+/** A shell's own line for a missing command: `sh: sysctl: command not found`, `sh: 1: sysctl: not found`. */
+const NOT_FOUND = /(?:^|\n)[^\n]*\b[\w.+-]+: (?:command )?not found[^\n]*(?:\n|$)/
+
 /**
  * A command that is missing (127), not executable (126), killed by a signal (128 and up), timed out or never started says
- * nothing about the need: the Errand stays open and the run is noted. Only a check that ran and answered non-zero closes it.
+ * nothing about the need: the Errand stays open and the run is noted. A check that ran and exited 0 or 1..125 but whose
+ * output says a command was not found is `broken`: `[ "$(sysctl -n x)" != 1 ]` exits 0 with an empty string when `sysctl`
+ * is not on the PATH, and "still needed" would be a lie. Only a check that ran and answered non-zero closes an Errand.
  */
 export function checkVerdict(run: CheckRun): CheckVerdict {
   if (run.timedOut || run.exit === null) return 'unrunnable'
+  if (run.exit === 127 || (run.exit !== 126 && run.exit < 128 && NOT_FOUND.test(run.output))) return 'broken'
   if (run.exit === 0) return 'needed'
   return run.exit >= 126 ? 'unrunnable' : 'not_needed'
 }
+
+/** The first line of a check's output that says a command was not found (or the output's first line). */
+export const brokenLine = (output: string): string =>
+  (output.split('\n').find((line) => /not found/i.test(line)) ?? output.split('\n')[0] ?? '').trim().slice(0, 160)
 
 export const CHECK_TIMEOUT_MS = 30_000
 /** The text of a check that never ran, cut. A ran check's output is kept as its first and last lines (`kernel/run.ts`). */

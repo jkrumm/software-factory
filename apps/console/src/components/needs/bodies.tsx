@@ -10,6 +10,7 @@ import { Textarea } from '@/components/ui/textarea'
 import {
   annotateArtifact,
   answerDecision,
+  approveErrand,
   finishErrand,
   dismissSignal,
   giveVerdict,
@@ -21,7 +22,10 @@ import {
   agoWords,
   ARTIFACT_KIND_LABEL,
   decisionParts,
+  approveWords,
   doneWords,
+  isApproval,
+  NEED_LABEL,
   repeatsTitle,
   defaultLine,
   defaultWords,
@@ -35,6 +39,7 @@ import {
 import { artifactPreview, plainExcerpt } from '@/lib/plain'
 import { useArtifact, useDecision, useErrands } from '@/lib/queries'
 import { CardBodySkeleton } from '@/components/skeletons'
+import { Command } from '@/components/needs/desk'
 import { useSettle } from '@/lib/settle'
 import { cn } from '@/lib/utils'
 
@@ -434,11 +439,20 @@ function ErrandBody({ item, issueTitle, onSent }: BodyProps) {
     onSent: () => onSent('Turned back: the lead hears your note'),
     onConflict: () => onSent(SETTLED),
   })
+  const approve = useSettle<void>({
+    send: () => approveErrand(item.id),
+    keys: [['needs'], ['errands']],
+    onSent: () => onSent(approveWords),
+    onConflict: () => onSent(SETTLED),
+  })
+  const approval = isApproval(item)
   const errand = data?.errands.find((entry) => entry.id === item.id)
   return (
     <div className="grid gap-4">
       <Lead hint="errand">
-        Something only your hands can do - a device, a portal, a physical step. The lead cannot do it and waits.
+        {approval
+          ? 'Only your yes is missing: its command runs on the mini when you approve. The lead waits.'
+          : 'Something only your hands can do - a device, a portal, a physical step. The lead cannot do it and waits.'}
       </Lead>
       <Prose>{errand?.summary ?? item.title}</Prose>
       {errand?.detail ? (
@@ -451,8 +465,14 @@ function ErrandBody({ item, issueTitle, onSent }: BodyProps) {
           { label: 'Issue', value: issueLink(item, issueTitle) },
           { label: 'Project', value: projectLink(item) },
           { label: 'Raised', value: <When item={item} /> },
+          { label: 'Needs', value: item.need ? NEED_LABEL[item.need] : null },
+          {
+            label: 'Also awaited by',
+            value: item.joined > 0 ? `${item.joined} more Issue${item.joined === 1 ? '' : 's'}` : null,
+          },
         ]}
       />
+      {approval && item.command ? <Command command={item.command} /> : null}
       <LastTry tried={item.tried} run={errand?.lastRun} />
       <ScreenNote note={item.judge} />
       <form
@@ -469,7 +489,20 @@ function ErrandBody({ item, issueTitle, onSent }: BodyProps) {
           onChange={(event) => setNote(event.target.value)}
         />
         <div className="flex flex-wrap items-center gap-2">
-          <Button type="submit" disabled={settle.disabled || turnBack.disabled}>
+          {approval ? (
+            <Button
+              type="button"
+              disabled={settle.disabled || turnBack.disabled || approve.disabled}
+              onClick={() => approve.send()}
+            >
+              Approve
+            </Button>
+          ) : null}
+          <Button
+            type="submit"
+            variant={approval ? 'outline' : 'default'}
+            disabled={settle.disabled || turnBack.disabled || approve.disabled}
+          >
             Done
           </Button>
           <Button
@@ -482,7 +515,7 @@ function ErrandBody({ item, issueTitle, onSent }: BodyProps) {
           </Button>
         </div>
       </form>
-      <Problem words={settle.error ?? turnBack.error} />
+      <Problem words={settle.error ?? turnBack.error ?? approve.error} />
     </div>
   )
 }
