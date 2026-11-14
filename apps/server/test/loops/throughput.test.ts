@@ -87,6 +87,7 @@ describe('the ranking', () => {
         processes: [
           { name: 'fseventsd', class: 'system', project: 'software-factory', grownMib: 4096, minutes: 300 },
           { name: 'small', class: 'other', project: 'a', grownMib: 100, minutes: 900 },
+          { name: 'postgres', class: 'tenant', project: 'software-factory', grownMib: 1700, minutes: 900 },
         ],
         queued: [{ project: 'b', minutes: 20, admissions: 2 }],
       }),

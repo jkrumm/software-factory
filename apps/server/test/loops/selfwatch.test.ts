@@ -426,6 +426,8 @@ test('process_growth: more than 1 GiB in the last hour of a process still there,
   expect(processGrowthFindings([proc(60, 800), proc(10, 3000)], NOW)).toEqual([])
   expect(processGrowthFindings([proc(90, 100), proc(80, 3000)], NOW)).toEqual([])
   expect(processGrowthFindings([proc(60, 3000), proc(1, 1000)], NOW)).toEqual([])
+  // a database server's footprint counts the shared buffers it maps: bounded, never a finding
+  expect(processGrowthFindings([proc(60, 300, 25267, 'postgres'), proc(1, 2059, 25267, 'postgres')], NOW)).toEqual([])
   // two processes of one name are two subjects; a pid reuse under another name is a third
   const two = processGrowthFindings(
     [...growing, ...growing.map((m) => ({ ...m, pid: 411 })), ...growing.map((m) => ({ ...m, name: 'mds' }))],

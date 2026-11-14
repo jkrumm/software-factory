@@ -6,6 +6,12 @@ export const BASELINE_DAYS = 14
 export const DEFAULT_PEAK_MIB = 2048
 /** A process that grew by this much between its first and last notable minute grew without bound. */
 export const PROCESS_GROWTH_MIB = 1024
+/**
+ * Programs whose footprint is mostly shared memory they map, so it rises to a fixed bound and stays: a database server's
+ * processes each count the `shared_buffers` pages they touched (2 GiB on the mini: the io workers, checkpointer and writer
+ * of one cluster read 1.7 to 2.1 GiB, 2026-11-14). Growth of such a process is not a leak, and neither growth rule reads it.
+ */
+export const SHARED_MEMORY_PROGRAMS: ReadonlySet<string> = new Set(['postgres'])
 /** The runs of a day a budget is judged on: fewer than this many is too few to say. */
 export const MIN_FAST_RUNS = 3
 export const MIN_FAIL_RUNS = 5
