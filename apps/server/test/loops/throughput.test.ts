@@ -89,6 +89,13 @@ describe('the ranking', () => {
           { name: 'fseventsd', class: 'system', project: 'software-factory', grownMib: 4096, minutes: 300 },
           { name: 'small', class: 'other', project: 'a', grownMib: 100, minutes: 900 },
           { name: 'postgres', class: 'tenant', project: 'software-factory', grownMib: 1700, minutes: 900 },
+          {
+            name: 'com.apple.Virtualization.VirtualMachine',
+            class: 'tenant',
+            project: 'software-factory',
+            grownMib: 4096,
+            minutes: 900,
+          },
         ],
         waits: [
           { reason: 'claim', project: 'b', minutes: 20, issues: 2, repos: [], fitMinutes: 0, leads: 1, lanes: [] },
