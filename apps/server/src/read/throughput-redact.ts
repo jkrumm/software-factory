@@ -35,6 +35,22 @@ export function redactAnswers(
   }
 }
 
+/** The retro's throughput part as the read token sees it: the answers, and the names of work repos in the scorecard and the findings. */
+export function redactRetroThroughput<T extends Pick<ThroughputModel, 'answers' | 'project' | 'improvements'>>(
+  throughput: T,
+  open: readonly OpenProject[],
+): T {
+  const repo = (name: string): string => (isWorkRepo(name, open) ? REDACTED_REPO : name)
+  return {
+    ...throughput,
+    answers: redactAnswers(throughput.answers, open),
+    project: throughput.project.map((row) => ({ ...row, repo: repo(row.repo) })),
+    improvements: throughput.improvements.map((row) =>
+      isWorkRepo(row.project, open) ? { ...row, project: REDACTED_REPO, subject: '*' } : row,
+    ),
+  }
+}
+
 /**
  * What a lead sees of the throughput read: every figure stays, the names of work repos and tenants go (`private`). A lead
  * measures its own change against these numbers; it never learns which work repo or tenant a row belongs to. The owner and
