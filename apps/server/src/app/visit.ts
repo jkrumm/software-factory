@@ -21,12 +21,12 @@ export interface VisitStore {
  * The owner reads the band at `now`: the first visit looks back 24 hours; a read more than 30 minutes after the last
  * one starts a new visit, whose band begins where the last one was seen; any other read only moves `seenAt`. A read two
  * hours or more after the last one also marks that he is back (`returnedAt`), which makes the desk pass due. Answers
- * where the band begins.
+ * where the band begins, and whether this read was his return: the caller starts the desk pass at once.
  */
 export async function registerVisit(
   uow: UnitOfWork<{ visits: VisitStore }>,
   now: Date,
-): Promise<Result<Date, PortError>> {
+): Promise<Result<{ since: Date; returned: boolean }, PortError>> {
   return uow.run(async ({ visits }) => {
     const marker = await visits.marker()
     const sinceAt = !marker
@@ -34,8 +34,9 @@ export async function registerVisit(
       : now.getTime() - marker.seenAt.getTime() > VISIT_GAP_MS
         ? marker.seenAt
         : marker.sinceAt
-    const returnedAt = cameBack(marker?.seenAt ?? null, now) ? now : (marker?.returnedAt ?? null)
+    const returned = cameBack(marker?.seenAt ?? null, now)
+    const returnedAt = returned ? now : (marker?.returnedAt ?? null)
     await visits.save({ seenAt: now, sinceAt, returnedAt })
-    return ok(sinceAt)
+    return ok({ since: sinceAt, returned })
   })
 }

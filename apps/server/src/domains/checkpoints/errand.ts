@@ -1,4 +1,5 @@
 import type { Id } from '../../kernel/ids.ts'
+import { type Host, HOSTS } from '../../kernel/hands.ts'
 import { err, ok, type Result } from '../../kernel/result.ts'
 import type { ErrandScreenAnswer } from '@software-factory/contract'
 import { JUDGE_BACKOFF_MS, JUDGE_MAX_TRIES, type MissingFields } from './decision.ts'
@@ -15,6 +16,10 @@ export interface ErrandRaised extends ErrandInput {
   tried: string
   /** a shell command that exits 0 while the Errand is still needed, for what a machine can observe; null when there is none */
   check: string | null
+  /** the command the owner runs on his MacBook, pushed to it as a dialog when he is back; null when there is none */
+  command: string | null
+  /** where the hands must be; the MacBook when there is a command and none is named, null otherwise (read from the words) */
+  host: Host | null
 }
 
 export const MAX_SUMMARY = 200
@@ -36,10 +41,22 @@ export function readErrand(raw: unknown): Result<ErrandRaised, MissingFields> {
   if (tried.length > MAX_TRIED) problems.push(`tried (longer than ${MAX_TRIED} characters)`)
   const check = typeof body.check === 'string' && body.check.trim() !== '' ? body.check.trim() : null
   if (check !== null && check.length > MAX_CHECK) problems.push(`check (longer than ${MAX_CHECK} characters)`)
+  const command = typeof body.cmd === 'string' && body.cmd.trim() !== '' ? body.cmd.trim() : null
+  if (command !== null && command.length > MAX_CHECK) problems.push(`cmd (longer than ${MAX_CHECK} characters)`)
+  const named = typeof body.host === 'string' && body.host.trim() !== '' ? body.host.trim() : null
+  if (named !== null && !(HOSTS as readonly string[]).includes(named))
+    problems.push(`host (one of ${HOSTS.join(', ')})`)
   if (problems.length > 0) {
     return err({ kind: 'missing_field', fields: problems, detail: `an Errand needs: ${problems.join(', ')}` })
   }
-  return ok({ summary, detail, tried, check })
+  return ok({
+    summary,
+    detail,
+    tried,
+    check,
+    command,
+    host: (named as Host | null) ?? (command === null ? null : 'macbook'),
+  })
 }
 
 interface HostClass {
@@ -95,6 +112,20 @@ export function refuseHostClass(input: ErrandRaised): string | null {
     return `an Errand is for a person's hands, and ${host.name} is not: ${host.route}. Nothing was raised.`
   }
   return null
+}
+
+/** A request a lead queued with `ask-human.sh` while it raised its Errand: the Errand is then a sentence the desk cannot push. */
+export interface QueuedAsk {
+  id: string
+  text: string
+  cmd: string | null
+}
+
+/** The refusal of an Errand with no command beside a request the same lead queued: the verb to use instead. */
+export function refuseQueuedAsk(queued: readonly QueuedAsk[]): string {
+  const [first] = queued
+  const shown = first?.cmd ? ` (\`${first.cmd.slice(0, 160)}\`)` : ''
+  return `you queued ask-human request ${first?.id ?? '?'}${shown}, and an Errand with no command beside it cannot be pushed to the MacBook when the owner is back. Raise the Errand with the command and the host: \`factory errand raise <id> --attempt <n> --summary "..." --tried "..." --cmd '<the command he runs>' --host macbook\`, retire the queued request (\`ask-human.sh resolve ${first?.id ?? '<id>'} --as superseded --note "raised as an Errand"\`) and queue no second request beside an Errand. Nothing was raised.`
 }
 
 /** Failed calls of the screen before the Errand reaches the owner unscreened; the wait between them. */

@@ -316,7 +316,7 @@ describe('errands', () => {
 
   test('an Errand for what the host does is refused with the route to take', () => {
     const refusal = (summary: string, tried = 'looked around', detail: string | null = null) =>
-      refuseHostClass({ summary, detail, tried, check: null })
+      refuseHostClass({ summary, detail, tried, check: null, command: null, host: null })
     // Issue 409: a token mint and a door route.
     expect(refusal('Mint a door token for kuma and set its route')).toContain('factory door token new')
     // Issue 412: monitor routes into other repos.

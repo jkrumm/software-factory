@@ -34,7 +34,7 @@ export const LANGUAGE = {
     "The lead's verb for a wait it can name: until a time, until other Issues close, or on the review of its pull request (--review, which is the external wait) (factory issue defer). The event is deferred",
   delivery: 'What was typed into a lead: its brief, or a note. Keyed, so a replay types nothing twice',
   'desk pass':
-    "The desk loop's one pass over every open Errand when the owner reads the Console after two hours or more away, and every six hours otherwise: each check runs (the resolved ones close and wake their lead), the rest are screened again, and one MacBook command is pushed through ask-human.sh push",
+    'The desk loop\'s one pass over every open Errand when the owner returns (a Console read after two hours or more away, the MacBook answering after it was unreachable, or his button "Push what waits to my MacBook"; each starts it at once) and every six hours otherwise: each check runs (the resolved ones close and wake their lead), the rest are screened again, and the MacBook commands are pushed through ask-human.sh push, every pending one oldest first on a return and one while he is away',
   dismiss:
     'A held signal the owner or the Judge turns away, with a reason; it files nothing and stays on record as dismissed',
   'door route':

@@ -210,6 +210,16 @@ export function deskGroups(items: readonly NeedItem[]): { host: DeskHost; label:
   })
 }
 
+/** The Errands whose command the factory can push to the MacBook as a dialog: the ones the button sends. */
+export const macbookCommands = (items: readonly NeedItem[]): number =>
+  items.filter((item) => item.kind === 'errand' && item.command !== null && item.host === 'macbook').length
+
+/** What the button's answer says. */
+export const pushWords = (reply: { started: boolean }): string =>
+  reply.started
+    ? 'Pushing to your MacBook: one dialog at a time, oldest first'
+    : 'Already pushing: the dialogs of the pass running are the ones you get'
+
 /** The browser tab's title: the count of what waits on the owner, or the page's name alone. */
 export const needsTitle = (count: number, desk: boolean): string =>
   `${count > 0 ? `(${count}) ` : ''}${desk ? 'Back at desk' : 'Needs you'} \u00b7 Software Factory`

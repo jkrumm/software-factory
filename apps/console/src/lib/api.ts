@@ -7,6 +7,7 @@ import {
   DecisionReply,
   DecisionView,
   ErrandList,
+  DeskPushReply,
   ErrandReply,
   ErrorBody,
   FlowModel,
@@ -165,6 +166,8 @@ export const finishErrand = (id: string, note: string, outcome: 'done' | 'not_ne
     { ...(note ? { note } : {}), ...(outcome === 'not_needed' ? { outcome } : {}) },
     ErrandReply,
   )
+/** The button "Push what waits to my MacBook": the desk pass now, as on his return. */
+export const pushDesk = () => postJson('/v1/desk/push', {}, DeskPushReply)
 export const turnBackErrand = (id: string, note: string) =>
   postJson(`/v1/errands/${encodeURIComponent(id)}/turn-back`, { note }, ErrandReply)
 export const promoteSignal = (id: string, repo: string | null) =>

@@ -185,6 +185,7 @@ export {
   LOOP_NAMES,
   LoopList,
   type LoopName,
+  DeskPushReply,
   LoopRunReply,
   LoopView,
   DigestAnswer,

@@ -348,11 +348,18 @@ export interface Notifier {
 /** Pushes a request's command to the MacBook as a dialog the owner answers (`ask-human.sh push <errand>`): one call, never inside a transaction. The answer closes the Errand on its own. */
 export interface PushPort {
   push(errand: ErrandId): Promise<Result<{ exit: number }>>
+  /** whether the MacBook answers the ask-human ssh probe: one call, never inside a transaction */
+  probe(): Promise<boolean>
 }
 
-/** The desk pass's own record: when it last ran, and when the owner last came back after a long absence. */
+/** The desk pass's own record: when it last ran, when the owner last came back, and whether the MacBook last answered. */
 export interface DeskStore {
   lastPassAt(): Promise<Date | null>
   recordPass(at: Date): Promise<void>
+  /** the latest sign of his return: a Console read after a long absence, or the MacBook answering after it was down */
   returnedAt(): Promise<Date | null>
+  /** whether the MacBook answered last; null before the first push or probe */
+  macbookUp(): Promise<boolean | null>
+  /** `backAt`: the MacBook answered after it was unreachable, which counts as his return */
+  setMacbook(up: boolean, backAt: Date | null): Promise<void>
 }

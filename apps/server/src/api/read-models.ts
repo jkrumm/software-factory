@@ -60,6 +60,8 @@ export interface ReadModelDeps {
   }
   /** the owner's visit marker; absent, `GET /v1/since` moves nothing and reads from the stored start */
   visits?: UnitOfWork<{ visits: VisitStore }>
+  /** the owner's read began a new visit after two hours or more away: the desk pass starts at once (never awaited, never throws) */
+  onReturn?: () => void
   /** the duration of a repo's finished CI runs; absent, `GET /v1/retro` has check figures only */
   ciTimes?: CiTimes
   /** the settings in force the capacity loop tunes; absent, `GET /v1/capacity-loop` is 503 */
@@ -211,8 +213,10 @@ export const readModelRoutes = (deps: ReadModelDeps | undefined, caller: (reques
         if (who === 'owner' && deps.visits) {
           const visit = await registerVisit(deps.visits, at)
           if (!visit.ok) throw new Error(`the visit marker could not be stored: ${visit.error.detail}`)
+          // his return is an event: the desk pass starts now, not at the loop's next tick
+          if (visit.value.returned) deps.onReturn?.()
           return Response.json(
-            SinceModel.parse(await readSince(deps.sql, { now: at, since: visit.value, redact: false })),
+            SinceModel.parse(await readSince(deps.sql, { now: at, since: visit.value.since, redact: false })),
           )
         }
         const since = await storedSince(deps.sql, at)

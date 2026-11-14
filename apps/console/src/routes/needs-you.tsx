@@ -2,7 +2,7 @@ import { NEED_KINDS, type NeedItem } from '@software-factory/contract'
 import { createFileRoute, Link, useNavigate } from '@tanstack/react-router'
 import { useEffect, useRef, useState } from 'react'
 import { InfoHint, type InfoWord } from '@/components/kit'
-import { Desk } from '@/components/needs/desk'
+import { Desk, PushToMacbook } from '@/components/needs/desk'
 import { NeedCard } from '@/components/needs/card'
 import { SinceBand } from '@/components/needs/since-band'
 import { NeedsSkeleton } from '@/components/skeletons'
@@ -164,6 +164,7 @@ function NeedsYou() {
         <PageHeader title="Back at desk" note="What needs your hands, by where they must be." />
         {modes}
         {notice}
+        <PushToMacbook items={data.items} onSent={onSent} />
         {errandCount === 0 ? (
           <EmptyState title="Nothing needs your hands">
             An errand shows here when it needs a device or a portal.
@@ -283,6 +284,7 @@ function NeedsYou() {
         </label>
       </div>
       {notice}
+      <PushToMacbook items={data.items} onSent={onSent} />
       {only || project ? (
         <p className="mb-4 flex flex-wrap items-center gap-x-2 text-sm text-muted-foreground">
           <span>

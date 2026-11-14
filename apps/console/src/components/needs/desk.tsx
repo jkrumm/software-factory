@@ -1,10 +1,10 @@
-import type { ErrandReply, NeedItem } from '@software-factory/contract'
+import type { DeskPushReply, ErrandReply, NeedItem } from '@software-factory/contract'
 import { CheckIcon, CopyIcon } from '@phosphor-icons/react'
 import { useState } from 'react'
 import { Section } from '@/components/kit'
 import { Button } from '@/components/ui/button'
-import { finishErrand } from '@/lib/api'
-import { agoWords, deskGroups, doneWords } from '@/lib/needs'
+import { finishErrand, pushDesk } from '@/lib/api'
+import { agoWords, deskGroups, doneWords, macbookCommands, pushWords } from '@/lib/needs'
 import { plainExcerpt } from '@/lib/plain'
 import { useSettle } from '@/lib/settle'
 
@@ -26,6 +26,32 @@ function Command({ command }: { command: string }) {
         {copied ? <CheckIcon aria-hidden /> : <CopyIcon aria-hidden />}
         {copied ? 'Copied' : 'Copy'}
       </Button>
+    </div>
+  )
+}
+
+/**
+ * The manual override of the desk pass: the same pass the owner's return starts, so every MacBook command that waits is pushed
+ * as a dialog, oldest first, one at a time. Shown only while one waits.
+ */
+export function PushToMacbook({ items, onSent }: { items: readonly NeedItem[]; onSent: (message: string) => void }) {
+  const waiting = macbookCommands(items)
+  const push = useSettle<void, DeskPushReply>({
+    send: () => pushDesk(),
+    keys: [['needs'], ['errands']],
+    onSent: (reply) => onSent(pushWords(reply)),
+  })
+  if (waiting === 0) return null
+  return (
+    <div className="mb-4 flex flex-wrap items-center gap-3">
+      <Button type="button" disabled={push.disabled} onClick={() => push.send()}>
+        Push what waits to my MacBook ({waiting})
+      </Button>
+      {push.error ? (
+        <p role="alert" className="text-sm text-destructive">
+          {push.error}
+        </p>
+      ) : null}
     </div>
   )
 }

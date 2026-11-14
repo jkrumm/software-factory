@@ -6,6 +6,7 @@ import { agwPort } from './adapters/agw/port.ts'
 import { agwFixClasses } from './adapters/agw/fix-classes.ts'
 import { agwDigest } from './adapters/agw/digest.ts'
 import { agwErrandNeeded } from './adapters/agw/errand-needed.ts'
+import { askQueueDir, queuedAsksIn } from './adapters/checkpoints/queued-asks.ts'
 import { shellCheckRunner } from './adapters/shell/check-runner.ts'
 import { agwHygiene } from './adapters/agw/hygiene.ts'
 import { agwQueue } from './adapters/agw/queue.ts'
@@ -255,6 +256,7 @@ async function main(): Promise<void> {
     blobs: fileBlobStore(checkpointSettings.blobDir),
     consoleUrl: checkpointSettings.line.consoleUrl,
     checks: shellCheckRunner(),
+    queuedAsks: queuedAsksIn(askQueueDir(process.env)),
     notifier: makeNotifier(checkpointSettings.line),
     // The Judge asks `factory-ask` through the agw port. The standing policy is each project's `policy:` in its
     // `project.yaml`; a JSON file named by the environment overrides it, as an explicit stand-in.
@@ -347,6 +349,8 @@ async function main(): Promise<void> {
   }
   const projectBudgets = () => readProjectBudgets(uow)
 
+  /** set by the owner's button: the next desk pass runs as if he had just come back */
+  let deskForced = false
   const specs: LoopSpec[] = [
     {
       name: 'leads',
@@ -706,16 +710,25 @@ async function main(): Promise<void> {
       },
     },
     {
-      // The desk pass over the open Errands, when the owner is back after two hours or more and every six hours: checks, a second
-      // screen, and one MacBook command pushed. The loop asks every 15 minutes whether it is due.
+      // The desk pass over the open Errands, when the owner is back after two hours or more (his Console read starts it at
+      // once; so does the MacBook answering after it was down, or his button) and every six hours: checks, a second screen,
+      // and the MacBook commands pushed, every pending one when he is back, one while he is away. The loop asks every 15
+      // minutes whether one is due.
       name: 'desk',
       intervalMs: loopSettings.intervalMs.desk,
       onChange: false,
       run: async () => {
+        const force = deskForced
+        deskForced = false
         const pass = await deskPass({
           settle: checkpointDeps,
           desk: uow,
-          push: askHumanPush({ bin: loopSettings.askHumanBin, home: process.env.HOME ?? '' }),
+          push: askHumanPush({
+            bin: loopSettings.askHumanBin,
+            home: process.env.HOME ?? '',
+            host: loopSettings.askHumanHost,
+          }),
+          force,
         })
         if (!pass.ok) return pass
         said('desk', pass.value.problems)
@@ -759,6 +772,16 @@ async function main(): Promise<void> {
     },
   })
   const leadsTick = loopSettings.intervalMs.leads
+  /** a desk pass in flight is not started again: the dialogs it pushes are the ones he gets */
+  const pushDesk = (): { started: boolean } => {
+    if (runner.view().some((loop) => loop.name === 'desk' && loop.running)) return { started: false }
+    deskForced = true
+    void runner.runNow('desk')
+    return { started: true }
+  }
+  const deskOnReturn = () => {
+    if (!runner.view().some((loop) => loop.name === 'desk' && loop.running)) void runner.runNow('desk')
+  }
 
   const queueReasons = async () => {
     const view = await planning.capacity.queue()
@@ -845,7 +868,7 @@ async function main(): Promise<void> {
     },
     checkpoints,
     leads: leads.routes,
-    loops: runner,
+    loops: Object.assign(runner, { pushDesk }),
     read: composeRead({
       sql,
       clock,
@@ -883,6 +906,7 @@ async function main(): Promise<void> {
         swapCeilingPct: planningEnv.memoryCeilings.swapUsedPct,
       },
       visits: uow,
+      onReturn: deskOnReturn,
       longWaitMs: loadNeedsSettings(process.env).longWaitMs,
       host: { version: settings.version, startedAt, top: () => hostSamples.top() },
     },

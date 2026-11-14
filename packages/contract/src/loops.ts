@@ -359,6 +359,14 @@ export const LoopRunReply = z
   .meta({ id: 'LoopRunReply' })
 export type LoopRunReply = z.infer<typeof LoopRunReply>
 
+export const DeskPushReply = z
+  .object({
+    /** false when a desk pass is running already: it is not started again, and the dialogs it pushes are the ones he gets */
+    started: z.boolean(),
+  })
+  .meta({ id: 'DeskPushReply' })
+export type DeskPushReply = z.infer<typeof DeskPushReply>
+
 // ---- factory digest ------------------------------------------------------------------------------------------------------
 
 const DigestId = z.string().regex(/^[A-Za-z0-9._-]{1,64}$/, 'an identifier')
