@@ -15,7 +15,12 @@ export interface SettlingFacts {
   statedEdges: boolean
   /** the words it was filed with: the signal's text, empty when it has none */
   text: string
+  /** the owner's `prio` of it, 0 when he ranked none */
+  prio: number
 }
+
+/** An Issue the owner ranked at this prio or above is never chained by inference: his rank is the order. */
+export const RANKED_PRIO = 400
 
 export type Refined = 'feature' | 'bug' | 'chore' | 'docs'
 
@@ -91,14 +96,26 @@ export type SettleChecked =
   | { ok: false; why: string }
 
 /**
+ * Whether the filed words name the blocker: `Issue 1177`, `issue_1177` or `#1177`. A shared file or topic is no
+ * evidence that an Issue builds on another's output; naming it is (2026-11-14: urgent fixes chained behind slow
+ * Issues that only touched the same area).
+ */
+export function namesIssue(facts: Pick<SettlingFacts, 'title' | 'text'>, blocker: IssueId): boolean {
+  const number = issueNumber(blocker)
+  const pattern = new RegExp(`(?:\\bissues?[ _#]*|#)${number}\\b`, 'i')
+  return pattern.test(facts.title) || pattern.test(facts.text)
+}
+
+/**
  * An answer is held to what it was shown (the workflow's guard, checked again here): only open Issues it saw, never the
- * Issue itself, none twice. An edge that would make the Issue wait on one that (`waitsForIssue`: through the open chain)
- * already waits on it, or on one filed after it, is dropped with its reason and the rest stand. A blocker that closed meanwhile is
+ * Issue itself, none twice. An edge is dropped with its reason, the rest standing, when it would make the Issue wait
+ * on one that (`waitsForIssue`: through the open chain) already waits on it, on one filed after it, on any Issue at
+ * all when the owner ranked it (`RANKED_PRIO`), or on one the filed words never name. A blocker that closed meanwhile is
  * refused later by planning's own use case.
  */
 export function checkSettle(
   shown: readonly TriageCandidate[],
-  facts: Pick<SettlingFacts, 'issue' | 'kind' | 'origin' | 'fromAlert'>,
+  facts: Pick<SettlingFacts, 'issue' | 'kind' | 'origin' | 'fromAlert' | 'title' | 'text' | 'prio'>,
   answer: TriageAnswer,
   waitsForIssue: (blocker: IssueId) => boolean,
 ): SettleChecked {
@@ -114,7 +131,17 @@ export function checkSettle(
   const dropped: DroppedEdge[] = []
   for (const id of answer.after as IssueId[]) {
     if (issueNumber(id) > issueNumber(issue)) dropped.push({ issue: id, why: `${id} was filed after ${issue}` })
-    else if (waitsForIssue(id)) dropped.push({ issue: id, why: `${id} already waits for ${issue}` })
+    else if (facts.prio >= RANKED_PRIO) {
+      dropped.push({
+        issue: id,
+        why: `${issue} is ranked prio ${facts.prio}: the owner's rank is not chained by inference`,
+      })
+    } else if (!namesIssue(facts, id)) {
+      dropped.push({
+        issue: id,
+        why: `the filed words never name ${id}: a shared topic is no evidence it builds on it`,
+      })
+    } else if (waitsForIssue(id)) dropped.push({ issue: id, why: `${id} already waits for ${issue}` })
     else after.push(id)
   }
   const refined =

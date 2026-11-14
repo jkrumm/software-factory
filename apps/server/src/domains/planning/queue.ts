@@ -78,7 +78,13 @@ export function orderQueue(input: {
 function reasonOf(issue: OpenIssue, edges: readonly Edge[], stopped: ReadonlyMap<string, IssueId>): ChainReason | null {
   const blockers = openBlockers(edges, issue.id)
   if (blockers.length > 0) {
-    const list = blockers.map((b) => `Issue ${issueNumber(b)}`).join(', ')
+    // An edge nobody stated says who inferred it and why, so the wait can be judged at a glance.
+    const inferredBy = new Map(
+      edges.filter((e) => e.issue === issue.id && !e.satisfied && e.inferredBy).map((e) => [e.after, e.inferredBy]),
+    )
+    const list = blockers
+      .map((b) => `Issue ${issueNumber(b)}${inferredBy.has(b) ? ` (inferred by ${inferredBy.get(b)})` : ''}`)
+      .join(', ')
     return { kind: 'chain', message: `waits for ${list} to close`, waitsFor: blockers }
   }
   if (issue.specPending) {

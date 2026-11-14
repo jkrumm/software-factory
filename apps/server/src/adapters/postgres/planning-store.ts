@@ -46,7 +46,12 @@ function projectOf(raw: unknown): StoredProject {
   }
 }
 
-const EdgeRow = z.object({ issue_id: z.string(), after_issue: z.string(), satisfied: z.boolean() })
+const EdgeRow = z.object({
+  issue_id: z.string(),
+  after_issue: z.string(),
+  satisfied: z.boolean(),
+  inferred_by: z.string().nullable(),
+})
 const PrioRow = z.object({ issue_id: z.string(), value: z.number().int() })
 const ReplanRow = z.object({ issue_id: z.string() })
 const ReplanProjectRow = z.object({ project: z.string() })
@@ -90,16 +95,21 @@ export function postgresPlanningStore(tx: SQL): PlanningStore {
 
     async edges() {
       const rows: unknown[] = await tx`
-        SELECT issue_id, after_issue, satisfied_at IS NOT NULL AS satisfied FROM factory.planning_edges`
+        SELECT issue_id, after_issue, satisfied_at IS NOT NULL AS satisfied, inferred_by FROM factory.planning_edges`
       return rows.map((raw): Edge => {
         const row = EdgeRow.parse(raw)
-        return { issue: idOf(row.issue_id), after: idOf(row.after_issue), satisfied: row.satisfied }
+        return {
+          issue: idOf(row.issue_id),
+          after: idOf(row.after_issue),
+          satisfied: row.satisfied,
+          ...(row.inferred_by ? { inferredBy: row.inferred_by } : {}),
+        }
       })
     },
 
-    async addEdge({ issue, after, at }) {
+    async addEdge({ issue, after, at, inferredBy }) {
       const rows: unknown[] = await tx`
-        INSERT INTO factory.planning_edges (issue_id, after_issue, created_at) VALUES (${issue}, ${after}, ${at})
+        INSERT INTO factory.planning_edges (issue_id, after_issue, created_at, inferred_by) VALUES (${issue}, ${after}, ${at}, ${inferredBy ?? null})
         ON CONFLICT DO NOTHING RETURNING issue_id`
       return rows.length === 1
     },

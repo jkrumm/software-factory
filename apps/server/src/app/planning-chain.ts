@@ -42,6 +42,7 @@ export async function addEdges(
   deps: PlanningDeps,
   issue: IssueId,
   after: readonly IssueId[],
+  inferredBy?: string | undefined,
 ): Promise<Result<number, PlanningError>> {
   if (after.length === 0) return ok(0)
   const states = await stores.reads.statesOf([issue, ...after])
@@ -55,7 +56,7 @@ export async function addEdges(
     const path = cycleThrough(edges, issue, blocker)
     if (path) return err({ kind: 'cycle', path: [issue, ...path] })
     edges.push({ issue, after: blocker, satisfied: false })
-    if (await stores.planning.addEdge({ issue, after: blocker, key: '', at: deps.clock.now() })) added++
+    if (await stores.planning.addEdge({ issue, after: blocker, key: '', at: deps.clock.now(), inferredBy })) added++
   }
   return ok(added)
 }
@@ -74,7 +75,14 @@ export interface Settled {
  */
 export async function settleIssue(
   deps: PlanningDeps,
-  input: { issue: IssueId; after: readonly IssueId[]; kind?: Kind | undefined; checkpoint?: 'spec' | undefined },
+  input: {
+    issue: IssueId
+    after: readonly IssueId[]
+    kind?: Kind | undefined
+    checkpoint?: 'spec' | undefined
+    /** who inferred the edges and why, kept on each edge and named in the queue order; absent when they were stated */
+    inferredBy?: string | undefined
+  },
 ): Promise<Result<Settled, PlanningError | PortError>> {
   const settledPayload = {
     ...(input.kind ? { kind: input.kind } : {}),
@@ -99,7 +107,8 @@ export async function settleIssue(
     // Edges belong to an Issue still settling: on any other one the event is ignored and nothing is chained
     // (`addAfter` is the verb for a queued Issue).
     const open = (await stores.reads.open()).find((row) => row.id === input.issue)
-    const edges = open?.state === 'settling' ? await addEdges(stores, deps, input.issue, input.after) : ok(0)
+    const edges =
+      open?.state === 'settling' ? await addEdges(stores, deps, input.issue, input.after, input.inferredBy) : ok(0)
     if (!edges.ok) return edges
     const recorded = await recordIn(stores.work, deps, {
       issueId: input.issue,
@@ -121,7 +130,7 @@ export async function settleIssue(
  */
 export async function addAfter(
   deps: PlanningDeps,
-  input: { issue: IssueId; after: readonly IssueId[]; running?: boolean },
+  input: { issue: IssueId; after: readonly IssueId[]; running?: boolean; inferredBy?: string | undefined },
 ): Promise<Result<{ edges: number }, PlanningError | PortError>> {
   return deps.uow.run(async (stores) => {
     await stores.capacity.lock()
@@ -142,7 +151,7 @@ export async function addAfter(
         detail: `Issue ${issueNumber(input.issue)} is ${open.state}: only a settling or queued Issue takes an edge${input.running ? ', or a working or watching one from the owner' : ' (a working lead defers with its own verb)'}`,
       })
     }
-    const edges = await addEdges(stores, deps, input.issue, input.after)
+    const edges = await addEdges(stores, deps, input.issue, input.after, input.inferredBy)
     return edges.ok ? ok({ edges: edges.value }) : edges
   })
 }

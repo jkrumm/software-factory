@@ -75,6 +75,9 @@ function countRefinement(pass: TriagePass, refinement: Refinement): void {
   if (refinement.checkpoint) pass.flagged++
 }
 
+/** What an edge `factory-triage` named carries, so the queue order says it was inferred and on what ground. */
+const inferredBy = (reason: string): string => `triage: ${reason}`.slice(0, 200)
+
 /**
  * Settles the Issue after the edges `factory-triage` named. Planning checks them again (every blocker open, no cycle), and
  * a refusal there is the answer refused: the Issue is settled with no edges rather than left behind.
@@ -85,8 +88,9 @@ async function settleAfter(
   after: IssueId[],
   pass: TriagePass,
   refinement: Refinement = {},
+  inferredBy?: string,
 ): Promise<void> {
-  const settled = await settleIssue(deps.planning, { issue, after, ...refinement })
+  const settled = await settleIssue(deps.planning, { issue, after, ...refinement, inferredBy })
   if (settled.ok) {
     if (settled.value.result === 'settled') {
       countRefinement(pass, refinement)
@@ -149,8 +153,9 @@ async function askTriage(deps: TriageDeps, row: SettlingRow, pass: TriagePass): 
   // checked again against these, an Issue that closed since is simply no longer one it may name.
   if (plan.kind === 'answered') {
     const checked = checkSettle(shown, row, plan.row.answer as TriageAnswer, waitsForIssue)
-    if (checked.ok) await settleAfter(deps, row.issue, checked.after, pass, checked.refinement)
-    else await settleWithout(deps, row.issue, pass)
+    if (checked.ok) {
+      await settleAfter(deps, row.issue, checked.after, pass, checked.refinement, inferredBy(checked.reason))
+    } else await settleWithout(deps, row.issue, pass)
     return
   }
   // In flight, backing off, or out of rounds: the steward settles it with no edges once the timeout passes.
@@ -193,8 +198,9 @@ async function askTriage(deps: TriageDeps, row: SettlingRow, pass: TriagePass): 
     pass.problems.push(`${row.issue}: ${recorded.error.detail}`)
     return
   }
-  if (checked?.ok) await settleAfter(deps, row.issue, checked.after, pass, checked.refinement)
-  else if (checked && !checked.ok) pass.refused++
+  if (checked?.ok) {
+    await settleAfter(deps, row.issue, checked.after, pass, checked.refinement, inferredBy(checked.reason))
+  } else if (checked && !checked.ok) pass.refused++
 }
 
 /**
