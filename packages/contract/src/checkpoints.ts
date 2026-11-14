@@ -254,6 +254,14 @@ export const ErrandBody = z
      * when the owner is back at the desk and every few hours, and closes the Errand, ending the wait, when it exits 1..125.
      */
     check: z.string().optional(),
+    /**
+     * the command the owner runs, for an Errand that is a step on his MacBook: it is pushed to the MacBook as a dialog showing
+     * the command when he is back (his Console read, the MacBook answering, or his button), and its answer closes the
+     * Errand. Raise "approve the queued dialog" this way; never queue an `ask-human.sh` request beside an Errand.
+     */
+    cmd: z.string().optional(),
+    /** where the hands must be (macbook, iphone, portal or any); with `--cmd` and no host, the MacBook */
+    host: z.enum(['macbook', 'iphone', 'portal', 'any']).optional(),
     /** makes a repeated call one event, as on `ship` and `defer` */
     call: z.string().trim().min(1).max(128).optional(),
   })

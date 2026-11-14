@@ -21,7 +21,14 @@ import {
   refuseNoOpDefault,
   type Settler,
 } from '../domains/checkpoints/decision.ts'
-import { type ErrandId, readErrand, refuseHostClass } from '../domains/checkpoints/errand.ts'
+import {
+  type ErrandId,
+  type ErrandRaised,
+  type QueuedAsk,
+  readErrand,
+  refuseHostClass,
+  refuseQueuedAsk,
+} from '../domains/checkpoints/errand.ts'
 import { type CheckRun, checkVerdict, readRequest, SCREENED_SOURCES } from '../domains/checkpoints/request.ts'
 import { exitedNote, headTail, runFailureOf, STILL_NEEDED_NOTE } from '../kernel/run.ts'
 import { deepLink, reviewPage } from '../domains/checkpoints/page.ts'
@@ -43,7 +50,7 @@ import { holdsIn, holdUntil, isHold } from '../kernel/hold.ts'
 import type { Issue } from '../domains/work/issue.ts'
 import { replay } from '../domains/work/machine.ts'
 import type { WorkStore } from '../domains/work/ports.ts'
-import type { IssueId } from '../kernel/ids.ts'
+import { type IssueId, issueNumber } from '../kernel/ids.ts'
 import { key } from '../kernel/keys.ts'
 import { err, ok, type PortError, type Result } from '../kernel/result.ts'
 import { type IssueWriteError, recordIn, type Recorded, type WriteDeps } from './issues.ts'
@@ -59,6 +66,8 @@ export interface CheckpointDeps extends WriteDeps {
   consoleUrl: string
   /** runs an Errand's `check` when the owner marks it done (outside any transaction) */
   checks: CheckRunner
+  /** the requests a lead queued with `ask-human.sh` and nobody answered, by Issue number; absent, none is looked for */
+  queuedAsks?: (issue: number) => Promise<QueuedAsk[]>
 }
 
 export type CheckpointError =
@@ -890,9 +899,21 @@ export function raiseErrand(
   const read = readErrand(input.raw)
   if (!read.ok) return Promise.resolve(read)
   // `tried` is the gate's, never stored: the rule screen reads the stored detail as the ask, and what was run first is not.
-  const { summary, detail } = read.value
   const hostDoes = refuseHostClass(read.value)
   if (hostDoes) return Promise.resolve(err({ kind: 'invalid', detail: hostDoes }))
+  return raiseChecked(deps, input, read.value)
+}
+
+async function raiseChecked(
+  deps: CheckpointDeps,
+  input: { issueId: IssueId; attempt: number; raw: unknown; call?: string },
+  read: ErrandRaised,
+): Promise<CheckpointResult<ErrandWritten>> {
+  const { summary, detail } = read
+  if (read.command === null && deps.queuedAsks) {
+    const queued = await deps.queuedAsks(issueNumber(input.issueId))
+    if (queued.length > 0) return err({ kind: 'invalid', detail: refuseQueuedAsk(queued) })
+  }
   return deps.uow.run(async ({ work, checkpoints }) => {
     const issue = await issueOf(work, input.issueId)
     if (!issue) return err({ kind: 'unknown_issue', issueId: input.issueId })
@@ -932,9 +953,9 @@ export function raiseErrand(
       screenNote: null,
       turnedAwayAt: null,
       source: null,
-      command: null,
-      checkCommand: read.value.check,
-      host: null,
+      command: read.command,
+      checkCommand: read.check,
+      host: read.host,
       expiresAt: null,
       requestKey: null,
       closedKind: null,

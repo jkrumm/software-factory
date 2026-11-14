@@ -40,14 +40,27 @@ let checks: Record<string, CheckRun>
 let screened: string[]
 let screenAnswer: () => Result<ErrandScreenAnswer>
 let pushed: string[]
+let pushExit: number
+let probeUp: boolean
+let probes: number
+let inFlight: number
 let ghJson: string
 let ghCalls: string[][]
 
 const push: PushPort = {
-  push: (errand) => {
+  push: async (errand) => {
     expect(deps.uow.inTransaction()).toBe(false)
+    // one dialog at a time: the next is pushed after this one was answered
+    expect(inFlight).toBe(0)
+    inFlight++
     pushed.push(errand)
-    return Promise.resolve(ok({ exit: 75 }))
+    await Promise.resolve()
+    inFlight--
+    return ok({ exit: pushExit })
+  },
+  probe: () => {
+    probes++
+    return Promise.resolve(probeUp)
   },
 }
 
@@ -73,6 +86,10 @@ beforeEach(async () => {
   checks = {}
   screened = []
   pushed = []
+  pushExit = 75
+  probeUp = false
+  probes = 0
+  inFlight = 0
   ghCalls = []
   ghJson = JSON.stringify({
     state: 'OPEN',
@@ -295,7 +312,7 @@ describe('the desk pass', () => {
     const effectsBefore = await noteEffects(issueId)
 
     const pass = value(await deskPass({ settle: deps, desk: deps.uow as never, push }))
-    expect(pass).toMatchObject({ ran: true, resolved: 1, pushed: first.errand.id })
+    expect(pass).toMatchObject({ ran: true, resolved: 1, returned: false, pushed: [first.errand.id] })
     expect(await errandRow(raised.errand.id)).toMatchObject({ closed_kind: 'not_needed', closed_by: 'check' })
     expect(await issueRow(issueId)).toMatchObject({ state: 'working' })
     expect(await noteEffects(issueId)).toBe(effectsBefore + 1)
@@ -307,10 +324,10 @@ describe('the desk pass', () => {
     clock.set(new Date(clock.now().getTime() + 3 * HOUR))
     value(await registerVisit(deps.uow as never, clock.now()))
     clock.set(new Date(clock.now().getTime() + 3 * HOUR))
-    // six hours later the pass is due on the clock alone; the next command goes, one only
+    // he came back since the last pass (the first read counts), so it is due and every pending command goes, oldest first
     const again = value(await deskPass({ settle: deps, desk: deps.uow as never, push }))
-    expect(again).toMatchObject({ ran: true, pushed: second.errand.id })
-    expect(pushed).toEqual([first.errand.id, second.errand.id])
+    expect(again).toMatchObject({ ran: true, returned: true, pushed: [first.errand.id, second.errand.id] })
+    expect(pushed).toEqual([first.errand.id, first.errand.id, second.errand.id])
   })
 
   test('is due when the owner comes back after two hours, and not for a short absence', async () => {
@@ -342,6 +359,103 @@ describe('the desk pass', () => {
     })
     expect(await issueRow(issueId)).toMatchObject({ state: 'working' })
     expect(await finishErrandReplay(raised.errand.id)).toBe('replayed')
+  })
+
+  const reached = async (issueId: IssueId, raw: Record<string, unknown>) => {
+    const raised = await raise(issueId, raw)
+    value(await screenErrands(deps))
+    return raised.errand.id
+  }
+
+  test("an Issue's Errand with a command is pushed when he comes back, and a second pending one after it", async () => {
+    const issueId = await workingIssue('example')
+    // the away pass has run and found nothing to push yet
+    value(await deskPass({ settle: deps, desk: deps.uow as never, push }))
+    clock.set(new Date(clock.now().getTime() + HOUR))
+    const queued = await reached(issueId, {
+      summary: 'Approve the queued dialog',
+      cmd: 'make maxvnodes-install',
+      host: 'macbook',
+    })
+    const request = value(await macbook('Reload the keys', 'make keys', 'keys')).errand.id
+    value(await screenErrands(deps))
+    expect(await errandRow(queued)).toMatchObject({ command: 'make maxvnodes-install', host: 'macbook' })
+    // away: the loop's tick finds nothing due
+    clock.set(new Date(clock.now().getTime() + HOUR))
+    expect(value(await deskPass({ settle: deps, desk: deps.uow as never, push })).ran).toBe(false)
+    expect(pushed).toEqual([])
+
+    // his read, two hours after the last
+    clock.set(new Date(clock.now().getTime() + 3 * HOUR))
+    value(await registerVisit(deps.uow as never, clock.now()))
+    const pass = value(await deskPass({ settle: deps, desk: deps.uow as never, push }))
+    expect(pass).toMatchObject({ ran: true, returned: true, pushed: [queued, request] })
+    expect(pushed).toEqual([queued, request])
+    // the return is spent: the next tick is not due
+    expect(value(await deskPass({ settle: deps, desk: deps.uow as never, push })).ran).toBe(false)
+  })
+
+  test('his button runs the pass at once, as on a return', async () => {
+    const issueId = await workingIssue('example')
+    const queued = await reached(issueId, { summary: 'Approve the queued dialog', cmd: 'make x', host: 'macbook' })
+    const request = value(await macbook('Reload the keys', 'make keys', 'keys')).errand.id
+    value(await screenErrands(deps))
+    value(await deskPass({ settle: deps, desk: deps.uow as never, push }))
+    expect(pushed).toEqual([queued])
+    clock.set(new Date(clock.now().getTime() + 1_000))
+    expect(value(await deskPass({ settle: deps, desk: deps.uow as never, push })).ran).toBe(false)
+    const forced = value(await deskPass({ settle: deps, desk: deps.uow as never, push, force: true }))
+    expect(forced).toMatchObject({ ran: true, returned: true, pushed: [queued, request] })
+  })
+
+  test('the MacBook answering after it was unreachable counts as his return', async () => {
+    const issueId = await workingIssue('example')
+    const queued = await reached(issueId, { summary: 'Approve the queued dialog', cmd: 'make x', host: 'macbook' })
+    const request = value(await macbook('Reload the keys', 'make keys', 'keys')).errand.id
+    value(await screenErrands(deps))
+    // the away pass pushes one; the MacBook does not answer, which ends the run and marks it down
+    pushExit = 69
+    value(await deskPass({ settle: deps, desk: deps.uow as never, push }))
+    expect(pushed).toEqual([queued])
+    expect(probes).toBe(0)
+
+    // still down: the probe says so, nothing is due
+    clock.set(new Date(clock.now().getTime() + HOUR))
+    expect(value(await deskPass({ settle: deps, desk: deps.uow as never, push })).ran).toBe(false)
+    expect(probes).toBe(1)
+
+    // it answers: his return, so the pass runs at once and pushes every pending command
+    probeUp = true
+    pushExit = 75
+    clock.set(new Date(clock.now().getTime() + HOUR))
+    const pass = value(await deskPass({ settle: deps, desk: deps.uow as never, push }))
+    expect(pass).toMatchObject({ ran: true, returned: true, pushed: [queued, request] })
+    // up again: it is not probed any more, and the return is spent
+    expect(value(await deskPass({ settle: deps, desk: deps.uow as never, push })).ran).toBe(false)
+    expect(probes).toBe(2)
+  })
+
+  test('an Errand with no command beside a request the lead queued is refused with the verb to use', async () => {
+    const issueId = await workingIssue('example')
+    deps.queuedAsks = (issue) =>
+      Promise.resolve(
+        `issue_${issue}` === String(issueId)
+          ? [{ id: '20261114T031243-30967', text: 'Raise kern.maxvnodes', cmd: 'make maxvnodes-install' }]
+          : [],
+      )
+    const raw = { tried: 'looked for a route: none', summary: 'Approve the queued dialog' }
+    const refused = await raiseErrand(deps, { issueId, attempt: 1, raw })
+    expect(!refused.ok && refused.error).toMatchObject({ kind: 'invalid' })
+    const detail = !refused.ok && 'detail' in refused.error ? refused.error.detail : ''
+    expect(detail).toContain('factory errand raise')
+    expect(detail).toContain("--cmd '<the command he runs>' --host macbook")
+    expect(detail).toContain('20261114T031243-30967')
+    expect(await db.sql`SELECT id FROM factory.errands`).toEqual([])
+    // with the command it is raised
+    const raised = value(
+      await raiseErrand(deps, { issueId, attempt: 1, raw: { ...raw, cmd: 'make maxvnodes-install' } }),
+    )
+    expect(raised.errand).toMatchObject({ command: 'make maxvnodes-install', host: 'macbook' })
   })
 
   const finishErrandReplay = async (errandId: string) =>

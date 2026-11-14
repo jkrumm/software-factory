@@ -1,7 +1,7 @@
 import { describe, expect, test } from 'bun:test'
 import { prReview } from '../../src/adapters/reviews/pr.ts'
 import { screenByReview } from '../../src/domains/checkpoints/errand.ts'
-import { deskDue, nextPush } from '../../src/domains/checkpoints/desk.ts'
+import { deskDue, pushQueue } from '../../src/domains/checkpoints/desk.ts'
 import type { ErrandRecord } from '../../src/domains/checkpoints/ports.ts'
 import { wakeReason } from '../../src/domains/loops/reviews.ts'
 import type { Run } from '../../src/adapters/quality/process.ts'
@@ -110,6 +110,8 @@ describe('the desk pass is due', () => {
     expect(deskDue({ now, lastPassAt: ago(1), returnedAt: ago(2) })).toBe(false)
     expect(deskDue({ now, lastPassAt: ago(3), returnedAt: ago(1) })).toBe(true)
     expect(deskDue({ now, lastPassAt: ago(6), returnedAt: null })).toBe(true)
+    // his button runs it at once
+    expect(deskDue({ now, lastPassAt: ago(1), returnedAt: null, force: true })).toBe(true)
   })
 
   const errand = (id: string, patch: Partial<ErrandRecord>): ErrandRecord =>
@@ -123,12 +125,24 @@ describe('the desk pass is due', () => {
       pushedAt: null,
       ...patch,
     }) as unknown as ErrandRecord
-  test('one command is pushed: the never-pushed first, then the one pushed longest ago', () => {
+  const ids = (list: ErrandRecord[]) => list.map((e) => String(e.id))
+  test('away, one command is pushed: the never-pushed first, then the one pushed longest ago', () => {
     const list = [errand('a', { pushedAt: ago(8) }), errand('b', {}), errand('c', { pushedAt: ago(20) })]
-    expect(String(nextPush(list, now)?.id)).toBe('b')
+    expect(ids(pushQueue(list, now, false))).toEqual(['b'])
     const rest = [list[0], list[2]].filter((e): e is ErrandRecord => e !== undefined)
-    expect(String(nextPush(rest, now)?.id)).toBe('c')
-    expect(nextPush([errand('d', { pushedAt: ago(1) })], now)).toBeNull()
-    expect(nextPush([errand('e', { host: 'iphone' }), errand('f', { command: null })], now)).toBeNull()
+    expect(ids(pushQueue(rest, now, false))).toEqual(['c'])
+    expect(pushQueue([errand('d', { pushedAt: ago(1) })], now, false)).toEqual([])
+    expect(pushQueue([errand('e', { host: 'iphone' }), errand('f', { command: null })], now, false)).toEqual([])
+  })
+  test('back, every pending command is pushed oldest first, spacing aside; a run still going is left', () => {
+    const at = (h: number) => ({ raisedAt: ago(h) })
+    const list = [
+      errand('a', { ...at(2), pushedAt: ago(1) }),
+      errand('b', at(9)),
+      errand('c', { ...at(5), runStatus: 'running' }),
+      errand('d', { ...at(7), source: null }),
+      errand('e', { ...at(3), host: 'portal' }),
+    ]
+    expect(ids(pushQueue(list, now, true))).toEqual(['b', 'd', 'a'])
   })
 })

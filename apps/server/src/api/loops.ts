@@ -1,4 +1,12 @@
-import { ErrorBody, LOOP_NAMES, LoopList, LoopRunReply, type LoopName, type LoopView } from '@software-factory/contract'
+import {
+  DeskPushReply,
+  ErrorBody,
+  LOOP_NAMES,
+  LoopList,
+  LoopRunReply,
+  type LoopName,
+  type LoopView,
+} from '@software-factory/contract'
 import { Elysia } from 'elysia'
 import * as z from 'zod'
 import { errorResponses } from './errors.ts'
@@ -7,6 +15,8 @@ import { errorResponses } from './errors.ts'
 export interface LoopsApi {
   view(): LoopView[]
   runNow(name: LoopName): Promise<{ started: boolean; summary: string | null; error: string | null } | null>
+  /** the desk pass now, as if the owner had just come back: every pending MacBook command is pushed. Answers at once; the dialogs follow. */
+  pushDesk(): { started: boolean }
 }
 
 const Name = z.object({ name: z.string() })
@@ -53,6 +63,21 @@ export const loopRoutes = (loops: LoopsApi | undefined) =>
           operationId: 'loop.run',
           summary:
             'one pass of one loop now (leads, planning, watch, settle, send, steward, triage, queue, friction, hygiene, screen, fix-classes, selfwatch, host, reaper, digest, errands, reviews, desk, throughput); a pass already running is waited for, not started again',
+        },
+      },
+    )
+    .post(
+      '/desk/push',
+      () =>
+        loops
+          ? Response.json(DeskPushReply.parse(loops.pushDesk()))
+          : failure(503, 'the loops are not wired in this process', 'unavailable'),
+      {
+        response: { 200: DeskPushReply, ...errorResponses(503) },
+        detail: {
+          operationId: 'desk.push',
+          summary:
+            'the owner\'s button "Push what waits to my MacBook": the desk pass now, as on his return, so every pending MacBook command is pushed, oldest first, one dialog at a time. Answers at once, the dialogs follow',
         },
       },
     )
