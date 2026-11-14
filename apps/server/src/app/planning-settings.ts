@@ -10,6 +10,7 @@ import {
   DEFAULT_SWAPOUT_CEILING_MB,
   type MemoryCeilings,
 } from '../domains/capacity/host.ts'
+import type { AimMode } from '../domains/capacity/slot-aim.ts'
 
 const whole = (min: number, max: number) => z.coerce.number().int().min(min).max(max)
 
@@ -35,6 +36,8 @@ const Env = z.object({
   FACTORY_SLOTS_MAX: whole(1, 64).optional(),
   /** the host load up to which a step beyond the base slots is granted */
   FACTORY_SLOT_EXTRA_LOAD: whole(1, 100_000).optional(),
+  /** the slot count that follows memory pressure: `off`, `shadow` (record beside the live rule, the default) or `on` */
+  FACTORY_SLOT_AIM: z.enum(['off', 'shadow', 'on']).optional(),
   FACTORY_CLAUDE_ACCOUNT_BIN: z.string().min(1).optional(),
   FACTORY_SYSCTL_BIN: z.string().min(1).optional(),
   /** a swapout rate is the delta between two readings; readings closer than this return the last one */
@@ -55,13 +58,14 @@ export interface PlanningSettings {
   loadRule: 'shadow' | 'on'
   loadPerCore: number
   processCap: number
-  /** the host's cores, which the throughput rule's load ceiling is a multiple of */
+  /** the host's cores: the throughput rule's load ceiling is a multiple of them, and the slot aim adds no slot above twice them in load */
   cores: number
   memoryCeilings: MemoryCeilings
   seatsMaxBonus: number
   slots: number
   slotsMax: number
   slotExtraLoad: number
+  slotAim: AimMode
 }
 
 /** The planning and capacity settings from the environment; throws one message naming every bad key. */
@@ -111,6 +115,7 @@ export function planningSettings(
     slots: e.FACTORY_SLOTS ?? 2,
     slotsMax: Math.max(e.FACTORY_SLOTS ?? 2, e.FACTORY_SLOTS_MAX ?? 6),
     slotExtraLoad: e.FACTORY_SLOT_EXTRA_LOAD ?? 12,
+    slotAim: e.FACTORY_SLOT_AIM ?? 'shadow',
   }
 }
 

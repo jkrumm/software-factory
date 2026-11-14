@@ -1,5 +1,6 @@
 import { freeMibOf, growthMib, headroomMib, LEARNED_RUNS, learnedPeakMib } from '../domains/capacity/costs.ts'
 import type { HostReader, StepCostRow } from '../domains/capacity/ports.ts'
+import { type AimMode, LOAD_PER_CORE } from '../domains/capacity/slot-aim.ts'
 import { releaseSlot, type SlotRow, type SlotView, slotLines, touchSlots } from '../domains/capacity/slots.ts'
 import { DEFAULT_SLOT_RUN_MS, durationMs } from '../domains/planning/project.ts'
 import { ok, type PortError, type Result } from '../kernel/result.ts'
@@ -36,6 +37,12 @@ export interface SlotDeps extends PlanningDeps {
   /** `FACTORY_SLOT_EXTRA_LOAD`: the load up to which a step beyond the base slots is granted */
   slotExtraLoad: number
   host: HostReader
+  /**
+   * `FACTORY_SLOT_AIM`: with `on`, the aim (1 to `slotsMax`) is the cap, the base stays `slots` (lowered to the aim when
+   * that is less), and a slot beyond the base keeps its learned-peak fit with the load gate at twice the cores
+   */
+  slotAim: AimMode
+  cores: number
 }
 
 /**
@@ -68,12 +75,16 @@ export async function touchSlot(
     }
     const freeMib = freeMibOf(await capacity.latestHostSample(), ramMib, now)
     const loadNow = load.ok ? load.value : null
+    const aimed =
+      deps.slotAim === 'on'
+        ? Math.min(deps.slotsMax, Math.max(1, (await capacity.slotAim())?.target ?? deps.slots))
+        : null
     const touched = touchSlots(
       rows,
       {
         id: input.id,
         name: input.name,
-        slots: deps.slots,
+        slots: aimed === null ? deps.slots : Math.min(deps.slots, aimed),
         runMs,
         cwd: input.cwd,
         rssMib: input.rssMib,
@@ -82,11 +93,11 @@ export async function touchSlot(
           peakMib: learned.get(input.name) ?? null,
           freeMib,
           growthMib: growthMib(holders, learned),
-          max: deps.slotsMax,
-          loadOk: loadNow !== null && loadNow <= deps.slotExtraLoad,
+          max: aimed ?? deps.slotsMax,
+          loadOk: loadNow !== null && loadNow <= (aimed === null ? deps.slotExtraLoad : LOAD_PER_CORE * deps.cores),
           headroomMib: headroomMib(ramMib),
           load: loadNow === null ? null : Math.round(loadNow * 10) / 10,
-          extraLoad: deps.slotExtraLoad,
+          extraLoad: aimed === null ? deps.slotExtraLoad : LOAD_PER_CORE * deps.cores,
         },
       },
       now,

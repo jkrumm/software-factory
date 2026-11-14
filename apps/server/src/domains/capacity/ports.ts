@@ -6,6 +6,7 @@ import type { SnapshotProc } from './classes.ts'
 import type { MemoryReading } from './host.ts'
 import type { ProcInfo } from './leadcost.ts'
 import type { QueueState, QueueStates } from './queue-state.ts'
+import type { AimState } from './slot-aim.ts'
 import type { SlotRow } from './slots.ts'
 
 /** A lead's account, chosen when it was admitted. Package 4's `start_lead` reads the account of its attempt. */
@@ -65,6 +66,12 @@ export interface CapacityStore {
   leadRssSince(since: Date): Promise<Map<number, number>>
   /** stores the minute's shadow decision (the first of a minute stays) and drops those before `keepSince` */
   recordShadow(decision: ShadowDecision, keepSince: Date): Promise<void>
+  /** the aimed slot count and the minute since which the host has been quiet; null before the first minute */
+  slotAim(): Promise<AimState | null>
+  saveSlotAim(state: AimState, at: Date): Promise<void>
+  /** one minute of the aim beside the live rule (shadow) */
+  recordSlotShadow(row: SlotShadowRow): Promise<void>
+  pruneSlotShadow(before: Date): Promise<number>
 }
 
 /**
@@ -90,6 +97,22 @@ export interface ShadowDecision {
   processCap: number
 }
 
+/** One minute of the slot aim beside the live rule: what each allowed, who held and waited, the reading the aim moved on. */
+export interface SlotShadowRow {
+  at: Date
+  liveSlots: number
+  liveMax: number
+  aimSlots: number
+  holders: number
+  waiters: number
+  pressureLevel: number | null
+  swapUsedPct: number | null
+  swapoutMbPer300s: number | null
+  swapGrowing: boolean
+  load: number | null
+  reason: string
+}
+
 export interface HostSampleFact {
   at: Date
   load: number | null
@@ -99,6 +122,8 @@ export interface HostSampleFact {
   swapoutMbPer300s: number | null
   /** the process count of that minute's `top` header; null: not read */
   processes: number | null
+  /** `kern.memorystatus_vm_pressure_level`: 1 normal, 2 warning, 4 critical */
+  pressureLevel: number | null
 }
 
 export interface LeadPeaks {

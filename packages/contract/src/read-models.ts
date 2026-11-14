@@ -754,6 +754,19 @@ export const CapacityShadowMinutes = z
   })
   .meta({ id: 'CapacityShadowMinutes' })
 
+/** The host's readings over the shadow minutes of one kind (the aim above the live rule's slots, or not). */
+export const SlotAimMinutes = z
+  .strictObject({
+    minutes: z.number().int(),
+    /** mean swapouts, MiB per 300 s, over the minutes with a reading; null with none */
+    swapoutMbMean: z.number().nullable(),
+    /** share of the minutes with a pressure reading that were above level 1; null with none */
+    pressureAboveNormal: z.number().nullable(),
+    /** minutes at pressure level 4 */
+    critical: z.number().int(),
+  })
+  .meta({ id: 'SlotAimMinutes' })
+
 export const CapacityReaped = z
   .strictObject({ comm: z.string(), session: z.string(), reason: z.enum(['session', 'worktree']), at })
   .meta({ id: 'CapacityReaped' })
@@ -810,6 +823,21 @@ export const CapacityLoopModel = z
       whenFewer: CapacityShadowMinutes,
       whenSame: CapacityShadowMinutes,
     }),
+    /**
+     * the slot aim of `read/capacity-loop.ts` (`domains/capacity/slot-aim.ts`): the count it allows now (null before its
+     * first minute) and, over the window's shadow minutes, the host's readings in the minutes it allowed more slots than
+     * the live rule's base against the others; the switch-on is judged by these two not differing for the worse
+     */
+    slotAim: z.strictObject({
+      mode: z.enum(['off', 'shadow', 'on']),
+      target: z.number().int().nullable(),
+      minutes: z.number().int(),
+      /** minutes the aim allowed more than the live base slots, and the minutes a caller waited in them */
+      moreSlots: SlotAimMinutes,
+      otherwise: SlotAimMinutes,
+      /** the minutes of `moreSlots` with a waiter in line: the minutes it would have helped */
+      moreSlotsWithWaiter: z.number().int(),
+    }),
     /** the 8 steps with the largest peak memory */
     topSteps: z.array(CapacityStep),
     /** the 8 repos whose leads take most memory (80th percentile of the newest attempts' peaks) */
@@ -834,6 +862,8 @@ export const CapacityLoopModel = z
       loadPerCore: z.number(),
       processCap: z.number(),
       cores: z.number(),
+      /** `FACTORY_SLOT_AIM`: whether the slot count follows memory pressure, only shadows it, or is off */
+      slotAim: z.enum(['off', 'shadow', 'on']),
     }),
   })
   .meta({ id: 'CapacityLoopModel' })
