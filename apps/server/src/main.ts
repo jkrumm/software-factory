@@ -50,7 +50,7 @@ import { availableParallelism, loadavg } from 'node:os'
 import { join } from 'node:path'
 import { APPROVED_RUN_HANG_GUARD_MS } from './app/checkpoints-approve.ts'
 import { endRequest, tellCheckBroken } from './app/checkpoints-errands.ts'
-import { syncPlaceErrands } from './app/checkpoints-sync.ts'
+import { syncPlaceErrands, syncSummary } from './app/checkpoints-sync.ts'
 import { checkpointUses } from './app/checkpoints-uses.ts'
 import { createLoopRunner, type LoopRunner, type LoopSpec } from './app/loops/runner.ts'
 import { projectFileProjects } from './app/quality-projects.ts'
@@ -790,7 +790,8 @@ async function main(): Promise<void> {
         })
         if (!pass.ok) return pass
         said('desk', pass.value.problems)
-        return ok(deskSummary(pass.value))
+        const syncLine = synced.ok ? syncSummary(synced.value) : ''
+        return ok(syncLine === '' ? deskSummary(pass.value) : `${deskSummary(pass.value)}; ${syncLine}`)
       },
     },
     {
