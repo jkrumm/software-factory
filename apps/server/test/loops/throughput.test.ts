@@ -395,7 +395,7 @@ describe('standing memory of the tenant class', () => {
     perIssue: [],
     steps: [],
     processes: [],
-    queued: [],
+    waits: [],
     tenants: { hours: 168, classMib: 0, members: [], day: [], ...over },
   })
   const policy = { project: 'dotfiles', budgetMib: 6144 }
