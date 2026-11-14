@@ -30,10 +30,6 @@
     <string>__SHA__</string>
   </dict>
 
-  <!-- Interactive, as the server's plist: the door must not be throttled below the work it reports on (`man launchd.plist`). -->
-  <key>ProcessType</key>
-  <string>Interactive</string>
-
   <key>RunAtLoad</key>
   <true/>
   <!-- Plain `true`: make doctor grades a KeepAlive job that is down. -->
