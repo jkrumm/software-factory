@@ -1,10 +1,13 @@
 import { realpathSync } from 'node:fs'
-import { constants } from 'node:os'
+import { mkdtemp, rm } from 'node:fs/promises'
+import { constants, tmpdir } from 'node:os'
+import { join } from 'node:path'
 import { send } from '@software-factory/client'
 import { DEFAULT_SLOT_RUN_MS, Slot, type StepCost } from '@software-factory/contract'
 import { usage } from './exit.ts'
 import { credentialOf } from './credentials.ts'
 import { DEFAULT_URL, type Io } from './operation.ts'
+import { collectJunit } from './junit.ts'
 import { readProcesses, treeMeter } from './process-tree.ts'
 
 /** How long a caller waits for a slot before it gives up with `EX_TEMPFAIL` (`FACTORY_SLOT_WAIT_MS`). */
@@ -153,6 +156,31 @@ async function reportCost(input: {
   }
 }
 
+/** Runs git in a directory; null when it fails (not a repository, no git). */
+async function git(cwd: string, args: string[]): Promise<string | null> {
+  try {
+    const proc = Bun.spawn(['git', '-C', cwd, ...args], { stdin: 'ignore', stdout: 'pipe', stderr: 'ignore' })
+    const out = await new Response(proc.stdout).text()
+    return (await proc.exited) === 0 ? out.trim() : null
+  } catch {
+    return null
+  }
+}
+
+/**
+ * The code a step runs on: `HEAD`, and whether tracked files differ from it. Read before the command starts (the tests
+ * may write files). A flake is the same code with both results, so a dirty tree is not evidence of one; untracked files
+ * do not make a tree dirty (a log the caller redirects into the worktree would).
+ */
+async function codeOf(cwd: string | undefined): Promise<{ commit?: string; dirty?: boolean }> {
+  if (cwd === undefined) return {}
+  const [commit, status] = await Promise.all([
+    git(cwd, ['rev-parse', 'HEAD']),
+    git(cwd, ['status', '--porcelain', '--untracked-files=no']),
+  ])
+  return commit ? { commit, ...(status === null ? {} : { dirty: status !== '' }) } : {}
+}
+
 /** A command inside a slot its caller holds: run as it is, no queue, and the exit code is the command's. */
 async function runHeld(program: string, args: string[], io: Io): Promise<number> {
   try {
@@ -251,6 +279,8 @@ export async function slotRun(input: { name?: string; command: string[] }, io: I
   for (const signal of signals) process.on(signal, onSignal)
 
   const askedAt = Date.now()
+  // Where the command leaves its JUnit files (the repos' check targets write them there: docs/plan.md "Check tiers").
+  let junitDir: string | undefined
   try {
     const outcome = await acquire({
       ask,
@@ -272,12 +302,19 @@ export async function slotRun(input: { name?: string; command: string[] }, io: I
     if (!holding) await release()
     if (stopped) return 128 + (constants.signals[stopped] ?? 1)
 
+    let code: Awaited<ReturnType<typeof codeOf>> = {}
+    if (holding) {
+      code = await codeOf(cwd)
+      junitDir = await mkdtemp(join(tmpdir(), 'factory-junit-')).catch(() => undefined)
+    }
     try {
       child = Bun.spawn([program, ...args], {
         stdin: 'inherit',
         stdout: 'inherit',
         stderr: 'inherit',
-        env: holding ? { ...io.env, FACTORY_SLOT_ACTIVE: '1' } : io.env,
+        env: holding
+          ? { ...io.env, FACTORY_SLOT_ACTIVE: '1', ...(junitDir === undefined ? {} : { FACTORY_JUNIT_DIR: junitDir }) }
+          : io.env,
         detached: true,
       })
     } catch (error) {
@@ -351,6 +388,7 @@ export async function slotRun(input: { name?: string; command: string[] }, io: I
     }
     const exitCode = limited ? EX_RUN_LIMIT : exitCodeOf(child)
     if (holding && meter) {
+      const tests = junitDir === undefined ? [] : await collectJunit(junitDir)
       await reportCost({
         base,
         path,
@@ -363,12 +401,15 @@ export async function slotRun(input: { name?: string; command: string[] }, io: I
           durationMs: Date.now() - startedAt,
           waitMs: waitedMs,
           exitCode,
+          ...code,
+          ...(tests.length === 0 ? {} : { tests }),
         },
       })
     }
     return exitCode
   } finally {
     for (const signal of signals) process.off(signal, onSignal)
+    if (junitDir !== undefined) await rm(junitDir, { recursive: true, force: true }).catch(() => undefined)
     await release()
   }
 }

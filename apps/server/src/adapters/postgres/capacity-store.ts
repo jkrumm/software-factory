@@ -273,9 +273,39 @@ export function postgresCapacityStore(tx: SQL): CapacityStore {
     },
 
     async recordStepCost(c) {
+      const [row] = await tx`
+        INSERT INTO factory.step_costs (at, name, repo, peak_rss_mib, cpu_seconds, duration_ms, wait_ms, exit_code,
+           vcs_ref_head_revision, dirty)
+        VALUES (${c.at}, ${c.name}, ${c.repo}, ${c.peakRssMib}, ${c.cpuSeconds}, ${c.durationMs}, ${c.waitMs}, ${c.exitCode},
+           ${c.commit ?? null}, ${c.dirty ?? null})
+        RETURNING id`
+      const tests = c.tests ?? []
+      if (tests.length === 0) return
+      const { id } = z.object({ id: z.coerce.number() }).parse(row)
+      // One statement for the whole list: the arrays are unnested into rows.
       await tx`
-        INSERT INTO factory.step_costs (at, name, repo, peak_rss_mib, cpu_seconds, duration_ms, wait_ms, exit_code)
-        VALUES (${c.at}, ${c.name}, ${c.repo}, ${c.peakRssMib}, ${c.cpuSeconds}, ${c.durationMs}, ${c.waitMs}, ${c.exitCode})`
+        INSERT INTO factory.test_results (step_cost_id, at, repo, vcs_ref_head_revision, dirty, test_suite_name,
+           test_case_name, test_case_result_status, duration_ms)
+        SELECT ${id}::bigint, ${c.at}::timestamptz, ${c.repo}::text, ${c.commit ?? null}::text, ${c.dirty ?? null}::boolean,
+               u.suite, u.name, u.status, u.duration
+        FROM unnest(
+          ${tx.array(
+            tests.map((t) => t.suite),
+            'TEXT',
+          )},
+          ${tx.array(
+            tests.map((t) => t.name),
+            'TEXT',
+          )},
+          ${tx.array(
+            tests.map((t) => t.status),
+            'TEXT',
+          )},
+          ${tx.array(
+            tests.map((t) => t.durationMs),
+            'INTEGER',
+          )}
+        ) AS u(suite, name, status, duration)`
     },
 
     async recentPeaks(name, limit) {

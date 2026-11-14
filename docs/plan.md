@@ -171,6 +171,13 @@ checks: { fast: make check-fast, full: make check, ci: true }
   project without `checks:` gets no section and keeps one `make check`.
 - **Slots.** The slot name is the step (`software-factory check-fast` beside `software-factory check`), so the ledger
   learns the fast tier's peak apart from the whole gate's.
+- **Test results.** `factory slot run` sets `FACTORY_JUNIT_DIR` (a fresh directory) for the command and posts the `*.xml` JUnit
+  files left there beside the step's cost: that is how the flake rate and the failed-run minutes per project are measured
+  (`factory read throughput`, `tests`). A repo's check targets write JUnit only when the variable is set, one file per
+  runner, so CI and a bare local run write none: Bun `--reporter=junit --reporter-outfile=$FACTORY_JUNIT_DIR/<name>.xml`, Playwright
+  the `junit` reporter with `outputFile` built from `process.env.FACTORY_JUNIT_DIR`, pytest `--junitxml=$FACTORY_JUNIT_DIR/<name>.xml`.
+  Make expands the variable before the slot starts, so put the flags on a target that runs inside the `check` slot, or run it as
+  `factory slot run -- make <target>`. Another project's Makefile is its own repo's to adopt.
 - `factory project show` prints `checks` (`null` for none). Another project's `checks:` is its own repo's to adopt: the
   Makefile target and the CI workflow it names are that repo's.
 

@@ -17,7 +17,10 @@ export default defineConfig({
   // stretched by the host's load when the run starts (Issue 719): a screenshot that takes 3 s idle took 35 s at load 40
   timeout: patient(30_000),
   expect: { timeout: patient(10_000) },
-  reporter: [['list']],
+  // `factory slot run` sets FACTORY_JUNIT_DIR and posts what is left there as the run's test results.
+  reporter: process.env.FACTORY_JUNIT_DIR
+    ? [['list'], ['junit', { outputFile: `${process.env.FACTORY_JUNIT_DIR}/e2e.xml` }]]
+    : [['list']],
   use: {
     ...devices['Desktop Chrome'],
     viewport: { width: 1800, height: 1200 },

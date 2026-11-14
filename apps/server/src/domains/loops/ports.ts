@@ -193,6 +193,8 @@ export interface LoopStore {
   pruneHostSamples(before: Date): Promise<number>
   /** drops the lead samples older than `before`; how many */
   pruneLeadSamples(before: Date): Promise<number>
+  /** drops the test results older than `before`; how many */
+  pruneTestResults(before: Date): Promise<number>
   /** the class rows and the notable processes of the minute at `at`; a process already stored at `at` is ignored */
   recordClassSnapshot(
     at: Date,

@@ -101,3 +101,33 @@ test('a nested pass-through records nothing', async () => {
   expect(result.code).toBe(0)
   expect(await sql()`SELECT 1 FROM factory.step_costs WHERE name = 'nested'`).toHaveLength(0)
 })
+
+test('the JUnit a step leaves in FACTORY_JUNIT_DIR is stored with its cost; a step with none stores no results', async () => {
+  const xml =
+    '<testsuites><testsuite name="a.test.ts"><testcase name="ok" classname="" time="0.5"/>' +
+    '<testcase name="bad" time="0.1"><failure message="x"/></testcase>' +
+    '<testcase name="later"><skipped/></testcase></testsuite></testsuites>'
+  const written = join(lab.root, 'unit.xml')
+  await Bun.write(written, xml)
+  const result = await lab.cli(
+    ['slot', 'run', '--name', 'with-junit', '--', 'sh', '-c', `cp ${written} "$FACTORY_JUNIT_DIR/unit.xml"; exit 1`],
+    env,
+  )
+  expect(result.code).toBe(1)
+  const rows = await sql()`
+    SELECT t.test_suite_name AS suite, t.test_case_name AS name, t.test_case_result_status AS status, t.duration_ms,
+      t.step_cost_id = c.id AS linked
+    FROM factory.test_results t JOIN factory.step_costs c ON c.id = t.step_cost_id
+    WHERE c.name = 'with-junit' ORDER BY t.id`
+  expect(
+    rows.map((r: Record<string, unknown>) => [r.suite, r.name, r.status, Number(r.duration_ms), r.linked]),
+  ).toEqual([
+    ['a.test.ts', 'ok', 'pass', 500, true],
+    ['a.test.ts', 'bad', 'fail', 100, true],
+    ['a.test.ts', 'later', 'skip', 0, true],
+  ])
+  await lab.cli(['slot', 'run', '--name', 'no-junit', '--', 'true'], env)
+  expect(
+    await sql()`SELECT 1 FROM factory.test_results t JOIN factory.step_costs c ON c.id = t.step_cost_id WHERE c.name = 'no-junit'`,
+  ).toHaveLength(0)
+}, 30_000)

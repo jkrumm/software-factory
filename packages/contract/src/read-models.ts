@@ -884,6 +884,48 @@ export const ThroughputModel = z
         }),
       ),
     }),
+    /**
+     * Test runs per project and the flaky tests, from `step_costs` and `test_results` over the same window (by `at`, the
+     * end of a run). A run is a row of `step_costs`; it failed when its exit code is not 0 (a run killed at its limit is 124).
+     * A flake is a test with both a pass and a fail at one commit, over clean-tree runs only; a run counts a test once,
+     * failed when any of its results of that test failed.
+     */
+    tests: z.strictObject({
+      /** every project with a run in the window, by name */
+      byProject: z.array(
+        z.strictObject({
+          repo: z.string(),
+          runs: z.number().int(),
+          failedRuns: z.number().int(),
+          /** sum of `duration_ms` over 60000, one decimal */
+          runMinutes: z.number(),
+          /** the same over the failed runs: the slot-minutes that bought nothing */
+          failedRunMinutes: z.number(),
+          /** `test_results` rows of the window */
+          testResults: z.number().int(),
+          /** distinct (suite, test) with a flake in the window */
+          flakyTests: z.number().int(),
+          /** flaky (test, commit) pairs over the pairs seen in two or more clean runs; null when no pair was */
+          flakeRate: nullableNumber,
+        }),
+      ),
+      /** the 20 flaky tests with the most flaky commits, then the newest flake, then name */
+      flaky: z.array(
+        z.strictObject({
+          repo: z.string(),
+          suite: z.string(),
+          name: z.string(),
+          /** commits at which the test had both results */
+          flakyCommits: z.number().int(),
+          /** clean-tree runs of the test, and how many of them failed */
+          runs: z.number().int(),
+          failures: z.number().int(),
+          /** when the first and the newest flaky commit showed both results (the later of its first pass and first fail) */
+          firstFlakeAt: at,
+          lastFlakeAt: at,
+        }),
+      ),
+    }),
   })
   .meta({ id: 'ThroughputModel' })
 export type ThroughputModel = z.infer<typeof ThroughputModel>

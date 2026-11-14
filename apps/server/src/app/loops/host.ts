@@ -151,6 +151,7 @@ export async function hostPass(deps: HostPassDeps): Promise<Result<HostPass, Por
     const pruned =
       (await loops.pruneHostSamples(keep)) +
       (await loops.pruneClassSamples(keep)) +
+      (await loops.pruneTestResults(keep)) +
       (await loops.pruneClassHours(new Date(at.getTime() - CLASS_HOURS_KEEP_MS)))
     return ok({
       pruned,

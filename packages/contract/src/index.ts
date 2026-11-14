@@ -144,6 +144,8 @@ export {
   SlotBody,
   SlotRelease,
   StepCost,
+  TestResult,
+  MAX_TEST_RESULTS,
 } from './capacity.ts'
 export {
   AfterAnswer,

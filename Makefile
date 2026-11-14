@@ -76,6 +76,10 @@ SLOT_PROJECT = software-factory
 slot = $(if $(shell command -v factory 2>/dev/null),factory slot run --name "$(SLOT_PROJECT) $(1)" --,)
 SLOT = $(call slot,test)
 
+# `factory slot run` sets FACTORY_JUNIT_DIR for the command it runs and posts the *.xml files left there beside the step's cost
+# (test results per run: flake rate, failed-run minutes). Unset (CI, a run without a slot): no JUnit file.
+JUNIT = $(if $(FACTORY_JUNIT_DIR),--reporter=junit --reporter-outfile=$(FACTORY_JUNIT_DIR)/$(1).xml)
+
 # Every test file may start a private Postgres cluster in beforeAll and a scenario drives real processes; initdb alone takes seconds
 # on a loaded runner. Bun 1.4 ignores `timeout` in bunfig.toml (tests ran at 5 s on CI), so the flag carries it.
 # The per-test limit stretches with the host's load per core (up to 6x): at load 40 a test that takes 3 s idle takes minutes (Issue 719).
@@ -85,7 +89,7 @@ test: test-unit test-scenarios
 
 test-unit:
 	@echo "==> unit tests (bun test apps packages scripts integrations)"
-	@$(SLOT) bun test $(TEST_TIMEOUT) ./apps ./packages ./scripts ./integrations
+	@$(SLOT) bun test $(call JUNIT,unit) $(TEST_TIMEOUT) ./apps ./packages ./scripts ./integrations
 
 # The unit tests of what the branch changed (bun follows the imports from each changed file; committed and uncommitted
 # changes against the merge base with origin/master). CHECK_FAST_ALL=1 (CI's `static` job) runs every unit test.
@@ -93,12 +97,12 @@ UNIT_BASE = $(shell git merge-base HEAD origin/master 2>/dev/null)
 test-unit-changed:
 	@if [ -n "$(CHECK_FAST_ALL)" ] || [ -z "$(UNIT_BASE)" ]; then $(MAKE) --no-print-directory test-unit; else \
 	  echo "==> unit tests of the changed files (bun test --changed=$(UNIT_BASE))"; \
-	  $(SLOT) bun test $(TEST_TIMEOUT) --changed=$(UNIT_BASE) --pass-with-no-tests ./apps ./packages ./scripts ./integrations; fi
+	  $(SLOT) bun test $(call JUNIT,unit-changed) $(TEST_TIMEOUT) --changed=$(UNIT_BASE) --pass-with-no-tests ./apps ./packages ./scripts ./integrations; fi
 
 # SHARD=1/2 runs the first of two shards of the scenarios (CI's matrix); unset, all of them.
 test-scenarios:
 	@echo "==> scenarios (bun test tests$(if $(SHARD), --shard=$(SHARD)))"
-	@$(SLOT) bun test $(TEST_TIMEOUT) $(if $(SHARD),--shard=$(SHARD)) ./tests
+	@$(SLOT) bun test $(call JUNIT,scenarios) $(TEST_TIMEOUT) $(if $(SHARD),--shard=$(SHARD)) ./tests
 
 # The Console is built first (the global setup serves apps/console/dist); `bun test` never collects tests/e2e (*.e2e.ts). Playwright runs under Bun.
 e2e:

@@ -187,7 +187,28 @@ export type Slot = z.infer<typeof Slot>
 export const SlotRelease = z.object({ released: z.boolean() }).meta({ id: 'SlotRelease' })
 export type SlotRelease = z.infer<typeof SlotRelease>
 
-/** What a finished step cost: `POST /slots/:id/cost`, appended to the ledger the grant rule learns from. */
+/** The most test results one step posts; a run past it keeps the first ones (`factory slot run` cuts the list). */
+export const MAX_TEST_RESULTS = 50_000
+
+/**
+ * One test result of a step: a `<testcase>` of a JUnit file. Named after the OTel test attributes (`test.suite.name`,
+ * `test.case.name`, `test.case.result.status`); `skip` is a custom status value, which the convention allows.
+ */
+export const TestResult = z
+  .object({
+    suite: z.string().max(500),
+    name: z.string().min(1).max(1000),
+    status: z.enum(['pass', 'fail', 'skip']),
+    durationMs: z.number().int().min(0),
+  })
+  .meta({ id: 'TestResult' })
+export type TestResult = z.infer<typeof TestResult>
+
+/**
+ * What a finished step cost: `POST /slots/:id/cost`, appended to the ledger the grant rule learns from. The JUnit results
+ * the step wrote ride along (`tests`), with the commit they ran on (`vcs.ref.head.revision`) and whether the tree had
+ * uncommitted changes: a flake is the same code with both results, so only a clean tree counts for one.
+ */
 export const StepCost = z
   .object({
     name: z.string().min(1).max(200),
@@ -197,6 +218,9 @@ export const StepCost = z
     durationMs: z.number().int().min(0),
     waitMs: z.number().int().min(0),
     exitCode: z.number().int().nullable(),
+    commit: z.string().min(1).max(64).optional(),
+    dirty: z.boolean().optional(),
+    tests: z.array(TestResult).max(MAX_TEST_RESULTS).optional(),
   })
   .meta({ id: 'StepCost' })
 export type StepCost = z.infer<typeof StepCost>
