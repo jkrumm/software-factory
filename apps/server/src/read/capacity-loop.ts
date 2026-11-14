@@ -95,13 +95,16 @@ export async function readCapacityLoop(
         SELECT at, greatest(seats - leads, 0) AS seats FROM factory.host_samples
         WHERE queued > 0 AND seats IS NOT NULL AND leads IS NOT NULL AND greatest(seats - leads, 0) > 0
           AND at >= ${w.from} AND at < ${w.to}),
+      ivs AS (
+        SELECT kind, from_at, to_at FROM factory.queue_intervals
+        WHERE from_at < ${w.to} AND coalesce(to_at, ${w.to}) > ${w.from}),
       kinds AS (
         SELECT idle.at, idle.seats,
           coalesce(
             array_agg(DISTINCT q.kind) FILTER (WHERE q.kind NOT IN ${tx([...OWNED_ELSEWHERE_KINDS])}),
             array_agg(DISTINCT q.kind) FILTER (WHERE q.kind IS NOT NULL),
             ARRAY['unrecorded']) AS kinds
-        FROM idle LEFT JOIN factory.queue_intervals q ON q.from_at <= idle.at AND coalesce(q.to_at, ${w.to}) > idle.at
+        FROM idle LEFT JOIN ivs q ON q.from_at <= idle.at AND coalesce(q.to_at, ${w.to}) > idle.at
         GROUP BY idle.at, idle.seats)
       SELECT kind, sum(seats::float8 / 60 / cardinality(kinds)) AS hours FROM kinds, unnest(kinds) AS kind GROUP BY kind`
     const Queued = z.object({ kind: z.string(), issues: z.coerce.number().int(), hours: z.coerce.number().nullable() })
