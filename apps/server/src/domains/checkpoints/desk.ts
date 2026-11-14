@@ -1,4 +1,5 @@
 import { DESK_EVERY_MS } from '../../kernel/run.ts'
+import { MAX_RUN_TRIES, needOf } from './need.ts'
 import type { ErrandRecord } from './ports.ts'
 
 /** The owner is back at the desk after this long without a Console read. */
@@ -44,21 +45,34 @@ export function deskDue(input: {
 
 /**
  * The MacBook commands the pass pushes, in order: an open Errand, Issue's or request, that reached the owner with a command
- * to run on the MacBook. One whose pushed run is still going in a MacBook terminal is left (a second push would run it
- * again).
+ * to run on the MacBook and needs him there (`secret`, `hands`). An `approval` never is one (Needs you has its button), and a
+ * `place` is pushed only on his own button (`includePlace`): no secret, no reason to page him. One whose pushed run is still
+ * going in a MacBook terminal is left (a second push would run it again), and one whose command came back unsuccessful
+ * `MAX_RUN_TRIES` times is not offered unchanged.
  *
  * He is back: every one, oldest raised first, to be pushed one dialog at a time (the next after the last was answered or
  * timed out). He is away: the one never pushed, oldest first, else the one pushed longest ago, and none within
  * `PUSH_AGAIN_MS` of its last push; a pile of dialogs is what he would come back to.
  */
-export function pushQueue(open: readonly ErrandRecord[], now: Date, returned: boolean): ErrandRecord[] {
+export function pushQueue(
+  open: readonly ErrandRecord[],
+  now: Date,
+  returned: boolean,
+  options: { includePlace?: boolean } = {},
+): ErrandRecord[] {
+  const dialog = (errand: ErrandRecord): boolean => {
+    const need = errand.need ?? needOf(errand)
+    return need === 'secret' || need === 'hands' || (need === 'place' && options.includePlace === true)
+  }
   const pending = open.filter(
     (errand) =>
       errand.doneAt === null &&
       errand.reachedOwnerAt !== null &&
       errand.command !== null &&
       errand.host === 'macbook' &&
-      errand.runStatus !== 'running',
+      errand.runStatus !== 'running' &&
+      errand.runAttempts < MAX_RUN_TRIES &&
+      dialog(errand),
   )
   // a stable sort: among equals the list's order stays
   if (returned) return pending.toSorted((a, b) => a.raisedAt.getTime() - b.raisedAt.getTime())

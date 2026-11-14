@@ -1,6 +1,8 @@
 import type { ErrandNeededAnswer } from '@software-factory/contract'
 import type { CheckRunner, CheckpointStore, ErrandNeededPort, ErrandRecord } from '../../domains/checkpoints/ports.ts'
 import {
+  brokenLine,
+  CHECK_BROKEN_NOTE,
   CHECK_FAILS_NOTED,
   CHECKS_PER_PASS,
   checkVerdict,
@@ -24,6 +26,13 @@ export interface CheckDeps {
   checks: CheckRunner
   /** ends an Errand whose check says it is no longer needed; default: close the request (no Issue to tell) */
   resolve?: (errand: ErrandRecord, why: string) => Promise<boolean>
+  /** tells the lead whose Issue waits on the Errand that its check is broken (once); a request has no one to tell */
+  broken?: (errand: ErrandRecord, line: string) => Promise<void>
+  /** ends a request by the loop's own finding and tells the Issues that joined it; default: close the row (no one joined) */
+  end?: (
+    errand: ErrandRecord,
+    how: { kind: 'not_needed' | 'expired'; by: 'check' | 'judge' | 'loop'; why: string },
+  ) => Promise<boolean>
 }
 
 export interface ErrandsDeps extends CheckDeps {
@@ -64,6 +73,7 @@ async function close(
   by: 'check' | 'judge' | 'loop',
   why: string,
 ): Promise<boolean> {
+  if (deps.end) return deps.end(errand, { kind, by, why })
   const done = await deps.uow.run(async ({ checkpoints }) =>
     ok(await checkpoints.finishErrand(errand.id, deps.clock.now(), closedNote(kind, why), { kind, by })),
   )
@@ -102,6 +112,23 @@ export async function runCheck(
   }
   pass.unrunnable++
   const fails = errand.checkFails + 1
+  if (verdict === 'broken') {
+    const line = brokenLine(run.output)
+    await noteCheck(
+      deps,
+      errand,
+      `${CHECK_BROKEN_NOTE}: ${line || `exit ${run.exit}`}; the owner's done still closes it`,
+      fails,
+    )
+    if (fails === 1) await deps.broken?.(errand, line)
+    if (fails === 1 || fails === CHECK_FAILS_NOTED)
+      pass.problems.push(
+        fails === 1
+          ? `${errand.id}: ${CHECK_BROKEN_NOTE}: ${line}`
+          : `${errand.id}: its check could not run ${fails} times in a row (${line})`,
+      )
+    return
+  }
   const why = run.timedOut
     ? 'timed out'
     : run.exit === null

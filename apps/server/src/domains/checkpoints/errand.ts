@@ -3,6 +3,7 @@ import { type Host, HOSTS } from '../../kernel/hands.ts'
 import { err, ok, type Result } from '../../kernel/result.ts'
 import type { ErrandScreenAnswer } from '@software-factory/contract'
 import { JUDGE_BACKOFF_MS, JUDGE_MAX_TRIES, type MissingFields } from './decision.ts'
+import { type Need, needByRule } from './need.ts'
 
 export type ErrandId = Id<'errand'>
 
@@ -244,18 +245,26 @@ export function screenByRule(input: ErrandInput): { verdict: 'turn_away'; reason
 }
 
 /**
- * A root step the lead hands the owner as a command for his MacBook needs his hands: the mini's sudo password is
- * MacBook-only (`dotfiles/docs/global-reference.md` §Sudo on a server), so no token reads it and the screen model, which does
- * not know that policy, would turn it away with a note that points at the password. Decided by the Errand's shape (a command
- * for the MacBook that names sudo), not by the lead's wording; the owner is paged without a model call.
+ * An Errand whose shape settles what it needs, so no model is asked and no token is offered the work: a command for the
+ * mini that asks only his yes (`approval`), or a step on his MacBook that names a secret only he has (1Password, a biometric,
+ * the mini's sudo password, which is MacBook-only: `dotfiles/docs/global-reference.md` §Sudo on a server; the screen model does
+ * not know that policy and would turn it away with a note that points at the password). Decided by the shape (a command, its
+ * host, the words), not by the lead's wording; null leaves the rest to the screen.
  */
-export function screenBySudo(
-  input: ErrandInput & { command: string | null; host: Host | null },
-): { note: string } | null {
-  if (input.command === null || input.host !== 'macbook') return null
-  const text = `${input.summary}\n${input.detail ?? ''}\n${input.command}`.toLowerCase()
-  if (!/\bsudo\b/.test(text)) return null
-  return { note: "a root step as a command for the owner's MacBook: the mini's sudo password is MacBook-only" }
+export function screenByNeed(input: ErrandInput & { command: string | null; host: Host | null }): {
+  need: Need
+  note: string
+} | null {
+  if (input.command === null) return null
+  const need = needByRule(input)
+  if (need === 'approval')
+    return { need, note: "an approval: only the owner's yes is missing, and its command runs on the mini" }
+  if (need === 'secret' && input.host === 'macbook')
+    return {
+      need,
+      note: "a step only the owner can take: it names a secret (1Password, a biometric, the mini's sudo password) on his MacBook",
+    }
+  return null
 }
 
 /** A pull request or merge request named in the text: its URL, else `#<number>` after the words that name one. */
@@ -286,7 +295,7 @@ export function screenByReview(input: ErrandInput): { review: string; reason: st
 }
 
 export type ErrandScreenChecked =
-  | { action: 'pass'; note: string }
+  | { action: 'pass'; note: string; need: Need | null }
   | { action: 'turn_away'; reason: string }
   /** an answer that cannot be acted on: counted as a failed call */
   | { action: 'refused'; why: string }
@@ -294,7 +303,7 @@ export type ErrandScreenChecked =
 /** The answer is held to its shape before anything is done: a turn-away needs a reason the lead can act on. */
 export function checkErrandScreen(answer: ErrandScreenAnswer): ErrandScreenChecked {
   const reason = answer.reason.trim().slice(0, REASON_MAX)
-  if (answer.verdict === 'pass') return { action: 'pass', note: reason }
+  if (answer.verdict === 'pass') return { action: 'pass', note: reason, need: answer.need ?? null }
   if (answer.verdict === 'turn_away' && reason !== '') return { action: 'turn_away', reason }
   return { action: 'refused', why: 'a turn-away without a reason' }
 }

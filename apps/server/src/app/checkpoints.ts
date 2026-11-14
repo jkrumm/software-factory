@@ -29,8 +29,16 @@ import {
   refuseHostClass,
   refuseQueuedAsk,
 } from '../domains/checkpoints/errand.ts'
-import { type CheckRun, checkVerdict, readRequest, SCREENED_SOURCES } from '../domains/checkpoints/request.ts'
-import { exitedNote, headTail, runFailureOf, STILL_NEEDED_NOTE } from '../kernel/run.ts'
+import { failedTwiceNote, MAX_RUN_TRIES, needOf } from '../domains/checkpoints/need.ts'
+import {
+  brokenLine,
+  CHECK_BROKEN_NOTE,
+  type CheckRun,
+  checkVerdict,
+  readRequest,
+  SCREENED_SOURCES,
+} from '../domains/checkpoints/request.ts'
+import { exitedNote, firstErrorLine, headTail, runFailureOf, STILL_NEEDED_NOTE } from '../kernel/run.ts'
 import { deepLink, reviewPage } from '../domains/checkpoints/page.ts'
 import type {
   AnnotationRecord,
@@ -40,6 +48,7 @@ import type {
   CheckRunner,
   DecisionFilter,
   DecisionRecord,
+  ErrandJoin,
   ErrandRecord,
   PageRecord,
   RevisionRecord,
@@ -67,6 +76,8 @@ export interface CheckpointDeps extends WriteDeps {
   consoleUrl: string
   /** runs an Errand's `check` when the owner marks it done (outside any transaction) */
   checks: CheckRunner
+  /** runs the command of an Errand the owner approved, on this host (outside any transaction); absent, Approve is refused */
+  commands?: CheckRunner
   /** the requests a lead queued with `ask-human.sh` and nobody answered, by Issue number; absent, none is looked for */
   queuedAsks?: (issue: number) => Promise<QueuedAsk[]>
 }
@@ -116,6 +127,47 @@ export const waitingOn = (issue: Issue, reason: 'decision' | 'review' | 'errand'
     return wait.decisions?.some((open) => open.id === checkpoint) ?? false
   }
   return wait.reason === reason && 'holds' in wait && wait.holds.id === checkpoint
+}
+
+/**
+ * The Issues that joined an Errand (their command or check was the same as the open one's) and still wait for it, each with
+ * what `each` does to it: the Errand's end is written to every one of them, in the transaction that closes it.
+ */
+export async function eachJoined(
+  stores: CheckpointStores,
+  errand: Pick<ErrandRecord, 'id'>,
+  each: (issueId: IssueId, join: ErrandJoin) => Promise<Result<unknown, CheckpointError>>,
+): Promise<Result<null, CheckpointError>> {
+  for (const join of await stores.checkpoints.joinsOf(errand.id)) {
+    const issue = await issueOf(stores.work, join.issueId)
+    if (!issue || !waitingOn(issue, 'errand', errand.id)) continue
+    const done = await each(join.issueId, join)
+    if (!done.ok) return done
+  }
+  return ok(null)
+}
+
+/**
+ * An Errand ends by a path that has no owner's hands in it (its Issue stopped waiting, a newer request replaced it, the
+ * recheck withdrew it): every Issue that joined it still waiting hears `errand_done` with why, so none waits on a closed
+ * Errand. `payload` carries `resolved` (it is no longer needed) or `turnedAway` (it ended and the lead should raise it again).
+ */
+export function endJoined(
+  stores: CheckpointStores,
+  deps: CheckpointDeps,
+  errand: Pick<ErrandRecord, 'id'>,
+  payload: { resolved: string } | { turnedAway: string },
+): Promise<Result<null, CheckpointError>> {
+  return eachJoined(stores, errand, async (issueId) =>
+    applied(
+      await recordIn(stores.work, deps, {
+        issueId,
+        key: key('errand_done', errand.id, issueId),
+        event: { kind: 'errand_done', payload: { errand: errand.id, ...payload }, actor: 'factory' },
+      }),
+      'errand_done',
+    ),
+  )
 }
 
 /** An event the machine must apply: anything else (refused, ignored, replayed) is the caller's error, and rolls back. */
@@ -947,7 +999,8 @@ export function listArtifacts(
 // Errands
 
 export interface ErrandWritten {
-  result: 'applied' | 'replayed'
+  /** `joined`: an open Errand has the same command or check, and the Issue waits on it instead of raising its own */
+  result: 'applied' | 'replayed' | 'joined'
   errand: ErrandRecord
   issue: IssueMove | null
 }
@@ -981,6 +1034,43 @@ async function raiseChecked(
     const errandKey = key('errand', input.issueId, input.attempt, digest(input.call ? `call:${input.call}` : summary))
     const existing = await checkpoints.errandByKey(errandKey)
     if (existing) return ok<ErrandWritten>({ result: 'replayed', errand: existing, issue: moveOf(issue) })
+
+    // a repeat of a raise that joined: the same Errand again
+    const earlier = await checkpoints.joinedErrand(errandKey)
+    if (earlier) return ok<ErrandWritten>({ result: 'replayed', errand: earlier, issue: moveOf(issue) })
+
+    // the same command or the same check as an open Errand: the Issue waits on that one, and the owner is paged once
+    const same = await checkpoints.openMatching({ command: read.command, check: read.check })
+    if (same) {
+      if (same.issueId === input.issueId)
+        return ok<ErrandWritten>({ result: 'replayed', errand: same, issue: moveOf(issue) })
+      const at = deps.clock.now()
+      const joined = applied(
+        await recordIn(work, deps, {
+          issueId: input.issueId,
+          key: key('errand_raised', same.id, input.issueId, input.attempt),
+          event: {
+            kind: 'errand_raised',
+            payload: { attempt: input.attempt, errand: { id: same.id, summary: same.summary } },
+            actor: 'lead',
+          },
+        }),
+        'errand_raised',
+      )
+      if (!joined.ok) return joined
+      await checkpoints.joinErrand({
+        errandId: same.id,
+        issueId: input.issueId,
+        attempt: input.attempt,
+        joinedAt: at,
+        key: errandKey,
+      })
+      return ok<ErrandWritten>({
+        result: 'joined',
+        errand: same,
+        issue: moveOf(joined.value.issue, joined.value.effects),
+      })
+    }
 
     const id = deps.ids.next('errand')
     const recorded = applied(
@@ -1032,6 +1122,8 @@ async function raiseChecked(
       runHead: null,
       runTail: null,
       pushedAt: null,
+      need: null,
+      approvedAt: null,
     })
     if (!stored) return err({ kind: 'version_conflict', issueId: input.issueId, expected: issue.version })
     const errand = await checkpoints.errand(id)
@@ -1081,7 +1173,13 @@ export async function finishErrand(
   const verdict = checkVerdict(run)
   if (verdict === 'needed') return keepOpen(deps, input.errandId, { kind: 'still_needed' })
   const said = input.note?.trim() ?? ''
-  const checked = verdict === 'not_needed' ? checkedNote(run) : ''
+  // a check that could not answer (missing command, timeout) never overrules his done: it is said in the note
+  const checked =
+    verdict === 'not_needed'
+      ? checkedNote(run)
+      : verdict === 'broken'
+        ? `${CHECK_BROKEN_NOTE}, so his done stands: ${brokenLine(run.output)}`
+        : ''
   return closeErrand(deps, {
     ...input,
     outcome,
@@ -1091,6 +1189,39 @@ export async function finishErrand(
 
 /** What the owner's done adds to its note when the check agreed: the check's exit and its output. */
 const checkedNote = (run: CheckRun): string => exitedNote(run.exit, run.output)
+
+/**
+ * An Errand whose command came back unsuccessful `MAX_RUN_TRIES` times ends: the factory does not offer the same command a
+ * third time. The Issue that raised it, and every Issue that joined it, hear `errand_done` with why (`turnedAway`) and raise
+ * it again with a corrected command; a request is closed `turned_back` with the same words, which its asker reads.
+ */
+export async function retireFailed(
+  stores: CheckpointStores,
+  deps: CheckpointDeps,
+  errand: ErrandRecord,
+): Promise<Result<null, CheckpointError>> {
+  const at = deps.clock.now()
+  const why = failedTwiceNote(firstErrorLine(errand.runHead ?? ''))
+  const end = async (issueId: IssueId): Promise<Result<unknown, CheckpointError>> =>
+    applied(
+      await recordIn(stores.work, deps, {
+        issueId,
+        key: key('errand_done', errand.id, ...(issueId === errand.issueId ? [] : [issueId])),
+        event: { kind: 'errand_done', payload: { errand: errand.id, turnedAway: why }, actor: 'factory' },
+      }),
+      'errand_done',
+    )
+  const issue = errand.issueId ? await issueOf(stores.work, errand.issueId) : null
+  if (errand.issueId && issue && waitingOn(issue, 'errand', errand.id)) {
+    const ended = await end(errand.issueId)
+    if (!ended.ok) return ended
+  }
+  const joined = await eachJoined(stores, errand, end)
+  if (!joined.ok) return joined
+  await stores.checkpoints.finishErrand(errand.id, at, why, { kind: 'turned_back', by: 'loop' })
+  await stores.checkpoints.cancelPages(errand.id, at)
+  return ok(null)
+}
 
 type KeptOpen = { kind: 'run'; failure: NonNullable<ReturnType<typeof runFailureOf>> } | { kind: 'still_needed' }
 
@@ -1107,6 +1238,12 @@ function keepOpen(deps: CheckpointDeps, errandId: ErrandId, why: KeptOpen): Prom
     if (why.kind === 'run') {
       const { head, tail } = headTail(why.failure.output)
       await checkpoints.recordRun(errand.id, { at, status: why.failure.status, exit: why.failure.exit, head, tail })
+      const after = await checkpoints.errand(errand.id)
+      // the same command that came back unsuccessful twice is not offered a third time: the lead or the asker is told
+      if (after && why.failure.status !== 'running' && after.runAttempts >= MAX_RUN_TRIES) {
+        const retired = await retireFailed({ work, checkpoints }, deps, after)
+        if (!retired.ok) return retired
+      }
     } else {
       await checkpoints.recordCheck(errand.id, { at, note: STILL_NEEDED_NOTE, fails: 0 })
     }
@@ -1142,21 +1279,22 @@ function closeErrand(
     const at = deps.clock.now()
     const note = input.note?.trim() || null
     let move: IssueMove | null = null
-    if (errand.issueId && issue && waitingOn(issue, 'errand', errand.id)) {
-      // a turn-back carries its note in `errand_done` itself, which the lead reads as one item
-      const said =
-        outcome === 'turned_back'
-          ? null
-          : outcome === 'not_needed'
-            ? `The owner says the Errand "${errand.summary}" is not needed${note ? `: ${note}` : ''}. Go on without it.`
-            : note
-              ? `The owner did the Errand "${errand.summary}": ${note}`
-              : null
+    // a turn-back carries its note in `errand_done` itself, which the lead reads as one item
+    const said =
+      outcome === 'turned_back'
+        ? null
+        : outcome === 'not_needed'
+          ? `The owner says the Errand "${errand.summary}" is not needed${note ? `: ${note}` : ''}. Go on without it.`
+          : note
+            ? `The owner did the Errand "${errand.summary}": ${note}`
+            : null
+    // the Issue that raised it, and every Issue that joined it, hear the end the same way
+    const endFor = async (issueId: IssueId): Promise<Result<IssueMove | null, CheckpointError>> => {
       if (said) {
         const noted = applied(
           await recordIn(work, deps, {
-            issueId: errand.issueId,
-            key: key('noted', 'errand', errand.id),
+            issueId,
+            key: key('noted', 'errand', errand.id, ...(issueId === errand.issueId ? [] : [issueId])),
             event: { kind: 'noted', payload: { text: said }, actor: 'owner' },
           }),
           'noted',
@@ -1165,8 +1303,8 @@ function closeErrand(
       }
       const recorded = applied(
         await recordIn(work, deps, {
-          issueId: errand.issueId,
-          key: key('errand_done', errand.id),
+          issueId,
+          key: key('errand_done', errand.id, ...(issueId === errand.issueId ? [] : [issueId])),
           event:
             outcome === 'turned_back'
               ? { kind: 'errand_turned_back', payload: { errand: errand.id, note: note ?? '' }, actor: by }
@@ -1174,9 +1312,15 @@ function closeErrand(
         }),
         outcome === 'turned_back' ? 'errand_turned_back' : 'errand_done',
       )
-      if (!recorded.ok) return recorded
-      move = moveOf(recorded.value.issue, recorded.value.effects)
+      return recorded.ok ? ok(moveOf(recorded.value.issue, recorded.value.effects)) : recorded
     }
+    if (errand.issueId && issue && waitingOn(issue, 'errand', errand.id)) {
+      const ended = await endFor(errand.issueId)
+      if (!ended.ok) return ended
+      move = ended.value
+    }
+    const joined = await eachJoined({ work, checkpoints }, errand, endFor)
+    if (!joined.ok) return joined
     await checkpoints.finishErrand(errand.id, at, note, { kind: outcome, by })
     await checkpoints.cancelPages(errand.id, at)
     const done = await checkpoints.errand(errand.id)
@@ -1197,7 +1341,8 @@ export function turnBackErrand(
 }
 
 export interface ErrandRequested {
-  result: 'applied' | 'replayed'
+  /** `joined`: an open Errand has the same command or check; this request is that Errand, and nobody is paged again */
+  result: 'applied' | 'replayed' | 'joined'
   errand: ErrandRecord
   /** the open requests this one replaced (same key) */
   superseded: ErrandId[]
@@ -1217,7 +1362,7 @@ export function requestErrand(
   const read = readRequest(input.raw, at)
   if (!read.ok) return Promise.resolve(read)
   const request = read.value
-  return deps.uow.run(async ({ checkpoints }) => {
+  return deps.uow.run(async ({ work, checkpoints }) => {
     // the expiry is relative to now, so it is not part of what makes a request the same one
     const same = digest(
       JSON.stringify([request.summary, request.detail, request.command, request.check, request.host, request.key]),
@@ -1226,10 +1371,27 @@ export function requestErrand(
     const existing = await checkpoints.errandByKey(sameKey)
     if (existing && !existing.doneAt)
       return ok<ErrandRequested>({ result: 'replayed', errand: existing, superseded: [] })
+    // the same command or the same check as an open Errand, an Issue's or a request: it is that Errand. The one exception is a
+    // newer request under the same key with another command: that is the corrected one, and replaces the older below.
+    const open = await checkpoints.openMatching({ command: request.command, check: request.check })
+    const corrected =
+      open !== null && request.key !== null && open.requestKey === request.key && open.command !== request.command
+    if (open && !corrected) return ok<ErrandRequested>({ result: 'joined', errand: open, superseded: [] })
     const id = deps.ids.next('errand')
     // asked again after the first was closed: a new Errand, under a key of its own
     const errandKey = existing ? key('errand_request', id) : sameKey
     const superseded = request.key ? await checkpoints.supersedeRequests(request.key, id, at) : []
+    for (const gone of superseded) {
+      const ended = await endJoined(
+        { work, checkpoints },
+        deps,
+        { id: gone },
+        {
+          turnedAway: `a newer request replaced it (${id}): raise it again if it still applies`,
+        },
+      )
+      if (!ended.ok) return ended
+    }
     const stored = await checkpoints.insertErrand({
       id,
       key: errandKey,
@@ -1266,6 +1428,11 @@ export function requestErrand(
       runHead: null,
       runTail: null,
       pushedAt: null,
+      // a request the screen reads gets its need when it reaches the owner; the rest reach him now
+      need: SCREENED_SOURCES.includes(request.source)
+        ? null
+        : needOf({ summary: request.summary, detail: request.detail, command: request.command, host: request.host }),
+      approvedAt: null,
     })
     if (!stored) return err({ kind: 'invalid', detail: `the request ${errandKey} is stored already` })
     const errand = await checkpoints.errand(id)

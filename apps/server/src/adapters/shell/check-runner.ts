@@ -1,11 +1,20 @@
 import { CHECK_OUTPUT_MAX, CHECK_TIMEOUT_MS, type CheckRun } from '../../domains/checkpoints/request.ts'
 import type { CheckRunner } from '../../domains/checkpoints/ports.ts'
-import { CannotExecute, EXIT_STOPPED, EXIT_TIMEOUT, type Run, runProcess } from '../quality/process.ts'
+import { CannotExecute, childEnv, EXIT_STOPPED, EXIT_TIMEOUT, type Run, runProcess } from '../quality/process.ts'
 
 /** A very long output keeps its two ends; the reader (`run.ts`) cuts it to its first and last lines. */
 const bounded = (text: string): string =>
   text.length <= STDOUT_MAX ? text : `${text.slice(0, STDOUT_MAX / 2)}\n…\n${text.slice(-STDOUT_MAX / 2)}`
 const STDOUT_MAX = 65_536
+
+/** Where `sysctl`, `ifconfig`, `lsof` and the like live; the server's launchd PATH has neither. */
+export const SBIN = ['/usr/sbin', '/sbin'] as const
+
+/** The PATH of a check: the server's, with `/usr/sbin` and `/sbin` after it where they are missing. */
+export function checkPath(path: string | undefined = process.env.PATH): string {
+  const have = (path ?? '').split(':').filter((dir) => dir !== '')
+  return [...have, ...SBIN.filter((dir) => !have.includes(dir))].join(':')
+}
 
 /**
  * An Errand's `check`: `sh -c` in its own process group (a timeout takes what it started along), stderr folded into stdout,
@@ -13,16 +22,17 @@ const STDOUT_MAX = 65_536
  * only a caller that can run a shell itself may set one (`api/policy.ts`).
  */
 export function shellCheckRunner(run: Run = runProcess, timeoutMs = CHECK_TIMEOUT_MS): CheckRunner {
+  const env = childEnv({ PATH: checkPath() })
   return {
     async run(command): Promise<CheckRun> {
       try {
         // a command that does not parse never ran: `sh -n` says so, and only a check that ran may close a request
-        const syntax = await run(['sh', '-n', '-c', command], timeoutMs, { group: true })
+        const syntax = await run(['sh', '-n', '-c', command], timeoutMs, { group: true, env })
         if (syntax.exitCode !== 0) {
           return { exit: null, timedOut: false, output: 'the check is not valid shell' }
         }
         // the newline ends a trailing `# comment` before the closing parenthesis
-        const result = await run(['sh', '-c', `(${command}\n) 2>&1`], timeoutMs, { group: true })
+        const result = await run(['sh', '-c', `(${command}\n) 2>&1`], timeoutMs, { group: true, env })
         // head and tail, not head alone: the reason is at the top and how it stopped is at the end
         const output = bounded(result.stdout.trim())
         if (result.exitCode === EXIT_TIMEOUT) return { exit: null, timedOut: true, output }

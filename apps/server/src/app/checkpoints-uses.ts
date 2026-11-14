@@ -23,8 +23,9 @@ import {
   submitArtifact,
 } from './checkpoints.ts'
 import { type PageDeps, runCheckpointPass, sendDuePages } from './checkpoints-pages.ts'
+import { approveErrand } from './checkpoints-approve.ts'
 import { checkErrandNow } from './checkpoints-check.ts'
-import { screenErrands } from './checkpoints-errands.ts'
+import { assignNeeds, screenErrands } from './checkpoints-errands.ts'
 import { previewSpecScreen, screenSpecs } from './checkpoints-specs.ts'
 import { recheckOpen } from './checkpoints-recheck.ts'
 import { recheckReviews } from './checkpoints-reviews.ts'
@@ -52,6 +53,7 @@ export function checkpointUses(deps: SettleDeps & PageDeps) {
     raiseErrand: (input: Parameters<typeof raiseErrand>[1]) => raiseErrand(deps, input),
     finishErrand: (input: Parameters<typeof finishErrand>[1]) => finishErrand(deps, input),
     turnBackErrand: (input: Parameters<typeof turnBackErrand>[1]) => turnBackErrand(deps, input),
+    approveErrand: (input: Parameters<typeof approveErrand>[1]) => approveErrand(deps, input),
     checkErrand: (input: Parameters<typeof checkErrandNow>[1]) => checkErrandNow(deps, input),
     requestErrand: (input: Parameters<typeof requestErrand>[1]) => requestErrand(deps, input),
     errands: (filter: Parameters<typeof listErrands>[1]) => listErrands(deps, filter),
@@ -66,6 +68,7 @@ export function checkpointUses(deps: SettleDeps & PageDeps) {
       if (!reviews.ok) return reviews
       const decisions = await settleOpen(deps)
       const errands = await screenErrands(deps)
+      await assignNeeds(deps)
       const specs = await screenSpecs(deps)
       if (!decisions.ok) return decisions
       return errands.ok ? specs : errands

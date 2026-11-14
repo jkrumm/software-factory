@@ -7,9 +7,10 @@ import {
   pushQueue,
 } from '../../domains/checkpoints/desk.ts'
 import type { ErrandId } from '../../domains/checkpoints/errand.ts'
-import type { DeskStore, PushPort } from '../../domains/checkpoints/ports.ts'
+import { MAX_RUN_TRIES } from '../../domains/checkpoints/need.ts'
+import type { DeskStore, ErrandRecord, PushPort } from '../../domains/checkpoints/ports.ts'
 import { ok, type PortError, type Result } from '../../kernel/result.ts'
-import { rescreenErrand, resolveErrand } from '../checkpoints-errands.ts'
+import { rescreenErrand, resolveErrand, retireErrand, tellCheckBroken } from '../checkpoints-errands.ts'
 import { runCheck } from './errands.ts'
 import type { SettleDeps } from '../checkpoints-settle.ts'
 import type { UnitOfWork } from '../unit-of-work.ts'
@@ -31,6 +32,8 @@ export interface DeskPass {
   resolved: number
   /** turned back by the second screen */
   turnedAway: number
+  /** ended because their command failed twice */
+  retired: number
   /** he was back for this pass: every pending MacBook command was pushed, not one */
   returned: boolean
   /** the Errands whose command was pushed to the MacBook, in the order they were */
@@ -64,6 +67,7 @@ export async function deskPass(deps: DeskDeps): Out<DeskPass> {
     looked: 0,
     resolved: 0,
     turnedAway: 0,
+    retired: 0,
     returned: false,
     pushed: [],
     problems: [],
@@ -100,6 +104,10 @@ export async function deskPass(deps: DeskDeps): Out<DeskPass> {
       if (!closed.ok) pass.problems.push(`${errand.id}: ${JSON.stringify(closed.error)}`.slice(0, 300))
       return closed.ok && closed.value
     },
+    broken: async (errand: ErrandRecord, line: string) => {
+      const told = await tellCheckBroken(settle, errand, line)
+      if (!told.ok) pass.problems.push(`${errand.id}: ${JSON.stringify(told.error)}`.slice(0, 300))
+    },
   }
   for (const errand of read.value) {
     if (errand.checkCommand !== null && checks < DESK_CHECKS) {
@@ -116,6 +124,15 @@ export async function deskPass(deps: DeskDeps): Out<DeskPass> {
 
   const stillOpen = []
   for (const errand of left) {
+    // its command came back unsuccessful twice: it is not offered again, and whoever raised it is told to correct it
+    if (errand.runAttempts >= MAX_RUN_TRIES && errand.runStatus !== null && errand.runStatus !== 'running') {
+      const retired = await retireErrand(settle, errand.id)
+      if (!retired.ok) pass.problems.push(`${errand.id}: ${JSON.stringify(retired.error)}`.slice(0, 300))
+      else if (retired.value) {
+        pass.retired++
+        continue
+      }
+    }
     if (errand.reachedOwnerAt !== null && rescreens < DESK_RESCREENS) {
       rescreens++
       const screened = await rescreenErrand(settle, errand.id)
@@ -128,7 +145,7 @@ export async function deskPass(deps: DeskDeps): Out<DeskPass> {
     stillOpen.push(errand)
   }
 
-  for (const next of pushQueue(stillOpen, settle.clock.now(), pass.returned)) {
+  for (const next of pushQueue(stillOpen, settle.clock.now(), pass.returned, { includePlace: force })) {
     await settle.uow.run(async ({ checkpoints }) => ok(await checkpoints.recordPush(next.id, settle.clock.now())))
     const pushed = await deps.push.push(next.id)
     if (!pushed.ok) {
@@ -150,7 +167,7 @@ export async function deskPass(deps: DeskDeps): Out<DeskPass> {
 
 export const deskSummary = (pass: DeskPass): string =>
   pass.ran
-    ? `${pass.looked} open Errands: ${pass.resolved} closed by their check, ${pass.turnedAway} turned back by the second screen, ${pass.pushed.length > 0 ? `${pass.pushed.length} pushed${pass.returned ? ' (he was back)' : ''}` : 'none pushed'}${
+    ? `${pass.looked} open Errands: ${pass.resolved} closed by their check, ${pass.turnedAway} turned back by the second screen, ${pass.retired} ended after a command failed twice, ${pass.pushed.length > 0 ? `${pass.pushed.length} pushed${pass.returned ? ' (he was back)' : ''}` : 'none pushed'}${
         pass.problems.length ? `: ${pass.problems.slice(0, 3).join(' | ')}` : ''
       }`
     : 'not due'

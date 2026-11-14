@@ -48,6 +48,8 @@ import { loadConsoleSettings } from './console-settings.ts'
 import { loadNeedsSettings } from './read/needs-settings.ts'
 import { availableParallelism, loadavg } from 'node:os'
 import { join } from 'node:path'
+import { APPROVED_RUN_HANG_GUARD_MS } from './app/checkpoints-approve.ts'
+import { endRequest, tellCheckBroken } from './app/checkpoints-errands.ts'
 import { checkpointUses } from './app/checkpoints-uses.ts'
 import { createLoopRunner, type LoopRunner, type LoopSpec } from './app/loops/runner.ts'
 import { projectFileProjects } from './app/quality-projects.ts'
@@ -262,6 +264,8 @@ async function main(): Promise<void> {
     blobs: fileBlobStore(checkpointSettings.blobDir),
     consoleUrl: checkpointSettings.line.consoleUrl,
     checks: shellCheckRunner(),
+    // an approved Errand's command runs here, on the mini: a hang guard, never a budget (a release takes minutes)
+    commands: shellCheckRunner(undefined, APPROVED_RUN_HANG_GUARD_MS),
     queuedAsks: queuedAsksIn(askQueueDir(process.env)),
     notifier: makeNotifier(checkpointSettings.line),
     // The Judge asks `factory-ask` through the agw port. The standing policy is each project's `policy:` in its
@@ -692,6 +696,14 @@ async function main(): Promise<void> {
           clock: writes.clock,
           checks: shellCheckRunner(),
           needed: agwErrandNeeded(agw),
+          // a request an Issue joined ends for that Issue too
+          end: async (errand, how) => {
+            const ended = await endRequest(checkpointDeps, errand.id, how)
+            return ended.ok && ended.value
+          },
+          broken: async (errand, line) => {
+            await tellCheckBroken(checkpointDeps, errand, line)
+          },
         })
         if (!pass.ok) return pass
         said('errands', pass.value.problems)
@@ -937,7 +949,7 @@ async function main(): Promise<void> {
     })
 
   // The Console's listener: loopback too, published on the tailnet by the dotfiles-private serve row; the perimeter is the
-  // tailnet ACL, there is no per-request identity. Only reads and the owner's ten answer verbs (`WRITES` in console.ts) pass,
+  // tailnet ACL, there is no per-request identity. Only reads and the owner's eleven answer verbs (`WRITES` in console.ts) pass,
   // and the owner token is held by this closure alone. It starts whenever the Console is built. It binds before
   // the loops start, so a bad port or a taken one refuses the boot before any pass has run.
   const consoleSettings = loadConsoleSettings(process.env)

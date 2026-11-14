@@ -187,7 +187,9 @@ describe('the check', () => {
     checks.missing = { exit: 127, timedOut: false, output: 'not found' }
     checks['missing-binary'] = { exit: 127, timedOut: false, output: 'sh: missing-binary: not found' }
     const first = await pass()
-    expect(first).toMatchObject({ looked: 2, kept: 1, unrunnable: 1, checkedOut: 0, problems: [] })
+    // a command that is not found is a broken check, said once as a problem of the pass
+    expect(first).toMatchObject({ looked: 2, kept: 1, unrunnable: 1, checkedOut: 0 })
+    expect(first.problems).toEqual([`${broken.errand.id}: the check is broken: sh: missing-binary: not found`])
     expect(await errandRow(kept.errand.id)).toMatchObject({
       check_note: 'the check exited 0: still needed',
       check_fails: 0,
@@ -195,6 +197,7 @@ describe('the check', () => {
     expect(await errandRow(broken.errand.id)).toMatchObject({ done_at: null, check_fails: 1 })
     await pass()
     const third = await pass()
+    // said as broken on the first pass, and again when it could not run three times in a row
     expect(third.problems).toHaveLength(1)
     expect(errandsSummary(third)).toContain('could not run 3 times in a row')
     expect(await errandRow(broken.errand.id)).toMatchObject({ done_at: null, check_fails: 3 })
@@ -342,12 +345,15 @@ describe('done', () => {
       { id: made.errand.id, tried: 'tried, failed: error: the vault is locked', redacted: false },
     ])
     expect(needsModel(await readNeeds(db.sql, clock.now()), { redact: true }).items[0]?.tried).toBeNull()
-    // a second failed run counts
+    // a second failed run ends it: the same command is not offered a third time, and its asker reads why
     await done(made.errand.id, { run: { status: 'failed', exit: 1, output: 'denied' } })
-    expect((await errandRow(made.errand.id))?.run_attempts).toBe(2)
-    expect(needsModel(await readNeeds(db.sql, clock.now()), { redact: false }).items[0]?.tried).toBe(
-      'tried, failed (2 tries): denied',
-    )
+    expect(await errandRow(made.errand.id)).toMatchObject({
+      run_attempts: 2,
+      closed_kind: 'turned_back',
+      closed_by: 'loop',
+    })
+    expect((await errandRow(made.errand.id))?.done_note).toContain('failed 2 times (denied)')
+    expect(needsModel(await readNeeds(db.sql, clock.now()), { redact: false }).items).toEqual([])
   })
 
   test('the words ask-human.sh wrote for a failed run are a failed run too; so are a timeout and a run still going', async () => {
@@ -409,7 +415,7 @@ describe('done', () => {
     checks.missing = { exit: 127, timedOut: false, output: 'not found' }
     expect((await done(made.errand.id, { note: 'did it' })).errand).toMatchObject({
       closedKind: 'done',
-      doneNote: 'did it',
+      doneNote: 'did it · the check is broken, so his done stands: not found',
     })
 
     const other = await request({ text: 'Needless', check: 'still' })

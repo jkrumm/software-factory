@@ -90,6 +90,7 @@ const errandHelp = [
   "  a secret read: `secrets-run`; a sudo step: a way without root first, else the owner's MacBook command (`--cmd`, `--host macbook`); the mini's sudo password is MacBook-only, never read it",
   '  a Report that does not show in Needs you: a signal on software-factory',
   "A step on the owner's MacBook (a sudo prompt, a Touch ID, a `hc run`): `--cmd '<the command he runs>' --host macbook`. The factory pushes it to the MacBook as a dialog when he is back, one at a time, and the answer closes the Errand. Never queue an `ask-human.sh` request beside an Errand: an Errand with no command beside your queued request is refused.",
+  "The Errand's need is set from its shape, not from your wording: a command addressed to the mini (`ssh <the mini's alias> '...'`) or the deploy gate's release is an `approval` (Needs you shows an Approve button, the server runs it, no MacBook dialog); a secret word (1Password, a biometric, sudo) is a `secret`; another MacBook command with no secret is a `place` (shown to copy; a dialog only on his button); the rest is `hands`. An open Errand with the same command or the same check as yours is joined: you wait on that one, and he is paged once. A command that came back unsuccessful twice ends the Errand with a note: raise it again with a corrected command and a new `--call` id.",
   'Raise the Errand as the last step of a turn and end the turn: `ship`, `defer` and `close` are taken again after the note that it is done.',
   "An Errand with a `--check` closes itself when the check exits 1..125 (at the owner's return or every 6 hours); `factory errand check <id>` runs it now, and `factory issue show` lists `errands` with when it last ran and runs next.",
 ].join('\n')
@@ -111,8 +112,11 @@ export const OPERATION_EXTENSIONS: Readonly<Record<string, OperationExtension>> 
   'issue.show': {
     help: "`edges.after` lists what the Issue waits on and `edges.before` the open Issues that wait on it: stored `after` edges (`via: edge`, what `factory issue replan` edits) and a lead's own dependency wait (`via: wait`). `factory read chain --format plain` shows the whole chain (`blocking.issue_<n>`). `errands` lists the Issue's Errands with `lastCheckedAt`, the check's `checkNote` and `nextCheckAt` (the desk pass runs the check then at the latest; `factory errand check <id>` runs it now).",
   },
+  'errand.approve': {
+    help: "The owner's yes on an `approval` Errand: an Errand whose command runs on the mini and asks only for his yes (the deploy gate's release of a colleague's commit is the example). The server runs the command itself, with its secrets left out, and records what it came to like a pushed run: exit 0 goes through his done, so the Errand's check decides whether it closes; a failure leaves it open, and the second failure ends it with a note that the command must be corrected. Answers at once (`started`); read the outcome on the Errand. Owner token only: an agent's or the orchestrator's token is refused. Needs you shows the same command with an Approve button.",
+  },
   'errand.check': {
-    help: "Runs the Errand's own check now (the shell command given to `errand raise --check`) instead of waiting for the desk pass. Exit 1..125 closes the Errand and ends the Issue's wait (you hear it as a note); exit 0 keeps it (`outcome: needed`); a check that could not run says why (`unrunnable`). An Errand with no check answers `no_check`; one closed already answers `already_closed`.",
+    help: "Runs the Errand's own check now (the shell command given to `errand raise --check`) instead of waiting for the desk pass. Exit 1..125 closes the Errand and ends the Issue's wait (you hear it as a note); exit 0 keeps it (`outcome: needed`); a check that could not run says why (`unrunnable`), and one whose command was not found is `broken` (its exit says nothing; the owner's done still closes the Errand). An Errand with no check answers `no_check`; one closed already answers `already_closed`.",
   },
   'issue.list': { plain: issueListPlain },
   'artifact.list': {

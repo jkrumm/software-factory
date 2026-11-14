@@ -24,7 +24,7 @@ import {
   readErrand,
   refuseHostClass,
   screenByRule,
-  screenBySudo,
+  screenByNeed,
 } from '../../src/domains/checkpoints/errand.ts'
 import {
   decisionPageKey,
@@ -362,16 +362,37 @@ describe('errands', () => {
 describe('the Errand screen', () => {
   test('a root step with a MacBook command reaches the owner by rule, and a rule turn-away never names the password', () => {
     expect(
-      screenBySudo({ summary: 'Install the daemon', detail: null, command: 'sudo make install', host: 'macbook' }),
-    ).toMatchObject({
-      note: expect.stringContaining('MacBook-only'),
-    })
-    expect(screenBySudo({ summary: 'Install the daemon', detail: null, command: null, host: null })).toBeNull()
+      screenByNeed({ summary: 'Install the daemon', detail: null, command: 'sudo make install', host: 'macbook' }),
+    ).toMatchObject({ need: 'secret', note: expect.stringContaining('sudo password') })
+    expect(screenByNeed({ summary: 'Install the daemon', detail: null, command: null, host: null })).toBeNull()
     expect(
-      screenBySudo({ summary: 'Click the button', detail: null, command: 'make deploy', host: 'macbook' }),
+      screenByNeed({ summary: 'Click the button', detail: null, command: 'make deploy', host: 'macbook' }),
     ).toBeNull()
-    expect(screenBySudo({ summary: 'Install', detail: null, command: 'sudo make install', host: 'iphone' })).toBeNull()
+    expect(screenByNeed({ summary: 'Install', detail: null, command: 'sudo make install', host: 'iphone' })).toBeNull()
     expect(screenByRule({ summary: 'Bootstrap', detail: 'Run `launchctl bootstrap` with sudo' })).toBeNull()
+  })
+
+  test('a release for the mini reaches the owner by rule as an approval, a reseal as a secret, and neither asks the model', () => {
+    expect(
+      screenByNeed({
+        summary: "Release the colleague's commit",
+        detail: null,
+        command: "ssh mini 'make -C ~/gate deploy-release SHA=78088f16'",
+        host: 'macbook',
+      }),
+    ).toMatchObject({ need: 'approval' })
+    expect(
+      screenByNeed({
+        summary: 'Reseal the mini secrets',
+        detail: null,
+        command: "cd ~/SourceRoot/dotfiles && hc run --timeout 900 'make secrets-seed'",
+        host: 'macbook',
+      }),
+    ).toMatchObject({ need: 'secret' })
+    // a command that names a secret is never an approval, whatever it is addressed to
+    expect(
+      screenByNeed({ summary: 'Install', detail: null, command: "ssh mini 'sudo make install'", host: 'macbook' }),
+    ).toMatchObject({ need: 'secret' })
   })
 
   test('a command a token can run is turned away by rule', () => {
@@ -396,7 +417,12 @@ describe('the Errand screen', () => {
   })
 
   test('an answer is held to its shape', () => {
-    expect(checkErrandScreen({ verdict: 'pass', reason: ' a person ' })).toEqual({ action: 'pass', note: 'a person' })
+    expect(checkErrandScreen({ verdict: 'pass', reason: ' a person ' })).toEqual({
+      action: 'pass',
+      note: 'a person',
+      need: null,
+    })
+    expect(checkErrandScreen({ verdict: 'pass', reason: 'a device', need: 'hands' })).toMatchObject({ need: 'hands' })
     expect(checkErrandScreen({ verdict: 'turn_away', reason: ` ${'x'.repeat(400)} ` })).toEqual({
       action: 'turn_away',
       reason: 'x'.repeat(300),

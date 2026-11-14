@@ -9,6 +9,7 @@ import {
   STEPS,
 } from '../../domains/checkpoints/decision.ts'
 import type { ErrandId } from '../../domains/checkpoints/errand.ts'
+import { NEEDS } from '../../domains/checkpoints/need.ts'
 import { RUN_STATUSES } from '../../kernel/run.ts'
 import type { Page } from '../../domains/checkpoints/page.ts'
 import { HOSTS } from '../../domains/checkpoints/request.ts'
@@ -159,6 +160,16 @@ const ErrandRow = z.object({
   run_head: z.string().nullable(),
   run_tail: z.string().nullable(),
   pushed_at: z.date().nullable(),
+  need: z.enum(NEEDS).nullable(),
+  approved_at: z.date().nullable(),
+})
+
+const JoinRow = z.object({
+  errand_id: z.string(),
+  issue_id: z.string(),
+  attempt: z.number().int(),
+  joined_at: z.date(),
+  key: z.string(),
 })
 
 const PageRow = z.object({
@@ -327,6 +338,8 @@ const errandOf = (raw: unknown): ErrandRecord => {
     runHead: row.run_head,
     runTail: row.run_tail,
     pushedAt: row.pushed_at,
+    need: row.need,
+    approvedAt: row.approved_at,
   }
 }
 
@@ -728,9 +741,9 @@ export function postgresCheckpointStore(tx: SQL): CheckpointStore {
     async insertErrand(e) {
       const rows: unknown[] = await tx`
         INSERT INTO factory.errands (id, key, issue_id, attempt, summary, detail, raised_at, reached_owner_at, screen_by,
-          source, command, check_command, host, expires_at, request_key)
+          source, command, check_command, host, expires_at, request_key, need)
         VALUES (${e.id}, ${e.key}, ${e.issueId}, ${e.attempt}, ${e.summary}, ${e.detail}, ${e.raisedAt}, ${e.reachedOwnerAt},
-          ${e.screenBy}, ${e.source}, ${e.command}, ${e.checkCommand}, ${e.host}, ${e.expiresAt}, ${e.requestKey})
+          ${e.screenBy}, ${e.source}, ${e.command}, ${e.checkCommand}, ${e.host}, ${e.expiresAt}, ${e.requestKey}, ${e.need})
         ON CONFLICT (key) DO NOTHING
         RETURNING id`
       return rows.length === 1
@@ -794,6 +807,13 @@ export function postgresCheckpointStore(tx: SQL): CheckpointStore {
       return rows.length === 1
     },
 
+    async clearRun(id) {
+      const rows: unknown[] = await tx`
+        UPDATE factory.errands SET run_status = NULL, run_exit = NULL, run_at = NULL, run_head = NULL, run_tail = NULL
+        WHERE id = ${id} AND done_at IS NULL RETURNING id`
+      return rows.length === 1
+    },
+
     async recordNeeded(id, run) {
       const rows: unknown[] = await tx`
         UPDATE factory.errands SET needed_at = ${run.at}, check_note = ${run.note}
@@ -838,8 +858,71 @@ export function postgresCheckpointStore(tx: SQL): CheckpointStore {
       const rows: unknown[] = await tx`
         UPDATE factory.errands
         SET reached_owner_at = ${reached.at}, screen_by = ${reached.by}, screen_note = ${reached.note},
-            screen_tries = ${reached.tries}, screen_retry_at = NULL
+            screen_tries = ${reached.tries}, screen_retry_at = NULL, need = ${reached.need}
         WHERE id = ${id} AND done_at IS NULL AND reached_owner_at IS NULL RETURNING id`
+      return rows.length === 1
+    },
+
+    async needlessErrands(limit) {
+      const rows: unknown[] = await tx`
+        SELECT * FROM factory.errands
+        WHERE done_at IS NULL AND reached_owner_at IS NOT NULL AND need IS NULL ORDER BY raised_at, id LIMIT ${limit}`
+      return rows.map(errandOf)
+    },
+
+    async setNeed(id, need) {
+      const rows: unknown[] = await tx`
+        UPDATE factory.errands SET need = ${need} WHERE id = ${id} AND done_at IS NULL AND need IS NULL RETURNING id`
+      return rows.length === 1
+    },
+
+    async openMatching({ command, check }) {
+      if (command === null && check === null) return null
+      const [row] = await tx`
+        SELECT * FROM factory.errands
+        WHERE done_at IS NULL AND turned_away_at IS NULL
+          AND (issue_id IS NULL OR EXISTS (SELECT 1 FROM factory.issues i WHERE i.id = errands.issue_id AND i.state <> 'closed'))
+          AND ((${command}::text IS NOT NULL AND command = ${command}) OR (${check}::text IS NOT NULL AND check_command = ${check}))
+        ORDER BY raised_at, id LIMIT 1`
+      return row ? errandOf(row) : null
+    },
+
+    async joinedErrand(key) {
+      const [row] = await tx`
+        SELECT e.* FROM factory.errands e JOIN factory.errand_joins j ON j.errand_id = e.id WHERE j.key = ${key}`
+      return row ? errandOf(row) : null
+    },
+
+    async joinErrand(join) {
+      const rows: unknown[] = await tx`
+        INSERT INTO factory.errand_joins (errand_id, issue_id, attempt, joined_at, key)
+        VALUES (${join.errandId}, ${join.issueId}, ${join.attempt}, ${join.joinedAt}, ${join.key})
+        ON CONFLICT DO NOTHING RETURNING errand_id`
+      return rows.length === 1
+    },
+
+    async joinsOf(id) {
+      const rows: unknown[] = await tx`
+        SELECT errand_id, issue_id, attempt, joined_at, key FROM factory.errand_joins WHERE errand_id = ${id}
+        ORDER BY joined_at, issue_id`
+      return rows.map((raw) => {
+        const row = JoinRow.parse(raw)
+        return {
+          errandId: row.errand_id as ErrandId,
+          issueId: row.issue_id as IssueId,
+          attempt: row.attempt,
+          joinedAt: row.joined_at,
+          key: row.key as Key,
+        }
+      })
+    },
+
+    async startApprovedRun(id, at, staleBefore) {
+      const rows: unknown[] = await tx`
+        UPDATE factory.errands
+        SET approved_at = ${at}, run_status = 'running', run_at = ${at}, run_head = NULL, run_tail = NULL, run_exit = NULL
+        WHERE id = ${id} AND done_at IS NULL AND (run_status IS DISTINCT FROM 'running' OR run_at < ${staleBefore})
+        RETURNING id`
       return rows.length === 1
     },
 

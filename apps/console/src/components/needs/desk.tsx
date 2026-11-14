@@ -3,15 +3,24 @@ import { CheckIcon, CopyIcon } from '@phosphor-icons/react'
 import { useState } from 'react'
 import { Section } from '@/components/kit'
 import { Button } from '@/components/ui/button'
-import { finishErrand, pushDesk } from '@/lib/api'
-import { agoWords, deskGroups, doneWords, macbookCommands, pushWords } from '@/lib/needs'
+import { approveErrand, finishErrand, pushDesk } from '@/lib/api'
+import {
+  agoWords,
+  approveWords,
+  deskGroups,
+  doneWords,
+  isApproval,
+  macbookCommands,
+  NEED_LABEL,
+  pushWords,
+} from '@/lib/needs'
 import { plainExcerpt } from '@/lib/plain'
 import { useSettle } from '@/lib/settle'
 
 const SETTLED = 'Already settled elsewhere'
 
 /** The command to copy: one block, and a button that puts it on the clipboard and says so. */
-function Command({ command }: { command: string }) {
+export function Command({ command }: { command: string }) {
   const [copied, setCopied] = useState(false)
   const copy = () => {
     void navigator.clipboard.writeText(command).then(() => {
@@ -71,7 +80,15 @@ function DeskItem({ item, onSent }: { item: NeedItem; onSent: (message: string) 
     onSent: () => onSent('Marked not needed'),
     onConflict: () => onSent(SETTLED),
   })
-  const error = done.error ?? needless.error
+  const approve = useSettle<void>({
+    send: () => approveErrand(item.id),
+    keys,
+    onSent: () => onSent(approveWords),
+    onConflict: () => onSent(SETTLED),
+  })
+  const approval = isApproval(item)
+  const busy = done.disabled || needless.disabled || approve.disabled
+  const error = done.error ?? needless.error ?? approve.error
   const summary = plainExcerpt(item.summary)
   return (
     <article className="grid gap-3 rounded-xl border bg-card p-4" aria-label={item.title}>
@@ -81,21 +98,34 @@ function DeskItem({ item, onSent }: { item: NeedItem; onSent: (message: string) 
           <p className="text-sm text-muted-foreground [overflow-wrap:anywhere] whitespace-pre-wrap">{summary}</p>
         ) : null}
         <p className="text-xs text-muted-foreground">
-          {[item.repo ?? item.source, `raised ${agoWords(item.ageMs)}`].filter(Boolean).join(' · ')}
+          {[
+            item.repo ?? item.source,
+            item.need ? NEED_LABEL[item.need] : null,
+            item.joined > 0 ? `${item.joined} more Issue${item.joined === 1 ? '' : 's'} wait on it` : null,
+            `raised ${agoWords(item.ageMs)}`,
+          ]
+            .filter(Boolean)
+            .join(' · ')}
         </p>
       </div>
       {item.tried ? <p className="text-sm text-destructive [overflow-wrap:anywhere]">{item.tried}</p> : null}
       {item.command ? <Command command={item.command} /> : null}
+      {approval ? (
+        <p className="text-sm text-muted-foreground">
+          Approve runs this command on the mini, as the factory&apos;s own user, with no MacBook and no 1Password. It
+          vouches for the command above and nothing else.
+        </p>
+      ) : null}
       <div className="flex flex-wrap items-center gap-2">
-        <Button type="button" disabled={done.disabled || needless.disabled} onClick={() => done.send()}>
+        {approval ? (
+          <Button type="button" disabled={busy} onClick={() => approve.send()}>
+            Approve
+          </Button>
+        ) : null}
+        <Button type="button" variant={approval ? 'outline' : 'default'} disabled={busy} onClick={() => done.send()}>
           Done
         </Button>
-        <Button
-          type="button"
-          variant="outline"
-          disabled={done.disabled || needless.disabled}
-          onClick={() => needless.send()}
-        >
+        <Button type="button" variant="outline" disabled={busy} onClick={() => needless.send()}>
           Not needed
         </Button>
       </div>

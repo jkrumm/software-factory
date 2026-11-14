@@ -59,6 +59,8 @@ export {
   ERRAND_CLOSED_KINDS,
   ERRAND_HOSTS,
   ErrandBody,
+  ErrandApproveReply,
+  ERRAND_NEEDS,
   ErrandCheckReply,
   ErrandDoneBody,
   ErrandTurnBackBody,

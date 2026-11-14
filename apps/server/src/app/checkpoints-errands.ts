@@ -5,16 +5,26 @@ import {
   ERRAND_SCREEN_MAX_TRIES,
   type ErrandId,
   screenByReview,
+  screenByNeed,
   screenByRule,
-  screenBySudo,
 } from '../domains/checkpoints/errand.ts'
+import { MAX_RUN_TRIES, type Need, needOf } from '../domains/checkpoints/need.ts'
 import { closedNote, SCREENED_SOURCES } from '../domains/checkpoints/request.ts'
 import { deepLink, errandPage } from '../domains/checkpoints/page.ts'
 import type { ErrandRecord } from '../domains/checkpoints/ports.ts'
 import type { IssueId } from '../kernel/ids.ts'
 import { key } from '../kernel/keys.ts'
 import { ok, type PortError, type Result } from '../kernel/result.ts'
-import { applied, type CheckpointError, type CheckpointStores, issueOf, waitingOn } from './checkpoints.ts'
+import {
+  applied,
+  type CheckpointError,
+  type CheckpointStores,
+  eachJoined,
+  endJoined,
+  issueOf,
+  retireFailed,
+  waitingOn,
+} from './checkpoints.ts'
 import { PASS_LIMIT, type SettleDeps } from './checkpoints-settle.ts'
 import { recordIn } from './issues.ts'
 
@@ -29,7 +39,7 @@ type Step<T> = Promise<Result<T, CheckpointError | PortError>>
 
 type Verdict =
   | { kind: 'turn_away'; by: 'rule' | 'judge'; reason: string; awaits?: string }
-  | { kind: 'reach'; by: 'rule' | 'judge' | 'failed'; note: string }
+  | { kind: 'reach'; by: 'rule' | 'judge' | 'failed'; note: string; need: Need | null }
   | { kind: 'failed'; why: string }
 
 /** What the screen is told of a request no Issue raised: who asked stands for the repo, and there is no Issue. */
@@ -62,6 +72,11 @@ async function openUnder(
     return { errand, issueId: errand.issueId, title: issue.title, repo: issue.repo, kind: issue.kind }
   }
   const at = deps.clock.now()
+  // whoever joined it is told: the Errand is gone, and the lead raises it again
+  const ended = await endJoined(stores, deps, errand, {
+    turnedAway: 'the Issue that raised it no longer waits for it, so it ended: raise it again if it still applies',
+  })
+  if (!ended.ok) throw new Error(`errand ${errand.id} could not end its joined Issues: ${JSON.stringify(ended.error)}`)
   await checkpoints.finishErrand(errand.id, at, 'the Issue no longer waits for it')
   await checkpoints.cancelPages(errand.id, at)
   return 'finished'
@@ -82,10 +97,18 @@ async function reachOwner(
   found: { errand: ErrandRecord; issueId: IssueId | null; repo: string },
   by: 'rule' | 'judge' | 'failed',
   note: string,
+  /** what the screen found it needs; null: the rule over its shape, else `hands` */
+  need: Need | null,
 ): Promise<void> {
   const at = deps.clock.now()
   const { errand } = found
-  await stores.checkpoints.reachOwner(errand.id, { at, by, note, tries: errand.screenTries })
+  await stores.checkpoints.reachOwner(errand.id, {
+    at,
+    by,
+    note,
+    tries: errand.screenTries,
+    need: needOf(errand, need),
+  })
   // a request no Issue raised is on the owner's list through its row; only an Issue's Errand is paged
   if (!found.issueId) return
   await stores.checkpoints.planPage(
@@ -110,12 +133,11 @@ export async function turnAway(
 ): Promise<Result<null, CheckpointError>> {
   const { issueId } = errand
   const at = deps.clock.now()
-  // a request no Issue raised has no lead to tell: the reason is the Errand's note, which the asker reads when it closes
-  if (issueId) {
-    const recorded = applied(
+  const end = async (issue: IssueId): Promise<Result<unknown, CheckpointError>> =>
+    applied(
       await recordIn(stores.work, deps, {
-        issueId,
-        key: key('errand_done', errand.id),
+        issueId: issue,
+        key: key('errand_done', errand.id, ...(issue === errand.issueId ? [] : [issue])),
         event: {
           kind: 'errand_done',
           payload: { errand: errand.id, turnedAway: reason, ...(awaits ? { awaits: { review: awaits } } : {}) },
@@ -124,8 +146,13 @@ export async function turnAway(
       }),
       'errand_done',
     )
+  // a request no Issue raised has no lead to tell: the reason is the Errand's note, which the asker reads when it closes
+  if (issueId) {
+    const recorded = await end(issueId)
     if (!recorded.ok) return recorded
   }
+  const joined = await eachJoined(stores, errand, end)
+  if (!joined.ok) return joined
   await stores.checkpoints.turnAwayErrand(errand.id, { at, by, reason })
   await stores.checkpoints.cancelPages(errand.id, at)
   return ok(null)
@@ -142,7 +169,7 @@ function record(deps: SettleDeps, id: ErrandId, verdict: Verdict, reached = fals
       return turned.ok ? ok('turned_away') : turned
     }
     if (verdict.kind === 'reach') {
-      await reachOwner(stores, deps, found, verdict.by, verdict.note)
+      await reachOwner(stores, deps, found, verdict.by, verdict.note, verdict.need)
       return ok('reached_owner')
     }
     const tries = errand.screenTries + 1
@@ -161,6 +188,7 @@ function record(deps: SettleDeps, id: ErrandId, verdict: Verdict, reached = fals
       { ...found, errand: { ...errand, screenTries: tries } },
       'failed',
       `the screen could not be reached after ${ERRAND_SCREEN_MAX_TRIES} tries: ${verdict.why}`,
+      null,
     )
     return ok('reached_owner')
   })
@@ -177,7 +205,7 @@ async function screenErrand(deps: SettleDeps, id: ErrandId): Step<ErrandScreened
     | 'dropped'
     | 'finished'
     | { rule: string; awaits?: string; errand: ErrandRecord }
-    | { reach: string; errand: ErrandRecord },
+    | { reach: string; need: Need; errand: ErrandRecord },
     CheckpointError
   >(async (stores) => {
     const found = await openUnder(stores, deps, id)
@@ -185,8 +213,8 @@ async function screenErrand(deps: SettleDeps, id: ErrandId): Step<ErrandScreened
     const { errand } = found
     const review = screenByReview(errand)
     if (review) return ok({ rule: review.reason, awaits: review.review, errand })
-    const sudo = screenBySudo(errand)
-    if (sudo) return ok({ reach: sudo.note, errand })
+    const shaped = screenByNeed(errand)
+    if (shaped) return ok({ reach: shaped.note, need: shaped.need, errand })
     const turned = screenByRule(errand)
     if (turned) return ok({ rule: turned.reason, errand })
     return ok({
@@ -201,7 +229,7 @@ async function screenErrand(deps: SettleDeps, id: ErrandId): Step<ErrandScreened
   if (first.value === 'dropped' || first.value === 'finished') return ok({ errand: id, outcome: 'dropped' })
 
   if ('reach' in first.value) {
-    const done = await record(deps, id, { kind: 'reach', by: 'rule', note: first.value.reach })
+    const done = await record(deps, id, { kind: 'reach', by: 'rule', note: first.value.reach, need: first.value.need })
     return done.ok ? ok({ errand: id, outcome: done.value }) : done
   }
 
@@ -222,7 +250,7 @@ async function screenErrand(deps: SettleDeps, id: ErrandId): Step<ErrandScreened
   else {
     const checked = checkErrandScreen(answer.value)
     if (checked.action === 'refused') verdict = { kind: 'failed', why: checked.why }
-    else if (checked.action === 'pass') verdict = { kind: 'reach', by: 'judge', note: checked.note }
+    else if (checked.action === 'pass') verdict = { kind: 'reach', by: 'judge', note: checked.note, need: checked.need }
     else verdict = { kind: 'turn_away', by: 'judge', reason: checked.reason }
   }
   const done = await record(deps, id, verdict)
@@ -266,8 +294,8 @@ export async function rescreenErrand(deps: SettleDeps, id: ErrandId): Step<Rescr
     if (errand.issueId && !issue) return ok('dropped')
     const review = screenByReview(errand)
     if (review) return ok({ rule: review.reason, awaits: review.review })
-    // a root step for the owner's MacBook stays with him: the screen model does not know the password is MacBook-only
-    if (screenBySudo(errand)) return ok('dropped')
+    // a step the shape settles (a secret on his MacBook, an approval) stays with him: the screen model does not know the policy
+    if (screenByNeed(errand)) return ok('dropped')
     const turned = screenByRule(errand)
     if (turned) return ok({ rule: turned.reason })
     return ok({
@@ -319,22 +347,113 @@ export async function resolveErrand(deps: SettleDeps, id: ErrandId, why: string)
     const errand = await checkpoints.lockErrand(id)
     if (!errand || errand.doneAt) return ok(false)
     const at = deps.clock.now()
+    const end = async (issueId: IssueId): Promise<Result<unknown, CheckpointError>> =>
+      applied(
+        await recordIn(work, deps, {
+          issueId,
+          key: key('errand_done', errand.id, ...(issueId === errand.issueId ? [] : [issueId])),
+          event: { kind: 'errand_done', payload: { errand: errand.id, resolved: why }, actor: 'factory' },
+        }),
+        'errand_done',
+      )
     if (errand.issueId) {
       const issue = await issueOf(work, errand.issueId)
       if (issue && waitingOn(issue, 'errand', errand.id)) {
-        const recorded = applied(
-          await recordIn(work, deps, {
-            issueId: errand.issueId,
-            key: key('errand_done', errand.id),
-            event: { kind: 'errand_done', payload: { errand: errand.id, resolved: why }, actor: 'factory' },
-          }),
-          'errand_done',
-        )
+        const recorded = await end(errand.issueId)
         if (!recorded.ok) return recorded
       }
     }
+    const joined = await eachJoined({ work, checkpoints }, errand, end)
+    if (!joined.ok) return joined
     await checkpoints.finishErrand(errand.id, at, closedNote('not_needed', why), { kind: 'not_needed', by: 'check' })
     await checkpoints.cancelPages(errand.id, at)
+    return ok(true)
+  })
+}
+
+/**
+ * The Errand's check cannot answer (a command in it is not found): the lead whose Issue waits on it, and every Issue that
+ * joined it, get it once as a note on their record (a waiting lead reads it at its next turn; it does not wake it), so the check is fixed or the Errand raised again without one. The owner reads the same
+ * words as the Errand's check note on Needs you. A request has no lead; its note is its asker's.
+ */
+export async function tellCheckBroken(deps: SettleDeps, errand: ErrandRecord, line: string): Step<null> {
+  return deps.uow.run<null, CheckpointError>(async (stores) => {
+    const said = `The check of your Errand "${errand.summary}" is broken (${line || 'a command was not found'}): it cannot say whether the Errand is still needed, so it stays open until the owner marks it done. Raise it again with a working check if you can.`
+    const tell = async (issueId: IssueId): Promise<Result<unknown, CheckpointError>> =>
+      applied(
+        await recordIn(stores.work, deps, {
+          issueId,
+          key: key('noted', 'check_broken', errand.id, issueId),
+          event: { kind: 'noted', payload: { text: said }, actor: 'factory' },
+        }),
+        'noted',
+      )
+    if (errand.issueId) {
+      const issue = await issueOf(stores.work, errand.issueId)
+      if (issue && waitingOn(issue, 'errand', errand.id)) {
+        const told = await tell(errand.issueId)
+        if (!told.ok) return told
+      }
+    }
+    const joined = await eachJoined(stores, errand, tell)
+    return joined.ok ? ok(null) : joined
+  })
+}
+
+/**
+ * An open Errand whose command already came back unsuccessful `MAX_RUN_TRIES` times (a run recorded before the second failure
+ * ended it, or one the desk pass finds): it ends, and its lead or asker is told to correct the command. False when it closed
+ * under the call or its runs are not that many.
+ */
+export async function retireErrand(deps: SettleDeps, id: ErrandId): Step<boolean> {
+  return deps.uow.run<boolean, CheckpointError>(async (stores) => {
+    const errand = await stores.checkpoints.lockErrand(id)
+    if (!errand || errand.doneAt || errand.runAttempts < MAX_RUN_TRIES || errand.runStatus === 'running')
+      return ok(false)
+    const retired = await retireFailed(stores, deps, errand)
+    return retired.ok ? ok(true) : retired
+  })
+}
+
+/**
+ * Gives an open Errand that reached the owner with no `need` the one its shape says (`needOf`): the Errands that were
+ * open when the field arrived. A pass over a few at a time; the screen sets it for every Errand after.
+ */
+export async function assignNeeds(deps: SettleDeps, limit = PASS_LIMIT): Step<number> {
+  return deps.uow.run<number, CheckpointError>(async ({ checkpoints }) => {
+    let assigned = 0
+    for (const errand of await checkpoints.needlessErrands(limit)) {
+      if (await checkpoints.setNeed(errand.id, needOf(errand))) assigned++
+    }
+    return ok(assigned)
+  })
+}
+
+/**
+ * A request (no Issue raised it) ends by a loop's own finding: its check says it is not needed, it expired, or the
+ * still-needed look said so. Every Issue that joined it hears the end in the same transaction. False when it closed under
+ * the call.
+ */
+export async function endRequest(
+  deps: SettleDeps,
+  id: ErrandId,
+  how: { kind: 'not_needed' | 'expired'; by: 'check' | 'judge' | 'loop'; why: string },
+): Step<boolean> {
+  return deps.uow.run<boolean, CheckpointError>(async (stores) => {
+    const errand = await stores.checkpoints.lockErrand(id)
+    if (!errand || errand.doneAt) return ok(false)
+    const at = deps.clock.now()
+    const ended = await endJoined(
+      stores,
+      deps,
+      errand,
+      how.kind === 'expired'
+        ? { turnedAway: `it expired (${how.why}): raise it again if it still applies` }
+        : { resolved: how.why },
+    )
+    if (!ended.ok) return ended
+    await stores.checkpoints.finishErrand(errand.id, at, closedNote(how.kind, how.why), { kind: how.kind, by: how.by })
+    await stores.checkpoints.cancelPages(errand.id, at)
     return ok(true)
   })
 }

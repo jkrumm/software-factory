@@ -24,6 +24,7 @@ import type {
   StepName,
 } from './decision.ts'
 import type { ErrandId } from './errand.ts'
+import type { Need } from './need.ts'
 import type { RunStatus } from '../../kernel/run.ts'
 import type { CheckRun, Host } from './request.ts'
 import type { Page } from './page.ts'
@@ -206,6 +207,20 @@ export interface ErrandRecord {
   runTail: string | null
   /** the last time the desk pass pushed its command to the MacBook */
   pushedAt: Date | null
+  /** what it needs from the owner, set when it reached him; null for an Errand that reached him before `need` existed */
+  need: Need | null
+  /** when the owner pressed Approve: the server ran (or is running) its command on the mini */
+  approvedAt: Date | null
+}
+
+/** An Issue that waits on an Errand another Issue (or a request) raised first: its command or check was the same. */
+export interface ErrandJoin {
+  errandId: ErrandId
+  issueId: IssueId
+  attempt: number
+  joinedAt: Date
+  /** the key of the raise that joined: a repeat of that call finds this join */
+  key: Key
 }
 
 export type ClosedKind = 'done' | 'not_needed' | 'expired' | 'superseded' | 'turned_away' | 'turned_back'
@@ -317,6 +332,8 @@ export interface CheckpointStore {
     id: ErrandId,
     run: { at: Date; status: RunStatus; exit: number | null; head: string; tail: string },
   ): Promise<boolean>
+  /** an approved run that succeeded but left the Errand open (its check still says it is needed): the `running` mark goes */
+  clearRun(id: ErrandId): Promise<boolean>
   /** what the last run of an Errand's check came to: `fails` is the runs in a row that could not answer */
   recordCheck(id: ErrandId, run: { at: Date; note: string; fails: number }): Promise<boolean>
   /** the still-needed workflow looked and kept it */
@@ -332,8 +349,22 @@ export interface CheckpointStore {
   failErrandScreen(id: ErrandId, failed: { tries: number; retryAt: Date; note: string }): Promise<boolean>
   reachOwner(
     id: ErrandId,
-    reached: { at: Date; by: 'rule' | 'judge' | 'failed'; note: string; tries: number },
+    reached: { at: Date; by: 'rule' | 'judge' | 'failed'; note: string; tries: number; need: Need },
   ): Promise<boolean>
+  /** the open Errands that reached the owner before `need` existed (or were stored without one), oldest first */
+  needlessErrands(limit: number): Promise<ErrandRecord[]>
+  /** stores what an Errand that has none needs; false when it has one or is done */
+  setNeed(id: ErrandId, need: Need): Promise<boolean>
+  /** the open Errand that has this command or this check, oldest first (a `null` matches nothing); one that was turned away, or whose raising Issue is closed, is not open */
+  openMatching(input: { command: string | null; check: string | null }): Promise<ErrandRecord | null>
+  /** the Errand an earlier raise under this key joined, open or closed */
+  joinedErrand(key: Key): Promise<ErrandRecord | null>
+  /** an Issue waits on this Errand too; false when it does already */
+  joinErrand(join: ErrandJoin): Promise<boolean>
+  /** the Issues that joined it, oldest first */
+  joinsOf(id: ErrandId): Promise<ErrandJoin[]>
+  /** the owner approved: its command is running on the mini now (status `running`, attempts unchanged); false when it is done, or another run is going (one that began within `staleBefore` or later) */
+  startApprovedRun(id: ErrandId, at: Date, staleBefore: Date): Promise<boolean>
   turnAwayErrand(id: ErrandId, away: { at: Date; by: 'rule' | 'judge'; reason: string }): Promise<boolean>
 
   /**

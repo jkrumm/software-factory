@@ -324,6 +324,12 @@ export const ErrandTurnBackBody = z
 export type ErrandTurnBackBody = z.infer<typeof ErrandTurnBackBody>
 
 export const ERRAND_HOSTS = ['macbook', 'iphone', 'portal', 'any'] as const
+/**
+ * What an Errand needs from the owner. `secret`: 1Password, a biometric, the mini's sudo password (a MacBook dialog).
+ * `hands`: a device, hardware, a portal, a visual check. `approval`: only his yes, and its command runs on the mini (Needs
+ * you has an Approve button; no dialog). `place`: it must run on his MacBook and holds no secret (Needs you shows the command).
+ */
+export const ERRAND_NEEDS = ['secret', 'hands', 'approval', 'place'] as const
 export const ERRAND_CLOSED_KINDS = [
   'done',
   'not_needed',
@@ -373,6 +379,10 @@ export const ErrandView = z.object({
   command: z.string().nullable(),
   check: z.string().nullable(),
   host: z.enum(ERRAND_HOSTS).nullable(),
+  /** what it needs from the owner; null for one that reached him before the field existed (the read falls back to the rule) */
+  need: z.enum(ERRAND_NEEDS).nullable(),
+  /** when the owner pressed Approve: its command was started on the mini */
+  approvedAt: iso.nullable(),
   expiresAt: iso.nullable(),
   requestKey: z.string().nullable(),
   /** how it ended and who ended it; null while open */
@@ -396,7 +406,12 @@ export const ErrandView = z.object({
 
 /** What `factory errand request` answers: the Errand and the older open requests it replaced. */
 export const ErrandRequestReply = z
-  .object({ result: z.enum(['applied', 'replayed']), errand: ErrandView, superseded: z.array(z.string()) })
+  .object({
+    /** `joined`: an open Errand has the same command or check; this request is that Errand and the owner is not paged again */
+    result: z.enum(['applied', 'replayed', 'joined']),
+    errand: ErrandView,
+    superseded: z.array(z.string()),
+  })
   .meta({ id: 'ErrandRequestReply' })
 export type ErrandRequestReply = z.infer<typeof ErrandRequestReply>
 
@@ -436,7 +451,12 @@ export type ErrandScreenRequest = z.infer<typeof ErrandScreenRequest>
 
 /** What `factory-errand` says: it needs a person's hands (`pass`), or a token or CLI could do it (`turn_away`). */
 export const ErrandScreenAnswer = z
-  .object({ verdict: z.enum(['pass', 'turn_away']), reason: z.string().trim().min(1).max(300) })
+  .object({
+    verdict: z.enum(['pass', 'turn_away']),
+    reason: z.string().trim().min(1).max(300),
+    /** what a passed Errand needs from the owner, for what the rules over its shape could not say; absent, `hands` */
+    need: z.enum(['secret', 'hands', 'place']).optional(),
+  })
   .meta({ id: 'ErrandScreenAnswer' })
 export type ErrandScreenAnswer = z.infer<typeof ErrandScreenAnswer>
 
@@ -504,21 +524,32 @@ export const SpecScreenPreview = z
 export type SpecScreenPreview = z.infer<typeof SpecScreenPreview>
 
 export const ErrandReply = z
-  .object({ result: z.enum(['applied', 'replayed']), errand: ErrandView, issue: IssueMove.nullable() })
+  .object({
+    /** `joined`: an open Errand has the same command or check, and the Issue waits on that one */
+    result: z.enum(['applied', 'replayed', 'joined']),
+    errand: ErrandView,
+    issue: IssueMove.nullable(),
+  })
   .meta({ id: 'ErrandReply' })
 export type ErrandReply = z.infer<typeof ErrandReply>
 
 /** What `factory errand check` answers: the check ran now, and what it said. */
 export const ErrandCheckReply = z
   .object({
-    /** `needed`: exit 0, the Errand stays; `closed`: exit 1..125, it closed and the lead is told; `unrunnable`: the check could not answer; `no_check`: the Errand carries none; `already_closed`: it was done before the call */
-    outcome: z.enum(['needed', 'closed', 'unrunnable', 'no_check', 'already_closed']),
+    /** `needed`: exit 0, the Errand stays; `closed`: exit 1..125, it closed and the lead is told; `unrunnable`: the check could not answer (timeout, a signal); `broken`: a command in it was not found, so its exit says nothing (the owner's done still closes the Errand); `no_check`: the Errand carries none; `already_closed`: it was done before the call */
+    outcome: z.enum(['needed', 'closed', 'unrunnable', 'broken', 'no_check', 'already_closed']),
     /** the check's own words: its exit and output, or why it could not run */
     note: z.string().nullable(),
     errand: ErrandView,
   })
   .meta({ id: 'ErrandCheckReply' })
 export type ErrandCheckReply = z.infer<typeof ErrandCheckReply>
+
+/** What `factory errand approve` answers: the command was started on the mini; what it came to lands on the Errand (`lastRun`, or closed). */
+export const ErrandApproveReply = z
+  .object({ errand: ErrandView, started: z.literal(true) })
+  .meta({ id: 'ErrandApproveReply' })
+export type ErrandApproveReply = z.infer<typeof ErrandApproveReply>
 
 export const ErrandList = z.object({ errands: z.array(ErrandView) }).meta({ id: 'ErrandList' })
 export type ErrandList = z.infer<typeof ErrandList>
