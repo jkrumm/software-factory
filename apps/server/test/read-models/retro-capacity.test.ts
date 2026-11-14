@@ -76,6 +76,22 @@ describe('the retro bundle carries the capacity loop', () => {
     expect(model.ledger[0]).toMatchObject({ kpi: 'minutes_over_ceiling_per_day', now: null, moved: null })
   })
 
+  test('the throughput part follows the window up to 14 days, drops the lead list and survives the redaction', async () => {
+    await sql`INSERT INTO factory.throughput_findings (id, project, kpi, subject, before, target, direction, unit, cost_minutes, query, filed_at, status)
+      VALUES ('finding_1', 'app', 'failed_run_minutes', '*', 60, 30, 'down', 'minutes', 120, 'factory read throughput', ${ago(30)}, 'open')`
+    const week = RetroModel.parse(await readRetro(sql, { now: NOW, days: DAYS }))
+    expect(week.throughput.hours).toBe(168)
+    const month = RetroModel.parse(await readRetro(sql, { now: NOW, days: 30, redact: true }))
+    expect(month.throughput.hours).toBe(336)
+    expect(month.throughput.lead).not.toHaveProperty('issues')
+    expect(month.throughput.improvements.map((f) => [f.id, f.project, f.status])).toEqual([
+      ['finding_1', 'app', 'open'],
+    ])
+    // the two Issues closed inside the week are the project's closed Issues, with or without a lead
+    expect(week.throughput.project.find((p) => p.repo === 'app')?.closedIssues).toBe(2)
+    expect(week.throughput.host.byClass).toHaveLength(7)
+  })
+
   test('the figures are per day and match SQL; the ledger measures a capacity key against the window', async () => {
     const model = RetroModel.parse(await readRetro(sql, { now: NOW, days: DAYS, capacityConstants: constants }))
     const figure = (key: string) => model.capacity?.figures.find((f) => f.key === key)?.value

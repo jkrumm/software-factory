@@ -52,7 +52,7 @@ rollback machinery, or personal analytics (Argo keeps those).
 
 | Surface | Job |
 |-|-|
-| Console (this repo) | Needs you, Flow, Chain, Improve, Issue and artifact pages. A PWA on the tailnet |
+| Console (this repo) | Needs you, Flow, Chain, Improve, Throughput, Issue and artifact pages. A PWA on the tailnet |
 | Herdr | Working in terminals, plus a glance that links to the Console |
 | Iris | A Hermes interface. Later it renders UI components, so an artifact can appear inside it |
 | Hermes | Conversation: files signals, reads state, never decides the factory's work |
