@@ -94,7 +94,7 @@ const HOST_CLASSES: readonly HostClass[] = [
     names: /\bsudo\b/,
     settledBy: /without sudo|no sudo|non-sudo|user-level/,
     // the mini's sudo password is the owner's and MacBook-only: a root step the lead cannot avoid is his command on his MacBook
-    settled: (input) => input.command !== null,
+    settled: (input) => input.command !== null && input.host === 'macbook',
     route:
       "first look for a way without root (brew, a user-level launchd agent, a path under the home directory, a Makefile target) and run it; if none exists, raise the Errand with the command the owner runs on his MacBook (`--cmd '<the sudo command>' --host macbook`). The mini's sudo password is deliberately MacBook-only: never read it with `op` or `secrets-run`",
   },
@@ -249,8 +249,10 @@ export function screenByRule(input: ErrandInput): { verdict: 'turn_away'; reason
  * not know that policy, would turn it away with a note that points at the password. Decided by the Errand's shape (a command
  * for the MacBook that names sudo), not by the lead's wording; the owner is paged without a model call.
  */
-export function screenBySudo(input: ErrandInput & { command: string | null }): { note: string } | null {
-  if (input.command === null) return null
+export function screenBySudo(
+  input: ErrandInput & { command: string | null; host: Host | null },
+): { note: string } | null {
+  if (input.command === null || input.host !== 'macbook') return null
   const text = `${input.summary}\n${input.detail ?? ''}\n${input.command}`.toLowerCase()
   if (!/\bsudo\b/.test(text)) return null
   return { note: "a root step as a command for the owner's MacBook: the mini's sudo password is MacBook-only" }

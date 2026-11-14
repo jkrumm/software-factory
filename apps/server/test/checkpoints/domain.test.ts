@@ -361,11 +361,16 @@ describe('errands', () => {
 
 describe('the Errand screen', () => {
   test('a root step with a MacBook command reaches the owner by rule, and a rule turn-away never names the password', () => {
-    expect(screenBySudo({ summary: 'Install the daemon', detail: null, command: 'sudo make install' })).toMatchObject({
+    expect(
+      screenBySudo({ summary: 'Install the daemon', detail: null, command: 'sudo make install', host: 'macbook' }),
+    ).toMatchObject({
       note: expect.stringContaining('MacBook-only'),
     })
-    expect(screenBySudo({ summary: 'Install the daemon', detail: null, command: null })).toBeNull()
-    expect(screenBySudo({ summary: 'Click the button', detail: null, command: 'make deploy' })).toBeNull()
+    expect(screenBySudo({ summary: 'Install the daemon', detail: null, command: null, host: null })).toBeNull()
+    expect(
+      screenBySudo({ summary: 'Click the button', detail: null, command: 'make deploy', host: 'macbook' }),
+    ).toBeNull()
+    expect(screenBySudo({ summary: 'Install', detail: null, command: 'sudo make install', host: 'iphone' })).toBeNull()
     expect(screenByRule({ summary: 'Bootstrap', detail: 'Run `launchctl bootstrap` with sudo' })).toBeNull()
   })
 
