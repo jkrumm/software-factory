@@ -164,6 +164,25 @@ describe('the aim pass and the grant', () => {
     expect(live.granted).toBe(true)
   })
 
+  test('while the newest host samples show swap rising, a second step waits; a stale reading is ignored', async () => {
+    const deps = { ...world.deps, slots: 2, slotsMax: 6, slotExtraLoad: 12, slotAim: 'shadow' as const, cores: 12 }
+    for (const [min, swap] of [
+      [0, 10],
+      [1, 10.1],
+      [2, 10.2],
+      [3, 10.3],
+      [4, 11],
+    ] as const)
+      await sample(min, { swap })
+    expect(value(await touchSlot(deps, { id: 'a', name: 'a' })).granted).toBe(true)
+    const second = value(await touchSlot(deps, { id: 'b', name: 'b' }))
+    expect(second.granted).toBe(false)
+    expect(second.why).toContain('swap in use is growing')
+    world.clock.set(at(20))
+    expect(value(await touchSlot(deps, { id: 'a', name: 'a' })).granted).toBe(true)
+    expect(value(await touchSlot(deps, { id: 'b', name: 'b' })).granted).toBe(true)
+  })
+
   test('under on a slot beyond the live base still needs a learned peak and the load within twice the cores', async () => {
     await world.db.sql`
       INSERT INTO factory.slot_aim (id, target, quiet_since, changed_at) VALUES (1, 4, NULL, ${AT})`
