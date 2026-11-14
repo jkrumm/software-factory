@@ -177,6 +177,8 @@ export async function setProcesses(
 /** One process in the reaper's table: its pid, age ("mm:ss" form) and the environment words appended to its command. */
 export interface SessionProcess {
   pid: number
+  /** its parent; `1` when not said */
+  ppid?: number
   etime?: string
   command?: string
   env?: string[]
@@ -190,7 +192,7 @@ export async function setSessionProcesses(
 ): Promise<void> {
   const host = dir(bin)
   const rows = processes.map((p) =>
-    `${p.pid} 1 ${p.etime ?? '30:00'} ${p.command ?? '/bin/sleep 300'} ${(p.env ?? []).join(' ')}`.trimEnd(),
+    `${p.pid} ${p.ppid ?? 1} ${p.etime ?? '30:00'} ${p.command ?? '/bin/sleep 300'} ${(p.env ?? []).join(' ')}`.trimEnd(),
   )
   await writeFile(join(host, 'ps-env.txt'), `    1     0 10-00:00:00 /sbin/launchd\n${rows.join('\n')}\n`)
   await rm(join(host, 'ps-env.fail'), { force: true })

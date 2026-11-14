@@ -39,6 +39,8 @@ export const LANGUAGE = {
     'A held signal the owner or the Judge turns away, with a reason; it files nothing and stays on record as dismissed',
   'door route':
     "The registry that says which repo a monitor files in. The owner's estate, kept by the factory, not by git",
+  dormant:
+    'A lead whose Issue waits for a person, a timer or another Issue and whose claude the factory quiesced (ended); its attempt, worktree and session stay, and the wake revives the session. Not a stall: nothing is wrong',
   dropped: 'Outcome: its lead gave it up, with a reason',
   errand:
     "Something only the owner's hands can do: a portal step, a device run, a 1Password prompt. It reaches the owner only after the screen (rules, then factory-errand) passes it",

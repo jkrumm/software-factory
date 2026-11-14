@@ -265,6 +265,20 @@ through `receive` in `app/intake.ts`; the answer is a triage outcome (`docs/lang
   a full repo refuses so the outbox tries again later. Trust follows the stored actor: a `noted` whose actor is `owner`
   is typed as "a note from the owner" and binds the lead (the contract says so); the factory's, steward's and Judge's
   (and any record without an actor) stay "a note, as data". The brief lists the owner's earlier notes in their own section.
+- **Quiescing** (`app/leads-quiesce.ts`, `domains/leads/quiesce.ts`, a step of the lead tick before the outbox). A lead whose Issue
+  waits for a person, a timer or another Issue holds no claim and needs no process, yet its `claude` is 200 to 290 MiB. After
+  `FACTORY_QUIESCE_AFTER_MS` (30 min; `FACTORY_QUIESCE=off` never does) of a quiet wait the factory ends it (`hc kill`: a
+  `--keep` terminal whose program was killed on purpose is `finished`, not a shell, so the finished terminal stays only as
+  the record of the model and effort it ran on) and marks the attempt `dormant_at`; worktree, branch, tab id and the session
+  id from the hooks stay. Never quiesced: a stall (the lead is alive and the steward acts), a session mid-turn, with
+  background work or an API error, a lead with any process under it (a `factory merge-lock`, `deploy-lock`, `slot run`, a
+  test or a shell all run under the lead and carry its `FACTORY_SESSION`; its own root must be in the `ps` table too) or a
+  granted slot whose directory is its worktree. The wake is a `note_lead` like any other: after `claims.resume`, a dormant
+  lead's session is started again under the same key and tab (`HcTerminals.revive`: `claude --resume <session>` on the model and
+  effort of the finished terminal, the note as its first message, so nothing is typed), paced by `app/type-pace.ts`. A
+  failed start is retried by the outbox; the third, or a refusal, is the lead gone. `followLeads` never calls a dormant
+  lead lost. The first turn of the resumed session is a prompt cache miss: the context is read uncached once, which a
+  wait over the cache's lifetime (1 h) costs nothing extra and one between 30 and 60 min does.
 - **The stop rule** (`domains/leads/stop.ts`): a lead that stops with nothing reported is sent back once with one line
   (the hook exits 2); the second time the Issue stalls as `unreported`. A stop with background work still running is no
   stop.

@@ -2,6 +2,7 @@ import { existsSync } from 'node:fs'
 import { fileURLToPath } from 'node:url'
 import * as z from 'zod'
 import { RESUME_DELAYS_MS, STAGGER_MS } from '../../domains/leads/apierror.ts'
+import { MAX_REVIVE_TRIES, QUIESCE_AFTER_MS } from '../../domains/leads/quiesce.ts'
 import { TYPE_GAP_MS } from '../../domains/leads/type-gap.ts'
 
 const Env = z.object({
@@ -31,6 +32,9 @@ const Env = z.object({
   FACTORY_TYPE_GAP_MS: z.coerce.number().int().min(0).optional(),
   FACTORY_API_DETECT_MS: z.coerce.number().int().min(0).optional(),
   FACTORY_API_PROBE_MS: z.coerce.number().int().min(0).optional(),
+  /** a waiting lead is dormant (its `claude` ended) after this long; `FACTORY_QUIESCE=off` never quiesces */
+  FACTORY_QUIESCE_AFTER_MS: z.coerce.number().int().min(0).optional(),
+  FACTORY_QUIESCE: z.enum(['on', 'off']).optional(),
   /** the agent token (`settings.ts`) and the API port: what a lead's `factory` calls the API with */
   FACTORY_AGENT_TOKEN: z.string().min(1).optional(),
   PORT: z.coerce.number().int().min(1).max(65_535).optional(),
@@ -70,6 +74,10 @@ export interface LeadSettings {
   apiErrorDetectMs: number
   /** a session's transcript is read at most this often */
   apiErrorProbeMs: number
+  /** how long a lead's Issue waits, quiet, before its `claude` is ended; null: leads are never dormant */
+  quiesceAfterMs: number | null
+  /** failed resumes of a dormant session after which its lead is called gone */
+  maxReviveTries: number
   /** `FACTORY_TOKEN` of a lead's terminal: the agent token, never the owner's; unset, the lead's CLI will answer 401 */
   agentToken: string | undefined
   /** `FACTORY_URL` of a lead's terminal: the API's loopback address; unset without a `PORT` */
@@ -114,6 +122,8 @@ export function loadLeadSettings(env: Record<string, string | undefined>): LeadS
     typeGapMs: e.FACTORY_TYPE_GAP_MS ?? TYPE_GAP_MS,
     apiErrorDetectMs: e.FACTORY_API_DETECT_MS ?? 45_000,
     apiErrorProbeMs: e.FACTORY_API_PROBE_MS ?? 20_000,
+    quiesceAfterMs: e.FACTORY_QUIESCE === 'off' ? null : (e.FACTORY_QUIESCE_AFTER_MS ?? QUIESCE_AFTER_MS),
+    maxReviveTries: MAX_REVIVE_TRIES,
     agentToken: e.FACTORY_AGENT_TOKEN,
     apiUrl: e.PORT ? `http://127.0.0.1:${e.PORT}` : undefined,
   }

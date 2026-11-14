@@ -5,6 +5,7 @@ import { startLead } from './leads-start.ts'
 import { noteLead } from './leads-note.ts'
 import { finalizeLead } from './leads-finalize.ts'
 import { followLeads } from './leads-follow.ts'
+import { quiesceLeads } from './leads-quiesce.ts'
 import { type ApiErrorMemory, handleApiErrors } from './leads-api-errors.ts'
 import { type LeadDeps } from './leads.ts'
 import { runOutbox } from './outbox.ts'
@@ -50,6 +51,12 @@ export async function leadTick(deps: LeadTickDeps): Promise<Result<TickAnswer, P
         console.error(`api error path failed: ${error instanceof Error ? error.message : String(error)}`)
         return { detected: 0, resumed: 0, marked: 0, cleared: 0, edges: 0 }
       })
+  // Before the outbox, in the same pass: a wake runs after the lead is dormant or not at all, never between the two halves.
+  if (!draining()) {
+    await quiesceLeads(deps.leads).catch((error: unknown) => {
+      console.error(`quiescing failed: ${error instanceof Error ? error.message : String(error)}`)
+    })
+  }
   if (draining()) return ok({ outbox: { ran: 0, failed: 0 }, replayed, lost, apiErrors })
   const outbox = await runOutbox({
     uow: deps.leads.uow,

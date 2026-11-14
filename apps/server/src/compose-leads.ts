@@ -49,6 +49,8 @@ export function composeLeads(input: {
   github: { token: string | null; apiUrl: string }
   /** the checkpoints' side of the Errand "log in account X" */
   loginErrands: NonNullable<LeadDeps['apiErrors']>['errands']
+  /** the host's processes and the slots granted now: what quiescing looks at before it ends a lead */
+  host: Pick<NonNullable<LeadDeps['quiesce']>, 'processes' | 'slotCwds'>
 }): LeadsComposition {
   const { settings: s } = input
   if (!s.agentToken)
@@ -85,6 +87,16 @@ export function composeLeads(input: {
     forceNoteAfterMs: s.forceNoteAfterMs,
     graceMs: s.graceMs,
     typePace: typePacer({ clock: input.clock, gapMs: s.typeGapMs }),
+    ...(s.quiesceAfterMs === null
+      ? {}
+      : {
+          quiesce: {
+            afterMs: s.quiesceAfterMs,
+            maxReviveTries: s.maxReviveTries,
+            processes: input.host.processes,
+            slotCwds: input.host.slotCwds,
+          },
+        }),
     apiErrors: apiErrorPorts({
       tails: fileTranscriptTails({
         projectsDirs: () => claudeProjectsDirs({ accountsFile: s.accountsFile, home: s.home }),

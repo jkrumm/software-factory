@@ -289,6 +289,16 @@ async function main(): Promise<void> {
     startWatch: startWatchPort({ uow, clock, projects, checkout }),
     github: intakeEnv.github,
     loginErrands: loginErrands(checkpoints),
+    host: {
+      processes: async () =>
+        (await reaperProcessTable.read())?.map(({ pid, ppid, session }) => ({ pid, ppid, session })) ?? null,
+      slotCwds: async () => {
+        const rows = await uow.run(async ({ capacity }) => ok(await capacity.slots()))
+        // A table that cannot be read says nothing of the slots: nothing is dormant on it.
+        if (!rows.ok) throw new Error(rows.error.detail)
+        return rows.value.flatMap((row) => (row.slot !== null && row.cwd ? [row.cwd] : []))
+      },
+    },
   })
   // The hook socket comes after the lock and the migrations: a second copy never reaches it.
   const socket = await leads.listen()

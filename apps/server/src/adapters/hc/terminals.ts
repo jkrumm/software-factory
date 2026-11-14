@@ -97,6 +97,12 @@ class Budget {
   }
 }
 
+/** The value after `--flag` in a program's arguments. */
+const flagOf = (argv: readonly string[], flag: string): string | undefined => {
+  const at = argv.indexOf(flag)
+  return at >= 0 ? argv[at + 1] : undefined
+}
+
 /** A refusal the retry cannot fix: the caller records the lead gone. */
 class Permanent extends Error {}
 
@@ -171,6 +177,32 @@ export class HcTerminals implements Terminals {
       const env = await this.accountEnv(input)
       const outcome = await this.serialized(() => this.findOrRun(input, env, budget))
       // Proving takes as long as the agent does to report: outside the lock, other starts go on.
+      if (!outcome.proven) await this.prove(outcome.terminal.address, budget)
+      return ok(infoOf(outcome.terminal))
+    } catch (error) {
+      return err(asPortError(error))
+    }
+  }
+
+  async quiesce(key: string): Promise<Result<void>> {
+    const budget = this.budget()
+    try {
+      // The finished terminal stays: it is the record of what the session ran on, and the wake removes it.
+      for (const terminal of await this.findAll(key, budget)) {
+        if (terminal.state === 'live') await this.kill(terminal.address, budget)
+      }
+      return ok(undefined)
+    } catch (error) {
+      return err(asPortError(error))
+    }
+  }
+
+  async revive(input: StartTerminal & { session: string }): Promise<Result<TerminalInfo>> {
+    if (input.prompt.startsWith('-')) return err(portError('refused', 'a prompt cannot start with "-"'))
+    const budget = this.budget()
+    try {
+      const env = await this.accountEnv(input)
+      const outcome = await this.serialized(() => this.findOrRun(input, env, budget, input.session))
       if (!outcome.proven) await this.prove(outcome.terminal.address, budget)
       return ok(infoOf(outcome.terminal))
     } catch (error) {
@@ -298,6 +330,7 @@ export class HcTerminals implements Terminals {
     input: StartTerminal,
     env: Record<string, string>,
     budget: Budget,
+    resume?: string,
   ): Promise<{ terminal: Terminal; proven: boolean }> {
     const found = await this.findAll(input.key, budget)
     const claude = this.options.claudeBin ?? 'claude'
@@ -305,8 +338,13 @@ export class HcTerminals implements Terminals {
     const live = found.find((t) => t.state === 'live' && t.argv[0] === claude)
     if (live) return { terminal: live, proven: false }
     // A terminal that did its work and ended ran the prompt: a second run would do the same work twice.
+    // A dormant lead's finished terminal did its work too, and is exactly what a resume replaces.
     const worked = found.find((t) => t.state === 'finished' && (t.reported || t.status !== null || t.turn >= 1))
-    if (worked) return { terminal: worked, proven: true }
+    if (worked && !resume) return { terminal: worked, proven: true }
+    // What the session ran on: the finished terminal's own arguments, so a changed role table never switches a resumed lead.
+    const ranOn = found
+      .map((t) => ({ tier: flagOf(t.argv, '--model'), effort: flagOf(t.argv, '--effort') }))
+      .find((r) => r.tier)
 
     const root = real(input.space)
     const space = await this.spaceId(root, budget)
@@ -320,7 +358,7 @@ export class HcTerminals implements Terminals {
     const created = await this.rpc(
       'terminal.run',
       {
-        argv: this.argv(input),
+        argv: this.argv(input, resume ? { session: resume, tier: ranOn?.tier, effort: ranOn?.effort } : undefined),
         cwd: input.cwd,
         env,
         labels: {
@@ -340,14 +378,18 @@ export class HcTerminals implements Terminals {
   }
 
   /** The program and its arguments; the prompt is last. */
-  private argv({ tier, effort, prompt }: StartTerminal): string[] {
+  private argv(
+    { tier, effort, prompt }: StartTerminal,
+    resume?: { session: string; tier: string | undefined; effort: string | undefined },
+  ): string[] {
     return [
       this.options.claudeBin ?? 'claude',
       '--dangerously-skip-permissions',
       '--model',
-      tier,
+      resume?.tier ?? tier,
       '--effort',
-      effort,
+      resume?.effort ?? effort,
+      ...(resume ? ['--resume', resume.session] : []),
       prompt,
     ]
   }

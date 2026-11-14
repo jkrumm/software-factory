@@ -98,6 +98,21 @@ export class FakeTerminals implements Terminals {
   async planErrors() {
     return ok(this.planErrored)
   }
+  dormant: string[] = []
+  revived: (StartTerminal & { session: string })[] = []
+  reviveError: PortError | null = null
+  async quiesce(k: string) {
+    this.dormant.push(k)
+    this.lose(k)
+    return ok(undefined)
+  }
+  async revive(input: StartTerminal & { session: string }) {
+    if (this.reviveError) return err(this.reviveError)
+    this.revived.push(input)
+    const made = { ...info(`t${this.next++}`), tabName: input.tabName }
+    this.terminals.set(input.key, [made])
+    return ok(made)
+  }
   async close(k: string) {
     this.closed.push(k)
     this.terminals.delete(k)
@@ -122,6 +137,9 @@ export class FakeTerminals implements Terminals {
     this.typeAnswers = []
     this.resumed = []
     this.resumeAnswers = []
+    this.dormant = []
+    this.revived = []
+    this.reviveError = null
   }
 }
 

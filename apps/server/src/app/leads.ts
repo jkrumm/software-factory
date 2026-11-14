@@ -11,6 +11,7 @@ import type {
   Windows,
   Worktrees,
   LeadBranches,
+  QuiescePorts,
 } from '../domains/leads/ports.ts'
 import type { QualityStore } from '../domains/quality/store.ts'
 import type { Issue } from '../domains/work/issue.ts'
@@ -50,6 +51,8 @@ export interface LeadDeps {
   graceMs: number
   /** the API-error path's ports; unset, a turn that ended on an API error is neither found nor answered */
   apiErrors?: ApiErrorPorts
+  /** quiescing of waiting leads; unset, no lead is dormant */
+  quiesce?: QuiescePorts
   /** waits its turn before a note or nudge is typed into a lead: after a server start, one per 10 s; unset, no wait */
   typePace?: () => Promise<void>
 }
