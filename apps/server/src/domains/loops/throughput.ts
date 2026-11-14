@@ -41,7 +41,7 @@ export interface WindowFacts {
   steps: { project: string; tier: string; runs: number; peakP90Mib: number; budgetMib: number; overMinutes: number }[]
   /** a process whose footprint grew between its first and last notable minute in the window */
   processes: { name: string; class: string; project: string; grownMib: number; minutes: number }[]
-  /** minutes Issues of the project spent queued (filed or reopened to admitted) for admissions in the window */
+  /** minutes Issues of every project spent queued (filed or reopened to admitted) for admissions in the window: one row, on the factory, whose queue it is */
   queued: { project: string; minutes: number; admissions: number }[]
 }
 
