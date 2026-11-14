@@ -219,7 +219,8 @@ export function rankCandidates(facts: WindowFacts, tenants: TenantPolicy | null 
     })
   }
   for (const p of facts.processes) {
-    if (p.grownMib < PROCESS_GROWTH_MIB || isSharedMemoryProgram(p.name)) continue
+    // a tenant's growth is `tenant_growth_mib`'s, filed on the repo that owns the host's configuration
+    if (p.grownMib < PROCESS_GROWTH_MIB || isSharedMemoryProgram(p.name) || p.class === 'tenant') continue
     found.push({
       project: p.project,
       kpi: 'process_growth_mib',
