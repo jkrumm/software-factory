@@ -44,14 +44,16 @@ export function specSourceOf(origin: SpecOrigin): SpecSource {
   return 'lead'
 }
 
-/** The changes a Replan's Spec proposes, as its fenced `replan` block states them (the Replan playbook, step 4). */
-const ReplanBlock = z.object({
+/**
+ * The changes a Replan's Spec proposes, as its fenced `replan` block states them (the Replan playbook, step 4). Strict and
+ * with every key required: a block that leaves one out or misnames one says nothing a rule may settle on, so it goes to the
+ * workflow instead.
+ */
+const ReplanBlock = z.strictObject({
   /** the plan rows the proposal adds, changes or drops, by key */
-  plan: z.array(z.string()).default([]),
-  edges: z
-    .object({ add: z.array(z.unknown()).default([]), remove: z.array(z.unknown()).default([]) })
-    .default({ add: [], remove: [] }),
-  cancel: z.array(z.unknown()).default([]),
+  plan: z.array(z.string()),
+  edges: z.strictObject({ add: z.array(z.unknown()), remove: z.array(z.unknown()) }),
+  cancel: z.array(z.unknown()),
 })
 export type ReplanBlock = z.infer<typeof ReplanBlock>
 

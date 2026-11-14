@@ -48,7 +48,8 @@ describe('the rules', () => {
   test('a Replan that changes no plan row and cancels nothing is settled; anything else is not decided by rule', () => {
     const replan = { ...ORIGIN, replan: true }
     const block = (body: unknown) => `# Replan\n\nFree 1043.\n\n\`\`\`replan\n${JSON.stringify(body)}\n\`\`\`\n`
-    const freeing = block({ plan: [], edges: { remove: [{ issue: 'issue_1043', after: ['issue_867'] }] }, cancel: [] })
+    const none = { plan: [], edges: { add: [], remove: [] }, cancel: [] }
+    const freeing = block({ ...none, edges: { add: [], remove: [{ issue: 'issue_1043', after: ['issue_867'] }] } })
     expect(screenSpecByRule({ revision: 1, earlier: [], origin: replan, content: freeing })).toEqual({
       outcome: 'settled',
       reason: 'a Replan that changes no plan row and cancels nothing: it only frees an Issue from a wait',
@@ -57,8 +58,12 @@ describe('the rules', () => {
     const inline = '```replan {"plan":[],"edges":{"add":[],"remove":[]},"cancel":[]} ```'
     expect(screenSpecByRule({ revision: 1, earlier: [], origin: replan, content: inline })?.outcome).toBe('settled')
     for (const content of [
-      block({ plan: ['v2-store'] }),
-      block({ cancel: [{ issue: 'issue_9', reason: 'shipped' }] }),
+      block({ ...none, plan: ['v2-store'] }),
+      block({ ...none, cancel: [{ issue: 'issue_9', reason: 'shipped' }] }),
+      // a block that leaves a key out or misnames one states nothing a rule may settle on
+      block({}),
+      block({ rows: ['v2-store'], edges: { add: [], remove: [] }, cancel: [] }),
+      block({ ...none, rows: ['v2-store'] }),
       '# Replan\n\nNo block at all.',
       '```replan\n{not json\n```',
     ]) {
@@ -224,6 +229,13 @@ describe('the Spec screen', () => {
     expect(given.actor).toBe('factory')
     expect(await reviewsAtOwner()).toEqual([])
     expect(await pages()).toBe(0)
+    // his "not needed" on a Spec the screen settled agrees with the screen: no friction, no KPI count
+    value(await markNeeded(deps, { artifactId: spec, needed: false, revision: null }))
+    clock.set(new Date(clock.now().getTime() + 60_000))
+    const friction = await readFriction(db.sql, { now: clock.now(), days: 7 })
+    expect(friction.counts.find((c) => c.key === 'spec_unneeded:triage')?.count).toBe(0)
+    const kpis = KpiModel.parse(await readKpis(db.sql, { now: clock.now(), days: 7 }))
+    expect(kpis.kpis.find((k) => k.key === 'specs_not_needed')).toMatchObject({ count: 0, n: 0 })
   })
 
   test('a screen that cannot be reached holds the Spec, retries after the backoff, and passes it after the last try', async () => {

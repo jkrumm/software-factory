@@ -661,8 +661,10 @@ export function postgresCheckpointStore(tx: SQL): CheckpointStore {
       })
     },
 
-    async lockSpecRevision(id, revision) {
-      const [artifactRow] = await tx`SELECT * FROM factory.artifacts WHERE id = ${id} AND kind = 'spec' FOR UPDATE`
+    async lockSpecRevision(id, revision, options = { lock: true }) {
+      const [artifactRow] = options.lock
+        ? await tx`SELECT * FROM factory.artifacts WHERE id = ${id} AND kind = 'spec' FOR UPDATE`
+        : await tx`SELECT * FROM factory.artifacts WHERE id = ${id} AND kind = 'spec'`
       if (!artifactRow) return null
       const artifact = artifactOf(artifactRow)
       const revisions: unknown[] = await tx`

@@ -1,6 +1,6 @@
 import type { SQL } from 'bun'
 import * as z from 'zod'
-import { orchestratorSteer, ownerTouch, TOUCH_EVENTS, type Window } from './kpis.ts'
+import { orchestratorSteer, ownerTouch, ownerVerdict, TOUCH_EVENTS, type Window } from './kpis.ts'
 import { frictionWindow } from './friction.ts'
 import { specSourceSql } from './spec-screen.ts'
 import { plain } from './words.ts'
@@ -102,7 +102,7 @@ async function refsOf(sql: SQL, w: Window, key: string): Promise<string[] | null
       SELECT a.issue_id FROM factory.verdicts v
       JOIN factory.artifacts a ON a.id = v.artifact_id AND a.kind = 'spec'
       LEFT JOIN factory.spec_screens s ON s.artifact_id = v.artifact_id AND s.revision = v.revision
-      WHERE v.needed_me IS FALSE AND ${specSourceSql(sql)} = ${tail} AND v.at >= ${w.from} AND v.at < ${w.to}
+      WHERE ${ownerVerdict(sql, w)} AND v.needed_me IS FALSE AND ${specSourceSql(sql)} = ${tail}
       ORDER BY v.at DESC`)
   }
   if (key === 'touch:decision_answered') {

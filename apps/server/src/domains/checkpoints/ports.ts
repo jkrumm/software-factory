@@ -294,8 +294,8 @@ export interface CheckpointStore {
 
   /** the Spec revisions the screen has not decided, oldest first: the latest revision, no verdict, a retry that is due */
   unscreenedSpecs(now: Date, limit: number): Promise<{ artifact: ArtifactId; revision: number }[]>
-  /** one Spec revision with what the screen reads, its row locked; null when it is not the latest Spec revision */
-  lockSpecRevision(id: ArtifactId, revision: number): Promise<UnscreenedSpec | null>
+  /** one Spec revision with what the screen reads, its row locked (`lock: false` for a read that writes nothing); null when it is not the latest Spec revision */
+  lockSpecRevision(id: ArtifactId, revision: number, options?: { lock: boolean }): Promise<UnscreenedSpec | null>
   specScreen(id: ArtifactId, revision: number): Promise<SpecScreenRecord | null>
   /** writes the screen's look; false when the revision was decided already */
   recordSpecScreen(screen: SpecScreenRecord): Promise<boolean>

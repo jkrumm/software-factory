@@ -111,6 +111,8 @@ test("the Replan's lead raises a Decision and submits a Spec: both reach Needs y
     ).json,
   )
   expect(submitted.issue).toMatchObject({ state: 'waiting', waitReason: 'review' })
+  // a Spec reaches Needs you once the Spec screen passes it (the fake agw passes it)
+  await must(lab, ['checkpoint', 'pass'])
   expect((await needs()).items.find((item) => item.id === submitted.artifact.id)).toMatchObject({ kind: 'review' })
 })
 

@@ -34,6 +34,7 @@ import { Elysia } from 'elysia'
 import * as z from 'zod'
 import type { CheckpointError } from '../app/checkpoints.ts'
 import type { CheckpointUses } from '../app/checkpoints-uses.ts'
+import { specScreenView } from '../app/checkpoints-specs.ts'
 import { ARTIFACT_KINDS, type ArtifactId } from '../domains/checkpoints/artifact.ts'
 import { defaultAt } from '../domains/checkpoints/decision.ts'
 import {
@@ -43,7 +44,6 @@ import {
   type ErrandRecord,
   type PageRecord,
   type RevisionRecord,
-  type SpecScreenRecord,
   statusOf,
   type VerdictRecord,
 } from '../domains/checkpoints/ports.ts'
@@ -107,19 +107,6 @@ const verdictView = (v: VerdictRecord) => ({
   at: iso(v.at),
   neededMe: v.neededMe,
 })
-
-const screenView = (s: SpecScreenRecord | null) =>
-  s === null
-    ? null
-    : {
-        revision: s.revision,
-        outcome: s.outcome ?? 'held',
-        by: s.by,
-        source: s.source,
-        note: s.note,
-        tries: s.tries,
-        at: iso(s.at),
-      }
 
 const annotationView = (a: AnnotationRecord) => ({
   id: a.id,
@@ -416,7 +403,7 @@ export const checkpointRoutes = (uses: CheckpointUses) =>
               .filter((a) => a.anchor === 'unanchored')
               .map((a) => annotationView(a.annotation)),
             verdicts: detail.verdicts.map(verdictView),
-            screen: screenView(detail.screen),
+            screen: specScreenView(detail.screen),
           }),
         )
       },

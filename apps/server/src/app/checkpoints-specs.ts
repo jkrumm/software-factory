@@ -201,7 +201,8 @@ export async function screenSpecs(deps: SettleDeps, limit = PASS_LIMIT): Step<Sp
   return ok(screened)
 }
 
-const screenView = (screen: SpecScreenRecord | null): SpecScreenPreview['screen'] =>
+/** The screen's look as the API shows it, on `artifact show` and in the preview. */
+export const specScreenView = (screen: SpecScreenRecord | null): SpecScreenPreview['screen'] =>
   screen === null
     ? null
     : {
@@ -227,7 +228,7 @@ export async function previewSpecScreen(deps: SettleDeps, id: ArtifactId): Step<
       if (artifact.kind !== 'spec') return err({ kind: 'invalid', detail: `${id} is a ${artifact.kind}, not a Spec` })
       const latest = (await checkpoints.revisions(id)).at(-1)
       if (!latest) return err({ kind: 'invalid', detail: `${id} has no revision` })
-      const spec = await checkpoints.lockSpecRevision(id, latest.n)
+      const spec = await checkpoints.lockSpecRevision(id, latest.n, { lock: false })
       if (!spec) return err({ kind: 'invalid', detail: `${id} has no revision ${latest.n}` })
       const issue = await issueOf(work, artifact.issueId)
       if (!issue) return err({ kind: 'unknown_issue', issueId: artifact.issueId })
@@ -245,7 +246,7 @@ export async function previewSpecScreen(deps: SettleDeps, id: ArtifactId): Step<
   return ok({
     artifact: id,
     revision: read.value.spec.revision.n,
-    screen: screenView(read.value.screen),
+    screen: specScreenView(read.value.screen),
     rule: look.value.rule,
     request: look.value.request,
   })
