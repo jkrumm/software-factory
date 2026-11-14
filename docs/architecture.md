@@ -145,7 +145,16 @@ through `receive` in `app/intake.ts`; the answer is a triage outcome (`docs/lang
   lane's `memory` reserves for its running leads and the candidate counts as swap in use, `docs/plan.md` "Lanes"; then the
   learned fit: a repo with at least three sampled attempts is refused, kind `memory`, when its p80 lead does not fit into
   the free memory of the newest host sample (not older than 5 min) less headroom (the larger of 2 GiB and 8 % of RAM); the running leads' test peaks are not reserved here, the slot grant holds them back (`SlotFit`); it
-  replaces the lanes' `memory` for that repo's leads, never refuses with an unknown figure and never the only lead on the host), the
+  replaces the lanes' `memory` for that repo's leads, never refuses with an unknown figure and never the only lead on the host).
+  **What a lead is learned to take** (`learnLeadCost`, `domains/capacity/leadcost.ts`): an attempt's peak is its worktree's largest
+  sample of the six hours before its last one, from the repo's relearn point on; the figure is the p80 (nearest rank) of the
+  newest ten attempts' peaks, except that a falling cost is believed sooner than a rising one: when the newest three **settled**
+  attempts (ended, no sample for 10 min, or run 30 min) all peak below that p80, it is the largest of the three (the refusal
+  says so). Too early is still caught by the swap and pressure ceilings and the slot grant; too late is idle seats with work
+  queued. `factory capacity relearn --repo <name> [--at <time>]` (owner and orchestrator; `lead_relearn`, `migrations/1034_lead_relearn.sql`;
+  default now, never in the future) ignores the repo's samples before the time: with fewer than three attempts after it the repo is
+  on its lane's memory prior as a new repo is, and `factory queue order` carries a note per repo with a point (and the refusal
+  says "learned from the attempts since …"). `read/lead-costs.ts` keeps the same window and point, with its plain p80, beside it. The
   candidate's lane (`lanes: {apple: 1}` in `project.yaml` caps the leads of a resource class inside the repo, a fix is
   never held; `domains/capacity/lanes.ts`), the repo's claims (`leads: N` plus one for a fix; `pace` allows one), then an
   account with room. **Seats:** when work is queued for the account cap and each of the newest five minute samples shows a load

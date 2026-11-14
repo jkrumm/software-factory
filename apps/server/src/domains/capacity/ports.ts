@@ -4,7 +4,7 @@ import type { AccountRank, AccountReading } from './accounts.ts'
 import type { Claim } from './claims.ts'
 import type { SnapshotProc } from './classes.ts'
 import type { MemoryReading } from './host.ts'
-import type { ProcInfo } from './leadcost.ts'
+import type { AttemptPeak, ProcInfo } from './leadcost.ts'
 import type { QueueState, QueueStates } from './queue-state.ts'
 import type { AimState } from './slot-aim.ts'
 import type { SlotRow } from './slots.ts'
@@ -63,8 +63,16 @@ export interface CapacityStore {
   latestHostSample(): Promise<{ at: Date; memoryUsedPct: number | null } | null>
   /** the newest minute samples of the host, newest first */
   recentHostSamples(limit: number): Promise<HostSampleFact[]>
-  /** per repo: the attempts sampled and the peak MiB of the newest ten, newest first (what `learnedLeadMib` takes) */
-  leadPeaks(): Promise<LeadPeaks[]>
+  /**
+   * per repo (project name): the attempts sampled since its relearn point and the peaks of the newest twenty, newest first
+   * (what `learnLeadCost` takes). A peak counts the samples of the attempt's last six hours only; `now` decides which
+   * attempts have ended.
+   */
+  leadPeaks(now: Date): Promise<LeadPeaks[]>
+  /** every repo's relearn point: samples before it are not learned from */
+  relearns(): Promise<Relearn[]>
+  /** stores the repo's relearn point (replacing an earlier one) */
+  setRelearn(relearn: Relearn): Promise<void>
   /** per Issue number: the MiB its lead's tree held at its newest sample since `since` */
   leadRssSince(since: Date): Promise<Map<number, number>>
   /** stores the minute's shadow decision (the first of a minute stays) and drops those before `keepSince` */
@@ -135,8 +143,17 @@ export interface HostSampleFact {
 
 export interface LeadPeaks {
   repo: string
+  /** the attempts sampled since the repo's relearn point (all of them, not only the newest twenty) */
   attempts: number
-  peaksNewestFirst: number[]
+  peaksNewestFirst: AttemptPeak[]
+}
+
+/** The time before which a repo's lead samples are not learned from, and who set it when. */
+export interface Relearn {
+  repo: string
+  at: Date
+  setAt: Date
+  setBy: string
 }
 
 /** One row of the cost ledger (`factory.step_costs`). */

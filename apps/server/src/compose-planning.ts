@@ -7,7 +7,7 @@ import type { CapacityApi } from './api/capacity.ts'
 import type { PlanningApi } from './api/planning.ts'
 import { admissionPass, capacityFacts, claimQueued, claimStalled, queueView } from './app/capacity-admit.ts'
 import { capacityForLeads } from './app/capacity-leads.ts'
-import { getQueueStates, setQueueState } from './app/capacity-queue.ts'
+import { getQueueStates, setQueueState, setRelearn } from './app/capacity-queue.ts'
 import { giveSlotBack, recordMergeWindow, recordStepCost, touchSlot } from './app/capacity-slots.ts'
 import { capacityState, refreshState } from './app/capacity-view.ts'
 import { addAfter, removeAfter, settleIssue, setPrio } from './app/planning-chain.ts'
@@ -159,6 +159,10 @@ export function composePlanning(input: {
         if (request.project === null) return setQueueState(writes, request)
         const name = await projectName(request.project)
         return name.ok ? setQueueState(writes, { ...request, project: name.value }) : name
+      },
+      setRelearn: async (request) => {
+        const name = await projectName(request.repo)
+        return name.ok ? setRelearn(writes, { ...request, repo: name.value }) : name
       },
       touchSlot: (request) => touchSlot(slots, request),
       giveSlotBack: (id) => giveSlotBack(writes, id),

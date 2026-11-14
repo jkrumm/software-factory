@@ -1,5 +1,6 @@
+import type { Relearn } from '../domains/capacity/ports.ts'
 import type { QueueState, QueueStates } from '../domains/capacity/queue-state.ts'
-import { ok, type PortError, type Result } from '../kernel/result.ts'
+import { err, ok, portError, type PortError, type Result } from '../kernel/result.ts'
 import type { PlanningDeps } from './planning-deps.ts'
 
 /** Sets the state of a scope: the whole queue (`project` null) or one project. A lifted `drain` takes effect at the next pass. */
@@ -16,4 +17,22 @@ export async function setQueueState(
 
 export async function getQueueStates(deps: PlanningDeps): Promise<Result<QueueStates, PortError>> {
   return deps.uow.run(async ({ capacity }) => ok(await capacity.queueStates()))
+}
+
+/**
+ * Stores a repo's relearn point (`repo` is the project name): the lead samples before `at` (default now) are not learned
+ * from, so a cost whose cause is fixed is not held up by the attempts that had it. A point in the future is refused.
+ */
+export async function setRelearn(
+  deps: PlanningDeps,
+  input: { repo: string; at: Date | null; actor: string },
+): Promise<Result<Relearn, PortError>> {
+  const now = deps.clock.now()
+  const at = input.at ?? now
+  if (at.getTime() > now.getTime()) return err(portError('refused', 'the relearn point is in the future'))
+  const relearn: Relearn = { repo: input.repo, at, setAt: now, setBy: input.actor }
+  return deps.uow.run(async ({ capacity }) => {
+    await capacity.setRelearn(relearn)
+    return ok(relearn)
+  })
 }

@@ -140,6 +140,7 @@ export const POLICY: readonly Rule[] = [
   rule('GET', '/capacity', OWNER),
   rule('POST', '/capacity/refresh', OWNER),
   rule('POST', '/capacity/admit', OWNER),
+  rule('POST', '/capacity/relearn', OWNER),
   rule('GET', '/queue/order', OWNER),
   rule('GET', '/queue', OWNER),
   rule('PUT', '/queue', OWNER),
