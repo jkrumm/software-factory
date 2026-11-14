@@ -102,6 +102,65 @@ export async function readCapacityLoop(
       .object({ n: z.coerce.number().int(), p50: z.coerce.number().nullable(), p90: z.coerce.number().nullable() })
       .parse(wait)
 
+    // MiB per minute: a sample's figure is that minute's delta scaled to 300 s
+    const swapDay: unknown[] = await tx`
+      SELECT to_char(at AT TIME ZONE 'UTC', 'YYYY-MM-DD') AS day, sum(swapout_mb_per_300s)::float8 / 5 AS v
+      FROM factory.host_samples WHERE at >= ${w.from} AND at < ${w.to} GROUP BY 1`
+    const swap = await total(tx`
+      SELECT sum(swapout_mb_per_300s)::float8 / 5 AS v FROM factory.host_samples WHERE at >= ${w.from} AND at < ${w.to}`)
+    const pressureDay: unknown[] = await tx`
+      SELECT to_char(at AT TIME ZONE 'UTC', 'YYYY-MM-DD') AS day, count(*) AS v
+      FROM factory.host_samples WHERE pressure_level >= 2 AND at >= ${w.from} AND at < ${w.to} GROUP BY 1`
+    const pressured = await total(tx`
+      SELECT count(*) AS v FROM factory.host_samples
+      WHERE pressure_level >= 2 AND at >= ${w.from} AND at < ${w.to}`)
+
+    const moreDay: unknown[] = await tx`
+      SELECT to_char(at AT TIME ZONE 'UTC', 'YYYY-MM-DD') AS day, count(*) AS v
+      FROM factory.admission_shadow WHERE shadow_admits > live_admits AND at >= ${w.from} AND at < ${w.to} GROUP BY 1`
+    const fewerDay: unknown[] = await tx`
+      SELECT to_char(at AT TIME ZONE 'UTC', 'YYYY-MM-DD') AS day, count(*) AS v
+      FROM factory.admission_shadow WHERE shadow_admits < live_admits AND at >= ${w.from} AND at < ${w.to} GROUP BY 1`
+    const [shadowSpan] = await tx`
+      SELECT count(*) AS n, min(at) AS first_at, max(at) AS last_at,
+        count(*) FILTER (WHERE shadow_admits > live_admits) AS more, count(*) FILTER (WHERE shadow_admits < live_admits) AS fewer
+      FROM factory.admission_shadow WHERE at >= ${w.from} AND at < ${w.to}`
+    // what the host did in each shadow minute: the minute samples, joined by the minute they fall in
+    const shadowHost: unknown[] = await tx`
+      SELECT CASE WHEN s.shadow_admits > s.live_admits THEN 'more' WHEN s.shadow_admits < s.live_admits THEN 'fewer' ELSE 'same' END AS kind,
+        count(DISTINCT s.at) AS n,
+        avg(h.swapout_mb_per_300s)::float8 AS swap_avg, max(h.swapout_mb_per_300s)::float8 AS swap_max,
+        max(h.pressure_level) AS pressure_max, count(h.at) FILTER (WHERE h.pressure_level >= 2) AS pressured
+      FROM factory.admission_shadow s
+      LEFT JOIN factory.host_samples h ON date_trunc('minute', h.at) = s.at
+      WHERE s.at >= ${w.from} AND s.at < ${w.to} GROUP BY 1`
+    const Span = z.object({
+      n: z.coerce.number().int(),
+      first_at: z.coerce.date().nullable(),
+      last_at: z.coerce.date().nullable(),
+      more: z.coerce.number().int(),
+      fewer: z.coerce.number().int(),
+    })
+    const Host = z.object({
+      kind: z.enum(['more', 'fewer', 'same']),
+      n: z.coerce.number().int(),
+      swap_avg: z.coerce.number().nullable(),
+      swap_max: z.coerce.number().nullable(),
+      pressure_max: z.coerce.number().int().nullable(),
+      pressured: z.coerce.number().int(),
+    })
+    const span = Span.parse(shadowSpan)
+    const hostOf = (kind: 'more' | 'fewer' | 'same') => {
+      const row = shadowHost.map((raw) => Host.parse(raw)).find((h) => h.kind === kind)
+      return {
+        minutes: row?.n ?? 0,
+        swapoutMbAvg: row?.swap_avg == null ? null : Math.round(row.swap_avg),
+        swapoutMbMax: row?.swap_max == null ? null : Math.round(row.swap_max),
+        pressureLevelMax: row?.pressure_max ?? null,
+        pressureMinutes: row?.pressured ?? 0,
+      }
+    }
+
     const steps: unknown[] = await tx`
       SELECT name, count(*) AS runs, max(peak_rss_mib) AS max_peak,
         percentile_cont(0.8) WITHIN GROUP (ORDER BY peak_rss_mib)::float8 AS p80_peak,
@@ -142,6 +201,18 @@ export async function readCapacityLoop(
       idleSeatHoursMemory: idleMemory,
       minutesOverCeiling: { total: over, perDay: perDay(overDay, 0) },
       slotWait: { n: waitRow.n, p50Ms: waitRow.p50, p90Ms: waitRow.p90, perDayP50: perDay(waitDay, null) },
+      swapoutMib: { total: swap, perDay: perDay(swapDay, 0) },
+      minutesUnderPressure: { total: pressured, perDay: perDay(pressureDay, 0) },
+      shadow: {
+        minutes: span.n,
+        firstAt: span.first_at?.toISOString() ?? null,
+        lastAt: span.last_at?.toISOString() ?? null,
+        shadowMore: { total: span.more, perDay: perDay(moreDay, 0) },
+        shadowFewer: { total: span.fewer, perDay: perDay(fewerDay, 0) },
+        whenMore: hostOf('more'),
+        whenFewer: hostOf('fewer'),
+        whenSame: hostOf('same'),
+      },
       topSteps: steps.map((raw) => {
         const s = Step.parse(raw)
         return {

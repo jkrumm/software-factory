@@ -217,6 +217,10 @@ describe('GET /v1/retro `build`', () => {
           reaperGraceMs: 300_000,
           swapoutCeilingMb: 2048,
           swapCeilingPct: 80,
+          loadRule: 'shadow',
+          loadPerCore: 3,
+          processCap: 1800,
+          cores: 12,
         },
       }),
     )

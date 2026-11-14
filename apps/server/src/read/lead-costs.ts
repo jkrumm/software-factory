@@ -18,7 +18,13 @@ export interface RepoLeadCost {
   lastFootprintMib: number | null
   /** median of (footprint peak / RSS peak) over those attempts, two decimals; null with none */
   footprintToRss: number | null
+  /** the median footprint of one lead's tree at rest (no test step of its Issue running); null with none */
+  restMibP50: number | null
+  /** the minutes of lead rows at rest */
+  restMinutes: number
 }
+
+const Rest = z.object({ repo: z.string(), minutes: z.coerce.number().int(), p50: z.coerce.number() })
 
 const Row = z.object({
   repo: z.string(),
@@ -73,10 +79,18 @@ export async function readLeadCosts(sql: SQL): Promise<RepoLeadCost[]> {
       SELECT rss.repo, rss.attempts, rss.peak_p80, rss.last_peak, coalesce(fp.footprint_attempts, 0) AS footprint_attempts,
         fp.footprint_p80, fp.last_footprint, fp.footprint_ratio
       FROM rss LEFT JOIN fp ON fp.repo = rss.repo ORDER BY rss.repo`
-    return found
+    const rest: unknown[] = await tx`
+      SELECT l.repo, count(*) AS minutes, percentile_cont(0.5) WITHIN GROUP (ORDER BY l.footprint_mib)::float8 AS p50
+      FROM factory.host_class_samples l
+      WHERE l.class = 'lead' AND l.repo IS NOT NULL AND NOT EXISTS (
+        SELECT 1 FROM factory.host_class_samples s WHERE s.class = 'step' AND s.at = l.at AND s.issue = l.issue)
+      GROUP BY l.repo`
+    return { found, rest }
   })
-  return rows.map((raw) => {
+  const atRest = new Map(rows.rest.map((raw) => Rest.parse(raw)).map((r) => [r.repo, r]))
+  return rows.found.map((raw) => {
     const row = Row.parse(raw)
+    const rest = atRest.get(row.repo)
     return {
       repo: row.repo,
       attempts: row.attempts,
@@ -86,6 +100,8 @@ export async function readLeadCosts(sql: SQL): Promise<RepoLeadCost[]> {
       footprintMibP80: row.footprint_p80,
       lastFootprintMib: row.last_footprint,
       footprintToRss: row.footprint_ratio,
+      restMibP50: rest ? Math.round(rest.p50) : null,
+      restMinutes: rest?.minutes ?? 0,
     }
   })
 }

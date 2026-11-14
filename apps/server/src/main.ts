@@ -102,7 +102,7 @@ import { systemIds } from './kernel/ids.ts'
 import { deployingSince } from './read/deploy-window.ts'
 import { healthOf, judgeTick } from './read/health.ts'
 import { startHealthProbe } from './read/health-probe.ts'
-import { planningSettings } from './app/planning-settings.ts'
+import { hostRule, planningSettings } from './app/planning-settings.ts'
 import { postgresOpenIssues } from './read/open-issues.ts'
 import { queueMovedAt } from './read/queue.ts'
 import { queueReasonMap } from './api/read-models.ts'
@@ -807,7 +807,11 @@ async function main(): Promise<void> {
       }),
       capacityConstants: {
         leadsPerAccount: planningEnv.leadsPerAccount,
-        loadCeiling: planningEnv.loadCeiling,
+        loadCeiling: hostRule(planningEnv).loadCeiling,
+        loadRule: planningEnv.loadRule,
+        loadPerCore: planningEnv.loadPerCore,
+        processCap: planningEnv.processCap,
+        cores: planningEnv.cores,
         slots: planningEnv.slots,
         slotsMax: planningEnv.slotsMax,
         slotExtraLoad: planningEnv.slotExtraLoad,

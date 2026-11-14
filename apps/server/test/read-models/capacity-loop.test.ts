@@ -26,6 +26,10 @@ const constants = {
   reaperGraceMs: 300_000,
   swapoutCeilingMb: 2048,
   swapCeilingPct: 80,
+  loadRule: 'shadow' as const,
+  loadPerCore: 3,
+  processCap: 1800,
+  cores: 12,
 }
 
 beforeAll(async () => {
@@ -263,6 +267,8 @@ describe('GET /v1/capacity-loop figures', () => {
           footprintMibP80: null,
           lastFootprintMib: null,
           footprintToRss: null,
+          restMibP50: null,
+          restMinutes: 0,
         }
       })
       .sort((a, b) => b.peakMibP80 - a.peakMibP80 || a.repo.localeCompare(b.repo))

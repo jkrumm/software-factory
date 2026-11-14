@@ -730,8 +730,29 @@ export const CapacityLeadCost = z
     lastFootprintMib: z.number().int().nullable(),
     /** median over those attempts of (footprint peak / RSS peak), two decimals: how much of summed RSS is not private memory */
     footprintToRss: z.number().nullable(),
+    /**
+     * what a lead of the repo holds at rest: the median physical footprint of its process tree over the minutes of the
+     * class rows (`host_class_samples`) where no test step of that Issue ran; null with none. Read beside the learned peak.
+     */
+    restMibP50: z.number().int().nullable(),
+    /** the minutes of lead rows at rest that the median is taken over */
+    restMinutes: z.number().int(),
   })
   .meta({ id: 'CapacityLeadCost' })
+
+/** The host's swapouts and pressure over the minutes of one kind of shadow decision. */
+export const CapacityShadowMinutes = z
+  .strictObject({
+    minutes: z.number().int(),
+    /** mean and largest of the minute samples' swapouts, MiB per 300 s; null with no sample joined */
+    swapoutMbAvg: z.number().nullable(),
+    swapoutMbMax: z.number().nullable(),
+    /** the highest `kern.memorystatus_vm_pressure_level` of those minutes (1, 2 or 4); null with none read */
+    pressureLevelMax: z.number().int().nullable(),
+    /** the minutes at pressure level 2 or 4 */
+    pressureMinutes: z.number().int(),
+  })
+  .meta({ id: 'CapacityShadowMinutes' })
 
 export const CapacityReaped = z
   .strictObject({ comm: z.string(), session: z.string(), reason: z.enum(['session', 'worktree']), at })
@@ -763,6 +784,32 @@ export const CapacityLoopModel = z
       p90Ms: z.number().nullable(),
       perDayP50: z.array(CapacityDay),
     }),
+    /** MiB swapped out per day: the minute samples' swapouts (each scaled to 300 s) over five */
+    swapoutMib: CapacityTotal,
+    /** host minutes at memory pressure level 2 (warning) or 4 (critical) */
+    minutesUnderPressure: CapacityTotal,
+    /**
+     * the throughput rule (the load ceiling in multiples of the cores, the process cap) beside the live one, from the
+     * per-minute decisions of `factory.admission_shadow`: minutes with a queued Issue only the host's rules keep out, in
+     * how many of them each rule would admit more, and what the host did in those minutes. Empty once the rule is live.
+     */
+    shadow: z.strictObject({
+      minutes: z.number().int(),
+      firstAt: at.nullable(),
+      lastAt: at.nullable(),
+      /** minutes the shadow rule would have admitted more Issues than the live one, per day */
+      shadowMore: CapacityTotal,
+      /** minutes it would have admitted fewer */
+      shadowFewer: CapacityTotal,
+      /**
+       * the host's swapouts and pressure in the minutes the shadow rule would have admitted more, fewer, or as many; with the
+       * fixed ceiling at or above 3x the cores the shadow is the stricter rule and `whenMore` stays empty, so `whenFewer`
+       * (the minutes the new rule would have held back) is what shows whether holding back mattered
+       */
+      whenMore: CapacityShadowMinutes,
+      whenFewer: CapacityShadowMinutes,
+      whenSame: CapacityShadowMinutes,
+    }),
     /** the 8 steps with the largest peak memory */
     topSteps: z.array(CapacityStep),
     /** the 8 repos whose leads take most memory (80th percentile of the newest attempts' peaks) */
@@ -781,6 +828,12 @@ export const CapacityLoopModel = z
       /** the memory gate: swapouts MiB per 300 s, and swap in use as a share of RAM, above which no lead is admitted */
       swapoutCeilingMb: z.number(),
       swapCeilingPct: z.number(),
+      /** `shadow`: the fixed load ceiling is live and the throughput rule is recorded; `on`: the throughput rule is live */
+      loadRule: z.enum(['shadow', 'on']),
+      /** the throughput rule: the load ceiling in multiples of `cores`, and the cap on the host's process count */
+      loadPerCore: z.number(),
+      processCap: z.number(),
+      cores: z.number(),
     }),
   })
   .meta({ id: 'CapacityLoopModel' })

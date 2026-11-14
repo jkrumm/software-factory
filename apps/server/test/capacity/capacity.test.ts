@@ -11,6 +11,7 @@ import { type AdmissionInputs, checkAdmission } from '../../src/domains/capacity
 import { type Claimant, claimRoom } from '../../src/domains/capacity/claims.ts'
 import {
   describeMemory,
+  loadCeilingOf,
   memoryReadingOf,
   overLoad,
   overMemory,
@@ -18,6 +19,7 @@ import {
   sustainedSwapoutMb,
   swapUsedBytes,
 } from '../../src/domains/capacity/host.ts'
+import { hostRule, planningSettings } from '../../src/app/planning-settings.ts'
 import { holdsClaim } from '../../src/domains/capacity/claims.ts'
 import { laneRoom } from '../../src/domains/capacity/lanes.ts'
 import { growthMib, learnedPeakMib } from '../../src/domains/capacity/costs.ts'
@@ -133,6 +135,29 @@ describe('the host', () => {
     )
     expect(overLoad(60.1, 60)).toBe(true)
     expect(overLoad(60, 60)).toBe(false)
+  })
+
+  test('the throughput rule: a load ceiling in multiples of the cores', () => {
+    expect(loadCeilingOf(12, 3)).toBe(36)
+    expect(loadCeilingOf(8, 2.5)).toBe(20)
+    expect(loadCeilingOf(0, 3)).toBe(1)
+  })
+
+  test('the throughput rule is shadowed beside the fixed ceiling until it is switched on', () => {
+    const settings = (env: Record<string, string>) =>
+      planningSettings({ FACTORY_LOAD_CEILING: '120', ...env }, { cores: 12 })
+    expect(hostRule(settings({}))).toEqual({
+      loadCeiling: 120,
+      processCap: null,
+      shadow: { loadCeiling: 36, processCap: 1800 },
+    })
+    expect(
+      hostRule(settings({ FACTORY_LOAD_RULE: 'on', FACTORY_LOAD_PER_CORE: '2', FACTORY_PROCESS_CAP: '1200' })),
+    ).toEqual({
+      loadCeiling: 24,
+      processCap: 1200,
+      shadow: null,
+    })
   })
 
   test('swapouts are graded over the last 300 s of minute samples, so a lull between bursts keeps the gate shut (Issue 858)', () => {
@@ -333,6 +358,21 @@ describe('admission', () => {
     expect(kind({ state: 'run', load: 1, memory: null })).toBe('claim')
     expect(kind({ state: 'run', load: 1, memory: null, holders: [] })).toBe('window')
     expect(kind({ state: 'run', load: 1, memory: null, holders: [], accounts: [reading('a')] })).toBe('admit')
+  })
+
+  test('a process count over its cap keeps a new lead out with the numbers; none known, or no cap, admits', () => {
+    const refused = checkAdmission(inputs({ processes: 1801, processCap: 1800 }))
+    expect(refused).toMatchObject({
+      admit: false,
+      refusal: { kind: 'load', message: 'the machine runs too many processes: 1801 processes (cap 1800)' },
+    })
+    expect(checkAdmission(inputs({ processes: 1800, processCap: 1800 })).admit).toBe(true)
+    expect(checkAdmission(inputs({ processes: null, processCap: 1800 })).admit).toBe(true)
+    expect(checkAdmission(inputs({ processes: 99_999, processCap: null })).admit).toBe(true)
+    // the load gate looks first
+    expect(checkAdmission(inputs({ load: 99, processes: 99_999, processCap: 1800 }))).toMatchObject({
+      refusal: { message: expect.stringContaining('load average') },
+    })
   })
 
   test('the memory reason says memory and the numbers; a reading that could not be taken admits without it', () => {

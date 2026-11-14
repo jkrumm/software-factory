@@ -19,10 +19,11 @@ beforeAll(async () => {
       capped: { project: 'apiVersion: factory/v2\nname: capped\nleads: 1\n' },
       solo: { project: 'apiVersion: factory/v2\nname: solo\n' },
       ordered: { project: 'apiVersion: factory/v2\nname: ordered\n' },
+      shade: { project: 'apiVersion: factory/v2\nname: shade\n' },
     },
     accounts: [{ id: 'a' }, { id: 'b' }],
     // the lead cap per account is unit-tested; here it would couple the scenarios through the accounts
-    env: { FACTORY_LEADS_PER_ACCOUNT: '16' },
+    env: { FACTORY_LEADS_PER_ACCOUNT: '16', FACTORY_PROCESS_CAP: '100' },
   })
   const synced = await lab.cli(['project', 'sync'])
   expect(synced.code).toBe(0)
@@ -210,4 +211,30 @@ test('admitting never asked agw', async () => {
   expect((await lab.world.calls()).filter((call) => call.tool === 'agw' && call.args[0] !== 'factory-triage')).toEqual(
     [],
   )
+})
+
+test('the throughput rule is shadowed: the live rule admits, the shadow table records that the process cap would not have', async () => {
+  const sql = lab.world.db.sql
+  await lab.memory({ swapUsedMb: 1024, swapouts: 1_001_000 })
+  await sql`DELETE FROM factory.host_samples`
+  await sql`DELETE FROM factory.admission_shadow`
+  // 500 processes by the newest minute sample: over the shadow cap of 100, which is not live while the rule is in shadow
+  await sql`
+    INSERT INTO factory.host_samples (at, load, memory_used_pct, swap_used_pct, swapout_mb_per_300s, processes)
+    VALUES (now(), 5, 20, 10, 0, 500)`
+  const issue = await lab.file('shade', 'queued while the host runs many processes')
+  await settle(issue)
+  expect((await admit()).admitted.map((a) => a.issue)).toContain(issue)
+  const rows = await sql`
+    SELECT live_admits, shadow_admits, live_refusal, shadow_refusal, shadow_message, processes, process_cap
+    FROM factory.admission_shadow`
+  expect(rows).toHaveLength(1)
+  expect(rows[0]).toMatchObject({
+    shadow_admits: 0,
+    shadow_refusal: 'load',
+    shadow_message: 'the machine runs too many processes: 500 processes (cap 100)',
+    processes: 500,
+    process_cap: 100,
+  })
+  expect(Number(rows[0]?.live_admits)).toBeGreaterThanOrEqual(1)
 })

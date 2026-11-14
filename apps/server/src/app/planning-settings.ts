@@ -1,7 +1,11 @@
+import { availableParallelism } from 'node:os'
 import { isAbsolute } from 'node:path'
 import * as z from 'zod'
 import {
   DEFAULT_LOAD_CEILING,
+  DEFAULT_LOAD_PER_CORE,
+  DEFAULT_PROCESS_CAP,
+  loadCeilingOf,
   DEFAULT_SWAP_CEILING_PCT,
   DEFAULT_SWAPOUT_CEILING_MB,
   type MemoryCeilings,
@@ -16,6 +20,12 @@ const Env = z.object({
   FACTORY_REPO_ALLOW: z.string().optional(),
   FACTORY_LEADS_PER_ACCOUNT: whole(1, 16).optional(),
   FACTORY_LOAD_CEILING: whole(1, 100_000).optional(),
+  /** `shadow` (default): the fixed ceiling is live and the throughput rule is only recorded; `on`: the throughput rule is live */
+  FACTORY_LOAD_RULE: z.enum(['shadow', 'on']).optional(),
+  /** the throughput rule's load ceiling in multiples of the host's cores */
+  FACTORY_LOAD_PER_CORE: whole(1, 1000).optional(),
+  /** the throughput rule's cap on the host's process count */
+  FACTORY_PROCESS_CAP: whole(100, 1_000_000).optional(),
   FACTORY_SWAPOUT_CEILING_MB: whole(1, 10_000_000).optional(),
   FACTORY_SWAP_CEILING_PCT: whole(1, 1000).optional(),
   /** the most extra leads per account while the host idles with work queued; 0 turns it off */
@@ -40,7 +50,13 @@ export interface PlanningSettings {
   sysctlBin: string
   memorySampleMs: number
   leadsPerAccount: number
+  /** the fixed load ceiling (`FACTORY_LOAD_CEILING`); live while the throughput rule is in shadow */
   loadCeiling: number
+  loadRule: 'shadow' | 'on'
+  loadPerCore: number
+  processCap: number
+  /** the host's cores, which the throughput rule's load ceiling is a multiple of */
+  cores: number
   memoryCeilings: MemoryCeilings
   seatsMaxBonus: number
   slots: number
@@ -51,7 +67,7 @@ export interface PlanningSettings {
 /** The planning and capacity settings from the environment; throws one message naming every bad key. */
 export function planningSettings(
   env: Record<string, string | undefined>,
-  options: { home?: string; repoRoots?: readonly string[]; repoAllow?: readonly string[] } = {},
+  options: { home?: string; repoRoots?: readonly string[]; repoAllow?: readonly string[]; cores?: number } = {},
 ): PlanningSettings {
   const home = options.home ?? env.HOME ?? '/'
   const parsed = Env.safeParse(env)
@@ -83,6 +99,10 @@ export function planningSettings(
     memorySampleMs: e.FACTORY_MEMORY_SAMPLE_MS ?? 30_000,
     leadsPerAccount: e.FACTORY_LEADS_PER_ACCOUNT ?? 2,
     loadCeiling: e.FACTORY_LOAD_CEILING ?? DEFAULT_LOAD_CEILING,
+    loadRule: e.FACTORY_LOAD_RULE ?? 'shadow',
+    loadPerCore: e.FACTORY_LOAD_PER_CORE ?? DEFAULT_LOAD_PER_CORE,
+    processCap: e.FACTORY_PROCESS_CAP ?? DEFAULT_PROCESS_CAP,
+    cores: options.cores ?? availableParallelism(),
     memoryCeilings: {
       swapoutMbPer300s: e.FACTORY_SWAPOUT_CEILING_MB ?? DEFAULT_SWAPOUT_CEILING_MB,
       swapUsedPct: e.FACTORY_SWAP_CEILING_PCT ?? DEFAULT_SWAP_CEILING_PCT,
@@ -92,4 +112,21 @@ export function planningSettings(
     slotsMax: Math.max(e.FACTORY_SLOTS ?? 2, e.FACTORY_SLOTS_MAX ?? 6),
     slotExtraLoad: e.FACTORY_SLOT_EXTRA_LOAD ?? 12,
   }
+}
+
+/**
+ * The load ceiling and process cap in force, and the rule shadowed beside them. In `shadow` the fixed ceiling is live, no
+ * process cap applies, and the throughput rule (multiples of the cores, the cap) is recorded per minute; in `on` the
+ * throughput rule is live and nothing is shadowed.
+ */
+export function hostRule(
+  settings: Pick<PlanningSettings, 'loadCeiling' | 'loadRule' | 'loadPerCore' | 'processCap' | 'cores'>,
+) {
+  const throughput = {
+    loadCeiling: loadCeilingOf(settings.cores, settings.loadPerCore),
+    processCap: settings.processCap,
+  }
+  return settings.loadRule === 'on'
+    ? { loadCeiling: throughput.loadCeiling, processCap: throughput.processCap as number | null, shadow: null }
+    : { loadCeiling: settings.loadCeiling, processCap: null as number | null, shadow: throughput }
 }

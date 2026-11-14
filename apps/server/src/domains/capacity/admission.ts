@@ -4,10 +4,12 @@ import { type Claimant, claimRoom } from './claims.ts'
 import {
   describeLoad,
   describeMemory,
+  describeProcesses,
   type MemoryCeilings,
   type MemoryReading,
   overLoad,
   overMemory,
+  overProcesses,
   type Reserved,
 } from './host.ts'
 import { type LaneInput, laneRoom } from './lanes.ts'
@@ -61,6 +63,10 @@ export interface AdmissionInputs {
   /** null: the reading could not be taken, and the lead is admitted without it */
   load: number | null
   loadCeiling: number
+  /** the host's process count by the newest minute sample; null: unread, and the cap does not apply */
+  processes?: number | null
+  /** no new lead above this many processes; null or absent: no cap */
+  processCap?: number | null
   memory: MemoryReading | null
   memoryCeilings: MemoryCeilings
   /** the learned cost of the candidate's lead against the free memory; null: nothing learned is known */
@@ -100,6 +106,9 @@ export function checkAdmission(input: AdmissionInputs): Admission {
   if (booting) return no('boot', booting.message, booting.opensAt)
   if (input.load !== null && overLoad(input.load, input.loadCeiling)) {
     return no('load', `the machine is busy: ${describeLoad(input.load, input.loadCeiling)}`)
+  }
+  if (input.processes != null && input.processCap != null && overProcesses(input.processes, input.processCap)) {
+    return no('load', `the machine runs too many processes: ${describeProcesses(input.processes, input.processCap)}`)
   }
   if (input.memory !== null && overMemory(input.memory, input.memoryCeilings, input.reserved)) {
     return no(
