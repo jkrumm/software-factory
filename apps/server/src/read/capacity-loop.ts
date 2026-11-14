@@ -127,7 +127,8 @@ export async function readCapacityLoop(
       FROM factory.admission_shadow WHERE at >= ${w.from} AND at < ${w.to}`
     // what the host did in each shadow minute: the minute samples, joined by the minute they fall in
     const shadowHost: unknown[] = await tx`
-      SELECT (s.shadow_admits > s.live_admits) AS more, count(DISTINCT s.at) AS n,
+      SELECT CASE WHEN s.shadow_admits > s.live_admits THEN 'more' WHEN s.shadow_admits < s.live_admits THEN 'fewer' ELSE 'same' END AS kind,
+        count(DISTINCT s.at) AS n,
         avg(h.swapout_mb_per_300s)::float8 AS swap_avg, max(h.swapout_mb_per_300s)::float8 AS swap_max,
         max(h.pressure_level) AS pressure_max, count(h.at) FILTER (WHERE h.pressure_level >= 2) AS pressured
       FROM factory.admission_shadow s
@@ -141,7 +142,7 @@ export async function readCapacityLoop(
       fewer: z.coerce.number().int(),
     })
     const Host = z.object({
-      more: z.boolean(),
+      kind: z.enum(['more', 'fewer', 'same']),
       n: z.coerce.number().int(),
       swap_avg: z.coerce.number().nullable(),
       swap_max: z.coerce.number().nullable(),
@@ -149,8 +150,8 @@ export async function readCapacityLoop(
       pressured: z.coerce.number().int(),
     })
     const span = Span.parse(shadowSpan)
-    const hostOf = (more: boolean) => {
-      const row = shadowHost.map((raw) => Host.parse(raw)).find((h) => h.more === more)
+    const hostOf = (kind: 'more' | 'fewer' | 'same') => {
+      const row = shadowHost.map((raw) => Host.parse(raw)).find((h) => h.kind === kind)
       return {
         minutes: row?.n ?? 0,
         swapoutMbAvg: row?.swap_avg == null ? null : Math.round(row.swap_avg),
@@ -208,8 +209,9 @@ export async function readCapacityLoop(
         lastAt: span.last_at?.toISOString() ?? null,
         shadowMore: { total: span.more, perDay: perDay(moreDay, 0) },
         shadowFewer: { total: span.fewer, perDay: perDay(fewerDay, 0) },
-        whenMore: hostOf(true),
-        whenOther: hostOf(false),
+        whenMore: hostOf('more'),
+        whenFewer: hostOf('fewer'),
+        whenSame: hostOf('same'),
       },
       topSteps: steps.map((raw) => {
         const s = Step.parse(raw)

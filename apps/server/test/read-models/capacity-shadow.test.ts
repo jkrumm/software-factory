@@ -65,7 +65,8 @@ test('the shadow minutes are counted by whether the shadow rule would admit more
     shadowMore: { total: 2 },
     shadowFewer: { total: 1 },
     whenMore: { minutes: 2, swapoutMbAvg: 3000, swapoutMbMax: 5000, pressureLevelMax: 2, pressureMinutes: 1 },
-    whenOther: { minutes: 3, swapoutMbAvg: 207, swapoutMbMax: 600, pressureLevelMax: 4, pressureMinutes: 1 },
+    whenFewer: { minutes: 1, swapoutMbAvg: 600, swapoutMbMax: 600, pressureLevelMax: 1, pressureMinutes: 0 },
+    whenSame: { minutes: 2, swapoutMbAvg: 10, swapoutMbMax: 20, pressureLevelMax: 4, pressureMinutes: 1 },
   })
   // MiB swapped out: each minute's figure is scaled to 300 s, so a fifth of it is that minute's
   expect(model.swapoutMib.total).toBe((5000 + 1000 + 0 + 600 + 20) / 5)

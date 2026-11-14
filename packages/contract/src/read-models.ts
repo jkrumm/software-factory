@@ -801,9 +801,14 @@ export const CapacityLoopModel = z
       shadowMore: CapacityTotal,
       /** minutes it would have admitted fewer */
       shadowFewer: CapacityTotal,
-      /** the host's swapouts and pressure in the minutes the shadow rule would have admitted more, and in all others */
+      /**
+       * the host's swapouts and pressure in the minutes the shadow rule would have admitted more, fewer, or as many; with the
+       * fixed ceiling at or above 3x the cores the shadow is the stricter rule and `whenMore` stays empty, so `whenFewer`
+       * (the minutes the new rule would have held back) is what shows whether holding back mattered
+       */
       whenMore: CapacityShadowMinutes,
-      whenOther: CapacityShadowMinutes,
+      whenFewer: CapacityShadowMinutes,
+      whenSame: CapacityShadowMinutes,
     }),
     /** the 8 steps with the largest peak memory */
     topSteps: z.array(CapacityStep),
