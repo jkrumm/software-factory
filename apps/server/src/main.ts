@@ -125,6 +125,9 @@ const HOSTNAME = '127.0.0.1'
 /** A ship call waits for git and agw (up to REVIEW_TIMEOUT_MS) inside one request; Bun's own idle limit is 10 s, and 255 s is its maximum. */
 const IDLE_TIMEOUT_S = 255
 
+/** How long a stop waits for the passes in flight (the loops, the intake pollers, the uptime push) before it goes on. */
+const PASS_GRACE_MS = 10_000
+
 /** A door source refused within this long is a health line; an older refusal has passed. */
 const DOOR_LINES_RECENT_MS = 24 * 3_600_000
 
@@ -971,11 +974,21 @@ async function main(): Promise<void> {
       { name: 'draining', run: async () => draining.abort() },
       { name: 'console.stop', run: async () => void (await consoleServer?.stop(true)) },
       { name: 'server.stop', run: () => app.stop(true) },
-      // A pass in an agw call is given a few seconds; its call is taken up again at the next boot under the same key.
-      { name: 'loops.stop', run: () => runner.stop(10_000) },
+      // The loops, the intake pollers and the uptime push wait for their pass in flight side by side, one grace for all of them
+      // (a restart measured them one after the other: 10 s of loops, then 17 s of a GitHub pass). A pass in an agw call is
+      // taken up again at the next boot under the same key; one cut off is named, so the next `stopped in …` line says who held it.
+      {
+        name: 'passes.stop',
+        run: async () => {
+          await Promise.all([runner.stop(PASS_GRACE_MS), intake.stop(PASS_GRACE_MS), stopUptime?.(PASS_GRACE_MS)])
+          const cut = runner
+            .view()
+            .filter((loop) => loop.running)
+            .map((loop) => loop.name)
+          if (cut.length) console.log(`stop: still running after ${PASS_GRACE_MS / 1000}s: ${cut.join(', ')}`)
+        },
+      },
       { name: 'hook socket.stop', run: () => socket.stop() },
-      { name: 'intake.stop', run: () => intake.stop() },
-      { name: 'uptime.stop', run: async () => void (await stopUptime?.()) },
       { name: 'lock.release', run: () => lock.release() },
       { name: 'health.probe.stop', run: async () => healthProbe.stop() },
       { name: 'database.close', run: () => sql.close() },

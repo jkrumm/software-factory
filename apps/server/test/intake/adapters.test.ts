@@ -157,4 +157,33 @@ describe('selfPaced', () => {
     await Bun.sleep(40)
     expect(started).toBe(after)
   })
+
+  test('the stop waits for the pass in flight, but not longer than its grace', async () => {
+    const lines: string[] = []
+    const stop = selfPaced('slow', 10_000, () => new Promise<void>(() => undefined), {
+      firstMs: 1,
+      log: (line) => lines.push(line),
+    })
+    await Bun.sleep(20)
+    const began = performance.now()
+    await stop(50)
+    expect(performance.now() - began).toBeLessThan(1_000)
+    expect(lines).toEqual(['slow: still running 0.05s after the stop; going on without it'])
+  })
+
+  test('with no grace the stop waits for the pass to finish', async () => {
+    let done = false
+    const stop = selfPaced(
+      'brief',
+      10_000,
+      async () => {
+        await Bun.sleep(60)
+        done = true
+      },
+      { firstMs: 1 },
+    )
+    await Bun.sleep(20)
+    await stop()
+    expect(done).toBe(true)
+  })
 })
