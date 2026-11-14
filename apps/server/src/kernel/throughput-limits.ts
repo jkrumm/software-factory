@@ -33,3 +33,26 @@ export const TENANT_DAY_HOURS = 24
 export const MIN_TENANT_BASELINE_DAYS = 7
 /** The memory one test slot holds (the default step budget): the excess of a tenant is turned into slot-minutes by it. */
 export const SLOT_MEMORY_MIB = DEFAULT_PEAK_MIB
+
+/**
+ * The queue waits the throughput loop ranks, by the interval kinds each counts (`domains/capacity/waits.ts`): the minutes
+ * Issues waited for host memory (the host's reading, or a repo's lead not fitting the free memory), for an account (its
+ * window closed, or its lead cap), for a repo's claim, for a lane's cap. A wait behind an `after` edge, a stopped line, a
+ * Spec at the owner, a drain, the boot grace or the load is no cost a lead can cut and is left out.
+ */
+export const WAIT_SUBJECTS = {
+  memory: ['memory', 'memory_fit'],
+  account: ['window', 'cap'],
+  claim: ['claim'],
+  lane: ['lane'],
+} as const
+export type WaitSubject = keyof typeof WAIT_SUBJECTS
+export const waitSubjectOf = (kind: string): WaitSubject | null =>
+  (Object.keys(WAIT_SUBJECTS) as WaitSubject[]).find((s) => (WAIT_SUBJECTS[s] as readonly string[]).includes(kind)) ??
+  null
+
+/** The queue interval kind of the memory gate's lead-fit refusal (what a repo's lead is learned to take); the host's reading is `memory`. */
+export const MEMORY_FIT_KIND = 'memory_fit'
+
+/** The interval kinds that are no cost of the factory: an `after` edge, a line stopped by an incident, a Spec at the owner. */
+export const OWNED_ELSEWHERE_KINDS = ['chain', 'line', 'finalizing', 'spec', 'unknown_project'] as const

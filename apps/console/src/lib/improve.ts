@@ -499,6 +499,27 @@ export const mibWords = (mib: number): string =>
 /** Hours with one decimal. */
 export const hoursWords = (hours: number): string => `${hours.toFixed(1)} h`
 
+const QUEUE_REASON_WORDS: Record<string, string> = {
+  memory: 'Host memory',
+  memory_fit: 'Memory: the lead does not fit',
+  claim: "The repo's claim",
+  lane: "A lane's cap",
+  window: "An account's window",
+  cap: "An account's lead cap",
+  load: 'Host load',
+  boot: 'Host boot grace',
+  drain: 'The queue is draining',
+  chain: 'An after edge',
+  line: 'A stopped line',
+  finalizing: 'Another Issue finalizing',
+  spec: 'A Spec at the owner',
+  unknown_project: 'An unknown project',
+  unrecorded: 'No reason recorded',
+}
+
+/** A queue reason kind in words; a kind the Console does not know reads as itself. */
+export const queueReasonWords = (kind: string): string => QUEUE_REASON_WORDS[kind] ?? kind
+
 /** Per-day points as a chart reads them: the values (a null is a gap) and the tooltip lines. */
 export const dayValues = (points: CapacityLoopModel['throughput']['perDay']): (number | null)[] =>
   points.map((p) => p.value)

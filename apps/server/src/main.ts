@@ -618,7 +618,12 @@ async function main(): Promise<void> {
           clock: writes.clock,
           tenants: { project: planningEnv.tenantProject, budgetMib: planningEnv.tenantBudgetMib },
           projects: async () =>
-            (await projectBudgets()).map((b) => ({ project: b.project, repo: b.repo, peakMib: b.peakMib })),
+            (await projectBudgets()).map((b) => ({
+              project: b.project,
+              repo: b.repo,
+              peakMib: b.peakMib,
+              shape: b.shape,
+            })),
           facts: (window, options) => readWindowFacts(sql, { ...window, ...options }),
           fates: (ids) => readIssueFates(sql, ids),
           file: (body) => intake.api.file(body, 'agent'),

@@ -67,7 +67,7 @@ describe('the ranking', () => {
     perIssue: [],
     steps: [],
     processes: [],
-    queued: [],
+    waits: [],
     tenants: { hours: 0, classMib: 0, members: [], day: [] },
     ...over,
   })
@@ -90,7 +90,9 @@ describe('the ranking', () => {
           { name: 'small', class: 'other', project: 'a', grownMib: 100, minutes: 900 },
           { name: 'postgres', class: 'tenant', project: 'software-factory', grownMib: 1700, minutes: 900 },
         ],
-        queued: [{ project: 'b', minutes: 20, admissions: 2 }],
+        waits: [
+          { reason: 'claim', project: 'b', minutes: 20, issues: 2, repos: [], fitMinutes: 0, leads: 1, lanes: [] },
+        ],
       }),
     )
     expect(ranked.map((c) => [c.project, c.kpi, c.costMinutes])).toEqual([
@@ -114,7 +116,7 @@ describe('the ranking', () => {
     expect(figureOf(f, { project: 'b', kpi: 'failed_run_minutes', subject: '*' })).toBeNull()
     expect(figureOf(f, { project: 'a', kpi: 'step_peak_mib', subject: 'full' })).toBe(3000)
     expect(figureOf(f, { project: 'a', kpi: 'process_growth_mib', subject: 'x' })).toBe(0)
-    expect(figureOf(f, { project: 'software-factory', kpi: 'queued_minutes', subject: '*' })).toBe(0)
+    expect(figureOf(f, { project: 'software-factory', kpi: 'queued_minutes', subject: 'memory' })).toBe(0)
     expect(figureOf(f, { project: 'a', kpi: 'queued_minutes', subject: '*' })).toBeNull()
   })
 
@@ -251,10 +253,11 @@ describe('the daily pass', () => {
     for (const hours of [5, 30]) await step({ repo: 'delta', at: ago(hours * HOUR), ms: 20 * 60_000 })
     // beta: a full check peaking at 4 GiB, five runs of 10 minutes: 50 minutes over the default budget of 2 GiB
     for (let i = 0; i < 5; i++) await step({ repo: 'beta', at: ago((i + 1) * 12 * HOUR), ms: 10 * 60_000, peak: 4096 })
-    // the queue is the factory's: an Issue of any project an Issue waited three hours between filing and its admission
+    // an Issue of gamma waited three hours for host memory: the wait is the factory's to cut
     await db.sql`INSERT INTO factory.issues (id, repo, state, outcome, version) VALUES ('issue_700', 'gamma', 'closed', 'done', 3)`
     await event('issue_700', 'filed', ago(30 * HOUR), { version: 1, to: 'queued' })
-    await event('issue_700', 'admitted', ago(27 * HOUR), { version: 2, to: 'working' })
+    await db.sql`INSERT INTO factory.queue_intervals (issue_id, project, kind, message, from_at, to_at)
+      VALUES ('issue_700', 'gamma', 'memory', 'the host is short of memory', ${ago(30 * HOUR)}, ${ago(27 * HOUR)})`
   })
 
   test('files the largest cost of each project with its measured before, the target and the query', async () => {

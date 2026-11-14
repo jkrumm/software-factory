@@ -28,6 +28,8 @@ export interface Refusal {
   message: string
   /** when a reading says the reason may end (a window's reset); null when nothing names a time */
   opensAt: Date | null
+  /** `fit`: the memory refusal is the learned cost of the candidate's lead, not the host's reading; absent otherwise */
+  part?: 'fit'
 }
 
 /**
@@ -87,9 +89,9 @@ export interface AdmissionInputs {
 
 export type Admission = { admit: true; account: AccountReading } | { admit: false; refusal: Refusal }
 
-const no = (kind: RefusalKind, message: string, opensAt: Date | null = null): Admission => ({
+const no = (kind: RefusalKind, message: string, opensAt: Date | null = null, part?: 'fit'): Admission => ({
   admit: false,
-  refusal: { kind, message, opensAt },
+  refusal: { kind, message, opensAt, ...(part ? { part } : {}) },
 })
 
 /**
@@ -117,7 +119,7 @@ export function checkAdmission(input: AdmissionInputs): Admission {
     )
   }
   const fit = input.leadFit ? fitRefusal(input.leadFit) : null
-  if (fit) return no('memory', fit)
+  if (fit) return no('memory', fit, null, 'fit')
   const laneFree = laneRoom({ lane: input.lane, urgent: input.candidate.urgent })
   if (!laneFree.granted) return no('lane', laneFree.message)
   const room = claimRoom({

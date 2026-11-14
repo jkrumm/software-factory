@@ -16,6 +16,7 @@ import {
   improvementTitle,
   type IssueFate,
   type ProjectBudgets,
+  type ProjectShape,
   type TenantPolicy,
   RANK_DAYS,
   rankCandidates,
@@ -35,6 +36,8 @@ export interface ThroughputProject {
   project: string
   repo: string
   peakMib: number | null
+  /** its `leads` and lane caps; absent: a claim or lane wait does not name them */
+  shape?: ProjectShape
 }
 
 export interface ThroughputDeps {
@@ -46,7 +49,11 @@ export interface ThroughputDeps {
   /** the host over a window (`readWindowFacts`); `baseline` adds the 14-day median per Issue */
   facts(
     window: { from: Date; to: Date },
-    options: { baseline: boolean; peakBudgetMib: ReadonlyMap<string, number> },
+    options: {
+      baseline: boolean
+      peakBudgetMib: ReadonlyMap<string, number>
+      shapes: ReadonlyMap<string, ProjectShape>
+    },
   ): Promise<WindowFacts>
   /** how the Issues ended and when they shipped (`readIssueFates`) */
   fates(ids: readonly string[]): Promise<ReadonlyMap<string, IssueFate>>
@@ -69,7 +76,15 @@ export interface ThroughputPass {
 export async function projectBudgets(uow: UnitOfWork<{ planning: PlanningStore }>): Promise<ProjectBudgets[]> {
   const stored = await uow.run(async ({ planning }) => ok(await planning.projects()))
   if (!stored.ok) throw new Error(`projects not read: ${stored.error.kind}`)
-  return stored.value.map((p) => ({ project: p.name, repo: repoTextOf(p), ...budgetsOf(p.project) }))
+  return stored.value.map((p) => ({
+    project: p.name,
+    repo: repoTextOf(p),
+    ...budgetsOf(p.project),
+    shape: {
+      leads: p.project.leads,
+      lanes: new Map(Object.entries(p.project.lanes).map(([name, lane]) => [name, lane.leads])),
+    },
+  }))
 }
 
 /** One pass files at most this many improvements; the next day's pass takes the rest. */
@@ -95,6 +110,7 @@ export async function throughputPass(deps: ThroughputDeps): Promise<Result<Throu
 
   const projects = await deps.projects()
   const peakBudgetMib = new Map(projects.filter((p) => p.peakMib !== null).map((p) => [p.project, p.peakMib as number]))
+  const shapes = new Map(projects.flatMap((p) => (p.shape ? [[p.project, p.shape] as const] : [])))
 
   // 1. the ledger
   const openIssues = rows.filter((r) => r.status === 'open' && r.issueId !== null).map((r) => r.issueId as string)
@@ -106,7 +122,7 @@ export async function throughputPass(deps: ThroughputDeps): Promise<Result<Throu
   }
   const changes = await readLedger(rows, fates, now, async (row, window) => {
     try {
-      return figureOf(await deps.facts(window, { baseline: false, peakBudgetMib }), row)
+      return figureOf(await deps.facts(window, { baseline: false, peakBudgetMib, shapes }), row)
     } catch (error) {
       pass.notes.push(`after of ${row.id} not read: ${error instanceof Error ? error.message : String(error)}`)
       return undefined
@@ -142,11 +158,11 @@ export async function throughputPass(deps: ThroughputDeps): Promise<Result<Throu
   try {
     facts = await deps.facts(
       { from: new Date(now.getTime() - RANK_DAYS * DAY_MS), to: now },
-      { baseline: true, peakBudgetMib },
+      { baseline: true, peakBudgetMib, shapes },
     )
     recent = await deps.facts(
       { from: new Date(now.getTime() - AFTER_DAYS * DAY_MS), to: now },
-      { baseline: false, peakBudgetMib },
+      { baseline: false, peakBudgetMib, shapes },
     )
   } catch (error) {
     pass.notes.push(`costs not read: ${error instanceof Error ? error.message : String(error)}`)

@@ -1,15 +1,26 @@
 import type { SQL } from 'bun'
 import * as z from 'zod'
-import type { BudgetFact, IssueFate, ProjectBudgets, TenantFacts, WindowFacts } from '../domains/loops/throughput.ts'
+import type {
+  BudgetFact,
+  IssueFate,
+  ProjectBudgets,
+  ProjectShape,
+  TenantFacts,
+  WaitFact,
+  WindowFacts,
+} from '../domains/loops/throughput.ts'
 import {
   BASELINE_DAYS,
   DEFAULT_PEAK_MIB,
+  MEMORY_FIT_KIND,
   MIN_FAIL_RUNS,
   MIN_FAST_RUNS,
   QUEUE_PROJECT,
   PROCESS_GROWTH_MIB,
   MIN_TENANT_BASELINE_DAYS,
   TENANT_DAY_HOURS,
+  WAIT_SUBJECTS,
+  waitSubjectOf,
 } from '../kernel/throughput-limits.ts'
 import { boundedRead } from './bounded.ts'
 import { REPO_OF_STEP } from './retro-build.ts'
@@ -37,6 +48,62 @@ const percentile = (sorted: readonly number[], p: number): number => {
   const low = Math.floor(rank)
   const high = Math.ceil(rank)
   return (sorted[low] ?? 0) + ((sorted[high] ?? 0) - (sorted[low] ?? 0)) * (rank - low)
+}
+
+interface WaitRow {
+  kind: string
+  project: string
+  lane: string
+  issue_ids: string
+  minutes: number
+}
+
+/**
+ * The wait rows as findings read them: memory and account waits are the factory's (one fact per reason, the repos they hit
+ * named), a claim or lane wait is the repo's own (one fact per project, with its `leads` and the lanes its Issues waited in).
+ */
+function waitFacts(rows: readonly WaitRow[], shapes: ReadonlyMap<string, ProjectShape>): WaitFact[] {
+  const facts = new Map<string, WaitFact & { ids: Set<string> }>()
+  const byRepo = new Map<string, Map<string, number>>()
+  for (const row of rows) {
+    const reason = waitSubjectOf(row.kind)
+    if (reason === null) continue
+    const factory = reason === 'memory' || reason === 'account'
+    const project = factory ? QUEUE_PROJECT : row.project
+    const k = `${reason}\n${project}`
+    const shape = shapes.get(row.project)
+    const fact = facts.get(k) ?? {
+      reason,
+      project,
+      minutes: 0,
+      issues: 0,
+      repos: [],
+      fitMinutes: 0,
+      leads: factory ? null : (shape?.leads ?? null),
+      lanes: [],
+      ids: new Set<string>(),
+    }
+    fact.minutes += row.minutes
+    for (const id of row.issue_ids.split(',')) fact.ids.add(id)
+    if (row.kind === MEMORY_FIT_KIND) fact.fitMinutes += row.minutes
+    if (!factory && row.lane !== '') {
+      const named = fact.lanes.find((l) => l.name === row.lane)
+      if (named) named.minutes += row.minutes
+      else fact.lanes.push({ name: row.lane, leads: shape?.lanes.get(row.lane) ?? null, minutes: row.minutes })
+    }
+    const repos = byRepo.get(k) ?? new Map<string, number>()
+    repos.set(row.project, (repos.get(row.project) ?? 0) + row.minutes)
+    byRepo.set(k, repos)
+    facts.set(k, fact)
+  }
+  return [...facts.entries()].map(([k, { ids, ...fact }]) => ({
+    ...fact,
+    issues: ids.size,
+    repos: [...(byRepo.get(k) ?? [])]
+      .map(([project, minutes]) => ({ project, minutes }))
+      .toSorted((a, b) => b.minutes - a.minutes || a.project.localeCompare(b.project)),
+    lanes: fact.lanes.toSorted((a, b) => b.minutes - a.minutes || a.name.localeCompare(b.name)),
+  }))
 }
 
 const stepRows = async (tx: SQL, from: Date, to: Date) =>
@@ -133,7 +200,14 @@ async function readTenantFacts(tx: SQL, from: Date, to: Date, baseline: boolean)
  */
 export async function readWindowFacts(
   sql: SQL,
-  options: { from: Date; to: Date; peakBudgetMib: ReadonlyMap<string, number>; baseline: boolean },
+  options: {
+    from: Date
+    to: Date
+    peakBudgetMib: ReadonlyMap<string, number>
+    baseline: boolean
+    /** per project: its `leads` and lane caps, named in a claim or lane wait's finding; absent: not named */
+    shapes?: ReadonlyMap<string, ProjectShape>
+  },
 ): Promise<WindowFacts> {
   const { from, to } = options
   const days = (to.getTime() - from.getTime()) / DAY_MS
@@ -194,14 +268,15 @@ export async function readWindowFacts(
       SELECT name, class, coalesce(repo, '') AS repo, max(footprint_mib) - min(footprint_mib) AS grown, count(*) AS minutes
       FROM factory.host_process_samples WHERE at >= ${from} AND at < ${to}
       GROUP BY pid, name, class, repo HAVING max(footprint_mib) - min(footprint_mib) >= ${PROCESS_GROWTH_MIB}`
-    const queued: unknown[] = await tx`
-      SELECT coalesce(sum(extract(epoch FROM (a.at - s.at)) / 60.0), 0)::float8 AS minutes, count(*) AS admissions
-      FROM factory.issue_events a
-      JOIN LATERAL (
-        SELECT x.at FROM factory.issue_events x
-        WHERE x.issue_id = a.issue_id AND x.result = 'applied' AND x.kind IN ('filed', 'reopened') AND x.version < a.version
-        ORDER BY x.version DESC LIMIT 1) s ON true
-      WHERE a.kind = 'admitted' AND a.result = 'applied' AND a.at >= ${from} AND a.at < ${to}`
+    // the waits a lead can cut, by interval kind, project and the lane the Issue was filed in, clipped to the window
+    const waited: unknown[] = await tx`
+      SELECT q.kind, q.project, coalesce(f.payload->>'lane', '') AS lane,
+        string_agg(DISTINCT q.issue_id, ',') AS issue_ids,
+        sum(extract(epoch FROM least(coalesce(q.to_at, ${to}), ${to}) - greatest(q.from_at, ${from})) / 60.0)::float8 AS minutes
+      FROM factory.queue_intervals q
+      LEFT JOIN factory.issue_events f ON f.issue_id = q.issue_id AND f.kind = 'filed' AND f.version = 1
+      WHERE q.kind IN ${tx(Object.values(WAIT_SUBJECTS).flat())} AND q.from_at < ${to} AND coalesce(q.to_at, ${to}) > ${from}
+      GROUP BY q.kind, q.project, coalesce(f.payload->>'lane', '')`
 
     const tenants = await readTenantFacts(tx, from, to, options.baseline)
     const projects = new Set([...runs.keys(), ...closed.keys()])
@@ -242,11 +317,14 @@ export async function readWindowFacts(
           minutes: r.minutes,
         }
       }),
-      // the queue is the factory's: no project's lead can shorten it, so its wait is one figure, filed on the factory
-      queued: queued
-        .map((raw) => z.object({ minutes: num, admissions: num }).parse(raw))
-        .filter((r) => r.admissions > 0)
-        .map((r) => ({ project: QUEUE_PROJECT, minutes: r.minutes, admissions: r.admissions })),
+      waits: waitFacts(
+        waited.map((raw) =>
+          z
+            .object({ kind: z.string(), project: z.string(), lane: z.string(), issue_ids: z.string(), minutes: num })
+            .parse(raw),
+        ),
+        options.shapes ?? new Map(),
+      ),
       tenants,
     }
   })
