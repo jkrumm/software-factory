@@ -23,6 +23,7 @@ import {
   fetchNeeds,
   fetchProjectDigests,
   fetchSince,
+  fetchThroughput,
   onNewerServer,
 } from './api.ts'
 import { useLive } from './live.ts'
@@ -152,6 +153,16 @@ export function useCapacityLoop(days: number) {
   return useQuery({
     queryKey: ['capacity-loop', days],
     queryFn: ({ signal }) => fetchCapacityLoop(days, signal),
+    refetchInterval: pollEvery(live),
+  })
+}
+
+/** The host's memory and CPU by class, the leads' hours and the improvement findings over the last `hours` hours. */
+export function useThroughput(hours: number) {
+  const live = useLive()
+  return useQuery({
+    queryKey: ['throughput', hours],
+    queryFn: ({ signal }) => fetchThroughput(hours, signal),
     refetchInterval: pollEvery(live),
   })
 }
