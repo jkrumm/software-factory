@@ -237,3 +237,29 @@ Report `docs/strategy/2026-11-next/report.html`, definition `docs/strategy/2026-
   (the lead's session and credentials are the account's; nothing is moved automatically), and `hc send --force` on every blocked
   terminal (a real dialog would take the typed text as its answer: the screen must show the error above an empty prompt). The owner's
   plan sessions are counted in the edge incident's row, never resumed. Counted after: `api_blocked_minutes_per_day`, `api_transient` rows.
+
+- **NL31 A deploy's restart is waited out, measured and coalesced; a gapless handover is not built (Issue 1112, 2026-11-14).**
+  The owner found the factory "often down": `deploys.log` held 19, 17 and 13 deploys on 11-12, -13 and -14, each a full stop and
+  start of the one process (p50 30 s, p90 214 s, three failed with rollbacks of 10 minutes), and every client failed at once
+  (`server unreachable`) for the length of it. Four changes, none a second process: the CLI waits a restart out (a refused
+  connection is retried for every verb, because nothing reached the server; a reset or a timeout only for a read, because Bun
+  reports a socket closed after connect as `ECONNRESET` whether or not the request was read; 90 s, 10 minutes while the host's
+  deploy lock is held by a live pid; one stderr line; `health get`, the hook and `slot run` keep failing at once), the Console
+  shows "restarting" and reloads when the stream greets again, `scripts/deploy.sh` writes `unreachable_s=N` (old process told to
+  stop to `/health` at the new sha) on its `end` line and `read throughput` sums it per day (`deploys.days`), and the number of
+  restarts falls: a deploy that finds its commit live restarts nothing, one whose master moved while it built builds the newer
+  commit (3 releases at most), and the migrations are dry-run in a rolled-back transaction before anything is stopped (a refused
+  migration is one way to a failed start and a rollback of minutes). Polling the unload and the health every 0.2 s
+  instead of every second takes about a second off the window.
+  **Gapless handover: not built, and when it would be.** The idea: the new process binds the port (`SO_REUSEPORT`) and takes
+  the single-process lock and the loops over from the old one before it exits, so no request meets a closed port. It costs
+  what the factory's own rules forbid cheaply: the process lock (`acquireProcessLock`) exists so that nothing runs beside
+  another server on the database, the loops (leads tick, outbox, hook socket, SSE streams) would need a hand-over protocol
+  with a fence, and a migration that is not backward-compatible with the old code cannot run while both are up. After 1 to 4
+  the window is the process start plus the migrations plus a `/health` poll, which `unreachable_s` now measures per deploy, and
+  a client that waits it out sees no error. Build it only if the measured figure says so: the median `unreachable_s` of a
+  restart above 20 s, or more than 5 minutes unreachable on a day, counted from `factory read throughput`. Before the change
+  only the whole deploy (build included) was recorded, so there is no earlier figure to compare; the first measured window is
+  the `end` line of the deploy that ships this. Rejected: a proxy in front that holds requests (a second process to keep up,
+  and the thing it hides is the thing the clients now wait out), and skipping the restart for commits that touch no runtime path
+  (all 50 master commits of two days did).

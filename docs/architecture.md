@@ -577,6 +577,18 @@ model, not a signal: an agent-trust signal files an Issue, and no loops page exi
   the way to the same thing (`apps/cli/src/retired.ts`). A flag's help and the client-side validation of a body (bare Issue
   numbers normalised to `issue_<n>`, every violated limit named, exit 2, nothing sent) derive from the contract schema of the
   request body (`apps/cli/src/body-schema.ts`); `--schema` prints that body's JSON Schema.
+- **A restart is waited out** (`packages/client` `sendPatient`, `apps/cli/src/restart-wait.ts`): a deploy stops and starts the
+  one process, so a call that finds the port closed retries with a backoff (0.5 s to 5 s) for up to 90 s
+  (`FACTORY_RESTART_WAIT_MS`), 10 minutes while `data/deploy.lock` names a live pid (`FACTORY_DEPLOY_WAIT_MS`), and says
+  `server restarting (deploy), waiting` once on stderr; then the usual `server unreachable` (exit 7). A refused connection is
+  retried for every verb (nothing reached the server); a reset or a timeout only for a read, since Bun's `ECONNRESET` does not
+  say whether the request was read. `health get` (monitors, `make verify`), the hook and `slot run` never wait. The Console
+  shows "Server restarting, reconnecting" for up to 3 minutes after the stream drops or a fetch gets no answer, keeps the data
+  on screen, retries with a backoff and refetches everything when the stream greets again (`apps/console/src/lib/restart.ts`).
+  `scripts/deploy.sh` restarts less: a deploy whose commit is live and healthy restarts nothing (`FACTORY_DEPLOY_FORCE=1`
+  restarts anyway), one whose master moved while it built builds the newer commit (`DEPLOY_ROUNDS`, 3), and the release's
+  pending migrations are dry-run in a rolled-back transaction (`apps/server/src/migrate-check.ts`) before the old process is
+  stopped. Why no gapless handover: `docs/decisions.md` NL31.
 - **Callers and tokens.** The caller is decided by the bearer token alone: `owner` (`FACTORY_TOKEN`, required), `orchestrator`
   (`FACTORY_ORCHESTRATOR_TOKEN`), `agent` (a lead), `machine` (the door), `signal` (Hermes) and `read`; every other token is
   optional, all differ, and a caller whose token is unset does not exist. The orchestrator, the owner's delegate agent, is on
@@ -594,7 +606,7 @@ model, not a signal: an agent-trust signal files an Issue, and no loops page exi
   no successful leads tick for 20 min (`TICK_DEAD_MS`; `FACTORY_HEARTBEAT_STALE_MS` replaces it for a scenario), no first tick
   5 min after a start on a host that is not starved (a load of twice the CPU count or more keeps `starved: no tick has succeeded yet` ok until the 20 min), or a database that errors for 5 min. Everything short of that is `ok` with a `reason` that says so:
   `starting` (before the first tick, up to 5 min), `deploying` (`scripts/deploy.sh` holds `data/deploy.lock` for a live pid, up to
-  30 min; it also appends its start and end to `data/deploys.log`), `starved: …` (a tick older than three intervals and a minute: the
+  30 min; it also appends its start and end to `data/deploys.log`, the end with `unreachable_s=N`, the seconds from stopping the old process to `/health` at the new sha, which `GET /v1/throughput` sums per day as `deploys.days`), `starved: …` (a tick older than three intervals and a minute: the
   process is alive, with the age and the load) or `failing: …` (the same, with the tick's error).
 - The hook socket is a plain `Bun.serve` unix listener beside the API: its contract (mode 0600, empty stdout) is the
   hook's, not the API's.

@@ -44,10 +44,36 @@ const checksum = (text: string): string => new Bun.CryptoHasher('sha256').update
  * file never sorts before an applied one, and a migration runs with an empty `search_path`, so every name it uses is
  * qualified with `factory.` or the statement fails. Changes are expand then contract: add, move the code, drop later.
  */
-export async function migrate(sql: SQL, migrations: Migration[]): Promise<string[]> {
+export async function migrate(
+  sql: SQL,
+  migrations: Migration[],
+  options: { dryRun?: boolean } = {},
+): Promise<string[]> {
+  try {
+    return await applyPending(sql, migrations, options.dryRun === true)
+  } catch (error) {
+    if (error instanceof DryRunApplied) return error.applied
+    throw error
+  }
+}
+
+/** Thrown to roll a dry run back after every pending migration ran: the transaction ends, nothing stays. */
+class DryRunApplied extends Error {
+  constructor(readonly applied: string[]) {
+    super('dry run')
+  }
+}
+
+/** A dry run runs beside the live server: it gives up on a lock after this long rather than queue the server's statements behind it. */
+export const DRY_RUN_LOCK_TIMEOUT_MS = 3_000
+const DRY_RUN_STATEMENT_TIMEOUT_MS = 120_000
+
+async function applyPending(sql: SQL, migrations: Migration[], dryRun: boolean): Promise<string[]> {
   return sql.begin(async (tx) => {
     // A migration may legitimately run past the pool's session limits; they come back with the transaction's end.
-    await tx`SELECT set_config('statement_timeout', '0', true), set_config('lock_timeout', '0', true)`
+    await (dryRun
+      ? tx`SELECT set_config('statement_timeout', ${String(DRY_RUN_STATEMENT_TIMEOUT_MS)}, true), set_config('lock_timeout', ${String(DRY_RUN_LOCK_TIMEOUT_MS)}, true)`
+      : tx`SELECT set_config('statement_timeout', '0', true), set_config('lock_timeout', '0', true)`)
     await tx`SELECT pg_advisory_xact_lock(${LOCKS.migration})`
     // CREATE SCHEMA IF NOT EXISTS still demands CREATE on the database, which the schema's owner role need not have.
     const [schema] = await tx`SELECT 1 FROM pg_namespace WHERE nspname = ${SCHEMA}`
@@ -88,6 +114,8 @@ export async function migrate(sql: SQL, migrations: Migration[]): Promise<string
       await tx.unsafe(migration.text)
       await tx`INSERT INTO factory.schema_migrations (name, checksum) VALUES (${migration.name}, ${checksum(migration.text)})`
     }
-    return pending.map((m) => m.name)
+    const names = pending.map((m) => m.name)
+    if (dryRun) throw new DryRunApplied(names)
+    return names
   })
 }

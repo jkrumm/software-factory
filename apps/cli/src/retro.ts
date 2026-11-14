@@ -1,12 +1,13 @@
 import { existsSync, rmSync } from 'node:fs'
 import { join } from 'node:path'
 import { parseArgs } from 'node:util'
-import { send } from '@software-factory/client'
+import { sendPatient } from '@software-factory/client'
 import { RetroModel } from '@software-factory/contract'
 import { authHint, credentialOf } from './credentials.ts'
 import { EXIT, FactoryError, kindForStatus, usage } from './exit.ts'
 import { DEFAULT_URL, type Io } from './operation.ts'
 import { type Format, plain, render } from './output.ts'
+import { restartPatience } from './restart-wait.ts'
 import { type TranscriptReport, transcriptPass } from './retro-transcripts.ts'
 
 const USAGE = 'usage: retro [--days <1-90>] [--digests <dir>] [--no-transcripts] [--format json|plain]'
@@ -74,14 +75,17 @@ export async function retroVerb(argv: readonly string[], io: Io): Promise<number
 
   const base = io.env.FACTORY_URL || DEFAULT_URL
   const credential = await credentialOf(io.env)
-  const answer = await send({
-    base,
-    method: 'GET',
-    path: '/v1/retro',
-    query: { days: String(days) },
-    token: credential.token,
-    timeoutMs: READ_TIMEOUT_MS,
-  })
+  const answer = await sendPatient(
+    {
+      base,
+      method: 'GET',
+      path: '/v1/retro',
+      query: { days: String(days) },
+      token: credential.token,
+      timeoutMs: READ_TIMEOUT_MS,
+    },
+    restartPatience(io.env, (text) => io.err(text)),
+  )
   if (!answer.reached) {
     throw new FactoryError('network', `server unreachable at ${base}: ${answer.reason}`, {
       hint: 'is the server up? make verify checks the deployment',

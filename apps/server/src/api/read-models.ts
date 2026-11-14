@@ -66,6 +66,8 @@ export interface ReadModelDeps {
   ciTimes?: CiTimes
   /** the settings in force the capacity loop tunes; absent, `GET /v1/capacity-loop` is 503 */
   capacityConstants?: CapacityConstants
+  /** the data directory `scripts/deploy.sh` writes `deploys.log` into; absent, `GET /v1/throughput` has no deploys */
+  dataDir?: string
   now?: () => Date
   /** how long a timed wait with Issues behind it must last to reach Needs you; absent, the default (`FACTORY_LONG_WAIT_MS`) */
   longWaitMs?: number
@@ -330,7 +332,9 @@ export const readModelRoutes = (deps: ReadModelDeps | undefined, caller: (reques
       async ({ query }) => {
         if (!deps) return unavailable
         const hours = query.hours === undefined ? DEFAULT_HOURS : Number(query.hours)
-        return Response.json(ThroughputModel.parse(await readThroughput(deps.sql, { now: now(), hours })))
+        return Response.json(
+          ThroughputModel.parse(await readThroughput(deps.sql, { now: now(), hours, dataDir: deps.dataDir })),
+        )
       },
       {
         query: HoursQuery,

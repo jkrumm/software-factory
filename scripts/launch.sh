@@ -77,5 +77,7 @@ exec "$SECRETS_RUN" run --env-file="$TPL" -- /bin/sh -c '
   # FACTORY_DB_ADDR is for the cutover rehearsal (a private cluster on another port); it is not on the allow-list of the settings file.
   export DATABASE_URL="postgres://factory:${FACTORY_DB_PASSWORD}@${FACTORY_DB_ADDR:-127.0.0.1:5432}/shared"
   unset FACTORY_DB_PASSWORD
-  exec bun apps/server/src/main.ts
+  # FACTORY_LAUNCH_ENTRY runs another entry of this release with the same environment: the deploy'"'"'s migration dry check
+  # (apps/server/src/migrate-check.ts) gets its DATABASE_URL from the one place that builds it. Unset, the server starts.
+  exec bun "${FACTORY_LAUNCH_ENTRY:-apps/server/src/main.ts}"
 ' sh $keys

@@ -78,8 +78,7 @@ import {
   windowWords,
 } from '@/lib/improve'
 import { ImproveSkeleton } from '@/components/skeletons'
-import { failureNote } from '@/lib/api'
-import { useScreen } from '@/lib/screen'
+import { useScreen, useScreenNote } from '@/lib/screen'
 import { useCapacityLoop, useFindingClasses, useFixCommits, useFriction, useKpis } from '@/lib/queries'
 import { cn } from '@/lib/utils'
 
@@ -878,6 +877,7 @@ function Improve() {
   const { days = DEFAULT_WINDOW } = Route.useSearch()
   const kpis = useKpis(days)
   const screen = useScreen(kpis)
+  const note = useScreenNote(screen, kpis.error)
   const friction = useFriction(days)
   const classes = useFindingClasses()
   const fixes = useFixCommits()
@@ -886,11 +886,7 @@ function Improve() {
   if (!kpis.data) {
     return (
       <Page fluid>
-        <PageHeader
-          title="Improve"
-          loading={screen === 'loading'}
-          note={screen === 'failed' ? failureNote(kpis.error) : undefined}
-        />
+        <PageHeader title="Improve" loading={screen === 'loading'} note={note} />
         <WindowSwitch days={days} />
         <WindowSection days={days} />
         {screen === 'loading' ? <ImproveSkeleton /> : null}

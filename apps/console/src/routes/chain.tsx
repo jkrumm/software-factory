@@ -5,9 +5,8 @@ import { EmptyState, Page, PageHeader } from '@/components/page'
 import { ActiveFilters, SidebarEntry, SidebarSection } from '@/components/sidebar'
 import { type ChainFilters, chainCounts, chainOf, isolatedNote, projectsOf } from '@/lib/chain'
 import { ChainSkeleton } from '@/components/skeletons'
-import { failureNote } from '@/lib/api'
 import { collapseOf, toggled } from '@/lib/chain-collapse'
-import { useScreen } from '@/lib/screen'
+import { useScreen, useScreenNote } from '@/lib/screen'
 import { chainQuery, queryClient, useChain } from '@/lib/queries'
 
 const text = (value: unknown): string | undefined => (typeof value === 'string' && value !== '' ? value : undefined)
@@ -37,6 +36,7 @@ function Chain() {
   const chain = useChain()
   const { data, error } = chain
   const screen = useScreen(chain)
+  const screenNote = useScreenNote(screen, error)
   const filters = Route.useSearch()
   const navigate = useNavigate({ from: Route.fullPath })
   const { default: ChainGraph } = Route.useLoaderData()
@@ -58,12 +58,7 @@ function Chain() {
   if (!data || !whole || !view)
     return (
       <Page full>
-        <PageHeader
-          title="Chain"
-          compact
-          loading={screen === 'loading'}
-          note={screen === 'failed' ? failureNote(error) : undefined}
-        />
+        <PageHeader title="Chain" compact loading={screen === 'loading'} note={screenNote} />
         {screen === 'loading' ? <ChainSkeleton /> : null}
       </Page>
     )
