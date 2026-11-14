@@ -143,7 +143,8 @@ takes the next free migration number if it adds a migration (`make check` prints
 rebase that only brings in master's commits is not re-run locally, CI on the rebased head is that check (NL28). Then
 `make merge-guard` (`MERGE_GUARD_ARGS=--wait` waits for the head's CI), merging only on exit 0. The rebase, push, CI wait,
 guard and merge run inside `factory merge-lock --project <repo> -- sh -c '…'` (`apps/cli/src/deploy-lock.ts`, the deploy lock's
-mechanism under `<project>.merge.lock`, waits up to 90 min, closed): with several leads a CI run (~15 min) outlasts the gap
+mechanism under `<project>.merge.lock`, waits up to 90 min, closed; the finished call is reported to `POST /merge-windows`
+afterwards, best effort, and never changes the lock or the exit code): with several leads a CI run (~15 min) outlasts the gap
 between merges, so unserialised leads rebased against each other forever (NL29). The guard refuses, with the
 reason, a branch that does not contain `origin/master`, a new migration whose number master (or the branch) already uses,
 a head with no finished green CI run on its exact sha, and a master whose last finished CI run is red (a cancelled run was

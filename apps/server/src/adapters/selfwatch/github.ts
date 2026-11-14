@@ -1,5 +1,5 @@
 import * as z from 'zod'
-import type { CiLive, CiRuns, CiRunTime, CiTimes } from '../../domains/loops/ports.ts'
+import type { CiLedgerRun, CiLedgerRuns, CiLive, CiRuns, CiRunTime, CiTimes } from '../../domains/loops/ports.ts'
 import { err, ok, portError, type PortError, type Result } from '../../kernel/result.ts'
 import { parseRemote } from '../intake/github.ts'
 import { gitIn } from '../quality/git.ts'
@@ -210,5 +210,68 @@ export function githubCiTimes(options: GithubCiOptions): CiTimes {
       truncated = page === TIMES_MAX_PAGES
     }
     return ok({ runs, truncated })
+  }
+}
+
+const LedgerRuns = z.looseObject({
+  workflow_runs: z.array(
+    z.looseObject({
+      id: z.number().int(),
+      name: z.string().nullish(),
+      event: z.string(),
+      head_branch: z.string().nullish(),
+      head_sha: z.string(),
+      conclusion: z.string().nullish(),
+      run_attempt: z.number().int().nullish(),
+      created_at: z.string(),
+      run_started_at: z.string().nullish(),
+      updated_at: z.string(),
+    }),
+  ),
+})
+
+/**
+ * The finished workflow runs of the repo created since a date, newest first, at most three pages (300 runs), for the CI
+ * ledger: every conclusion (a cancelled run held its head's pull request waiting too), with when it was queued, started
+ * and finished. A rerun is queued at its latest attempt's start, not at the first attempt's creation. Reads only; errors
+ * are `githubCiRuns`'s.
+ */
+export function githubCiLedger(options: GithubCiOptions): CiLedgerRuns {
+  const { api, read, slugOf } = githubReader(options)
+
+  return async (repo, since) => {
+    const found = await slugOf(repo)
+    if (!found.ok) return found
+    const runs: CiLedgerRun[] = []
+    for (let page = 1; page <= TIMES_MAX_PAGES; page++) {
+      const answer = await read(
+        `${api}/repos/${found.value}/actions/runs?status=completed&created=%3E%3D${since.toISOString().slice(0, 10)}&per_page=${TIMES_PAGE_SIZE}&page=${page}`,
+        LedgerRuns,
+      )
+      if (!answer.ok) return answer
+      for (const run of answer.value.workflow_runs) {
+        if (!run.conclusion || !run.run_started_at) continue
+        const attempt = run.run_attempt ?? 1
+        const startedAt = new Date(run.run_started_at)
+        const finishedAt = new Date(run.updated_at)
+        const queuedAt = attempt > 1 ? startedAt : new Date(run.created_at)
+        if ([queuedAt, startedAt, finishedAt].some((d) => Number.isNaN(d.getTime()))) continue
+        // the clock of one run is one clock: a run that ends before it starts, or starts before it was queued, is clamped
+        runs.push({
+          runId: run.id,
+          workflow: run.name?.trim() || 'workflow',
+          event: run.event,
+          headBranch: run.head_branch ?? null,
+          headSha: run.head_sha,
+          runAttempt: attempt,
+          queuedAt: queuedAt > startedAt ? startedAt : queuedAt,
+          startedAt,
+          finishedAt: finishedAt < startedAt ? startedAt : finishedAt,
+          conclusion: run.conclusion,
+        })
+      }
+      if (answer.value.workflow_runs.length < TIMES_PAGE_SIZE) break
+    }
+    return ok(runs)
   }
 }

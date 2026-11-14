@@ -332,6 +332,37 @@ export function postgresLoopStore(tx: SQL): LoopStore {
       return rows.length
     },
 
+    async ciLedgerRepos(since) {
+      const rows: unknown[] = await tx`
+        SELECT DISTINCT i.repo FROM factory.issue_events e JOIN factory.issues i ON i.id = e.issue_id
+        WHERE e.at >= ${since} ORDER BY i.repo`
+      return rows.map((raw) => z.object({ repo: z.string() }).parse(raw).repo)
+    },
+
+    async newestCiRun(repo) {
+      const [row] = await tx`SELECT max(finished_at) AS at FROM factory.ci_runs WHERE repo = ${repo}`
+      return z.object({ at: z.date().nullable() }).parse(row).at
+    },
+
+    async recordCiRuns(repo, runs) {
+      for (const r of runs)
+        await tx`
+          INSERT INTO factory.ci_runs (repo, run_id, workflow, event, head_branch, head_sha, run_attempt, queued_at, started_at,
+             finished_at, conclusion)
+          VALUES (${repo}, ${r.runId}, ${r.workflow}, ${r.event}, ${r.headBranch}, ${r.headSha}, ${r.runAttempt}, ${r.queuedAt},
+                  ${r.startedAt}, ${r.finishedAt}, ${r.conclusion})
+          ON CONFLICT (repo, run_id) DO UPDATE SET workflow = excluded.workflow, event = excluded.event,
+            head_branch = excluded.head_branch, head_sha = excluded.head_sha, run_attempt = excluded.run_attempt,
+            queued_at = excluded.queued_at, started_at = excluded.started_at, finished_at = excluded.finished_at,
+            conclusion = excluded.conclusion`
+      return runs.length
+    },
+
+    async pruneCiRuns(before) {
+      const rows: unknown[] = await tx`DELETE FROM factory.ci_runs WHERE finished_at < ${before} RETURNING run_id`
+      return rows.length
+    },
+
     async attemptWorktrees(since) {
       const rows: unknown[] = await tx`
         SELECT a.worktree_path, a.issue_id, a.attempt, a.repo_path, i.repo, pr.name AS project

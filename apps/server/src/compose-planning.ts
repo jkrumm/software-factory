@@ -8,7 +8,7 @@ import type { PlanningApi } from './api/planning.ts'
 import { admissionPass, capacityFacts, claimQueued, claimStalled, queueView } from './app/capacity-admit.ts'
 import { capacityForLeads } from './app/capacity-leads.ts'
 import { getQueueStates, setQueueState } from './app/capacity-queue.ts'
-import { giveSlotBack, recordStepCost, touchSlot } from './app/capacity-slots.ts'
+import { giveSlotBack, recordMergeWindow, recordStepCost, touchSlot } from './app/capacity-slots.ts'
 import { capacityState, refreshState } from './app/capacity-view.ts'
 import { addAfter, removeAfter, settleIssue, setPrio } from './app/planning-chain.ts'
 import type { PlanningDeps } from './app/planning-deps.ts'
@@ -163,6 +163,7 @@ export function composePlanning(input: {
       touchSlot: (request) => touchSlot(slots, request),
       giveSlotBack: (id) => giveSlotBack(writes, id),
       recordStepCost: (cost) => recordStepCost(writes, cost),
+      recordMergeWindow: (window) => recordMergeWindow(writes, window),
     },
     leads: capacityForLeads(writes),
     capacityFacts: () => capacityFacts(capacity),

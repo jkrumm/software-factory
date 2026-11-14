@@ -196,7 +196,15 @@ describe('factory deploy-lock', () => {
 describe('factory merge-lock', () => {
   const startMerge = (project: string, cmd: string[], env: Record<string, string> = {}) =>
     Bun.spawn(['bun', BIN, 'merge-lock', '--project', project, '--', ...cmd], {
-      env: { ...process.env, FACTORY_DEPLOY_LOCK_DIR: locks, FACTORY_DEPLOY_LOCK_POLL_MS: '20', ...env },
+      // a server nobody listens on: the report of the call is best effort, and never reaches the live factory from a test
+      env: {
+        ...process.env,
+        FACTORY_DEPLOY_LOCK_DIR: locks,
+        FACTORY_DEPLOY_LOCK_POLL_MS: '20',
+        FACTORY_URL: 'http://127.0.0.1:1',
+        FACTORY_TOKEN: 'test-token',
+        ...env,
+      },
       stdout: 'pipe',
       stderr: 'pipe',
     })
@@ -229,6 +237,64 @@ describe('factory merge-lock', () => {
     expect(result.code).toBe(75)
     expect(result.err).toContain('merge lock for app')
     expect(await marksOf()).toEqual([])
+  })
+
+  test("reports the wait and the hold of a finished call to the server, and the exit code is the command's", async () => {
+    const bodies: unknown[] = []
+    const auth: (string | null)[] = []
+    const server = Bun.serve({
+      port: 0,
+      fetch: async (request) => {
+        bodies.push(await request.json())
+        auth.push(request.headers.get('authorization'))
+        return Response.json({ released: true })
+      },
+    })
+    try {
+      const holder = startMerge('app', marker('a', '0.4'))
+      while ((await marksOf()).length < 1) await Bun.sleep(10)
+      const waiter = startMerge('app', ['sh', '-c', 'exit 3'], { FACTORY_URL: `http://127.0.0.1:${server.port}` })
+      expect((await finish(holder)).code).toBe(0)
+      expect((await finish(waiter)).code).toBe(3)
+    } finally {
+      await server.stop(true)
+    }
+    expect(auth).toEqual(['Bearer test-token'])
+    const [body] = bodies as Record<string, unknown>[]
+    expect(body).toMatchObject({ project: 'app', exitCode: 3 })
+    const at = (key: string) => Date.parse(String(body?.[key]))
+    // it waited for the holder (about 0.4 s), then held the window only as long as its own command
+    expect(at('acquiredAt') - at('requestedAt')).toBeGreaterThan(100)
+    expect(at('releasedAt')).toBeGreaterThanOrEqual(at('acquiredAt'))
+    expect(typeof body?.cwd).toBe('string')
+  })
+
+  test('a call that never got the window is reported with no acquiredAt', async () => {
+    const bodies: unknown[] = []
+    const server = Bun.serve({
+      port: 0,
+      fetch: async (request) => {
+        bodies.push(await request.json())
+        return Response.json({ released: true })
+      },
+    })
+    try {
+      const holder = Bun.spawn(['sleep', '60'])
+      sleepers.push(holder)
+      await mkdir(locks, { recursive: true })
+      await symlink(String(holder.pid), join(locks, 'app.merge.lock'))
+      const result = await finish(
+        startMerge('app', marker('b', '0'), {
+          FACTORY_MERGE_LOCK_WAIT_MS: '100',
+          FACTORY_URL: `http://127.0.0.1:${server.port}`,
+        }),
+      )
+      expect(result.code).toBe(75)
+    } finally {
+      await server.stop(true)
+    }
+    expect(bodies).toHaveLength(1)
+    expect(bodies[0]).toMatchObject({ project: 'app', acquiredAt: null, exitCode: 75 })
   })
 
   test('a missing --project is a usage error naming merge-lock', async () => {

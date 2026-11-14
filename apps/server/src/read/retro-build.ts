@@ -34,7 +34,7 @@ const Step = z.object({
 })
 
 /** The repo a step cost belongs to: the directory name of the project's checkout. */
-const REPO_OF_STEP = `regexp_replace(rtrim(repo, '/'), '^.*/', '')`
+export const REPO_OF_STEP = `regexp_replace(rtrim(repo, '/'), '^.*/', '')`
 
 interface CheckRead {
   closed: Map<string, number>

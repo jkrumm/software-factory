@@ -1,9 +1,11 @@
 import { lstatSync, mkdirSync, readlinkSync, rmdirSync, rmSync, symlinkSync } from 'node:fs'
 import { constants, homedir } from 'node:os'
 import { join } from 'node:path'
+import { send } from '@software-factory/client'
+import { credentialOf } from './credentials.ts'
 import { usage } from './exit.ts'
-import type { Io } from './operation.ts'
-import { EX_TEMPFAIL, exitCodeOf, signalGroup } from './slot.ts'
+import { DEFAULT_URL, type Io } from './operation.ts'
+import { callerCwd, EX_TEMPFAIL, exitCodeOf, signalGroup } from './slot.ts'
 
 const USAGE = 'usage: deploy-lock --project <name> -- <cmd> [args…]'
 const MERGE_USAGE = 'usage: merge-lock --project <name> -- <cmd> [args…]'
@@ -130,11 +132,67 @@ function release(lock: string): void {
  * The lock is a symlink to the holder's pid in `FACTORY_DEPLOY_LOCK_DIR` (default `~/.local/state/factory/deploy-locks`).
  * `kind: 'merge'` (`factory merge-lock`) is the same lock under `<project>.merge.lock`: the one merge window of a project,
  * so leads rebase, wait for CI and merge one at a time instead of rebasing against each other's merges forever. It waits
- * up to `FACTORY_MERGE_LOCK_WAIT_MS` (90 min).
+ * up to `FACTORY_MERGE_LOCK_WAIT_MS` (90 min). A finished merge-lock call is also reported to the server (`POST /merge-windows`:
+ * when it asked, when it got the window, when it gave it back), after the command and the release, best effort: a server
+ * that cannot be reached changes neither the lock nor the exit code.
  */
 export async function deployLock(
   input: { project: string; command: string[]; kind?: LockKind },
   io: Io,
+): Promise<number> {
+  const timing: Timing = {}
+  const code = await holdAndRun(input, io, timing)
+  if ((input.kind ?? 'deploy') === 'merge' && timing.requestedAt) {
+    await reportWindow(io, {
+      project: input.project,
+      requestedAt: timing.requestedAt,
+      acquiredAt: timing.acquiredAt ?? null,
+      releasedAt: new Date(),
+      exitCode: code,
+    })
+  }
+  return code
+}
+
+/** When a call asked for its lock and when it got it, filled in as it goes. */
+interface Timing {
+  requestedAt?: Date
+  acquiredAt?: Date
+}
+
+/** The finished merge-lock call, appended to the server's ledger. Best effort: a failure changes nothing. */
+async function reportWindow(
+  io: Io,
+  window: { project: string; requestedAt: Date; acquiredAt: Date | null; releasedAt: Date; exitCode: number },
+): Promise<void> {
+  try {
+    const { token } = await credentialOf(io.env)
+    if (!token) return
+    const cwd = callerCwd()
+    await send({
+      base: io.env.FACTORY_URL || DEFAULT_URL,
+      method: 'POST',
+      path: '/merge-windows',
+      token,
+      timeoutMs: 5_000,
+      body: {
+        project: window.project,
+        ...(cwd === undefined ? {} : { cwd }),
+        requestedAt: window.requestedAt.toISOString(),
+        acquiredAt: window.acquiredAt?.toISOString() ?? null,
+        releasedAt: window.releasedAt.toISOString(),
+        exitCode: window.exitCode,
+      },
+    })
+  } catch {
+    // the ledger is a convenience
+  }
+}
+
+async function holdAndRun(
+  input: { project: string; command: string[]; kind?: LockKind },
+  io: Io,
+  timing: Timing,
 ): Promise<number> {
   const kind = input.kind ?? 'deploy'
   const [program, ...args] = input.command
@@ -165,11 +223,13 @@ export async function deployLock(
       io.err(`factory: ${kind} lock for ${input.project}: cannot create ${dir}: ${reason(error)}; not running\n`)
       return EX_TEMPFAIL
     }
+    timing.requestedAt = new Date()
     const deadline = Date.now() + waitMs
     for (;;) {
       const outcome = tryTake(lock)
       if (outcome === 'taken') {
         held = true
+        timing.acquiredAt = new Date()
         break
       }
       if (outcome === 'retry') {

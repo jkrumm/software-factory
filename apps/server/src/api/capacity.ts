@@ -3,6 +3,7 @@ import {
   AdmitAnswer,
   CapacityView,
   ErrorBody,
+  MergeWindow,
   QueueOrder,
   type QUEUE_REASONS,
   QueueSetBody,
@@ -51,6 +52,14 @@ export interface CapacityApi {
   }): Promise<Result<SlotView, PortError>>
   giveSlotBack(id: string): Promise<Result<boolean, PortError>>
   recordStepCost(cost: StepCost): Promise<Result<true, PortError>>
+  recordMergeWindow(window: {
+    project: string
+    cwd?: string | undefined
+    requestedAt: Date
+    acquiredAt: Date | null
+    releasedAt: Date
+    exitCode: number | null
+  }): Promise<Result<true, PortError>>
 }
 
 const failure = (error: string, code: string): ErrorBody => ErrorBody.parse({ error, code })
@@ -301,6 +310,28 @@ export const capacityRoutes = (api?: CapacityApi) => {
         body: StepCost,
         response: { 200: SlotRelease, ...errorResponses(400, 503) },
         detail: { hide: true, operationId: 'slots.cost' },
+      },
+    )
+    .post(
+      '/merge-windows',
+      async ({ body, status }) => {
+        if (!api) return status(503, unbound)
+        const recorded = await api.recordMergeWindow({
+          project: body.project,
+          cwd: body.cwd,
+          requestedAt: new Date(body.requestedAt),
+          acquiredAt: body.acquiredAt === null ? null : new Date(body.acquiredAt),
+          releasedAt: new Date(body.releasedAt),
+          exitCode: body.exitCode,
+        })
+        return recorded.ok
+          ? status(200, SlotRelease.parse({ released: true }))
+          : status(503, unavailable(recorded.error))
+      },
+      {
+        body: MergeWindow,
+        response: { 200: SlotRelease, ...errorResponses(400, 503) },
+        detail: { hide: true, operationId: 'mergeWindows.record' },
       },
     )
 }

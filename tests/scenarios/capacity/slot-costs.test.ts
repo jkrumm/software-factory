@@ -85,7 +85,7 @@ test('a finished step leaves a row in the ledger with its duration, wait, size a
   const result = await lab.cli(['slot', 'run', '--name', 'ledgered', '--', 'sh', '-c', 'sleep 1; exit 3'], env)
   expect(result.code).toBe(3)
   const rows = await sql()`
-    SELECT name, repo, peak_rss_mib, cpu_seconds, duration_ms, wait_ms, exit_code
+    SELECT name, repo, peak_rss_mib, cpu_seconds, duration_ms, wait_ms, exit_code, cwd
     FROM factory.step_costs WHERE name = 'ledgered'`
   expect(rows).toHaveLength(1)
   const row = rows[0]
@@ -94,6 +94,21 @@ test('a finished step leaves a row in the ledger with its duration, wait, size a
   expect(row.peak_rss_mib).not.toBeNull()
   expect(row.cpu_seconds).not.toBeNull()
   expect(row.exit_code).toBe(3)
+  // the directory the step ran in: what ties it to a lead's worktree
+  expect(typeof row.cwd).toBe('string')
+}, 30_000)
+
+test('a finished merge-lock call leaves a row with when it asked, got the window and gave it back', async () => {
+  const locks = { FACTORY_DEPLOY_LOCK_DIR: join(lab.root, 'locks') }
+  const result = await lab.cli(['merge-lock', '--project', 'app', '--', 'sh', '-c', 'sleep 1; exit 2'], locks)
+  expect(result.code).toBe(2)
+  const rows = await sql()`
+    SELECT project, cwd, requested_at, acquired_at, released_at, exit_code FROM factory.merge_windows`
+  expect(rows).toHaveLength(1)
+  const row = rows[0]
+  expect([row.project, row.exit_code, typeof row.cwd]).toEqual(['app', 2, 'string'])
+  expect(row.acquired_at.getTime()).toBeGreaterThanOrEqual(row.requested_at.getTime())
+  expect(row.released_at.getTime() - row.acquired_at.getTime()).toBeGreaterThanOrEqual(900)
 }, 30_000)
 
 test('a nested pass-through records nothing', async () => {

@@ -279,9 +279,9 @@ export function postgresCapacityStore(tx: SQL): CapacityStore {
     async recordStepCost(c) {
       const [row] = await tx`
         INSERT INTO factory.step_costs (at, name, repo, peak_rss_mib, cpu_seconds, duration_ms, wait_ms, exit_code,
-           vcs_ref_head_revision, dirty)
+           vcs_ref_head_revision, dirty, cwd)
         VALUES (${c.at}, ${c.name}, ${c.repo}, ${c.peakRssMib}, ${c.cpuSeconds}, ${c.durationMs}, ${c.waitMs}, ${c.exitCode},
-           ${c.commit ?? null}, ${c.dirty ?? null})
+           ${c.commit ?? null}, ${c.dirty ?? null}, ${c.cwd})
         RETURNING id`
       const tests = c.tests ?? []
       if (tests.length === 0) return
@@ -310,6 +310,12 @@ export function postgresCapacityStore(tx: SQL): CapacityStore {
             'INTEGER',
           )}
         ) AS u(suite, name, status, duration)`
+    },
+
+    async recordMergeWindow(w) {
+      await tx`
+        INSERT INTO factory.merge_windows (project, cwd, requested_at, acquired_at, released_at, exit_code)
+        VALUES (${w.project}, ${w.cwd}, ${w.requestedAt}, ${w.acquiredAt}, ${w.releasedAt}, ${w.exitCode})`
     },
 
     async recentPeaks(name, limit) {

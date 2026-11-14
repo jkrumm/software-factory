@@ -872,6 +872,31 @@ export type CapacityLoopModel = z.infer<typeof CapacityLoopModel>
 const nullableNumber = z.number().nullable()
 
 /**
+ * One closed Issue's lead wall time, or the sum over Issues, split into the seven places it went, in seconds. The places
+ * are exclusive and take time in this order, each only what the ones before it did not: the owner (the Issue waited on a
+ * person), a step (a `factory slot run` was running), a slot (one was queued), the merge lock (queued for the window), CI
+ * (a run of the lead's branch was queued or running), a turn (the lead's model was working), and idle (everything else).
+ * So the seven add up to `wallSeconds`.
+ */
+export const LeadSplit = z.strictObject({
+  /** the Issue waited on a person: a Decision, a verdict, an Errand, or another person's review of its pull request */
+  ownerSeconds: z.number(),
+  /** a test step ran in a slot, inside the lead's worktree */
+  stepSeconds: z.number(),
+  /** a step of the lead waited for a slot */
+  slotWaitSeconds: z.number(),
+  /** a `factory merge-lock` of the lead waited for the project's merge window */
+  mergeLockSeconds: z.number(),
+  /** a CI run of the lead's branch was queued or running */
+  ciSeconds: z.number(),
+  /** the lead's session was in a turn: the model worked, or a tool ran for it */
+  turnSeconds: z.number(),
+  /** none of the above: the lead was quiet with nothing measured under it */
+  idleSeconds: z.number(),
+})
+export type LeadSplit = z.infer<typeof LeadSplit>
+
+/**
  * Where the host's memory and CPU went over the last `hours` hours (`GET /v1/throughput`), computed in SQL from the
  * host samples, the per-minute class rows and the notable-process rows, over `[now - hours, now)`. A key's per-minute
  * total is the sum of its rows' `footprint_mib` (and `cpu_ms`) at one minute; its `footprintMib` is the sum of those
@@ -1009,6 +1034,96 @@ export const ThroughputModel = z
         }),
       ),
     }),
+    /**
+     * Each Issue closed in the window (an applied event into `closed`), over its lead's wall time: from the start of its
+     * first lead after the Issue's previous close, if any, to the close. An Issue whose lead never started is not in it.
+     * A step or merge window is the lead's when its directory is inside the lead's worktree (a step of an older row, with
+     * no directory, when its name begins with the worktree's `factory-<issue>-<attempt>`).
+     */
+    lead: z.strictObject({
+      /** Issues in the split */
+      closed: z.number().int(),
+      wallSeconds: z.number(),
+      split: LeadSplit,
+      /** the Issues with the longest wall time, at most 50, then Issue number */
+      issues: z.array(
+        z.strictObject({
+          issue: z.string(),
+          repo: z.string(),
+          closedAt: at,
+          wallSeconds: z.number(),
+          split: LeadSplit,
+        }),
+      ),
+    }),
+    /** one scorecard per project that closed an Issue, ran a step, finished a CI run or took the merge window in the window: most slot minutes first, then repo name */
+    project: z.array(
+      z.strictObject({
+        repo: z.string(),
+        /** Issues closed in the window, whether or not their lead is in `lead` */
+        closedIssues: z.number().int(),
+        /** the project's `factory slot run` steps over the window, every step of the repo, a lead's or not */
+        slot: z.strictObject({
+          steps: z.number().int(),
+          /** the minutes the steps ran */
+          minutes: z.number(),
+          /** `minutes` over `closedIssues`, null when none closed */
+          minutesPerClosedIssue: nullableNumber,
+          /** the minutes the steps waited for a slot, and the median and 90th percentile of one wait */
+          waitMinutes: z.number(),
+          waitP50Ms: nullableNumber,
+          waitP90Ms: nullableNumber,
+          /** the largest peak memory of a step, null when none was measured */
+          peakMib: z.number().int().nullable(),
+          /** steps that exited non-zero, and their minutes */
+          failedSteps: z.number().int(),
+          failedMinutes: z.number(),
+        }),
+        /** the steps by tier: `fast` is `check-fast`, `full` is `check`, any other step is its own last word; most total minutes first */
+        check: z.strictObject({
+          tiers: z.array(
+            z.strictObject({
+              tier: z.string(),
+              runs: z.number().int(),
+              p50Ms: z.number(),
+              p90Ms: z.number(),
+            }),
+          ),
+        }),
+        /** the finished CI runs (success, failure or timed out; a cancelled or skipped one is left out) */
+        ci: z.strictObject({
+          runs: z.number().int(),
+          /** started to finished, summed */
+          minutes: z.number(),
+          /** queued to started, summed */
+          queueMinutes: z.number(),
+          p50Minutes: nullableNumber,
+          p90Minutes: nullableNumber,
+          /** runs that ended red or timed out, and their minutes */
+          failedRuns: z.number().int(),
+          failedMinutes: z.number(),
+        }),
+        /** the work done on the host (`slot.minutes`) against the work done in CI (`ci.minutes`) */
+        localToCi: z.strictObject({
+          localMinutes: z.number(),
+          ciMinutes: z.number(),
+          /** local over local plus CI, null when both are 0 */
+          localShare: nullableNumber,
+        }),
+        /** `factory merge-lock` calls that ended in the window: asked to got, and got to gave back */
+        mergeLock: z.strictObject({
+          windows: z.number().int(),
+          waitMinutes: z.number(),
+          holdMinutes: z.number(),
+        }),
+        /** the lead time of the project's Issues in `lead` */
+        leadTime: z.strictObject({
+          closed: z.number().int(),
+          wallSeconds: z.number(),
+          split: LeadSplit,
+        }),
+      }),
+    ),
   })
   .meta({ id: 'ThroughputModel' })
 export type ThroughputModel = z.infer<typeof ThroughputModel>

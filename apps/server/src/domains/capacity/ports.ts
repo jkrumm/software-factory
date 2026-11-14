@@ -54,6 +54,8 @@ export interface CapacityStore {
   saveSlots(rows: readonly SlotRow[]): Promise<void>
   /** appends one finished step to the cost ledger */
   recordStepCost(cost: StepCostRow): Promise<void>
+  /** appends one finished `factory merge-lock` call: its wait and its hold */
+  recordMergeWindow(window: MergeWindowRow): Promise<void>
   /** a step's peaks, newest first (null: not measured) */
   recentPeaks(name: string, limit: number): Promise<(number | null)[]>
   /** the newest minute sample of the host: when, and the share of RAM in use */
@@ -142,6 +144,8 @@ export interface StepCostRow {
   durationMs: number
   waitMs: number
   exitCode: number | null
+  /** the directory the step ran in: a lead's steps run inside its worktree */
+  cwd: string | null
   /** the commit the step ran on, and whether the tree had uncommitted changes (null: not read) */
   commit?: string | undefined
   dirty?: boolean | undefined
@@ -155,6 +159,17 @@ export interface TestResultRow {
   name: string
   status: 'pass' | 'fail' | 'skip'
   durationMs: number
+}
+
+/** One row of the merge-window ledger (`factory.merge_windows`). */
+export interface MergeWindowRow {
+  project: string
+  cwd: string | null
+  requestedAt: Date
+  /** null when the call never got the window */
+  acquiredAt: Date | null
+  releasedAt: Date
+  exitCode: number | null
 }
 
 /** The machine the server runs on. Every reading may fail; admission then goes on without it. */

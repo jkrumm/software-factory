@@ -224,3 +224,20 @@ export const StepCost = z
   })
   .meta({ id: 'StepCost' })
 export type StepCost = z.infer<typeof StepCost>
+
+/**
+ * One finished `factory merge-lock` call: `POST /merge-windows`. `requestedAt` is when it asked for the project's merge
+ * window, `acquiredAt` when it got it (absent when it never did), `releasedAt` when it gave the window back or gave up.
+ * `cwd` is the directory the call ran in: the lead whose worktree holds it waited.
+ */
+export const MergeWindow = z
+  .object({
+    project: z.string().min(1).max(200),
+    cwd: z.string().min(1).max(4096).optional(),
+    requestedAt: z.iso.datetime(),
+    acquiredAt: z.iso.datetime().nullable(),
+    releasedAt: z.iso.datetime(),
+    exitCode: z.number().int().nullable(),
+  })
+  .meta({ id: 'MergeWindow' })
+export type MergeWindow = z.infer<typeof MergeWindow>
