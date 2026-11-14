@@ -45,7 +45,7 @@ export function unroutedLines(rows: readonly UnroutedRow[], now: Date, graceMs: 
     )
     .map((row) => {
       const name = row.monitor.length > 80 ? `${row.monitor.slice(0, 79)}…` : row.monitor
-      const state = row.filedIssue ? `filed as ${row.filedIssue}` : 'to be filed'
+      const state = row.filedIssue ? `filed as ${row.filedIssue}` : row.filedAt ? 'held for the owner' : 'to be filed'
       return `monitor ${row.source}/${name} down ${since(now.getTime() - (row.downSince as Date).getTime())} with no route, ${state}`
     })
 }

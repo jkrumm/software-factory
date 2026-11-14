@@ -12,6 +12,7 @@ import { err, ok, portError } from '../../kernel/result.ts'
 export const stubProjectSignals: ProjectSignals = {
   find: () => Promise.resolve(ok(null)),
   polled: () => Promise.resolve(ok([])),
+  names: () => Promise.resolve(ok([])),
 }
 
 const Heal = z.strictObject({
@@ -70,6 +71,17 @@ export function fileProjectSignals(path: string): ProjectSignals {
     },
     async polled() {
       return read()
+    },
+    async names() {
+      const all = await read()
+      return all.ok
+        ? ok(
+            all.value
+              .filter((project) => !project.work)
+              .map((project) => project.repo)
+              .sort(),
+          )
+        : all
     },
   }
 }

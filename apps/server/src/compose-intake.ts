@@ -59,6 +59,7 @@ export async function composeIntake(input: {
       fingerprintWindowMs: env.fingerprintWindowMs,
       unroutedGraceMs: 10 * 60_000,
       homeRepo: env.homeRepo,
+      unroutedHeldMs: 6 * 3_600_000,
     },
   })
 

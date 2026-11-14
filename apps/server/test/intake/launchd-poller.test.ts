@@ -64,6 +64,7 @@ function setup(options: { projects?: RepoSignals[]; open?: string[]; receive?: '
   const projects: ProjectSignals = {
     find: () => Promise.resolve(ok(null)),
     polled: () => Promise.resolve(ok(options.projects ?? [project()])),
+    names: () => Promise.resolve(ok([])),
   }
   const poller = launchdPoller({ sink, projects, uid: UID, run, log: (line) => logged.push(line) })
   return {
