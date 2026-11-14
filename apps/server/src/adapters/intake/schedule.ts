@@ -28,6 +28,9 @@ export function selfPaced(
     clearTimeout(first)
     clearInterval(timer)
     if (graceMs === Number.POSITIVE_INFINITY) await running
-    else await Promise.race([running, Bun.sleep(graceMs)])
+    else {
+      await Promise.race([running, Bun.sleep(graceMs)])
+      if (running) log(`${name}: still running ${graceMs / 1000}s after the stop; going on without it`)
+    }
   }
 }
