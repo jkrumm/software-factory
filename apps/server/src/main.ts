@@ -17,7 +17,9 @@ import { makeNotifier } from './adapters/ntfy/ntfy.ts'
 import { postgresCheckpointStore } from './adapters/postgres/checkpoint-store.ts'
 import { hostReader } from './adapters/planning/host.ts'
 import { hostWatch } from './adapters/planning/host-watch.ts'
-import { processTable } from './adapters/planning/processes.ts'
+import { textRunner } from './adapters/planning/process.ts'
+import { processTable, sharedCwds } from './adapters/planning/processes.ts'
+import { hostSnapshot } from './adapters/planning/snapshot.ts'
 import { postgresLoopStore } from './adapters/postgres/loop-store.ts'
 import { postgresVisitStore } from './adapters/postgres/visit-store.ts'
 import { postgresReviewStore } from './adapters/postgres/review-store.ts'
@@ -50,7 +52,7 @@ import { projectFileProjects } from './app/quality-projects.ts'
 import { loadLoopSettings } from './app/loops/settings.ts'
 import { frictionPass, frictionSummary } from './app/loops/friction.ts'
 import { fixClassesPass, fixClassesSummary } from './app/loops/fix-classes.ts'
-import { hostPass, hostSummary } from './app/loops/host.ts'
+import { freshHostMemory, hostPass, hostSummary } from './app/loops/host.ts'
 import { reaperPass, reaperSummary } from './app/loops/reaper.ts'
 import { processKiller, reaperProcesses } from './adapters/planning/reaper-processes.ts'
 import { hygienePass, hygieneSummary } from './app/loops/hygiene.ts'
@@ -181,18 +183,35 @@ async function main(): Promise<void> {
     repoAllow: leadSettings.repoAllow,
   })
   // Its own reader: the swapout rate of a minute sample counts from the last sample, not from an admission's reading.
+  // One metered runner for every helper of the host loop: the CPU they take is the collector's cost, stored each minute.
+  const hostRunner = textRunner(5_000)
+  const lsofBin = process.env.FACTORY_LSOF_BIN ?? '/usr/sbin/lsof'
   const hostSamples = hostWatch({
     host: hostReader({ sysctlBin: planningEnv.sysctlBin, minSampleMs: 0 }),
     sysctlBin: planningEnv.sysctlBin,
     psBin: process.env.FACTORY_PS_BIN ?? '/bin/ps',
     topBin: process.env.FACTORY_TOP_BIN ?? '/usr/bin/top',
     vmStatBin: process.env.FACTORY_VM_STAT_BIN,
+    runner: hostRunner,
   })
+  const hostCwds = sharedCwds({ runner: hostRunner, lsofBin })
   const hostProcesses = processTable({
     rows: () => hostSamples.rows(),
     footprints: () => hostSamples.footprints(),
-    lsofBin: process.env.FACTORY_LSOF_BIN ?? '/usr/sbin/lsof',
+    lsofBin,
+    cwds: hostCwds,
   })
+  const hostClasses = hostSnapshot({
+    top: () => hostSamples.topSnapshot(),
+    cwds: hostCwds,
+    runner: hostRunner,
+    psBin: process.env.FACTORY_PS_BIN ?? '/bin/ps',
+    launchctlBin: process.env.FACTORY_LAUNCHCTL_BIN ?? '/bin/launchctl',
+    lsofBin,
+    sysctlBin: planningEnv.sysctlBin,
+    vmVolume: process.env.FACTORY_VM_VOLUME ?? '/System/Volumes/VM',
+  })
+  const hostMemory = freshHostMemory()
   const reaperProcessTable = reaperProcesses({
     psBin: process.env.FACTORY_PS_BIN ?? '/bin/ps',
     lsofBin: process.env.FACTORY_LSOF_BIN ?? '/usr/sbin/lsof',
@@ -558,7 +577,7 @@ async function main(): Promise<void> {
       },
     },
     {
-      // One reading of the host a minute, kept 25 hours: the Console's Live popover draws it.
+      // One reading of the host a minute with its class snapshot, kept 14 days: the Live popover and `read throughput` draw it.
       name: 'host',
       intervalMs: loopSettings.intervalMs.host,
       onChange: false,
@@ -568,6 +587,9 @@ async function main(): Promise<void> {
           clock: writes.clock,
           sampler: hostSamples,
           processes: hostProcesses,
+          snapshot: hostClasses,
+          memory: hostMemory,
+          self: { pid: process.pid, dirs: [process.cwd()] },
           facts: planning.capacityFacts,
         })
         if (!pass.ok) return pass

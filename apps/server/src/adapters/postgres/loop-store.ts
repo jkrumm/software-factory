@@ -239,9 +239,11 @@ export function postgresLoopStore(tx: SQL): LoopStore {
 
     async recordHostSample(at, sample, leads) {
       await tx`
-        INSERT INTO factory.host_samples (at, load, memory_used_pct, swap_used_pct, swapout_mb_per_300s, leads, queued, seats, load_ceiling)
+        INSERT INTO factory.host_samples (at, load, memory_used_pct, swap_used_pct, swapout_mb_per_300s, leads, queued, seats,
+          load_ceiling, pressure_level, compressor_mib, processes, cpu_idle_pct, vm_free_gib, collector_cpu_ms)
         VALUES (${at}, ${sample.load}, ${sample.memoryUsedPct}, ${sample.swapUsedPct}, ${sample.swapoutMbPer300s},
-          ${sample.leads}, ${sample.queued}, ${sample.seats}, ${sample.loadCeiling})
+          ${sample.leads}, ${sample.queued}, ${sample.seats}, ${sample.loadCeiling}, ${sample.pressureLevel},
+          ${sample.compressorMib}, ${sample.processes}, ${sample.cpuIdlePct}, ${sample.vmFreeGib}, ${sample.collectorCpuMs})
         ON CONFLICT (at) DO NOTHING`
       for (const lead of leads) {
         await tx`
@@ -276,6 +278,52 @@ export function postgresLoopStore(tx: SQL): LoopStore {
 
     async pruneLeadSamples(before) {
       const rows: unknown[] = await tx`DELETE FROM factory.lead_samples WHERE at < ${before} RETURNING at`
+      return rows.length
+    },
+
+    async recordClassSnapshot(at, classes, processes) {
+      for (const row of classes) {
+        await tx`
+          INSERT INTO factory.host_class_samples (at, class, repo, tenant, issue, step, footprint_mib, cpu_ms, procs)
+          VALUES (${at}, ${row.class}, ${row.repo}, ${row.tenant}, ${row.issue}, ${row.step}, ${row.footprintMib},
+            ${row.cpuMs}, ${row.procs})`
+      }
+      for (const proc of processes) {
+        await tx`
+          INSERT INTO factory.host_process_samples (at, pid, ppid, name, class, repo, tenant, issue, footprint_mib, cpu_ms, why, grown_mib)
+          VALUES (${at}, ${proc.pid}, ${proc.ppid}, ${proc.name}, ${proc.class}, ${proc.repo}, ${proc.tenant}, ${proc.issue},
+            ${proc.footprintMib}, ${proc.cpuMs}, ${proc.why}, ${proc.grownMib})
+          ON CONFLICT (at, pid) DO NOTHING`
+      }
+    },
+
+    async rollUpClassHours(now) {
+      // a minute's total per key first, then the hour: the peak is the largest minute, not the largest row
+      const rows: unknown[] = await tx`
+        INSERT INTO factory.host_class_hours (hour, class, repo, tenant, mib_minutes, peak_mib, cpu_seconds, minutes)
+        SELECT hour, class, repo, tenant, sum(mib), max(mib), coalesce(sum(cpu), 0) / 1000.0, count(*)
+        FROM (
+          SELECT date_trunc('hour', at) AS hour, at, class, coalesce(repo, '') AS repo, coalesce(tenant, '') AS tenant,
+            sum(footprint_mib) AS mib, sum(cpu_ms) AS cpu
+          FROM factory.host_class_samples
+          WHERE at < date_trunc('hour', ${now}::timestamptz)
+            AND at >= coalesce((SELECT max(hour) + interval '1 hour' FROM factory.host_class_hours), '-infinity'::timestamptz)
+          GROUP BY 1, 2, 3, 4, 5
+        ) minute
+        GROUP BY hour, class, repo, tenant
+        ON CONFLICT DO NOTHING
+        RETURNING hour`
+      return rows.length
+    },
+
+    async pruneClassSamples(before) {
+      const classes: unknown[] = await tx`DELETE FROM factory.host_class_samples WHERE at < ${before} RETURNING at`
+      const processes: unknown[] = await tx`DELETE FROM factory.host_process_samples WHERE at < ${before} RETURNING at`
+      return classes.length + processes.length
+    },
+
+    async pruneClassHours(before) {
+      const rows: unknown[] = await tx`DELETE FROM factory.host_class_hours WHERE hour < ${before} RETURNING hour`
       return rows.length
     },
 

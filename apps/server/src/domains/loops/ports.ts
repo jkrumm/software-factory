@@ -86,8 +86,47 @@ export interface HostReading {
   swapoutMbPer300s: number | null
 }
 
-/** One minute as stored: the reading and the capacity facts (`migrations/1010_lead_samples.sql`). */
-export type HostSampleRecord = HostReading & CapacityFacts
+/** The host signals the class snapshot reads beside the processes (`migrations/1022_host_classes.sql`); null when not read. */
+export interface HostSignals {
+  /** `kern.memorystatus_vm_pressure_level`: 1 normal, 2 warning, 4 critical */
+  pressureLevel: number | null
+  compressorMib: number | null
+  processes: number | null
+  cpuIdlePct: number | null
+  vmFreeGib: number | null
+  /** the CPU the host loop's helper processes took since the last snapshot */
+  collectorCpuMs: number | null
+}
+
+/** One minute as stored: the reading, the capacity facts (`migrations/1010_lead_samples.sql`) and the host signals. */
+export type HostSampleRecord = HostReading & CapacityFacts & HostSignals
+
+/** One row of `host_class_samples`: a class, repo, tenant, Issue and step summed over the minute. */
+export interface ClassSampleRow {
+  class: string
+  repo: string | null
+  tenant: string | null
+  issue: number | null
+  step: string | null
+  footprintMib: number
+  cpuMs: number | null
+  procs: number
+}
+
+/** One notable process of the minute (`host_process_samples`): its program name only, never its command line. */
+export interface ProcessSampleRow {
+  pid: number
+  ppid: number
+  name: string
+  class: string
+  repo: string | null
+  tenant: string | null
+  issue: number | null
+  footprintMib: number
+  cpuMs: number | null
+  why: 'top' | 'large' | 'growth'
+  grownMib: number | null
+}
 
 /** What one lead's process tree cost at a sample, by its worktree. */
 export interface LeadSampleRow {
@@ -154,6 +193,18 @@ export interface LoopStore {
   pruneHostSamples(before: Date): Promise<number>
   /** drops the lead samples older than `before`; how many */
   pruneLeadSamples(before: Date): Promise<number>
+  /** the class rows and the notable processes of the minute at `at`; a process already stored at `at` is ignored */
+  recordClassSnapshot(
+    at: Date,
+    classes: readonly ClassSampleRow[],
+    processes: readonly ProcessSampleRow[],
+  ): Promise<void>
+  /** rolls every complete hour before `now`'s hour that has no rollup yet into `host_class_hours`; how many rows */
+  rollUpClassHours(now: Date): Promise<number>
+  /** drops the class and process rows older than `before`; how many */
+  pruneClassSamples(before: Date): Promise<number>
+  /** drops the hourly rollups older than `before`; how many */
+  pruneClassHours(before: Date): Promise<number>
   /** the worktrees of the attempts that are live or ended since `since` */
   attemptWorktrees(since: Date): Promise<AttemptWorktree[]>
   /** the rounds of one subject, oldest first */

@@ -11,6 +11,9 @@ import { memoryUsedPct } from '../src/adapters/planning/vm-memory.ts'
 import { readLeadCosts } from '../src/read/lead-costs.ts'
 import { createApp } from '../src/api/app.ts'
 import { hostPass } from '../src/app/loops/host.ts'
+import { textRunner } from '../src/adapters/planning/process.ts'
+import { hostSnapshot } from '../src/adapters/planning/snapshot.ts'
+import { emptySnapshotMemory, type SnapshotProc } from '../src/domains/capacity/classes.ts'
 
 const PS = `    1     0   0.1    12288 /sbin/launchd
   412     1  96.4  2411520 /Applications/Google Chrome.app/Contents/MacOS/Google Chrome
@@ -158,6 +161,42 @@ test('hostWatch: one ps serves readers within the cache; a failed ps gives empty
   expect(await broken.sample()).toMatchObject({ memoryUsedPct: null })
 })
 
+test('hostSnapshot: a full reading joins every helper; a failed ps, launchctl or lsof keeps the signals and no procs', async () => {
+  const top = await fakeBin(
+    'top',
+    `printf '%s\\n' 'Processes: 2 total' 'CPU usage: 1.0% user, 2.0% sys, 97.0% idle' 'PID PPID MEM TIME' '7  1  300M 00:01.00' '8  7  4096K 00:00.50'`,
+  )
+  const ps = await fakeBin('ps', `printf '%s\\n' '7 1 me /opt/bin/worker' '8 7 me /opt/bin/child'`)
+  const launchctl = await fakeBin('launchctl', `printf 'PID\\tStatus\\tLabel\\n7\\t0\\tcom.example.worker\\n'`)
+  const sysctl = await fakeBin('sysctl', `printf '2\\n1073741824\\n'`)
+  const failing = await fakeBin('fails', 'exit 1')
+  const reader = (overrides: { psBin?: string; launchctlBin?: string; cwds?: Map<number, string> | null }) => {
+    const runner = textRunner(5_000)
+    const watch = hostWatch({ host: {} as never, sysctlBin: sysctl, psBin: ps, topBin: top, runner })
+    return hostSnapshot({
+      top: () => watch.topSnapshot(),
+      cwds: async () => (overrides.cwds === undefined ? new Map([[7, '/srv']]) : overrides.cwds),
+      runner,
+      psBin: overrides.psBin ?? ps,
+      launchctlBin: overrides.launchctlBin ?? launchctl,
+      lsofBin: failing,
+      sysctlBin: sysctl,
+      vmVolume: '/',
+    })
+  }
+  const full = await reader({}).read()
+  expect(full).toMatchObject({ processes: 2, cpuIdlePct: 97, pressureLevel: 2, compressorMib: 1024 })
+  expect(full?.vmFreeGib).toBeGreaterThan(0)
+  expect(full?.procs?.map((p) => [p.pid, p.name, p.label, p.cwd])).toEqual([
+    [7, 'worker', 'com.example.worker', '/srv'],
+    [8, 'child', null, null],
+  ])
+  for (const degraded of [{ psBin: failing }, { launchctlBin: failing }, { cwds: null }]) {
+    const reading = await reader(degraded).read()
+    expect(reading).toMatchObject({ procs: null, processes: 2, pressureLevel: 2 })
+  }
+})
+
 let db: TestCluster
 beforeAll(async () => {
   db = await startTestCluster()
@@ -165,19 +204,27 @@ beforeAll(async () => {
 })
 afterAll(() => db.stop())
 
-test('a pass writes one row and prunes what is older than 25 hours', async () => {
+const noSnapshot = () => ({
+  snapshot: { read: async () => null },
+  memory: { current: emptySnapshotMemory() },
+  self: { pid: 1, dirs: [] },
+})
+
+test('a pass writes one row and prunes what is older than 14 days', async () => {
   const uow = postgresUnitOfWork(db.sql, (tx) => ({ loops: postgresLoopStore(tx) }))
   const now = new Date()
-  const old = new Date(now.getTime() - 26 * 3_600_000)
-  await db.sql`INSERT INTO factory.host_samples (at, load) VALUES (${old}, 1)`
+  const old = new Date(now.getTime() - 15 * 86_400_000)
+  await db.sql`INSERT INTO factory.host_samples (at, load) VALUES (${old}, 1), (${new Date(now.getTime() - 86_400_000)}, 1)`
   const pass = await hostPass({
     uow,
     clock: { now: () => now },
     sampler: { sample: async () => ({ load: 2, memoryUsedPct: null, swapUsedPct: 10, swapoutMbPer300s: 0 }) },
     processes: { read: async () => null },
+    ...noSnapshot(),
     facts: async () => ({ ok: false, error: { kind: 'gone', detail: 'x' } }),
   })
-  expect(pass).toEqual({ ok: true, value: { pruned: 1, leadRows: null } })
+  expect(pass).toEqual({ ok: true, value: { pruned: 1, leadRows: null, classRows: null } })
+  await db.sql`DELETE FROM factory.host_samples WHERE at < ${now}`
   const rows =
     await db.sql`SELECT load, memory_used_pct, swap_used_pct, leads, queued, seats, load_ceiling FROM factory.host_samples`
   expect(rows).toHaveLength(1)
@@ -216,9 +263,10 @@ test('a pass with a process table stores the facts and one row per lead, and pru
         { pid: 20, ppid: 1, rssKib: 4096, footprintKib: null, cwd: '/work/app/.claude/worktrees/factory-8-1' },
       ],
     },
+    ...noSnapshot(),
     facts: async () => ({ ok: true, value: { leads: 1, queued: 2, seats: 16, loadCeiling: 6.5 } }),
   })
-  expect(pass).toEqual({ ok: true, value: { pruned: 0, leadRows: 1 } })
+  expect(pass).toEqual({ ok: true, value: { pruned: 0, leadRows: 1, classRows: null } })
   const [sample] = await db.sql`SELECT leads, queued, seats, load_ceiling FROM factory.host_samples WHERE at = ${now}`
   expect(sample).toEqual({ leads: 1, queued: 2, seats: 16, load_ceiling: 6.5 })
   const rows =
@@ -230,6 +278,148 @@ test('a pass with a process table stores the facts and one row per lead, and pru
   await db.sql`DELETE FROM factory.lead_samples`
   await db.sql`DELETE FROM factory.lead_attempts`
   await db.sql`DELETE FROM factory.host_samples WHERE at = ${now}`
+})
+
+test('a pass with a snapshot stores the signals, the class rows and the notable processes, rolls hours up and prunes', async () => {
+  const uow = postgresUnitOfWork(db.sql, (tx) => ({ loops: postgresLoopStore(tx) }))
+  const t0 = new Date(Date.UTC(2026, 10, 14, 10, 59))
+  const worktree = '/work/app/.claude/worktrees/factory-9-1'
+  await db.sql`
+    INSERT INTO factory.lead_attempts (issue_id, attempt, branch, repo_path, worktree_path, first_try_at)
+    VALUES ('issue_9', 1, 'factory/9-1', '/work/app', ${worktree}, ${t0})`
+  await db.sql`INSERT INTO factory.host_class_samples (at, class, footprint_mib, procs) VALUES (${new Date(t0.getTime() - 15 * 86_400_000)}, 'other', 1, 1)`
+  await db.sql`INSERT INTO factory.host_class_hours (hour, class, mib_minutes, peak_mib, cpu_seconds, minutes) VALUES (${new Date(t0.getTime() - 401 * 86_400_000)}, 'other', 1, 1, 0, 1)`
+  const proc = (
+    pid: number,
+    ppid: number,
+    mib: number,
+    cpuS: number,
+    extra: Partial<SnapshotProc> = {},
+  ): SnapshotProc => ({
+    pid,
+    ppid,
+    footprintKib: mib * 1024,
+    cpuMs: cpuS * 1000,
+    name: `p${pid}`,
+    user: 'me',
+    exe: `/opt/bin/p${pid}`,
+    label: null,
+    session: null,
+    slot: null,
+    slotActive: false,
+    vm: null,
+    cwd: null,
+    ...extra,
+  })
+  // a lead (claude in its worktree) with a slot run under it, a tenant job, the server's job, and a root daemon
+  const snapshotAt = (claudeMib: number, cpuS: number) => [
+    proc(1, 0, 10, 1, { user: 'root', exe: '/sbin/launchd' }),
+    proc(100, 1, claudeMib, cpuS, { cwd: worktree }),
+    proc(101, 100, 50, cpuS, { slot: 'factory-9-1 make check-fast' }),
+    proc(102, 101, 1500, cpuS, { slotActive: true }),
+    proc(200, 1, 300, cpuS, { label: 'com.example.worker' }),
+    proc(300, 1, 40, cpuS, { label: 'com.example.factory' }),
+    proc(301, 300, 60, cpuS),
+  ]
+  let next = snapshotAt(200, 10)
+  const deps = {
+    uow,
+    sampler: { sample: async () => ({ load: 3, memoryUsedPct: 50, swapUsedPct: 1, swapoutMbPer300s: 0 }) },
+    processes: { read: async () => null },
+    snapshot: {
+      read: async () => ({
+        procs: next,
+        processes: 7,
+        cpuIdlePct: 40.5,
+        pressureLevel: 2,
+        compressorMib: 900,
+        vmFreeGib: 120.5,
+        collectorCpuMs: 420,
+      }),
+    },
+    memory: { current: emptySnapshotMemory() },
+    self: { pid: 301, dirs: [] },
+    facts: async () => ({ ok: false as const, error: { kind: 'gone' as const, detail: 'x' } }),
+  }
+  const first = await hostPass({ ...deps, clock: { now: () => t0 } })
+  expect(first).toEqual({ ok: true, value: { pruned: 2, leadRows: null, classRows: 5 } })
+  const [signals] = await db.sql`
+    SELECT pressure_level, compressor_mib, processes, cpu_idle_pct, vm_free_gib, collector_cpu_ms
+    FROM factory.host_samples WHERE at = ${t0}`
+  expect(signals).toEqual({
+    pressure_level: 2,
+    compressor_mib: 900,
+    processes: 7,
+    cpu_idle_pct: 40.5,
+    vm_free_gib: 120.5,
+    collector_cpu_ms: 420,
+  })
+  const classesAt = (at: Date) => db.sql`
+    SELECT class, repo, tenant, issue, step, footprint_mib, cpu_ms::int AS cpu_ms, procs
+    FROM factory.host_class_samples WHERE at = ${at} ORDER BY footprint_mib DESC`
+  // the first snapshot has no CPU figures: nothing to take a difference from
+  expect(await classesAt(t0)).toEqual([
+    {
+      class: 'step',
+      repo: 'app',
+      tenant: null,
+      issue: 9,
+      step: 'make check-fast',
+      footprint_mib: 1550,
+      cpu_ms: null,
+      procs: 2,
+    },
+    {
+      class: 'tenant',
+      repo: null,
+      tenant: 'com.example.worker',
+      issue: null,
+      step: null,
+      footprint_mib: 300,
+      cpu_ms: null,
+      procs: 1,
+    },
+    { class: 'lead', repo: 'app', tenant: null, issue: 9, step: null, footprint_mib: 200, cpu_ms: null, procs: 1 },
+    { class: 'factory', repo: null, tenant: null, issue: null, step: null, footprint_mib: 100, cpu_ms: null, procs: 2 },
+    { class: 'system', repo: null, tenant: null, issue: null, step: null, footprint_mib: 10, cpu_ms: null, procs: 1 },
+  ])
+
+  // a minute later the lead grew by 250 MiB and every process used 6 s more
+  const t1 = new Date(t0.getTime() + 60_000)
+  next = snapshotAt(450, 16)
+  expect(await hostPass({ ...deps, clock: { now: () => t1 } })).toMatchObject({ ok: true, value: { classRows: 5 } })
+  const lead = (await classesAt(t1)).find((row: { class: string }) => row.class === 'lead')
+  expect(lead).toMatchObject({ footprint_mib: 450, cpu_ms: 6000 })
+  const processes = await db.sql`
+    SELECT pid, name, class, repo, issue, footprint_mib, why, grown_mib FROM factory.host_process_samples
+    WHERE at = ${t1} ORDER BY footprint_mib DESC`
+  expect(
+    processes.map((row: { pid: number; why: string; grown_mib: number | null }) => [row.pid, row.why, row.grown_mib]),
+  ).toEqual([
+    [102, 'large', null],
+    [100, 'growth', 250],
+    [200, 'top', null],
+    [301, 'top', null],
+    [101, 'top', null],
+    [300, 'top', null],
+    [1, 'top', null],
+  ])
+  // t1 opened hour 11: hour 10 (one minute) is rolled up, per class, repo and tenant
+  const hours = await db.sql`
+    SELECT class, repo, tenant, mib_minutes::int AS mib_minutes, peak_mib, minutes FROM factory.host_class_hours
+    WHERE hour = ${new Date(Date.UTC(2026, 10, 14, 10))} ORDER BY class`
+  expect(hours).toEqual([
+    { class: 'factory', repo: '', tenant: '', mib_minutes: 100, peak_mib: 100, minutes: 1 },
+    { class: 'lead', repo: 'app', tenant: '', mib_minutes: 200, peak_mib: 200, minutes: 1 },
+    { class: 'step', repo: 'app', tenant: '', mib_minutes: 1550, peak_mib: 1550, minutes: 1 },
+    { class: 'system', repo: '', tenant: '', mib_minutes: 10, peak_mib: 10, minutes: 1 },
+    { class: 'tenant', repo: '', tenant: 'com.example.worker', mib_minutes: 300, peak_mib: 300, minutes: 1 },
+  ])
+  await db.sql`DELETE FROM factory.host_class_samples`
+  await db.sql`DELETE FROM factory.host_process_samples`
+  await db.sql`DELETE FROM factory.host_class_hours`
+  await db.sql`DELETE FROM factory.host_samples WHERE at IN (${t0}, ${t1})`
+  await db.sql`DELETE FROM factory.lead_attempts`
 })
 
 test('readLeadCosts: per repo, the attempts, the p80 of the newest ten attempt peaks and the newest peak', async () => {

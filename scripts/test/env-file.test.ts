@@ -23,6 +23,8 @@ const NEVER: Record<string, string> = {
   FACTORY_TEST_CLOCK_OFFSET_MS: 'scenarios only',
   FACTORY_URL: "the leads' terminals and the CLI read it; the server's own URL follows its port",
   FACTORY_SESSION: "the lead's terminal sets it",
+  FACTORY_SLOT_ACTIVE:
+    "`factory slot run` sets it for its step; the host loop reads it in other processes' environment",
   FACTORY_ROLE: "the lead's terminal sets it",
 }
 

@@ -92,6 +92,8 @@ export const POLICY: readonly Rule[] = [
   rule('GET', '/v1/artifacts', LEAD),
   rule('GET', '/v1/artifacts/:id', LEAD),
   rule('GET', '/v1/pages', LEAD),
+  // tenant and repo names of work repos: the read token and a lead do not see them
+  rule('GET', '/v1/throughput', OWNER),
 
   // -- read ----------------------------------------------------------------------------------------------------------
   rule('GET', '/v1/projects/digests', READ),

@@ -88,6 +88,10 @@ describe('the policy table', () => {
     }
   })
 
+  test('the throughput read names tenants and repos of work repos: owner and orchestrator only', () => {
+    expect(allowed('GET', '/v1/throughput')).toEqual(['owner', 'orchestrator'])
+  })
+
   test('the project digests are a read route: owner, orchestrator, agent and the read token (which gets no words of a work repo)', async () => {
     expect(allowed('GET', '/v1/projects/digests')).toEqual(['owner', 'orchestrator', 'agent', 'read'])
     expect(ruleFor('GET', '/v1/projects/digests')?.route).toBe('/v1/projects/digests')

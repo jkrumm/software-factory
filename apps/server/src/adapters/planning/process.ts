@@ -3,10 +3,45 @@ export interface ProcessResult {
   stdout: string
   stderr: string
   timedOut: boolean
+  /** the CPU time the program used (user and system), µs; absent when the runtime did not say */
+  cpuUs?: number
 }
 
 /** A process that could not start (the program is missing, the directory is gone). */
 export class CannotStart extends Error {}
+
+/** Runs read-only helpers for their output and adds up the CPU they took, so a loop can say what its readings cost. */
+export interface TextRunner {
+  /**
+   * The program's stdout; null when it could not start, timed out, or exited non-zero (with `partial`, a non-zero exit
+   * that still printed something counts: lsof exits 1 when it could not look at some process).
+   */
+  run(cmd: readonly string[], options?: { timeoutMs?: number; partial?: boolean }): Promise<string | null>
+  /** the CPU the helpers used since the last call, ms */
+  takeCpuMs(): number
+}
+
+export function textRunner(defaultTimeoutMs: number): TextRunner {
+  let cpuUs = 0
+  return {
+    async run(cmd, options = {}) {
+      try {
+        const out = await runProcess(cmd, { timeoutMs: options.timeoutMs ?? defaultTimeoutMs })
+        cpuUs += out.cpuUs ?? 0
+        if (out.timedOut) return null
+        if (out.code === 0 || (options.partial && out.stdout.trim() !== '')) return out.stdout
+        return null
+      } catch {
+        return null
+      }
+    },
+    takeCpuMs() {
+      const ms = Math.round(cpuUs / 1000)
+      cpuUs = 0
+      return ms
+    },
+  }
+}
 
 /** After the kill, the pipes get this long to drain before the call gives up on them. */
 const PIPE_GRACE_MS = 500
@@ -70,7 +105,14 @@ export async function runProcess(
       await Promise.allSettled([stdout.cancel(), stderr.cancel()])
       return { code: 137, stdout: '', stderr: '', timedOut: true }
     }
-    return { code: done[2], stdout: done[0], stderr: done[1], timedOut }
+    const cpu = proc.resourceUsage()?.cpuTime.total
+    return {
+      code: done[2],
+      stdout: done[0],
+      stderr: done[1],
+      timedOut,
+      ...(cpu === undefined ? {} : { cpuUs: Number(cpu) }),
+    }
   } finally {
     clearTimeout(timer)
   }

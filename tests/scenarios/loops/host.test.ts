@@ -56,6 +56,16 @@ test('a lead is costed by its process tree and the minute carries the capacity f
   const ran = await runLoop(lab, 'host')
   expect(ran.error).toBeNull()
   expect(ran.summary).toContain('1 lead row(s)')
+  // the class snapshot: top lists the lead's two processes (the third has no footprint), both classed as the lead's
+  expect(ran.summary).toContain('1 class row(s)')
+  const classes = await sql()`
+    SELECT class, repo, issue, footprint_mib, procs FROM factory.host_class_samples
+    WHERE at = (SELECT max(at) FROM factory.host_class_samples)`
+  expect(classes).toEqual([
+    { class: 'lead', repo: 'app', issue: Number(lead.slice('issue_'.length)), footprint_mib: 1280, procs: 2 },
+  ])
+  const [signals] = await sql()`SELECT processes FROM factory.host_samples ORDER BY at DESC LIMIT 1`
+  expect(signals).toEqual({ processes: 10 })
 
   const rows =
     await sql()`SELECT worktree, repo, issue, attempt, rss_mib, footprint_mib, procs FROM factory.lead_samples`
