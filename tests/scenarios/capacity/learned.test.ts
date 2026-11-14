@@ -1,5 +1,6 @@
 import { afterAll, beforeAll, expect, test } from 'bun:test'
 import { AdmitAnswer } from '@software-factory/contract'
+import { TOKENS } from '../harness.ts'
 import { type Lab, startLab } from '../planning/lab.ts'
 
 /**
@@ -105,4 +106,10 @@ test('a relearn point drops the repo to its lane prior, queue order says so, and
 
   const future = await lab.cli(['capacity', 'relearn', '--repo', 'heavy', '--at', '2999-01-01T00:00:00Z'])
   expect(future.code).not.toBe(0)
+
+  // a lead's token may set a point too (an Issue's own ship step), recorded as the agent, but not admit
+  const lead = await lab.cli(['capacity', 'relearn', '--repo', 'small'], { FACTORY_TOKEN: TOKENS.agent })
+  expect(lead.code).toBe(0)
+  expect(lead.json).toMatchObject({ repo: 'small', setBy: 'agent' })
+  expect((await lab.cli(['capacity', 'admit'], { FACTORY_TOKEN: TOKENS.agent })).code).toBe(3)
 }, 60_000)
