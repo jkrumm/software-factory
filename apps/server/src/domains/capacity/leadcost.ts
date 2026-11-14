@@ -165,3 +165,36 @@ export function learnLeadCost(attempts: readonly AttemptPeak[]): LearnedLead | n
   }
   return { mib: p80, basis: 'p80', p80Mib: p80 }
 }
+
+/** A running lead as the memory fit sees it: its repo's learned size, what it holds now, and how long it has run. */
+export interface RunningLead {
+  /** what the repo's leads are learned to take; null: nothing learned, the lane's constant stands */
+  learnedMib: number | null
+  /** what the lead holds by its newest sample; null: unknown, counted as nothing held */
+  heldMib: number | null
+  ageMs: number
+}
+
+/** What the leads that are still growing will take on: how many, and their MiB. */
+export interface LeadGrowth {
+  leads: number
+  mib: number
+}
+
+/**
+ * The memory the running leads are still expected to take: for each lead younger than the age at which its figure counts
+ * as settled (`SETTLED_RUN_MS`), its repo's learned size less what it holds now, never below 0. A lead of a repo with no
+ * learned size reserves nothing here (its lane's constant does); a lead past that age is believed to hold what it will.
+ */
+export function leadGrowth(running: readonly RunningLead[]): LeadGrowth {
+  let leads = 0
+  let mib = 0
+  for (const lead of running) {
+    if (lead.learnedMib === null || lead.ageMs >= SETTLED_RUN_MS) continue
+    const growth = Math.max(0, lead.learnedMib - (lead.heldMib ?? 0))
+    if (growth === 0) continue
+    leads += 1
+    mib += growth
+  }
+  return { leads, mib }
+}

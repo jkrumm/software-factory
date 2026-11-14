@@ -1,6 +1,7 @@
 import { describe, expect, test } from 'bun:test'
 import { type AdmissionInputs, checkAdmission, type LeadFit } from '../../src/domains/capacity/admission.ts'
 import { freeMibOf, headroomMib } from '../../src/domains/capacity/costs.ts'
+import { leadGrowth } from '../../src/domains/capacity/leadcost.ts'
 import { type SeatInputs, seatBonus } from '../../src/domains/capacity/seats.ts'
 
 const now = new Date('2026-11-07T12:00:00Z')
@@ -189,5 +190,51 @@ describe('seatBonus', () => {
     expect(seatBonus(base({ recent: [idle, idle, { load: 1, swapUsedPct: 75 }, idle, idle] }))).toBe(0)
     expect(seatBonus(base({ recent: [idle, idle, { load: null, swapUsedPct: 1 }, idle, idle] }))).toBe(0)
     expect(seatBonus(base({ recent: [idle, idle, { load: 1, swapUsedPct: null }, idle, idle] }))).toBe(0)
+  })
+})
+
+describe('the fit counts what young leads are still learned to grow by', () => {
+  const minutes = (n: number) => n * 60_000
+  const third = (ageMinutes: number) =>
+    checkAdmission(
+      inputs({
+        leadFit: fit({
+          repo: 'basalt-ui',
+          candidateMib: 1_600,
+          // room for three by the plain fit: 2 500 MiB free past the headroom, two leads running
+          freeMib: 2_500 + 2_621,
+          running: 2,
+          growing: leadGrowth([1, 2].map(() => ({ learnedMib: 1_600, heldMib: 200, ageMs: minutes(ageMinutes) }))),
+        }),
+      }),
+    )
+
+  test('two leads admitted five minutes ago holding 200 MiB each: the third is refused with the growth named', () => {
+    expect(third(5)).toMatchObject({
+      admit: false,
+      refusal: {
+        kind: 'memory',
+        part: 'fit',
+        message: expect.stringContaining('the host has 5 GiB free, of which 2 young leads still take 2.7 GiB more'),
+      },
+    })
+  })
+
+  test('forty minutes later their figure is settled and the third is admitted', () => {
+    expect(third(40).admit).toBe(true)
+  })
+
+  test('one young lead is named in the singular, and none adds nothing to the text', () => {
+    const one = checkAdmission(
+      inputs({
+        leadFit: fit({ candidateMib: 1_600, freeMib: 4_000, growing: { leads: 1, mib: 1_400 } }),
+      }),
+    )
+    expect(one).toMatchObject({
+      refusal: { message: expect.stringContaining('1 young lead still takes 1.4 GiB more') },
+    })
+    const none = checkAdmission(inputs({ leadFit: fit({ candidateMib: 28_000 }) }))
+    if (none.admit) throw new Error('expected a refusal')
+    expect(none.refusal.message).not.toContain('young')
   })
 })

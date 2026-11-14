@@ -74,13 +74,23 @@ test('a heavy repo whose second lead would not fit stays queued with the numbers
 
   const second = await queued('heavy', 'a second heavy lead')
   const light = await queued('small', 'a small lead')
+  // the lone lead is minutes old and holds nothing yet: it is still learned to take its 15.6 GiB, which the sample does not show
+  const early = await admit()
+  expect(early.admitted).toEqual([])
+  expect(reasonOf(early, light)).toMatchObject({
+    kind: 'memory',
+    message: expect.stringContaining('the host has 16 GiB free, of which 1 young lead still takes 15.6 GiB more'),
+  })
+  // past 30 minutes its figure counts as settled: the sample is believed
+  await sql()`UPDATE factory.capacity_claims SET taken_at = now() - interval '40 minutes'`
   const answer = await admit()
   expect(answer.admitted.map((a) => a.issue)).toEqual([light])
   expect(reasonOf(answer, second)).toMatchObject({
     kind: 'memory',
     message:
       `memory: a lead of heavy takes ~15.6 GiB outside test slots (the largest of the newest 3 settled leads, all below the p80 of 17.6 GiB), the host has 16 GiB free, ` +
-      'headroom 2.6 GiB',
+      // the small lead admitted in this pass is young and takes its 400 MiB before the sample shows it
+      'of which 1 young lead still takes 0.4 GiB more, headroom 2.6 GiB',
   })
 }, 60_000)
 

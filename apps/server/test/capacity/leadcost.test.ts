@@ -1,6 +1,7 @@
 import { expect, test } from 'bun:test'
 import {
   attribute,
+  leadGrowth,
   learnedLeadMib,
   learnLeadCost,
   type AttemptPeak,
@@ -176,4 +177,18 @@ test('learnLeadCost: the falling figure is the largest of the three, and only se
 test('learnLeadCost: fewer than three attempts learn nothing', () => {
   expect(learnLeadCost([gib(3), gib(3)])).toBeNull()
   expect(learnLeadCost([])).toBeNull()
+})
+
+test('leadGrowth: a young lead takes its learned size less what it holds, a settled or unlearned one nothing', () => {
+  const minutes = (n: number) => n * 60_000
+  expect(
+    leadGrowth([
+      { learnedMib: 1600, heldMib: 200, ageMs: minutes(5) },
+      { learnedMib: 1600, heldMib: null, ageMs: 0 },
+      { learnedMib: 1600, heldMib: 2400, ageMs: minutes(5) },
+      { learnedMib: 1600, heldMib: 200, ageMs: minutes(30) },
+      { learnedMib: null, heldMib: 200, ageMs: minutes(5) },
+    ]),
+  ).toEqual({ leads: 2, mib: 1400 + 1600 })
+  expect(leadGrowth([])).toEqual({ leads: 0, mib: 0 })
 })
