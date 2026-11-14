@@ -1110,27 +1110,7 @@ export function createIntake(deps: IntakeDeps) {
     const waiting = await s.intake.unroutedOne(route.source, route.monitor)
     const stored = await s.intake.setRoute(route.source, route.monitor, route.repo, setBy)
     if (waiting?.status !== 'down' || waiting.group) return ok(stored)
-    const received: Received = {
-      signal: {
-        source: waiting.source,
-        kind: 'alert',
-        origin: originOf(waiting.source),
-        trust: 'machine',
-        repo: route.repo,
-        fingerprint: `${waiting.source}:${waiting.monitor}`,
-        title: waiting.lastTitle,
-        text: '',
-        link: null,
-        madeBy: null,
-        probe: false,
-      },
-      alert: {
-        subject: waiting.monitor,
-        event: waiting.lastEvent,
-        status: 'down',
-        facts: { unrouted: true, downSince: waiting.downSince?.toISOString() ?? null },
-      },
-    }
+    const received = unroutedSignal(waiting, route.repo, waiting.lastTitle, '')
     const filed = await downIn(s, received, received.alert as Alert, { info, topology })
     if (!filed.ok) return filed
     // The held signal this monitor became while it had no route is answered by the Issue.
