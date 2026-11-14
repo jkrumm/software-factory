@@ -1,7 +1,19 @@
 import type { ResumeRules } from '../../domains/leads/apierror.ts'
 import type { SignalRequest } from '@software-factory/contract'
 import type { Triaged } from '../../domains/intake/model.ts'
-import type { CiRuns, LoopReads, LoopStore, MigrationFiles } from '../../domains/loops/ports.ts'
+import type { CapacityStore } from '../../domains/capacity/ports.ts'
+import { type MemoryCeilings, overLoad, overMemory } from '../../domains/capacity/host.ts'
+import { slotLines } from '../../domains/capacity/slots.ts'
+import type { CiRuns, LoopReads, LoopStore, MigrationFiles, OverloadHost } from '../../domains/loops/ports.ts'
+import {
+  type AdmissionRules,
+  gatesPassedFindings,
+  loadOverCeilingFindings,
+  OVERLOAD_KINDS,
+  overloadEvidence,
+  routesSlowFindings,
+  slotLineFindings,
+} from '../../domains/loops/overload.ts'
 import { DEFAULT_STEWARD_RULES, idleClockStart } from '../../domains/loops/stall.ts'
 import {
   ciFindings,
@@ -25,6 +37,7 @@ import {
   type HeartbeatFact,
   type IdleLead,
   type RegressionFact,
+  type RouteLatency,
   type SelfwatchChange,
   type SelfwatchRow,
   subjectKeyOf,
@@ -50,6 +63,7 @@ export type SelfwatchStores = {
   quality: QualityStore
   loops: LoopStore
   loopReads: LoopReads
+  capacity: CapacityStore
 }
 
 export interface SelfwatchDeps {
@@ -78,6 +92,14 @@ export interface SelfwatchDeps {
   processCap: number
   /** every project's budgets against its last day of runs; unset (a host with no step costs) judges none */
   budgets?: (now: Date) => Promise<BudgetFact[]>
+  /** the memory ceilings admission holds (`gates_passed` reads a lead admitted past them) */
+  memoryCeilings: MemoryCeilings
+  /** this process's pid: the server in the evidence's priority line */
+  serverPid: number
+  /** the server's own routes over the last five minutes, timed in the process; absent, `routes_slow` is not judged */
+  routes?: () => RouteLatency
+  /** the process list and `deploys.log` for the evidence block; absent, a capacity signal carries none */
+  overload?: OverloadHost
   /** `GET /health`'s heartbeat, as `healthOf` computes it */
   heartbeat(): Promise<HeartbeatFact>
   /** intake's entry for an agent (`intake.api.file`): its fingerprint rules decide a repeat */
@@ -98,6 +120,42 @@ export interface SelfwatchPass {
 
 /** Open Issues a pass looks at for a quiet lead or a regression. */
 const ISSUE_LIMIT = 100
+
+/** The host and slot minutes the capacity conditions read: the longest of them needs fifteen, and a few more are a margin. */
+const OVERLOAD_LOOKBACK_MS = 20 * 60_000
+/** The newest host sample the evidence block quotes is looked for this far back. */
+const EVIDENCE_HOST_MS = 10 * 60_000
+/** The lines of `deploys.log` the evidence carries. */
+const DEPLOY_LINES = 6
+
+/**
+ * The evidence block of a capacity incident: the slot lines with their reasons, the queue by reason, the host's memory,
+ * compressor and swap, the busiest processes with their scheduling priority, the priority of the server, the door and Postgres
+ * against a lead's, and the last deploy lines. Read once for a pass, and only when a capacity signal is about to be filed:
+ * the database reads in one transaction, the process list and the log outside it.
+ */
+async function overloadLines(deps: SelfwatchDeps & { overload: OverloadHost }, now: Date): Promise<string[]> {
+  const stored = await deps.uow.run(async ({ capacity, loopReads }) =>
+    ok({
+      slots: slotLines(await capacity.slots(), now),
+      queue: await loopReads.queueReasons(),
+      host: (await loopReads.capacityMinutes(new Date(now.getTime() - EVIDENCE_HOST_MS))).at(-1) ?? null,
+    }),
+  )
+  const [ps, deployLines] = await Promise.all([deps.overload.processes(), deps.overload.deployLines(DEPLOY_LINES)])
+  const lines = overloadEvidence({
+    now,
+    slotLines: stored.ok ? stored.value.slots : [],
+    queue: stored.ok ? stored.value.queue : [],
+    host: stored.ok ? stored.value.host : null,
+    ps: ps.ok ? { output: ps.value } : { failure: ps.error.detail },
+    serverPid: deps.serverPid,
+    deployLines,
+  })
+  return stored.ok
+    ? lines
+    : [...lines, `The database was not read for the slot lines, the queue and the host: ${stored.error.detail}`]
+}
 
 const reasonOf = (error: IntakeError): string => ('detail' in error ? `${error.kind}: ${error.detail}` : error.kind)
 
@@ -208,6 +266,38 @@ async function gather(deps: SelfwatchDeps, now: Date): Out<Gathered> {
     gathered.unread.add('process_growth').add('swap_growth').add('process_storm')
     gathered.notes.push('host samples not fresh: process growth, swap and process count not judged')
   }
+
+  // the factory's own capacity: the host minutes with their capacity facts, the slot minutes and the server's own routes
+  const capacity = await deps.uow.run(async ({ loopReads }) =>
+    ok({
+      minutes: await loopReads.capacityMinutes(new Date(now.getTime() - OVERLOAD_LOOKBACK_MS)),
+      slots: await loopReads.slotMinutes(new Date(now.getTime() - OVERLOAD_LOOKBACK_MS)),
+      admissions: await loopReads.admissions(new Date(now.getTime() - OVERLOAD_LOOKBACK_MS)),
+    }),
+  )
+  if (!capacity.ok) return capacity
+  // the comparisons admission itself makes (`domains/capacity/host.ts`), so a changed rule moves these conditions with it
+  const rules: AdmissionRules = {
+    overLoad,
+    overMemory: (reading) => overMemory(reading, deps.memoryCeilings),
+  }
+  gathered.findings.push(
+    ...loadOverCeilingFindings(capacity.value.minutes, rules, now),
+    ...gatesPassedFindings(capacity.value.minutes, capacity.value.admissions, rules, now),
+    ...slotLineFindings(capacity.value.slots, now),
+  )
+  if (!hostSampleIsFresh(capacity.value.minutes, now)) {
+    gathered.unread.add('load_over_ceiling').add('gates_passed')
+    gathered.notes.push('host samples not fresh: load over the ceiling and gates passed not judged')
+  }
+  if (!hostSampleIsFresh(capacity.value.slots, now)) {
+    gathered.unread.add('slot_line')
+    gathered.notes.push(
+      'slot minutes not fresh (the slot aim is off, or the host loop stopped): the slot line not judged',
+    )
+  }
+  if (deps.routes) gathered.findings.push(...routesSlowFindings(deps.routes(), now))
+  else gathered.unread.add('routes_slow')
   if (deps.budgets) {
     try {
       gathered.findings.push(...budgetFindings(await deps.budgets(now)))
@@ -220,7 +310,7 @@ async function gather(deps: SelfwatchDeps, now: Date): Out<Gathered> {
 }
 
 /**
- * One tick of the self-watch loop: ten deterministic conditions (CI, migrations, waits, leads, regressions, the heartbeat, the host's process growth, swap and process count, and a project's `budgets:` breached over the last day), filed through intake as signals on
+ * One tick of the self-watch loop: fourteen deterministic conditions (CI, migrations, waits, leads, regressions, the heartbeat, the host process growth, swap and process count, a project `budgets:` breached over the last day, and the factory own capacity: load over the ceiling, the slot line, gates passed, slow routes), filed through intake as signals on
  * the watched repo. A subject is filed once; while it stays open and its evidence is the same nothing is filed, a changed
  * evidence is filed again under the same title (intake amends the open Issue), and a subject that no longer holds is
  * cleared. At most `MAX_SELFWATCH_FILINGS` a pass, the rest on the next. A row is written only after intake took the signal, so a
@@ -245,8 +335,13 @@ export async function selfwatchPass(deps: SelfwatchDeps): Promise<Result<Selfwat
   }
 
   const rows: SelfwatchRow[] = []
+  let evidence: Promise<string[]> | null = null
   for (const action of due) {
-    const { finding } = action
+    const { overload } = deps
+    const finding =
+      overload && OVERLOAD_KINDS.has(action.finding.kind)
+        ? { ...action.finding, evidence: await (evidence ??= overloadLines({ ...deps, overload }, now)) }
+        : action.finding
     const id = key('selfwatch', finding.kind, finding.subject, action.hash)
     const filed = await deps.file({
       from: `agent:${finding.repo ?? deps.repo}`,

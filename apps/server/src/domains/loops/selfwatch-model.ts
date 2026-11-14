@@ -1,4 +1,4 @@
-/** The ten conditions the self-watch loop looks for; the kind is the first half of a finding's stable key. */
+/** The fourteen conditions the self-watch loop looks for; the kind is the first half of a finding's stable key. */
 export const FINDING_KINDS = [
   'ci_red',
   'migration_clash',
@@ -10,6 +10,10 @@ export const FINDING_KINDS = [
   'swap_growth',
   'process_storm',
   'budget_breach',
+  'load_over_ceiling',
+  'slot_line',
+  'gates_passed',
+  'routes_slow',
 ] as const
 export type FindingKind = (typeof FINDING_KINDS)[number]
 
@@ -27,6 +31,8 @@ export interface Finding {
   /** more to read for the lead (the time now, a count): never hashed */
   context: string[]
   reproduce: string
+  /** the evidence block of a capacity finding (`overloadEvidence`): read when it is filed, never hashed */
+  evidence?: string[]
 }
 
 export const subjectKeyOf = (finding: Pick<Finding, 'kind' | 'subject'>): string => `${finding.kind}:${finding.subject}`
@@ -124,4 +130,54 @@ export interface HostMinute {
   at: Date
   swapUsedPct: number | null
   processes: number | null
+}
+
+/** One minute of the host's capacity facts (`host_samples`), as the overload conditions read it; null when not read. */
+export interface CapacityMinute {
+  at: Date
+  load: number | null
+  /** the load ceiling in force that minute */
+  loadCeiling: number | null
+  /** the leads that held a claim */
+  leads: number | null
+  /** the leads the enabled accounts may hold */
+  seats: number | null
+  memoryUsedPct: number | null
+  swapUsedPct: number | null
+  swapoutMbPer300s: number | null
+  compressorMib: number | null
+  pressureLevel: number | null
+}
+
+/** One minute of the test slots (`slot_shadow`): the base slots, the steps holding one and the callers waiting. */
+export interface SlotMinute {
+  at: Date
+  liveSlots: number
+  holders: number
+  waiters: number
+}
+
+/** What `GET /health` also says: the server's own routes over the last window, measured in the process. */
+export interface RouteLatency {
+  /** the 95th percentile of the answer times (a request still unanswered counts at its age); null with no request */
+  p95Ms: number | null
+  samples: number
+  windowMs: number
+}
+
+/** The queued Issues by the reason they stay queued, as the open `queue_intervals` say. */
+export interface QueueReasonCount {
+  kind: string
+  count: number
+  /** the start of the oldest open interval */
+  since: Date
+}
+
+/** One line of `ps`: the process, its scheduling priority (`ps -o pri`), CPU share, resident size and command. */
+export interface PsRow {
+  pid: number
+  pri: number
+  pcpu: number
+  rssMib: number
+  command: string
 }

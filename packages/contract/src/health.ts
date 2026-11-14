@@ -2,7 +2,7 @@ import * as z from 'zod'
 
 /**
  * What the Uptime Kuma pusher reads from `GET /health` (`.heartbeat.ok`, `.reason`, `.tickAt`, `.queueMovedAt`): a
- * client outside this repo, so the four names stay. `tickAt` is the last successful tick and `queueMovedAt` the last
+ * client outside this repo, so the four names stay (a fifth and sixth, `routeP95Ms` and `routeSamples`, are new). `tickAt` is the last successful tick and `queueMovedAt` the last
  * change of the queue; both are null until there is one. `ok` is false only for a stopped factory; while it is true,
  * `reason` may still say why the factory is not at full pace: `starting`, `deploying`, `starved: …`, `failing: …`.
  */
@@ -12,6 +12,15 @@ export const Heartbeat = z
     reason: z.string().nullable(),
     tickAt: z.iso.datetime({ offset: true }).nullable(),
     queueMovedAt: z.iso.datetime({ offset: true }).nullable(),
+    /**
+     * Added without a rename (optional, so an older server's answer still parses): the 95th percentile, in ms, of the
+     * answer times of the server's own routes over the last five minutes (a request still unanswered counts at its age;
+     * `/health` and the event stream are not timed), and how many requests it is over. `/health` never queries the
+     * database, so it answers for a server that is up but useless; this figure does not: a monitor that reads it can
+     * tell the two apart. Null with no request in the window.
+     */
+    routeP95Ms: z.number().nullable().optional(),
+    routeSamples: z.number().int().min(0).optional(),
   })
   .meta({ id: 'Heartbeat' })
 export type Heartbeat = z.infer<typeof Heartbeat>

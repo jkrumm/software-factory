@@ -48,7 +48,16 @@ test('a fresh start is ok and says starting until its first tick', async () => {
   expect(status).toBe(200)
   expect(body.status).toBe('ok')
   expect(body.reason).toBe('starting')
-  expect(body.heartbeat).toEqual({ ok: true, reason: 'starting', tickAt: null, queueMovedAt: null })
+  expect(body.heartbeat).toMatchObject({ ok: true, reason: 'starting', tickAt: null, queueMovedAt: null })
+  // the four names the pusher reads stay; the route figure is new beside them (null with no request, a number once routes answered)
+  expect(Object.keys(body.heartbeat).sort()).toEqual([
+    'ok',
+    'queueMovedAt',
+    'reason',
+    'routeP95Ms',
+    'routeSamples',
+    'tickAt',
+  ])
 })
 
 test('a restart that never ticks within its grace is not ok', async () => {

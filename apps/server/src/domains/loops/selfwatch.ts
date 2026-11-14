@@ -289,14 +289,14 @@ export const GROWTH_WINDOW_MS = 60 * 60_000
 /** A growth is judged on a process seen at least this long: a test step that starts and peaks within minutes is not a leak. */
 const GROWTH_MIN_SPAN_MS = 30 * 60_000
 /** A reading older than this is not the host as it is now: a process that ended, a host loop that stopped. */
-const FRESH_MS = 3 * 60_000
+export const FRESH_MS = 3 * 60_000
 
 /** Swap use that rose over this many minute samples, never falling, is a swap that grows. */
 export const SWAP_RISE_MINUTES = 15
 /** The rise over those minutes, in points of swap use, below which a flat reading is noise. */
 const SWAP_MIN_RISE_PCT = 0.5
 /** Two minute samples further apart than this are not consecutive: one skipped host tick under load does not break a run. */
-const MINUTE_GAP_MS = 150_000
+export const MINUTE_GAP_MS = 150_000
 
 /** The process count must stay over the cap this many samples in a row: one `top` reading can be a spike of a build. */
 export const STORM_SAMPLES = 3
@@ -304,7 +304,7 @@ export const STORM_SAMPLES = 3
 export const DEFAULT_PROCESS_CAP = 2500
 
 /** Whether the newest minute sample is recent enough to say what the host is doing now. */
-export const hostSampleIsFresh = (minutes: readonly HostMinute[], now: Date): boolean =>
+export const hostSampleIsFresh = (minutes: readonly { at: Date }[], now: Date): boolean =>
   minutes.some((minute) => now.getTime() - minute.at.getTime() <= FRESH_MS)
 
 const mib = (n: number): string => `${Math.round(n)} MiB`
@@ -413,12 +413,19 @@ export function evidenceHash(finding: Pick<Finding, 'facts'>): string {
   return new Bun.CryptoHasher('sha256').update(finding.facts.join('\n')).digest('hex').slice(0, 16)
 }
 
-/** A finding as a signal's text: what was seen, where, how to look again; at most `MAX_LINES` lines. */
+/** The most lines of a capacity finding's evidence block (`overloadEvidence`) a signal carries. */
+export const MAX_EVIDENCE_LINES = 60
+
+/**
+ * A finding as a signal's text: what was seen, where, how to look again; at most `MAX_LINES` lines, and after them the
+ * finding's evidence block when it has one (a capacity finding: the lead who takes the Issue has the host's state as it was).
+ */
 export function signalText(finding: Finding, repo: string): string {
   return [
     `Self-watch ${finding.kind} (${finding.subject}) on ${repo}`,
     ...[...finding.facts, ...finding.context].slice(0, MAX_LINES - 2),
     `Reproduce: ${finding.reproduce}`,
+    ...(finding.evidence ?? []).slice(0, MAX_EVIDENCE_LINES),
   ].join('\n')
 }
 

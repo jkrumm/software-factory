@@ -23,7 +23,7 @@ test('the server boots on Postgres and /health answers through the contract', as
     status: 'ok',
     version: 'scenario',
     reason: null,
-    heartbeat: { ok: true, reason: null, tickAt: null, queueMovedAt: null },
+    heartbeat: expect.objectContaining({ ok: true, reason: null, tickAt: null, queueMovedAt: null }),
     lines: [],
     loops: expect.any(Array),
   })

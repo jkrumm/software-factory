@@ -15,6 +15,7 @@ import { type LeadRoutes, leadRoutes } from './leads.ts'
 import { type LoopsApi, loopRoutes } from './loops.ts'
 import { type PlanningApi, planningRoutes } from './planning.ts'
 import { readRoutes } from './read.ts'
+import type { RouteTimer } from './route-timer.ts'
 import { type ReadModelDeps, readModelRoutes } from './read-models.ts'
 import type { ReadApi } from '../read/reader.ts'
 
@@ -24,6 +25,8 @@ export interface ApiDeps {
   /** serves the OpenAPI document and its page, public; off by default and in production (the CLI generator turns it on and reads it in-process) */
   docs?: boolean
   health: HealthSource
+  /** times every route but `/health` and the stream, for `heartbeat.routeP95Ms` and the self-watch's `routes_slow`; absent, nothing is timed */
+  routes?: RouteTimer
   /** the checkpoints use cases; absent (the CLI generator reads the document only), the routes exist and answer nothing */
   checkpoints?: CheckpointUses
   /** the quality use cases (ship, reopen, what was recorded); absent, they answer unavailable */
@@ -80,6 +83,7 @@ export function createApp(deps: ApiDeps) {
           })
         : new Elysia(),
     )
+    .use(deps.routes?.plugin ?? new Elysia())
     .use(auth(deps.tokens))
     .onError(({ code, error, set, request }) => {
       if (error instanceof Refusal) {
