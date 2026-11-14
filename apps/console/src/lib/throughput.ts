@@ -127,6 +127,8 @@ export const KPI_WORDS: Record<string, { label: string; format: (value: number) 
   step_peak_mib: { label: 'Peak memory of a step', format: mibWords },
   process_growth_mib: { label: 'Growth of a process', format: mibWords },
   queued_minutes: { label: 'Minutes Issues waited in the queue', format: (v) => minutesWords(v) },
+  tenant_class_mib: { label: 'Standing memory of the tenant class', format: mibWords },
+  tenant_growth_mib: { label: 'Standing memory of a tenant that grew', format: mibWords },
 }
 
 export const kpiLabel = (kpi: string): string => KPI_WORDS[kpi]?.label ?? kpi

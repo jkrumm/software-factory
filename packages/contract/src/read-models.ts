@@ -1031,6 +1031,16 @@ export const ThroughputModel = z
           share: z.number(),
         }),
       ),
+      /**
+       * the tenant class (launchd jobs and VMs) against its budget (`FACTORY_TENANT_BUDGET_MIB`): the class's `footprintMib` over
+       * the window, whether it is over the budget, and the repo the daily ranking files a finding on when the 7 days are over it
+       */
+      tenantBudget: z.strictObject({
+        budgetMib: z.number().int(),
+        footprintMib: z.number().int(),
+        over: z.boolean(),
+        project: z.string(),
+      }),
       /** lead and step rows with a repo, per repo: the 20 largest by footprint, then repo name */
       byRepo: z.array(
         z.strictObject({
@@ -1245,7 +1255,7 @@ export const ThroughputModel = z
       z.strictObject({
         id: z.string(),
         project: z.string(),
-        /** `failed_run_minutes`, `slot_minutes_per_issue`, `step_peak_mib`, `process_growth_mib` or `queued_minutes` */
+        /** `failed_run_minutes`, `slot_minutes_per_issue`, `step_peak_mib`, `process_growth_mib`, `queued_minutes`, `tenant_class_mib` or `tenant_growth_mib` */
         kpi: z.string(),
         /** a step's tier, a process name, or `*` for the whole project */
         subject: z.string(),

@@ -16,6 +16,7 @@ import {
   improvementTitle,
   type IssueFate,
   type ProjectBudgets,
+  type TenantPolicy,
   RANK_DAYS,
   rankCandidates,
   readLedger,
@@ -39,6 +40,8 @@ export interface ThroughputProject {
 export interface ThroughputDeps {
   uow: UnitOfWork<{ loops: LoopStore }>
   clock: Clock
+  /** the tenant class's budget and the repo its findings are filed on (`FACTORY_TENANT_BUDGET_MIB`, `FACTORY_TENANT_PROJECT`) */
+  tenants: TenantPolicy
   projects(): Promise<ThroughputProject[]>
   /** the host over a window (`readWindowFacts`); `baseline` adds the 14-day median per Issue */
   facts(
@@ -154,7 +157,11 @@ export async function throughputPass(deps: ThroughputDeps): Promise<Result<Throu
   // a project with an improvement open is asked for no second one
   pass.held = projects.map((p) => p.project).filter((project) => holdsProject(rows, project))
   const top = new Map<string, Candidate>()
-  for (const candidate of rankCandidates(facts)) {
+  const ranked = rankCandidates(facts, deps.tenants)
+  if (!byProject.has(deps.tenants.project) && ranked.some((c) => c.project === deps.tenants.project)) {
+    pass.notes.push(`standing memory not filed: ${deps.tenants.project} is not a followed project`)
+  }
+  for (const candidate of ranked) {
     if (!byProject.has(candidate.project) || top.has(candidate.project) || pass.held.includes(candidate.project))
       continue
     if (held.has(subjectKey(candidate))) continue

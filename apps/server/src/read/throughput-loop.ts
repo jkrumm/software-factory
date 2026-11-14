@@ -1,6 +1,6 @@
 import type { SQL } from 'bun'
 import * as z from 'zod'
-import type { BudgetFact, IssueFate, ProjectBudgets, WindowFacts } from '../domains/loops/throughput.ts'
+import type { BudgetFact, IssueFate, ProjectBudgets, TenantFacts, WindowFacts } from '../domains/loops/throughput.ts'
 import {
   BASELINE_DAYS,
   DEFAULT_PEAK_MIB,
@@ -8,6 +8,8 @@ import {
   MIN_FAST_RUNS,
   QUEUE_PROJECT,
   PROCESS_GROWTH_MIB,
+  MIN_TENANT_BASELINE_DAYS,
+  TENANT_DAY_HOURS,
 } from '../kernel/throughput-limits.ts'
 import { boundedRead } from './bounded.ts'
 import { REPO_OF_STEP } from './retro-build.ts'
@@ -43,6 +45,84 @@ const stepRows = async (tx: SQL, from: Date, to: Date) =>
       SELECT ${tx.unsafe(REPO_OF_STEP)} AS repo, name, duration_ms, exit_code, peak_rss_mib AS peak
       FROM factory.step_costs WHERE repo IS NOT NULL AND at >= ${from} AND at < ${to}`) as unknown[]
   ).map((raw) => StepRow.parse(raw))
+
+const HOUR_MS = 3_600_000
+
+const median = (values: readonly number[]): number =>
+  percentile(
+    values.toSorted((a, b) => a - b),
+    0.5,
+  )
+
+/**
+ * The tenant class over `[from, to)` from the hourly rollups (`host_class_hours`: complete hours only, so an hour that had
+ * not ended by `to` is not read). A mean is the summed MiB-minutes over the window's sampled hours times 60, so an hour a
+ * tenant is absent counts 0. With `baseline`, each tenant's mean over the newest `TENANT_DAY_HOURS` is returned with its
+ * median over the `BASELINE_DAYS` buckets of that length before them: a bucket is a day of the host being sampled, a
+ * tenant absent in one counts 0, and fewer than `MIN_TENANT_BASELINE_DAYS` such buckets leave the median null.
+ */
+async function readTenantFacts(tx: SQL, from: Date, to: Date, baseline: boolean): Promise<TenantFacts> {
+  const dayFrom = new Date(to.getTime() - TENANT_DAY_HOURS * HOUR_MS)
+  const since = new Date(dayFrom.getTime() - BASELINE_DAYS * TENANT_DAY_HOURS * HOUR_MS)
+  const start = baseline ? new Date(Math.min(from.getTime(), since.getTime())) : from
+  const hourRows: unknown[] = await tx`
+    SELECT DISTINCT hour FROM factory.host_class_hours
+    WHERE hour >= ${start} AND hour + interval '1 hour' <= ${to}`
+  const tenantRows: unknown[] = await tx`
+    SELECT hour, tenant, sum(mib_minutes)::float8 AS mib_minutes FROM factory.host_class_hours
+    WHERE class = 'tenant' AND tenant <> '' AND hour >= ${start} AND hour + interval '1 hour' <= ${to}
+    GROUP BY hour, tenant`
+  const hours = hourRows.map((raw) => z.object({ hour: z.coerce.date() }).parse(raw).hour.getTime())
+  const rows = tenantRows.map((raw) =>
+    z.object({ hour: z.coerce.date(), tenant: z.string(), mib_minutes: num }).parse(raw),
+  )
+  const means = (windowFrom: Date) => {
+    const sampled = hours.filter((h) => h >= windowFrom.getTime()).length
+    const sums = new Map<string, number>()
+    for (const r of rows) {
+      if (r.hour.getTime() >= windowFrom.getTime()) sums.set(r.tenant, (sums.get(r.tenant) ?? 0) + r.mib_minutes)
+    }
+    return { sampled, mean: (tenant: string) => (sampled === 0 ? 0 : (sums.get(tenant) ?? 0) / (sampled * 60)), sums }
+  }
+  const window = means(from)
+  const members = [...window.sums.keys()]
+    .map((tenant) => ({ tenant, mib: Math.round(window.mean(tenant)) }))
+    .toSorted((a, b) => b.mib - a.mib || a.tenant.localeCompare(b.tenant))
+  const classMib = members.reduce((sum, m) => sum + m.mib, 0)
+
+  const day: TenantFacts['day'] = []
+  if (baseline) {
+    const newest = means(dayFrom)
+    const bucketMs = TENANT_DAY_HOURS * HOUR_MS
+    // bucket 0 is the oldest of the 14 days before the newest 24 hours
+    const bucketOf = (at: number) => Math.floor((at - since.getTime()) / bucketMs)
+    const sampledBuckets = new Map<number, number>()
+    for (const h of hours) {
+      if (h < since.getTime() || h >= dayFrom.getTime()) continue
+      sampledBuckets.set(bucketOf(h), (sampledBuckets.get(bucketOf(h)) ?? 0) + 1)
+    }
+    const perBucket = new Map<string, Map<number, number>>()
+    for (const r of rows) {
+      if (r.hour.getTime() < since.getTime() || r.hour.getTime() >= dayFrom.getTime()) continue
+      const buckets = perBucket.get(r.tenant) ?? new Map<number, number>()
+      buckets.set(bucketOf(r.hour.getTime()), (buckets.get(bucketOf(r.hour.getTime())) ?? 0) + r.mib_minutes)
+      perBucket.set(r.tenant, buckets)
+    }
+    const enough = sampledBuckets.size >= MIN_TENANT_BASELINE_DAYS
+    for (const tenant of new Set([...newest.sums.keys(), ...perBucket.keys()])) {
+      const buckets = perBucket.get(tenant)
+      day.push({
+        tenant,
+        mib: Math.round(newest.mean(tenant)),
+        medianMib: enough
+          ? Math.round(median([...sampledBuckets].map(([b, n]) => (buckets?.get(b) ?? 0) / (n * 60))))
+          : null,
+      })
+    }
+    day.sort((a, b) => a.tenant.localeCompare(b.tenant))
+  }
+  return { hours: window.sampled, classMib, members, day }
+}
 
 /**
  * The host over `[from, to)` as the throughput loop ranks it: the raw figures per project from `step_costs`, the closed
@@ -123,6 +203,7 @@ export async function readWindowFacts(
         ORDER BY x.version DESC LIMIT 1) s ON true
       WHERE a.kind = 'admitted' AND a.result = 'applied' AND a.at >= ${from} AND a.at < ${to}`
 
+    const tenants = await readTenantFacts(tx, from, to, options.baseline)
     const projects = new Set([...runs.keys(), ...closed.keys()])
     return {
       days,
@@ -166,6 +247,7 @@ export async function readWindowFacts(
         .map((raw) => z.object({ minutes: num, admissions: num }).parse(raw))
         .filter((r) => r.admissions > 0)
         .map((r) => ({ project: QUEUE_PROJECT, minutes: r.minutes, admissions: r.admissions })),
+      tenants,
     }
   })
 }

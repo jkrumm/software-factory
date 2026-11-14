@@ -10,6 +10,9 @@ import {
   DEFAULT_PEAK_MIB,
   QUEUE_PROJECT,
   PROCESS_GROWTH_MIB,
+  SLOT_MEMORY_MIB,
+  TENANT_DAY_HOURS,
+  TENANT_GROWTH_MIB,
   isSharedMemoryProgram,
 } from '../../kernel/throughput-limits.ts'
 
@@ -19,6 +22,8 @@ export const THROUGHPUT_KPIS = [
   'step_peak_mib',
   'process_growth_mib',
   'queued_minutes',
+  'tenant_class_mib',
+  'tenant_growth_mib',
 ] as const
 export type ThroughputKpi = (typeof THROUGHPUT_KPIS)[number]
 
@@ -49,6 +54,29 @@ export interface WindowFacts {
   processes: { name: string; class: string; project: string; grownMib: number; minutes: number }[]
   /** minutes Issues of every project spent queued (filed or reopened to admitted) for admissions in the window: one row, on the factory, whose queue it is */
   queued: { project: string; minutes: number; admissions: number }[]
+  /** the tenant class (launchd jobs and VMs) as the hourly rollups of the window give it */
+  tenants: TenantFacts
+}
+
+/**
+ * The tenant class over a window, from `host_class_hours`: means are the summed MiB-minutes over the sampled hours times 60,
+ * so an hour a tenant is absent counts 0 (a cluster's shared mapping is counted once, as the class rows store it).
+ */
+export interface TenantFacts {
+  /** the hours of the window with class rows; 0 means the window has no reading */
+  hours: number
+  /** the class's mean footprint over the window, MiB */
+  classMib: number
+  /** every tenant's mean footprint over the window, largest first */
+  members: { tenant: string; mib: number }[]
+  /** with a baseline: each tenant's mean over the window's newest 24 hours, and its median over the 14 days before them (null: too short a past to say) */
+  day: { tenant: string; mib: number; medianMib: number | null }[]
+}
+
+/** Where tenant findings are filed (the repo that owns the host's configuration) and the class's budget. */
+export interface TenantPolicy {
+  project: string
+  budgetMib: number
 }
 
 /** One thing that costs capacity, with the figure that measures it. */
@@ -68,9 +96,12 @@ export interface Candidate {
 const round = (value: number, decimals = 1): number => Math.round(value * 10 ** decimals) / 10 ** decimals
 
 const READ = 'factory read throughput --hours 168'
+const MINUTES_PER_DAY = 1440
+
+const gib = (mib: number): string => `${round(mib / 1024)} GiB`
 
 /** What the window's facts rank as costs, largest first (then project, kpi, subject). */
-export function rankCandidates(facts: WindowFacts): Candidate[] {
+export function rankCandidates(facts: WindowFacts, tenants: TenantPolicy | null = null): Candidate[] {
   const found: Candidate[] = []
   const days = Math.max(1, facts.days)
   for (const r of facts.runs) {
@@ -147,6 +178,7 @@ export function rankCandidates(facts: WindowFacts): Candidate[] {
       query: `\`factory read kpis\` queue_time for the cut, every project's Issues from filed to admitted, divided by the ${days} days`,
     })
   }
+  if (tenants) found.push(...tenantCandidates(facts, tenants))
   return found.toSorted(
     (a, b) =>
       b.costMinutes - a.costMinutes ||
@@ -154,6 +186,50 @@ export function rankCandidates(facts: WindowFacts): Candidate[] {
       a.kpi.localeCompare(b.kpi) ||
       a.subject.localeCompare(b.subject),
   )
+}
+
+/**
+ * The two findings about standing memory, both filed on `policy.project` (a tenant is a launchd job or VM that repo
+ * configures). The excess is turned into minutes of capacity as slot-minutes: the minutes a test slot of `SLOT_MEMORY_MIB`
+ * (the default step budget) could have held it, over the window for the class and over the newest day for a tenant.
+ */
+function tenantCandidates(facts: WindowFacts, policy: TenantPolicy): Candidate[] {
+  const found: Candidate[] = []
+  const { tenants } = facts
+  if (tenants.hours === 0) return found
+  const days = Math.max(1, facts.days)
+  if (tenants.classMib > policy.budgetMib) {
+    const largest = tenants.members
+      .slice(0, 3)
+      .map((m) => `${m.tenant} ${gib(m.mib)}`)
+      .join(', ')
+    found.push({
+      project: policy.project,
+      kpi: 'tenant_class_mib',
+      subject: '*',
+      label: `the tenant class held ${gib(tenants.classMib)} on average over ${round(days)} days against its budget of ${gib(policy.budgetMib)}; the largest tenants: ${largest}`,
+      value: round(tenants.classMib, 0),
+      unit: 'MiB',
+      target: policy.budgetMib,
+      costMinutes: round(((tenants.classMib - policy.budgetMib) / SLOT_MEMORY_MIB) * days * MINUTES_PER_DAY),
+      query: `${READ} | .host.byClass[] | select(.class == "tenant") | .footprintMib, against .host.tenantBudget.budgetMib; .host.byTenant[] for the tenants`,
+    })
+  }
+  for (const t of tenants.day) {
+    if (t.medianMib === null || t.mib - t.medianMib < TENANT_GROWTH_MIB) continue
+    found.push({
+      project: policy.project,
+      kpi: 'tenant_growth_mib',
+      subject: t.tenant,
+      label: `${t.tenant} held ${gib(t.mib)} on average over the last ${TENANT_DAY_HOURS} hours against a median of ${gib(t.medianMib)} over the 14 days before`,
+      value: round(t.mib, 0),
+      unit: 'MiB',
+      target: round(t.medianMib, 0),
+      costMinutes: round(((t.mib - t.medianMib) / SLOT_MEMORY_MIB) * (TENANT_DAY_HOURS * 60)),
+      query: `${READ} | .host.byTenant[] | select(.tenant == "${t.tenant}") | .footprintMib; its median of the 14 days before is in \`host_class_hours\` (class tenant, one row per hour)`,
+    })
+  }
+  return found
 }
 
 /**
@@ -191,6 +267,13 @@ export function figureOf(
       // the queue is the factory's: a finding of an earlier rule on another project has nothing to read
       return q ? round(q.minutes / days) : finding.project === QUEUE_PROJECT ? 0 : null
     }
+    case 'tenant_class_mib':
+      return facts.tenants.hours === 0 ? null : round(facts.tenants.classMib, 0)
+    case 'tenant_growth_mib':
+      // a tenant that does not appear in a window with readings held nothing
+      return facts.tenants.hours === 0
+        ? null
+        : round(facts.tenants.members.find((m) => m.tenant === finding.subject)?.mib ?? 0, 0)
   }
 }
 
@@ -331,6 +414,8 @@ export const improvementTitle = (c: Pick<Candidate, 'project' | 'kpi' | 'subject
     step_peak_mib: `bring the ${c.subject} step’s peak memory under its budget`,
     process_growth_mib: `stop ${c.subject} growing without bound`,
     queued_minutes: 'cut the time Issues wait queued',
+    tenant_class_mib: 'bring the standing memory of the tenant class under its budget',
+    tenant_growth_mib: `bring ${c.subject} back to the memory it usually holds`,
   }
   return `Throughput: ${what[c.kpi]} in ${c.project}`
 }
@@ -348,6 +433,12 @@ export function improvementText(c: Candidate, input: { date: string; reopens: Fi
   if (c.kpi === 'step_peak_mib')
     lines.push(
       `The target is the project's peak budget (\`budgets.peak\` in project.yaml, ${DEFAULT_PEAK_MIB} MiB when none).`,
+    )
+  if (c.kpi === 'tenant_class_mib' || c.kpi === 'tenant_growth_mib')
+    lines.push(
+      c.kpi === 'tenant_class_mib'
+        ? `The memory is the host's, not this repo's: a tenant is a launchd job or a VM this repo configures. The target is the tenant class's budget (\`FACTORY_TENANT_BUDGET_MIB\`). The cost counts the excess as slot-minutes: the minutes a test slot of ${SLOT_MEMORY_MIB} MiB could have held it over ${RANK_DAYS} days.`
+        : `The memory is the host's, not this repo's: a tenant is a launchd job or a VM this repo configures. The rule needs no list of tenants: a tenant ${TENANT_GROWTH_MIB} MiB or more above its own median fires it, and the target is that median. The cost counts the excess as slot-minutes over the ${TENANT_DAY_HOURS} hours.`,
     )
   if (input.reopens) {
     lines.push(

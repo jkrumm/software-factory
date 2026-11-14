@@ -165,6 +165,24 @@ describe('readThroughput', () => {
     expect(collector.cpuSeconds).toBeCloseTo((sqlSignals.collector_ms as number) / 1000, 9)
   })
 
+  test('tenantBudget: the tenant class against its budget, over it or not', async () => {
+    const tenantMib = (await read()).host.byClass.find((c) => c.class === 'tenant')?.footprintMib ?? -1
+    expect(tenantMib).toBeGreaterThan(0)
+    const under = (await read()).host.tenantBudget
+    expect(under).toEqual({ budgetMib: 6144, footprintMib: tenantMib, over: false, project: 'dotfiles' })
+    const model = await readThroughput(sql, {
+      now: NOW,
+      hours: HOURS,
+      tenantBudget: { project: 'hostcfg', budgetMib: tenantMib - 1 },
+    })
+    expect(model.host.tenantBudget).toEqual({
+      budgetMib: tenantMib - 1,
+      footprintMib: tenantMib,
+      over: true,
+      project: 'hostcfg',
+    })
+  })
+
   test('byClass lists the seven classes, largest first', async () => {
     const { byClass } = (await read()).host
     expect(byClass.map((c) => c.class)).toEqual(['system', 'lead', 'tenant', 'step', 'owner', 'other', 'factory'])

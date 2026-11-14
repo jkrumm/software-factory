@@ -20,3 +20,16 @@ export const MIN_FAST_RUNS = 3
 export const MIN_FAIL_RUNS = 5
 /** The project the queue's wait is filed on (the queue is the factory's), and a process of no repo. */
 export const QUEUE_PROJECT = 'software-factory'
+
+/** The tenant class's budget when `FACTORY_TENANT_BUDGET_MIB` is not set: what the dotfiles program aims at with its work profile up. */
+export const DEFAULT_TENANT_BUDGET_MIB = 6144
+/** The repo that owns the host's configuration, where a tenant finding is filed when `FACTORY_TENANT_PROJECT` is not set. */
+export const DEFAULT_TENANT_PROJECT = 'dotfiles'
+/** A tenant whose 24 h average footprint is this far above its own median of the 14 days before has grown. */
+export const TENANT_GROWTH_MIB = 1024
+/** The hours the regression rule averages a tenant over, and the buckets of that length its median is taken from. */
+export const TENANT_DAY_HOURS = 24
+/** A tenant's median is read only from this many buckets of sampled hours: fewer is too short a past to call growth. */
+export const MIN_TENANT_BASELINE_DAYS = 7
+/** The memory one test slot holds (the default step budget): the excess of a tenant is turned into slot-minutes by it. */
+export const SLOT_MEMORY_MIB = DEFAULT_PEAK_MIB
