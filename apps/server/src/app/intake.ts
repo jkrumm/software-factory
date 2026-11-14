@@ -612,7 +612,12 @@ export function createIntake(deps: IntakeDeps) {
     return ok(triaged('dropped', 'probe', null, id, 'marked as a probe: stored dismissed, never shown to the owner'))
   }
 
-  async function hold(s: Stores, r: Received, again?: IssueId): Out<Triaged> {
+  async function hold(
+    s: Stores,
+    r: Received,
+    again?: IssueId,
+    reason = 'outside text waits for the owner or the Judge',
+  ): Out<Triaged> {
     const base = r.alert
       ? ['held', r.signal.source, r.alert.subject]
       : again
@@ -627,7 +632,7 @@ export function createIntake(deps: IntakeDeps) {
     }
     if (existing) return ok({ ...replayedOf(existing), outcome: 'held' })
     const id = await store(s, r, heldKey, 'held', null)
-    return ok(triaged('held', 'quarantined', null, id, 'outside text waits for the owner or the Judge'))
+    return ok(triaged('held', 'quarantined', null, id, reason))
   }
 
   /**
@@ -741,7 +746,9 @@ export function createIntake(deps: IntakeDeps) {
       // A work repo hears the owner only, but the lead of an Issue the owner filed may owe work there: its signal waits
       // as a held one for the owner to promote (never work by itself, never screened).
       if (verdict.detail === 'work_repo' && !signal.probe && (await ownerFiledBy(signal, filer))) {
-        return uow.run(async (s) => hold(s, r))
+        return uow.run(async (s) =>
+          hold(s, r, undefined, 'a work repo hears the owner only: the signal waits for the owner to promote it'),
+        )
       }
       return ok(dropped(verdict.detail, verdict.reason))
     }

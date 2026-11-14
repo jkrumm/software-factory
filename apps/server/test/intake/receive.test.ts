@@ -1144,6 +1144,7 @@ describe("a lead's follow-up for a work repo", () => {
     done(await owned('Consolidate the databases'))
     const held = done(await intake.file(request('agent:argo', 'Move the chat database', 'issue_1'), 'agent'))
     expect(held).toMatchObject({ outcome: 'held', detail: 'quarantined' })
+    expect(held.reason).toContain('owner to promote')
     expect(await issues()).toHaveLength(1)
     const [row] = await db.sql`SELECT state, repo, trust FROM factory.intake_signals WHERE id = ${held.signal}`
     expect(row).toEqual({ state: 'held', repo: 'chat', trust: 'agent' })

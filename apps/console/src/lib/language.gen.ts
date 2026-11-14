@@ -54,7 +54,7 @@ export const LANGUAGE = {
   gone: 'Session state: its session ended or its terminal is gone',
   healed: 'Outcome: an incident that went away before a lead started',
   'held signal':
-    'Outside text the factory did not trust enough to turn into work. It waits in Needs you for the owner to promote or dismiss it',
+    "Outside text the factory did not trust enough to turn into work. It waits in Needs you for the owner to promote or dismiss it. The one held signal that is not outside text is a lead's follow-up for a work repo, when its own Issue was owner-filed: the Judge never reads it",
   idle: 'Session state: its last turn ended',
   incident:
     'One root cause seen through many signals: the VPS is down, so Beszel, HyperDX and Kuma all fire. Triage groups them under one Issue',
@@ -108,7 +108,7 @@ export const LANGUAGE = {
   revision: "One version of an artifact's content. A Decision has one; a Concept or Spec gains one with each revise",
   round: 'The nth ask of a workflow about one subject. A subject has a limited number of rounds',
   screen:
-    'The Judge looks at a held signal (the screen loop, factory-screen) and promotes it, dismisses it with a reason (a duplicate names the open Issue) or leaves it held with a recommendation the owner reads in Needs you. A signal is screened once; a failed call is retried with a backoff, five times at most',
+    "The Judge looks at a held signal (bar a work repo's; the screen loop, factory-screen) and promotes it, dismisses it with a reason (a duplicate names the open Issue) or leaves it held with a recommendation the owner reads in Needs you. A signal is screened once; a failed call is retried with a backoff, five times at most",
   seat: "One lead the accounts may hold at once (leads per account, plus the bonus the host's idle minutes earn). A seat is idle when work is queued and no lead holds it",
   'session state':
     "What a lead's session is, derived from its hook events: starting (no hook yet), working (a turn is running), idle (its last turn ended), compacted (its context was just compacted, no turn since), walled (its account hit a limit), gone (its session ended or its terminal is gone)",
