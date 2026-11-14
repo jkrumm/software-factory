@@ -279,7 +279,7 @@ through `receive` in `app/intake.ts`; the answer is a triage outcome (`docs/lang
   pile their load; `factory slot run` takes a slot, says once on stderr that it is queued for one (and how long it waited when
   it gets it), a wait past 45 minutes exits 75 without running, and a server that is down runs the command anyway. A command
   runs with `FACTORY_SLOT_ACTIVE=1`; a `slot run` inside one runs its command as it is, so the steps of `make check` do not queue
-  again. The host's load in a scenario is the fake `sysctl`'s (`vm.loadavg`), never the machine's.
+  again. While swap in use grows (`swapGrowing`: the newest of five minute samples is 0.5 points of RAM above the lowest older one), only the first step runs, whatever memory is free: the memory rule reads free pages, and swap filling up beside 70 % free is the host paging out what a second run would touch. The host's load in a scenario is the fake `sysctl`'s (`vm.loadavg`), never the machine's.
   Every step leaves a row in `factory.step_costs` (`POST /slots/:id/cost`: name, repo, the directory it ran in, peak resident size and CPU seconds of its
   process tree, duration, wait, exit code; the CLI measures with `ps` every 3 s and the renewals carry the size). The same post carries the step's **test results**
   (`migrations/1023_test_results.sql`): the CLI gives the command a fresh directory in `FACTORY_JUNIT_DIR`, reads every `*.xml`

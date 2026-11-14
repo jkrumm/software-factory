@@ -33,6 +33,8 @@ export interface SlotFit {
   /** whether the host's load allows a step beyond the base slots */
   loadOk: boolean
   headroomMib: number
+  /** swap in use rose over the newest host samples (`swapGrowing`): a second step would page the first one's memory out */
+  swapGrowing?: boolean
   /** for the message only */
   load?: number | null
   extraLoad?: number
@@ -59,6 +61,8 @@ function decide(holders: number, base: number, fit: SlotFit): { grant: true } | 
   const max = Math.max(base, fit.max)
   if (holders >= max) return { grant: false, why: `all ${max} slots are busy` }
   if (holders === 0) return { grant: true }
+  if (fit.swapGrowing)
+    return { grant: false, why: 'swap in use is growing: one step at a time until it settles, whatever memory is free' }
   const { peakMib, freeMib } = fit
   const known = peakMib !== null && freeMib !== null
   const fits = known && peakMib + fit.growthMib <= freeMib - fit.headroomMib
