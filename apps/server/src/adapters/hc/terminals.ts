@@ -117,9 +117,10 @@ function asPortError(error: unknown): PortError {
   throw error
 }
 
-const infoOf = (terminal: Terminal): TerminalInfo => ({
+const infoOf = (terminal: Terminal, claude: string): TerminalInfo => ({
   address: terminal.address,
   live: terminal.state === 'live',
+  agent: terminal.argv[0] === claude,
   reported: terminal.reported,
   status: terminal.status?.state ?? null,
   turn: terminal.turn,
@@ -151,6 +152,10 @@ export class HcTerminals implements Terminals {
     this.hc = new HcClient({ bin: options.bin, session: options.session })
   }
 
+  private claude(): string {
+    return this.options.claudeBin ?? 'claude'
+  }
+
   private budget(): Budget {
     return new Budget(this.options.startBudgetMs ?? DEFAULT_START_BUDGET_MS)
   }
@@ -163,7 +168,7 @@ export class HcTerminals implements Terminals {
 
   async find(key: string): Promise<Result<TerminalInfo[]>> {
     try {
-      return ok((await this.findAll(key, this.budget())).map(infoOf))
+      return ok((await this.findAll(key, this.budget())).map((t) => infoOf(t, this.claude())))
     } catch (error) {
       return err(asPortError(error))
     }
@@ -178,7 +183,7 @@ export class HcTerminals implements Terminals {
       const outcome = await this.serialized(() => this.findOrRun(input, env, budget))
       // Proving takes as long as the agent does to report: outside the lock, other starts go on.
       if (!outcome.proven) await this.prove(outcome.terminal.address, budget)
-      return ok(infoOf(outcome.terminal))
+      return ok(infoOf(outcome.terminal, this.claude()))
     } catch (error) {
       return err(asPortError(error))
     }
@@ -204,7 +209,7 @@ export class HcTerminals implements Terminals {
       const env = await this.accountEnv(input)
       const outcome = await this.serialized(() => this.findOrRun(input, env, budget, input.session))
       if (!outcome.proven) await this.prove(outcome.terminal.address, budget)
-      return ok(infoOf(outcome.terminal))
+      return ok(infoOf(outcome.terminal, this.claude()))
     } catch (error) {
       return err(asPortError(error))
     }

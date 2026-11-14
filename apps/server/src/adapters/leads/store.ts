@@ -200,10 +200,16 @@ export function postgresLeadStore(tx: SQL): LeadStore {
         WHERE issue_id = ${issue} AND attempt = ${attempt} AND dormant_at IS NULL`
     },
 
-    async markRevived(issue, attempt) {
+    async markRevived(issue, attempt, terminal) {
       await tx`
         UPDATE factory.lead_attempts SET dormant_at = NULL, revive_tries = 0
         WHERE issue_id = ${issue} AND attempt = ${attempt}`
+      // The session runs in a new terminal: what the API serves as the lead's address must be that one.
+      if (terminal) {
+        await tx`
+          UPDATE factory.lead_attempts SET terminal = ${terminal.address}, tab = ${terminal.tab}, space = ${terminal.space}
+          WHERE issue_id = ${issue} AND attempt = ${attempt}`
+      }
     },
 
     async reviveFailed(issue, attempt) {

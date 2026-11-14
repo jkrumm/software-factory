@@ -11,6 +11,8 @@ export interface TerminalInfo {
   address: string
   /** running; a finished terminal ended, whatever it was running */
   live: boolean
+  /** what runs in it is the agent itself, not the shell the core put in its place */
+  agent: boolean
   /** the agent in it reported (a status or a turn): it started */
   reported: boolean
   status: string | null
@@ -341,7 +343,11 @@ export interface LeadStore {
   /** the lead is dormant (marking twice keeps the first time) */
   markDormant(issue: IssueId, attempt: number, at: Date): Promise<void>
   /** the dormant lead runs again: the mark and the failed resumes are cleared */
-  markRevived(issue: IssueId, attempt: number): Promise<void>
+  markRevived(
+    issue: IssueId,
+    attempt: number,
+    terminal?: { address: string; tab: string | null; space: string | null },
+  ): Promise<void>
   /** a resume of the dormant session failed; the count of failures including this one */
   reviveFailed(issue: IssueId, attempt: number): Promise<number>
   /** attempts with a terminal that are not marked gone: the ones to look at */

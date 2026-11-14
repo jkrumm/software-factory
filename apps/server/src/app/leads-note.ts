@@ -73,7 +73,8 @@ export async function noteLead(deps: LeadDeps, effect: NoteEffect): Promise<Resu
 
   const found = await deps.terminals.find(name)
   if (!found.ok) return found
-  const live = found.value.find((terminal) => terminal.live)
+  // A dormant lead's live terminal must run the agent: a shell the core put in place of a lost program is no lead.
+  const live = found.value.find((terminal) => terminal.live && (!dormant || terminal.agent))
   // A dormant lead has no process by design; the wake starts its session again, below.
   if (!live && !dormant) return leadGone(deps, issue, attempt, 'its terminal was gone when a note arrived')
 
@@ -158,7 +159,11 @@ async function reviveAndTell(
   const at = deps.clock.now()
   const marked = await deps.uow.run(async ({ leads }) => {
     await leads.markTyped(deliveryKey, at, false)
-    await leads.markRevived(issue, attempt)
+    await leads.markRevived(issue, attempt, {
+      address: started.value.address,
+      tab: started.value.tab,
+      space: started.value.space,
+    })
     return ok(undefined)
   })
   return marked.ok ? ok(undefined) : marked

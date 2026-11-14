@@ -52,6 +52,7 @@ export class MovingClock implements Clock {
 const info = (address: string, live = true): TerminalInfo => ({
   address,
   live,
+  agent: true,
   reported: true,
   status: 'idle',
   turn: 0,
