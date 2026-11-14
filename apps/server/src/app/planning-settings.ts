@@ -58,7 +58,7 @@ export interface PlanningSettings {
   loadRule: 'shadow' | 'on'
   loadPerCore: number
   processCap: number
-  /** the host's cores, which the throughput rule's load ceiling is a multiple of */
+  /** the host's cores: the throughput rule's load ceiling is a multiple of them, and the slot aim adds no slot above twice them in load */
   cores: number
   memoryCeilings: MemoryCeilings
   seatsMaxBonus: number
@@ -66,8 +66,6 @@ export interface PlanningSettings {
   slotsMax: number
   slotExtraLoad: number
   slotAim: AimMode
-  /** the host's cores: the aim adds no slot above twice that in load */
-  cores: number
 }
 
 /** The planning and capacity settings from the environment; throws one message naming every bad key. */
@@ -118,7 +116,6 @@ export function planningSettings(
     slotsMax: Math.max(e.FACTORY_SLOTS ?? 2, e.FACTORY_SLOTS_MAX ?? 6),
     slotExtraLoad: e.FACTORY_SLOT_EXTRA_LOAD ?? 12,
     slotAim: e.FACTORY_SLOT_AIM ?? 'shadow',
-    cores: options.cores ?? availableParallelism(),
   }
 }
 
