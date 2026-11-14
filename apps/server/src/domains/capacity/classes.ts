@@ -1,3 +1,4 @@
+import { SHARED_MEMORY_PROGRAMS } from '../../kernel/throughput-limits.ts'
 import { type WorktreeRef, worktreeOwners } from './leadcost.ts'
 
 /** Who a process works for (`migrations/1022_host_classes.sql`). */
@@ -208,9 +209,36 @@ export interface ClassRow {
   procs: number
 }
 
+/**
+ * The memory a minute's processes add up to. The processes of a shared-memory program (`SHARED_MEMORY_PROGRAMS`: a
+ * database cluster's postmaster, io workers, checkpointer and writer) each count the pages of one mapping they touched, so
+ * summing them counts it once per process (2026-11-14: 5.3 GiB for a 2.5 GiB cluster). A cluster is a process and its
+ * same-named children; it counts its largest process whole, and each other process at the size of the cluster's smallest
+ * (the postmaster, which touches no shared page) or its own size when that is less: the private rest.
+ */
+function countedKib(procs: readonly ClassedProc[]): Map<number, number> {
+  const counted = new Map(procs.map((proc) => [proc.pid, proc.footprintKib]))
+  const shared = procs.filter((proc) => SHARED_MEMORY_PROGRAMS.has(proc.name))
+  const byPid = new Map(shared.map((proc) => [proc.pid, proc]))
+  const clusters = new Map<number, ClassedProc[]>()
+  for (const proc of shared) {
+    const root = byPid.get(proc.ppid)?.name === proc.name ? proc.ppid : proc.pid
+    clusters.set(root, [...(clusters.get(root) ?? []), proc])
+  }
+  for (const members of clusters.values()) {
+    const largest = members.reduce((a, b) => (b.footprintKib > a.footprintKib ? b : a))
+    const privateKib = Math.min(...members.map((proc) => proc.footprintKib))
+    for (const proc of members) {
+      if (proc !== largest) counted.set(proc.pid, Math.min(proc.footprintKib, privateKib))
+    }
+  }
+  return counted
+}
+
 /** The processes with their classes summed per class, repo, tenant, Issue and step, largest first. */
 export function classRows(procs: readonly ClassedProc[]): ClassRow[] {
   const rows = new Map<string, ClassRow & { kib: number }>()
+  const counted = countedKib(procs)
   for (const proc of procs) {
     const key = JSON.stringify([proc.class, proc.repo, proc.tenant, proc.issue, proc.step])
     const row = rows.get(key) ?? {
@@ -224,7 +252,7 @@ export function classRows(procs: readonly ClassedProc[]): ClassRow[] {
       procs: 0,
       kib: 0,
     }
-    row.kib += proc.footprintKib
+    row.kib += counted.get(proc.pid) ?? proc.footprintKib
     row.procs += 1
     if (proc.cpuMs !== null) row.cpuMs = (row.cpuMs ?? 0) + proc.cpuMs
     rows.set(key, row)
