@@ -5,7 +5,13 @@
  * the largest is the one worth a lead's time.
  */
 import type { Finding } from './selfwatch-model.ts'
-import { BASELINE_DAYS, DEFAULT_PEAK_MIB, QUEUE_PROJECT, PROCESS_GROWTH_MIB } from '../../kernel/throughput-limits.ts'
+import {
+  BASELINE_DAYS,
+  DEFAULT_PEAK_MIB,
+  QUEUE_PROJECT,
+  PROCESS_GROWTH_MIB,
+  SHARED_MEMORY_PROGRAMS,
+} from '../../kernel/throughput-limits.ts'
 
 export const THROUGHPUT_KPIS = [
   'failed_run_minutes',
@@ -113,7 +119,7 @@ export function rankCandidates(facts: WindowFacts): Candidate[] {
     })
   }
   for (const p of facts.processes) {
-    if (p.grownMib < PROCESS_GROWTH_MIB) continue
+    if (p.grownMib < PROCESS_GROWTH_MIB || SHARED_MEMORY_PROGRAMS.has(p.name)) continue
     found.push({
       project: p.project,
       kpi: 'process_growth_mib',
