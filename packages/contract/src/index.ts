@@ -137,6 +137,7 @@ export {
   QueueEntry,
   QueueOrder,
   QueueReason,
+  MergeWindow,
   QueueSetBody,
   QueueStatesView,
   RefreshAnswer,

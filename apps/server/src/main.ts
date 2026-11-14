@@ -58,7 +58,8 @@ import { reaperPass, reaperSummary } from './app/loops/reaper.ts'
 import { processKiller, reaperProcesses } from './adapters/planning/reaper-processes.ts'
 import { hygienePass, hygieneSummary } from './app/loops/hygiene.ts'
 import { selfwatchPass, selfwatchSummary } from './app/loops/selfwatch.ts'
-import { githubCiLive, githubCiRuns, githubCiTimes } from './adapters/selfwatch/github.ts'
+import { ciLedgerPass } from './app/loops/ci-ledger.ts'
+import { githubCiLedger, githubCiLive, githubCiRuns, githubCiTimes } from './adapters/selfwatch/github.ts'
 import { gitMigrationFiles } from './adapters/selfwatch/git.ts'
 import { SHARED_NUMBERS } from './adapters/postgres/migrate.ts'
 import { MainCheckoutLines } from './app/loops/checkout-lines.ts'
@@ -537,7 +538,28 @@ async function main(): Promise<void> {
         })
         if (!pass.ok) return pass
         said('selfwatch', [...pass.value.notes, ...pass.value.failed.map((f) => `${f.key}: ${f.reason}`)])
-        return ok(selfwatchSummary(pass.value))
+        // The CI ledger rides on this loop's interval: the runs of every followed project, kept per head for `read throughput`.
+        const ledger = await ciLedgerPass({
+          uow,
+          clock: writes.clock,
+          always: [SELFWATCH_REPO],
+          ledger: githubCiLedger({
+            locate: (repo) => repos.locate(repo),
+            token: intakeEnv.github.token,
+            apiUrl: intakeEnv.github.apiUrl,
+          }),
+        })
+        const ledgerNotes = ledger.ok ? ledger.value.notes : [`ci ledger: ${ledger.error.kind}: ${ledger.error.detail}`]
+        said('selfwatch', ledgerNotes)
+        return ok(
+          [
+            selfwatchSummary(pass.value),
+            ledger.ok ? `ci ledger ${ledger.value.runs} run(s) of ${ledger.value.repos} repo(s)` : null,
+            ...ledgerNotes,
+          ]
+            .filter(Boolean)
+            .join('; '),
+        )
       },
     },
     {

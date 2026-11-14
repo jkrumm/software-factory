@@ -2,6 +2,7 @@ import type { SQL } from 'bun'
 import * as z from 'zod'
 import type { ThroughputModel } from '@software-factory/contract'
 import { boundedRead } from './bounded.ts'
+import { readAccount } from './throughput-account.ts'
 
 const TOP_KEYS = 20
 const TOP_PROCESSES = 15
@@ -196,7 +197,9 @@ export async function readThroughput(sql: SQL, options: { now: Date; hours: numb
     }).sort((a, b) => b.footprintMib - a.footprintMib || a.class.localeCompare(b.class))
 
     const collectorSeconds = (signals.collector_ms ?? 0) / 1000
+    const account = await readAccount(tx, from, to)
     return {
+      ...account,
       host: {
         minutes,
         signals: {

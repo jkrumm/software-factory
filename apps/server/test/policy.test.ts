@@ -36,6 +36,7 @@ async function routes(): Promise<{ method: string; route: string }[]> {
     { method: 'PUT', route: '/slots/:id' },
     { method: 'DELETE', route: '/slots/:id' },
     { method: 'POST', route: '/slots/:id/cost' },
+    { method: 'POST', route: '/merge-windows' },
   ]
 }
 

@@ -215,6 +215,14 @@ export interface LoopStore {
   pruneClassSamples(before: Date): Promise<number>
   /** drops the hourly rollups older than `before`; how many */
   pruneClassHours(before: Date): Promise<number>
+  /** the repos an Issue had an event in since `since`: the projects whose CI the ledger follows */
+  ciLedgerRepos(since: Date): Promise<string[]>
+  /** when the newest run of the repo in the ledger finished, null for a repo with none */
+  newestCiRun(repo: string): Promise<Date | null>
+  /** stores the runs, a run already stored (same repo and run id) is overwritten; how many rows */
+  recordCiRuns(repo: string, runs: readonly CiLedgerRun[]): Promise<number>
+  /** drops the runs that finished before `before`; how many */
+  pruneCiRuns(before: Date): Promise<number>
   /** the worktrees of the attempts that are live or ended since `since` */
   attemptWorktrees(since: Date): Promise<AttemptWorktree[]>
   /** the rounds of one subject, oldest first */
@@ -418,6 +426,23 @@ export type CiTimes = (
   repo: string,
   since: Date,
 ) => Promise<Result<{ runs: CiRunTime[]; truncated: boolean }, PortError>>
+
+/** One finished workflow run as the CI ledger keeps it (`factory.ci_runs`): queued at, started at and finished at. */
+export interface CiLedgerRun {
+  runId: number
+  workflow: string
+  event: string
+  headBranch: string | null
+  headSha: string
+  runAttempt: number
+  queuedAt: Date
+  startedAt: Date
+  finishedAt: Date
+  conclusion: string
+}
+
+/** The finished workflow runs of a repo created since a date, whatever their conclusion (called outside any transaction). */
+export type CiLedgerRuns = (repo: string, since: Date) => Promise<Result<CiLedgerRun[], PortError>>
 
 /** Whether a branch has a workflow run that is queued or in progress (called outside any transaction). */
 export interface CiLive {

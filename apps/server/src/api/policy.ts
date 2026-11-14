@@ -82,6 +82,7 @@ export const POLICY: readonly Rule[] = [
   rule('PUT', '/slots/:id', LEAD),
   rule('DELETE', '/slots/:id', LEAD),
   rule('POST', '/slots/:id/cost', LEAD),
+  rule('POST', '/merge-windows', LEAD),
 
   // -- inside /v1 where a wider row would let a reader in -----------------------------------------------------------
   // Whole texts and contents (a Decision's form, an artifact's revisions, the owner's pages, the Errands): the read token

@@ -1,5 +1,5 @@
 import { freeMibOf, growthMib, headroomMib, LEARNED_RUNS, learnedPeakMib } from '../domains/capacity/costs.ts'
-import type { HostReader, StepCostRow } from '../domains/capacity/ports.ts'
+import type { HostReader, MergeWindowRow, StepCostRow } from '../domains/capacity/ports.ts'
 import { type AimMode, LOAD_PER_CORE } from '../domains/capacity/slot-aim.ts'
 import { releaseSlot, type SlotRow, type SlotView, slotLines, touchSlots } from '../domains/capacity/slots.ts'
 import { DEFAULT_SLOT_RUN_MS, durationMs } from '../domains/planning/project.ts'
@@ -110,12 +110,24 @@ export async function touchSlot(
 /** Appends a finished step to the cost ledger; the repo is the project owning the caller's directory. */
 export async function recordStepCost(
   deps: PlanningDeps,
-  input: Omit<StepCostRow, 'at' | 'repo'> & { cwd?: string | undefined },
+  input: Omit<StepCostRow, 'at' | 'repo' | 'cwd'> & { cwd?: string | undefined },
 ): Promise<Result<true, PortError>> {
   const { cwd, ...cost } = input
   const repo = (await ownerOf(deps, cwd))?.repo ?? null
   return deps.uow.run(async ({ capacity }) => {
-    await capacity.recordStepCost({ ...cost, at: deps.clock.now(), repo })
+    await capacity.recordStepCost({ ...cost, at: deps.clock.now(), repo, cwd: cwd ?? null })
+    return ok(true as const)
+  })
+}
+
+/** Appends a finished `factory merge-lock` call (its wait and its hold) to the merge-window ledger. */
+export async function recordMergeWindow(
+  deps: PlanningDeps,
+  input: Omit<MergeWindowRow, 'cwd'> & { cwd?: string | undefined },
+): Promise<Result<true, PortError>> {
+  const { cwd, ...window } = input
+  return deps.uow.run(async ({ capacity }) => {
+    await capacity.recordMergeWindow({ ...window, cwd: cwd ?? null })
     return ok(true as const)
   })
 }
