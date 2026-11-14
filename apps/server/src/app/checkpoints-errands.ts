@@ -6,6 +6,7 @@ import {
   type ErrandId,
   screenByReview,
   screenByRule,
+  screenBySudo,
 } from '../domains/checkpoints/errand.ts'
 import { closedNote, SCREENED_SOURCES } from '../domains/checkpoints/request.ts'
 import { deepLink, errandPage } from '../domains/checkpoints/page.ts'
@@ -28,7 +29,7 @@ type Step<T> = Promise<Result<T, CheckpointError | PortError>>
 
 type Verdict =
   | { kind: 'turn_away'; by: 'rule' | 'judge'; reason: string; awaits?: string }
-  | { kind: 'reach'; by: 'judge' | 'failed'; note: string }
+  | { kind: 'reach'; by: 'rule' | 'judge' | 'failed'; note: string }
   | { kind: 'failed'; why: string }
 
 /** What the screen is told of a request no Issue raised: who asked stands for the repo, and there is no Issue. */
@@ -79,7 +80,7 @@ async function reachOwner(
   stores: CheckpointStores,
   deps: SettleDeps,
   found: { errand: ErrandRecord; issueId: IssueId | null; repo: string },
-  by: 'judge' | 'failed',
+  by: 'rule' | 'judge' | 'failed',
   note: string,
 ): Promise<void> {
   const at = deps.clock.now()
@@ -175,7 +176,8 @@ async function screenErrand(deps: SettleDeps, id: ErrandId): Step<ErrandScreened
     | { request: ErrandScreenRequest; errand: ErrandRecord }
     | 'dropped'
     | 'finished'
-    | { rule: string; awaits?: string; errand: ErrandRecord },
+    | { rule: string; awaits?: string; errand: ErrandRecord }
+    | { reach: string; errand: ErrandRecord },
     CheckpointError
   >(async (stores) => {
     const found = await openUnder(stores, deps, id)
@@ -183,6 +185,8 @@ async function screenErrand(deps: SettleDeps, id: ErrandId): Step<ErrandScreened
     const { errand } = found
     const review = screenByReview(errand)
     if (review) return ok({ rule: review.reason, awaits: review.review, errand })
+    const sudo = screenBySudo(errand)
+    if (sudo) return ok({ reach: sudo.note, errand })
     const turned = screenByRule(errand)
     if (turned) return ok({ rule: turned.reason, errand })
     return ok({
@@ -195,6 +199,11 @@ async function screenErrand(deps: SettleDeps, id: ErrandId): Step<ErrandScreened
   })
   if (!first.ok) return first
   if (first.value === 'dropped' || first.value === 'finished') return ok({ errand: id, outcome: 'dropped' })
+
+  if ('reach' in first.value) {
+    const done = await record(deps, id, { kind: 'reach', by: 'rule', note: first.value.reach })
+    return done.ok ? ok({ errand: id, outcome: done.value }) : done
+  }
 
   if ('rule' in first.value) {
     const done = await record(deps, id, {
@@ -257,6 +266,8 @@ export async function rescreenErrand(deps: SettleDeps, id: ErrandId): Step<Rescr
     if (errand.issueId && !issue) return ok('dropped')
     const review = screenByReview(errand)
     if (review) return ok({ rule: review.reason, awaits: review.review })
+    // a root step for the owner's MacBook stays with him: the screen model does not know the password is MacBook-only
+    if (screenBySudo(errand)) return ok('dropped')
     const turned = screenByRule(errand)
     if (turned) return ok({ rule: turned.reason })
     return ok({

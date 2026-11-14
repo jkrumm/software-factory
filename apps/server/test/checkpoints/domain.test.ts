@@ -19,7 +19,13 @@ import {
   refuseNoOpDefault,
   scrub,
 } from '../../src/domains/checkpoints/decision.ts'
-import { checkErrandScreen, readErrand, refuseHostClass, screenByRule } from '../../src/domains/checkpoints/errand.ts'
+import {
+  checkErrandScreen,
+  readErrand,
+  refuseHostClass,
+  screenByRule,
+  screenBySudo,
+} from '../../src/domains/checkpoints/errand.ts'
 import {
   decisionPageKey,
   deepLink,
@@ -331,6 +337,18 @@ describe('errands', () => {
     expect(
       refusal('Run sudo launchctl bootstrap for the agent', 'tried it without sudo: the plist needs /Library'),
     ).toBeNull()
+    // Issue 1114: a sudo step that is the owner's MacBook command passes, whatever the words say.
+    expect(
+      refuseHostClass({
+        summary: 'Run sudo launchctl bootstrap for the agent',
+        detail: null,
+        tried: 'looked around',
+        check: null,
+        command: 'sudo launchctl bootstrap system /Library/LaunchDaemons/x.plist',
+        host: 'macbook',
+      }),
+    ).toBeNull()
+    expect(refusal('Run sudo launchctl bootstrap for the agent')).toContain('MacBook-only')
     // Issues 379 and 443: a verdict pointer for a Report.
     expect(refusal('Point the owner at the verdict: the Report does not show in Needs you')).toContain(
       '--repo software-factory',
@@ -342,6 +360,15 @@ describe('errands', () => {
 })
 
 describe('the Errand screen', () => {
+  test('a root step with a MacBook command reaches the owner by rule, and a rule turn-away never names the password', () => {
+    expect(screenBySudo({ summary: 'Install the daemon', detail: null, command: 'sudo make install' })).toMatchObject({
+      note: expect.stringContaining('MacBook-only'),
+    })
+    expect(screenBySudo({ summary: 'Install the daemon', detail: null, command: null })).toBeNull()
+    expect(screenBySudo({ summary: 'Click the button', detail: null, command: 'make deploy' })).toBeNull()
+    expect(screenByRule({ summary: 'Bootstrap', detail: 'Run `launchctl bootstrap` with sudo' })).toBeNull()
+  })
+
   test('a command a token can run is turned away by rule', () => {
     expect(screenByRule({ summary: 'Run `make deploy`', detail: null })).toMatchObject({ verdict: 'turn_away' })
     expect(screenByRule({ summary: 'Deploy it', detail: 'Use `gh pr merge 12` for this' })).toMatchObject({

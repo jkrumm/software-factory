@@ -65,6 +65,8 @@ interface HostClass {
   names: RegExp
   /** the lead's `tried` shows the class was already worked through; absent, nothing does */
   settledBy?: RegExp
+  /** the Errand's own shape settles the class, whatever its words say; absent, nothing does */
+  settled?: (input: ErrandRaised) => boolean
   /** the route to take instead */
   route: string
 }
@@ -91,8 +93,10 @@ const HOST_CLASSES: readonly HostClass[] = [
     name: 'a sudo step',
     names: /\bsudo\b/,
     settledBy: /without sudo|no sudo|non-sudo|user-level/,
+    // the mini's sudo password is the owner's and MacBook-only: a root step the lead cannot avoid is his command on his MacBook
+    settled: (input) => input.command !== null,
     route:
-      'first look for a way without root (brew, a user-level launchd agent, a path under the home directory, a Makefile target) and run it; if none exists, raise the Errand again with `--tried` naming what you ran without sudo',
+      "first look for a way without root (brew, a user-level launchd agent, a path under the home directory, a Makefile target) and run it; if none exists, raise the Errand with the command the owner runs on his MacBook (`--cmd '<the sudo command>' --host macbook`). The mini's sudo password is deliberately MacBook-only: never read it with `op` or `secrets-run`",
   },
   {
     name: 'a verdict pointer for a Report',
@@ -108,7 +112,7 @@ export function refuseHostClass(input: ErrandRaised): string | null {
   const text = `${input.summary}\n${input.detail ?? ''}`.toLowerCase()
   const tried = input.tried.toLowerCase()
   for (const host of HOST_CLASSES) {
-    if (!host.names.test(text) || host.settledBy?.test(tried)) continue
+    if (!host.names.test(text) || host.settledBy?.test(tried) || host.settled?.(input)) continue
     return `an Errand is for a person's hands, and ${host.name} is not: ${host.route}. Nothing was raised.`
   }
   return null
@@ -199,10 +203,11 @@ const HANDS_WORDS: readonly string[] = [
   'sim',
   '1password',
   'permission prompt',
+  'sudo',
 ]
 
 const TURN_AWAY_BY_RULE =
-  "That is a command a token can run: run it yourself (secrets-run for credentials, gh for GitHub), and raise an Errand only for a person's hands."
+  "That is a command a token can run: run it yourself (secrets-run for credentials, gh for GitHub), and raise an Errand only for a person's hands. Never the mini's sudo password: it is MacBook-only, so a root step is an Errand with --cmd and --host macbook."
 
 const escaped = (word: string): string => word.replace(/[.*+?^${}()|[\]\\-]/g, '\\$&')
 const handsWord = new RegExp(`(?<![a-z0-9])(?:${HANDS_WORDS.map(escaped).join('|')})(?![a-z0-9])`)
@@ -236,6 +241,19 @@ export function screenByRule(input: ErrandInput): { verdict: 'turn_away'; reason
     return COMMAND_WORDS.includes(first)
   })
   return named ? { verdict: 'turn_away', reason: TURN_AWAY_BY_RULE } : null
+}
+
+/**
+ * A root step the lead hands the owner as a command for his MacBook needs his hands: the mini's sudo password is
+ * MacBook-only (`dotfiles/docs/global-reference.md` §Sudo on a server), so no token reads it and the screen model, which does
+ * not know that policy, would turn it away with a note that points at the password. Decided by the Errand's shape (a command
+ * for the MacBook that names sudo), not by the lead's wording; the owner is paged without a model call.
+ */
+export function screenBySudo(input: ErrandInput & { command: string | null }): { note: string } | null {
+  if (input.command === null) return null
+  const text = `${input.summary}\n${input.detail ?? ''}\n${input.command}`.toLowerCase()
+  if (!/\bsudo\b/.test(text)) return null
+  return { note: "a root step as a command for the owner's MacBook: the mini's sudo password is MacBook-only" }
 }
 
 /** A pull request or merge request named in the text: its URL, else `#<number>` after the words that name one. */
