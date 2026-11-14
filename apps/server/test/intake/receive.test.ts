@@ -1128,6 +1128,47 @@ describe('a repo is stored as its project name, never as a path', () => {
   })
 })
 
+describe("a lead's follow-up for a work repo", () => {
+  const request = (from: string, title: string, filer?: string): SignalRequest => ({
+    from,
+    kind: 'request',
+    title,
+    text: 'move the database into the one Postgres',
+    repo: 'chat',
+    probe: false,
+    ...(filer ? { filer } : {}),
+  })
+  const owned = (title: string) => intake.file({ ...request('owner:hermes', title), repo: 'argo' }, 'owner')
+
+  test('an owner-filed Issue’s lead gets a held signal for the owner, never an Issue', async () => {
+    done(await owned('Consolidate the databases'))
+    const held = done(await intake.file(request('agent:argo', 'Move the chat database', 'issue_1'), 'agent'))
+    expect(held).toMatchObject({ outcome: 'held', detail: 'quarantined' })
+    expect(held.reason).toContain('owner to promote')
+    expect(await issues()).toHaveLength(1)
+    const [row] = await db.sql`SELECT state, repo, trust FROM factory.intake_signals WHERE id = ${held.signal}`
+    expect(row).toEqual({ state: 'held', repo: 'chat', trust: 'agent' })
+    // a replay is the held one
+    expect(done(await intake.file(request('agent:argo', 'Move the chat database', 'issue_1'), 'agent'))).toMatchObject({
+      outcome: 'held',
+      detail: 'replayed',
+      signal: held.signal,
+    })
+  })
+
+  test('no filer, a filer the owner did not file, or a source that is not its repo is dropped', async () => {
+    done(await intake.file({ ...request('agent:argo', 'A request from an agent'), repo: 'argo' }, 'agent'))
+    done(await owned('Consolidate the databases'))
+    const dropped = (from: string, filer?: string) =>
+      intake.file(request(from, 'Move the chat database', filer), 'agent').then(done)
+    expect(await dropped('agent:argo')).toMatchObject({ outcome: 'dropped', detail: 'work_repo' })
+    expect(await dropped('agent:argo', 'issue_1')).toMatchObject({ outcome: 'dropped', detail: 'work_repo' })
+    expect(await dropped('agent:vps', 'issue_2')).toMatchObject({ outcome: 'dropped', detail: 'work_repo' })
+    expect(await dropped('agent:argo', 'issue_99')).toMatchObject({ outcome: 'dropped', detail: 'work_repo' })
+    expect(await intake.list('held')).toEqual({ ok: true, value: [] })
+  })
+})
+
 describe("a lead's follow-up never lands on its own Issue", () => {
   const request = (from: string, title: string, filer?: string): SignalRequest => ({
     from,

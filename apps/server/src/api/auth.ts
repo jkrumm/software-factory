@@ -65,7 +65,11 @@ export const auth = (tokens: Tokens | undefined) =>
     const caller = resolveCaller(tokens, request.headers.get('authorization'))
     if (!caller) throw refusal(401, 'a bearer token is required: set FACTORY_TOKEN', 'unauthorized')
     if (!rule.callers.includes(caller)) {
-      throw refusal(403, `the ${caller} token may not use ${request.method} ${route}`, 'forbidden')
+      const hint =
+        caller === 'agent' && request.method === 'POST' && route === '/issues'
+          ? ': a lead files a signal, `factory signal file --repo <repo>`, and triage makes the Issue'
+          : ''
+      throw refusal(403, `the ${caller} token may not use ${request.method} ${route}${hint}`, 'forbidden')
     }
     resolved.set(request, caller)
     return {}

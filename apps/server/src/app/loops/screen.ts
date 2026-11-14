@@ -61,6 +61,29 @@ async function record(deps: ScreenDeps, id: string, screening: Screening): Promi
 
 async function screenOne(deps: ScreenDeps, row: SignalRow, names: string[], pass: ScreenPass): Promise<void> {
   const signal = row.received.signal
+  // A work repo's held signal (a lead's follow-up for an owner-filed Issue) is the owner's alone: no workflow reads it
+  // and the last look never dismisses it.
+  const home = signal.repo ? await deps.projects.find(signal.repo) : ok(null)
+  if (!home.ok) {
+    pass.problems.push(`${row.id}: ${home.error.detail}`.slice(0, 300))
+    return
+  }
+  if (home.value?.work) {
+    const stored = await deps.uow.run(async ({ intake }) =>
+      ok(
+        await intake.setScreening(row.id, {
+          ...row.screening,
+          note: 'a work repo: it waits for the owner',
+          at: deps.clock.now(),
+          retryAt: null,
+        }),
+      ),
+    )
+    if (!stored.ok) pass.problems.push(`${row.id}: ${stored.error.detail}`.slice(0, 300))
+    else if (stored.value) pass.left++
+    else pass.notHeld++
+    return
+  }
   const open = signal.repo ? await deps.openIssues.inRepo(signal.repo) : ok([])
   if (!open.ok) {
     pass.problems.push(`${row.id}: ${open.error.detail}`.slice(0, 300))

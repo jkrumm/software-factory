@@ -612,7 +612,12 @@ export function createIntake(deps: IntakeDeps) {
     return ok(triaged('dropped', 'probe', null, id, 'marked as a probe: stored dismissed, never shown to the owner'))
   }
 
-  async function hold(s: Stores, r: Received, again?: IssueId): Out<Triaged> {
+  async function hold(
+    s: Stores,
+    r: Received,
+    again?: IssueId,
+    reason = 'outside text waits for the owner or the Judge',
+  ): Out<Triaged> {
     const base = r.alert
       ? ['held', r.signal.source, r.alert.subject]
       : again
@@ -627,7 +632,7 @@ export function createIntake(deps: IntakeDeps) {
     }
     if (existing) return ok({ ...replayedOf(existing), outcome: 'held' })
     const id = await store(s, r, heldKey, 'held', null)
-    return ok(triaged('held', 'quarantined', null, id, 'outside text waits for the owner or the Judge'))
+    return ok(triaged('held', 'quarantined', null, id, reason))
   }
 
   /**
@@ -712,6 +717,14 @@ export function createIntake(deps: IntakeDeps) {
 
   // ---- receive ----
 
+  /** Whether an agent's signal is the follow-up of an Issue the owner filed, from that Issue's own repo (its lead). */
+  async function ownerFiledBy(signal: Signal, filer: IssueId | null): Promise<boolean> {
+    if (signal.trust !== 'agent' || filer === null) return false
+    const issue = await uow.run(async (s) => ok(await loadIssue(s.work, filer)))
+    if (!issue.ok || !issue.value) return false
+    return issue.value.origin === 'you' && signal.source === `agent:${issue.value.repo}`
+  }
+
   async function receive(r: Received, filer: IssueId | null = null): Out<Triaged> {
     const { signal, alert } = r
     // The loop guard: a change a loop made never fires an automatic sender again.
@@ -729,7 +742,16 @@ export function createIntake(deps: IntakeDeps) {
     const found = signal.repo ? await deps.projects.find(signal.repo) : ok(null)
     if (!found.ok) return found
     const verdict = gate(signal, found.value)
-    if (!verdict.pass) return ok(dropped(verdict.detail, verdict.reason))
+    if (!verdict.pass) {
+      // A work repo hears the owner only, but the lead of an Issue the owner filed may owe work there: its signal waits
+      // as a held one for the owner to promote (never work by itself, never screened).
+      if (verdict.detail === 'work_repo' && !signal.probe && (await ownerFiledBy(signal, filer))) {
+        return uow.run(async (s) =>
+          hold(s, r, undefined, 'a work repo hears the owner only: the signal waits for the owner to promote it'),
+        )
+      }
+      return ok(dropped(verdict.detail, verdict.reason))
+    }
     if (signal.probe) return uow.run(async (s) => probeIn(s, r))
     const info = found.value as RepoSignals
 

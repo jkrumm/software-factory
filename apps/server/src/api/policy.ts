@@ -96,8 +96,8 @@ export const POLICY: readonly Rule[] = [
   // the screen request carries the owner's verdict notes on other projects' Specs as precedents: his and his delegate's only
   rule('GET', '/v1/artifacts/:id/screen', OWNER),
   rule('GET', '/v1/pages', LEAD),
-  // tenant and repo names of work repos: the read token and a lead do not see them
-  rule('GET', '/v1/throughput', OWNER),
+  // tenant and repo names of work repos: the read token never sees them; a lead reads the figures with those names redacted
+  rule('GET', '/v1/throughput', LEAD),
 
   // -- read ----------------------------------------------------------------------------------------------------------
   rule('GET', '/v1/projects/digests', READ),

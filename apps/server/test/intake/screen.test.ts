@@ -116,6 +116,32 @@ test('a signal the owner dismissed meanwhile is counted, not an error', async ()
   expect(pass).toMatchObject({ ok: true, value: { looked: 1, notHeld: 1, dismissed: 0, problems: [] } })
 })
 
+test('a held signal of a work repo is left to the owner without a workflow call', async () => {
+  const recorded: unknown[] = []
+  const store = {
+    screenable: async () => [row()],
+    setScreening: async (_id: string, screening: unknown) => {
+      recorded.push(screening)
+      return true
+    },
+  }
+  const pass = await screenPass({
+    uow: { run: async (fn) => fn({ intake: store as unknown as IntakeStore }), inTransaction: () => false },
+    clock: { now: () => new Date('2026-11-12T11:00:00Z') },
+    workflow: {
+      screen: async () => {
+        throw new Error('a work repo’s words go to no workflow')
+      },
+    },
+    openIssues: { inRepo: async () => ok([]), closedSince: async () => ok([]) },
+    projects: { find: async () => ok({ work: true }), names: async () => ok(['app']) },
+    promote: async () => err({ kind: 'not_held', detail: 'x' }),
+    dismiss: async () => err({ kind: 'not_held', detail: 'x' }),
+  })
+  expect(pass).toMatchObject({ ok: true, value: { looked: 1, left: 1, promoted: 0, dismissed: 0, failed: 0 } })
+  expect(recorded).toEqual([expect.objectContaining({ note: expect.stringContaining('owner'), retryAt: null })])
+})
+
 test('a promote the factory refuses at act time records the attempt with a backoff, so it is not asked again at once', async () => {
   const recorded: unknown[] = []
   const store = {

@@ -90,8 +90,8 @@ describe('the policy table', () => {
     }
   })
 
-  test('the throughput read names tenants and repos of work repos: owner and orchestrator only', () => {
-    expect(allowed('GET', '/v1/throughput')).toEqual(['owner', 'orchestrator'])
+  test('the throughput read names tenants and repos of work repos: a lead gets it redacted, the read token not at all', () => {
+    expect(allowed('GET', '/v1/throughput')).toEqual(['owner', 'orchestrator', 'agent'])
   })
 
   test('the project digests are a read route: owner, orchestrator, agent and the read token (which gets no words of a work repo)', async () => {
