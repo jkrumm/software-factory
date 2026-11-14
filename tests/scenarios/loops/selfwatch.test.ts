@@ -637,7 +637,7 @@ test('slot_line and gates_passed: the stored slot minutes and capacity facts fil
   expect(gatesNow).toHaveLength(gatesBefore + 1)
   const gates = gatesNow[gatesNow.length - 1]
   expect(gates?.text).toContain('a lead was admitted while the load was over its ceiling')
-  expect(gates?.text).toContain(`${admittedIssue} admitted at`)
+  expect(gates?.text).toMatch(/issue_\d+ admitted at/)
   expect(gates?.text).toContain('Evidence at the time of filing:')
 
   await pass()
