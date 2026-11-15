@@ -193,8 +193,12 @@ export function gatesPassedFindings(
 
 /** The p95 of the server's routes over the window above this is a server that is up but useless. */
 export const ROUTE_P95_LIMIT_MS = 2_000
-/** Fewer answers than this in the window say nothing about the p95. */
-export const ROUTE_MIN_SAMPLES = 10
+/**
+ * Fewer answers than this in the window say nothing about the p95: the nearest-rank p95 of fewer than 20 is the slowest one,
+ * so a single cold request after a restart (a deploy empties the window) would file an Issue (2026-11-15: 14 answers, p95 2.9 s,
+ * 56 ms a minute later). From 20 on, the one slowest answer is ignored and two slow ones fire.
+ */
+export const ROUTE_MIN_SAMPLES = 20
 
 export function routesSlowFindings(latency: RouteLatency, now: Date): Finding[] {
   if (latency.p95Ms === null || latency.samples < ROUTE_MIN_SAMPLES || latency.p95Ms <= ROUTE_P95_LIMIT_MS) return []
@@ -206,6 +210,9 @@ export function routesSlowFindings(latency: RouteLatency, now: Date): Finding[] 
       facts: [`the p95 of the server's route answer times over five minutes is above ${ROUTE_P95_LIMIT_MS / 1000} s`],
       context: [
         `p95 ${Math.round(latency.p95Ms)} ms over ${latency.samples} requests in the last ${Math.round(latency.windowMs / 60_000)} minutes (a request still unanswered counts at its age)`,
+        ...(latency.slowest?.length
+          ? [`Slowest: ${latency.slowest.map((one) => `${one.route} ${Math.round(one.ms)} ms`).join('; ')}`]
+          : []),
         `Now: ${iso(now)}`,
       ],
       reproduce: 'curl the server GET /health (heartbeat.routeP95Ms); factory read loops',

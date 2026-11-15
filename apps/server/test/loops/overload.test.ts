@@ -201,8 +201,15 @@ test('routes_slow: a p95 over two seconds with enough requests fires, a quiet or
   expect(found[0]?.context[0]).toContain('p95 2500 ms over 40 requests')
   expect(routesSlowFindings({ p95Ms: 2000, samples: 40, windowMs: window }, NOW)).toEqual([])
   expect(routesSlowFindings({ p95Ms: 900, samples: 400, windowMs: window }, NOW)).toEqual([])
-  // three slow answers on an idle server are not a p95
+  // a few answers after a restart are not a p95: below 20 the nearest-rank p95 is the one slowest answer
+  expect(ROUTE_MIN_SAMPLES).toBe(20)
   expect(routesSlowFindings({ p95Ms: 9000, samples: ROUTE_MIN_SAMPLES - 1, windowMs: window }, NOW)).toEqual([])
+  // the slowest routes are named in the finding
+  const named = routesSlowFindings(
+    { p95Ms: 2500, samples: 40, windowMs: window, slowest: [{ route: 'GET /v1/issues', ms: 4100.4 }] },
+    NOW,
+  )[0] as Finding
+  expect(named.context).toContain('Slowest: GET /v1/issues 4100 ms')
   expect(routesSlowFindings({ p95Ms: null, samples: 0, windowMs: window }, NOW)).toEqual([])
   // the figure moves, the evidence does not: one signal until it clears
   const a = routesSlowFindings({ p95Ms: 2500, samples: 40, windowMs: window }, NOW)[0] as Finding

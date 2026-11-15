@@ -163,6 +163,8 @@ export interface RouteLatency {
   p95Ms: number | null
   samples: number
   windowMs: number
+  /** the slowest answers in the window, slowest first, with the route each was; absent where the figure is not timed per route */
+  slowest?: { route: string; ms: number }[]
 }
 
 /** The queued Issues by the reason they stay queued, as the open `queue_intervals` say. */
