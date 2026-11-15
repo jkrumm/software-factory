@@ -15,6 +15,8 @@ test('a Makefile with a merge-guard rule has one, one without or no Makefile has
     expect(await guard.has(dir)).toBe(true)
     await writeFile(join(dir, 'Makefile'), 'MERGE_GUARD := 1\nci merge-guard: check\n\ttrue\n')
     expect(await guard.has(dir)).toBe(true)
+    await writeFile(join(dir, 'Makefile'), 'include mk/guard.mk\ncheck:\n\ttrue\n')
+    expect(await guard.has(dir)).toBeNull()
   } finally {
     await rm(dir, { recursive: true, force: true })
   }

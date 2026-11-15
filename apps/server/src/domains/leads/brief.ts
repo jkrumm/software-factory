@@ -4,7 +4,7 @@ import type { BriefSignal, BriefSpec, CheckTiers } from './ports.ts'
 
 /**
  * What every lead is told, word for word: a constant, so a brief opens with the same text every time and the prompt
- * cache serves it. A test pins its hash. Nothing here names an Issue, a project or a path.
+ * cache serves it. A test pins that every brief starts with it, byte for byte. Nothing here names an Issue, a project or a path.
  */
 export const STANDING_ORDERS = `# Operating contract
 
