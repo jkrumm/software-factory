@@ -23,7 +23,15 @@ export interface SlotRow {
   /** when a step behind this waiter was first granted past it, and which one: the start of the passing window */
   passedAt: Date | null
   passedBy: string | null
+  /** what the waiter was told it waits for at its last call (`WaitKind`); null once granted */
+  whyKind: WaitKind | null
+  /** the ms this waiter has spent under each reason so far: the time between two calls counts to the reason of the first */
+  waitSplit: Readonly<Partial<Record<WaitKind, number>>>
 }
+
+/** What a wait waits for: every slot taken, the memory fit, swap growing, the load gate, a step with no size known, or the line ahead. */
+export const WAIT_KINDS = ['slots', 'memory', 'swap', 'load', 'unsized', 'line'] as const
+export type WaitKind = (typeof WAIT_KINDS)[number]
 
 /** How long a waiter may be passed by smaller steps before nothing passes it any more (`FACTORY_SLOT_PASS_MIN`). */
 export const DEFAULT_PASS_AFTER_MS = 10 * 60_000
@@ -60,6 +68,14 @@ export interface SlotFit {
   /** for the message only */
   load?: number | null
   extraLoad?: number
+  /** where `extraLoad` comes from, for the message: the setting or the aim's multiple of the cores */
+  extraLoadFrom?: string
+}
+
+/** What a granted step waited for: its whole wait and the split of it by reason (the time between two calls counts to the reason given at the first). */
+export interface Waited {
+  ms: number
+  split: Readonly<Partial<Record<WaitKind, number>>>
 }
 
 export interface SlotView {
@@ -79,28 +95,44 @@ export interface SlotView {
 const gib = (mib: number): string => `${(mib / 1024).toFixed(1)} GiB`
 
 /** Whether the first waiter gets a slot with `holders` taken, and if not why. */
-function decide(holders: number, base: number, fit: SlotFit): { grant: true } | { grant: false; why: string } {
+function decide(
+  holders: number,
+  base: number,
+  fit: SlotFit,
+): { grant: true } | { grant: false; why: string; kind: WaitKind } {
   const max = Math.max(base, fit.max)
-  if (holders >= max) return { grant: false, why: `all ${max} slots are busy` }
+  if (holders >= max) return { grant: false, kind: 'slots', why: `all ${max} slots are busy` }
   if (holders === 0) return { grant: true }
   if (fit.swapGrowing)
-    return { grant: false, why: 'swap in use is growing: one step at a time until it settles, whatever memory is free' }
+    return {
+      grant: false,
+      kind: 'swap',
+      why: 'swap in use is growing: one step at a time until it settles, whatever memory is free',
+    }
   const { peakMib, freeMib } = fit
   const known = peakMib !== null && freeMib !== null
   const fits = known && peakMib + fit.growthMib <= freeMib - fit.headroomMib
-  const memory = (): { grant: false; why: string } => ({
+  const memory = (): { grant: false; why: string; kind: WaitKind } => ({
     grant: false,
+    kind: 'memory',
     why: `waiting for memory: needs ${gib(peakMib ?? 0)} (${PEAK_SOURCE[fit.peakFrom ?? 'learned']}), ${gib(Math.max(0, (freeMib ?? 0) - fit.growthMib))} free after ${gib(fit.growthMib)} the running steps still grow, headroom ${gib(fit.headroomMib)}`,
   })
   if (holders < base) return !known || fits ? { grant: true } : memory()
   if (!fit.loadOk) {
     const over =
-      fit.load != null && fit.extraLoad !== undefined ? `load ${fit.load} is over ${fit.extraLoad}` : 'load is too high'
-    return { grant: false, why: `${over} for a slot beyond the first ${base}` }
+      fit.load != null && fit.extraLoad !== undefined
+        ? `load ${fit.load} is over ${fit.extraLoad}${fit.extraLoadFrom ? ` (${fit.extraLoadFrom})` : ''}`
+        : 'load is too high'
+    return { grant: false, kind: 'load', why: `${over} for a slot beyond the first ${base}` }
   }
   if (peakMib === null)
-    return { grant: false, why: `no learned peak for this step yet, so no slot beyond the first ${base}` }
-  if (freeMib === null) return { grant: false, why: 'no recent free-memory reading, so no slot beyond the base' }
+    return {
+      grant: false,
+      kind: 'unsized',
+      why: `no learned peak for this step yet, so no slot beyond the first ${base}`,
+    }
+  if (freeMib === null)
+    return { grant: false, kind: 'unsized', why: 'no recent free-memory reading, so no slot beyond the base' }
   return fits ? { grant: true } : memory()
 }
 
@@ -127,7 +159,7 @@ export function touchSlots(
     passAfterMs?: number | undefined
   },
   now: Date,
-): { rows: SlotRow[]; view: SlotView } {
+): { rows: SlotRow[]; view: SlotView; waited?: Waited } {
   const leaseEnd = new Date(now.getTime() + SLOT_LEASE_MS)
   const kept = rows.filter((row) =>
     row.slot === null
@@ -135,9 +167,16 @@ export function touchSlots(
       : (row.leasedUntil?.getTime() ?? 0) >= now.getTime(),
   )
   const existing = kept.find((row) => row.id === input.id)
+  // A waiter's time since its last call was spent under the reason that call gave it.
+  const split = { ...existing?.waitSplit }
+  if (existing?.slot === null && existing.whyKind !== null) {
+    const spent = Math.min(Math.max(0, now.getTime() - existing.seenAt.getTime()), WAITER_TTL_MS)
+    split[existing.whyKind] = (split[existing.whyKind] ?? 0) + spent
+  }
   const mine: SlotRow = existing
     ? {
         ...existing,
+        waitSplit: split,
         seenAt: now,
         leasedUntil: existing.slot === null ? null : leaseEnd,
         rssMib: input.rssMib ?? existing.rssMib,
@@ -159,6 +198,8 @@ export function touchSlots(
         cwd: input.cwd ?? null,
         passedAt: null,
         passedBy: null,
+        whyKind: null,
+        waitSplit: {},
       }
   const others = kept.filter((row) => row.id !== input.id)
   const view = (row: SlotRow, ahead: number, why: string | null = null): SlotView => ({
@@ -185,6 +226,7 @@ export function touchSlots(
       grantedAt: now,
       runMs: input.runMs,
       why: null,
+      whyKind: null,
     }
     return { rows: [...others, reclaimed], view: view(reclaimed, 0) }
   }
@@ -198,11 +240,11 @@ export function touchSlots(
       ? ''
       : ` (passed by "${row.passedBy ?? '?'}" since ${Math.floor((now.getTime() - row.passedAt.getTime()) / 60_000)} min; nothing passes it after ${Math.round(passAfterMs / 60_000)} min)`
   const verdict = decide(taken.size, input.slots, input.fit)
-  const wait = (why: string): { rows: SlotRow[]; view: SlotView } => ({
-    rows: [...others, { ...mine, why }],
+  const wait = (why: string, kind: WaitKind): { rows: SlotRow[]; view: SlotView } => ({
+    rows: [...others, { ...mine, why, whyKind: kind }],
     view: view(mine, ahead, why),
   })
-  if (!verdict.grant) return wait(verdict.why + passedNote(mine))
+  if (!verdict.grant) return wait(verdict.why + passedNote(mine), verdict.kind)
   // The slot goes to the first waiter in line that fits: a waiter ahead that does not fit is passed, unless it has been
   // passed for the whole window (then it holds the line), and one that fits takes the slot on its own next call.
   const passed: SlotRow[] = []
@@ -212,22 +254,32 @@ export function touchSlots(
       peakMib: input.fit.peaksByName?.get(waiter.name) ?? null,
       peakFrom: input.fit.peakFromByName?.get(waiter.name) ?? 'learned',
     })
-    if (theirs.grant) return wait(`waiting for the ${ahead} ahead in line`)
+    if (theirs.grant) return wait(`waiting for the ${ahead} ahead in line`, 'line')
     if (waiter.passedAt !== null && now.getTime() - waiter.passedAt.getTime() >= passAfterMs)
       return wait(
         `"${waiter.name}" ahead was passed for ${Math.round(passAfterMs / 60_000)} min and nothing passes it now: ${theirs.why}`,
+        'line',
       )
     passed.push(waiter)
   }
   const max = Math.max(input.slots, input.fit.max)
   const slot = Array.from({ length: max }, (_, i) => i + 1).find((n) => !taken.has(n))
-  if (slot === undefined) return wait(`all ${max} slots are busy`)
-  const granted: SlotRow = { ...mine, slot, leasedUntil: leaseEnd, grantedAt: now, runMs: input.runMs, why: null }
+  if (slot === undefined) return wait(`all ${max} slots are busy`, 'slots')
+  const granted: SlotRow = {
+    ...mine,
+    slot,
+    leasedUntil: leaseEnd,
+    grantedAt: now,
+    runMs: input.runMs,
+    why: null,
+    whyKind: null,
+  }
   const passedIds = new Set(passed.map((row) => row.id))
   const rest = others.map((row) =>
     passedIds.has(row.id) ? { ...row, passedAt: row.passedAt ?? now, passedBy: row.passedBy ?? mine.name } : row,
   )
-  return { rows: [...rest, granted], view: view(granted, 0) }
+  const ms = Object.values(split).reduce((sum, v) => sum + v, 0)
+  return { rows: [...rest, granted], view: view(granted, 0), ...(existing ? { waited: { ms, split } } : {}) }
 }
 
 /** The steps holding a live slot and the callers still asking for one. */

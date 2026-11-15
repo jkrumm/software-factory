@@ -5,6 +5,7 @@ import { OWNED_ELSEWHERE_KINDS } from '../kernel/throughput-limits.ts'
 import { boundedRead } from './bounded.ts'
 import { countedFrom, epochNote } from '../kernel/epoch.ts'
 import { readLeadCosts } from './lead-costs.ts'
+import { REPO_OF_STEP } from './retro-build.ts'
 import { windowOf } from './stats.ts'
 
 /** The settings in force that the capacity loop tunes; the server hands them over from the settings it holds. */
@@ -146,6 +147,62 @@ export async function readCapacityLoop(
       .object({ n: z.coerce.number().int(), p50: z.coerce.number().nullable(), p90: z.coerce.number().nullable() })
       .parse(wait)
 
+    // what each wait waited for: a wait's ms are split by reason, so a reason's figures are over the waits that spent time under it
+    const REASON_STATS = `count(*) AS waits, sum(ms) AS total, percentile_cont(0.5) WITHIN GROUP (ORDER BY ms) AS p50,
+        percentile_cont(0.9) WITHIN GROUP (ORDER BY ms) AS p90, max(ms) AS max`
+    const reasonRows: unknown[] = await tx`
+      WITH x AS (
+        SELECT coalesce(${tx.unsafe(REPO_OF_STEP)}, '(unknown)') AS repo, w.key AS reason, w.value::float8 AS ms
+        FROM factory.slot_waits s, jsonb_each_text(s.split) w WHERE s.at >= ${w.from} AND s.at < ${w.to})
+      SELECT repo, reason, ${tx.unsafe(REASON_STATS)} FROM x GROUP BY repo, reason`
+    const repoRows: unknown[] = await tx`
+      WITH x AS (
+        SELECT coalesce(${tx.unsafe(REPO_OF_STEP)}, '(unknown)') AS repo, wait_ms::float8 AS ms
+        FROM factory.slot_waits s WHERE s.at >= ${w.from} AND s.at < ${w.to})
+      SELECT repo, ${tx.unsafe(REASON_STATS)} FROM x GROUP BY repo`
+    const allReasonRows: unknown[] = await tx`
+      WITH x AS (
+        SELECT w.key AS reason, w.value::float8 AS ms
+        FROM factory.slot_waits s, jsonb_each_text(s.split) w WHERE s.at >= ${w.from} AND s.at < ${w.to})
+      SELECT reason, ${tx.unsafe(REASON_STATS)} FROM x GROUP BY reason`
+    const Stats = {
+      waits: z.coerce.number().int(),
+      total: z.coerce.number(),
+      p50: z.coerce.number().nullable(),
+      p90: z.coerce.number().nullable(),
+      max: z.coerce.number().nullable(),
+    }
+    const Reason = z.enum(['slots', 'memory', 'swap', 'load', 'unsized', 'line'])
+    const statsOf = (r: {
+      waits: number
+      total: number
+      p50: number | null
+      p90: number | null
+      max: number | null
+    }) => ({
+      waits: r.waits,
+      totalMs: r.total,
+      p50Ms: r.p50,
+      p90Ms: r.p90,
+      maxMs: r.max,
+    })
+    const byTotal = <T extends { totalMs: number }>(list: T[]) => list.toSorted((a, b) => b.totalMs - a.totalMs)
+    const byReasonAll = byTotal(
+      allReasonRows
+        .map((raw) => z.object({ reason: Reason, ...Stats }).parse(raw))
+        .map((r) => ({ reason: r.reason, ...statsOf(r) })),
+    )
+    const reasonsByRepo = new Map<string, typeof byReasonAll>()
+    for (const raw of reasonRows) {
+      const r = z.object({ repo: z.string(), reason: Reason, ...Stats }).parse(raw)
+      reasonsByRepo.set(r.repo, [...(reasonsByRepo.get(r.repo) ?? []), { reason: r.reason, ...statsOf(r) }])
+    }
+    const byRepoAll = byTotal(
+      repoRows
+        .map((raw) => z.object({ repo: z.string(), ...Stats }).parse(raw))
+        .map((r) => ({ repo: r.repo, ...statsOf(r), byReason: byTotal(reasonsByRepo.get(r.repo) ?? []) })),
+    )
+
     // MiB per minute: a sample's figure is that minute's delta scaled to 300 s
     const swapDay: unknown[] = await tx`
       SELECT to_char(at AT TIME ZONE 'UTC', 'YYYY-MM-DD') AS day, sum(swapout_mb_per_300s)::float8 / 5 AS v
@@ -278,7 +335,14 @@ export async function readCapacityLoop(
       queueByReason,
       minutesOverCeiling: { total: over, perDay: perDay(overDay, 0) },
       slotAim,
-      slotWait: { n: waitRow.n, p50Ms: waitRow.p50, p90Ms: waitRow.p90, perDayP50: perDay(waitDay, null) },
+      slotWait: {
+        n: waitRow.n,
+        p50Ms: waitRow.p50,
+        p90Ms: waitRow.p90,
+        perDayP50: perDay(waitDay, null),
+        byReason: byReasonAll,
+        byRepo: byRepoAll,
+      },
       swapoutMib: { total: swap, perDay: perDay(swapDay, 0) },
       minutesUnderPressure: { total: pressured, perDay: perDay(pressureDay, 0) },
       shadow: {
