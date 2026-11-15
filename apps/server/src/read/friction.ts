@@ -126,8 +126,8 @@ export async function readFriction(sql: SQL, options: { now: Date; days: number 
 
   const stalls = await grouped(sql`
     SELECT wait->>'reason' AS key, NULL::text AS detail, count(*) AS n FROM factory.issue_events
-    WHERE result = 'applied' AND to_state = 'waiting' AND wait->>'reason' IN ${sql(Object.keys(STALLS))}
-      AND at >= ${w.from} AND at < ${w.to} GROUP BY wait->>'reason'`)
+    WHERE result = 'applied' AND to_state = 'waiting' AND from_state IS DISTINCT FROM 'waiting'
+      AND wait->>'reason' IN ${sql(Object.keys(STALLS))} AND at >=${w.from} AND at < ${w.to} GROUP BY wait->>'reason'`)
   for (const [reason, label] of Object.entries(STALLS)) {
     add('stall', `stall:${reason}`, label, stalls.find((row) => row.key === reason)?.n ?? 0)
   }

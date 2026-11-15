@@ -319,11 +319,22 @@ test('a Judge answer to hold is a timed wait, and the lead that blocks again on 
   // the time comes, the lead blocks again with the same words: held again, longer, and no second Decision or call
   await expire()
   expect(await state(lab, issue)).toMatchObject({ state: 'working' })
-  await block(lab, issue, 'holding for the vendor update zxcvb')
+  await block(lab, issue, 'holding for the vendor update zxcvb still')
   const calls = (await callsOf(lab, 'factory-steward')).length
   expect((await runLoop(lab, 'steward')).summary).toContain('Decisions 0')
   expect(await state(lab, issue)).toMatchObject({ state: 'waiting', wait: 'timer' })
-  expect((await untilOf()) - Date.now()).toBeGreaterThan(first * 1.5)
+  const second = (await untilOf()) - Date.now()
+  expect(second).toBeGreaterThan(first * 1.5)
+  expect((await callsOf(lab, 'factory-steward')).length).toBe(calls)
+  expect(await decisionsOf()).toHaveLength(1)
+
+  // the lead rewords its block each time it wakes: this one is far from the first words but alike the last block's, so it is
+  // the same stall and held longer still, with no second Decision
+  await expire()
+  await block(lab, issue, 'still missing vendor update zxcvb unchanged')
+  expect((await runLoop(lab, 'steward')).summary).toContain('Decisions 0')
+  expect(await state(lab, issue)).toMatchObject({ state: 'waiting', wait: 'timer' })
+  expect((await untilOf()) - Date.now()).toBeGreaterThan(second * 1.5)
   expect((await callsOf(lab, 'factory-steward')).length).toBe(calls)
   expect(await decisionsOf()).toHaveLength(1)
 })

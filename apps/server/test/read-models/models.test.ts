@@ -164,12 +164,18 @@ async function seed() {
   await event('issue_6', 5, 'admitted', ago(1), { from: 'queued', to: 'working' })
 
   // issue_7: stalled on the account's window, with a note nobody typed
-  await issue('issue_7', 'app', 'waiting', 4, 'wall')
+  await issue('issue_7', 'app', 'waiting', 5, 'wall')
   await filed('issue_7', 'app', 'Fourth change', ago(8))
   await event('issue_7', 2, 'settled', ago(7.9), { from: 'settling', to: 'queued' })
   await event('issue_7', 3, 'admitted', ago(7), { from: 'queued', to: 'working' })
   await event('issue_7', 4, 'stalled', ago(1), {
     from: 'working',
+    to: 'waiting',
+    wait: { reason: 'wall', detail: 'full', since: 4, told: 3 },
+  })
+  // a note while it already waits keeps the wait's reason: it is no second stall
+  await event('issue_7', 5, 'noted', ago(0.9), {
+    from: 'waiting',
     to: 'waiting',
     wait: { reason: 'wall', detail: 'full', since: 4, told: 3 },
   })
