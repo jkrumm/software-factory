@@ -219,7 +219,7 @@ through `receive` in `app/intake.ts`; the answer is a triage outcome (`docs/lang
 - **Annotation dispositions.** A lead answers each of the owner's annotations with `factory artifact annotation-reply` (`POST
   /v1/artifacts/:id/annotations/:annotationId/reply`, a lead verb gated on the Issue's current attempt): `applied`, `deferred` (the note
   names the Issue or signal it filed) or `declined` (the note says why), stored on the annotation (`disposition`, `disposition_note`,
-  `disposed_at`). `factory issue ship` is refused while an owner annotation on any of the Issue's Specs or Concepts has none, naming
+  `disposed_at`). `factory issue ship` and `factory issue close --outcome done` (not `dropped`) are refused while an owner annotation on any of the Issue's Specs or Concepts has none, naming
   each. The Console shows the disposition under the comment; the retro's taste part carries it, and an annotation declined twice for the same reason is a
   candidate standing rule.
 - **A repeated stall is not asked twice** (`repeatedStall` in `app/loops/steward.ts`, `decideStall`). A stall of the same
