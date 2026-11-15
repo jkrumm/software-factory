@@ -19,7 +19,14 @@ const lines = async (macbookProbe: boolean) =>
     await readHealthLines(db.sql, {
       now: NOW,
       accounts: [],
-      sources: { doorLines: async () => [], loops: () => [], blockedStreak: 3, mainCheckouts: () => [], macbookProbe },
+      sources: {
+        doorLines: async () => [],
+        loops: () => [],
+        blockedStreak: 3,
+        mainCheckouts: () => [],
+        macbookProbe,
+        maxRunTries: 2,
+      },
     })
   ).filter((line) => line.kind === 'macbook-probe')
 
