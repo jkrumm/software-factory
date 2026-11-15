@@ -4,6 +4,8 @@ const UNIT_KIB: Record<string, number> = { B: 1 / 1024, K: 1, M: 1024, G: 1024 *
 const LINE = /^\s*(\d+)\s+(?:(\d+)\s+)?(\d+(?:[.,]\d+)?)([BKMGT])[+-]?(?:\s+(\d+:\d{2}(?:[.:]\d{2})?))?\s*$/
 const PROCESSES = /^Processes:\s+(\d+)\s+total/
 const IDLE = /^CPU usage:.*?(\d+(?:[.,]\d+)?)%\s+idle/
+const USER = /^CPU usage:.*?(\d+(?:[.,]\d+)?)%\s+user/
+const SYS = /^CPU usage:.*?(\d+(?:[.,]\d+)?)%\s+sys/
 
 export interface TopRow {
   ppid: number | null
@@ -18,6 +20,9 @@ export interface TopSnapshot {
   processes: number | null
   /** the header's CPU idle share, percent */
   cpuIdlePct: number | null
+  /** the header's CPU user and system shares, percent of all cores */
+  cpuUserPct: number | null
+  cpuSysPct: number | null
   rows: Map<number, TopRow>
 }
 
@@ -37,12 +42,22 @@ export function parseTopTime(text: string): number | null {
  * or G. A line that does not parse is skipped; a pid listed twice keeps its first row.
  */
 export function parseTop(output: string): TopSnapshot {
-  const snapshot: TopSnapshot = { processes: null, cpuIdlePct: null, rows: new Map() }
+  const snapshot: TopSnapshot = {
+    processes: null,
+    cpuIdlePct: null,
+    cpuUserPct: null,
+    cpuSysPct: null,
+    rows: new Map(),
+  }
   for (const line of output.split('\n')) {
     const processes = PROCESSES.exec(line)
     if (processes) snapshot.processes = Number(processes[1])
     const idle = IDLE.exec(line)
     if (idle) snapshot.cpuIdlePct = Number((idle[1] ?? '').replace(',', '.'))
+    const user = USER.exec(line)
+    if (user) snapshot.cpuUserPct = Number((user[1] ?? '').replace(',', '.'))
+    const sys = SYS.exec(line)
+    if (sys) snapshot.cpuSysPct = Number((sys[1] ?? '').replace(',', '.'))
     const match = LINE.exec(line)
     if (!match) continue
     const pid = Number(match[1])

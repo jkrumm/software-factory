@@ -267,6 +267,9 @@ export interface HostSnapshotReading {
   /** the process count of `top`'s header */
   processes: number | null
   cpuIdlePct: number | null
+  /** the header's user and system CPU shares, percent of all cores */
+  cpuUserPct: number | null
+  cpuSysPct: number | null
   /** `kern.memorystatus_vm_pressure_level`: 1 normal, 2 warning, 4 critical */
   pressureLevel: number | null
   compressorMib: number | null

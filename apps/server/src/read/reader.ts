@@ -43,8 +43,15 @@ export interface Surface {
   redact: boolean
 }
 
-/** Sessions `/v1/sessions` looks at without an Issue: the newest. */
-const SESSION_LIMIT = 200
+/** Sessions `/v1/sessions` looks at without an Issue: the newest, a page of this many unless `limit` says otherwise. */
+export const SESSION_LIMIT = 200
+export const SESSION_LIMIT_MAX = 1000
+
+/** One page of session cards; `next` is the `before` of the following page, null when this one reached the oldest. */
+export interface SessionPage {
+  sessions: ReadSessionCard[]
+  next: string | null
+}
 
 const clampLimit = (limit: number | undefined): number => Math.min(Math.max(limit ?? DEFAULT_LIMIT, 1), MAX_LIMIT)
 
@@ -54,7 +61,9 @@ export interface ReadApi {
   issues(input: Surface & { scope: IssueScope; limit?: number; repo?: string }): Promise<ReadIssueCard[]>
   /** `issue_12` or `12`; null when there is no such Issue or the text is no Issue */
   issue(input: Surface & { id: string }): Promise<ReadIssueDetail | null>
-  sessions(input: Surface & { issue?: string; role?: string; live?: boolean }): Promise<ReadSessionCard[] | null>
+  sessions(
+    input: Surface & { issue?: string; role?: string; live?: boolean; limit?: number; before?: Date },
+  ): Promise<SessionPage | null>
   session(input: Surface & { id: string }): Promise<ReadSessionCard | null>
   asks(input: Surface): Promise<ReadAskList>
   health(input: Surface): Promise<ReadHealthLine[]>
@@ -122,18 +131,24 @@ export function createReader(deps: ReadDeps): ReadApi {
     return redact ? redactOverview(body) : body
   }
 
-  async function sessions(input: Surface & { issue?: string; role?: string; live?: boolean }) {
+  async function sessions(
+    input: Surface & { issue?: string; role?: string; live?: boolean; limit?: number; before?: Date },
+  ): Promise<SessionPage | null> {
     const ref = input.issue === undefined ? undefined : issueRefOf(input.issue)
     if (ref === null) return null
-    const attempts = await loadAttempts(sql, ref ? [ref] : null, SESSION_LIMIT, input.live === true)
+    const limit = Math.min(Math.max(input.limit ?? SESSION_LIMIT, 1), SESSION_LIMIT_MAX)
+    const attempts = await loadAttempts(sql, ref ? [ref] : null, limit, input.live === true, input.before ?? null)
     const briefs = await loadBriefs(sql, [...new Set(attempts.map((a) => a.issue_id))])
     const derived = await deriveLeads(deps, { attempts, briefs, quota: await quotaOf() })
-    return derived
+    const cards = derived
       .map((lead) => (input.redact ? redactSessionCard(lead.card) : lead.card))
       .filter(
         (card) => (input.role === undefined || card.role === input.role) && (!input.live || card.state !== 'dead'),
       )
       .sort((a, b) => b.lastActivityAt.localeCompare(a.lastActivityAt) || a.id.localeCompare(b.id))
+    // an Issue's own list is whole; a full page of the newest attempts has an older page behind it
+    const oldest = ref ? null : attempts.length >= limit ? attempts[attempts.length - 1] : null
+    return { sessions: cards, next: oldest ? oldest.first_try_at.toISOString() : null }
   }
 
   return {
@@ -163,7 +178,7 @@ export function createReader(deps: ReadDeps): ReadApi {
       const match = /^lead-([1-9][0-9]*)-[1-9][0-9]*$/.exec(id)
       if (!match?.[1]) return null
       const found = await sessions({ redact, issue: match[1] })
-      return found?.find((card) => card.id === id) ?? null
+      return found?.sessions.find((card) => card.id === id) ?? null
     },
 
     async asks({ redact }) {

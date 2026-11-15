@@ -286,6 +286,7 @@ describe('the project scorecard', () => {
         waitMinutes: 3,
         waitP50Ms: 90_000,
         waitP90Ms: 162_000,
+        waitMaxMs: 180_000,
         peakMib: 2000,
         failedSteps: 1,
         failedMinutes: 10,
@@ -298,7 +299,7 @@ describe('the project scorecard', () => {
       },
       ci: { runs: 2, minutes: 20, queueMinutes: 3, p50Minutes: 10, p90Minutes: 10, failedRuns: 1, failedMinutes: 10 },
       localToCi: { localMinutes: 15, ciMinutes: 20, localShare: 0.4286 },
-      mergeLock: { windows: 1, waitMinutes: 3, holdMinutes: 12 },
+      mergeLock: { windows: 1, waitMinutes: 3, waitP90Minutes: 3, waitMaxMinutes: 3, holdMinutes: 12 },
       leadTime: {
         closed: 3,
         wallSeconds: 9000,
@@ -326,7 +327,13 @@ describe('the project scorecard', () => {
       failedRuns: 0,
       failedMinutes: 0,
     })
-    expect(lib?.mergeLock).toEqual({ windows: 0, waitMinutes: 0, holdMinutes: 0 })
+    expect(lib?.mergeLock).toEqual({
+      windows: 0,
+      waitMinutes: 0,
+      waitP90Minutes: null,
+      waitMaxMinutes: null,
+      holdMinutes: 0,
+    })
     expect(lib?.localToCi).toEqual({ localMinutes: 4, ciMinutes: 0, localShare: 1 })
     expect(lib?.slot.minutesPerClosedIssue).toBe(4)
     expect(lib?.check.tiers).toEqual([{ tier: 'fast', runs: 1, p50Ms: 240_000, p90Ms: 240_000 }])

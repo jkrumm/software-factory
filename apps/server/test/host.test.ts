@@ -185,7 +185,14 @@ test('hostSnapshot: a full reading joins every helper; a failed ps, launchctl or
     })
   }
   const full = await reader({}).read()
-  expect(full).toMatchObject({ processes: 2, cpuIdlePct: 97, pressureLevel: 2, compressorMib: 1024 })
+  expect(full).toMatchObject({
+    processes: 2,
+    cpuIdlePct: 97,
+    cpuUserPct: 1,
+    cpuSysPct: 2,
+    pressureLevel: 2,
+    compressorMib: 1024,
+  })
   expect(full?.vmFreeGib).toBeGreaterThan(0)
   expect(full?.procs?.map((p) => [p.pid, p.name, p.label, p.cwd])).toEqual([
     [7, 'worker', 'com.example.worker', '/srv'],
@@ -294,6 +301,8 @@ test('a pass with a process table stores the facts and one row per lead, and pru
         ],
         processes: 5,
         cpuIdlePct: null,
+        cpuUserPct: null,
+        cpuSysPct: null,
         pressureLevel: null,
         compressorMib: null,
         vmFreeGib: null,
@@ -378,6 +387,8 @@ test('a pass with a snapshot stores the signals, the class rows and the notable 
         procs: next,
         processes: 7,
         cpuIdlePct: 40.5,
+        cpuUserPct: 35,
+        cpuSysPct: 24.5,
         pressureLevel: 2,
         compressorMib: 900,
         vmFreeGib: 120.5,
@@ -391,13 +402,15 @@ test('a pass with a snapshot stores the signals, the class rows and the notable 
   const first = await hostPass({ ...deps, clock: { now: () => t0 } })
   expect(first).toEqual({ ok: true, value: { pruned: 2, leadRows: null, classRows: 5 } })
   const [signals] = await db.sql`
-    SELECT pressure_level, compressor_mib, processes, cpu_idle_pct, vm_free_gib, collector_cpu_ms
+    SELECT pressure_level, compressor_mib, processes, cpu_idle_pct, cpu_user_pct, cpu_sys_pct, vm_free_gib, collector_cpu_ms
     FROM factory.host_samples WHERE at = ${t0}`
   expect(signals).toEqual({
     pressure_level: 2,
     compressor_mib: 900,
     processes: 7,
     cpu_idle_pct: 40.5,
+    cpu_user_pct: 35,
+    cpu_sys_pct: 24.5,
     vm_free_gib: 120.5,
     collector_cpu_ms: 420,
   })

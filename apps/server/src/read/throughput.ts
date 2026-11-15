@@ -8,6 +8,7 @@ import { DEFAULT_TENANT_BUDGET_MIB, DEFAULT_TENANT_PROJECT } from '../kernel/thr
 import type { QueueReasons } from './flow.ts'
 import { readAccount } from './throughput-account.ts'
 import { answersOf, readAnswerFacts } from './throughput-answers.ts'
+import { readSeries, readStored } from './throughput-series.ts'
 
 const TOP_KEYS = 20
 const TOP_PROCESSES = 15
@@ -27,6 +28,10 @@ const Signals = z.object({
   load_max: nullNum,
   idle_p50: nullNum,
   idle_min: nullNum,
+  user_p50: nullNum,
+  user_max: nullNum,
+  sys_p50: nullNum,
+  sys_max: nullNum,
   compressor_p50: nullNum,
   compressor_max: nullNum,
   swap_p50: nullNum,
@@ -141,6 +146,8 @@ export async function readThroughput(
         count(*) FILTER (WHERE pressure_level IS NULL) AS unread,
         percentile_cont(0.5) WITHIN GROUP (ORDER BY load)::float8 AS load_p50, max(load)::float8 AS load_max,
         percentile_cont(0.5) WITHIN GROUP (ORDER BY cpu_idle_pct)::float8 AS idle_p50, min(cpu_idle_pct)::float8 AS idle_min,
+        percentile_cont(0.5) WITHIN GROUP (ORDER BY cpu_user_pct)::float8 AS user_p50, max(cpu_user_pct)::float8 AS user_max,
+        percentile_cont(0.5) WITHIN GROUP (ORDER BY cpu_sys_pct)::float8 AS sys_p50, max(cpu_sys_pct)::float8 AS sys_max,
         percentile_cont(0.5) WITHIN GROUP (ORDER BY compressor_mib)::float8 AS compressor_p50, max(compressor_mib)::float8 AS compressor_max,
         percentile_cont(0.5) WITHIN GROUP (ORDER BY swap_used_pct)::float8 AS swap_p50, max(swap_used_pct)::float8 AS swap_max,
         percentile_cont(0.5) WITHIN GROUP (ORDER BY processes)::float8 AS processes_p50, max(processes)::float8 AS processes_max,
@@ -282,6 +289,8 @@ export async function readThroughput(
       }
     })
     const account = await readAccount(tx, from, to)
+    const series = await readSeries(tx, { from, to, bucketMinutes })
+    const stored = await readStored(tx)
     const tenantBudget = { budgetMib, footprintMib: tenantMib, over: tenantMib > budgetMib }
     const answers = answersOf({
       window: { from, to },
@@ -298,6 +307,8 @@ export async function readThroughput(
     })
     return {
       ...account,
+      stored,
+      series,
       host: {
         minutes,
         signals: {
@@ -309,6 +320,8 @@ export async function readThroughput(
           },
           load: { p50: signals.load_p50, max: signals.load_max },
           cpuIdlePct: { p50: signals.idle_p50, min: signals.idle_min },
+          cpuUserPct: { p50: signals.user_p50, max: signals.user_max },
+          cpuSysPct: { p50: signals.sys_p50, max: signals.sys_max },
           compressorMib: { p50: signals.compressor_p50, max: signals.compressor_max },
           swapUsedPct: { p50: signals.swap_p50, max: signals.swap_max },
           processes: { p50: signals.processes_p50, max: signals.processes_max },

@@ -630,6 +630,12 @@ export const HostSample = z
     swapUsedPct: z.number().nullable(),
     /** swapped-out data in the last 300 s, MiB */
     swapoutMbPer300s: z.number().nullable(),
+    /** the process count of `top`'s header at that minute */
+    processes: z.number().int().nullable(),
+    /** the header's CPU split, percent of all cores: user, system and idle (they sum to about 100) */
+    cpuUserPct: z.number().nullable(),
+    cpuSysPct: z.number().nullable(),
+    cpuIdlePct: z.number().nullable(),
   })
   .meta({ id: 'HostSample' })
 export type HostSample = z.infer<typeof HostSample>
@@ -1096,6 +1102,40 @@ export const LeadSplit = z.strictObject({
 })
 export type LeadSplit = z.infer<typeof LeadSplit>
 
+/** The oldest and newest row of one stored source. */
+export const ThroughputStoredSpan = z.strictObject({ from: at, to: at }).meta({ id: 'ThroughputStoredSpan' })
+
+/** One instant of the series: the leads running and the Issues queued, with the queue by reason and by repo. */
+export const ThroughputSeriesPoint = z
+  .strictObject({
+    /** the bucket's start; the counts are read at this instant */
+    at,
+    /** lead attempts started and not gone at `at` (`lead_attempts`), in total and by the Issue's repo */
+    running: z.number().int(),
+    runningByRepo: z.record(z.string(), z.number().int()),
+    /** Issues in an open queue interval at `at` (`queue_intervals`), in total, by the kind of the reason and by repo */
+    queued: z.number().int(),
+    queuedByReason: z.record(z.string(), z.number().int()),
+    queuedByRepo: z.record(z.string(), z.number().int()),
+    /** the most leads running and Issues queued the host's minute samples of the bucket held; null where the bucket has no sample */
+    peakRunning: z.number().int().nullable(),
+    peakQueued: z.number().int().nullable(),
+  })
+  .meta({ id: 'ThroughputSeriesPoint' })
+
+/**
+ * Leads running and Issues queued over the window, a point per bucket, from the events the factory already stores: no counter
+ * of its own. `queuedByReason` and `queuedByRepo` start where `queue_intervals` starts (`stored.queueIntervals`); before it
+ * only `peakQueued` (the host's minute samples) tells.
+ */
+export const ThroughputSeries = z
+  .strictObject({
+    /** 5 minutes up to a day, 15 up to three days, else an hour (the host timeline's bucket) */
+    bucketMinutes: z.number().int(),
+    points: z.array(ThroughputSeriesPoint),
+  })
+  .meta({ id: 'ThroughputSeries' })
+
 /**
  * Where the host's memory and CPU went over the last `hours` hours (`GET /v1/throughput`), computed in SQL from the
  * host samples, the per-minute class rows and the notable-process rows, over `[now - hours, now)`. A key's per-minute
@@ -1111,6 +1151,20 @@ export const ThroughputModel = z
     /** the counting epoch; null where none is configured */
     epoch: ThroughputEpoch.nullable(),
     answers: ThroughputAnswers,
+    /**
+     * What is stored, whatever the window or the epoch: the oldest and newest row of each source the reads draw on, so a
+     * window cut short by the epoch can say which earlier data still exists (rows before the epoch stay until retention
+     * removes them). A source with no row is null.
+     */
+    stored: z.strictObject({
+      hostSamples: ThroughputStoredSpan.nullable(),
+      hostClassSamples: ThroughputStoredSpan.nullable(),
+      queueIntervals: ThroughputStoredSpan.nullable(),
+      leadAttempts: ThroughputStoredSpan.nullable(),
+      stepCosts: ThroughputStoredSpan.nullable(),
+      mergeWindows: ThroughputStoredSpan.nullable(),
+    }),
+    series: ThroughputSeries,
     host: z.strictObject({
       /** snapshot minutes in the window: the distinct minutes with class rows; the divisor of every mean below */
       minutes: z.number().int(),
@@ -1125,6 +1179,9 @@ export const ThroughputModel = z
         }),
         load: z.strictObject({ p50: nullableNumber, max: nullableNumber }),
         cpuIdlePct: z.strictObject({ p50: nullableNumber, min: nullableNumber }),
+        /** the header's user and system CPU shares, percent of all cores; null where the minutes stored before the split read none */
+        cpuUserPct: z.strictObject({ p50: nullableNumber, max: nullableNumber }),
+        cpuSysPct: z.strictObject({ p50: nullableNumber, max: nullableNumber }),
         compressorMib: z.strictObject({ p50: nullableNumber, max: nullableNumber }),
         swapUsedPct: z.strictObject({ p50: nullableNumber, max: nullableNumber }),
         processes: z.strictObject({ p50: nullableNumber, max: nullableNumber }),
@@ -1305,6 +1362,8 @@ export const ThroughputModel = z
           waitMinutes: z.number(),
           waitP50Ms: nullableNumber,
           waitP90Ms: nullableNumber,
+          /** the longest single wait */
+          waitMaxMs: nullableNumber,
           /** the largest peak memory of a step, null when none was measured */
           peakMib: z.number().int().nullable(),
           /** steps that exited non-zero, and their minutes */
@@ -1346,6 +1405,9 @@ export const ThroughputModel = z
         mergeLock: z.strictObject({
           windows: z.number().int(),
           waitMinutes: z.number(),
+          /** the 90th percentile and the longest of one wait, null when no call ended */
+          waitP90Minutes: nullableNumber,
+          waitMaxMinutes: nullableNumber,
           holdMinutes: z.number(),
         }),
         /** the lead time of the project's Issues in `lead` */

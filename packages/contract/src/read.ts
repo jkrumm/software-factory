@@ -353,7 +353,10 @@ export type ReadIssueDetail = z.infer<typeof ReadIssueDetail>
 export const ReadIssueCards = z.object({ issues: z.array(ReadIssueCard) }).meta({ id: 'ReadIssueCards' })
 export type ReadIssueCards = z.infer<typeof ReadIssueCards>
 
-export const ReadSessionCards = z.object({ sessions: z.array(ReadSessionCard) }).meta({ id: 'ReadSessionCards' })
+/** `next` is the `before` of the following page of the newest-first list (an ISO instant); null when there is none. */
+export const ReadSessionCards = z
+  .object({ sessions: z.array(ReadSessionCard), next: z.string().nullable() })
+  .meta({ id: 'ReadSessionCards' })
 export type ReadSessionCards = z.infer<typeof ReadSessionCards>
 
 export const ReadOverviewCounts = z

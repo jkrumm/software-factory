@@ -88,13 +88,15 @@ export async function loadBriefs(sql: SQL, ids: readonly string[]): Promise<Map<
 
 /**
  * The attempts of these Issues (all of them), or the newest attempts of any Issue when `issueIds` is null.
- * `liveOnly` leaves out attempts marked gone, so newer dead rows cannot push a live one past the limit.
+ * `liveOnly` leaves out attempts marked gone, so newer dead rows cannot push a live one past the limit. `before` leaves out
+ * the attempts first tried at or after it: the next page of the newest-first list.
  */
 export async function loadAttempts(
   sql: SQL,
   issueIds: readonly string[] | null,
   limit: number,
   liveOnly = false,
+  before: Date | null = null,
 ): Promise<AttemptRow[]> {
   if (issueIds?.length === 0) return []
   const rows: unknown[] = issueIds
@@ -103,7 +105,8 @@ export async function loadAttempts(
         FROM factory.lead_attempts WHERE issue_id IN ${sql(issueIds)} ORDER BY issue_id, attempt`
     : await sql`
         SELECT issue_id, attempt, account, terminal, tab, space, first_try_at, started_at, gone_at
-        FROM factory.lead_attempts WHERE ${liveOnly ? sql`gone_at IS NULL` : sql`true`}
+        FROM factory.lead_attempts
+        WHERE ${liveOnly ? sql`gone_at IS NULL` : sql`true`} AND ${before ? sql`first_try_at < ${before}` : sql`true`}
         ORDER BY first_try_at DESC, issue_id, attempt DESC LIMIT ${limit}`
   return rows as AttemptRow[]
 }
