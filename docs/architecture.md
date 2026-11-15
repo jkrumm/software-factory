@@ -224,7 +224,8 @@ through `receive` in `app/intake.ts`; the answer is a triage outcome (`docs/lang
   candidate standing rule.
 - **A repeated stall is not asked twice** (`repeatedStall` in `app/loops/steward.ts`, `decideStall`). A stall of the same
   cause as the one the steward's last Decision of this attempt answered, whose detail reads alike (`sameWords`: the share of
-  words, digits dropped, at least `SAME_STALL`), with no `noted` by the owner or the orchestrator and no `reopened` since
+  words, digits dropped, at least `SAME_STALL`) to that stall or to any block of the same cause the lead made since the
+  answer (a lead that wakes from a hold rewords its block, each wording close to the last), with no `noted` by the owner or the orchestrator and no `reopened` since
   the answer, stays stalled and asks nothing: the lead blocking again on the same reason, or a re-ship of the same change
   against the same failing check, is one question with one answer. A note delivered while it waited, or a changed detail, is
   news and ends it as before.

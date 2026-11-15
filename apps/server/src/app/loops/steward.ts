@@ -141,6 +141,7 @@ export function repeatedStall(
   history: readonly AppliedRecord[],
   cause: StallCause,
   detail: string,
+  since: number,
 ): RepeatedStall | null {
   const lastAdmitted = history.findLast((record) => record.kind === 'admitted')?.version ?? 0
   const asked = history.findLast(
@@ -161,7 +162,19 @@ export function repeatedStall(
     history.filter((record) => record.version < asked.version),
   ).wait
   if (before?.reason !== cause || !('detail' in before)) return null
-  if (sameWords(before.detail, detail) < SAME_STALL) return null
+  // A lead that wakes from a hold rewords its block ("Unchanged at <sha>: ..."), so the words drift away from the stall the
+  // Decision answered while each block still reads like the one before it. Every block of this cause the lead made since
+  // the answer is a link in the chain: alike to any of them is the same stall, not a new question.
+  const chain = history
+    .filter(
+      (record) =>
+        record.kind === 'stalled' &&
+        field(record.payload, 'cause') === cause &&
+        record.version > answered.version &&
+        record.version < since,
+    )
+    .map((record) => field(record.payload, 'detail'))
+  if (![before.detail, ...chain].some((earlier) => sameWords(earlier, detail) >= SAME_STALL)) return null
   return { answeredAt: answered.version, held: field(answered.payload, 'hold') !== '' }
 }
 
@@ -191,7 +204,7 @@ export function factsOf(issue: Issue, history: readonly AppliedRecord[]): StallF
         field(record.payload, 'detail').startsWith(STEWARD_DETAIL),
     ).length,
     episode: 0,
-    repeatOf: repeatedStall(issue.id, history, cause, wait.detail),
+    repeatOf: repeatedStall(issue.id, history, cause, wait.detail, wait.since),
     holds: holdsIn(history),
     notes: history
       .filter((record) => record.kind === 'noted' && record.version > wait.told)
