@@ -85,9 +85,11 @@ const runbook: Runbook = {
     return Promise.resolve(runbookAnswer())
   },
 }
+let triageHangs = false
 const triage: TriageWorkflow = {
   amendOrNew: ({ settled, candidates }) => {
     triageCalls++
+    if (triageHangs) return new Promise(() => {})
     triageOffered = candidates.map((issue) => issue.id)
     triageSettled = [...settled]
     return Promise.resolve(triageAnswer())
@@ -109,6 +111,7 @@ beforeEach(async () => {
   runbooks = []
   runbookAnswer = () => ok({ ran: true, exit: 0, tail: 'restarted' })
   triageCalls = 0
+  triageHangs = false
   triageSettled = []
   triageOffered = []
   triageAnswer = () => err(portError('gone', 'no workflow'))
@@ -564,6 +567,26 @@ describe("a person's or an agent's signal", () => {
       issue: 'issue_1',
     })
     expect(triageCalls).toBe(2)
+  })
+
+  test('a workflow that does not answer in time does not hold the request: the signal files anew', async () => {
+    done(await intake.receive(owner('Login page crashes on submit')))
+    triageHangs = true
+    intake = createIntake({
+      uow,
+      clock,
+      ids,
+      projects: projectPort,
+      topology,
+      openIssues: postgresOpenIssues(db.sql),
+      triage,
+      runbook,
+      settings: { ...DEFAULT_INTAKE_SETTINGS, homeRepo: 'vps', triageWaitMs: 50 },
+    })
+    const started = Date.now()
+    expect(done(await intake.receive(owner('Login crashes')))).toMatchObject({ outcome: 'filed', issue: 'issue_2' })
+    expect(triageCalls).toBe(1)
+    expect(Date.now() - started).toBeLessThan(2_000)
   })
 
   test('a request with no title overlap still reaches the workflow, whose amend answer amends the open Issue', async () => {
