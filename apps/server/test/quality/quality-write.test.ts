@@ -5,6 +5,7 @@ import { postgresUnitOfWork } from '../../src/adapters/postgres/unit-of-work.ts'
 import { postgresWorkStore } from '../../src/adapters/postgres/work-store.ts'
 import { postgresQualityStore } from '../../src/adapters/quality/store.ts'
 import { fileIssue, recordIssueEvent } from '../../src/app/issues.ts'
+import { closeIssue } from '../../src/app/leads-verbs.ts'
 import { runOutbox } from '../../src/app/outbox.ts'
 import { showQuality } from '../../src/app/quality-read.ts'
 import { reopenIssue } from '../../src/app/quality-reopen.ts'
@@ -258,6 +259,53 @@ describe('the ship gate', () => {
 
     await db.sql`UPDATE factory.annotations SET disposition = 'declined', disposition_note = 'no', disposed_at = ${clock.now()} WHERE id = 'annotation_2'`
     expect(value(await ship(id, 'call-c')).result).toBe('applied')
+  })
+
+  test('a close as done is refused while an owner annotation on its Spec has no disposition; dropped stays open, a replay is no refusal', async () => {
+    const id = await working()
+    await db.sql`
+      INSERT INTO factory.artifacts (id, key, issue_id, kind, title, format, author, created_at)
+      VALUES ('artifact_c', 'k-c', ${id}, 'spec', 'the Spec', 'markdown', 'lead', ${clock.now()})`
+    await db.sql`
+      INSERT INTO factory.artifact_revisions (artifact_id, n, key, blob, sha256, bytes, note, created_at)
+      VALUES ('artifact_c', 1, 'k-rc', 'blob', 'sha', 1, null, ${clock.now()})`
+    await db.sql`
+      INSERT INTO factory.annotations (id, key, artifact_id, revision, quote, path, comment, author, at)
+      VALUES ('annotation_c', 'k-ac', 'artifact_c', 1, 'a quote', null, 'widen it', 'owner', ${clock.now()})`
+    const close = (outcome: 'done' | 'dropped', call: string) =>
+      closeIssue({ uow, clock, ids }, id, { attempt: 1, outcome, reason: 'nothing to deploy', call })
+
+    const refused = await close('done', 'c-1')
+    expect(refused).toMatchObject({ ok: false, error: { kind: 'filing_refused' } })
+    expect(JSON.stringify(refused)).toContain('close refused')
+    expect(JSON.stringify(refused)).toContain('annotation_c')
+    expect((await stateOf(id)).state).not.toBe('closed')
+
+    await db.sql`UPDATE factory.annotations SET disposition = 'applied', disposed_at = ${clock.now()} WHERE id = 'annotation_c'`
+    expect(value(await close('done', 'c-2')).result).toBe('applied')
+    // an annotation the lead's call left behind never turns its recorded close into a refusal
+    await db.sql`
+      INSERT INTO factory.annotations (id, key, artifact_id, revision, quote, path, comment, author, at)
+      VALUES ('annotation_d', 'k-ad', 'artifact_c', 1, 'late', null, 'more', 'owner', ${clock.now()})`
+    expect(value(await close('done', 'c-2')).result).toBe('replayed')
+  })
+
+  test('a close as dropped goes through with an annotation unanswered', async () => {
+    const id = await working()
+    await db.sql`
+      INSERT INTO factory.artifacts (id, key, issue_id, kind, title, format, author, created_at)
+      VALUES ('artifact_e', 'k-e', ${id}, 'spec', 'the Spec', 'markdown', 'lead', ${clock.now()})`
+    await db.sql`
+      INSERT INTO factory.artifact_revisions (artifact_id, n, key, blob, sha256, bytes, note, created_at)
+      VALUES ('artifact_e', 1, 'k-re', 'blob', 'sha', 1, null, ${clock.now()})`
+    await db.sql`
+      INSERT INTO factory.annotations (id, key, artifact_id, revision, quote, path, comment, author, at)
+      VALUES ('annotation_e', 'k-ae', 'artifact_e', 1, 'a quote', null, 'widen it', 'owner', ${clock.now()})`
+    const closed = value(
+      await closeIssue({ uow, clock, ids }, id, { attempt: 1, outcome: 'dropped', reason: 'superseded', call: 'e-1' }),
+    )
+    expect(closed.result).toBe('applied')
+    expect(await stateOf(id)).toMatchObject({ state: 'closed', outcome: 'dropped' })
   })
 
   test('a refusal for the missing Spec is a refused ship on the record, counted as a refusal', async () => {

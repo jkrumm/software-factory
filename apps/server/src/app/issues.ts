@@ -25,7 +25,7 @@ export type IssueWriteError =
   | { kind: 'version_conflict'; issueId: IssueId; expected: number }
   /** the key is stored for another Issue or another kind of event: the caller built it wrong */
   | { kind: 'key_taken'; key: Key; detail: string }
-  /** a filed event the machine refuses makes no Issue */
+  /** a filed event the machine refuses makes no Issue; also a lead's close refused for owner annotations still unanswered (409 `refused`) */
   | { kind: 'filing_refused'; detail: string }
 
 export interface WriteDeps {
