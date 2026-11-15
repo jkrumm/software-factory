@@ -1110,7 +1110,7 @@ export const ThroughputSeriesPoint = z
   .strictObject({
     /** the bucket's start; the counts are read at this instant */
     at,
-    /** lead attempts started and not gone at `at` (`lead_attempts`), in total and by the Issue's repo */
+    /** lead attempts started at `at` and neither gone nor ended by their Issue's close (`lead_attempts`, `issue_events`), in total and by the Issue's repo */
     running: z.number().int(),
     runningByRepo: z.record(z.string(), z.number().int()),
     /** Issues in an open queue interval at `at` (`queue_intervals`), in total, by the kind of the reason and by repo */

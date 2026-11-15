@@ -34,6 +34,9 @@ beforeAll(async () => {
       ('issue_2', 1, 'factory/2-1', ${t('10:06')}, ${t('10:07')}, NULL),
       ('issue_3', 1, 'factory/3-1', ${t('10:06')}, ${t('10:07')}, ${t('10:08')}),
       ('issue_3', 2, 'factory/3-2', ${t('10:30')}, NULL, NULL)`
+  // issue_2's lead is never marked gone: the close of its Issue ends it
+  await sql`INSERT INTO factory.issue_events (id, issue_id, key, kind, payload, actor, at, result, version, to_state)
+    VALUES ('ev_close_2', 'issue_2', 'k_close_2', 'seeded', '{}'::jsonb, 'factory', ${t('10:20')}, 'applied', 2, 'closed')`
   await sql`
     INSERT INTO factory.queue_intervals (issue_id, project, kind, message, from_at, to_at) VALUES
       ('issue_3', 'app', 'memory_fit', 'm', ${t('10:00')}, ${t('10:11')}),
@@ -89,9 +92,11 @@ describe('the series', () => {
       queued: 1,
       queuedByReason: { seats: 1 },
     })
-    // an attempt that never started is not running
-    expect(at('10:30')?.running).toBe(1)
-    expect(at('11:55')).toMatchObject({ queued: 1, running: 1, peakRunning: null, peakQueued: null })
+    // issue_2's Issue closed at 10:20: its lead is finished though never marked gone; an attempt that never started is not running
+    expect(at('10:15')?.running).toBe(1)
+    expect(at('10:20')?.running).toBe(0)
+    expect(at('10:30')?.running).toBe(0)
+    expect(at('11:55')).toMatchObject({ queued: 1, running: 0, peakRunning: null, peakQueued: null })
   })
 
   test('the minute samples give the peak of each bucket', async () => {
