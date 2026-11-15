@@ -41,7 +41,7 @@ test('no line while no Errand with a MacBook command is open, with the probe off
 test('a line while the probe is off and a MacBook Errand is open; none with the probe on or once it is done', async () => {
   await db.sql`
     INSERT INTO factory.errands (id, key, summary, raised_at, reached_owner_at, source, command, host)
-    VALUES ('errand_approve', 'k-approve', 'release it', ${NOW}, ${NOW}, 'test', 'ssh mini make x', 'macbook')`
+    VALUES ('errand_approve', 'k-approve', 'release it', ${NOW}, ${NOW}, 'test', 'make deploy-release', 'macbook')`
   await db.sql`UPDATE factory.errands SET need = 'approval' WHERE id = 'errand_approve'`
   expect(await lines(false)).toEqual([])
   await db.sql`
