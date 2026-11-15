@@ -298,11 +298,13 @@ describe('the brief', () => {
     notesMore: 3,
   }
 
-  test('the standing orders open every brief and are pinned', () => {
+  test('the standing orders open every brief byte for byte, whatever the Issue', () => {
+    // A hash of the text was pinned here once; it conflicted on every brief edit by any lead and
+    // staled their reviews. The property that matters is a prefix no input can change.
+    const other = { ...input, issue: { ...input.issue, title: 'another', kind: 'feature' as const }, attempt: 1 }
     expect(buildBrief(input).startsWith(STANDING_ORDERS)).toBe(true)
-    expect(new Bun.CryptoHasher('sha256').update(STANDING_ORDERS).digest('hex')).toBe(
-      '99eaa6ae67996ecde887e58b4e485dff7ef1adcc3f091f65ee5d704aeb3236d5',
-    )
+    expect(buildBrief(other).startsWith(STANDING_ORDERS)).toBe(true)
+    expect(STANDING_ORDERS).not.toContain('${')
   })
 
   test('the standing orders carry the HerdrCore constraint', () => {
@@ -321,6 +323,8 @@ describe('the brief', () => {
     expect(STANDING_ORDERS).toMatch(/One check per worktree/)
     expect(STANDING_ORDERS).toMatch(/Kill by pid/)
     expect(STANDING_ORDERS).toContain('--thread factory-<issue number>')
+    expect(STANDING_ORDERS).toContain('--thread factory-<issue number>-rebase')
+    expect(STANDING_ORDERS).toMatch(/only while the commit's context lines are unchanged/)
     expect(STANDING_ORDERS).toMatch(/no Grep or Glob tool/i)
     expect(STANDING_ORDERS).toMatch(/Write a change that fits a few files yourself/)
     expect(STANDING_ORDERS).toMatch(/about 30 minutes/)
