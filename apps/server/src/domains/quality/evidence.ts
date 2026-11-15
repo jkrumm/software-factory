@@ -144,6 +144,9 @@ export function isInert(path: string, deployPaths: readonly string[] = []): bool
 export const deploys = (paths: readonly string[], deployPaths: readonly string[] = []): boolean =>
   paths.some((path) => !isInert(path, deployPaths))
 
+/** The tiers that owe a lead no review (NL12: light goes). */
+const FREE_TIERS = ['none', 'light']
+
 /** The review as evidence, from what agw answered for the ship's ranges (null: it could not be asked). */
 export function reviewOf(input: {
   ranges: readonly ReviewRange[]
@@ -171,12 +174,18 @@ export function reviewOf(input: {
       reason: null,
     }
   }
-  const named = read.uncovered.map((c) => `${c.sha.slice(0, 12)} ${c.subject} (needs ${c.required})`).join('; ')
+  // NL12: a review is owed at standard or deep. A commit agw routes to light is covered by the checks, so it is no absence.
+  // Fail closed: only a non-empty list of light or none commits is no absence; an empty list or an unknown tier still is.
+  const owed = read.uncovered.filter((c) => !FREE_TIERS.includes(c.required))
+  if (read.uncovered.length > 0 && owed.length === 0) {
+    return { status: 'not_required', tier: read.tier, ranges, uncovered: [], reason: null }
+  }
+  const named = owed.map((c) => `${c.sha.slice(0, 12)} ${c.subject} (needs ${c.required})`).join('; ')
   return {
     status: 'uncovered',
     tier: read.tier,
     ranges,
-    uncovered: read.uncovered,
+    uncovered: owed,
     reason: `agw does not cover the range${named ? `: ${named}` : ''}`,
   }
 }
