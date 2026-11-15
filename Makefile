@@ -55,6 +55,8 @@ check-static:
 	@bun run --cwd apps/console language:check
 	@echo "==> typecheck e2e (tests/e2e)"
 	@bunx --no-install tsc -p tests/e2e/tsconfig.json --noEmit
+	@echo "==> shard weights name no missing test file (scripts/shard.ts --check)"
+	@bun scripts/shard.ts --check
 	@echo "==> boundaries (scripts/boundaries.ts)"
 	@bun scripts/boundaries.ts
 	@echo "==> retired words (scripts/retired-words.ts)"
@@ -87,9 +89,10 @@ TEST_TIMEOUT = --timeout $(shell bun -e 'import {cpus,loadavg} from "node:os"; c
 
 test: test-unit test-scenarios
 
+# UNIT_SHARD=1/2 runs the first of two shards (CI: `static` runs the first beside the checks, `unit (2/2)` the second); unset, all of them.
 test-unit:
-	@echo "==> unit tests (bun test apps packages scripts integrations)"
-	@$(SLOT) bun test $(call JUNIT,unit) $(TEST_TIMEOUT) ./apps ./packages ./scripts ./integrations
+	@echo "==> unit tests (bun test apps packages scripts integrations$(if $(UNIT_SHARD), --shard=$(UNIT_SHARD)))"
+	@$(SLOT) bun test $(call JUNIT,unit) $(TEST_TIMEOUT) $(if $(UNIT_SHARD),--shard=$(UNIT_SHARD)) ./apps ./packages ./scripts ./integrations
 
 # The unit tests of what the branch changed (bun follows the imports from each changed file; committed and uncommitted
 # changes against the merge base with origin/master). CHECK_FAST_ALL=1 (CI's `static` job) runs every unit test.
@@ -99,17 +102,21 @@ test-unit-changed:
 	  echo "==> unit tests of the changed files (bun test --changed=$(UNIT_BASE))"; \
 	  $(SLOT) bun test $(call JUNIT,unit-changed) $(TEST_TIMEOUT) --changed=$(UNIT_BASE) --pass-with-no-tests ./apps ./packages ./scripts ./integrations; fi
 
-# SHARD=1/2 runs the first of two shards of the scenarios (CI's matrix); unset, all of them.
+# SHARD=1/3 runs the files scripts/shard.ts plans for the first of three shards of the scenarios (CI's matrix; seconds per file in
+# tests/scenarios/shard-weights.json); unset, all of them.
 test-scenarios:
-	@echo "==> scenarios (bun test tests$(if $(SHARD), --shard=$(SHARD)))"
-	@$(SLOT) bun test $(call JUNIT,scenarios) $(TEST_TIMEOUT) $(if $(SHARD),--shard=$(SHARD)) ./tests
+	@echo "==> scenarios (bun test tests$(if $(SHARD), shard $(SHARD)))"
+	@$(if $(SHARD),files=$$(bun scripts/shard.ts scenarios $(SHARD)) || exit 1;) \
+	  $(SLOT) bun test $(call JUNIT,scenarios) $(TEST_TIMEOUT) $(if $(SHARD),$$files,./tests)
 
 # The Console is built first (the global setup serves apps/console/dist); `bun test` never collects tests/e2e (*.e2e.ts). Playwright runs under Bun.
+# E2E_SHARD=2/3 runs the files scripts/shard.ts plans for that shard (seconds per file in tests/e2e/shard-weights.json); unset, all of them.
 e2e:
 	@echo "==> console build (apps/console/dist)"
 	@bun run --cwd apps/console build
-	@echo "==> e2e (playwright, tests/e2e$(if $(E2E_SHARD), --shard=$(E2E_SHARD)))"
-	@$(SLOT) bunx --bun playwright test -c tests/e2e/playwright.config.ts $(if $(E2E_SHARD),--shard=$(E2E_SHARD))
+	@echo "==> e2e (playwright, tests/e2e$(if $(E2E_SHARD), shard $(E2E_SHARD)))"
+	@$(if $(E2E_SHARD),files=$$(bun scripts/shard.ts e2e $(E2E_SHARD)) || exit 1;) \
+	  $(SLOT) bunx --bun playwright test -c tests/e2e/playwright.config.ts $$files
 
 fmt:
 	@bunx --no-install oxfmt --write .

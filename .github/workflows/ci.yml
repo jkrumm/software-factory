@@ -16,46 +16,39 @@ concurrency:
 # `merge-guard` reads this workflow's run, which is green only when every job below is, so the split changes nothing
 # for it. The tests start their own throwaway Postgres from the PostgreSQL packages that ship on the runner image
 # (tests/support/pg.ts finds /usr/lib/postgresql/<major>/bin); shellcheck ships there too.
+#
+# One matrix, fail-fast: the first job that goes red cancels the ones still queued or running, and the run ends
+# `failure`. (A red `static` is known minutes before the test jobs end. `gh run cancel` from a step does the same but
+# ends the run `cancelled`, which merge-guard and the selfwatch `ci_red` read as superseded, so a red head or master
+# would not show as red.) Job names are the matrix entries' `name`.
 jobs:
-  # What a lead runs locally (project.yaml `checks.fast`): format, lint, types, boundaries, scans, every unit test.
-  static:
-    runs-on: ubuntu-latest
-    steps:
-      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
-      - uses: ./.github/actions/setup
-      - run: make check-fast
-        env:
-          CHECK_FAST_ALL: '1'
-
-  scenarios:
+  ci:
+    name: ${{ matrix.name }}
     runs-on: ubuntu-latest
     strategy:
-      fail-fast: false
+      fail-fast: true
       matrix:
-        shard: ['1/2', '2/2']
-    steps:
-      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
-      - uses: ./.github/actions/setup
-      - run: make test-scenarios
-        env:
-          SHARD: ${{ matrix.shard }}
-
-  e2e:
-    runs-on: ubuntu-latest
-    strategy:
-      fail-fast: false
-      matrix:
-        shard: ['1/3', '2/3', '3/3']
+        include:
+          # What a lead runs locally (project.yaml `checks.fast`): format, lint, types, boundaries, scans, every unit test.
+          # The unit tests are half of it (203 s of a 234 s job): `static` runs the first of two shards beside the checks.
+          - { name: static, make: check-fast CHECK_FAST_ALL=1 UNIT_SHARD=1/2 }
+          - { name: unit (2/2), make: test-unit UNIT_SHARD=2/2 }
+          # The files of a scenarios or e2e shard are planned by seconds (scripts/shard.ts, shard-weights.json beside the
+          # tests): bun and Playwright cut by count, and one scenarios shard of three ran 265 s against 167 and 191.
+          - { name: scenarios (1/3), make: test-scenarios SHARD=1/3 }
+          - { name: scenarios (2/3), make: test-scenarios SHARD=2/3 }
+          - { name: scenarios (3/3), make: test-scenarios SHARD=3/3 }
+          - { name: e2e (1/3), make: e2e E2E_SHARD=1/3, playwright: 'true' }
+          - { name: e2e (2/3), make: e2e E2E_SHARD=2/3, playwright: 'true' }
+          - { name: e2e (3/3), make: e2e E2E_SHARD=3/3, playwright: 'true' }
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
       - uses: ./.github/actions/setup
         with:
-          playwright: 'true'
-      - run: make e2e
-        env:
-          E2E_SHARD: ${{ matrix.shard }}
+          playwright: ${{ matrix.playwright || 'false' }}
+      - run: make ${{ matrix.make }}
       - uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
-        if: failure()
+        if: failure() && matrix.playwright == 'true'
         with:
           name: e2e-results-${{ strategy.job-index }}
           path: tests/e2e/out
