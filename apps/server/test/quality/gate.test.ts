@@ -141,6 +141,11 @@ test('a range agw routes to light owes no review (NL12); a standard or deep comm
     uncovered: [deep],
     reason: expect.not.stringContaining('fix: y'),
   })
+  // fail closed: no listed commit, or a tier agw may add, is still an absence
+  expect(reviewOf({ ...base, read: { tier: 'standard', covered: false, uncovered: [] } }).status).toBe('uncovered')
+  expect(
+    reviewOf({ ...base, read: { tier: 'high', covered: false, uncovered: [{ ...light, required: 'high' }] } }).status,
+  ).toBe('uncovered')
 })
 
 test('the lead’s acceptance lines are parsed: met, or not met with why; anything else is named', () => {
