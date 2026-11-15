@@ -154,6 +154,8 @@ describe('read sessions pages past 200', () => {
       loops: () => [],
       blockedStreak: 3,
       mainCheckouts: () => [],
+      macbookProbe: true,
+      maxRunTries: 2,
       streamPollMs: 20,
     })
 
