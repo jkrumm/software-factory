@@ -126,6 +126,61 @@ export function refuseHostClass(input: ErrandRaised): string | null {
   return null
 }
 
+/** `ssh` options that take their value as the next word. */
+const SSH_VALUE_FLAGS = new Set('bcDEeFIiJLlmOopQRSWw'.split('').map((flag) => `-${flag}`))
+
+/** Whether a command allocates a TTY over ssh (`-t`, `-tt`, `-nt`, `-o RequestTTY=yes|force`): the dialog has none to give. */
+function sshAllocatesTty(command: string): boolean {
+  for (const call of command.matchAll(/(?:^|[\s;&|(`'"])ssh([^;&|\n`'")]*)/g)) {
+    const words = (call[1] ?? '').trim().split(/\s+/).filter(Boolean)
+    for (let at = 0; at < words.length; at++) {
+      const word = words[at] ?? ''
+      if (!word.startsWith('-')) break
+      if (/^-[A-Za-z]*t[A-Za-z]*$/.test(word)) return true
+      if (word === '-o' && /^RequestTTY=(?:yes|force)$/i.test(words[at + 1] ?? '')) return true
+      if (SSH_VALUE_FLAGS.has(word)) at++
+    }
+  }
+  return false
+}
+
+/** `sudo` options that take their value as the next word. */
+const SUDO_VALUE_FLAGS = new Set('ughpCrtTU'.split('').map((flag) => `-${flag}`))
+
+/** Whether a command runs `sudo` that would ask for a password on a terminal: no `-S` (stdin) or `-n` (never ask). */
+function interactiveSudo(command: string): boolean {
+  for (const call of command.matchAll(/(?<![\w-])sudo(?![\w-])((?:\s[^;&|'"`\n]*)?)/g)) {
+    const words = (call[1] ?? '').trim().split(/\s+/).filter(Boolean)
+    let quiet = false
+    for (let at = 0; at < words.length; at++) {
+      const word = words[at] ?? ''
+      if (!word.startsWith('-') || word === '--') break
+      if (word === '--stdin' || word === '--non-interactive' || /^-[A-Za-z]*[Sn][A-Za-z]*$/.test(word)) quiet = true
+      if (SUDO_VALUE_FLAGS.has(word)) at++
+    }
+    if (!quiet) return true
+  }
+  return false
+}
+
+const NO_TTY_ROUTE =
+  'pipe the password on local stdin into `sudo -S`, which needs no terminal: `op read "op://Private/<ref>/password" --account <account> | ssh <host> \'sudo -S <cmd>\'` (docs: dotfiles `docs/global-reference.md` §Sudo on a server), and run it through `hc run` where it must outlive the dialog'
+
+/**
+ * A command the owner's dialog cannot run: it runs without a terminal, so `ssh -t` fails ("not a tty") and a `sudo` with no
+ * `-S` asks for a password nobody can type (burn-in 2026-11-15: two Errands reached him with a command that could not run).
+ * Null when it can; the refusal names the way that does.
+ */
+export function refuseUndialogable(input: ErrandRaised): string | null {
+  const { command } = input
+  if (command === null) return null
+  if (sshAllocatesTty(command))
+    return `the command allocates a terminal over ssh (\`-t\`), and the dialog runs it with none: it would fail with "not a tty". Drop \`-t\`: ${NO_TTY_ROUTE}. Nothing was raised.`
+  if (interactiveSudo(command))
+    return `the command runs \`sudo\` without \`-S\`, which asks for a password on a terminal the dialog does not have: ${NO_TTY_ROUTE}. Nothing was raised.`
+  return null
+}
+
 /** A request a lead queued with `ask-human.sh` while it raised its Errand: the Errand is then a sentence the desk cannot push. */
 export interface QueuedAsk {
   id: string

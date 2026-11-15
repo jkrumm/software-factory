@@ -1145,7 +1145,7 @@ describe('errands', () => {
     const raised = await raise(issueId, {
       summary: 'Install the launchd daemon and sysctl',
       tried: 'looked for a way without root: none',
-      cmd: 'sudo make install-daemon',
+      cmd: 'op read "op://Private/mac-mini-server/password" --account <account> | sudo -S make install-daemon',
       host: 'macbook',
     })
     expect(raised).toMatchObject({ result: 'applied' })

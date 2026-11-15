@@ -449,7 +449,12 @@ async function main(): Promise<void> {
       name: 'settle',
       intervalMs: loopSettings.intervalMs.settle,
       onChange: true,
-      run: () => passOf(() => checkpoints.settle(), 'the settle pass'),
+      run: async () => {
+        const settled = await passOf(() => checkpoints.settle(), 'the settle pass')
+        // an Errand this pass let through to the owner has its dialog pushed now (the desk pass is due for a command never pushed)
+        deskOnReturn()
+        return settled
+      },
     },
     {
       name: 'send',

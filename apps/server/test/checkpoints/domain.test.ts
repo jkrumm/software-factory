@@ -23,6 +23,7 @@ import {
   checkErrandScreen,
   readErrand,
   refuseHostClass,
+  refuseUndialogable,
   screenByRule,
   screenByNeed,
 } from '../../src/domains/checkpoints/errand.ts'
@@ -357,6 +358,43 @@ describe('errands', () => {
     // A person's hands pass.
     expect(refusal('Approve the App Store build in the portal')).toBeNull()
     expect(refusal('Plug the cable into the device')).toBeNull()
+  })
+})
+
+describe('a command the dialog can run', () => {
+  const refusal = (command: string | null) =>
+    refuseUndialogable({ summary: 's', detail: null, tried: 't', check: null, command, host: 'macbook', needKey: null })
+
+  test('ssh -t and a sudo that asks on a terminal are refused with the sudo -S route', () => {
+    for (const command of [
+      'ssh -t homelab sudo systemctl restart x',
+      'ssh -tt homelab "sudo -S true"',
+      'ssh -o RequestTTY=yes homelab true',
+      'ssh -i ~/.ssh/k -t homelab uptime',
+      'sudo launchctl bootstrap system /Library/LaunchDaemons/x.plist',
+      'ssh homelab sudo sysctl -w kern.maxvnodes=1',
+      "ssh homelab 'sudo -u root restic unlock'",
+      'cd /tmp && sudo make install',
+    ]) {
+      expect({ command, refusal: refusal(command) }).toEqual({
+        command,
+        refusal: expect.stringContaining('sudo -S'),
+      })
+    }
+  })
+
+  test('sudo -S piped from op, sudo -n, a plain command and a remote -t flag pass', () => {
+    for (const command of [
+      null,
+      'make keys',
+      'op read "op://Private/homelab-server/password" --account <account> | ssh homelab \'sudo -S restic unlock\'',
+      'ssh homelab sudo -n true',
+      'sudo -u root -S true',
+      'ssh homelab ls -t /var/log',
+      'ssh -o BatchMode=yes homelab true',
+      'echo pseudo-sudoers',
+    ])
+      expect({ command, refusal: refusal(command) }).toEqual({ command, refusal: null })
   })
 })
 

@@ -27,6 +27,7 @@ import {
   type QueuedAsk,
   readErrand,
   refuseHostClass,
+  refuseUndialogable,
   refuseQueuedAsk,
 } from '../domains/checkpoints/errand.ts'
 import { matchKeyOf } from '../domains/checkpoints/match.ts'
@@ -1016,6 +1017,8 @@ export function raiseErrand(
   // `tried` is the gate's, never stored: the rule screen reads the stored detail as the ask, and what was run first is not.
   const hostDoes = refuseHostClass(read.value)
   if (hostDoes) return Promise.resolve(err({ kind: 'invalid', detail: hostDoes }))
+  const undialogable = refuseUndialogable(read.value)
+  if (undialogable) return Promise.resolve(err({ kind: 'invalid', detail: undialogable }))
   return raiseChecked(deps, input, read.value)
 }
 
