@@ -395,6 +395,47 @@ test('an Errand raised by the lead and done by the owner: paged once, and the le
   expect(await ok((json) => ErrandList.parse(json).errands, 'errand', 'list', '--open', 'yes')).toEqual([])
 })
 
+test('two Issues of a repo raise the same need: one Errand, one page, and his one answer ends both waits', async () => {
+  const first = await workingIssue('example-errand')
+  const second = await workingIssue('example-errand')
+  const raise = (issue: string, extra: Record<string, unknown>) =>
+    ok(
+      (json) => ErrandReply.parse(json),
+      'errand',
+      'raise',
+      issue,
+      ...body({ attempt: 1, tried: 'looked for an API route: none', ...extra }),
+    )
+  const raised = await raise(first, { summary: 'Set the census contact in the portal', needKey: 'census-contact' })
+  expect(raised.result).toBe('applied')
+  // another wording, the lead's own name for the need
+  const joined = await raise(second, {
+    summary: 'The census poller needs a contact address',
+    needKey: 'census-contact',
+  })
+  expect(joined).toMatchObject({
+    result: 'joined',
+    errand: { id: raised.errand.id },
+    issue: { state: 'waiting', waitReason: 'errand' },
+  })
+  expect(await ok((json) => ErrandList.parse(json).errands, 'errand', 'list', '--open', 'yes')).toHaveLength(1)
+
+  const passed = await pass()
+  expect(passed.pages.sent).toEqual([`page:errand:${raised.errand.id}`])
+  const needs = await ok((json) => NeedsModel.parse(json), 'read', 'needs')
+  expect(needs.items.filter((item) => item.kind === 'errand')).toMatchObject([
+    { id: raised.errand.id, joined: 1, joinedIssues: [second] },
+  ])
+
+  const done = await ok((json) => ErrandReply.parse(json), 'errand', 'done', raised.errand.id, ...body({ note: 'set' }))
+  expect(done).toMatchObject({ result: 'applied', issue: { state: 'working' } })
+  const shown = await Promise.all(
+    [first, second].map(async (id) => (await cli('issue', 'show', id)).json as { state: string }),
+  )
+  expect(shown.map((issue) => issue.state)).toEqual(['working', 'working'])
+  expect(await ok((json) => ErrandList.parse(json).errands, 'errand', 'list', '--open', 'yes')).toEqual([])
+})
+
 test('an annotation whose quote is gone lands in Unanchored', async () => {
   const issueId = await workingIssue('example-annotate')
   const report = await ok(

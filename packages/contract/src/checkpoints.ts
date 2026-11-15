@@ -293,6 +293,11 @@ export const ErrandBody = z
     cmd: z.string().optional(),
     /** where the hands must be (macbook, iphone, portal or any); with `--cmd` and no host, the MacBook */
     host: z.enum(['macbook', 'iphone', 'portal', 'any']).optional(),
+    /**
+     * your own name for the need (a short lowercase name, e.g. `census-ua-contact`): another open Errand of this repo raised under
+     * the same name is the same Errand, and you wait on that one. Without it the same command or the same one-line ask joins.
+     */
+    needKey: z.string().optional(),
     /** makes a repeated call one event, as on `ship` and `defer` */
     call: z.string().trim().min(1).max(128).optional(),
   })

@@ -162,6 +162,7 @@ const ErrandRow = z.object({
   pushed_at: z.date().nullable(),
   need: z.enum(NEEDS).nullable(),
   approved_at: z.date().nullable(),
+  match_key: z.string().nullable(),
 })
 
 const JoinRow = z.object({
@@ -340,6 +341,7 @@ const errandOf = (raw: unknown): ErrandRecord => {
     pushedAt: row.pushed_at,
     need: row.need,
     approvedAt: row.approved_at,
+    matchKey: row.match_key,
   }
 }
 
@@ -741,9 +743,9 @@ export function postgresCheckpointStore(tx: SQL): CheckpointStore {
     async insertErrand(e) {
       const rows: unknown[] = await tx`
         INSERT INTO factory.errands (id, key, issue_id, attempt, summary, detail, raised_at, reached_owner_at, screen_by,
-          source, command, check_command, host, expires_at, request_key, need)
+          source, command, check_command, host, expires_at, request_key, need, match_key)
         VALUES (${e.id}, ${e.key}, ${e.issueId}, ${e.attempt}, ${e.summary}, ${e.detail}, ${e.raisedAt}, ${e.reachedOwnerAt},
-          ${e.screenBy}, ${e.source}, ${e.command}, ${e.checkCommand}, ${e.host}, ${e.expiresAt}, ${e.requestKey}, ${e.need})
+          ${e.screenBy}, ${e.source}, ${e.command}, ${e.checkCommand}, ${e.host}, ${e.expiresAt}, ${e.requestKey}, ${e.need}, ${e.matchKey})
         ON CONFLICT (key) DO NOTHING
         RETURNING id`
       return rows.length === 1
@@ -876,13 +878,14 @@ export function postgresCheckpointStore(tx: SQL): CheckpointStore {
       return rows.length === 1
     },
 
-    async openMatching({ command, check }) {
-      if (command === null && check === null) return null
+    async openMatching({ command, check, matchKey }) {
+      if (command === null && check === null && matchKey === null) return null
       const [row] = await tx`
         SELECT * FROM factory.errands
         WHERE done_at IS NULL AND turned_away_at IS NULL
           AND (issue_id IS NULL OR EXISTS (SELECT 1 FROM factory.issues i WHERE i.id = errands.issue_id AND i.state <> 'closed'))
-          AND ((${command}::text IS NOT NULL AND command = ${command}) OR (${check}::text IS NOT NULL AND check_command = ${check}))
+          AND ((${command}::text IS NOT NULL AND command = ${command}) OR (${check}::text IS NOT NULL AND check_command = ${check})
+            OR (${matchKey}::text IS NOT NULL AND match_key = ${matchKey}))
         ORDER BY raised_at, id LIMIT 1`
       return row ? errandOf(row) : null
     },

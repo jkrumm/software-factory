@@ -211,6 +211,8 @@ export interface ErrandRecord {
   need: Need | null
   /** when the owner pressed Approve: the server ran (or is running) its command on the mini */
   approvedAt: Date | null
+  /** what makes it the same need as another (`domains/checkpoints/match.ts`); null for an Errand raised before it existed */
+  matchKey: string | null
 }
 
 /** An Issue that waits on an Errand another Issue (or a request) raised first: its command or check was the same. */
@@ -355,8 +357,12 @@ export interface CheckpointStore {
   needlessErrands(limit: number): Promise<ErrandRecord[]>
   /** stores what an Errand that has none needs; false when it has one or is done */
   setNeed(id: ErrandId, need: Need): Promise<boolean>
-  /** the open Errand that has this command or this check, oldest first (a `null` matches nothing); one that was turned away, or whose raising Issue is closed, is not open */
-  openMatching(input: { command: string | null; check: string | null }): Promise<ErrandRecord | null>
+  /** the open Errand that has this command, this check or this match key, oldest first (a `null` matches nothing); one that was turned away, or whose raising Issue is closed, is not open */
+  openMatching(input: {
+    command: string | null
+    check: string | null
+    matchKey: string | null
+  }): Promise<ErrandRecord | null>
   /** the Errand an earlier raise under this key joined, open or closed */
   joinedErrand(key: Key): Promise<ErrandRecord | null>
   /** an Issue waits on this Errand too; false when it does already */

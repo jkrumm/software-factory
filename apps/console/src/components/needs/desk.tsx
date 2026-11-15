@@ -6,6 +6,7 @@ import { Button } from '@/components/ui/button'
 import { approveErrand, finishErrand, pushDesk } from '@/lib/api'
 import {
   agoWords,
+  alsoWaiting,
   approveWords,
   deskGroups,
   doneWords,
@@ -101,7 +102,7 @@ function DeskItem({ item, onSent }: { item: NeedItem; onSent: (message: string) 
           {[
             item.repo ?? item.source,
             item.need ? NEED_LABEL[item.need] : null,
-            item.joined > 0 ? `${item.joined} more Issue${item.joined === 1 ? '' : 's'} wait on it` : null,
+            item.joined > 0 ? `also awaited by ${alsoWaiting(item)}` : null,
             `raised ${agoWords(item.ageMs)}`,
           ]
             .filter(Boolean)

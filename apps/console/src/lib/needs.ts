@@ -75,6 +75,15 @@ export function summaryLine(item: Pick<NeedItem, 'title' | 'summary'>, issueTitl
 /** The Issue page's route parameter of an item's `issue_<n>`: the number. */
 export const issueNumber = (ref: string): string => ref.replace(/^issue_/, '')
 
+/** The Issues besides the raiser that wait on an Errand: "Issue 1333", "Issues 1333 and 1335", "Issues 1333, 1335 and 1340". */
+export function alsoWaiting(item: Pick<NeedItem, 'joined' | 'joinedIssues'>): string {
+  const numbers = item.joinedIssues.map(issueNumber)
+  if (numbers.length === 0) return `${item.joined} more Issue${item.joined === 1 ? '' : 's'}`
+  const last = numbers[numbers.length - 1]
+  const list = numbers.length === 1 ? last : `${numbers.slice(0, -1).join(', ')} and ${last}`
+  return `Issue${numbers.length === 1 ? '' : 's'} ${list}`
+}
+
 /** What a Decision is, in one line for the card that opens it. */
 export function decisionParts(
   project: string,

@@ -3,6 +3,7 @@ import { type Host, HOSTS } from '../../kernel/hands.ts'
 import { err, ok, type Result } from '../../kernel/result.ts'
 import type { ErrandScreenAnswer } from '@software-factory/contract'
 import { JUDGE_BACKOFF_MS, JUDGE_MAX_TRIES, type MissingFields } from './decision.ts'
+import { NEED_KEY_RE } from './match.ts'
 import { type Need, needByRule } from './need.ts'
 
 export type ErrandId = Id<'errand'>
@@ -21,6 +22,8 @@ export interface ErrandRaised extends ErrandInput {
   command: string | null
   /** where the hands must be; the MacBook when there is a command and none is named, null otherwise (read from the words) */
   host: Host | null
+  /** the lead's own name for the need (`--need-key`): another open Errand of the repo under the same name is the same Errand; null when it gave none */
+  needKey: string | null
 }
 
 export const MAX_SUMMARY = 200
@@ -47,6 +50,9 @@ export function readErrand(raw: unknown): Result<ErrandRaised, MissingFields> {
   const named = typeof body.host === 'string' && body.host.trim() !== '' ? body.host.trim() : null
   if (named !== null && !(HOSTS as readonly string[]).includes(named))
     problems.push(`host (one of ${HOSTS.join(', ')})`)
+  const needKey = typeof body.needKey === 'string' && body.needKey.trim() !== '' ? body.needKey.trim() : null
+  if (needKey !== null && !NEED_KEY_RE.test(needKey))
+    problems.push('needKey (a short lowercase name: a-z, 0-9, . _ : / -, at most 80 characters)')
   if (problems.length > 0) {
     return err({ kind: 'missing_field', fields: problems, detail: `an Errand needs: ${problems.join(', ')}` })
   }
@@ -57,6 +63,7 @@ export function readErrand(raw: unknown): Result<ErrandRaised, MissingFields> {
     check,
     command,
     host: (named as Host | null) ?? (command === null ? null : 'macbook'),
+    needKey,
   })
 }
 

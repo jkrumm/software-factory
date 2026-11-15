@@ -25,6 +25,7 @@ import {
   approveWords,
   doneWords,
   isApproval,
+  alsoWaiting,
   NEED_LABEL,
   repeatsTitle,
   defaultLine,
@@ -468,7 +469,7 @@ function ErrandBody({ item, issueTitle, onSent }: BodyProps) {
           { label: 'Needs', value: item.need ? NEED_LABEL[item.need] : null },
           {
             label: 'Also awaited by',
-            value: item.joined > 0 ? `${item.joined} more Issue${item.joined === 1 ? '' : 's'}` : null,
+            value: item.joined > 0 ? alsoWaiting(item) : null,
           },
         ]}
       />
