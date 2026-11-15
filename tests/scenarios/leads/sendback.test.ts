@@ -27,7 +27,7 @@ async function working(): Promise<{ issue: string; session: string; n: number }>
   return { issue, session, n }
 }
 
-test('a stop with nothing reported is sent back once; the next stalls the Issue as unreported; a new turn ends the stall', async () => {
+test('a stop with nothing reported is sent back once; the next is let through and stalls nothing', async () => {
   const { issue, session } = await working()
 
   const first = await w.hook('stop', session, { stop_hook_active: false })
@@ -41,17 +41,13 @@ test('a stop with nothing reported is sent back once; the next stalls the Issue 
 
   const second = await w.hook('stop', session, { stop_hook_active: true })
   expect(second).toEqual({ code: 0, out: '', err: '' })
-  expect(await state(issue)).toEqual({ state: 'waiting', wait_reason: 'unreported' })
-
-  // The same stop asked again records nothing more.
+  // A finished background task can start the lead's next turn right after this stop: no stall is recorded, the steward's
+  // idle path owns a lead that stays quiet.
+  expect(await state(issue)).toEqual({ state: 'working', wait_reason: null })
   await w.hook('stop', session, { stop_hook_active: true })
   const stalled = await w.world.db
-    .sql`SELECT 1 FROM factory.issue_events WHERE issue_id = ${issue} AND kind = 'stalled' AND result = 'applied'`
-  expect(stalled).toHaveLength(1)
-
-  // The lead's next turn (a note, the steward, the owner typing) ends the stall by itself.
-  await w.hook('user-prompt-submit', session, { session_id: 'again' })
-  expect(await state(issue)).toEqual({ state: 'working', wait_reason: null })
+    .sql`SELECT 1 FROM factory.issue_events WHERE issue_id = ${issue} AND kind = 'stalled'`
+  expect(stalled).toHaveLength(0)
 })
 
 test('a stop after a report, with background work, or in a turn the owner started is let through', async () => {
@@ -76,8 +72,8 @@ test('a stop after a report, with background work, or in a turn the owner starte
   // The owner types into the pane: that turn follows the factory's first one and no note was typed before it.
   const owner = await working()
   await w.hook('stop', owner.session, { stop_hook_active: false }) // sent back once for turn 1
-  await w.hook('stop', owner.session, { stop_hook_active: true }) // stalls
-  await w.hook('user-prompt-submit', owner.session, { session_id: 'owner' }) // woken, turn 2: the owner's
+  await w.hook('stop', owner.session, { stop_hook_active: true }) // let through
+  await w.hook('user-prompt-submit', owner.session, { session_id: 'owner' }) // turn 2: the owner's
   expect((await w.hook('stop', owner.session, { stop_hook_active: false })).code).toBe(0)
   expect(await state(owner.issue)).toEqual({ state: 'working', wait_reason: null })
 })
