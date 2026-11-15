@@ -391,6 +391,7 @@ describe('a command the dialog can run', () => {
       'ssh homelab sudo -n true',
       'sudo -u root -S true',
       'ssh homelab ls -t /var/log',
+      'ssh-keygen -t ed25519 -f /tmp/k',
       'ssh -o BatchMode=yes homelab true',
       'echo pseudo-sudoers',
     ])

@@ -18,7 +18,7 @@ export interface ErrandRaised extends ErrandInput {
   tried: string
   /** a shell command that exits 0 while the Errand is still needed, for what a machine can observe; null when there is none */
   check: string | null
-  /** the command the owner runs on his MacBook, pushed to it as a dialog when he is back; null when there is none */
+  /** the command the owner runs on his MacBook, pushed to it as a dialog as soon as it reaches him; null when there is none */
   command: string | null
   /** where the hands must be; the MacBook when there is a command and none is named, null otherwise (read from the words) */
   host: Host | null
@@ -104,7 +104,7 @@ const HOST_CLASSES: readonly HostClass[] = [
     // the mini's sudo password is the owner's and MacBook-only: a root step the lead cannot avoid is his command on his MacBook
     settled: (input) => input.command !== null && input.host === 'macbook',
     route:
-      "first look for a way without root (brew, a user-level launchd agent, a path under the home directory, a Makefile target) and run it; if none exists, raise the Errand with the command the owner runs on his MacBook (`--cmd '<the sudo command>' --host macbook`). The mini's sudo password is deliberately MacBook-only: never read it with `op` or `secrets-run`",
+      "first look for a way without root (brew, a user-level launchd agent, a path under the home directory, a Makefile target) and run it; if none exists, raise the Errand with the command the owner runs on his MacBook (`--cmd '<the sudo command>' --host macbook`, as `sudo -S` with the password piped in on stdin: the dialog has no terminal, so a bare `sudo` or `ssh -t` is refused). The mini's sudo password is deliberately MacBook-only: never read it with `op` or `secrets-run`",
   },
   {
     name: 'a verdict pointer for a Report',
@@ -131,7 +131,7 @@ const SSH_VALUE_FLAGS = new Set('bcDEeFIiJLlmOopQRSWw'.split('').map((flag) => `
 
 /** Whether a command allocates a TTY over ssh (`-t`, `-tt`, `-nt`, `-o RequestTTY=yes|force`): the dialog has none to give. */
 function sshAllocatesTty(command: string): boolean {
-  for (const call of command.matchAll(/(?:^|[\s;&|(`'"])ssh([^;&|\n`'")]*)/g)) {
+  for (const call of command.matchAll(/(?:^|[\s;&|(`'"])ssh(?=\s)([^;&|\n`'")]*)/g)) {
     const words = (call[1] ?? '').trim().split(/\s+/).filter(Boolean)
     for (let at = 0; at < words.length; at++) {
       const word = words[at] ?? ''

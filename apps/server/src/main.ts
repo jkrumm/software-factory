@@ -74,7 +74,7 @@ import { gitMainCheckouts } from './adapters/quality/main-checkouts.ts'
 import { stewardPass, stewardSummary } from './app/loops/steward.ts'
 import { queuePass, queueSummary } from './app/loops/queue.ts'
 import { digestPass, digestPassSummary } from './app/loops/digest.ts'
-import { deskPass, deskSummary } from './app/loops/desk.ts'
+import { deskPass, deskSummary, hasUnpushed } from './app/loops/desk.ts'
 import { errandsPass, errandsSummary } from './app/loops/errands.ts'
 import { reviewsPass, reviewsSummary } from './app/loops/reviews.ts'
 import { screenPass, screenSummary } from './app/loops/screen.ts'
@@ -451,8 +451,9 @@ async function main(): Promise<void> {
       onChange: true,
       run: async () => {
         const settled = await passOf(() => checkpoints.settle(), 'the settle pass')
-        // an Errand this pass let through to the owner has its dialog pushed now (the desk pass is due for a command never pushed)
-        deskOnReturn()
+        // an Errand this pass let through to the owner has its dialog pushed now: the desk pass is due for a command never pushed
+        const open = await uow.run(async ({ checkpoints: store }) => ok(await store.openErrands(500)))
+        if (open.ok && hasUnpushed(open.value)) deskOnReturn()
         return settled
       },
     },
@@ -780,8 +781,9 @@ async function main(): Promise<void> {
     {
       // The desk pass over the open Errands, when the owner is back after two hours or more (his Console read starts it at
       // once; so does the MacBook answering after it was down, or his button) and every six hours: checks, a second screen,
-      // and the MacBook commands pushed, every pending one when he is back, one while he is away. The loop asks every 15
-      // minutes whether one is due.
+      // and the MacBook commands pushed, every pending one when he is back, one per pass while he is away, and a command
+      // that reached him and was never pushed makes one due (the settle loop starts it). The loop asks every 15 minutes
+      // whether one is due.
       name: 'desk',
       intervalMs: loopSettings.intervalMs.desk,
       onChange: false,

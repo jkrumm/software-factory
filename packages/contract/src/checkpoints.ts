@@ -287,8 +287,8 @@ export const ErrandBody = z
     check: z.string().optional(),
     /**
      * the command the owner runs, for an Errand that is a step on his MacBook: it is pushed to the MacBook as a dialog showing
-     * the command when he is back (his Console read, the MacBook answering, or his button), and its answer closes the
-     * Errand. Raise "approve the queued dialog" this way; never queue an `ask-human.sh` request beside an Errand.
+     * the command as soon as it reaches him, and its answer closes the Errand. The dialog has no terminal: `ssh -t` and a
+     * `sudo` without `-S` are refused (pipe the password into `sudo -S`). Raise "approve the queued dialog" this way; never queue an `ask-human.sh` request beside an Errand.
      */
     cmd: z.string().optional(),
     /** where the hands must be (macbook, iphone, portal or any); with `--cmd` and no host, the MacBook */

@@ -16,6 +16,9 @@ import { runCheck } from './errands.ts'
 import type { SettleDeps } from '../checkpoints-settle.ts'
 import type { UnitOfWork } from '../unit-of-work.ts'
 
+/** the composition asks it before it starts a pass, and imports no domain code */
+export { hasUnpushed }
+
 export interface DeskDeps {
   settle: SettleDeps
   desk: UnitOfWork<{ desk: DeskStore }>
