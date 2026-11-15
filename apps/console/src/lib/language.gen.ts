@@ -21,7 +21,7 @@ export const LANGUAGE = {
   checkpoint:
     'Where the factory stops for a person: a Decision, a review of a Concept or Spec, an Errand. Never a merge',
   claim:
-    "A lead's place in its repo: leads: N plus one for a fix. A wait that needs a person or a clock gives it back; the lead takes one again before it is told its wait is over",
+    "A lead's place in its repo: leads: N (64 when the project states none: the host's fit is the limit, NL32) plus one for a fix. A wait that needs a person or a clock gives it back; the lead takes one again before it is told its wait is over",
   compacted: 'Session state: its context was just compacted, no turn since',
   concept:
     "A direction for a whole product, UX or architecture, before building. Three or four per project, ever. Its result goes into the project's DESIGN.md",

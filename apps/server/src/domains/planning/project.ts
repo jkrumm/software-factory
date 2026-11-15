@@ -152,8 +152,11 @@ const Hygiene = z
 /** The most leads a repo, or a lane of it, may state: a value above is clamped to it, with a warning, never refused. */
 export const MAX_LEADS = 64
 
-/** The leads of a repo whose `project.yaml` states none (and of a repo with none). */
-export const DEFAULT_LEADS = 4
+/**
+ * The leads of a repo whose `project.yaml` states none (and of a repo with none): no cap beyond the host, whose memory
+ * fit, load and accounts hold work back. A `leads: N` below it is an exception the file gives its reason for (NL32).
+ */
+export const DEFAULT_LEADS = MAX_LEADS
 
 const LANE_MEMORY = /^(\d+(?:\.\d+)?)(MiB|GiB)$/
 const MAX_LANE_MEMORY_MIB = 1024 * 1024

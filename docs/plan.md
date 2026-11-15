@@ -111,7 +111,10 @@ the latest lead started on.
 
 ## Lanes
 
-`leads: N` caps the leads in a repo, but work inside one repo is not equally heavy: server rows are cheap, an Apple row
+`leads: N` caps the leads in a repo; a repo that states none has no cap beyond the host (64, the bound), because memory fit,
+load and the accounts already decide what runs. State `leads` only for a shared resource the repo's merge window or its
+files cannot serve in parallel (one merge at a time, rebase conflicts on a ratchet file), with the reason in a comment
+beside it (NL32). Work inside one repo is also not equally heavy: server rows are cheap, an Apple row
 runs xcodebuild and a simulator on the one mini. Give each kind of row a `lane` and cap the heavy lane in the repo's
 `project.yaml` (a lane's `leads`, like the repo's, is at most 64; a larger value is clamped, with a warning in `factory project show`):
 

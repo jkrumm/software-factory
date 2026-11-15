@@ -59,7 +59,7 @@ describe('syncing the projects', () => {
     value(await syncProjects(world.deps, { fetch: false }))
     const [work] = await states()
     expect(work?.project).toMatchObject({ name: 'work', source: 'defaults' })
-    expect(work?.project.project.leads).toBe(4)
+    expect(work?.project.project.leads).toBe(64)
     expect(issue).toBe(issueId(1))
   })
 
