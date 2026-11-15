@@ -89,9 +89,10 @@ TEST_TIMEOUT = --timeout $(shell bun -e 'import {cpus,loadavg} from "node:os"; c
 
 test: test-unit test-scenarios
 
+# UNIT_SHARD=1/2 runs the first of two shards (CI: `static` runs the first beside the checks, `unit (2/2)` the second); unset, all of them.
 test-unit:
-	@echo "==> unit tests (bun test apps packages scripts integrations)"
-	@$(SLOT) bun test $(call JUNIT,unit) $(TEST_TIMEOUT) ./apps ./packages ./scripts ./integrations
+	@echo "==> unit tests (bun test apps packages scripts integrations$(if $(UNIT_SHARD), --shard=$(UNIT_SHARD)))"
+	@$(SLOT) bun test $(call JUNIT,unit) $(TEST_TIMEOUT) $(if $(UNIT_SHARD),--shard=$(UNIT_SHARD)) ./apps ./packages ./scripts ./integrations
 
 # The unit tests of what the branch changed (bun follows the imports from each changed file; committed and uncommitted
 # changes against the merge base with origin/master). CHECK_FAST_ALL=1 (CI's `static` job) runs every unit test.
