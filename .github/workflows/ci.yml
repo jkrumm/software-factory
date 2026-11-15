@@ -20,19 +20,27 @@ jobs:
   # What a lead runs locally (project.yaml `checks.fast`): format, lint, types, boundaries, scans, every unit test.
   static:
     runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      actions: write
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
       - uses: ./.github/actions/setup
       - run: make check-fast
         env:
           CHECK_FAST_ALL: '1'
+      # A red static is known minutes before the test jobs end: stop them, the run is red anyway.
+      - if: failure()
+        run: gh run cancel "$GITHUB_RUN_ID" --repo "$GITHUB_REPOSITORY"
+        env:
+          GH_TOKEN: ${{ github.token }}
 
   scenarios:
     runs-on: ubuntu-latest
     strategy:
       fail-fast: false
       matrix:
-        shard: ['1/2', '2/2']
+        shard: ['1/3', '2/3', '3/3']
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
       - uses: ./.github/actions/setup
