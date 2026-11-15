@@ -158,6 +158,7 @@ export function postgresQualityStore(tx: SQL): QualityStore {
         JOIN LATERAL (
           SELECT checks FROM factory.quality_checks WHERE watch_key = w.key ORDER BY n DESC LIMIT 1) last ON true
         WHERE i.repo = ${repo} AND w.issue_id <> ${exceptIssue} AND w.answer = 'regressed'
+          AND w.watch = (SELECT max(r.watch) FROM factory.quality_watches r WHERE r.issue_id = w.issue_id AND r.answer = 'regressed')
           AND w.answered_at <= ${now} AND w.answered_at > ${new Date(now.getTime() - OPEN_REGRESSION_MS)}
           AND NOT EXISTS (
             SELECT 1 FROM factory.quality_watches later

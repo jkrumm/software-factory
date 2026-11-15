@@ -66,7 +66,16 @@ else
   else
     # Another lead's merge that is still being deployed is that lead's to deploy (its own watch reads the deployed version), not a
     # failure of the change this verify watches: master may be ahead of the deploy for the grace. A merge nobody deployed fails after it.
-    first=$(git -C "$REPO_DIR" log --reverse --format=%ct "$deployed..$remote" | head -n 1)
+    # The age is the oldest commit that changed a deployable path: an older docs-only commit needs no deploy and sets no clock.
+    first=""
+    while IFS= read -r sha; do
+      [[ -z "$sha" ]] && continue
+      while IFS= read -r touched; do
+        [[ -z "$touched" ]] && continue
+        inert_path "$touched" || { first=$(git -C "$REPO_DIR" log -1 --format=%ct "$sha"); break; }
+      done < <(git -C "$REPO_DIR" diff-tree --no-commit-id --name-only -r --root "$sha")
+      [[ -n "$first" ]] && break
+    done < <(git -C "$REPO_DIR" rev-list --reverse "$deployed..$remote")
     age=$(( $(date +%s) - ${first:-0} ))
     grace="${FACTORY_VERIFY_DEPLOY_GRACE_S:-1800}"
     (( age < grace )) \

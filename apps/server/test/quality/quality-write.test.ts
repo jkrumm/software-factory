@@ -669,6 +669,29 @@ describe('the watch', () => {
       expect(await regressesWith([verifyRed(7)])).toEqual({ regressed: 1, state: 'working' })
     })
 
+    test('only an Issue’s latest regressed watch is owned: a red its lead fixed since is gone', async () => {
+      const issueId = await working()
+      value(await ship(issueId))
+      await runEffects()
+      const other = await regressedElsewhere([verifyRed(3)])
+      clock.advance(60_000)
+      // the other lead fixed that red and regressed again on something else
+      await db.sql`
+        INSERT INTO factory.quality_watches (key, issue_id, attempt, watch, started_at, window_ms, answer, answered_at)
+        VALUES (${`start_watch:${other}:2`}, ${other}, 1, 2, ${clock.now()}, 0, 'regressed', ${clock.now()})`
+      await db.sql`
+        INSERT INTO factory.quality_checks (watch_key, n, at, outcome, checks)
+        VALUES (${`start_watch:${other}:2`}, 1, ${clock.now()}, 'red', ${[{ name: 'make verify', ok: false, detail: 'exit 1: a test broke' }]})`
+      proofAnswer = () => ok([verifyRed(7)])
+      clock.advance(30 * 60_000)
+      let regressed = 0
+      for (let minutes = 0; minutes <= 8; minutes++) {
+        regressed += value(await checkWatches(watchDeps())).regressed
+        clock.advance(60_000)
+      }
+      expect(regressed).toBe(1)
+    })
+
     test('the Issue’s own earlier regression does not excuse its next red', async () => {
       const issueId = await working()
       let regressed = 0
