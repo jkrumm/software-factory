@@ -359,7 +359,7 @@ through `receive` in `app/intake.ts`; the answer is a triage outcome (`docs/lang
   agw's judgment (`covered`), not the factory's; `factory issue ship` prints one stderr line naming the range to `/review`
   when the answer is `uncovered`, or the reason when it was not read. The lead also states one line per acceptance line of the Issue
   (`--acceptance "met: ..."` or `"not met: ..."`; the factory parses no criteria), recorded as `acceptance` evidence and shown on the
-  Issue page; a malformed line is refused (422), a `not met` never refuses, and a ship that states nothing is counted as
+  Issue page; the natural forms are normalised (a list marker, `AC2:`, bold, a dash for the colon), a line over 500 characters is cut, and a malformed line is refused (422) with the corrected `--acceptance` line built from what was sent; a `not met` never refuses, and a ship that states nothing is counted as
   friction (`unstated_acceptance`) like an unreviewed one. The pull request the commits landed through is read from GitHub
   (`adapters/quality/ci.ts`, the `Ci` port) and its head's CI recorded as `ci` evidence (`green`, `red`, `running`, `missing`
   when no pull request or no check was found, `unknown` when GitHub could not be read); it never refuses a ship, and a red

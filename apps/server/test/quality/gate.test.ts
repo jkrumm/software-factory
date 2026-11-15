@@ -161,8 +161,43 @@ test('the lead’s acceptance lines are parsed: met, or not met with why; anythi
   })
   expect(parseAcceptance([])).toEqual({ ok: true, evidence: { statements: [] } })
   for (const line of ['done', 'met:', 'unmet: x']) {
-    expect(parseAcceptance([line])).toMatchObject({ ok: false, error: expect.stringContaining('must read "met:') })
+    expect(parseAcceptance([line])).toMatchObject({
+      ok: false,
+      error: expect.stringContaining('must start with "met: "'),
+    })
   }
+})
+
+test('the natural forms of an acceptance line are accepted, a long one is cut', () => {
+  const parsed = parseAcceptance([
+    '- met - the page shows it',
+    '1. **Met**: bold',
+    'AC2: not met — no time',
+    'NOT_MET: later',
+    `met: ${'x'.repeat(900)}`,
+  ])
+  expect(parsed).toMatchObject({ ok: true })
+  if (!parsed.ok) return
+  expect(parsed.evidence.statements.map((s) => [s.status, s.text.slice(0, 12)])).toEqual([
+    ['met', 'the page sho'],
+    ['met', 'bold'],
+    ['not_met', 'no time'],
+    ['not_met', 'later'],
+    ['met', 'xxxxxxxxxxxx'],
+  ])
+  expect(parsed.evidence.statements[4]?.text).toHaveLength(500)
+})
+
+test('a malformed acceptance line is refused with the corrected line, built from what was sent', () => {
+  const refused = parseAcceptance(['the route answers 200 on the mini'])
+  expect(refused).toEqual({
+    ok: false,
+    error: expect.stringContaining('--acceptance "met: the route answers 200 on the mini"'),
+  })
+  expect(refused).toEqual({
+    ok: false,
+    error: expect.stringContaining('--acceptance "not met: the route answers 200 on the mini"'),
+  })
 })
 
 test('the ship records the pull request CI, and a CI that could not be read is `unknown`, never a refusal (NL23)', () => {

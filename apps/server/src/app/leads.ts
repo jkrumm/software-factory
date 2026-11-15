@@ -3,6 +3,7 @@ import type {
   LeadStore,
   Claims,
   Checks,
+  MergeGuard,
   Repos,
   Roles,
   Seats,
@@ -37,6 +38,8 @@ export interface LeadDeps {
   repos: Repos
   /** the project's check tiers, for the brief */
   checks: Checks
+  /** whether the repo has `make merge-guard`, for the brief */
+  mergeGuard: MergeGuard
   roles: Roles
   /** capacity's: the account, the claim, the window (package 3) */
   seats: Seats

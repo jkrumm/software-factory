@@ -81,22 +81,37 @@ export interface AcceptanceEvidence {
   statements: AcceptanceStatement[]
 }
 
-const STATEMENT = /^\s*(not[ _]met|met)\s*:\s*(\S[\s\S]*)$/i
+/** The most characters of one statement kept; a longer line is cut, never refused. */
+export const MAX_STATEMENT_CHARS = 500
 
-/** The lead's lines as statements, or the first line that is neither `met: <text>` nor `not met: <why>`. */
+/** What leads put before the status: a list marker, a number, `AC2:`, bold or backticks. */
+const LEAD_IN =
+  /^\s*(?:(?:[-*\u2022>]+|\d+[.)]|(?:ac|criterion|acceptance)[ _-]?#?\d+\s*[:.)\u2013\u2014-])\s*)*[*_`]*/i
+/** `met: why`, also `met - why`, `Met \u2014 why`, `**not met**: why`, `NOT_MET: why`. */
+const STATEMENT = /^(not[\s_-]*met|met)[*_`]*\s*(?::|[-\u2013\u2014]+|=)\s*[*_`]*\s*(\S[\s\S]*)$/i
+
+/**
+ * The lead's lines as statements, or the first line that is neither a `met` nor a `not met` statement. The natural
+ * forms (a list marker, a dash for the colon, bold) are normalised, a line over the cap is cut, and a refusal prints
+ * the corrected lines, so the first refusal is the last.
+ */
 export function parseAcceptance(
   lines: readonly string[],
 ): { ok: true; evidence: AcceptanceEvidence } | { ok: false; error: string } {
   const statements: AcceptanceStatement[] = []
   for (const line of lines) {
-    const found = STATEMENT.exec(line)
+    const found = STATEMENT.exec(line.replace(LEAD_IN, ''))
     if (!found?.[1] || !found[2]) {
+      const said = line.trim().slice(0, MAX_STATEMENT_CHARS - 'not met: '.length)
       return {
         ok: false,
-        error: `acceptance line "${line.slice(0, 80)}" must read "met: <what shows it>" or "not met: <why>"`,
+        error: `acceptance line "${line.trim().slice(0, 80)}" must start with "met: " or "not met: " (a line over ${MAX_STATEMENT_CHARS} characters is cut): send --acceptance "met: ${said}" if it holds, or --acceptance "not met: ${said}" if it does not`,
       }
     }
-    statements.push({ status: found[1].toLowerCase() === 'met' ? 'met' : 'not_met', text: found[2].trim() })
+    statements.push({
+      status: /^met$/i.test(found[1]) ? 'met' : 'not_met',
+      text: found[2].trim().slice(0, MAX_STATEMENT_CHARS),
+    })
   }
   return { ok: true, evidence: { statements } }
 }

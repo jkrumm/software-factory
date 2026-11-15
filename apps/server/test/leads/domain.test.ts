@@ -375,6 +375,23 @@ describe('the brief', () => {
     expect(buildBrief({ ...input, checks: null })).toBe(buildBrief(input))
   })
 
+  test('the brief says whether the repo has make merge-guard; unknown says nothing', () => {
+    const without = buildBrief({ ...input, mergeGuard: false })
+    expect(without).toContain('## Merge guard in this repo')
+    expect(without).toContain('has no `make merge-guard` target')
+    expect(without).toContain('do not look for one')
+    expect(without.startsWith(STANDING_ORDERS)).toBe(true)
+    expect(buildBrief({ ...input, mergeGuard: true })).toContain('has a `make merge-guard` target')
+    expect(buildBrief({ ...input, mergeGuard: null })).toBe(buildBrief(input))
+  })
+
+  test('the standing orders carry the ship grammar, the reads a lead cannot make and the stopped background command', () => {
+    expect(STANDING_ORDERS).toContain('each starting `met: ` or `not met: `, over 500 characters is cut')
+    expect(STANDING_ORDERS).toContain('Reads your token cannot make (403)')
+    expect(STANDING_ORDERS).toContain('`factory project plan <name>`')
+    expect(STANDING_ORDERS).toContain('if its log has no `rc=` line, run it again at once')
+  })
+
   test('the standing orders name the friction route: a signal on software-factory, never a self-filed Issue', () => {
     expect(STANDING_ORDERS).toContain('factory signal file --from agent:<repo> --repo software-factory')
     expect(STANDING_ORDERS).toContain('never file that Issue yourself')

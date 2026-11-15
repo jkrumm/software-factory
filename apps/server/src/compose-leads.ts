@@ -2,6 +2,7 @@ import type { SQL } from 'bun'
 import type { TickAnswer } from '@software-factory/contract'
 import { gitBranches } from './adapters/git/branches.ts'
 import { gitWorktrees } from './adapters/git/worktrees.ts'
+import { makefileMergeGuard } from './adapters/git/merge-guard.ts'
 import { rootedRepos } from './adapters/git/repos.ts'
 import { HcTerminals, claudeProjectsDirs } from './adapters/hc/terminals.ts'
 import { SpoolReplayer } from './adapters/leads/spool.ts'
@@ -75,6 +76,7 @@ export function composeLeads(input: {
     branches: gitBranches(input.github),
     repos: rootedRepos(s.repoRoots, s.repoAllow),
     checks: input.checks,
+    mergeGuard: makefileMergeGuard(),
     roles: fileRoles(s.rolesFile),
     seats: input.capacity.seats,
     claims: input.capacity.claims,
