@@ -4,13 +4,14 @@ import { type Outcome, clean, failed, finding, found, skipped } from './finding.
 import { type Checkout, MAX_EVIDENCE_LINES } from '../../../domains/loops/hygiene-model.ts'
 
 /** A CLI helper's limit, not an agent's: the repo's whole gate can be slow. */
-const CHECK_TIMEOUT_MS = 45 * 60_000
+export const CHECK_TIMEOUT_MS = 45 * 60_000
 
 const ANSI = new RegExp(`${String.fromCharCode(27)}\\[[0-9;?]*[A-Za-z]`, 'g')
 
-async function makeCheck(tools: Tools, cwd: string) {
+/** `make <target>` in `cwd`: the exit code, the seconds it took and the tail of its output (ANSI stripped, `MAX_EVIDENCE_LINES` lines). */
+export async function makeTarget(tools: Tools, cwd: string, target: string) {
   const started = Date.now()
-  const result = await exec(withStderr([tools.make, 'check']), CHECK_TIMEOUT_MS, cwd)
+  const result = await exec(withStderr([tools.make, target]), CHECK_TIMEOUT_MS, cwd)
   const tail = result.stdout
     .replace(ANSI, '')
     .split('\n')
@@ -38,14 +39,14 @@ export async function checkProbe(tools: Tools, checkout: Checkout): Promise<Outc
     .text()
     .catch(() => '')
   if (!/^check:/m.test(makefile)) return skipped('no check target in the Makefile')
-  const first = await makeCheck(tools, path)
+  const first = await makeTarget(tools, path, 'check')
   if (first.exitCode === EXIT_TIMEOUT) return failed(`make check did not finish in ${CHECK_TIMEOUT_MS / 60_000} min`)
   let detail = `make check, ${first.seconds}s, exit ${first.exitCode}`
   if (first.exitCode === 0) return clean(detail)
   if (first.exitCode === 126 || first.exitCode === 127) return failed(`${detail}: ${tools.make} cannot run`)
   const sha7 = ref.slice(0, 7)
   if (await cleanAt(tools, source, ref)) {
-    const own = await makeCheck(tools, source)
+    const own = await makeTarget(tools, source, 'check')
     if (own.exitCode === EXIT_TIMEOUT) return failed(`make check did not finish in the project's own checkout`)
     if (own.exitCode === 126 || own.exitCode === 127) {
       return failed(`make check, exit ${own.exitCode} in the project's own checkout: ${tools.make} cannot run`)

@@ -19,7 +19,7 @@ import { coChanged, parseLog } from '../../src/adapters/hygiene/probes/cochange.
 import { parseOutdated, severity } from '../../src/adapters/hygiene/probes/deps.ts'
 import { retiredScope } from '../../src/adapters/hygiene/probes/retired.ts'
 import { publishedHost } from '../../src/adapters/hygiene/probes/runrules.ts'
-import type { SweepReport } from '../../src/domains/loops/hygiene-model.ts'
+import type { DeclaredProbe, SweepReport } from '../../src/domains/loops/hygiene-model.ts'
 
 const REPO_ROOT = join(import.meta.dir, '..', '..', '..', '..')
 const ID = {
@@ -93,11 +93,11 @@ const checker = (options: { make?: string; bun?: string } = {}) =>
 
 async function sweep(
   name: string,
-  options: { make?: string; bun?: string; skipCheck?: string } = {},
+  options: { make?: string; bun?: string; skipCheck?: string; probes?: DeclaredProbe[] } = {},
 ): Promise<SweepReport> {
-  const { skipCheck, ...tools } = options
+  const { skipCheck, probes, ...tools } = options
   const c = checker(tools)
-  const result = await c.withCheckout(name, null, (checkout) => c.sweep(checkout, { skipCheck }))
+  const result = await c.withCheckout(name, null, (checkout) => c.sweep(checkout, { skipCheck, probes }))
   if (!result.ok) throw new Error(result.error.detail)
   return result.value
 }
@@ -282,6 +282,72 @@ describe('check probe', () => {
   test('the sweep runs the probes in PROBES order, one run each', async () => {
     const report = await sweep(makeRepo({ 'a.txt': 'x' }).name)
     expect(report.runs.map((r) => r.probe)).toEqual(['check', 'links', 'retired', 'deps', 'cochange', 'runrules'])
+  })
+})
+
+describe('declared probes', () => {
+  const demo = [{ name: 'demo', target: 'demo-check' }]
+  const runs = (report: SweepReport) => report.runs.filter((r) => r.probe === 'probe')
+
+  test('a red target is one probe:<name> finding with the tail of its output; green is clean', async () => {
+    const noisy = Array.from({ length: 12 }, (_, i) => `\t@echo line${i + 1}`).join('\n')
+    const red = await sweep(makeRepo({ Makefile: `demo-check:\n${noisy}\n\t@echo oops >&2; exit 1\n` }).name, {
+      probes: demo,
+    })
+    expect(runs(red)).toHaveLength(1)
+    expect(runs(red)[0]).toMatchObject({ outcome: 'found' })
+    expect(runs(red)[0]?.detail).toMatch(/^demo: make demo-check, \d+s, exit 2$/)
+    const [item] = findings(red, 'probe')
+    expect(findings(red, 'probe')).toHaveLength(1)
+    expect(item).toMatchObject({ key: 'probe:demo', count: 1, reproduce: 'make demo-check' })
+    expect(item?.lines.length).toBe(8)
+    expect(item?.lines).toContain('oops')
+    expect(item?.lines).not.toContain('line1')
+    const green = await sweep(makeRepo({ Makefile: 'demo-check:\n\t@exit 0\n' }).name, { probes: demo })
+    expect(runs(green)[0]?.outcome).toBe('clean')
+    expect(findings(green, 'probe')).toEqual([])
+  })
+
+  test('a target the Makefile lacks is skipped with the reason, and never run', async () => {
+    const marker = join(base, `ran-${++counter}`)
+    const none = await sweep(makeRepo({ Makefile: `other:\n\t@touch ${marker}; exit 1\n` }).name, { probes: demo })
+    expect(runs(none)[0]).toMatchObject({ outcome: 'skipped', detail: 'demo: no demo-check target in the Makefile' })
+    expect(findings(none, 'probe')).toEqual([])
+    expect(existsSync(marker)).toBe(false)
+    const bare = await sweep(makeRepo({ 'a.txt': 'x' }).name, { probes: demo })
+    expect(runs(bare)[0]?.outcome).toBe('skipped')
+    // a longer target name is not the target
+    const longer = await sweep(makeRepo({ Makefile: 'demo-check-all:\n\t@exit 1\n' }).name, { probes: demo })
+    expect(runs(longer)[0]?.outcome).toBe('skipped')
+    // a target named among several on one line is
+    const shared = await sweep(makeRepo({ Makefile: 'a demo-check b:\n\t@exit 1\n' }).name, { probes: demo })
+    expect(runs(shared)[0]?.outcome).toBe('found')
+  })
+
+  test('a make that cannot run is failed, not a finding; one run per declared probe, after the built-in ones', async () => {
+    const broken = await sweep(makeRepo({ Makefile: 'demo-check:\n\t@exit 1\n' }).name, {
+      make: '/nonexistent/make',
+      probes: demo,
+    })
+    expect(runs(broken)[0]?.outcome).toBe('failed')
+    expect(findings(broken, 'probe')).toEqual([])
+    const two = await sweep(makeRepo({ Makefile: 'one:\n\t@exit 1\n\ntwo:\n\t@exit 0\n' }).name, {
+      probes: [
+        { name: 'first', target: 'one' },
+        { name: 'second', target: 'two' },
+      ],
+    })
+    expect(two.runs.map((r) => r.probe)).toEqual([
+      'check',
+      'links',
+      'retired',
+      'deps',
+      'cochange',
+      'runrules',
+      'probe',
+      'probe',
+    ])
+    expect(two.runs.slice(-2).map((r) => r.outcome)).toEqual(['found', 'clean'])
   })
 })
 
