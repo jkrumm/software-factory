@@ -60,7 +60,7 @@ test('projects are read from the default branch: leads, the slot limit and the s
   expect(synced.json).toMatchObject({ synced: 2, broken: [], retired: [], errors: [] })
   const list = ProjectList.parse((await lab.cli(['project', 'list'])).json)
   expect(list.projects.map((p) => [p.name, p.source, p.leads, p.slotRun, p.branch])).toEqual([
-    ['app', 'file', 4, null, 'origin/main'],
+    ['app', 'file', 64, null, 'origin/main'],
     ['lib', 'file', 3, '45m', 'origin/main'],
   ])
   expect(list.projects.map((p) => p.checks)).toEqual([null, { fast: 'make check-fast', full: 'make check', ci: true }])
