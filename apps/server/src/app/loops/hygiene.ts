@@ -25,8 +25,9 @@ import type {
   LoopStore,
 } from '../../domains/loops/ports.ts'
 import type { Triaged } from '../../domains/intake/model.ts'
+import { type DoctorReader, doctorMessage } from '../../domains/capacity/doctor.ts'
 import type { PlanningStore } from '../../domains/planning/ports.ts'
-import { repoTextOf } from '../../domains/planning/sync.ts'
+import { repoTextOf, type StoredProject } from '../../domains/planning/sync.ts'
 import type { Clock } from '../../kernel/clock.ts'
 import type { IdSource } from '../../kernel/ids.ts'
 import { key } from '../../kernel/keys.ts'
@@ -40,6 +41,8 @@ export interface HygieneDeps {
   clock: Clock
   ids: IdSource
   checker: HygieneChecker
+  /** the projects' own doctors: a red one skips the project's `check` probe with its lines as the reason; absent: none is asked */
+  doctor?: DoctorReader
   workflow: HygieneWorkflow
   /** intake's entry for an agent (`intake.api.file`): its fingerprint rules decide a repeat */
   file(body: SignalRequest): Promise<Result<Triaged, IntakeError>>
@@ -294,6 +297,14 @@ async function retryPass(
   return ok({ due: true, mode: 'retry', record, filedNow: added.filed.length, overNow: added.overBudget.length })
 }
 
+/** Why the project's doctor says this host cannot run it, so its `check` probe is skipped instead of switched off; undefined: green, no doctor, or no reading. */
+async function redDoctor(deps: HygieneDeps, project: StoredProject): Promise<string | undefined> {
+  const command = project.project.doctor
+  if (!deps.doctor || !command) return undefined
+  const reading = await deps.doctor.read({ project: project.name, repo: project.repo, command })
+  return reading && !reading.ok ? doctorMessage(project.name, reading) : undefined
+}
+
 /**
  * One tick of the hygiene loop: at most one project. A project with no pass in the last `everyMs` is swept (probes in a
  * throwaway checkout, then `factory-hygiene` over the documents the sweep picked); otherwise a project whose judgment failed
@@ -328,7 +339,7 @@ export async function hygienePass(deps: HygieneDeps): Promise<Result<HygienePass
     return retryPass(deps, { repoText: work.repo, name: project.name, passId: work.row.id }, work.row)
   }
   const { hygiene } = project.project
-  const skipCheck = hygiene.check ? undefined : hygiene.reason
+  const skipCheck = hygiene.check ? await redDoctor(deps, project) : hygiene.reason
   return fullPass(
     deps,
     { repoText: work.repo, name: project.name, passId: deps.ids.next('hygiene'), skipCheck, probes: hygiene.probes },

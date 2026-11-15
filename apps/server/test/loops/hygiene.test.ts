@@ -272,6 +272,30 @@ test('a project with hygiene.check false is swept with its reason; the default a
   expect(w.skips).toEqual([reason, undefined])
 })
 
+test("a red doctor skips the project's check with its lines, so hygiene.check needs no switching off; a green one and no doctor do not", async () => {
+  const withDoctor = (name: string) =>
+    ({ ...project(name), project: { hygiene: { check: true }, doctor: 'make doctor' } }) as unknown as StoredProject
+  const w = world([], new Set(), [
+    withDoctor('a-red'),
+    withDoctor('b-green'),
+    withDoctor('c-unknown'),
+    project('d-plain'),
+  ])
+  const readings: Record<string, { ok: boolean; lines: string[]; at: Date } | null> = {
+    'a-red': { ok: false, lines: ['lab seed missing; fix: rsync it'], at: now },
+    'b-green': { ok: true, lines: [], at: now },
+    'c-unknown': null,
+  }
+  w.deps.doctor = { read: async ({ project: name }) => readings[name] ?? null }
+  for (let i = 0; i < 4; i++) await hygienePass(w.deps)
+  expect(w.skips).toEqual([
+    'a-red cannot run on this host: lab seed missing; fix: rsync it',
+    undefined,
+    undefined,
+    undefined,
+  ])
+})
+
 test('the probes a project declares are handed to its sweep; one that declares none passes none', async () => {
   const declared = [{ name: 'demo', target: 'demo-check' }]
   const w = world([], new Set(), [project('lab', { check: true, probes: declared }), project('plain')])

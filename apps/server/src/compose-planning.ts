@@ -5,7 +5,14 @@ import { gitProjectSource } from './adapters/planning/git-projects.ts'
 import { hostReader } from './adapters/planning/host.ts'
 import type { CapacityApi } from './api/capacity.ts'
 import type { PlanningApi } from './api/planning.ts'
-import { admissionPass, capacityFacts, claimQueued, claimStalled, queueView } from './app/capacity-admit.ts'
+import {
+  admissionPass,
+  capacityFacts,
+  type CapacityDeps,
+  claimQueued,
+  claimStalled,
+  queueView,
+} from './app/capacity-admit.ts'
 import { capacityForLeads } from './app/capacity-leads.ts'
 import { getQueueStates, setQueueState, setRelearn } from './app/capacity-queue.ts'
 import { giveSlotBack, recordMergeWindow, recordStepCost, touchSlot } from './app/capacity-slots.ts'
@@ -57,8 +64,10 @@ export function composePlanning(input: {
   settings: PlanningSettings
   /** a timed wait this long with Issues behind it gets a Replan; absent, no Replan is filed by the pass */
   longWaitMs?: number
+  /** the projects' own doctors (`doctor:` of a `project.yaml`); absent, no project is asked whether this host can run it */
+  doctor?: CapacityDeps['doctor']
 }): PlanningComposition {
-  const { writes, roles, settings, longWaitMs } = input
+  const { writes, roles, settings, longWaitMs, doctor } = input
   const sync = {
     ...writes,
     roles,
@@ -81,6 +90,7 @@ export function composePlanning(input: {
     ...writes,
     limits,
     host,
+    ...(doctor ? { doctor } : {}),
     accounts: claudeAccountSource({ bin: settings.claudeAccountBin }),
     ranker: claudeAccountRanker({ bin: settings.claudeAccountBin }),
   }

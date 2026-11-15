@@ -15,7 +15,7 @@ import { queueMovedAt } from '../../src/read/queue.ts'
 import { setQueueState, setRelearn } from '../../src/app/capacity-queue.ts'
 import { setPrio } from '../../src/app/planning-chain.ts'
 import { syncProjects } from '../../src/app/planning-sync.ts'
-import { issueId } from '../../src/kernel/ids.ts'
+import { issueId, issueNumber } from '../../src/kernel/ids.ts'
 import { key } from '../../src/kernel/keys.ts'
 import { err, ok, portError } from '../../src/kernel/result.ts'
 import { account, startWorld, value, type World } from '../planning/support.ts'
@@ -88,6 +88,49 @@ describe('admission', () => {
     const result = await pass()
     expect(result.admitted.map((a) => a.issue)).toEqual(issues)
     expect(result.queue.filter((e) => e.reason?.kind === 'claim')).toEqual([])
+  })
+
+  test("a red doctor keeps the project's Issues queued with its lines, leaves other projects alone, and the next green reading admits them", async () => {
+    world.accounts.rows = [account('a'), account('b'), account('c')]
+    world.source.add('gated', {
+      project: {
+        state: 'text',
+        sha: 'sha-gated',
+        value: { apiVersion: 'factory/v2', name: 'gated', doctor: 'make doctor' },
+      },
+    })
+    value(await syncProjects(world.deps, { fetch: false }))
+    const asked: string[] = []
+    let reading: { ok: boolean; lines: string[]; at: Date } | null = {
+      ok: false,
+      lines: ['lab seed missing; fix: rsync it'],
+      at: world.clock.now(),
+    }
+    world.deps.doctor = {
+      async read({ project, command }) {
+        asked.push(`${project}: ${command}`)
+        return reading
+      },
+    }
+    try {
+      const [blocked, free] = [await world.queued({ repo: 'gated' }), await world.queued({ repo: 'app' })]
+      const first = await pass()
+      expect(first.admitted.map((a) => a.issue)).toEqual([free])
+      expect(first.queue.find((e) => e.issue === blocked)?.reason).toMatchObject({
+        kind: 'doctor',
+        message: 'gated cannot run on this host: lab seed missing; fix: rsync it',
+      })
+      // only the project that declares a doctor is asked
+      expect([...new Set(asked)]).toEqual(['gated: make doctor'])
+      expect(await state(issueNumber(blocked))).toBe('queued')
+
+      // a doctor that cannot run says nothing about the host: the project is admitted
+      reading = null
+      nextSample()
+      expect((await pass()).admitted.map((a) => a.issue)).toEqual([blocked])
+    } finally {
+      delete world.deps.doctor
+    }
   })
 
   test('lanes: {apple: 1} with leads: 2 starts one apple Issue and the lane-less one, and the second apple Issue waits until the first closes', async () => {

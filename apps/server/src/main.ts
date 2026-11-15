@@ -88,6 +88,7 @@ import { loadIntakeEnv } from './adapters/intake/settings.ts'
 import { composeIssues } from './compose-issues.ts'
 import { rootedRepos } from './adapters/git/repos.ts'
 import { createFixCommitReader } from './adapters/hygiene/fix-commits.ts'
+import { createDoctorReader } from './adapters/doctor/index.ts'
 import { createHygieneChecker } from './adapters/hygiene/index.ts'
 import { fileRoles } from './adapters/leads/roles.ts'
 import { composeIntake } from './compose-intake.ts'
@@ -251,11 +252,14 @@ async function main(): Promise<void> {
   const reaperKiller = processKiller({ psBin: process.env.FACTORY_PS_BIN ?? '/bin/ps' })
   // Planning and capacity own the projects and the claims; the leads, intake and the checkpoints take their ports.
   const roles = fileRoles(leadSettings.rolesFile)
+  // One reader for admission and hygiene: a reading one took is the other's, and a project's doctor runs once at a time.
+  const doctor = createDoctorReader({ now: () => writes.clock.now() })
   const planning = composePlanning({
     writes,
     roles,
     settings: planningEnv,
     longWaitMs: loadNeedsSettings(process.env).longWaitMs,
+    doctor,
   })
   const checkout = leadCheckoutOf(uow)
   const repos = rootedRepos(leadSettings.repoRoots, leadSettings.repoAllow)
@@ -546,6 +550,7 @@ async function main(): Promise<void> {
           clock: writes.clock,
           ids: systemIds,
           checker: hygieneChecker,
+          doctor,
           workflow: agwHygiene(agw),
           file: (body) => intake.api.file(body, 'agent'),
           everyMs: loopSettings.hygieneEveryMs,

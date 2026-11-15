@@ -138,7 +138,11 @@ through `receive` in `app/intake.ts`; the answer is a triage outcome (`docs/lang
 ## Capacity and leads
 
 - **Admission** (`domains/capacity/admission.ts`) is pure and decided again at every claim, in this order: queue state
-  (`drain` starts nothing), the **boot grace** (kind `boot`, `domains/capacity/boot.ts`: while the host's uptime, from `kern.boottime`, is under 30 min,
+  (`drain` starts nothing), the project's **doctor** (kind `doctor`, `domains/capacity/doctor.ts`, `adapters/doctor/`: `doctor: make doctor` in a `project.yaml` is a
+  read-only command of seconds that exits 0 when this host can run the project and otherwise exits non-zero with one line per missing prerequisite and its fix;
+  it runs in the project's own checkout under a 60 s timeout, a red reading stands 5 min and a green one 1 h, one run per project at a time, kept in memory so a restart asks again;
+  while it is red every Issue of the project stays queued, the reason `<project> cannot run on this host: <first four lines>`, and the hygiene `check` probe is skipped with the same words,
+  so a project needs no `hygiene.check: false` for a lab it lacks; a doctor that cannot run (no `make`, no `doctor` target in the checkout, a timeout) is no reading and the project is admitted), the **boot grace** (kind `boot`, `domains/capacity/boot.ts`: while the host's uptime, from `kern.boottime`, is under 30 min,
   no new lead until the five newest minute samples, all taken since the boot, show a load under a quarter of the ceiling and the newest
   sample's memory is under 80 % in use, then at most one lead per 2 min; resumed leads count against the seats as always; the reason reads
   "host booted N min ago: …"; an unreadable uptime applies no grace and says so as a note), the host's 1-minute load (kind `load`; and the **throughput rule**, below), its memory (swapouts and swap against ceilings; the swapouts are the higher of the pass's own rate and the minute samples' last 300 s, `sustainedSwapoutMb`, so a lull between bursts does not open the gate; the memory that a
