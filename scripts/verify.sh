@@ -1,6 +1,7 @@
 #!/bin/bash
 # software-factory verify (`make verify`): exit 0 only if the deployed server is healthy, is the commit that was
-# deployed, that commit is origin/master (or only behind it by changes that need no deploy), and the installed `factory` CLI reaches the server.
+# deployed, that commit is origin/master (or only behind it by changes that need no deploy, or by a merge younger than
+# FACTORY_VERIFY_DEPLOY_GRACE_S, default 30 min, whose deploy is its lead's), and the installed `factory` CLI reaches the server.
 
 set -u
 
@@ -55,11 +56,32 @@ else
   git -C "$REPO_DIR" merge-base --is-ancestor "$deployed" "$remote" 2>/dev/null \
     || fail "deployed ${deployed:0:12} is not an ancestor of origin/$REF ${remote:0:12}"
   changed=$(git -C "$REPO_DIR" diff --name-only "$deployed" "$remote") || fail "cannot diff ${deployed:0:12}..${remote:0:12}"
+  pending=""
   while IFS= read -r path; do
     [[ -z "$path" ]] && continue
-    inert_path "$path" || fail "deployed ${deployed:0:12} is not origin/$REF ${remote:0:12}: $path changed and needs a deploy"
+    inert_path "$path" || { pending="$path"; break; }
   done <<<"$changed"
-  ok "deployed ${deployed:0:12} is behind origin/$REF ${remote:0:12} only by changes that need no deploy (docs, markdown, tests)"
+  if [[ -z "$pending" ]]; then
+    ok "deployed ${deployed:0:12} is behind origin/$REF ${remote:0:12} only by changes that need no deploy (docs, markdown, tests)"
+  else
+    # Another lead's merge that is still being deployed is that lead's to deploy (its own watch reads the deployed version), not a
+    # failure of the change this verify watches: master may be ahead of the deploy for the grace. A merge nobody deployed fails after it.
+    # The age is the oldest commit that changed a deployable path: an older docs-only commit needs no deploy and sets no clock.
+    first=""
+    while IFS= read -r sha; do
+      [[ -z "$sha" ]] && continue
+      while IFS= read -r touched; do
+        [[ -z "$touched" ]] && continue
+        inert_path "$touched" || { first=$(git -C "$REPO_DIR" log -1 --format=%ct "$sha"); break; }
+      done < <(git -C "$REPO_DIR" diff-tree --no-commit-id --name-only -r --root "$sha")
+      [[ -n "$first" ]] && break
+    done < <(git -C "$REPO_DIR" rev-list --reverse "$deployed..$remote")
+    age=$(( $(date +%s) - ${first:-0} ))
+    grace="${FACTORY_VERIFY_DEPLOY_GRACE_S:-1800}"
+    (( age < grace )) \
+      || fail "deployed ${deployed:0:12} is not origin/$REF ${remote:0:12}: $pending changed and needs a deploy (merged $((age / 60)) min ago, longer than the ${grace}s grace)"
+    ok "deployed ${deployed:0:12} is behind origin/$REF ${remote:0:12}: $pending changed and its deploy is pending (merged $((age / 60)) min ago, inside the ${grace}s grace)"
+  fi
 fi
 
 # 3. the API refuses a caller without the token: every route but GET /health needs a bearer
