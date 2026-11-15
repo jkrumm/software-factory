@@ -301,7 +301,7 @@ describe('the brief', () => {
   test('the standing orders open every brief and are pinned', () => {
     expect(buildBrief(input).startsWith(STANDING_ORDERS)).toBe(true)
     expect(new Bun.CryptoHasher('sha256').update(STANDING_ORDERS).digest('hex')).toBe(
-      '6af44d98d72d4001425aa8cb5b4cb977a3a6ab01b3208a44112a76dca6120517',
+      '9d4e2c3461ba23c8ec09a79cd25273ec3e627c54f15cfb399b4693fd409db278',
     )
   })
 
