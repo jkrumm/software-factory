@@ -32,7 +32,7 @@ Also:
 
 # Waiting, and the host's shell
 
-- Never sleep-poll: \`sleep N\` followed by anything is blocked, and a ScheduleWakeup poll finds nothing. Run the long command in the background with its exit code written out (\`make -C <worktree> check > <worktree>/.check.log 2>&1; echo rc=$?\`) and end the turn: its completion notice is the wake. Then read the log.
+- Never sleep-poll: \`sleep N\` followed by anything is blocked, and a ScheduleWakeup poll finds nothing. Run the long command in the background with its exit code written out (\`make -C <worktree> check > <worktree>/.check.log 2>&1; echo rc=$?\`) and end the turn: its completion notice is the wake. Then read the log. A command that was stopped, or whose terminal restarted (a host restart, a compaction), sends no notice: if its log has no \`rc=\` line, run it again at once, never wait for it.
 - Never pipe a waited command into \`tail\` or \`head\`: the pipe's exit code is the tail's, so a red run reports exit code 0.
 - Name the worktree: \`make -C <worktree> ...\` with the path above. A background shell does not start where you are.
 - One check per worktree: while your @implementer runs one, do not start your own; two in one tree ran for 31 minutes.
@@ -59,7 +59,8 @@ Every verb is a plain command with flags. Name your attempt with \`--attempt <n>
 - Wait for a time or for other Issues: \`factory issue defer <id> --attempt <n> --until 2026-12-01T09:00:00Z\` or \`factory issue defer <id> --attempt <n> --after issue_5 --after issue_6\`.
 - Wait on someone else's review of your pull request (a required review by a team or another person, work repos above all): \`factory issue defer <id> --attempt <n> --review <pull request URL or #number>\`. The factory polls it every 15 minutes through \`gh\` or \`glab\` and wakes you when it is approved, gets changes requested or a new review comment, merges or closes; it shows as waiting on others, never in Needs you. Never raise an Errand to approve or merge a pull request, or to bypass a review rule: an Errand that asks for it is turned back and the Issue waits on the review anyway.
 - Stall, when you cannot go on and nobody can answer: \`factory issue block <id> --attempt <n> --reason "the caller contract must change"\`.
-- Ship, after you landed and deployed: \`factory issue ship <id> --attempt <n> --call ship-1 --commit <sha> --commit <sha> --acceptance "met: <what shows it>" --acceptance "not met: <why>"\` (one \`--acceptance\` per acceptance line of the Issue).
+- Ship, after you landed and deployed: \`factory issue ship <id> --attempt <n> --call ship-1 --commit <sha> --commit <sha> --acceptance "met: <what shows it>" --acceptance "not met: <why>"\` (one \`--acceptance\` per acceptance line of the Issue, each starting \`met: \` or \`not met: \`, over 500 characters is cut; a refusal prints the line it wants).
+- Reads your token cannot make (403): \`factory project list|show\`, \`queue get|order\`, \`errand list\`, \`door routes\`, \`artifact screen\`. Use \`factory project plan <name>\`, \`read overview\`, \`read waits\` and \`issue show <id>\` (its Errands too); the door's routes and a Spec's screen are the owner's.
 - Raise a Decision: \`factory issue ask <id> --attempt <n> --question "..." --recommendation "..." --checked "..." --options '<json>' --no-answer '<json>'\`. \`--options\` is a JSON array of \`{"label","reversible","cost"}\` and \`--no-answer\` a JSON object \`{"consequence","default","waitMinutes"}\`: the two flags that take JSON (\`--body '<json>'\` still works for them). An incomplete Decision is refused with the missing fields named; a Decision on a question still open amends the open one; the Judge sees it before the owner, who gets it only if the Judge passes it on.
 - Hand over a Concept, Spec or Report for review (a Spec is due as order 3 says): \`factory artifact submit <id> --attempt <n> --kind spec --title "..." --content @file.md\` (\`--content-format markdown|html\`).
 - Revise it after a verdict of changes: \`factory artifact revise <artifact-id> --content @file.md --note "what changed" --attempt <n>\`.
@@ -100,6 +101,8 @@ export interface BriefInput {
   notesMore: number
   /** the project's check tiers; absent for a project with none */
   checks?: CheckTiers | null
+  /** whether the worktree's Makefile has a `merge-guard` target; null or absent: not known, the brief says nothing */
+  mergeGuard?: boolean | null
   /** the signals the Issue was filed from (an alert's title, text and facts), oldest first */
   signals?: readonly BriefSignal[]
   /** the Spec the filer attached (`issue new --spec`): the lead builds from its verdict, it does not submit one */
@@ -163,6 +166,13 @@ export function checksSection({ fast, full, ci }: CheckTiers): string {
 This repo has check tiers: \`fast\` is \`${fast}\`, \`full\` is \`${full}\`${ci ? ', run by CI' : ''}. ${gate}`
 }
 
+/** Whether order 7's `make merge-guard` exists in this repo, so the lead does not look for it. */
+export function mergeGuardSection(has: boolean): string {
+  return `## Merge guard in this repo
+
+${has ? 'This repo has a `make merge-guard` target: order 7 applies as written.' : "This repo has no `make merge-guard` target (its Makefile was read): do not look for one. Hold order 7's by-hand rule instead (`git merge-base --is-ancestor origin/master HEAD`, every check of `gh pr checks <n>` finished green on the pushed head, no red finished run on the default branch) and wait for CI with `gh pr checks <n> --watch`."}`
+}
+
 /**
  * The lead's first prompt: the standing orders and the verbs, which are the same in every brief, then what is this
  * attempt's. Anything that came from outside (the title, a note) is data in a fence.
@@ -196,6 +206,7 @@ This Issue was filed with its Spec: \`${artifact}\`, ${JSON.stringify(title)}, w
 This Issue carries the checkpoint \`spec\`: submit a one-page Spec (order 3) before you build, and \`factory issue ship\` is refused until a Spec is submitted. With no verdict in ${SPEC_WAIT_HOURS} hours you go on with the defaults it names.`)
   }
   if (input.checks) parts.push(checksSection(input.checks))
+  if (input.mergeGuard != null) parts.push(mergeGuardSection(input.mergeGuard))
   const signals = (input.signals ?? []).slice(0, MAX_BRIEF_SIGNALS)
   if (signals.length > 0) {
     parts.push(`## The signals it was filed from

@@ -67,6 +67,24 @@ describe('start_lead', () => {
     expect(w.terminals.started[0]?.prompt).toContain('run `make check-fast` before the first push')
   })
 
+  test('the brief of a repo without merge-guard says so, with it says it has one, unreadable says nothing', async () => {
+    const unknown = await w.admitted()
+    await startLead(w.deps, effect(unknown))
+    expect(w.terminals.started[0]?.prompt).not.toContain('## Merge guard in this repo')
+
+    await w.reset()
+    w.mergeGuard = false
+    const without = await w.admitted()
+    await startLead(w.deps, effect(without))
+    expect(w.terminals.started[0]?.prompt).toContain('has no `make merge-guard` target')
+
+    await w.reset()
+    w.mergeGuard = true
+    const has = await w.admitted()
+    await startLead(w.deps, effect(has))
+    expect(w.terminals.started[0]?.prompt).toContain('has a `make merge-guard` target')
+  })
+
   test('a replay finds the lead that runs: nothing is made or started twice, the fact is recorded once', async () => {
     const issue = await w.admitted()
     await startLead(w.deps, effect(issue))

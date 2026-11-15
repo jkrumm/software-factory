@@ -196,6 +196,8 @@ export interface World {
   repoError: PortError | null
   /** the check tiers the fake project has; null: none */
   checkTiers: CheckTiers | null
+  /** whether the fake repo has a merge-guard target; null: unreadable */
+  mergeGuard: boolean | null
   seatError: PortError | null
   /** the account the fake capacity gives every attempt */
   seatAccount: string
@@ -247,6 +249,7 @@ export async function startWorld(): Promise<World> {
     },
     repoError: null,
     checkTiers: null,
+    mergeGuard: null,
     seatError: null,
     seatAccount: 'default',
     windowReset: null,
@@ -290,6 +293,7 @@ export async function startWorld(): Promise<World> {
     branches,
     repos,
     checks: { of: async () => ok(world.checkTiers) },
+    mergeGuard: { has: async () => world.mergeGuard },
     roles,
     seats,
     claims: world.claims,
@@ -340,6 +344,7 @@ export async function startWorld(): Promise<World> {
     world.transcripts.error = null
     world.repoError = null
     world.checkTiers = null
+    world.mergeGuard = null
     world.seatError = null
     world.seatAccount = 'default'
     world.windowReset = null

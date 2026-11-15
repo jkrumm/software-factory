@@ -67,8 +67,8 @@ export const ShipBody = z
     commits: z.array(z.string().min(1)).max(50).optional(),
     /** the flag form `--commit <sha>` (repeatable), joined with `commits` */
     commit: z.array(z.string().min(1)).max(50).optional(),
-    /** one line per acceptance criterion, `met: <what shows it>` or `not met: <why>`; a record, never a gate */
-    acceptance: z.array(z.string().min(1).max(500)).max(20).optional(),
+    /** one line per acceptance criterion, `met: <what shows it>` or `not met: <why>`; a record, never a gate. A line over 500 characters is cut when recorded, not refused. */
+    acceptance: z.array(z.string().min(1).max(4000)).max(20).optional(),
   })
   .meta({ id: 'ShipBody' })
 export type ShipBody = z.infer<typeof ShipBody>

@@ -152,6 +152,11 @@ export interface Checks {
   of(repo: string): Promise<Result<CheckTiers | null>>
 }
 
+/** Whether the lead's worktree has a `make merge-guard` target, so the brief says so and the lead does not look; null: unreadable. */
+export interface MergeGuard {
+  has(worktree: string): Promise<boolean | null>
+}
+
 /** The role table, as it is when asked: the `lead` row when a lead starts, any row when an Issue is filed with a seat. */
 export interface Roles {
   lead(): Promise<Result<{ tier: Tier; effort: Effort }>>
