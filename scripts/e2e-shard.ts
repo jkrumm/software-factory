@@ -18,7 +18,8 @@ const WEIGHTS_FILE = join(E2E_DIR, 'shard-weights.json')
 const E2E_FILE = /\.e2e\.ts$/
 
 export async function e2eFiles(root: string): Promise<string[]> {
-  return (await readdir(join(root, E2E_DIR))).filter((name) => E2E_FILE.test(name)).sort()
+  // the Playwright config matches `**/*.e2e.ts`, so a file in a subdirectory is an e2e file too
+  return (await readdir(join(root, E2E_DIR), { recursive: true })).filter((name) => E2E_FILE.test(name)).sort()
 }
 
 export async function readWeights(root: string): Promise<Record<string, number>> {
