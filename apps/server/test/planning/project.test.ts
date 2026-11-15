@@ -18,7 +18,7 @@ describe('project.yaml', () => {
     const parsed = parseProject(yaml(await Bun.file(join(ROOT, 'project.yaml')).text()), 'software-factory')
     expect(parsed.ok).toBe(true)
     if (!parsed.ok) return
-    expect(parsed.project.leads).toBe(5)
+    expect(parsed.project.leads).toBe(12)
     expect(parsed.project.ship).toEqual([{ paths: ['**'], via: 'pr' }])
     expect(parsed.project.signals.github?.author).toBe('jkrumm')
     expect(parsed.project.deploy.targets[0]?.verify).toBe('make verify')
@@ -154,16 +154,16 @@ describe('sync', () => {
   const sync = (previous: StoredProject | null, input: ReturnType<typeof read>) =>
     synced({ previous, name: 'x', directory: 'x', repo: '/src/x', read: input, now: at })
 
-  test('no project.yaml: the defaults, four leads, no deploy', () => {
+  test('no project.yaml: the defaults, no cap on leads, no deploy', () => {
     const stored = sync(null, read({ state: 'absent' }))
     expect(stored).toMatchObject({ source: 'defaults', projectError: null, plan: null, branch: 'origin/main' })
     expect(stored.project).toEqual(defaultProject('x'))
-    expect(stored.project.leads).toBe(4)
+    expect(stored.project.leads).toBe(64)
   })
 
-  test('a project that states no leads gets 4; the bound is 64 for the repo and for a lane', () => {
+  test('a project that states no leads gets 64 (no cap beyond the host); the bound is 64 for the repo and for a lane', () => {
     const base = 'apiVersion: factory/v2\nname: x\n'
-    expect(parseProject(yaml(base), 'x')).toMatchObject({ ok: true, project: { leads: 4 }, warnings: [] })
+    expect(parseProject(yaml(base), 'x')).toMatchObject({ ok: true, project: { leads: 64 }, warnings: [] })
     expect(parseProject(yaml(`${base}leads: 64\nlanes: { apple: 64, sim: { leads: 64 } }`), 'x')).toMatchObject({
       ok: true,
       project: { leads: 64, lanes: { apple: { leads: 64 }, sim: { leads: 64 } } },

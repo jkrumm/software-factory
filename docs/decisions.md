@@ -263,3 +263,13 @@ Report `docs/strategy/2026-11-next/report.html`, definition `docs/strategy/2026-
   the `end` line of the deploy that ships this. Rejected: a proxy in front that holds requests (a second process to keep up,
   and the thing it hides is the thing the clients now wait out), and skipping the restart for commits that touch no runtime path
   (all 50 master commits of two days did).
+- **NL32 A repo's `leads:` is an exception, not the default (Issue 1372, 2026-11-15).** The owner's rule is that only host
+  resources and real dependency chains hold work back. Measured 2026-11-14 18:08Z to 2026-11-15 07:30Z (`read capacity-loop`):
+  the repo claim was the largest reason seats idled with work queued, 168.8 of 308.5 idle seat-hours over 57 Issues; seat caps
+  and account windows cost 0.4 h and 1.6 h. A repo that states no `leads` now takes `DEFAULT_LEADS` = 64, the bound, so
+  memory fit, load and the accounts decide. What a cap protected, and what lifting it costs: the repo's merge window
+  (one merge at a time, about 10 an hour here; a lead waits up to 90 min for it), rebase conflicts on shared files (98 of 401
+  sessions rebased twice or more; budget-ratchet files and migration numbers most), and test-slot contention (a separate
+  Issue). A stated `leads: N` stays in force and is a line with its reason beside it. This repo: 5 to 12, where the merge
+  window serves a lead within about 1.2 h of its 90 min; expect more rebases per merge, not more waiting past the lock.
+  Not changed: the account seat caps, the memory-fit and load gates, `lanes:` (the cap of a truly scarce resource).

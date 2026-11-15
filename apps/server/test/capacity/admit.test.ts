@@ -77,6 +77,19 @@ describe('admission', () => {
     expect(await state(3)).toBe('working')
   })
 
+  test('a repo that states no leads has no cap of its own: with memory and load free, six Issues start where the old default of four stopped at four (NL32)', async () => {
+    world.accounts.rows = ['a', 'b', 'c', 'd', 'e', 'f'].map((name) => account(name))
+    world.source.add('open', {
+      project: { state: 'text', sha: 'sha-open', value: { apiVersion: 'factory/v2', name: 'open' } },
+    })
+    value(await syncProjects(world.deps, { fetch: false }))
+    const issues = []
+    for (let n = 0; n < 6; n++) issues.push(await world.queued({ repo: 'open' }))
+    const result = await pass()
+    expect(result.admitted.map((a) => a.issue)).toEqual(issues)
+    expect(result.queue.filter((e) => e.reason?.kind === 'claim')).toEqual([])
+  })
+
   test('lanes: {apple: 1} with leads: 2 starts one apple Issue and the lane-less one, and the second apple Issue waits until the first closes', async () => {
     world.accounts.rows = [account('a'), account('b'), account('c')]
     const [apple1, apple2, plain] = [
