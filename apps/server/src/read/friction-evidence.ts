@@ -70,9 +70,16 @@ async function refsOf(sql: SQL, w: Window, key: string): Promise<string[] | null
         AND at >= ${w.from} AND at < ${w.to} ORDER BY at DESC`)
   }
   if (key === 'lead_gone') {
+    // the same two sources as the count: lost leads that were revived (no event) are lost leads too
     return issueIds(sql`
-      SELECT issue_id FROM factory.issue_events
-      WHERE kind = 'lead_gone' AND result = 'applied' AND at >= ${w.from} AND at < ${w.to} ORDER BY at DESC`)
+      SELECT issue_id FROM (
+        SELECT issue_id, at FROM factory.issue_events
+        WHERE kind = 'lead_gone' AND result = 'applied' AND at >= ${w.from} AND at < ${w.to}
+        UNION ALL
+        SELECT l.issue_id, l.at FROM factory.lead_losses l WHERE l.at >= ${w.from} AND l.at < ${w.to}
+          AND NOT EXISTS (SELECT 1 FROM factory.issue_events e WHERE e.issue_id = l.issue_id AND e.kind = 'lead_gone'
+            AND e.result = 'applied' AND e.payload->>'attempt' = l.attempt::text)
+      ) lost ORDER BY at DESC`)
   }
   if (key === 'unreviewed_ship') {
     return issueIds(sql`

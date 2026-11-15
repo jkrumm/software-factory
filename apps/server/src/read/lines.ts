@@ -43,7 +43,7 @@ const line = (input: {
 
 /**
  * What needs a look and is not a question for the owner: a door line (a refused or silent source, an unrouted monitor), an
- * account stopped at its limit, a loop whose last pass failed, a watch whose checkout stays blocked, a repo's main checkout off its branch or dirty under a live lead. Derived at read.
+ * account stopped at its limit, a loop whose last pass failed, a watch whose checkout stays blocked, a repo's main checkout off its branch or dirty under a live lead, a working Issue whose lead has no agent in its terminal (`lead-no-agent`, an open row of `lead_losses`). Derived at read.
  */
 export async function readHealthLines(
   sql: SQL,
@@ -105,6 +105,27 @@ export async function readHealthLines(
         repo: brief?.repo ?? null,
         visible: brief?.visible ?? false,
         text: `The checkout for the watch of Issue ${issueNumberOf(watch.issue)} stays blocked after ${watch.checks} checks`,
+      }),
+    )
+  }
+  // A working Issue whose lead has no agent in its terminal (a host restart brought it back as a shell): it holds its repo's claim and nobody works.
+  const stranded = await sql`
+    SELECT l.issue_id, l.at FROM factory.lead_losses l JOIN factory.issues i ON i.id = l.issue_id
+    WHERE l.closed_at IS NULL AND i.state = 'working' ORDER BY l.at`
+  const strandedBriefs = await loadBriefs(
+    sql,
+    (stranded as { issue_id: string }[]).map((row) => row.issue_id),
+  )
+  for (const row of stranded as { issue_id: string; at: Date }[]) {
+    const brief = strandedBriefs.get(row.issue_id)
+    lines.push(
+      line({
+        id: `lead-no-agent:${row.issue_id}`,
+        kind: 'lead-no-agent',
+        since: new Date(row.at).toISOString(),
+        repo: brief?.repo ?? null,
+        visible: brief?.visible ?? false,
+        text: `The lead of Issue ${issueNumberOf(row.issue_id)} has no agent in its terminal since ${new Date(row.at).toISOString().slice(0, 16)}Z; its session is being started again`,
       }),
     )
   }

@@ -60,6 +60,10 @@ async function handle(request: Request): Promise<unknown> {
           screen: '',
           sent: [],
         }
+        if (state.runEnds) {
+          state.runEnds = false
+          Object.assign(made, { state: 'finished', status: null, reported: false, exit_code: 1 })
+        }
         state.terminals[made.address] = made
         return made
       }

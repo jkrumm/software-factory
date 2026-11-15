@@ -226,6 +226,8 @@ export async function leadGone(
   const at = deps.clock.now()
   const recorded = await deps.uow.run(async ({ work, leads }) => {
     await leads.markGone(issue, attempt, at)
+    // A loss still open ends here: the next attempt is the answer to it, and the health line has nothing to name.
+    await leads.markAgentFound(issue, attempt, at)
     const result = await recordIn(work, deps, {
       issueId: issue,
       key: key('lead_gone', issue, attempt),

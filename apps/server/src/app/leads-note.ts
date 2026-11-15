@@ -12,14 +12,20 @@ import { type LeadDeps, loadIssue } from './leads.ts'
 
 type NoteEffect = EffectOf<'note_lead'> & { issueId: IssueId }
 
-/** What starting a dormant lead's session again needs, read in the same look as the delivery. */
-interface Dormant {
+/** What starting a lead's session again needs (a dormant lead, or one whose terminal fell back to a shell), read in the same look as the delivery. */
+export interface Dormant {
   session: string | null
   worktree: string | null
   repoPath: string | null
   account: string | null
   issue: Issue
 }
+
+/** What a session started again over a shell is told first: the host's restart took everything the old session had running. */
+export const HOST_RESTARTED =
+  'The host restarted: your terminal came back as a shell and this session was started again with `--resume`. ' +
+  'Everything that ran in the background (checks, builds, merge windows, subagents, waits) is gone. ' +
+  'Check git, the pull request and production before you repeat anything that left the machine, then go on.'
 
 type Look =
   | { done: true }
@@ -97,10 +103,14 @@ export async function noteLead(deps: LeadDeps, effect: NoteEffect): Promise<Resu
 
   const found = await deps.terminals.find(name)
   if (!found.ok) return found
-  // A dormant lead's live terminal must run the agent: a shell the core put in place of a lost program is no lead.
-  const live = found.value.find((terminal) => terminal.live && (!dormant || terminal.agent))
+  // A live terminal must run the agent: a shell the core put in place of a lost program is no lead, and a note is never typed into it.
+  const live = found.value.find((terminal) => terminal.live && terminal.agent)
+  // A live terminal with no agent in it (a host restart brought it back as a shell): the session starts again over it, below.
+  const shellOnly = !live && found.value.some((terminal) => terminal.live)
   // A dormant lead has no process by design; the wake starts its session again, below.
-  if (!live && !dormant) return leadGone(deps, issue, attempt, 'its terminal was gone when a note arrived')
+  if (!live && !dormant && !shellOnly) {
+    return leadGone(deps, issue, attempt, 'its terminal was gone when a note arrived')
+  }
 
   // A wait that ended left the lead without a claim: it takes its repo's place back before it is told, and a full repo
   // refuses so the outbox tries again. A lead that is waiting again by now has nothing to take.
@@ -143,9 +153,23 @@ export async function noteLead(deps: LeadDeps, effect: NoteEffect): Promise<Resu
   }
 
   if (!live) {
-    return dormant
-      ? reviveAndTell(deps, { issue, attempt, name, deliveryKey, text: delivery.text, dormant })
-      : leadGone(deps, issue, attempt, 'its terminal was gone when a note arrived')
+    // A shell over a lead that was not dormant: the loss is on record (the follow may not have met the grace yet), the
+    // account it belongs to now, and the restart told first.
+    if (!dormant) {
+      await deps.uow.run(async ({ leads }) => {
+        await leads.markAgentLost(issue, attempt, deps.clock.now())
+        return ok(undefined)
+      })
+    }
+    return reviveAndTell(deps, {
+      issue,
+      attempt,
+      name,
+      deliveryKey,
+      text: dormant ? delivery.text : `${HOST_RESTARTED}\n\n${delivery.text}`,
+      dormant: dormant ?? resume,
+      ...(!dormant && movedTo ? { account: movedTo } : {}),
+    })
   }
   // Dormant but its process never ended (the quiesce failed): the lead runs, so the mark goes and the note is typed.
   if (dormant) await clearDormant(deps, issue, attempt)
@@ -197,13 +221,14 @@ const clearDormant = (deps: LeadDeps, issue: IssueId, attempt: number) =>
  * The wake of a dormant lead: its session starts again with the note as its first message, so there is nothing to type. A
  * start that fails is tried again by the outbox; the third failure, or one a retry cannot fix, is the lead gone.
  */
-async function reviveAndTell(
+export async function reviveAndTell(
   deps: LeadDeps,
   input: {
     issue: IssueId
     attempt: number
     name: string
-    deliveryKey: string
+    /** the note's delivery, marked typed with the start; none for a start that carries no note */
+    deliveryKey?: string
     text: string
     dormant: Dormant
     /** the account the session starts on when it is not the one it ran on: a lead moved off an account that ran out */
@@ -239,7 +264,8 @@ async function reviveAndTell(
   }
   const at = deps.clock.now()
   const marked = await deps.uow.run(async ({ leads }) => {
-    await leads.markTyped(deliveryKey, at, false)
+    if (deliveryKey) await leads.markTyped(deliveryKey, at, false)
+    await leads.markAgentFound(issue, attempt, at)
     await leads.markRevived(issue, attempt, {
       address: started.value.address,
       tab: started.value.tab,

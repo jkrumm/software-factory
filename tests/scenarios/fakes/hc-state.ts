@@ -30,6 +30,8 @@ export interface FakeHcState {
   doc: { value: unknown; version: number } | null
   /** `terminal.run` answers this error once, then clears it: a start that fails */
   failRun: { kind: string; message: string } | null
+  /** the next `terminal.run` makes a terminal that ends at once, before it reports: a start that dies */
+  runEnds?: boolean
 }
 
 const EMPTY: FakeHcState = { next: 1, terminals: {}, doc: null, failRun: null }
