@@ -59,7 +59,8 @@ before the next one.
   after a real Issue is admitted, built, shipped, watched and verified, or at the first finding that needs a fix.
 - **Stopping is the normal way a window ends**: drain the new core, stop it, put the old core back on its schema
   (`make rollback`), resume the old queue. Nothing either core recorded is deleted; the next window's import carries
-  forward what the new core recorded.
+  forward what the new core recorded. *(Removed 2026-11-15 after the day-7 report: the old release, its pin, the schema swap
+  scripts and the rehearsal are gone; `make rollback` returns to the previous release only.)*
 - **Later windows** grow: more repos, `run` instead of `pace`, longer, then overnight. The cutover is done when a window
   holds its criteria with every repo on `run` for a day: then the old code is deleted and the docs describe the new core.
 - **Burn-in after the cutover:** the orchestrator stays on, watches lightly (health, loops, friction, stalls, owner
