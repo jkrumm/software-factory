@@ -17,6 +17,7 @@ import { depsProbe } from './probes/deps.ts'
 import { type Outcome, failed, skipped } from './probes/finding.ts'
 import { linksProbe } from './probes/links.ts'
 import { retiredProbe } from './probes/retired.ts'
+import { runrulesProbe } from './probes/runrules.ts'
 
 export interface HygieneCheckerOptions {
   repos: RepoLocator
@@ -54,6 +55,7 @@ export function createHygieneChecker(options: HygieneCheckerOptions): HygieneChe
       retired: async () => retiredProbe(tools, path, await markdown),
       deps: () => depsProbe(tools, path),
       cochange: () => cochangeProbe(tools, path),
+      runrules: () => runrulesProbe(tools, path),
     }
     const [history, ...results] = await Promise.all([
       docs

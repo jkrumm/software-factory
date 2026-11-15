@@ -18,6 +18,7 @@ import { brokenLinks } from '../../src/adapters/hygiene/probes/links.ts'
 import { coChanged, parseLog } from '../../src/adapters/hygiene/probes/cochange.ts'
 import { parseOutdated, severity } from '../../src/adapters/hygiene/probes/deps.ts'
 import { retiredScope } from '../../src/adapters/hygiene/probes/retired.ts'
+import { publishedHost } from '../../src/adapters/hygiene/probes/runrules.ts'
 import type { SweepReport } from '../../src/domains/loops/hygiene-model.ts'
 
 const REPO_ROOT = join(import.meta.dir, '..', '..', '..', '..')
@@ -263,7 +264,7 @@ describe('check probe', () => {
 
   test('the sweep runs the probes in PROBES order, one run each', async () => {
     const report = await sweep(makeRepo({ 'a.txt': 'x' }).name)
-    expect(report.runs.map((r) => r.probe)).toEqual(['check', 'links', 'retired', 'deps', 'cochange'])
+    expect(report.runs.map((r) => r.probe)).toEqual(['check', 'links', 'retired', 'deps', 'cochange', 'runrules'])
   })
 })
 
@@ -474,6 +475,186 @@ describe('cochange probe', () => {
       lines: ['changed together in 16 of the last 300 commits (lib/y.ts: 16, src/a/x.ts: 16)'],
       count: 16,
     })
+  })
+})
+
+describe('runrules probe', () => {
+  const PROJECT_MINI =
+    'apiVersion: factory/v2\nname: x\ndeploy:\n  mode: make\n  targets:\n    - { name: mini, host: mini, verify: make verify }\n'
+  const PROJECT_VPS = PROJECT_MINI.replace('host: mini', 'host: vps')
+  const COMPOSE = [
+    'services:',
+    '  cache:',
+    '    image: ghcr.io/example/app:1',
+    '    container_name: app-cache',
+    '    restart: unless-stopped',
+    '    ports:',
+    '      - "8080:80"',
+    '      - "127.0.0.1:8081:81"',
+    '',
+  ].join('\n')
+  const entry = (extra = '') =>
+    `services:\n  - { name: app-cache, repo: x, kind: compose, tier: manual, container: app-cache, memory_mib: 100${extra} }\n`
+  const PLIST = (label: string, body: string) =>
+    `<?xml version="1.0"?>\n<plist version="1.0">\n<dict>\n  <key>Label</key>\n  <string>${label}</string>\n${body}</dict>\n</plist>\n`
+  const JOB = (label: string) =>
+    `${entry()}  - { name: job, repo: x, kind: launchd, tier: core, label: ${label}, memory_mib: 50 }\n`
+
+  const rules = (report: SweepReport) => findings(report, 'runrules').map((f) => f.key)
+
+  test('a mini compose service with restart unless-stopped and no memory limit names both rules; the open port and the missing healthcheck too', async () => {
+    const report = await sweep(makeRepo({ 'mini-services.yaml': entry(), 'compose.yml': COMPOSE }).name)
+    expect(run(report, 'runrules')?.outcome).toBe('found')
+    expect(rules(report).sort()).toEqual([
+      'runrules:no-healthcheck:compose.yml',
+      'runrules:no-memory-limit:compose.yml',
+      'runrules:port-binding:compose.yml',
+      'runrules:restart-policy:compose.yml',
+    ])
+    expect(findings(report, 'runrules').find((f) => f.key.includes('restart-policy'))).toMatchObject({
+      title: 'Hygiene: run rule restart-policy in compose.yml',
+      lines: ['compose.yml:5: cache: restart unless-stopped on a manual service: only a core service restarts itself'],
+    })
+    expect(findings(report, 'runrules').find((f) => f.key.includes('port-binding'))?.lines[0]).toStartWith(
+      'compose.yml:7:',
+    )
+  })
+
+  test('debt and exception fields excuse their rule, and only it', async () => {
+    const excused = entry(
+      ', debt: { restart-policy: "plan row", no-memory-limit: "plan row", port-binding: x, no-healthcheck: x }',
+    )
+    expect(rules(await sweep(makeRepo({ 'mini-services.yaml': excused, 'compose.yml': COMPOSE }).name))).toEqual([])
+    const partial = entry(
+      ', debt: { restart-policy: "plan row" }, exception: { no-memory-limit: dev stack, port-binding: x }',
+    )
+    expect(rules(await sweep(makeRepo({ 'mini-services.yaml': partial, 'compose.yml': COMPOSE }).name))).toEqual([
+      'runrules:no-healthcheck:compose.yml',
+    ])
+  })
+
+  test('a repo that deploys only to the VPS is not checked', async () => {
+    const report = await sweep(makeRepo({ 'project.yaml': PROJECT_VPS, 'compose.yml': COMPOSE }).name)
+    expect(run(report, 'runrules')?.outcome).toBe('skipped')
+    expect(rules(report)).toEqual([])
+  })
+
+  test('a compose service no entry names is not checked, a core service may restart, memory and a healthcheck satisfy', async () => {
+    const compose = COMPOSE.replace(
+      '    ports:',
+      '    mem_limit: 128m\n    healthcheck: { test: ["CMD", "true"] }\n    ports:',
+    ).replace('      - "8080:80"\n', '')
+    const core = entry().replace('tier: manual', 'tier: core')
+    expect(rules(await sweep(makeRepo({ 'mini-services.yaml': core, 'compose.yml': compose }).name))).toEqual([])
+    const other = entry().replace('container: app-cache', 'container: other').replace('name: app-cache', 'name: other')
+    expect(rules(await sweep(makeRepo({ 'mini-services.yaml': other, 'compose.yml': COMPOSE }).name))).toEqual([])
+  })
+
+  test('a shared-infrastructure image is a finding unless excused', async () => {
+    const compose =
+      'services:\n  db:\n    image: postgres:18\n    mem_limit: 1g\n    healthcheck: { test: ["CMD", "true"] }\n'
+    const services = 'services:\n  - { name: db, repo: x, kind: compose, tier: core, memory_mib: 100 }\n'
+    const report = await sweep(makeRepo({ 'mini-services.yaml': services, 'compose.yml': compose }).name)
+    expect(rules(report)).toEqual(['runrules:shared-infrastructure:compose.yml'])
+    const excused = services.replace(
+      'memory_mib: 100',
+      'memory_mib: 100, exception: { shared-infrastructure: the one }',
+    )
+    expect(rules(await sweep(makeRepo({ 'mini-services.yaml': excused, 'compose.yml': compose }).name))).toEqual([])
+  })
+
+  test('a plist template no entry names is a finding; a named one is not', async () => {
+    const plist = PLIST(
+      'com.jkrumm.x-job',
+      '  <key>ProgramArguments</key>\n  <array>\n    <string>/usr/local/bin/jobrun</string>\n  </array>\n',
+    )
+    const none = await sweep(
+      makeRepo({ 'mini-services.yaml': entry(), 'deploy/com.jkrumm.x-job.plist.template': plist }).name,
+    )
+    expect(findings(none, 'runrules')).toMatchObject([
+      {
+        key: 'runrules:unregistered-job:deploy/com.jkrumm.x-job.plist.template',
+        title: 'Hygiene: run rule unregistered-job in deploy/com.jkrumm.x-job.plist.template',
+      },
+    ])
+    const named = await sweep(
+      makeRepo({ 'mini-services.yaml': JOB('com.jkrumm.x-job'), 'deploy/com.jkrumm.x-job.plist.template': plist }).name,
+    )
+    expect(rules(named)).toEqual([])
+    // a repo with no services file of its own is registered in the host's file, which a checkout cannot see
+    const host = await sweep(
+      makeRepo({ 'project.yaml': PROJECT_MINI, 'deploy/com.jkrumm.x-job.plist.template': plist }).name,
+    )
+    expect(rules(host)).toEqual([])
+  })
+
+  test('a KeepAlive job whose program is a shell loop is a finding; a server or a schedule is not', async () => {
+    const loop = PLIST(
+      'com.jkrumm.x-poll',
+      '  <key>ProgramArguments</key>\n  <array>\n    <string>/bin/sh</string>\n    <string>-c</string>\n    <string>while true; do check; sleep 30; done</string>\n  </array>\n  <key>KeepAlive</key>\n  <true/>\n',
+    )
+    const server = PLIST(
+      'com.jkrumm.x-srv',
+      '  <key>ProgramArguments</key>\n  <array>\n    <string>/usr/local/bin/bun</string>\n    <string>server.ts</string>\n  </array>\n  <key>KeepAlive</key>\n  <true/>\n',
+    )
+    const scheduled = loop.replace(
+      '<key>KeepAlive</key>\n  <true/>',
+      '<key>StartInterval</key>\n  <integer>60</integer>',
+    )
+    const services = `services:\n  - { name: a, repo: x, kind: launchd, tier: core, label: com.jkrumm.x-poll, memory_mib: 50 }\n  - { name: b, repo: x, kind: launchd, tier: core, label: com.jkrumm.x-srv, memory_mib: 50 }\n`
+    const report = await sweep(
+      makeRepo({
+        'project.yaml': PROJECT_MINI,
+        'mini-services.yaml': services,
+        'l/poll.plist': loop,
+        'l/srv.plist': server,
+        'l/sched.plist': scheduled,
+      }).name,
+    )
+    expect(rules(report).filter((key) => key.includes('keepalive-poll'))).toEqual([
+      'runrules:keepalive-poll:l/poll.plist',
+    ])
+    expect(findings(report, 'runrules').find((f) => f.key.includes('keepalive-poll'))?.lines[0]).toStartWith(
+      'l/poll.plist:10:',
+    )
+    // without a services file the loop is still a finding
+    const bare = await sweep(makeRepo({ 'project.yaml': PROJECT_MINI, 'l/poll.plist': loop }).name)
+    expect(rules(bare)).toEqual(['runrules:keepalive-poll:l/poll.plist'])
+    const debt = services.replace(
+      'label: com.jkrumm.x-poll',
+      'label: com.jkrumm.x-poll, debt: { keepalive-poll: plan }',
+    )
+    expect(rules(await sweep(makeRepo({ 'mini-services.yaml': debt, 'l/poll.plist': loop }).name))).toEqual([])
+  })
+
+  test('a services entry with no memory budget is a finding, a static site or a oneshot is not', async () => {
+    const services = [
+      'services:',
+      '  - { name: a, repo: x, kind: launchd, tier: core, label: com.jkrumm.a }',
+      '  - { name: b, repo: x, kind: static, tier: core }',
+      '  - { name: c, repo: x, kind: launchd, tier: core, oneshot: true, memory_mib: 0 }',
+      '  - { name: d, repo: x, kind: launchd, tier: core, memory_mib: 0, debt: { no-budget: plan } }',
+      '',
+    ].join('\n')
+    const report = await sweep(makeRepo({ 'mini-services.yaml': services }).name)
+    expect(findings(report, 'runrules')).toMatchObject([
+      {
+        key: 'runrules:no-budget:mini-services.yaml',
+        lines: ['mini-services.yaml:2: a: no memory_mib (set 1.5 times the footprint after an hour of use)'],
+      },
+    ])
+  })
+
+  test('published ports: only a loopback host is closed', () => {
+    expect(publishedHost('127.0.0.1:80:80')).toBe('127.0.0.1')
+    expect(publishedHost('[::1]:80:80')).toBe('::1')
+    expect(publishedHost('8080:80/tcp')).toBe('')
+    expect(publishedHost(8080)).toBe('')
+    expect(publishedHost('0.0.0.0:80:80')).toBe('0.0.0.0')
+    expect(publishedHost(['$', '{BIND:-127.0.0.1}:80:80'].join(''))).toBeNull()
+    expect(publishedHost({ target: 80, published: 8080 })).toBe('')
+    expect(publishedHost({ target: 80, published: 8080, host_ip: '127.0.0.1' })).toBe('127.0.0.1')
+    expect(publishedHost({ target: 80 })).toBeUndefined()
   })
 })
 

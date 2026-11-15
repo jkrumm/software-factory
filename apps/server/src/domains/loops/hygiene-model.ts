@@ -7,7 +7,7 @@ import type { PortError, Result } from '../../kernel/result.ts'
  */
 
 /** The deterministic probes, in the order their findings are filed when the budget is short. */
-export const PROBES = ['check', 'links', 'retired', 'deps', 'cochange'] as const
+export const PROBES = ['check', 'links', 'retired', 'deps', 'cochange', 'runrules'] as const
 export type Probe = (typeof PROBES)[number]
 
 /** Documents under these directories are a record, not a reference: no staleness, filler or link finding is raised for them. */

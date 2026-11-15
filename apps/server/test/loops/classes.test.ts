@@ -38,6 +38,7 @@ const lastClose = (pattern: string) => at(pattern.length)
 test('classOf: a judgment is classed by its kind, any other key by its first segment', () => {
   expect(classOf('hygiene', 'judgment:stale:docs/x.md')).toBe('judgment:stale')
   expect(classOf('hygiene', 'cochange:a|b')).toBe('cochange')
+  expect(classOf('hygiene', 'runrules:no-memory-limit:deploy/compose.yml')).toBe('runrules')
   expect(classOf('hygiene', 'links:docs/x.md')).toBe('links')
   expect(classOf('hygiene', 'check')).toBe('check')
   expect(classOf('friction', 'touch:woken')).toBe('touch')
