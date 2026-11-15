@@ -2,6 +2,7 @@ import {
   DESK_CHECKS,
   DESK_RESCREENS,
   deskDue,
+  hasUnpushed,
   isReturn,
   PUSH_UNREACHABLE,
   pushQueue,
@@ -14,6 +15,9 @@ import { rescreenErrand, resolveErrand, retireErrand, tellCheckBroken } from '..
 import { runCheck } from './errands.ts'
 import type { SettleDeps } from '../checkpoints-settle.ts'
 import type { UnitOfWork } from '../unit-of-work.ts'
+
+/** the composition asks it before it starts a pass, and imports no domain code */
+export { hasUnpushed }
 
 export interface DeskDeps {
   settle: SettleDeps
@@ -46,7 +50,8 @@ type Out<T> = Promise<Result<T, PortError>>
 /**
  * The desk pass: one pass over every open Errand, an Issue's and a request, when the owner is back at the desk (a Console
  * read after two hours or more away, the MacBook answering after it was unreachable, or his button) and in any case every
- * 6 hours. A return starts the pass at once (`app/visit.ts`); the loop's tick only asks whether one is due. In order, so
+ * 6 hours; an Errand with a MacBook command that reached him and was never pushed makes one due too, so its dialog
+ * is on his MacBook when it is raised. A return starts the pass at once (`app/visit.ts`); the loop's tick only asks whether one is due. In order, so
  * each step works on what the last left:
  *
  * 1. every `check` runs (outside any transaction): exit 1..125 closes the Errand and tells its lead it is no longer needed;
@@ -74,21 +79,25 @@ export async function deskPass(deps: DeskDeps): Out<DeskPass> {
   }
   const down = await deps.desk.run(async ({ desk }) => ok((await desk.macbookUp()) === false))
   if (!down.ok) return down
-  if (down.value && (await deps.push.probe())) {
+  let macbookDown = down.value
+  if (macbookDown && (await deps.push.probe())) {
     await deps.desk.run(async ({ desk }) => ok(await desk.setMacbook(true, now)))
+    macbookDown = false
   }
   const state = await deps.desk.run(async ({ desk }) =>
     ok({ lastPassAt: await desk.lastPassAt(), returnedAt: await desk.returnedAt() }),
   )
   if (!state.ok) return state
   const force = deps.force === true
-  if (!deskDue({ now, ...state.value, force })) return ok(pass)
+  const read = await settle.uow.run(async ({ checkpoints }) => ok(await checkpoints.openErrands(500)))
+  if (!read.ok) return read
+  // a command Errand never pushed goes at once; not to a MacBook known to be down, which the probe above asks again each tick
+  const fresh = !macbookDown && hasUnpushed(read.value)
+  if (!deskDue({ now, ...state.value, force, fresh })) return ok(pass)
   await deps.desk.run(async ({ desk }) => ok(await desk.recordPass(now)))
   pass.ran = true
   pass.returned = isReturn({ ...state.value, force })
 
-  const read = await settle.uow.run(async ({ checkpoints }) => ok(await checkpoints.openErrands(500)))
-  if (!read.ok) return read
   pass.looked = read.value.length
   let checks = 0
   let rescreens = 0

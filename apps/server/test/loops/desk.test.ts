@@ -340,7 +340,10 @@ describe('the desk pass', () => {
     expect(pushed).toEqual([first.errand.id])
     expect(await errandRow(second.errand.id)).toMatchObject({ pushed_at: null })
 
-    // not due again for six hours, unless the owner came back
+    // the second was never pushed: it is owed its dialog at the next tick, one per pass while he is away
+    const next = value(await deskPass({ settle: deps, desk: deps.uow as never, push }))
+    expect(next).toMatchObject({ ran: true, returned: false, pushed: [second.errand.id] })
+    // then not due again for six hours, unless the owner came back
     expect(value(await deskPass({ settle: deps, desk: deps.uow as never, push })).ran).toBe(false)
     clock.set(new Date(clock.now().getTime() + 3 * HOUR))
     value(await registerVisit(deps.uow as never, clock.now()))
@@ -348,7 +351,7 @@ describe('the desk pass', () => {
     // he came back since the last pass (the first read counts), so it is due and every pending command goes, oldest first
     const again = value(await deskPass({ settle: deps, desk: deps.uow as never, push }))
     expect(again).toMatchObject({ ran: true, returned: true, pushed: [first.errand.id, second.errand.id] })
-    expect(pushed).toEqual([first.errand.id, first.errand.id, second.errand.id])
+    expect(pushed).toEqual([first.errand.id, second.errand.id, first.errand.id, second.errand.id])
   })
 
   test("a lead's check now closes an Errand its check answers and wakes the lead, with no desk pass", async () => {
@@ -478,17 +481,26 @@ describe('the desk pass', () => {
     const request = value(await macbook('Reload the keys with Touch ID', 'make keys', 'keys')).errand.id
     value(await screenErrands(deps))
     expect(await errandRow(queued)).toMatchObject({ command: 'make maxvnodes-install', host: 'macbook' })
-    // away: the loop's tick finds nothing due
+    // away: a command that reached him is pushed at the next tick, not held for his return, one dialog per pass
     clock.set(new Date(clock.now().getTime() + HOUR))
+    expect(value(await deskPass({ settle: deps, desk: deps.uow as never, push }))).toMatchObject({
+      ran: true,
+      returned: false,
+      pushed: [queued],
+    })
+    expect(value(await deskPass({ settle: deps, desk: deps.uow as never, push }))).toMatchObject({
+      ran: true,
+      pushed: [request],
+    })
     expect(value(await deskPass({ settle: deps, desk: deps.uow as never, push })).ran).toBe(false)
-    expect(pushed).toEqual([])
+    expect(pushed).toEqual([queued, request])
 
     // his read, two hours after the last
     clock.set(new Date(clock.now().getTime() + 3 * HOUR))
     value(await registerVisit(deps.uow as never, clock.now()))
     const pass = value(await deskPass({ settle: deps, desk: deps.uow as never, push }))
     expect(pass).toMatchObject({ ran: true, returned: true, pushed: [queued, request] })
-    expect(pushed).toEqual([queued, request])
+    expect(pushed).toEqual([queued, request, queued, request])
     // the return is spent: the next tick is not due
     expect(value(await deskPass({ settle: deps, desk: deps.uow as never, push })).ran).toBe(false)
   })
@@ -504,6 +516,9 @@ describe('the desk pass', () => {
     value(await screenErrands(deps))
     value(await deskPass({ settle: deps, desk: deps.uow as never, push }))
     expect(pushed).toEqual([queued])
+    // the request was never pushed: the next tick owes it its dialog, and then nothing is due
+    clock.set(new Date(clock.now().getTime() + 1_000))
+    expect(value(await deskPass({ settle: deps, desk: deps.uow as never, push })).pushed).toEqual([request])
     clock.set(new Date(clock.now().getTime() + 1_000))
     expect(value(await deskPass({ settle: deps, desk: deps.uow as never, push })).ran).toBe(false)
     const forced = value(await deskPass({ settle: deps, desk: deps.uow as never, push, force: true }))
@@ -542,6 +557,31 @@ describe('the desk pass', () => {
     // up again: it is not probed any more, and the return is spent
     expect(value(await deskPass({ settle: deps, desk: deps.uow as never, push })).ran).toBe(false)
     expect(probes).toBe(2)
+  })
+
+  test('a command the dialog cannot run is refused at raise, and the sudo -S form is raised and pushed', async () => {
+    const issueId = await workingIssue('example')
+    const summary = 'Tune the homelab host with root'
+    const refused = await raiseErrand(deps, {
+      issueId,
+      attempt: 1,
+      raw: { tried: 'looked for a way without root', summary, cmd: 'ssh -t homelab sudo sysctl -w vm.swappiness=10' },
+    })
+    expect(!refused.ok && refused.error).toMatchObject({ kind: 'invalid' })
+    expect(!refused.ok && 'detail' in refused.error ? refused.error.detail : '').toContain('sudo -S')
+    expect(await db.sql`SELECT id FROM factory.errands`).toHaveLength(0)
+
+    const queued = await reached(issueId, {
+      summary,
+      cmd: `op read "op://Private/homelab-server/password" --account <account> | ssh homelab 'sudo -S sysctl -w vm.swappiness=10'`,
+      host: 'macbook',
+    })
+    // raised and screened, it is on his MacBook at the next tick, with no return of his needed
+    expect(value(await deskPass({ settle: deps, desk: deps.uow as never, push }))).toMatchObject({
+      ran: true,
+      returned: false,
+      pushed: [queued],
+    })
   })
 
   test('an Errand with no command beside a request the lead queued is refused with the verb to use', async () => {

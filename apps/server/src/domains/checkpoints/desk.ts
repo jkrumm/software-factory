@@ -30,16 +30,19 @@ export function isReturn(input: { lastPassAt: Date | null; returnedAt: Date | nu
 /**
  * The desk pass is due when it never ran, when the owner came back since it last ran, when he asked for it, and in any
  * case every `DESK_EVERY_MS`: one pass over the open Errands, so a list that grew while he was away is cleaned before he
- * reads it.
+ * reads it. An Errand with a MacBook command that reached him and was never pushed makes it due as well (`fresh`): the
+ * dialog waits on his MacBook until he is there, so it goes when the Errand is raised, not when he next comes back.
  */
 export function deskDue(input: {
   now: Date
   lastPassAt: Date | null
   returnedAt: Date | null
   force?: boolean
+  /** a MacBook command reached the owner and was never pushed (`hasUnpushed`): its dialog goes now, not at the next due pass */
+  fresh?: boolean
 }): boolean {
   const { now, lastPassAt } = input
-  if (lastPassAt === null || isReturn(input)) return true
+  if (lastPassAt === null || input.fresh === true || isReturn(input)) return true
   return now.getTime() - lastPassAt.getTime() >= DESK_EVERY_MS
 }
 
@@ -60,20 +63,7 @@ export function pushQueue(
   returned: boolean,
   options: { includePlace?: boolean } = {},
 ): ErrandRecord[] {
-  const dialog = (errand: ErrandRecord): boolean => {
-    const need = errand.need ?? needOf(errand)
-    return need === 'secret' || need === 'hands' || (need === 'place' && options.includePlace === true)
-  }
-  const pending = open.filter(
-    (errand) =>
-      errand.doneAt === null &&
-      errand.reachedOwnerAt !== null &&
-      errand.command !== null &&
-      errand.host === 'macbook' &&
-      errand.runStatus !== 'running' &&
-      errand.runAttempts < MAX_RUN_TRIES &&
-      dialog(errand),
-  )
+  const pending = open.filter((errand) => pushable(errand, options.includePlace === true))
   // a stable sort: among equals the list's order stays
   if (returned) return pending.toSorted((a, b) => a.raisedAt.getTime() - b.raisedAt.getTime())
   const pushedAt = (errand: ErrandRecord): number => errand.pushedAt?.getTime() ?? 0
@@ -83,3 +73,22 @@ export function pushQueue(
   const first = due.toSorted((a, b) => pushedAt(a) - pushedAt(b))[0]
   return first ? [first] : []
 }
+
+/** Whether the pass may push this Errand's command: it reached the owner, is not done, and is a MacBook command that needs him. */
+function pushable(errand: ErrandRecord, includePlace: boolean): boolean {
+  const need = errand.need ?? needOf(errand)
+  const dialog = need === 'secret' || need === 'hands' || (need === 'place' && includePlace)
+  return (
+    errand.doneAt === null &&
+    errand.reachedOwnerAt !== null &&
+    errand.command !== null &&
+    errand.host === 'macbook' &&
+    errand.runStatus !== 'running' &&
+    errand.runAttempts < MAX_RUN_TRIES &&
+    dialog
+  )
+}
+
+/** An open Errand whose MacBook command was never pushed: raised and screened since the last pass, its dialog is owed now. */
+export const hasUnpushed = (open: readonly ErrandRecord[]): boolean =>
+  open.some((errand) => errand.pushedAt === null && pushable(errand, false))
