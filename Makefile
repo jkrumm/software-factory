@@ -1,5 +1,5 @@
 .DEFAULT_GOAL := help
-.PHONY: help check check-fast check-steps check-fast-steps check-static test test-unit test-unit-changed test-scenarios merge-guard e2e fmt deploy rollback verify version rehearse
+.PHONY: help check check-fast check-steps check-fast-steps check-static test test-unit test-unit-changed test-scenarios merge-guard e2e fmt deploy rollback verify version
 
 help:
 	@echo "make check   install, format, lint, shellcheck, tsc, Console tsc, tokens, artifact templates and InfoHint definitions, e2e tsc, boundaries, retired words, public scan, Issue diagram, generated CLI, tests, scenarios, Console build and Playwright (the merge gate)"
@@ -11,7 +11,6 @@ help:
 	@echo "make deploy  deploy origin/master (or FACTORY_REF=<branch>) on the mini: release, LaunchAgent, health check, rollback (DRY_RUN=1 prints the plan)"
 	@echo "make rollback swap back to the previous release (data/previous-sha): service, /health at the old sha, current, CLI, door (DRY_RUN=1 prints the plan)"
 	@echo "make version print the deployed commit sha (one line; what the hold checks the shipped commits against)"
-	@echo "make rehearse the cutover rehearsal on a copy of the live data in a private cluster (read-only dump; REHEARSE_ARGS='--keep --skip-old --dump <file>')"
 	@echo "make verify  prove the deployment: /health at the deployed sha, which is origin/master (or FACTORY_REF; behind it only by docs/tests, or by a merge younger than FACTORY_VERIFY_DEPLOY_GRACE_S=1800 whose deploy is pending, is fine), and the factory CLI against it"
 
 # Tests start a private Postgres cluster (initdb) in a temp dir: PG_BIN_DIR points at the binaries when they are not on PATH.
@@ -133,10 +132,6 @@ verify:
 
 version:
 	@/bin/bash scripts/version.sh
-
-# A window on a copy of the live data: restore, rename, boot the new core, import, compare, scenarios, the way back, the next window.
-rehearse:
-	@bun scripts/rehearse.ts $(REHEARSE_ARGS)
 
 # A lead runs this right before it merges its pull request (AGENTS.md "Merging"): rebased, free migration number, green master.
 merge-guard:

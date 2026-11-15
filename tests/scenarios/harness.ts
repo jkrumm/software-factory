@@ -66,7 +66,7 @@ export async function startWorld(): Promise<World> {
   return startWorldOn(await startTestCluster())
 }
 
-/** A world on a database that exists already (the cutover rehearsal's copy of the live data); `stop` stops it as well. */
+/** A world on a database that exists already (a copy of live data, a restored dump); `stop` stops it as well. */
 export async function startWorldOn(db: TestCluster): Promise<World> {
   const bin = await mkdtemp('/tmp/factory-world-')
   const log = join(bin, 'calls.jsonl')

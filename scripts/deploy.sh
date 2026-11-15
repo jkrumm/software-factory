@@ -19,10 +19,6 @@
 # the plist, the service, /health at the old sha, then `current`, the CLI link, deployed-sha, the door. The two shas trade places, so a
 # second rollback swaps forward again. Nothing is fetched or built: the previous release is on disk or the rollback is refused.
 #
-# A release is either core: the new one (apps/server, apps/door, apps/cli) or the old one, whose source is gone from master: its
-# built release stays pinned in data/keep-releases until the day-7 burn-in report, so `make rollback` still returns to it. Every step asks
-# the release which core it is, so one script deploys the new core and rolls back onto the old.
-#
 # DRY_RUN=1 prints the plan and the rendered plist and touches nothing (no fetch, no launchd, no ~/.local/bin).
 #
 # Everything lives inside `main`, called on the last line when the file is run (not when it is sourced): this file is
@@ -51,9 +47,8 @@ CURRENT="$ROOT/current"
 DATA_DIR="$ROOT/data"
 SHA_FILE="$DATA_DIR/deployed-sha"
 PREV_FILE="$DATA_DIR/previous-sha"
-# Releases never pruned, one sha per line: the cutover pins the old core's release here, so the way back always has it.
-KEEP_FILE="$DATA_DIR/keep-releases"
 KEEP_RELEASES=3
+CLI_ENTRY="apps/cli/bin/factory.ts"
 BIN_DIR="$HOME/.local/bin"
 CLI_LINK="$BIN_DIR/factory"
 PLIST="$HOME/Library/LaunchAgents/$LABEL.plist"
@@ -115,21 +110,11 @@ render_plist() { # $1 template, $2 release dir, $3 sha -> stdout
 template_of() { echo "$1/deploy/$LABEL.plist.template"; } # $1 release dir
 door_template_of() { echo "$1/deploy/$DOOR_LABEL.plist.template"; } # $1 release dir
 
-# Which core a release holds, and where its CLI is (the new core's is apps/cli, the old one's packages/cli).
-core_of() { if [[ -f "$1/apps/server/src/main.ts" ]]; then echo "new core (apps/server)"; else echo "old core"; fi; } # $1 release dir
-cli_of() { if [[ -f "$1/apps/cli/bin/factory.ts" ]]; then echo "apps/cli/bin/factory.ts"; else echo "packages/cli/bin/factory.ts"; fi; } # $1 release dir
-
-# Which door a release holds, and what its launcher needs. A door is the release's own: the new core's (apps/door) posts to the
-# server's HTTP API with FACTORY_DOOR_TOKEN, resolved from the release's .env.door.tpl; the old core's posts to the
-# server's hook socket and holds no secret. Both read the tokens file of their sources. The 401 of an unauthenticated POST is the
-# same from either, so it proves a door is up, never which one: `door_runs_from` reads that from launchd.
-door_of() { if [[ -f "$1/apps/door/src/main.ts" ]]; then echo "new door (apps/door)"; else echo "old door"; fi; } # $1 release dir
-door_needs_secret() { grep -qs '\.env\.door\.tpl' "$1/scripts/launch-door.sh"; } # $1 release dir: does its launcher resolve a template
-door_credentials() { # $1 release dir
-  if door_needs_secret "$1"; then echo "FACTORY_DOOR_TOKEN from its .env.door.tpl, and the tokens file"; else echo "none (the tokens file only)"; fi
-}
+# The door (apps/door) of a release posts to the server's HTTP API with FACTORY_DOOR_TOKEN, resolved from the release's
+# .env.door.tpl, and reads the tokens file of its sources. The 401 of an unauthenticated POST proves a door is up, never which
+# release's: `door_runs_from` reads that from launchd.
 door_plan() { # $1 release dir, $2 sha: the one line that says which door starts
-  log "door: $(door_of "$1") from ${2:0:12}, launcher $1/scripts/launch-door.sh, credentials: $(door_credentials "$1")"
+  log "door: apps/door from ${2:0:12}, launcher $1/scripts/launch-door.sh, credentials: FACTORY_DOOR_TOKEN from its .env.door.tpl, and the tokens file"
 }
 # The launcher the loaded door job runs ("" = not loaded).
 door_runs_from() {
@@ -275,7 +260,7 @@ build_release() { # $1 sha
   git -C "$REPO_DIR" archive --format=tar "$1" | tar -x -C "$dir" || { remove_release "$1"; die "exporting $1 failed"; }
   (cd "$dir" && bun install --frozen-lockfile) || { remove_release "$1"; die "bun install failed; the live release is untouched"; }
   build_console "$1" || { remove_release "$1"; die "the Console build failed; the live release is untouched"; }
-  chmod +x "$dir"/scripts/*.sh "$dir/$(cli_of "$dir")"
+  chmod +x "$dir"/scripts/*.sh "$dir/$CLI_ENTRY"
   touch "$dir/.complete"
 }
 
@@ -365,15 +350,13 @@ deploy_door() { # $1 release dir, $2 sha
   template=$(door_template_of "$1")
   if [[ ! -f "$template" ]]; then log "WARNING: $template missing: the door is left as it is"; return 0; fi
   door_plan "$1" "$2"
-  if door_needs_secret "$1"; then
-    if [[ ! -f "$1/.env.door.tpl" ]]; then
-      log "WARNING: $1/.env.door.tpl is missing: the door cannot start"
-    else
-      local key ref
-      while IFS='=' read -r key ref; do
-        secrets-run read "$ref" >/dev/null 2>&1 || log "WARNING: the door's $key ($ref) does not resolve through secrets-run: the door will not start"
-      done < <(grep -hoE '^[A-Za-z_][A-Za-z0-9_]*=op://[^[:space:]]+' "$1/.env.door.tpl")
-    fi
+  if [[ ! -f "$1/.env.door.tpl" ]]; then
+    log "WARNING: $1/.env.door.tpl is missing: the door cannot start"
+  else
+    local key ref
+    while IFS='=' read -r key ref; do
+      secrets-run read "$ref" >/dev/null 2>&1 || log "WARNING: the door's $key ($ref) does not resolve through secrets-run: the door will not start"
+    done < <(grep -hoE '^[A-Za-z_][A-Za-z0-9_]*=op://[^[:space:]]+' "$1/.env.door.tpl")
   fi
   tmp="$DOOR_PLIST.tmp.$$"
   if ! { render_plist "$template" "$1" "$2" > "$tmp" && plutil -lint "$tmp" >/dev/null; }; then
@@ -390,7 +373,7 @@ deploy_door() { # $1 release dir, $2 sha
   while (( i < DOOR_WAIT_SECS )); do
     if door_answers; then
       if [[ "$(door_runs_from)" == "$1/scripts/launch-door.sh" ]]; then
-        log "door OK: the $(door_of "$1") of ${2:0:12} answers on 127.0.0.1:$DOOR_PORT (401 to an unauthenticated POST)"
+        log "door OK: the door (apps/door) of ${2:0:12} answers on 127.0.0.1:$DOOR_PORT (401 to an unauthenticated POST)"
       else
         log "WARNING: a door answers on 127.0.0.1:$DOOR_PORT but launchd runs '$(door_runs_from)', not $1/scripts/launch-door.sh: read launchctl print gui/$(id -u)/$DOOR_LABEL"
       fi
@@ -580,7 +563,7 @@ rollback() {
   if [[ -n "$DRY_RUN" ]]; then
     log "DRY RUN: nothing is stopped, started or written"
     log "the settings file is accepted by ${prev:0:12}'s launcher"
-    log "would roll back ${live:-none} ($( [[ -n "$live" && -d "$RELEASES/$live" ]] && core_of "$RELEASES/$live" || echo "release not on disk")) -> ${prev:0:12} ($(core_of "$release")), release $release"
+    log "would roll back ${live:-none} -> ${prev:0:12}, release $release"
     log "rendered $PLIST (points at the release, not at current):"
     render_plist "$(template_of "$release")" "$release" "$prev"
     act "while the live service is healthy, wait up to ${LOAD_WAIT_SECS}s for the one-minute load average to be at most ${LOAD_MAX} (now $(load_avg)); still above: refuse, nothing changed"
@@ -589,12 +572,12 @@ rollback() {
     act "wait up to ${HEALTH_WAIT_SECS}s for $HEALTH_URL = ok, version $prev"
     act "on failure: boot ${live:-none} again, exit 1"
     act ln -sfn "$release" "$CURRENT"
-    act ln -sf "$CURRENT/$(cli_of "$release")" "$CLI_LINK"
+    act ln -sf "$CURRENT/$CLI_ENTRY" "$CLI_LINK"
     act "write $SHA_FILE ($prev) and $PREV_FILE (${live:-none}): the two trade places"
-    log "rendered $DOOR_PLIST (the door of the $(core_of "$release"), from the previous release):"
+    log "rendered $DOOR_PLIST (the door of the previous release):"
     render_plist "$(door_template_of "$release")" "$release" "$prev"
     door_plan "$release" "$prev"
-    act "launchctl bootout $DOOR_LABEL if loaded, then bootstrap it from $release (the door of the $(core_of "$release"))"
+    act "launchctl bootout $DOOR_LABEL if loaded, then bootstrap it from $release (the door of the previous release)"
     return 0
   fi
 
@@ -609,18 +592,18 @@ rollback() {
   take_lock
   wait_calm_host || die "the host is starved (load above $LOAD_MAX); the live service was not touched. Retry when it calms, or set LOAD_MAX"
 
-  log "rolling back ${live:-none} -> ${prev:0:12} ($(core_of "$release")), stopping the service"
+  log "rolling back ${live:-none} -> ${prev:0:12}, stopping the service"
   mark_down
   stop_service "$unload_secs" || die "still loaded ${unload_secs}s after bootout; not bootstrapping over it. Retry the rollback."
   mark_stopped
   if restart_until_healthy "$release" "$prev" "$unload_secs"; then
     mark_up
     ln -sfn "$release" "$CURRENT" || die "updating $CURRENT failed"
-    ln -sf "$CURRENT/$(cli_of "$release")" "$CLI_LINK" || die "linking $CLI_LINK failed"
+    ln -sf "$CURRENT/$CLI_ENTRY" "$CLI_LINK" || die "linking $CLI_LINK failed"
     [[ -z "$live" ]] || write_atomic "$PREV_FILE" "$live"
     write_atomic "$SHA_FILE" "$prev" || die "writing $SHA_FILE failed"
     deploy_door "$release" "$prev"
-    log "rollback OK: ${prev:0:12} ($(core_of "$release")) healthy; factory -> $CLI_LINK"
+    log "rollback OK: ${prev:0:12} healthy; factory -> $CLI_LINK"
     return 0
   fi
   echo "[deploy] ERROR: ${prev:0:12} did not become healthy within ${HEALTH_WAIT_SECS}s" >&2
@@ -657,7 +640,7 @@ main() {
     old=$(read_sha "$SHA_FILE")
     sha=$(git -C "$SELF_DIR" rev-parse "origin/$REF" 2>/dev/null) || sha="<origin/$REF>"
     log "DRY RUN: nothing is fetched, stopped, started or written"
-    log "would deploy ${sha:0:12} ($(core_of "$SELF_DIR/..")) (live: ${old:-none}$( [[ -n "$old" && -d "$RELEASES/$old" ]] && echo ", $(core_of "$RELEASES/$old")")) from ${repo_url:-<no origin url>}"
+    log "would deploy ${sha:0:12} (live: ${old:-none}) from ${repo_url:-<no origin url>}"
     act git -C "$REPO_DIR" fetch --prune origin "$REF"
     act "export $sha to $RELEASES/$sha and bun install --frozen-lockfile there"
     act "build the Console there (bun run --cwd apps/console build); a failed build removes the release and stops the deploy, the live release untouched"
@@ -673,9 +656,9 @@ main() {
     act "wait up to ${HEALTH_WAIT_SECS}s for $HEALTH_URL = ok, version $sha"
     act "on failure: print the log tails, boot the previous release again (${old:-none}), exit 1"
     act ln -sfn "$RELEASES/$sha" "$CURRENT"
-    act ln -sf "$CURRENT/$(cli_of "$SELF_DIR/..")" "$CLI_LINK"
+    act ln -sf "$CURRENT/$CLI_ENTRY" "$CLI_LINK"
     act "write $SHA_FILE ($sha) and $PREV_FILE (${old:-none})"
-    log "rendered $DOOR_PLIST (the door of the $(core_of "$SELF_DIR/.."), from the same release):"
+    log "rendered $DOOR_PLIST (the door, from the same release):"
     render_plist "$(door_template_of "$SELF_DIR/..")" "$RELEASES/$sha" "$sha"
     door_plan "$SELF_DIR/.." "$sha"
     act "launchctl bootout $DOOR_LABEL if loaded, then launchctl bootstrap it"
@@ -749,7 +732,7 @@ main() {
   if [[ -n "$old" && "$old" != "$sha" && -f "$RELEASES/$old/.complete" ]]; then prev="$old"; fi
 
   # --- switch
-  log "deploying ${sha:0:12} ($(core_of "$release")) (live: ${old:-none}), stopping the service"
+  log "deploying ${sha:0:12} (live: ${old:-none}), stopping the service"
   mark_down
   stop_service "$unload_secs" || die "still loaded ${unload_secs}s after bootout (ExitTimeOut + 10); not bootstrapping over it. It may still be shutting down: retry the deploy."
   mark_stopped
@@ -769,13 +752,11 @@ main() {
   # --- healthy: current, the CLI, then the marker ("deployed" means the CLI is usable too)
   ln -sfn "$release" "$CURRENT" || die "updating $CURRENT failed"
   if [[ -n "$old" && "$old" != "$sha" ]]; then write_atomic "$PREV_FILE" "$old"; fi
-  ln -sf "$CURRENT/$(cli_of "$release")" "$CLI_LINK" || die "linking $CLI_LINK failed"
+  ln -sf "$CURRENT/$CLI_ENTRY" "$CLI_LINK" || die "linking $CLI_LINK failed"
   write_atomic "$SHA_FILE" "$sha" || die "writing $SHA_FILE failed"
   deploy_door "$release" "$sha"
-  local pinned=() k
-  [[ -f "$KEEP_FILE" ]] && while IFS= read -r k; do is_sha "$k" && pinned+=("$k"); done <"$KEEP_FILE"
-  prune_releases "$sha" "$(read_sha "$PREV_FILE")" ${pinned[@]+"${pinned[@]}"}
-  log "deploy OK: ${sha:0:12} ($(core_of "$release")) healthy; factory -> $CLI_LINK"
+  prune_releases "$sha" "$(read_sha "$PREV_FILE")"
+  log "deploy OK: ${sha:0:12} healthy; factory -> $CLI_LINK"
 }
 
 if [[ "${BASH_SOURCE[0]}" == "$0" ]]; then main "$@"; fi

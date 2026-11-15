@@ -1,7 +1,6 @@
 # <path> <term or *>  # <reason>. One line per file and term the check must let through; a stale line fails it.
 scripts/retired-words.ts *  # the list of retired words itself
 scripts/test/retired-words.test.ts *  # the fixtures that prove each word is caught
-scripts/env-file.sh ask judge  # the old core's settings allow-list (FACTORY_ASK_JUDGE); package 9 rewrites it with the deploy scripts
 apps/server/src/adapters/hc/terminals.ts wave  # USAGE_LANE=wave is the usage tracker's lane name for factory sessions, an external value
 apps/server/src/read/asks.ts human queue  # the legacy read API's wire name `humanQueue` (open Errands), read by existing clients
 apps/server/src/read/reader.ts human queue  # the legacy read API's wire name `humanQueue` (open Errands), read by existing clients
@@ -14,7 +13,6 @@ tests/scenarios/clients/dotfiles.test.ts human queue  # ask-human.sh's own note 
 apps/server/scripts/import/plan.ts classify  # the old core's event kinds (classified, classify_failed) the importer maps or drops
 apps/server/scripts/import/plan.ts park  # the old core's park event and reason, mapped to a stall
 apps/server/scripts/import/run.ts park  # the old core's wait reason `parked`, compared with the new stall
-scripts/rehearse.ts ask judge  # FACTORY_ASK_JUDGE: the old core's setting, switched off when its release is booted on the copy
 apps/server/test/import/plan.test.ts classify  # old event kinds the planner is tested on
 apps/server/test/import/plan.test.ts park  # the old core wait reason `parked`, tested against the new stall
 apps/server/src/api/console.ts manifest  # manifest.webmanifest is a browser file name, not a project manifest

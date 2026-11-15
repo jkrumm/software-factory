@@ -24,8 +24,8 @@ The reset (RS1–RS15) and the rewrite (NL11–NL24) are built and live; their l
 
 - **After the cutover** (`docs/plan.yaml`): the Console chain (shell, Needs you, artifact page, then the owner's first look,
   Flow, Issue page, Chain, Improve, then the full Console's review), the surfaces (Herdr glance, Hermes' factory skill,
-  Argo's factory pages out), and the burn-in reports on day 3 and day 7 after the cutover. The old core's release stays pinned
-  in `data/keep-releases` for the way back (`make rollback`) until the day-7 report.
+  Argo's factory pages out), and the burn-in reports on day 3 and day 7 after the cutover. The way back to the old core was removed
+  after the day-7 report (2026-11-15); `make rollback` returns to the previous release only.
 - **Time-gated, track U:** judge the cost program's Wave 6 on the W46 report (2026-11-16); W45 is a trend.
 - **Open after R0 and A1** (below), each the owner's or a security call.
 

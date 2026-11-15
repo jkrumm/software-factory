@@ -39,8 +39,8 @@ rows:
     facts:
       why: The new core is live on master (docs/rewrite/state.md). legacy/ is the old core kept as a read-only reference, and it misleads every reader.
       what: legacy/, the Makefile's legacy note, every tracked reference to packages/server, packages/door or legacy/, /tmp-style leftovers named in docs/rewrite/state.md.
-      change: Delete legacy/ and every reference to it. Keep the way back working until the day-7 burn-in report — the old core's built release stays pinned in data/keep-releases and make rollback still reaches it — so deploy.sh keeps telling the two cores apart; say so in one comment.
-      acceptance: No tracked file under legacy/; grep for packages/server and legacy/ finds only the deploy.sh core check and docs/rewrite; DRY_RUN=1 make rollback still plans the pinned old release; make check passes; make deploy and make verify are green.
+      change: Delete legacy/ and every reference to it. The way back to the old core (the pin in data/keep-releases, deploy.sh's old-core branches) was kept until the day-7 burn-in report and removed on 2026-11-15 (issue 1413).
+      acceptance: No tracked file under legacy/; grep for packages/server and legacy/ finds only docs/rewrite; DRY_RUN=1 make rollback plans the previous release; make check passes; make deploy and make verify are green.
   - key: docs-new-core
     kind: docs
     after: [cutover-close]

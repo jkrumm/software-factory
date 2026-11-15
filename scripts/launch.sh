@@ -74,7 +74,7 @@ exec "$SECRETS_RUN" run --env-file="$TPL" -- /bin/sh -c '
   case "$FACTORY_DB_PASSWORD" in
     *[!0-9a-f]*) echo "software-factory: FACTORY_DB_PASSWORD is not hex; refusing to start." >&2; exit 78 ;;
   esac
-  # FACTORY_DB_ADDR is for the cutover rehearsal (a private cluster on another port); it is not on the allow-list of the settings file.
+  # FACTORY_DB_ADDR points a launch at another address (a private cluster on another port); it is not on the allow-list of the settings file.
   export DATABASE_URL="postgres://factory:${FACTORY_DB_PASSWORD}@${FACTORY_DB_ADDR:-127.0.0.1:5432}/shared"
   unset FACTORY_DB_PASSWORD
   # FACTORY_LAUNCH_ENTRY runs another entry of this release with the same environment: the deploy'"'"'s migration dry check
