@@ -12,6 +12,9 @@ import { leadGone } from './leads-start.ts'
 /** The most wall-clock a pass spends naming tabs; what is left retries next pass, and gone-detection is never cut. */
 export const NAME_TABS_BUDGET_MS = 15_000
 
+/** The most wall-clock a pass spends starting sessions again over shells (each start is paced); what is left waits for the next pass. */
+export const REVIVE_BUDGET_MS = 60_000
+
 /**
  * Finds the leads whose terminal is gone: each started lead of a `working` Issue is looked up in herdr-core by its key,
  * and one with no running terminal, past the grace (from the later of its start and its last hook event), is a lead
@@ -56,6 +59,7 @@ export async function followLeads(deps: LeadDeps, signal?: AbortSignal): Promise
   // The lookups only read, so they run together: serial, a loaded host's slow `hc` calls add up past the heartbeat's limit.
   const lookups = await Promise.all(rows.map(({ row }) => deps.terminals.find(leadKey(row.issueId, row.attempt))))
   const namingStart = deps.clock.now().getTime()
+  let revivedAny = false
   let lost = 0
   for (const [index, { row, since, session, issue, title, working }] of rows.entries()) {
     const name = leadKey(row.issueId, row.attempt)
@@ -83,6 +87,9 @@ export async function followLeads(deps: LeadDeps, signal?: AbortSignal): Promise
     const quiet = deps.clock.now().getTime() - Math.max(row.startedAt?.getTime() ?? 0, since?.getTime() ?? 0)
     if (quiet < deps.graceMs) continue
     if (running.length > 0) {
+      // The first start of a pass always runs; a later one only while the pass has time left.
+      if (revivedAny && deps.clock.now().getTime() - namingStart >= REVIVE_BUDGET_MS) continue
+      revivedAny = true
       await reviveShell(deps, { row, name, session, issue, open: open.has(name) })
       continue
     }

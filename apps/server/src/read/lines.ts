@@ -43,7 +43,7 @@ const line = (input: {
 
 /**
  * What needs a look and is not a question for the owner: a door line (a refused or silent source, an unrouted monitor), an
- * account stopped at its limit, a loop whose last pass failed, a watch whose checkout stays blocked, a repo's main checkout off its branch or dirty under a live lead. Derived at read.
+ * account stopped at its limit, a loop whose last pass failed, a watch whose checkout stays blocked, a repo's main checkout off its branch or dirty under a live lead, a working Issue whose lead has no agent in its terminal (`lead-no-agent`, an open row of `lead_losses`). Derived at read.
  */
 export async function readHealthLines(
   sql: SQL,

@@ -277,7 +277,10 @@ through `receive` in `app/intake.ts`; the answer is a triage outcome (`docs/lang
 - **Hooks.** `factory hook` appends to the spool, then posts to the unix socket (mode 0600) within 300 ms. The server
   replays the spool with idempotent keys. Session state is derived from the events when read, never stored.
 - **Notes** (`app/leads-note.ts`) are typed into the lead's terminal once: the delivery key is claimed before the typing, a
-  lead mid-turn is asked again until its turn ends, and a lead whose terminal is gone is the lead gone. A lead whose hooks
+  lead mid-turn is asked again until its turn ends, and a lead whose terminal is gone is the lead gone. A note is never typed
+  into a terminal that runs no agent (`HcTerminals.type` refuses it): a live terminal with a shell in it (herdr-core brings
+  every kept terminal back as a login shell after a host restart) has its session started again over it, as a dormant
+  lead's is, with the note after a line saying the host restarted. A lead whose hooks
   say its turn ended for `forceNoteAfterMs` is typed to whatever herdr-core's status reads, when the screen shows an empty input
   box (no dialog, no running turn): a resumed session read `working` for a day while it sat at its prompt (issue 1190). Before the typing
   the lead takes its repo's claim back (`resumeClaim` through `claims.resume`): a wait that ended left it without one, and
@@ -296,7 +299,12 @@ through `receive` in `app/intake.ts`; the answer is a triage outcome (`docs/lang
   lead's session is started again under the same key and tab (`HcTerminals.revive`: `claude --resume <session>` on the model and
   effort of the finished terminal, the note as its first message, so nothing is typed), paced by `app/type-pace.ts`. A
   failed start is retried by the outbox; the third, or a refusal, is the lead gone. `followLeads` never calls a dormant
-  lead lost. The first turn of the resumed session is a prompt cache miss: the context is read uncached once, which a
+  lead lost. It does call lost a lead of a `working` Issue whose terminal lives but runs no agent (`terminals.find`:
+  `agent` false for every live terminal; the hooks of such a lead read `gone` or `idle` from before the restart): past
+  the grace it opens a row of `lead_losses`, starts the session again with `--resume` and a first message that says the
+  host restarted and its background work is gone, and closes the row when the agent runs again; the third failed start is
+  the lead gone. The open row is a `lead-no-agent` health line, and every row is a lost lead in the friction read. A pass
+  starts at most `REVIVE_BUDGET_MS` of such starts; the rest wait for the next pass. The first turn of the resumed session is a prompt cache miss: the context is read uncached once, which a
   wait over the cache's lifetime (1 h) costs nothing extra and one between 30 and 60 min does.
 - **The stop rule** (`domains/leads/stop.ts`): a lead that stops with nothing reported is sent back once with one line
   (the hook exits 2); the stop after that is let through and stalls nothing, because a finished background task can restart the
@@ -679,7 +687,7 @@ model, not a signal: an agent-trust signal files an Issue, and no loops page exi
   actor with `via: orchestrator`) count as steering too.
 - **One contract** in `packages/contract` builds every body; a body that does not parse is exit 9.
 - **Reads** (`/v1/*`, `read/`): needs, flow, chain, Issues, sessions, signals, accounts, queue, loops, friction, waits (the wait census), finding classes, fix commits, kpis, retro (`GET /v1/retro`: the KPI table with history, the friction counts, the lead sessions with their transcript paths, samples of Issues worth reading and the ledger of earlier retro signals; the read token gets no path and no words), host, since (the Console's "since you were here" band: `read/since.ts` counts what the event log, Decisions, Errands, signals and incidents say after a start; only the owner's read moves the one-row `console_visit` marker, `app/visit.ts`: a read 30 minutes after the last starts a new visit at the old `seen_at`, the first looks back 24 h) and
-  the change stream. Health lines (`read/lines.ts`) are kinds `door`, `account`, `account-rank`, `loop`, `checkout` (a blocked watch) and `main-checkout` (a shared main checkout off its branch or dirty under a live lead). The stream (`read/stream.ts`) resumes from an opaque cursor without losing or doubling a change.
+  the change stream. Health lines (`read/lines.ts`) are kinds `door`, `account`, `account-rank`, `loop`, `checkout` (a blocked watch), `lead-no-agent` (a working Issue whose lead has no agent in its terminal) and `main-checkout` (a shared main checkout off its branch or dirty under a live lead). The stream (`read/stream.ts`) resumes from an opaque cursor without losing or doubling a change.
   `GET /health` carries the heartbeat and answers from memory: a background probe (`read/health-probe.ts`, every
   `FACTORY_HEALTH_PROBE_MS`, 10 s, one read at a time) holds the database facts (`queueMovedAt`, the door lines, a database error),
   so a request never waits for Postgres and answers within a second at load 200. `ok` is false only for a stopped factory:
