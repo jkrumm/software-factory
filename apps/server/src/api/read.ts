@@ -98,25 +98,33 @@ export const readRoutes = (read: ReadApi | undefined) =>
       '/sessions',
       async ({ request, query }) => {
         if (!read) return unavailable()
-        const sessions = await read.sessions({
+        const page = await read.sessions({
           ...surfaceOf(request),
           issue: query.issue,
           role: query.role,
           live: query.live === '1',
+          limit: query.limit,
+          ...(query.before === undefined ? {} : { before: new Date(query.before) }),
         })
-        if (sessions === null) return failure(400, `${query.issue} is not an Issue (issue_12 or 12)`, 'invalid_request')
-        return Response.json(ReadSessionCards.parse({ sessions }))
+        if (page === null) return failure(400, `${query.issue} is not an Issue (issue_12 or 12)`, 'invalid_request')
+        return Response.json(ReadSessionCards.parse(page))
       },
       {
         query: z.object({
           issue: z.string().meta(ISSUE_ID_META).optional(),
           role: z.string().optional(),
           live: z.enum(['1']).optional(),
+          limit: z.coerce.number().int().min(1).max(1000).optional(),
+          before: z.string().datetime().optional().meta({
+            description:
+              'the `next` of the previous page: only attempts first tried before this instant (newest first)',
+          }),
         }),
         response: { 200: ReadSessionCards, ...errorResponses(400, 503) },
         detail: {
           operationId: 'read.sessions',
-          summary: "lead sessions: an Issue's, or the newest; live=1 leaves ended ones out",
+          summary:
+            "lead sessions: an Issue's, or the newest 200 (limit up to 1000); live=1 leaves ended ones out; `next` is the `before` of the next page",
         },
       },
     )

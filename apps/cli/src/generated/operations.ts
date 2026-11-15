@@ -2162,9 +2162,10 @@ export const OPERATIONS: readonly Operation[] = [
     command: ['read', 'sessions'],
     method: 'GET',
     path: '/v1/sessions',
-    summary: "lead sessions: an Issue's, or the newest; live=1 leaves ended ones out",
+    summary:
+      "lead sessions: an Issue's, or the newest 200 (limit up to 1000); live=1 leaves ended ones out; `next` is the `before` of the next page",
     pathParams: [],
-    queryParams: ['issue', 'role', 'live'],
+    queryParams: ['issue', 'role', 'live', 'limit', 'before'],
     body: false,
     issueParams: ['issue'],
     queryFlags: [{ name: 'live', boolean: false, value: '1' }],

@@ -106,6 +106,9 @@ export interface HostSignals {
   compressorMib: number | null
   processes: number | null
   cpuIdlePct: number | null
+  /** the header's user and system CPU shares, percent of all cores */
+  cpuUserPct: number | null
+  cpuSysPct: number | null
   vmFreeGib: number | null
   /** the CPU the host loop's helper processes took since the last snapshot */
   collectorCpuMs: number | null

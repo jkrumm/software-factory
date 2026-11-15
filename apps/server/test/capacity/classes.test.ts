@@ -39,6 +39,8 @@ test('top: the header counts and per pid the parent, footprint and CPU time; the
   const snapshot = parseTop(TOP)
   expect(snapshot.processes).toBe(763)
   expect(snapshot.cpuIdlePct).toBe(36.22)
+  expect(snapshot.cpuUserPct).toBe(39.4)
+  expect(snapshot.cpuSysPct).toBe(24.36)
   expect([...snapshot.rows]).toEqual([
     [10220, { ppid: 1, kib: 6161 * 1024, cpuMs: (86 * 60 + 11) * 1000 + 580 }],
     [0, { ppid: 0, kib: 4512, cpuMs: (66 * 60 + 24) * 1000 + 720 }],

@@ -36,6 +36,7 @@ const ProjectStepRow = z.object({
   wait_minutes: num,
   wait_p50: nullNum,
   wait_p90: nullNum,
+  wait_max: nullNum,
   peak: nullNum,
   failed_steps: num,
   failed_minutes: num,
@@ -51,7 +52,14 @@ const CiRow = z.object({
   failed_runs: num,
   failed_minutes: num,
 })
-const LockRow = z.object({ repo: z.string(), windows: num, wait_minutes: num, hold_minutes: num })
+const LockRow = z.object({
+  repo: z.string(),
+  windows: num,
+  wait_minutes: num,
+  wait_p90: nullNum,
+  wait_max: nullNum,
+  hold_minutes: num,
+})
 const ClosedRow = z.object({ repo: z.string(), closed: num })
 
 const zeroSplit = (): LeadSplit => ({
@@ -242,7 +250,7 @@ export async function readAccount(tx: SQL, from: Date, to: Date): Promise<{ lead
     SELECT ${tx.unsafe(REPO_OF_STEP)} AS repo, count(*) AS steps, sum(duration_ms)::float8 / 60000 AS minutes,
       sum(wait_ms)::float8 / 60000 AS wait_minutes,
       percentile_cont(0.5) WITHIN GROUP (ORDER BY wait_ms)::float8 AS wait_p50,
-      percentile_cont(0.9) WITHIN GROUP (ORDER BY wait_ms)::float8 AS wait_p90,
+      percentile_cont(0.9) WITHIN GROUP (ORDER BY wait_ms)::float8 AS wait_p90, max(wait_ms)::float8 AS wait_max,
       max(peak_rss_mib) AS peak,
       count(*) FILTER (WHERE exit_code IS NOT NULL AND exit_code <> 0) AS failed_steps,
       coalesce(sum(duration_ms) FILTER (WHERE exit_code IS NOT NULL AND exit_code <> 0), 0)::float8 / 60000 AS failed_minutes
@@ -264,6 +272,8 @@ export async function readAccount(tx: SQL, from: Date, to: Date): Promise<{ lead
   const lockRows: unknown[] = await tx`
     SELECT project AS repo, count(*) AS windows,
       coalesce(sum(extract(epoch FROM coalesce(acquired_at, released_at) - requested_at)), 0)::float8 / 60 AS wait_minutes,
+      percentile_cont(0.9) WITHIN GROUP (ORDER BY extract(epoch FROM coalesce(acquired_at, released_at) - requested_at) / 60)::float8 AS wait_p90,
+      max(extract(epoch FROM coalesce(acquired_at, released_at) - requested_at) / 60)::float8 AS wait_max,
       coalesce(sum(extract(epoch FROM released_at - acquired_at)), 0)::float8 / 60 AS hold_minutes
     FROM factory.merge_windows WHERE released_at >= ${from} AND released_at < ${to} GROUP BY project`
 
@@ -297,6 +307,7 @@ export async function readAccount(tx: SQL, from: Date, to: Date): Promise<{ lead
           waitMinutes: round(s?.wait_minutes ?? 0, 2),
           waitP50Ms: s?.wait_p50 ?? null,
           waitP90Ms: s?.wait_p90 ?? null,
+          waitMaxMs: s?.wait_max ?? null,
           peakMib: s?.peak ?? null,
           failedSteps: s?.failed_steps ?? 0,
           failedMinutes: round(s?.failed_minutes ?? 0, 2),
@@ -323,6 +334,8 @@ export async function readAccount(tx: SQL, from: Date, to: Date): Promise<{ lead
         mergeLock: {
           windows: m?.windows ?? 0,
           waitMinutes: round(m?.wait_minutes ?? 0, 2),
+          waitP90Minutes: m?.wait_p90 === null || m?.wait_p90 === undefined ? null : round(m.wait_p90, 2),
+          waitMaxMinutes: m?.wait_max === null || m?.wait_max === undefined ? null : round(m.wait_max, 2),
           holdMinutes: round(m?.hold_minutes ?? 0, 2),
         },
         leadTime: {

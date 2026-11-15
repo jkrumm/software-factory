@@ -187,6 +187,8 @@ export function hostSnapshot(options: HostSnapshotOptions): HostSnapshotReader {
           : null,
         processes: top.processes,
         cpuIdlePct: top.cpuIdlePct,
+        cpuUserPct: top.cpuUserPct,
+        cpuSysPct: top.cpuSysPct,
         pressureLevel: pressure !== undefined && [1, 2, 4].includes(pressure) ? pressure : null,
         compressorMib:
           compressor !== undefined && Number.isFinite(compressor) && compressor >= 0

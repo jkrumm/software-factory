@@ -59,6 +59,8 @@ const NO_SIGNALS: HostSignals = {
   compressorMib: null,
   processes: null,
   cpuIdlePct: null,
+  cpuUserPct: null,
+  cpuSysPct: null,
   vmFreeGib: null,
   collectorCpuMs: null,
 }
@@ -141,6 +143,8 @@ export async function hostPass(deps: HostPassDeps): Promise<Result<HostPass, Por
           compressorMib: snapshot.compressorMib,
           processes: snapshot.processes,
           cpuIdlePct: snapshot.cpuIdlePct,
+          cpuUserPct: snapshot.cpuUserPct,
+          cpuSysPct: snapshot.cpuSysPct,
           vmFreeGib: snapshot.vmFreeGib,
           collectorCpuMs: snapshot.collectorCpuMs,
         }

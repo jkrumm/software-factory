@@ -84,6 +84,8 @@ beforeAll(() => {
           pressureMinutes: { normal: 0, warning: 0, critical: 0, unread: 0 },
           load: { p50: null, max: null },
           cpuIdlePct: { p50: null, min: null },
+          cpuUserPct: { p50: null, max: null },
+          cpuSysPct: { p50: null, max: null },
           compressorMib: { p50: null, max: null },
           swapUsedPct: { p50: null, max: null },
           processes: { p50: null, max: null },

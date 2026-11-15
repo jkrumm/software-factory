@@ -35,6 +35,13 @@ export function redactAnswers(
   }
 }
 
+/** A count per repo with every work repo summed under one name. */
+function redactCounts(counts: Record<string, number>, name: (repo: string) => string): Record<string, number> {
+  const out: Record<string, number> = {}
+  for (const [repo, n] of Object.entries(counts)) out[name(repo)] = (out[name(repo)] ?? 0) + n
+  return out
+}
+
 /**
  * What a lead sees of the throughput read: every figure stays, the names of work repos and tenants go (`private`). A lead
  * measures its own change against these numbers; it never learns which work repo or tenant a row belongs to. The owner and
@@ -46,6 +53,14 @@ export function redactThroughput(model: ThroughputModel, open: readonly OpenProj
   return {
     ...model,
     answers: redactAnswers(model.answers, open),
+    series: {
+      ...model.series,
+      points: model.series.points.map((point) => ({
+        ...point,
+        runningByRepo: redactCounts(point.runningByRepo, repo),
+        queuedByRepo: redactCounts(point.queuedByRepo, repo),
+      })),
+    },
     host: {
       ...model.host,
       byRepo: model.host.byRepo.map((row) => ({ ...row, repo: repo(row.repo) })),
