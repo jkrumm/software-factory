@@ -33,9 +33,11 @@ jobs:
           # The unit tests are half of it (203 s of a 234 s job): `static` runs the first of two shards beside the checks.
           - { name: static, make: check-fast CHECK_FAST_ALL=1 UNIT_SHARD=1/2 }
           - { name: unit (2/2), make: test-unit UNIT_SHARD=2/2 }
-          - { name: scenarios (1/3), make: test-scenarios SHARD=1/3 }
-          - { name: scenarios (2/3), make: test-scenarios SHARD=2/3 }
-          - { name: scenarios (3/3), make: test-scenarios SHARD=3/3 }
+          # bun cuts the files by count, not time: with three shards one of them ran 265 s against 167 and 191.
+          - { name: scenarios (1/4), make: test-scenarios SHARD=1/4 }
+          - { name: scenarios (2/4), make: test-scenarios SHARD=2/4 }
+          - { name: scenarios (3/4), make: test-scenarios SHARD=3/4 }
+          - { name: scenarios (4/4), make: test-scenarios SHARD=4/4 }
           # The files of a shard are planned by seconds (scripts/e2e-shard.ts, tests/e2e/shard-weights.json).
           - { name: e2e (1/3), make: e2e E2E_SHARD=1/3, playwright: 'true' }
           - { name: e2e (2/3), make: e2e E2E_SHARD=2/3, playwright: 'true' }

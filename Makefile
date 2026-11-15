@@ -102,7 +102,7 @@ test-unit-changed:
 	  echo "==> unit tests of the changed files (bun test --changed=$(UNIT_BASE))"; \
 	  $(SLOT) bun test $(call JUNIT,unit-changed) $(TEST_TIMEOUT) --changed=$(UNIT_BASE) --pass-with-no-tests ./apps ./packages ./scripts ./integrations; fi
 
-# SHARD=1/3 runs the first of three shards of the scenarios (CI's matrix); unset, all of them.
+# SHARD=1/4 runs the first of four shards of the scenarios (CI's matrix); unset, all of them.
 test-scenarios:
 	@echo "==> scenarios (bun test tests$(if $(SHARD), --shard=$(SHARD)))"
 	@$(SLOT) bun test $(call JUNIT,scenarios) $(TEST_TIMEOUT) $(if $(SHARD),--shard=$(SHARD)) ./tests
