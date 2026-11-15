@@ -9,7 +9,7 @@ import type { IntakeEnv } from './adapters/intake/settings.ts'
 import { infraTopology, loadInfra } from './adapters/intake/topology.ts'
 import type { ProjectSignals, TriageWorkflow } from './domains/intake/ports.ts'
 import type { IntakeApi } from './api/intake.ts'
-import { createIntake, type IntakeWrites } from './app/intake.ts'
+import { createIntake, DEFAULT_INTAKE_SETTINGS, type IntakeWrites } from './app/intake.ts'
 import type { Clock } from './kernel/clock.ts'
 import type { IdSource } from './kernel/ids.ts'
 import { postgresOpenIssues } from './read/open-issues.ts'
@@ -60,6 +60,7 @@ export async function composeIntake(input: {
       unroutedGraceMs: 10 * 60_000,
       homeRepo: env.homeRepo,
       unroutedHeldMs: 6 * 3_600_000,
+      triageWaitMs: DEFAULT_INTAKE_SETTINGS.triageWaitMs,
     },
   })
 

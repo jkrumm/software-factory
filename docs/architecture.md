@@ -113,7 +113,7 @@ through `receive` in `app/intake.ts`; the answer is a triage outcome (`docs/lang
   open incident already settles it, the `factory-triage` workflow sees the repo's open Issues and those closed in the last
   day (outcome, reason) and answers amend `<open Issue>`, "already settled: `<closed Issue>`" or neither (file anew): a
   settled answer acks `dropped`/`settled` and stores the signal dismissed by the judge, for a person's request and for a
-  `down` alert alike. The workflow side (agent-workflows `factory-triage`) must learn `settled`; until it does the extra
+  `down` alert alike. The request waits for the workflow at most `triageWaitMs` (8 s, under the client's 10 s): later, or never (the line is down), it files anew and the run goes on unwatched; the same signal sent again rejoins it by its key. `POST /signals` therefore answers from the local database whatever the network does. The workflow side (agent-workflows `factory-triage`) must learn `settled`; until it does the extra
   input is ignored and `settled` never comes back, which is today's behaviour. A `down` waits out a heal grace as `held`: an `up` inside it makes it `healed`, and a project's heal rule runs
   `make restart` in its repo (`adapters/intake/runbook.ts`, outside any transaction) before an Issue is filed.
 - **Quarantine.** An outside signal is held and reaches a lead only when the owner or the Judge promotes it, fenced as data.

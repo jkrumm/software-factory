@@ -93,6 +93,11 @@ export interface IntakeSettings {
   homeRepo: string | null
   /** a monitor that stays down this long with no route and no place is held for the owner */
   unroutedHeldMs: number
+  /**
+   * How long a request waits for the triage workflow before it files anew. A hang guard on the request, not a budget on the
+   * run: the run goes on, and the same signal sent again rejoins it by its key. Below the client's 10 s transport timeout.
+   */
+  triageWaitMs: number
 }
 
 export const DEFAULT_INTAKE_SETTINGS: IntakeSettings = {
@@ -101,6 +106,7 @@ export const DEFAULT_INTAKE_SETTINGS: IntakeSettings = {
   unroutedGraceMs: 10 * 60_000,
   homeRepo: null,
   unroutedHeldMs: 6 * 3_600_000,
+  triageWaitMs: 8_000,
 }
 
 export interface IntakeDeps extends WriteDeps {
@@ -679,6 +685,19 @@ export function createIntake(deps: IntakeDeps) {
     return issue !== null && (isOpen(issue) || recent)
   }
 
+  /** The answer, or null when it is not there after `ms`: the call is not cancelled, only no longer waited for. */
+  async function withinWait<T>(call: Promise<T>, ms: number): Promise<T | null> {
+    let timer: ReturnType<typeof setTimeout> | undefined
+    const late = new Promise<null>((resolve) => {
+      timer = setTimeout(() => resolve(null), ms)
+    })
+    try {
+      return await Promise.race([call, late])
+    } finally {
+      clearTimeout(timer)
+    }
+  }
+
   /** The workflow's call, outside any transaction: the open Issues and those closed in the last day; null when it did not answer. */
   async function askTriage(signal: Signal, open: readonly OpenIssue[]): Promise<Decision | null> {
     const closed = signal.repo
@@ -686,8 +705,8 @@ export function createIntake(deps: IntakeDeps) {
       : ok<ClosedIssue[]>([])
     const settled = closed.ok ? closed.value : []
     if (open.length === 0 && settled.length === 0) return null
-    const asked = await deps.triage.amendOrNew({ signal, candidates: open, settled })
-    return asked.ok ? asked.value : null
+    const asked = await withinWait(deps.triage.amendOrNew({ signal, candidates: open, settled }), settings.triageWaitMs)
+    return asked?.ok ? asked.value : null
   }
 
   /**
