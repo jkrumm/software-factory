@@ -55,8 +55,8 @@ check-static:
 	@bun run --cwd apps/console language:check
 	@echo "==> typecheck e2e (tests/e2e)"
 	@bunx --no-install tsc -p tests/e2e/tsconfig.json --noEmit
-	@echo "==> e2e shard weights cover every e2e file (scripts/e2e-shard.ts --check)"
-	@bun scripts/e2e-shard.ts --check
+	@echo "==> shard weights name no missing test file (scripts/shard.ts --check)"
+	@bun scripts/shard.ts --check
 	@echo "==> boundaries (scripts/boundaries.ts)"
 	@bun scripts/boundaries.ts
 	@echo "==> retired words (scripts/retired-words.ts)"
@@ -102,18 +102,20 @@ test-unit-changed:
 	  echo "==> unit tests of the changed files (bun test --changed=$(UNIT_BASE))"; \
 	  $(SLOT) bun test $(call JUNIT,unit-changed) $(TEST_TIMEOUT) --changed=$(UNIT_BASE) --pass-with-no-tests ./apps ./packages ./scripts ./integrations; fi
 
-# SHARD=1/4 runs the first of four shards of the scenarios (CI's matrix); unset, all of them.
+# SHARD=1/3 runs the files scripts/shard.ts plans for the first of three shards of the scenarios (CI's matrix; seconds per file in
+# tests/scenarios/shard-weights.json); unset, all of them.
 test-scenarios:
-	@echo "==> scenarios (bun test tests$(if $(SHARD), --shard=$(SHARD)))"
-	@$(SLOT) bun test $(call JUNIT,scenarios) $(TEST_TIMEOUT) $(if $(SHARD),--shard=$(SHARD)) ./tests
+	@echo "==> scenarios (bun test tests$(if $(SHARD), shard $(SHARD)))"
+	@$(if $(SHARD),files=$$(bun scripts/shard.ts scenarios $(SHARD)) || exit 1;) \
+	  $(SLOT) bun test $(call JUNIT,scenarios) $(TEST_TIMEOUT) $(if $(SHARD),$$files,./tests)
 
 # The Console is built first (the global setup serves apps/console/dist); `bun test` never collects tests/e2e (*.e2e.ts). Playwright runs under Bun.
-# E2E_SHARD=2/3 runs the files scripts/e2e-shard.ts plans for that shard (seconds per file in tests/e2e/shard-weights.json); unset, all of them.
+# E2E_SHARD=2/3 runs the files scripts/shard.ts plans for that shard (seconds per file in tests/e2e/shard-weights.json); unset, all of them.
 e2e:
 	@echo "==> console build (apps/console/dist)"
 	@bun run --cwd apps/console build
 	@echo "==> e2e (playwright, tests/e2e$(if $(E2E_SHARD), shard $(E2E_SHARD)))"
-	@$(if $(E2E_SHARD),files=$$(bun scripts/e2e-shard.ts $(E2E_SHARD)) || exit 1;) \
+	@$(if $(E2E_SHARD),files=$$(bun scripts/shard.ts e2e $(E2E_SHARD)) || exit 1;) \
 	  $(SLOT) bunx --bun playwright test -c tests/e2e/playwright.config.ts $$files
 
 fmt:

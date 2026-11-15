@@ -55,7 +55,7 @@ export type VariantName = (typeof VARIANTS)[number]['name']
 
 /**
  * The screenshots of one viewport and theme. One file per variant (`screenshots-<variant>.e2e.ts`) calls this, so the
- * variants are units the shard planner (`scripts/e2e-shard.ts`) can spread over the CI shards.
+ * variants are units the shard planner (`scripts/shard.ts`) can spread over the CI shards.
  */
 export function screenshotSuite(variantName: VariantName) {
   const variant = VARIANTS.find((candidate) => candidate.name === variantName)
