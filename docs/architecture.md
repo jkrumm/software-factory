@@ -19,7 +19,7 @@ packages/
 tests/
   scenarios/  use cases run against a real server and Postgres with fake hc and agw: the acceptance suite
 config/       roles.json (tier and effort per role), infra.json (the Beszel thresholds)
-scripts/      deploy, verify, launch, env-file, the boundary and retired-word checks, the cutover tools
+scripts/      deploy, verify, launch, env-file, the boundary and retired-word checks
 deploy/       LaunchAgent templates
 ```
 
