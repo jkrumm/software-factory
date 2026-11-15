@@ -68,6 +68,7 @@ beforeAll(async () => {
       loops: () => [],
       blockedStreak: 3,
       mainCheckouts: () => [],
+      macbookProbe: true,
       streamPollMs: 20,
     }),
   })

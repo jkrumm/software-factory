@@ -946,6 +946,7 @@ async function main(): Promise<void> {
       loops: () => runner.view(),
       blockedStreak: loopSettings.blockedChecks,
       mainCheckouts: () => mainCheckoutLines.current(),
+      macbookProbe: loopSettings.askHumanHost !== null,
       queueReasons,
       uptime: () => uptime.snapshot(),
     }),
