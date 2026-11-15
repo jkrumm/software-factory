@@ -446,7 +446,7 @@ closes `turned_back` by `owner` or `orchestrator`. It is the one way the orchest
 
 **The desk pass** (`desk` loop, every 15 minutes it asks whether it is due; `app/loops/desk.ts`, `domains/checkpoints/desk.ts`). The owner's return is an
 event: the `GET /v1/since` read that starts a new visit (two hours or more after the last, `console_visit.returned_at`) starts the pass at once (`ReadModelDeps.onReturn`),
-and so does the MacBook answering the ask-human ssh probe (the reachability verb of the mini's MacBook key; its ssh alias is `FACTORY_ASK_HUMAN_HOST`, unset: no probe) after a push found it unreachable (`desk_presence`: the push's exit 69 marks it down, the tick's probe
+and so does the MacBook answering the ask-human ssh probe (the reachability verb of the mini's MacBook key; its ssh alias is `FACTORY_ASK_HUMAN_HOST`, unset: no probe, and `read health` carries a `macbook-probe` line while an open Errand has a MacBook command: the host needs that one `FACTORY_ASK_HUMAN_HOST=<the MacBook's ssh alias, as in the mini's ssh config>` line in `~/.config/factory/env`, then `FACTORY_DEPLOY_FORCE=1 make deploy`, since a settings change needs a restart; the alias is a private value and never in a tracked file) after a push found it unreachable (`desk_presence`: the push's exit 69 marks it down, the tick's probe
 marks it back, which counts as a return) and the Console's button "Push what waits to my MacBook" (`POST /v1/desk/push`, `factory desk push`, owner and orchestrator; it answers at once and
 the pass runs with `force`). The pass is due on a return, on the button, when it never ran, and in any case every 6 hours. One pass over every open Errand, an Issue's and a request: each `check` runs (30 a pass) and an Errand
 whose check exits 1..125 closes `not_needed` by `check`, telling its lead with `errand_done` (`resolved`); the rest that reached the owner are screened again (`rescreenErrand`: the same
@@ -509,10 +509,14 @@ identity. So Approve is a recorded consent of the same strength as `errand done`
 gives an agent nothing it lacks: the command runs as the user the agent already is. What the MacBook dialog had that Approve does
 not is a click on another machine; the Decision on this Issue (decision_01a1d9e5) put that trade to the owner, and reverting is one
 condition in `pushQueue` plus the route.
-**Repeats join.** A lead's Errand, or a request, with the same command or the same check as an open Errand does not raise another:
-the Issue waits on the open one (`errand_raised` with its id, a row in `errand_joins`), the owner is paged once, and the Errand's
+**Repeats join.** A lead's Errand, or a request, that is the same need as an open Errand does not raise another. The same need is
+the same exact command or check, or the same `match_key` (`domains/checkpoints/match.ts`, stored when it is raised): the lead's
+own `needKey` in the repo (`--body '{"needKey":"census-ua-contact",...}'`), else the command with its whitespace and a trailing
+`;` normalised (the same wherever it is raised), else the one-line summary lowercased and stripped of punctuation, in the same
+repo (a request's repo is its asker). Errands raised before the column existed carry none and join by exact command or check
+only. The Issue waits on the open one (`errand_raised` with its id, a row in `errand_joins`), the owner is paged once, and the Errand's
 end (`errand_done`, a turn-back, a check that closes it, a retire) is written to every joined Issue in the same transaction
-(`eachJoined`). A request under a key that an open one holds replaces it as before, and joins only when its command is the same.
+(`eachJoined`); Needs you names the joined Issues on the Errand (`joinedIssues`, "also awaited by Issues 1333 and 1335"). A request under a key that an open one holds replaces it as before, and joins only when its command is the same.
 **A command that fails twice ends** (`MAX_RUN_TRIES`, `retireFailed`): a pushed or approved run that came back unsuccessful the
 second time is not offered a third time. The Errand closes `turned_back` by `loop`; its lead (and every joined lead) hears
 `errand_done` with `turnedAway` saying the command failed twice and must be corrected, a request's asker reads the same words as

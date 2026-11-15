@@ -1,6 +1,7 @@
 import { createHash } from 'node:crypto'
 import type { LoopView, ReadAccountQuota, ReadHealthLine } from '@software-factory/contract'
 import type { SQL } from 'bun'
+import * as z from 'zod'
 import type { MainCheckoutLine } from '../domains/loops/checkout.ts'
 import { readRank } from './accounts.ts'
 import { LINE_TEXT_MAX } from './asks.ts'
@@ -16,6 +17,10 @@ export interface LineSources {
   blockedStreak: number
   /** the main checkouts the steward found off their branch or dirty while a lead was live */
   mainCheckouts: () => MainCheckoutLine[]
+  /** the MacBook's ssh alias is set (`FACTORY_ASK_HUMAN_HOST`): the desk pass can tell that he is back after a push found it down */
+  macbookProbe: boolean
+  /** a command that came back unsuccessful this many times is not pushed again (`MAX_RUN_TRIES`, passed in: `read/` imports no domain code) */
+  maxRunTries: number
 }
 
 const shortHash = (text: string): string => createHash('sha256').update(text).digest('hex').slice(0, 12)
@@ -147,5 +152,30 @@ export async function readHealthLines(
       }),
     )
   }
+  const waiting = sources.macbookProbe ? 0 : await macbookErrandsOpen(sql, sources.maxRunTries)
+  if (waiting > 0) {
+    lines.push(
+      line({
+        id: 'macbook-probe',
+        kind: 'macbook-probe',
+        text: `The MacBook return probe is off (FACTORY_ASK_HUMAN_HOST is not set in the host's settings file) while ${waiting} Errand${waiting === 1 ? '' : 's'} with a MacBook command wait: a push that found it unreachable is retried only at his Console visit, his button or the 6-hour pass`,
+      }),
+    )
+  }
   return lines
+}
+
+/**
+ * Open Errands at the owner that the desk pass pushes to his MacBook when it knows he is back (`pushQueue`): a command, host
+ * `macbook`, need `secret` or `hands` (an approval is run on the mini, a place only on his button), no run going and fewer
+ * than `maxRunTries` failed ones.
+ */
+async function macbookErrandsOpen(sql: SQL, maxRunTries: number): Promise<number> {
+  const [row] = await sql`
+    SELECT count(*)::int AS n
+    FROM factory.errands e LEFT JOIN factory.issues i ON i.id = e.issue_id
+    WHERE e.done_at IS NULL AND e.reached_owner_at IS NOT NULL AND e.command IS NOT NULL AND e.host = 'macbook'
+      AND e.need IN ('secret', 'hands') AND e.run_status IS DISTINCT FROM 'running' AND e.run_attempts < ${maxRunTries}
+      AND (e.issue_id IS NULL OR i.state <> 'closed')`
+  return z.object({ n: z.number().int() }).parse(row).n
 }

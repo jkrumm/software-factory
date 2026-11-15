@@ -759,6 +759,47 @@ describe('an Errand that needs only his yes', () => {
     expect(await issueRow(second)).toMatchObject({ state: 'working' })
   })
 
+  test('the same ask in the same repo joins, even with no command or check, and another repo does not', async () => {
+    const first = await workingIssue('/w/work-repo-1')
+    const same = await workingIssue('/w/work-repo-1')
+    const other = await workingIssue('/w/work-repo-2')
+    const raised = await raise(first, { summary: 'Set the census contact in the portal.' })
+    expect(raised.result).toBe('applied')
+    const joined = await raise(same, { summary: 'set the census contact in the Portal' })
+    expect(joined).toMatchObject({ result: 'joined', errand: { id: raised.errand.id } })
+    expect(await issueRow(same)).toMatchObject({ state: 'waiting', wait_reason: 'errand' })
+    expect(await raise(other, { summary: 'Set the census contact in the portal' })).toMatchObject({ result: 'applied' })
+    expect((await db.sql`SELECT count(*)::int AS n FROM factory.errands`)[0]?.n).toBe(2)
+  })
+
+  test("a lead's need key joins another wording of the need, and a command differing in whitespace joins", async () => {
+    const first = await workingIssue('/w/work-repo-1')
+    const second = await workingIssue('/w/work-repo-1')
+    const third = await workingIssue('/w/work-repo-1')
+    const raised = await raise(first, { summary: 'Reseal the cache', needKey: 'reseal-cache' })
+    const keyed = await raise(second, { summary: 'The secrets cache lacks a ref', needKey: 'reseal-cache' })
+    expect(keyed).toMatchObject({ result: 'joined', errand: { id: raised.errand.id } })
+    const command = await raise(third, { summary: 'Reseal', cmd: 'make   secrets-seed ;' })
+    expect(command.result).toBe('applied')
+    const spaced = await raise(await workingIssue('/w/work-repo-2'), { summary: 'Reseal it', cmd: 'make secrets-seed' })
+    expect(spaced).toMatchObject({ result: 'joined', errand: { id: command.errand.id } })
+  })
+
+  test('Needs you names the Issues that joined, and one answer ends every wait', async () => {
+    const first = await workingIssue('/w/work-repo-1')
+    const second = await workingIssue('/w/work-repo-1')
+    const third = await workingIssue('/w/work-repo-1')
+    const raised = await raise(first, { summary: 'Set the census contact' })
+    value(await screenErrands(deps))
+    await raise(second, { summary: 'Set the census contact' })
+    await raise(third, { summary: 'set the census contact!' })
+    expect((await readNeeds(db.sql, clock.now())).items).toMatchObject([
+      { id: raised.errand.id, joined: 2, joinedIssues: [second, third] },
+    ])
+    value(await finishErrand(deps, { errandId: raised.errand.id, note: 'set' }))
+    for (const id of [first, second, third]) expect(await issueRow(id)).toMatchObject({ state: 'working' })
+  })
+
   test('a request under the same key with another command replaces the open one; the same command joins', async () => {
     const ask = (command: string) =>
       requestErrand(deps, { raw: { source: 'test-agent', text: 'Release the commit', command, key: 'gate' } })
@@ -767,6 +808,16 @@ describe('an Errand that needs only his yes', () => {
     const corrected = value(await ask("ssh mini 'make -C ~/gate deploy-release SHA=feedbeef'"))
     expect(corrected).toMatchObject({ result: 'applied', superseded: [first.errand.id] })
     expect(value(await ask("ssh mini 'make -C ~/gate deploy-release SHA=feedbeef'")).result).toBe('replayed')
+  })
+
+  test('a command-less request under the same key with another detail or check replaces the open one', async () => {
+    const ask = (text: string, check?: string) =>
+      requestErrand(deps, { raw: { source: 'test-agent', text, key: 'reseal', ...(check ? { check } : {}) } })
+    const first = value(await ask('Reseal the cache\nold detail'))
+    expect(first.result).toBe('applied')
+    const changed = value(await ask('Reseal the cache\nnew detail', 'gate-pending'))
+    expect(changed).toMatchObject({ result: 'applied', superseded: [first.errand.id] })
+    expect(await errandRow(changed.errand.id)).toMatchObject({ check_command: 'gate-pending' })
   })
 
   test('a check that cannot find its command is broken: the owner and the lead are told, and his done closes it', async () => {

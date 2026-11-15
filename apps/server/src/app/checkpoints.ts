@@ -29,6 +29,7 @@ import {
   refuseHostClass,
   refuseQueuedAsk,
 } from '../domains/checkpoints/errand.ts'
+import { matchKeyOf } from '../domains/checkpoints/match.ts'
 import { failedTwiceNote, MAX_RUN_TRIES, needOf } from '../domains/checkpoints/need.ts'
 import {
   brokenLine,
@@ -999,7 +1000,7 @@ export function listArtifacts(
 // Errands
 
 export interface ErrandWritten {
-  /** `joined`: an open Errand has the same command or check, and the Issue waits on it instead of raising its own */
+  /** `joined`: an open Errand is the same need (command, check, need key or ask), and the Issue waits on it instead of raising its own */
   result: 'applied' | 'replayed' | 'joined'
   errand: ErrandRecord
   issue: IssueMove | null
@@ -1039,8 +1040,9 @@ async function raiseChecked(
     const earlier = await checkpoints.joinedErrand(errandKey)
     if (earlier) return ok<ErrandWritten>({ result: 'replayed', errand: earlier, issue: moveOf(issue) })
 
-    // the same command or the same check as an open Errand: the Issue waits on that one, and the owner is paged once
-    const same = await checkpoints.openMatching({ command: read.command, check: read.check })
+    // the same command, check, need key or ask as an open Errand: the Issue waits on that one, and the owner is paged once
+    const matchKey = matchKeyOf({ repo: issue.repo, needKey: read.needKey, command: read.command, summary })
+    const same = await checkpoints.openMatching({ command: read.command, check: read.check, matchKey })
     if (same) {
       if (same.issueId === input.issueId)
         return ok<ErrandWritten>({ result: 'replayed', errand: same, issue: moveOf(issue) })
@@ -1124,6 +1126,7 @@ async function raiseChecked(
       pushedAt: null,
       need: null,
       approvedAt: null,
+      matchKey,
     })
     if (!stored) return err({ kind: 'version_conflict', issueId: input.issueId, expected: issue.version })
     const errand = await checkpoints.errand(id)
@@ -1341,7 +1344,7 @@ export function turnBackErrand(
 }
 
 export interface ErrandRequested {
-  /** `joined`: an open Errand has the same command or check; this request is that Errand, and nobody is paged again */
+  /** `joined`: an open Errand is the same need (command, check or ask); this request is that Errand, and nobody is paged again */
   result: 'applied' | 'replayed' | 'joined'
   errand: ErrandRecord
   /** the open requests this one replaced (same key) */
@@ -1371,11 +1374,22 @@ export function requestErrand(
     const existing = await checkpoints.errandByKey(sameKey)
     if (existing && !existing.doneAt)
       return ok<ErrandRequested>({ result: 'replayed', errand: existing, superseded: [] })
-    // the same command or the same check as an open Errand, an Issue's or a request: it is that Errand. The one exception is a
-    // newer request under the same key with another command: that is the corrected one, and replaces the older below.
-    const open = await checkpoints.openMatching({ command: request.command, check: request.check })
+    // the same command, check or ask as an open Errand, an Issue's or a request: it is that Errand. The one exception is a
+    // newer request under the same key that is not the same request (another command, or with no command another detail or
+    // check): that is the corrected one, and replaces the older below.
+    const matchKey = matchKeyOf({
+      repo: request.source,
+      needKey: null,
+      command: request.command,
+      summary: request.summary,
+    })
+    const open = await checkpoints.openMatching({ command: request.command, check: request.check, matchKey })
     const corrected =
-      open !== null && request.key !== null && open.requestKey === request.key && open.command !== request.command
+      open !== null &&
+      request.key !== null &&
+      open.requestKey === request.key &&
+      (open.command !== request.command ||
+        (request.command === null && (open.detail !== request.detail || open.checkCommand !== request.check)))
     if (open && !corrected) return ok<ErrandRequested>({ result: 'joined', errand: open, superseded: [] })
     const id = deps.ids.next('errand')
     // asked again after the first was closed: a new Errand, under a key of its own
@@ -1433,6 +1447,7 @@ export function requestErrand(
         ? null
         : needOf({ summary: request.summary, detail: request.detail, command: request.command, host: request.host }),
       approvedAt: null,
+      matchKey,
     })
     if (!stored) return err({ kind: 'invalid', detail: `the request ${errandKey} is stored already` })
     const errand = await checkpoints.errand(id)

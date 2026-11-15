@@ -49,7 +49,7 @@ import { loadNeedsSettings } from './read/needs-settings.ts'
 import { availableParallelism, loadavg } from 'node:os'
 import { join } from 'node:path'
 import { APPROVED_RUN_HANG_GUARD_MS } from './app/checkpoints-approve.ts'
-import { endRequest, tellCheckBroken } from './app/checkpoints-errands.ts'
+import { endRequest, MAX_RUN_TRIES, tellCheckBroken } from './app/checkpoints-errands.ts'
 import { syncPlaceErrands, syncSummary } from './app/checkpoints-sync.ts'
 import { checkpointUses } from './app/checkpoints-uses.ts'
 import { createLoopRunner, type LoopRunner, type LoopSpec } from './app/loops/runner.ts'
@@ -946,6 +946,8 @@ async function main(): Promise<void> {
       loops: () => runner.view(),
       blockedStreak: loopSettings.blockedChecks,
       mainCheckouts: () => mainCheckoutLines.current(),
+      macbookProbe: loopSettings.askHumanHost !== null,
+      maxRunTries: MAX_RUN_TRIES,
       queueReasons,
       uptime: () => uptime.snapshot(),
     }),

@@ -1918,6 +1918,7 @@ export const OPERATIONS: readonly Operation[] = [
       { name: 'check', flag: 'check', kind: 'string', repeatable: false, required: false, untyped: false },
       { name: 'cmd', flag: 'cmd', kind: 'string', repeatable: false, required: false, untyped: false },
       { name: 'host', flag: 'host', kind: 'string', repeatable: false, required: false, untyped: false },
+      { name: 'needKey', flag: 'need-key', kind: 'string', repeatable: false, required: false, untyped: false },
       { name: 'call', flag: 'call', kind: 'string', repeatable: false, required: false, untyped: false },
     ],
     args: [],

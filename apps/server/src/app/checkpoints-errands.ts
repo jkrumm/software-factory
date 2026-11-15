@@ -28,6 +28,9 @@ import {
 import { PASS_LIMIT, type SettleDeps } from './checkpoints-settle.ts'
 import { recordIn } from './issues.ts'
 
+/** the composition passes it to the health lines, which import no domain code */
+export { MAX_RUN_TRIES }
+
 export interface ErrandScreened {
   errand: string
   /** `held`: a call failed and is tried again later; `dropped`: it changed under the call */

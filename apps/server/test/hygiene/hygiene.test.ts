@@ -191,6 +191,23 @@ describe('withCheckout', () => {
 })
 
 describe('check probe', () => {
+  // the probe runs `make check` in a throwaway repo: a parent make's flags (`MAKEFLAGS` without --no-print-directory, `MAKELEVEL`)
+  // would add "Entering/Leaving directory" lines to its output, so the tail depends on which job runs the test
+  const MAKE_ENV = ['MAKEFLAGS', 'MFLAGS', 'MAKELEVEL', 'MAKEOVERRIDES']
+  const saved: Record<string, string | undefined> = {}
+  beforeAll(() => {
+    for (const name of MAKE_ENV) {
+      saved[name] = process.env[name]
+      delete process.env[name]
+    }
+  })
+  afterAll(() => {
+    for (const name of MAKE_ENV) {
+      if (saved[name] === undefined) delete process.env[name]
+      else process.env[name] = saved[name]
+    }
+  })
+
   test('a project that says its check needs a lab gets no check run and no finding, and the sweep names why', async () => {
     const marker = join(base, `ran-${++counter}`)
     const makefile = `check:\n\t@touch ${marker}; exit 1\n`

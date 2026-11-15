@@ -293,6 +293,11 @@ export const ErrandBody = z
     cmd: z.string().optional(),
     /** where the hands must be (macbook, iphone, portal or any); with `--cmd` and no host, the MacBook */
     host: z.enum(['macbook', 'iphone', 'portal', 'any']).optional(),
+    /**
+     * your own name for the need (a short lowercase name, e.g. `census-ua-contact`): another open Errand of this repo raised under
+     * the same name is the same Errand, and you wait on that one. Without it the same command or the same one-line ask joins.
+     */
+    needKey: z.string().optional(),
     /** makes a repeated call one event, as on `ship` and `defer` */
     call: z.string().trim().min(1).max(128).optional(),
   })
@@ -407,7 +412,7 @@ export const ErrandView = z.object({
 /** What `factory errand request` answers: the Errand and the older open requests it replaced. */
 export const ErrandRequestReply = z
   .object({
-    /** `joined`: an open Errand has the same command or check; this request is that Errand and the owner is not paged again */
+    /** `joined`: an open Errand is the same need (command, check or ask); this request is that Errand and the owner is not paged again */
     result: z.enum(['applied', 'replayed', 'joined']),
     errand: ErrandView,
     superseded: z.array(z.string()),
@@ -525,7 +530,7 @@ export type SpecScreenPreview = z.infer<typeof SpecScreenPreview>
 
 export const ErrandReply = z
   .object({
-    /** `joined`: an open Errand has the same command or check, and the Issue waits on that one */
+    /** `joined`: an open Errand is the same need (command, check, need key or ask), and the Issue waits on that one */
     result: z.enum(['applied', 'replayed', 'joined']),
     errand: ErrandView,
     issue: IssueMove.nullable(),

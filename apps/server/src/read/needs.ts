@@ -112,6 +112,7 @@ const ErrandRow = z.object({
   check_note: z.string().nullable(),
   need: z.enum(ERRAND_NEEDS).nullable(),
   joined: z.number().int(),
+  joined_issues: z.array(z.string()),
 })
 
 /** What the last attempt at an Errand said, newest first: a run that came back unsuccessful, or a check that overruled a done. */
@@ -202,6 +203,7 @@ export async function readNeeds(sql: SQL, now: Date, options: { longWaitMs?: num
     SELECT r.id, r.issue_id, i.repo, r.summary, r.detail, r.raised_at, r.screen_note, r.source, r.command, r.host,
       r.run_status, r.run_exit, r.run_at, r.run_attempts, r.run_head, r.check_at, r.check_note, r.need,
       (SELECT count(*)::int FROM factory.errand_joins j WHERE j.errand_id = r.id) AS joined,
+      ARRAY(SELECT j.issue_id FROM factory.errand_joins j WHERE j.errand_id = r.id ORDER BY j.joined_at, j.issue_id) AS joined_issues,
       (SELECT f.payload->>'origin' FROM factory.issue_events f WHERE f.issue_id = r.issue_id AND f.kind = 'filed' AND f.version = 1) AS origin
     FROM factory.errands r LEFT JOIN factory.issues i ON i.id = r.issue_id
     WHERE r.done_at IS NULL AND r.reached_owner_at IS NOT NULL AND (r.issue_id IS NULL OR i.state <> 'closed')
@@ -241,6 +243,7 @@ export async function readNeeds(sql: SQL, now: Date, options: { longWaitMs?: num
         tried: null,
         need: null,
         joined: 0,
+        joinedIssues: [],
         wait: null,
         work: isWorkRepo(row.repo, open),
       }
@@ -268,6 +271,7 @@ export async function readNeeds(sql: SQL, now: Date, options: { longWaitMs?: num
         tried: null,
         need: null,
         joined: 0,
+        joinedIssues: [],
         wait: null,
         work: isWorkRepo(row.repo, open),
       }
@@ -295,6 +299,7 @@ export async function readNeeds(sql: SQL, now: Date, options: { longWaitMs?: num
         tried: triedOf(row),
         need: row.need,
         joined: row.joined,
+        joinedIssues: row.joined_issues,
         wait: null,
         // a request no Issue raised names no repo, so it may be about a work repo: the read token never sees its words
         work: row.repo === null || isWorkRepo(row.repo, open),
@@ -322,6 +327,7 @@ export async function readNeeds(sql: SQL, now: Date, options: { longWaitMs?: num
         tried: null,
         need: null,
         joined: 0,
+        joinedIssues: [],
         wait: null,
         work: isWorkRepo(row.repo, open),
       }
@@ -346,6 +352,7 @@ export async function readNeeds(sql: SQL, now: Date, options: { longWaitMs?: num
       tried: null,
       need: null,
       joined: 0,
+      joinedIssues: [],
       wait: { reason: 'timer', until: wait.until, held: wait.held },
       work: isWorkRepo(wait.repo, open),
     })),
