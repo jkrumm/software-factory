@@ -225,6 +225,15 @@ export class HcTerminals implements Terminals {
     try {
       const terminal = await this.rpc('terminal.get', { terminal: input.terminal }, Terminal, budget)
       if (terminal.state !== 'live') return err(portError('gone', `${input.terminal} has finished; nothing was typed`))
+      // A terminal the core brought back as a login shell has no agent to hear it: text typed there runs as a command.
+      if (terminal.argv[0] !== this.claude()) {
+        return err(
+          portError(
+            'refused',
+            `${input.terminal} runs ${terminal.argv[0] ?? 'no program'}, not the agent; nothing was typed`,
+          ),
+        )
+      }
       const status = terminal.status?.state
       // Only an agent at its prompt takes text: a working one queues it (typed anyway when forced), a blocked one reads it as the answer to its dialog.
       const forced = input.force && status === 'working'

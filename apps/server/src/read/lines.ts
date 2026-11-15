@@ -108,6 +108,27 @@ export async function readHealthLines(
       }),
     )
   }
+  // A working Issue whose lead has no agent in its terminal (a host restart brought it back as a shell): it holds its repo's claim and nobody works.
+  const stranded = await sql`
+    SELECT l.issue_id, l.at FROM factory.lead_losses l JOIN factory.issues i ON i.id = l.issue_id
+    WHERE l.closed_at IS NULL AND i.state = 'working' ORDER BY l.at`
+  const strandedBriefs = await loadBriefs(
+    sql,
+    (stranded as { issue_id: string }[]).map((row) => row.issue_id),
+  )
+  for (const row of stranded as { issue_id: string; at: Date }[]) {
+    const brief = strandedBriefs.get(row.issue_id)
+    lines.push(
+      line({
+        id: `lead-no-agent:${row.issue_id}`,
+        kind: 'lead-no-agent',
+        since: new Date(row.at).toISOString(),
+        repo: brief?.repo ?? null,
+        visible: brief?.visible ?? false,
+        text: `The lead of Issue ${issueNumberOf(row.issue_id)} has no agent in its terminal since ${new Date(row.at).toISOString().slice(0, 16)}Z; its session is being started again`,
+      }),
+    )
+  }
   const checkouts = sources.mainCheckouts()
   const checkoutBriefs = await loadBriefs(
     sql,

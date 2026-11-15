@@ -238,6 +238,26 @@ export function postgresLeadStore(tx: SQL): LeadStore {
       return rows.map(attemptOf)
     },
 
+    async markAgentLost(issue, attempt, at) {
+      await tx`
+        INSERT INTO factory.lead_losses (issue_id, attempt, at) VALUES (${issue}, ${attempt}, ${at})
+        ON CONFLICT DO NOTHING`
+    },
+
+    async markAgentFound(issue, attempt, at) {
+      await tx`
+        UPDATE factory.lead_losses SET closed_at = ${at}
+        WHERE issue_id = ${issue} AND attempt = ${attempt} AND closed_at IS NULL`
+    },
+
+    async openLosses() {
+      const rows: unknown[] = await tx`SELECT issue_id, attempt FROM factory.lead_losses WHERE closed_at IS NULL`
+      return rows.map((raw) => {
+        const row = z.object({ issue_id: z.string(), attempt: z.number().int() }).parse(raw)
+        return { issueId: row.issue_id as IssueId, attempt: row.attempt }
+      })
+    },
+
     async appendHook({ issue, attempt, session, fact, receivedAt }) {
       const rows: unknown[] = await tx`
         INSERT INTO factory.lead_hook_events (key, session, issue_id, attempt, kind, at, received_at, payload)

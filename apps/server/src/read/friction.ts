@@ -137,8 +137,13 @@ export async function readFriction(sql: SQL, options: { now: Date; days: number 
     'lead_gone',
     'Leads that were lost',
     await one(sql`
-      SELECT count(*) AS n FROM factory.issue_events
-      WHERE kind = 'lead_gone' AND result = 'applied' AND at >= ${w.from} AND at < ${w.to}`),
+      SELECT (SELECT count(*) FROM factory.issue_events
+        WHERE kind = 'lead_gone' AND result = 'applied' AND at >= ${w.from} AND at < ${w.to})
+        -- a lead that lost its agent to a host restart is lost too, whether or not its session started again; one that
+        -- then went the lost path is the event above
+        + (SELECT count(*) FROM factory.lead_losses l WHERE l.at >= ${w.from} AND l.at < ${w.to}
+          AND NOT EXISTS (SELECT 1 FROM factory.issue_events e WHERE e.issue_id = l.issue_id AND e.kind = 'lead_gone'
+            AND e.result = 'applied' AND e.payload->>'attempt' = l.attempt::text)) AS n`),
   )
 
   // An edge incident (leads that hit transient API errors together) is recorded once with its leads and window; the factory

@@ -370,6 +370,12 @@ export interface LeadStore {
   reviveFailed(issue: IssueId, attempt: number): Promise<number>
   /** attempts with a terminal that are not marked gone: the ones to look at */
   followed(): Promise<LeadAttempt[]>
+  /** the lead's terminal runs no agent: a loss is opened (one open at a time, a second call keeps the first) */
+  markAgentLost(issue: IssueId, attempt: number, at: Date): Promise<void>
+  /** the lead's agent runs again: the open loss, if any, is closed */
+  markAgentFound(issue: IssueId, attempt: number, at: Date): Promise<void>
+  /** the attempts whose loss is open */
+  openLosses(): Promise<{ issueId: IssueId; attempt: number }[]>
 
   /** false when the key is stored already: a replay */
   appendHook(input: {
