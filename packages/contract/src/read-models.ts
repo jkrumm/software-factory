@@ -779,6 +779,31 @@ export const CapacityDay = z
   })
   .meta({ id: 'CapacityDay' })
 
+/** What the waits for a test slot waited for: per reason (a wait that spent time under it) the count and the ms spent under it. */
+export const SlotWaitReason = z
+  .strictObject({
+    /** `slots` every slot taken, `memory` the fit, `swap` swap growing, `load` the load gate, `unsized` no learned size or free-memory reading, `line` the waiters ahead */
+    reason: z.enum(['slots', 'memory', 'swap', 'load', 'unsized', 'line']),
+    waits: z.number().int(),
+    totalMs: z.number(),
+    p50Ms: z.number().nullable(),
+    p90Ms: z.number().nullable(),
+    maxMs: z.number().nullable(),
+  })
+  .meta({ id: 'SlotWaitReason' })
+
+export const SlotWaitRepo = z
+  .strictObject({
+    repo: z.string(),
+    waits: z.number().int(),
+    totalMs: z.number(),
+    p50Ms: z.number().nullable(),
+    p90Ms: z.number().nullable(),
+    maxMs: z.number().nullable(),
+    byReason: z.array(SlotWaitReason),
+  })
+  .meta({ id: 'SlotWaitRepo' })
+
 export const CapacityTotal = z
   .strictObject({ total: z.number(), perDay: z.array(CapacityDay) })
   .meta({ id: 'CapacityTotal' })
@@ -905,6 +930,9 @@ export const CapacityLoopModel = z
       p50Ms: z.number().nullable(),
       p90Ms: z.number().nullable(),
       perDayP50: z.array(CapacityDay),
+      /** the waits that were granted or given up (`factory.slot_waits`; only those after the table existed), split by what each waited for: largest total first */
+      byReason: z.array(SlotWaitReason),
+      byRepo: z.array(SlotWaitRepo),
     }),
     /** MiB swapped out per day: the minute samples' swapouts (each scaled to 300 s) over five */
     swapoutMib: CapacityTotal,

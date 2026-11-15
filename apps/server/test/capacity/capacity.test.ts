@@ -725,6 +725,8 @@ describe('test slots', () => {
         cwd: null,
         passedAt: null,
         passedBy: null,
+        whyKind: null,
+        waitSplit: {},
       }))
     const cases: { name: string; holders: number; fit: Partial<SlotFit>; granted: boolean; why?: string }[] = [
       { name: 'a lone step is always granted', holders: 0, fit: { freeMib: 100 }, granted: true },
@@ -931,6 +933,61 @@ describe('test slots', () => {
     })
   })
 
+  describe('what a wait waited for', () => {
+    const mem = (peakMib: number): SlotFit => ({
+      peakMib,
+      freeMib: 3072,
+      growthMib: 0,
+      max: 6,
+      loadOk: true,
+      headroomMib: 2048,
+    })
+    test('the time between two calls counts to the reason of the first, and the grant hands the split over', () => {
+      let rows = call([], 'h', now, 2, { ...open, max: 6 }).rows
+      const input = (fit: SlotFit) => ({ id: 'w', name: 'w', slots: 1, runMs: 1_800_000, fit })
+      // 1 s of the line on memory, then 3 s on the load gate, then it fits
+      const first = touchSlots(rows, input(mem(5120)), at(0))
+      expect(first.rows.find((r) => r.id === 'w')).toMatchObject({ whyKind: 'memory', waitSplit: {} })
+      const second = touchSlots(first.rows, input({ ...mem(5120), loadOk: false }), at(1000))
+      expect(second.rows.find((r) => r.id === 'w')).toMatchObject({ whyKind: 'load', waitSplit: { memory: 1000 } })
+      const third = touchSlots(second.rows, input(mem(300)), at(4000))
+      expect(third.view.granted).toBe(true)
+      expect(third.waited).toEqual({ ms: 4000, split: { memory: 1000, load: 3000 } })
+      expect(third.rows.find((r) => r.id === 'w')).toMatchObject({ whyKind: null })
+      rows = third.rows
+      // a renewal is no wait; nor is a grant at the first call
+      expect(touchSlots(rows, input(mem(300)), at(5000)).waited).toBeUndefined()
+      expect(call([], 'solo', now).waited).toBeUndefined()
+    })
+
+    test('the line, the slot count and the unsized step are told apart', () => {
+      let rows = call([], 'h', now, 2, { ...open, max: 6 }).rows
+      rows = call(rows, 'h2', now, 2, { ...open, max: 6 }).rows
+      const busy = touchSlots(rows, { id: 'a', name: 'a', slots: 2, runMs: 1, fit: { ...mem(300), max: 2 } }, at(1000))
+      expect(busy.rows.find((r) => r.id === 'a')?.whyKind).toBe('slots')
+      const unsized = touchSlots(
+        rows,
+        { id: 'b', name: 'b', slots: 2, runMs: 1, fit: { ...mem(300), peakMib: null } },
+        at(1000),
+      )
+      expect(unsized.rows.find((r) => r.id === 'b')?.whyKind).toBe('unsized')
+      // a waiter behind one that would be granted waits on the line
+      const ahead = touchSlots(rows, { id: 'c', name: 'c', slots: 2, runMs: 1, fit: { ...mem(300), max: 6 } }, at(2000))
+      const behind = touchSlots(
+        ahead.rows.map((r) => (r.id === 'c' ? { ...r, slot: null, leasedUntil: null } : r)),
+        {
+          id: 'd',
+          name: 'd',
+          slots: 2,
+          runMs: 1,
+          fit: { ...mem(300), max: 6, peaksByName: new Map([['c', 300]]) },
+        },
+        at(2500),
+      )
+      expect(behind.rows.find((r) => r.id === 'd')?.whyKind).toBe('line')
+    })
+  })
+
   describe('the ledger', () => {
     test('the learned peak is the p80 of the 8 newest measured peaks, so one inflated run does not set it', () => {
       expect(learnedPeakMib([])).toBeNull()
@@ -982,6 +1039,8 @@ describe('a slot is live work of the lead whose worktree its command started in'
     cwd: '/w/factory-1-1/apps/server',
     passedAt: null,
     passedBy: null,
+    whyKind: null,
+    waitSplit: {},
     ...extra,
   })
 

@@ -7,7 +7,7 @@ import type { MemoryReading } from './host.ts'
 import type { AttemptPeak, ProcInfo } from './leadcost.ts'
 import type { QueueState, QueueStates } from './queue-state.ts'
 import type { AimState } from './slot-aim.ts'
-import type { SlotRow } from './slots.ts'
+import type { SlotRow, WaitKind } from './slots.ts'
 import type { OpenWait, WaitPlan } from './waits.ts'
 
 /** A lead's account, chosen when it was admitted. Package 4's `start_lead` reads the account of its attempt. */
@@ -60,6 +60,8 @@ export interface CapacityStore {
   saveSlots(rows: readonly SlotRow[]): Promise<void>
   /** appends one finished step to the cost ledger */
   recordStepCost(cost: StepCostRow): Promise<void>
+  /** appends one finished wait for a slot */
+  recordSlotWait(wait: SlotWaitRow): Promise<void>
   /** appends one finished `factory merge-lock` call: its wait and its hold */
   recordMergeWindow(window: MergeWindowRow): Promise<void>
   /**
@@ -204,6 +206,17 @@ export interface TestResultRow {
   name: string
   status: 'pass' | 'fail' | 'skip'
   durationMs: number
+}
+
+/** One finished wait for a test slot (`factory.slot_waits`): how long, and the split of it by what it waited for. */
+export interface SlotWaitRow {
+  at: Date
+  name: string
+  repo: string | null
+  cwd: string | null
+  outcome: 'granted' | 'gave_up'
+  waitMs: number
+  split: Readonly<Partial<Record<WaitKind, number>>>
 }
 
 /** One row of the merge-window ledger (`factory.merge_windows`). */

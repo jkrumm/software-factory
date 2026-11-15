@@ -1,5 +1,5 @@
 import { afterAll, beforeAll, beforeEach, describe, expect, test } from 'bun:test'
-import { recordStepCost, touchSlot } from '../../src/app/capacity-slots.ts'
+import { giveSlotBack, recordStepCost, touchSlot } from '../../src/app/capacity-slots.ts'
 import { DEFAULT_PRIOR_MIB, stepKindOf, stepNameOf, stepPrior } from '../../src/domains/capacity/costs.ts'
 import { startWorld, value, type World } from '../planning/support.ts'
 
@@ -111,5 +111,32 @@ describe('a step is sized from its project', () => {
     )
     const rows = await world.db.sql`SELECT name, repo FROM factory.step_costs`
     expect(rows.map((r: { name: string; repo: string }) => [r.name, r.repo])).toEqual([['p unit', '/src/p']])
+  })
+
+  test("a granted waiter's split is stored with its project, and a waiter that leaves is stored as gave_up", async () => {
+    await learn('p unit', 30_000)
+    await hold()
+    expect(value(await worktreeStep('c')).granted).toBe(false)
+    expect(value(await worktreeStep('d')).granted).toBe(false)
+    world.clock.set(new Date(AT.getTime() + 4000))
+    expect(value(await worktreeStep('c')).granted).toBe(false)
+    expect(value(await worktreeStep('d')).granted).toBe(false)
+    world.clock.set(new Date(AT.getTime() + 8000))
+    value(await giveSlotBack(world.deps, 'd'))
+    value(await giveSlotBack(world.deps, 'a'))
+    // the holders end and memory frees: c is granted and its split lands in the ledger
+    value(await giveSlotBack(world.deps, 'b'))
+    world.clock.set(new Date(AT.getTime() + 9000))
+    expect(value(await worktreeStep('c')).granted).toBe(true)
+    const rows = await world.db
+      .sql`SELECT name, repo, outcome, wait_ms, split FROM factory.slot_waits ORDER BY outcome DESC`
+    expect(rows.map((r: { outcome: string; repo: string }) => [r.outcome, r.repo])).toEqual([
+      ['granted', '/src/p'],
+      ['gave_up', '/src/p'],
+    ])
+    const granted = rows[0] as { wait_ms: string | number; split: string | Record<string, number> }
+    const split = typeof granted.split === 'string' ? JSON.parse(granted.split) : granted.split
+    expect(Number(granted.wait_ms)).toBe(9000)
+    expect(split).toEqual({ memory: 9000 })
   })
 })

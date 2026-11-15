@@ -195,11 +195,25 @@ export async function touchSlot(
           swapGrowing: swapRising,
           load: loadNow === null ? null : Math.round(loadNow * 10) / 10,
           extraLoad: aimed === null ? deps.slotExtraLoad : LOAD_PER_CORE * deps.cores,
+          extraLoadFrom:
+            aimed === null
+              ? 'FACTORY_SLOT_EXTRA_LOAD'
+              : `${LOAD_PER_CORE} x ${deps.cores} cores under FACTORY_SLOT_AIM, FACTORY_SLOT_EXTRA_LOAD is not read`,
         },
       },
       now,
     )
     await capacity.saveSlots(touched.rows)
+    if (touched.waited)
+      await capacity.recordSlotWait({
+        at: now,
+        name: input.name,
+        repo: ownerIn(projects, input.cwd)?.repo ?? null,
+        cwd: input.cwd ?? null,
+        outcome: 'granted',
+        waitMs: touched.waited.ms,
+        split: touched.waited.split,
+      })
     return ok(touched.view)
   })
 }
@@ -234,10 +248,24 @@ export async function recordMergeWindow(
 
 /** Gives the slot back (or leaves the line). True if the caller had a row. */
 export async function giveSlotBack(deps: PlanningDeps, id: string): Promise<Result<boolean, PortError>> {
+  const projects = await projectsOf(deps)
   return deps.uow.run(async ({ capacity }) => {
     await capacity.lock()
-    const released = releaseSlot(await capacity.slots(), id)
+    const rows = await capacity.slots()
+    const released = releaseSlot(rows, id)
     if (released.had) await capacity.saveSlots(released.rows)
+    // a waiter that leaves the line without a slot still waited: its split is the answer to what the line cost it
+    const left = rows.find((row) => row.id === id)
+    if (left?.slot === null && Object.keys(left.waitSplit).length > 0)
+      await capacity.recordSlotWait({
+        at: deps.clock.now(),
+        name: left.name,
+        repo: ownerIn(projects, left.cwd ?? undefined)?.repo ?? null,
+        cwd: left.cwd,
+        outcome: 'gave_up',
+        waitMs: Object.values(left.waitSplit).reduce((sum, v) => sum + v, 0),
+        split: left.waitSplit,
+      })
     return ok(released.had)
   })
 }

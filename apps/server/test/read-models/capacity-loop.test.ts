@@ -119,6 +119,19 @@ async function seed() {
     await sql`INSERT INTO factory.step_costs (at, name, peak_rss_mib, duration_ms, wait_ms)
       VALUES (${at}, ${name}, ${peak}, ${duration}, ${wait})`
 
+  // slot waits: [at, repo, outcome, wait, split]; one before the window, one with no repo
+  const slotWaits: Array<[Date, string | null, string, number, Record<string, number>]> = [
+    [t('11-02T10:00'), '/src/alpha', 'granted', 30_000, { load: 20_000, line: 10_000 }],
+    [t('11-03T10:00'), '/src/alpha', 'granted', 600_000, { memory: 600_000 }],
+    [t('11-04T10:00'), '/src/alpha', 'gave_up', 90_000, { load: 90_000 }],
+    [t('11-04T11:00'), '/src/beta', 'granted', 1_000, { slots: 1_000 }],
+    [t('11-04T12:00'), null, 'granted', 5_000, { slots: 5_000 }],
+    [t('10-30T09:00'), '/src/alpha', 'granted', 999_999, { memory: 999_999 }],
+  ]
+  for (const [at, repo, outcome, wait, split] of slotWaits)
+    await sql`INSERT INTO factory.slot_waits (at, name, repo, outcome, wait_ms, split)
+      VALUES (${at}, 'alpha unit', ${repo}, ${outcome}, ${wait}, ${JSON.stringify(split)}::text::jsonb)`
+
   // lead processes: repo alpha has 3 attempts, repo beta 12 (only the newest 10 count), minute samples per attempt
   const lead = async (repo: string, n: number, peakOf: (i: number) => number) => {
     for (let i = 1; i <= n; i++) {
@@ -257,6 +270,23 @@ describe('GET /v1/capacity-loop figures', () => {
     // a day with no steps is null, not 0
     expect(model.slotWait.perDayP50.find((d) => d.day === '2026-11-03')?.value).toBeNull()
 
+    // what the waits waited for, restated by hand over the five in the window
+    const reason = (name: string) => model.slotWait.byReason.find((r) => r.reason === name)
+    expect(model.slotWait.byReason.map((r) => r.reason)).toEqual(['memory', 'load', 'line', 'slots'])
+    expect(reason('memory')).toMatchObject({ waits: 1, totalMs: 600_000, maxMs: 600_000 })
+    expect(reason('load')).toMatchObject({ waits: 2, totalMs: 110_000, maxMs: 90_000 })
+    expect(reason('load')?.p50Ms).toBeCloseTo(55_000, 6)
+    expect(reason('slots')).toMatchObject({ waits: 2, totalMs: 6_000, maxMs: 5_000 })
+    expect(model.slotWait.byRepo.map((r) => r.repo)).toEqual(['alpha', '(unknown)', 'beta'])
+    const alpha = model.slotWait.byRepo[0]
+    expect(alpha).toMatchObject({ waits: 3, totalMs: 720_000, maxMs: 600_000 })
+    expect(alpha?.p50Ms).toBeCloseTo(90_000, 6)
+    expect(alpha?.byReason.map((r) => [r.reason, r.totalMs])).toEqual([
+      ['memory', 600_000],
+      ['load', 110_000],
+      ['line', 10_000],
+    ])
+
     // top steps by memory
     const stepRows: Array<Record<string, string | number>> = await sql.unsafe(
       `SELECT n.name,
@@ -338,7 +368,7 @@ describe('GET /v1/capacity-loop figures', () => {
       await migrate(empty.sql, await loadMigrations())
       const model = CapacityLoopModel.parse(await readCapacityLoop(empty.sql, { now: NOW, days: 1, constants }))
       expect(model.throughput.total).toBe(0)
-      expect(model.slotWait).toMatchObject({ n: 0, p50Ms: null, p90Ms: null })
+      expect(model.slotWait).toMatchObject({ n: 0, p50Ms: null, p90Ms: null, byReason: [], byRepo: [] })
       expect(model.topSteps).toEqual([])
       expect(model.leadCosts).toEqual([])
       expect(model.reaped).toMatchObject({ total: 0, newest: [] })

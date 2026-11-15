@@ -6,7 +6,7 @@ import type { Assignment, CapacityStore, HostSampleFact, LeadPeaks } from '../..
 import { ENDED_AFTER_MS, LEARN_WINDOW_MS, PEAKS_FETCHED, SETTLED_RUN_MS } from '../../domains/capacity/leadcost.ts'
 import type { AimState } from '../../domains/capacity/slot-aim.ts'
 import { QUEUE_STATES, type QueueStates } from '../../domains/capacity/queue-state.ts'
-import type { SlotRow } from '../../domains/capacity/slots.ts'
+import { type SlotRow, WAIT_KINDS } from '../../domains/capacity/slots.ts'
 import { type IssueId, issueId } from '../../kernel/ids.ts'
 import { LOCKS } from './locks.ts'
 
@@ -67,6 +67,12 @@ const SlotDbRow = z.object({
   cwd: z.string().nullable(),
   passed_at: z.date().nullable(),
   passed_by: z.string().nullable(),
+  why_kind: z.enum(WAIT_KINDS).nullable(),
+  // the driver hands jsonb back as text
+  wait_split: z.preprocess(
+    (v) => (typeof v === 'string' ? JSON.parse(v) : v),
+    z.partialRecord(z.enum(WAIT_KINDS), z.number()),
+  ),
 })
 
 const PeakRow = z.object({ peak_rss_mib: z.number().int().nullable() })
@@ -281,6 +287,8 @@ export function postgresCapacityStore(tx: SQL): CapacityStore {
           cwd: r.cwd,
           passedAt: r.passed_at,
           passedBy: r.passed_by,
+          whyKind: r.why_kind,
+          waitSplit: r.wait_split,
         }
       })
     },
@@ -291,10 +299,17 @@ export function postgresCapacityStore(tx: SQL): CapacityStore {
       for (const r of rows) {
         await tx`
           INSERT INTO factory.capacity_slots (id, name, requested_at, seen_at, slot, leased_until, granted_at, run_ms, rss_mib,
-             peak_rss_mib, why, cwd, passed_at, passed_by)
+             peak_rss_mib, why, cwd, passed_at, passed_by, why_kind, wait_split)
           VALUES (${r.id}, ${r.name}, ${r.requestedAt}, ${r.seenAt}, ${r.slot}, ${r.leasedUntil}, ${r.grantedAt}, ${r.runMs},
-                  ${r.rssMib}, ${r.peakRssMib}, ${r.why}, ${r.cwd}, ${r.passedAt}, ${r.passedBy})`
+                  ${r.rssMib}, ${r.peakRssMib}, ${r.why}, ${r.cwd}, ${r.passedAt}, ${r.passedBy}, ${r.whyKind},
+                  ${JSON.stringify(r.waitSplit)}::text::jsonb)`
       }
+    },
+
+    async recordSlotWait(w) {
+      await tx`
+        INSERT INTO factory.slot_waits (at, name, repo, cwd, outcome, wait_ms, split)
+        VALUES (${w.at}, ${w.name}, ${w.repo}, ${w.cwd}, ${w.outcome}, ${Math.round(w.waitMs)}, ${JSON.stringify(w.split)}::text::jsonb)`
     },
 
     async recordStepCost(c) {
