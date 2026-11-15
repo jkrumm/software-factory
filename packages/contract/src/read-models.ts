@@ -49,7 +49,7 @@ export const NeedItem = z
     tried: z.string().nullable(),
     /** an Errand's need: `secret`, `hands`, `approval` (Approve button; its command runs on the mini) or `place` (his MacBook, no secret); null for everything else */
     need: z.enum(['secret', 'hands', 'approval', 'place']).nullable(),
-    /** an Errand other Issues wait on too (their command or check was the same): how many besides the one that raised it; 0 for everything else */
+    /** an Errand other Issues wait on too (their command, check, need key or ask was the same): how many besides the one that raised it; 0 for everything else */
     joined: z.number().int().min(0),
     /** the Issues that joined it, oldest first (`issue_<n>`); empty for everything else */
     joinedIssues: z.array(z.string()),

@@ -215,7 +215,7 @@ export interface ErrandRecord {
   matchKey: string | null
 }
 
-/** An Issue that waits on an Errand another Issue (or a request) raised first: its command or check was the same. */
+/** An Issue that waits on an Errand another Issue (or a request) raised first: its command, check, need key or ask was the same. */
 export interface ErrandJoin {
   errandId: ErrandId
   issueId: IssueId

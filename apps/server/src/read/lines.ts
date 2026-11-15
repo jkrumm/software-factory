@@ -2,6 +2,7 @@ import { createHash } from 'node:crypto'
 import type { LoopView, ReadAccountQuota, ReadHealthLine } from '@software-factory/contract'
 import type { SQL } from 'bun'
 import * as z from 'zod'
+import { MAX_RUN_TRIES } from '../domains/checkpoints/need.ts'
 import type { MainCheckoutLine } from '../domains/loops/checkout.ts'
 import { readRank } from './accounts.ts'
 import { LINE_TEXT_MAX } from './asks.ts'
@@ -163,12 +164,17 @@ export async function readHealthLines(
   return lines
 }
 
-/** Open Errands at the owner that carry a command for his MacBook: what the desk pass pushes when it knows he is back. */
+/**
+ * Open Errands at the owner that the desk pass pushes to his MacBook when it knows he is back (`pushQueue`): a command, host
+ * `macbook`, need `secret` or `hands` (an approval is run on the mini, a place only on his button), no run going and fewer
+ * than `MAX_RUN_TRIES` failed ones.
+ */
 async function macbookErrandsOpen(sql: SQL): Promise<number> {
   const [row] = await sql`
     SELECT count(*)::int AS n
     FROM factory.errands e LEFT JOIN factory.issues i ON i.id = e.issue_id
     WHERE e.done_at IS NULL AND e.reached_owner_at IS NOT NULL AND e.command IS NOT NULL AND e.host = 'macbook'
+      AND e.need IN ('secret', 'hands') AND e.run_status IS DISTINCT FROM 'running' AND e.run_attempts < ${MAX_RUN_TRIES}
       AND (e.issue_id IS NULL OR i.state <> 'closed')`
   return z.object({ n: z.number().int() }).parse(row).n
 }

@@ -810,6 +810,16 @@ describe('an Errand that needs only his yes', () => {
     expect(value(await ask("ssh mini 'make -C ~/gate deploy-release SHA=feedbeef'")).result).toBe('replayed')
   })
 
+  test('a command-less request under the same key with another detail or check replaces the open one', async () => {
+    const ask = (text: string, check?: string) =>
+      requestErrand(deps, { raw: { source: 'test-agent', text, key: 'reseal', ...(check ? { check } : {}) } })
+    const first = value(await ask('Reseal the cache\nold detail'))
+    expect(first.result).toBe('applied')
+    const changed = value(await ask('Reseal the cache\nnew detail', 'gate-pending'))
+    expect(changed).toMatchObject({ result: 'applied', superseded: [first.errand.id] })
+    expect(await errandRow(changed.errand.id)).toMatchObject({ check_command: 'gate-pending' })
+  })
+
   test('a check that cannot find its command is broken: the owner and the lead are told, and his done closes it', async () => {
     const issueId = await workingIssue()
     const raised = await raise(issueId, { summary: 'Raise the vnode limit', check: 'sysctl-check' })

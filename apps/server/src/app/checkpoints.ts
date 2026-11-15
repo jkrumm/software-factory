@@ -1344,7 +1344,7 @@ export function turnBackErrand(
 }
 
 export interface ErrandRequested {
-  /** `joined`: an open Errand has the same command or check; this request is that Errand, and nobody is paged again */
+  /** `joined`: an open Errand is the same need (command, check or ask); this request is that Errand, and nobody is paged again */
   result: 'applied' | 'replayed' | 'joined'
   errand: ErrandRecord
   /** the open requests this one replaced (same key) */
@@ -1374,8 +1374,9 @@ export function requestErrand(
     const existing = await checkpoints.errandByKey(sameKey)
     if (existing && !existing.doneAt)
       return ok<ErrandRequested>({ result: 'replayed', errand: existing, superseded: [] })
-    // the same command or the same check as an open Errand, an Issue's or a request: it is that Errand. The one exception is a
-    // newer request under the same key with another command: that is the corrected one, and replaces the older below.
+    // the same command, check or ask as an open Errand, an Issue's or a request: it is that Errand. The one exception is a
+    // newer request under the same key that is not the same request (another command, or with no command another detail or
+    // check): that is the corrected one, and replaces the older below.
     const matchKey = matchKeyOf({
       repo: request.source,
       needKey: null,
@@ -1384,7 +1385,11 @@ export function requestErrand(
     })
     const open = await checkpoints.openMatching({ command: request.command, check: request.check, matchKey })
     const corrected =
-      open !== null && request.key !== null && open.requestKey === request.key && open.command !== request.command
+      open !== null &&
+      request.key !== null &&
+      open.requestKey === request.key &&
+      (open.command !== request.command ||
+        (request.command === null && (open.detail !== request.detail || open.checkCommand !== request.check)))
     if (open && !corrected) return ok<ErrandRequested>({ result: 'joined', errand: open, superseded: [] })
     const id = deps.ids.next('errand')
     // asked again after the first was closed: a new Errand, under a key of its own
