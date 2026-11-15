@@ -1,7 +1,7 @@
 import { expect, test } from 'bun:test'
 import { Elysia } from 'elysia'
 import { createApp } from '../src/api/app.ts'
-import { p95Of, ROUTE_WINDOW_MS, routeTimer } from '../src/api/route-timer.ts'
+import { p95Of, ROUTE_WINDOW_MS, routeLabel, routeTimer } from '../src/api/route-timer.ts'
 import { healthOf } from '../src/read/health.ts'
 
 test('p95Of: nearest rank, null without a value', () => {
@@ -9,6 +9,13 @@ test('p95Of: nearest rank, null without a value', () => {
   expect(p95Of([5])).toBe(5)
   expect(p95Of(Array.from({ length: 100 }, (_, i) => i + 1))).toBe(95)
   expect(p95Of([3000, 10, 20, 30, 40, 50, 60, 70, 80, 90])).toBe(3000)
+})
+
+test('routeLabel: the method and the path, a segment with a digit collapsed', () => {
+  expect(routeLabel(new Request('http://localhost/v1/issues'))).toBe('GET /v1/issues')
+  expect(routeLabel(new Request('http://localhost/v1/issues/issue_1317/note?x=1', { method: 'POST' }))).toBe(
+    'POST /v1/issues/:id/note',
+  )
 })
 
 const health = {
@@ -26,7 +33,7 @@ test('routeTimer times every route but /health, with a failing one counted too',
   await app.handle(new Request('http://localhost/v1/nothing', { headers: { authorization: 'Bearer secret' } }))
   expect(timer.snapshot().samples).toBe(2)
   clock += ROUTE_WINDOW_MS + 1
-  expect(timer.snapshot()).toEqual({ p95Ms: null, samples: 0, windowMs: ROUTE_WINDOW_MS })
+  expect(timer.snapshot()).toEqual({ p95Ms: null, samples: 0, windowMs: ROUTE_WINDOW_MS, slowest: [] })
 })
 
 test('routeTimer: a request still unanswered counts at its age, a stream never counts, a request nobody answers ages out', async () => {
@@ -55,12 +62,22 @@ test('routeTimer: a request still unanswered counts at its age, a stream never c
   ]
   await Bun.sleep(20)
   clock = 4_000
-  expect(timer.snapshot()).toEqual({ p95Ms: 4_000, samples: 1, windowMs: ROUTE_WINDOW_MS })
+  expect(timer.snapshot()).toEqual({
+    p95Ms: 4_000,
+    samples: 1,
+    windowMs: ROUTE_WINDOW_MS,
+    slowest: [{ route: 'GET /v1/slow', ms: 4_000 }],
+  })
   // the slow one ends: now it is an answer of 4 s, and the two streams were never counted
   release()
   await Promise.all(calls)
   await Bun.sleep(20)
-  expect(timer.snapshot()).toEqual({ p95Ms: 4_000, samples: 1, windowMs: ROUTE_WINDOW_MS })
+  expect(timer.snapshot()).toEqual({
+    p95Ms: 4_000,
+    samples: 1,
+    windowMs: ROUTE_WINDOW_MS,
+    slowest: [{ route: 'GET /v1/slow', ms: 4_000 }],
+  })
   clock = ROUTE_WINDOW_MS + 10_000
   expect(timer.snapshot().samples).toBe(0)
 })

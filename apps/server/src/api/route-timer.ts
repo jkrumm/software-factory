@@ -14,6 +14,15 @@ export interface RouteTimer {
   plugin: Elysia
 }
 
+/** The slowest answers a snapshot names, so a slow p95 says which route it was. */
+const SLOWEST_SHOWN = 3
+
+/** `GET /v1/issues/:id/note`: the method and the path with every segment that holds a digit (but not `v1`) collapsed, so the label has no unbounded variety. */
+export function routeLabel(request: Request): string {
+  const path = new URL(request.url).pathname.replace(/\/(?!v\d+(?:\/|$))[^/]*\d[^/]*/g, '/:id')
+  return `${request.method} ${path}`
+}
+
 /** The routes whose time says nothing about the database: the health route (it never queries) and a stream that stays open by design. */
 const untimed = (request: Request): boolean => {
   const { pathname } = new URL(request.url)
@@ -44,7 +53,7 @@ export function routeTimer(options: { windowMs?: number; now?: () => number } = 
   const windowMs = options.windowMs ?? ROUTE_WINDOW_MS
   const now = options.now ?? Date.now
   const pending = new Map<Request, number>()
-  let answered: { endedAt: number; ms: number }[] = []
+  let answered: { endedAt: number; ms: number; route: string }[] = []
 
   const prune = (at: number): void => {
     const from = at - windowMs
@@ -58,8 +67,16 @@ export function routeTimer(options: { windowMs?: number; now?: () => number } = 
     snapshot() {
       const at = now()
       prune(at)
-      const times = [...answered.map((sample) => sample.ms), ...[...pending.values()].map((began) => at - began)]
-      return { p95Ms: p95Of(times), samples: times.length, windowMs }
+      const timed = [
+        ...answered.map((sample) => ({ ms: sample.ms, route: sample.route })),
+        ...[...pending].map(([request, began]) => ({ ms: at - began, route: routeLabel(request) })),
+      ]
+      const times = timed.map((sample) => sample.ms)
+      const slowest = timed
+        .sort((a, b) => b.ms - a.ms)
+        .slice(0, SLOWEST_SHOWN)
+        .map(({ route, ms }) => ({ route, ms }))
+      return { p95Ms: p95Of(times), samples: times.length, windowMs, slowest }
     },
     plugin: new Elysia({ name: 'route-timer' })
       .onRequest(({ request }) => {
@@ -70,7 +87,7 @@ export function routeTimer(options: { windowMs?: number; now?: () => number } = 
         if (began === undefined) return
         pending.delete(request)
         const at = now()
-        answered.push({ endedAt: at, ms: at - began })
+        answered.push({ endedAt: at, ms: at - began, route: routeLabel(request) })
         if (answered.length > MAX_SAMPLES * 2) prune(at)
       }),
   }
