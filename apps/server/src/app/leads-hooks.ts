@@ -85,8 +85,8 @@ export async function recordHook(deps: LeadDeps, line: SpoolLine): Promise<Resul
 
 /**
  * Whether a lead's stop is turned back, asked by the Stop hook before it records anything: a stop that is sent back is
- * no end, so the turn goes on. Sent back once per turn (`sendback:<session>:<turn>`); the stop after that, which comes
- * with `stopHookActive`, stalls the Issue as `unreported` and is let through. Any session that is no working lead's has
+ * no end, so the turn goes on. Sent back once per turn (`sendback:<session>:<turn>`); the stop after that is let through
+ * and stalls nothing (the steward's idle path owns a lead that stays quiet). Any session that is no working lead's has
  * nothing said to it.
  */
 export async function stopCheck(
@@ -121,27 +121,10 @@ export async function stopCheck(
       factoryTurn,
       reported: reportedSince(history, lead.attempt, view.lastTurnAt),
       sentBack: await leads.sentBack(sendbackKey),
-      stopHookActive: input.stopHookActive,
     })
     if (decision === 'let_through') return ok(through)
-    if (decision === 'send_back') {
-      await leads.recordSendBack({ key: sendbackKey, issue: lead.issue, attempt: lead.attempt, turn, at })
-      return ok<StopCheck>({ sendBack: true, message: sendBackMessage(lead.issue) })
-    }
-    const stalled = await recordIn(work, deps, {
-      issueId: lead.issue,
-      key: key('unreported', lead.issue, lead.attempt, turn),
-      event: {
-        kind: 'stalled',
-        payload: {
-          attempt: lead.attempt,
-          cause: 'unreported',
-          detail: `the lead stopped twice in turn ${turn} with nothing reported`,
-        },
-        actor: 'factory',
-      },
-    })
-    return stalled.ok ? ok(through) : stalled
+    await leads.recordSendBack({ key: sendbackKey, issue: lead.issue, attempt: lead.attempt, turn, at })
+    return ok<StopCheck>({ sendBack: true, message: sendBackMessage(lead.issue) })
   })
   return checked.ok ? checked : err(toPortError(checked.error))
 }

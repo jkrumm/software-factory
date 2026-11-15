@@ -17,7 +17,7 @@ export function reportedSince(records: readonly HistoryRecord[], attempt: number
   return records.some((record) => record.at.getTime() >= since.getTime() && isReport(record, attempt))
 }
 
-export type StopDecision = 'let_through' | 'send_back' | 'stall'
+export type StopDecision = 'let_through' | 'send_back'
 
 export interface StopFacts {
   /** the Issue is `working` on the attempt of the session that stopped */
@@ -29,21 +29,19 @@ export interface StopFacts {
   reported: boolean
   /** this turn was sent back once already */
   sentBack: boolean
-  /** the hook's loop guard: this stop is the one after a send-back */
-  stopHookActive: boolean
 }
 
 /**
- * A lead's stop: sent back once with one line when it reports nothing; the stop
- * that follows a send-back (`stopHookActive`) stalls the Issue as `unreported`. The same stop asked again, without the
- * flag (a retried hook), is let through and records nothing. A turn answering the owner is never sent back.
+ * A lead's stop: sent back once per turn with one line when it reports nothing. The stop after the send-back is let
+ * through and stalls nothing: a finished background task can restart the lead a few milliseconds after that stop (issues
+ * 1154 and 1180), so a stall here was a false one. A lead that really stays quiet is the steward's idle path
+ * (`loadIdle`: a note, then the `unreported` stall). A turn answering the owner is never sent back.
  */
 export function decideStop(facts: StopFacts): StopDecision {
   if (facts.backgroundTasks || !facts.working || !facts.factoryTurn || facts.reported) return 'let_through'
-  if (!facts.sentBack) return 'send_back'
-  return facts.stopHookActive ? 'stall' : 'let_through'
+  return facts.sentBack ? 'let_through' : 'send_back'
 }
 
 export function sendBackMessage(issue: IssueId): string {
-  return `Issue ${issue}: you stopped with nothing reported. Report where it stands with \`factory issue ship|close|block|ask|defer ${issue} --attempt <n> …\` (or \`factory artifact submit ${issue} --attempt <n> …\`, \`factory errand raise ${issue} --attempt <n> …\`), or keep working. Stopping again unreported stalls the Issue.`
+  return `Issue ${issue}: you stopped with nothing reported. Report where it stands with \`factory issue ship|close|block|ask|defer ${issue} --attempt <n> …\` (or \`factory artifact submit ${issue} --attempt <n> …\`, \`factory errand raise ${issue} --attempt <n> …\`), or keep working. A lead that stays quiet is nudged by the steward and, if it still does not report, the Issue stalls.`
 }

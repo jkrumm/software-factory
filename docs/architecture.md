@@ -298,8 +298,9 @@ through `receive` in `app/intake.ts`; the answer is a triage outcome (`docs/lang
   lead lost. The first turn of the resumed session is a prompt cache miss: the context is read uncached once, which a
   wait over the cache's lifetime (1 h) costs nothing extra and one between 30 and 60 min does.
 - **The stop rule** (`domains/leads/stop.ts`): a lead that stops with nothing reported is sent back once with one line
-  (the hook exits 2); the second time the Issue stalls as `unreported`. A stop with background work still running is no
-  stop.
+  (the hook exits 2); the stop after that is let through and stalls nothing, because a finished background task can restart the
+  lead milliseconds later (issues 1154, 1180). A lead that stays quiet is the steward's idle path: a note, then the `unreported`
+  stall. A stop with background work still running is no stop.
 - **Finalize** (`app/leads-finalize.ts`), once per attempt and in this order: the claim goes back, the terminals close,
   the transcripts are archived, the worktree and branch are removed when clean and its work is on origin's default
   (the worktree is found by the path it was made at, because a lead may detach HEAD or rename the branch; its HEAD and the

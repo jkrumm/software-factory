@@ -180,12 +180,10 @@ describe('the send-back decision', () => {
     factoryTurn: true,
     reported: false,
     sentBack: false,
-    stopHookActive: false,
   }
   test.each([
     ['nothing reported in a factory turn: sent back', {}, 'send_back'],
-    ['sent back already and the hook says so: stall', { sentBack: true, stopHookActive: true }, 'stall'],
-    ['sent back already, a retried hook: let through, records nothing', { sentBack: true }, 'let_through'],
+    ['sent back already: let through, stalls nothing', { sentBack: true }, 'let_through'],
     ['reported', { reported: true }, 'let_through'],
     ['background work in flight', { backgroundTasks: true }, 'let_through'],
     ["the owner's turn", { factoryTurn: false }, 'let_through'],
@@ -303,7 +301,7 @@ describe('the brief', () => {
   test('the standing orders open every brief and are pinned', () => {
     expect(buildBrief(input).startsWith(STANDING_ORDERS)).toBe(true)
     expect(new Bun.CryptoHasher('sha256').update(STANDING_ORDERS).digest('hex')).toBe(
-      '999d5d3d99f2c56398f68cfc307af020d89dedec38e1e7e74a8fbcc2034af3ba',
+      '6af44d98d72d4001425aa8cb5b4cb977a3a6ab01b3208a44112a76dca6120517',
     )
   })
 
