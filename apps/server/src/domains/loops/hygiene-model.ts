@@ -72,7 +72,7 @@ export interface Checkout {
 
 /** What the project's project.yaml lets a sweep run. */
 export interface SweepOptions {
-  /** the project's own words for why `make check` is not run here (its check needs a lab this host lacks); absent runs it */
+  /** the project's own words for why `make check` is not run here (its check needs a lab this host lacks, or its doctor says so); absent runs it */
   skipCheck?: string
   /** the probes the project declares (`hygiene.probes`); absent or empty runs none */
   probes?: readonly DeclaredProbe[]

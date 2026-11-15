@@ -302,6 +302,12 @@ export const ProjectFile = z
     budgets: Budgets.default({}),
     /** check tiers: a fast local check and the full gate (CI's when `ci` is true); `null` keeps one `make check` */
     checks: Checks.nullable().default(null),
+    /**
+     * `make doctor`: a read-only command of seconds that exits 0 when this host can run the project and otherwise exits
+     * non-zero with one line per missing prerequisite and its fix. A red doctor keeps every lead of the project from being
+     * admitted and the hygiene `check` probe from running, with its lines as the reason; `null`: the project says nothing.
+     */
+    doctor: MakeCommand.nullable().default(null),
     hygiene: Hygiene.default(() => Hygiene.parse({})),
     signals: Signals.default({}),
     heal: z.array(HealRule).max(32).default([]),

@@ -12,6 +12,7 @@ import {
 import type { BootSample } from '../domains/capacity/boot.ts'
 import { checkAdmission, type LeadFit, type RefusalKind, REFUSALS } from '../domains/capacity/admission.ts'
 import { freeMibOf, headroomMib } from '../domains/capacity/costs.ts'
+import { type DoctorReader, doctorMessage } from '../domains/capacity/doctor.ts'
 import { DEFAULT_TYPICAL_LEAD_MIB, SEAT_SAMPLE_MAX_AGE_MS, SEAT_SAMPLES, seatBonus } from '../domains/capacity/seats.ts'
 import { type LeadGrowth, leadGrowth, learnLeadCost } from '../domains/capacity/leadcost.ts'
 import { type MemoryCeilings, type MemoryReading, reservedOf, sustainedSwapoutMb } from '../domains/capacity/host.ts'
@@ -52,6 +53,8 @@ export interface CapacityLimits {
 
 export interface CapacityDeps extends PlanningDeps {
   host: HostReader
+  /** the projects' own doctors; absent: no project is asked whether this host can run it */
+  doctor?: DoctorReader
   accounts: AccountSource
   ranker: AccountRanker
   limits: CapacityLimits
@@ -82,6 +85,8 @@ export interface HostInputs {
   rssByIssue: ReadonlyMap<number, number>
   /** the newest five minute samples, newest first; empty unless all five exist and none is older than six minutes */
   recent: readonly { load: number | null; swapUsedPct: number | null }[]
+  /** per project name: why its doctor says this host cannot run it; a project whose doctor is green, or has none, is absent */
+  doctors: ReadonlyMap<string, string>
   notes: string[]
 }
 
@@ -97,6 +102,7 @@ const NO_HOST: HostInputs = {
   relearns: new Map(),
   rssByIssue: new Map(),
   recent: [],
+  doctors: new Map(),
   notes: [],
 }
 
@@ -160,8 +166,9 @@ export async function readHost(deps: CapacityDeps): Promise<HostInputs> {
   const uptime = await deps.host.uptimeMs()
   if (!uptime.ok) notes.push(`uptime reading failed (${uptime.error.detail}): the boot grace does not apply this pass`)
   const now = deps.clock.now()
-  const facts = await deps.uow.run(async ({ capacity }) =>
+  const facts = await deps.uow.run(async ({ capacity, planning }) =>
     ok({
+      projects: deps.doctor ? await planning.projects() : [],
       latest: await capacity.latestHostSample(),
       recent: await capacity.recentHostSamples(SEAT_SAMPLES),
       peaks: await capacity.leadPeaks(now),
@@ -176,6 +183,7 @@ export async function readHost(deps: CapacityDeps): Promise<HostInputs> {
       facts.value.recent.every((s) => now.getTime() - s.at.getTime() <= SEAT_SAMPLE_MAX_AGE_MS)
     : false
   const newest = facts.ok ? facts.value.recent[0] : undefined
+  const doctors = await readDoctors(deps.doctor, facts.ok ? facts.value.projects : [])
   return {
     load: load.ok ? load.value : null,
     processes: newest && now.getTime() - newest.at.getTime() <= RSS_MAX_AGE_MS ? newest.processes : null,
@@ -214,8 +222,30 @@ export async function readHost(deps: CapacityDeps): Promise<HostInputs> {
     relearns: new Map(facts.ok ? facts.value.relearns.map((r) => [r.repo, r.at]) : []),
     rssByIssue: facts.ok ? facts.value.rss : new Map(),
     recent: facts.ok && fresh ? facts.value.recent.map((s) => ({ load: s.load, swapUsedPct: s.swapUsedPct })) : [],
+    doctors,
     notes,
   }
+}
+
+/**
+ * Asks the doctor of every project that declares one (the reader keeps a reading until it is due, so this is seldom a run) and
+ * answers the refusal of each whose doctor is red. A doctor that cannot be run is no reading: that project is admitted.
+ */
+async function readDoctors(
+  reader: DoctorReader | undefined,
+  projects: readonly StoredProject[],
+): Promise<Map<string, string>> {
+  const red = new Map<string, string>()
+  if (!reader) return red
+  const asked = projects.filter((p) => p.project.doctor !== null && !p.project.work)
+  const readings = await Promise.all(
+    asked.map((p) => reader.read({ project: p.name, repo: p.repo, command: p.project.doctor as string })),
+  )
+  asked.forEach((p, i) => {
+    const reading = readings[i]
+    if (reading && !reading.ok) red.set(p.name, doctorMessage(p.name, reading))
+  })
+  return red
 }
 
 /**
@@ -486,6 +516,7 @@ function decide(snap: Snapshot, host: HostInputs, limits: CapacityLimits, bonus:
       lane: laneOf(issue.id, project, claims, owed, laneByIssue),
       now: snap.now,
       state: effectiveState(snap.states, project.name),
+      doctor: host.doctors.get(project.name) ?? null,
       leads: project.project.leads,
       holders: claims.filter((s) => s.repo === project.repo).map((s) => ({ issue: s.issue, urgent: s.urgent })),
       owed: owed.filter((o) => o.project === project.name).map((o) => claimantOf(o.id, o.kind, o.since)),

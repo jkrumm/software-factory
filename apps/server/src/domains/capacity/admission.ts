@@ -20,7 +20,7 @@ import type { QueueState } from './queue-state.ts'
  * Why a queued Issue that the chain lets through still stays queued, in the order the rules are looked at (the first
  * that says no wins). "Hold" is retired: an Issue is not waiting, it stays queued, and this names why.
  */
-export const REFUSALS = ['drain', 'boot', 'load', 'memory', 'lane', 'claim', 'window', 'cap'] as const
+export const REFUSALS = ['drain', 'doctor', 'boot', 'load', 'memory', 'lane', 'claim', 'window', 'cap'] as const
 export type RefusalKind = (typeof REFUSALS)[number]
 
 export interface Refusal {
@@ -62,6 +62,8 @@ export interface AdmissionInputs {
   now: Date
   /** the effective queue state of the candidate's project */
   state: QueueState
+  /** why the project's own doctor says this host cannot run it (`doctor:` of its `project.yaml`); null or absent: it says nothing, or says it can */
+  doctor?: string | null
   /** `leads: N` of the project */
   leads: number
   holders: readonly Claimant[]
@@ -118,6 +120,7 @@ const no = (kind: RefusalKind, message: string, opensAt: Date | null = null, par
 export function checkAdmission(input: AdmissionInputs): Admission {
   const pace = input.state === 'pace'
   if (input.state === 'drain') return no('drain', 'the queue is draining: nothing new starts')
+  if (input.doctor) return no('doctor', input.doctor)
   const booting = input.boot ? bootRefusal(input.boot, input.now) : null
   if (booting) return no('boot', booting.message, booting.opensAt)
   if (input.load !== null && overLoad(input.load, input.loadCeiling)) {

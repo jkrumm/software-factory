@@ -458,6 +458,14 @@ describe('admission', () => {
     expect(checkAdmission(inputs())).toMatchObject({ admit: true, account: { account: 'a' } })
   })
 
+  test("a red doctor refuses the project's lead with its own words, after a drain and before the host's readings", () => {
+    const words = 'lab cannot run on this host: lab seed missing'
+    const refused = checkAdmission(inputs({ doctor: words, load: 99 }))
+    expect(refused).toMatchObject({ admit: false, refusal: { kind: 'doctor', message: words, opensAt: null } })
+    expect(checkAdmission(inputs({ doctor: words, state: 'drain' }))).toMatchObject({ refusal: { kind: 'drain' } })
+    expect(checkAdmission(inputs({ doctor: null }))).toMatchObject({ admit: true })
+  })
+
   test('the first rule that says no wins: drain, load, memory, claim, then the account', () => {
     const everything = inputs({
       state: 'drain',

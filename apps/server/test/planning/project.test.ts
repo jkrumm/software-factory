@@ -108,6 +108,16 @@ describe('project.yaml', () => {
     }
   })
 
+  test('doctor is `make <target>` or absent, never a shell string', () => {
+    const parse = (doctor: string) => parseProject(yaml(`apiVersion: factory/v2\nname: lab\ndoctor: ${doctor}`), 'lab')
+    expect(defaultProject('lab').doctor).toBeNull()
+    const ok = parse('make doctor')
+    expect(ok.ok && ok.project.doctor).toBe('make doctor')
+    for (const bad of ['"scripts/doctor.sh"', '"make doctor; rm -rf /"', '"make"', '""', '[make doctor]']) {
+      expect(parse(bad).ok).toBe(false)
+    }
+  })
+
   test("host is a slug naming the host the project's alerts sit on", () => {
     const parse = (host: string) => parseProject(yaml(`apiVersion: factory/v2\nname: lab\nhost: ${host}`), 'lab')
     const ok = parse('macmini')
