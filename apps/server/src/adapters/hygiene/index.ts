@@ -13,6 +13,7 @@ import { type Tools } from './git.ts'
 import { candidates } from './history.ts'
 import { checkProbe } from './probes/check.ts'
 import { cochangeProbe } from './probes/cochange.ts'
+import { declaredProbe } from './probes/declared.ts'
 import { depsProbe } from './probes/deps.ts'
 import { type Outcome, failed, skipped } from './probes/finding.ts'
 import { linksProbe } from './probes/links.ts'
@@ -50,7 +51,7 @@ export function createHygieneChecker(options: HygieneCheckerOptions): HygieneChe
     markdown.catch(() => {})
     const docs = markdown.then(livingDocs)
     docs.catch(() => {})
-    const quick: Record<Exclude<Probe, 'check'>, () => Promise<Outcome>> = {
+    const quick: Record<Exclude<Probe, 'check' | 'probe'>, () => Promise<Outcome>> = {
       links: async () => linksProbe(path, await docs),
       retired: async () => retiredProbe(tools, path, await markdown),
       deps: () => depsProbe(tools, path),
@@ -81,12 +82,18 @@ export function createHygieneChecker(options: HygieneCheckerOptions): HygieneChe
           : await guarded(() => checkProbe(tools, checkout)),
     )
 
+    // The project's own probes run one after another, after the built-in ones: each is a make target of its own.
+    const declared: Outcome[] = []
+    for (const probe of options.probes ?? []) declared.push(await guarded(() => declaredProbe(tools, checkout, probe)))
+
     const runs: ProbeRun[] = []
     const findings = []
     for (const probe of PROBES) {
-      const outcome = outcomes.get(probe) ?? failed('did not run')
-      runs.push({ probe, outcome: outcome.outcome, detail: outcome.detail })
-      findings.push(...outcome.findings)
+      const list = probe === 'probe' ? declared : [outcomes.get(probe) ?? failed('did not run')]
+      for (const outcome of list) {
+        runs.push({ probe, outcome: outcome.outcome, detail: outcome.detail })
+        findings.push(...outcome.findings)
+      }
     }
     return { ref: checkout.ref, runs, findings, ...history }
   }

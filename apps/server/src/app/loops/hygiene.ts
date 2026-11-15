@@ -16,7 +16,7 @@ import {
   NO_REF,
   type Swept,
 } from '../../domains/loops/hygiene.ts'
-import type { Checkout, HygieneChecker, SweepReport } from '../../domains/loops/hygiene-model.ts'
+import type { Checkout, DeclaredProbe, HygieneChecker, SweepReport } from '../../domains/loops/hygiene-model.ts'
 import type {
   HygieneJudgment,
   HygienePassRecord,
@@ -101,6 +101,8 @@ interface Target {
   passId: string
   /** the project's reason for not running `make check` here (`hygiene.check: false`); absent runs it */
   skipCheck?: string
+  /** the probes the project declares (`hygiene.probes`) */
+  probes?: readonly DeclaredProbe[]
 }
 
 /**
@@ -177,7 +179,7 @@ async function fullPass(deps: HygieneDeps, target: Target, now: Date): Promise<R
   const gate = gated.value
   const added = nothingAdded()
   const swept = await deps.checker.withCheckout(target.repoText, null, async (checkout) => {
-    const report = await deps.checker.sweep(checkout, { skipCheck: target.skipCheck })
+    const report = await deps.checker.sweep(checkout, { skipCheck: target.skipCheck, probes: target.probes })
     // A held class is named before the budget counts: it does not use up a slot.
     const ranked = rankProbeFindings(report.findings)
     const allowed = ranked.filter((finding) => gate.allows(finding.key))
@@ -327,7 +329,11 @@ export async function hygienePass(deps: HygieneDeps): Promise<Result<HygienePass
   }
   const { hygiene } = project.project
   const skipCheck = hygiene.check ? undefined : hygiene.reason
-  return fullPass(deps, { repoText: work.repo, name: project.name, passId: deps.ids.next('hygiene'), skipCheck }, now)
+  return fullPass(
+    deps,
+    { repoText: work.repo, name: project.name, passId: deps.ids.next('hygiene'), skipCheck, probes: hygiene.probes },
+    now,
+  )
 }
 
 export const hygieneSummary = (pass: HygienePass): string => {

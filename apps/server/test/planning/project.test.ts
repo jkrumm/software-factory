@@ -80,13 +80,32 @@ describe('project.yaml', () => {
   test('hygiene.check defaults on; false needs a reason, and an unknown key is an error', () => {
     const parse = (hygiene: string) =>
       parseProject(yaml(`apiVersion: factory/v2\nname: lab\nhygiene: ${hygiene}`), 'lab')
-    expect(defaultProject('lab').hygiene).toEqual({ check: true })
+    expect(defaultProject('lab').hygiene).toEqual({ check: true, probes: [] })
     const off = parse('{ check: false, reason: needs the owner library }')
-    expect(off.ok && off.project.hygiene).toEqual({ check: false, reason: 'needs the owner library' })
+    expect(off.ok && off.project.hygiene).toEqual({ check: false, reason: 'needs the owner library', probes: [] })
     const bare = parse('{ check: false }')
     expect(bare.ok).toBe(false)
     expect(!bare.ok && bare.message).toContain('hygiene.reason')
     expect(parse('{ chek: false }').ok).toBe(false)
+  })
+
+  test('hygiene.probes are {name, target} with a slug target, never a shell string', () => {
+    const parse = (probes: string) =>
+      parseProject(yaml(`apiVersion: factory/v2\nname: lab\nhygiene: { probes: ${probes} }`), 'lab')
+    const ok = parse('[{ name: demo, target: demo-check }]')
+    expect(ok.ok && ok.project.hygiene.probes).toEqual([{ name: 'demo', target: 'demo-check' }])
+    for (const bad of [
+      '[{ name: demo, target: "make x; rm -rf /" }]',
+      '[{ name: demo, target: "../x" }]',
+      '[{ name: demo, target: Demo }]',
+      '[{ name: demo, target: "" }]',
+      '[{ name: "a b", target: x }]',
+      '[{ name: demo }]',
+      '[{ name: demo, target: x, cmd: y }]',
+      '[{ name: demo, target: a }, { name: demo, target: b }]',
+    ]) {
+      expect(parse(bad).ok).toBe(false)
+    }
   })
 
   test("host is a slug naming the host the project's alerts sit on", () => {

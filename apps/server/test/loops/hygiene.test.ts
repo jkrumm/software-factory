@@ -162,8 +162,10 @@ test('a failed judgment is retried after the gap while attempts remain; a full p
 
 // ---- a checkout that cannot be made ---------------------------------------------------------------------------------------
 
-const project = (name: string, hygiene: { check: boolean; reason?: string } = { check: true }) =>
-  ({ name, repo: `/src/${name}`, source: 'file', project: { hygiene } }) as unknown as StoredProject
+const project = (
+  name: string,
+  hygiene: { check: boolean; reason?: string; probes?: { name: string; target: string }[] } = { check: true },
+) => ({ name, repo: `/src/${name}`, source: 'file', project: { hygiene } }) as unknown as StoredProject
 
 interface Extra {
   findings?: ProbeFinding[]
@@ -182,6 +184,7 @@ function world(
   let at = now
   const sweeps: string[] = []
   const skips: (string | undefined)[] = []
+  const probes: (readonly { name: string; target: string }[] | undefined)[] = []
   const loops = {
     hygienePasses: async () => {
       const newest = new Map<string, HygienePassRecord>()
@@ -202,6 +205,7 @@ function world(
     sweep: async (co, options) => {
       sweeps.push(co.ref)
       skips.push(options?.skipCheck)
+      probes.push(options?.probes)
       return { ref: co.ref, runs: [], findings: extra.findings ?? [], stale: [], slop: [] }
     },
   }
@@ -234,6 +238,7 @@ function world(
     rows,
     sweeps,
     skips,
+    probes,
     recorded,
     filedBodies,
     advance: (ms: number) => (at = new Date(at.getTime() + ms)),
@@ -265,6 +270,19 @@ test('a project with hygiene.check false is swept with its reason; the default a
   expect(await hygienePass(w.deps)).toMatchObject({ ok: true, value: { due: true, record: { repo: 'lab' } } })
   expect(await hygienePass(w.deps)).toMatchObject({ ok: true, value: { due: true, record: { repo: 'plain' } } })
   expect(w.skips).toEqual([reason, undefined])
+})
+
+test('the probes a project declares are handed to its sweep; one that declares none passes none', async () => {
+  const declared = [{ name: 'demo', target: 'demo-check' }]
+  const w = world([], new Set(), [project('lab', { check: true, probes: declared }), project('plain')])
+  await hygienePass(w.deps)
+  await hygienePass(w.deps)
+  expect(w.probes).toEqual([declared, undefined])
+})
+
+test('a declared probe is ranked after every built-in probe', () => {
+  const ranked = rankProbeFindings([finding('probe', 'probe:demo', 9), finding('runrules', 'runrules:x', 1)])
+  expect(ranked.map((f) => f.key)).toEqual(['runrules:x', 'probe:demo'])
 })
 
 test('a project that says work: true is never swept', async () => {

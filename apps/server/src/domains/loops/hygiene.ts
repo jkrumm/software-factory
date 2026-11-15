@@ -125,7 +125,11 @@ export function probeSignalText(finding: ProbeFinding, swept: Swept): string {
     `Probe: ${finding.probe} (${finding.key})`,
     `Evidence (${finding.count} item(s), up to the first ${finding.lines.length} lines):`,
     ...finding.lines,
-    finding.probe === 'check' ? 'Reproduce: make check' : 'Sweep: factory read loops',
+    finding.reproduce !== undefined
+      ? `Reproduce: ${finding.reproduce}`
+      : finding.probe === 'check'
+        ? 'Reproduce: make check'
+        : 'Sweep: factory read loops',
   ].join('\n')
 }
 

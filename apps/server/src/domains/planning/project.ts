@@ -134,15 +134,33 @@ const Checks = z.strictObject({
 })
 export type CheckTiers = z.output<typeof Checks>
 
+/** The most probes a project may declare: each is a `make` run per weekly pass, and the pass files at most 3 probe findings. */
+const MAX_DECLARED_PROBES = 16
+
+/**
+ * One probe the project declares: `target` is a Makefile target the loop runs as `make <target>`, never a shell string. A
+ * finding is keyed `probe:<name>`, so `name` is a short slug.
+ */
+const DeclaredProbe = z.strictObject({
+  name: z.string().regex(/^[a-z0-9-]{1,64}$/, 'lowercase letters, digits and dashes, at most 64'),
+  target: z.string().regex(/^[a-z0-9-]{1,64}$/, 'a Makefile target of lowercase letters, digits and dashes'),
+})
+
 /**
  * `hygiene:`: what the hygiene loop may run on the project. `check: false` says the project's `make check` needs a lab
  * the factory host does not have (inputs only a person may supply); the loop skips that probe and names `reason` in its
- * pass. The reason is required: a probe is never switched off without one.
+ * pass. The reason is required: a probe is never switched off without one. `probes` adds the project's own weekly checks
+ * (`{ name, target }`): `make <target>` in the throwaway checkout, red on any exit but 0.
  */
 const Hygiene = z
   .strictObject({
     check: z.boolean().default(true),
     reason: z.string().trim().min(1).max(300).optional(),
+    probes: z
+      .array(DeclaredProbe)
+      .max(MAX_DECLARED_PROBES)
+      .refine((list) => new Set(list.map((probe) => probe.name)).size === list.length, 'probe names are unique')
+      .default([]),
   })
   .refine((hygiene) => hygiene.check || hygiene.reason !== undefined, {
     message: '`reason` is required when `check` is false',
