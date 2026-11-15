@@ -20,7 +20,7 @@ const bump = (into: Record<string, number>, key: string, n: number): void => {
 }
 
 /**
- * Leads running and Issues queued at the start of each bucket of `[from, to)`, from `lead_attempts` (started, not yet gone)
+ * Leads running and Issues queued at the start of each bucket of `[from, to)`, from `lead_attempts` (started, not gone, its Issue not closed since)
  * and `queue_intervals` (open at the instant), with the host minute samples' peaks per bucket beside. A figure is read at
  * the instant, so a state shorter than a bucket can fall between two points: `peakRunning` and `peakQueued` are the
  * minute samples' maxima and see it.
@@ -32,10 +32,17 @@ export async function readSeries(tx: SQL, window: { from: Date; to: Date; bucket
   const start = new Date(Math.floor(from.getTime() / 1000 / bucketSeconds) * bucketSeconds * 1000)
   const step = `${bucketMinutes} minutes`
 
+  // an attempt runs from its start to the earlier of its `gone_at` (set only for a lost lead) and the first close of its Issue
+  // after the start: a lead whose Issue closed is finished, whatever its row says
   const running: unknown[] = await tx`
+    WITH attempts AS (
+      SELECT a.issue_id, a.started_at,
+        least(a.gone_at, (SELECT min(e.at) FROM factory.issue_events e
+          WHERE e.issue_id = a.issue_id AND e.result = 'applied' AND e.to_state = 'closed' AND e.at >= a.started_at)) AS ended_at
+      FROM factory.lead_attempts a WHERE a.started_at IS NOT NULL AND a.started_at <= ${to})
     SELECT b.t AS at, i.repo AS key, count(*) AS n
     FROM generate_series(${start}::timestamptz, ${to}::timestamptz, ${step}::interval) AS b(t)
-    JOIN factory.lead_attempts a ON a.started_at <= b.t AND (a.gone_at IS NULL OR a.gone_at > b.t)
+    JOIN attempts a ON a.started_at <= b.t AND (a.ended_at IS NULL OR a.ended_at > b.t)
     JOIN factory.issues i ON i.id = a.issue_id
     GROUP BY b.t, i.repo`
   const queuedByReason: unknown[] = await tx`
