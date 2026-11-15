@@ -243,3 +243,71 @@ describe('plain forms', () => {
     )
   })
 })
+
+describe('rebasing the plan file', () => {
+  const DRIVER = `bun ${join(ROOT, 'apps/cli/bin/factory.ts')} plan merge %O %A %B`
+  const git = (cwd: string, ...args: string[]) => {
+    const result = Bun.spawnSync(
+      ['git', '-c', 'user.name=t', '-c', 'user.email=t@t', '-c', 'commit.gpgsign=false', ...args],
+      { cwd, stdout: 'pipe', stderr: 'pipe' },
+    )
+    return { code: result.exitCode, out: result.stdout.toString() + result.stderr.toString() }
+  }
+  const rebase = (cwd: string) => git(cwd, '-c', `merge.plan.driver=${DRIVER}`, 'rebase', 'master')
+
+  /** a repo with the base plan on master, `branch` with its text and master with its own after it */
+  async function fork(name: string, texts: { base: string; branch: string; master: string }) {
+    const repo = await mkdtemp(join(dir, `${name}-`))
+    const path = join(repo, 'docs/plan.yaml')
+    await mkdir(join(repo, 'docs'))
+    await writeFile(join(repo, '.gitattributes'), await Bun.file(join(ROOT, '.gitattributes')).text())
+    await writeFile(path, texts.base)
+    git(repo, 'init', '-q', '-b', 'master')
+    git(repo, 'add', '-A')
+    git(repo, 'commit', '-qm', 'base')
+    git(repo, 'checkout', '-qb', 'branch')
+    await writeFile(path, texts.branch)
+    git(repo, 'commit', '-qam', 'branch')
+    git(repo, 'checkout', '-q', 'master')
+    await writeFile(path, texts.master)
+    git(repo, 'commit', '-qam', 'master')
+    git(repo, 'checkout', '-q', 'branch')
+    return { repo, path }
+  }
+
+  test('the repo declares docs/plan.yaml an append-only aggregator for the plan driver', async () => {
+    const attributes = await Bun.file(join(ROOT, '.gitattributes')).text()
+    expect(attributes).toMatch(/^docs\/plan\.yaml\s+merge=plan$/m)
+  })
+
+  test('two branches appending rows that share lines rebase clean and keep every row whole', async () => {
+    const { repo, path } = await fork('append', {
+      base: file(row('a')),
+      branch: file(row('a'), row('b')),
+      master: file(row('a'), row('c')),
+    })
+    expect(rebase(repo).code).toBe(0)
+    expect(await Bun.file(path).text()).toBe(file(row('a'), row('c'), row('b')))
+    expect((await cli(['plan', 'check', path])).code).toBe(0)
+  })
+
+  test('master editing an earlier row does not clash with the branch appending', async () => {
+    const { repo, path } = await fork('edit-master', {
+      base: file(row('a'), row('z')),
+      branch: file(row('a'), row('z'), row('b')),
+      master: file(row('a', ['    after: [z]']), row('z')),
+    })
+    expect(rebase(repo).code).toBe(0)
+    expect(await Bun.file(path).text()).toBe(file(row('a', ['    after: [z]']), row('z'), row('b')))
+  })
+
+  test('both sides editing the same row stays a conflict', async () => {
+    const { repo, path } = await fork('clash', {
+      base: file(row('a', ['    after: [z]']), row('z')),
+      branch: file(row('a', ['    after: [y]']), row('z')),
+      master: file(row('a', ['    after: [x]']), row('z')),
+    })
+    expect(rebase(repo).code).not.toBe(0)
+    expect(await Bun.file(path).text()).toContain('<<<<<<<')
+  })
+})
