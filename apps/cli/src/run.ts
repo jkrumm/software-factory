@@ -9,6 +9,7 @@ import { filingContract, filingGuide } from './filing.ts'
 import { followVerb } from './follow.ts'
 import { OPERATIONS } from './generated/operations.ts'
 import { planVerb } from './plan.ts'
+import { planMergeVerb } from './plan-merge.ts'
 import { retroVerb } from './retro.ts'
 import { type BodyField, extensionOf, type FlagValue, type Io, type Operation, runOperation } from './operation.ts'
 import { type Format, render } from './output.ts'
@@ -71,6 +72,10 @@ const HAND_WRITTEN: readonly [string, string][] = [
   [
     'plan check [file]',
     'check a plan file (default docs/plan.yaml, - is stdin) with line numbers; exit 2 on a problem (offline)',
+  ],
+  [
+    'plan merge <base> <ours> <theirs>',
+    "a git merge driver for docs/plan.yaml: keeps master's file and appends the branch's added rows (offline)",
   ],
   ['hook <event>', 'the Claude Code hook (reads FACTORY_SESSION; never fails the session)'],
 ]
@@ -313,6 +318,7 @@ export async function run(argv: string[], io: Io, operations: readonly Operation
     if (argv[0] === 'retro') return await retroVerb(argv.slice(1), io)
     if (argv[0] === 'issue' && argv[1] === 'schema') return issueSchemaVerb(argv.slice(2), io)
     if (argv[0] === 'plan' && (argv[1] === 'schema' || argv[1] === 'check')) return await planVerb(argv.slice(1), io)
+    if (argv[0] === 'plan' && argv[1] === 'merge') return planMergeVerb(argv.slice(2), io)
     if (argv[0] === 'door' && argv[1] === 'token') return doorTokenVerb(argv.slice(2), io)
     // Stage 1 finds the command; flags it does not know are left for stage 2, which knows the command's own.
     const tokens = parseArgs({ args: argv, options: FIRST_STAGE, allowPositionals: true, strict: false, tokens: true })

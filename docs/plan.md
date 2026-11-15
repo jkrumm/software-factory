@@ -211,6 +211,27 @@ state):
 The Issue's edges are not in `factory issue show`; `factory read chain --format plain` lists what blocks each Issue
 (`blocking.issue_<n>`).
 
+## Rebasing a plan file
+
+Leads append rows to `docs/plan.yaml` faster than a check and a CI run take, so a plain rebase conflicts on the last
+lines every time. The repo declares the file an append-only aggregator in `.gitattributes`:
+
+```
+docs/plan.yaml merge=plan
+```
+
+and the rebase names the driver on its command line (git keeps no driver in a tracked file):
+
+```
+git -c merge.plan.driver='factory plan merge %O %A %B' rebase origin/master && factory plan check
+```
+
+`factory plan merge <base> <ours> <theirs>` keeps master's file and appends what the branch added at the end of it. A
+side that also changed existing lines is no append: the driver leaves git's line merge with its conflict markers and
+exits 1, so two edits of one row stay a conflict to read. The resolution ends no merge window and owes no local
+`make check`; `factory plan check` after it refuses a duplicate row key. Git's own `merge=union` is not used: it drops
+the lines two appended rows share and leaves a row corrupt.
+
 ## Splitting a plan into rows
 
 - One row is one change that ships alone: its own lead, review, deploy and verify. If two halves could not be reverted
