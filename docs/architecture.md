@@ -355,7 +355,7 @@ through `receive` in `app/intake.ts`; the answer is a triage outcome (`docs/lang
 - **Ship** (`app/quality-ship.ts`, `domains/quality/gate.ts`): the lead names merged commits; git must find them on the
   default branch, read by the factory, never taken from the lead. Without that the ship is refused with the error named and
   counted as friction; so is the ship of an Issue flagged `checkpoint: spec` with no Spec submitted ("The Spec checkpoint", under Checkpoints). A review is recorded as evidence when agw's ledger covers the range, and its absence is recorded
-  with its reason; it never refuses a ship (NL23). Whether a rebased, squash-merged change still counts as reviewed is
+  with its reason; it never refuses a ship (NL23). A commit agw routes to light is no absence (NL12: a review is owed at standard or deep), so a range whose only uncovered commits are light is recorded `not_required` and the friction loop does not count it; the brief has the lead read `agw review covered` before the merge. Whether a rebased, squash-merged change still counts as reviewed is
   agw's judgment (`covered`), not the factory's; `factory issue ship` prints one stderr line naming the range to `/review`
   when the answer is `uncovered`, or the reason when it was not read. The lead also states one line per acceptance line of the Issue
   (`--acceptance "met: ..."` or `"not met: ..."`; the factory parses no criteria), recorded as `acceptance` evidence and shown on the

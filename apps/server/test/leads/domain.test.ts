@@ -457,6 +457,7 @@ describe('the brief', () => {
     expect(STANDING_ORDERS).toMatch(/Watch/)
     expect(STANDING_ORDERS).toMatch(/once per ship range, standard or deep/)
     expect(STANDING_ORDERS).toMatch(/never refuses a ship/)
+    expect(STANDING_ORDERS).toMatch(/agw review covered --cwd <worktree> --range origin\/master\.\.HEAD/)
   })
 
   test('outside text is data in a fence longer than any backtick run inside', () => {

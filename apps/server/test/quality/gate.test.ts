@@ -5,6 +5,7 @@ import {
   ciStateOf,
   parseAcceptance,
   type ReviewRead,
+  reviewOf,
 } from '../../src/domains/quality/evidence.ts'
 import { judgeShip } from '../../src/domains/quality/gate.ts'
 import { err, ok, portError } from '../../src/kernel/result.ts'
@@ -124,6 +125,22 @@ test('a change that needs no review is a review that exists', () => {
     acceptance: { statements: [] },
   })
   expect(verdict).toMatchObject({ accepted: true, commits: { deploys: false }, review: { status: 'not_required' } })
+})
+
+test('a range agw routes to light owes no review (NL12); a standard or deep commit beside it still does', () => {
+  const light = { sha: 'b'.repeat(40), subject: 'fix: y', required: 'light' }
+  const deep = { sha: 'c'.repeat(40), subject: 'chore: z', required: 'deep' }
+  const base = { ranges: [], problem: null }
+  expect(reviewOf({ ...base, read: { tier: 'light', covered: false, uncovered: [light] } })).toMatchObject({
+    status: 'not_required',
+    uncovered: [],
+    reason: null,
+  })
+  expect(reviewOf({ ...base, read: { tier: 'deep', covered: false, uncovered: [light, deep] } })).toMatchObject({
+    status: 'uncovered',
+    uncovered: [deep],
+    reason: expect.not.stringContaining('fix: y'),
+  })
 })
 
 test('the lead’s acceptance lines are parsed: met, or not met with why; anything else is named', () => {
