@@ -51,7 +51,15 @@ const VARIANTS = [
   { name: 'phone-light', viewport: { width: 390, height: 844 }, colorScheme: 'light' },
 ] as const
 
-for (const variant of VARIANTS) {
+export type VariantName = (typeof VARIANTS)[number]['name']
+
+/**
+ * The screenshots of one viewport and theme. One file per variant (`screenshots-<variant>.e2e.ts`) calls this, so the
+ * variants are units the shard planner (`scripts/e2e-shard.ts`) can spread over the CI shards.
+ */
+export function screenshotSuite(variantName: VariantName) {
+  const variant = VARIANTS.find((candidate) => candidate.name === variantName)
+  if (!variant) throw new Error(`no variant ${variantName}`)
   test.describe(variant.name, () => {
     test.use({ viewport: variant.viewport, colorScheme: variant.colorScheme })
 
@@ -291,10 +299,8 @@ for (const variant of VARIANTS) {
       await shot('palette-query')
     })
   })
-}
 
-/** Flow with the sidebar open, and collapsed at the primary viewport. */
-for (const variant of VARIANTS) {
+  /** Flow with the sidebar open, and collapsed at the primary viewport. */
   test(`sidebar ${variant.name}`, async ({ browser }) => {
     const context = await browser.newContext({ viewport: variant.viewport, colorScheme: variant.colorScheme })
     const page = await context.newPage()
