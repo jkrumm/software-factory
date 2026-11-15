@@ -504,8 +504,9 @@ test('a replayed outbox pages once: the same asks and passes again send nothing'
   expect(published).toHaveLength(sentBefore)
   expect((await pages()).length).toBe(listed.length)
 
-  // One page per checkpoint that reached the owner: the Spec, one Decision, one Errand. Nothing the factory settled paged.
-  expect(published.map((p) => p.tags).sort()).toEqual(['decision', 'errand', 'review'])
+  // One page per checkpoint that reached the owner: the Spec, one Decision, two Errands (the second was joined by another Issue,
+  // which paged nothing). Nothing the factory settled paged.
+  expect(published.map((p) => p.tags).sort()).toEqual(['decision', 'errand', 'errand', 'review'])
 })
 
 test('a Decision reaches Needs you only after the Judge saw it, and is amended by a second ask on the open question', async () => {
@@ -574,6 +575,7 @@ test('only the Spec screen, the Judge and the Errand screen called agw', async (
     'factory-ask',
     'factory-ask',
     'factory-ask',
+    'factory-errand',
     'factory-errand',
     'factory-ask',
     'factory-ask',
