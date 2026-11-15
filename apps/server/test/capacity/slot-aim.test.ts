@@ -8,6 +8,7 @@ import {
   aimStep,
   swapGrowing,
 } from '../../src/domains/capacity/slot-aim.ts'
+import { ok } from '../../src/kernel/result.ts'
 import { startWorld, value, type World } from '../planning/support.ts'
 
 const AT = new Date('2026-11-14T12:00:00Z')
@@ -192,5 +193,29 @@ describe('the aim pass and the grant', () => {
     const third = value(await touchSlot(deps, { id: 'c', name: 'c' }))
     expect(third.granted).toBe(false)
     expect(third.why).toContain('no recent free-memory reading')
+  })
+
+  test('a refusal on load names where its number comes from: the setting without the aim, the cores with it', async () => {
+    const slotDeps = (mode: 'shadow' | 'on') => ({
+      ...world.deps,
+      slots: 2,
+      slotsMax: 6,
+      slotExtraLoad: 12,
+      slotAim: mode,
+      cores: 12,
+    })
+    const wait = async (mode: 'shadow' | 'on') => {
+      await world.reset()
+      world.clock.set(AT)
+      await world.db.sql`
+        INSERT INTO factory.slot_aim (id, target, quiet_since, changed_at) VALUES (1, 4, NULL, ${AT})`
+      world.host.loadValue = ok(30)
+      for (const id of ['a', 'b']) value(await touchSlot(slotDeps(mode), { id, name: id }))
+      return value(await touchSlot(slotDeps(mode), { id: 'c', name: 'c' }))
+    }
+    expect((await wait('shadow')).why).toContain('load 30 is over 12 (FACTORY_SLOT_EXTRA_LOAD)')
+    expect((await wait('on')).why).toContain(
+      'load 30 is over 24 (2 x 12 cores under FACTORY_SLOT_AIM, FACTORY_SLOT_EXTRA_LOAD is not read)',
+    )
   })
 })
