@@ -112,33 +112,39 @@ export const failureSignature = (detail: string): string =>
 const failingSet = (detail: string): Set<string> => new Set(failingLines(detail).map(failureSignature))
 
 /**
- * Whether `now` is a failure that was already there in `before`: the failing lines of this run are all among the failing
- * lines of that one. A target that lists its drift prints fewer items as they are fixed, and numbers (counts, versions,
- * pids) change; that is the same red, while a line the baseline never had is a new failure, an added drift item
- * included. A run that printed no line is compared whole.
+ * Whether `now` is a failure that was already there in `before`, the details of the earlier runs that were red: the
+ * failing lines of this run are all among the failing lines of those runs together. A target that lists its drift prints
+ * fewer items as they are fixed, and numbers (counts, versions, pids) change; that is the same red, while a line none of
+ * them had is a new failure, an added drift item included. A run that printed no line is compared whole, to each.
  */
-function failedBefore(now: string, before: string): boolean {
+function failedBefore(now: string, before: readonly string[]): boolean {
   const mine = failingSet(now)
-  if (mine.size === 0) return failureSignature(now) === failureSignature(before)
-  const earlier = failingSet(before)
+  if (mine.size === 0) return before.some((detail) => failureSignature(now) === failureSignature(detail))
+  const earlier = new Set(before.flatMap((detail) => [...failingSet(detail)]))
   return [...mine].every((line) => earlier.has(line))
 }
 
 /**
- * Marks each failed `make <target>` check whose failing lines were all failing in `baseline`, the repo's last finished
- * run before the ship: a verify red in a component the change never touched (a pending OS update, a dependency that
- * moved, a drift list that shrank) is not a regression of the Issue. A line the baseline did not have keeps the
- * check the change's. The version, CI, checkout and probe checks stay the change's: each reads this ship's own commit
- * or the live system. With no baseline, or one that was green, nothing is marked.
+ * Marks each failed `make <target>` check whose failing lines were all failing in `baseline`: the repo's last finished
+ * run before the ship, and the last run of each other Issue's watch in the repo that ended in a regression no pass has
+ * answered yet (one red, one owner: that Issue's lead has it, and it is not the Issue's whose watch sees the same red).
+ * A verify red in a component the change never touched (a pending OS update, a dependency that moved, a drift list
+ * that shrank) is not a regression of the Issue. A line none of them had keeps the check the change's. The version, CI,
+ * checkout and probe checks stay the change's: each reads this ship's own commit or the live system. With no baseline,
+ * or one that was green, nothing is marked.
  */
 export function markInherited(checks: readonly Check[], baseline: readonly CheckRecord[] | null): Check[] {
   if (!baseline) return [...checks]
   return checks.map((check) => {
     if (check.ok || check.blocked || !check.name.startsWith('make ')) return check
-    const before = baseline.some(
-      (old) => old.name === check.name && (!old.ok || old.inherited) && failedBefore(check.detail, old.detail),
-    )
-    return before ? { ...check, inherited: true } : check
+    const red = baseline.filter((old) => old.name === check.name && (!old.ok || old.inherited))
+    return red.length > 0 &&
+      failedBefore(
+        check.detail,
+        red.map((old) => old.detail),
+      )
+      ? { ...check, inherited: true }
+      : check
   })
 }
 

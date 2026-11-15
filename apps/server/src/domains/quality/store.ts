@@ -69,6 +69,11 @@ export interface QualityStore {
    * `before`: what verify said of the repo before this ship. Null when there was none.
    */
   baselineChecks(input: { repo: string; before: Date; exceptIssue: IssueId }): Promise<CheckRecord[] | null>
+  /**
+   * The checks of the last run of each other Issue's watch in the repo that ended in a regression in the last day and
+   * that no later pass of that Issue has answered: a red some other lead already owns. Empty when there is none.
+   */
+  openRegressionChecks(input: { repo: string; exceptIssue: IssueId; now: Date }): Promise<CheckRecord[]>
   /** opens a watch; false when it was opened already (the same effect run again) */
   openWatch(watch: WatchRecord): Promise<boolean>
   /** open watches no check holds at `now`; the caller works out which are due */

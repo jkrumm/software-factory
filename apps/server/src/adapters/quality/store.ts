@@ -12,6 +12,9 @@ import type {
 import type { IssueId } from '../../kernel/ids.ts'
 import type { Key } from '../../kernel/keys.ts'
 
+/** How long a regression of another Issue's watch is taken as a red its lead still owns, unless a pass answered it. */
+const OPEN_REGRESSION_MS = 24 * 60 * 60_000
+
 const OUTCOME = z.enum(['green', 'red', 'blocked'])
 const CheckList = z.array(
   z.object({ name: z.string(), ok: z.boolean(), detail: z.string(), inherited: z.boolean().optional() }),
@@ -146,6 +149,20 @@ export function postgresQualityStore(tx: SQL): QualityStore {
         WHERE i.repo = ${repo} AND w.issue_id <> ${exceptIssue} AND c.at < ${before} AND c.outcome <> 'blocked'
         ORDER BY c.at DESC LIMIT 1`
       return row ? CheckList.parse(z.object({ checks: z.unknown() }).parse(row).checks) : null
+    },
+
+    async openRegressionChecks({ repo, exceptIssue, now }) {
+      const rows = await tx`
+        SELECT last.checks FROM factory.quality_watches w
+        JOIN factory.issues i ON i.id = w.issue_id
+        JOIN LATERAL (
+          SELECT checks FROM factory.quality_checks WHERE watch_key = w.key ORDER BY n DESC LIMIT 1) last ON true
+        WHERE i.repo = ${repo} AND w.issue_id <> ${exceptIssue} AND w.answer = 'regressed'
+          AND w.answered_at <= ${now} AND w.answered_at > ${new Date(now.getTime() - OPEN_REGRESSION_MS)}
+          AND NOT EXISTS (
+            SELECT 1 FROM factory.quality_watches later
+            WHERE later.issue_id = w.issue_id AND later.answer = 'passed' AND later.answered_at > w.answered_at)`
+      return rows.flatMap((row: unknown) => CheckList.parse(z.object({ checks: z.unknown() }).parse(row).checks))
     },
 
     async openWatch(watch) {

@@ -208,6 +208,17 @@ test('two runs of one red target that differ by a drift line are inherited; a ne
   expect(markInherited([check('exit 2: ')], before)[0]?.inherited).toBeUndefined()
 })
 
+test('the failing lines of a red target may come from several earlier runs together: one line none of them had is the change’s', () => {
+  const run = (...items: string[]): Check => ({ name: 'make verify', ok: false, detail: `exit 2: ${items.join('\n')}` })
+  const before = [run('macos 26.1 pending'), run('tailscale 1.90 behind')]
+  const inheritedOf = (check: Check) => markInherited([check], before)[0]?.inherited
+  expect(inheritedOf(run('macos 26.1 pending', 'tailscale 1.90 behind'))).toBe(true)
+  expect(inheritedOf(run('macos 26.1 pending', 'weatherorb build broke'))).toBeUndefined()
+  // a run that was green is no part of the union
+  const mixed = [run('macos 26.1 pending'), { name: 'make verify', ok: true, detail: 'exit 0' }]
+  expect(markInherited([run('macos 26.1 pending')], mixed)[0]?.inherited).toBe(true)
+})
+
 test('the regression note names the failed checks first, then their first failing lines, then the cut output', () => {
   const output = [
     ...Array.from({ length: 150 }, (_, n) => `line ${n} of the output`),

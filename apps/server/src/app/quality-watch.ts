@@ -126,9 +126,12 @@ async function checkOne(deps: WatchDeps, watch: OpenWatch, pass: WatchPass): Pro
     }
     const ship = await quality.lastShip(watch.issueId, watch.attempt)
     // What verify said of the repo before this ship: a make target red the same way then is not this change's.
-    const baseline = ship
+    const before = ship
       ? await quality.baselineChecks({ repo: issue.repo, before: ship.at, exceptIssue: watch.issueId })
       : null
+    // And what another lead already owns: a red that Issue's watch regressed on is that lead's, not this change's.
+    const owned = ship ? await quality.openRegressionChecks({ repo: issue.repo, exceptIssue: watch.issueId, now }) : []
+    const baseline = before || owned.length > 0 ? [...(before ?? []), ...owned] : null
     return ok({ issue, ship, baseline })
   })
   if (!claimed.ok) return claimed
