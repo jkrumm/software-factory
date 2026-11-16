@@ -42,7 +42,7 @@ async function factsOf(deps: SettleDeps, id: ArtifactId, revision: number): Step
   return deps.uow.run<Facts | 'dropped', CheckpointError>(async ({ work, checkpoints }) => {
     const spec = await checkpoints.lockSpecRevision(id, revision)
     if (!spec || spec.answered || spec.screen?.outcome) return ok('dropped')
-    const issue = await issueOf(work, spec.artifact.issueId)
+    const issue = spec.artifact.issueId ? await issueOf(work, spec.artifact.issueId) : null
     if (!issue || issue.state === 'closed') return ok('dropped')
     return ok({
       spec,
@@ -94,7 +94,7 @@ function record(deps: SettleDeps, id: ArtifactId, revision: number, verdict: Ver
     const { work, checkpoints } = stores
     const spec = await checkpoints.lockSpecRevision(id, revision)
     if (!spec || spec.answered || spec.screen?.outcome) return ok('dropped')
-    const issue = await issueOf(work, spec.artifact.issueId)
+    const issue = spec.artifact.issueId ? await issueOf(work, spec.artifact.issueId) : null
     if (!issue || issue.state === 'closed') return ok('dropped')
     const at = deps.clock.now()
     const tries = (spec.screen?.tries ?? 0) + (verdict.kind === 'failed' || verdict.by !== 'rule' ? 1 : 0)
@@ -230,6 +230,8 @@ export async function previewSpecScreen(deps: SettleDeps, id: ArtifactId): Step<
       if (!latest) return err({ kind: 'invalid', detail: `${id} has no revision` })
       const spec = await checkpoints.lockSpecRevision(id, latest.n, { lock: false })
       if (!spec) return err({ kind: 'invalid', detail: `${id} has no revision ${latest.n}` })
+      if (!artifact.issueId)
+        return err({ kind: 'invalid', detail: `${id} is a standalone artifact: no Issue to screen it for` })
       const issue = await issueOf(work, artifact.issueId)
       if (!issue) return err({ kind: 'unknown_issue', issueId: artifact.issueId })
       return ok({

@@ -244,6 +244,8 @@ export const ReadArtifactLine = z
     /** the owner's latest verdict word (looks_good, with_notes, changes, no_longer_applies); null while none */
     verdict: z.string().nullable(),
     at: iso,
+    /** true when another Issue owns it (or none does) and this Issue is only linked to it (`artifact link`) */
+    linked: z.boolean().default(false),
   })
   .meta({ id: 'ReadArtifactLine' })
 export type ReadArtifactLine = z.infer<typeof ReadArtifactLine>

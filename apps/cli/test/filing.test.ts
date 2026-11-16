@@ -46,7 +46,7 @@ async function cli(argv: string[], env: Record<string, string> = {}) {
 }
 
 const errorLine = (text: string) => JSON.parse(text).error as { kind: string; message: string; hint: string }
-const filed = { status: 200, body: { issue: 'issue_1', state: 'open', filed: true } }
+const filed = { status: 200, body: { issue: 'issue_1', id: 'issue_1', state: 'open', filed: true } }
 
 describe('the filing contract', () => {
   test('its example parses with the server body schema', () => {

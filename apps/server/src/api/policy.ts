@@ -73,6 +73,8 @@ export const POLICY: readonly Rule[] = [
   rule('POST', '/v1/issues/:id/errands', LEAD),
   rule('POST', '/v1/errands/requests', LEAD),
   rule('POST', '/v1/errands/:id/check', LEAD),
+  rule('POST', '/v1/artifacts', LEAD),
+  rule('POST', '/v1/artifacts/:id/links', LEAD),
   rule('POST', '/v1/artifacts/:id/revisions', LEAD),
   rule('POST', '/v1/artifacts/:id/annotations/:annotationId/reply', LEAD),
   rule('POST', '/v1/sessions/:session/note', LEAD),

@@ -62,7 +62,7 @@ check, `docs/architecture.md`).
 | Word | Means | Retires |
 |-|-|-|
 | **Checkpoint** | Where the factory stops for a person: a Decision, a review of a Concept or Spec, an Errand. Never a merge | Taste gate |
-| **Artifact** | What a lead hands to a person. One model, four kinds: Concept, Spec, Decision, Report | Document |
+| **Artifact** | What a lead hands to a person. One model, four kinds: Concept, Spec, Decision, Report. An Issue owns it, or none does (a standalone Report, `artifact new`); links name the other Issues it concerns | Document |
 | Concept | A direction for a whole product, UX or architecture, before building. Three or four per project, ever. Its result goes into the project's `DESIGN.md` | |
 | Spec | A larger plan to review | |
 | Decision | One question as a form: recommendation, what was checked, cost per option, what happens with no answer. Refused when incomplete; it reaches the owner only after the Judge saw it; a second ask on the open one amends it. Raised while its Concept or Spec waits for review, it is about that artifact and waits together with the review | Ask (noun), question, decision card |

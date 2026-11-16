@@ -35,7 +35,7 @@ beforeAll(async () => {
         return Response.json({ error: 'a bearer token is required', code: 'unauthorized' }, { status: 401 })
       }
       if (url.pathname === '/v1/issues') return Response.json({ issues: [] })
-      return Response.json({ issue: 'issue_1', state: 'open', filed: true })
+      return Response.json({ issue: 'issue_1', id: 'issue_1', state: 'open', filed: true })
     },
   })
 })

@@ -21,7 +21,7 @@ export const Route = createFileRoute('/artifacts/$id')({
     void queryClient
       .fetchQuery({ ...artifactQuery(params.id, deps.revision), staleTime: PREFETCH_STALE_MS })
       .then((detail) => {
-        const number = issueNumber(detail.artifact.issueId)
+        const number = detail.artifact.issueId ? issueNumber(detail.artifact.issueId) : null
         if (number !== null) prefetchDetail('issue', String(number))
       })
       .catch(() => undefined)

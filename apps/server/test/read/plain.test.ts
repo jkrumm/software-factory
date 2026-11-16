@@ -244,6 +244,7 @@ describe('the read token', () => {
           revisions: 2,
           verdict: 'looks_good',
           at: '2026-11-07T10:02:00.000Z',
+          linked: false,
         },
       ],
       shipping: [

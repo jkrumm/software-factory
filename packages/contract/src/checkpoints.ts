@@ -1,4 +1,5 @@
 import * as z from 'zod'
+import { IssueRefInput, MAX_AFTER_IDS } from './issues.ts'
 
 /**
  * Where the factory stops for a person: Decisions, artifacts, Errands and the owner's line (`docs/language.md`, "Where
@@ -124,7 +125,12 @@ export const RevisionView = z.object({
 
 export const ArtifactSummary = z.object({
   id: z.string(),
-  issueId: z.string(),
+  /** the Issue that owns it; null for a standalone artifact (`artifact new`), which names its `repo` instead */
+  issueId: z.string().nullable(),
+  /** the project a standalone artifact concerns; null when an Issue owns it (the Issue has the repo) */
+  repo: z.string().nullable().default(null),
+  /** the Issues it concerns besides its owner: `artifact new --issue`, `artifact link` */
+  links: z.array(z.string()).default([]),
   kind: z.enum(ARTIFACT_KINDS),
   title: z.string(),
   format: z.enum(['markdown', 'html']),
@@ -143,6 +149,26 @@ export const SubmitBody = z
     content: z.string().optional(),
   })
   .meta({ id: 'SubmitBody' })
+
+/**
+ * `artifact new`: a Report no Issue owns, for the owner's comments. `repo` is a repo's directory name or a path inside a
+ * source root (422 `repo_outside_roots`); `issue` lists the Issues it concerns. The same `key` again files nothing.
+ */
+export const NewArtifactBody = z
+  .object({
+    repo: z.string().optional(),
+    /** only `report`: a Spec or Concept waits for a verdict, which an Issue's lead does */
+    kind: z.enum(['report']).optional(),
+    title: z.string().optional(),
+    contentFormat: z.enum(['markdown', 'html']).optional(),
+    content: z.string().optional(),
+    issue: z.array(IssueRefInput).max(MAX_AFTER_IDS).optional(),
+    key: z.string().trim().min(1).max(200).optional(),
+  })
+  .meta({ id: 'NewArtifactBody' })
+
+/** `artifact link`: the artifact also concerns this Issue. */
+export const LinkArtifactBody = z.object({ issue: IssueRefInput.optional() }).meta({ id: 'LinkArtifactBody' })
 
 export const ReviseBody = z
   .object({

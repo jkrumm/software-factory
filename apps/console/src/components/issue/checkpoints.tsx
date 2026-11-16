@@ -101,7 +101,12 @@ export function Checkpoints({ issue, now }: { issue: Issue; now: number }) {
                   <span className="w-20 shrink-0 text-xs text-muted-foreground">
                     {ARTIFACT_KIND_LABEL[artifact.kind] ?? artifact.kind}
                   </span>
-                  <span className="min-w-0 flex-1 font-medium">{artifact.title}</span>
+                  <span className="min-w-0 flex-1 font-medium">
+                    {artifact.title}
+                    {artifact.linked ? (
+                      <span className="ml-2 text-xs font-normal text-muted-foreground">linked</span>
+                    ) : null}
+                  </span>
                   <span className="text-xs text-muted-foreground tabular-nums">
                     {artifact.revisions} {artifact.revisions === 1 ? 'revision' : 'revisions'}
                   </span>

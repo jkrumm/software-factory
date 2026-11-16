@@ -82,7 +82,8 @@ const PrecedentRow = z.object({
 const ArtifactRow = z.object({
   id: z.string(),
   key: z.string(),
-  issue_id: z.string(),
+  issue_id: z.string().nullable(),
+  repo: z.string().nullable(),
   kind: z.enum(ARTIFACT_KINDS),
   title: z.string(),
   format: z.enum(FORMATS),
@@ -222,7 +223,8 @@ const artifactOf = (raw: unknown): ArtifactRecord => {
   return {
     id: row.id as ArtifactId,
     key: row.key as Key,
-    issueId: row.issue_id as IssueId,
+    issueId: row.issue_id as IssueId | null,
+    repo: row.repo,
     kind: row.kind,
     title: row.title,
     format: row.format,
@@ -375,7 +377,7 @@ export function postgresCheckpointStore(tx: SQL): CheckpointStore {
     if (ids.length === 0) return grouped
     const rows: unknown[] = await tx`
       SELECT decision_id, step, outcome, detail, at, tries FROM factory.decision_steps
-      WHERE decision_id IN ${tx(ids)} ORDER BY array_position(ARRAY['policy', 'judge', 'default', 'owner'], step)`
+      WHERE decision_id IN ${tx([...ids])} ORDER BY array_position(ARRAY['policy', 'judge', 'default', 'owner'], step)`
     for (const raw of rows) {
       const row = StepRow.parse(raw)
       const list = grouped.get(row.decision_id) ?? []
@@ -539,8 +541,8 @@ export function postgresCheckpointStore(tx: SQL): CheckpointStore {
 
     async insertArtifact(a) {
       const rows: unknown[] = await tx`
-        INSERT INTO factory.artifacts (id, key, issue_id, kind, title, format, author, created_at)
-        VALUES (${a.id}, ${a.key}, ${a.issueId}, ${a.kind}, ${a.title}, ${a.format}, ${a.author}, ${a.createdAt})
+        INSERT INTO factory.artifacts (id, key, issue_id, repo, kind, title, format, author, created_at)
+        VALUES (${a.id}, ${a.key}, ${a.issueId}, ${a.repo ?? null}, ${a.kind}, ${a.title}, ${a.format}, ${a.author}, ${a.createdAt})
         ON CONFLICT DO NOTHING
         RETURNING id`
       return rows.length === 1
@@ -559,10 +561,31 @@ export function postgresCheckpointStore(tx: SQL): CheckpointStore {
     async artifacts(filter) {
       const rows: unknown[] = await tx`
         SELECT * FROM factory.artifacts
-        WHERE (${filter.issueId ?? null}::text IS NULL OR issue_id = ${filter.issueId ?? null})
+        WHERE (${filter.issueId ?? null}::text IS NULL OR issue_id = ${filter.issueId ?? null}
+            OR EXISTS (SELECT 1 FROM factory.artifact_links l
+              WHERE l.artifact_id = artifacts.id AND l.issue_id = ${filter.issueId ?? null}))
           AND (${filter.kind ?? null}::text IS NULL OR kind = ${filter.kind ?? null})
         ORDER BY created_at DESC, id DESC LIMIT ${filter.limit}`
       return rows.map(artifactOf)
+    },
+
+    async linkArtifact(artifact, issue, at) {
+      const rows: unknown[] = await tx`
+        INSERT INTO factory.artifact_links (artifact_id, issue_id, linked_at)
+        VALUES (${artifact}, ${issue}, ${at})
+        ON CONFLICT DO NOTHING
+        RETURNING artifact_id`
+      return rows.length === 1
+    },
+
+    async artifactLinks(ids) {
+      const links = new Map<ArtifactId, IssueId[]>(ids.map((id) => [id, []]))
+      if (ids.length === 0) return links
+      const rows: { artifact_id: string; issue_id: string }[] = await tx`
+        SELECT artifact_id, issue_id FROM factory.artifact_links
+        WHERE artifact_id IN ${tx([...ids])} ORDER BY linked_at, issue_id`
+      for (const row of rows) links.get(row.artifact_id as ArtifactId)?.push(row.issue_id as IssueId)
+      return links
     },
 
     async insertRevision(r) {

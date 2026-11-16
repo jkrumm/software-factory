@@ -489,6 +489,8 @@ export interface ArtifactWritten {
   result: 'applied' | 'replayed'
   artifact: ArtifactRecord
   revisions: RevisionRecord[]
+  /** the Issues it is linked to besides its owner */
+  links: IssueId[]
   /** null when no event touched the Issue (a Report, an annotation) */
   issue: IssueMove | null
 }
@@ -508,7 +510,8 @@ async function written(
 ): Promise<ArtifactWritten> {
   const artifact = await checkpoints.artifact(id)
   if (!artifact) throw new Error(`artifact ${id} vanished inside its own transaction`)
-  return { result, artifact, revisions: await checkpoints.revisions(id), issue }
+  const links = (await checkpoints.artifactLinks([id])).get(id) ?? []
+  return { result, artifact, revisions: await checkpoints.revisions(id), links, issue }
 }
 
 /**
@@ -613,17 +616,17 @@ export async function reviseArtifact(
   return deps.uow.run(async ({ work, checkpoints }) => {
     const artifact = await checkpoints.artifact(input.artifactId)
     if (!artifact) return err(notFound('artifact', input.artifactId))
-    const issue = await issueOf(work, artifact.issueId)
-    if (!issue) return err({ kind: 'unknown_issue', issueId: artifact.issueId })
+    const issue = artifact.issueId ? await issueOf(work, artifact.issueId) : null
+    if (artifact.issueId && !issue) return err({ kind: 'unknown_issue', issueId: artifact.issueId })
     if (artifact.kind === 'decision') return err({ kind: 'invalid', detail: 'a Decision is not revised: ask again' })
     const revisions = await checkpoints.revisions(artifact.id)
     // The same content as the latest revision is the lead sending it again; going back to an older one is a new revision.
     if (revisions.at(-1)?.sha256 === blob.value.sha256) {
-      return ok(await written(checkpoints, artifact.id, 'replayed', moveOf(issue)))
+      return ok(await written(checkpoints, artifact.id, 'replayed', issue ? moveOf(issue) : null))
     }
     const n = (revisions.at(-1)?.n ?? 0) + 1
     let move: IssueMove | null = null
-    if (waitsForReview(artifact.kind)) {
+    if (waitsForReview(artifact.kind) && issue) {
       if (input.attempt === null) {
         return err({
           kind: 'missing_field',
@@ -633,7 +636,7 @@ export async function reviseArtifact(
       }
       const recorded = applied(
         await recordIn(work, deps, {
-          issueId: artifact.issueId,
+          issueId: issue.id,
           key: key('submitted', artifact.id, n),
           event: {
             kind: 'submitted',
@@ -657,9 +660,13 @@ export async function reviseArtifact(
       note: input.note?.trim() || null,
       createdAt: at,
     })
-    if (!stored) return err({ kind: 'version_conflict', issueId: artifact.issueId, expected: issue.version })
+    if (!stored) {
+      return issue
+        ? err({ kind: 'version_conflict', issueId: issue.id, expected: issue.version })
+        : err({ kind: 'invalid', detail: `revision ${n} of ${artifact.id} was written by a concurrent request` })
+    }
     // A Spec revision is paged by the screen once it passes it to the owner (`checkpoints-specs.ts`); a Concept at once.
-    if (artifact.kind === 'concept') {
+    if (artifact.kind === 'concept' && issue) {
       await checkpoints.planPage(
         reviewPage({
           issue: { id: issue.id, repo: issue.repo },
@@ -752,11 +759,6 @@ export function replyAnnotation(
 ): Promise<CheckpointResult<ArtifactWritten>> {
   const read = readDisposition(input.raw)
   if (!read.ok) return Promise.resolve(read)
-  if (input.attempt === null) {
-    return Promise.resolve(
-      err({ kind: 'missing_field', fields: ['attempt'], detail: 'an annotation reply needs: attempt' }),
-    )
-  }
   return deps.uow.run(async ({ work, checkpoints }) => {
     const artifact = await checkpoints.artifact(input.artifactId)
     if (!artifact) return err(notFound('artifact', input.artifactId))
@@ -764,9 +766,13 @@ export function replyAnnotation(
     if (!annotation || annotation.artifactId !== artifact.id) return err(notFound('annotation', input.annotationId))
     if (annotation.author !== 'owner')
       return err({ kind: 'invalid', detail: "only the owner's annotations are answered" })
-    const issue = await issueOf(work, artifact.issueId)
-    if (!issue) return err({ kind: 'unknown_issue', issueId: artifact.issueId })
-    if (issue.attempt !== input.attempt) {
+    // A standalone artifact has no lead and no attempt: whoever may call the verb answers.
+    const issue = artifact.issueId ? await issueOf(work, artifact.issueId) : null
+    if (artifact.issueId && !issue) return err({ kind: 'unknown_issue', issueId: artifact.issueId })
+    if (issue && input.attempt === null) {
+      return err({ kind: 'missing_field', fields: ['attempt'], detail: 'an annotation reply needs: attempt' })
+    }
+    if (issue && issue.attempt !== input.attempt) {
       return err({
         kind: 'invalid',
         detail: `attempt ${input.attempt} is not the Issue's current attempt (${issue.attempt}): only its own lead answers`,
@@ -860,10 +866,13 @@ export async function verdictIn(
     }
     const verdictKey = key('verdict', artifact.id, revision)
     const existing = await checkpoints.verdictByKey(verdictKey)
-    const issue = await issueOf(work, artifact.issueId)
-    if (!issue) return err({ kind: 'unknown_issue', issueId: artifact.issueId })
+    const issue = artifact.issueId ? await issueOf(work, artifact.issueId) : null
+    if (artifact.issueId && !issue) return err({ kind: 'unknown_issue', issueId: artifact.issueId })
     if (existing) {
-      return ok({ ...(await written(checkpoints, artifact.id, 'replayed', moveOf(issue))), verdict: existing })
+      return ok({
+        ...(await written(checkpoints, artifact.id, 'replayed', issue ? moveOf(issue) : null)),
+        verdict: existing,
+      })
     }
 
     const at = deps.clock.now()
@@ -874,8 +883,9 @@ export async function verdictIn(
     // The Spec its filer attached holds the Issue in the queue, not in a wait: the verdict has no wait to end, and only
     // its note is left for the lead that starts next.
     const heldInQueue =
-      artifact.key.startsWith('filed-spec:') && (issue.state === 'settling' || issue.state === 'queued')
+      artifact.key.startsWith('filed-spec:') && (issue?.state === 'settling' || issue?.state === 'queued')
     const verdictNote = async (): Promise<Result<unknown, CheckpointError | PortError>> => {
+      if (!artifact.issueId) return ok(null)
       if (!note && verdict !== 'with_notes' && verdict !== 'changes') return ok(null)
       const text = `${by === 'factory' ? 'No verdict from the owner' : "The owner's verdict"} on "${artifact.title}" (revision ${revision}): ${labelOf[verdict]}${note ? `. ${note}` : ''}. Read it with: factory artifact show ${artifact.id}`
       return applied(
@@ -890,7 +900,7 @@ export async function verdictIn(
     if (heldInQueue) {
       const noted = await verdictNote()
       if (!noted.ok) return noted
-    } else if (waitsForReview(artifact.kind) && waitingOn(issue, 'review', artifact.id)) {
+    } else if (issue && artifact.issueId && waitsForReview(artifact.kind) && waitingOn(issue, 'review', artifact.id)) {
       const noted = await verdictNote()
       if (!noted.ok) return noted
       const recorded = applied(
@@ -947,6 +957,7 @@ export interface ArtifactDetail {
   /** every annotation, anchored or not in the revision shown; an unanchored one is the "Unanchored" group */
   annotations: { annotation: AnnotationRecord; anchor: Anchor }[]
   verdicts: VerdictRecord[]
+  links: IssueId[]
   /** the Spec screen's look at the revision shown; null for a Concept, a Report, and a Spec not looked at yet */
   screen: SpecScreenRecord | null
 }
@@ -967,11 +978,12 @@ export async function showArtifact(
       shown,
       annotations: await checkpoints.annotations(artifact.id),
       verdicts: await checkpoints.verdicts(artifact.id),
+      links: (await checkpoints.artifactLinks([artifact.id])).get(artifact.id) ?? [],
       screen: artifact.kind === 'spec' ? await checkpoints.specScreen(artifact.id, shown) : null,
     })
   })
   if (!rows.ok) return rows
-  const { artifact, revisions, annotations, verdicts, shown, screen } = rows.value
+  const { artifact, revisions, annotations, verdicts, links, shown, screen } = rows.value
   const revision = revisions.find((candidate) => candidate.n === shown)
   if (!revision) return err({ kind: 'invalid', detail: `${artifact.id} has no revision ${shown}` })
   const content = await deps.blobs.get(revision.blob)
@@ -986,15 +998,21 @@ export async function showArtifact(
       anchor: anchorOf(content.value, artifact.format, annotation.quote),
     })),
     verdicts,
+    links,
     screen,
   })
 }
 
+/** Artifacts newest first, each with the Issues it is linked to; `issueId` matches the owner and the links. */
 export function listArtifacts(
   deps: CheckpointDeps,
   filter: { issueId?: IssueId; kind?: ArtifactKind; limit: number },
-): Promise<CheckpointResult<ArtifactRecord[]>> {
-  return deps.uow.run(async ({ checkpoints }) => ok(await checkpoints.artifacts(filter)))
+): Promise<CheckpointResult<{ artifact: ArtifactRecord; links: IssueId[] }[]>> {
+  return deps.uow.run(async ({ checkpoints }) => {
+    const artifacts = await checkpoints.artifacts(filter)
+    const links = await checkpoints.artifactLinks(artifacts.map((artifact) => artifact.id))
+    return ok(artifacts.map((artifact) => ({ artifact, links: links.get(artifact.id) ?? [] })))
+  })
 }
 
 // ---------------------------------------------------------------------------------------------------------------------

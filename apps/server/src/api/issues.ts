@@ -1,8 +1,11 @@
 import {
+  ArtifactReply,
   CancelBody,
   DecisionReply,
   IssueAnswerBody,
   LeadVerbAnswer,
+  LinkArtifactBody,
+  NewArtifactBody,
   NewIssueAnswer,
   NewIssueBody,
   NoteAnswer,
@@ -12,6 +15,7 @@ import {
 } from '@software-factory/contract'
 import { Elysia } from 'elysia'
 import * as z from 'zod'
+import type { StandaloneArtifact, StandaloneArtifactError } from '../app/artifact-new.ts'
 import type { Answered } from '../app/checkpoints.ts'
 import type { IssueAnswerError } from '../app/issue-answer.ts'
 import type { NewIssueError, NewIssueInput, NewIssued } from '../app/issue-new.ts'
@@ -21,9 +25,10 @@ import type { Recorded } from '../app/issues.ts'
 import type { Written } from './written.ts'
 import { err, portError, type PortError, type Result } from '../kernel/result.ts'
 import type { OwnerActor } from '../kernel/events.ts'
-import type { IssueId } from '../kernel/ids.ts'
+import { idOf, type IssueId } from '../kernel/ids.ts'
+import type { ArtifactId } from '../domains/checkpoints/artifact.ts'
 import { callerOf, ownerActorOf } from './auth.ts'
-import { decisionView, failed as checkpointFailure } from './checkpoints.ts'
+import { decisionView, failed as checkpointFailure, summaryOf } from './checkpoints.ts'
 import { errorResponses } from './errors.ts'
 import { issueRef } from './issue-ref.ts'
 import { failure, issueMove, verbResponse, writeFailure } from './written.ts'
@@ -31,6 +36,17 @@ import { failure, issueMove, verbResponse, writeFailure } from './written.ts'
 /** The owner's Issue verbs and the session note, bound in `main.ts`. */
 export interface IssueApi {
   file(input: NewIssueInput): Promise<Result<NewIssued, NewIssueError | PortError>>
+  /** a Report no Issue owns, linked to the Issues it concerns */
+  newArtifact(input: {
+    repo: string
+    raw: unknown
+    issues: IssueId[]
+    key?: string | undefined
+  }): Promise<Result<StandaloneArtifact, StandaloneArtifactError | PortError>>
+  linkArtifact(input: {
+    artifactId: ArtifactId
+    issueId: IssueId
+  }): Promise<Result<StandaloneArtifact, StandaloneArtifactError | PortError>>
   cancel(input: { issueId: IssueId; reason: string; actor: OwnerActor; call?: string | undefined }): Promise<Written>
   note(input: NoteInput): Promise<Result<NoteOutcome, NoteError>>
   seat(input: {
@@ -57,7 +73,16 @@ export interface IssueApi {
 type NoteError = Parameters<typeof writeFailure>[0]
 
 const gone = async () => err(portError('gone', 'the Issue verbs are not wired into this server'))
-const unwired: IssueApi = { file: gone, cancel: gone, note: gone, seat: gone, answer: gone, sessionNote: gone }
+const unwired: IssueApi = {
+  file: gone,
+  newArtifact: gone,
+  linkArtifact: gone,
+  cancel: gone,
+  note: gone,
+  seat: gone,
+  answer: gone,
+  sessionNote: gone,
+}
 
 const unknownIssue = (text: string): Response =>
   Response.json(failure(`no Issue ${text}`, 'not_found'), { status: 404 })
@@ -136,6 +161,24 @@ function answerFailure(error: IssueAnswerError | PortError): Response {
 
 const Params = z.object({ id: z.string() })
 
+/** A standalone artifact write as the HTTP answer: the artifact with the Issues it is linked to, no Issue moved. */
+function standaloneResponse(result: Result<StandaloneArtifact, StandaloneArtifactError | PortError>): Response {
+  if (!result.ok) {
+    return result.error.kind === 'repo_outside_roots'
+      ? Response.json(failure(result.error.detail, 'repo_outside_roots'), { status: 422 })
+      : checkpointFailure(result.error)
+  }
+  const { artifact, revisions, links } = result.value
+  return Response.json(
+    ArtifactReply.parse({
+      result: result.value.result,
+      artifact: summaryOf(artifact, revisions, links),
+      verdict: null,
+      issue: null,
+    }),
+  )
+}
+
 /**
  * `issue new|cancel|note|answer` (the owner's) and `session note` (a lead's session, typed by the owner or an agent).
  * The owner's verbs take an Issue as `issue_12` or `12`.
@@ -178,6 +221,7 @@ export const issueRoutes = (wired: IssueApi | undefined) => {
         return Response.json(
           NewIssueAnswer.parse({
             issue: filed.value.issue.id,
+            id: filed.value.issue.id,
             state: filed.value.issue.state,
             filed: filed.value.filed,
           }),
@@ -190,6 +234,49 @@ export const issueRoutes = (wired: IssueApi | undefined) => {
           operationId: 'issue.new',
           summary:
             'the owner files an Issue: a repo, a title, optional text, facts, a lead seat and Issues it waits for',
+        },
+      },
+    )
+    .post(
+      '/v1/artifacts',
+      async ({ body }) => {
+        const issues: IssueId[] = []
+        for (const text of body.issue ?? []) {
+          const id = issueRef(text)
+          if (!id) return Response.json(failure(`issue: no Issue ${text}`, 'not_found'), { status: 404 })
+          issues.push(id)
+        }
+        const { repo, issue: _issues, key, ...raw } = body
+        return standaloneResponse(await api.newArtifact({ repo: repo ?? '', raw, issues, key }))
+      },
+      {
+        body: NewArtifactBody,
+        response: { 200: ArtifactReply, ...errorResponses(400, 404, 422, 503) },
+        detail: {
+          operationId: 'artifact.new',
+          summary:
+            'a Report no Issue owns, shown to the owner for comments and linked to the Issues it concerns (it never waits and pages no one)',
+        },
+      },
+    )
+    .post(
+      '/v1/artifacts/:id/links',
+      async ({ params, body }) => {
+        const artifactId = idOf('artifact', params.id)
+        if (!artifactId) return Response.json(failure(`no artifact ${params.id}`, 'not_found'), { status: 404 })
+        const issueId = body.issue ? issueRef(body.issue) : null
+        if (!issueId) {
+          return Response.json(failure(`issue: no Issue ${body.issue ?? ''}`.trim(), 'not_found'), { status: 404 })
+        }
+        return standaloneResponse(await api.linkArtifact({ artifactId, issueId }))
+      },
+      {
+        params: Params,
+        body: LinkArtifactBody,
+        response: { 200: ArtifactReply, ...errorResponses(400, 404, 422, 503) },
+        detail: {
+          operationId: 'artifact.link',
+          summary: 'the artifact also concerns this Issue: it shows on the Issue, and its lead can read it',
         },
       },
     )
