@@ -1,11 +1,14 @@
-// jk-glance — the sidebar's glance at the factory, an aggregate and no tickets: what waits on the owner (one count), the
-// Flow page's four KPIs with their 7-day trend (Working, Waiting, Queued, Shipped this week), health and uptime. A click
-// opens the factory Console in the default browser (`open` on this computer). Read-only. 268 px wide, 144 px high.
-// Every 15 s ONE call on the mini reads `factory read needs`, `read overview` (counts, health, uptime), `read issues` and
-// `read sessions` (token through secrets-run, never argv) and the Console's base URL (FACTORY_CONSOLE_URL in the mini's
-// ~/.config/factory/env). Every 60 s a second call reads `factory read flow`, the read the Console's Flow page draws its
-// trends from, and keeps only its numbers. Each part parses on its own and keeps its last good answer; no good poll for
-// 2 min dims the block. All API text is data, never interpreted; no ticket title, summary or id is ever drawn.
+// jk-glance — the sidebar's glance at the factory: what waits on the owner (with a link per item), the Flow page's four KPIs
+// with their 7-day trend, the running leads by project (Issue number and phase), what is queued and why, production red per
+// project, what shipped today, the host's load and swap against the ceilings that stop new leads, health and uptime. A click
+// opens the factory Console at that place in the default browser (`open` on this computer). Read-only: links, no controls.
+// 268 px wide, GLANCE_H px high (the layout's block, dotfiles config/herdr-app/layouts/jk.json).
+// Every 15 s ONE call on the mini reads `factory read needs`, `read overview` (counts, health, uptime, the open Issues),
+// `read issues`, `read sessions` and `read machine` (token through secrets-run, never argv) and the Console's base URL
+// (FACTORY_CONSOLE_URL in the mini's ~/.config/factory/env). Every 60 s a second call reads `factory read flow`: the 7-day
+// trend, the reason each queued Issue waits and the projects whose production is red. Each part parses on its own and keeps
+// its last good answer; no good poll for 2 min dims the block. API text is data, never interpreted; no ticket title or
+// summary is ever drawn (an Issue shows as its number and phase, an item as its kind, repo and age).
 // The 15 s poll also publishes shared("jk.factory.terminals"), the feed jk-pane's header and the tab's Console link show
 // (only when it changed).
 import { View, div, PathBuilder } from 'gpui-kit'
@@ -17,10 +20,11 @@ const SECRETS = `PATH="$HOME/.local/bin:$HOME/.bun/bin:/opt/homebrew/bin:$PATH";
 // `--format json` goes before the subcommand. Parts are split on a line holding only @@.
 const READS =
   'factory --format json read needs; echo; echo @@; factory --format json read overview; echo; echo @@; ' +
-  'factory --format json read issues --state all --limit 40; echo; echo @@; factory --format json read sessions --live; echo'
+  'factory --format json read issues --state all --limit 40; echo; echo @@; factory --format json read sessions --live; echo; ' +
+  'echo @@; factory --format json read machine; echo'
 const URL_READ = `grep -m1 '^FACTORY_CONSOLE_URL=' "$HOME/.config/factory/env" | cut -d= -f2-`
 const CMD = `{ ${SECRETS} sh -c '${READS}'; } 2>/dev/null; echo @@; ${URL_READ} 2>/dev/null`
-// The Flow page's own read: the 7-day series live in its `trend`.
+// The Flow page's own read: the 7-day series live in its `trend`, the queue reasons in its queued column.
 const FLOW_CMD = `{ ${SECRETS} sh -c 'factory --format json read flow'; } 2>/dev/null`
 
 const POLL_MS = 15000
@@ -44,7 +48,17 @@ const SPARK_PAD = 2
 // The Console's page for a health line: it has none yet. Set the path (e.g. '/health') when it gets one.
 const HEALTH_PATH = null
 
-// "needs @@ overview @@ issues @@ sessions @@ url": each part is null when it does not parse.
+// What each section lists before it says "+N": the block's height is fixed (GLANCE_H), so a section never grows.
+const MAX_NEEDS = 3
+const MAX_PROJECTS = 4
+const MAX_CHIPS = 1
+const MAX_REASONS = 3
+const MAX_RED = 2
+
+// The layout's block height in px: dotfiles `config/herdr-app/layouts/jk.json`, block `glance`, `size.px`.
+const GLANCE_H = 388
+
+// "needs @@ overview @@ issues @@ sessions @@ machine @@ url": each part is null when it does not parse.
 function parseNeeds(text) {
   let d
   try {
@@ -61,7 +75,16 @@ function parseNeeds(text) {
     held_signal: num(c.held_signal),
     long_wait: num(c.long_wait),
   }
-  const items = d.items.filter((i) => i && typeof i === 'object')
+  // Only what a row draws or links: no title, summary or text of an item is kept.
+  const items = d.items
+    .filter((i) => i && typeof i === 'object')
+    .map((i) => ({
+      id: i.id,
+      kind: typeof i.kind === 'string' ? i.kind.slice(0, 24) : null,
+      repo: typeof i.repo === 'string' ? clip(i.repo, 40) : null,
+      issue: typeof i.issue === 'string' ? i.issue : null,
+      ageMs: i.ageMs,
+    }))
   return { items, counts }
 }
 
@@ -95,6 +118,31 @@ function parseOverview(text) {
     health: num(c.health),
     healthKinds: asArray(d.health).map((h) => (typeof h?.kind === 'string' ? h.kind.slice(0, 32) : 'other')),
     uptime: parseUptime(d.uptime),
+    leads: parseLeads(d.issues),
+  }
+}
+
+// The running leads: an open Issue in the working state, as its number, project and phase (never its words).
+function parseLeads(issues) {
+  return asArray(issues)
+    .filter((i) => i && i.state === 'working' && Number.isInteger(i.id))
+    .map((i) => ({
+      n: i.id,
+      repo: clip(typeof i.repoName === 'string' && i.repoName ? i.repoName : '?', 40),
+      phase: clip(typeof i.phase === 'string' && i.phase ? i.phase : 'working', 24),
+    }))
+}
+
+// The host's figures and the ceilings above which no new lead is admitted (`factory read machine`).
+function parseMachine(text) {
+  const d = parseJson(text)
+  if (!d || !Number.isFinite(d.load) || !d.memory || !Number.isFinite(d.memory.swapUsedPct)) return null
+  const ceiling = (v) => (Number.isFinite(v) && v > 0 ? v : null)
+  return {
+    load: d.load,
+    loadCeiling: ceiling(d.loadCeiling),
+    swapPct: d.memory.swapUsedPct,
+    swapCeiling: ceiling(d.memoryCeilings?.swapUsedPct),
   }
 }
 
@@ -110,8 +158,9 @@ function parseJson(text) {
 // The Flow page's trend, numbers only (the read also holds Issue titles; they never leave this function): the daily samples
 // of working, waiting and queued (oldest first, the last is now), the daily shipped counts and the week before.
 function parseFlow(text) {
-  const t = parseJson(text)?.trend
-  if (!t || typeof t !== 'object') return null
+  const d = parseJson(text)
+  if (!d) return null
+  const t = d.trend && typeof d.trend === 'object' ? d.trend : {}
   const states = t.states && typeof t.states === 'object' ? t.states : {}
   const line = (v) => (Array.isArray(v) && v.length >= 2 ? v.map(num) : null)
   const flow = {
@@ -121,7 +170,43 @@ function parseFlow(text) {
     shipped: Array.isArray(t.shipped) && t.shipped.length ? t.shipped.map(num) : null,
     shippedBefore: Number.isFinite(t.shippedBefore) ? num(t.shippedBefore) : null,
   }
-  return Object.values(flow).some((v) => v !== null) ? flow : null
+  const column = d.states && typeof d.states === 'object' ? d.states : null
+  const hasTrend = Object.values(flow).some((v) => v !== null)
+  if (!hasTrend && !column) return null
+  return { ...flow, ...queueReasons(column) }
+}
+
+const NOT_A_FIX_LINE = new Set(['chain', 'spec', 'finalizing', 'unknown_project'])
+const LINE_MESSAGE = /^production of (\S+) is red \(Issue (\d+)\)/
+
+// From the board's columns: why each queued Issue waits (`why`: its queue kind, `seat` when nothing but a free account holds
+// it, and its project) and the projects whose production is red (`red`: the incident that stops the line). Words of an
+// Issue never leave this function. A project is red while an incident Issue is queued or working and nothing blocks it (the
+// server's own rule, domains/planning/queue.ts); the queued Issues held by that line carry the same project and incident.
+function queueReasons(column) {
+  const why = []
+  const red = new Map()
+  const put = (project, n) => {
+    if (project && !red.has(project)) red.set(project, n)
+  }
+  const numberOf = (id) => {
+    const m = /^issue_(\d+)$/.exec(String(id ?? ''))
+    return m ? Number(m[1]) : null
+  }
+  for (const state of ['working', 'queued']) {
+    for (const i of asArray(column?.[state]?.issues)) {
+      if (!i || typeof i !== 'object') continue
+      const repo = typeof i.repo === 'string' ? clip(i.repo, 40) : null
+      const kind = typeof i.queue?.kind === 'string' ? i.queue.kind.slice(0, 24) : null
+      if (state === 'queued') why.push({ kind: kind ?? 'seat', project: repo })
+      if (i.kind === 'incident' && !(kind && NOT_A_FIX_LINE.has(kind))) put(repo, numberOf(i.id))
+      if (kind === 'line') {
+        const m = LINE_MESSAGE.exec(String(i.queue.message ?? ''))
+        if (m) put(clip(m[1], 40), Number(m[2]))
+      }
+    }
+  }
+  return { why, red: [...red].map(([project, n]) => ({ project, n })) }
 }
 
 const parseIssues = (text) => {
@@ -135,13 +220,14 @@ const parseSessions = (text) => {
 
 function parsePoll(stdout) {
   const parts = String(stdout ?? '').split(/^@@$/m)
-  const url = (parts[4] ?? '').trim().split('\n')[0].trim()
+  const url = (parts[5] ?? '').trim().split('\n')[0].trim()
   return {
     needs: parseNeeds(parts[0]),
     overview: parseOverview(parts[1]),
     issues: parseIssues(parts[2]),
     sessions: parseSessions(parts[3]),
-    base: parts.length >= 5 ? url : null,
+    machine: parseMachine(parts[4]),
+    base: parts.length >= 6 ? url : null,
   }
 }
 
@@ -210,6 +296,11 @@ function consoleLink(base, kind, item) {
     .replace(/\/+$/, '')
   if (!/^https?:\/\/[^\s/]+/i.test(b)) return null
   if (kind === 'flow') return `${b}/flow`
+  if (kind === 'working' || kind === 'queued') return `${b}/flow?state=${kind}`
+  if (kind === 'project') return `${b}/flow?project=${encodeURIComponent(String(item ?? ''))}`
+  if (kind === 'issue') return Number.isInteger(item) ? `${b}/issues/${item}` : `${b}/flow`
+  if (kind === 'host') return `${b}/throughput`
+  if (kind === 'chain') return `${b}/chain`
   if (kind === 'health') return HEALTH_PATH ? `${b}${HEALTH_PATH}` : null
   const id = item?.id
   return `${b}/needs-you${id != null && id !== '' ? `?item=${encodeURIComponent(String(id))}` : ''}`
@@ -319,7 +410,121 @@ const healthTone = (overview) => {
   return kinds.length && kinds.every((k) => k === 'door') ? 'warn' : 'bad'
 }
 
-function glanceModel({ needs, overview, flow, base, at, now, flowAt }) {
+// -- the sections below the cells. Each is pure data for the render: text, a tone and a link (a click opens the Console).
+
+const ageText = (ms) => {
+  if (!Number.isFinite(ms) || ms < 0) return ''
+  const min = Math.floor(ms / 60000)
+  if (min < 60) return `${Math.max(1, min)}m`
+  const h = Math.floor(min / 60)
+  return h < 48 ? `${h}h` : `${Math.floor(h / 24)}d`
+}
+
+const KIND_WORD = { held_signal: 'signal', long_wait: 'wait' }
+
+// The newest items that wait on the owner, one row each: kind, repo, age; the link opens that item in the Console.
+function needsRows(needs, base) {
+  const items = asArray(needs?.items)
+  const byAge = [...items].sort(
+    (a, b) => (Number.isFinite(a.ageMs) ? a.ageMs : Infinity) - (Number.isFinite(b.ageMs) ? b.ageMs : Infinity),
+  )
+  const rows = byAge.slice(0, MAX_NEEDS).map((i) => ({
+    text: [KIND_WORD[i.kind] ?? i.kind ?? 'item', i.repo].filter(Boolean).join(' · '),
+    age: ageText(i.ageMs),
+    link: consoleLink(base, 'needs', i),
+  }))
+  return { rows, more: Math.max(0, items.length - rows.length) }
+}
+
+// Running leads grouped by project, the busiest first: per project its count and up to MAX_CHIPS `#n phase` links.
+function leadRows(leads, base) {
+  const byProject = new Map()
+  for (const l of asArray(leads)) byProject.set(l.repo, [...(byProject.get(l.repo) ?? []), l])
+  const projects = [...byProject].sort((a, b) => b[1].length - a[1].length || a[0].localeCompare(b[0]))
+  const rows = projects.slice(0, MAX_PROJECTS).map(([project, list]) => {
+    const sorted = [...list].sort((a, b) => a.n - b.n)
+    return {
+      project,
+      count: list.length,
+      chips: sorted
+        .slice(0, MAX_CHIPS)
+        .map((l) => ({ text: `#${l.n} ${l.phase}`, link: consoleLink(base, 'issue', l.n) })),
+      more: Math.max(0, sorted.length - MAX_CHIPS),
+      moreTip: sorted
+        .slice(MAX_CHIPS)
+        .map((l) => `#${l.n} ${l.phase}`)
+        .join(', '),
+      link: consoleLink(base, 'project', project),
+    }
+  })
+  return { rows, more: Math.max(0, projects.length - rows.length), total: asArray(leads).length }
+}
+
+// How a queued Issue's binding reason reads (the queue kinds of domains/planning/queue.ts and describe.ts; `seat` is none).
+const WHY_WORD = {
+  line: 'production red, only fixes run',
+  chain: 'waits for another Issue',
+  drain: 'the queue is draining',
+  claim: 'its repo has no free claim',
+  spec: 'a Spec waits for your verdict',
+  finalizing: 'the last attempt is ending',
+  unknown_project: 'its repo is not known yet',
+  seat: 'waits for a free seat',
+}
+
+// Queued Issues grouped by the reason that holds them, the largest group first; the rest is one "other reasons" row.
+function queueRows(why, base) {
+  const groups = new Map()
+  for (const w of asArray(why)) {
+    const g = groups.get(w.kind) ?? { count: 0, projects: [] }
+    g.count++
+    if (w.project && !g.projects.includes(w.project)) g.projects.push(w.project)
+    groups.set(w.kind, g)
+  }
+  const sorted = [...groups].sort((a, b) => b[1].count - a[1].count)
+  const shown = sorted.length > MAX_REASONS ? sorted.slice(0, MAX_REASONS - 1) : sorted
+  const rows = shown.map(([kind, g]) => ({
+    text: `${g.count} · ${WHY_WORD[kind] ?? kind}${kind === 'line' ? `: ${g.projects.join(', ')}` : ''}`,
+    link: consoleLink(base, kind === 'chain' ? 'chain' : 'queued', null),
+  }))
+  const rest = sorted.slice(shown.length)
+  if (rest.length) {
+    rows.push({
+      text: `${sum(rest.map(([, g]) => g.count))} · ${rest.length} other reasons`,
+      link: consoleLink(base, 'queued', null),
+    })
+  }
+  return rows
+}
+
+// Production per project: red while an incident stops its line; each red project links to that incident's page.
+function productionRows(red, base) {
+  const list = asArray(red)
+  return {
+    rows: list
+      .slice(0, MAX_RED)
+      .map((r) => ({ text: `${r.project}${r.n ? ` · #${r.n}` : ''}`, link: consoleLink(base, 'issue', r.n) })),
+    more: Math.max(0, list.length - MAX_RED),
+    red: list.length,
+  }
+}
+
+// The host against the ceilings that stop new leads: warn from 75 % of one, red at or over it.
+function hostLine(machine) {
+  if (!machine) return null
+  const ratio = (v, ceiling) => (ceiling ? v / ceiling : 0)
+  const worst = Math.max(ratio(machine.load, machine.loadCeiling), ratio(machine.swapPct, machine.swapCeiling))
+  const load = `${Math.round(machine.load)}${machine.loadCeiling ? `/${Math.round(machine.loadCeiling)}` : ''}`
+  return {
+    text: `Load ${load} · Swap ${Math.round(machine.swapPct)}%`,
+    tone: worst >= 1 ? 'bad' : worst >= 0.75 ? 'warn' : 'dim',
+    tip: machine.loadCeiling
+      ? `Load ${machine.load} of ${machine.loadCeiling} and swap ${machine.swapPct}% of ${machine.swapCeiling ?? '?'}%: new leads stop at a ceiling`
+      : `Load ${machine.load}, swap ${machine.swapPct}%`,
+  }
+}
+
+function glanceModel({ needs, overview, flow, machine, base, at, now, flowAt }) {
   if (!at) return { empty: true, text: 'Factory: no data' }
   const stale = now - at > STALE_MS
   const trend = flow && now - flowAt <= FLOW_STALE_MS ? flow : null
@@ -345,6 +550,7 @@ function glanceModel({ needs, overview, flow, base, at, now, flowAt }) {
       flowLink,
     ),
   }))
+  const host = hostLine(machine)
   const up = overview?.uptime ?? null
   const downList = up?.downNames.length ? `Down: ${up.downNames.join(', ')}` : up?.down ? `${up.down} down` : 'All up'
   return {
@@ -355,8 +561,26 @@ function glanceModel({ needs, overview, flow, base, at, now, flowAt }) {
       tone: n > 0 ? 'bad' : 'dim',
       link: needsLink,
       tip: tip('Open the Console', needsLink),
+      ...needsRows(needs, base),
     },
     cells,
+    leads: {
+      text: `Leads · ${overview ? overview.leads.length : '–'}`,
+      link: consoleLink(base, 'working', null),
+      ...leadRows(overview?.leads, base),
+    },
+    queue: {
+      text: `Queued · ${overview ? overview.queued : '–'}`,
+      link: consoleLink(base, 'queued', null),
+      rows: trend ? queueRows(trend.why, base) : [],
+    },
+    // null until the board's read has answered: an unknown production is not a green one
+    production: trend ? productionRows(trend.red, base) : null,
+    shippedToday: {
+      text: `Shipped today · ${trend?.shipped ? trend.shipped[trend.shipped.length - 1] : '–'}`,
+      link: flowLink,
+    },
+    host: host && { ...host, tip: staleTip ?? host.tip, link: consoleLink(base, 'host', null) },
     health: {
       text: `Health · ${overview ? overview.health : '–'}`,
       tone: healthTone(overview),
@@ -376,6 +600,7 @@ export default class JkGlance extends View {
     this.needs = null
     this.overview = null
     this.flow = null
+    this.machine = null
     this.base = ''
     this.issues = null
     this.sessions = null
@@ -403,6 +628,7 @@ export default class JkGlance extends View {
       if (next?.needs || next?.overview) this.at = Date.now()
       if (next?.needs) this.needs = next.needs
       if (next?.overview) this.overview = next.overview
+      if (next?.machine) this.machine = next.machine
       if (next?.base != null) this.base = next.base
       if (next?.issues) this.issues = next.issues
       if (next?.sessions) this.sessions = next.sessions
@@ -442,11 +668,12 @@ export default class JkGlance extends View {
 
   render() {
     const t = theme()
-    const root = v_flex().size_full().px(8).py(8).gap(6).text_size(11)
+    const root = v_flex().size_full().px(8).py(8).gap(4).text_size(11)
     const m = glanceModel({
       needs: this.needs,
       overview: this.overview,
       flow: this.flow,
+      machine: this.machine,
       base: this.base,
       at: this.at,
       now: Date.now(),
@@ -530,18 +757,126 @@ export default class JkGlance extends View {
           ),
         c.link,
       )
-    const needsRow = clickable(
-      div()
-        .id('glance-needs')
-        .h(16)
+    // A section header (12 px) and a list row (14 px): left text, an optional right text, one link, the full text as tooltip.
+    const header = (id, text, tone, link, tip) =>
+      clickable(
+        div()
+          .id(id)
+          .h(16)
+          .px(6)
+          .truncate()
+          .text_size(12)
+          .text_color(color[tone])
+          .tooltip(tip ?? text)
+          .child(text),
+        link,
+      )
+    const row = (id, left, right, link, { tone = 'neutral', tip } = {}) =>
+      clickable(
+        h_flex()
+          .id(id)
+          .h(14)
+          .px(6)
+          .gap(6)
+          .items_center()
+          .justify_between()
+          .tooltip(tip ?? left)
+          .child(div().flex_1().truncate().text_color(color[tone]).child(left))
+          .when(Boolean(right), (el) => el.child(div().flex_none().text_color(t.dim).child(right))),
+        link,
+      )
+    const more = (id, n, word) => (n > 0 ? [div().id(id).h(14).px(6).text_color(t.dim).child(`+${n} ${word}`)] : [])
+    const needsSection = v_flex()
+      .child(header('glance-needs', m.needs.text, m.needs.tone, m.needs.link, m.needs.tip))
+      .children(m.needs.rows.map((r, i) => row(`glance-need-${i}`, r.text, r.age, r.link)))
+      .children(more('glance-needs-more', m.needs.more, 'more'))
+    const leadRow = (r, i) =>
+      h_flex()
+        .h(14)
         .px(6)
-        .truncate()
-        .text_size(12)
-        .text_color(color[m.needs.tone])
-        .tooltip(m.needs.tip)
-        .child(m.needs.text),
-      m.needs.link,
-    )
+        .gap(6)
+        .items_center()
+        .child(
+          clickable(
+            div()
+              .id(`glance-lead-${i}`)
+              .flex_none()
+              .w(104)
+              .truncate()
+              .text_color(t.muted)
+              .tooltip(`${r.project}: ${r.count}`)
+              .child(r.project),
+            r.link,
+          ),
+        )
+        .children(
+          r.chips.map((c, j) =>
+            clickable(
+              div().id(`glance-lead-${i}-${j}`).flex_1().truncate().text_color(t.foreground).child(c.text),
+              c.link,
+            ),
+          ),
+        )
+        .when(r.more > 0, (el) =>
+          el.child(
+            div().id(`glance-lead-${i}-more`).flex_none().text_color(t.dim).tooltip(r.moreTip).child(`+${r.more}`),
+          ),
+        )
+    const leadsSection = v_flex()
+      .child(header('glance-leads', m.leads.text, 'neutral', m.leads.link))
+      .children(m.leads.rows.map(leadRow))
+      .children(more('glance-leads-more', m.leads.more, 'projects'))
+    const queueSection = v_flex()
+      .child(header('glance-queue', m.queue.text, 'neutral', m.queue.link))
+      .children(m.queue.rows.map((r, i) => row(`glance-queue-${i}`, r.text, null, r.link)))
+    // Production: one line while green or unknown, a red header and one row per red project otherwise.
+    const prod = m.production
+    const productionSection = v_flex()
+      .child(
+        h_flex()
+          .h(14)
+          .px(6)
+          .gap(5)
+          .items_center()
+          .child(
+            div()
+              .w(7)
+              .h(7)
+              .rounded(4)
+              .bg(color[!prod ? 'dim' : prod.red > 0 ? 'bad' : 'good']),
+          )
+          .child(
+            div()
+              .text_color(prod && prod.red > 0 ? color.bad : t.muted)
+              .child(!prod ? 'Production · –' : prod.red > 0 ? `Production · ${prod.red} red` : 'Production · green'),
+          ),
+      )
+      .children(prod ? prod.rows.map((r, i) => row(`glance-red-${i}`, r.text, null, r.link, { tone: 'bad' })) : [])
+      .children(more('glance-red-more', prod ? prod.more : 0, 'more'))
+    const footer = h_flex()
+      .h(14)
+      .px(6)
+      .gap(10)
+      .items_center()
+      .child(
+        clickable(
+          div()
+            .id('glance-shipped')
+            .truncate()
+            .text_color(t.muted)
+            .tooltip(m.shippedToday.text)
+            .child(m.shippedToday.text),
+          m.shippedToday.link,
+        ),
+      )
+      .when(Boolean(m.host), (el) =>
+        el.child(
+          clickable(
+            div().id('glance-host').truncate().text_color(color[m.host.tone]).tooltip(m.host.tip).child(m.host.text),
+            m.host.link,
+          ),
+        ),
+      )
     const healthRow = h_flex()
       .h(14)
       .px(6)
@@ -571,13 +906,17 @@ export default class JkGlance extends View {
       )
     return root
       .when(m.stale, (el) => el.opacity(0.5))
-      .child(needsRow)
+      .child(needsSection)
       .child(
         v_flex()
           .gap(4)
           .child(h_flex().gap(0).child(cell(m.cells[0])).child(cell(m.cells[1])))
           .child(h_flex().gap(0).child(cell(m.cells[2])).child(cell(m.cells[3]))),
       )
+      .child(leadsSection)
+      .child(queueSection)
+      .child(productionSection)
+      .child(footer)
       .child(healthRow)
   }
 }
