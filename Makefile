@@ -18,7 +18,13 @@ check:
 	@$(call slot,check) $(MAKE) --no-print-directory check-steps
 
 # The lead's check after each change (project.yaml `checks.fast`): its own slot name, so the ledger learns its peak apart from the whole gate's.
+#
+# A lead's tree is formatted first, outside the slot (oxfmt --write takes ~50 ms): a format-only red used to cost a whole
+# slot wait (up to 12 min measured) plus a rerun, and 11 of 21 steps of a day exited non-zero (#1639). CI ($$CI set) keeps
+# the read-only `oxfmt --check` of check-static, so an unformatted head still fails there.
 check-fast:
+	@if [ -z "$$CI" ]; then before=$$(git diff | cksum); bunx --no-install oxfmt --write . >/dev/null; \
+	  [ "$$before" = "$$(git diff | cksum)" ] || echo "==> oxfmt reformatted files in this tree: commit them"; fi
 	@$(call slot,check-fast) $(MAKE) --no-print-directory check-fast-steps
 
 # The whole check is one lease on a test slot (a lead sees "queued for a test slot" and waits, it does not poll the load);
