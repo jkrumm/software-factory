@@ -358,3 +358,31 @@ test('Needs you to Chain: the graph chunk is fetched before the click, and the f
     `Needs you -> Chain: median ${median.toFixed(0)} ms over ${RUNS} runs (${times.map((t) => t.toFixed(0)).join(', ')})`,
   )
 })
+
+test('an edge between two cards on one line is one horizontal segment, with no jog', async ({ page }) => {
+  await page.goto('/chain')
+  await expect(graph(page).getByTestId('chain-node').first()).toBeVisible()
+  const paths = await graph(page)
+    .locator('.react-flow__edge-path')
+    .evaluateAll((els) => els.map((el) => el.getAttribute('d') ?? ''))
+  expect(paths.length).toBeGreaterThanOrEqual(5)
+  const straight = /^M\s*([\d.-]+)[ ,]([\d.-]+)\s*L\s*([\d.-]+)[ ,]([\d.-]+)$/
+  let level = 0
+  for (const d of paths) {
+    const numbers = (d.match(/-?\d+(?:\.\d+)?/g) ?? []).map(Number)
+    const startY = numbers[1] ?? Number.NaN
+    const endY = numbers[numbers.length - 1] ?? Number.NaN
+    const line = straight.exec(d.trim())
+    if (line) {
+      expect(line[2], d).toBe(line[4])
+      level++
+    } else {
+      // an edge that turns climbs or falls by a real distance: a card's own ports are 24 px apart, a jog of a few px is the defect
+      expect(Math.abs(endY - startY), d).toBeGreaterThanOrEqual(20)
+    }
+  }
+  // gate or done into middle, and middle into last, sit on one line in the seeded chain
+  expect(level).toBeGreaterThanOrEqual(2)
+  await expect(graph(page).locator('.chain-edge-blocked')).not.toHaveCount(0)
+  await expect(graph(page).locator('.chain-edge-done')).not.toHaveCount(0)
+})

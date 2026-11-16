@@ -3,13 +3,13 @@ import {
   BaseEdge,
   ControlButton,
   Controls,
-  getSmoothStepPath,
   Handle,
   MarkerType,
   Position,
   ReactFlow,
   useReactFlow,
   useStore,
+  useUpdateNodeInternals,
   type Edge,
   type EdgeProps,
   type ReactFlowInstance,
@@ -34,18 +34,42 @@ import {
   waitsForWords,
 } from '@/lib/chain'
 import { type ChainGroup, type CollapsedView } from '@/lib/chain-collapse'
-import { layoutOf } from '@/lib/chain-layout'
+import { edgePath, TURN } from '@/lib/chain-edge'
+import { edgeKey, layoutOf, portId, portsOf } from '@/lib/chain-layout'
 import { GroupCard, groupTitle } from './group-card'
 import { useNow } from '@/lib/now'
 import { cn } from '@/lib/utils'
 
 type ChainNode = ChainModel['nodes'][number]
-type CardNode = Node<{ node: ChainNode; waitsFor: string | null }, 'chain'>
-type GroupNode = Node<{ group: ChainGroup; onOpen: (id: string) => void }, 'folded'>
+type CardNode = Node<{ node: ChainNode; waitsFor: string | null; ports: number[] }, 'chain'>
+type GroupNode = Node<{ group: ChainGroup; onOpen: (id: string) => void; ports: number[] }, 'folded'>
+
+/**
+ * The handles where edges enter a card, one per port, at the height `portsOf` gave it (px from the card's middle). A card
+ * whose ports change is measured again, or xyflow would not know where the new ones are.
+ */
+function Ports({ id, ports }: { id: string; ports: number[] }) {
+  const update = useUpdateNodeInternals()
+  const key = ports.join(',')
+  useEffect(() => {
+    update(id)
+  }, [id, key, update])
+  return ports.map((offset, index) => (
+    <Handle
+      key={portId(index)}
+      id={portId(index)}
+      type="target"
+      position={Position.Left}
+      isConnectable={false}
+      className="opacity-0"
+      style={{ top: `calc(50% + ${offset}px)` }}
+    />
+  ))
+}
 
 /** An Issue is the kit's card and a link to its page; a plan row is the same card on a dashed outline, not a link. */
-function Card({ data }: NodeProps<CardNode>) {
-  const { node, waitsFor } = data
+function Card({ id, data }: NodeProps<CardNode>) {
+  const { node, waitsFor, ports } = data
   const now = useNow(60_000)
   const number = issueNumber(node)
   const peeked = useIsPeeked(number)
@@ -59,22 +83,7 @@ function Card({ data }: NodeProps<CardNode>) {
       className="pointer-events-auto"
       style={{ width: NODE_WIDTH, height: NODE_HEIGHT }}
     >
-      <Handle
-        id="blocked"
-        type="target"
-        position={Position.Left}
-        isConnectable={false}
-        className="opacity-0"
-        style={{ top: '68%' }}
-      />
-      <Handle
-        id="done"
-        type="target"
-        position={Position.Left}
-        isConnectable={false}
-        className="opacity-0"
-        style={{ top: '32%' }}
-      />
+      <Ports id={id} ports={ports} />
       <IssueCard
         raised
         compact
@@ -100,7 +109,7 @@ function Card({ data }: NodeProps<CardNode>) {
 }
 
 /** A folded group: the node's size, a dashed card that opens in place when clicked. */
-function Group({ data }: NodeProps<GroupNode>) {
+function Group({ id, data }: NodeProps<GroupNode>) {
   return (
     <div
       data-testid="chain-group"
@@ -108,22 +117,7 @@ function Group({ data }: NodeProps<GroupNode>) {
       className="pointer-events-auto"
       style={{ width: NODE_WIDTH, height: NODE_HEIGHT }}
     >
-      <Handle
-        id="blocked"
-        type="target"
-        position={Position.Left}
-        isConnectable={false}
-        className="opacity-0"
-        style={{ top: '68%' }}
-      />
-      <Handle
-        id="done"
-        type="target"
-        position={Position.Left}
-        isConnectable={false}
-        className="opacity-0"
-        style={{ top: '32%' }}
-      />
+      <Ports id={id} ports={data.ports} />
       <GroupCard group={data.group} onOpen={data.onOpen} />
       <Handle type="source" position={Position.Right} isConnectable={false} className="opacity-0" />
     </div>
@@ -135,14 +129,12 @@ const NODE_TYPES = { chain: Card, folded: Group }
 
 type DependencyEdge = Edge<{ blocked: boolean }, 'dependency'>
 
-/** Where an edge turns, as a share of the gap between the two nodes: the long straight run after it is where the label sits. */
-const TURN = { blocked: 0.3, done: 0.18 }
 /** Room the arrowhead takes at the end of the run (px). */
 const ARROW = 10
 
 /**
- * A smoothstep edge that turns early and carries its label on the final straight run, so the line runs unbroken
- * into the label and out to the arrowhead.
+ * A straight line between two cards on one line; otherwise a smoothstep edge that turns early and carries its label on
+ * the final straight run, so the line runs unbroken into the label and out to the arrowhead.
  */
 function Dependency({
   data,
@@ -150,8 +142,6 @@ function Dependency({
   sourceY,
   targetX,
   targetY,
-  sourcePosition,
-  targetPosition,
   markerEnd,
   label,
   labelStyle,
@@ -161,15 +151,7 @@ function Dependency({
   labelBgBorderRadius,
 }: EdgeProps<DependencyEdge>) {
   const turn = data?.blocked ? TURN.blocked : TURN.done
-  const [path] = getSmoothStepPath({
-    sourceX,
-    sourceY,
-    sourcePosition,
-    targetX,
-    targetY,
-    targetPosition,
-    stepPosition: turn,
-  })
+  const path = edgePath({ sourceX, sourceY, targetX, targetY, blocked: data?.blocked ?? false })
   const turnX = sourceX + (targetX - sourceX) * turn
   return (
     <BaseEdge
@@ -322,13 +304,14 @@ export default function ChainGraph({
 }) {
   const { nodes, edges, bounds, focusBox } = useMemo(() => {
     const placed = layoutOf([...view.nodes, ...view.groups], view.edges)
+    const { ports, of: portOf } = portsOf(placed, view.edges)
     const byId = new Map<string, { title: string }>(view.nodes.map((node) => [node.id, node]))
     for (const group of view.groups) byId.set(group.id, { title: groupTitle(group) })
     const groups: GroupNode[] = view.groups.map((group) => ({
       id: group.id,
       type: 'folded',
       position: placed.get(group.id) ?? { x: 0, y: 0 },
-      data: { group, onOpen },
+      data: { group, onOpen, ports: ports.get(group.id) ?? [] },
       ariaRole: 'group',
       ariaLabel: `${groupTitle(group)}, ${group.repo || 'no project'}, folded`,
     }))
@@ -336,7 +319,7 @@ export default function ChainGraph({
       id: node.id,
       type: 'chain',
       position: placed.get(node.id) ?? { x: 0, y: 0 },
-      data: { node, waitsFor: waitsForWords(node.id, view.edges, byId) },
+      data: { node, waitsFor: waitsForWords(node.id, view.edges, byId), ports: ports.get(node.id) ?? [] },
       ariaRole: 'group',
       ariaLabel: `${node.title}, ${node.repo ?? 'no project'}, ${stateWord(node.state)}`,
     }))
@@ -344,13 +327,13 @@ export default function ChainGraph({
       const blocked = isBlocked(edge)
       const text = edgeText(edge, byId)
       return {
-        id: `${edge.to}>${edge.from}`,
+        id: edgeKey(edge),
         source: edge.to,
         target: edge.from,
-        targetHandle: blocked ? 'blocked' : 'done',
+        targetHandle: portId(portOf.get(edgeKey(edge))?.index ?? 0),
         type: 'dependency',
         data: { blocked },
-        label: blocked ? 'blocks' : 'done',
+        label: portOf.get(edgeKey(edge))?.labelled === false ? undefined : blocked ? 'blocks' : 'done',
         labelShowBg: true,
         labelBgPadding: [6, 3],
         labelBgBorderRadius: 6,

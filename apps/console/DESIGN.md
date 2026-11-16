@@ -155,7 +155,7 @@ click, and keeps the working screen where it was.
   around it.
 - **Chain**: the graph fills the viewport on a canvas step, nodes are 320 x 144 IssueCards (an Issue opens its page; a plan
   row is the same card on a dashed outline, "Not filed yet", with its "Not before" date); a blocked edge is solid warn and
-  labelled "blocks", a done one dashed and faint, a legend names them. Every card ends in a reason line (the wait, the date, or "Waits for ..."). **A chain of more than 60 nodes
+  labelled "blocks", a done one dashed and faint, a legend names them. An edge between two cards on one line is one horizontal segment (`lib/chain-layout.ts` straightens the dagre layout and gives each blocker of a card its own port, the level one at the middle; a card with many blockers draws the lines without labels). Every card ends in a reason line (the wait, the date, or "Waits for ..."). **A chain of more than 60 nodes
   opens collapsed** (`lib/chain-collapse.ts`): every open Issue, the plan rows that may file now (20 per project), and the 6 newest
   closed Issues beside them are cards; the rest of a project's plan is folded into **group nodes** of the card's size, a dashed
   card (a plan row's outline) with the count, "Not filed yet" and its reason ("Wait for open Issues to close", "3 steps from
