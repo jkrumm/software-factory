@@ -16,7 +16,13 @@ import {
   NO_REF,
   type Swept,
 } from '../../domains/loops/hygiene.ts'
-import type { Checkout, DeclaredProbe, HygieneChecker, SweepReport } from '../../domains/loops/hygiene-model.ts'
+import type {
+  Checkout,
+  DeclaredProbe,
+  HygieneChecker,
+  SkippedProbe,
+  SweepReport,
+} from '../../domains/loops/hygiene-model.ts'
 import type {
   HygieneJudgment,
   HygienePassRecord,
@@ -106,6 +112,8 @@ interface Target {
   skipCheck?: string
   /** the probes the project declares (`hygiene.probes`) */
   probes?: readonly DeclaredProbe[]
+  /** the built-in probes the project opts out of (`hygiene.skip`) */
+  skip?: readonly SkippedProbe[]
 }
 
 /**
@@ -182,7 +190,11 @@ async function fullPass(deps: HygieneDeps, target: Target, now: Date): Promise<R
   const gate = gated.value
   const added = nothingAdded()
   const swept = await deps.checker.withCheckout(target.repoText, null, async (checkout) => {
-    const report = await deps.checker.sweep(checkout, { skipCheck: target.skipCheck, probes: target.probes })
+    const report = await deps.checker.sweep(checkout, {
+      skipCheck: target.skipCheck,
+      probes: target.probes,
+      skip: target.skip,
+    })
     // A held class is named before the budget counts: it does not use up a slot.
     const ranked = rankProbeFindings(report.findings)
     const allowed = ranked.filter((finding) => gate.allows(finding.key))
@@ -342,7 +354,14 @@ export async function hygienePass(deps: HygieneDeps): Promise<Result<HygienePass
   const skipCheck = hygiene.check ? await redDoctor(deps, project) : hygiene.reason
   return fullPass(
     deps,
-    { repoText: work.repo, name: project.name, passId: deps.ids.next('hygiene'), skipCheck, probes: hygiene.probes },
+    {
+      repoText: work.repo,
+      name: project.name,
+      passId: deps.ids.next('hygiene'),
+      skipCheck,
+      probes: hygiene.probes,
+      skip: hygiene.skip,
+    },
     now,
   )
 }

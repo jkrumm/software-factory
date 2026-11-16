@@ -19,7 +19,7 @@ import { coChanged, parseLog } from '../../src/adapters/hygiene/probes/cochange.
 import { parseOutdated, severity } from '../../src/adapters/hygiene/probes/deps.ts'
 import { retiredScope } from '../../src/adapters/hygiene/probes/retired.ts'
 import { publishedHost } from '../../src/adapters/hygiene/probes/runrules.ts'
-import type { DeclaredProbe, SweepReport } from '../../src/domains/loops/hygiene-model.ts'
+import type { DeclaredProbe, SkippedProbe, SweepReport } from '../../src/domains/loops/hygiene-model.ts'
 
 const REPO_ROOT = join(import.meta.dir, '..', '..', '..', '..')
 const ID = {
@@ -93,11 +93,17 @@ const checker = (options: { make?: string; bun?: string } = {}) =>
 
 async function sweep(
   name: string,
-  options: { make?: string; bun?: string; skipCheck?: string; probes?: DeclaredProbe[] } = {},
+  options: {
+    make?: string
+    bun?: string
+    skipCheck?: string
+    probes?: DeclaredProbe[]
+    skip?: SkippedProbe[]
+  } = {},
 ): Promise<SweepReport> {
-  const { skipCheck, probes, ...tools } = options
+  const { skipCheck, probes, skip, ...tools } = options
   const c = checker(tools)
-  const result = await c.withCheckout(name, null, (checkout) => c.sweep(checkout, { skipCheck, probes }))
+  const result = await c.withCheckout(name, null, (checkout) => c.sweep(checkout, { skipCheck, probes, skip }))
   if (!result.ok) throw new Error(result.error.detail)
   return result.value
 }
@@ -281,7 +287,15 @@ describe('check probe', () => {
 
   test('the sweep runs the probes in PROBES order, one run each', async () => {
     const report = await sweep(makeRepo({ 'a.txt': 'x' }).name)
-    expect(report.runs.map((r) => r.probe)).toEqual(['check', 'links', 'retired', 'deps', 'cochange', 'runrules'])
+    expect(report.runs.map((r) => r.probe)).toEqual([
+      'check',
+      'links',
+      'retired',
+      'deps',
+      'cochange',
+      'runrules',
+      'browser',
+    ])
   })
 })
 
@@ -344,10 +358,141 @@ describe('declared probes', () => {
       'deps',
       'cochange',
       'runrules',
+      'browser',
       'probe',
       'probe',
     ])
     expect(two.runs.slice(-2).map((r) => r.outcome)).toEqual(['found', 'clean'])
+  })
+})
+
+describe('browser probe', () => {
+  const keys = (report: SweepReport) => findings(report, 'browser').map((f) => f.key)
+  const CONFIG = (line: string) =>
+    `import { defineConfig } from '@playwright/test'\nexport default defineConfig({\n  use: {\n${line}\n  },\n})\n`
+
+  test('a config with a bare channel chrome is reported with its line and the rule', async () => {
+    const report = await sweep(makeRepo({ 'playwright.config.ts': CONFIG("    channel: 'chrome',") }).name)
+    expect(run(report, 'browser')?.outcome).toBe('found')
+    const [one, ...rest] = findings(report, 'browser')
+    expect(rest).toEqual([])
+    expect(one).toMatchObject({
+      key: 'browser:playwright.config.ts',
+      title: 'Hygiene: browser rule in playwright.config.ts',
+      count: 1,
+    })
+    expect(one?.lines).toHaveLength(1)
+    expect(one?.lines[0]).toStartWith("playwright.config.ts:4: channel: 'chrome',: no `// chrome: <reason>`")
+    expect(one?.lines[0]).toContain('with the reason on the line')
+    const double = await sweep(makeRepo({ 'playwright.config.ts': CONFIG('    channel: "chrome",') }).name)
+    expect(keys(double)).toEqual(['browser:playwright.config.ts'])
+  })
+
+  test('a chrome: reason on the line or the line above clears it, an empty one does not', async () => {
+    const same = CONFIG("    channel: 'chrome', // chrome: pixel baselines recorded in Chrome")
+    const above = CONFIG("    // chrome: pixel baselines recorded in Chrome\n    channel: 'chrome',")
+    const empty = CONFIG("    channel: 'chrome', // chrome:")
+    const far = CONFIG("    // chrome: baselines\n    retries: 1,\n    channel: 'chrome',")
+    expect(keys(await sweep(makeRepo({ 'playwright.config.ts': same }).name))).toEqual([])
+    expect(keys(await sweep(makeRepo({ 'playwright.config.ts': above }).name))).toEqual([])
+    expect(keys(await sweep(makeRepo({ 'playwright.config.ts': empty }).name))).toEqual([
+      'browser:playwright.config.ts',
+    ])
+    expect(keys(await sweep(makeRepo({ 'playwright.config.ts': far }).name))).toEqual(['browser:playwright.config.ts'])
+  })
+
+  test('an executablePath naming Google Chrome is reported, one finding per file with every line', async () => {
+    const spec = [
+      "const path = '/Applications/Google Chrome.app/Contents/MacOS/Google Chrome'",
+      'const a = { executablePath: "/Applications/Google Chrome.app/Contents/MacOS/Google Chrome" }',
+      'const b = { headless: false }',
+      "// channel: 'chrome' in a comment is nothing",
+      '',
+    ].join('\n')
+    const report = await sweep(makeRepo({ 'e2e/login.spec.ts': spec }).name)
+    const [one] = findings(report, 'browser')
+    expect(one?.key).toBe('browser:e2e/login.spec.ts')
+    expect(one?.count).toBe(2)
+    expect(one?.lines.map((l) => l.split(': ')[0])).toEqual(['e2e/login.spec.ts:2', 'e2e/login.spec.ts:3'])
+  })
+
+  test('headless false in a spec is reported, whatever its comments say', async () => {
+    const spec =
+      "import { chromium } from '@playwright/test'\nconst b = await chromium.launch({ headless: false }) // chrome: because\n"
+    const report = await sweep(makeRepo({ 'src/login.spec.ts': spec }).name)
+    const [one] = findings(report, 'browser')
+    expect(one?.key).toBe('browser:src/login.spec.ts')
+    expect(one?.lines[0]).toContain('never `headless: false` in a suite')
+  })
+
+  test('files outside tests are not judged: scripts, product code, evidence, spikes', async () => {
+    const shot = "const b = await chromium.launch({ channel: 'chrome', headless: false })\n"
+    const report = await sweep(
+      makeRepo({
+        'scripts/shot.ts': shot,
+        'src/browser.ts': shot,
+        'docs/evidence/run/probe.test.ts': shot,
+        'tools/spikes/chrome/launch.spec.ts': shot,
+        'node_modules/x/tests/a.ts': shot,
+        'tests/notes.md': "channel: 'chrome'\n",
+      }).name,
+    )
+    expect(run(report, 'browser')?.outcome).toBe('clean')
+    expect(keys(report)).toEqual([])
+  })
+
+  test('a file under tests/ or named *.e2e.ts is judged', async () => {
+    const shot = "const b = await chromium.launch({ channel: 'chrome' })\n"
+    const report = await sweep(makeRepo({ 'apps/web/tests/harness/launch.ts': shot, 'a/x.e2e.ts': shot }).name)
+    expect(keys(report).sort()).toEqual(['browser:a/x.e2e.ts', 'browser:apps/web/tests/harness/launch.ts'])
+  })
+
+  test('a checked-in .mcp.json, an mcpServers block in settings or an agent file is reported once per file', async () => {
+    const report = await sweep(
+      makeRepo({
+        '.mcp.json': '{ "mcpServers": { "chrome-devtools": { "command": "x" } } }\n',
+        '.claude/settings.json': '{\n  "mcpServers": { "a": { "command": "x" } }\n}\n',
+        '.claude/agents/web.md': '---\nname: web\nmcpServers:\n  - a\n---\nbody\n',
+      }).name,
+    )
+    expect(keys(report).sort()).toEqual([
+      'browser:.claude/agents/web.md',
+      'browser:.claude/settings.json',
+      'browser:.mcp.json',
+    ])
+    expect(findings(report, 'browser').find((f) => f.key.endsWith('settings.json'))?.lines[0]).toStartWith(
+      '.claude/settings.json:2:',
+    )
+    expect(findings(report, 'browser').find((f) => f.key.endsWith('web.md'))?.lines[0]).toStartWith(
+      '.claude/agents/web.md:3:',
+    )
+    expect(findings(report, 'browser')[0]?.lines[0]).toContain('a command-line tool and a skill')
+  })
+
+  test('an MCP server a repo provides as a product, or settings and agents without one, are not findings', async () => {
+    const report = await sweep(
+      makeRepo({
+        'packages/mcp/.mcp.json': '{ "mcpServers": { "x": {} } }\n',
+        'packages/mcp/src/server.ts': "import { McpServer } from '@modelcontextprotocol/sdk'\n",
+        '.claude/settings.json': '{ "permissions": { "deny": [] }, "mcpServers": {} }\n',
+        '.claude/agents/web.md': '---\nname: web\n---\nmcpServers: in the body\n',
+      }).name,
+    )
+    expect(run(report, 'browser')?.outcome).toBe('clean')
+  })
+
+  test('a project opts a built-in probe out with a reason: skipped, nothing reported', async () => {
+    const files = { '.mcp.json': '{ "mcpServers": { "a": {} } }\n' }
+    const report = await sweep(makeRepo(files).name, {
+      skip: [{ probe: 'browser', reason: 'keeps the devtools server' }],
+    })
+    expect(run(report, 'browser')).toEqual({
+      probe: 'browser',
+      outcome: 'skipped',
+      detail: 'the project opts out: keeps the devtools server',
+    })
+    expect(keys(report)).toEqual([])
+    expect(run(report, 'links')?.outcome).not.toBe('skipped')
   })
 })
 

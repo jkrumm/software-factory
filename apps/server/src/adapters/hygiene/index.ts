@@ -11,6 +11,7 @@ import { type RepoLocator, withCheckout } from './checkout.ts'
 import { livingDocs, trackedMarkdown } from './docs.ts'
 import { type Tools } from './git.ts'
 import { candidates } from './history.ts'
+import { browserProbe } from './probes/browser.ts'
 import { checkProbe } from './probes/check.ts'
 import { cochangeProbe } from './probes/cochange.ts'
 import { declaredProbe } from './probes/declared.ts'
@@ -57,7 +58,9 @@ export function createHygieneChecker(options: HygieneCheckerOptions): HygieneChe
       deps: () => depsProbe(tools, path),
       cochange: () => cochangeProbe(tools, path),
       runrules: () => runrulesProbe(tools, path),
+      browser: () => browserProbe(tools, path),
     }
+    const optOut = new Map((options.skip ?? []).map((entry) => [entry.probe, entry.reason]))
     const [history, ...results] = await Promise.all([
       docs
         .then((list) => candidates(tools, path, list))
@@ -66,9 +69,13 @@ export function createHygieneChecker(options: HygieneCheckerOptions): HygieneChe
           slop: [],
           candidatesError: (error instanceof Error ? error.message : String(error)).slice(0, 200),
         })),
-      ...(Object.keys(quick) as (keyof typeof quick)[]).map(
-        async (probe) => [probe, await guarded(quick[probe])] as const,
-      ),
+      ...(Object.keys(quick) as (keyof typeof quick)[]).map(async (probe) => {
+        const reason = optOut.get(probe)
+        return [
+          probe,
+          reason === undefined ? await guarded(quick[probe]) : skipped(`the project opts out: ${reason}`),
+        ] as const
+      }),
     ])
     const outcomes = new Map<Probe, Outcome>(results)
     // A gate that cannot run for want of its dependencies says nothing about the branch: it is not a red check.

@@ -80,13 +80,35 @@ describe('project.yaml', () => {
   test('hygiene.check defaults on; false needs a reason, and an unknown key is an error', () => {
     const parse = (hygiene: string) =>
       parseProject(yaml(`apiVersion: factory/v2\nname: lab\nhygiene: ${hygiene}`), 'lab')
-    expect(defaultProject('lab').hygiene).toEqual({ check: true, probes: [] })
+    expect(defaultProject('lab').hygiene).toEqual({ check: true, skip: [], probes: [] })
     const off = parse('{ check: false, reason: needs the owner library }')
-    expect(off.ok && off.project.hygiene).toEqual({ check: false, reason: 'needs the owner library', probes: [] })
+    expect(off.ok && off.project.hygiene).toEqual({
+      check: false,
+      reason: 'needs the owner library',
+      skip: [],
+      probes: [],
+    })
     const bare = parse('{ check: false }')
     expect(bare.ok).toBe(false)
     expect(!bare.ok && bare.message).toContain('hygiene.reason')
     expect(parse('{ chek: false }').ok).toBe(false)
+  })
+
+  test('hygiene.skip names a built-in probe with a reason, once; check and the declared probe are not skippable', () => {
+    const parse = (skip: string) =>
+      parseProject(yaml(`apiVersion: factory/v2\nname: lab\nhygiene: { skip: ${skip} }`), 'lab')
+    const ok = parse('[{ probe: browser, reason: keeps the devtools server }]')
+    expect(ok.ok && ok.project.hygiene.skip).toEqual([{ probe: 'browser', reason: 'keeps the devtools server' }])
+    for (const bad of [
+      '[{ probe: browser }]',
+      '[{ probe: browser, reason: "" }]',
+      '[{ probe: check, reason: x }]',
+      '[{ probe: probe, reason: x }]',
+      '[{ probe: nope, reason: x }]',
+      '[{ probe: browser, reason: a }, { probe: browser, reason: b }]',
+    ]) {
+      expect(parse(bad).ok).toBe(false)
+    }
   })
 
   test('hygiene.probes are {name, target} with a slug target, never a shell string', () => {
