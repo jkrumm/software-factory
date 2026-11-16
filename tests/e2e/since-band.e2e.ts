@@ -200,7 +200,10 @@ test('a row opens a popover on hover and on keyboard focus: the full title, what
   )
   const rowBox = await row.boundingBox()
   const popupBox = await popup.boundingBox()
-  expect(rowBox && popupBox && popupBox.x >= rowBox.x + rowBox.width - 1).toBe(true)
+  // beside the row, never over it: to its right, or to its left where the column is the last one on the screen
+  expect(
+    rowBox && popupBox && (popupBox.x >= rowBox.x + rowBox.width - 1 || popupBox.x + popupBox.width <= rowBox.x + 1),
+  ).toBe(true)
   await page.mouse.move(2, 2)
   await expect(popup).toBeHidden()
 
