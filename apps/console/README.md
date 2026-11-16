@@ -184,8 +184,8 @@ the page is idle (`prefetchPalette`) and watched only while the palette is open;
 titles. `tests/e2e/speed.e2e.ts` holds the skeleton, the update and the hover guarantees and shoots every skeleton.
 
 The stream does not invalidate everything. Changes that arrive within 250 ms of each other (at most 1 s after the first of a
-burst) invalidate, once, the lists and the pages they can alter; the aggregates on `/improve` (KPIs, friction, finding
-classes, fix commits) wait for a 2 s pause (at most 10 s). Accounts and machine are not in the stream and only poll. The
+burst) invalidate, once, the lists and the pages they can alter; the aggregates (on `/improve`: KPIs, friction, finding
+classes, fix commits; on `/flow`: the trend chart) wait for a 2 s pause (at most 10 s). Accounts and machine are not in the stream and only poll. The
 first `hello` of a page joins the boot's requests (`cancelRefetch: false`) instead of cancelling and repeating them. Chunks:
 the entry holds the shell and the screens that are small; `@xyflow/react` and dagre (`/chain`), react-markdown
 (`/artifacts`) and the command palette (cmdk, loaded when it is first opened) are their own chunks, all precached by the
