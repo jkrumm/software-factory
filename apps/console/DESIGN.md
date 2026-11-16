@@ -57,7 +57,7 @@ laws do not (they are Mantine's; the Console is Base UI and Tailwind on Basalt's
 
 - **Sidebar.** The logo slot is the app icon, the metallic tile the PWA shows (`/icons/icon-192.png`), then the wordmark "Factory" at the top. The global nav is compact: icon, label, a count, and the
   key that reaches it (`g n`, `g f`, …) shown on hover. Under a hairline, **the page's own section**: Flow's projects and origins as toggles, each with what is
-  open behind it as two small figures (a lit lamp and the running count, an hourglass and the pending count; never a closed
+  open behind it as three small figures (a lit lamp and the working count, an hourglass and the waiting count, a queue icon and the queued count; never a closed
   Issue, and none at all when nothing is open), Needs you's kinds, Chain's projects, Improve's window. Collapsible to icons.
 - **Header strip.** One line from 1280 up, wrapping to two below. In order: counts (working, waiting, queued, each a link to
   Flow filtered to it); one meter per subscription (graphite until 75 % / 90 %, then warn / bad; popover with the used share per
