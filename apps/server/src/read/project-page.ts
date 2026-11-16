@@ -11,7 +11,7 @@ import {
 } from '@software-factory/contract'
 import type { SQL } from 'bun'
 import * as z from 'zod'
-import { countsOf, DIGEST_WINDOW_MS, groupByProject, type DigestIssue } from '../kernel/digest-scope.ts'
+import { countsOf, DIGEST_WINDOW_MS, groupByProject, shipped, type DigestIssue } from '../kernel/digest-scope.ts'
 import { projectOf } from '../kernel/project-of.ts'
 import { loopReads } from './loops.ts'
 
@@ -132,9 +132,6 @@ async function issuesOf(sql: SQL, projects: readonly Project[], now: Date): Prom
 }
 
 const iso = (date: Date): string => date.toISOString()
-
-const shipped = (issue: DigestIssue): boolean =>
-  issue.state === 'closed' && (issue.outcome === 'done' || issue.outcome === 'healed')
 
 const watchingCount = (issues: readonly DigestIssue[]): number => issues.filter((i) => i.state === 'watching').length
 
@@ -299,7 +296,7 @@ export async function readProjectHygiene(
   sql: SQL,
   options: { now: Date; name: string; /** the read token: a work project is not found */ redact?: boolean },
 ): Promise<ProjectHygieneModel | null> {
-  const project = (await loadProjects(sql)).find((p) => p.name === options.name)
+  const project = projectOf(await loadProjects(sql), options.name)
   if (!project || (options.redact && project.work)) return null
   const passes = await passesOf(sql, project, PASSES)
   const last = passes[0] ?? null
@@ -421,7 +418,7 @@ export async function readProjectPage(
 ): Promise<ProjectPageModel | null> {
   const { now } = options
   const projects = await loadProjects(sql)
-  const project = projects.find((p) => p.name === options.name)
+  const project = projectOf(projects, options.name)
   if (!project || (options.redact && project.work)) return null
   const issues = (await issuesOf(sql, projects, now)).get(project.name) ?? []
   const since = new Date(now.getTime() - DIGEST_WINDOW_MS)
@@ -451,6 +448,7 @@ export async function readProjectPage(
   return {
     at: iso(now),
     name: project.name,
+    repo: project.repo,
     work: project.work,
     source: project.source,
     branch: project.branch,

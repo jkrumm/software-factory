@@ -59,7 +59,8 @@ export interface DigestCounts {
   waiting: number
 }
 
-const shipped = (issue: DigestIssue): boolean =>
+/** Closed done or healed: the one meaning of "shipped" the digest's counts and the project page's bars share. */
+export const shipped = (issue: DigestIssue): boolean =>
   issue.state === 'closed' && (issue.outcome === 'done' || issue.outcome === 'healed')
 
 /** What the project has, counted from the Issues: never from the model. */

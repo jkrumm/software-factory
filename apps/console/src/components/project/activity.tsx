@@ -17,9 +17,21 @@ const POPOVER_LINK =
 const OPEN_ORDER: readonly ColumnKey[] = ['working', 'watching', 'waiting', 'queued', 'settling']
 
 /** What runs now and what waits, as the Flow cards, from the cached Flow read so the stream keeps it current. */
-export function NowSection({ project, flow, now }: { project: string; flow: FlowModel; now: number }) {
-  const board = boardOf(flow, { project })
-  const cards = OPEN_ORDER.flatMap((key) => board[key])
+/** The project's Issues on the Flow board: a card names its project by name, or by the repo's path when the name was taken by another directory. */
+const ownsCard = (project: { name: string; repo: string }, repo: string): boolean =>
+  repo === project.name || repo === project.repo || repo.startsWith(`${project.repo}/`)
+
+export function NowSection({
+  project,
+  flow,
+  now,
+}: {
+  project: { name: string; repo: string }
+  flow: FlowModel
+  now: number
+}) {
+  const board = boardOf(flow)
+  const cards = OPEN_ORDER.flatMap((key) => board[key]).filter((card) => ownsCard(project, card.repo))
   return (
     <Section title="Now" aside={`${cards.length} open`} className="min-w-0">
       {cards.length === 0 ? (

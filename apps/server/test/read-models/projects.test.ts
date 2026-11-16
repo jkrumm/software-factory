@@ -186,6 +186,16 @@ test('the page shows the setup, the shipped bars and the production facts', asyn
   ])
 })
 
+test('a path of the repo, or of a worktree below it, finds the project and names it', async () => {
+  const page = ProjectPageModel.parse(
+    await get(`/v1/projects/${encodeURIComponent('/src/open-app/.claude/worktrees/x')}`),
+  )
+  expect(page.name).toBe('open-app')
+  expect(page.repo).toBe('/src/open-app')
+  const hygiene = ProjectHygieneModel.parse(await get(`/v1/projects/${encodeURIComponent('/src/open-app')}/hygiene`))
+  expect(hygiene.project).toBe('open-app')
+})
+
 test('the hygiene reads each probe, the newest pass and how each finding ended', async () => {
   const model = ProjectHygieneModel.parse(await get('/v1/projects/open-app/hygiene'))
   expect(model.skipCheck).toBe('needs a lab')

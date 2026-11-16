@@ -100,7 +100,10 @@ export type ProjectMonitor = z.infer<typeof ProjectMonitor>
 export const ProjectPageModel = z
   .strictObject({
     at,
+    /** the project's name; a request by the repo's path or a worktree below it is answered with this */
     name: z.string(),
+    /** the repo text Issues of the project carry (its path): Flow's cards name a project by it when its name was taken */
+    repo: z.string(),
     work: z.boolean(),
     source: z.enum(['file', 'defaults']),
     branch: z.string().nullable(),

@@ -1,5 +1,6 @@
 import { CheckCircleIcon, ListChecksIcon, ShieldCheckIcon } from '@phosphor-icons/react'
-import { createFileRoute, Link } from '@tanstack/react-router'
+import { createFileRoute, Link, useNavigate } from '@tanstack/react-router'
+import { useEffect } from 'react'
 import { ApiError } from '@/lib/api'
 import { HygieneSection, SetupSection } from '@/components/project/setup'
 import { NowSection, PlanSection, ProductionSection, ShippedSection } from '@/components/project/activity'
@@ -63,6 +64,13 @@ function ProjectPage() {
   const note = useScreenNote(screen, page.error)
   const now = useNow(30_000)
   const wide = useMediaQuery('(min-width: 768px)')
+  const navigate = useNavigate()
+  // an address by the repo's path (a chip on a card of a project whose name was taken) lands on the project's own name
+  const canonical = page.data?.name
+  useEffect(() => {
+    if (canonical && canonical !== name)
+      void navigate({ to: '/projects/$name', params: { name: canonical }, replace: true })
+  }, [canonical, name, navigate])
 
   if (page.error instanceof ApiError && page.error.status === 404 && !page.data) {
     return (
@@ -199,7 +207,7 @@ function ProjectPage() {
         />
       </div>
       <div className="grid gap-10">
-        {flow.data ? <NowSection project={name} flow={flow.data} now={now} /> : null}
+        {flow.data ? <NowSection project={model} flow={flow.data} now={now} /> : null}
         <div className="grid gap-10 xl:grid-cols-2">
           <ShippedSection page={model} now={now} side={sidePage} />
           {plan.data ? (
