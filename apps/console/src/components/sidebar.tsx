@@ -124,12 +124,12 @@ function OpenFigures({ working, waiting, queued }: OpenSplit) {
   ]
     .filter(Boolean)
     .join(', ')
-  const slot = 'flex w-8 shrink-0 items-center gap-1'
+  const slot = 'flex w-7 shrink-0 items-center gap-0.5'
   return (
     <span
       aria-label={words}
       title={`${words} (Issues, not sessions)`}
-      className="flex shrink-0 items-center gap-1 text-xs font-normal tabular-nums"
+      className="flex shrink-0 items-center gap-0.5 text-xs font-normal tabular-nums"
     >
       <span aria-hidden className={slot}>
         {working ? (
