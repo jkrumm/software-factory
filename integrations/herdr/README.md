@@ -1,54 +1,55 @@
 # Herdr app: jk-glance
 
-A sidebar mod for the Herdr app: the factory at a glance, the essentials of its flow and nothing to operate. Every row is
-a link into the Console (no button, no control). No ticket words anywhere (no title, summary or text, tooltips included):
-an Issue shows as its number and phase, an item that waits on the owner as its kind, repo and age. The owner reads the
-rest in the Console.
+The factory at a glance for the Herdr app: short items in the bottom status bar, the detail in a popover on a click, and
+nothing to operate. Every popover row is a link into the Console (no button, no control). No ticket words anywhere (no
+title, summary or text, tooltips included): an item that waits on the owner shows as its kind, repo and age, a project as
+its name and a count. **No list of leads anywhere**: the number of running leads is the figure, by project in a popover.
+The owner reads the rest in the Console.
+
+One mod, three roles, chosen by the block's props (`props()` in the mod):
+
+|Role|Props|What it is|
+|-|-|-|
+|bar|`{ "bar": true }`|The status-bar segment: the items below. It polls the factory and publishes `shared("jk.factory.glance")`.|
+|popover|`{ "kind": "detail", "item": "<key>" }`|The card a click on an item opens (an overlay popup of this same mod). Reads the shared model, never polls.|
+|sidebar|none|One line, `Needs you · N · M leads`, `GLANCE_H` px high. Polls too, so keep it out of a layout that has the bar.|
 
 ## Layout
 
-**268 px wide, 388 px high.** The layout (dotfiles, `config/herdr-app/layouts/jk.json`, block `glance`) must give the
-block `size.px: 388` (`GLANCE_H` in `main.js`; it was 144, and 56 before). Every section has a row cap (`MAX_*` in
-`main.js`; the headers carry the totals) and the tallest the block can get, 378 px (`WORST_CASE_H`), is held within 388 by
-a test.
+**The bar block: at least 780 px wide (`BAR_W`), 28 px high (`BAR_H`, the status row's height).** The widest it can get, with
+every figure at its longest, is estimated at 780 px (`barWidth`, held within `BAR_W` by a test); a usual bar is about 680.
+The layout (dotfiles, `config/herdr-app/layouts/jk.json`) puts it in the status row of the `work` column as a block beside
+`jk-status`, never inside it (a mod cannot add items to another mod's block):
 
-Top to bottom (every row below is a link; the Console place is in brackets):
+```json
+{ "id": "status", "type": "row", "size": { "px": 28 }, "children": [
+  { "id": "glance-bar", "type": "block", "size": { "px": 780 }, "content": { "mod": "jk-glance", "props": { "bar": true } } },
+  { "id": "status-bar", "type": "block", "content": { "mod": "jk-status" } }
+] }
+```
 
-- **Needs you · N** (or `Nothing waits on you`; red above 0): the overview's `counts.asks + counts.humanQueue`, the
-  `read needs` total standing in when the overview is missing. Click: `/needs-you`. Under it the three newest items,
-  `review · shutterflow … 4h` (kind, repo, age), each opening that item (`/needs-you?item=<id>`).
-- **Four cells in a 2x2 grid**, the ones the Console's Flow page shows: **Working**, **Waiting**, **Queued**, **Shipped
-  this week**. Each has the figure, the change against 7 days ago (arrow and delta) and a 48x16 px sparkline with its last
-  point marked (Shipped: 7 daily bars). A state's figure is the overview's count, the change is last minus first sample of
-  the trend, Shipped is this week minus the week before, and the colour is the Console's: the direction of the change times
-  whether more is better (Working and Shipped yes, Waiting and Queued no; 0 is neutral). Click: `/flow`.
-- **Leads · N** (`/flow?state=working`): the working Issues by project, the busiest first, up to four projects. A row is
-  the project (`/flow?project=<name>`), its lowest Issue as `#1683 building` (`/issues/<n>`) and `+N` for its other leads
-  (the tooltip names them with their phase).
-- **Queued · N** (`/flow?state=queued`): why they wait, grouped by the reason that binds each one, the largest group first
-  and at most three rows: `7 · production red, only fixes run: weatherorb`, `2 · waits for a free seat`, `3 · 2 other
-  reasons`. The reasons are the queue's kinds (`QUEUE_REASONS` in `packages/contract/src/capacity.ts`: `chain`, `line`,
-  `finalizing`, `spec`, `unknown_project`, `drain`, `doctor`, `boot`, `load`, `memory`, `lane`, `claim`, `window`, `cap`),
-  each in words; an Issue with no reason recorded reads `waits for a free seat`. Chain rows open `/chain`.
-- **Production**: a green dot and `Production · green`, or `Production · N red` with one row per red project, each opening
-  the incident Issue (`/issues/<n>`). A project is red by the server's own rule (`stoppedProjects`,
-  `domains/planning/queue.ts`): an incident Issue queued or working that nothing blocks. Until the board's read has answered
-  the dot is grey and says `–`: an unknown production is not a green one.
-- **Shipped today · N** (`/flow`): the last of the Flow page's 7 daily bars. Next to it **Load 15/36 · Swap 3%**
-  (`/throughput`): the host's one-minute load and swap use against the ceilings above which no new lead is admitted (what
-  `factory read machine` answers), grey below 75 % of a ceiling, amber from there, red at it. The ceilings are the pressure
-  that matters here; the heavier `read host` (about 250 KB) is not polled.
-- **Health · N** with a dot: green at 0, amber when every line is of kind `door` (an alert nobody routed), red for any other
-  kind. Next to it `Uptime · up/total up` (red when a monitor is down; the tooltip names them), from the overview's
-  `uptime` roll-up (Uptime Kuma through the server's poller; absent when the server has no feed). The Console has no health
-  page yet, so the line is inert; `HEALTH_PATH` in `main.js` makes it a link once there is one.
+**The sidebar block: `GLANCE_H` = 28 px, or gone.** It was 388 px; with the bar carrying everything it should go (remove
+the `glance` block from the sidebar column and let the spaces list have the room). Until then it is one line, 28 px, and
+shows the same Needs you count and the lead count.
 
-The quota is not drawn: the status bar has it. With `FACTORY_CONSOLE_URL` unset the rows are inert and the tooltip says
-so. With no good answer for two minutes the block dims.
+The bar, left to right (a thin separator between groups; each item is one click target, the popover opens 10 px above it):
+
+|Item|Shows|Popover|
+|-|-|-|
+|**Needs you N**|the overview's `counts.asks + counts.humanQueue`, the `read needs` total standing in when the overview is missing; red above 0|the newest items, `review · shutterflow  4h` (kind, repo, age), each opening that item (`/needs-you?item=<id>`); the title opens `/needs-you`|
+|**Working N**, **Waiting N**, **Queued N**|the overview's counts (the last trend sample when it is missing)|Working: the running leads **by project**, a count each (`/flow?project=<name>`). Queued: why they wait, grouped by the reason that binds each one, largest first (`production red, only fixes run: weatherorb  2`, `waits for a free seat  2`; chain rows open `/chain`). Each: the change against 7 days ago, coloured as the Flow page does (direction times whether more is better). Titles open `/flow?state=<state>`|
+|**Shipped N**|shipped today: the last of the Flow page's 7 daily bars|this week, the week before, the change (`/flow`)|
+|**Prod**, a dot, `N` when red|green, red with the number of red projects, grey while the board's read has not answered (an unknown production is not a green one)|one row per red project, each opening its incident Issue (`/issues/<n>`). A project is red by the server's own rule (`stoppedProjects`, `domains/planning/queue.ts`): an incident Issue queued or working that nothing blocks|
+|**CPU N%**, **RAM N%**, **Load N%**|the dev host's CPU and memory in use (the status bar's own figures, read on the host in the same call), and the one-minute load **as a percent of its ceiling**, the ceiling above which no new lead is admitted (never `5/36`; the plain number when no ceiling is known). Grey, amber from 70 % (CPU, RAM) or 75 % of a ceiling, red from 85 % or at the ceiling; Load is as red as the worse of load and swap|one popover for the three, `Host`: CPU, RAM with GiB, Load with the figure and its ceiling, Swap against its ceiling (`/throughput`)|
+|**Health N**, a dot|green at 0, amber when every line is of kind `door` (an alert nobody routed), red for any other kind|the lines by kind, `Uptime 69 of 70 up` and what is down (infra names, from the overview's `uptime`). The Console has no health page yet, so the title is inert; `HEALTH_PATH` in `main.js` makes it a link once there is one|
+
+The quota is not drawn: `jk-status` has it. With `FACTORY_CONSOLE_URL` unset the rows are inert and the tooltips say so.
+With no good answer for two minutes the bar dims. A popover is as high as its rows (`popupHeight`, at most `MAX_ROWS` = 8
+rows; a longer list ends in `+N more`), 340 px wide.
 
 ## What it calls
 
-Read-only, on the dev host, two calls:
+Read-only, on the dev host, two calls (only the bar and the sidebar line make them; a popover reads the bar's model):
 
 Every 15 seconds (counts, the open Issues, host, health, uptime and the terminals feed):
 
@@ -56,17 +57,18 @@ Every 15 seconds (counts, the open Issues, host, health, uptime and the terminal
 - `factory read overview`
 - `factory read issues --state all --limit 40`
 - `factory read sessions --live`
-- `factory read machine`
+- `factory read machine`: the load and swap with their ceilings
+- the host's CPU and memory in use (`ps`, `vm_stat` and `sysctl` in the same shell; `read machine` has neither)
 
 Every 60 seconds (the board and the 7-day series, the same read the Console's Flow page draws from):
 
 - `factory read flow`: the `trend` as numbers, for each queued Issue its queue kind and project, and which incident Issues
-  stop their project's line. A flow read older than 10 minutes is dropped: the cells show their figures without trend, the
-  queue and production rows go.
+  stop their project's line. A flow read older than 10 minutes is dropped: the figures stay without trend, the queue and
+  production go (Prod turns grey).
 
 Each part parses on its own and keeps its last good answer, so an overview without a needs read (or the other way round)
-still draws what it has. All API text is data; the parsers keep numbers, kinds, project names, phases and ids, never a
-title or summary (`jk-glance.test.ts` asserts it).
+still draws what it has. All API text is data; the parsers keep numbers, kinds, project names and ids, never a title,
+summary, Issue number or phase of a lead (`jk-glance.test.ts` asserts it).
 
 ## Credential and Console URL
 
@@ -78,6 +80,37 @@ The Console's base URL is `FACTORY_CONSOLE_URL` in `~/.config/factory/env` on th
 but does not link, and the tooltips say so.
 
 ## Cross-mod contract
+
+What dotfiles renders from this mod (the layout, `config/herdr-app/layouts/jk.json`, and `jk-status`):
+
+1. **The bar block**: `{ "mod": "jk-glance", "props": { "bar": true } }`, at least `BAR_W` (780) px wide and 28 px high, in
+   the status row beside `jk-status` (the layout JSON above). `jk-status` changes nothing: it keeps the machines, the
+   quota, the branch, Uptime Kuma and the palette hint, and may drop its own `N needs you` chip (the bar's first item).
+2. **The popovers are this mod**, opened by the bar through `openOverlay({ mod: "jk-glance", kind: "popup", frame: "none",
+   width: 340, height, at, props: { kind: "detail", item } })`. Nothing for dotfiles to add: `mod.json` stays
+   `{ "place": "none" }`, the same as `jk-details`.
+3. **The sidebar block**: remove it (preferred), or keep it at `GLANCE_H` = 28 px. Never both a sidebar block and the bar
+   unless the duplicate poll is wanted.
+
+`shared("jk.factory.glance")` is the bar's model, published only when it changed (about every poll while the numbers move;
+it is persisted and every mod re-renders on a change, so it holds no history). A mod that wants the figures reads it
+instead of polling:
+
+```json
+{
+  "empty": false,
+  "stale": false,
+  "items": [{ "group": 0, "key": "needs", "label": "Needs you", "value": "3", "tone": "bad", "dot": null, "tip": "…" }],
+  "details": { "queued": { "title": "Queued · 7", "tone": "neutral", "link": "https://factory.<dev domain>/flow?state=queued",
+    "rows": [{ "text": "waits for a free seat", "right": "2", "tone": "dim", "link": "…" }], "height": 138 } },
+  "side": { "text": "Needs you · 3 · 4 leads", "tone": "bad", "link": "…", "tip": "…" }
+}
+```
+
+`items` are in bar order (`group` changes where a separator goes; `key` is one of `needs`, `working`, `waiting`, `queued`,
+`shipped`, `production`, `cpu`, `ram`, `load`, `health`); `details` is keyed by the same keys (`cpu`, `ram` and `load` hold
+the one host popover); `tone` is `good`, `bad`, `warn`, `dim` or `neutral`; `link` is `null` without a Console URL. Before
+the first good poll it is `{ "empty": true, "text": "Factory: no data" }`. No Issue title, summary or phase is in it; the one number is a red project's incident, the link target of its row.
 
 The same poll publishes `shared("jk.factory.terminals")` when its content changed. The `jk-pane` and `jk-tabs` mods (they
 stay in dotfiles, `config/herdr-app/mods`) read it to draw each terminal's header and the Console link on its tab. The
@@ -124,12 +157,15 @@ The old `jk-board` mod is gone from this repo and from dotfiles; `make herdr-app
 ## Test
 
 `jk-glance.test.ts` runs the pure-helper block of `main.js` (between `// <glance>` and `// </glance>`) on its own,
-because the mod imports gpui and herdr and cannot load under Bun: the parsers, the sparkline and bar geometry, the section
-builders (needs rows, leads, queue reasons, production, host) and the view model (`glanceModel`, every word the block
+because the mod imports gpui and herdr and cannot load under Bun: the parsers, the row builders (needs, projects, queue
+reasons, production, host, health) and the view model (`glanceModel`, every word the bar and a popover draw). It holds
+the heights and widths (the sidebar line within 28 px, every popover within `MAX_ROWS` rows and its computed height, the
+widest bar within `BAR_W`) and the no-title rule (no title, summary, or number or phase of a lead in any word the mod
 draws). `bun test integrations`. `scripts/test/deploy-hook.test.ts` covers the post-deploy hook.
 
 The app check, on a copy, because `herdr-app check` writes a generated `gpui-kit.d.ts` next to the mod:
-`cp -R jk-glance /tmp/x/jk-glance && HERDR_APP_HOME=/tmp/home herdr-app check /tmp/x/jk-glance`. It renders once, and the
-mod starts with no data, so seed `this.at`, `this.flowAt`, `this.overview`, `this.needs`, `this.flow` and `this.machine`
-in the copy (parse real `factory read` output with the block's own `parse*` functions) to exercise the drawing. Passes on
-herdr-app 0.1.15 (gpui-shell 0.7.1).
+`cp -R jk-glance /tmp/x/jk-glance && HERDR_APP_HOME=/tmp/home herdr-app check /tmp/x/jk-glance`. It renders once with no
+props (the sidebar line) and no data. To exercise the other roles seed the copy: in `init`, set `this.at`, `this.flowAt`,
+`this.overview`, `this.needs`, `this.flow`, `this.machine` and `this.stats` (parse real output with the block's own
+`parse*` functions) and force `this.role` to `'bar'`; for the popover `'popup'`, `setShared('jk.factory.glance', …)` with
+`glanceModel(…)` and `this.props = () => ({ item: 'queued' })`. All three pass on herdr-app 0.1.15 (gpui-shell 0.7.1).
