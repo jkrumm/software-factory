@@ -646,11 +646,12 @@ function glanceModel({ needs, overview, flow, machine, stats, base, at, now, flo
   const queueList = trend ? queueRows(trend.why, base) : []
   const needsList = needsRows(needs, base)
   const projects = projectRows(overview?.leads, base)
+  const hostList = hostRows(machine, stats)
   const hostDetail = detail(
     'Host',
     'neutral',
     consoleLink(base, 'host', null),
-    hostRows(machine, stats).length ? hostRows(machine, stats) : [{ text: 'Not known yet', tone: 'dim' }],
+    hostList.length ? hostList : [{ text: 'Not known yet', tone: 'dim' }],
   )
   const details = {
     needs: detail(
@@ -705,7 +706,7 @@ function glanceModel({ needs, overview, flow, machine, stats, base, at, now, flo
       `Health · ${healthKnown ? overview.health : '–'}`,
       healthTone(overview),
       consoleLink(base, 'health', null),
-      healthRows(overview).slice(0, MAX_ROWS),
+      capRows(healthRows(overview), null),
     ),
   }
 

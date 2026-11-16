@@ -827,6 +827,7 @@ test('every popover fits its card: at most MAX_ROWS rows, the height is what the
     expect(d.height, key).toBeLessThanOrEqual(lib.WORST_POPUP_H)
   }
   expect(m.details.needs.rows.at(-1).text).toMatch(/^\+\d+ more$/)
+  expect(m.details.health.rows.at(-1).text).toMatch(/^\+\d+ more$/)
   expect(m.details.working.rows.at(-1).text).toMatch(/^\+\d+ more$/)
   // with a trend, its row keeps its place after the capped projects
   const withTrend = lib.glanceModel({ ...worstCase(), flow: lib.parseFlow(JSON.stringify(trend)) })
