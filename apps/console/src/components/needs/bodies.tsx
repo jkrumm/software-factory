@@ -522,11 +522,12 @@ function ErrandBody({ item, issueTitle, onSent }: BodyProps) {
 }
 
 function HeldSignalBody({ item, issueTitle, onSent }: BodyProps) {
-  const [repo, setRepo] = useState('')
+  const { unrouted } = item
+  const [repo, setRepo] = useState(unrouted?.proposal ?? '')
   const settle = useSettle<void>({
     send: () => promoteSignal(item.id, item.repo ?? repo.trim()),
     keys: [['needs']],
-    onSent: () => onSent('Promoted: it is work now'),
+    onSent: () => onSent(unrouted ? `Routed to ${repo.trim()}: the alert is filed there` : 'Promoted: it is work now'),
     onConflict: () => onSent(SETTLED),
   })
   const [reason, setReason] = useState('')
@@ -540,8 +541,22 @@ function HeldSignalBody({ item, issueTitle, onSent }: BodyProps) {
   const link = httpLink(item.sourceLink)
   return (
     <div className="grid gap-4">
-      <Lead hint="held signal">Outside text the factory did not trust enough to turn into work</Lead>
-      <Prose>{plainExcerpt(item.summary)}</Prose>
+      {unrouted ? (
+        <>
+          <Lead hint="held signal">An alert is firing and no repository is assigned to hear it</Lead>
+          <Prose>
+            {`"${plainExcerpt(item.title.replace(/^[^:]*:\s*/, ''))}" from ${unrouted.source} reached no repository, because none is assigned to the monitor "${unrouted.monitor}". `}
+            {unrouted.proposal
+              ? `The screen suggests ${unrouted.proposal}. Routing it there files the alert in that repository and sends the monitor's next alerts there too.`
+              : 'Name the repository it belongs to: the monitor gets that route and the alert is filed there.'}
+          </Prose>
+        </>
+      ) : (
+        <>
+          <Lead hint="held signal">Outside text the factory did not trust enough to turn into work</Lead>
+          <Prose>{plainExcerpt(item.summary)}</Prose>
+        </>
+      )}
       <PropertyList
         items={[
           { label: 'Source', value: sourceWords(item) },
@@ -576,7 +591,11 @@ function HeldSignalBody({ item, issueTitle, onSent }: BodyProps) {
         ) : null}
         <div>
           <Button type="submit" disabled={settle.disabled || (needsRepo && !repo.trim())}>
-            Promote
+            {unrouted
+              ? repo.trim()
+                ? `Route to ${repo.trim()} and file the alert`
+                : 'Route and file the alert'
+              : 'Promote'}
           </Button>
         </div>
       </form>
