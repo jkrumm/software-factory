@@ -3,6 +3,7 @@ import type { SignalRequest } from '@software-factory/contract'
 import type { Triaged } from '../../domains/intake/model.ts'
 import type { CapacityStore } from '../../domains/capacity/ports.ts'
 import { type MemoryCeilings, overLoad, overMemory } from '../../domains/capacity/host.ts'
+import type { AimMode } from '../../domains/capacity/slot-aim.ts'
 import { slotLines } from '../../domains/capacity/slots.ts'
 import type { CiRuns, LoopReads, LoopStore, MigrationFiles, OverloadHost } from '../../domains/loops/ports.ts'
 import {
@@ -94,6 +95,8 @@ export interface SelfwatchDeps {
   budgets?: (now: Date) => Promise<BudgetFact[]>
   /** the memory ceilings admission holds (`gates_passed` reads a lead admitted past them) */
   memoryCeilings: MemoryCeilings
+  /** `FACTORY_SLOT_AIM`: only under `on` is the aim's target the base the slot rule grants against (`slot_line`'s `base_empty`) */
+  slotAim: AimMode
   /** this process's pid: the server in the evidence's priority line */
   serverPid: number
   /** the server's own routes over the last five minutes, timed in the process; absent, `routes_slow` is not judged */
@@ -284,7 +287,7 @@ async function gather(deps: SelfwatchDeps, now: Date): Out<Gathered> {
   gathered.findings.push(
     ...loadOverCeilingFindings(capacity.value.minutes, rules, now),
     ...gatesPassedFindings(capacity.value.minutes, capacity.value.admissions, rules, now),
-    ...slotLineFindings(capacity.value.slots, now),
+    ...slotLineFindings(capacity.value.slots, now, deps.slotAim === 'on'),
   )
   if (!hostSampleIsFresh(capacity.value.minutes, now)) {
     gathered.unread.add('load_over_ceiling').add('gates_passed')

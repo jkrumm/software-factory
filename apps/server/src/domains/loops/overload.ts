@@ -74,7 +74,14 @@ export const SLOT_WAIT_MINUTES = 15
 /** A base slot empty while a caller waits, this many consecutive minutes: the memory rule is refusing a step the host could run. */
 export const SLOT_EMPTY_MINUTES = 5
 
-export function slotLineFindings(minutes: readonly SlotMinute[], now: Date): Finding[] {
+/**
+ * The base slots callers were granted against that minute: `FACTORY_SLOTS`, or under `on` the aim's target when it is
+ * lower (`app/capacity-slots.ts` hands `min(slots, aim)` to the grant rule, which then says "all N slots are busy").
+ * Under `shadow` the aim moves nothing, so the base is `FACTORY_SLOTS`.
+ */
+const grantBase = (m: SlotMinute, aimOn: boolean): number => (aimOn ? Math.min(m.liveSlots, m.aimSlots) : m.liveSlots)
+
+export function slotLineFindings(minutes: readonly SlotMinute[], now: Date, aimOn: boolean): Finding[] {
   const found: Finding[] = []
   const waiting = tailRun(minutes, (m) => m.waiters > SLOT_WAITERS)
   const waitingLast = waiting[waiting.length - 1]
@@ -86,13 +93,13 @@ export function slotLineFindings(minutes: readonly SlotMinute[], now: Date): Fin
       title: 'Self-watch: more than eight callers have waited for a test slot for fifteen minutes',
       facts: [`more than ${SLOT_WAITERS} callers waited for a test slot in ${SLOT_WAIT_MINUTES} consecutive minutes`],
       context: [
-        `${waiting.length} minutes in a row since ${iso(waiting[0]?.at ?? waitingLast.at)}: ${waitingLast.waiters} waiting now, ${most} at most, ${waitingLast.holders} of ${waitingLast.liveSlots} base slots held`,
+        `${waiting.length} minutes in a row since ${iso(waiting[0]?.at ?? waitingLast.at)}: ${waitingLast.waiters} waiting now, ${most} at most, ${waitingLast.holders} of ${grantBase(waitingLast, aimOn)} base slots held`,
         `Now: ${iso(now)}`,
       ],
       reproduce: 'factory capacity state (the slot lines); factory slot list',
     })
   }
-  const empty = tailRun(minutes, (m) => m.holders < m.liveSlots && m.waiters > 0)
+  const empty = tailRun(minutes, (m) => m.holders < grantBase(m, aimOn) && m.waiters > 0)
   const emptyLast = empty[empty.length - 1]
   if (emptyLast && empty.length >= SLOT_EMPTY_MINUTES && freshRun(empty, now)) {
     found.push({
@@ -101,7 +108,7 @@ export function slotLineFindings(minutes: readonly SlotMinute[], now: Date): Fin
       title: 'Self-watch: a base test slot sits empty while callers wait for memory',
       facts: [`a base test slot was empty while a caller waited in ${SLOT_EMPTY_MINUTES} consecutive minutes`],
       context: [
-        `${empty.length} minutes in a row since ${iso(empty[0]?.at ?? emptyLast.at)}: ${emptyLast.holders} of ${emptyLast.liveSlots} base slots held, ${emptyLast.waiters} waiting`,
+        `${empty.length} minutes in a row since ${iso(empty[0]?.at ?? emptyLast.at)}: ${emptyLast.holders} of ${grantBase(emptyLast, aimOn)} base slots held, ${emptyLast.waiters} waiting`,
         `Now: ${iso(now)}`,
       ],
       reproduce: 'factory capacity state (the slot lines name the reason of each waiter)',
