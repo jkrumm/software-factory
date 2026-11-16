@@ -146,16 +146,31 @@ const DeclaredProbe = z.strictObject({
   target: z.string().regex(/^[a-z0-9-]{1,64}$/, 'a Makefile target of lowercase letters, digits and dashes'),
 })
 
+/** The built-in hygiene probes a project may switch off (`check` has `check: false`, the declared `probes` are the project's own). */
+const SKIPPABLE_PROBES = ['links', 'retired', 'deps', 'cochange', 'runrules', 'browser'] as const
+
+/** One probe the project opts out of, with the reason: a probe is never switched off without one. */
+const SkippedProbe = z.strictObject({
+  probe: z.enum(SKIPPABLE_PROBES),
+  reason: z.string().trim().min(1).max(300),
+})
+
 /**
  * `hygiene:`: what the hygiene loop may run on the project. `check: false` says the project's `make check` needs a lab
  * the factory host does not have (inputs only a person may supply); the loop skips that probe and names `reason` in its
  * pass. The reason is required: a probe is never switched off without one. `probes` adds the project's own weekly checks
- * (`{ name, target }`): `make <target>` in the throwaway checkout, red on any exit but 0.
+ * (`{ name, target }`): `make <target>` in the throwaway checkout, red on any exit but 0. `skip` opts out of one built-in
+ * probe (`{ probe, reason }`, the reason required): the probe is `skipped` with it in the pass.
  */
 const Hygiene = z
   .strictObject({
     check: z.boolean().default(true),
     reason: z.string().trim().min(1).max(300).optional(),
+    skip: z
+      .array(SkippedProbe)
+      .max(SKIPPABLE_PROBES.length)
+      .refine((list) => new Set(list.map((entry) => entry.probe)).size === list.length, 'a probe is named once')
+      .default([]),
     probes: z
       .array(DeclaredProbe)
       .max(MAX_DECLARED_PROBES)

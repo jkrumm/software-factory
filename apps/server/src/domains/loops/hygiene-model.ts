@@ -10,7 +10,7 @@ import type { PortError, Result } from '../../kernel/result.ts'
  * The deterministic probes, in the order their findings are filed when the budget is short. `probe` is last: the probes a
  * project declares (`hygiene.probes`), one run and at most one finding each, after every built-in probe.
  */
-export const PROBES = ['check', 'links', 'retired', 'deps', 'cochange', 'runrules', 'probe'] as const
+export const PROBES = ['check', 'links', 'retired', 'deps', 'cochange', 'runrules', 'browser', 'probe'] as const
 export type Probe = (typeof PROBES)[number]
 
 /** A probe a project declares in `project.yaml`: `make <target>` in the checkout, red on any exit but 0. */
@@ -70,12 +70,20 @@ export interface Checkout {
   source: string
 }
 
+/** A built-in probe a project switches off in `project.yaml` (`hygiene.skip`), with its reason. */
+export interface SkippedProbe {
+  probe: Exclude<Probe, 'check' | 'probe'>
+  reason: string
+}
+
 /** What the project's project.yaml lets a sweep run. */
 export interface SweepOptions {
   /** the project's own words for why `make check` is not run here (its check needs a lab this host lacks, or its doctor says so); absent runs it */
   skipCheck?: string
   /** the probes the project declares (`hygiene.probes`); absent or empty runs none */
   probes?: readonly DeclaredProbe[]
+  /** the built-in probes the project opts out of (`hygiene.skip`): each is `skipped` with its reason */
+  skip?: readonly SkippedProbe[]
 }
 
 /**
