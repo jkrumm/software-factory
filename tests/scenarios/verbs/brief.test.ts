@@ -131,6 +131,8 @@ test('the lead calls its verbs in the forms the brief lists, with the agent toke
       'plug it in',
       '--detail',
       'the cable',
+      '--need',
+      'hands',
       '--tried',
       'a command',
     ],
