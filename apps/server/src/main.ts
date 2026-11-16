@@ -969,6 +969,7 @@ async function main(): Promise<void> {
       dataDir,
       epoch,
       tenantBudget: { project: planningEnv.tenantProject, budgetMib: planningEnv.tenantBudgetMib },
+      cores: planningEnv.cores,
       queueReasons,
       machine,
       ciTimes: githubCiTimes({

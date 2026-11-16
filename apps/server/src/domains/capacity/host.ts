@@ -107,12 +107,17 @@ const MIB = 1024 * 1024
 const UNITS: Record<string, number> = { K: 1024, M: MIB, G: 1024 * MIB }
 const WINDOW_S = 300
 
-/** The swap in use, in bytes, from `vm.swapusage` (`total = 10240.00M  used = 9012.25M  free = …`); null when not understood. */
-export function swapUsedBytes(swapusage: string): number | null {
-  const match = /used\s*=\s*([\d.]+)\s*([KMG])/.exec(swapusage)
+const swapField = (swapusage: string, field: 'total' | 'used'): number | null => {
+  const match = new RegExp(`${field}\\s*=\\s*([\\d.]+)\\s*([KMG])`).exec(swapusage)
   const unit = match?.[2] ? UNITS[match[2]] : undefined
-  return match?.[1] && unit !== undefined ? Number(match[1]) * unit : null
+  return match?.[1] && unit !== undefined ? Math.round(Number(match[1]) * unit) : null
 }
+
+/** The swap in use, in bytes, from `vm.swapusage` (`total = 10240.00M  used = 9012.25M  free = …`); null when not understood. */
+export const swapUsedBytes = (swapusage: string): number | null => swapField(swapusage, 'used')
+
+/** The swap's size, in bytes, from the same text; null when not understood. */
+export const swapTotalBytes = (swapusage: string): number | null => swapField(swapusage, 'total')
 
 /** One sample of the counters, for the next reading's rate. */
 export interface SwapSample {

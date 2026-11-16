@@ -2,7 +2,8 @@ import type { HostProcess } from '@software-factory/contract'
 import type { HostReader } from '../../domains/capacity/ports.ts'
 import { parsePs, type PsRow, topProcesses } from './ps.ts'
 import { parseTop, type TopSnapshot } from './top.ts'
-import { memoryUsedPct } from './vm-memory.ts'
+import { swapTotalBytes, swapUsedBytes } from '../../domains/capacity/host.ts'
+import { memoryUsedBytes, sharePct } from './vm-memory.ts'
 import { type TextRunner, textRunner } from './process.ts'
 
 export interface HostWatchOptions {
@@ -30,6 +31,11 @@ export interface HostSampleReading {
   memoryUsedPct: number | null
   swapUsedPct: number | null
   swapoutMbPer300s: number | null
+  /** the same memory and swap as amounts, in bytes (`migrations/1044_host_bytes.sql`) */
+  ramBytes: number | null
+  memoryUsedBytes: number | null
+  swapUsedBytes: number | null
+  swapTotalBytes: number | null
 }
 
 export interface HostWatch {
@@ -91,13 +97,12 @@ export function hostWatch(options: HostWatchOptions): HostWatch {
     return n
   }
 
-  const memoryUsed = async (): Promise<number | null> => {
-    const [ram, counts, vmStat] = await Promise.all([
-      memsize(),
+  const memoryUsed = async (ram: number | null): Promise<number | null> => {
+    const [counts, vmStat] = await Promise.all([
       run([options.sysctlBin, '-n', 'vm.page_pageable_internal_count', 'vm.page_purgeable_count', 'hw.pagesize']),
       run([options.vmStatBin ?? '/usr/bin/vm_stat']),
     ])
-    return ram && counts !== null && vmStat !== null ? memoryUsedPct(counts, vmStat, ram) : null
+    return ram && counts !== null && vmStat !== null ? memoryUsedBytes(counts, vmStat, ram) : null
   }
 
   return {
@@ -111,14 +116,20 @@ export function hostWatch(options: HostWatchOptions): HostWatch {
     },
 
     async sample(): Promise<HostSampleReading> {
-      const [load, memory, used] = await Promise.all([
+      const ram = await memsize()
+      const [load, memory, used, swap] = await Promise.all([
         options.host.load().catch(() => null),
         options.host.memory().catch(() => null),
-        memoryUsed(),
+        memoryUsed(ram),
+        run([options.sysctlBin, '-n', 'vm.swapusage']),
       ])
       return {
         load: load?.ok ? load.value : null,
-        memoryUsedPct: used,
+        memoryUsedPct: used === null || !ram ? null : sharePct(used, ram),
+        ramBytes: ram,
+        memoryUsedBytes: used,
+        swapUsedBytes: swap === null ? null : swapUsedBytes(swap),
+        swapTotalBytes: swap === null ? null : swapTotalBytes(swap),
         swapUsedPct: memory?.ok ? memory.value.swapUsedPct : null,
         swapoutMbPer300s: memory?.ok ? memory.value.swapoutMbPer300s : null,
       }

@@ -76,6 +76,8 @@ export interface ReadModelDeps {
   epoch?: Date | null
   /** the tenant class's budget and the repo its findings are filed on; absent, the defaults */
   tenantBudget?: { project: string; budgetMib: number }
+  /** the host's cores, for the Throughput read to name beside the load */
+  cores?: number
   now?: () => Date
   /** how long a timed wait with Issues behind it must last to reach Needs you; absent, the default (`FACTORY_LONG_WAIT_MS`) */
   longWaitMs?: number
@@ -369,6 +371,7 @@ export const readModelRoutes = (deps: ReadModelDeps | undefined, caller: (reques
             hours,
             dataDir: deps.dataDir,
             tenantBudget: deps.tenantBudget,
+            ...(deps.cores === undefined ? {} : { cores: deps.cores }),
             epoch: deps.epoch ?? null,
             queue: await deps.queueReasons?.().catch(() => null),
           }),

@@ -29,6 +29,8 @@ export const LANGUAGE = {
   concept:
     "A direction for a whole product, UX or architecture, before building. Three or four per project, ever. Its result goes into the project's DESIGN.md",
   cost: "Dollars the usage schema priced for an Issue's sessions, joined at read, never copied",
+  'cpu busy':
+    "The share of all the host's cores that were working (user plus system time), percent, from top. 100 % is every core fully used, the rest is idle. It says how much of the machine is in use, where Load says how many threads wanted it",
   cycle: 'The time from an Issue filed to closed',
   decision:
     'One question as a form: recommendation, what was checked, cost per option, what happens with no answer. Refused when incomplete; it reaches the owner only after the Judge saw it; a second ask on the open one amends it. Raised while its Concept or Spec waits for review, it is about that artifact and waits together with the review',
@@ -71,9 +73,16 @@ export const LANGUAGE = {
   lane: 'A resource class inside a repo (apple) that an Issue or plan row names; lanes: {apple: 1} in the repo\'s project.yaml caps how many leads of the lane run at once, within leads. An undeclared lane is unlimited (docs/plan.md "Lanes")',
   lead: 'The Claude Code session that owns one attempt of one Issue: understand, build, review, ship, verify',
   line: "Stop the line: while a repo's alert is unsolved, only its fix is admitted",
+  load: "The number of threads that wanted a core, averaged over the last minute (the 1-minute load average). It is a count, not a percentage, and it is not CPU busy: on 12 cores load 4 is a third of the cores' worth of threads, load 12 is one thread for every core, and above that threads wait. It also counts threads waiting on the disk, so it can be high with the CPU quiet. Admission uses load because a storm of waiting processes (git, tests) starves everything on the host whatever the CPU percent says",
+  'load ceiling':
+    'The load above which no new lead is admitted, stored with every minute so the page reads the ceiling that was in force. Under the throughput rule it is 3 per core',
   'long wait':
     'An Issue in a timed wait of an hour or more with other open Issues waiting behind it. It appears in Needs you until the wait ends',
   loop: 'A named recurring job with a trigger, a budget and one way to act. Its judgment is an agw workflow with its own prompt, tools and skills',
+  'memory pressure':
+    "The kernel's own verdict on memory: normal, warning or critical. It is the one memory figure that says the host is struggling now: a host can hold 90 % of its RAM at normal pressure",
+  'memory used':
+    "The RAM in use, in GB of the RAM installed, as Activity Monitor's Memory Used counts it: app memory plus wired plus compressed. Cached files are not in it, so a high figure is real use, not a full cache. GB here is 1024 x 1024 x 1024 bytes",
   'needed me':
     'The owner\'s one-click mark on a verdict of a Spec or Report: did it need him. The newest marks teach the Spec screen and triage the next time; "Specs at the owner not needed" counts the no\'s',
   needs:
@@ -139,6 +148,8 @@ export const LANGUAGE = {
   'still-needed look':
     'The factory-errand-needed workflow reading a request that has no check, once a day from its first day: only a not_needed with a reason closes it. Closures by the check, the look, the expiry or a newer request are the "Errands closed without you" band of the next since read',
   surface: 'Console, Herdr, Iris, Argo, ntfy',
+  'swap used':
+    "The part of the swap file the host has written memory out to, in GB of the swap's current size (macOS grows it on demand, so the size is not a limit). Swap stays full after its cause is gone, so a high figure alone is not a fault: swap that keeps growing is the alarm, and admission turns new leads away above 75 % of the RAM in swap or a fast rate of swapouts",
   'taste pass':
     "The weekly retro's reading of the owner's verdict notes and comments: a preference seen twice becomes a rule in the repo's AGENTS.md or DESIGN.md",
   'test slot':

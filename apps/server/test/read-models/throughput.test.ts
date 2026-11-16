@@ -51,6 +51,9 @@ async function processRow(
     VALUES (${at}, ${pid}, 1, ${name}, ${cls}, ${repo}, ${tenant}, ${footprint}, ${cpu}, ${why}, ${grown})`
 }
 
+const GIB = 1024 ** 3
+const RAM = 32 * GIB
+
 async function seed() {
   await classRows([
     // 10:00
@@ -105,6 +108,9 @@ async function seed() {
   await host(t('10:03'), [null, null, null, null, null, null, null, 4])
   await host(t('10:04'), [6, null, null, null, null, 35, 1800, null])
   await host(t('11:00', '11-06'), [99, 1, 99999, 99, 9999, 1, 99999, 4]) // outside
+  // the newest minute of the window is the only one stored with amounts: the others read as their share of its RAM
+  await sql`UPDATE factory.host_samples SET ram_bytes = ${RAM}, memory_used_bytes = ${6 * GIB}, swap_used_bytes = ${2 * GIB},
+    swap_total_bytes = ${4 * GIB}, cpu_user_pct = 10, cpu_sys_pct = 5 WHERE at = ${t('10:04')}`
 
   await processRow(t('10:00'), 'node', 'lead', 'app', null, 900, 100, 'top', null)
   await processRow(t('10:01'), 'node', 'lead', 'app', null, 1100, 200, 'growth', 250)
@@ -239,11 +245,43 @@ describe('readThroughput', () => {
     }
   })
 
+  test('the newest minute as amounts; a minute stored without them is read as its share of the newest known RAM', async () => {
+    const { now, signals } = (await read()).host
+    // 10:04 reads user 10 + system 5 and the amounts; the cores are the server's, absent here
+    expect(now).toEqual({
+      at: t('10:04').toISOString(),
+      cpuBusyPct: 15,
+      load: 6,
+      loadCeiling: null,
+      cores: null,
+      ramBytes: RAM,
+      memoryUsedBytes: 6 * GIB,
+      swapUsedBytes: 2 * GIB,
+      swapTotalBytes: 4 * GIB,
+      pressureLevel: null,
+    })
+    // busy CPU is 100 minus idle where the minute has no split: 20, 40, 80 at 10:00 to 10:02
+    expect(signals.cpuBusyPct).toEqual({ p50: 30, max: 80 })
+    expect(signals.memoryUsedBytes.max).toBe(6 * GIB)
+    expect(signals.swapUsedBytes.max).toBeCloseTo(0.3 * RAM, 0)
+    expect((await read(1)).host.now).toBeNull()
+  })
+
   test('the timeline: the worst pressure and the largest swap use and load of each bucket', async () => {
     const { timeline } = (await read()).host
     // 24 hours: 5-minute buckets; 10:00 to 10:04 are one bucket, the sample outside the window is none
     expect(timeline.bucketMinutes).toBe(5)
-    expect(timeline.points).toEqual([{ at: t('10:00').toISOString(), pressureLevel: 4, swapUsedPct: 30, load: 10 }])
+    expect(timeline.points).toEqual([
+      {
+        at: t('10:00').toISOString(),
+        pressureLevel: 4,
+        swapUsedPct: 30,
+        cpuBusyPct: 80,
+        memoryUsedBytes: 6 * GIB,
+        swapUsedBytes: expect.closeTo(0.3 * RAM, 0),
+        load: 10,
+      },
+    ])
     const sqlBucket = await one(sql`
       SELECT max(pressure_level)::int AS level, max(swap_used_pct)::float8 AS swap, max(load)::float8 AS load
       FROM factory.host_samples WHERE at >= ${FROM} AND at < ${NOW}`)

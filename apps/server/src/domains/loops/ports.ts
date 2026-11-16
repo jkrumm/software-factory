@@ -97,6 +97,11 @@ export interface HostReading {
   memoryUsedPct: number | null
   swapUsedPct: number | null
   swapoutMbPer300s: number | null
+  /** the same as amounts, in bytes (`migrations/1044_host_bytes.sql`): the RAM, the memory in use, the swap in use and its size */
+  ramBytes: number | null
+  memoryUsedBytes: number | null
+  swapUsedBytes: number | null
+  swapTotalBytes: number | null
 }
 
 /** The host signals the class snapshot reads beside the processes (`migrations/1022_host_classes.sql`); null when not read. */

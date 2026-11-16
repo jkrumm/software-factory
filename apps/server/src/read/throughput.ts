@@ -32,6 +32,12 @@ const Signals = z.object({
   user_max: nullNum,
   sys_p50: nullNum,
   sys_max: nullNum,
+  busy_p50: nullNum,
+  busy_max: nullNum,
+  mem_p50: nullNum,
+  mem_max: nullNum,
+  swapb_p50: nullNum,
+  swapb_max: nullNum,
   compressor_p50: nullNum,
   compressor_max: nullNum,
   swap_p50: nullNum,
@@ -79,7 +85,33 @@ const FlakyRow = z.object({
   last_flake: z.coerce.date(),
 })
 
-const TimelineRow = z.object({ at: z.coerce.date(), level: z.coerce.number().nullable(), swap: nullNum, load: nullNum })
+const TimelineRow = z.object({
+  at: z.coerce.date(),
+  level: z.coerce.number().nullable(),
+  swap: nullNum,
+  busy: nullNum,
+  mem: nullNum,
+  swapb: nullNum,
+  load: nullNum,
+})
+const NowRow = z.object({
+  at: z.coerce.date(),
+  busy: nullNum,
+  load: nullNum,
+  ceiling: nullNum,
+  ram: nullNum,
+  mem: nullNum,
+  swapb: nullNum,
+  swaptotal: nullNum,
+  level: z.coerce.number().nullable(),
+})
+
+/*
+ * The three host queries below read `m` (the window's `host_samples` with the amounts a minute stored before
+ * `migrations/1044_host_bytes.sql` lacks taken from its shares of the newest known RAM: `mem_b`, `swap_b`; and `busy`, the
+ * CPU user plus system, else 100 minus idle). Written out in each: a query is one template, not a composed fragment.
+ */
+
 const FindingRow = z.object({
   id: z.string(),
   project: z.string(),
@@ -120,6 +152,8 @@ export async function readThroughput(
     hours: number
     dataDir?: string
     tenantBudget?: { project: string; budgetMib: number }
+    /** the host's cores: named beside the load, which is threads wanting a core; absent, the model leaves them null */
+    cores?: number
     /** the counting epoch: nothing before it counts; absent, everything does */
     epoch?: Date | null
     /** why each queued Issue stays queued now; absent, the host answer names no waiting Issue */
@@ -139,6 +173,14 @@ export async function readThroughput(
     const mean = (sum: number, decimals = 0) => (minutes === 0 ? 0 : round(sum / minutes, decimals))
 
     const [signalsRow] = await tx`
+      WITH ram AS (SELECT ram_bytes::float8 AS r FROM factory.host_samples WHERE ram_bytes IS NOT NULL ORDER BY at DESC LIMIT 1),
+      m AS (
+        SELECT h.*,
+          CASE WHEN h.cpu_user_pct IS NOT NULL AND h.cpu_sys_pct IS NOT NULL THEN h.cpu_user_pct + h.cpu_sys_pct
+            ELSE 100 - h.cpu_idle_pct END AS busy,
+          coalesce(h.memory_used_bytes::float8, h.memory_used_pct / 100 * (SELECT r FROM ram)) AS mem_b,
+          coalesce(h.swap_used_bytes::float8, h.swap_used_pct / 100 * (SELECT r FROM ram)) AS swap_b
+        FROM factory.host_samples h WHERE h.at >= ${from} AND h.at < ${to})
       SELECT
         count(*) FILTER (WHERE pressure_level = 1) AS normal,
         count(*) FILTER (WHERE pressure_level = 2) AS warning,
@@ -148,13 +190,16 @@ export async function readThroughput(
         percentile_cont(0.5) WITHIN GROUP (ORDER BY cpu_idle_pct)::float8 AS idle_p50, min(cpu_idle_pct)::float8 AS idle_min,
         percentile_cont(0.5) WITHIN GROUP (ORDER BY cpu_user_pct)::float8 AS user_p50, max(cpu_user_pct)::float8 AS user_max,
         percentile_cont(0.5) WITHIN GROUP (ORDER BY cpu_sys_pct)::float8 AS sys_p50, max(cpu_sys_pct)::float8 AS sys_max,
+        percentile_cont(0.5) WITHIN GROUP (ORDER BY busy)::float8 AS busy_p50, max(busy)::float8 AS busy_max,
+        percentile_cont(0.5) WITHIN GROUP (ORDER BY mem_b)::float8 AS mem_p50, max(mem_b)::float8 AS mem_max,
+        percentile_cont(0.5) WITHIN GROUP (ORDER BY swap_b)::float8 AS swapb_p50, max(swap_b)::float8 AS swapb_max,
         percentile_cont(0.5) WITHIN GROUP (ORDER BY compressor_mib)::float8 AS compressor_p50, max(compressor_mib)::float8 AS compressor_max,
         percentile_cont(0.5) WITHIN GROUP (ORDER BY swap_used_pct)::float8 AS swap_p50, max(swap_used_pct)::float8 AS swap_max,
         percentile_cont(0.5) WITHIN GROUP (ORDER BY processes)::float8 AS processes_p50, max(processes)::float8 AS processes_max,
         min(vm_free_gib)::float8 AS vm_min,
         (array_agg(vm_free_gib ORDER BY at DESC) FILTER (WHERE vm_free_gib IS NOT NULL))[1]::float8 AS vm_last,
         count(collector_cpu_ms) AS collector_minutes, sum(collector_cpu_ms) AS collector_ms
-      FROM factory.host_samples WHERE at >= ${from} AND at < ${to}`
+      FROM m`
     const signals = Signals.parse(signalsRow)
 
     const classRows: unknown[] = await tx`
@@ -237,14 +282,37 @@ export async function readThroughput(
     const bucketMinutes = bucketMinutesOf(hours)
     const bucketSeconds = bucketMinutes * 60
     const timelineRows: unknown[] = await tx`
+      WITH ram AS (SELECT ram_bytes::float8 AS r FROM factory.host_samples WHERE ram_bytes IS NOT NULL ORDER BY at DESC LIMIT 1),
+      m AS (
+        SELECT h.*,
+          CASE WHEN h.cpu_user_pct IS NOT NULL AND h.cpu_sys_pct IS NOT NULL THEN h.cpu_user_pct + h.cpu_sys_pct
+            ELSE 100 - h.cpu_idle_pct END AS busy,
+          coalesce(h.memory_used_bytes::float8, h.memory_used_pct / 100 * (SELECT r FROM ram)) AS mem_b,
+          coalesce(h.swap_used_bytes::float8, h.swap_used_pct / 100 * (SELECT r FROM ram)) AS swap_b
+        FROM factory.host_samples h WHERE h.at >= ${from} AND h.at < ${to})
       SELECT to_timestamp(floor(extract(epoch FROM at) / ${bucketSeconds}::int) * ${bucketSeconds}::int) AS at,
-        max(pressure_level) AS level, max(swap_used_pct)::float8 AS swap, max(load)::float8 AS load
-      FROM factory.host_samples WHERE at >= ${from} AND at < ${to} GROUP BY 1 ORDER BY 1`
+        max(pressure_level) AS level, max(swap_used_pct)::float8 AS swap, max(busy)::float8 AS busy,
+        max(mem_b)::float8 AS mem, max(swap_b)::float8 AS swapb, max(load)::float8 AS load
+      FROM m GROUP BY 1 ORDER BY 1`
+    const nowRows: unknown[] = await tx`
+      WITH ram AS (SELECT ram_bytes::float8 AS r FROM factory.host_samples WHERE ram_bytes IS NOT NULL ORDER BY at DESC LIMIT 1),
+      m AS (
+        SELECT h.*,
+          CASE WHEN h.cpu_user_pct IS NOT NULL AND h.cpu_sys_pct IS NOT NULL THEN h.cpu_user_pct + h.cpu_sys_pct
+            ELSE 100 - h.cpu_idle_pct END AS busy,
+          coalesce(h.memory_used_bytes::float8, h.memory_used_pct / 100 * (SELECT r FROM ram)) AS mem_b,
+          coalesce(h.swap_used_bytes::float8, h.swap_used_pct / 100 * (SELECT r FROM ram)) AS swap_b
+        FROM factory.host_samples h WHERE h.at >= ${from} AND h.at < ${to})
+      SELECT at, busy::float8 AS busy, load::float8 AS load, load_ceiling::float8 AS ceiling,
+        (SELECT r FROM ram) AS ram, mem_b::float8 AS mem, swap_b::float8 AS swapb, swap_total_bytes::float8 AS swaptotal,
+        pressure_level AS level
+      FROM m ORDER BY at DESC LIMIT 1`
     const findingRows: unknown[] = await tx`
       SELECT id, project, kpi, subject, before, target, after, direction, unit, cost_minutes, status, issue_id, filed_at,
         shipped_at, after_at
       FROM factory.throughput_findings ORDER BY filed_at DESC, id LIMIT ${TOP_FINDINGS}`
 
+    const newest = nowRows[0] === undefined ? null : NowRow.parse(nowRows[0])
     const seconds = (ms: number | null) => round((ms ?? 0) / 1000, 1)
     const found = new Map(classRows.map((raw) => ClassRow.parse(raw)).map((r) => [r.class, r]))
     const classTotal = [...found.values()].reduce((sum, r) => sum + r.fp, 0)
@@ -322,6 +390,9 @@ export async function readThroughput(
           cpuIdlePct: { p50: signals.idle_p50, min: signals.idle_min },
           cpuUserPct: { p50: signals.user_p50, max: signals.user_max },
           cpuSysPct: { p50: signals.sys_p50, max: signals.sys_max },
+          cpuBusyPct: { p50: signals.busy_p50, max: signals.busy_max },
+          memoryUsedBytes: { p50: signals.mem_p50, max: signals.mem_max },
+          swapUsedBytes: { p50: signals.swapb_p50, max: signals.swapb_max },
           compressorMib: { p50: signals.compressor_p50, max: signals.compressor_max },
           swapUsedPct: { p50: signals.swap_p50, max: signals.swap_max },
           processes: { p50: signals.processes_p50, max: signals.processes_max },
@@ -354,11 +425,31 @@ export async function readThroughput(
           const r = TenantRow.parse(raw)
           return { tenant: r.tenant, footprintMib: mean(r.fp), peakMib: r.peak, cpuSeconds: seconds(r.cpu) }
         }),
+        now: newest && {
+          at: newest.at.toISOString(),
+          cpuBusyPct: newest.busy,
+          load: newest.load,
+          loadCeiling: newest.ceiling,
+          cores: options.cores ?? null,
+          ramBytes: newest.ram,
+          memoryUsedBytes: newest.mem,
+          swapUsedBytes: newest.swapb,
+          swapTotalBytes: newest.swaptotal,
+          pressureLevel: newest.level,
+        },
         timeline: {
           bucketMinutes,
           points: timelineRows.map((raw) => {
             const r = TimelineRow.parse(raw)
-            return { at: r.at.toISOString(), pressureLevel: r.level, swapUsedPct: r.swap, load: r.load }
+            return {
+              at: r.at.toISOString(),
+              pressureLevel: r.level,
+              swapUsedPct: r.swap,
+              cpuBusyPct: r.busy,
+              memoryUsedBytes: r.mem,
+              swapUsedBytes: r.swapb,
+              load: r.load,
+            }
           }),
         },
         topProcesses: processRows.map((raw) => {
