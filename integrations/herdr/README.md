@@ -8,14 +8,15 @@ rest in the Console.
 ## Layout
 
 **268 px wide, 388 px high.** The layout (dotfiles, `config/herdr-app/layouts/jk.json`, block `glance`) must give the
-block `size.px: 388` (`GLANCE_H` in `main.js`; it was 144, and 56 before). Sections never grow past that: each lists a
-few rows and says `+N` for the rest.
+block `size.px: 388` (`GLANCE_H` in `main.js`; it was 144, and 56 before). Every section has a row cap (`MAX_*` in
+`main.js`; the headers carry the totals) and the tallest the block can get, 382 px (`WORST_CASE_H`), is held within 388 by
+a test.
 
 Top to bottom (every row below is a link; the Console place is in brackets):
 
 - **Needs you · N** (or `Nothing waits on you`; red above 0): the overview's `counts.asks + counts.humanQueue`, the
   `read needs` total standing in when the overview is missing. Click: `/needs-you`. Under it the three newest items,
-  `review · shutterflow … 4h` (kind, repo, age), each opening that item (`/needs-you?item=<id>`); `+N more`.
+  `review · shutterflow … 4h` (kind, repo, age), each opening that item (`/needs-you?item=<id>`).
 - **Four cells in a 2x2 grid**, the ones the Console's Flow page shows: **Working**, **Waiting**, **Queued**, **Shipped
   this week**. Each has the figure, the change against 7 days ago (arrow and delta) and a 48x16 px sparkline with its last
   point marked (Shipped: 7 daily bars). A state's figure is the overview's count, the change is last minus first sample of
@@ -26,8 +27,9 @@ Top to bottom (every row below is a link; the Console place is in brackets):
   (the tooltip names them with their phase).
 - **Queued · N** (`/flow?state=queued`): why they wait, grouped by the reason that binds each one, the largest group first
   and at most three rows: `7 · production red, only fixes run: weatherorb`, `2 · waits for a free seat`, `3 · 2 other
-  reasons`. The reasons are the queue's kinds (`line`, `chain`, `drain`, `claim`, `spec`, `finalizing`,
-  `unknown_project`; none is `seat`: a free account). Chain rows open `/chain`.
+  reasons`. The reasons are the queue's kinds (`QUEUE_REASONS` in `packages/contract/src/capacity.ts`: `chain`, `line`,
+  `finalizing`, `spec`, `unknown_project`, `drain`, `doctor`, `boot`, `load`, `memory`, `lane`, `claim`, `window`, `cap`),
+  each in words; an Issue with no reason recorded reads `waits for a free seat`. Chain rows open `/chain`.
 - **Production**: a green dot and `Production · green`, or `Production · N red` with one row per red project, each opening
   the incident Issue (`/issues/<n>`). A project is red by the server's own rule (`stoppedProjects`,
   `domains/planning/queue.ts`): an incident Issue queued or working that nothing blocks. Until the board's read has answered
@@ -95,7 +97,7 @@ value is an object keyed by app terminal address, `mini/<terminal id>`, one entr
 
 Every field can be `null`. A closed Issue has no entry. `state` is the Issue's state in the language's words (`settling`, `queued`, `working`,
 `waiting`, `watching`), else the session's. `link` is the Issue's place in the Console: its newest Needs you item, else
-the flow, and `null` for a session without an Issue or without a Console URL. No
+its page (`/issues/<n>`), and `null` for a session without an Issue or without a Console URL. No
 Issue number, role or phase is shared, and none is shown there: the screen says what the work is about. Only these fields are
 shared: no insights, no elapsed time, because the value is persisted and every mod re-renders when it changes.
 

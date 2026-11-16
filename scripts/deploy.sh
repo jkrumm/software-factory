@@ -674,6 +674,11 @@ main() {
     door_plan "$SELF_DIR/.." "$sha"
     act "launchctl bootout $DOOR_LABEL if loaded, then launchctl bootstrap it"
     act "wait up to ${DOOR_WAIT_SECS}s for an unauthenticated POST to 127.0.0.1:$DOOR_PORT/alert/kuma to answer 401; a door that does not start (no tokens file) is a warning, never a failed deploy"
+    if [[ -x "$POST_DEPLOY_HOOK" ]]; then
+      act "start the post-deploy hook $POST_DEPLOY_HOOK in the background (release dir and sha as arguments; its failure never fails the deploy)"
+    else
+      act "post-deploy hook: none ($POST_DEPLOY_HOOK is not an executable file)"
+    fi
     act "prune releases beyond the newest $KEEP_RELEASES"
     return 0
   fi

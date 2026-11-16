@@ -58,6 +58,21 @@ const MAX_RED = 2
 // The layout's block height in px: dotfiles `config/herdr-app/layouts/jk.json`, block `glance`, `size.px`.
 const GLANCE_H = 388
 
+// The tallest the render can get with every section at its cap, in px (the render's row heights: a header 16, a row 14, the
+// cells 2 x 40 + 4, the production line, the footer and the health row 14 each, 4 between sections, 8 padding top and bottom).
+// A test keeps it within GLANCE_H: a section that outgrows the block would push the footer out of it.
+const WORST_CASE_H =
+  16 +
+  MAX_NEEDS * 14 +
+  84 +
+  (16 + MAX_PROJECTS * 14) +
+  (16 + MAX_REASONS * 14) +
+  (14 + MAX_RED * 14) +
+  14 +
+  14 +
+  6 * 4 +
+  16
+
 // "needs @@ overview @@ issues @@ sessions @@ machine @@ url": each part is null when it does not parse.
 function parseNeeds(text) {
   let d
@@ -306,13 +321,13 @@ function consoleLink(base, kind, item) {
   return `${b}/needs-you${id != null && id !== '' ? `?item=${encodeURIComponent(String(id))}` : ''}`
 }
 
-// An Issue's place in the Console. The Console has no Issue page yet, so: the Issue's newest Needs you item when it has
-// one, else the flow. Null when the base is not an http(s) URL.
+// An Issue's place in the Console: its newest Needs you item when it has one (the thing the owner has to answer), else its
+// page (`/issues/<n>`). Null when the base is not an http(s) URL.
 function issueLink(base, issue, needs) {
   const ref = `issue_${issue}`
   const own = { items: asArray(needs?.items).filter((i) => i.issue === ref) }
   const item = newestItem(own)
-  return consoleLink(base, item ? 'needs' : 'flow', item)
+  return item ? consoleLink(base, 'needs', item) : consoleLink(base, 'issue', issue)
 }
 
 // -- the KPI cells: the Console's Flow page figures (apps/console/src/lib/flow.ts statsOf), the same rules.
@@ -433,7 +448,7 @@ function needsRows(needs, base) {
     age: ageText(i.ageMs),
     link: consoleLink(base, 'needs', i),
   }))
-  return { rows, more: Math.max(0, items.length - rows.length) }
+  return { rows }
 }
 
 // Running leads grouped by project, the busiest first: per project its count and up to MAX_CHIPS `#n phase` links.
@@ -457,7 +472,7 @@ function leadRows(leads, base) {
       link: consoleLink(base, 'project', project),
     }
   })
-  return { rows, more: Math.max(0, projects.length - rows.length), total: asArray(leads).length }
+  return { rows, total: asArray(leads).length }
 }
 
 // How a queued Issue's binding reason reads (the queue kinds of domains/planning/queue.ts and describe.ts; `seat` is none).
@@ -469,7 +484,14 @@ const WHY_WORD = {
   spec: 'a Spec waits for your verdict',
   finalizing: 'the last attempt is ending',
   unknown_project: 'its repo is not known yet',
-  seat: 'waits for a free seat',
+  doctor: 'the host doctor holds new work back',
+  boot: 'the host has just booted',
+  load: 'the host is busy',
+  memory: 'the host is short of memory',
+  lane: 'its resource lane is full',
+  window: 'every account window is closed',
+  cap: 'every account is at its lead cap',
+  seat: 'waits for a free seat', // no reason recorded: only a free account holds it
 }
 
 // Queued Issues grouped by the reason that holds them, the largest group first; the rest is one "other reasons" row.
@@ -504,7 +526,6 @@ function productionRows(red, base) {
     rows: list
       .slice(0, MAX_RED)
       .map((r) => ({ text: `${r.project}${r.n ? ` · #${r.n}` : ''}`, link: consoleLink(base, 'issue', r.n) })),
-    more: Math.max(0, list.length - MAX_RED),
     red: list.length,
   }
 }
@@ -785,11 +806,9 @@ export default class JkGlance extends View {
           .when(Boolean(right), (el) => el.child(div().flex_none().text_color(t.dim).child(right))),
         link,
       )
-    const more = (id, n, word) => (n > 0 ? [div().id(id).h(14).px(6).text_color(t.dim).child(`+${n} ${word}`)] : [])
     const needsSection = v_flex()
       .child(header('glance-needs', m.needs.text, m.needs.tone, m.needs.link, m.needs.tip))
       .children(m.needs.rows.map((r, i) => row(`glance-need-${i}`, r.text, r.age, r.link)))
-      .children(more('glance-needs-more', m.needs.more, 'more'))
     const leadRow = (r, i) =>
       h_flex()
         .h(14)
@@ -825,7 +844,6 @@ export default class JkGlance extends View {
     const leadsSection = v_flex()
       .child(header('glance-leads', m.leads.text, 'neutral', m.leads.link))
       .children(m.leads.rows.map(leadRow))
-      .children(more('glance-leads-more', m.leads.more, 'projects'))
     const queueSection = v_flex()
       .child(header('glance-queue', m.queue.text, 'neutral', m.queue.link))
       .children(m.queue.rows.map((r, i) => row(`glance-queue-${i}`, r.text, null, r.link)))
@@ -852,7 +870,6 @@ export default class JkGlance extends View {
           ),
       )
       .children(prod ? prod.rows.map((r, i) => row(`glance-red-${i}`, r.text, null, r.link, { tone: 'bad' })) : [])
-      .children(more('glance-red-more', prod ? prod.more : 0, 'more'))
     const footer = h_flex()
       .h(14)
       .px(6)

@@ -8,7 +8,7 @@ const src = readFileSync(join(import.meta.dir, 'jk-glance/main.js'), 'utf8')
 const block = /\/\/ <glance>[^\n]*\n([\s\S]*?)\/\/ <\/glance>/.exec(src)?.[1]
 if (!block) throw new Error('jk-glance: no <glance> block')
 const lib = new Function(
-  `${block}; return { parseNeeds, parseOverview, parseFlow, parseMachine, parseLeads, queueReasons, needsRows, leadRows, queueRows, productionRows, hostLine, ageText, parseUptime, parsePoll, terminalsMap, needsTotal, needsCount, newestItem, needsLabel, consoleLink, issueLink, toneOf, deltaText, kpiCells, sparkPoints, pathPercent, barHeights, glanceModel }`,
+  `${block}; return { GLANCE_H, WORST_CASE_H, parseNeeds, parseOverview, parseFlow, parseMachine, parseLeads, queueReasons, needsRows, leadRows, queueRows, productionRows, hostLine, ageText, parseUptime, parsePoll, terminalsMap, needsTotal, needsCount, newestItem, needsLabel, consoleLink, issueLink, toneOf, deltaText, kpiCells, sparkPoints, pathPercent, barHeights, glanceModel }`,
 )() as any
 
 const needs = (counts: object, items: object[] = []) => JSON.stringify({ at: 1, items, counts })
@@ -257,7 +257,7 @@ test('terminalsMap: session with terminal + Issue, no terminal, unparseable', ()
       summary: 'Sum',
       state: 'working',
       repo: 'dotfiles',
-      link: 'https://c.example.com/flow',
+      link: 'https://c.example.com/issues/362',
     },
   })
   const bare = lib.terminalsMap(
@@ -284,8 +284,8 @@ test("issueLink: the Issue's newest Needs you item, else the flow, else nothing"
     ]),
   )
   expect(lib.issueLink('https://c.example.com/', 7, n)).toBe('https://c.example.com/needs-you?item=new')
-  expect(lib.issueLink('https://c.example.com/', 9, n)).toBe('https://c.example.com/flow')
-  expect(lib.issueLink('https://c.example.com/', 7, null)).toBe('https://c.example.com/flow')
+  expect(lib.issueLink('https://c.example.com/', 9, n)).toBe('https://c.example.com/issues/9')
+  expect(lib.issueLink('https://c.example.com/', 7, null)).toBe('https://c.example.com/issues/7')
   expect(lib.issueLink('', 7, n)).toBeNull()
 })
 
@@ -351,7 +351,7 @@ test('terminalsMap: the shared feed is byte-identical for a fixture', () => {
     { id: 'e', issue: 7, terminal: { id: 'bad addr' } },
   ]
   expect(JSON.stringify(lib.terminalsMap(issues, sessions, n, 'https://c.example.com'))).toBe(
-    '{"mini/t0z":{"title":"Loose","summary":"S","state":"idle","repo":"proj","link":null},"mini/t1":{"title":"Seven","summary":"Sum 7","state":"working","repo":"dotfiles","link":"https://c.example.com/needs-you?item=it1"},"mini/t2":{"title":"Eight","summary":null,"state":"queued","repo":"software-factory","link":"https://c.example.com/flow"}}',
+    '{"mini/t0z":{"title":"Loose","summary":"S","state":"idle","repo":"proj","link":null},"mini/t1":{"title":"Seven","summary":"Sum 7","state":"working","repo":"dotfiles","link":"https://c.example.com/needs-you?item=it1"},"mini/t2":{"title":"Eight","summary":null,"state":"queued","repo":"software-factory","link":"https://c.example.com/issues/8"}}',
   )
 })
 
@@ -601,6 +601,11 @@ test('parseFlow: a red line is read from a queued Issue even when the incident i
   expect(f.red).toEqual([{ project: 'weatherorb', n: 99 }])
 })
 
+test('the block is tall enough for every section at its cap', () => {
+  expect(lib.WORST_CASE_H).toBeLessThanOrEqual(lib.GLANCE_H)
+  expect(lib.GLANCE_H).toBe(388) // the layout's block height in dotfiles (config/herdr-app/layouts/jk.json)
+})
+
 test('ageText: minutes, hours, days', () => {
   expect(lib.ageText(0)).toBe('1m')
   expect(lib.ageText(59 * 60000)).toBe('59m')
@@ -626,8 +631,7 @@ test('needsRows: the three newest, kind and repo and age, each a link to its ite
     { text: 'signal', age: '2h', link: `${base}/needs-you?item=mid` },
     { text: 'errand · dotfiles', age: '3d', link: `${base}/needs-you?item=old` },
   ])
-  expect(r.more).toBe(1)
-  expect(lib.needsRows(null, base)).toEqual({ rows: [], more: 0 })
+  expect(lib.needsRows(null, base)).toEqual({ rows: [] })
   expect(lib.needsRows(n, '').rows.every((x: any) => x.link === null)).toBe(true)
 })
 
@@ -643,7 +647,6 @@ test('leadRows: by project, the busiest first, one Issue chip with its phase and
   const r = lib.leadRows(leads, base)
   expect(r.total).toBe(8)
   expect(r.rows).toHaveLength(4)
-  expect(r.more).toBe(2)
   expect(r.rows[0]).toEqual({
     project: 'software-factory',
     count: 3,
@@ -653,7 +656,7 @@ test('leadRows: by project, the busiest first, one Issue chip with its phase and
     link: `${base}/flow?project=software-factory`,
   })
   expect(r.rows.map((x: any) => x.project)).toEqual(['software-factory', 'argo', 'basalt-ui', 'dotfiles'])
-  expect(lib.leadRows([], base)).toEqual({ rows: [], more: 0, total: 0 })
+  expect(lib.leadRows([], base)).toEqual({ rows: [], total: 0 })
 })
 
 test('queueRows: groups by the binding reason, the largest first, the tail is one row', () => {
@@ -692,12 +695,11 @@ test('productionRows: each red project links to its incident', () => {
     base,
   )
   expect(p.red).toBe(3)
-  expect(p.more).toBe(1)
   expect(p.rows).toEqual([
     { text: 'weatherorb · #30', link: `${base}/issues/30` },
     { text: 'argo', link: `${base}/flow` },
   ])
-  expect(lib.productionRows([], base)).toEqual({ rows: [], more: 0, red: 0 })
+  expect(lib.productionRows([], base)).toEqual({ rows: [], red: 0 })
 })
 
 test('hostLine: load and swap against the ceilings that stop new leads', () => {
