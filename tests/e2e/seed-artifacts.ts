@@ -110,12 +110,13 @@ ${FILLER('the open questions')}
 `
 
 export const LINKS_HTML = `<!doctype html>
-<html><head><meta charset="utf-8"><title>Links</title><style>body{font-family:system-ui;padding:1rem}section{min-height:900px}</style></head>
+<html><head><meta charset="utf-8"><title>Links</title><style>body{font:15px/1.5 system-ui;padding:1rem}section{min-height:900px}.tw{max-width:100%}table{border-collapse:collapse}td,th{padding:4px 10px;text-align:left}</style></head>
 <body>
 <h1>Link report</h1>
 <section><h2 id="intro">Intro</h2>
 <p id="web">Read <a id="external" href="${EXTERNAL_URL}">WeatherOrb V2</a>, or jump <a id="anchor" href="#later">to the end</a>, or open <a id="page" href="/issues/1">an Issue</a>.</p>
-<p id="claim">The probe ships on Friday and nobody pays for it.</p></section>
+<p id="claim">The probe ships on Friday and nobody pays for it.</p>
+<div class="tw"><table id="read"><thead><tr><th>If you have</th><th>Read</th></tr></thead><tbody><tr><td>15 minutes</td><td>this page</td></tr><tr><td>an hour</td><td>add the options</td></tr></tbody></table></div></section>
 <section><h2 id="middle">Middle</h2><p>Nothing happens here.</p></section>
 <section><h2 id="later">Later</h2><p>The end of the report.</p></section>
 </body></html>

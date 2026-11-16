@@ -1,8 +1,10 @@
 import type { ArtifactDetail } from '@software-factory/contract'
-import { ArrowLeftIcon } from '@phosphor-icons/react'
+import { ArrowLeftIcon, ChatCircleTextIcon, ListBulletsIcon } from '@phosphor-icons/react'
 import { Link } from '@tanstack/react-router'
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
+import { type PanelSize, useDefaultLayout, usePanelRef } from 'react-resizable-panels'
 import { Annotations, type Focus } from '@/components/artifact-comments'
+import { CollapseButton, PANE, PANES_KEY, Rail, ReadingSizeControl } from '@/components/artifact-panes'
 import { Composer, ScreenLine, VerdictControl } from '@/components/artifact-panel'
 import { TocBar, TocColumn } from '@/components/artifact-toc'
 import { ArtifactContent, type Selected } from '@/components/artifact-content'
@@ -13,10 +15,12 @@ import { Skeleton } from '@/components/kit/skeleton'
 import { EmptyState } from '@/components/page'
 import { ArtifactSkeleton } from '@/components/skeletons'
 import { Badge } from '@/components/ui/badge'
+import { ResizableHandle, ResizablePanel, ResizablePanelGroup } from '@/components/ui/resizable'
 import { FORMAT_WORDS, GLOBAL_PATH, KIND_WORDS, type TocItem } from '@/lib/artifact'
 import { ISSUE_STATE_WORDS } from '@/lib/issue'
 import { lozengeStateOf } from '@/lib/issue-page'
 import { useMediaQuery } from '@/lib/media'
+import { setReadingSize, useReadingSize } from '@/lib/reading'
 import { useNow } from '@/lib/now'
 import { useScreen } from '@/lib/screen'
 import { issueNumber } from '@/lib/policy'
@@ -126,7 +130,23 @@ function ArtifactViewOf({ id, revision, compare, onPick, peek }: ArtifactViewPro
   const [toc, setToc] = useState<TocItem[]>([])
   const [section, setSection] = useState<string | null>(null)
   const [jump, setJump] = useState<{ id: string; tick: number } | null>(null)
-  const tocSide = useMediaQuery('(min-width: 1800px)') && !peek
+  const paned = wide && !peek
+  const tocSide = useMediaQuery('(min-width: 1280px)') && paned
+  const reading = useReadingSize()
+  // the panes' sizes are kept per browser, in one layout for three panes and one for two
+  const panelIds = tocSide ? ['document', 'contents', 'comments'] : ['document', 'comments']
+  const layout = useDefaultLayout({
+    id: `${PANES_KEY}-${panelIds.length}`,
+    panelIds,
+    storage: window.localStorage,
+  })
+  const contentsPane = usePanelRef()
+  const commentsPane = usePanelRef()
+  const [folded, setFolded] = useState({ contents: false, comments: false })
+  const track = (pane: 'contents' | 'comments') => (size: PanelSize) => {
+    const now = size.inPixels <= PANE.rail + 1
+    setFolded((was) => (was[pane] === now ? was : { ...was, [pane]: now }))
+  }
   const onJump = useCallback((to: string) => setJump((was) => ({ id: to, tick: (was?.tick ?? 0) + 1 })), [])
   // a click on a card brings its passage into view in the document
   const onFocus = useCallback(
@@ -190,149 +210,223 @@ function ArtifactViewOf({ id, revision, compare, onPick, peek }: ArtifactViewPro
   const pad = artifact.format === 'html' ? '' : peek ? 'px-4 py-6' : 'px-4 py-6 md:px-8 md:py-8'
   const part = 'flex min-h-0 min-w-0 flex-col'
 
-  return (
-    <div
-      className={cn(
-        'grid w-full grid-cols-[minmax(0,1fr)]',
-        !peek &&
-          'lg:h-full lg:min-h-[40rem] lg:grid-cols-[minmax(0,1fr)_24rem] min-[1800px]:grid-cols-[minmax(0,1fr)_36rem]',
-      )}
-    >
-      <div className={cn('flex min-w-0 flex-col', !peek && 'lg:min-h-0')}>
-        <header className={cn('flex flex-col gap-3 border-b px-4 pt-5 pb-4', !peek && 'md:px-8')}>
-          <ArtifactCrumb artifact={artifact} peek={peek} />
-          <div className="flex flex-wrap items-start justify-between gap-x-6 gap-y-3">
-            <div className="flex min-w-0 flex-1 basis-80 flex-col gap-2">
-              <h1
-                className="font-heading text-xl font-semibold tracking-tight [text-wrap:balance]"
-                title={artifact.title}
-              >
-                {artifact.title}
-              </h1>
-              <div className="flex flex-wrap items-center gap-x-2 gap-y-1 text-xs text-muted-foreground">
-                <Badge variant="secondary">{KIND_WORDS[artifact.kind]}</Badge>
-                <span>{FORMAT_WORDS[artifact.format]}</span>
-                <span>· by {artifact.author === 'lead' ? 'the lead' : 'the factory'}</span>
-                <span>
-                  · <Ago iso={artifact.createdAt} now={now} className="font-mono" />
-                </span>
-              </div>
-            </div>
-            <div className="flex flex-wrap items-center gap-x-4 gap-y-2">
-              <nav aria-label="Revisions" className="flex items-center gap-2 text-sm whitespace-nowrap">
-                <span className="text-muted-foreground">Revision</span>
-                {revisions.map((n) => (
-                  <Link
-                    key={n}
-                    to="/artifacts/$id"
-                    params={{ id }}
-                    search={{ revision: n, compare }}
-                    aria-current={n === detail.revision ? 'page' : undefined}
-                    className="rounded-md px-2 py-0.5 tabular-nums hover:bg-accent aria-[current=page]:bg-muted aria-[current=page]:font-semibold aria-[current=page]:text-foreground"
-                  >
-                    {n}
-                  </Link>
-                ))}
-                {revisions.length > 1 && !peek ? (
-                  <label className="ml-1 flex items-center gap-2">
-                    Compare with
-                    <select
-                      aria-label="Compare with"
-                      className="rounded-md bg-muted px-2 py-1"
-                      value={compare ?? ''}
-                      onChange={(event) =>
-                        pick({ compare: event.target.value ? Number(event.target.value) : undefined })
-                      }
-                    >
-                      <option value="">None</option>
-                      {revisions
-                        .filter((n) => n !== detail.revision)
-                        .map((n) => (
-                          <option key={n} value={n}>
-                            Revision {n}
-                          </option>
-                        ))}
-                    </select>
-                  </label>
-                ) : null}
-              </nav>
-              {reviewable ? <VerdictControl key={detail.revision} detail={detail} now={now} /> : null}
-              <ScreenLine detail={detail} />
+  const docColumn = (
+    <div className={cn('flex min-w-0 flex-col', !peek && 'lg:h-full lg:min-h-0')}>
+      <header className={cn('flex flex-col gap-3 border-b px-4 pt-5 pb-4', !peek && 'md:px-8')}>
+        <ArtifactCrumb artifact={artifact} peek={peek} />
+        <div className="flex flex-wrap items-start justify-between gap-x-6 gap-y-3">
+          <div className="flex min-w-0 flex-1 basis-80 flex-col gap-2">
+            <h1
+              className="font-heading text-xl font-semibold tracking-tight [text-wrap:balance]"
+              title={artifact.title}
+            >
+              {artifact.title}
+            </h1>
+            <div className="flex flex-wrap items-center gap-x-2 gap-y-1 text-xs text-muted-foreground">
+              <Badge variant="secondary">{KIND_WORDS[artifact.kind]}</Badge>
+              <span>{FORMAT_WORDS[artifact.format]}</span>
+              <span>· by {artifact.author === 'lead' ? 'the lead' : 'the factory'}</span>
+              <span>
+                · <Ago iso={artifact.createdAt} now={now} className="font-mono" />
+              </span>
             </div>
           </div>
-        </header>
+          <div className="flex flex-wrap items-center gap-x-4 gap-y-2">
+            <nav aria-label="Revisions" className="flex items-center gap-2 text-sm whitespace-nowrap">
+              <span className="text-muted-foreground">Revision</span>
+              {revisions.map((n) => (
+                <Link
+                  key={n}
+                  to="/artifacts/$id"
+                  params={{ id }}
+                  search={{ revision: n, compare }}
+                  aria-current={n === detail.revision ? 'page' : undefined}
+                  className="rounded-md px-2 py-0.5 tabular-nums hover:bg-accent aria-[current=page]:bg-muted aria-[current=page]:font-semibold aria-[current=page]:text-foreground"
+                >
+                  {n}
+                </Link>
+              ))}
+              {revisions.length > 1 && !peek ? (
+                <label className="ml-1 flex items-center gap-2">
+                  Compare with
+                  <select
+                    aria-label="Compare with"
+                    className="rounded-md bg-muted px-2 py-1"
+                    value={compare ?? ''}
+                    onChange={(event) => pick({ compare: event.target.value ? Number(event.target.value) : undefined })}
+                  >
+                    <option value="">None</option>
+                    {revisions
+                      .filter((n) => n !== detail.revision)
+                      .map((n) => (
+                        <option key={n} value={n}>
+                          Revision {n}
+                        </option>
+                      ))}
+                  </select>
+                </label>
+              ) : null}
+            </nav>
+            <ReadingSizeControl size={reading} onChange={setReadingSize} />
+            {reviewable ? <VerdictControl key={detail.revision} detail={detail} now={now} /> : null}
+            <ScreenLine detail={detail} />
+          </div>
+        </div>
+      </header>
 
-        {tocSide ? null : <TocBar items={toc} section={section} onJump={onJump} />}
+      {tocSide ? null : <TocBar items={toc} section={section} onJump={onJump} />}
+      <div ref={docScroll} className={cn('flex min-w-0 flex-col', !peek && 'lg:min-h-0 lg:flex-1 lg:overflow-y-auto')}>
         <div
-          ref={docScroll}
-          className={cn('flex min-w-0 flex-col', !peek && 'lg:min-h-0 lg:flex-1 lg:overflow-y-auto')}
+          className={
+            comparing
+              ? 'grid grid-cols-[minmax(0,1fr)] gap-4 md:grid-cols-2 lg:min-h-0 lg:flex-1'
+              : cn('flex flex-col', !peek && 'lg:min-h-0 lg:flex-1')
+          }
         >
-          <div
-            className={
-              comparing
-                ? 'grid grid-cols-[minmax(0,1fr)] gap-4 md:grid-cols-2 lg:min-h-0 lg:flex-1'
-                : cn('flex flex-col', !peek && 'lg:min-h-0 lg:flex-1')
-            }
-          >
-            <section aria-label={`Revision ${detail.revision}`} className={cn(part, !peek && 'lg:flex-1', pad)}>
-              {comparing ? <h2 className="mb-2 text-sm font-semibold">Revision {detail.revision}</h2> : null}
+          <section aria-label={`Revision ${detail.revision}`} className={cn(part, !peek && 'lg:flex-1', pad)}>
+            {comparing ? <h2 className="mb-2 text-sm font-semibold">Revision {detail.revision}</h2> : null}
+            <ArtifactContent
+              key={detail.revision}
+              format={artifact.format}
+              content={detail.content}
+              primary
+              quotes={quotes}
+              focus={focus}
+              onSelect={onSelect}
+              onOpen={onOpen}
+              onHeadings={setToc}
+              onSection={setSection}
+              jump={jump}
+              cleared={cleared}
+              stacked={peek}
+              reading={reading}
+            />
+          </section>
+          {comparing ? (
+            <section aria-label={`Revision ${other.data.revision}`} className={cn(part, 'lg:flex-1', pad)}>
+              <h2 className="mb-2 text-sm font-semibold">Revision {other.data.revision}</h2>
               <ArtifactContent
-                key={detail.revision}
-                format={artifact.format}
-                content={detail.content}
-                primary
-                quotes={quotes}
-                focus={focus}
+                key={other.data.revision}
+                format={other.data.artifact.format}
+                content={other.data.content}
+                primary={false}
+                quotes={[]}
+                focus={null}
                 onSelect={onSelect}
                 onOpen={onOpen}
                 onHeadings={setToc}
                 onSection={setSection}
-                jump={jump}
-                cleared={cleared}
-                stacked={peek}
+                jump={null}
+                cleared={0}
+                reading={reading}
               />
             </section>
-            {comparing ? (
-              <section aria-label={`Revision ${other.data.revision}`} className={cn(part, 'lg:flex-1', pad)}>
-                <h2 className="mb-2 text-sm font-semibold">Revision {other.data.revision}</h2>
-                <ArtifactContent
-                  key={other.data.revision}
-                  format={other.data.artifact.format}
-                  content={other.data.content}
-                  primary={false}
-                  quotes={[]}
-                  focus={null}
-                  onSelect={onSelect}
-                  onOpen={onOpen}
-                  onHeadings={setToc}
-                  onSection={setSection}
-                  jump={null}
-                  cleared={0}
-                />
-              </section>
-            ) : null}
-          </div>
+          ) : null}
         </div>
       </div>
-      <div
-        className={cn(
-          'flex min-w-0 flex-col',
-          tocSide && 'grid grid-cols-3 grid-rows-[minmax(0,1fr)]',
-          !peek && 'lg:min-h-0',
-        )}
-      >
-        {tocSide ? (
-          <div className="col-span-1 flex min-h-0 min-w-0 flex-col">
-            <TocColumn items={toc} section={section} onJump={onJump} />
-          </div>
-        ) : null}
-        <aside
-          aria-label="Comments"
-          className={cn('flex min-w-0 flex-1 flex-col bg-card', tocSide && 'col-span-2', !peek && 'lg:min-h-0')}
+    </div>
+  )
+
+  const commentsBody = (
+    <Annotations
+      detail={detail}
+      items={items}
+      review={review}
+      focus={focus}
+      now={now}
+      onFocus={onFocus}
+      action={
+        paned ? (
+          <CollapseButton label="Fold Comments away" side="right" onClick={() => commentsPane.current?.collapse()} />
+        ) : undefined
+      }
+    />
+  )
+  const commentCount = items.filter((i) => i.revision === detail.revision).length
+
+  return (
+    <div className={cn('w-full', paned ? 'h-full min-h-[40rem]' : 'grid grid-cols-[minmax(0,1fr)]')}>
+      {paned ? (
+        <ResizablePanelGroup
+          id={`${PANES_KEY}-${panelIds.length}`}
+          orientation="horizontal"
+          defaultLayout={layout.defaultLayout}
+          onLayoutChanged={layout.onLayoutChanged}
         >
-          <Annotations detail={detail} items={items} review={review} focus={focus} now={now} onFocus={onFocus} />
-        </aside>
-      </div>
+          <ResizablePanel id="document" minSize={PANE.document} className="min-w-0">
+            {docColumn}
+          </ResizablePanel>
+          {tocSide ? (
+            <>
+              <ResizableHandle aria-label="Resize Contents" />
+              <ResizablePanel
+                id="contents"
+                panelRef={contentsPane}
+                defaultSize={PANE.contentsDefault}
+                minSize={PANE.contentsMin}
+                collapsible
+                collapsedSize={PANE.rail}
+                groupResizeBehavior="preserve-pixel-size"
+                onResize={track('contents')}
+                className="flex min-h-0 flex-col bg-muted/40"
+              >
+                {folded.contents ? (
+                  <Rail
+                    label="Contents"
+                    icon={<ListBulletsIcon aria-hidden="true" className="size-4" />}
+                    onExpand={() => contentsPane.current?.expand()}
+                  />
+                ) : (
+                  <TocColumn
+                    items={toc}
+                    section={section}
+                    onJump={onJump}
+                    action={
+                      <CollapseButton
+                        label="Fold Contents away"
+                        side="left"
+                        onClick={() => contentsPane.current?.collapse()}
+                      />
+                    }
+                  />
+                )}
+              </ResizablePanel>
+            </>
+          ) : null}
+          <ResizableHandle aria-label="Resize Comments" />
+          <ResizablePanel
+            id="comments"
+            panelRef={commentsPane}
+            defaultSize={window.innerWidth >= 1800 ? PANE.commentsDefaultWide : PANE.commentsDefault}
+            minSize={PANE.commentsMin}
+            collapsible
+            collapsedSize={PANE.rail}
+            groupResizeBehavior="preserve-pixel-size"
+            onResize={track('comments')}
+            className="flex min-h-0 flex-col bg-card"
+          >
+            <aside aria-label="Comments" className="flex min-h-0 min-w-0 flex-1 flex-col">
+              {folded.comments ? (
+                <Rail
+                  label="Comments"
+                  count={commentCount}
+                  icon={<ChatCircleTextIcon aria-hidden="true" className="size-4" />}
+                  onExpand={() => commentsPane.current?.expand()}
+                />
+              ) : (
+                commentsBody
+              )}
+            </aside>
+          </ResizablePanel>
+        </ResizablePanelGroup>
+      ) : (
+        <>
+          {docColumn}
+          <aside aria-label="Comments" className="flex min-w-0 flex-1 flex-col bg-card">
+            {commentsBody}
+          </aside>
+        </>
+      )}
       {selected && anchor ? (
         <Composer
           key={`${selected.quote}|${selected.path}`}

@@ -70,12 +70,12 @@ test('a Markdown Spec: mark text, comment, see it listed and highlighted, then a
   await expect(composer).toBeHidden()
   await expect.poll(() => page.evaluate('getSelection().isCollapsed')).toBe(true)
 
-  // The document is centred in the column left of the comments panel, its prose capped near 75ch.
+  // The document is centred in the column left of the comments panel, its prose capped near 76ch.
   const column = await region(page, 'Revision 1').boundingBox()
   const prose = await page.locator('.artifact-prose').boundingBox()
   if (!column || !prose) throw new Error('no boxes')
   expect(Math.abs(prose.x + prose.width / 2 - (column.x + column.width / 2))).toBeLessThanOrEqual(2)
-  expect(prose.width).toBeLessThanOrEqual(75 * 11)
+  expect(prose.width).toBeLessThanOrEqual(76 * 11)
 
   // The box opens beside the selection, just below it on its left edge, and the passage stays painted while it is open.
   await page.evaluate(SELECT(SPEC_QUOTE))
@@ -335,9 +335,9 @@ test.describe('an HTML artifact', () => {
     if (!frameBox || !box) throw new Error('no boxes')
     expect(box.y).toBeGreaterThanOrEqual(frameBox.y + inFrame.bottom - 1)
     expect(box.y).toBeLessThanOrEqual(frameBox.y + inFrame.bottom + 24)
-    // the frame fills the page's height and width: no box, no border
+    // the frame fills its pane's height and width: no box, no border
     expect(frameBox.height).toBeGreaterThan(900)
-    expect(frameBox.width).toBeGreaterThan(1100)
+    expect(frameBox.width).toBeGreaterThan(800)
     // cancelled, the same passage can be chosen again
     await composer.getByRole('button', { name: 'Cancel' }).click()
     await expect(composer).toBeHidden()

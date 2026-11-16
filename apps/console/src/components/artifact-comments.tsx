@@ -1,5 +1,5 @@
 import { ChatCircleTextIcon, PencilSimpleIcon, TrashIcon } from '@phosphor-icons/react'
-import { useEffect, useRef, useState } from 'react'
+import { type ReactNode, useEffect, useRef, useState } from 'react'
 import type { ArtifactDetail } from '@software-factory/contract'
 import { Ago } from '@/components/issue/ago'
 import { Fold } from '@/components/kit/fold'
@@ -382,6 +382,7 @@ export function Annotations({
   focus,
   now,
   onFocus,
+  action,
 }: {
   detail: ArtifactDetail
   items: readonly ReviewItem[]
@@ -389,6 +390,8 @@ export function Annotations({
   focus: Focus | null
   now: number
   onFocus: (item: ReviewItem) => void
+  /** the pane's own control (fold it away), at the end of its header */
+  action?: ReactNode
 }) {
   const { current, previous, later } = splitByRevision(items, detail.revision)
   const general = current.filter((i) => i.path === GLOBAL_PATH)
@@ -427,9 +430,12 @@ export function Annotations({
   return (
     <div className="flex min-h-0 flex-1 flex-col">
       <div className="flex flex-col gap-0.5 px-4 pt-4 pb-3">
-        <h2 className="font-heading text-base font-semibold tracking-tight">
-          Comments <span className="font-normal text-muted-foreground tabular-nums">{current.length}</span>
-        </h2>
+        <div className="flex items-center justify-between gap-2">
+          <h2 className="font-heading text-base font-semibold tracking-tight">
+            Comments <span className="font-normal text-muted-foreground tabular-nums">{current.length}</span>
+          </h2>
+          {action}
+        </div>
         <p className="text-xs text-muted-foreground">Select text in the document to comment on it.</p>
       </div>
       <div className="flex min-h-0 flex-1 flex-col gap-5 px-4 pb-4 lg:overflow-y-auto">
