@@ -3,7 +3,7 @@ import type { HostReader } from '../../domains/capacity/ports.ts'
 import { parsePs, type PsRow, topProcesses } from './ps.ts'
 import { parseTop, type TopSnapshot } from './top.ts'
 import { swapTotalBytes, swapUsedBytes } from '../../domains/capacity/host.ts'
-import { memoryUsedBytes } from './vm-memory.ts'
+import { memoryUsedBytes, sharePct } from './vm-memory.ts'
 import { type TextRunner, textRunner } from './process.ts'
 
 export interface HostWatchOptions {
@@ -125,7 +125,7 @@ export function hostWatch(options: HostWatchOptions): HostWatch {
       ])
       return {
         load: load?.ok ? load.value : null,
-        memoryUsedPct: used === null || !ram ? null : Math.round((used / ram) * 1000) / 10,
+        memoryUsedPct: used === null || !ram ? null : sharePct(used, ram),
         ramBytes: ram,
         memoryUsedBytes: used,
         swapUsedBytes: swap === null ? null : swapUsedBytes(swap),

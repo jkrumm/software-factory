@@ -26,8 +26,11 @@ export function memoryUsedBytes(sysctlOut: string, vmStatOut: string, ramBytes: 
   return (pageable - purgeable + wired + compressed) * pageSize
 }
 
+/** An amount as a share of the RAM, percent with one decimal: the one rounding of the stored `memory_used_pct`. */
+export const sharePct = (bytes: number, ramBytes: number): number => Math.round((bytes / ramBytes) * 1000) / 10
+
 /** The same memory as a share of the RAM, percent with one decimal; null where the bytes are. */
 export function memoryUsedPct(sysctlOut: string, vmStatOut: string, ramBytes: number): number | null {
   const used = memoryUsedBytes(sysctlOut, vmStatOut, ramBytes)
-  return used === null ? null : Math.round((used / ramBytes) * 1000) / 10
+  return used === null ? null : sharePct(used, ramBytes)
 }

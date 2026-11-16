@@ -229,6 +229,36 @@ const noSnapshot = () => ({
   self: { pid: 1, dirs: [] },
 })
 
+test('a pass stores the amounts the sampler read in their own columns', async () => {
+  const uow = postgresUnitOfWork(db.sql, (tx) => ({ loops: postgresLoopStore(tx) }))
+  const now = new Date(Date.now() + 3_600_000)
+  const GIB = 1024 ** 3
+  const pass = await hostPass({
+    uow,
+    clock: { now: () => now },
+    sampler: {
+      sample: async () => ({
+        load: 1,
+        memoryUsedPct: 25,
+        swapUsedPct: 5,
+        swapoutMbPer300s: 0,
+        ramBytes: 64 * GIB,
+        memoryUsedBytes: 16 * GIB,
+        swapUsedBytes: 3 * GIB,
+        swapTotalBytes: 8 * GIB,
+      }),
+    },
+    processes: { read: async () => null },
+    ...noSnapshot(),
+    facts: async () => ({ ok: false, error: { kind: 'gone', detail: 'x' } }),
+  })
+  expect(pass.ok).toBe(true)
+  const [row] =
+    await db.sql`SELECT ram_bytes::float8 AS ram, memory_used_bytes::float8 AS mem, swap_used_bytes::float8 AS swap, swap_total_bytes::float8 AS total FROM factory.host_samples WHERE at = ${now}`
+  expect(row).toEqual({ ram: 64 * GIB, mem: 16 * GIB, swap: 3 * GIB, total: 8 * GIB })
+  await db.sql`DELETE FROM factory.host_samples WHERE at = ${now}`
+})
+
 test('a pass writes one row and prunes what is older than 14 days', async () => {
   const uow = postgresUnitOfWork(db.sql, (tx) => ({ loops: postgresLoopStore(tx) }))
   const now = new Date()
