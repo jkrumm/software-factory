@@ -272,7 +272,7 @@ describe('the note a lead is typed', () => {
       },
     ])
     expect(text).toContain("was run for you on the owner's MacBook through a fixed verb")
-    expect(text).toContain('MacBook verb "report smb-mounts": //h/s on /Volumes/s (smbfs)\\nline two')
+    expect(text).toContain('MacBook verb \\"report smb-mounts\\": //h/s on /Volumes/s (smbfs)\\nline two')
     expect(text).not.toContain('\n//h')
   })
 
