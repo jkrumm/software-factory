@@ -82,6 +82,31 @@ export type NeedsModel = z.infer<typeof NeedsModel>
 export const FLOW_STATES = ['settling', 'queued', 'working', 'waiting', 'watching'] as const
 export type FlowState = (typeof FLOW_STATES)[number]
 
+/**
+ * The three counts the owner reads, and the Issue states each one counts. The one definition: the strip, the Flow
+ * cards and board, the Flow sidebar, the project digests and the trend all count Issues (never sessions) by it.
+ * Working: a lead is running now (`working`, and `watching`, the lead still open after the deploy). Waiting: started
+ * and paused on a named wait. Queued: ready and not started (`queued` held back by capacity or a chain, and `settling`).
+ */
+export const FLOW_COUNTS = ['working', 'waiting', 'queued'] as const
+export type FlowCount = (typeof FLOW_COUNTS)[number]
+export const FLOW_COUNT_STATES: Readonly<Record<FlowCount, readonly FlowState[]>> = {
+  working: ['working', 'watching'],
+  waiting: ['waiting'],
+  queued: ['settling', 'queued'],
+}
+
+/** The count an Issue in `state` is part of; `closed` and anything else is part of none. */
+export const flowCountOfState = (state: string): FlowCount | null =>
+  FLOW_COUNTS.find((count) => FLOW_COUNT_STATES[count].some((member) => member === state)) ?? null
+
+/** The three counts from a count per state. */
+export function flowCountsOf(perState: Readonly<Record<FlowState, number>>): Record<FlowCount, number> {
+  const sum = (count: FlowCount): number =>
+    FLOW_COUNT_STATES[count].reduce((total, state) => total + perState[state], 0)
+  return { working: sum('working'), waiting: sum('waiting'), queued: sum('queued') }
+}
+
 export const FLOW_KINDS = ['feature', 'bug', 'incident', 'chore', 'docs'] as const
 
 export const FlowIssue = z
@@ -121,7 +146,15 @@ export const FlowClosed = z
   .meta({ id: 'FlowClosed' })
 
 export const FlowProject = z
-  .strictObject({ repo: z.string(), open: z.number().int(), working: z.number().int(), queued: z.number().int() })
+  .strictObject({
+    repo: z.string(),
+    /** every open Issue of the repo */
+    open: z.number().int(),
+    /** the three counts by `FLOW_COUNT_STATES`: they add up to `open` */
+    working: z.number().int(),
+    waiting: z.number().int(),
+    queued: z.number().int(),
+  })
   .meta({ id: 'FlowProject' })
 
 const flowStateCounts = z.array(z.number().int()).length(8)
@@ -164,6 +197,58 @@ export const FlowModel = z
   })
   .meta({ id: 'FlowModel' })
 export type FlowModel = z.infer<typeof FlowModel>
+
+/** The windows and buckets of the flow trend: 24 hours by the hour, 7 days by the hour or the day, 30 days by the day. */
+export const FLOW_TREND_RANGES = [
+  { window: '24h', bucket: 'hour' },
+  { window: '7d', bucket: 'hour' },
+  { window: '7d', bucket: 'day' },
+  { window: '30d', bucket: 'day' },
+] as const
+export const FLOW_TREND_WINDOWS = ['24h', '7d', '30d'] as const
+export const FLOW_TREND_BUCKETS = ['hour', 'day'] as const
+
+/** What one count did inside one bucket: the most Issues at any instant, and the time-weighted mean. */
+export const FlowTrendPoint = z
+  .strictObject({ peak: z.number().int().min(0), avg: z.number().min(0) })
+  .meta({ id: 'FlowTrendPoint' })
+
+/**
+ * The three counts per bucket, computed from the applied events (never from samples): the peak is the most Issues in
+ * the count at any instant of the bucket, the average its mean over the time the bucket covers. Buckets sit on UTC
+ * hours or days, oldest first; the last one ends at `at` and may be partial.
+ */
+export const FlowTrendSeries = z
+  .strictObject({
+    at,
+    window: z.enum(FLOW_TREND_WINDOWS),
+    bucket: z.enum(FLOW_TREND_BUCKETS),
+    buckets: z.array(
+      z.strictObject({
+        /** the start of the bucket */
+        at,
+        working: FlowTrendPoint,
+        waiting: FlowTrendPoint,
+        queued: FlowTrendPoint,
+      }),
+    ),
+  })
+  .meta({ id: 'FlowTrendSeries' })
+export type FlowTrendSeries = z.infer<typeof FlowTrendSeries>
+
+/** `?window=24h|7d|30d&bucket=hour|day`: both optional (default 7 days by the day); 30 days by the hour is refused. */
+export const FlowTrendQuery = z
+  .object({ window: z.enum(FLOW_TREND_WINDOWS).optional(), bucket: z.enum(FLOW_TREND_BUCKETS).optional() })
+  .refine(
+    (query) =>
+      FLOW_TREND_RANGES.some(
+        (range) =>
+          range.window === (query.window ?? '7d') &&
+          range.bucket === (query.bucket ?? (query.window === '24h' ? 'hour' : 'day')),
+      ),
+    'window and bucket: 24h by hour, 7d by hour or day, 30d by day',
+  )
+export type FlowTrendQuery = z.infer<typeof FlowTrendQuery>
 
 // -- chain ---------------------------------------------------------------------------------------------------------------
 
@@ -684,7 +769,7 @@ export const ProjectDigestCounts = z
   .strictObject({
     /** closed done or healed in the last 7 days */
     done7d: z.number().int().min(0),
-    /** working or watching now */
+    /** by `FLOW_COUNT_STATES`: working or watching now */
     working: z.number().int().min(0),
     /** settling or queued now */
     queued: z.number().int().min(0),

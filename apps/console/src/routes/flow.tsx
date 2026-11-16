@@ -4,6 +4,7 @@ import { CheckCircleIcon, HourglassIcon, QueueIcon, RocketLaunchIcon } from '@ph
 import { type ReactNode, useState } from 'react'
 import { DigestStrip } from '@/components/flow/digest-strip'
 import { FlowCardView } from '@/components/flow/card'
+import { TrendChart } from '@/components/flow/trend-chart'
 import { EmptyColumn } from '@/components/flow/empty'
 import { FlowList } from '@/components/flow/list'
 import { InfoHint, type InfoWord, StatCard } from '@/components/kit'
@@ -116,6 +117,7 @@ function StatRow({ data, now }: { data: FlowModel; now: number }) {
           className="w-72 shrink-0 snap-start lg:w-auto"
           icon={STAT_ICON[stat.key]}
           title={stat.title}
+          hint={stat.key === 'shipped' ? undefined : stat.key}
           subtitle={stat.subtitle}
           value={stat.value}
           delta={{ value: stat.delta, higherIsBetter: stat.higherIsBetter }}
@@ -193,6 +195,7 @@ function Flow() {
       <PageHeader title="Flow" note={boardNote(counts)} />
       <DigestStrip digests={digests.data?.projects ?? []} now={now} project={filters.project} />
       <StatRow data={data} now={now} />
+      <TrendChart />
       <FlowSidebar data={data} filters={filters} />
       <ActiveFilters
         chips={(['project', 'origin'] as const).flatMap((name) => {

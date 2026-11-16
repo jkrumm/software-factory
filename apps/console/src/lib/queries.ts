@@ -1,5 +1,5 @@
-import { QueryCache, QueryClient, useQuery } from '@tanstack/react-query'
-import type { ChainModel } from '@software-factory/contract'
+import { keepPreviousData, QueryCache, QueryClient, useQuery } from '@tanstack/react-query'
+import type { ChainModel, FlowTrendSeries } from '@software-factory/contract'
 import { createSyncStoragePersister } from '@tanstack/query-sync-storage-persister'
 import {
   ApiError,
@@ -13,6 +13,7 @@ import {
   fetchDecision,
   fetchErrands,
   fetchFlow,
+  fetchFlowTrend,
   fetchFindingClasses,
   fetchFixCommits,
   fetchFriction,
@@ -124,6 +125,16 @@ export function useNeeds() {
 export function useFlow() {
   const live = useLive()
   return useQuery({ ...flowQuery, refetchInterval: pollEvery(live) })
+}
+
+/** The flow trend of one window and bucket; a minute is finer than the hourly buckets it plots. */
+export function useFlowTrend(window: FlowTrendSeries['window'], bucket: FlowTrendSeries['bucket']) {
+  return useQuery({
+    queryKey: ['flow-trend', window, bucket],
+    queryFn: ({ signal }) => fetchFlowTrend(window, bucket, signal),
+    refetchInterval: 60_000,
+    placeholderData: keepPreviousData,
+  })
 }
 
 /** The answer's own timestamp changes on every request; the graph is rebuilt only when what it draws changes. */

@@ -386,3 +386,11 @@ test('an edge between two cards on one line is one horizontal segment, with no j
   await expect(graph(page).locator('.chain-edge-blocked')).not.toHaveCount(0)
   await expect(graph(page).locator('.chain-edge-done')).not.toHaveCount(0)
 })
+
+test('the sidebar number of a project is labelled as what it counts, never as a state', async ({ page }) => {
+  await page.goto('/chain')
+  const link = page.getByRole('group', { name: 'Projects' }).getByRole('link', { name: /^quartz/ })
+  await expect(link.getByText('in chain')).toBeVisible()
+  await expect(link.getByLabel(/^\d+ in chain$/)).toBeVisible()
+  await expect(link).not.toContainText(/queued|working|waiting/i)
+})

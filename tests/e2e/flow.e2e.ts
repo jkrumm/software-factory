@@ -1,6 +1,7 @@
 import type { Page } from '@playwright/test'
 import { expect, test } from './fixtures.ts'
 import { COLUMN_EMPTY } from '../../apps/console/src/lib/column-empty.ts'
+import { expectHint } from './hints.ts'
 import { api } from './seed.ts'
 
 /**
@@ -40,6 +41,13 @@ interface Flow {
   trend: { states: Record<State, number[]>; shipped: number[]; shippedBefore: number }
 }
 
+/** The one definition of the three counts: working takes watching in, queued takes settling in. */
+const counted = (flow: Flow) => ({
+  working: flow.states.working.count + flow.states.watching.count,
+  waiting: flow.states.waiting.count,
+  queued: flow.states.queued.count + flow.states.settling.count,
+})
+
 const flowOf = (apiUrl: string) => api<Flow>(apiUrl, '/v1/flow')
 const region = (page: Page, key: keyof typeof LABEL) => page.getByRole('region', { name: new RegExp(`^${LABEL[key]}`) })
 const heading = (page: Page, key: keyof typeof LABEL) => region(page, key).getByRole('heading', { level: 2 })
@@ -60,7 +68,7 @@ async function expectCounts(page: Page, counts: Record<keyof typeof LABEL, numbe
 const pick = (page: Page, group: 'Projects' | 'Origin', label: string) =>
   page
     .getByRole('group', { name: group })
-    .getByRole('link', { name: new RegExp(`^${label}( \\d+ (working|waiting).*)?$`) })
+    .getByRole('link', { name: new RegExp(`^${label}( \\d+ (working|waiting|queued).*)?$`) })
     .click()
 
 /** A word from a number, letters only: intake's fingerprint drops digits, and titles that overlap are amended into one Issue. */
@@ -127,9 +135,9 @@ test('the stat row shows the API figures and a card opens its column', async ({ 
   await expect(cards).toHaveCount(4)
   const shipped = flow.trend.shipped.reduce((a, b) => a + b, 0)
   const expected: [string, number][] = [
-    ['Working', flow.states.working.count],
-    ['Waiting', flow.states.waiting.count],
-    ['Queued', flow.states.queued.count],
+    ['Working', counted(flow).working],
+    ['Waiting', counted(flow).waiting],
+    ['Queued', counted(flow).queued],
     ['Shipped this week', shipped],
   ]
   for (const [i, [title, value]] of expected.entries()) {
@@ -143,6 +151,21 @@ test('the stat row shows the API figures and a card opens its column', async ({ 
   await page.goto('/flow')
   await row.getByRole('link', { name: 'Shipped this week' }).click()
   await expect(page).toHaveURL(/\/flow\?state=closed$/)
+})
+
+test('the strip, the stat cards and the sidebar count the same Issues, each card carries its hint', async ({
+  page,
+  apiUrl,
+}) => {
+  const flow = await flowOf(apiUrl)
+  const want = counted(flow)
+  await page.goto('/flow')
+  const strip = page.getByRole('navigation', { name: 'Issues in flight' })
+  const cards = page.getByRole('group', { name: 'Totals' }).locator('article')
+  for (const [i, key] of (['working', 'waiting', 'queued'] as const).entries()) {
+    await expect(strip.getByRole('link', { name: new RegExp(`^${want[key]} ${key}`) })).toBeVisible()
+    await expectHint(cards.nth(i), key)
+  }
 })
 
 test('the header strip count opens the same view as the stat card', async ({ page, apiUrl }) => {
@@ -399,7 +422,7 @@ test('on a wide screen the board scrolls sideways inside its own container when 
   expect(measured.mainScroll).toBe(measured.mainClient)
 })
 
-test('the sidebar counts each project by what runs and what waits, and a project with nothing open shows no figure', async ({
+test('the sidebar counts each project as working, waiting and queued, and a project with nothing open shows no figure', async ({
   page,
   apiUrl,
 }) => {
@@ -409,12 +432,17 @@ test('the sidebar counts each project by what runs and what waits, and a project
   const repos = new Set([...STATES.flatMap((s) => flow.states[s].issues), ...flow.closedRecently].map((i) => i.repo))
   for (const repo of repos) {
     const inRepo = (s: State) => flow.states[s].issues.filter((i) => i.repo === repo).length
-    const running = inRepo('working') + inRepo('watching')
-    const pending = inRepo('settling') + inRepo('queued') + inRepo('waiting')
-    const row = projects.getByRole('link', { name: new RegExp(`^${repo}( \\d+ (working|waiting).*)?$`) })
-    const words = [running ? `${running} working` : null, pending ? `${pending} waiting` : null].filter(Boolean)
+    const working = inRepo('working') + inRepo('watching')
+    const waiting = inRepo('waiting')
+    const queued = inRepo('settling') + inRepo('queued')
+    const row = projects.getByRole('link', { name: new RegExp(`^${repo}( \\d+ (working|waiting|queued).*)?$`) })
+    const words = [
+      working ? `${working} working` : null,
+      waiting ? `${waiting} waiting` : null,
+      queued ? `${queued} queued` : null,
+    ].filter(Boolean)
     if (words.length > 0) await expect(row.getByLabel(words.join(', '))).toBeVisible()
-    else await expect(row.getByLabel(/\d+ (working|waiting)/)).toHaveCount(0)
+    else await expect(row.getByLabel(/\d+ (working|waiting|queued)/)).toHaveCount(0)
   }
 })
 
@@ -447,4 +475,35 @@ test.describe('content as long as the live data', () => {
       expect(measured.mainScroll).toBe(measured.mainClient)
     })
   }
+})
+
+interface Trend {
+  buckets: { at: string; working: { peak: number; avg: number } }[]
+}
+
+test('the trend chart plots the peak and the average per bucket, and its control changes window and bucket', async ({
+  page,
+  apiUrl,
+}) => {
+  await page.goto('/flow')
+  const chart = page.getByTestId('flow-trend')
+  await expect(chart.getByRole('heading', { name: 'Issues over time' })).toBeVisible()
+  await expectHint(chart, 'working')
+  const ranges = chart.getByRole('group', { name: 'Window and bucket' })
+  for (const [label, window, bucket, length] of [
+    ['24 hours by hour', '24h', 'hour', 24],
+    ['7 days by hour', '7d', 'hour', 168],
+    ['7 days by day', '7d', 'day', 7],
+    ['30 days by day', '30d', 'day', 30],
+  ] as const) {
+    await ranges.getByRole('button', { name: label }).click()
+    await expect(ranges.getByRole('button', { name: label })).toHaveAttribute('aria-pressed', 'true')
+    const trend = await api<Trend>(apiUrl, `/v1/flow/trend?window=${window}&bucket=${bucket}`)
+    expect(trend.buckets).toHaveLength(length)
+    const peak = Math.max(0, ...trend.buckets.map((b) => b.working.peak))
+    await expect(chart.getByText(`peak working in the window`)).toBeVisible()
+    await expect(chart.getByTestId('trend-peak')).toHaveText(String(peak))
+  }
+  await chart.getByRole('group', { name: 'Count' }).getByRole('button', { name: 'Queued' }).click()
+  await expect(chart.getByText('peak queued in the window')).toBeVisible()
 })

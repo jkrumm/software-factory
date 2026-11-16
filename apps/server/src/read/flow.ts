@@ -2,6 +2,7 @@ import type { SQL } from 'bun'
 import * as z from 'zod'
 import {
   FLOW_KINDS,
+  flowCountOfState,
   FLOW_STATES,
   type FlowIssue,
   type FlowModel,
@@ -117,7 +118,7 @@ export async function readFlow(
     waiting: { count: 0, issues: [] },
     watching: { count: 0, issues: [] },
   }
-  const perProject = new Map<string, { open: number; working: number; queued: number }>()
+  const perProject = new Map<string, { open: number; working: number; waiting: number; queued: number }>()
   for (const raw of open) {
     const row = Open.parse(raw)
     const issue: FlowIssue = {
@@ -133,10 +134,11 @@ export async function readFlow(
     const column = columns[row.state]
     column.count++
     column.issues.push(issue)
-    const counts = perProject.get(repoOf(row.repo)) ?? { open: 0, working: 0, queued: 0 }
+    const counts = perProject.get(repoOf(row.repo)) ?? { open: 0, working: 0, waiting: 0, queued: 0 }
     counts.open++
-    if (row.state === 'working') counts.working++
-    if (row.state === 'queued') counts.queued++
+    // the one definition of the three counts (`FLOW_COUNT_STATES`): they add up to `open`
+    const count = flowCountOfState(row.state)
+    if (count) counts[count]++
     perProject.set(repoOf(row.repo), counts)
   }
 

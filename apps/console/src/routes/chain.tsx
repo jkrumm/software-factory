@@ -88,6 +88,8 @@ function Chain() {
             key={repo}
             label={repo}
             count={counts.projects[repo]?.drawn ?? 0}
+            countLabel="in chain"
+            countTitle={`${counts.projects[repo]?.drawn ?? 0} Issues and plan rows of ${repo} drawn in the chain, in any state: not the queued count`}
             pressed={filters.project === repo}
             render={(props) => (
               <Link to="/chain" search={filters.project === repo ? {} : { project: repo }} {...props} />

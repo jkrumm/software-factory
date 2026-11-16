@@ -105,7 +105,8 @@ export const LANGUAGE = {
     'run (admission decides), pace (one lead per project, spending toward the weekly pace), drain (no new lead), for the whole queue or one project. The more restrictive of the two applies',
   'queue wait':
     'The time from an Issue filed or reopened to admitted (a lead started); settling and the chain are part of it',
-  queued: 'State: ready, held back by capacity or a chain',
+  queued:
+    'State: an Issue that is ready and that no lead has started, held back by capacity or a chain; it counts Issues, not sessions',
   reaper: 'The loop that ends, by session key and worktree path, the processes a closed lead attempt left behind',
   refusal: 'An Issue event the state machine refused, or a ship the gate refused. Counted as friction',
   regressed:
@@ -130,7 +131,7 @@ export const LANGUAGE = {
     "What a lead's session is, derived from its hook events: starting (no hook yet), working (a turn is running), idle (its last turn ended), compacted (its context was just compacted, no turn since), walled (its account hit a limit), gone (its session ended or its terminal is gone)",
   settler:
     'Who settled a Decision, in the order tried: policy, judge, default, owner; or orchestrator, answering for the owner',
-  settling: 'State: triage is not done',
+  settling: 'State: triage is not done: counted as queued',
   ship: 'Land and deploy',
   'ship refused':
     "The gate's answer to a ship that does not hold; recorded, and counted as friction. A review never refuses a ship: it is recorded as evidence",
@@ -142,7 +143,7 @@ export const LANGUAGE = {
   stall: "A wait with a machine cause, the steward's to end",
   starting: 'Session state: no hook yet',
   state:
-    'Where an Issue is: settling (triage is not done), queued (ready, held back by capacity or a chain), working (a lead runs), waiting (a named wait), watching (shipped and deployed, the watch is on: the factory runs Verify and the probes, and the Issue closes when they pass), closed. The only field a person reads to know what an Issue is doing',
+    "Where an Issue is: settling (triage is not done: counted as queued), queued (an Issue that is ready and that no lead has started, held back by capacity or a chain; it counts Issues, not sessions), working (an Issue a lead is running now, the watching ones included; it counts Issues, not sessions), waiting (an Issue a lead started and that is paused on a named wait: a timer, the owner's review or a blocker; it counts Issues, not sessions), watching (shipped and deployed, the watch is on: the factory runs Verify and the probes, and the Issue closes when they pass; counted as working), closed. The only field a person reads to know what an Issue is doing. The strip, the Flow cards and the project digests count the three groups by this one definition: working = working + watching, waiting = waiting, queued = queued + settling",
   steward:
     'The supervisor loop over stalled Issues. Acts deterministically first (wake, re-check, requeue, deliver) and asks an agw workflow when a call needs judgment',
   'still-needed look':
@@ -170,15 +171,16 @@ export const LANGUAGE = {
   visit:
     'The owner\'s run of Console reads with no gap of 30 minutes. The "Since you were here" band counts what happened since the visit before it ended (the first ever looks back 24 hours), so a page reload inside a visit shows the same band',
   wait: 'A pause with a named exit',
-  waiting: 'State: a named wait',
+  waiting:
+    "State: an Issue a lead started and that is paused on a named wait: a timer, the owner's review or a blocker; it counts Issues, not sessions",
   walled: 'Session state: its account hit a limit',
   watch: 'The window after a ship',
   watching:
-    'State: shipped and deployed, the watch is on: the factory runs Verify and the probes, and the Issue closes when they pass',
+    'State: shipped and deployed, the watch is on: the factory runs Verify and the probes, and the Issue closes when they pass; counted as working',
   window: "An account's 5-hour or weekly reset",
   'window point': "A point of the five-hour Max window that an Issue's sessions used, per Issue",
   'work repo':
     'A repo no project.yaml describes, or whose project.yaml says work: true. The read token never sees its words',
-  working: 'State: a lead runs',
+  working: 'State: an Issue a lead is running now, the watching ones included; it counts Issues, not sessions',
   'worth asking': "The owner's flag on an answered Decision. Feeds the ledger and the Judge's precedent",
 } as const satisfies Record<string, string>

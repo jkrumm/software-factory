@@ -14,6 +14,7 @@ import {
   ErrandReply,
   ErrorBody,
   FlowModel,
+  FlowTrendSeries,
   FindingClassesModel,
   FixCommitsModel,
   FrictionModel,
@@ -129,6 +130,12 @@ export const fetchChain = (signal?: AbortSignal) => getJson('/v1/chain', ChainMo
 export const fetchProjectDigests = (signal?: AbortSignal) =>
   getJson('/v1/projects/digests', ProjectDigestsModel, signal)
 export const fetchFlow = (signal?: AbortSignal) => getJson('/v1/flow', FlowModel, signal)
+/** The three counts per bucket, peak and average, over a window (`/v1/flow/trend`). */
+export const fetchFlowTrend = (
+  window: FlowTrendSeries['window'],
+  bucket: FlowTrendSeries['bucket'],
+  signal?: AbortSignal,
+) => getJson(`/v1/flow/trend?window=${window}&bucket=${bucket}`, FlowTrendSeries, signal)
 export const fetchKpis = (days: number, signal?: AbortSignal) => getJson(`/v1/kpis?days=${days}`, KpiModel, signal)
 export const fetchCapacityLoop = (days: number, signal?: AbortSignal) =>
   getJson(`/v1/capacity-loop?days=${days}`, CapacityLoopModel, signal)
