@@ -54,6 +54,27 @@ export const ownerVerdict = (sql: SQL, w: Window) => sql`
     SELECT 1 FROM factory.issue_events e
     WHERE e.key = 'verdict_given:' || v.artifact_id || ':' || v.revision AND e.actor = 'factory')`
 
+/**
+ * Errands that reached the owner in the window, by what they need. One that reached him before `need` was stored counts under
+ * none of the four (the total still has it).
+ */
+async function errandsReached(sql: SQL, w: Window) {
+  const [row] = await sql`
+    SELECT count(*) AS n,
+      count(*) FILTER (WHERE need = 'secret') AS secret, count(*) FILTER (WHERE need = 'hands') AS hands,
+      count(*) FILTER (WHERE need = 'place') AS place, count(*) FILTER (WHERE need = 'approval') AS approval
+    FROM factory.errands WHERE reached_owner_at >= ${w.from} AND reached_owner_at < ${w.to}`
+  return z
+    .object({
+      n: z.coerce.number().int(),
+      secret: z.coerce.number().int(),
+      hands: z.coerce.number().int(),
+      place: z.coerce.number().int(),
+      approval: z.coerce.number().int(),
+    })
+    .parse(row)
+}
+
 /** Issues filed in the window: what every per-Issue figure divides by. */
 export const issuesFiled = (sql: SQL, w: Window): Promise<number> =>
   one(
@@ -295,6 +316,7 @@ async function kpisOf(
   const worth = await one(sql`
     SELECT count(*) AS n FROM factory.decisions
     WHERE settled_by = 'owner' AND worth_asking IS TRUE AND answered_at >= ${w.from} AND answered_at < ${w.to}`)
+  const reached = await errandsReached(sql, w)
   const verdicts = await one(sql`SELECT count(*) AS n FROM factory.verdicts v WHERE ${ownerVerdict(sql, w)}`)
   const verdictsChanged = await one(
     sql`SELECT count(*) AS n FROM factory.verdicts v WHERE ${ownerVerdict(sql, w)} AND v.verdict IN ('with_notes', 'changes')`,
@@ -370,6 +392,43 @@ async function kpisOf(
       measured: true,
       definition:
         'Decisions the owner answered himself in the window (not the Judge, a policy or a default), per 100 Issues filed in the window. Read beside Specs per 100 Issues: both near zero means nothing reaches him.',
+    }),
+    kpi({
+      key: 'errands_reached_per_100',
+      label: 'Errands that reached the owner per 100 Issues',
+      value: issues === 0 ? null : (reached.n / issues) * 100,
+      unit: 'per_100_issues',
+      n: issues,
+      count: reached.n,
+      target: { kind: 'trend', min: null, max: null },
+      measured: true,
+      definition:
+        "Errands, an Issue's and a request's, that the screen let through to the owner in the window (the rules of their shape, the fixed MacBook verbs and the screen model keep the rest away from him), per 100 Issues filed in the window. The parts are the share of those that needs a secret (1Password, a biometric, a password), hands (a device, a portal, a physical step), a place on his MacBook or only his yes on the mini, and the share of secret and hands together: what is left of them after that is the figure to lower.",
+      parts:
+        reached.n === 0
+          ? []
+          : [
+              {
+                key: 'secret_or_hands',
+                label: 'Needing a secret, a password or hands',
+                value: (reached.secret + reached.hands) / reached.n,
+                unit: 'share',
+              },
+              {
+                key: 'secret',
+                label: 'Needing a secret or a password',
+                value: reached.secret / reached.n,
+                unit: 'share',
+              },
+              { key: 'hands', label: 'Needing hands', value: reached.hands / reached.n, unit: 'share' },
+              {
+                key: 'place',
+                label: 'Needing a place on his MacBook',
+                value: reached.place / reached.n,
+                unit: 'share',
+              },
+              { key: 'approval', label: 'Needing only his yes', value: reached.approval / reached.n, unit: 'share' },
+            ],
     }),
     kpi({
       key: 'worth_asking',

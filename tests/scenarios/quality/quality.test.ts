@@ -204,6 +204,8 @@ describe('ship: after an Errand', () => {
         'plug it in',
         '--detail',
         'the cable',
+        '--need',
+        'hands',
         '--tried',
         'a command',
         '--format',

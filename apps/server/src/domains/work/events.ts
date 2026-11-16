@@ -69,12 +69,14 @@ export const PAYLOADS = {
   /**
    * the owner did the errand, or something ended its wait without his hands: the screen turned it away (`turnedAway`: why;
    * with `awaits` the Issue then waits on that pull request's review), or a pass found its check no longer needed
-   * (`resolved`: what the check said)
+   * (`resolved`: what the check said), or the factory ran its command through a fixed MacBook verb (`ran`: the verb and its output)
    */
   errand_done: z.object({
     errand: text,
     turnedAway: text.optional(),
     resolved: text.optional(),
+    /** the factory ran it through a fixed MacBook verb, no dialog: the verb and what it printed */
+    ran: text.optional(),
     awaits: z.object({ review: text }).optional(),
   }),
   /** the owner or the orchestrator turned the Errand back: not done, and `note` says what to do instead */

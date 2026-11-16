@@ -7,3 +7,5 @@ apps/server/src/adapters/reviews/pr.ts work-repo  # the review poll must recogni
 apps/server/test/checkpoints/domain.test.ts host  # fixtures: a command addressed to the mini is the shape an approval Errand is read from
 apps/server/test/checkpoints/need.test.ts host  # fixtures: the seven-day replay of command Errands, which are addressed to the mini
 apps/server/test/loops/desk.test.ts host  # fixtures: an approval Errand's command is addressed to the mini
+apps/server/test/checkpoints/checkpoints.test.ts host  # fixtures: commands addressed to the mini and a server, the shapes the host's-own-work rule refuses
+apps/server/test/checkpoints/triage.test.ts host  # fixtures: commands addressed to the mini and a server, the shapes the host's-own-work rule refuses

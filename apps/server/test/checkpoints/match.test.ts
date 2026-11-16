@@ -22,7 +22,7 @@ test('the need key wins, then the command, then the ask; a command is repo-free,
 })
 
 test('a need key a lead states is a short lowercase name, else the Errand is refused with it named', () => {
-  const raw = { summary: 's', tried: 't' }
+  const raw = { summary: 's', need: 'hands', tried: 't' }
   expect(readErrand({ ...raw, needKey: 'census-ua-contact' })).toMatchObject({
     ok: true,
     value: { needKey: 'census-ua-contact' },

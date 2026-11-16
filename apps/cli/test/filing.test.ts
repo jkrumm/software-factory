@@ -145,7 +145,7 @@ describe('the filing contract', () => {
   test('errand raise and issue ask take --call, as ship and defer do', async () => {
     answer = { status: 200, body: {} }
     for (const argv of [
-      ['errand', 'raise', '1', '--attempt', '1', '--summary', 's', '--tried', 't', '--call', 'e-1'],
+      ['errand', 'raise', '1', '--attempt', '1', '--summary', 's', '--need', 'hands', '--tried', 't', '--call', 'e-1'],
       ['issue', 'ask', '1', '--attempt', '1', '--question', 'q', '--call', 'a-1'],
     ]) {
       sentBody = ''

@@ -262,6 +262,20 @@ describe('the note a lead is typed', () => {
     expect(noteText(issueId(12), [{ ...turned, payload: { errand: 'e1' } }])).toContain('the Errand "e1" is done')
   })
 
+  test('an Errand the factory ran through a MacBook verb carries what it printed, on one line', () => {
+    const text = noteText(issueId(12), [
+      {
+        kind: 'errand_done',
+        payload: { errand: 'e1', ran: 'MacBook verb "report smb-mounts": //h/s on /Volumes/s (smbfs)\nline two' },
+        at,
+        version: 9,
+      },
+    ])
+    expect(text).toContain("was run for you on the owner's MacBook through a fixed verb")
+    expect(text).toContain('MacBook verb \\"report smb-mounts\\": //h/s on /Volumes/s (smbfs)\\nline two')
+    expect(text).not.toContain('\n//h')
+  })
+
   test('a verdict of changes names the commands that read and revise the artifact', () => {
     const text = noteText(issueId(12), [
       { kind: 'verdict_given', payload: { artifact: 'artifact_1', verdict: 'changes' }, at, version: 9 },

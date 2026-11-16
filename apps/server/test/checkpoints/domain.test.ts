@@ -308,22 +308,24 @@ describe('artifacts', () => {
 
 describe('errands', () => {
   test('an Errand needs its summary', () => {
-    expect(readErrand({ detail: 'x', tried: 'y' }).ok).toBe(false)
-    expect(readErrand({ summary: ' Approve the portal ', tried: ' looked for a token ' })).toMatchObject({
-      ok: true,
-      value: { summary: 'Approve the portal', tried: 'looked for a token' },
-    })
+    expect(readErrand({ detail: 'x', tried: 'y', need: 'hands' }).ok).toBe(false)
+    expect(readErrand({ summary: ' Approve the portal ', tried: ' looked for a token ', need: 'hands' })).toMatchObject(
+      {
+        ok: true,
+        value: { summary: 'Approve the portal', tried: 'looked for a token' },
+      },
+    )
   })
 
   test('an Errand names what was tried, and the refusal says so', () => {
-    const read = readErrand({ summary: 'Approve the portal' })
+    const read = readErrand({ summary: 'Approve the portal', need: 'hands' })
     expect(read.ok).toBe(false)
     expect(!read.ok && read.error.fields[0]).toStartWith('tried')
   })
 
   test('an Errand for what the host does is refused with the route to take', () => {
     const refusal = (summary: string, tried = 'looked around', detail: string | null = null) =>
-      refuseHostClass({ summary, detail, tried, check: null, command: null, host: null, needKey: null })
+      refuseHostClass({ summary, detail, tried, check: null, command: null, host: null, needKey: null, need: 'hands' })
     // Issue 409: a token mint and a door route.
     expect(refusal('Mint a door token for kuma and set its route')).toContain('factory door token new')
     // Issue 412: monitor routes into other repos.
@@ -348,6 +350,7 @@ describe('errands', () => {
         command: 'sudo launchctl bootstrap system /Library/LaunchDaemons/x.plist',
         host: 'macbook',
         needKey: null,
+        need: 'secret',
       }),
     ).toBeNull()
     expect(refusal('Run sudo launchctl bootstrap for the agent')).toContain('MacBook-only')
@@ -363,7 +366,16 @@ describe('errands', () => {
 
 describe('a command the dialog can run', () => {
   const refusal = (command: string | null) =>
-    refuseUndialogable({ summary: 's', detail: null, tried: 't', check: null, command, host: 'macbook', needKey: null })
+    refuseUndialogable({
+      summary: 's',
+      detail: null,
+      tried: 't',
+      check: null,
+      command,
+      host: 'macbook',
+      needKey: null,
+      need: 'hands',
+    })
 
   test('ssh -t and a sudo that asks on a terminal are refused with the sudo -S route', () => {
     for (const command of [

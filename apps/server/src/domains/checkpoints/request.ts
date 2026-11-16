@@ -1,6 +1,7 @@
 import { err, ok, type Result } from '../../kernel/result.ts'
 import { type Host, HOSTS, hostOf } from '../../kernel/hands.ts'
 import type { MissingFields } from './decision.ts'
+import { STATED_NEEDS, type StatedNeed } from './triage.ts'
 
 export { CHECK_BROKEN_NOTE } from '../../kernel/run.ts'
 
@@ -33,6 +34,8 @@ export interface RequestInput {
   host: Host
   source: string
   key: string | null
+  /** what the asker says it needs from the owner; null when it did not say */
+  need: StatedNeed | null
   /** `null`: never; otherwise the instant it expires */
   expiresAt: Date | null
 }
@@ -73,6 +76,9 @@ export function readRequest(raw: unknown, now: Date): Result<RequestInput, Missi
   const where = asText(body.where)
   if (where !== null && !(HOSTS as readonly string[]).includes(where))
     problems.push(`where (one of ${HOSTS.join(', ')})`)
+  const need = asText(body.need)
+  if (need !== null && !(STATED_NEEDS as readonly string[]).includes(need))
+    problems.push(`need (one of ${STATED_NEEDS.join(', ')})`)
   let expiresAt: Date | null | undefined
   const given = asText(body.expires)
   if (given !== null) {
@@ -94,6 +100,7 @@ export function readRequest(raw: unknown, now: Date): Result<RequestInput, Missi
     host: (where as Host | null) ?? hostOf(`${text}\n${command ?? ''}`),
     source,
     key,
+    need: need as StatedNeed | null,
     // no check and no expiry given: the default; a check keeps it until the check says otherwise
     expiresAt:
       expiresAt === undefined ? (check === null ? new Date(now.getTime() + DEFAULT_EXPIRY_MS) : null) : expiresAt,

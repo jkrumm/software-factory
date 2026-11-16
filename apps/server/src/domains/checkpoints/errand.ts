@@ -5,6 +5,7 @@ import type { ErrandScreenAnswer } from '@software-factory/contract'
 import { JUDGE_BACKOFF_MS, JUDGE_MAX_TRIES, type MissingFields } from './decision.ts'
 import { NEED_KEY_RE } from './match.ts'
 import { type Need, needByRule } from './need.ts'
+import { STATED_NEEDS, type StatedNeed } from './triage.ts'
 
 export type ErrandId = Id<'errand'>
 
@@ -24,6 +25,8 @@ export interface ErrandRaised extends ErrandInput {
   host: Host | null
   /** the lead's own name for the need (`--need-key`): another open Errand of the repo under the same name is the same Errand; null when it gave none */
   needKey: string | null
+  /** what the lead says it needs from the owner (`--need`); required */
+  need: StatedNeed
 }
 
 export const MAX_SUMMARY = 200
@@ -53,7 +56,13 @@ export function readErrand(raw: unknown): Result<ErrandRaised, MissingFields> {
   const needKey = typeof body.needKey === 'string' && body.needKey.trim() !== '' ? body.needKey.trim() : null
   if (needKey !== null && !NEED_KEY_RE.test(needKey))
     problems.push('needKey (a short lowercase name: a-z, 0-9, . _ : / -, at most 80 characters)')
-  if (problems.length > 0) {
+  const stated = typeof body.need === 'string' ? body.need.trim() : ''
+  const need = (STATED_NEEDS as readonly string[]).includes(stated) ? (stated as StatedNeed) : null
+  if (need === null)
+    problems.push(
+      'need (what it needs from the owner, one of secret, hands or place: --need secret|hands|place; secret is 1Password, a biometric or a password, hands a device, a portal or a physical step, place a command that must run on his MacBook)',
+    )
+  if (problems.length > 0 || need === null) {
     return err({ kind: 'missing_field', fields: problems, detail: `an Errand needs: ${problems.join(', ')}` })
   }
   return ok({
@@ -64,6 +73,7 @@ export function readErrand(raw: unknown): Result<ErrandRaised, MissingFields> {
     command,
     host: (named as Host | null) ?? (command === null ? null : 'macbook'),
     needKey,
+    need,
   })
 }
 

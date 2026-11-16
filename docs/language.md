@@ -109,7 +109,7 @@ check, `docs/architecture.md`).
 | **Regressed** | A shipped change that failed its watch: Verify or a probe found it broken after the ship. The lead goes back to work twice, the third time it is a stall | |
 | **Verified** | A shipped change whose watch passed: it is live and Verify and the probes found nothing broken. The "Since you were here" band counts these as Shipped and verified, one per Issue | |
 | **Filed** | An Issue that came into being: the owner's request, an agent's, or a signal triage turned into one. The band's New Issues counts them once each and names where they came from | |
-| **Closed without you** | An Errand that ended with no action from the owner: its check found it no longer needed, it expired, or a newer request replaced it. Nothing to do, and its title says which | |
+| **Closed without you** | An Errand that ended with no action from the owner: its check found it no longer needed, it expired, a newer request replaced it, or the factory ran its MacBook command through a fixed verb. Nothing to do, and its title says which | |
 | **Visit** | The owner's run of Console reads with no gap of 30 minutes. The "Since you were here" band counts what happened since the visit before it ended (the first ever looks back 24 hours), so a page reload inside a visit shows the same band | |
 | **First verification pass** | A first watch (the window after an Issue's first ship) that ended passed, not regressed. The share of those is a KPI | |
 | **Fix commit** | A commit that fixes something that went wrong, sorted by class by the fix-classes loop and counted per week | |

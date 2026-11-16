@@ -28,7 +28,10 @@ function item(record: HistoryRecord): string | null {
     case 'errand_done': {
       const turnedAway = field(record, 'turnedAway')
       const resolved = field(record, 'resolved')
+      const ran = field(record, 'ran')
       const awaits = field(record, 'awaits')
+      if (typeof ran === 'string')
+        return `the Errand ${oneLine(field(record, 'errand'))} was run for you on the owner's MacBook through a fixed verb, with no dialog and no owner: ${oneLine(ran)}`
       if (typeof resolved === 'string')
         return `the Errand ${oneLine(field(record, 'errand'))} is no longer needed: ${oneLine(resolved)}`
       if (typeof turnedAway === 'string' && typeof (awaits as { review?: unknown } | null)?.review === 'string')

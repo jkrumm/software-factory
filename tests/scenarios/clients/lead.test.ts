@@ -193,6 +193,8 @@ test('artifact submit, show and revise; errand raise; defer; signal file', async
     'plug it in',
     '--detail',
     'x',
+    '--need',
+    'hands',
     '--tried',
     'a command',
   ])

@@ -1,5 +1,6 @@
 import { join } from 'node:path'
-import type { PushPort, SyncPort } from '../../domains/checkpoints/ports.ts'
+import type { MacbookVerbPort, PushPort, SyncPort } from '../../domains/checkpoints/ports.ts'
+import { verbWords } from '../../domains/checkpoints/triage.ts'
 import { err, ok, portError } from '../../kernel/result.ts'
 import { type Run, runProcess } from '../quality/process.ts'
 
@@ -51,22 +52,23 @@ export function askHumanPush(options: {
   }
 }
 
-/** A sync pulls and may run a make target; this is a hang guard, never a budget. */
-const SYNC_TIMEOUT_MS = 10 * 60_000
+/** A verb of the gate (a pull, a sync with its make targets) is a hang guard here, never a budget. */
+const VERB_TIMEOUT_MS = 10 * 60_000
 
 /**
- * The MacBook's `dotfiles-sync` verb, through the same ssh alias `ask-human.sh` pushes through. `BatchMode` so a key that
- * is not accepted fails at once instead of asking; unset host, there is no MacBook to sync.
+ * The MacBook's fixed verbs (`dotfiles-sync`, `report <name>`, `repo-pull <name>`) through the ssh alias `ask-human.sh` pushes
+ * through. The words are the verb and one name the domain validated (`triage.ts`); the gate validates them again. `BatchMode`
+ * so a key that is not accepted fails at once; unset host, there is no MacBook to call.
  */
-export function askHumanSync(options: { host: string | null; run?: Run }): SyncPort {
+export function askHumanVerbs(options: { host: string | null; run?: Run }): MacbookVerbPort {
   const run = options.run ?? runProcess
   return {
-    async sync() {
+    async run(verb) {
       if (!options.host) return err(portError('gone', 'no MacBook ssh alias is set (FACTORY_ASK_HUMAN_HOST)'))
       try {
         const done = await run(
-          ['ssh', '-o', 'BatchMode=yes', '-o', 'ConnectTimeout=8', options.host, 'dotfiles-sync'],
-          SYNC_TIMEOUT_MS,
+          ['ssh', '-o', 'BatchMode=yes', '-o', 'ConnectTimeout=8', options.host, ...verbWords(verb)],
+          VERB_TIMEOUT_MS,
           { group: true },
         )
         return ok({ exit: done.exitCode, output: done.stdout })
@@ -75,4 +77,12 @@ export function askHumanSync(options: { host: string | null; run?: Run }): SyncP
       }
     },
   }
+}
+
+/**
+ * The MacBook's `dotfiles-sync` verb, through the same ssh alias and the same call as the other verbs (`askHumanVerbs`).
+ */
+export function askHumanSync(options: { host: string | null; run?: Run }): SyncPort {
+  const verbs = askHumanVerbs(options)
+  return { sync: () => verbs.run({ verb: 'dotfiles-sync' }) }
 }

@@ -35,9 +35,15 @@ const SECRET = new RegExp(
   'i',
 )
 
+/** Whether the text names a secret only he has (1Password, a biometric, sudo, a password or passphrase, the reseal). */
+export const namesSecret = (text: string): boolean => SECRET.test(text)
+
 /** A physical step or a visual look: a device, hardware, a portal, a click in a page. */
 const PHYSICAL =
   /\b(?:device|phone|iphone|ipad|tap|click|portal|dashboard|browser|sign in|log in|login|captcha|2fa|otp|qr|plug|cable|hardware|physical|router|bulb|light|button|app store|testflight|visual)\b/i
+
+/** Whether the words (not a command) name a physical step or a look: a device, hardware, a portal, a click. */
+export const namesPhysical = (text: string): boolean => PHYSICAL.test(text)
 
 /** A command addressed to the mini over ssh: the command is the part after the host, and it runs there. */
 const SSH_MINI = /^\s*ssh\s+(?:-\S+\s+(?:\S+\s+)?)*mini\s+([\s\S]+)$/

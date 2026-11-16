@@ -14,6 +14,7 @@ import {
   answerDecision,
   askDecision,
   finishErrand,
+  turnBackErrand,
   giveVerdict,
   listPages,
   markWorthAsking,
@@ -31,6 +32,7 @@ import { screenSpecs } from '../../src/app/checkpoints-specs.ts'
 import { type SettleDeps, settleDecision, settleOpen } from '../../src/app/checkpoints-settle.ts'
 import { fileIssue, recordIssueEvent } from '../../src/app/issues.ts'
 import { readNeeds } from '../../src/read/needs.ts'
+import { readSince } from '../../src/read/since.ts'
 import type { ArtifactId } from '../../src/domains/checkpoints/artifact.ts'
 import {
   JUDGE_BACKOFF_MS,
@@ -1124,7 +1126,7 @@ describe('a Decision raised during a review', () => {
 })
 
 describe('errands', () => {
-  const APPROVE = { summary: 'Approve the App Store build', tried: 'looked for an API key route: none' }
+  const APPROVE = { summary: 'Approve the App Store build', need: 'hands', tried: 'looked for an API key route: none' }
   const raise = async (issueId: IssueId, raw: Record<string, unknown> = APPROVE) =>
     value(await raiseErrand(deps, { issueId, attempt: 1, raw }))
   const pageCount = async () => rows('checkpoint_pages')
@@ -1144,6 +1146,7 @@ describe('errands', () => {
     const issueId = await workingIssue()
     const raised = await raise(issueId, {
       summary: 'Install the launchd daemon and sysctl',
+      need: 'hands',
       tried: 'looked for a way without root: none',
       cmd: 'op read "op://Private/mac-mini-server/password" --account <account> | sudo -S make install-daemon',
       host: 'macbook',
@@ -1202,7 +1205,11 @@ describe('errands', () => {
 
   describe('a request from ask-human', () => {
     const ask = async (text: string, command: string | null = null) =>
-      value(await requestErrand(deps, { raw: { source: 'ask-human', text, ...(command ? { command } : {}) } }))
+      value(
+        await requestErrand(deps, {
+          raw: { source: 'ask-human', need: 'hands', text, ...(command ? { command } : {}) },
+        }),
+      )
 
     test('waits for the screen like a lead Errand: held out of Needs-you, then reaches the owner without a page', async () => {
       const made = await ask('Approve the sign-in dialog on the MacBook')
@@ -1240,6 +1247,7 @@ describe('errands', () => {
     const raised = await raise(issueId, {
       summary: 'Run the migration',
       detail: 'Run `make deploy` on the host',
+      need: 'hands',
       tried: 'nothing yet',
     })
     expect(value(await screenErrands(deps))).toEqual([{ errand: raised.errand.id, outcome: 'turned_away' }])
@@ -1312,7 +1320,9 @@ describe('errands', () => {
       ['Install exiftool and magick on the mini', 'Makefile target'],
       ['Point the owner at the verdict: the Report does not show in Needs you', '--repo software-factory'],
     ] as const) {
-      const refused = errorOf(await raiseErrand(deps, { issueId, attempt: 1, raw: { summary, tried: 'nothing' } }))
+      const refused = errorOf(
+        await raiseErrand(deps, { issueId, attempt: 1, raw: { summary, need: 'hands', tried: 'nothing' } }),
+      )
       expect(refused).toMatchObject({ kind: 'invalid' })
       expect(JSON.stringify(refused)).toContain(route)
     }
@@ -1324,6 +1334,7 @@ describe('errands', () => {
     const issueId = await workingIssue()
     const raised = await raise(issueId, {
       summary: 'Rotate the OAuth consent in the Google console',
+      need: 'hands',
       tried: '`gh api /repos/x` returned 403',
     })
     expect(raised.errand.detail).toBeNull()
@@ -1343,7 +1354,9 @@ describe('errands', () => {
   test('an Errand with no summary is refused with the field named', async () => {
     const issueId = await workingIssue()
     expect(
-      errorOf(await raiseErrand(deps, { issueId, attempt: 1, raw: { detail: 'x', tried: 'a command' } })),
+      errorOf(
+        await raiseErrand(deps, { issueId, attempt: 1, raw: { detail: 'x', need: 'hands', tried: 'a command' } }),
+      ),
     ).toMatchObject({
       kind: 'missing_field',
       fields: ['summary'],
@@ -1526,5 +1539,237 @@ describe('a Concept or Spec the owner has not answered for a day', () => {
     expect(lookAtReview({ wait: { ...wait, kind: 'spec' }, closed: false, waiting: true }).outcome).toBe('defaulted')
     expect(lookAtReview({ wait, closed: false, waiting: false }).outcome).toBe('withdrawn')
     expect(lookAtReview({ wait, closed: true, waiting: true }).outcome).toBe('withdrawn')
+  })
+})
+
+describe('decided by rule before the owner (issue 1714)', () => {
+  const REPORT = 'mount | grep smbfs'
+  const pageCount = async () => rows('checkpoint_pages')
+  const raise = async (issueId: IssueId, raw: Record<string, unknown>) =>
+    raiseErrand(deps, { issueId, attempt: 1, raw: { need: 'hands', tried: 'looked for a route: none', ...raw } })
+  let verbCalls: string[][]
+  let verbAnswer: () => Result<{ exit: number; output: string }>
+
+  beforeEach(() => {
+    verbCalls = []
+    verbAnswer = () => ok({ exit: 0, output: '//host/share on /Volumes/share (smbfs)\n' })
+    deps.macbook = {
+      run: (verb) => {
+        // the port is never called inside a transaction
+        expect(deps.uow.inTransaction()).toBe(false)
+        verbCalls.push(verb.verb === 'dotfiles-sync' ? [verb.verb] : [verb.verb, verb.name])
+        return Promise.resolve(verbAnswer())
+      },
+    }
+  })
+
+  test('(e) an Errand with no need is refused and nothing is raised', async () => {
+    const issueId = await workingIssue()
+    const refused = errorOf(
+      await raiseErrand(deps, { issueId, attempt: 1, raw: { summary: 'Approve the build', tried: 'looked' } }),
+    )
+    expect(refused).toMatchObject({ kind: 'missing_field' })
+    expect(JSON.stringify(refused)).toContain('--need')
+    expect(await rows('errands')).toBe(0)
+    expect(await eventsOf(issueId)).not.toContain('errand_raised')
+  })
+
+  test('(e) a place with no command is refused', async () => {
+    const issueId = await workingIssue()
+    const refused = errorOf(await raise(issueId, { summary: 'Run the thing', need: 'place' }))
+    expect(JSON.stringify(refused)).toContain('--cmd')
+    expect(await rows('errands')).toBe(0)
+  })
+
+  test('(a) a command that runs wholly on the mini is refused with the words to run it yourself', async () => {
+    const issueId = await workingIssue()
+    const refused = errorOf(
+      await raise(issueId, {
+        summary: 'Install the deploy gate',
+        cmd: "ssh mini 'make -C ~/SourceRoot/dotfiles deploy-gate-install'",
+        need: 'place',
+      }),
+    )
+    expect(JSON.stringify(refused)).toContain('run it yourself')
+    expect(await rows('errands')).toBe(0)
+    // the gate's release stays his yes
+    const release = await raise(issueId, {
+      summary: 'Release the commit',
+      cmd: "ssh mini 'make -C ~/gate deploy-release SHA=feedbeef'",
+      need: 'place',
+    })
+    expect(value(release)).toMatchObject({ result: 'applied' })
+  })
+
+  test('(d) the same need turned back is not raised again for three days, and his note is the refusal', async () => {
+    const issueId = await workingIssue()
+    const body = { summary: 'The mini needs its planned restart', need: 'hands' }
+    const first = value(await raise(issueId, body))
+    value(
+      await turnBackErrand(deps, { errandId: first.errand.id, note: 'Not tonight: restart on Sunday', by: 'owner' }),
+    )
+    expect(await eventsOf(issueId)).toContain('errand_turned_back')
+    // the next lead, on another Issue, asks the same thing
+    const next = await workingIssue()
+    const again = errorOf(await raise(next, body))
+    expect(JSON.stringify(again)).toContain('Not tonight: restart on Sunday')
+    expect(await rows('errands')).toBe(1)
+    // a different ask is not held
+    expect(value(await raise(next, { summary: 'Plug in the cable', need: 'hands' }))).toMatchObject({
+      result: 'applied',
+    })
+    // after the hold the ask is raised again
+    clock.set(new Date(clock.now().getTime() + 3 * 24 * 3_600_000 + 60_000))
+    expect(value(await raise(await workingIssue(), body))).toMatchObject({ result: 'applied' })
+  })
+
+  test('(d) a decline by a loop, or a done Errand, holds nothing', async () => {
+    const issueId = await workingIssue()
+    const body = { summary: 'Approve the build', need: 'hands' }
+    const first = value(await raise(issueId, body))
+    value(await finishErrand(deps, { errandId: first.errand.id, note: 'approved' }))
+    expect(value(await raise(await workingIssue(), body))).toMatchObject({ result: 'applied' })
+  })
+
+  describe('a request', () => {
+    const ask = (raw: Record<string, unknown>) => requestErrand(deps, { raw: { source: 'ask-human', ...raw } })
+
+    test('(c) a bot check is refused with the route, and nothing is stored', async () => {
+      const refused = errorOf(
+        await ask({
+          text: 'agw: example.com shows a bot check the research Chrome cannot pass. Open screen share to the mini',
+          command: 'open vnc://mini',
+        }),
+      )
+      expect(JSON.stringify(refused)).toContain('report the page as blocked')
+      expect(await rows('errands')).toBe(0)
+    })
+
+    test('(e) a request that says nothing about its need is refused, and one that states it is taken', async () => {
+      expect(JSON.stringify(errorOf(await ask({ text: 'Please have a look at the thing' })))).toContain('--need')
+      expect(value(await ask({ text: 'Please have a look at the thing', need: 'hands' }))).toMatchObject({
+        result: 'applied',
+      })
+    })
+
+    test('(a) a command that runs on the mini is refused', async () => {
+      const refused = errorOf(await ask({ text: 'Run it', command: 'ssh homelab docker ps' }))
+      expect(JSON.stringify(refused)).toContain('keyless')
+    })
+
+    test('(d) the same ask the owner turned back is refused with his note', async () => {
+      const made = value(await ask({ text: 'Restart the mini now', need: 'hands' }))
+      value(await turnBackErrand(deps, { errandId: made.errand.id, note: 'No, not before the release', by: 'owner' }))
+      expect(JSON.stringify(errorOf(await ask({ text: 'Restart the mini now', need: 'hands' })))).toContain(
+        'No, not before the release',
+      )
+    })
+  })
+
+  test('(b) a read-only MacBook report runs with no dialog and its output reaches the lead', async () => {
+    const issueId = await workingIssue()
+    const raised = value(await raise(issueId, { summary: 'Which smb mounts are up?', cmd: REPORT, need: 'place' }))
+    expect(value(await screenErrands(deps))).toEqual([{ errand: raised.errand.id, outcome: 'ran' }])
+    expect(verbCalls).toEqual([['report', 'smb-mounts']])
+    expect(screenCalls).toEqual([])
+    expect(await pageCount()).toBe(0)
+    const errand = value(await raiseErrandRead(raised.errand.id))
+    expect(errand).toMatchObject({ closedKind: 'done', closedBy: 'loop', reachedOwnerAt: null })
+    expect(errand.doneNote).toContain('MacBook verb "report smb-mounts"')
+    expect(errand.doneNote).toContain('//host/share on /Volumes/share (smbfs)')
+    const [event] = await db.sql`
+      SELECT actor, payload FROM factory.issue_events WHERE issue_id = ${issueId} AND kind = 'errand_done'`
+    expect(event).toMatchObject({ actor: 'factory' })
+    expect(JSON.stringify(event.payload)).toContain('smbfs')
+    expect(await effectsOf(issueId, 'note_lead')).toBe(1)
+    expect((await readNeeds(db.sql, clock.now())).items).toEqual([])
+    expect(value(await screenErrands(deps))).toEqual([])
+  })
+
+  test('(b) a pull of the owner’s own repo runs through repo-pull; a standalone request is closed the same way', async () => {
+    const made = value(
+      await requestErrand(deps, {
+        raw: {
+          source: 'ask-human',
+          text: 'Pull brain on the MacBook',
+          command: 'git -C ~/SourceRoot/brain pull --ff-only',
+          where: 'macbook',
+        },
+      }),
+    )
+    expect(value(await screenErrands(deps))).toEqual([{ errand: made.errand.id, outcome: 'ran' }])
+    expect(verbCalls).toEqual([['repo-pull', 'brain']])
+    expect(value(await raiseErrandRead(made.errand.id))).toMatchObject({ closedKind: 'done', closedBy: 'loop' })
+    // the band of Errands closed without the owner says the factory ran it
+    const band = (await readSince(db.sql, { now: clock.now(), since: new Date(clock.now().getTime() - 60_000) }))
+      .categories.errands
+    expect(band.items).toMatchObject([{ title: 'Pull brain on the MacBook (run by the factory)' }])
+  })
+
+  test('(b) a verb that did not run leaves the command with the owner as a place Errand, with the reason', async () => {
+    // each case its own command: the same command is the same Errand
+    for (const [exit, why, cmd] of [
+      [255, 'did not answer', REPORT],
+      [126, 'does not serve that verb', 'ntfy-mac update --check'],
+    ] as const) {
+      verbAnswer = () => ok({ exit, output: '' })
+      const raised = value(await raise(await workingIssue(), { summary: 'Look at the MacBook', cmd, need: 'place' }))
+      expect(value(await screenErrands(deps))).toEqual([{ errand: raised.errand.id, outcome: 'reached_owner' }])
+      expect(value(await raiseErrandRead(raised.errand.id))).toMatchObject({ need: 'place', closedKind: null })
+      expect((value(await raiseErrandRead(raised.errand.id)).screenNote ?? '').includes(why)).toBe(true)
+    }
+    expect(screenCalls).toEqual([])
+  })
+
+  test('(b) a failed pull is the owner’s with git’s words; a port that errors is the same', async () => {
+    const issueId = await workingIssue()
+    verbAnswer = () => ok({ exit: 1, output: 'fatal: Not possible to fast-forward, aborting.\n' })
+    const pull = value(
+      await raise(issueId, {
+        summary: 'Pull brain',
+        cmd: 'git -C ~/SourceRoot/brain pull --ff-only',
+        need: 'place',
+        needKey: 'pull-brain',
+      }),
+    )
+    expect(value(await screenErrands(deps))).toEqual([{ errand: pull.errand.id, outcome: 'reached_owner' }])
+    expect(value(await raiseErrandRead(pull.errand.id)).screenNote).toContain('Not possible to fast-forward')
+    verbAnswer = () => err(portError('gone', 'ssh could not start'))
+    const second = value(await raise(await workingIssue(), { summary: 'Which mounts', cmd: REPORT, need: 'place' }))
+    expect(value(await screenErrands(deps))).toEqual([{ errand: second.errand.id, outcome: 'reached_owner' }])
+  })
+
+  test('(b) a class command that names a secret or hands is never run', async () => {
+    const issueId = await workingIssue()
+    const raised = value(
+      await raise(issueId, {
+        summary: 'Pull the private repo: the keychain password prompt appears',
+        cmd: 'git -C ~/SourceRoot/brain pull --ff-only',
+        need: 'secret',
+      }),
+    )
+    expect(value(await screenErrands(deps))).toEqual([{ errand: raised.errand.id, outcome: 'reached_owner' }])
+    expect(verbCalls).toEqual([])
+    expect(value(await raiseErrandRead(raised.errand.id))).toMatchObject({ need: 'secret' })
+  })
+
+  test('(b) an Errand with its own check is not run by a verb: the check decides, so it reaches the owner', async () => {
+    const raised = value(
+      await raise(await workingIssue(), {
+        summary: 'Pull brain',
+        cmd: 'git -C ~/SourceRoot/brain pull --ff-only',
+        need: 'place',
+        check: 'true',
+      }),
+    )
+    expect(value(await screenErrands(deps))).toEqual([{ errand: raised.errand.id, outcome: 'reached_owner' }])
+    expect(verbCalls).toEqual([])
+  })
+
+  test('(b) with no MacBook port the class command reaches the owner as before', async () => {
+    delete deps.macbook
+    const issueId = await workingIssue()
+    const raised = value(await raise(issueId, { summary: 'Which smb mounts are up?', cmd: REPORT, need: 'place' }))
+    expect(value(await screenErrands(deps))).toEqual([{ errand: raised.errand.id, outcome: 'reached_owner' }])
   })
 })

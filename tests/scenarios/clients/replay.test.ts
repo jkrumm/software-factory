@@ -84,6 +84,8 @@ beforeAll(async () => {
       'plug it in',
       '--detail',
       'the cable',
+      '--need',
+      'hands',
       '--tried',
       'looked for a command',
     ],

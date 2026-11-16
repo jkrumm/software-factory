@@ -97,7 +97,7 @@ export async function readSince(sql: SQL, options: { now: Date; since: Date; red
   const closedErrands = parse(
     await sql`
     SELECT NULL::text AS issue_id, NULL::text AS repo, e.summary || ' (' ||
-        CASE e.closed_kind WHEN 'expired' THEN 'expired' WHEN 'superseded' THEN 'replaced by a newer request' ELSE 'no longer needed' END || ')' AS title,
+        CASE e.closed_kind WHEN 'expired' THEN 'expired' WHEN 'superseded' THEN 'replaced by a newer request' WHEN 'done' THEN 'run by the factory' ELSE 'no longer needed' END || ')' AS title,
       e.done_at AS at, count(*) OVER () AS total
     FROM factory.errands e
     WHERE e.issue_id IS NULL AND e.done_at > ${since} AND e.closed_by IN ('check', 'judge', 'loop', 'request')
