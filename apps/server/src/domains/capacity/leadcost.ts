@@ -182,15 +182,25 @@ export interface LeadGrowth {
 }
 
 /**
- * The memory the running leads are still expected to take: for each lead younger than the age at which its figure counts
- * as settled (`SETTLED_RUN_MS`), its repo's learned size less what it holds now, never below 0. A lead of a repo with no
- * learned size reserves nothing here (its lane's constant does); a lead past that age is believed to hold what it will.
+ * How long a lead counts as not yet in the host reading: the host sample is a minute apart and a lead's processes are up
+ * within seconds. Measured over the 2026-11-15 window (239 leads, 31 000 lead samples): a lead holds 475 MiB at the first
+ * sample and 520 MiB ten minutes later, and the remaining distance to its peak does not shrink with age (median 1.3 GiB at
+ * 0 to 5 minutes, 1.3 GiB at 35 to 40): a lead's peak is a burst of its work, not a ramp, so no age makes it settle.
+ */
+export const RAMP_MS = 2 * 60_000
+
+/**
+ * The memory the running leads are about to take that the host reading does not show yet: for each lead younger than
+ * `RAMP_MS`, its repo's learned size less what it holds now, never below 0. A lead admitted in the same pass has no sample
+ * and takes the whole figure, so one pass cannot admit several against one reading. A lead of a repo with no learned size
+ * reserves nothing here (its lane's constant does); an older lead is in the reading, and its burst is the headroom's and the
+ * swap and pressure ceilings' to hold. A lead resumed from a wait is a new process, so its age starts again.
  */
 export function leadGrowth(running: readonly RunningLead[]): LeadGrowth {
   let leads = 0
   let mib = 0
   for (const lead of running) {
-    if (lead.learnedMib === null || lead.ageMs >= SETTLED_RUN_MS) continue
+    if (lead.learnedMib === null || lead.ageMs >= RAMP_MS) continue
     const growth = Math.max(0, lead.learnedMib - (lead.heldMib ?? 0))
     if (growth === 0) continue
     leads += 1
