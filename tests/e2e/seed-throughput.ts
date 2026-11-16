@@ -100,6 +100,7 @@ export async function seedLeadTime(sql: SQL): Promise<string[]> {
   const closed: Array<{ issue_id: string; at: Date }> = await sql`
     SELECT e.issue_id, e.at FROM factory.issue_events e
     WHERE e.result = 'applied' AND e.to_state = 'closed' AND e.at > now() - interval '20 hours'
+      AND NOT EXISTS (SELECT 1 FROM factory.lead_attempts a WHERE a.issue_id = e.issue_id)
     ORDER BY e.at DESC LIMIT 4`
   for (const [n, { issue_id: issue, at }] of closed.entries()) {
     const number = issue.replace('issue_', '')

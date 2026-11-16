@@ -10,6 +10,7 @@ import { checkpointRoutes, documentOnlyUses } from './checkpoints.ts'
 import { type HealthSource, healthRoutes } from './health.ts'
 import { type QualityWrites, qualityRoutes, unwiredQuality } from './quality.ts'
 import { type IntakeApi, intakeRoutes, unwiredIntake } from './intake.ts'
+import { collectionRoutes } from './collections.ts'
 import { type IssueApi, issueRoutes } from './issues.ts'
 import { type LeadRoutes, leadRoutes } from './leads.ts'
 import { type LoopsApi, loopRoutes } from './loops.ts'
@@ -129,6 +130,7 @@ export function createApp(deps: ApiDeps) {
     .use(checkpointRoutes(deps.checkpoints ?? documentOnlyUses))
     .use(leadRoutes(deps.leads))
     .use(issueRoutes(deps.issues))
+    .use(collectionRoutes(deps.issues))
     .use(intakeRoutes(deps.intake ?? unwiredIntake))
     .use(planningRoutes(deps.planning))
     .use(capacityRoutes(deps.capacity))

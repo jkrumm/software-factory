@@ -4,6 +4,8 @@ import {
   ArtifactList,
   ArtifactReply,
   ChainModel,
+  CollectionList,
+  CollectionReply,
   DecisionReply,
   DecisionView,
   ErrandList,
@@ -145,7 +147,9 @@ export const fetchHost = (signal?: AbortSignal) => getJson('/v1/host', HostHisto
 export const fetchIssueCards = (signal?: AbortSignal, scope: 'all' | 'open' = 'all') =>
   getJson(`/v1/issues?state=${scope}&limit=500`, ReadIssueCards, signal)
 /** The artifacts, newest first: what the command palette searches. */
-export const fetchArtifacts = (signal?: AbortSignal) => getJson('/v1/artifacts?limit=200', ArtifactList, signal)
+export const fetchArtifacts = (signal?: AbortSignal) => getJson('/v1/artifacts?limit=500', ArtifactList, signal)
+/** The collections of artifacts, pinned first. */
+export const fetchCollections = (signal?: AbortSignal) => getJson('/v1/artifact-collections', CollectionList, signal)
 
 /** Same-origin write (POST, PATCH, DELETE) of an optional JSON body to one of the answer verbs the listener forwards; a refusal throws with the API's own words. */
 async function sendJson<T>(method: string, path: string, body: unknown, schema: Schema<T>): Promise<T> {
@@ -196,6 +200,9 @@ export const approveErrand = (id: string) =>
 export const pushDesk = () => postJson('/v1/desk/push', {}, DeskPushReply)
 export const turnBackErrand = (id: string, note: string) =>
   postJson(`/v1/errands/${encodeURIComponent(id)}/turn-back`, { note }, ErrandReply)
+/** The owner's pin or unpin of a collection: the page it leads, with the cards. */
+export const pinCollection = (id: string, pinned: boolean) =>
+  postJson(`/v1/artifact-collections/${encodeURIComponent(id)}/${pinned ? 'pin' : 'unpin'}`, {}, CollectionReply)
 export const promoteSignal = (id: string, repo: string | null) =>
   postJson(`/signals/${encodeURIComponent(id)}/promote`, repo ? { repo } : {}, SignalAck)
 

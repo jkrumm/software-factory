@@ -1,4 +1,11 @@
 import type { IssueApi } from './api/issues.ts'
+import {
+  editCollection,
+  listCollections,
+  newCollection,
+  pinCollection,
+  showCollection,
+} from './app/artifact-collections.ts'
 import { linkArtifactToIssue, newStandaloneArtifact, setArtifactRetired } from './app/artifact-new.ts'
 import { answerIssue } from './app/issue-answer.ts'
 import { fileNewIssue, type NewIssueDeps } from './app/issue-new.ts'
@@ -21,6 +28,11 @@ export function composeIssues(input: {
     newArtifact: (request) => newStandaloneArtifact(filing, request),
     linkArtifact: (request) => linkArtifactToIssue(filing, request),
     retireArtifact: (request) => setArtifactRetired(filing, request),
+    listCollections: () => listCollections(filing),
+    showCollection: (id) => showCollection(filing, id),
+    newCollection: (request) => newCollection(filing, request),
+    editCollection: (request) => editCollection(filing, request),
+    pinCollection: (request) => pinCollection(filing, request),
     cancel: (request) => cancelIssue(writes, request),
     note: (request) => noteIssue(writes, request),
     seat: (request) => seatIssue({ ...writes, roles: filing.roles }, request),

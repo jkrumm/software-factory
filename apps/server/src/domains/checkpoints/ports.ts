@@ -12,7 +12,7 @@ import type { SpecOrigin } from './spec-screen.ts'
 import type { IssueId } from '../../kernel/ids.ts'
 import type { Key } from '../../kernel/keys.ts'
 import type { PortError, Result } from '../../kernel/result.ts'
-import type { ArtifactId, ArtifactKind, Disposition, Format, Verdict } from './artifact.ts'
+import type { ArtifactId, ArtifactKind, CollectionId, Disposition, Format, Verdict } from './artifact.ts'
 import type {
   DecisionForm,
   DecisionId,
@@ -101,6 +101,31 @@ export interface ArtifactRecord {
   createdAt: Date
   /** when it was retired (hidden from the list, still readable); null while it is shown */
   retiredAt?: Date | null
+  /** the collection it belongs to (at most one); null while it stands alone */
+  collectionId?: CollectionId | null
+}
+
+/** A named set of artifacts with one lead page; pinned, it leads the Artifacts screen. */
+export interface CollectionRecord {
+  id: CollectionId
+  key: Key
+  title: string
+  /** the project it concerns, stored as a project name */
+  repo: string
+  /** the overview: one of its members; null until one is named */
+  leadArtifactId: ArtifactId | null
+  /** when the owner pinned it; null while it is not */
+  pinnedAt: Date | null
+  createdAt: Date
+}
+
+/** What a collection's card shows, read off its members. */
+export interface CollectionStats {
+  members: ArtifactId[]
+  /** the newest of a member's creation, revision, comment, verdict; null with no member */
+  lastChange: Date | null
+  /** the owner's comments on its members that the lead has not answered */
+  openComments: number
 }
 
 export interface RevisionRecord {
@@ -297,6 +322,21 @@ export interface CheckpointStore {
     retired?: boolean
     limit: number
   }): Promise<ArtifactRecord[]>
+  insertCollection(collection: CollectionRecord): Promise<boolean>
+  collection(id: CollectionId): Promise<CollectionRecord | null>
+  collectionByKey(key: Key): Promise<CollectionRecord | null>
+  /** pinned first, then newest */
+  collections(): Promise<CollectionRecord[]>
+  updateCollection(id: CollectionId, change: { title?: string; leadArtifactId?: ArtifactId | null }): Promise<void>
+  /** false when the pin was as asked already */
+  setCollectionPin(id: CollectionId, at: Date | null): Promise<boolean>
+  /** put an artifact in a collection, or take it out (null); only a free artifact, or one already there, is taken: false when it is in another */
+  setArtifactCollection(
+    artifact: ArtifactId,
+    collection: CollectionId | null,
+    from: CollectionId | null,
+  ): Promise<boolean>
+  collectionStats(ids: readonly CollectionId[]): Promise<Map<CollectionId, CollectionStats>>
   /** false when it was retired already */
   retireArtifact(artifact: ArtifactId, at: Date): Promise<boolean>
   /** false when it was not retired */

@@ -100,6 +100,7 @@ export const summaryOf = (
   author: artifact.author,
   createdAt: iso(artifact.createdAt),
   retiredAt: artifact.retiredAt ? iso(artifact.retiredAt) : null,
+  collectionId: artifact.collectionId ?? null,
   revisions: revisions.map((r) => ({
     n: r.n,
     sha256: r.sha256,

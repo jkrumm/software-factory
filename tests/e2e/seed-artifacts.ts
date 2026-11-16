@@ -5,7 +5,7 @@ import type { Lab } from '../scenarios/planning/lab.ts'
 import { api } from './seed.ts'
 
 /** one repo per lead these artifacts need: a project takes one lead at a time (the lab is started with them) */
-export const ARTIFACT_REPOS = ['ember', 'flint', 'forge', 'gable']
+export const ARTIFACT_REPOS = ['ember', 'flint', 'forge', 'gable', 'haven']
 
 export const SPEC_QUOTE = 'We keep the queue in Postgres because it is already running.'
 export const KEPT = 'The lock decides who takes the next row.'
@@ -168,7 +168,23 @@ export interface SeededArtifacts {
   review: string
   /** an HTML Report with an external link, an anchor, a Console link and headings to scroll through */
   links: string
+  collections: SeededCollections
 }
+
+/** The collections of the Artifacts page: one pinned, one not, with the pages the default view leaves out. */
+export interface SeededCollections {
+  pinned: { id: string; title: string; lead: string; pages: string[] }
+  unpinned: { id: string; title: string }
+  /** a Spec whose Issue was cancelled: absent by default, present under Show all */
+  closedSpec: { id: string; title: string }
+  /** the title two standalone Reports share: the newer one shows, the older one is superseded */
+  copy: { title: string; older: string; newer: string }
+}
+
+export const PINNED_COLLECTION = 'Orb rewrite'
+export const UNPINNED_COLLECTION = 'Storage notes'
+export const CLOSED_SPEC = 'Retire the old queue'
+export const COPY_TITLE = 'Forecast cache notes'
 
 /** The shared HTML template, filled in the way a lead would: the result first, a table, a picture, the risks. */
 const TEMPLATE = join(import.meta.dir, '..', '..', 'apps', 'console', 'templates', 'artifact.html')
@@ -248,6 +264,9 @@ export async function seedArtifacts(lab: Lab): Promise<SeededArtifacts> {
   if (!risky) throw new Error('the Report comment was not stored')
   const edit = { comment: 'Which risk would we not take, and why?' }
   await api(url, `/v1/artifacts/${shotReport}/annotations/${risky.id}`, edit, 'PATCH')
+  const closedIssue = await lead('haven', 'Retire the old queue')
+  const closedSpec = await submit(closedIssue, { kind: 'spec', title: CLOSED_SPEC, content: SPEC_MD })
+  await api(url, `/issues/${closedIssue}/cancel`, { reason: 'the queue is gone' })
   const reviewIssue = await lead('gable', 'Roll out the weather tile')
   const review = await submit(reviewIssue, { kind: 'spec', title: 'Weather rollout', content: reviewMd(spec) })
   const links = await submit(reportIssue, {
@@ -256,7 +275,42 @@ export async function seedArtifacts(lab: Lab): Promise<SeededArtifacts> {
     contentFormat: 'html',
     content: LINKS_HTML,
   })
+  const standalone = async (title: string, content: string): Promise<string> =>
+    (await api<{ artifact: { id: string } }>(url, '/v1/artifacts', { repo: 'ember', title, content })).artifact.id
+  const overview = await standalone('Orb rewrite: overview', '# Orb rewrite\n\nWhere the rewrite stands.')
+  const notes = await standalone('Orb rewrite: forecast', '# Forecast\n\nThe forecast tile.')
+  const older = await standalone(COPY_TITLE, '# Cache notes\n\nThe first copy.')
+  const newer = await standalone(COPY_TITLE, '# Cache notes\n\nThe second copy.')
+  const storage = await standalone('Storage notes: sizing', '# Sizing\n\nThe queue is small.')
+  const collection = async (title: string, lead: string, add: string[], pin: boolean): Promise<string> => {
+    const made = (
+      await api<{ collection: { id: string } }>(url, '/v1/artifact-collections', {
+        title,
+        lead,
+        add,
+        key: `e2e-${title}`,
+      })
+    ).collection.id
+    if (pin) await api(url, `/v1/artifact-collections/${made}/pin`, {})
+    return made
+  }
+  const pinnedId = await collection(PINNED_COLLECTION, overview, [notes], true)
+  const unpinnedId = await collection(UNPINNED_COLLECTION, storage, [], false)
   // a Spec reaches the owner once the Spec screen passes it (the fake agw passes it)
   await api(url, '/v1/checkpoints/pass', {})
-  return { spec, report, revised, shotSpec, shotReport, review, links }
+  return {
+    spec,
+    report,
+    revised,
+    shotSpec,
+    shotReport,
+    review,
+    links,
+    collections: {
+      pinned: { id: pinnedId, title: PINNED_COLLECTION, lead: overview, pages: [overview, notes] },
+      unpinned: { id: unpinnedId, title: UNPINNED_COLLECTION },
+      closedSpec: { id: closedSpec, title: CLOSED_SPEC },
+      copy: { title: COPY_TITLE, older, newer },
+    },
+  }
 }
