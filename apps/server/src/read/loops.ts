@@ -78,6 +78,8 @@ const ProcessMinuteRow = z.object({
   pid: z.number().int(),
   name: z.string(),
   class: z.string(),
+  repo: z.string().nullable(),
+  issue: z.number().int().nullable(),
   footprint_mib: z.number().int(),
 })
 
@@ -381,10 +383,18 @@ export function loopReads(tx: SQL): LoopReads {
 
     async processMinutes(since) {
       const rows: unknown[] = await tx`
-        SELECT at, pid, name, class, footprint_mib FROM factory.host_process_samples WHERE at >= ${since} ORDER BY at, pid`
+        SELECT at, pid, name, class, repo, issue, footprint_mib FROM factory.host_process_samples WHERE at >= ${since} ORDER BY at, pid`
       return rows.map((raw) => {
         const row = ProcessMinuteRow.parse(raw)
-        return { at: row.at, pid: row.pid, name: row.name, class: row.class, footprintMib: row.footprint_mib }
+        return {
+          at: row.at,
+          pid: row.pid,
+          name: row.name,
+          class: row.class,
+          repo: row.repo,
+          issue: row.issue,
+          footprintMib: row.footprint_mib,
+        }
       })
     },
 

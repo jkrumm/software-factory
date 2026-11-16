@@ -122,6 +122,9 @@ export interface ProcessMinute {
   pid: number
   name: string
   class: string
+  /** the repo whose lead or step owns the process; null for a process no repo owns */
+  repo: string | null
+  issue: number | null
   footprintMib: number
 }
 
