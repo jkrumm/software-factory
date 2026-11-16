@@ -451,6 +451,8 @@ test('process_growth: more than 1 GiB in the last hour of a process still there,
   expect(processGrowthFindings([proc(60, 3000), proc(1, 1000)], NOW)).toEqual([])
   // a database server's footprint counts the shared buffers it maps: bounded, never a finding
   expect(processGrowthFindings([proc(60, 300, 25267, 'postgres'), proc(1, 2059, 25267, 'postgres')], NOW)).toEqual([])
+  // the kernel's footprint follows memory pressure (2026-11-16: 2772 to 8795 MiB in 46 minutes): never a finding
+  expect(processGrowthFindings([proc(60, 2772, 0, 'kernel_task'), proc(1, 8795, 0, 'kernel_task')], NOW)).toEqual([])
   // a tenant (a VM, a launchd job) is `tenant_growth_mib`'s, never this repo's to shrink
   const vm = (minutesAgo: number, footprintMib: number): ProcessMinute => ({
     ...proc(minutesAgo, footprintMib, 49543, 'com.apple.Virtualization.VirtualMachine'),
