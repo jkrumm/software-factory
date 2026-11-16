@@ -137,7 +137,8 @@ export function Shell() {
               </div>
             </header>
             <div className="relative flex min-h-0 flex-1 flex-col">
-              <main className="min-h-0 flex-1 overflow-x-hidden overflow-y-auto">
+              {/* `relative` makes `main` the containing block of an absolute descendant (a chart's sr-only table), so its overflow clips it; otherwise the box sits past the viewport and the document scrolls. */}
+              <main className="relative min-h-0 flex-1 overflow-x-hidden overflow-y-auto">
                 <Outlet />
               </main>
               <PeekHost />
