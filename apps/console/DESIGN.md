@@ -143,8 +143,9 @@ click, and keeps the working screen where it was.
 
 ## The screens
 
-- **Needs you**: a "Since you were here" band on top (what shipped, what failed, what the Judge settled and the screen
-  turned away, what is new, since the owner's last visit). Its entries are SinceRows, never cards, and the detail lives in their popover. Then the checkpoints, project first and then title. A Decision
+- **Needs you**: a "Since you were here" band on top. Its head says since when, in words; each category that has something shows a
+  figure, its label with an InfoHint, and one plain sentence of what happened and whether it wants anything from the owner;
+  an empty category is absent, and what he may act on (Regressed, Incidents, Dropped) reads first. Its entries are SinceRows, never cards, and the detail lives in their popover. Then the checkpoints, project first and then title. A Decision
   shows its options as cards: the recommendation marked with its reason, cost and consequence per option, free text last.
   An Errand says what it is. A held signal shows where it came from, when, and a link to its source.
 - **Flow**: a stat row (working, waiting, queued, shipped this week, each a StatCard with its sparkline), then the board

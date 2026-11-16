@@ -17,7 +17,7 @@ import { TONE_TEXT, TONE_TINT } from '@/components/kit/tone'
 import { useMediaQuery } from '@/lib/media'
 import { issueNumber } from '@/lib/needs'
 import { useSince } from '@/lib/queries'
-import { isQuiet, SINCE_HAPPENED, type SinceKey, type SinceRow, sinceRows, visitWords } from '@/lib/since'
+import { isQuiet, SINCE_HAPPENED, type SinceKey, type SinceRow, sinceRows, visitWords, windowWords } from '@/lib/since'
 import { cn } from '@/lib/utils'
 
 /** The band's height depends on what happened, so its skeleton takes the height the band had on the last visit (and a typical one before the first). */
@@ -92,25 +92,32 @@ function Items({ row, items, now }: { row: SinceRow; items: SinceItem[]; now: nu
   )
 }
 
-/** The figure on top and the label beneath it, the InfoHint right after the label's text. */
+/** The figure on top, the label beneath it with its InfoHint, then what it means and whether it wants anything from the owner. */
 function Figure({ row }: { row: SinceRow }) {
-  const quiet = row.count === 0
   return (
     <>
       <span
-        data-tone={quiet ? 'quiet' : row.tone}
+        data-tone={row.tone}
         className={cn(
           'w-fit rounded-md px-1.5 text-2xl font-semibold tracking-tight tabular-nums',
-          quiet ? 'text-muted-foreground' : [TONE_TINT[row.tone], TONE_TEXT[row.tone]],
+          TONE_TINT[row.tone],
+          TONE_TEXT[row.tone],
         )}
       >
         {row.count}
       </span>
-      <p className={cn('text-sm whitespace-nowrap', quiet && 'text-muted-foreground')}>
+      <p className="text-sm whitespace-nowrap">
         {row.label}
-        {row.hint ? <InfoHint word={row.hint} className="-my-1 ml-0.5 align-middle" /> : null}
+        <InfoHint word={row.hint} className="-my-1 ml-0.5 align-middle" />
       </p>
-      {row.breakdown ? <p className="text-xs text-muted-foreground">{row.breakdown}</p> : null}
+      <p data-part="subtitle" className="text-xs text-muted-foreground">
+        {row.subtitle}
+      </p>
+      {row.breakdown ? (
+        <p data-part="breakdown" className="text-xs text-muted-foreground">
+          {row.breakdown}
+        </p>
+      ) : null}
     </>
   )
 }
@@ -186,6 +193,11 @@ export function SinceBand({ now }: { now: number }) {
       {visitWords(data.since, now)}
     </time>
   )
+  const span = (
+    <time dateTime={data.since} title={absolute(data.since)}>
+      {windowWords(data.since, now)}
+    </time>
+  )
   if (isQuiet(rows)) {
     return (
       <p className="mb-8 text-sm">
@@ -194,7 +206,7 @@ export function SinceBand({ now }: { now: number }) {
     )
   }
   return (
-    <Section title="Since you were here" aside={visit} className="mb-8">
+    <Section title="Since you were here" hint="visit" aside={span} className="mb-8">
       <div ref={body}>
         {wide ? (
           <div className="grid grid-cols-[repeat(auto-fill,minmax(20rem,1fr))] gap-x-6 gap-y-6">

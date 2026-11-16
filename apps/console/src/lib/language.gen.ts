@@ -23,6 +23,8 @@ export const LANGUAGE = {
     'Where the factory stops for a person: a Decision, a review of a Concept or Spec, an Errand. Never a merge',
   claim:
     "A lead's place in its repo: leads: N (64 when the project states none: the host's fit is the limit, NL32) plus one for a fix. A wait that needs a person or a clock gives it back; the lead takes one again before it is told its wait is over",
+  'closed without you':
+    'An Errand that ended with no action from the owner: its check found it no longer needed, it expired, or a newer request replaced it. Nothing to do, and its title says which',
   compacted: 'Session state: its context was just compacted, no turn since',
   concept:
     "A direction for a whole product, UX or architecture, before building. Three or four per project, ever. Its result goes into the project's DESIGN.md",
@@ -47,6 +49,8 @@ export const LANGUAGE = {
     "Something only the owner's hands can do: a portal step, a device run, a 1Password prompt. It reaches the owner only after the screen (rules, then factory-errand) passes it",
   event:
     'A fact recorded on an Issue, stored with who sent it and what it did. State is derived from events, never the other way',
+  filed:
+    "An Issue that came into being: the owner's request, an agent's, or a signal triage turned into one. The band's New Issues counts them once each and names where they came from",
   'first verification pass':
     "A first watch (the window after an Issue's first ship) that ended passed, not regressed. The share of those is a KPI",
   'fix commit':
@@ -149,7 +153,11 @@ export const LANGUAGE = {
   'turn back':
     "The owner's or the orchestrator's verb that ends an Errand wait without doing it (factory errand turn-back <id> --note ..., the Console's Turn back button): the Errand closes turned_back and the lead hears the note as its next turn",
   verdict: "The owner's answer on an artifact: Looks good, With notes, Changes, No longer applies",
+  verified:
+    'A shipped change whose watch passed: it is live and Verify and the probes found nothing broken. The "Since you were here" band counts these as Shipped and verified, one per Issue',
   verify: 'The check that ends the watch: make verify, probes',
+  visit:
+    'The owner\'s run of Console reads with no gap of 30 minutes. The "Since you were here" band counts what happened since the visit before it ended (the first ever looks back 24 hours), so a page reload inside a visit shows the same band',
   wait: 'A pause with a named exit',
   waiting: 'State: a named wait',
   walled: 'Session state: its account hit a limit',

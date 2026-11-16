@@ -8,8 +8,8 @@ export { agoWords }
 
 type InfoWord = keyof typeof LANGUAGE
 
-/** The band's categories, in the order they read. */
-export const SINCE_KEYS = ['shipped', 'failed', 'dropped', 'judge', 'screen', 'errands', 'filed', 'incidents'] as const
+/** The band's categories, in the order they read: what he may want to act on first, what settled without him last. */
+export const SINCE_KEYS = ['failed', 'incidents', 'dropped', 'shipped', 'filed', 'judge', 'screen', 'errands'] as const
 export type SinceKey = (typeof SINCE_KEYS)[number]
 
 export const SINCE_LABEL: Record<SinceKey, string> = {
@@ -47,14 +47,29 @@ export const SINCE_HAPPENED: Record<SinceKey, string> = {
   incidents: 'An incident was opened for it.',
 }
 
-/** The domain words a category carries an InfoHint for. */
+/** What a category says in plain words under its label: what happened, and whether it wants anything from the owner. */
+export const SINCE_SUBTITLE: Record<SinceKey, string> = {
+  failed: 'Was live, then its check failed. Its lead is fixing it; nothing to do unless it stalls.',
+  incidents: 'Something in production raised an alarm and an Issue was opened for it. Its lead is on it.',
+  dropped: 'Ended without shipping: the lead gave up and said why. Open one to read the reason.',
+  shipped: 'Live, and its check passed. Nothing to do.',
+  filed: 'New work, from you or from what the factory noticed. Nothing to do; it is queued.',
+  judge: 'Questions the Judge answered, so they never reached you. Nothing to do.',
+  screen: 'Alerts and requests turned away before they reached you. Nothing to do.',
+  errands: 'Requests for your hands that ended without you. Nothing to do.',
+}
+
+/** The domain word each category's InfoHint defines (docs/language.md, generated). */
 export const SINCE_HINT = {
   failed: 'regressed',
+  incidents: 'incident',
   dropped: 'dropped',
+  shipped: 'verified',
+  filed: 'filed',
   judge: 'judge',
   screen: 'screen',
-  incidents: 'incident',
-} as const satisfies Partial<Record<SinceKey, InfoWord>>
+  errands: 'closed without you',
+} as const satisfies Record<SinceKey, InfoWord>
 
 /** An origin as it reads inside a sentence: "2 you, 1 GitHub". */
 const ORIGIN_WORD = {
@@ -83,7 +98,8 @@ export interface SinceRow {
   label: string
   count: number
   tone: Tone
-  hint?: InfoWord
+  subtitle: string
+  hint: InfoWord
   /** the newest `SHOWN`, newest first */
   shown: SinceItem[]
   /** the rest of what arrived (the server sends the newest 8) */
@@ -97,9 +113,9 @@ export interface SinceRow {
 const newestFirst = (items: readonly SinceItem[]): SinceItem[] =>
   items.toSorted((a, b) => Date.parse(b.at) - Date.parse(a.at))
 
-/** The band's rows in reading order. */
+/** The band's rows in reading order; a category nothing happened in is left out. */
 export function sinceRows(model: SinceModel): SinceRow[] {
-  return SINCE_KEYS.map((key) => {
+  return SINCE_KEYS.filter((key) => model.categories[key].count > 0).map((key) => {
     const category = model.categories[key]
     const items = newestFirst(category.items)
     return {
@@ -107,7 +123,8 @@ export function sinceRows(model: SinceModel): SinceRow[] {
       label: SINCE_LABEL[key],
       count: category.count,
       tone: SINCE_TONE[key],
-      ...(key in SINCE_HINT ? { hint: SINCE_HINT[key as keyof typeof SINCE_HINT] } : {}),
+      subtitle: SINCE_SUBTITLE[key],
+      hint: SINCE_HINT[key],
       shown: items.slice(0, SHOWN),
       folded: items.slice(SHOWN),
       more: Math.max(0, category.count - items.length),
@@ -117,7 +134,7 @@ export function sinceRows(model: SinceModel): SinceRow[] {
 }
 
 /** Nothing happened in any category. */
-export const isQuiet = (rows: readonly SinceRow[]): boolean => rows.every((row) => row.count === 0)
+export const isQuiet = (rows: readonly SinceRow[]): boolean => rows.length === 0
 
 /** The local wall-clock time of an instant: "09:12". */
 export const clockOf = (iso: string): string =>
@@ -126,3 +143,7 @@ export const clockOf = (iso: string): string =>
 /** The visit as muted text beside the heading: "3 hours ago · Mon 09:12". */
 export const visitWords = (iso: string, now: number): string =>
   `${agoWords(now - Date.parse(iso))} \u00b7 ${new Date(iso).toLocaleDateString([], { weekday: 'short' })} ${clockOf(iso)}`
+
+/** The band's window in the head: "Since Mon 09:12 \u00b7 3 hours ago". */
+export const windowWords = (iso: string, now: number): string =>
+  `Since ${new Date(iso).toLocaleDateString([], { weekday: 'short' })} ${clockOf(iso)} \u00b7 ${agoWords(now - Date.parse(iso))}`
