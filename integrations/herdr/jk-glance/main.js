@@ -1,17 +1,19 @@
 // jk-glance — the factory at a glance, in three roles of one mod (props():
-//   { bar: true }                a status-bar segment: short items, left to right: Needs you, Working, Waiting, Queued,
-//                                Shipped today, Production, CPU, RAM, Load (percent of its ceiling), Health. It polls
-//                                the factory and publishes shared("jk.factory.glance"); a click on an item opens its popover.
+//   { bar: true }                a status-bar segment: short items, left to right: Needs, Work, Wait, Queue, Ship (today),
+//                                Prod, Health (only above 0). The host (CPU, RAM, load) and Uptime Kuma are the mini's chip in
+//                                jk-status, not here. It polls the factory and publishes shared("jk.factory.glance"), with the
+//                                host's load as a percent of its ceiling in `host`; a click on an item opens its popover.
 //   { kind: "detail", item }     the popover (an overlay popup of this same mod): the detail of one item, read from
 //                                shared("jk.factory.glance"), each row a link into the Console. It never polls.
 //   no props                     the sidebar block, one line: Needs you and the lead count (GLANCE_H px high). It polls too:
 //                                keep it out of a layout that already has the bar.
 // A click on a row opens the factory Console at that place in the default browser (`open` on this computer). Read-only:
 // links, no controls. No per-lead row anywhere: the leads show as a count, by project in the popover.
-// Every 15 s ONE call on the mini reads `factory read needs`, `read overview` (counts, health, uptime, the open Issues),
-// `read issues`, `read sessions` and `read machine` (token through secrets-run, never argv), the host's CPU and RAM and the
-// Console's base URL (FACTORY_CONSOLE_URL in the mini's ~/.config/factory/env). Every 60 s a second call reads `factory read
-// flow`: the 7-day trend, the reason each queued Issue waits and the projects whose production is red. Each part parses on
+// Every 15 s ONE call on the mini reads `factory read needs`, `read overview` (counts, health, the open Issues),
+// `read issues`, `read sessions` and `read machine` (token through secrets-run, never argv) and the Console's base URL
+// (FACTORY_CONSOLE_URL in the mini's ~/.config/factory/env). Every 60 s a second call reads `factory read flow`: the 7-day
+// trend, the last day's shipped Issues (by hour and project), the reason each queued Issue waits and the projects whose
+// production is red. Each part parses on
 // its own and keeps its last good answer; no good poll for 2 min dims the bar. API text is data, never interpreted; no ticket
 // title or summary is ever drawn (an item shows as its kind, repo and age, a project as its name and a count).
 // The 15 s poll also publishes shared("jk.factory.terminals"), the feed jk-pane's header and the tab's Console link show
@@ -27,11 +29,8 @@ const READS =
   'factory --format json read needs; echo; echo @@; factory --format json read overview; echo; echo @@; ' +
   'factory --format json read issues --state all --limit 40; echo; echo @@; factory --format json read sessions --live; echo; ' +
   'echo @@; factory --format json read machine; echo'
-// macOS: "<cpu %> <used GiB> <total GiB>". Used = active + wired + compressed, the figure Activity Monitor calls memory used
-// (the same as the status bar's own). Not part of `read machine`, which has the load and swap only.
-const STATS = `export LC_ALL=C; cpu=$(ps -A -o %cpu= | awk -v n="$(sysctl -n hw.ncpu)" '{s+=$1} END{printf "%.1f", s/n}'); used=$(vm_stat | awk '/page size of/{ps=$8} /Pages active/{a=$3} /Pages wired/{w=$4} /occupied by compressor/{c=$5} END{printf "%.1f", (a+w+c)*ps/1073741824}'); echo "$cpu $used $(sysctl -n hw.memsize | awk '{printf "%.0f", $1/1073741824}')"`
 const URL_READ = `grep -m1 '^FACTORY_CONSOLE_URL=' "$HOME/.config/factory/env" | cut -d= -f2-`
-const CMD = `{ ${SECRETS} sh -c '${READS}'; } 2>/dev/null; echo @@; ${STATS} 2>/dev/null; echo @@; ${URL_READ} 2>/dev/null`
+const CMD = `{ ${SECRETS} sh -c '${READS}'; } 2>/dev/null; echo @@; ${URL_READ} 2>/dev/null`
 // The Flow page's own read: the 7-day series live in its `trend`, the queue reasons in its queued column.
 const FLOW_CMD = `{ ${SECRETS} sh -c 'factory --format json read flow'; } 2>/dev/null`
 
@@ -58,30 +57,67 @@ const GLANCE_H = 28
 
 // The bar: the width in px the block needs for its worst case (`barWidth`, held by a test). The layout gives the bar block
 // at least this; a status row is 28 px high.
-const BAR_W = 780
+const BAR_W = 440
 const BAR_H = 28
-// Text metrics for the width estimate: the bar's 11.8 px text is at most this wide per character; an item has 4 px padding
-// each side, a dot is 7 px and 5 px from its text, the items sit 2 px apart and a separator takes 9 px with its gap.
+// Text metrics for the width estimate: the bar's 11.8 px text is at most this wide per character; an item has 3 px padding
+// each side, a dot is 6 px and 4 px from its text, a value sits 4 px from its label, the items sit 1 px apart and a
+// separator takes 7 px with its gap.
 const CHAR_W = 6.2
-const ITEM_PAD = 8
-const DOT_W = 12
-const ITEM_GAP = 2
-const SEP_W = 9
+const ITEM_PAD = 6
+const DOT_W = 10
+const VALUE_GAP = 4
+const ITEM_GAP = 1
+const SEP_W = 7
 
-// The popover: a card of POPUP_W px with a title row and at most MAX_ROWS rows, each ROW_H px high, 2 px apart.
+// The popover: a card of POPUP_W px with a title row, an optional chart and at most MAX_ROWS rows, each ROW_H px high, 2 px apart.
 const POPUP_W = 340
 const POPUP_PAD = 12
 const TITLE_H = 22
 const ROW_H = 20
 const ROW_GAP = 2
 const MAX_ROWS = 8
-const MAX_DOWN = 4
+// The Shipped popover's charts: three bar charts (the last 24 hours and the last 7 days by the hour, the last 30 days by the
+// day), each a caption row over BAR_AREA_H px of bars.
+const BAR_AREA_H = 34
+const chartHeight = (charts) => charts * (ROW_H + ROW_GAP + BAR_AREA_H) + (charts - 1) * ROW_GAP
+// The Shipped popover lists the projects of the last day under its charts, at most this many rows.
+const SHIPPED_ROWS = 5
+// The gap between a popover's bottom edge and the item it belongs to, and the margin to the window's edges.
+const POPUP_GAP = 10
+const EDGE = 8
 
 // The popover's height for a detail: what the card draws, so the overlay can sit its bottom edge above the item.
-const popupHeight = (rows) => 2 * POPUP_PAD + 2 + TITLE_H + rows * (ROW_H + ROW_GAP)
-const WORST_POPUP_H = popupHeight(MAX_ROWS)
+const popupHeight = (rows, extra = 0) =>
+  2 * POPUP_PAD + 2 + TITLE_H + rows * (ROW_H + ROW_GAP) + (extra ? extra + ROW_GAP : 0)
+const WORST_POPUP_H = popupHeight(MAX_ROWS, chartHeight(3))
 
-// "needs @@ overview @@ issues @@ sessions @@ machine @@ stats @@ url": each part is null when it does not parse.
+// Where a popover's top left goes: centred over its item, its bottom edge POPUP_GAP px above the item's top (so it never
+// covers the item), at least EDGE px from the window's left and top edge, and EDGE px from the right edge when the window's
+// width is known. `item` is the item's bounds {x, y, width}.
+function placePopup({ item, width, height, windowWidth = null }) {
+  const centred = Math.round(item.x + item.width / 2 - width / 2)
+  const right = Number.isFinite(windowWidth) ? windowWidth - EDGE - width : Infinity
+  return {
+    x: Math.max(EDGE, Math.min(centred, right)),
+    y: Math.max(EDGE, Math.round(item.y - height - POPUP_GAP)),
+  }
+}
+
+// The overlay for a popover: frameless (the card draws its own frame, so the measured card is the popup), POPUP_W wide,
+// `height` high, placed by placePopup. The item's bounds and the height go along in the props, for a re-placement.
+function popupSpec(props, item, height, windowWidth = null) {
+  return {
+    mod: 'jk-glance',
+    kind: 'popup',
+    frame: 'none',
+    width: POPUP_W,
+    height,
+    at: placePopup({ item, width: POPUP_W, height, windowWidth }),
+    props: { ...props, anchor: item, height },
+  }
+}
+
+// "needs @@ overview @@ issues @@ sessions @@ machine @@ url": each part is null when it does not parse.
 function parseNeeds(text) {
   let d
   try {
@@ -111,18 +147,8 @@ function parseNeeds(text) {
   return { items, counts }
 }
 
-// The monitors roll-up of the overview: counts and the names of what is down (infra names, a few, clipped).
-function parseUptime(u) {
-  if (!u || typeof u !== 'object') return null
-  if (!Number.isFinite(u.up) || !Number.isFinite(u.down) || !Number.isFinite(u.total)) return null
-  const downNames = asArray(u.downNames)
-    .filter((n) => typeof n === 'string' && n.trim())
-    .slice(0, 10)
-    .map((n) => clip(n, 80))
-  return { up: num(u.up), down: num(u.down), total: num(u.total), downNames }
-}
-
-// Counts, the kinds of the health lines (never their words) and the uptime. Nothing else of the overview is kept.
+// Counts, the kinds of the health lines (never their words) and the project of each open Issue by state. Nothing else of the
+// overview is kept (its uptime roll-up is Uptime Kuma's chip in jk-status).
 function parseOverview(text) {
   let d
   try {
@@ -140,16 +166,19 @@ function parseOverview(text) {
     humanQueue: num(c.humanQueue),
     health: num(c.health),
     healthKinds: asArray(d.health).map((h) => (typeof h?.kind === 'string' ? h.kind.slice(0, 32) : 'other')),
-    uptime: parseUptime(d.uptime),
-    leads: parseLeads(d.issues),
+    projects: parseProjects(d.issues),
   }
 }
 
-// The running leads: an open Issue in the working state, as its project only (never its number, phase or words).
-function parseLeads(issues) {
-  return asArray(issues)
-    .filter((i) => i && i.state === 'working' && Number.isInteger(i.id))
-    .map((i) => ({ repo: clip(typeof i.repoName === 'string' && i.repoName ? i.repoName : '?', 40) }))
+// The open Issues that are working, waiting or queued, as their project only (never a number, phase or words): the project
+// name of each, per state.
+function parseProjects(issues) {
+  const out = { working: [], waiting: [], queued: [] }
+  for (const i of asArray(issues)) {
+    if (!i || !Number.isInteger(i.id) || !Array.isArray(out[i.state])) continue
+    out[i.state].push(clip(typeof i.repoName === 'string' && i.repoName ? i.repoName : '?', 40))
+  }
+  return out
 }
 
 // The host's figures and the ceilings above which no new lead is admitted (`factory read machine`).
@@ -165,16 +194,6 @@ function parseMachine(text) {
   }
 }
 
-// The host's CPU and memory: "<cpu %> <used GiB> <total GiB>" (STATS). Null when it does not parse.
-function parseStats(text) {
-  const [cpu, used, total] = String(text ?? '')
-    .trim()
-    .split(/\s+/)
-    .map(Number)
-  if (![cpu, used, total].every(Number.isFinite) || total <= 0 || cpu < 0 || used < 0) return null
-  return { cpu, usedG: used, totalG: total, ramPct: (used / total) * 100 }
-}
-
 function parseJson(text) {
   try {
     const d = JSON.parse(String(text ?? ''))
@@ -185,24 +204,43 @@ function parseJson(text) {
 }
 
 // The Flow page's trend, numbers only (the read also holds Issue titles; they never leave this function): the daily samples
-// of working, waiting and queued (oldest first, the last is now), the daily shipped counts and the week before.
+// of working, waiting and queued (oldest first, the last is now), the daily shipped counts and the week before, the shipped
+// Issues by the hour of the last 7 days (168 buckets, the last is the hour ending now) and by the day of the last 30, and from
+// what closed in the last day the shipped Issues by project.
 function parseFlow(text) {
   const d = parseJson(text)
   if (!d) return null
   const t = d.trend && typeof d.trend === 'object' ? d.trend : {}
   const states = t.states && typeof t.states === 'object' ? t.states : {}
   const line = (v) => (Array.isArray(v) && v.length >= 2 ? v.map(num) : null)
+  const series = (v, n) => (Array.isArray(v) && v.length === n ? v.map(num) : null)
   const flow = {
     working: line(states.working),
     waiting: line(states.waiting),
     queued: line(states.queued),
     shipped: Array.isArray(t.shipped) && t.shipped.length ? t.shipped.map(num) : null,
     shippedBefore: Number.isFinite(t.shippedBefore) ? num(t.shippedBefore) : null,
+    shippedHourly: series(t.shippedHourly, 168),
+    shippedDaily30: series(t.shippedDaily30, 30),
   }
   const column = d.states && typeof d.states === 'object' ? d.states : null
   const hasTrend = Object.values(flow).some((v) => v !== null)
   if (!hasTrend && !column) return null
-  return { ...flow, ...queueReasons(column) }
+  return { ...flow, ...{ shippedProjects: shippedProjectsOf(d.closedRecently) }, ...queueReasons(column) }
+}
+
+// What shipped in the last day (outcome done or healed, the Flow page's own rule) by project, the busiest first. Only the
+// project and the outcome of a closed Issue are read, never its words.
+function shippedProjectsOf(closed) {
+  const byProject = new Map()
+  for (const c of asArray(closed)) {
+    if (!c || (c.outcome !== 'done' && c.outcome !== 'healed')) continue
+    const project = typeof c.repo === 'string' && c.repo ? clip(c.repo, 40) : '?'
+    byProject.set(project, (byProject.get(project) ?? 0) + 1)
+  }
+  return [...byProject]
+    .sort((a, b) => b[1] - a[1] || a[0].localeCompare(b[0]))
+    .map(([project, count]) => ({ project, count }))
 }
 
 const NOT_A_FIX_LINE = new Set(['chain', 'spec', 'finalizing', 'unknown_project'])
@@ -249,15 +287,14 @@ const parseSessions = (text) => {
 
 function parsePoll(stdout) {
   const parts = String(stdout ?? '').split(/^@@$/m)
-  const url = (parts[6] ?? '').trim().split('\n')[0].trim()
+  const url = (parts[5] ?? '').trim().split('\n')[0].trim()
   return {
     needs: parseNeeds(parts[0]),
     overview: parseOverview(parts[1]),
     issues: parseIssues(parts[2]),
     sessions: parseSessions(parts[3]),
     machine: parseMachine(parts[4]),
-    stats: parseStats(parts[5]),
-    base: parts.length >= 7 ? url : null,
+    base: parts.length >= 6 ? url : null,
   }
 }
 
@@ -327,10 +364,8 @@ function consoleLink(base, kind, item) {
   if (!/^https?:\/\/[^\s/]+/i.test(b)) return null
   if (kind === 'flow') return `${b}/flow`
   if (kind === 'working' || kind === 'waiting' || kind === 'queued') return `${b}/flow?state=${kind}`
-  if (kind === 'project') return `${b}/flow?project=${encodeURIComponent(String(item ?? ''))}`
+  if (kind === 'project') return `${b}/projects/${encodeURIComponent(String(item ?? ''))}`
   if (kind === 'issue') return Number.isInteger(item) ? `${b}/issues/${item}` : `${b}/flow`
-  if (kind === 'host') return `${b}/throughput`
-  if (kind === 'chain') return `${b}/chain`
   if (kind === 'health') return HEALTH_PATH ? `${b}${HEALTH_PATH}` : null
   const id = item?.id
   return `${b}/needs-you${id != null && id !== '' ? `?item=${encodeURIComponent(String(id))}` : ''}`
@@ -353,6 +388,7 @@ const KPIS = [
   { key: 'queued', label: 'Queued', higherIsBetter: false },
   { key: 'shipped', label: 'Shipped this week', higherIsBetter: true },
 ]
+const KPI_TITLE = Object.fromEntries(KPIS.map((k) => [k.key, k.label]))
 
 // good, bad or neutral: the direction of the change times whether more is better (0 and unknown are neutral).
 function toneOf(delta, higherIsBetter) {
@@ -421,61 +457,56 @@ function needsRows(needs, base) {
   }))
 }
 
-// Running leads by project, the busiest first: a project and its count, never a lead of its own.
-function projectRows(leads, base) {
+// A state's projects, the busiest first, one row each: the project and its count, never an Issue of its own. A click opens
+// that project's page in the Console. `reasonOf(project)` is an optional dim note between the two (Queued: what binds it).
+function projectRows(projects, base, reasonOf = null) {
   const byProject = new Map()
-  for (const l of asArray(leads)) byProject.set(l.repo, (byProject.get(l.repo) ?? 0) + 1)
+  for (const p of asArray(projects)) byProject.set(p, (byProject.get(p) ?? 0) + 1)
   return [...byProject]
     .sort((a, b) => b[1] - a[1] || a[0].localeCompare(b[0]))
-    .map(([project, count]) => ({ text: project, right: String(count), link: consoleLink(base, 'project', project) }))
+    .map(([project, count]) => ({
+      text: project,
+      ...(reasonOf?.(project) ? { note: reasonOf(project) } : {}),
+      right: String(count),
+      link: consoleLink(base, 'project', project),
+    }))
 }
 
-// How a queued Issue's binding reason reads (the queue kinds of domains/planning/queue.ts and describe.ts; `seat` is none).
+// How a queued Issue's binding reason reads, short enough to stand beside a project name (the queue kinds of
+// domains/planning/queue.ts and describe.ts; `seat` is none recorded: only a free account holds it).
 const WHY_WORD = {
-  line: 'production red, only fixes run',
-  chain: 'waits for another Issue',
-  drain: 'the queue is draining',
-  claim: 'its repo has no free claim',
-  spec: 'a Spec waits for your verdict',
-  finalizing: 'the last attempt is ending',
-  unknown_project: 'its repo is not known yet',
-  doctor: 'the host doctor holds new work back',
-  boot: 'the host has just booted',
-  load: 'the host is busy',
-  memory: 'the host is short of memory',
-  lane: 'its resource lane is full',
-  window: 'every account window is closed',
-  cap: 'every account is at its lead cap',
-  seat: 'waits for a free seat', // no reason recorded: only a free account holds it
+  line: 'production red',
+  chain: 'waits for an Issue',
+  drain: 'queue draining',
+  claim: 'repo has no free claim',
+  spec: 'Spec waits for you',
+  finalizing: 'last attempt ending',
+  unknown_project: 'repo not known yet',
+  doctor: 'host doctor',
+  boot: 'host just booted',
+  load: 'host busy',
+  memory: 'host short of memory',
+  lane: 'lane full',
+  window: 'account windows closed',
+  cap: 'accounts at lead cap',
+  seat: 'waits for a seat',
 }
 
-// Queued Issues grouped by the reason that holds them, the largest group first; the tail past MAX_ROWS - 2 reasons is one
-// "other reasons" row (the last row of the popover is the trend's).
-const MAX_REASONS = MAX_ROWS - 2
-function queueRows(why, base) {
-  const groups = new Map()
+// The reason that binds most of a project's queued Issues (the larger group wins, then the kind's name), a word from WHY_WORD.
+function queueReasonOf(why) {
+  const counts = new Map()
   for (const w of asArray(why)) {
-    const g = groups.get(w.kind) ?? { count: 0, projects: [] }
-    g.count++
-    if (w.project && !g.projects.includes(w.project)) g.projects.push(w.project)
-    groups.set(w.kind, g)
+    if (!w.project) continue
+    const byKind = counts.get(w.project) ?? new Map()
+    byKind.set(w.kind, (byKind.get(w.kind) ?? 0) + 1)
+    counts.set(w.project, byKind)
   }
-  const sorted = [...groups].sort((a, b) => b[1].count - a[1].count)
-  const shown = sorted.length > MAX_REASONS ? sorted.slice(0, MAX_REASONS - 1) : sorted
-  const rows = shown.map(([kind, g]) => ({
-    text: `${WHY_WORD[kind] ?? kind}${kind === 'line' ? `: ${g.projects.join(', ')}` : ''}`,
-    right: String(g.count),
-    link: consoleLink(base, kind === 'chain' ? 'chain' : 'queued', null),
-  }))
-  const rest = sorted.slice(shown.length)
-  if (rest.length) {
-    rows.push({
-      text: `${rest.length} other reasons`,
-      right: String(sum(rest.map(([, g]) => g.count))),
-      link: consoleLink(base, 'queued', null),
-    })
+  return (project) => {
+    const byKind = counts.get(project)
+    if (!byKind) return null
+    const [kind] = [...byKind].sort((a, b) => b[1] - a[1] || a[0].localeCompare(b[0]))[0]
+    return WHY_WORD[kind] ?? kind
   }
-  return rows
 }
 
 // Production per project: red while an incident stops its line; each red project links to that incident's page.
@@ -496,81 +527,40 @@ const TONE_RANK = { neutral: 0, dim: 0, good: 0, warn: 1, bad: 2 }
 const worseTone = (a, b) => (TONE_RANK[b] > TONE_RANK[a] ? b : a)
 // Warn from 75 % of a ceiling, red at or over it.
 const ratioTone = (ratio) => (ratio >= 1 ? 'bad' : ratio >= 0.75 ? 'warn' : 'neutral')
-// CPU and memory have no ceiling of the factory's: the status bar's own red from 85 %, amber from 70.
-const useTone = (pct) => (pct >= 85 ? 'bad' : pct >= 70 ? 'warn' : 'neutral')
 
-// The host's figures, each as the percent the bar shows: CPU and RAM of the host, load as a share of the ceiling above which
-// no new lead is admitted (the plain figure when no ceiling is known), swap as its own percent against its ceiling. Null per
-// figure while its read is missing.
-function hostFigures(machine, stats) {
-  const loadRatio = machine?.loadCeiling ? machine.load / machine.loadCeiling : null
-  const swapRatio = machine?.swapCeiling ? machine.swapPct / machine.swapCeiling : null
+// The host as the mini's chip in jk-status may read it (shared("jk.factory.glance").host): the one-minute load and its
+// ceiling (the load above which no new lead is admitted), the load as a percent of that ceiling (null with no ceiling or no
+// read), swap and its ceiling, and the tone of the worse of the two ratios. Null while `read machine` has not answered.
+function hostOf(machine) {
+  if (!machine) return null
+  const loadRatio = machine.loadCeiling ? machine.load / machine.loadCeiling : null
+  const swapRatio = machine.swapCeiling ? machine.swapPct / machine.swapCeiling : null
   return {
-    cpu: stats ? { value: `${Math.round(stats.cpu)}%`, tone: useTone(stats.cpu) } : null,
-    ram: stats ? { value: `${Math.round(stats.ramPct)}%`, tone: useTone(stats.ramPct) } : null,
-    load: machine
-      ? {
-          value: loadRatio === null ? `${Math.round(machine.load)}` : `${Math.round(loadRatio * 100)}%`,
-          // the two ceilings stop new leads alike: the load figure is as red as the worse of them
-          tone: worseTone(ratioTone(loadRatio ?? 0), ratioTone(swapRatio ?? 0)),
-        }
-      : null,
+    load: Math.round(machine.load * 10) / 10,
+    loadCeiling: machine.loadCeiling,
+    loadPct: loadRatio === null ? null : Math.round(loadRatio * 100),
+    swapPct: Math.round(machine.swapPct),
+    swapCeiling: machine.swapCeiling,
+    tone: worseTone(ratioTone(loadRatio ?? 0), ratioTone(swapRatio ?? 0)),
   }
 }
 
-// The host popover's rows: every figure with what it is against.
-function hostRows(machine, stats) {
-  const rows = []
-  if (stats) {
-    rows.push({ text: 'CPU', right: `${Math.round(stats.cpu)}%`, tone: useTone(stats.cpu) })
-    rows.push({
-      text: 'RAM',
-      right: `${Math.round(stats.ramPct)}% · ${Math.round(stats.usedG)} of ${Math.round(stats.totalG)} G`,
-      tone: useTone(stats.ramPct),
-    })
-  }
-  if (machine) {
-    const loadRatio = machine.loadCeiling ? machine.load / machine.loadCeiling : null
-    rows.push({
-      text: 'Load',
-      right:
-        loadRatio === null
-          ? `${machine.load}`
-          : `${Math.round(loadRatio * 100)}% · ${Math.round(machine.load * 10) / 10} of ${Math.round(machine.loadCeiling)}`,
-      tone: ratioTone(loadRatio ?? 0),
-    })
-    const swapRatio = machine.swapCeiling ? machine.swapPct / machine.swapCeiling : null
-    rows.push({
-      text: 'Swap',
-      right: `${Math.round(machine.swapPct)}%${machine.swapCeiling ? ` of ${Math.round(machine.swapCeiling)}%` : ''}`,
-      tone: ratioTone(swapRatio ?? 0),
-    })
-    if (machine.loadCeiling || machine.swapCeiling) rows.push({ text: 'New leads stop at a ceiling', tone: 'dim' })
-  }
-  return rows
-}
-
-// Health lines by kind and the uptime roll-up, never their words.
+// Health lines by kind, never their words.
 function healthRows(overview) {
   if (!overview) return []
   const kinds = new Map()
   for (const k of overview.healthKinds) kinds.set(k, (kinds.get(k) ?? 0) + 1)
-  const rows = [...kinds].map(([kind, n]) => ({ text: kind, right: String(n), tone: kind === 'door' ? 'warn' : 'bad' }))
-  const up = overview.uptime
-  if (up && up.total > 0) {
-    rows.push({ text: 'Uptime', right: `${up.up} of ${up.total} up`, tone: up.down > 0 ? 'bad' : 'dim' })
-    for (const name of up.downNames.slice(0, MAX_DOWN)) rows.push({ text: name, right: 'down', tone: 'bad' })
-  }
-  if (!rows.length) rows.push({ text: 'Nothing to report', tone: 'dim' })
-  return rows
+  return [...kinds].map(([kind, n]) => ({ text: kind, right: String(n), tone: kind === 'door' ? 'warn' : 'bad' }))
 }
 
 // -- the view model: every word the bar and its popovers show, in one pure object (the render only draws it, and it is what
 // the bar publishes as shared("jk.factory.glance")). No Issue title, summary, number or phase enters it: the reads are parsed
 // down to counts, kinds and monitor names. `link` is a URL for a click and is never drawn.
 
-// The bar's items by group (a separator between groups): key, label, value, tone and an optional dot.
-function glanceModel({ needs, overview, flow, machine, stats, base, at, now, flowAt }) {
+// The bar's items by group (a separator between groups): key, label, value, tone and an optional dot. `dim` greys the label
+// of an item at 0. The host (CPU, RAM, load) and Uptime Kuma are not items: they are the mini's chip in jk-status, which
+// reads the load as a percent of its ceiling from `host`.
+function glanceModel({ needs, overview, flow, machine, base, at, now, flowAt }) {
   if (!at) return { empty: true, text: 'Factory: no data' }
   const stale = now - at > STALE_MS
   const trend = flow && now - flowAt <= FLOW_STALE_MS ? flow : null
@@ -579,10 +569,9 @@ function glanceModel({ needs, overview, flow, machine, stats, base, at, now, flo
   const n = needsCount(overview, needs)
   const cells = Object.fromEntries(kpiCells(overview, trend).map((c) => [c.key, c]))
   const fig = (v) => (v === null || v === undefined ? '–' : String(v))
-  const host = hostFigures(machine, stats)
   const prod = trend ? productionRows(trend.red, base) : null // null until the board's read has answered: unknown is not green
   const shippedToday = trend?.shipped ? trend.shipped[trend.shipped.length - 1] : null
-  const healthKnown = Boolean(overview)
+  const healthLines = overview ? overview.health : 0
 
   const item = (group, key, label, value, tone, tip, dot = null) => ({
     group,
@@ -591,14 +580,16 @@ function glanceModel({ needs, overview, flow, machine, stats, base, at, now, flo
     value,
     tone,
     dot,
+    dim: value === '0',
     tip: staleTip ?? tip,
   })
+  const count = (key, label, value, tip) => item(1, key, label, fig(value), 'neutral', tip)
   const items = [
-    item(0, 'needs', 'Needs you', fig(n), n > 0 ? 'bad' : 'dim', n > 0 ? `${n} wait on you` : 'Nothing waits on you'),
-    item(1, 'working', 'Working', fig(cells.working.value), 'neutral', 'Leads working'),
-    item(1, 'waiting', 'Waiting', fig(cells.waiting.value), 'neutral', 'Issues waiting'),
-    item(1, 'queued', 'Queued', fig(cells.queued.value), 'neutral', 'Issues queued'),
-    item(1, 'shipped', 'Shipped', fig(shippedToday), 'neutral', 'Shipped today'),
+    item(0, 'needs', 'Needs', fig(n), n > 0 ? 'bad' : 'dim', n > 0 ? `${n} wait on you` : 'Nothing waits on you'),
+    count('working', 'Work', cells.working.value, 'Leads working'),
+    count('waiting', 'Wait', cells.waiting.value, 'Issues waiting'),
+    count('queued', 'Queue', cells.queued.value, 'Issues queued'),
+    count('shipped', 'Ship', shippedToday, 'Shipped in the last day'),
     item(
       2,
       'production',
@@ -608,51 +599,71 @@ function glanceModel({ needs, overview, flow, machine, stats, base, at, now, flo
       !prod ? 'Production: not known yet' : prod.red > 0 ? `${prod.red} projects red` : 'Production is green',
       !prod ? 'dim' : prod.red > 0 ? 'bad' : 'good',
     ),
-    item(3, 'cpu', 'CPU', host.cpu?.value ?? '–', host.cpu?.tone ?? 'dim', 'CPU of the host'),
-    item(3, 'ram', 'RAM', host.ram?.value ?? '–', host.ram?.tone ?? 'dim', 'Memory of the host in use'),
-    item(
-      3,
-      'load',
-      'Load',
-      host.load?.value ?? '–',
-      host.load?.tone ?? 'dim',
-      machine?.loadCeiling
-        ? `Load ${machine.load} of ${machine.loadCeiling}: new leads stop at the ceiling`
-        : 'Load of the host',
-    ),
-    item(
-      4,
-      'health',
-      'Health',
-      healthKnown ? String(overview.health) : '–',
-      healthTone(overview),
-      'Health lines of the factory',
-      healthTone(overview),
-    ),
+    // only while there is a line to read: at 0 (and while unknown) the item is not on the bar
+    ...(healthLines > 0
+      ? [
+          item(
+            3,
+            'health',
+            'Health',
+            String(healthLines),
+            healthTone(overview),
+            'Health lines of the factory',
+            healthTone(overview),
+          ),
+        ]
+      : []),
   ]
 
   const flowLink = consoleLink(base, 'flow', null)
   const needsLink = consoleLink(base, 'needs', newestItem(needs))
   const trendRow = (c) =>
     c.delta === null ? [] : [{ text: 'Change in 7 days', right: deltaText(c.delta), tone: c.tone }]
-  const detail = (title, tone, link, rows) => ({
+  const detail = (title, tone, link, rows, chart = null) => ({
     title,
     tone,
     link,
     rows,
-    height: popupHeight(rows.length),
+    ...(chart ? { chart } : {}),
+    height: popupHeight(rows.length, chart ? chartHeight(chart.length) : 0),
   })
-  const shippedWeek = cells.shipped
-  const queueList = trend ? queueRows(trend.why, base) : []
   const needsList = needsRows(needs, base)
-  const projects = projectRows(overview?.leads, base)
-  const hostList = hostRows(machine, stats)
-  const hostDetail = detail(
-    'Host',
-    'neutral',
-    consoleLink(base, 'host', null),
-    hostList.length ? hostList : [{ text: 'Not known yet', tone: 'dim' }],
-  )
+  // Working, Waiting, Queued: one row per project with its count, the busiest first, then the change in 7 days.
+  const byState = (state, reasonOf = null) => {
+    const link = consoleLink(base, state, null)
+    const trendRows = trendRow(cells[state])
+    const rows = capRows(projectRows(overview?.projects?.[state], base, reasonOf), link, MAX_ROWS - trendRows.length)
+    const all = [...rows, ...trendRows]
+    return detail(
+      `${KPI_TITLE[state]} · ${fig(cells[state].value)}`,
+      'neutral',
+      link,
+      all.length ? all : [{ text: 'Open the Flow page', tone: 'dim' }],
+    )
+  }
+  const shippedWeek = cells.shipped
+  // the shipped charts: the last 24 hours and the last 7 days by the hour, the last 30 days by the day (no daily 7-day bars)
+  const chart = (caption, values, extra = '') => (values ? [{ caption, right: `${sum(values)}${extra}`, values }] : [])
+  const charts = [
+    ...chart('Last 24 hours', trend?.shippedHourly?.slice(-24) ?? null),
+    ...chart(
+      'Last 7 days by the hour',
+      trend?.shippedHourly ?? null,
+      shippedWeek.delta === null ? '' : ` ${deltaText(shippedWeek.delta)}`,
+    ),
+    ...chart('Last 30 days by the day', trend?.shippedDaily30 ?? null),
+  ]
+  const shippedRows = trend?.shippedProjects?.length
+    ? capRows(
+        trend.shippedProjects.map((p) => ({
+          text: p.project,
+          right: String(p.count),
+          link: consoleLink(base, 'project', p.project),
+        })),
+        flowLink,
+        SHIPPED_ROWS,
+      )
+    : [{ text: trend ? 'Nothing shipped in the last day' : 'No trend yet', tone: 'dim' }]
   const details = {
     needs: detail(
       needsLabel(n),
@@ -662,31 +673,15 @@ function glanceModel({ needs, overview, flow, machine, stats, base, at, now, flo
         ? capRows(needsList, needsLink)
         : [{ text: n > 0 ? 'Open the Console' : 'Nothing to answer', tone: 'dim' }],
     ),
-    working: detail(`Working · ${fig(cells.working.value)}`, 'neutral', consoleLink(base, 'working', null), [
-      ...capRows(projects, consoleLink(base, 'working', null), MAX_ROWS - trendRow(cells.working).length),
-      ...trendRow(cells.working),
-    ]),
-    waiting: detail(
-      `Waiting · ${fig(cells.waiting.value)}`,
-      'neutral',
-      consoleLink(base, 'waiting', null),
-      trendRow(cells.waiting).length ? trendRow(cells.waiting) : [{ text: 'Open the Flow page', tone: 'dim' }],
-    ),
-    queued: detail(`Queued · ${fig(cells.queued.value)}`, 'neutral', consoleLink(base, 'queued', null), [
-      ...queueList,
-      ...trendRow(cells.queued),
-    ]),
+    working: byState('working'),
+    waiting: byState('waiting'),
+    queued: byState('queued', queueReasonOf(trend?.why)),
     shipped: detail(
-      `Shipped today · ${fig(shippedToday)}`,
+      `Shipped in the last day · ${fig(shippedToday)}`,
       'neutral',
       flowLink,
-      shippedWeek.value === null
-        ? [{ text: 'No trend yet', tone: 'dim' }]
-        : [
-            { text: 'This week', right: String(shippedWeek.value) },
-            ...(trend?.shippedBefore != null ? [{ text: 'The week before', right: String(trend.shippedBefore) }] : []),
-            ...trendRow(shippedWeek),
-          ],
+      shippedRows,
+      charts.length ? charts : null,
     ),
     production: detail(
       !prod ? 'Production · –' : prod.red > 0 ? `Production · ${prod.red} red` : 'Production · green',
@@ -698,12 +693,8 @@ function glanceModel({ needs, overview, flow, machine, stats, base, at, now, flo
           ? capRows(prod.rows, flowLink)
           : [{ text: 'No project is red', tone: 'dim' }],
     ),
-    // the three host items share one popover
-    cpu: hostDetail,
-    ram: hostDetail,
-    load: hostDetail,
     health: detail(
-      `Health · ${healthKnown ? overview.health : '–'}`,
+      `Health · ${overview ? overview.health : '–'}`,
       healthTone(overview),
       consoleLink(base, 'health', null),
       capRows(healthRows(overview), null),
@@ -715,6 +706,9 @@ function glanceModel({ needs, overview, flow, machine, stats, base, at, now, flo
     stale,
     items,
     details,
+    // the host, for the mini's chip in jk-status (null until `read machine` has answered): `loadPct` is the one-minute load
+    // as a percent of the ceiling above which no new lead is admitted
+    host: hostOf(machine),
     // the sidebar block's one line: what waits on the owner and how many leads run
     side: {
       text: `${needsLabel(n)}${overview ? ` · ${overview.working} ${overview.working === 1 ? 'lead' : 'leads'}` : ''}`,
@@ -730,8 +724,8 @@ function glanceModel({ needs, overview, flow, machine, stats, base, at, now, flo
 function barWidth(items) {
   let w = 0
   items.forEach((it, i) => {
-    const chars = it.label.length + (it.value ? 1 + it.value.length : 0)
-    w += chars * CHAR_W + ITEM_PAD + (it.dot ? DOT_W : 0) + (i > 0 ? ITEM_GAP : 0)
+    const chars = it.label.length + (it.value ? it.value.length : 0)
+    w += chars * CHAR_W + ITEM_PAD + (it.value ? VALUE_GAP : 0) + (it.dot ? DOT_W : 0) + (i > 0 ? ITEM_GAP : 0)
     if (i > 0 && it.group !== items[i - 1].group) w += SEP_W
   })
   return Math.ceil(w) + 2 * 8
@@ -747,7 +741,6 @@ export default class JkGlance extends View {
     this.overview = null
     this.flow = null
     this.machine = null
-    this.stats = null
     this.base = ''
     this.issues = null
     this.sessions = null
@@ -779,7 +772,6 @@ export default class JkGlance extends View {
       overview: this.overview,
       flow: this.flow,
       machine: this.machine,
-      stats: this.stats,
       base: this.base,
       at: this.at,
       now: Date.now(),
@@ -802,7 +794,6 @@ export default class JkGlance extends View {
       if (next?.needs) this.needs = next.needs
       if (next?.overview) this.overview = next.overview
       if (next?.machine) this.machine = next.machine
-      if (next?.stats) this.stats = next.stats
       if (next?.base != null) this.base = next.base
       if (next?.issues) this.issues = next.issues
       if (next?.sessions) this.sessions = next.sessions
@@ -856,7 +847,9 @@ export default class JkGlance extends View {
     if (e?.bounds) (this.bounds ??= {})[key] = e.bounds
   }
 
-  // The popover ends 10 px above the clicked item (anchor = its top centre), its card POPUP_W wide and as high as its rows.
+  // The popover sits fully above the clicked item, its bottom edge POPUP_GAP px over the item's top (placePopup), its card
+  // POPUP_W wide and as high as its rows. The item's bounds travel in the props so the popover can place itself again once
+  // it has measured its real height (fit).
   openDetail(key, event) {
     const d = this.shown?.details?.[key]
     if (!d) return
@@ -864,21 +857,10 @@ export default class JkGlance extends View {
     // report a child's or an outer element's bounds.
     const b = [event?.bounds, this.bounds?.[key]].find((x) => x && x.height <= 40)
     const p = event?.position
-    const anchor = b ? { x: b.x + b.width / 2, y: b.y } : p ? { x: p.x, y: p.y - 14 } : null
+    const item = b ? { x: b.x, y: b.y, width: b.width } : p ? { x: p.x - 20, y: p.y - 14, width: 40 } : null
     const props = { kind: 'detail', item: key }
-    if (!anchor) return openOverlay({ mod: 'jk-glance', kind: 'popup', props })
-    openOverlay({
-      mod: 'jk-glance',
-      kind: 'popup',
-      frame: 'none',
-      width: POPUP_W,
-      height: d.height,
-      at: {
-        x: Math.max(8, Math.round(anchor.x - POPUP_W / 2)),
-        y: Math.max(8, Math.round(anchor.y - d.height - 10)),
-      },
-      props,
-    })
+    if (!item) return openOverlay({ mod: 'jk-glance', kind: 'popup', props })
+    openOverlay(popupSpec(props, item, d.height))
   }
 
   render() {
@@ -930,22 +912,42 @@ export default class JkGlance extends View {
       .text_size(11.8)
       .text_color(t.muted)
     if (m.empty) return bar.text_color(t.dim).child(div().truncate().child(m.text))
-    const sep = () => div().w(1).h(12).mx(4).flex_none().bg(t.border)
+    const sep = () =>
+      div()
+        .w(1)
+        .h(12)
+        .mx((SEP_W - 1) / 2)
+        .flex_none()
+        .bg(t.border)
     const cell = (it) =>
       h_flex()
         .id(`glance-${it.key}`)
         .flex_none()
-        .gap(5)
+        .gap(VALUE_GAP)
         .items_center()
-        .px(4)
+        .px(ITEM_PAD / 2)
         .rounded(5)
         .cursor_pointer()
         .hover((s) => s.bg(t.hover))
         .tooltip(it.tip)
         .on_mouse_move((e) => this.track(it.key, e))
         .on_mouse_up('left', (e) => this.openDetail(it.key, e))
-        .when(Boolean(it.dot), (el) => el.child(div().w(7).h(7).flex_none().rounded(4).bg(color[it.dot])))
-        .child(div().flex_none().child(it.label))
+        .when(Boolean(it.dot), (el) =>
+          el.child(
+            div()
+              .w(DOT_W - VALUE_GAP)
+              .h(DOT_W - VALUE_GAP)
+              .flex_none()
+              .rounded(4)
+              .bg(color[it.dot]),
+          ),
+        )
+        .child(
+          div()
+            .flex_none()
+            .text_color(it.dim ? t.dim : t.muted)
+            .child(it.label),
+        )
         .when(Boolean(it.value), (el) => el.child(div().flex_none().text_color(color[it.tone]).child(it.value)))
     const children = []
     m.items.forEach((it, i) => {
@@ -955,8 +957,18 @@ export default class JkGlance extends View {
     return bar.when(m.stale, (el) => el.opacity(0.5)).children(children)
   }
 
-  // The popover card: a title (a link to the item's page) and one row per detail row, each a link when it has one. The
-  // bar's published model is the only source; a row click opens the Console and closes the popover.
+  // The card knows its real height once laid out: when the guess (`height`, from the rows) was off, it places itself again
+  // once so its bottom edge sits POPUP_GAP px over the item and never over it.
+  fit(size) {
+    const { anchor, height, refit, kind, item } = this.props()
+    const h = Math.ceil(size.height)
+    if (!anchor || !height || !h || refit || Math.abs(h - height) <= 2) return
+    closeOverlay(this.props().overlay)
+    openOverlay(popupSpec({ kind, item, refit: true }, anchor, h))
+  }
+
+  // The popover card: a title (a link to the item's page), an optional chart and one row per detail row, each a link when it
+  // has one. The bar's published model is the only source; a row click opens the Console and closes the popover.
   renderPopup(t, color, clickable) {
     const d = shared(DETAIL_KEY)?.details?.[this.props().item]
     const close = () => closeOverlay(this.props().overlay)
@@ -971,6 +983,7 @@ export default class JkGlance extends View {
       .bg(t.popover)
       .text_size(11.8)
       .text_color(t.foreground)
+      .on_size_change((size) => this.fit(size))
       .on_mouse_down('left', () => {})
     if (!d) return card.child(div().h(TITLE_H).text_color(t.dim).child('No data yet'))
     const row = (r, i) =>
@@ -978,27 +991,70 @@ export default class JkGlance extends View {
         h_flex()
           .id(`glance-row-${i}`)
           .h(ROW_H)
+          .flex_none()
           .px(4)
           .gap(8)
           .items_center()
           .justify_between()
           .child(
-            div()
+            h_flex()
               .flex_1()
-              .truncate()
-              .text_color(color[r.tone ?? 'neutral'] ?? t.muted)
-              .child(r.text),
+              .min_w(0)
+              .gap(8)
+              .child(
+                div()
+                  .max_w(170)
+                  .truncate()
+                  .text_color(color[r.tone ?? 'neutral'] ?? t.muted)
+                  .child(r.text),
+              )
+              .when(Boolean(r.note), (el) =>
+                el.child(div().flex_1().min_w(0).truncate().text_color(t.dim).child(r.note)),
+              ),
           )
           .when(Boolean(r.right), (el) => el.child(div().flex_none().text_color(t.dim).child(r.right))),
         r.link,
         close,
       )
+    // One bar chart: a caption row over bars as high as their value against the chart's largest; the newest bar is lit.
+    const chart = (c) => {
+      const max = Math.max(1, ...c.values)
+      return v_flex()
+        .flex_none()
+        .gap(ROW_GAP)
+        .child(
+          h_flex()
+            .h(ROW_H)
+            .px(4)
+            .items_center()
+            .justify_between()
+            .child(div().text_color(t.muted).child(c.caption))
+            .child(div().text_color(t.dim).child(c.right)),
+        )
+        .child(
+          h_flex()
+            .h(BAR_AREA_H)
+            .px(4)
+            .gap(c.values.length > 60 ? 0 : 2) // 168 hourly bars side by side, the others a hair apart
+            .items_end()
+            .children(
+              c.values.map((v, i) =>
+                div()
+                  .flex_1()
+                  .h(v > 0 ? Math.max(3, Math.round((v / max) * BAR_AREA_H)) : 1)
+                  .rounded(1)
+                  .bg(v === 0 ? t.border : i === c.values.length - 1 ? t.foreground : t.muted),
+              ),
+            ),
+        )
+    }
     return card
       .child(
         clickable(
           div()
             .id('glance-title')
             .h(TITLE_H)
+            .flex_none()
             .px(4)
             .truncate()
             .text_size(13)
@@ -1008,6 +1064,7 @@ export default class JkGlance extends View {
           close,
         ),
       )
+      .when(Boolean(d.chart), (el) => el.child(v_flex().flex_none().gap(ROW_GAP).children(d.chart.map(chart))))
       .children(d.rows.map(row))
   }
 }

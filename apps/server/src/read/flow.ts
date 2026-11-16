@@ -109,6 +109,29 @@ export async function readFlow(
     ) c ON true
     WHERE i.state = 'closed' AND i.outcome IN ('done', 'healed') AND c.at > ${before} AND c.at <= ${now}
     GROUP BY bucket`
+  // the same count in windows that end at `now`: 168 hourly ones (bucket 0 the oldest) and 30 daily ones
+  const trendHourly: unknown[] = await sql`
+    SELECT (167 - floor(extract(epoch FROM ${now}::timestamptz - c.at) / 3600))::int AS bucket, count(*)::int AS count
+    FROM factory.issues i
+    JOIN LATERAL (
+      SELECT x.at FROM factory.issue_events x
+      WHERE x.issue_id = i.id AND x.result = 'applied' AND x.to_state = 'closed'
+      ORDER BY x.version DESC LIMIT 1
+    ) c ON true
+    WHERE i.state = 'closed' AND i.outcome IN ('done', 'healed')
+      AND c.at > ${now}::timestamptz - interval '168 hours' AND c.at <= ${now}
+    GROUP BY bucket`
+  const trendDaily30: unknown[] = await sql`
+    SELECT (29 - floor(extract(epoch FROM ${now}::timestamptz - c.at) / 86400))::int AS bucket, count(*)::int AS count
+    FROM factory.issues i
+    JOIN LATERAL (
+      SELECT x.at FROM factory.issue_events x
+      WHERE x.issue_id = i.id AND x.result = 'applied' AND x.to_state = 'closed'
+      ORDER BY x.version DESC LIMIT 1
+    ) c ON true
+    WHERE i.state = 'closed' AND i.outcome IN ('done', 'healed')
+      AND c.at > ${now}::timestamptz - interval '30 days' AND c.at <= ${now}
+    GROUP BY bucket`
   const scopes: unknown[] = await sql`SELECT project, state FROM factory.capacity_queue_states`
 
   const columns: FlowModel['states'] = {
@@ -153,6 +176,8 @@ export async function readFlow(
     },
     shipped: Array<number>(7).fill(0),
     shippedBefore: 0,
+    shippedHourly: Array<number>(168).fill(0),
+    shippedDaily30: Array<number>(30).fill(0),
   }
   for (const raw of trendStates) {
     const row = TrendState.parse(raw)
@@ -162,6 +187,14 @@ export async function readFlow(
     const row = TrendShipped.parse(raw)
     if (row.bucket < 7) trend.shippedBefore += row.count
     else trend.shipped[row.bucket - 7] = row.count
+  }
+  for (const raw of trendHourly) {
+    const row = TrendShipped.parse(raw)
+    if (row.bucket >= 0 && row.bucket < 168) trend.shippedHourly[row.bucket] = row.count
+  }
+  for (const raw of trendDaily30) {
+    const row = TrendShipped.parse(raw)
+    if (row.bucket >= 0 && row.bucket < 30) trend.shippedDaily30[row.bucket] = row.count
   }
 
   const states = scopes.map((raw) => QueueRow.parse(raw))

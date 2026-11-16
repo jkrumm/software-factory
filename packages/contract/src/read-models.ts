@@ -177,6 +177,10 @@ export const FlowTrend = z
     shipped: z.array(z.number().int()).length(7),
     /** the same count over the 7 days before at[0] */
     shippedBefore: z.number().int(),
+    /** Issues closed done or healed in each hour window (at - (168 - i) h, at - (167 - i) h], oldest first: the last 7 days by the hour */
+    shippedHourly: z.array(z.number().int()).length(168),
+    /** the same per day window (at - (30 - i) d, at - (29 - i) d], oldest first: the last 30 days by the day */
+    shippedDaily30: z.array(z.number().int()).length(30),
   })
   .meta({ id: 'FlowTrend' })
 
