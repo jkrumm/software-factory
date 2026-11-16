@@ -79,28 +79,10 @@ export function askHumanVerbs(options: { host: string | null; run?: Run }): Macb
   }
 }
 
-/** A sync pulls and may run a make target; this is a hang guard, never a budget. */
-const SYNC_TIMEOUT_MS = 10 * 60_000
-
 /**
- * The MacBook's `dotfiles-sync` verb, through the same ssh alias `ask-human.sh` pushes through. `BatchMode` so a key that
- * is not accepted fails at once instead of asking; unset host, there is no MacBook to sync.
+ * The MacBook's `dotfiles-sync` verb, through the same ssh alias and the same call as the other verbs (`askHumanVerbs`).
  */
 export function askHumanSync(options: { host: string | null; run?: Run }): SyncPort {
-  const run = options.run ?? runProcess
-  return {
-    async sync() {
-      if (!options.host) return err(portError('gone', 'no MacBook ssh alias is set (FACTORY_ASK_HUMAN_HOST)'))
-      try {
-        const done = await run(
-          ['ssh', '-o', 'BatchMode=yes', '-o', 'ConnectTimeout=8', options.host, 'dotfiles-sync'],
-          SYNC_TIMEOUT_MS,
-          { group: true },
-        )
-        return ok({ exit: done.exitCode, output: done.stdout })
-      } catch (cause) {
-        return err(portError('gone', `ssh could not start: ${String(cause).slice(0, 200)}`))
-      }
-    },
-  }
+  const verbs = askHumanVerbs(options)
+  return { sync: () => verbs.run({ verb: 'dotfiles-sync' }) }
 }

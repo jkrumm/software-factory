@@ -220,7 +220,8 @@ async function screenErrand(deps: SettleDeps, id: ErrandId): Step<ErrandScreened
     const review = screenByReview(errand)
     if (review) return ok({ rule: review.reason, awaits: review.review, errand })
     // a command that is exactly a report or a pull of a fixed MacBook verb runs with no dialog, before any other look
-    const verb = deps.macbook ? verbFor(errand) : null
+    // an Errand with its own check is not run here: the check decides whether it is still needed, and only the owner's done reads it
+    const verb = deps.macbook && errand.checkCommand === null ? verbFor(errand) : null
     if (verb) return ok({ verb, errand })
     const shaped = screenByNeed(errand)
     if (shaped) return ok({ reach: shaped.note, need: shaped.need, errand })

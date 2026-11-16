@@ -1748,6 +1748,19 @@ describe('decided by rule before the owner (issue 1714)', () => {
     expect(value(await raiseErrandRead(raised.errand.id))).toMatchObject({ need: 'secret' })
   })
 
+  test('(b) an Errand with its own check is not run by a verb: the check decides, so it reaches the owner', async () => {
+    const raised = value(
+      await raise(await workingIssue(), {
+        summary: 'Pull brain',
+        cmd: 'git -C ~/SourceRoot/brain pull --ff-only',
+        need: 'place',
+        check: 'true',
+      }),
+    )
+    expect(value(await screenErrands(deps))).toEqual([{ errand: raised.errand.id, outcome: 'reached_owner' }])
+    expect(verbCalls).toEqual([])
+  })
+
   test('(b) with no MacBook port the class command reaches the owner as before', async () => {
     delete deps.macbook
     const issueId = await workingIssue()
