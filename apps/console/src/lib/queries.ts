@@ -9,6 +9,7 @@ import {
   fetchArtifacts,
   fetchCapacityLoop,
   fetchChain,
+  fetchCollections,
   fetchDecision,
   fetchErrands,
   fetchFlow,
@@ -241,6 +242,11 @@ export const artifactListQuery = {
   staleTime: 0,
   queryFn: ({ signal }: { signal: AbortSignal }) => fetchArtifacts(signal),
 }
+export const collectionListQuery = {
+  queryKey: ['artifact-collections'],
+  staleTime: 0,
+  queryFn: ({ signal }: { signal: AbortSignal }) => fetchCollections(signal),
+}
 
 /**
  * What the command palette searches. Only an open palette observes them (`enabled`), so the stream never refetches 550 KB
@@ -258,6 +264,11 @@ export function usePaletteArtifacts(enabled: boolean) {
 /** The artifacts index: the same list the palette searches, kept current by the stream. */
 export function useArtifactList() {
   return useQuery(artifactListQuery)
+}
+
+/** The collections of artifacts, pinned first: the Artifacts page's cards and a collection's own page. */
+export function useCollectionList() {
+  return useQuery(collectionListQuery)
 }
 
 export function prefetchPalette(): void {

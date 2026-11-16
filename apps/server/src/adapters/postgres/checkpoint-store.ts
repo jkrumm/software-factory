@@ -669,7 +669,7 @@ export function postgresCheckpointStore(tx: SQL): CheckpointStore {
           (SELECT count(*)::int FROM factory.annotations n
             WHERE n.artifact_id = a.id AND n.author = 'owner' AND n.disposition IS NULL) AS open_comments
         FROM factory.artifacts a
-        WHERE a.collection_id IN ${tx([...ids] as string[])}
+        WHERE a.collection_id IN ${tx([...ids] as string[])} AND a.retired_at IS NULL
         ORDER BY a.created_at, a.id`
       for (const row of rows) {
         const entry = stats.get(row.collection_id as CollectionId)
