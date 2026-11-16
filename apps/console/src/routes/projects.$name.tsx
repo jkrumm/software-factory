@@ -44,8 +44,9 @@ function ProjectsSidebar({ name }: { name: string }) {
           label={project.name}
           current={project.name === name}
           open={{
-            running: project.counts.working,
-            pending: project.counts.waiting + project.counts.queued,
+            working: project.counts.working,
+            waiting: project.counts.waiting,
+            queued: project.counts.queued,
           }}
           render={(props) => <Link to="/projects/$name" params={{ name: project.name }} {...props} />}
         />
