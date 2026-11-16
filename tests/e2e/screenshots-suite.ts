@@ -20,8 +20,14 @@ const SCREENS = [
 
 /** The artifact page: a Report in the shared HTML template, a Report compared with its first revision. */
 function artifactScreens() {
-  const ids = JSON.parse(process.env.E2E_ARTIFACTS ?? '{}') as { revised: string; shotReport: string }
+  const ids = JSON.parse(process.env.E2E_ARTIFACTS ?? '{}') as {
+    revised: string
+    shotReport: string
+    collections: { pinned: { id: string } }
+  }
   return [
+    { name: 'artifacts', path: '/artifacts' },
+    { name: 'artifact-collection', path: `/artifacts/collections/${ids.collections.pinned.id}` },
     { name: 'artifact-report', path: `/artifacts/${ids.shotReport}` },
     { name: 'artifact-compare', path: `/artifacts/${ids.revised}?revision=2&compare=1` },
   ]
