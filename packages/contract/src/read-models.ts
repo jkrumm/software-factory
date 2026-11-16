@@ -1402,6 +1402,20 @@ export const ThroughputModel = z
           }),
         ),
       }),
+      /**
+       * the last 15 minutes of the host as they were sampled, one point per minute, oldest first (a minute with no sample is
+       * left out; none when the newest sample is older than that): what the host cards draw beside their figure. The newest
+       * point is the minute `now` reads.
+       */
+      recent: z.array(
+        z.strictObject({
+          at,
+          cpuBusyPct: nullableNumber,
+          memoryUsedBytes: nullableNumber,
+          swapUsedBytes: nullableNumber,
+          load: nullableNumber,
+        }),
+      ),
     }),
     /**
      * Test runs per project and the flaky tests, from `step_costs` and `test_results` over the same window (by `at`, the

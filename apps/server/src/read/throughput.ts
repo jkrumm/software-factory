@@ -94,6 +94,15 @@ const TimelineRow = z.object({
   swapb: nullNum,
   load: nullNum,
 })
+const RecentRow = z.object({
+  at: z.coerce.date(),
+  busy: nullNum,
+  mem: nullNum,
+  swapb: nullNum,
+  load: nullNum,
+})
+/** How far back the host cards' short trend reads: one point per sampled minute. */
+const RECENT_MINUTES = 15
 const NowRow = z.object({
   at: z.coerce.date(),
   busy: nullNum,
@@ -307,6 +316,19 @@ export async function readThroughput(
         (SELECT r FROM ram) AS ram, mem_b::float8 AS mem, swap_b::float8 AS swapb, swap_total_bytes::float8 AS swaptotal,
         pressure_level AS level
       FROM m ORDER BY at DESC LIMIT 1`
+    // the short trend of the host cards: the last minutes of the window, the epoch still the floor
+    const recentFrom = new Date(Math.max(from.getTime(), to.getTime() - RECENT_MINUTES * 60_000))
+    const recentRows: unknown[] = await tx`
+      WITH ram AS (SELECT ram_bytes::float8 AS r FROM factory.host_samples WHERE ram_bytes IS NOT NULL ORDER BY at DESC LIMIT 1),
+      m AS (
+        SELECT h.*,
+          CASE WHEN h.cpu_user_pct IS NOT NULL AND h.cpu_sys_pct IS NOT NULL THEN h.cpu_user_pct + h.cpu_sys_pct
+            ELSE 100 - h.cpu_idle_pct END AS busy,
+          coalesce(h.memory_used_bytes::float8, h.memory_used_pct / 100 * (SELECT r FROM ram)) AS mem_b,
+          coalesce(h.swap_used_bytes::float8, h.swap_used_pct / 100 * (SELECT r FROM ram)) AS swap_b
+        FROM factory.host_samples h WHERE h.at >= ${recentFrom} AND h.at < ${to})
+      SELECT at, busy::float8 AS busy, mem_b::float8 AS mem, swap_b::float8 AS swapb, load::float8 AS load
+      FROM m ORDER BY at`
     const findingRows: unknown[] = await tx`
       SELECT id, project, kpi, subject, before, target, after, direction, unit, cost_minutes, status, issue_id, filed_at,
         shipped_at, after_at
@@ -452,6 +474,16 @@ export async function readThroughput(
             }
           }),
         },
+        recent: recentRows.map((raw) => {
+          const r = RecentRow.parse(raw)
+          return {
+            at: r.at.toISOString(),
+            cpuBusyPct: r.busy,
+            memoryUsedBytes: r.mem,
+            swapUsedBytes: r.swapb,
+            load: r.load,
+          }
+        }),
         topProcesses: processRows.map((raw) => {
           const r = ProcessRow.parse(raw)
           return {
