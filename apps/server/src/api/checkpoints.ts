@@ -476,7 +476,11 @@ export const checkpointRoutes = (uses: CheckpointUses) =>
         params: Id,
         body: AnnotateBody,
         response: RESPONSES(ArtifactReply, 400, 404, 409, 422, 503),
-        detail: { operationId: 'artifact.annotate', summary: 'a comment anchored by a quote and a path' },
+        detail: {
+          operationId: 'artifact.annotate',
+          summary:
+            'a comment anchored by a quote and a path; the owner token only, a lead or the orchestrator gets 403 whatever --author says (a lead answers a comment with annotation-reply)',
+        },
       },
     )
     .patch(
