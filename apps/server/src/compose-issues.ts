@@ -1,5 +1,5 @@
 import type { IssueApi } from './api/issues.ts'
-import { linkArtifactToIssue, newStandaloneArtifact } from './app/artifact-new.ts'
+import { linkArtifactToIssue, newStandaloneArtifact, setArtifactRetired } from './app/artifact-new.ts'
 import { answerIssue } from './app/issue-answer.ts'
 import { fileNewIssue, type NewIssueDeps } from './app/issue-new.ts'
 import { cancelIssue, noteIssue, noteSession, seatIssue } from './app/issue-owner.ts'
@@ -20,6 +20,7 @@ export function composeIssues(input: {
     file: (request) => fileNewIssue(filing, request),
     newArtifact: (request) => newStandaloneArtifact(filing, request),
     linkArtifact: (request) => linkArtifactToIssue(filing, request),
+    retireArtifact: (request) => setArtifactRetired(filing, request),
     cancel: (request) => cancelIssue(writes, request),
     note: (request) => noteIssue(writes, request),
     seat: (request) => seatIssue({ ...writes, roles: filing.roles }, request),

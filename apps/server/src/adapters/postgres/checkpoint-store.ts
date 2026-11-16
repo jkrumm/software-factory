@@ -89,6 +89,7 @@ const ArtifactRow = z.object({
   format: z.enum(FORMATS),
   author: z.enum(['lead', 'factory']),
   created_at: z.date(),
+  retired_at: z.date().nullable(),
 })
 
 const RevisionRow = z.object({
@@ -230,6 +231,7 @@ const artifactOf = (raw: unknown): ArtifactRecord => {
     format: row.format,
     author: row.author,
     createdAt: row.created_at,
+    retiredAt: row.retired_at,
   }
 }
 
@@ -565,8 +567,21 @@ export function postgresCheckpointStore(tx: SQL): CheckpointStore {
             OR EXISTS (SELECT 1 FROM factory.artifact_links l
               WHERE l.artifact_id = artifacts.id AND l.issue_id = ${filter.issueId ?? null}))
           AND (${filter.kind ?? null}::text IS NULL OR kind = ${filter.kind ?? null})
+          AND (${filter.retired ?? false}::boolean OR retired_at IS NULL)
         ORDER BY created_at DESC, id DESC LIMIT ${filter.limit}`
       return rows.map(artifactOf)
+    },
+
+    async retireArtifact(artifact, at) {
+      const rows: unknown[] = await tx`
+        UPDATE factory.artifacts SET retired_at = ${at} WHERE id = ${artifact} AND retired_at IS NULL RETURNING id`
+      return rows.length === 1
+    },
+
+    async restoreArtifact(artifact) {
+      const rows: unknown[] = await tx`
+        UPDATE factory.artifacts SET retired_at = NULL WHERE id = ${artifact} AND retired_at IS NOT NULL RETURNING id`
+      return rows.length === 1
     },
 
     async linkArtifact(artifact, issue, at) {

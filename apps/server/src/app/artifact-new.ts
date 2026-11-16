@@ -119,3 +119,28 @@ export function linkArtifactToIssue(
     return ok(await detailOf(checkpoints, artifact.id, linked ? 'applied' : 'replayed'))
   })
 }
+
+/**
+ * `factory artifact retire|restore`: a Report leaves the list (a copy a standalone Report superseded, a page of a cancelled
+ * Issue) or comes back; its address, revisions and annotations work either way. Only a Report: a Concept or Spec is an
+ * Issue's wait, and hiding it would hide the wait. Doing it twice is a replay.
+ */
+export function setArtifactRetired(
+  deps: Pick<StandaloneArtifactDeps, 'uow' | 'clock'>,
+  input: { artifactId: ArtifactId; retired: boolean },
+): Promise<Result<StandaloneArtifact, StandaloneArtifactError | PortError>> {
+  return deps.uow.run<StandaloneArtifact, StandaloneArtifactError>(async ({ checkpoints }) => {
+    const artifact = await checkpoints.artifact(input.artifactId)
+    if (!artifact) return err({ kind: 'not_found', what: 'artifact', id: input.artifactId })
+    if (artifact.kind !== 'report') {
+      return err({
+        kind: 'machine_refused',
+        detail: `${artifact.id} is a ${artifact.kind}: only a Report can be retired`,
+      })
+    }
+    const changed = input.retired
+      ? await checkpoints.retireArtifact(artifact.id, deps.clock.now())
+      : await checkpoints.restoreArtifact(artifact.id)
+    return ok(await detailOf(checkpoints, artifact.id, changed ? 'applied' : 'replayed'))
+  })
+}

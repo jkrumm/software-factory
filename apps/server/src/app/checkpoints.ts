@@ -1006,7 +1006,7 @@ export async function showArtifact(
 /** Artifacts newest first, each with the Issues it is linked to; `issueId` matches the owner and the links. */
 export function listArtifacts(
   deps: CheckpointDeps,
-  filter: { issueId?: IssueId; kind?: ArtifactKind; limit: number },
+  filter: { issueId?: IssueId; kind?: ArtifactKind; retired?: boolean; limit: number },
 ): Promise<CheckpointResult<{ artifact: ArtifactRecord; links: IssueId[] }[]>> {
   return deps.uow.run(async ({ checkpoints }) => {
     const artifacts = await checkpoints.artifacts(filter)
