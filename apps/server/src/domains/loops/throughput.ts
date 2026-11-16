@@ -13,6 +13,7 @@ import {
   SLOT_MEMORY_MIB,
   TENANT_DAY_HOURS,
   TENANT_GROWTH_MIB,
+  isKernelTask,
   isSharedMemoryProgram,
   WAIT_SUBJECTS,
   type WaitSubject,
@@ -220,7 +221,13 @@ export function rankCandidates(facts: WindowFacts, tenants: TenantPolicy | null 
   }
   for (const p of facts.processes) {
     // a tenant's growth is `tenant_growth_mib`'s, filed on the repo that owns the host's configuration
-    if (p.grownMib < PROCESS_GROWTH_MIB || isSharedMemoryProgram(p.name) || p.class === 'tenant') continue
+    if (
+      p.grownMib < PROCESS_GROWTH_MIB ||
+      isSharedMemoryProgram(p.name) ||
+      isKernelTask(p.name) ||
+      p.class === 'tenant'
+    )
+      continue
     found.push({
       project: p.project,
       kpi: 'process_growth_mib',

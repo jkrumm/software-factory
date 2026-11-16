@@ -15,6 +15,12 @@ export const PROCESS_GROWTH_MIB = 1024
 const SHARED_MEMORY_PROGRAMS: ReadonlySet<string> = new Set(['postgres'])
 /** Whether a process name is one of those programs; a child that sets its process title (`postgres: io worker 0`) is named `postgres:`. */
 export const isSharedMemoryProgram = (name: string): boolean => SHARED_MEMORY_PROGRAMS.has(name.replace(/:$/, ''))
+/**
+ * The macOS kernel's own process (pid 0). Its footprint is the kernel's wired and compressed memory, which rises and
+ * falls with the host's memory pressure (2.8 to 8.8 GiB within 46 minutes, 2026-11-16): a symptom, not a leak, and nothing
+ * a lead can shrink. `swap_growth` and the pressure level read the pressure itself; neither growth rule reads this process.
+ */
+export const isKernelTask = (name: string): boolean => name === 'kernel_task'
 /** The runs of a day a budget is judged on: fewer than this many is too few to say. */
 export const MIN_FAST_RUNS = 3
 export const MIN_FAIL_RUNS = 5
