@@ -4,9 +4,11 @@ import { artifactsNote, kindCounts, projectCounts, projectsOfRows, rowsOf, visib
 
 type Artifact = ArtifactList['artifacts'][number]
 
-const artifact = (id: string, issueId: string, kind: Artifact['kind'], createdAt: string): Artifact => ({
+const artifact = (id: string, issueId: string | null, kind: Artifact['kind'], createdAt: string): Artifact => ({
   id,
   issueId,
+  repo: issueId ? null : 'brain',
+  links: [],
   kind,
   title: `Title ${id}`,
   format: 'html',

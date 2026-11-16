@@ -90,7 +90,10 @@ export interface DecisionFilter {
 export interface ArtifactRecord {
   id: ArtifactId
   key: Key
-  issueId: IssueId
+  /** null for a standalone artifact (`factory artifact new`): no Issue owns it */
+  issueId: IssueId | null
+  /** the project of a standalone artifact; null when an Issue owns it */
+  repo?: string | null
   kind: ArtifactKind
   title: string
   format: Format
@@ -286,6 +289,10 @@ export interface CheckpointStore {
   artifact(id: ArtifactId): Promise<ArtifactRecord | null>
   artifactByKey(key: Key): Promise<ArtifactRecord | null>
   artifacts(filter: { issueId?: IssueId; kind?: ArtifactKind; limit: number }): Promise<ArtifactRecord[]>
+  /** the Issue an artifact also concerns; false when it was linked already */
+  linkArtifact(artifact: ArtifactId, issue: IssueId, at: Date): Promise<boolean>
+  /** the Issues each artifact is linked to, oldest link first (an artifact with none has an empty list) */
+  artifactLinks(ids: readonly ArtifactId[]): Promise<Map<ArtifactId, IssueId[]>>
   insertRevision(revision: RevisionRecord & { key: Key }): Promise<boolean>
   revisions(id: ArtifactId): Promise<RevisionRecord[]>
   insertAnnotation(annotation: AnnotationRecord): Promise<boolean>

@@ -153,7 +153,7 @@ function Artifacts() {
         </EmptyState>
       ) : (
         <ul className="flex flex-col text-[length:var(--vx-text-sm)]">
-          {visible.map(({ artifact, issue, issueTitle, project: repo }) => (
+          {visible.map(({ artifact, issue, issueTitle, project: repo, linked }) => (
             <li key={artifact.id} className="not-first:border-t">
               <Link to="/artifacts/$id" params={{ id: artifact.id }} className={ROW_LINK}>
                 <span className="w-20 shrink-0 text-xs text-muted-foreground">
@@ -162,9 +162,10 @@ function Artifacts() {
                 <span className="min-w-0 flex-1">
                   <span className="block font-medium">{artifact.title}</span>
                   <span className="block truncate text-xs text-muted-foreground">
-                    Issue {issue}
+                    {issue ? `Issue ${issue}` : 'No Issue'}
                     {issueTitle ? `: ${issueTitle}` : ''}
                     {repo ? ` · ${repo}` : ''}
+                    {linked.length > 0 ? ` · ${issue ? 'also ' : ''}${linked.map((n) => `Issue ${n}`).join(', ')}` : ''}
                   </span>
                 </span>
                 <Ago iso={artifact.createdAt} now={now} className="font-mono text-xs text-muted-foreground" />

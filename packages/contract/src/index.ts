@@ -77,6 +77,8 @@ export {
   PassReply,
   ReviseBody,
   SubmitBody,
+  NewArtifactBody,
+  LinkArtifactBody,
   SPEC_SCREEN_CONTENT_MAX,
   SPEC_SCREEN_PRECEDENTS,
   SPEC_SOURCES,

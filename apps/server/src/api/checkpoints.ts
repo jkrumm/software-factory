@@ -85,9 +85,15 @@ export const decisionView = (d: DecisionRecord): DecisionView => ({
   judge: judgeOf(d),
 })
 
-const summaryOf = (artifact: ArtifactRecord, revisions: readonly RevisionRecord[]) => ({
+export const summaryOf = (
+  artifact: ArtifactRecord,
+  revisions: readonly RevisionRecord[],
+  links: readonly string[],
+) => ({
   id: artifact.id,
   issueId: artifact.issueId,
+  repo: artifact.repo ?? null,
+  links: [...links],
   kind: artifact.kind,
   title: artifact.title,
   format: artifact.format,
@@ -346,7 +352,7 @@ export const checkpointRoutes = (uses: CheckpointUses) =>
         return Response.json(
           ArtifactReply.parse({
             result: result.value.result,
-            artifact: summaryOf(artifact, revisions),
+            artifact: summaryOf(artifact, revisions, result.value.links),
             verdict: null,
             issue,
           }),
@@ -359,7 +365,7 @@ export const checkpointRoutes = (uses: CheckpointUses) =>
         detail: {
           operationId: 'artifact.submit',
           summary:
-            'the lead hands over a Concept or Spec (the Issue waits for the verdict) or a Report (it never waits)',
+            'the lead (or the owner, for his own Issue) hands over a Concept or Spec (the Issue waits for the verdict) or a Report (it never waits); a Report no Issue owns is `artifact new`',
         },
       },
     )
@@ -375,7 +381,9 @@ export const checkpointRoutes = (uses: CheckpointUses) =>
         })
         if (!result.ok) return failed(result.error)
         // The list shows each artifact without its revisions' detail; `artifact show` has them.
-        return Response.json(ArtifactList.parse({ artifacts: result.value.map((a) => summaryOf(a, [])) }))
+        return Response.json(
+          ArtifactList.parse({ artifacts: result.value.map((a) => summaryOf(a.artifact, [], a.links)) }),
+        )
       },
       {
         query: z.object({
@@ -397,7 +405,7 @@ export const checkpointRoutes = (uses: CheckpointUses) =>
         const detail = result.value
         return Response.json(
           ArtifactDetail.parse({
-            artifact: summaryOf(detail.artifact, detail.revisions),
+            artifact: summaryOf(detail.artifact, detail.revisions, detail.links),
             revision: detail.revision,
             content: detail.content,
             annotations: detail.annotations
@@ -437,7 +445,7 @@ export const checkpointRoutes = (uses: CheckpointUses) =>
         return Response.json(
           ArtifactReply.parse({
             result: result.value.result,
-            artifact: summaryOf(artifact, revisions),
+            artifact: summaryOf(artifact, revisions, result.value.links),
             verdict: null,
             issue,
           }),
@@ -447,7 +455,11 @@ export const checkpointRoutes = (uses: CheckpointUses) =>
         params: Id,
         body: ReviseBody,
         response: RESPONSES(ArtifactReply, 400, 404, 409, 422, 503),
-        detail: { operationId: 'artifact.revise', summary: 'the lead adds a revision after a verdict of Changes' },
+        detail: {
+          operationId: 'artifact.revise',
+          summary:
+            'a revision of an artifact: the lead after a verdict of Changes, or whoever filed a standalone Report (no attempt needed)',
+        },
       },
     )
     .post(
@@ -466,7 +478,7 @@ export const checkpointRoutes = (uses: CheckpointUses) =>
         return Response.json(
           ArtifactReply.parse({
             result: result.value.result,
-            artifact: summaryOf(artifact, revisions),
+            artifact: summaryOf(artifact, revisions, result.value.links),
             verdict: null,
             issue,
           }),
@@ -498,7 +510,7 @@ export const checkpointRoutes = (uses: CheckpointUses) =>
         return Response.json(
           ArtifactReply.parse({
             result: result.value.result,
-            artifact: summaryOf(artifact, revisions),
+            artifact: summaryOf(artifact, revisions, result.value.links),
             verdict: null,
             issue,
           }),
@@ -527,7 +539,7 @@ export const checkpointRoutes = (uses: CheckpointUses) =>
         return Response.json(
           ArtifactReply.parse({
             result: result.value.result,
-            artifact: summaryOf(artifact, revisions),
+            artifact: summaryOf(artifact, revisions, result.value.links),
             verdict: null,
             issue,
           }),
@@ -539,7 +551,8 @@ export const checkpointRoutes = (uses: CheckpointUses) =>
         response: RESPONSES(ArtifactReply, 400, 404, 422, 503),
         detail: {
           operationId: 'artifact.annotation-reply',
-          summary: "the lead answers one of the owner's annotations: applied, deferred or declined, with a note",
+          summary:
+            "the lead answers one of the owner's annotations: applied, deferred or declined, with a note (a standalone artifact has no attempt: whoever filed it answers)",
         },
       },
     )
@@ -557,7 +570,7 @@ export const checkpointRoutes = (uses: CheckpointUses) =>
         return Response.json(
           ArtifactReply.parse({
             result: result.value.result,
-            artifact: summaryOf(artifact, revisions),
+            artifact: summaryOf(artifact, revisions, result.value.links),
             verdict: null,
             issue,
           }),
@@ -585,7 +598,7 @@ export const checkpointRoutes = (uses: CheckpointUses) =>
         return Response.json(
           ArtifactReply.parse({
             result: result.value.result,
-            artifact: summaryOf(artifact, revisions),
+            artifact: summaryOf(artifact, revisions, result.value.links),
             verdict: verdictView(verdict),
             issue,
           }),

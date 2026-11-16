@@ -163,7 +163,7 @@ export function checkpointTally(issue: Pick<ReadIssueDetail, 'asks' | 'artifacts
   open: number
 } {
   const openDecisions = issue.asks.filter((ask) => ask.status === 'open').length
-  const awaitingVerdict = issue.artifacts.filter((artifact) => artifact.verdict === null).length
+  const awaitingVerdict = issue.artifacts.filter((artifact) => !artifact.linked && artifact.verdict === null).length
   return {
     decisions: issue.asks.length,
     openDecisions,
@@ -250,7 +250,7 @@ export function nextActions(issue: Pick<ReadIssueDetail, 'asks' | 'artifacts'>):
 } {
   return {
     decisionId: issue.asks.find((ask) => ask.status === 'open')?.id ?? null,
-    artifactId: issue.artifacts.find((artifact) => artifact.verdict === null)?.id ?? null,
+    artifactId: issue.artifacts.find((artifact) => !artifact.linked && artifact.verdict === null)?.id ?? null,
   }
 }
 

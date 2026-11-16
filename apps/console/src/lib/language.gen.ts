@@ -3,7 +3,8 @@ export const LANGUAGE = {
   amend: "Adding to an open Issue's scope or facts instead of filing a new one. The lead hears it as a note",
   annotation:
     'A comment anchored by a quote and a path on one revision. If the quote is gone from a later revision it sits in "Unanchored"',
-  artifact: 'What a lead hands to a person. One model, four kinds: Concept, Spec, Decision, Report',
+  artifact:
+    'What a lead hands to a person. One model, four kinds: Concept, Spec, Decision, Report. An Issue owns it, or none does (a standalone Report, artifact new); links name the other Issues it concerns',
   ask: "The lead's verb that raises a Decision (factory issue ask)",
   attempt: 'Lead number n of an Issue',
   'avoidable touch':

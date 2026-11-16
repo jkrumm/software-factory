@@ -1,3 +1,4 @@
+import type { ArtifactDetail } from '@software-factory/contract'
 import { ArrowLeftIcon } from '@phosphor-icons/react'
 import { Link } from '@tanstack/react-router'
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
@@ -49,6 +50,42 @@ function IssueCrumb({ issueId, peek }: { issueId: string; peek?: boolean }) {
         </>
       ) : null}
     </div>
+  )
+}
+
+/** Where the artifact hangs: its Issue, or the project of a standalone one, and the Issues it is linked to. */
+function ArtifactCrumb({ artifact, peek }: { artifact: ArtifactDetail['artifact']; peek?: boolean }) {
+  const linked = artifact.links.flatMap((ref) => {
+    const number = issueNumber(ref)
+    return number === null ? [] : [number]
+  })
+  return (
+    <>
+      {artifact.issueId ? (
+        <IssueCrumb issueId={artifact.issueId} peek={peek} />
+      ) : (
+        <div className="flex min-w-0 flex-wrap items-center gap-x-2 gap-y-1 text-[length:var(--vx-text-sm)] text-muted-foreground">
+          <span>No Issue owns this {KIND_WORDS[artifact.kind].toLowerCase()}</span>
+          {artifact.repo ? <ProjectChip name={artifact.repo} /> : null}
+        </div>
+      )}
+      {linked.length > 0 ? (
+        <div className="flex min-w-0 flex-wrap items-center gap-x-3 gap-y-1 text-[length:var(--vx-text-sm)] text-muted-foreground">
+          <span>{artifact.issueId ? 'Also concerns' : 'Concerns'}</span>
+          {linked.map((number) => (
+            <Link
+              key={number}
+              to="/issues/$id"
+              params={{ id: String(number) }}
+              data-peek={peek ? undefined : 'off'}
+              className="rounded-md font-mono text-xs outline-none hover:text-foreground focus-visible:ring-3 focus-visible:ring-ring/50"
+            >
+              Issue {number}
+            </Link>
+          ))}
+        </div>
+      ) : null}
+    </>
   )
 }
 
@@ -163,7 +200,7 @@ function ArtifactViewOf({ id, revision, compare, onPick, peek }: ArtifactViewPro
     >
       <div className={cn('flex min-w-0 flex-col', !peek && 'lg:min-h-0')}>
         <header className={cn('flex flex-col gap-3 border-b px-4 pt-5 pb-4', !peek && 'md:px-8')}>
-          <IssueCrumb issueId={artifact.issueId} peek={peek} />
+          <ArtifactCrumb artifact={artifact} peek={peek} />
           <div className="flex flex-wrap items-start justify-between gap-x-6 gap-y-3">
             <div className="flex min-w-0 flex-1 basis-80 flex-col gap-2">
               <h1

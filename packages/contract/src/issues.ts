@@ -55,8 +55,9 @@ export const NewIssueBody = z
   .meta({ id: 'NewIssueBody' })
 export type NewIssueBody = z.infer<typeof NewIssueBody>
 
+/** `issue` is the Issue's id as a string; `id` is the same id, the key the other verbs' `issue` object carries (read `.id`). */
 export const NewIssueAnswer = z
-  .object({ issue: z.string(), state: z.string(), filed: z.boolean() })
+  .object({ issue: z.string(), id: z.string(), state: z.string(), filed: z.boolean() })
   .meta({ id: 'NewIssueAnswer' })
 export type NewIssueAnswer = z.infer<typeof NewIssueAnswer>
 

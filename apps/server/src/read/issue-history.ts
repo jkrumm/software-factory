@@ -86,11 +86,15 @@ export async function loadArtifacts(sql: SQL, issue: string): Promise<ReadArtifa
     created_at: Date
     revisions: string
     verdict: string | null
+    linked: boolean
   }[] = await sql`
-    SELECT a.id, a.kind, a.title, a.created_at,
+    SELECT a.id, a.kind, a.title, a.created_at, a.issue_id IS DISTINCT FROM ${issue} AS linked,
       (SELECT count(*) FROM factory.artifact_revisions r WHERE r.artifact_id = a.id)::text AS revisions,
       (SELECT v.verdict FROM factory.verdicts v WHERE v.artifact_id = a.id ORDER BY v.at DESC, v.revision DESC LIMIT 1) AS verdict
-    FROM factory.artifacts a WHERE a.issue_id = ${issue} AND a.kind <> 'decision' ORDER BY a.created_at, a.id`
+    FROM factory.artifacts a
+    WHERE (a.issue_id = ${issue} OR EXISTS (
+        SELECT 1 FROM factory.artifact_links l WHERE l.artifact_id = a.id AND l.issue_id = ${issue}))
+      AND a.kind <> 'decision' ORDER BY a.created_at, a.id`
   return rows.map((r) => ({
     id: r.id,
     kind: r.kind,
@@ -98,6 +102,7 @@ export async function loadArtifacts(sql: SQL, issue: string): Promise<ReadArtifa
     revisions: Number(r.revisions),
     verdict: r.verdict,
     at: r.created_at.toISOString(),
+    linked: r.linked,
   }))
 }
 

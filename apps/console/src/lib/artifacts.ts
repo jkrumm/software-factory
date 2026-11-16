@@ -10,25 +10,33 @@ export interface ArtifactFilters {
   project?: string
 }
 
-/** An artifact with the Issue it hangs on, as far as the Issue cards know it. */
+/** An artifact with the Issue it hangs on, as far as the Issue cards know it; a standalone one has its own repo. */
 export interface ArtifactRow {
   artifact: Artifact
-  /** the Issue's number, as the Issue page's address wants it */
-  issue: string
+  /** the owning Issue's number, as the Issue page's address wants it; null for a standalone artifact */
+  issue: string | null
   issueTitle: string | null
   project: string | null
+  /** the numbers of the Issues it is linked to */
+  linked: string[]
 }
 
 const issueNumber = (ref: string): string => ref.replace(/^issue_/, '')
 
-/** Newest first, each with its Issue's title and project; an Issue the cards do not hold leaves both null. */
+/** Newest first, each with its Issue's title and project; an Issue the cards do not hold leaves both null (a standalone artifact's project is its repo). */
 export function rowsOf(artifacts: readonly Artifact[], cards: readonly ReadIssueCard[]): ArtifactRow[] {
   const byNumber = new Map(cards.map((card) => [String(card.id), card]))
   return artifacts
     .map((artifact): ArtifactRow => {
-      const issue = issueNumber(artifact.issueId)
-      const card = byNumber.get(issue)
-      return { artifact, issue, issueTitle: card?.title ?? null, project: card?.repoName ?? null }
+      const issue = artifact.issueId ? issueNumber(artifact.issueId) : null
+      const card = issue ? byNumber.get(issue) : undefined
+      return {
+        artifact,
+        issue,
+        issueTitle: card?.title ?? null,
+        project: card?.repoName ?? artifact.repo,
+        linked: artifact.links.map(issueNumber),
+      }
     })
     .sort((a, b) => Date.parse(b.artifact.createdAt) - Date.parse(a.artifact.createdAt))
 }
