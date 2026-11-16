@@ -26,6 +26,9 @@ export interface ArtifactRow {
   closed: boolean
 }
 
+/** The card's name for a project: the last segment of an Issue's repo, which is a whole path for a second directory of a name. */
+const basename = (repo: string | null): string | null => repo?.split('/').filter(Boolean).pop() ?? null
+
 const issueNumber = (ref: string): string => ref.replace(/^issue_/, '')
 
 /** Newest first, each with its Issue's title and project; an Issue the cards do not hold leaves both null (a standalone artifact's project is its repo). */
@@ -39,9 +42,9 @@ export function rowsOf(artifacts: readonly Artifact[], cards: readonly ReadIssue
         artifact,
         issue,
         issueTitle: card?.title ?? null,
-        project: card?.repoName ?? artifact.repo,
+        project: card?.repoName ?? artifact.repo ?? basename(artifact.issueRepo),
         linked: artifact.links.map(issueNumber),
-        closed: card?.state === 'closed',
+        closed: artifact.issueClosed ?? card?.state === 'closed',
       }
     })
     .sort((a, b) => Date.parse(b.artifact.createdAt) - Date.parse(a.artifact.createdAt))

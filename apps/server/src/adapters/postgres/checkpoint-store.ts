@@ -100,6 +100,8 @@ const ArtifactRow = z.object({
   created_at: z.date(),
   retired_at: z.date().nullable(),
   collection_id: z.string().nullable(),
+  issue_closed: z.boolean().nullable().optional(),
+  issue_repo: z.string().nullable().optional(),
 })
 
 const CollectionRow = z.object({
@@ -253,6 +255,8 @@ const artifactOf = (raw: unknown): ArtifactRecord => {
     createdAt: row.created_at,
     retiredAt: row.retired_at,
     collectionId: row.collection_id as CollectionId | null,
+    issueClosed: row.issue_closed ?? null,
+    issueRepo: row.issue_repo ?? null,
   }
 }
 
@@ -596,7 +600,10 @@ export function postgresCheckpointStore(tx: SQL): CheckpointStore {
 
     async artifacts(filter) {
       const rows: unknown[] = await tx`
-        SELECT * FROM factory.artifacts
+        SELECT artifacts.*,
+          (SELECT i.state = 'closed' FROM factory.issues i WHERE i.id = artifacts.issue_id) AS issue_closed,
+          (SELECT i.repo FROM factory.issues i WHERE i.id = artifacts.issue_id) AS issue_repo
+        FROM factory.artifacts
         WHERE (${filter.issueId ?? null}::text IS NULL OR issue_id = ${filter.issueId ?? null}
             OR EXISTS (SELECT 1 FROM factory.artifact_links l
               WHERE l.artifact_id = artifacts.id AND l.issue_id = ${filter.issueId ?? null}))
