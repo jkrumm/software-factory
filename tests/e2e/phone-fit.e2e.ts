@@ -115,6 +115,7 @@ for (const path of [
   '/throughput?hours=168',
   '/needs-you',
   '/flow',
+  '/flow?state=working',
   '/artifacts',
   '/projects',
   '/projects/argo',

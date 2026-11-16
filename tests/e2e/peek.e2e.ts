@@ -18,7 +18,9 @@ interface Flow {
 
 const numberOf = (id: string) => id.replace('issue_', '')
 const panel = (page: Page) => page.getByRole('dialog').and(page.locator('[data-peek-panel]'))
-const column = (page: Page, label: string) => page.getByRole('region', { name: new RegExp(`^${label}`) })
+/** The Flow page's list of Issues (collapsed until a filter is set), and one row of it. */
+const list = (page: Page) => page.getByTestId('flow-list')
+const row = (page: Page, title: string) => list(page).getByRole('row').filter({ hasText: title })
 
 async function firstWorking(apiUrl: string): Promise<Item> {
   const flow = await api<Flow>(apiUrl, '/v1/flow')
@@ -27,16 +29,16 @@ async function firstWorking(apiUrl: string): Promise<Item> {
   return item
 }
 
-test('from Flow, a card opens the Issue in the peek and Escape leaves the board where it was', async ({
+test('from Flow, a row opens the Issue in the peek and Escape leaves the list where it was', async ({
   page,
   apiUrl,
 }) => {
   const working = await firstWorking(apiUrl)
-  await page.goto(`/flow?project=${working.repo}`)
-  const card = column(page, 'Working').getByRole('listitem').filter({ hasText: working.title })
+  await page.goto(`/flow?project=${working.repo}&state=working`)
+  const card = row(page, working.title)
   await expect(card).toBeVisible()
-  // a mark on the live board: the page underneath must never be remounted, or its scroll and filters would be lost
-  await column(page, 'Working').evaluate((el) => el.setAttribute('data-kept', 'yes'))
+  // a mark on the live list: the page underneath must never be remounted, or its scroll and filters would be lost
+  await list(page).evaluate((el) => el.setAttribute('data-kept', 'yes'))
   const before = page.url()
   await card.getByRole('link', { name: working.title }).click()
 
@@ -44,15 +46,15 @@ test('from Flow, a card opens the Issue in the peek and Escape leaves the board 
   await expect(panel(page).getByRole('heading', { level: 1, name: working.title })).toBeVisible()
   expect(new URL(page.url()).searchParams.get('peek')).toBe(`issues/${numberOf(working.id)}`)
   expect(new URL(page.url()).searchParams.get('project')).toBe(working.repo)
-  // the card that is open is marked on the board
-  await expect(card.locator('article')).toHaveAttribute('aria-current', 'true')
-  // the board is still there underneath
-  await expect(column(page, 'Working')).toBeVisible()
+  // the row that is open is marked
+  await expect(card).toHaveAttribute('aria-current', 'true')
+  // the list is still there underneath
+  await expect(list(page)).toBeVisible()
 
   await page.keyboard.press('Escape')
   await expect(panel(page)).toBeHidden()
   expect(page.url()).toBe(before)
-  await expect(column(page, 'Working')).toHaveAttribute('data-kept', 'yes')
+  await expect(list(page)).toHaveAttribute('data-kept', 'yes')
   await expect(card).toBeVisible()
   // focus is back on the link that opened it
   await expect(card.getByRole('link', { name: working.title })).toBeFocused()
@@ -60,8 +62,8 @@ test('from Flow, a card opens the Issue in the peek and Escape leaves the board 
 
 test('the peek address reloads into the same state, and back closes it', async ({ page, apiUrl }) => {
   const working = await firstWorking(apiUrl)
-  await page.goto('/flow')
-  await column(page, 'Working').getByRole('listitem').getByRole('link', { name: working.title, exact: true }).click()
+  await page.goto('/flow?state=working')
+  await row(page, working.title).getByRole('link', { name: working.title, exact: true }).click()
   await expect(panel(page)).toBeVisible()
   const opened = page.url()
 
@@ -80,23 +82,25 @@ test('the peek address reloads into the same state, and back closes it', async (
 
   await page.goBack()
   await expect(panel(page)).toBeHidden()
-  await expect(page).toHaveURL(/\/flow$/)
+  await expect(page).toHaveURL(/\/flow\?state=working$/)
   await page.goForward()
   await expect(panel(page)).toBeVisible()
 })
 
 test('another card swaps what the peek shows in one history step; Escape closes it all', async ({ page, apiUrl }) => {
   const flow = await api<Flow>(apiUrl, '/v1/flow')
-  const [a, b] = Object.values(flow.states).flatMap((s) => s.issues)
-  if (!a || !b) throw new Error('the seed has fewer than two open Issues')
-  await page.goto('/flow')
+  const open = Object.values(flow.states).flatMap((s) => s.issues)
+  const a = open[0]
+  const b = open.find((issue) => issue.id !== a?.id && issue.repo === a?.repo)
+  if (!a || !b) throw new Error('the seed has fewer than two open Issues of one project')
+  await page.goto(`/flow?project=${a.repo}`)
   await page.getByRole('link', { name: a.title, exact: true }).first().click()
   await expect(panel(page).getByRole('heading', { level: 1, name: a.title })).toBeVisible()
   await page.getByRole('link', { name: b.title, exact: true }).first().click()
   await expect(panel(page).getByRole('heading', { level: 1, name: b.title })).toBeVisible()
   await page.keyboard.press('Escape')
   await expect(panel(page)).toBeHidden()
-  await expect(page).toHaveURL(/\/flow$/)
+  await expect(page).toHaveURL(new RegExp(`/flow\\?project=${a.repo}$`))
   // one step back leaves the Flow page, not an older peek
   await page.goBack()
   await expect(page).not.toHaveURL(/\/flow/)
@@ -104,8 +108,8 @@ test('another card swaps what the peek shows in one history step; Escape closes 
 
 test('a modifier click and "Open full page" go to the page', async ({ page, apiUrl, context }) => {
   const working = await firstWorking(apiUrl)
-  await page.goto('/flow')
-  const link = column(page, 'Working').getByRole('link', { name: working.title, exact: true })
+  await page.goto('/flow?state=working')
+  const link = row(page, working.title).getByRole('link', { name: working.title, exact: true })
   const [tab] = await Promise.all([context.waitForEvent('page'), link.click({ modifiers: ['ControlOrMeta'] })])
   expect(new URL(tab.url()).pathname).toBe(`/issues/${numberOf(working.id)}`)
   await tab.close()

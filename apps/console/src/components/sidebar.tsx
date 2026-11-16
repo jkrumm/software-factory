@@ -6,7 +6,7 @@ import { createPortal } from 'react-dom'
 import { InfoHint, type InfoWord } from '@/components/kit'
 import { Logo } from '@/components/logo'
 import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip'
-import { boardOf, countsOf, type OpenSplit, openCount } from '@/lib/flow'
+import { cardsOf, countsOf, type OpenSplit, openCount } from '@/lib/flow'
 import { NAV, type NavItem } from '@/lib/nav'
 import { useFlow } from '@/lib/queries'
 import { cn } from '@/lib/utils'
@@ -298,7 +298,7 @@ function NavEntry({
 export function Sidebar({ needs }: { needs: number | null }) {
   const { setSlot, collapsed, toggle } = useSidebar()
   const { data } = useFlow()
-  const open = data ? openCount(countsOf(boardOf(data))) : null
+  const open = data ? openCount(countsOf(cardsOf(data))) : null
   const label = collapsed ? 'Expand sidebar' : 'Collapse sidebar'
   return (
     <aside

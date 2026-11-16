@@ -204,15 +204,20 @@ export const FlowModel = z
   .meta({ id: 'FlowModel' })
 export type FlowModel = z.infer<typeof FlowModel>
 
-/** The windows and buckets of the flow trend: 24 hours by the hour, 7 days by the hour or the day, 30 days by the day. */
+/** The windows and buckets of the flow trend: 24 hours by the hour, 7 days by the hour, 30 days by the day. */
 export const FLOW_TREND_RANGES = [
   { window: '24h', bucket: 'hour' },
   { window: '7d', bucket: 'hour' },
-  { window: '7d', bucket: 'day' },
   { window: '30d', bucket: 'day' },
 ] as const
 export const FLOW_TREND_WINDOWS = ['24h', '7d', '30d'] as const
 export const FLOW_TREND_BUCKETS = ['hour', 'day'] as const
+/** The default window of the trend: 7 days. */
+export const FLOW_TREND_DEFAULT_WINDOW = '7d' as const
+
+/** The one bucket a window is plotted by: 30 days by the day, anything shorter by the hour. */
+export const flowTrendBucketOf = (window: (typeof FLOW_TREND_WINDOWS)[number]): (typeof FLOW_TREND_BUCKETS)[number] =>
+  window === '30d' ? 'day' : 'hour'
 
 /** What one count did inside one bucket: the most Issues at any instant, and the time-weighted mean. */
 export const FlowTrendPoint = z
@@ -242,17 +247,17 @@ export const FlowTrendSeries = z
   .meta({ id: 'FlowTrendSeries' })
 export type FlowTrendSeries = z.infer<typeof FlowTrendSeries>
 
-/** `?window=24h|7d|30d&bucket=hour|day`: both optional (default 7 days by the day); 30 days by the hour is refused. */
+/** `?window=24h|7d|30d&bucket=hour|day`: both optional (default 7 days by the hour); a bucket other than the window's own (30 days by the hour, 7 days by the day) is refused. */
 export const FlowTrendQuery = z
   .object({ window: z.enum(FLOW_TREND_WINDOWS).optional(), bucket: z.enum(FLOW_TREND_BUCKETS).optional() })
   .refine(
     (query) =>
       FLOW_TREND_RANGES.some(
         (range) =>
-          range.window === (query.window ?? '7d') &&
-          range.bucket === (query.bucket ?? (query.window === '24h' ? 'hour' : 'day')),
+          range.window === (query.window ?? FLOW_TREND_DEFAULT_WINDOW) &&
+          range.bucket === (query.bucket ?? flowTrendBucketOf(query.window ?? FLOW_TREND_DEFAULT_WINDOW)),
       ),
-    'window and bucket: 24h by hour, 7d by hour or day, 30d by day',
+    'window and bucket: 24h by hour, 7d by hour, 30d by day',
   )
 export type FlowTrendQuery = z.infer<typeof FlowTrendQuery>
 

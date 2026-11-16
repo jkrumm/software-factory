@@ -121,7 +121,7 @@ test('a kind with nothing waiting says so and links back', async ({ page, apiUrl
   await expect(page).not.toHaveURL(/kind=/)
 })
 
-test('Flow: projects and origins toggle the URL and the board, All clears', async ({ page, apiUrl }) => {
+test('Flow: projects and origins toggle the URL and the list, All clears', async ({ page, apiUrl }) => {
   const flow = await api<Flow>(apiUrl, '/v1/flow')
   const all = [...STATES.flatMap((s) => flow.states[s].issues), ...flow.closedRecently]
   const repo = all[0]?.repo
@@ -145,8 +145,9 @@ test('Flow: projects and origins toggle the URL and the board, All clears', asyn
   await link.click()
   await expect(page).toHaveURL(new RegExp(`project=${repo}`))
   await expect(link).toHaveAttribute('aria-pressed', 'true')
-  await expect(page.getByRole('region', { name: /^Queued/ }).getByRole('heading', { level: 2 })).toHaveText(
-    `Queued ${inRepo('queued')}`,
+  // the list under the charts opens on that project's Issues: the open ones and what closed lately
+  await expect(page.getByTestId('flow-list').getByTestId('flow-row')).toHaveCount(
+    all.filter((i) => i.repo === repo).length,
   )
 
   const origin = all.find((i) => i.repo === repo)?.origin
@@ -166,22 +167,22 @@ test('Flow: projects and origins toggle the URL and the board, All clears', asyn
   await expect(page.locator('main select').first()).toBeHidden()
 })
 
-test('Flow: ?state shows one column full width with a link back to all', async ({ page, apiUrl }) => {
+test('Flow: ?state lists the Issues of that count with a link back to all', async ({ page, apiUrl }) => {
   const flow = await api<Flow>(apiUrl, '/v1/flow')
+  const list = page.getByTestId('flow-list')
   await page.goto('/flow?state=waiting')
-  const region = page.getByRole('region', { name: /^Waiting/ })
-  await expect(region.getByRole('heading', { level: 2 })).toHaveText(`Waiting ${flow.states.waiting.count}`)
+  await expect(list.getByRole('heading', { level: 2 })).toHaveText(`Waiting ${flow.states.waiting.count}`)
+  await expect(list.getByTestId('flow-row')).toHaveCount(flow.states.waiting.count)
   await expect(page.getByRole('region')).toHaveCount(1)
-  await expect(region.getByRole('listitem')).toHaveCount(flow.states.waiting.count)
-  await expect(page.getByRole('region', { name: /^Working/ })).toHaveCount(0)
 
+  // an unknown state is dropped: the list stays collapsed
   await page.goto('/flow?state=nope')
-  await expect(page.getByRole('region')).toHaveCount(6)
+  await expect(list).toHaveAttribute('data-collapsed', 'true')
 
   await page.goto('/flow?state=waiting&project=argo')
   await page.getByRole('link', { name: 'Show all states' }).click()
   await expect(page).toHaveURL(/\/flow\?project=argo$/)
-  await expect(page.getByRole('region')).toHaveCount(6)
+  await expect(list.getByRole('heading', { level: 2 })).toHaveText(/^Issues \d+$/)
 })
 
 test('Needs you: a kind in the sidebar shows only that kind, a second click shows all', async ({ page, apiUrl }) => {
@@ -249,11 +250,11 @@ test('the section leaves with the page', async ({ page }) => {
 test.describe('phone', () => {
   test.use({ viewport: { width: 390, height: 844 } })
 
-  test('there is no sidebar; the board keeps its own selects and the state picks the tab', async ({ page }) => {
+  test('there is no sidebar; the page keeps its own selects and the state opens the list', async ({ page }) => {
     await page.goto('/flow')
     await expect(aside(page)).toBeHidden()
     await expect(page.locator('main select').first()).toBeVisible()
     await page.goto('/flow?state=waiting')
-    await expect(page.getByRole('tab', { name: /^Waiting/ })).toHaveAttribute('aria-selected', 'true')
+    await expect(page.getByTestId('flow-list').getByRole('heading', { level: 2 })).toHaveText(/^Waiting \d+$/)
   })
 })

@@ -1,13 +1,13 @@
 import { expect, test } from 'bun:test'
 import type { FlowModel } from '@software-factory/contract'
 import {
-  boardColumns,
-  boardNote,
-  boardOf,
-  columnKeyOf,
-  columnWeight,
+  cardsOf,
   countsOf,
-  defaultTab,
+  defaultSort,
+  DEFAULT_TREND_RANGE,
+  flowNote,
+  listOf,
+  listStateOf,
   type Origin,
   openCount,
   openSplits,
@@ -20,8 +20,11 @@ import {
   numberOf,
   shortDate,
   statsOf,
+  singleProject,
+  sortedCards,
+  startSort,
+  TREND_RANGES,
   xLabelsOf,
-  visibleColumns,
 } from '../src/lib/flow.ts'
 
 const SINCE = '2026-11-08T10:00:00.000Z'
@@ -92,19 +95,19 @@ test('origins are words', () => {
 })
 
 test('the reason line: wait reason, queue message only when present; a closed card carries the outcome as its state', () => {
-  const board = boardOf(data)
-  expect(board.waiting[0]?.reason).toBe('decision')
-  expect(board.queued[0]?.reason).toBe('waits for another change')
-  expect(board.queued[1]?.reason).toBeNull()
-  expect(board.settling[0]?.reason).toBeNull()
-  expect(board.closed[0]).toMatchObject({ reason: null, state: 'healed', since: SINCE })
+  const cards = cardsOf(data)
+  expect(cards.waiting[0]?.reason).toBe('decision')
+  expect(cards.queued[0]?.reason).toBe('waits for another change')
+  expect(cards.queued[1]?.reason).toBeNull()
+  expect(cards.settling[0]?.reason).toBeNull()
+  expect(cards.closed[0]).toMatchObject({ reason: null, state: 'healed', since: SINCE })
 })
 
-test('filters narrow every column; an unknown value gives empty columns', () => {
-  expect(countsOf(boardOf(data, { project: 'chat' }))).toMatchObject({ settling: 0, queued: 1, waiting: 1, closed: 0 })
-  expect(countsOf(boardOf(data, { origin: 'you' }))).toMatchObject({ queued: 2, waiting: 0, closed: 0 })
-  expect(countsOf(boardOf(data, { project: 'chat', origin: 'you' }))).toMatchObject({ queued: 1, waiting: 0 })
-  const none = countsOf(boardOf(data, { project: 'nope' }))
+test('filters narrow every state; an unknown value gives none', () => {
+  expect(countsOf(cardsOf(data, { project: 'chat' }))).toMatchObject({ settling: 0, queued: 1, waiting: 1, closed: 0 })
+  expect(countsOf(cardsOf(data, { origin: 'you' }))).toMatchObject({ queued: 2, waiting: 0, closed: 0 })
+  expect(countsOf(cardsOf(data, { project: 'chat', origin: 'you' }))).toMatchObject({ queued: 1, waiting: 0 })
+  const none = countsOf(cardsOf(data, { project: 'nope' }))
   expect(Object.values(none).every((n) => n === 0)).toBe(true)
 })
 
@@ -113,31 +116,60 @@ test('options come from the data, sorted', () => {
   expect(originsOf(data)).toEqual(['you', 'github', 'feedback', 'factory'])
 })
 
-test('the default tab is Working, else the first column with cards', () => {
-  expect(defaultTab(countsOf(boardOf(data)))).toBe('settling')
-  const working = {
-    ...data,
-    states: { ...data.states, working: { count: 1, issues: [issue('issue_9', 'argo', 'you')] } },
-  }
-  expect(defaultTab(countsOf(boardOf(working)))).toBe('working')
-  expect(defaultTab(countsOf(boardOf(data, { project: 'nope' })))).toBe('working')
-})
-
 test('the note counts open and closed', () => {
-  expect(boardNote(countsOf(boardOf(data)))).toBe('4 open, 1 closed in the last day')
+  expect(flowNote(countsOf(cardsOf(data)))).toBe('4 open, 1 closed in the last day')
 })
 
-test('a state value names a column or is dropped', () => {
-  expect(columnKeyOf('working')).toBe('working')
-  expect(columnKeyOf('closed')).toBe('closed')
-  expect(columnKeyOf('nope')).toBeUndefined()
-  expect(columnKeyOf(undefined)).toBeUndefined()
+test('a state value names a list or is dropped', () => {
+  expect(listStateOf('working')).toBe('working')
+  expect(listStateOf('closed')).toBe('closed')
+  expect(listStateOf('watching')).toBeUndefined()
+  expect(listStateOf('nope')).toBeUndefined()
+  expect(listStateOf(undefined)).toBeUndefined()
 })
 
-test('a state shows one column and leaves the rows alone', () => {
-  expect(visibleColumns('waiting')).toEqual(['waiting'])
-  expect(visibleColumns()).toHaveLength(6)
-  expect(countsOf(boardOf(data, { state: 'waiting' }))).toEqual(countsOf(boardOf(data)))
+test('a state leaves the cards alone and picks what the list shows: a count takes its states in', () => {
+  expect(countsOf(cardsOf(data, { state: 'waiting' }))).toEqual(countsOf(cardsOf(data)))
+  const cards = cardsOf(data)
+  expect(listOf(cards, 'waiting').map((c) => c.number)).toEqual([4])
+  // queued takes settling in: the number the strip shows
+  expect(listOf(cards, 'queued').map((c) => c.number)).toEqual([1, 2, 3])
+  expect(listOf(cards, 'working')).toEqual([])
+  expect(listOf(cards, 'closed').map((c) => c.number)).toEqual([5])
+  // no state: every open Issue, then what closed lately
+  expect(listOf(cards).map((c) => c.number)).toEqual([1, 2, 3, 4, 5])
+})
+
+test('the list sorts by the pressed column and keeps the order of ties', () => {
+  const cards = listOf(cardsOf(data))
+  expect(sortedCards(cards, startSort('number')).map((c) => c.number)).toEqual([5, 4, 3, 2, 1])
+  expect(sortedCards(cards, { key: 'project', direction: 'asc' }).map((c) => c.repo)).toEqual([
+    'argo',
+    'argo',
+    'chat',
+    'chat',
+    'harbor',
+  ])
+  // every card has the same `since`: a sort by it leaves the order alone, either way
+  expect(sortedCards(cards, { key: 'since', direction: 'desc' }).map((c) => c.number)).toEqual([1, 2, 3, 4, 5])
+  expect(sortedCards(cards, { key: 'title', direction: 'desc' }).map((c) => c.number)).toEqual([4, 3, 2, 1, 5])
+  expect(defaultSort('working')).toEqual({ key: 'since', direction: 'asc' })
+  expect(defaultSort('closed')).toEqual({ key: 'since', direction: 'desc' })
+})
+
+test('the list belongs to one project only when its rows do', () => {
+  expect(singleProject(listOf(cardsOf(data, { project: 'chat' })))).toBe('chat')
+  expect(singleProject(listOf(cardsOf(data)))).toBeNull()
+  expect(singleProject([])).toBeNull()
+})
+
+test('the trend control: 24 hours and 7 days by the hour, 30 days by the day, opening on 7 days', () => {
+  expect(TREND_RANGES.map((r) => [r.label, r.window, r.bucket])).toEqual([
+    ['24 h', '24h', 'hour'],
+    ['7 d', '7d', 'hour'],
+    ['30 d', '30d', 'day'],
+  ])
+  expect(DEFAULT_TREND_RANGE.key).toBe('7d')
 })
 
 test('the sidebar counts open Issues as working, waiting and queued, never a closed one', () => {
@@ -179,12 +211,12 @@ test('working includes watching, queued includes settling: the sidebar, the stri
   ]).toEqual([3, 1, 3])
 })
 
-test('a card has its number, kind and state (the column, or the outcome when closed)', () => {
-  const board = boardOf(data)
+test('a card has its number, kind and state (the state, or the outcome when closed)', () => {
+  const cards = cardsOf(data)
   expect(numberOf('issue_12')).toBe(12)
-  expect(board.waiting[0]).toMatchObject({ number: 4, kind: 'feature', state: 'waiting' })
-  expect(board.queued[1]).toMatchObject({ number: 3, state: 'queued' })
-  expect(board.closed[0]).toMatchObject({ number: 5, kind: 'incident', state: 'healed' })
+  expect(cards.waiting[0]).toMatchObject({ number: 4, kind: 'feature', state: 'waiting' })
+  expect(cards.queued[1]).toMatchObject({ number: 3, state: 'queued' })
+  expect(cards.closed[0]).toMatchObject({ number: 5, kind: 'incident', state: 'healed' })
 })
 
 test('x labels: the first day, the middle one and Now', () => {
@@ -245,23 +277,9 @@ test('the stat row: live counts, trend deltas, subs, footers and the 7-day sums'
 })
 
 test('the sidebar count and the Flow note share one open count, which is not the working count', () => {
-  const counts = countsOf(boardOf(data))
+  const counts = countsOf(cardsOf(data))
   const sidebar = openCount(counts)
   expect(sidebar).toBe(4)
-  expect(boardNote(counts)).toBe(`${sidebar} open, 1 closed in the last day`)
+  expect(flowNote(counts)).toBe(`${sidebar} open, 1 closed in the last day`)
   expect(sidebar).not.toBe(counts.working)
-})
-
-test('columnWeight: empty columns are narrow, crowded ones wide, Closed recently the widest', () => {
-  expect(columnWeight('working', 0)).toBeLessThan(columnWeight('working', 1))
-  expect(columnWeight('waiting', 1)).toBeLessThan(columnWeight('waiting', 10))
-  expect(columnWeight('closed', 112)).toBeGreaterThan(columnWeight('waiting', 112))
-  expect(columnWeight('closed', 0)).toBe(columnWeight('working', 0))
-})
-
-test('boardColumns: one track per shown column, an empty one with the smaller minimum', () => {
-  const counts = { settling: 0, queued: 0, working: 1, waiting: 1, watching: 0, closed: 112 }
-  expect(boardColumns(['working', 'watching', 'closed'], counts)).toBe(
-    'minmax(15rem, 1fr) minmax(11rem, 0.6fr) minmax(15rem, 2fr)',
-  )
 })

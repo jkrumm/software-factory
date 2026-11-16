@@ -12,33 +12,23 @@ import type { IssueKind } from '@/components/kit/kind-badge'
 import type { LozengeState } from '@/components/kit/lozenge'
 import { ageWords } from '@/lib/age'
 
-export type ColumnKey = FlowState | 'closed'
-export const COLUMN_KEYS: readonly ColumnKey[] = [...FLOW_STATES, 'closed']
+/** An Issue's state, or `closed` for one that is done, dropped, healed or cancelled lately: the key of `cardsOf`. */
+export type StateKey = FlowState | 'closed'
+export const STATE_KEYS: readonly StateKey[] = [...FLOW_STATES, 'closed']
 
-export const COLUMN_LABEL: Record<ColumnKey, string> = {
-  settling: 'Settling',
-  queued: 'Queued',
+/** What the list can be opened on: one of the three counts (working takes watching in, queued takes settling in) or what closed lately. */
+export const LIST_STATES = ['working', 'waiting', 'queued', 'closed'] as const
+export type ListState = (typeof LIST_STATES)[number]
+
+export const LIST_LABEL: Record<ListState, string> = {
   working: 'Working',
   waiting: 'Waiting',
-  watching: 'Watching',
+  queued: 'Queued',
   closed: 'Closed recently',
 }
 
-/**
- * The share of the board a column takes, by what it holds: an empty column is narrow (it has a sentence to say, no
- * titles to fit), a crowded one wider, and Closed recently the widest because it only grows.
- */
-export function columnWeight(key: ColumnKey, count: number): number {
-  if (count === 0) return 0.6
-  const crowded = count >= 10
-  if (key === 'closed') return crowded ? 2 : 1.25
-  return crowded ? 1.4 : 1
-}
-
-/** `grid-template-columns` of the board: each column at least as wide as its cards can read, then its weight. */
-export function boardColumns(keys: readonly ColumnKey[], counts: Record<ColumnKey, number>): string {
-  return keys.map((key) => `minmax(${counts[key] === 0 ? 11 : 15}rem, ${columnWeight(key, counts[key])}fr)`).join(' ')
-}
+/** A `state` search value that names a list, or undefined. */
+export const listStateOf = (value: unknown): ListState | undefined => LIST_STATES.find((key) => key === value)
 
 /** An Issue's origin as the word the owner reads. */
 export const ORIGIN_LABEL = {
@@ -56,7 +46,7 @@ export const OUTCOME_LABEL = { done: 'Done', dropped: 'Dropped', healed: 'Healed
 
 export const originWord = (origin: string): string => ORIGIN_LABEL[origin as Origin] ?? origin
 
-/** One card of the board: the same shape for an open and a closed Issue. `since` is when it entered its state (closed: when it closed). */
+/** One Issue as the list and the project page show it: the same shape for an open and a closed Issue. `since` is when it entered its state (closed: when it closed). */
 export interface FlowCard {
   key: string
   /** the Issue's number, the address of its page (`/issues/<number>`) */
@@ -65,7 +55,7 @@ export interface FlowCard {
   repo: string
   origin: string
   kind: IssueKind
-  /** the column's state, or a closed Issue's outcome */
+  /** the Issue's state, or a closed Issue's outcome */
   state: LozengeState
   /** the queue or wait reason, or the outcome of a closed one; null: no line */
   reason: string | null
@@ -75,15 +65,9 @@ export interface FlowCard {
 export interface FlowFilters {
   project?: string
   origin?: string
-  /** Chooses which column shows (`/flow?state=working`); it never filters rows, so `boardOf` ignores it. */
-  state?: ColumnKey
+  /** Chooses which Issues the list shows (`/flow?state=working`); it never filters the cards of `cardsOf`. */
+  state?: ListState
 }
-
-/** A `state` search value that names a column, or undefined. */
-export const columnKeyOf = (value: unknown): ColumnKey | undefined => COLUMN_KEYS.find((key) => key === value)
-
-/** The columns to show: only the chosen one with a `state`, else all of them. */
-export const visibleColumns = (state?: ColumnKey): readonly ColumnKey[] => (state ? [state] : COLUMN_KEYS)
 
 /** What a project or origin has open, split by the one definition of the three counts (`FLOW_COUNT_STATES`): Issues, never sessions. */
 export type OpenSplit = Record<FlowCount, number>
@@ -111,13 +95,13 @@ export const flowCounts = (data: FlowModel): Record<FlowCount, number> =>
     Object.fromEntries(FLOW_STATES.map((state) => [state, data.states[state].count])) as Record<FlowState, number>,
   )
 
-export type Board = Record<ColumnKey, FlowCard[]>
+export type Cards = Record<StateKey, FlowCard[]>
 
 const keep = (filters: FlowFilters, card: { repo: string; origin: string }): boolean =>
   (!filters.project || card.repo === filters.project) && (!filters.origin || card.origin === filters.origin)
 
-/** The cards of every column under the filters, in the order the server sent them. */
-export function boardOf(data: FlowModel, filters: FlowFilters = {}): Board {
+/** The cards of every state under the project and origin filters, in the order the server sent them. */
+export function cardsOf(data: FlowModel, filters: FlowFilters = {}): Cards {
   const open = (state: FlowState): FlowCard[] =>
     data.states[state].issues
       .filter((issue) => keep(filters, issue))
@@ -172,25 +156,70 @@ export function originsOf(data: FlowModel): Origin[] {
   return ORIGIN_ORDER.filter((origin) => present.has(origin))
 }
 
-export const countsOf = (board: Board): Record<ColumnKey, number> =>
-  Object.fromEntries(COLUMN_KEYS.map((key) => [key, board[key].length])) as Record<ColumnKey, number>
+export const countsOf = (cards: Cards): Record<StateKey, number> =>
+  Object.fromEntries(STATE_KEYS.map((key) => [key, cards[key].length])) as Record<StateKey, number>
 
-/** The tab a phone opens on: Working, or the first column with a card. */
-export function defaultTab(counts: Record<ColumnKey, number>): ColumnKey {
-  if (counts.working > 0) return 'working'
-  return COLUMN_KEYS.find((key) => counts[key] > 0) ?? 'working'
-}
-
-/** The Issues in a column other than closed: the one "open" figure of the sidebar and the Flow page's note. */
-export const openCount = (counts: Record<ColumnKey, number>): number =>
+/** The Issues in a state other than closed: the one "open" figure of the sidebar and the Flow page's note. */
+export const openCount = (counts: Record<StateKey, number>): number =>
   FLOW_STATES.reduce((sum, state) => sum + counts[state], 0)
 
 /** "12 open, 3 closed in the last day" */
-export function boardNote(counts: Record<ColumnKey, number>): string {
+export function flowNote(counts: Record<StateKey, number>): string {
   return `${openCount(counts)} open, ${counts.closed} closed in the last day`
 }
 
-/** The count each stat card shows, and the card's address: `/flow?state=<count>` (the column of its main state). */
+/**
+ * The Issues the list shows: a count's states together (the number the strip and the stat card show), what closed lately,
+ * or with no `state` every open Issue and then what closed lately. The project and origin filters are already in `cards`.
+ */
+export function listOf(cards: Cards, state?: ListState): FlowCard[] {
+  if (state === 'closed') return cards.closed
+  if (state) return FLOW_COUNT_STATES[state].flatMap((key) => cards[key])
+  return STATE_KEYS.flatMap((key) => cards[key])
+}
+
+export type SortKey = 'number' | 'title' | 'project' | 'origin' | 'state' | 'since'
+export interface Sort {
+  key: SortKey
+  direction: 'asc' | 'desc'
+}
+
+/** What the list opens sorted by: what has been in its state longest first, what closed lately newest first. */
+export const defaultSort = (state?: ListState): Sort => ({
+  key: 'since',
+  direction: state === 'closed' ? 'desc' : 'asc',
+})
+
+/** The order a column of the list starts in when it is pressed: the words ascending, the number and the time newest first. */
+export const startSort = (key: SortKey): Sort => ({ key, direction: key === 'number' ? 'desc' : 'asc' })
+
+const SORT_VALUE: Record<SortKey, (card: FlowCard) => number | string> = {
+  number: (card) => card.number,
+  title: (card) => card.title.toLowerCase(),
+  project: (card) => card.repo,
+  origin: (card) => originWord(card.origin),
+  state: (card) => card.state,
+  since: (card) => Date.parse(card.since),
+}
+
+/** A sorted copy: ties keep the order they came in, so a re-sort never shuffles equal rows. */
+export function sortedCards(cards: readonly FlowCard[], sort: Sort): FlowCard[] {
+  const value = SORT_VALUE[sort.key]
+  const sign = sort.direction === 'asc' ? 1 : -1
+  return [...cards].sort((a, b) => {
+    const x = value(a)
+    const y = value(b)
+    return (typeof x === 'number' && typeof y === 'number' ? x - y : String(x).localeCompare(String(y))) * sign
+  })
+}
+
+/** The project the whole list belongs to when it is one, for the chain link; null when the rows span several. */
+export function singleProject(cards: readonly FlowCard[]): string | null {
+  const repos = new Set(cards.map((card) => card.repo))
+  return repos.size === 1 ? ([...repos][0] ?? null) : null
+}
+
+/** The count each stat card shows, and the card's address: `/flow?state=<count>` (the list of the Issues it counts). */
 export const STAT_STATES = ['working', 'waiting', 'queued'] as const
 
 /** Issues of the states a count takes in (`FLOW_COUNT_STATES`), in the order the server sent them. */
@@ -213,8 +242,8 @@ export interface FlowStat {
   xLabels: [string, string, string]
   sub: string
   footer: [{ label: string; value: string }, { label: string; value: string }]
-  /** the column the card opens on /flow */
-  state: ColumnKey
+  /** the list the card opens on /flow */
+  state: ListState
 }
 
 const sum = (values: readonly number[]): number => values.reduce((total, n) => total + n, 0)
@@ -251,7 +280,7 @@ export function longestWords(since: readonly string[], now: number): string {
 const distinct = (values: readonly string[]): number => new Set(values).size
 const plural = (n: number, word: string): string => `${n} ${word}${n === 1 ? '' : 's'}`
 
-/** The four stat cards above the board: factory-wide, so never from the filtered board. */
+/** The four stat cards: factory-wide, so never from the filtered cards. */
 export function statsOf(data: FlowModel, now: number): FlowStat[] {
   const { trend } = data
   const issues = (count: FlowCount) => issuesOf(data, count)
@@ -368,19 +397,21 @@ export function statsOf(data: FlowModel, now: number): FlowStat[] {
   ]
 }
 
-/** The ranges of the trend chart's control: a window and the bucket it is plotted by. */
+/** The ranges of the trend chart's control: a window and the one bucket it is plotted by (24 hours and 7 days by the hour, 30 days by the day). */
 export const TREND_RANGES = [
-  { key: '24h-hour', window: '24h', bucket: 'hour', label: '24 hours by hour' },
-  { key: '7d-hour', window: '7d', bucket: 'hour', label: '7 days by hour' },
-  { key: '7d-day', window: '7d', bucket: 'day', label: '7 days by day' },
-  { key: '30d-day', window: '30d', bucket: 'day', label: '30 days by day' },
+  { key: '24h', window: '24h', bucket: 'hour', label: '24 h' },
+  { key: '7d', window: '7d', bucket: 'hour', label: '7 d' },
+  { key: '30d', window: '30d', bucket: 'day', label: '30 d' },
 ] as const satisfies readonly {
-  key: string
+  key: FlowTrendSeries['window']
   window: FlowTrendSeries['window']
   bucket: FlowTrendSeries['bucket']
   label: string
 }[]
 export type TrendRange = (typeof TREND_RANGES)[number]
+
+/** What the chart opens on: 7 days by the hour, the server's default as well. */
+export const DEFAULT_TREND_RANGE: TrendRange = TREND_RANGES[1]
 
 /** A bucket's start as the chart words it: an hour in the viewer's zone, a day as its UTC date (the buckets sit on UTC days). */
 export function bucketWords(at: number, bucket: FlowTrendSeries['bucket']): string {

@@ -11,7 +11,7 @@ const COUNTS = [
 ] as const
 
 /**
- * Working, waiting and queued Issues, counted once for the whole console (`flowCounts`): each a link to Flow filtered to that state. The lamp is lit
+ * Working, waiting and queued Issues, counted once for the whole console (`flowCounts`): each a link to Flow's list of the Issues it counts. The lamp is lit
  * on Working only, steady, while a lead runs.
  */
 export function Counts() {
@@ -26,7 +26,7 @@ export function Counts() {
             key={state}
             title={`${count ?? '-'} ${label}. ${LANGUAGE[state]}`}
             to="/flow"
-            // The Flow route takes `state` (working|waiting|queued|...) from the sidebar change; `never` types both before and after it.
+            // The Flow route takes `state` (working|waiting|queued|closed): the list of the Issues this count counts.
             search={{ state } as never}
             className="inline-flex h-7 items-center gap-1.5 rounded-md px-1.5 text-xs whitespace-nowrap text-muted-foreground tabular-nums outline-none transition-colors hover:bg-accent hover:text-foreground focus-visible:ring-3 focus-visible:ring-ring/50"
           >
