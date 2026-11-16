@@ -83,9 +83,9 @@ test('the header shows title, kind, state, project, regressions and the facts', 
   const header = page.locator('main header').first()
   await expect(header.getByText(/^(Being settled|Queued|Working|Waiting|Watching|Done|Closed)/).first()).toBeVisible()
   const project = page.getByRole('link', { name: issue.repoName, exact: true }).first()
-  await expect(project).toHaveAttribute('href', `/flow?project=${issue.repoName}`)
+  await expect(project).toHaveAttribute('href', `/projects/${issue.repoName}`)
   await project.click()
-  await expect(page).toHaveURL(new RegExp(`/flow\\?project=${issue.repoName}$`))
+  await expect(page).toHaveURL(new RegExp(`/projects/${issue.repoName}$`))
   await page.goBack()
 
   const regressions = Math.max(

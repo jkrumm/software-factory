@@ -141,7 +141,7 @@ test('the queue detail lists each reason with its hours, and the lead time split
   await expect(band.getByRole('img')).toHaveAttribute('aria-label', /^Lead time: /)
 })
 
-test('the cost detail: the seven classes with the API figures, tenants and projects, and a project opens Flow', async ({
+test('the cost detail: the seven classes with the API figures, tenants and projects, and a project opens its page', async ({
   page,
   apiUrl,
 }) => {
@@ -165,7 +165,7 @@ test('the cost detail: the seven classes with the API figures, tenants and proje
     model.host.byTenant[0]?.tenant ?? '',
   )
   await table(page, 'Memory by project').getByRole('link', { name: 'argo' }).click()
-  await expect(page).toHaveURL(/\/flow\?project=argo$/)
+  await expect(page).toHaveURL(/\/projects\/argo$/)
 })
 
 test('the scorecard has a row per project the API names, with its slot minutes per closed Issue', async ({
