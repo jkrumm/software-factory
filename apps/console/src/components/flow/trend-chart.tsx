@@ -72,7 +72,8 @@ export function TrendChart() {
             <InfoHint word={count} className="-my-1" />
           </h2>
           <p className="text-xs text-muted-foreground">
-            Issues, never sessions: the most at any instant of a {range.bucket} and the average over it
+            Issues, never sessions: the most at any instant of {range.bucket === 'hour' ? 'an hour' : 'a day'} and the
+            average over it
           </p>
         </div>
         <Segments
