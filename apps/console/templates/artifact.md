@@ -1,10 +1,3 @@
-<!--
-  The Console renders this at 18 px (the reader can make it 16 or 20), about 76 characters wide and centred in the pane.
-  A table takes that width and scrolls sideways inside itself when it is wider: keep it to about five columns. Raw HTML is
-  dropped and an image is shown as its alt text. Submit it with:
-    factory artifact submit <issue> --attempt <n> --kind spec --title "..." --content @artifact.md
--->
-
 # Title of the artifact
 
 > **TLDR.** What is proposed, why, and what you are asked to decide, in three sentences at most.
@@ -44,3 +37,10 @@ What was run and what it showed. For a Report, this is the section to read first
 ## Open questions
 
 - What you could not settle and who can.
+
+<!--
+  The Console renders this at 18 px (the reader can make it 16 or 20), about 76 characters wide and centred in the pane.
+  A table takes that width and scrolls sideways inside itself when it is wider: keep it to about five columns. Raw HTML is
+  dropped and an image is shown as its alt text. Submit it with:
+    factory artifact submit <issue> --attempt <n> --kind spec --title "..." --content @artifact.md
+-->
