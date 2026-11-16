@@ -194,8 +194,8 @@ describe('seatBonus', () => {
 })
 
 describe('the fit counts what young leads are still learned to grow by', () => {
-  const minutes = (n: number) => n * 60_000
-  const third = (ageMinutes: number) =>
+  const seconds = (n: number) => n * 1000
+  const third = (ageSeconds: number) =>
     checkAdmission(
       inputs({
         leadFit: fit({
@@ -204,13 +204,13 @@ describe('the fit counts what young leads are still learned to grow by', () => {
           // room for three by the plain fit: 2 500 MiB free past the headroom, two leads running
           freeMib: 2_500 + 2_621,
           running: 2,
-          growing: leadGrowth([1, 2].map(() => ({ learnedMib: 1_600, heldMib: 200, ageMs: minutes(ageMinutes) }))),
+          growing: leadGrowth([1, 2].map(() => ({ learnedMib: 1_600, heldMib: 200, ageMs: seconds(ageSeconds) }))),
         }),
       }),
     )
 
-  test('two leads admitted five minutes ago holding 200 MiB each: the third is refused with the growth named', () => {
-    expect(third(5)).toMatchObject({
+  test('two leads admitted a minute before the host reading holding 200 MiB each: the third is refused with the growth named', () => {
+    expect(third(60)).toMatchObject({
       admit: false,
       refusal: {
         kind: 'memory',
@@ -220,8 +220,8 @@ describe('the fit counts what young leads are still learned to grow by', () => {
     })
   })
 
-  test('forty minutes later their figure is settled and the third is admitted', () => {
-    expect(third(40).admit).toBe(true)
+  test('five minutes later they are in the reading and the third is admitted', () => {
+    expect(third(300).admit).toBe(true)
   })
 
   test('one young lead is named in the singular, and none adds nothing to the text', () => {

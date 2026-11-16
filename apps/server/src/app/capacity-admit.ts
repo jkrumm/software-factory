@@ -74,6 +74,8 @@ export interface HostInputs {
   samples: readonly BootSample[]
   /** the memory free by the newest minute sample (not older than five minutes); null: unknown */
   freeMib: number | null
+  /** when that sample was taken: a lead that started after it is not in `freeMib` yet */
+  freeAt: Date | null
   /** per project name: what a lead is learned to take (null with fewer than three attempts since the relearn point), by which rule, and the attempts sampled */
   learned: ReadonlyMap<
     string,
@@ -98,6 +100,7 @@ const NO_HOST: HostInputs = {
   uptimeMs: null,
   samples: [],
   freeMib: null,
+  freeAt: null,
   learned: new Map(),
   relearns: new Map(),
   rssByIssue: new Map(),
@@ -203,6 +206,7 @@ export async function readHost(deps: CapacityDeps): Promise<HostInputs> {
     // Without the samples the grace has nothing to go on, and a booting host admits nothing.
     samples: facts.ok ? facts.value.recent : [],
     freeMib: facts.ok ? freeMibOf(facts.value.latest, ramMib, now) : null,
+    freeAt: facts.ok ? (facts.value.latest?.at ?? null) : null,
     learned: new Map(
       facts.ok
         ? facts.value.peaks.map((p) => {
@@ -374,9 +378,10 @@ function reservedMib(
 }
 
 /**
- * What the running leads are still learned to grow by, host-wide (memory is the host's): a claim younger than the age its
- * figure counts as settled takes its repo's learned size less what its newest sample holds. A lead this pass admitted
- * has no sample and takes the whole figure, so one pass cannot admit several against the same reading.
+ * What the running leads will take that the free reading does not show yet, host-wide (memory is the host's): a claim that
+ * started within `RAMP_MS` of the host sample the free figure comes from, or after it, takes its repo's learned size less
+ * what its newest sample holds. A lead this pass admitted has no sample and takes the whole figure, so one pass cannot
+ * admit several against the same reading.
  */
 function youngGrowth(claims: readonly Claim[], snap: Snapshot, host: HostInputs): LeadGrowth {
   const nameOf = new Map(snap.projects.map((p) => [p.repo, p.name]))
@@ -384,7 +389,7 @@ function youngGrowth(claims: readonly Claim[], snap: Snapshot, host: HostInputs)
     claims.map((claim) => ({
       learnedMib: host.learned.get(nameOf.get(claim.repo) ?? '')?.mib ?? null,
       heldMib: host.rssByIssue.get(issueNumber(claim.issue)) ?? null,
-      ageMs: snap.now.getTime() - claim.takenAt.getTime(),
+      ageMs: (host.freeAt ?? snap.now).getTime() - claim.takenAt.getTime(),
     })),
   )
 }

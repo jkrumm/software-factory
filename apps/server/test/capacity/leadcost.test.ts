@@ -4,6 +4,7 @@ import {
   leadGrowth,
   learnedLeadMib,
   learnLeadCost,
+  RAMP_MS,
   type AttemptPeak,
   type ProcInfo,
   type WorktreeRef,
@@ -179,16 +180,18 @@ test('learnLeadCost: fewer than three attempts learn nothing', () => {
   expect(learnLeadCost([])).toBeNull()
 })
 
-test('leadGrowth: a young lead takes its learned size less what it holds, a settled or unlearned one nothing', () => {
-  const minutes = (n: number) => n * 60_000
+test('leadGrowth: a lead the reading does not show takes its learned size less what it holds, a lead in it or an unlearned one nothing', () => {
+  const seconds = (n: number) => n * 1000
   expect(
     leadGrowth([
-      { learnedMib: 1600, heldMib: 200, ageMs: minutes(5) },
+      { learnedMib: 1600, heldMib: 200, ageMs: seconds(90) },
       { learnedMib: 1600, heldMib: null, ageMs: 0 },
-      { learnedMib: 1600, heldMib: 2400, ageMs: minutes(5) },
-      { learnedMib: 1600, heldMib: 200, ageMs: minutes(30) },
-      { learnedMib: null, heldMib: 200, ageMs: minutes(5) },
+      { learnedMib: 1600, heldMib: null, ageMs: -seconds(40) },
+      { learnedMib: 1600, heldMib: 2400, ageMs: seconds(30) },
+      { learnedMib: 1600, heldMib: 200, ageMs: RAMP_MS },
+      { learnedMib: 1600, heldMib: 200, ageMs: seconds(300) },
+      { learnedMib: null, heldMib: 200, ageMs: seconds(30) },
     ]),
-  ).toEqual({ leads: 2, mib: 1400 + 1600 })
+  ).toEqual({ leads: 3, mib: 1400 + 1600 + 1600 })
   expect(leadGrowth([])).toEqual({ leads: 0, mib: 0 })
 })
