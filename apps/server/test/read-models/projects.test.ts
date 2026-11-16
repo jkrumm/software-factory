@@ -3,8 +3,9 @@ import { ProjectHygieneModel, ProjectIndexModel, ProjectPageModel } from '@softw
 import { startTestCluster, type TestCluster } from '@software-factory/tests/pg'
 import { loadMigrations, migrate } from '../../src/adapters/postgres/migrate.ts'
 import { createApp } from '../../src/api/app.ts'
+import { JUDGMENT_PREFIX } from '../../src/domains/loops/hygiene.ts'
 import { PROBES } from '../../src/domains/loops/hygiene-model.ts'
-import { BUILT_IN_PROBES } from '../../src/read/project-page.ts'
+import { BUILT_IN_PROBES, DOCUMENT_PREFIX } from '../../src/read/project-page.ts'
 
 /** `GET /v1/projects`, `/v1/projects/:name` and `/v1/projects/:name/hygiene`: every figure equals the stored facts, and a work project is not found for the read token. */
 const TOKENS = {
@@ -131,8 +132,9 @@ beforeAll(async () => {
 })
 afterAll(() => db.stop())
 
-test('the built-in probes are the hygiene loop probes less the declared one', () => {
+test("the built-in probes and the judgment key prefix are the hygiene loop's", () => {
   expect([...BUILT_IN_PROBES]).toEqual(PROBES.filter((probe) => probe !== 'probe'))
+  expect(DOCUMENT_PREFIX).toBe(JUDGMENT_PREFIX)
 })
 
 test('the list counts the Issues and names the newest hygiene pass', async () => {

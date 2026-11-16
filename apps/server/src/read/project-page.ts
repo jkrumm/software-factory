@@ -33,8 +33,8 @@ export const BUILT_IN_PROBES = [
   'context',
 ] as const
 
-/** The key prefix of a finding the document judgment filed (`JUDGMENT_PREFIX` of `domains/loops/hygiene.ts`). */
-const JUDGMENT_PREFIX = 'judgment:'
+/** The key prefix of a finding the document judgment filed (`JUDGMENT_PREFIX` of `domains/loops/hygiene.ts`; a test holds them equal). */
+export const DOCUMENT_PREFIX = 'judgment:'
 
 const DAY_MS = 24 * 3_600_000
 const SHIPPED_ITEMS = 20
@@ -213,7 +213,7 @@ const documentKeys = (pass: Pass): Set<string> =>
   new Set(
     [...pass.filed, ...pass.overBudget, ...pass.failed]
       .map((e) => e.key)
-      .filter((key) => key.startsWith(JUDGMENT_PREFIX)),
+      .filter((key) => key.startsWith(DOCUMENT_PREFIX)),
   )
 
 const findingCount = (pass: Pass): number => pass.report.findings.length + documentKeys(pass).size
