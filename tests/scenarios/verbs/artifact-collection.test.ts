@@ -118,7 +118,7 @@ test('edit retitles, takes artifacts in and out, and a call that changes nothing
   )
 })
 
-test('pin and unpin are the owner and orchestrator, listed first, and doing either twice is a replay', async () => {
+test('pin and unpin work for a lead and the owner, pinned ones are listed first, and doing either twice is a replay', async () => {
   const [row] = await v.w.world.db.sql`SELECT id FROM factory.artifact_collections LIMIT 1`
   const id = String(row?.id)
   const other = await v.run(
@@ -127,11 +127,10 @@ test('pin and unpin are the owner and orchestrator, listed first, and doing eith
   )
   const newer = collectionOf(other).id
 
-  expect((await v.run(['artifact', 'collection-pin', id], 'agent')).code).not.toBe(0)
-  const pinned = await v.run(['artifact', 'collection-pin', id])
+  const pinned = await v.run(['artifact', 'collection-pin', id], 'agent')
   expect(pinned.json).toMatchObject({ result: 'applied' })
   expect(collectionOf(pinned).pinnedAt).not.toBeNull()
-  expect((await v.run(['artifact', 'collection-pin', id])).json).toMatchObject({ result: 'replayed' })
+  expect((await v.run(['artifact', 'collection-pin', id], 'owner')).json).toMatchObject({ result: 'replayed' })
 
   const listed = await v.run(['artifact', 'collection-list'], 'agent')
   const ids = ((listed.json?.collections ?? []) as Collection[]).map((c) => c.id)

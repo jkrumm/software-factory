@@ -42,7 +42,7 @@ function replyOf(result: Result<Collection, StandaloneArtifactError | PortError>
 
 /**
  * `factory artifact collection-*`: a named set of artifacts with one lead page. A lead may make and edit one (it groups
- * the Reports it filed); pinning is the owner's choice (`policy.ts`), made on the Artifacts screen or by `collection-pin`.
+ * the Reports it filed); the owner pins on the Artifacts screen, and a lead by `collection-pin` when its Issue asks for it (a new collection is never pinned).
  */
 export const collectionRoutes = (
   api:
