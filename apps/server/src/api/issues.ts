@@ -62,7 +62,6 @@ export interface IssueApi {
     repo?: string | undefined
     lead?: string | undefined
     add: readonly string[]
-    pin: boolean
     key?: string | undefined
   }): Promise<Result<Collection, StandaloneArtifactError | PortError>>
   editCollection(input: {

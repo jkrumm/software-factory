@@ -147,7 +147,7 @@ export const fetchHost = (signal?: AbortSignal) => getJson('/v1/host', HostHisto
 export const fetchIssueCards = (signal?: AbortSignal, scope: 'all' | 'open' = 'all') =>
   getJson(`/v1/issues?state=${scope}&limit=500`, ReadIssueCards, signal)
 /** The artifacts, newest first: what the command palette searches. */
-export const fetchArtifacts = (signal?: AbortSignal) => getJson('/v1/artifacts?limit=200', ArtifactList, signal)
+export const fetchArtifacts = (signal?: AbortSignal) => getJson('/v1/artifacts?limit=500', ArtifactList, signal)
 /** The collections of artifacts, pinned first. */
 export const fetchCollections = (signal?: AbortSignal) => getJson('/v1/artifact-collections', CollectionList, signal)
 

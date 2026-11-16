@@ -1015,7 +1015,6 @@ export const OPERATIONS: readonly Operation[] = [
       { name: 'repo', flag: 'repo', kind: 'string', repeatable: false, required: false, untyped: false },
       { name: 'lead', flag: 'lead', kind: 'string', repeatable: false, required: false, untyped: false },
       { name: 'add', flag: 'add', kind: 'string', repeatable: true, required: false, untyped: false },
-      { name: 'pin', flag: 'pin', kind: 'boolean', repeatable: false, required: false, untyped: false },
       { name: 'key', flag: 'key', kind: 'string', repeatable: false, required: false, untyped: false },
     ],
     args: [],

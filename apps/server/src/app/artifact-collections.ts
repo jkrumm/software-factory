@@ -105,7 +105,6 @@ export async function newCollection(
     repo?: string | undefined
     lead?: string | undefined
     add: readonly string[]
-    pin: boolean
     key?: string | undefined
   },
 ): Promise<CollectionResult> {
@@ -122,7 +121,10 @@ export async function newCollection(
     }
     repo = located.value
   }
-  const filed = key('artifact-collection', input.key ?? digest(`${repo ?? ''}\n${title}`))
+  const filed = key(
+    'artifact-collection',
+    input.key ?? digest(`${repo ?? ''}\n${title}\n${[...members].sort().join(',')}`),
+  )
   return deps.uow.run<Collection, StandaloneArtifactError>(async (stores) => {
     const { checkpoints } = stores
     const existing = await checkpoints.collectionByKey(filed)
@@ -155,7 +157,7 @@ export async function newCollection(
       title,
       repo: project,
       leadArtifactId: null,
-      pinnedAt: input.pin ? at : null,
+      pinnedAt: null,
       createdAt: at,
     })
     if (!stored) return err({ kind: 'invalid', detail: `the key ${filed} was filed by a concurrent request` })

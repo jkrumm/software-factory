@@ -331,7 +331,7 @@ export type CollectionReply = z.infer<typeof CollectionReply>
 
 /**
  * `artifact collection new`: a title, the artifacts it holds (`add`), the page that leads it (`lead`, added too) and
- * whether it is pinned. `repo` names its project (a repo's directory name or a path inside a source root); without it
+ * `repo` names its project (a repo's directory name or a path inside a source root); without it
  * the project of the lead page or of the first artifact. The same `key` again files nothing.
  */
 export const NewCollectionBody = z
@@ -340,7 +340,6 @@ export const NewCollectionBody = z
     repo: z.string().optional(),
     lead: z.string().optional(),
     add: z.array(z.string()).max(200).optional(),
-    pin: z.boolean().optional(),
     key: z.string().trim().min(1).max(200).optional(),
   })
   .meta({ id: 'NewCollectionBody' })

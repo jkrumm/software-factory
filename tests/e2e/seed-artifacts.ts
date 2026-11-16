@@ -282,16 +282,18 @@ export async function seedArtifacts(lab: Lab): Promise<SeededArtifacts> {
   const older = await standalone(COPY_TITLE, '# Cache notes\n\nThe first copy.')
   const newer = await standalone(COPY_TITLE, '# Cache notes\n\nThe second copy.')
   const storage = await standalone('Storage notes: sizing', '# Sizing\n\nThe queue is small.')
-  const collection = async (title: string, lead: string, add: string[], pin: boolean): Promise<string> =>
-    (
+  const collection = async (title: string, lead: string, add: string[], pin: boolean): Promise<string> => {
+    const made = (
       await api<{ collection: { id: string } }>(url, '/v1/artifact-collections', {
         title,
         lead,
         add,
-        pin,
         key: `e2e-${title}`,
       })
     ).collection.id
+    if (pin) await api(url, `/v1/artifact-collections/${made}/pin`, {})
+    return made
+  }
   const pinnedId = await collection(PINNED_COLLECTION, overview, [notes], true)
   const unpinnedId = await collection(UNPINNED_COLLECTION, storage, [], false)
   // a Spec reaches the owner once the Spec screen passes it (the fake agw passes it)

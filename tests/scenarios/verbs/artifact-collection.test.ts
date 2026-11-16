@@ -155,3 +155,15 @@ test("a collection counts the owner's comments the lead has not answered", async
   const shown = await v.run(['artifact', 'collection-show', String(row?.id)])
   expect(collectionOf(shown).openComments).toBe(1)
 })
+
+test('the same title with other pages is another collection, not a replay', async () => {
+  const [, , two] = reports as [string, string, string]
+  const [free] = await v.w.world.db.sql`SELECT id FROM factory.artifacts WHERE collection_id IS NULL LIMIT 1`
+  const made = await v.run(
+    ['artifact', 'collection-new', '--title', 'Orb rewrite, V2', '--add', String(free?.id)],
+    'agent',
+  )
+  expect(made.json).toMatchObject({ result: 'applied' })
+  expect(collectionOf(made).members).toEqual([String(free?.id)])
+  expect(collectionOf(made).members).not.toContain(two)
+})

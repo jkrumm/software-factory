@@ -98,7 +98,6 @@ export const collectionRoutes = (
             repo: body.repo,
             lead: body.lead,
             add: body.add ?? [],
-            pin: body.pin ?? false,
             key: body.key,
           }),
         )
