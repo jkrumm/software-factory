@@ -11,7 +11,7 @@ import type { Caller } from '../harness.ts'
 export type Fields = Record<string, string>
 
 export interface ClientRequest {
-  client: 'herdr-board' | 'hermes' | 'iris' | 'agw' | 'repo-scripts' | 'devhost-health'
+  client: 'herdr-glance' | 'hermes' | 'iris' | 'agw' | 'repo-scripts' | 'devhost-health'
   /** where the client makes the call (file:line under ~/SourceRoot) */
   source: string
   /** the call as the client writes it */
@@ -99,17 +99,17 @@ const OVERVIEW_ROOT: Fields = {
   queue: 'object',
 }
 
-const BOARD = 'dotfiles/config/herdr-app/mods/jk-board/main.js'
+const GLANCE = 'software-factory/integrations/herdr/jk-glance/main.js'
 const HERMES_SKILL = 'hermes-agent/skills/fleet/SKILL.md'
 const HERMES_OPS = 'hermes-agent/scripts/hermes-ops.sh'
 const IRIS = 'iris/server/src/adapters/factory-http.ts'
 const AGW = 'agent-workflows/packages/host/src/fleet/factory.ts'
 
 export const REQUESTS: readonly ClientRequest[] = [
-  // -- the Herdr board: the full token, `secrets-run` env -----------------------------------------------------------
+  // -- the Herdr glance: the full token, `secrets-run` env -----------------------------------------------------------
   {
-    client: 'herdr-board',
-    source: `${BOARD}:32`,
+    client: 'herdr-glance',
+    source: `${GLANCE}:21`,
     call: 'factory --format json read overview',
     via: 'cli',
     argv: ['--format', 'json', 'read', 'overview'],
@@ -129,8 +129,8 @@ export const REQUESTS: readonly ClientRequest[] = [
     each: { asks: ASK, humanQueue: ASK, health: HEALTH, issues: CARD },
   },
   {
-    client: 'herdr-board',
-    source: `${BOARD}:32`,
+    client: 'herdr-glance',
+    source: `${GLANCE}:21`,
     call: 'factory --format json read issues --state all --limit 40',
     via: 'cli',
     argv: ['--format', 'json', 'read', 'issues', '--state', 'all', '--limit', '40'],
@@ -139,8 +139,8 @@ export const REQUESTS: readonly ClientRequest[] = [
     each: { issues: CARD },
   },
   {
-    client: 'herdr-board',
-    source: `${BOARD}:32`,
+    client: 'herdr-glance',
+    source: `${GLANCE}:21`,
     call: 'factory --format json read sessions --live',
     via: 'cli',
     argv: ['--format', 'json', 'read', 'sessions', '--live'],
@@ -149,14 +149,36 @@ export const REQUESTS: readonly ClientRequest[] = [
     each: { sessions: SESSION },
   },
   {
-    client: 'herdr-board',
-    source: `${BOARD}:171`,
-    call: 'factory --format json read issue <id>',
+    client: 'herdr-glance',
+    source: `${GLANCE}:21`,
+    call: 'factory --format json read needs',
     via: 'cli',
-    argv: ['--format', 'json', 'read', 'issue', '{n}'],
+    argv: ['--format', 'json', 'read', 'needs'],
     token: 'owner',
-    root: { ...CARD, timeline: 'array', sessions: 'array', asks: 'array', evidence: 'array' },
-    each: { timeline: { at: 'string', kind: 'string', text: 'string' }, sessions: SESSION },
+    root: { items: 'array', counts: 'object' },
+    nested: {
+      counts: { decision: 'number', review: 'number', errand: 'number', held_signal: 'number', long_wait: 'number' },
+    },
+  },
+  {
+    client: 'herdr-glance',
+    source: `${GLANCE}:21`,
+    call: 'factory --format json read machine',
+    via: 'cli',
+    argv: ['--format', 'json', 'read', 'machine'],
+    token: 'owner',
+    root: { load: 'number', loadCeiling: 'number', memory: 'object', memoryCeilings: 'object' },
+    nested: { memory: { swapUsedPct: 'number' }, memoryCeilings: { swapUsedPct: 'number' } },
+  },
+  {
+    client: 'herdr-glance',
+    source: `${GLANCE}:28`,
+    call: 'factory --format json read flow',
+    via: 'cli',
+    argv: ['--format', 'json', 'read', 'flow'],
+    token: 'owner',
+    root: { states: 'object', trend: 'object' },
+    nested: { trend: { states: 'object', shipped: 'array', shippedBefore: 'number' } },
   },
 
   // -- Hermes: the read token only ----------------------------------------------------------------------------------
@@ -303,12 +325,6 @@ export const REQUESTS: readonly ClientRequest[] = [
 
 /** The legacy commands that are retired, with the word their hint must carry. */
 export const RETIRED: readonly { client: string; source: string; argv: string[]; hint: string }[] = [
-  {
-    client: 'herdr-board',
-    source: `${BOARD}:39`,
-    argv: ['--format', 'json', 'fleet', '--refresh'],
-    hint: 'factory read overview',
-  },
   {
     client: 'repo-scripts',
     source: 'software-factory/scripts/verify.sh:73',

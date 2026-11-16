@@ -387,6 +387,17 @@ deploy_door() { # $1 release dir, $2 sha
   return 0
 }
 
+# A host-local hook that follows a healthy deploy: an executable at $POST_DEPLOY_HOOK is started in the background with the
+# release dir and the sha, its output in ~/Library/Logs/factory-post-deploy.log. This is how a client of the factory that
+# lives on another machine (the Herdr glance on the owner's laptop, integrations/herdr) learns that master moved; what it
+# does and where is that host's own business, kept out of this public repo. It never delays or fails the deploy.
+POST_DEPLOY_HOOK="${FACTORY_POST_DEPLOY_HOOK:-$HOME/.config/factory/post-deploy}"
+post_deploy_hook() { # $1 release dir, $2 sha
+  [[ -x "$POST_DEPLOY_HOOK" ]] || return 0
+  ( "$POST_DEPLOY_HOOK" "$1" "$2" >>"$HOME/Library/Logs/factory-post-deploy.log" 2>&1 </dev/null & ) || true
+  log "post-deploy hook started: $POST_DEPLOY_HOOK (log: ~/Library/Logs/factory-post-deploy.log)"
+}
+
 # Every ref of .env.tpl must resolve before anything is stopped: a missing secret refuses the deploy, never a rollback.
 # The refs of .env.server.tpl are optional: an unresolved one is a warning.
 check_refs() { # $1 release dir
@@ -663,6 +674,11 @@ main() {
     door_plan "$SELF_DIR/.." "$sha"
     act "launchctl bootout $DOOR_LABEL if loaded, then launchctl bootstrap it"
     act "wait up to ${DOOR_WAIT_SECS}s for an unauthenticated POST to 127.0.0.1:$DOOR_PORT/alert/kuma to answer 401; a door that does not start (no tokens file) is a warning, never a failed deploy"
+    if [[ -x "$POST_DEPLOY_HOOK" ]]; then
+      act "start the post-deploy hook $POST_DEPLOY_HOOK in the background (release dir and sha as arguments; its failure never fails the deploy)"
+    else
+      act "post-deploy hook: none ($POST_DEPLOY_HOOK is not an executable file)"
+    fi
     act "prune releases beyond the newest $KEEP_RELEASES"
     return 0
   fi
@@ -755,6 +771,7 @@ main() {
   ln -sf "$CURRENT/$CLI_ENTRY" "$CLI_LINK" || die "linking $CLI_LINK failed"
   write_atomic "$SHA_FILE" "$sha" || die "writing $SHA_FILE failed"
   deploy_door "$release" "$sha"
+  post_deploy_hook "$release" "$sha"
   prune_releases "$sha" "$(read_sha "$PREV_FILE")"
   log "deploy OK: ${sha:0:12} healthy; factory -> $CLI_LINK"
 }
