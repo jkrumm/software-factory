@@ -29,7 +29,7 @@ beforeAll(async () => {
       'agent',
     )
     expect(made.code).toBe(0)
-    reports.push((made.json?.artifact as { id: string }).id)
+    reports.push(((made.json ?? {}).artifact as { id: string }).id)
   }
 })
 
@@ -71,7 +71,7 @@ test('collection-new takes its lead page and members, and the same key again fil
   expect(collectionOf(again).id).toBe(collection.id)
 
   const shown = await v.run(['artifact', 'show', one])
-  expect((shown.json?.artifact as { collectionId: string }).collectionId).toBe(collection.id)
+  expect(((shown.json ?? {}).artifact as { collectionId: string }).collectionId).toBe(collection.id)
 })
 
 test('an artifact belongs to at most one collection, and a missing title or an unknown artifact is refused', async () => {

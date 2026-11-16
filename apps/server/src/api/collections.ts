@@ -3,7 +3,6 @@ import { Elysia } from 'elysia'
 import * as z from 'zod'
 import type { Collection } from '../app/artifact-collections.ts'
 import type { StandaloneArtifactError } from '../app/artifact-new.ts'
-import type { CollectionId } from '../domains/checkpoints/artifact.ts'
 import type { CollectionRecord, CollectionStats } from '../domains/checkpoints/ports.ts'
 import { idOf } from '../kernel/ids.ts'
 import type { PortError, Result } from '../kernel/result.ts'
@@ -122,7 +121,7 @@ export const collectionRoutes = (
         if (!id) return unknown(params.id)
         return replyOf(
           await wired.editCollection({
-            id: id as CollectionId,
+            id,
             title: body.title,
             lead: body.lead,
             add: body.add ?? [],
