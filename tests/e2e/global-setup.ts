@@ -6,6 +6,7 @@ import { freePort, startServer, startWorld, type ServerProcess } from '../scenar
 import { makeEstate } from '../scenarios/intake/support.ts'
 import { startLab } from '../scenarios/planning/lab.ts'
 import { seedDigests } from './seed-digests.ts'
+import { ARGO_PROJECT_YAML, PROJECT, seedProjectPage } from './seed-projects.ts'
 import { seedCapacity } from './seed-capacity.ts'
 import { seedHost } from './seed-host.ts'
 import { seedLeadTime, seedThroughput } from './seed-throughput.ts'
@@ -54,7 +55,7 @@ export default async function globalSetup(): Promise<() => Promise<void>> {
       [...LEAD_REPOS, ...ARTIFACT_REPOS, ...HISTORY_REPOS, ...CHAIN_REPOS].map((name) => [
         name,
         {
-          project: `apiVersion: factory/v2\nname: ${name}\n`,
+          project: name === PROJECT ? ARGO_PROJECT_YAML : `apiVersion: factory/v2\nname: ${name}\n`,
           ...(CHAIN_REPOS.includes(name) ? { plan: chainPlan() } : {}),
         },
       ]),
@@ -72,6 +73,7 @@ export default async function globalSetup(): Promise<() => Promise<void>> {
   await seed(lab)
   process.env.E2E_DIGESTS = JSON.stringify(await seedDigests(lab.server.url, world.db.sql))
   await seedLeadTime(world.db.sql)
+  await seedProjectPage(world.db.sql)
   const consoleUrl = `http://127.0.0.1:${consolePort}`
   // the same environment the lab used, so the restarted server keeps the Console port and the repos
   const serverEnv = { FACTORY_REPO_ROOTS: lab.root, FACTORY_GRACE_MS: '0', ...labEnv }

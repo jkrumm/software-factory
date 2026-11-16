@@ -132,11 +132,11 @@ test('from the Chain, a node opens the Issue in the peek', async ({ page }) => {
   await page.goto('/chain')
   const node = page
     .getByTestId('chain-node')
-    .filter({ has: page.getByRole('link') })
+    .filter({ has: page.locator('a[href^="/issues/"]') })
     .first()
   await expect(node).toBeVisible()
   const title = (await node.getByRole('heading').first().innerText()).trim()
-  await node.getByRole('link').click()
+  await node.locator('a[href^="/issues/"]').click()
   await expect(panel(page).getByRole('heading', { level: 1, name: title })).toBeVisible()
   await expect(page.getByRole('region', { name: 'Dependency chain' })).toBeVisible()
   await page.keyboard.press('Escape')

@@ -450,7 +450,7 @@ function Tenants({ model }: { model: Model }) {
           rows={byRepo.map((r) => ({
             key: r.repo,
             name: (
-              <Link to="/flow" search={{ project: r.repo }} className={LINK}>
+              <Link to="/projects/$name" params={{ name: r.repo }} className={LINK}>
                 {r.repo}
               </Link>
             ),
@@ -679,7 +679,7 @@ function Scorecard({ model }: { model: Model }) {
           {model.project.map((p) => (
             <tr key={p.repo}>
               <th scope="row" className={cn(TD, 'text-left font-medium')}>
-                <Link to="/flow" search={{ project: p.repo }} className={LINK}>
+                <Link to="/projects/$name" params={{ name: p.repo }} className={LINK}>
                   {p.repo}
                 </Link>
               </th>
@@ -729,7 +729,7 @@ function Improvements({ model }: { model: Model }) {
             return (
               <tr key={f.id} data-status={f.status}>
                 <th scope="row" className={cn(TD, 'text-left font-medium')}>
-                  <Link to="/flow" search={{ project: f.project }} className={LINK}>
+                  <Link to="/projects/$name" params={{ name: f.project }} className={LINK}>
                     {f.project}
                   </Link>
                 </th>

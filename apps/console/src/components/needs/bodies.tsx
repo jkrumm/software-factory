@@ -103,7 +103,7 @@ const projectLink = (item: NeedItem): ReactNode =>
   item.repo === null ? (
     projectOf(item)
   ) : (
-    <Link to="/flow" search={{ project: item.repo }} className={LINK}>
+    <Link to="/projects/$name" params={{ name: item.repo }} className={LINK}>
       {item.repo}
     </Link>
   )

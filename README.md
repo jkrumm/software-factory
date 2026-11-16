@@ -60,6 +60,7 @@ One Issue, signal to verify, as the Console shows it. The data is a seeded demo 
 |-|-|
 | **Needs you** | What waits on the owner, and nothing else |
 | **Flow** | Every Issue by state, across projects |
+| **Projects** | One project: what runs now, what shipped, its plan, production, setup and hygiene |
 | **Issue** | One Issue end to end, the event log in plain words |
 | **Chain** | What waits on what, across repos |
 | **Improve** | The factory's KPIs against their targets, in 7-day windows |
@@ -218,7 +219,7 @@ token and takes the repo from a server-side route registry, never from the paylo
 | `apps/server` | the server: API, domains, use cases, loops, adapters, read models, migrations |
 | `apps/cli` | the `factory` CLI, generated from the server's OpenAPI document plus hand-written hook and slot verbs |
 | `apps/door` | the alert door: alerts from monitors become signals |
-| `apps/console` | the Console: a React PWA with Needs you, Flow, Issue, Chain, Improve and Throughput |
+| `apps/console` | the Console: a React PWA with Needs you, Flow, Projects, Issue, Chain, Improve and Throughput |
 | `packages/contract` | zod schemas for every request, response and event; the source of the OpenAPI document |
 | `packages/client` | the typed client shared by the CLI and the door |
 | `tests/scenarios` | use cases run end to end against a real server and Postgres with fake runner and agw: the acceptance suite |

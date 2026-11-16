@@ -178,3 +178,33 @@ export function ArtifactSkeleton() {
     </div>
   )
 }
+
+/** A project's page: the stat row, the open cards, then the bands under them. */
+export function ProjectSkeleton() {
+  return (
+    <div {...busy('Loading the project')} className="grid gap-8">
+      <div className="grid gap-3 lg:grid-cols-3">
+        {Array.from({ length: 3 }, (_, i) => (
+          <Skeleton key={i} height={273} rounded="rounded-xl" className={cn(i > 0 && 'hidden lg:block')} />
+        ))}
+      </div>
+      <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-3 2xl:grid-cols-4">
+        {Array.from({ length: 4 }, (_, i) => (
+          <Skeleton key={i} height={118} rounded="rounded-xl" className={cn(i > 1 && 'hidden xl:block')} />
+        ))}
+      </div>
+      <Skeleton height={240} rounded="rounded-xl" />
+    </div>
+  )
+}
+
+/** The project list: a grid of project cards. */
+export function ProjectIndexSkeleton() {
+  return (
+    <div {...busy('Loading the projects')} className="grid gap-3 sm:grid-cols-2 xl:grid-cols-3 2xl:grid-cols-4">
+      {Array.from({ length: 8 }, (_, i) => (
+        <Skeleton key={i} height={168} rounded="rounded-xl" />
+      ))}
+    </div>
+  )
+}

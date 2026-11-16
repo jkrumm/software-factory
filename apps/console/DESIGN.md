@@ -66,7 +66,7 @@ laws do not (they are Mantine's; the Console is Base UI and Tailwind on Basalt's
   the stream's state, the last event's age, the server's version and uptime).
 - **Everything that names a thing links to it.** An Issue title or an artifact anywhere opens it in the **peek**, a panel on
   the right of the page you are on (below); a modifier-click, "Open full page" in the panel, or a link on the Issue's own
-  page opens the page; a project opens Flow filtered; an origin links out to its source (the GitHub issue, the alert).
+  page opens the page; a project opens its page (`/projects/<name>`; Flow's own filter stays a toggle in the sidebar); an origin links out to its source (the GitHub issue, the alert).
 - **The palette** finds Issues by title or number across projects, projects, artifacts and commands, each row with an icon,
   the highlighted match, a muted reference and a kind column; it shows each command's key.
 
@@ -148,6 +148,7 @@ click, and keeps the working screen where it was.
   an empty category is absent, and what he may act on (Regressed, Incidents, Dropped) reads first. Its entries are SinceRows, never cards, and the detail lives in their popover. Then the checkpoints, project first and then title. A Decision
   shows its options as cards: the recommendation marked with its reason, cost and consequence per option, free text last.
   An Errand says what it is. A held signal shows where it came from, when, and a link to its source.
+- **Projects**: the list is one card per project (name, working, waiting, queued and shipped figures, the digest's headline, one hygiene line), busiest first. A project's page fills the width: its three StatCards (Shipped with its daily bars against the 7 days before, Plan done of all rows, Hygiene findings of the newest pass), then Now (the project's open Issues as the Flow cards), Shipped in 7 days (SinceRows) beside the Plan (the rows still to come), Production (Watch, incidents, regressions and the monitors the door routes to it), Setup (a PropertyList of `project.yaml`) and Hygiene (each probe with its last run, the newest pass's findings and how each ended, earlier passes in a Fold). Its links into Flow, Chain and Artifacts carry `?project=`.
 - **Flow**: a stat row (working, waiting, queued, shipped this week, each a StatCard with its sparkline), then the board
   across the full width; a column header has its count and an InfoHint; IssueCards open the Issue and show its number.
 - **Issue**: a header (title, project, KindBadge, Lozenge, age, actions), a PropertyList of the facts, tabs for overview,

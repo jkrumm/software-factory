@@ -68,14 +68,14 @@ test('the project filter shows that project alone, opened', async ({ page }) => 
   await expect(page.getByTestId('digest-strip')).toHaveCount(0)
 })
 
-test('a project name on a card filters the board to it', async ({ page }) => {
+test('a project name on a card opens the project page', async ({ page }) => {
   await page.goto('/flow')
   await page
     .getByTestId('digest-strip')
     .locator('[data-project="harbor"]')
     .getByRole('link', { name: 'harbor' })
     .click()
-  await expect(page).toHaveURL(/project=harbor/)
+  await expect(page).toHaveURL(/\/projects\/harbor$/)
 })
 
 test('with more than one project the strip is one row, and "Show all" lays every card out', async ({ page }) => {

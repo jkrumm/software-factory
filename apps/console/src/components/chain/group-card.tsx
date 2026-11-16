@@ -1,4 +1,5 @@
 import { ArrowsOutSimpleIcon, CheckCircleIcon, ClockIcon, StackIcon } from '@phosphor-icons/react'
+import { Link } from '@tanstack/react-router'
 import { ProjectChip } from '@/components/kit/issue-parts'
 import { type ChainGroup, READY_BUDGET, STEP_CAP } from '@/lib/chain-collapse'
 import { dateWords, utcWords } from '@/lib/chain'
@@ -39,7 +40,12 @@ export function GroupCard({ group, onOpen }: { group: ChainGroup; onOpen: (id: s
     >
       <header className="flex flex-wrap items-center gap-x-2 gap-y-1 px-2.5 pt-2 pb-1">
         <Icon className="size-4 shrink-0 text-muted-foreground" aria-hidden="true" />
-        <ProjectChip project={group.repo || 'No project'} />
+        <ProjectChip
+          project={group.repo || 'No project'}
+          as={
+            group.repo ? (props) => <Link to="/projects/$name" params={{ name: group.repo }} {...props} /> : undefined
+          }
+        />
         <span className="text-xs text-muted-foreground">{done ? 'Closed' : 'Not filed yet'}</span>
       </header>
       <div className="flex min-h-0 flex-1 flex-col justify-center gap-0.5 rounded-lg bg-background px-2.5 py-2.5">

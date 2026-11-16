@@ -239,7 +239,7 @@ export function CommandPalette({ open, onOpenChange }: { open: boolean; onOpenCh
                   query={query}
                   reference={`${project.open} open`}
                   kind="Project"
-                  onSelect={go(() => void navigate({ to: '/flow', search: { project: project.name } }))}
+                  onSelect={go(() => void navigate({ to: '/projects/$name', params: { name: project.name } }))}
                 />
               ))}
             </CommandGroup>

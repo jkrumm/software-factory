@@ -12,6 +12,7 @@
   "needs-you.e2e.ts": 10,
   "peek.e2e.ts": 7,
   "phone-fit.e2e.ts": 21,
+  "projects.e2e.ts": 12,
   "screenshots-desktop-dark.e2e.ts": 23,
   "screenshots-desktop-light.e2e.ts": 23,
   "screenshots-desktop-xl-dark.e2e.ts": 25,

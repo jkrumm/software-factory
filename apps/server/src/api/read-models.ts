@@ -22,11 +22,14 @@ import {
   NeedsModel,
   ChainModel,
   ProjectDigestsModel,
+  ProjectHygieneModel,
+  ProjectIndexModel,
+  ProjectPageModel,
   type QueueReason as QueueReasonSchema,
 } from '@software-factory/contract'
 import type { SQL } from 'bun'
 import { Elysia } from 'elysia'
-import type * as z from 'zod'
+import * as z from 'zod'
 import type { UnitOfWork } from '../app/unit-of-work.ts'
 import { registerVisit, type VisitStore } from '../app/visit.ts'
 import type { CiTimes } from '../domains/loops/ports.ts'
@@ -35,6 +38,7 @@ import { type CapacityConstants, readCapacityLoop } from '../read/capacity-loop.
 import { readWaitCensus } from '../read/wait-census.ts'
 import { readChain } from '../read/chain.ts'
 import { readProjectDigests } from '../read/digests.ts'
+import { readProjectHygiene, readProjectIndex, readProjectPage } from '../read/project-page.ts'
 import { type QueueReasons, readFlow } from '../read/flow.ts'
 import { readFlowTrend } from '../read/flow-trend.ts'
 import { readFixCommits } from '../read/fix-commits.ts'
@@ -105,6 +109,9 @@ const unavailable = Response.json(
   ErrorBody.parse({ error: 'the read models are not wired in this process', code: 'unavailable' }),
   { status: 503 },
 )
+
+const noProject = (name: string) =>
+  Response.json(ErrorBody.parse({ error: `no project ${name}`, code: 'not_found' }), { status: 404 })
 
 const noMachine = () =>
   Response.json(ErrorBody.parse({ error: 'the host cannot be read in this process', code: 'unavailable' }), {
@@ -191,6 +198,62 @@ export const readModelRoutes = (deps: ReadModelDeps | undefined, caller: (reques
           operationId: 'read.project-digests',
           summary:
             "each project's newest digest (headline, shipped, next and risks bullets citing Issues, themes) made every few hours by agw's factory digest, for projects with an Issue open or closed in the last 7 days, with counts (done in 7 days, working, queued, waiting) read from the Issues now; the read token gets the counts of a work project and no words",
+        },
+      },
+    )
+    .get(
+      '/projects',
+      async ({ request }) => {
+        if (!deps) return unavailable
+        const model = await readProjectIndex(deps.sql, { now: now() })
+        // the read token hears no word of a work project, not even that it exists (NL18)
+        const redact = caller(request) === 'read'
+        return Response.json(
+          ProjectIndexModel.parse(redact ? { ...model, projects: model.projects.filter((p) => !p.work) } : model),
+        )
+      },
+      {
+        response: { 200: ProjectIndexModel, ...errorResponses(503) },
+        detail: {
+          operationId: 'read.project-index',
+          summary:
+            'every project the factory has read, with its counts (done in 7 days, working, queued, waiting, in Watch) and the state of its newest hygiene pass; the read token gets no work project',
+        },
+      },
+    )
+    .get(
+      '/projects/:name',
+      async ({ params, request }) => {
+        if (!deps) return unavailable
+        const redact = caller(request) === 'read'
+        const page = await readProjectPage(deps.sql, { now: now(), name: params.name, redact })
+        return page ? Response.json(ProjectPageModel.parse(page)) : noProject(params.name)
+      },
+      {
+        params: z.object({ name: z.string() }),
+        response: { 200: ProjectPageModel, ...errorResponses(404, 503) },
+        detail: {
+          operationId: 'read.project-page',
+          summary:
+            "one project's page: its setup (leads, lanes, checks, deploy and probes), counts, what shipped in 7 days with daily bars, and its production facts (Issues in Watch, incidents, regressions, the monitors that file alerts in it); the read token gets 404 for a work project and no monitors",
+        },
+      },
+    )
+    .get(
+      '/projects/:name/hygiene',
+      async ({ params, request }) => {
+        if (!deps) return unavailable
+        const redact = caller(request) === 'read'
+        const model = await readProjectHygiene(deps.sql, { now: now(), name: params.name, redact })
+        return model ? Response.json(ProjectHygieneModel.parse(model)) : noProject(params.name)
+      },
+      {
+        params: z.object({ name: z.string() }),
+        response: { 200: ProjectHygieneModel, ...errorResponses(404, 503) },
+        detail: {
+          operationId: 'read.project-hygiene',
+          summary:
+            "one project's hygiene: each probe (built-in, declared, opted out with its reason) with its last run, the newest pass with the findings it raised and how each ended (filed, left out, refused), and the last five passes; the read token gets 404 for a work project",
         },
       },
     )
