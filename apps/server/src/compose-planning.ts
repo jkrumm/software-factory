@@ -103,6 +103,7 @@ export function composePlanning(input: {
     swapoutCeilingMb: settings.memoryCeilings.swapoutMbPer300s,
     slotAim: settings.slotAim,
     cores: settings.cores,
+    loadCeiling: limits.loadCeiling,
     host,
   }
 

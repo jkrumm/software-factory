@@ -10,12 +10,27 @@ import {
   type WindowLimits,
 } from '../domains/capacity/accounts.ts'
 import type { BootSample } from '../domains/capacity/boot.ts'
-import { checkAdmission, type LeadFit, type RefusalKind, REFUSALS } from '../domains/capacity/admission.ts'
+import {
+  checkAdmission,
+  type LeadFit,
+  type RefusalKind,
+  REFUSALS,
+  type TestLine,
+} from '../domains/capacity/admission.ts'
 import { freeMibOf, headroomMib } from '../domains/capacity/costs.ts'
 import { type DoctorReader, doctorMessage } from '../domains/capacity/doctor.ts'
 import { DEFAULT_TYPICAL_LEAD_MIB, SEAT_SAMPLE_MAX_AGE_MS, SEAT_SAMPLES, seatBonus } from '../domains/capacity/seats.ts'
 import { type LeadGrowth, leadGrowth, learnLeadCost } from '../domains/capacity/leadcost.ts'
-import { type MemoryCeilings, type MemoryReading, reservedOf, sustainedSwapoutMb } from '../domains/capacity/host.ts'
+import {
+  type LoadTrip,
+  loadTrip,
+  type MemoryCeilings,
+  type MemoryReading,
+  reservedOf,
+  SUSTAINED_LOAD_SAMPLES,
+  sustainedSwapoutMb,
+} from '../domains/capacity/host.ts'
+import { testLineOf } from '../domains/capacity/slots.ts'
 import { type LaneInput, laneRoom } from '../domains/capacity/lanes.ts'
 import type { AccountRanker, AccountSource, Assignment, HostReader, ShadowDecision } from '../domains/capacity/ports.ts'
 import { effectiveState, type QueueStates } from '../domains/capacity/queue-state.ts'
@@ -89,6 +104,10 @@ export interface HostInputs {
   recent: readonly { load: number | null; swapUsedPct: number | null }[]
   /** per project name: why its doctor says this host cannot run it; a project whose doctor is green, or has none, is absent */
   doctors: ReadonlyMap<string, string>
+  /** the load tripwire over the minute samples; absent or null: too few fresh samples, the instant reading decides */
+  loadTrip?: LoadTrip
+  /** the host's test line now; absent or null: unread, it keeps nobody out */
+  tests?: TestLine | null
   notes: string[]
 }
 
@@ -108,6 +127,9 @@ const NO_HOST: HostInputs = {
   doctors: new Map(),
   notes: [],
 }
+
+/** The steps whose median run is how long a step takes, for the test line (`lineRefusal`): those of the last day. */
+const STEP_WINDOW_MS = 86_400_000
 
 /** A lead's own sample is read as what it holds now only when it is this fresh. */
 const RSS_MAX_AGE_MS = 3 * 60_000
@@ -173,7 +195,9 @@ export async function readHost(deps: CapacityDeps): Promise<HostInputs> {
     ok({
       projects: deps.doctor ? await planning.projects() : [],
       latest: await capacity.latestHostSample(),
-      recent: await capacity.recentHostSamples(SEAT_SAMPLES),
+      recent: await capacity.recentHostSamples(Math.max(SEAT_SAMPLES, SUSTAINED_LOAD_SAMPLES)),
+      slots: await capacity.slots(),
+      stepMs: await capacity.stepMedianMs(new Date(now.getTime() - STEP_WINDOW_MS)),
       peaks: await capacity.leadPeaks(now),
       relearns: await capacity.relearns(),
       rss: await capacity.leadRssSince(new Date(now.getTime() - RSS_MAX_AGE_MS)),
@@ -182,8 +206,8 @@ export async function readHost(deps: CapacityDeps): Promise<HostInputs> {
   if (!facts.ok)
     notes.push(`the learned lead costs could not be read (${facts.error.detail}): admission goes on without them`)
   const fresh = facts.ok
-    ? facts.value.recent.length === SEAT_SAMPLES &&
-      facts.value.recent.every((s) => now.getTime() - s.at.getTime() <= SEAT_SAMPLE_MAX_AGE_MS)
+    ? facts.value.recent.length >= SEAT_SAMPLES &&
+      facts.value.recent.slice(0, SEAT_SAMPLES).every((s) => now.getTime() - s.at.getTime() <= SEAT_SAMPLE_MAX_AGE_MS)
     : false
   const newest = facts.ok ? facts.value.recent[0] : undefined
   const doctors = await readDoctors(deps.doctor, facts.ok ? facts.value.projects : [])
@@ -225,8 +249,13 @@ export async function readHost(deps: CapacityDeps): Promise<HostInputs> {
     ),
     relearns: new Map(facts.ok ? facts.value.relearns.map((r) => [r.repo, r.at]) : []),
     rssByIssue: facts.ok ? facts.value.rss : new Map(),
-    recent: facts.ok && fresh ? facts.value.recent.map((s) => ({ load: s.load, swapUsedPct: s.swapUsedPct })) : [],
+    recent:
+      facts.ok && fresh
+        ? facts.value.recent.slice(0, SEAT_SAMPLES).map((s) => ({ load: s.load, swapUsedPct: s.swapUsedPct }))
+        : [],
     doctors,
+    loadTrip: facts.ok ? loadTrip(facts.value.recent, deps.limits.loadCeiling, now, load.ok ? load.value : null) : null,
+    tests: facts.ok ? { ...testLineOf(facts.value.slots, now), stepMs: facts.value.stepMs } : null,
     notes,
   }
 }
@@ -538,6 +567,8 @@ function decide(snap: Snapshot, host: HostInputs, limits: CapacityLimits, bonus:
             },
       load: host.load,
       loadCeiling: limits.loadCeiling,
+      loadTrip: host.loadTrip ?? null,
+      tests: host.tests ?? null,
       processes: host.processes,
       processCap: limits.processCap ?? null,
       memory: host.memory,
@@ -738,11 +769,14 @@ async function recordWaits(deps: CapacityDeps, queue: readonly QueueEntry[], not
 
 /**
  * The host readings with the load read now. A reading that fails keeps the pass's last one (`readHost` already noted a
- * failure), so a host that answered before is never admitted into without a load because of one slow `sysctl`.
+ * failure), so a host that answered before is never admitted into without a load because of one slow `sysctl`. A
+ * tripped tripwire is cleared by a reading now back under the ceiling, as `loadTrip` clears it.
  */
 async function withFreshLoad(deps: CapacityDeps, host: HostInputs): Promise<HostInputs> {
   const load = await deps.host.load()
-  return load.ok ? { ...host, load: load.value } : host
+  if (!load.ok) return host
+  const cleared = host.loadTrip?.tripped && load.value <= deps.limits.loadCeiling
+  return { ...host, load: load.value, ...(cleared ? { loadTrip: { tripped: false } as const } : {}) }
 }
 
 /** The most Issues one pass admits; the rest wait for the next. */

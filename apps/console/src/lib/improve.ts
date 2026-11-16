@@ -507,6 +507,7 @@ const QUEUE_REASON_WORDS: Record<string, string> = {
   window: "An account's window",
   cap: "An account's lead cap",
   load: 'Host load',
+  tests: 'The test line',
   boot: 'Host boot grace',
   drain: 'The queue is draining',
   chain: 'An after edge',

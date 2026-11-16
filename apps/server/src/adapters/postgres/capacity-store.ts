@@ -75,7 +75,11 @@ const SlotDbRow = z.object({
   ),
 })
 
-const PeakRow = z.object({ peak_rss_mib: z.number().int().nullable() })
+const RunRow = z.object({
+  peak_rss_mib: z.number().int().nullable(),
+  cpu_seconds: z.number().nullable(),
+  duration_ms: z.coerce.number(),
+})
 const ProjectPeakRow = z.object({ step: z.string(), peak_rss_mib: z.number().int().nullable() })
 const HostSampleRow = z.object({ at: z.date(), memory_used_pct: z.number().nullable() })
 
@@ -354,11 +358,11 @@ export function postgresCapacityStore(tx: SQL): CapacityStore {
         VALUES (${w.project}, ${w.cwd}, ${w.requestedAt}, ${w.acquiredAt}, ${w.releasedAt}, ${w.exitCode})`
     },
 
-    async recentPeaks(name, limit, swapoutCeilingMb, legacy) {
+    async recentRuns(name, limit, swapoutCeilingMb, legacy) {
       // A run that ended while the host was under pressure (level above normal, or swapout above the ceiling in a sample
       // within 90 s of its end) measured a thrashing host, not the step.
       const rows: unknown[] = await tx`
-        SELECT peak_rss_mib FROM factory.step_costs c
+        SELECT peak_rss_mib, cpu_seconds, duration_ms FROM factory.step_costs c
         WHERE (name = ${name}
             OR (${legacy?.repo ?? null}::text IS NOT NULL AND repo = ${legacy?.repo ?? null} AND name ~ '^factory-[0-9]+-[0-9]+ '
                 AND substr(name, strpos(name, ' ')) = ${legacy?.words ?? null}))
@@ -367,7 +371,21 @@ export function postgresCapacityStore(tx: SQL): CapacityStore {
             WHERE h.at BETWEEN c.at - interval '90 seconds' AND c.at + interval '90 seconds'
               AND (h.pressure_level > 1 OR h.swapout_mb_per_300s > ${swapoutCeilingMb}))
         ORDER BY at DESC, id DESC LIMIT ${limit}`
-      return rows.map((raw) => PeakRow.parse(raw).peak_rss_mib)
+      return rows.map((raw) => {
+        const row = RunRow.parse(raw)
+        return {
+          peakRssMib: row.peak_rss_mib,
+          cores: row.cpu_seconds === null || row.duration_ms <= 0 ? null : row.cpu_seconds / (row.duration_ms / 1000),
+          durationMs: row.duration_ms,
+        }
+      })
+    },
+
+    async stepMedianMs(since) {
+      const [raw] = await tx`
+        SELECT percentile_cont(0.5) WITHIN GROUP (ORDER BY duration_ms)::float8 AS ms FROM factory.step_costs WHERE at >= ${since}`
+      const ms = z.object({ ms: z.number().nullable() }).parse(raw ?? { ms: null }).ms
+      return ms === null ? null : Math.round(ms)
     },
 
     async projectPeaks(repo, project, since, limit, swapoutCeilingMb) {

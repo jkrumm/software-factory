@@ -52,6 +52,43 @@ export const overMemory = (
 
 export const overLoad = (load: number, ceiling: number): boolean => load > ceiling
 
+/**
+ * How many minute samples in a row the load must be over its ceiling before admission pulls back (the tripwire). Measured
+ * 2026-11-14 to 16 against the ceiling of 36 on 12 cores: 174 runs over it of one minute, 27 of two, 5 of three, 1 of
+ * four, none of five. A peak is expected and costs nothing; five minutes is an overshoot unlike any spike of those days.
+ */
+export const SUSTAINED_LOAD_SAMPLES = 5
+/** The oldest of those samples may be at most this old: a gap in the minute samples is no reading. */
+const SUSTAINED_SPAN_MS = (SUSTAINED_LOAD_SAMPLES + 1) * 60_000
+
+/** The tripwire's verdict: tripped with the loads that tripped it, clear, or unknown (too few fresh samples). */
+export type LoadTrip = { tripped: true; loads: number[] } | { tripped: false } | null
+
+/**
+ * Whether the load has been over the ceiling in each of the newest `SUSTAINED_LOAD_SAMPLES` minute samples (newest
+ * first) and still is by the reading now (a reading back under it clears the trip at once; an unread one does not).
+ * Null when fewer samples are fresh: the caller falls back to the reading of the instant.
+ */
+export function loadTrip(
+  samplesNewestFirst: readonly { at: Date; load: number | null }[],
+  ceiling: number,
+  now: Date,
+  loadNow: number | null,
+): LoadTrip {
+  const window = samplesNewestFirst.slice(0, SUSTAINED_LOAD_SAMPLES)
+  const oldest = window[window.length - 1]
+  if (window.length < SUSTAINED_LOAD_SAMPLES || !oldest || now.getTime() - oldest.at.getTime() > SUSTAINED_SPAN_MS)
+    return null
+  const loads = window.map((s) => s.load)
+  if (loads.some((load) => load === null)) return null
+  const over = (loads as number[]).every((load) => load > ceiling) && (loadNow === null || loadNow > ceiling)
+  return over ? { tripped: true, loads: (loads as number[]).map((l) => Math.round(l * 10) / 10) } : { tripped: false }
+}
+
+/** The tripwire's words: `load over 36 in each of the last 5 minutes (41.2, 38, …)`. */
+export const describeTrip = (loads: readonly number[], ceiling: number): string =>
+  `load over ${ceiling} in each of the last ${loads.length} minutes (${loads.join(', ')})`
+
 /** The load ceiling of the throughput rule, in multiples of the host's cores: no new lead above 3x. */
 export const DEFAULT_LOAD_PER_CORE = 3
 /**

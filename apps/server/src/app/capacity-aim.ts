@@ -1,4 +1,5 @@
 import { SAMPLE_MAX_AGE_MS } from '../domains/capacity/costs.ts'
+import { loadTrip, SUSTAINED_LOAD_SAMPLES } from '../domains/capacity/host.ts'
 import { type AimMode, type AimState, aimStep, swapGrowing } from '../domains/capacity/slot-aim.ts'
 import { slotCounts } from '../domains/capacity/slots.ts'
 import { ok, type PortError, type Result } from '../kernel/result.ts'
@@ -13,7 +14,8 @@ export interface SlotAimDeps extends PlanningDeps {
   slots: number
   /** `FACTORY_SLOTS_MAX`: the ceiling of the aim */
   slotsMax: number
-  cores: number
+  /** the load ceiling of the lead admission: the slot aim's tripwire is set at it */
+  loadCeiling: number
 }
 
 /**
@@ -27,7 +29,7 @@ export async function slotAimPass(deps: SlotAimDeps): Promise<Result<string, Por
   return deps.uow.run(async ({ capacity }) => {
     await capacity.lock()
     const now = deps.clock.now()
-    const samples = await capacity.recentHostSamples(5)
+    const samples = await capacity.recentHostSamples(Math.max(5, SUSTAINED_LOAD_SAMPLES))
     const newest = samples[0]
     const fresh = newest !== undefined && now.getTime() - newest.at.getTime() <= SAMPLE_MAX_AGE_MS
     const before: AimState = (await capacity.slotAim()) ?? { target: deps.slots, quietSince: null }
@@ -40,7 +42,8 @@ export async function slotAimPass(deps: SlotAimDeps): Promise<Result<string, Por
         pressureLevel: fresh ? newest.pressureLevel : null,
         swapGrowing: growing,
         load: fresh ? newest.load : null,
-        cores: deps.cores,
+        loadTrip: loadTrip(samples, deps.loadCeiling, now, fresh ? newest.load : null),
+        loadCeiling: deps.loadCeiling,
         waiters,
       },
       deps.slotsMax,

@@ -882,7 +882,7 @@ export const CapacityDay = z
 export const SlotWaitReason = z
   .strictObject({
     /** `slots` every slot taken, `memory` the fit, `swap` swap growing, `load` the load gate, `unsized` no learned size or free-memory reading, `line` the waiters ahead */
-    reason: z.enum(['slots', 'memory', 'swap', 'load', 'unsized', 'line']),
+    reason: z.enum(['slots', 'memory', 'swap', 'load', 'unsized', 'line', 'cores', 'class']),
     waits: z.number().int(),
     totalMs: z.number(),
     p50Ms: z.number().nullable(),
@@ -1024,11 +1024,15 @@ export const CapacityLoopModel = z
     queueByReason: z.array(CapacityReason),
     /** host minutes whose load was above the ceiling in force that minute */
     minutesOverCeiling: CapacityTotal,
+    /** the leads running per day: the mean of the minute samples' lead count */
+    leadsRunning: z.array(CapacityDay),
     slotWait: z.strictObject({
       n: z.number().int(),
       p50Ms: z.number().nullable(),
       p90Ms: z.number().nullable(),
       perDayP50: z.array(CapacityDay),
+      /** the 90th percentile of the day's waits: the tail the lead admission's test line steers on */
+      perDayP90: z.array(CapacityDay),
       /** the waits that were granted or given up (`factory.slot_waits`; only those after the table existed), split by what each waited for: largest total first */
       byReason: z.array(SlotWaitReason),
       byRepo: z.array(SlotWaitRepo),

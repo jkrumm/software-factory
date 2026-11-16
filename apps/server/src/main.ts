@@ -719,7 +719,7 @@ async function main(): Promise<void> {
           mode: planningEnv.slotAim,
           slots: planningEnv.slots,
           slotsMax: planningEnv.slotsMax,
-          cores: planningEnv.cores,
+          loadCeiling: hostRule(planningEnv).loadCeiling,
         })
         return ok(
           aim.ok

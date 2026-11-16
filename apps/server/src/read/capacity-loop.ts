@@ -139,6 +139,13 @@ export async function readCapacityLoop(
       SELECT to_char(at AT TIME ZONE 'UTC', 'YYYY-MM-DD') AS day,
         percentile_cont(0.5) WITHIN GROUP (ORDER BY wait_ms)::float8 AS v
       FROM factory.step_costs WHERE at >= ${w.from} AND at < ${w.to} GROUP BY 1`
+    const waitDayP90: unknown[] = await tx`
+      SELECT to_char(at AT TIME ZONE 'UTC', 'YYYY-MM-DD') AS day,
+        percentile_cont(0.9) WITHIN GROUP (ORDER BY wait_ms)::float8 AS v
+      FROM factory.step_costs WHERE at >= ${w.from} AND at < ${w.to} GROUP BY 1`
+    const leadsDay: unknown[] = await tx`
+      SELECT to_char(at AT TIME ZONE 'UTC', 'YYYY-MM-DD') AS day, avg(leads)::float8 AS v
+      FROM factory.host_samples WHERE leads IS NOT NULL AND at >= ${w.from} AND at < ${w.to} GROUP BY 1`
     const [wait] = await tx`
       SELECT count(*) AS n, percentile_cont(0.5) WITHIN GROUP (ORDER BY wait_ms)::float8 AS p50,
         percentile_cont(0.9) WITHIN GROUP (ORDER BY wait_ms)::float8 AS p90
@@ -172,7 +179,7 @@ export async function readCapacityLoop(
       p90: z.coerce.number().nullable(),
       max: z.coerce.number().nullable(),
     }
-    const Reason = z.enum(['slots', 'memory', 'swap', 'load', 'unsized', 'line'])
+    const Reason = z.enum(['slots', 'memory', 'swap', 'load', 'unsized', 'line', 'cores', 'class'])
     const statsOf = (r: {
       waits: number
       total: number
@@ -334,12 +341,14 @@ export async function readCapacityLoop(
       idleSeatHoursMemory: idleMemory,
       queueByReason,
       minutesOverCeiling: { total: over, perDay: perDay(overDay, 0) },
+      leadsRunning: perDay(leadsDay, null),
       slotAim,
       slotWait: {
         n: waitRow.n,
         p50Ms: waitRow.p50,
         p90Ms: waitRow.p90,
         perDayP50: perDay(waitDay, null),
+        perDayP90: perDay(waitDayP90, null),
         byReason: byReasonAll,
         byRepo: byRepoAll,
       },
