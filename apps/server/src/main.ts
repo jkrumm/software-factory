@@ -27,7 +27,7 @@ import { postgresVisitStore } from './adapters/postgres/visit-store.ts'
 import { postgresReviewStore } from './adapters/postgres/review-store.ts'
 import { postgresDeskStore } from './adapters/postgres/desk-store.ts'
 import { prReview } from './adapters/reviews/pr.ts'
-import { askHumanPush, askHumanSync } from './adapters/shell/ask-human.ts'
+import { askHumanPush, askHumanSync, askHumanVerbs } from './adapters/shell/ask-human.ts'
 import { loadMigrations, migrate } from './adapters/postgres/migrate.ts'
 import { acquireProcessLock } from './adapters/postgres/process-lock.ts'
 import { postgresCapacityStore } from './adapters/postgres/capacity-store.ts'
@@ -295,6 +295,8 @@ async function main(): Promise<void> {
     // `project.yaml`; a JSON file named by the environment overrides it, as an explicit stand-in.
     judge: agwJudge(agw),
     errandScreen: agwErrandScreen(agw),
+    // an Errand that is exactly a report or a pull of the MacBook's fixed verbs runs through them, with no dialog
+    macbook: askHumanVerbs({ host: loopSettings.askHumanHost }),
     specScreen: agwSpecScreen(agw),
     recheckAfterMs: loopSettings.recheckAfterMs,
     policies: checkpointSettings.policyFile ? fileStandingPolicies(checkpointSettings.policyFile) : planning.policies,

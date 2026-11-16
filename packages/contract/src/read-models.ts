@@ -317,6 +317,7 @@ export const KPI_KEYS = [
   'verdict_changes_share',
   'specs_per_100',
   'owner_decisions_per_100',
+  'errands_reached_per_100',
   'first_verification_passes',
   'refusals',
   'cycle_p50',

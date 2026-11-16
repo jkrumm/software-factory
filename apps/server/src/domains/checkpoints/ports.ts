@@ -28,6 +28,7 @@ import type { Need } from './need.ts'
 import type { RunStatus } from '../../kernel/run.ts'
 import type { CheckRun, Host } from './request.ts'
 import type { Page } from './page.ts'
+import type { MacbookVerb } from './triage.ts'
 import type { Recheck, RecheckCandidate, ReviewWait } from './recheck.ts'
 
 /** A step on a Decision's way to an answer. `open`: it reached the owner. */
@@ -425,6 +426,8 @@ export interface CheckpointStore {
     check: string | null
     matchKey: string | null
   }): Promise<ErrandRecord | null>
+  /** the latest turn-back, by the owner or the orchestrator, of an Errand with this match key at or after `since`: when, and his note (the same need is not raised again for a while) */
+  declinedMatch(matchKey: string, since: Date): Promise<{ at: Date; note: string } | null>
   /** the Errand an earlier raise under this key joined, open or closed */
   joinedErrand(key: Key): Promise<ErrandRecord | null>
   /** an Issue waits on this Errand too; false when it does already */
@@ -512,6 +515,16 @@ export interface PushPort {
  */
 export interface SyncPort {
   sync(): Promise<Result<{ exit: number; output: string }>>
+}
+
+/**
+ * A fixed verb of the MacBook's gate over the dedicated ssh key (`<verb> [<name>]` as its forced command reads it, `triage.ts`): `dotfiles-sync`,
+ * `report <name>` (one read-only command of the MacBook's registry, exit 0 when it ran, whatever it said) and `repo-pull <name>`
+ * (`git pull --ff-only` of one checkout under `~/SourceRoot`). Exit 126: the gate refuses the verb (unknown, or an older gate),
+ * 255: the MacBook is unreachable. One call, never inside a transaction.
+ */
+export interface MacbookVerbPort {
+  run(verb: MacbookVerb): Promise<Result<{ exit: number; output: string }>>
 }
 
 /** The desk pass's own record: when it last ran, when the owner last came back, and whether the MacBook last answered. */

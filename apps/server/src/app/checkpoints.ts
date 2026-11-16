@@ -33,6 +33,14 @@ import {
 import { matchKeyOf } from '../domains/checkpoints/match.ts'
 import { failedTwiceNote, MAX_RUN_TRIES, needOf } from '../domains/checkpoints/need.ts'
 import {
+  DECLINE_HOLD_MS,
+  refuseBotCheck,
+  refuseDeclined,
+  refuseEmptyPlace,
+  refuseKeyless,
+  refuseUnroutable,
+} from '../domains/checkpoints/triage.ts'
+import {
   brokenLine,
   CHECK_BROKEN_NOTE,
   type CheckRun,
@@ -1018,6 +1026,17 @@ export function listArtifacts(
 // ---------------------------------------------------------------------------------------------------------------------
 // Errands
 
+/** The refusal of a need the owner turned back within the hold, or null. */
+async function declinedRefusal(
+  checkpoints: Pick<CheckpointStores['checkpoints'], 'declinedMatch'>,
+  matchKey: string | null,
+  now: Date,
+): Promise<string | null> {
+  if (matchKey === null) return null
+  const declined = await checkpoints.declinedMatch(matchKey, new Date(now.getTime() - DECLINE_HOLD_MS))
+  return refuseDeclined(declined, now)
+}
+
 export interface ErrandWritten {
   /** `joined`: an open Errand is the same need (command, check, need key or ask), and the Issue waits on it instead of raising its own */
   result: 'applied' | 'replayed' | 'joined'
@@ -1037,6 +1056,9 @@ export function raiseErrand(
   if (hostDoes) return Promise.resolve(err({ kind: 'invalid', detail: hostDoes }))
   const undialogable = refuseUndialogable(read.value)
   if (undialogable) return Promise.resolve(err({ kind: 'invalid', detail: undialogable }))
+  // the host's own work and an empty place are refused before an Issue waits (`domains/checkpoints/triage.ts`)
+  const byRule = refuseKeyless(read.value) ?? refuseEmptyPlace(read.value, read.value.need)
+  if (byRule) return Promise.resolve(err({ kind: 'invalid', detail: byRule }))
   return raiseChecked(deps, input, read.value)
 }
 
@@ -1094,6 +1116,10 @@ async function raiseChecked(
         issue: moveOf(joined.value.issue, joined.value.effects),
       })
     }
+
+    // the owner turned this need back not long ago: his note is the answer, nothing is raised
+    const held = await declinedRefusal(checkpoints, matchKey, deps.clock.now())
+    if (held) return err({ kind: 'invalid', detail: held })
 
     const id = deps.ids.next('errand')
     const recorded = applied(
@@ -1386,6 +1412,13 @@ export function requestErrand(
   const read = readRequest(input.raw, at)
   if (!read.ok) return Promise.resolve(read)
   const request = read.value
+  // a bot check, the host's own work and a request that says nothing about its need are refused before anything is stored
+  const byRule =
+    refuseBotCheck(request) ??
+    refuseKeyless(request) ??
+    refuseEmptyPlace(request, request.need) ??
+    refuseUnroutable(request, request.need)
+  if (byRule) return Promise.resolve(err({ kind: 'invalid', detail: byRule }))
   return deps.uow.run(async ({ work, checkpoints }) => {
     // the expiry is relative to now, so it is not part of what makes a request the same one
     const same = digest(
@@ -1412,6 +1445,8 @@ export function requestErrand(
       (open.command !== request.command ||
         (request.command === null && (open.detail !== request.detail || open.checkCommand !== request.check)))
     if (open && !corrected) return ok<ErrandRequested>({ result: 'joined', errand: open, superseded: [] })
+    const held = await declinedRefusal(checkpoints, matchKey, at)
+    if (held) return err({ kind: 'invalid', detail: held })
     const id = deps.ids.next('errand')
     // asked again after the first was closed: a new Errand, under a key of its own
     const errandKey = existing ? key('errand_request', id) : sameKey

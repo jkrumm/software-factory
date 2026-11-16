@@ -79,7 +79,7 @@ const value = <T, E>(result: Result<T, E>): T => {
   return result.value
 }
 const request = async (raw: Record<string, unknown>) =>
-  value(await requestErrand(deps, { raw: { source: 'test-agent', ...raw } }))
+  value(await requestErrand(deps, { raw: { source: 'test-agent', need: 'hands', ...raw } }))
 const pass = async () => value(await errandsPass({ uow: deps.uow, clock, checks: runner, needed: judge }))
 const errandRow = async (id: string) => (await db.sql`SELECT * FROM factory.errands WHERE id = ${id}`)[0]
 const since = async (at: Date) => (await readSince(db.sql, { now: clock.now(), since: at })).categories.errands

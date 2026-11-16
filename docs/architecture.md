@@ -515,7 +515,25 @@ no secret is `approval`, and with a command it reaches the owner by rule (`scree
 MacBook with no physical step is `place`; a device, hardware, a portal or a visual check is `hands`. The desk pass pushes a MacBook
 dialog (`pushQueue`) only for `secret` and `hands`: a `place` waits on Needs you with its command to copy (his "Push what waits"
 button still pushes it), an `approval` never goes to the MacBook.
-**The one place the factory runs itself** (`app/checkpoints-sync.ts`, `isSyncCommand`): a `place` Errand whose command is exactly
+**Decided by rule before the owner** (issue 1714, `domains/checkpoints/triage.ts`, replayed by `scripts/errand-replay.ts`): a request or a lead's Errand is read by its shape
+before it can reach him, and a secret, sudo, passphrase or hands Errand can only get `reach`. (a) A command that runs wholly on the mini or
+over keyless ssh (an ssh to the mini or a server, `hc ... --on mini`) with no secret word, no physical word and none of his yes (a restart or
+power-off, `hc server`/`hc update`, the gate's release, a recursive delete, a service boot-out) is refused at the raise
+(`refuseKeyless`: the lead is on the mini, so it runs the command itself); an `approval` is now only a yes of his. (c) A request (no Issue) that
+asks him to pass a bot check (`refuseBotCheck`) is refused: the run reports the page as blocked and goes on with other sources; an Issue that
+cannot be answered without the page raises an Errand of its own. (d) The same need (`matchKey`) that the owner or the orchestrator turned back
+within `DECLINE_HOLD_MS` (3 days) is refused with the turn-back note as the refusal text (`declinedMatch`; no new column). (e) A lead's
+Errand states its need (`--need secret|hands|place`, `ErrandBody.need`; `place` needs `--cmd`), else it is refused with the field named; a request
+with no command whose words name no secret and no physical step must state one too. A stated need never lowers the rules' need: it is
+checked for presence, not stored. (b) `verbFor`: a MacBook command that is exactly a fixed class and names no secret or physical step is run by
+the screen (`screenErrand`, before the other looks, only when `SettleDeps.macbook` is set) through the gate's fixed verbs
+(`report <name>` for the commands of `MACBOOK_REPORTS`, `repo-pull <name>` for `git -C ~/SourceRoot/<name> pull --ff-only`,
+`dotfiles-sync`; `adapters/shell/ask-human.ts` `askHumanVerbs`, no transaction open) with no dialog: exit 0 closes the Errand `done` by `loop`
+(`finishRan`), the Issue and every joined Issue hear `errand_done` with `ran` (the verb and its output) and nothing is paged; any other exit (126 the
+gate lacks the verb, 255 unreachable, git refused) reaches him as a `place` Errand with the reason in its screen note. The MacBook side of the verbs
+(`report`'s registry, `repo-pull`) is dotfiles': the contract is the signal filed with this change. The KPI `errands_reached_per_100` is the Errands
+that reached him per 100 Issues filed; its parts are the shares needing a secret or hands, a secret, hands, a place, or only his yes.
+**The one place the factory ran itself before 1714** (`app/checkpoints-sync.ts`, `isSyncCommand`): a `place` Errand whose command is exactly
 `git -C ~/SourceRoot/dotfiles pull --ff-only`, optionally followed by `make herdr-app-setup`, is run through the MacBook's
 `dotfiles-sync` verb (`ssh -o BatchMode=yes <FACTORY_ASK_HUMAN_HOST> dotfiles-sync`, no arguments, `adapters/shell/ask-human.ts`
 `askHumanSync`) on every tick of the `desk` loop, not only when its pass is due, with no dialog and no copy-paste. One call serves

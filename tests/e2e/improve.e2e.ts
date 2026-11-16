@@ -48,6 +48,7 @@ const CARD_ORDER = [
   'specs_not_needed',
   'specs_per_100',
   'owner_decisions_per_100',
+  'errands_reached_per_100',
   'verdict_changes_share',
   'first_watch_dwell_p50',
   'regression_cause',

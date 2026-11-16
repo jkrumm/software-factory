@@ -140,6 +140,7 @@ test('a stale Decision and a stale Errand whose Issue is closed are withdrawn wi
       attempt: 1,
       summary: 'Approve the build in the portal',
       detail: 'Release > Build 42 > Approve',
+      need: 'hands',
       tried: 'looked for an API route: none',
     }),
   )

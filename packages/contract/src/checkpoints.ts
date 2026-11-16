@@ -389,6 +389,12 @@ export const ErrandBody = z
      * the same name is the same Errand, and you wait on that one. Without it the same command or the same one-line ask joins.
      */
     needKey: z.string().optional(),
+    /**
+     * what the Errand needs from the owner, required: `secret` (1Password, a biometric, a password or passphrase), `hands`
+     * (a device, a portal, a physical step or a look) or `place` (a command that must run on his MacBook and holds no secret).
+     * The rules over its shape still decide the stored need; a missing one refuses the raise.
+     */
+    need: z.enum(['secret', 'hands', 'place']).optional(),
     /** makes a repeated call one event, as on `ship` and `defer` */
     call: z.string().trim().min(1).max(128).optional(),
   })
@@ -452,6 +458,8 @@ export const ErrandRequestBody = z
     where: z.enum(ERRAND_HOSTS).optional(),
     /** who asks, a short name (`ask-human`) */
     source: z.string().optional(),
+    /** what it needs from the owner: `secret`, `hands` or `place`; required when no command is given and the words name no physical step or secret */
+    need: z.enum(['secret', 'hands', 'place']).optional(),
   })
   .meta({ id: 'ErrandRequestBody' })
 
@@ -681,7 +689,7 @@ export const PassReply = z
       }),
     ),
     errands: z.array(
-      z.object({ errand: z.string(), outcome: z.enum(['held', 'reached_owner', 'turned_away', 'dropped']) }),
+      z.object({ errand: z.string(), outcome: z.enum(['held', 'reached_owner', 'turned_away', 'ran', 'dropped']) }),
     ),
     /** the Spec revisions the screen looked at: passed to the owner, settled by the factory, held for a retry, or dropped */
     specs: z

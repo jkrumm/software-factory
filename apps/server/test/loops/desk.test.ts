@@ -171,7 +171,9 @@ async function workingIssue(repo = '/w/work-repo-1'): Promise<IssueId> {
 }
 
 const raise = async (issueId: IssueId, raw: Record<string, unknown>) =>
-  value(await raiseErrand(deps, { issueId, attempt: 1, raw: { tried: 'looked for a route: none', ...raw } }))
+  value(
+    await raiseErrand(deps, { issueId, attempt: 1, raw: { need: 'hands', tried: 'looked for a route: none', ...raw } }),
+  )
 const issueRow = async (id: string) => (await db.sql`SELECT * FROM factory.issues WHERE id = ${id}`)[0]
 const errandRow = async (id: string) => (await db.sql`SELECT * FROM factory.errands WHERE id = ${id}`)[0]
 const noteEffects = async (id: string) =>
@@ -565,7 +567,12 @@ describe('the desk pass', () => {
     const refused = await raiseErrand(deps, {
       issueId,
       attempt: 1,
-      raw: { tried: 'looked for a way without root', summary, cmd: 'ssh -t homelab sudo sysctl -w vm.swappiness=10' },
+      raw: {
+        need: 'hands',
+        tried: 'looked for a way without root',
+        summary,
+        cmd: 'ssh -t homelab sudo sysctl -w vm.swappiness=10',
+      },
     })
     expect(!refused.ok && refused.error).toMatchObject({ kind: 'invalid' })
     expect(!refused.ok && 'detail' in refused.error ? refused.error.detail : '').toContain('sudo -S')
@@ -592,7 +599,7 @@ describe('the desk pass', () => {
           ? [{ id: '20261114T031243-30967', text: 'Raise kern.maxvnodes', cmd: 'make maxvnodes-install' }]
           : [],
       )
-    const raw = { tried: 'looked for a route: none', summary: 'Approve the queued dialog' }
+    const raw = { need: 'hands', tried: 'looked for a route: none', summary: 'Approve the queued dialog' }
     const refused = await raiseErrand(deps, { issueId, attempt: 1, raw })
     expect(!refused.ok && refused.error).toMatchObject({ kind: 'invalid' })
     const detail = !refused.ok && 'detail' in refused.error ? refused.error.detail : ''
@@ -852,7 +859,9 @@ describe('an Errand that needs only his yes', () => {
 
   test('a command-less request under the same key with another detail or check replaces the open one', async () => {
     const ask = (text: string, check?: string) =>
-      requestErrand(deps, { raw: { source: 'test-agent', text, key: 'reseal', ...(check ? { check } : {}) } })
+      requestErrand(deps, {
+        raw: { source: 'test-agent', need: 'hands', text, key: 'reseal', ...(check ? { check } : {}) },
+      })
     const first = value(await ask('Reseal the cache\nold detail'))
     expect(first.result).toBe('applied')
     const changed = value(await ask('Reseal the cache\nnew detail', 'gate-pending'))

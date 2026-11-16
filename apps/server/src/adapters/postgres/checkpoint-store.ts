@@ -1044,6 +1044,17 @@ export function postgresCheckpointStore(tx: SQL): CheckpointStore {
       return row ? errandOf(row) : null
     },
 
+    async declinedMatch(matchKey, since) {
+      const [row] = await tx`
+        SELECT done_at, done_note FROM factory.errands
+        WHERE match_key = ${matchKey} AND closed_kind = 'turned_back' AND closed_by IN ('owner', 'orchestrator')
+          AND done_at >= ${since}
+        ORDER BY done_at DESC LIMIT 1`
+      if (!row) return null
+      const read = z.object({ done_at: z.coerce.date(), done_note: z.string().nullable() }).parse(row)
+      return { at: read.done_at, note: read.done_note ?? '' }
+    },
+
     async joinedErrand(key) {
       const [row] = await tx`
         SELECT e.* FROM factory.errands e JOIN factory.errand_joins j ON j.errand_id = e.id WHERE j.key = ${key}`

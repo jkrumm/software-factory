@@ -64,6 +64,8 @@ export function describeEvent(kind: string, payload: unknown): string {
     case 'errand_done': {
       const turnedAway = field(payload, 'turnedAway')
       const resolved = field(payload, 'resolved')
+      const ran = field(payload, 'ran')
+      if (ran) return `An errand was run on the MacBook by the factory: ${cut(plainText(ran))}`
       if (resolved) return `An errand was no longer needed: ${cut(plainText(resolved))}`
       return turnedAway ? `An errand was turned away: ${cut(plainText(turnedAway))}` : 'The errand was done.'
     }

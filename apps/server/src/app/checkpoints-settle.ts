@@ -13,6 +13,7 @@ import type { Precedent } from '../domains/checkpoints/decision.ts'
 import { decisionPage, deepLink } from '../domains/checkpoints/page.ts'
 import {
   type ErrandScreenPort,
+  type MacbookVerbPort,
   type SpecScreenPort,
   type JudgePort,
   type DecisionRecord,
@@ -37,6 +38,8 @@ export interface SettleDeps extends CheckpointDeps {
   policies: StandingPolicies
   judge: JudgePort
   errandScreen: ErrandScreenPort
+  /** the MacBook's fixed verbs, which run a report or a pull for an Errand with no dialog; absent: every such Errand reaches the owner as before */
+  macbook?: MacbookVerbPort
   specScreen: SpecScreenPort
   /** a checkpoint at the owner this long is looked at once more (`FACTORY_CHECKPOINT_RECHECK_MS`); 0 is off */
   recheckAfterMs: number

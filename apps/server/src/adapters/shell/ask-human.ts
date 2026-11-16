@@ -1,5 +1,6 @@
 import { join } from 'node:path'
-import type { PushPort, SyncPort } from '../../domains/checkpoints/ports.ts'
+import type { MacbookVerbPort, PushPort, SyncPort } from '../../domains/checkpoints/ports.ts'
+import { verbWords } from '../../domains/checkpoints/triage.ts'
 import { err, ok, portError } from '../../kernel/result.ts'
 import { type Run, runProcess } from '../quality/process.ts'
 
@@ -46,6 +47,33 @@ export function askHumanPush(options: {
         return done.exitCode === 0
       } catch {
         return false
+      }
+    },
+  }
+}
+
+/** A verb of the gate (a pull, a sync with its make targets) is a hang guard here, never a budget. */
+const VERB_TIMEOUT_MS = 10 * 60_000
+
+/**
+ * The MacBook's fixed verbs (`dotfiles-sync`, `report <name>`, `repo-pull <name>`) through the ssh alias `ask-human.sh` pushes
+ * through. The words are the verb and one name the domain validated (`triage.ts`); the gate validates them again. `BatchMode`
+ * so a key that is not accepted fails at once; unset host, there is no MacBook to call.
+ */
+export function askHumanVerbs(options: { host: string | null; run?: Run }): MacbookVerbPort {
+  const run = options.run ?? runProcess
+  return {
+    async run(verb) {
+      if (!options.host) return err(portError('gone', 'no MacBook ssh alias is set (FACTORY_ASK_HUMAN_HOST)'))
+      try {
+        const done = await run(
+          ['ssh', '-o', 'BatchMode=yes', '-o', 'ConnectTimeout=8', options.host, ...verbWords(verb)],
+          VERB_TIMEOUT_MS,
+          { group: true },
+        )
+        return ok({ exit: done.exitCode, output: done.stdout })
+      } catch (cause) {
+        return err(portError('gone', `ssh could not start: ${String(cause).slice(0, 200)}`))
       }
     },
   }

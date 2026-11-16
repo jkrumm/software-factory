@@ -10,8 +10,10 @@ import {
 } from '../domains/checkpoints/errand.ts'
 import { MAX_RUN_TRIES, type Need, needOf } from '../domains/checkpoints/need.ts'
 import { closedNote, SCREENED_SOURCES } from '../domains/checkpoints/request.ts'
+import { type MacbookVerb, verbFor, verbWords } from '../domains/checkpoints/triage.ts'
+import { firstErrorLine, outputNote } from '../kernel/run.ts'
 import { deepLink, errandPage } from '../domains/checkpoints/page.ts'
-import type { ErrandRecord } from '../domains/checkpoints/ports.ts'
+import type { ErrandRecord, MacbookVerbPort } from '../domains/checkpoints/ports.ts'
 import type { IssueId } from '../kernel/ids.ts'
 import { key } from '../kernel/keys.ts'
 import { ok, type PortError, type Result } from '../kernel/result.ts'
@@ -34,7 +36,7 @@ export { MAX_RUN_TRIES }
 export interface ErrandScreened {
   errand: string
   /** `held`: a call failed and is tried again later; `dropped`: it changed under the call */
-  outcome: 'held' | 'reached_owner' | 'turned_away' | 'dropped'
+  outcome: 'held' | 'reached_owner' | 'turned_away' | 'ran' | 'dropped'
 }
 
 type Outcome = ErrandScreened['outcome']
@@ -208,6 +210,7 @@ async function screenErrand(deps: SettleDeps, id: ErrandId): Step<ErrandScreened
     | 'dropped'
     | 'finished'
     | { rule: string; awaits?: string; errand: ErrandRecord }
+    | { verb: MacbookVerb; errand: ErrandRecord }
     | { reach: string; need: Need; errand: ErrandRecord },
     CheckpointError
   >(async (stores) => {
@@ -216,6 +219,9 @@ async function screenErrand(deps: SettleDeps, id: ErrandId): Step<ErrandScreened
     const { errand } = found
     const review = screenByReview(errand)
     if (review) return ok({ rule: review.reason, awaits: review.review, errand })
+    // a command that is exactly a report or a pull of a fixed MacBook verb runs with no dialog, before any other look
+    const verb = deps.macbook ? verbFor(errand) : null
+    if (verb) return ok({ verb, errand })
     const shaped = screenByNeed(errand)
     if (shaped) return ok({ reach: shaped.note, need: shaped.need, errand })
     const turned = screenByRule(errand)
@@ -230,6 +236,9 @@ async function screenErrand(deps: SettleDeps, id: ErrandId): Step<ErrandScreened
   })
   if (!first.ok) return first
   if (first.value === 'dropped' || first.value === 'finished') return ok({ errand: id, outcome: 'dropped' })
+
+  if ('verb' in first.value && deps.macbook) return viaMacbook(deps, deps.macbook, id, first.value.verb)
+  if ('verb' in first.value) return ok({ errand: id, outcome: 'dropped' })
 
   if ('reach' in first.value) {
     const done = await record(deps, id, { kind: 'reach', by: 'rule', note: first.value.reach, need: first.value.need })
@@ -258,6 +267,79 @@ async function screenErrand(deps: SettleDeps, id: ErrandId): Step<ErrandScreened
   }
   const done = await record(deps, id, verdict)
   return done.ok ? ok({ errand: id, outcome: done.value }) : done
+}
+
+/**
+ * Runs an Errand's fixed MacBook verb through its port (no transaction open) and closes the Errand with what it printed: the
+ * lead hears it as its next note and the owner is never paged. A verb that did not run (the gate refuses it, the MacBook does not
+ * answer, git refused the pull) leaves the command with the owner, as a `place` Errand, with the reason in its note.
+ */
+async function viaMacbook(
+  deps: SettleDeps,
+  port: MacbookVerbPort,
+  id: ErrandId,
+  verb: MacbookVerb,
+): Step<ErrandScreened> {
+  const answer = await port.run(verb)
+  const said = `MacBook verb "${verbWords(verb).join(' ')}"`
+  const failed = !answer.ok
+    ? answer.error.detail
+    : answer.value.exit === 126
+      ? "the MacBook's gate does not serve that verb"
+      : answer.value.exit === 255
+        ? 'the MacBook did not answer'
+        : answer.value.exit === 0
+          ? null
+          : `it exited ${answer.value.exit}: ${firstErrorLine(answer.value.output)}`
+  if (answer.ok && failed === null) {
+    const finished = await finishRan(
+      deps,
+      id,
+      `${said}: ${outputNote(answer.value.output) || '(no output)'}`.slice(0, 1800),
+    )
+    return finished.ok ? ok({ errand: id, outcome: finished.value ? 'ran' : 'dropped' }) : finished
+  }
+  const done = await record(deps, id, {
+    kind: 'reach',
+    by: 'rule',
+    need: 'place',
+    note: `the factory tried the ${said} and it did not run (${failed ?? 'unknown'}): the command is his to run`.slice(
+      0,
+      300,
+    ),
+  })
+  return done.ok ? ok({ errand: id, outcome: done.value }) : done
+}
+
+/**
+ * An Errand the factory ran itself through a fixed MacBook verb ends `done` (closed by the loop, never by the owner): the Issue
+ * that waits on it, and every Issue that joined it, hear what the verb printed. False when it closed under the call.
+ */
+export async function finishRan(deps: SettleDeps, id: ErrandId, ran: string): Step<boolean> {
+  return deps.uow.run<boolean, CheckpointError>(async (stores) => {
+    const found = await openUnder(stores, deps, id)
+    if (found === 'dropped' || found === 'finished') return ok(false)
+    const { errand } = found
+    const at = deps.clock.now()
+    const end = async (issueId: IssueId): Promise<Result<unknown, CheckpointError>> =>
+      applied(
+        await recordIn(stores.work, deps, {
+          issueId,
+          key: key('errand_done', errand.id, ...(issueId === errand.issueId ? [] : [issueId])),
+          event: { kind: 'errand_done', payload: { errand: errand.id, ran }, actor: 'factory' },
+        }),
+        'errand_done',
+      )
+    if (errand.issueId) {
+      const ended = await end(errand.issueId)
+      if (!ended.ok) return ended
+    }
+    const joined = await eachJoined(stores, errand, end)
+    if (!joined.ok) return joined
+    await stores.checkpoints.finishErrand(errand.id, at, ran.slice(0, 1500), { kind: 'done', by: 'loop' })
+    await stores.checkpoints.cancelPages(errand.id, at)
+    return ok(true)
+  })
 }
 
 /** One pass over the Errands the screen holds, oldest first. */

@@ -100,6 +100,7 @@ export async function seed(lab: Lab): Promise<void> {
       attempt: 1,
       summary,
       detail,
+      need: 'hands',
       tried: 'looked for a command or token route: none',
     })
   await raise(

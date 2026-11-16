@@ -368,6 +368,7 @@ test('an Errand raised by the lead and done by the owner: paged once, and the le
       attempt: 1,
       summary: 'Approve the App Store build in the portal',
       detail: 'Release > Build 42 > Approve',
+      need: 'hands',
       tried: 'looked for an API route: none',
     }),
   )
@@ -404,7 +405,7 @@ test('two Issues of a repo raise the same need: one Errand, one page, and his on
       'errand',
       'raise',
       issue,
-      ...body({ attempt: 1, tried: 'looked for an API route: none', ...extra }),
+      ...body({ attempt: 1, need: 'hands', tried: 'looked for an API route: none', ...extra }),
     )
   const raised = await raise(first, { summary: 'Set the census contact in the portal', needKey: 'census-contact' })
   expect(raised.result).toBe('applied')

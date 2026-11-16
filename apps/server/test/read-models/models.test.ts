@@ -90,7 +90,7 @@ describe('the empty database', () => {
     expect(chain).toMatchObject({ nodes: [], edges: [], blocking: {} })
 
     const kpis = KpiModel.parse(await readKpis(sql, { now: NOW, days: 7 }))
-    expect(kpis.kpis.map((k) => k.key)).toHaveLength(25)
+    expect(kpis.kpis.map((k) => k.key)).toHaveLength(26)
     for (const kpi of kpis.kpis) expect(kpi.value).toBeNull()
     expect(kpis.kpis.find((k) => k.key === 'cost')).toMatchObject({ measured: false, n: 0 })
 
@@ -418,6 +418,26 @@ describe('the fixture', () => {
     const later = new Date(NOW.getTime() + 10 * 24 * 3_600_000)
     const narrow = KpiModel.parse(await readKpis(sql, { now: later, days: 1 }))
     expect(narrow.kpis.find((k) => k.key === 'worth_asking')).toMatchObject({ n: 0, value: null })
+  })
+
+  test('kpis: Errands that reached the owner per 100 Issues, and what they needed', async () => {
+    // the fixture's one Errand reached him 2 hours ago with no need stored; three more with one, one before the window
+    await sql`INSERT INTO factory.errands (id, key, issue_id, attempt, summary, raised_at, reached_owner_at, need) VALUES
+      ('errand_k1', 'key_k1', 'issue_4', 1, 'a', ${ago(3)}, ${ago(3)}, 'secret'),
+      ('errand_k2', 'key_k2', 'issue_4', 1, 'b', ${ago(4)}, ${ago(4)}, 'hands'),
+      ('errand_k3', 'key_k3', 'issue_4', 1, 'c', ${ago(5)}, ${ago(5)}, 'place'),
+      ('errand_k4', 'key_k4', 'issue_4', 1, 'd', ${ago(400)}, ${ago(400)}, 'secret')`
+    try {
+      const model = KpiModel.parse(await readKpis(sql, { now: NOW, days: 7 }))
+      const kpi = model.kpis.find((k) => k.key === 'errands_reached_per_100')
+      // four reached him in the window over nine Issues filed
+      expect(kpi).toMatchObject({ n: 9, count: 4, measured: true, unit: 'per_100_issues' })
+      expect(kpi?.value).toBeCloseTo((4 / 9) * 100, 6)
+      const parts = Object.fromEntries((kpi?.parts ?? []).map((part) => [part.key, part.value]))
+      expect(parts).toEqual({ secret_or_hands: 2 / 4, secret: 1 / 4, hands: 1 / 4, place: 1 / 4, approval: 0 })
+    } finally {
+      await sql`DELETE FROM factory.errands WHERE id LIKE 'errand_k%'`
+    }
   })
 
   test('kpis: the history holds the windows before, each the same figures over its own window', async () => {
