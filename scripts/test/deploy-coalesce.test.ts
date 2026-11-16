@@ -80,7 +80,7 @@ describe('a deploy takes the newest commit, and one that finds its commit live r
 
 describe('the unreachable seconds of a deploy', () => {
   test('a closed window is unreachable_s=N, an open one says down=1', async () => {
-    const closed = await sh('DOWN_AT=$(( $(date +%s) - 17 )); mark_up; unreachable_detail')
+    const closed = await sh('date() { echo 1000; }; DOWN_AT=983; mark_up; unreachable_detail')
     expect(closed.out).toBe('unreachable_s=17')
     const open = await sh('DOWN_AT=$(( $(date +%s) - 5 )); unreachable_detail')
     expect(open.out).toMatch(/^unreachable_s=[5-6] down=1$/)
@@ -88,22 +88,20 @@ describe('the unreachable seconds of a deploy', () => {
   })
 
   test('mark_up closes the window once: a later call (a rollback after the deploy) does not move it', async () => {
-    const result = await sh(
-      'DOWN_AT=$(( $(date +%s) - 10 )); mark_up; DOWN_AT=$(( $(date +%s) - 99 )); mark_up; unreachable_detail',
-    )
+    const result = await sh('date() { echo 1000; }; DOWN_AT=990; mark_up; DOWN_AT=901; mark_up; unreachable_detail')
     expect(result.out).toBe('unreachable_s=10')
   })
 
   test('the end line splits the window into stopped_s and started_s; only the first stop counts', async () => {
     const result = await sh(
-      'DOWN_AT=$(( $(date +%s) - 30 )); STOPPED_AT=$(( $(date +%s) - 12 )); STOPPED_S=18; mark_stopped; mark_up; unreachable_detail',
+      'date() { echo 1000; }; DOWN_AT=970; STOPPED_AT=988; STOPPED_S=18; mark_stopped; mark_up; unreachable_detail',
     )
     expect(result.out).toBe('unreachable_s=30 stopped_s=18 started_s=12')
   })
 
   test('mark_down and mark_up put the one-minute load on the end line: when the old process was told to stop, when /health answered', async () => {
     const result = await sh(
-      'load_avg() { echo 7; }; mark_down; load_avg() { echo 152; }; DOWN_AT=$(( $(date +%s) - 40 )); mark_up; unreachable_detail',
+      'load_avg() { echo 7; }; mark_down; load_avg() { echo 152; }; date() { echo 1000; }; DOWN_AT=960; mark_up; unreachable_detail',
     )
     expect(result.out).toBe('unreachable_s=40 load_down=7 load_up=152')
     const open = await sh('load_avg() { echo 9; }; mark_down; unreachable_detail')
