@@ -1,6 +1,7 @@
 export { ErrorBody } from './errors.ts'
 export * from './read.ts'
 export * from './read-models.ts'
+export * from './project-page.ts'
 export {
   CancelBody,
   IssueAnswerBody,
