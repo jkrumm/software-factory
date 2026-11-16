@@ -58,7 +58,8 @@ export function TrendChart() {
   const peak = lines ? Math.max(0, ...lines.peak) : 0
   const word = (ms: number) => bucketWords(ms, range.bucket)
   return (
-    <section
+    <div
+      role="group"
       aria-label="Issues over time"
       data-testid="flow-trend"
       className="mb-4 flex min-w-0 flex-col gap-3 rounded-xl bg-card p-3 text-card-foreground"
@@ -137,6 +138,6 @@ export function TrendChart() {
           </p>
         )}
       </div>
-    </section>
+    </div>
   )
 }
