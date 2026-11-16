@@ -7,6 +7,7 @@ import { api, needsCount } from './seed.ts'
 const NAV = [
   { label: 'Needs you', path: '/needs-you', key: 'N' },
   { label: 'Flow', path: '/flow', key: 'F' },
+  { label: 'Artifacts', path: '/artifacts', key: 'A' },
   { label: 'Chain', path: '/chain', key: 'C' },
   { label: 'Improve', path: '/improve', key: 'I' },
   { label: 'Throughput', path: '/throughput', key: 'T' },

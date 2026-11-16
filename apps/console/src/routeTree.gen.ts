@@ -16,6 +16,7 @@ import { Route as ImproveRouteImport } from './routes/improve'
 import { Route as KitRouteImport } from './routes/kit'
 import { Route as NeedsYouRouteImport } from './routes/needs-you'
 import { Route as ThroughputRouteImport } from './routes/throughput'
+import { Route as ArtifactsIndexRouteImport } from './routes/artifacts.index'
 import { Route as ArtifactsIdRouteImport } from './routes/artifacts.$id'
 import { Route as CheckpointsIdRouteImport } from './routes/checkpoints.$id'
 import { Route as IssuesIdRouteImport } from './routes/issues.$id'
@@ -55,6 +56,11 @@ const ThroughputRoute = ThroughputRouteImport.update({
   path: '/throughput',
   getParentRoute: () => rootRouteImport,
 } as any)
+const ArtifactsIndexRoute = ArtifactsIndexRouteImport.update({
+  id: '/artifacts/',
+  path: '/artifacts/',
+  getParentRoute: () => rootRouteImport,
+} as any)
 const ArtifactsIdRoute = ArtifactsIdRouteImport.update({
   id: '/artifacts/$id',
   path: '/artifacts/$id',
@@ -82,6 +88,7 @@ export interface FileRoutesByFullPath {
   '/artifacts/$id': typeof ArtifactsIdRoute
   '/checkpoints/$id': typeof CheckpointsIdRoute
   '/issues/$id': typeof IssuesIdRoute
+  '/artifacts/': typeof ArtifactsIndexRoute
 }
 export interface FileRoutesByTo {
   '/': typeof IndexRoute
@@ -94,6 +101,7 @@ export interface FileRoutesByTo {
   '/artifacts/$id': typeof ArtifactsIdRoute
   '/checkpoints/$id': typeof CheckpointsIdRoute
   '/issues/$id': typeof IssuesIdRoute
+  '/artifacts': typeof ArtifactsIndexRoute
 }
 export interface FileRoutesById {
   __root__: typeof rootRouteImport
@@ -107,6 +115,7 @@ export interface FileRoutesById {
   '/artifacts/$id': typeof ArtifactsIdRoute
   '/checkpoints/$id': typeof CheckpointsIdRoute
   '/issues/$id': typeof IssuesIdRoute
+  '/artifacts/': typeof ArtifactsIndexRoute
 }
 export interface FileRouteTypes {
   fileRoutesByFullPath: FileRoutesByFullPath
@@ -121,6 +130,7 @@ export interface FileRouteTypes {
     | '/artifacts/$id'
     | '/checkpoints/$id'
     | '/issues/$id'
+    | '/artifacts/'
   fileRoutesByTo: FileRoutesByTo
   to:
     | '/'
@@ -133,6 +143,7 @@ export interface FileRouteTypes {
     | '/artifacts/$id'
     | '/checkpoints/$id'
     | '/issues/$id'
+    | '/artifacts'
   id:
     | '__root__'
     | '/'
@@ -145,6 +156,7 @@ export interface FileRouteTypes {
     | '/artifacts/$id'
     | '/checkpoints/$id'
     | '/issues/$id'
+    | '/artifacts/'
   fileRoutesById: FileRoutesById
 }
 export interface RootRouteChildren {
@@ -158,6 +170,7 @@ export interface RootRouteChildren {
   ArtifactsIdRoute: typeof ArtifactsIdRoute
   CheckpointsIdRoute: typeof CheckpointsIdRoute
   IssuesIdRoute: typeof IssuesIdRoute
+  ArtifactsIndexRoute: typeof ArtifactsIndexRoute
 }
 
 declare module '@tanstack/react-router' {
@@ -211,6 +224,13 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof ThroughputRouteImport
       parentRoute: typeof rootRouteImport
     }
+    '/artifacts/': {
+      id: '/artifacts/'
+      path: '/artifacts'
+      fullPath: '/artifacts/'
+      preLoaderRoute: typeof ArtifactsIndexRouteImport
+      parentRoute: typeof rootRouteImport
+    }
     '/artifacts/$id': {
       id: '/artifacts/$id'
       path: '/artifacts/$id'
@@ -246,6 +266,7 @@ const rootRouteChildren: RootRouteChildren = {
   ArtifactsIdRoute: ArtifactsIdRoute,
   CheckpointsIdRoute: CheckpointsIdRoute,
   IssuesIdRoute: IssuesIdRoute,
+  ArtifactsIndexRoute: ArtifactsIndexRoute,
 }
 export const routeTree = rootRouteImport
   ._addFileChildren(rootRouteChildren)

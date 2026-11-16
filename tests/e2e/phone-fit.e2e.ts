@@ -115,6 +115,7 @@ for (const path of [
   '/throughput?hours=168',
   '/needs-you',
   '/flow',
+  '/artifacts',
 ]) {
   test(`nothing reaches past the right edge of the phone on ${path}`, async ({ page }) => {
     await page.goto(path)

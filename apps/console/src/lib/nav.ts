@@ -1,8 +1,17 @@
-import { CpuIcon, GraphIcon, KanbanIcon, LightningIcon, TrendUpIcon, type Icon } from '@phosphor-icons/react'
+import {
+  CpuIcon,
+  FileTextIcon,
+  GraphIcon,
+  KanbanIcon,
+  LightningIcon,
+  TrendUpIcon,
+  type Icon,
+} from '@phosphor-icons/react'
 
 export const NAV = [
   { to: '/needs-you', label: 'Needs you', icon: LightningIcon, key: 'N' },
   { to: '/flow', label: 'Flow', icon: KanbanIcon, key: 'F' },
+  { to: '/artifacts', label: 'Artifacts', icon: FileTextIcon, key: 'A' },
   { to: '/chain', label: 'Chain', icon: GraphIcon, key: 'C' },
   { to: '/improve', label: 'Improve', icon: TrendUpIcon, key: 'I' },
   { to: '/throughput', label: 'Throughput', icon: CpuIcon, key: 'T' },

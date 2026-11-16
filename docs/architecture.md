@@ -556,7 +556,7 @@ A Concept or Spec is a
 revisable artifact; the owner's verdict arrives as the lead's next turn. Revisions are blobs under the data directory
 named by their hash, never in git. The owner's line (ntfy) carries one page per checkpoint, plus one push for a Concept or Spec revision nobody answered in a day, and nothing else.
 
-The Console shows an artifact at `/artifacts/<id>` (`?revision=n`, `&compare=m` for two revisions side by side) as a
+The Console lists every artifact at `/artifacts` (the Artifacts screen, `G` then `A`): `GET /v1/artifacts?limit=200` newest first, each row its kind, title, Issue (number, title, project, from the Issue cards) and age, filtered by `?kind=` and `?project=` through the sidebar. A Report never waits for a verdict and so never reaches Needs you; this is where the owner finds one. The Console shows an artifact at `/artifacts/<id>` (`?revision=n`, `&compare=m` for two revisions side by side) as a
 designed page: a header band (a link back to its Issue with the Issue's state and project, the title, the kind and format in
 words, a revision selector, and for a Concept or Spec the verdict control, a button whose popover holds the four words and
 a note), the document centred in the column left of the comments panel (prose capped at 75ch), and the panel: one card per

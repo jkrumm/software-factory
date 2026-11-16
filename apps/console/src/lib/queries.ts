@@ -255,6 +255,11 @@ export function usePaletteArtifacts(enabled: boolean) {
   return useQuery({ ...artifactListQuery, enabled })
 }
 
+/** The artifacts index: the same list the palette searches, kept current by the stream. */
+export function useArtifactList() {
+  return useQuery(artifactListQuery)
+}
+
 export function prefetchPalette(): void {
   void queryClient.prefetchQuery({ ...issueCardsQuery, staleTime: PREFETCH_STALE_MS })
   void queryClient.prefetchQuery({ ...artifactListQuery, staleTime: PREFETCH_STALE_MS })
