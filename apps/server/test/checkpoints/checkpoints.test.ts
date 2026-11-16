@@ -32,6 +32,7 @@ import { screenSpecs } from '../../src/app/checkpoints-specs.ts'
 import { type SettleDeps, settleDecision, settleOpen } from '../../src/app/checkpoints-settle.ts'
 import { fileIssue, recordIssueEvent } from '../../src/app/issues.ts'
 import { readNeeds } from '../../src/read/needs.ts'
+import { readSince } from '../../src/read/since.ts'
 import type { ArtifactId } from '../../src/domains/checkpoints/artifact.ts'
 import {
   JUDGE_BACKOFF_MS,
@@ -1699,6 +1700,10 @@ describe('decided by rule before the owner (issue 1714)', () => {
     expect(value(await screenErrands(deps))).toEqual([{ errand: made.errand.id, outcome: 'ran' }])
     expect(verbCalls).toEqual([['repo-pull', 'brain']])
     expect(value(await raiseErrandRead(made.errand.id))).toMatchObject({ closedKind: 'done', closedBy: 'loop' })
+    // the band of Errands closed without the owner says the factory ran it
+    const band = (await readSince(db.sql, { now: clock.now(), since: new Date(clock.now().getTime() - 60_000) }))
+      .categories.errands
+    expect(band.items).toMatchObject([{ title: 'Pull brain on the MacBook (run by the factory)' }])
   })
 
   test('(b) a verb that did not run leaves the command with the owner as a place Errand, with the reason', async () => {

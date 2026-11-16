@@ -24,7 +24,7 @@ export const LANGUAGE = {
   claim:
     "A lead's place in its repo: leads: N (64 when the project states none: the host's fit is the limit, NL32) plus one for a fix. A wait that needs a person or a clock gives it back; the lead takes one again before it is told its wait is over",
   'closed without you':
-    'An Errand that ended with no action from the owner: its check found it no longer needed, it expired, or a newer request replaced it. Nothing to do, and its title says which',
+    'An Errand that ended with no action from the owner: its check found it no longer needed, it expired, a newer request replaced it, or the factory ran its MacBook command through a fixed verb. Nothing to do, and its title says which',
   compacted: 'Session state: its context was just compacted, no turn since',
   concept:
     "A direction for a whole product, UX or architecture, before building. Three or four per project, ever. Its result goes into the project's DESIGN.md",
