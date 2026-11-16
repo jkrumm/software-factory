@@ -644,6 +644,14 @@ describe('links probe', () => {
     writeFileSync(join(root, 'foo(1).md'), '')
     expect(brokenLinks(root, 'b.md', '[x](foo(1).md)')).toEqual([])
   })
+
+  test('a node_modules/ target is a consumer-root path and is not judged; a nested or lookalike one is', () => {
+    const root = mkdtempSync(join(base, 'links-'))
+    expect(brokenLinks(root, 'b.md', '[x](node_modules/pkg/docs/a.md)')).toEqual([])
+    expect(brokenLinks(root, 'b.md', '[x](./node_modules/pkg/docs/a.md#h)')).toEqual([])
+    expect(brokenLinks(root, 'b.md', '[x](sub/node_modules/pkg/a.md)')).toHaveLength(1)
+    expect(brokenLinks(root, 'b.md', '[x](node_modules_old/a.md)')).toHaveLength(1)
+  })
 })
 
 describe('retired probe', () => {
