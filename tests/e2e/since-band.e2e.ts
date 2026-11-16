@@ -135,7 +135,7 @@ test('every figure on the band equals the count in the event log since the visit
   const origins = await expectedOrigins(visit)
   expect(Object.values(origins).reduce((sum, n) => sum + n, 0)).toBe(expected.filed)
   expect(Object.keys(origins).length).toBeGreaterThanOrEqual(4)
-  const breakdown = category(page, 'filed').locator('p').nth(1)
+  const breakdown = category(page, 'filed').locator('[data-part="breakdown"]')
   for (const [origin, n] of Object.entries(origins)) {
     await expect(breakdown).toContainText(`${n} ${ORIGIN_WORD[origin] ?? origin}`)
   }
@@ -200,7 +200,10 @@ test('a row opens a popover on hover and on keyboard focus: the full title, what
   )
   const rowBox = await row.boundingBox()
   const popupBox = await popup.boundingBox()
-  expect(rowBox && popupBox && popupBox.x >= rowBox.x + rowBox.width - 1).toBe(true)
+  // beside the row, never over it: to its right, or to its left where the column is the last one on the screen
+  expect(
+    rowBox && popupBox && (popupBox.x >= rowBox.x + rowBox.width - 1 || popupBox.x + popupBox.width <= rowBox.x + 1),
+  ).toBe(true)
   await page.mouse.move(2, 2)
   await expect(popup).toBeHidden()
 
@@ -248,7 +251,7 @@ test('a second page load inside the visit shows the same band', async ({ page, a
   expect(after.seen.getTime()).toBeGreaterThanOrEqual(started.seen.getTime())
 })
 
-test('Regressed, Dropped, Incidents, and the Judge and the screen, carry an InfoHint with the generated text', async ({
+test('every shown category carries a subtitle and an InfoHint with the generated text, and the head names the window', async ({
   page,
   apiUrl,
 }) => {
@@ -258,7 +261,20 @@ test('Regressed, Dropped, Incidents, and the Judge and the screen, carry an Info
   await expectHint(category(page, 'incidents'), 'incident')
   await expectHint(category(page, 'judge'), 'judge')
   await expectHint(category(page, 'screen'), 'screen')
-  await expect(category(page, 'shipped').getByRole('button', { name: /^What / })).toHaveCount(0)
+  await expectHint(category(page, 'shipped'), 'verified')
+  await expectHint(category(page, 'filed'), 'filed')
+  for (const key of keys) await expect(category(page, key).locator('[data-part="subtitle"]'), key).not.toBeEmpty()
+  await expect(category(page, 'shipped').locator('[data-part="subtitle"]')).toHaveText(
+    'Live, and its check passed. Nothing to do.',
+  )
+  // the head says since when, in words, beside the visit hint
+  await expect(band(page).locator('time').first()).toContainText(/^Since \w+ \d{2}:\d{2} \u00b7 /)
+  await expectHint(band(page), 'visit')
+  // what he may act on comes first: Regressed, then Incidents, then Dropped
+  const order = await band(page)
+    .locator('[data-category]')
+    .evaluateAll((els) => els.map((el) => el.getAttribute('data-category')))
+  expect(order.slice(0, 3)).toEqual(['failed', 'incidents', 'dropped'])
 })
 
 test('the visit rule: a read 31 minutes after the last starts a new visit; the read token and an agent move nothing', async ({

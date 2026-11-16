@@ -9,9 +9,12 @@ import {
   SHOWN,
   SINCE_KEYS,
   SINCE_LABEL,
+  SINCE_SUBTITLE,
   SINCE_TONE,
   sinceRows,
+  windowWords,
 } from '../src/lib/since.ts'
+import { LANGUAGE } from '../src/lib/language.gen.ts'
 
 const item = (n: number): SinceItem => ({
   issue: `issue_${n}`,
@@ -39,33 +42,70 @@ const model = (over: Partial<SinceModel['categories']> = {}): SinceModel => ({
 })
 
 describe('sinceRows', () => {
-  test('the categories read in a fixed order with their labels and tones', () => {
-    const rows = sinceRows(model())
+  const everything = model({
+    shipped: category(1, [item(1)]),
+    failed: category(1, [item(2)]),
+    dropped: category(1, [item(3)]),
+    judge: category(1, [item(4)]),
+    screen: category(1, [item(5)]),
+    errands: category(1, [item(6)]),
+    filed: { count: 1, byOrigin: [{ origin: 'you', count: 1 }], items: [item(7)] },
+    incidents: category(1, [item(8)]),
+  })
+
+  test('what he may act on reads first: Regressed and Incidents, then Dropped, then what settled without him', () => {
+    const rows = sinceRows(everything)
+    expect(rows.map((r) => r.key)).toEqual([
+      'failed',
+      'incidents',
+      'dropped',
+      'shipped',
+      'filed',
+      'judge',
+      'screen',
+      'errands',
+    ])
     expect(rows.map((r) => r.key)).toEqual([...SINCE_KEYS])
     expect(rows.map((r) => r.label)).toEqual([
-      'Shipped and verified',
       'Regressed',
+      'Incidents',
       'Dropped',
+      'Shipped and verified',
+      'New Issues',
       'Settled by the Judge',
       'Turned away',
       'Errands closed without you',
-      'New Issues',
-      'Incidents',
     ])
-    expect(Object.keys(SINCE_LABEL)).toEqual([...SINCE_KEYS])
-    expect(Object.keys(SINCE_TONE)).toEqual([...SINCE_KEYS])
+    expect(Object.keys(SINCE_LABEL).toSorted()).toEqual(SINCE_KEYS.toSorted())
+    expect(Object.keys(SINCE_TONE).toSorted()).toEqual(SINCE_KEYS.toSorted())
     expect(rows.find((r) => r.key === 'failed')?.tone).toBe('bad')
     expect(rows.find((r) => r.key === 'shipped')?.tone).toBe('good')
   })
 
-  test('Regressed, Dropped, the Judge, the screen and Incidents carry an InfoHint word, nothing else does', () => {
-    const hints = sinceRows(model()).map((r) => [r.key, r.hint])
-    expect(hints.filter(([, hint]) => hint)).toEqual([
+  test('a category nothing happened in is absent, whatever its neighbours hold', () => {
+    const rows = sinceRows(model({ shipped: category(2, [item(1), item(2)]), incidents: category(1, [item(3)]) }))
+    expect(rows.map((r) => r.key)).toEqual(['incidents', 'shipped'])
+    expect(sinceRows(model())).toEqual([])
+  })
+
+  test('every shown category has a plain subtitle and an InfoHint word', () => {
+    const rows = sinceRows(everything)
+    expect(rows).toHaveLength(SINCE_KEYS.length)
+    for (const row of rows) {
+      expect(row.subtitle.length, row.key).toBeGreaterThan(20)
+      expect(LANGUAGE[row.hint].length, row.key).toBeGreaterThan(10)
+    }
+    expect(Object.keys(SINCE_SUBTITLE).toSorted()).toEqual(SINCE_KEYS.toSorted())
+    expect(rows.find((r) => r.key === 'shipped')?.subtitle).toBe('Live, and its check passed. Nothing to do.')
+    expect(rows.map((r) => [r.key, r.hint])).toEqual([
       ['failed', 'regressed'],
+      ['incidents', 'incident'],
       ['dropped', 'dropped'],
+      ['shipped', 'verified'],
+      ['filed', 'filed'],
       ['judge', 'judge'],
       ['screen', 'screen'],
-      ['incidents', 'incident'],
+      ['errands', 'closed without you'],
     ])
   })
 
@@ -129,4 +169,9 @@ test('agoWords and clockOf phrase the time', () => {
 test('the visit reads as an age and the weekday with the clock', () => {
   const at = '2026-01-01T09:12:00.000Z'
   expect(visitWords(at, Date.parse(at) + 3 * 60 * 60_000)).toMatch(/^3 hours ago \u00b7 \w+ \d{2}:\d{2}$/)
+})
+
+test('the head names the window: since when, as a day and a clock, and how long ago', () => {
+  const at = '2026-01-01T09:12:00.000Z'
+  expect(windowWords(at, Date.parse(at) + 3 * 60 * 60_000)).toMatch(/^Since \w+ \d{2}:\d{2} \u00b7 3 hours ago$/)
 })
