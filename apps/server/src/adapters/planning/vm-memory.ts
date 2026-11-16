@@ -4,10 +4,10 @@ const PAGE_LINE = /^\s*Pages (wired down|occupied by compressor):\s+(\d+)\.?\s*$
  * Memory in use as Activity Monitor's "Memory Used" counts it: (app memory + wired + compressed) over RAM, where app
  * memory is `vm.page_pageable_internal_count - vm.page_purgeable_count`. `sysctlOut` is `sysctl -n` of
  * `vm.page_pageable_internal_count vm.page_purgeable_count hw.pagesize` (one value per line); `vmStatOut` is `vm_stat`
- * (wired and compressor pages). Percent with one decimal; null when anything is missing or does not parse.
+ * (wired and compressor pages). Bytes; null when anything is missing or does not parse.
  * (Summed process RSS counts every shared page once per process and reads as full on a host that is not.)
  */
-export function memoryUsedPct(sysctlOut: string, vmStatOut: string, ramBytes: number): number | null {
+export function memoryUsedBytes(sysctlOut: string, vmStatOut: string, ramBytes: number): number | null {
   const [pageable, purgeable, pageSize] = sysctlOut
     .trim()
     .split('\n')
@@ -23,6 +23,11 @@ export function memoryUsedPct(sysctlOut: string, vmStatOut: string, ramBytes: nu
   if (wired === undefined || compressed === undefined) return null
   if (![pageable, purgeable, pageSize, ramBytes].every((n) => Number.isFinite(n))) return null
   if (pageSize <= 0 || ramBytes <= 0 || pageable < purgeable) return null
-  const used = (pageable - purgeable + wired + compressed) * pageSize
-  return Math.round((used / ramBytes) * 1000) / 10
+  return (pageable - purgeable + wired + compressed) * pageSize
+}
+
+/** The same memory as a share of the RAM, percent with one decimal; null where the bytes are. */
+export function memoryUsedPct(sysctlOut: string, vmStatOut: string, ramBytes: number): number | null {
+  const used = memoryUsedBytes(sysctlOut, vmStatOut, ramBytes)
+  return used === null ? null : Math.round((used / ramBytes) * 1000) / 10
 }

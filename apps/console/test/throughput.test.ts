@@ -4,6 +4,9 @@ import {
   classRows,
   dayWords,
   epochLine,
+  gbNumber,
+  gbOf,
+  hostFigures,
   hoursWords,
   kpiValue,
   levelHeight,
@@ -118,4 +121,86 @@ test('the queue and epoch words: a reason by name, hours with a decimal, a day s
   expect(epochLine(epoch(false))).toStartWith('Counting since ')
   expect(epochLine(epoch(true))).toContain('the 7 days window starts there')
   expect(epochLine({ hours: 24, epoch: null } as ThroughputModel)).toBeNull()
+})
+
+const GIB = 1024 ** 3
+
+const hostModel = (now: ThroughputModel['host']['now']): ThroughputModel =>
+  ({
+    hours: 24,
+    host: {
+      now,
+      signals: {
+        pressureMinutes: { normal: 1400, warning: 30, critical: 10, unread: 0 },
+        load: { p50: 3.14, max: 20.2 },
+        cpuBusyPct: { p50: 22.4, max: 71 },
+        memoryUsedBytes: { p50: 38 * GIB, max: 52.26 * GIB },
+        swapUsedBytes: { p50: 1 * GIB, max: 3 * GIB },
+      },
+    },
+  }) as unknown as ThroughputModel
+
+test('GB are 1024 cubed, one decimal under 100', () => {
+  expect([gbNumber(41.25 * GIB), gbNumber(64 * GIB), gbNumber(0.34 * GIB), gbNumber(128.4 * GIB)]).toEqual([
+    '41.3',
+    '64',
+    '0.3',
+    '128',
+  ])
+  expect(gbOf(41.2 * GIB, 64 * GIB)).toBe('41.2 of 64 GB')
+})
+
+test('the host row reads amounts: CPU percent, GB of the RAM and of the swap, load against its ceiling on named cores', () => {
+  const figures = hostFigures(
+    hostModel({
+      at: '2026-11-16T10:00:00.000Z',
+      cpuBusyPct: 34.6,
+      load: 4.2,
+      loadCeiling: 36,
+      cores: 12,
+      ramBytes: 64 * GIB,
+      memoryUsedBytes: 41.2 * GIB,
+      swapUsedBytes: 2.5 * GIB,
+      swapTotalBytes: 8 * GIB,
+      pressureLevel: 1,
+    }),
+  )
+  expect(figures.cpu.value).toBe('35 %')
+  expect(figures.cpu.sub).toBe('Typical 22 %, peak 71 % over 24 hours.')
+  expect(figures.memory.value).toBe('41.2 of 64 GB')
+  expect(figures.memory.sub).toBe('64 % of the RAM. Typical 38 GB, peak 52.3 GB over 24 hours.')
+  expect(figures.swap.value).toBe('2.5 of 8 GB')
+  expect(figures.swap.fill).toBeCloseTo(2.5 / 64)
+  expect(figures.load.value).toBe('4.2 of 36')
+  // load 4.2 on 12 cores is 35 % of one thread per core: how load differs from CPU percent
+  expect(figures.load.sub).toBe('12 cores, so 35 % of one thread each. Typical 3.1, peak 20.2 over 24 hours.')
+  expect(figures.load.fill).toBeCloseTo(4.2 / 36)
+  expect(figures.pressure.value).toBe('Normal')
+  expect(figures.pressure.sub).toBe('40 of 1440 minutes at warning or critical over 24 hours.')
+})
+
+test('a figure the host did not read is a dash with its reason, never zero', () => {
+  const none = hostFigures(hostModel(null))
+  for (const key of ['cpu', 'memory', 'swap', 'pressure', 'load'] as const) {
+    expect(none[key].value).toBeNull()
+    expect(none[key].fill).toBeNull()
+  }
+  const partial = hostFigures(
+    hostModel({
+      at: '2026-11-16T10:00:00.000Z',
+      cpuBusyPct: null,
+      load: 2,
+      loadCeiling: null,
+      cores: null,
+      ramBytes: null,
+      memoryUsedBytes: null,
+      swapUsedBytes: 1 * GIB,
+      swapTotalBytes: null,
+      pressureLevel: null,
+    }),
+  )
+  expect(partial.cpu.value).toBeNull()
+  expect(partial.memory.value).toBeNull()
+  expect(partial.swap.value).toBe('1 GB')
+  expect(partial.load.value).toBe('2')
 })

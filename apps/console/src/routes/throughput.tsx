@@ -1,5 +1,14 @@
 import type { ThroughputModel } from '@software-factory/contract'
-import { ArrowRightIcon, CpuIcon, HourglassIcon, StackIcon, WarningIcon } from '@phosphor-icons/react'
+import {
+  ArrowRightIcon,
+  CpuIcon,
+  GaugeIcon,
+  HardDrivesIcon,
+  HourglassIcon,
+  MemoryIcon,
+  StackIcon,
+  WarningIcon,
+} from '@phosphor-icons/react'
 import { createFileRoute, Link } from '@tanstack/react-router'
 import { type ReactNode, useState } from 'react'
 import { Fold, MeterBar, Section, Sparkline, StatCard, TimeChart } from '@/components/kit'
@@ -16,6 +25,7 @@ import {
   DEFAULT_THROUGHPUT_WINDOW,
   dayWords,
   epochLine,
+  hostFigures,
   hoursWords,
   issueNumber,
   kpiLabel,
@@ -118,12 +128,94 @@ const dash = (value: number | null, format: (v: number) => string): string => (v
 
 const LEVEL_NAME = { normal: 'Normal', warning: 'Warning', critical: 'Critical', unread: 'Not read' } as const
 
+/** The host now, as numbers: CPU, memory and swap as amounts, the kernel's pressure, and the load against its ceiling. */
+function HostRow({ model }: { model: Model }) {
+  const figures = hostFigures(model)
+  const points = model.host.timeline.points
+  const times = points.map((p) => new Date(p.at).toLocaleString('en-GB', { dateStyle: 'short', timeStyle: 'short' }))
+  const over = windowName(model.hours)
+  const bar = (key: 'cpu' | 'memory' | 'swap' | 'load') => {
+    const { fill, tone } = figures[key]
+    return fill === null ? null : <MeterBar value={Math.min(1, Math.max(0, fill))} tone={tone} />
+  }
+  return (
+    <section aria-labelledby="throughput-host-now" className="min-w-0">
+      <h2 id="throughput-host-now" className="sr-only">
+        The host now
+      </h2>
+      <div className="grid gap-4 sm:grid-cols-2 @7xl:grid-cols-5">
+        <StatCard
+          id="throughput-cpu"
+          icon={CpuIcon}
+          title="CPU busy"
+          hint="cpu busy"
+          subtitle="Share of all cores, newest minute"
+          value={figures.cpu.value}
+          valueNote={figures.cpu.valueNote}
+          sub={figures.cpu.sub}
+          chart={bar('cpu')}
+        />
+        <StatCard
+          id="throughput-memory"
+          icon={MemoryIcon}
+          title="Memory used"
+          hint="memory used"
+          subtitle="Of the RAM installed, newest minute"
+          value={figures.memory.value}
+          valueNote={figures.memory.valueNote}
+          sub={figures.memory.sub}
+          chart={bar('memory')}
+        />
+        <StatCard
+          id="throughput-swap"
+          icon={HardDrivesIcon}
+          title="Swap used"
+          hint="swap used"
+          subtitle="Of the swap file, newest minute"
+          value={figures.swap.value}
+          valueNote={figures.swap.valueNote}
+          sub={figures.swap.sub}
+          chart={bar('swap')}
+        />
+        <StatCard
+          id="throughput-pressure"
+          icon={WarningIcon}
+          title="Memory pressure"
+          hint="memory pressure"
+          subtitle={`Kernel verdict, ${over}`}
+          value={figures.pressure.value}
+          valueNote={figures.pressure.valueNote}
+          sub={figures.pressure.sub}
+          chart={
+            <Sparkline
+              name="Memory pressure"
+              values={points.map((p) => levelHeight(p.pressureLevel))}
+              labels={points.map((p, i) => `${levelWords(p.pressureLevel)}, ${times[i]}`)}
+              format={(v) => (v >= 2 ? 'Critical' : v >= 1 ? 'Warning' : 'Normal')}
+              tone={figures.pressure.tone}
+            />
+          }
+        />
+        <StatCard
+          id="throughput-load"
+          icon={GaugeIcon}
+          title="Load"
+          hint="load"
+          subtitle="Threads wanting a core, per minute"
+          value={figures.load.value}
+          valueNote={figures.load.valueNote}
+          sub={figures.load.sub}
+          chart={bar('load')}
+        />
+      </div>
+    </section>
+  )
+}
+
 /** The three answers, in order, each a question, one sentence, one figure and its trend. The server wrote the sentences. */
 function Answers({ model }: { model: Model }) {
   const { answers } = model
   const { host, queue, cost } = answers
-  const points = model.host.timeline.points
-  const times = points.map((p) => new Date(p.at).toLocaleString('en-GB', { dateStyle: 'short', timeStyle: 'short' }))
   const costDays = cost.perDay
   return (
     <section aria-labelledby="throughput-answers" className="min-w-0">
@@ -146,19 +238,7 @@ function Answers({ model }: { model: Model }) {
                 : { value: 'Not the limit', tone: 'good', direction: 0 }
           }
           sub={host.sentence}
-          chart={
-            <Sparkline
-              name="Memory pressure"
-              values={points.map((p) => levelHeight(p.pressureLevel))}
-              labels={points.map((p, i) => `${levelWords(p.pressureLevel)}, ${times[i]}`)}
-              format={(v) => (v >= 2 ? 'Critical' : v >= 1 ? 'Warning' : 'Normal')}
-              tone={host.level === 'critical' ? 'bad' : host.level === 'warning' ? 'warn' : 'neutral'}
-            />
-          }
-          footer={[
-            { label: 'Swap in use', value: dash(host.swapUsedPct, (v) => `${v.toFixed(1)} %`), note: 'Not read' },
-            { label: 'Memory used', value: dash(host.memoryUsedPct, (v) => `${Math.round(v)} %`), note: 'Not read' },
-          ]}
+          chart={null}
         />
         <StatCard
           id="throughput-queue"
@@ -412,43 +492,71 @@ function Processes({ model }: { model: Model }) {
 function Timeline({ model }: { model: Model }) {
   const { points, bucketMinutes } = model.host.timeline
   const times = points.map((p) => new Date(p.at).getTime())
+  const { now } = model.host
+  const gb = (bytes: number | null) => (bytes === null ? null : bytes / 1024 ** 3)
+  const charts = [
+    {
+      name: 'CPU busy, share of all cores',
+      series: [{ name: 'CPU', values: points.map((p) => p.cpuBusyPct), tone: 'accent' as const, area: true }],
+      format: (v: number) => `${v.toFixed(0)} %`,
+      reference: 100,
+    },
+    {
+      name: 'Memory used, GB',
+      series: [
+        { name: 'Memory', values: points.map((p) => gb(p.memoryUsedBytes)), tone: 'neutral' as const, area: true },
+      ],
+      format: (v: number) => `${v.toFixed(1)} GB`,
+      reference: gb(now?.ramBytes ?? null) ?? undefined,
+    },
+    {
+      name: 'Swap used, GB',
+      series: [{ name: 'Swap', values: points.map((p) => gb(p.swapUsedBytes)), tone: 'accent' as const, area: true }],
+      format: (v: number) => `${v.toFixed(1)} GB`,
+    },
+    {
+      name: 'Memory pressure',
+      series: [
+        {
+          name: 'Pressure',
+          values: points.map((p) => levelHeight(p.pressureLevel)),
+          tone: 'warn' as const,
+          area: true,
+        },
+      ],
+      format: (v: number) => (v >= 2 ? 'Critical' : v >= 1 ? 'Warning' : 'Normal'),
+    },
+    {
+      name: 'Load average',
+      series: [{ name: 'Load', values: points.map((p) => p.load), tone: 'neutral' as const, area: true }],
+      format: (v: number) => v.toFixed(1),
+      reference: now?.loadCeiling ?? undefined,
+    },
+  ]
   return (
     <Section
       level={3}
-      title="Pressure, swap and load"
+      title="CPU, memory, swap, pressure and load"
       aside={`${bucketMinutes}-minute buckets, the busiest minute of each`}
     >
       {points.length === 0 ? (
         <Nothing>The host recorded no minute in this window.</Nothing>
       ) : (
-        <div className="grid gap-6 lg:grid-cols-3">
-          {[
-            {
-              name: 'Memory pressure',
-              series: [
-                {
-                  name: 'Pressure',
-                  values: points.map((p) => levelHeight(p.pressureLevel)),
-                  tone: 'warn' as const,
-                  area: true,
-                },
-              ],
-              format: (v: number) => (v >= 2 ? 'Critical' : v >= 1 ? 'Warning' : 'Normal'),
-            },
-            {
-              name: 'Swap in use, share of RAM',
-              series: [{ name: 'Swap', values: points.map((p) => p.swapUsedPct), tone: 'accent' as const, area: true }],
-              format: (v: number) => `${v.toFixed(1)} %`,
-            },
-            {
-              name: 'Load average',
-              series: [{ name: 'Load', values: points.map((p) => p.load), tone: 'neutral' as const, area: true }],
-              format: (v: number) => v.toFixed(1),
-            },
-          ].map((chart) => (
-            <div key={chart.name} className="min-w-0 rounded-xl bg-card p-4">
+        <div className="grid gap-6 lg:grid-cols-6">
+          {charts.map((chart, i) => (
+            <div
+              key={chart.name}
+              className={cn('min-w-0 rounded-xl bg-card p-4', i < 3 ? 'lg:col-span-2' : 'lg:col-span-3')}
+            >
               <h3 className="mb-2 text-[length:var(--vx-text-sm)] font-medium text-muted-foreground">{chart.name}</h3>
-              <TimeChart name={chart.name} times={times} series={chart.series} format={chart.format} height={96} />
+              <TimeChart
+                name={chart.name}
+                times={times}
+                series={chart.series}
+                format={chart.format}
+                reference={chart.reference}
+                height={96}
+              />
             </div>
           ))}
         </div>
@@ -695,10 +803,11 @@ function Throughput() {
       <WindowSwitch hours={hours} />
       <WindowSection hours={hours} />
       <div className="grid gap-8 @container">
+        <HostRow model={model} />
         <Answers model={model} />
         <Section title="Detail" aside="One step from each answer">
           <div className="grid gap-2">
-            <Detail title="The host: pressure, swap and load, and the largest processes">
+            <Detail title="The host over time: CPU, memory, swap, pressure and load, and the largest processes">
               <div className="grid gap-8">
                 <Timeline model={model} />
                 <Processes model={model} />

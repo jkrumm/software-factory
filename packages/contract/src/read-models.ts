@@ -1184,6 +1184,11 @@ export const ThroughputModel = z
         /** the header's user and system CPU shares, percent of all cores; null where the minutes stored before the split read none */
         cpuUserPct: z.strictObject({ p50: nullableNumber, max: nullableNumber }),
         cpuSysPct: z.strictObject({ p50: nullableNumber, max: nullableNumber }),
+        /** user plus system CPU, percent of all cores (a minute with no split reads 100 minus idle) */
+        cpuBusyPct: z.strictObject({ p50: nullableNumber, max: nullableNumber }),
+        /** memory in use (app, wired and compressed) and swap in use, bytes; a minute stored before the amounts is its share of the RAM */
+        memoryUsedBytes: z.strictObject({ p50: nullableNumber, max: nullableNumber }),
+        swapUsedBytes: z.strictObject({ p50: nullableNumber, max: nullableNumber }),
         compressorMib: z.strictObject({ p50: nullableNumber, max: nullableNumber }),
         swapUsedPct: z.strictObject({ p50: nullableNumber, max: nullableNumber }),
         processes: z.strictObject({ p50: nullableNumber, max: nullableNumber }),
@@ -1267,8 +1272,29 @@ export const ThroughputModel = z
         }),
       ),
       /**
+       * the newest host minute of the window, as amounts (what the page leads with): each figure null where that minute
+       * read none; `cores` is the host's, null where the server does not know it. Null with no minute in the window.
+       */
+      now: z
+        .strictObject({
+          at,
+          /** user plus system CPU, percent of all cores */
+          cpuBusyPct: nullableNumber,
+          /** the 1-minute load average, the ceiling in force that minute (cores times the load per core) and the cores */
+          load: nullableNumber,
+          loadCeiling: nullableNumber,
+          cores: z.number().int().nullable(),
+          ramBytes: nullableNumber,
+          memoryUsedBytes: nullableNumber,
+          swapUsedBytes: nullableNumber,
+          swapTotalBytes: nullableNumber,
+          /** the kernel pressure level (1, 2 or 4) */
+          pressureLevel: z.number().int().nullable(),
+        })
+        .nullable(),
+      /**
        * the host signals over the window in equal buckets (5 minutes up to 24 hours, 15 up to 72, else 60), oldest first, a
-       * bucket with no sample left out: the worst pressure level and the largest swap use and load of the bucket
+       * bucket with no sample left out: the worst pressure level and the largest CPU, memory and swap use and load of the bucket
        */
       timeline: z.strictObject({
         bucketMinutes: z.number().int(),
@@ -1278,6 +1304,9 @@ export const ThroughputModel = z
             /** the largest kernel pressure level read in the bucket (1, 2 or 4), null when none was read */
             pressureLevel: z.number().int().nullable(),
             swapUsedPct: nullableNumber,
+            cpuBusyPct: nullableNumber,
+            memoryUsedBytes: nullableNumber,
+            swapUsedBytes: nullableNumber,
             load: nullableNumber,
           }),
         ),

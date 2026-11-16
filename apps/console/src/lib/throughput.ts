@@ -1,5 +1,5 @@
 import type { ThroughputModel } from '@software-factory/contract'
-import type { Tone } from '../components/kit/tone'
+import { meterTone, type Tone } from '../components/kit/tone'
 
 /** The windows the page reads, in hours: a day, a week, two weeks (the minute rows are kept 14 days). */
 export const THROUGHPUT_WINDOWS = [24, 168, 336] as const
@@ -39,6 +39,123 @@ export const SPLIT_PARTS = [
 
 export const mibWords = (mib: number): string =>
   mib < 1024 ? `${Math.round(mib)} MiB` : `${(mib / 1024).toFixed(1)} GiB`
+
+const GIB = 1024 ** 3
+
+/** Bytes as the number of GB (1024 x 1024 x 1024, as Activity Monitor counts), one decimal under 100: "41.2", "64". */
+export const gbNumber = (bytes: number): string => {
+  const gb = bytes / GIB
+  return String(gb >= 100 ? Math.round(gb) : Number(gb.toFixed(1)))
+}
+
+/** An amount in GB beside the whole it is part of: "41.2 of 64 GB". */
+export const gbOf = (used: number, total: number): string => `${gbNumber(used)} of ${gbNumber(total)} GB`
+
+const whole = (value: number): string => String(Math.round(value))
+const one = (value: number): string => String(Math.round(value * 10) / 10)
+
+/** One card of the host row: the figure as the page reads it, why it is a dash, the line under it and the bar's fill (0 to 1). */
+export interface HostFigure {
+  value: string | null
+  valueNote: string
+  sub: string
+  /** 0 to 1; null draws no bar */
+  fill: number | null
+  tone: Tone
+}
+
+/**
+ * The host as amounts, from the newest minute of the window (`host.now`) and the window's typical and peak figures
+ * (`host.signals`). A figure the host did not read is `null` with its reason, never zero.
+ */
+export function hostFigures(
+  model: ThroughputModel,
+): Record<'cpu' | 'memory' | 'swap' | 'pressure' | 'load', HostFigure> {
+  const { now, signals } = model.host
+  const over = `over ${windowName(model.hours)}`
+  const unread = (what: string) => `The host did not read ${what} in its newest minute`
+  const range = (p50: number | null, max: number | null, say: (v: number) => string): string =>
+    p50 === null || max === null ? '' : `Typical ${say(p50)}, peak ${say(max)} ${over}.`
+  const join = (...parts: string[]) => parts.filter((part) => part !== '').join(' ')
+  const share = (part: number | null, total: number | null) =>
+    part === null || total === null || total <= 0 ? null : part / total
+
+  const busy = now?.cpuBusyPct ?? null
+  const cpu: HostFigure = {
+    value: busy === null ? null : `${whole(busy)} %`,
+    valueNote: unread('the CPU'),
+    sub: range(signals.cpuBusyPct.p50, signals.cpuBusyPct.max, (v) => `${whole(v)} %`),
+    fill: busy === null ? null : busy / 100,
+    tone: busy === null ? 'neutral' : meterTone(busy / 100),
+  }
+
+  const ram = now?.ramBytes ?? null
+  const mem = now?.memoryUsedBytes ?? null
+  const memShare = share(mem, ram)
+  const memory: HostFigure = {
+    value: mem === null || ram === null ? null : gbOf(mem, ram),
+    valueNote: unread('the memory in use'),
+    sub: join(
+      memShare === null ? '' : `${whole(memShare * 100)} % of the RAM.`,
+      range(signals.memoryUsedBytes.p50, signals.memoryUsedBytes.max, (v) => `${gbNumber(v)} GB`),
+    ),
+    fill: memShare,
+    tone: memShare === null ? 'neutral' : meterTone(memShare),
+  }
+
+  const swapUsed = now?.swapUsedBytes ?? null
+  const swapTotal = now?.swapTotalBytes ?? null
+  const swapShare = share(swapUsed, ram)
+  const swap: HostFigure = {
+    value:
+      swapUsed === null
+        ? null
+        : swapTotal === null || swapTotal <= 0
+          ? `${gbNumber(swapUsed)} GB`
+          : gbOf(swapUsed, swapTotal),
+    valueNote: unread('the swap'),
+    sub: join(
+      swapShare === null ? '' : `${one(swapShare * 100)} % of the RAM.`,
+      range(signals.swapUsedBytes.p50, signals.swapUsedBytes.max, (v) => `${gbNumber(v)} GB`),
+    ),
+    // the bar is the share of RAM: the swap's own size grows on demand, so full against it is ordinary
+    fill: swapShare,
+    tone: 'neutral',
+  }
+
+  const level = now?.pressureLevel ?? null
+  const { normal, warning, critical } = signals.pressureMinutes
+  const pressure: HostFigure = {
+    value: level === null ? null : levelWords(level),
+    valueNote: 'The host read no pressure level in its newest minute',
+    sub:
+      normal + warning + critical === 0
+        ? ''
+        : `${warning + critical} of ${normal + warning + critical} minutes at warning or critical ${over}.`,
+    fill: null,
+    tone: levelTone(level),
+  }
+
+  const load = now?.load ?? null
+  const ceiling = now?.loadCeiling ?? null
+  const cores = now?.cores ?? null
+  const loadShare = share(load, ceiling)
+  const loadFigure: HostFigure = {
+    value: load === null ? null : ceiling === null ? one(load) : `${one(load)} of ${whole(ceiling)}`,
+    valueNote: unread('the load'),
+    sub: join(
+      load !== null && cores !== null
+        ? `${cores} cores, so ${whole((load / cores) * 100)} % of one thread each.`
+        : ceiling === null
+          ? ''
+          : 'Ceiling is where no new lead is admitted.',
+      range(signals.load.p50, signals.load.max, one),
+    ),
+    fill: loadShare,
+    tone: loadShare === null ? 'neutral' : meterTone(loadShare),
+  }
+  return { cpu, memory, swap, pressure, load: loadFigure }
+}
 
 export const percentWords = (share: number): string => {
   const percent = share * 100

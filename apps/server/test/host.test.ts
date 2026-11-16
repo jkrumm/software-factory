@@ -23,6 +23,9 @@ garbage line
    55     1   0,5      100 -zsh
 `
 
+/** A minute whose amounts the fake host did not read. */
+const NO_BYTES = { ramBytes: null, memoryUsedBytes: null, swapUsedBytes: null, swapTotalBytes: null }
+
 test('ps: rows parse, a command is its basename (spaces kept), a bad line is skipped', () => {
   const rows = parsePs(PS)
   expect(rows.map((r) => r.command)).toEqual(['launchd', 'Google Chrome', 'bun', 'claude', '-zsh'])
@@ -150,7 +153,16 @@ test('hostWatch: one ps serves readers within the cache; a failed ps gives empty
   const [a, b] = await Promise.all([watch.top(), watch.top()])
   expect(a).toEqual(b)
   expect(a.topByCpu).toEqual([{ pid: 7, command: 'thing', cpuPct: 50, memoryMb: 1024 }])
-  expect(await watch.sample()).toEqual({ load: 1.5, memoryUsedPct: 25, swapUsedPct: null, swapoutMbPer300s: null })
+  expect(await watch.sample()).toEqual({
+    load: 1.5,
+    memoryUsedPct: 25,
+    swapUsedPct: null,
+    swapoutMbPer300s: null,
+    ramBytes: 4294967296,
+    memoryUsedBytes: 1073741824,
+    swapUsedBytes: null,
+    swapTotalBytes: null,
+  })
   expect((await Bun.file(counter).text()).trim().split('\n')).toHaveLength(1)
   t = 11_000
   await watch.top()
@@ -225,7 +237,9 @@ test('a pass writes one row and prunes what is older than 14 days', async () => 
   const pass = await hostPass({
     uow,
     clock: { now: () => now },
-    sampler: { sample: async () => ({ load: 2, memoryUsedPct: null, swapUsedPct: 10, swapoutMbPer300s: 0 }) },
+    sampler: {
+      sample: async () => ({ load: 2, memoryUsedPct: null, swapUsedPct: 10, swapoutMbPer300s: 0, ...NO_BYTES }),
+    },
     processes: { read: async () => null },
     ...noSnapshot(),
     facts: async () => ({ ok: false, error: { kind: 'gone', detail: 'x' } }),
@@ -279,7 +293,7 @@ test('a pass with a process table stores the facts and one row per lead, and pru
   const pass = await hostPass({
     uow,
     clock: { now: () => now },
-    sampler: { sample: async () => ({ load: 1, memoryUsedPct: 5, swapUsedPct: 1, swapoutMbPer300s: 0 }) },
+    sampler: { sample: async () => ({ load: 1, memoryUsedPct: 5, swapUsedPct: 1, swapoutMbPer300s: 0, ...NO_BYTES }) },
     processes: {
       read: async () => [
         { pid: 10, ppid: 1, rssKib: 2048, footprintKib: 1024, cwd: base },
@@ -380,7 +394,7 @@ test('a pass with a snapshot stores the signals, the class rows and the notable 
   let next = snapshotAt(200, 10)
   const deps = {
     uow,
-    sampler: { sample: async () => ({ load: 3, memoryUsedPct: 50, swapUsedPct: 1, swapoutMbPer300s: 0 }) },
+    sampler: { sample: async () => ({ load: 3, memoryUsedPct: 50, swapUsedPct: 1, swapoutMbPer300s: 0, ...NO_BYTES }) },
     processes: { read: async () => null },
     snapshot: {
       read: async () => ({

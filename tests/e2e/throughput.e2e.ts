@@ -4,6 +4,7 @@ import {
   CLASS_LABEL,
   classRows,
   epochLine,
+  hostFigures,
   hoursWords,
   kpiLabel,
   kpiValue,
@@ -73,16 +74,46 @@ test('the answers are the API: pressure now, the binding reason in hours, the te
   await expect(cost).toContainText(mibWords(host.tenantBudget.budgetMib))
 })
 
-test('the host detail holds the three charts and the five largest processes, and opens on request', async ({
+test('the host row leads the page with CPU, memory, swap, pressure and load as numbers, each with a hint', async ({
+  page,
+  apiUrl,
+}) => {
+  const model = await read(apiUrl, 24)
+  const figures = hostFigures(model)
+  expect(model.host.now).not.toBeNull()
+  await page.goto('/throughput')
+  const row = page.getByRole('region', { name: 'The host now' })
+  for (const [id, title, key] of [
+    ['throughput-cpu', 'CPU busy', 'cpu'],
+    ['throughput-memory', 'Memory used', 'memory'],
+    ['throughput-swap', 'Swap used', 'swap'],
+    ['throughput-pressure', 'Memory pressure', 'pressure'],
+    ['throughput-load', 'Load', 'load'],
+  ] as const) {
+    const card = row.locator(`#${id}`)
+    await expect(card.getByRole('heading', { name: title, level: 3 })).toBeVisible()
+    await expect(card).toContainText(figures[key].value ?? '–')
+    await expect(card.getByRole('button', { name: `What ${title} means` })).toBeVisible()
+  }
+  // amounts, not shares: GB of the RAM, GB of the swap, the load against its ceiling
+  await expect(row.locator('#throughput-memory')).toContainText(/\d+(\.\d)? of 64 GB/)
+  await expect(row.locator('#throughput-swap')).toContainText(/\d+(\.\d)? of 32 GB/)
+  await expect(row.locator('#throughput-load')).toContainText(/of 36/)
+  // the row sits above the three answers, inside the first 1200 px
+  const box = await row.boundingBox()
+  expect((box?.y ?? 0) + (box?.height ?? 0)).toBeLessThanOrEqual(1200)
+})
+
+test('the host detail holds the five charts and the five largest processes, and opens on request', async ({
   page,
   apiUrl,
 }) => {
   const model = await read(apiUrl, 24)
   await page.goto('/throughput')
   await expect(page.getByRole('group', { name: /^Memory pressure/ })).toHaveCount(1)
-  await expect(page.getByRole('heading', { name: 'Pressure, swap and load' })).toHaveCount(0)
-  await open(page, /^The host: pressure, swap and load/)
-  for (const name of ['Memory pressure', 'Swap in use, share of RAM', 'Load average'])
+  await expect(page.getByRole('heading', { name: 'CPU, memory, swap, pressure and load' })).toHaveCount(0)
+  await open(page, /^The host over time: CPU, memory, swap, pressure and load/)
+  for (const name of ['CPU busy', 'Memory used', 'Swap used', 'Memory pressure', 'Load average'])
     await expect(page.getByRole('group', { name: new RegExp(`^${name}`) }).first()).toBeVisible()
   const processes = table(page, 'Notable processes')
   await expect(processes.locator('tbody tr')).toHaveCount(Math.min(5, model.host.topProcesses.length))

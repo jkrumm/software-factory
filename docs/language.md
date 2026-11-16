@@ -124,6 +124,19 @@ check, `docs/architecture.md`).
 | **Flow** | The read model of Issues by state over time; **Chain** is its graph | |
 | **Change** | One row of the change stream: a kind, ids and states, never words. Its **cursor** (`<txid>.<seq>`) resumes the stream without losing or doubling a change | |
 
+## The host
+
+The figures Throughput leads with, read once a minute from the host (`top`, `vm_stat`, `sysctl`). A figure the host could not read is a dash, never zero.
+
+| Word | Means | Retires |
+|-|-|-|
+| **CPU busy** | The share of all the host's cores that were working (user plus system time), percent, from `top`. 100 % is every core fully used, the rest is idle. It says how much of the machine is in use, where **Load** says how many threads wanted it | |
+| **Memory used** | The RAM in use, in GB of the RAM installed, as Activity Monitor's Memory Used counts it: app memory plus wired plus compressed. Cached files are not in it, so a high figure is real use, not a full cache. GB here is 1024 x 1024 x 1024 bytes | |
+| **Swap used** | The part of the swap file the host has written memory out to, in GB of the swap's current size (macOS grows it on demand, so the size is not a limit). Swap stays full after its cause is gone, so a high figure alone is not a fault: swap that keeps growing is the alarm, and admission turns new leads away above 75 % of the RAM in swap or a fast rate of swapouts | |
+| **Memory pressure** | The kernel's own verdict on memory: normal, warning or critical. It is the one memory figure that says the host is struggling now: a host can hold 90 % of its RAM at normal pressure | |
+| **Load** | The number of threads that wanted a core, averaged over the last minute (the 1-minute load average). It is a count, not a percentage, and it is not CPU busy: on 12 cores load 4 is a third of the cores' worth of threads, load 12 is one thread for every core, and above that threads wait. It also counts threads waiting on the disk, so it can be high with the CPU quiet. Admission uses load because a storm of waiting processes (git, tests) starves everything on the host whatever the CPU percent says | |
+| **Load ceiling** | The load above which no new lead is admitted, stored with every minute so the page reads the ceiling that was in force. Under the throughput rule it is 3 per core | |
+
 ## Events
 
 Every event an Issue takes (`apps/server/src/domains/work/events.ts`). An event naming an attempt, a watch, a wait or a
