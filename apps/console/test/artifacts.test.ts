@@ -9,6 +9,7 @@ const artifact = (id: string, issueId: string | null, kind: Artifact['kind'], cr
   issueId,
   repo: issueId ? null : 'brain',
   links: [],
+  retiredAt: null,
   kind,
   title: `Title ${id}`,
   format: 'html',

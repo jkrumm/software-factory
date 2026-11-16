@@ -99,6 +99,8 @@ export interface ArtifactRecord {
   format: Format
   author: 'lead' | 'factory'
   createdAt: Date
+  /** when it was retired (hidden from the list, still readable); null while it is shown */
+  retiredAt?: Date | null
 }
 
 export interface RevisionRecord {
@@ -288,7 +290,17 @@ export interface CheckpointStore {
   insertArtifact(artifact: ArtifactRecord): Promise<boolean>
   artifact(id: ArtifactId): Promise<ArtifactRecord | null>
   artifactByKey(key: Key): Promise<ArtifactRecord | null>
-  artifacts(filter: { issueId?: IssueId; kind?: ArtifactKind; limit: number }): Promise<ArtifactRecord[]>
+  /** newest first; a retired artifact is left out unless `retired` is set */
+  artifacts(filter: {
+    issueId?: IssueId
+    kind?: ArtifactKind
+    retired?: boolean
+    limit: number
+  }): Promise<ArtifactRecord[]>
+  /** false when it was retired already */
+  retireArtifact(artifact: ArtifactId, at: Date): Promise<boolean>
+  /** false when it was not retired */
+  restoreArtifact(artifact: ArtifactId): Promise<boolean>
   /** the Issue an artifact also concerns; false when it was linked already */
   linkArtifact(artifact: ArtifactId, issue: IssueId, at: Date): Promise<boolean>
   /** the Issues each artifact is linked to, oldest link first (an artifact with none has an empty list) */

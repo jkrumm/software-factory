@@ -136,6 +136,8 @@ export const ArtifactSummary = z.object({
   format: z.enum(['markdown', 'html']),
   author: z.enum(['lead', 'factory']),
   createdAt: iso,
+  /** when `artifact retire` hid it from the list; null while it is shown (its address works either way) */
+  retiredAt: iso.nullable().default(null),
   revisions: z.array(RevisionView),
 })
 

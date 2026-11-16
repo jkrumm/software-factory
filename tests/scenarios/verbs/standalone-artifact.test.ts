@@ -14,6 +14,7 @@ const artifactOf = (out: { json: Record<string, unknown> | null }) =>
     issueId: string | null
     repo: string | null
     links: string[]
+    retiredAt: string | null
     revisions: unknown[]
   }
 
@@ -119,4 +120,33 @@ test('revise, annotate, reply and verdict need no Issue and no attempt', async (
   const verdict = await v.run(['artifact', 'verdict', report, '--verdict', 'looks_good'])
   expect(verdict.code).toBe(0)
   expect(verdict.json).toMatchObject({ issue: null })
+})
+
+test('retire hides a Report from the list, its address still works, restore brings it back', async () => {
+  const retired = await v.run(['artifact', 'retire', report], 'agent')
+  expect(retired.code).toBe(0)
+  expect(retired.json).toMatchObject({ result: 'applied' })
+  expect(artifactOf(retired).retiredAt).not.toBeNull()
+  const again = await v.run(['artifact', 'retire', report], 'agent')
+  expect(again.json).toMatchObject({ result: 'replayed' })
+
+  const idsOf = (out: { json: Record<string, unknown> | null }) =>
+    ((out.json?.artifacts ?? []) as { id: string }[]).map((a) => a.id)
+  expect(idsOf(await v.run(['artifact', 'list']))).toEqual([])
+  expect(idsOf(await v.run(['artifact', 'list', '--issue', '1']))).toEqual([])
+  expect(idsOf(await v.run(['artifact', 'list', '--retired', 'true']))).toEqual([report])
+  const shown = await v.run(['artifact', 'show', report])
+  expect(shown.code).toBe(0)
+
+  const restored = await v.run(['artifact', 'restore', report], 'agent')
+  expect(restored.json).toMatchObject({ result: 'applied' })
+  expect(artifactOf(restored).retiredAt).toBeNull()
+  expect(idsOf(await v.run(['artifact', 'list']))).toEqual([report])
+  expect((await v.run(['artifact', 'restore', report], 'agent')).json).toMatchObject({ result: 'replayed' })
+})
+
+test('only a Report can be retired, and an unknown artifact is refused', async () => {
+  expect((await v.run(['artifact', 'retire', 'artifact_999'], 'agent')).code).not.toBe(0)
+  const [spec] = await v.w.world.db.sql`SELECT id FROM factory.artifacts WHERE kind <> 'report' LIMIT 1`
+  if (spec) expect((await v.run(['artifact', 'retire', String(spec.id)], 'agent')).code).not.toBe(0)
 })

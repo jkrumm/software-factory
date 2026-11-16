@@ -47,6 +47,11 @@ export interface IssueApi {
     artifactId: ArtifactId
     issueId: IssueId
   }): Promise<Result<StandaloneArtifact, StandaloneArtifactError | PortError>>
+  /** hide a Report from the artifact list, or bring it back */
+  retireArtifact(input: {
+    artifactId: ArtifactId
+    retired: boolean
+  }): Promise<Result<StandaloneArtifact, StandaloneArtifactError | PortError>>
   cancel(input: { issueId: IssueId; reason: string; actor: OwnerActor; call?: string | undefined }): Promise<Written>
   note(input: NoteInput): Promise<Result<NoteOutcome, NoteError>>
   seat(input: {
@@ -77,6 +82,7 @@ const unwired: IssueApi = {
   file: gone,
   newArtifact: gone,
   linkArtifact: gone,
+  retireArtifact: gone,
   cancel: gone,
   note: gone,
   seat: gone,
@@ -278,6 +284,36 @@ export const issueRoutes = (wired: IssueApi | undefined) => {
           operationId: 'artifact.link',
           summary: 'the artifact also concerns this Issue: it shows on the Issue, and its lead can read it',
         },
+      },
+    )
+    .post(
+      '/v1/artifacts/:id/retire',
+      async ({ params }) => {
+        const artifactId = idOf('artifact', params.id)
+        if (!artifactId) return Response.json(failure(`no artifact ${params.id}`, 'not_found'), { status: 404 })
+        return standaloneResponse(await api.retireArtifact({ artifactId, retired: true }))
+      },
+      {
+        params: Params,
+        response: { 200: ArtifactReply, ...errorResponses(400, 404, 409, 422, 503) },
+        detail: {
+          operationId: 'artifact.retire',
+          summary:
+            'a Report leaves the artifact list (`GET /v1/artifacts?retired=true` still has it); its address and revisions keep working',
+        },
+      },
+    )
+    .post(
+      '/v1/artifacts/:id/restore',
+      async ({ params }) => {
+        const artifactId = idOf('artifact', params.id)
+        if (!artifactId) return Response.json(failure(`no artifact ${params.id}`, 'not_found'), { status: 404 })
+        return standaloneResponse(await api.retireArtifact({ artifactId, retired: false }))
+      },
+      {
+        params: Params,
+        response: { 200: ArtifactReply, ...errorResponses(400, 404, 409, 422, 503) },
+        detail: { operationId: 'artifact.restore', summary: 'a retired Report is listed again' },
       },
     )
     .post(

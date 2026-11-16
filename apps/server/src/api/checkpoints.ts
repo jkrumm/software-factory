@@ -99,6 +99,7 @@ export const summaryOf = (
   format: artifact.format,
   author: artifact.author,
   createdAt: iso(artifact.createdAt),
+  retiredAt: artifact.retiredAt ? iso(artifact.retiredAt) : null,
   revisions: revisions.map((r) => ({
     n: r.n,
     sha256: r.sha256,
@@ -377,6 +378,7 @@ export const checkpointRoutes = (uses: CheckpointUses) =>
         const result = await uses.artifacts({
           ...(issueId ? { issueId } : {}),
           ...(query.kind ? { kind: query.kind } : {}),
+          ...(query.retired === 'true' ? { retired: true } : {}),
           limit: query.limit ?? 50,
         })
         if (!result.ok) return failed(result.error)
@@ -389,10 +391,15 @@ export const checkpointRoutes = (uses: CheckpointUses) =>
         query: z.object({
           issue: z.string().meta(ISSUE_ID_META).optional(),
           kind: z.enum(ARTIFACT_KINDS).optional(),
+          /** `true` also lists the retired ones (`artifact retire`); they are hidden by default */
+          retired: z.enum(['true', 'false']).optional(),
           limit: z.coerce.number().int().min(1).max(500).optional(),
         }),
         response: RESPONSES(ArtifactList, 400, 404, 422, 503),
-        detail: { operationId: 'artifact.list', summary: 'artifacts, newest first' },
+        detail: {
+          operationId: 'artifact.list',
+          summary: 'artifacts, newest first; a retired one only with `retired=true`',
+        },
       },
     )
     .get(
