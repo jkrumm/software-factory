@@ -6,7 +6,7 @@ import { compressResponse } from './compress.ts'
 export interface ConsoleHandlerOptions {
   /** the Console build */
   dir: string
-  /** answers `/health`, `/v1/*` and the eleven answer verbs (`WRITES`) from the API; the caller decides what credentials it carries */
+  /** answers `/health`, `/v1/*` and the thirteen verbs (`WRITES`) from the API; the caller decides what credentials it carries */
   forward: (request: Request) => Promise<Response>
 }
 
@@ -100,7 +100,7 @@ export function apiForward(options: {
 
 const forwarded = (path: string): boolean => path === '/health' || path === '/v1' || path.startsWith('/v1/')
 
-/** The owner's eleven answer verbs: the only writes the listener forwards. None starts a session or cancels or reopens an Issue; promote files one only from a held signal, dismiss files nothing. */
+/** The owner's thirteen verbs, his eleven answers and the pin and unpin of a collection: the only writes the listener forwards. None starts a session or cancels or reopens an Issue; promote files one only from a held signal, dismiss files nothing; a pin moves one timestamp. */
 const WRITES: { method: string; path: RegExp }[] = [
   { method: 'POST', path: /^\/v1\/decisions\/[^/]+\/answer$/ },
   { method: 'POST', path: /^\/v1\/artifacts\/[^/]+\/verdict$/ },
@@ -113,6 +113,8 @@ const WRITES: { method: string; path: RegExp }[] = [
   { method: 'POST', path: /^\/v1\/errands\/[^/]+\/approve$/ },
   { method: 'POST', path: /^\/signals\/[^/]+\/promote$/ },
   { method: 'POST', path: /^\/signals\/[^/]+\/dismiss$/ },
+  { method: 'POST', path: /^\/v1\/artifact-collections\/[^/]+\/pin$/ },
+  { method: 'POST', path: /^\/v1\/artifact-collections\/[^/]+\/unpin$/ },
 ]
 
 const isWrite = (request: Request, path: string): boolean =>
@@ -176,7 +178,7 @@ function fileOf(dir: string, rawPath: string): string | null {
 
 /**
  * The Console listener's handler. No per-request identity: the perimeter is the tailnet ACL. Gates in a fixed order, for
- * every path: a read method (or one of the eleven answer verbs, `WRITES`, which also need a same-origin JSON body of at most 64 KiB), then either the API's slice
+ * every path: a read method (or one of the thirteen verbs, `WRITES`, which also need a same-origin JSON body of at most 64 KiB), then either the API's slice
  * (`/health`, `/v1/*`, the verbs) or a static file. Nothing else that writes or starts a session passes. A text answer to a GET is
  * compressed (br or gzip, whatever the client accepts), a static file once; the event stream is never touched.
  */
@@ -225,7 +227,7 @@ export function consoleHandler(options: ConsoleHandlerOptions): (request: Reques
     })
   }
 
-  /** One of the eleven answer verbs: a same-origin JSON body of at most 64 KiB (a DELETE has none), forwarded verbatim. */
+  /** One of the thirteen verbs: a same-origin JSON body of at most 64 KiB (a DELETE has none), forwarded verbatim. */
   const write = async (request: Request): Promise<Response> => {
     const json = (request.headers.get('content-type') ?? '').toLowerCase().startsWith('application/json')
     if (request.method !== 'DELETE' && !json) {
@@ -243,7 +245,7 @@ export function consoleHandler(options: ConsoleHandlerOptions): (request: Reques
     const rawPath = new URL(request.url).pathname
     if (isWrite(request, rawPath)) return write(request)
     if (request.method !== 'GET' && request.method !== 'HEAD') {
-      return errorResponse(405, 'the Console listener reads, and takes eleven answers', 'method_not_allowed', {
+      return errorResponse(405, 'the Console listener reads, and takes thirteen verbs', 'method_not_allowed', {
         allow: 'GET, HEAD',
       })
     }

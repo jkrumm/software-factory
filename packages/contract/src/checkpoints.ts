@@ -138,6 +138,8 @@ export const ArtifactSummary = z.object({
   createdAt: iso,
   /** when `artifact retire` hid it from the list; null while it is shown (its address works either way) */
   retiredAt: iso.nullable().default(null),
+  /** the collection it belongs to (`artifact collection`), at most one; null while it stands alone */
+  collectionId: z.string().nullable().default(null),
   revisions: z.array(RevisionView),
 })
 
@@ -294,6 +296,64 @@ export const ArtifactDetail = z
   })
   .meta({ id: 'ArtifactDetail' })
 export type ArtifactDetail = z.infer<typeof ArtifactDetail>
+
+/** A named set of artifacts with one lead page; pinned, it leads the Artifacts screen. */
+export const CollectionView = z
+  .object({
+    id: z.string(),
+    title: z.string(),
+    /** the project it concerns */
+    repo: z.string(),
+    /** the overview page: one of its members; null until one is named */
+    lead: z.string().nullable(),
+    /** when the owner pinned it; null while it is not */
+    pinnedAt: iso.nullable(),
+    createdAt: iso,
+    /** its artifacts, oldest first */
+    members: z.array(z.string()),
+    memberCount: z.number().int(),
+    /** the newest creation, revision, comment or verdict among its members; null with none */
+    lastChange: iso.nullable(),
+    /** the owner's comments on its members that the lead has not answered yet */
+    openComments: z.number().int(),
+  })
+  .meta({ id: 'CollectionView' })
+export type CollectionView = z.infer<typeof CollectionView>
+
+export const CollectionList = z.object({ collections: z.array(CollectionView) }).meta({ id: 'CollectionList' })
+export type CollectionList = z.infer<typeof CollectionList>
+
+/** `replayed`: the key was filed before, or the edit changed nothing. */
+export const CollectionReply = z
+  .object({ result: z.enum(['applied', 'replayed']), collection: CollectionView })
+  .meta({ id: 'CollectionReply' })
+export type CollectionReply = z.infer<typeof CollectionReply>
+
+/**
+ * `artifact collection new`: a title, the artifacts it holds (`add`), the page that leads it (`lead`, added too) and
+ * whether it is pinned. `repo` names its project (a repo's directory name or a path inside a source root); without it
+ * the project of the lead page or of the first artifact. The same `key` again files nothing.
+ */
+export const NewCollectionBody = z
+  .object({
+    title: z.string().optional(),
+    repo: z.string().optional(),
+    lead: z.string().optional(),
+    add: z.array(z.string()).max(200).optional(),
+    pin: z.boolean().optional(),
+    key: z.string().trim().min(1).max(200).optional(),
+  })
+  .meta({ id: 'NewCollectionBody' })
+
+/** `artifact collection edit`: retitle, name another lead page, take artifacts in (`add`) or out (`remove`). */
+export const EditCollectionBody = z
+  .object({
+    title: z.string().optional(),
+    lead: z.string().optional(),
+    add: z.array(z.string()).max(200).optional(),
+    remove: z.array(z.string()).max(200).optional(),
+  })
+  .meta({ id: 'EditCollectionBody' })
 
 export const ArtifactList = z.object({ artifacts: z.array(ArtifactSummary) }).meta({ id: 'ArtifactList' })
 export type ArtifactList = z.infer<typeof ArtifactList>

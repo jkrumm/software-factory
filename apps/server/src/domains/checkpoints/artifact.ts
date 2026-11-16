@@ -3,6 +3,8 @@ import { err, ok, type Result } from '../../kernel/result.ts'
 import type { DecisionForm, MissingFields } from './decision.ts'
 
 export type ArtifactId = Id<'artifact'>
+/** `collection_<id>`: a named set of artifacts with one lead page (`artifact collection`). */
+export type CollectionId = Id<'collection'>
 
 /** One model, four kinds (`docs/language.md`, Artifact). */
 export const ARTIFACT_KINDS = ['concept', 'spec', 'decision', 'report'] as const

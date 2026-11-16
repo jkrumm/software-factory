@@ -15,6 +15,7 @@ import {
 } from '@software-factory/contract'
 import { Elysia } from 'elysia'
 import * as z from 'zod'
+import type { Collection } from '../app/artifact-collections.ts'
 import type { StandaloneArtifact, StandaloneArtifactError } from '../app/artifact-new.ts'
 import type { Answered } from '../app/checkpoints.ts'
 import type { IssueAnswerError } from '../app/issue-answer.ts'
@@ -26,7 +27,8 @@ import type { Written } from './written.ts'
 import { err, portError, type PortError, type Result } from '../kernel/result.ts'
 import type { OwnerActor } from '../kernel/events.ts'
 import { idOf, type IssueId } from '../kernel/ids.ts'
-import type { ArtifactId } from '../domains/checkpoints/artifact.ts'
+import type { ArtifactId, CollectionId } from '../domains/checkpoints/artifact.ts'
+import type { CollectionRecord, CollectionStats } from '../domains/checkpoints/ports.ts'
 import { callerOf, ownerActorOf } from './auth.ts'
 import { decisionView, failed as checkpointFailure, summaryOf } from './checkpoints.ts'
 import { errorResponses } from './errors.ts'
@@ -52,6 +54,28 @@ export interface IssueApi {
     artifactId: ArtifactId
     retired: boolean
   }): Promise<Result<StandaloneArtifact, StandaloneArtifactError | PortError>>
+  /** the collections of artifacts, pinned first (`artifact collection`) */
+  listCollections(): Promise<Result<{ collection: CollectionRecord; stats: CollectionStats }[], PortError>>
+  showCollection(id: CollectionId): Promise<Result<Collection, StandaloneArtifactError | PortError>>
+  newCollection(input: {
+    title: string
+    repo?: string | undefined
+    lead?: string | undefined
+    add: readonly string[]
+    pin: boolean
+    key?: string | undefined
+  }): Promise<Result<Collection, StandaloneArtifactError | PortError>>
+  editCollection(input: {
+    id: CollectionId
+    title?: string | undefined
+    lead?: string | undefined
+    add: readonly string[]
+    remove: readonly string[]
+  }): Promise<Result<Collection, StandaloneArtifactError | PortError>>
+  pinCollection(input: {
+    id: CollectionId
+    pinned: boolean
+  }): Promise<Result<Collection, StandaloneArtifactError | PortError>>
   cancel(input: { issueId: IssueId; reason: string; actor: OwnerActor; call?: string | undefined }): Promise<Written>
   note(input: NoteInput): Promise<Result<NoteOutcome, NoteError>>
   seat(input: {
@@ -83,6 +107,11 @@ const unwired: IssueApi = {
   newArtifact: gone,
   linkArtifact: gone,
   retireArtifact: gone,
+  listCollections: gone,
+  showCollection: gone,
+  newCollection: gone,
+  editCollection: gone,
+  pinCollection: gone,
   cancel: gone,
   note: gone,
   seat: gone,
