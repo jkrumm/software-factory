@@ -9,7 +9,7 @@ rest in the Console.
 
 **268 px wide, 388 px high.** The layout (dotfiles, `config/herdr-app/layouts/jk.json`, block `glance`) must give the
 block `size.px: 388` (`GLANCE_H` in `main.js`; it was 144, and 56 before). Every section has a row cap (`MAX_*` in
-`main.js`; the headers carry the totals) and the tallest the block can get, 382 px (`WORST_CASE_H`), is held within 388 by
+`main.js`; the headers carry the totals) and the tallest the block can get, 378 px (`WORST_CASE_H`), is held within 388 by
 a test.
 
 Top to bottom (every row below is a link; the Console place is in brackets):
