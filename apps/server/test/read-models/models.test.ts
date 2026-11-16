@@ -81,6 +81,8 @@ describe('the empty database', () => {
     expect(Object.values(flow.trend.states).flat()).toEqual(Array(40).fill(0))
     expect(flow.trend.shipped).toEqual(Array(7).fill(0))
     expect(flow.trend.shippedBefore).toBe(0)
+    expect(flow.trend.shippedHourly).toEqual(Array(168).fill(0))
+    expect(flow.trend.shippedDaily30).toEqual(Array(30).fill(0))
     expect(flow.perProject).toEqual([])
     expect(flow.queueStates).toEqual({ global: 'run', projects: {} })
 
@@ -698,6 +700,11 @@ describe('the flow trend', () => {
     // t2 closed 3 d and 1 h ago: the window (-4 d, -3 d]
     expect(trend.shipped).toEqual([0, 0, 0, 1, 0, 0, 0])
     expect(trend.shippedBefore).toBe(1)
+    // the last 7 days by the hour: t2 (73 h ago) is in the window (-74 h, -73 h]; t3 (10 d) is out. The last 30 days by the
+    // day: t2 in the window (-4 d, -3 d] (bucket 26 of 30), t3 in (-11 d, -10 d] (bucket 19)
+    expect(trend.shippedHourly.map((n, i) => (n ? i : -1)).filter((i) => i >= 0)).toEqual([94])
+    expect(trend.shippedHourly.reduce((a, b) => a + b, 0)).toBe(1)
+    expect(trend.shippedDaily30.map((n, i) => (n ? i : -1)).filter((i) => i >= 0)).toEqual([19, 26])
     // the last sample is the live column counts
     for (const state of Object.keys(trend.states) as (keyof typeof trend.states)[]) {
       expect(trend.states[state][7]).toBe(flow.states[state].count)
