@@ -147,7 +147,7 @@ const DeclaredProbe = z.strictObject({
 })
 
 /** The built-in hygiene probes a project may switch off (`check` has `check: false`, the declared `probes` are the project's own). */
-const SKIPPABLE_PROBES = ['links', 'retired', 'deps', 'cochange', 'runrules', 'browser'] as const
+const SKIPPABLE_PROBES = ['links', 'retired', 'deps', 'cochange', 'runrules', 'browser', 'context'] as const
 
 /** One probe the project opts out of, with the reason: a probe is never switched off without one. */
 const SkippedProbe = z.strictObject({

@@ -14,6 +14,7 @@ import { candidates } from './history.ts'
 import { browserProbe } from './probes/browser.ts'
 import { checkProbe } from './probes/check.ts'
 import { cochangeProbe } from './probes/cochange.ts'
+import { contextProbe } from './probes/context.ts'
 import { declaredProbe } from './probes/declared.ts'
 import { depsProbe } from './probes/deps.ts'
 import { type Outcome, failed, skipped } from './probes/finding.ts'
@@ -59,6 +60,7 @@ export function createHygieneChecker(options: HygieneCheckerOptions): HygieneChe
       cochange: () => cochangeProbe(tools, path),
       runrules: () => runrulesProbe(tools, path),
       browser: () => browserProbe(tools, path),
+      context: () => contextProbe(tools, path),
     }
     const optOut = new Map((options.skip ?? []).map((entry) => [entry.probe, entry.reason]))
     const [history, ...results] = await Promise.all([
