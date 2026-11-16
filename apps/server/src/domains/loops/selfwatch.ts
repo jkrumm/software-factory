@@ -310,7 +310,7 @@ export const hostSampleIsFresh = (minutes: readonly { at: Date }[], now: Date): 
 const mib = (n: number): string => `${Math.round(n)} MiB`
 
 /**
- * A process (by pid and program name) whose footprint rose by more than 1 GiB between the first and the last of its
+ * A process (by pid and program name; a lead's or step's, on the repo whose Issue runs it) whose footprint rose by more than 1 GiB between the first and the last of its
  * samples in the last hour, seen over at least 30 minutes and still present. The evidence is the process and the limit; the
  * figures move every minute and are context, so the signal is filed once and repeats only after the growth has cleared.
  */
@@ -334,15 +334,20 @@ export function processGrowthFindings(samples: readonly ProcessMinute[], now: Da
     if (last.at.getTime() - first.at.getTime() < GROWTH_MIN_SPAN_MS) continue
     const grown = last.footprintMib - first.footprintMib
     if (grown <= GROWTH_MIB) continue
+    // a lead's or a step's process belongs to the repo whose Issue runs it: that repo's lead can shrink it, this repo's cannot
+    const owner = last.repo ?? first.repo
+    const issue = last.issue ?? first.issue
     found.push({
       kind: 'process_growth',
       subject,
+      ...(owner ? { repo: owner } : {}),
       title: `Self-watch: process ${oneLine(first.name, 60)} grew by more than one GiB in an hour`,
       facts: [
         `${first.name} (pid ${first.pid}, class ${first.class}) grew by more than ${GROWTH_MIB} MiB within one hour`,
       ],
       context: [
         `From ${mib(first.footprintMib)} at ${iso(first.at)} to ${mib(last.footprintMib)} at ${iso(last.at)}: ${mib(grown)}`,
+        ...(issue === null ? [] : [`Run by the lead of Issue ${issue}${owner ? ` of ${owner}` : ''}`]),
         `Now: ${iso(now)}`,
       ],
       reproduce: `factory read host (the host loop's notable processes); ps -o pid,rss,command -p ${first.pid}`,

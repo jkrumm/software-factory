@@ -409,7 +409,30 @@ const proc = (minutesAgo: number, footprintMib: number, pid = 410, name = 'fseve
   pid,
   name,
   class: 'system',
+  repo: null,
+  issue: null,
   footprintMib,
+})
+
+test('process_growth: a lead process files on the repo whose Issue runs it, a process no repo owns on the watched one', () => {
+  const owned = (minutesAgo: number, footprintMib: number): ProcessMinute => ({
+    ...proc(minutesAgo, footprintMib, 29615, 'bun'),
+    class: 'lead',
+    repo: 'basalt-ui',
+    issue: 1541,
+  })
+  const [found] = processGrowthFindings([owned(60, 435), owned(30, 4000), owned(1, 8945)], NOW)
+  expect(found?.repo).toBe('basalt-ui')
+  expect(found?.context.join('\n')).toContain('Issue 1541 of basalt-ui')
+  // the owner is not evidence: the same episode hashes the same with or without it
+  const bareLead = (minutesAgo: number, footprintMib: number): ProcessMinute => ({
+    ...proc(minutesAgo, footprintMib, 29615, 'bun'),
+    class: 'lead',
+  })
+  const [bare] = processGrowthFindings([bareLead(60, 435), bareLead(1, 8945)], NOW)
+  expect(bare?.repo).toBeUndefined()
+  expect(bare?.context.join('\n')).not.toContain('Issue')
+  expect(evidenceHash(found as Finding)).toBe(evidenceHash(bare as Finding))
 })
 
 test('process_growth: more than 1 GiB in the last hour of a process still there, once per process', () => {
