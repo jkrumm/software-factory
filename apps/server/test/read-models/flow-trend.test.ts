@@ -58,11 +58,13 @@ test('the last bucket covers only the time that has passed; an open interval run
   expect(trend.at).toBe(NOW.toISOString())
 })
 
-test('the query: 24h by hour, 7d by hour or day, 30d by day; 30d by hour is refused', () => {
+test('the query: 24h by hour, 7d by hour, 30d by day; 7d by day and 30d by hour are refused', () => {
   expect(FlowTrendQuery.safeParse({}).success).toBe(true)
   expect(FlowTrendQuery.safeParse({ window: '24h', bucket: 'hour' }).success).toBe(true)
   expect(FlowTrendQuery.safeParse({ window: '7d', bucket: 'hour' }).success).toBe(true)
   expect(FlowTrendQuery.safeParse({ window: '30d' }).success).toBe(true)
+  expect(FlowTrendQuery.safeParse({ window: '7d' }).success).toBe(true)
+  expect(FlowTrendQuery.safeParse({ window: '7d', bucket: 'day' }).success).toBe(false)
   expect(FlowTrendQuery.safeParse({ window: '30d', bucket: 'hour' }).success).toBe(false)
   expect(FlowTrendQuery.safeParse({ window: '24h', bucket: 'day' }).success).toBe(false)
   expect(FlowTrendQuery.safeParse({ window: '90d' }).success).toBe(false)

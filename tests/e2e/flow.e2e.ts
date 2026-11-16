@@ -1,23 +1,15 @@
 import type { Page } from '@playwright/test'
 import { expect, test } from './fixtures.ts'
-import { COLUMN_EMPTY } from '../../apps/console/src/lib/column-empty.ts'
 import { expectHint } from './hints.ts'
 import { api } from './seed.ts'
 
 /**
- * The Flow board against the seeded server. The files run in order (`artifact`, `flow`, `needs-you`, ...): the live and
- * virtualised tests add Issues, and the others read the counts from the API at the moment they run.
+ * The Flow page against the seeded server: the numbers, the trend chart and the list of Issues a filter opens. The files
+ * run in order (`artifact`, `flow`, `needs-you`, ...): the live test adds Issues, and the others read the counts from the
+ * API at the moment they run.
  */
 const STATES = ['settling', 'queued', 'working', 'waiting', 'watching'] as const
 type State = (typeof STATES)[number]
-const LABEL: Record<State | 'closed', string> = {
-  settling: 'Settling',
-  queued: 'Queued',
-  working: 'Working',
-  waiting: 'Waiting',
-  watching: 'Watching',
-  closed: 'Closed recently',
-}
 const ORIGIN_WORD: Record<string, string> = {
   you: 'You',
   application: 'Application',
@@ -49,20 +41,21 @@ const counted = (flow: Flow) => ({
 })
 
 const flowOf = (apiUrl: string) => api<Flow>(apiUrl, '/v1/flow')
-const region = (page: Page, key: keyof typeof LABEL) => page.getByRole('region', { name: new RegExp(`^${LABEL[key]}`) })
-const heading = (page: Page, key: keyof typeof LABEL) => region(page, key).getByRole('heading', { level: 2 })
+const open = (flow: Flow, keep: (item: Item) => boolean = () => true): Item[] =>
+  STATES.flatMap((state) => flow.states[state].issues).filter(keep)
 
-function countsOf(flow: Flow, keep: (item: Item) => boolean = () => true): Record<keyof typeof LABEL, number> {
-  return {
-    ...(Object.fromEntries(STATES.map((s) => [s, flow.states[s].issues.filter(keep).length])) as Record<State, number>),
-    closed: flow.closedRecently.filter(keep).length,
-  }
-}
+/** The Issues of a count, as the strip and the stat card count them. */
+const issuesOf = (flow: Flow, count: keyof ReturnType<typeof counted>): Item[] =>
+  count === 'working'
+    ? [...flow.states.working.issues, ...flow.states.watching.issues]
+    : count === 'queued'
+      ? [...flow.states.settling.issues, ...flow.states.queued.issues]
+      : flow.states.waiting.issues
 
-async function expectCounts(page: Page, counts: Record<keyof typeof LABEL, number>) {
-  for (const key of Object.keys(LABEL) as (keyof typeof LABEL)[])
-    await expect(heading(page, key)).toHaveText(`${LABEL[key]} ${counts[key]}`)
-}
+/** The Flow page's list of Issues: collapsed until a filter is set, then one row per Issue. */
+const list = (page: Page) => page.getByTestId('flow-list')
+const rows = (page: Page) => list(page).getByTestId('flow-row')
+const row = (page: Page, title: string) => rows(page).filter({ hasText: title })
 
 /** A toggle of the sidebar's Flow section: `Projects` or `Origin`, by the start of its label (`All` clears). */
 const pick = (page: Page, group: 'Projects' | 'Origin', label: string) =>
@@ -71,67 +64,65 @@ const pick = (page: Page, group: 'Projects' | 'Origin', label: string) =>
     .getByRole('link', { name: new RegExp(`^${label}( \\d+ (working|waiting|queued).*)?$`) })
     .click()
 
-/** A word from a number, letters only: intake's fingerprint drops digits, and titles that overlap are amended into one Issue. */
-const wordOf = (n: number): string =>
-  n.toString(26).replace(/[0-9a-p]/g, (c) => String.fromCharCode(97 + parseInt(c, 26)))
-
-test('every column is present with a heading and its count equals the API', async ({ page, apiUrl }) => {
+test('Flow is the numbers and their charts: no board, and the list is collapsed until a filter is set', async ({
+  page,
+  apiUrl,
+}) => {
   const flow = await flowOf(apiUrl)
   await page.goto('/flow')
-  for (const key of Object.keys(LABEL) as (keyof typeof LABEL)[]) await expect(heading(page, key)).toBeVisible()
-  await expectCounts(page, countsOf(flow))
-  const open = Object.values(countsOf(flow)).reduce((a, b) => a + b, 0) - flow.closedRecently.length
-  await expect(page.getByText(`${open} open, ${flow.closedRecently.length} closed in the last day`)).toBeVisible()
+  await expect(page.getByRole('group', { name: 'Totals' })).toBeVisible()
+  await expect(page.getByTestId('flow-trend')).toBeVisible()
+  await expect(page.getByTestId('flow-board')).toHaveCount(0)
+  await expect(page.getByRole('tablist')).toHaveCount(0)
+  await expect(
+    page.getByRole('region', { name: /^(Settling|Queued|Working|Waiting|Watching|Closed recently)/ }),
+  ).toHaveCount(0)
+  await expect(list(page)).toHaveAttribute('data-collapsed', 'true')
+  await expect(rows(page)).toHaveCount(0)
+  const openCount = open(flow).length
+  await expect(page.getByText(`${openCount} open, ${flow.closedRecently.length} closed in the last day`)).toBeVisible()
 })
 
-test('a card shows title, project, origin word, a reason, an age and its number', async ({ page, apiUrl }) => {
+test('a row shows the number, kind, title, project, origin, state, a reason and an age', async ({ page, apiUrl }) => {
   const flow = await flowOf(apiUrl)
-  await page.goto('/flow')
   const waiting = flow.states.waiting.issues.find((i) => i.waitReason)
   if (!waiting) throw new Error('the seed has no waiting Issue')
-  const card = region(page, 'waiting').getByRole('listitem').filter({ hasText: waiting.title })
+  await page.goto('/flow?state=waiting')
+  const card = row(page, waiting.title)
   await expect(card).toBeVisible()
   await expect(card).toContainText(waiting.repo)
-  // the default origin (You) is noise and is not shown
-  const origin = ORIGIN_WORD[waiting.origin] ?? waiting.origin
-  if (origin !== 'You') await expect(card).toContainText(origin)
+  await expect(card).toContainText(ORIGIN_WORD[waiting.origin] ?? waiting.origin)
+  await expect(card).toContainText('Waiting')
   await expect(card).toContainText(waiting.waitReason ?? '')
   await expect(card).toContainText(/just now|\d+ (min|h|d) ago/)
   await expect(card).toContainText(`#${waiting.id.replace('issue_', '')}`)
+  await expect(
+    card.getByRole('img', { name: waiting.kind.charAt(0).toUpperCase() + waiting.kind.slice(1) }),
+  ).toBeVisible()
   expect(await page.locator('body').innerText()).not.toMatch(/issue_\d+|lead-\d+/)
 })
 
-test('a card shows its kind as an icon', async ({ page, apiUrl }) => {
-  const flow = await flowOf(apiUrl)
-  await page.goto('/flow')
-  const working = flow.states.working.issues[0]
-  if (!working) throw new Error('the seed has no working Issue')
-  const card = region(page, 'working').getByRole('listitem').filter({ hasText: working.title })
-  await expect(
-    card.getByRole('img', { name: working.kind.charAt(0).toUpperCase() + working.kind.slice(1) }),
-  ).toBeVisible()
-  // the column names the state, so a working card has no Lozenge of it
-  await expect(card).not.toContainText('Working')
-})
-
-test('a card is a link to its Issue page (a plain click opens the peek, peek.e2e.ts)', async ({ page, apiUrl }) => {
+test('a row is a link to its Issue page (a plain click opens the peek, peek.e2e.ts)', async ({ page, apiUrl }) => {
   const flow = await flowOf(apiUrl)
   const working = flow.states.working.issues[0]
   if (!working) throw new Error('the seed has no working Issue')
-  await page.goto('/flow')
-  const card = region(page, 'working').getByRole('listitem').filter({ hasText: working.title })
-  await expect(card.getByRole('link', { name: working.title })).toHaveAttribute('href', /\/issues\/\d+$/)
-  // the link is the card itself: no ⋯ is needed to open it
-  await expect(card.getByRole('button')).toHaveCount(0)
+  await page.goto('/flow?state=working')
+  await expect(row(page, working.title).getByRole('link', { name: working.title })).toHaveAttribute(
+    'href',
+    /\/issues\/\d+$/,
+  )
   await page.goto(`/issues/${working.id.replace('issue_', '')}`)
   await expect(page.getByRole('heading', { level: 1, name: working.title })).toBeVisible()
 })
 
-test('the stat row shows the API figures and a card opens its column', async ({ page, apiUrl }) => {
+test('the stat row shows the API figures and a card opens the list of the Issues it counts', async ({
+  page,
+  apiUrl,
+}) => {
   const flow = await flowOf(apiUrl)
   await page.goto('/flow')
-  const row = page.getByRole('group', { name: 'Totals' })
-  const cards = row.locator('article')
+  const totals = page.getByRole('group', { name: 'Totals' })
+  const cards = totals.locator('article')
   await expect(cards).toHaveCount(4)
   const shipped = flow.trend.shipped.reduce((a, b) => a + b, 0)
   const expected: [string, number][] = [
@@ -144,13 +135,14 @@ test('the stat row shows the API figures and a card opens its column', async ({ 
     await expect(cards.nth(i).getByRole('heading', { name: title })).toBeVisible()
     await expect(cards.nth(i).getByText(String(value), { exact: true }).first()).toBeVisible()
   }
-  await row.getByRole('link', { name: 'Working' }).click()
+  await totals.getByRole('link', { name: 'Working' }).click()
   await expect(page).toHaveURL(/\/flow\?state=working$/)
-  await expect(page.getByRole('region')).toHaveCount(1)
-  await expect(heading(page, 'working')).toHaveText(`Working ${flow.states.working.count}`)
+  await expect(list(page).getByRole('heading', { level: 2 })).toHaveText(`Working ${counted(flow).working}`)
+  await expect(rows(page)).toHaveCount(counted(flow).working)
   await page.goto('/flow')
-  await row.getByRole('link', { name: 'Shipped this week' }).click()
+  await totals.getByRole('link', { name: 'Shipped this week' }).click()
   await expect(page).toHaveURL(/\/flow\?state=closed$/)
+  await expect(rows(page)).toHaveCount(flow.closedRecently.length)
 })
 
 test('the strip, the stat cards and the sidebar count the same Issues, each card carries its hint', async ({
@@ -168,58 +160,83 @@ test('the strip, the stat cards and the sidebar count the same Issues, each card
   }
 })
 
-test('the header strip count opens the same view as the stat card', async ({ page, apiUrl }) => {
+for (const count of ['working', 'waiting', 'queued'] as const) {
+  test(`the header strip's ${count} count opens a list of exactly those Issues`, async ({ page, apiUrl }) => {
+    const flow = await flowOf(apiUrl)
+    await page.goto('/flow')
+    await page
+      .getByRole('navigation', { name: 'Issues in flight' })
+      .getByRole('link', { name: new RegExp(`${count}$`) })
+      .click()
+    await expect(page).toHaveURL(new RegExp(`/flow\\?state=${count}$`))
+    const issues = issuesOf(flow, count)
+    await expect(list(page)).not.toHaveAttribute('data-collapsed', 'true')
+    await expect(rows(page)).toHaveCount(issues.length)
+    for (const issue of issues) await expect(row(page, issue.title)).toBeVisible()
+  })
+}
+
+test('the list sorts by a pressed column, and pressing it again reverses it', async ({ page }) => {
+  await page.goto('/flow?state=queued')
+  const number = page.getByRole('columnheader', { name: 'Issue' })
+  const numbers = async () =>
+    (await rows(page).evaluateAll((nodes) => nodes.map((node) => node.textContent ?? ''))).map((text) =>
+      Number(/#(\d+)/.exec(text)?.[1]),
+    )
+  // opens on what has been in its state longest, so no column says it sorts the rows
+  await expect(number).toHaveAttribute('aria-sort', 'none')
+  await number.getByRole('button').click()
+  await expect(number).toHaveAttribute('aria-sort', 'descending')
+  const down = await numbers()
+  expect(down.length).toBeGreaterThan(1)
+  expect(down).toEqual([...down].sort((a, b) => b - a))
+  await number.getByRole('button').click()
+  await expect(number).toHaveAttribute('aria-sort', 'ascending')
+  expect(await numbers()).toEqual([...down].reverse())
+})
+
+test("the list links to the Chain, for the project when the rows are one project's", async ({ page, apiUrl }) => {
+  await page.goto('/flow?state=working')
+  await expect(list(page).getByRole('link', { name: 'See how these depend' })).toHaveAttribute('href', '/chain')
   const flow = await flowOf(apiUrl)
-  await page.goto('/flow')
-  await page
-    .getByRole('navigation', { name: 'Issues in flight' })
-    .getByRole('link', { name: /working$/ })
-    .click()
-  await expect(page).toHaveURL(/\/flow\?state=working$/)
-  await expect(page.getByRole('region')).toHaveCount(1)
-  await expect(heading(page, 'working')).toHaveText(`Working ${flow.states.working.count}`)
+  const repo = open(flow)[0]?.repo
+  if (!repo) throw new Error('the seed has no open Issue')
+  await page.goto(`/flow?project=${repo}`)
+  await expect(list(page).getByRole('link', { name: 'See how these depend' })).toHaveAttribute(
+    'href',
+    `/chain?project=${repo}`,
+  )
+  await list(page).getByRole('link', { name: 'See how these depend' }).click()
+  await expect(page).toHaveURL(new RegExp(`/chain\\?project=${repo}$`))
 })
 
-test('every column header has its InfoHint, and no select shows on a wide screen', async ({ page }) => {
-  await page.goto('/flow')
-  for (const key of Object.keys(LABEL) as (keyof typeof LABEL)[]) {
-    const word = key === 'closed' ? 'Outcome' : LABEL[key]
-    await expect(region(page, key).getByRole('button', { name: `What ${word} means` })).toBeVisible()
-    // the hint is a sibling of the h2: the heading text stays the label and count
-    await expect(heading(page, key)).toHaveText(new RegExp(`^${LABEL[key]} \\d+$`))
-  }
-  await expect(page.locator('select:visible')).toHaveCount(0)
-})
-
-test('a project toggle in the sidebar narrows the board', async ({ page, apiUrl }) => {
+test('a project toggle in the sidebar lists that project, and no select shows on a wide screen', async ({
+  page,
+  apiUrl,
+}) => {
   const flow = await flowOf(apiUrl)
   await page.goto('/flow')
   await pick(page, 'Projects', 'argo')
   await expect(page).toHaveURL(/[?&]project=argo/)
-  await expectCounts(
-    page,
-    countsOf(flow, (i) => i.repo === 'argo'),
+  await expect(rows(page)).toHaveCount(
+    open(flow, (i) => i.repo === 'argo').length + flow.closedRecently.filter((i) => i.repo === 'argo').length,
   )
   await expect(page.locator('select:visible')).toHaveCount(0)
 })
 
-test("a card's project chip is a link that opens the project's page", async ({ page, apiUrl }) => {
+test("a row's project is a link that opens the project's page", async ({ page, apiUrl }) => {
   const flow = await flowOf(apiUrl)
-  const item = flow.states.working.issues[0] ?? STATES.flatMap((s) => flow.states[s].issues)[0]
-  if (!item) throw new Error('the board is empty')
-  await page.goto('/flow')
-  const chip = page
-    .getByRole('article')
-    .filter({ has: page.getByRole('heading', { name: item.title, exact: true }) })
-    .first()
-    .getByRole('link', { name: item.repo, exact: true })
+  const item = flow.states.working.issues[0] ?? open(flow)[0]
+  if (!item) throw new Error('the seed is empty')
+  await page.goto(`/flow?project=${item.repo}`)
+  const chip = row(page, item.title).getByRole('link', { name: item.repo, exact: true })
   await expect(chip).toHaveAttribute('href', new RegExp(`/projects/${item.repo}$`))
   await chip.click()
   await expect(page).toHaveURL(new RegExp(`/projects/${item.repo}$`))
   await expect(page.getByRole('heading', { level: 1, name: item.repo })).toBeVisible()
 })
 
-test('the filters narrow every column, write the URL, and clearing restores the counts', async ({ page, apiUrl }) => {
+test('the filters narrow the list, write the URL, and clearing collapses it again', async ({ page, apiUrl }) => {
   // an Issue of another origin: a held feedback signal the owner promotes
   const title = `Flow feedback ${Date.now()}`
   await api(apiUrl, '/signals', { from: 'feedback:argo', title, text: 'it is broken' })
@@ -228,133 +245,77 @@ test('the filters narrow every column, write the URL, and clearing restores the 
   if (!held) throw new Error('the feedback signal is not held')
   await api(apiUrl, `/signals/${held.id}/promote`, { repo: 'argo' })
   const flow = await flowOf(apiUrl)
-  expect(Object.values(flow.states).flatMap((c) => c.issues)).toEqual(
-    expect.arrayContaining([expect.objectContaining({ origin: 'feedback' })]),
-  )
+  expect(open(flow)).toEqual(expect.arrayContaining([expect.objectContaining({ origin: 'feedback' })]))
+  const closed = (keep: (item: Item) => boolean) => flow.closedRecently.filter(keep).length
 
   await page.goto('/flow')
-  await expectCounts(page, countsOf(flow))
+  await expect(list(page)).toHaveAttribute('data-collapsed', 'true')
   await pick(page, 'Projects', 'chat')
   await expect(page).toHaveURL(/[?&]project=chat/)
-  await expectCounts(
-    page,
-    countsOf(flow, (i) => i.repo === 'chat'),
-  )
+  await expect(rows(page)).toHaveCount(open(flow, (i) => i.repo === 'chat').length + closed((i) => i.repo === 'chat'))
   await pick(page, 'Projects', 'All')
   await expect(page).not.toHaveURL(/project=/)
-  await expectCounts(page, countsOf(flow))
+  await expect(list(page)).toHaveAttribute('data-collapsed', 'true')
 
   await pick(page, 'Origin', 'Feedback')
   await expect(page).toHaveURL(/[?&]origin=feedback/)
-  await expectCounts(
-    page,
-    countsOf(flow, (i) => i.origin === 'feedback'),
+  await expect(rows(page)).toHaveCount(
+    open(flow, (i) => i.origin === 'feedback').length + closed((i) => i.origin === 'feedback'),
   )
-  await expect(region(page, 'settling').getByRole('listitem').first()).toContainText('Feedback')
+  await expect(row(page, title)).toContainText('Feedback')
 
   await pick(page, 'Projects', 'argo')
   await expect(page).toHaveURL(/project=argo/)
-  await expectCounts(
-    page,
-    countsOf(flow, (i) => i.origin === 'feedback' && i.repo === 'argo'),
-  )
+  const both = (i: Item) => i.origin === 'feedback' && i.repo === 'argo'
+  await expect(rows(page)).toHaveCount(open(flow, both).length + closed(both))
   await pick(page, 'Origin', 'All')
   await pick(page, 'Projects', 'All')
   await expect(page).not.toHaveURL(/origin=|project=/)
-  await expectCounts(page, countsOf(flow))
+  await expect(list(page)).toHaveAttribute('data-collapsed', 'true')
 
-  // a linked view applies, and a value the data does not have gives empty columns
+  // a linked view applies, and a value the data does not have gives an empty list that says so
   await page.goto('/flow?project=nowhere')
-  await expectCounts(page, { settling: 0, queued: 0, working: 0, waiting: 0, watching: 0, closed: 0 })
-  // an empty column says what is missing and what puts a card there, never a bare "Nothing here"
-  await expect(page.getByText('Nothing here')).toHaveCount(0)
-  for (const key of [...STATES, 'closed'] as const) {
-    const empty = COLUMN_EMPTY[key]
-    await expect(region(page, key).getByText(empty.title, { exact: true })).toBeVisible()
-    await expect(region(page, key).getByText(empty.cause, { exact: true })).toBeVisible()
-  }
+  await expect(rows(page)).toHaveCount(0)
+  await expect(list(page)).toContainText('No Issue matches this filter.')
 })
 
-test('the board sizes its columns by what they hold: an empty one is narrower than one with cards', async ({
+test('a state in the URL names the list, an unknown one is dropped, and "Show all states" clears it', async ({
   page,
-  apiUrl,
 }) => {
-  const flow = await flowOf(apiUrl)
-  const empty = STATES.find((state) => flow.states[state].count === 0)
-  const full = STATES.find((state) => flow.states[state].count > 0)
-  if (!empty || !full) throw new Error('the seed leaves one column empty and one with cards')
-  await page.goto('/flow')
-  await expect(heading(page, full)).toBeVisible()
-  const width = async (state: State) => (await region(page, state).boundingBox())?.width ?? 0
-  expect(await width(empty)).toBeLessThan(await width(full))
-  // nothing is squeezed below what a card can read
-  expect(await width(full)).toBeGreaterThanOrEqual(240)
+  await page.goto('/flow?state=waiting&project=argo')
+  await expect(list(page).getByRole('heading', { level: 2 })).toHaveText(/^Waiting \d+$/)
+  await page.goto('/flow?state=nonsense')
+  await expect(list(page)).toHaveAttribute('data-collapsed', 'true')
+  await page.goto('/flow?state=working')
+  await list(page).getByRole('link', { name: 'Show all states' }).click()
+  await expect(page).not.toHaveURL(/state=/)
+  await expect(list(page).getByRole('heading', { level: 2 })).toHaveText('Issues')
 })
 
-test('a new Issue appears in its column without a reload', async ({ page, apiUrl }) => {
-  await page.goto('/flow')
-  const before = (await flowOf(apiUrl)).states.settling.count
-  await expect(heading(page, 'settling')).toHaveText(`Settling ${before}`)
+test('a new Issue appears in its list without a reload', async ({ page, apiUrl }) => {
+  await page.goto('/flow?state=queued')
+  const before = counted(await flowOf(apiUrl)).queued
+  await expect(rows(page)).toHaveCount(before)
   await page.evaluate('window.__kept = true')
 
-  const title = `Live board card ${Date.now()}`
+  const title = `Live list row ${Date.now()}`
   await api(apiUrl, '/signals', { from: 'owner:hermes', repo: 'argo', title })
-  await expect(region(page, 'settling').getByRole('listitem').filter({ hasText: title })).toBeVisible()
-  await expect(heading(page, 'settling')).toHaveText(`Settling ${before + 1}`)
+  await expect(row(page, title)).toBeVisible()
+  await expect(list(page).getByRole('heading', { level: 2 })).toHaveText(`Queued ${before + 1}`)
   expect(await page.evaluate('window.__kept')).toBe(true)
-})
-
-test('only the visible cards are in the DOM, and scrolling reveals the rest', async ({ page, apiUrl }) => {
-  for (let i = 0; i < 40; i++)
-    await api(apiUrl, '/signals', {
-      from: 'owner:hermes',
-      repo: 'argo',
-      title: `Crowded ${wordOf(1000 + i)} ${wordOf(5000 + i)} ${wordOf(9000 + i)}`,
-    })
-  const flow = await flowOf(apiUrl)
-  const [state, column] =
-    STATES.map((s) => [s, flow.states[s]] as const).sort((a, b) => b[1].count - a[1].count)[0] ?? []
-  if (!state || !column || column.count < 30) throw new Error('no column holds enough cards')
-
-  await page.goto('/flow')
-  await expect(heading(page, state)).toHaveText(`${LABEL[state]} ${column.count}`)
-  const cards = region(page, state).getByRole('listitem')
-  await expect(cards.first()).toBeVisible()
-  expect(await cards.count()).toBeLessThan(column.count)
-  expect(await cards.count()).toBeGreaterThan(0)
-
-  const last = column.issues.at(-1)?.title ?? ''
-  await expect(cards.filter({ hasText: last })).toHaveCount(0)
-  await region(page, state)
-    .getByTestId('flow-scroll')
-    .evaluate((node) => node.scrollTo(0, node.scrollHeight))
-  await expect(cards.filter({ hasText: last })).toBeVisible()
-  await expect(heading(page, state)).toHaveText(`${LABEL[state]} ${column.count}`)
 })
 
 test.describe('phone', () => {
   test.use({ viewport: { width: 390, height: 844 } })
 
-  test('tabs pick one state at a time and the page does not scroll sideways', async ({ page, apiUrl }) => {
+  test('the list is a table that scrolls inside itself and the page does not scroll sideways', async ({
+    page,
+    apiUrl,
+  }) => {
     const flow = await flowOf(apiUrl)
-    await page.goto('/flow')
-    const tabs = page.getByRole('tablist', { name: 'State' })
-    await expect(tabs).toBeVisible()
-    await expect(page.getByRole('region')).toHaveCount(0)
-    const working = page.getByRole('tab', { name: /^Working/ })
-    await expect(working).toHaveAttribute('aria-selected', 'true')
-    const panel = page.getByRole('tabpanel')
-    const workingTitle = flow.states.working.issues[0]?.title ?? ''
-    await expect(panel.getByRole('listitem').filter({ hasText: workingTitle })).toBeVisible()
-
-    const waiting = page.getByRole('tab', { name: new RegExp(`^Waiting ${flow.states.waiting.count}$`) })
-    await waiting.click()
-    await expect(waiting).toHaveAttribute('aria-selected', 'true')
-    await expect(
-      panel.getByRole('listitem').filter({ hasText: flow.states.waiting.issues[0]?.title ?? '' }),
-    ).toBeVisible()
-    await expect(panel.getByRole('listitem').filter({ hasText: workingTitle })).toHaveCount(0)
-
+    await page.goto('/flow?state=working')
+    await expect(page.getByRole('tablist')).toHaveCount(0)
+    await expect(rows(page)).toHaveCount(counted(flow).working)
     const overflow = await page.evaluate<number>(
       'document.documentElement.scrollWidth - document.documentElement.clientWidth',
     )
@@ -383,7 +344,7 @@ const reach = (page: Page): Promise<Reach> =>
 
 /**
  * The page never scrolls sideways: not the document, not the Shell's `main` (the real scroller, so `document.scrollWidth`
- * alone says nothing), and the board is the one thing that scrolls sideways, inside its own container.
+ * alone says nothing); a table too wide for the screen scrolls inside its own container.
  */
 for (const viewport of [
   { width: 1280, height: 800 },
@@ -395,8 +356,8 @@ for (const viewport of [
     test('document.scrollWidth equals the viewport width on Flow, and main does not scroll sideways', async ({
       page,
     }) => {
-      await page.goto('/flow')
-      await expect(heading(page, 'working').or(page.getByRole('tab', { name: /^Working/ }))).toBeVisible()
+      await page.goto('/flow?state=working')
+      await expect(rows(page).first()).toBeVisible()
       await page.waitForLoadState('networkidle')
       const measured = await reach(page)
       expect(measured.scrollWidth).toBe(measured.innerWidth)
@@ -404,20 +365,6 @@ for (const viewport of [
     })
   })
 }
-
-test('on a wide screen the board scrolls sideways inside its own container when its columns do not fit', async ({
-  page,
-}) => {
-  await page.setViewportSize({ width: 1280, height: 800 })
-  await page.goto('/flow')
-  const board = page.getByTestId('flow-board')
-  await expect(board).toBeVisible()
-  const scroll = await board.evaluate((node) => node.scrollWidth)
-  const client = await board.evaluate((node) => node.clientWidth)
-  expect(scroll).toBeGreaterThan(client)
-  const measured = await reach(page)
-  expect(measured.mainScroll).toBe(measured.mainClient)
-})
 
 test('the sidebar counts each project as working, waiting and queued, and a project with nothing open shows no figure', async ({
   page,
@@ -465,7 +412,8 @@ test.describe('content as long as the live data', () => {
         for (const item of body.closedRecently) item.title = LONG
         await route.fulfill({ response, json: body })
       })
-      await page.goto('/flow')
+      await page.goto('/flow?state=queued')
+      await expect(rows(page).first()).toBeVisible()
       await page.waitForLoadState('networkidle')
       const measured = await reach(page)
       expect(measured.scrollWidth).toBe(measured.innerWidth)
@@ -475,10 +423,12 @@ test.describe('content as long as the live data', () => {
 })
 
 interface Trend {
+  window: string
+  bucket: string
   buckets: { at: string; working: { peak: number; avg: number } }[]
 }
 
-test('the trend chart plots the peak and the average per bucket, and its control changes window and bucket', async ({
+test('the trend chart opens on 7 days by the hour, and its control offers 24 h, 7 d and 30 d only', async ({
   page,
   apiUrl,
 }) => {
@@ -486,15 +436,20 @@ test('the trend chart plots the peak and the average per bucket, and its control
   const chart = page.getByTestId('flow-trend')
   await expect(chart.getByRole('heading', { name: 'Issues over time' })).toBeVisible()
   await expectHint(chart, 'working')
-  const ranges = chart.getByRole('group', { name: 'Window and bucket' })
+  const ranges = chart.getByRole('group', { name: 'Window' })
+  await expect(ranges.getByRole('button')).toHaveText(['24 h', '7 d', '30 d'])
+  await expect(ranges.getByRole('button', { name: '7 d' })).toHaveAttribute('aria-pressed', 'true')
+  // the read's own default is the same window by the same bucket
+  const byDefault = await api<Trend>(apiUrl, '/v1/flow/trend')
+  expect(byDefault).toMatchObject({ window: '7d', bucket: 'hour' })
+  expect(byDefault.buckets).toHaveLength(168)
   for (const [label, window, bucket, length] of [
-    ['24 hours by hour', '24h', 'hour', 24],
-    ['7 days by hour', '7d', 'hour', 168],
-    ['7 days by day', '7d', 'day', 7],
-    ['30 days by day', '30d', 'day', 30],
+    ['24 h', '24h', 'hour', 24],
+    ['7 d', '7d', 'hour', 168],
+    ['30 d', '30d', 'day', 30],
   ] as const) {
-    await ranges.getByRole('button', { name: label }).click()
-    await expect(ranges.getByRole('button', { name: label })).toHaveAttribute('aria-pressed', 'true')
+    await ranges.getByRole('button', { name: label, exact: true }).click()
+    await expect(ranges.getByRole('button', { name: label, exact: true })).toHaveAttribute('aria-pressed', 'true')
     const trend = await api<Trend>(apiUrl, `/v1/flow/trend?window=${window}&bucket=${bucket}`)
     expect(trend.buckets).toHaveLength(length)
     const peak = Math.max(0, ...trend.buckets.map((b) => b.working.peak))
@@ -503,4 +458,8 @@ test('the trend chart plots the peak and the average per bucket, and its control
   }
   await chart.getByRole('group', { name: 'Count' }).getByRole('button', { name: 'Queued' }).click()
   await expect(chart.getByText('peak queued in the window')).toBeVisible()
+})
+
+test('7 days by the day is no range of the read', async ({ apiUrl }) => {
+  await expect(api(apiUrl, '/v1/flow/trend?window=7d&bucket=day')).rejects.toThrow(/4\d\d/)
 })

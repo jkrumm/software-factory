@@ -77,7 +77,7 @@ function Bullets({ digest }: { digest: ProjectDigest }) {
 }
 
 /**
- * One project's digest as a card on the card surface step: the project (a link that filters the board to it) and the
+ * One project's digest as a card on the card surface step: the project (a link to its page) and the
  * digest's age, the headline alone on the inset step, the four counts, and a button that opens the shipped, next and risks
  * bullets, each citing its Issues by a link. Collapsed to the headline and the counts unless `open` says otherwise.
  */
@@ -151,9 +151,9 @@ function DigestCard({
 const openWork = (digest: ProjectDigest): number => digest.counts.working + digest.counts.queued + digest.counts.waiting
 
 /**
- * The strip above the Flow board: one card per project with a digest, the projects with open work first (then the most
- * done in 7 days, then the name). By default one scrollable row, so the board stays on screen with dozens of projects;
- * "Show all" lays every card out as a grid. `project` (the board's filter) shows that project alone and opens it. Nothing
+ * The strip above the Flow numbers: one card per project with a digest, the projects with open work first (then the most
+ * done in 7 days, then the name). By default one scrollable row, so the charts stay on screen with dozens of projects;
+ * "Show all" lays every card out as a grid. `project` (the page's filter) shows that project alone and opens it. Nothing
  * renders without a digest.
  */
 export function DigestStrip({

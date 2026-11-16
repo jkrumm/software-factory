@@ -7,6 +7,8 @@ import {
   FindingClassesModel,
   FixCommitsModel,
   FlowModel,
+  FLOW_TREND_DEFAULT_WINDOW,
+  flowTrendBucketOf,
   FlowTrendQuery,
   FlowTrendSeries,
   FrictionModel,
@@ -171,8 +173,8 @@ export const readModelRoutes = (deps: ReadModelDeps | undefined, caller: (reques
       '/flow/trend',
       async ({ query }) => {
         if (!deps) return unavailable
-        const window = query.window ?? '7d'
-        const bucket = query.bucket ?? (window === '24h' ? 'hour' : 'day')
+        const window = query.window ?? FLOW_TREND_DEFAULT_WINDOW
+        const bucket = query.bucket ?? flowTrendBucketOf(window)
         return Response.json(FlowTrendSeries.parse(await readFlowTrend(deps.sql, { now: now(), window, bucket })))
       },
       {
@@ -181,7 +183,7 @@ export const readModelRoutes = (deps: ReadModelDeps | undefined, caller: (reques
         detail: {
           operationId: 'read.flow-trend',
           summary:
-            'the Issues counted as working, waiting and queued over a window (24h by hour, 7d by hour or day, 30d by day; default 7d by day), per bucket the peak and the average, computed from the applied events; counts only',
+            'the Issues counted as working, waiting and queued over a window (24h by hour, 7d by hour, 30d by day; default 7d by hour), per bucket the peak and the average, computed from the applied events; counts only',
         },
       },
     )

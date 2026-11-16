@@ -33,38 +33,34 @@ field. The address logic is pure (`lib/peek.ts`); the panel's content is its own
 
 ## Flow
 
-`/flow` fills the content area (no width cap). From the top: the header, a stat row, then the board of every Issue by state:
-Settling, Queued, Working, Waiting, Watching and Closed recently (the last 24 hours), from `GET /v1/flow`, refreshed by the
-stream like every other screen.
+`/flow` fills the content area (no width cap). From the top: the header, the digest strip, a stat row, the trend chart and, under
+them, the list of Issues a filter opens, from `GET /v1/flow`, refreshed by the stream like every other screen. There is no board of
+state columns anywhere: the Chain is the view of the work.
 
-**Digest strip.** Above the stat row, one card per project with a digest (`GET /v1/projects/digests`, `components/flow/digest-strip.tsx`): the project (a link to its page), the digest's age, the headline, the four counts (done in 7 days, working, queued, waiting: read from the Issues, not from the digest), and a button that opens the shipped, next and risks bullets, each citing its Issues by a link. The busiest projects (most working, queued and waiting) come first, in one scrollable row so the board stays on screen; "Show all N" lays every card out as a grid. Collapsed to the headline and the counts; with `?project=` the strip shows that project alone, opened. No digest, no strip.
+**Digest strip.** Above the stat row, one card per project with a digest (`GET /v1/projects/digests`, `components/flow/digest-strip.tsx`): the project (a link to its page), the digest's age, the headline, the four counts (done in 7 days, working, queued, waiting: read from the Issues, not from the digest), and a button that opens the shipped, next and risks bullets, each citing its Issues by a link. The busiest projects (most working, queued and waiting) come first, in one scrollable row so the charts stay on screen; "Show all N" lays every card out as a grid. Collapsed to the headline and the counts; with `?project=` the strip shows that project alone, opened. No digest, no strip.
 
 **Stat row.** Four kit `StatCard`s: Working, Waiting, Queued (a line of the Issues in that state at eight daily samples,
 `trend` in the model, summed over the states a count takes in) and Shipped this week (bars of the done and healed closes per day, against the 7 days before). They
-are factory-wide, never narrowed by the filters; each opens `/flow?state=<state>` (Shipped: `closed`), the same view the
+are factory-wide, never narrowed by the filters; each opens `/flow?state=<count>` (Shipped: `closed`), the same list the
 header strip's counts open. All three count Issues, never sessions, by the one definition `FLOW_COUNT_STATES` in the contract (working = working + watching, waiting, queued = queued + settling), the same as the strip, the sidebar and the project digests; each card carries an InfoHint with that definition in its top right corner. Below `lg` the row scrolls sideways inside itself, snapping per card.
 
-**Cards.** A card is the kit `IssueCard`, the whole card a link to `/issues/<n>`: a header with the kind as an
-icon (its name the tooltip), the project and the Issue number in mono (`#12`) and the origin as a muted word where it is
-not You; the title alone in an inset body; a footer with the reason (a wait's reason or the queue's message) and the age
-in mono. A column
-already names the state, so only Closed recently shows a Lozenge, the outcome (Done, Dropped, Healed, Cancelled).
+**The list** (`components/flow/issue-table.tsx`, `FlowList` in `routes/flow.tsx`). A plain table of Issues under the charts, collapsed to its
+heading and one line until a filter is set: `?state=`, `?project=` or `?origin=`. Columns: the number with the kind as an icon, the
+title (a link to `/issues/<n>`, opening the peek; a wait's reason or the queue's message under it), the project (a link to its
+page), the origin, the state (a Closed Issue shows its outcome) and the age since it entered it. Every header sorts (`aria-sort`);
+it opens on what has been in its state longest first (Closed recently: newest first), and the sort is the list's own state, not the
+URL's. The heading is the label and count ("Working 3"); "See how these depend" opens the Chain, filtered to the project when
+every row is one project's. No state shows every open Issue, then what closed in the last day. The table is not virtualised: a
+filter leaves a few dozen rows.
 
-**Columns.** The header is the label and count as the `h2` ("Working 3"), an `InfoHint` for the state beside it (Closed
-recently: outcome) and a hairline under. From the `lg` breakpoint (1024px) the six columns share the width equally in a
-board that scrolls sideways inside itself when they do not fit (1280px), and the board fills the height under the stat
-row; every column is its own virtualised list (`@tanstack/react-virtual`): only the visible cards are in the DOM. Below
-`lg` the board is one list with a tab per state (Working first, or the first state with cards). The layout switches with
-`matchMedia`, so only one of the two is ever rendered.
-
-**Trend chart** (`components/flow/trend-chart.tsx`, `GET /v1/flow/trend`): below the stat row, the peak (most Issues at any instant) and the average of one count per bucket, computed by the server from the applied events. Its own frame holds the controls: the count (Working, Waiting, Queued) and the window by bucket (24 hours by hour, 7 days by hour or day, 30 days by day; hours in the viewer's zone, days are UTC days).
+**Trend chart** (`components/flow/trend-chart.tsx`, `GET /v1/flow/trend`): below the stat row, the peak (most Issues at any instant) and the average of one count per bucket, computed by the server from the applied events. Its own frame holds the controls: the count (Working, Waiting, Queued) and the window by bucket (24 h and 7 d by the hour, 30 d by the day; it opens on 7 d; hours in the viewer's zone, days are UTC days). Three windows, one meaning: a Console chart that offers a window offers these.
 
 **Filters.** Projects and origins are toggles in the sidebar (selects on a phone only) and live in the URL
-(`/flow?project=argo&origin=feedback`), so a filtered view is linkable, and each column header counts what the filters
-leave. A sidebar row's figures are its *open* Issues, never closed ones (`openSplits` in `src/lib/flow.ts`): a lit lamp and the working count (working, watching), an hourglass and the waiting count, a queue icon and the queued count (queued, settling); a row with none open shows no figure. `?state=working|waiting|queued|settling|watching|closed` shows only that column, full width as a grid of cards,
-with a "Show all states" link (it never filters rows); on a phone it picks the tab.
+(`/flow?project=argo&origin=feedback`), so a filtered view is linkable, and the list heading counts what the filters
+leave. A sidebar row's figures are its *open* Issues, never closed ones (`openSplits` in `src/lib/flow.ts`): a lit lamp and the working count (working, watching), an hourglass and the waiting count, a queue icon and the queued count (queued, settling); a row with none open shows no figure. `?state=working|waiting|queued|closed` lists that count's Issues (working takes watching in, queued takes settling in, the number the
+strip shows) with a "Show all states" link; it never filters the figures. An unknown state is dropped.
 
-**The page never scrolls sideways.** The Shell's `main` clips the x axis (`overflow-x-hidden`), the board scrolls sideways inside its own container (`data-testid="flow-board"`), and text that cannot break (a stat card's sub line, a reason line) wraps anywhere. `tests/e2e/flow.e2e.ts` asserts `document.scrollWidth` equals the viewport width and `main` has no sideways scroll at 1280x800 and 390x844, also with long titles and reasons at 1024.
+**The page never scrolls sideways.** The Shell's `main` clips the x axis (`overflow-x-hidden`), a table too wide for the screen scrolls inside its own container, and text that cannot break (a stat card's sub line, a reason line) wraps anywhere. `tests/e2e/flow.e2e.ts` asserts `document.scrollWidth` equals the viewport width and `main` has no sideways scroll at 1280x800 and 390x844, also with long titles and reasons at 1024.
 
 ## Needs you
 
@@ -193,7 +189,7 @@ classes, fix commits; on `/flow`: the trend chart) wait for a 2 s pause (at most
 first `hello` of a page joins the boot's requests (`cancelRefetch: false`) instead of cancelling and repeating them. Chunks:
 the entry holds the shell and the screens that are small; `@xyflow/react` and dagre (`/chain`), react-markdown
 (`/artifacts`) and the command palette (cmdk, loaded when it is first opened) are their own chunks, all precached by the
-service worker. A list is virtualised only where it can grow to hundreds (the Flow columns); the others hold a handful of rows.
+service worker. A list is virtualised only where it can grow to hundreds (none today); the lists hold a handful of rows.
 Keys must not carry a timestamp that moves with each answer, or the row is rebuilt on every refetch.
 
 ## Tokens

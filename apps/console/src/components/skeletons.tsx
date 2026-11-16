@@ -3,7 +3,7 @@ import { cn } from '@/lib/utils'
 
 /**
  * The screens at their final size while their data loads, built from the kit's `Skeleton`: the heights are the real
- * screens' at 1800 wide (a collapsed Needs-you card, a StatCard, a board, the artifact's two columns), so nothing jumps
+ * screens' at 1800 wide (a collapsed Needs-you card, a StatCard, a chart, the artifact's two columns), so nothing jumps
  * when the content arrives. Each is `aria-busy` and named for a screen reader.
  */
 
@@ -43,33 +43,16 @@ export function CardBodySkeleton() {
   )
 }
 
-/** The stat row and the board: four StatCards, then six columns of cards. */
+/** The stat row and the trend chart: four StatCards, then the chart's frame. */
 export function FlowSkeleton() {
   return (
-    <div {...busy('Loading the flow')} className="flex min-h-0 flex-1 flex-col">
+    <div {...busy('Loading the flow')} className="flex flex-col">
       <div className="mb-4 grid gap-3 lg:grid-cols-2 xl:grid-cols-4">
         {Array.from({ length: 4 }, (_, i) => (
           <Skeleton key={i} height={273} rounded="rounded-xl" className={cn(i > 0 && 'hidden lg:block')} />
         ))}
       </div>
-      <div className="hidden min-h-[28rem] flex-1 gap-4 lg:grid lg:grid-cols-[repeat(4,minmax(0,1fr))_12rem_minmax(0,1.2fr)]">
-        {[4, 3, 3, 5, 0, 1].map((cards, column) => (
-          <div key={column} className="flex flex-col gap-2">
-            <div className="border-b pb-3">
-              <Skeleton height={20} width="55%" />
-            </div>
-            {Array.from({ length: cards }, (_, card) => (
-              <Skeleton key={card} height={card % 2 === 0 ? 118 : 130} rounded="rounded-xl" />
-            ))}
-          </div>
-        ))}
-      </div>
-      <div className="grid gap-3 lg:hidden">
-        <Skeleton height={32} className="md:hidden" />
-        <Skeleton height={32} />
-        <Skeleton height={118} rounded="rounded-xl" />
-        <Skeleton height={130} rounded="rounded-xl" />
-      </div>
+      <Skeleton height={330} rounded="rounded-xl" />
     </div>
   )
 }

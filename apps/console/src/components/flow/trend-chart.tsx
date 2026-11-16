@@ -1,7 +1,7 @@
 import { FLOW_COUNTS, type FlowCount } from '@software-factory/contract'
 import { useState } from 'react'
 import { InfoHint, TimeChart } from '@/components/kit'
-import { bucketWords, TREND_RANGES, type TrendRange, trendLines } from '@/lib/flow'
+import { bucketWords, DEFAULT_TREND_RANGE, TREND_RANGES, type TrendRange, trendLines } from '@/lib/flow'
 import { useFlowTrend } from '@/lib/queries'
 import { cn } from '@/lib/utils'
 
@@ -50,9 +50,9 @@ function Segments<T extends string>({
  * chosen in the chart's own frame; both lines are plotted from zero.
  */
 export function TrendChart() {
-  const [rangeKey, setRangeKey] = useState<TrendRange['key']>('7d-day')
+  const [rangeKey, setRangeKey] = useState<TrendRange['key']>(DEFAULT_TREND_RANGE.key)
   const [count, setCount] = useState<FlowCount>('working')
-  const range = TREND_RANGES.find((choice) => choice.key === rangeKey) ?? TREND_RANGES[2]
+  const range = TREND_RANGES.find((choice) => choice.key === rangeKey) ?? DEFAULT_TREND_RANGE
   const { data, error, isPending } = useFlowTrend(range.window, range.bucket)
   const lines = data ? trendLines(data, count) : null
   const peak = lines ? Math.max(0, ...lines.peak) : 0
@@ -82,7 +82,7 @@ export function TrendChart() {
           value={count}
           onChange={setCount}
         />
-        <Segments label="Window and bucket" choices={TREND_RANGES} value={rangeKey} onChange={setRangeKey} />
+        <Segments label="Window" choices={TREND_RANGES} value={rangeKey} onChange={setRangeKey} />
       </header>
       <div className="rounded-lg bg-background px-4 py-3.5">
         {lines ? (

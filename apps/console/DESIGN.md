@@ -90,12 +90,12 @@ it does not.
 | StepRail | One row per event or step: icon, words, a duration bar scaled to the longest, time on the right; a failure is red with its line |
 | Meter, Sparkline, MiniBars | Hand-drawn SVG on tokens, hover tooltip, no animation. A Meter is graphite, warn from 75 %, bad from 90 % (`meterTone`) |
 | InfoHint | A small ⓘ beside a domain word; its text is that word's definition generated from `docs/language.md`, never retyped |
-| EmptyState, Skeleton | One sentence and an icon tile. A skeleton is a quiet block at the final height of what it stands for (`components/skeletons.tsx` holds one per screen, built from the kit's `Skeleton`: a collapsed Needs-you card is 72 to 98 px, a StatCard 273, a board card about 120, the artifact's comments panel 24 rem), so nothing jumps when the content arrives; the screen is `aria-busy` and named. It never reads "Loading" as text |
+| EmptyState, Skeleton | One sentence and an icon tile. A skeleton is a quiet block at the final height of what it stands for (`components/skeletons.tsx` holds one per screen, built from the kit's `Skeleton`: a collapsed Needs-you card is 72 to 98 px, a StatCard 273, the trend chart 330, the artifact's comments panel 24 rem), so nothing jumps when the content arrives; the screen is `aria-busy` and named. It never reads "Loading" as text |
 
 ## The peek
 
-The decision of Issue 664: a **side panel, not a modal**. A centred modal hides the board it was opened from and wants a
-click out; the panel leaves the board (and the Chain graph) readable beside it, lets the next card swap the panel in one
+The decision of Issue 664: a **side panel, not a modal**. A centred modal hides the page it was opened from and wants a
+click out; the panel leaves the page (and the Chain graph) readable beside it, lets the next card swap the panel in one
 click, and keeps the working screen where it was.
 
 - **Address.** `?peek=issues/<n>` or `?peek=artifacts/<id>` on any page, with `peekTab` (the Issue's tab) and `peekRevision`
@@ -106,7 +106,7 @@ click, and keeps the working screen where it was.
   full view). The palette still goes to the page.
 - **History.** Opening from a closed panel pushes one entry; swapping replaces it. Escape, the close button and the
   browser's back all close it, and Escape and the button step back the one entry, so the list is exactly as it was: the page
-  underneath stays mounted, keeping its scroll, filters and virtualised columns. Escape belongs to an open popover, the
+  underneath stays mounted, keeping its scroll and filters. Escape belongs to an open popover, the
   palette or a menu first, and in a field it only leaves the field.
 - **Narrow form.** The views do not size to the viewport inside it: the Issue's properties stack under the tabs, the stat
   figures take two columns, the artifact's comments stack under its document.
@@ -114,7 +114,7 @@ click, and keeps the working screen where it was.
 ## Rules
 
 - The page never scrolls sideways, at any viewport. Shell's `main` clips the x axis; only a container made for it (the Flow
-  board, a carousel) scrolls sideways, inside itself. Text that cannot break wraps anywhere.
+  list's table, a carousel) scrolls sideways, inside itself. Text that cannot break wraps anywhere.
 - A meter is graphite; it takes the warn tone from 75 % and the bad tone from 90 % of its ceiling, and no series colour
   otherwise. Colour in the chrome is state only.
 - No coloured left bar on a card, a block or a quote. No gradient, no glow, no emoji.
@@ -149,8 +149,10 @@ click, and keeps the working screen where it was.
   shows its options as cards: the recommendation marked with its reason, cost and consequence per option, free text last.
   An Errand says what it is. A held signal shows where it came from, when, and a link to its source.
 - **Projects**: the list is one card per project (name, working, waiting, queued and shipped figures, the digest's headline, one hygiene line), busiest first. A project's page fills the width: its three StatCards (Shipped with its daily bars against the 7 days before, Plan done of all rows, Hygiene findings of the newest pass), then Now (the project's open Issues as the Flow cards), Shipped in 7 days (SinceRows) beside the Plan (the rows still to come), Production (Watch, incidents, regressions and the monitors the door routes to it), Setup (a PropertyList of `project.yaml`) and Hygiene (each probe with its last run, the newest pass's findings and how each ended, earlier passes in a Fold). Its links into Flow, Chain and Artifacts carry `?project=`.
-- **Flow**: a stat row (working, waiting, queued, shipped this week, each a StatCard with its sparkline), then the board
-  across the full width; a column header has its count and an InfoHint; IssueCards open the Issue and show its number.
+- **Flow**: a stat row (working, waiting, queued, shipped this week, each a StatCard with its sparkline), then the trend chart
+  (its window control is 24 h, 7 d, 30 d, opening on 7 d by the hour; 24 h and 7 d are by the hour, 30 d by the day) and, under it, the
+  list of Issues a filter opens: a sortable table, collapsed until a count, project or origin is picked, with a link to the Chain. There
+  is no board of state columns; the Chain is the view of the work.
 - **Issue**: a header (title, project, KindBadge, Lozenge, age, actions), a PropertyList of the facts, tabs for overview,
   activity (StepRail of the event log in words), evidence and checkpoints; a right panel with properties and the chain
   around it.

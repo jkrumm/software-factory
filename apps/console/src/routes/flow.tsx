@@ -1,50 +1,48 @@
 import { createFileRoute, Link, useNavigate } from '@tanstack/react-router'
 import type { FlowModel } from '@software-factory/contract'
 import { CheckCircleIcon, HourglassIcon, QueueIcon, RocketLaunchIcon } from '@phosphor-icons/react'
-import { type ReactNode, useState } from 'react'
+import { useState } from 'react'
 import { DigestStrip } from '@/components/flow/digest-strip'
-import { FlowCardView } from '@/components/flow/card'
+import { IssueTable } from '@/components/flow/issue-table'
 import { TrendChart } from '@/components/flow/trend-chart'
-import { EmptyColumn } from '@/components/flow/empty'
-import { FlowList } from '@/components/flow/list'
-import { InfoHint, type InfoWord, StatCard } from '@/components/kit'
+import { StatCard } from '@/components/kit'
 import { EmptyState, Page, PageHeader } from '@/components/page'
-import { ActiveFilters, SidebarEntry, SidebarSection } from '@/components/sidebar'
+import { ActiveFilters, type FilterChip, SidebarEntry, SidebarSection } from '@/components/sidebar'
 import {
-  boardColumns,
-  boardNote,
-  boardOf,
-  COLUMN_KEYS,
-  COLUMN_LABEL,
-  type ColumnKey,
-  columnKeyOf,
+  cardsOf,
   countsOf,
-  defaultTab,
+  defaultSort,
   type FlowFilters,
+  flowNote,
+  LIST_LABEL,
+  listOf,
+  listStateOf,
   type OpenSplit,
   openSplits,
   originsOf,
   originWord,
   projectsOf,
   type FlowStat,
+  type Sort,
+  singleProject,
+  sortedCards,
+  startSort,
+  STATE_KEYS,
   statsOf,
-  visibleColumns,
 } from '@/lib/flow'
-import { useMediaQuery } from '@/lib/media'
 import { useNow } from '@/lib/now'
 import { FlowSkeleton } from '@/components/skeletons'
 import { useScreen, useScreenNote } from '@/lib/screen'
 import { useFlow, useProjectDigests } from '@/lib/queries'
-import { cn } from '@/lib/utils'
 
 const text = (value: unknown): string | undefined => (typeof value === 'string' && value !== '' ? value : undefined)
 
 export const Route = createFileRoute('/flow')({
-  /** `project` and `origin` filter the board, `state` shows one column: `/flow?project=argo&state=working` is a linkable view. */
+  /** `project` and `origin` filter the list, `state` picks what it lists: `/flow?project=argo&state=working` is a linkable view. */
   validateSearch: (search: Record<string, unknown>): FlowFilters => {
     const project = text(search.project)
     const origin = text(search.origin)
-    const state = columnKeyOf(search.state)
+    const state = listStateOf(search.state)
     return { ...(project ? { project } : {}), ...(origin ? { origin } : {}), ...(state ? { state } : {}) }
   },
   component: Flow,
@@ -103,7 +101,7 @@ const STAT_ICON = {
   shipped: CheckCircleIcon,
 } as const
 
-/** The four stat cards: factory-wide, each opens the column it counts. */
+/** The four stat cards: factory-wide, each opens the list of the Issues it counts. */
 function StatRow({ data, now }: { data: FlowModel; now: number }) {
   return (
     <div
@@ -134,18 +132,76 @@ function StatRow({ data, now }: { data: FlowModel; now: number }) {
   )
 }
 
-/** A column's label and count as the h2 (nothing else inside it), the word's InfoHint beside it, a hairline under. */
-function ColumnHeader({ column, count, children }: { column: ColumnKey; count: number; children?: ReactNode }) {
-  const word: InfoWord = column === 'closed' ? 'outcome' : column
+/**
+ * The Issues behind a filter: a heading with their count, a link to the Chain, and the table. With no filter set it is
+ * collapsed to its heading and one line saying what opens it. Sorting is the list's own state, reset when the list's
+ * state changes.
+ */
+function FlowList({ data, filters, now }: { data: FlowModel; filters: FlowFilters; now: number }) {
+  const [picked, setPicked] = useState<Sort | null>(null)
+  const filtered = Boolean(filters.state || filters.project || filters.origin)
+  if (!filtered) {
+    return (
+      <section aria-labelledby="flow-list" data-testid="flow-list" data-collapsed="true" className="mb-4">
+        <h2 id="flow-list" className="border-b pb-1.5 text-sm font-medium text-muted-foreground">
+          Issues
+        </h2>
+        <p className="pt-2 text-sm text-muted-foreground">
+          Pick a count, a project or an origin to list its Issues here.
+        </p>
+      </section>
+    )
+  }
+  const cards = listOf(cardsOf(data, filters), filters.state)
+  const sort = picked ?? defaultSort(filters.state)
+  const rows = sortedCards(cards, sort)
+  const project = filters.project ?? singleProject(cards)
+  const onSort = (key: Sort['key']) =>
+    setPicked(sort.key === key ? { key, direction: sort.direction === 'asc' ? 'desc' : 'asc' } : startSort(key))
+  const title = filters.state ? LIST_LABEL[filters.state] : 'Issues'
   return (
-    <div className="flex items-center gap-1 border-b pb-1.5">
-      <h2 id={`flow-${column}`} className="text-sm font-medium text-muted-foreground">
-        {COLUMN_LABEL[column]} <span className="tabular-nums">{count}</span>
-      </h2>
-      <InfoHint word={word} />
-      {children}
-    </div>
+    <section aria-labelledby="flow-list" data-testid="flow-list" className="mb-4 flex flex-col gap-3">
+      <div className="flex flex-wrap items-center gap-x-4 gap-y-1 border-b pb-1.5">
+        <h2 id="flow-list" className="text-sm font-medium text-muted-foreground">
+          {title} <span className="tabular-nums">{cards.length}</span>
+        </h2>
+        {filters.state ? (
+          <Link
+            to="/flow"
+            search={{ ...filters, state: undefined }}
+            className="text-sm text-muted-foreground underline underline-offset-4 hover:text-foreground"
+          >
+            Show all states
+          </Link>
+        ) : null}
+        <Link
+          to="/chain"
+          search={project ? { project } : {}}
+          className="ml-auto text-sm text-muted-foreground underline underline-offset-4 hover:text-foreground"
+        >
+          See how these depend
+        </Link>
+      </div>
+      {rows.length === 0 ? (
+        <p className="px-1 py-3 text-sm text-muted-foreground">No Issue matches this filter.</p>
+      ) : (
+        <IssueTable label={`${title} Issues`} cards={rows} sort={sort} onSort={onSort} now={now} />
+      )}
+    </section>
   )
+}
+
+/** The active filters as chips, each a link that clears its own. */
+function chipsOf(filters: FlowFilters): FilterChip[] {
+  const clear =
+    (name: keyof FlowFilters): FilterChip['render'] =>
+    (props) => <Link to="/flow" search={{ ...filters, [name]: undefined }} {...props} />
+  const chips: FilterChip[] = []
+  if (filters.state) chips.push({ key: 'state', label: `State: ${LIST_LABEL[filters.state]}`, render: clear('state') })
+  if (filters.project) chips.push({ key: 'project', label: `Project: ${filters.project}`, render: clear('project') })
+  if (filters.origin)
+    chips.push({ key: 'origin', label: `Origin: ${originWord(filters.origin)}`, render: clear('origin') })
+  return chips
 }
 
 const SELECT =
@@ -159,22 +215,20 @@ function Flow() {
   const note = useScreenNote(screen, error)
   // the root route validates nothing, so an unknown `state` still reaches here from the raw URL: read it through the guard again
   const search = Route.useSearch()
-  const filters: FlowFilters = { ...search, state: columnKeyOf(search.state) }
+  const filters: FlowFilters = { ...search, state: listStateOf(search.state) }
   const navigate = useNavigate({ from: Route.fullPath })
   const now = useNow(30_000)
-  const wide = useMediaQuery('(min-width: 1024px)')
-  const [picked, setPicked] = useState<ColumnKey | null>(null)
 
   if (!data)
     return (
-      <Page full>
+      <Page fluid>
         <PageHeader title="Flow" loading={screen === 'loading'} note={note} />
         {screen === 'loading' ? <FlowSkeleton /> : null}
       </Page>
     )
 
-  const everything = countsOf(boardOf(data))
-  if (COLUMN_KEYS.every((key) => everything[key] === 0)) {
+  const everything = countsOf(cardsOf(data))
+  if (STATE_KEYS.every((key) => everything[key] === 0)) {
     return (
       <Page wide>
         <PageHeader title="Flow" />
@@ -183,33 +237,17 @@ function Flow() {
     )
   }
 
-  const board = boardOf(data, filters)
-  const counts = countsOf(board)
   const setFilter = (name: 'project' | 'origin', value: string) =>
     void navigate({ search: { ...filters, [name]: value || undefined }, replace: true })
-  const tab = picked ?? filters.state ?? defaultTab(counts)
-  const columns = visibleColumns(filters.state)
 
   return (
-    <Page full>
-      <PageHeader title="Flow" note={boardNote(counts)} />
+    <Page fluid>
+      <PageHeader title="Flow" note={flowNote(countsOf(cardsOf(data, filters)))} />
       <DigestStrip digests={digests.data?.projects ?? []} now={now} project={filters.project} />
       <StatRow data={data} now={now} />
       <TrendChart />
       <FlowSidebar data={data} filters={filters} />
-      <ActiveFilters
-        chips={(['project', 'origin'] as const).flatMap((name) => {
-          const value = filters[name]
-          if (!value) return []
-          return [
-            {
-              key: name,
-              label: `${name === 'project' ? 'Project' : 'Origin'}: ${name === 'origin' ? originWord(value) : value}`,
-              render: (props) => <Link to="/flow" search={{ ...filters, [name]: undefined }} {...props} />,
-            },
-          ]
-        })}
-      />
+      <ActiveFilters chips={chipsOf(filters)} />
       <div className="mb-4 flex flex-wrap gap-3 md:hidden">
         <label className="flex items-center gap-2 text-sm text-muted-foreground">
           Project
@@ -238,91 +276,7 @@ function Flow() {
           </select>
         </label>
       </div>
-      {wide && filters.state ? (
-        <section aria-labelledby={`flow-${filters.state}`} className="flex min-h-0 flex-1 flex-col gap-3">
-          <ColumnHeader column={filters.state} count={counts[filters.state]}>
-            <Link
-              to="/flow"
-              search={{ ...filters, state: undefined }}
-              className="ml-3 text-sm text-muted-foreground underline underline-offset-4 hover:text-foreground"
-            >
-              Show all states
-            </Link>
-          </ColumnHeader>
-          {board[filters.state].length === 0 ? (
-            <EmptyColumn column={filters.state} />
-          ) : (
-            <div className="-mx-1 min-h-0 flex-1 overflow-y-auto px-1 pb-2">
-              <ul
-                aria-labelledby={`flow-${filters.state}`}
-                className="grid grid-cols-[repeat(auto-fill,minmax(20rem,1fr))] items-start gap-3"
-              >
-                {board[filters.state].map((card) => (
-                  <li key={card.key}>
-                    <FlowCardView card={card} now={now} showState={filters.state === 'closed'} />
-                  </li>
-                ))}
-              </ul>
-            </div>
-          )}
-        </section>
-      ) : wide ? (
-        <div
-          data-testid="flow-board"
-          className="-mx-1 min-h-[28rem] flex-1 overflow-x-auto px-1 pb-1 [scrollbar-width:thin]"
-        >
-          <div className="grid h-full gap-4" style={{ gridTemplateColumns: boardColumns(columns, counts) }}>
-            {columns.map((key) => (
-              <section key={key} aria-labelledby={`flow-${key}`} className="flex min-h-0 min-w-0 flex-col gap-2">
-                <ColumnHeader column={key} count={counts[key]} />
-                <FlowList
-                  cards={board[key]}
-                  now={now}
-                  labelledBy={`flow-${key}`}
-                  column={key}
-                  showState={key === 'closed'}
-                  className="min-h-0 flex-1"
-                />
-              </section>
-            ))}
-          </div>
-        </div>
-      ) : (
-        <div className="grid gap-3">
-          <div role="tablist" aria-label="State" className="-mx-4 flex gap-2 overflow-x-auto px-4 pb-1">
-            {COLUMN_KEYS.map((key) => (
-              <button
-                key={key}
-                id={`flow-tab-${key}`}
-                type="button"
-                role="tab"
-                aria-selected={tab === key}
-                aria-controls="flow-panel"
-                onClick={() => setPicked(key)}
-                className={cn(
-                  'shrink-0 cursor-pointer rounded-full border px-3 py-1 text-sm whitespace-nowrap outline-none focus-visible:ring-3 focus-visible:ring-ring/50',
-                  tab === key
-                    ? 'border-transparent bg-primary text-primary-foreground'
-                    : 'bg-card text-muted-foreground',
-                )}
-              >
-                {COLUMN_LABEL[key]} <span className="tabular-nums">{counts[key]}</span>
-              </button>
-            ))}
-          </div>
-          <div id="flow-panel" role="tabpanel" aria-labelledby={`flow-tab-${tab}`}>
-            <FlowList
-              key={tab}
-              cards={board[tab]}
-              now={now}
-              labelledBy={`flow-tab-${tab}`}
-              column={tab}
-              showState={tab === 'closed'}
-              className="max-h-[calc(100dvh-18rem)]"
-            />
-          </div>
-        </div>
-      )}
+      <FlowList key={filters.state ?? 'all'} data={data} filters={filters} now={now} />
     </Page>
   )
 }

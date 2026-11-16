@@ -5,7 +5,7 @@ import { FlowCardView } from '@/components/flow/card'
 import { Ago } from '@/components/issue/ago'
 import { EmptyState, Fold, Lozenge, Section, SinceRow, type SinceRowProps } from '@/components/kit'
 import type { Tone } from '@/components/kit/tone'
-import { boardOf, type ColumnKey, numberOf } from '@/lib/flow'
+import { cardsOf, numberOf, type StateKey } from '@/lib/flow'
 import { nextRows, planSummary } from '@/lib/project'
 import { cn } from '@/lib/utils'
 import { LINK, Mono, None, NUM, Table, TD, TH } from './parts'
@@ -13,14 +13,14 @@ import { LINK, Mono, None, NUM, Table, TD, TH } from './parts'
 const POPOVER_LINK =
   'inline-flex items-center gap-1 rounded-sm text-[length:var(--vx-text-sm)] underline underline-offset-4 outline-none focus-visible:ring-3 focus-visible:ring-ring/50'
 
-/** The open columns in the order the owner reads them: what runs, what waits for something, what has not started. */
-const OPEN_ORDER: readonly ColumnKey[] = ['working', 'watching', 'waiting', 'queued', 'settling']
+/** The open states in the order the owner reads them: what runs, what waits for something, what has not started. */
+const OPEN_ORDER: readonly StateKey[] = ['working', 'watching', 'waiting', 'queued', 'settling']
 
-/** What runs now and what waits, as the Flow cards, from the cached Flow read so the stream keeps it current. */
-/** The project's Issues on the Flow board: a card names its project by name, or by the repo's path when the name was taken by another directory. */
+/** The project's Issues as the Flow cards: a card names its project by name, or by the repo's path when the name was taken by another directory. */
 const ownsCard = (project: { name: string; repo: string }, repo: string): boolean =>
   repo === project.name || repo === project.repo || repo.startsWith(`${project.repo}/`)
 
+/** What runs now and what waits, from the cached Flow read so the stream keeps it current. */
 export function NowSection({
   project,
   flow,
@@ -30,8 +30,8 @@ export function NowSection({
   flow: FlowModel
   now: number
 }) {
-  const board = boardOf(flow)
-  const cards = OPEN_ORDER.flatMap((key) => board[key]).filter((card) => ownsCard(project, card.repo))
+  const byState = cardsOf(flow)
+  const cards = OPEN_ORDER.flatMap((key) => byState[key]).filter((card) => ownsCard(project, card.repo))
   return (
     <Section title="Now" aside={`${cards.length} open`} className="min-w-0">
       {cards.length === 0 ? (
