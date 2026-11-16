@@ -29,5 +29,8 @@ test('Artifacts lists every Report and Spec newest first, filters by kind and op
 
   await page.goto(`/artifacts?kind=spec`)
   await list.getByRole('link', { name: /The storage spec/ }).click()
-  await expect(page).toHaveURL(new RegExp(`/artifacts/${spec}$`))
+  await expect(page).toHaveURL(/peek=/)
+  // a plain click opens the artifact in the peek over the list
+  expect(new URL(page.url()).searchParams.get('peek')).toBe(`artifacts/${spec}`)
+  await expect(page.getByRole('dialog').and(page.locator('[data-peek-panel]'))).toBeVisible()
 })
