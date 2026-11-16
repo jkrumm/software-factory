@@ -103,6 +103,9 @@ export interface ArtifactRecord {
   retiredAt?: Date | null
   /** the collection it belongs to (at most one); null while it stands alone */
   collectionId?: CollectionId | null
+  /** read by `artifacts()` only: whether the owning Issue is closed, and its repo; null for a standalone artifact, absent from every other read */
+  issueClosed?: boolean | null
+  issueRepo?: string | null
 }
 
 /** A named set of artifacts with one lead page; pinned, it leads the Artifacts screen. */

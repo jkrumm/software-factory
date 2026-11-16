@@ -140,6 +140,10 @@ export const ArtifactSummary = z.object({
   retiredAt: iso.nullable().default(null),
   /** the collection it belongs to (`artifact collection`), at most one; null while it stands alone */
   collectionId: z.string().nullable().default(null),
+  /** whether the owning Issue is closed; only the list reads it, null for a standalone artifact and on a single read */
+  issueClosed: z.boolean().nullable().default(null),
+  /** the owning Issue's project, for a list whose Issue cards do not reach that far back */
+  issueRepo: z.string().nullable().default(null),
   revisions: z.array(RevisionView),
 })
 

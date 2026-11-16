@@ -122,6 +122,19 @@ test('revise, annotate, reply and verdict need no Issue and no attempt', async (
   expect(verdict.json).toMatchObject({ issue: null })
 })
 
+test('the list says whether the owning Issue is closed and what its repo is; a standalone Report has neither', async () => {
+  const listed = ((await v.run(['artifact', 'list'])).json?.artifacts ?? []) as {
+    id: string
+    issueId: string | null
+    issueClosed: boolean | null
+    issueRepo: string | null
+  }[]
+  const standalone = listed.find((a) => a.id === report)
+  expect(standalone).toMatchObject({ issueClosed: null, issueRepo: null })
+  const owned = listed.find((a) => a.issueId !== null)
+  if (owned) expect(owned).toMatchObject({ issueClosed: expect.any(Boolean), issueRepo: expect.any(String) })
+})
+
 test('retire hides a Report from the list, its address still works, restore brings it back', async () => {
   const retired = await v.run(['artifact', 'retire', report], 'agent')
   expect(retired.code).toBe(0)

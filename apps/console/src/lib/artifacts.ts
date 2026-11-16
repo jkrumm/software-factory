@@ -39,9 +39,9 @@ export function rowsOf(artifacts: readonly Artifact[], cards: readonly ReadIssue
         artifact,
         issue,
         issueTitle: card?.title ?? null,
-        project: card?.repoName ?? artifact.repo,
+        project: card?.repoName ?? artifact.repo ?? artifact.issueRepo,
         linked: artifact.links.map(issueNumber),
-        closed: card?.state === 'closed',
+        closed: artifact.issueClosed ?? card?.state === 'closed',
       }
     })
     .sort((a, b) => Date.parse(b.artifact.createdAt) - Date.parse(a.artifact.createdAt))

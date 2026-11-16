@@ -23,6 +23,8 @@ const artifact = (id: string, issueId: string | null, kind: Artifact['kind'], cr
   links: [],
   retiredAt: null,
   collectionId: null,
+  issueClosed: null,
+  issueRepo: null,
   kind,
   title: `Title ${id}`,
   format: 'html',
@@ -114,6 +116,26 @@ describe('what the default view hides', () => {
   test('a Report of a closed Issue stays, and Show all lists every row', () => {
     expect(listedRows(rows, false).map((r) => r.artifact.id)).toEqual(['report-closed', 'spec-open', 'new'])
     expect(listedRows(rows, true)).toHaveLength(6)
+  })
+
+  test('an Issue the cards do not reach is closed and has its project from the list itself', () => {
+    const old = rowsOf(
+      [
+        {
+          ...titled('old-spec', 'issue_3', 'spec', '2026-11-16T09:00:00.000Z', 'An old spec'),
+          issueClosed: true,
+          issueRepo: 'argo',
+        },
+        {
+          ...titled('live-spec', 'issue_4', 'spec', '2026-11-16T10:00:00.000Z', 'A live spec'),
+          issueClosed: false,
+          issueRepo: 'argo',
+        },
+      ],
+      [],
+    )
+    expect(old.map((r) => r.project)).toEqual(['argo', 'argo'])
+    expect(Object.fromEntries(hiddenRows(old))).toEqual({ 'old-spec': 'closed' })
   })
 
   test('an artifact with no known project is never taken for a copy', () => {
