@@ -59,18 +59,18 @@ const MAX_RED = 2
 const GLANCE_H = 388
 
 // The tallest the render can get with every section at its cap, in px (the render's row heights: a header 16, a row 14, the
-// cells 2 x 40 + 4, the production line, the footer and the health row 14 each, 4 between sections, 8 padding top and bottom).
+// cells 2 x 44 + 4, the production line, the footer and the health row 14 each, 2 between sections, 8 padding top and bottom).
 // A test keeps it within GLANCE_H: a section that outgrows the block would push the footer out of it.
 const WORST_CASE_H =
   16 +
   MAX_NEEDS * 14 +
-  84 +
+  92 +
   (16 + MAX_PROJECTS * 14) +
   (16 + MAX_REASONS * 14) +
   (14 + MAX_RED * 14) +
   14 +
   14 +
-  6 * 4 +
+  6 * 2 +
   16
 
 // "needs @@ overview @@ issues @@ sessions @@ machine @@ url": each part is null when it does not parse.
@@ -689,7 +689,7 @@ export default class JkGlance extends View {
 
   render() {
     const t = theme()
-    const root = v_flex().size_full().px(8).py(8).gap(4).text_size(11)
+    const root = v_flex().size_full().px(8).py(8).gap(2).text_size(11)
     const m = glanceModel({
       needs: this.needs,
       overview: this.overview,
@@ -757,12 +757,12 @@ export default class JkGlance extends View {
         v_flex()
           .id(`glance-${c.key}`)
           .flex_1()
-          .h(40)
+          .h(44)
           .px(6)
           .py(3)
           .gap(1)
           .tooltip(c.tip)
-          .child(div().truncate().text_size(10).text_color(t.muted).child(c.label))
+          .child(div().flex_none().truncate().text_size(10).text_color(t.muted).child(c.label))
           .child(
             h_flex()
               .items_end()
