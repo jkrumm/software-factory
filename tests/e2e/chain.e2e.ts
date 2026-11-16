@@ -126,7 +126,7 @@ test('the project filter is in the URL and narrows the nodes to the project and 
 test('an Issue node links to its page; a plan row does not link', async ({ page }) => {
   await page.goto('/chain')
   await expect(node(page, 'Draft the export schema').getByRole('link')).toHaveCount(0)
-  await node(page, 'Choose the export format').getByRole('link').click()
+  await node(page, 'Choose the export format').locator('a[href^="/issues/"]').click()
   // a plain click opens the peek over the graph (peek.e2e.ts); the page is "Open full page"
   const panel = page.getByRole('dialog').and(page.locator('[data-peek-panel]'))
   await expect(panel.getByRole('heading', { level: 1, name: 'Choose the export format' })).toBeVisible()
@@ -175,11 +175,12 @@ test('every Issue card is a link to its Issue; a plan row is not', async ({ page
   const issues = chain.nodes.filter((n) => n.kind === 'issue' && linked(chain).has(n.id))
   expect(issues.length).toBeGreaterThanOrEqual(3)
   for (const n of issues) {
-    const link = node(page, n.title).getByRole('link')
+    // the card's own link; its project chip is a second link, to the project's page
+    const link = node(page, n.title).locator('a[href^="/issues/"]')
     await expect(link).toHaveCount(1)
     await expect(link).toHaveAttribute('href', `/issues/${n.id.replace('issue_', '')}`)
   }
-  await expect(graph(page).locator('[data-kind="row"] a')).toHaveCount(0)
+  await expect(graph(page).locator('[data-kind="row"] a[href^="/issues/"]')).toHaveCount(0)
 })
 
 test('the schedule lists the dated plan rows in date order; a far date is in Later', async ({ page, apiUrl }) => {
