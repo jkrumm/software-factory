@@ -1030,7 +1030,8 @@ export const OPERATIONS: readonly Operation[] = [
     command: ['artifact', 'annotate'],
     method: 'POST',
     path: '/v1/artifacts/{id}/annotations',
-    summary: 'a comment anchored by a quote and a path',
+    summary:
+      'a comment anchored by a quote and a path; the owner token only, a lead or the orchestrator gets 403 whatever --author says (a lead answers a comment with annotation-reply)',
     pathParams: ['id'],
     queryParams: [],
     body: true,
