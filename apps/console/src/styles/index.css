@@ -127,7 +127,9 @@
 /* The rendered Markdown of an artifact. */
 .artifact-prose {
   @apply text-base leading-7 wrap-break-word;
+  width: 100%;
   max-width: 75ch;
+  /* auto margins stop a flex-column parent from stretching the item, so it would size to its widest table; width keeps it in the column */
   margin-inline: auto;
 }
 .artifact-prose > :first-child {

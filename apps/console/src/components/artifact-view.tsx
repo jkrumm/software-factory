@@ -156,7 +156,7 @@ function ArtifactViewOf({ id, revision, compare, onPick, peek }: ArtifactViewPro
   return (
     <div
       className={cn(
-        'grid w-full',
+        'grid w-full grid-cols-[minmax(0,1fr)]',
         !peek &&
           'lg:h-full lg:min-h-[40rem] lg:grid-cols-[minmax(0,1fr)_24rem] min-[1800px]:grid-cols-[minmax(0,1fr)_36rem]',
       )}
@@ -233,7 +233,7 @@ function ArtifactViewOf({ id, revision, compare, onPick, peek }: ArtifactViewPro
           <div
             className={
               comparing
-                ? 'grid gap-4 md:grid-cols-2 lg:min-h-0 lg:flex-1'
+                ? 'grid grid-cols-[minmax(0,1fr)] gap-4 md:grid-cols-2 lg:min-h-0 lg:flex-1'
                 : cn('flex flex-col', !peek && 'lg:min-h-0 lg:flex-1')
             }
           >

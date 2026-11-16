@@ -164,3 +164,30 @@ test('an open Needs you card of every kind stays inside the phone, even with a w
   const long = items.find((item) => item.title.startsWith('Broken link'))
   if (long) await api(apiUrl, `/signals/${encodeURIComponent(long.id)}/dismiss`, { reason: 'Test signal' })
 })
+
+test('a Markdown artifact with a wide table stays inside the phone and the table scrolls inside its wrapper', async ({
+  page,
+}) => {
+  const { spec } = JSON.parse(process.env.E2E_ARTIFACTS ?? '{}') as { spec: string }
+  const cell = 'unbreakable_identifier_that_keeps_its_width'
+  const wide = [
+    '| Layer | Owns | Reads | Writes |',
+    '|-|-|-|-|',
+    ...[1, 2, 3].map(() => `| ${cell} | ${cell} | ${cell} | ${cell} |`),
+  ]
+  await page.route(`**/v1/artifacts/${spec}**`, async (route) => {
+    const response = await route.fetch()
+    const body = (await response.json()) as { content?: unknown }
+    if (typeof body.content === 'string') body.content = `${body.content}\n\n${wide.join('\n')}\n`
+    await route.fulfill({ response, json: body })
+  })
+  await page.goto(`/artifacts/${spec}`)
+  const table = page.locator('.artifact-prose table').last()
+  await expect(table).toBeVisible()
+  await page.waitForLoadState('networkidle')
+  expect(await overhang(page)).toEqual([])
+  const prose = await page.locator('.artifact-prose').first().boundingBox()
+  expect(prose?.width).toBeLessThanOrEqual(WIDTH)
+  const wrapper = table.locator('xpath=..')
+  expect(await wrapper.evaluate((el) => el.scrollWidth > el.clientWidth)).toBe(true)
+})
