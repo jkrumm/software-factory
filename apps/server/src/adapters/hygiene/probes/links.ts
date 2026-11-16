@@ -6,6 +6,7 @@ import { type Outcome, clean, finding, found } from './finding.ts'
 const SCHEME = /^[A-Za-z][A-Za-z0-9+.-]*:/
 const INLINE_CODE = /(`+)[^`]*?\1/g
 const LINK = /!?\[[^\]]*\]\(\s*(<[^>]*>|(?:[^()\s]|\([^()\s]*\))+)(?:\s+(?:"[^"]*"|'[^']*'))?\s*\)/g
+const CONSUMER_ROOT = /^(?:\.\/)?node_modules\//
 const FENCE = /^ {0,3}(`{3,}|~{3,})/
 
 export interface BrokenLink {
@@ -37,6 +38,8 @@ function pathOf(target: string): string | undefined {
   if (SCHEME.test(target) || target.startsWith('#') || target.startsWith('/')) return undefined
   const bare = target.split('#')[0]?.split('?')[0] ?? ''
   if (!bare) return undefined
+  // A consumer-root path in a doc shipped to consumers: it resolves in their install, never in this checkout.
+  if (CONSUMER_ROOT.test(bare)) return undefined
   try {
     return decodeURIComponent(bare)
   } catch {
