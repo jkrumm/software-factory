@@ -15,6 +15,7 @@ import {
   originWord,
   projectsOf,
   countWords,
+  flowCounts,
   longestWords,
   numberOf,
   shortDate,
@@ -65,8 +66,8 @@ const data = {
     },
   ],
   perProject: [
-    { repo: 'chat', open: 2, working: 0, queued: 1 },
-    { repo: 'argo', open: 2, working: 0, queued: 1 },
+    { repo: 'chat', open: 2, working: 0, waiting: 1, queued: 1 },
+    { repo: 'argo', open: 2, working: 0, waiting: 0, queued: 2 },
   ],
   queueStates: { global: 'run', projects: {} },
   trend: {
@@ -139,30 +140,43 @@ test('a state shows one column and leaves the rows alone', () => {
   expect(countsOf(boardOf(data, { state: 'waiting' }))).toEqual(countsOf(boardOf(data)))
 })
 
-test('the sidebar counts open Issues as running and pending, never a closed one', () => {
-  // harbor has only a closed Issue: no entry, so its row shows no figure
+test('the sidebar counts open Issues as working, waiting and queued, never a closed one', () => {
+  // harbor has only a closed Issue: no entry, so its row shows no figure; argo's settling Issue is queued
   expect(openSplits(data, 'repo')).toEqual({
-    argo: { running: 0, pending: 2 },
-    chat: { running: 0, pending: 2 },
+    argo: { working: 0, waiting: 0, queued: 2 },
+    chat: { working: 0, waiting: 1, queued: 1 },
   })
   expect(openSplits(data, 'origin')).toEqual({
-    feedback: { running: 0, pending: 1 },
-    you: { running: 0, pending: 2 },
-    github: { running: 0, pending: 1 },
+    feedback: { working: 0, waiting: 0, queued: 1 },
+    you: { working: 0, waiting: 0, queued: 2 },
+    github: { working: 0, waiting: 1, queued: 0 },
   })
 })
 
-test('working and watching run; settling, queued and waiting are pending', () => {
+test('working includes watching, queued includes settling: the sidebar, the strip and the cards count alike', () => {
   const states = {
     ...data.states,
     working: { count: 2, issues: [issue('issue_6', 'argo', 'you'), issue('issue_7', 'harbor', 'you')] },
     watching: { count: 1, issues: [issue('issue_8', 'argo', 'you')] },
   }
-  expect(openSplits({ ...data, states }, 'repo')).toEqual({
-    argo: { running: 2, pending: 2 },
-    chat: { running: 0, pending: 2 },
-    harbor: { running: 1, pending: 0 },
+  const model = { ...data, states }
+  expect(openSplits(model, 'repo')).toEqual({
+    argo: { working: 2, waiting: 0, queued: 2 },
+    chat: { working: 0, waiting: 1, queued: 1 },
+    harbor: { working: 1, waiting: 0, queued: 0 },
   })
+  // the strip's figures
+  expect(flowCounts(model)).toEqual({ working: 3, waiting: 1, queued: 3 })
+  // the stat cards show the same figures, and the splits of every project add up to them
+  const [working, waiting, queued] = statsOf(model, Date.parse(SINCE))
+  expect([working?.value, waiting?.value, queued?.value]).toEqual([3, 1, 3])
+  expect(working?.sub).toBe('in 2 projects, 1 of them watching')
+  const splits = Object.values(openSplits(model, 'repo'))
+  expect([
+    splits.reduce((n, split) => n + split.working, 0),
+    splits.reduce((n, split) => n + split.waiting, 0),
+    splits.reduce((n, split) => n + split.queued, 0),
+  ]).toEqual([3, 1, 3])
 })
 
 test('a card has its number, kind and state (the column, or the outcome when closed)', () => {
@@ -211,7 +225,9 @@ test('the stat row: live counts, trend deltas, subs, footers and the 7-day sums'
   ])
   expect(waiting).toMatchObject({ value: 1, delta: 1, higherIsBetter: false, sub: '1 decision' })
   expect(waiting?.footer[0]).toEqual({ label: 'Oldest', value: '2 h' })
-  expect(queued).toMatchObject({ value: 2, delta: -1, higherIsBetter: false, sub: '1 chain, 1 ready' })
+  // queued counts the settling Issue: its sample is the sum of both states
+  expect(queued).toMatchObject({ value: 3, delta: 0, higherIsBetter: false, sub: '1 chain, 1 ready, 1 settling' })
+  expect(queued?.series).toEqual([3, 3, 2, 2, 2, 2, 3, 3])
   expect(queued?.footer[1]).toEqual({ label: 'Projects', value: '2' })
   expect(shipped).toMatchObject({
     title: 'Shipped this week',

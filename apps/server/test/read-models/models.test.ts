@@ -1,10 +1,23 @@
 import { afterAll, beforeAll, describe, expect, test } from 'bun:test'
-import { ChainModel, FlowModel, FrictionModel, HISTORY_WINDOWS, KpiModel, NeedsModel } from '@software-factory/contract'
+import {
+  ChainModel,
+  FLOW_STATES,
+  flowCountsOf,
+  FlowModel,
+  FlowTrendSeries,
+  FrictionModel,
+  HISTORY_WINDOWS,
+  KpiModel,
+  NeedsModel,
+} from '@software-factory/contract'
 import { startTestCluster, type TestCluster } from '@software-factory/tests/pg'
 import type { SQL } from 'bun'
 import { loadMigrations, migrate } from '../../src/adapters/postgres/migrate.ts'
 import { readChain } from '../../src/read/chain.ts'
+import { DIGEST_WINDOW_MS, countsOf } from '../../src/kernel/digest-scope.ts'
 import { readFlow } from '../../src/read/flow.ts'
+import { readFlowTrend } from '../../src/read/flow-trend.ts'
+import { loopReads } from '../../src/read/loops.ts'
 import { readFriction } from '../../src/read/friction.ts'
 import { readFrictionEvidence } from '../../src/read/friction-evidence.ts'
 import { pointsCache, readKpis } from '../../src/read/kpis.ts'
@@ -315,8 +328,8 @@ describe('the fixture', () => {
     // origin is a shape: a work repo's Issue keeps it
     expect(flow.states.waiting.issues.find((i) => i.id === 'issue_4')?.origin).toBe('you')
     expect(flow.perProject).toEqual([
-      { repo: 'app', open: 4, working: 1, queued: 1 },
-      { repo: 'work-app', open: 3, working: 0, queued: 0 },
+      { repo: 'app', open: 4, working: 1, waiting: 2, queued: 1 },
+      { repo: 'work-app', open: 3, working: 0, waiting: 2, queued: 1 },
     ])
     expect(flow.queueStates).toEqual({ global: 'drain', projects: { app: 'pace' } })
   })
@@ -689,5 +702,94 @@ describe('the flow trend', () => {
     for (const state of Object.keys(trend.states) as (keyof typeof trend.states)[]) {
       expect(trend.states[state][7]).toBe(flow.states[state].count)
     }
+  })
+})
+
+describe('one definition of working, waiting and queued', () => {
+  test('the strip, the Flow cards, the per-project figures and the project digest agree, settling and watching included', async () => {
+    await sql`TRUNCATE factory.issues CASCADE`
+    // app: 2 working, 1 watching, 1 waiting, 2 queued, 1 settling; other: 1 working
+    const seeded: [string, string, string][] = [
+      ['issue_1', 'app', 'working'],
+      ['issue_2', 'app', 'working'],
+      ['issue_3', 'app', 'watching'],
+      ['issue_4', 'app', 'waiting'],
+      ['issue_5', 'app', 'queued'],
+      ['issue_6', 'app', 'queued'],
+      ['issue_7', 'app', 'settling'],
+      ['issue_8', 'other', 'working'],
+    ]
+    for (const [id, repo, state] of seeded) {
+      await issue(id, repo, state, 1, state === 'waiting' ? 'timer' : undefined)
+      await event(id, 1, 'filed', ago(5), { payload: { repo, title: id, kind: 'feature', origin: 'you' }, to: state })
+    }
+    const flow = FlowModel.parse(await readFlow(sql, { now: NOW }))
+    // the strip and the cards: working counts watching, queued counts settling
+    expect(flowCountsOf(Object.fromEntries(FLOW_STATES.map((s) => [s, flow.states[s].count])) as never)).toEqual({
+      working: 4,
+      waiting: 1,
+      queued: 3,
+    })
+    // the per-project figures add up to the whole and to `open`
+    const app = flow.perProject.find((p) => p.repo === 'app')
+    expect(app).toEqual({ repo: 'app', open: 7, working: 3, waiting: 1, queued: 3 })
+    expect(flow.perProject.reduce((n, p) => n + p.working, 0)).toBe(4)
+    for (const p of flow.perProject) expect(p.working + p.waiting + p.queued).toBe(p.open)
+    // the digest of the project counts the same Issues the same way
+    const digestIssues = await loopReads(sql).digestIssues(new Date(NOW.getTime() - DIGEST_WINDOW_MS))
+    const digest = countsOf(
+      digestIssues.filter((i) => i.repo === 'app'),
+      NOW,
+    )
+    expect(digest).toEqual({ done7d: 0, working: 3, waiting: 1, queued: 3 })
+  })
+})
+
+describe('the flow trend by bucket', () => {
+  /** `count` Issues of `app` working from `from` to `to` hours ago, then closed */
+  async function workedBetween(first: number, count: number, from: number, to: number) {
+    for (let n = 0; n < count; n++) {
+      const id = `issue_${first + n}`
+      await issue(id, 'app', 'closed', 4, undefined, 'done')
+      await filed(id, 'app', id, ago(from + 3))
+      await event(id, 2, 'settled', ago(from + 2), { from: 'settling', to: 'queued' })
+      await event(id, 3, 'admitted', ago(from), { from: 'queued', to: 'working' })
+      await event(id, 4, 'closed', ago(to), { from: 'working', to: 'closed', outcome: 'done' })
+    }
+  }
+
+  test('a noon peak of 25 working Issues is the peak of the 24-hour and the 7-day charts, with its average', async () => {
+    await sql`TRUNCATE factory.issues CASCADE`
+    // NOW is 12:00 UTC: 25 Issues work from 22 h to 20 h ago (14:00 to 16:00 yesterday)
+    await workedBetween(1, 25, 22, 20)
+    // a single Issue, working across the last 5 hours and still working
+    await issue('issue_100', 'app', 'working', 3)
+    await filed('issue_100', 'app', 'Steady', ago(8))
+    await event('issue_100', 2, 'settled', ago(7), { from: 'settling', to: 'queued' })
+    await event('issue_100', 3, 'admitted', ago(5), { from: 'queued', to: 'working' })
+
+    const hourly = FlowTrendSeries.parse(await readFlowTrend(sql, { now: NOW, window: '24h', bucket: 'hour' }))
+    expect(hourly.buckets).toHaveLength(24)
+    // the first bucket starts 23 h before the current hour
+    expect(hourly.buckets[0]?.at).toBe(ago(23).toISOString())
+    expect(hourly.buckets.at(-1)?.at).toBe(NOW.toISOString())
+    expect(Math.max(...hourly.buckets.map((b) => b.working.peak))).toBe(25)
+    // the bucket that starts at 22 h ago holds all 25 for its whole hour
+    const noon = hourly.buckets.find((b) => b.at === ago(22).toISOString())
+    expect(noon?.working).toEqual({ peak: 25, avg: 25 })
+
+    const week = FlowTrendSeries.parse(await readFlowTrend(sql, { now: NOW, window: '7d', bucket: 'hour' }))
+    expect(week.buckets).toHaveLength(168)
+    expect(Math.max(...week.buckets.map((b) => b.working.peak))).toBe(25)
+    const days = FlowTrendSeries.parse(await readFlowTrend(sql, { now: NOW, window: '7d', bucket: 'day' }))
+    expect(days.buckets).toHaveLength(7)
+    expect(Math.max(...days.buckets.map((b) => b.working.peak))).toBe(25)
+    // a day's average is below its peak: the 25 worked 2 of its 24 hours at most
+    const peakDay = days.buckets.find((b) => b.working.peak === 25)
+    expect(peakDay?.working.avg).toBeLessThan(25)
+    expect(peakDay?.working.avg).toBeGreaterThan(0)
+    const month = FlowTrendSeries.parse(await readFlowTrend(sql, { now: NOW, window: '30d', bucket: 'day' }))
+    expect(month.buckets).toHaveLength(30)
+    expect(Math.max(...month.buckets.map((b) => b.working.peak))).toBe(25)
   })
 })

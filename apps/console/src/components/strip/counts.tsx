@@ -1,4 +1,6 @@
 import { Link } from '@tanstack/react-router'
+import { flowCounts } from '@/lib/flow'
+import { LANGUAGE } from '@/lib/language.gen'
 import { useFlow } from '@/lib/queries'
 import { cn } from '@/lib/utils'
 
@@ -9,18 +11,20 @@ const COUNTS = [
 ] as const
 
 /**
- * Working, waiting and queued, as the Flow model counts them: each a link to Flow filtered to that state. The lamp is lit
+ * Working, waiting and queued Issues, counted once for the whole console (`flowCounts`): each a link to Flow filtered to that state. The lamp is lit
  * on Working only, steady, while a lead runs.
  */
 export function Counts() {
-  const states = useFlow().data?.states
+  const data = useFlow().data
+  const counts = data ? flowCounts(data) : undefined
   return (
     <nav aria-label="Issues in flight" className="flex shrink-0 items-center gap-x-1">
       {COUNTS.map(({ state, label }) => {
-        const count = states?.[state].count
+        const count = counts?.[state]
         return (
           <Link
             key={state}
+            title={`${count ?? '-'} ${label}. ${LANGUAGE[state]}`}
             to="/flow"
             // The Flow route takes `state` (working|waiting|queued|...) from the sidebar change; `never` types both before and after it.
             search={{ state } as never}

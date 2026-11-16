@@ -1,3 +1,4 @@
+import { flowCountOfState } from '@software-factory/contract'
 import type { IssueId } from './ids.ts'
 import { projectOf } from './project-of.ts'
 
@@ -68,9 +69,11 @@ export function countsOf(issues: readonly DigestIssue[], now: Date): DigestCount
   for (const issue of issues) {
     if (shipped(issue)) {
       if (issue.at.getTime() >= since) counts.done7d++
-    } else if (issue.state === 'working' || issue.state === 'watching') counts.working++
-    else if (issue.state === 'queued' || issue.state === 'settling') counts.queued++
-    else if (issue.state === 'waiting') counts.waiting++
+    } else {
+      // the one definition of the three counts, the strip's and Flow's (`FLOW_COUNT_STATES`)
+      const count = flowCountOfState(issue.state)
+      if (count) counts[count]++
+    }
   }
   return counts
 }

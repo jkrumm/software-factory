@@ -1,4 +1,13 @@
-import { FLOW_STATES, type FlowModel, type FlowState } from '@software-factory/contract'
+import {
+  type FlowCount,
+  FLOW_COUNT_STATES,
+  flowCountOfState,
+  flowCountsOf,
+  FLOW_STATES,
+  type FlowModel,
+  type FlowState,
+  type FlowTrendSeries,
+} from '@software-factory/contract'
 import type { IssueKind } from '@/components/kit/kind-badge'
 import type { LozengeState } from '@/components/kit/lozenge'
 import { ageWords } from '@/lib/age'
@@ -76,29 +85,31 @@ export const columnKeyOf = (value: unknown): ColumnKey | undefined => COLUMN_KEY
 /** The columns to show: only the chosen one with a `state`, else all of them. */
 export const visibleColumns = (state?: ColumnKey): readonly ColumnKey[] => (state ? [state] : COLUMN_KEYS)
 
-/** What a project or origin has open, split as the owner reads it: what runs now and what waits for something. */
-export interface OpenSplit {
-  /** working, and watching (a lead still open after the deploy) */
-  running: number
-  /** waiting, queued and settling: an Issue that has not started or cannot go on */
-  pending: number
-}
+/** What a project or origin has open, split by the one definition of the three counts (`FLOW_COUNT_STATES`): Issues, never sessions. */
+export type OpenSplit = Record<FlowCount, number>
 
 /**
- * The open Issues of each project or origin, split into running and pending, before any filter. A closed Issue is never
- * counted, so a value whose Issues all closed has no entry at all.
+ * The open Issues of each project or origin, split into working, waiting and queued, before any filter. A closed Issue is
+ * never counted, so a value whose Issues all closed has no entry at all.
  */
 export function openSplits(data: FlowModel, field: 'repo' | 'origin'): Record<string, OpenSplit> {
   const splits: Record<string, OpenSplit> = {}
   for (const state of FLOW_STATES) {
-    const side = state === 'working' || state === 'watching' ? 'running' : 'pending'
+    const count = flowCountOfState(state)
+    if (!count) continue
     for (const issue of data.states[state].issues) {
-      const split = (splits[issue[field]] ??= { running: 0, pending: 0 })
-      split[side] += 1
+      const split = (splits[issue[field]] ??= { working: 0, waiting: 0, queued: 0 })
+      split[count] += 1
     }
   }
   return splits
 }
+
+/** The three counts of the whole factory: what the strip, the stat cards and the project digests show. */
+export const flowCounts = (data: FlowModel): Record<FlowCount, number> =>
+  flowCountsOf(
+    Object.fromEntries(FLOW_STATES.map((state) => [state, data.states[state].count])) as Record<FlowState, number>,
+  )
 
 export type Board = Record<ColumnKey, FlowCard[]>
 
@@ -179,8 +190,12 @@ export function boardNote(counts: Record<ColumnKey, number>): string {
   return `${openCount(counts)} open, ${counts.closed} closed in the last day`
 }
 
-/** The state each stat card counts, and the card's address: `/flow?state=<state>`. */
+/** The count each stat card shows, and the card's address: `/flow?state=<count>` (the column of its main state). */
 export const STAT_STATES = ['working', 'waiting', 'queued'] as const
+
+/** Issues of the states a count takes in (`FLOW_COUNT_STATES`), in the order the server sent them. */
+const issuesOf = (data: FlowModel, count: FlowCount) =>
+  FLOW_COUNT_STATES[count].flatMap((state) => data.states[state].issues)
 
 export interface FlowStat {
   key: FlowState | 'shipped'
@@ -239,22 +254,28 @@ const plural = (n: number, word: string): string => `${n} ${word}${n === 1 ? '' 
 /** The four stat cards above the board: factory-wide, so never from the filtered board. */
 export function statsOf(data: FlowModel, now: number): FlowStat[] {
   const { trend } = data
-  const issues = (state: FlowState) => data.states[state].issues
+  const issues = (count: FlowCount) => issuesOf(data, count)
   const labels = trend.at.map(shortDate)
   const xLabels = xLabelsOf(trend.at)
-  const line = (state: (typeof STAT_STATES)[number]) => {
-    const series = trend.states[state]
+  const counts = flowCounts(data)
+  const line = (count: (typeof STAT_STATES)[number]) => {
+    // the daily samples of the count: the sum of the states it takes in, as the figure above them is
+    const series = trend.at.map((_, i) =>
+      FLOW_COUNT_STATES[count].reduce((total, state) => total + (trend.states[state][i] ?? 0), 0),
+    )
     return {
-      key: state,
-      value: data.states[state].count,
+      key: count,
+      value: counts[count],
       delta: (series.at(-1) ?? 0) - (series[0] ?? 0),
       series,
       labels,
       xLabels,
-      subtitle: 'vs 7 days ago, all projects',
-      state,
+      subtitle: 'Issues, vs 7 days ago',
+      state: count,
     } as const
   }
+  const watching = data.states.watching.count
+  const settling = data.states.settling.count
   const shipped = sum(trend.shipped)
   const queue = data.queueStates.global
   const queueWord = `${queue.charAt(0).toUpperCase()}${queue.slice(1)}`
@@ -266,7 +287,7 @@ export function statsOf(data: FlowModel, now: number): FlowStat[] {
       sub:
         issues('working').length === 0
           ? 'Nothing running'
-          : `in ${plural(distinct(issues('working').map((i) => i.repo)), 'project')}`,
+          : `in ${plural(distinct(issues('working').map((i) => i.repo)), 'project')}${watching > 0 ? `, ${watching} of them watching` : ''}`,
       footer: [
         {
           label: 'Oldest',
@@ -307,10 +328,15 @@ export function statsOf(data: FlowModel, now: number): FlowStat[] {
       sub:
         issues('queued').length === 0
           ? 'Nothing queued'
-          : countWords(
-              issues('queued').map((i) => i.queue?.kind ?? null),
-              'ready',
-            ),
+          : [
+              countWords(
+                data.states.queued.issues.map((i) => i.queue?.kind ?? null),
+                'ready',
+              ),
+              settling > 0 ? `${settling} settling` : '',
+            ]
+              .filter(Boolean)
+              .join(', '),
       footer: [
         {
           label: 'Oldest',
@@ -340,4 +366,35 @@ export function statsOf(data: FlowModel, now: number): FlowStat[] {
       state: 'closed',
     },
   ]
+}
+
+/** The ranges of the trend chart's control: a window and the bucket it is plotted by. */
+export const TREND_RANGES = [
+  { key: '24h-hour', window: '24h', bucket: 'hour', label: '24 hours by hour' },
+  { key: '7d-hour', window: '7d', bucket: 'hour', label: '7 days by hour' },
+  { key: '7d-day', window: '7d', bucket: 'day', label: '7 days by day' },
+  { key: '30d-day', window: '30d', bucket: 'day', label: '30 days by day' },
+] as const satisfies readonly {
+  key: string
+  window: FlowTrendSeries['window']
+  bucket: FlowTrendSeries['bucket']
+  label: string
+}[]
+export type TrendRange = (typeof TREND_RANGES)[number]
+
+/** A bucket's start as the chart words it: an hour in the viewer's zone, a day as its UTC date (the buckets sit on UTC days). */
+export function bucketWords(at: number, bucket: FlowTrendSeries['bucket']): string {
+  const date = new Date(at)
+  if (bucket === 'day')
+    return `${date.toLocaleDateString('en-GB', { weekday: 'short', day: 'numeric', month: 'short', timeZone: 'UTC' })}`
+  return `${date.toLocaleDateString('en-GB', { weekday: 'short' })} ${date.toLocaleTimeString('en-GB', { hour: '2-digit', minute: '2-digit' })}`
+}
+
+/** One count of the trend as the chart plots it: the bucket starts, and the peak and the average of each bucket. */
+export function trendLines(series: FlowTrendSeries, count: FlowCount) {
+  return {
+    times: series.buckets.map((b) => Date.parse(b.at)),
+    peak: series.buckets.map((b) => b[count].peak),
+    avg: series.buckets.map((b) => b[count].avg),
+  }
 }

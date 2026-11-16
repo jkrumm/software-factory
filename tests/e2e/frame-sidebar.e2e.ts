@@ -129,14 +129,19 @@ test('Flow: projects and origins toggle the URL and the board, All clears', asyn
   const inRepo = (s: (typeof STATES)[number]) => flow.states[s].issues.filter((i) => i.repo === repo).length
 
   await page.goto('/flow')
-  const link = toggle(page, 'Projects', new RegExp(`^${repo}( \\d+ (working|waiting).*)?$`))
+  const link = toggle(page, 'Projects', new RegExp(`^${repo}( \\d+ (working|waiting|queued).*)?$`))
   await expect(link).toHaveAttribute('aria-pressed', 'false')
-  // the row counts what is open, as running and pending, and never a closed Issue
-  const running = inRepo('working') + inRepo('watching')
-  const pending = inRepo('settling') + inRepo('queued') + inRepo('waiting')
-  const words = [running ? `${running} working` : null, pending ? `${pending} waiting` : null].filter(Boolean)
+  // the row counts what is open, as working, waiting and queued (the one definition), and never a closed Issue
+  const working = inRepo('working') + inRepo('watching')
+  const waiting = inRepo('waiting')
+  const queued = inRepo('settling') + inRepo('queued')
+  const words = [
+    working ? `${working} working` : null,
+    waiting ? `${waiting} waiting` : null,
+    queued ? `${queued} queued` : null,
+  ].filter(Boolean)
   if (words.length > 0) await expect(link.getByLabel(words.join(', '))).toBeVisible()
-  else await expect(link.getByLabel(/\d+ (working|waiting)/)).toHaveCount(0)
+  else await expect(link.getByLabel(/\d+ (working|waiting|queued)/)).toHaveCount(0)
   await link.click()
   await expect(page).toHaveURL(new RegExp(`project=${repo}`))
   await expect(link).toHaveAttribute('aria-pressed', 'true')

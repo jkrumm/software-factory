@@ -36,9 +36,9 @@ stream like every other screen.
 **Digest strip.** Above the stat row, one card per project with a digest (`GET /v1/projects/digests`, `components/flow/digest-strip.tsx`): the project (a link that filters the board), the digest's age, the headline, the four counts (done in 7 days, working, queued, waiting: read from the Issues, not from the digest), and a button that opens the shipped, next and risks bullets, each citing its Issues by a link. The busiest projects (most working, queued and waiting) come first, in one scrollable row so the board stays on screen; "Show all N" lays every card out as a grid. Collapsed to the headline and the counts; with `?project=` the strip shows that project alone, opened. No digest, no strip.
 
 **Stat row.** Four kit `StatCard`s: Working, Waiting, Queued (a line of the Issues in that state at eight daily samples,
-`trend` in the model) and Shipped this week (bars of the done and healed closes per day, against the 7 days before). They
+`trend` in the model, summed over the states a count takes in) and Shipped this week (bars of the done and healed closes per day, against the 7 days before). They
 are factory-wide, never narrowed by the filters; each opens `/flow?state=<state>` (Shipped: `closed`), the same view the
-header strip's counts open. Below `lg` the row scrolls sideways inside itself, snapping per card.
+header strip's counts open. All three count Issues, never sessions, by the one definition `FLOW_COUNT_STATES` in the contract (working = working + watching, waiting, queued = queued + settling), the same as the strip, the sidebar and the project digests; each card carries an InfoHint with that definition in its top right corner. Below `lg` the row scrolls sideways inside itself, snapping per card.
 
 **Cards.** A card is the kit `IssueCard`, the whole card a link to `/issues/<n>`: a header with the kind as an
 icon (its name the tooltip), the project and the Issue number in mono (`#12`) and the origin as a muted word where it is
@@ -53,9 +53,11 @@ row; every column is its own virtualised list (`@tanstack/react-virtual`): only 
 `lg` the board is one list with a tab per state (Working first, or the first state with cards). The layout switches with
 `matchMedia`, so only one of the two is ever rendered.
 
+**Trend chart** (`components/flow/trend-chart.tsx`, `GET /v1/flow/trend`): below the stat row, the peak (most Issues at any instant) and the average of one count per bucket, computed by the server from the applied events. Its own frame holds the controls: the count (Working, Waiting, Queued) and the window by bucket (24 hours by hour, 7 days by hour or day, 30 days by day; hours in the viewer's zone, days are UTC days).
+
 **Filters.** Projects and origins are toggles in the sidebar (selects on a phone only) and live in the URL
 (`/flow?project=argo&origin=feedback`), so a filtered view is linkable, and each column header counts what the filters
-leave. A sidebar row's figures are its *open* Issues, never closed ones (`openSplits` in `src/lib/flow.ts`): a lit lamp and the running count (working, watching), an hourglass and the pending count (waiting, queued, settling); a row with none open shows no figure. `?state=working|waiting|queued|settling|watching|closed` shows only that column, full width as a grid of cards,
+leave. A sidebar row's figures are its *open* Issues, never closed ones (`openSplits` in `src/lib/flow.ts`): a lit lamp and the working count (working, watching), an hourglass and the waiting count, a queue icon and the queued count (queued, settling); a row with none open shows no figure. `?state=working|waiting|queued|settling|watching|closed` shows only that column, full width as a grid of cards,
 with a "Show all states" link (it never filters rows); on a phone it picks the tab.
 
 **The page never scrolls sideways.** The Shell's `main` clips the x axis (`overflow-x-hidden`), the board scrolls sideways inside its own container (`data-testid="flow-board"`), and text that cannot break (a stat card's sub line, a reason line) wraps anywhere. `tests/e2e/flow.e2e.ts` asserts `document.scrollWidth` equals the viewport width and `main` has no sideways scroll at 1280x800 and 390x844, also with long titles and reasons at 1024.
@@ -182,8 +184,8 @@ the page is idle (`prefetchPalette`) and watched only while the palette is open;
 titles. `tests/e2e/speed.e2e.ts` holds the skeleton, the update and the hover guarantees and shoots every skeleton.
 
 The stream does not invalidate everything. Changes that arrive within 250 ms of each other (at most 1 s after the first of a
-burst) invalidate, once, the lists and the pages they can alter; the aggregates on `/improve` (KPIs, friction, finding
-classes, fix commits) wait for a 2 s pause (at most 10 s). Accounts and machine are not in the stream and only poll. The
+burst) invalidate, once, the lists and the pages they can alter; the aggregates (on `/improve`: KPIs, friction, finding
+classes, fix commits; on `/flow`: the trend chart) wait for a 2 s pause (at most 10 s). Accounts and machine are not in the stream and only poll. The
 first `hello` of a page joins the boot's requests (`cancelRefetch: false`) instead of cancelling and repeating them. Chunks:
 the entry holds the shell and the screens that are small; `@xyflow/react` and dagre (`/chain`), react-markdown
 (`/artifacts`) and the command palette (cmdk, loaded when it is first opened) are their own chunks, all precached by the

@@ -19,7 +19,7 @@ export interface FooterPair {
 export interface StatCardProps extends CardLinkProps {
   icon: Icon
   title: string
-  /** A domain word the title carries an InfoHint for, after the title (above a stretched link). */
+  /** A domain word the card carries an InfoHint for, in the top right corner (above a stretched link). */
   hint?: InfoWord
   /** Names the comparison: "Against the last 7 days". */
   subtitle: string
@@ -157,19 +157,17 @@ export function StatCard({
           <CardIcon className="size-4" aria-hidden="true" />
         </span>
         <div className="min-w-0 flex-1">
-          <div className="flex items-center gap-0.5">
-            <h3
-              title={title}
-              className="min-w-0 line-clamp-2 text-[length:var(--vx-text-md)] leading-tight font-semibold tracking-tight"
-            >
-              <CardLink href={href} as={as}>
-                {title}
-              </CardLink>
-            </h3>
-            {hint ? <InfoHint word={hint} className="relative z-10 -my-1" /> : null}
-          </div>
+          <h3
+            title={title}
+            className="min-w-0 line-clamp-2 text-[length:var(--vx-text-md)] leading-tight font-semibold tracking-tight"
+          >
+            <CardLink href={href} as={as}>
+              {title}
+            </CardLink>
+          </h3>
           <p className="truncate text-xs text-muted-foreground">{subtitle}</p>
         </div>
+        {hint ? <InfoHint word={hint} className="relative z-10 -mt-0.5 -mr-1" /> : null}
         {menu ?? (onMenu ? <MenuButton onClick={onMenu} label={`${title} options`} /> : null)}
       </header>
       <div className="flex flex-1 flex-col gap-2 rounded-lg bg-background px-4 py-3.5">

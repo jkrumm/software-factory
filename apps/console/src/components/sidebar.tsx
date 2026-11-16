@@ -1,4 +1,4 @@
-import { HourglassIcon, SidebarSimpleIcon, XIcon } from '@phosphor-icons/react'
+import { HourglassIcon, QueueIcon, SidebarSimpleIcon, XIcon } from '@phosphor-icons/react'
 import { useFormatForDisplay } from '@tanstack/react-hotkeys'
 import { Link } from '@tanstack/react-router'
 import { createContext, type ReactElement, type ReactNode, use, useCallback, useMemo, useState } from 'react'
@@ -111,33 +111,47 @@ export function ActiveFilters({ chips }: { chips: FilterChip[] }) {
 }
 
 /**
- * What runs and what waits, as two small figures: a lit lamp and the running count, an hourglass and the pending count.
- * A zero keeps its slot empty so the figures of every row line up; with both at zero nothing shows.
+ * Working, waiting and queued Issues of a row, as three small figures by the one definition of the three counts: a lit
+ * lamp, an hourglass and a queue. A zero keeps its slot empty so the figures of every row line up; with all three at
+ * zero nothing shows.
  */
-function OpenFigures({ running, pending }: OpenSplit) {
-  if (running + pending === 0) return null
-  const words = [running ? `${running} working` : null, pending ? `${pending} waiting` : null]
+function OpenFigures({ working, waiting, queued }: OpenSplit) {
+  if (working + waiting + queued === 0) return null
+  const words = [
+    working ? `${working} working` : null,
+    waiting ? `${waiting} waiting` : null,
+    queued ? `${queued} queued` : null,
+  ]
     .filter(Boolean)
     .join(', ')
+  const slot = 'flex w-8 shrink-0 items-center gap-1'
   return (
     <span
       aria-label={words}
-      title={`${words}${pending ? ' (waiting, queued or settling)' : ''}`}
-      className="flex shrink-0 items-center gap-2 text-xs font-normal tabular-nums"
+      title={`${words} (Issues, not sessions)`}
+      className="flex shrink-0 items-center gap-1 text-xs font-normal tabular-nums"
     >
-      <span aria-hidden className="flex w-8 shrink-0 items-center gap-1">
-        {running ? (
+      <span aria-hidden className={slot}>
+        {working ? (
           <>
             <span className="mx-[3px] size-1.5 shrink-0 rounded-full bg-good" />
-            <span className="w-[2ch] text-right text-foreground">{running}</span>
+            <span className="w-[2ch] text-right text-foreground">{working}</span>
           </>
         ) : null}
       </span>
-      <span aria-hidden className="flex w-8 shrink-0 items-center gap-1">
-        {pending ? (
+      <span aria-hidden className={slot}>
+        {waiting ? (
           <>
             <HourglassIcon className="size-3 shrink-0" />
-            <span className="w-[2ch] text-right">{pending}</span>
+            <span className="w-[2ch] text-right">{waiting}</span>
+          </>
+        ) : null}
+      </span>
+      <span aria-hidden className={slot}>
+        {queued ? (
+          <>
+            <QueueIcon className="size-3 shrink-0" />
+            <span className="w-[2ch] text-right">{queued}</span>
           </>
         ) : null}
       </span>
@@ -152,6 +166,8 @@ function OpenFigures({ running, pending }: OpenSplit) {
 export function SidebarEntry({
   label,
   count,
+  countLabel,
+  countTitle,
   open,
   pressed,
   current,
@@ -160,7 +176,11 @@ export function SidebarEntry({
 }: {
   label: string
   count?: number
-  /** The open Issues behind this row, split into running and pending; a row with none shows no figure. */
+  /** What the count counts when it is not a state ("nodes"): the word beside the figure, so a number never reads as a state. */
+  countLabel?: string
+  /** The sentence for the count's hover, saying what exactly is counted. */
+  countTitle?: string
+  /** The open Issues behind this row, split into working, waiting and queued; a row with none shows no figure. */
   open?: OpenSplit
   pressed?: boolean
   current?: boolean
@@ -184,7 +204,16 @@ export function SidebarEntry({
           className="size-1.5 shrink-0 rounded-full bg-primary opacity-0 group-aria-pressed:opacity-100 group-aria-[current=page]:opacity-100"
         />
         <span className="min-w-0 flex-1 truncate">{label}</span>
-        {count === undefined ? null : <span className="text-xs font-normal tabular-nums">{count}</span>}
+        {count === undefined ? null : (
+          <span
+            className="text-xs font-normal tabular-nums"
+            aria-label={countLabel ? `${count} ${countLabel}` : undefined}
+            title={countLabel ? (countTitle ?? `${count} ${countLabel}`) : undefined}
+          >
+            {count}
+            {countLabel ? <span className="ml-1 text-muted-foreground">{countLabel}</span> : null}
+          </span>
+        )}
         {open ? <OpenFigures {...open} /> : null}
       </>
     ),

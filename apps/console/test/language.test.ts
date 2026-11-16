@@ -11,7 +11,7 @@ test('the words an InfoHint carries are defined', () => {
     expect(LANGUAGE[word].length).toBeGreaterThan(10)
   }
   expect(LANGUAGE.errand).toContain('owner')
-  expect(LANGUAGE.settling).toBe('State: triage is not done')
+  expect(LANGUAGE.settling).toBe('State: triage is not done: counted as queued')
 })
 
 test('the session states and the words the screens hint have a key of their own', () => {
@@ -19,7 +19,7 @@ test('the session states and the words the screens hint have a key of their own'
   for (const word of ['starting', 'idle', 'compacted', 'walled'] as const)
     expect(LANGUAGE[word]).toStartWith('Session state:')
   // the first definition stays: `working` is the Issue state, not the session's
-  expect(LANGUAGE.working).toBe('State: a lead runs')
+  expect(LANGUAGE.working).toContain('a lead is running now')
   for (const word of ['regressed', 'stale', 'refusal', 'avoidable touch', 'window point'] as const) {
     expect(LANGUAGE[word].length).toBeGreaterThan(10)
   }

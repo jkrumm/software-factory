@@ -23,6 +23,8 @@ export interface TimeChartProps {
   /** A ceiling or target as a dashed line; kept in the range only when it is not far off the data. */
   reference?: number
   format: (value: number) => string
+  /** How a reading's time is worded in the tooltip and the table; default the clock time, for a chart that spans days. */
+  timeLabel?: (ms: number) => string
   height?: number
   /** Told when the point under the pointer changes (null when it leaves), so a figure beside the chart can follow it. */
   onActiveChange?: (index: number | null) => void
@@ -46,6 +48,7 @@ export function TimeChart({
   series,
   reference,
   format,
+  timeLabel = clock,
   height = 64,
   onActiveChange,
   className,
@@ -62,7 +65,7 @@ export function TimeChart({
   const yOf = (value: number) => PAD_Y + (1 - value / ceiling) * (height - 2 * PAD_Y)
 
   const rows = times.map((at, i) => ({
-    label: clock(at),
+    label: timeLabel(at),
     value: series
       .map((s) => {
         const v = s.values[i]

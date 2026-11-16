@@ -7,6 +7,8 @@ import {
   FindingClassesModel,
   FixCommitsModel,
   FlowModel,
+  FlowTrendQuery,
+  FlowTrendSeries,
   FrictionModel,
   type HostProcess,
   HostHistoryModel,
@@ -34,6 +36,7 @@ import { readWaitCensus } from '../read/wait-census.ts'
 import { readChain } from '../read/chain.ts'
 import { readProjectDigests } from '../read/digests.ts'
 import { type QueueReasons, readFlow } from '../read/flow.ts'
+import { readFlowTrend } from '../read/flow-trend.ts'
 import { readFixCommits } from '../read/fix-commits.ts'
 import { readFriction } from '../read/friction.ts'
 import { readHostSamples } from '../read/host.ts'
@@ -154,6 +157,24 @@ export const readModelRoutes = (deps: ReadModelDeps | undefined, caller: (reques
           operationId: 'read.flow',
           summary:
             'the Issues by state (settling, queued, working, waiting, watching), what closed in the last day, counts per project and the queue state per scope',
+        },
+      },
+    )
+    .get(
+      '/flow/trend',
+      async ({ query }) => {
+        if (!deps) return unavailable
+        const window = query.window ?? '7d'
+        const bucket = query.bucket ?? (window === '24h' ? 'hour' : 'day')
+        return Response.json(FlowTrendSeries.parse(await readFlowTrend(deps.sql, { now: now(), window, bucket })))
+      },
+      {
+        query: FlowTrendQuery,
+        response: { 200: FlowTrendSeries, ...errorResponses(400, 422, 503) },
+        detail: {
+          operationId: 'read.flow-trend',
+          summary:
+            'the Issues counted as working, waiting and queued over a window (24h by hour, 7d by hour or day, 30d by day; default 7d by day), per bucket the peak and the average, computed from the applied events; counts only',
         },
       },
     )

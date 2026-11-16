@@ -60,6 +60,6 @@ describe('the migration that rewrites stored paths to names', () => {
     expect(events.map((e: { repo: string }) => e.repo)).toEqual(Array(3).fill('software-factory'))
 
     const flow = FlowModel.parse(await readFlow(db.sql, { now: NOW }))
-    expect(flow.perProject).toEqual([{ repo: 'software-factory', open: 3, working: 0, queued: 3 }])
+    expect(flow.perProject).toEqual([{ repo: 'software-factory', open: 3, working: 0, waiting: 0, queued: 3 }])
   })
 })

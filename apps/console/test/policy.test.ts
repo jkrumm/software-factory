@@ -153,6 +153,7 @@ describe('affected', () => {
 
   test('the aggregates are the slow tier; an Issue id is read with or without its prefix', () => {
     expect(isAggregate(['kpis', 7])).toBe(true)
+    expect(isAggregate(['flow-trend', '7d', 'day'])).toBe(true)
     expect(isAggregate(['needs'])).toBe(false)
     expect(issueNumber('issue_12')).toBe(12)
     expect(issueNumber('12')).toBe(12)
