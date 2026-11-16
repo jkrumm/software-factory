@@ -13,8 +13,8 @@ import { LINK, Mono, None, NUM, Table, TD, TH } from './parts'
 const POPOVER_LINK =
   'inline-flex items-center gap-1 rounded-sm text-[length:var(--vx-text-sm)] underline underline-offset-4 outline-none focus-visible:ring-3 focus-visible:ring-ring/50'
 
-/** The open states in the order the owner reads them: what runs, what waits for something, what has not started. */
-const OPEN_ORDER: readonly StateKey[] = ['working', 'watching', 'waiting', 'queued', 'settling']
+/** The open words in the order the owner reads them: what runs, what waits for something, what has not started. */
+const OPEN_ORDER: readonly StateKey[] = ['running', 'checking', 'paused', 'ready', 'held']
 
 /** The project's Issues as the Flow cards: a card names its project by name, or by the repo's path when the name was taken by another directory. */
 const ownsCard = (project: { name: string; repo: string }, repo: string): boolean =>
@@ -35,7 +35,9 @@ export function NowSection({
   return (
     <Section title="Now" aside={`${cards.length} open`} className="min-w-0">
       {cards.length === 0 ? (
-        <EmptyState title="Nothing is open">Working, waiting and queued Issues of this project show here.</EmptyState>
+        <EmptyState title="Nothing is open">
+          Running, paused, ready, held and checking Issues of this project show here.
+        </EmptyState>
       ) : (
         <ul aria-label="Open Issues" className="grid gap-3 sm:grid-cols-2 xl:grid-cols-3 2xl:grid-cols-4">
           {cards.map((card) => (

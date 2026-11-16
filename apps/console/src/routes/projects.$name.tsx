@@ -43,11 +43,7 @@ function ProjectsSidebar({ name }: { name: string }) {
           key={project.name}
           label={project.name}
           current={project.name === name}
-          open={{
-            working: project.counts.working,
-            waiting: project.counts.waiting,
-            queued: project.counts.queued,
-          }}
+          open={project.counts.work}
           render={(props) => <Link to="/projects/$name" params={{ name: project.name }} {...props} />}
         />
       ))}
@@ -142,7 +138,7 @@ function ProjectPage() {
           subtitle="Against the 7 days before"
           value={shipped}
           delta={{ value: shipped - model.shipped.before, higherIsBetter: true }}
-          sub={`${model.counts.working} working, ${model.counts.waiting} waiting, ${model.counts.queued} queued`}
+          sub={`${model.counts.work.running} running, ${model.counts.work.paused} paused, ${model.counts.work.ready} ready, ${model.counts.work.held} held, ${model.counts.work.checking} checking`}
           bars={model.shipped.days}
           barLabels={days}
           xLabels={[days[0] ?? '', days[3] ?? '', 'Today']}
@@ -160,8 +156,8 @@ function ProjectPage() {
           valueNote="This project has no plan rows"
           sub={summary.total === 0 ? undefined : `${summary.done} of ${summary.total} rows done`}
           bars={summary.total === 0 ? undefined : [summary.done, summary.open, summary.filable, summary.waiting]}
-          barLabels={['Done', 'In flight', 'May file now', 'Waiting']}
-          xLabels={['Done', 'In flight', 'Waiting']}
+          barLabels={['Done', 'In flight', 'May file now', 'Not due']}
+          xLabels={['Done', 'In flight', 'Not due']}
           chart={summary.total === 0 ? null : undefined}
           footer={[
             { label: 'In flight', value: plan.data ? String(summary.open) : null, note: 'The plan has not loaded' },

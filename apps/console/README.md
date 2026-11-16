@@ -11,7 +11,7 @@ Needs you's kinds and projects (`?kind=`, `?project=`), Chain's projects, Improv
 select or switch stays below `md`. Collapsed to icons (14 rem or 3.5 rem, kept in `localStorage` as `console-sidebar`) the
 section is hidden, so a page shows its active filters as removable chips (`ActiveFilters`) and Improve keeps its window switch.
 
-**Header strip** (`components/status-strip.tsx`, `components/strip/`): working, waiting and queued from `/v1/flow`, each a
+**Header strip** (`components/status-strip.tsx`, `components/strip/`): Running, Paused, Ready, Held and Checking (the last one quieter) from `FlowModel.work`, each a
 link to `/flow?state=...`; one meter per subscription from `/v1/accounts`; the host's load, memory and swap with the last
 24 h and the busiest processes from `GET /v1/host`; and Live. Each meter and Live opens a popover. Live says `Live`,
 `Polling` while the event stream is closed, or `Offline` with the snapshot's age.
@@ -37,27 +37,27 @@ field. The address logic is pure (`lib/peek.ts`); the panel's content is its own
 them, the list of Issues a filter opens, from `GET /v1/flow`, refreshed by the stream like every other screen. There is no board of
 state columns anywhere: the Chain is the view of the work.
 
-**Digest strip.** Above the stat row, one card per project with a digest (`GET /v1/projects/digests`, `components/flow/digest-strip.tsx`): the project (a link to its page), the digest's age, the headline, the four counts (done in 7 days, working, queued, waiting: read from the Issues, not from the digest), and a button that opens the shipped, next and risks bullets, each citing its Issues by a link. The busiest projects (most working, queued and waiting) come first, in one scrollable row so the charts stay on screen; "Show all N" lays every card out as a grid. Collapsed to the headline and the counts; with `?project=` the strip shows that project alone, opened. No digest, no strip.
+**Digest strip.** Above the stat row, one card per project with a digest (`GET /v1/projects/digests`, `components/flow/digest-strip.tsx`): the project (a link to its page), the digest's age, the headline, the five counts (done in 7 days, running, paused, ready, held: `counts.work`, read from the Issues, not from the digest), and a button that opens the shipped, next and risks bullets, each citing its Issues by a link. The busiest projects (most working, queued and waiting) come first, in one scrollable row so the charts stay on screen; "Show all N" lays every card out as a grid. Collapsed to the headline and the counts; with `?project=` the strip shows that project alone, opened. No digest, no strip.
 
-**Stat row.** Four kit `StatCard`s: Working, Waiting, Queued (a line of the Issues in that state at eight daily samples,
-`trend` in the model, summed over the states a count takes in) and Shipped this week (bars of the done and healed closes per day, against the 7 days before). They
-are factory-wide, never narrowed by the filters; each opens `/flow?state=<count>` (Shipped: `closed`), the same list the
-header strip's counts open. All three count Issues, never sessions, by the one definition `FLOW_COUNT_STATES` in the contract (working = working + watching, waiting, queued = queued + settling), the same as the strip, the sidebar and the project digests; each card carries an InfoHint with that definition in its top right corner. Below `lg` the row scrolls sideways inside itself, snapping per card.
+**Stat row.** Four kit `StatCard`s: Running, Paused, Not started (Ready and Held together; a line of the Issues at eight daily samples,
+`trend` in the model, summed over the stored states a series takes in) and Shipped this week (bars of the done and healed closes per day, against the 7 days before). They
+are factory-wide, never narrowed by the filters; each opens `/flow?state=<word>` (Not started: `ready`; Shipped: `closed`), the same list the
+header strip's counts open. All count Issues, never sessions, by the one definition `workOf` in the contract (`docs/language.md` "Where work stands"), the same as the strip, the sidebar and the project digests; each card carries an InfoHint with that definition in its top right corner. Below `lg` the row scrolls sideways inside itself, snapping per card.
 
 **The list** (`components/flow/issue-table.tsx`, `FlowList` in `routes/flow.tsx`). A plain table of Issues under the charts, collapsed to its
 heading and one line until a filter is set: `?state=`, `?project=` or `?origin=`. Columns: the number with the kind as an icon, the
 title (a link to `/issues/<n>`, opening the peek; a wait's reason or the queue's message under it), the project (a link to its
 page), the origin, the state (a Closed Issue shows its outcome) and the age since it entered it. Every header sorts (`aria-sort`);
 it opens on what has been in its state longest first (Closed recently: newest first), and the sort is the list's own state, not the
-URL's. The heading is the label and count ("Working 3"); "See how these depend" opens the Chain, filtered to the project when
+URL's. The heading is the label and count ("Running 3"); "See how these depend" opens the Chain, filtered to the project when
 every row is one project's. No state shows every open Issue, then what closed in the last day. The table is not virtualised: a
 filter leaves a few dozen rows.
 
-**Trend chart** (`components/flow/trend-chart.tsx`, `GET /v1/flow/trend`): below the stat row, the peak (most Issues at any instant) and the average of one count per bucket, computed by the server from the applied events. Its own frame holds the controls: the count (Working, Waiting, Queued) and the window by bucket (24 h and 7 d by the hour, 30 d by the day; it opens on 7 d; hours in the viewer's zone, days are UTC days). Three windows, one meaning: a Console chart that offers a window offers these.
+**Trend chart** (`components/flow/trend-chart.tsx`, `GET /v1/flow/trend`): below the stat row, the peak (most Issues at any instant) and the average of one count per bucket, computed by the server from the applied events. Its own frame holds the controls: the count (Running, Paused, Not started, Checking) and the window by bucket (24 h and 7 d by the hour, 30 d by the day; it opens on 7 d; hours in the viewer's zone, days are UTC days). Three windows, one meaning: a Console chart that offers a window offers these.
 
 **Filters.** Projects and origins are toggles in the sidebar (selects on a phone only) and live in the URL
 (`/flow?project=argo&origin=feedback`), so a filtered view is linkable, and the list heading counts what the filters
-leave. A sidebar row's figures are its *open* Issues, never closed ones (`openSplits` in `src/lib/flow.ts`): a lit lamp and the working count (working, watching), an hourglass and the waiting count, a queue icon and the queued count (queued, settling); a row with none open shows no figure. `?state=working|waiting|queued|closed` lists that count's Issues (working takes watching in, queued takes settling in, the number the
+leave. A sidebar row's figures are its *open* Issues, never closed ones (`openSplits` in `src/lib/flow.ts`): a lit lamp and the Running count, an hourglass and the Paused count, a queue icon and the Ready count, a lock and the Held count (Checking in the hover); a row with none open shows no figure. `?state=running|paused|ready|held|checking|closed` (the stored names of an old link read as the word that replaced them) lists that word's Issues (working takes watching in, queued takes settling in, the number the
 strip shows) with a "Show all states" link; it never filters the figures. An unknown state is dropped.
 
 **The page never scrolls sideways.** The Shell's `main` clips the x axis (`overflow-x-hidden`), a table too wide for the screen scrolls inside its own container, and text that cannot break (a stat card's sub line, a reason line) wraps anywhere. `tests/e2e/flow.e2e.ts` asserts `document.scrollWidth` equals the viewport width and `main` has no sideways scroll at 1280x800 and 390x844, also with long titles and reasons at 1024.
@@ -79,7 +79,7 @@ loading band is a skeleton of its height, and an error leaves the band out while
 
 The checkpoints are grouped by kind (Decisions, Reviews, Errands, Held signals, each with its count and an InfoHint). Every
 card leads with its project, a chip that opens `/projects/<repo>` (the word "App feedback" when it names none), then the
-title, the age in the verb of its kind (waiting, raised, received; the absolute time on hover), a Stale lozenge, and the
+title, the age in the verb of its kind (open, raised, received; the absolute time on hover), a Stale lozenge, and the
 Issue's title as a link. Closed, the whole card opens it (the title button is stretched over the card, the links sit above it).
 Opened, a Decision says what it is, shows the Judge's note when it passed it on, and lays its options out as cards with the
 reversible lozenge, the cost, the reason on the recommended one and the default-if-nobody-answers on the option that is the
@@ -103,8 +103,8 @@ it. A blocked edge is solid warn and thick, labelled `blocks`; a satisfied one (
 labelled `done`, and the two arrive on separate handles of the node. An edge is one line (`Dependency` in `graph.tsx`): it turns early and carries its label on the final straight run, so the line runs through the label to the arrowhead; each edge also has an accessible text ("A blocks B"), and a legend in the corner (from `md` up) names both and the dashed
 plan row. A node is the kit `IssueCard` at a fixed 320 x 144 (`NODE_WIDTH`, `NODE_HEIGHT`, which dagre reads): an Issue is a
 link to `/issues/<n>` with its kind, state, one reason line (its wait reason, "Waits for <blocker>" while a blocker is open, else what its state means, "Closed, no longer blocks" for a closed one) and age; a plan row is the same card on a dashed outline, not a link,
-with "Not filed yet" in the header, no number, no age, a Lozenge for its state (`waiting`, or "Ready to file") and, when it waits for a
-date, "Not before Mon 16 Nov, 09:00" (the viewer's zone, the UTC instant on hover). An Issue node shows its number. Nodes with no edge
+with "Not filed yet" in the header, no number, no age, a Lozenge (Planned, with its reason: "Due to file", "After another Issue" or "Not before <date>") and, when it is dated,
+the date, "Not before Mon 16 Nov, 09:00" (the viewer's zone, the UTC instant on hover). An Issue node shows its number. Nodes with no edge
 and no date are not drawn: the header counts them ("N more items have no dependencies, so they are not drawn"), and the sidebar's per-project count is the nodes the graph draws for that project (`chainCounts` in `src/lib/chain.ts`, one source for both). `?project=argo` keeps that project's nodes
 and every node an edge joins them to, so an edge across projects stays readable. With no edge the graph part says "No
 dependencies". xyflow's variables are pointed at the semantic tokens in `src/styles/index.css`.
@@ -254,7 +254,7 @@ narrower, a collapsible "Contents" bar under the header. Each verdict and Decisi
 else. A header (kind, state, project chip, title, summary, the owner's next moves as links, the facts), then from `lg` up
 two columns: tabs on the left and an aside on the right (Properties; the Chain around this Issue, Waits on and Blocks); below
 `lg` the aside stacks under the tabs. The tab is the URL's `?tab=activity|evidence|checkpoints` (the overview is the bare
-address; history is replaced, not pushed). Overview: what it is, a StatCard row (working time, turns, tokens out, cache read
+address; history is replaced, not pushed). Overview: what it is, a StatCard row (active time, turns, tokens out, cache read
 share; bars per attempt from two attempts), the attempts, and how it was filed and amended (`triage`). Activity: the event
 log in words as a StepRail per attempt. Evidence: each ship with its commits, review, acceptance, watch and verify runs, then
 the evidence. Checkpoints: Decisions with their options, artifacts, the notes you sent; the tab shows how many wait on you.

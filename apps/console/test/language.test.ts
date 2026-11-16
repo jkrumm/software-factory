@@ -11,7 +11,7 @@ test('the words an InfoHint carries are defined', () => {
     expect(LANGUAGE[word].length).toBeGreaterThan(10)
   }
   expect(LANGUAGE.errand).toContain('owner')
-  expect(LANGUAGE.settling).toBe('State: triage is not done: counted as queued')
+  expect(LANGUAGE.settling).toBe('State: triage is not done; shown as Held')
 })
 
 test('the session states and the words the screens hint have a key of their own', () => {

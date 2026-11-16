@@ -1,5 +1,5 @@
 import { Link } from '@tanstack/react-router'
-import type { ProjectDigest } from '@software-factory/contract'
+import { openOfWork, type ProjectDigest } from '@software-factory/contract'
 import { CaretRightIcon } from '@phosphor-icons/react'
 import { useId, useState } from 'react'
 import { Age } from '@/components/kit/issue-parts'
@@ -8,9 +8,10 @@ import { cn } from '@/lib/utils'
 /** The counts in the order the owner reads a project: what is done, what runs, what is still to do, what is stuck. */
 const COUNTS = [
   ['done7d', 'Done 7 d'],
-  ['working', 'Working'],
-  ['queued', 'Queued'],
-  ['waiting', 'Waiting'],
+  ['running', 'Running'],
+  ['paused', 'Paused'],
+  ['ready', 'Ready'],
+  ['held', 'Held'],
 ] as const
 
 const BULLETS = [
@@ -24,12 +25,12 @@ const numberOf = (id: string): string => id.replace(/^issue_/, '')
 
 function Counts({ counts }: { counts: ProjectDigest['counts'] }) {
   return (
-    <dl className="grid grid-cols-4 gap-2 px-2.5">
+    <dl className="grid grid-cols-5 gap-2 px-2.5">
       {COUNTS.map(([key, label]) => (
         <div key={key} className="min-w-0">
           <dt className="truncate text-xs text-muted-foreground">{label}</dt>
           <dd className="text-[length:var(--vx-text-md)] font-semibold tabular-nums" data-count={key}>
-            {counts[key]}
+            {key === 'done7d' ? counts.done7d : counts.work[key]}
           </dd>
         </div>
       ))}
@@ -147,8 +148,8 @@ function DigestCard({
   )
 }
 
-/** What a project has open now: the strip puts the projects with work in flight or queued first. */
-const openWork = (digest: ProjectDigest): number => digest.counts.working + digest.counts.queued + digest.counts.waiting
+/** What a project has open now: the strip puts the projects with work in flight or ready first. */
+const openWork = (digest: ProjectDigest): number => openOfWork(digest.counts.work)
 
 /**
  * The strip above the Flow numbers: one card per project with a digest, the projects with open work first (then the most

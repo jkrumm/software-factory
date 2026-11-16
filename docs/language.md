@@ -21,7 +21,7 @@ check, `docs/architecture.md`).
 | **Door route** | The registry that says which repo a monitor files in. The owner's estate, kept by the factory, not by git | |
 | **Work repo** | A repo no `project.yaml` describes, or whose `project.yaml` says `work: true`. The read token never sees its words | |
 | **Issue** | One unit of work: one repo, one branch, one ship. Warp's work item | Item, task, ticket. A GitHub issue is a signal |
-| **State** | Where an Issue is: `settling` (triage is not done: counted as queued), `queued` (an Issue that is ready and that no lead has started, held back by capacity or a chain; it counts Issues, not sessions), `working` (an Issue a lead is running now, the watching ones included; it counts Issues, not sessions), `waiting` (an Issue a lead started and that is paused on a named wait: a timer, the owner's review or a blocker; it counts Issues, not sessions), `watching` (shipped and deployed, the watch is on: the factory runs Verify and the probes, and the Issue closes when they pass; counted as working), `closed`. The only field a person reads to know what an Issue is doing. The strip, the Flow cards and the project digests count the three groups by this one definition: working = working + watching, waiting = waiting, queued = queued + settling | Phase, as a field |
+| **State** | The stored name of where an Issue is, never a word a screen shows (screens show the words of "Where work stands" below): `settling` (triage is not done; shown as Held), `queued` (no lead has started it; shown as Ready or Held by its queue reason), `working` (a lead is running now; shown as Running), `waiting` (a lead started and the Issue is paused on a named wait; shown as Paused), `watching` (shipped and deployed, the watch is on: the factory runs Verify and the probes, and the Issue closes when they pass; shown as Checking), `closed`. Every count is of Issues, never sessions | Phase, as a field |
 | **Outcome** | How a closed Issue ended: `done`, `dropped` (its lead gave it up, with a reason), `healed` (an incident that went away before a lead started), `cancelled` (the owner's stop) | |
 | **Event** | A fact recorded on an Issue, stored with who sent it and what it did. State is derived from events, never the other way | |
 | **Kind** | What an Issue is: feature, bug, chore, docs, incident. Intake files an owner's or agent's request as feature; triage may refine it when it settles the Issue. A failing check of a project's default branch is an incident, never a bug | |
@@ -40,6 +40,21 @@ check, `docs/architecture.md`).
 | **Seat** | One lead the accounts may hold at once (`leads` per account, plus the bonus the host's idle minutes earn). A seat is idle when work is queued and no lead holds it | |
 | **Test slot** | A lease on the host's test capacity that `factory slot run` takes for a `make check`, test or e2e step; it waits while the host is busy and records what the step cost | |
 | **Reaper** | The loop that ends, by session key and worktree path, the processes a closed lead attempt left behind | |
+
+## Where work stands
+
+Five words and a sixth for what is not an Issue yet, defined once here and used on every surface: the Console strip, Flow, Chain, the project pages and digests, the Herdr bar and the sentence an Issue's summary carries. They count Issues, never sessions, and `Running + Paused + Ready + Held + Checking` is the number of open Issues. `workOf` (`packages/contract/src/work-words.ts`) puts each open Issue under exactly one word from its stored state, its wait and its queue reason; `scripts/vocabulary.ts` (in `make check`) fails when a screen's text names a state word instead.
+
+| Word | Means | Retires |
+|-|-|-|
+| **Started** | The Issues a lead began: Running and Paused | |
+| **Not started** | The Issues no lead has begun: Ready and Held. The trend shows them as one line | |
+| **Running** | A lead works on it now: the Issue is in the working state and holds a seat. A lead standing in line for a test slot is still Running. The count is of Issues, not sessions: one Running Issue may have no session open for an instant between two sessions, and a Checking Issue's session is open without being counted here | |
+| **Paused** | A lead began it and it waits on a named wait, no session running. Its split: on you (a Decision, a review, an Errand), on a timer, on another Issue (a dependency, or someone else's review of its pull request), stalled (the account's window, a lead that stopped without reporting, a block, a lost lead, a regression) | |
+| **Ready** | No lead has begun it and nothing but capacity keeps it out: it starts when its turn and a seat come. Its limit names what binds it: a free seat, the host (load, memory, boot, doctor), the repo's claims, the lane or the cap, or the account's window | |
+| **Held** | No lead has begun it and it cannot start whatever the capacity: it waits for another Issue to close, its project's line is red, the queue is draining, a Spec it was filed with waits for the owner's verdict, or it is still being settled (triage, a finalizing attempt, a repo no project covers). It is not a held signal | |
+| **Checking** | Shipped and deployed: the watch is on, the factory runs Verify and the probes, and the Issue closes when they pass. Its own small count, in no other word | |
+| **Planned** | A plan row not yet filed as an Issue: due to be filed, after another Issue, or not before a date. Never an Issue, so never part of the five | |
 
 ## Who works
 

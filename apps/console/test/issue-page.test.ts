@@ -81,6 +81,7 @@ const node = (id: string, title: string): ChainNode => ({
   repo: null,
   title,
   state: 'queued',
+  work: { word: 'ready', split: 'seat' },
   issueKind: 'feature',
   since: null,
   waitReason: null,
@@ -98,12 +99,13 @@ test('a tab value is one of the four, else the overview', () => {
   expect(Object.keys(TAB_LABEL)).toEqual([...TAB_KEYS])
 })
 
-test('a closed Issue shows a known outcome, otherwise its state', () => {
-  expect(lozengeStateOf({ state: 'closed', outcome: 'done' })).toBe('done')
-  expect(lozengeStateOf({ state: 'closed', outcome: 'healed' })).toBe('healed')
-  expect(lozengeStateOf({ state: 'closed', outcome: 'weird' })).toBe('closed')
-  expect(lozengeStateOf({ state: 'closed', outcome: null })).toBe('closed')
-  expect(lozengeStateOf({ state: 'working', outcome: 'done' })).toBe('working')
+test('a closed Issue shows a known outcome, otherwise Closed; an open one the word its work stands under', () => {
+  expect(lozengeStateOf({ state: 'closed', outcome: 'done', work: null })).toBe('done')
+  expect(lozengeStateOf({ state: 'closed', outcome: 'healed', work: null })).toBe('healed')
+  expect(lozengeStateOf({ state: 'closed', outcome: 'weird', work: null })).toBe('closed')
+  expect(lozengeStateOf({ state: 'closed', outcome: null, work: null })).toBe('closed')
+  expect(lozengeStateOf({ state: 'working', outcome: 'done', work: { word: 'running', split: null } })).toBe('running')
+  expect(lozengeStateOf({ state: 'queued', outcome: null, work: { word: 'held', split: 'line' } })).toBe('held')
 })
 
 test('only the five kinds are kinds', () => {
@@ -247,7 +249,7 @@ test('a ship reads refused, regressed, passed, watching or shipped', () => {
   expect(shipStatus(ship({ result: 'refused', detail: 'no' }))).toEqual({ label: 'Refused', tone: 'bad' })
   expect(shipStatus(ship({}, watch('regressed')))).toEqual({ label: 'Regressed', tone: 'bad' })
   expect(shipStatus(ship({}, watch('passed')))).toEqual({ label: 'Passed', tone: 'good' })
-  expect(shipStatus(ship({}, watch(null)))).toEqual({ label: 'Watching', tone: 'warn' })
+  expect(shipStatus(ship({}, watch(null)))).toEqual({ label: 'Under watch', tone: 'warn' })
   expect(shipStatus(ship({}, watch('ended')))).toEqual({ label: 'Shipped', tone: 'neutral' })
   expect(shipStatus(ship())).toEqual({ label: 'Shipped', tone: 'neutral' })
 })

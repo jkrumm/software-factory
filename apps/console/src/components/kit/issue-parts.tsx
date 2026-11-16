@@ -29,11 +29,12 @@ export interface IssueViewProps extends CardLinkProps {
 }
 
 const REASON_ICON: Record<LozengeState, Icon> = {
-  settling: ClockIcon,
-  queued: QueueIcon,
-  working: ClockIcon,
-  waiting: HourglassIcon,
-  watching: ClockIcon,
+  running: ClockIcon,
+  paused: HourglassIcon,
+  ready: QueueIcon,
+  held: QueueIcon,
+  checking: ClockIcon,
+  planned: QueueIcon,
   closed: CheckCircleIcon,
   done: CheckCircleIcon,
   dropped: CheckCircleIcon,

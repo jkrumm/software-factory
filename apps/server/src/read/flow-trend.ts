@@ -1,6 +1,6 @@
 import type { SQL } from 'bun'
 import * as z from 'zod'
-import { FLOW_COUNTS, type FlowCount, flowCountOfState, type FlowTrendSeries } from '@software-factory/contract'
+import { type FlowTrendSeries, WORK_TREND_KEYS, type WorkTrendKey, workTrendOfState } from '@software-factory/contract'
 
 const HOUR_MS = 3_600_000
 const BUCKET_MS = { hour: HOUR_MS, day: 24 * HOUR_MS } as const
@@ -30,8 +30,8 @@ export function bucketStarts(
 const round2 = (value: number): number => Math.round(value * 100) / 100
 
 /**
- * The three counts per bucket from the Issues' state intervals. An instant counts an Issue once in the count its state
- * belongs to (`FLOW_COUNT_STATES`), however many events put it there; the peak is the most at any instant of the
+ * The four counts per bucket (running, paused, not started, checking) from the Issues' state intervals. An instant counts
+ * an Issue once in the count its state belongs to (`WORK_TREND_STATES`), however many events put it there; the peak is the most at any instant of the
  * bucket, the average the mean over the part of the bucket that has passed. Pure.
  */
 export function trendOf(
@@ -45,9 +45,14 @@ export function trendOf(
   const origin = starts[0] ?? nowMs
 
   // per count: the change of the count at each instant, an interval of any of its states adding one from its start to its end
-  const changes: Record<FlowCount, Map<number, number>> = { working: new Map(), waiting: new Map(), queued: new Map() }
+  const changes: Record<WorkTrendKey, Map<number, number>> = {
+    running: new Map(),
+    paused: new Map(),
+    notStarted: new Map(),
+    checking: new Map(),
+  }
   for (const interval of intervals) {
-    const count = flowCountOfState(interval.state)
+    const count = workTrendOfState(interval.state)
     if (!count) continue
     const from = Math.max(interval.from.getTime(), origin)
     const to = Math.min(interval.to?.getTime() ?? nowMs, nowMs)
@@ -58,7 +63,7 @@ export function trendOf(
   }
 
   const points = Object.fromEntries(
-    FLOW_COUNTS.map((count) => {
+    WORK_TREND_KEYS.map((count) => {
       const steps = [...changes[count]].sort((a, b) => a[0] - b[0])
       let next = 0
       let level = 0
@@ -82,7 +87,7 @@ export function trendOf(
       })
       return [count, perBucket]
     }),
-  ) as Record<FlowCount, { peak: number; avg: number }[]>
+  ) as Record<WorkTrendKey, { peak: number; avg: number }[]>
 
   return {
     at: now.toISOString(),
@@ -90,9 +95,10 @@ export function trendOf(
     bucket,
     buckets: starts.map((start, i) => ({
       at: new Date(start).toISOString(),
-      working: points.working[i] ?? { peak: 0, avg: 0 },
-      waiting: points.waiting[i] ?? { peak: 0, avg: 0 },
-      queued: points.queued[i] ?? { peak: 0, avg: 0 },
+      running: points.running[i] ?? { peak: 0, avg: 0 },
+      paused: points.paused[i] ?? { peak: 0, avg: 0 },
+      notStarted: points.notStarted[i] ?? { peak: 0, avg: 0 },
+      checking: points.checking[i] ?? { peak: 0, avg: 0 },
     })),
   }
 }

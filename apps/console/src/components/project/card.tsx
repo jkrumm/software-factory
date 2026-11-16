@@ -1,6 +1,8 @@
 import { Link } from '@tanstack/react-router'
-import type { ProjectIndexRow } from '@software-factory/contract'
+import type { ProjectIndexRow, WorkWord } from '@software-factory/contract'
 import { CardLink, LINKED_CARD } from '@/components/kit/card-link'
+import { workSplitWords } from '@/lib/flow'
+import { LANGUAGE } from '@/lib/language.gen'
 import { PASS_TONES } from '@/lib/project'
 import { cn } from '@/lib/utils'
 import { prefetchProject } from '@/lib/queries'
@@ -14,6 +16,13 @@ function Figure({ label, value, title }: { label: string; value: number; title: 
     </div>
   )
 }
+
+const FIGURES = [
+  ['running', 'Running'],
+  ['paused', 'Paused'],
+  ['ready', 'Ready'],
+  ['held', 'Held'],
+] as const satisfies readonly (readonly [WorkWord, string])[]
 
 /** One project of the list: its name, what it has open and shipped, and how its last hygiene pass ended. The whole card opens the page. */
 export function ProjectCard({
@@ -49,10 +58,18 @@ export function ProjectCard({
         ) : null}
       </header>
       <div className="grid flex-1 content-start gap-3 rounded-lg bg-background px-2.5 py-2.5">
-        <dl className="grid grid-cols-4 gap-2">
-          <Figure label="Working" value={counts.working} title={`${project.watching} of them in Watch`} />
-          <Figure label="Waiting" value={counts.waiting} title="Waiting for a named exit" />
-          <Figure label="Queued" value={counts.queued} title="Queued or settling" />
+        <dl className="grid grid-cols-5 gap-2">
+          {FIGURES.map(([key, label]) => {
+            const split = workSplitWords(counts.work, key)
+            return (
+              <Figure
+                key={key}
+                label={label}
+                value={counts.work[key]}
+                title={`${LANGUAGE[key]}${split ? ` By what holds it: ${split}.` : ''}${key === 'running' && counts.work.checking ? ` ${counts.work.checking} more checking.` : ''}`}
+              />
+            )
+          })}
           <Figure label="Shipped" value={counts.done7d} title="Closed done or healed in the last 7 days" />
         </dl>
         {headline ? (

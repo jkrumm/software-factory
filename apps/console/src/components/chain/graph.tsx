@@ -324,7 +324,7 @@ export default function ChainGraph({
       position: placed.get(node.id) ?? { x: 0, y: 0 },
       data: { node, waitsFor: waitsForWords(node.id, view.edges, byId), ports: ports.get(node.id) ?? [] },
       ariaRole: 'group',
-      ariaLabel: `${node.title}, ${node.repo ?? 'no project'}, ${stateWord(node.state)}`,
+      ariaLabel: `${node.title}, ${node.repo ?? 'no project'}, ${stateWord(node)}`,
     }))
     const edges: DependencyEdge[] = view.edges.map((edge) => {
       const blocked = isBlocked(edge)

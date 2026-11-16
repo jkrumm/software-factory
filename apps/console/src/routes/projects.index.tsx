@@ -1,3 +1,4 @@
+import type { ProjectIndexRow } from '@software-factory/contract'
 import { createFileRoute } from '@tanstack/react-router'
 import { ProjectCard } from '@/components/project/card'
 import { EmptyState, Page, PageHeader } from '@/components/page'
@@ -28,12 +29,11 @@ function Projects() {
       </Page>
     )
 
-  // the busiest first (working, then waiting and queued), then by name
+  const notRunning = ({ counts }: ProjectIndexRow) => counts.work.paused + counts.work.ready + counts.work.held
+  // the busiest first (running, then paused, ready and held), then by name
   const projects = [...index.data.projects].sort(
     (a, b) =>
-      b.counts.working - a.counts.working ||
-      b.counts.waiting + b.counts.queued - (a.counts.waiting + a.counts.queued) ||
-      a.name.localeCompare(b.name),
+      b.counts.work.running - a.counts.work.running || notRunning(b) - notRunning(a) || a.name.localeCompare(b.name),
   )
   const headlines = new Map((digests.data?.projects ?? []).map((digest) => [digest.project, digest.headline]))
   if (projects.length === 0)

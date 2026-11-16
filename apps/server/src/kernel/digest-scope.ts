@@ -1,4 +1,4 @@
-import { flowCountOfState } from '@software-factory/contract'
+import { addWork, emptyWorkCounts, workOf, type WorkCounts } from '@software-factory/contract'
 import type { IssueId } from './ids.ts'
 import { projectOf } from './project-of.ts'
 
@@ -54,26 +54,38 @@ export function groupByProject(
 
 export interface DigestCounts {
   done7d: number
-  working: number
-  queued: number
-  waiting: number
+  /** the open Issues by the five words (`workOf`) */
+  work: WorkCounts
 }
 
 /** Closed done or healed: the one meaning of "shipped" the digest's counts and the project page's bars share. */
 export const shipped = (issue: DigestIssue): boolean =>
   issue.state === 'closed' && (issue.outcome === 'done' || issue.outcome === 'healed')
 
-/** What the project has, counted from the Issues: never from the model. */
-export function countsOf(issues: readonly DigestIssue[], now: Date): DigestCounts {
+/**
+ * What the project has, counted from the Issues: never from the model. `queueKind` says why a queued Issue stays queued
+ * (the capacity read); without it a queued Issue is Ready, as on every other surface.
+ */
+export function countsOf(
+  issues: readonly DigestIssue[],
+  now: Date,
+  queueKind?: (id: IssueId) => string | null | undefined,
+): DigestCounts {
   const since = now.getTime() - DIGEST_WINDOW_MS
-  const counts: DigestCounts = { done7d: 0, working: 0, queued: 0, waiting: 0 }
+  const counts: DigestCounts = { done7d: 0, work: emptyWorkCounts() }
   for (const issue of issues) {
     if (shipped(issue)) {
       if (issue.at.getTime() >= since) counts.done7d++
     } else {
-      // the one definition of the three counts, the strip's and Flow's (`FLOW_COUNT_STATES`)
-      const count = flowCountOfState(issue.state)
-      if (count) counts[count]++
+      // the one definition of the five words, the strip's and Flow's (`workOf`)
+      addWork(
+        counts.work,
+        workOf({
+          state: issue.state,
+          waitReason: issue.waitReason,
+          queueKind: queueKind?.(issue.id) ?? null,
+        }),
+      )
     }
   }
   return counts

@@ -1,4 +1,5 @@
 import * as z from 'zod'
+import { WORK_WORDS, WorkCounts } from './work-words.ts'
 
 /**
  * The read API (`/v1`): a projection of what the factory holds, shaped for people, and the change stream. Existing clients
@@ -95,6 +96,8 @@ export const ReadIssueCard = z
     /** one plain sentence on what the Issue is for */
     about: z.string().nullable(),
     state: z.enum(READ_ISSUE_STATES),
+    /** the word the Issue stands under (`workOf`): running, paused, ready, held or checking; null once closed */
+    work: z.strictObject({ word: z.enum(WORK_WORDS), split: z.string().nullable() }).nullable(),
     /** the wait's name while `waiting` (timer, dependency, decision, review ...) */
     reason: z.string().nullable(),
     outcome: z.string().nullable(),
@@ -363,10 +366,8 @@ export type ReadSessionCards = z.infer<typeof ReadSessionCards>
 
 export const ReadOverviewCounts = z
   .object({
-    working: z.number().int(),
-    waiting: z.number().int(),
-    queued: z.number().int(),
-    watching: z.number().int(),
+    /** the open Issues by the five words (`workOf`) and their splits: they add up to the open Issues */
+    work: WorkCounts,
     /** what waits on the owner: Decisions and artifacts awaiting a verdict */
     asks: z.number().int(),
     /** open Errands that are not stale */

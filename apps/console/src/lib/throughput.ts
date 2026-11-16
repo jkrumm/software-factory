@@ -30,10 +30,10 @@ export const CLASS_LABEL: Record<string, string> = {
 export const SPLIT_PARTS = [
   { key: 'turnSeconds', label: 'In a turn', slot: 1 },
   { key: 'stepSeconds', label: 'In a check step', slot: 2 },
-  { key: 'slotWaitSeconds', label: 'Waiting for a slot', slot: 3 },
-  { key: 'ciSeconds', label: 'Waiting for CI', slot: 4 },
-  { key: 'mergeLockSeconds', label: 'Waiting for the merge window', slot: 5 },
-  { key: 'ownerSeconds', label: 'Waiting for the owner', slot: 7 },
+  { key: 'slotWaitSeconds', label: 'Slot wait', slot: 3 },
+  { key: 'ciSeconds', label: 'CI wait', slot: 4 },
+  { key: 'mergeLockSeconds', label: 'Merge window wait', slot: 5 },
+  { key: 'ownerSeconds', label: 'Owner wait', slot: 7 },
   { key: 'idleSeconds', label: 'Idle', slot: 9 },
 ] as const satisfies readonly { key: keyof ThroughputModel['lead']['split']; label: string; slot: number }[]
 

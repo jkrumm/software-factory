@@ -165,7 +165,7 @@ export const readModelRoutes = (deps: ReadModelDeps | undefined, caller: (reques
         detail: {
           operationId: 'read.flow',
           summary:
-            'the Issues by state (settling, queued, working, waiting, watching), what closed in the last day, counts per project and the queue state per scope',
+            'the Issues by stored state (settling, queued, working, waiting, watching), what closed in the last day, the five words (running, paused, ready, held, checking) per project and in all, and the queue state per scope',
         },
       },
     )
@@ -183,7 +183,7 @@ export const readModelRoutes = (deps: ReadModelDeps | undefined, caller: (reques
         detail: {
           operationId: 'read.flow-trend',
           summary:
-            'the Issues counted as working, waiting and queued over a window (24h by hour, 7d by hour, 30d by day; default 7d by hour), per bucket the peak and the average, computed from the applied events; counts only',
+            'the Issues counted as running, paused, not started (ready and held) and checking over a window (24h by hour, 7d by hour, 30d by day; default 7d by hour), per bucket the peak and the average, computed from the applied events; counts only',
         },
       },
     )
@@ -191,15 +191,20 @@ export const readModelRoutes = (deps: ReadModelDeps | undefined, caller: (reques
       '/projects/digests',
       async ({ request }) => {
         if (!deps) return unavailable
+        const queue = await deps.queueReasons?.().catch(() => null)
         const redact = caller(request) === 'read'
-        return Response.json(ProjectDigestsModel.parse(await readProjectDigests(deps.sql, { now: now(), redact })))
+        return Response.json(
+          ProjectDigestsModel.parse(
+            await readProjectDigests(deps.sql, { now: now(), redact, queue: queue ?? undefined }),
+          ),
+        )
       },
       {
         response: { 200: ProjectDigestsModel, ...errorResponses(503) },
         detail: {
           operationId: 'read.project-digests',
           summary:
-            "each project's newest digest (headline, shipped, next and risks bullets citing Issues, themes) made every few hours by agw's factory digest, for projects with an Issue open or closed in the last 7 days, with counts (done in 7 days, working, queued, waiting) read from the Issues now; the read token gets the counts of a work project and no words",
+            "each project's newest digest (headline, shipped, next and risks bullets citing Issues, themes) made every few hours by agw's factory digest, for projects with an Issue open or closed in the last 7 days, with counts (done in 7 days and the five words running, paused, ready, held, checking) read from the Issues now; the read token gets the counts of a work project and no words",
         },
       },
     )
@@ -207,7 +212,8 @@ export const readModelRoutes = (deps: ReadModelDeps | undefined, caller: (reques
       '/projects',
       async ({ request }) => {
         if (!deps) return unavailable
-        const model = await readProjectIndex(deps.sql, { now: now() })
+        const queue = await deps.queueReasons?.().catch(() => null)
+        const model = await readProjectIndex(deps.sql, { now: now(), queue: queue ?? undefined })
         // the read token hears no word of a work project, not even that it exists (NL18)
         const redact = caller(request) === 'read'
         return Response.json(
@@ -219,7 +225,7 @@ export const readModelRoutes = (deps: ReadModelDeps | undefined, caller: (reques
         detail: {
           operationId: 'read.project-index',
           summary:
-            'every project the factory has read, with its counts (done in 7 days, working, queued, waiting, in Watch) and the state of its newest hygiene pass; the read token gets no work project',
+            'every project the factory has read, with its counts (done in 7 days and the five words running, paused, ready, held, checking) and the state of its newest hygiene pass; the read token gets no work project',
         },
       },
     )
@@ -228,7 +234,13 @@ export const readModelRoutes = (deps: ReadModelDeps | undefined, caller: (reques
       async ({ params, request }) => {
         if (!deps) return unavailable
         const redact = caller(request) === 'read'
-        const page = await readProjectPage(deps.sql, { now: now(), name: params.name, redact })
+        const queue = await deps.queueReasons?.().catch(() => null)
+        const page = await readProjectPage(deps.sql, {
+          now: now(),
+          name: params.name,
+          redact,
+          queue: queue ?? undefined,
+        })
         return page ? Response.json(ProjectPageModel.parse(page)) : noProject(params.name)
       },
       {
@@ -333,7 +345,12 @@ export const readModelRoutes = (deps: ReadModelDeps | undefined, caller: (reques
       '/chain',
       async ({ request }) => {
         if (!deps) return unavailable
-        return Response.json(ChainModel.parse(await readChain(deps.sql, now(), { redact: caller(request) === 'read' })))
+        const queue = await deps.queueReasons?.().catch(() => null)
+        return Response.json(
+          ChainModel.parse(
+            await readChain(deps.sql, now(), { redact: caller(request) === 'read', queue: queue ?? undefined }),
+          ),
+        )
       },
       {
         response: { 200: ChainModel, ...errorResponses(503) },

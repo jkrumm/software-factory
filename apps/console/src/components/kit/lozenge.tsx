@@ -2,11 +2,12 @@ import { cn } from '@/lib/utils'
 import { TONE_TEXT, TONE_TINT, type Tone } from './tone'
 
 export const LOZENGE_STATES = [
-  'settling',
-  'queued',
-  'working',
-  'waiting',
-  'watching',
+  'running',
+  'paused',
+  'ready',
+  'held',
+  'checking',
+  'planned',
   'closed',
   'done',
   'dropped',
@@ -14,16 +15,17 @@ export const LOZENGE_STATES = [
   'cancelled',
 ] as const
 
-/** An Issue's state (`docs/language.md` State) or, once closed, its outcome (Outcome). */
+/** Where an Issue's work stands (`docs/language.md` "Where work stands"; Planned is a plan row) or, once closed, its outcome (Outcome). */
 export type LozengeState = (typeof LOZENGE_STATES)[number]
 
 /** The tone of each state, decided here and nowhere else: never derived from the word. */
 export const LOZENGE_TONES: Record<LozengeState, Tone> = {
-  settling: 'neutral',
-  queued: 'neutral',
-  working: 'accent',
-  waiting: 'warn',
-  watching: 'accent',
+  running: 'accent',
+  paused: 'warn',
+  ready: 'neutral',
+  held: 'neutral',
+  checking: 'accent',
+  planned: 'neutral',
   closed: 'neutral',
   done: 'good',
   dropped: 'neutral',

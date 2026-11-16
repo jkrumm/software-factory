@@ -107,6 +107,7 @@ the record of the rewrite and `docs/rewrite/state.md` its log. A directory listi
 - **Heartbeat names** on `GET /health` (`ok`, `reason`, `tickAt`, `queueMovedAt`) are read by a pusher outside this repo:
   do not rename them (`routeP95Ms` and `routeSamples` are additive, for the same pusher). `ok` is false only for a stopped factory (`docs/architecture.md`); a restart (`starting`), a deploy
   (`deploying`) and a starved host (`starved: …`) are ok with that `reason`. `/health` never queries the database in the request.
+- **State words stay off screens** (`scripts/vocabulary.ts`, `docs/language.md` "Where work stands"): the Console, the Herdr bar and `read/describe.ts` show Running, Paused, Ready, Held, Checking and Planned, never `queued`, `working`, `waiting`, `watching` or `settling`, which are stored names. An exception is a line with its reason in `scripts/vocabulary.allow`; a stale line fails too.
 - **Retired words fail `make check`** (`scripts/retired-words.ts`, the Retires column of `docs/language.md`). An exception
   is a line with its reason in `scripts/retired-words.allow`; a stale line fails too.
 

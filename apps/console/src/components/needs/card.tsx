@@ -116,7 +116,7 @@ export function NeedCard({
           </span>
           {item.stale ? (
             <span className="relative z-10 inline-flex items-center gap-0.5">
-              <Lozenge state="waiting">Stale</Lozenge>
+              <Lozenge state="paused">Stale</Lozenge>
               <InfoHint word="stale" className="-my-1" />
             </span>
           ) : null}

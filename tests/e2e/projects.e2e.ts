@@ -11,9 +11,10 @@ interface Index {
   projects: {
     name: string
     work: boolean
-    counts: { done7d: number; working: number; queued: number; waiting: number }
+    counts: { done7d: number; work: Work }
   }[]
 }
+type Work = Record<'running' | 'paused' | 'ready' | 'held' | 'checking', number>
 interface Flow {
   states: Record<string, { issues: { id: string; repo: string }[] }>
 }
@@ -23,7 +24,7 @@ interface Hygiene {
   passes: unknown[]
 }
 interface Page_ {
-  counts: { done7d: number; working: number; queued: number; waiting: number }
+  counts: { done7d: number; work: Work }
   production: { monitors: { monitor: string }[] }
   setup: { leads: number }
 }
@@ -54,7 +55,7 @@ test('a project card shows the counts of the API and opens the page', async ({ p
   if (!argo) throw new Error('argo is not a project')
   await page.goto('/projects')
   const card = page.getByRole('article').filter({ has: page.getByRole('heading', { name: PROJECT, exact: true }) })
-  await expect(card).toContainText(`${argo.counts.working}Working`)
+  await expect(card).toContainText(`${argo.counts.work.running}Running`)
   await expect(card).toContainText(`${argo.counts.done7d}Shipped`)
   await card.getByRole('link', { name: PROJECT, exact: true }).click()
   await expect(page).toHaveURL(new RegExp(`/projects/${PROJECT}$`))
@@ -68,11 +69,13 @@ test("the page's open Issues are Flow's for the project, and its counts are the 
   await expect(page.getByRole('heading', { level: 1, name: PROJECT })).toBeVisible()
   await settle(page)
   await expect(page.getByRole('list', { name: 'Open Issues' }).getByRole('listitem')).toHaveCount(open.length)
-  expect(model.counts.working + model.counts.waiting + model.counts.queued).toBeGreaterThan(0)
+  expect(
+    model.counts.work.running + model.counts.work.paused + model.counts.work.ready + model.counts.work.held,
+  ).toBeGreaterThan(0)
   const totals = page.getByRole('group', { name: 'Totals' })
   await expect(totals.getByRole('article')).toHaveCount(3)
   await expect(totals).toContainText(
-    `${model.counts.working} working, ${model.counts.waiting} waiting, ${model.counts.queued} queued`,
+    `${model.counts.work.running} running, ${model.counts.work.paused} paused, ${model.counts.work.ready} ready, ${model.counts.work.held} held, ${model.counts.work.checking} checking`,
   )
   // the other screens, filtered to the project
   const nav = page.getByRole('navigation', { name: 'This project in other screens' })

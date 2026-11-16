@@ -1,14 +1,14 @@
 import { afterAll, beforeAll, describe, expect, test } from 'bun:test'
 import {
   ChainModel,
-  FLOW_STATES,
-  flowCountsOf,
   FlowModel,
   FlowTrendSeries,
   FrictionModel,
   HISTORY_WINDOWS,
   KpiModel,
   NeedsModel,
+  openOfWork,
+  type WorkCounts,
 } from '@software-factory/contract'
 import { startTestCluster, type TestCluster } from '@software-factory/tests/pg'
 import type { SQL } from 'bun'
@@ -329,10 +329,13 @@ describe('the fixture', () => {
     expect(flow.states.waiting.issues.find((i) => i.id === 'issue_4')?.kind).toBe('feature')
     // origin is a shape: a work repo's Issue keeps it
     expect(flow.states.waiting.issues.find((i) => i.id === 'issue_4')?.origin).toBe('you')
-    expect(flow.perProject).toEqual([
-      { repo: 'app', open: 4, working: 1, waiting: 2, queued: 1 },
-      { repo: 'work-app', open: 3, working: 0, waiting: 2, queued: 1 },
+    // the five words add up to the open Issues, per project and in all
+    expect(flow.perProject.map((p) => [p.repo, p.open, openOfWork(p.work)])).toEqual([
+      ['app', 4, 4],
+      ['work-app', 3, 3],
     ])
+    expect(openOfWork(flow.work)).toBe(7)
+    expect(flow.work).toMatchObject({ running: 1, paused: 4, held: 2 })
     expect(flow.queueStates).toEqual({ global: 'drain', projects: { app: 'pace' } })
   })
 
@@ -732,7 +735,7 @@ describe('the flow trend', () => {
   })
 })
 
-describe('one definition of working, waiting and queued', () => {
+describe('one definition of running, paused, ready, held and checking', () => {
   test('the strip, the Flow cards, the per-project figures and the project digest agree, settling and watching included', async () => {
     await sql`TRUNCATE factory.issues CASCADE`
     // app: 2 working, 1 watching, 1 waiting, 2 queued, 1 settling; other: 1 working
@@ -751,24 +754,23 @@ describe('one definition of working, waiting and queued', () => {
       await event(id, 1, 'filed', ago(5), { payload: { repo, title: id, kind: 'feature', origin: 'you' }, to: state })
     }
     const flow = FlowModel.parse(await readFlow(sql, { now: NOW }))
-    // the strip and the cards: working counts watching, queued counts settling
-    expect(flowCountsOf(Object.fromEntries(FLOW_STATES.map((s) => [s, flow.states[s].count])) as never)).toEqual({
-      working: 4,
-      waiting: 1,
-      queued: 3,
-    })
-    // the per-project figures add up to the whole and to `open`
+    // the strip and the cards: watching is Checking, settling is Held, a queued Issue with no reason is Ready
+    expect(flow.work).toMatchObject({ running: 3, checking: 1, paused: 1, ready: 2, held: 1 })
+    expect(openOfWork(flow.work)).toBe(8)
+    // the per-project figures add up to the whole and to open
     const app = flow.perProject.find((p) => p.repo === 'app')
-    expect(app).toEqual({ repo: 'app', open: 7, working: 3, waiting: 1, queued: 3 })
-    expect(flow.perProject.reduce((n, p) => n + p.working, 0)).toBe(4)
-    for (const p of flow.perProject) expect(p.working + p.waiting + p.queued).toBe(p.open)
+    expect(app).toMatchObject({ repo: 'app', open: 7 })
+    expect(app?.work).toMatchObject({ running: 2, checking: 1, paused: 1, ready: 2, held: 1 })
+    expect(flow.perProject.reduce((n, p) => n + p.work.running, 0)).toBe(3)
+    for (const p of flow.perProject) expect(openOfWork(p.work)).toBe(p.open)
     // the digest of the project counts the same Issues the same way
     const digestIssues = await loopReads(sql).digestIssues(new Date(NOW.getTime() - DIGEST_WINDOW_MS))
     const digest = countsOf(
       digestIssues.filter((i) => i.repo === 'app'),
       NOW,
     )
-    expect(digest).toEqual({ done7d: 0, working: 3, waiting: 1, queued: 3 })
+    expect(digest.done7d).toBe(0)
+    expect(digest.work).toEqual(app?.work as WorkCounts)
   })
 })
 
@@ -800,23 +802,23 @@ describe('the flow trend by bucket', () => {
     // the first bucket starts 23 h before the current hour
     expect(hourly.buckets[0]?.at).toBe(ago(23).toISOString())
     expect(hourly.buckets.at(-1)?.at).toBe(NOW.toISOString())
-    expect(Math.max(...hourly.buckets.map((b) => b.working.peak))).toBe(25)
+    expect(Math.max(...hourly.buckets.map((b) => b.running.peak))).toBe(25)
     // the bucket that starts at 22 h ago holds all 25 for its whole hour
     const noon = hourly.buckets.find((b) => b.at === ago(22).toISOString())
-    expect(noon?.working).toEqual({ peak: 25, avg: 25 })
+    expect(noon?.running).toEqual({ peak: 25, avg: 25 })
 
     const week = FlowTrendSeries.parse(await readFlowTrend(sql, { now: NOW, window: '7d', bucket: 'hour' }))
     expect(week.buckets).toHaveLength(168)
-    expect(Math.max(...week.buckets.map((b) => b.working.peak))).toBe(25)
+    expect(Math.max(...week.buckets.map((b) => b.running.peak))).toBe(25)
     const days = FlowTrendSeries.parse(await readFlowTrend(sql, { now: NOW, window: '7d', bucket: 'day' }))
     expect(days.buckets).toHaveLength(7)
-    expect(Math.max(...days.buckets.map((b) => b.working.peak))).toBe(25)
+    expect(Math.max(...days.buckets.map((b) => b.running.peak))).toBe(25)
     // a day's average is below its peak: the 25 worked 2 of its 24 hours at most
-    const peakDay = days.buckets.find((b) => b.working.peak === 25)
-    expect(peakDay?.working.avg).toBeLessThan(25)
-    expect(peakDay?.working.avg).toBeGreaterThan(0)
+    const peakDay = days.buckets.find((b) => b.running.peak === 25)
+    expect(peakDay?.running.avg).toBeLessThan(25)
+    expect(peakDay?.running.avg).toBeGreaterThan(0)
     const month = FlowTrendSeries.parse(await readFlowTrend(sql, { now: NOW, window: '30d', bucket: 'day' }))
     expect(month.buckets).toHaveLength(30)
-    expect(Math.max(...month.buckets.map((b) => b.working.peak))).toBe(25)
+    expect(Math.max(...month.buckets.map((b) => b.running.peak))).toBe(25)
   })
 })

@@ -1,3 +1,4 @@
+import { workOf } from '@software-factory/contract'
 import type { Page } from '@playwright/test'
 import { expect, test } from './fixtures.ts'
 import { expectHint } from './hints.ts'
@@ -15,7 +16,13 @@ const NAV = [
 
 const STATES = ['settling', 'queued', 'working', 'waiting', 'watching'] as const
 interface Flow {
-  states: Record<(typeof STATES)[number], { count: number; issues: { repo: string; origin: string }[] }>
+  states: Record<
+    (typeof STATES)[number],
+    {
+      count: number
+      issues: { repo: string; origin: string; waitReason?: string | null; queue?: { kind: string } | null }[]
+    }
+  >
   closedRecently: { repo: string; origin: string }[]
 }
 const KIND_WORD = {
@@ -59,7 +66,7 @@ test('the counts are the API: waiting on Needs you, open on Flow', async ({ page
   const needs = await needsCount(apiUrl)
   const flow = await api<Flow>(apiUrl, '/v1/flow')
   await page.goto('/chain')
-  await expect(nav(page).getByLabel(`${needs} waiting`)).toHaveText(String(needs))
+  await expect(nav(page).getByLabel(`${needs} to answer`)).toHaveText(String(needs))
   const open = Object.values(flow.states).reduce((sum, state) => sum + state.count, 0)
   if (open > 0) await expect(nav(page).getByLabel(`${open} open`)).toHaveText(String(open))
   else await expect(nav(page).getByLabel(/\d+ open/)).toHaveCount(0)
@@ -107,7 +114,7 @@ test('collapsed, the active filters show as removable chips and the window switc
   await expect(chips.getByRole('link', { name: 'Remove filter Kind: Errands' })).toBeVisible()
   await page.goto('/improve')
   await expect(page.getByRole('navigation', { name: 'Window' })).toBeVisible()
-  await expect(nav(page).getByRole('link', { name: /^Needs you/ })).toHaveAttribute('aria-label', /waiting/)
+  await expect(nav(page).getByRole('link', { name: /^Needs you/ })).toHaveAttribute('aria-label', /to answer/)
   await page.getByRole('button', { name: 'Expand sidebar' }).click()
 })
 
@@ -126,22 +133,24 @@ test('Flow: projects and origins toggle the URL and the list, All clears', async
   const all = [...STATES.flatMap((s) => flow.states[s].issues), ...flow.closedRecently]
   const repo = all[0]?.repo
   if (!repo) throw new Error('the seeded flow is empty')
-  const inRepo = (s: (typeof STATES)[number]) => flow.states[s].issues.filter((i) => i.repo === repo).length
+  const inRepo = (word: 'running' | 'paused' | 'ready' | 'held' | 'checking') =>
+    STATES.flatMap((state) =>
+      flow.states[state].issues.filter(
+        (i) =>
+          i.repo === repo &&
+          workOf({ state, waitReason: i.waitReason ?? null, queueKind: i.queue?.kind ?? null })?.word === word,
+      ),
+    ).length
 
   await page.goto('/flow')
-  const link = toggle(page, 'Projects', new RegExp(`^${repo}( \\d+ (working|waiting|queued).*)?$`))
+  const link = toggle(page, 'Projects', new RegExp(`^${repo}( \\d+ (running|paused|ready|held|checking).*)?$`))
   await expect(link).toHaveAttribute('aria-pressed', 'false')
-  // the row counts what is open, as working, waiting and queued (the one definition), and never a closed Issue
-  const working = inRepo('working') + inRepo('watching')
-  const waiting = inRepo('waiting')
-  const queued = inRepo('settling') + inRepo('queued')
-  const words = [
-    working ? `${working} working` : null,
-    waiting ? `${waiting} waiting` : null,
-    queued ? `${queued} queued` : null,
-  ].filter(Boolean)
+  // the row counts what is open, by the five words, and never a closed Issue
+  const words = (['running', 'paused', 'ready', 'held', 'checking'] as const).flatMap((word) =>
+    inRepo(word) ? [`${inRepo(word)} ${word}`] : [],
+  )
   if (words.length > 0) await expect(link.getByLabel(words.join(', '))).toBeVisible()
-  else await expect(link.getByLabel(/\d+ (working|waiting|queued)/)).toHaveCount(0)
+  else await expect(link.getByLabel(/\d+ (running|paused|ready|held|checking)/)).toHaveCount(0)
   await link.click()
   await expect(page).toHaveURL(new RegExp(`project=${repo}`))
   await expect(link).toHaveAttribute('aria-pressed', 'true')
@@ -167,11 +176,11 @@ test('Flow: projects and origins toggle the URL and the list, All clears', async
   await expect(page.locator('main select').first()).toBeHidden()
 })
 
-test('Flow: ?state lists the Issues of that count with a link back to all', async ({ page, apiUrl }) => {
+test('Flow: ?state lists the Issues of that word with a link back to all', async ({ page, apiUrl }) => {
   const flow = await api<Flow>(apiUrl, '/v1/flow')
   const list = page.getByTestId('flow-list')
-  await page.goto('/flow?state=waiting')
-  await expect(list.getByRole('heading', { level: 2 })).toHaveText(`Waiting ${flow.states.waiting.count}`)
+  await page.goto('/flow?state=paused')
+  await expect(list.getByRole('heading', { level: 2 })).toHaveText(`Paused ${flow.states.waiting.count}`)
   await expect(list.getByTestId('flow-row')).toHaveCount(flow.states.waiting.count)
   await expect(page.getByRole('region')).toHaveCount(1)
 
@@ -179,7 +188,7 @@ test('Flow: ?state lists the Issues of that count with a link back to all', asyn
   await page.goto('/flow?state=nope')
   await expect(list).toHaveAttribute('data-collapsed', 'true')
 
-  await page.goto('/flow?state=waiting&project=argo')
+  await page.goto('/flow?state=paused&project=argo')
   await page.getByRole('link', { name: 'Show all states' }).click()
   await expect(page).toHaveURL(/\/flow\?project=argo$/)
   await expect(list.getByRole('heading', { level: 2 })).toHaveText(/^Issues \d+$/)
@@ -254,7 +263,7 @@ test.describe('phone', () => {
     await page.goto('/flow')
     await expect(aside(page)).toBeHidden()
     await expect(page.locator('main select').first()).toBeVisible()
-    await page.goto('/flow?state=waiting')
-    await expect(page.getByTestId('flow-list').getByRole('heading', { level: 2 })).toHaveText(/^Waiting \d+$/)
+    await page.goto('/flow?state=paused')
+    await expect(page.getByTestId('flow-list').getByRole('heading', { level: 2 })).toHaveText(/^Paused \d+$/)
   })
 })

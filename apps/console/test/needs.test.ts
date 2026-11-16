@@ -36,7 +36,7 @@ test('spanWords and waitingWords name the wait in plain words', () => {
   expect(spanWords(2 * 60 * MIN + 30 * MIN)).toBe('2 hours')
   expect(spanWords(60 * MIN)).toBe('1 hour')
   expect(spanWords(3 * 24 * 60 * MIN)).toBe('3 days')
-  expect(waitingWords(2 * 60 * MIN)).toBe('Waiting 2 hours')
+  expect(waitingWords(2 * 60 * MIN)).toBe('Open 2 hours')
 })
 
 test('defaultWords counts down to the default and says so once it is due', () => {
@@ -50,7 +50,7 @@ test('the origin is the repo, or App feedback; reversibility is a lozenge from a
   expect(originOf({ repo: null })).toBe('App feedback')
   expect(projectOf({ repo: null })).toBe('App feedback')
   expect(reversibleLozenge(true)).toEqual({ state: 'done', words: 'Reversible' })
-  expect(reversibleLozenge(false)).toEqual({ state: 'waiting', words: 'Not reversible' })
+  expect(reversibleLozenge(false)).toEqual({ state: 'paused', words: 'Not reversible' })
 })
 
 test('errorWords: 409 is settled elsewhere, no status is unreachable, the rest says what the API said', () => {
@@ -68,14 +68,14 @@ test('defaultWhen and metaWords phrase the timing per kind', () => {
   const now = Date.parse('2026-01-01T10:00:00Z')
   expect(defaultWhen('2026-01-01T10:40:00Z', now)).toBe('in 40 minutes')
   expect(defaultWhen('2026-01-01T09:00:00Z', now)).toBe('at the next pass')
-  expect(metaWords({ kind: 'decision', ageMs: 2 * 60 * MIN })).toBe('Waiting 2 hours')
+  expect(metaWords({ kind: 'decision', ageMs: 2 * 60 * MIN })).toBe('Open 2 hours')
   expect(metaWords({ kind: 'errand', ageMs: 2 * 60 * MIN })).toBe('Raised 2 hours ago')
   expect(metaWords({ kind: 'held_signal', ageMs: 5 * MIN })).toBe('Received 5 minutes ago')
   expect(metaWords({ kind: 'long_wait', ageMs: 2 * 60 * MIN })).toBe('Held 2 hours')
 })
 
 test('metaParts splits the lead word from the age that metaWords joins', () => {
-  expect(metaParts({ kind: 'decision', ageMs: 2 * 60 * MIN })).toEqual({ lead: 'Waiting', age: '2 hours' })
+  expect(metaParts({ kind: 'decision', ageMs: 2 * 60 * MIN })).toEqual({ lead: 'Open', age: '2 hours' })
   expect(metaParts({ kind: 'errand', ageMs: 2 * 60 * MIN })).toEqual({ lead: 'Raised', age: '2 hours ago' })
   expect(metaParts({ kind: 'held_signal', ageMs: 5 * MIN })).toEqual({ lead: 'Received', age: '5 minutes ago' })
   expect(metaParts({ kind: 'long_wait', ageMs: 2 * 60 * MIN })).toEqual({ lead: 'Held', age: '2 hours' })

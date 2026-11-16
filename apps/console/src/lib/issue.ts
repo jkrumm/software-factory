@@ -5,20 +5,11 @@ import { spanWords } from './needs.ts'
 
 /** The pure wording of the Issue page: every figure comes from the API's detail, only phrased here. */
 
-export const ISSUE_STATE_WORDS: Record<ReadIssueDetail['state'], string> = {
-  settling: 'Being settled',
-  queued: 'Queued',
-  working: 'Working',
-  waiting: 'Waiting',
-  watching: 'Watching after a ship',
-  closed: 'Closed',
-}
-
 export const SESSION_STATE_WORDS: Record<ReadIssueDetail['sessions'][number]['state'], string> = {
   starting: 'Starting',
-  working: 'Working',
+  working: 'Active',
   idle: 'Idle between turns',
-  waiting: 'Waiting',
+  waiting: 'Paused',
   walled: 'Stopped at its account limit',
   blocked: 'Blocked',
   stuck: 'Stuck',

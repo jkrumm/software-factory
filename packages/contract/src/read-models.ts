@@ -2,6 +2,7 @@ import * as z from 'zod'
 import { QueueReason, QueueStatesView } from './capacity.ts'
 import { SIGNAL_ORIGINS } from './intake.ts'
 import { IssueRef } from './planning.ts'
+import { WORK_WORDS, WorkCounts } from './work-words.ts'
 
 /**
  * The Console's computed screens: what waits on the owner, the Issues by state, the chain, the KPIs and the friction. Each
@@ -84,31 +85,6 @@ export type NeedsModel = z.infer<typeof NeedsModel>
 export const FLOW_STATES = ['settling', 'queued', 'working', 'waiting', 'watching'] as const
 export type FlowState = (typeof FLOW_STATES)[number]
 
-/**
- * The three counts the owner reads, and the Issue states each one counts. The one definition: the strip, the Flow
- * cards and board, the Flow sidebar, the project digests and the trend all count Issues (never sessions) by it.
- * Working: a lead is running now (`working`, and `watching`, the lead still open after the deploy). Waiting: started
- * and paused on a named wait. Queued: ready and not started (`queued` held back by capacity or a chain, and `settling`).
- */
-export const FLOW_COUNTS = ['working', 'waiting', 'queued'] as const
-export type FlowCount = (typeof FLOW_COUNTS)[number]
-export const FLOW_COUNT_STATES: Readonly<Record<FlowCount, readonly FlowState[]>> = {
-  working: ['working', 'watching'],
-  waiting: ['waiting'],
-  queued: ['settling', 'queued'],
-}
-
-/** The count an Issue in `state` is part of; `closed` and anything else is part of none. */
-export const flowCountOfState = (state: string): FlowCount | null =>
-  FLOW_COUNTS.find((count) => FLOW_COUNT_STATES[count].some((member) => member === state)) ?? null
-
-/** The three counts from a count per state. */
-export function flowCountsOf(perState: Readonly<Record<FlowState, number>>): Record<FlowCount, number> {
-  const sum = (count: FlowCount): number =>
-    FLOW_COUNT_STATES[count].reduce((total, state) => total + perState[state], 0)
-  return { working: sum('working'), waiting: sum('waiting'), queued: sum('queued') }
-}
-
 export const FLOW_KINDS = ['feature', 'bug', 'incident', 'chore', 'docs'] as const
 
 export const FlowIssue = z
@@ -152,10 +128,8 @@ export const FlowProject = z
     repo: z.string(),
     /** every open Issue of the repo */
     open: z.number().int(),
-    /** the three counts by `FLOW_COUNT_STATES`: they add up to `open` */
-    working: z.number().int(),
-    waiting: z.number().int(),
-    queued: z.number().int(),
+    /** the five words (`workOf`): they add up to `open` */
+    work: WorkCounts,
   })
   .meta({ id: 'FlowProject' })
 
@@ -197,6 +171,8 @@ export const FlowModel = z
     /** closed in the last 24 hours, newest first */
     closedRecently: z.array(FlowClosed),
     perProject: z.array(FlowProject),
+    /** every open Issue by the five words (`workOf`): the strip's and the Herdr bar's figures */
+    work: WorkCounts,
     queueStates: QueueStatesView,
     /** the last 7 days in daily samples; counts only */
     trend: FlowTrend,
@@ -238,9 +214,10 @@ export const FlowTrendSeries = z
       z.strictObject({
         /** the start of the bucket */
         at,
-        working: FlowTrendPoint,
-        waiting: FlowTrendPoint,
-        queued: FlowTrendPoint,
+        running: FlowTrendPoint,
+        paused: FlowTrendPoint,
+        notStarted: FlowTrendPoint,
+        checking: FlowTrendPoint,
       }),
     ),
   })
@@ -270,8 +247,10 @@ export const ChainNode = z
     kind: z.enum(['issue', 'row']),
     repo: z.string().nullable(),
     title: z.string(),
-    /** an Issue's state, or a row's: `filable` or `waiting` */
+    /** an Issue's state, or a row's: `filable` or `waiting` (stored names; a screen shows `work`) */
     state: z.string(),
+    /** the word it stands under (`workOf`): an open Issue's five, a row's `planned` with its split `due` (to file now), `issue` (after another Issue) or `date` (not before a time); null for a closed Issue */
+    work: z.strictObject({ word: z.enum([...WORK_WORDS, 'planned']), split: z.string().nullable() }).nullable(),
     /** an Issue's settled kind, else its filed one (`chore` when unknown); a row's `kind` (default `feature`) */
     issueKind: z.enum(FLOW_KINDS),
     /** when the Issue entered the state it is in; null for a row */
@@ -781,11 +760,8 @@ export const ProjectDigestCounts = z
   .strictObject({
     /** closed done or healed in the last 7 days */
     done7d: z.number().int().min(0),
-    /** by `FLOW_COUNT_STATES`: working or watching now */
-    working: z.number().int().min(0),
-    /** settling or queued now */
-    queued: z.number().int().min(0),
-    waiting: z.number().int().min(0),
+    /** the open Issues by the five words (`workOf`) */
+    work: WorkCounts,
   })
   .meta({ id: 'ProjectDigestCounts' })
 

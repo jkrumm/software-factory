@@ -46,8 +46,8 @@ test('one node per linked API node, with its title, project and state as a word'
     await expect(card).toHaveAttribute('data-kind', n.kind)
     if (n.kind === 'row') await expect(card).toContainText('Not filed yet')
   }
-  await expect(node(page, 'Choose the export format')).toContainText('Settling')
-  await expect(node(page, 'Add a retry to the export job')).toContainText('Queued')
+  await expect(node(page, 'Choose the export format')).toContainText('Held')
+  await expect(node(page, 'Add a retry to the export job')).toContainText('Held')
 })
 
 test('one edge per API edge; a blocked edge reads differently from a satisfied one', async ({ page, apiUrl }) => {

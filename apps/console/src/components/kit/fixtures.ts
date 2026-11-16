@@ -29,7 +29,7 @@ export const KIT_ISSUES: KitIssue[] = [
     title: 'Show the export time on the board',
     project: 'pearl',
     kind: 'feature',
-    state: 'working',
+    state: 'running',
     reason: null,
     since: ago(42),
   },
@@ -39,8 +39,8 @@ export const KIT_ISSUES: KitIssue[] = [
     title: 'The login page crashes on submit',
     project: 'argo',
     kind: 'bug',
-    state: 'waiting',
-    reason: 'Waiting for the answer to a Decision: which session store to keep',
+    state: 'paused',
+    reason: 'On you: a Decision about which session store to keep',
     since: ago(190),
   },
   {
@@ -49,8 +49,8 @@ export const KIT_ISSUES: KitIssue[] = [
     title: 'Pick a database',
     project: 'argo',
     kind: 'chore',
-    state: 'queued',
-    reason: 'Queued behind Choose the export format: the chain is not done',
+    state: 'held',
+    reason: 'Behind Choose the export format: the chain is not done',
     since: ago(7),
   },
   {
@@ -59,7 +59,7 @@ export const KIT_ISSUES: KitIssue[] = [
     title: 'Move the export job to the new queue',
     project: 'orion',
     kind: 'feature',
-    state: 'watching',
+    state: 'checking',
     reason: null,
     since: ago(1500),
   },
@@ -69,7 +69,7 @@ export const KIT_ISSUES: KitIssue[] = [
     title: 'The host stopped answering and three alerts fired',
     project: 'orion',
     kind: 'incident',
-    state: 'settling',
+    state: 'held',
     reason: null,
     since: ago(0.4),
   },
@@ -89,7 +89,7 @@ export const KIT_ISSUES: KitIssue[] = [
     title: 'Write the restore runbook for the export store',
     project: 'argo',
     kind: 'docs',
-    state: 'working',
+    state: 'running',
     reason: null,
     since: ago(95),
   },
@@ -99,8 +99,8 @@ export const KIT_ISSUES: KitIssue[] = [
     title: 'Remove the feature flags that shipped last quarter',
     project: 'orion',
     kind: 'chore',
-    state: 'queued',
-    reason: 'Queued behind Move the export job to the new queue: the chain is not done',
+    state: 'held',
+    reason: 'Behind Move the export job to the new queue: the chain is not done',
     since: ago(30),
   },
   {
@@ -110,8 +110,8 @@ export const KIT_ISSUES: KitIssue[] = [
       'Make the export job resumable after a host restart, keep the partial files it already wrote, and report which rows were skipped when the same job is started again on the next scheduled run',
     project: 'orion',
     kind: 'bug',
-    state: 'working',
-    reason: 'Waiting for the export store to finish its nightly compaction before the next batch may start',
+    state: 'running',
+    reason: 'Holding for the export store to finish its nightly compaction before the next batch may start',
     since: ago(260),
   },
   {
@@ -120,7 +120,7 @@ export const KIT_ISSUES: KitIssue[] = [
     title: 'Add the archive step to the export plan',
     project: 'pearl',
     kind: 'feature',
-    state: 'queued',
+    state: 'planned',
     reason: 'Not before Nov 20',
     since: null,
   },
@@ -139,9 +139,9 @@ export const KIT_ORIGIN: Record<string, string> = {
   'plan-row': 'Not filed yet',
 }
 
-export const KIT_STATS: Record<'working' | 'waiting' | 'queued' | 'shipped', Omit<StatCardProps, 'icon'>> = {
-  working: {
-    title: 'Working',
+export const KIT_STATS: Record<'running' | 'paused' | 'notStarted' | 'shipped', Omit<StatCardProps, 'icon'>> = {
+  running: {
+    title: 'Running',
     subtitle: 'Against the target of 6 leads',
     value: 4,
     delta: { value: 1, higherIsBetter: true },
@@ -168,12 +168,12 @@ export const KIT_STATS: Record<'working' | 'waiting' | 'queued' | 'shipped', Omi
       { label: 'Idle slots', value: '2' },
     ],
   },
-  waiting: {
-    title: 'Waiting',
+  paused: {
+    title: 'Paused',
     subtitle: 'Against the last 7 days',
     value: 3,
     delta: { value: -2, higherIsBetter: false },
-    sub: 'Two need you, one waits for a time',
+    sub: 'Two on you, one on a timer',
     series: { values: [6, 5, 5, 4, 5, 4, 3], labels: ['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun'] },
     xLabels: ['Mon', 'Thu', 'Sun'],
     footer: [
@@ -181,12 +181,12 @@ export const KIT_STATS: Record<'working' | 'waiting' | 'queued' | 'shipped', Omi
       { label: 'On a person', value: '2' },
     ],
   },
-  queued: {
-    title: 'Queued',
+  notStarted: {
+    title: 'Not started',
     subtitle: 'Per day, last 7 days',
     value: 7,
     delta: { value: 0 },
-    sub: 'Held back by the chain and the weekly pace',
+    sub: 'Ready or held by the chain and the weekly pace',
     bars: [3, 5, 4, 8, 6, 9, 7],
     barLabels: ['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun'],
     xLabels: ['Mon', 'Thu', 'Today'],

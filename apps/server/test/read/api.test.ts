@@ -127,7 +127,7 @@ describe('as the owner', () => {
       waitingOnOwner: true,
       account: 'max1',
     })
-    expect(card.summary).toBe('The lead is working on it.')
+    expect(card.summary).toBe('Running: a lead is on it.')
     expect(card.insights).toMatchObject({ attempts: 1, partial: true })
     expect(typeof card.updatedAt).toBe('string')
     // titles show no id as display text
@@ -256,7 +256,7 @@ describe('as the owner', () => {
       version: 'v1',
       now: NOW,
       builtAt: NOW,
-      counts: { working: 1, waiting: 1, queued: 0, watching: 0, asks: 1, humanQueue: 1, health: 2 },
+      counts: { work: { running: 1, paused: 1, ready: 0, held: 0, checking: 0 }, asks: 1, humanQueue: 1, health: 2 },
       queue: { effective: 'run', spawns: [] },
     })
     expect(body.issues).toHaveLength(2)

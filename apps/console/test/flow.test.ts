@@ -1,5 +1,5 @@
 import { expect, test } from 'bun:test'
-import type { FlowModel } from '@software-factory/contract'
+import { type FlowModel, workCountsOf } from '@software-factory/contract'
 import {
   cardsOf,
   countsOf,
@@ -15,7 +15,6 @@ import {
   originWord,
   projectsOf,
   countWords,
-  flowCounts,
   longestWords,
   numberOf,
   shortDate,
@@ -69,8 +68,8 @@ const data = {
     },
   ],
   perProject: [
-    { repo: 'chat', open: 2, working: 0, waiting: 1, queued: 1 },
-    { repo: 'argo', open: 2, working: 0, waiting: 0, queued: 2 },
+    { repo: 'chat', open: 2 },
+    { repo: 'argo', open: 2 },
   ],
   queueStates: { global: 'run', projects: {} },
   trend: {
@@ -87,6 +86,16 @@ const data = {
   },
 } as unknown as FlowModel
 
+/** The model as the server sends it: `work` is the five words of the open Issues. */
+const withWork = (model: FlowModel): FlowModel => ({
+  ...model,
+  work: workCountsOf(
+    (['settling', 'queued', 'working', 'waiting', 'watching'] as const).flatMap((state) =>
+      model.states[state].issues.map((i) => ({ state, waitReason: i.waitReason, queueKind: i.queue?.kind ?? null })),
+    ),
+  ),
+})
+
 test('origins are words', () => {
   expect(originWord('you')).toBe('You')
   expect(originWord('github')).toBe('GitHub')
@@ -96,17 +105,16 @@ test('origins are words', () => {
 
 test('the reason line: wait reason, queue message only when present; a closed card carries the outcome as its state', () => {
   const cards = cardsOf(data)
-  expect(cards.waiting[0]?.reason).toBe('decision')
-  expect(cards.queued[0]?.reason).toBe('waits for another change')
-  expect(cards.queued[1]?.reason).toBeNull()
-  expect(cards.settling[0]?.reason).toBeNull()
+  expect(cards.paused[0]?.reason).toBe('On you: a Decision')
+  expect(cards.held.map((card) => card.reason)).toEqual(['Being settled', 'waits for another change'])
+  expect(cards.ready[0]?.reason).toBeNull()
   expect(cards.closed[0]).toMatchObject({ reason: null, state: 'healed', since: SINCE })
 })
 
 test('filters narrow every state; an unknown value gives none', () => {
-  expect(countsOf(cardsOf(data, { project: 'chat' }))).toMatchObject({ settling: 0, queued: 1, waiting: 1, closed: 0 })
-  expect(countsOf(cardsOf(data, { origin: 'you' }))).toMatchObject({ queued: 2, waiting: 0, closed: 0 })
-  expect(countsOf(cardsOf(data, { project: 'chat', origin: 'you' }))).toMatchObject({ queued: 1, waiting: 0 })
+  expect(countsOf(cardsOf(data, { project: 'chat' }))).toMatchObject({ held: 0, ready: 1, paused: 1, closed: 0 })
+  expect(countsOf(cardsOf(data, { origin: 'you' }))).toMatchObject({ held: 1, ready: 1, paused: 0, closed: 0 })
+  expect(countsOf(cardsOf(data, { project: 'chat', origin: 'you' }))).toMatchObject({ ready: 1, paused: 0 })
   const none = countsOf(cardsOf(data, { project: 'nope' }))
   expect(Object.values(none).every((n) => n === 0)).toBe(true)
 })
@@ -120,24 +128,28 @@ test('the note counts open and closed', () => {
   expect(flowNote(countsOf(cardsOf(data)))).toBe('4 open, 1 closed in the last day')
 })
 
-test('a state value names a list or is dropped', () => {
-  expect(listStateOf('working')).toBe('working')
+test('a state value names a list or is dropped; the stored names of an old link read as their word', () => {
+  expect(listStateOf('running')).toBe('running')
   expect(listStateOf('closed')).toBe('closed')
-  expect(listStateOf('watching')).toBeUndefined()
+  expect(listStateOf('working')).toBe('running')
+  expect(listStateOf('waiting')).toBe('paused')
+  expect(listStateOf('queued')).toBe('ready')
+  expect(listStateOf('settling')).toBe('held')
+  expect(listStateOf('watching')).toBe('checking')
   expect(listStateOf('nope')).toBeUndefined()
   expect(listStateOf(undefined)).toBeUndefined()
 })
 
-test('a state leaves the cards alone and picks what the list shows: a count takes its states in', () => {
-  expect(countsOf(cardsOf(data, { state: 'waiting' }))).toEqual(countsOf(cardsOf(data)))
+test('a state leaves the cards alone and picks what the list shows: one word, or what closed lately', () => {
+  expect(countsOf(cardsOf(data, { state: 'paused' }))).toEqual(countsOf(cardsOf(data)))
   const cards = cardsOf(data)
-  expect(listOf(cards, 'waiting').map((c) => c.number)).toEqual([4])
-  // queued takes settling in: the number the strip shows
-  expect(listOf(cards, 'queued').map((c) => c.number)).toEqual([1, 2, 3])
-  expect(listOf(cards, 'working')).toEqual([])
+  expect(listOf(cards, 'paused').map((c) => c.number)).toEqual([4])
+  expect(listOf(cards, 'held').map((c) => c.number)).toEqual([1, 2])
+  expect(listOf(cards, 'ready').map((c) => c.number)).toEqual([3])
+  expect(listOf(cards, 'running')).toEqual([])
   expect(listOf(cards, 'closed').map((c) => c.number)).toEqual([5])
   // no state: every open Issue, then what closed lately
-  expect(listOf(cards).map((c) => c.number)).toEqual([1, 2, 3, 4, 5])
+  expect(listOf(cards).map((c) => c.number)).toEqual([4, 3, 1, 2, 5])
 })
 
 test('the list sorts by the pressed column and keeps the order of ties', () => {
@@ -151,9 +163,9 @@ test('the list sorts by the pressed column and keeps the order of ties', () => {
     'harbor',
   ])
   // every card has the same `since`: a sort by it leaves the order alone, either way
-  expect(sortedCards(cards, { key: 'since', direction: 'desc' }).map((c) => c.number)).toEqual([1, 2, 3, 4, 5])
+  expect(sortedCards(cards, { key: 'since', direction: 'desc' }).map((c) => c.number)).toEqual([4, 3, 1, 2, 5])
   expect(sortedCards(cards, { key: 'title', direction: 'desc' }).map((c) => c.number)).toEqual([4, 3, 2, 1, 5])
-  expect(defaultSort('working')).toEqual({ key: 'since', direction: 'asc' })
+  expect(defaultSort('running')).toEqual({ key: 'since', direction: 'asc' })
   expect(defaultSort('closed')).toEqual({ key: 'since', direction: 'desc' })
 })
 
@@ -172,50 +184,40 @@ test('the trend control: 24 hours and 7 days by the hour, 30 days by the day, op
   expect(DEFAULT_TREND_RANGE.key).toBe('7d')
 })
 
-test('the sidebar counts open Issues as working, waiting and queued, never a closed one', () => {
-  // harbor has only a closed Issue: no entry, so its row shows no figure; argo's settling Issue is queued
-  expect(openSplits(data, 'repo')).toEqual({
-    argo: { working: 0, waiting: 0, queued: 2 },
-    chat: { working: 0, waiting: 1, queued: 1 },
-  })
-  expect(openSplits(data, 'origin')).toEqual({
-    feedback: { working: 0, waiting: 0, queued: 1 },
-    you: { working: 0, waiting: 0, queued: 2 },
-    github: { working: 0, waiting: 1, queued: 0 },
-  })
+test('the sidebar counts open Issues by the five words, never a closed one', () => {
+  // harbor has only a closed Issue: no entry, so its row shows no figure; argo's settling Issue is held, as is its chained one
+  const argo = openSplits(data, 'repo').argo
+  expect(argo).toMatchObject({ running: 0, paused: 0, ready: 0, held: 2, checking: 0 })
+  expect(argo?.split.held).toEqual({ issue: 1, line: 0, drain: 0, spec: 0, settling: 1 })
+  expect(openSplits(data, 'repo').chat).toMatchObject({ paused: 1, ready: 1, held: 0 })
+  expect(openSplits(data, 'repo').harbor).toBeUndefined()
+  expect(openSplits(data, 'origin').github).toMatchObject({ paused: 1 })
 })
 
-test('working includes watching, queued includes settling: the sidebar, the strip and the cards count alike', () => {
+test('Checking is its own word; the sidebar, the strip and the cards count alike', () => {
   const states = {
     ...data.states,
     working: { count: 2, issues: [issue('issue_6', 'argo', 'you'), issue('issue_7', 'harbor', 'you')] },
     watching: { count: 1, issues: [issue('issue_8', 'argo', 'you')] },
   }
-  const model = { ...data, states }
-  expect(openSplits(model, 'repo')).toEqual({
-    argo: { working: 2, waiting: 0, queued: 2 },
-    chat: { working: 0, waiting: 1, queued: 1 },
-    harbor: { working: 1, waiting: 0, queued: 0 },
-  })
-  // the strip's figures
-  expect(flowCounts(model)).toEqual({ working: 3, waiting: 1, queued: 3 })
-  // the stat cards show the same figures, and the splits of every project add up to them
-  const [working, waiting, queued] = statsOf(model, Date.parse(SINCE))
-  expect([working?.value, waiting?.value, queued?.value]).toEqual([3, 1, 3])
-  expect(working?.sub).toBe('in 2 projects, 1 of them watching')
+  const model = withWork({ ...data, states })
+  expect(model.work).toMatchObject({ running: 2, paused: 1, ready: 1, held: 2, checking: 1 })
+  expect(openSplits(model, 'repo').argo).toMatchObject({ running: 1, held: 2, checking: 1 })
+  // the stat cards show the figures of the strip, Not started being Ready and Held together
+  const [running, paused, notStarted] = statsOf(model, Date.parse(SINCE))
+  expect([running?.value, paused?.value, notStarted?.value]).toEqual([2, 1, 3])
+  expect(running?.sub).toBe('in 2 projects, 1 more checking')
   const splits = Object.values(openSplits(model, 'repo'))
-  expect([
-    splits.reduce((n, split) => n + split.working, 0),
-    splits.reduce((n, split) => n + split.waiting, 0),
-    splits.reduce((n, split) => n + split.queued, 0),
-  ]).toEqual([3, 1, 3])
+  expect(splits.reduce((n, split) => n + split.running, 0)).toBe(model.work.running)
+  expect(splits.reduce((n, split) => n + split.checking, 0)).toBe(model.work.checking)
 })
 
 test('a card has its number, kind and state (the state, or the outcome when closed)', () => {
   const cards = cardsOf(data)
   expect(numberOf('issue_12')).toBe(12)
-  expect(cards.waiting[0]).toMatchObject({ number: 4, kind: 'feature', state: 'waiting' })
-  expect(cards.queued[1]).toMatchObject({ number: 3, state: 'queued' })
+  expect(cards.paused[0]).toMatchObject({ number: 4, kind: 'feature', state: 'paused', split: 'you' })
+  expect(cards.ready[0]).toMatchObject({ number: 3, state: 'ready', split: 'seat' })
+  expect(cards.held[1]).toMatchObject({ number: 2, state: 'held', split: 'issue' })
   expect(cards.closed[0]).toMatchObject({ number: 5, kind: 'incident', state: 'healed' })
 })
 
@@ -241,26 +243,26 @@ test('the longest time in a state', () => {
 
 test('the stat row: live counts, trend deltas, subs, footers and the 7-day sums', () => {
   const now = Date.parse(SINCE) + 2 * 3_600_000
-  const [working, waiting, queued, shipped] = statsOf(data, now)
-  expect(working).toMatchObject({
-    title: 'Working',
+  const [running, paused, notStarted, shipped] = statsOf(withWork(data), now)
+  expect(running).toMatchObject({
+    title: 'Running',
     value: 0,
     delta: 1,
     higherIsBetter: true,
     sub: 'Nothing running',
-    state: 'working',
+    state: 'running',
   })
-  expect(working?.series).toEqual([1, 2, 2, 3, 3, 2, 1, 2])
-  expect(working?.footer).toEqual([
+  expect(running?.series).toEqual([1, 2, 2, 3, 3, 2, 1, 2])
+  expect(running?.footer).toEqual([
     { label: 'Oldest', value: 'None' },
     { label: 'Queue', value: 'Run' },
   ])
-  expect(waiting).toMatchObject({ value: 1, delta: 1, higherIsBetter: false, sub: '1 decision' })
-  expect(waiting?.footer[0]).toEqual({ label: 'Oldest', value: '2 h' })
-  // queued counts the settling Issue: its sample is the sum of both states
-  expect(queued).toMatchObject({ value: 3, delta: 0, higherIsBetter: false, sub: '1 chain, 1 ready, 1 settling' })
-  expect(queued?.series).toEqual([3, 3, 2, 2, 2, 2, 3, 3])
-  expect(queued?.footer[1]).toEqual({ label: 'Projects', value: '2' })
+  expect(paused).toMatchObject({ value: 1, delta: 1, higherIsBetter: false, sub: 'on you 1', state: 'paused' })
+  expect(paused?.footer[0]).toEqual({ label: 'Oldest', value: '2 h' })
+  // not started is Ready and Held: its sample is the sum of both stored states
+  expect(notStarted).toMatchObject({ title: 'Not started', value: 3, delta: 0, sub: '1 ready, 2 held', state: 'ready' })
+  expect(notStarted?.series).toEqual([3, 3, 2, 2, 2, 2, 3, 3])
+  expect(notStarted?.footer[1]).toEqual({ label: 'Projects', value: '2' })
   expect(shipped).toMatchObject({
     title: 'Shipped this week',
     value: 8,
@@ -281,5 +283,5 @@ test('the sidebar count and the Flow note share one open count, which is not the
   const sidebar = openCount(counts)
   expect(sidebar).toBe(4)
   expect(flowNote(counts)).toBe(`${sidebar} open, 1 closed in the last day`)
-  expect(sidebar).not.toBe(counts.working)
+  expect(sidebar).not.toBe(counts.running)
 })

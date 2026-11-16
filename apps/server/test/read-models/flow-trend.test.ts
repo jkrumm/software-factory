@@ -25,12 +25,12 @@ test('peak is the most at any instant, the average is time weighted, between two
   const trend = trendOf(intervals, { now: NOW, window: '24h', bucket: 'hour' })
   const ten = trend.buckets.find((b) => b.at === '2026-11-07T10:00:00.000Z')
   // 1 for 15 min, 3 for 30 min, 1 for 15 min = 120 Issue-minutes over 60
-  expect(ten?.working).toEqual({ peak: 3, avg: 2 })
+  expect(ten?.running).toEqual({ peak: 3, avg: 2 })
   // an instant sample at 10:00 or 11:00 sees 1 at most
-  expect(trend.buckets.find((b) => b.at === '2026-11-07T11:00:00.000Z')?.working).toEqual({ peak: 0, avg: 0 })
+  expect(trend.buckets.find((b) => b.at === '2026-11-07T11:00:00.000Z')?.running).toEqual({ peak: 0, avg: 0 })
 })
 
-test('watching counts as working and settling as queued; consecutive intervals of one count never count twice', () => {
+test('watching is its own count and settling is not started; consecutive intervals of one count never count twice', () => {
   const intervals = [
     { state: 'working', from: at('08:00'), to: at('09:00') },
     { state: 'watching', from: at('09:00'), to: at('10:00') },
@@ -40,11 +40,12 @@ test('watching counts as working and settling as queued; consecutive intervals o
   ]
   const trend = trendOf(intervals, { now: NOW, window: '24h', bucket: 'hour' })
   const bucket = (hh: string) => trend.buckets.find((b) => b.at === `2026-11-07T${hh}:00:00.000Z`)
-  expect(bucket('08')?.working).toEqual({ peak: 1, avg: 1 })
-  expect(bucket('09')?.working).toEqual({ peak: 1, avg: 1 })
-  expect(bucket('10')?.working).toEqual({ peak: 0, avg: 0 })
-  expect(bucket('08')?.queued).toEqual({ peak: 1, avg: 1 })
-  expect(bucket('09')?.queued).toEqual({ peak: 1, avg: 0.5 })
+  expect(bucket('08')?.running).toEqual({ peak: 1, avg: 1 })
+  expect(bucket('09')?.running).toEqual({ peak: 0, avg: 0 })
+  expect(bucket('09')?.checking).toEqual({ peak: 1, avg: 1 })
+  expect(bucket('10')?.checking).toEqual({ peak: 0, avg: 0 })
+  expect(bucket('08')?.notStarted).toEqual({ peak: 1, avg: 1 })
+  expect(bucket('09')?.notStarted).toEqual({ peak: 1, avg: 0.5 })
 })
 
 test('the last bucket covers only the time that has passed; an open interval runs to now', () => {
@@ -53,8 +54,8 @@ test('the last bucket covers only the time that has passed; an open interval run
     window: '24h',
     bucket: 'hour',
   })
-  // waiting 15 of the 30 minutes that have passed in the 12:00 bucket
-  expect(trend.buckets.at(-1)?.waiting).toEqual({ peak: 1, avg: 0.5 })
+  // paused 15 of the 30 minutes that have passed in the 12:00 bucket
+  expect(trend.buckets.at(-1)?.paused).toEqual({ peak: 1, avg: 0.5 })
   expect(trend.at).toBe(NOW.toISOString())
 })
 

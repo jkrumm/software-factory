@@ -23,7 +23,7 @@ const read = (apiUrl: string, hours: number) => api<ThroughputModel>(apiUrl, `/v
 
 const QUESTIONS = [
   'Is the host the limit right now?',
-  'What do queued Issues wait for?',
+  'What keeps Issues from starting?',
   'What is the largest avoidable cost?',
 ]
 
@@ -124,7 +124,7 @@ test('the queue detail lists each reason with its hours, and the lead time split
   const model = await read(apiUrl, 24)
   await page.goto('/throughput')
   await open(page, /^The queue: what each reason cost/)
-  const reasons = table(page, 'Queued hours by reason').locator('tbody tr')
+  const reasons = table(page, 'Hours in the queue by reason').locator('tbody tr')
   await expect(reasons).toHaveCount(model.answers.queue.byReason.length)
   for (const reason of model.answers.queue.byReason) {
     const row = page.locator(`tr[data-reason="${reason.kind}"]`)

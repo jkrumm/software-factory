@@ -16,8 +16,8 @@ export function spanWords(ms: number): string {
   return plural(Math.floor(ms / DAY), 'day')
 }
 
-/** How long an item has waited: "Waiting 2 hours". */
-export const waitingWords = (ageMs: number): string => `Waiting ${spanWords(ageMs)}`
+/** How long an item has been open: "Open 2 hours". */
+export const waitingWords = (ageMs: number): string => `Open ${spanWords(ageMs)}`
 
 /** When the factory takes the default, relative to `now`: "in 40 minutes", or "at the next pass" once due. */
 export function defaultWhen(defaultAt: string, now: number): string {
@@ -40,15 +40,15 @@ export function agoWords(ms: number): string {
   return span === 'under a minute' ? 'just now' : `${span} ago`
 }
 
-/** How long an item has been there, in the verb of its kind: "Waiting 2 hours", "Raised 2 hours ago", "Received just now". */
+/** How long an item has been there, in the verb of its kind: "Open 2 hours", "Raised 2 hours ago", "Received just now". */
 export function metaParts(item: Pick<NeedItem, 'kind' | 'ageMs'>): {
-  lead: 'Waiting' | 'Raised' | 'Received' | 'Held'
+  lead: 'Open' | 'Raised' | 'Received' | 'Held'
   age: string
 } {
   if (item.kind === 'long_wait') return { lead: 'Held', age: spanWords(item.ageMs) }
   if (item.kind === 'errand') return { lead: 'Raised', age: agoWords(item.ageMs) }
   if (item.kind === 'held_signal') return { lead: 'Received', age: agoWords(item.ageMs) }
-  return { lead: 'Waiting', age: spanWords(item.ageMs) }
+  return { lead: 'Open', age: spanWords(item.ageMs) }
 }
 
 /** `metaParts` as one phrase. */
@@ -140,7 +140,7 @@ export function errorWords(status: number | null, detail: string | null): string
 
 /** A Lozenge for an option's reversibility, from an explicit map: reversible is good, not reversible is a warning. */
 export const reversibleLozenge = (reversible: boolean): { state: LozengeState; words: string } =>
-  reversible ? { state: 'done', words: 'Reversible' } : { state: 'waiting', words: 'Not reversible' }
+  reversible ? { state: 'done', words: 'Reversible' } : { state: 'paused', words: 'Not reversible' }
 
 const norm = (text: string): string => text.trim().toLowerCase()
 

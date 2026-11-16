@@ -192,16 +192,16 @@ test.describe('layout', () => {
 })
 
 test('the strip shows the counts, each account weekly and the host, and opens the detail', async ({ page, apiUrl }) => {
-  const flow = await api<{
-    states: Record<'working' | 'waiting' | 'queued' | 'settling' | 'watching', { count: number }>
-  }>(apiUrl, '/v1/flow')
+  const flow = await api<{ work: Record<'running' | 'paused' | 'ready' | 'held' | 'checking', number> }>(
+    apiUrl,
+    '/v1/flow',
+  )
   const { accounts } = await api<{ accounts: { account: string }[] }>(apiUrl, '/v1/accounts')
   expect(accounts.length).toBeGreaterThan(0)
   await page.goto('/needs-you')
   const counts = page.getByRole('navigation', { name: 'Issues in flight' })
-  await expect(counts).toContainText(`${flow.states.working.count + flow.states.watching.count} working`)
-  await expect(counts).toContainText(`${flow.states.waiting.count} waiting`)
-  await expect(counts).toContainText(`${flow.states.queued.count + flow.states.settling.count} queued`)
+  for (const word of ['running', 'paused', 'ready', 'held', 'checking'] as const)
+    await expect(counts).toContainText(`${flow.work[word]} ${word}`)
   for (const { account } of accounts)
     await expect(page.getByRole('button', { name: new RegExp(`^${account}, `) })).toContainText(/\d+/)
   const host = page.getByRole('button', { name: 'Host: load, memory and swap' })

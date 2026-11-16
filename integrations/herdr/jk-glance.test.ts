@@ -8,7 +8,7 @@ const src = readFileSync(join(import.meta.dir, 'jk-glance/main.js'), 'utf8')
 const block = /\/\/ <glance>[^\n]*\n([\s\S]*?)\/\/ <\/glance>/.exec(src)?.[1]
 if (!block) throw new Error('jk-glance: no <glance> block')
 const lib = new Function(
-  `${block}; return { GLANCE_H, BAR_W, BAR_H, POPUP_W, POPUP_GAP, EDGE, MAX_ROWS, SHIPPED_ROWS, WORST_POPUP_H, popupHeight, chartHeight, placePopup, popupSpec, barWidth, capRows, parseNeeds, parseOverview, parseFlow, parseMachine, parseProjects, shippedProjectsOf, queueReasons, queueReasonOf, needsRows, projectRows, productionRows, hostOf, healthRows, ageText, parsePoll, terminalsMap, needsTotal, needsCount, newestItem, needsLabel, consoleLink, issueLink, toneOf, deltaText, kpiCells, glanceModel }`,
+  `${block}; return { GLANCE_H, BAR_W, BAR_H, POPUP_W, POPUP_GAP, EDGE, MAX_ROWS, SHIPPED_ROWS, WORST_POPUP_H, popupHeight, chartHeight, placePopup, popupSpec, barWidth, capRows, parseNeeds, parseOverview, parseFlow, parseMachine, parseProjects, shippedProjectsOf, queueReasons, parseWork, workFromColumns, splitRows, needsRows, projectRows, productionRows, hostOf, healthRows, ageText, parsePoll, terminalsMap, needsTotal, needsCount, newestItem, needsLabel, consoleLink, issueLink, toneOf, deltaText, kpiCells, glanceModel }`,
 )() as any
 
 const needs = (counts: object, items: object[] = []) => JSON.stringify({ at: 1, items, counts })
@@ -26,10 +26,38 @@ test('parseNeeds: valid, invalid, empty', () => {
   expect(lib.needsTotal(lib.parseNeeds(needs({})))).toBe(0)
 })
 
-test('parseOverview: counts, health kinds and the projects by state; nothing else', () => {
+// The server's `counts.work`: five words and the splits of three, the same shape in the overview and the flow.
+const workBody = (over: object = {}) => ({
+  running: 2,
+  paused: 1,
+  ready: 3,
+  held: 2,
+  checking: 1,
+  split: {
+    paused: { you: 1, timer: 0, issue: 0, stalled: 0 },
+    ready: { seat: 1, host: 2, repo: 0, account: 0 },
+    held: { issue: 1, line: 0, drain: 0, spec: 0, settling: 1 },
+  },
+  ...over,
+})
+const zeroWork = {
+  running: 0,
+  paused: 0,
+  ready: 0,
+  held: 0,
+  checking: 0,
+  split: {
+    paused: { you: 0, timer: 0, issue: 0, stalled: 0 },
+    ready: { seat: 0, host: 0, repo: 0, account: 0 },
+    held: { issue: 0, line: 0, drain: 0, spec: 0, settling: 0 },
+  },
+}
+const noProjects = { running: [], paused: [], ready: [], held: [], checking: [] }
+
+test('parseOverview: counts, health kinds and the projects by word; nothing else', () => {
   const o = lib.parseOverview(
     JSON.stringify({
-      counts: { working: 2, waiting: 1, queued: 3, asks: 2, humanQueue: 1, health: 2 },
+      counts: { work: workBody(), asks: 2, humanQueue: 1, health: 2 },
       health: [
         { kind: 'door', short: 'Secret title', text: 'Secret text' },
         { kind: 'account', summary: 'Secret' },
@@ -40,28 +68,24 @@ test('parseOverview: counts, health kinds and the projects by state; nothing els
     }),
   )
   expect(o).toEqual({
-    working: 2,
-    waiting: 1,
-    queued: 3,
+    work: workBody(),
     asks: 2,
     humanQueue: 1,
     health: 2,
     healthKinds: ['door', 'account', 'other'],
-    projects: { working: [], waiting: [], queued: [] },
+    projects: noProjects,
   })
   // the monitors roll-up is Uptime Kuma's chip in jk-status: the bar keeps nothing of it
   expect(JSON.stringify(o)).not.toMatch(/uptime|kuma/i)
   expect(JSON.stringify(o)).not.toContain('Secret')
   const bare = lib.parseOverview('{"counts":{}}')
   expect(bare).toEqual({
-    working: 0,
-    waiting: 0,
-    queued: 0,
+    work: zeroWork,
     asks: 0,
     humanQueue: 0,
     health: 0,
     healthKinds: [],
-    projects: { working: [], waiting: [], queued: [] },
+    projects: noProjects,
   })
   expect(lib.parseOverview('')).toBeNull()
   expect(lib.parseOverview('nope')).toBeNull()
@@ -90,15 +114,16 @@ const trend = {
 test('parseFlow: the trend as numbers, nothing else', () => {
   const f = lib.parseFlow(JSON.stringify(trend))
   expect(f).toEqual({
-    working: [2, 0, 0, 2, 9, 8, 8, 4],
-    waiting: [2, 4, 2, 1, 2, 4, 3, 5],
-    queued: [10, 1, 0, 1, 51, 14, 2, 19],
+    running: [2, 0, 0, 2, 9, 8, 8, 4],
+    paused: [2, 4, 2, 1, 2, 4, 3, 5],
+    notStarted: [10, 1, 0, 1, 51, 14, 2, 19],
+    checking: [1, 0, 0, 2, 0, 0, 0, 1],
     shipped: [108, 84, 119, 43, 127, 117, 89],
     shippedBefore: 71,
     shippedHourly: trend.trend.shippedHourly,
     shippedDaily30: trend.trend.shippedDaily30,
+    work: { ...zeroWork, running: 1 }, // no `work` in the read: counted from the one Issue of its working column
     shippedProjects: [],
-    why: [],
     red: [],
   })
   expect(JSON.stringify(f)).not.toContain('Secret')
@@ -109,19 +134,22 @@ test('parseFlow: the trend as numbers, nothing else', () => {
   // a part that does not parse is null, the others stay
   const partial = lib.parseFlow('{"trend":{"states":{"working":[1,2],"waiting":"x"},"shipped":[],"shippedBefore":"z"}}')
   expect(partial).toEqual({
-    working: [1, 2],
-    waiting: null,
-    queued: null,
+    running: [1, 2],
+    paused: null,
+    notStarted: null,
+    checking: null,
     shipped: null,
     shippedBefore: null,
     shippedHourly: null,
     shippedDaily30: null,
+    work: null,
     shippedProjects: [],
-    why: [],
     red: [],
   })
   // NaN and negatives are zero
-  expect(lib.parseFlow('{"trend":{"states":{"working":[1,-3,null,4]}}}').working).toEqual([1, 0, 0, 4])
+  expect(lib.parseFlow('{"trend":{"states":{"working":[1,-3,null,4]}}}').running).toEqual([1, 0, 0, 4])
+  // Not started is the stored queued and settling samples added
+  expect(lib.parseFlow('{"trend":{"states":{"queued":[1,2],"settling":[3,4]}}}').notStarted).toEqual([4, 6])
   expect(lib.parseFlow('{"trend":{"states":{"working":[7]}}}')).toBeNull()
 })
 
@@ -139,23 +167,94 @@ test('toneOf and deltaText follow the Console: direction times higher-is-better'
   expect(lib.deltaText(null)).toBe('')
 })
 
-test('kpiCells: the Flow page figures', () => {
-  const o = lib.parseOverview('{"counts":{"working":4,"waiting":5,"queued":19}}')
+test('kpiCells: the Console strip words and figures', () => {
+  const o = lib.parseOverview(
+    JSON.stringify({ counts: { work: workBody({ running: 4, paused: 5, ready: 19, held: 0 }) } }),
+  )
   const cells = lib.kpiCells(o, lib.parseFlow(JSON.stringify(trend)))
   const by = Object.fromEntries(cells.map((c: any) => [c.key, c]))
-  expect(cells.map((c: any) => c.label)).toEqual(['Working', 'Waiting', 'Queued', 'Shipped this week'])
-  expect([by.working.value, by.working.delta, by.working.tone]).toEqual([4, 2, 'good'])
-  expect([by.waiting.value, by.waiting.delta, by.waiting.tone]).toEqual([5, 3, 'bad'])
-  expect([by.queued.value, by.queued.delta, by.queued.tone]).toEqual([19, 9, 'bad'])
+  expect(cells.map((c: any) => c.label)).toEqual([
+    'Running',
+    'Paused',
+    'Ready',
+    'Held',
+    'Checking',
+    'Shipped this week',
+  ])
+  expect([by.running.value, by.running.delta, by.running.tone]).toEqual([4, 2, 'good'])
+  expect([by.paused.value, by.paused.delta, by.paused.tone]).toEqual([5, 3, 'bad'])
+  // Ready and Held read the one Not started series
+  expect([by.ready.value, by.ready.delta, by.ready.tone]).toEqual([19, 9, 'bad'])
+  expect([by.held.value, by.held.delta]).toEqual([0, 9])
+  expect([by.checking.value, by.checking.delta, by.checking.tone]).toEqual([1, 0, 'neutral'])
   expect([by.shipped.value, by.shipped.delta, by.shipped.tone]).toEqual([687, 616, 'good'])
   // no flow: figures from the overview, no change
   const noFlow = lib.kpiCells(o, null)
-  expect(noFlow.map((c: any) => c.value)).toEqual([4, 5, 19, null])
+  expect(noFlow.map((c: any) => c.value)).toEqual([4, 5, 19, 0, 1, null])
   expect(noFlow.every((c: any) => c.delta === null)).toBe(true)
-  // no overview: figures from the last sample
+  // no overview: the flow's own work counts (here counted from its columns)
   const noOverview = lib.kpiCells(null, lib.parseFlow(JSON.stringify(trend)))
-  expect(noOverview.map((c: any) => c.value)).toEqual([4, 5, 19, 687])
-  expect(lib.kpiCells(null, null).map((c: any) => c.value)).toEqual([null, null, null, null])
+  expect(noOverview.map((c: any) => c.value)).toEqual([1, 0, 0, 0, 0, 687])
+  // a word with its own trend line reads it when no count is there
+  const lineOnly = lib.kpiCells(null, lib.parseFlow('{"trend":{"states":{"working":[1,4],"queued":[1,2]}}}'))
+  expect(lineOnly.map((c: any) => c.value)).toEqual([4, null, null, null, null, null])
+  expect(lib.kpiCells(null, null).map((c: any) => c.value)).toEqual([null, null, null, null, null, null])
+})
+
+test('one set of figures: the overview and the flow count the same Issues to the same words', () => {
+  const board = {
+    states: {
+      settling: { issues: [{ id: 'issue_1' }] },
+      queued: {
+        issues: [
+          { id: 'issue_2', queue: null },
+          { id: 'issue_3', queue: { kind: 'load' } },
+          { id: 'issue_4', queue: { kind: 'window' } },
+          { id: 'issue_5', queue: { kind: 'chain' } },
+          { id: 'issue_6', queue: { kind: 'unknown_project' } },
+          { id: 'issue_7', queue: { kind: 'brand_new' } },
+        ],
+      },
+      working: { issues: [{ id: 'issue_8' }, { id: 'issue_9' }] },
+      waiting: {
+        issues: [
+          { id: 'issue_10', waitReason: 'decision' },
+          { id: 'issue_11', waitReason: 'timer' },
+          { id: 'issue_12', waitReason: 'external' },
+          { id: 'issue_13', waitReason: 'wall' },
+        ],
+      },
+      watching: { issues: [{ id: 'issue_14' }] },
+    },
+  }
+  const counted = lib.workFromColumns(board.states)
+  expect(counted).toEqual({
+    running: 2,
+    paused: 4,
+    ready: 4,
+    held: 3,
+    checking: 1,
+    split: {
+      paused: { you: 1, timer: 1, issue: 1, stalled: 1 },
+      ready: { seat: 2, host: 1, repo: 0, account: 1 },
+      held: { issue: 1, line: 0, drain: 0, spec: 0, settling: 2 },
+    },
+  })
+  // a server that sends `work` is believed over the columns; both parts hold the same figures for the same fixture
+  const overview = lib.parseOverview(JSON.stringify({ counts: { work: counted } }))
+  const flow = lib.parseFlow(JSON.stringify({ ...board, work: counted }))
+  expect(flow.work).toEqual(overview.work)
+  const a = lib.glanceModel({ ...full(), overview, flow: null })
+  const b = lib.glanceModel({ ...full(), overview: null, flow })
+  const figures = (m: any) => m.items.slice(1, 6).map((i: any) => [i.label, i.value])
+  expect(figures(a)).toEqual([
+    ['Running', '2'],
+    ['Paused', '4'],
+    ['Ready', '4'],
+    ['Held', '3'],
+    ['Checking', '1'],
+  ])
+  expect(figures(b)).toEqual(figures(a))
 })
 
 test('parsePoll: parts parse on their own', () => {
@@ -313,7 +412,12 @@ const secretIssues = {
 const fullOverview = () =>
   lib.parseOverview(
     JSON.stringify({
-      counts: { working: 4, waiting: 5, queued: 19, asks: 2, humanQueue: 1, health: 2 },
+      counts: {
+        work: workBody({ running: 4, paused: 5, ready: 19, held: 0, checking: 0 }),
+        asks: 2,
+        humanQueue: 1,
+        health: 2,
+      },
       health: [
         { kind: 'door', short: 'Secret health title', text: 'Secret health text' },
         { kind: 'door', summary: 'Secret' },
@@ -400,23 +504,31 @@ test('parseNeeds keeps kind, repo, age and the item id; no words of an item', ()
   expect(JSON.stringify(n)).not.toContain('Secret')
 })
 
-test('parseOverview: the projects of the working, waiting and queued Issues, by state, as names only', () => {
+test("parseOverview: the projects of the open Issues by word (the card's own, else its stored state), as names only", () => {
   const o = lib.parseOverview(
     JSON.stringify({
-      counts: { working: 2 },
+      counts: { work: workBody({ running: 2 }) },
       issues: [
         { id: 7, state: 'working', repoName: 'dotfiles', phase: 'building', title: 'Secret' },
-        { id: 8, state: 'queued', repoName: 'dotfiles', phase: 'queued' },
-        { id: 10, state: 'waiting', repoName: 'iris', summary: 'Secret' },
+        { id: 8, state: 'queued', repoName: 'dotfiles', phase: 'queued', work: { word: 'ready', split: 'seat' } },
+        { id: 12, state: 'queued', repoName: 'iris', work: { word: 'held', split: 'issue' } },
+        { id: 10, state: 'waiting', repoName: 'iris', summary: 'Secret', work: { word: 'paused', split: 'you' } },
         { id: 11, state: 'watching', repoName: 'argo' },
+        { id: 13, state: 'queued', repoName: 'home' }, // a queued card without its word is in no list
         { id: 'x', state: 'working' },
         { id: 9, state: 'working' },
       ],
     }),
   )
-  expect(o.projects).toEqual({ working: ['dotfiles', '?'], waiting: ['iris'], queued: ['dotfiles'] })
+  expect(o.projects).toEqual({
+    running: ['dotfiles', '?'],
+    paused: ['iris'],
+    ready: ['dotfiles'],
+    held: ['iris'],
+    checking: ['argo'],
+  })
   expect(JSON.stringify(o)).not.toContain('Secret')
-  expect(lib.parseProjects(null)).toEqual({ working: [], waiting: [], queued: [] })
+  expect(lib.parseProjects(null)).toEqual(noProjects)
 })
 
 test('parseMachine: load, swap and their ceilings; null when a figure is missing', () => {
@@ -432,17 +544,20 @@ test('parseMachine: load, swap and their ceilings; null when a figure is missing
   expect(lib.parseMachine('')).toBeNull()
 })
 
-test('parseFlow: why each Issue is queued and which projects are red', () => {
+test('parseFlow: the work counts of the columns and which projects are red', () => {
   const f = lib.parseFlow(JSON.stringify(flowBoard))
-  expect(f.why).toEqual([
-    { kind: 'line', project: 'weatherorb' },
-    { kind: 'line', project: 'weatherorb' },
-    { kind: 'seat', project: 'dotfiles' },
-    { kind: 'chain', project: 'basalt-ui' },
-    { kind: 'chain', project: 'iris' },
-    { kind: 'drain', project: 'argo' },
-    { kind: 'seat', project: 'home' },
-  ])
+  // two working; of seven queued, a chain, a line and a drain are Held and no kind at all is Ready (a free seat)
+  expect(f.work).toEqual({
+    ...zeroWork,
+    running: 2,
+    ready: 2,
+    held: 5,
+    split: {
+      ...zeroWork.split,
+      ready: { seat: 2, host: 0, repo: 0, account: 0 },
+      held: { issue: 2, line: 2, drain: 1, spec: 0, settling: 0 },
+    },
+  })
   // The server's rule (stoppedProjects): an incident that is queued or working and that nothing blocks stops its line.
   // weatherorb works one, argo and home queue one (a drain only holds the start); iris's incident waits for another
   // Issue (a chain), so it stops nothing.
@@ -453,10 +568,13 @@ test('parseFlow: why each Issue is queued and which projects are red', () => {
   ])
   expect(JSON.stringify(f)).not.toContain('Secret')
   // a board with no columns and no trend is nothing; columns alone are enough
-  expect(lib.parseFlow('{"states":{}}')).toMatchObject({ why: [], red: [], working: null })
-  expect(lib.parseFlow('{"states":{"queued":{"issues":[null,5,{"queue":{"kind":7}}]}}}').why).toEqual([
-    { kind: 'seat', project: null },
-  ])
+  expect(lib.parseFlow('{"states":{}}')).toMatchObject({ red: [], running: null, work: zeroWork })
+  expect(lib.parseFlow('{"states":{"queued":{"issues":[null,5,{"queue":{"kind":7}}]}}}').work.split.ready).toEqual({
+    seat: 1,
+    host: 0,
+    repo: 0,
+    account: 0,
+  })
 })
 
 test('parseFlow: a red line is read from a queued Issue even when the incident is not on the board', () => {
@@ -477,17 +595,38 @@ const essentials = () => ({
   ...full(),
   overview: lib.parseOverview(
     JSON.stringify({
-      counts: { working: 2, waiting: 1, queued: 7, asks: 1, humanQueue: 0, health: 0 },
+      counts: {
+        work: workBody({
+          running: 2,
+          paused: 1,
+          ready: 2,
+          held: 5,
+          checking: 1,
+          split: {
+            paused: { you: 1, timer: 0, issue: 0, stalled: 0 },
+            ready: { seat: 2, host: 0, repo: 0, account: 0 },
+            held: { issue: 2, line: 2, drain: 1, spec: 0, settling: 0 },
+          },
+        }),
+        asks: 1,
+        humanQueue: 0,
+        health: 0,
+      },
       health: [],
       issues: [
         { id: 30, state: 'working', repoName: 'weatherorb', phase: 'building', title: 'Secret' },
         { id: 31, state: 'working', repoName: 'dotfiles', phase: 'waiting for your review', summary: 'Secret' },
-        { id: 32, state: 'waiting', repoName: 'iris' },
-        ...['weatherorb', 'weatherorb', 'dotfiles', 'basalt-ui', 'iris', 'argo', 'home'].map((repoName, i) => ({
-          id: 40 + i,
-          state: 'queued',
-          repoName,
-        })),
+        { id: 32, state: 'waiting', repoName: 'iris', work: { word: 'paused', split: 'you' } },
+        { id: 50, state: 'watching', repoName: 'argo', work: { word: 'checking', split: null } },
+        ...[
+          ['weatherorb', 'held', 'line'],
+          ['weatherorb', 'held', 'line'],
+          ['dotfiles', 'ready', 'seat'],
+          ['basalt-ui', 'held', 'issue'],
+          ['iris', 'held', 'issue'],
+          ['argo', 'held', 'drain'],
+          ['home', 'ready', 'seat'],
+        ].map(([repoName, word, split], i) => ({ id: 40 + i, state: 'queued', repoName, work: { word, split } })),
       ],
     }),
   ),
@@ -511,25 +650,31 @@ test('ageText: minutes, hours, days', () => {
 test('the bar: short items left to right, no host and no uptime, no list of leads', () => {
   const m = lib.glanceModel(essentials())
   expect(m.items.map((i: any) => [i.key, i.label, i.value])).toEqual([
-    ['needs', 'Needs', '1'],
-    ['working', 'Work', '2'],
-    ['waiting', 'Wait', '1'],
-    ['queued', 'Queue', '7'],
+    ['needs', 'Needs you', '1'],
+    ['running', 'Running', '2'],
+    ['paused', 'Paused', '1'],
+    ['ready', 'Ready', '2'],
+    ['held', 'Held', '5'],
+    ['checking', 'Checking', '1'],
     ['shipped', 'Ship', '89'],
     ['production', 'Prod', '3'],
   ])
+  // the Console strip's order, Checking last of them and quiet
+  expect(itemOf(m, 'checking').tone).toBe('dim')
   expect(itemOf(m, 'needs').tone).toBe('bad')
   expect(itemOf(m, 'production')).toMatchObject({ dot: 'bad', tone: 'bad' })
   // the host is the mini's chip in jk-status: the bar has no CPU, RAM or Load item, and no popover for them
   expect(m.items.some((i: any) => ['cpu', 'ram', 'load'].includes(i.key))).toBe(false)
   expect(Object.keys(m.details).sort()).toEqual([
+    'checking',
     'health',
+    'held',
     'needs',
+    'paused',
     'production',
-    'queued',
+    'ready',
+    'running',
     'shipped',
-    'waiting',
-    'working',
   ])
   // never a ratio like 15/36, never a lead of its own
   expect(m.items.every((i: any) => !i.value.includes('/'))).toBe(true)
@@ -540,9 +685,15 @@ test('the bar: an item at 0 is dimmed; Health is on the bar only above 0', () =>
   const quiet = lib.glanceModel({
     ...essentials(),
     needs: lib.parseNeeds(needs({})),
-    overview: lib.parseOverview('{"counts":{"working":3}}'),
+    overview: lib.parseOverview(JSON.stringify({ counts: { work: { running: 3 } } })),
   })
-  expect(quiet.items.filter((i: any) => i.dim).map((i: any) => i.key)).toEqual(['needs', 'waiting', 'queued'])
+  expect(quiet.items.filter((i: any) => i.dim).map((i: any) => i.key)).toEqual([
+    'needs',
+    'paused',
+    'ready',
+    'held',
+    'checking',
+  ])
   expect(quiet.items.some((i: any) => i.key === 'health')).toBe(false) // 0 lines: no item
   expect(lib.glanceModel({ ...essentials(), overview: null }).items.some((i: any) => i.key === 'health')).toBe(false)
   const lines = lib.glanceModel(full())
@@ -589,30 +740,50 @@ test('the popovers: a row per project with its count, each a link to the Console
   const m = lib.glanceModel(essentials())
   expect(m.details.needs).toMatchObject({ title: 'Needs you · 1', tone: 'bad', link: `${base}/needs-you?item=it1` })
   expect(rowsOf(m, 'needs')).toEqual([{ text: 'item', right: '1m', link: `${base}/needs-you?item=it1` }])
-  // working: the projects, the busiest first, then the change against 7 days ago; the title keeps the Flow page
-  expect(m.details.working.title).toBe('Working · 2')
-  expect(m.details.working.link).toBe(`${base}/flow?state=working`)
-  expect(rowsOf(m, 'working')).toEqual([
+  // Running: the projects, the busiest first, then the change against 7 days ago; the title keeps the Flow page
+  expect(m.details.running.title).toBe('Running · 2')
+  expect(m.details.running.link).toBe(`${base}/flow?state=running`)
+  expect(rowsOf(m, 'running')).toEqual([
     { text: 'dotfiles', right: '1', link: `${base}/projects/dotfiles` },
     { text: 'weatherorb', right: '1', link: `${base}/projects/weatherorb` },
     { text: 'Change in 7 days', right: '▲ +2', tone: 'good' },
   ])
-  expect(m.details.waiting.link).toBe(`${base}/flow?state=waiting`)
-  expect(rowsOf(m, 'waiting')).toEqual([
+  // Paused: by who it waits for, then its projects
+  expect(m.details.paused.title).toBe('Paused · 1')
+  expect(m.details.paused.link).toBe(`${base}/flow?state=paused`)
+  expect(rowsOf(m, 'paused')).toEqual([
+    { text: 'on you', right: '1', link: `${base}/flow?state=paused` },
     { text: 'iris', right: '1', link: `${base}/projects/iris` },
     { text: 'Change in 7 days', right: '▲ +3', tone: 'bad' },
   ])
-  // queued: a project, what binds it and its count
-  expect(rowsOf(m, 'queued').map((r: any) => [r.text, r.note, r.right])).toEqual([
-    ['weatherorb', 'production red', '2'],
-    ['argo', 'queue draining', '1'],
-    ['basalt-ui', 'waits for an Issue', '1'],
-    ['dotfiles', 'waits for a seat', '1'],
-    ['home', 'waits for a seat', '1'],
-    ['iris', 'waits for an Issue', '1'],
-    ['Change in 7 days', undefined, '▲ +9'],
+  // Ready: the limit that binds it; Held: what keeps it from starting; the trend of both is Not started
+  expect(m.details.ready.link).toBe(`${base}/flow?state=ready`)
+  expect(rowsOf(m, 'ready').map((r: any) => [r.text, r.right])).toEqual([
+    ['a free seat', '2'],
+    ['dotfiles', '1'],
+    ['home', '1'],
+    ['Not started, change in 7 days', '▲ +9'],
   ])
-  expect(rowsOf(m, 'queued')[0].link).toBe(`${base}/projects/weatherorb`)
+  expect(m.details.held.title).toBe('Held · 5')
+  expect(m.details.held.link).toBe(`${base}/flow?state=held`)
+  expect(rowsOf(m, 'held').map((r: any) => [r.text, r.right])).toEqual([
+    ['behind another Issue', '2'],
+    ['the line is red', '2'],
+    ['drained', '1'],
+    ['weatherorb', '2'],
+    ['argo', '1'],
+    ['basalt-ui', '1'],
+    ['iris', '1'],
+    ['Not started, change in 7 days', '▲ +9'],
+  ])
+  expect(rowsOf(m, 'held')[0].link).toBe(`${base}/chain`)
+  expect(rowsOf(m, 'held')[3].link).toBe(`${base}/projects/weatherorb`)
+  expect(m.details.checking.title).toBe('Checking · 1')
+  expect(m.details.checking.link).toBe(`${base}/flow?state=checking`)
+  expect(rowsOf(m, 'checking')).toEqual([
+    { text: 'argo', right: '1', link: `${base}/projects/argo` },
+    { text: 'Change in 7 days', right: '– 0', tone: 'neutral' },
+  ])
   expect(m.details.production.title).toBe('Production · 3 red')
   expect(rowsOf(m, 'production')[0]).toEqual({
     text: 'weatherorb',
@@ -700,13 +871,13 @@ test('every popover sits fully above its item: the bottom edge POPUP_GAP over th
   // an unknown window width leaves the right side alone
   expect(place(1700, 60, 100).x).toBe(1700 + 30 - lib.POPUP_W / 2)
   // the overlay spec carries it, with the item and the height for a re-placement
-  const spec = lib.popupSpec({ kind: 'detail', item: 'working' }, { x: 100, y: 972, width: 60 }, 120)
+  const spec = lib.popupSpec({ kind: 'detail', item: 'running' }, { x: 100, y: 972, width: 60 }, 120)
   expect(spec).toMatchObject({ mod: 'jk-glance', kind: 'popup', frame: 'none', width: lib.POPUP_W, height: 120 })
   expect(spec.at).toEqual({
     x: 100 + 30 - lib.POPUP_W / 2 < lib.EDGE ? lib.EDGE : 100 + 30 - lib.POPUP_W / 2,
     y: 972 - 120 - lib.POPUP_GAP,
   })
-  expect(spec.props).toEqual({ kind: 'detail', item: 'working', anchor: { x: 100, y: 972, width: 60 }, height: 120 })
+  expect(spec.props).toEqual({ kind: 'detail', item: 'running', anchor: { x: 100, y: 972, width: 60 }, height: 120 })
 })
 
 test('the sidebar block is one line: Needs you and the lead count', () => {
@@ -715,7 +886,10 @@ test('the sidebar block is one line: Needs you and the lead count', () => {
     tone: 'bad',
     link: `${base}/needs-you?item=it1`,
   })
-  const quiet = lib.glanceModel({ ...essentials(), overview: lib.parseOverview('{"counts":{"working":1}}') })
+  const quiet = lib.glanceModel({
+    ...essentials(),
+    overview: lib.parseOverview(JSON.stringify({ counts: { work: workBody({ running: 1 }) } })),
+  })
   expect(quiet.side).toMatchObject({ text: 'Nothing waits on you · 1 lead', tone: 'dim' })
   expect(lib.glanceModel({ ...essentials(), overview: null }).side.text).toBe('Needs you · 2')
   expect(lib.GLANCE_H).toBe(28) // the sidebar block's height in dotfiles' layout (config/herdr-app/layouts/jk.json)
@@ -736,7 +910,25 @@ test('no ticket title, summary, number or phase is drawn or in a tooltip', () =>
     expect(all).not.toMatch(/it1/)
   }
   // a lead is never listed: the parsed overview holds no number or phase of one
-  expect(JSON.stringify(essentials().overview.projects.working)).toBe('["weatherorb","dotfiles"]')
+  expect(JSON.stringify(essentials().overview.projects.running)).toBe('["weatherorb","dotfiles"]')
+})
+
+test('no retired state word is drawn: item labels, titles, rows and tooltips', () => {
+  const m = lib.glanceModel(essentials())
+  const drawn = JSON.stringify([
+    m.items.map((i: any) => [i.label, i.tip]),
+    Object.values(m.details).map((d: any) => [d.title, d.rows.map((r: any) => [r.text, r.right])]),
+    m.side,
+  ])
+  expect(drawn).not.toMatch(/queued|waiting|working|watching|settling/i)
+  expect(m.items.map((i: any) => i.label).slice(0, 6)).toEqual([
+    'Needs you',
+    'Running',
+    'Paused',
+    'Ready',
+    'Held',
+    'Checking',
+  ])
 })
 
 test('the model degrades per part', () => {
@@ -745,14 +937,17 @@ test('the model degrades per part', () => {
   expect(itemOf(noFlow, 'production')).toMatchObject({ value: '', dot: 'dim' })
   expect(noFlow.details.production.title).toBe('Production · –')
   expect(itemOf(noFlow, 'shipped').value).toBe('–')
-  expect(rowsOf(noFlow, 'queued').every((r: any) => r.note === undefined)).toBe(true) // no reasons without the board
+  // the split comes from the overview's counts; the trend row needs the board
+  expect(rowsOf(noFlow, 'ready').map((r: any) => r.text)).toEqual(['a free seat', 'dotfiles', 'home'])
   // a trend older than 10 min is dropped with the board
   expect(itemOf(lib.glanceModel({ ...essentials(), flowAt: NOW - 11 * 60000 }), 'production').dot).toBe('dim')
-  // no overview: the trend's last samples stand in, health is unknown
+  // no overview: the board's own work counts stand in, health is unknown
   const noOverview = lib.glanceModel({ ...essentials(), overview: null })
   expect(
-    noOverview.items.filter((i: any) => ['working', 'waiting', 'queued'].includes(i.key)).map((i: any) => i.value),
-  ).toEqual(['4', '5', '19'])
+    noOverview.items
+      .filter((i: any) => ['running', 'paused', 'ready', 'held', 'checking'].includes(i.key))
+      .map((i: any) => i.value),
+  ).toEqual(['2', '0', '2', '5', '0'])
   expect(itemOf(noOverview, 'health')).toBeUndefined()
   // no host read: no host for the mini's chip
   expect(lib.glanceModel({ ...essentials(), machine: null }).host).toBeNull()
@@ -802,27 +997,44 @@ test('projectRows: by project, the busiest first, a count, a link to the project
   expect(lib.projectRows(['x'], '')[0].link).toBeNull()
 })
 
-test('queueReasonOf: the reason that binds most of a project, as a short word', () => {
-  const f = lib.parseFlow(JSON.stringify(flowBoard))
-  const reason = lib.queueReasonOf(f.why)
-  expect(reason('weatherorb')).toBe('production red')
-  expect(reason('basalt-ui')).toBe('waits for an Issue')
-  expect(reason('home')).toBe('waits for a seat')
-  expect(reason('unknown')).toBeNull()
-  // the larger group wins, then the kind's name
-  const mixed = lib.queueReasonOf([
-    { kind: 'cap', project: 'p' },
-    { kind: 'chain', project: 'p' },
-    { kind: 'chain', project: 'p' },
-    { kind: 'drain', project: 'q' },
-    { kind: 'chain', project: 'q' },
-    { kind: 'new_kind', project: 'r' },
-    { kind: 'x', project: null },
+test('splitRows: one row per non-empty split, the largest first; every queue kind lands where the contract puts it', () => {
+  const work = lib.workFromColumns({
+    queued: {
+      issues: [
+        'chain',
+        'drain',
+        'doctor',
+        'boot',
+        'load',
+        'memory',
+        'lane',
+        'window',
+        'cap',
+        'claim',
+        'spec',
+        'line',
+        'finalizing',
+      ].map((kind) => ({ queue: { kind } })),
+    },
+  })
+  expect(work.split.ready).toEqual({ seat: 0, host: 4, repo: 3, account: 1 })
+  expect(work.split.held).toEqual({ issue: 1, line: 1, drain: 1, spec: 1, settling: 1 })
+  expect(lib.splitRows(work, 'ready', base)).toEqual([
+    { text: 'the host', right: '4', link: `${base}/flow?state=ready` },
+    { text: "the repo's claims", right: '3', link: `${base}/flow?state=ready` },
+    { text: "the account's window", right: '1', link: `${base}/flow?state=ready` },
   ])
-  expect(mixed('p')).toBe('waits for an Issue')
-  expect(mixed('q')).toBe('waits for an Issue') // a tie: chain before drain
-  expect(mixed('r')).toBe('new_kind')
-  expect(lib.queueReasonOf(null)('p')).toBeNull()
+  expect(lib.splitRows(work, 'held', base).map((r: any) => r.text)).toEqual([
+    'behind another Issue',
+    'the line is red',
+    'drained',
+    'an open Spec',
+    'being settled',
+  ])
+  expect(lib.splitRows(work, 'held', base)[0].link).toBe(`${base}/chain`)
+  expect(lib.splitRows(lib.parseWork(workBody()), 'paused', base).map((r: any) => r.text)).toEqual(['on you'])
+  expect(lib.splitRows(null, 'ready', base)).toEqual([])
+  expect(lib.splitRows(zeroWork, 'ready', base)).toEqual([])
 })
 
 test('productionRows: each red project links to its incident', () => {
@@ -850,6 +1062,8 @@ test('capRows: a longer list ends in one "+N more" row', () => {
 })
 
 // -- the heights and the width
+
+const WORK_WORDS = ['running', 'paused', 'ready', 'held', 'checking']
 
 // The tallest a board can get: every list far past its cap, every figure at its widest.
 const worstCase = () => {
@@ -902,10 +1116,31 @@ const worstCase = () => {
     ),
     overview: lib.parseOverview(
       JSON.stringify({
-        counts: { working: 99, waiting: 99, queued: 99, asks: 99, humanQueue: 99, health: 99 },
+        counts: {
+          work: {
+            running: 99,
+            paused: 99,
+            ready: 99,
+            held: 99,
+            checking: 99,
+            split: {
+              paused: { you: 25, timer: 25, issue: 25, stalled: 24 },
+              ready: { seat: 25, host: 25, repo: 25, account: 24 },
+              held: { issue: 20, line: 20, drain: 20, spec: 20, settling: 19 },
+            },
+          },
+          asks: 99,
+          humanQueue: 99,
+          health: 99,
+        },
         health: Array.from({ length: 12 }, (_, i) => ({ kind: `kind${i}` })),
-        issues: ['working', 'waiting', 'queued'].flatMap((state, s) =>
-          Array.from({ length: 30 }, (_, i) => ({ id: s * 100 + i + 1, state, repoName: `project-${i}` })),
+        issues: WORK_WORDS.flatMap((word, s) =>
+          Array.from({ length: 30 }, (_, i) => ({
+            id: s * 100 + i + 1,
+            state: 'queued',
+            repoName: `project-${i}`,
+            work: { word, split: null },
+          })),
         ),
       }),
     ),
@@ -930,23 +1165,33 @@ test('every popover fits its card: at most MAX_ROWS rows, the height is what the
   }
   expect(m.details.needs.rows.at(-1).text).toMatch(/^\+\d+ more$/)
   expect(m.details.health.rows.at(-1).text).toMatch(/^\+\d+ more$/)
-  expect(m.details.working.rows.at(-1).text).toMatch(/^\+\d+ more$/)
-  expect(m.details.waiting.rows.at(-1).text).toMatch(/^\+\d+ more$/)
-  expect(m.details.queued.rows.at(-1).text).toMatch(/^\+\d+ more$/)
+  for (const word of ['running', 'paused', 'ready', 'held', 'checking']) {
+    expect(m.details[word].rows.at(-1).text, word).toMatch(/^\+\d+ more$/)
+  }
   // the Shipped popover lists at most SHIPPED_ROWS projects under its two charts
   expect(m.details.shipped.rows).toHaveLength(lib.SHIPPED_ROWS)
   expect(m.details.shipped.rows.at(-1).text).toMatch(/^\+\d+ more$/)
   expect(m.details.shipped.chart).toHaveLength(3)
   // with a trend, its row keeps its place after the capped projects
   const withTrend = lib.glanceModel({ ...worstCase(), flow: lib.parseFlow(JSON.stringify(trend)) })
-  expect(withTrend.details.working.rows).toHaveLength(lib.MAX_ROWS)
-  expect(withTrend.details.working.rows.at(-2).text).toMatch(/^\+\d+ more$/)
-  expect(withTrend.details.working.rows.at(-1).text).toBe('Change in 7 days')
+  expect(withTrend.details.running.rows).toHaveLength(lib.MAX_ROWS)
+  expect(withTrend.details.running.rows.at(-2).text).toMatch(/^\+\d+ more$/)
+  expect(withTrend.details.running.rows.at(-1).text).toBe('Change in 7 days')
+  // the splits (up to five rows) leave the projects what is left of the eight rows
+  expect(withTrend.details.held.rows).toHaveLength(lib.MAX_ROWS)
+  expect(withTrend.details.held.rows.slice(0, 5).map((r: any) => r.text)).toEqual([
+    'behind another Issue',
+    'the line is red',
+    'drained',
+    'an open Spec',
+    'being settled',
+  ])
+  expect(withTrend.details.held.rows.at(-1).text).toBe('Not started, change in 7 days')
 })
 
 test('the bar fits its block at its widest', () => {
   const m = lib.glanceModel(worstCase())
-  expect(m.items).toHaveLength(7)
+  expect(m.items).toHaveLength(9)
   expect(lib.barWidth(m.items)).toBeLessThanOrEqual(lib.BAR_W)
   // the usual bar is narrower than the worst one
   expect(lib.barWidth(lib.glanceModel(essentials()).items)).toBeLessThan(lib.barWidth(m.items))

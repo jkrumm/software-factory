@@ -9,7 +9,7 @@ words are `docs/language.md`'s; what the Console may do is `AGENTS.md` "The Cons
 - Built and reviewed at 1280×800. The owner works at **1800×1200**; the screens sat in a narrow column and wasted half of it.
 - Nothing was a link: an Issue card did not open its Issue, a count did not open Flow, a project was a dropdown.
 - Numbers as bare text where a chart says more (host load, KPIs against target), and popovers that were unformatted dumps.
-- Domain words with no explanation (an Errand, Watching): a stranger, and the owner, could not tell what they meant.
+- Domain words with no explanation (an Errand, Checking): a stranger, and the owner, could not tell what they meant.
 - Generated-looking decoration: a coloured left bar on cards and blocks, boxes inside padded boxes, borders for depth.
 - Interactions that were half there: a passage could not be selected to comment, an annotation could not be edited or
   deleted, the palette found commands but not Issues.
@@ -57,9 +57,9 @@ laws do not (they are Mantine's; the Console is Base UI and Tailwind on Basalt's
 
 - **Sidebar.** The logo slot is the app icon, the metallic tile the PWA shows (`/icons/icon-192.png`), then the wordmark "Factory" at the top. The global nav is compact: icon, label, a count, and the
   key that reaches it (`g n`, `g f`, …) shown on hover. Under a hairline, **the page's own section**: Flow's projects and origins as toggles, each with what is
-  open behind it as three small figures (a lit lamp and the working count, an hourglass and the waiting count, a queue icon and the queued count; never a closed
+  open behind it as three small figures (a lit lamp and the Running count, an hourglass and the Paused count, a queue icon and the Ready count, a lock and the Held count; never a closed
   Issue, and none at all when nothing is open), Needs you's kinds, Chain's projects, Improve's window. Collapsible to icons.
-- **Header strip.** One line from 1280 up, wrapping to two below. In order: counts (working, waiting, queued, each a link to
+- **Header strip.** One line from 1280 up, wrapping to two below. In order: counts (Running, Paused, Ready, Held, Checking, each a link to
   Flow filtered to it); one meter per subscription (graphite until 75 % / 90 %, then warn / bad; popover with the used share per
   window and its reset time); host meters for load, memory and swap (same rule; popover with the 24 h charts and their
   ceilings and the top five processes); Live (a dot; popover with
@@ -123,7 +123,7 @@ click, and keeps the working screen where it was.
   `apps/console/test/no-raw-colour.test.ts`.
 - Every card and row is a link: pointer cursor, hover and focus states, the keyboard reaches it.
 - Times are relative with the absolute time on hover. An origin is a word plus its source.
-- Every domain word a stranger would not know (Errand, Decision, Judge, held signal, settling, watching) carries an
+- Every domain word a stranger would not know (Errand, Decision, Judge, held signal, Held, Checking) carries an
   InfoHint.
 - The page never goes stale: an event invalidates the queries, a reconnect refetches, a persisted snapshot never hides
   live data.
@@ -148,10 +148,10 @@ click, and keeps the working screen where it was.
   an empty category is absent, and what he may act on (Regressed, Incidents, Dropped) reads first. Its entries are SinceRows, never cards, and the detail lives in their popover. Then the checkpoints, project first and then title. A Decision
   shows its options as cards: the recommendation marked with its reason, cost and consequence per option, free text last.
   An Errand says what it is. A held signal shows where it came from, when, and a link to its source.
-- **Projects**: the list is one card per project (name, working, waiting, queued and shipped figures, the digest's headline, one hygiene line), busiest first. A project's page fills the width: its three StatCards (Shipped with its daily bars against the 7 days before, Plan done of all rows, Hygiene findings of the newest pass), then Now (the project's open Issues as the Flow cards), Shipped in 7 days (SinceRows) beside the Plan (the rows still to come), Production (Watch, incidents, regressions and the monitors the door routes to it), Setup (a PropertyList of `project.yaml`) and Hygiene (each probe with its last run, the newest pass's findings and how each ended, earlier passes in a Fold). Its links into Flow, Chain and Artifacts carry `?project=`.
-- **Flow**: a stat row (working, waiting, queued, shipped this week, each a StatCard with its sparkline), then the trend chart
+- **Projects**: the list is one card per project (name, running, paused, ready, held and shipped figures, the digest's headline, one hygiene line), busiest first. A project's page fills the width: its three StatCards (Shipped with its daily bars against the 7 days before, Plan done of all rows, Hygiene findings of the newest pass), then Now (the project's open Issues as the Flow cards), Shipped in 7 days (SinceRows) beside the Plan (the rows still to come), Production (Watch, incidents, regressions and the monitors the door routes to it), Setup (a PropertyList of `project.yaml`) and Hygiene (each probe with its last run, the newest pass's findings and how each ended, earlier passes in a Fold). Its links into Flow, Chain and Artifacts carry `?project=`.
+- **Flow**: a stat row (running, paused, not started, shipped this week, each a StatCard with its sparkline), then the trend chart
   (its window control is 24 h, 7 d, 30 d, opening on 7 d by the hour; 24 h and 7 d are by the hour, 30 d by the day) and, under it, the
-  list of Issues a filter opens: a sortable table, collapsed until a count, project or origin is picked, with a link to the Chain. There
+  list of Issues a filter opens: a sortable table, collapsed until a word, project or origin is picked, with a link to the Chain. There
   is no board of state columns; the Chain is the view of the work.
 - **Issue**: a header (title, project, KindBadge, Lozenge, age, actions), a PropertyList of the facts, tabs for overview,
   activity (StepRail of the event log in words), evidence and checkpoints; a right panel with properties and the chain

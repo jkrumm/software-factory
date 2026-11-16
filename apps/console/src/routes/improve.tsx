@@ -603,7 +603,7 @@ function FixBand({ model, pending }: { model: FixCommitsModel | undefined; pendi
 
 const CAPACITY_TITLE = {
   throughput: 'Issues closed',
-  idle: 'Idle seat-hours with work queued',
+  idle: 'Idle seat-hours with work ready',
   over: 'Minutes over the load ceiling',
   wait: 'Test slot wait',
 } as const
@@ -777,8 +777,8 @@ function CapacityTables({ model }: { model: CapacityLoopModel }) {
             <div className={cn(PANEL, 'overflow-x-auto')} style={PANEL_SHADOW}>
               <table className="w-full text-sm">
                 <caption className="sr-only">
-                  Hours queued Issues waited, and idle seat-hours that fell in minutes they waited, by the reason they
-                  stayed queued
+                  Hours Issues waited to start, and idle seat-hours that fell in minutes they waited, by the reason that
+                  kept them from starting
                 </caption>
                 <thead className="text-left text-xs text-muted-foreground">
                   <tr>
@@ -789,7 +789,7 @@ function CapacityTables({ model }: { model: CapacityLoopModel }) {
                       Issues
                     </th>
                     <th scope="col" className="px-4 py-2 text-right font-medium">
-                      Queued
+                      Hours
                     </th>
                     <th scope="col" className="px-4 py-2 text-right font-medium">
                       Idle seats

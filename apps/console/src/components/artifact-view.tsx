@@ -17,7 +17,6 @@ import { ArtifactSkeleton } from '@/components/skeletons'
 import { Badge } from '@/components/ui/badge'
 import { ResizableHandle, ResizablePanel, ResizablePanelGroup } from '@/components/ui/resizable'
 import { FORMAT_WORDS, GLOBAL_PATH, KIND_WORDS, type TocItem } from '@/lib/artifact'
-import { ISSUE_STATE_WORDS } from '@/lib/issue'
 import { lozengeStateOf } from '@/lib/issue-page'
 import { useMediaQuery } from '@/lib/media'
 import { setReadingSize, useReadingSize } from '@/lib/reading'
@@ -47,9 +46,7 @@ function IssueCrumb({ issueId, peek }: { issueId: string; peek?: boolean }) {
       </Link>
       {issue ? (
         <>
-          <Lozenge state={lozengeStateOf(issue)}>
-            {issue.state === 'closed' ? undefined : ISSUE_STATE_WORDS[issue.state]}
-          </Lozenge>
+          <Lozenge state={lozengeStateOf(issue)} />
           <ProjectChip name={issue.repoName} />
         </>
       ) : null}

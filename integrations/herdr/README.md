@@ -4,7 +4,9 @@ The factory at a glance for the Herdr app: short items in the bottom status bar,
 nothing to operate. Every popover row is a link into the Console (no button, no control). No ticket words anywhere (no
 title, summary or text, tooltips included): an item that waits on the owner shows as its kind, repo and age, a project as
 its name and a count. **No list of leads anywhere**: the number of running leads is the figure, by project in a popover.
-The owner reads the rest in the Console.
+The words and figures are the Console strip's (`docs/language.md` "Where work stands"): Running, Paused, Ready, Held,
+Checking, taken from the overview's `counts.work` (the Console reads the same counts from the flow's `work`; one server
+function builds both). The owner reads the rest in the Console.
 
 One mod, three roles, chosen by the block's props (`props()` in the mod):
 
@@ -16,14 +18,15 @@ One mod, three roles, chosen by the block's props (`props()` in the mod):
 
 ## Layout
 
-**The bar block: at least 440 px wide (`BAR_W`), 28 px high (`BAR_H`, the status row's height).** The widest it can get, with
-every figure at its longest, is estimated at 431 px (`barWidth`, held within `BAR_W` by a test); a usual bar is about 310 px. It was 780 (usual 689, worst case 763) while the bar carried CPU, RAM, Load and the uptime.
+**The bar block: at least 608 px wide (`BAR_W`), 28 px high (`BAR_H`, the status row's height).** The widest it can get, with
+every figure at its longest, is estimated at 608 px (`barWidth`, held within `BAR_W` by a test). It was 440 before the bar
+carried Running, Paused, Ready, Held and Checking in place of Work, Wait and Queue, and 780 while it carried CPU, RAM, Load and the uptime.
 The layout (dotfiles, `config/herdr-app/layouts/jk.json`) puts it in the status row of the `work` column as a block beside
 `jk-status`, never inside it (a mod cannot add items to another mod's block):
 
 ```json
 { "id": "status", "type": "row", "size": { "px": 28 }, "children": [
-  { "id": "glance-bar", "type": "block", "size": { "px": 440 }, "content": { "mod": "jk-glance", "props": { "bar": true } } },
+  { "id": "glance-bar", "type": "block", "size": { "px": 608 }, "content": { "mod": "jk-glance", "props": { "bar": true } } },
   { "id": "status-bar", "type": "block", "content": { "mod": "jk-status" } }
 ] }
 ```
@@ -38,8 +41,8 @@ from the window's left and top edge:
 
 |Item|Shows|Popover|
 |-|-|-|
-|**Needs N**|the overview's `counts.asks + counts.humanQueue`, the `read needs` total standing in when the overview is missing; red above 0|the newest items, `review · shutterflow  4h` (kind, repo, age), each opening that item (`/needs-you?item=<id>`); the title opens `/needs-you`|
-|**Work N**, **Wait N**, **Queue N**|the overview's counts (the last trend sample when it is missing)|one row per project with its count, the busiest first; **Queue** also says what binds the project (`production red`, `waits for an Issue`, `waits for a seat`, the project's largest group). A project row opens the Console's `/projects/<name>`; the title opens `/flow?state=<state>`. Last row: the change against 7 days ago, coloured as the Flow page does (direction times whether more is better)|
+|**Needs you N**|the overview's `counts.asks + counts.humanQueue`, the `read needs` total standing in when the overview is missing; red above 0|the newest items, `review · shutterflow  4h` (kind, repo, age), each opening that item (`/needs-you?item=<id>`); the title opens `/needs-you`|
+|**Running N**, **Paused N**, **Ready N**, **Held N**, **Checking N** (Checking last and quiet)|the overview's `counts.work` (the flow's own `work` when the overview is missing)|**Paused**, **Ready** and **Held** open with one row per split of the word, the largest first, from `counts.work.split` (the contract's `workOf`, whose kind tables the mod copies for the flow fallback): Paused `on you`, `on a timer`, `on another Issue`, `stalled`; Ready by the limit that binds it, `a free seat`, `the host`, `the repo's claims`, `the account's window`; Held `behind another Issue` (opens `/chain`), `the line is red`, `drained`, `an open Spec`, `being settled`. Then one row per project with its count, the busiest first (the card's `work.word`; cut to leave the eight rows their room), opening the Console's `/projects/<name>`. Last row: the change against 7 days ago, coloured as the Flow page does (direction times whether more is better); Ready and Held show the sum of the stored queued and settling samples as `Not started, change in 7 days`. The title opens `/flow?state=<running\|paused\|ready\|held\|checking>`|
 |**Ship N**|shipped in the last day: the last of the Flow page's 7 daily bars|three bar charts, all of Issues that closed `done` or `healed`: the last 24 hours and the last 7 days **by the hour**, the last 30 days by the day (`trend.shippedHourly` and `trend.shippedDaily30` of `read flow`; no daily bars for 7 days), then the projects that shipped in the last day with their count, each opening `/projects/<name>`. Title: `/flow`|
 |**Prod**, a dot, `N` when red|green, red with the number of red projects, grey while the board's read has not answered (an unknown production is not a green one)|one row per red project, each opening its incident Issue (`/issues/<n>`). A project is red by the server's own rule (`stoppedProjects`, `domains/planning/queue.ts`): an incident Issue queued or working that nothing blocks|
 |**Health N**, a dot|only while there are health lines (hidden at 0 and while unknown); amber when every line is of kind `door` (an alert nobody routed), red for any other kind|the lines by kind. The Console has no health page yet, so the title is inert; `HEALTH_PATH` in `main.js` makes it a link once there is one|
@@ -69,8 +72,8 @@ Every 15 seconds (counts, the open Issues, the load, health and the terminals fe
 Every 60 seconds (the board and the 7-day series, the same read the Console's Flow page draws from):
 
 - `factory read flow`: the `trend` as numbers, what closed in the last day (only its project and outcome, for the Shipped
-  project list) and the shipped counts by the hour (7 days) and by the day (30 days) for the Shipped charts, for each queued Issue its queue kind and project, and which incident Issues stop their project's line. A flow read older than 10 minutes is dropped: the figures stay without trend, the queue and
-  production go (Prod turns grey).
+  project list) and the shipped counts by the hour (7 days) and by the day (30 days) for the Shipped charts, its `work` counts, and which incident Issues stop their project's line. A flow read older than 10 minutes is dropped: the figures stay without trend and
+  production goes (Prod turns grey).
 
 Each part parses on its own and keeps its last good answer, so an overview without a needs read (or the other way round)
 still draws what it has. All API text is data; the parsers keep numbers, kinds, project names and ids, never a title,
@@ -89,10 +92,10 @@ but does not link, and the tooltips say so.
 
 What dotfiles renders from this mod (the layout, `config/herdr-app/layouts/jk.json`, and `jk-status`):
 
-1. **The bar block**: `{ "mod": "jk-glance", "props": { "bar": true } }`, at least `BAR_W` (440) px wide and 28 px high, in
+1. **The bar block**: `{ "mod": "jk-glance", "props": { "bar": true } }`, at least `BAR_W` (608) px wide and 28 px high, in
    the status row beside `jk-status` (the layout JSON above). `jk-status` keeps the machines (with the load below), the
    quota, the branch, the one Uptime Kuma item and the palette hint, and may drop its own `N needs you` chip (the bar's
-   first item). The bar block shrinks from 780 to 440 px: the layout's `glance-bar` `size.px` follows.
+   first item). The bar block is 608 px: the layout's `glance-bar` `size.px` follows (it was 780, then 440).
 2. **The popovers are this mod**, opened by the bar through `openOverlay({ mod: "jk-glance", kind: "popup", frame: "none",
    width: 340, height, at, props: { kind: "detail", item } })`. Nothing for dotfiles to add: `mod.json` stays
    `{ "place": "none" }`, the same as `jk-details`.
@@ -107,16 +110,16 @@ instead of polling:
 {
   "empty": false,
   "stale": false,
-  "items": [{ "group": 0, "key": "needs", "label": "Needs", "value": "3", "tone": "bad", "dot": null, "dim": false, "tip": "…" }],
-  "details": { "queued": { "title": "Queued · 7", "tone": "neutral", "link": "https://factory.<dev domain>/flow?state=queued",
-    "rows": [{ "text": "weatherorb", "note": "production red", "right": "2", "link": "https://factory.<dev domain>/projects/weatherorb" }], "height": 138 } },
+  "items": [{ "group": 0, "key": "needs", "label": "Needs you", "value": "3", "tone": "bad", "dot": null, "dim": false, "tip": "…" }],
+  "details": { "ready": { "title": "Ready · 7", "tone": "neutral", "link": "https://factory.<dev domain>/flow?state=ready",
+    "rows": [{ "text": "a free seat", "right": "2", "link": "https://factory.<dev domain>/flow?state=ready" }, { "text": "weatherorb", "right": "2", "link": "https://factory.<dev domain>/projects/weatherorb" }], "height": 138 } },
   "host": { "load": 14.8, "loadCeiling": 36, "loadPct": 41, "swapPct": 3, "swapCeiling": 75, "tone": "neutral" },
   "side": { "text": "Needs you · 3 · 4 leads", "tone": "bad", "link": "…", "tip": "…" }
 }
 ```
 
-`items` are in bar order (`group` changes where a separator goes; `key` is one of `needs`, `working`, `waiting`, `queued`,
-`shipped`, `production`, `health`, the last only while there are health lines); `details` is keyed by the same keys (`health`
+`items` are in bar order (`group` changes where a separator goes; `key` is one of `needs`, `running`, `paused`, `ready`,
+`held`, `checking`, `shipped`, `production`, `health`, the last only while there are health lines); `details` is keyed by the same keys (`health`
 is always present); `tone` is `good`, `bad`, `warn`, `dim` or `neutral`; `link` is `null` without a Console URL. A detail
 may carry `chart` (the Shipped popover: `[{ caption, right, values }]`) and a row `note`. Before the first good poll it is
 `{ "empty": true, "text": "Factory: no data" }`. No Issue title, summary or phase is in it; the one number is a red
@@ -145,8 +148,7 @@ value is an object keyed by app terminal address, `mini/<terminal id>`, one entr
 }
 ```
 
-Every field can be `null`. A closed Issue has no entry. `state` is the Issue's state in the language's words (`settling`, `queued`, `working`,
-`waiting`, `watching`), else the session's. `link` is the Issue's place in the Console: its newest Needs you item, else
+Every field can be `null`. A closed Issue has no entry. `state` is the Issue's stored state (a data key, not a display word), else the session's. `link` is the Issue's place in the Console: its newest Needs you item, else
 its page (`/issues/<n>`), and `null` for a session without an Issue or without a Console URL. No
 Issue number, role or phase is shared, and none is shown there: the screen says what the work is about. Only these fields are
 shared: no insights, no elapsed time, because the value is persisted and every mod re-renders when it changes.
@@ -174,8 +176,9 @@ The old `jk-board` mod is gone from this repo and from dotfiles; `make herdr-app
 ## Test
 
 `jk-glance.test.ts` runs the pure-helper block of `main.js` (between `// <glance>` and `// </glance>`) on its own,
-because the mod imports gpui and herdr and cannot load under Bun: the parsers, the row builders (needs, projects, queue
-reasons, production, health), the Shipped charts, the popover placement and the view model (`glanceModel`, every word the
+because the mod imports gpui and herdr and cannot load under Bun: the parsers, the row builders (needs, projects, the Paused,
+Ready and Held splits, production, health), the one set of figures from the overview and the flow, the strip's words and
+order, no retired state word in anything drawn, the Shipped charts, the popover placement and the view model (`glanceModel`, every word the
 bar and a popover draw). It holds the placement rule (every popover's bottom edge `POPUP_GAP` px over its item, never
 covering it, at each end of the bar and for every height up to the tallest, clamped to the window's edges), the heights and
 widths (the sidebar line within 28 px, every popover within `MAX_ROWS` rows and its computed height, the widest bar within
@@ -187,4 +190,4 @@ The app check, on a copy, because `herdr-app check` writes a generated `gpui-kit
 props (the sidebar line) and no data. To exercise the other roles seed the copy: in `init`, set `this.at`, `this.flowAt`,
 `this.overview`, `this.needs`, `this.flow`, and `this.machine` (parse real output with the block's own
 `parse*` functions) and force `this.role` to `'bar'`; for the popover `'popup'`, `setShared('jk.factory.glance', …)` with
-`glanceModel(…)` and `this.props = () => ({ item: 'queued' })`. All three pass on herdr-app 0.1.15 (gpui-shell 0.7.1).
+`glanceModel(…)` and `this.props = () => ({ item: 'ready' })`. All three pass on herdr-app 0.1.15 (gpui-shell 0.7.1).
