@@ -138,6 +138,17 @@ describe('the lead admission follows the test line', () => {
     expect(verdicts).toEqual([false, false, false, false, false, false, true, true])
   })
 
+  test('steps held back by their host-wide class are not the test line', () => {
+    const apple = [
+      holder('iris-apple', 1),
+      ...['shutterflow-apple', 'ntfy-mac-apple', 'weatherorb apple'].map((name) => ({
+        ...waiter(name, 5),
+        whyKind: 'class' as const,
+      })),
+    ]
+    expect(testLineOf(apple, T)).toEqual({ waiters: 0, holders: 1, medianWaitMs: 0 })
+  })
+
   test('a fix is never kept out by the line', () => {
     const urgent = { ...replayed(24, line), candidate: { issue: id(1), urgent: true, since: null } }
     expect(checkAdmission(urgent).admit).toBe(true)

@@ -387,7 +387,8 @@ export function lineOrder(rows: readonly SlotRow[], runMsByName?: ReadonlyMap<st
 
 /**
  * The host's test line for the lead admission (`TestLine` of `admission.ts`): the live waiters and holders, and the median
- * of how long the waiters have waited so far.
+ * of how long the waiters have waited so far. A waiter its host-wide class holds back waits for that class, not for a
+ * slot, and is left out: a queue of Apple builds behind one is no reason to hold leads back.
  */
 export function testLineOf(
   rows: readonly SlotRow[],
@@ -395,7 +396,7 @@ export function testLineOf(
 ): { waiters: number; holders: number; medianWaitMs: number } {
   const t = now.getTime()
   const waits = rows
-    .filter((row) => row.slot === null && row.seenAt.getTime() >= t - WAITER_TTL_MS)
+    .filter((row) => row.slot === null && row.whyKind !== 'class' && row.seenAt.getTime() >= t - WAITER_TTL_MS)
     .map((row) => Math.max(0, t - row.requestedAt.getTime()))
     .sort((a, b) => a - b)
   const holders = rows.filter((row) => row.slot !== null && (row.leasedUntil?.getTime() ?? 0) >= t).length
