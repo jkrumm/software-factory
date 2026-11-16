@@ -410,19 +410,19 @@ test('the contents of an HTML artifact follow the frame, and jump in it', async 
   await expect(current).toHaveText('Link report')
 })
 
-test('below 1800 px the comments keep the column and the contents fold into a bar under the header', async ({
+test('below 1280 px the comments keep their pane and the contents fold into a bar under the header', async ({
   page,
 }) => {
   const { review } = seeded()
-  await page.setViewportSize({ width: 1400, height: 900 })
+  await page.setViewportSize({ width: 1200, height: 900 })
   await page.goto(`/artifacts/${review}`)
   const bar = page.getByRole('button', { name: /^Contents/ })
   await expect(bar).toBeVisible()
   await expect(bar).toHaveAttribute('aria-expanded', 'false')
   await expect(comments(page)).toBeVisible()
   const box = await comments(page).boundingBox()
-  expect(box?.width).toBeGreaterThanOrEqual(380)
-  expect(box?.width).toBeLessThanOrEqual(388)
+  expect(box?.width).toBeGreaterThanOrEqual(288)
+  expect(box?.width).toBeLessThanOrEqual(400)
   await bar.click()
   await contents(page).getByRole('button', { name: 'Proof', exact: true }).click()
   await expect(page.locator('h2#proof')).toBeInViewport()

@@ -4,6 +4,7 @@ import Markdown, { defaultUrlTransform } from 'react-markdown'
 import remarkGfm from 'remark-gfm'
 import { linkTarget, parseFrameMessage, type SelectionRect, type TocItem } from '@/lib/artifact'
 import { isPlainClick } from '@/lib/peek'
+import { READING_PX, type ReadingSize } from '@/lib/reading'
 import { cn } from '@/lib/utils'
 import {
   clearHighlights,
@@ -48,6 +49,8 @@ export interface ContentProps {
   cleared: number
   /** the content sits in a panel that scrolls as one (the peek): the frame takes its own height, not the column's */
   stacked?: boolean
+  /** the reader's size for the text: Markdown takes it as a CSS variable, an HTML artifact's frame as a message */
+  reading: ReadingSize
 }
 
 /** A link in Markdown: an anchor scrolls the document, an external one opens a tab, a Console page opens in place, the rest is text. */
@@ -110,6 +113,7 @@ function MarkdownContent({
   onHeadings,
   onSection,
   jump,
+  reading,
 }: Omit<ContentProps, 'format'>) {
   const root = useRef<HTMLDivElement>(null)
   const hover = useRef(0)
@@ -217,6 +221,7 @@ function MarkdownContent({
     <div
       ref={root}
       className="artifact-prose"
+      style={{ '--reading-size': `${READING_PX[reading]}px` } as React.CSSProperties}
       onClick={(event) => {
         // a drag that ends on a highlight selects text; only a plain click opens the comment
         if (window.getSelection()?.isCollapsed === false) return
@@ -276,8 +281,11 @@ function HtmlContent({
   onHeadings,
   onSection,
   jump,
+  reading,
 }: Omit<ContentProps, 'format'>) {
   const frame = useRef<HTMLIFrameElement>(null)
+  const size = useRef(reading)
+  size.current = reading
   const router = useRouter()
   const ready = useRef(false)
   const latest = useRef(quotes)
@@ -349,6 +357,11 @@ function HtmlContent({
     if (primary && cleared > 0) send({ type: 'factory.clear' })
   }, [primary, cleared])
 
+  // the reading size changes under a frame that is already rendered; the first paint carries it in the render message
+  useEffect(() => {
+    send({ type: 'factory.reading', px: READING_PX[reading] })
+  }, [reading])
+
   useEffect(() => {
     const index = jump ? headings.current.findIndex((item) => item.id === jump.id) : -1
     if (index !== -1) send({ type: 'factory.goto', index })
@@ -360,7 +373,7 @@ function HtmlContent({
       title="Artifact"
       sandbox={FRAME_SANDBOX}
       src="/frame.html"
-      onLoad={() => send({ type: 'factory.render', html: content, annotate: primary })}
+      onLoad={() => send({ type: 'factory.render', html: content, annotate: primary, px: READING_PX[size.current] })}
       className={cn('h-[calc(100dvh-14rem)] min-h-96 w-full bg-background', !stacked && 'lg:h-full lg:min-h-0')}
     />
   )

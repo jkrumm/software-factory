@@ -141,9 +141,11 @@
     let at = -1
     // at the very end of the document the last headings can never reach the top: the last one on screen is the section
     const atEnd = window.scrollY > 0 && window.scrollY + window.innerHeight >= document.documentElement.scrollHeight - 2
+    // the offset grows with the reader's size (the root font is 16, 18 or 20 px), so a first heading under a margin still counts
+    const offset = SECTION_OFFSET * (parseFloat(getComputedStyle(document.documentElement).fontSize) / 16 || 1)
     headingElements().forEach((h, i) => {
       const top = h.getBoundingClientRect().top
-      if (top <= SECTION_OFFSET || (atEnd && top < window.innerHeight)) at = i
+      if (top <= offset || (atEnd && top < window.innerHeight)) at = i
     })
     if (at === lastSection) return
     lastSection = at

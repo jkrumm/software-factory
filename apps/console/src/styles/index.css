@@ -126,9 +126,12 @@
 
 /* The rendered Markdown of an artifact. */
 .artifact-prose {
-  @apply text-base leading-7 wrap-break-word;
+  @apply wrap-break-word;
+  /* the reader's size (smaller, default, larger) arrives as --reading-size; the line length is held near 76 characters */
+  font-size: var(--reading-size, 18px);
+  line-height: 1.65;
   width: 100%;
-  max-width: 75ch;
+  max-width: 76ch;
   /* auto margins stop a flex-column parent from stretching the item, so it would size to its widest table; width keeps it in the column */
   margin-inline: auto;
 }
@@ -142,13 +145,16 @@
   @apply mt-6 mb-2 font-heading font-semibold tracking-tight;
 }
 .artifact-prose h1 {
-  @apply text-2xl;
+  font-size: 1.6em;
+  line-height: 1.25;
 }
 .artifact-prose h2 {
-  @apply text-xl;
+  font-size: 1.35em;
+  line-height: 1.3;
 }
 .artifact-prose h3 {
-  @apply text-lg;
+  font-size: 1.15em;
+  line-height: 1.3;
 }
 .artifact-prose p,
 .artifact-prose ul,
@@ -185,7 +191,9 @@
   @apply bg-transparent p-0;
 }
 .artifact-prose table {
-  @apply w-full border-collapse text-sm;
+  @apply w-full border-collapse;
+  font-size: 0.9em;
+  line-height: 1.5;
 }
 .artifact-prose th,
 .artifact-prose td {

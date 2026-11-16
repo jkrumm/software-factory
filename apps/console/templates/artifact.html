@@ -9,6 +9,18 @@
   <style> block as it is. No external request is possible (the Console frames it under a closed policy), so a picture is
   inline SVG or a data: URL and a font is the system font. Submit it with:
     factory artifact submit <issue> --attempt <n> --kind spec --title "..." --content @artifact.html --content-format html
+
+  The Console adds a reading stylesheet after yours, inside the frame, with !important, so these rules hold whatever your CSS
+  says; write for them instead of against them:
+    - Body text is 18 px (the reader's control makes it 16 or 20): html and body font-size and line-height are the Console's.
+      Size everything else in rem or em, never in px, so it scales with the reader's choice.
+    - Paragraphs, lists, quotes and headings that sit directly in body, main, article, section or a div are held to 76
+      characters and centred (max-width and margin-inline are the Console's). Do not set a measure of your own on them.
+    - A table is wrapped in a div by the Console: it has the text column's width, is centred, and scrolls sideways inside the
+      wrap when it is wider; it never shifts left. A table that must be wider than the text (a matrix of many columns)
+      takes the attribute data-wide and is then up to 72 rem wide, centred.
+    - pre scrolls sideways inside itself; img and figure svg never exceed the column; a figure is centred.
+    - Colours, the page background, tables' own cell styling, callouts and spacing between blocks stay yours.
 -->
     <style>
       /* tokens:begin - generated from src/styles/tokens.css by scripts/templates.ts; do not edit */
@@ -85,10 +97,10 @@
         padding: var(--vx-space-stack-xl) 32px;
         background: var(--vx-surface-bg);
         color: var(--vx-ink);
-        font: 15px/1.65 var(--font-sans);
+        font: 18px/1.65 var(--font-sans);
       }
       main {
-        max-width: 75ch;
+        max-width: 76ch;
         margin: 0 auto;
       }
       h1,
@@ -156,7 +168,7 @@
       table {
         border-collapse: collapse;
         width: 100%;
-        font-size: 0.93rem;
+        font-size: 0.9rem;
       }
       th,
       td {
