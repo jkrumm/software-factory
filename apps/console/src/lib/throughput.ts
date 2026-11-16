@@ -157,6 +157,47 @@ export function hostFigures(
   return { cpu, memory, swap, pressure, load: loadFigure }
 }
 
+/** What the host cards' sparklines span, as the cards label it (the server reads `host.recent` over this many minutes). */
+export const RECENT_SPAN = 'last 15 min'
+
+/** One card's short trend: a value per sampled minute, a time label for each, and how a value reads (as the card's figure does). */
+export interface HostTrend {
+  values: (number | null)[]
+  labels: string[]
+  format: (value: number) => string
+}
+
+/**
+ * The last minutes of CPU, memory, swap and load from `host.recent`, one point per sampled minute. The newest point is
+ * the minute `host.now` reads, and `format` writes it exactly as the card's figure (`hostFigures`), so the dot on the
+ * line and the number above it are the same reading.
+ */
+export function hostTrends(model: ThroughputModel): Record<'cpu' | 'memory' | 'swap' | 'load', HostTrend> {
+  const { now, recent } = model.host
+  const labels = recent.map((p) => new Date(p.at).toLocaleTimeString('en-GB', { hour: '2-digit', minute: '2-digit' }))
+  const ram = now?.ramBytes ?? null
+  const swapTotal = now?.swapTotalBytes ?? null
+  const ceiling = now?.loadCeiling ?? null
+  return {
+    cpu: { values: recent.map((p) => p.cpuBusyPct), labels, format: (v) => `${whole(v)} %` },
+    memory: {
+      values: recent.map((p) => p.memoryUsedBytes),
+      labels,
+      format: (v) => (ram === null ? `${gbNumber(v)} GB` : gbOf(v, ram)),
+    },
+    swap: {
+      values: recent.map((p) => p.swapUsedBytes),
+      labels,
+      format: (v) => (swapTotal === null || swapTotal <= 0 ? `${gbNumber(v)} GB` : gbOf(v, swapTotal)),
+    },
+    load: {
+      values: recent.map((p) => p.load),
+      labels,
+      format: (v) => (ceiling === null ? one(v) : `${one(v)} of ${whole(ceiling)}`),
+    },
+  }
+}
+
 export const percentWords = (share: number): string => {
   const percent = share * 100
   return percent > 0 && percent < 1 ? '<1 %' : `${Math.round(percent)} %`

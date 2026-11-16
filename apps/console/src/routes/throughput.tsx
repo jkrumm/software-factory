@@ -26,6 +26,7 @@ import {
   dayWords,
   epochLine,
   hostFigures,
+  hostTrends,
   hoursWords,
   issueNumber,
   kpiLabel,
@@ -37,6 +38,7 @@ import {
   percentWords,
   progress,
   queueWords,
+  RECENT_SPAN,
   secondsWords,
   splitRows,
   STATUS,
@@ -126,6 +128,8 @@ function Nothing({ children }: { children: string }) {
 
 const dash = (value: number | null, format: (v: number) => string): string => (value === null ? '–' : format(value))
 
+const HOST_TREND_NAME = { cpu: 'CPU busy', memory: 'Memory used', swap: 'Swap used', load: 'Load' } as const
+
 const LEVEL_NAME = { normal: 'Normal', warning: 'Warning', critical: 'Critical', unread: 'Not read' } as const
 
 /** The host now, as numbers: CPU, memory and swap as amounts, the kernel's pressure, and the load against its ceiling. */
@@ -134,10 +138,31 @@ function HostRow({ model }: { model: Model }) {
   const points = model.host.timeline.points
   const times = points.map((p) => new Date(p.at).toLocaleString('en-GB', { dateStyle: 'short', timeStyle: 'short' }))
   const over = windowName(model.hours)
+  const trends = hostTrends(model)
+  const hasTrend = model.host.recent.length > 0
+  /** the gauge against its ceiling, and under it the last minutes: the dot is the minute the card's figure reads */
   const bar = (key: 'cpu' | 'memory' | 'swap' | 'load') => {
     const { fill, tone } = figures[key]
-    return fill === null ? null : <MeterBar value={Math.min(1, Math.max(0, fill))} tone={tone} />
+    const { values, labels, format } = trends[key]
+    return (
+      <>
+        {fill === null ? null : <MeterBar value={Math.min(1, Math.max(0, fill))} tone={tone} />}
+        {hasTrend ? (
+          <Sparkline
+            name={`${HOST_TREND_NAME[key]}, ${RECENT_SPAN}`}
+            values={values}
+            labels={labels}
+            format={format}
+            tone={tone}
+            height={40}
+          />
+        ) : null}
+      </>
+    )
   }
+  const trendLabels: [string, string, string] | undefined = hasTrend
+    ? ['−15 min', `(${RECENT_SPAN})`, 'now']
+    : undefined
   return (
     <section aria-labelledby="throughput-host-now" className="min-w-0">
       <h2 id="throughput-host-now" className="sr-only">
@@ -154,6 +179,7 @@ function HostRow({ model }: { model: Model }) {
           valueNote={figures.cpu.valueNote}
           sub={figures.cpu.sub}
           chart={bar('cpu')}
+          xLabels={trendLabels}
         />
         <StatCard
           id="throughput-memory"
@@ -165,6 +191,7 @@ function HostRow({ model }: { model: Model }) {
           valueNote={figures.memory.valueNote}
           sub={figures.memory.sub}
           chart={bar('memory')}
+          xLabels={trendLabels}
         />
         <StatCard
           id="throughput-swap"
@@ -176,6 +203,7 @@ function HostRow({ model }: { model: Model }) {
           valueNote={figures.swap.valueNote}
           sub={figures.swap.sub}
           chart={bar('swap')}
+          xLabels={trendLabels}
         />
         <StatCard
           id="throughput-pressure"
@@ -206,6 +234,7 @@ function HostRow({ model }: { model: Model }) {
           valueNote={figures.load.valueNote}
           sub={figures.load.sub}
           chart={bar('load')}
+          xLabels={trendLabels}
         />
       </div>
     </section>

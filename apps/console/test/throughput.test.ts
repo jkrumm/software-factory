@@ -7,6 +7,7 @@ import {
   gbNumber,
   gbOf,
   hostFigures,
+  hostTrends,
   hoursWords,
   kpiValue,
   levelHeight,
@@ -15,6 +16,7 @@ import {
   percentWords,
   progress,
   queueWords,
+  RECENT_SPAN,
   splitRows,
   throughputWindowOf,
 } from '../src/lib/throughput.ts'
@@ -203,4 +205,45 @@ test('a figure the host did not read is a dash with its reason, never zero', () 
   expect(partial.memory.value).toBeNull()
   expect(partial.swap.value).toBe('1 GB')
   expect(partial.load.value).toBe('2')
+})
+
+test('the host cards trend: 15 one-minute samples are 15 points, the newest being the figure the card reads', () => {
+  const samples = Array.from({ length: 15 }, (_, i) => ({
+    at: new Date(Date.UTC(2026, 10, 16, 10, i)).toISOString(),
+    cpuBusyPct: 10 + i,
+    memoryUsedBytes: (20 + i) * GIB,
+    swapUsedBytes: i === 3 ? null : i * 0.1 * GIB,
+    load: 1 + i / 2,
+  }))
+  const newest = samples[14] as (typeof samples)[number]
+  const model = hostModel({
+    at: newest.at,
+    cpuBusyPct: newest.cpuBusyPct,
+    load: newest.load,
+    loadCeiling: 36,
+    cores: 12,
+    ramBytes: 64 * GIB,
+    memoryUsedBytes: newest.memoryUsedBytes,
+    swapUsedBytes: newest.swapUsedBytes,
+    swapTotalBytes: 8 * GIB,
+    pressureLevel: 1,
+  })
+  model.host.recent = samples
+  const trends = hostTrends(model)
+  const figures = hostFigures(model)
+  expect(trends.cpu.values).toEqual(samples.map((s) => 10 + samples.indexOf(s)))
+  expect(trends.memory.values).toHaveLength(15)
+  expect(trends.swap.values[3]).toBeNull()
+  expect(trends.load.values.at(-1)).toBe(8)
+  expect(trends.cpu.labels).toHaveLength(15)
+  // the last point reads exactly as the card's figure
+  for (const key of ['cpu', 'memory', 'swap', 'load'] as const)
+    expect(trends[key].format(trends[key].values.at(-1) as number)).toBe(figures[key].value as string)
+  expect(RECENT_SPAN).toBe('last 15 min')
+})
+
+test('a host with no recent minute has no points', () => {
+  const model = hostModel(null)
+  model.host.recent = []
+  expect(hostTrends(model).cpu.values).toEqual([])
 })

@@ -267,6 +267,38 @@ describe('readThroughput', () => {
     expect((await read(1)).host.now).toBeNull()
   })
 
+  test('the recent minutes: one point per sampled minute of the last 15, oldest first, the newest being the minute `now` reads', async () => {
+    const at = (hhmm: string, seconds = 0) => new Date(t(hhmm).getTime() + seconds * 1000)
+    // read at 10:05: the five seeded minutes are all inside the 15
+    const early = (await readThroughput(sql, { now: at('10:05'), hours: HOURS })).host
+    expect(early.recent.map((p) => [p.at, p.cpuBusyPct, p.load])).toEqual([
+      [t('10:00').toISOString(), 20, 2],
+      [t('10:01').toISOString(), 40, 4],
+      [t('10:02').toISOString(), 80, 10],
+      [t('10:03').toISOString(), null, null],
+      [t('10:04').toISOString(), 15, 6],
+    ])
+    const last = early.recent[early.recent.length - 1]
+    expect(last).toMatchObject({
+      at: early.now?.at,
+      cpuBusyPct: early.now?.cpuBusyPct,
+      load: early.now?.load,
+      memoryUsedBytes: early.now?.memoryUsedBytes,
+      swapUsedBytes: early.now?.swapUsedBytes,
+    })
+    // read at 10:16:30 the window of 15 minutes starts at 10:01:30: the first two minutes have dropped out
+    const later = (await readThroughput(sql, { now: at('10:16', 30), hours: HOURS })).host
+    expect(later.recent.map((p) => p.at)).toEqual([
+      t('10:02').toISOString(),
+      t('10:03').toISOString(),
+      t('10:04').toISOString(),
+    ])
+    // nothing newer than 15 minutes: no trend, though the newest minute is still the card's figure
+    const stale = (await readThroughput(sql, { now: at('10:30'), hours: HOURS })).host
+    expect(stale.recent).toEqual([])
+    expect(stale.now?.at).toBe(t('10:04').toISOString())
+  })
+
   test('the timeline: the worst pressure and the largest swap use and load of each bucket', async () => {
     const { timeline } = (await read()).host
     // 24 hours: 5-minute buckets; 10:00 to 10:04 are one bucket, the sample outside the window is none
