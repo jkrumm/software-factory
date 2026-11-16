@@ -406,6 +406,34 @@ describe('admission', () => {
     expect(result.notes).toEqual([])
   })
 
+  test('the load gate is the tripwire: five minutes on end over the ceiling keep a lead out, a peak or a reading back under it does not', async () => {
+    const issue = await world.queued({ repo: 'app' })
+    const now = world.clock.now()
+    const minutes = async (loads: number[]) => {
+      await world.db.sql`DELETE FROM factory.host_samples`
+      for (const [i, load] of loads.entries())
+        await world.db.sql`
+          INSERT INTO factory.host_samples (at, load, memory_used_pct, swap_used_pct, swapout_mb_per_300s, pressure_level)
+          VALUES (${new Date(now.getTime() - i * 60_000)}, ${load}, 40, 2, 0, 1)`
+    }
+    // a peak among quiet minutes, read at 75 over the ceiling of 60: admitted
+    await minutes([75, 20, 20, 20, 20])
+    world.host.loadValue = ok(75)
+    expect((await pass()).admitted.map((a) => a.issue)).toEqual([issue])
+
+    const next = await world.queued({ repo: 'app' })
+    nextSample()
+    await minutes([75, 70, 68, 66, 64])
+    world.host.loadValue = ok(75)
+    const shut = await pass()
+    expect(shut.queue.find((e) => e.issue === next)?.reason?.message).toBe(
+      'the machine is busy: load over 60 in each of the last 5 minutes (75, 70, 68, 66, 64)',
+    )
+    // the reading before the admission is back under the ceiling: the trip clears
+    world.host.loadQueue = [ok(75), ok(30)]
+    expect((await pass()).admitted.map((a) => a.issue)).toEqual([next])
+  })
+
   test('a long test line keeps a new lead out and the pass reads it from the slots; it opens when the line drains', async () => {
     const issue = await world.queued({ repo: 'app' })
     const now = world.clock.now()
