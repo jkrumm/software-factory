@@ -435,6 +435,25 @@ describe('the Errand screen', () => {
     ).toMatchObject({ need: 'secret' })
   })
 
+  test('a MacBook command that runs op reaches the owner by rule, whatever the verb, flags or pipe (issue 1664)', () => {
+    const command = "op item get shutterflow-masters-b2 --account acct --fields label=key --reveal | ssh box 'b2 ls'"
+    expect(
+      screenByNeed({ summary: 'Read-only B2 listing probe', detail: null, command, host: 'macbook' }),
+    ).toMatchObject({ need: 'secret' })
+    for (const line of [
+      'op --account acct item get x',
+      'op document get x > f',
+      'op inject -i a.tpl',
+      'echo 1 | op whoami',
+    ])
+      expect(screenByNeed({ summary: 'List it', detail: null, command: line, host: 'macbook' })).toMatchObject({
+        need: 'secret',
+      })
+    // an unrelated word that starts with op, and an op command addressed to no MacBook, are left to the screen
+    expect(screenByNeed({ summary: 'List it', detail: null, command: 'ops item get x', host: 'macbook' })).toBeNull()
+    expect(screenByNeed({ summary: 'List it', detail: null, command: command, host: 'portal' })).toBeNull()
+  })
+
   test('a command a token can run is turned away by rule', () => {
     expect(screenByRule({ summary: 'Run `make deploy`', detail: null })).toMatchObject({ verdict: 'turn_away' })
     expect(screenByRule({ summary: 'Deploy it', detail: 'Use `gh pr merge 12` for this' })).toMatchObject({

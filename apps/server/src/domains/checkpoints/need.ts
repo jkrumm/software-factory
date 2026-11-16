@@ -21,9 +21,19 @@ export interface NeedInput {
   host: Host | null
 }
 
+/**
+ * A call of the 1Password CLI: `op` and one of its verbs, global flags (`--account acct`) allowed in between. On the mini
+ * `op` hangs on a biometric prompt and only the refs of `headless.refs` are cached for `secrets-run`, so a command that runs
+ * `op` is run on his MacBook, by him (issue 1664: `op item get … | ssh box …` was turned away as agent-doable).
+ */
+const OP_CALL =
+  '\\bop\\s+(?:--?[\\w-]+(?:=\\S+)?\\s+(?:(?!--?\\w)\\S+\\s+)?)*(?:read|signin|signout|run|item|document|inject|whoami|account|vault|user|group|connect|events-api|plugin|service-account)\\b'
+
 /** A secret only he has: 1Password, a biometric, the sudo password, the secrets reseal. */
-const SECRET =
-  /\bsudo(?:ers)?\b|\b1password\b|\bbiometric\b|\btouch id\b|\bface id\b|\bsecrets-(?:seed|reseal)\b|\bop:\/\/|\bop (?:read|signin|run)\b|\bkeychain password\b|\bpassphrase\b|\bpassword\b/i
+const SECRET = new RegExp(
+  `\\bsudo(?:ers)?\\b|\\b1password\\b|\\bbiometric\\b|\\btouch id\\b|\\bface id\\b|\\bsecrets-(?:seed|reseal)\\b|\\bop:\\/\\/|${OP_CALL}|\\bkeychain password\\b|\\bpassphrase\\b|\\bpassword\\b`,
+  'i',
+)
 
 /** A physical step or a visual look: a device, hardware, a portal, a click in a page. */
 const PHYSICAL =
