@@ -7,6 +7,7 @@ const SCREENS = [
   { label: 'Needs you', path: '/needs-you', key: 'N' },
   { label: 'Flow', path: '/flow', key: 'F' },
   { label: 'Artifacts', path: '/artifacts', key: 'A' },
+  { label: 'Projects', path: '/projects', key: 'P' },
   { label: 'Chain', path: '/chain', key: 'C' },
   { label: 'Improve', path: '/improve', key: 'I' },
   { label: 'Throughput', path: '/throughput', key: 'T' },
@@ -25,7 +26,7 @@ test('the root redirects to Needs you, the badge is the API count and no id leak
   expect(await textWithoutBand(page)).not.toMatch(/issue_\d+|lead-\d+|#\d+/)
 })
 
-test('the six screens open from the navigation and from G then N, F, A, C, I, T', async ({ page }) => {
+test('the seven screens open from the navigation and from G then N, F, A, P, C, I, T', async ({ page }) => {
   await page.goto('/needs-you')
   const nav = page.getByRole('navigation', { name: 'Main' })
   for (const { label, path } of SCREENS) {
