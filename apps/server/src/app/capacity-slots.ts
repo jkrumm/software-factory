@@ -3,16 +3,19 @@ import {
   growthMib,
   headroomMib,
   LEARNED_RUNS,
+  learnedCores,
   learnedPeakMib,
+  learnedRunMs,
   SAMPLE_MAX_AGE_MS,
   stepNameOf,
   stepPrior,
 } from '../domains/capacity/costs.ts'
-import { DEFAULT_SWAPOUT_CEILING_MB } from '../domains/capacity/host.ts'
+import { DEFAULT_SWAPOUT_CEILING_MB, describeTrip, loadTrip, SUSTAINED_LOAD_SAMPLES } from '../domains/capacity/host.ts'
 import type { HostReader, MergeWindowRow, StepCostRow } from '../domains/capacity/ports.ts'
-import { type AimMode, LOAD_PER_CORE, SWAP_WINDOW, swapGrowing } from '../domains/capacity/slot-aim.ts'
+import { type AimMode, SWAP_WINDOW, swapGrowing } from '../domains/capacity/slot-aim.ts'
 import {
   DEFAULT_PASS_AFTER_MS,
+  DEFAULT_STEP_CORES,
   releaseSlot,
   type SlotRow,
   type SlotView,
@@ -74,10 +77,15 @@ export interface SlotDeps extends PlanningDeps {
   host: HostReader
   /**
    * `FACTORY_SLOT_AIM`: with `on`, the aim (1 to `slotsMax`) is the cap, the base stays `slots` (lowered to the aim when
-   * that is less), and a slot beyond the base keeps its learned-peak fit with the load gate at twice the cores
+   * that is less), and a slot beyond the base keeps its learned-peak fit, fits the learned cores of the running steps and
+   * its own into the host's cores, and is held back by the load tripwire (`loadTrip`), not by one peak; the line is
+   * ordered by the learned runs (`lineOrder`)
    */
   slotAim: AimMode
+  /** the cores the steps beyond the base share under the aim */
   cores: number
+  /** the lead admission's load ceiling: under the aim, the tripwire for a slot beyond the base is set at it */
+  loadCeiling: number
   /** `FACTORY_SLOT_PASS_MIN` in ms: how long a waiter may be passed by smaller steps before nothing passes it */
   slotPassMs?: number
   /** the swapout rate above which a finished run's peak is not learned from */
@@ -114,7 +122,8 @@ export async function touchSlot(
     const ceiling = deps.swapoutCeilingMb ?? DEFAULT_SWAPOUT_CEILING_MB
     // The size of a step: what it is learned to peak at, else a prior from its project (`stepPrior`). A worktree's step is its
     // project's (`stepNameOf`), whose old rows under the worktree names seed the figure.
-    const sized = new Map<string, { key: string; mib: number; from: PeakFrom }>()
+    type Size = { key: string; mib: number; from: PeakFrom; cores: number; runMs: number | null }
+    const sized = new Map<string, Size>()
     const projectSteps = new Map<string, Map<string, number | null>>()
     const sizeOf = async (name: string, cwd: string | null | undefined) => {
       const owner = ownerIn(projects, cwd ?? undefined)
@@ -126,9 +135,11 @@ export async function touchSlot(
         owner && key.startsWith(`${owner.name} `)
           ? { repo: owner.repo, words: key.slice(owner.name.length) }
           : undefined
-      const learnedMib = learnedPeakMib(await capacity.recentPeaks(key, LEARNED_RUNS, ceiling, legacy))
-      let result: { key: string; mib: number; from: PeakFrom }
-      if (learnedMib !== null) result = { key, mib: learnedMib, from: 'learned' }
+      const runs = await capacity.recentRuns(key, LEARNED_RUNS, ceiling, legacy)
+      const learnedMib = learnedPeakMib(runs.map((run) => run.peakRssMib))
+      const measured = { cores: learnedCores(runs) ?? DEFAULT_STEP_CORES, runMs: learnedRunMs(runs) }
+      let result: Size
+      if (learnedMib !== null) result = { key, mib: learnedMib, from: 'learned', ...measured }
       else {
         let steps = owner ? projectSteps.get(owner.repo) : undefined
         if (owner && !steps) {
@@ -138,7 +149,7 @@ export async function touchSlot(
           projectSteps.set(owner.repo, steps)
         }
         const prior = stepPrior(key, steps ?? new Map())
-        result = { key, mib: prior.mib, from: prior.from }
+        result = { key, mib: prior.mib, from: prior.from, ...measured }
       }
       sized.set(cacheKey, result)
       return result
@@ -149,16 +160,22 @@ export async function touchSlot(
       learned.set((await sizeOf(holder.name, holder.cwd)).key, (await sizeOf(holder.name, holder.cwd)).mib)
     const peaksByName = new Map<string, number | null>()
     const peakFromByName = new Map<string, PeakFrom>()
-    for (const waiter of waiting) {
+    const coresByName = new Map<string, number>()
+    const runMsByName = new Map<string, number | null>()
+    for (const waiter of [...waiting, { name: input.name, cwd: input.cwd ?? null }]) {
       const size = await sizeOf(waiter.name, waiter.cwd)
       peaksByName.set(waiter.name, size.mib)
       peakFromByName.set(waiter.name, size.from)
+      coresByName.set(waiter.name, size.cores)
+      runMsByName.set(waiter.name, size.runMs)
     }
+    let heldCores = 0
+    for (const holder of holders) heldCores += (await sizeOf(holder.name, holder.cwd)).cores
     const growth = growthMib(
       await Promise.all(holders.map(async (h) => ({ name: (await sizeOf(h.name, h.cwd)).key, rssMib: h.rssMib }))),
       learned,
     )
-    const hostSamples = await capacity.recentHostSamples(SWAP_WINDOW)
+    const hostSamples = await capacity.recentHostSamples(Math.max(SWAP_WINDOW, SUSTAINED_LOAD_SAMPLES))
     const newestSample = hostSamples[0]
     const freeMib = freeMibOf(newestSample ?? null, ramMib, now)
     const swapRising =
@@ -166,6 +183,9 @@ export async function touchSlot(
       now.getTime() - newestSample.at.getTime() <= SAMPLE_MAX_AGE_MS &&
       swapGrowing(hostSamples)
     const loadNow = load.ok ? load.value : null
+    // Under the aim a slot beyond the base is held back by the tripwire (minutes on end over the load ceiling), never by
+    // one peak; an unknown trip (too few samples) reads the instant against the ceiling.
+    const trip = loadTrip(hostSamples, deps.loadCeiling, now, loadNow)
     const aimed =
       deps.slotAim === 'on'
         ? Math.min(deps.slotsMax, Math.max(1, (await capacity.slotAim())?.target ?? deps.slots))
@@ -190,15 +210,22 @@ export async function touchSlot(
           freeMib,
           growthMib: growth,
           max: aimed ?? deps.slotsMax,
-          loadOk: loadNow !== null && loadNow <= (aimed === null ? deps.slotExtraLoad : LOAD_PER_CORE * deps.cores),
+          loadOk:
+            aimed === null
+              ? loadNow !== null && loadNow <= deps.slotExtraLoad
+              : trip === null
+                ? loadNow !== null && loadNow <= deps.loadCeiling
+                : !trip.tripped,
+          ...(aimed !== null && trip?.tripped ? { loadWhy: describeTrip(trip.loads, deps.loadCeiling) } : {}),
           headroomMib: headroomMib(ramMib),
           swapGrowing: swapRising,
           load: loadNow === null ? null : Math.round(loadNow * 10) / 10,
-          extraLoad: aimed === null ? deps.slotExtraLoad : LOAD_PER_CORE * deps.cores,
+          extraLoad: aimed === null ? deps.slotExtraLoad : deps.loadCeiling,
           extraLoadFrom:
             aimed === null
               ? 'FACTORY_SLOT_EXTRA_LOAD'
-              : `${LOAD_PER_CORE} x ${deps.cores} cores under FACTORY_SLOT_AIM, FACTORY_SLOT_EXTRA_LOAD is not read`,
+              : 'the load ceiling, too few minute samples for the tripwire; FACTORY_SLOT_EXTRA_LOAD is not read',
+          ...(aimed === null ? {} : { cores: deps.cores, stepCores: mine.cores, coresByName, heldCores, runMsByName }),
         },
       },
       now,

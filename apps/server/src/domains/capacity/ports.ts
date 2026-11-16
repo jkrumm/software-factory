@@ -65,17 +65,19 @@ export interface CapacityStore {
   /** appends one finished `factory merge-lock` call: its wait and its hold */
   recordMergeWindow(window: MergeWindowRow): Promise<void>
   /**
-   * a step's peaks, newest first (null: not measured), of the runs that did not end under host pressure (a pressure level
+   * a step's runs, newest first (its peak, cores and run time), of the runs that did not end under host pressure (a pressure level
    * above normal or a swapout rate above `swapoutCeilingMb` in the host sample around the end). `legacy` adds the rows a
    * worktree's own step name left in that repo before steps were stored under the project's name (`factory-<n>-<a>` and
    * the same words after it).
    */
-  recentPeaks(
+  recentRuns(
     name: string,
     limit: number,
     swapoutCeilingMb: number,
     legacy?: { repo: string; words: string },
-  ): Promise<(number | null)[]>
+  ): Promise<StepRun[]>
+  /** the median run of every step that ended since `since`, in ms; null when none did */
+  stepMedianMs(since: Date): Promise<number | null>
   /** the same for every step of a repo (its absolute path): each name, the worktree names of old rows read as `project`'s, with its newest peaks, of the runs since `since` */
   projectPeaks(
     repo: string,
@@ -179,6 +181,15 @@ export interface Relearn {
   at: Date
   setAt: Date
   setBy: string
+}
+
+/** What one run of a step took, as the grant learns from it. */
+export interface StepRun {
+  /** null: not measured */
+  peakRssMib: number | null
+  /** the cores it used: its CPU seconds over its run's seconds; null: not measured */
+  cores: number | null
+  durationMs: number
 }
 
 /** One row of the cost ledger (`factory.step_costs`). */

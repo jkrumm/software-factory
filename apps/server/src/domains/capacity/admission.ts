@@ -5,6 +5,8 @@ import {
   describeLoad,
   describeMemory,
   describeProcesses,
+  describeTrip,
+  type LoadTrip,
   type MemoryCeilings,
   type MemoryReading,
   overLoad,
@@ -20,7 +22,18 @@ import type { QueueState } from './queue-state.ts'
  * Why a queued Issue that the chain lets through still stays queued, in the order the rules are looked at (the first
  * that says no wins). "Hold" is retired: an Issue is not waiting, it stays queued, and this names why.
  */
-export const REFUSALS = ['drain', 'doctor', 'boot', 'load', 'memory', 'lane', 'claim', 'window', 'cap'] as const
+export const REFUSALS = [
+  'drain',
+  'doctor',
+  'boot',
+  'load',
+  'memory',
+  'tests',
+  'lane',
+  'claim',
+  'window',
+  'cap',
+] as const
 export type RefusalKind = (typeof REFUSALS)[number]
 
 export interface Refusal {
@@ -76,6 +89,13 @@ export interface AdmissionInputs {
   /** null: the reading could not be taken, and the lead is admitted without it */
   load: number | null
   loadCeiling: number
+  /**
+   * the load tripwire over the minute samples (`loadTrip`): a lead waits only while it is tripped, never for one peak.
+   * Absent or null (too few fresh samples): the reading of the instant decides, as before.
+   */
+  loadTrip?: LoadTrip
+  /** the host's test line as it stands (`testLine`); null or absent: unread, and the line keeps nobody out */
+  tests?: TestLine | null
   /** the host's process count by the newest minute sample; null: unread, and the cap does not apply */
   processes?: number | null
   /** no new lead above this many processes; null or absent: no cap */
@@ -112,7 +132,8 @@ const no = (kind: RefusalKind, message: string, opensAt: Date | null = null, par
 
 /**
  * Whether a new lead may start now, in the order of the rules: the queue state (`drain` starts nothing), the host's
- * boot grace, its load, its memory (the reading, then the learned fit of the candidate's lead), the candidate's lane (the repo's
+ * boot grace, its load (the tripwire: sustained minutes over the ceiling), its memory (the reading, then the learned fit
+ * of the candidate's lead), the host's test line (`lineRefusal`), the candidate's lane (the repo's
  * cap on a resource class), the repo's claims (`leads: N` plus one for a fix; `pace` allows one), then an account with room.
  * Never spills: with every account closed the answer is to wait for the first opening. Pure: the readings are passed
  * in, and the caller decides again at every claim, inside one transaction.
@@ -123,7 +144,9 @@ export function checkAdmission(input: AdmissionInputs): Admission {
   if (input.doctor) return no('doctor', input.doctor)
   const booting = input.boot ? bootRefusal(input.boot, input.now) : null
   if (booting) return no('boot', booting.message, booting.opensAt)
-  if (input.load !== null && overLoad(input.load, input.loadCeiling)) {
+  const trip = input.loadTrip
+  if (trip?.tripped) return no('load', `the machine is busy: ${describeTrip(trip.loads, input.loadCeiling)}`)
+  if (!trip && input.load !== null && overLoad(input.load, input.loadCeiling)) {
     return no('load', `the machine is busy: ${describeLoad(input.load, input.loadCeiling)}`)
   }
   if (input.processes != null && input.processCap != null && overProcesses(input.processes, input.processCap)) {
@@ -137,6 +160,8 @@ export function checkAdmission(input: AdmissionInputs): Admission {
   }
   const fit = input.leadFit ? fitRefusal(input.leadFit) : null
   if (fit) return no('memory', fit, null, 'fit')
+  const line = input.tests && !input.candidate.urgent ? lineRefusal(input.tests) : null
+  if (line) return no('tests', line)
   const laneFree = laneRoom({ lane: input.lane, urgent: input.candidate.urgent })
   if (!laneFree.granted) return no('lane', laneFree.message)
   const room = claimRoom({
@@ -164,6 +189,37 @@ export function checkAdmission(input: AdmissionInputs): Admission {
 }
 
 const gib = (mib: number): number => Math.round((mib / 1024) * 10) / 10
+
+/**
+ * The host's test line as the admission sees it. A lead costs little while it thinks and much while it tests, so the
+ * steps waiting for a test slot are what more leads would lengthen.
+ */
+export interface TestLine {
+  /** steps waiting for a slot */
+  waiters: number
+  /** steps running in a slot */
+  holders: number
+  /** the median of how long the waiters have waited so far */
+  medianWaitMs: number
+  /** how long a step takes: the median run of the last day's steps; null: none ran */
+  stepMs: number | null
+}
+
+const minutes = (ms: number): string => `${Math.round(ms / 6000) / 10} min`
+
+/**
+ * No new lead while the test line is long: more steps wait than run, and half of them have already waited longer than a
+ * step takes. Then the slots, not the seats, are the bottleneck, and another lead only adds to the line. It opens again
+ * as soon as the line drains (fewer waiting than running, or the waits shorter than a step). Not a constant: both sides
+ * are measured, the line now and the steps of the last day. A fix (`urgent`) is never kept out by it.
+ */
+export function lineRefusal(line: TestLine): string | null {
+  if (line.stepMs === null || line.waiters <= line.holders || line.medianWaitMs <= line.stepMs) return null
+  return (
+    `the test line is long: ${line.waiters} steps wait for a slot beside ${line.holders} running, half of them for over ` +
+    `${minutes(line.medianWaitMs)}, longer than the ${minutes(line.stepMs)} a step takes (median of the last day)`
+  )
+}
 
 /** The refusal of a lead that would not fit by what its repo's leads are learned to take; null: it fits or nothing is known. */
 function fitRefusal(fit: LeadFit): string | null {

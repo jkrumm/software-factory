@@ -13,6 +13,28 @@ export function learnedPeakMib(peaksNewestFirst: readonly (number | null)[]): nu
   return peaks.length === 0 ? null : (peaks[Math.ceil(peaks.length * 0.8) - 1] ?? null)
 }
 
+const nearestRank = (values: readonly number[], share: number): number | null => {
+  const sorted = [...values].sort((a, b) => a - b)
+  return sorted.length === 0 ? null : (sorted[Math.max(0, Math.ceil(sorted.length * share) - 1)] ?? null)
+}
+
+/** The cores a step is learned to take: the p80 (nearest rank) of its newest measured runs, as its peak. Null: none measured. */
+export function learnedCores(runsNewestFirst: readonly { cores: number | null }[]): number | null {
+  const cores = runsNewestFirst
+    .slice(0, LEARNED_RUNS)
+    .map((run) => run.cores)
+    .filter((c): c is number => c !== null)
+  const p80 = nearestRank(cores, 0.8)
+  return p80 === null ? null : Math.round(p80 * 100) / 100
+}
+
+/** How long a step is learned to run: the median (nearest rank) of its newest runs. Null: none ran. */
+export const learnedRunMs = (runsNewestFirst: readonly { durationMs: number }[]): number | null =>
+  nearestRank(
+    runsNewestFirst.slice(0, LEARNED_RUNS).map((run) => run.durationMs),
+    0.5,
+  )
+
 /** The memory the running steps will still take on: what each is learned to peak at, less what it holds now. */
 export function growthMib(
   holders: readonly { name: string; rssMib: number | null }[],

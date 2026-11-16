@@ -13,6 +13,7 @@ export const QUEUE_REASONS = [
   'boot',
   'load',
   'memory',
+  'tests',
   'lane',
   'claim',
   'window',

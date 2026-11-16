@@ -73,6 +73,20 @@ export function treeMeter(root: number) {
   }
 }
 
+/**
+ * The CPU seconds a finished command used: its exit's resource usage, which counts every descendant it reaped (the `ps`
+ * samples miss each process that starts and ends between two of them: a test runner's workers, `git`), or the samples'
+ * figure when that is more (a daemon the command left running) or the usage is unknown.
+ */
+export function cpuOfRun(
+  sampledSeconds: number | null,
+  usage: { cpuTime: { total: bigint } } | undefined,
+): number | null {
+  const reaped = usage === undefined ? null : Number(usage.cpuTime.total) / 1e6
+  if (reaped === null) return sampledSeconds
+  return Math.round(Math.max(reaped, sampledSeconds ?? 0) * 100) / 100
+}
+
 /** One timed `ps`; null when it failed. */
 export async function readProcesses(timeoutMs = 3000): Promise<PsRow[] | null> {
   try {

@@ -51,7 +51,15 @@ describe('a step is sized from its project', () => {
       VALUES (${AT}, 5, 40, 30, 0, 1)`
   })
 
-  const deps = () => ({ ...world.deps, slots: 2, slotsMax: 6, slotExtraLoad: 12, slotAim: 'off' as const, cores: 12 })
+  const deps = () => ({
+    ...world.deps,
+    slots: 2,
+    slotsMax: 6,
+    slotExtraLoad: 12,
+    slotAim: 'off' as const,
+    cores: 12,
+    loadCeiling: 36,
+  })
   const learn = (name: string, peak: number, repo = '/src/p') =>
     world.db.sql`
       INSERT INTO factory.step_costs (at, name, repo, peak_rss_mib, cpu_seconds, duration_ms, wait_ms, exit_code)

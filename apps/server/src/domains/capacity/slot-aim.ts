@@ -1,3 +1,5 @@
+import { describeTrip, type LoadTrip } from './host.ts'
+
 /** `FACTORY_SLOT_AIM`: `off` leaves the live rule alone, `shadow` records what the aim would do beside it, `on` grants by the aim. */
 export type AimMode = 'off' | 'shadow' | 'on'
 
@@ -7,8 +9,6 @@ export const AIM_QUIET_MS = 5 * 60_000
 export const SWAP_WINDOW = 5
 /** Swap in use must rise by this many percentage points of RAM across the window to count as growing. */
 export const SWAP_GROWTH_PCT = 0.5
-/** No slot is added while the 1-minute load is above this many times the cores. */
-export const LOAD_PER_CORE = 2
 
 export interface AimState {
   /** the slots the aim allows, between 1 and the ceiling */
@@ -23,7 +23,10 @@ export interface AimSignals {
   pressureLevel: number | null
   swapGrowing: boolean
   load: number | null
-  cores: number
+  /** the load tripwire over the minute samples (`loadTrip`): no slot is added while it is tripped; null: too few samples */
+  loadTrip: LoadTrip
+  /** the load ceiling the tripwire is set at, for the reason's words */
+  loadCeiling: number
   /** callers in line for a slot */
   waiters: number
 }
@@ -46,8 +49,9 @@ export function swapGrowing(samplesNewestFirst: readonly { swapUsedPct: number |
 
 /**
  * One minute of the aim, AIMD on the host's pressure: level 4 drops to one slot, level 2 or swap growing halves the count,
- * and one more slot is added after five quiet minutes at level 1 with a waiter in line and the load within twice the
- * cores. An unread pressure level holds the count and counts as not quiet.
+ * and one more slot is added after five quiet minutes at level 1 with a waiter in line and the load tripwire clear (a
+ * peak over the ceiling adds nothing to the count's caution; minutes on end over it do). An unread pressure level holds
+ * the count and counts as not quiet.
  */
 export function aimStep(state: AimState, signals: AimSignals, ceiling: number): AimStep {
   const target = Math.min(Math.max(1, state.target), ceiling)
@@ -67,10 +71,11 @@ export function aimStep(state: AimState, signals: AimSignals, ceiling: number): 
   if (quietMs < AIM_QUIET_MS) return { state: { target, quietSince }, reason: 'quiet, waiting out 5 minutes' }
   if (target >= ceiling) return { state: { target, quietSince }, reason: `quiet, at the ceiling of ${ceiling}` }
   if (signals.waiters === 0) return { state: { target, quietSince }, reason: 'quiet, nobody waits' }
-  if (signals.load === null || signals.load > LOAD_PER_CORE * signals.cores)
+  if (signals.load === null) return { state: { target, quietSince }, reason: 'quiet, load unread' }
+  if (signals.loadTrip?.tripped)
     return {
       state: { target, quietSince },
-      reason: `quiet, load ${signals.load ?? 'unread'} is over ${LOAD_PER_CORE * signals.cores} (${LOAD_PER_CORE}x the cores)`,
+      reason: `quiet, but ${describeTrip(signals.loadTrip.loads, signals.loadCeiling)}`,
     }
   return {
     state: { target: target + 1, quietSince: at },

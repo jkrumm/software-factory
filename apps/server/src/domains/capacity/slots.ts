@@ -29,9 +29,32 @@ export interface SlotRow {
   waitSplit: Readonly<Partial<Record<WaitKind, number>>>
 }
 
-/** What a wait waits for: every slot taken, the memory fit, swap growing, the load gate, a step with no size known, or the line ahead. */
-export const WAIT_KINDS = ['slots', 'memory', 'swap', 'load', 'unsized', 'line'] as const
+/**
+ * What a wait waits for: every slot taken, the memory fit, swap growing, the load gate (the tripwire under the aim), a step
+ * with no size known, the line ahead, the cores fit, or its host-wide class held by another step.
+ */
+export const WAIT_KINDS = ['slots', 'memory', 'swap', 'load', 'unsized', 'line', 'cores', 'class'] as const
 export type WaitKind = (typeof WAIT_KINDS)[number]
+
+/**
+ * The host-wide class of a step, or null: at most one step of a class holds a slot at a time, whichever repo runs it.
+ * `apple` is every step named `<repo>-apple` or `<project> apple`, the name dotfiles `docs/apple-signing.md` gives every
+ * xcodebuild, devicectl, archive and notarisation (iris, ntfy-mac, shutterflow and any later Xcode user). One at a time
+ * not for memory (the 14 days to 2026-11-16: iris-apple peaked at 2.8 GiB, ntfy-mac-apple 2.7, shutterflow-apple 2.1, so
+ * two would fit beside the leads on 32 GiB) but because the simulators and the signing keychain are the host's: iris's
+ * `scripts/apple-slot --sim` shuts every simulator down when its job ends. Cargo builds are no class: measured at 5.6 GiB
+ * and 3 cores (shutterflow cargo test, p80), they are packed by the memory and cores fit like any other step.
+ */
+export function stepClassOf(name: string): string | null {
+  return /(^|[\s-])apple$/.test(name) ? 'apple' : null
+}
+
+/**
+ * The cores a step with none learned is taken to need: the p85 of every step's cores (CPU seconds over its run) on the
+ * day to 2026-11-16 was 0.83. That ledger counted only the processes alive at a `ps` sample, so the figure is rounded up
+ * to the next core; runs since `factory slot run` reads the exit's resource usage (every reaped descendant) replace it.
+ */
+export const DEFAULT_STEP_CORES = 1
 
 /** How long a waiter may be passed by smaller steps before nothing passes it any more (`FACTORY_SLOT_PASS_MIN`). */
 export const DEFAULT_PASS_AFTER_MS = 10 * 60_000
@@ -70,6 +93,35 @@ export interface SlotFit {
   extraLoad?: number
   /** where `extraLoad` comes from, for the message: the setting or the aim's multiple of the cores */
   extraLoadFrom?: string
+  /** why `loadOk` is false in words of its own (the tripwire's), in place of `load` and `extraLoad` */
+  loadWhy?: string
+  /**
+   * The cores the steps beyond the base may use together: the host's cores. Null or absent: no cores fit. Steps are
+   * packed by what each is learned to take, so several light steps run beside one heavy one.
+   */
+  cores?: number | null
+  /** what the caller's step is learned to take in cores; absent: `DEFAULT_STEP_CORES` */
+  stepCores?: number
+  /** the cores of each waiter's step ahead of the caller, by name; a missing name takes `DEFAULT_STEP_CORES` */
+  coresByName?: ReadonlyMap<string, number>
+  /** the cores the running steps are learned to take, summed */
+  heldCores?: number
+  /** each waiter's learned run in ms by name, for the order of the line; a missing or null name has none learned */
+  runMsByName?: ReadonlyMap<string, number | null>
+}
+
+/** One step as the grant weighs it: its name (and so its class), its learned memory peak and its cores. */
+interface StepSize {
+  name: string
+  peakMib: number | null
+  peakFrom: PeakFrom
+  cores: number
+}
+
+/** The slots taken: how many, and how many of each host-wide class. */
+interface Taken {
+  count: number
+  classes: ReadonlyMap<string, number>
 }
 
 /** What a granted step waited for: its whole wait and the split of it by reason (the time between two calls counts to the reason given at the first). */
@@ -94,14 +146,25 @@ export interface SlotView {
 
 const gib = (mib: number): string => `${(mib / 1024).toFixed(1)} GiB`
 
-/** Whether the first waiter gets a slot with `holders` taken, and if not why. */
+const cores = (n: number): string => `${Math.round(n * 10) / 10}`
+
+/** Whether `step` gets a slot with `taken` held, and if not why. */
 function decide(
-  holders: number,
+  taken: Taken,
   base: number,
   fit: SlotFit,
+  step: StepSize,
 ): { grant: true } | { grant: false; why: string; kind: WaitKind } {
+  const holders = taken.count
   const max = Math.max(base, fit.max)
   if (holders >= max) return { grant: false, kind: 'slots', why: `all ${max} slots are busy` }
+  const cls = stepClassOf(step.name)
+  if (cls !== null && (taken.classes.get(cls) ?? 0) > 0)
+    return {
+      grant: false,
+      kind: 'class',
+      why: `a step of the host-wide class ${cls} holds a slot: one at a time, whichever repo runs it`,
+    }
   if (holders === 0) return { grant: true }
   if (fit.swapGrowing)
     return {
@@ -109,22 +172,31 @@ function decide(
       kind: 'swap',
       why: 'swap in use is growing: one step at a time until it settles, whatever memory is free',
     }
-  const { peakMib, freeMib } = fit
+  const { peakMib } = step
+  const { freeMib } = fit
   const known = peakMib !== null && freeMib !== null
   const fits = known && peakMib + fit.growthMib <= freeMib - fit.headroomMib
   const memory = (): { grant: false; why: string; kind: WaitKind } => ({
     grant: false,
     kind: 'memory',
-    why: `waiting for memory: needs ${gib(peakMib ?? 0)} (${PEAK_SOURCE[fit.peakFrom ?? 'learned']}), ${gib(Math.max(0, (freeMib ?? 0) - fit.growthMib))} free after ${gib(fit.growthMib)} the running steps still grow, headroom ${gib(fit.headroomMib)}`,
+    why: `waiting for memory: needs ${gib(peakMib ?? 0)} (${PEAK_SOURCE[step.peakFrom]}), ${gib(Math.max(0, (freeMib ?? 0) - fit.growthMib))} free after ${gib(fit.growthMib)} the running steps still grow, headroom ${gib(fit.headroomMib)}`,
   })
   if (holders < base) return !known || fits ? { grant: true } : memory()
   if (!fit.loadOk) {
     const over =
-      fit.load != null && fit.extraLoad !== undefined
+      fit.loadWhy ??
+      (fit.load != null && fit.extraLoad !== undefined
         ? `load ${fit.load} is over ${fit.extraLoad}${fit.extraLoadFrom ? ` (${fit.extraLoadFrom})` : ''}`
-        : 'load is too high'
+        : 'load is too high')
     return { grant: false, kind: 'load', why: `${over} for a slot beyond the first ${base}` }
   }
+  const held = fit.heldCores ?? 0
+  if (fit.cores != null && held > 0 && held + step.cores > fit.cores)
+    return {
+      grant: false,
+      kind: 'cores',
+      why: `waiting for cores: needs ${cores(step.cores)}, the ${holders} running steps are learned to take ${cores(held)} of the ${fit.cores} cores`,
+    }
   if (peakMib === null)
     return {
       grant: false,
@@ -139,7 +211,7 @@ function decide(
 /**
  * One call of a caller, which is a request for a slot and a renewal of the one it has: the first call makes it a
  * waiter; a call from a waiter first in line, with a slot free, gives it that slot; a call from a holder renews the
- * lease. Slots go to waiters in the order they asked. Rows past their lease (holders) or their poll window (waiters)
+ * lease. Slots go to waiters in the line's order (`lineOrder`). Rows past their lease (holders) or their poll window (waiters)
  * are removed first, so an expired lease frees its slot without anything else having to notice.
  */
 export function touchSlots(
@@ -230,32 +302,44 @@ export function touchSlots(
     }
     return { rows: [...others, reclaimed], view: view(reclaimed, 0) }
   }
-  const line = [...others.filter((row) => row.slot === null), mine].sort(
-    (a, b) => a.requestedAt.getTime() - b.requestedAt.getTime() || a.id.localeCompare(b.id),
-  )
+  const line = lineOrder([...others.filter((row) => row.slot === null), mine], input.fit.runMsByName)
   const ahead = line.findIndex((row) => row.id === input.id)
   const passAfterMs = input.passAfterMs ?? DEFAULT_PASS_AFTER_MS
   const passedNote = (row: SlotRow): string =>
     row.passedAt === null
       ? ''
       : ` (passed by "${row.passedBy ?? '?'}" since ${Math.floor((now.getTime() - row.passedAt.getTime()) / 60_000)} min; nothing passes it after ${Math.round(passAfterMs / 60_000)} min)`
-  const verdict = decide(taken.size, input.slots, input.fit)
+  const held = others.filter((row) => row.slot !== null)
+  const classes = new Map<string, number>()
+  for (const row of held) {
+    const cls = stepClassOf(row.name)
+    if (cls !== null) classes.set(cls, (classes.get(cls) ?? 0) + 1)
+  }
+  const takenNow: Taken = { count: taken.size, classes }
+  const verdict = decide(takenNow, input.slots, input.fit, {
+    name: input.name,
+    peakMib: input.fit.peakMib,
+    peakFrom: input.fit.peakFrom ?? 'learned',
+    cores: input.fit.stepCores ?? DEFAULT_STEP_CORES,
+  })
   const wait = (why: string, kind: WaitKind): { rows: SlotRow[]; view: SlotView } => ({
     rows: [...others, { ...mine, why, whyKind: kind }],
     view: view(mine, ahead, why),
   })
   if (!verdict.grant) return wait(verdict.why + passedNote(mine), verdict.kind)
   // The slot goes to the first waiter in line that fits: a waiter ahead that does not fit is passed, unless it has been
-  // passed for the whole window (then it holds the line), and one that fits takes the slot on its own next call.
+  // passed for the whole window (then it holds the line), and one that fits takes the slot on its own next call. A waiter
+  // whose host-wide class is held never holds the line: the line standing still frees no class.
   const passed: SlotRow[] = []
   for (const waiter of line.slice(0, ahead)) {
-    const theirs = decide(taken.size, input.slots, {
-      ...input.fit,
+    const theirs = decide(takenNow, input.slots, input.fit, {
+      name: waiter.name,
       peakMib: input.fit.peaksByName?.get(waiter.name) ?? null,
       peakFrom: input.fit.peakFromByName?.get(waiter.name) ?? 'learned',
+      cores: input.fit.coresByName?.get(waiter.name) ?? DEFAULT_STEP_CORES,
     })
     if (theirs.grant) return wait(`waiting for the ${ahead} ahead in line`, 'line')
-    if (waiter.passedAt !== null && now.getTime() - waiter.passedAt.getTime() >= passAfterMs)
+    if (theirs.kind !== 'class' && waiter.passedAt !== null && now.getTime() - waiter.passedAt.getTime() >= passAfterMs)
       return wait(
         `"${waiter.name}" ahead was passed for ${Math.round(passAfterMs / 60_000)} min and nothing passes it now: ${theirs.why}`,
         'line',
@@ -280,6 +364,44 @@ export function touchSlots(
   )
   const ms = Object.values(split).reduce((sum, v) => sum + v, 0)
   return { rows: [...rest, granted], view: view(granted, 0), ...(existing ? { waited: { ms, split } } : {}) }
+}
+
+/**
+ * The line in the order slots go out: by the time a waiter asked plus the time its step is learned to run, so a short
+ * step passes a long one that asked a little earlier (the mean wait falls), and the passing has its own ageing: a waiter's
+ * place is fixed when it asks, so a step asking later passes it only by being shorter by more than the gap, and once the
+ * clock is past its place nothing new passes it. A step with no learned run takes the median of the line's learned ones
+ * (none learned: the order is the order of asking).
+ */
+export function lineOrder(rows: readonly SlotRow[], runMsByName?: ReadonlyMap<string, number | null>): SlotRow[] {
+  const known = rows
+    .map((row) => runMsByName?.get(row.name))
+    .filter((ms): ms is number => typeof ms === 'number')
+    .sort((a, b) => a - b)
+  const median = known.length === 0 ? 0 : (known[Math.floor((known.length - 1) / 2)] ?? 0)
+  const place = (row: SlotRow): number => row.requestedAt.getTime() + (runMsByName?.get(row.name) ?? median)
+  return [...rows].sort(
+    (a, b) => place(a) - place(b) || a.requestedAt.getTime() - b.requestedAt.getTime() || a.id.localeCompare(b.id),
+  )
+}
+
+/**
+ * The host's test line for the lead admission (`TestLine` of `admission.ts`): the live waiters and holders, and the median
+ * of how long the waiters have waited so far. A waiter its host-wide class holds back waits for that class, not for a
+ * slot, and is left out: a queue of Apple builds behind one is no reason to hold leads back.
+ */
+export function testLineOf(
+  rows: readonly SlotRow[],
+  now: Date,
+): { waiters: number; holders: number; medianWaitMs: number } {
+  const t = now.getTime()
+  const waits = rows
+    .filter((row) => row.slot === null && row.whyKind !== 'class' && row.seenAt.getTime() >= t - WAITER_TTL_MS)
+    .map((row) => Math.max(0, t - row.requestedAt.getTime()))
+    .sort((a, b) => a - b)
+  const holders = rows.filter((row) => row.slot !== null && (row.leasedUntil?.getTime() ?? 0) >= t).length
+  const mid = waits.length === 0 ? 0 : (waits[Math.floor((waits.length - 1) / 2)] ?? 0)
+  return { waiters: waits.length, holders, medianWaitMs: mid }
 }
 
 /** The steps holding a live slot and the callers still asking for one. */

@@ -133,7 +133,15 @@ describe('the fixed tuning rules', () => {
       throughput: { total: 5, perDay: [] },
       minutesOverCeiling: { total: over, perDay: [] },
       idleSeatHours: { total: idle, perDay: [] },
-      slotWait: { n: p90 === null ? 0 : 3, p50Ms: p90, p90Ms: p90, perDayP50: [], byReason: [], byRepo: [] },
+      slotWait: {
+        n: p90 === null ? 0 : 3,
+        p50Ms: p90,
+        p90Ms: p90,
+        perDayP50: [],
+        perDayP90: [],
+        byReason: [],
+        byRepo: [],
+      },
     })
 
   test('too long over the ceiling lowers the seat bonus first, then the seats, then the extra slots', () => {

@@ -406,6 +406,59 @@ describe('admission', () => {
     expect(result.notes).toEqual([])
   })
 
+  test('the load gate is the tripwire: five minutes on end over the ceiling keep a lead out, a peak or a reading back under it does not', async () => {
+    const issue = await world.queued({ repo: 'app' })
+    const now = world.clock.now()
+    const minutes = async (loads: number[]) => {
+      await world.db.sql`DELETE FROM factory.host_samples`
+      for (const [i, load] of loads.entries())
+        await world.db.sql`
+          INSERT INTO factory.host_samples (at, load, memory_used_pct, swap_used_pct, swapout_mb_per_300s, pressure_level)
+          VALUES (${new Date(now.getTime() - i * 60_000)}, ${load}, 40, 2, 0, 1)`
+    }
+    // a peak among quiet minutes, read at 75 over the ceiling of 60: admitted
+    await minutes([75, 20, 20, 20, 20])
+    world.host.loadValue = ok(75)
+    expect((await pass()).admitted.map((a) => a.issue)).toEqual([issue])
+
+    const next = await world.queued({ repo: 'app' })
+    nextSample()
+    await minutes([75, 70, 68, 66, 64])
+    world.host.loadValue = ok(75)
+    const shut = await pass()
+    expect(shut.queue.find((e) => e.issue === next)?.reason?.message).toBe(
+      'the machine is busy: load over 60 in each of the last 5 minutes (75, 70, 68, 66, 64)',
+    )
+    // the reading before the admission is back under the ceiling: the trip clears
+    world.host.loadQueue = [ok(75), ok(30)]
+    expect((await pass()).admitted.map((a) => a.issue)).toEqual([next])
+  })
+
+  test('a long test line keeps a new lead out and the pass reads it from the slots; it opens when the line drains', async () => {
+    const issue = await world.queued({ repo: 'app' })
+    const now = world.clock.now()
+    const ago = (ms: number) => new Date(now.getTime() - ms)
+    // a step took 30 s over the last day; one runs, three have waited five minutes
+    await world.db.sql`
+      INSERT INTO factory.step_costs (at, name, repo, peak_rss_mib, cpu_seconds, duration_ms, wait_ms, exit_code)
+      VALUES (${ago(3_600_000)}, 'app unit', '/src/app', 500, 10, 30000, 0, 0)`
+    await world.db.sql`
+      INSERT INTO factory.capacity_slots (id, name, requested_at, seen_at, slot, leased_until, granted_at)
+      VALUES ('h', 'app unit', ${ago(60_000)}, ${now}, 1, ${new Date(now.getTime() + 30_000)}, ${ago(60_000)})`
+    for (const id of ['w1', 'w2', 'w3'])
+      await world.db.sql`
+        INSERT INTO factory.capacity_slots (id, name, requested_at, seen_at) VALUES (${id}, ${id}, ${ago(300_000)}, ${now})`
+    const shut = await pass()
+    expect(shut.admitted).toEqual([])
+    expect(shut.queue.find((e) => e.issue === issue)?.reason).toMatchObject({
+      kind: 'tests',
+      message:
+        'the test line is long: 3 steps wait for a slot beside 1 running, half of them for over 5 min, longer than the 0.5 min a step takes (median of the last day)',
+    })
+    await world.db.sql`DELETE FROM factory.capacity_slots WHERE id IN ('w2', 'w3')`
+    expect((await pass()).admitted.map((a) => a.issue)).toEqual([issue])
+  })
+
   test('a host that booted 5 min ago admits nothing new, whatever the load: the reason names the boot', async () => {
     const issue = await world.queued({ repo: 'app' })
     world.host.uptimeValue = ok(5 * 60_000)

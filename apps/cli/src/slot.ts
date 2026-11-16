@@ -8,7 +8,7 @@ import { usage } from './exit.ts'
 import { credentialOf } from './credentials.ts'
 import { DEFAULT_URL, type Io } from './operation.ts'
 import { collectJunit } from './junit.ts'
-import { readProcesses, treeMeter } from './process-tree.ts'
+import { cpuOfRun, readProcesses, treeMeter } from './process-tree.ts'
 import { type LocalTry, localSlots } from './local-slots.ts'
 import { restartPatience } from './restart-wait.ts'
 
@@ -473,7 +473,7 @@ export async function slotRun(input: { name?: string; command: string[] }, io: I
           name,
           ...(cwd === undefined ? {} : { cwd }),
           peakRssMib: meter.peakRssMib,
-          cpuSeconds: meter.cpuSeconds,
+          cpuSeconds: cpuOfRun(meter.cpuSeconds, child?.resourceUsage()),
           durationMs: Date.now() - startedAt,
           waitMs: waitedMs,
           exitCode,
