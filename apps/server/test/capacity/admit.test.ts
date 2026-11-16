@@ -387,6 +387,25 @@ describe('admission', () => {
     expect(result.notes).toEqual(['load reading failed (no loadavg): new leads are admitted without it'])
   })
 
+  test('the load is read again before every admission: a host that got busy since the pass began admits no further lead (Issue 1742)', async () => {
+    world.accounts.rows = [account('a'), account('b')]
+    const [one, two] = [await world.queued({ repo: 'app' }), await world.queued({ repo: 'app' })]
+    // readHost 10, before the first admission 10, before the second 75 (ceiling 60)
+    world.host.loadQueue = [ok(10), ok(10), ok(75)]
+    const result = await pass()
+    expect(result.admitted.map((a) => a.issue)).toEqual([one])
+    expect(reasons(result)[two]).toBe('load')
+  })
+
+  test('a load reading that fails after one that was over the ceiling keeps that reading: the lead is not admitted without it', async () => {
+    const issue = await world.queued({ repo: 'app' })
+    world.host.loadQueue = [ok(75), { ok: false, error: { kind: 'timeout', detail: 'slow' } }]
+    const result = await pass()
+    expect(result.admitted).toEqual([])
+    expect(reasons(result)).toEqual({ [issue]: 'load' })
+    expect(result.notes).toEqual([])
+  })
+
   test('a host that booted 5 min ago admits nothing new, whatever the load: the reason names the boot', async () => {
     const issue = await world.queued({ repo: 'app' })
     world.host.uptimeValue = ok(5 * 60_000)

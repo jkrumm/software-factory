@@ -80,8 +80,10 @@ export class FakeSource implements ProjectSource {
 export class FakeHost implements HostReader {
   loadValue: Result<number> = ok(1)
   memoryValue: Result<MemoryReading> = ok({ swapoutMbPer300s: 0, swapUsedPct: 10 })
+  /** readings handed out one by one before `loadValue`, for a test where the load moves between two looks */
+  loadQueue: Result<number>[] = []
   async load() {
-    return this.loadValue
+    return this.loadQueue.shift() ?? this.loadValue
   }
   ramMibValue: Result<number> = ok(32_768)
   async memory() {

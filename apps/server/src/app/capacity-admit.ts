@@ -736,12 +736,21 @@ async function recordWaits(deps: CapacityDeps, queue: readonly QueueEntry[], not
   if (!stored.ok) notes.push(`the queue intervals could not be stored (${stored.error.detail})`)
 }
 
+/**
+ * The host readings with the load read now. A reading that fails keeps the pass's last one (`readHost` already noted a
+ * failure), so a host that answered before is never admitted into without a load because of one slow `sysctl`.
+ */
+async function withFreshLoad(deps: CapacityDeps, host: HostInputs): Promise<HostInputs> {
+  const load = await deps.host.load()
+  return load.ok ? { ...host, load: load.value } : host
+}
+
 /** The most Issues one pass admits; the rest wait for the next. */
 export const PASS_LIMIT = 20
 
 /**
- * The admission pass: poll the accounts if the readings are old, read the host once, then admit one Issue at a time,
- * each decided again in its own transaction, until nothing more may start. Replay-safe: the event key names the
+ * The admission pass: poll the accounts if the readings are old, read the host once (the load is read again before each
+ * admission), then admit one Issue at a time, each decided again in its own transaction, until nothing more may start. Replay-safe: the event key names the
  * attempt, so a second pass admits nothing twice.
  */
 export async function admissionPass(
@@ -749,13 +758,18 @@ export async function admissionPass(
   options: { limit?: number } = {},
 ): Promise<Result<PassResult, PortError>> {
   const notes = await pollIfDue(deps)
-  const host = await readHost(deps)
-  notes.push(...host.notes)
-  await recordShadow(deps, host, notes)
+  const first = await readHost(deps)
+  notes.push(...first.notes)
+  await recordShadow(deps, first, notes)
+  let host = first
   const admitted: Admitted[] = []
   const skip = new Set<IssueId>()
   let queue: QueueEntry[] = []
   for (let i = 0; i < (options.limit ?? PASS_LIMIT); i++) {
+    // The load is read again before every admission, not once for the pass: the doctors, the shadow decision and the
+    // admissions before this one all take time, and the 1-minute load moves by tens in a minute on a busy host (Issue 1742:
+    // a lead admitted with the load over its ceiling on the samples either side).
+    host = await withFreshLoad(deps, host)
     const step = await admitOne(deps, host, skip)
     if (!step.ok) return step
     queue = step.value.queue
