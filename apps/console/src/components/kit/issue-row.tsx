@@ -17,6 +17,7 @@ export function IssueRow({
   since,
   now,
   onMenu,
+  projectAs,
   href,
   as,
   className,
@@ -40,7 +41,7 @@ export function IssueRow({
         </CardLink>
       </span>
       <span className="hidden w-20 shrink-0 min-[40rem]:block">
-        <ProjectChip project={project} />
+        <ProjectChip project={project} as={projectAs} />
       </span>
       <span className="shrink-0 min-[40rem]:w-24">
         <Lozenge state={state} />

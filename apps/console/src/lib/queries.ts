@@ -24,6 +24,10 @@ import {
   fetchMachine,
   fetchNeeds,
   fetchProjectDigests,
+  fetchProjectHygiene,
+  fetchProjectIndex,
+  fetchProjectPage,
+  fetchProjectPlan,
   fetchSince,
   fetchThroughput,
   onNewerServer,
@@ -110,6 +114,58 @@ export function useProjectDigests() {
     retry: (count, error) =>
       retryNetworkError(error) || (!(error instanceof ApiError && error.status === 404) && count < 1),
   })
+}
+
+/** An unknown project (404) is not retried: its page says so. */
+const retryUnlessMissing = (count: number, error: Error) =>
+  retryNetworkError(error) || (!(error instanceof ApiError && error.status === 404) && count < 1)
+
+/** Every project with its counts and its newest hygiene pass. */
+export const projectIndexQuery = {
+  queryKey: ['project-index'],
+  queryFn: ({ signal }: { signal: AbortSignal }) => fetchProjectIndex(signal),
+}
+
+export function useProjectIndex() {
+  const live = useLive()
+  return useQuery({ ...projectIndexQuery, refetchInterval: pollEvery(live) })
+}
+
+/** One project's page, its plan rows and its hygiene: the route's loader warms them, the hooks keep them current. */
+export const projectPageQuery = (name: string) => ({
+  queryKey: ['project-page', name],
+  queryFn: ({ signal }: { signal: AbortSignal }) => fetchProjectPage(name, signal),
+})
+export const projectPlanQuery = (name: string) => ({
+  queryKey: ['project-plan', name],
+  queryFn: ({ signal }: { signal: AbortSignal }) => fetchProjectPlan(name, signal),
+})
+export const projectHygieneQuery = (name: string) => ({
+  queryKey: ['project-hygiene', name],
+  queryFn: ({ signal }: { signal: AbortSignal }) => fetchProjectHygiene(name, signal),
+})
+
+export function useProjectPage(name: string) {
+  const live = useLive()
+  return useQuery({ ...projectPageQuery(name), retry: retryUnlessMissing, refetchInterval: pollEvery(live) })
+}
+
+export function useProjectPlan(name: string) {
+  const live = useLive()
+  return useQuery({ ...projectPlanQuery(name), retry: retryUnlessMissing, refetchInterval: pollEvery(live) })
+}
+
+export function useProjectHygiene(name: string) {
+  const live = useLive()
+  return useQuery({ ...projectHygieneQuery(name), retry: retryUnlessMissing, refetchInterval: pollEvery(live) })
+}
+
+/** Warms what a project's page reads, on a hover or a focus of a link to it. */
+export function prefetchProject(name: string): void {
+  const staleTime = PREFETCH_STALE_MS
+  void queryClient.prefetchQuery({ ...projectPageQuery(name), staleTime })
+  void queryClient.prefetchQuery({ ...projectPlanQuery(name), staleTime })
+  void queryClient.prefetchQuery({ ...projectHygieneQuery(name), staleTime })
 }
 
 /** The options of the two first-screen queries, shared by the hooks and by the prefetch at boot. */

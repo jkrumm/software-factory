@@ -203,7 +203,7 @@ test('a project toggle in the sidebar narrows the board', async ({ page, apiUrl 
   await expect(page.locator('select:visible')).toHaveCount(0)
 })
 
-test("a card's project chip is a link that filters the board to that project", async ({ page, apiUrl }) => {
+test("a card's project chip is a link that opens the project's page", async ({ page, apiUrl }) => {
   const flow = await flowOf(apiUrl)
   const item = flow.states.working.issues[0] ?? STATES.flatMap((s) => flow.states[s].issues)[0]
   if (!item) throw new Error('the board is empty')
@@ -213,13 +213,10 @@ test("a card's project chip is a link that filters the board to that project", a
     .filter({ has: page.getByRole('heading', { name: item.title, exact: true }) })
     .first()
     .getByRole('link', { name: item.repo, exact: true })
-  await expect(chip).toHaveAttribute('href', new RegExp(`/flow\\?project=${item.repo}$`))
+  await expect(chip).toHaveAttribute('href', new RegExp(`/projects/${item.repo}$`))
   await chip.click()
-  await expect(page).toHaveURL(new RegExp(`[?&]project=${item.repo}`))
-  await expectCounts(
-    page,
-    countsOf(flow, (i) => i.repo === item.repo),
-  )
+  await expect(page).toHaveURL(new RegExp(`/projects/${item.repo}$`))
+  await expect(page.getByRole('heading', { level: 1, name: item.repo })).toBeVisible()
 })
 
 test('the filters narrow every column, write the URL, and clearing restores the counts', async ({ page, apiUrl }) => {

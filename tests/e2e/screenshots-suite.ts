@@ -10,6 +10,8 @@ const SCREENS = [
   { name: 'flow', path: '/flow' },
   { name: 'flow-working', path: '/flow?state=working' },
   { name: 'flow-project', path: '/flow?project=argo' },
+  { name: 'projects', path: '/projects' },
+  { name: 'project-argo', path: '/projects/argo' },
   { name: 'chain', path: '/chain' },
   { name: 'improve', path: '/improve' },
   { name: 'improve-30', path: '/improve?days=30' },
@@ -97,6 +99,14 @@ export function screenshotSuite(variantName: VariantName) {
           await page.setViewportSize({ width, height: width < 600 ? 1800 : 1600 })
           await page.waitForLoadState('networkidle')
           await shot('chain-tall')
+          await page.setViewportSize({ width, height })
+        }
+        if (name === 'project-argo') {
+          // The page runs taller than the viewport (Production, Setup and Hygiene sit under the cards): shoot a tall one too.
+          const { width, height } = page.viewportSize() ?? variant.viewport
+          await page.setViewportSize({ width, height: width < 600 ? 4200 : 2600 })
+          await page.waitForLoadState('networkidle')
+          await shot('project-argo-tall')
           await page.setViewportSize({ width, height })
         }
         if (name === 'improve' || name === 'improve-30') {

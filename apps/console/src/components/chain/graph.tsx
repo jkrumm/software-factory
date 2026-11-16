@@ -90,6 +90,9 @@ function Card({ id, data }: NodeProps<CardNode>) {
         className={cn('chain-card h-full overflow-hidden', row && 'border border-dashed border-muted-foreground/50')}
         title={node.title}
         project={node.repo ?? 'No project'}
+        projectAs={
+          node.repo ? (props) => <Link to="/projects/$name" params={{ name: node.repo ?? '' }} {...props} /> : undefined
+        }
         kind={node.issueKind}
         number={number ? Number(number) : null}
         selected={peeked}

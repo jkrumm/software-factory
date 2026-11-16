@@ -20,6 +20,10 @@ import {
   FrictionModel,
   HostHistoryModel,
   ProjectDigestsModel,
+  ProjectHygieneModel,
+  ProjectIndexModel,
+  ProjectPageModel,
+  ProjectPlanModel,
   KpiModel,
   MachineModel,
   NeedsModel,
@@ -129,6 +133,15 @@ export const fetchSince = (signal?: AbortSignal) => getJson('/v1/since', SinceMo
 export const fetchChain = (signal?: AbortSignal) => getJson('/v1/chain', ChainModel, signal)
 export const fetchProjectDigests = (signal?: AbortSignal) =>
   getJson('/v1/projects/digests', ProjectDigestsModel, signal)
+export const fetchProjectIndex = (signal?: AbortSignal) => getJson('/v1/projects', ProjectIndexModel, signal)
+/** One project's page; an unknown project (404) is an `ApiError`. */
+export const fetchProjectPage = (name: string, signal?: AbortSignal) =>
+  getJson(`/v1/projects/${encodeURIComponent(name)}`, ProjectPageModel, signal)
+export const fetchProjectHygiene = (name: string, signal?: AbortSignal) =>
+  getJson(`/v1/projects/${encodeURIComponent(name)}/hygiene`, ProjectHygieneModel, signal)
+/** The project's plan rows with their derived state (`done`, `open`, `filable`, `waiting`). */
+export const fetchProjectPlan = (name: string, signal?: AbortSignal) =>
+  getJson(`/v1/projects/${encodeURIComponent(name)}/plan`, ProjectPlanModel, signal)
 export const fetchFlow = (signal?: AbortSignal) => getJson('/v1/flow', FlowModel, signal)
 /** The three counts per bucket, peak and average, over a window (`/v1/flow/trend`). */
 export const fetchFlowTrend = (

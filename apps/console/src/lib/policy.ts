@@ -59,7 +59,7 @@ export type KeyPredicate = (key: Key) => boolean
  */
 const POLLED_ONLY = new Set(['accounts', 'machine', 'since'])
 /** Slower-moving figures over windows of history: they refetch on the longer debounce. */
-const AGGREGATES = new Set(['kpis', 'friction', 'finding-classes', 'fix-commits', 'flow-trend'])
+const AGGREGATES = new Set(['kpis', 'friction', 'finding-classes', 'fix-commits', 'flow-trend', 'project-hygiene'])
 /** What `needs`, `flow` and `chain` read: Issues, their Decisions, artifacts, Errands and held signals. Hook events (`session`) are not among them. */
 const LISTED_KINDS = new Set(['issue', 'decision', 'artifact', 'errand', 'signal'])
 
@@ -108,6 +108,9 @@ const BY_ROOT: Record<string, RootRule> = {
   flow: listsAffected,
   'issue-cards': (change) => change.kind === 'issue' || !isKnownKind(change.kind),
   chain: listsAffected,
+  'project-index': listsAffected,
+  'project-page': listsAffected,
+  'project-plan': listsAffected,
   errands: errandsAffected,
   issue: issueAffected,
   decision: (change, key) => detailAffects(change, 'decision', String(key[1])),

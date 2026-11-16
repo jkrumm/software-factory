@@ -15,7 +15,7 @@ export function FlowCardView({ card, now, showState = false }: { card: FlowCard;
     <IssueCard
       title={card.title}
       project={card.repo}
-      projectAs={(props) => <Link to="/flow" search={{ project: card.repo }} {...props} />}
+      projectAs={(props) => <Link to="/projects/$name" params={{ name: card.repo }} {...props} />}
       kind={card.kind}
       number={card.number}
       selected={selected}

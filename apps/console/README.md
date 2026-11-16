@@ -27,13 +27,17 @@ page. Escape, the close button and the browser's back close it; opening pushes o
 replaces it, so closing is one step. Escape yields to an open popover or the palette, and in a field it only leaves the
 field. The address logic is pure (`lib/peek.ts`); the panel's content is its own chunk. The rules: `DESIGN.md` "The peek".
 
+## Projects
+
+`/projects` is one card per project from `GET /v1/projects` (the digest's headline from `/v1/projects/digests`), busiest first; each card opens `/projects/<name>`, and so does **every project chip** of the Console (Issue cards and rows, Needs you, the Chain's nodes and groups, the digest strip, the palette, Throughput's tables, the Issue page and artifact headers). Flow's own project filter stays a toggle in its sidebar. The page (`routes/projects.$name.tsx`, `components/project/`) reads `GET /v1/projects/:name` (setup from `project.yaml`, counts, the shipped Issues with their daily bars, Watch, incidents and regressions of the last 7 days, the monitors the door routes to the project), `GET /v1/projects/:name/plan` (the rows with their state), `GET /v1/projects/:name/hygiene` (each probe's last run, the newest pass, its findings and how each ended, the last five passes) and the cached `GET /v1/flow` for the open Issues, so Now is as live as Flow. A project the factory has not read is a 404 and the page says so; a work project is shown to the owner only. The words and sums are pure logic in `src/lib/project.ts`.
+
 ## Flow
 
 `/flow` fills the content area (no width cap). From the top: the header, a stat row, then the board of every Issue by state:
 Settling, Queued, Working, Waiting, Watching and Closed recently (the last 24 hours), from `GET /v1/flow`, refreshed by the
 stream like every other screen.
 
-**Digest strip.** Above the stat row, one card per project with a digest (`GET /v1/projects/digests`, `components/flow/digest-strip.tsx`): the project (a link that filters the board), the digest's age, the headline, the four counts (done in 7 days, working, queued, waiting: read from the Issues, not from the digest), and a button that opens the shipped, next and risks bullets, each citing its Issues by a link. The busiest projects (most working, queued and waiting) come first, in one scrollable row so the board stays on screen; "Show all N" lays every card out as a grid. Collapsed to the headline and the counts; with `?project=` the strip shows that project alone, opened. No digest, no strip.
+**Digest strip.** Above the stat row, one card per project with a digest (`GET /v1/projects/digests`, `components/flow/digest-strip.tsx`): the project (a link to its page), the digest's age, the headline, the four counts (done in 7 days, working, queued, waiting: read from the Issues, not from the digest), and a button that opens the shipped, next and risks bullets, each citing its Issues by a link. The busiest projects (most working, queued and waiting) come first, in one scrollable row so the board stays on screen; "Show all N" lays every card out as a grid. Collapsed to the headline and the counts; with `?project=` the strip shows that project alone, opened. No digest, no strip.
 
 **Stat row.** Four kit `StatCard`s: Working, Waiting, Queued (a line of the Issues in that state at eight daily samples,
 `trend` in the model, summed over the states a count takes in) and Shipped this week (bars of the done and healed closes per day, against the 7 days before). They
@@ -78,7 +82,7 @@ never polls, is never refetched by the stream (an open tab would keep the visit 
 loading band is a skeleton of its height, and an error leaves the band out while the checkpoints show.
 
 The checkpoints are grouped by kind (Decisions, Reviews, Errands, Held signals, each with its count and an InfoHint). Every
-card leads with its project, a chip that opens `/flow?project=<repo>` (the word "App feedback" when it names none), then the
+card leads with its project, a chip that opens `/projects/<repo>` (the word "App feedback" when it names none), then the
 title, the age in the verb of its kind (waiting, raised, received; the absolute time on hover), a Stale lozenge, and the
 Issue's title as a link. Closed, the whole card opens it (the title button is stretched over the card, the links sit above it).
 Opened, a Decision says what it is, shows the Judge's note when it passed it on, and lays its options out as cards with the

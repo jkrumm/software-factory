@@ -250,13 +250,13 @@ test.describe('the palette', () => {
     await expect(page).toHaveURL(new RegExp(`/issues/${issue.number}$`))
   })
 
-  test('finds a project and goes to Flow filtered to it', async ({ page, apiUrl }) => {
+  test('finds a project and opens its page', async ({ page, apiUrl }) => {
     const { project } = await world(apiUrl)
     await page.goto('/needs-you')
     await open(page, project)
     const row = dialog(page).getByRole('option').filter({ hasText: 'Project' }).filter({ hasText: project })
     await row.first().click()
-    await expect(page).toHaveURL(new RegExp(`/flow\\?project=${project}$`))
+    await expect(page).toHaveURL(new RegExp(`/projects/${project}$`))
   })
 
   test('finds an artifact and opens it', async ({ page, apiUrl }) => {
