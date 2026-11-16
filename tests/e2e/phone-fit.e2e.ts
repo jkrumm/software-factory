@@ -79,7 +79,14 @@ const liveShaped = async (page: Page) => {
     const counts = (body.counts ?? []) as Record<string, unknown>[]
     body.counts = [
       ...counts.map((row) => ({ ...row, count: 1234 })),
-      { key: 'refusal:long', group: 'refusal', label: REFUSAL, count: 1234, perIssue: 0.0038910505836575876 },
+      {
+        key: 'refusal:long',
+        group: 'refusal',
+        label: REFUSAL,
+        count: 1234,
+        perIssue: 0.0038910505836575876,
+        previous: 1100,
+      },
     ]
   })
   await rewrite('**/v1/kpis?*', (body) => {

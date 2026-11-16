@@ -27,6 +27,7 @@ const count = (key: string, group: FrictionCount['group'], n: number, label = ke
   label,
   count: n,
   perIssue: closed === 0 ? null : n / closed,
+  previous: null,
 })
 
 const over = (counts: FrictionCount[], closed = CLOSED) => patternsOver(counts, closed)

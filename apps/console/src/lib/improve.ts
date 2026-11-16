@@ -45,6 +45,8 @@ export function formatValue(unit: Kpi['unit'], value: number): string {
       return `$${value.toFixed(2)}`
     case 'points':
       return value.toFixed(1)
+    case 'count':
+      return Number.isInteger(value) ? String(value) : value.toFixed(1)
     case 'ms':
       if (value < MINUTE) return `${Math.round(value / 1000)} s`
       if (value < HOUR) return `${Math.round(value / MINUTE)} min`
@@ -53,10 +55,9 @@ export function formatValue(unit: Kpi['unit'], value: number): string {
   }
 }
 
-/** The value as the screen shows it; a missing one says why. */
+/** The value as the screen shows it; one the factory has no figure for says so, never a zero. */
 export function formatKpi(kpi: Pick<Kpi, 'value' | 'unit' | 'measured'>): string {
-  if (!kpi.measured) return 'Not measured'
-  if (kpi.value === null) return 'No data'
+  if (!kpi.measured || kpi.value === null) return 'Not measured'
   return formatValue(kpi.unit, kpi.value)
 }
 
@@ -101,42 +102,6 @@ export function targetTally(kpis: readonly Pick<Kpi, 'value' | 'measured' | 'tar
   }
 }
 
-/** The KPIs the summary strip tiles, in the Console's order: those whose target judges a reading (not a trend). */
-const SUMMARY_ORDER: readonly KpiKey[] = [
-  'first_verification_passes',
-  'avoidable_touches',
-  'asks',
-  'worth_asking',
-  'specs_not_needed',
-  'refusals',
-  'queue_wait_p90',
-  'queue_wait_p50',
-  'cycle_p50',
-  'window_points',
-  'cost',
-]
-
-export function summaryKpis<T extends Pick<Kpi, 'key' | 'target'>>(kpis: readonly T[]): T[] {
-  return SUMMARY_ORDER.flatMap((key) =>
-    kpis.filter((k) => k.key === key && ['at_least', 'at_most', 'between'].includes(k.target.kind)),
-  )
-}
-
-/** The one word of a summary tile's lamp. */
-export const STATUS_WORD: Record<TargetStatus, string> = {
-  met: 'Met',
-  missed: 'Missed',
-  no_data: 'No data',
-  not_measured: 'Not measured',
-  no_target: 'No target',
-  trend: 'Trend only',
-}
-
-/** The lamp's tone: the verdict where there is one, neutral otherwise. */
-export function statusTone(status: TargetStatus): Tone {
-  return status === 'met' ? 'good' : status === 'missed' ? 'bad' : 'neutral'
-}
-
 const SAMPLE_NOUN: Record<KpiKey, readonly [string, string]> = {
   avoidable_touches: ['Issue', 'Issues'],
   asks: ['Issue', 'Issues'],
@@ -151,7 +116,7 @@ const SAMPLE_NOUN: Record<KpiKey, readonly [string, string]> = {
   cycle_p50: ['sample', 'samples'],
   queue_wait_p50: ['sample', 'samples'],
   queue_wait_p90: ['sample', 'samples'],
-  fix_commits: ['Issue', 'Issues'],
+  fix_commits: ['fix commit', 'fix commits'],
   window_points: ['Issue', 'Issues'],
   cost: ['Issue', 'Issues'],
   queue_time: ['queue interval', 'queue intervals'],
@@ -209,31 +174,59 @@ export const partWords = (kpi: Pick<Kpi, 'parts'>): string[] =>
 /** The word the sample noun of a KPI is hinted by, where the noun is a domain word of its own ("13 watches"). */
 export const SAMPLE_HINT = { first_verification_passes: 'watch' } as const satisfies Partial<Record<KpiKey, InfoWord>>
 
-export const FRICTION_GROUP_LABEL: Record<FrictionCount['group'], string> = {
-  avoidable_touch: 'Avoidable touches',
-  orchestrator_steer: 'The orchestrator steering leads',
-  refusal: 'Refusals',
-  stall: 'Stalls',
-  lead_gone: 'Leads that went away',
-  undelivered_note: 'Notes that never arrived',
-  unreviewed_ship: 'Ships without a review',
-  unstated_acceptance: 'Ships that state nothing against the acceptance',
-  unproven_ci: 'Ships whose CI was red or missing',
-  regression: 'Regressions',
-  decision_settled: 'Decisions settled by default',
-  signal: 'Signals',
-  api_transient: 'Leads hit by transient API errors',
-  spec_unneeded: 'Specs that did not need the owner',
+/** How many friction rows the ranking names in words; the rest are the folded tail. */
+export const FRICTION_TOP = 5
+
+export interface FrictionRow {
+  key: string
+  label: string
+  count: number
+  /** the same count in the window just before; null when that window is not comparable */
+  previous: number | null
+  /** "+3 (4 before)", "new", "same", "no earlier window" */
+  change: string
+  /** more friction is worse: a rise is bad, a fall good */
+  tone: Tone
+  direction: -1 | 0 | 1
+  /** its count over the largest count shown, 0 to 1: the bar */
+  share: number
 }
 
-/** The friction groups whose heading is a domain word a stranger would not know. */
-export const FRICTION_GROUP_HINT = {
-  avoidable_touch: 'avoidable touch',
-  refusal: 'refusal',
-} as const satisfies Partial<Record<FrictionCount['group'], InfoWord>>
+function frictionChange(count: number, previous: number | null): Pick<FrictionRow, 'change' | 'tone' | 'direction'> {
+  if (previous === null) return { change: 'no earlier window', tone: 'neutral', direction: 0 }
+  if (previous === 0) return { change: 'new', tone: 'bad', direction: 1 }
+  const difference = count - previous
+  if (difference === 0) return { change: 'same', tone: 'neutral', direction: 0 }
+  return {
+    change: `${difference > 0 ? '+' : '-'}${Math.abs(difference)} (${previous} before)`,
+    tone: difference > 0 ? 'bad' : 'good',
+    direction: difference > 0 ? 1 : -1,
+  }
+}
 
-/** Per Issue closed, two decimals; "—" when none closed. */
-export const perIssueWords = (perIssue: number | null): string => (perIssue === null ? '—' : perIssue.toFixed(2))
+/**
+ * The friction counts as a ranking: the rows that counted anything, most first (the totals that only repeat their own
+ * rows are left out), the top `FRICTION_TOP` apart from the tail, and how many kinds counted nothing.
+ */
+export function frictionRanking(
+  counts: readonly Pick<FrictionCount, 'key' | 'label' | 'count' | 'previous'>[],
+  top = FRICTION_TOP,
+): { top: FrictionRow[]; tail: FrictionRow[]; quiet: number } {
+  const measured = counts.filter((c) => !c.key.endsWith(':total'))
+  const ranked = measured
+    .filter((c) => c.count > 0)
+    .toSorted((a, b) => b.count - a.count || a.label.localeCompare(b.label))
+  const largest = ranked[0]?.count ?? 1
+  const rows = ranked.map((c) => ({
+    key: c.key,
+    label: c.label,
+    count: c.count,
+    previous: c.previous,
+    ...frictionChange(c.count, c.previous),
+    share: c.count / largest,
+  }))
+  return { top: rows.slice(0, top), tail: rows.slice(top), quiet: measured.length - ranked.length }
+}
 
 /** "2026-11-01 to 2026-11-08" */
 export const windowWords = (window: { from: string; to: string }): string =>
@@ -288,9 +281,10 @@ function sizeWords(unit: Kpi['unit'], size: number): string {
  * How far `kpi` is from its target, in words; the verdict first when it is met. A KPI with no target to judge (a trend,
  * an unset one) has no distance: the footer's Target pair says so once, so this is `null` and the card has no sub line.
  */
-export function distanceWords(kpi: Pick<Kpi, 'value' | 'unit' | 'measured' | 'target'>): string | null {
-  if (!kpi.measured) return 'Not measured'
-  if (kpi.value === null) return 'No data'
+export function distanceWords(
+  kpi: Pick<Kpi, 'value' | 'unit' | 'measured' | 'target'> & { reason?: string | null },
+): string | null {
+  if (!kpi.measured || kpi.value === null) return kpi.reason ?? 'Not measured'
   const { kind, min, max } = kpi.target
   const met = meets(kpi.target, kpi.value)
   if (met === null) return null
@@ -412,13 +406,132 @@ export function kpiFooter(kpi: Pick<Kpi, 'key' | 'n' | 'measured' | 'target' | '
   const hint = SAMPLE_HINT[kpi.key as keyof typeof SAMPLE_HINT]
   return [
     { label: 'Target', value: targetWords(kpi) },
-    {
-      label: 'Counted',
-      value: kpi.measured ? sampleWords(kpi) : 'The usage schema is not joined here',
-      ...(hint && kpi.measured ? { hint } : {}),
-    },
+    { label: 'Counted', value: sampleWords(kpi), ...(hint ? { hint } : {}) },
   ]
 }
+
+// ---- what a card says in plain words, and the order of the page --------------------------------------------------------
+
+/** One sentence per KPI, for a reader who knows none of the words: what it is, then which way is good. */
+export const MEANING: Record<KpiKey, string> = {
+  avoidable_touches:
+    'How often you had to step in on something the factory should have settled, per Issue filed. Lower is better.',
+  asks: 'How many Decisions the factory put to you or left open, per Issue filed. Lower is better.',
+  worth_asking: 'Of the Decisions you answered, how many you said were worth asking. Higher is better.',
+  specs_not_needed: 'Of the Specs sent to you, how many you said did not need you. Lower is better.',
+  specs_per_100:
+    'How many Specs the leads wrote per 100 Issues. Neither direction is good by itself; zero for weeks means the Spec path is silent.',
+  owner_decisions_per_100:
+    'How many Decisions you answered yourself per 100 Issues. Lower means the factory settles more alone; zero for weeks means nothing reaches you.',
+  verdict_changes_share:
+    'Of your verdicts on a Concept, Spec or Report, how many asked for notes or changes. Lower is better.',
+  first_verification_passes: 'Of the first checks after a ship, how many passed. Higher is better.',
+  refusals: 'How often the state machine or the ship gate refused something, per Issue filed. Lower is better.',
+  cycle_p50: 'How long a typical Issue takes from filed to closed. Shorter is better.',
+  queue_wait_p50: 'How long a typical Issue waits before a lead starts on it. Shorter is better.',
+  queue_wait_p90: 'How long the slowest tenth of Issues wait before a lead starts on them. Shorter is better.',
+  fix_commits: 'How many fix commits landed per week, each one a mistake that shipped. Fewer is better.',
+  window_points: 'How much of the five-hour Max window the sessions of an Issue used, per Issue. Lower is cheaper.',
+  cost: 'What the sessions of an Issue cost in dollars, per Issue. Lower is cheaper.',
+  queue_time: 'The total time Issues spent queued, and how much of it an after edge held. Less is better.',
+  idle_capacity:
+    'How often an account had room while an Issue sat queued for no dependency. Lower is better: capacity went unused.',
+  working_share: 'How much of a lead’s time is spent working rather than waiting. Higher is better.',
+  dropped_after_lead:
+    'Of the Issues closed after a lead started, how many were dropped or cancelled: lead time that shipped nothing. Lower is better.',
+  amend_rate:
+    'Of the incoming signals, how many joined an Issue already open instead of filing a new one. Higher means fewer duplicates.',
+  nudges_acted: 'Of the steward’s reminders to a lead, how many the lead acted on within 30 minutes. Higher is better.',
+  forced_note_delay_p50:
+    'How long a note to a busy lead takes to arrive when it has to be forced in. Shorter is better.',
+  errands_turned_away:
+    'Of the Errands leads raised, how many the screen turned away before they reached you. Higher means less of your time went to needless Errands.',
+  regression_cause: 'Of the first checks after a ship, how many regressed. Lower is better.',
+  first_watch_dwell_p50:
+    'How long a first check takes to answer; a pass over checks that answer in seconds proves little. Longer is a stronger check.',
+}
+
+/** The KPIs the page lists as cards, in the order each group keeps (fix commits have their own band). */
+export const KPI_ORDER: readonly KpiKey[] = [
+  'first_verification_passes',
+  'avoidable_touches',
+  'asks',
+  'worth_asking',
+  'specs_not_needed',
+  'specs_per_100',
+  'owner_decisions_per_100',
+  'verdict_changes_share',
+  'first_watch_dwell_p50',
+  'regression_cause',
+  'queue_wait_p90',
+  'queue_wait_p50',
+  'cycle_p50',
+  'refusals',
+  'queue_time',
+  'idle_capacity',
+  'working_share',
+  'dropped_after_lead',
+  'amend_rate',
+  'nudges_acted',
+  'forced_note_delay_p50',
+  'errands_turned_away',
+  'window_points',
+  'cost',
+]
+
+export interface KpiGroups<T> {
+  /** a target that judged the figure and it is outside */
+  off: T[]
+  /** no figure: nothing counted, too few samples, or the source is not there */
+  unmeasured: T[]
+  /** a target that judged the figure and it is inside */
+  met: T[]
+  /** a figure with no target to judge: a trend to read, not a verdict */
+  trend: T[]
+}
+
+/** The KPIs sorted by what needs attention: those off target, those with no figure, those on target, those with no target to judge. */
+export function groupKpis<T extends Pick<Kpi, 'key' | 'value' | 'measured' | 'target'>>(
+  kpis: readonly T[],
+): KpiGroups<T> {
+  const groups: KpiGroups<T> = { off: [], unmeasured: [], met: [], trend: [] }
+  for (const key of KPI_ORDER) {
+    for (const kpi of kpis.filter((k) => k.key === key)) {
+      const status = targetStatus(kpi)
+      if (status === 'missed') groups.off.push(kpi)
+      else if (status === 'not_measured' || status === 'no_data') groups.unmeasured.push(kpi)
+      else if (status === 'met') groups.met.push(kpi)
+      else groups.trend.push(kpi)
+    }
+  }
+  return groups
+}
+
+export interface PartRow {
+  key: string
+  label: string
+  /** the part in the KPI's unit, in words */
+  value: string
+  /** its share of the parts together, 0 to 1 */
+  share: number
+}
+
+/** The parts of a KPI as rows, largest first, each with its share of the whole; none when the parts add up to nothing. */
+export function partRows(kpi: Pick<Kpi, 'parts'>): PartRow[] {
+  const total = kpi.parts.reduce((sum, part) => sum + part.value, 0)
+  if (total <= 0) return []
+  return kpi.parts
+    .toSorted((a, b) => b.value - a.value)
+    .map((part) => ({
+      key: part.key,
+      label: part.label,
+      value: formatValue(part.unit, part.value),
+      share: part.value / total,
+    }))
+}
+
+/** The KPIs whose card shows what the figure is made of (the others keep that in the popover). */
+export const PARTS_ON_CARD: ReadonlySet<KpiKey> = new Set(['queue_wait_p50'])
 
 // ---- the fix-commit card -----------------------------------------------------------------------------------------------
 

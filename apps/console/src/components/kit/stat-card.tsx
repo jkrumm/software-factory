@@ -38,6 +38,10 @@ export interface StatCardProps extends CardLinkProps {
   }
   /** One line under the figure. */
   sub?: string
+  /** What the figure means and which way is good, in one plain sentence: visible without a click, under the header. */
+  meaning?: string
+  /** Below the sub line, above the chart: what the figure is made of. */
+  extra?: ReactNode
   /** A line chart from props. */
   series?: { values: number[]; labels?: string[]; futureFrom?: number; target?: number }
   /** Bars from props, the last one in the accent. */
@@ -110,6 +114,8 @@ export function StatCard({
   valueNote,
   delta,
   sub,
+  meaning,
+  extra,
   series,
   bars,
   barLabels,
@@ -194,6 +200,8 @@ export function StatCard({
         {subLine ? (
           <p className="text-[length:var(--vx-text-sm)] [overflow-wrap:anywhere] text-muted-foreground">{subLine}</p>
         ) : null}
+        {meaning ? <p className="text-[length:var(--vx-text-sm)] [overflow-wrap:anywhere]">{meaning}</p> : null}
+        {extra}
         {picture || xLabels ? (
           <div className="mt-auto flex flex-col gap-2">
             {picture}

@@ -190,7 +190,8 @@ describe('queue time, idle capacity and the lead’s time', () => {
     // the first shows room. An hour with no reading is not counted: the readings are kept a week.
     expect(k.n).toBe(2)
     expect(k.count).toBe(1)
-    expect(k.value).toBeCloseTo(0.5, 6)
+    // two hours are under the floor: the share is not a reading
+    expect(k).toMatchObject({ value: null, measured: false })
   })
 
   test('working share divides a lead’s time into working and each wait reason', async () => {

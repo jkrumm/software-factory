@@ -14,15 +14,18 @@ import {
   fixWeeksOldestFirst,
   fixWeekTotals,
   formatKpi,
-  FRICTION_GROUP_HINT,
-  FRICTION_GROUP_LABEL,
   historyLabels,
   historyXLabels,
   kpiChange,
   partWords,
   KPI_HINT,
   kpiFooter,
+  frictionRanking,
+  groupKpis,
+  KPI_ORDER,
   lineTone,
+  MEANING,
+  partRows,
   sampleWords,
   targetStatus,
   targetTally,
@@ -44,6 +47,7 @@ const kpi = (over: Partial<Kpi>): Kpi => ({
   count: 1,
   target: { kind: 'between', min: 0.05, max: 0.07 },
   measured: true,
+  reason: null,
   definition: '',
   parts: [],
   history: history(0.3, 0.28, 0.4, 0.22, 0.2, 0.25),
@@ -75,7 +79,7 @@ test('formatKpi by unit, and why a value is missing', () => {
   expect(formatKpi(kpi({ unit: 'ms', value: 37 * 60_000 }))).toBe('37 min')
   expect(formatKpi(kpi({ unit: 'ms', value: 8.8 * 3_600_000 }))).toBe('8.8 h')
   expect(formatKpi(kpi({ unit: 'ms', value: 2.1 * 86_400_000 }))).toBe('2.1 d')
-  expect(formatKpi(kpi({ value: null }))).toBe('No data')
+  expect(formatKpi(kpi({ value: null }))).toBe('Not measured')
   expect(formatKpi(kpi({ value: null, measured: false }))).toBe('Not measured')
 })
 
@@ -169,7 +173,8 @@ test('distanceWords: the verdict in words, the reason when there is none', () =>
   ).toBe('4.0 h above the target of at most 1.0 h')
   expect(distanceWords(kpi({ target: { kind: 'trend', min: null, max: null } }))).toBeNull()
   expect(distanceWords(kpi({ target: { kind: 'unset', min: null, max: null } }))).toBeNull()
-  expect(distanceWords(kpi({ value: null }))).toBe('No data')
+  expect(distanceWords(kpi({ value: null }))).toBe('Not measured')
+  expect(distanceWords({ ...kpi({ value: null, measured: false }), reason: 'Only 2 counted' })).toBe('Only 2 counted')
   expect(distanceWords(kpi({ value: null, measured: false }))).toBe('Not measured')
 })
 
@@ -246,10 +251,7 @@ test('history labels, x labels, subtitle and footer', () => {
     { label: 'Target', value: '0.05 to 0.07' },
     { label: 'Counted', value: '4 Issues' },
   ])
-  expect(kpiFooter(kpi({ measured: false }))[1]).toEqual({
-    label: 'Counted',
-    value: 'The usage schema is not joined here',
-  })
+  expect(kpiFooter(kpi({ measured: false, n: 2 }))[1]).toEqual({ label: 'Counted', value: '2 Issues' })
 })
 
 test('fixCard: the newest week against the one before, fewer is better, classes keep their slot', () => {
@@ -296,13 +298,9 @@ test('fixCard: the newest week against the one before, fewer is better, classes 
   )
 })
 
-test('every KPI and the avoidable-touch and refusal friction groups carry a defined InfoHint word', () => {
+test('every KPI carries a defined InfoHint word', () => {
   expect(Object.keys(KPI_HINT).toSorted()).toEqual([...KPI_KEYS].toSorted())
   for (const word of Object.values(KPI_HINT)) expect(LANGUAGE[word].length).toBeGreaterThan(10)
-  for (const [group, word] of Object.entries(FRICTION_GROUP_HINT)) {
-    expect(group in FRICTION_GROUP_LABEL).toBe(true)
-    expect(LANGUAGE[word].length).toBeGreaterThan(10)
-  }
 })
 
 test('the footer hints the watches of the first verification passes, and no other sample', () => {
@@ -333,4 +331,69 @@ test('the parts of a breakdown KPI are listed in its own unit', () => {
   })
   expect(partWords(queued)).toEqual(['Held by an after edge: 5.0 h', 'Capacity: 2 min'])
   expect(partWords(kpi({}))).toEqual([])
+})
+
+test('every KPI has one plain sentence that says which way is good, and the card order lists each card KPI once', () => {
+  for (const [key, sentence] of Object.entries(MEANING)) {
+    expect(sentence.length, key).toBeGreaterThan(30)
+    expect(sentence.endsWith('.'), key).toBe(true)
+    expect(sentence.split('. ').length, key).toBeLessThanOrEqual(3)
+  }
+  expect(new Set(KPI_ORDER).size).toBe(KPI_ORDER.length)
+  expect(KPI_ORDER).not.toContain('fix_commits')
+})
+
+test('groupKpis puts what is off target first, then what has no figure, what is met, and what no target judges', () => {
+  const none = { kind: 'unset', min: null, max: null } as const
+  const groups = groupKpis([
+    kpi({ key: 'asks', value: 0.06 }),
+    kpi({ key: 'avoidable_touches', value: 0.9 }),
+    kpi({ key: 'cost', value: null, measured: false, target: none }),
+    kpi({ key: 'cycle_p50', value: 5, target: none }),
+    kpi({ key: 'refusals', value: null, measured: true, target: { kind: 'at_most', min: null, max: 0.25 } }),
+  ])
+  expect(groups.off.map((k) => k.key)).toEqual(['avoidable_touches'])
+  expect(groups.met.map((k) => k.key)).toEqual(['asks'])
+  expect(groups.unmeasured.map((k) => k.key)).toEqual(['refusals', 'cost'])
+  expect(groups.trend.map((k) => k.key)).toEqual(['cycle_p50'])
+})
+
+test('formatKpi reads a count as a whole number, or one decimal for a rate', () => {
+  expect(formatKpi(kpi({ unit: 'count', value: 3 }))).toBe('3')
+  expect(formatKpi(kpi({ unit: 'count', value: 1.3333 }))).toBe('1.3')
+})
+
+test('partRows: largest first, each with its share; nothing when the parts add up to none', () => {
+  const parts = [
+    { key: 'chain', label: 'An after edge', value: 1 * 3_600_000, unit: 'ms' as const },
+    { key: 'capacity', label: 'Capacity', value: 3 * 3_600_000, unit: 'ms' as const },
+  ]
+  expect(partRows({ parts })).toEqual([
+    { key: 'capacity', label: 'Capacity', value: '3.0 h', share: 0.75 },
+    { key: 'chain', label: 'An after edge', value: '1.0 h', share: 0.25 },
+  ])
+  expect(partRows({ parts: [] })).toEqual([])
+})
+
+test('frictionRanking: most first, the totals left out, the top five apart, the change against the window before', () => {
+  const row = (key: string, count: number, previous: number | null) => ({ key, label: key, count, previous })
+  const ranking = frictionRanking([
+    row('refusal:total', 40, 10),
+    row('a', 9, 4),
+    row('b', 12, 12),
+    row('c', 3, 8),
+    row('d', 5, 0),
+    row('e', 1, null),
+    row('f', 2, 2),
+    row('g', 0, 3),
+  ])
+  expect(ranking.top.map((r) => r.key)).toEqual(['b', 'a', 'd', 'c', 'f'])
+  expect(ranking.tail.map((r) => r.key)).toEqual(['e'])
+  expect(ranking.quiet).toBe(1)
+  const by = Object.fromEntries([...ranking.top, ...ranking.tail].map((r) => [r.key, r]))
+  expect(by.a).toMatchObject({ change: '+5 (4 before)', tone: 'bad', direction: 1, share: 0.75 })
+  expect(by.b).toMatchObject({ change: 'same', tone: 'neutral', share: 1 })
+  expect(by.c).toMatchObject({ change: '-5 (8 before)', tone: 'good', direction: -1 })
+  expect(by.d).toMatchObject({ change: 'new', tone: 'bad' })
+  expect(by.e).toMatchObject({ change: 'no earlier window', tone: 'neutral' })
 })

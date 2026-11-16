@@ -11,7 +11,7 @@ import type { Window } from './kpis.ts'
  * one window, so each can be checked by SQL over the same window (`apps/server/test/read-models/kpis-flow.test.ts`).
  */
 
-type Figure = Omit<Kpi, 'history' | 'target'> & { target?: Kpi['target'] }
+type Figure = Omit<Kpi, 'history' | 'target' | 'reason'> & { target?: Kpi['target'] }
 
 const Duration = z.object({ ms: z.coerce.number() })
 
@@ -211,7 +211,11 @@ export function regressionCause(failed: readonly string[]): (typeof REGRESSION_C
   return 'other'
 }
 
-const kpi = (k: Figure): Omit<Kpi, 'history'> => ({ ...k, target: k.target ?? { kind: 'unset', min: null, max: null } })
+const kpi = (k: Figure): Omit<Kpi, 'history'> => ({
+  ...k,
+  target: k.target ?? { kind: 'unset', min: null, max: null },
+  reason: null,
+})
 
 const TREND = { kind: 'trend', min: null, max: null } as const
 

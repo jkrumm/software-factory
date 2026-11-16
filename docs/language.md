@@ -120,6 +120,7 @@ Five words and a sixth for what is not an Issue yet, defined once here and used 
 | **Touch** | The owner acting on an Issue | Zero-touch |
 | **Avoidable touch** | A touch the factory should have settled: a Decision answered and not marked worth asking, an owner note, wake, cancel or reopen. Not the first note of a filing, a verdict on a Concept or Spec, or a done Errand | |
 | **Friction** | Any counted waste: an avoidable touch, a refusal, an undelivered note | |
+| **Not measured** | A KPI with no figure: nothing was counted in the window, fewer samples than the floor of three stand under a share or a duration, or the source is not there (the usage schema). It never reads as zero, and its card says which. A friction count is read against the window of the same length just before it | |
 | **Refusal** | An Issue event the state machine refused, or a ship the gate refused. Counted as friction | |
 | **Regressed** | A shipped change that failed its watch: Verify or a probe found it broken after the ship. The lead goes back to work twice, the third time it is a stall | |
 | **Verified** | A shipped change whose watch passed: it is live and Verify and the probes found nothing broken. The "Since you were here" band counts these as Shipped and verified, one per Issue | |
