@@ -301,7 +301,11 @@ through `receive` in `app/intake.ts`; the answer is a triage outcome (`docs/lang
   test or a shell all run under the lead and carry its `FACTORY_SESSION`; its own root must be in the `ps` table too) or a
   granted slot whose directory is its worktree. The wake is a `note_lead` like any other: after `claims.resume`, a dormant
   lead's session is started again under the same key and tab (`HcTerminals.revive`: `claude --resume <session>` on the model and
-  effort of the finished terminal, the note as its first message, so nothing is typed), paced by `app/type-pace.ts`. A
+  effort of the finished terminal, the note as its first message, so nothing is typed), paced by `app/type-pace.ts`. A fresh
+  start and a resume share one argv (`HcTerminals.argv`) and both carry `--strict-mcp-config` with no `--mcp-config`: no
+  `.mcp.json` or agent-file MCP server of the repo the lead works in starts inside it (proved on Claude Code 2.1.325 in
+  dotfiles `docs/browser.md` §Strict MCP: the flag blocks a project server and is accepted with `--resume`, and leaves plugin
+  tools, tool search, hooks and skills working). A launcher that adds `--mcp-config` or a `--plugin-dir` server re-proves it. A
   failed start is retried by the outbox; the third, or a refusal, is the lead gone. `followLeads` never calls a dormant
   lead lost. It does call lost a lead of a `working` Issue whose terminal lives but runs no agent (`terminals.find`:
   `agent` false for every live terminal; the hooks of such a lead read `gone` or `idle` from before the restart): past

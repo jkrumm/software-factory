@@ -22,14 +22,16 @@ test('start: admitted runs start_lead; the fake hc shows one terminal with its k
   expect(terminals).toHaveLength(1)
   const [terminal] = terminals
   expect(terminal?.labels['factory.key']).toBe('lead-1-1')
-  expect(terminal?.argv.slice(0, 6)).toEqual([
+  expect(terminal?.argv.slice(0, 7)).toEqual([
     'claude',
     '--dangerously-skip-permissions',
     '--model',
     'sonnet',
     '--effort',
     'high',
+    '--strict-mcp-config',
   ])
+  expect(terminal?.argv).not.toContain('--mcp-config')
   const brief = terminal?.argv.at(-1) ?? ''
   expect(brief).toContain('# Operating contract')
   expect(brief).toContain('attempt 1 of Issue 1')
