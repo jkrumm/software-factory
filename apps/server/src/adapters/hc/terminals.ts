@@ -413,7 +413,10 @@ export class HcTerminals implements Terminals {
     return { terminal: created, proven: false }
   }
 
-  /** The program and its arguments; the prompt is last. */
+  /**
+   * The program and its arguments; the prompt is last. `--strict-mcp-config` with no `--mcp-config` keeps every
+   * repo's `.mcp.json` and agent-file MCP server out of the lead: it works in whatever repo its Issue names.
+   */
   private argv(
     { tier, effort, prompt }: StartTerminal,
     resume?: { session: string; tier: string | undefined; effort: string | undefined },
@@ -425,6 +428,7 @@ export class HcTerminals implements Terminals {
       resume?.tier ?? tier,
       '--effort',
       resume?.effort ?? effort,
+      '--strict-mcp-config',
       ...(resume ? ['--resume', resume.session] : []),
       prompt,
     ]

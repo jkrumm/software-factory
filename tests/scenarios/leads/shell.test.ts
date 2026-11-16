@@ -65,6 +65,8 @@ test('a terminal that fell back to a shell: the session starts again over it, on
   expect(running).toMatchObject({ state: 'live' })
   const resume = running?.argv.indexOf('--resume') ?? -1
   expect(running?.argv[resume + 1]).toBe('s-1')
+  expect(running?.argv).toContain('--strict-mcp-config')
+  expect(running?.argv).not.toContain('--mcp-config')
   expect(running?.argv.at(-1)).toContain('The host restarted')
   expect(running?.sent).toHaveLength(0)
 
