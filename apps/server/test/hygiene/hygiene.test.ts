@@ -16,6 +16,7 @@ import { rootedRepos } from '../../src/adapters/git/repos.ts'
 import { createHygieneChecker } from '../../src/adapters/hygiene/index.ts'
 import { brokenLinks } from '../../src/adapters/hygiene/probes/links.ts'
 import { coChanged, parseLog } from '../../src/adapters/hygiene/probes/cochange.ts'
+import { sections } from '../../src/adapters/hygiene/probes/context.ts'
 import { parseOutdated, severity } from '../../src/adapters/hygiene/probes/deps.ts'
 import { retiredScope } from '../../src/adapters/hygiene/probes/retired.ts'
 import { publishedHost } from '../../src/adapters/hygiene/probes/runrules.ts'
@@ -295,6 +296,7 @@ describe('check probe', () => {
       'cochange',
       'runrules',
       'browser',
+      'context',
     ])
   })
 })
@@ -359,6 +361,7 @@ describe('declared probes', () => {
       'cochange',
       'runrules',
       'browser',
+      'context',
       'probe',
       'probe',
     ])
@@ -493,6 +496,110 @@ describe('browser probe', () => {
     })
     expect(keys(report)).toEqual([])
     expect(run(report, 'links')?.outcome).not.toBe('skipped')
+  })
+})
+
+describe('context probe', () => {
+  /** An AGENTS.md of exactly `bytes` bytes: a `## ` section per entry of `parts` (heading, bytes of body), the padding in the preamble. */
+  const sized = (bytes: number, parts: [string, number][] = [['Rules', 0]]): string => {
+    const body = parts.map(([heading, size]) => `## ${heading}\n${'x'.repeat(size)}\n`).join('')
+    const head = '# Title\n\n'
+    const padding = 'p'.repeat(Math.max(bytes - Buffer.byteLength(head + body) - 1, 0))
+    return `${head}${padding}\n${body}`
+  }
+  const keys = (report: SweepReport) => findings(report, 'context').map((f) => f.key)
+
+  test('a root file of 12,001 bytes is one finding naming the file, its bytes and its five largest sections', async () => {
+    const parts: [string, number][] = [
+      ['Alpha', 3000],
+      ['Beta', 2500],
+      ['Gamma', 2000],
+      ['Delta', 1500],
+      ['Epsilon', 1000],
+      ['Zeta', 100],
+    ]
+    const text = sized(12_001, parts)
+    expect(Buffer.byteLength(text)).toBe(12_001)
+    const report = await sweep(makeRepo({ 'AGENTS.md': text }).name)
+    expect(run(report, 'context')?.outcome).toBe('found')
+    const [one, ...rest] = findings(report, 'context')
+    expect(rest).toEqual([])
+    expect(one).toMatchObject({ key: 'context', count: 1 })
+    const lines = one?.lines.join('\n') ?? ''
+    expect(lines).toContain('AGENTS.md: 12001 bytes')
+    expect(lines).toContain('writing-for-agents.md')
+    expect(lines).toContain('not a shortening by deletion')
+    for (const heading of ['Alpha', 'Beta', 'Gamma', 'Delta', 'Epsilon']) expect(lines).toContain(`## ${heading}:`)
+    expect(lines).not.toContain('## Zeta:')
+  })
+
+  test('the sections are counted in bytes, in order of size, outside fenced code', () => {
+    const text = '# T\n## A\nab\n```\n## fenced\n```\n## B\nabcdefgh\n'
+    expect(sections(text)).toEqual([
+      { heading: 'A', bytes: Buffer.byteLength('## A\nab\n```\n## fenced\n```\n') },
+      { heading: 'B', bytes: Buffer.byteLength('## B\nabcdefgh\n') },
+    ])
+  })
+
+  test('12,000 bytes is within the budget: clean, no finding', async () => {
+    const report = await sweep(makeRepo({ 'AGENTS.md': sized(12_000) }).name)
+    expect(run(report, 'context')?.outcome).toBe('clean')
+    expect(keys(report)).toEqual([])
+  })
+
+  test('a nested file of 8,001 bytes is a finding, 8,000 is not; the root is under budget', async () => {
+    const over = await sweep(makeRepo({ 'AGENTS.md': sized(500), 'apps/web/AGENTS.md': sized(8_001) }).name)
+    expect(keys(over)).toEqual(['context'])
+    const [one] = findings(over, 'context')
+    expect(one?.title).toBe('Hygiene: a nested AGENTS.md is over its byte budget')
+    expect(one?.lines.join('\n')).toContain('apps/web/AGENTS.md: 8001 bytes')
+    expect(one?.lines.join('\n')).not.toContain('## ')
+    const within = await sweep(makeRepo({ 'AGENTS.md': sized(500), 'apps/web/AGENTS.md': sized(8_000) }).name)
+    expect(run(within, 'context')?.outcome).toBe('clean')
+  })
+
+  test('root and nested over budget are still one finding for the repo, every file named, at most 8 lines', async () => {
+    const files: Record<string, string> = {
+      'AGENTS.md': sized(13_000, [
+        ['A', 100],
+        ['B', 50],
+      ]),
+    }
+    for (let i = 0; i < 10; i++) files[`pkg${i}/AGENTS.md`] = sized(9_000 + i)
+    const report = await sweep(makeRepo(files).name)
+    const [one, ...rest] = findings(report, 'context')
+    expect(rest).toEqual([])
+    expect(one?.count).toBe(11)
+    expect(one?.lines.length).toBeLessThanOrEqual(8)
+    const lines = one?.lines.join('\n') ?? ''
+    expect(lines).toContain('pkg9/AGENTS.md: 9009 bytes')
+    expect(lines).toMatch(/and \d+ more nested AGENTS.md/)
+  })
+
+  test('the same checkout twice gives the same key, title and lines', async () => {
+    const files = { 'AGENTS.md': sized(12_500, [['A', 4000]]) }
+    const one = findings(await sweep(makeRepo(files).name), 'context')
+    const two = findings(await sweep(makeRepo(files).name), 'context')
+    expect(one).toEqual(two)
+    expect(one).toHaveLength(1)
+  })
+
+  test('no AGENTS.md is skipped, an untracked or non-AGENTS file does not count', async () => {
+    const report = await sweep(makeRepo({ 'README.md': sized(20_000), 'docs/agents.md': sized(20_000) }).name)
+    expect(run(report, 'context')).toEqual({ probe: 'context', outcome: 'skipped', detail: 'no AGENTS.md in the repo' })
+    expect(keys(report)).toEqual([])
+  })
+
+  test('a project opts out with a reason: skipped, nothing reported', async () => {
+    const report = await sweep(makeRepo({ 'AGENTS.md': sized(20_000) }).name, {
+      skip: [{ probe: 'context', reason: 'a generated file, split later' }],
+    })
+    expect(run(report, 'context')).toEqual({
+      probe: 'context',
+      outcome: 'skipped',
+      detail: 'the project opts out: a generated file, split later',
+    })
+    expect(keys(report)).toEqual([])
   })
 })
 

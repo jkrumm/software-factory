@@ -10,7 +10,17 @@ import type { PortError, Result } from '../../kernel/result.ts'
  * The deterministic probes, in the order their findings are filed when the budget is short. `probe` is last: the probes a
  * project declares (`hygiene.probes`), one run and at most one finding each, after every built-in probe.
  */
-export const PROBES = ['check', 'links', 'retired', 'deps', 'cochange', 'runrules', 'browser', 'probe'] as const
+export const PROBES = [
+  'check',
+  'links',
+  'retired',
+  'deps',
+  'cochange',
+  'runrules',
+  'browser',
+  'context',
+  'probe',
+] as const
 export type Probe = (typeof PROBES)[number]
 
 /** A probe a project declares in `project.yaml`: `make <target>` in the checkout, red on any exit but 0. */
