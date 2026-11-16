@@ -59,7 +59,7 @@ export type KeyPredicate = (key: Key) => boolean
  */
 const POLLED_ONLY = new Set(['accounts', 'machine', 'since'])
 /** Slower-moving figures over windows of history: they refetch on the longer debounce. */
-const AGGREGATES = new Set(['kpis', 'friction', 'finding-classes', 'fix-commits'])
+const AGGREGATES = new Set(['kpis', 'friction', 'finding-classes', 'fix-commits', 'flow-trend'])
 /** What `needs`, `flow` and `chain` read: Issues, their Decisions, artifacts, Errands and held signals. Hook events (`session`) are not among them. */
 const LISTED_KINDS = new Set(['issue', 'decision', 'artifact', 'errand', 'signal'])
 
