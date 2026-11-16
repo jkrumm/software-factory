@@ -936,6 +936,31 @@ describe('the door', () => {
     })
   })
 
+  test('promoting a held unrouted monitor with a repo sets its route and files the alert there', async () => {
+    intake = createIntake({
+      uow,
+      clock,
+      ids,
+      projects: projectPort,
+      topology,
+      openIssues: postgresOpenIssues(db.sql),
+      triage,
+      runbook,
+      settings: { ...DEFAULT_INTAKE_SETTINGS, homeRepo: null },
+    })
+    done(await intake.alert(alert({ monitor: 'mystery', event: 'd1' })))
+    clock.advance(DEFAULT_INTAKE_SETTINGS.unroutedHeldMs + 60_000)
+    expect((await intake.settle()).ok).toBe(true)
+    const [held] = await db.sql`SELECT id, text FROM factory.intake_signals WHERE state = 'held'`
+    expect(String(held?.text)).toContain('no repo is assigned to mystery')
+    const promoted = await intake.promote(String(held?.id), { repo: 'vps' })
+    expect(promoted.ok && promoted.value).toMatchObject({ outcome: 'filed', issue: 'issue_1' })
+    expect(await issues()).toEqual([{ id: 'issue_1', repo: 'vps', state: 'settling', outcome: null }])
+    const routes = await intake.routes()
+    expect(routes.ok && routes.value.routes.map((route) => [route.monitor, route.repo])).toEqual([['mystery', 'vps']])
+    expect(await db.sql`SELECT state FROM factory.intake_signals WHERE state = 'held'`).toEqual([])
+  })
+
   test('an up with nothing open is counted on the route; a replayed up is not counted twice', async () => {
     await intake.setRoute({ source: 'kuma', monitor: 'web - Push', repo: 'vps' }, 'owner')
     expect(done(await intake.alert(alert({ status: 'up', event: 'u1' })))).toMatchObject({

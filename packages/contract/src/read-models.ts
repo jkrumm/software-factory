@@ -43,6 +43,8 @@ export const NeedItem = z
     /** a request's command to copy, and where the hands must be; null for everything else and for a work-repo item the caller may not read */
     command: z.string().nullable(),
     host: z.enum(['macbook', 'iphone', 'portal', 'any']).nullable(),
+    /** a held signal that is a monitor down with no route: its source in a person's word, its name and the repo the screen's note names (the one promoting it routes to); null for everything else */
+    unrouted: z.strictObject({ source: z.string(), monitor: z.string(), proposal: z.string().nullable() }).nullable(),
     /** a held signal's link to the thing it is about; null for everything else and for a work-repo item the caller may not read */
     sourceLink: z.string().nullable(),
     /** an Errand whose last run failed or whose check overruled a done: "tried, failed: <first error line>" or the check's note; null for everything else and for a work-repo item the caller may not read */

@@ -65,6 +65,7 @@ const need = (id: string, work: boolean, kind: ScopedNeed['kind'] = 'decision'):
   command: null,
   host: null,
   sourceLink: null,
+  unrouted: null,
   tried: null,
   need: null,
   joined: 0,

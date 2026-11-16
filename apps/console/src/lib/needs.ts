@@ -57,9 +57,12 @@ export function metaWords(item: Pick<NeedItem, 'kind' | 'ageMs'>): string {
   return `${lead} ${age}`
 }
 
-/** Where an item comes from, as a word: the repo; "Requests" for an Errand no Issue raised; "App feedback" for outside text that names none. */
-export const originOf = (item: Pick<NeedItem, 'repo'> & Partial<Pick<NeedItem, 'kind' | 'source'>>): string =>
-  item.repo ?? (item.kind === 'errand' && item.source != null ? 'Requests' : 'App feedback')
+/** Where an item comes from, as a word: the repo; "Monitors" for a monitor no repo hears; "Requests" for an Errand no Issue raised; "App feedback" for outside text that names none. */
+export const originOf = (
+  item: Pick<NeedItem, 'repo'> & Partial<Pick<NeedItem, 'kind' | 'source' | 'unrouted'>>,
+): string =>
+  item.repo ??
+  (item.unrouted ? 'Monitors' : item.kind === 'errand' && item.source != null ? 'Requests' : 'App feedback')
 
 /** The project filter's value and the chip's word: the repo, or "App feedback" for an item that names none. */
 export const projectOf = originOf

@@ -8,7 +8,7 @@ import { readLongWaits } from './long-waits.ts'
 import { screenPassed } from './spec-screen.ts'
 import { DEFAULT_LONG_WAIT_MS } from './needs-settings.ts'
 import { plain } from './words.ts'
-import { isWorkRepo, loadOpenProjects, REDACTED_SUMMARY, REDACTED_TITLE } from './work.ts'
+import { isWorkRepo, loadOpenProjects, type OpenProject, REDACTED_SUMMARY, REDACTED_TITLE } from './work.ts'
 
 export { isWorkRepo, REDACTED_SUMMARY, REDACTED_TITLE }
 export type { OpenProject } from './work.ts'
@@ -65,6 +65,17 @@ export function sourceWords(source: string, origin: string): string {
   if (source.startsWith('feedback')) return 'feedback'
   if (source.startsWith('owner')) return 'you'
   return origin
+}
+
+/**
+ * The repo the Judge's note on an unrouted monitor names: the one open project whose name the note mentions as a whole
+ * word; none, or more than one, is no proposal (the owner types the repo).
+ */
+export function proposalOf(note: string | null, open: readonly OpenProject[]): string | null {
+  if (note === null) return null
+  const escaped = (name: string) => name.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')
+  const named = open.filter((p) => new RegExp(`(?<![\\w-])${escaped(p.name)}(?![\\w-])`, 'i').test(note))
+  return named.length === 1 ? (named[0]?.name ?? null) : null
 }
 
 const DecisionRow = z.object({
@@ -148,6 +159,8 @@ const SignalRow = z.object({
   origin: z.string(),
   source: z.string(),
   link: z.string().nullable(),
+  /** the monitor of a signal that is a monitor down with no route */
+  unrouted_monitor: z.string().nullable(),
 })
 
 /**
@@ -209,7 +222,8 @@ export async function readNeeds(sql: SQL, now: Date, options: { longWaitMs?: num
     WHERE r.done_at IS NULL AND r.reached_owner_at IS NOT NULL AND (r.issue_id IS NULL OR i.state <> 'closed')
     ORDER BY r.raised_at DESC, r.id DESC`
   const signals: unknown[] = await sql`
-    SELECT id, repo, title, text, received_at, issue_id, screen_note, origin, source, link
+    SELECT id, repo, title, text, received_at, issue_id, screen_note, origin, source, link,
+      CASE WHEN alert->'facts'->>'unrouted' = 'true' THEN alert->>'subject' END AS unrouted_monitor
     FROM factory.intake_signals WHERE state = 'held'
     ORDER BY received_at DESC, id DESC`
 
@@ -240,6 +254,7 @@ export async function readNeeds(sql: SQL, now: Date, options: { longWaitMs?: num
         command: null,
         host: null,
         sourceLink: null,
+        unrouted: null,
         tried: null,
         need: null,
         joined: 0,
@@ -268,6 +283,7 @@ export async function readNeeds(sql: SQL, now: Date, options: { longWaitMs?: num
         command: null,
         host: null,
         sourceLink: null,
+        unrouted: null,
         tried: null,
         need: null,
         joined: 0,
@@ -296,6 +312,7 @@ export async function readNeeds(sql: SQL, now: Date, options: { longWaitMs?: num
         // a lead's Errand names no host: it is read from its words, as a request's is at intake
         host: row.host ?? hostOf(`${row.summary}\n${row.detail ?? ''}`),
         sourceLink: null,
+        unrouted: null,
         tried: triedOf(row),
         need: row.need,
         joined: row.joined,
@@ -324,6 +341,14 @@ export async function readNeeds(sql: SQL, now: Date, options: { longWaitMs?: num
         command: null,
         host: null,
         sourceLink: row.link,
+        unrouted:
+          row.unrouted_monitor === null
+            ? null
+            : {
+                source: sourceWords(row.source, row.origin),
+                monitor: plain(row.unrouted_monitor, 120),
+                proposal: proposalOf(row.screen_note, open),
+              },
         tried: null,
         need: null,
         joined: 0,
@@ -349,6 +374,7 @@ export async function readNeeds(sql: SQL, now: Date, options: { longWaitMs?: num
       command: null,
       host: null,
       sourceLink: null,
+      unrouted: null,
       tried: null,
       need: null,
       joined: 0,

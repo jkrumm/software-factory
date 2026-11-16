@@ -63,7 +63,7 @@ export const LANGUAGE = {
   gone: 'Session state: its session ended or its terminal is gone',
   healed: 'Outcome: an incident that went away before a lead started',
   'held signal':
-    "Outside text the factory did not trust enough to turn into work. It waits in Needs you for the owner to promote or dismiss it. The one held signal that is not outside text is a lead's follow-up for a work repo, when its own Issue was owner-filed: the Judge never reads it",
+    "Outside text the factory did not trust enough to turn into work. It waits in Needs you for the owner to promote or dismiss it. Two held signals are not outside text: a lead's follow-up for a work repo, when its own Issue was owner-filed (the Judge never reads it), and a monitor that stayed down with no route and no home repo to place it in: its card says what fired, and promoting it with a repo sets the monitor's route and files the alert there",
   idle: 'Session state: its last turn ended',
   incident:
     'One root cause seen through many signals: the VPS is down, so Beszel, HyperDX and Kuma all fire. Triage groups them under one Issue',

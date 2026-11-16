@@ -889,6 +889,8 @@ export function createIntake(deps: IntakeDeps) {
     if (!found.ok) return found
     if (!found.value) return refuse('unknown_project', `${asked} is not a project the factory knows`)
     const repo = found.value.repo
+    if ((row.received.alert?.facts as { unrouted?: unknown } | null)?.unrouted === true)
+      return promoteUnrouted(id, found.value, by)
     return uow.run(async (s): Out<Triaged> => {
       await s.intake.lock(`promote:${id}`)
       const current = await s.intake.signal(id)
@@ -932,6 +934,42 @@ export function createIntake(deps: IntakeDeps) {
         admitted: r.alert !== null && r.signal.source === 'github' && !fromBacklog ? 'label' : null,
       })
       return ok(triaged('filed', 'promoted', issue, id))
+    })
+  }
+
+  /**
+   * A held signal that is a monitor down with no route: promoting it sets the route in the repo and files the monitor's
+   * last alert there (`routeIn`, which also answers this held signal). A monitor that came back up meanwhile has nothing
+   * to file: the route stays and the signal is dismissed with that reason.
+   */
+  async function promoteUnrouted(id: string, info: RepoSignals, by: 'owner' | 'judge'): Out<Triaged> {
+    // A route into a work repo would let a monitor file there: the work repo hears the owner only.
+    if (info.work) return refuse('unknown_project', `${info.repo} is a work repo: it hears the owner only`)
+    const topology = await deps.topology.load()
+    if (!topology.ok) return topology
+    return uow.run(async (s): Out<Triaged> => {
+      await s.intake.lock(`promote:${id}`)
+      const current = await s.intake.signal(id)
+      if (!current) return refuse('not_found', `no signal ${id}`)
+      if (current.state !== 'held') return refuse('not_held', `signal ${id} is ${current.state}`)
+      const { source, subject } = { source: current.received.signal.source, subject: current.received.alert?.subject }
+      if (!subject) return refuse('invalid', `signal ${id} names no monitor`)
+      const routed = await routeIn(
+        s,
+        { source, monitor: subject, repo: info.repo },
+        by === 'owner' ? 'owner' : 'factory:screen',
+        info,
+        topology.value,
+      )
+      if (!routed.ok) return routed
+      const after = await s.intake.signal(id)
+      if (after?.state === 'promoted') return ok(triaged('filed', 'promoted', after.issueId, id))
+      await s.intake.setSignal(id, {
+        state: 'dismissed',
+        issueId: null,
+        dismissal: { reason: `the monitor is up again; it now routes to ${info.repo}`, by, at: clock.now() },
+      })
+      return ok(triaged('dropped', 'promoted', null, id, `the monitor is up again; it now routes to ${info.repo}`))
     })
   }
 
@@ -1235,7 +1273,12 @@ export function createIntake(deps: IntakeDeps) {
     return placeByName(monitor, names)
   }
 
-  const HOME_TITLE = 'No door route for a monitor that is down, pick its repo: '
+  const HOME_TITLE = 'No repo hears this alert, pick its repo: '
+  /** What the owner reads when the factory has no repo to ask: what fired, since when, and what the one answer does. */
+  const heldAsk = (row: UnroutedRow): string => {
+    const since = row.downSince ? ` since ${row.downSince.toISOString().slice(0, 16).replace('T', ' ')} UTC` : ''
+    return `The alert "${row.lastTitle}" from ${row.source} has been firing${since} and reached no repo, because no repo is assigned to ${row.monitor}. Pick the repo it belongs to: the monitor gets that route and the alert is filed there.`
+  }
   const HOME_ASK =
     'No door route exists for this monitor, so its alerts reach no repo. Decide which repo it belongs to and add the route with `factory door route-set`; fix the monitor if it is down for a reason of its own.'
 
@@ -1311,7 +1354,7 @@ export function createIntake(deps: IntakeDeps) {
         continue
       }
       if (!row.downSince || clock.now().getTime() - row.downSince.getTime() < settings.unroutedHeldMs) continue
-      const held = unroutedSignal(row, null, title, HOME_ASK)
+      const held = unroutedSignal(row, null, title, heldAsk(row))
       const out = await uow.run(async (s) => {
         await s.intake.lock(`subject:${row.source}:${row.monitor}`)
         const stored = await hold(s, held, undefined, 'a monitor down with no route and no repo to place it in')
