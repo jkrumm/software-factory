@@ -124,12 +124,12 @@ describe('what the default view hides', () => {
         {
           ...titled('old-spec', 'issue_3', 'spec', '2026-11-16T09:00:00.000Z', 'An old spec'),
           issueClosed: true,
-          issueRepo: 'argo',
+          issueRepo: '/work/argo',
         },
         {
           ...titled('live-spec', 'issue_4', 'spec', '2026-11-16T10:00:00.000Z', 'A live spec'),
           issueClosed: false,
-          issueRepo: 'argo',
+          issueRepo: '/work/argo',
         },
       ],
       [],

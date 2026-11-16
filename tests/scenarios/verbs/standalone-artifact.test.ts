@@ -131,8 +131,13 @@ test('the list says whether the owning Issue is closed and what its repo is; a s
   }[]
   const standalone = listed.find((a) => a.id === report)
   expect(standalone).toMatchObject({ issueClosed: null, issueRepo: null })
-  const owned = listed.find((a) => a.issueId !== null)
-  if (owned) expect(owned).toMatchObject({ issueClosed: expect.any(Boolean), issueRepo: expect.any(String) })
+  await v.w.world.db.sql`INSERT INTO factory.artifacts (id, key, issue_id, kind, title, format, author, created_at)
+    VALUES ('artifact_owned', 'k-owned', 'issue_1', 'spec', 'An owned spec', 'markdown', 'lead', now())`
+  const owned = (((await v.run(['artifact', 'list'])).json?.artifacts ?? []) as typeof listed).find(
+    (a) => a.id === 'artifact_owned',
+  )
+  expect(owned).toMatchObject({ issueClosed: false, issueRepo: expect.stringMatching(/example$/) })
+  await v.w.world.db.sql`DELETE FROM factory.artifacts WHERE id = 'artifact_owned'`
 })
 
 test('retire hides a Report from the list, its address still works, restore brings it back', async () => {
