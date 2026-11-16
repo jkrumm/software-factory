@@ -80,42 +80,65 @@ test('load_over_ceiling: nine samples, a dip, a missing reading, a gap or a stal
 // ---- slot_line --------------------------------------------------------------------------------------------------------------
 
 const slots = (n: number, over: Partial<SlotMinute> = {}): SlotMinute[] =>
-  Array.from({ length: n }, (_, i) => ({ at: ago(n - 1 - i), liveSlots: 2, holders: 2, waiters: 0, ...over }))
+  Array.from({ length: n }, (_, i) => ({
+    at: ago(n - 1 - i),
+    liveSlots: 2,
+    aimSlots: 2,
+    holders: 2,
+    waiters: 0,
+    ...over,
+  }))
 
 test('slot_line: more callers than eight waiting for fifteen minutes fires, and clears the minute the line shortens', () => {
-  const found = slotLineFindings(slots(SLOT_WAIT_MINUTES, { waiters: SLOT_WAITERS + 1 }), NOW)
+  const found = slotLineFindings(slots(SLOT_WAIT_MINUTES, { waiters: SLOT_WAITERS + 1 }), NOW, false)
   expect(found.map((f) => f.subject)).toEqual(['waiting'])
   expect(found[0]?.title).toContain('more than eight callers')
   // the line of exactly eight, fourteen minutes of nine, or a break in it do not fire
-  expect(slotLineFindings(slots(SLOT_WAIT_MINUTES, { waiters: SLOT_WAITERS }), NOW)).toEqual([])
-  expect(slotLineFindings(slots(SLOT_WAIT_MINUTES - 1, { waiters: 20 }), NOW)).toEqual([])
+  expect(slotLineFindings(slots(SLOT_WAIT_MINUTES, { waiters: SLOT_WAITERS }), NOW, false)).toEqual([])
+  expect(slotLineFindings(slots(SLOT_WAIT_MINUTES - 1, { waiters: 20 }), NOW, false)).toEqual([])
   const broken = slots(20, { waiters: 20 })
   broken[10] = { ...(broken[10] as SlotMinute), waiters: 0 }
-  expect(slotLineFindings(broken, NOW)).toEqual([])
+  expect(slotLineFindings(broken, NOW, false)).toEqual([])
   // cleared: the newest minute has a short line
   const clearing = slots(20, { waiters: 20 })
   clearing[19] = { ...(clearing[19] as SlotMinute), waiters: 1, holders: 2 }
-  expect(slotLineFindings(clearing, NOW)).toEqual([])
+  expect(slotLineFindings(clearing, NOW, false)).toEqual([])
   // and a slot minute from before the host loop stopped says nothing about now
-  expect(slotLineFindings(slots(SLOT_WAIT_MINUTES, { waiters: 20 }), new Date(NOW.getTime() + 600_000))).toEqual([])
+  expect(slotLineFindings(slots(SLOT_WAIT_MINUTES, { waiters: 20 }), new Date(NOW.getTime() + 600_000), false)).toEqual(
+    [],
+  )
 })
 
 test('slot_line: a base slot empty while callers wait fires after five minutes, once per condition, and clears when the slot is taken', () => {
   const empty = slots(SLOT_EMPTY_MINUTES, { holders: 1, waiters: 2 })
-  const found = slotLineFindings(empty, NOW)
+  const found = slotLineFindings(empty, NOW, false)
   expect(found.map((f) => f.subject)).toEqual(['base_empty'])
   expect(found[0]?.title).toContain('empty')
   // both conditions at once are two subjects, each with its own title
-  const both = slotLineFindings(slots(SLOT_WAIT_MINUTES, { holders: 1, waiters: 12 }), NOW)
+  const both = slotLineFindings(slots(SLOT_WAIT_MINUTES, { holders: 1, waiters: 12 }), NOW, false)
   expect(both.map((f) => f.subject).sort()).toEqual(['base_empty', 'waiting'])
   // four minutes, nobody waiting, or every base slot held: no finding
-  expect(slotLineFindings(slots(SLOT_EMPTY_MINUTES - 1, { holders: 1, waiters: 2 }), NOW)).toEqual([])
-  expect(slotLineFindings(slots(10, { holders: 1, waiters: 0 }), NOW)).toEqual([])
-  expect(slotLineFindings(slots(10, { holders: 2, waiters: 5 }), NOW)).toEqual([])
+  expect(slotLineFindings(slots(SLOT_EMPTY_MINUTES - 1, { holders: 1, waiters: 2 }), NOW, false)).toEqual([])
+  expect(slotLineFindings(slots(10, { holders: 1, waiters: 0 }), NOW, false)).toEqual([])
+  expect(slotLineFindings(slots(10, { holders: 2, waiters: 5 }), NOW, false)).toEqual([])
   // cleared: the slot was granted in the newest minute
   const granted = slots(10, { holders: 1, waiters: 2 })
   granted[9] = { ...(granted[9] as SlotMinute), holders: 2 }
-  expect(slotLineFindings(granted, NOW)).toEqual([])
+  expect(slotLineFindings(granted, NOW, false)).toEqual([])
+})
+
+test('slot_line: under the aim `on` the base is the aim, so one holder of an aim of 1 is no empty slot (issue 1556)', () => {
+  // the aim lowered the base to 1: callers were told "all 1 slots are busy", which is the rule working
+  const aimed = slots(10, { holders: 1, waiters: 13, aimSlots: 1 })
+  expect(slotLineFindings(aimed, NOW, true)).toEqual([])
+  // under `shadow` the aim moves nothing: the same rows are a base slot of two, one empty
+  expect(slotLineFindings(aimed, NOW, false).map((f) => f.subject)).toEqual(['base_empty'])
+  // an aim of 1 with nobody holding is still an empty base slot, and the context names the base callers had
+  const idle = slotLineFindings(slots(SLOT_EMPTY_MINUTES, { holders: 0, waiters: 3, aimSlots: 1 }), NOW, true)
+  expect(idle.map((f) => f.subject)).toEqual(['base_empty'])
+  expect(idle[0]?.context.join(' ')).toContain('0 of 1 base slots held')
+  // an aim above FACTORY_SLOTS never raises the base the memory rule judges
+  expect(slotLineFindings(slots(10, { holders: 2, waiters: 5, aimSlots: 4 }), NOW, true)).toEqual([])
 })
 
 // ---- gates_passed -----------------------------------------------------------------------------------------------------------

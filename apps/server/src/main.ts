@@ -593,6 +593,7 @@ async function main(): Promise<void> {
           sharedNumbers: SHARED_NUMBERS,
           processCap: DEFAULT_PROCESS_CAP,
           memoryCeilings: planningEnv.memoryCeilings,
+          slotAim: planningEnv.slotAim,
           serverPid: process.pid,
           routes: () => routes.snapshot(),
           overload: hostOverload({ dataDir }),

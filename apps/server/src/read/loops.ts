@@ -107,6 +107,7 @@ const AdmissionRow = z.object({ at: z.date(), issue_id: z.string() })
 const SlotMinuteRow = z.object({
   at: z.date(),
   live_slots: z.number().int(),
+  aim_slots: z.number().int(),
   holders: z.number().int(),
   waiters: z.number().int(),
 })
@@ -439,10 +440,16 @@ export function loopReads(tx: SQL): LoopReads {
 
     async slotMinutes(since) {
       const rows: unknown[] = await tx`
-        SELECT at, live_slots, holders, waiters FROM factory.slot_shadow WHERE at >= ${since} ORDER BY at`
+        SELECT at, live_slots, aim_slots, holders, waiters FROM factory.slot_shadow WHERE at >= ${since} ORDER BY at`
       return rows.map((raw) => {
         const row = SlotMinuteRow.parse(raw)
-        return { at: row.at, liveSlots: row.live_slots, holders: row.holders, waiters: row.waiters }
+        return {
+          at: row.at,
+          liveSlots: row.live_slots,
+          aimSlots: row.aim_slots,
+          holders: row.holders,
+          waiters: row.waiters,
+        }
       })
     },
 
