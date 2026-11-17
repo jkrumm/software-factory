@@ -18,7 +18,7 @@ Every command starts with `[ -n "$FACTORY_SESSION" ]`: outside a factory session
 when `factory` is not installed. Inside one, `factory hook <event>` appends the fact to the spool first, then posts it
 to the server over a unix socket (300 ms, best effort), and exits 0 whatever happens. The one exception is the `Stop`
 send-back: when the server holds a note for the session, the hook exits 2 and Claude Code keeps the session going. The
-hook prints nothing on stdout, because Claude Code injects a hook's stdout into the session. See `apps/cli/src/hook.ts`.
+hook prints nothing on stdout, because Claude Code injects a hook's stdout into the session, bar one line: a lead's `SessionStart` after a compaction tells it to re-read its Issue. See `apps/cli/src/hook.ts`.
 
 ## Credential
 
