@@ -431,6 +431,11 @@ describe('the brief', () => {
     expect(STANDING_ORDERS).toContain('gh pr checks <n>')
   })
 
+  test('the watch fallback first waits for the pushed head to have a run', () => {
+    expect(STANDING_ORDERS).toContain('gh run list --commit $(git rev-parse HEAD)')
+    expect(buildBrief({ ...input, mergeGuard: false })).toContain('gh run list --commit <head sha>')
+  })
+
   test('the CI wait reads each check bucket, never the watch exit code', () => {
     expect(STANDING_ORDERS).toContain('--json bucket')
     expect(STANDING_ORDERS).toContain('| grep -qx true')
