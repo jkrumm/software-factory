@@ -1,4 +1,4 @@
-/** The weekly retro: one signal a week, filed by the friction loop's pass, whose lead writes the review as a Report. */
+/** The retro: a signal filed by every friction pass (a day or 200 closed Issues; intake's fingerprint folds a repeat into the open one), whose lead writes the review as a Report. */
 
 /** Stable: the fingerprint drops digits and punctuation, so a repeat amends within the intake window. */
 export const RETRO_TITLE =

@@ -42,7 +42,7 @@ export interface FrictionDeps {
   file(body: SignalRequest): Promise<Result<Triaged, IntakeError>>
 }
 
-/** `retro`: what filing the weekly retro signal came to, in words (it is not a friction pattern and has no row in the record). */
+/** `retro`: what filing the retro signal came to, in words (it is not a friction pattern and has no row in the record). */
 export type FrictionPass =
   | { due: false; lastAt: Date }
   | { due: true; trigger: PassTrigger; record: FrictionPassRecord; retro: string }
