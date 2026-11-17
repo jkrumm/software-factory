@@ -121,6 +121,7 @@ import { readBudgetFacts, readIssueFates, readWindowFacts } from './read/through
 import { loadEpoch } from './adapters/throughput-epoch.ts'
 import { projectBudgets as readProjectBudgets, throughputPass, throughputSummary } from './app/loops/throughput.ts'
 import { readFrictionEvidence } from './read/friction-evidence.ts'
+import { readClosedSince, readRetroOutcomes } from './read/retro-outcomes.ts'
 import { loopReads } from './read/loops.ts'
 import { readIssues } from './read/planning.ts'
 import { loadSettings } from './settings.ts'
@@ -519,7 +520,7 @@ async function main(): Promise<void> {
       },
     },
     {
-      // Deterministic: the week's counts, one signal per pattern over its threshold. Due once a week, read from the table.
+      // Deterministic: the week's counts, one signal per pattern over its threshold. Due once a day or after 200 closed Issues, read from the table.
       name: 'friction',
       intervalMs: loopSettings.intervalMs.friction,
       onChange: false,
@@ -530,6 +531,8 @@ async function main(): Promise<void> {
           ids: systemIds,
           friction: (now) => readFriction(sql, { now, days: FRICTION_WINDOW_DAYS }),
           evidence: (now, keys) => readFrictionEvidence(sql, { now, days: FRICTION_WINDOW_DAYS }, keys),
+          closedSince: (since, now) => readClosedSince(sql, { since, now }),
+          retroOutcomes: (now, days) => readRetroOutcomes(sql, { now, days }),
           file: (body) => intake.api.file(body, 'agent'),
         })
         if (!pass.ok) return pass

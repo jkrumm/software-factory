@@ -26,7 +26,7 @@ export interface CallPolicy {
   maxRounds: number
   /** how long after a round that came to nothing the next one may start */
   retryMs: number
-  /** a claimed call is held this long: the hang guard of the agw call, so a lease outlives any run */
+  /** a claimed call is held this long, then another pass may take it over; the retaken call has the same key, so agw joins the run instead of starting a second */
   leaseMs: number
 }
 

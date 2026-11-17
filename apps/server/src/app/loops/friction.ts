@@ -1,14 +1,16 @@
 import type { FrictionModel, SignalRequest } from '@software-factory/contract'
-import { RETRO_TITLE, RETRO_WINDOW_DAYS, retroText } from '../../domains/loops/retro.ts'
+import { RETRO_TITLE, RETRO_WINDOW_DAYS, type RetroOutcomes, retroText } from '../../domains/loops/retro.ts'
 import {
-  FRICTION_PASS_EVERY_MS,
+  clockTrigger,
   FRICTION_WINDOW_DAYS,
   hasIssueRefs,
   named,
   type Pattern,
+  type PassTrigger,
   patternsOver,
   signalText,
   signalTitle,
+  volumeDue,
   withinBudget,
 } from '../../domains/loops/friction.ts'
 import type { FrictionPassRecord, LoopReads, LoopStore } from '../../domains/loops/ports.ts'
@@ -32,17 +34,24 @@ export interface FrictionDeps {
   friction(now: Date): Promise<FrictionModel>
   /** the most recent Issue refs behind the counts of these keys, for the same window */
   evidence(now: Date, keys: string[]): Promise<Record<string, string[]>>
+  /** Issues closed from `since` to `now`: what the volume trigger counts */
+  closedSince(since: Date, now: Date): Promise<number>
+  /** what the retro signals of the last `days` days led to (`read/retro-outcomes.ts`) */
+  retroOutcomes(now: Date, days: number): Promise<RetroOutcomes>
   /** intake's entry for an agent (`intake.api.file`): its fingerprint rules decide a repeat */
   file(body: SignalRequest): Promise<Result<Triaged, IntakeError>>
 }
 
-/** `retro`: what filing the weekly retro signal came to, in words (it is not a friction pattern and has no row in the record). */
-export type FrictionPass = { due: false; lastAt: Date } | { due: true; record: FrictionPassRecord; retro: string }
+/** `retro`: what filing the retro signal came to, in words (it is not a friction pattern and has no row in the record). */
+export type FrictionPass =
+  | { due: false; lastAt: Date }
+  | { due: true; trigger: PassTrigger; record: FrictionPassRecord; retro: string }
 
 const reasonOf = (error: IntakeError): string => ('detail' in error ? `${error.kind}: ${error.detail}` : error.kind)
 
 /**
- * One tick of the friction loop (no model): when no pass was recorded in the last week, count the week's waste, file one
+ * One tick of the friction loop (no model): when no pass was recorded in the last day, or 200 Issues closed since the last
+ * one (whichever comes first), count the last week's waste, file one
  * signal for each pattern over its threshold (at most `MAX_SIGNALS_PER_PASS`, the rest are named in the record) and
  * record the pass. A crash between filing and recording replays safely: intake's fingerprint turns a repeat into a note
  * on the open Issue, or drops it when that Issue closed lately.
@@ -51,9 +60,15 @@ export async function frictionPass(deps: FrictionDeps): Promise<Result<FrictionP
   const now = deps.clock.now()
   const last = await deps.uow.run(async ({ loops }) => ok(await loops.lastFrictionPassAt()))
   if (!last.ok) return last
-  if (last.value && last.value.getTime() > now.getTime() - FRICTION_PASS_EVERY_MS) {
-    return ok({ due: false, lastAt: last.value })
+  let trigger = clockTrigger(last.value, now)
+  if (trigger === null && last.value) {
+    try {
+      if (volumeDue(await deps.closedSince(last.value, now))) trigger = 'volume'
+    } catch (error) {
+      return err(portError('unreadable', `the closed Issues could not be counted: ${String(error).slice(0, 300)}`))
+    }
   }
+  if (trigger === null) return ok({ due: false, lastAt: last.value ?? now })
 
   const gated = await readGate(deps, { loop: 'friction', now })
   if (!gated.ok) return gated
@@ -97,27 +112,33 @@ export async function frictionPass(deps: FrictionDeps): Promise<Result<FrictionP
     failed: [],
   }
   for (const pattern of over.file) await fileOne(deps, gate, pattern, facts, evidence[pattern.key] ?? [], record)
-  const retro = await fileRetro(deps, model.window.to)
+  const retro = await fileRetro(deps, model.window.to, now)
 
   const recorded = await deps.uow.run(async ({ loops }) => {
     await loops.recordFrictionPass(record)
     return ok(undefined)
   })
   if (!recorded.ok) return recorded
-  return ok({ due: true, record, retro })
+  return ok({ due: true, trigger, record, retro })
 }
 
 /**
- * The weekly retro: one signal on this repo whose lead reviews the week (`domains/loops/retro.ts`). Filed after the patterns,
+ * The retro: one signal on this repo whose lead reviews the week (`domains/loops/retro.ts`). Filed after the patterns,
  * so a pattern is never held back by it; a failure is named in the pass line and never stops the pass. A replay is intake's
  * fingerprint: an amend of the open retro Issue, or a drop while one closed lately.
  */
-async function fileRetro(deps: FrictionDeps, to: string): Promise<string> {
+async function fileRetro(deps: FrictionDeps, to: string, now: Date): Promise<string> {
+  let previous: RetroOutcomes | null = null
+  try {
+    previous = await deps.retroOutcomes(now, RETRO_WINDOW_DAYS)
+  } catch {
+    // the line about the earlier retros is a convenience: a failed read never keeps the retro from being filed
+  }
   const filed = await deps.file({
     from: FRICTION_SOURCE,
     kind: 'request',
     title: RETRO_TITLE,
-    text: retroText({ to, days: RETRO_WINDOW_DAYS }),
+    text: retroText({ to, days: RETRO_WINDOW_DAYS, previous }),
     repo: FRICTION_REPO,
     probe: false,
   })
@@ -159,7 +180,7 @@ async function fileOne(
 export const frictionSummary = (pass: FrictionPass): string => {
   if (!pass.due) return `not due (last pass ${pass.lastAt.toISOString()})`
   const { record } = pass
-  const parts = [`filed ${record.filed.length} signal(s) for ${FRICTION_WINDOW_DAYS} days`]
+  const parts = [`${pass.trigger} pass: filed ${record.filed.length} signal(s) for ${FRICTION_WINDOW_DAYS} days`]
   parts.push(`retro ${pass.retro}`)
   if (record.overBudget.length > 0) parts.push(`over budget, not filed: ${named(record.overBudget)}`)
   if (record.failed.length > 0) {

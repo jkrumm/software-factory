@@ -1,8 +1,8 @@
 import { expect, test } from 'bun:test'
+import { MAX_SIGNALS_PER_PASS } from '../../src/domains/loops/budget.ts'
 import type { FrictionCount, SignalRequest } from '@software-factory/contract'
 import {
   isRetired,
-  MAX_SIGNALS_PER_PASS,
   MIN_CLOSED,
   named,
   patternsOver,
@@ -14,7 +14,7 @@ import {
 import type { ClassIssue } from '../../src/domains/loops/classes.ts'
 import type { FrictionPassRecord, LoopReads, LoopStore } from '../../src/domains/loops/ports.ts'
 import { frictionPass, frictionSummary, type FrictionDeps } from '../../src/app/loops/friction.ts'
-import { RETRO_TITLE } from '../../src/domains/loops/retro.ts'
+import { RETRO_TITLE, type RetroOutcomes } from '../../src/domains/loops/retro.ts'
 import { sequentialIds } from '../../src/kernel/ids.ts'
 import { err, ok } from '../../src/kernel/result.ts'
 
@@ -179,11 +179,15 @@ test('a pattern without Issues says so', () => {
 const DAY = 86_400_000
 const passNow = new Date('2026-11-20T12:00:00Z')
 
-function frictionWorld(classes: Record<string, ClassIssue[]>, failRetro = false) {
+function frictionWorld(
+  classes: Record<string, ClassIssue[]>,
+  failRetro = false,
+  extra: { last?: Date | null; closed?: number; outcomes?: RetroOutcomes } = {},
+) {
   const recorded: { issue: string; class: string; key: string }[] = []
   const records: FrictionPassRecord[] = []
   const loops = {
-    lastFrictionPassAt: async () => null,
+    lastFrictionPassAt: async () => extra.last ?? null,
     recordFrictionPass: async (r: FrictionPassRecord) => void records.push(r),
     recordFinding: async (f: { issue: string; class: string; key: string }) => {
       if (!recorded.some((r) => r.issue === f.issue)) recorded.push(f)
@@ -206,6 +210,8 @@ function frictionWorld(classes: Record<string, ClassIssue[]>, failRetro = false)
       counts: [count('lead_gone', 'lead_gone', 9), count('regression', 'regression', 9)],
     }),
     evidence: async () => ({}),
+    closedSince: async () => extra.closed ?? 0,
+    retroOutcomes: async () => extra.outcomes ?? { days: 7, signals: 0, shipped: 0, done: 0, dropped: 0, open: 0 },
     file: async (body) => {
       bodies.push(body)
       if (failRetro && body.title === RETRO_TITLE) return err({ kind: 'unreadable', detail: 'intake is down' }) as never
@@ -265,4 +271,52 @@ test('every pass files the weekly retro signal once, and a failure to file it ne
   expect(failed.ok && failed.value.due && frictionSummary(failed.value)).toContain(
     'retro not filed: unreadable: intake is down',
   )
+})
+
+// ---- the pace: a day, or 200 closed Issues ---------------------------------------------------------------------------------
+
+const HOUR = 3_600_000
+
+test('a pass is not due within a day while fewer than 200 Issues closed, and then not read as a pass', async () => {
+  const w = frictionWorld({}, false, { last: new Date(passNow.getTime() - 3 * HOUR), closed: 199 })
+  const pass = await frictionPass(w.deps)
+  expect(pass).toMatchObject({ ok: true, value: { due: false } })
+  expect(w.records).toHaveLength(0)
+  expect(w.bodies).toHaveLength(0)
+})
+
+test('200 Issues closed since the last pass make one due within the day, and the budget still holds', async () => {
+  const w = frictionWorld({}, false, { last: new Date(passNow.getTime() - 3 * HOUR), closed: 200 })
+  const pass = await frictionPass(w.deps)
+  expect(pass).toMatchObject({ ok: true, value: { due: true, trigger: 'volume' } })
+  expect(w.records).toHaveLength(1)
+  expect(w.records[0]?.filed.length).toBeLessThanOrEqual(MAX_SIGNALS_PER_PASS)
+  expect(pass.ok && pass.value.due && frictionSummary(pass.value)).toContain('volume pass: filed 2 signal(s)')
+})
+
+test('a day since the last pass makes one due on the clock, however few Issues closed', async () => {
+  const w = frictionWorld({}, false, { last: new Date(passNow.getTime() - 25 * HOUR), closed: 3 })
+  expect(await frictionPass(w.deps)).toMatchObject({ ok: true, value: { due: true, trigger: 'day' } })
+})
+
+test('the retro signal says what the earlier retros’ signals led to', async () => {
+  const w = frictionWorld({}, false, {
+    outcomes: { days: 7, signals: 6, shipped: 3, done: 1, dropped: 1, open: 0 },
+  })
+  await frictionPass(w.deps)
+  const text = w.bodies.find((b) => b.title === RETRO_TITLE)?.text ?? ''
+  expect(text).toContain(
+    'Verified: the retros of the last 7 days filed 6 signal(s): 3 shipped, 1 closed done without a ship, 1 dropped or cancelled, 0 still open, 1 reached no Issue.',
+  )
+  const quiet = frictionWorld({})
+  await frictionPass(quiet.deps)
+  expect(quiet.bodies.find((b) => b.title === RETRO_TITLE)?.text).not.toContain('Verified:')
+})
+
+test('the retro asks the Report to open with the three largest sources of waste, by hours', async () => {
+  const w = frictionWorld({})
+  await frictionPass(w.deps)
+  const text = w.bodies.find((b) => b.title === RETRO_TITLE)?.text ?? ''
+  expect(text).toContain('0. The three largest sources of waste')
+  expect(text.indexOf('0. The three')).toBeLessThan(text.indexOf('1. The numbers'))
 })

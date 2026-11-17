@@ -6,6 +6,7 @@ import type {
   Kpi,
   KpiKey,
   KpiModel,
+  LoopYieldModel,
 } from '@software-factory/contract'
 import {
   ChatCircleDotsIcon,
@@ -37,6 +38,8 @@ import {
   dayValues,
   dayXLabels,
   classWords,
+  closeWords,
+  yieldWords,
   comparisonWords,
   DEFAULT_WINDOW,
   distanceWords,
@@ -77,7 +80,7 @@ import {
 } from '@/lib/improve'
 import { ImproveSkeleton } from '@/components/skeletons'
 import { useScreen, useScreenNote } from '@/lib/screen'
-import { useCapacityLoop, useFindingClasses, useFixCommits, useFriction, useKpis } from '@/lib/queries'
+import { useCapacityLoop, useFindingClasses, useFixCommits, useFriction, useKpis, useLoopYield } from '@/lib/queries'
 import { cn } from '@/lib/utils'
 
 export const Route = createFileRoute('/improve')({
@@ -446,6 +449,72 @@ function FrictionSection({ model, pending }: { model: FrictionModel | undefined;
           <FrictionBody model={model} />
         ) : (
           <p className="text-sm text-muted-foreground">{pending ? 'Loading' : 'No data yet'}</p>
+        )}
+      </Section>
+    </div>
+  )
+}
+
+/** What each loop that files signals led to: the Issues its signals opened and how those ended, the pace of a close, the kinds it files most. */
+function LoopYieldSection({ model }: { model: LoopYieldModel | undefined }) {
+  return (
+    <div data-shot="improve-yield">
+      <Section title="What the loops yielded">
+        {model === undefined ? (
+          <p className="text-sm text-muted-foreground">Loading</p>
+        ) : (
+          <div className={cn(PANEL, 'overflow-x-auto')} style={PANEL_SHADOW}>
+            <table aria-label="What the loops yielded" className="w-full text-sm">
+              <thead className="text-left text-xs text-muted-foreground">
+                <tr>
+                  <th scope="col" className="px-4 py-2 font-medium">
+                    Loop
+                  </th>
+                  <th scope="col" className="px-2.5 py-2 font-medium">
+                    Days
+                  </th>
+                  <th scope="col" className="px-2.5 py-2 text-right font-medium">
+                    Passes
+                  </th>
+                  <th scope="col" className="px-2.5 py-2 text-right font-medium">
+                    Signals
+                  </th>
+                  <th scope="col" className="px-2.5 py-2 text-right font-medium">
+                    Issues
+                  </th>
+                  <th scope="col" className="px-2.5 py-2 font-medium">
+                    How they ended
+                  </th>
+                  <th scope="col" className="px-2.5 py-2 text-right font-medium">
+                    Median to close
+                  </th>
+                  <th scope="col" className="px-2.5 py-2 font-medium">
+                    Most filed
+                  </th>
+                </tr>
+              </thead>
+              <tbody className="divide-y">
+                {model.loops.flatMap((loop) =>
+                  loop.windows.map((window, index) => (
+                    <tr key={`${loop.loop}/${window.days}`}>
+                      <th scope="row" className="px-4 py-2 text-left font-medium">
+                        {index === 0 ? loop.loop : ''}
+                      </th>
+                      <td className="px-2.5 py-2 tabular-nums">{window.days}</td>
+                      <td className="px-2.5 py-2 text-right tabular-nums">{window.passes ?? '–'}</td>
+                      <td className="px-2.5 py-2 text-right tabular-nums">{window.signals}</td>
+                      <td className="px-2.5 py-2 text-right tabular-nums">{window.issues}</td>
+                      <td className="px-2.5 py-2">{yieldWords(window)}</td>
+                      <td className="px-2.5 py-2 text-right tabular-nums">{closeWords(window.medianCloseSeconds)}</td>
+                      <td className="px-2.5 py-2 text-muted-foreground">
+                        {window.classes.map((c) => `${c.class} (${c.issues})`).join(', ') || '–'}
+                      </td>
+                    </tr>
+                  )),
+                )}
+              </tbody>
+            </table>
+          </div>
         )}
       </Section>
     </div>
@@ -877,6 +946,7 @@ function Improve() {
   const note = useScreenNote(screen, kpis.error)
   const friction = useFriction(days)
   const classes = useFindingClasses()
+  const yields = useLoopYield()
   const fixes = useFixCommits()
   const capacity = useCapacityLoop(days)
 
@@ -901,6 +971,7 @@ function Improve() {
           <KpiSections model={model} />
           <FixBand model={fixes.data} pending={fixes.isPending} />
           <FrictionSection model={friction.data} pending={friction.isPending} />
+          <LoopYieldSection model={yields.data} />
           <FindingClassesSection model={classes.data} />
         </div>
       </div>

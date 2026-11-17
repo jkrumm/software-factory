@@ -657,6 +657,58 @@ export const FindingClassesModel = z
   .meta({ id: 'FindingClassesModel' })
 export type FindingClassesModel = z.infer<typeof FindingClassesModel>
 
+// -- what the loops yield ----------------------------------------------------------------------------------------------
+
+/** The loops that file signals; the others (leads, steward, host, ...) judge or sample and file none. */
+export const YIELD_LOOPS = ['friction', 'hygiene', 'selfwatch', 'throughput'] as const
+
+export const LoopYieldClass = z
+  .strictObject({
+    /** the pattern group, probe, finding kind or KPI the loop filed under */
+    class: z.string(),
+    issues: z.number().int(),
+    /** of those, dropped or cancelled */
+    noise: z.number().int(),
+  })
+  .meta({ id: 'LoopYieldClass' })
+export type LoopYieldClass = z.infer<typeof LoopYieldClass>
+
+/** One loop over one window: what it filed and how it ended. Issues are counted by the day they were filed. */
+export const LoopYieldWindow = z
+  .strictObject({
+    days: z.number().int(),
+    /** recorded passes (a pass that filed nothing too); null for a loop that keeps no record of its passes */
+    passes: z.number().int().nullable(),
+    /** signals the loop filed, as its own record counts them (a repeat that amended an Issue is one) */
+    signals: z.number().int(),
+    /** distinct Issues those signals opened or reached */
+    issues: z.number().int(),
+    done: z.number().int(),
+    healed: z.number().int(),
+    dropped: z.number().int(),
+    cancelled: z.number().int(),
+    /** not closed yet */
+    open: z.number().int(),
+    /** median seconds from the Issue's filing to its close, over the closed ones; null with none */
+    medianCloseSeconds: z.number().nullable(),
+    /** the three kinds of finding with the most Issues, then by name */
+    classes: z.array(LoopYieldClass),
+  })
+  .meta({ id: 'LoopYieldWindow' })
+export type LoopYieldWindow = z.infer<typeof LoopYieldWindow>
+
+export const LoopYield = z
+  .strictObject({
+    loop: z.enum(YIELD_LOOPS),
+    /** the last 7 days, then the last 30 */
+    windows: z.array(LoopYieldWindow),
+  })
+  .meta({ id: 'LoopYield' })
+export type LoopYield = z.infer<typeof LoopYield>
+
+export const LoopYieldModel = z.strictObject({ at, loops: z.array(LoopYield) }).meta({ id: 'LoopYieldModel' })
+export type LoopYieldModel = z.infer<typeof LoopYieldModel>
+
 // -- fix commits ---------------------------------------------------------------------------------------------------------
 
 export const FixWeek = z
@@ -1735,6 +1787,19 @@ export const RetroThroughput = z
   .meta({ id: 'RetroThroughput' })
 export type RetroThroughput = z.infer<typeof RetroThroughput>
 
+/** One source of waste over the retro's window, in hours: what the factory spent waiting or redoing. */
+export const RetroWasteSource = z
+  .strictObject({
+    source: z.enum(['queue', 'slot_wait', 'stalls', 'refused_ships', 'owner_waits']),
+    hours: z.number(),
+    /** how many waits, refusals or intervals add up to the hours */
+    events: z.number().int(),
+    /** the largest part of it, in the factory's words (the queue reason, the stall reason); null when it has no parts */
+    largest: z.string().nullable(),
+  })
+  .meta({ id: 'RetroWasteSource' })
+export type RetroWasteSource = z.infer<typeof RetroWasteSource>
+
 /**
  * What the weekly retro reads, all of it from the event log and the tables (no model): the KPI table with its history, the
  * friction counts, the lead sessions with their transcripts (the CLI reads those: `factory retro`), samples of Issues worth
@@ -1764,6 +1829,8 @@ export const RetroModel = z
     build: RetroBuild,
     /** where the host's memory and the leads' hours went over the window */
     throughput: RetroThroughput,
+    /** the five sources of waste in hours, largest first: the first three are what the Report leads with */
+    waste: z.array(RetroWasteSource),
   })
   .meta({ id: 'RetroModel' })
 export type RetroModel = z.infer<typeof RetroModel>

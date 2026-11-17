@@ -164,14 +164,14 @@ test('the first pass counts only the new core, files each pattern over its rate 
   expect(ran.summary).toContain('retro filed (new)')
 })
 
-test('a second run in the same week is not due and files nothing', async () => {
+test('a second run in the same day is not due and files nothing', async () => {
   const ran = await runLoop(lab, 'friction')
   expect(ran.summary).toContain('not due (last pass ')
   expect(await filedSignals()).toHaveLength(3)
   expect(await passes()).toHaveLength(1)
 })
 
-test('a pass a week later amends the open Issue of a pattern with what it counted now, and files no second', async () => {
+test('a pass a day later amends the open Issue of a pattern with what it counted now, and files no second', async () => {
   const [first] = await filedSignals().then((all) => all.filter((s) => s.title.includes('regression')))
   if (!first?.issue_id) throw new Error('the regression signal has no Issue')
   expect(await notesOn(first.issue_id)).toEqual([])
@@ -235,4 +235,27 @@ test('a window with nothing over a threshold still records its pass', async () =
   const all = await passes()
   expect(all).toHaveLength(before + 1)
   expect(all.at(-1)).toMatchObject({ filed: [], over_budget: [], failed: [] })
+})
+
+test('200 Issues closed within an hour make a pass due before the day is out, and 199 do not', async () => {
+  await sql()`DELETE FROM factory.issue_events WHERE key LIKE 'seed-%'`
+  // the last pass was three hours ago: the day has not passed
+  await sql()`UPDATE factory.friction_passes SET at = now() - interval '3 hours'`
+  const before = (await passes()).length
+  await close(issue, 199, '1 hour')
+  const quiet = await runLoop(lab, 'friction')
+  expect(quiet.error).toBeNull()
+  expect(quiet.summary).toContain('not due (last pass ')
+  expect(await passes()).toHaveLength(before)
+
+  await close(issue, 1, '30 minutes')
+  const ran = await runLoop(lab, 'friction')
+  expect(ran.error).toBeNull()
+  expect(ran.summary).toContain('volume pass: filed ')
+  const all = await passes()
+  expect(all).toHaveLength(before + 1)
+  // the budget holds: no pass files more than five, and the retro is the one signal of the repo besides them
+  expect(all.at(-1)?.filed.length).toBeLessThanOrEqual(5)
+  // the pass restarts the count: the next run is quiet again
+  expect((await runLoop(lab, 'friction')).summary).toContain('not due (last pass ')
 })

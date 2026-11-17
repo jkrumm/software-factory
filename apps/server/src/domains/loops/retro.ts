@@ -1,4 +1,4 @@
-/** The weekly retro: one signal a week, filed by the friction loop's pass, whose lead writes the review as a Report. */
+/** The retro: a signal filed by every friction pass (a day or 200 closed Issues; intake's fingerprint folds a repeat into the open one), whose lead writes the review as a Report. */
 
 /** Stable: the fingerprint drops digits and punctuation, so a repeat amends within the intake window. */
 export const RETRO_TITLE =
@@ -6,17 +6,45 @@ export const RETRO_TITLE =
 
 export const RETRO_WINDOW_DAYS = 7
 
+/** What the signals of the retros of the last `days` days led to, counted when this retro is filed. */
+export interface RetroOutcomes {
+  days: number
+  /** retro signals filed in those days (each ends with a `Retro:` marker) */
+  signals: number
+  /** their Issues: shipped, closed done without a ship, dropped or cancelled, still open; the rest reached no Issue */
+  shipped: number
+  done: number
+  dropped: number
+  open: number
+}
+
+/** The previous retros' yield in a line for the signal's facts; null when no retro signal was filed in the window. */
+export function outcomesLine(outcomes: RetroOutcomes | null): string | null {
+  if (!outcomes || outcomes.signals === 0) return null
+  const none = outcomes.signals - outcomes.shipped - outcomes.done - outcomes.dropped - outcomes.open
+  const parts = [
+    `${outcomes.shipped} shipped`,
+    `${outcomes.done} closed done without a ship`,
+    `${outcomes.dropped} dropped or cancelled`,
+    `${outcomes.open} still open`,
+  ]
+  if (none > 0) parts.push(`${none} reached no Issue`)
+  return `Verified: the retros of the last ${outcomes.days} days filed ${outcomes.signals} signal(s): ${parts.join(', ')}.`
+}
+
 /**
  * The signal's text: the ask a lead builds from. Every command is one the factory already has; the bundle
  * (`factory retro`) holds every number, so the lead reads and judges, it does not recount.
  */
-export function retroText(input: { to: string; days: number }): string {
+export function retroText(input: { to: string; days: number; previous?: RetroOutcomes | null }): string {
   const { to, days } = input
   const date = to.slice(0, 10)
-  return [
+  const lines = [
     `Why: the owner wants a review of the last ${days} days as a repeating hygiene step: it keeps tuning the factory, the CLIs, the briefs and the dotfiles wiring, and checks that earlier changes moved their number.`,
     `What: the event log, the lead transcripts and the earlier retro signals, over the ${days} days ending ${to}.`,
+    outcomesLine(input.previous ?? null),
     `Change: write one Report (\`factory artifact submit --kind report\`) with these parts, in this order.`,
+    `0. The three largest sources of waste. \`waste\` lists the five sources in Issue-hours over the window, largest first (queue by reason, slot wait, stalls, refused ships, waits on the owner), each with its hours, its events and its largest part. Open the Report with a table of the first three: the source, its hours, its share of the five, and the one change that would take most of it out, or why none exists. A source with no hours is named as zero; do not drop it.`,
     `1. The numbers against last week. Run \`factory retro --days ${days} --digests <a directory under the temp dir> --format json\`. \`kpis.kpis\` holds each figure with its history (the last two points are this window and last week's): a table of those that moved, those with a target and whether it is met, the parts of the breakdowns (queued time by reason, time by state, regressions by cause), then \`transcripts\`: seconds by tool category, idle gaps by what ended them, tool-error classes, \`make check\` runs per Issue.`,
     `2. The sample's patterns. \`samples\` lists Issues that regressed, stalled, were slowest, were refused or were dropped; \`transcripts.digests\` names the digest file of each. Have subagents read the digests (general-purpose, which runs on a cheap tier: one per sample group, each answering with the pattern, the Issue refs and the line that shows it) and verify each pattern against a digest line yourself before it goes in. A pattern without a cited line is not in the Report.`,
     `2b. Capacity. \`capacity.figures\` holds Issues closed per day, minutes a day over the load ceiling, idle seat-hours a day behind a non-empty queue, the test-slot wait p90 and the minutes a day leads spent blocked on API errors (\`api_blocked_minutes_per_day\`: from a lead's turn ending on an API error to the next turn that started; a rise means the edge or a login, and \`factory read friction\` lists the edge incidents under \`api_transient\`); \`capacity.loop\` the steps and repos that take most memory, the reaper's work and \`constants\` (the settings in force); \`capacity.tune\` the one constant the fixed rules would change first and why (null: nothing is out of range). Name the constant to change, or say why not; a change to it is a recommendation whose \`kpi=\` is one of those figure keys (\`closed_per_day\`, \`minutes_over_ceiling_per_day\`, \`idle_seat_hours_per_day\`, \`slot_wait_p90_ms\`), and Issues closed per day must not fall.`,
@@ -27,5 +55,6 @@ export function retroText(input: { to: string; days: number }): string {
     `4. Recommendations: one signal per concrete change (\`factory signal file --from agent:software-factory --repo <the repo it belongs in> --title ... --text ...\`), each with the KPI it should move. The text of each signal ends with a marker, so the next retro finds it (intake keeps the text on one line): \`Retro: ${date} kpi=<KPI or capacity figure key> before=<its value now, or none> direction=<up|down>\` as the last words of the text. A change for another repo is a signal on that repo; the factory's own friction is a signal on software-factory. Put each signal's title and what it should move in the Report.`,
     `Acceptance: the Report states for every ledger entry whether it shipped and what its number did; every recommendation is a filed signal with a marker line and a KPI; no pattern is named without a digest line; the Report is submitted for review.`,
     `Reproduce: factory retro --days ${days}`,
-  ].join('\n')
+  ]
+  return lines.filter((line) => line !== null).join('\n')
 }

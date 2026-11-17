@@ -50,6 +50,7 @@ describe('affected', () => {
     kpis: ['kpis', 7],
     friction: ['friction', 7],
     classes: ['finding-classes'],
+    yields: ['loop-yield'],
     fixes: ['fix-commits'],
     accounts: ['accounts'],
     machine: ['machine'],

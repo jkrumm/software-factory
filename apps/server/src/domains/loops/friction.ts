@@ -1,13 +1,26 @@
 import type { FrictionCount } from '@software-factory/contract'
+import { MAX_SIGNALS_PER_PASS } from './budget.ts'
 
-/** The weekly pass reads this many days of counts. */
+/** A pass reads this many days of counts: the thresholds below are a week's. */
 export const FRICTION_WINDOW_DAYS = 7
 
-/** A pass is due when no pass was recorded within this long. */
-export const FRICTION_PASS_EVERY_MS = FRICTION_WINDOW_DAYS * 24 * 3_600_000
+/** A pass is due when no pass was recorded within this long... */
+export const FRICTION_PASS_EVERY_MS = 24 * 3_600_000
 
-/** One pass files at most this many signals; the patterns left out are named in the pass record. */
-export const MAX_SIGNALS_PER_PASS = 5
+/** ...or when this many Issues closed since the last one, whichever comes first: at 126 to 166 closed a day the weekly pace looked at a thousand Issues per pass. */
+export const FRICTION_PASS_EVERY_CLOSED = 200
+
+/** Why a pass runs now: nothing recorded yet, a day since the last, or the volume of closed Issues. */
+export type PassTrigger = 'first' | 'day' | 'volume'
+
+/** `first` or `day` when the clock makes a pass due; null when it does not (the volume is then the other trigger). */
+export function clockTrigger(lastAt: Date | null, now: Date): PassTrigger | null {
+  if (lastAt === null) return 'first'
+  return lastAt.getTime() <= now.getTime() - FRICTION_PASS_EVERY_MS ? 'day' : null
+}
+
+/** Whether the Issues closed since the last pass make one due. */
+export const volumeDue = (closedSince: number): boolean => closedSince >= FRICTION_PASS_EVERY_CLOSED
 
 /** Evidence Issue refs shown in one signal. */
 export const MAX_EVIDENCE = 5

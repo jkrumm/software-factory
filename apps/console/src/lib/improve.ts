@@ -5,6 +5,7 @@ import type {
   FrictionCount,
   Kpi,
   KpiKey,
+  LoopYieldWindow,
 } from '@software-factory/contract'
 import type { Tone } from '../components/kit/tone'
 import type { LANGUAGE } from './language.gen'
@@ -244,6 +245,25 @@ export function classWords(cls: FindingClass): string {
   if (cls.status === 'held')
     return `${outcomes}, asked again ${cls.heldUntil === null ? 'later' : cls.heldUntil.slice(0, 10)}`
   return `${outcomes}, one Issue at a time until one closes done`
+}
+
+/** A span of seconds as the owner reads it: minutes under two hours, hours under two days, else days; a dash for none. */
+export function closeWords(seconds: number | null): string {
+  if (seconds === null) return '–'
+  if (seconds < 7_200) return `${Math.max(1, Math.round(seconds / 60))} min`
+  if (seconds < 172_800) return `${Math.round(seconds / 3_600)} h`
+  return `${Math.round(seconds / 86_400)} d`
+}
+
+/** What a loop's signals led to over one window, in one line: done, dropped or cancelled, still open. */
+export function yieldWords(window: LoopYieldWindow): string {
+  if (window.issues === 0) return 'no Issue'
+  const parts = [
+    `${window.done + window.healed} done`,
+    `${window.dropped + window.cancelled} dropped or cancelled`,
+    `${window.open} open`,
+  ]
+  return parts.join(', ')
 }
 
 /** The model's weeks as the table reads them, the oldest first (the API sends the newest first). */

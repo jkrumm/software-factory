@@ -41,7 +41,7 @@ import type {
 import type { FindingRow, LedgerChange } from './throughput.ts'
 import type { QueueAskRow, QueueEdge, RefusedEdge, QueueIssue } from './queue.ts'
 
-/** One weekly friction pass as recorded (`migrations/0950_friction.sql`). */
+/** One friction pass (a day or 200 closed Issues) as recorded (`migrations/0950_friction.sql`). */
 export interface FrictionPassRecord {
   id: string
   at: Date
