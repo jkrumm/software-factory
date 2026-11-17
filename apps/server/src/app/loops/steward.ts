@@ -25,6 +25,7 @@ import {
   type IdleFacts,
   MAX_ROUNDS,
   readIdleHistory,
+  QUICK_REBLOCK_MS,
   type RepeatedStall,
   SAME_STALL,
   sameWords,
@@ -174,7 +175,23 @@ export function repeatedStall(
         record.version < since,
     )
     .map((record) => field(record.payload, 'detail'))
-  if (![before.detail, ...chain].some((earlier) => sameWords(earlier, detail) >= SAME_STALL)) return null
+  // The first block after an answer is a new wording of the same reason more often than not (the lead cites the answer it
+  // was just given), so alike words are not the only proof: a block straight after the answer, with nothing reported by the
+  // lead in between, is the same stall.
+  const began = history.find((record) => record.version === since)
+  const straightAfter =
+    cause === 'blocked' &&
+    began !== undefined &&
+    began.at.getTime() - answered.at.getTime() <= QUICK_REBLOCK_MS &&
+    !history.some(
+      (record) =>
+        record.version > answered.version &&
+        record.version < since &&
+        record.actor === 'lead' &&
+        record.kind !== 'stalled',
+    )
+  const alike = [before.detail, ...chain].some((earlier) => sameWords(earlier, detail) >= SAME_STALL)
+  if (!straightAfter && !alike) return null
   return { answeredAt: answered.version, held: field(answered.payload, 'hold') !== '' }
 }
 
