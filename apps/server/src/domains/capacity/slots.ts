@@ -209,6 +209,23 @@ function decide(
 }
 
 /**
+ * Whether a step may pass a head that was passed for the whole window anyway: the freeze exists so small steps cannot keep
+ * the head out for ever, and a step does not keep it out when the head still fits beside it once the holders granted
+ * before the passing began have ended (their resident size is then free again). Both sizes must be learned or guessed and
+ * the free memory known; otherwise the freeze holds. The holders granted since the passing began are the passers: they stay
+ * and are already in the used memory.
+ */
+function headFitsBeside(head: SlotRow, step: SlotRow, held: readonly SlotRow[], fit: SlotFit): boolean {
+  const headMib = fit.peaksByName?.get(head.name) ?? null
+  const stepMib = fit.peaksByName?.get(step.name) ?? fit.peakMib
+  if (headMib === null || stepMib === null || fit.freeMib === null || head.passedAt === null) return false
+  const released = held
+    .filter((row) => row.grantedAt !== null && row.grantedAt.getTime() < (head.passedAt as Date).getTime())
+    .reduce((sum, row) => sum + (row.rssMib ?? 0), 0)
+  return headMib + stepMib + fit.headroomMib <= fit.freeMib + released
+}
+
+/**
  * One call of a caller, which is a request for a slot and a renewal of the one it has: the first call makes it a
  * waiter; a call from a waiter first in line, with a slot free, gives it that slot; a call from a holder renews the
  * lease. Slots go to waiters in the line's order (`lineOrder`). Rows past their lease (holders) or their poll window (waiters)
@@ -339,7 +356,12 @@ export function touchSlots(
       cores: input.fit.coresByName?.get(waiter.name) ?? DEFAULT_STEP_CORES,
     })
     if (theirs.grant) return wait(`waiting for the ${ahead} ahead in line`, 'line')
-    if (theirs.kind !== 'class' && waiter.passedAt !== null && now.getTime() - waiter.passedAt.getTime() >= passAfterMs)
+    if (
+      theirs.kind !== 'class' &&
+      waiter.passedAt !== null &&
+      now.getTime() - waiter.passedAt.getTime() >= passAfterMs &&
+      !headFitsBeside(waiter, mine, held, input.fit)
+    )
       return wait(
         `"${waiter.name}" ahead was passed for ${Math.round(passAfterMs / 60_000)} min and nothing passes it now: ${theirs.why}`,
         'line',
