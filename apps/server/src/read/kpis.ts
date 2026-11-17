@@ -6,6 +6,7 @@ import { percentile, per, windowOf } from './stats.ts'
 import { catalogFields, type CatalogField } from './kpi-fields.ts'
 import { flowKpis, regressionParts } from './kpis-flow.ts'
 import { costBySeat, USAGE_TIMEOUT_MS, type SeatCost } from './usage.ts'
+import { readAttemptSeats, readInferredEdges } from './kpis-attempts.ts'
 import { readSeatKpis } from './kpis-seats.ts'
 
 /** The owner's actions on an Issue that the factory should have settled; the events that count are these kinds. */
@@ -745,9 +746,13 @@ export async function readKpis(
     window: { from: last.from.toISOString(), to: last.to.toISOString() },
     windows: windows.map((w) => ({ from: w.from.toISOString(), to: w.to.toISOString() })),
     kpis,
-    seats: await readSeatKpis(sql, last, {
-      now: options.now,
-      cost: (issues) => costOfIssues(sql, issues, options.usageTimeoutMs),
-    }),
+    seats: {
+      ...(await readSeatKpis(sql, last, {
+        now: options.now,
+        cost: (issues) => costOfIssues(sql, issues, options.usageTimeoutMs),
+      })),
+      attemptSeats: await readAttemptSeats(sql, last, { timeoutMs: options.usageTimeoutMs }),
+    },
+    edges: await readInferredEdges(sql, last),
   }
 }

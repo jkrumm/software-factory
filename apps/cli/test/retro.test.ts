@@ -41,6 +41,7 @@ beforeAll(() => {
       kpis: [],
       seats: {
         rows: [],
+        attemptSeats: [],
         movedUpShare: null,
         tripwire: {
           on: false,
@@ -53,6 +54,7 @@ beforeAll(() => {
           met: null,
         },
       },
+      edges: { total: 0, open: 0, needed: 0, notNeeded: 0, neededShare: null, idleHours: 0 },
     },
     friction: { at: '', days: 7, window: { from: '', to: '' }, since: null, issues: 0, closed: 0, counts: [] },
     sessions: [

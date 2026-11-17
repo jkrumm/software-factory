@@ -135,7 +135,7 @@ export async function readSeatKpis(
   sql: SQL,
   w: Window,
   options: { now: Date; cost: ((issues: readonly string[]) => Promise<number | null>) | null },
-): Promise<SeatKpis> {
+): Promise<Omit<SeatKpis, 'attemptSeats'>> {
   const facts = await factsOf(sql, w, options.now)
   const rows: SeatKpiRow[] = []
   for (const seat of KPI_SEATS) {
