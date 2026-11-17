@@ -181,7 +181,7 @@ checkpoint is for that one only: a late one the factory sent is ignored, and a l
 | `filed` | Triage made it an Issue; it begins `settling` | factory, owner |
 | `settled` | Triage and the chain are done; it may be queued. Carries the refined Kind when triage corrected an owner's or agent's request, and `checkpoint: spec` when triage flagged it, and the size triage judged (`small`, `medium`, `large`) | factory |
 | `admitted` | Capacity lets a lead start: the next attempt | factory |
-| `lead_started` | The attempt's lead runs in its terminal, on the seat it records (tier, effort and the role row: `lead`, `light`, or the filed seat's) | factory |
+| `lead_started` | The attempt's lead runs in its terminal, on the seat it records (tier, effort and the role row: `lead`, `light`, or the filed seat's), and the reviewer row its reviews were assigned (`reviewer` or `reviewer-cheap`; none on the attached path of a crash replay) | factory |
 | `lead_gone` | The attempt's lead failed to start or ended; twice a new attempt, the third time a stall | factory |
 | `seated` | The owner set the seat (tier and effort, or a role of the table, resolved now) the next lead starts on; taken while the Issue is `settling` or `queued`, refused once a lead has started | owner, orchestrator |
 | `noted` | An amend or a note reaches the lead | owner, factory, steward, judge |

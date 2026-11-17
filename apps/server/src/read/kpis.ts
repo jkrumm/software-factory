@@ -1,12 +1,13 @@
 import type { SQL } from 'bun'
 import * as z from 'zod'
-import { HISTORY_WINDOWS, type Kpi, type KpiModel } from '@software-factory/contract'
+import { type Effort, HISTORY_WINDOWS, type Kpi, type KpiModel, type Tier } from '@software-factory/contract'
 import { boundedRead } from './bounded.ts'
 import { percentile, per, windowOf } from './stats.ts'
 import { catalogFields, type CatalogField } from './kpi-fields.ts'
 import { flowKpis, regressionParts } from './kpis-flow.ts'
 import { costBySeat, USAGE_TIMEOUT_MS, type SeatCost } from './usage.ts'
 import { readAttemptSeats, readInferredEdges } from './kpis-attempts.ts'
+import { readReviewerKpis } from './kpis-reviewers.ts'
 import { readSeatKpis } from './kpis-seats.ts'
 
 /** The owner's actions on an Issue that the factory should have settled; the events that count are these kinds. */
@@ -348,6 +349,35 @@ export async function costOfIssues(sql: SQL, issues: readonly string[], timeoutM
         WHERE r.session_id = ANY(${tx.array(ids, 'BIGINT')})`
       return z.object({ cost: z.coerce.number() }).parse(sum).cost
     })
+  } catch {
+    return null
+  }
+}
+
+/**
+ * The reviewer-agent dollars (the usage side's tool `reviewer`) of these Issues' sessions, split by the seat that ran
+ * them: the haiku tier is the cheap seat, any other the rest. Null when the usage schema cannot be read.
+ */
+export async function reviewerCostOfIssues(
+  sql: SQL,
+  issues: readonly string[],
+  timeoutMs = USAGE_TIMEOUT_MS,
+): Promise<{ cheap: number; plain: number } | null> {
+  if (issues.length === 0) return { cheap: 0, plain: 0 }
+  try {
+    const sessions = await boundedRead(sql, timeoutMs, async (tx) => {
+      const [row] =
+        await tx`SELECT to_regclass('usage.sessions') IS NOT NULL AND to_regclass('usage.records_unique') IS NOT NULL AS present`
+      return z.object({ present: z.boolean() }).parse(row).present ? await sessionsOfIssues(tx, [...issues]) : null
+    })
+    if (sessions === null) return null
+    const seats = await costBySeat(sql, { sessions, timeoutMs })
+    const reviewer = seats.filter((seat) => seat.tool === 'reviewer')
+    const sum = (rows: SeatCost[]) => rows.reduce((total, seat) => total + seat.cost, 0)
+    return {
+      cheap: sum(reviewer.filter((seat) => seat.model.includes('haiku'))),
+      plain: sum(reviewer.filter((seat) => !seat.model.includes('haiku'))),
+    }
   } catch {
     return null
   }
@@ -721,7 +751,14 @@ const USAGE_WINDOWS = 2
  */
 export async function readKpis(
   sql: SQL,
-  options: { now: Date; days: number; usageTimeoutMs?: number; pointsCache?: PointsCache },
+  options: {
+    now: Date
+    days: number
+    usageTimeoutMs?: number
+    pointsCache?: PointsCache
+    /** the role table's reviewer rows, for the words beside the reviewer numbers; absent: the numbers stand alone */
+    reviewerRows?: { cheap: { tier: Tier; effort: Effort }; reviewer: { tier: Tier; effort: Effort } } | null
+  },
 ): Promise<KpiModel> {
   const step = options.days * 24 * 3_600_000
   // oldest first; window k ends where window k + 1 starts, the last is exactly `windowOf(now, days)`
@@ -754,6 +791,11 @@ export async function readKpis(
       })),
       attemptSeats: await readAttemptSeats(sql, last, { timeoutMs: options.usageTimeoutMs }),
     },
+    reviewers: await readReviewerKpis(sql, last, {
+      now: options.now,
+      table: { cheap: options.reviewerRows?.cheap ?? null, reviewer: options.reviewerRows?.reviewer ?? null },
+      cost: (issues) => reviewerCostOfIssues(sql, issues, options.usageTimeoutMs),
+    }),
     edges: await readInferredEdges(sql, last),
   }
 }

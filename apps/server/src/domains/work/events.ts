@@ -55,6 +55,8 @@ export const PAYLOADS = {
     seat: z
       .object({ tier: z.enum(TIERS), effort: z.enum(EFFORTS), role: text.optional(), rule: text.optional() })
       .optional(),
+    /** the reviewer row the lead's reviews were assigned (`reviewer` or `reviewer-cheap`, `domains/leads/reviewer.ts`); old events carry none */
+    reviewer: text.optional(),
   }),
   /** the attempt's lead failed to start or ended */
   lead_gone: z.object({ attempt, detail: text }),

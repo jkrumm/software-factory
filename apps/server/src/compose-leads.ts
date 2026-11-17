@@ -1,5 +1,6 @@
 import type { SQL } from 'bun'
 import type { TickAnswer } from '@software-factory/contract'
+import { reviewerTakesAll } from './read/kpis-reviewers.ts'
 import { gitBranches } from './adapters/git/branches.ts'
 import { gitWorktrees } from './adapters/git/worktrees.ts'
 import { makefileMergeGuard } from './adapters/git/merge-guard.ts'
@@ -65,6 +66,7 @@ export function composeLeads(input: {
       'leads: FACTORY_AGENT_TOKEN is not set; a lead starts without a token and its factory calls answer 401',
     )
   const deps: LeadDeps = {
+    reviewerTakesAll: () => reviewerTakesAll(input.sql, input.clock.now()).catch(() => false),
     uow: input.uow,
     clock: input.clock,
     ids: input.ids,

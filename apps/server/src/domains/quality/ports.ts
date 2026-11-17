@@ -1,6 +1,6 @@
 import type { IssueId } from '../../kernel/ids.ts'
 import type { Result } from '../../kernel/result.ts'
-import type { CiRead, CiState, CommitRead, ReviewRange, ReviewRead } from './evidence.ts'
+import type { CiRead, CiState, CommitRead, LedgerThread, ReviewRange, ReviewRead } from './evidence.ts'
 import type { Check, ProjectChecks } from './watch.ts'
 
 /**
@@ -21,6 +21,11 @@ export interface Commits {
 /** agw's review ledger: the factory only asks, and records the answer. */
 export interface Review {
   read(input: { repo: string; ranges: readonly ReviewRange[] }): Promise<Result<ReviewRead>>
+  /**
+   * The ledger's record of the reviews that cover a ship (`ReviewRead.jobs`), one per thread. A job agw cannot answer for
+   * is left out, never an error: the record is a measure, not a gate. Unset where nothing reads the ledger.
+   */
+  threads?(input: { repo: string; jobs: readonly string[] }): Promise<Result<LedgerThread[]>>
 }
 
 /** GitHub's CI, read only. Any failure is an error result: the ship records it as `unknown`, the watch does not hold on it. */

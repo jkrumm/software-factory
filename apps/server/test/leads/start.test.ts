@@ -197,6 +197,39 @@ describe('start_lead seats', () => {
     expect(w.terminals.started[0]?.prompt).not.toContain('## Your seat')
   })
 
+  test('the reviewer row is assigned at the start, recorded on lead_started and told in the brief; a table without it says nothing', async () => {
+    const odd = await w.admitted() // issue_1
+    expect((await startLead(w.deps, effect(odd))).ok).toBe(true)
+    expect(w.terminals.started[0]?.prompt).not.toContain('## Your reviewer seat')
+    expect((await events(odd, 'lead_started'))[0]?.payload).not.toHaveProperty('reviewer')
+
+    await w.reset()
+    w.reviewerCheap = true
+    const first = await w.admitted() // issue_1: odd, so the reviewer row
+    expect((await startLead(w.deps, effect(first))).ok).toBe(true)
+    expect(w.terminals.started[0]?.prompt).toContain('Your reviews run on the seat `agw review prepare` names')
+    expect((await events(first, 'lead_started'))[0]?.payload).toMatchObject({ reviewer: 'reviewer' })
+
+    const second = await w.admitted() // issue_2: even, so the cheap row
+    expect((await startLead(w.deps, effect(second))).ok).toBe(true)
+    const prompt = w.terminals.started.at(-1)?.prompt
+    expect(prompt).toContain('## Your reviewer seat')
+    expect(prompt).toContain('`model: haiku`')
+    expect((await events(second, 'lead_started'))[0]?.payload).toMatchObject({ reviewer: 'reviewer-cheap' })
+
+    w.reviewerTakesAll = true
+    const third = await w.admitted() // issue_3: odd, but the tripwire has handed over every review
+    expect((await startLead(w.deps, effect(third))).ok).toBe(true)
+    expect((await events(third, 'lead_started'))[0]?.payload).toMatchObject({ reviewer: 'reviewer-cheap' })
+  })
+
+  test('a light-seat lead is assigned the cheap reviewer row whatever its number', async () => {
+    w.reviewerCheap = true
+    const issue = await w.admitted([], undefined, 'docs')
+    expect((await startLead(w.deps, effect(issue))).ok).toBe(true)
+    expect((await events(issue, 'lead_started'))[0]?.payload).toMatchObject({ reviewer: 'reviewer-cheap' })
+  })
+
   test('a docs Issue with no seat starts light, says so in its brief, and a moved-up one starts on the lead row', async () => {
     const issue = await w.admitted([], undefined, 'docs')
     expect((await startLead(w.deps, effect(issue))).ok).toBe(true)

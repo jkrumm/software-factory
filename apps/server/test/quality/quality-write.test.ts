@@ -81,11 +81,13 @@ const commits: Commits = {
     return commitAnswer
   },
 }
+let threadsAnswer: Awaited<ReturnType<NonNullable<Review['threads']>>> = ok([])
 const review: Review = {
   read: async () => {
     if (uow.inTransaction()) inside.push('review')
     return reviewAnswer
   },
+  threads: async () => threadsAnswer,
 }
 const checkout: LeadCheckout = {
   of: async () => {
@@ -109,7 +111,8 @@ const ci: Ci = {
   },
   ofCommit: async () => err(portError('refused', 'no token')),
 }
-const deps = (): ShipDeps => ({ uow, clock, ids, commits, review, ci, projects: watch(), checkout })
+let reviewerRows: ShipDeps['reviewerRows']
+const deps = (): ShipDeps => ({ uow, clock, ids, commits, review, ci, projects: watch(), checkout, reviewerRows })
 const watchDeps = (extra: Partial<WatchDeps> = {}): WatchDeps => ({
   uow,
   clock,
@@ -154,17 +157,31 @@ const record = async (issueId: IssueId, name: string, event: AnyIssueEvent) =>
   value(await recordIssueEvent({ uow, clock, ids }, { issueId, key: key(name, issueId), event }))
 
 /** An Issue whose attempt 1 has a lead working. */
-async function working(extra: { checkpoint?: 'spec' } = {}): Promise<IssueId> {
+async function working(extra: { checkpoint?: 'spec'; reviewer?: string } = {}): Promise<IssueId> {
   const filed = ev(
     'filed',
-    { repo: '/repo/example', title: 'the probe fails', kind: 'bug', origin: 'you', ...extra },
+    {
+      repo: '/repo/example',
+      title: 'the probe fails',
+      kind: 'bug',
+      origin: 'you',
+      ...(extra.checkpoint ? { checkpoint: extra.checkpoint } : {}),
+    },
     'factory',
   )
   if (filed.kind !== 'filed') throw new Error('unreachable')
   const { issue } = value(await fileIssue({ uow, clock, ids }, { key: key('filed', ids.next('signal')), event: filed }))
   await record(issue.id, 'settled', ev('settled', {}, 'factory'))
   await record(issue.id, 'admitted', ev('admitted', {}, 'factory'))
-  await record(issue.id, 'lead_started', ev('lead_started', { attempt: 1, terminal: 'lead-1' }, 'factory'))
+  await record(
+    issue.id,
+    'lead_started',
+    ev(
+      'lead_started',
+      { attempt: 1, terminal: 'lead-1', ...(extra.reviewer ? { reviewer: extra.reviewer } : {}) },
+      'factory',
+    ),
+  )
   return issue.id
 }
 
@@ -346,6 +363,66 @@ describe('the ship gate', () => {
     expect((await outbox(issueId)).map((e: { kind: string }) => e.kind)).toContain('start_watch')
     const view = value(await showQuality({ uow }, issueId))
     expect(view.ships.map((s) => [s.result, s.attempt, s.evidence.length])).toEqual([['accepted', 1, 4]])
+  })
+
+  test('a review is recorded with the seat it ran on: the assigned row for a non-deep thread, agw’s seat for a deep one', async () => {
+    reviewerRows = async () => ({
+      cheap: { tier: 'haiku', effort: 'high' },
+      reviewer: { tier: 'sonnet', effort: 'medium' },
+    })
+    const thread = (over: object) => ({
+      thread: 't1',
+      key: 'factory-1',
+      job: 'rv_1',
+      tier: 'standard',
+      rounds: 2,
+      outcome: 'clean',
+      routed: { model: 'sonnet', effort: 'medium' },
+      wallMs: 30_000,
+      findings: { total: 3, important: 1, applied: 2, declined: 1, open: 0 },
+      ...over,
+    })
+    reviewAnswer = ok({ tier: 'deep', covered: true, uncovered: [], jobs: ['rv_1', 'rv_2'] })
+    threadsAnswer = ok([
+      thread({}),
+      thread({ thread: 't2', job: 'rv_2', tier: 'deep', routed: { model: 'sonnet', effort: 'high' } }),
+    ])
+    try {
+      const issueId = await working({ reviewer: 'reviewer-cheap' })
+      const shipped = value(await ship(issueId))
+      expect(shipped.evidence[1]).toMatchObject({
+        payload: {
+          status: 'covered',
+          reviewer: 'reviewer-cheap',
+          threads: [
+            { thread: 't1', seat: { role: 'reviewer-cheap', tier: 'haiku', effort: 'high' } },
+            { thread: 't2', seat: { role: 'reviewer', tier: 'sonnet', effort: 'high' } },
+          ],
+        },
+      })
+    } finally {
+      threadsAnswer = ok([])
+      reviewerRows = undefined
+    }
+  })
+
+  test('a ship of a lead with no recorded reviewer row records no threads, and a ledger that cannot be read leaves the review as it is', async () => {
+    reviewerRows = async () => ({
+      cheap: { tier: 'haiku', effort: 'high' },
+      reviewer: { tier: 'sonnet', effort: 'medium' },
+    })
+    reviewAnswer = ok({ tier: 'standard', covered: true, uncovered: [], jobs: ['rv_1'] })
+    threadsAnswer = err(portError('unreadable', 'agw is down'))
+    try {
+      const plain = value(await ship(await working()))
+      expect(plain.evidence[1]?.payload).not.toHaveProperty('threads')
+      const down = value(await ship(await working({ reviewer: 'reviewer' })))
+      expect(down.evidence[1]).toMatchObject({ payload: { status: 'covered', reviewer: 'reviewer' } })
+      expect(down.evidence[1]?.payload).not.toHaveProperty('threads')
+    } finally {
+      threadsAnswer = ok([])
+      reviewerRows = undefined
+    }
   })
 
   test('what the ship states against the acceptance is evidence; stating nothing is recorded as empty', async () => {

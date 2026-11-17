@@ -111,6 +111,8 @@ export interface BriefInput {
   previous?: { attempt: number; branch: string; worktree: string | null; why: string; ended: string | null }
   /** the light seat's rule when this lead runs on it (`domains/leads/light.ts`): it learns how to say it is out of its depth */
   light?: string | null
+  /** the reviewer seat section (`domains/leads/reviewer.ts`); absent when the role table has no cheap reviewer row */
+  reviewer?: string | null
   /** the attempt before was a light lead that was moved up: why, and its last words from its transcript */
   movedUp?: { attempt: number; why: string; lastWords: string | null } | null
 }
@@ -225,6 +227,7 @@ ${fenced(signals.map(signalLines).join('\n\n'))}`)
 
 You run on the light seat (rule \`${input.light}\`): this Issue was judged mechanical, with a check that proves it. Keep the change as small as the finding. If it needs a design choice, more than a few files, or you cannot make the check pass, do not push on: run \`factory issue block ${issue.id} --attempt ${input.attempt} --out-of-depth --reason "<what makes it bigger than it looked>"\`, push your branch first, and end the turn. A stronger lead takes it over from your branch. A second stall or a second refused ship moves it up too.`)
   }
+  if (input.reviewer) parts.push(input.reviewer)
   if (input.movedUp) {
     const { attempt, why, lastWords } = input.movedUp
     parts.push(`## Moved up from the light seat

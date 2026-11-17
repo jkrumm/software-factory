@@ -1,11 +1,12 @@
-import { SPEC_WAIT_HOURS } from '@software-factory/contract'
+import { type Effort, SPEC_WAIT_HOURS, type Tier } from '@software-factory/contract'
+import { reviewSeat } from '../domains/leads/reviewer.ts'
 import { type CiOutcome, judgeShip, type ReviewOutcome, type ShipVerdict } from '../domains/quality/gate.ts'
-import type { AcceptanceEvidence } from '../domains/quality/evidence.ts'
+import type { AcceptanceEvidence, ReviewEvidence } from '../domains/quality/evidence.ts'
 import type { Ci, Commits, LeadCheckout, Projects, Review } from '../domains/quality/ports.ts'
 import type { QualityStore, StoredEvidence, UndisposedAnnotation } from '../domains/quality/store.ts'
 import type { AnyIssueEvent } from '../domains/work/events.ts'
 import type { Issue } from '../domains/work/issue.ts'
-import { replay } from '../domains/work/machine.ts'
+import { type AppliedRecord, replay } from '../domains/work/machine.ts'
 import type { WorkStore } from '../domains/work/ports.ts'
 import type { Clock } from '../kernel/clock.ts'
 import type { IdSource, IssueId } from '../kernel/ids.ts'
@@ -28,6 +29,11 @@ export interface ShipDeps {
   /** whether the project ships by pull request: a push-shipping project has no pull request whose CI to read */
   projects: Projects
   checkout: LeadCheckout
+  /** the role table's `reviewer` and `reviewer-cheap` rows, for the seat a review's record names; unset or null: no review is recorded with a seat */
+  reviewerRows?: () => Promise<{
+    cheap: { tier: Tier; effort: Effort }
+    reviewer: { tier: Tier; effort: Effort }
+  } | null>
 }
 
 export interface ShipInput {
@@ -91,8 +97,42 @@ export async function checkoutOf(
   })
 }
 
+/** The reviewer row the attempt's lead was assigned when it started (`lead_started`'s payload), or null: none was recorded. */
+export function assignedReviewer(history: readonly AppliedRecord[], attempt: number): string | null {
+  const started = history.findLast(
+    (record) => record.kind === 'lead_started' && (record.payload as { attempt?: number }).attempt === attempt,
+  )
+  const reviewer = (started?.payload as { reviewer?: unknown } | undefined)?.reviewer
+  return typeof reviewer === 'string' ? reviewer : null
+}
+
+/**
+ * The review evidence with its reviews' records: each covering thread of agw's ledger, with the seat it ran on (the
+ * assigned row's, or agw's own for a deep review), and the row the lead was assigned. A ledger that cannot be read leaves
+ * the evidence as it is; a record is a measure and never a gate.
+ */
+async function withThreads(
+  deps: ShipDeps,
+  input: { repo: string; review: ReviewEvidence; jobs: readonly string[]; reviewer: string | null },
+): Promise<ReviewEvidence> {
+  if (!input.reviewer) return input.review
+  const rows = deps.reviewerRows ? await deps.reviewerRows() : null
+  if (!rows || !deps.review.threads || input.jobs.length === 0) return { ...input.review, reviewer: input.reviewer }
+  const read = await deps.review.threads({ repo: input.repo, jobs: input.jobs })
+  if (!read.ok) return { ...input.review, reviewer: input.reviewer }
+  const reviewer = input.reviewer
+  return {
+    ...input.review,
+    reviewer,
+    threads: read.value.map((thread) => ({
+      ...thread,
+      seat: reviewSeat({ assigned: reviewer, tier: thread.tier, routed: thread.routed, rows }),
+    })),
+  }
+}
+
 /** The git and agw reads of a ship: outside any transaction, the lead's call waits for them. */
-async function judge(deps: ShipDeps, issue: Issue, input: ShipInput): Promise<ShipVerdict> {
+async function judge(deps: ShipDeps, issue: Issue, input: ShipInput, reviewer: string | null): Promise<ShipVerdict> {
   const refuse = (why: string): ShipVerdict => ({ accepted: false, error: `ship refused: ${why}` })
   if (input.commits.length === 0) return refuse('ship names no merged commit')
   const checkout = await checkoutOf(deps.checkout, issue, input.attempt)
@@ -126,7 +166,7 @@ async function judge(deps: ShipDeps, issue: Issue, input: ShipInput): Promise<Sh
       : { read: null, problem: `CI could not be read: ${read.error.detail}` }
   }
   const [review, ci] = await Promise.all([readReview(), readCi()])
-  return judgeShip({
+  const verdict = judgeShip({
     reported: input.commits,
     commits,
     review,
@@ -134,6 +174,11 @@ async function judge(deps: ShipDeps, issue: Issue, input: ShipInput): Promise<Sh
     acceptance: input.acceptance,
     ...(project.ok && project.value.deployPaths ? { deployPaths: project.value.deployPaths } : {}),
   })
+  if (!verdict.accepted) return verdict
+  return {
+    ...verdict,
+    review: await withThreads(deps, { repo, review: verdict.review, jobs: review.read?.jobs ?? [], reviewer }),
+  }
 }
 
 /**
@@ -173,10 +218,11 @@ export async function shipIssue(
       accepted: await quality.shipAccepted(eventKey),
       specOwed: issue.checkpoint === 'spec' && !(await quality.specSubmitted(input.issueId)),
       annotationsOwed: await quality.undisposedAnnotations(input.issueId),
+      reviewer: assignedReviewer(history, input.attempt),
     })
   })
   if (!loaded.ok) return loaded
-  const { eventKey, issue, accepted, specOwed, annotationsOwed: owed } = loaded.value
+  const { eventKey, issue, accepted, specOwed, annotationsOwed: owed, reviewer } = loaded.value
 
   if (accepted) {
     return deps.uow.run(async ({ work, quality }) => {
@@ -196,7 +242,7 @@ export async function shipIssue(
     ? { accepted: false, error: SPEC_OWED }
     : owed.length > 0
       ? { accepted: false, error: annotationsOwed(owed) }
-      : await judge(deps, issue, input)
+      : await judge(deps, issue, input, reviewer)
   return deps.uow.run<ShipAnswer, IssueWriteError>(async ({ work, quality }) => {
     const at = deps.clock.now()
     const ship = {

@@ -30,6 +30,8 @@ import {
   ProjectPageModel,
   ProjectSetupModel,
   type QueueReason as QueueReasonSchema,
+  type Effort,
+  type Tier,
 } from '@software-factory/contract'
 import type { SQL } from 'bun'
 import { Elysia } from 'elysia'
@@ -70,6 +72,11 @@ export interface ReadModelDeps {
   sql: SQL
   /** why each queued Issue stays queued; absent or failing, the Flow screen shows the Issues without a reason */
   queueReasons?: () => Promise<QueueReasons | null>
+  /** the role table's reviewer rows, for the Improve screen's reviewer table; absent or null, its numbers have no tier words */
+  reviewerRows?: () => Promise<{
+    cheap: { tier: Tier; effort: Effort }
+    reviewer: { tier: Tier; effort: Effort }
+  } | null>
   /** the host's load and memory with the admission ceilings; null when the capacity use case cannot read them */
   machine?: () => Promise<Omit<MachineModel, 'at'> | null>
   /** the server's version and start time with the host's busiest processes; absent, `GET /v1/host` is 503 */
@@ -400,7 +407,15 @@ export const readModelRoutes = (deps: ReadModelDeps | undefined, caller: (reques
       '/kpis',
       async ({ query }) => {
         if (!deps) return unavailable
-        return Response.json(KpiModel.parse(await readKpis(deps.sql, { now: now(), days: days(query) })))
+        return Response.json(
+          KpiModel.parse(
+            await readKpis(deps.sql, {
+              now: now(),
+              days: days(query),
+              reviewerRows: await deps.reviewerRows?.().catch(() => null),
+            }),
+          ),
+        )
       },
       {
         query: DaysQuery,

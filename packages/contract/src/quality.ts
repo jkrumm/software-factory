@@ -1,4 +1,5 @@
 import * as z from 'zod'
+import { EFFORTS, TIERS } from './roles.ts'
 
 /** The Issue as a quality verb answers: where it stands after the call. */
 export const QualityIssue = z
@@ -24,6 +25,36 @@ const CommitsEvidence = z.object({
   paths: z.array(z.string()),
 })
 
+/**
+ * One review of a range, a thread of agw's ledger from its first round to the one that covered the commits: what it
+ * found, what the lead did with it, and the seat it ran on. `seat` is the seat the factory assigned (the brief told the
+ * lead to run the reviewer agent on it; a deep review stays on `reviewer`), `routed` what agw's own route table named.
+ */
+const ReviewThread = z.object({
+  thread: z.string(),
+  key: z.string(),
+  /** the round that covered the commits */
+  job: z.string(),
+  tier: z.string(),
+  rounds: z.number().int(),
+  outcome: z.string().nullable(),
+  seat: z.object({ role: z.string(), tier: z.enum(TIERS), effort: z.enum(EFFORTS) }),
+  routed: z.object({ model: z.string(), effort: z.string() }).nullable(),
+  /** the covering round's creation to its submit; null when agw did not say */
+  wallMs: z.number().nullable(),
+  findings: z.object({
+    total: z.number().int(),
+    important: z.number().int(),
+    /** disposed `fixed` */
+    applied: z.number().int(),
+    /** disposed `wrong`, `intentional` or `irrelevant` */
+    declined: z.number().int(),
+    /** still open at the ship */
+    open: z.number().int(),
+  }),
+})
+export type ReviewThread = z.infer<typeof ReviewThread>
+
 const ReviewEvidence = z.object({
   kind: z.literal('review'),
   /** `covered` and `not_required` are a review; `uncovered` and `unknown` are its recorded absence, with the reason */
@@ -34,6 +65,10 @@ const ReviewEvidence = z.object({
     z.object({ sha: z.string(), subject: z.string(), required: z.string(), reason: z.string().optional() }),
   ),
   reason: z.string().nullable(),
+  /** the reviewer row the factory assigned the Issue's lead at its start (`reviewer` or `reviewer-cheap`); absent before Issue 2027 */
+  reviewer: z.string().optional(),
+  /** each covering review with its seat; absent on a ship recorded before Issue 2027, empty when agw could not say */
+  threads: z.array(ReviewThread).optional(),
 })
 
 const AcceptanceEvidence = z.object({

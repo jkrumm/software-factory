@@ -198,6 +198,9 @@ export interface World {
   checkTiers: CheckTiers | null
   /** whether the fake repo has a merge-guard target; null: unreadable */
   mergeGuard: boolean | null
+  /** whether the role table has the cheap reviewer row, and whether the tripwire has handed it every review */
+  reviewerCheap: boolean
+  reviewerTakesAll: boolean
   seatError: PortError | null
   /** the account the fake capacity gives every attempt */
   seatAccount: string
@@ -250,6 +253,8 @@ export async function startWorld(): Promise<World> {
     repoError: null,
     checkTiers: null,
     mergeGuard: null,
+    reviewerCheap: false,
+    reviewerTakesAll: false,
     seatError: null,
     seatAccount: 'default',
     windowReset: null,
@@ -277,9 +282,11 @@ export async function startWorld(): Promise<World> {
         ? ok({ tier: 'sonnet' as const, effort: 'high' as const })
         : name === 'light'
           ? ok({ tier: 'haiku' as const, effort: 'high' as const })
-          : name === 'deep'
-            ? ok({ tier: 'opus' as const, effort: 'max' as const })
-            : err(portError('refused', `no role "${name}"`)),
+          : name === 'reviewer-cheap' && world.reviewerCheap
+            ? ok({ tier: 'haiku' as const, effort: 'high' as const })
+            : name === 'deep'
+              ? ok({ tier: 'opus' as const, effort: 'max' as const })
+              : err(portError('refused', `no role "${name}"`)),
   }
   const seats: Seats = {
     seat: async () => (world.seatError ? err(world.seatError) : ok({ account: world.seatAccount })),
@@ -296,6 +303,7 @@ export async function startWorld(): Promise<World> {
     repos,
     checks: { of: async () => ok(world.checkTiers) },
     mergeGuard: { has: async () => world.mergeGuard },
+    reviewerTakesAll: async () => world.reviewerTakesAll,
     roles,
     seats,
     claims: world.claims,
@@ -347,6 +355,8 @@ export async function startWorld(): Promise<World> {
     world.repoError = null
     world.checkTiers = null
     world.mergeGuard = null
+    world.reviewerCheap = false
+    world.reviewerTakesAll = false
     world.seatError = null
     world.seatAccount = 'default'
     world.windowReset = null

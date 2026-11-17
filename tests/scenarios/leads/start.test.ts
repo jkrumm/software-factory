@@ -51,6 +51,8 @@ test('start: admitted runs start_lead; the fake hc shows one terminal with its k
     attempt: 1,
     terminal: terminal?.address,
     seat: { tier: 'sonnet', effort: 'high', role: 'lead' },
+    // Issue 1 is odd, not on the light seat: the reviewer row, the real role table's
+    reviewer: 'reviewer',
   })
   const [effect] = await w.world.db
     .sql`SELECT done_at FROM factory.issue_effects WHERE key = ${`start_lead:${issue}:1`}`

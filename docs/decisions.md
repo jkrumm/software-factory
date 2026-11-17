@@ -357,3 +357,22 @@ Report `docs/strategy/2026-11-next/report.html`, definition `docs/strategy/2026-
   three, else `s`). At the first reading `l` is about 0.15 and `s` 2.7, so `m*` is about 94 %: cost alone allows almost any
   share, and (a) and (c) carry the gate. Cost: a first-watch regression on light still counts in (a) and (c) and moves the
   Issue up; the figures are over three days, so a quiet stretch of rule-class Issues leaves the gate closed.
+- **NL39 The reviewer runs on the cheap tier for a share of real reviews (Issue 2027, 2026-11-17).** The owner asked to
+  try haiku at high effort as the reviewer: the model picker's table of 2026-11-16 puts it at 29.9 against 30.8 for
+  sonnet at medium, at about a fifth of the cost per task. The one offline eval against it (agent-workflows, late October,
+  12 paired cases) decides nothing, and the rule is no offline eval: ship it and measure. Leads run `/review` themselves
+  and agw routes the seat, so the factory assigns a **reviewer row** at the lead's start (`reviewer-cheap` for a lead on the
+  light seat and for an even Issue number, `reviewer` for the rest, stored as `lead_started.payload.reviewer`) and says in
+  the brief to pass `/review`'s Agent call that row's tier and effort instead of `prepare`'s `seat` at tier light or
+  standard; a deep review keeps agw's seat. At the ship the factory reads each covering review from agw's ledger
+  (`agw review covered` names the job, `agw review status <job>` its thread: rounds, findings, dispositions, wall time)
+  and stores it in the review evidence with the seat it ran on (`ReviewEvidence.threads`, no migration). `read/kpis-reviewers.ts`
+  puts the two seats side by side in `factory read kpis` (`reviewers`) and on Improve. The seat a record names is the
+  assignment the brief told the lead to follow, not an observation of the session: the usage side's reviewer cost by model
+  (haiku or not) is the cross-check, shown as cost per review. **Tripwire, both ways, from stored facts alone** (no mode is
+  kept): the cheap row takes every non-deep review when each seat has 100 non-deep reviews (of the Issues whose lead was not on the light seat: the light Issues are the cheap row's by rule, mechanical and proved by a check, and would flatter it, so the comparison is the even against the odd Issue numbers), the cheap row's Issues regress
+  no more often and pass their first verification within 2 points of the other seat's; it goes back to its starting share
+  while its last 3 days (judged with at least 10 Issues, so one regression cannot flip it; 10 is a floor of this Issue, not a measurement) break either test against the other seat's whole record, since with every review on the cheap row the
+  other seat has no days of its own. Deep reviews stay on `reviewer` until the plain tier has this evidence. Starting share:
+  every light-seat Issue and half of the others (Issue number parity). Revert: set `reviewer-cheap` in `config/roles.json` to the `reviewer` row's tier and effort (the assignment
+  stays, the seat does not), or delete the row (leads then get no reviewer section and review on agw's seat).

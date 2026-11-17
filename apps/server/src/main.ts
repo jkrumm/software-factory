@@ -1,3 +1,4 @@
+import { REVIEWER_CHEAP_ROLE, REVIEWER_ROLE } from '@software-factory/contract'
 import { connect } from './adapters/postgres/connection.ts'
 import { agwAmend } from './adapters/agw/amend.ts'
 import { agwErrandScreen } from './adapters/agw/errand.ts'
@@ -247,6 +248,11 @@ async function main(): Promise<void> {
   const reaperKiller = processKiller({ psBin: process.env.FACTORY_PS_BIN ?? '/bin/ps' })
   // Planning and capacity own the projects and the claims; the leads, intake and the checkpoints take their ports.
   const roles = fileRoles(leadSettings.rolesFile)
+  // The two reviewer rows as the table stands: the seat a review's record names, and the words beside the Improve numbers.
+  const reviewerRows = async () => {
+    const [cheap, reviewer] = await Promise.all([roles.role(REVIEWER_CHEAP_ROLE), roles.role(REVIEWER_ROLE)])
+    return cheap.ok && reviewer.ok ? { cheap: cheap.value, reviewer: reviewer.value } : null
+  }
   // One reader for admission and hygiene: a reading one took is the other's, and a project's doctor runs once at a time.
   const doctor = createDoctorReader({ now: () => writes.clock.now() })
   const disagreementSignals: { file?: SignalFiler } = {}
@@ -338,6 +344,7 @@ async function main(): Promise<void> {
     ci,
     projects,
     checkout,
+    reviewerRows,
   }
   const draining = new AbortController()
 
@@ -980,6 +987,7 @@ async function main(): Promise<void> {
       tenantBudget: { project: planningEnv.tenantProject, budgetMib: planningEnv.tenantBudgetMib },
       cores: planningEnv.cores,
       queueReasons,
+      reviewerRows,
       machine,
       ciTimes: githubCiTimes({
         locate: (repo) => repos.locate(repo),
