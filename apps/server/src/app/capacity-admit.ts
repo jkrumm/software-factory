@@ -156,6 +156,11 @@ export interface QueueEntry {
   reason: QueueReason | null
   /** the account it would run on, when nothing keeps it out */
   account: string | null
+  /**
+   * Only for an Issue its `after` edges hold: whether it would be admitted this look with the edges gone (nothing else keeps
+   * it out and every admission rule passes for it). Absent for an Issue the chain does not hold.
+   */
+  readyWithoutEdges?: boolean
 }
 
 export interface Snapshot {
@@ -520,18 +525,8 @@ function decide(snap: Snapshot, host: HostInputs, limits: CapacityLimits, bonus:
     null,
   )
 
-  return ordered.map((row): QueueEntry => {
-    const { issue } = row
-    const base = {
-      issue: issue.id,
-      repo: repoOf.get(issue.id) ?? '',
-      project: issue.project,
-      kind: issue.kind,
-      prio: row.prio,
-    }
-    if (row.reason) return { ...base, reason: { ...row.reason, opensAt: null }, account: null }
-    const project = issue.project === null ? undefined : projectByName.get(issue.project)
-    if (!project) return { ...base, reason: null, account: null }
+  /** The admission rules for `issue` against the claims as they stand now; changes nothing. */
+  const verdictFor = (issue: OpenIssue, project: StoredProject) => {
     const leadsByAccount = leadsOnAccounts(claims, owed, snap.owedAccounts)
     const learned = host.learned.get(project.name)
     const leadFit: LeadFit = {
@@ -546,7 +541,7 @@ function decide(snap: Snapshot, host: HostInputs, limits: CapacityLimits, bonus:
       running: claims.length,
       growing: youngGrowth(claims, snap, host),
     }
-    const verdict = checkAdmission({
+    return checkAdmission({
       lane: laneOf(issue.id, project, claims, owed, laneByIssue),
       now: snap.now,
       state: effectiveState(snap.states, project.name),
@@ -587,6 +582,28 @@ function decide(snap: Snapshot, host: HostInputs, limits: CapacityLimits, bonus:
       seatBonus: bonus,
       rank: snap.rank,
     })
+  }
+
+  return ordered.map((row): QueueEntry => {
+    const { issue } = row
+    const base = {
+      issue: issue.id,
+      repo: repoOf.get(issue.id) ?? '',
+      project: issue.project,
+      kind: issue.kind,
+      prio: row.prio,
+    }
+    if (row.reason) {
+      const reason = { ...row.reason, opensAt: null }
+      if (row.reason.kind !== 'chain') return { ...base, reason, account: null }
+      // Held by its edges: would it run without them? Nothing of the chain's keeps it out and the rules let it in.
+      const held = issue.project === null ? undefined : projectByName.get(issue.project)
+      const ready = row.withoutEdges === null && held !== undefined && verdictFor(issue, held).admit
+      return { ...base, reason, account: null, readyWithoutEdges: ready }
+    }
+    const project = issue.project === null ? undefined : projectByName.get(issue.project)
+    if (!project) return { ...base, reason: null, account: null }
+    const verdict = verdictFor(issue, project)
     if (!verdict.admit) return { ...base, reason: verdict.refusal, account: null }
     claims.push({
       issue: issue.id,
@@ -768,6 +785,23 @@ async function recordWaits(deps: CapacityDeps, queue: readonly QueueEntry[], not
 }
 
 /**
+ * Records, on the unsatisfied edges of each Issue the chain holds, whether this look would have admitted it without them
+ * (`planning_edges.ready_since`). A failure is a note, never the pass's.
+ */
+async function recordReadiness(deps: CapacityDeps, queue: readonly QueueEntry[], notes: string[]): Promise<void> {
+  const held = queue.filter((entry) => entry.readyWithoutEdges !== undefined)
+  const stored = await deps.uow.run(async ({ capacity, planning }) => {
+    await capacity.lock()
+    await planning.noteReadiness(deps.clock.now(), {
+      ready: held.filter((entry) => entry.readyWithoutEdges).map((entry) => entry.issue),
+      held: held.filter((entry) => !entry.readyWithoutEdges).map((entry) => entry.issue),
+    })
+    return ok(undefined)
+  })
+  if (!stored.ok) notes.push(`the edges' readiness could not be stored (${stored.error.detail})`)
+}
+
+/**
  * The host readings with the load read now. A reading that fails keeps the pass's last one (`readHost` already noted a
  * failure), so a host that answered before is never admitted into without a load because of one slow `sysctl`. A
  * tripped tripwire is cleared by a reading now back under the ceiling, as `loadTrip` clears it.
@@ -815,6 +849,7 @@ export async function admissionPass(
     admitted.push(step.value.admitted)
   }
   await recordWaits(deps, queue, notes)
+  await recordReadiness(deps, queue, notes)
   return ok({ admitted, queue, notes })
 }
 

@@ -1,3 +1,4 @@
+import { EFFORTS, TIERS } from '@software-factory/contract'
 import { EVENT_KINDS } from '@software-factory/contract/spool'
 import type { SQL } from 'bun'
 import * as z from 'zod'
@@ -31,6 +32,8 @@ const AttemptRow = z.object({
   gone_at: z.date().nullable(),
   dormant_at: z.date().nullable(),
   revive_tries: z.number().int(),
+  tier: z.enum(TIERS).nullable(),
+  effort: z.enum(EFFORTS).nullable(),
 })
 
 const SpecRow = z.object({
@@ -59,6 +62,7 @@ const attemptOf = (raw: unknown): LeadAttempt => {
     goneAt: row.gone_at,
     dormantAt: row.dormant_at,
     reviveTries: row.revive_tries,
+    seat: row.tier && row.effort ? { tier: row.tier, effort: row.effort } : null,
   }
 }
 
@@ -193,7 +197,8 @@ export function postgresLeadStore(tx: SQL): LeadStore {
     async saveStarted(issue, attempt, input) {
       await tx`
         UPDATE factory.lead_attempts
-        SET terminal = ${input.terminal}, tab = ${input.tab}, space = ${input.space}, started_at = ${input.at}
+        SET terminal = ${input.terminal}, tab = ${input.tab}, space = ${input.space}, started_at = ${input.at},
+            tier = ${input.seat.tier}, effort = ${input.seat.effort}
         WHERE issue_id = ${issue} AND attempt = ${attempt}`
     },
 

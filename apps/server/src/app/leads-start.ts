@@ -201,6 +201,7 @@ export async function startLead(deps: LeadDeps, effect: StartEffect): Promise<Re
         tab: started.value.tab,
         space: started.value.space,
         at,
+        seat: { tier: role.value.tier, effort: role.value.effort },
       })
       // The brief is the program's argument: delivered with the start, never typed a second time.
       const brief = key('brief', issue, attempt)
