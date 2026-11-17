@@ -104,9 +104,9 @@ test('the first screen answers health, now, next and shipped in 1800 by 1200 wit
   // the hourly bars carry the page's own hours
   expect(model.shipped.hours).toHaveLength(168)
   // nothing needs a scroll: the last thing of the first screen ends inside the viewport and the content does not overflow
-  const overflow = await page.evaluate(() => {
-    const main = document.querySelector('main')
-    return main ? main.scrollHeight - main.clientHeight : 0
+  const overflow = await page.locator('main').evaluate((el) => {
+    const box = el as { scrollHeight: number; clientHeight: number }
+    return box.scrollHeight - box.clientHeight
   })
   expect(overflow).toBeLessThanOrEqual(0)
   // nothing is told twice: a heading of the first screen appears once
