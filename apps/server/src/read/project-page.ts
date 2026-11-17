@@ -279,25 +279,33 @@ function findingRows(passes: readonly Pass[], issues: ReadonlyMap<string, Findin
     if (!entry) return { issue: null, issueState: null }
     return { issue: entry.issue, issueState: entry.state === 'closed' ? (entry.outcome ?? 'done') : 'open' } as const
   }
+  const seenKey = new Set<string>()
+  const push = (pass: Pass, f: Pass['report']['findings'][number]) => {
+    if (seenKey.has(f.key)) return
+    seenKey.add(f.key)
+    const link = issueOf(f.key)
+    rows.push({
+      probe: f.probe,
+      key: f.key,
+      title: f.title,
+      count: f.count,
+      ...statusOf(pass, f.key, link.issueState),
+      ...link,
+    })
+  }
+  const speaks = (run: Pass['report']['runs'][number], f: Pass['report']['findings'][number]): boolean =>
+    run.covers ? f.key === run.covers || f.key.startsWith(`${run.covers}:`) : f.probe === run.probe
   for (const pass of passes) {
     for (const run of pass.report.runs) {
       if (!verdict(run)) continue
       const id = run.covers ?? run.probe
       if (seenProbe.has(id)) continue
       seenProbe.add(id)
-      for (const f of pass.report.findings.filter((f) =>
-        run.covers ? f.key === run.covers || f.key.startsWith(`${run.covers}:`) : f.probe === run.probe,
-      )) {
-        const link = issueOf(f.key)
-        rows.push({
-          probe: f.probe,
-          key: f.key,
-          title: f.title,
-          count: f.count,
-          ...statusOf(pass, f.key, link.issueState),
-          ...link,
-        })
-      }
+      for (const f of pass.report.findings.filter((f) => speaks(run, f))) push(pass, f)
+    }
+    // a finding no run of its pass names (a pass recorded before the runs carried their keys) still stands, once
+    for (const f of pass.report.findings) {
+      if (!pass.report.runs.some((run) => speaks(run, f))) push(pass, f)
     }
   }
   const fullPass = passes.find((pass) => pass.report.scope === 'full')
