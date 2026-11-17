@@ -316,3 +316,13 @@ Report `docs/strategy/2026-11-next/report.html`, definition `docs/strategy/2026-
   table for findings (the Issues already are the state), healing a lead's open Issue (it would race the lead's own ship),
   coverage as a built-in probe (a repo asks for it with a declared probe), `cargo audit` and `pip-audit` beside
   `osv-scanner` (one tool reads every lockfile of ours).
+- **NL36 A base test slot keeps no headroom (Issue 1883, 2026-11-17).** `slot_line`'s `base_empty` fired for 8 minutes with
+  1 of 2 base slots held and 13 callers waiting, at pressure level 1, swap 3.6 % and no swapouts: 5.9 GiB free, 2.3 GiB of
+  growth reserved for the one holder, a 2.6 GiB headroom, so a step needing 2.0 GiB was refused for 1.0 GiB of room. Earlier
+  the same symptom came from a frozen head (#1809). The headroom keeps memory for the host itself against the slots
+  *beyond* the base; the base is the concurrency the host is sized for, and swap growing, the step's own fit (its learned
+  peak plus what the holders still grow by within the free memory) and the lead admission's own headroom still hold.
+  Now a step below the base needs `peak + growth <= free`; one beyond it keeps `headroom`. Cost: with two steps running
+  the host may sit under 8 % free memory until they end; the next grant waits on swap growing and the fit. Revert by
+  using `fit.headroomMib` for every grant in `decide` (`domains/capacity/slots.ts`) if `minutesUnderPressure` or
+  `swapoutMib` of `factory read capacity-loop` rises over the three days after.
