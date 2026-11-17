@@ -69,21 +69,33 @@ test('a group opens in place into its rows and Fold all closes it again', async 
 test('opening a group answers in under 100 ms', async ({ page }) => {
   await page.goto('/chain')
   await expect(groups(page).first()).toBeVisible()
+  const folded = await groups(page).count()
   // time from the click to the frame that paints the opened rows
-  const ms = await page.evaluate<number>(`(async () => {
-    const group = [...document.querySelectorAll('[data-testid="chain-group"]')].find((g) => g.textContent.includes('Wait for open Issues'))
-    const before = document.querySelectorAll('[data-testid="chain-node"]').length
-    const t0 = performance.now()
-    group.querySelector('button').click()
-    for (;;) {
-      await new Promise((resolve) => requestAnimationFrame(resolve))
-      if (document.querySelectorAll('[data-testid="chain-node"]').length > before) return performance.now() - t0
-      if (performance.now() - t0 > 5000) return -1
-    }
-  })()`)
-  console.log(`opening a group of 44 rows: ${ms.toFixed(0)} ms`)
-  test.info().annotations.push({ type: 'open-group', description: `${ms.toFixed(0)} ms` })
-  expect(ms).toBeGreaterThan(0)
+  const open = () =>
+    page.evaluate<number>(`(async () => {
+      const group = [...document.querySelectorAll('[data-testid="chain-group"]')].find((g) => g.textContent.includes('Wait for open Issues'))
+      const before = document.querySelectorAll('[data-testid="chain-node"]').length
+      const t0 = performance.now()
+      group.querySelector('button').click()
+      for (;;) {
+        await new Promise((resolve) => requestAnimationFrame(resolve))
+        if (document.querySelectorAll('[data-testid="chain-node"]').length > before) return performance.now() - t0
+        if (performance.now() - t0 > 5000) return -1
+      }
+    })()`)
+  // five open and fold cycles, the median judged: one stall of a shared CI runner (102 ms once, with 18 ms
+  // frames in the next test) is not a slow screen, a screen that is slow is slow in most of them
+  const runs: number[] = []
+  for (let i = 0; i < 5; i++) {
+    runs.push(await open())
+    await page.getByRole('button', { name: 'Fold all' }).click()
+    await expect(groups(page)).toHaveCount(folded)
+  }
+  const ms = [...runs].sort((a, b) => a - b)[2] ?? -1
+  const all = runs.map((run) => run.toFixed(0)).join(', ')
+  console.log(`opening a group of 44 rows: median ${ms.toFixed(0)} ms of ${all}`)
+  test.info().annotations.push({ type: 'open-group', description: `median ${ms.toFixed(0)} ms of ${all}` })
+  expect(Math.min(...runs)).toBeGreaterThan(0)
   expect(ms).toBeLessThan(100)
 })
 
