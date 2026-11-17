@@ -1,7 +1,7 @@
 import { existsSync } from 'node:fs'
 import { basename, dirname, join } from 'node:path'
 import { gitOut, type Tools } from '../git.ts'
-import { type Outcome, clean, finding, found } from './finding.ts'
+import { type Outcome, clean, finding, found, unjudging } from './finding.ts'
 
 const COMMITS = 300
 const MIN_FILES = 2
@@ -62,8 +62,8 @@ export interface Pair {
   inB: number
 }
 
-/** Pairs of files in different directories, with different names, that changed together over and over. */
-export function coChanged(commits: string[][], exists: (file: string) => boolean = () => true): Pair[] {
+/** Every pair of files in different directories, with different names, that changed together over and over, the strongest first. */
+export function allCoChanged(commits: string[][], exists: (file: string) => boolean = () => true): Pair[] {
   const per = new Map<string, number>()
   const pairs = new Map<string, number>()
   for (const files of commits) {
@@ -85,24 +85,36 @@ export function coChanged(commits: string[][], exists: (file: string) => boolean
     if (!exists(a) || !exists(b)) continue
     found.push({ a, b, together, inA, inB })
   }
-  return found.sort((x, y) => y.together - x.together || `${x.a}|${x.b}`.localeCompare(`${y.a}|${y.b}`)).slice(0, TOP)
+  return found.sort((x, y) => y.together - x.together || `${x.a}|${x.b}`.localeCompare(`${y.a}|${y.b}`))
 }
+
+/** The strongest `TOP` pairs: what the probe raises. */
+export const coChanged = (commits: string[][], exists: (file: string) => boolean = () => true): Pair[] =>
+  allCoChanged(commits, exists).slice(0, TOP)
+
+const keyOf = (p: Pair): string => `cochange:${p.a}|${p.b}`
 
 export async function cochangeProbe(tools: Tools, path: string): Promise<Outcome> {
   const log = await gitOut(tools, path, ['log', '-n', String(COMMITS), '--no-merges', '--name-only', '--format=%x00%H'])
-  const pairs = coChanged(parseLog(log), (file) => existsSync(join(path, file)))
+  const all = allCoChanged(parseLog(log), (file) => existsSync(join(path, file)))
+  const pairs = all.slice(0, TOP)
+  // a pair that still qualifies but is not the strongest is not raised: it is not green either, so it never heals
+  const unjudged = all.slice(TOP).map(keyOf)
   const detail = `last ${COMMITS} commits`
   if (!pairs.length) return clean(detail)
-  return found(
-    detail,
-    pairs.map((p) =>
-      finding(
-        'cochange',
-        `cochange:${p.a}|${p.b}`,
-        `Hygiene: ${p.a} and ${p.b} change together`,
-        [`changed together in ${p.together} of the last ${COMMITS} commits (${p.a}: ${p.inA}, ${p.b}: ${p.inB})`],
-        p.together,
+  return unjudging(
+    found(
+      detail,
+      pairs.map((p) =>
+        finding(
+          'cochange',
+          keyOf(p),
+          `Hygiene: ${p.a} and ${p.b} change together`,
+          [`changed together in ${p.together} of the last ${COMMITS} commits (${p.a}: ${p.inA}, ${p.b}: ${p.inB})`],
+          p.together,
+        ),
       ),
     ),
+    unjudged,
   )
 }

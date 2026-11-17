@@ -61,7 +61,7 @@ export interface HygieneDeps {
   /** the cheap probes run again when the newest pass of any scope is older than this; 0 is off */
   dailyMs?: number
   /** writes one lifecycle step to its Issue; absent, the machine's events (`applyStep`). A seam for tests of the decisions. */
-  apply?: (step: LifecycleStep, now: Date, reopens: number) => Promise<HygienePassRecord['lifecycle'][number]>
+  apply?: (step: LifecycleStep, now: Date, reopens: number) => Promise<HygienePassRecord['lifecycle'][number] | null>
   /** a failed judgment is asked again this long on */
   retryMs: number
   /** only these projects (names or repo texts); null is every project with a `project.yaml` */
@@ -93,7 +93,7 @@ async function applyStep(
   step: LifecycleStep,
   now: Date,
   reopens: number,
-): Promise<HygienePassRecord['lifecycle'][number]> {
+): Promise<HygienePassRecord['lifecycle'][number] | null> {
   const issueId = step.issue as IssueId
   const done = (action: LifecycleStep['action'], why: string) => ({
     key: step.key,
@@ -103,7 +103,9 @@ async function applyStep(
     at: now,
   })
   const record = (eventKey: string, event: Parameters<typeof recordIn>[2]['event']) =>
-    deps.uow.run(({ work }) => recordIn(work, deps, { issueId, key: key('hygiene', eventKey, step.issue), event }))
+    deps.uow.run(({ work }) =>
+      recordIn(work, deps, { issueId, key: key('hygiene', eventKey, step.issue, reopens), event }),
+    )
   if (step.action === 'kept') return done('kept', step.why)
   if (step.action === 'reopened') {
     const reopened = await deps.uow.run(({ work }) =>
@@ -125,9 +127,9 @@ async function applyStep(
       payload: { text: `Hygiene: ${step.why}`.slice(0, 2000) },
       actor: 'factory',
     })
-    return noted.ok
-      ? done('noted', step.why)
-      : done('kept', `could not note: ${JSON.stringify(noted.error).slice(0, 200)}`)
+    if (!noted.ok) return done('kept', `could not note: ${JSON.stringify(noted.error).slice(0, 200)}`)
+    // the lead of this cycle was told on an earlier pass: nothing new reached it, so nothing is recorded
+    return noted.value.result === 'replayed' ? null : done('noted', step.why)
   }
   if (step.action === 'noted') return note()
   const healed = await record('healed', {
@@ -289,7 +291,8 @@ async function sweepPass(
     })
     for (const step of plan.steps) {
       const reopens = known.value.find((entry) => entry.key === step.key)?.reopens ?? 0
-      lifecycle.push(await (deps.apply ?? ((s, n, r) => applyStep(deps, s, n, r)))(step, now, reopens))
+      const applied = await (deps.apply ?? ((s, n, r) => applyStep(deps, s, n, r)))(step, now, reopens)
+      if (applied) lifecycle.push(applied)
     }
     // A held class is named before the budget counts: it does not use up a slot.
     const ranked = rankProbeFindings(report.findings.filter((finding) => !plan.suppress.has(finding.key)))

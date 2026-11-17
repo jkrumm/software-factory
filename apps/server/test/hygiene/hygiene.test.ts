@@ -16,7 +16,7 @@ import { rootedRepos } from '../../src/adapters/git/repos.ts'
 import { HYGIENE_CATALOGUE } from '@software-factory/contract'
 import { createHygieneChecker } from '../../src/adapters/hygiene/index.ts'
 import { brokenLinks } from '../../src/adapters/hygiene/probes/links.ts'
-import { coChanged, parseLog } from '../../src/adapters/hygiene/probes/cochange.ts'
+import { allCoChanged, coChanged, parseLog } from '../../src/adapters/hygiene/probes/cochange.ts'
 import { sections } from '../../src/adapters/hygiene/probes/context.ts'
 import { parseOutdated, severity } from '../../src/adapters/hygiene/probes/deps.ts'
 import { retiredScope } from '../../src/adapters/hygiene/probes/retired.ts'
@@ -786,6 +786,12 @@ describe('deps probe', () => {
 
 describe('cochange probe', () => {
   const commits = (n: number, files: string[]) => Array.from({ length: n }, () => files)
+
+  test('only the strongest pair is raised; the others that qualify are named, so the lifecycle never heals them', () => {
+    const history = [...commits(20, ['src/a/x.ts', 'lib/y.ts']), ...commits(16, ['src/b/p.ts', 'lib/q.ts'])]
+    expect(coChanged(history).map((p) => `${p.a}|${p.b}`)).toEqual(['lib/y.ts|src/a/x.ts'])
+    expect(allCoChanged(history).map((p) => `${p.a}|${p.b}`)).toEqual(['lib/y.ts|src/a/x.ts', 'lib/q.ts|src/b/p.ts'])
+  })
 
   test('a pair in different directories that moves together is a finding; filters hold', () => {
     const pairs = coChanged([
