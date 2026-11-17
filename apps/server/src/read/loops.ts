@@ -3,6 +3,7 @@ import * as z from 'zod'
 import type { ClassIssue } from '../domains/loops/classes.ts'
 import type { DigestIssue } from '../kernel/digest-scope.ts'
 import type { LoopReads } from '../domains/loops/ports.ts'
+import { readEdgeNeed, readHeldEdges, readRemovedEdges } from './edge-need.ts'
 import { readSpecPrecedents } from './spec-screen.ts'
 import type { IssueId } from '../kernel/ids.ts'
 
@@ -36,6 +37,7 @@ const QueueRowSchema = z.object({
   summary: z.string(),
   prio: z.number().int(),
   blockers: z.string(),
+  size: z.enum(['small', 'medium', 'large']).nullable(),
 })
 
 const Holder = z.object({ id: z.string(), state: z.enum(['working', 'watching']), blockers: z.array(z.string()) })
@@ -253,6 +255,7 @@ export function loopReads(tx: SQL): LoopReads {
         SELECT i.id, i.repo, i.state, f.payload->>'title' AS title, COALESCE((SELECT s.payload->>'kind' FROM factory.issue_events s WHERE s.issue_id = i.id AND s.kind = 'settled' AND s.result = 'applied' ORDER BY s.version DESC LIMIT 1), f.payload->>'kind') AS kind, f.at AS filed_at,
           COALESCE((SELECT s.text FROM factory.intake_signals s WHERE s.issue_id = i.id ORDER BY s.received_at LIMIT 1), '') AS summary,
           COALESCE((SELECT p.value FROM factory.planning_prios p WHERE p.issue_id = i.id ORDER BY p.at DESC, p.id DESC LIMIT 1), 0) AS prio,
+          (SELECT z.payload->>'size' FROM factory.issue_events z WHERE z.issue_id = i.id AND z.kind = 'settled' AND z.result = 'applied' AND z.payload->>'size' IS NOT NULL ORDER BY z.version DESC LIMIT 1) AS size,
           COALESCE((SELECT string_agg(e.after_issue, ',' ORDER BY e.after_issue) FROM factory.planning_edges e JOIN factory.issues b ON b.id = e.after_issue WHERE e.issue_id = i.id AND e.satisfied_at IS NULL AND b.state <> 'closed'), '') AS blockers
         FROM factory.issues i
         JOIN factory.issue_events f ON f.issue_id = i.id AND f.kind = 'filed' AND f.version = 1
@@ -267,12 +270,17 @@ export function loopReads(tx: SQL): LoopReads {
           kind: row.kind,
           state: row.state,
           prio: row.prio,
+          size: row.size,
           filedAt: row.filed_at,
           summary: row.summary,
           blockers: row.blockers === '' ? [] : (row.blockers.split(',') as IssueId[]),
         }
       })
     },
+
+    heldEdges: () => readHeldEdges(tx),
+    removedEdges: () => readRemovedEdges(tx),
+    edgeNeed: (window) => readEdgeNeed(tx, window),
 
     async liveRepos(limit) {
       const rows: { repo: string; issues: string[] }[] = await tx`

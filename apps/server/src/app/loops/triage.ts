@@ -2,6 +2,7 @@ import { SPEC_SCREEN_PRECEDENTS, type TriageAnswer } from '@software-factory/con
 import type { CallPolicy } from '../../domains/loops/calls.ts'
 import { cycleThrough } from '../../domains/planning/chain.ts'
 import type { LoopReads, LoopStore, SettleWorkflow, SettlingRow } from '../../domains/loops/ports.ts'
+import { EDGE_NEED_DAYS, stopReason, stopsEdges } from '../../kernel/edge-need.ts'
 import { checkSettle, MAX_CANDIDATES, type Refinement, settleRequest, settleRule } from '../../domains/loops/settle.ts'
 import { MAX_ROUNDS } from '../../domains/loops/stall.ts'
 import type { WorkStore } from '../../domains/work/ports.ts'
@@ -44,6 +45,8 @@ export interface TriagePass {
   /** answers refused: an Issue it was not shown, a cycle, a blocker that closed */
   refused: number
   problems: string[]
+  /** set while triage's own kind of edge is mostly not needed: an Issue settles with no edges, and this is why */
+  edgesStopped?: string
 }
 
 const PASS_LIMIT = 20
@@ -90,11 +93,19 @@ async function settleAfter(
   refinement: Refinement = {},
   inferredBy?: string,
 ): Promise<void> {
-  const settled = await settleIssue(deps.planning, { issue, after, ...refinement, inferredBy })
+  // Edges triage inferred that were mostly not needed are no longer added (`stopsEdges`); the Issue settles with none.
+  const stopped = pass.edgesStopped !== undefined && after.length > 0
+  if (stopped) pass.dropped += after.length
+  const settled = await settleIssue(deps.planning, {
+    issue,
+    after: stopped ? [] : after,
+    ...refinement,
+    inferredBy: stopped ? undefined : inferredBy,
+  })
   if (settled.ok) {
     if (settled.value.result === 'settled') {
       countRefinement(pass, refinement)
-      if (after.length > 0) pass.chained++
+      if (after.length > 0 && !stopped) pass.chained++
       else pass.settled++
     }
     return
@@ -222,6 +233,15 @@ export async function triagePass(deps: TriageDeps): Out<TriagePass> {
   }
   const settling = await deps.uow.run(async ({ loopReads }) => ok(await loopReads.settling(PASS_LIMIT)))
   if (!settling.ok) return settling
+  if (settling.value.length > 0) {
+    const now = deps.clock.now()
+    const need = await deps.uow.run(async ({ loopReads }) =>
+      ok(await loopReads.edgeNeed({ from: new Date(now.getTime() - EDGE_NEED_DAYS * 24 * 3_600_000), to: now })),
+    )
+    const mine = need.ok ? need.value.find((n) => n.source === 'triage') : undefined
+    if (mine && stopsEdges(mine)) pass.edgesStopped = stopReason(mine)
+    else if (!need.ok) pass.problems.push(`edge need: ${need.error.detail}`)
+  }
   for (const row of settling.value) {
     pass.looked++
     await askTriage(deps, row, pass)

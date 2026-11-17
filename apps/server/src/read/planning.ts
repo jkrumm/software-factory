@@ -16,6 +16,7 @@ const OpenRow = z.object({
   spec_pending: z.boolean(),
   lane: z.string().nullable(),
   since: z.coerce.date().nullable(),
+  size: z.enum(['small', 'medium', 'large']).nullable(),
 })
 
 const WaitRow = z.object({
@@ -48,7 +49,8 @@ export function readIssues(tx: SQL): IssueReads {
             WHERE a.issue_id = i.id AND a.key LIKE 'filed-spec:%'
               AND NOT EXISTS (SELECT 1 FROM factory.verdicts v WHERE v.artifact_id = a.id AND v.revision = r.n)) AS spec_pending,
           (SELECT e.payload->>'lane' FROM factory.issue_events e WHERE e.issue_id = i.id AND e.kind = 'filed' LIMIT 1) AS lane,
-          (SELECT x.at FROM factory.issue_events x WHERE x.issue_id = i.id AND x.result = 'applied' AND x.to_state IS DISTINCT FROM x.from_state ORDER BY x.version DESC LIMIT 1) AS since
+          (SELECT x.at FROM factory.issue_events x WHERE x.issue_id = i.id AND x.result = 'applied' AND x.to_state IS DISTINCT FROM x.from_state ORDER BY x.version DESC LIMIT 1) AS since,
+          (SELECT z.payload->>'size' FROM factory.issue_events z WHERE z.issue_id = i.id AND z.kind = 'settled' AND z.result = 'applied' AND z.payload->>'size' IS NOT NULL ORDER BY z.version DESC LIMIT 1) AS size
         FROM factory.issues i WHERE i.state <> 'closed' ORDER BY i.id`
       return rows.map((raw): OpenIssueRow => {
         const row = OpenRow.parse(raw)
@@ -62,6 +64,7 @@ export function readIssues(tx: SQL): IssueReads {
           specPending: row.spec_pending,
           lane: row.lane,
           since: row.since,
+          size: row.size,
         }
       })
     },

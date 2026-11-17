@@ -207,6 +207,49 @@ export async function removeAfter(
   })
 }
 
+/**
+ * Takes back one edge the factory added (`inferredBy` set: never one the owner or a filer stated, which is refused as
+ * `unknown_edge` here). What the edge carried and the reason go to `queue_edge_removals` before the edge is dropped, and the
+ * Issue notes the removal and its reason. Only a queued Issue's edge is taken back.
+ */
+export async function removeInferredEdge(
+  deps: PlanningDeps,
+  input: { issue: IssueId; after: IssueId; kind: 'disjoint' | 'owner_wait'; reason: string },
+): Promise<Result<{ removed: boolean }, PlanningError | PortError>> {
+  return deps.uow.run(async (stores) => {
+    await stores.capacity.lock()
+    const open = (await stores.reads.open()).find((row) => row.id === input.issue)
+    if (open?.state !== 'queued') {
+      return err<PlanningError>({
+        kind: 'wrong_state',
+        issue: input.issue,
+        detail: `Issue ${issueNumber(input.issue)} is ${open?.state ?? 'not open'}: only a queued Issue's edge is taken back`,
+      })
+    }
+    const stored = (await stores.planning.edges()).find(
+      (edge) => edge.issue === input.issue && edge.after === input.after && !edge.satisfied,
+    )
+    if (!stored?.inferredBy) return err<PlanningError>({ kind: 'unknown_edge', issue: input.issue, after: input.after })
+    const at = deps.clock.now()
+    const logged = await stores.planning.logEdgeRemoval({ ...input, at })
+    if (!logged) return err<PlanningError>({ kind: 'unknown_edge', issue: input.issue, after: input.after })
+    const removed = await stores.planning.removeEdge({ issue: input.issue, after: input.after })
+    const noted = await recordIn(stores.work, deps, {
+      issueId: input.issue,
+      key: key('unafter', deps.ids.next('unafter')),
+      event: {
+        kind: 'noted',
+        payload: {
+          text: `the queue loop took back the edge after Issue ${issueNumber(input.after)} (${stored.inferredBy}): ${input.reason}`,
+        },
+        actor: 'factory',
+      },
+    })
+    if (!noted.ok) return err(lift(noted.error))
+    return ok({ removed })
+  })
+}
+
 export interface PrioInput {
   issue: IssueId
   value: number

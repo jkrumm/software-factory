@@ -1188,6 +1188,29 @@ export const CapacityLoopModel = z
      * the learned cost of a repo's lead against the free memory).
      */
     queueByReason: z.array(CapacityReason),
+    /**
+     * whether the `after` edges the factory added (triage, the queue loop; never one somebody stated) were needed, over the
+     * edges added in the window: both Issues shipped (an accepted ship's commits) and touched a file in common (the
+     * lockfiles and the plan aggregator left out) is `needed`, none in common `notNeeded`, an edge whose Issues did not
+     * both ship `unknown`. `removed` counts the edges the queue loop took back. `stopped`: enough were measured and most were
+     * not needed, so the factory stops adding that source's edges (`kernel/edge-need.ts`)
+     */
+    edges: z.strictObject({
+      /** the share of the measured edges of every source that were not needed; null when none was measured */
+      notNeededShare: z.number().nullable(),
+      bySource: z.array(
+        z.strictObject({
+          source: z.string(),
+          added: z.number().int(),
+          needed: z.number().int(),
+          notNeeded: z.number().int(),
+          unknown: z.number().int(),
+          removed: z.number().int(),
+          notNeededShare: z.number().nullable(),
+          stopped: z.boolean(),
+        }),
+      ),
+    }),
     /** host minutes whose load was above the ceiling in force that minute */
     minutesOverCeiling: CapacityTotal,
     /** the leads running per day: the mean of the minute samples' lead count */

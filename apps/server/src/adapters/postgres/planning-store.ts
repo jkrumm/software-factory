@@ -53,6 +53,7 @@ const EdgeRow = z.object({
   inferred_by: z.string().nullable(),
 })
 const PrioRow = z.object({ issue_id: z.string(), value: z.number().int() })
+const OrderRow = z.object({ order: z.array(z.string()).nullable() })
 const ReplanRow = z.object({ issue_id: z.string() })
 const ReplanProjectRow = z.object({ project: z.string() })
 const VerdictRow = z.object({ verdict: z.string().nullable() })
@@ -121,6 +122,15 @@ export function postgresPlanningStore(tx: SQL): PlanningStore {
       return rows.length === 1
     },
 
+    async logEdgeRemoval({ issue, after, kind, reason, at }) {
+      const rows: unknown[] = await tx`
+        INSERT INTO factory.queue_edge_removals (issue_id, after_issue, inferred_by, added_at, removed_at, kind, reason)
+        SELECT issue_id, after_issue, inferred_by, created_at, ${at}, ${kind}, ${reason} FROM factory.planning_edges
+        WHERE issue_id = ${issue} AND after_issue = ${after} AND satisfied_at IS NULL AND inferred_by IS NOT NULL
+        RETURNING issue_id`
+      return rows.length === 1
+    },
+
     async markSatisfied(edges, at) {
       for (const edge of edges) {
         await tx`
@@ -151,6 +161,23 @@ export function postgresPlanningStore(tx: SQL): PlanningStore {
           return [idOf(row.issue_id), row.value] as const
         }),
       )
+    },
+
+    async queueOrder() {
+      // An answer is stored as the JSON text of its object (`finishQueueAsk`'s `::jsonb` over a text parameter makes a jsonb
+      // string): read either form.
+      const rows: unknown[] = await tx`
+        SELECT DISTINCT ON (repo) (CASE WHEN jsonb_typeof(answer) = 'string' THEN (answer #>> '{}')::jsonb ELSE answer END)->'order' AS "order"
+        FROM factory.queue_asks WHERE outcome = 'answered' AND answer IS NOT NULL
+        ORDER BY repo, finished_at DESC, key`
+      const order = new Map<IssueId, number>()
+      for (const raw of rows) {
+        const row = OrderRow.parse(raw)
+        for (const [place, id] of (row.order ?? []).entries()) {
+          if (/^issue_\d+$/.test(id)) order.set(id as IssueId, place)
+        }
+      }
+      return order
     },
 
     async recordPrio({ key, issue, value, actor, at }) {

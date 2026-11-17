@@ -11,6 +11,8 @@ export interface QueueIssue {
   state: string
   /** the owner's priority; 0 when never set */
   prio: number
+  /** triage's size; null when it judged none */
+  size: 'small' | 'medium' | 'large' | null
   filedAt: Date
   /** the first words of the signal behind it, '' when none */
   summary: string
@@ -135,7 +137,7 @@ export function requestOf(
       state: row.state,
       prio: row.prio,
       ageMinutes: Math.max(0, Math.floor((now.getTime() - row.filedAt.getTime()) / 60_000)),
-      size: null,
+      size: row.size,
       summary: clean(row.summary).slice(0, MAX_SUMMARY),
       after: row.blockers.slice(0, 20),
     })),
@@ -147,13 +149,23 @@ export interface Checked {
   refused: RefusedEdge[]
 }
 
+export interface CheckOptions {
+  /** pairs the loop took back (`issue|after`): never added again */
+  removed?: ReadonlySet<string> | undefined
+  /** set when the queue loop's own kind of edge is mostly not needed: no edge is added, and this is why */
+  stopped?: string | null | undefined
+}
+
+/** The key of a pair in `CheckOptions.removed`. */
+export const pairKey = (issue: string, after: string): string => `${issue}|${after}`
+
 /**
  * The edges of an answer that may be applied. An edge needs a shown queued Issue that waits and a shown open Issue to wait
  * for, different, not an edge it has already, not a repeat, and never against the owner: a queued Issue the owner ranked
  * higher does not wait for one ranked lower. At most `MAX_EDGES_PER_ISSUE` per Issue and `MAX_EDGES_PER_PASS` in all.
- * `order` is recorded by the caller and never applied.
+ * `order` is stored by the caller; the admission order reads it as the tie-break after size (`orderQueue`).
  */
-export function checkQueue(rows: readonly QueueIssue[], answer: QueueAnswer): Checked {
+export function checkQueue(rows: readonly QueueIssue[], answer: QueueAnswer, options: CheckOptions = {}): Checked {
   const shown = new Map(shownOf(rows).map((row) => [row.id as string, row]))
   const accepted: QueueEdge[] = []
   const refused: RefusedEdge[] = []
@@ -165,7 +177,9 @@ export function checkQueue(rows: readonly QueueIssue[], answer: QueueAnswer): Ch
     if (waiting?.state !== 'queued') refuse('not a queued Issue that was shown')
     else if (!blocker) refuse('the Issue to wait for was not shown')
     else if (waiting.id === blocker.id) refuse('an Issue cannot wait for itself')
+    else if (options.stopped) refuse(options.stopped)
     else if (waiting.blockers.includes(blocker.id)) refuse('the edge exists already')
+    else if (options.removed?.has(pairKey(waiting.id, blocker.id))) refuse('the loop took this edge back already')
     else if (accepted.some((a) => a.issue === waiting.id && a.after === blocker.id)) refuse('named twice')
     else if (blocker.state === 'queued' && blocker.prio < waiting.prio) refuse('against the owner’s priority')
     else if ((perIssue.get(waiting.id) ?? 0) >= MAX_EDGES_PER_ISSUE) refuse('too many edges for one Issue')

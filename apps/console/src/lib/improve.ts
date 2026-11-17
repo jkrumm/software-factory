@@ -675,6 +675,11 @@ const QUEUE_REASON_WORDS: Record<string, string> = {
 /** A queue reason kind in words; a kind the Console does not know reads as itself. */
 export const queueReasonWords = (kind: string): string => QUEUE_REASON_WORDS[kind] ?? kind
 
+const EDGE_SOURCE_WORDS: Record<string, string> = { triage: 'Triage', queue: 'Queue loop' }
+
+/** Who added an `after` edge, in words; a source the Console does not know reads as itself. */
+export const edgeSourceWords = (source: string): string => EDGE_SOURCE_WORDS[source] ?? source
+
 /** Per-day points as a chart reads them: the values (a null is a gap) and the tooltip lines. */
 export const dayValues = (points: CapacityLoopModel['throughput']['perDay']): (number | null)[] =>
   points.map((p) => p.value)

@@ -4,6 +4,8 @@ import type { CapacityLoopModel } from '@software-factory/contract'
 import { OWNED_ELSEWHERE_KINDS } from '../kernel/throughput-limits.ts'
 import { boundedRead } from './bounded.ts'
 import { countedFrom, epochNote } from '../kernel/epoch.ts'
+import { notNeededShare, stopsEdges } from '../kernel/edge-need.ts'
+import { readEdgeNeed } from './edge-need.ts'
 import { readLeadCosts } from './lead-costs.ts'
 import { REPO_OF_STEP } from './retro-build.ts'
 import { windowOf } from './stats.ts'
@@ -17,6 +19,19 @@ const DAY_MS = 24 * 3_600_000
 
 const Day = z.object({ day: z.string(), v: z.coerce.number().nullable() })
 const Total = z.object({ v: z.coerce.number().nullable() })
+
+/** The edges the factory added over the window, whether they were needed, per source and in all. */
+async function edgesOf(tx: SQL, window: { from: Date; to: Date }): Promise<CapacityLoopModel['edges']> {
+  const need = await readEdgeNeed(tx, window)
+  const total = need.reduce((sum, n) => ({ needed: sum.needed + n.needed, notNeeded: sum.notNeeded + n.notNeeded }), {
+    needed: 0,
+    notNeeded: 0,
+  })
+  return {
+    notNeededShare: notNeededShare(total),
+    bySource: need.map((n) => ({ ...n, notNeededShare: notNeededShare(n), stopped: stopsEdges(n) })),
+  }
+}
 
 /**
  * What the capacity loop did over the last `days` days, all computed in SQL over the window `[now - days, now)`. A day is
@@ -340,6 +355,7 @@ export async function readCapacityLoop(
       idleSeatHours: { total: idle, perDay: perDay(idleDay, 0) },
       idleSeatHoursMemory: idleMemory,
       queueByReason,
+      edges: await edgesOf(tx, w),
       minutesOverCeiling: { total: over, perDay: perDay(overDay, 0) },
       leadsRunning: perDay(leadsDay, null),
       slotAim,

@@ -1,6 +1,9 @@
 import { type IssueId, issueNumber } from '../../kernel/ids.ts'
 import { type Edge, openBlockers } from './chain.ts'
 
+/** triage's size of an Issue (`SIZES` in the work domain) */
+type Size = 'small' | 'medium' | 'large'
+
 /** The Issue kind that stops the line: an incident is a fix and is urgent. */
 export const FIX_KIND = 'incident'
 
@@ -17,6 +20,10 @@ export interface OpenIssue {
   finalizing: boolean
   /** the Spec its filer attached has no verdict yet: the owner has not seen it, and the 24 hours have not run out */
   specPending: boolean
+  /** triage's size; absent or null when it judged none (read as medium) */
+  size?: Size | null | undefined
+  /** since when it has been in this state: a queued Issue's age in the queue; absent or null counts no ageing */
+  since?: Date | null | undefined
 }
 
 /** Why a queued Issue is not a candidate this round, in the words of the chain. */
@@ -54,16 +61,42 @@ export function stoppedProjects(open: readonly OpenIssue[], edges: readonly Edge
   return stopped
 }
 
+/** What finishes sooner starts first: the rank of a size, an unsized Issue read as medium. */
+const SIZE_RANK: Record<Size, number> = { small: 0, medium: 1, large: 2 }
+const UNSIZED_RANK = SIZE_RANK.medium
+
+/** A queued Issue moves up one size rank for every this long it has waited, so a large one is not starved (12 hours at most). */
+export const AGEING_STEP_MS = 6 * 3_600_000
+
+/**
+ * The throughput key of a queued Issue: its size rank less one for each `AGEING_STEP_MS` it has waited, never below
+ * zero (the rank of a small one). Lower runs first.
+ */
+export function throughputKey(issue: OpenIssue, now: Date | undefined): number {
+  const rank = issue.size ? SIZE_RANK[issue.size] : UNSIZED_RANK
+  if (!now || !issue.since) return rank
+  const steps = Math.floor(Math.max(0, now.getTime() - issue.since.getTime()) / AGEING_STEP_MS)
+  return Math.max(0, rank - steps)
+}
+
 /**
  * The queued Issues in the order they are looked at, first rule first: the fix of a stopped line (an incident), then
  * dependencies (an Issue with an open blocker, or a filed Spec without a verdict, is no candidate: it follows the others, carrying its reason), then the
  * owner's `prio` (higher first, never overridden), then age (the lower Issue number). Each Issue carries the chain's
  * reason when it is not a candidate.
+ *
+ * Within one project and one prio the order is for throughput: what finishes sooner first (`throughputKey`, with
+ * ageing), then the queue model's own order (`modelOrder`, an Issue it did not place last), then the lower Issue number.
+ * Only the places of one project's Issues of one prio are exchanged among themselves: the owner's prio, the chain and
+ * the interleaving of projects stay as the first rules made them.
  */
 export function orderQueue(input: {
   open: readonly OpenIssue[]
   edges: readonly Edge[]
   prio: ReadonlyMap<IssueId, number>
+  now?: Date | undefined
+  /** the position of each Issue in the newest order the queue model gave its repo */
+  modelOrder?: ReadonlyMap<IssueId, number> | undefined
 }): Ordered[] {
   const stopped = stoppedProjects(input.open, input.edges)
   const rows = input.open
@@ -75,7 +108,27 @@ export function orderQueue(input: {
       withoutEdges: reasonOf(issue, [], stopped),
     }))
   const rank = (row: Ordered): number => (row.reason !== null ? 2 : isFix(row.issue) ? 0 : 1)
-  return rows.sort((a, b) => rank(a) - rank(b) || b.prio - a.prio || issueNumber(a.issue.id) - issueNumber(b.issue.id))
+  rows.sort((a, b) => rank(a) - rank(b) || b.prio - a.prio || issueNumber(a.issue.id) - issueNumber(b.issue.id))
+
+  const model = (row: Ordered): number => input.modelOrder?.get(row.issue.id) ?? Number.POSITIVE_INFINITY
+  const sooner = (a: Ordered, b: Ordered): number =>
+    throughputKey(a.issue, input.now) - throughputKey(b.issue, input.now) ||
+    (model(a) === model(b) ? 0 : model(a) < model(b) ? -1 : 1) ||
+    issueNumber(a.issue.id) - issueNumber(b.issue.id)
+  const groups = new Map<string, number[]>()
+  rows.forEach((row, at) => {
+    if (row.reason !== null) return
+    const groupKey = `${rank(row)}|${row.prio}|${row.issue.project ?? ''}`
+    groups.set(groupKey, [...(groups.get(groupKey) ?? []), at])
+  })
+  const placed = [...rows]
+  for (const places of groups.values()) {
+    const members = places.map((at) => rows[at] as Ordered).sort(sooner)
+    places.forEach((at, i) => {
+      placed[at] = members[i] as Ordered
+    })
+  }
+  return placed
 }
 
 function reasonOf(issue: OpenIssue, edges: readonly Edge[], stopped: ReadonlyMap<string, IssueId>): ChainReason | null {

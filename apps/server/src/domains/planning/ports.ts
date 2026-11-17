@@ -40,6 +40,17 @@ export interface PlanningStore {
     at: Date
     inferredBy?: string | undefined
   }): Promise<boolean>
+  /**
+   * Keeps what an open edge the factory added carries (who inferred it, when it was added) with the reason it is taken
+   * back, before `removeEdge` drops it; false when the edge is not an open stored edge somebody inferred.
+   */
+  logEdgeRemoval(removal: {
+    issue: IssueId
+    after: IssueId
+    kind: 'disjoint' | 'owner_wait'
+    reason: string
+    at: Date
+  }): Promise<boolean>
   /** false when no open (unsatisfied) edge was stored */
   removeEdge(edge: { issue: IssueId; after: IssueId }): Promise<boolean>
   markSatisfied(edges: readonly { issue: IssueId; after: IssueId }[], at: Date): Promise<void>
@@ -52,6 +63,8 @@ export interface PlanningStore {
 
   /** the owner's latest `prio` of each Issue that has one */
   prios(): Promise<Map<IssueId, number>>
+  /** the place of each Issue in the newest order the queue model answered for its repo (0 first); an Issue it did not place is absent */
+  queueOrder(): Promise<Map<IssueId, number>>
   /** false when the key is stored already */
   recordPrio(prio: { key: string; issue: IssueId; value: number; actor: string; at: Date }): Promise<boolean>
 

@@ -20,6 +20,8 @@ import type { IssueId } from '../../kernel/ids.ts'
 import type { Key } from '../../kernel/keys.ts'
 import type { PortError, Result } from '../../kernel/result.ts'
 import type { MainCheckoutLook } from './checkout.ts'
+import type { EdgeNeed } from '../../kernel/edge-need.ts'
+import type { HeldEdge } from './edge-need.ts'
 import type { DigestIssue, DigestRecord, LatestDigest } from './digest.ts'
 import type { ReaperAttempt, ReaperProc } from './reaper.ts'
 import type { CallLoop, CallOutcome, CallRow } from './calls.ts'
@@ -368,6 +370,12 @@ export interface LoopReads {
   openIssues(repo: string, excluding: IssueId, limit: number): Promise<TriageCandidate[]>
   /** every open Issue that is not settling, with its priority and open blockers, for the queue loop */
   queueIssues(): Promise<QueueIssue[]>
+  /** the edges the factory added that still hold a queued Issue behind an open blocker (never a stated edge), for the sweep */
+  heldEdges(): Promise<HeldEdge[]>
+  /** the edges the queue loop took back: pairs it must not add again */
+  removedEdges(): Promise<{ issue: IssueId; after: IssueId }[]>
+  /** whether the edges the factory added were needed, per source, over the edges added in the window */
+  edgeNeed(window: { from: Date; to: Date }): Promise<EdgeNeed[]>
   /** watching Issues whose open watch has had at least `streak` checks in a row, all blocked */
   blockedCheckouts(streak: number, limit: number): Promise<BlockedWatch[]>
   /** working or watching Issues with an open edge to one of `queued` (still queued, same repo): the claim deadlock */
