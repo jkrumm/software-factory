@@ -11,6 +11,9 @@ import { Ago } from './ago'
 import { ProjectChip } from './project-chip'
 import { LINK_CLASS } from './source-link'
 
+const seatWords = ({ tier, effort, role }: NonNullable<ReadIssueDetail['ranOn']>) =>
+  [tier, effort, role].filter(Boolean).join(' · ')
+
 /** Title, state, the owner's next moves as links, and the facts. The Console only links: it never starts or cancels. */
 export function Header({ issue, now, narrow }: { issue: ReadIssueDetail; now: number; narrow?: boolean }) {
   const { insights } = issue
@@ -47,7 +50,7 @@ export function Header({ issue, now, narrow }: { issue: ReadIssueDetail; now: nu
         </Link>
       </nav>
       <PropertyList
-        className={cn('mt-2 grid-cols-2 gap-y-3 min-[40rem]:grid-cols-3', !narrow && 'min-[64rem]:grid-cols-6')}
+        className={cn('mt-2 grid-cols-2 gap-y-3 min-[40rem]:grid-cols-3', !narrow && 'min-[64rem]:grid-cols-4')}
         items={[
           { label: 'Phase', value: issue.phase },
           { label: 'Created', value: <Ago iso={issue.createdAt} now={now} className="font-mono text-xs" /> },
@@ -57,6 +60,8 @@ export function Header({ issue, now, narrow }: { issue: ReadIssueDetail; now: nu
           { label: 'Elapsed', value: <span className="tabular-nums">{spanWords(insights.elapsedMs)}</span> },
           { label: 'Active time', value: <span className="tabular-nums">{durationWords(insights.workingMs)}</span> },
           { label: 'Attempts', value: <span className="tabular-nums">{insights.attempts}</span> },
+          { label: 'Size', value: issue.size ? `${issue.size.charAt(0).toUpperCase()}${issue.size.slice(1)}` : '–' },
+          { label: 'Seat', value: issue.ranOn ? seatWords(issue.ranOn) : '–' },
         ]}
       />
     </header>

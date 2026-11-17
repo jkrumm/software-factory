@@ -1,6 +1,7 @@
 import {
   AlarmIcon,
   ArrowCounterClockwiseIcon,
+  ArrowFatLinesUpIcon,
   CheckCircleIcon,
   CircleIcon,
   FilePlusIcon,
@@ -46,6 +47,7 @@ const KIND_ICON: Record<string, Icon> = {
   errand_done: CheckCircleIcon,
   deferred: HourglassIcon,
   stalled: StopIcon,
+  moved_up: ArrowFatLinesUpIcon,
   woken: AlarmIcon,
   shipped: RocketIcon,
   watch_passed: EyeIcon,

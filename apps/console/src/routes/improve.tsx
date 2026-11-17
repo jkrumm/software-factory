@@ -66,12 +66,15 @@ import {
   mibWords,
   msWords,
   perDayWords,
+  SEAT_LABEL,
+  seatCells,
   shortDate,
   type FrictionRow,
   MEANING,
   PARTS_ON_CARD,
   partRows,
   targetTally,
+  tripwireWords,
   leadsWords,
   stampWords,
   WINDOW_DAYS,
@@ -939,6 +942,65 @@ function CapacitySection({ model, pending }: { model: CapacityLoopModel | undefi
   )
 }
 
+const SEAT_COLUMNS = [
+  { key: 'issues', label: 'Issues' },
+  { key: 'firstPass', label: 'First verification pass' },
+  { key: 'regressions', label: 'Regressions' },
+  { key: 'refusals', label: 'Refusals' },
+  { key: 'cycle', label: 'Cycle time p50' },
+  { key: 'working', label: 'Active time p50' },
+  { key: 'cost', label: 'Cost per Issue' },
+  { key: 'movedUp', label: 'Moved up' },
+] as const
+
+function SeatSection({ model }: { model: KpiModel }) {
+  const { rows, tripwire } = model.seats
+  return (
+    <div data-shot="improve-seats">
+      <Section title="By seat" aside="Issues by the seat their first lead ran on">
+        <div className={cn(PANEL, 'overflow-x-auto')} style={PANEL_SHADOW}>
+          <table className="w-full text-sm">
+            <caption className="sr-only">Issues whose first lead started in the window, by the seat it ran on</caption>
+            <thead className="text-left text-xs text-muted-foreground">
+              <tr>
+                <th scope="col" className="px-4 py-2 font-medium">
+                  <span className="inline-flex items-center gap-1">
+                    Seat
+                    <InfoHint word="light seat" className="-my-1" />
+                  </span>
+                </th>
+                {SEAT_COLUMNS.map((column) => (
+                  <th key={column.key} scope="col" className="px-4 py-2 text-right font-medium">
+                    {column.label}
+                  </th>
+                ))}
+              </tr>
+            </thead>
+            <tbody>
+              {rows.map((row) => {
+                const cells = seatCells(row)
+                return (
+                  <tr key={row.seat} className="border-t">
+                    <th scope="row" className="px-4 py-2 text-left font-medium">
+                      {SEAT_LABEL[row.seat]}
+                    </th>
+                    {SEAT_COLUMNS.map((column) => (
+                      <td key={column.key} className="px-4 py-2 text-right tabular-nums">
+                        {cells[column.key]}
+                      </td>
+                    ))}
+                  </tr>
+                )
+              })}
+            </tbody>
+          </table>
+        </div>
+        <p className="mt-2 text-sm text-muted-foreground">{tripwireWords(tripwire)}</p>
+      </Section>
+    </div>
+  )
+}
+
 function Improve() {
   const { days = DEFAULT_WINDOW } = Route.useSearch()
   const kpis = useKpis(days)
@@ -969,6 +1031,7 @@ function Improve() {
       <div role="group" aria-label="Key figures" className="@container">
         <div className="grid gap-10">
           <KpiSections model={model} />
+          <SeatSection model={model} />
           <FixBand model={fixes.data} pending={fixes.isPending} />
           <FrictionSection model={friction.data} pending={friction.isPending} />
           <LoopYieldSection model={yields.data} />

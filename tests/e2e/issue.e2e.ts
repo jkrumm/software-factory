@@ -95,6 +95,8 @@ test('the header shows title, kind, state, project, regressions and the facts', 
   expect(regressions).toBeGreaterThan(0)
   await expect(page.getByText(`Regressed ${regressions}×`)).toBeVisible()
   expect(await figure(fact(page, 'Attempts'))).toBe(issue.insights.attempts)
+  await expect(fact(page, 'Size')).toBeVisible()
+  await expect(fact(page, 'Seat')).toBeVisible()
   await noIds(page, idsOf(issue))
 })
 

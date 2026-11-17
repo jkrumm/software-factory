@@ -21,8 +21,10 @@ import {
   msWords,
   partRows,
   perDayWords,
+  SEAT_LABEL,
   shortDate,
   targetTally,
+  tripwireWords,
   windowWords,
 } from '../../apps/console/src/lib/improve.ts'
 import type { CapacityLoopModel, Kpi, KpiModel } from '@software-factory/contract'
@@ -460,4 +462,16 @@ test('the queue wait card names what the wait is made of, largest first, from th
   const list = card.getByRole('list', { name: /by reason/ })
   await expect(list.getByRole('listitem')).toHaveCount(rows.length)
   await expect(list.getByRole('listitem').first()).toContainText(largest?.label ?? '')
+})
+
+test('the By seat section tables the three seats and says where the tripwire stands', async ({ page, apiUrl }) => {
+  const [kpis] = await read(apiUrl, 7)
+  await page.goto('/improve')
+  const section = page.locator('[data-shot="improve-seats"]')
+  await expect(section.getByRole('heading', { name: 'By seat' })).toBeVisible()
+  const table = section.getByRole('table')
+  for (const seat of kpis.seats.rows.map((row) => SEAT_LABEL[row.seat]))
+    await expect(table.getByRole('rowheader', { name: seat, exact: true })).toBeVisible()
+  await expect(table.getByRole('columnheader', { name: 'Moved up' })).toBeVisible()
+  await expect(section.getByText(tripwireWords(kpis.seats.tripwire))).toBeVisible()
 })
