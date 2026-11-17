@@ -1,5 +1,9 @@
 # Improve: concept
 
+> The structure, friction and copy sections below record Issue 665's layout (seven topic bands, a summary strip, friction in
+> groups). Issue 1678 replaced it: the page is ordered by what needs attention (off target, trends, folded on target and not
+> measured) and friction is a ranked list. The current design is `apps/console/DESIGN.md`.
+
 The Console's Improve route, rebalanced (Issue 665). The owner's review of Console v1: "I like our new card component
 here but the UI seems slopped out, unbalanced, not well structured or positioned." Built against
 `apps/console/DESIGN.md`.
