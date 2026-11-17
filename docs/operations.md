@@ -45,8 +45,9 @@ fails on any raw colour.
 
 - Help and body validation derive from the contract schemas (`--schema` prints one).
 - `hook`, `slot`, `deploy-lock`, `merge-lock`, `follow`, `retro` (the weekly retro bundle: the retro read plus a pass over
-  the lead transcripts), `role`, `issue schema` (the filing contract, offline), `plan schema`, `plan check` (a
-  line-numbered check of a plan file, offline) and `plan merge` are hand-written. `plan merge` is the git merge driver
+  the lead transcripts), `role`, `issue schema` (the filing contract, offline), `project schema`, `project check` (`docs/project.md`
+  and a line-numbered check of a `project.yaml`, offline), `plan schema`, `plan check` (a line-numbered check of a plan
+  file, offline) and `plan merge` are hand-written. `plan merge` is the git merge driver
   that appends a branch's rows to master's `docs/plan.yaml` (`.gitattributes` `merge=plan`), so a rebase of that file ends
   no merge window.
 - On the host a call with neither `FACTORY_TOKEN` nor `FACTORY_READ_TOKEN` resolves the owner token itself

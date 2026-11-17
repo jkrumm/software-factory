@@ -9,6 +9,7 @@ import { filingContract, filingGuide } from './filing.ts'
 import { followVerb } from './follow.ts'
 import { OPERATIONS } from './generated/operations.ts'
 import { planVerb } from './plan.ts'
+import { projectVerb } from './project.ts'
 import { planMergeVerb } from './plan-merge.ts'
 import { retroVerb } from './retro.ts'
 import { type BodyField, extensionOf, type FlagValue, type Io, type Operation, runOperation } from './operation.ts'
@@ -72,6 +73,11 @@ const HAND_WRITTEN: readonly [string, string][] = [
   [
     'plan check [file]',
     'check a plan file (default docs/plan.yaml, - is stdin) with line numbers; exit 2 on a problem (offline)',
+  ],
+  ['project schema', "the project file's author page, docs/project.md, with the generated key reference (offline)"],
+  [
+    'project check [file]',
+    'check a project.yaml (default project.yaml, - is stdin) with line numbers; warns on retired keys, missing make targets, a name that is not the repo and a comment citing a missing document; exit 2 on a problem (offline)',
   ],
   [
     'plan merge <base> <ours> <theirs>',
@@ -318,6 +324,8 @@ export async function run(argv: string[], io: Io, operations: readonly Operation
     if (argv[0] === 'retro') return await retroVerb(argv.slice(1), io)
     if (argv[0] === 'issue' && argv[1] === 'schema') return issueSchemaVerb(argv.slice(2), io)
     if (argv[0] === 'plan' && (argv[1] === 'schema' || argv[1] === 'check')) return await planVerb(argv.slice(1), io)
+    if (argv[0] === 'project' && (argv[1] === 'schema' || argv[1] === 'check'))
+      return await projectVerb(argv.slice(1), io)
     if (argv[0] === 'plan' && argv[1] === 'merge') return planMergeVerb(argv.slice(2), io)
     if (argv[0] === 'door' && argv[1] === 'token') return doorTokenVerb(argv.slice(2), io)
     // Stage 1 finds the command; flags it does not know are left for stage 2, which knows the command's own.

@@ -8,11 +8,13 @@ import { loadProjects } from './project-page.ts'
 /**
  * One project's `project.yaml` in force as a form: each key in the schema's order with the schema's description and the
  * value the factory reads (defaults filled in), and the same file as YAML. The schema comes in as JSON Schema from the
- * caller (`z.toJSONSchema(ProjectFile)`): `read/` holds no code of a domain. Read-only SQL.
+ * caller (`projectJsonSchema()` of the contract): `read/` holds no code of a domain. Read-only SQL.
  */
 
 interface Node {
   description?: string
+  /** a retired key: accepted and dropped, read by nothing */
+  deprecated?: boolean
   default?: unknown
   properties?: Record<string, Node>
   anyOf?: Node[]
@@ -21,6 +23,7 @@ interface Node {
 const JsonNode: z.ZodType<Node> = z.lazy(() =>
   z.looseObject({
     description: z.string().optional(),
+    deprecated: z.boolean().optional(),
     default: z.unknown().optional(),
     properties: z.record(z.string(), JsonNode).optional(),
     anyOf: z.array(JsonNode).optional(),
@@ -59,20 +62,26 @@ const same = (value: unknown, fallback: unknown): boolean => {
   return (empty(value) && empty(fallback)) || Bun.deepEquals(value, fallback)
 }
 
+/** A schema description as the form shows it: plain text (no code marks), a capital first letter. */
+const plainText = (text: string): string => {
+  const plain = text.replaceAll('`', '')
+  return `${plain.charAt(0).toUpperCase()}${plain.slice(1)}`
+}
+
 function fieldsOf(node: Node, value: unknown, prefix: string): ProjectSetupField[] {
   const properties = objectOf(node)?.properties ?? {}
   const values = isRecord(value) ? value : {}
   const rows: ProjectSetupField[] = []
   for (const [key, child] of Object.entries(properties)) {
-    // a key with no description is not part of the form (`jobs` and `ticktick` are accepted and dropped)
-    if (child.description === undefined) continue
+    // a key with no description, or a retired one (accepted and dropped, read by nothing), is not part of the form
+    if (child.description === undefined || child.deprecated === true) continue
     const path = `${prefix}${key}`
     const own = values[key]
     const isDefault = same(own, child.default)
     const nested = objectOf(child) && isRecord(own) ? fieldsOf(child, own, `${path}.`) : []
     rows.push({
       path,
-      description: child.description,
+      description: plainText(child.description),
       value: nested.length > 0 ? '' : render(own),
       isDefault,
     })
@@ -86,7 +95,7 @@ export async function readProjectSetup(
   options: {
     now: Date
     name: string
-    /** `z.toJSONSchema(ProjectFile, { io: 'input' })` */
+    /** `projectJsonSchema()`: the file's JSON Schema as an author writes it */
     schema: unknown
     /** the read token: a work project is not found */
     redact?: boolean

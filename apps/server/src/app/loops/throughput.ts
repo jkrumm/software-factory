@@ -3,7 +3,7 @@ import type { Triaged } from '../../domains/intake/model.ts'
 import { MAX_SIGNALS_PER_PASS } from '../../domains/loops/budget.ts'
 import type { LoopStore } from '../../domains/loops/ports.ts'
 import type { PlanningStore } from '../../domains/planning/ports.ts'
-import { budgetsOf } from '../../domains/planning/project.ts'
+import { budgetsOf } from '@software-factory/contract/project'
 import { repoTextOf } from '../../domains/planning/sync.ts'
 import {
   type Candidate,

@@ -1,0 +1,22 @@
+# copied from dotfiles/project.yaml on 2026-11-17, comments dropped
+apiVersion: factory/v2
+name: dotfiles
+deploy:
+  mode: make
+  targets:
+    - name: mini
+      host: mini
+      verify: make verify
+  hold: 15m
+  migrations: []
+ship:
+  - paths:
+      - '**'
+    via: push
+leads: 16
+lanes:
+  host: 2
+signals:
+  github:
+    author: jkrumm
+    since: 2026-11-07T06:30:00Z

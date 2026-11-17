@@ -1,0 +1,18 @@
+# copied from brain/project.yaml on 2026-11-17, comments dropped
+apiVersion: factory/v2
+name: brain
+deploy:
+  mode: none
+ship:
+  - paths:
+      - '**'
+    via: push
+leads: 1
+hygiene:
+  probes:
+    - name: inbox
+      target: inbox-check
+signals:
+  github:
+    author: jkrumm
+    since: 2026-11-07T06:30:00Z

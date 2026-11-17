@@ -1,4 +1,4 @@
-import { durationMs, type ProjectFile } from './project.ts'
+import { durationMs, type ProjectFile } from '@software-factory/contract/project'
 import { repoTextOf, type StoredProject } from './sync.ts'
 
 /** One `heal:` rule: a `down` of the source waits `graceMs` for its `up`, after the runbook. */

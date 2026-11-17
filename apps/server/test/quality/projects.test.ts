@@ -1,6 +1,6 @@
 import { expect, test } from 'bun:test'
 import { projectFileProjects } from '../../src/app/quality-projects.ts'
-import { parseProject } from '../../src/domains/planning/project.ts'
+import { parseProject } from '@software-factory/contract/project'
 import type { StoredProject } from '../../src/domains/planning/sync.ts'
 import type { Projects } from '../../src/domains/quality/ports.ts'
 import { ok } from '../../src/kernel/result.ts'

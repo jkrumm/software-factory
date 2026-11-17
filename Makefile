@@ -75,6 +75,8 @@ check-static:
 	@bun scripts/public-scan.ts
 	@echo "==> Issue diagram is current (apps/server/scripts/issue-diagram.ts --check)"
 	@bun apps/server/scripts/issue-diagram.ts --check
+	@echo "==> project.yaml schema and key reference are current (scripts/project-schema.ts --check)"
+	@bun scripts/project-schema.ts --check
 	@echo "==> generated CLI is current (apps/cli/scripts/generate.ts --check)"
 	@bun apps/cli/scripts/generate.ts --check
 	@echo "==> next free migration number (scripts/merge-guard.ts): $$(bun scripts/merge-guard.ts --next-migration)"

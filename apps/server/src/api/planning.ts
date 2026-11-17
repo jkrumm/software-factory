@@ -6,6 +6,7 @@ import {
   PlanningPassAnswer,
   PrioAnswer,
   PrioBody,
+  ProjectJsonSchema,
   ProjectList,
   ProjectPlanModel,
   ProjectSyncAnswer,
@@ -20,6 +21,7 @@ import {
   UnafterAnswer,
   UnafterBody,
 } from '@software-factory/contract'
+import { projectJsonSchema } from '@software-factory/contract/project'
 import { Elysia } from 'elysia'
 import * as z from 'zod'
 import type { RowState } from '../domains/planning/plan.ts'
@@ -224,6 +226,14 @@ const syncAnswer = (result: SyncResult): ProjectSyncAnswer => ProjectSyncAnswer.
 export const planningRoutes = (api?: PlanningApi) => {
   const unbound = failure('planning is not wired in this process', 'unavailable')
   return new Elysia()
+    .get('/v1/schema/project', ({ status }) => status(200, projectJsonSchema()), {
+      response: { 200: ProjectJsonSchema },
+      detail: {
+        operationId: 'schema.project',
+        summary:
+          'the JSON Schema of project.yaml this server parses with (docs/project.md; offline: factory project schema --format json)',
+      },
+    })
     .get(
       '/projects',
       async ({ status }) => {

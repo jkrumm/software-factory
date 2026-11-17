@@ -1,0 +1,585 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "$id": "https://raw.githubusercontent.com/jkrumm/software-factory/master/schema/project.schema.json",
+  "title": "project.yaml",
+  "description": "A repo's declaration to the software factory: how it ships, deploys, checks and is watched. The author page is docs/project.md.",
+  "type": "object",
+  "properties": {
+    "apiVersion": {
+      "type": "string",
+      "const": "factory/v2",
+      "description": "the file format; `factory/v2`, any other is a broken file",
+      "consumer": "sync (apps/server/src/domains/planning/sync.ts)"
+    },
+    "name": {
+      "type": "string",
+      "pattern": "^[A-Za-z0-9][A-Za-z0-9._-]{0,127}$",
+      "description": "the repo's directory name; a file whose name is not its directory's is refused",
+      "consumer": "sync (apps/server/src/domains/planning/sync.ts)"
+    },
+    "host": {
+      "description": "the host the repo's alerts sit on, a key of config/infra.json's hosts (`macmini`), so its Kuma and HyperDX alerts join that host's incident",
+      "consumer": "intake (apps/server/src/domains/planning/signals.ts)",
+      "type": "string",
+      "pattern": "^[A-Za-z0-9][A-Za-z0-9._-]{0,127}$"
+    },
+    "deploy": {
+      "description": "how a shipped change is deployed and watched",
+      "consumer": "the Watch (apps/server/src/app/quality-projects.ts)",
+      "type": "object",
+      "properties": {
+        "mode": {
+          "default": "none",
+          "description": "how a shipped change reaches production. `auto`: a push to the default branch deploys (CI, Vercel, RollHook), the Watch asks no `make version`; `make`: the lead runs `make deploy` and `make version` reads the live sha; `agentic`: the lead deploys by its own steps; `none`: nothing deploys, done is merged with CI green",
+          "consumer": "the Watch (apps/server/src/app/quality-projects.ts)",
+          "type": "string",
+          "enum": [
+            "auto",
+            "make",
+            "agentic",
+            "none"
+          ]
+        },
+        "targets": {
+          "default": [],
+          "description": "where a deploy is verified, one entry per place. Empty: the Watch runs `make verify` when the Makefile has it",
+          "consumer": "the Watch (apps/server/src/app/quality-projects.ts)",
+          "type": "array",
+          "items": {
+            "type": "object",
+            "properties": {
+              "name": {
+                "type": "string",
+                "pattern": "^[A-Za-z0-9][A-Za-z0-9._-]{0,127}$",
+                "description": "the target's name, shown on the project page (`mini`, `prod`)",
+                "consumer": "the Watch (apps/server/src/app/quality-projects.ts)"
+              },
+              "host": {
+                "description": "the machine the target runs on (`mini`, `vps`, `homelab`). `mini` makes the weekly hygiene pass judge the repo against the run rules for the mini (`runrules`), which it otherwise does only for a repo with a root `mini-services.yaml`",
+                "consumer": "the hygiene runrules probe (apps/server/src/adapters/hygiene/probes/runrules.ts, read from the raw file)",
+                "type": "string",
+                "pattern": "^[A-Za-z0-9][A-Za-z0-9._-]{0,127}$"
+              },
+              "verify": {
+                "type": "string",
+                "pattern": "^(https?:\\/\\/\\S+|make [A-Za-z0-9][A-Za-z0-9_.-]*)$",
+                "description": "how a deploy is proved: `make verify` (or another `make <target>`) run in the repo, or an http(s) URL the Watch GETs and expects 200 from",
+                "consumer": "the Watch (apps/server/src/app/quality-projects.ts)"
+              }
+            },
+            "required": [
+              "name",
+              "verify"
+            ],
+            "additionalProperties": false
+          }
+        },
+        "hold": {
+          "default": "0m",
+          "description": "how long a shipped change is watched before it counts as done (`30m`, `2h`, `1d`, at most 7d). Give an asynchronous deploy (CI, a rolling swap) its time here",
+          "consumer": "the Watch (apps/server/src/app/quality-projects.ts)",
+          "type": "string",
+          "pattern": "^(\\d+)(s|m|h|d)$"
+        },
+        "paths": {
+          "default": [],
+          "description": "globs of the paths a deploy carries (`apps/**`, `Makefile`). Empty: every path that is not inert deploys. Set: a ship touching none of them records no deploy and no deployed-version check, as a rewrite built beside the running system must",
+          "consumer": "the ship gate (apps/server/src/domains/quality/gate.ts) and the Watch",
+          "type": "array",
+          "items": {
+            "type": "string",
+            "minLength": 1
+          }
+        },
+        "migrations": {
+          "description": "Retired: read by nothing; no gate or brief ever used it. Where migrations live and how they run belongs in the repo's AGENTS.md. Remove it.",
+          "consumer": "nothing (retired)",
+          "deprecated": true,
+          "type": "array",
+          "items": {
+            "type": "string"
+          }
+        },
+        "probes": {
+          "default": [],
+          "description": "HTTP probes the Watch runs after every deploy, beside the targets",
+          "consumer": "the Watch (apps/server/src/app/quality-projects.ts)",
+          "type": "array",
+          "items": {
+            "type": "object",
+            "properties": {
+              "name": {
+                "type": "string",
+                "pattern": "^[A-Za-z0-9][A-Za-z0-9._-]{0,127}$",
+                "description": "the probe's name in the Watch's evidence",
+                "consumer": "the Watch (apps/server/src/app/quality-projects.ts)"
+              },
+              "http": {
+                "type": "string",
+                "pattern": "^https?:\\/\\/\\S+$",
+                "description": "the URL the Watch GETs",
+                "consumer": "the Watch (apps/server/src/app/quality-projects.ts)"
+              },
+              "expect": {
+                "default": 200,
+                "description": "the HTTP status the probe expects",
+                "consumer": "the Watch (apps/server/src/app/quality-projects.ts)",
+                "type": "integer",
+                "minimum": 100,
+                "maximum": 599
+              }
+            },
+            "required": [
+              "name",
+              "http"
+            ],
+            "additionalProperties": false
+          }
+        }
+      },
+      "additionalProperties": false,
+      "default": {}
+    },
+    "ship": {
+      "description": "how a change lands: a list of `{ via }` rules; any `via: pr` makes the Watch expect CI",
+      "consumer": "the Watch (apps/server/src/app/quality-projects.ts)",
+      "minItems": 1,
+      "type": "array",
+      "items": {
+        "type": "object",
+        "properties": {
+          "paths": {
+            "description": "Retired: read by nothing; no code ever matched a change against these globs. The factory reads only whether any rule ships `via: pr`. Remove it.",
+            "consumer": "nothing (retired)",
+            "deprecated": true,
+            "minItems": 1,
+            "type": "array",
+            "items": {
+              "type": "string",
+              "minLength": 1
+            }
+          },
+          "via": {
+            "type": "string",
+            "enum": [
+              "push",
+              "pr"
+            ],
+            "description": "`pr`: changes land through a pull request, so the Watch expects CI on the head; `push`: straight to the default branch",
+            "consumer": "the Watch (apps/server/src/app/quality-projects.ts)"
+          }
+        },
+        "required": [
+          "via"
+        ],
+        "additionalProperties": false
+      },
+      "default": [
+        {
+          "via": "push"
+        }
+      ]
+    },
+    "work": {
+      "default": false,
+      "description": "`true`: the repo stays a work repo though it has a project.yaml: the read token never sees its words and it hears the owner only. For a repo of another organisation the factory builds in",
+      "consumer": "read redaction and intake (apps/server/src/domains/planning/signals.ts, apps/server/src/api/planning.ts)",
+      "type": "boolean"
+    },
+    "leads": {
+      "default": 64,
+      "description": "how many leads may work in the repo at once (one more for a fix while the line is stopped). Unset: 64, no cap beyond the host's memory, load and accounts; a value above 64 is clamped with a warning. A lower cap is an exception the file gives its reason for (NL32)",
+      "consumer": "admission (apps/server/src/app/capacity-admit.ts)",
+      "type": "integer",
+      "minimum": 1,
+      "maximum": 64
+    },
+    "lanes": {
+      "description": "resource classes inside the repo: `{apple: 1}` lets one lead of lane apple run at once; `{apple: {leads: 1, memory: 18GiB}}` also reserves that memory on the host for every running lead of the lane. A lane a row or Issue names and this does not declare is unlimited within `leads`",
+      "consumer": "admission (apps/server/src/app/capacity-admit.ts)",
+      "type": "object",
+      "propertyNames": {
+        "$ref": "#/definitions/LaneName"
+      },
+      "additionalProperties": {
+        "anyOf": [
+          {
+            "type": "integer",
+            "minimum": 1,
+            "maximum": 64,
+            "description": "how many leads of the lane run at once",
+            "consumer": "admission (apps/server/src/app/capacity-admit.ts)"
+          },
+          {
+            "type": "object",
+            "properties": {
+              "leads": {
+                "type": "integer",
+                "minimum": 1,
+                "maximum": 64,
+                "description": "how many leads of the lane run at once",
+                "consumer": "admission (apps/server/src/app/capacity-admit.ts)"
+              },
+              "memory": {
+                "description": "the host memory each running lead of the lane reserves (`18GiB`, at most 1 TiB)",
+                "consumer": "admission (apps/server/src/app/capacity-admit.ts)",
+                "type": "string",
+                "pattern": "^(\\d+(?:\\.\\d+)?)(MiB|GiB)$"
+              }
+            },
+            "required": [
+              "leads"
+            ],
+            "additionalProperties": false
+          }
+        ]
+      },
+      "default": {}
+    },
+    "slots": {
+      "default": {},
+      "description": "the repo's test-slot limits",
+      "consumer": "test slots (apps/server/src/app/capacity-slots.ts)",
+      "type": "object",
+      "properties": {
+        "run": {
+          "description": "how long one `factory slot run` of this repo may hold a test slot before it is stopped (at least 1m, at most 6h; unset: 30m)",
+          "consumer": "test slots (apps/server/src/app/capacity-slots.ts)",
+          "type": "string",
+          "pattern": "^(\\d+)(s|m|h|d)$"
+        }
+      },
+      "additionalProperties": false
+    },
+    "budgets": {
+      "default": {},
+      "description": "what the repo's checks may cost; a day over one is a signal on the repo. A key left out is no budget",
+      "consumer": "the throughput loop (apps/server/src/app/loops/throughput.ts)",
+      "type": "object",
+      "properties": {
+        "fast": {
+          "description": "the most the median of a day's fast-tier check runs may take (`5m`)",
+          "consumer": "the throughput loop (apps/server/src/app/loops/throughput.ts)",
+          "type": "string",
+          "pattern": "^(\\d+)(s|m|h|d)$"
+        },
+        "peak": {
+          "description": "the most peak memory one check step may take (`4GiB`)",
+          "consumer": "the throughput loop (apps/server/src/app/loops/throughput.ts)",
+          "type": "string",
+          "pattern": "^(\\d+(?:\\.\\d+)?)(MiB|GiB)$"
+        },
+        "fail": {
+          "description": "the most of a day's check steps that may exit non-zero (`30%`)",
+          "consumer": "the throughput loop (apps/server/src/app/loops/throughput.ts)",
+          "type": "string",
+          "pattern": "^(\\d+(?:\\.\\d+)?)%$"
+        }
+      },
+      "additionalProperties": false
+    },
+    "checks": {
+      "default": null,
+      "description": "check tiers: a fast local check and the full gate (CI's when `ci` is true). Unset: the lead runs `make check`",
+      "consumer": "the lead's brief (apps/server/src/domains/leads/brief.ts)",
+      "anyOf": [
+        {
+          "type": "object",
+          "properties": {
+            "fast": {
+              "type": "string",
+              "pattern": "^make [A-Za-z0-9][A-Za-z0-9_.-]*$",
+              "description": "what a lead runs locally before each push (`make check-fast`)",
+              "consumer": "the lead's brief (apps/server/src/domains/leads/brief.ts)"
+            },
+            "full": {
+              "default": "make check",
+              "description": "the complete gate",
+              "consumer": "the lead's brief (apps/server/src/domains/leads/brief.ts)",
+              "type": "string",
+              "pattern": "^make [A-Za-z0-9][A-Za-z0-9_.-]*$"
+            },
+            "ci": {
+              "default": false,
+              "description": "`true`: CI runs `full` on the pull request head, so the lead runs only `fast` and relies on that run (`make merge-guard` still demands it green)",
+              "consumer": "the lead's brief (apps/server/src/domains/leads/brief.ts)",
+              "type": "boolean"
+            }
+          },
+          "required": [
+            "fast"
+          ],
+          "additionalProperties": false
+        },
+        {
+          "type": "null"
+        }
+      ]
+    },
+    "doctor": {
+      "default": null,
+      "description": "`make doctor`: a read-only command of seconds that exits 0 when this host can run the project, else non-zero with one line per missing prerequisite and its fix. Red keeps every lead of the repo from being admitted and the hygiene `check` probe from running",
+      "consumer": "admission (apps/server/src/app/capacity-admit.ts) and the hygiene loop (apps/server/src/app/loops/hygiene.ts)",
+      "anyOf": [
+        {
+          "type": "string",
+          "pattern": "^make [A-Za-z0-9][A-Za-z0-9_.-]*$"
+        },
+        {
+          "type": "null"
+        }
+      ]
+    },
+    "hygiene": {
+      "default": {
+        "check": true,
+        "skip": [],
+        "probes": []
+      },
+      "description": "what the weekly hygiene pass runs on the repo",
+      "consumer": "the hygiene loop (apps/server/src/app/loops/hygiene.ts)",
+      "type": "object",
+      "properties": {
+        "check": {
+          "default": true,
+          "description": "`false`: the repo's `make check` needs a lab the factory host does not have, so the weekly pass skips its `check` probe (with `reason`)",
+          "consumer": "the hygiene loop (apps/server/src/app/loops/hygiene.ts)",
+          "type": "boolean"
+        },
+        "reason": {
+          "description": "why `check` is false; required then",
+          "consumer": "the hygiene loop (apps/server/src/app/loops/hygiene.ts)",
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 300
+        },
+        "skip": {
+          "default": [],
+          "description": "built-in probes the repo opts out of, each with its reason (links, retired, deps, cochange, runrules, browser, context)",
+          "consumer": "the hygiene loop (apps/server/src/app/loops/hygiene.ts)",
+          "maxItems": 7,
+          "type": "array",
+          "items": {
+            "type": "object",
+            "properties": {
+              "probe": {
+                "type": "string",
+                "enum": [
+                  "links",
+                  "retired",
+                  "deps",
+                  "cochange",
+                  "runrules",
+                  "browser",
+                  "context"
+                ],
+                "description": "the built-in probe switched off",
+                "consumer": "the hygiene loop (apps/server/src/app/loops/hygiene.ts)"
+              },
+              "reason": {
+                "type": "string",
+                "minLength": 1,
+                "maxLength": 300,
+                "description": "why: a probe is never switched off without one; the pass shows it",
+                "consumer": "the hygiene loop (apps/server/src/app/loops/hygiene.ts)"
+              }
+            },
+            "required": [
+              "probe",
+              "reason"
+            ],
+            "additionalProperties": false
+          }
+        },
+        "probes": {
+          "default": [],
+          "description": "the repo's own weekly probes, at most 16",
+          "consumer": "the hygiene loop (apps/server/src/app/loops/hygiene.ts)",
+          "maxItems": 16,
+          "type": "array",
+          "items": {
+            "type": "object",
+            "properties": {
+              "name": {
+                "type": "string",
+                "pattern": "^[a-z0-9-]{1,64}$",
+                "description": "the probe's name; a finding is keyed `probe:<name>`",
+                "consumer": "the hygiene loop (apps/server/src/app/loops/hygiene.ts)"
+              },
+              "target": {
+                "type": "string",
+                "pattern": "^[a-z0-9-]{1,64}$",
+                "description": "the Makefile target the loop runs as `make <target>` in a throwaway checkout; any exit but 0 is a finding",
+                "consumer": "the hygiene loop (apps/server/src/app/loops/hygiene.ts)"
+              }
+            },
+            "required": [
+              "name",
+              "target"
+            ],
+            "additionalProperties": false
+          }
+        }
+      },
+      "additionalProperties": false
+    },
+    "signals": {
+      "default": {},
+      "description": "which automatic sources the repo listens to; a work repo lists none and hears the owner only",
+      "consumer": "intake (apps/server/src/domains/planning/signals.ts)",
+      "type": "object",
+      "properties": {
+        "github": {
+          "description": "the repo's GitHub issues and check runs come in as signals",
+          "consumer": "intake (apps/server/src/domains/planning/signals.ts)",
+          "type": "object",
+          "properties": {
+            "label": {
+              "default": "factory",
+              "description": "a GitHub issue with this label is filed as a signal, whoever opened it",
+              "consumer": "intake (apps/server/src/domains/planning/signals.ts)",
+              "type": "string",
+              "minLength": 1,
+              "maxLength": 50,
+              "pattern": "^[A-Za-z0-9 ._-]+$"
+            },
+            "checks": {
+              "default": false,
+              "description": "`true`: a red check run on the default branch is filed as a signal",
+              "consumer": "intake (apps/server/src/domains/planning/signals.ts)",
+              "type": "boolean"
+            },
+            "author": {
+              "description": "every new issue this login opens is filed without the label; set together with `since`",
+              "consumer": "intake (apps/server/src/domains/planning/signals.ts)",
+              "type": "string",
+              "pattern": "^[A-Za-z0-9](?:[A-Za-z0-9-]{0,38})$"
+            },
+            "since": {
+              "description": "issues of `author` opened before this are never filed; set together with `author`",
+              "consumer": "intake (apps/server/src/domains/planning/signals.ts)",
+              "type": "string",
+              "pattern": "^\\d{4}-\\d{2}-\\d{2}(?:T\\d{2}:\\d{2}(?::\\d{2})?Z)?$"
+            }
+          },
+          "additionalProperties": false
+        },
+        "launchd": {
+          "description": "LaunchAgent labels on the mini whose crash or failed exit is filed as a signal on this repo",
+          "consumer": "launchd intake (apps/server/src/adapters/intake/launchd.ts)",
+          "maxItems": 64,
+          "type": "array",
+          "items": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 200
+          }
+        }
+      },
+      "additionalProperties": false
+    },
+    "heal": {
+      "default": [],
+      "description": "alerts that wait for their own recovery before they are filed",
+      "consumer": "intake (apps/server/src/app/intake.ts)",
+      "maxItems": 32,
+      "type": "array",
+      "items": {
+        "type": "object",
+        "properties": {
+          "when": {
+            "type": "string",
+            "pattern": "^(kuma|hyperdx|github|checks|launchd)\\.down$",
+            "description": "`<source>.down`: the alert this rule settles",
+            "consumer": "intake (apps/server/src/app/intake.ts)"
+          },
+          "grace": {
+            "type": "string",
+            "pattern": "^(\\d+)(s|m|h|d)$",
+            "description": "how long the `down` waits for its `up` before it is filed (at most 1d)",
+            "consumer": "intake (apps/server/src/app/intake.ts)"
+          },
+          "runbook": {
+            "description": "run first, before the grace starts",
+            "consumer": "intake (apps/server/src/app/intake.ts)",
+            "type": "string",
+            "const": "make restart"
+          },
+          "max": {
+            "default": 1,
+            "description": "how many heals in a row before it is filed anyway",
+            "consumer": "intake (apps/server/src/app/intake.ts)",
+            "type": "integer",
+            "minimum": 1,
+            "maximum": 5
+          }
+        },
+        "required": [
+          "when",
+          "grace"
+        ],
+        "additionalProperties": false
+      }
+    },
+    "policy": {
+      "default": [],
+      "description": "standing answers: the first rule whose phrase the question contains and whose answer is one of its options settles a Decision",
+      "consumer": "Decision policies (apps/server/src/app/planning-policies.ts)",
+      "maxItems": 64,
+      "type": "array",
+      "items": {
+        "type": "object",
+        "properties": {
+          "when": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 300,
+            "description": "a phrase the Decision's question contains",
+            "consumer": "Decision policies (apps/server/src/app/planning-policies.ts)"
+          },
+          "answer": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 200,
+            "description": "the option label the rule takes; it must be one of the options",
+            "consumer": "Decision policies (apps/server/src/app/planning-policies.ts)"
+          },
+          "reason": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 500,
+            "description": "why, recorded with the answer",
+            "consumer": "Decision policies (apps/server/src/app/planning-policies.ts)"
+          }
+        },
+        "required": [
+          "when",
+          "answer",
+          "reason"
+        ],
+        "additionalProperties": false
+      }
+    },
+    "jobs": {
+      "description": "Retired with the old core; accepted and dropped. Remove it.",
+      "consumer": "nothing (retired)",
+      "deprecated": true
+    },
+    "ticktick": {
+      "description": "Retired with the old core; accepted and dropped. Remove it.",
+      "consumer": "nothing (retired)",
+      "deprecated": true
+    }
+  },
+  "required": [
+    "apiVersion",
+    "name"
+  ],
+  "additionalProperties": false,
+  "definitions": {
+    "LaneName": {
+      "type": "string",
+      "pattern": "^[a-z0-9][a-z0-9-]{0,39}$"
+    }
+  }
+}

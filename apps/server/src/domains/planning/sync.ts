@@ -1,6 +1,6 @@
 import { createHash } from 'node:crypto'
 import { type PlanFile, parsePlan } from './plan.ts'
-import { defaultProject, parseProject, type ProjectFile } from './project.ts'
+import { defaultProject, parseProject, type ProjectFile } from '@software-factory/contract/project'
 
 /** What reading one file of a repo's default branch came back with. */
 export type FileRead =

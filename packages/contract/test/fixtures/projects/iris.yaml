@@ -1,0 +1,26 @@
+# copied from iris/project.yaml on 2026-11-17, comments dropped
+apiVersion: factory/v2
+name: iris
+deploy:
+  mode: make
+  targets:
+    - name: mini
+      host: mini
+      verify: make verify
+  hold: 10m
+  migrations: []
+ship:
+  - paths:
+      - '**'
+    via: push
+checks:
+  fast: make check-fast
+  full: make check
+  ci: true
+leads: 4
+lanes:
+  apple: 1
+signals:
+  github:
+    author: jkrumm
+    since: 2026-11-07T06:30:00Z

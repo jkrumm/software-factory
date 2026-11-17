@@ -37,7 +37,7 @@ const WEEK_MS = DIGEST_WINDOW_MS
 const FINDING_LOOKBACK_MS = 30 * 24 * HOUR_MS
 /** a host sample older than this says nothing about the seats now */
 const SEATS_MAX_AGE_MS = 10 * 60_000
-/** `leads:` at or above this is no cap of the project's own (`DEFAULT_LEADS` of `domains/planning/project.ts`; a test holds them equal) */
+/** `leads:` at or above this is no cap of the project's own (`DEFAULT_LEADS` of `packages/contract/src/project-file.ts`; a test holds them equal) */
 export const NO_LEAD_CAP = 64
 
 const json = (value: unknown): unknown => (typeof value === 'string' ? JSON.parse(value) : value)

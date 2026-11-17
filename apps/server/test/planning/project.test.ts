@@ -1,7 +1,7 @@
 import { describe, expect, test } from 'bun:test'
 import { join } from 'node:path'
 import { parseYamlText } from '../../src/adapters/planning/git-projects.ts'
-import { defaultProject, parseProject, ProjectFile } from '../../src/domains/planning/project.ts'
+import { defaultProject, parseProject, ProjectFile, StoredProjectFile } from '@software-factory/contract/project'
 import { signalsView } from '../../src/domains/planning/signals.ts'
 import { projectName, projectOf, type StoredProject, synced } from '../../src/domains/planning/sync.ts'
 
@@ -19,7 +19,7 @@ describe('project.yaml', () => {
     expect(parsed.ok).toBe(true)
     if (!parsed.ok) return
     expect(parsed.project.leads).toBe(12)
-    expect(parsed.project.ship).toEqual([{ paths: ['**'], via: 'pr' }])
+    expect(parsed.project.ship).toEqual([{ via: 'pr' }])
     expect(parsed.project.signals.github?.author).toBe('jkrumm')
     expect(parsed.project.deploy.targets[0]?.verify).toBe('make verify')
     expect(parsed.project.checks).toEqual({ fast: 'make check-fast', full: 'make check', ci: true })
@@ -49,7 +49,7 @@ describe('project.yaml', () => {
     ])
       expect(parse(bad).ok).toBe(false)
     // a stored project reads back through the same schema, and an old stored row has no checks at all
-    const stored = ProjectFile.parse(sharded.ok ? sharded.project : null)
+    const stored = StoredProjectFile.parse(sharded.ok ? sharded.project : null)
     expect(stored.checks?.ci).toBe(true)
     expect(ProjectFile.parse({ apiVersion: 'factory/v2', name: 'lab' }).checks).toBeNull()
   })
@@ -148,7 +148,7 @@ describe('project.yaml', () => {
     expect(defaultProject('lab').host).toBeUndefined()
   })
 
-  test('leads, slots.run and signals are read; jobs and ticktick are accepted and dropped', () => {
+  test('leads, slots.run and signals are read; retired keys (jobs, ticktick, migrations, ship paths) are accepted and dropped', () => {
     const parsed = parseProject(
       yaml(
         [
@@ -156,15 +156,32 @@ describe('project.yaml', () => {
           'name: weatherorb',
           'leads: 2',
           'slots: { run: 45m }',
-          'signals: { kuma: [weatherorb-web] }',
+          'signals: { launchd: [com.example.weatherorb] }',
           'jobs: [deps]',
           'ticktick: { list: WeatherOrb }',
+          'deploy: { migrations: [db/], targets: [{ name: mini, host: mini, verify: make verify }] }',
+          "ship: [{ paths: ['**'], via: pr }]",
         ].join('\n'),
       ),
       'weatherorb',
     )
-    expect(parsed).toMatchObject({ ok: true, project: { leads: 2, slots: { run: '45m' } } })
-    expect(parsed.ok && 'jobs' in parsed.project).toBe(false)
+    expect(parsed).toMatchObject({
+      ok: true,
+      project: { leads: 2, slots: { run: '45m' }, signals: { launchd: ['com.example.weatherorb'] } },
+    })
+    if (!parsed.ok) return
+    expect('jobs' in parsed.project || 'ticktick' in parsed.project).toBe(false)
+    expect(parsed.project.deploy).not.toHaveProperty('migrations')
+    expect(parsed.project.deploy.targets).toEqual([{ name: 'mini', host: 'mini', verify: 'make verify' }])
+    expect(parsed.project.ship).toEqual([{ via: 'pr' }])
+  })
+
+  test('signals is strict: a typo or a retired source (kuma, hyperdx: the door routes now) is refused', () => {
+    const parse = (signals: string) => parseProject(yaml(`apiVersion: factory/v2\nname: x\nsignals: ${signals}`), 'x')
+    for (const bad of ['{ githb: { checks: true } }', '{ kuma: [web] }', '{ hyperdx: {} }']) {
+      expect(parse(bad).ok).toBe(false)
+    }
+    expect(parse('{ github: { checks: true } }').ok).toBe(true)
   })
 
   test('a typo, a wrong version, a name that is not the directory and a bad value are refused with the reason', () => {

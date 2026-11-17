@@ -1,0 +1,19 @@
+# copied from basalt-ui-obsidian/project.yaml on 2026-11-17, comments dropped
+apiVersion: factory/v2
+name: basalt-ui-obsidian
+deploy:
+  mode: make
+  targets:
+    - name: mini
+      host: mini
+      verify: make verify
+  hold: 5m
+ship:
+  - paths:
+      - '**'
+    via: push
+leads: 1
+signals:
+  github:
+    author: jkrumm
+    since: 2026-11-07T06:30:00Z

@@ -1,0 +1,11 @@
+# copied from a WorkRoot repo on 2026-11-17, comments dropped
+apiVersion: factory/v2
+name: work-repo-1
+work: true
+deploy:
+  mode: none
+ship:
+  - paths:
+      - '**'
+    via: pr
+leads: 1

@@ -1,0 +1,17 @@
+# copied from free-planning-poker/project.yaml on 2026-11-17, comments dropped
+apiVersion: factory/v2
+name: free-planning-poker
+deploy:
+  mode: auto
+  targets:
+    - name: prod
+      host: vps
+      verify: make verify
+  hold: 10m
+  migrations:
+    - packages/db/drizzle/
+ship:
+  - paths:
+      - '**'
+    via: pr
+leads: 1

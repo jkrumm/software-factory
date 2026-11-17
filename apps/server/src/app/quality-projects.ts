@@ -1,5 +1,5 @@
 import type { PlanningStore } from '../domains/planning/ports.ts'
-import { durationMs, type ProjectFile } from '../domains/planning/project.ts'
+import { durationMs, type ProjectFile } from '@software-factory/contract/project'
 import { projectOf } from '../domains/planning/sync.ts'
 import type { Projects } from '../domains/quality/ports.ts'
 import type { ProjectChecks } from '../domains/quality/watch.ts'

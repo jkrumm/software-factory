@@ -1,0 +1,16 @@
+# copied from email-gateway/project.yaml on 2026-11-17, comments dropped
+apiVersion: factory/v2
+name: email-gateway
+deploy:
+  mode: make
+  targets:
+    - name: vps
+      host: vps
+      verify: make verify
+  hold: 10m
+  migrations: []
+ship:
+  - paths:
+      - '**'
+    via: push
+leads: 1
