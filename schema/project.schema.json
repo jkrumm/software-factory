@@ -296,7 +296,7 @@
             "type": "boolean"
           },
           "dockerfile": {
-            "description": "the repo's own image for the step off the mini (a Dockerfile in the repo, built on the step host once per content); unset: the factory's (Ubuntu 24.04, git, make, bun and the PostgreSQL server binaries). Required for `needs: [browser]` off the mini",
+            "description": "the repo's own image for the step off the mini (a Dockerfile in the repo, built on the step host once per content); unset: the factory's (Ubuntu 24.04, git, jq, make, bun and the PostgreSQL server binaries). Required for `needs: [browser]` off the mini",
             "consumer": "step placement (apps/server/src/app/capacity-slots.ts, apps/cli/src/remote-step.ts)",
             "type": "string",
             "minLength": 1,
