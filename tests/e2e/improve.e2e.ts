@@ -25,6 +25,7 @@ import {
   shortDate,
   targetTally,
   tripwireWords,
+  deliveryRows,
   edgeWords,
   windowWords,
 } from '../../apps/console/src/lib/improve.ts'
@@ -172,6 +173,7 @@ test('one card per KPI in the order the Console shows, each the figures the API 
   await expect(grid.getByRole('heading', { level: 2 })).toHaveText([
     ...headings,
     'By seat',
+    'What the light seat delivers',
     'By attempt seat',
     'Inferred chain edges',
     'Fix commits',
@@ -478,6 +480,17 @@ test('the By seat section tables the three seats and says where the tripwire sta
     await expect(table.getByRole('rowheader', { name: seat, exact: true })).toBeVisible()
   await expect(table.getByRole('columnheader', { name: 'Moved up' })).toBeVisible()
   await expect(section.getByText(tripwireWords(kpis.seats.tripwire))).toBeVisible()
+})
+
+test('the light seat delivery table shows the four figures, each with its definition', async ({ page, apiUrl }) => {
+  const [kpis] = await read(apiUrl, 7)
+  await page.goto('/improve')
+  const section = page.locator('[data-shot="improve-light-delivery"]')
+  await expect(section.getByRole('heading', { name: 'What the light seat delivers' })).toBeVisible()
+  for (const row of deliveryRows(kpis.seats.delivery)) {
+    await expect(section.getByRole('rowheader', { name: new RegExp(row.label) })).toBeVisible()
+    await expect(section.getByText(row.definition)).toBeVisible()
+  }
 })
 
 test('the attempt-seat table and the inferred-edge line sit under the By seat section', async ({ page, apiUrl }) => {
