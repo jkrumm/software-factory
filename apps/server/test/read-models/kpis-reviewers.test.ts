@@ -66,6 +66,10 @@ beforeAll(async () => {
   await reviewed(1, 'reviewer-cheap', [thread('reviewer-cheap', 'standard', 2, 40_000, 3, 2, 1)], 'passed')
   await reviewed(2, 'reviewer-cheap', [thread('reviewer-cheap', 'light', 1, 20_000, 0, 0, 0)], 'regressed')
   await reviewed(3, 'reviewer', [thread('reviewer', 'standard', 1, 10_000, 2, 2, 0)], 'passed')
+  // issue_2 regressed and shipped again, the re-ship with no review of its own: it stays measured on the ship it regressed from
+  await sql`INSERT INTO factory.quality_evidence (id, issue_id, attempt, source_key, kind, at, payload)
+    VALUES ('ev_2b', 'issue_2', 1, 'ship_2b', 'review', ${ago(2)},
+      ${JSON.stringify({ kind: 'review', status: 'not_required', reviewer: 'reviewer-cheap', threads: [] })}::text::jsonb)`
   // a cheap Issue whose only review was deep: it ran on the reviewer row and tested neither seat's Issues
   await reviewed(4, 'reviewer-cheap', [thread('reviewer', 'deep', 3, 90_000, 4, 4, 0)], 'passed')
   // a light-seat Issue is on the cheap row by rule: it shows in the rows but stays out of the tripwire's comparison

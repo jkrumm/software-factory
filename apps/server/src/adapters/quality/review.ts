@@ -34,6 +34,12 @@ const MAX_RANGES_AT_ONCE = 4
 /** The most covering reviews of one ship whose record is read: a ship of more threads is measured on the first eight agw names. */
 const MAX_THREADS = 8
 
+/**
+ * The ledger reads of a ship's threads share this limit, a hang guard on top of `REVIEW_TIMEOUT_MS`: the call that waits for
+ * them has already waited for `covered`, and the two must stay under the server's 255 s idle limit.
+ */
+export const THREADS_TIMEOUT_MS = 20_000
+
 const Status = z.object({
   job: z
     .object({
@@ -127,7 +133,7 @@ export class AgwReview implements Review {
   async threads({ repo, jobs }: { repo: string; jobs: readonly string[] }): Promise<Result<LedgerThread[]>> {
     try {
       const now = this.options.now ?? Date.now
-      const deadline = now() + (this.options.timeoutMs ?? REVIEW_TIMEOUT_MS)
+      const deadline = now() + Math.min(this.options.timeoutMs ?? REVIEW_TIMEOUT_MS, THREADS_TIMEOUT_MS)
       const run = this.options.run ?? runProcess
       const answers = await Promise.all(
         jobs.slice(0, MAX_THREADS).map(async (job): Promise<LedgerThread | null> => {

@@ -479,6 +479,16 @@ test('agw review: the covering jobs of a range are named, each once, and each th
   })
 })
 
+test('agw review: the ledger reads of a ship’s threads share a short limit of their own', async () => {
+  const limits: number[] = []
+  const run: Run = async (_cmd, timeoutMs) => {
+    limits.push(timeoutMs)
+    return { exitCode: 1, stdout: '' }
+  }
+  await new AgwReview({ bin: 'agw', run }).threads({ repo: '/r', jobs: ['rv_1', 'rv_2'] })
+  expect(limits).toEqual([20_000, 20_000])
+})
+
 test('agw review: a job the ledger cannot answer for is left out of the threads, never an error', async () => {
   expect(await agw({}).threads({ repo: '/r', jobs: ['rv_1'] })).toEqual({ ok: true, value: [] })
 })

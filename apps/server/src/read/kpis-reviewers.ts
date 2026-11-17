@@ -53,38 +53,40 @@ const Outcome = z.object({
 export type Outcome = z.infer<typeof Outcome>
 
 /**
- * The reviews and the Issues of the latest accepted ship of each Issue whose evidence names the reviewer seat. Older
+ * The reviews and the Issues of the first accepted ship of each Issue whose evidence names the reviewer seat: the review
+ * its first watch followed, so a re-ship after a regression (often with no review of its own) cannot move the regression
+ * to an Issue with no reviews. Older
  * evidence has no `reviewer` and no `threads`, so nothing before the seat existed is counted.
  */
 async function recordsOf(sql: SQL): Promise<{ reviews: Review[]; outcomes: Outcome[] }> {
   const reviews: unknown[] = await sql`
-    WITH latest AS (
+    WITH first_ship AS (
       SELECT DISTINCT ON (e.issue_id) e.issue_id, e.at, e.payload, EXISTS (
           SELECT 1 FROM factory.issue_events s
           WHERE s.issue_id = e.issue_id AND s.kind = 'lead_started' AND s.result = 'applied'
             AND (s.payload->>'attempt')::int = e.attempt AND s.payload->'seat'->>'rule' IS NOT NULL) AS light
       FROM factory.quality_evidence e
       WHERE e.kind = 'review' AND e.payload ? 'reviewer'
-      ORDER BY e.issue_id, e.at DESC)
+      ORDER BY e.issue_id, e.at)
     SELECT l.issue_id, l.light, l.at, l.payload->>'reviewer' AS assigned, t->'seat'->>'role' AS role, t->>'tier' AS tier,
       (t->>'rounds')::int AS rounds, t->>'wallMs' AS wall_ms,
       (t->'findings'->>'total')::int AS findings, (t->'findings'->>'applied')::int AS applied,
       (t->'findings'->>'declined')::int AS declined
-    FROM latest l, jsonb_array_elements(coalesce(l.payload->'threads', '[]'::jsonb)) t`
+    FROM first_ship l, jsonb_array_elements(coalesce(l.payload->'threads', '[]'::jsonb)) t`
   const outcomes: unknown[] = await sql`
-    WITH latest AS (
+    WITH first_ship AS (
       SELECT DISTINCT ON (e.issue_id) e.issue_id, e.at, e.payload->>'reviewer' AS assigned, EXISTS (
           SELECT 1 FROM factory.issue_events s
           WHERE s.issue_id = e.issue_id AND s.kind = 'lead_started' AND s.result = 'applied'
             AND (s.payload->>'attempt')::int = e.attempt AND s.payload->'seat'->>'rule' IS NOT NULL) AS light
       FROM factory.quality_evidence e
       WHERE e.kind = 'review' AND e.payload ? 'reviewer'
-      ORDER BY e.issue_id, e.at DESC)
+      ORDER BY e.issue_id, e.at)
     SELECT l.issue_id, l.light, l.at, l.assigned,
       (SELECT w.answer FROM factory.quality_watches w
         WHERE w.issue_id = l.issue_id AND w.watch = 1 AND w.answer IN ('passed', 'regressed')) AS first_watch,
       EXISTS (SELECT 1 FROM factory.quality_watches w WHERE w.issue_id = l.issue_id AND w.answer = 'regressed') AS regressed
-    FROM latest l`
+    FROM first_ship l`
   return { reviews: reviews.map((row) => Review.parse(row)), outcomes: outcomes.map((row) => Outcome.parse(row)) }
 }
 
