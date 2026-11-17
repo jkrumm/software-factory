@@ -49,6 +49,14 @@ const close = async (issue: string, times: number, ago = NEW) => {
   }
 }
 
+const leadGone = async (issue: string, times: number) => {
+  for (let i = 0; i < times; i++) {
+    await sql()`INSERT INTO factory.issue_events (id, issue_id, key, kind, payload, actor, at, result, version, to_state)
+      VALUES (${`event_seed_${++seeded}`}, ${issue}, ${`seed-${seeded}`}, 'lead_gone', '{}'::jsonb, 'factory',
+        now() - interval '1 hour', 'applied', ${1000 + seeded}, 'working')`
+  }
+}
+
 const refuseShips = async (issue: string, detail: string, times: number) => {
   for (let i = 0; i < times; i++) {
     await sql()`INSERT INTO factory.quality_ships (id, issue_id, attempt, event_key, at, result, detail, reported)
@@ -127,7 +135,7 @@ test('the first pass counts only the new core, files each pattern over its rate 
   await refuse(issue, 'started', 'too early', 3) // 0.075: three, but under the rate
   await refuse(issue, 'closed', 'a typo', 2) // under the count
   await refuseShips(issue, 'ship refused, review missing: review v4 at the tier `agw review route`…', 8) // retired
-  await regress(issue) // serious at any rate
+  for (let i = 0; i < 3; i++) await regress(issue) // 0.075 per Issue closed: over 0.05
   await hold('feedback', 3) // 0.075 per Issue closed against 0.2
 
   const ran = await runLoop(lab, 'friction')
@@ -153,10 +161,10 @@ test('the first pass counts only the new core, files each pattern over its rate 
     expect(signal.text).not.toContain('an old reason')
     expect(signal.text).not.toContain('Count: 22')
   }
-  expect(signals[1]?.text).toContain('Count: 1 ')
+  expect(signals[1]?.text).toContain('Count: 3 ')
 
   const [pass] = await passes()
-  expect(pass?.filed.map((f) => f.count).sort()).toEqual([1, 5])
+  expect(pass?.filed.map((f) => f.count).sort()).toEqual([3, 5])
   expect(pass?.over_budget).toEqual([])
   expect(pass?.failed).toEqual([])
   // the two patterns and the weekly retro
@@ -188,7 +196,7 @@ test('a pass a day later amends the open Issue of a pattern with what it counted
 
   const notes = await notesOn(first.issue_id)
   expect(notes).toHaveLength(1)
-  expect(notes[0]).toContain('Count: 2 ')
+  expect(notes[0]).toContain('Count: 4 ')
 })
 
 test('more than five patterns: five are filed, the rest are named in the pass record and its line', async () => {
@@ -213,12 +221,13 @@ test('under the minimum sample no rate is judged; the patterns that need no rate
   // five Issues closed: the old and the new sample are both gone from the window's rate, only the count of the serious stays
   await sql()`DELETE FROM factory.issue_events WHERE kind = 'closed' AND key LIKE 'seed-%' AND at > now() - interval '12 hours'`
   await close(issue, 5)
+  await leadGone(issue, 2) // serious at any rate
   await backdate()
   const ran = await runLoop(lab, 'friction')
   expect(ran.error).toBeNull()
   const last = (await passes()).at(-1)
   if (!last) throw new Error('no pass recorded')
-  expect(last.filed.map((f) => f.key)).toEqual(['regression'])
+  expect(last.filed.map((f) => f.key)).toEqual(['lead_gone'])
   expect(last.over_budget).toEqual([])
 })
 
