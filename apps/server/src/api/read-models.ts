@@ -5,6 +5,7 @@ import {
   DEFAULT_HOURS,
   ErrorBody,
   FindingClassesModel,
+  LoopYieldModel,
   FixCommitsModel,
   FlowModel,
   FLOW_TREND_DEFAULT_WINDOW,
@@ -54,6 +55,7 @@ import { readRetro } from '../read/retro.ts'
 import { readThroughput } from '../read/throughput.ts'
 import { redactThroughput } from '../read/throughput-redact.ts'
 import { loadOpenProjects } from '../read/work.ts'
+import { readLoopYield } from '../read/loop-yield.ts'
 import { loopReads } from '../read/loops.ts'
 import { needsModel, readNeeds } from '../read/needs.ts'
 import { readSince, storedSince } from '../read/since.ts'
@@ -534,6 +536,21 @@ export const readModelRoutes = (deps: ReadModelDeps | undefined, caller: (reques
           operationId: 'read.finding-classes',
           summary:
             'the kinds of finding the friction and hygiene loops file, each open, on probation or held for mostly dropped or cancelled Issues, with its counts and when a held class is asked again',
+        },
+      },
+    )
+    .get(
+      '/loop-yield',
+      async () => {
+        if (!deps) return unavailable
+        return Response.json(LoopYieldModel.parse(await readLoopYield(deps.sql, { now: now() })))
+      },
+      {
+        response: { 200: LoopYieldModel, ...errorResponses(503) },
+        detail: {
+          operationId: 'read.loop-yield',
+          summary:
+            'what each loop that files signals (friction, hygiene, selfwatch, throughput) yielded over the last 7 and 30 days: passes, signals filed, the Issues they opened and how those ended (done, healed, dropped, cancelled, still open), the median time to close and the three kinds of finding with most Issues',
         },
       },
     )

@@ -112,6 +112,7 @@ beforeAll(() => {
       project: [],
       improvements: [],
     },
+    waste: [],
   }
 })
 afterAll(() => rmSync(dir, { recursive: true, force: true }))

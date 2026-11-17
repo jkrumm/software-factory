@@ -21,6 +21,7 @@ import type { QueueReasons } from './flow.ts'
 import { readThroughput } from './throughput.ts'
 import { readKpis, type Window } from './kpis.ts'
 import { readRetroBuild } from './retro-build.ts'
+import { readWaste } from './retro-waste.ts'
 import { readTaste } from './retro-taste.ts'
 import { REGRESSION_CAUSES, regressionCause } from './kpis-flow.ts'
 import { windowOf } from './stats.ts'
@@ -314,6 +315,7 @@ export async function readRetro(
     capacity,
     build,
     throughput: await throughputOf(sql, { now, days, epoch: options.epoch ?? null, queue: options.queue ?? null }),
+    waste: await readWaste(sql, w),
   }
   if (!options.redact) return model
   const bare = (list: RetroSample[]): RetroSample[] => list.map((s) => ({ ...s, why: '' }))
