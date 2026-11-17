@@ -3,7 +3,6 @@ import {
   type HygieneCandidate,
   type HygieneFinding,
   type HygieneRequest,
-  seatOfKey,
 } from '@software-factory/contract'
 import type { HygieneJudgment, HygienePassRecord } from './ports.ts'
 import { MAX_SIGNALS_PER_PASS } from './budget.ts'
@@ -122,16 +121,16 @@ export interface Swept {
 
 const shortRef = (ref: string): string => ref.slice(0, 7)
 
-/** The seat the finding's Issue should run on: the catalogue's word, so the filer, the page and the light rule agree. */
-const seatLine = (key: string): string =>
-  `Seat: ${seatOfKey(key)} (${seatOfKey(key) === 'light' ? 'mechanical work a rule can name: the light lead takes it' : 'the standard lead'})`
+/** The seat the finding's Issue starts on: every hygiene finding is a probe's, and the probe turning green proves the fix. */
+const seatLine = (): string =>
+  'Seat: light (the probe turning green proves the fix; a class whose Issues keep moving up starts on the standard lead)'
 
 /** A probe finding as a signal: the stable title, what was swept, the evidence lines and how to look again. */
 export function probeSignalText(finding: ProbeFinding, swept: Swept): string {
   return [
     `Swept: ${swept.repo} @ ${shortRef(swept.ref)}`,
     `Probe: ${finding.probe} (${finding.key})`,
-    seatLine(finding.key),
+    seatLine(),
     `Evidence (${finding.count} item(s), up to the first ${finding.lines.length} lines):`,
     ...finding.lines,
     ...(finding.plan ?? []),
@@ -148,7 +147,7 @@ export function judgmentSignalText(finding: HygieneFinding, swept: Swept): strin
   return [
     `Swept: ${swept.repo} @ ${shortRef(swept.ref)}`,
     `Judgment: ${finding.kind} document ${finding.path}`,
-    seatLine(judgmentKey(finding)),
+    seatLine(),
     `Finding: ${finding.title}`,
     `Evidence: ${finding.evidence}`,
     `Fix: ${finding.fix}`,

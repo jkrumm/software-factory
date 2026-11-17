@@ -1,7 +1,8 @@
-import { hygieneClass, LIGHT_CLASSES } from '@software-factory/contract'
+import { hygieneClass } from '@software-factory/contract'
 
 export { hygieneClass }
-// The light seat: mechanical, well-specified work with a check that proves it starts on the cheap seat (the role table's
+// The light seat: mechanical, well-specified work with a check that proves it (every hygiene finding, whatever its size)
+// starts on the cheap seat (the role table's
 // `light` row) instead of the `lead` row. modelpick's table of 2026-11-16 put haiku at high effort level with sonnet at
 // medium (29.9 against 30.8) at a fifth of its cost, and 12 points under sonnet at high: right for work a rule can name,
 // not as the default lead. A light lead that struggles is moved up once: the next lead starts on the lead row.
@@ -20,6 +21,8 @@ export interface LightFacts {
   spec: boolean
   /** the key of the hygiene finding that filed it (`links:docs/x.md`, `judgment:stale:docs/y.md`, `probe:readme`), if one did */
   hygieneKey: string | null
+  /** the hygiene finding's class is out of the light seat: its move-up share over its last 20 Issues is above the bound (`judgeClassSeat`) */
+  hygieneOut: boolean
   /** a monitor alerted with no door route and the factory filed it home: its fix is a route */
   unroutedMonitor: boolean
   /** a light lead was moved up on it before: never light again */
@@ -45,10 +48,9 @@ export const outOfScope = (text: string): boolean => OUT_OF_SCOPE.test(text)
 /** Why the Issue starts light (the rule's name, shown on the Issue), or null when it starts on the lead row. */
 export function lightRule(facts: LightFacts): string | null {
   if (facts.movedUp > 0) return null
-  if (facts.hygieneKey !== null) {
-    const found = hygieneClass(facts.hygieneKey)
-    if (LIGHT_CLASSES.includes(found)) return `hygiene:${found}`
-  }
+  // A hygiene finding comes from a probe, and the same probe turning green proves the fix: it starts light whatever size
+  // triage gave it, unless its class keeps moving up. A class that is out never falls through to a size rule below.
+  if (facts.hygieneKey !== null) return facts.hygieneOut ? null : `hygiene:${hygieneClass(facts.hygieneKey)}`
   if (facts.kind === 'docs') return 'kind:docs'
   if (facts.unroutedMonitor) return 'alert:route'
   if (facts.triageSmall && facts.size === 'small' && !facts.spec && !outOfScope(facts.text)) {

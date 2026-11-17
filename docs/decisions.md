@@ -376,3 +376,15 @@ Report `docs/strategy/2026-11-next/report.html`, definition `docs/strategy/2026-
   other seat has no days of its own. Deep reviews stay on `reviewer` until the plain tier has this evidence. Starting share:
   every light-seat Issue and half of the others (Issue number parity). Revert: set `reviewer-cheap` in `config/roles.json` to the `reviewer` row's tier and effort (the assignment
   stays, the seat does not), or delete the row (leads then get no reviewer section and review on agw's seat).
+- **NL40 Every hygiene finding starts light; a class that keeps moving up starts on the lead row (Issue 2052, 2026-11-17).**
+  The owner said many hygiene runs can use the cheap tier at high effort. Until now only the catalogue's `light` classes did;
+  the rest (unused exports, security advisories, the root AGENTS.md byte limit, browser rules) reached the lead row when triage
+  sized them medium or left the size empty. A hygiene finding is a probe's, and the same probe turning green proves the fix, so
+  `lightRule` seats every Issue with a `loop_findings` hygiene row light whatever its size; the catalogue's `seat` column is gone.
+  The move-up path is unchanged. Each class carries its record in `factory read finding-classes` (`seat`: light starts, move-ups,
+  finished first watches and their pass rate, and the same over its last 20 Issues). A class is out when, over its last 20
+  Issues, the move-up share of the light starts in the window (at least 3) is above the bound of NL38 (`seats.tripwire.bound`,
+  `judgeClassSeat`); `seat.out` and `seat.why` say so, and the Improve page lists it with the held classes. Issues of a class
+  that is out start on the lead row, so they age its light starts out of the window until fewer than 3 remain: the class is back
+  on light with no switch to flip (10 min cache in `compose-leads.ts`). With no bound measured nothing is out. Not changed:
+  friction, selfwatch and owner-filed Issues keep NL38's rule; 20 and 3 are floors of this Issue, not measurements.

@@ -152,13 +152,24 @@ export function postgresLeadStore(tx: SQL): LeadStore {
       const [raw] = await tx`
         SELECT
           (SELECT key FROM factory.loop_findings WHERE issue_id = ${issue} AND loop = 'hygiene') AS hygiene_key,
+          (SELECT class FROM factory.loop_findings WHERE issue_id = ${issue} AND loop = 'hygiene') AS hygiene_class,
           EXISTS (SELECT 1 FROM factory.intake_door_unrouted WHERE filed_issue = ${issue}) AS unrouted,
           (SELECT string_agg(s.title || ' ' || s.text, ' ' ORDER BY s.received_at, s.id)
             FROM factory.intake_signals s WHERE s.issue_id = ${issue}) AS text`
       const row = z
-        .object({ hygiene_key: z.string().nullable(), unrouted: z.boolean(), text: z.string().nullable() })
+        .object({
+          hygiene_key: z.string().nullable(),
+          hygiene_class: z.string().nullable(),
+          unrouted: z.boolean(),
+          text: z.string().nullable(),
+        })
         .parse(raw)
-      return { hygieneKey: row.hygiene_key, unroutedMonitor: row.unrouted, text: row.text ?? '' }
+      return {
+        hygieneKey: row.hygiene_key,
+        hygieneClass: row.hygiene_class,
+        unroutedMonitor: row.unrouted,
+        text: row.text ?? '',
+      }
     },
 
     async filedSpecOf(issue) {

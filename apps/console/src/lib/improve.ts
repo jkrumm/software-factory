@@ -248,12 +248,17 @@ export function frictionRanking(
 export const windowWords = (window: { from: string; to: string }): string =>
   `${window.from.slice(0, 10)} to ${window.to.slice(0, 10)}`
 
-/** What a held or probation class says about itself, in the owner's words. */
+/** Whether a finding class is held, on probation, or started on the standard lead: the classes the Improve page lists. */
+export const classIsQuiet = (cls: FindingClass): boolean => cls.status !== 'open' || cls.seat?.out === true
+
+/** What a held, probation or standard-lead class says about itself, in the owner's words. */
 export function classWords(cls: FindingClass): string {
   const outcomes = `${cls.noise} of ${cls.decided} dropped or cancelled`
+  const lead = cls.seat?.out === true ? `. Starts on the standard lead: ${cls.seat.why ?? 'its Issues moved up'}` : ''
+  if (cls.status === 'open') return `${outcomes}${lead}`
   if (cls.status === 'held')
-    return `${outcomes}, asked again ${cls.heldUntil === null ? 'later' : cls.heldUntil.slice(0, 10)}`
-  return `${outcomes}, one Issue at a time until one closes done`
+    return `${outcomes}, asked again ${cls.heldUntil === null ? 'later' : cls.heldUntil.slice(0, 10)}${lead}`
+  return `${outcomes}, one Issue at a time until one closes done${lead}`
 }
 
 /** A span of seconds as the owner reads it: minutes under two hours, hours under two days, else days; a dash for none. */

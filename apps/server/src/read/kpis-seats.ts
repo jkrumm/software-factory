@@ -260,15 +260,14 @@ async function tripwireOf(
 }
 
 /**
- * Whether triage's `small` starts on the light seat now: the tripwire's verdict over the last `TRIPWIRE_DAYS` days. Only
- * a measured pass opens it; a figure that cannot be read, or a window that breaks a condition, leaves it closed.
+ * The tripwire over the last `TRIPWIRE_DAYS` days, read for the starts: `met` says whether triage's `small` starts on the
+ * light seat now (only a measured pass opens it), `bound.share` is the move-up share a hygiene class stays under.
  */
-export async function readLightGate(
+export async function readTripwire(
   sql: SQL,
   options: { now: Date; cost: CostOf; usageTimeoutMs?: number },
-): Promise<boolean> {
-  const tripwire = await tripwireOf(sql, { ...options, usageTimeoutMs: options.usageTimeoutMs ?? USAGE_TIMEOUT_MS })
-  return tripwire.met === true
+): Promise<SeatKpis['tripwire']> {
+  return tripwireOf(sql, { ...options, usageTimeoutMs: options.usageTimeoutMs ?? USAGE_TIMEOUT_MS })
 }
 
 /**

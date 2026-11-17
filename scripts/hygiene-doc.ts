@@ -29,11 +29,10 @@ const COST: Record<(typeof PROBE_COSTS)[number], string> = {
 
 const summaryTable = (): string =>
   [
-    '| Probe | Default | Runs | Cost | Seat |',
-    '|-|-|-|-|-|',
+    '| Probe | Default | Runs | Cost |',
+    '|-|-|-|-|',
     ...HYGIENE_CATALOGUE.map(
-      (entry) =>
-        `| [\`${entry.name}\`](#${entry.name}) | ${entry.enabled} | ${entry.cadence} | ${entry.cost} | ${entry.seat} |`,
+      (entry) => `| [\`${entry.name}\`](#${entry.name}) | ${entry.enabled} | ${entry.cadence} | ${entry.cost} |`,
     ),
   ].join('\n')
 
@@ -45,7 +44,6 @@ const section = (entry: HygieneCatalogueEntry): string =>
     '',
     `- **Default:** ${ENABLED[entry.enabled]}${entry.detect ? `: ${entry.detect}` : ''}.`,
     `- **Runs:** ${entry.cadence === 'daily' ? 'in the daily pass and the weekly one' : 'in the weekly pass'}; ${COST[entry.cost]}.`,
-    `- **Seat of its Issue:** ${entry.seat === 'light' ? 'light, work a rule can name' : 'standard'}.`,
     `- **Silence it:** ${entry.silence}`,
   ].join('\n')
 
@@ -73,8 +71,10 @@ page's Hygiene tab and \`factory read project-hygiene <name>\` render that one l
   named in the pass record, never dropped. A finding class that mostly ends dropped or cancelled stops filing for 14 days.
 - **Settings.** \`FACTORY_HYGIENE_EVERY_MS\` (the week), \`FACTORY_HYGIENE_DAILY_MS\` (the day, 0 turns daily passes off),
   \`FACTORY_HYGIENE_RETRY_MS\`, \`FACTORY_HYGIENE_REPOS\` (\`apps/server/src/app/loops/settings.ts\`, set in the env file).
-- **The seat.** Every signal carries a \`Seat:\` line. A light seat is for work a rule can name (a link, a word, a budget, a
-  version bump, a project file); the light rule reads the same catalogue.
+- **The seat.** Every signal carries a \`Seat:\` line. A finding's Issue starts on the light seat whatever its size: the probe that
+  found it turning green proves the fix, and a light lead that struggles is moved up once. A class whose Issues keep moving up
+  (its move-up share over its last 20 Issues above the bound the cost of a move-up sets) starts on the standard lead until the
+  share drops under it; \`factory read finding-classes\` shows each class's starts, move-ups and pass rate, and which are out.
 
 ## What happens to a finding
 

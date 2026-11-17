@@ -41,6 +41,8 @@ import { PROJECT_SCHEMA } from '../app/project-schema.ts'
 import { registerVisit, type VisitStore } from '../app/visit.ts'
 import type { CiTimes } from '../domains/loops/ports.ts'
 import { findingClasses } from '../app/loops/finding-classes.ts'
+import { readClassSeats } from '../read/finding-seats.ts'
+import { readTripwire } from '../read/kpis-seats.ts'
 import { type CapacityConstants, readCapacityLoop } from '../read/capacity-loop.ts'
 import { readWaitCensus } from '../read/wait-census.ts'
 import { readChain } from '../read/chain.ts'
@@ -54,7 +56,7 @@ import { readFlowTrend } from '../read/flow-trend.ts'
 import { readFixCommits } from '../read/fix-commits.ts'
 import { readFriction } from '../read/friction.ts'
 import { readHostSamples } from '../read/host.ts'
-import { readKpis } from '../read/kpis.ts'
+import { costOfIssues, readKpis } from '../read/kpis.ts'
 import { readRetro } from '../read/retro.ts'
 import { readThroughput } from '../read/throughput.ts'
 import { redactThroughput } from '../read/throughput-redact.ts'
@@ -550,7 +552,14 @@ export const readModelRoutes = (deps: ReadModelDeps | undefined, caller: (reques
       '/finding-classes',
       async () => {
         if (!deps) return unavailable
-        return Response.json(FindingClassesModel.parse(await findingClasses(loopReads(deps.sql), now())))
+        const at = now()
+        const bound =
+          (await readTripwire(deps.sql, { now: at, cost: (issues) => costOfIssues(deps.sql, issues) })).bound?.share ??
+          null
+        const byClass = await readClassSeats(deps.sql, bound)
+        return Response.json(
+          FindingClassesModel.parse(await findingClasses(loopReads(deps.sql), at, { bound, byClass })),
+        )
       },
       {
         response: { 200: FindingClassesModel, ...errorResponses(503) },

@@ -341,7 +341,7 @@ export async function startWorld(): Promise<World> {
     return issue
   }
   world.reset = async () => {
-    await db.sql`TRUNCATE factory.lead_attempts, factory.lead_deliveries, factory.lead_hook_events, factory.lead_sendbacks, factory.lead_finalizations, factory.issue_effect_runs, factory.issue_effects, factory.issue_events, factory.issues CASCADE`
+    await db.sql`TRUNCATE factory.loop_findings, factory.lead_attempts, factory.lead_deliveries, factory.lead_hook_events, factory.lead_sendbacks, factory.lead_finalizations, factory.issue_effect_runs, factory.issue_effects, factory.issue_events, factory.issues CASCADE`
     await db.sql`ALTER SEQUENCE factory.issue_numbers RESTART`
     terminals.reset()
     worktrees.reset()
