@@ -436,7 +436,7 @@ test('an owner request with nothing open beside it still asks factory-triage, wh
   expect(
     (await callsOf(lab, 'factory-triage')).filter((c) => (c.input.issue as { id?: string })?.id === docs),
   ).toHaveLength(1)
-  expect(await settledPayload(docs)).toEqual({ kind: 'docs' })
+  expect(await settledPayload(docs)).toEqual({ kind: 'docs', size: 'small' })
   expect(await kindShown(docs)).toBe('docs')
   const open = await lab.world.db.sql`SELECT kind FROM factory.issue_events WHERE issue_id = ${docs} AND kind = 'filed'`
   expect(open).toHaveLength(1)
@@ -460,14 +460,14 @@ test('triage flags a new public surface checkpoint: spec in the settled event; a
     },
   ])
   expect((await runLoop(lab, 'triage')).summary).toContain('flagged 1')
-  expect(await settledPayload(route)).toEqual({ checkpoint: 'spec' })
+  expect(await settledPayload(route)).toEqual({ checkpoint: 'spec', size: 'medium' })
 
   const plain = (await signal('solo', 'Rename a local variable in the parser')).issue as string
   await script(triageScript, [
     { match: 'rename a local', answer: { amend: null, after: [], kind: null, size: 'small', reason: 'local' } },
   ])
   expect((await runLoop(lab, 'triage')).summary).toContain('flagged 0')
-  expect(await settledPayload(plain)).toEqual({})
+  expect(await settledPayload(plain)).toEqual({ size: 'small' })
 })
 
 test('a null, an incident or an unchanged kind answer leaves the kind as filed', async () => {
