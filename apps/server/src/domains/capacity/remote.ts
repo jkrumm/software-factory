@@ -42,6 +42,24 @@ export const DISK_CEILING_PCT = 90
  */
 export const COPY_BYTES = 3.2 * 1024 ** 3
 
+/**
+ * What the step host keeps (issue 2035, `adapters/remote/trim.ts`). A slot copy whose slot has run no step for this many
+ * days is removed (the worktree and its `.run` directory; the next step of that slot checks it out and installs again).
+ */
+export const COPY_IDLE_DAYS = 7
+
+/** A bun cache entry no install has read for this many days is removed. */
+export const CACHE_IDLE_DAYS = 14
+
+/**
+ * The bun cache's ceiling in GiB: past it the idle age tightens (7, 3, 1 days) until it fits. Measured 2026-11-17: the
+ * whole cache of basalt-ui and this repo is 1.9 GiB, so 3 GiB leaves room to grow before the age bites.
+ */
+export const CACHE_CAP_GIB = 3
+
+/** How often the step host is trimmed at most. Idle ages are in days, so a few runs a day are plenty. */
+export const TRIM_EVERY_MS = 6 * 3_600_000
+
 /** The VPS is about 1.7 times slower per step (basalt-ui unit, 701 s against the mini's 412 s p50, 2026-11-17). */
 export const VPS_SLOWDOWN = 1.7
 
