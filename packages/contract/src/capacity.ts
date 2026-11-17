@@ -239,6 +239,11 @@ export const SlotBody = z
     pin: StepHost.optional(),
     /** hosts that failed this caller (unreachable, the sync or the container failed): it is not placed there again */
     notOn: z.array(StepHost).max(STEP_HOSTS.length).optional(),
+    /**
+     * With `holding`: the command runs on this host in this slot. A lease that lapsed and whose row is gone is taken back
+     * there, never on the mini, where the step does not run.
+     */
+    runningOn: z.object({ host: StepHost, slot: z.number().int().min(1) }).optional(),
   })
   .meta({ id: 'SlotBody' })
 export type SlotBody = z.infer<typeof SlotBody>

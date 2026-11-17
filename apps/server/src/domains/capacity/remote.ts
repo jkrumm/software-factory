@@ -67,6 +67,21 @@ export interface RemoteHolder {
 
 const gib = (mib: number): string => `${(mib / 1024).toFixed(1)} GiB`
 
+/** Why the VPS takes no step now. */
+export type RemoteRefusal = 'probe' | 'pressure' | 'disk' | 'memory' | 'cores'
+
+/**
+ * The refusal as a waiter's reason says it: no figures, because `factory slot run` prints a line each time the reason
+ * changes, and a figure that moves every second (a probe's age, the free memory) would print one a second.
+ */
+export const REMOTE_REFUSAL_WORDS: Record<RemoteRefusal, string> = {
+  probe: 'the VPS has not answered its probe lately',
+  pressure: 'production on the VPS is under pressure, or its pressure is not readable',
+  disk: 'the VPS disk is near the line its alert pages on',
+  memory: 'the VPS has not enough free memory for it',
+  cores: 'the VPS has no idle cores for it',
+}
+
 /**
  * Whether the VPS has room for `step` now, by its reading. Memory: the step's peak fits in what is available after the
  * running steps' peaks and the headroom (the mini's rule: 2 GiB or 8 % of RAM); the running steps are counted at their
@@ -80,15 +95,15 @@ export function decideRemote(input: {
   step: RemoteStep
   /** a copy of this project is already on the VPS: no new copy's bytes */
   copyExists: boolean
-}): { grant: true } | { grant: false; why: string } {
+}): { grant: true } | { grant: false; why: string; kind: RemoteRefusal } {
   const { reading, now, step } = input
-  if (reading === null) return { grant: false, why: 'the VPS has not answered its probe yet' }
+  if (reading === null) return { grant: false, kind: 'probe', why: 'the VPS has not answered its probe yet' }
   const age = now.getTime() - reading.at.getTime()
   if (age > REMOTE_READING_MAX_AGE_MS)
-    return { grant: false, why: `the VPS has not answered its probe for ${Math.round(age / 1000)} s` }
+    return { grant: false, kind: 'probe', why: `the VPS has not answered its probe for ${Math.round(age / 1000)} s` }
   // the tripwire fails closed: a host whose production pressure cannot be read takes no step
   if (reading.memoryPressure === null || reading.ioPressure === null)
-    return { grant: false, why: "the VPS's production pressure (system.slice PSI) is not readable" }
+    return { grant: false, kind: 'pressure', why: "the VPS's production pressure (system.slice PSI) is not readable" }
   const squeezed = [
     ['memory', reading.memoryPressure],
     ['io', reading.ioPressure],
@@ -96,6 +111,7 @@ export function decideRemote(input: {
   if (squeezed)
     return {
       grant: false,
+      kind: 'pressure',
       why: `production on the VPS is stalled on ${squeezed[0]} (${squeezed[1]} % of the last 10 s, over ${PRESSURE_TRIPWIRE_PCT} %)`,
     }
   const copy = input.copyExists ? 0 : COPY_BYTES
@@ -103,6 +119,7 @@ export function decideRemote(input: {
   if (usedPct > DISK_CEILING_PCT)
     return {
       grant: false,
+      kind: 'disk',
       why: `the VPS disk would be ${Math.round(usedPct)} % full, over the ${DISK_CEILING_PCT} % its disk alert pages on`,
     }
   const held = input.holders.reduce((sum, h) => sum + h.peakMib, 0)
@@ -110,12 +127,14 @@ export function decideRemote(input: {
   if (step.peakMib + held > room)
     return {
       grant: false,
+      kind: 'memory',
       why: `the VPS has ${gib(Math.max(0, room - held))} free for a step after its headroom and ${input.holders.length} running, the step needs ${gib(step.peakMib)}`,
     }
   const idle = reading.cores - reading.load1
   if (input.holders.length > 0 && step.cores > idle)
     return {
       grant: false,
+      kind: 'cores',
       why: `the VPS has ${Math.max(0, Math.round(idle * 10) / 10)} idle cores, the step is learned to take ${Math.round(step.cores * 10) / 10}`,
     }
   return { grant: true }

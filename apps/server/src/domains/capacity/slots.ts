@@ -445,8 +445,7 @@ export function testLineOf(
   now: Date,
 ): { waiters: number; holders: number; medianWaitMs: number } {
   const t = now.getTime()
-  // the VPS's holders and the waiters pinned to it load the VPS, not the mini's line
-  const mini = rows.filter((row) => row.host !== 'vps')
+  const mini = miniRowsOf(rows)
   const waits = mini
     .filter((row) => row.slot === null && row.whyKind !== 'class' && row.seenAt.getTime() >= t - WAITER_TTL_MS)
     .map((row) => Math.max(0, t - row.requestedAt.getTime()))
@@ -459,11 +458,15 @@ export function testLineOf(
 /** The steps holding a live slot and the callers still asking for one. */
 export function slotCounts(rows: readonly SlotRow[], now: Date): { holders: number; waiters: number } {
   const t = now.getTime()
+  const mini = miniRowsOf(rows)
   return {
-    holders: rows.filter((row) => row.slot !== null && (row.leasedUntil?.getTime() ?? 0) >= t).length,
-    waiters: rows.filter((row) => row.slot === null && row.seenAt.getTime() >= t - WAITER_TTL_MS).length,
+    holders: mini.filter((row) => row.slot !== null && (row.leasedUntil?.getTime() ?? 0) >= t).length,
+    waiters: mini.filter((row) => row.slot === null && row.seenAt.getTime() >= t - WAITER_TTL_MS).length,
   }
 }
+
+/** The rows of the mini's line: the VPS's holders and the waiters pinned to it load the VPS, not the mini. */
+export const miniRowsOf = (rows: readonly SlotRow[]): SlotRow[] => rows.filter((row) => row.host !== 'vps')
 
 /** Gives the slot back (or leaves the line). */
 export const releaseSlot = (rows: readonly SlotRow[], id: string): { rows: SlotRow[]; had: boolean } => ({

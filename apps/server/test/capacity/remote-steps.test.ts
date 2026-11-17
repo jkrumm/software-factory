@@ -133,13 +133,34 @@ describe('a declared step runs off the mini when the mini makes it wait', () => 
   test('an unreachable VPS, a full disk or production under pressure keeps the step on the mini', async () => {
     await fillMini()
     probed = answer({ at: new Date(AT.getTime() - 5 * 60_000) })
-    expect(value(await step('p unit')).why).toContain('has not answered its probe')
-    probed = answer({ diskUsedBytes: 162 * GIB })
-    expect(value(await step('p unit')).why).toContain('disk alert')
-    probed = answer({ ioPressure: 25 })
-    expect(value(await step('p unit')).why).toContain('stalled on io')
+    const stale = value(await step('p unit')).why
+    expect(stale).toContain('the VPS has not answered its probe lately')
+    // the reason carries no figure that moves, so the waiting CLI prints it once, not once a second
+    world.clock.set(new Date(AT.getTime() + 1000))
+    expect(value(await step('p unit')).why).toBe(stale)
+    probed = answer({ at: new Date(AT.getTime() + 1000), diskUsedBytes: 162 * GIB })
+    expect(value(await step('p unit')).why).toContain('near the line its alert pages on')
+    probed = answer({ at: new Date(AT.getTime() + 1000), ioPressure: 25 })
+    expect(value(await step('p unit')).why).toContain('under pressure')
     probed = null
-    expect(value(await step('p unit')).why).toContain('not answered its probe yet')
+    expect(value(await step('p unit')).why).toContain('has not answered its probe lately')
+  })
+
+  test('a VPS holder whose lapsed row another caller dropped is taken back on the VPS, never on the mini', async () => {
+    await fillMini()
+    expect(value(await step('p unit')).host).toBe('vps')
+    // the server was away past the lease: another caller's save drops the lapsed VPS row
+    world.clock.set(new Date(AT.getTime() + 60_000))
+    expect(value(await touchSlot(deps(), { id: 'held', name: 'q check', holding: true })).granted).toBe(true)
+    const [gone] = await world.db.sql`SELECT count(*)::int AS n FROM factory.capacity_slots WHERE id = 'c'`
+    expect(gone).toEqual({ n: 0 })
+    const back = value(await step('p unit', { holding: true, runningOn: { host: 'vps', slot: 1 } }))
+    expect(back).toMatchObject({ granted: true, host: 'vps', slot: 1 })
+    const rows = await world.db.sql`SELECT id, host FROM factory.capacity_slots ORDER BY id`
+    expect(rows.map((r: { id: string; host: string | null }) => [r.id, r.host])).toEqual([
+      ['c', 'vps'],
+      ['held', null],
+    ])
   })
 
   test('the VPS failing a step puts it back in the mini line at its old place', async () => {
