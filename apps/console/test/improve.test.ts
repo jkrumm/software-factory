@@ -1,5 +1,5 @@
 import { expect, test } from 'bun:test'
-import { KPI_KEYS, type FindingClass, type FixCommitsModel, type Kpi } from '@software-factory/contract'
+import { KPI_CATALOG, KPI_KEYS, type FindingClass, type FixCommitsModel, type Kpi } from '@software-factory/contract'
 import {
   changeTone,
   changeWords,
@@ -88,6 +88,13 @@ test('formatKpi by unit, and why a value is missing', () => {
   expect(formatKpi(kpi({ unit: 'ms', value: 2.1 * 86_400_000 }))).toBe('2.1 d')
   expect(formatKpi(kpi({ value: null }))).toBe('Not measured')
   expect(formatKpi(kpi({ value: null, measured: false }))).toBe('Not measured')
+})
+
+test('a card says which way is good the way the catalog does, and only for a KPI that has a side', () => {
+  for (const key of KPI_KEYS) {
+    const neither = /neither direction/i.test(MEANING[key])
+    expect(neither, key).toBe(KPI_CATALOG[key].direction === 'watch')
+  }
 })
 
 test('targetWords and targetStatus are literal', () => {

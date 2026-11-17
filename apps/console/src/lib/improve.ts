@@ -459,7 +459,7 @@ export const MEANING: Record<KpiKey, string> = {
   specs_per_100:
     'How many Specs the leads wrote per 100 Issues. Neither direction is good by itself; zero for weeks means the Spec path is silent.',
   owner_decisions_per_100:
-    'How many Decisions you answered yourself per 100 Issues. Lower means the factory settles more alone; zero for weeks means nothing reaches you.',
+    'How many Decisions you answered yourself per 100 Issues. Neither direction is good by itself; zero for weeks means nothing reaches you.',
   errands_reached_per_100:
     'How many Errands got through to you per 100 Issues: a device, a portal or a secret only you can supply. Lower is better.',
   verdict_changes_share:
@@ -483,7 +483,7 @@ export const MEANING: Record<KpiKey, string> = {
   errands_turned_away:
     'Of the Errands leads raised, how many the screen turned away before they reached you. Higher means less of your time went to needless Errands.',
   first_watch_dwell_p50:
-    'How long a first check takes to answer; a pass over checks that answer in seconds proves little. Longer is a stronger check.',
+    'How long a first check takes to answer. Neither direction is good by itself: a pass over checks that answer in seconds proves little, and one that takes an hour slows the queue.',
 }
 
 /** The KPIs the page lists as cards, in the order each group keeps (fix commits have their own band). */

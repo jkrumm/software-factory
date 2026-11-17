@@ -477,7 +477,7 @@ async function kpisOf(
   const firstPassed = await one(sql`
     SELECT count(*) AS n FROM factory.quality_watches WHERE watch = 1 AND answer = 'passed' AND answered_at >= ${w.from} AND answered_at < ${w.to}`)
   const refusals = await refusalCount(sql, w)
-  const regressions = await regressionParts(sql, w)
+  const regressions = withParts ? await regressionParts(sql, w) : []
   const cycles = await cycleTimes(sql, w)
   const waits = await queueWaits(sql, w)
   const usage = withUsage
