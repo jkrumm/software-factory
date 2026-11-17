@@ -843,8 +843,8 @@ function CapacityTables({ model }: { model: CapacityLoopModel }) {
           )}
         </Fold>
       </section>
-      <section aria-label="Edges the factory added">
-        <Fold title="Edges the factory added" count={model.edges.bySource.length} defaultOpen>
+      <section aria-label="Edges by shared files">
+        <Fold title="Edges by shared files" count={model.edges.bySource.length} defaultOpen>
           {model.edges.bySource.length === 0 ? (
             <p className="py-2 text-sm text-muted-foreground">No edge added in the window.</p>
           ) : (
