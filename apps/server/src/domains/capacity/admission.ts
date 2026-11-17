@@ -52,14 +52,14 @@ export interface Refusal {
  */
 export interface LeadFit {
   repo: string
-  /** the learned p80 of the candidate's repo; null: fewer than three attempts */
+  /** the learned median peak of the candidate's repo; null: fewer than three attempts */
   candidateMib: number | null
   /** the attempts sampled for the repo */
   attempts: number
-  /** by which rule the figure is learned: the p80 of the newest ten, or (`falling`) the largest of the newest three settled attempts, all below that p80 */
-  basis?: 'p80' | 'falling'
-  /** the p80 of the newest ten, which a `falling` figure is below */
-  p80Mib?: number | null
+  /** by which rule the figure is learned: the median of the newest ten, or (`falling`) the largest of the newest three settled attempts, all below that median */
+  basis?: 'median' | 'falling'
+  /** the median of the newest ten, which a `falling` figure is below */
+  typicalMib?: number | null
   /** the repo's relearn point, when it has one: the figure is learned from the attempts since */
   relearnedAt?: Date | null
   /** free by the newest host sample; null: unknown */
@@ -229,8 +229,8 @@ function fitRefusal(fit: LeadFit): string | null {
   if (fit.candidateMib <= fit.freeMib - growth - fit.headroomMib) return null
   const basis =
     fit.basis === 'falling'
-      ? `the largest of the newest 3 settled leads, all below the p80 of ${gib(fit.p80Mib ?? fit.candidateMib)} GiB`
-      : `p80 of ${fit.attempts} past leads`
+      ? `the largest of the newest 3 settled leads, all below the median of ${gib(fit.typicalMib ?? fit.candidateMib)} GiB`
+      : `median of ${fit.attempts} past leads`
   const since = fit.relearnedAt ? `, learned from the attempts since ${fit.relearnedAt.toISOString()}` : ''
   const growing =
     fit.growing && growth > 0

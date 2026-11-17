@@ -94,7 +94,7 @@ export interface HostInputs {
   /** per project name: what a lead is learned to take (null with fewer than three attempts since the relearn point), by which rule, and the attempts sampled */
   learned: ReadonlyMap<
     string,
-    { mib: number | null; attempts: number; basis: 'p80' | 'falling' | null; p80Mib: number | null }
+    { mib: number | null; attempts: number; basis: 'median' | 'falling' | null; typicalMib: number | null }
   >
   /** per project name: the relearn point, when the repo has one */
   relearns: ReadonlyMap<string, Date>
@@ -246,7 +246,7 @@ export async function readHost(deps: CapacityDeps): Promise<HostInputs> {
                 mib: lead?.mib ?? null,
                 attempts: p.attempts,
                 basis: lead?.basis ?? null,
-                p80Mib: lead?.p80Mib ?? null,
+                typicalMib: lead?.typicalMib ?? null,
               },
             ]
           })
@@ -533,8 +533,8 @@ function decide(snap: Snapshot, host: HostInputs, limits: CapacityLimits, bonus:
       repo: project.name,
       candidateMib: learned?.mib ?? null,
       attempts: learned?.attempts ?? 0,
-      basis: learned?.basis ?? 'p80',
-      p80Mib: learned?.p80Mib ?? null,
+      basis: learned?.basis ?? 'median',
+      typicalMib: learned?.typicalMib ?? null,
       relearnedAt: host.relearns.get(project.name) ?? null,
       freeMib: host.freeMib,
       headroomMib: headroomMib(host.ramMib),
@@ -859,7 +859,7 @@ function relearnNotes(host: HostInputs): string[] {
     const learned = host.learned.get(repo)
     const figure =
       learned?.mib != null
-        ? `a lead takes ~${Math.round((learned.mib / 1024) * 10) / 10} GiB (${learned.basis === 'falling' ? 'the largest of the newest 3 settled leads' : `p80 of the newest ${Math.min(learned.attempts, 10)}`})`
+        ? `a lead takes ~${Math.round((learned.mib / 1024) * 10) / 10} GiB (${learned.basis === 'falling' ? 'the largest of the newest 3 settled leads' : `median of the newest ${Math.min(learned.attempts, 10)}`})`
         : `${learned?.attempts ?? 0} attempts since, fewer than three: the lane's memory prior`
     return `${repo}: lead cost learned from after the relearn point ${at.toISOString()}: ${figure}`
   })
