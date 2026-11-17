@@ -1,0 +1,34 @@
+{
+  "schema_version": 1,
+  "diagram_type": "dataflow",
+  "meta": {
+    "title": "Admission: readings in, one answer out",
+    "output": ".archify/admission-dataflow.html",
+    "visual_preset": "basalt",
+    "quality_profile": "showcase",
+    "locale": "en",
+    "legend": {
+      "mode": "auto",
+      "entries": {
+        "security": { "label": "refusal" },
+        "emphasis": { "label": "all clear" }
+      }
+    }
+  },
+  "stages": [{ "label": "Readings" }, { "label": "Decide" }, { "label": "Answer" }],
+  "nodes": [
+    { "id": "chain", "type": "messagebus", "label": "Chain", "sublabel": "edges, line, spec", "stage": 0, "row": 0 },
+    { "id": "host", "type": "cloud", "label": "Host, test line", "sublabel": "load, swap, slots", "stage": 0, "row": 1 },
+    { "id": "claims", "type": "database", "label": "Repo, accounts", "sublabel": "claims, lanes, windows", "stage": 0, "row": 2 },
+    { "id": "admission", "type": "backend", "label": "checkAdmission", "sublabel": "first no wins, pure", "stage": 1, "row": 1, "tag": "10 refusals" },
+    { "id": "lead", "type": "frontend", "label": "Lead starts", "sublabel": "claim, account picked", "stage": 2, "row": 0 },
+    { "id": "reason", "type": "security", "label": "Queue reason", "sublabel": "a sentence with numbers", "stage": 2, "row": 2 }
+  ],
+  "flows": [
+    { "id": "chain-admission", "from": "chain", "to": "admission", "label": "Ready Issue", "classification": "Issue", "variant": "default" },
+    { "id": "host-admission", "from": "host", "to": "admission", "label": "readings", "classification": "reading", "variant": "default" },
+    { "id": "claims-admission", "from": "claims", "to": "admission", "label": "room, caps", "classification": "reading", "variant": "default" },
+    { "id": "admission-lead", "from": "admission", "to": "lead", "label": "no refusal", "classification": "answer", "variant": "emphasis" },
+    { "id": "admission-reason", "from": "admission", "to": "reason", "label": "first refusal", "classification": "answer", "variant": "security" }
+  ]
+}

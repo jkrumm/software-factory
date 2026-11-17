@@ -2,6 +2,8 @@
 
 A checkpoint is where the factory stops for a person. Each kind has a contract the code enforces. A Decision goes to the Judge first. A Spec waits 24 hours and then proceeds on its defaults. An Errand is only for a person's hands. Screens (last section) decide what reaches the owner, and whatever reaches the owner and did not need to is counted as an avoidable touch.
 
+![Checkpoint routes: a Decision passes standing policy, then the Judge, then the owner, and takes its default when no answer comes; a Spec reaches the owner and goes ahead on its defaults after 24 hours; an Errand is turned back unless it needs hands, and a check can close it.](./diagrams/checkpoint-routes.svg)
+
 ## Decisions
 
 A Decision is one question as a form. The lead raises it with `factory issue ask`, and the form is refused unless every field is filled.

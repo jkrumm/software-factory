@@ -11,6 +11,8 @@ Admission is the pure function that answers, for one Issue the chain lets throug
 - **Never spills.** With every account closed the answer is to wait for the first opening, never to start on a metered key.
 - **Urgent passes.** A fix for a red production skips the test line and the lane cap. It takes the one place beyond `leads`.
 
+![Admission as a data flow: the chain, the host and test line, and the repo and accounts feed checkAdmission, whose first refusal becomes a queue reason and whose clear answer starts a lead.](./diagrams/admission-dataflow.svg)
+
 ```ts
 export const REFUSALS = [
   'drain',

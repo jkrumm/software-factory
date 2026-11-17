@@ -1,0 +1,232 @@
+{
+  "schema_version": 2,
+  "diagram_type": "workflow",
+  "meta": {
+    "title": "Checkpoints: what reaches the owner",
+    "output": ".archify/checkpoint-routes.html",
+    "visual_preset": "basalt",
+    "quality_profile": "showcase",
+    "locale": "en",
+    "legend": {
+      "mode": "auto",
+      "entries": {
+        "frontend": {
+          "label": "the lead raises it"
+        },
+        "backend": {
+          "label": "settled by rule or agw"
+        },
+        "external": {
+          "label": "the owner"
+        },
+        "database": {
+          "label": "the default is taken"
+        }
+      }
+    }
+  },
+  "lanes": [
+    {
+      "id": "decision",
+      "label": "Decision"
+    },
+    {
+      "id": "spec",
+      "label": "Spec"
+    },
+    {
+      "id": "errand",
+      "label": "Errand"
+    }
+  ],
+  "mainPath": [
+    "ask",
+    "policy",
+    "judge",
+    "owner-d",
+    "default-d"
+  ],
+  "nodes": [
+    {
+      "id": "ask",
+      "lane": "decision",
+      "col": 0,
+      "type": "frontend",
+      "label": "issue ask",
+      "sublabel": "a form, all fields"
+    },
+    {
+      "id": "policy",
+      "lane": "decision",
+      "col": 1,
+      "type": "backend",
+      "label": "Standing policy",
+      "sublabel": "project.yaml"
+    },
+    {
+      "id": "judge",
+      "lane": "decision",
+      "col": 2,
+      "type": "backend",
+      "label": "The Judge",
+      "sublabel": "answers or hands on"
+    },
+    {
+      "id": "owner-d",
+      "lane": "decision",
+      "col": 3,
+      "type": "external",
+      "label": "Owner",
+      "sublabel": "a question"
+    },
+    {
+      "id": "default-d",
+      "lane": "decision",
+      "col": 4,
+      "type": "database",
+      "label": "Default",
+      "sublabel": "after its wait"
+    },
+    {
+      "id": "submit",
+      "lane": "spec",
+      "col": 0,
+      "type": "frontend",
+      "label": "artifact submit",
+      "sublabel": "a Spec, before building"
+    },
+    {
+      "id": "screen-s",
+      "lane": "spec",
+      "col": 1,
+      "type": "backend",
+      "label": "Spec screen",
+      "sublabel": "a rule passes or holds"
+    },
+    {
+      "id": "owner-s",
+      "lane": "spec",
+      "col": 3,
+      "type": "external",
+      "label": "Owner",
+      "sublabel": "a verdict"
+    },
+    {
+      "id": "default-s",
+      "lane": "spec",
+      "col": 4,
+      "type": "database",
+      "label": "Looks good",
+      "sublabel": "no verdict in 24 hours"
+    },
+    {
+      "id": "raise",
+      "lane": "errand",
+      "col": 0,
+      "type": "frontend",
+      "label": "errand raise",
+      "sublabel": "a need, and what was tried"
+    },
+    {
+      "id": "screen-e",
+      "lane": "errand",
+      "col": 1,
+      "type": "backend",
+      "label": "Errand rules",
+      "sublabel": "turns away what the host does"
+    },
+    {
+      "id": "owner-e",
+      "lane": "errand",
+      "col": 3,
+      "type": "external",
+      "label": "Owner",
+      "sublabel": "a person's hands"
+    },
+    {
+      "id": "checked",
+      "lane": "errand",
+      "col": 4,
+      "type": "database",
+      "label": "Closed",
+      "sublabel": "check exits 1 to 125"
+    }
+  ],
+  "edges": [
+    {
+      "id": "ask-policy",
+      "from": "ask",
+      "to": "policy",
+      "variant": "emphasis"
+    },
+    {
+      "id": "policy-judge",
+      "from": "policy",
+      "to": "judge",
+      "label": "no rule",
+      "variant": "emphasis"
+    },
+    {
+      "id": "judge-owner",
+      "from": "judge",
+      "to": "owner-d",
+      "label": "hands on",
+      "variant": "emphasis"
+    },
+    {
+      "id": "owner-default",
+      "from": "owner-d",
+      "to": "default-d",
+      "label": "no answer",
+      "variant": "dashed"
+    },
+    {
+      "id": "submit-screen",
+      "from": "submit",
+      "to": "screen-s",
+      "variant": "emphasis"
+    },
+    {
+      "id": "screen-owner",
+      "from": "screen-s",
+      "to": "owner-s",
+      "label": "reaches him",
+      "variant": "emphasis"
+    },
+    {
+      "id": "owner-s-default",
+      "from": "owner-s",
+      "to": "default-s",
+      "label": "24 hours",
+      "variant": "dashed"
+    },
+    {
+      "id": "raise-screen",
+      "from": "raise",
+      "to": "screen-e",
+      "variant": "emphasis"
+    },
+    {
+      "id": "owner-checked",
+      "from": "owner-e",
+      "to": "checked",
+      "label": "not needed",
+      "variant": "dashed"
+    },
+    {
+      "id": "screen-owner-e",
+      "from": "screen-e",
+      "to": "owner-e",
+      "label": "needs hands",
+      "variant": "emphasis"
+    },
+    {
+      "id": "screen-raise",
+      "from": "screen-e",
+      "to": "raise",
+      "label": "turned away",
+      "variant": "security",
+      "role": "return"
+    }
+  ]
+}

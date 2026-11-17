@@ -1,0 +1,135 @@
+{
+  "schema_version": 3,
+  "diagram_type": "lifecycle",
+  "meta": {
+    "title": "The Issue lifecycle",
+    "output": ".archify/issue-lifecycle.html",
+    "visual_preset": "basalt",
+    "quality_profile": "showcase",
+    "locale": "en"
+  },
+  "mainPath": [
+    "settling",
+    "queued",
+    "working",
+    "watching",
+    "closed"
+  ],
+  "states": [
+    {
+      "id": "settling",
+      "type": "start",
+      "label": "settling",
+      "sublabel": "Held: triage is not done",
+      "step": "01"
+    },
+    {
+      "id": "queued",
+      "type": "waiting",
+      "label": "queued",
+      "sublabel": "Ready, or Held by a queue reason",
+      "step": "02"
+    },
+    {
+      "id": "working",
+      "type": "active",
+      "label": "working",
+      "sublabel": "Running: a lead owns it",
+      "step": "03"
+    },
+    {
+      "id": "waiting",
+      "type": "waiting",
+      "label": "waiting",
+      "sublabel": "Paused, with a wait reason"
+    },
+    {
+      "id": "watching",
+      "type": "decision",
+      "label": "watching",
+      "sublabel": "Checking: verify and probes",
+      "step": "04"
+    },
+    {
+      "id": "closed",
+      "type": "success",
+      "label": "closed",
+      "sublabel": "done, dropped, healed, cancelled",
+      "step": "05"
+    }
+  ],
+  "transitions": [
+    {
+      "id": "settling-queued",
+      "from": "settling",
+      "to": "queued",
+      "label": "settle"
+    },
+    {
+      "id": "queued-working",
+      "from": "queued",
+      "to": "working",
+      "label": "admit"
+    },
+    {
+      "id": "working-watching",
+      "from": "working",
+      "to": "watching",
+      "label": "ship"
+    },
+    {
+      "id": "watching-closed",
+      "from": "watching",
+      "to": "closed",
+      "label": "passed",
+      "variant": "emphasis"
+    },
+    {
+      "id": "working-queued",
+      "from": "working",
+      "to": "queued",
+      "label": "lead_gone"
+    },
+    {
+      "id": "working-waiting",
+      "from": "working",
+      "to": "waiting",
+      "label": "asked, deferred, stalled",
+      "variant": "dashed"
+    },
+    {
+      "id": "waiting-working",
+      "from": "waiting",
+      "to": "working",
+      "label": "answered, woken",
+      "variant": "dashed"
+    },
+    {
+      "id": "watching-working",
+      "from": "watching",
+      "to": "working",
+      "label": "regressed",
+      "variant": "security"
+    },
+    {
+      "id": "watching-waiting",
+      "from": "watching",
+      "to": "waiting",
+      "label": "regressed 3rd time",
+      "variant": "security"
+    },
+    {
+      "id": "settling-closed",
+      "from": "settling",
+      "to": "closed",
+      "label": "cancelled, closed"
+    },
+    {
+      "id": "closed-queued",
+      "from": "closed",
+      "to": "queued",
+      "label": "reopened",
+      "variant": "dashed"
+    }
+  ]
+}

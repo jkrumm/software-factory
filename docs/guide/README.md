@@ -23,6 +23,8 @@ The 76 touches are mostly notes (58) and cancels (11). A touch pattern that repe
 
 ## The loop
 
+![The loop: a signal is triaged into an Issue, admitted, built by a lead, gated, shipped and deployed, then verified and watched; a regression returns to the lead, and loops beside the path file signals.](./diagrams/loop.svg)
+
 1. **Signal.** A monitor, a GitHub issue, a lead's follow-up or the owner's words arrives as a signal with a kind, an origin and a trust level ([Signals and Triage](./signals.md)).
 2. **Triage.** Rules decide first. An `agw` workflow decides where the rules are unsure. The outcome is one of five: a new Issue, a note on an open one, part of an incident, held, or dropped ([Signals and Triage](./signals.md)).
 3. **Issue.** One repo, one branch, one ship. Its state is derived from stored events, and a total table decides every transition ([Issues](./issues.md)).

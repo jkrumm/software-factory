@@ -1,0 +1,199 @@
+{
+  "schema_version": 2,
+  "diagram_type": "workflow",
+  "meta": {
+    "title": "The loop: signal to verified production",
+    "output": ".archify/loop.html",
+    "visual_preset": "basalt",
+    "quality_profile": "showcase",
+    "locale": "en",
+    "legend": {
+      "mode": "auto",
+      "entries": {
+        "external": {
+          "label": "arrives from outside"
+        },
+        "backend": {
+          "label": "factory code"
+        },
+        "database": {
+          "label": "stored state"
+        },
+        "security": {
+          "label": "decides or refuses"
+        },
+        "frontend": {
+          "label": "the lead, a model"
+        },
+        "cloud": {
+          "label": "on the host"
+        },
+        "messagebus": {
+          "label": "recurring loops"
+        }
+      }
+    }
+  },
+  "lanes": [
+    {
+      "id": "beside",
+      "label": "Loops beside"
+    },
+    {
+      "id": "arrive",
+      "label": "Arrives"
+    },
+    {
+      "id": "build",
+      "label": "Starts and builds"
+    },
+    {
+      "id": "land",
+      "label": "Lands and is checked"
+    }
+  ],
+  "mainPath": [
+    "signal",
+    "triage",
+    "issue",
+    "admission",
+    "lead",
+    "gates",
+    "deploy",
+    "verify"
+  ],
+  "nodes": [
+    {
+      "id": "loops",
+      "lane": "beside",
+      "col": 0,
+      "type": "messagebus",
+      "label": "Loops",
+      "sublabel": "friction, hygiene, steward"
+    },
+    {
+      "id": "signal",
+      "lane": "arrive",
+      "col": 0,
+      "type": "external",
+      "label": "1 Signal",
+      "sublabel": "monitor, owner, lead"
+    },
+    {
+      "id": "triage",
+      "lane": "arrive",
+      "col": 1,
+      "type": "backend",
+      "label": "2 Triage",
+      "sublabel": "rules, then agw"
+    },
+    {
+      "id": "issue",
+      "lane": "arrive",
+      "col": 2,
+      "type": "database",
+      "label": "3 Issue",
+      "sublabel": "one repo, one ship"
+    },
+    {
+      "id": "admission",
+      "lane": "build",
+      "col": 2,
+      "type": "security",
+      "label": "4 Admission",
+      "sublabel": "numbers, first no wins"
+    },
+    {
+      "id": "lead",
+      "lane": "build",
+      "col": 3,
+      "type": "frontend",
+      "label": "5 Lead",
+      "sublabel": "owns it to production"
+    },
+    {
+      "id": "gates",
+      "lane": "build",
+      "col": 4,
+      "type": "security",
+      "label": "6 Gates",
+      "sublabel": "guard, window, ship gate"
+    },
+    {
+      "id": "deploy",
+      "lane": "land",
+      "col": 4,
+      "type": "cloud",
+      "label": "7 Ship, deploy",
+      "sublabel": "under a lock"
+    },
+    {
+      "id": "verify",
+      "lane": "land",
+      "col": 5,
+      "type": "database",
+      "label": "8 Verify, watch",
+      "sublabel": "make verify, probes"
+    }
+  ],
+  "edges": [
+    {
+      "id": "loops-signal",
+      "from": "loops",
+      "to": "signal",
+      "label": "file signals",
+      "variant": "dashed"
+    },
+    {
+      "id": "signal-triage",
+      "from": "signal",
+      "to": "triage",
+      "variant": "emphasis"
+    },
+    {
+      "id": "triage-issue",
+      "from": "triage",
+      "to": "issue",
+      "variant": "emphasis"
+    },
+    {
+      "id": "issue-admission",
+      "from": "issue",
+      "to": "admission",
+      "variant": "emphasis"
+    },
+    {
+      "id": "admission-lead",
+      "from": "admission",
+      "to": "lead",
+      "label": "a lead starts",
+      "variant": "emphasis"
+    },
+    {
+      "id": "lead-gates",
+      "from": "lead",
+      "to": "gates",
+      "variant": "emphasis"
+    },
+    {
+      "id": "gates-deploy",
+      "from": "gates",
+      "to": "deploy",
+      "variant": "emphasis"
+    },
+    {
+      "id": "deploy-verify",
+      "from": "deploy",
+      "to": "verify",
+      "variant": "emphasis"
+    },
+    {
+      "id": "verify-lead",
+      "from": "verify",
+      "to": "lead",
+      "label": "regressed",
+      "variant": "security",
+      "role": "return"
+    }
+  ]
+}

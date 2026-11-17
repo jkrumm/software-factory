@@ -1,0 +1,172 @@
+{
+  "schema_version": 1,
+  "diagram_type": "sequence",
+  "meta": {
+    "title": "A lead from start to watch",
+    "output": ".archify/lead-sequence.html",
+    "visual_preset": "basalt",
+    "quality_profile": "showcase",
+    "locale": "en",
+    "legend": {
+      "mode": "auto",
+      "entries": {
+        "security": {
+          "label": "regression, red watch"
+        }
+      }
+    }
+  },
+  "participants": [
+    {
+      "id": "factory",
+      "type": "backend",
+      "label": "Factory",
+      "sublabel": "server and gates"
+    },
+    {
+      "id": "lead",
+      "type": "frontend",
+      "label": "Lead",
+      "sublabel": "Claude Code session"
+    },
+    {
+      "id": "review",
+      "type": "security",
+      "label": "agw review",
+      "sublabel": "covered range"
+    },
+    {
+      "id": "github",
+      "type": "cloud",
+      "label": "GitHub",
+      "sublabel": "git and CI"
+    },
+    {
+      "id": "host",
+      "type": "database",
+      "label": "Host",
+      "sublabel": "deploy and verify"
+    }
+  ],
+  "messages": [
+    {
+      "id": "brief",
+      "from": "factory",
+      "to": "lead",
+      "y": 170,
+      "label": "brief: orders and the Issue",
+      "variant": "emphasis"
+    },
+    {
+      "id": "review-range",
+      "from": "lead",
+      "to": "review",
+      "y": 210,
+      "label": "/review merge-base..HEAD"
+    },
+    {
+      "id": "covered",
+      "from": "review",
+      "to": "lead",
+      "y": 240,
+      "label": "covered",
+      "variant": "return"
+    },
+    {
+      "id": "window",
+      "from": "lead",
+      "to": "github",
+      "y": 290,
+      "label": "merge window: rebase, push",
+      "variant": "emphasis"
+    },
+    {
+      "id": "green",
+      "from": "github",
+      "to": "lead",
+      "y": 320,
+      "label": "CI green on this head",
+      "variant": "return"
+    },
+    {
+      "id": "merge",
+      "from": "lead",
+      "to": "github",
+      "y": 350,
+      "label": "merge-guard, then merge"
+    },
+    {
+      "id": "deploy",
+      "from": "lead",
+      "to": "host",
+      "y": 400,
+      "label": "deploy lock, make deploy",
+      "variant": "emphasis"
+    },
+    {
+      "id": "ship",
+      "from": "lead",
+      "to": "factory",
+      "y": 450,
+      "label": "factory issue ship",
+      "variant": "emphasis"
+    },
+    {
+      "id": "read-git",
+      "from": "factory",
+      "to": "github",
+      "y": 480,
+      "label": "find the commits, read CI"
+    },
+    {
+      "id": "accepted",
+      "from": "factory",
+      "to": "lead",
+      "y": 510,
+      "label": "accepted: the watch begins",
+      "variant": "return"
+    },
+    {
+      "id": "verify",
+      "from": "factory",
+      "to": "host",
+      "y": 560,
+      "label": "make verify and probes"
+    },
+    {
+      "id": "regressed",
+      "from": "factory",
+      "to": "lead",
+      "y": 590,
+      "label": "red: a note, fix forward",
+      "variant": "security"
+    }
+  ],
+  "segments": [
+    {
+      "from": 155,
+      "to": 260,
+      "label": "Build and review"
+    },
+    {
+      "from": 275,
+      "to": 365,
+      "label": "Land"
+    },
+    {
+      "from": 385,
+      "to": 415,
+      "label": "Deploy"
+    },
+    {
+      "from": 435,
+      "to": 525,
+      "label": "Ship"
+    },
+    {
+      "from": 545,
+      "to": 605,
+      "label": "Watch"
+    }
+  ]
+}
