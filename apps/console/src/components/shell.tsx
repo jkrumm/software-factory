@@ -2,6 +2,7 @@ import { MagnifyingGlassIcon } from '@phosphor-icons/react'
 import { useFormatForDisplay, useHotkey, useHotkeys } from '@tanstack/react-hotkeys'
 import { Link, Outlet, useNavigate } from '@tanstack/react-router'
 import { lazy, Suspense, useEffect, useState } from 'react'
+import { Notices } from '@/components/notices'
 import { PeekHost } from '@/components/peek/host'
 import { Sidebar, SidebarProvider } from '@/components/sidebar'
 import { StatusStrip } from '@/components/status-strip'
@@ -136,6 +137,7 @@ export function Shell() {
                 />
               </div>
             </header>
+            <Notices />
             <div className="relative flex min-h-0 flex-1 flex-col">
               {/* `relative` makes `main` the containing block of an absolute descendant (a chart's sr-only table), so its overflow clips it; otherwise the box sits past the viewport and the document scrolls. */}
               <main className="relative min-h-0 flex-1 overflow-x-hidden overflow-y-auto">

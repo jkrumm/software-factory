@@ -160,8 +160,10 @@ and the app fetches with `cache: 'no-store'`. A restored snapshot is a first pai
 
 ## Staying current
 
-`src/lib/update.ts` owns the service worker registration. A long-lived tab or installed app asks for a new worker when it
-becomes visible, when it comes online, on every stream `hello`, every 10 minutes and when an answer does not match the
+`src/lib/update.ts` owns the service worker registration. The worker takes over by itself (`skipWaiting` and `clientsClaim`
+in `vite.config.ts`: with `injectRegister: false` the PWA plugin does not default them, and a new worker then waits for ever
+behind the one that controls the open window, which was the hard reloads). A long-lived tab or installed app asks for a new
+worker when it becomes visible, when it comes online, on every stream `hello`, every minute and when an answer does not match the
 contract (`ShapeError` in `src/lib/api.ts`: the server is newer than the bundle; an answer that only adds a field is no
 `ShapeError`: it is read as it is and asks for the new bundle in the background). Once the new worker has taken over the
 page does not reload under the owner: it loads the bundle at the next navigation to another screen (`reloadOnNavigation`,
@@ -170,6 +172,16 @@ called from the router's `onBeforeLoad` in `main.tsx`), when the tab hides, or a
 because of a `ShapeError` is the exception: it shows its skeleton (`useScreen`, `src/lib/screen.ts`) and reloads the moment the
 worker is in; after 20 s without it the screen says "This Console is older than the server. Reload the page to update it".
 Any other failure says the status.
+
+The strip says what the window runs and whether it is current: the Live lamp's trigger carries `updating` while a new build is
+on its way in and `build 3 h ago` from 1536 px up; its popover lists the build id and age, the update (`Up to date`,
+`Updating`, `Not applied`) and the stale reads. A build that has not taken for two minutes (`UPDATE_STUCK_MS`, a draft or
+a focused field held the reload) shows a notice under the strip with one button, `Update now`, which forgets the worker and its
+caches and loads the page from the network (`updateNow`). A read is stale when its data is older than its poll interval and
+15 s (`staleReads`, `src/lib/freshness.ts`; the interval is the observer's `refetchInterval`): the lamp turns warn and counts
+them, the popover names them, and a notice under the strip says how old the screen's own data is (the strip's readings are
+left to the popover). `tests/e2e/update.e2e.ts` swaps the build under an open page (`tests/e2e/build-swap.ts`) and sees the
+new build id without a reload by hand.
 
 ## Speed
 
