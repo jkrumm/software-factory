@@ -97,7 +97,6 @@ export async function checkoutOf(
   })
 }
 
-/** The git and agw reads of a ship: outside any transaction, the lead's call waits for them. */
 /** The reviewer row the attempt's lead was assigned when it started (`lead_started`'s payload), or null: none was recorded. */
 export function assignedReviewer(history: readonly AppliedRecord[], attempt: number): string | null {
   const started = history.findLast(
@@ -132,6 +131,7 @@ async function withThreads(
   }
 }
 
+/** The git and agw reads of a ship: outside any transaction, the lead's call waits for them. */
 async function judge(deps: ShipDeps, issue: Issue, input: ShipInput, reviewer: string | null): Promise<ShipVerdict> {
   const refuse = (why: string): ShipVerdict => ({ accepted: false, error: `ship refused: ${why}` })
   if (input.commits.length === 0) return refuse('ship names no merged commit')

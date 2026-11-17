@@ -31,7 +31,7 @@ export const REVIEW_TIMEOUT_MS = 225_000
 
 const MAX_RANGES_AT_ONCE = 4
 
-/** The most covering reviews of one ship whose record is read: a ship of many threads is measured on the newest few. */
+/** The most covering reviews of one ship whose record is read: a ship of more threads is measured on the first eight agw names. */
 const MAX_THREADS = 8
 
 const Status = z.object({
