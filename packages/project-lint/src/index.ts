@@ -125,7 +125,10 @@ async function missingCitations(text: string, repo: string, siblings: string, io
   return problems
 }
 
-/** The main checkout a directory belongs to: itself, or for a linked worktree (the hygiene pass's throwaway one) the repo it was made from. */
+/**
+ * The main checkout a directory belongs to: itself, or for a linked worktree (the hygiene pass's throwaway one) the repo it
+ * was made from. A worktree of a bare `<name>.git` (a step host's copy of the repo, issue 1793) belongs to `<name>`.
+ */
 async function mainCheckout(directory: string): Promise<string> {
   // asynchronous: the server's hygiene pass lints from its event loop, which a stuck git must not hold
   const path = await new Promise<string>((resolve) => {
@@ -136,7 +139,8 @@ async function mainCheckout(directory: string): Promise<string> {
       (error, stdout) => resolve(error ? '' : stdout.trim()),
     )
   })
-  return path.endsWith('/.git') ? dirname(path) : directory
+  if (path.endsWith('/.git')) return dirname(path)
+  return path.endsWith('.git') ? path.slice(0, -'.git'.length) : directory
 }
 
 /** The comment at the end of a line, if the line has one before no quote opens (the values this reads are plain scalars). */
