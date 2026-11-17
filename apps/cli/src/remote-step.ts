@@ -173,7 +173,8 @@ export function prepareScript(input: { repo: string; tag: string; bun: string })
     `mkdir -p factory-steps/.cache && { [ -d ${shq(input.repo)} ] || git init -q --bare ${shq(input.repo)}; } || exit 125`,
     `docker image inspect ${input.tag} >/dev/null 2>&1 && exit 0`,
     `echo "factory: building the step image ${input.tag} on the step host (once)" >&2`,
-    `docker build -q -t ${input.tag} --build-arg BUN=${shq(input.bun)} - >/dev/null`,
+    // the label is what the host's daily image prune may be told to keep (`docker image prune --filter label!=factory.image`)
+    `docker build -q -t ${input.tag} --label factory.image=step --build-arg BUN=${shq(input.bun)} - >/dev/null`,
   ].join('\n')
 }
 

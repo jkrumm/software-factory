@@ -5,7 +5,9 @@
  * The same call removes a step container whose holder is gone (a `factory slot run` killed with its ssh still up).
  */
 import type { RemoteHostProbe, RemoteProbeAnswer } from '../../domains/capacity/ports.ts'
+import { TRIM_EVERY_MS } from '../../domains/capacity/remote.ts'
 import { helperEnv, type RunProcess, runProcess } from '../intake/process.ts'
+import { trimScript } from './trim.ts'
 
 /** How often the VPS is asked at most. */
 export const PROBE_EVERY_MS = 30_000
@@ -13,6 +15,8 @@ export const PROBE_EVERY_MS = 30_000
 const PROBE_TIMEOUT_MS = 15_000
 /** A container younger than this may belong to a holder whose first renewal has not come yet. */
 const REAP_AFTER_MS = 120_000
+/** The retention pass walks a cache of 150 000 files and removes whole trees: minutes at most. */
+const TRIM_TIMEOUT_MS = 300_000
 
 /** The label every step container carries: its slot id (`factory.step`) and its start in epoch seconds (`factory.started`). */
 export const STEP_LABEL = 'factory.step'
@@ -91,6 +95,18 @@ export function sshProbe(input: {
   let answer: RemoteProbeAnswer | null = null
   let askedAt = 0
   let inFlight = false
+  let trimmedAt = 0
+  let trimming = false
+  // the step host's retention (`trim.ts`), apart from the probe so a long walk never ages the reading past its limit; the
+  // script itself does nothing while a step container runs
+  const trim = async (): Promise<void> => {
+    const result = await run([...ssh, trimScript({ stepLabel: STEP_LABEL })], TRIM_TIMEOUT_MS, helperEnv())
+    // stdout and stderr arrive joined: the script's own line is the last one that starts with `trim:`
+    const lines = result.stdout.trim().split('\n')
+    const summary = lines.findLast((line) => line.startsWith('trim:')) ?? lines.at(-1) ?? ''
+    if (result.exit !== 0) input.log?.(`step host trim failed (exit ${result.exit ?? 'timeout'}): ${summary}`)
+    else if (!summary.includes('removed 0 idle slot copies and 0 bun cache entries')) input.log?.(summary)
+  }
   const refresh = async (live: ReadonlySet<string> | null): Promise<void> => {
     const result = await run([...ssh, SCRIPT], PROBE_TIMEOUT_MS, helperEnv())
     const parsed = result.exit === 0 ? parseProbe(result.stdout, now()) : null
@@ -99,6 +115,13 @@ export function sshProbe(input: {
       return
     }
     answer = parsed
+    if (!trimming && parsed.steps.length === 0 && now().getTime() - trimmedAt >= TRIM_EVERY_MS) {
+      trimming = true
+      trimmedAt = now().getTime()
+      void trim().finally(() => {
+        trimming = false
+      })
+    }
     // no live set read from the slots yet (the first call after a start): nothing is known to be orphaned
     if (live === null) return
     const t = now().getTime()

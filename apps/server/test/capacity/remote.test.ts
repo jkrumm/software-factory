@@ -1,7 +1,9 @@
 import { describe, expect, test } from 'bun:test'
-import { parseProbe } from '../../src/adapters/remote/probe.ts'
+import type { RunProcess } from '../../src/adapters/intake/process.ts'
+import { parseProbe, sshProbe } from '../../src/adapters/remote/probe.ts'
 import {
   DISK_CEILING_PCT,
+  TRIM_EVERY_MS,
   decideRemote,
   expectedMiniWaitMs,
   finishesSooner,
@@ -197,5 +199,54 @@ describe('the probe', () => {
 
   test('a missing figure is no reading', () => {
     expect(parseProbe('12\n', AT)).toBeNull()
+  })
+})
+
+describe('the probe starts the step host trim', () => {
+  const PROBE_OUT = [
+    '12',
+    '0.81 1.02 1.20 2/900 12345',
+    'MemTotal:       24607744 kB',
+    'MemAvailable:   18874368 kB',
+    '190052302848 133136662528',
+    'psi-memory some avg10=0.00',
+    'psi-io some avg10=0.00',
+    'copies ',
+  ].join('\n')
+
+  const harness = (probeOut: string) => {
+    const calls: string[] = []
+    let now = AT.getTime()
+    const run: RunProcess = async (command) => {
+      const script = command.at(-1) ?? ''
+      calls.push(script.startsWith('cd "$HOME"') ? 'trim' : 'probe')
+      return {
+        exit: 0,
+        stdout: script.startsWith('cd "$HOME"') ? 'trim: removed 0 idle slot copies and 0 bun cache entries' : probeOut,
+      }
+    }
+    const probe = sshProbe({ target: 'vps', run, now: () => new Date(now) })
+    const tick = async (ms: number): Promise<void> => {
+      now += ms
+      probe.latest(null)
+      await Bun.sleep(5)
+    }
+    return { calls, tick }
+  }
+
+  test('once per interval, after a probe that saw no step container', async () => {
+    const { calls, tick } = harness(PROBE_OUT)
+    await tick(0)
+    await tick(31_000)
+    expect(calls.filter((c) => c === 'trim')).toHaveLength(1)
+    await tick(TRIM_EVERY_MS)
+    expect(calls.filter((c) => c === 'trim')).toHaveLength(2)
+  })
+
+  test('not while a step container runs', async () => {
+    const { calls, tick } = harness(`${PROBE_OUT}\nstep 123-abc 1763380000`)
+    await tick(0)
+    await tick(TRIM_EVERY_MS)
+    expect(calls).not.toContain('trim')
   })
 })
