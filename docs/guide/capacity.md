@@ -158,7 +158,7 @@ A test slot is a lease on the host's test capacity that `factory slot run` takes
 - **Lease and poll.** A holder renews within 30 seconds or loses the slot. A waiter asks again within 15 seconds or drops out of the line.
 - **Base slots start on memory alone.** The first two slots start whatever the load, when the step's learned peak fits the free memory or is not known yet. A slot beyond them also needs the load under its ceiling, a known peak and room in the cores. While swap in use is growing, a second step does not start at all.
 - **A step is sized by its past.** The grant reads the learned peak of the step by name. A step with none gets a guess from the same project, and says so in its wait line.
-- **The line is not first come, first served.** Slots go in the order of asking plus the step's learned run time, so a short step passes a long one. A waiter passed for ten minutes freezes the line: nothing passes it, except a head that still fits beside the step (see "A capacity Issue").
+- **The line is not first come, first served.** Slots go in the order of asking plus the step's learned run time, so a short step passes a long one. A waiter passed for ten minutes has its memory reserved: a step passes it only when it fits now and is learned to end before the memory is free for the waiter (the running steps' learned remaining runtime), or when the head still fits beside the step (see "A capacity Issue").
 
 Every step named `<repo>-apple` takes one slot at a time across all repos, because the simulators and the signing keychain belong to the host. The wait reasons are `slots`, `memory`, `swap`, `load`, `unsized`, `line`, `cores` and `class`. A memory refusal is arithmetic:
 
@@ -169,7 +169,7 @@ Every step named `<repo>-apple` takes one slot at a time across all repos, becau
 From the same reading as above, 2026-11-17 (other repos renamed):
 
 ```text
-test slot wait "repo-a make check": waiting for memory: needs 4.9 GiB (learned from the last runs), 2.4 GiB free after 4.7 GiB the running steps still grow, headroom 2.6 GiB (passed by "repo-b bun test" since 8 min; nothing passes it after 10 min)
+test slot wait "repo-a make check": waiting for memory: needs 4.9 GiB (learned from the last runs), 2.4 GiB free after 4.7 GiB the running steps still grow, headroom 2.6 GiB (passed by "repo-b bun test" since 8 min; after 10 min its memory is reserved and only a step that ends before its start passes it)
 ```
 
 The step needs 4.9 GiB and 2.4 GiB are free after headroom, so it waits. The passing window closes in two minutes.

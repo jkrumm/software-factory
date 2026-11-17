@@ -44,7 +44,7 @@ const Env = z.object({
   FACTORY_SLOTS_MAX: whole(1, 64).optional(),
   /** the host load up to which a step beyond the base slots is granted */
   FACTORY_SLOT_EXTRA_LOAD: whole(1, 100_000).optional(),
-  /** the minutes a waiter in the test-slot line may be passed by smaller steps before nothing passes it any more */
+  /** the minutes a waiter in the test-slot line may be passed by smaller steps before its memory is reserved for it */
   FACTORY_SLOT_PASS_MIN: whole(1, 1440).optional(),
   /** the slot count that follows memory pressure: `off`, `shadow` (record beside the live rule, the default) or `on` */
   FACTORY_SLOT_AIM: z.enum(['off', 'shadow', 'on']).optional(),

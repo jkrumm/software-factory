@@ -64,7 +64,10 @@ export function stepClassOf(name: string): string | null {
  */
 export const DEFAULT_STEP_CORES = 1
 
-/** How long a waiter may be passed by smaller steps before nothing passes it any more (`FACTORY_SLOT_PASS_MIN`). */
+/**
+ * How long a waiter may be passed by smaller steps before its memory is reserved (`FACTORY_SLOT_PASS_MIN`): from then on a
+ * step passes it only when it fits now and is learned to end before the reserved start (`reservedStartMs`).
+ */
 export const DEFAULT_PASS_AFTER_MS = 10 * 60_000
 
 /** What the memory rule is given: the learned peak of the caller's step, the host's free memory, and the base the extras are measured from. */
@@ -118,6 +121,10 @@ export interface SlotFit {
   heldCores?: number
   /** each waiter's learned run in ms by name, for the order of the line; a missing or null name has none learned */
   runMsByName?: ReadonlyMap<string, number | null>
+  /** the caller's step's learned run in ms (null or absent: none learned, so it never backfills ahead of a reserved head) */
+  stepRunMs?: number | null
+  /** each holder's step's learned run in ms by the holder's id; a missing or null id has none learned and reads as ending now */
+  heldRunMsById?: ReadonlyMap<string, number | null>
 }
 
 /** One step as the grant weighs it: its name (and so its class), its learned memory peak and its cores. */
@@ -251,6 +258,49 @@ function headFitsBeside(
 }
 
 /**
+ * The reservation of a head that was passed for the whole window: in how many ms its memory is free, counted from the running
+ * steps' learned remaining runtime (the learned run less the time they ran). The holders are taken to end in that order, each
+ * freeing its resident size, until the head's size, what the holders left still grow by and the headroom fit in the free memory
+ * plus what ended. A holder with no learned run reads as ending now, so the reserved start is never later than the true one:
+ * a step that ends before it cannot delay the head. Null when the head's size or the free memory is unknown, or when it does
+ * not fit even with every holder gone: no step backfills then, and the head keeps the whole line. `base` is the number of
+ * base slots: below it the head keeps no headroom.
+ */
+export function reservedStartMs(
+  head: SlotRow,
+  held: readonly SlotRow[],
+  fit: SlotFit,
+  base: number,
+  now: Date,
+): number | null {
+  const headMib = fit.peaksByName?.get(head.name) ?? null
+  if (headMib === null || fit.freeMib === null) return null
+  const ending = held
+    .map((row) => {
+      const learned = fit.heldRunMsById?.get(row.id) ?? null
+      const ran = now.getTime() - (row.grantedAt?.getTime() ?? now.getTime())
+      return {
+        row,
+        remainingMs: learned === null ? 0 : Math.max(0, learned - ran),
+        growMib: Math.max(0, (fit.heldPeakById?.get(row.id) ?? 0) - (row.rssMib ?? 0)),
+      }
+    })
+    .sort((a, b) => a.remainingMs - b.remainingMs)
+  let released = 0
+  let growing = ending.reduce((sum, h) => sum + h.growMib, 0)
+  for (let k = 0; k <= ending.length; k++) {
+    const staying = ending.length - k
+    const room = staying < base ? 0 : fit.headroomMib
+    if (headMib + growing + room <= (fit.freeMib ?? 0) + released) return ending[k - 1]?.remainingMs ?? 0
+    const gone = ending[k]
+    if (!gone) break
+    released += gone.row.rssMib ?? 0
+    growing -= gone.growMib
+  }
+  return null
+}
+
+/**
  * One call of a caller, which is a request for a slot and a renewal of the one it has: the first call makes it a
  * waiter; a call from a waiter first in line, with a slot free, gives it that slot; a call from a holder renews the
  * lease. Slots go to waiters in the line's order (`lineOrder`). Rows past their lease (holders) or their poll window (waiters)
@@ -269,7 +319,7 @@ export function touchSlots(
     peakRssMib?: number | undefined
     /** the caller's command is running under this slot: a lapsed lease is taken back whatever the fit says */
     holding?: boolean | undefined
-    /** how long a waiter may be passed before nothing passes it any more */
+    /** how long a waiter may be passed before its memory is reserved for it */
     passAfterMs?: number | undefined
   },
   now: Date,
@@ -352,7 +402,7 @@ export function touchSlots(
   const passedNote = (row: SlotRow): string =>
     row.passedAt === null
       ? ''
-      : ` (passed by "${row.passedBy ?? '?'}" since ${Math.floor((now.getTime() - row.passedAt.getTime()) / 60_000)} min; nothing passes it after ${Math.round(passAfterMs / 60_000)} min)`
+      : ` (passed by "${row.passedBy ?? '?'}" since ${Math.floor((now.getTime() - row.passedAt.getTime()) / 60_000)} min; after ${Math.round(passAfterMs / 60_000)} min its memory is reserved and only a step that ends before its start passes it)`
   const held = others.filter((row) => row.slot !== null)
   const classes = new Map<string, number>()
   for (const row of held) {
@@ -372,7 +422,8 @@ export function touchSlots(
   })
   if (!verdict.grant) return wait(verdict.why + passedNote(mine), verdict.kind)
   // The slot goes to the first waiter in line that fits: a waiter ahead that does not fit is passed, unless it has been
-  // passed for the whole window (then it holds the line, unless it still fits beside the caller: `headFitsBeside`), and
+  // passed for the whole window (then its memory is reserved: the caller passes it only when it still fits beside the caller,
+  // `headFitsBeside`, or the caller ends before the reserved start, `reservedStartMs`), and
   // one that fits takes the slot on its own next call. A waiter
   // whose host-wide class is held never holds the line: the line standing still frees no class.
   const passed: SlotRow[] = []
@@ -389,11 +440,17 @@ export function touchSlots(
       waiter.passedAt !== null &&
       now.getTime() - waiter.passedAt.getTime() >= passAfterMs &&
       !headFitsBeside(waiter, mine, held, input.fit, takenNow.count + 2 <= input.slots ? 0 : input.fit.headroomMib)
-    )
-      return wait(
-        `"${waiter.name}" ahead was passed for ${Math.round(passAfterMs / 60_000)} min and nothing passes it now: ${theirs.why}`,
-        'line',
-      )
+    ) {
+      // Backfill: the reservation is the memory the head waits for; the caller fits now (its own verdict) and passes when it is
+      // learned to end before that memory is free, so the head's start is not delayed. Any other reason the head waits holds.
+      const reservedMs = theirs.kind === 'memory' ? reservedStartMs(waiter, held, input.fit, input.slots, now) : null
+      const runMs = input.fit.stepRunMs ?? null
+      if (reservedMs === null || runMs === null || runMs > reservedMs)
+        return wait(
+          `"${waiter.name}" ahead was passed for ${Math.round(passAfterMs / 60_000)} min and its memory is reserved${reservedMs === null ? '' : ` (free in ~${Math.ceil(reservedMs / 60_000)} min`}${reservedMs === null ? '' : runMs === null ? '; this step has no learned run' : `; this step runs ~${Math.ceil(runMs / 60_000)} min`}${reservedMs === null ? '' : ')'}: ${theirs.why}`,
+          'line',
+        )
+    }
     passed.push(waiter)
   }
   const max = Math.max(input.slots, input.fit.max)

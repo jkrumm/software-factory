@@ -27,6 +27,7 @@ import { laneRoom } from '../../src/domains/capacity/lanes.ts'
 import { growthMib, learnedPeakMib } from '../../src/domains/capacity/costs.ts'
 import {
   releaseSlot,
+  reservedStartMs,
   SLOT_LEASE_MS,
   type SlotRow,
   type SlotFit,
@@ -899,7 +900,7 @@ describe('test slots', () => {
         at(late),
       )
       expect(s4.view).toMatchObject({ granted: false, ahead: 1 })
-      expect(s4.view.why).toContain('"big" ahead was passed for 10 min and nothing passes it')
+      expect(s4.view.why).toContain('"big" ahead was passed for 10 min and its memory is reserved')
       // the steps end, memory frees: the big one is next, the small one waits behind it
       rows = ['h', 's1', 's2', 's3'].reduce((acc, id) => releaseSlot(acc, id).rows, s4.rows)
       const roomy: SlotFit = { ...mem(0, 5120), freeMib: 30_000 }
@@ -987,7 +988,7 @@ describe('test slots', () => {
       // 100 MiB less and the head would no longer fit beside the step: the freeze holds
       const held = fits(3371)
       expect(held.granted).toBe(false)
-      expect(held.why).toContain('nothing passes it')
+      expect(held.why).toContain('its memory is reserved')
       // the passer s1 still grows by 1000 MiB (learned 1000, resident 0): the head has to fit beside that growth too
       const growing = new Map<string, number | null>([['s1', 1000]])
       expect(fits(3372 + 1000, growing).granted).toBe(true)
@@ -1000,6 +1001,99 @@ describe('test slots', () => {
       const small = ask(big.rows, 's1', 2000, 3000, 300)
       expect(small.view.granted).toBe(false)
       expect(big.rows.find((r) => r.id === 'big')?.passedAt).toBeNull()
+    })
+  })
+
+  describe('backfill: a step that ends before the reserved start passes a head that was passed for the whole window', () => {
+    const MIN = 60_000
+    // 2026-11-17 18:27: weatherorb test-py (7.1 GiB) at the head, 4.5 GiB free, two of the slots held, short steps behind it
+    const row = (extra: Partial<SlotRow>): SlotRow => ({
+      id: 'x',
+      name: 'x',
+      requestedAt: now,
+      seenAt: at(11 * MIN),
+      slot: null,
+      leasedUntil: null,
+      grantedAt: null,
+      runMs: null,
+      rssMib: null,
+      peakRssMib: null,
+      why: null,
+      cwd: null,
+      passedAt: null,
+      passedBy: null,
+      whyKind: null,
+      waitSplit: {},
+      ...extra,
+    })
+    const held = (id: string, rssMib: number): SlotRow =>
+      row({ id, name: id, slot: id === 'h1' ? 1 : 2, leasedUntil: at(12 * MIN), grantedAt: now, rssMib })
+    const big = row({ id: 'big', name: 'big', passedAt: now, passedBy: 'old' })
+    const base: SlotRow[] = [held('h1', 3000), held('h2', 3000), big]
+    // h1 is learned to run 30 min, h2 20 min: h2 ends 9 min from now (11 min in), and then big's 7270 MiB fit the free 4608 + 3000
+    const fit = (stepRunMs: number | null, heldRunMsById?: Map<string, number | null>): SlotFit => ({
+      peakMib: 300,
+      peaksByName: new Map([['big', 7270]]),
+      heldPeakById: new Map([
+        ['h1', 3000],
+        ['h2', 3000],
+        ['s', 300],
+      ]),
+      heldRunMsById:
+        heldRunMsById ??
+        new Map([
+          ['h1', 30 * MIN],
+          ['h2', 20 * MIN],
+        ]),
+      stepRunMs,
+      freeMib: 4608,
+      growthMib: 0,
+      max: 8,
+      loadOk: true,
+      headroomMib: 512,
+    })
+    const askStep = (rows: SlotRow[], f: SlotFit) =>
+      touchSlots(rows, { id: 's', name: 's', slots: 2, runMs: 1_800_000, fit: f, passAfterMs: 10 * MIN }, at(11 * MIN))
+
+    test('the reserved start is when the running steps are learned to free the head its memory', () => {
+      expect(reservedStartMs(big, [held('h1', 3000), held('h2', 3000)], fit(null), 2, at(11 * MIN))).toBe(9 * MIN)
+      // a holder with no learned run reads as ending now: the reservation is not later than the true one
+      const unlearned = new Map<string, number | null>([
+        ['h1', 30 * MIN],
+        ['h2', null],
+      ])
+      expect(reservedStartMs(big, [held('h1', 3000), held('h2', 3000)], fit(null, unlearned), 2, at(11 * MIN))).toBe(0)
+      // the head does not fit even with every holder gone, or its size is unknown: no reservation
+      expect(reservedStartMs(big, [held('h1', 100), held('h2', 100)], fit(null), 2, at(11 * MIN))).toBeNull()
+      expect(reservedStartMs({ ...big, name: 'other' }, [held('h1', 3000)], fit(null), 2, at(11 * MIN))).toBeNull()
+    })
+
+    test('a short step is granted and the big waiter keeps its reserved start', () => {
+      const short = askStep(base, fit(5 * MIN))
+      expect(short.view.granted).toBe(true)
+      expect(short.rows.find((r) => r.id === 'big')).toMatchObject({ slot: null, passedAt: now, passedBy: 'old' })
+      const holders = short.rows.filter((r) => r.slot !== null)
+      const after = reservedStartMs(big, holders, fit(null), 2, at(11 * MIN))
+      expect(after).toBe(9 * MIN)
+    })
+
+    test('a step that runs past the reserved start, or has no learned run, waits and says why', () => {
+      const long = askStep(base, fit(10 * MIN))
+      expect(long.view.granted).toBe(false)
+      expect(long.view.why).toContain(
+        '"big" ahead was passed for 10 min and its memory is reserved (free in ~9 min; this step runs ~10 min)',
+      )
+      expect(long.view.why).not.toContain('nothing passes it now')
+      const unknown = askStep(base, fit(null))
+      expect(unknown.view.granted).toBe(false)
+      expect(unknown.view.why).toContain('this step has no learned run')
+      // the step that ends exactly at the reserved start passes
+      expect(askStep(base, fit(9 * MIN)).view.granted).toBe(true)
+    })
+
+    test('the starvation guarantee holds: with no learned run of the holders nothing backfills', () => {
+      const none = new Map<string, number | null>()
+      expect(askStep(base, fit(1000, none)).view.granted).toBe(false)
     })
   })
 
