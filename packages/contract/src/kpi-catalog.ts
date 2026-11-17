@@ -194,7 +194,8 @@ export const KPI_CATALOG: Record<KpiKey, KpiSpec> = {
     targetSource: 'Watch only: development runs on flat-rate Max subscriptions, so the dollars are notional',
     numerator: 'Dollars the usage schema priced for the Issues’ sessions',
     denominator: 'Issues filed in the window',
-    decision: 'Whether a tier or a role costs more than its Issues return; the real limit is window points',
+    decision:
+      'Which seat (tool, model, effort) spends most, from the parts: whether a tier or a role costs more than its Issues return; the real limit is window points',
   },
   queue_capacity_share: {
     label: 'Share of queued time held by capacity',
