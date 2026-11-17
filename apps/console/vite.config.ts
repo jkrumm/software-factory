@@ -82,6 +82,10 @@ export default defineConfig({
         navigateFallbackDenylist: [/^\/v1\//, /^\/health/, /^\/frame/],
         globIgnores: ['frame.html', 'frame/**'],
         cleanupOutdatedCaches: true,
+        // `injectRegister: false` (the app registers the worker itself, update.ts) makes the plugin skip its autoUpdate
+        // defaults: without these two a new worker waits for ever behind the one that controls the open window
+        skipWaiting: true,
+        clientsClaim: true,
         globPatterns: ['**/*.{js,css,html,svg,png,woff2,webmanifest}'],
       },
       devOptions: { enabled: false },

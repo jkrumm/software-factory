@@ -62,8 +62,9 @@ laws do not (they are Mantine's; the Console is Base UI and Tailwind on Basalt's
 - **Header strip.** One line from 1280 up, wrapping to two below. In order: counts (Running, Paused, Ready, Held, Checking, each a link to
   Flow filtered to it); one meter per subscription (graphite until 75 % / 90 %, then warn / bad; popover with the used share per
   window and its reset time); host meters for load, memory and swap (same rule; popover with the 24 h charts and their
-  ceilings and the top five processes); Live (a dot; popover with
-  the stream's state, the last event's age, the server's version and uptime).
+  ceilings and the top five processes); Live (a dot, the word, `N stale` and `updating` when they are true, and `build 3 h ago` from 1536 px; popover with
+  the stream's state, the last event's age, the server's version and uptime, the build and the update, and the stale reads). Under the strip, only when
+  true: a stuck update (two minutes, one button) and the age of the screen's own data once it is older than its poll interval.
 - **Everything that names a thing links to it.** An Issue title or an artifact anywhere opens it in the **peek**, a panel on
   the right of the page you are on (below); a modifier-click, "Open full page" in the panel, or a link on the Issue's own
   page opens the page; a project opens its page (`/projects/<name>`; Flow's own filter stays a toggle in the sidebar); an origin links out to its source (the GitHub issue, the alert).

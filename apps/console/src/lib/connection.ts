@@ -1,5 +1,6 @@
 import { useEffect, useState, useSyncExternalStore } from 'react'
 import { ageWords } from './age.ts'
+import { staleReads, type PolledRead, type StaleRead } from './freshness.ts'
 import { useLastEventAt, useLive } from './live.ts'
 import { queryClient } from './queries.ts'
 import { getFailingSince, restartPhase, RESTART_WINDOW_MS, subscribeFailing } from './restart.ts'
@@ -17,6 +18,33 @@ const subscribeOnline = (listener: () => void) => {
   }
 }
 
+/**
+ * Bumped when a query's data or its set of observers changes: a snapshot a component can compare without holding the array of
+ * queries. Not on `observerOptionsUpdated`, which every render of a component with a query fires, so a component that read
+ * it and held a query itself would render for ever.
+ */
+let cacheVersion = 0
+const VERSIONED = new Set(['added', 'removed', 'updated', 'observerAdded', 'observerRemoved'])
+cache.subscribe((event) => {
+  if (VERSIONED.has(event.type)) cacheVersion += 1
+})
+const getCacheVersion = () => cacheVersion
+
+/** The reads on screen that poll, with the interval each is read at; a read nobody watches, or that does not poll, is not here. */
+function polledReads(): PolledRead[] {
+  return cache.getAll().flatMap((query) => {
+    const intervals = query.observers.flatMap((observer) =>
+      observer.options.enabled !== false && typeof observer.options.refetchInterval === 'number'
+        ? [observer.options.refetchInterval]
+        : [],
+    )
+    const intervalMs = Math.min(...intervals)
+    return Number.isFinite(intervalMs)
+      ? [{ key: query.queryKey, updatedAt: query.state.dataUpdatedAt, intervalMs }]
+      : []
+  })
+}
+
 export const RESTARTING_LABEL = 'Server restarting, reconnecting'
 
 export interface Connection {
@@ -31,6 +59,8 @@ export interface Connection {
   newestDataAt: number
   /** the clock the ages are measured against, refreshed every 30 s */
   now: number
+  /** the polled reads whose data is older than their poll interval; none while the tab is hidden (a hidden tab does not poll) */
+  stale: StaleRead[]
 }
 
 /** True while the server restarts: the stream dropped or a fetch got no answer, inside the restart window, browser online. */
@@ -59,19 +89,40 @@ export function useConnection(): Connection {
     cache.getAll().reduce((latest, q) => Math.max(latest, q.state.dataUpdatedAt), 0),
   )
   const failingSince = useSyncExternalStore(subscribeFailing, getFailingSince)
+  // re-render when a read lands: staleness is computed from the cache below
+  useSyncExternalStore(subscribeCache, getCacheVersion)
   const streamLost = failingSince !== null && !live
   const [now, setNow] = useState(() => Date.now())
   useEffect(() => {
     const id = setInterval(() => setNow(Date.now()), AGE_REFRESH_MS)
     return () => clearInterval(id)
   }, [])
+  const stale = document.visibilityState === 'hidden' ? [] : staleReads(polledReads(), now)
 
   if (restarting) {
-    return { label: RESTARTING_LABEL, offline: false, restarting, live: false, lastEventAt, newestDataAt: newest, now }
+    return {
+      label: RESTARTING_LABEL,
+      offline: false,
+      restarting,
+      live: false,
+      lastEventAt,
+      newestDataAt: newest,
+      now,
+      stale,
+    }
   }
   if (!online || failed || streamLost) {
     const label = newest > 0 ? `Offline - snapshot from ${ageWords(Math.max(0, now - newest))}` : 'Offline'
-    return { label, offline: true, restarting: false, live: false, lastEventAt, newestDataAt: newest, now }
+    return {
+      label,
+      offline: true,
+      restarting: false,
+      live: false,
+      lastEventAt,
+      newestDataAt: newest,
+      now,
+      stale,
+    }
   }
   return {
     label: live ? 'Live' : 'Polling',
@@ -81,5 +132,6 @@ export function useConnection(): Connection {
     lastEventAt,
     newestDataAt: newest,
     now,
+    stale,
   }
 }
