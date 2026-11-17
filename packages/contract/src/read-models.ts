@@ -391,7 +391,10 @@ export const SeatKpiRow = z
     share: z.number().nullable(),
     /** the light Issues moved up to the lead row; 0 on the other seats */
     movedUp: z.number().int(),
-    /** first watches that ended passed or regressed, and the share that passed (null with none) */
+    /**
+     * first watches that ended passed or regressed, and the share that passed (null with none); on light, a moved-up Issue
+     * whose first watch the light lead did not ship counts as a failed one
+     */
     firstWatches: z.number().int(),
     firstPassRate: z.number().nullable(),
     /** watches that ended regressed */

@@ -443,7 +443,7 @@ describe('seated sets the seat before a lead works', () => {
 })
 
 describe('size, the seat a lead ran on, and moved_up', () => {
-  const light = { tier: 'haiku' as const, effort: 'high' as const, role: 'light' }
+  const light = { tier: 'haiku' as const, effort: 'high' as const, role: 'light', rule: 'kind:docs' }
   const started = ev('lead_started', { attempt: 1, terminal: 't1', seat: light }, 'factory')
 
   test('settled keeps the size, lead_started the seat of its attempt, and the next admission clears it', () => {
@@ -484,4 +484,15 @@ describe('size, the seat a lead ran on, and moved_up', () => {
     )
     expect(detail(apply(working, ev('moved_up', { attempt: 1, why: 'x' }, 'lead'), { now: NOW }))).toContain('refused')
   })
+})
+
+test('a filed light seat is never moved up: only a lead the light rule seated is', () => {
+  const filed = { tier: 'haiku' as const, effort: 'high' as const, role: 'light' }
+  const { issue } = drive([
+    ...settledAndWorking,
+    ev('lead_started', { attempt: 1, terminal: 't1', seat: filed }, 'factory'),
+  ])
+  expect(detail(apply(issue, ev('moved_up', { attempt: 1, why: 'x' }, 'factory'), { now: NOW }))).toBe(
+    'refused: only a lead the light rule seated is moved up',
+  )
 })

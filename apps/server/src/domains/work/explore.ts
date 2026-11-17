@@ -36,7 +36,11 @@ export function candidates(issue: Issue, now: Date): AnyIssueEvent[] {
     e('settled', {}, 'factory'),
     e('admitted', {}, 'factory'),
     e('lead_started', { attempt, terminal: 'lead' }, 'factory'),
-    e('lead_started', { attempt, terminal: 'lead', seat: { tier: 'haiku', effort: 'high', role: 'light' } }, 'factory'),
+    e(
+      'lead_started',
+      { attempt, terminal: 'lead', seat: { tier: 'haiku', effort: 'high', role: 'light', rule: 'kind:docs' } },
+      'factory',
+    ),
     e('lead_started', { attempt: stale, terminal: 'lead' }, 'factory'),
     e('lead_gone', { attempt, detail: 'its terminal ended' }, 'factory'),
     e('lead_gone', { attempt: stale, detail: 'its terminal ended' }, 'factory'),

@@ -279,7 +279,7 @@ async function recordStarted(
   issue: IssueId,
   attempt: number,
   terminal: string,
-  seat: { tier: Tier; effort: Effort; role?: string | undefined } | undefined,
+  seat: { tier: Tier; effort: Effort; role?: string | undefined; rule?: string | null | undefined } | undefined,
 ) {
   const result = await recordIn(work, deps, {
     issueId: issue,
@@ -289,7 +289,7 @@ async function recordStarted(
       payload: {
         attempt,
         terminal,
-        ...(seat ? { seat: { tier: seat.tier, effort: seat.effort, ...(seat.role ? { role: seat.role } : {}) } } : {}),
+        ...(seat ? { seat: seatPayload(seat) } : {}),
       },
       actor: 'factory',
     },
@@ -318,3 +318,16 @@ export async function leadGone(
   })
   return recorded.ok ? ok(undefined) : err(toPortError(recorded.error))
 }
+
+/** The seat as `lead_started` stores it: the role row, and the light rule only when the rule chose the seat. */
+const seatPayload = (seat: {
+  tier: Tier
+  effort: Effort
+  role?: string | undefined
+  rule?: string | null | undefined
+}) => ({
+  tier: seat.tier,
+  effort: seat.effort,
+  ...(seat.role ? { role: seat.role } : {}),
+  ...(seat.rule ? { rule: seat.rule } : {}),
+})

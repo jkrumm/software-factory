@@ -47,8 +47,14 @@ export const PAYLOADS = {
   lead_started: z.object({
     attempt,
     terminal: text,
-    /** what the lead started on (old events carry none); `role` is the table row it came from (`lead`, `light`), or the filed seat's role */
-    seat: z.object({ tier: z.enum(TIERS), effort: z.enum(EFFORTS), role: text.optional() }).optional(),
+    /**
+     * what the lead started on (old events carry none); `role` is the table row it came from (`lead`, `light`), or the
+     * filed seat's role; `rule` is the light rule that chose the seat, set only then: a filed `light` seat has none, so
+     * only a lead the rule put on light is ever moved up
+     */
+    seat: z
+      .object({ tier: z.enum(TIERS), effort: z.enum(EFFORTS), role: text.optional(), rule: text.optional() })
+      .optional(),
   }),
   /** the attempt's lead failed to start or ended */
   lead_gone: z.object({ attempt, detail: text }),

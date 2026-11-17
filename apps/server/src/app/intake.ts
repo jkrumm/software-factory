@@ -281,7 +281,11 @@ export function createIntake(deps: IntakeDeps) {
     let recorded = false
     if (issue.state === 'watching') {
       // A light lead's first watch that breaks moves the Issue up instead of going back to that lead.
-      const moved = await moveUpIfDue({ work: s.work }, deps, { issueId: issue.id, regressedWatch: issue.watch })
+      const moved = await moveUpIfDue({ work: s.work }, deps, {
+        issueId: issue.id,
+        regressedWatch: issue.watch,
+        detail: noteText(r),
+      })
       if (!moved.ok) return moved
       recorded = moved.value?.result === 'applied'
       if (recorded) detail = 'regression'

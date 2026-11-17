@@ -374,7 +374,7 @@ const moveUp = (ctx: Ctx<'moved_up'>): Cell => {
   if (ctx.event.payload.attempt !== issue.attempt) {
     return ignore(`moved_up is for attempt ${ctx.event.payload.attempt}; the Issue is on attempt ${issue.attempt}`)
   }
-  if (issue.ranOn?.role !== 'light') return refuse('only a lead on the light seat is moved up')
+  if (!issue.ranOn?.rule) return refuse('only a lead the light rule seated is moved up')
   if (issue.wait && WAITS[issue.wait.reason].exit === 'person') {
     return refuse(`it waits for a ${issue.wait.reason}: that ends with its answer first`)
   }

@@ -744,10 +744,6 @@ export function tripwireWords(tripwire: SeatKpis['tripwire']): string {
       ? `Last ${days} days: light has ${lightWatches} first watches and lead ${leadWatches}`
       : `Last ${days} days: light passed ${rateWords(light)} of ${lightWatches} first watches, lead ${rateWords(lead)} of ${leadWatches}`
   const verdict =
-    met === null
-      ? 'not measured yet'
-      : met
-        ? `within ${points} points: met`
-        : `not within ${points} points: not met`
+    met === null ? 'not measured yet' : met ? `within ${points} points: met` : `not within ${points} points: not met`
   return `Triage's small is ${on ? 'on' : 'off'}. ${rates}; ${verdict}.`
 }

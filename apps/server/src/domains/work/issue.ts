@@ -113,7 +113,7 @@ export interface Issue {
   /** triage's size, when it judged one */
   size?: Size
   /** the seat the current attempt's lead started on; absent before its `lead_started` (and on old events) */
-  ranOn?: { tier: Tier; effort: Effort; role?: string }
+  ranOn?: { tier: Tier; effort: Effort; role?: string; rule?: string }
   /** times a light lead was moved up: the next lead starts on the lead row */
   movedUp: number
   /** the lead number: 0 until admitted, one more with every admission */

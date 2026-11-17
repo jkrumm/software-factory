@@ -188,7 +188,11 @@ async function checkOne(deps: WatchDeps, watch: OpenWatch, pass: WatchPass): Pro
     }
     if (step.kind !== 'pass') {
       // A light lead's first watch that regressed is not sent back to it: the Issue moves up to the lead row instead.
-      const moved = await moveUpIfDue({ work, quality }, deps, { issueId: watch.issueId, regressedWatch: watch.watch })
+      const moved = await moveUpIfDue({ work, quality }, deps, {
+        issueId: watch.issueId,
+        regressedWatch: watch.watch,
+        detail: step.detail,
+      })
       if (!moved.ok) return moved
       if (moved.value?.result === 'applied') {
         await quality.answerWatch(watch.key, 'regressed', at)
