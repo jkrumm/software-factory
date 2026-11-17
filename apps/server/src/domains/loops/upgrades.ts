@@ -132,7 +132,8 @@ export function planLines(plan: UpgradePlan, now: Date): string[] {
         : batch.kind === 'together'
           ? 'move together'
           : 'one batch'
-    lines.push(`Batch ${index + 1} (${batch.label}; ${how}):`)
+    // past the cap a batch is only counted: its header would stand empty and cost the brief's clip budget
+    if (shown < MAX_PLAN_ROWS) lines.push(`Batch ${index + 1} (${batch.label}; ${how}):`)
     for (const row of batch.rows) take(row, '  ')
   })
   if (cut) lines.push(`  and ${cut} more: run the ecosystem's own outdated command for them`)

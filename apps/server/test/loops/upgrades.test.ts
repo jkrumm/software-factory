@@ -66,3 +66,10 @@ test('a long plan cuts batch rows, never the held ones', () => {
   expect(lines.filter((l) => l.includes('young'))).toHaveLength(1)
   expect(lines.at(-1)).toContain('and 11 more')
 })
+
+test('past the cap no empty batch header is printed', () => {
+  const majors = Array.from({ length: 50 }, (_, i) => row(`m${String(i).padStart(2, '0')}`, 'major'))
+  const lines = planLines(planUpgrades(majors, now), now)
+  expect(lines.filter((l) => l.startsWith('Batch '))).toHaveLength(40)
+  expect(lines.at(-1)).toContain('and 10 more')
+})
