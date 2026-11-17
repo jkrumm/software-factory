@@ -54,31 +54,6 @@ export type ProjectIndexModel = z.infer<typeof ProjectIndexModel>
 
 const PageIssue = z.strictObject({ id: IssueRef, title: z.string(), kind: z.string() })
 
-export const ProjectSetup = z
-  .strictObject({
-    /** how many leads may work in the repo at once */
-    leads: z.number().int(),
-    lanes: z.record(z.string(), z.strictObject({ leads: z.number().int(), memoryMib: z.number().int().nullable() })),
-    /** the test-slot run limit (`45m`); null: the default */
-    slotRun: z.string().nullable(),
-    checks: z.strictObject({ fast: z.string(), full: z.string(), ci: z.boolean() }).nullable(),
-    /** `make doctor`'s command; null: the project says none */
-    doctor: z.string().nullable(),
-    /** the automatic sources the project listens to (`signals:`) */
-    signals: z.array(z.string()),
-    deploy: z.strictObject({
-      mode: z.enum(['auto', 'make', 'agentic', 'none']),
-      /** how long a shipped change is watched before it counts as done */
-      hold: z.string(),
-      /** where a deploy is verified: a URL or `make <target>` per target */
-      targets: z.array(z.strictObject({ name: z.string(), verify: z.string() })),
-      /** the HTTP probes the Watch runs */
-      probes: z.array(z.strictObject({ name: z.string(), http: z.string(), expect: z.number().int() })),
-    }),
-  })
-  .meta({ id: 'ProjectSetup' })
-export type ProjectSetup = z.infer<typeof ProjectSetup>
-
 /** A monitor whose alerts the door files in this project (Uptime Kuma, ClickStack), with the last thing it said. */
 export const ProjectMonitor = z
   .strictObject({
@@ -106,14 +81,15 @@ export const ProjectPageModel = z
     syncedAt: at.nullable(),
     /** the `project.yaml` now on the default branch does not parse; the setup is the last valid one */
     projectError: z.string().nullable(),
-    setup: ProjectSetup,
     counts: ProjectCounts,
     shipped: z.strictObject({
       /** Issues closed done or healed per day, oldest first, the last day ending at `at` */
       days: z.array(z.number().int().min(0)).length(7),
+      /** the same count per hour over the last 7 days, oldest first, the last hour ending at `at` */
+      hours: z.array(z.number().int().min(0)).length(168),
       /** the same count over the 7 days before */
       before: z.number().int().min(0),
-      /** the newest 20 of the last 7 days */
+      /** the newest 100 of the last 7 days */
       items: z.array(PageIssue.extend({ outcome: z.string(), closedAt: at })),
     }),
     production: z.strictObject({
@@ -198,3 +174,36 @@ export const ProjectHygieneModel = z
   })
   .meta({ id: 'ProjectHygieneModel' })
 export type ProjectHygieneModel = z.infer<typeof ProjectHygieneModel>
+
+// -- setup ---------------------------------------------------------------------------------------------------------------
+
+/** One key of `project.yaml`: where it sits, what the schema says it means, and the value in force. */
+export const ProjectSetupField = z
+  .strictObject({
+    /** the key's path in the file (`deploy.hold`) */
+    path: z.string(),
+    /** the schema's description of the key; empty when it has none */
+    description: z.string(),
+    /** the value in force: a scalar as text, a list or a map as YAML */
+    value: z.string(),
+    /** the value is the schema's default (the file does not set it, or sets what the default is) */
+    isDefault: z.boolean(),
+  })
+  .meta({ id: 'ProjectSetupField' })
+export type ProjectSetupField = z.infer<typeof ProjectSetupField>
+
+/** `GET /v1/projects/:name/setup`: the `project.yaml` in force as a form with the schema's descriptions, and as YAML. */
+export const ProjectSetupModel = z
+  .strictObject({
+    at,
+    project: z.string(),
+    source: z.enum(['file', 'defaults']),
+    /** the `project.yaml` now on the default branch does not parse; the fields are the last valid one's */
+    projectError: z.string().nullable(),
+    /** the keys in the schema's order; a key with children is followed by them */
+    fields: z.array(ProjectSetupField),
+    /** the file in force with its defaults filled in, as YAML */
+    yaml: z.string(),
+  })
+  .meta({ id: 'ProjectSetupModel' })
+export type ProjectSetupModel = z.infer<typeof ProjectSetupModel>

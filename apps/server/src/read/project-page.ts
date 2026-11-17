@@ -7,7 +7,6 @@ import {
   type ProjectHygieneModel,
   type ProjectIndexModel,
   type ProjectPageModel,
-  type ProjectSetup,
 } from '@software-factory/contract'
 import type { SQL } from 'bun'
 import * as z from 'zod'
@@ -38,7 +37,9 @@ export const BUILT_IN_PROBES = [
 export const DOCUMENT_PREFIX = 'judgment:'
 
 const DAY_MS = 24 * 3_600_000
-const SHIPPED_ITEMS = 20
+const SHIPPED_ITEMS = 100
+const HOUR_MS = 3_600_000
+const HOURS = 168
 const PASSES = 5
 
 const json = (value: unknown): unknown => (typeof value === 'string' ? JSON.parse(value) : value)
@@ -87,11 +88,13 @@ const ProjectRow = z.object({
   synced_at: z.date().nullable(),
 })
 
-interface Project {
+export interface Project {
   name: string
   repo: string
   source: 'file' | 'defaults'
   stored: StoredProject
+  /** the stored project as the sync parsed it, defaults filled in; `{}` when no file was read */
+  raw: Record<string, unknown>
   /** the message of the `project.yaml` that does not parse */
   error: string | null
   branch: string | null
@@ -105,17 +108,19 @@ const messageOf = (value: unknown): string | null => {
   return parsed.success ? parsed.data.message : null
 }
 
-async function loadProjects(sql: SQL): Promise<Project[]> {
+export async function loadProjects(sql: SQL): Promise<Project[]> {
   const rows: unknown[] = await sql`
     SELECT name, repo, source, project, project_error, branch, synced_at FROM factory.planning_projects ORDER BY name`
   return rows.map((raw) => {
     const row = ProjectRow.parse(raw)
-    const stored = StoredProject.parse(json(row.project) ?? {})
+    const rawProject = json(row.project) ?? {}
+    const stored = StoredProject.parse(rawProject)
     return {
       name: row.name,
       repo: row.repo,
       source: row.source,
       stored,
+      raw: isRecord(rawProject) ? rawProject : {},
       error: messageOf(row.project_error),
       branch: row.branch,
       syncedAt: row.synced_at,
@@ -133,6 +138,8 @@ async function issuesOf(sql: SQL, projects: readonly Project[], now: Date): Prom
 }
 
 const iso = (date: Date): string => date.toISOString()
+const isRecord = (value: unknown): value is Record<string, unknown> =>
+  typeof value === 'object' && value !== null && !Array.isArray(value)
 
 // -- hygiene passes ------------------------------------------------------------------------------------------------------
 
@@ -372,18 +379,9 @@ const MonitorRow = z.object({
   last_quiet_at: z.date().nullable(),
 })
 
-const setupOf = (stored: StoredProject): ProjectSetup => ({
-  leads: stored.leads,
-  lanes: stored.lanes,
-  slotRun: stored.slots.run ?? null,
-  checks: stored.checks,
-  doctor: stored.doctor,
-  signals: Object.keys(stored.signals).sort(),
-  deploy: stored.deploy,
-})
-
 function shippedOf(issues: readonly DigestIssue[], now: Date): ProjectPageModel['shipped'] {
   const days = [0, 0, 0, 0, 0, 0, 0]
+  const hours = Array.from({ length: HOURS }, () => 0)
   let before = 0
   const items: ProjectPageModel['shipped']['items'] = []
   const closed = issues.filter(shipped).sort((a, b) => b.at.getTime() - a.at.getTime())
@@ -395,6 +393,8 @@ function shippedOf(issues: readonly DigestIssue[], now: Date): ProjectPageModel[
       continue
     }
     days[6 - age] = (days[6 - age] ?? 0) + 1
+    const hour = HOURS - 1 - Math.floor((now.getTime() - issue.at.getTime()) / HOUR_MS)
+    hours[hour] = (hours[hour] ?? 0) + 1
     if (items.length < SHIPPED_ITEMS) {
       items.push({
         id: issue.id,
@@ -405,7 +405,7 @@ function shippedOf(issues: readonly DigestIssue[], now: Date): ProjectPageModel[
       })
     }
   }
-  return { days, before, items }
+  return { days, hours, before, items }
 }
 
 /** One project's page: its setup, counts, what it shipped and its production facts; null when no project has the name. Read-only SQL. */
@@ -456,7 +456,6 @@ export async function readProjectPage(
     branch: project.branch,
     syncedAt: project.syncedAt ? iso(project.syncedAt) : null,
     projectError: project.error,
-    setup: setupOf(project.stored),
     counts,
     shipped: shippedOf(issues, now),
     production: {

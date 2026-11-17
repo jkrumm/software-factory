@@ -46,8 +46,16 @@ const DeployGlob = z.string().min(1)
 
 const Deploy = z.strictObject({
   /** `auto`: a push deploys · `make`: `make deploy` · `agentic`: the lead deploys · `none` */
-  mode: z.enum(['auto', 'make', 'agentic', 'none']).default('none'),
-  targets: z.array(Target).default([]),
+  mode: z
+    .enum(['auto', 'make', 'agentic', 'none'])
+    .default('none')
+    .describe(
+      'How a change reaches production: auto (a push deploys), make (the lead runs make deploy), agentic (the lead deploys by hand) or none.',
+    ),
+  targets: z
+    .array(Target)
+    .default([])
+    .describe('Where a deploy is verified: a name, the host it runs on, and a URL to fetch or a make target to run.'),
   /** how long a shipped change is watched before it counts as done (`30m`, `2h`, `1d`; at most 7 days) */
   hold: z
     .string()
@@ -55,15 +63,22 @@ const Deploy = z.strictObject({
       const ms = durationMs(text)
       return ms !== undefined && ms <= MAX_WATCH_MS
     }, 'a duration like 30m, 2h or 1d, at most 7d')
-    .default('0m'),
+    .default('0m')
+    .describe('How long a shipped change is watched in production before it counts as done (30m, 2h, 1d; at most 7d).'),
   /**
    * globs of the paths a deploy carries (`apps/**`, `Makefile`). Empty: every path that is not inert deploys. Set: a ship
    * touching none of them records no deploy and no deployed-version check, as a rewrite built beside the running system must.
    */
-  paths: z.array(DeployGlob).default([]),
+  paths: z
+    .array(DeployGlob)
+    .default([])
+    .describe('Globs of the paths a deploy carries. Empty: every path that is not inert deploys.'),
   /** paths whose change needs a migration to be run */
-  migrations: z.array(z.string().min(1)).default([]),
-  probes: z.array(Probe).default([]),
+  migrations: z.array(z.string().min(1)).default([]).describe('Paths whose change needs a migration to be run.'),
+  probes: z
+    .array(Probe)
+    .default([])
+    .describe('HTTP probes the Watch runs after a deploy: a name, a URL and the status it expects.'),
 })
 
 /** `slots:`: the test-slot run limit of the project; `run` unset means `DEFAULT_SLOT_RUN_MS`. */
@@ -74,7 +89,8 @@ const Slots = z.strictObject({
       const ms = durationMs(text)
       return ms !== undefined && ms >= MIN_SLOT_RUN_MS && ms <= MAX_SLOT_RUN_MS
     }, 'a duration like 45m or 2h, at least 1m and at most 6h')
-    .optional(),
+    .optional()
+    .describe('How long one test-slot run may take before it is stopped (45m, 2h; 1m to 6h). Unset: the default.'),
 })
 
 const SIZE = /^(\d+(?:\.\d+)?)(MiB|GiB)$/
@@ -92,15 +108,21 @@ const Budgets = z.strictObject({
       const ms = durationMs(text)
       return ms !== undefined && ms >= 1000
     }, 'a duration like 90s or 2m')
-    .optional(),
-  peak: z.string().regex(SIZE, 'a size like 2GiB or 512MiB').optional(),
+    .optional()
+    .describe('The median a day of fast-tier check runs may take; a breach files a signal.'),
+  peak: z
+    .string()
+    .regex(SIZE, 'a size like 2GiB or 512MiB')
+    .optional()
+    .describe('The largest peak memory one check step may use.'),
   fail: z
     .string()
     .refine((text) => {
       const share = PERCENT.exec(text)?.[1]
       return share !== undefined && Number(share) > 0 && Number(share) <= 100
     }, 'a share like 10%')
-    .optional(),
+    .optional()
+    .describe("The share of a day's check steps that may exit non-zero."),
 })
 
 /** A project's budgets as numbers: milliseconds, MiB, a share of 1; each `null` when the project sets none. */
@@ -128,9 +150,11 @@ const MakeCommand = z.string().regex(/^make [A-Za-z0-9][A-Za-z0-9_.-]*$/, '`make
  * demands it green). A project without `checks:` is `null`: its lead runs `make check` as before.
  */
 const Checks = z.strictObject({
-  fast: MakeCommand,
-  full: MakeCommand.default('make check'),
-  ci: z.boolean().default(false),
+  fast: MakeCommand.describe('What a lead runs locally before each push.'),
+  full: MakeCommand.default('make check').describe(
+    'The complete gate; CI runs it on the pull request head when ci is true.',
+  ),
+  ci: z.boolean().default(false).describe('Whether CI runs the full gate, so the lead relies on that run.'),
 })
 export type CheckTiers = z.output<typeof Checks>
 
@@ -164,18 +188,31 @@ const SkippedProbe = z.strictObject({
  */
 const Hygiene = z
   .strictObject({
-    check: z.boolean().default(true),
-    reason: z.string().trim().min(1).max(300).optional(),
+    check: z
+      .boolean()
+      .default(true)
+      .describe(
+        'Whether the hygiene loop runs make check as a probe; false when the project needs a lab this host lacks.',
+      ),
+    reason: z
+      .string()
+      .trim()
+      .min(1)
+      .max(300)
+      .optional()
+      .describe('Why make check is not run as a probe; required when check is false.'),
     skip: z
       .array(SkippedProbe)
       .max(SKIPPABLE_PROBES.length)
       .refine((list) => new Set(list.map((entry) => entry.probe)).size === list.length, 'a probe is named once')
-      .default([]),
+      .default([])
+      .describe('Built-in probes the project opts out of, each with its reason.'),
     probes: z
       .array(DeclaredProbe)
       .max(MAX_DECLARED_PROBES)
       .refine((list) => new Set(list.map((probe) => probe.name)).size === list.length, 'probe names are unique')
-      .default([]),
+      .default([])
+      .describe("The project's own weekly probes: a name and the make target that runs it, red on any exit but 0."),
   })
   .refine((hygiene) => hygiene.check || hygiene.reason !== undefined, {
     message: '`reason` is required when `check` is false',
@@ -291,43 +328,78 @@ export type PolicyRule = z.output<typeof PolicyRule>
  */
 export const ProjectFile = z
   .strictObject({
-    apiVersion: z.literal(PROJECT_API_VERSION),
-    name: Slug,
+    apiVersion: z.literal(PROJECT_API_VERSION).describe('The file format version.'),
+    name: Slug.describe("The project's name: the directory name of its repo."),
     /** the host the project's alerts sit on, a key of config/infra.json's hosts (e.g. `macmini`) */
-    host: Slug.optional(),
-    deploy: Deploy.default(() => Deploy.parse({})),
+    host: Slug.optional().describe("The host the project's alerts sit on."),
+    deploy: Deploy.default(() => Deploy.parse({})).describe('How a change is deployed, verified and watched.'),
     ship: z
       .array(ShipRule)
       .min(1)
-      .default(() => [{ paths: ['**'], via: 'push' as const }]),
+      .default(() => [{ paths: ['**'], via: 'push' as const }])
+      .describe(
+        'How a change lands, by the paths it touches: a push to the default branch or a pull request. The first rule that matches wins.',
+      ),
     /**
      * `true`: the repo stays a work repo though it has a `project.yaml`: the read token never sees its words and it hears
      * the owner only. For a repo of another organisation that the factory builds in.
      */
-    work: z.boolean().default(false),
+    work: z
+      .boolean()
+      .default(false)
+      .describe('A work repo: the read token never sees its words and it hears the owner only.'),
     /** how many leads may work in the repo at once (one more for a fix while the line is stopped) */
-    leads: z.number().int().min(1).max(MAX_LEADS).default(DEFAULT_LEADS),
+    leads: z
+      .number()
+      .int()
+      .min(1)
+      .max(MAX_LEADS)
+      .default(DEFAULT_LEADS)
+      .describe('How many leads may work in the repo at once.'),
     /**
      * resource classes inside the repo: `{apple: 1}` lets one lead of lane apple run at once; `{apple: {leads: 1, memory:
      * 18GiB}}` also reserves that memory on the host for every running lead of the lane. A lane a row or Issue names and
      * this does not declare is unlimited within `leads`; a cap above `leads` limits nothing.
      */
-    lanes: z.record(LaneName, Lane).default({}),
-    slots: Slots.default({}),
-    budgets: Budgets.default({}),
+    lanes: z
+      .record(LaneName, Lane)
+      .default({})
+      .describe(
+        'Resource classes inside the repo: a cap on the leads of a lane, and optionally the host memory each running lead of it reserves.',
+      ),
+    slots: Slots.default({}).describe('The test slots the project runs its suites in.'),
+    budgets: Budgets.default({}).describe(
+      "What the project's checks may cost; a breach files a signal the day it happens.",
+    ),
     /** check tiers: a fast local check and the full gate (CI's when `ci` is true); `null` keeps one `make check` */
-    checks: Checks.nullable().default(null),
+    checks: Checks.nullable().default(null).describe('The check tiers. Unset: the lead runs make check.'),
     /**
      * `make doctor`: a read-only command of seconds that exits 0 when this host can run the project and otherwise exits
      * non-zero with one line per missing prerequisite and its fix. A red doctor keeps every lead of the project from being
      * admitted and the hygiene `check` probe from running, with its lines as the reason; `null`: the project says nothing.
      */
-    doctor: MakeCommand.nullable().default(null),
-    hygiene: Hygiene.default(() => Hygiene.parse({})),
-    signals: Signals.default({}),
-    heal: z.array(HealRule).max(32).default([]),
+    doctor: MakeCommand.nullable()
+      .default(null)
+      .describe(
+        'A read-only make target that exits 0 when this host can run the project; red, it keeps every lead from being admitted.',
+      ),
+    hygiene: Hygiene.default(() => Hygiene.parse({})).describe('What the hygiene loop may run on the project.'),
+    signals: Signals.default({}).describe(
+      'The automatic sources the project listens to: GitHub, launchd, Uptime Kuma, ClickStack.',
+    ),
+    heal: z
+      .array(HealRule)
+      .max(32)
+      .default([])
+      .describe(
+        'Rules that wait for a source to come back up, after trying a runbook, before an alert files an Issue.',
+      ),
     /** standing policy: the first rule whose phrase the question contains and whose answer is one of its options settles it */
-    policy: z.array(PolicyRule).max(64).default([]),
+    policy: z
+      .array(PolicyRule)
+      .max(64)
+      .default([])
+      .describe('Standing answers to a recurring Decision: a phrase of the question, the option it takes and why.'),
     jobs: z.unknown().optional(),
     ticktick: z.unknown().optional(),
   })

@@ -23,6 +23,12 @@ import { Route as IssuesIdRouteImport } from './routes/issues.$id'
 import { Route as ProjectsIndexRouteImport } from './routes/projects.index'
 import { Route as ProjectsNameRouteImport } from './routes/projects.$name'
 import { Route as ArtifactsCollectionsIdRouteImport } from './routes/artifacts.collections.$id'
+import { Route as ProjectsNameIndexRouteImport } from './routes/projects.$name.index'
+import { Route as ProjectsNameHygieneRouteImport } from './routes/projects.$name.hygiene'
+import { Route as ProjectsNamePlanRouteImport } from './routes/projects.$name.plan'
+import { Route as ProjectsNameSetupRouteImport } from './routes/projects.$name.setup'
+import { Route as ProjectsNameShippedRouteImport } from './routes/projects.$name.shipped'
+import { Route as ProjectsNameWorkRouteImport } from './routes/projects.$name.work'
 
 const IndexRoute = IndexRouteImport.update({
   id: '/',
@@ -94,6 +100,36 @@ const ArtifactsCollectionsIdRoute = ArtifactsCollectionsIdRouteImport.update({
   path: '/artifacts/collections/$id',
   getParentRoute: () => rootRouteImport,
 } as any)
+const ProjectsNameIndexRoute = ProjectsNameIndexRouteImport.update({
+  id: '/',
+  path: '/',
+  getParentRoute: () => ProjectsNameRoute,
+} as any)
+const ProjectsNameHygieneRoute = ProjectsNameHygieneRouteImport.update({
+  id: '/hygiene',
+  path: '/hygiene',
+  getParentRoute: () => ProjectsNameRoute,
+} as any)
+const ProjectsNamePlanRoute = ProjectsNamePlanRouteImport.update({
+  id: '/plan',
+  path: '/plan',
+  getParentRoute: () => ProjectsNameRoute,
+} as any)
+const ProjectsNameSetupRoute = ProjectsNameSetupRouteImport.update({
+  id: '/setup',
+  path: '/setup',
+  getParentRoute: () => ProjectsNameRoute,
+} as any)
+const ProjectsNameShippedRoute = ProjectsNameShippedRouteImport.update({
+  id: '/shipped',
+  path: '/shipped',
+  getParentRoute: () => ProjectsNameRoute,
+} as any)
+const ProjectsNameWorkRoute = ProjectsNameWorkRouteImport.update({
+  id: '/work',
+  path: '/work',
+  getParentRoute: () => ProjectsNameRoute,
+} as any)
 
 export interface FileRoutesByFullPath {
   '/': typeof IndexRoute
@@ -106,10 +142,16 @@ export interface FileRoutesByFullPath {
   '/artifacts/$id': typeof ArtifactsIdRoute
   '/checkpoints/$id': typeof CheckpointsIdRoute
   '/issues/$id': typeof IssuesIdRoute
-  '/projects/$name': typeof ProjectsNameRoute
+  '/projects/$name': typeof ProjectsNameRouteWithChildren
   '/artifacts/': typeof ArtifactsIndexRoute
   '/projects/': typeof ProjectsIndexRoute
   '/artifacts/collections/$id': typeof ArtifactsCollectionsIdRoute
+  '/projects/$name/hygiene': typeof ProjectsNameHygieneRoute
+  '/projects/$name/plan': typeof ProjectsNamePlanRoute
+  '/projects/$name/setup': typeof ProjectsNameSetupRoute
+  '/projects/$name/shipped': typeof ProjectsNameShippedRoute
+  '/projects/$name/work': typeof ProjectsNameWorkRoute
+  '/projects/$name/': typeof ProjectsNameIndexRoute
 }
 export interface FileRoutesByTo {
   '/': typeof IndexRoute
@@ -122,10 +164,15 @@ export interface FileRoutesByTo {
   '/artifacts/$id': typeof ArtifactsIdRoute
   '/checkpoints/$id': typeof CheckpointsIdRoute
   '/issues/$id': typeof IssuesIdRoute
-  '/projects/$name': typeof ProjectsNameRoute
   '/artifacts': typeof ArtifactsIndexRoute
   '/projects': typeof ProjectsIndexRoute
   '/artifacts/collections/$id': typeof ArtifactsCollectionsIdRoute
+  '/projects/$name/hygiene': typeof ProjectsNameHygieneRoute
+  '/projects/$name/plan': typeof ProjectsNamePlanRoute
+  '/projects/$name/setup': typeof ProjectsNameSetupRoute
+  '/projects/$name/shipped': typeof ProjectsNameShippedRoute
+  '/projects/$name/work': typeof ProjectsNameWorkRoute
+  '/projects/$name': typeof ProjectsNameIndexRoute
 }
 export interface FileRoutesById {
   __root__: typeof rootRouteImport
@@ -139,10 +186,16 @@ export interface FileRoutesById {
   '/artifacts/$id': typeof ArtifactsIdRoute
   '/checkpoints/$id': typeof CheckpointsIdRoute
   '/issues/$id': typeof IssuesIdRoute
-  '/projects/$name': typeof ProjectsNameRoute
+  '/projects/$name': typeof ProjectsNameRouteWithChildren
   '/artifacts/': typeof ArtifactsIndexRoute
   '/projects/': typeof ProjectsIndexRoute
   '/artifacts/collections/$id': typeof ArtifactsCollectionsIdRoute
+  '/projects/$name/hygiene': typeof ProjectsNameHygieneRoute
+  '/projects/$name/plan': typeof ProjectsNamePlanRoute
+  '/projects/$name/setup': typeof ProjectsNameSetupRoute
+  '/projects/$name/shipped': typeof ProjectsNameShippedRoute
+  '/projects/$name/work': typeof ProjectsNameWorkRoute
+  '/projects/$name/': typeof ProjectsNameIndexRoute
 }
 export interface FileRouteTypes {
   fileRoutesByFullPath: FileRoutesByFullPath
@@ -161,6 +214,12 @@ export interface FileRouteTypes {
     | '/artifacts/'
     | '/projects/'
     | '/artifacts/collections/$id'
+    | '/projects/$name/hygiene'
+    | '/projects/$name/plan'
+    | '/projects/$name/setup'
+    | '/projects/$name/shipped'
+    | '/projects/$name/work'
+    | '/projects/$name/'
   fileRoutesByTo: FileRoutesByTo
   to:
     | '/'
@@ -173,10 +232,15 @@ export interface FileRouteTypes {
     | '/artifacts/$id'
     | '/checkpoints/$id'
     | '/issues/$id'
-    | '/projects/$name'
     | '/artifacts'
     | '/projects'
     | '/artifacts/collections/$id'
+    | '/projects/$name/hygiene'
+    | '/projects/$name/plan'
+    | '/projects/$name/setup'
+    | '/projects/$name/shipped'
+    | '/projects/$name/work'
+    | '/projects/$name'
   id:
     | '__root__'
     | '/'
@@ -193,6 +257,12 @@ export interface FileRouteTypes {
     | '/artifacts/'
     | '/projects/'
     | '/artifacts/collections/$id'
+    | '/projects/$name/hygiene'
+    | '/projects/$name/plan'
+    | '/projects/$name/setup'
+    | '/projects/$name/shipped'
+    | '/projects/$name/work'
+    | '/projects/$name/'
   fileRoutesById: FileRoutesById
 }
 export interface RootRouteChildren {
@@ -206,7 +276,7 @@ export interface RootRouteChildren {
   ArtifactsIdRoute: typeof ArtifactsIdRoute
   CheckpointsIdRoute: typeof CheckpointsIdRoute
   IssuesIdRoute: typeof IssuesIdRoute
-  ProjectsNameRoute: typeof ProjectsNameRoute
+  ProjectsNameRoute: typeof ProjectsNameRouteWithChildren
   ArtifactsIndexRoute: typeof ArtifactsIndexRoute
   ProjectsIndexRoute: typeof ProjectsIndexRoute
   ArtifactsCollectionsIdRoute: typeof ArtifactsCollectionsIdRoute
@@ -312,8 +382,72 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof ArtifactsCollectionsIdRouteImport
       parentRoute: typeof rootRouteImport
     }
+    '/projects/$name/': {
+      id: '/projects/$name/'
+      path: '/'
+      fullPath: '/projects/$name/'
+      preLoaderRoute: typeof ProjectsNameIndexRouteImport
+      parentRoute: typeof ProjectsNameRoute
+    }
+    '/projects/$name/hygiene': {
+      id: '/projects/$name/hygiene'
+      path: '/hygiene'
+      fullPath: '/projects/$name/hygiene'
+      preLoaderRoute: typeof ProjectsNameHygieneRouteImport
+      parentRoute: typeof ProjectsNameRoute
+    }
+    '/projects/$name/plan': {
+      id: '/projects/$name/plan'
+      path: '/plan'
+      fullPath: '/projects/$name/plan'
+      preLoaderRoute: typeof ProjectsNamePlanRouteImport
+      parentRoute: typeof ProjectsNameRoute
+    }
+    '/projects/$name/setup': {
+      id: '/projects/$name/setup'
+      path: '/setup'
+      fullPath: '/projects/$name/setup'
+      preLoaderRoute: typeof ProjectsNameSetupRouteImport
+      parentRoute: typeof ProjectsNameRoute
+    }
+    '/projects/$name/shipped': {
+      id: '/projects/$name/shipped'
+      path: '/shipped'
+      fullPath: '/projects/$name/shipped'
+      preLoaderRoute: typeof ProjectsNameShippedRouteImport
+      parentRoute: typeof ProjectsNameRoute
+    }
+    '/projects/$name/work': {
+      id: '/projects/$name/work'
+      path: '/work'
+      fullPath: '/projects/$name/work'
+      preLoaderRoute: typeof ProjectsNameWorkRouteImport
+      parentRoute: typeof ProjectsNameRoute
+    }
   }
 }
+
+interface ProjectsNameRouteChildren {
+  ProjectsNameHygieneRoute: typeof ProjectsNameHygieneRoute
+  ProjectsNamePlanRoute: typeof ProjectsNamePlanRoute
+  ProjectsNameSetupRoute: typeof ProjectsNameSetupRoute
+  ProjectsNameShippedRoute: typeof ProjectsNameShippedRoute
+  ProjectsNameWorkRoute: typeof ProjectsNameWorkRoute
+  ProjectsNameIndexRoute: typeof ProjectsNameIndexRoute
+}
+
+const ProjectsNameRouteChildren: ProjectsNameRouteChildren = {
+  ProjectsNameHygieneRoute: ProjectsNameHygieneRoute,
+  ProjectsNamePlanRoute: ProjectsNamePlanRoute,
+  ProjectsNameSetupRoute: ProjectsNameSetupRoute,
+  ProjectsNameShippedRoute: ProjectsNameShippedRoute,
+  ProjectsNameWorkRoute: ProjectsNameWorkRoute,
+  ProjectsNameIndexRoute: ProjectsNameIndexRoute,
+}
+
+const ProjectsNameRouteWithChildren = ProjectsNameRoute._addFileChildren(
+  ProjectsNameRouteChildren,
+)
 
 const rootRouteChildren: RootRouteChildren = {
   IndexRoute: IndexRoute,
@@ -326,7 +460,7 @@ const rootRouteChildren: RootRouteChildren = {
   ArtifactsIdRoute: ArtifactsIdRoute,
   CheckpointsIdRoute: CheckpointsIdRoute,
   IssuesIdRoute: IssuesIdRoute,
-  ProjectsNameRoute: ProjectsNameRoute,
+  ProjectsNameRoute: ProjectsNameRouteWithChildren,
   ArtifactsIndexRoute: ArtifactsIndexRoute,
   ProjectsIndexRoute: ProjectsIndexRoute,
   ArtifactsCollectionsIdRoute: ArtifactsCollectionsIdRoute,

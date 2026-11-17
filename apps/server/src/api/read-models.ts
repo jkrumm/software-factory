@@ -27,12 +27,14 @@ import {
   ProjectHygieneModel,
   ProjectIndexModel,
   ProjectPageModel,
+  ProjectSetupModel,
   type QueueReason as QueueReasonSchema,
 } from '@software-factory/contract'
 import type { SQL } from 'bun'
 import { Elysia } from 'elysia'
 import * as z from 'zod'
 import type { UnitOfWork } from '../app/unit-of-work.ts'
+import { PROJECT_SCHEMA } from '../app/project-schema.ts'
 import { registerVisit, type VisitStore } from '../app/visit.ts'
 import type { CiTimes } from '../domains/loops/ports.ts'
 import { findingClasses } from '../app/loops/finding-classes.ts'
@@ -41,6 +43,7 @@ import { readWaitCensus } from '../read/wait-census.ts'
 import { readChain } from '../read/chain.ts'
 import { readProjectDigests } from '../read/digests.ts'
 import { readProjectHygiene, readProjectIndex, readProjectPage } from '../read/project-page.ts'
+import { readProjectSetup } from '../read/project-setup.ts'
 import { type QueueReasons, readFlow } from '../read/flow.ts'
 import { readFlowTrend } from '../read/flow-trend.ts'
 import { readFixCommits } from '../read/fix-commits.ts'
@@ -249,7 +252,30 @@ export const readModelRoutes = (deps: ReadModelDeps | undefined, caller: (reques
         detail: {
           operationId: 'read.project-page',
           summary:
-            "one project's page: its setup (leads, lanes, checks, deploy and probes), counts, what shipped in 7 days with daily bars, and its production facts (Issues in Watch, incidents, regressions, the monitors that file alerts in it); the read token gets 404 for a work project and no monitors",
+            "one project's page: its counts, what shipped in 7 days with daily and hourly bars, and its production facts (Issues in Watch, incidents, regressions, the monitors that file alerts in it); the read token gets 404 for a work project and no monitors",
+        },
+      },
+    )
+    .get(
+      '/projects/:name/setup',
+      async ({ params, request }) => {
+        if (!deps) return unavailable
+        const redact = caller(request) === 'read'
+        const model = await readProjectSetup(deps.sql, {
+          now: now(),
+          name: params.name,
+          schema: PROJECT_SCHEMA,
+          redact,
+        })
+        return model ? Response.json(ProjectSetupModel.parse(model)) : noProject(params.name)
+      },
+      {
+        params: z.object({ name: z.string() }),
+        response: { 200: ProjectSetupModel, ...errorResponses(404, 503) },
+        detail: {
+          operationId: 'read.project-setup',
+          summary:
+            "one project's project.yaml in force as a form: each key in the schema's order with the schema's description, its value and whether that is the default, and the file with its defaults filled in as YAML; the read token gets 404 for a work project",
         },
       },
     )

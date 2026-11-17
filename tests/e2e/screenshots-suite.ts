@@ -12,6 +12,7 @@ const SCREENS = [
   { name: 'flow-project', path: '/flow?project=argo' },
   { name: 'projects', path: '/projects' },
   { name: 'project-argo', path: '/projects/argo' },
+  { name: 'project-argo-setup', path: '/projects/argo/setup' },
   { name: 'chain', path: '/chain' },
   { name: 'improve', path: '/improve' },
   { name: 'improve-30', path: '/improve?days=30' },

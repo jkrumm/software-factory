@@ -5,6 +5,7 @@ import {
   ProjectHygieneModel,
   ProjectIndexModel,
   ProjectPageModel,
+  ProjectSetupModel,
 } from '@software-factory/contract'
 import { startTestCluster, type TestCluster } from '@software-factory/tests/pg'
 import { loadMigrations, migrate } from '../../src/adapters/postgres/migrate.ts'
@@ -169,18 +170,41 @@ test('the read token hears of no work project', async () => {
   expect(page.production.monitors).toEqual([])
 })
 
-test('the page shows the setup, the shipped bars and the production facts', async () => {
+test("the setup is the project.yaml in force as a form with the schema's descriptions, and as YAML", async () => {
+  const setup = ProjectSetupModel.parse(await get('/v1/projects/open-app/setup'))
+  expect(setup.project).toBe('open-app')
+  const field = (path: string) => setup.fields.find((f) => f.path === path)
+  expect(field('leads')).toMatchObject({ value: '3', isDefault: false })
+  expect(field('leads')?.description).toContain('leads may work')
+  expect(field('slots.run')).toMatchObject({ value: '45m', isDefault: false })
+  expect(field('checks.fast')).toMatchObject({ value: 'make check-fast' })
+  expect(field('deploy.hold')).toMatchObject({ value: '30m', isDefault: false })
+  expect(field('deploy.hold')?.description).toContain('watched')
+  expect(field('deploy.targets')?.value).toContain('verify: make verify')
+  expect(field('lanes')?.value).toContain('memoryMib: 18432')
+  // a parent whose children are listed carries no value of its own, and the children follow it in order
+  expect(field('deploy')?.value).toBe('')
+  expect(setup.fields.findIndex((f) => f.path === 'deploy')).toBeLessThan(
+    setup.fields.findIndex((f) => f.path === 'deploy.hold'),
+  )
+  // a key the file does not set reads as unset and default; the dropped legacy keys are not part of the form
+  expect(field('host')).toMatchObject({ value: '', isDefault: true })
+  expect(field('jobs')).toBeUndefined()
+  expect(setup.yaml).toContain('leads: 3')
+  expect((await call('/v1/projects/work-app/setup', TOKENS.read)).status).toBe(404)
+  expect((await call('/v1/projects/nothing/setup', TOKENS.owner)).status).toBe(404)
+})
+
+test('the page shows the shipped bars and the production facts', async () => {
   const page = ProjectPageModel.parse(await get('/v1/projects/open-app'))
-  expect(page.setup.leads).toBe(3)
-  expect(page.setup.lanes).toEqual({ apple: { leads: 1, memoryMib: 18432 } })
-  expect(page.setup.slotRun).toBe('45m')
-  expect(page.setup.checks).toEqual({ fast: 'make check-fast', full: 'make check', ci: true })
-  expect(page.setup.signals).toEqual(['github', 'kuma'])
-  expect(page.setup.deploy.targets).toEqual([{ name: 'prod', verify: 'make verify' }])
-  expect(page.setup.deploy.probes).toEqual([{ name: 'health', http: 'https://example.com/health', expect: 200 }])
   expect(page.branch).toBe('master')
   // 2 h ago and 80 h ago are in the last 7 days; 9 days ago is before; 20 days ago is out of both windows
   expect(page.shipped.days).toEqual([0, 0, 0, 1, 0, 0, 1])
+  // the same by the hour: the last hour ends at the clock, so 2 h ago is the third bar from the end
+  expect(page.shipped.hours).toHaveLength(168)
+  expect(page.shipped.hours.at(-3)).toBe(1)
+  expect(page.shipped.hours.at(-1 - 80)).toBe(1)
+  expect(page.shipped.hours.reduce((a, b) => a + b, 0)).toBe(2)
   expect(page.shipped.before).toBe(1)
   expect(page.shipped.items.map((i) => i.id)).toEqual(['issue_5', 'issue_6'])
   expect(page.production.watching.map((i) => i.id)).toEqual(['issue_4'])
