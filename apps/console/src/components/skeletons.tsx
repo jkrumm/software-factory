@@ -194,10 +194,9 @@ export function ProjectTabSkeleton() {
 /** The project list: a grid of project cards. */
 export function ProjectIndexSkeleton() {
   return (
-    <div {...busy('Loading the projects')} className="grid gap-3 sm:grid-cols-2 xl:grid-cols-3 2xl:grid-cols-4">
-      {Array.from({ length: 8 }, (_, i) => (
-        <Skeleton key={i} height={168} rounded="rounded-xl" />
-      ))}
+    <div {...busy('Loading the projects')} className="grid gap-3">
+      <Skeleton height={32} rounded="rounded-lg" />
+      <Skeleton height={940} rounded="rounded-xl" />
     </div>
   )
 }

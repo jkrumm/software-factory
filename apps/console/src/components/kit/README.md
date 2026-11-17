@@ -17,6 +17,10 @@ The Console's components, each depending only on Basalt tokens (`--vx-*` through
   that lists the series (`ChartRow.lines`) and the hidden table. Its series colours are `--vx-series-1` to `-9` from
   `src/styles/series.css` (the dataviz skill's palette, validated in dark and light; slot 9 is the quiet "Other"): a series
   keeps its `slot` whatever else is shown. `no-raw-colour.test.ts` lets that one file hold literals.
+- **In a table row** a chart is `Sparkline compact` (no gridlines, a thinner line, no Tab stop and no hidden table: the
+  figure beside it and the row carry it) and **`SegmentBar`**, one thin horizontal bar of parts in their states' tones
+  (`LOZENGE_TONES`) on a shared `scale`, so rows compare; its accessible name lists every part. **`Segments`** is the
+  segmented control (pressed buttons, never links) Flow's chart and the Projects toolbar share.
 - **StatCard `value: null`** is a figure nobody counted: an en dash in the figure, `valueNote` as its title, its screen-reader
   text and the sub line when there is no `sub`, and no delta pill. A footer pair takes `value: null` and `note` the same
   way. A zero is only ever a counted zero.

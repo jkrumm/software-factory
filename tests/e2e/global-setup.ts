@@ -6,7 +6,7 @@ import { freePort, startServer, startWorld, type ServerProcess } from '../scenar
 import { makeEstate } from '../scenarios/intake/support.ts'
 import { startLab } from '../scenarios/planning/lab.ts'
 import { seedDigests } from './seed-digests.ts'
-import { ARGO_PROJECT_YAML, PROJECT, seedProjectPage } from './seed-projects.ts'
+import { ARGO_PROJECT_YAML, PROJECT, PROJECT_GROUPS, seedProjectPage } from './seed-projects.ts'
 import { seedCapacity } from './seed-capacity.ts'
 import { seedHost } from './seed-host.ts'
 import { seedLeadTime, seedThroughput } from './seed-throughput.ts'
@@ -33,6 +33,9 @@ export default async function globalSetup(): Promise<() => Promise<void>> {
   // the counting epoch ten days back: the day's and the week's windows are whole, the fortnight's is cut (the seeded rows are relative to now)
   const epochFile = join(dataDir, 'throughput.json')
   await Bun.write(epochFile, JSON.stringify({ epoch: new Date(Date.now() - 240 * 3_600_000).toISOString() }))
+  // the owner's Herdr groups, so the e2e server never reads the host's own file
+  const groupsFile = join(dataDir, 'groups.json')
+  await Bun.write(groupsFile, JSON.stringify(PROJECT_GROUPS))
   // the owner's line: a page being sent is what puts a Decision on the owner's list
   const ntfy = Bun.serve({ port: 0, hostname: '127.0.0.1', fetch: () => new Response('ok') })
   // `chat` is the work repo of the estate (outside text redacted for the read token); these have project files, so leads run in them
@@ -47,6 +50,7 @@ export default async function globalSetup(): Promise<() => Promise<void>> {
     FACTORY_CONSOLE_DIR: DIST,
     FACTORY_DATA_DIR: dataDir,
     FACTORY_THROUGHPUT_FILE: epochFile,
+    FACTORY_PROJECT_GROUPS_FILE: groupsFile,
   }
   const lab = await startLab({
     world,

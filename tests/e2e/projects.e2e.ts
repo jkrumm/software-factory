@@ -1,7 +1,7 @@
 import type { Page } from '@playwright/test'
 import { expect, test } from './fixtures.ts'
 import { api } from './seed.ts'
-import { BROKEN_LINKS, PROJECT } from './seed-projects.ts'
+import { BROKEN_LINKS, PROJECT, RED_PROJECT } from './seed-projects.ts'
 
 /**
  * The project screens against the seeded server: the list, and `argo`'s page: the first screen that answers four questions,
@@ -9,10 +9,19 @@ import { BROKEN_LINKS, PROJECT } from './seed-projects.ts'
  * page itself reads.
  */
 interface Index {
+  at: string
+  seats: number | null
+  groups: string[]
   projects: {
     name: string
     work: boolean
+    group: string
     counts: { done7d: number; work: Work }
+    shipped: { hours: number[]; lastAt: string | null }
+    production: { incidents: number; incidentAt: string | null; regressionAt: string | null }
+    plan: { done: number; total: number }
+    hygiene: { clean: number; run: number; lastPassAt: string | null }
+    digest: { headline: string } | null
   }[]
 }
 type Work = Record<'running' | 'paused' | 'ready' | 'held' | 'checking', number>
@@ -47,12 +56,44 @@ const settle = async (page: Page) => {
 
 const sections = (page: Page) => page.getByRole('navigation', { name: 'Project sections' })
 
-test('the sidebar and the g p key reach the list, one card per project', async ({ page, apiUrl }) => {
+type IndexRow = Index['projects'][number]
+const shippedOf = (row: IndexRow) => row.shipped.hours.reduce((a, b) => a + b, 0)
+const isRed = (row: IndexRow) => row.production.incidents > 0 || row.production.regressionAt !== null
+const table = (page: Page) => page.getByRole('table', { name: 'Projects' })
+const rows = (page: Page) => table(page).locator('tbody tr[data-project]')
+const order = (page: Page) => rows(page).evaluateAll((els) => els.map((el) => el.getAttribute('data-project')))
+
+test.beforeEach(async ({ page }) => {
+  // every test starts from the defaults: the table's choices live in this browser's storage
+  await page.addInitScript(() => {
+    if (!sessionStorage.getItem('projects-e2e')) {
+      localStorage.removeItem('factory.projects.table.v1')
+      sessionStorage.setItem('projects-e2e', '1')
+    }
+  })
+})
+
+test('the sidebar and the g p key reach the table: every project in one view at 1800x1200, grouped', async ({
+  page,
+  apiUrl,
+}) => {
   const index = await api<Index>(apiUrl, '/v1/projects')
   await page.goto('/needs-you')
   await page.getByRole('navigation', { name: 'Main' }).getByRole('link', { name: 'Projects' }).click()
   await expect(page).toHaveURL(/\/projects$/)
-  await expect(page.getByRole('list', { name: 'Projects' }).getByRole('listitem')).toHaveCount(index.projects.length)
+  await expect(rows(page)).toHaveCount(index.projects.length)
+  // all of them on screen, nothing scrolled: the last row ends inside the viewport
+  const viewport = page.viewportSize()
+  const last = await rows(page).last().boundingBox()
+  expect(viewport && last && last.y + last.height <= viewport.height).toBe(true)
+  expect(await page.evaluate("document.querySelector('main')?.scrollTop ?? 0")).toBe(0)
+  // groups in the owner's order, each with the projects the groups file files under it
+  const groups = index.groups.filter((group) => index.projects.some((p) => p.group === group))
+  await expect(table(page).locator('tbody th[scope="colgroup"]')).toHaveCount(groups.length)
+  for (const group of groups) {
+    const members = index.projects.filter((p) => p.group === group).length
+    await expect(table(page).getByRole('rowgroup', { name: group }).locator('tr[data-project]')).toHaveCount(members)
+  }
   await page.goto('/flow')
   await page.locator('main').click()
   await page.keyboard.press('g')
@@ -60,16 +101,150 @@ test('the sidebar and the g p key reach the list, one card per project', async (
   await expect(page).toHaveURL(/\/projects$/)
 })
 
-test('a project card shows the counts of the API and opens the page', async ({ page, apiUrl }) => {
+test('32 projects in six groups, the size of the live estate, still fit 1800x1200 without scrolling', async ({
+  page,
+  apiUrl,
+}) => {
+  const index = await api<Index>(apiUrl, '/v1/projects')
+  const groups = ['Infra', 'Tooling', 'Personal', 'Apps', 'Work', 'Other']
+  const projects = Array.from({ length: 32 }, (_, i) => {
+    const source = index.projects[i % index.projects.length]
+    if (!source) throw new Error('no project to copy')
+    return { ...source, name: `${source.name}-${i}`, group: groups[i % groups.length] }
+  })
+  await page.route('**/v1/projects', (route) => route.fulfill({ json: { ...index, groups, projects } }))
+  await page.goto('/projects')
+  await expect(rows(page)).toHaveCount(32)
+  const last = await rows(page).last().boundingBox()
+  const viewport = page.viewportSize()
+  expect(viewport && last && last.y + last.height <= viewport.height).toBe(true)
+})
+
+test("a row shows the API's figures: the state bar, the shipped count, the lamp, the plan and the hygiene", async ({
+  page,
+  apiUrl,
+}) => {
   const index = await api<Index>(apiUrl, '/v1/projects')
   const argo = index.projects.find((p) => p.name === PROJECT)
   if (!argo) throw new Error('argo is not a project')
   await page.goto('/projects')
-  const card = page.getByRole('article').filter({ has: page.getByRole('heading', { name: PROJECT, exact: true }) })
-  await expect(card).toContainText(`${argo.counts.work.running}Running`)
-  await expect(card).toContainText(`${argo.counts.done7d}Shipped`)
-  await card.getByRole('link', { name: PROJECT, exact: true }).click()
+  const row = rows(page).and(page.locator(`[data-project="${PROJECT}"]`))
+  const { running, paused, ready, held, checking } = argo.counts.work
+  await expect(row.getByRole('img', { name: `Open Issues of ${PROJECT}` })).toHaveAccessibleName(
+    `Open Issues of ${PROJECT}: ${running} running, ${paused} paused, ${ready} ready, ${held} held, ${checking} checking`,
+  )
+  const cells = row.locator('td')
+  const heads = await table(page)
+    .locator('thead th')
+    .evaluateAll((els) => els.map((el) => el.textContent?.trim()))
+  const cellOf = (head: string) => cells.nth(heads.findIndex((h) => h?.startsWith(head)))
+  await expect(cellOf('Now')).toContainText(String(running + paused + ready + held + checking))
+  await expect(cellOf('Shipped 7 d')).toContainText(String(shippedOf(argo)))
+  expect(shippedOf(argo)).toBe(argo.counts.done7d)
+  if (argo.plan.total > 0) await expect(cellOf('Plan')).toContainText(`${argo.plan.done}/${argo.plan.total}`)
+  if (argo.hygiene.run > 0) await expect(cellOf('Hygiene')).toContainText(`${argo.hygiene.clean}/${argo.hygiene.run}`)
+  const red = index.projects.find((p) => p.name === RED_PROJECT)
+  expect(red && isRed(red)).toBe(true)
+  await expect(
+    rows(page)
+      .and(page.locator(`[data-project="${RED_PROJECT}"]`))
+      .locator('[data-lamp="incident"]'),
+  ).toBeVisible()
+  // the hover previews the digest, a click opens the page
+  if (argo.digest) {
+    await row.hover()
+    await expect(page.getByRole('dialog').filter({ hasText: argo.digest.headline })).toBeVisible()
+  }
+  await cellOf('Now').click()
   await expect(page).toHaveURL(new RegExp(`/projects/${PROJECT}$`))
+})
+
+test('sorting by shipped orders the rows by the 7-day count, the most first', async ({ page, apiUrl }) => {
+  const index = await api<Index>(apiUrl, '/v1/projects')
+  const shipped = new Map(index.projects.map((p) => [p.name, shippedOf(p)]))
+  await page.goto('/projects')
+  await page.getByRole('group', { name: 'Group' }).getByRole('button', { name: 'Flat' }).click()
+  await table(page).getByRole('button', { name: 'Shipped 7 d' }).click()
+  await expect(table(page).locator('th[aria-sort="descending"]')).toContainText('Shipped 7 d')
+  const counts = (await order(page)).map((name) => shipped.get(name ?? '') ?? -1)
+  expect(counts).toHaveLength(index.projects.length)
+  expect(counts).toEqual([...counts].sort((a, b) => b - a))
+  await table(page).getByRole('button', { name: 'Shipped 7 d' }).click()
+  await expect(table(page).locator('th[aria-sort="ascending"]')).toContainText('Shipped 7 d')
+  const ascending = (await order(page)).map((name) => shipped.get(name ?? '') ?? -1)
+  expect(ascending).toEqual([...ascending].sort((a, b) => a - b))
+})
+
+test('the Red filter keeps the projects with an open incident or a regression in 7 days, and search narrows by name', async ({
+  page,
+  apiUrl,
+}) => {
+  const index = await api<Index>(apiUrl, '/v1/projects')
+  const red = index.projects.filter(isRed).map((p) => p.name)
+  expect(red).toContain(RED_PROJECT)
+  await page.goto('/projects')
+  await page.getByRole('group', { name: 'Show' }).getByRole('button', { name: 'Red' }).click()
+  await expect(rows(page)).toHaveCount(red.length)
+  expect((await order(page)).sort()).toEqual([...red].sort())
+  await page.getByRole('group', { name: 'Show' }).getByRole('button', { name: 'All' }).click()
+  await page.getByRole('searchbox', { name: 'Search projects' }).fill(PROJECT)
+  const matching = index.projects.filter((p) => p.name.includes(PROJECT)).length
+  await expect(rows(page)).toHaveCount(matching)
+})
+
+test('the column choice, the sort and the density survive a reload', async ({ page }) => {
+  await page.goto('/projects')
+  await expect(table(page).getByRole('columnheader', { name: /Plan/ })).toBeVisible()
+  await page.getByRole('button', { name: 'Columns' }).click()
+  await page.getByRole('checkbox', { name: 'Plan' }).uncheck()
+  await page.keyboard.press('Escape')
+  await table(page).getByRole('button', { name: 'Last ship' }).click()
+  await page.getByRole('group', { name: 'Density' }).getByRole('button', { name: 'Comfortable' }).click()
+  await expect(table(page).getByRole('columnheader', { name: /Plan/ })).toHaveCount(0)
+  await page.reload()
+  await expect(rows(page).first()).toBeVisible()
+  await expect(table(page).getByRole('columnheader', { name: /Plan/ })).toHaveCount(0)
+  await expect(table(page).locator('th[aria-sort="descending"]')).toContainText('Last ship')
+  await expect(
+    page.getByRole('group', { name: 'Density' }).getByRole('button', { name: 'Comfortable' }),
+  ).toHaveAttribute('aria-pressed', 'true')
+})
+
+test('the page reads its data in one request', async ({ page }) => {
+  const reads: string[] = []
+  page.on('request', (request) => {
+    const path = new URL(request.url()).pathname
+    if (path.startsWith('/v1/projects')) reads.push(path)
+  })
+  await page.goto('/projects')
+  await expect(rows(page).first()).toBeVisible()
+  await page.waitForLoadState('networkidle')
+  expect(reads).toEqual(['/v1/projects'])
+})
+
+test('the keyboard moves between rows and Enter opens the project', async ({ page }) => {
+  await page.goto('/projects')
+  const first = rows(page).first()
+  await first.focus()
+  await page.keyboard.press('ArrowDown')
+  const second = (await order(page))[1]
+  await expect(rows(page).nth(1)).toBeFocused()
+  await page.keyboard.press('Enter')
+  await expect(page).toHaveURL(new RegExp(`/projects/${second}$`))
+})
+
+test.describe('on a phone', () => {
+  test.use({ viewport: { width: 390, height: 844 } })
+  test('every project is a card with its state bar and opens its page', async ({ page, apiUrl }) => {
+    const index = await api<Index>(apiUrl, '/v1/projects')
+    await page.goto('/projects')
+    const cards = page.getByRole('article')
+    await expect(cards).toHaveCount(index.projects.length)
+    const argo = cards.filter({ has: page.getByRole('heading', { name: PROJECT, exact: true }) })
+    await expect(argo.getByRole('img', { name: new RegExp(`^Open Issues of ${PROJECT}`) })).toBeVisible()
+    await argo.getByRole('link', { name: PROJECT, exact: true }).click()
+    await expect(page).toHaveURL(new RegExp(`/projects/${PROJECT}$`))
+  })
 })
 
 test('the first screen answers health, now, next and shipped in 1800 by 1200 without scrolling, each list capped at five', async ({
