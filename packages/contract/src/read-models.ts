@@ -544,6 +544,85 @@ export const SeatKpis = z
   .meta({ id: 'SeatKpis' })
 export type SeatKpis = z.infer<typeof SeatKpis>
 
+/** The two reviewer seats, as the reviewer table groups them: the cheap row (`reviewer-cheap`) and the other, `reviewer`. */
+export const REVIEWER_SEATS = ['plain', 'cheap'] as const
+
+/**
+ * One reviewer seat over the reviews recorded in the window (a review is an agw thread that covered a ship, recorded with
+ * the seat it ran on, Issue 2027). Reviews are the non-deep ones; a deep review stays on `reviewer` and counts in
+ * `deepReviews`. The Issue measures follow the Issues assigned the seat that had at least one non-deep review.
+ */
+export const ReviewerKpiRow = z
+  .strictObject({
+    seat: z.enum(REVIEWER_SEATS),
+    /** the row of the role table and the tier and effort it names now */
+    role: z.string(),
+    tier: z.enum(TIERS).nullable(),
+    effort: z.enum(EFFORTS).nullable(),
+    reviews: z.number().int(),
+    deepReviews: z.number().int(),
+    findings: z.number().int(),
+    /** findings per review; null with no review */
+    findingsPerReview: z.number().nullable(),
+    /** findings the lead fixed, and the ones it declined (wrong, intentional or irrelevant); the rest were open at the ship */
+    applied: z.number().int(),
+    declined: z.number().int(),
+    /** applied of applied and declined; null with neither */
+    appliedShare: z.number().nullable(),
+    /** rounds of a review until clean, on average; null with no review */
+    roundsPerReview: z.number().nullable(),
+    /** Issues behind the reviews, their first watches that ended passed or regressed, and the share that passed */
+    issues: z.number().int(),
+    firstWatches: z.number().int(),
+    firstPassRate: z.number().nullable(),
+    /** Issues with a watch that ended regressed, and their share of `firstWatches`'s Issues; null with none */
+    regressedIssues: z.number().int(),
+    regressionRate: z.number().nullable(),
+    /** reviewer-agent dollars the usage schema priced for these Issues' sessions (the cheap seat's by the haiku tier, the rest the other's), per review of the seat, deep ones included; null while it cannot be read */
+    costPerReview: z.number().nullable(),
+    /** median wall time of the covering round, in ms; null with none */
+    wallP50Ms: z.number().nullable(),
+  })
+  .meta({ id: 'ReviewerKpiRow' })
+export type ReviewerKpiRow = z.infer<typeof ReviewerKpiRow>
+
+/** What the tripwire reads of one seat: the inputs, over the whole record, whatever window the page shows. */
+const ReviewerEvidence = z.strictObject({
+  reviews: z.number().int(),
+  issues: z.number().int(),
+  firstPassRate: z.number().nullable(),
+  regressionRate: z.number().nullable(),
+})
+
+export const ReviewerKpis = z
+  .strictObject({
+    rows: z.array(ReviewerKpiRow),
+    /** the share of the Issues that are not light that start on the cheap row */
+    startShare: z.number(),
+    /**
+     * The cheap row takes every non-deep review when each seat has `minReviews` reviews and the cheap row's Issues regress
+     * no more often and pass their first verification within `points` of the other seat's (`cheap` and `plain` are those
+     * numbers); it goes back to its starting share while the cheap row's last `windowDays` days (`window`, judged with at
+     * least `windowMinIssues` Issues) break either test against the other seat's record. `takesAll` is the verdict now.
+     */
+    tripwire: z.strictObject({
+      minReviews: z.number().int(),
+      points: z.number(),
+      windowDays: z.number().int(),
+      windowMinIssues: z.number().int(),
+      cheap: ReviewerEvidence,
+      plain: ReviewerEvidence,
+      window: ReviewerEvidence,
+      enough: z.boolean(),
+      passOk: z.boolean().nullable(),
+      regressOk: z.boolean().nullable(),
+      windowBreaks: z.boolean().nullable(),
+      takesAll: z.boolean(),
+    }),
+  })
+  .meta({ id: 'ReviewerKpis' })
+export type ReviewerKpis = z.infer<typeof ReviewerKpis>
+
 /**
  * The `after` edges the factory inferred (`planning_edges.inferred_by` set) that were created in the window, by whether
  * they were needed. An edge is settled once its blocker closed. A settled edge with no `ready_since` was needed: no look
@@ -578,6 +657,8 @@ export const KpiModel = z
     kpis: z.array(Kpi),
     /** the current window's Issues by the seat their first lead ran on */
     seats: SeatKpis,
+    /** the reviewer seats side by side, and the tripwire that hands the cheap one every review */
+    reviewers: ReviewerKpis,
     /** the inferred chain edges created in the window, needed or not */
     edges: InferredEdgeKpis,
   })

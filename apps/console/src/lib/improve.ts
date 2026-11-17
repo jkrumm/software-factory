@@ -10,6 +10,8 @@ import type {
   LoopYieldWindow,
   SeatDelivery,
   SeatKpiRow,
+  ReviewerKpiRow,
+  ReviewerKpis,
   SeatKpis,
 } from '@software-factory/contract'
 import type { Tone } from '../components/kit/tone'
@@ -804,6 +806,41 @@ export function deliveryRows(delivery: SeatKpis['delivery']) {
       lead: usd(lead.costPerIssue),
       definition: definitions.cost,
     },
+  ]
+}
+
+/** The reviewer rows of the "Reviewers" table, in the words the Console shows. */
+export const REVIEWER_LABEL: Record<ReviewerKpiRow['seat'], string> = { plain: 'Reviewer', cheap: 'Cheap reviewer' }
+
+const oneDecimal = (value: number | null): string => (value === null ? '–' : value.toFixed(1))
+
+/** A reviewer row's cells as text: the seat's words, its reviews, what they found and what became of the Issues; none is an en dash. */
+export function reviewerCells(row: ReviewerKpiRow) {
+  return {
+    seat: row.tier && row.effort ? `${row.tier} · ${row.effort}` : row.role,
+    reviews: row.deepReviews === 0 ? `${row.reviews}` : `${row.reviews} (+${row.deepReviews} deep)`,
+    findings: oneDecimal(row.findingsPerReview),
+    applied: row.appliedShare === null ? '–' : `${rateWords(row.appliedShare)} of ${row.applied + row.declined}`,
+    rounds: oneDecimal(row.roundsPerReview),
+    firstPass: row.firstPassRate === null ? '–' : `${rateWords(row.firstPassRate)} of ${row.firstWatches}`,
+    regressions: row.regressionRate === null ? '–' : `${rateWords(row.regressionRate)} (${row.regressedIssues})`,
+    cost: row.costPerReview === null ? '–' : formatValue('usd', row.costPerReview),
+    wall: msWords(row.wallP50Ms),
+  }
+}
+
+/** The tripwire lines under the reviewer table: its inputs for both seats, the last days of the cheap one, and the verdict. */
+export function reviewerTripwireWords(reviewers: ReviewerKpis): string[] {
+  const { tripwire: t, startShare } = reviewers
+  const seat = (name: string, e: ReviewerKpis['tripwire']['cheap']) =>
+    `${name}: ${e.reviews} reviews, first pass ${rateWords(e.firstPassRate)}, regressed ${rateWords(e.regressionRate)} of ${e.issues} Issues`
+  const test = (ok: boolean | null) => (ok === null ? 'not measured yet' : ok ? 'holds' : 'fails')
+  const verdict = t.takesAll
+    ? 'The cheap reviewer takes every non-deep review.'
+    : `The cheap reviewer has the light-seat Issues and ${rateWords(startShare)} of the others.`
+  return [
+    `${seat('Cheap', t.cheap)}; ${seat('Reviewer', t.plain)}; ${seat(`Cheap, last ${t.windowDays} days`, t.window)}.`,
+    `It takes all reviews at ${t.minReviews} reviews each (${t.enough ? 'reached' : 'not reached'}), regressions no more often (${test(t.regressOk)}), first pass within ${t.points} points (${test(t.passOk)}), and goes back if its last ${t.windowDays} days (at least ${t.windowMinIssues} Issues) break either (${t.windowBreaks === null ? 'too few Issues to say' : t.windowBreaks ? 'broken' : 'not broken'}). ${verdict}`,
   ]
 }
 

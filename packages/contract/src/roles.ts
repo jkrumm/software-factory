@@ -42,3 +42,20 @@ export function parseRoleTable(text: string): RoleTable {
   const file = RoleFile.parse(JSON.parse(text))
   return new Map(Object.entries(file.roles).map(([role, entry]) => [role, { role, ...entry }]))
 }
+
+/**
+ * The reviewer seats (Issue 2027). `reviewer` is the current seat, `reviewer-cheap` the cheap tier at high effort. A
+ * review of a light-seat Issue and of half of the others (by Issue number parity) runs on the cheap row; a deep review
+ * (the ones that fan out to verifier agents) stays on `reviewer` until the cheap row has the evidence below.
+ */
+export const REVIEWER_ROLE = 'reviewer'
+export const REVIEWER_CHEAP_ROLE = 'reviewer-cheap'
+/** The share of the Issues that are not light that start on the cheap row: the even Issue numbers. */
+export const REVIEWER_START_SHARE = 0.5
+/** The cheap row takes every non-deep review when each seat has this many reviews and the tests below hold. */
+export const REVIEWER_TRIPWIRE_REVIEWS = 100
+/** The cheap row's first verification pass rate may be this many points under the other seat's, and no more. */
+export const REVIEWER_TRIPWIRE_POINTS = 2
+/** The window that sends the cheap row back to its starting share, and the fewest Issues with a first watch it must hold to judge. */
+export const REVIEWER_TRIPWIRE_DAYS = 3
+export const REVIEWER_WINDOW_MIN_ISSUES = 10

@@ -1,6 +1,7 @@
-import type { Effort, Tier } from '@software-factory/contract'
+import { type Effort, REVIEWER_CHEAP_ROLE, type Tier } from '@software-factory/contract'
 import { buildBrief, fitNotes, MAX_BRIEF_SIGNALS } from '../domains/leads/brief.ts'
 import { LEAD_ROLE, LIGHT_ROLE, lightRule } from '../domains/leads/light.ts'
+import { reviewerBrief, reviewerRoleFor } from '../domains/leads/reviewer.ts'
 import { deriveSession } from '../domains/leads/session.ts'
 import { leadBranch, leadKey, tabName } from '../domains/leads/names.ts'
 import type { BriefSignal, BriefSpec, LeadAttempt, SeatOrigin } from '../domains/leads/ports.ts'
@@ -161,6 +162,7 @@ export async function startLead(deps: LeadDeps, effect: StartEffect): Promise<Re
       lastWords: await lastWordsOf(deps, movedFrom.transcript),
     }
 
+    const reviewer = await reviewerOf(deps, issue, role.value.rule !== null)
     const notes = notesBefore(history, attempt)
     // A project's check tiers change what the brief tells the lead to run; a read that fails is the brief of today.
     const tiers = await deps.checks.of(repoPath)
@@ -185,6 +187,7 @@ export async function startLead(deps: LeadDeps, effect: StartEffect): Promise<Re
       filedSpec,
       ...(previous ? { previous } : {}),
       light: role.value.rule,
+      reviewer: reviewer ? reviewerBrief(reviewer.role, reviewer.cheap) : null,
       movedUp,
     })
     const started = await deps.terminals.start({
@@ -215,7 +218,7 @@ export async function startLead(deps: LeadDeps, effect: StartEffect): Promise<Re
       ) {
         await leads.markTyped(brief, at, false)
       }
-      return recordStarted(work, deps, issue, attempt, started.value.address, role.value)
+      return recordStarted(work, deps, issue, attempt, started.value.address, role.value, reviewer?.role ?? null)
     })
     return recorded.ok ? ok(undefined) : err(toPortError(recorded.error))
   }
@@ -224,8 +227,9 @@ export async function startLead(deps: LeadDeps, effect: StartEffect): Promise<Re
   // the seat decided again (the rule reads stored facts); a table that cannot be read leaves the filed seat, or none.
   const decided = await seatOf(deps, current, origin)
   const seat = decided.ok ? decided.value : current.seat
+  const reviewer = await reviewerOf(deps, issue, (seat && 'rule' in seat ? seat.rule : null) != null)
   const recorded = await deps.uow.run(({ work }) =>
-    recordStarted(work, deps, issue, attempt, row.terminal ?? name, seat),
+    recordStarted(work, deps, issue, attempt, row.terminal ?? name, seat, reviewer?.role ?? null),
   )
   return recorded.ok ? ok(undefined) : err(toPortError(recorded.error))
 }
@@ -267,6 +271,22 @@ export async function seatOf(deps: LeadDeps, issue: Issue, origin: SeatOrigin): 
   return lead.ok ? ok({ ...lead.value, role: LEAD_ROLE, rule: null }) : lead
 }
 
+/**
+ * The reviewer row this lead's reviews run on and the cheap row's seat (`domains/leads/reviewer.ts`), or null when the
+ * role table cannot say (a table without the cheap row leaves reviews on agw's seat, as before Issue 2027). The tripwire
+ * is read here, once, outside any transaction; with no reader every Issue is on its starting share.
+ */
+async function reviewerOf(
+  deps: LeadDeps,
+  issue: IssueId,
+  light: boolean,
+): Promise<{ role: string; cheap: { tier: Tier; effort: Effort } } | null> {
+  const cheap = await deps.roles.role(REVIEWER_CHEAP_ROLE)
+  if (!cheap.ok) return null
+  const takesAll = deps.reviewerTakesAll ? await deps.reviewerTakesAll() : false
+  return { role: reviewerRoleFor({ issueNumber: issueNumber(issue), light, takesAll }), cheap: cheap.value }
+}
+
 /** The last words of a moved-up light lead, for its successor's brief; nothing when they cannot be read. */
 async function lastWordsOf(deps: LeadDeps, transcript: string | null): Promise<string | null> {
   if (!transcript || !deps.apiErrors) return null
@@ -284,6 +304,7 @@ async function recordStarted(
   attempt: number,
   terminal: string,
   seat: { tier: Tier; effort: Effort; role?: string | undefined; rule?: string | null | undefined } | undefined,
+  reviewer: string | null,
 ) {
   const result = await recordIn(work, deps, {
     issueId: issue,
@@ -294,6 +315,7 @@ async function recordStarted(
         attempt,
         terminal,
         ...(seat ? { seat: seatPayload(seat) } : {}),
+        ...(reviewer ? { reviewer } : {}),
       },
       actor: 'factory',
     },

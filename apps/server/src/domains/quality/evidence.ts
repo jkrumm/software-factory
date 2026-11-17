@@ -1,3 +1,4 @@
+import type { ReviewThread } from '@software-factory/contract'
 import { conclusionVerdict } from '../../kernel/checks.ts'
 import { EVIDENCE_SAMPLE_CAP } from '../../kernel/edge-need.ts'
 import { globMatches } from '../../kernel/glob.ts'
@@ -39,6 +40,23 @@ export interface ReviewRead {
   tier: string
   covered: boolean
   uncovered: UncoveredCommit[]
+  /** the reviews that cover the range's commits, as agw's job ids (`coveredBy`), each once; absent when none is named */
+  jobs?: string[]
+}
+
+/** What agw's ledger holds of one review thread at the ship: no seat yet, which the factory's assignment names. */
+export interface LedgerThread {
+  thread: string
+  key: string
+  /** the round that covered the commits */
+  job: string
+  tier: string
+  rounds: number
+  outcome: string | null
+  /** agw's own seat for the job, in its route table's words */
+  routed: { model: string; effort: string } | null
+  wallMs: number | null
+  findings: { total: number; important: number; applied: number; declined: number; open: number }
 }
 
 /** The merged commits a ship named, as evidence. */
@@ -66,6 +84,10 @@ export interface ReviewEvidence {
   uncovered: UncoveredCommit[]
   /** why there is no review: what agw said, or why it could not be asked */
   reason: string | null
+  /** the reviewer row the Issue's lead was assigned (`domains/leads/reviewer.ts`); absent when none was recorded */
+  reviewer?: string
+  /** the covering reviews with the seat each ran on; absent when none was read */
+  threads?: ReviewThread[]
 }
 
 /** One line of the acceptance the lead states: met, or not met and why. */

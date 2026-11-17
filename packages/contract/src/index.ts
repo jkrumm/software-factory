@@ -25,6 +25,7 @@ export {
 export * from './filing.ts'
 export * from './seat.ts'
 export * from './light-gate.ts'
+export * from './reviewer.ts'
 export * from './lane.ts'
 export { Health, HealthLine, HealthLoop, Heartbeat } from './health.ts'
 export {
@@ -34,6 +35,13 @@ export {
   ROLE_NAME,
   RoleEntry,
   RoleList,
+  REVIEWER_CHEAP_ROLE,
+  REVIEWER_ROLE,
+  REVIEWER_START_SHARE,
+  REVIEWER_TRIPWIRE_DAYS,
+  REVIEWER_TRIPWIRE_POINTS,
+  REVIEWER_TRIPWIRE_REVIEWS,
+  REVIEWER_WINDOW_MIN_ISSUES,
   RoleName,
   type RoleTable,
   TIERS,
@@ -46,6 +54,7 @@ export {
   QualityEvidence,
   QualityIssue,
   QualityView,
+  type ReviewThread,
   ReopenAnswer,
   ReopenBody,
   ShipAnswer,

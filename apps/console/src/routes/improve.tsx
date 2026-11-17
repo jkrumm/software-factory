@@ -78,6 +78,9 @@ import {
   PARTS_ON_CARD,
   partRows,
   targetTally,
+  reviewerCells,
+  reviewerTripwireWords,
+  REVIEWER_LABEL,
   tripwireWords,
   deliveryRows,
   leadsWords,
@@ -1046,6 +1049,67 @@ function EdgeSection({ model }: { model: KpiModel }) {
   )
 }
 
+const REVIEWER_COLUMNS = [
+  { key: 'seat', label: 'Seat' },
+  { key: 'reviews', label: 'Reviews' },
+  { key: 'findings', label: 'Findings per review' },
+  { key: 'applied', label: 'Applied' },
+  { key: 'rounds', label: 'Rounds until clean' },
+  { key: 'firstPass', label: 'First verification pass' },
+  { key: 'regressions', label: 'Regressed Issues' },
+  { key: 'cost', label: 'Cost per review' },
+  { key: 'wall', label: 'Wall time p50' },
+] as const
+
+function ReviewerSection({ model }: { model: KpiModel }) {
+  const { rows } = model.reviewers
+  return (
+    <div data-shot="improve-reviewers" className="mt-6">
+      <Section title="Reviewers" aside="The two reviewer seats over the reviews recorded in the window">
+        <div className={cn(PANEL, 'overflow-x-auto')} style={PANEL_SHADOW}>
+          <table className="w-full text-sm">
+            <caption className="sr-only">Reviews recorded in the window, by the seat they ran on</caption>
+            <thead className="text-left text-xs text-muted-foreground">
+              <tr>
+                <th scope="col" className="px-4 py-2 font-medium">
+                  Reviewer
+                </th>
+                {REVIEWER_COLUMNS.map((column) => (
+                  <th key={column.key} scope="col" className="px-4 py-2 text-right font-medium">
+                    {column.label}
+                  </th>
+                ))}
+              </tr>
+            </thead>
+            <tbody>
+              {rows.map((row) => {
+                const cells = reviewerCells(row)
+                return (
+                  <tr key={row.seat} className="border-t">
+                    <th scope="row" className="px-4 py-2 text-left font-medium">
+                      {REVIEWER_LABEL[row.seat]}
+                    </th>
+                    {REVIEWER_COLUMNS.map((column) => (
+                      <td key={column.key} className="px-4 py-2 text-right tabular-nums">
+                        {cells[column.key]}
+                      </td>
+                    ))}
+                  </tr>
+                )
+              })}
+            </tbody>
+          </table>
+        </div>
+        {reviewerTripwireWords(model.reviewers).map((line) => (
+          <p key={line} className="mt-2 text-sm text-muted-foreground">
+            {line}
+          </p>
+        ))}
+      </Section>
+    </div>
+  )
+}
+
 function SeatSection({ model }: { model: KpiModel }) {
   const { rows, attemptSeats, tripwire, delivery } = model.seats
   return (
@@ -1211,6 +1275,7 @@ function Improve() {
         <div className="grid gap-10">
           <KpiSections model={model} />
           <SeatSection model={model} />
+          <ReviewerSection model={model} />
           <EdgeSection model={model} />
           <FixBand model={fixes.data} pending={fixes.isPending} />
           <FrictionSection model={friction.data} pending={friction.isPending} />

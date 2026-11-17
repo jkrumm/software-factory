@@ -419,3 +419,66 @@ test('the ci check reads the landed commit; a CI that cannot be read does not ho
   ])
   expect(checks(await new MakeAndProbes({ ci }).run({ ...input, ci: undefined }, signal()))).toEqual([])
 })
+
+test('agw review: the covering jobs of a range are named, each once, and each thread’s record is read from the ledger', async () => {
+  const sha = (c: string) => c.repeat(40)
+  const review = agw({
+    route: { exitCode: 0, stdout: JSON.stringify({ tier: 'standard' }) },
+    covered: {
+      exitCode: 0,
+      stdout: JSON.stringify({
+        covered: true,
+        commits: [
+          { sha: sha('a'), subject: 'x', required: 'standard', coveredBy: 'rv_1' },
+          { sha: sha('b'), subject: 'y', required: 'light', coveredBy: 'rv_1' },
+          { sha: sha('c'), subject: 'z', required: 'light', coveredBy: null },
+        ],
+        uncovered: [],
+      }),
+    },
+    status: {
+      exitCode: 0,
+      stdout: JSON.stringify({
+        job: {
+          id: 'rv_1',
+          thread: 'th_1',
+          threadKey: 'factory-9',
+          round: 2,
+          tier: 'standard',
+          outcome: 'clean',
+          seat: { model: 'sonnet', effort: 'medium' },
+          createdAt: '2026-11-17T10:00:00.000Z',
+          submittedAt: '2026-11-17T10:00:40.000Z',
+        },
+        findings: [
+          { tag: 'important', disposition: 'fixed' },
+          { tag: 'nit', disposition: 'intentional' },
+          { tag: 'nit', disposition: 'wrong' },
+          { tag: 'nit', disposition: 'open' },
+        ],
+      }),
+    },
+  })
+  const read = await review.read({ repo: '/r', ranges: [range] })
+  expect(read).toMatchObject({ ok: true, value: { jobs: ['rv_1'] } })
+  expect(await review.threads({ repo: '/r', jobs: ['rv_1', 'rv_1'] })).toEqual({
+    ok: true,
+    value: [
+      {
+        thread: 'th_1',
+        key: 'factory-9',
+        job: 'rv_1',
+        tier: 'standard',
+        rounds: 2,
+        outcome: 'clean',
+        routed: { model: 'sonnet', effort: 'medium' },
+        wallMs: 40_000,
+        findings: { total: 4, important: 1, applied: 1, declined: 2, open: 1 },
+      },
+    ],
+  })
+})
+
+test('agw review: a job the ledger cannot answer for is left out of the threads, never an error', async () => {
+  expect(await agw({}).threads({ repo: '/r', jobs: ['rv_1'] })).toEqual({ ok: true, value: [] })
+})

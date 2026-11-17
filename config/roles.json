@@ -5,6 +5,7 @@
     "implementer": { "tier": "sonnet", "effort": "medium" },
     "verifier": { "tier": "haiku", "effort": "high" },
     "reviewer": { "tier": "sonnet", "effort": "medium" },
+    "reviewer-cheap": { "tier": "haiku", "effort": "high" },
     "Explore": { "tier": "haiku", "effort": "high" }
   }
 }
