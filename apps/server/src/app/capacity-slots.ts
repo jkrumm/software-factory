@@ -110,7 +110,7 @@ export interface SlotDeps extends PlanningDeps {
   cores: number
   /** the lead admission's load ceiling: under the aim, the tripwire for a slot beyond the base is set at it */
   loadCeiling: number
-  /** `FACTORY_SLOT_PASS_MIN` in ms: how long a waiter may be passed by smaller steps before nothing passes it */
+  /** `FACTORY_SLOT_PASS_MIN` in ms: how long a waiter may be passed by smaller steps before its memory is reserved for it */
   slotPassMs?: number
   /** the swapout rate above which a finished run's peak is not learned from */
   swapoutCeilingMb?: number
@@ -292,7 +292,12 @@ export async function touchSlot(
     for (const holder of holders)
       learned.set((await sizeOf(holder.name, holder.cwd)).key, (await sizeOf(holder.name, holder.cwd)).mib)
     const heldPeakById = new Map<string, number | null>()
-    for (const holder of holders) heldPeakById.set(holder.id, (await sizeOf(holder.name, holder.cwd)).mib)
+    const heldRunMsById = new Map<string, number | null>()
+    for (const holder of holders) {
+      const size = await sizeOf(holder.name, holder.cwd)
+      heldPeakById.set(holder.id, size.mib)
+      heldRunMsById.set(holder.id, size.runMs)
+    }
     const peaksByName = new Map<string, number | null>()
     const peakFromByName = new Map<string, PeakFrom>()
     const coresByName = new Map<string, number>()
@@ -379,6 +384,8 @@ export async function touchSlot(
               peaksByName,
               peakFromByName,
               heldPeakById,
+              heldRunMsById,
+              stepRunMs: mine.runMs,
               freeMib,
               growthMib: growth,
               max: aimed ?? deps.slotsMax,
