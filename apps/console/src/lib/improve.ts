@@ -1,8 +1,10 @@
 import type {
+  AttemptSeatRow,
   CapacityLoopModel,
   FindingClass,
   FixCommitsModel,
   FrictionCount,
+  InferredEdgeKpis,
   Kpi,
   KpiKey,
   LoopYieldWindow,
@@ -749,4 +751,24 @@ export function tripwireWords(tripwire: SeatKpis['tripwire']): string {
   const verdict =
     met === null ? 'not measured yet' : met ? `within ${points} points: met` : `not within ${points} points: not met`
   return `Triage's small is ${on ? 'on' : 'off'}. ${rates}; ${verdict}.`
+}
+
+/** An attempt-seat row's cells as text: the seat, its attempts and Issues, the first pass, and the cost per Issue. */
+export function attemptSeatCells(row: AttemptSeatRow) {
+  return {
+    seat: `${row.tier} · ${row.effort}`,
+    attempts: `${row.attempts}`,
+    issues: `${row.issues}`,
+    firstPass: row.firstPassRate === null ? '–' : `${rateWords(row.firstPassRate)} of ${row.firstWatches}`,
+    cost: row.costPerIssue === null ? '–' : formatValue('usd', row.costPerIssue),
+  }
+}
+
+/** The line under the edge figures: how many inferred edges were needed, how many held a ready Issue, and for how long. */
+export function edgeWords(edges: InferredEdgeKpis): string {
+  const settled = edges.needed + edges.notNeeded
+  if (edges.total === 0) return 'No inferred chain edge was created in this window.'
+  const open = edges.open === 0 ? '' : ` ${edges.open} still open.`
+  if (settled === 0) return `${edges.total} inferred chain edges, none settled yet.${open}`
+  return `Of ${settled} settled inferred chain edges ${edges.needed} were needed (${rateWords(edges.neededShare)}) and ${edges.notNeeded} held a ready Issue for ${hoursWords(edges.idleHours)} in all.${open}`
 }

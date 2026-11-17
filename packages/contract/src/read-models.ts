@@ -2,6 +2,7 @@ import * as z from 'zod'
 import { QueueReason, QueueStatesView } from './capacity.ts'
 import { SIGNAL_ORIGINS } from './intake.ts'
 import { IssueRef } from './planning.ts'
+import { EFFORTS, TIERS } from './roles.ts'
 import { WORK_WORDS, WorkCounts } from './work-words.ts'
 
 /**
@@ -426,9 +427,35 @@ export const SeatKpiRow = z
   .meta({ id: 'SeatKpiRow' })
 export type SeatKpiRow = z.infer<typeof SeatKpiRow>
 
+/**
+ * The attempts that started in the window, grouped by the tier and effort each ran on (`lead_attempts.tier`, `effort`).
+ * Unlike `SeatKpiRow`, which follows an Issue's first lead, this follows every attempt: a retry on a stronger seat counts
+ * for that seat, and a first watch counts for the seat of the attempt that shipped it.
+ */
+export const AttemptSeatRow = z
+  .strictObject({
+    tier: z.enum(TIERS),
+    effort: z.enum(EFFORTS),
+    /** attempts that started on the seat in the window */
+    attempts: z.number().int(),
+    /** the Issues behind those attempts, each once */
+    issues: z.number().int(),
+    /** first watches (watch 1) of those attempts' ships that ended passed or regressed, and the share that passed (null with none) */
+    firstWatches: z.number().int(),
+    firstPassRate: z.number().nullable(),
+    /** dollars the usage schema priced for the Claude sessions the attempts' hooks reported; null while it cannot be read */
+    cost: z.number().nullable(),
+    /** `cost` per Issue of `issues`; null while `cost` is */
+    costPerIssue: z.number().nullable(),
+  })
+  .meta({ id: 'AttemptSeatRow' })
+export type AttemptSeatRow = z.infer<typeof AttemptSeatRow>
+
 export const SeatKpis = z
   .strictObject({
     rows: z.array(SeatKpiRow),
+    /** the same window by the seat each attempt started on, the most attempts first */
+    attemptSeats: z.array(AttemptSeatRow),
     /** the light Issues moved up, of the light Issues; null with none light */
     movedUpShare: z.number().nullable(),
     /**
@@ -449,6 +476,30 @@ export const SeatKpis = z
   .meta({ id: 'SeatKpis' })
 export type SeatKpis = z.infer<typeof SeatKpis>
 
+/**
+ * The `after` edges the factory inferred (`planning_edges.inferred_by` set) that were created in the window, by whether
+ * they were needed. An edge is settled once its blocker closed. A settled edge with no `ready_since` was needed: no look
+ * saw its Issue ready behind it. One with `ready_since` was not: the Issue sat ready, idle capacity, until the edge was
+ * satisfied. Readiness is judged per Issue, so the idle hours of Issues held in one repo can overlap.
+ */
+export const InferredEdgeKpis = z
+  .strictObject({
+    /** inferred edges created in the window */
+    total: z.number().int(),
+    /** of those, not yet satisfied: their value is not final */
+    open: z.number().int(),
+    /** satisfied with no look that saw the Issue ready */
+    needed: z.number().int(),
+    /** satisfied with the Issue ready from `ready_since` */
+    notNeeded: z.number().int(),
+    /** `needed` of the settled edges; null with none settled */
+    neededShare: z.number().nullable(),
+    /** hours the not needed edges held a ready Issue, from `ready_since` to `satisfied_at`, summed */
+    idleHours: z.number(),
+  })
+  .meta({ id: 'InferredEdgeKpis' })
+export type InferredEdgeKpis = z.infer<typeof InferredEdgeKpis>
+
 export const KpiModel = z
   .strictObject({
     at,
@@ -459,6 +510,8 @@ export const KpiModel = z
     kpis: z.array(Kpi),
     /** the current window's Issues by the seat their first lead ran on */
     seats: SeatKpis,
+    /** the inferred chain edges created in the window, needed or not */
+    edges: InferredEdgeKpis,
   })
   .meta({ id: 'KpiModel' })
 export type KpiModel = z.infer<typeof KpiModel>
