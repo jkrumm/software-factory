@@ -288,7 +288,7 @@ export const KPI_CATALOG: Record<KpiKey, KpiSpec> = {
     decision: 'Whether to add a test slot: a long wait means leads idle on a gate',
   },
   minutes_over_ceiling: {
-    label: 'Minutes over the load ceiling',
+    label: 'Share of minutes over the load ceiling',
     direction: 'lower',
     target: WATCH,
     targetSource:
