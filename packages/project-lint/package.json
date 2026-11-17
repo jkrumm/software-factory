@@ -1,0 +1,15 @@
+{
+  "name": "@software-factory/project-lint",
+  "version": "0.0.0",
+  "private": true,
+  "type": "module",
+  "exports": {
+    ".": "./src/index.ts",
+    "./yaml-problems": "./src/yaml-problems.ts"
+  },
+  "dependencies": {
+    "@software-factory/contract": "workspace:*",
+    "yaml": "2.9.1",
+    "zod": "4.6.7"
+  }
+}

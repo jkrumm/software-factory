@@ -23,6 +23,7 @@
         "@software-factory/client": "workspace:*",
         "@software-factory/contract": "workspace:*",
         "@software-factory/door": "workspace:*",
+        "@software-factory/project-lint": "workspace:*",
         "yaml": "2.9.1",
         "zod": "4.6.7",
       },
@@ -88,6 +89,7 @@
       "dependencies": {
         "@elysiajs/openapi": "1.4.17",
         "@software-factory/contract": "workspace:*",
+        "@software-factory/project-lint": "workspace:*",
         "elysia": "1.4.30",
         "yaml": "2.9.1",
         "zod": "4.6.7",
@@ -118,6 +120,15 @@
       },
       "devDependencies": {
         "ajv": "8.20.0",
+      },
+    },
+    "packages/project-lint": {
+      "name": "@software-factory/project-lint",
+      "version": "0.0.0",
+      "dependencies": {
+        "@software-factory/contract": "workspace:*",
+        "yaml": "2.9.1",
+        "zod": "4.6.7",
       },
     },
     "tests": {
@@ -631,6 +642,8 @@
     "@software-factory/contract": ["@software-factory/contract@workspace:packages/contract"],
 
     "@software-factory/door": ["@software-factory/door@workspace:apps/door"],
+
+    "@software-factory/project-lint": ["@software-factory/project-lint@workspace:packages/project-lint"],
 
     "@software-factory/server": ["@software-factory/server@workspace:apps/server"],
 

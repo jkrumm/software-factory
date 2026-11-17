@@ -3,7 +3,7 @@ import type { FixCommitReader } from '../../domains/loops/ports.ts'
 import { err, ok, portError } from '../../kernel/result.ts'
 import { CannotExecute } from '../hc/process.ts'
 import { originDefault, type RepoLocator } from './checkout.ts'
-import { gitOut, ProcessFailed, type Tools } from './git.ts'
+import { defaultTools, gitOut, ProcessFailed, type Tools } from './git.ts'
 
 const FETCH_TIMEOUT_MS = 90_000
 const FIELD = '\u001f'
@@ -34,7 +34,7 @@ function commitOf(block: string): FixCommit | null {
  * fetch, as the hygiene checkout finds it), the subject filtered to a conventional `fix`. Read only.
  */
 export function createFixCommitReader(options: { repos: RepoLocator; git?: string }): FixCommitReader {
-  const tools: Tools = { git: options.git ?? 'git', make: 'make', bun: 'bun' }
+  const tools: Tools = defaultTools(options.git)
   return {
     async read(repo, since) {
       const located = await options.repos.locate(repo)

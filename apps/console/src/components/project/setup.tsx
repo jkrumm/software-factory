@@ -1,18 +1,25 @@
 import type { ProjectHygieneModel, ProjectSetupField, ProjectSetupModel } from '@software-factory/contract'
+import { Link } from '@tanstack/react-router'
 import { useState } from 'react'
 import { Fold, Lozenge, Section } from '@/components/kit'
 import { Ago } from '@/components/issue/ago'
 import {
+  ACTION_TONES,
+  ACTION_WORDS,
+  COST_WORDS,
+  ENABLED_WORDS,
   FINDING_TONES,
   FINDING_WHY,
   FINDING_WORDS,
+  ISSUE_STATE_WORDS,
   PASS_TONES,
   PASS_WORDS,
   PROBE_TONES,
   PROBE_WORDS,
 } from '@/lib/project'
+import { numberOf } from '@/lib/flow'
 import { cn } from '@/lib/utils'
-import { Mono, None, NUM, Table, TD, TH } from './parts'
+import { LINK, Mono, None, NUM, Table, TD, TH } from './parts'
 
 const ALERT =
   'rounded-lg bg-[color-mix(in_srgb,var(--vx-bad-solid)_12%,transparent)] px-3 py-2 text-[length:var(--vx-text-sm)] text-[color:var(--vx-bad-text)]'
@@ -137,6 +144,8 @@ export function HygieneSection({ model, now }: { model: ProjectHygieneModel; now
         head={
           <>
             <th className={TH}>Probe</th>
+            <th className={TH}>Default</th>
+            <th className={TH}>Runs</th>
             <th className={TH}>Last run</th>
             <th className={TH}>Detail</th>
             <th className={cn(TH, NUM)}>Findings</th>
@@ -145,18 +154,50 @@ export function HygieneSection({ model, now }: { model: ProjectHygieneModel; now
       >
         {model.probes.map((probe) => (
           <tr key={`${probe.declared ? 'declared' : 'built-in'}:${probe.name}`}>
-            <td className={TD}>
+            <td className={cn(TD, 'min-w-56')}>
               <Mono>{probe.name}</Mono>
               {probe.declared ? <span className="ml-2 text-xs text-muted-foreground">the project's own</span> : null}
+              <p className="mt-1 text-xs text-muted-foreground">{probe.catalogue.summary}</p>
+            </td>
+            <td className={TD} title={probe.catalogue.detect ?? undefined}>
+              {ENABLED_WORDS[probe.catalogue.enabled]}
+              {probe.catalogue.detect ? (
+                <p className="mt-1 text-xs text-muted-foreground">{probe.catalogue.detect}</p>
+              ) : null}
+            </td>
+            <td className={TD}>
+              <span className="capitalize">{probe.catalogue.cadence}</span>
+              <p className="mt-1 text-xs text-muted-foreground">{COST_WORDS[probe.catalogue.cost]}</p>
             </td>
             <td className={TD}>
               <Lozenge tone={PROBE_TONES[probe.status]}>{PROBE_WORDS[probe.status]}</Lozenge>
+              {probe.ranAt ? (
+                <p className="mt-1 text-xs text-muted-foreground">
+                  <Ago iso={probe.ranAt} now={now} />
+                </p>
+              ) : null}
             </td>
             <td className={cn(TD, 'text-muted-foreground wrap-anywhere')}>{probe.detail}</td>
             <td className={cn(TD, NUM)}>{probe.findings}</td>
           </tr>
         ))}
       </Table>
+      <Fold title="How to switch a probe off" count={model.probes.filter((p) => !p.declared).length} className="mt-4">
+        <dl className="grid gap-x-6 gap-y-2 pt-3 text-[length:var(--vx-text-sm)] min-[40rem]:grid-cols-[max-content_minmax(0,1fr)]">
+          {model.probes
+            .filter((probe) => !probe.declared)
+            .map((probe) => (
+              <div key={probe.name} className="contents">
+                <dt>
+                  <Mono>{probe.name}</Mono>
+                </dt>
+                <dd className="text-muted-foreground">
+                  {probe.catalogue.silence} Seat of its Issue: {probe.catalogue.seat}.
+                </dd>
+              </div>
+            ))}
+        </dl>
+      </Fold>
       <h3 className="mt-6 mb-2 text-sm font-medium text-muted-foreground">
         Findings of the newest pass <span className="tabular-nums">{model.findings.length}</span>
       </h3>
@@ -169,6 +210,7 @@ export function HygieneSection({ model, now }: { model: ProjectHygieneModel; now
             <>
               <th className={TH}>Finding</th>
               <th className={TH}>Probe</th>
+              <th className={TH}>Issue</th>
               <th className={TH}>How it ended</th>
             </>
           }
@@ -187,6 +229,15 @@ export function HygieneSection({ model, now }: { model: ProjectHygieneModel; now
               <td className={TD}>
                 <Mono>{finding.probe}</Mono>
               </td>
+              <td className={TD}>
+                {finding.issue ? (
+                  <Link to="/issues/$id" params={{ id: String(numberOf(finding.issue)) }} className={LINK}>
+                    {finding.issueState ? ISSUE_STATE_WORDS[finding.issueState] : 'Issue'} · #{numberOf(finding.issue)}
+                  </Link>
+                ) : (
+                  <span className="text-muted-foreground">None</span>
+                )}
+              </td>
               <td className={TD} title={FINDING_WHY[finding.status]}>
                 <Lozenge tone={FINDING_TONES[finding.status]}>{FINDING_WORDS[finding.status]}</Lozenge>
                 {finding.reason ? <span className="ml-2 text-muted-foreground">{finding.reason}</span> : null}
@@ -195,6 +246,43 @@ export function HygieneSection({ model, now }: { model: ProjectHygieneModel; now
           ))}
         </Table>
       )}
+      {model.lifecycle.length > 0 ? (
+        <Fold title="What the passes did to findings already filed" count={model.lifecycle.length} className="mt-4">
+          <div className="pt-3">
+            <Table
+              label="Lifecycle"
+              head={
+                <>
+                  <th className={TH}>When</th>
+                  <th className={TH}>Finding</th>
+                  <th className={TH}>Issue</th>
+                  <th className={TH}>Did</th>
+                </>
+              }
+            >
+              {model.lifecycle.map((entry) => (
+                <tr key={`${entry.at}:${entry.key}:${entry.action}`}>
+                  <td className={TD}>
+                    <Ago iso={entry.at} now={now} />
+                  </td>
+                  <td className={cn(TD, 'wrap-anywhere')}>
+                    <Mono>{entry.key}</Mono>
+                    <p className="mt-1 text-xs text-muted-foreground">{entry.why.split('\n')[0]}</p>
+                  </td>
+                  <td className={TD}>
+                    <Link to="/issues/$id" params={{ id: String(numberOf(entry.issue)) }} className={LINK}>
+                      #{numberOf(entry.issue)}
+                    </Link>
+                  </td>
+                  <td className={TD}>
+                    <Lozenge tone={ACTION_TONES[entry.action]}>{ACTION_WORDS[entry.action]}</Lozenge>
+                  </td>
+                </tr>
+              ))}
+            </Table>
+          </div>
+        </Fold>
+      ) : null}
       {model.passes.length > 1 ? (
         <Fold title="Earlier passes" count={model.passes.length - 1} className="mt-4">
           <div className="pt-3">

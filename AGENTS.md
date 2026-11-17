@@ -87,12 +87,12 @@ and where) → `docs/decisions.md` (what was decided and why).
   do not rename them. `ok` is false only for a stopped factory; `/health` never queries the database in the request.
 - **State words stay off screens** (`scripts/vocabulary.ts`, `docs/language.md` "Where work stands"): the Console, the
   Herdr bar and `read/describe.ts` show Running, Paused, Ready, Held, Checking and Planned, never `queued`, `working`,
-  `waiting`, `watching` or `settling`. An exception is a line with its reason in `scripts/vocabulary.allow`.
-- **Retired words fail `make check`** (`scripts/retired-words.ts`, the Retires column of `docs/language.md`). An exception
-  is a line with its reason in `scripts/retired-words.allow`.
+  `waiting`, `watching` or `settling`. Retired words (`scripts/retired-words.ts`, the Retires column) fail the same way.
+  An exception is a line with its reason in the script's `.allow` file.
 - **The README states counts and lists** (event kinds, callers, tokens, screens, domains, states, the Console's port and
-  writes). `make docs-check` reads them from the code and fails on a mismatch, so change the README in the commit that
-  adds an event kind, a caller, a token, a screen or a domain.
+  writes): `make docs-check` fails on a mismatch, so change it in the commit that changes one.
+- **Hygiene probes are one catalogue** (`packages/contract/src/hygiene-catalogue.ts`): add a probe there, with its default,
+  cadence, seat and silence; `docs/hygiene.md` is generated from it.
 
 ## Validate and ship
 

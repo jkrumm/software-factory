@@ -299,3 +299,20 @@ Report `docs/strategy/2026-11-next/report.html`, definition `docs/strategy/2026-
   bursts exceed its median is admitted into a host that may then swap; the ceilings stop the next admission, not the burst.
   Revert to 0.8 (`LEAD_SHARE`) if `idleSeatHoursMemory` or `minutesUnderPressure` rises over the three days the loop reads.
   Not changed: the read side's plain p80 (`read/lead-costs.ts`), which shows the burst.
+- **NL35 Hygiene, second generation: one catalogue, findings that clear themselves, a daily pass for the cheap probes (Issue 1788, 2026-11-17).**
+  Measured 2026-11-17: nine built-in probes ran weekly; nothing cleared a finding whose probe went green; a still-red probe was
+  filed again a week after its Issue closed (the intake fingerprint window is 24 hours); `factory read finding-classes` is not
+  empty, its fields are `status`, `issues`, `decided`, `noise` and `open` (a query for `state`, `filed` and `dropped` finds
+  nothing). So: (1) the catalogue (`packages/contract/src/hygiene-catalogue.ts`) is the one list of probes, with default,
+  cost, cadence, seat and how to silence each; `docs/hygiene.md`, the Console's Hygiene tab, `factory read project-hygiene`,
+  the `hygiene.skip` keys and the light rule's classes are all read from it. (2) A finding is its key and the Issues that key
+  filed (`loop_findings`); its state is derived, never stored. A probe that ran with a verdict and does not raise a key closes
+  the key's Issue as healed while no lead has started (the machine allows `healed` only then), and tells a lead at work once;
+  a red key whose newest Issue closed done within 29 days reopens that Issue with the evidence (at most twice, then it is left
+  to a person and said so), instead of filing a second one; an open Issue holds its finding, so a daily pass adds no note a
+  day to a lead at work. The document judgment is never healed: it reads a few documents and absence proves nothing.
+  (3) Cheap file probes run in a daily pass, `check`, the tool probes, the project's own probes and the judgment weekly; a
+  daily pass becomes a full one when 30 commits landed since the last full pass and it is two days old. Rejected: a new
+  table for findings (the Issues already are the state), healing a lead's open Issue (it would race the lead's own ship),
+  coverage as a built-in probe (a repo asks for it with a declared probe), `cargo audit` and `pip-audit` beside
+  `osv-scanner` (one tool reads every lockfile of ours).

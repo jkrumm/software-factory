@@ -17,10 +17,12 @@ import {
   requestOf,
   skipped,
 } from '../../src/domains/loops/hygiene.ts'
-import type { HygieneChecker, Probe, ProbeFinding } from '../../src/domains/loops/hygiene-model.ts'
+import type { HygieneChecker, Probe, ProbeFinding, ProbeRun, Scope } from '../../src/domains/loops/hygiene-model.ts'
 import type { ClassIssue } from '../../src/domains/loops/classes.ts'
+import type { FindingIssue, LifecycleStep } from '../../src/domains/loops/hygiene-lifecycle.ts'
 import type { HygienePassRecord, LoopReads, LoopStore } from '../../src/domains/loops/ports.ts'
-import { hygienePass, type HygieneDeps } from '../../src/app/loops/hygiene.ts'
+import { hygieneSummary, hygienePass, type HygieneDeps } from '../../src/app/loops/hygiene.ts'
+import { planLifecycle } from '../../src/domains/loops/hygiene-lifecycle.ts'
 import type { StoredProject } from '../../src/domains/planning/sync.ts'
 import { sequentialIds } from '../../src/kernel/ids.ts'
 import { err, ok, portError } from '../../src/kernel/result.ts'
@@ -124,6 +126,7 @@ const row = (repo: string, at: Date, judgment: Partial<HygienePassRecord['judgme
   filed: [],
   overBudget: [],
   failed: [],
+  lifecycle: [],
 })
 const plan = (rows: HygienePassRecord[], over: { allow?: string[] | null; projects?: string[] } = {}) =>
   planHygiene({
@@ -170,6 +173,12 @@ const project = (
 interface Extra {
   findings?: ProbeFinding[]
   classes?: Record<string, ClassIssue[]>
+  /** the newest Issue of each finding key the project filed before (`LoopReads.findingIssues`) */
+  issues?: FindingIssue[]
+  /** the runs a sweep reports */
+  runs?: ProbeRun[]
+  /** commits since the last full pass */
+  commits?: number | null
 }
 
 function world(
@@ -196,22 +205,37 @@ function world(
       if (!recorded.some((r) => r.issue === f.issue)) recorded.push(f)
     },
   } as unknown as LoopStore
-  const loopReads = { classIssues: async () => extra.classes ?? {} } as unknown as LoopReads
+  const loopReads = {
+    classIssues: async () => extra.classes ?? {},
+    findingIssues: async () => extra.issues ?? [],
+  } as unknown as LoopReads
+  const steps: LifecycleStep[] = []
+  const scopes: (Scope | undefined)[] = []
   const checker: HygieneChecker = {
     withCheckout: async (repo, _ref, use) =>
       broken.has(repo)
         ? err(portError('gone', 'fetch failed'))
         : ok(await use({ path: '/tmp/x', ref: 'abcdef1234abcdef', source: '/tmp/src' })),
+    commitsSince: async () => extra.commits ?? null,
     sweep: async (co, options) => {
+      scopes.push(options?.scope)
       sweeps.push(co.ref)
       skips.push(options?.skipCheck)
       probes.push(options?.probes)
-      return { ref: co.ref, runs: [], findings: extra.findings ?? [], stale: [], slop: [] }
+      return {
+        ref: co.ref,
+        scope: options?.scope ?? 'full',
+        runs: extra.runs ?? [],
+        findings: extra.findings ?? [],
+        stale: [],
+        slop: [],
+      }
     },
   }
   const deps: HygieneDeps = {
     uow: {
-      run: async (work) => work({ loops, loopReads, planning: { projects: async () => projects } as never }),
+      run: async (work) =>
+        work({ loops, loopReads, planning: { projects: async () => projects } as never, work: {} as never }),
       inTransaction: () => false,
     },
     clock: { now: () => at },
@@ -230,10 +254,17 @@ function world(
       } as never)
     },
     everyMs: 7 * DAY,
+    dailyMs: DAY,
     retryMs: 6 * HOUR,
     repos: null,
+    apply: async (step, at, _reopens) => {
+      steps.push(step)
+      return { key: step.key, issue: step.issue, action: step.action, why: step.why, at }
+    },
   }
   return {
+    steps,
+    scopes,
     deps,
     rows,
     sweeps,
@@ -383,4 +414,182 @@ test('a class held by noise from other repos holds in this repo too; its repo is
   expect(w.rows[0]?.filed.map((f) => f.key)).toEqual(['links:x.md'])
   expect(w.rows[0]?.overBudget.map((f) => f.key)).toEqual(['cochange:a|b'])
   expect(w.recorded.map((r) => [r.class, r.repo])).toEqual([['links', w.rows[0]?.repo ?? '']])
+})
+
+// ---- the lifecycle: a finding heals, a closed one that is red again reopens ------------------------------------------------
+
+const issueOf = (key: string, over: Partial<FindingIssue> = {}): FindingIssue => ({
+  key,
+  issue: `issue_${key.length}`,
+  state: 'queued',
+  outcome: null,
+  closedAt: null,
+  reopens: 0,
+  ...over,
+})
+const run = (covers: string, outcome: ProbeRun['outcome'] = 'clean'): ProbeRun => ({
+  probe: covers.split(':')[0] as Probe,
+  outcome,
+  detail: `ran ${covers}`,
+  covers,
+})
+const lifecycle = (input: { red?: ProbeFinding[]; runs?: ProbeRun[]; issues: FindingIssue[] }) =>
+  planLifecycle({ red: [], runs: [], now, swept: 'app @ abc1234', ...input })
+
+test('a finding its probe no longer raises: an Issue no lead has started is closed healed, a lead at work is told, a watch is left alone', () => {
+  const issues = [
+    issueOf('links:a.md', { issue: 'issue_1', state: 'settling' }),
+    issueOf('links:b.md', { issue: 'issue_2', state: 'queued' }),
+    issueOf('links:c.md', { issue: 'issue_3', state: 'working' }),
+    issueOf('links:d.md', { issue: 'issue_4', state: 'waiting' }),
+    issueOf('links:e.md', { issue: 'issue_5', state: 'watching' }),
+  ]
+  const plan = lifecycle({ issues, runs: [run('links')] })
+  expect(plan.steps.map((s) => [s.issue, s.action])).toEqual([
+    ['issue_1', 'healed'],
+    ['issue_2', 'healed'],
+    ['issue_3', 'noted'],
+    ['issue_4', 'noted'],
+  ])
+  expect(plan.steps[0]?.why).toContain('ran links')
+  expect(plan.suppress.size).toBe(0)
+})
+
+test('only a run with a verdict speaks for a key: skipped, failed and a run of another probe heal nothing', () => {
+  const issues = [issueOf('links:a.md', { state: 'queued' })]
+  expect(lifecycle({ issues, runs: [run('links', 'skipped')] }).steps).toEqual([])
+  expect(lifecycle({ issues, runs: [run('links', 'failed')] }).steps).toEqual([])
+  expect(lifecycle({ issues, runs: [run('deps')] }).steps).toEqual([])
+  expect(lifecycle({ issues, runs: [] }).steps).toEqual([])
+  // a run that found other things is still a verdict on the keys it did not raise
+  expect(lifecycle({ issues, runs: [run('links', 'found')] }).steps.map((s) => s.action)).toEqual(['healed'])
+  // a key is covered by a run of its own name or under it, never by a longer name that merely starts alike
+  expect(lifecycle({ issues: [issueOf('check', { state: 'queued' })], runs: [run('check')] }).steps).toHaveLength(1)
+  expect(lifecycle({ issues: [issueOf('deps:cargo', { state: 'queued' })], runs: [run('deps')] }).steps).toHaveLength(1)
+  expect(
+    lifecycle({ issues: [issueOf('probe:demo-2', { state: 'queued' })], runs: [run('probe:demo')] }).steps,
+  ).toEqual([])
+})
+
+test('the document judgment is never healed: it read a few documents, absence proves nothing', () => {
+  const issues = [issueOf('judgment:slop:docs/a.md', { state: 'queued' })]
+  expect(lifecycle({ issues, runs: [run('judgment')] }).steps).toEqual([])
+})
+
+test('a finding that is red again: an open Issue is its life (nothing filed, no note a day); closed done reopens; reopened twice is left to a person', () => {
+  const red = [finding('links', 'links:a.md', 2), finding('links', 'links:b.md', 1), finding('links', 'links:c.md', 1)]
+  const closedDone = (days: number, reopens = 0) =>
+    ({ state: 'closed', outcome: 'done', closedAt: ago(days * DAY), reopens }) as const
+  const plan = lifecycle({
+    red,
+    issues: [
+      issueOf('links:a.md', { issue: 'issue_1', state: 'working' }),
+      issueOf('links:b.md', { issue: 'issue_2', ...closedDone(3) }),
+      issueOf('links:c.md', { issue: 'issue_3', ...closedDone(3, 2) }),
+    ],
+  })
+  expect(plan.steps.map((s) => [s.issue, s.action])).toEqual([
+    ['issue_2', 'reopened'],
+    ['issue_3', 'kept'],
+  ])
+  expect(plan.steps[0]?.why).toContain('red again at app @ abc1234')
+  expect(plan.steps[0]?.why).toContain('a line')
+  expect([...plan.suppress].sort()).toEqual(['links:a.md', 'links:b.md', 'links:c.md'])
+})
+
+test('a finding red again after the reopen window, healed, dropped or cancelled is filed anew, not reopened', () => {
+  const red = [finding('links', 'links:a.md', 1)]
+  for (const closed of [
+    { state: 'closed', outcome: 'done', closedAt: ago(40 * DAY) },
+    { state: 'closed', outcome: 'healed', closedAt: ago(3 * DAY) },
+    { state: 'closed', outcome: 'dropped', closedAt: ago(3 * DAY) },
+    { state: 'closed', outcome: 'cancelled', closedAt: ago(3 * DAY) },
+  ] as const) {
+    const plan = lifecycle({ red, issues: [issueOf('links:a.md', closed)] })
+    expect(plan.steps).toEqual([])
+    expect(plan.suppress.size).toBe(0)
+  }
+})
+
+test('a pass reopens the closed finding instead of filing it, and records what it did', async () => {
+  const findings = [finding('links', 'links:a.md', 1), finding('links', 'links:b.md', 1)]
+  const issues = [issueOf('links:a.md', { issue: 'issue_9', state: 'closed', outcome: 'done', closedAt: ago(2 * DAY) })]
+  const w = world(['app'], new Set(), undefined, { findings, issues, runs: [run('links', 'found')] })
+  await hygienePass(w.deps)
+  expect(w.steps.map((s) => [s.issue, s.action])).toEqual([['issue_9', 'reopened']])
+  // only the finding with no Issue is filed
+  expect(w.filedBodies).toEqual(['title of links:b.md'])
+  expect(w.rows[0]?.lifecycle.map((e) => [e.key, e.action])).toEqual([['links:a.md', 'reopened']])
+  expect(w.rows[0]?.filed.map((f) => f.key)).toEqual(['links:b.md'])
+})
+
+test('a pass heals the finding whose probe ran green and files nothing', async () => {
+  const issues = [issueOf('links:a.md', { issue: 'issue_7', state: 'queued' })]
+  const w = world(['app'], new Set(), undefined, { findings: [], issues, runs: [run('links')] })
+  const pass = await hygienePass(w.deps)
+  expect(w.steps.map((s) => [s.issue, s.action])).toEqual([['issue_7', 'healed']])
+  expect(w.filedBodies).toEqual([])
+  expect(w.rows[0]?.lifecycle[0]).toMatchObject({ key: 'links:a.md', issue: 'issue_7', action: 'healed' })
+  expect(pass.ok && pass.value.due && hygieneSummary(pass.value)).toMatch(/; healed 1$/)
+})
+
+// ---- cadence: weekly full pass, daily cheap pass, busy repo ------------------------------------------------------------------
+
+const planDaily = (rows: HygienePassRecord[], over: { projects?: string[] } = {}) =>
+  planHygiene({
+    projects: over.projects ?? ['a', 'b'],
+    rows,
+    now,
+    everyMs: 7 * DAY,
+    dailyMs: DAY,
+    retryMs: 6 * HOUR,
+    allow: null,
+  })
+const dailyRow = (repo: string, at: Date): HygienePassRecord => {
+  const base = row(repo, at)
+  return { ...base, report: { ...base.report, scope: 'daily' } }
+}
+
+test('a full pass is due after the week, a daily one after the day, and a daily pass does not move the week', () => {
+  // never swept: full
+  expect(planDaily([])).toEqual({ kind: 'full', repo: 'a' })
+  // a full pass 2 days ago and nothing since: a daily pass is due, carrying the last full pass
+  const full = row('a', ago(2 * DAY))
+  expect(planDaily([full, row('b', ago(HOUR))])).toEqual({ kind: 'daily', repo: 'a', lastFull: full })
+  // a daily pass an hour ago holds the day; the full pass is still 9 days old, so the week is due
+  expect(planDaily([row('a', ago(9 * DAY)), dailyRow('a', ago(HOUR)), row('b', ago(HOUR))])).toEqual({
+    kind: 'full',
+    repo: 'a',
+  })
+  expect(planDaily([row('a', ago(3 * DAY)), dailyRow('a', ago(HOUR)), row('b', ago(HOUR))])).toEqual({ kind: 'none' })
+  // a full pass comes before a daily one
+  expect(planDaily([row('a', ago(2 * DAY)), row('b', ago(8 * DAY))])).toMatchObject({ kind: 'full', repo: 'b' })
+  // daily passes off: only the week counts
+  expect(plan([row('a', ago(2 * DAY)), row('b', ago(2 * DAY)), row('c', ago(2 * DAY))])).toEqual({ kind: 'none' })
+})
+
+test('a judgment retry belongs to the newest full pass, not to a daily one', () => {
+  const failedFull = row('a', ago(2 * DAY), { outcome: 'failed', attempts: 1, judgedAt: ago(7 * HOUR) })
+  const rows = [failedFull, dailyRow('a', ago(HOUR)), row('b', ago(HOUR))]
+  expect(planDaily(rows)).toMatchObject({ kind: 'retry', repo: 'a' })
+})
+
+test('a daily pass runs the cheap scope; a busy repo is promoted to a full pass, a quiet one is not', async () => {
+  const quiet = world(['app'], new Set(), undefined, { findings: [], commits: 5 })
+  quiet.rows.push({ ...row('app', ago(3 * DAY)), ref: 'abc123def456abc123def456abc123def456abcd' })
+  const first = await hygienePass(quiet.deps)
+  expect(first).toMatchObject({ ok: true, value: { due: true, mode: 'daily' } })
+  expect(quiet.scopes).toEqual(['daily'])
+  expect(quiet.rows.at(-1)?.judgment.reason).toContain('daily pass')
+
+  const busy = world(['app'], new Set(), undefined, { findings: [], commits: 80 })
+  busy.rows.push({ ...row('app', ago(3 * DAY)), ref: 'abc123def456abc123def456abc123def456abcd' })
+  expect(await hygienePass(busy.deps)).toMatchObject({ ok: true, value: { due: true, mode: 'full' } })
+  expect(busy.scopes).toEqual(['full'])
+
+  // not busy enough for a repo whose last full pass is young: commits alone do not promote it
+  const young = world(['app'], new Set(), undefined, { findings: [], commits: 80 })
+  young.rows.push({ ...row('app', ago(DAY + HOUR)), ref: 'abc123def456abc123def456abc123def456abcd' })
+  await hygienePass(young.deps)
+  expect(young.scopes).toEqual(['daily'])
 })

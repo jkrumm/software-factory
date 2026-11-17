@@ -1,11 +1,12 @@
 .DEFAULT_GOAL := help
-.PHONY: help docs-check check check-fast check-steps check-fast-steps check-static test test-unit test-unit-changed test-scenarios merge-guard e2e fmt deploy rollback verify version
+.PHONY: help docs-check check check-fast check-steps check-fast-steps check-static test test-unit test-unit-changed test-scenarios merge-guard e2e fmt deploy rollback verify version hygiene-tools
 
 help:
 	@echo "make check   install, format, lint, shellcheck, tsc, Console tsc, tokens, artifact templates and InfoHint definitions, e2e tsc, boundaries, retired words, state words on screens, public scan, Issue diagram, generated CLI, tests, scenarios, Console build and Playwright (the merge gate)"
 	@echo "make check-fast  the lead's local check (project.yaml checks.fast): everything of make check up to the tests, then the unit tests of the files the branch changed (CHECK_FAST_ALL=1: all of them); CI runs the full gate sharded"
 	@echo "make merge-guard  run right before merging a PR: refuses unless the branch contains origin/master, its migration numbers are free, the head's CI finished green and master's last finished CI run is not red (MERGE_GUARD_ARGS=--wait waits for the head's CI; --allow-red only for the change that fixes a red master)"
 	@echo "make docs-check  the README's counts and lists (event kinds, callers, tokens, screens, domains, states, Console port and writes) against the code; also this repo's hygiene probe \`readme\`"
+	@echo "make hygiene-tools  install the host tools of the hygiene probes that Homebrew provides (osv-scanner, for the advisories probe)"
 	@echo "make test    the unit tests and the scenarios"
 	@echo "make e2e     build the Console and run its Playwright suite against a seeded server (tests/e2e; screenshots land in tests/e2e/out/screenshots)"
 	@echo "make fmt     apply formatting"
@@ -79,6 +80,8 @@ check-static:
 	@bun apps/server/scripts/issue-diagram.ts --check
 	@echo "==> project.yaml schema and key reference are current (scripts/project-schema.ts --check)"
 	@bun scripts/project-schema.ts --check
+	@echo "==> docs/hygiene.md is current (scripts/hygiene-doc.ts --check)"
+	@bun scripts/hygiene-doc.ts --check
 	@echo "==> generated CLI is current (apps/cli/scripts/generate.ts --check)"
 	@bun apps/cli/scripts/generate.ts --check
 	@echo "==> KPI table of docs/product.md is the catalog (scripts/kpi-table.ts --check)"
@@ -153,6 +156,11 @@ version:
 # A lead runs this right before it merges its pull request (AGENTS.md "Merging"): rebased, free migration number, green master.
 merge-guard:
 	@bun scripts/merge-guard.ts $(MERGE_GUARD_ARGS)
+
+# Host tools of the hygiene probes: osv-scanner is for the hygiene `advisories` probe (Cargo, Python and Swift lockfiles); idempotent.
+hygiene-tools:
+	@brew list osv-scanner >/dev/null 2>&1 || brew install osv-scanner
+	@osv-scanner --version
 
 # The README states counts and lists (event kinds, callers, tokens, screens, domains, states, the Console's port and writes): this reads them
 # from the code and fails on a README that disagrees. A step of check-static and this repo's hygiene probe `readme` (project.yaml `hygiene.probes`).

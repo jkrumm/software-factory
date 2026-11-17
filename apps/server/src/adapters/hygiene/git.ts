@@ -6,7 +6,23 @@ export interface Tools {
   git: string
   make: string
   bun: string
+  /** the dead-code analyzer (`deadcode` probe); absent from the PATH the probe is skipped */
+  fallow: string
+  /** the advisory scanner for Cargo, Python and Swift lockfiles (`advisories` probe); absent from the PATH those lockfiles are skipped */
+  osv: string
+  /** GitHub's CLI, for facts about the repo on GitHub (`ci`, `deps`) */
+  gh: string
 }
+
+/** The tools of the sweep by their PATH names; `HygieneCheckerOptions` and the tests replace single ones. */
+export const defaultTools = (git = 'git'): Tools => ({
+  git,
+  make: 'make',
+  bun: 'bun',
+  fallow: 'fallow',
+  osv: 'osv-scanner',
+  gh: 'gh',
+})
 
 export const GIT_TIMEOUT_MS = 60_000
 

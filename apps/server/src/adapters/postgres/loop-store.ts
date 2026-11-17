@@ -139,7 +139,16 @@ const HygieneRow = z.object({
   filed: z.unknown(),
   over_budget: z.unknown(),
   failed: z.unknown(),
+  lifecycle: z.unknown().optional(),
 })
+
+/** The lifecycle entries as stored: ISO times back to dates; a pass recorded before the column has none. */
+const lifecycleOf = (value: unknown): HygienePassRecord['lifecycle'] =>
+  ((json(value) ?? []) as { key: string; issue: string; action: string; why: string; at: string }[]).map((entry) => ({
+    ...entry,
+    action: entry.action as HygienePassRecord['lifecycle'][number]['action'],
+    at: new Date(entry.at),
+  }))
 
 const hygieneOf = (raw: unknown): HygienePassRecord => {
   const row = HygieneRow.parse(raw)
@@ -154,6 +163,7 @@ const hygieneOf = (raw: unknown): HygienePassRecord => {
     filed: json(row.filed) as HygienePassRecord['filed'],
     overBudget: json(row.over_budget) as HygienePassRecord['overBudget'],
     failed: json(row.failed) as HygienePassRecord['failed'],
+    lifecycle: lifecycleOf(row.lifecycle),
   }
 }
 
@@ -468,7 +478,11 @@ export function postgresLoopStore(tx: SQL): LoopStore {
     },
 
     async hygienePasses() {
-      const rows: unknown[] = await tx`SELECT DISTINCT ON (repo) * FROM factory.hygiene_passes ORDER BY repo, at DESC`
+      // the newest pass of each repo and scope: the weekly (full) one carries the judgment, the daily one the cheap probes
+      const rows: unknown[] = await tx`
+        SELECT DISTINCT ON (repo, scope) * FROM (
+          SELECT *, COALESCE(report->>'scope', 'full') AS scope FROM factory.hygiene_passes
+        ) p ORDER BY repo, scope, at DESC`
       return rows.map(hygieneOf)
     },
 
@@ -480,10 +494,11 @@ export function postgresLoopStore(tx: SQL): LoopStore {
 
     async recordHygienePass(pass) {
       await tx`
-        INSERT INTO factory.hygiene_passes (id, repo, at, ref, report, judgment, filed, over_budget, failed)
+        INSERT INTO factory.hygiene_passes (id, repo, at, ref, report, judgment, filed, over_budget, failed, lifecycle)
         VALUES (${pass.id}, ${pass.repo}, ${pass.at}, ${pass.ref}, ${JSON.stringify(pass.report)}::jsonb,
           ${JSON.stringify(pass.judgment)}::jsonb, ${JSON.stringify(pass.filed)}::jsonb,
-          ${JSON.stringify(pass.overBudget)}::jsonb, ${JSON.stringify(pass.failed)}::jsonb)`
+          ${JSON.stringify(pass.overBudget)}::jsonb, ${JSON.stringify(pass.failed)}::jsonb,
+          ${JSON.stringify(pass.lifecycle)}::jsonb)`
     },
 
     async updateHygieneJudgment(id, next) {

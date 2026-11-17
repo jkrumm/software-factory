@@ -2,6 +2,7 @@ import type { SQL } from 'bun'
 import * as z from 'zod'
 import type { ClassIssue } from '../domains/loops/classes.ts'
 import type { DigestIssue } from '../kernel/digest-scope.ts'
+import type { FindingIssue } from '../domains/loops/hygiene-lifecycle.ts'
 import type { LoopReads } from '../domains/loops/ports.ts'
 import { readEdgeNeed, readHeldEdges, readRemovedEdges } from './edge-need.ts'
 import { readSpecPrecedents } from './spec-screen.ts'
@@ -126,6 +127,15 @@ const WaitRowSchema = z.object({
     after: z.array(z.string()).optional(),
   }),
   since_at: z.date().nullable(),
+})
+
+const FindingIssueRow = z.object({
+  key: z.string(),
+  issue: z.string(),
+  state: z.enum(['settling', 'queued', 'working', 'waiting', 'watching', 'closed']),
+  outcome: z.enum(['done', 'healed', 'dropped', 'cancelled']).nullable(),
+  closed_at: z.date().nullable(),
+  reopens: z.number().int(),
 })
 
 const classRows = (rows: unknown[]) =>
@@ -469,6 +479,30 @@ export function loopReads(tx: SQL): LoopReads {
     },
 
     specPrecedents: (limit) => readSpecPrecedents(tx, limit),
+
+    async findingIssues(repo) {
+      // the newest Issue of each key (by when it was filed), its state, how it closed and how often it was reopened
+      const rows: unknown[] = await tx`
+        SELECT DISTINCT ON (lf.key) lf.key, i.id AS issue, i.state, i.outcome,
+          (SELECT c.at FROM factory.issue_events c WHERE c.issue_id = i.id AND c.result = 'applied' AND c.to_state = 'closed' ORDER BY c.version DESC LIMIT 1) AS closed_at,
+          (SELECT count(*) FROM factory.issue_events r WHERE r.issue_id = i.id AND r.result = 'applied' AND r.kind = 'reopened')::int AS reopens
+        FROM factory.loop_findings lf
+        JOIN factory.issues i ON i.id = lf.issue_id
+        JOIN factory.issue_events f ON f.issue_id = i.id AND f.kind = 'filed' AND f.version = 1
+        WHERE lf.loop = 'hygiene' AND lf.repo = ${repo}
+        ORDER BY lf.key, f.at DESC, i.id DESC`
+      return rows.map((raw): FindingIssue => {
+        const row = FindingIssueRow.parse(raw)
+        return {
+          key: row.key,
+          issue: row.issue,
+          state: row.state,
+          outcome: row.outcome,
+          closedAt: row.state === 'closed' ? row.closed_at : null,
+          reopens: row.reopens,
+        }
+      })
+    },
 
     async classIssues(loop) {
       const out: Record<string, ClassIssue[]> = {}

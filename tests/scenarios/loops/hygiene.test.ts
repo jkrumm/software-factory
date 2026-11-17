@@ -3,7 +3,8 @@ import { existsSync, readFileSync } from 'node:fs'
 import { mkdtemp, rm } from 'node:fs/promises'
 import { join } from 'node:path'
 import { type Lab, startLab } from '../planning/lab.ts'
-import { callsOf, runLoop, script } from './support.ts'
+import { admitted, must, tick } from '../flow.ts'
+import { callsOf, runLoop, script, state } from './support.ts'
 
 /**
  * The hygiene loop against the real server and Postgres, the real checker and real git: every project is a small repo with
@@ -15,10 +16,11 @@ import { callsOf, runLoop, script } from './support.ts'
 let lab: Lab
 let dir: string
 let hygieneScript: string
-const PROJECTS = ['h1', 'h2', 'h3', 'h4']
+const PROJECTS = ['h1', 'h2', 'h3', 'h4', 'h5', 'h6']
 const FAKE_RETRY_MS = 3_600_000
 
-const projectFile = (name: string) => `apiVersion: factory/v2\nname: ${name}\nleads: 2\n`
+const projectFile = (name: string) =>
+  `apiVersion: factory/v2\nname: ${name}\nleads: 2 # a lab repo: two leads are plenty\n`
 const mark = (repo: string) => join(dir, `${repo}.mark`)
 const sweepsOf = (repo: string): number =>
   existsSync(mark(repo)) ? readFileSync(mark(repo), 'utf8').split('\n').filter(Boolean).length : 0
@@ -93,11 +95,12 @@ interface Pass {
   repo: string
   at: Date
   ref: string
-  report: { runs: { probe: string; outcome: string }[]; findings: { key: string }[] }
+  report: { runs: { probe: string; outcome: string; covers?: string }[]; findings: { key: string }[] }
   judgment: { outcome: string; attempts: number; judgedAt: string | null; reason: string; findings: { path: string }[] }
   filed: { key: string; title: string }[]
   over_budget: { key: string; title: string }[]
   failed: { key: string; reason: string }[]
+  lifecycle: { key: string; issue: string; action: string; why: string }[]
 }
 
 const passes = async (repo: string): Promise<Pass[]> => {
@@ -113,6 +116,7 @@ const passes = async (repo: string): Promise<Pass[]> => {
     filed: json(row.filed),
     over_budget: json(row.over_budget),
     failed: json(row.failed),
+    lifecycle: json(row.lifecycle),
   }))
 }
 
@@ -209,7 +213,7 @@ test('a due project is swept: red check and a broken link are filed, the answer 
   expect(sweepsOf('h1')).toBe(1)
 })
 
-test('not due again in the window; a week on it is swept again and intake dedups what is still open', async () => {
+test('not due again in the window; a week on it is swept again and nothing is filed for what an open Issue holds', async () => {
   const again = await sweep('h1')
   expect(again.summary).toBe('not due')
   expect(await signalsFrom('h1')).toHaveLength(3)
@@ -218,7 +222,8 @@ test('not due again in the window; a week on it is swept again and intake dedups
   await sql()`UPDATE factory.hygiene_passes SET at = at - interval '8 days' WHERE repo = 'h1'`
   const later = await sweep('h1')
   expect(later.error).toBeNull()
-  expect(later.summary).toMatch(/^swept h1 @[0-9a-f]{7}: filed 3 signal\(s\), 0 over budget; judgment answered$/)
+  // the check and the links are open Issues: the pass files nothing for them; the judgment finding is the one intake dedups
+  expect(later.summary).toMatch(/^swept h1 @[0-9a-f]{7}: filed 1 signal\(s\), 0 over budget; judgment answered$/)
   expect(await passes('h1')).toHaveLength(2)
   expect(await issuesOf('h1')).toBe(3)
   expect(sweepsOf('h1')).toBe(2)
@@ -310,4 +315,89 @@ test('a work repo without project.yaml is never swept', async () => {
   expect(rows.map((r: { repo: string }) => r.repo)).toEqual(PROJECTS)
   expect(sweepsOf('work')).toBe(0)
   expect(await signalsFrom('work')).toEqual([])
+})
+
+// ---- the lifecycle: a finding heals; a done Issue whose finding is red again is reopened, never filed twice ----------------------------
+
+const GREEN = 'check:\n\t@true\n'
+const agedWeek = (repo: string) =>
+  sql()`UPDATE factory.hygiene_passes SET at = at - interval '8 days' WHERE repo = ${repo} AND id NOT LIKE 'hygiene_aside_%'`
+const issueIds = async (repo: string): Promise<string[]> =>
+  (await sql()`SELECT id FROM factory.issues WHERE repo = ${repo} ORDER BY id`).map((r: { id: string }) => r.id)
+const closure = async (issue: string) => {
+  const [row] = await sql()`SELECT state, outcome FROM factory.issues WHERE id = ${issue}`
+  const events = await sql()`
+    SELECT kind, actor, payload FROM factory.issue_events WHERE issue_id = ${issue} AND result = 'applied' AND kind IN ('closed', 'reopened') ORDER BY version`
+  return {
+    state: row.state as string,
+    outcome: row.outcome as string | null,
+    events: events as { kind: string; actor: string; payload: unknown }[],
+  }
+}
+
+test('a probe that turns green closes its Issue as healed, with the run as the reason', async () => {
+  const red = await sweep('h5')
+  expect(red.error).toBeNull()
+  const [issue, ...others] = await issueIds('h5')
+  expect(others).toEqual([])
+  expect((await state(lab, issue ?? '')).state).toBe('settling')
+  expect((await passes('h5'))[0]?.filed.map((f) => f.key)).toEqual(['check'])
+
+  await lab.commit('h5', { Makefile: GREEN })
+  await agedWeek('h5')
+  const green = await sweep('h5')
+  expect(green.error).toBeNull()
+  expect(green.summary).toMatch(
+    /^swept h5 @[0-9a-f]{7}: filed 0 signal\(s\), 0 over budget; judgment skipped; healed 1$/,
+  )
+
+  const ended = await closure(issue ?? '')
+  expect(ended).toMatchObject({ state: 'closed', outcome: 'healed' })
+  expect(ended.events).toHaveLength(1)
+  expect(ended.events[0]).toMatchObject({ kind: 'closed', actor: 'factory' })
+  expect(JSON.stringify(ended.events[0]?.payload)).toContain('make check')
+  const [, newest] = await passes('h5')
+  expect(newest?.report.runs.find((r) => r.probe === 'check')?.outcome).toBe('clean')
+  expect(await issueIds('h5')).toEqual([issue ?? ''])
+  expect(await signalsFrom('h5')).toHaveLength(1)
+})
+
+test('a still-red probe after a done Issue reopens that Issue: no second Issue, no signal, and an open one is left alone', async () => {
+  expect((await sweep('h6')).error).toBeNull()
+  const [issue, ...others] = await issueIds('h6')
+  expect(others).toEqual([])
+
+  // a lead takes it and closes it done; the Makefile is still red
+  await admitted(lab, issue ?? '')
+  await tick(lab)
+  await must(
+    lab,
+    ['issue', 'close', issue ?? '', '--attempt', '1', '--outcome', 'done', '--reason', 'fixed it'],
+    'agent',
+  )
+  expect(await closure(issue ?? '')).toMatchObject({ state: 'closed', outcome: 'done' })
+
+  await agedWeek('h6')
+  const again = await sweep('h6')
+  expect(again.error).toBeNull()
+  expect(again.summary).toMatch(
+    /^swept h6 @[0-9a-f]{7}: filed 0 signal\(s\), 0 over budget; judgment skipped; reopened 1$/,
+  )
+  const reopened = await closure(issue ?? '')
+  expect(reopened.state).toBe('queued')
+  expect(reopened.events.map((e) => [e.kind, e.actor])).toEqual([
+    ['closed', 'lead'],
+    ['reopened', 'factory'],
+  ])
+  expect(JSON.stringify(reopened.events[1]?.payload)).toContain('red again')
+  expect(await issueIds('h6')).toEqual([issue ?? ''])
+  expect(await signalsFrom('h6')).toHaveLength(1)
+  expect((await passes('h6'))[1]?.lifecycle.map((e) => [e.key, e.action])).toEqual([['check', 'reopened']])
+
+  // red a week later with its Issue open again: it stays the one Issue, and nothing is filed or noted
+  await agedWeek('h6')
+  const third = await sweep('h6')
+  expect(third.summary).toMatch(/filed 0 signal\(s\)/)
+  expect(await issueIds('h6')).toEqual([issue ?? ''])
+  expect(await signalsFrom('h6')).toHaveLength(1)
 })

@@ -1,7 +1,13 @@
-import type { HygieneAnswer, HygieneCandidate, HygieneFinding, HygieneRequest } from '@software-factory/contract'
+import {
+  type HygieneAnswer,
+  type HygieneCandidate,
+  type HygieneFinding,
+  type HygieneRequest,
+  seatOfKey,
+} from '@software-factory/contract'
 import type { HygieneJudgment, HygienePassRecord } from './ports.ts'
 import { MAX_SIGNALS_PER_PASS } from './budget.ts'
-import { PROBES, type ProbeFinding, type SweepReport } from './hygiene-model.ts'
+import { PROBES, type ProbeFinding, type Scope, type SweepReport } from './hygiene-model.ts'
 
 /** Slots the judgment keeps: the deterministic findings may take `MAX_SIGNALS_PER_PASS - JUDGMENT_RESERVE`. */
 export const JUDGMENT_RESERVE = 2
@@ -116,11 +122,16 @@ export interface Swept {
 
 const shortRef = (ref: string): string => ref.slice(0, 7)
 
+/** The seat the finding's Issue should run on: the catalogue's word, so the filer, the page and the light rule agree. */
+export const seatLine = (key: string): string =>
+  `Seat: ${seatOfKey(key)} (${seatOfKey(key) === 'light' ? 'mechanical work a rule can name: the light lead takes it' : 'the standard lead'})`
+
 /** A probe finding as a signal: the stable title, what was swept, the evidence lines and how to look again. */
 export function probeSignalText(finding: ProbeFinding, swept: Swept): string {
   return [
     `Swept: ${swept.repo} @ ${shortRef(swept.ref)}`,
     `Probe: ${finding.probe} (${finding.key})`,
+    seatLine(finding.key),
     `Evidence (${finding.count} item(s), up to the first ${finding.lines.length} lines):`,
     ...finding.lines,
     finding.reproduce !== undefined
@@ -136,6 +147,7 @@ export function judgmentSignalText(finding: HygieneFinding, swept: Swept): strin
   return [
     `Swept: ${swept.repo} @ ${shortRef(swept.ref)}`,
     `Judgment: ${finding.kind} document ${finding.path}`,
+    seatLine(judgmentKey(finding)),
     `Finding: ${finding.title}`,
     `Evidence: ${finding.evidence}`,
     `Fix: ${finding.fix}`,
@@ -148,47 +160,66 @@ export function judgmentSignalText(finding: HygieneFinding, swept: Swept): strin
 export type HygieneWork =
   | { kind: 'none' }
   | { kind: 'full'; repo: string }
+  | { kind: 'daily'; repo: string; lastFull: HygienePassRecord | null }
   | { kind: 'retry'; repo: string; row: HygienePassRecord }
 
 /** The `ref` of a pass whose checkout could not be made. */
 export const NO_REF = 'none'
 
+/** A recorded pass's scope: a pass recorded before the daily scope was a full one. */
+export const scopeOf = (row: Pick<HygienePassRecord, 'report'>): Scope => row.report.scope ?? 'full'
+
 /**
- * The next work for this tick, at most one project. A project whose newest pass is older than `everyMs` (or has none) is
- * due a full pass, never-swept first, then oldest. Otherwise a project whose newest pass is within `everyMs` and whose
- * judgment failed, with attempts left and `retryMs` gone since the attempt, is due a judgment-only retry. `allow` null is every project.
+ * The next work for this tick, at most one project. A project whose newest full pass is older than `everyMs` (or has none) is
+ * due a full pass, never-swept first, then oldest. Otherwise one whose newest pass of any scope is older than `dailyMs` is
+ * due a daily pass (the cheap probes; `dailyMs` 0 is off), the full ones first. Otherwise a project whose newest full pass is
+ * within `everyMs` and whose judgment failed, with attempts left and `retryMs` gone since the attempt, is due a
+ * judgment-only retry. `rows` holds the newest pass of each repo and scope. `allow` null is every project.
  */
 export function planHygiene(input: {
   projects: readonly string[]
   rows: readonly HygienePassRecord[]
   now: Date
   everyMs: number
+  dailyMs?: number
   retryMs: number
   allow: readonly string[] | null
 }): HygieneWork {
   const { now } = input
-  const newest = new Map(input.rows.map((row) => [row.repo, row]))
+  const dailyMs = input.dailyMs ?? 0
+  const newest = new Map<string, HygienePassRecord>()
+  const newestFull = new Map<string, HygienePassRecord>()
+  for (const row of input.rows) {
+    const any = newest.get(row.repo)
+    if (!any || row.at.getTime() > any.at.getTime()) newest.set(row.repo, row)
+    if (scopeOf(row) !== 'full') continue
+    const full = newestFull.get(row.repo)
+    if (!full || row.at.getTime() > full.at.getTime()) newestFull.set(row.repo, row)
+  }
   const repos = input.projects.filter((repo) => input.allow === null || input.allow.includes(repo)).sort(byKey)
+  // A pass that made no checkout ran no probe at all: it is asked again after the retry gap, not after a week or a day.
+  const gapOf = (row: HygienePassRecord | undefined, normal: number): number =>
+    row?.ref === NO_REF ? input.retryMs : normal
+  const due = (row: HygienePassRecord | undefined, normal: number): boolean =>
+    !row || row.at.getTime() <= now.getTime() - gapOf(row, normal)
+  const oldest = (a: string, b: string): number =>
+    (newest.get(a)?.at.getTime() ?? 0) - (newest.get(b)?.at.getTime() ?? 0)
 
-  const full = repos
-    .filter((repo) => {
-      const row = newest.get(repo)
-      // A pass that made no checkout ran no probe at all: it is asked again after the retry gap, not after a week.
-      const every = row?.ref === NO_REF ? input.retryMs : input.everyMs
-      return !row || row.at.getTime() <= now.getTime() - every
-    })
-    .sort((a, b) => (newest.get(a)?.at.getTime() ?? 0) - (newest.get(b)?.at.getTime() ?? 0))[0]
+  const full = repos.filter((repo) => due(newestFull.get(repo), input.everyMs)).sort(oldest)[0]
   if (full !== undefined) return { kind: 'full', repo: full }
 
+  const daily = dailyMs > 0 ? repos.filter((repo) => due(newest.get(repo), dailyMs)).sort(oldest)[0] : undefined
+  if (daily !== undefined) return { kind: 'daily', repo: daily, lastFull: newestFull.get(daily) ?? null }
+
   const retries = repos.flatMap((repo) => {
-    const row = newest.get(repo)
+    const row = newestFull.get(repo)
     if (!row) return []
     const { judgment } = row
-    const due =
+    const retry =
       judgment.outcome === 'failed' &&
       judgment.attempts < MAX_JUDGMENT_ATTEMPTS &&
       (judgment.judgedAt === null || judgment.judgedAt.getTime() <= now.getTime() - input.retryMs)
-    return due ? [row] : []
+    return retry ? [row] : []
   })
   const next = retries.sort((a, b) => (a.judgment.judgedAt?.getTime() ?? 0) - (b.judgment.judgedAt?.getTime() ?? 0))[0]
   return next ? { kind: 'retry', repo: next.repo, row: next } : { kind: 'none' }
