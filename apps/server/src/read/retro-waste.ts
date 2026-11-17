@@ -1,7 +1,6 @@
 import type { SQL } from 'bun'
 import * as z from 'zod'
 import type { RetroWasteSource } from '@software-factory/contract'
-import { WAITS } from '../domains/work/issue.ts'
 import type { Window } from './kpis.ts'
 
 const HOUR_MS = 3_600_000
@@ -21,12 +20,9 @@ export function wasteOf(source: RetroWasteSource['source'], parts: readonly Part
   return { source, hours: round(hours), events, largest: top ? `${top.part} (${round(top.hours)} h)` : null }
 }
 
-const STALL_REASONS = Object.entries(WAITS)
-  .filter(([, wait]) => wait.stall)
-  .map(([reason]) => reason)
-const OWNER_REASONS = Object.entries(WAITS)
-  .filter(([, wait]) => wait.exit === 'person')
-  .map(([reason]) => reason)
+/** The waits with a machine cause the steward ends, and those only a person ends (`WAITS` in the work domain; `read/` takes no code from a domain, so a test holds these two lists to it). */
+export const STALL_REASONS = ['wall', 'unreported', 'blocked', 'lead_gone', 'regressed']
+export const OWNER_REASONS = ['decision', 'review', 'errand']
 
 /** Waits of the window by reason: from the applied event that put the Issue in `waiting` to the next applied event, clipped to the window; still waiting runs to the window's end. */
 async function waitsBy(sql: SQL, w: Window, reasons: readonly string[]): Promise<Part[]> {
@@ -68,10 +64,19 @@ export async function readWaste(sql: SQL, w: Window): Promise<RetroWasteSource[]
     ) q
     WHERE result = 'refused' AND at >= ${w.from} AND at < ${w.to}`
   const sources = [
-    wasteOf('queue', queue.map((raw) => Part.parse(raw))),
-    wasteOf('slot_wait', slot.map((raw) => Part.parse(raw))),
+    wasteOf(
+      'queue',
+      queue.map((raw) => Part.parse(raw)),
+    ),
+    wasteOf(
+      'slot_wait',
+      slot.map((raw) => Part.parse(raw)),
+    ),
     wasteOf('stalls', await waitsBy(sql, w, STALL_REASONS)),
-    wasteOf('refused_ships', refused.map((raw) => Part.parse(raw))),
+    wasteOf(
+      'refused_ships',
+      refused.map((raw) => Part.parse(raw)),
+    ),
     wasteOf('owner_waits', await waitsBy(sql, w, OWNER_REASONS)),
   ]
   return sources.sort((a, b) => b.hours - a.hours || (a.source < b.source ? -1 : 1))

@@ -6,6 +6,8 @@ import {
   chartTarget,
   drawsHistory,
   classWords,
+  closeWords,
+  yieldWords,
   comparisonWords,
   distanceWords,
   fixCard,
@@ -398,4 +400,30 @@ test('frictionRanking: most first, the totals left out, the top five apart, the 
   expect(by.c).toMatchObject({ change: '-5 (8 before)', tone: 'good', direction: -1 })
   expect(by.d).toMatchObject({ change: 'new', tone: 'bad' })
   expect(by.e).toMatchObject({ change: 'no earlier window', tone: 'neutral' })
+})
+
+test('closeWords: minutes under two hours, hours under two days, days after; a dash for none', () => {
+  expect(closeWords(null)).toBe('–')
+  expect(closeWords(20)).toBe('1 min')
+  expect(closeWords(5_400)).toBe('90 min')
+  expect(closeWords(3 * 3_600)).toBe('3 h')
+  expect(closeWords(3 * 86_400)).toBe('3 d')
+})
+
+test('yieldWords: what a loop’s Issues came to, healed counted as done', () => {
+  const base = {
+    days: 7,
+    passes: 1,
+    signals: 5,
+    issues: 5,
+    done: 2,
+    healed: 1,
+    dropped: 1,
+    cancelled: 0,
+    open: 1,
+    medianCloseSeconds: 60,
+    classes: [],
+  }
+  expect(yieldWords(base)).toBe('3 done, 1 dropped or cancelled, 1 open')
+  expect(yieldWords({ ...base, issues: 0 })).toBe('no Issue')
 })

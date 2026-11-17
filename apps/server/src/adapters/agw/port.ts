@@ -53,7 +53,9 @@ async function exec(
   })
   let lastActivity = Date.now()
   let hung = false
-  const readers = [proc.stdout, proc.stderr].map((stream) => (stream as ReadableStream<Uint8Array>).getReader())
+  const stdoutReader = (proc.stdout as ReadableStream<Uint8Array>).getReader()
+  const stderrReader = (proc.stderr as ReadableStream<Uint8Array>).getReader()
+  const readers = [stdoutReader, stderrReader]
   const collect = async (reader: { read(): Promise<{ done: boolean; value?: Uint8Array }> }): Promise<string> => {
     const decoder = new TextDecoder()
     let text = ''
@@ -64,7 +66,7 @@ async function exec(
       text += decoder.decode(value, { stream: true })
     }
   }
-  const finished = Promise.all([collect(readers[0]!), collect(readers[1]!), proc.exited])
+  const finished = Promise.all([collect(stdoutReader), collect(stderrReader), proc.exited])
   const timer = setInterval(
     () => {
       if (hung || Date.now() - lastActivity < idleMs) return
@@ -137,9 +139,7 @@ export function agwPort(options: AgwOptions): AgwPort {
           finished = await exec(options.bin, ['run', 'wait', runId, '--format', 'json'], null, idleMs, purpose)
         }
         if (finished.hung) {
-          return err(
-            portError('timeout', `agw ${call.workflow} went silent for ${Math.round(idleMs / 1000)} s`),
-          )
+          return err(portError('timeout', `agw ${call.workflow} went silent for ${Math.round(idleMs / 1000)} s`))
         }
         if (finished.code !== 0) {
           const said = finished.err.trim() || finished.out.trim()

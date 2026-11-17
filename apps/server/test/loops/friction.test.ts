@@ -211,8 +211,7 @@ function frictionWorld(
     }),
     evidence: async () => ({}),
     closedSince: async () => extra.closed ?? 0,
-    retroOutcomes: async () =>
-      extra.outcomes ?? { days: 7, signals: 0, shipped: 0, done: 0, dropped: 0, open: 0 },
+    retroOutcomes: async () => extra.outcomes ?? { days: 7, signals: 0, shipped: 0, done: 0, dropped: 0, open: 0 },
     file: async (body) => {
       bodies.push(body)
       if (failRetro && body.title === RETRO_TITLE) return err({ kind: 'unreadable', detail: 'intake is down' }) as never

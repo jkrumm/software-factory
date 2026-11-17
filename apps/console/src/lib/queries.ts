@@ -15,6 +15,7 @@ import {
   fetchFlow,
   fetchFlowTrend,
   fetchFindingClasses,
+  fetchLoopYield,
   fetchFixCommits,
   fetchFriction,
   fetchHost,
@@ -284,6 +285,16 @@ export function useFindingClasses() {
   return useQuery({
     queryKey: ['finding-classes'],
     queryFn: ({ signal }) => fetchFindingClasses(signal),
+    refetchInterval: pollEvery(live),
+  })
+}
+
+/** What each signal-filing loop yielded over the last 7 and 30 days. */
+export function useLoopYield() {
+  const live = useLive()
+  return useQuery({
+    queryKey: ['loop-yield'],
+    queryFn: ({ signal }) => fetchLoopYield(signal),
     refetchInterval: pollEvery(live),
   })
 }

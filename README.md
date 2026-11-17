@@ -195,7 +195,7 @@ state and its effects in one transaction, then runs the effects. The state diagr
 fails when it is stale. No XState, no workflow engine.
 
 **Loops** are a tick with a trigger and a budget. The deterministic part runs in the server; the judgment is a
-dedicated agw workflow called through a port with a hang guard.
+dedicated agw workflow called through a port with an idle watchdog (no wall-clock limit).
 
 | Loop | Deterministic | Workflow decides |
 |-|-|-|

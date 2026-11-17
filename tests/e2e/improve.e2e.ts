@@ -170,6 +170,7 @@ test('one card per KPI in the order the Console shows, each the figures the API 
     ...headings,
     'Fix commits',
     'Friction',
+    'What the loops yielded',
     'Held finding classes',
   ])
   await expectCards(page, kpis)
@@ -271,6 +272,29 @@ test('a KPI the API does not measure says Not measured and why, and no id leaks 
   for (const kpi of kpis.kpis.filter((k) => !k.measured))
     await expect(cardOf(page, kpi.label).locator('span.tabular-nums').first()).not.toHaveText(/^[$0.]+$/)
   expect(await page.locator('body').innerText()).not.toMatch(/issue_\d+|lead-\d+|#\d+/)
+})
+
+test('what the loops yielded reads the API: a row per loop and window with its signals, Issues and passes', async ({
+  page,
+  apiUrl,
+}) => {
+  const model = await api<{
+    loops: { loop: string; windows: { days: number; passes: number | null; signals: number; issues: number }[] }[]
+  }>(apiUrl, '/v1/loop-yield')
+  await page.goto('/improve')
+  const table = page.getByRole('table', { name: 'What the loops yielded' })
+  const rows = table.getByRole('row')
+  await expect(rows).toHaveCount(1 + model.loops.length * 2)
+  // the header row, then each loop's windows in the order the API gives them
+  let at = 1
+  for (const loop of model.loops)
+    for (const window of loop.windows) {
+      const cells = rows.nth(at++).getByRole('cell')
+      await expect(cells.nth(0)).toHaveText(String(window.days))
+      await expect(cells.nth(1)).toHaveText(window.passes === null ? '–' : String(window.passes))
+      await expect(cells.nth(2)).toHaveText(String(window.signals))
+      await expect(cells.nth(3)).toHaveText(String(window.issues))
+    }
 })
 
 test('held finding classes read what the API says: a line when none is held, else each class with its counts', async ({

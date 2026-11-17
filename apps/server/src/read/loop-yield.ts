@@ -1,11 +1,6 @@
 import type { SQL } from 'bun'
 import * as z from 'zod'
-import {
-  YIELD_LOOPS,
-  type LoopYield,
-  type LoopYieldModel,
-  type LoopYieldWindow,
-} from '@software-factory/contract'
+import { YIELD_LOOPS, type LoopYield, type LoopYieldModel, type LoopYieldWindow } from '@software-factory/contract'
 import { percentile, windowOf } from './stats.ts'
 
 /** The two windows every loop is read over, in days. */

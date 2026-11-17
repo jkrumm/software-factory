@@ -706,9 +706,7 @@ export const LoopYield = z
   .meta({ id: 'LoopYield' })
 export type LoopYield = z.infer<typeof LoopYield>
 
-export const LoopYieldModel = z
-  .strictObject({ at, loops: z.array(LoopYield) })
-  .meta({ id: 'LoopYieldModel' })
+export const LoopYieldModel = z.strictObject({ at, loops: z.array(LoopYield) }).meta({ id: 'LoopYieldModel' })
 export type LoopYieldModel = z.infer<typeof LoopYieldModel>
 
 // -- fix commits ---------------------------------------------------------------------------------------------------------

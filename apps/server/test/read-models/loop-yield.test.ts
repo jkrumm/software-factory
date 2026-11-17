@@ -5,7 +5,8 @@ import { loadMigrations, migrate } from '../../src/adapters/postgres/migrate.ts'
 import { createApp } from '../../src/api/app.ts'
 import { readLoopYield } from '../../src/read/loop-yield.ts'
 import { readClosedSince, readRetroOutcomes } from '../../src/read/retro-outcomes.ts'
-import { readWaste, wasteOf } from '../../src/read/retro-waste.ts'
+import { WAITS } from '../../src/domains/work/issue.ts'
+import { OWNER_REASONS, readWaste, STALL_REASONS, wasteOf } from '../../src/read/retro-waste.ts'
 
 /** What the loops yielded, the sources of waste and the retro's outcomes, over a real Postgres, restated in plain rows. */
 let db: TestCluster
@@ -89,7 +90,15 @@ test('friction over 7 and 30 days: passes, signals, Issues by outcome, median ti
       { class: 'touch', issues: 1, noise: 0 },
     ],
   })
-  expect(month).toMatchObject({ days: 30, passes: 3, signals: 4, issues: 4, done: 2, open: 1, medianCloseSeconds: 4 * 3600 })
+  expect(month).toMatchObject({
+    days: 30,
+    passes: 3,
+    signals: 4,
+    issues: 4,
+    done: 2,
+    open: 1,
+    medianCloseSeconds: 4 * 3600,
+  })
   expect(month?.classes.map((c) => c.class)).toEqual(['stall', 'refusal', 'touch'])
 })
 
@@ -121,7 +130,9 @@ test('GET /v1/loop-yield answers the owner, the agent and the read token, and no
     readModels: { sql: db.sql, now: () => NOW },
   })
   const get = (token?: string) =>
-    app.handle(new Request('http://localhost/v1/loop-yield', { headers: token ? { authorization: `Bearer ${token}` } : {} }))
+    app.handle(
+      new Request('http://localhost/v1/loop-yield', { headers: token ? { authorization: `Bearer ${token}` } : {} }),
+    )
   expect((await get()).status).toBe(401)
   expect((await get(TOKENS.machine)).status).toBe(403)
   for (const token of [TOKENS.owner, TOKENS.agent, TOKENS.read]) {
@@ -201,7 +212,14 @@ test('the retro’s outcomes count each signal once; Issues closed since a pass 
     dropped: 1,
     open: 1,
   })
-  const closed = await db.sql`SELECT count(*) AS n FROM factory.issue_events WHERE to_state = 'closed' AND result = 'applied' AND at > ${ago(26)}`
+  const closed =
+    await db.sql`SELECT count(*) AS n FROM factory.issue_events WHERE to_state = 'closed' AND result = 'applied' AND at > ${ago(26)}`
   expect(await readClosedSince(db.sql, { since: ago(26), now: NOW })).toBe(Number(closed[0].n))
   expect(await readClosedSince(db.sql, { since: NOW, now: NOW })).toBe(0)
+})
+
+test('the stall and owner reasons the waste read uses are the work domain’s', () => {
+  const entries = Object.entries(WAITS)
+  expect(STALL_REASONS).toEqual(entries.filter(([, w]) => w.stall).map(([reason]) => reason))
+  expect(OWNER_REASONS).toEqual(entries.filter(([, w]) => w.exit === 'person').map(([reason]) => reason))
 })
