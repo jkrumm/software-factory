@@ -87,7 +87,7 @@ export const issuesFiled = (sql: SQL, w: Window): Promise<number> =>
   )
 
 /** Owner touches of one kind this close together are one action: a person sending the same steer to a dozen Issues, or an owner script cancelling a re-planned batch. */
-export const TOUCH_BURST_MS = 60_000
+const TOUCH_BURST_MS = 60_000
 
 /**
  * Avoidable touches by kind: an owner action on an Issue the factory should have settled. A Decision the owner answered and
@@ -138,7 +138,7 @@ export async function orchestratorSteering(sql: SQL, w: Window): Promise<Record<
 }
 
 /** Refusals in the window: Issue events the machine refused, and ships the gate refused. */
-export async function refusalCount(sql: SQL, w: Window): Promise<number> {
+async function refusalCount(sql: SQL, w: Window): Promise<number> {
   const events = await one(sql`
     SELECT count(*) AS n FROM factory.issue_events WHERE result = 'refused' AND at >= ${w.from} AND at < ${w.to}`)
   const ships = await one(sql`
@@ -397,14 +397,14 @@ const kpi = (
  * are a coin. Such a KPI has no figure (`measured` false, the reason says how many it had); a rate per Issue stands on its
  * Issues and has no floor beyond one.
  */
-export const MIN_SAMPLES = 3
+const MIN_SAMPLES = 3
 const FLOORED_UNITS: ReadonlySet<Kpi['unit']> = new Set(['share', 'ms'])
 
 /**
  * A KPI with no figure says so and why, never a zero: nothing counted at all (a ratio over an empty denominator), or
  * fewer samples than the floor. A KPI the source did not measure already carries its own reason.
  */
-export function withReason(k: Omit<Kpi, 'history'>): Omit<Kpi, 'history'> {
+function withReason(k: Omit<Kpi, 'history'>): Omit<Kpi, 'history'> {
   if (!k.measured) return { ...k, value: null, reason: k.reason ?? 'The factory has no data for this figure yet' }
   // a count that is zero is a result (a week with no fix commit); every other figure over nothing has no value
   if (k.value === null || (k.n === 0 && k.unit !== 'count'))

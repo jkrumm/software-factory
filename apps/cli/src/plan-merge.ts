@@ -11,7 +11,7 @@ import type { Io } from './operation.ts'
  * Git's own `union` driver is not used: it drops the lines two appended rows share (a `why: |-` and its text) and
  * leaves a row corrupt.
  */
-export function mergeAppends(input: { base: string; ours: string; theirs: string }): string | null {
+function mergeAppends(input: { base: string; ours: string; theirs: string }): string | null {
   const { base, ours, theirs } = input
   if (ours === theirs) return ours
   if (theirs === base) return ours

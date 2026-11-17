@@ -8,7 +8,7 @@ import {
 import { queueReasonWords } from './improve.ts'
 
 /** How many needs the Overview names; the rest are the count. */
-export const TOP_NEEDS = 3
+const TOP_NEEDS = 3
 
 /** What wants the owner: the total and the oldest few (the longest open first: they cost the most). */
 export function needsOf(model: Pick<NeedsModel, 'items'>): { total: number; top: NeedItem[] } {

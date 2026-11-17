@@ -29,7 +29,7 @@ export const failed = (detail: string): Outcome => ({ outcome: 'failed', detail,
 export const found = (detail: string, findings: ProbeFinding[]): Outcome => ({ outcome: 'found', detail, findings })
 
 /** A single line of evidence: no line breaks, at most 240 characters. */
-export const oneLine = (text: string): string => {
+const oneLine = (text: string): string => {
   const flat = text.replace(/[\r\n\u2028\u2029]+/g, ' ').trim()
   return flat.length > MAX_LINE ? `${flat.slice(0, MAX_LINE - 1)}…` : flat
 }

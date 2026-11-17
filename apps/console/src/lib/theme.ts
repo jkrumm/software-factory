@@ -4,10 +4,10 @@ export type Theme = 'light' | 'dark'
 const KEY = 'console-theme'
 const DARK_QUERY = '(prefers-color-scheme: dark)'
 
-export const resolveTheme = (preference: ThemePreference, osPrefersDark: boolean): Theme =>
+const resolveTheme = (preference: ThemePreference, osPrefersDark: boolean): Theme =>
   preference === 'system' ? (osPrefersDark ? 'dark' : 'light') : preference
 
-export function storedPreference(): ThemePreference {
+function storedPreference(): ThemePreference {
   const value = localStorage.getItem(KEY)
   return value === 'light' || value === 'dark' ? value : 'system'
 }

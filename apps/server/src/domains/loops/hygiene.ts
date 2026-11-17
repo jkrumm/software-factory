@@ -10,11 +10,11 @@ import { MAX_SIGNALS_PER_PASS } from './budget.ts'
 import { PROBES, type ProbeFinding, type Scope, type SweepReport } from './hygiene-model.ts'
 
 /** Slots the judgment keeps: the deterministic findings may take `MAX_SIGNALS_PER_PASS - JUDGMENT_RESERVE`. */
-export const JUDGMENT_RESERVE = 2
+const JUDGMENT_RESERVE = 2
 export const MAX_PROBE_SIGNALS = MAX_SIGNALS_PER_PASS - JUDGMENT_RESERVE
 
 /** A failed judgment is asked again until this many attempts have been made. */
-export const MAX_JUDGMENT_ATTEMPTS = 3
+const MAX_JUDGMENT_ATTEMPTS = 3
 
 /** The key prefix of a filed or over-budget judgment finding, so a probe key and a judgment key never meet. */
 export const JUDGMENT_PREFIX = 'judgment:'
@@ -44,7 +44,7 @@ export const probeFiledCount = (record: Pick<HygienePassRecord, 'filed'>): numbe
 const MAX_CANDIDATES = 20
 
 /** The documents handed to the workflow: each path once (stale first), at most 20 of each list. */
-export function candidatesOf(report: Pick<SweepReport, 'stale' | 'slop'>): {
+function candidatesOf(report: Pick<SweepReport, 'stale' | 'slop'>): {
   stale: HygieneCandidate[]
   slop: HygieneCandidate[]
 } {
@@ -123,7 +123,7 @@ export interface Swept {
 const shortRef = (ref: string): string => ref.slice(0, 7)
 
 /** The seat the finding's Issue should run on: the catalogue's word, so the filer, the page and the light rule agree. */
-export const seatLine = (key: string): string =>
+const seatLine = (key: string): string =>
   `Seat: ${seatOfKey(key)} (${seatOfKey(key) === 'light' ? 'mechanical work a rule can name: the light lead takes it' : 'the standard lead'})`
 
 /** A probe finding as a signal: the stable title, what was swept, the evidence lines and how to look again. */
@@ -168,7 +168,7 @@ export type HygieneWork =
 export const NO_REF = 'none'
 
 /** A recorded pass's scope: a pass recorded before the daily scope was a full one. */
-export const scopeOf = (row: Pick<HygienePassRecord, 'report'>): Scope => row.report.scope ?? 'full'
+const scopeOf = (row: Pick<HygienePassRecord, 'report'>): Scope => row.report.scope ?? 'full'
 
 /**
  * The next work for this tick, at most one project. A project whose newest full pass is older than `everyMs` (or has none) is

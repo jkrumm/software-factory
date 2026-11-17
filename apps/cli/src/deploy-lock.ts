@@ -41,10 +41,7 @@ const sleep = (ms: number) => new Promise<void>((resolve) => setTimeout(resolve,
  * when it asked, when it got the window, when it gave it back), after the command and the release, best effort: a server
  * that cannot be reached changes neither the lock nor the exit code.
  */
-export async function deployLock(
-  input: { project: string; command: string[]; kind?: LockKind },
-  io: Io,
-): Promise<number> {
+async function deployLock(input: { project: string; command: string[]; kind?: LockKind }, io: Io): Promise<number> {
   const timing: Timing = {}
   const code = await holdAndRun(input, io, timing)
   if ((input.kind ?? 'deploy') === 'merge' && timing.requestedAt) {

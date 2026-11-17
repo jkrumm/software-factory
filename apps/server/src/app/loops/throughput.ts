@@ -91,7 +91,7 @@ export async function projectBudgets(uow: UnitOfWork<{ planning: PlanningStore }
 }
 
 /** A ranking window the epoch cut shorter than this many days files nothing: a day's cost is not a week's. */
-export const MIN_RANK_DAYS = 1
+const MIN_RANK_DAYS = 1
 
 const DAY_MS = 86_400_000
 const reasonOf = (error: IntakeError): string => ('detail' in error ? `${error.kind}: ${error.detail}` : error.kind)

@@ -196,7 +196,7 @@ export function repeatedStall(
 }
 
 /** What the steward knows of a stalled Issue, from its events alone; `windowOpen` comes from capacity afterwards. */
-export function factsOf(issue: Issue, history: readonly AppliedRecord[]): StallFacts | null {
+function factsOf(issue: Issue, history: readonly AppliedRecord[]): StallFacts | null {
   const cause = stallCause(issue)
   const wait = issue.wait
   if (!cause || !wait || !('detail' in wait)) return null

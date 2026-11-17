@@ -55,7 +55,7 @@ const PALETTE_UTILITY = new RegExp(
 )
 
 /** Drops comments; a `//` after a `:` or a quote is a URL, not a comment. */
-export function stripComments(source: string): string {
+function stripComments(source: string): string {
   return source
     .replace(/\/\*[\s\S]*?\*\//g, (block) => block.replace(/[^\n]/g, ' '))
     .replace(/(^|[^:'"`\\])\/\/[^\n]*/g, '$1')

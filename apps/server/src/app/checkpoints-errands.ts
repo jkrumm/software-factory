@@ -316,7 +316,7 @@ async function viaMacbook(
  * An Errand the factory ran itself through a fixed MacBook verb ends `done` (closed by the loop, never by the owner): the Issue
  * that waits on it, and every Issue that joined it, hear what the verb printed. False when it closed under the call.
  */
-export async function finishRan(deps: SettleDeps, id: ErrandId, ran: string): Step<boolean> {
+async function finishRan(deps: SettleDeps, id: ErrandId, ran: string): Step<boolean> {
   return deps.uow.run<boolean, CheckpointError>(async (stores) => {
     const found = await openUnder(stores, deps, id)
     if (found === 'dropped' || found === 'finished') return ok(false)

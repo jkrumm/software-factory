@@ -18,20 +18,11 @@ import {
   tryLock,
 } from '@software-factory/contract/spool'
 
-export const HOOK_EVENTS = [
-  'session-start',
-  'user-prompt-submit',
-  'stop',
-  'stop-failure',
-  'notification',
-  'session-end',
-] as const
-
 /** How long a hook waits for another hook of its session before it writes a key that cannot collide. */
-export const LOCK_BUDGET_MS = 200
+const LOCK_BUDGET_MS = 200
 
 /** The post to the server may take this long and no longer. */
-export const POST_TIMEOUT_MS = 300
+const POST_TIMEOUT_MS = 300
 
 type Input = Record<string, unknown>
 
@@ -180,7 +171,7 @@ function append(file: string, line: SpoolLine): void {
 }
 
 /** The server's answer to a stop is asked within this long, like any post. */
-export const STOP_CHECK_TIMEOUT_MS = 300
+const STOP_CHECK_TIMEOUT_MS = 300
 
 /**
  * Whether the server wants this stop turned back (FL5): the line to print, or nothing. Any failure, a slow answer or a

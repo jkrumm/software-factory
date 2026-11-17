@@ -60,9 +60,9 @@ export const NO_VERSION_TARGET =
   'no `make version` target: it is a probe, so the owner adds it (it prints the deployed commit sha) and a lead does not: `factory issue block` with this reason'
 
 /** CI not yet visible for a commit this long after it merged is taken to mean the repo has none. */
-export const CI_VISIBLE_MS = 10 * 60_000
+const CI_VISIBLE_MS = 10 * 60_000
 /** CI still running this long after the merge did not finish. */
-export const CI_RUNNING_MAX_MS = 60 * 60_000
+const CI_RUNNING_MAX_MS = 60 * 60_000
 
 /**
  * What the default branch's CI says of the landed commit, as a check named `ci`. Green is a pass and red names the
@@ -101,7 +101,7 @@ export function outcomeOf(checks: readonly Check[]): Outcome {
 }
 
 /** The part of a failure's output that says what failed: numbers (times, counts, shas, pids) and spacing are not. */
-export const failureSignature = (detail: string): string =>
+const failureSignature = (detail: string): string =>
   detail
     .replace(/\b[0-9a-f]{7,40}\b/g, '#')
     .replace(/\d+/g, '#')

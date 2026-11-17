@@ -28,10 +28,10 @@ import { windowOf } from './stats.ts'
 import { plain } from './words.ts'
 
 /** Issues listed per sample. */
-export const SAMPLE_SIZE = 10
+const SAMPLE_SIZE = 10
 
 /** A number within this share of `before` has not moved. */
-export const FLAT_WITHIN = 0.05
+const FLAT_WITHIN = 0.05
 
 const Ref = z.object({ issue_id: z.string() })
 
@@ -162,7 +162,7 @@ export function figureOf(
 }
 
 /** The retro signals the factory has seen (`RETRO_MARKER` in their text), against the KPIs as they are now. */
-export async function ledgerOf(
+async function ledgerOf(
   sql: SQL,
   kpis: KpiModel,
   capacity: readonly RetroCapacityFigure[] = [],

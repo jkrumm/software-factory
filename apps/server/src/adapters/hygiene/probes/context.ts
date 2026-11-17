@@ -9,9 +9,9 @@ import type { ProbeFinding } from '../../../domains/loops/hygiene-model.ts'
  * table "Where a fact goes" and section Budgets; the measurements are in dotfiles `docs/writing-for-agents.md`): a root
  * `AGENTS.md` is loaded by every task in its repo, a nested one by the work in its directory. Over is strictly more.
  */
-export const ROOT_BUDGET_BYTES = 12_000
-export const NESTED_BUDGET_BYTES = 8_000
-export const SECTIONS_SHOWN = 5
+const ROOT_BUDGET_BYTES = 12_000
+const NESTED_BUDGET_BYTES = 8_000
+const SECTIONS_SHOWN = 5
 
 const MAX_LINES = 8
 const HEADING_CHARS = 40
@@ -59,7 +59,7 @@ const cut = (heading: string): string =>
   heading.length > HEADING_CHARS ? `${heading.slice(0, HEADING_CHARS - 1)}…` : heading
 
 /** The one finding of a repo: the files over budget, the root's largest sections, the rule. Empty when none is over. */
-export function toFindings(over: ContextFile[], rootText: string | undefined): ProbeFinding[] {
+function toFindings(over: ContextFile[], rootText: string | undefined): ProbeFinding[] {
   if (!over.length) return []
   const root = over.find((file) => !file.nested)
   const nested = over.filter((file) => file.nested).sort((a, b) => b.bytes - a.bytes || a.file.localeCompare(b.file))

@@ -5,9 +5,9 @@
  */
 
 /** A check run that ended in one of these is red. `cancelled`, `skipped` and `neutral` say nothing of the code. */
-export const RED_CONCLUSIONS: ReadonlySet<string> = new Set(['failure', 'timed_out', 'startup_failure'])
+const RED_CONCLUSIONS: ReadonlySet<string> = new Set(['failure', 'timed_out', 'startup_failure'])
 /** A commit status in one of these states is red; `pending` (or anything unknown) has not concluded. */
-export const RED_STATES: ReadonlySet<string> = new Set(['failure', 'error'])
+const RED_STATES: ReadonlySet<string> = new Set(['failure', 'error'])
 
 export type CheckVerdict = 'red' | 'green'
 

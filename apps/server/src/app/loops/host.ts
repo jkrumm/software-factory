@@ -42,13 +42,13 @@ export interface HostPassDeps {
 export const freshHostMemory = (): { current: SnapshotMemory } => ({ current: emptySnapshotMemory() })
 
 /** Host samples, class rows and notable processes are kept two weeks: the Console's 24 hours and the loop's 14-day medians. */
-export const HOST_KEEP_MS = 14 * 86_400_000
+const HOST_KEEP_MS = 14 * 86_400_000
 
 /** The hourly class rollups are kept 400 days: a year against the year before. */
-export const CLASS_HOURS_KEEP_MS = 400 * 86_400_000
+const CLASS_HOURS_KEEP_MS = 400 * 86_400_000
 
 /** What each lead cost is learned from a month of minutes. */
-export const LEAD_SAMPLES_KEEP_MS = 30 * 86_400_000
+const LEAD_SAMPLES_KEEP_MS = 30 * 86_400_000
 
 /** An attempt that ended this long ago still has its processes sampled, so a finishing lead's last minute is kept. */
 const ENDED_GRACE_MS = 10 * 60_000

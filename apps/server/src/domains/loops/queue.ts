@@ -53,11 +53,11 @@ export interface QueueAskRow {
 }
 
 /** Issues shown to the workflow at most. */
-export const MAX_SHOWN = 40
+const MAX_SHOWN = 40
 export const MAX_EDGES_PER_ISSUE = 3
 export const MAX_EDGES_PER_PASS = 10
-export const MAX_TITLE = 500
-export const MAX_SUMMARY = 600
+const MAX_TITLE = 500
+const MAX_SUMMARY = 600
 
 const byNumber = (a: QueueIssue, b: QueueIssue): number => issueNumber(a.id) - issueNumber(b.id)
 
@@ -69,7 +69,7 @@ export function byRepo(rows: readonly QueueIssue[]): Map<string, QueueIssue[]> {
 }
 
 /** What the workflow is shown: the queued Issues first, then the chain context, at most `MAX_SHOWN`. */
-export function shownOf(rows: readonly QueueIssue[]): QueueIssue[] {
+function shownOf(rows: readonly QueueIssue[]): QueueIssue[] {
   const sorted = [...rows].sort(byNumber)
   return [...sorted.filter((row) => row.state === 'queued'), ...sorted.filter((row) => row.state !== 'queued')].slice(
     0,

@@ -20,14 +20,12 @@ import type { LozengeState } from '@/components/kit/lozenge'
 import { ageWords } from '@/lib/age'
 import { pausedReason } from '@/lib/paused-reason'
 
-export { pausedReason }
-
 /** An Issue's place under the five words, or `closed` for one that is done, dropped, healed or cancelled lately: the key of `cardsOf`. */
 export type StateKey = WorkWord | 'closed'
 export const STATE_KEYS: readonly StateKey[] = [...WORK_WORDS, 'closed']
 
 /** What the list can be opened on: one of the five words or what closed lately. */
-export const LIST_STATES = STATE_KEYS
+const LIST_STATES = STATE_KEYS
 export type ListState = StateKey
 
 export const LIST_LABEL: Record<ListState, string> = {
@@ -40,7 +38,7 @@ export const LIST_LABEL: Record<ListState, string> = {
 }
 
 /** Paused, by who or what it waits for (`PausedSplit`), as the words after the count. */
-export const PAUSED_LABEL: Record<PausedSplit, string> = {
+const PAUSED_LABEL: Record<PausedSplit, string> = {
   you: 'on you',
   timer: 'on a timer',
   issue: 'on another Issue',
@@ -48,7 +46,7 @@ export const PAUSED_LABEL: Record<PausedSplit, string> = {
 }
 
 /** Ready, by the one limit that holds it (`ReadyLimit`). */
-export const READY_LABEL: Record<ReadyLimit, string> = {
+const READY_LABEL: Record<ReadyLimit, string> = {
   seat: 'a free seat',
   host: 'the host',
   repo: "the repo's claims",
@@ -56,7 +54,7 @@ export const READY_LABEL: Record<ReadyLimit, string> = {
 }
 
 /** Held, by what keeps it from starting (`HeldSplit`). */
-export const HELD_LABEL: Record<HeldSplit, string> = {
+const HELD_LABEL: Record<HeldSplit, string> = {
   issue: 'behind another Issue',
   line: 'the line is red',
   drain: 'drained',
@@ -65,7 +63,7 @@ export const HELD_LABEL: Record<HeldSplit, string> = {
 }
 
 /** "on you 1, on a timer 4": the non-zero parts of a split, in the order of its labels. */
-export function splitWords(counts: Readonly<Record<string, number>>, labels: Readonly<Record<string, string>>): string {
+function splitWords(counts: Readonly<Record<string, number>>, labels: Readonly<Record<string, string>>): string {
   return Object.keys(labels)
     .flatMap((key) => (counts[key] ? [`${labels[key]} ${counts[key]}`] : []))
     .join(', ')
@@ -92,7 +90,7 @@ export const listStateOf = (value: unknown): ListState | undefined =>
   LIST_STATES.find((key) => key === value) ?? (typeof value === 'string' ? LEGACY_STATE.get(value) : undefined)
 
 /** An Issue's origin as the word the owner reads. */
-export const ORIGIN_LABEL = {
+const ORIGIN_LABEL = {
   you: 'You',
   application: 'Application',
   infrastructure: 'Infrastructure',
@@ -102,8 +100,6 @@ export const ORIGIN_LABEL = {
 } as const
 export type Origin = keyof typeof ORIGIN_LABEL
 const ORIGIN_ORDER = Object.keys(ORIGIN_LABEL) as Origin[]
-
-export const OUTCOME_LABEL = { done: 'Done', dropped: 'Dropped', healed: 'Healed', cancelled: 'Cancelled' } as const
 
 export const originWord = (origin: string): string => ORIGIN_LABEL[origin as Origin] ?? origin
 
@@ -281,7 +277,7 @@ export function singleProject(cards: readonly FlowCard[]): string | null {
 }
 
 /** The cards above the list, each counting one trend series (Not started is Ready and Held together). */
-export const STAT_KEYS = ['running', 'paused', 'notStarted'] as const satisfies readonly WorkTrendKey[]
+const STAT_KEYS = ['running', 'paused', 'notStarted'] as const satisfies readonly WorkTrendKey[]
 
 /** The list a stat card opens on the Overview. */
 const STAT_COLUMN: Record<(typeof STAT_KEYS)[number], ListState | undefined> = {

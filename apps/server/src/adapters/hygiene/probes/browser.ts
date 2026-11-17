@@ -41,7 +41,7 @@ const REASON_LINE = /^\s*(?:\/\/|\/\*|\*|#)\s*chrome:\s*\S/
 const COMMENT_LINE = /^\s*(?:\/\/|\/\*|\*)/
 
 /** A file the browser rule judges: a Playwright config, a spec or test file, or anything under an `e2e` or `tests` directory. */
-export function isSuiteFile(file: string): boolean {
+function isSuiteFile(file: string): boolean {
   if (!SOURCE.test(file) || file.split('/').includes('node_modules')) return false
   if (NOT_SUITES.some((prefix) => file.startsWith(prefix))) return false
   const name = basename(file)
@@ -53,7 +53,7 @@ export function isSuiteFile(file: string): boolean {
 }
 
 /** The breaches of one suite file: installed Chrome with no `chrome:` reason on its line or the line above, and `headless: false`. */
-export function browserBreaches(text: string, file: string): Breach[] {
+function browserBreaches(text: string, file: string): Breach[] {
   const lines = text.split('\n')
   const out: Breach[] = []
   lines.forEach((line, index) => {
@@ -76,11 +76,11 @@ const hasServers = (value: unknown): boolean => Object.keys(asRecord(value)).len
 const AGENT_FILE = /^\.claude\/agents\/[^/]+\.md$/
 
 /** The three places a checked-in MCP server configuration lives. */
-export const isAgentConfig = (file: string): boolean =>
+const isAgentConfig = (file: string): boolean =>
   file === '.mcp.json' || file === '.claude/settings.json' || AGENT_FILE.test(file)
 
 /** A checked-in MCP server configuration a coding-agent session would load: `.mcp.json`, `mcpServers` in settings or an agent file. */
-export function mcpBreach(file: string, text: string): Breach | undefined {
+function mcpBreach(file: string, text: string): Breach | undefined {
   if (file === '.mcp.json') return { file, line: 1, what: 'a checked-in .mcp.json', rule: MCP_RULE }
   if (file === '.claude/settings.json') {
     try {
@@ -104,7 +104,7 @@ export function mcpBreach(file: string, text: string): Breach | undefined {
 }
 
 /** One finding per file: the key is the path, so intake's fingerprint is one Issue per file. */
-export function toFindings(breaches: Breach[]): ProbeFinding[] {
+function toFindings(breaches: Breach[]): ProbeFinding[] {
   const groups = new Map<string, Breach[]>()
   for (const breach of breaches) groups.set(breach.file, [...(groups.get(breach.file) ?? []), breach])
   return [...groups].map(([file, list]) =>

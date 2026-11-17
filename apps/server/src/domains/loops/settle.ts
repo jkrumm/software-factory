@@ -20,7 +20,7 @@ export interface SettlingFacts {
 }
 
 /** An Issue the owner ranked at this prio or above is never chained by inference: his rank is the order. */
-export const RANKED_PRIO = 400
+const RANKED_PRIO = 400
 
 export type Refined = 'feature' | 'bug' | 'chore' | 'docs'
 
@@ -102,7 +102,7 @@ export type SettleChecked =
  * evidence that an Issue builds on another's output; naming it is (2026-11-14: urgent fixes chained behind slow
  * Issues that only touched the same area).
  */
-export function namesIssue(facts: Pick<SettlingFacts, 'title' | 'text'>, blocker: IssueId): boolean {
+function namesIssue(facts: Pick<SettlingFacts, 'title' | 'text'>, blocker: IssueId): boolean {
   const number = issueNumber(blocker)
   const pattern = new RegExp(`(?:\\bissues?[ _#]*|#)${number}\\b`, 'i')
   return pattern.test(facts.title) || pattern.test(facts.text)

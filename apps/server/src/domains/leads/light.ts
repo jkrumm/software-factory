@@ -1,6 +1,6 @@
 import { hygieneClass, LIGHT_CLASSES } from '@software-factory/contract'
 
-export { hygieneClass, LIGHT_CLASSES }
+export { hygieneClass }
 // The light seat: mechanical, well-specified work with a check that proves it starts on the cheap seat (the role table's
 // `light` row) instead of the `lead` row. modelpick's table of 2026-11-16 put haiku at high effort level with sonnet at
 // medium (29.9 against 30.8) at a fifth of its cost, and 12 points under sonnet at high: right for work a rule can name,
@@ -58,7 +58,7 @@ export function lightRule(facts: LightFacts): string | null {
 }
 
 /** A light lead's second stall, or its second refused ship, moves it up. */
-export const MOVE_UP_AFTER = 2
+const MOVE_UP_AFTER = 2
 
 /** What a light lead's attempt did, read from its events and its ships. */
 export interface StruggleFacts {

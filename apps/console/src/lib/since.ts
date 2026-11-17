@@ -61,7 +61,7 @@ export const SINCE_SUBTITLE: Record<SinceKey, string> = {
 }
 
 /** The domain word each category's InfoHint defines (docs/language.md, generated). */
-export const SINCE_HINT = {
+const SINCE_HINT = {
   failed: 'regressed',
   incidents: 'incident',
   dropped: 'dropped',

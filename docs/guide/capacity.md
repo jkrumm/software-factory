@@ -135,7 +135,7 @@ A claim is a lead's place in its repo. A lane is a resource class inside a repo 
 - **Lanes cap a class.** `lanes: {apple: 1}` lets one Apple lead run in the repo at once, within `leads`. An undeclared lane is unlimited.
 
 ```ts
-export const CLAIM_FREEING_WAITS: ReadonlySet<string> = new Set([
+const CLAIM_FREEING_WAITS: ReadonlySet<string> = new Set([
   'timer',
   'dependency',
   'decision',

@@ -34,7 +34,7 @@ const LEVEL = new Map<number, ThroughputAnswers['host']['level']>([
 ])
 
 /** The UTC dates `[from, to]` touches, oldest first. */
-export function utcDays(from: Date, to: Date): string[] {
+function utcDays(from: Date, to: Date): string[] {
   const days: string[] = []
   for (let t = Date.UTC(from.getUTCFullYear(), from.getUTCMonth(), from.getUTCDate()); t <= to.getTime(); t += DAY_MS)
     days.push(new Date(t).toISOString().slice(0, 10))
@@ -49,7 +49,7 @@ interface Interval {
 }
 
 /** The hours queued per reason (and the Issues that waited), and the binding reason's hours per UTC day, clipped to `[from, to)`. */
-export function queueHours(
+function queueHours(
   intervals: readonly Interval[],
   window: { from: Date; to: Date },
 ): {
@@ -88,7 +88,7 @@ export function queueHours(
 type Findings = ThroughputModel['improvements']
 
 /** The open improvement that costs most: still to be judged (`open`, or `shipped` waiting for its after), not one the epoch left unmeasured. */
-export function topFinding(findings: Findings): Findings[number] | null {
+function topFinding(findings: Findings): Findings[number] | null {
   return (
     findings
       .filter((f) => f.status === 'open' || f.status === 'shipped')

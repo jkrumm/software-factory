@@ -106,7 +106,7 @@ export const hygieneShare = (row: ProjectIndexRow): number | null =>
   row.hygiene.run === 0 ? null : row.hygiene.clean / row.hygiene.run
 
 /** A probe not clean, or a finding raised for over this long, is a hygiene gap. */
-export const STALE_FINDING_MS = 7 * DAY
+const STALE_FINDING_MS = 7 * DAY
 
 /** The tone of the hygiene figure: clean is quiet, a gap warns, a finding raised for over 7 days is bad. */
 export function hygieneTone(row: ProjectIndexRow, now: number): Tone {
@@ -192,7 +192,7 @@ export interface TablePrefs {
 
 export const DEFAULT_PREFS: TablePrefs = { hidden: [], sort: [], grouped: true, density: 'compact' }
 
-export const PREFS_KEY = 'factory.projects.table.v1'
+const PREFS_KEY = 'factory.projects.table.v1'
 
 const isColumn = (value: unknown): value is ColumnId =>
   typeof value === 'string' && (COLUMN_IDS as readonly string[]).includes(value)

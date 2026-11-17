@@ -4,7 +4,7 @@ export interface Scheduler {
   clear(handle: unknown): void
 }
 
-export const realScheduler: Scheduler = {
+const realScheduler: Scheduler = {
   set: (run, ms) => setTimeout(run, ms),
   clear: (handle) => clearTimeout(handle as ReturnType<typeof setTimeout>),
 }
@@ -44,7 +44,7 @@ export function trailingDebounce(
   }
 }
 
-export const BACKOFF_START_MS = 1_000
+const BACKOFF_START_MS = 1_000
 export const BACKOFF_MAX_MS = 30_000
 
 /** The reconnect wait after `previous` (undefined for the first): 1 s, doubling, capped at 30 s. */

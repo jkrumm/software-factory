@@ -10,7 +10,7 @@ import { LINK } from './parts'
 import { type ProjectScreen, SCREEN_WORDS, ScreenLink } from './tab-link'
 
 /** The screen of the project the address names: the first screen, or the tab it ends in. */
-export function screenOf(pathname: string): ProjectScreen {
+function screenOf(pathname: string): ProjectScreen {
   const last = pathname.replace(/\/+$/, '').split('/').pop()
   return PROJECT_TABS.find((tab) => tab === last) ?? 'overview'
 }

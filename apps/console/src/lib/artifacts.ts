@@ -141,7 +141,7 @@ export function entriesOf(collections: readonly Collection[], rows: readonly Art
 }
 
 /** Whether a collection passes the page's kind and project filters (a kind: one of its pages has it). */
-export const entryMatches = (entry: CollectionEntry, filters: ArtifactFilters): boolean =>
+const entryMatches = (entry: CollectionEntry, filters: ArtifactFilters): boolean =>
   (!filters.project || entry.collection.repo === filters.project) &&
   (!filters.kind || entry.members.some((row) => row.artifact.kind === filters.kind))
 
@@ -156,7 +156,7 @@ export interface Shelf {
   groups: { project: string; items: ShelfItem[] }[]
 }
 
-export const NO_PROJECT = 'No project'
+const NO_PROJECT = 'No project'
 
 /**
  * The page: pinned collections first, then what is left by project. An artifact in a collection shows through its

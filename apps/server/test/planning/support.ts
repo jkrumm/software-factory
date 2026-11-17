@@ -21,7 +21,7 @@ import { readIssues } from '../../src/read/planning.ts'
 import type { Actor } from '../../src/kernel/events.ts'
 
 /** The role table the planning tests file seats against. */
-export const ROLES = {
+const ROLES = {
   role: async (name: string) =>
     name === 'deep'
       ? ok({ tier: 'opus' as const, effort: 'max' as const })
@@ -34,7 +34,7 @@ export const value = <T, E>(result: Result<T, E>): T => {
 }
 
 /** Repos the fake source knows, and what their default branches say; a test edits `files` and the next read sees it. */
-export class FakeSource implements ProjectSource {
+class FakeSource implements ProjectSource {
   repos = new Map<string, { ref: RepoRef; read: RepoRead | 'fail' }>()
   reads: string[] = []
 
@@ -77,7 +77,7 @@ export class FakeSource implements ProjectSource {
   }
 }
 
-export class FakeHost implements HostReader {
+class FakeHost implements HostReader {
   loadValue: Result<number> = ok(1)
   memoryValue: Result<MemoryReading> = ok({ swapoutMbPer300s: 0, swapUsedPct: 10 })
   /** readings handed out one by one before `loadValue`, for a test where the load moves between two looks */
@@ -99,7 +99,7 @@ export class FakeHost implements HostReader {
   }
 }
 
-export class FakeAccounts implements AccountSource {
+class FakeAccounts implements AccountSource {
   rows: Omit<AccountReading, 'readAt' | 'sampledAt'>[] = []
   fail = false
   reads = 0
@@ -110,7 +110,7 @@ export class FakeAccounts implements AccountSource {
   }
 }
 
-export class FakeRanker implements AccountRanker {
+class FakeRanker implements AccountRanker {
   rows: RankedAccount[] = []
   fail = false
   reads = 0

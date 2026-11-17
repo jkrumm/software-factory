@@ -80,7 +80,7 @@ export type IntakeRefusal = {
 export type RequestCaller = 'owner' | 'orchestrator' | 'agent' | 'machine' | 'signal' | 'read'
 
 /** The one source the signal token files as: Hermes, carrying the owner's words. */
-export const SIGNAL_SOURCE = 'owner:hermes'
+const SIGNAL_SOURCE = 'owner:hermes'
 export type IntakeError = IssueWriteError | PortError | IntakeRefusal
 
 export interface IntakeSettings {
@@ -215,7 +215,7 @@ export function envelopeOfRequest(body: SignalRequest, caller: RequestCaller): R
 }
 
 /** The facts of an alert as the text a lead reads: compact JSON, clipped. */
-export function factsText(facts: unknown): string {
+function factsText(facts: unknown): string {
   const text = JSON.stringify(facts ?? {})
   return text === '{}' ? '' : text.slice(0, 6000)
 }
@@ -1517,6 +1517,6 @@ function failureOf(error: IntakeError): PortError {
 }
 
 /** An Issue id read from a request. */
-export const issueIdOf = (text: string): IssueId | null => idOf('issue', text)
+const issueIdOf = (text: string): IssueId | null => idOf('issue', text)
 
 export type { HealRule }

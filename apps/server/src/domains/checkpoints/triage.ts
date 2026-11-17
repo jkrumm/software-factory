@@ -45,7 +45,7 @@ const HIS_YES =
   /\b(?:reboot|shut ?down|power ?off|halt|planned restart|restart (?:of )?(?:the )?(?:mini|host|machine|core|herdr-core)|hc server|hc update|herdr-core-update|deploy-release|gate(?:\.py)? release|rm -rf|launchctl (?:bootout|unload|remove))\b/i
 
 /** The command the keyless route runs, and where: the mini (`mini`, `hc ... --on mini`) or a server (`homelab`, `vps`). */
-export function keylessRoute(command: string): { where: string; line: string } | null {
+function keylessRoute(command: string): { where: string; line: string } | null {
   const ssh = KEYLESS_SSH.exec(command)
   if (ssh) return { where: ssh[1] ?? 'mini', line: (ssh[2] ?? '').trim() }
   return HC_ON_MINI.test(command) ? { where: 'mini', line: command.trim() } : null

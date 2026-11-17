@@ -10,7 +10,7 @@ import { helperEnv, type RunProcess, runProcess } from '../intake/process.ts'
 import { trimScript } from './trim.ts'
 
 /** How often the VPS is asked at most. */
-export const PROBE_EVERY_MS = 30_000
+const PROBE_EVERY_MS = 30_000
 /** One probe's process timeout. */
 const PROBE_TIMEOUT_MS = 15_000
 /** A container younger than this may belong to a holder whose first renewal has not come yet. */
@@ -19,8 +19,8 @@ const REAP_AFTER_MS = 120_000
 const TRIM_TIMEOUT_MS = 300_000
 
 /** The label every step container carries: its slot id (`factory.step`) and its start in epoch seconds (`factory.started`). */
-export const STEP_LABEL = 'factory.step'
-export const STARTED_LABEL = 'factory.started'
+const STEP_LABEL = 'factory.step'
+const STARTED_LABEL = 'factory.started'
 
 const SCRIPT = [
   'nproc',

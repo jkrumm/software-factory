@@ -19,7 +19,7 @@ export interface RetroOutcomes {
 }
 
 /** The previous retros' yield in a line for the signal's facts; null when no retro signal was filed in the window. */
-export function outcomesLine(outcomes: RetroOutcomes | null): string | null {
+function outcomesLine(outcomes: RetroOutcomes | null): string | null {
   if (!outcomes || outcomes.signals === 0) return null
   const none = outcomes.signals - outcomes.shipped - outcomes.done - outcomes.dropped - outcomes.open
   const parts = [

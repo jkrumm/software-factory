@@ -93,7 +93,7 @@ export function findingsIn(file: string, text: string): Finding[] {
 }
 
 /** `<path> <term or *>  # <reason>`; a line without a reason is returned as a problem. */
-export function parseExceptions(text: string): { exceptions: Exception[]; problems: string[] } {
+function parseExceptions(text: string): { exceptions: Exception[]; problems: string[] } {
   const exceptions: Exception[] = []
   const problems: string[] = []
   const terms = new Set(RETIRED.map((r) => r.term))

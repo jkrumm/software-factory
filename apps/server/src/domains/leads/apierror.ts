@@ -116,8 +116,8 @@ export interface ApiIncident {
 export const RESUME_DELAYS_MS: readonly number[] = [60_000, 180_000, 600_000, 600_000, 600_000]
 
 /** Leads that fail within this long of each other, three or more, are one incident of the edge, not three. */
-export const EDGE_WINDOW_MS = 5 * 60_000
-export const EDGE_MIN_LEADS = 3
+const EDGE_WINDOW_MS = 5 * 60_000
+const EDGE_MIN_LEADS = 3
 
 /** Of an edge incident's leads, one is resumed per this long. */
 export const STAGGER_MS = 30_000

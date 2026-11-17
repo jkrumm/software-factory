@@ -5,7 +5,7 @@ import type { HistoryRecord } from './history.ts'
 const REPORT_KINDS: readonly string[] = ['asked', 'submitted', 'errand_raised', 'deferred', 'shipped', 'closed']
 
 /** Whether a record is the lead's report for `attempt`: its verbs, and `stalled` when the lead itself blocked. */
-export function isReport(record: HistoryRecord, attempt: number): boolean {
+function isReport(record: HistoryRecord, attempt: number): boolean {
   const payload = record.payload as { attempt?: unknown; cause?: unknown }
   if (payload.attempt !== attempt) return false
   if (record.kind === 'stalled') return payload.cause === 'blocked'

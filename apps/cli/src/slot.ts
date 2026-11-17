@@ -266,7 +266,7 @@ async function runHeld(program: string, args: string[], io: Io): Promise<number>
  * (`FACTORY_SLOT_RUN_MS`, else the project's `slots.run`, else 30 min; the server resolves it) has its whole process
  * group sent SIGTERM, then SIGKILL after `FACTORY_SLOT_KILL_GRACE_MS` (5 s), and the exit code is 124.
  */
-export async function slotRun(input: { name?: string; command: string[] }, io: Io): Promise<number> {
+async function slotRun(input: { name?: string; command: string[] }, io: Io): Promise<number> {
   const [program, ...args] = input.command
   if (!program) throw usage('usage: slot run [--name <label>] -- <cmd> [args…]')
   // Inside a slot already (the whole `make check` runs in one): the steps below it are that slot's, they do not queue again.

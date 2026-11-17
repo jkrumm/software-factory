@@ -120,7 +120,7 @@ export function slotLineFindings(minutes: readonly SlotMinute[], now: Date, aimO
 // ---- 13. gates_passed -------------------------------------------------------------------------------------------------------
 
 /** The newest samples within this long of the newest one are looked at for a lead that was admitted past a gate. */
-export const GATE_WINDOW_MS = 10 * 60_000
+const GATE_WINDOW_MS = 10 * 60_000
 
 /**
  * The admission rules, as the capacity layer holds them (`overLoad`, `overMemory` in `domains/capacity/host.ts`): passed in
@@ -199,7 +199,7 @@ export function gatesPassedFindings(
 // ---- 14. routes_slow --------------------------------------------------------------------------------------------------------
 
 /** The p95 of the server's routes over the window above this is a server that is up but useless. */
-export const ROUTE_P95_LIMIT_MS = 2_000
+const ROUTE_P95_LIMIT_MS = 2_000
 /**
  * Fewer answers than this in the window say nothing about the p95: the nearest-rank p95 of fewer than 20 is the slowest one,
  * so a single cold request after a restart (a deploy empties the window) would file an Issue (2026-11-15: 14 answers, p95 2.9 s,
@@ -289,8 +289,8 @@ export function priorityLine(rows: readonly PsRow[], serverPid: number): string 
   return `Scheduling priority (ps -o pri, a higher number is scheduled sooner): ${parts.join('; ')}`
 }
 
-export const BUSIEST = 15
-export const SLOT_LINES_LISTED = 12
+const BUSIEST = 15
+const SLOT_LINES_LISTED = 12
 
 export interface EvidenceInputs {
   now: Date

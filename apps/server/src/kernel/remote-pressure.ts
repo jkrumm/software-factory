@@ -17,8 +17,8 @@ export const BASELINE_MIN_SAMPLES = 200
 /** The samples a baseline reads, and how long a sample is kept. */
 export const BASELINE_WINDOW_MS = 3 * 86_400_000
 /** The line sits this far above the p99: the larger of half a point and a quarter of the p99. */
-export const THRESHOLD_MARGIN_PCT = 0.5
-export const THRESHOLD_MARGIN_SHARE = 0.25
+const THRESHOLD_MARGIN_PCT = 0.5
+const THRESHOLD_MARGIN_SHARE = 0.25
 
 /** The probe samples taken with no step running on the VPS: how many, over how long, and the 99th percentile of each pressure. */
 export interface PressureBaseline {

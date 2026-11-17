@@ -14,7 +14,7 @@ import { key, type Key } from '../../kernel/keys.ts'
 /** Commits older than this are not read: the Improve screen shows four weeks, and a week of slack covers a late pass. */
 export const FIX_WINDOW_DAYS = 35
 /** The most commits one workflow call sorts. */
-export const FIX_BATCH = 40
+const FIX_BATCH = 40
 /** A commit's body, as far as the workflow reads it. */
 export const BODY_CHARS = 800
 /** The most paths of one commit the workflow is shown. */

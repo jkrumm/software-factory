@@ -23,8 +23,8 @@ import type { UnitOfWork } from '../unit-of-work.ts'
 import { readGate, type ClassGate } from './gate.ts'
 
 /** The repo that carries the factory's own findings, and who files them. */
-export const FRICTION_REPO = 'software-factory'
-export const FRICTION_SOURCE = `agent:${FRICTION_REPO}`
+const FRICTION_REPO = 'software-factory'
+const FRICTION_SOURCE = `agent:${FRICTION_REPO}`
 
 export interface FrictionDeps {
   uow: UnitOfWork<{ loops: LoopStore; loopReads: LoopReads }>

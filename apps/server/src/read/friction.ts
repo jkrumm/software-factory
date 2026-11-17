@@ -8,7 +8,7 @@ import { per, windowOf } from './stats.ts'
 import { plain } from './words.ts'
 
 /** A note typed into a lead later than this after it was claimed is undelivered. */
-export const NOTE_GRACE_MS = 10 * 60_000
+const NOTE_GRACE_MS = 10 * 60_000
 
 /** The wait reasons that are stalls (`WAITS` in the work domain), in words. */
 const STALLS: Record<string, string> = {

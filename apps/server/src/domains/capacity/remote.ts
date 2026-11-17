@@ -28,7 +28,7 @@ export interface RemoteReading {
 }
 
 /** A reading older than this says nothing of the VPS now, and an unreachable VPS has none newer: no step goes there. */
-export const REMOTE_READING_MAX_AGE_MS = 90_000
+const REMOTE_READING_MAX_AGE_MS = 90_000
 
 /**
  * The share of the disk no step may push the VPS past: the line the infra disk alert pages on (`config/infra.json`
@@ -40,7 +40,7 @@ export const DISK_CEILING_PCT = 90
  * What one copy of a project takes on the VPS when it is new: the tree, its `node_modules` and its share of the bun cache.
  * Measured for basalt-ui on 2026-11-17: 0.2 GiB of tree, 1.5 GiB of `node_modules`, 1.5 GiB of cache.
  */
-export const COPY_BYTES = 3.2 * 1024 ** 3
+const COPY_BYTES = 3.2 * 1024 ** 3
 
 /**
  * What the step host keeps (issue 2035, `adapters/remote/trim.ts`). A slot copy whose slot has run no step for this many
@@ -61,10 +61,10 @@ export const CACHE_CAP_GIB = 3
 export const TRIM_EVERY_MS = 6 * 3_600_000
 
 /** The VPS is about 1.7 times slower per step (basalt-ui unit, 701 s against the mini's 412 s p50, 2026-11-17). */
-export const VPS_SLOWDOWN = 1.7
+const VPS_SLOWDOWN = 1.7
 
 /** The least memory a step container gets, whatever its learned peak. */
-export const MIN_CEILING_MIB = 1024
+const MIN_CEILING_MIB = 1024
 
 /** A step's memory ceiling on the VPS: 1.5 times its learned peak, at least 1 GiB. A runaway stops there, not in production. */
 export const memoryCeilingMib = (peakMib: number): number => Math.max(MIN_CEILING_MIB, Math.ceil(peakMib * 1.5))

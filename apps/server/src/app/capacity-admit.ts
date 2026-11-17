@@ -325,7 +325,7 @@ export async function pollIfDue(deps: CapacityDeps): Promise<string[]> {
   return notes
 }
 
-export async function snapshotOf(stores: PlanningStores, now: Date): Promise<Snapshot> {
+async function snapshotOf(stores: PlanningStores, now: Date): Promise<Snapshot> {
   const projects = await stores.planning.projects()
   const rows = await stores.reads.open()
   const claims = await stores.capacity.claims()
@@ -348,7 +348,7 @@ export async function snapshotOf(stores: PlanningStores, now: Date): Promise<Sna
 }
 
 /** The claims of Issues that no longer work in their repo go back; run under the capacity lock. */
-export async function sweepClaims(stores: PlanningStores, snap: Snapshot): Promise<IssueId[]> {
+async function sweepClaims(stores: PlanningStores, snap: Snapshot): Promise<IssueId[]> {
   const holding = new Set(snap.issues.filter((i) => holdsClaim(i.state, i.waitReason)).map((i) => i.id))
   const stale = snap.claims.filter((claim) => !holding.has(claim.issue)).map((claim) => claim.issue)
   if (stale.length === 0) return []
@@ -436,7 +436,7 @@ function youngGrowth(claims: readonly Claim[], snap: Snapshot, host: HostInputs)
  * decided as if the ones before it were admitted (they take a claim and an account), so the reasons of the later ones
  * are the ones they would meet in turn. Pure: the snapshot and the host readings are passed in.
  */
-export function evaluateQueue(snap: Snapshot, host: HostInputs, limits: CapacityLimits): QueueEntry[] {
+function evaluateQueue(snap: Snapshot, host: HostInputs, limits: CapacityLimits): QueueEntry[] {
   const base = decide(snap, host, limits, 0)
   const bonus = seatBonusOf(snap, host, limits, base)
   return bonus > 0 ? decide(snap, host, limits, bonus) : base
@@ -700,11 +700,7 @@ const REFUSAL_KINDS: ReadonlySet<string> = new Set(REFUSALS)
  * would admit this look and the refusal of the first Issue that nothing in the chain keeps out. Null when no rule is
  * shadowed or nothing is queued for the host's rules.
  */
-export function shadowDecision(
-  snap: Snapshot,
-  host: HostInputs,
-  limits: CapacityLimits,
-): Omit<ShadowDecision, 'at'> | null {
+function shadowDecision(snap: Snapshot, host: HostInputs, limits: CapacityLimits): Omit<ShadowDecision, 'at'> | null {
   const { shadow } = limits
   if (!shadow) return null
   const live = evaluateQueue(snap, host, limits)
@@ -757,10 +753,10 @@ async function recordShadow(deps: CapacityDeps, host: HostInputs, notes: string[
 }
 
 /** The shadow decisions are kept two weeks, as the host samples they are read against. */
-export const SHADOW_KEEP_MS = 14 * 86_400_000
+const SHADOW_KEEP_MS = 14 * 86_400_000
 
 /** The queue intervals are kept 400 days, as the hourly class rollups (a few rows per Issue). */
-export const WAITS_KEEP_MS = 400 * 86_400_000
+const WAITS_KEEP_MS = 400 * 86_400_000
 
 /**
  * Records what the last look found each queued Issue waiting for (`factory.queue_intervals`): an Issue with a reason has an
@@ -819,7 +815,7 @@ async function withFreshLoad(deps: CapacityDeps, host: HostInputs): Promise<Host
 }
 
 /** The most Issues one pass admits; the rest wait for the next. */
-export const PASS_LIMIT = 20
+const PASS_LIMIT = 20
 
 /**
  * The admission pass: poll the accounts if the readings are old, read the host once (the load is read again before each

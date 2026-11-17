@@ -4,7 +4,7 @@ import type { RetroTaste } from '@software-factory/contract'
 import { ownerVerdict, type Window } from './kpis.ts'
 
 /** The verdicts and annotations one retro lists; the newest are kept. */
-export const TASTE_LIMIT = 200
+const TASTE_LIMIT = 200
 
 const Kind = z.enum(['concept', 'spec', 'report'])
 

@@ -2,7 +2,7 @@ import { isSharedMemoryProgram } from '../../kernel/throughput-limits.ts'
 import { type WorktreeRef, worktreeOwners } from './leadcost.ts'
 
 /** Who a process works for (`migrations/1022_host_classes.sql`). */
-export const PROCESS_CLASSES = ['lead', 'step', 'tenant', 'factory', 'system', 'owner', 'other'] as const
+const PROCESS_CLASSES = ['lead', 'step', 'tenant', 'factory', 'system', 'owner', 'other'] as const
 export type ProcessClass = (typeof PROCESS_CLASSES)[number]
 
 /** One process of the minute's `top`, with what `ps`, `lsof` and `launchctl` said about it. */
@@ -308,7 +308,7 @@ export function cpuSince(procs: readonly SnapshotProc[], memory: SnapshotMemory)
   return used
 }
 
-export const NOTABLE_TOP = 15
+const NOTABLE_TOP = 15
 const LARGE_KIB = 1024 * 1024
 const GROWTH_KIB = 200 * 1024
 const GROWTH_WINDOW_MS = 10 * 60_000

@@ -16,7 +16,7 @@ import { useIssue } from '@/lib/queries'
 import { cn } from '@/lib/utils'
 
 /** What the Issue shows while it loads or when it cannot be shown. `narrow`: the column is a panel's, not the page's. */
-export function IssueGap({ id, narrow }: { id: string; narrow?: boolean }) {
+function IssueGap({ id, narrow }: { id: string; narrow?: boolean }) {
   const issue = useIssue(id)
   const { error } = issue
   const screen = useScreen(issue)

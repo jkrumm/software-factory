@@ -34,16 +34,16 @@ export type ThroughputKpi = (typeof THROUGHPUT_KPIS)[number]
 export const RANK_DAYS = 7
 export const AFTER_DAYS = 3
 const DAY_MS = 86_400_000
-export const AFTER_DELAY_MS = AFTER_DAYS * DAY_MS
+const AFTER_DELAY_MS = AFTER_DAYS * DAY_MS
 
 /** A finding costing less than this many minutes in the ranking window is not worth an Issue. */
-export const MIN_COST_MINUTES = 30
+const MIN_COST_MINUTES = 30
 /** Slot-minutes per closed Issue is a finding when it is this far above the project's median of the 14 days before. */
-export const PER_ISSUE_FACTOR = 1.25
+const PER_ISSUE_FACTOR = 1.25
 /** An after within this share of the before has not moved. */
-export const MOVED_SHARE = 0.1
+const MOVED_SHARE = 0.1
 /** The share of `before` a time figure is asked to fall to. */
-export const TARGET_SHARE = 0.5
+const TARGET_SHARE = 0.5
 
 /** The host in the window `[from, to)`, as the loop reads it: raw figures per project, thresholds not applied. */
 export interface WindowFacts {

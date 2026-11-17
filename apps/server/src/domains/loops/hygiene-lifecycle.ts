@@ -16,11 +16,11 @@ const DAY_MS = 86_400_000
 /** The machine refuses a reopen 30 days after the close; a day's margin keeps the pass from asking at the edge. */
 export const REOPEN_WINDOW_MS = 29 * DAY_MS
 /** A finding is reopened at most this often: a lead that closed it done twice and found it red again needs a person. */
-export const MAX_REOPENS = 2
+const MAX_REOPENS = 2
 /** A daily pass becomes a full one when this many commits landed since the last full pass... */
-export const BUSY_COMMITS = 30
+const BUSY_COMMITS = 30
 /** ...and the last full pass is at least this old (a repo that merges all day does not get a full sweep every day). */
-export const BUSY_MIN_AGE_MS = 2 * DAY_MS
+const BUSY_MIN_AGE_MS = 2 * DAY_MS
 
 /** The newest Issue a key filed, as the pass reads it (`LoopReads.findingIssues`). */
 export interface FindingIssue {
@@ -53,10 +53,10 @@ export interface LifecyclePlan {
 }
 
 /** An `unjudged` entry that means every key of the run. */
-export const ALL = '*'
+const ALL = '*'
 
 /** A run speaks for a key when it ended with a verdict (clean or found), the key is its own or under it, and the run did not leave that key unjudged. */
-export function coveringRun(runs: readonly ProbeRun[], key: string): ProbeRun | undefined {
+function coveringRun(runs: readonly ProbeRun[], key: string): ProbeRun | undefined {
   const under = (prefix: string): boolean => key === prefix || key.startsWith(`${prefix}:`)
   return runs.find(
     (run) =>

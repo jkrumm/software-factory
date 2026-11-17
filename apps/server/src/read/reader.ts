@@ -28,8 +28,6 @@ import { deriveLeads, issueRefOf, loadAttempts, loadBriefs, type SessionDeps } f
 import { changesAfter, follow, formatCursor, resolveCursor, type StreamEvent } from './stream.ts'
 import { isWorkRepo, loadOpenProjects } from './work.ts'
 
-export { DEFAULT_LIMIT, MAX_LIMIT }
-
 export interface ReadDeps extends SessionDeps, LineSources {
   /** how often the change stream looks for news */
   streamPollMs: number
@@ -45,8 +43,8 @@ export interface Surface {
 }
 
 /** Sessions `/v1/sessions` looks at without an Issue: the newest, a page of this many unless `limit` says otherwise. */
-export const SESSION_LIMIT = 200
-export const SESSION_LIMIT_MAX = 1000
+const SESSION_LIMIT = 200
+const SESSION_LIMIT_MAX = 1000
 
 /** One page of session cards; `next` is the `before` of the following page, null when this one reached the oldest. */
 export interface SessionPage {

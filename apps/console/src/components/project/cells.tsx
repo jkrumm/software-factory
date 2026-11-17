@@ -27,7 +27,7 @@ import { cn } from '@/lib/utils'
 const HOUR_MS = 3_600_000
 
 /** "Tue, Nov 10, 22:39": the absolute time a relative one shows on hover. */
-export const absolute = (iso: string): string =>
+const absolute = (iso: string): string =>
   new Date(iso).toLocaleString([], {
     weekday: 'short',
     month: 'short',

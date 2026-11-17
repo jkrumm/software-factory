@@ -7,7 +7,7 @@ import { err as fail, type Result } from '../kernel/result.ts'
 import { type CheckpointDeps, type CheckpointError, type CheckpointResult, finishErrand } from './checkpoints.ts'
 
 /** A run that began this long ago and never reported (the server restarted under it) may be started again. */
-export const APPROVED_RUN_STALE_MS = 35 * 60_000
+const APPROVED_RUN_STALE_MS = 35 * 60_000
 /** A hang guard on an approved command, never a budget: a release or a restart takes minutes. */
 export const APPROVED_RUN_HANG_GUARD_MS = 30 * 60_000
 const NOTE_MAX = 1500

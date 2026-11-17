@@ -38,7 +38,7 @@ const IGNORED = [
 const stem = (file: string): string => basename(file).split('.')[0] ?? ''
 
 /** Files that change with their own derivations or their own tests say nothing about hidden coupling. */
-export const ignored = (file: string): boolean => IGNORED.some((pattern) => pattern.test(file))
+const ignored = (file: string): boolean => IGNORED.some((pattern) => pattern.test(file))
 
 /** The changed files of each commit (`%x00%H` then `--name-only`), the ignored ones removed. */
 export function parseLog(log: string): string[][] {

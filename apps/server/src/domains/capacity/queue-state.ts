@@ -4,8 +4,7 @@ export type QueueState = (typeof QUEUE_STATES)[number]
 
 const RESTRICTIVENESS: Record<QueueState, number> = { run: 0, pace: 1, drain: 2 }
 
-export const moreRestrictive = (a: QueueState, b: QueueState): QueueState =>
-  RESTRICTIVENESS[a] >= RESTRICTIVENESS[b] ? a : b
+const moreRestrictive = (a: QueueState, b: QueueState): QueueState => (RESTRICTIVENESS[a] >= RESTRICTIVENESS[b] ? a : b)
 
 /** The scopes with a state set: global, and per project. No row is `run`. */
 export interface QueueStates {

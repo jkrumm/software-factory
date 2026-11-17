@@ -12,7 +12,7 @@ import type { ProbeFinding } from '../../../domains/loops/hygiene-model.ts'
  * of that file names it, so a compose file of a repo that deploys to the VPS or the HomeLab is never touched.
  */
 
-export const SERVICES_FILE = 'mini-services.yaml'
+const SERVICES_FILE = 'mini-services.yaml'
 
 /** The rule names of the registry (`debt: { <rule>: … }`, `exception: { <rule>: … }`); `no-healthcheck` is this probe's own. */
 export type Rule =
@@ -57,7 +57,7 @@ const asRecord = (value: unknown): Record<string, unknown> =>
 const asText = (value: unknown): string | undefined => (typeof value === 'string' ? value : undefined)
 
 /** A project that runs something on the mini: a deploy target with host `mini`, or its own services file. */
-export function runsOnMini(projectYaml: string | undefined, hasServices: boolean): boolean {
+function runsOnMini(projectYaml: string | undefined, hasServices: boolean): boolean {
   if (hasServices) return true
   if (projectYaml === undefined) return false
   try {
@@ -74,7 +74,7 @@ const lineAt = (counter: LineCounter, node: unknown): number => {
 }
 
 /** The entries of a services file. A file that does not parse has none. */
-export function parseEntries(text: string): Entry[] {
+function parseEntries(text: string): Entry[] {
   const counter = new LineCounter()
   const doc = parseDocument(text, { lineCounter: counter })
   const list = doc.get('services', true)
@@ -102,7 +102,7 @@ export function parseEntries(text: string): Entry[] {
 }
 
 /** `no-budget`: an entry with no `memory_mib`, or 0, unless it is a static site or a oneshot. */
-export function budgetBreaches(entries: Entry[], file: string): Breach[] {
+function budgetBreaches(entries: Entry[], file: string): Breach[] {
   return entries
     .filter((entry) => !(entry.memoryMib && entry.memoryMib > 0) && entry.kind !== 'static' && !entry.oneshot)
     .filter((entry) => !entry.excused.has('no-budget'))
@@ -153,7 +153,7 @@ const entryFor = (entries: Entry[], key: string, container: string | undefined):
   ) ?? entries.find((entry) => entry.kind === 'compose' && entry.name === key)
 
 /** The breaches of the compose services a services entry names. A compose file that does not parse has none. */
-export function composeBreaches(text: string, file: string, entries: Entry[]): Breach[] {
+function composeBreaches(text: string, file: string, entries: Entry[]): Breach[] {
   const counter = new LineCounter()
   const doc = parseDocument(text, { lineCounter: counter })
   const services = doc.get('services', true)
@@ -211,7 +211,7 @@ interface Plist {
 const KEY = (name: string): RegExp => new RegExp(`<key>${name}</key>\\s*`, 'g')
 
 /** A launchd job in a plist (or a template of one): its label, whether KeepAlive is on, and the program strings. Not one: `undefined`. */
-export function parsePlist(text: string): Plist | undefined {
+function parsePlist(text: string): Plist | undefined {
   const label = /<key>Label<\/key>\s*<string>([^<]*)<\/string>/.exec(text)?.[1]
   const lineOf = (index: number): number => text.slice(0, index).split('\n').length
   const program: Plist['program'] = []
@@ -248,7 +248,7 @@ const labelOf = (plist: Plist, file: string): string[] => [
  * The breaches of one plist or template: no entry names it (only judged when the repo has a services file), or it keeps a
  * shell polling loop alive instead of a server or a `jobrun` schedule.
  */
-export function plistBreaches(text: string, file: string, entries: Entry[] | undefined): Breach[] {
+function plistBreaches(text: string, file: string, entries: Entry[] | undefined): Breach[] {
   const plist = parsePlist(text)
   if (!plist) return []
   const out: Breach[] = []
@@ -279,7 +279,7 @@ export function plistBreaches(text: string, file: string, entries: Entry[] | und
 }
 
 /** One finding per rule and file: the title is the rule and the path, so intake's fingerprint is one Issue per pattern. */
-export function toFindings(breaches: Breach[]): ProbeFinding[] {
+function toFindings(breaches: Breach[]): ProbeFinding[] {
   const groups = new Map<string, Breach[]>()
   for (const breach of breaches) {
     const key = `runrules:${breach.rule}:${breach.file}`

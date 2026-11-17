@@ -466,7 +466,7 @@ export function slotCounts(rows: readonly SlotRow[], now: Date): { holders: numb
 }
 
 /** The rows of the mini's line: the VPS's holders and the waiters pinned to it load the VPS, not the mini. */
-export const miniRowsOf = (rows: readonly SlotRow[]): SlotRow[] => rows.filter((row) => row.host !== 'vps')
+const miniRowsOf = (rows: readonly SlotRow[]): SlotRow[] => rows.filter((row) => row.host !== 'vps')
 
 /** Gives the slot back (or leaves the line). */
 export const releaseSlot = (rows: readonly SlotRow[], id: string): { rows: SlotRow[]; had: boolean } => ({

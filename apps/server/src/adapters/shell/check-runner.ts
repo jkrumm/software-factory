@@ -8,7 +8,7 @@ const bounded = (text: string): string =>
 const STDOUT_MAX = 65_536
 
 /** Where `sysctl`, `ifconfig`, `lsof` and the like live; the server's launchd PATH has neither. */
-export const SBIN = ['/usr/sbin', '/sbin'] as const
+const SBIN = ['/usr/sbin', '/sbin'] as const
 
 /** The PATH of a check: the server's, with `/usr/sbin` and `/sbin` after it where they are missing. */
 export function checkPath(path: string | undefined = process.env.PATH): string {

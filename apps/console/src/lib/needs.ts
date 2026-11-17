@@ -201,12 +201,10 @@ export function projectsOfNeeds(items: readonly NeedItem[], keep?: string): stri
 }
 
 /** Where the owner's hands must be, in the order a desk is worked through. */
-export const DESK_HOSTS = ['macbook', 'iphone', 'portal', 'any'] as const satisfies readonly NonNullable<
-  NeedItem['host']
->[]
+const DESK_HOSTS = ['macbook', 'iphone', 'portal', 'any'] as const satisfies readonly NonNullable<NeedItem['host']>[]
 export type DeskHost = (typeof DESK_HOSTS)[number]
 
-export const DESK_LABEL: Record<DeskHost, string> = {
+const DESK_LABEL: Record<DeskHost, string> = {
   macbook: 'On the MacBook',
   iphone: 'On the iPhone',
   portal: 'In a portal',

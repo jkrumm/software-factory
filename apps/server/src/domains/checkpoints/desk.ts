@@ -3,9 +3,9 @@ import { MAX_RUN_TRIES, needOf } from './need.ts'
 import type { ErrandRecord } from './ports.ts'
 
 /** The owner is back at the desk after this long without a Console read. */
-export const PRESENCE_GAP_MS = 2 * 3_600_000
+const PRESENCE_GAP_MS = 2 * 3_600_000
 /** While he is away, a pushed command is pushed again no sooner than this (it waits in a dialog until then). */
-export const PUSH_AGAIN_MS = 6 * 3_600_000
+const PUSH_AGAIN_MS = 6 * 3_600_000
 /** Checks, re-screens and pushes one pass makes. */
 export const DESK_CHECKS = 30
 export const DESK_RESCREENS = 10

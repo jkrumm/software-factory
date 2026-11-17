@@ -1,7 +1,7 @@
 import { type Key, key } from '../../kernel/keys.ts'
 
 /** What the owner's line carries: a checkpoint, and nothing else (NL20). Work the factory settles never pages. */
-export const PAGE_KINDS = ['decision', 'review', 'errand'] as const
+const PAGE_KINDS = ['decision', 'review', 'errand'] as const
 export type PageKind = (typeof PAGE_KINDS)[number]
 
 /** A message on the owner's line, finished text: the factory calls no model for it. */
@@ -21,7 +21,7 @@ export interface Page {
 export const decisionPageKey = (decision: string): Key => key('page', 'decision', decision)
 /** A revision pages once; a revised artifact is a new revision and pages again. */
 export const reviewPageKey = (artifact: string, revision: number): Key => key('page', 'review', artifact, revision)
-export const errandPageKey = (errand: string): Key => key('page', 'errand', errand)
+const errandPageKey = (errand: string): Key => key('page', 'errand', errand)
 
 /** The Console's page for a checkpoint. `base` is a setting until the Console exists. */
 export const deepLink = (base: string, checkpoint: string): string =>

@@ -13,7 +13,7 @@ export function groupTitle(group: Pick<ChainGroup, 'bucket' | 'members'>): strin
 }
 
 /** Where a group's members stand, as one line. */
-export function groupReason(group: Pick<ChainGroup, 'bucket' | 'step'>): string {
+function groupReason(group: Pick<ChainGroup, 'bucket' | 'step'>): string {
   if (group.bucket === 'done') return 'Done, no longer block'
   if (group.bucket === 'ready') return `Ready to file, past the first ${READY_BUDGET}`
   const step = group.step ?? 1

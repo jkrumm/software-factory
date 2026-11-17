@@ -182,10 +182,10 @@ export const partWords = (kpi: Pick<Kpi, 'parts'>): string[] =>
   kpi.parts.map((part) => `${part.label}: ${formatValue(part.unit, part.value)}`)
 
 /** The word the sample noun of a KPI is hinted by, where the noun is a domain word of its own ("13 watches"). */
-export const SAMPLE_HINT = { first_verification_passes: 'watch' } as const satisfies Partial<Record<KpiKey, InfoWord>>
+const SAMPLE_HINT = { first_verification_passes: 'watch' } as const satisfies Partial<Record<KpiKey, InfoWord>>
 
 /** How many friction rows the ranking names in words; the rest are the folded tail. */
-export const FRICTION_TOP = 5
+const FRICTION_TOP = 5
 
 export interface FrictionRow {
   key: string

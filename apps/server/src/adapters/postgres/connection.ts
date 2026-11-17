@@ -7,7 +7,7 @@ export interface SessionTimeouts {
   idleInTransactionMs: number
 }
 
-export const DEFAULT_SESSION_TIMEOUTS: SessionTimeouts = {
+const DEFAULT_SESSION_TIMEOUTS: SessionTimeouts = {
   statementMs: 30_000,
   lockMs: 10_000,
   idleInTransactionMs: 60_000,

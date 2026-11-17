@@ -42,9 +42,9 @@ export const JUDGE_MAX_TRIES = 3
 /** The wait after a failed Judge call before the next try. */
 export const JUDGE_BACKOFF_MS = 5 * 60_000
 
-export const MAX_OPTIONS = 10
-export const MAX_TEXT = 4000
-export const MAX_WAIT_MINUTES = 7 * 24 * 60
+const MAX_OPTIONS = 10
+const MAX_TEXT = 4000
+const MAX_WAIT_MINUTES = 7 * 24 * 60
 
 /** A form that is not complete: the fields that are missing or wrong, each named as the lead wrote it. */
 export interface MissingFields {
@@ -164,7 +164,7 @@ export function refuseNoOpDefault(form: DecisionForm): string | null {
 }
 
 /** The label of the option a free-text answer names, ignoring case; null when it names none. */
-export function optionOf(form: Pick<DecisionForm, 'options'>, answer: string): string | null {
+function optionOf(form: Pick<DecisionForm, 'options'>, answer: string): string | null {
   const wanted = answer.trim().toLowerCase()
   return form.options.find((option) => option.label.toLowerCase() === wanted)?.label ?? null
 }
@@ -262,7 +262,7 @@ const MAX_JUDGE_TEXT = 2000
 const cut = (value: string): string => scrub(value).slice(0, MAX_JUDGE_TEXT)
 
 /** A repo as the Judge is told of it: its name, never the path it lives at. */
-export const repoName = (repo: string): string => repo.split('/').filter(Boolean).pop() ?? 'repo'
+const repoName = (repo: string): string => repo.split('/').filter(Boolean).pop() ?? 'repo'
 
 export function judgeInputOf(input: {
   decision: DecisionId

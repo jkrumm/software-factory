@@ -2,28 +2,16 @@ import { PLAN_LIMITS } from '@software-factory/contract'
 import { findCycle, notBeforeMs, type PlanFile, type PlanRow } from '@software-factory/contract/plan'
 import { type IssueId, issueId } from '../../kernel/ids.ts'
 
-export {
-  findCycle,
-  notBeforeMs,
-  PLAN_KINDS,
-  PLAN_VERSION,
-  PlanFile,
-  PlanKey,
-  type PlanKind,
-  type PlanParse,
-  PlanRow,
-  parsePlan,
-  RowRef,
-} from '@software-factory/contract/plan'
+export { PlanFile, type PlanKind, type PlanParse, PlanRow, parsePlan } from '@software-factory/contract/plan'
 
 /** `docs/plan.yaml` is read from the default branch like `project.yaml`; a larger file is a broken plan. */
 export const MAX_PLAN_BYTES = PLAN_LIMITS.maxBytes
 
-export const ROW_STATES = ['done', 'open', 'filable', 'waiting'] as const
+const ROW_STATES = ['done', 'open', 'filable', 'waiting'] as const
 export type RowState = (typeof ROW_STATES)[number]
 
 /** How an Issue closes when it shipped: what an `after_needs: shipped` row requires of every row it waits for. */
-export const SHIPPED_OUTCOMES: ReadonlySet<string> = new Set(['done', 'healed'])
+const SHIPPED_OUTCOMES: ReadonlySet<string> = new Set(['done', 'healed'])
 
 /** An `after` row that closed without shipping, and so holds a row that needs it shipped. */
 export interface HeldBy {
@@ -73,7 +61,7 @@ export interface PlanFacts {
 const DAY_MS = 86_400_000
 
 /** the end of an `after_days` window that began at `closedMs` */
-export const afterDaysEnd = (closedMs: number, days: number): number => closedMs + days * DAY_MS
+const afterDaysEnd = (closedMs: number, days: number): number => closedMs + days * DAY_MS
 
 const refOf = (project: string, key: string): string => `${project}:${key}`
 

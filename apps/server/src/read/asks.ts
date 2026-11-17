@@ -5,7 +5,7 @@ import { screenPassed } from './spec-screen.ts'
 import { loadBriefs, issueNumberOf } from './sessions.ts'
 
 /** An ask older than this is stale. */
-export const STALE_ASK_MS = 24 * 3_600_000
+const STALE_ASK_MS = 24 * 3_600_000
 /** The raw text of an ask or a health line in the read API: one line, cut at a word. */
 export const LINE_TEXT_MAX = 240
 

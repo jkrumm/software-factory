@@ -92,7 +92,7 @@ export function parseLsofInstances(output: string): Map<number, string> {
 }
 
 /** The program name of a Virtualization.framework VM process: Lima's `vz` VMs run in one each. */
-export const VM_PROCESS = 'com.apple.Virtualization.VirtualMachine'
+const VM_PROCESS = 'com.apple.Virtualization.VirtualMachine'
 
 /**
  * The minute's processes as the class rules take them: `top`'s rows (the footprint and CPU of every process it listed),
@@ -202,7 +202,7 @@ export function hostSnapshot(options: HostSnapshotOptions): HostSnapshotReader {
 }
 
 /** Free space of the volume holding `path`, GiB with one decimal; null when it cannot be read. */
-export async function freeGib(path: string): Promise<number | null> {
+async function freeGib(path: string): Promise<number | null> {
   try {
     const stats = await statfs(path)
     return Math.round(((stats.bavail * stats.bsize) / 1024 ** 3) * 10) / 10

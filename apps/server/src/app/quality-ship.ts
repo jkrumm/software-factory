@@ -57,7 +57,7 @@ export interface ShipAnswer {
 }
 
 /** What a flagged Issue's ship is refused with until its lead has submitted a Spec. */
-export const SPEC_OWED = `ship refused: this Issue carries the checkpoint \`spec\` and no Spec was submitted: hand over a one-page Spec with \`factory artifact submit --kind spec\` (at most three open choices, each with your default); with no verdict in ${SPEC_WAIT_HOURS} hours you go on with your defaults`
+const SPEC_OWED = `ship refused: this Issue carries the checkpoint \`spec\` and no Spec was submitted: hand over a one-page Spec with \`factory artifact submit --kind spec\` (at most three open choices, each with your default); with no verdict in ${SPEC_WAIT_HOURS} hours you go on with your defaults`
 
 /**
  * What a ship, or a close with outcome done, is refused with while the owner's annotations on its Specs and Concepts are

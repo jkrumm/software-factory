@@ -10,7 +10,7 @@ export interface HookFact {
   payload: Record<string, unknown>
 }
 
-export const SESSION_STATES = ['starting', 'working', 'idle', 'compacted', 'gone'] as const
+const SESSION_STATES = ['starting', 'working', 'idle', 'compacted', 'gone'] as const
 export type SessionState = (typeof SESSION_STATES)[number]
 
 /** What a session's hook events say, derived when read; nothing of it is stored. */

@@ -15,10 +15,10 @@ export interface RunFailure {
 }
 
 /** The exit code `timeout(1)` ends a run with. */
-export const EXIT_TIMED_OUT = 124
+const EXIT_TIMED_OUT = 124
 
-export const HEAD_LINES = 20
-export const TAIL_LINES = 20
+const HEAD_LINES = 20
+const TAIL_LINES = 20
 /** A line longer than this is cut; the two halves together never pass 4 KiB each. */
 const LINE_MAX = 400
 const HALF_MAX = 4000
@@ -49,7 +49,7 @@ export function headTail(output: string): HeadTail {
 }
 
 /** The two halves as one text for a note: the head, a marker for what was left out, the tail. */
-export function joinHeadTail({ head, tail, cut }: HeadTail): string {
+function joinHeadTail({ head, tail, cut }: HeadTail): string {
   if (tail === '') return head
   return `${head}\n… ${cut} lines left out …\n${tail}`
 }

@@ -2,9 +2,9 @@ import type { Signal } from '@software-factory/contract'
 import type { OpenIssue, Received, RepoSignals } from './model.ts'
 
 /** The sources whose alerts come through the door; a route in the registry is the owner's act of listening. */
-export const DOOR_SOURCES: readonly string[] = ['kuma', 'hyperdx']
+const DOOR_SOURCES: readonly string[] = ['kuma', 'hyperdx']
 /** The sources that correlate into an incident when they sit on one host. */
-export const CORRELATED_SOURCES: readonly string[] = ['kuma', 'hyperdx', 'beszel']
+const CORRELATED_SOURCES: readonly string[] = ['kuma', 'hyperdx', 'beszel']
 
 export type IssueKindName = 'feature' | 'bug' | 'chore' | 'docs' | 'incident'
 export type OriginName = Signal['origin']
@@ -81,9 +81,9 @@ export function overlap(a: string, b: string): number {
 }
 
 /** At or above this a title is the same ask. */
-export const MATCH_AT = 0.6
+const MATCH_AT = 0.6
 /** Between this and `MATCH_AT` a person would have to look: the triage workflow does. */
-export const UNSURE_AT = 0.3
+const UNSURE_AT = 0.3
 
 export type Match = { kind: 'match'; issue: OpenIssue } | { kind: 'unsure'; candidates: OpenIssue[] } | { kind: 'none' }
 

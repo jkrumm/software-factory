@@ -3,7 +3,7 @@ import { fileURLToPath } from 'node:url'
 import * as z from 'zod'
 
 /** The tracked file of this checkout or release: `config/throughput.json`. */
-export const DEFAULT_EPOCH_FILE = fileURLToPath(new URL('../../../../config/throughput.json', import.meta.url))
+const DEFAULT_EPOCH_FILE = fileURLToPath(new URL('../../../../config/throughput.json', import.meta.url))
 
 const File = z.strictObject({ epoch: z.iso.datetime() })
 

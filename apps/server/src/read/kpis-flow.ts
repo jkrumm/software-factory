@@ -32,11 +32,11 @@ export const REGRESSION_CAUSES = [
 /** The Issue events that count as a lead visibly acting after a nudge (a lead's own verb, not a note). */
 const ACTION_KINDS = ['shipped', 'asked', 'deferred', 'closed', 'submitted', 'errand_raised', 'stalled'] as const
 /** How long after a steward's note a lead's action still counts as its answer. */
-export const NUDGE_ANSWER_MS = 30 * 60_000
+const NUDGE_ANSWER_MS = 30 * 60_000
 
 /** An account has room while its five-hour window is below this share and the week is not nearly used. */
-export const ROOM_FIVE_HOUR_BELOW = 50
-export const ROOM_WEEKLY_BELOW = 90
+const ROOM_FIVE_HOUR_BELOW = 50
+const ROOM_WEEKLY_BELOW = 90
 
 const part = (key: string, label: string, value: number, unit: KpiPart['unit']): KpiPart => ({
   key,

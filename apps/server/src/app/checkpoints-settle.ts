@@ -49,7 +49,7 @@ export interface SettleDeps extends CheckpointDeps {
  * A claimed call is held this long, then a second pass may take it over. That is a takeover point, not a limit on the call: the
  * retaken call carries the same idempotency key, so agw joins the run the first one started (`AGW_CALL_LEASE_MS`).
  */
-export const STEP_LEASE_MS = 35 * 60_000
+const STEP_LEASE_MS = 35 * 60_000
 
 /** The Decisions one pass looks at. */
 export const PASS_LIMIT = 20

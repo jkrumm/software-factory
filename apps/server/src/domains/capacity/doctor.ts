@@ -12,7 +12,7 @@ export interface DoctorReading {
 }
 
 /** The doctor's lines a refusal or a skip names: no more than this many, the rest counted. */
-export const DOCTOR_LINES_SHOWN = 4
+const DOCTOR_LINES_SHOWN = 4
 
 /** How long a red reading stands before the doctor runs again: the owner fixing the host opens the project within it. */
 export const DOCTOR_RED_RECHECK_MS = 5 * 60_000

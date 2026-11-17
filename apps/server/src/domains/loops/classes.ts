@@ -9,7 +9,7 @@ export const CLASS_WINDOW = 10
 /** Fewer decided Issues prove nothing: an unproven class is never held. */
 export const MIN_DECIDED = 3
 /** Held when noise / window is strictly above this: exactly half noise is still a class worth hearing from. */
-export const NOISE_SHARE = 0.5
+const NOISE_SHARE = 0.5
 /** A held class is asked again this long after its last Issue closed. */
 export const HOLD_MS = 14 * 86_400_000
 

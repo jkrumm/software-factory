@@ -111,7 +111,7 @@ export interface IssueMove {
   effects: { kind: string; key: string }[]
 }
 
-export const moveOf = (issue: Issue, effects: Recorded['effects'] = []): IssueMove => ({
+const moveOf = (issue: Issue, effects: Recorded['effects'] = []): IssueMove => ({
   state: issue.state,
   waitReason: issue.wait?.reason ?? null,
   version: issue.version,

@@ -15,7 +15,7 @@ export interface BrokenLink {
 }
 
 /** The relative targets of the inline links in `text`, outside fenced code and inline code spans, with their line. */
-export function linkTargets(text: string): BrokenLink[] {
+function linkTargets(text: string): BrokenLink[] {
   const targets: BrokenLink[] = []
   let fence: string | undefined
   text.split('\n').forEach((raw, index) => {

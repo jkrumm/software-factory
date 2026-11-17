@@ -27,7 +27,7 @@ const CoveredAnswer = z.object({
  * It is one limit for the whole read of every range (the batches share it), and it sits under the server's 255 s idle
  * limit with room for git and the database, since the review read runs beside the CI read and not before it.
  */
-export const REVIEW_TIMEOUT_MS = 225_000
+const REVIEW_TIMEOUT_MS = 225_000
 
 const MAX_RANGES_AT_ONCE = 4
 

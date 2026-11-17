@@ -33,7 +33,7 @@ export interface DoorOptions {
 }
 
 /** A request with this header is the factory's own health probe: logged as `probe`, never reported as a refusal. */
-export const PROBE_HEADER = 'x-factory-probe'
+const PROBE_HEADER = 'x-factory-probe'
 
 const ROUTE = /^\/alert\/([a-z][a-z0-9-]{0,31})$/
 const FEEDBACK_ROUTE = /^\/feedback\/([a-z][a-z0-9-]{0,22})$/
