@@ -235,6 +235,25 @@ describe('- and @file for string and json values', () => {
     expect(sent()).toEqual({ title: 'from a file' })
   })
 
+  test('--body takes - and @path like every string flag, and a -- inside a value is opaque text', async () => {
+    const title = 'met: var(--vx-ink) and migrate --check -- ok'
+    stdin = JSON.stringify({ title })
+    expect((await fixtureCli(['thing', 'new', '--body', '-'])).code).toBe(0)
+    expect(sent()).toEqual({ title })
+    const file = join(dir, 'body.json')
+    await writeFile(file, JSON.stringify({ title, key: 'a' }))
+    expect((await fixtureCli(['thing', 'new', '--body', `@${file}`])).code).toBe(0)
+    expect(sent()).toEqual({ title, key: 'a' })
+    expect((await fixtureCli(['thing', 'new', '--key', title, '--title', title])).code).toBe(0)
+    expect(sent()).toEqual({ title, key: title })
+    expect((await fixtureCli(['thing', 'note', 't1', title])).code).toBe(0)
+    expect(sent()).toEqual({ text: title })
+    stdin = 'not json'
+    const bad = await fixtureCli(['thing', 'new', '--body', '-'])
+    expect(bad.code).toBe(2)
+    expect(errorOf(bad.err).message).toBe('--body is not JSON')
+  })
+
   test('@@ is a literal @, and a number is left alone', async () => {
     await fixtureCli(['thing', 'note', 't1', '@@jkrumm look'])
     expect(sent()).toEqual({ text: '@jkrumm look' })
