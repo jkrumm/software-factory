@@ -13,6 +13,6 @@
     "@fontsource-variable/jetbrains-mono": "5.3.0",
     "@fontsource-variable/nunito-sans": "5.3.0",
     "basalt-ui": "2.29.0",
-    "vitepress": "1.6.4"
+    "vitepress": "2.0.0-alpha.21"
   }
 }
