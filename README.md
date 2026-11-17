@@ -10,6 +10,10 @@ place; this one shows the language, the patterns and how far the automation reac
 
 MIT licensed. Read it, fork it, take the parts you want.
 
+**The guide** explains the factory chapter by chapter, each idea next to the code that implements it and the Issue it
+came from: [software-factory.jkrumm.com](https://software-factory.jkrumm.com). The same pages read on GitHub in
+[`docs/guide/`](docs/guide/README.md).
+
 ## Position
 
 **Dark for code, lit for decisions.**

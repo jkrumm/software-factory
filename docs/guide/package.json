@@ -1,0 +1,18 @@
+{
+  "name": "software-factory-guide",
+  "version": "0.0.0",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "build": "vitepress build",
+    "preview": "vitepress preview",
+    "tokens": "basalt-ui tokens:css --selector-class dark --default-scheme light --only core --out .vitepress/theme/tokens.css",
+    "tokens:check": "basalt-ui tokens:css --selector-class dark --default-scheme light --only core --out .vitepress/theme/tokens.css --check"
+  },
+  "devDependencies": {
+    "@fontsource-variable/jetbrains-mono": "5.3.0",
+    "@fontsource-variable/nunito-sans": "5.3.0",
+    "basalt-ui": "2.29.0",
+    "vitepress": "1.6.4"
+  }
+}

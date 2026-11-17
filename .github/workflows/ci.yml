@@ -31,8 +31,11 @@ jobs:
         include:
           # What a lead runs locally (project.yaml `checks.fast`): format, lint, types, boundaries, scans, every unit test.
           # The unit tests are half of it (203 s of a 234 s job): `static` runs the first of two shards beside the checks.
-          - { name: static, make: check-fast CHECK_FAST_ALL=1 UNIT_SHARD=1/2 }
+          # `history` fetches every commit: scripts/guide-links.ts proves each permalink of the guide is on master.
+          - { name: static, make: check-fast CHECK_FAST_ALL=1 UNIT_SHARD=1/2, history: 'true' }
           - { name: unit (2/2), make: test-unit UNIT_SHARD=2/2 }
+          # The guide (docs/guide): its own install, Basalt tokens current, the VitePress build. pages.yml deploys it.
+          - { name: guide, make: guide-check, history: 'true' }
           # The files of a scenarios or e2e shard are planned by seconds (scripts/shard.ts, shard-weights.json beside the
           # tests): bun and Playwright cut by count, and one scenarios shard of three ran 265 s against 167 and 191.
           - { name: scenarios (1/3), make: test-scenarios SHARD=1/3 }
@@ -43,6 +46,9 @@ jobs:
           - { name: e2e (3/3), make: e2e E2E_SHARD=3/3, playwright: 'true' }
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          # Strings: in an expression the number 0 is falsy, so `&& 0 || 1` always gave 1.
+          fetch-depth: ${{ matrix.history == 'true' && '0' || '1' }}
       - uses: ./.github/actions/setup
         with:
           playwright: ${{ matrix.playwright || 'false' }}
