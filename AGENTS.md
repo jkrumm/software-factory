@@ -93,7 +93,7 @@ and where) → `docs/decisions.md` (what was decided and why).
 - **The README states counts and lists** (event kinds, callers, tokens, screens, domains, states, the Console's port and
   writes): `make docs-check` fails on a mismatch, so change it in the commit that changes one.
 - **Hygiene probes are one catalogue** (`packages/contract/src/hygiene-catalogue.ts`): add a probe there, with its default,
-  cadence, seat and silence; `docs/hygiene.md` is generated from it.
+  cadence and silence; `docs/hygiene.md` is generated from it.
 
 ## Validate and ship
 
