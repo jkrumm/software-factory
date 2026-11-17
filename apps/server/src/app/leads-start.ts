@@ -3,7 +3,7 @@ import { buildBrief, fitNotes, MAX_BRIEF_SIGNALS } from '../domains/leads/brief.
 import { LEAD_ROLE, LIGHT_ROLE, lightRule } from '../domains/leads/light.ts'
 import { deriveSession } from '../domains/leads/session.ts'
 import { leadBranch, leadKey, tabName } from '../domains/leads/names.ts'
-import type { BriefSignal, BriefSpec, LeadAttempt } from '../domains/leads/ports.ts'
+import type { BriefSignal, BriefSpec, LeadAttempt, SeatOrigin } from '../domains/leads/ports.ts'
 import type { EffectOf } from '../domains/work/effects.ts'
 import type { Issue } from '../domains/work/issue.ts'
 import type { AppliedRecord } from '../domains/work/machine.ts'
@@ -33,7 +33,7 @@ type Look =
       previous: PreviousAttempt | null
       signals: BriefSignal[]
       filedSpec: BriefSpec | null
-      origin: { hygieneKey: string | null; unroutedMonitor: boolean }
+      origin: SeatOrigin
       movedFrom: { attempt: number; why: string; transcript: string | null } | null
     }
 
@@ -87,7 +87,12 @@ export async function startLead(deps: LeadDeps, effect: StartEffect): Promise<Re
         : null
     const signals = await leads.signalsOf(issue, MAX_BRIEF_SIGNALS)
     const filedSpec = await leads.filedSpecOf(issue)
-    const origin = await leads.originOf(issue)
+    const found = await leads.originOf(issue)
+    // An Issue the owner or an agent filed carries its text as notes, not as a signal: the light rule reads both.
+    const origin = {
+      ...found,
+      text: [found.text, ...notesBefore(loaded.history, attempt).shown.map((note) => note.text)].join(' '),
+    }
     const moved = loaded.history.findLast(
       (record) => record.kind === 'moved_up' && (record.payload as { attempt?: number }).attempt === attempt - 1,
     )
@@ -225,8 +230,8 @@ export async function startLead(deps: LeadDeps, effect: StartEffect): Promise<Re
   return recorded.ok ? ok(undefined) : err(toPortError(recorded.error))
 }
 
-/** An Issue no loop or monitor filed: the light rule reads its kind and size alone. */
-export const NO_ORIGIN = { hygieneKey: null, unroutedMonitor: false } as const
+/** An Issue no loop or monitor filed, or one whose origin is not at hand: the light rule reads its kind and size alone. */
+export const NO_ORIGIN: SeatOrigin = { hygieneKey: null, unroutedMonitor: false, text: '' }
 
 /** A lead seat: its tier and effort, the role row it came from, and the light rule that chose it. */
 export interface LeadSeat {
@@ -241,11 +246,7 @@ export interface LeadSeat {
  * The seat the lead starts on: the Issue's seat as filed always wins; with none, the table's `light` row when the light
  * rule names the Issue (and the table has the row), else its `lead` row.
  */
-export async function seatOf(
-  deps: LeadDeps,
-  issue: Issue,
-  origin: { hygieneKey: string | null; unroutedMonitor: boolean },
-): Promise<Result<LeadSeat, PortError>> {
+export async function seatOf(deps: LeadDeps, issue: Issue, origin: SeatOrigin): Promise<Result<LeadSeat, PortError>> {
   if (issue.seat) return ok({ tier: issue.seat.tier, effort: issue.seat.effort, role: issue.seat.role, rule: null })
   const rule = lightRule({
     kind: issue.kind,
@@ -254,6 +255,8 @@ export async function seatOf(
     hygieneKey: origin.hygieneKey,
     unroutedMonitor: origin.unroutedMonitor,
     movedUp: issue.movedUp,
+    text: `${issue.title} ${origin.text}`,
+    triageSmall: issue.size === 'small' && (await (deps.lightGate?.().catch(() => false) ?? false)),
   })
   if (rule) {
     const light = await deps.roles.role(LIGHT_ROLE)

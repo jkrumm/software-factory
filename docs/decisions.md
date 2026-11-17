@@ -282,8 +282,7 @@ Report `docs/strategy/2026-11-next/report.html`, definition `docs/strategy/2026-
   it: a hygiene finding of a mechanical class (links, retired, context, deps, project, readme, agentsmd, stale), kind docs,
   a monitor filed home for want of a route. The filer's seat always wins. Triage's size is now kept on the Issue
   (`settled.size`); triage's `small` with no design choice joins the rule only once light's first verification pass rate
-  is within 3 points of lead's over a week (`LIGHT_FROM_TRIAGE_SMALL`, off; the Improve screen's seat table shows both
-  rates and the tripwire). A light lead that stalls twice, has its ship refused twice, says it is out of its depth
+  is within 3 points of lead's over a week (a switch, off; NL38 replaced it with a measured gate). A light lead that stalls twice, has its ship refused twice, says it is out of its depth
   (`issue block --out-of-depth`) or regresses on its first watch is `moved_up`: the attempt ends, the Issue queues again,
   and the next lead starts on the `lead` row with why and the light lead's last words in its brief. Never twice. Not
   built: a class of alert whose fix is one config line (none is named by a stored fact today), and triage asking for the
@@ -339,3 +338,22 @@ Report `docs/strategy/2026-11-next/report.html`, definition `docs/strategy/2026-
   steady 2 to 3 % to 5 % does. Not changed: `stall:regressed` (a stall twice in a week still files; 1 since the fix) and the
   light seat's move-up on a first-watch regression. Two cases are worth a look if the rate climbs: a light lead that
   forgets `make deploy`, and an environmental red (a bulb, a monitor in PENDING) that moves a light lead up to a Sonnet one.
+- **NL38 The light seat widens on what it delivers: finished passes, move-ups priced, a gate that reads (Issue 2026, 2026-11-17).**
+  NL33's tripwire read light's first-pass rate with every moved-up Issue counted as a failed first pass: 37 of 47 (78.7 %)
+  against the lead's 95.6 %, so it could never open. By the seat an attempt ran on, the cheap tier at high effort passed
+  37 of 39 (94.9 %): the whole gap was the Issues that moved up, and moving up is the designed valve, not a bad result.
+  Now four figures describe what the owner pays for, light beside lead, on the Improve page and in `factory read kpis`
+  (`seats.delivery`, each with a one-line definition): (a) the first pass of what finished on the seat, (b) the move-up
+  share with the dollars and minutes the light attempt spent before it moved, (c) regressions per Issue, (d) cost per
+  Issue with the moved-up attempts counted. The gate (`judgeLightGate`, `seats.tripwire`) is met when, over the last 3
+  days, (a) is within 3 points of lead's, (c) is not higher than lead's, and (b) is under the cost bound; with fewer than
+  10 finished first watches on light, or a figure unmeasured, it is closed. It is read, not switched: `compose-leads.ts`
+  reads it at most every 10 minutes and a window that breaks a condition closes it again. When met, triage's `small` with
+  no `checkpoint: spec` starts light, except an Issue whose filing words name a migration, security or a public surface
+  (`outOfScope`; triage's checkpoint covers design, a data model, a dependency and an unseen screen, not security).
+  The bound is where a light route costs what a lead start costs: every Issue runs a light attempt (`l`), the moved-up
+  share `m` then runs a lead attempt (`f`), the lead route costs one lead attempt (`s`): `l + m·f = s`, so
+  `m* = (s − l) / f`, from the per-attempt dollars of the window (`f` is the lead attempts after a move-up when there are
+  three, else `s`). At the first reading `l` is about 0.15 and `s` 2.7, so `m*` is about 94 %: cost alone allows almost any
+  share, and (a) and (c) carry the gate. Cost: a first-watch regression on light still counts in (a) and (c) and moves the
+  Issue up; the figures are over three days, so a quiet stretch of rule-class Issues leaves the gate closed.

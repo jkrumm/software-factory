@@ -56,6 +56,8 @@ export interface LeadDeps {
   apiErrors?: ApiErrorPorts
   /** quiescing of waiting leads; unset, no lead is dormant */
   quiesce?: QuiescePorts
+  /** whether triage's `small` starts on the light seat now (the tripwire, `read/kpis-seats.ts`); unset or failing, it does not */
+  lightGate?: () => Promise<boolean>
   /** waits its turn before a note or nudge is typed into a lead: after a server start, one per 10 s; unset, no wait */
   typePace?: () => Promise<void>
 }

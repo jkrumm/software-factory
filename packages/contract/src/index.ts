@@ -24,12 +24,12 @@ export {
 } from './issues.ts'
 export * from './filing.ts'
 export * from './seat.ts'
+export * from './light-gate.ts'
 export * from './lane.ts'
 export { Health, HealthLine, HealthLoop, Heartbeat } from './health.ts'
 export {
   EFFORTS,
   Effort,
-  LIGHT_FROM_TRIAGE_SMALL,
   parseRoleTable,
   ROLE_NAME,
   RoleEntry,
@@ -39,6 +39,7 @@ export {
   TIERS,
   Tier,
   TRIPWIRE_DAYS,
+  TRIPWIRE_MIN_WATCHES,
   TRIPWIRE_POINTS,
 } from './roles.ts'
 export {

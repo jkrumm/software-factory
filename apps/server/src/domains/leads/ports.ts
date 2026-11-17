@@ -342,13 +342,21 @@ export interface BriefSpec {
   verdict: { verdict: string; note: string | null } | null
 }
 
+/** What the light seat's rule reads about where an Issue came from. */
+export interface SeatOrigin {
+  hygieneKey: string | null
+  unroutedMonitor: boolean
+  /** the titles and texts of the signals the Issue was filed from, joined; empty when it had none */
+  text: string
+}
+
 export interface LeadStore {
   /** the signals an Issue was filed from or joined, oldest first, at most `limit` */
   signalsOf(issue: IssueId, limit: number): Promise<BriefSignal[]>
   /** the Spec the Issue was filed with, or null */
   filedSpecOf(issue: IssueId): Promise<BriefSpec | null>
-  /** what the light seat's rule reads beyond the Issue: the hygiene finding that filed it, an unrouted monitor filed home */
-  originOf(issue: IssueId): Promise<{ hygieneKey: string | null; unroutedMonitor: boolean }>
+  /** what the light seat's rule reads beyond the Issue: the hygiene finding that filed it, an unrouted monitor filed home, the text of its signals */
+  originOf(issue: IssueId): Promise<SeatOrigin>
 
   attempt(issue: IssueId, attempt: number): Promise<LeadAttempt | null>
   /** the attempt's row, made on the first try; every later try counts */

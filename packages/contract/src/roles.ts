@@ -26,14 +26,16 @@ const RoleFile = z.object({ roles: z.record(RoleName, z.object({ tier: Tier, eff
 export type RoleTable = ReadonlyMap<string, RoleEntry>
 
 /**
- * The tripwire for triage's `small` on the light seat (`apps/server/src/domains/leads/light.ts`). Light starts with the
- * rule classes only; triage's `small` with no design choice joins them once light's first verification pass rate over
- * the last `TRIPWIRE_DAYS` days is within `TRIPWIRE_POINTS` of lead's. The Improve screen's seat table shows both rates
- * and whether it is met (`read/kpis-seats.ts`); flipping the switch is the one-line change that follows it.
+ * The tripwire for triage's `small` on the light seat (`apps/server/src/domains/leads/light.ts`). The light seat starts
+ * with the rule classes; triage's `small` with no design choice joins them while, over the last `TRIPWIRE_DAYS` days, the
+ * light seat delivers: the first verification pass rate of the attempts that finished on it is within `TRIPWIRE_POINTS`
+ * of lead's, its regressions per Issue are not higher than lead's, and its move-up share is under the bound the cost of a
+ * move-up sets (`judgeLightGate`). It is read, not switched: a window that breaks any of them closes it again. Fewer than
+ * `TRIPWIRE_MIN_WATCHES` finished first watches on light is no reading, and a closed gate.
  */
-export const LIGHT_FROM_TRIAGE_SMALL = false
 export const TRIPWIRE_POINTS = 3
-export const TRIPWIRE_DAYS = 7
+export const TRIPWIRE_DAYS = 3
+export const TRIPWIRE_MIN_WATCHES = 10
 
 /** Parses the role table's text; throws with zod's message when it is not one. */
 export function parseRoleTable(text: string): RoleTable {
