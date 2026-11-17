@@ -41,7 +41,7 @@ state columns anywhere: the Chain is the view of the work.
 
 **Stat row.** Four kit `StatCard`s: Running, Paused, Not started (Ready and Held together; a line of the Issues at eight daily samples,
 `trend` in the model, summed over the stored states a series takes in) and Shipped this week (bars of the done and healed closes per day, against the 7 days before). They
-are factory-wide, never narrowed by the filters; each opens `/flow?state=<word>` (Not started: `ready`; Shipped: `closed`), the same list the
+are factory-wide, never narrowed by the filters; each opens `/flow?state=<word>` (Not started: the whole list, there is no list of Ready and Held together; Shipped: `closed`), the same list the
 header strip's counts open. All count Issues, never sessions, by the one definition `workOf` in the contract (`docs/language.md` "Where work stands"), the same as the strip, the sidebar and the project digests; each card carries an InfoHint with that definition in its top right corner. Below `lg` the row scrolls sideways inside itself, snapping per card.
 
 **The list** (`components/flow/issue-table.tsx`, `FlowList` in `routes/flow.tsx`). A plain table of Issues under the charts, collapsed to its
@@ -57,8 +57,7 @@ filter leaves a few dozen rows.
 
 **Filters.** Projects and origins are toggles in the sidebar (selects on a phone only) and live in the URL
 (`/flow?project=argo&origin=feedback`), so a filtered view is linkable, and the list heading counts what the filters
-leave. A sidebar row's figures are its *open* Issues, never closed ones (`openSplits` in `src/lib/flow.ts`): a lit lamp and the Running count, an hourglass and the Paused count, a queue icon and the Ready count, a lock and the Held count (Checking in the hover); a row with none open shows no figure. `?state=running|paused|ready|held|checking|closed` (the stored names of an old link read as the word that replaced them) lists that word's Issues (working takes watching in, queued takes settling in, the number the
-strip shows) with a "Show all states" link; it never filters the figures. An unknown state is dropped.
+leave. A sidebar row's figures are its *open* Issues, never closed ones (`openSplits` in `src/lib/flow.ts`): a lit lamp and the Running count, an hourglass and the Paused count, a queue icon and the Ready count, a lock and the Held count (Checking in the hover); a row with none open shows no figure. `?state=running|paused|ready|held|checking|closed` (the stored names of an old link read as the word that replaced them) lists exactly that word's Issues (Checking is its own word and settling is Held) with a "Show all states" link; it never filters the figures. An unknown state is dropped.
 
 **The page never scrolls sideways.** The Shell's `main` clips the x axis (`overflow-x-hidden`), a table too wide for the screen scrolls inside its own container, and text that cannot break (a stat card's sub line, a reason line) wraps anywhere. `tests/e2e/flow.e2e.ts` asserts `document.scrollWidth` equals the viewport width and `main` has no sideways scroll at 1280x800 and 390x844, also with long titles and reasons at 1024.
 

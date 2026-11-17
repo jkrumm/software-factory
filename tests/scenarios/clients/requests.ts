@@ -118,9 +118,7 @@ export const REQUESTS: readonly ClientRequest[] = [
     nested: {
       counts: {
         humanQueue: 'number',
-        working: 'number',
-        waiting: 'number',
-        queued: 'number',
+        work: 'object',
         asks: 'number',
         health: 'number',
       },

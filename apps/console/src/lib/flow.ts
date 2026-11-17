@@ -284,10 +284,11 @@ export function singleProject(cards: readonly FlowCard[]): string | null {
 export const STAT_KEYS = ['running', 'paused', 'notStarted'] as const satisfies readonly WorkTrendKey[]
 
 /** The list a stat card opens on /flow. */
-const STAT_COLUMN: Record<(typeof STAT_KEYS)[number], ListState> = {
+const STAT_COLUMN: Record<(typeof STAT_KEYS)[number], ListState | undefined> = {
   running: 'running',
   paused: 'paused',
-  notStarted: 'ready',
+  // Ready and Held together have no list of their own: the card opens the whole list
+  notStarted: undefined,
 }
 
 /** Issues in the stored states a trend series counts, in the order the server sent them. */
@@ -311,7 +312,8 @@ export interface FlowStat {
   sub: string
   footer: [{ label: string; value: string }, { label: string; value: string }]
   /** the list the card opens on /flow */
-  state: ListState
+  /** the list the card opens; none: the whole list */
+  state: ListState | undefined
 }
 
 const sum = (values: readonly number[]): number => values.reduce((total, n) => total + n, 0)

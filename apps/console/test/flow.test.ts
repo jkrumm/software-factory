@@ -260,7 +260,13 @@ test('the stat row: live counts, trend deltas, subs, footers and the 7-day sums'
   expect(paused).toMatchObject({ value: 1, delta: 1, higherIsBetter: false, sub: 'on you 1', state: 'paused' })
   expect(paused?.footer[0]).toEqual({ label: 'Oldest', value: '2 h' })
   // not started is Ready and Held: its sample is the sum of both stored states
-  expect(notStarted).toMatchObject({ title: 'Not started', value: 3, delta: 0, sub: '1 ready, 2 held', state: 'ready' })
+  expect(notStarted).toMatchObject({
+    title: 'Not started',
+    value: 3,
+    delta: 0,
+    sub: '1 ready, 2 held',
+    state: undefined,
+  })
   expect(notStarted?.series).toEqual([3, 3, 2, 2, 2, 2, 3, 3])
   expect(notStarted?.footer[1]).toEqual({ label: 'Projects', value: '2' })
   expect(shipped).toMatchObject({

@@ -94,7 +94,7 @@ test('a pass asks once for each project with work, and for none without', async 
     headline: 'Checkout shipped, wishlist next',
     shipped: [{ text: 'The checkout page is live', ids: [shipped] }],
     next: [{ ids: [appQueued] }],
-    counts: { done7d: 1, working: 0, queued: 1, waiting: 0 },
+    counts: { done7d: 1, work: expect.objectContaining({ running: 0, ready: 1, paused: 0 }) },
   })
   expect((await digests()).map((p) => p.project)).toEqual(['app', 'bank', 'shop'])
 })
@@ -154,7 +154,7 @@ test('the read token gets the counts of a work project and no words, and nothing
     next: [],
     risks: [],
     themes: [],
-    counts: { done7d: 0, working: 0, queued: 1, waiting: 0 },
+    counts: { done7d: 0, work: expect.objectContaining({ running: 0, ready: 1, paused: 0 }) },
   })
   expect(JSON.stringify(hidden)).not.toContain('bank')
   expect(JSON.stringify(hidden)).not.toContain('ledger')
