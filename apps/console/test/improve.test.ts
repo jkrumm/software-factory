@@ -1,5 +1,5 @@
 import { expect, test } from 'bun:test'
-import { KPI_KEYS, type FindingClass, type FixCommitsModel, type Kpi } from '@software-factory/contract'
+import { KPI_CATALOG, KPI_KEYS, type FindingClass, type FixCommitsModel, type Kpi } from '@software-factory/contract'
 import {
   changeTone,
   changeWords,
@@ -48,6 +48,11 @@ const kpi = (over: Partial<Kpi>): Kpi => ({
   n: 4,
   count: 1,
   target: { kind: 'between', min: 0.05, max: 0.07 },
+  direction: 'lower',
+  targetSource: '',
+  numerator: '',
+  denominator: '',
+  decision: '',
   measured: true,
   reason: null,
   definition: '',
@@ -85,6 +90,13 @@ test('formatKpi by unit, and why a value is missing', () => {
   expect(formatKpi(kpi({ value: null, measured: false }))).toBe('Not measured')
 })
 
+test('a card says which way is good the way the catalog does, and only for a KPI that has a side', () => {
+  for (const key of KPI_KEYS) {
+    const neither = /neither direction/i.test(MEANING[key])
+    expect(neither, key).toBe(KPI_CATALOG[key].direction === 'watch')
+  }
+})
+
 test('targetWords and targetStatus are literal', () => {
   expect(targetWords(kpi({}))).toBe('0.05 to 0.07')
   expect(targetWords(kpi({ target: { kind: 'at_most', min: null, max: 0.25 } }))).toBe('at most 0.25')
@@ -105,7 +117,7 @@ test('targetWords and targetStatus are literal', () => {
 
 test('sampleWords and windowWords', () => {
   expect(sampleWords({ key: 'asks', n: 13 })).toBe('13 Issues')
-  expect(sampleWords({ key: 'worth_asking', n: 1 })).toBe('1 Decision')
+  expect(sampleWords({ key: 'recommendation_taken', n: 1 })).toBe('1 Decision')
   expect(sampleWords({ key: 'queue_wait_p90', n: 0 })).toBe('0 samples')
   expect(windowWords({ from: '2026-11-01T00:00:00Z', to: '2026-11-08T10:00:00Z' })).toBe('2026-11-01 to 2026-11-08')
 })
@@ -324,7 +336,7 @@ test('targetTally counts the met targets of those judged; trends, unset targets 
 
 test('the parts of a breakdown KPI are listed in its own unit', () => {
   const queued = kpi({
-    key: 'queue_time',
+    key: 'queue_capacity_share',
     unit: 'ms',
     parts: [
       { key: 'chain', label: 'Held by an after edge', value: 5 * 3_600_000, unit: 'ms' },

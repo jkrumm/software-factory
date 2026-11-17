@@ -81,6 +81,8 @@ check-static:
 	@bun scripts/project-schema.ts --check
 	@echo "==> generated CLI is current (apps/cli/scripts/generate.ts --check)"
 	@bun apps/cli/scripts/generate.ts --check
+	@echo "==> KPI table of docs/product.md is the catalog (scripts/kpi-table.ts --check)"
+	@bun scripts/kpi-table.ts --check
 	@echo "==> next free migration number (scripts/merge-guard.ts): $$(bun scripts/merge-guard.ts --next-migration)"
 
 # The tests run in one of the host's test slots (FL7) when `factory` is installed, so parallel checks do not pile their

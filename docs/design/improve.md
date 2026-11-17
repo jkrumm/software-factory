@@ -29,9 +29,9 @@ row is full and equal.
 
 | Band | Content | Grid at 1800 | At 1280 | At 390 |
 |-|-|-|-|-|
-| Against target | a summary strip: one tile per KPI with a target (first verification passes, avoidable touches, asks, decisions worth asking, refusals), each with a status lamp and word (Met, Missed, No data, Not measured), its figure, its label and its target; a tile links to the KPI's card. One DOM, two layouts: tiles from a container of `@7xl`, compact rows in one panel below it (one line from `@md`, two lines on a phone so the label is never cut). The heading's aside tallies the targets met ("3 of 5 targets met") | one row of tiles | compact rows | compact rows |
-| Quality | first verification passes, avoidable touches, asks, decisions worth asking | 4 | 2 | 1 |
-| Pace and gates | queue wait 90th percentile, queue wait median, cycle median, refusals | 4 | 2 | 1 |
+| Against target | a summary strip: one tile per KPI with a target (first verification passes, avoidable touches, asks, specs not needed, refusals: the KPIs whose catalog target is a number), each with a status lamp and word (Met, Missed, No data, Not measured), its figure, its label and its target; a tile links to the KPI's card. One DOM, two layouts: tiles from a container of `@7xl`, compact rows in one panel below it (one line from `@md`, two lines on a phone so the label is never cut). The heading's aside tallies the targets met ("3 of 5 targets met") | one row of tiles | compact rows | compact rows |
+| Quality | first verification passes, avoidable touches, asks, recommendations taken, specs not needed, and the rest of the quality KPIs in `KPI_ORDER` | 4 | 2 | 1 |
+| Pace and gates | Issues closed per day, cycle median, queue wait 90th percentile, refusals | 4 | 2 | 1 |
 | Spend | window points and cost, two columns each at 1800, one each at 1280; no charts, so short | 2 + 2 | 2 | 1 |
 | Fix commits | the Fix commits StatCard (stacked bars by week and class) beside the fix-class table, always open | 2 | 2 | 1 |
 | Friction | the friction groups as balanced columns inside one panel (groups of a single row without a hint share one "Also counted" group); then held finding classes | 3 columns of groups | 2 | 1 |

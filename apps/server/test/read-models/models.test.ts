@@ -91,7 +91,8 @@ describe('the empty database', () => {
 
     const kpis = KpiModel.parse(await readKpis(sql, { now: NOW, days: 7 }))
     expect(kpis.kpis.map((k) => k.key)).toHaveLength(26)
-    for (const kpi of kpis.kpis) expect(kpi.value).toBeNull()
+    // a count per day is a real zero when nothing closed; every other figure has nothing to divide and is null
+    for (const kpi of kpis.kpis) expect(kpi.value).toBe(kpi.key === 'issues_closed_per_day' ? 0 : null)
     expect(kpis.kpis.find((k) => k.key === 'cost')).toMatchObject({ measured: false, n: 0 })
 
     const friction = FrictionModel.parse(await readFriction(sql, { now: NOW, days: 7 }))
@@ -407,12 +408,12 @@ describe('the fixture', () => {
     expect(by.avoidable_touches).toMatchObject({ n: 9, count: 3, value: 3 / 9, measured: true })
     expect(by.asks).toMatchObject({ n: 9, count: 3 })
     // two samples are under the floor of three: a share of two is a coin, so there is no figure, and it says why
-    expect(by.worth_asking).toMatchObject({ n: 2, count: 1, value: null, measured: false })
-    expect(by.worth_asking?.reason).toBe('Only 2 counted in the window; at least 3 are needed for a figure')
+    // (the owner's two answers were 'pino' to the recommendation 'Use pino': neither names it as an option label)
+    expect(by.recommendation_taken).toMatchObject({ n: 2, count: 0, value: null, measured: false })
+    expect(by.recommendation_taken?.reason).toBe('Only 2 counted in the window; at least 3 are needed for a figure')
     expect(by.first_verification_passes).toMatchObject({ n: 2, count: 1, value: null, measured: false })
     expect(by.refusals).toMatchObject({ n: 9, count: 2 })
     expect(by.cycle_p50).toMatchObject({ n: 2, value: null, measured: false })
-    expect(by.queue_wait_p50).toMatchObject({ n: 7, value: 3_600_000 })
     expect(by.queue_wait_p90).toMatchObject({ n: 7, value: 7_200_000 })
     expect(by.fix_commits).toMatchObject({ measured: false, value: null, n: 0 })
     expect(by.fix_commits?.reason).toContain('No fix commit is stored yet')
@@ -430,7 +431,7 @@ describe('the fixture', () => {
     // a window that starts after the fixture sees none of it
     const later = new Date(NOW.getTime() + 10 * 24 * 3_600_000)
     const narrow = KpiModel.parse(await readKpis(sql, { now: later, days: 1 }))
-    expect(narrow.kpis.find((k) => k.key === 'worth_asking')).toMatchObject({ n: 0, value: null })
+    expect(narrow.kpis.find((k) => k.key === 'recommendation_taken')).toMatchObject({ n: 0, value: null })
   })
 
   test('kpis: Errands that reached the owner per 100 Issues, and what they needed', async () => {
@@ -507,15 +508,14 @@ describe('the fixture', () => {
       expect(before('asks')).toEqual({ value: 1 / 2, n: 2 })
       expect(before('refusals')).toEqual({ value: 1 / 2, n: 2 })
       expect(before('first_verification_passes')).toEqual({ value: 2 / 3, n: 3 })
-      expect(before('queue_wait_p50')).toEqual({ value: null, n: 2 })
+      expect(before('queue_wait_p90')).toEqual({ value: null, n: 2 })
       expect(before('cycle_p50')).toEqual({ value: null, n: 0 })
       // the current window is unchanged by them
       expect(by.avoidable_touches).toMatchObject({ n: 9, count: 3 })
-      expect(by.queue_wait_p50).toMatchObject({ n: 7, value: 3_600_000 })
 
       // the same window read directly gives the same figures as the history entry
       const shifted = KpiModel.parse(await readKpis(sql, { now: new Date(NOW.getTime() - week), days: 7 }))
-      for (const key of ['avoidable_touches', 'asks', 'refusals', 'first_verification_passes', 'queue_wait_p50']) {
+      for (const key of ['avoidable_touches', 'asks', 'refusals', 'first_verification_passes', 'queue_wait_p90']) {
         const direct = shifted.kpis.find((k) => k.key === key)
         expect(before(key)).toEqual({ value: direct?.value ?? null, n: direct?.n ?? -1 })
       }

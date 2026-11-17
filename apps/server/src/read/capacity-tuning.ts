@@ -62,7 +62,7 @@ const figure = (figures: readonly RetroCapacityFigure[], key: string): number | 
  * which the loop raises by itself, then the seats, then the extra slots); a machine under the ceiling with seats idle behind
  * a queue lets more in (the load ceiling, unless most of that idle time sat behind the memory gate: then the swapout ceiling,
  * with the heaviest repo's lead memory in the reason, since a higher load ceiling would change nothing); a long slot wait with the load low raises the base of the slots. Null when
- * nothing is out of range. The reason says what the rule saw; which gate held the queue is in `queue_time`'s parts.
+ * nothing is out of range. The reason says what the rule saw; which gate held the queue is in `queue_capacity_share`'s parts.
  */
 export function tuneConstant(
   figures: readonly RetroCapacityFigure[],
@@ -116,7 +116,7 @@ export function tuneConstant(
     return {
       constant: 'loadCeiling',
       direction: 'up',
-      reason: `${idle.toFixed(1)} seat-hours a day sat idle behind a queue while the load was over the ceiling only ${Math.round(over)} minutes a day: check the queue reasons (\`queue_time\`) for the gate that held it, the ceiling first`,
+      reason: `${idle.toFixed(1)} seat-hours a day sat idle behind a queue while the load was over the ceiling only ${Math.round(over)} minutes a day: check the queue reasons (\`queue_capacity_share\`) for the gate that held it, the ceiling first`,
     }
   if (lowLoad && wait !== null && wait >= WAIT_HIGH_MS && constants.slots < constants.slotsMax)
     return {
