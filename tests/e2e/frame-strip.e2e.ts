@@ -189,7 +189,10 @@ test.describe('the meters and their popovers', () => {
     await expect(page.getByRole('dialog').getByText('No history yet')).toBeVisible()
   })
 
-  test('the Live popover shows the stream, the last event, the version and the uptime', async ({ page, apiUrl }) => {
+  test('the Live popover shows the stream, the last event, the version, the uptime, the build and the stale reads', async ({
+    page,
+    apiUrl,
+  }) => {
     const host = await api<{ version: string }>(apiUrl, '/v1/host')
     await page.goto('/needs-you')
     await expect(page.getByRole('status').filter({ hasText: 'Live' })).toBeVisible()
@@ -197,7 +200,11 @@ test.describe('the meters and their popovers', () => {
     const popup = page.getByRole('dialog')
     await expect(popup.getByText('Connected to the event stream')).toBeVisible()
     await expect(popup.getByText('Last event')).toBeVisible()
-    await expect(popup.getByText(/just now|\d+ min ago/)).toBeVisible()
+    // the last event's age comes first; the build's age is a second such word
+    await expect(popup.getByText(/just now|\d+ min ago/).first()).toBeVisible()
+    await expect(popup.getByText('Build', { exact: true })).toBeVisible()
+    await expect(popup.getByText('Up to date')).toBeVisible()
+    await expect(popup.getByText('Stale reads')).toBeVisible()
     await expect(popup.getByText(host.version, { exact: true })).toBeVisible()
     await expect(popup.getByText(/^(\d+ d \d+ h|\d+ h \d+ min|\d+ min|under a minute)$/)).toBeVisible()
   })
