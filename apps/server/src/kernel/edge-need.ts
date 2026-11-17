@@ -7,6 +7,15 @@
  */
 export const SHARED_PATHS: readonly string[] = ['docs/plan.yaml', 'bun.lock', 'bun.lockb', 'package-lock.json']
 
+/**
+ * How many commits and paths a ship's evidence keeps (`CommitsEvidence`). Evidence with this many paths was cut: the files
+ * of that Issue are not all known, so two Issues are never compared on it.
+ */
+export const EVIDENCE_SAMPLE_CAP = 100
+
+/** The waits of an Issue that need the owner: a Decision, a Spec or Concept verdict, an Errand. */
+export const OWNER_WAITS: ReadonlySet<string> = new Set(['decision', 'review', 'errand'])
+
 /** The paths that say something about what an Issue works on. */
 export const meaningfulPaths = (paths: readonly string[]): string[] => paths.filter((p) => !SHARED_PATHS.includes(p))
 

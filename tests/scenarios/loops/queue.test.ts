@@ -14,7 +14,7 @@ import { callsOf, loops, runLoop, script } from './support.ts'
 let lab: Lab
 let dir: string
 let queueScript: string
-const REPOS = ['q1', 'q2', 'q3', 'q4', 'q5', 'q6', 'q7', 'q8', 'q9', 'q10', 'q11', 'q12', 'q13', 'q14']
+const REPOS = ['q1', 'q2', 'q3', 'q4', 'q5', 'q6', 'q7', 'q8', 'q9', 'q10', 'q11', 'q12', 'q13', 'q14', 'q15']
 
 beforeAll(async () => {
   dir = await mkdtemp('/tmp/factory-queue-')
@@ -310,6 +310,22 @@ test('an edge whose Issues share a file is kept', async () => {
   expect(await removalsOf('q11')).toEqual([])
 })
 
+test('evidence cut at the sample cap says nothing of the files: the edge stays', async () => {
+  const a = await queued('q15', 'Large change one')
+  const b = await queued('q15', 'Large change two')
+  await inferred(b, a)
+  await shipped(
+    a,
+    Array.from({ length: 100 }, (_, n) => `one/${n}.ts`),
+  )
+  await shipped(b, ['two/only.ts'])
+  await answers('q15', [], [])
+
+  await runLoop(lab, 'queue')
+  expect(await edgesOf('q15')).toEqual([`${b}>${a}`])
+  expect(await removalsOf('q15')).toEqual([])
+})
+
 test('an edge the owner or a filer stated is never taken back, whatever the files say', async () => {
   const a = await queued('q12', 'The stated blocker')
   const b = await queued('q12', 'Waits because it was told to', [a])
@@ -386,6 +402,10 @@ test('a source whose measured edges were mostly not needed gets no more edges fr
   expect(await edgesOf('q14')).toEqual([])
   const [recorded] = await asksRecorded('q14')
   expect(recorded?.refused?.[0]?.why).toContain('mostly not needed')
+  const model = (await must(lab, ['read', 'capacity-loop', '--days', '7'])).json as {
+    edges: { bySource: { source: string; stopped: boolean }[] }
+  }
+  expect(model.edges.bySource.find((s) => s.source === 'queue')?.stopped).toBe(true)
   // the model's order is still stored: it is the tie-break of the admission order
   expect(recorded?.answer?.order).toEqual([a, b])
 })

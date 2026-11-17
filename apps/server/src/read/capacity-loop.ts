@@ -4,7 +4,7 @@ import type { CapacityLoopModel } from '@software-factory/contract'
 import { OWNED_ELSEWHERE_KINDS } from '../kernel/throughput-limits.ts'
 import { boundedRead } from './bounded.ts'
 import { countedFrom, epochNote } from '../kernel/epoch.ts'
-import { notNeededShare, stopsEdges } from '../kernel/edge-need.ts'
+import { EDGE_NEED_DAYS, notNeededShare, stopsEdges } from '../kernel/edge-need.ts'
 import { readEdgeNeed } from './edge-need.ts'
 import { readLeadCosts } from './lead-costs.ts'
 import { REPO_OF_STEP } from './retro-build.ts'
@@ -23,13 +23,19 @@ const Total = z.object({ v: z.coerce.number().nullable() })
 /** The edges the factory added over the window, whether they were needed, per source and in all. */
 async function edgesOf(tx: SQL, window: { from: Date; to: Date }): Promise<CapacityLoopModel['edges']> {
   const need = await readEdgeNeed(tx, window)
+  // `stopped` is what the loops decide: over the last `EDGE_NEED_DAYS` ending with the window, not over the days asked for
+  const deciding = await readEdgeNeed(tx, {
+    from: new Date(window.to.getTime() - EDGE_NEED_DAYS * DAY_MS),
+    to: window.to,
+  })
+  const stopped = (source: string) => stopsEdges(deciding.find((n) => n.source === source))
   const total = need.reduce((sum, n) => ({ needed: sum.needed + n.needed, notNeeded: sum.notNeeded + n.notNeeded }), {
     needed: 0,
     notNeeded: 0,
   })
   return {
     notNeededShare: notNeededShare(total),
-    bySource: need.map((n) => ({ ...n, notNeededShare: notNeededShare(n), stopped: stopsEdges(n) })),
+    bySource: need.map((n) => ({ ...n, notNeededShare: notNeededShare(n), stopped: stopped(n.source) })),
   }
 }
 

@@ -533,3 +533,42 @@ test('triage names edges: the Issue waits for the Issue it was shown, and a refu
   expect(await state(lab, stuck)).toMatchObject({ state: 'queued' })
   expect(await settledPayload(stuck)).toEqual({})
 }, 40_000)
+
+test('triage stops naming edges once its own were mostly not needed: the Issue settles with none and the drop is counted', async () => {
+  // twelve pairs that shipped disjoint files behind an edge triage had inferred: the kind is mostly not needed
+  const sql = lab.world.db.sql
+  for (let n = 0; n < 12; n++) {
+    const issue = `issue_${8000 + 2 * n}`
+    const after = `issue_${8001 + 2 * n}`
+    for (const id of [issue, after]) {
+      await sql`INSERT INTO factory.issues (id, repo, state, outcome, version) VALUES (${id}, 'history', 'closed', 'done', 2)`
+      const payload = JSON.stringify({
+        commits: [],
+        landedAt: null,
+        mergedAt: null,
+        deploys: true,
+        paths: [`history/${id}.ts`],
+      })
+      await sql`INSERT INTO factory.quality_evidence (id, issue_id, attempt, source_key, kind, at, payload)
+        VALUES (${`evidence-${id}`}, ${id}, 1, ${`ship-${id}`}, 'commits', now(), ${payload}::text::jsonb)`
+    }
+    await sql`INSERT INTO factory.planning_edges (issue_id, after_issue, created_at, satisfied_at, inferred_by)
+      VALUES (${issue}, ${after}, now(), now(), 'triage: guessed a shared file')`
+  }
+  const blocker = (await signal('app', 'Rework the cache layer')).issue as string
+  await runLoop(lab, 'triage')
+  const waits = (await signal('app', `Add cache warmup, after ${blocker}`)).issue as string
+  await script(triageScript, [
+    {
+      match: 'cache warmup',
+      answer: { amend: null, after: [blocker], kind: null, size: 'small', reason: 'builds on the cache' },
+    },
+  ])
+  const ran = await runLoop(lab, 'triage')
+  expect(ran.error).toBeNull()
+  expect(ran.summary).toContain('chained 0')
+  expect(ran.summary).toContain('dropped 1')
+  expect(await state(lab, waits)).toMatchObject({ state: 'queued' })
+  const edges = await sql`SELECT after_issue FROM factory.planning_edges WHERE issue_id = ${waits}`
+  expect(edges).toEqual([])
+})

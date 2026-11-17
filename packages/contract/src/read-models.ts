@@ -1193,7 +1193,7 @@ export const CapacityLoopModel = z
      * edges added in the window: both Issues shipped (an accepted ship's commits) and touched a file in common (the
      * lockfiles and the plan aggregator left out) is `needed`, none in common `notNeeded`, an edge whose Issues did not
      * both ship `unknown`. `removed` counts the edges the queue loop took back. `stopped`: enough were measured and most were
-     * not needed, so the factory stops adding that source's edges (`kernel/edge-need.ts`)
+     * not needed, so the factory stops adding that source's edges (`kernel/edge-need.ts`); `stopped` is what the loops decide, over the last 14 days ending with the window, whatever `days` was asked
      */
     edges: z.strictObject({
       /** the share of the measured edges of every source that were not needed; null when none was measured */

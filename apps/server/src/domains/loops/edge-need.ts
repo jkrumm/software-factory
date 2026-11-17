@@ -1,12 +1,9 @@
 import type { IssueId } from '../../kernel/ids.ts'
 import { issueNumber } from '../../kernel/ids.ts'
-import { meaningfulPaths, sharesPath } from '../../kernel/edge-need.ts'
+import { meaningfulPaths, OWNER_WAITS, sharesPath } from '../../kernel/edge-need.ts'
 
 /** A blocker that waits on the owner this long no longer holds the Issues behind it back (the owner's own prio and edges stay). */
 export const OWNER_WAIT_MS = 6 * 3_600_000
-
-/** The waits of an Issue that need the owner: a Decision, a Spec or Concept verdict, an Errand. */
-export const OWNER_WAITS: ReadonlySet<string> = new Set(['decision', 'review', 'errand'])
 
 /** An edge the factory added and that still holds an Issue back, with what the sweep needs to judge it. */
 export interface HeldEdge {

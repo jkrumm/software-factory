@@ -1,7 +1,7 @@
 import type { SQL } from 'bun'
 import * as z from 'zod'
 import type { HeldEdge } from '../domains/loops/edge-need.ts'
-import { type EdgeNeed, SHARED_PATHS } from '../kernel/edge-need.ts'
+import { EVIDENCE_SAMPLE_CAP, type EdgeNeed, SHARED_PATHS } from '../kernel/edge-need.ts'
 import type { IssueId } from '../kernel/ids.ts'
 
 const NeedRow = z.object({
@@ -17,7 +17,7 @@ const NeedRow = z.object({
  * Whether the edges the factory added were needed, per source (`triage`, `queue`: the word before the first colon of
  * `planning_edges.inferred_by`), over the edges added in `[from, to)`. An edge is one the factory added: a stored edge with
  * `inferred_by`, or one the queue loop took back (`queue_edge_removals`, which keeps what the edge carried). It is
- * measured when both Issues shipped (an accepted ship's `commits` evidence): `needed` when the paths their commits touched
+ * measured when both Issues shipped (an accepted ship's `commits` evidence, whose paths were not cut at `EVIDENCE_SAMPLE_CAP`): `needed` when the paths their commits touched
  * share one (the shared aggregator and the lockfiles left out), `not_needed` when they share none, `unknown` otherwise.
  */
 export async function readEdgeNeed(tx: SQL, window: { from: Date; to: Date }): Promise<EdgeNeed[]> {
@@ -30,7 +30,9 @@ export async function readEdgeNeed(tx: SQL, window: { from: Date; to: Date }): P
     ), c AS (
       SELECT split_part(e.inferred_by, ':', 1) AS source, e.removed,
         (EXISTS (SELECT 1 FROM factory.quality_evidence q WHERE q.issue_id = e.issue_id AND q.kind = 'commits')
-          AND EXISTS (SELECT 1 FROM factory.quality_evidence q WHERE q.issue_id = e.after_issue AND q.kind = 'commits')) AS measured,
+          AND EXISTS (SELECT 1 FROM factory.quality_evidence q WHERE q.issue_id = e.after_issue AND q.kind = 'commits')
+          AND NOT EXISTS (SELECT 1 FROM factory.quality_evidence q WHERE q.issue_id IN (e.issue_id, e.after_issue)
+            AND q.kind = 'commits' AND jsonb_array_length(q.payload->'paths') >= ${EVIDENCE_SAMPLE_CAP})) AS measured,
         EXISTS (
           SELECT 1 FROM factory.quality_evidence qa
           CROSS JOIN LATERAL jsonb_array_elements_text(qa.payload->'paths') pa(path)
@@ -81,10 +83,12 @@ export async function readHeldEdges(tx: SQL): Promise<HeldEdge[]> {
     SELECT e.issue_id, e.after_issue, e.inferred_by, i.state AS issue_state, b.state AS blocker_state, b.wait_reason AS blocker_wait,
       (SELECT x.at FROM factory.issue_events x WHERE x.issue_id = b.id AND x.result = 'applied' AND x.to_state IS DISTINCT FROM x.from_state ORDER BY x.version DESC LIMIT 1) AS blocker_since,
       CASE WHEN EXISTS (SELECT 1 FROM factory.quality_evidence k WHERE k.issue_id = i.id AND k.kind = 'commits')
+        AND NOT EXISTS (SELECT 1 FROM factory.quality_evidence k WHERE k.issue_id = i.id AND k.kind = 'commits' AND jsonb_array_length(k.payload->'paths') >= ${EVIDENCE_SAMPLE_CAP})
         THEN (SELECT COALESCE(jsonb_agg(DISTINCT p.path), '[]'::jsonb) FROM factory.quality_evidence q
           CROSS JOIN LATERAL jsonb_array_elements_text(q.payload->'paths') p(path)
           WHERE q.issue_id = i.id AND q.kind = 'commits') END AS issue_paths,
       CASE WHEN EXISTS (SELECT 1 FROM factory.quality_evidence k WHERE k.issue_id = b.id AND k.kind = 'commits')
+        AND NOT EXISTS (SELECT 1 FROM factory.quality_evidence k WHERE k.issue_id = b.id AND k.kind = 'commits' AND jsonb_array_length(k.payload->'paths') >= ${EVIDENCE_SAMPLE_CAP})
         THEN (SELECT COALESCE(jsonb_agg(DISTINCT p.path), '[]'::jsonb) FROM factory.quality_evidence q
           CROSS JOIN LATERAL jsonb_array_elements_text(q.payload->'paths') p(path)
           WHERE q.issue_id = b.id AND q.kind = 'commits') END AS blocker_paths
