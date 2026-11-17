@@ -3,7 +3,8 @@ import * as z from 'zod'
 import { HISTORY_WINDOWS, type Kpi, type KpiModel } from '@software-factory/contract'
 import { boundedRead } from './bounded.ts'
 import { percentile, per, windowOf } from './stats.ts'
-import { flowKpis } from './kpis-flow.ts'
+import { catalogFields, type CatalogField } from './kpi-fields.ts'
+import { flowKpis, regressionParts } from './kpis-flow.ts'
 import { costBySeat, USAGE_TIMEOUT_MS, type SeatCost } from './usage.ts'
 import { readSeatKpis } from './kpis-seats.ts'
 
@@ -351,17 +352,11 @@ export async function costOfIssues(sql: SQL, issues: readonly string[], timeoutM
   }
 }
 
-const NONE = { kind: 'unset', min: null, max: null } as const
-
 const kpi = (
-  k: Omit<Kpi, 'target' | 'history' | 'parts' | 'reason'> & {
-    target?: Kpi['target']
-    parts?: Kpi['parts']
-    reason?: string
-  },
+  k: Omit<Kpi, CatalogField | 'history' | 'parts' | 'reason'> & { parts?: Kpi['parts']; reason?: string },
 ): Omit<Kpi, 'history'> => ({
   ...k,
-  target: k.target ?? NONE,
+  ...catalogFields(k.key),
   parts: k.parts ?? [],
   reason: k.reason ?? null,
 })
@@ -461,9 +456,10 @@ async function kpisOf(
       AND (settled_by IN ('owner', 'orchestrator') OR (answered_at IS NULL AND withdrawn_at IS NULL))`)
   const byOwner = await one(sql`
     SELECT count(*) AS n FROM factory.decisions WHERE settled_by = 'owner' AND answered_at >= ${w.from} AND answered_at < ${w.to}`)
-  const worth = await one(sql`
+  const recommended = await one(sql`
     SELECT count(*) AS n FROM factory.decisions
-    WHERE settled_by = 'owner' AND worth_asking IS TRUE AND answered_at >= ${w.from} AND answered_at < ${w.to}`)
+    WHERE settled_by = 'owner' AND lower(trim(answer)) = lower(trim(recommendation))
+      AND answered_at >= ${w.from} AND answered_at < ${w.to}`)
   const reached = await errandsReached(sql, w)
   const verdicts = await one(sql`SELECT count(*) AS n FROM factory.verdicts v WHERE ${ownerVerdict(sql, w)}`)
   const verdictsChanged = await one(
@@ -482,6 +478,7 @@ async function kpisOf(
   const firstPassed = await one(sql`
     SELECT count(*) AS n FROM factory.quality_watches WHERE watch = 1 AND answer = 'passed' AND answered_at >= ${w.from} AND answered_at < ${w.to}`)
   const refusals = await refusalCount(sql, w)
+  const regressions = await regressionParts(sql, w)
   const cycles = await cycleTimes(sql, w)
   const waits = await queueWaits(sql, w)
   const usage = withUsage
@@ -498,60 +495,50 @@ async function kpisOf(
   const figures = [
     kpi({
       key: 'avoidable_touches',
-      label: 'Avoidable touches per Issue',
       value: per(touchCount, issues),
       unit: 'per_issue',
       n: issues,
       count: touchCount,
-      target: { kind: 'between', min: 0.05, max: 0.07 },
       measured: true,
       definition:
         'Owner actions in the window on an Issue the factory should have settled, divided by the Issues filed in the window: a Decision the owner answered and did not mark worth asking, an owner note, an owner wake, a cancel, a reopen. The first note of a filing, anything the orchestrator did (it is reported separately, as its own friction line), a verdict on a Concept or Spec and a done Errand are not counted: those are the request or the owner wanted them. Touches of one kind within a minute of the one before count once: one steer sent to a dozen Issues, or one re-planned batch cancelled, is one action. The orchestrator is excluded only while it writes with its own token (`FACTORY_ORCHESTRATOR_TOKEN`); a session still on the owner token is counted as the owner.',
     }),
     kpi({
       key: 'asks',
-      label: 'Asks per Issue',
       value: per(asked, issues),
       unit: 'per_issue',
       n: issues,
       count: asked,
-      target: { kind: 'between', min: 0.05, max: 0.07 },
       measured: true,
       definition:
         'Decisions raised in the window that the factory did not settle itself (the owner answered them, or they still wait), divided by the Issues filed in the window.',
     }),
     kpi({
       key: 'specs_per_100',
-      label: 'Specs per 100 Issues',
       value: issues === 0 ? null : (specs / issues) * 100,
       unit: 'per_100_issues',
       n: issues,
       count: specs,
-      target: { kind: 'trend', min: null, max: null },
       measured: true,
       definition:
         'Specs the leads submitted in the window (a lead hands one over when the Issue carries the checkpoint spec, or the change is a new public surface, a data model, a dependency of weight or a screen the owner has not seen), per 100 Issues filed in the window. Near zero for weeks means the Spec path is silent.',
     }),
     kpi({
       key: 'owner_decisions_per_100',
-      label: 'Owner-settled Decisions per 100 Issues',
       value: issues === 0 ? null : (byOwner / issues) * 100,
       unit: 'per_100_issues',
       n: issues,
       count: byOwner,
-      target: { kind: 'trend', min: null, max: null },
       measured: true,
       definition:
         'Decisions the owner answered himself in the window (not the Judge, a policy or a default), per 100 Issues filed in the window. Read beside Specs per 100 Issues: both near zero means nothing reaches him.',
     }),
     kpi({
       key: 'errands_reached_per_100',
-      label: 'Errands that reached the owner per 100 Issues',
       value: issues === 0 ? null : (reached.n / issues) * 100,
       unit: 'per_100_issues',
       n: issues,
       count: reached.n,
-      target: { kind: 'trend', min: null, max: null },
       measured: true,
       definition:
         "Errands, an Issue's and a request's, that the screen let through to the owner in the window (the rules of their shape, the fixed MacBook verbs and the screen model keep the rest away from him), per 100 Issues filed in the window. The parts are the share of those that needs a secret (1Password, a biometric, a password), hands (a device, a portal, a physical step), a place on his MacBook or only his yes on the mini, and the share of secret and hands together: what is left of them after that is the figure to lower.",
@@ -582,68 +569,68 @@ async function kpisOf(
             ],
     }),
     kpi({
-      key: 'worth_asking',
-      label: 'Decisions the owner marks worth asking',
-      value: per(worth, byOwner),
+      key: 'errands_no_secret_no_hands',
+      value: per(reached.place + reached.approval, reached.n),
       unit: 'share',
-      n: byOwner,
-      count: worth,
-      target: { kind: 'at_least', min: 0.8, max: null },
+      n: reached.n,
+      count: reached.place + reached.approval,
       measured: true,
       definition:
-        'Of the Decisions the owner answered in the window, the share he flagged worth asking. The flag is his, so an unflagged answer counts against the share.',
+        'Of the Errands that reached the owner in the window, the share that needed neither a secret nor hands: a command on his MacBook (`place`) or only his yes (`approval`). An Errand that reached him before `need` was stored counts under neither. Each one is a step the lead or a rule could have taken.',
+    }),
+    kpi({
+      key: 'recommendation_taken',
+      value: per(recommended, byOwner),
+      unit: 'share',
+      n: byOwner,
+      count: recommended,
+      measured: true,
+      definition:
+        'Of the Decisions the owner answered in the window, the share where the option he chose is the one the lead recommended (the answer is the recommendation, ignoring case and spaces; a recommendation written as prose that names no option never matches, so the share can only be too low). It needs no click from him: the answer is the signal. Each one was an ask the lead could have decided itself.',
     }),
     kpi({
       key: 'specs_not_needed',
-      label: 'Specs at the owner not needed',
       value: per(specsNotNeeded, specsAtOwner),
       unit: 'share',
       n: specsAtOwner,
       count: specsNotNeeded,
-      target: { kind: 'at_most', min: null, max: 0.2 },
       measured: true,
       definition:
         "Of the owner's own verdicts on a Spec in the window (the Spec screen passed it to him; the factory's looks_good on a Spec it settled, and a default after the wait, are not his), the share he marked not needed (`needed me: no`). An unmarked verdict does not count against it. Each mark is a precedent for the Spec screen and triage at once; the friction lines name who made each such Spec owed: triage, the filer, a Replan or the lead.",
     }),
     kpi({
       key: 'verdict_changes_share',
-      label: 'Owner verdicts that ask for changes',
       value: per(verdictsChanged, verdicts),
       unit: 'share',
       n: verdicts,
       count: verdictsChanged,
-      target: { kind: 'trend', min: null, max: null },
       measured: true,
       definition:
         "Of the owner's own verdicts on a Concept, Spec or Report in the window (the defaults the factory gave when a wait ran out, and withdrawals, are not his), the share that was good with notes or changes. Lower is better: a lead that already knows his taste gets looks_good. The retro writes recurring notes down where the next lead reads them.",
     }),
     kpi({
       key: 'first_verification_passes',
-      label: 'First verification passes',
       value: per(firstPassed, firstWatches),
       unit: 'share',
       n: firstWatches,
       count: firstPassed,
-      target: { kind: 'at_least', min: 0.9, max: null },
+      parts: regressions,
       measured: true,
       definition:
-        "Of the first watches (the window after an Issue's first ship) that ended in the window as passed or regressed, the share that passed. A watch that ended because its Issue moved on is not counted. A pass is as strong as its watch: read it beside the first watch's dwell and the regressions by cause.",
+        "Of the first watches (the window after an Issue's first ship) that ended in the window as passed or regressed, the share that passed. A watch that ended because its Issue moved on is not counted. A pass is as strong as its watch: read it beside the first watch's dwell. The parts are the shares of first watches that regressed, by what failed in the last run: the CI, the project's verify, a deployed version that lacks the landed commit, a missing version probe, the checkout, another check (the first of these in that order names a regression that failed several).",
     }),
     kpi({
       key: 'refusals',
-      label: 'Refusals per Issue',
       value: per(refusals, issues),
       unit: 'per_issue',
       n: issues,
       count: refusals,
-      target: { kind: 'at_most', min: null, max: 0.25 },
       measured: true,
       definition:
         'Issue events the state machine refused (result refused) plus ships the gate refused, in the window, divided by the Issues filed in the window.',
     }),
     kpi({
       key: 'cycle_p50',
-      label: 'Cycle, median',
       value: percentile(cycles, 0.5),
       unit: 'ms',
       n: cycles.length,
@@ -652,35 +639,22 @@ async function kpisOf(
       definition: 'The median time from filed to closed of the Issues that closed in the window.',
     }),
     kpi({
-      key: 'queue_wait_p50',
-      label: 'Queue wait, median',
-      value: percentile(waits, 0.5),
-      unit: 'ms',
-      n: waits.length,
-      count: null,
-      measured: true,
-      definition:
-        'The median time from filed or reopened to admitted (a lead started) of the admissions in the window; settling and the chain are part of the wait. The parts are the queued time of the window by what held it: capacity (a seat, a cap, an account window, memory, load), an after edge, a draining queue, production red (a fix is queued and only fixes are admitted), and the rest.',
-      parts: queueParts,
-    }),
-    kpi({
       key: 'queue_wait_p90',
-      label: 'Queue wait, 90th percentile',
       value: percentile(waits, 0.9),
       unit: 'ms',
       n: waits.length,
       count: null,
       measured: true,
-      definition: 'The 90th percentile of the same queue waits.',
+      definition:
+        'The 90th percentile of the time from filed or reopened to admitted (a lead started), over the admissions in the window; settling and the chain are part of the wait. The parts are the queued time of the window by what held it: capacity (a seat, a cap, an account window, memory, load), an after edge, a draining queue, production red (a fix is queued and only fixes are admitted), and the rest.',
+      parts: queueParts,
     }),
     kpi({
       key: 'fix_commits',
-      label: 'Fix commits per week, by class',
       value: fixes.inWindow / weeks,
       unit: 'count',
       n: fixes.inWindow,
       count: fixes.inWindow,
-      target: { kind: 'trend', min: null, max: null },
       measured: fixes.ever,
       ...(fixes.ever ? {} : { reason: 'No fix commit is stored yet: the fix-classes loop has not sorted any' }),
       definition:
@@ -688,12 +662,10 @@ async function kpisOf(
     }),
     kpi({
       key: 'window_points',
-      label: 'Window points per Issue',
       value: usage.points === null ? null : per(usage.points, issues),
       unit: 'points',
       n: withUsage ? issues : 0,
       count: null,
-      target: { kind: 'trend', min: null, max: null },
       measured: usage.points !== null,
       ...(usage.points === null && usage.reason ? { reason: usage.reason } : {}),
       definition:
@@ -701,7 +673,6 @@ async function kpisOf(
     }),
     kpi({
       key: 'cost',
-      label: 'Cost per Issue',
       value: usage.cost === null ? null : per(usage.cost, issues),
       unit: 'usd',
       n: withUsage ? issues : 0,

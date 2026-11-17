@@ -82,21 +82,21 @@ test('a week with no fix commit is a measured zero, as the fix-commits read says
 
 test('the queue wait is split by what held it, the largest first, and nothing is made up', async () => {
   const model = KpiModel.parse(await readKpis(sql, { now: NOW, days: 7 }))
-  const wait = model.kpis.find((k) => k.key === 'queue_wait_p50')
+  const wait = model.kpis.find((k) => k.key === 'queue_wait_p90')
   const H = 3_600_000
   expect(wait?.parts.map((p) => [p.key, Math.round(p.value / H)])).toEqual([
     ['chain', 6],
     ['capacity', 2],
     ['production_red', 1],
   ])
-  // no admission happened, so the median itself has no figure, with its reason
+  // no admission happened, so the percentile itself has no figure, with its reason
   expect(wait).toMatchObject({ value: null, measured: false })
   expect(wait?.reason).toBe('Nothing was counted in the window')
 })
 
 test('a ratio over nothing and a share under the floor read as not measured, never zero', async () => {
   const model = KpiModel.parse(await readKpis(sql, { now: NOW, days: 7 }))
-  for (const key of ['worth_asking', 'specs_not_needed', 'first_verification_passes', 'cycle_p50']) {
+  for (const key of ['recommendation_taken', 'specs_not_needed', 'first_verification_passes', 'cycle_p50']) {
     const kpi = model.kpis.find((k) => k.key === key)
     expect(kpi, key).toMatchObject({ value: null, measured: false })
     expect(kpi?.reason, key).toContain('counted')

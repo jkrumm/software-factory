@@ -44,25 +44,21 @@ const CARD_ORDER = [
   'first_verification_passes',
   'avoidable_touches',
   'asks',
-  'worth_asking',
+  'recommendation_taken',
   'specs_not_needed',
   'specs_per_100',
   'owner_decisions_per_100',
   'errands_reached_per_100',
   'verdict_changes_share',
   'first_watch_dwell_p50',
-  'regression_cause',
   'queue_wait_p90',
-  'queue_wait_p50',
   'cycle_p50',
   'refusals',
   'queue_time',
   'idle_capacity',
   'working_share',
   'dropped_after_lead',
-  'amend_rate',
   'nudges_acted',
-  'forced_note_delay_p50',
   'errands_turned_away',
   'window_points',
   'cost',
@@ -449,7 +445,7 @@ test('the queue wait card names what the wait is made of, largest first, from th
   apiUrl,
 }) => {
   const [kpis] = await read(apiUrl, 7)
-  const wait = kpis.kpis.find((k) => k.key === 'queue_wait_p50')
+  const wait = kpis.kpis.find((k) => k.key === 'queue_wait_p90')
   const rows = partRows(wait ?? { parts: [] })
   expect(rows.length, 'the seed queued an Issue behind an edge and a cap').toBeGreaterThan(1)
   await page.goto('/improve')

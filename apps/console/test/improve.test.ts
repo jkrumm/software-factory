@@ -48,6 +48,11 @@ const kpi = (over: Partial<Kpi>): Kpi => ({
   n: 4,
   count: 1,
   target: { kind: 'between', min: 0.05, max: 0.07 },
+  direction: 'lower',
+  targetSource: '',
+  numerator: '',
+  denominator: '',
+  decision: '',
   measured: true,
   reason: null,
   definition: '',
@@ -105,7 +110,7 @@ test('targetWords and targetStatus are literal', () => {
 
 test('sampleWords and windowWords', () => {
   expect(sampleWords({ key: 'asks', n: 13 })).toBe('13 Issues')
-  expect(sampleWords({ key: 'worth_asking', n: 1 })).toBe('1 Decision')
+  expect(sampleWords({ key: 'recommendation_taken', n: 1 })).toBe('1 Decision')
   expect(sampleWords({ key: 'queue_wait_p90', n: 0 })).toBe('0 samples')
   expect(windowWords({ from: '2026-11-01T00:00:00Z', to: '2026-11-08T10:00:00Z' })).toBe('2026-11-01 to 2026-11-08')
 })

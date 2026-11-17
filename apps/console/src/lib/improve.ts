@@ -42,6 +42,8 @@ export function formatValue(unit: Kpi['unit'], value: number): string {
       return value.toFixed(2)
     case 'per_100_issues':
       return value.toFixed(1)
+    case 'per_day':
+      return value.toFixed(1)
     case 'share':
       return `${Math.round(value * 100)}%`
     case 'usd':
@@ -108,7 +110,11 @@ export function targetTally(kpis: readonly Pick<Kpi, 'value' | 'measured' | 'tar
 const SAMPLE_NOUN: Record<KpiKey, readonly [string, string]> = {
   avoidable_touches: ['Issue', 'Issues'],
   asks: ['Issue', 'Issues'],
-  worth_asking: ['Decision', 'Decisions'],
+  recommendation_taken: ['Decision', 'Decisions'],
+  errands_no_secret_no_hands: ['Errand', 'Errands'],
+  closed_per_day: ['day', 'days'],
+  test_slot_wait_p50: ['step', 'steps'],
+  minutes_over_ceiling: ['minute', 'minutes'],
   specs_not_needed: ['Spec verdict', 'Spec verdicts'],
   specs_per_100: ['Issue', 'Issues'],
   owner_decisions_per_100: ['Issue', 'Issues'],
@@ -117,7 +123,6 @@ const SAMPLE_NOUN: Record<KpiKey, readonly [string, string]> = {
   first_verification_passes: ['watch', 'watches'],
   refusals: ['Issue', 'Issues'],
   cycle_p50: ['sample', 'samples'],
-  queue_wait_p50: ['sample', 'samples'],
   queue_wait_p90: ['sample', 'samples'],
   fix_commits: ['fix commit', 'fix commits'],
   window_points: ['Issue', 'Issues'],
@@ -126,11 +131,8 @@ const SAMPLE_NOUN: Record<KpiKey, readonly [string, string]> = {
   idle_capacity: ['hour', 'hours'],
   working_share: ['interval', 'intervals'],
   dropped_after_lead: ['Issue', 'Issues'],
-  amend_rate: ['signal', 'signals'],
   nudges_acted: ['nudge', 'nudges'],
-  forced_note_delay_p50: ['note', 'notes'],
   errands_turned_away: ['Errand', 'Errands'],
-  regression_cause: ['watch', 'watches'],
   first_watch_dwell_p50: ['watch', 'watches'],
 }
 
@@ -144,7 +146,11 @@ export function sampleWords(kpi: Pick<Kpi, 'key' | 'n'>): string {
 export const KPI_HINT = {
   avoidable_touches: 'avoidable touch',
   asks: 'ask',
-  worth_asking: 'worth asking',
+  recommendation_taken: 'decision',
+  errands_no_secret_no_hands: 'errand',
+  closed_per_day: 'cycle',
+  test_slot_wait_p50: 'test slot',
+  minutes_over_ceiling: 'load ceiling',
   specs_not_needed: 'needed me',
   specs_per_100: 'spec',
   owner_decisions_per_100: 'decision',
@@ -153,7 +159,6 @@ export const KPI_HINT = {
   first_verification_passes: 'first verification pass',
   refusals: 'refusal',
   cycle_p50: 'cycle',
-  queue_wait_p50: 'queue wait',
   queue_wait_p90: 'queue wait',
   fix_commits: 'fix commit',
   window_points: 'window point',
@@ -162,11 +167,8 @@ export const KPI_HINT = {
   idle_capacity: 'idle',
   working_share: 'running',
   dropped_after_lead: 'dropped',
-  amend_rate: 'amend',
   nudges_acted: 'steward',
-  forced_note_delay_p50: 'delivery',
   errands_turned_away: 'turn away',
-  regression_cause: 'regressed',
   first_watch_dwell_p50: 'watch',
 } as const satisfies Record<KpiKey, InfoWord>
 
@@ -445,7 +447,14 @@ export const MEANING: Record<KpiKey, string> = {
   avoidable_touches:
     'How often you had to step in on something the factory should have settled, per Issue filed. Lower is better.',
   asks: 'How many Decisions the factory put to you or left open, per Issue filed. Lower is better.',
-  worth_asking: 'Of the Decisions you answered, how many you said were worth asking. Higher is better.',
+  recommendation_taken:
+    'Of the Decisions you answered, how many you answered with the option the lead recommended: a question the lead could have decided. Lower is better.',
+  errands_no_secret_no_hands:
+    'Of the Errands that reached you, how many needed neither a secret nor your hands: a step a command could take. Lower is better.',
+  closed_per_day: 'How many Issues closed per day, whatever the outcome. Higher is faster.',
+  test_slot_wait_p50: 'How long a typical check step waited for a test slot before it ran. Shorter is better.',
+  minutes_over_ceiling:
+    'The share of minutes the host ran above its load ceiling. Lower is better: the host is not overcommitted.',
   specs_not_needed: 'Of the Specs sent to you, how many you said did not need you. Lower is better.',
   specs_per_100:
     'How many Specs the leads wrote per 100 Issues. Neither direction is good by itself; zero for weeks means the Spec path is silent.',
@@ -458,27 +467,21 @@ export const MEANING: Record<KpiKey, string> = {
   first_verification_passes: 'Of the first checks after a ship, how many passed. Higher is better.',
   refusals: 'How often the state machine or the ship gate refused something, per Issue filed. Lower is better.',
   cycle_p50: 'How long a typical Issue takes from filed to closed. Shorter is better.',
-  queue_wait_p50: 'How long a typical Issue waits before a lead starts on it. Shorter is better.',
   queue_wait_p90: 'How long the slowest tenth of Issues wait before a lead starts on them. Shorter is better.',
   fix_commits: 'How many fix commits landed per week, each one a mistake that shipped. Fewer is better.',
   window_points: 'How much of the five-hour Max window the sessions of an Issue used, per Issue. Lower is cheaper.',
   cost: 'What the sessions of an Issue cost in dollars, per Issue. Lower is cheaper.',
   queue_time:
-    'The total time Issues waited for a lead to start, and how much of it an after edge held. Less is better.',
+    'Of the time Issues waited for a lead to start, the share an after edge did not hold: capacity, a cap or a slot. Lower is better.',
   idle_capacity:
     'How often an account had room while an Issue waited for a lead with nothing holding it. Lower is better: capacity went unused.',
   working_share:
     'How much of a lead’s time goes into the work itself rather than into holding for something. Higher is better.',
   dropped_after_lead:
     'Of the Issues closed after a lead started, how many were dropped or cancelled: lead time that shipped nothing. Lower is better.',
-  amend_rate:
-    'Of the incoming signals, how many joined an Issue already open instead of filing a new one. Higher means fewer duplicates.',
   nudges_acted: 'Of the steward’s reminders to a lead, how many the lead acted on within 30 minutes. Higher is better.',
-  forced_note_delay_p50:
-    'How long a note to a busy lead takes to arrive when it has to be forced in. Shorter is better.',
   errands_turned_away:
     'Of the Errands leads raised, how many the screen turned away before they reached you. Higher means less of your time went to needless Errands.',
-  regression_cause: 'Of the first checks after a ship, how many regressed. Lower is better.',
   first_watch_dwell_p50:
     'How long a first check takes to answer; a pass over checks that answer in seconds proves little. Longer is a stronger check.',
 }
@@ -488,25 +491,25 @@ export const KPI_ORDER: readonly KpiKey[] = [
   'first_verification_passes',
   'avoidable_touches',
   'asks',
-  'worth_asking',
+  'recommendation_taken',
   'specs_not_needed',
   'specs_per_100',
   'owner_decisions_per_100',
   'errands_reached_per_100',
+  'errands_no_secret_no_hands',
   'verdict_changes_share',
   'first_watch_dwell_p50',
-  'regression_cause',
-  'queue_wait_p90',
-  'queue_wait_p50',
+  'closed_per_day',
   'cycle_p50',
+  'queue_wait_p90',
   'refusals',
   'queue_time',
   'idle_capacity',
   'working_share',
   'dropped_after_lead',
-  'amend_rate',
+  'test_slot_wait_p50',
+  'minutes_over_ceiling',
   'nudges_acted',
-  'forced_note_delay_p50',
   'errands_turned_away',
   'window_points',
   'cost',
@@ -564,7 +567,7 @@ export function partRows(kpi: Pick<Kpi, 'parts'>): PartRow[] {
 }
 
 /** The KPIs whose card shows what the figure is made of (the others keep that in the popover). */
-export const PARTS_ON_CARD: ReadonlySet<KpiKey> = new Set(['queue_wait_p50'])
+export const PARTS_ON_CARD: ReadonlySet<KpiKey> = new Set(['queue_wait_p90'])
 
 // ---- the fix-commit card -----------------------------------------------------------------------------------------------
 

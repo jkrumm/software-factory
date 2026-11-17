@@ -172,7 +172,9 @@ describe('queue time, idle capacity and the lead’s time', () => {
   test('queued time is split into what an after edge held and the rest, and matches SQL', async () => {
     const k = (await flow())('queue_time')
     // issue_1 9 h (5 h chain), issue_2 4.9 h, issue_3 4.9 h
-    expect(k.value).toBeCloseTo(18.8 * H, -3)
+    // of 18.8 h queued, 13.8 h no after edge held
+    expect(k.value).toBeCloseTo(13.8 / 18.8, 6)
+    expect(k.unit).toBe('share')
     expect(k.n).toBe(3)
     expect(k.parts.map((p) => p.key)).toEqual(['chain', 'capacity'])
     expect(k.parts[0]?.value).toBeCloseTo(5 * H, -3)
@@ -181,7 +183,7 @@ describe('queue time, idle capacity and the lead’s time', () => {
       SELECT sum(extract(epoch FROM (n.at - q.at)) * 1000) AS v FROM factory.issue_events q
       JOIN factory.issue_events n ON n.issue_id = q.issue_id AND n.kind = 'admitted'
       WHERE q.kind = 'settled' AND n.at >= ${from} AND n.at < ${NOW}`)
-    expect(k.value).toBeCloseTo(sqlTotal, -3)
+    expect((k.parts[0]?.value ?? 0) + (k.parts[1]?.value ?? 0)).toBeCloseTo(sqlTotal, -3)
   })
 
   test('idle capacity counts the hours an unblocked Issue was queued and an account had room', async () => {
@@ -222,30 +224,24 @@ describe('what leads and the loops cost', () => {
     ])
   })
 
-  test('amends, nudges, forced-note delay and Errands', async () => {
+  test('nudges and Errands', async () => {
     const k = await flow()
-    expect(k('amend_rate')).toMatchObject({ n: 3, count: 2 })
     // three steward notes: on issue_1 a lead's ask followed within 30 minutes, on issue_40 its block (a stalled event), on issue_2
     // the next action only an hour later
     expect(k('nudges_acted')).toMatchObject({ n: 3, count: 2 })
-    expect(k('forced_note_delay_p50')).toMatchObject({ n: 3, value: 120_000 })
-    expect(k('forced_note_delay_p50').parts).toEqual([
-      { key: 'p90', label: '90th percentile', value: 504_000, unit: 'ms' },
-    ])
     expect(k('errands_turned_away')).toMatchObject({ n: 3, count: 2 })
   })
 
   test('first watches: the dwell, and each regression by the checks of its last run', async () => {
     const k = await flow()
     expect(k('first_watch_dwell_p50')).toMatchObject({ n: 3, value: 600_000 })
-    const cause = k('regression_cause')
-    expect(cause).toMatchObject({ n: 3, count: 2 })
-    expect(cause.parts.map((p) => [p.key, Math.round(p.value * 100)])).toEqual([
+    // the first-pass KPI is 1 of 3, and its parts name why the other two regressed
+    const passes = k('first_verification_passes')
+    expect(passes).toMatchObject({ n: 3, count: 1 })
+    expect(passes.parts.map((p) => [p.key, Math.round(p.value * 100)])).toEqual([
       ['verify', 33],
       ['not_deployed', 33],
     ])
-    // the first-pass KPI is untouched: 1 of 3
-    expect(k('first_verification_passes')).toMatchObject({ n: 3, count: 1 })
   })
 
   test('the cause of a regression names the first failing check in the documented order', () => {
@@ -309,7 +305,7 @@ describe('the retro model', () => {
 
   test('the bundle holds the sessions, the samples and the ledger of the earlier retro signals', async () => {
     await sql`INSERT INTO factory.intake_signals (id, source, kind, origin, trust, repo, fingerprint, title, text, received_at, state, issue_id) VALUES
-      ('signal_r1', 'agent:software-factory', 'request', 'factory', 'agent', 'app', 'r1', 'Shorter queue', ${'why Retro: 2026-10-30 kpi=amend_rate before=0.2 direction=down'}, ${ago(300)}, 'filed', 'issue_9'),
+      ('signal_r1', 'agent:software-factory', 'request', 'factory', 'agent', 'app', 'r1', 'Shorter queue', ${'why Retro: 2026-10-30 kpi=dropped_after_lead before=0.2 direction=down'}, ${ago(300)}, 'filed', 'issue_9'),
       ('signal_r2', 'agent:software-factory', 'request', 'factory', 'agent', 'app', 'r2', 'Not shipped yet', ${'Retro: 2026-10-30 kpi=queue_time before=none direction=down'}, ${ago(300)}, 'filed', 'issue_2'),
       ('signal_r3', 'agent:software-factory', 'request', 'factory', 'agent', 'app', 'r3', 'Not a marker', 'Retro: soon', ${ago(300)}, 'filed', 'issue_2')`
     const model = RetroModel.parse(await readRetro(sql, { now: NOW, days: 7 }))
@@ -321,11 +317,11 @@ describe('the retro model', () => {
     expect(model.samples.slowest[0]).toMatchObject({ issue: 'issue_1', why: 'cycle' })
     expect(model.samples.dropped.map((s) => s.issue).toSorted()).toEqual(['issue_2', 'issue_3'])
 
-    // issue_9 shipped 200 h ago, before the window: the whole window is after the ship; the amend rate went from 0.2 to 0.667
+    // issue_9 shipped 200 h ago, before the window: the whole window is after the ship; the dropped share went from 0.2 to 0.667
     const shipped = model.ledger.find((e) => e.signal === 'signal_r1')
     expect(shipped).toMatchObject({
       issue: 'issue_9',
-      kpi: 'amend_rate',
+      kpi: 'dropped_after_lead',
       before: 0.2,
       direction: 'down',
       measured: 'after',

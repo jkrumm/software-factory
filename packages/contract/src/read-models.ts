@@ -291,17 +291,20 @@ export type ChainModel = z.infer<typeof ChainModel>
 export const KPI_KEYS = [
   'avoidable_touches',
   'asks',
-  'worth_asking',
+  'recommendation_taken',
   'specs_not_needed',
   'verdict_changes_share',
   'specs_per_100',
   'owner_decisions_per_100',
   'errands_reached_per_100',
+  'errands_no_secret_no_hands',
   'first_verification_passes',
   'refusals',
   'cycle_p50',
-  'queue_wait_p50',
   'queue_wait_p90',
+  'closed_per_day',
+  'test_slot_wait_p50',
+  'minutes_over_ceiling',
   'fix_commits',
   'window_points',
   'cost',
@@ -309,11 +312,8 @@ export const KPI_KEYS = [
   'idle_capacity',
   'working_share',
   'dropped_after_lead',
-  'amend_rate',
   'nudges_acted',
-  'forced_note_delay_p50',
   'errands_turned_away',
-  'regression_cause',
   'first_watch_dwell_p50',
 ] as const
 export type KpiKey = (typeof KPI_KEYS)[number]
@@ -325,6 +325,11 @@ export const KpiTarget = z
     max: z.number().nullable(),
   })
   .meta({ id: 'KpiTarget' })
+export type KpiTargetValue = z.infer<typeof KpiTarget>
+
+/** The side of a KPI that is good: `watch` when no side is known and the figure is read as a trend. */
+export const KPI_DIRECTIONS = ['lower', 'higher', 'watch'] as const
+export type KpiDirection = (typeof KPI_DIRECTIONS)[number]
 
 /** How many consecutive windows of `days` days a Kpi's `history` holds, the current one last. */
 export const HISTORY_WINDOWS = 6
@@ -337,7 +342,7 @@ export const KpiPoint = z
   })
   .meta({ id: 'KpiPoint' })
 
-const KPI_UNITS = ['per_issue', 'per_100_issues', 'share', 'ms', 'usd', 'points', 'count'] as const
+const KPI_UNITS = ['per_issue', 'per_100_issues', 'per_day', 'share', 'ms', 'usd', 'points', 'count'] as const
 
 /** One slice of a KPI that is a breakdown (queued time by reason, time by state): same unit as the KPI, never a target. */
 export const KpiPart = z
@@ -362,6 +367,16 @@ export const Kpi = z
     /** the numerator: the events counted (a duration's samples are `n`) */
     count: z.number().int().nullable(),
     target: KpiTarget,
+    /** the side that is good; the target's kind follows it (`at_most` for lower, `at_least` for higher, a trend for watch) */
+    direction: z.enum(KPI_DIRECTIONS),
+    /** where the target came from, or why the KPI is watch only */
+    targetSource: z.string(),
+    /** what is counted, in a short phrase */
+    numerator: z.string(),
+    /** what it is divided by */
+    denominator: z.string(),
+    /** what a person or a loop does differently when the figure moves */
+    decision: z.string(),
     /** false: there is no figure (it is not a zero): the factory has no data for it, or too few samples stand under it; `reason` says which */
     measured: z.boolean(),
     /** why `measured` is false, in words; null when it is true */
