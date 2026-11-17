@@ -26,6 +26,7 @@ export { Health, HealthLine, HealthLoop, Heartbeat } from './health.ts'
 export {
   EFFORTS,
   Effort,
+  LIGHT_FROM_TRIAGE_SMALL,
   parseRoleTable,
   ROLE_NAME,
   RoleEntry,
@@ -34,6 +35,8 @@ export {
   type RoleTable,
   TIERS,
   Tier,
+  TRIPWIRE_DAYS,
+  TRIPWIRE_POINTS,
 } from './roles.ts'
 export {
   QualityEvidence,

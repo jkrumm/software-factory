@@ -1,7 +1,13 @@
 import type { SQL } from 'bun'
 import * as z from 'zod'
-import { KPI_SEATS, type SeatKpiRow, type SeatKpis } from '@software-factory/contract'
-import { LIGHT_FROM_TRIAGE_SMALL, TRIPWIRE_DAYS, TRIPWIRE_POINTS } from '../domains/leads/light.ts'
+import {
+  KPI_SEATS,
+  LIGHT_FROM_TRIAGE_SMALL,
+  type SeatKpiRow,
+  type SeatKpis,
+  TRIPWIRE_DAYS,
+  TRIPWIRE_POINTS,
+} from '@software-factory/contract'
 import { percentile, per, windowOf } from './stats.ts'
 
 type Seat = (typeof KPI_SEATS)[number]

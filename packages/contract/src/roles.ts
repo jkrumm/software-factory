@@ -25,6 +25,16 @@ const RoleFile = z.object({ roles: z.record(RoleName, z.object({ tier: Tier, eff
 
 export type RoleTable = ReadonlyMap<string, RoleEntry>
 
+/**
+ * The tripwire for triage's `small` on the light seat (`apps/server/src/domains/leads/light.ts`). Light starts with the
+ * rule classes only; triage's `small` with no design choice joins them once light's first verification pass rate over
+ * the last `TRIPWIRE_DAYS` days is within `TRIPWIRE_POINTS` of lead's. The Improve screen's seat table shows both rates
+ * and whether it is met (`read/kpis-seats.ts`); flipping the switch is the one-line change that follows it.
+ */
+export const LIGHT_FROM_TRIAGE_SMALL = false
+export const TRIPWIRE_POINTS = 3
+export const TRIPWIRE_DAYS = 7
+
 /** Parses the role table's text; throws with zod's message when it is not one. */
 export function parseRoleTable(text: string): RoleTable {
   const file = RoleFile.parse(JSON.parse(text))

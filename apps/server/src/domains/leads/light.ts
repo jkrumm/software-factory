@@ -1,3 +1,4 @@
+import { LIGHT_FROM_TRIAGE_SMALL } from '@software-factory/contract'
 // The light seat: mechanical, well-specified work with a check that proves it starts on the cheap seat (the role table's
 // `light` row) instead of the `lead` row. modelpick's table of 2026-11-16 put haiku at high effort level with sonnet at
 // medium (29.9 against 30.8) at a fifth of its cost, and 12 points under sonnet at high: right for work a rule can name,
@@ -18,16 +19,6 @@ export const LIGHT_CLASSES: readonly string[] = [
   'agentsmd',
   'stale',
 ]
-
-/**
- * The tripwire for triage's `small`. Light starts with the rule classes only; triage's `small` with no design choice joins
- * them once light's first verification pass rate, over a week of light Issues, is within `TRIPWIRE_POINTS` of lead's. The
- * Improve screen's seat table shows both rates and whether the tripwire is met (`read/kpis-seats.ts`); flipping this is
- * the one-line change that follows it.
- */
-export const LIGHT_FROM_TRIAGE_SMALL = false
-export const TRIPWIRE_POINTS = 3
-export const TRIPWIRE_DAYS = 7
 
 /** What decides whether an Issue with no filed seat starts light. */
 export interface LightFacts {
