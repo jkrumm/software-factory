@@ -53,6 +53,9 @@ beforeAll(async () => {
     ('fp1', ${ago(30)}, ${ago(198)}, ${ago(30)}, 10, '[{"key":"stall","count":2,"title":"t"},{"key":"touch","count":3,"title":"t"}]', '[]', '[]'),
     ('fp2', ${ago(5)}, ${ago(173)}, ${ago(5)}, 10, '[{"key":"touch","count":3,"title":"t"}]', '[]', '[]'),
     ('fp3', ${ago(300)}, ${ago(468)}, ${ago(300)}, 10, '[{"key":"x","count":3,"title":"t"}]', '[]', '[]')`
+  // the store writes its arrays as a jsonb string: a pass recorded that way counts as well
+  await db.sql`INSERT INTO factory.friction_passes (id, at, window_from, window_to, issues, filed, over_budget, failed)
+    VALUES ('fp4', ${ago(2)}, ${ago(170)}, ${ago(2)}, 10, ${JSON.stringify([{ key: 'a', count: 3, title: 't' }])}::jsonb, '[]', '[]')`
   // hygiene: one healed Issue
   await finding(await issue(48, 1, 'healed'), 'hygiene', 'links')
   await db.sql`INSERT INTO factory.hygiene_passes (id, repo, at, ref, report, judgment, filed, over_budget, failed)
@@ -76,8 +79,8 @@ test('friction over 7 and 30 days: passes, signals, Issues by outcome, median ti
   const [week, month] = byLoop(model, 'friction') ?? []
   expect(week).toEqual({
     days: 7,
-    passes: 2,
-    signals: 3,
+    passes: 3,
+    signals: 4,
     issues: 3,
     done: 1,
     healed: 0,
@@ -92,8 +95,8 @@ test('friction over 7 and 30 days: passes, signals, Issues by outcome, median ti
   })
   expect(month).toMatchObject({
     days: 30,
-    passes: 3,
-    signals: 4,
+    passes: 4,
+    signals: 5,
     issues: 4,
     done: 2,
     open: 1,

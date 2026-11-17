@@ -112,14 +112,15 @@ export async function readLoopYield(sql: SQL, options: { now: Date }): Promise<L
     }
   })
 
+  // `filed` is a jsonb array or, as the pass stores write it (`JSON.stringify(...)::jsonb`), a jsonb string holding one: the count reads both
   const recordOf = async (loop: YieldLoop, from: Date): Promise<YieldRecord> => {
     const to = now
     const [row] =
       loop === 'friction'
-        ? await sql`SELECT count(*) AS passes, coalesce(sum(jsonb_array_length(filed)), 0) AS signals
+        ? await sql`SELECT count(*) AS passes, coalesce(sum(jsonb_array_length(CASE WHEN jsonb_typeof(filed) = 'string' THEN (filed #>> '{}')::jsonb ELSE filed END)), 0) AS signals
             FROM factory.friction_passes WHERE at >= ${from} AND at < ${to}`
         : loop === 'hygiene'
-          ? await sql`SELECT count(*) AS passes, coalesce(sum(jsonb_array_length(filed)), 0) AS signals
+          ? await sql`SELECT count(*) AS passes, coalesce(sum(jsonb_array_length(CASE WHEN jsonb_typeof(filed) = 'string' THEN (filed #>> '{}')::jsonb ELSE filed END)), 0) AS signals
               FROM factory.hygiene_passes WHERE at >= ${from} AND at < ${to}`
           : loop === 'selfwatch'
             ? await sql`SELECT 0 AS passes, count(*) AS signals
