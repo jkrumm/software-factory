@@ -185,6 +185,14 @@ describe('what a red run off the mini failed on', () => {
     })
   })
 
+  test('a timeout printed on the line above the failing test is its timeout', () => {
+    const found = disagreementOf({
+      tests: [test_('a.test.ts', 'slow one', 'fail', 5210)],
+      output: ['error: this test timed out after 5000ms.', '(fail) a.test.ts > slow one [5002.00ms]', 'Ran 1 test'],
+    })
+    expect(found.tests).toEqual([{ name: 'a.test.ts > slow one', durationMs: 5210, timeoutMs: 5000 }])
+  })
+
   test('with no failing test parsed, the last 40 lines of the output', () => {
     const output = Array.from({ length: 100 }, (_, i) => `line ${i}`)
     const found = disagreementOf({ tests: [test_('s', 't', 'pass')], output })

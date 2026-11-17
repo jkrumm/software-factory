@@ -298,6 +298,9 @@ export const testNameOf = (test: Pick<TestResult, 'suite' | 'name'>): string =>
 /** The timeout a line says a test hit ("timed out after 5000ms", "5 s"), in ms. */
 const TIMEOUT = /timed out after (\d+(?:\.\d+)?)\s*(ms|s)\b/i
 
+/** How many lines either side of the one naming a test its timeout may stand on. */
+const TIMEOUT_NEAR_LINES = 3
+
 /**
  * What a red run off the mini failed on: the failing tests from its JUnit results, each with its duration there and the
  * timeout an output line naming it gives; the last `DISAGREEMENT_TAIL_LINES` lines of the output when no failing test
@@ -309,7 +312,14 @@ export function disagreementOf(input: { tests: readonly TestResult[]; output: re
     return { tests: [], tail: input.output.slice(-DISAGREEMENT_TAIL_LINES).join('\n').slice(-DISAGREEMENT_TAIL_CHARS) }
   return {
     tests: failing.map((test) => {
-      const said = input.output.find((line) => line.includes(test.name) && TIMEOUT.test(line))
+      // a runner may print the timeout on the line above or below the one that names the test
+      const at = input.output.findIndex((line) => line.includes(test.name))
+      const said =
+        at === -1
+          ? undefined
+          : input.output
+              .slice(Math.max(0, at - TIMEOUT_NEAR_LINES), at + TIMEOUT_NEAR_LINES + 1)
+              .find((l) => TIMEOUT.test(l))
       const match = said === undefined ? null : TIMEOUT.exec(said)
       const timeoutMs =
         match === null ? null : Math.round(Number(match[1]) * (match[2]?.toLowerCase() === 's' ? 1000 : 1))
