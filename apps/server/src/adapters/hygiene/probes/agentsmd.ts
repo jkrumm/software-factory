@@ -13,11 +13,27 @@ export interface Import {
   target: string
 }
 
-/** The `@path` imports of an AGENTS.md, outside fenced code and inline code spans. */
+const MANAGED_BEGIN = /^\s*<!--\s*basalt:begin\b/
+const MANAGED_END = /^\s*<!--\s*basalt:end\b/
+
+/**
+ * The `@path` imports of an AGENTS.md, outside fenced code, inline code spans and the basalt-ui managed block
+ * (`<!-- basalt:begin -->` .. `<!-- basalt:end -->`): that block is generated and `basalt-ui sync --check` gates the
+ * consumer's CI, so an import in it is not the consumer's to fix.
+ */
 export function agentsImports(text: string): Import[] {
   const imports: Import[] = []
   let fence: string | undefined
+  let managed = false
   text.split('\n').forEach((raw, index) => {
+    if (managed) {
+      if (MANAGED_END.test(raw)) managed = false
+      return
+    }
+    if (!fence && MANAGED_BEGIN.test(raw)) {
+      managed = true
+      return
+    }
     const opening = FENCE.exec(raw)?.[1]
     if (opening) {
       if (!fence) fence = opening
