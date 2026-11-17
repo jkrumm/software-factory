@@ -74,6 +74,9 @@ function namedTargets(project: ProjectFile): { target: string; path: Path }[] {
   ]
 }
 
+/** A Makefile that includes another file defines targets this reader does not follow, so no target of it is judged missing. */
+const includesFiles = (makefile: string): boolean => /^-?s?include[ \t]/m.test(makefile)
+
 /** The targets a Makefile defines at the start of a line, every one of a `verify deploy:` line too; `include`d files are not read. */
 const makefileTargets = (makefile: string): Set<string> =>
   new Set(
@@ -246,9 +249,10 @@ export async function checkProject(text: string, repo: string | null, io: LintIo
       warnings.push(at(['name'], `name is "${parsed.data.name}", the repo is "${name}": the factory refuses the file`))
     }
     const makefile = await io.readFile(join(repo, 'Makefile')).catch(() => null)
-    const targets = makefile === null ? null : makefileTargets(makefile)
+    const unknown = makefile !== null && includesFiles(makefile)
+    const targets = makefile === null || unknown ? null : makefileTargets(makefile)
     for (const { target, path } of namedTargets(parsed.data)) {
-      if (targets?.has(target)) continue
+      if (unknown || targets?.has(target)) continue
       warnings.push(
         at(
           path,
