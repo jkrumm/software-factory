@@ -1,5 +1,6 @@
 import { moveUpWhy } from '../domains/leads/light.ts'
 import type { QualityStore } from '../domains/quality/store.ts'
+import { OUTLIVES_CLOSE } from '../domains/work/effects.ts'
 import { replay } from '../domains/work/machine.ts'
 import type { WorkStore } from '../domains/work/ports.ts'
 import type { IssueId } from '../kernel/ids.ts'
@@ -48,7 +49,13 @@ export async function moveUpIfDue(
     key: key('moved_up', input.issueId, issue.attempt),
     event: { kind: 'moved_up', payload: { attempt: issue.attempt, why: whyWith(why, input.detail) }, actor: 'factory' },
   })
-  return recorded.ok ? ok(recorded.value) : recorded
+  if (!recorded.ok) return recorded
+  // As a close does: a note still owed to the light lead would hold the finalize behind it (the outbox runs an Issue's
+  // effects in order), and the next lead reads every note in its brief anyway.
+  if (recorded.value.result === 'applied') {
+    await stores.work.cancelOpenEffects(input.issueId, OUTLIVES_CLOSE, deps.clock.now())
+  }
+  return ok(recorded.value)
 }
 
 /** The rule's reason, and what broke when a regression moved it: the next lead reads both in its brief. */

@@ -55,7 +55,13 @@ async function readmitted(issue: string): Promise<void> {
     if (passed.admitted.some((a) => a.issue === issue) || (await stateOf(lab.world, issue)).state === 'working') return
     last = { queue: passed.queue.filter((entry) => JSON.stringify(entry).includes(issue)), notes: passed.notes }
   }
-  throw new Error(`${issue} was not admitted again: ${JSON.stringify(last)}`)
+  const effects = await lab.world.db.sql`
+    SELECT e.key, e.done_at IS NOT NULL AS done, r.error_kind, r.detail
+    FROM factory.issue_effects e
+    LEFT JOIN LATERAL (
+      SELECT error_kind, detail FROM factory.issue_effect_runs WHERE effect_key = e.key ORDER BY id DESC LIMIT 1) r ON true
+    WHERE e.issue_id = ${issue} AND e.done_at IS NULL AND e.cancelled_at IS NULL`
+  throw new Error(`${issue} was not admitted again: ${JSON.stringify({ last, effects })}`)
 }
 
 test('a links finding starts a light lead; its second stall requeues it, and the next lead starts on the lead row', async () => {
@@ -103,7 +109,7 @@ test('a links finding starts a light lead; its second stall requeues it, and the
   }
   expect(after.ranOn).toEqual({ tier: 'sonnet', effort: 'high', role: 'lead' })
   expect(after.timeline.find((line) => line.kind === 'moved_up')?.text).toBe(
-    'Moved up from the light seat to the lead seat: the light lead stalled 2 times',
+    'Moved up from the light seat to the lead seat: The light lead stalled 2 times',
   )
   // a real sweep, two admissions and three ticks: past the 30 s default on a loaded runner
 }, 180_000)
