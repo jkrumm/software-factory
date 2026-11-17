@@ -9,8 +9,11 @@ export const FIRST_HOLD_MS = 3_600_000
 export const MAX_HOLD_MS = 7 * 86_400_000
 /** A disagreement more than this after the previous hold ended starts again at the first hold. */
 export const WINDOW_MS = 7 * 86_400_000
-/** The ledger is read this far back: a hold ends within `MAX_HOLD_MS`, a doubling chain reaches back a week more. */
-export const HOLD_LOOKBACK_MS = MAX_HOLD_MS + WINDOW_MS
+/**
+ * The ledger is read this far back: a chain that doubles to the cap spans nine disagreements, each up to a week after the
+ * last hold, so a shorter read would restart a long chain at its oldest visible event and shorten the hold.
+ */
+export const HOLD_LOOKBACK_MS = 90 * 86_400_000
 
 /** One ledger fact of a step: a disagreement on the mini, or a green run on the step host. */
 export interface HoldEvent {
@@ -40,8 +43,10 @@ export function holdOf(events: readonly HoldEvent[]): HoldState {
   for (const event of ordered) {
     if (event.kind === 'disagreed') {
       // measured from the end of the hold: a disagreement can only come after it, so the seven-day hold stays reachable
-      const chained = state.until !== null && event.at.getTime() - state.until.getTime() <= WINDOW_MS
-      const holdMs = chained && state.holdMs > 0 ? Math.min(MAX_HOLD_MS, state.holdMs * 2) : FIRST_HOLD_MS
+      // a hold halved away by green runs starts a new chain
+      const chained =
+        state.until !== null && state.holdMs > 0 && event.at.getTime() - state.until.getTime() <= WINDOW_MS
+      const holdMs = chained ? Math.min(MAX_HOLD_MS, state.holdMs * 2) : FIRST_HOLD_MS
       state = {
         holdMs,
         lastDisagreementAt: event.at,

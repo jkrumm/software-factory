@@ -195,7 +195,7 @@ export function composePlanning(input: {
         recordStepCost(
           writes,
           cost,
-          input.signals ? (body) => input.signals?.file?.(body) ?? Promise.resolve() : undefined,
+          input.signals ? (body) => input.signals?.file?.(body) ?? Promise.resolve({ ok: false }) : undefined,
         ),
       recordMergeWindow: (window) => recordMergeWindow(writes, window),
     },

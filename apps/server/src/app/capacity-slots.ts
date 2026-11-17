@@ -334,7 +334,7 @@ export async function touchSlot(
     const held =
       eligible && input.holding !== true
         ? activeHold(holdOf(await capacity.holdEvents(mine.key, new Date(now.getTime() - HOLD_LOOKBACK_MS))), now)
-      : null
+        : null
     const declared =
       held === null
         ? stated
@@ -625,7 +625,7 @@ export type DisagreementSignal = {
 }
 
 /** Files a signal; its fingerprint (repo and title) makes a repeat one Issue. Late-bound: intake is composed after planning. */
-export type SignalFiler = (body: DisagreementSignal) => Promise<unknown>
+export type SignalFiler = (body: DisagreementSignal) => Promise<{ ok: boolean }>
 
 /** What the signal for a test that disagreed again says: the test, its remote duration and the timeout its output named. */
 export function disagreementSignal(input: {
@@ -673,8 +673,14 @@ export async function recordStepCost(
   })
   if (!stored.ok) return stored
   if (file && owner)
-    for (const test of stored.value.again)
-      await file(disagreementSignal({ project: owner.name, step: stored.value.name, test })).catch(() => undefined)
+    for (const test of stored.value.again) {
+      const filed = await file(disagreementSignal({ project: owner.name, step: stored.value.name, test })).catch(
+        () => ({ ok: false }),
+      )
+      // it fires once per test (the second disagreement), so a refusal is said, not retried
+      if (!filed.ok)
+        console.error(`steps: the signal for the test "${test.name}" of ${stored.value.name} was not filed`)
+    }
   return ok(true as const)
 }
 

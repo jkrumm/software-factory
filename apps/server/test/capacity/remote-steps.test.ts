@@ -265,7 +265,10 @@ describe('a declared step runs off the mini when the mini makes it wait', () => 
 
   test('a test that disagrees a second time is filed once to its repo, with its remote duration and timeout', async () => {
     const filed: Parameters<SignalFiler>[0][] = []
-    const file: SignalFiler = async (body) => void filed.push(body)
+    const file: SignalFiler = async (body) => {
+      filed.push(body)
+      return { ok: true }
+    }
     const red = {
       name: 'p unit',
       cwd: WORKTREE,

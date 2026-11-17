@@ -84,6 +84,8 @@ describe('the graded hold after a disagreement', () => {
     const state = holdOf([bad(0), green(2 * H)])
     expect(state.holdMs).toBe(0)
     expect(lengthOf([bad(0), green(2 * H), bad(3 * H)])).toBe(FIRST_HOLD_MS)
+    // and it counts as the first of a new chain
+    expect(holdOf([bad(0), green(2 * H), bad(3 * H)]).disagreements).toBe(1)
   })
 
   test('the events may come in any order', () => {
