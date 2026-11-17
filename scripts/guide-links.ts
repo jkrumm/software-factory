@@ -66,7 +66,9 @@ export function parsePermalink(url: string): Permalink | 'unpinned' | null {
 /** Every finding of one page. `file` is relative to the repo root; `exists` answers for a path relative to it. */
 export function checkPage(file: string, text: string, git: Git, exists: (path: string) => boolean): Finding[] {
   const findings: Finding[] = []
-  const add = (line: number, message: string) => findings.push({ file, line, message })
+  const add = (line: number, message: string): void => {
+    findings.push({ file, line, message })
+  }
   const lines = text.split('\n')
 
   if (lines[0]?.trim() === '---') add(1, 'frontmatter: GitHub shows it as a table; the title is the # H1')
