@@ -771,7 +771,7 @@ model, not a signal: an agent-trust signal files an Issue, and no loops page exi
   the dotfiles repo), which today reads the four names: it should push down while `routeP95Ms` is over 2000 with `routeSamples` of 20 or more (below 20 the nearest-rank p95 is the one slowest answer, which a cold request after a deploy is), the
   same line `routes_slow` draws inside the server. That change is the pusher's repo's (a signal was filed there); until it lands the figure is read by hand
   and by the self-watch, which runs in the process that starves.
-- The hook socket is a plain `Bun.serve` unix listener beside the API: its contract (mode 0600, empty stdout) is the
+- The hook socket is a plain `Bun.serve` unix listener beside the API: its contract (mode 0600, stdout empty bar the compaction line) is the
   hook's, not the API's.
 
 ## Perimeter

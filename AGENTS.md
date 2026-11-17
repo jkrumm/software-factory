@@ -68,7 +68,8 @@ and where) → `docs/decisions.md` (what was decided and why).
 - **Hooks: spool first, then post.** `factory hook <event>` does nothing without `FACTORY_SESSION`, appends to the spool,
   posts to the unix socket and exits 0 whatever happens (the one exception: the Stop send-back, exit 2).
   `apps/cli/src/hook.ts` imports only `node:fs` and `@software-factory/contract/spool` and keeps **stdout empty for every
-  event**, because Claude Code injects a hook's stdout into the session.
+  event** bar one (`compactedLead`: a lead's post-compaction `session-start` prints one re-read line), because Claude Code
+  injects a hook's stdout into the session.
 - **One process.** A session-level Postgres advisory lock is taken first; a second copy waits 45 s, then exits 1. Every
   advisory key lives in `adapters/postgres/locks.ts` and they stay distinct.
 - **One contract.** Request, response and event shapes are zod schemas in `packages/contract`; the server builds every body
@@ -99,7 +100,7 @@ and where) → `docs/decisions.md` (what was decided and why).
 `make check-fast` is the lead's check (everything of `make check` that is not a test run, then the unit tests of the files
 the branch changed; outside CI it first applies `oxfmt --write`, so commit what it reformats). CI runs the full gate
 sharded; `make check` stays the whole gate locally for a change to the test layout, the Makefile or CI itself, and takes
-minutes in a test slot (`factory slot run` wraps it; "queued for a test slot" on stderr is a wait, not a hang). Reproduce
+minutes in a test slot (`factory slot run` wraps it; "queued for a test slot" is a wait, not a hang). Reproduce
 one CI failure by running that suite alone inside a slot. The tests start a private Postgres with `initdb` (`PATH` or `PG_BIN_DIR`). The jobs, shards and slot rules: `docs/operations.md` "Check tiers".
 
 Changes land through a pull request (`project.yaml` `ship:`), conventional commits, no AI attribution. Before merging, a
@@ -121,5 +122,4 @@ red master. `make deploy`, `make rollback` and `make verify` act on the mini onl
 - The client pieces (Herdr glance mod, Claude Code hook entries, `rd`'s contract, the Hermes `fleet` skill):
   `integrations/`, an index and a README each. Other repos install them; the copies here are the source.
 
-Update this file in the same commit as the code it describes, and keep it to what lookup cannot reveal: a detail that is
-in the code or in `docs/` is deleted here.
+Update this file with the code it describes; a detail that is in the code or in `docs/` is deleted here.
