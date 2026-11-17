@@ -8,6 +8,7 @@ import type {
   Kpi,
   KpiKey,
   LoopYieldWindow,
+  SeatDelivery,
   SeatKpiRow,
   SeatKpis,
 } from '@software-factory/contract'
@@ -747,16 +748,63 @@ export function seatCells(row: SeatKpiRow) {
   }
 }
 
-/** The tripwire line under the seat table: whether triage's small is on, the two first-pass rates, and the verdict. */
+/** The tripwire line under the seat table: whether triage's small starts light now, the inputs, and why not. */
 export function tripwireWords(tripwire: SeatKpis['tripwire']): string {
-  const { on, points, days, light, lead, lightWatches, leadWatches, met } = tripwire
+  const { points, days, minWatches, light, lead, bound, met, failing } = tripwire
+  const state =
+    met === true
+      ? "Triage's small starts on the light seat"
+      : met === false
+        ? "Triage's small stays on the lead row"
+        : "Triage's small stays on the lead row until it is measured"
   const rates =
-    light === null || lead === null
-      ? `Last ${days} days: light has ${lightWatches} first watches and lead ${leadWatches}`
-      : `Last ${days} days: light passed ${rateWords(light)} of ${lightWatches} first watches, lead ${rateWords(lead)} of ${leadWatches}`
-  const verdict =
-    met === null ? 'not measured yet' : met ? `within ${points} points: met` : `not within ${points} points: not met`
-  return `Triage's small is ${on ? 'on' : 'off'}. ${rates}; ${verdict}.`
+    light.finishedPassRate === null || lead.finishedPassRate === null
+      ? `light has ${light.finishedWatches} finished first watches (${minWatches} needed), lead ${lead.finishedWatches}`
+      : `light passed ${rateWords(light.finishedPassRate)} of ${light.finishedWatches} finished first watches, lead ${rateWords(lead.finishedPassRate)} of ${lead.finishedWatches}`
+  const moves =
+    bound === null || light.movedUpShare === null
+      ? 'move-up bound not measured'
+      : `${rateWords(light.movedUpShare)} moved up, bound ${rateWords(bound.share)}`
+  const why = failing.length === 0 ? '' : ` Not met: ${failing.join('; ')}.`
+  return `${state}. Last ${days} days: ${rates}; regressions per Issue ${perIssueWords(light.regressionsPerIssue)} against ${perIssueWords(lead.regressionsPerIssue)}; ${moves}; within ${points} points, regressions not higher, moves under the bound.${why}`
+}
+
+const perIssueWords = (value: number | null): string => (value === null ? '–' : value.toFixed(3))
+
+/** The four delivery figures as rows of the light and lead cells, each with its one-line definition. */
+export function deliveryRows(delivery: SeatKpis['delivery']) {
+  const { light, lead, definitions } = delivery
+  const usd = (value: number | null) => (value === null ? '–' : formatValue('usd', value))
+  const passWords = (d: SeatDelivery) =>
+    d.finishedPassRate === null ? '–' : `${rateWords(d.finishedPassRate)} of ${d.finishedWatches}`
+  const movedWords =
+    light.movedUpShare === null
+      ? '–'
+      : `${rateWords(light.movedUpShare)} (${light.movedUp} of ${light.issues}), ${usd(light.movedUpCost)} and ${msWords(light.movedUpMs)} each before it moved`
+  return [
+    {
+      key: 'finishedPass',
+      label: 'First pass of what finished',
+      light: passWords(light),
+      lead: passWords(lead),
+      definition: definitions.finishedPass,
+    },
+    { key: 'movedUp', label: 'Moved up', light: movedWords, lead: '–', definition: definitions.movedUp },
+    {
+      key: 'regressions',
+      label: 'Regressions per Issue',
+      light: `${perIssueWords(light.regressionsPerIssue)} (${light.regressions})`,
+      lead: `${perIssueWords(lead.regressionsPerIssue)} (${lead.regressions})`,
+      definition: definitions.regressions,
+    },
+    {
+      key: 'cost',
+      label: 'Cost per Issue',
+      light: usd(light.costPerIssue),
+      lead: usd(lead.costPerIssue),
+      definition: definitions.cost,
+    },
+  ]
 }
 
 /** An attempt-seat row's cells as text: the seat, its attempts and Issues, the first pass, and the cost per Issue. */

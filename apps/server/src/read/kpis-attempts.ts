@@ -23,7 +23,7 @@ const Claude = z.object({ issue_id: z.string(), attempt: z.coerce.number().int()
 const Session = z.object({ id: z.union([z.string(), z.number(), z.bigint()]), claude: z.string() })
 const Spend = z.object({ id: z.coerce.string(), cost: z.coerce.number() })
 
-const keyOf = (issue: string, attempt: number): string => `${issue}#${attempt}`
+export const keyOf = (issue: string, attempt: number): string => `${issue}#${attempt}`
 
 /** The attempts that started in the window with a stored seat, each with what its ship's first watch answered. */
 async function attemptsOf(sql: SQL, w: Window): Promise<Attempt[]> {
@@ -43,9 +43,9 @@ async function attemptsOf(sql: SQL, w: Window): Promise<Attempt[]> {
  * ever reported belongs to no attempt and is not counted here. Null (never zero) when the schema cannot be read, the role
  * may not read it or a statement ran past the timeout.
  */
-async function costOfAttempts(
+export async function costOfAttempts(
   sql: SQL,
-  attempts: readonly Attempt[],
+  attempts: readonly { issue_id: string; attempt: number }[],
   timeoutMs: number,
 ): Promise<Map<string, number> | null> {
   if (attempts.length === 0) return new Map()

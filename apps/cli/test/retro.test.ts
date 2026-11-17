@@ -6,6 +6,20 @@ import type { RetroModel } from '@software-factory/contract'
 import { bundleOf, sampledIssues } from '../src/retro.ts'
 import { run } from '../src/run.ts'
 
+const noDelivery = {
+  issues: 0,
+  finishedWatches: 0,
+  finishedPassRate: null,
+  movedUp: 0,
+  movedUpShare: null,
+  movedUpCost: null,
+  movedUpMs: null,
+  regressions: 0,
+  regressionsPerIssue: null,
+  cost: null,
+  costPerIssue: null,
+}
+
 let dir: string
 let model: RetroModel
 
@@ -43,15 +57,20 @@ beforeAll(() => {
         rows: [],
         attemptSeats: [],
         movedUpShare: null,
+        delivery: {
+          light: noDelivery,
+          lead: noDelivery,
+          definitions: { finishedPass: '', movedUp: '', regressions: '', cost: '' },
+        },
         tripwire: {
-          on: false,
           points: 3,
-          days: 7,
-          light: null,
-          lead: null,
-          lightWatches: 0,
-          leadWatches: 0,
+          days: 3,
+          minWatches: 10,
+          light: noDelivery,
+          lead: noDelivery,
+          bound: null,
           met: null,
+          failing: [],
         },
       },
       edges: { total: 0, open: 0, needed: 0, notNeeded: 0, neededShare: null, idleHours: 0 },

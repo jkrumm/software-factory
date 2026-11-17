@@ -408,8 +408,8 @@ export const SeatKpiRow = z
     /** the light Issues moved up to the lead row; 0 on the other seats */
     movedUp: z.number().int(),
     /**
-     * first watches that ended passed or regressed, and the share that passed (null with none); on light, a moved-up Issue
-     * whose first watch the light lead did not ship counts as a failed one
+     * first watches that ended passed or regressed, and the share that passed (null with none); on light, only the first
+     * watches of ships by the light lead: a move-up shipped nothing on the seat and is its own figure (`SeatDelivery`)
      */
     firstWatches: z.number().int(),
     firstPassRate: z.number().nullable(),
@@ -451,6 +451,61 @@ export const AttemptSeatRow = z
   .meta({ id: 'AttemptSeatRow' })
 export type AttemptSeatRow = z.infer<typeof AttemptSeatRow>
 
+/**
+ * What one seat delivers, over a window, in the four figures the owner pays for (`definitions` says each in a line). `light`
+ * follows the Issues the light rule seated, `lead` the Issues that started on the lead row; the fields that only a move-up
+ * has are 0 or null on the lead row.
+ */
+export const SeatDelivery = z
+  .strictObject({
+    issues: z.number().int(),
+    /** (a) first watches of ships by attempts that finished on the seat, ended passed or regressed */
+    finishedWatches: z.number().int(),
+    /** (a) the share of them that passed; null with none */
+    finishedPassRate: z.number().nullable(),
+    /** (b) the Issues moved up to the lead row, and their share of `issues` (null with none) */
+    movedUp: z.number().int(),
+    movedUpShare: z.number().nullable(),
+    /** (b) dollars the light attempts of moved-up Issues cost, and the mean ms they ran before moving up; null while unmeasured */
+    movedUpCost: z.number().nullable(),
+    movedUpMs: z.number().nullable(),
+    /** (c) watches that ended regressed, and per Issue (null with none) */
+    regressions: z.number().int(),
+    regressionsPerIssue: z.number().nullable(),
+    /** (d) dollars of every session of the seat's Issues, moved-up attempts included, and per Issue; null while unmeasured */
+    cost: z.number().nullable(),
+    costPerIssue: z.number().nullable(),
+  })
+  .meta({ id: 'SeatDelivery' })
+export type SeatDelivery = z.infer<typeof SeatDelivery>
+
+/**
+ * The share of moved-up Issues at which starting light costs as much as starting on the lead row. A light route costs
+ * `lightAttempt + share * followUpAttempt` per Issue (every Issue runs a light attempt, the moved-up share then runs a
+ * lead attempt), the lead route `leadAttempt`; they meet at `share = (leadAttempt - lightAttempt) / followUpAttempt`.
+ */
+export const MoveUpBound = z
+  .strictObject({
+    /** dollars per attempt: light attempts, lead-row attempts of Issues that started there, lead attempts that followed a move-up (the lead row's when fewer than three) */
+    lightAttempt: z.number(),
+    leadAttempt: z.number(),
+    followUpAttempt: z.number(),
+    share: z.number(),
+  })
+  .meta({ id: 'MoveUpBound' })
+export type MoveUpBound = z.infer<typeof MoveUpBound>
+
+/** The one-line definitions of the four figures, as the Improve screen and `factory read kpis` carry them. */
+export const SEAT_DELIVERY_DEFINITIONS = {
+  finishedPass:
+    'First pass of what finished: the share of first verifications that passed, over the attempts that shipped on the seat; an attempt that moved up shipped nothing and is not in it',
+  movedUp:
+    'Move-up share: the share of the seat’s Issues a light lead handed to the lead row, with the dollars and minutes the light attempt spent before it moved',
+  regressions:
+    'Regressions per Issue: watches that ended regressed, over the Issues whose first lead started on the seat',
+  cost: 'Cost per Issue: dollars of every session of those Issues, the light attempts of moved-up ones included',
+} as const
+
 export const SeatKpis = z
   .strictObject({
     rows: z.array(SeatKpiRow),
@@ -458,19 +513,32 @@ export const SeatKpis = z
     attemptSeats: z.array(AttemptSeatRow),
     /** the light Issues moved up, of the light Issues; null with none light */
     movedUpShare: z.number().nullable(),
+    /** the window's four figures for the light seat beside the lead row's, each defined in one line */
+    delivery: z.strictObject({
+      light: SeatDelivery,
+      lead: SeatDelivery,
+      definitions: z.strictObject({
+        finishedPass: z.string(),
+        movedUp: z.string(),
+        regressions: z.string(),
+        cost: z.string(),
+      }),
+    }),
     /**
-     * Whether triage's `small` joins the light rule: `on` is the code's switch, the rates are over the last `days` days,
-     * `met` when light's first verification pass rate is within `points` of lead's (null while either has no first watch).
+     * Whether triage's `small` starts on the light seat now: the same four figures over the last `days` days, whatever
+     * window the page shows. `met` when light's finished pass rate is within `points` of lead's, its regressions per Issue
+     * are not higher and its move-up share is under `bound` (null while any figure is unmeasured, or light has fewer than
+     * `minWatches` finished first watches); `failing` names each condition that is not met or not measured.
      */
     tripwire: z.strictObject({
-      on: z.boolean(),
       points: z.number(),
       days: z.number().int(),
-      light: z.number().nullable(),
-      lead: z.number().nullable(),
-      lightWatches: z.number().int(),
-      leadWatches: z.number().int(),
+      minWatches: z.number().int(),
+      light: SeatDelivery,
+      lead: SeatDelivery,
+      bound: MoveUpBound.nullable(),
       met: z.boolean().nullable(),
+      failing: z.array(z.string()),
     }),
   })
   .meta({ id: 'SeatKpis' })

@@ -1,4 +1,4 @@
-import { hygieneClass, LIGHT_CLASSES, LIGHT_FROM_TRIAGE_SMALL } from '@software-factory/contract'
+import { hygieneClass, LIGHT_CLASSES } from '@software-factory/contract'
 
 export { hygieneClass, LIGHT_CLASSES }
 // The light seat: mechanical, well-specified work with a check that proves it starts on the cheap seat (the role table's
@@ -24,9 +24,23 @@ export interface LightFacts {
   unroutedMonitor: boolean
   /** a light lead was moved up on it before: never light again */
   movedUp: number
-  /** the switch above, passed in so a test can turn it */
-  triageSmall?: boolean
+  /** the Issue's title and the text it was filed with, for the words that keep a `small` off the light seat */
+  text: string
+  /** the tripwire is met (`judgeLightGate` in the contract package): triage's `small` may start light; false while it is not met or not measured */
+  triageSmall: boolean
 }
+
+/**
+ * Work whose words say it touches a migration, security or a public surface stays on the lead row even when triage called
+ * it `small` and raised no design checkpoint: triage's checkpoint names a new surface, a data model, a dependency or an
+ * unseen screen, and these words are the same classes read from the filing, a deterministic net a lead's text cannot talk
+ * its way past. A false hit costs a cheap seat, a miss costs a regression.
+ */
+const OUT_OF_SCOPE =
+  /\b(?:migrat\w*|secur\w*|auth(?:n|z|entication|orization|orisation)?|permissions?|credentials?|secrets?|passwords?|vulnerab\w*|cve-\d+|policy\.ts|breaking change|public (?:api|surface)|new (?:route|endpoint|verb|command|api|screen))\b|\.sql\b/i
+
+/** Whether the filing's words keep the Issue off the light seat. */
+export const outOfScope = (text: string): boolean => OUT_OF_SCOPE.test(text)
 
 /** Why the Issue starts light (the rule's name, shown on the Issue), or null when it starts on the lead row. */
 export function lightRule(facts: LightFacts): string | null {
@@ -37,7 +51,9 @@ export function lightRule(facts: LightFacts): string | null {
   }
   if (facts.kind === 'docs') return 'kind:docs'
   if (facts.unroutedMonitor) return 'alert:route'
-  if ((facts.triageSmall ?? LIGHT_FROM_TRIAGE_SMALL) && facts.size === 'small' && !facts.spec) return 'triage:small'
+  if (facts.triageSmall && facts.size === 'small' && !facts.spec && !outOfScope(facts.text)) {
+    return 'triage:small'
+  }
   return null
 }
 

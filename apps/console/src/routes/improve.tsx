@@ -79,6 +79,7 @@ import {
   partRows,
   targetTally,
   tripwireWords,
+  deliveryRows,
   leadsWords,
   stampWords,
   WINDOW_DAYS,
@@ -1046,7 +1047,7 @@ function EdgeSection({ model }: { model: KpiModel }) {
 }
 
 function SeatSection({ model }: { model: KpiModel }) {
-  const { rows, attemptSeats, tripwire } = model.seats
+  const { rows, attemptSeats, tripwire, delivery } = model.seats
   return (
     <div data-shot="improve-seats">
       <Section title="By seat" aside="Issues by the seat their first lead ran on">
@@ -1089,6 +1090,42 @@ function SeatSection({ model }: { model: KpiModel }) {
         </div>
         <p className="mt-2 text-sm text-muted-foreground">{tripwireWords(tripwire)}</p>
       </Section>
+      <div data-shot="improve-light-delivery" className="mt-6">
+        <Section title="What the light seat delivers" aside="Four figures beside the lead row's, over the window">
+          <div className={cn(PANEL, 'overflow-x-auto')} style={PANEL_SHADOW}>
+            <table className="w-full text-sm">
+              <caption className="sr-only">The light seat's delivery against the lead row's, over the window</caption>
+              <thead className="text-left text-xs text-muted-foreground">
+                <tr>
+                  <th scope="col" className="px-4 py-2 font-medium">
+                    Figure
+                  </th>
+                  <th scope="col" className="px-4 py-2 text-right font-medium">
+                    Light
+                  </th>
+                  <th scope="col" className="px-4 py-2 text-right font-medium">
+                    Lead
+                  </th>
+                </tr>
+              </thead>
+              <tbody>
+                {deliveryRows(delivery).map((row) => (
+                  <tr key={row.key} className="border-t align-top">
+                    <th scope="row" className="px-4 py-2 text-left font-medium">
+                      {row.label}
+                      <span className="mt-0.5 block max-w-prose text-xs font-normal text-muted-foreground">
+                        {row.definition}
+                      </span>
+                    </th>
+                    <td className="px-4 py-2 text-right tabular-nums">{row.light}</td>
+                    <td className="px-4 py-2 text-right tabular-nums">{row.lead}</td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        </Section>
+      </div>
       <div data-shot="improve-attempt-seats" className="mt-6">
         <Section title="By attempt seat" aside="Every attempt by the tier and effort it started on">
           <div className={cn(PANEL, 'overflow-x-auto')} style={PANEL_SHADOW}>

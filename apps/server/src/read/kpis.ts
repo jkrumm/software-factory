@@ -750,6 +750,7 @@ export async function readKpis(
       ...(await readSeatKpis(sql, last, {
         now: options.now,
         cost: (issues) => costOfIssues(sql, issues, options.usageTimeoutMs),
+        ...(options.usageTimeoutMs === undefined ? {} : { usageTimeoutMs: options.usageTimeoutMs }),
       })),
       attemptSeats: await readAttemptSeats(sql, last, { timeoutMs: options.usageTimeoutMs }),
     },
