@@ -66,7 +66,11 @@ export const THRESHOLDS: Record<Judged, Rule> = {
     rate: 0.25,
     why: 'ships whose pull request CI was red or missing on one in four closed Issues is a lead that lands before CI says so, or a repo with no CI',
   },
-  regression: { min: 1, rate: null, why: 'a shipped change that regressed always needs a look' },
+  regression: {
+    min: 3,
+    rate: 0.05,
+    why: 'a watch catching a bad change is the factory working; one closed Issue in twenty ending in a regression means the changes or the watch are wrong',
+  },
   avoidable_touch: {
     min: 3,
     rate: 0.15,
