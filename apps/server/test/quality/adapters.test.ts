@@ -485,7 +485,7 @@ test('agw review: the ledger reads of a ship’s threads share a short limit of 
     limits.push(timeoutMs)
     return { exitCode: 1, stdout: '' }
   }
-  await new AgwReview({ bin: 'agw', run }).threads({ repo: '/r', jobs: ['rv_1', 'rv_2'] })
+  await new AgwReview({ bin: 'agw', run, now: () => 0 }).threads({ repo: '/r', jobs: ['rv_1', 'rv_2'] })
   expect(limits).toEqual([20_000, 20_000])
 })
 
