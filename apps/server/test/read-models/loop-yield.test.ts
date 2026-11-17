@@ -202,12 +202,22 @@ test('the retro’s outcomes count each signal once; Issues closed since a pass 
   await signal('signal_r2', await issue(30, 5, 'done'), mark)
   await signal('signal_r3', await issue(30, 5, 'dropped'), mark)
   await signal('signal_r4', await issue(30, null), mark)
+  // shipped and still being watched: one signal, counted as shipped only
+  const watched = await issue(30, null)
+  await db.sql`INSERT INTO factory.issue_events (id, issue_id, key, kind, payload, actor, at, result, version, to_state)
+    VALUES ('ev_ship2', ${watched}, 'k_ship2', 'shipped', '{}'::jsonb, 'factory', ${ago(26)}, 'applied', 3, 'watching')`
+  await signal('signal_r6', watched, mark)
+  // a throughput improvement ends in the same marker and is not a retro signal
+  const improvement = await issue(30, null)
+  await signal('signal_t1', improvement, mark)
+  await db.sql`INSERT INTO factory.throughput_findings (id, project, kpi, subject, before, target, direction, unit, cost_minutes, query, signal_id, issue_id, filed_at, status)
+    VALUES ('tf2', 'app', 'queued_minutes', '*', 10, 5, 'down', 'min', 60, 'q', 'signal_t1', ${improvement}, ${ago(30)}, 'open')`
   await db.sql`INSERT INTO factory.intake_signals (id, source, kind, origin, trust, repo, fingerprint, title, text, received_at, state)
     VALUES ('signal_r5', 'agent:app', 'request', 'factory', 'agent', 'app', 'fp-r5', 'T', ${mark}, ${ago(2)}, 'held')`
   expect(await readRetroOutcomes(db.sql, { now: NOW, days: 7 })).toEqual({
     days: 7,
-    signals: 5,
-    shipped: 1,
+    signals: 6,
+    shipped: 2,
     done: 1,
     dropped: 1,
     open: 1,

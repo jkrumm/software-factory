@@ -424,7 +424,7 @@ through `receive` in `app/intake.ts`; the answer is a triage outcome (`docs/lang
 A Decision is a form with every field required (recommendation, what was checked, cost per option, what happens with no
 answer). It is settled in order: standing policy (`FACTORY_CHECKPOINT_POLICY_FILE`), the Judge (`factory-ask`),
 which reads the plan, the docs and the precedents of the ledger), the default after its wait when the option is reversible, then
-the owner. A step is a claimed call with a 35-minute lease past the Judge's 30-minute hang guard. A form with a missing
+the owner. A step is a claimed call with a 35-minute lease: a takeover point, not a limit on the call, since a retaken call carries the same idempotency key and agw joins the run it started. A form with a missing
 field is refused (422 `missing_field`, the fields named, nothing stored). The Judge sees every Decision before the owner
 does: a failed Judge call is tried again after a 5-minute backoff, three tries in all (`decision_steps.tries`), and while
 tries are left the Decision is not the owner's (no owner step, no page, not in Needs). After the third failure it reaches

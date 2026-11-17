@@ -315,7 +315,7 @@ export async function readRetro(
     capacity,
     build,
     throughput: await throughputOf(sql, { now, days, epoch: options.epoch ?? null, queue: options.queue ?? null }),
-    waste: await readWaste(sql, w),
+    waste: await readWaste(sql, options.epoch && options.epoch > w.from ? { from: options.epoch, to: w.to } : w),
   }
   if (!options.redact) return model
   const bare = (list: RetroSample[]): RetroSample[] => list.map((s) => ({ ...s, why: '' }))

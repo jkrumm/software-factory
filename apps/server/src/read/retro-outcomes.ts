@@ -23,7 +23,8 @@ const Row = z.object({
 
 /**
  * What the retro signals of the last `days` days (those ending in a `Retro:` marker, as the ledger finds them) led to: the
- * Issue each opened, shipped or closed, and the signals that reached none. Each signal is counted once, in the first of
+ * Issue each opened, shipped or closed, and the signals that reached none (the throughput loop's improvements end in the same
+ * marker and are left out: they have a row in its own ledger). Each signal is counted once, in the first of
  * shipped, done, dropped, open that fits.
  */
 export async function readRetroOutcomes(sql: SQL, options: { now: Date; days: number }): Promise<RetroOutcomes> {
@@ -33,12 +34,13 @@ export async function readRetroOutcomes(sql: SQL, options: { now: Date; days: nu
       count(*) FILTER (WHERE shipped) AS shipped,
       count(*) FILTER (WHERE NOT shipped AND state = 'closed' AND outcome IN ('done', 'healed')) AS done,
       count(*) FILTER (WHERE NOT shipped AND state = 'closed' AND outcome IN ('dropped', 'cancelled')) AS dropped,
-      count(*) FILTER (WHERE state IS NOT NULL AND state <> 'closed') AS open
+      count(*) FILTER (WHERE NOT shipped AND state IS NOT NULL AND state <> 'closed') AS open
     FROM (
       SELECT i.state, i.outcome, EXISTS (
         SELECT 1 FROM factory.issue_events e WHERE e.issue_id = s.issue_id AND e.kind = 'shipped' AND e.result = 'applied') AS shipped
       FROM factory.intake_signals s LEFT JOIN factory.issues i ON i.id = s.issue_id
-      WHERE s.text ~ 'Retro: [0-9]{4}-[0-9]{2}-[0-9]{2} kpi=[a-z0-9_]+ before=' AND s.received_at >= ${w.from} AND s.received_at < ${w.to}
+      WHERE NOT EXISTS (SELECT 1 FROM factory.throughput_findings t WHERE t.signal_id = s.id)
+        AND s.text ~ 'Retro: [0-9]{4}-[0-9]{2}-[0-9]{2} kpi=[a-z0-9_]+ before=' AND s.received_at >= ${w.from} AND s.received_at < ${w.to}
     ) r`
   return { days: options.days, ...Row.parse(row) }
 }
