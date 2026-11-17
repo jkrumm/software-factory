@@ -12,6 +12,7 @@ import type {
 } from '@software-factory/contract'
 import { workOf } from '@software-factory/contract'
 import { basename } from 'node:path'
+import { OWNER_WAITS } from '../kernel/edge-need.ts'
 import type { SQL } from 'bun'
 import { DESK_EVERY_MS } from '../kernel/run.ts'
 import { loadArtifacts, loadNotes, loadShipping, loadTriage } from './issue-history.ts'
@@ -142,8 +143,6 @@ async function loadExtras(sql: SQL, ids: readonly string[]): Promise<Extras> {
   for (const row of holders) heldBy.set(row.id, issueNumberOf(row.holder))
   return { goals, closings, asking, heldBy }
 }
-
-const OWNER_WAITS = new Set(['decision', 'review', 'errand'])
 
 function cardOf(input: {
   row: IssueRow

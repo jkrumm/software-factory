@@ -1,4 +1,5 @@
 import { conclusionVerdict } from '../../kernel/checks.ts'
+import { EVIDENCE_SAMPLE_CAP } from '../../kernel/edge-need.ts'
 import { globMatches } from '../../kernel/glob.ts'
 
 /** `base..head`, as agw's review commands take a range. */
@@ -125,7 +126,7 @@ export interface CheckRecord {
   inherited?: boolean
 }
 
-export const MAX_RECORDED = 100
+export const MAX_RECORDED = EVIDENCE_SAMPLE_CAP
 
 const TEXT_FILE = /\.(md|mdx|txt)$/
 const TEST_DIR = /(^|\/)(test|tests|__tests__)\//

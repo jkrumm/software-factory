@@ -20,6 +20,7 @@ const row = (n: number, over: Partial<QueueIssue> = {}): QueueIssue => ({
   kind: 'feature',
   state: 'queued',
   prio: 0,
+  size: null,
   filedAt: new Date('2026-11-08T10:00:00Z'),
   summary: '',
   blockers: [],

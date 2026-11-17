@@ -169,6 +169,8 @@ export interface Snapshot {
   issues: (OpenIssueRow & { project: string | null })[]
   edges: Edge[]
   prio: Map<IssueId, number>
+  /** the place of each Issue in the queue model's newest order: the tie-break of the queue order */
+  queueOrder: Map<IssueId, number>
   claims: Claim[]
   readings: AccountReading[]
   /** the picker's order of accounts; null: none stored */
@@ -335,6 +337,7 @@ export async function snapshotOf(stores: PlanningStores, now: Date): Promise<Sna
     issues: rows.map((row) => ({ ...row, project: projectOf(projects, row.repo)?.name ?? null })),
     edges: await stores.planning.edges(),
     prio: await stores.planning.prios(),
+    queueOrder: await stores.planning.queueOrder(),
     claims,
     readings: await stores.capacity.latestReadings(),
     rank: await stores.capacity.latestRank(RANK_LANE),
@@ -510,8 +513,10 @@ function decide(snap: Snapshot, host: HostInputs, limits: CapacityLimits, bonus:
     waitReason: i.waitReason,
     finalizing: i.finalizing,
     specPending: i.specPending,
+    size: i.size,
+    since: i.since,
   }))
-  const ordered = orderQueue({ open, edges: snap.edges, prio: snap.prio })
+  const ordered = orderQueue({ open, edges: snap.edges, prio: snap.prio, now: snap.now, modelOrder: snap.queueOrder })
   const claims = [...snap.claims]
   const taken = new Set(claims.map((s) => s.issue))
   const loaded = loadedAccounts(snap)

@@ -14,7 +14,7 @@ import { callsOf, loops, runLoop, script } from './support.ts'
 let lab: Lab
 let dir: string
 let queueScript: string
-const REPOS = ['q1', 'q2', 'q3', 'q4', 'q5', 'q6', 'q7', 'q8', 'q9']
+const REPOS = ['q1', 'q2', 'q3', 'q4', 'q5', 'q6', 'q7', 'q8', 'q9', 'q10', 'q11', 'q12', 'q13', 'q14', 'q15']
 
 beforeAll(async () => {
   dir = await mkdtemp('/tmp/factory-queue-')
@@ -248,4 +248,164 @@ test('a cycle already in the data: no ask, and the problem names the path', asyn
   expect(ran.summary).toContain('the chain has a cycle')
   expect(ran.summary).toMatch(/issue_\d+ -> issue_\d+ -> issue_\d+/)
   expect((await asksFor(repo)).length).toBe(before)
+})
+
+// ---- the sweep and the edge measure ---------------------------------------------------------------------------------------
+
+/** What an accepted ship leaves as evidence: the paths its commits touched. */
+const shipped = async (issue: string, paths: string[]): Promise<void> => {
+  const payload = JSON.stringify({ commits: [], landedAt: null, mergedAt: null, deploys: true, paths })
+  await sql()`
+    INSERT INTO factory.quality_evidence (id, issue_id, attempt, source_key, kind, at, payload)
+    VALUES (${`evidence-${issue}`}, ${issue}, 1, ${`ship-${issue}`}, 'commits', now(), ${payload}::text::jsonb)`
+}
+
+/** An edge the factory added, as the queue loop or triage leaves it. */
+const inferred = (issue: string, after: string, by = 'queue: the same files') =>
+  sql()`INSERT INTO factory.planning_edges (issue_id, after_issue, created_at, inferred_by) VALUES (${issue}, ${after}, now(), ${by})`
+
+const removalsOf = (repo: string) =>
+  sql()`SELECT r.issue_id, r.after_issue, r.kind, r.reason, r.inferred_by FROM factory.queue_edge_removals r
+    JOIN factory.issues i ON i.id = r.issue_id WHERE i.repo = ${repo}` as Promise<
+    { issue_id: string; after_issue: string; kind: string; reason: string; inferred_by: string }[]
+  >
+
+const notesOf = async (issue: string): Promise<string[]> =>
+  (
+    await sql()`SELECT payload->>'text' AS text FROM factory.issue_events WHERE issue_id = ${issue} AND kind = 'noted' ORDER BY version`
+  ).map((r: { text: string }) => r.text)
+
+test('a factory-added edge between Issues with disjoint files is taken back with its reason, and both Issues are candidates', async () => {
+  const a = await queued('q10', 'Rework the pricing table')
+  const b = await queued('q10', 'Add the changelog page')
+  await inferred(b, a)
+  await shipped(a, ['apps/web/pricing.ts', 'docs/plan.yaml'])
+  await shipped(b, ['apps/web/changelog.ts', 'docs/plan.yaml'])
+  await answers('q10', [], [b, a])
+
+  const ran = await runLoop(lab, 'queue')
+  expect(ran.error).toBeNull()
+  expect(ran.summary).toContain('took back 1')
+  expect(await edgesOf('q10')).toEqual([])
+  const [removal] = await removalsOf('q10')
+  expect(removal).toMatchObject({ issue_id: b, after_issue: a, kind: 'disjoint', inferred_by: 'queue: the same files' })
+  expect(removal?.reason).toContain('disjoint')
+  expect((await notesOf(b)).some((text) => text.includes('took back the edge') && text.includes('disjoint'))).toBe(true)
+
+  const chain = ChainModel.parse((await must(lab, ['read', 'chain'])).json)
+  expect(chain.blocking[b] ?? []).toEqual([])
+  expect((await asksFor('q10')).length).toBe(1)
+})
+
+test('an edge whose Issues share a file is kept', async () => {
+  const a = await queued('q11', 'Change the checkout')
+  const b = await queued('q11', 'Also change the checkout')
+  await inferred(b, a)
+  await shipped(a, ['apps/web/checkout.ts'])
+  await shipped(b, ['apps/web/checkout.ts', 'apps/web/coupon.ts'])
+  await answers('q11', [], [])
+
+  await runLoop(lab, 'queue')
+  expect(await edgesOf('q11')).toEqual([`${b}>${a}`])
+  expect(await removalsOf('q11')).toEqual([])
+})
+
+test('evidence cut at the sample cap says nothing of the files: the edge stays', async () => {
+  const a = await queued('q15', 'Large change one')
+  const b = await queued('q15', 'Large change two')
+  await inferred(b, a)
+  await shipped(
+    a,
+    Array.from({ length: 100 }, (_, n) => `one/${n}.ts`),
+  )
+  await shipped(b, ['two/only.ts'])
+  await answers('q15', [], [])
+
+  await runLoop(lab, 'queue')
+  expect(await edgesOf('q15')).toEqual([`${b}>${a}`])
+  expect(await removalsOf('q15')).toEqual([])
+})
+
+test('an edge the owner or a filer stated is never taken back, whatever the files say', async () => {
+  const a = await queued('q12', 'The stated blocker')
+  const b = await queued('q12', 'Waits because it was told to', [a])
+  await shipped(a, ['apps/web/a.ts'])
+  await shipped(b, ['apps/web/b.ts'])
+  await sql()`UPDATE factory.issues SET state = 'waiting', wait_reason = 'decision' WHERE id = ${a}`
+  await sql()`UPDATE factory.issue_events SET at = at - interval '48 hours' WHERE issue_id = ${a}`
+  await answers('q12', [], [])
+
+  const ran = await runLoop(lab, 'queue')
+  expect(ran.summary).toContain('took back 0')
+  expect(await edgesOf('q12')).toEqual([`${b}>${a}`])
+  expect(await removalsOf('q12')).toEqual([])
+})
+
+test('an edge behind a blocker that has waited on the owner for hours is taken back; one that waited briefly is kept', async () => {
+  const a = await queued('q13', 'Waits on a Decision')
+  const b = await queued('q13', 'Held behind it')
+  const c = await queued('q13', 'Waits on a Decision just now')
+  const d = await queued('q13', 'Held behind the second')
+  await inferred(b, a)
+  await inferred(d, c)
+  await sql()`UPDATE factory.issues SET state = 'waiting', wait_reason = 'decision' WHERE id IN (${a}, ${c})`
+  await sql()`UPDATE factory.issue_events SET at = at - interval '8 hours' WHERE issue_id = ${a}`
+  await answers('q13', [], [])
+
+  const ran = await runLoop(lab, 'queue')
+  expect(ran.summary).toContain('took back 1')
+  expect(await edgesOf('q13')).toEqual([`${d}>${c}`])
+  const [removal] = await removalsOf('q13')
+  expect(removal).toMatchObject({ issue_id: b, after_issue: a, kind: 'owner_wait' })
+  expect(removal?.reason).toContain('waited on the owner')
+})
+
+test('the capacity-loop read reports the share of factory-added edges that were not needed', async () => {
+  const model = (await must(lab, ['read', 'capacity-loop', '--days', '7'])).json as {
+    edges: {
+      notNeededShare: number | null
+      bySource: {
+        source: string
+        added: number
+        needed: number
+        notNeeded: number
+        removed: number
+        stopped: boolean
+      }[]
+    }
+  }
+  const queue = model.edges.bySource.find((s) => s.source === 'queue')
+  // q10's edge was taken back with disjoint files (not needed), q11's was kept with a shared file (needed); the rest shipped nothing
+  expect(queue).toMatchObject({ needed: 1, notNeeded: 1, removed: 2, stopped: false })
+  expect(queue?.added).toBeGreaterThanOrEqual(4)
+  expect(model.edges.notNeededShare).toBe(0.5)
+})
+
+test('a source whose measured edges were mostly not needed gets no more edges from the loop', async () => {
+  // twelve pairs that shipped disjoint files and whose edge the queue loop had added: the kind is mostly not needed
+  for (let n = 0; n < 12; n++) {
+    const issue = `issue_${9000 + 2 * n}`
+    const after = `issue_${9001 + 2 * n}`
+    for (const id of [issue, after]) {
+      await sql()`INSERT INTO factory.issues (id, repo, state, outcome, version) VALUES (${id}, 'history', 'closed', 'done', 2)`
+      await shipped(id, [`history/${id}.ts`])
+    }
+    await sql()`INSERT INTO factory.planning_edges (issue_id, after_issue, created_at, satisfied_at, inferred_by)
+      VALUES (${issue}, ${after}, now(), now(), 'queue: guessed the same files')`
+  }
+  const a = await queued('q14', 'Stopped first')
+  const b = await queued('q14', 'Stopped second')
+  await answers('q14', [[b, a]], [a, b])
+
+  const ran = await runLoop(lab, 'queue')
+  expect(ran.summary).toContain('applied 0 edge(s), refused 1')
+  expect(await edgesOf('q14')).toEqual([])
+  const [recorded] = await asksRecorded('q14')
+  expect(recorded?.refused?.[0]?.why).toContain('mostly not needed')
+  const model = (await must(lab, ['read', 'capacity-loop', '--days', '7'])).json as {
+    edges: { bySource: { source: string; stopped: boolean }[] }
+  }
+  expect(model.edges.bySource.find((s) => s.source === 'queue')?.stopped).toBe(true)
+  // the model's order is still stored: it is the tie-break of the admission order
+  expect(recorded?.answer?.order).toEqual([a, b])
 })

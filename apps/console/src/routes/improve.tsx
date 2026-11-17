@@ -59,6 +59,7 @@ import {
   historyXLabels,
   hoursWords,
   queueReasonWords,
+  edgeSourceWords,
   kpiChange,
   KPI_HINT,
   kpiFooter,
@@ -84,6 +85,7 @@ import {
   windowOf,
   windowWords,
 } from '@/lib/improve'
+import { percentWords } from '@/lib/throughput'
 import { ImproveSkeleton } from '@/components/skeletons'
 import { useScreen, useScreenNote } from '@/lib/screen'
 import { useCapacityLoop, useFindingClasses, useFixCommits, useFriction, useKpis, useLoopYield } from '@/lib/queries'
@@ -833,6 +835,65 @@ function CapacityTables({ model }: { model: CapacityLoopModel }) {
                       <td className="px-4 py-2 text-right tabular-nums">{reason.issues}</td>
                       <td className="px-4 py-2 text-right tabular-nums">{hoursWords(reason.queuedHours)}</td>
                       <td className="px-4 py-2 text-right tabular-nums">{hoursWords(reason.idleSeatHours)}</td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+          )}
+        </Fold>
+      </section>
+      <section aria-label="Edges by shared files">
+        <Fold title="Edges by shared files" count={model.edges.bySource.length} defaultOpen>
+          {model.edges.bySource.length === 0 ? (
+            <p className="py-2 text-sm text-muted-foreground">No edge added in the window.</p>
+          ) : (
+            <div className={cn(PANEL, 'overflow-x-auto')} style={PANEL_SHADOW}>
+              <table className="w-full text-sm">
+                <caption className="sr-only">
+                  After edges that triage and the queue loop added, and whether the two Issues touched a file in common
+                  in the end. Only edges whose Issues both shipped are measured.
+                </caption>
+                <thead className="text-left text-xs text-muted-foreground">
+                  <tr>
+                    <th scope="col" className="px-4 py-2 font-medium">
+                      Added by
+                    </th>
+                    <th scope="col" className="px-4 py-2 text-right font-medium">
+                      Edges
+                    </th>
+                    <th scope="col" className="px-4 py-2 text-right font-medium">
+                      Needed
+                    </th>
+                    <th scope="col" className="px-4 py-2 text-right font-medium">
+                      Not needed
+                    </th>
+                    <th scope="col" className="px-4 py-2 text-right font-medium">
+                      Not measured
+                    </th>
+                    <th scope="col" className="px-4 py-2 text-right font-medium">
+                      Taken back
+                    </th>
+                    <th scope="col" className="px-4 py-2 text-right font-medium">
+                      Share not needed
+                    </th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {model.edges.bySource.map((source) => (
+                    <tr key={source.source} className="border-t">
+                      <th scope="row" className="px-4 py-2 text-left font-medium">
+                        {edgeSourceWords(source.source)}
+                        {source.stopped ? ' (no new edges)' : ''}
+                      </th>
+                      <td className="px-4 py-2 text-right tabular-nums">{source.added}</td>
+                      <td className="px-4 py-2 text-right tabular-nums">{source.needed}</td>
+                      <td className="px-4 py-2 text-right tabular-nums">{source.notNeeded}</td>
+                      <td className="px-4 py-2 text-right tabular-nums">{source.unknown}</td>
+                      <td className="px-4 py-2 text-right tabular-nums">{source.removed}</td>
+                      <td className="px-4 py-2 text-right tabular-nums">
+                        {source.notNeededShare === null ? 'none measured' : percentWords(source.notNeededShare)}
+                      </td>
                     </tr>
                   ))}
                 </tbody>
