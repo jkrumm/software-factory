@@ -122,8 +122,13 @@ function Table({
   )
 }
 
-function Nothing({ children }: { children: string }) {
-  return <EmptyState title={children} icon={CpuIcon} />
+/** An empty panel: `children` is why, `next` the first step (a longer window is the usual one). */
+function Nothing({ children, next = 'Choose a longer window above.' }: { children: string; next?: string }) {
+  return (
+    <EmptyState title={children} icon={CpuIcon}>
+      {next}
+    </EmptyState>
+  )
 }
 
 const dash = (value: number | null, format: (v: number) => string): string => (value === null ? '–' : format(value))
@@ -256,6 +261,7 @@ function Answers({ model }: { model: Model }) {
           id="throughput-host"
           icon={WarningIcon}
           title="Is the host the limit right now?"
+          hint="memory pressure"
           subtitle={`Memory pressure over ${windowName(model.hours)}`}
           value={host.level === 'unread' ? null : LEVEL_NAME[host.level]}
           valueNote="The host read no pressure level in this window"
@@ -273,6 +279,7 @@ function Answers({ model }: { model: Model }) {
           id="throughput-queue"
           icon={HourglassIcon}
           title="What keeps Issues from starting?"
+          hint="queue reason"
           subtitle={`Hours in the queue over ${windowName(model.hours)}`}
           value={queue.binding ? hoursWords(queue.binding.hours) : null}
           valueNote="No Issue waited for a cost of the factory in this window"
@@ -296,6 +303,7 @@ function Answers({ model }: { model: Model }) {
           id="throughput-cost"
           icon={StackIcon}
           title="What is the largest avoidable cost?"
+          hint="avoidable cost"
           subtitle={
             cost.kind === 'improvement' ? 'The open improvement that costs most' : 'Tenants against their budget'
           }
@@ -738,7 +746,7 @@ function Improvements({ model }: { model: Model }) {
   return (
     <Section level={3} title="Improvements" aside="What the loop filed, before and after">
       {model.improvements.length === 0 ? (
-        <Nothing>The loop has filed no improvement yet.</Nothing>
+        <Nothing next="An improvement shows here once the loop files it.">The loop has filed no improvement yet.</Nothing>
       ) : (
         <Table
           label="Improvement findings"

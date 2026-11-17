@@ -98,7 +98,11 @@ function ShipSection({ ship, now }: { ship: Ship; now: number }) {
 
 export function Evidence({ issue, now }: { issue: ReadIssueDetail; now: number }) {
   if (issue.shipping.length === 0 && issue.evidence.length === 0)
-    return <EmptyState title="Nothing has been shipped yet." />
+    return (
+      <EmptyState title="Nothing has been shipped yet.">
+        The ship and its Verify result show here once the lead ships.
+      </EmptyState>
+    )
   const ships = [...issue.shipping].sort((a, b) => Date.parse(b.at) - Date.parse(a.at))
   return (
     <div className="flex flex-col gap-8">

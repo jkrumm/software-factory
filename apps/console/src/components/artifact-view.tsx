@@ -192,7 +192,9 @@ function ArtifactViewOf({ id, revision, compare, onPick, peek }: ArtifactViewPro
     if (screen === 'failed')
       return (
         <Shell>
-          <EmptyState title="This artifact is not available" />
+          <EmptyState title="This artifact is not available">
+            The factory could not load it. Reload the page, or open it again from Artifacts.
+          </EmptyState>
         </Shell>
       )
     return peek ? <Skeleton height={320} className="m-4" /> : <ArtifactSkeleton />

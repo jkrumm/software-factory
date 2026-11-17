@@ -129,7 +129,9 @@ export function ChainAround({ issue }: { issue: Issue }) {
             <Skeleton height={36} />
           </div>
         ) : null}
-        {chain.isError ? <p className="text-muted-foreground">The Chain is not available right now.</p> : null}
+        {chain.isError ? (
+          <p className="text-muted-foreground">The Chain did not load. Reload the page to try again.</p>
+        ) : null}
         {around && around.blockedBy.length === 0 && around.blocks.length === 0 ? (
           <p className="text-muted-foreground">This Issue waits on nothing and nothing waits on it.</p>
         ) : null}

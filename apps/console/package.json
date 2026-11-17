@@ -13,6 +13,8 @@
     "templates:check": "bun scripts/templates.ts --check",
     "language": "bun scripts/language.ts",
     "language:check": "bun scripts/language.ts --check",
+    "copy": "bun scripts/copy.ts",
+    "copy:strings": "bun scripts/copy.ts --strings",
     "test": "bun test"
   },
   "dependencies": {

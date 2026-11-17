@@ -1,5 +1,7 @@
 // Generated from docs/language.md by scripts/language.ts: do not edit (`bun run --cwd apps/console language`).
 export const LANGUAGE = {
+  'active time':
+    'How long a lead worked on this Issue, summed over its attempts. Time spent waiting on a person, a timer or another Issue is not in it. What to do: when elapsed time is far above active time, read the Activity tab to see what it waited on',
   amend: "Adding to an open Issue's scope or facts instead of filing a new one. The lead hears it as a note",
   annotation:
     'A comment anchored by a quote and a path on one revision. If the quote is gone from a later revision it sits in "Unanchored"',
@@ -7,10 +9,14 @@ export const LANGUAGE = {
     'What a lead hands to a person. One model, four kinds: Concept, Spec, Decision, Report. An Issue owns it, or none does (a standalone Report, artifact new); links name the other Issues it concerns; it may belong to one collection (a named set with one lead page, pinned or not)',
   ask: "The lead's verb that raises a Decision (factory issue ask)",
   attempt: 'Lead number n of an Issue',
+  'avoidable cost':
+    "The open improvement that costs the factory most, in minutes of queue wait or MiB over the memory budget; without one, the standing tenants' memory against its budget. What to do: it is the next thing worth fixing; open the improvement's Issue",
   'avoidable touch':
     'A touch the factory should have settled: a Decision answered and not marked worth asking, an owner note, wake, cancel or reopen. Not the first note of a filing, a verdict on a Concept or Spec, or a done Errand',
   'back at desk':
     'The Needs-you view (?mode=desk) of the open Errands by where the hands must be, each with its command to copy and Done and Not needed buttons',
+  'cache read share':
+    'The share of prompt tokens a lead read from the cache instead of fresh. What to do: higher is cheaper; a low share on a long attempt means the context was rebuilt, so look in Activity for a restart or a compaction',
   caller:
     "Who a request comes from, decided by its token: owner, orchestrator (the owner's delegate agent: the owner's rights bar ten routes, its own actor in the log), agent (a lead session), machine (the alert door), signal (Hermes, which files the owner's words), read (the surfaces)",
   cancelled: "Outcome: the owner's stop",
@@ -32,7 +38,7 @@ export const LANGUAGE = {
     "A direction for a whole product, UX or architecture, before building. Three or four per project, ever. Its result goes into the project's DESIGN.md",
   cost: "Dollars the usage schema priced for an Issue's sessions, joined at read, never copied",
   'cpu busy':
-    "The share of all the host's cores that were working (user plus system time), percent, from top. 100 % is every core fully used, the rest is idle. It says how much of the machine is in use, where Load says how many threads wanted it",
+    "The share of all the host's cores that were working (user plus system time), percent, from top. 100 % is every core fully used, the rest is idle. It says how much of the machine is in use, where Load says how many threads wanted it. What to do: near 100 % for many minutes while Issues are Ready means the host is the limit; read Load next, and wait rather than start more",
   cycle: 'The time from an Issue filed to closed',
   decision:
     'One question as a form: recommendation, what was checked, cost per option, what happens with no answer. Refused when incomplete; it reaches the owner only after the Judge saw it; a second ask on the open one amends it. Raised while its Concept or Spec waits for review, it is about that artifact and waits together with the review',
@@ -71,6 +77,8 @@ export const LANGUAGE = {
   incident:
     'One root cause seen through many signals: the VPS is down, so Beszel, HyperDX and Kuma all fire. Triage groups them under one Issue',
   issue: "One unit of work: one repo, one branch, one ship. Warp's work item",
+  'issues per hour':
+    'How many Issues of a project shipped in each hour of the last 7 days, against the 7 days before. What to do: a drop while Issues are Ready or Held may mean something holds them; open Work and read the reason on each',
   judge: 'The agw workflow that tries to settle a Decision before the owner sees it',
   kind: "What an Issue is: feature, bug, chore, docs, incident. Intake files an owner's or agent's request as feature; triage may refine it when it settles the Issue. A failing check of a project's default branch is an incident, never a bug",
   lane: 'A resource class inside a repo (apple) that an Issue or plan row names; lanes: {apple: 1} in the repo\'s project.yaml caps how many leads of the lane run at once, within leads. An undeclared lane is unlimited (docs/plan.md "Lanes")',
@@ -78,16 +86,16 @@ export const LANGUAGE = {
   'light seat':
     "The role table's light row, the cheap seat a lead starts on when the Issue is mechanical: a hygiene finding of a mechanical class, kind docs, a monitor with no route. The filer's seat always wins. A light lead that struggles is moved up: the next lead starts on the lead row (apps/server/src/domains/leads/light.ts)",
   line: "Stop the line: while a repo's alert is unsolved, only its fix is admitted",
-  load: "The number of threads that wanted a core, averaged over the last minute (the 1-minute load average). It is a count, not a percentage, and it is not CPU busy: on 12 cores load 4 is a third of the cores' worth of threads, load 12 is one thread for every core, and above that threads wait. It also counts threads waiting on the disk, so it can be high with the CPU quiet. Admission uses load because a storm of waiting processes (git, tests) starves everything on the host whatever the CPU percent says",
+  load: "The number of threads that wanted a core, averaged over the last minute (the 1-minute load average). It is a count, not a percentage, and it is not CPU busy: on 12 cores load 4 is a third of the cores' worth of threads, load 12 is one thread for every core, and above that threads wait. It also counts threads waiting on the disk, so it can be high with the CPU quiet. Admission uses load because a storm of waiting processes (git, tests) starves everything on the host whatever the CPU percent says. What to do: above the load ceiling nothing new starts, so wait it out; read CPU busy to tell real work from threads stuck on the disk",
   'load ceiling':
-    'The load above which no new lead is admitted, stored with every minute so the page reads the ceiling that was in force. Under the throughput rule it is 3 per core',
+    'The load above which no new lead is admitted, stored with every minute so the page reads the ceiling that was in force. Under the throughput rule it is 3 per core. What to do: minutes above it are minutes Ready Issues waited; a ceiling that is crossed every day is the next improvement to file',
   'long wait':
     'An Issue in a timed wait of an hour or more with other open Issues waiting behind it. It appears in Needs you until the wait ends',
   loop: 'A named recurring job with a trigger, a budget and one way to act. Its judgment is an agw workflow with its own prompt, tools and skills',
   'memory pressure':
-    "The kernel's own verdict on memory: normal, warning or critical. It is the one memory figure that says the host is struggling now: a host can hold 90 % of its RAM at normal pressure",
+    "The kernel's own verdict on memory: normal, warning or critical. It is the one memory figure that says the host is struggling now: a host can hold 90 % of its RAM at normal pressure. What to do: at warning or critical, read Memory by class on Throughput to see what holds the memory; no new lead is admitted until it is normal again",
   'memory used':
-    "The RAM in use, in GB of the RAM installed, as Activity Monitor's Memory Used counts it: app memory plus wired plus compressed. Cached files are not in it, so a high figure is real use, not a full cache. GB here is 1024 x 1024 x 1024 bytes",
+    "The RAM in use, in GB of the RAM installed, as Activity Monitor's Memory Used counts it: app memory plus wired plus compressed. Cached files are not in it, so a high figure is real use, not a full cache. GB here is 1024 x 1024 x 1024 bytes. What to do: nothing at normal pressure; read Memory pressure before acting on a high figure",
   'needed me':
     'The owner\'s one-click mark on a verdict of a Spec or Report: did it need him. The newest marks teach the Spec screen and triage the next time; "Specs at the owner not needed" counts the no\'s',
   needs:
@@ -167,11 +175,13 @@ export const LANGUAGE = {
     'The factory-errand-needed workflow reading a request that has no check, once a day from its first day: only a not_needed with a reason closes it. Closures by the check, the look, the expiry or a newer request are the "Errands closed without you" band of the next since read',
   surface: 'Console, Herdr, Iris, Argo, ntfy',
   'swap used':
-    "The part of the swap file the host has written memory out to, in GB of the swap's current size (macOS grows it on demand, so the size is not a limit). Swap stays full after its cause is gone, so a high figure alone is not a fault: swap that keeps growing is the alarm, and admission turns new leads away above 75 % of the RAM in swap or a fast rate of swapouts",
+    "The part of the swap file the host has written memory out to, in GB of the swap's current size (macOS grows it on demand, so the size is not a limit). Swap stays full after its cause is gone, so a high figure alone is not a fault: swap that keeps growing is the alarm, and admission turns new leads away above 75 % of the RAM in swap or a fast rate of swapouts. What to do: if it keeps growing, read Memory by class on Throughput to find what writes memory out; a full but steady swap needs nothing",
   'taste pass':
     "The weekly retro's reading of the owner's verdict notes and comments: a preference seen twice becomes a rule in the repo's AGENTS.md or DESIGN.md",
   'test slot':
     "A lease on the host's test capacity that factory slot run takes for a make check, test or e2e step; it waits while the host is busy and records what the step cost",
+  'tokens out':
+    "The tokens a lead's sessions wrote, from the usage data, summed over the attempts; the tokens read in and the cache are beneath it. What to do: a high figure on a small Issue is a lead that rewrote a lot; compare the attempts",
   touch: 'The owner acting on an Issue',
   triage:
     'Deciding what a signal becomes: a new Issue, an amendment to an open one, part of an incident, held, or dropped',
@@ -181,6 +191,8 @@ export const LANGUAGE = {
     "An Errand the screen refuses because a token or CLI could do it: the Issue's errand wait ends and the lead hears the reason",
   'turn back':
     "The owner's or the orchestrator's verb that ends an Errand wait without doing it (factory errand turn-back <id> --note ..., the Console's Turn back button): the Errand closes turned_back and the lead hears the note as its next turn",
+  turns:
+    'How many times a lead was prompted and worked until it stopped: the brief, each note, each wake. What to do: many turns on a small Issue means the lead was steered a lot; read the notes in Activity',
   verdict: "The owner's answer on an artifact: Looks good, With notes, Changes, No longer applies",
   verified:
     'A shipped change whose watch passed: it is live and Verify and the probes found nothing broken. The "Since you were here" band counts these as Shipped and verified, one per Issue',

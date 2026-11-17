@@ -38,7 +38,9 @@ describe('an answer from a newer server', () => {
     expect(awaitsUpdate(new ApiError(500, '/v1/x'))).toBe(false)
     expect(awaitsUpdate(null)).toBe(false)
     expect(failureNote(new ShapeError('/v1/x', 'x'))).toContain('Reload')
-    expect(failureNote(new ApiError(503, '/v1/x'))).toBe('The server answered 503')
+    expect(failureNote(new ApiError(503, '/v1/x'))).toBe(
+      'The server answered 503. Reload the page; if it stays, read the server log.',
+    )
   })
 })
 

@@ -148,12 +148,25 @@ The figures Throughput leads with, read once a minute from the host (`top`, `vm_
 
 | Word | Means | Retires |
 |-|-|-|
-| **CPU busy** | The share of all the host's cores that were working (user plus system time), percent, from `top`. 100 % is every core fully used, the rest is idle. It says how much of the machine is in use, where **Load** says how many threads wanted it | |
-| **Memory used** | The RAM in use, in GB of the RAM installed, as Activity Monitor's Memory Used counts it: app memory plus wired plus compressed. Cached files are not in it, so a high figure is real use, not a full cache. GB here is 1024 x 1024 x 1024 bytes | |
-| **Swap used** | The part of the swap file the host has written memory out to, in GB of the swap's current size (macOS grows it on demand, so the size is not a limit). Swap stays full after its cause is gone, so a high figure alone is not a fault: swap that keeps growing is the alarm, and admission turns new leads away above 75 % of the RAM in swap or a fast rate of swapouts | |
-| **Memory pressure** | The kernel's own verdict on memory: normal, warning or critical. It is the one memory figure that says the host is struggling now: a host can hold 90 % of its RAM at normal pressure | |
-| **Load** | The number of threads that wanted a core, averaged over the last minute (the 1-minute load average). It is a count, not a percentage, and it is not CPU busy: on 12 cores load 4 is a third of the cores' worth of threads, load 12 is one thread for every core, and above that threads wait. It also counts threads waiting on the disk, so it can be high with the CPU quiet. Admission uses load because a storm of waiting processes (git, tests) starves everything on the host whatever the CPU percent says | |
-| **Load ceiling** | The load above which no new lead is admitted, stored with every minute so the page reads the ceiling that was in force. Under the throughput rule it is 3 per core | |
+| **CPU busy** | The share of all the host's cores that were working (user plus system time), percent, from `top`. 100 % is every core fully used, the rest is idle. It says how much of the machine is in use, where **Load** says how many threads wanted it. What to do: near 100 % for many minutes while Issues are Ready means the host is the limit; read Load next, and wait rather than start more | |
+| **Memory used** | The RAM in use, in GB of the RAM installed, as Activity Monitor's Memory Used counts it: app memory plus wired plus compressed. Cached files are not in it, so a high figure is real use, not a full cache. GB here is 1024 x 1024 x 1024 bytes. What to do: nothing at normal pressure; read Memory pressure before acting on a high figure | |
+| **Swap used** | The part of the swap file the host has written memory out to, in GB of the swap's current size (macOS grows it on demand, so the size is not a limit). Swap stays full after its cause is gone, so a high figure alone is not a fault: swap that keeps growing is the alarm, and admission turns new leads away above 75 % of the RAM in swap or a fast rate of swapouts. What to do: if it keeps growing, read Memory by class on Throughput to find what writes memory out; a full but steady swap needs nothing | |
+| **Memory pressure** | The kernel's own verdict on memory: normal, warning or critical. It is the one memory figure that says the host is struggling now: a host can hold 90 % of its RAM at normal pressure. What to do: at warning or critical, read Memory by class on Throughput to see what holds the memory; no new lead is admitted until it is normal again | |
+| **Load** | The number of threads that wanted a core, averaged over the last minute (the 1-minute load average). It is a count, not a percentage, and it is not CPU busy: on 12 cores load 4 is a third of the cores' worth of threads, load 12 is one thread for every core, and above that threads wait. It also counts threads waiting on the disk, so it can be high with the CPU quiet. Admission uses load because a storm of waiting processes (git, tests) starves everything on the host whatever the CPU percent says. What to do: above the load ceiling nothing new starts, so wait it out; read CPU busy to tell real work from threads stuck on the disk | |
+| **Load ceiling** | The load above which no new lead is admitted, stored with every minute so the page reads the ceiling that was in force. Under the throughput rule it is 3 per core. What to do: minutes above it are minutes Ready Issues waited; a ceiling that is crossed every day is the next improvement to file | |
+
+## The figures on a card
+
+Every number on a Console card has a word here or in a table above, and its definition says what the figure counts and, after "What to do:", what to do about it. `apps/console/test/copy.test.ts` fails on a card with no such word.
+
+| Word | Means | Retires |
+|-|-|-|
+| **Active time** | How long a lead worked on this Issue, summed over its attempts. Time spent waiting on a person, a timer or another Issue is not in it. What to do: when elapsed time is far above active time, read the Activity tab to see what it waited on | |
+| **Turns** | How many times a lead was prompted and worked until it stopped: the brief, each note, each wake. What to do: many turns on a small Issue means the lead was steered a lot; read the notes in Activity | |
+| **Tokens out** | The tokens a lead's sessions wrote, from the usage data, summed over the attempts; the tokens read in and the cache are beneath it. What to do: a high figure on a small Issue is a lead that rewrote a lot; compare the attempts | |
+| **Cache read share** | The share of prompt tokens a lead read from the cache instead of fresh. What to do: higher is cheaper; a low share on a long attempt means the context was rebuilt, so look in Activity for a restart or a compaction | |
+| **Issues per hour** | How many Issues of a project shipped in each hour of the last 7 days, against the 7 days before. What to do: a drop while Issues are Ready or Held may mean something holds them; open Work and read the reason on each | |
+| **Avoidable cost** | The open improvement that costs the factory most, in minutes of queue wait or MiB over the memory budget; without one, the standing tenants' memory against its budget. What to do: it is the next thing worth fixing; open the improvement's Issue | |
 
 ## Events
 

@@ -59,6 +59,8 @@ check-static:
 	@bun run --cwd apps/console templates:check
 	@echo "==> console InfoHint definitions are current (scripts/language.ts)"
 	@bun run --cwd apps/console language:check
+	@echo "==> console copy follows the voice rules (apps/console/scripts/copy.ts)"
+	@bun run --cwd apps/console copy
 	@echo "==> typecheck e2e (tests/e2e)"
 	@bunx --no-install tsc -p tests/e2e/tsconfig.json --noEmit
 	@echo "==> shard weights name no missing test file (scripts/shard.ts --check)"

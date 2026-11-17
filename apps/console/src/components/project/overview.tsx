@@ -197,6 +197,7 @@ export function ShippedPanel({
       <StatCard
         icon={CheckCircleIcon}
         title="Issues per hour"
+        hint="issues per hour"
         subtitle="Last 7 days, against the 7 days before"
         value={total}
         delta={{ value: total - shipped.before, higherIsBetter: true }}
@@ -309,7 +310,9 @@ export function Overview({ name }: { name: string }) {
               <UpcomingRows name={name} rows={upcoming} />
             </div>
           ) : open && plan.isError ? (
-            <EmptyState title="The plan did not load">Ready and held Issues are in Work.</EmptyState>
+            <EmptyState title="The plan did not load">
+              Reload the page to try again. Ready and held Issues are in Work.
+            </EmptyState>
           ) : (
             <Skeleton height={320} rounded="rounded-xl" />
           )}

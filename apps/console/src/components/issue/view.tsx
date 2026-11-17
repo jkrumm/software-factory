@@ -21,7 +21,11 @@ export function IssueGap({ id, narrow }: { id: string; narrow?: boolean }) {
   const { error } = issue
   const screen = useScreen(issue)
   if (error instanceof ApiError && error.status === 404)
-    return <EmptyState title="No such Issue">It may have a different number than the link says.</EmptyState>
+    return (
+      <EmptyState title="No such Issue">
+        It may have a different number than the link says. Search for it in the command palette.
+      </EmptyState>
+    )
   if (screen === 'failed')
     return (
       <EmptyState title="This Issue is not available">The factory could not be reached. It will try again.</EmptyState>

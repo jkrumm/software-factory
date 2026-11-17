@@ -543,12 +543,12 @@ function HeldSignalBody({ item, issueTitle, onSent }: BodyProps) {
     <div className="grid gap-4">
       {unrouted ? (
         <>
-          <Lead hint="held signal">An alert is firing and no repository is assigned to hear it</Lead>
+          <Lead hint="held signal">An alert is firing and no repo is assigned to hear it</Lead>
           <Prose>
-            {`"${plainExcerpt(item.title.replace(/^[^:]*:\s*/, ''))}" from ${unrouted.source} reached no repository, because none is assigned to the monitor "${unrouted.monitor}". `}
+            {`"${plainExcerpt(item.title.replace(/^[^:]*:\s*/, ''))}" from ${unrouted.source} reached no repo, because none is assigned to the monitor "${unrouted.monitor}". `}
             {unrouted.proposal
-              ? `The screen suggests ${unrouted.proposal}. Routing it there files the alert in that repository and sends the monitor's next alerts there too.`
-              : 'Name the repository it belongs to: the monitor gets that route and the alert is filed there.'}
+              ? `The screen suggests ${unrouted.proposal}. Routing it there files the alert in that repo and sends the monitor's next alerts there too.`
+              : 'Name the repo it belongs to: the monitor gets that route and the alert is filed there.'}
           </Prose>
         </>
       ) : (
@@ -583,8 +583,8 @@ function HeldSignalBody({ item, issueTitle, onSent }: BodyProps) {
       >
         {needsRepo ? (
           <Input
-            aria-label="Repository"
-            placeholder="Which repository is this for?"
+            aria-label="Repo"
+            placeholder="Which repo is this for?"
             value={repo}
             onChange={(event) => setRepo(event.target.value)}
           />

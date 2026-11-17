@@ -31,7 +31,7 @@ export function NeedsSkeleton() {
 /** What an open card holds while its Decision, artifact or Errand loads. */
 export function CardBodySkeleton() {
   return (
-    <div {...busy('Loading the item')} className="grid gap-4">
+    <div {...busy('Loading this card')} className="grid gap-4">
       <div className="grid gap-2">
         <Skeleton height={12} width={72} />
         <Skeleton height={22} width="55%" />

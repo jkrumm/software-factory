@@ -95,12 +95,13 @@ function Kit() {
           <StatCard
             icon={RocketLaunchIcon}
             {...KIT_STATS.running}
+            hint="running"
             as={(p) => <Link to="/flow" {...p} />}
             onMenu={() => undefined}
           />
-          <StatCard icon={HourglassIcon} {...KIT_STATS.paused} onMenu={() => undefined} />
-          <StatCard icon={QueueIcon} {...KIT_STATS.notStarted} onMenu={() => undefined} />
-          <StatCard icon={CheckCircleIcon} {...KIT_STATS.shipped} onMenu={() => undefined} />
+          <StatCard icon={HourglassIcon} {...KIT_STATS.paused} hint="paused" onMenu={() => undefined} />
+          <StatCard icon={QueueIcon} {...KIT_STATS.notStarted} hint="ready" onMenu={() => undefined} />
+          <StatCard icon={CheckCircleIcon} {...KIT_STATS.shipped} hint="issues per hour" onMenu={() => undefined} />
         </div>
       </Section>
 
@@ -114,6 +115,7 @@ function Kit() {
           <StatCard
             icon={WarningCircleIcon}
             title="Avoidable touches"
+            hint="avoidable touch"
             subtitle="Last 7 days against the 7 before"
             value="0.06"
             delta={{ value: '-0.03', direction: -1, tone: 'good' }}
@@ -136,6 +138,7 @@ function Kit() {
           <StatCard
             icon={WarningCircleIcon}
             title="Fix commits per week"
+            hint="fix commit"
             subtitle="This week against the one before"
             value={4}
             delta={{ value: '-1', direction: -1, tone: 'good' }}
@@ -151,6 +154,7 @@ function Kit() {
           <StatCard
             icon={WarningCircleIcon}
             title="Tokens out"
+            hint="tokens out"
             subtitle="This attempt"
             value={null}
             valueNote="The usage data has no tokens for this Issue yet."
