@@ -16,7 +16,7 @@ import {
 } from './app/capacity-admit.ts'
 import { capacityForLeads } from './app/capacity-leads.ts'
 import { getQueueStates, setQueueState, setRelearn } from './app/capacity-queue.ts'
-import { giveSlotBack, recordMergeWindow, recordStepCost, touchSlot } from './app/capacity-slots.ts'
+import { giveSlotBack, recordMergeWindow, recordStepCost, type SignalFiler, touchSlot } from './app/capacity-slots.ts'
 import { capacityState, refreshState } from './app/capacity-view.ts'
 import { addAfter, removeAfter, settleIssue, setPrio } from './app/planning-chain.ts'
 import type { PlanningDeps } from './app/planning-deps.ts'
@@ -67,6 +67,8 @@ export function composePlanning(input: {
   longWaitMs?: number
   /** the projects' own doctors (`doctor:` of a `project.yaml`); absent, no project is asked whether this host can run it */
   doctor?: CapacityDeps['doctor']
+  /** where a test that disagreed twice is filed; `file` is set once intake is composed (it is composed after planning) */
+  signals?: { file?: SignalFiler }
 }): PlanningComposition {
   const { writes, roles, settings, longWaitMs, doctor } = input
   const sync = {
@@ -189,7 +191,12 @@ export function composePlanning(input: {
       },
       touchSlot: (request) => touchSlot(slots, request),
       giveSlotBack: (id) => giveSlotBack(writes, id),
-      recordStepCost: (cost) => recordStepCost(writes, cost),
+      recordStepCost: (cost) =>
+        recordStepCost(
+          writes,
+          cost,
+          input.signals ? (body) => input.signals?.file?.(body) ?? Promise.resolve() : undefined,
+        ),
       recordMergeWindow: (window) => recordMergeWindow(writes, window),
     },
     leads: capacityForLeads(writes, limits),

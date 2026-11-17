@@ -2,6 +2,7 @@ import type { SQL } from 'bun'
 import * as z from 'zod'
 import type { AccountReading } from '../../domains/capacity/accounts.ts'
 import type { Claim } from '../../domains/capacity/claims.ts'
+import { BASELINE_WINDOW_MS } from '../../kernel/remote-pressure.ts'
 import type { Assignment, CapacityStore, HostSampleFact, LeadPeaks } from '../../domains/capacity/ports.ts'
 import { ENDED_AFTER_MS, LEARN_WINDOW_MS, PEAKS_FETCHED, SETTLED_RUN_MS } from '../../domains/capacity/leadcost.ts'
 import type { AimState } from '../../domains/capacity/slot-aim.ts'
@@ -323,9 +324,10 @@ export function postgresCapacityStore(tx: SQL): CapacityStore {
     async recordStepCost(c) {
       const [row] = await tx`
         INSERT INTO factory.step_costs (at, name, repo, peak_rss_mib, cpu_seconds, duration_ms, wait_ms, exit_code,
-           vcs_ref_head_revision, dirty, cwd, host, tree, disagreed)
+           vcs_ref_head_revision, dirty, cwd, host, tree, disagreed, disagreement)
         VALUES (${c.at}, ${c.name}, ${c.repo}, ${c.peakRssMib}, ${c.cpuSeconds}, ${c.durationMs}, ${c.waitMs}, ${c.exitCode},
-           ${c.commit ?? null}, ${c.dirty ?? null}, ${c.cwd}, ${c.host ?? null}, ${c.tree ?? null}, ${c.disagreed ?? null})
+           ${c.commit ?? null}, ${c.dirty ?? null}, ${c.cwd}, ${c.host ?? null}, ${c.tree ?? null}, ${c.disagreed ?? null},
+           ${c.disagreement === undefined ? null : JSON.stringify(c.disagreement)}::text::jsonb)
         RETURNING id`
       const tests = c.tests ?? []
       if (tests.length === 0) return
@@ -391,10 +393,54 @@ export function postgresCapacityStore(tx: SQL): CapacityStore {
       })
     },
 
-    async lastDisagreement(name, since) {
+    async holdEvents(name, since) {
+      const rows = await tx`
+        SELECT at, coalesce(disagreed, false) AS disagreed FROM factory.step_costs
+        WHERE name = ${name} AND at >= ${since} AND (disagreed OR (host = 'vps' AND exit_code = 0))`
+      return rows.map((raw: unknown) => {
+        const r = z.object({ at: z.date(), disagreed: z.boolean() }).parse(raw)
+        return { at: r.at, kind: r.disagreed ? ('disagreed' as const) : ('green' as const) }
+      })
+    },
+
+    async disagreementsOfTest(name, test) {
       const [raw] = await tx`
-        SELECT max(at) AS at FROM factory.step_costs WHERE name = ${name} AND disagreed AND at >= ${since}`
-      return z.object({ at: z.date().nullable() }).parse(raw ?? { at: null }).at
+        SELECT count(*) AS n FROM factory.step_costs
+        WHERE name = ${name} AND disagreed AND disagreement->'tests' @> ${JSON.stringify([{ name: test }])}::text::jsonb`
+      return z.object({ n: z.coerce.number() }).parse(raw).n
+    },
+
+    async recordRemoteSample(sample) {
+      await tx`
+        INSERT INTO factory.remote_samples (at, memory_pressure, io_pressure, steps_running)
+        VALUES (${sample.at}, ${sample.memoryPressure}, ${sample.ioPressure}, ${sample.stepsRunning})
+        ON CONFLICT (at) DO NOTHING`
+    },
+
+    async pressureBaseline(now) {
+      const since = new Date(now.getTime() - BASELINE_WINDOW_MS)
+      await tx`DELETE FROM factory.remote_samples WHERE at < ${since}`
+      const [raw] = await tx`
+        SELECT count(*) AS n, extract(epoch FROM max(at) - min(at)) * 1000 AS span_ms,
+          percentile_cont(0.99) WITHIN GROUP (ORDER BY memory_pressure)::float8 AS memory_p99,
+          percentile_cont(0.99) WITHIN GROUP (ORDER BY io_pressure)::float8 AS io_p99
+        FROM factory.remote_samples
+        WHERE steps_running = 0 AND memory_pressure IS NOT NULL AND io_pressure IS NOT NULL AND at >= ${since}`
+      const r = z
+        .object({
+          n: z.coerce.number(),
+          span_ms: z.coerce.number().nullable(),
+          memory_p99: z.number().nullable(),
+          io_p99: z.number().nullable(),
+        })
+        .parse(raw)
+      if (r.n === 0 || r.span_ms === null || r.memory_p99 === null || r.io_p99 === null) return null
+      return { samples: r.n, spanMs: Math.round(r.span_ms), memoryP99: r.memory_p99, ioP99: r.io_p99 }
+    },
+
+    async recordPlacement(p) {
+      await tx`
+        INSERT INTO factory.step_placements (at, name, host, reason) VALUES (${p.at}, ${p.name}, ${p.host}, ${p.reason})`
     },
 
     async stepMedianMs(since) {

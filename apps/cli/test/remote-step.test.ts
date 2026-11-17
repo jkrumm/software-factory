@@ -5,6 +5,7 @@ import { join } from 'node:path'
 import type { RemoteGrant } from '@software-factory/contract'
 import {
   bunOfPackage,
+  disagreementOf,
   imageOf,
   isHostFailure,
   isHostPath,
@@ -155,5 +156,39 @@ describe('the snapshot', () => {
     } finally {
       rmSync(root, { recursive: true, force: true })
     }
+  })
+})
+
+describe('what a red run off the mini failed on', () => {
+  const test_ = (suite: string, name: string, status: 'pass' | 'fail' | 'skip', durationMs = 10) => ({
+    suite,
+    name,
+    status,
+    durationMs,
+  })
+
+  test('the failing test names with their remote duration, and the timeout the output names', () => {
+    const found = disagreementOf({
+      tests: [
+        test_('a.test.ts', 'fine', 'pass'),
+        test_('a.test.ts', 'slow one', 'fail', 5210),
+        test_('', 'bare', 'fail', 3),
+      ],
+      output: ['(fail) slow one [5210.00ms]', 'error: this test "slow one" timed out after 5000ms', 'Ran 3 tests'],
+    })
+    expect(found).toEqual({
+      tests: [
+        { name: 'a.test.ts > slow one', durationMs: 5210, timeoutMs: 5000 },
+        { name: 'bare', durationMs: 3, timeoutMs: null },
+      ],
+      tail: null,
+    })
+  })
+
+  test('with no failing test parsed, the last 40 lines of the output', () => {
+    const output = Array.from({ length: 100 }, (_, i) => `line ${i}`)
+    const found = disagreementOf({ tests: [test_('s', 't', 'pass')], output })
+    expect(found.tests).toEqual([])
+    expect(found.tail?.split('\n')).toEqual(output.slice(-40))
   })
 })

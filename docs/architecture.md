@@ -407,10 +407,20 @@ owner's setting, `FACTORY_STEP_REMOTE_TARGET` (an ssh alias; unset, every step r
   CLI sends `remote`), its project is admitted, its step is declared `remote: true` and needs nothing only the mini has
   (`mac`, `apple`, `secrets`, `services`; a step of the host-wide class `apple` never, whatever a file says), the VPS gets
   it when `decideRemote` finds room and `finishesSooner` holds. Room: a probe at most 90 s old, production's own pressure
-  stall (`system.slice` memory and io `some avg10`) under 10 %, the disk under the 90 % its alert pages on with a new copy
+  stall (`system.slice` memory and io `some avg10`) not over the pressure line (below), the disk under the 90 % its alert pages on with a new copy
   counted, the step's peak beside the running steps' peaks and the mini's headroom rule in `MemAvailable`, its cores in the
   idle ones. Sooner: its learned VPS run (unknown: 1.7 times the mini's, as measured) against the expected mini wait (the
   holder that frees its slot) plus its mini run. There is no fixed share of the VPS.
+- **The pressure line** (`kernel/remote-pressure.ts`). Each probe reading is stored once (`remote_samples`: memory and io
+  pressure, and how many step containers ran). The samples taken with none running over the last 3 days are the baseline;
+  with a day of them (at least 24 h between the first and the newest, 200 samples) the line is just above each pressure's
+  p99 (the larger of half a point and a quarter of the p99 on top, at most 10 %), else 1 %. At rest the VPS reads 0.00, so
+  a flat 10 % meant production already stalled a tenth of the time. The line is derived from the samples at each read, so
+  the baseline sits beside it in Throughput's "Steps by host" (`tests.remote.pressure`).
+- **Why a step ran where it did** (`step_placements`, one row at each grant of a step its project declared remote): on the
+  VPS, or on the mini because a slot was free (`free`), the VPS had no room (`no_room`), would not finish it sooner
+  (`not_sooner`) or the step was held (`held`). The reason is the VPS's last refusal while the step waited, kept in the
+  process; a restart reads `free`. Throughput lists each such step with its runs per host and these counts.
 - **The probe** (`adapters/remote/probe.ts`): one `ssh` of at most every 30 s, started by a placement read and never awaited
   by it. It reads cores, load, memory, disk, the PSI and the step containers, and removes a step container whose slot is
   gone (older than 2 min, the CLI killed with its session up).
@@ -426,10 +436,17 @@ owner's setting, `FACTORY_STEP_REMOTE_TARGET` (an ssh alias; unset, every step r
   partition. A whole no-op step costs 1.9 s.
 - **Results.** The exit code is the step's own. ssh's 255 and docker's or the setup's 125 to 127 are the host's failure:
   the caller goes back to the mini's line at its old place (`notOn`). A red on the VPS is not yet a red: the same call runs
-  the step again on the mini, and only that result reaches the caller; a green there is stored `disagreed`, and the step
-  stays on the mini for 7 days. `step_costs.host`, `tree` (the snapshot's tree) and `disagreed` record it; the run time is
-  learned per host, the peak and cores across hosts. The VPS's holders and pinned waiters are not the mini's test line for
-  the admission. Throughput's "Steps by host" reads them.
+  the step again on the mini, and only that result reaches the caller; a green there is stored `disagreed` with what the red
+  run failed on (`step_costs.disagreement`: the failing test names from its JUnit with their remote duration and the
+  timeout its output names, else the last 40 lines of the output). `step_costs.host`, `tree` (the snapshot's tree) and
+  `disagreed` record it; the run time is learned per host, the peak and cores across hosts. The VPS's holders and pinned
+  waiters are not the mini's test line for the admission. Throughput's "Steps by host" reads them.
+- **The hold** (`kernel/remote-hold.ts`, derived from the ledger, never stored). A disagreement holds the step on the mini
+  for 1 hour; each further one within a week of the hold's end doubles it, up to 7 days; the first green run on the VPS
+  after a hold halves it (once; below an hour it is gone). The wait line says `it stays on the mini for 2 h, until <time>`,
+  and Throughput shows the hold with its end. A test name that disagrees a second time files one signal to its project
+  (`recordStepCost`: the test, its remote duration, the timeout), so the repo fixes the test instead of the factory losing
+  the host.
 - `FACTORY_SLOT_HOST=mini|vps` pins one call (a step that needs what only the mini has is never pinned off it);
   `FACTORY_SLOT_REMOTE=0` keeps one call on the mini.
 

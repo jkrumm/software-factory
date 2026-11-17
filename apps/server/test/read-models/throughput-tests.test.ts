@@ -201,6 +201,11 @@ describe('readThroughput tests', () => {
 
   test('a window that holds no run is empty', async () => {
     const empty = await readThroughput(sql, { now: new Date('2026-10-01T00:00:00Z'), hours: 24 })
-    expect(empty.tests).toEqual({ byProject: [], byHost: [], flaky: [] })
+    expect(empty.tests).toEqual({
+      byProject: [],
+      byHost: [],
+      remote: { pressure: { memoryPct: 1, ioPct: 1, from: 'default', baseline: null }, steps: [] },
+      flaky: [],
+    })
   })
 })

@@ -290,6 +290,23 @@ export const TestResult = z
   .meta({ id: 'TestResult' })
 export type TestResult = z.infer<typeof TestResult>
 
+/** What a red run off the mini failed on: its failing tests (with the run's duration and the timeout its output names), else the last lines of its output. */
+export const StepDisagreement = z
+  .object({
+    tests: z
+      .array(
+        z.object({
+          name: z.string().min(1).max(1000),
+          durationMs: z.number().int().min(0),
+          timeoutMs: z.number().int().min(0).nullable(),
+        }),
+      )
+      .max(200),
+    tail: z.string().max(8000).nullable(),
+  })
+  .meta({ id: 'StepDisagreement' })
+export type StepDisagreement = z.infer<typeof StepDisagreement>
+
 /**
  * What a finished step cost: `POST /slots/:id/cost`, appended to the ledger the grant rule learns from. The JUnit results
  * the step wrote ride along (`tests`), with the commit they ran on (`vcs.ref.head.revision`) and whether the tree had
@@ -316,6 +333,8 @@ export const StepCost = z
       .optional(),
     /** a run on the mini that confirmed a red off the mini as green: the step was red on the VPS, green here */
     disagreed: z.boolean().optional(),
+    /** with `disagreed`: what the red run off the mini failed on */
+    disagreement: StepDisagreement.optional(),
   })
   .meta({ id: 'StepCost' })
 export type StepCost = z.infer<typeof StepCost>
