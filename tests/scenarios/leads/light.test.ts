@@ -42,11 +42,15 @@ const flow = () => ({ world: lab.world, server: lab.server })
 const terminals = () => Object.values(readState(statePathOf(join(lab.world.bin, 'calls.jsonl'))).terminals)
 const modelOf = (argv: readonly string[]) => [argv[argv.indexOf('--model') + 1], argv[argv.indexOf('--effort') + 1]]
 
-/** Admits the requeued Issue; on a miss the error carries the queue's own reason for it, not a bare timeout. */
+/**
+ * Admits the requeued Issue. The light lead's attempt is finalized by the leads' loop first (an open `finalize` holds the
+ * Issue as `finalizing`), so every pass ticks it. On a miss the error carries the queue's own reason, not a bare timeout.
+ */
 async function readmitted(issue: string): Promise<void> {
   const deadline = Date.now() + 120_000
   let last: unknown = null
   while (Date.now() < deadline) {
+    await tick(flow())
     const passed = await admit(flow())
     if (passed.admitted.some((a) => a.issue === issue) || (await stateOf(lab.world, issue)).state === 'working') return
     last = { queue: passed.queue.filter((entry) => JSON.stringify(entry).includes(issue)), notes: passed.notes }
