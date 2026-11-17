@@ -25,6 +25,21 @@ export const HYGIENE_OUTCOMES = ['answered', 'failed', 'skipped'] as const
 
 // -- the list ------------------------------------------------------------------------------------------------------------
 
+/** The hours of the index's shipped series: 7 days by the hour, oldest first. */
+export const PROJECT_SHIPPED_HOURS = 168
+
+/** A duration's median over the last 7 days and over the 7 before, with the samples behind each (`docs/language.md` Cycle, Queue wait). */
+export const ProjectMedian = z
+  .strictObject({
+    /** null: no sample in the window */
+    ms: z.number().min(0).nullable(),
+    n: z.number().int().min(0),
+    beforeMs: z.number().min(0).nullable(),
+    beforeN: z.number().int().min(0),
+  })
+  .meta({ id: 'ProjectMedian' })
+export type ProjectMedian = z.infer<typeof ProjectMedian>
+
 export const ProjectIndexRow = z
   .strictObject({
     name: z.string(),
@@ -33,6 +48,8 @@ export const ProjectIndexRow = z
     /** `file`: the project has its own `project.yaml`; `defaults`: it has none */
     source: z.enum(['file', 'defaults']),
     branch: z.string().nullable(),
+    /** the Herdr group the project's space is filed under (`Infra`, `Tooling`, …), from the groups file; `Other` when none lists it */
+    group: z.string(),
     counts: ProjectCounts,
     /** the newest hygiene pass; null: the project was never swept */
     hygiene: z.strictObject({
@@ -40,13 +57,55 @@ export const ProjectIndexRow = z
       outcome: z.enum(HYGIENE_OUTCOMES).nullable(),
       /** findings of the newest pass */
       findings: z.number().int().min(0),
+      /** probes the newest pass ran clean, of the probes it ran (a skipped or never-run probe is in neither) */
+      clean: z.number().int().min(0),
+      run: z.number().int().min(0),
+      /** the first pass, of the last 30 days, that raised a finding the newest pass still raises; null: none */
+      oldestFindingAt: at.nullable(),
     }),
+    /** Issues closed done or healed per hour, `PROJECT_SHIPPED_HOURS` of them, the last hour ending at `at`; the newest ship ever */
+    shipped: z.strictObject({
+      hours: z.array(z.number().int().min(0)).length(PROJECT_SHIPPED_HOURS),
+      lastAt: at.nullable(),
+    }),
+    /** filed to closed, over the Issues closed in the window */
+    cycle: ProjectMedian,
+    /** filed or reopened to admitted, over the admissions in the window */
+    queueWait: ProjectMedian,
+    production: z.strictObject({
+      /** incidents whose Issue is open, and when the oldest of them opened */
+      incidents: z.number().int().min(0),
+      incidentAt: at.nullable(),
+      /** the newest regression of the last 7 days */
+      regressionAt: at.nullable(),
+    }),
+    /** the plan's rows, and those whose Issue closed (`factory project show`'s `done`); 0 of 0 with no plan */
+    plan: z.strictObject({ done: z.number().int().min(0), total: z.number().int().min(0) }),
+    /** leads running in the project now (Issues `working`), and its own `leads:` cap; null: it states none */
+    leads: z.strictObject({ running: z.number().int().min(0), cap: z.number().int().nullable() }),
+    /** the project's newest digest; null: none made, or the read token on a work project */
+    digest: z
+      .strictObject({
+        at,
+        headline: z.string(),
+        shipped: z.array(z.string()),
+        next: z.array(z.string()),
+        risks: z.array(z.string()),
+      })
+      .nullable(),
   })
   .meta({ id: 'ProjectIndexRow' })
 export type ProjectIndexRow = z.infer<typeof ProjectIndexRow>
 
 export const ProjectIndexModel = z
-  .strictObject({ at, projects: z.array(ProjectIndexRow) })
+  .strictObject({
+    at,
+    /** the leads the host admits now (its seats, the newest host sample); null: no sample of the last 10 minutes */
+    seats: z.number().int().nullable(),
+    /** the groups in the owner's order (the Herdr groups file), the fallback last; every row's `group` is one of them */
+    groups: z.array(z.string()),
+    projects: z.array(ProjectIndexRow),
+  })
   .meta({ id: 'ProjectIndexModel' })
 export type ProjectIndexModel = z.infer<typeof ProjectIndexModel>
 

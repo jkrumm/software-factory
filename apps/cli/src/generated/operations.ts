@@ -2409,7 +2409,7 @@ export const OPERATIONS: readonly Operation[] = [
     method: 'GET',
     path: '/v1/projects',
     summary:
-      'every project the factory has read, with its counts (done in 7 days and the five words running, paused, ready, held, checking) and the state of its newest hygiene pass; the read token gets no work project',
+      "every project the factory has read, in the owner's Herdr groups, with its counts (done in 7 days and the five words running, paused, ready, held, checking), shipped per hour over 7 days, cycle and queue wait medians against the 7 days before, its production lamp, plan rows done, running leads, its newest hygiene pass and digest, and the host's seats; the read token gets no work project",
     pathParams: [],
     queryParams: [],
     body: false,

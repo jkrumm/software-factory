@@ -43,7 +43,9 @@ import { type CapacityConstants, readCapacityLoop } from '../read/capacity-loop.
 import { readWaitCensus } from '../read/wait-census.ts'
 import { readChain } from '../read/chain.ts'
 import { readProjectDigests } from '../read/digests.ts'
-import { readProjectHygiene, readProjectIndex, readProjectPage } from '../read/project-page.ts'
+import { readProjectGroups } from '../read/project-groups.ts'
+import { readProjectIndex } from '../read/project-index.ts'
+import { readProjectHygiene, readProjectPage } from '../read/project-page.ts'
 import { readProjectSetup } from '../read/project-setup.ts'
 import { type QueueReasons, readFlow } from '../read/flow.ts'
 import { readFlowTrend } from '../read/flow-trend.ts'
@@ -86,6 +88,8 @@ export interface ReadModelDeps {
   capacityConstants?: CapacityConstants
   /** the data directory `scripts/deploy.sh` writes `deploys.log` into; absent, `GET /v1/throughput` has no deploys */
   dataDir?: string
+  /** the owner's Herdr groups file the Projects table groups by; absent or unreadable, every project is in Other */
+  projectGroupsFile?: string
   /** the counting epoch (`config/throughput.json`): the throughput, capacity-loop and retro reads count nothing before it; absent, everything counts */
   epoch?: Date | null
   /** the tenant class's budget and the repo its findings are filed on; absent, the defaults */
@@ -218,7 +222,8 @@ export const readModelRoutes = (deps: ReadModelDeps | undefined, caller: (reques
       async ({ request }) => {
         if (!deps) return unavailable
         const queue = await deps.queueReasons?.().catch(() => null)
-        const model = await readProjectIndex(deps.sql, { now: now(), queue: queue ?? undefined })
+        const groups = await readProjectGroups(deps.projectGroupsFile)
+        const model = await readProjectIndex(deps.sql, { now: now(), groups, queue: queue ?? undefined })
         // the read token hears no word of a work project, not even that it exists (NL18)
         const redact = caller(request) === 'read'
         return Response.json(
@@ -230,7 +235,7 @@ export const readModelRoutes = (deps: ReadModelDeps | undefined, caller: (reques
         detail: {
           operationId: 'read.project-index',
           summary:
-            'every project the factory has read, with its counts (done in 7 days and the five words running, paused, ready, held, checking) and the state of its newest hygiene pass; the read token gets no work project',
+            "every project the factory has read, in the owner's Herdr groups, with its counts (done in 7 days and the five words running, paused, ready, held, checking), shipped per hour over 7 days, cycle and queue wait medians against the 7 days before, its production lamp, plan rows done, running leads, its newest hygiene pass and digest, and the host's seats; the read token gets no work project",
         },
       },
     )

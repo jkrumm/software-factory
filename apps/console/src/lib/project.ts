@@ -108,7 +108,7 @@ export function dayLabels(at: string): string[] {
 
 /** One line on a project's hygiene for its card: when it was last swept and what it found. */
 export function hygieneLine(
-  hygiene: ProjectIndexRow['hygiene'],
+  hygiene: Pick<ProjectIndexRow['hygiene'], 'lastPassAt' | 'outcome' | 'findings'>,
   now: number,
   ageWords: (ms: number) => string,
 ): string {

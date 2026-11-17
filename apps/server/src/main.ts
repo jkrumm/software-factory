@@ -46,7 +46,7 @@ import { createApp } from './api/app.ts'
 import { apiForward, consoleHandler } from './api/console.ts'
 import { loadConsoleSettings } from './console-settings.ts'
 import { loadNeedsSettings } from './read/needs-settings.ts'
-import { availableParallelism, loadavg } from 'node:os'
+import { availableParallelism, homedir, loadavg } from 'node:os'
 import { join } from 'node:path'
 import { APPROVED_RUN_HANG_GUARD_MS } from './app/checkpoints-approve.ts'
 import { endRequest, MAX_RUN_TRIES, tellCheckBroken } from './app/checkpoints-errands.ts'
@@ -973,6 +973,9 @@ async function main(): Promise<void> {
       sql,
       dataDir,
       epoch,
+      // the owner's Herdr groups, the file the Herdr app reads (`make herdr-app-setup` in dotfiles links it here)
+      projectGroupsFile:
+        process.env.FACTORY_PROJECT_GROUPS_FILE || join(homedir(), '.config', 'herdr-app', 'groups.json'),
       tenantBudget: { project: planningEnv.tenantProject, budgetMib: planningEnv.tenantBudgetMib },
       cores: planningEnv.cores,
       queueReasons,
