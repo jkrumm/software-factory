@@ -121,7 +121,7 @@ describe('rd', () => {
   // scripts/remote-dev.sh:75: `factory role get '<role>' --format json`, parsed at remote-dev.sh:79 (.role, .tier, .effort)
   const ROLES = {
     lead: ['sonnet', 'high'],
-    implementer: ['sonnet', 'medium'],
+    implementer: ['haiku', 'xhigh'],
     light: ['haiku', 'high'],
     verifier: ['haiku', 'high'],
     reviewer: ['sonnet', 'medium'],
