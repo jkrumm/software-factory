@@ -413,9 +413,9 @@ test('a note filed through the API appears without a reload', async ({ page, api
 })
 
 const scrolls = async (page: Page) =>
-  (await page.evaluate(
+  page.evaluate<{ scroll: number; client: number }>(
     '({ scroll: document.documentElement.scrollWidth, client: document.documentElement.clientWidth })',
-  )) as { scroll: number; client: number }
+  )
 
 test('the page uses the width of a large screen', async ({ page }) => {
   const { rich } = seeded()
@@ -445,12 +445,12 @@ test.describe('on a phone', () => {
       await page.waitForLoadState('networkidle')
       const widths = await scrolls(page)
       expect(widths.scroll, `${tab} scrolls sideways`).toBeLessThanOrEqual(widths.client)
-      const edges = (await page.evaluate(`(() => {
+      const edges = await page.evaluate<{ tabsBottom: number; sideTop: number }>(`(() => {
         const rect = (selector) => document.querySelector(selector)?.getBoundingClientRect()
         const tabs = rect('[data-slot="tabs"]')
         const side = rect('aside[aria-label="About this Issue"]')
         return { tabsBottom: tabs?.bottom, sideTop: side?.top }
-      })()`)) as { tabsBottom: number; sideTop: number }
+      })()`)
       expect(edges.sideTop, `${tab}: the aside starts below the tabs`).toBeGreaterThanOrEqual(edges.tabsBottom - 1)
     }
   })
