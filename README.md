@@ -135,7 +135,7 @@ The full table, with what each word retires, is [`docs/language.md`](docs/langua
 | **Signal** | Anything that arrives and may become work, with a kind, an origin and a trust level |
 | **Issue** | One unit of work: one repo, one branch, one ship |
 | **State** | `settling`, `queued`, `working`, `waiting`, `watching`, `closed`. Only an event moves it. Screens say Running, Paused, Ready, Held, Checking and Planned instead |
-| **Event** | A fact recorded on an Issue. **23 kinds**, among them `filed`, `admitted`, `shipped`, `watch_passed` |
+| **Event** | A fact recorded on an Issue. **24 kinds**, among them `filed`, `admitted`, `shipped`, `watch_passed` |
 | **Lead / Attempt** | The Claude Code session that owns an Issue, and its *n*th try |
 | **Steward** | The loop over stalled Issues: wake, re-check, requeue, deliver, break a claim deadlock; asks a workflow only when the rules run out |
 | **Judge** | The workflow that tries to settle a Decision before the owner sees it |
