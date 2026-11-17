@@ -170,6 +170,7 @@ test('one card per KPI in the order the Console shows, each the figures the API 
   const headings = ['Off target', ...(groupKpis(kpis.kpis).trend.length > 0 ? ['No target, trends only'] : [])]
   await expect(grid.getByRole('heading', { level: 2 })).toHaveText([
     ...headings,
+    'By seat',
     'Fix commits',
     'Friction',
     'What the loops yielded',
