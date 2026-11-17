@@ -82,7 +82,9 @@ export function CollectionCard({ entry, now }: { entry: CollectionEntry; now: nu
             className="line-clamp-2 text-[length:var(--vx-text-md)] leading-tight font-semibold tracking-tight"
           >
             <CardLink
-              as={(props) => <Link to="/artifacts/collections/$id" params={{ id: collection.id }} {...props} />}
+              as={(props) => (
+                <Link to="/artifacts/collections/$id" params={{ id: collection.id }} data-keynav="" {...props} />
+              )}
             >
               {collection.title}
             </CardLink>
@@ -115,7 +117,7 @@ const HIDDEN_WORDS: Record<Hidden, string> = {
 export function ArtifactRowLink({ row, now, tag }: { row: ArtifactRow; now: number; tag?: string | null | undefined }) {
   const { artifact, issue, issueTitle, project: repo, linked } = row
   return (
-    <Link to="/artifacts/$id" params={{ id: artifact.id }} className={ROW_LINK}>
+    <Link to="/artifacts/$id" params={{ id: artifact.id }} data-keynav="" className={ROW_LINK}>
       <span className="w-20 shrink-0 text-xs text-muted-foreground">
         {ARTIFACT_KIND_LABEL[artifact.kind] ?? artifact.kind}
       </span>
@@ -147,7 +149,12 @@ export function CollectionRow({ entry, now }: { entry: CollectionEntry; now: num
   const { collection } = entry
   return (
     <div className="flex items-center gap-2" data-collection={collection.title}>
-      <Link to="/artifacts/collections/$id" params={{ id: collection.id }} className={cn(ROW_LINK, 'min-w-0 flex-1')}>
+      <Link
+        to="/artifacts/collections/$id"
+        params={{ id: collection.id }}
+        data-keynav=""
+        className={cn(ROW_LINK, 'min-w-0 flex-1')}
+      >
         <span className="w-20 shrink-0 text-xs text-muted-foreground">Collection</span>
         <span className="min-w-0 flex-1">
           <span className="block font-medium">{collection.title}</span>

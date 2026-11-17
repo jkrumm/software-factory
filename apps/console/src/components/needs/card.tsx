@@ -90,6 +90,7 @@ export function NeedCard({
           <h3 className="min-w-0 flex-1 text-[15px] font-medium [overflow-wrap:anywhere]">
             <Link
               ref={header}
+              data-keynav=""
               to="/needs-you"
               search={search}
               replace

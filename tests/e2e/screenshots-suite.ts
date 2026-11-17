@@ -7,9 +7,9 @@ const OUT = join(import.meta.dir, 'out', 'screenshots')
 
 const SCREENS = [
   { name: 'needs-you', path: '/needs-you' },
-  { name: 'flow', path: '/flow' },
-  { name: 'flow-working', path: '/flow?state=running' },
-  { name: 'flow-project', path: '/flow?project=argo' },
+  { name: 'overview', path: '/' },
+  { name: 'overview-working', path: '/?state=running' },
+  { name: 'overview-project', path: '/?project=argo' },
   { name: 'projects', path: '/projects' },
   { name: 'project-argo', path: '/projects/argo' },
   { name: 'project-argo-setup', path: '/projects/argo/setup' },
@@ -248,7 +248,7 @@ export function screenshotSuite(variantName: VariantName) {
       }
     })
 
-    test('the peek: an Issue over Flow and the Chain, an artifact over Needs you, the panel on each tab', async ({
+    test('the peek: an Issue over the Overview and the Chain, an artifact over Needs you, the panel on each tab', async ({
       page,
     }) => {
       const shotFull = (name: string) =>
@@ -267,10 +267,10 @@ export function screenshotSuite(variantName: VariantName) {
         ).toBeVisible()
         await page.waitForLoadState('networkidle')
       }
-      await open(`/flow?peek=issues/${rich}`)
-      await shotFull('peek-flow-issue')
-      await open(`/flow?peek=issues/${rich}&peekTab=activity`)
-      await shotFull('peek-flow-issue-activity')
+      await open(`/?peek=issues/${rich}`)
+      await shotFull('peek-overview-issue')
+      await open(`/?peek=issues/${rich}&peekTab=activity`)
+      await shotFull('peek-overview-issue-activity')
       await open(`/chain?peek=issues/${middle}&peekTab=checkpoints`)
       await shotFull('peek-chain-issue')
       await open(`/needs-you?peek=artifacts/${shotSpec}`)
@@ -287,7 +287,7 @@ export function screenshotSuite(variantName: VariantName) {
       const { accounts } = await api<{ accounts: { account: string }[] }>(apiUrl, '/v1/accounts')
       const { issues } = await api<{ issues: { id: number; title: string }[] }>(apiUrl, '/v1/issues?state=all&limit=50')
       const word = issues[0]?.title.split(/\s+/).find((w) => w.length > 3) ?? 'a'
-      await page.goto('/flow')
+      await page.goto('/')
       await expect(page.getByRole('status').filter({ hasText: 'Live' })).toBeVisible()
       await page.waitForLoadState('networkidle')
       await shot('strip')
@@ -317,18 +317,18 @@ export function screenshotSuite(variantName: VariantName) {
     })
   })
 
-  /** Flow with the sidebar open, and collapsed at the primary viewport. */
+  /** The Overview with the sidebar open, and collapsed at the primary viewport. */
   test(`sidebar ${variant.name}`, async ({ browser }) => {
     const context = await browser.newContext({ viewport: variant.viewport, colorScheme: variant.colorScheme })
     const page = await context.newPage()
     const shot = (name: string) =>
       page.screenshot({ path: join(OUT, `${variant.name}-${name}.png`), animations: 'disabled' })
-    await page.goto('/flow')
+    await page.goto('/')
     await page.waitForLoadState('networkidle')
-    await shot('sidebar-flow')
+    await shot('sidebar-overview')
     if (variant.name.startsWith('desktop-xl')) {
       await page.getByRole('button', { name: 'Collapse sidebar' }).click()
-      await shot('sidebar-flow-collapsed')
+      await shot('sidebar-overview-collapsed')
     }
     await context.close()
   })

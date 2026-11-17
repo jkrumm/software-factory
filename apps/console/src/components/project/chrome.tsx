@@ -106,8 +106,8 @@ export function ProjectChrome({ page, now }: { page: ProjectPageModel; now: numb
           aria-label="This project in other screens"
           className="flex flex-wrap gap-x-4 gap-y-1 text-sm min-[40rem]:ml-auto"
         >
-          <Link to="/flow" search={{ project: page.name }} className={LINK}>
-            Flow
+          <Link to="/" search={{ project: page.name }} className={LINK}>
+            Overview
           </Link>
           <Link to="/chain" search={{ project: page.name }} className={LINK}>
             Chain

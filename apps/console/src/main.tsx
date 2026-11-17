@@ -24,7 +24,7 @@ router.subscribe('onBeforeLoad', ({ fromLocation, toLocation, pathChanged }) => 
 
 // the first screen's data is requested now, in parallel with the rest of the boot
 void queryClient.prefetchQuery(needsQuery)
-if (location.pathname === '/flow') void queryClient.prefetchQuery(flowQuery)
+if (location.pathname === '/' || location.pathname === '/flow') void queryClient.prefetchQuery(flowQuery)
 
 // the Chain's code and data wait until the page is idle, so a `g c` or a tap finds them loaded
 const whenIdle = (run: () => void) =>

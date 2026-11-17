@@ -18,7 +18,7 @@ interface Flow {
 
 const numberOf = (id: string) => id.replace('issue_', '')
 const panel = (page: Page) => page.getByRole('dialog').and(page.locator('[data-peek-panel]'))
-/** The Flow page's list of Issues (collapsed until a filter is set), and one row of it. */
+/** The Overview's list of Issues (collapsed until a filter is set), and one row of it. */
 const list = (page: Page) => page.getByTestId('flow-list')
 const row = (page: Page, title: string) => list(page).getByRole('row').filter({ hasText: title })
 
@@ -29,12 +29,12 @@ async function firstWorking(apiUrl: string): Promise<Item> {
   return item
 }
 
-test('from Flow, a row opens the Issue in the peek and Escape leaves the list where it was', async ({
+test('from the Overview, a row opens the Issue in the peek and Escape leaves the list where it was', async ({
   page,
   apiUrl,
 }) => {
   const working = await firstWorking(apiUrl)
-  await page.goto(`/flow?project=${working.repo}&state=running`)
+  await page.goto(`/?project=${working.repo}&state=running`)
   const card = row(page, working.title)
   await expect(card).toBeVisible()
   // a mark on the live list: the page underneath must never be remounted, or its scroll and filters would be lost
@@ -62,7 +62,7 @@ test('from Flow, a row opens the Issue in the peek and Escape leaves the list wh
 
 test('the peek address reloads into the same state, and back closes it', async ({ page, apiUrl }) => {
   const working = await firstWorking(apiUrl)
-  await page.goto('/flow?state=running')
+  await page.goto('/?state=running')
   await row(page, working.title).getByRole('link', { name: working.title, exact: true }).click()
   await expect(panel(page)).toBeVisible()
   const opened = page.url()
@@ -82,7 +82,7 @@ test('the peek address reloads into the same state, and back closes it', async (
 
   await page.goBack()
   await expect(panel(page)).toBeHidden()
-  await expect(page).toHaveURL(/\/flow\?state=running$/)
+  await expect(page).toHaveURL(/\/\?state=running$/)
   await page.goForward()
   await expect(panel(page)).toBeVisible()
 })
@@ -93,22 +93,22 @@ test('another card swaps what the peek shows in one history step; Escape closes 
   const a = open[0]
   const b = open.find((issue) => issue.id !== a?.id && issue.repo === a?.repo)
   if (!a || !b) throw new Error('the seed has fewer than two open Issues of one project')
-  await page.goto(`/flow?project=${a.repo}`)
+  await page.goto(`/?project=${a.repo}`)
   await page.getByRole('link', { name: a.title, exact: true }).first().click()
   await expect(panel(page).getByRole('heading', { level: 1, name: a.title })).toBeVisible()
   await page.getByRole('link', { name: b.title, exact: true }).first().click()
   await expect(panel(page).getByRole('heading', { level: 1, name: b.title })).toBeVisible()
   await page.keyboard.press('Escape')
   await expect(panel(page)).toBeHidden()
-  await expect(page).toHaveURL(new RegExp(`/flow\\?project=${a.repo}$`))
-  // one step back leaves the Flow page, not an older peek
+  await expect(page).toHaveURL(new RegExp(`/\\?project=${a.repo}$`))
+  // one step back leaves the Overview, not an older peek
   await page.goBack()
-  await expect(page).not.toHaveURL(/\/flow/)
+  await expect(page).not.toHaveURL(/\?project=/)
 })
 
 test('a modifier click and "Open full page" go to the page', async ({ page, apiUrl, context }) => {
   const working = await firstWorking(apiUrl)
-  await page.goto('/flow?state=running')
+  await page.goto('/?state=running')
   const link = row(page, working.title).getByRole('link', { name: working.title, exact: true })
   const [tab] = await Promise.all([context.waitForEvent('page'), link.click({ modifiers: ['ControlOrMeta'] })])
   expect(new URL(tab.url()).pathname).toBe(`/issues/${numberOf(working.id)}`)
@@ -173,7 +173,7 @@ test('an artifact with revisions switches revision inside the panel and has no c
 
 test('Escape belongs to the palette while it is open, and to a field while it has focus', async ({ page, apiUrl }) => {
   const working = await firstWorking(apiUrl)
-  await page.goto(`/flow?peek=issues/${numberOf(working.id)}`)
+  await page.goto(`/?peek=issues/${numberOf(working.id)}`)
   await expect(panel(page)).toBeVisible()
   await page.keyboard.press('ControlOrMeta+K')
   const palette = page.getByRole('dialog').filter({ has: page.getByRole('combobox') })

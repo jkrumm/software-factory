@@ -3,20 +3,30 @@ import {
   FileTextIcon,
   FolderSimpleIcon,
   GraphIcon,
-  ChartLineIcon,
   LightningIcon,
+  SquaresFourIcon,
   TrendUpIcon,
   type Icon,
 } from '@phosphor-icons/react'
+import { SCREENS, type ScreenTarget } from './screens.ts'
 
-export const NAV = [
-  { to: '/needs-you', label: 'Needs you', icon: LightningIcon, key: 'N' },
-  { to: '/flow', label: 'Flow', icon: ChartLineIcon, key: 'F' },
-  { to: '/artifacts', label: 'Artifacts', icon: FileTextIcon, key: 'A' },
-  { to: '/projects', label: 'Projects', icon: FolderSimpleIcon, key: 'P' },
-  { to: '/chain', label: 'Chain', icon: GraphIcon, key: 'C' },
-  { to: '/improve', label: 'Improve', icon: TrendUpIcon, key: 'I' },
-  { to: '/throughput', label: 'Throughput', icon: CpuIcon, key: 'T' },
-] as const satisfies ReadonlyArray<{ to: string; label: string; icon: Icon; key: string }>
+const ICON = {
+  '/': SquaresFourIcon,
+  '/needs-you': LightningIcon,
+  '/chain': GraphIcon,
+  '/projects': FolderSimpleIcon,
+  '/artifacts': FileTextIcon,
+  '/improve': TrendUpIcon,
+  '/throughput': CpuIcon,
+} as const satisfies Record<ScreenTarget, Icon>
+
+/** The screens of `screens.ts` with their icons, in the navigation's order. */
+export const NAV = SCREENS.map((screen) => ({ ...screen, icon: ICON[screen.to] }))
 
 export type NavItem = (typeof NAV)[number]
+
+/** The daily screens, then the quieter group (Improve, Throughput). */
+export const NAV_GROUPS = [
+  { key: 'work', items: NAV.filter((item) => item.group === 'work') },
+  { key: 'insight', items: NAV.filter((item) => item.group === 'insight') },
+] as const

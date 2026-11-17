@@ -1,7 +1,7 @@
 import type { ReactElement, ReactNode } from 'react'
 import { cn } from '@/lib/utils'
 
-/** How a card renders its link: pass a router link here (`(p) => <Link to="/flow" {...p} />`); the default is an <a>. */
+/** How a card renders its link: pass a router link here (`(p) => <Link to="/" {...p} />`); the default is an <a>. */
 export type LinkRender = (props: { className: string; children: ReactNode }) => ReactElement
 
 export interface CardLinkProps {

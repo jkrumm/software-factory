@@ -22,7 +22,7 @@ test('Flow opens with one card per digested project: headline, counts from the A
 }) => {
   const model = await api<Digests>(apiUrl, '/v1/projects/digests')
   expect(model.projects.map((p) => p.project).sort()).toEqual(['argo', 'harbor'])
-  await page.goto('/flow')
+  await page.goto('/')
   const strip = page.getByTestId('digest-strip')
   await expect(strip).toBeVisible()
   await expect(strip.getByTestId('project-digest')).toHaveCount(model.projects.length)
@@ -52,7 +52,7 @@ test('one click opens the bullets, and the Issue ids in them are links to the Is
   const ids = cited().argo ?? []
   const first = ids[0]
   if (!first) throw new Error('the seed cited no Issue in argo')
-  await page.goto('/flow')
+  await page.goto('/')
   const card = page.getByTestId('digest-strip').locator('[data-project="argo"]')
   await card.getByRole('button', { name: /Show shipped, next and risks/ }).click()
   for (const name of ['Shipped', 'Next', 'Risks']) await expect(card.getByRole('group', { name })).toBeVisible()
@@ -67,16 +67,16 @@ test('one click opens the bullets, and the Issue ids in them are links to the Is
 })
 
 test('the project filter shows that project alone, opened', async ({ page }) => {
-  await page.goto('/flow?project=argo')
+  await page.goto('/?project=argo')
   const strip = page.getByTestId('digest-strip')
   await expect(strip.getByTestId('project-digest')).toHaveCount(1)
   await expect(strip.locator('[data-project="argo"]').getByRole('group', { name: 'Risks' })).toBeVisible()
-  await page.goto('/flow?project=orion')
+  await page.goto('/?project=orion')
   await expect(page.getByTestId('digest-strip')).toHaveCount(0)
 })
 
 test('a project name on a card opens the project page', async ({ page }) => {
-  await page.goto('/flow')
+  await page.goto('/')
   await page
     .getByTestId('digest-strip')
     .locator('[data-project="harbor"]')
@@ -86,7 +86,7 @@ test('a project name on a card opens the project page', async ({ page }) => {
 })
 
 test('with more than one project the strip is one row, and "Show all" lays every card out', async ({ page }) => {
-  await page.goto('/flow')
+  await page.goto('/')
   const strip = page.getByTestId('digest-strip')
   await expect(strip).toContainText('2 projects')
   const toggle = strip.getByRole('button', { name: 'Show all 2' })

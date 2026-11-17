@@ -25,7 +25,7 @@ const routes = (): string[] => {
   const { spec } = JSON.parse(process.env.E2E_ARTIFACTS ?? '{}') as { spec: string }
   return [
     '/needs-you',
-    '/flow',
+    '/',
     '/artifacts',
     '/chain',
     '/improve',

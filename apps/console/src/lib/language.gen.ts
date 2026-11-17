@@ -67,7 +67,7 @@ export const LANGUAGE = {
     "A first watch (the window after an Issue's first ship) that ended passed, not regressed. The share of those is a KPI",
   'fix commit':
     'A commit that fixes something that went wrong, sorted by class by the fix-classes loop and counted per week',
-  flow: 'The read model of Issues by state over time; Chain is its graph',
+  flow: 'The read model of Issues by state over time (GET /v1/flow), shown on the Overview; Chain is its graph',
   friction: 'Any counted waste: an avoidable touch, a refusal, an undelivered note',
   gate: 'A machine check a lead cannot talk past. Evidence is what a gate reads',
   gone: 'Session state: its session ended or its terminal is gone',
@@ -108,6 +108,8 @@ export const LANGUAGE = {
   origin: 'Where it came from, in words a person uses: you, application, infrastructure, GitHub, feedback, factory',
   outcome:
     "How a closed Issue ended: done, dropped (its lead gave it up, with a reason), healed (an incident that went away before a lead started), cancelled (the owner's stop)",
+  overview:
+    "The Console's home screen (/): what needs the owner, production, what shipped in a day, the host and the queue's binding reason, then the flow's counts and trend. It was the Flow screen",
   owed: 'Working in a repo without a claim, because the wait that gave it up has ended. Owed Issues are served first, so a new lead never takes the place a resumed one waits for. Among themselves they are served by the earliest wait end, then the Issue number; an owed lead is held up only by those ahead of it in that order, never by itself or one behind it. An owed lead counts in the leads of the account it resumes on, and the account cap never refuses its resume. A note refused for a claim for FACTORY_CLAIM_STALL_MS while a claim would be granted to that lead now is a steward stall; a herd waiting its turn is not',
   page: "One message on the owner's line (ntfy). It carries a checkpoint, is never sent twice, and goes on until the checkpoint is settled",
   pass: 'One run of a loop. A pass claims, commits, calls, records: a replayed pass acts on what the first stored',

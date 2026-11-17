@@ -128,7 +128,7 @@ export interface FlowCard {
 export interface FlowFilters {
   project?: string
   origin?: string
-  /** Chooses which Issues the list shows (`/flow?state=running`); it never filters the cards of `cardsOf`. */
+  /** Chooses which Issues the list shows (`/?state=running`); it never filters the cards of `cardsOf`. */
   state?: ListState
 }
 
@@ -283,7 +283,7 @@ export function singleProject(cards: readonly FlowCard[]): string | null {
 /** The cards above the list, each counting one trend series (Not started is Ready and Held together). */
 export const STAT_KEYS = ['running', 'paused', 'notStarted'] as const satisfies readonly WorkTrendKey[]
 
-/** The list a stat card opens on /flow. */
+/** The list a stat card opens on the Overview. */
 const STAT_COLUMN: Record<(typeof STAT_KEYS)[number], ListState | undefined> = {
   running: 'running',
   paused: 'paused',
@@ -311,7 +311,7 @@ export interface FlowStat {
   xLabels: [string, string, string]
   sub: string
   footer: [{ label: string; value: string }, { label: string; value: string }]
-  /** the list the card opens on /flow */
+  /** the list the card opens on the Overview */
   /** the list the card opens; none: the whole list */
   state: ListState | undefined
 }

@@ -9,7 +9,8 @@ import {
   StackIcon,
   WarningIcon,
 } from '@phosphor-icons/react'
-import { createFileRoute, Link } from '@tanstack/react-router'
+import { createFileRoute, Link, useNavigate } from '@tanstack/react-router'
+import { useWindowKeys } from '@/components/shortcuts'
 import { type ReactNode, useState } from 'react'
 import { Fold, MeterBar, Section, Sparkline, StatCard, TimeChart } from '@/components/kit'
 import { TONE_TEXT, TONE_TINT } from '@/components/kit/tone'
@@ -822,6 +823,8 @@ function Improvements({ model }: { model: Model }) {
 
 function Throughput() {
   const { hours = DEFAULT_THROUGHPUT_WINDOW } = Route.useSearch()
+  const navigate = useNavigate({ from: Route.fullPath })
+  useWindowKeys(THROUGHPUT_WINDOWS, hours, (next) => void navigate({ search: { hours: next } }))
   const query = useThroughput(hours)
   const screen = useScreen(query)
   const note = useScreenNote(screen, query.error)

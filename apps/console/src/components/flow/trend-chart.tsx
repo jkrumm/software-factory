@@ -1,6 +1,7 @@
 import { WORK_TREND_KEYS, type WorkTrendKey } from '@software-factory/contract'
 import { useState } from 'react'
 import { InfoHint, Segments, TimeChart } from '@/components/kit'
+import { useWindowKeys } from '@/components/shortcuts'
 import { bucketWords, DEFAULT_TREND_RANGE, TREND_RANGES, type TrendRange, trendLines } from '@/lib/flow'
 import { useFlowTrend } from '@/lib/queries'
 
@@ -14,6 +15,9 @@ const COUNT_LABEL: Record<WorkTrendKey, string> = {
 /** The word each series is defined under in `docs/language.md`. */
 const COUNT_WORD = { running: 'running', paused: 'paused', notStarted: 'not started', checking: 'checking' } as const
 
+/** The windows from shorter to longer: `[` and `]` step through them. */
+const RANGE_KEYS = TREND_RANGES.map((choice) => choice.key)
+
 /**
  * Issues over time: the peak and the average of one count (running, paused, not started or checking) in every bucket of a window,
  * from the server's applied events, so a daytime peak between two instants still shows. The window and the bucket are
@@ -22,6 +26,7 @@ const COUNT_WORD = { running: 'running', paused: 'paused', notStarted: 'not star
 export function TrendChart() {
   const [rangeKey, setRangeKey] = useState<TrendRange['key']>(DEFAULT_TREND_RANGE.key)
   const [count, setCount] = useState<WorkTrendKey>('running')
+  useWindowKeys(RANGE_KEYS, rangeKey, setRangeKey)
   const range = TREND_RANGES.find((choice) => choice.key === rangeKey) ?? DEFAULT_TREND_RANGE
   const { data, error, isPending } = useFlowTrend(range.window, range.bucket)
   const lines = data ? trendLines(data, count) : null

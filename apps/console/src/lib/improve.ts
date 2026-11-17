@@ -668,6 +668,7 @@ const QUEUE_REASON_WORDS: Record<string, string> = {
   finalizing: 'Another Issue finalizing',
   spec: 'A Spec at the owner',
   unknown_project: 'An unknown project',
+  doctor: "The project's doctor check",
   unrecorded: 'No reason recorded',
 }
 

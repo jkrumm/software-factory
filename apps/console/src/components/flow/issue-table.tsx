@@ -64,7 +64,12 @@ function Row({ card, now }: { card: FlowCard; now: number }) {
         </span>
       </td>
       <td className={cn(TD, 'min-w-48')}>
-        <Link to="/issues/$id" params={{ id: String(card.number) }} className={cn(LINK, 'font-medium wrap-anywhere')}>
+        <Link
+          to="/issues/$id"
+          params={{ id: String(card.number) }}
+          data-keynav=""
+          className={cn(LINK, 'font-medium wrap-anywhere')}
+        >
           {card.title}
         </Link>
         {card.reason ? <p className="text-xs text-muted-foreground wrap-anywhere">{card.reason}</p> : null}

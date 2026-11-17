@@ -90,7 +90,7 @@ test('a review opened after a hover shows its artifact with no skeleton', async 
 
 const SCREENS = [
   { name: 'needs-you', path: '/needs-you' },
-  { name: 'flow', path: '/flow' },
+  { name: 'overview', path: '/' },
   { name: 'chain', path: '/chain' },
   { name: 'improve', path: '/improve' },
   { name: 'artifact', path: () => `/artifacts/${JSON.parse(process.env.E2E_ARTIFACTS ?? '{}').shotReport}` },

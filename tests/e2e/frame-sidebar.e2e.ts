@@ -6,10 +6,10 @@ import { api, needsCount } from './seed.ts'
 
 /** The sidebar: logo and wordmark, the global nav with counts and keys, collapse, and the page's own section. */
 const NAV = [
+  { label: 'Overview', path: '/', key: 'O' },
   { label: 'Needs you', path: '/needs-you', key: 'N' },
-  { label: 'Flow', path: '/flow', key: 'F' },
-  { label: 'Artifacts', path: '/artifacts', key: 'A' },
   { label: 'Chain', path: '/chain', key: 'C' },
+  { label: 'Artifacts', path: '/artifacts', key: 'A' },
   { label: 'Improve', path: '/improve', key: 'I' },
   { label: 'Throughput', path: '/throughput', key: 'T' },
 ] as const
@@ -62,7 +62,7 @@ test('each entry navigates and shows its key on hover', async ({ page }) => {
   }
 })
 
-test('the counts are the API: waiting on Needs you, open on Flow', async ({ page, apiUrl }) => {
+test('the counts are the API: waiting on Needs you, open on the Overview', async ({ page, apiUrl }) => {
   const needs = await needsCount(apiUrl)
   const flow = await api<Flow>(apiUrl, '/v1/flow')
   await page.goto('/chain')
@@ -73,7 +73,7 @@ test('the counts are the API: waiting on Needs you, open on Flow', async ({ page
 })
 
 test('it collapses to icons, keeps the choice across a reload and expands again', async ({ page }) => {
-  await page.goto('/flow')
+  await page.goto('/')
   const width = async () => (await aside(page).boundingBox())?.width ?? 0
   await expect.poll(width).toBeCloseTo(224, 0)
   await expect(section(page, 'Projects')).toBeVisible()
@@ -83,7 +83,7 @@ test('it collapses to icons, keeps the choice across a reload and expands again'
   await expect.poll(width).toBeCloseTo(56, 0)
   await expect(section(page, 'Projects')).toBeHidden()
   await expect(aside(page).getByText('Factory', { exact: true })).toBeHidden()
-  await expect(nav(page).getByRole('link', { name: 'Flow' })).toBeVisible()
+  await expect(nav(page).getByRole('link', { name: 'Overview' })).toBeVisible()
   await nav(page).getByRole('link', { name: 'Chain' }).hover()
   await expect(page.locator('[data-slot="tooltip-content"]')).toContainText('Chain')
 
@@ -99,7 +99,7 @@ test('it collapses to icons, keeps the choice across a reload and expands again'
 })
 
 test('collapsed, the active filters show as removable chips and the window switch stays', async ({ page }) => {
-  await page.goto('/flow?project=argo')
+  await page.goto('/?project=argo')
   const chips = page.getByRole('group', { name: 'Active filters' })
   await expect(chips).toBeHidden()
   await page.getByRole('button', { name: 'Collapse sidebar' }).click()
@@ -128,7 +128,7 @@ test('a kind with nothing waiting says so and links back', async ({ page, apiUrl
   await expect(page).not.toHaveURL(/kind=/)
 })
 
-test('Flow: projects and origins toggle the URL and the list, All clears', async ({ page, apiUrl }) => {
+test('Overview: projects and origins toggle the URL and the list, All clears', async ({ page, apiUrl }) => {
   const flow = await api<Flow>(apiUrl, '/v1/flow')
   const all = [...STATES.flatMap((s) => flow.states[s].issues), ...flow.closedRecently]
   const repo = all[0]?.repo
@@ -142,7 +142,7 @@ test('Flow: projects and origins toggle the URL and the list, All clears', async
       ),
     ).length
 
-  await page.goto('/flow')
+  await page.goto('/')
   const link = toggle(page, 'Projects', new RegExp(`^${repo}( \\d+ (running|paused|ready|held|checking).*)?$`))
   await expect(link).toHaveAttribute('aria-pressed', 'false')
   // the row counts what is open, by the five words, and never a closed Issue
@@ -176,21 +176,21 @@ test('Flow: projects and origins toggle the URL and the list, All clears', async
   await expect(page.locator('main select').first()).toBeHidden()
 })
 
-test('Flow: ?state lists the Issues of that word with a link back to all', async ({ page, apiUrl }) => {
+test('Overview: ?state lists the Issues of that word with a link back to all', async ({ page, apiUrl }) => {
   const flow = await api<Flow>(apiUrl, '/v1/flow')
   const list = page.getByTestId('flow-list')
-  await page.goto('/flow?state=paused')
+  await page.goto('/?state=paused')
   await expect(list.getByRole('heading', { level: 2 })).toHaveText(`Paused ${flow.states.waiting.count}`)
   await expect(list.getByTestId('flow-row')).toHaveCount(flow.states.waiting.count)
-  await expect(page.getByRole('region')).toHaveCount(1)
+  await expect(page.getByTestId('flow-list')).toHaveCount(1)
 
   // an unknown state is dropped: the list stays collapsed
-  await page.goto('/flow?state=nope')
+  await page.goto('/?state=nope')
   await expect(list).toHaveAttribute('data-collapsed', 'true')
 
-  await page.goto('/flow?state=paused&project=argo')
+  await page.goto('/?state=paused&project=argo')
   await page.getByRole('link', { name: 'Show all states' }).click()
-  await expect(page).toHaveURL(/\/flow\?project=argo$/)
+  await expect(page).toHaveURL(/\/\?project=argo$/)
   await expect(list.getByRole('heading', { level: 2 })).toHaveText(/^Issues \d+$/)
 })
 
@@ -249,7 +249,7 @@ test('Improve: the window is in the sidebar and the page has no switch of its ow
 })
 
 test('the section leaves with the page', async ({ page }) => {
-  await page.goto('/flow')
+  await page.goto('/')
   await expect(section(page, 'Projects')).toBeVisible()
   await nav(page).getByRole('link', { name: 'Improve' }).click()
   await expect(section(page, 'Projects')).toHaveCount(0)
@@ -260,10 +260,10 @@ test.describe('phone', () => {
   test.use({ viewport: { width: 390, height: 844 } })
 
   test('there is no sidebar; the page keeps its own selects and the state opens the list', async ({ page }) => {
-    await page.goto('/flow')
+    await page.goto('/')
     await expect(aside(page)).toBeHidden()
     await expect(page.locator('main select').first()).toBeVisible()
-    await page.goto('/flow?state=paused')
+    await page.goto('/?state=paused')
     await expect(page.getByTestId('flow-list').getByRole('heading', { level: 2 })).toHaveText(/^Paused \d+$/)
   })
 })

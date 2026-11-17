@@ -37,14 +37,14 @@ async function world(apiUrl: string): Promise<World> {
 
 test.describe('the counts', () => {
   for (const state of ['running', 'paused', 'ready', 'held', 'checking'] as const) {
-    test(`${state} links to Flow filtered to it`, async ({ page, apiUrl }) => {
+    test(`${state} links to the Overview filtered to it`, async ({ page, apiUrl }) => {
       const flow = await api<{ work: Record<typeof state, number> }>(apiUrl, '/v1/flow')
       const count = flow.work[state]
       await page.goto('/needs-you')
       const link = flowLinks(page).getByRole('link', { name: new RegExp(`${state}$`) })
       await expect(link).toContainText(String(count))
       await link.click()
-      await expect(page).toHaveURL(new RegExp(`/flow\\?state=${state}$`))
+      await expect(page).toHaveURL(new RegExp(`/\\?state=${state}$`))
     })
   }
 })
@@ -271,8 +271,8 @@ test.describe('the palette', () => {
   test('shows the keys of the commands, the footer and the recent Issues on an empty query', async ({ page }) => {
     await page.goto('/needs-you')
     await open(page)
-    const flow = dialog(page).getByRole('option', { name: /Go to Flow/ })
-    await expect(flow.locator('kbd')).toHaveText(['G', 'F'])
+    const flow = dialog(page).getByRole('option', { name: /Go to Overview/ })
+    await expect(flow.locator('kbd')).toHaveText(['G', 'O'])
     await expect(flow).toContainText('Command')
     await expect(dialog(page).getByText('Recently active')).toBeVisible()
     await expect(dialog(page).getByRole('option').filter({ hasText: 'Issue' }).first()).toBeVisible()
@@ -286,7 +286,7 @@ test.describe('the palette', () => {
     const height = () => dialog(page).evaluate((el) => (el as { offsetHeight: number }).offsetHeight)
     const empty = await height()
     expect(empty).toBeGreaterThan(250)
-    for (const query of ['go to f', 'go to fl', 'flow', 'zzzzqqq']) {
+    for (const query of ['go to ov', 'go to over', 'overview', 'zzzzqqq']) {
       await dialog(page).getByRole('combobox').fill(query)
       expect(await height(), query).toBe(empty)
     }
