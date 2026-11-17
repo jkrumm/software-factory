@@ -78,6 +78,8 @@ export interface SlotFit {
   peaksByName?: ReadonlyMap<string, number | null>
   /** how each of those peaks was known; a missing name reads as learned */
   peakFromByName?: ReadonlyMap<string, PeakFrom>
+  /** the learned peak of each holder's step by the holder's id (a missing id has none: its growth reads as 0) */
+  heldPeakById?: ReadonlyMap<string, number | null>
   freeMib: number | null
   /** what the running steps will still grow by */
   growthMib: number
@@ -209,6 +211,27 @@ function decide(
 }
 
 /**
+ * Whether a step may pass a head that was passed for the whole window anyway: the freeze exists so small steps cannot keep
+ * the head out for ever, and a step does not keep it out when the head still fits beside it once the holders granted
+ * before the passing began have ended (their resident size is then free again). Both sizes must be learned or guessed and
+ * the free memory known; otherwise the freeze holds. The holders granted since the passing began are the passers: they stay
+ * and are already in the used memory.
+ */
+function headFitsBeside(head: SlotRow, step: SlotRow, held: readonly SlotRow[], fit: SlotFit): boolean {
+  const headMib = fit.peaksByName?.get(head.name) ?? null
+  const stepMib = fit.peaksByName?.get(step.name) ?? fit.peakMib
+  if (headMib === null || stepMib === null || fit.freeMib === null || head.passedAt === null) return false
+  const passedAt = head.passedAt.getTime()
+  const before = (row: SlotRow): boolean => row.grantedAt !== null && row.grantedAt.getTime() < passedAt
+  const released = held.filter(before).reduce((sum, row) => sum + (row.rssMib ?? 0), 0)
+  // what the holders that stay (the passers) will still take on, as the head's own fit counts the growth of every holder
+  const staying = held
+    .filter((row) => !before(row))
+    .reduce((sum, row) => sum + Math.max(0, (fit.heldPeakById?.get(row.id) ?? 0) - (row.rssMib ?? 0)), 0)
+  return headMib + stepMib + staying + fit.headroomMib <= fit.freeMib + released
+}
+
+/**
  * One call of a caller, which is a request for a slot and a renewal of the one it has: the first call makes it a
  * waiter; a call from a waiter first in line, with a slot free, gives it that slot; a call from a holder renews the
  * lease. Slots go to waiters in the line's order (`lineOrder`). Rows past their lease (holders) or their poll window (waiters)
@@ -328,7 +351,8 @@ export function touchSlots(
   })
   if (!verdict.grant) return wait(verdict.why + passedNote(mine), verdict.kind)
   // The slot goes to the first waiter in line that fits: a waiter ahead that does not fit is passed, unless it has been
-  // passed for the whole window (then it holds the line), and one that fits takes the slot on its own next call. A waiter
+  // passed for the whole window (then it holds the line, unless it still fits beside the caller: `headFitsBeside`), and
+  // one that fits takes the slot on its own next call. A waiter
   // whose host-wide class is held never holds the line: the line standing still frees no class.
   const passed: SlotRow[] = []
   for (const waiter of line.slice(0, ahead)) {
@@ -339,7 +363,12 @@ export function touchSlots(
       cores: input.fit.coresByName?.get(waiter.name) ?? DEFAULT_STEP_CORES,
     })
     if (theirs.grant) return wait(`waiting for the ${ahead} ahead in line`, 'line')
-    if (theirs.kind !== 'class' && waiter.passedAt !== null && now.getTime() - waiter.passedAt.getTime() >= passAfterMs)
+    if (
+      theirs.kind !== 'class' &&
+      waiter.passedAt !== null &&
+      now.getTime() - waiter.passedAt.getTime() >= passAfterMs &&
+      !headFitsBeside(waiter, mine, held, input.fit)
+    )
       return wait(
         `"${waiter.name}" ahead was passed for ${Math.round(passAfterMs / 60_000)} min and nothing passes it now: ${theirs.why}`,
         'line',

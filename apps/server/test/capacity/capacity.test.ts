@@ -932,6 +932,48 @@ describe('test slots', () => {
       expect(blocked.view.why).not.toContain('learned from the last runs')
     })
 
+    test('after the window a step still passes a head that fits beside it once the holders from before the passing end', () => {
+      // h holds 4 GiB of the host's used memory since before the big step asked; big (5 GiB) was passed once, 10 min ago
+      let rows = call([], 'h', now, 2, { ...open, max: 6 }).rows
+      rows = touchSlots(
+        rows,
+        { id: 'h', name: 'h', slots: 2, runMs: 1, fit: open, rssMib: 4096, peakRssMib: 4096 },
+        at(500),
+      ).rows
+      rows = ask(rows, 'big', 1000, 0, 5120).rows
+      rows = ask(rows, 's1', 2000, 0, 300).rows
+      expect(rows.find((r) => r.id === 'big')).toMatchObject({ passedBy: 's1', passedAt: at(2000) })
+      const late = 2000 + 10 * MIN
+      for (let ms = 15_000; ms < late; ms += 10_000) {
+        for (const id of ['h', 's1']) rows = ask(rows, id, ms, 0, 300).rows
+        rows = ask(rows, 'big', ms, 0, 5120).rows
+      }
+      const hOnly = rows.map((r) => (r.id === 'h' ? { ...r, rssMib: 4096 } : r))
+      const fits = (freeMib: number, heldPeakById?: Map<string, number | null>) =>
+        touchSlots(
+          hOnly,
+          {
+            id: 's2',
+            name: 's2',
+            slots: 2,
+            runMs: 1,
+            fit: { ...mem(0, 300), freeMib, ...(heldPeakById ? { heldPeakById } : {}) },
+            passAfterMs: 10 * MIN,
+          },
+          at(late),
+        ).view
+      // 5120 + 300 + 2048 = 7468 needs 3372 free now beside h's 4096 that ends: it fits
+      expect(fits(3372).granted).toBe(true)
+      // 100 MiB less and the head would no longer fit beside the step: the freeze holds
+      const held = fits(3371)
+      expect(held.granted).toBe(false)
+      expect(held.why).toContain('nothing passes it')
+      // the passer s1 still grows by 1000 MiB (learned 1000, resident 0): the head has to fit beside that growth too
+      const growing = new Map<string, number | null>([['s1', 1000]])
+      expect(fits(3372 + 1000, growing).granted).toBe(true)
+      expect(fits(3372 + 999, growing).granted).toBe(false)
+    })
+
     test('a small step that does not fit either does not pass', () => {
       const rows = call([], 'h', now, 2, { ...open, max: 6 }).rows
       const big = ask(rows, 'big', 1000, 0, 5120)
