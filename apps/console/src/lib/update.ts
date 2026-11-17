@@ -138,9 +138,9 @@ export function startUpdates(): void {
     if (controlled) activated()
     controlled = true
   })
-  // a lazy chunk of the old build is gone from the server once the new one is live: its load fails, and only a reload cures it
-  window.addEventListener('vite:preloadError', (event) => {
-    event.preventDefault()
+  // a lazy chunk of the old build is gone from the server once the new one is live: its load fails, and only a reload cures it.
+  // The event is not cancelled: a cancelled one makes `import()` resolve to nothing, which `React.lazy` cannot render.
+  window.addEventListener('vite:preloadError', () => {
     if (!reloadAt('idle')) checkForUpdate()
   })
   document.addEventListener('visibilitychange', () => {
