@@ -10,7 +10,7 @@ export interface RepoLeadCost {
   repo: string
   /** the attempts sampled */
   attempts: number
-  /** 80th percentile (nearest rank) of the newest 10 attempts' peak MiB; admission takes the largest of the newest three settled attempts instead when all are below it (`learnLeadCost`) */
+  /** 80th percentile (nearest rank) of the newest 10 attempts' peak MiB; the burst a lead reaches, not the figure admission reserves: that is the median of the same ten, or the largest of the newest three settled attempts when all are below it (`learnLeadCost`) */
   peakMibP80: number
   /** the peak MiB of the newest attempt */
   lastPeakMib: number
@@ -43,7 +43,7 @@ const Row = z.object({
 /**
  * Per repo: the peak of every attempt (its worktree's largest sample of its last six hours, from the repo's relearn point on, the
  * population admission learns from), then the 80th percentile of the newest ten
- * attempts' peaks (nearest rank, as `learnedLeadMib` takes it, but with no minimum of attempts: the caller decides
+ * attempts' peaks (nearest rank, but at the 0.8 share where `learnedLeadMib` takes the median, and with no minimum of attempts: the caller decides
  * whether `attempts` is enough) and the newest attempt's peak. The same two figures again from the physical footprint,
  * over the newest ten attempts that have one (rows from before the footprint was recorded, or minutes `top` failed, have
  * none), with the median of footprint peak over RSS peak: the calibration of one against the other.
