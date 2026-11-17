@@ -254,14 +254,17 @@ export function CommandPalette({ open, onOpenChange }: { open: boolean; onOpenCh
   const result = useMemo(() => searchPalette(query, source, recent), [query, source, recent])
   const actions = new Map(commands.map((command) => [command.id, command]))
 
+  // On an empty query the actions on this page lead; on a typed one the things that match do, and the actions follow them
+  const typed = query.trim() !== ''
   const first =
     (result.openNumber !== null && `open-${result.openNumber}`) ||
     (result.recent[0] && `recent-${result.recent[0].type}-${result.recent[0].id}`) ||
-    (result.context[0] && `context-${result.context[0].id}`) ||
+    (!typed && result.context[0] && `context-${result.context[0].id}`) ||
     (result.issues[0] && `issue-${result.issues[0].number}`) ||
     (result.projects[0] && `project-${result.projects[0].name}`) ||
     (result.artifacts[0] && `artifact-${result.artifacts[0].id}`) ||
     (result.collections[0] && `collection-${result.collections[0].id}`) ||
+    (result.context[0] && `context-${result.context[0].id}`) ||
     (result.commands[0] && `command-${result.commands[0].id}`) ||
     ''
   // The best match is always the one Enter takes: the selection follows the results, not cmdk's own order.
@@ -286,6 +289,23 @@ export function CommandPalette({ open, onOpenChange }: { open: boolean; onOpenCh
     if (!next) setQuery('')
     onOpenChange(next)
   }
+
+  const thisPage =
+    result.context.length > 0 ? (
+      <CommandGroup heading="This page">
+        {result.context.map((entry) => (
+          <Row
+            key={entry.id}
+            value={`context-${entry.id}`}
+            icon={entry.id === 'context-pin' ? PushPinIcon : CopyIcon}
+            title={entry.title}
+            query={query}
+            kind="Action"
+            onSelect={go(contextRun(entry.id, entry))}
+          />
+        ))}
+      </CommandGroup>
+    ) : null
 
   return (
     <CommandDialog
@@ -333,21 +353,7 @@ export function CommandPalette({ open, onOpenChange }: { open: boolean; onOpenCh
               ))}
             </CommandGroup>
           ) : null}
-          {result.context.length > 0 ? (
-            <CommandGroup heading="This page">
-              {result.context.map((entry) => (
-                <Row
-                  key={entry.id}
-                  value={`context-${entry.id}`}
-                  icon={entry.id === 'context-pin' ? PushPinIcon : CopyIcon}
-                  title={entry.title}
-                  query={query}
-                  kind="Action"
-                  onSelect={go(contextRun(entry.id, entry))}
-                />
-              ))}
-            </CommandGroup>
-          ) : null}
+          {typed ? null : thisPage}
           {result.issues.length > 0 ? (
             <CommandGroup heading={query.trim() === '' ? 'Recently active' : 'Issues'}>
               {result.issues.map((issue) => (
@@ -418,6 +424,7 @@ export function CommandPalette({ open, onOpenChange }: { open: boolean; onOpenCh
               ))}
             </CommandGroup>
           ) : null}
+          {typed ? thisPage : null}
           {result.commands.length > 0 ? (
             <CommandGroup heading="Commands">
               {result.commands.map((entry) => {
