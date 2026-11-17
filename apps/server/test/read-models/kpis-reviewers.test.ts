@@ -36,9 +36,21 @@ const thread = (
   findings: { total, important: 0, applied, declined, open: total - applied - declined },
 })
 
-async function reviewed(n: number, assigned: string | null, threads: object[], first: 'passed' | 'regressed' | null) {
+async function reviewed(
+  n: number,
+  assigned: string | null,
+  threads: object[],
+  first: 'passed' | 'regressed' | null,
+  light = false,
+) {
   const id = `issue_${n}`
   await sql`INSERT INTO factory.issues (id, repo, state, version) VALUES (${id}, 'app', 'working', 1)`
+  const seat = light
+    ? { tier: 'haiku', effort: 'high', role: 'light', rule: 'kind:docs' }
+    : { tier: 'sonnet', effort: 'high' }
+  await sql`INSERT INTO factory.issue_events (id, issue_id, key, kind, payload, actor, at, result, version, to_state)
+    VALUES (${`event_${n}`}, ${id}, ${`key_${n}`}, 'lead_started', ${JSON.stringify({ attempt: 1, terminal: 't', seat })}::text::jsonb,
+      'factory', ${ago(20)}, 'applied', 1, 'working')`
   const payload = { kind: 'review', status: 'covered', ...(assigned ? { reviewer: assigned, threads } : {}) }
   await sql`INSERT INTO factory.quality_evidence (id, issue_id, attempt, source_key, kind, at, payload)
     VALUES (${`ev_${n}`}, ${id}, 1, ${`ship_${n}`}, 'review', ${ago(10)}, ${JSON.stringify(payload)}::text::jsonb)`
@@ -56,6 +68,8 @@ beforeAll(async () => {
   await reviewed(3, 'reviewer', [thread('reviewer', 'standard', 1, 10_000, 2, 2, 0)], 'passed')
   // a cheap Issue whose only review was deep: it ran on the reviewer row and tested neither seat's Issues
   await reviewed(4, 'reviewer-cheap', [thread('reviewer', 'deep', 3, 90_000, 4, 4, 0)], 'passed')
+  // a light-seat Issue is on the cheap row by rule: it shows in the rows but stays out of the tripwire's comparison
+  await reviewed(6, 'reviewer-cheap', [thread('reviewer-cheap', 'light', 1, 20_000, 0, 0, 0)], 'passed', true)
   // a ship from before the seat was recorded counts for nothing
   await reviewed(5, null, [], 'passed')
 })
@@ -73,21 +87,21 @@ describe('the reviewer seats', () => {
       role: 'reviewer-cheap',
       tier: 'haiku',
       effort: 'high',
-      reviews: 2,
+      reviews: 3,
       deepReviews: 0,
       findings: 3,
-      findingsPerReview: 1.5,
+      findingsPerReview: 1,
       applied: 2,
       declined: 1,
       appliedShare: 2 / 3,
-      roundsPerReview: 1.5,
-      issues: 2,
-      firstWatches: 2,
-      firstPassRate: 0.5,
+      roundsPerReview: 4 / 3,
+      issues: 3,
+      firstWatches: 3,
+      firstPassRate: 2 / 3,
       regressedIssues: 1,
-      regressionRate: 0.5,
+      regressionRate: 1 / 3,
       costPerReview: null,
-      wallP50Ms: 30_000,
+      wallP50Ms: 20_000,
     })
     expect(rows.find((row) => row.seat === 'plain')).toMatchObject({
       role: 'reviewer',
@@ -106,11 +120,11 @@ describe('the reviewer seats', () => {
 
   test('cost per review divides each seat’s reviewer dollars by its reviews, deep ones included', async () => {
     const { rows } = await readReviewerKpis(sql, W, { now: NOW, table, cost: async () => ({ cheap: 1, plain: 3 }) })
-    expect(rows.find((row) => row.seat === 'cheap')?.costPerReview).toBe(0.5)
+    expect(rows.find((row) => row.seat === 'cheap')?.costPerReview).toBeCloseTo(1 / 3)
     expect(rows.find((row) => row.seat === 'plain')?.costPerReview).toBe(1.5)
   })
 
-  test('the tripwire shows its inputs and, with two reviews of a seat, takes nothing over', async () => {
+  test('the tripwire shows its inputs, leaves the light-seat Issue out of the comparison and, with two reviews of a seat, takes nothing over', async () => {
     const { tripwire } = await readReviewerKpis(sql, W, { now: NOW, table, cost: null })
     expect(tripwire).toMatchObject({
       minReviews: 100,

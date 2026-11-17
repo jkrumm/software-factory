@@ -224,12 +224,14 @@ export async function startLead(deps: LeadDeps, effect: StartEffect): Promise<Re
   }
 
   // Attached: the terminal runs already. The fact is recorded again if a crash came between the two transactions, with
-  // the seat decided again (the rule reads stored facts); a table that cannot be read leaves the filed seat, or none.
+  // the seat decided again (the rule reads stored facts); a table that cannot be read leaves the filed seat, or none. The
+  // reviewer row is not decided again: the brief was typed under a decision this path cannot read back, and a row that
+  // differs from the brief would be measured as a seat the lead was never told to use. None is recorded: the reviews of
+  // that lead are left out of the reviewer table.
   const decided = await seatOf(deps, current, origin)
   const seat = decided.ok ? decided.value : current.seat
-  const reviewer = await reviewerOf(deps, issue, (seat && 'rule' in seat ? seat.rule : null) != null)
   const recorded = await deps.uow.run(({ work }) =>
-    recordStarted(work, deps, issue, attempt, row.terminal ?? name, seat, reviewer?.role ?? null),
+    recordStarted(work, deps, issue, attempt, row.terminal ?? name, seat, null),
   )
   return recorded.ok ? ok(undefined) : err(toPortError(recorded.error))
 }

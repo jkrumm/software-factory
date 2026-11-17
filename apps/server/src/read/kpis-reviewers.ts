@@ -27,6 +27,8 @@ interface Window {
 /** One recorded review: a thread of agw's ledger that covered a ship, with the seat it ran on. */
 const Review = z.object({
   issue_id: z.string(),
+  /** the attempt's lead ran on the light seat: its Issues are not like the others and stay out of the tripwire */
+  light: z.boolean(),
   at: z.coerce.date(),
   assigned: z.string(),
   role: z.string(),
@@ -42,6 +44,7 @@ export type Review = z.infer<typeof Review>
 /** What became of an Issue whose ship carried recorded reviews. */
 const Outcome = z.object({
   issue_id: z.string(),
+  light: z.boolean(),
   at: z.coerce.date(),
   assigned: z.string(),
   first_watch: z.string().nullable(),
@@ -56,22 +59,28 @@ export type Outcome = z.infer<typeof Outcome>
 async function recordsOf(sql: SQL): Promise<{ reviews: Review[]; outcomes: Outcome[] }> {
   const reviews: unknown[] = await sql`
     WITH latest AS (
-      SELECT DISTINCT ON (e.issue_id) e.issue_id, e.at, e.payload
+      SELECT DISTINCT ON (e.issue_id) e.issue_id, e.at, e.payload, EXISTS (
+          SELECT 1 FROM factory.issue_events s
+          WHERE s.issue_id = e.issue_id AND s.kind = 'lead_started' AND s.result = 'applied'
+            AND (s.payload->>'attempt')::int = e.attempt AND s.payload->'seat'->>'rule' IS NOT NULL) AS light
       FROM factory.quality_evidence e
       WHERE e.kind = 'review' AND e.payload ? 'reviewer'
       ORDER BY e.issue_id, e.at DESC)
-    SELECT l.issue_id, l.at, l.payload->>'reviewer' AS assigned, t->'seat'->>'role' AS role, t->>'tier' AS tier,
+    SELECT l.issue_id, l.light, l.at, l.payload->>'reviewer' AS assigned, t->'seat'->>'role' AS role, t->>'tier' AS tier,
       (t->>'rounds')::int AS rounds, t->>'wallMs' AS wall_ms,
       (t->'findings'->>'total')::int AS findings, (t->'findings'->>'applied')::int AS applied,
       (t->'findings'->>'declined')::int AS declined
     FROM latest l, jsonb_array_elements(coalesce(l.payload->'threads', '[]'::jsonb)) t`
   const outcomes: unknown[] = await sql`
     WITH latest AS (
-      SELECT DISTINCT ON (e.issue_id) e.issue_id, e.at, e.payload->>'reviewer' AS assigned
+      SELECT DISTINCT ON (e.issue_id) e.issue_id, e.at, e.payload->>'reviewer' AS assigned, EXISTS (
+          SELECT 1 FROM factory.issue_events s
+          WHERE s.issue_id = e.issue_id AND s.kind = 'lead_started' AND s.result = 'applied'
+            AND (s.payload->>'attempt')::int = e.attempt AND s.payload->'seat'->>'rule' IS NOT NULL) AS light
       FROM factory.quality_evidence e
       WHERE e.kind = 'review' AND e.payload ? 'reviewer'
       ORDER BY e.issue_id, e.at DESC)
-    SELECT l.issue_id, l.at, l.assigned,
+    SELECT l.issue_id, l.light, l.at, l.assigned,
       (SELECT w.answer FROM factory.quality_watches w
         WHERE w.issue_id = l.issue_id AND w.watch = 1 AND w.answer IN ('passed', 'regressed')) AS first_watch,
       EXISTS (SELECT 1 FROM factory.quality_watches w WHERE w.issue_id = l.issue_id AND w.answer = 'regressed') AS regressed
@@ -91,11 +100,21 @@ function issuesOf(seat: Seat, reviews: readonly Review[], outcomes: readonly Out
   return outcomes.filter((outcome) => seatOfRole(outcome.assigned) === seat && reviewed.has(outcome.issue_id))
 }
 
-/** The tripwire's evidence of one seat: its non-deep reviews and its Issues' first verifications and regressions. */
+/**
+ * The tripwire's evidence of one seat: its non-deep reviews and its Issues' first verifications and regressions. Issues
+ * whose lead ran on the light seat are left out of both seats: the cheap row has all of them and the other row none, and
+ * mechanical work with a proving check passes more often whatever the reviewer, so they would flatter the cheap row. What
+ * is compared is the even and odd Issue numbers of the rest.
+ */
 export function evidenceOf(seat: Seat, reviews: readonly Review[], outcomes: readonly Outcome[]): SeatEvidence {
-  const issues = issuesOf(seat, reviews, outcomes).filter((outcome) => outcome.first_watch !== null)
+  const like = reviews.filter((review) => !review.light)
+  const issues = issuesOf(
+    seat,
+    like,
+    outcomes.filter((outcome) => !outcome.light),
+  ).filter((outcome) => outcome.first_watch !== null)
   return {
-    reviews: reviews.filter((review) => seatOfRole(review.role) === seat && !isDeep(review)).length,
+    reviews: like.filter((review) => seatOfRole(review.role) === seat && !isDeep(review)).length,
     issues: issues.length,
     passed: issues.filter((outcome) => outcome.first_watch === 'passed').length,
     regressed: issues.filter((outcome) => outcome.regressed).length,

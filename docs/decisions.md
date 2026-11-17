@@ -370,7 +370,7 @@ Report `docs/strategy/2026-11-next/report.html`, definition `docs/strategy/2026-
   puts the two seats side by side in `factory read kpis` (`reviewers`) and on Improve. The seat a record names is the
   assignment the brief told the lead to follow, not an observation of the session: the usage side's reviewer cost by model
   (haiku or not) is the cross-check, shown as cost per review. **Tripwire, both ways, from stored facts alone** (no mode is
-  kept): the cheap row takes every non-deep review when each seat has 100 non-deep reviews, the cheap row's Issues regress
+  kept): the cheap row takes every non-deep review when each seat has 100 non-deep reviews (of the Issues whose lead was not on the light seat: the light Issues are the cheap row's by rule, mechanical and proved by a check, and would flatter it, so the comparison is the even against the odd Issue numbers), the cheap row's Issues regress
   no more often and pass their first verification within 2 points of the other seat's; it goes back to its starting share
   while its last 3 days (judged with at least 10 Issues, so one regression cannot flip it; 10 is a floor of this Issue, not a measurement) break either test against the other seat's whole record, since with every review on the cheap row the
   other seat has no days of its own. Deep reviews stay on `reviewer` until the plain tier has this evidence. Starting share:
