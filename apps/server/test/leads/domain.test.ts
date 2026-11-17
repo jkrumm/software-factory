@@ -431,6 +431,12 @@ describe('the brief', () => {
     expect(STANDING_ORDERS).toContain('gh pr checks <n>')
   })
 
+  test('the CI wait reads each check bucket, never the watch exit code', () => {
+    expect(STANDING_ORDERS).toContain('--json bucket')
+    expect(STANDING_ORDERS).toContain('| grep -qx true')
+    expect(STANDING_ORDERS).toContain("the watch's exit code is not the verdict")
+  })
+
   test('the standing orders list every verb in its plain flag form and say how news arrives', () => {
     for (const form of [
       'factory issue show <id>',
