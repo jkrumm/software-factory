@@ -59,6 +59,8 @@ export interface PaletteResult {
   context: ContextAction[]
   /** a number was typed and no listed Issue has it: the row "Open Issue #n" still opens it */
   openNumber: number | null
+  /** the query is a project's whole name: that project leads the list and is what Enter opens, ahead of Issues whose titles start with it */
+  projectFirst: boolean
   /** the last visited things, newest first, resolved to titles; empty for a query */
   recent: RecentRow[]
 }
@@ -169,15 +171,18 @@ export function searchPalette(
       commands: source.commands,
       context,
       openNumber: null,
+      projectFirst: false,
       recent: resolveRecent(recent, source),
     }
   }
   const issues = rank(source.issues, (issue) => issueScore(issue, query))
   const number = numberOf(query)
+  const projects = rank(source.projects, (project) => textScore(project.name, query)).slice(0, MAX_OTHERS)
+  const named = query.trim().toLowerCase()
   return {
     issues: issues.slice(0, MAX_ISSUES),
     moreIssues: Math.max(0, issues.length - MAX_ISSUES),
-    projects: rank(source.projects, (project) => textScore(project.name, query)).slice(0, MAX_OTHERS),
+    projects,
     artifacts: rank(source.artifacts, (artifact) => textScore(artifact.title, query, artifact.id)).slice(0, MAX_OTHERS),
     collections: rank(source.collections, (collection) => textScore(collection.title, query, collection.id)).slice(
       0,
@@ -186,6 +191,7 @@ export function searchPalette(
     commands: rank(source.commands, (command) => textScore(command.title, query, command.keywords)),
     context: rank(context, (command) => textScore(command.title, query, command.keywords)),
     openNumber: number !== null && !source.issues.some((issue) => issue.number === number) ? number : null,
+    projectFirst: projects[0]?.name.toLowerCase() === named,
     recent: [],
   }
 }

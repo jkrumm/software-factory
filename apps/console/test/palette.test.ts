@@ -150,6 +150,15 @@ test('collections rank by textScore like artifacts and are found by id', () => {
   expect(searchPalette('zzz', source([])).collections).toEqual([])
 })
 
+test("a project's whole name puts the project first, ahead of Issues whose titles start with it", () => {
+  const titled = source([issue(9, "Argo's master gets the same protection")])
+  expect(searchPalette('argo', titled).projectFirst).toBe(true)
+  expect(searchPalette('ARGO ', titled).projectFirst).toBe(true)
+  expect(searchPalette('arg', titled).projectFirst).toBe(false)
+  expect(searchPalette('argo master', titled).projectFirst).toBe(false)
+  expect(searchPalette('', titled).projectFirst).toBe(false)
+})
+
 test('a number no listed Issue has comes back as openNumber; a listed one and a word do not', () => {
   expect(searchPalette('#999', source([issue(7, 'x')])).openNumber).toBe(999)
   expect(searchPalette('12', source([])).openNumber).toBe(12)
