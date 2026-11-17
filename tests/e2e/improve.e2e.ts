@@ -25,6 +25,8 @@ import {
   shortDate,
   targetTally,
   tripwireWords,
+  REVIEWER_LABEL,
+  reviewerTripwireWords,
   deliveryRows,
   edgeWords,
   windowWords,
@@ -175,6 +177,7 @@ test('one card per KPI in the order the Console shows, each the figures the API 
     'By seat',
     'What the light seat delivers',
     'By attempt seat',
+    'Reviewers',
     'Inferred chain edges',
     'Fix commits',
     'Friction',
@@ -491,6 +494,29 @@ test('the light seat delivery table shows the four figures, each with its defini
     await expect(section.getByRole('rowheader', { name: new RegExp(row.label) })).toBeVisible()
     await expect(section.getByText(row.definition)).toBeVisible()
   }
+})
+
+test('the reviewers table shows both seats with the five measures, and the tripwire with its inputs', async ({
+  page,
+  apiUrl,
+}) => {
+  const [kpis] = await read(apiUrl, 7)
+  await page.goto('/improve')
+  const section = page.locator('[data-shot="improve-reviewers"]')
+  await expect(section.getByRole('heading', { name: 'Reviewers' })).toBeVisible()
+  for (const row of kpis.reviewers.rows)
+    await expect(section.getByRole('rowheader', { name: REVIEWER_LABEL[row.seat], exact: true })).toBeVisible()
+  for (const name of [
+    'Findings per review',
+    'Applied',
+    'Rounds until clean',
+    'First verification pass',
+    'Regressed Issues',
+    'Cost per review',
+    'Wall time p50',
+  ])
+    await expect(section.getByRole('columnheader', { name })).toBeVisible()
+  for (const line of reviewerTripwireWords(kpis.reviewers)) await expect(section.getByText(line)).toBeVisible()
 })
 
 test('the attempt-seat table and the inferred-edge line sit under the By seat section', async ({ page, apiUrl }) => {
