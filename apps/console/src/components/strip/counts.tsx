@@ -14,7 +14,7 @@ const COUNTS = [
 ] as const satisfies readonly { key: WorkWord; label: string }[]
 
 /**
- * Running, Paused, Ready, Held and Checking Issues, counted once for the whole console (`FlowModel.work`): each a link to Flow
+ * Running, Paused, Ready, Held and Checking Issues, counted once for the whole console (`FlowModel.work`): each a link to the Overview
  * filtered to that word. The lamp is lit on Running only, steady, while a lead runs. Checking comes last and quieter.
  */
 export function Counts() {
@@ -31,7 +31,7 @@ export function Counts() {
           <Link
             key={key}
             title={`${count ?? '-'} ${label}. ${LANGUAGE[key]}${split ? ` ${label} by what holds it: ${split}.` : ''}`}
-            to="/flow"
+            to="/"
             search={{ state: key } as never}
             className={cn(
               'inline-flex h-7 shrink-0 items-center gap-1 rounded-md px-1 text-xs sm:gap-1.5 sm:px-1.5 whitespace-nowrap text-muted-foreground tabular-nums outline-none transition-colors hover:bg-accent hover:text-foreground focus-visible:ring-3 focus-visible:ring-ring/50',

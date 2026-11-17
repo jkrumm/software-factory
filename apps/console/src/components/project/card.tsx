@@ -42,7 +42,9 @@ export function ProjectCard({
     >
       <header className="flex items-center gap-2 px-2.5 pt-2 pb-1">
         <h2 className="min-w-0 truncate text-[length:var(--vx-text-md)] font-semibold tracking-tight">
-          <CardLink as={(props) => <Link to="/projects/$name" params={{ name: project.name }} {...props} />}>
+          <CardLink
+            as={(props) => <Link to="/projects/$name" params={{ name: project.name }} data-keynav="" {...props} />}
+          >
             {project.name}
           </CardLink>
         </h2>

@@ -27,7 +27,7 @@ The Console's components, each depending only on Basalt tokens (`--vx-*` through
 - **StatCard `delta`** may carry `tone` and `direction` when the sign does not say which way is good (a KPI's tone comes from
   its target). **`MenuPopover`** is the ⋯ button that opens a popover of words (Improve's "What is counted").
 - **A card that is a link** puts the link on its title, stretched over the card, so a button inside (the three dots)
-  never nests in an `<a>`. `href` makes an `<a>`; `as` takes a router link: `as={(p) => <Link to="/flow" {...p} />}`.
+  never nests in an `<a>`. `href` makes an `<a>`; `as` takes a router link: `as={(p) => <Link to="/" {...p} />}`.
 - **InfoHint** reads `src/lib/language.gen.ts`, generated from `docs/language.md` by `scripts/language.ts`.
 - **StatCard** takes `hint` (top right corner) and a `hint` on a footer pair.
 - **IssueCard** is a StatCard-shaped card: the shell holds the header (`KindIcon`, project chip, the `number` as `#657` in

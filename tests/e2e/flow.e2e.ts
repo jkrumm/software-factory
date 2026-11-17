@@ -69,7 +69,7 @@ test('Flow is the numbers and their charts: no state columns, and the list is co
   apiUrl,
 }) => {
   const flow = await flowOf(apiUrl)
-  await page.goto('/flow')
+  await page.goto('/')
   await expect(page.getByRole('group', { name: 'Totals' })).toBeVisible()
   await expect(page.getByTestId('flow-trend')).toBeVisible()
   await expect(page.getByTestId('flow-columns')).toHaveCount(0)
@@ -87,7 +87,7 @@ test('a row shows the number, kind, title, project, origin, state, a reason and 
   const flow = await flowOf(apiUrl)
   const waiting = issuesOf(flow, 'paused').find((i) => i.waitReason)
   if (!waiting) throw new Error('the seed has no paused Issue')
-  await page.goto('/flow?state=paused')
+  await page.goto('/?state=paused')
   const card = row(page, waiting.title)
   await expect(card).toBeVisible()
   await expect(card).toContainText(waiting.repo)
@@ -106,7 +106,7 @@ test('a row is a link to its Issue page (a plain click opens the peek, peek.e2e.
   const flow = await flowOf(apiUrl)
   const working = issuesOf(flow, 'running')[0]
   if (!working) throw new Error('the seed has no running Issue')
-  await page.goto('/flow?state=running')
+  await page.goto('/?state=running')
   await expect(row(page, working.title).getByRole('link', { name: working.title })).toHaveAttribute(
     'href',
     /\/issues\/\d+$/,
@@ -120,7 +120,7 @@ test('the stat row shows the API figures and a card opens the list of the Issues
   apiUrl,
 }) => {
   const flow = await flowOf(apiUrl)
-  await page.goto('/flow')
+  await page.goto('/')
   const totals = page.getByRole('group', { name: 'Totals' })
   const cards = totals.locator('article')
   await expect(cards).toHaveCount(4)
@@ -136,12 +136,12 @@ test('the stat row shows the API figures and a card opens the list of the Issues
     await expect(cards.nth(i).getByText(String(value), { exact: true }).first()).toBeVisible()
   }
   await totals.getByRole('link', { name: 'Running' }).click()
-  await expect(page).toHaveURL(/\/flow\?state=running$/)
+  await expect(page).toHaveURL(/\/\?state=running$/)
   await expect(list(page).getByRole('heading', { level: 2 })).toHaveText(`Running ${flow.work.running}`)
   await expect(rows(page)).toHaveCount(flow.work.running)
-  await page.goto('/flow')
+  await page.goto('/')
   await totals.getByRole('link', { name: 'Shipped this week' }).click()
-  await expect(page).toHaveURL(/\/flow\?state=closed$/)
+  await expect(page).toHaveURL(/\/\?state=closed$/)
   await expect(rows(page)).toHaveCount(flow.closedRecently.length)
 })
 
@@ -150,7 +150,7 @@ test('the strip, the stat cards and the sidebar count the same Issues, each card
   apiUrl,
 }) => {
   const flow = await flowOf(apiUrl)
-  await page.goto('/flow')
+  await page.goto('/')
   const strip = page.getByRole('navigation', { name: 'Issues in flight' })
   const cards = page.getByRole('group', { name: 'Totals' }).locator('article')
   for (const key of WORDS)
@@ -162,12 +162,12 @@ test('the strip, the stat cards and the sidebar count the same Issues, each card
 for (const count of WORDS) {
   test(`the header strip's ${count} count opens a list of exactly those Issues`, async ({ page, apiUrl }) => {
     const flow = await flowOf(apiUrl)
-    await page.goto('/flow')
+    await page.goto('/')
     await page
       .getByRole('navigation', { name: 'Issues in flight' })
       .getByRole('link', { name: new RegExp(`${count}$`) })
       .click()
-    await expect(page).toHaveURL(new RegExp(`/flow\\?state=${count}$`))
+    await expect(page).toHaveURL(new RegExp(`/\\?state=${count}$`))
     const issues = issuesOf(flow, count)
     await expect(list(page)).not.toHaveAttribute('data-collapsed', 'true')
     await expect(rows(page)).toHaveCount(issues.length)
@@ -176,7 +176,7 @@ for (const count of WORDS) {
 }
 
 test('the list sorts by a pressed column, and pressing it again reverses it', async ({ page }) => {
-  await page.goto('/flow?state=running')
+  await page.goto('/?state=running')
   const number = page.getByRole('columnheader', { name: 'Issue' })
   const numbers = async () =>
     (await rows(page).evaluateAll((nodes) => nodes.map((node) => node.textContent ?? ''))).map((text) =>
@@ -195,12 +195,12 @@ test('the list sorts by a pressed column, and pressing it again reverses it', as
 })
 
 test("the list links to the Chain, for the project when the rows are one project's", async ({ page, apiUrl }) => {
-  await page.goto('/flow?state=running')
+  await page.goto('/?state=running')
   await expect(list(page).getByRole('link', { name: 'See how these depend' })).toHaveAttribute('href', '/chain')
   const flow = await flowOf(apiUrl)
   const repo = open(flow)[0]?.repo
   if (!repo) throw new Error('the seed has no open Issue')
-  await page.goto(`/flow?project=${repo}`)
+  await page.goto(`/?project=${repo}`)
   await expect(list(page).getByRole('link', { name: 'See how these depend' })).toHaveAttribute(
     'href',
     `/chain?project=${repo}`,
@@ -214,7 +214,7 @@ test('a project toggle in the sidebar lists that project, and no select shows on
   apiUrl,
 }) => {
   const flow = await flowOf(apiUrl)
-  await page.goto('/flow')
+  await page.goto('/')
   await pick(page, 'Projects', 'argo')
   await expect(page).toHaveURL(/[?&]project=argo/)
   await expect(rows(page)).toHaveCount(
@@ -227,7 +227,7 @@ test("a row's project is a link that opens the project's page", async ({ page, a
   const flow = await flowOf(apiUrl)
   const item = issuesOf(flow, 'running')[0] ?? open(flow)[0]
   if (!item) throw new Error('the seed is empty')
-  await page.goto(`/flow?project=${item.repo}`)
+  await page.goto(`/?project=${item.repo}`)
   const chip = row(page, item.title).getByRole('link', { name: item.repo, exact: true })
   await expect(chip).toHaveAttribute('href', new RegExp(`/projects/${item.repo}$`))
   await chip.click()
@@ -247,7 +247,7 @@ test('the filters narrow the list, write the URL, and clearing collapses it agai
   expect(open(flow)).toEqual(expect.arrayContaining([expect.objectContaining({ origin: 'feedback' })]))
   const closed = (keep: (item: Item) => boolean) => flow.closedRecently.filter(keep).length
 
-  await page.goto('/flow')
+  await page.goto('/')
   await expect(list(page)).toHaveAttribute('data-collapsed', 'true')
   await pick(page, 'Projects', 'chat')
   await expect(page).toHaveURL(/[?&]project=chat/)
@@ -273,7 +273,7 @@ test('the filters narrow the list, write the URL, and clearing collapses it agai
   await expect(list(page)).toHaveAttribute('data-collapsed', 'true')
 
   // a linked view applies, and a value the data does not have gives an empty list that says so
-  await page.goto('/flow?project=nowhere')
+  await page.goto('/?project=nowhere')
   await expect(rows(page)).toHaveCount(0)
   await expect(list(page)).toContainText('No Issue matches this filter.')
 })
@@ -281,21 +281,21 @@ test('the filters narrow the list, write the URL, and clearing collapses it agai
 test('a state in the URL names the list, an unknown one is dropped, and "Show all states" clears it', async ({
   page,
 }) => {
-  await page.goto('/flow?state=paused&project=argo')
+  await page.goto('/?state=paused&project=argo')
   await expect(list(page).getByRole('heading', { level: 2 })).toHaveText(/^Paused \d+$/)
   // the stored names of an old link read as the word that replaced them
-  await page.goto('/flow?state=waiting')
+  await page.goto('/?state=waiting')
   await expect(list(page).getByRole('heading', { level: 2 })).toHaveText(/^Paused \d+$/)
-  await page.goto('/flow?state=nonsense')
+  await page.goto('/?state=nonsense')
   await expect(list(page)).toHaveAttribute('data-collapsed', 'true')
-  await page.goto('/flow?state=running')
+  await page.goto('/?state=running')
   await list(page).getByRole('link', { name: 'Show all states' }).click()
   await expect(page).not.toHaveURL(/state=/)
   await expect(list(page).getByRole('heading', { level: 2 })).toHaveText('Issues')
 })
 
 test('a new Issue appears in its list without a reload', async ({ page, apiUrl }) => {
-  await page.goto('/flow?state=held')
+  await page.goto('/?state=held')
   const before = (await flowOf(apiUrl)).work.held
   await expect(rows(page)).toHaveCount(before)
   await page.evaluate('window.__kept = true')
@@ -315,7 +315,7 @@ test.describe('phone', () => {
     apiUrl,
   }) => {
     const flow = await flowOf(apiUrl)
-    await page.goto('/flow?state=running')
+    await page.goto('/?state=running')
     await expect(page.getByRole('tablist')).toHaveCount(0)
     await expect(rows(page)).toHaveCount(flow.work.running)
     const overflow = await page.evaluate<number>(
@@ -358,7 +358,7 @@ for (const viewport of [
     test('document.scrollWidth equals the viewport width on Flow, and main does not scroll sideways', async ({
       page,
     }) => {
-      await page.goto('/flow?state=running')
+      await page.goto('/?state=running')
       await expect(rows(page).first()).toBeVisible()
       await page.waitForLoadState('networkidle')
       const measured = await reach(page)
@@ -373,7 +373,7 @@ test('the sidebar counts each project by the five words, and a project with noth
   apiUrl,
 }) => {
   const flow = await flowOf(apiUrl)
-  await page.goto('/flow')
+  await page.goto('/')
   const projects = page.getByRole('group', { name: 'Projects' })
   const repos = new Set([...open(flow), ...flow.closedRecently].map((i) => i.repo))
   for (const repo of repos) {
@@ -411,7 +411,7 @@ test.describe('content as long as the live data', () => {
         for (const item of body.closedRecently) item.title = LONG
         await route.fulfill({ response, json: body })
       })
-      await page.goto('/flow?state=ready')
+      await page.goto('/?state=ready')
       await expect(rows(page).first()).toBeVisible()
       await page.waitForLoadState('networkidle')
       const measured = await reach(page)
@@ -431,7 +431,7 @@ test('the trend chart opens on 7 days by the hour, and its control offers 24 h, 
   page,
   apiUrl,
 }) => {
-  await page.goto('/flow')
+  await page.goto('/')
   const chart = page.getByTestId('flow-trend')
   await expect(chart.getByRole('heading', { name: 'Issues over time' })).toBeVisible()
   await expectHint(chart, 'running')

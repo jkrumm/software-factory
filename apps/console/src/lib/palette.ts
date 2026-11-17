@@ -1,4 +1,6 @@
 import { queryWords } from './highlight.ts'
+import { peekOf } from './peek.ts'
+import type { RecentEntry } from './recent.ts'
 
 /** How many Issues the palette lists; the rest are a "N more" hint. */
 export const MAX_ISSUES = 8
@@ -24,6 +26,11 @@ export interface ArtifactEntry {
   title: string
   kind: string
 }
+export interface CollectionEntry {
+  id: string
+  title: string
+  repo: string
+}
 export interface CommandEntry {
   id: string
   title: string
@@ -35,7 +42,10 @@ export interface PaletteSource {
   issues: IssueEntry[]
   projects: ProjectEntry[]
   artifacts: ArtifactEntry[]
+  collections: CollectionEntry[]
   commands: CommandEntry[]
+  /** actions on the thing in view (`contextActions`), shown as "This page" */
+  context?: ContextAction[]
 }
 
 export interface PaletteResult {
@@ -44,7 +54,19 @@ export interface PaletteResult {
   moreIssues: number
   projects: ProjectEntry[]
   artifacts: ArtifactEntry[]
+  collections: CollectionEntry[]
   commands: CommandEntry[]
+  context: ContextAction[]
+  /** a number was typed and no listed Issue has it: the row "Open Issue #n" still opens it */
+  openNumber: number | null
+  /** the last visited things, newest first, resolved to titles; empty for a query */
+  recent: RecentRow[]
+}
+
+/** A visited thing as the palette shows it: its title when the loaded lists know it, else its reference. */
+export interface RecentRow extends RecentEntry {
+  title: string
+  reference: string
 }
 
 const NUMBER_QUERY = /^#?(\d+)$/
@@ -94,27 +116,172 @@ function rank<T>(items: readonly T[], score: (item: T) => number): T[] {
 
 const byRecent = (a: IssueEntry, b: IssueEntry): number => b.updatedAt.localeCompare(a.updatedAt)
 
+function resolveRecent(recent: readonly RecentEntry[], source: PaletteSource): RecentRow[] {
+  return recent.map((entry): RecentRow => {
+    if (entry.type === 'issue') {
+      const found = source.issues.find((issue) => String(issue.number) === entry.id)
+      return { ...entry, title: found?.title ?? `Issue #${entry.id}`, reference: `#${entry.id}` }
+    }
+    if (entry.type === 'artifact') {
+      const found = source.artifacts.find((artifact) => artifact.id === entry.id)
+      return { ...entry, title: found?.title ?? `Artifact ${entry.id}`, reference: entry.id }
+    }
+    if (entry.type === 'collection') {
+      const found = source.collections.find((collection) => collection.id === entry.id)
+      return { ...entry, title: found?.title ?? `Collection ${entry.id}`, reference: entry.id }
+    }
+    const found = source.projects.find((project) => project.name === entry.id)
+    return { ...entry, title: entry.id, reference: found ? `${found.open} open` : '' }
+  })
+}
+
+/** The Issue number a query names when it is only a number, else null. */
+function numberOf(query: string): number | null {
+  const digits = NUMBER_QUERY.exec(query.trim())?.[1]
+  if (digits === undefined) return null
+  const n = Number(digits)
+  return Number.isSafeInteger(n) && n > 0 ? n : null
+}
+
 /**
- * What the palette lists. An empty query shows every command and the five most recently active open Issues; a query
- * ranks each kind by its score (see `textScore`, `issueScore`), lists at most eight Issues and counts the rest.
+ * What the palette lists. An empty query shows the recent visits first, the actions on the page in view, the five most
+ * recently active open Issues that are not already recent, and every command; a query ranks each kind by its score
+ * (see `textScore`, `issueScore`), lists at most eight Issues and counts the rest. A bare number no Issue in the list
+ * has comes back as `openNumber`, so an Issue by number opens before the list has loaded.
  */
-export function searchPalette(query: string, source: PaletteSource): PaletteResult {
+export function searchPalette(
+  query: string,
+  source: PaletteSource,
+  recent: readonly RecentEntry[] = [],
+): PaletteResult {
+  const context = source.context ?? []
   if (queryWords(query).length === 0) {
-    const open = source.issues.filter((issue) => issue.state !== 'closed').sort(byRecent)
+    const seen = new Set(recent.filter((entry) => entry.type === 'issue').map((entry) => entry.id))
+    const open = source.issues
+      .filter((issue) => issue.state !== 'closed' && !seen.has(String(issue.number)))
+      .sort(byRecent)
     return {
       issues: open.slice(0, RECENT_ISSUES),
       moreIssues: 0,
       projects: [],
       artifacts: [],
+      collections: [],
       commands: source.commands,
+      context,
+      openNumber: null,
+      recent: resolveRecent(recent, source),
     }
   }
   const issues = rank(source.issues, (issue) => issueScore(issue, query))
+  const number = numberOf(query)
   return {
     issues: issues.slice(0, MAX_ISSUES),
     moreIssues: Math.max(0, issues.length - MAX_ISSUES),
     projects: rank(source.projects, (project) => textScore(project.name, query)).slice(0, MAX_OTHERS),
     artifacts: rank(source.artifacts, (artifact) => textScore(artifact.title, query, artifact.id)).slice(0, MAX_OTHERS),
+    collections: rank(source.collections, (collection) => textScore(collection.title, query, collection.id)).slice(
+      0,
+      MAX_OTHERS,
+    ),
     commands: rank(source.commands, (command) => textScore(command.title, query, command.keywords)),
+    context: rank(context, (command) => textScore(command.title, query, command.keywords)),
+    openNumber: number !== null && !source.issues.some((issue) => issue.number === number) ? number : null,
+    recent: [],
   }
+}
+
+/** The thing a page or its peek shows. */
+export type PaletteView =
+  | { type: 'issue'; id: string }
+  | { type: 'artifact'; id: string }
+  | { type: 'collection'; id: string }
+  | { type: 'project'; name: string }
+
+/** The thing in view: a peek wins over the page under it; null on any other page. */
+export function viewOf(pathname: string, search: Record<string, unknown>): PaletteView | null {
+  const peek = peekOf(search)
+  if (peek) return { type: peek.kind, id: peek.id }
+  return pageViewOf(pathname)
+}
+
+/** The thing a page's own address names. */
+export function pageViewOf(pathname: string): PaletteView | null {
+  const [, first, second, third] = pathname.replace(/\/+$/, '').split('/')
+  if (!first || !second) return null
+  const id = decodeURIComponent(second)
+  if (first === 'issues' && /^\d+$/.test(id)) return { type: 'issue', id }
+  if (first === 'projects') return { type: 'project', name: id }
+  if (first !== 'artifacts') return null
+  if (id !== 'collections') return { type: 'artifact', id }
+  return third ? { type: 'collection', id: decodeURIComponent(third) } : null
+}
+
+/** What the palette knows about the thing in view beyond its id. */
+export interface ViewFacts {
+  /** `location.origin`, for links */
+  origin: string
+  /** an Issue's project, when the card list has it */
+  repo?: string | null | undefined
+  /** the Needs you item that waits on this Issue */
+  needItem?: string | null | undefined
+  /** a collection's pinned state; null or absent while the list has not loaded */
+  pinned?: boolean | null | undefined
+}
+
+/** An action on the thing in view; `copy` is the text it puts on the clipboard. */
+export interface ContextAction extends CommandEntry {
+  copy?: string
+}
+
+/** The actions that exist for the thing in view; the palette maps each id to its effect. */
+export function contextActions(view: PaletteView | null, facts: ViewFacts): ContextAction[] {
+  if (!view) return []
+  const link = (title: string, path: string): ContextAction => ({
+    id: 'context-copy-link',
+    title,
+    keywords: 'url share copy',
+    copy: `${facts.origin}${path}`,
+  })
+  const cli = (command: string): ContextAction => ({
+    id: 'context-copy-cli',
+    title: `Copy CLI command: ${command}`,
+    keywords: 'terminal shell copy',
+    copy: command,
+  })
+  if (view.type === 'issue') {
+    const n = view.id
+    return [
+      link(`Copy link to Issue ${n}`, `/issues/${n}`),
+      cli(`factory issue show ${n}`),
+      ...(facts.repo
+        ? [{ id: 'context-chain', title: `Open Issue ${n}'s project in the Chain`, keywords: facts.repo }]
+        : []),
+      ...(facts.needItem ? [{ id: 'context-answer', title: `Answer Issue ${n}`, keywords: 'needs you reply' }] : []),
+    ]
+  }
+  if (view.type === 'artifact')
+    return [
+      link('Copy link to this artifact', `/artifacts/${encodeURIComponent(view.id)}`),
+      cli(`factory artifact show ${view.id}`),
+    ]
+  if (view.type === 'collection')
+    return [
+      ...(facts.pinned === null || facts.pinned === undefined
+        ? []
+        : [
+            {
+              id: 'context-pin',
+              title: facts.pinned ? 'Unpin collection' : 'Pin collection',
+              keywords: 'pin unpin',
+            },
+          ]),
+      link('Copy link to this collection', `/artifacts/collections/${encodeURIComponent(view.id)}`),
+    ]
+  const name = view.name
+  return [
+    { id: 'context-chain', title: `Open ${name} in the Chain`, keywords: 'graph' },
+    { id: 'context-overview', title: `Show ${name}'s Issues on the Overview`, keywords: 'flow filter' },
+    link(`Copy link to ${name}`, `/projects/${encodeURIComponent(name)}`),
+    cli(`factory project plan ${name}`),
+  ]
 }

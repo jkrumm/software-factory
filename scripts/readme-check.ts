@@ -163,7 +163,9 @@ export function checkReadme(
   else
     for (const screen of facts.screens)
       if (!layout.includes(screen))
-        problems.push(`README.md: the \`apps/console\` row omits the screen ${screen} (apps/console/src/lib/nav.ts).`)
+        problems.push(
+          `README.md: the \`apps/console\` row omits the screen ${screen} (apps/console/src/lib/screens.ts).`,
+        )
   for (const screen of facts.screens) {
     if (!readme.includes(`**${screen}**`)) problems.push(`README.md: the screen ${screen} has no bold entry in See it.`)
   }
@@ -190,7 +192,7 @@ export function checkReadme(
 /** The facts, read from the code of the checkout at `root` (the code that runs is this checkout's own). */
 export function readFacts(root: string): Facts {
   const read = (path: string) => readFileSync(join(root, path), 'utf8')
-  const nav = [...read('apps/console/src/lib/nav.ts').matchAll(/label: '([^']+)'/g)].map((m) => m[1] ?? '')
+  const nav = [...read('apps/console/src/lib/screens.ts').matchAll(/label: '([^']+)'/g)].map((m) => m[1] ?? '')
   const tokens = [...read('apps/server/src/settings.ts').matchAll(/^\s+(FACTORY_[A-Z_]*TOKEN): token/gm)].map(
     (m) => m[1] ?? '',
   )

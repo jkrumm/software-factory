@@ -31,10 +31,12 @@ judge, an Errand that only hands can do.
 
 ![Needs you: a Decision, a Spec and an Errand, each with what the lead recommends](docs/demo/needs-you.png)
 
-**Flow** is the numbers and their charts: Issues running, paused and not started, what shipped this week, and the
-trend by the hour or the day. A filter opens the list behind a number.
+**Overview** is home: what needs the owner, whether production is red, what shipped in the last day and why the queue
+does not move, then the numbers and their charts (Issues running, paused and not started, what shipped this week, the
+trend by the hour or the day). A filter opens the list behind a number. Every screen says under its title the one
+question it answers, `?` lists every key, and the palette (Mod+K) opens any Issue by number or project by name.
 
-![Flow: four totals, the trend chart and the project digests](docs/demo/flow.png)
+![Overview: what needs the owner, production, what shipped and the host with the queue's reason, then the four totals and the trend chart](docs/demo/overview.png)
 
 **Chain** shows what waits on what, across repos.
 
@@ -59,6 +61,8 @@ the leads' hours go, and the improvements the loop filed.
 The same screens fit a phone:
 
 ![Needs you on a phone: one Decision with the lead's recommendation](docs/demo/phone-needs-you.png)
+
+![The Overview on a phone: the band's panels stacked, the tab bar holding the daily screens](docs/demo/phone-overview.png)
 
 ## How it works
 
@@ -215,7 +219,7 @@ token of the owner's and takes the repo from a server-side route registry, never
 | `apps/server` | the server: API, Console listener, domains, use cases, loops, adapters, read models, migrations |
 | `apps/cli` | the `factory` CLI, generated from the server's OpenAPI document plus hand-written hook and slot verbs |
 | `apps/door` | the alert door: alerts from monitors become signals |
-| `apps/console` | the Console, a React PWA: Needs you, Flow, Artifacts, Projects, Chain, Improve and Throughput, and a page per Issue |
+| `apps/console` | the Console, a React PWA: Overview, Needs you, Chain, Projects, Artifacts, Improve and Throughput, and a page per Issue |
 | `packages/contract` | zod schemas for every request, response and event; the source of the OpenAPI document |
 | `packages/client` | the typed client shared by the CLI and the door |
 | `tests/scenarios` | use cases run end to end against a real server and Postgres with fake runner and agw: the acceptance suite |

@@ -19,7 +19,7 @@ describe('stale reads', () => {
       { key: ['project-page', 'b'], updatedAt: NOW - 100_000, intervalMs: 60_000 },
     ]
     const stale = staleReads(reads, NOW)
-    expect(stale.map((read) => read.label)).toEqual(['Flow', 'Project', 'Accounts'])
+    expect(stale.map((read) => read.label)).toEqual(['Overview', 'Project', 'Accounts'])
     expect(stale.map((read) => read.strip)).toEqual([false, false, true])
   })
 })

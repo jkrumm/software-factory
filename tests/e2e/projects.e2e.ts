@@ -94,7 +94,7 @@ test('the sidebar and the g p key reach the table: every project in one view at 
     const members = index.projects.filter((p) => p.group === group).length
     await expect(table(page).getByRole('rowgroup', { name: group }).locator('tr[data-project]')).toHaveCount(members)
   }
-  await page.goto('/flow')
+  await page.goto('/')
   await page.locator('main').click()
   await page.keyboard.press('g')
   await page.keyboard.press('p')
@@ -320,7 +320,7 @@ test("the tabs are addresses, the Work tab lists Flow's open Issues of the proje
   await expect(page.getByRole('columnheader', { name: 'Title' })).toHaveAttribute('aria-sort', 'ascending')
   // the other screens, filtered to the project
   const others = page.getByRole('navigation', { name: 'This project in other screens' })
-  await expect(others.getByRole('link', { name: 'Flow' })).toHaveAttribute('href', `/flow?project=${PROJECT}`)
+  await expect(others.getByRole('link', { name: 'Overview' })).toHaveAttribute('href', `/?project=${PROJECT}`)
   await expect(others.getByRole('link', { name: 'Chain' })).toHaveAttribute('href', `/chain?project=${PROJECT}`)
   await expect(others.getByRole('link', { name: 'Artifacts' })).toHaveAttribute('href', `/artifacts?project=${PROJECT}`)
 })

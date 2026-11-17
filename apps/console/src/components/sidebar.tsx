@@ -8,7 +8,7 @@ import { Logo } from '@/components/logo'
 import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip'
 import { openOfWork, WORK_WORDS, type WorkCounts } from '@software-factory/contract'
 import { cardsOf, countsOf, LIST_LABEL, openCount } from '@/lib/flow'
-import { NAV, type NavItem } from '@/lib/nav'
+import { NAV_GROUPS, type NavItem } from '@/lib/nav'
 import { useFlow } from '@/lib/queries'
 import { cn } from '@/lib/utils'
 
@@ -235,6 +235,7 @@ function NavEntry({
   const link = (
     <Link
       to={item.to}
+      activeOptions={{ exact: item.to === '/', includeSearch: false }}
       aria-label={collapsed ? [item.label, countWords].filter(Boolean).join(', ') : undefined}
       className={cn(
         ROW,
@@ -246,11 +247,12 @@ function NavEntry({
       {collapsed ? null : (
         <>
           <span className="min-w-0 flex-1 truncate">{item.label}</span>
-          <kbd className="hidden font-mono text-[11px] font-normal text-muted-foreground group-hover:inline group-focus-visible:inline">
+          <kbd className="hidden shrink-0 font-mono text-[11px] font-normal text-muted-foreground group-hover:inline group-focus-visible:inline">
             {chord}
           </kbd>
         </>
       )}
+      {/* the key hint takes the count's place on hover, so a long label never truncates under both */}
       {shown === null ? null : collapsed ? (
         <span
           aria-hidden
@@ -262,7 +264,10 @@ function NavEntry({
       ) : (
         <span
           aria-label={countWords ?? undefined}
-          className={cn('text-xs font-normal tabular-nums', prominent && 'font-semibold text-foreground')}
+          className={cn(
+            'shrink-0 text-xs font-normal tabular-nums group-hover:hidden group-focus-visible:hidden',
+            prominent && 'font-semibold text-foreground',
+          )}
         >
           {shown}
         </span>
@@ -299,20 +304,36 @@ export function Sidebar({ needs }: { needs: number | null }) {
         <Logo />
         {collapsed ? null : <span className="font-heading text-[15px] font-semibold tracking-tight">Factory</span>}
       </div>
-      <nav aria-label="Main" className="flex flex-col gap-0.5">
-        {NAV.map((item) => (
-          <NavEntry
-            key={item.to}
-            item={item}
-            collapsed={collapsed}
-            count={item.to === '/needs-you' ? needs : item.to === '/flow' ? open : null}
-            countLabel={item.to === '/flow' ? 'open' : 'to answer'}
-            prominent={item.to === '/needs-you'}
-          />
+      <nav aria-label="Main" className="flex flex-col gap-3">
+        {NAV_GROUPS.map((group) => (
+          <div
+            key={group.key}
+            role="group"
+            aria-label={group.key === 'work' ? 'Daily' : 'How the factory runs'}
+            className="flex flex-col gap-0.5"
+          >
+            {group.key === 'insight' && !collapsed ? (
+              <p aria-hidden className="px-2 pb-0.5 text-[11px] font-medium text-muted-foreground">
+                How it runs
+              </p>
+            ) : null}
+            {group.key === 'insight' && collapsed ? <hr aria-hidden className="mx-2 mb-1 border-border" /> : null}
+            {group.items.map((item) => (
+              <NavEntry
+                key={item.to}
+                item={item}
+                collapsed={collapsed}
+                count={item.to === '/needs-you' ? needs : item.to === '/' ? open : null}
+                countLabel={item.to === '/' ? 'open' : 'to answer'}
+                prominent={item.to === '/needs-you'}
+              />
+            ))}
+          </div>
         ))}
       </nav>
       <div
         ref={setSlot}
+        data-page-section=""
         className={cn(
           'flex min-h-0 flex-1 flex-col gap-4 overflow-y-auto border-t pt-3 empty:hidden',
           collapsed && 'hidden',

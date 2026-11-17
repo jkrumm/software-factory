@@ -1,32 +1,33 @@
 import { expect, test } from './fixtures.ts'
-import { textWithoutBand } from './screen-text.ts'
 import { badge, chip } from './shell-support.ts'
 import { api, holdSignal, needsCount } from './seed.ts'
 
 const SCREENS = [
+  { label: 'Overview', path: '/', key: 'O' },
   { label: 'Needs you', path: '/needs-you', key: 'N' },
-  { label: 'Flow', path: '/flow', key: 'F' },
-  { label: 'Artifacts', path: '/artifacts', key: 'A' },
-  { label: 'Projects', path: '/projects', key: 'P' },
   { label: 'Chain', path: '/chain', key: 'C' },
+  { label: 'Projects', path: '/projects', key: 'P' },
+  { label: 'Artifacts', path: '/artifacts', key: 'A' },
   { label: 'Improve', path: '/improve', key: 'I' },
   { label: 'Throughput', path: '/throughput', key: 'T' },
 ] as const
 
-test('the root redirects to Needs you, the badge is the API count and no id leaks onto the page', async ({
+test('the root is the Overview with its band, the badge is the API count and no id leaks onto the page', async ({
   page,
   apiUrl,
 }) => {
   const count = await needsCount(apiUrl)
   expect(count).toBeGreaterThan(1)
   await page.goto('/')
-  await expect(page).toHaveURL(/\/needs-you$/)
+  await expect(page).toHaveURL(/\/$/)
+  await expect(page.getByTestId('overview-band')).toBeVisible()
   await expect(badge(page)).toHaveText(String(count))
-  await expect(page.getByText(`${count} need you`, { exact: true })).toBeVisible()
-  expect(await textWithoutBand(page)).not.toMatch(/issue_\d+|lead-\d+|#\d+/)
+  await expect(page.getByTestId('overview-needs')).toContainText(String(count))
+  // the Overview has no Since-you-were-here band to cut away: no Issue number appears in its band
+  expect(await page.getByTestId('overview-band').innerText()).not.toMatch(/issue_\d+|lead-\d+|#\d+/)
 })
 
-test('the seven screens open from the navigation and from G then N, F, A, P, C, I, T', async ({ page }) => {
+test('the seven screens open from the navigation and from G then O, N, C, P, A, I, T', async ({ page }) => {
   await page.goto('/needs-you')
   const nav = page.getByRole('navigation', { name: 'Main' })
   for (const { label, path } of SCREENS) {

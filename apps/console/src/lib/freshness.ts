@@ -22,8 +22,8 @@ const STRIP_ROOTS = new Set(['accounts', 'machine', 'host', 'project-digests'])
 
 const LABELS: Record<string, string> = {
   needs: 'Needs you',
-  flow: 'Flow',
-  'flow-trend': 'Flow trend',
+  flow: 'Overview',
+  'flow-trend': 'Issues over time',
   chain: 'Chain',
   kpis: 'KPIs',
   friction: 'Friction',

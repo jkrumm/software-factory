@@ -1,9 +1,11 @@
 import type { ReactNode } from 'react'
 import { Skeleton } from '@/components/kit/skeleton'
+import { purposeOfLabel } from '@/lib/screens'
 
 export { EmptyState } from '@/components/kit/empty-state'
 
 /**
+ * A screen of the main navigation shows the question it answers under its title (`purpose` in `lib/screens.ts`).
  * `compact` puts the note on the title's line and tightens the space under it (a screen that fills the viewport).
  * `loading` holds the note's line with a skeleton, so the content below does not move when the note arrives.
  */
@@ -18,9 +20,15 @@ export function PageHeader({
   compact?: boolean
   loading?: boolean
 }) {
+  const purpose = purposeOfLabel(title)
   return (
     <header className={compact ? 'mb-3 flex flex-wrap items-baseline gap-x-3 gap-y-0.5' : 'mb-6 flex flex-col gap-1'}>
       <h1 className="font-heading text-2xl font-semibold tracking-tight">{title}</h1>
+      {purpose ? (
+        <p data-testid="page-purpose" className="text-[length:var(--vx-text-sm)] text-foreground/75">
+          {purpose}
+        </p>
+      ) : null}
       {loading ? <Skeleton height={20} width={compact ? 160 : 144} /> : null}
       {loading && compact ? <Skeleton height={20} width="60%" className="sm:hidden" /> : null}
       {note ? <p className="text-sm text-muted-foreground">{note}</p> : null}

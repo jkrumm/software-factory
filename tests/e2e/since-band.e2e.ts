@@ -242,7 +242,7 @@ test('a second page load inside the visit shows the same band', async ({ page, a
 
   await page.reload()
   await expect(band(page).locator('time').first()).toHaveAttribute('datetime', visit.toISOString())
-  await page.goto('/flow')
+  await page.goto('/')
   await page.goto('/needs-you')
   await expect(band(page)).toBeVisible()
   expect(await Promise.all(keys.map((key) => category(page, key).innerText()))).toEqual(first)

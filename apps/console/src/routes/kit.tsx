@@ -96,7 +96,7 @@ function Kit() {
             icon={RocketLaunchIcon}
             {...KIT_STATS.running}
             hint="running"
-            as={(p) => <Link to="/flow" {...p} />}
+            as={(p) => <Link to="/" {...p} />}
             onMenu={() => undefined}
           />
           <StatCard icon={HourglassIcon} {...KIT_STATS.paused} hint="paused" onMenu={() => undefined} />
@@ -185,7 +185,7 @@ function Kit() {
               origin={KIT_ORIGIN[i.key]}
               showState={i.state !== 'running'}
               className={i.number === null ? 'border border-dashed border-muted-foreground/50' : undefined}
-              as={i.key === 'export-time' ? (p) => <Link to="/flow" {...p} /> : undefined}
+              as={i.key === 'export-time' ? (p) => <Link to="/" {...p} /> : undefined}
               href={i.key === 'export-time' ? undefined : `#${i.key}`}
               onMenu={() => undefined}
             />

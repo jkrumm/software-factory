@@ -2,22 +2,32 @@
 
 The owner's place for decisions, on a phone and a desktop: a Vite + React SPA (Base UI through shadcn, Tailwind 4, Basalt
 tokens, TanStack Router, Query and Hotkeys), installable as a PWA. It holds no logic the API could hold. This is the shell:
-a sidebar, a one-line header strip, the command palette, and the screens (Needs you, Flow, Artifacts, Projects, Chain, Improve, Throughput, and the Issue page).
+a sidebar, a one-line header strip, the command palette, and the screens (Overview, Needs you, Chain, Projects, Artifacts, Improve, Throughput, and the Issue page).
 
-**Sidebar** (`components/sidebar.tsx`, from `md` up; a tab bar below): the logo slot and wordmark, the seven screens with their
-keys (`g n`, `g f`, `g a`, `g p`, `g c`, `g i`, `g t`) and counts, then the page's own section. A page fills that section with
-`<SidebarSection title>` (a portal into the sidebar's slot, gone when the page unmounts): Flow's projects and origins,
+**Sidebar** (`components/sidebar.tsx`, from `md` up; a tab bar below): the logo slot and wordmark, the seven screens in two groups (Overview, Needs you, Chain, Projects, Artifacts; then Improve and Throughput under "How it runs") with their
+keys (`g o`, `g n`, `g c`, `g p`, `g a`, `g i`, `g t`, shown on hover in the count's place) and counts, then the page's own section. A page fills that section with
+`<SidebarSection title>` (a portal into the sidebar's slot, gone when the page unmounts): the Overview's projects and origins,
 Needs you's kinds and projects (`?kind=`, `?project=`), Chain's projects, Improve's window. Each is a toggle on a search param, and the page's own
 select or switch stays below `md`. Collapsed to icons (14 rem or 3.5 rem, kept in `localStorage` as `console-sidebar`) the
 section is hidden, so a page shows its active filters as removable chips (`ActiveFilters`) and Improve keeps its window switch.
 
 **Header strip** (`components/status-strip.tsx`, `components/strip/`): Running, Paused, Ready, Held and Checking (the last one quieter) from `FlowModel.work`, each a
-link to `/flow?state=...`; one meter per subscription from `/v1/accounts`; the host's load, memory and swap with the last
+link to `/?state=...`; one meter per subscription from `/v1/accounts`; the host's load, memory and swap with the last
 24 h and the busiest processes from `GET /v1/host`; and Live. Each meter and Live opens a popover. Live says `Live`,
 `Polling` while the event stream is closed, or `Offline` with the snapshot's age.
 
-**Palette** (`Mod+K`): Issues by title or number across projects, projects, artifacts and commands (theme, the screens with
-their keys).
+**Palette** (`Mod+K`, `components/palette.tsx`, pure logic in `src/lib/palette.ts`): every navigation target (an Issue by
+title or by number, a number not in the loaded list included; a project by name; an artifact; a collection; each screen with
+its key), the theme and a reload. An empty query lists Recent first (the last 8 Issues, artifacts, collections and projects
+opened, `src/lib/recent.ts`, `localStorage` `console-recent`), then This page (actions on the thing in view, a peek winning
+over the page under it: copy its link, copy the `factory` command that shows it, open it in the Chain, answer it, pin a
+collection), then the recently active Issues and the commands.
+
+**Keys** (`src/lib/shortcuts.ts`, the one list; `?` shows it as an overlay by group, `components/shortcuts-dialog.tsx`):
+`g` then `o n c p a i t` opens a screen, `/` focuses the page's sidebar section or searches, Escape goes back from a page of
+one thing once no peek or popup holds it, `j` and `k` move through the rows a page marks with `data-keynav` and Enter opens
+one, `[` and `]` step a chart's window (the Overview's trend, Improve's days, Throughput's hours). All through
+`@tanstack/react-hotkeys`; none fires in a text field.
 
 **Peek** (`components/peek/`, kit `Peek`): a plain click on any link to an Issue or an artifact opens it in a right-side
 panel over the current page (`?peek=issues/<n>` or `?peek=artifacts/<id>`, with `peekTab` and `peekRevision`), and the page
@@ -29,22 +39,31 @@ field. The address logic is pure (`lib/peek.ts`); the panel's content is its own
 
 ## Projects
 
-`/projects` is one table on TanStack Table (`components/project/table.tsx`; sorting, filters, stored choices and the lamp in `lib/project-table.ts`) fed by one read, `GET /v1/projects`, which carries every figure and the digest the row previews on hover; one row per project in the owner's Herdr groups, busiest first, a card per project below 40 rem; a row opens `/projects/<name>`, and so does **every project chip** of the Console (Issue cards and rows, Needs you, the Chain's nodes and groups, the digest strip, the palette, Throughput's tables, the Issue page and artifact headers). Flow's own project filter stays a toggle in its sidebar. The page (`routes/projects.$name*.tsx`, `components/project/`) reads top-down. Its header holds the name, a project switcher (a popover that lands on the tab that is open; there is no project list in the sidebar), the links to Flow, Chain and Artifacts filtered to the project, and the tabs. The project's own address is the first screen, built for 1800 by 1200 with no scrolling: a health band of three answers (production: incidents, regressions and what is in Watch; the checks: the hygiene probes that found or failed; the project files: a `project.yaml` or plan that does not parse), then Moving now (Running and Paused with the reason, five each), Next (Ready and Held, five each, and the plan rows no Issue is on yet) and Shipped (the hourly bars of 7 days and the newest five); each list ends in a count that opens the tab with the rest, and nothing is shown twice. The other screens are tabs with their own address and their own reads: `/work` (every open Issue, sortable, from the cached `GET /v1/flow` so it is as live as Flow), `/plan` (`GET /v1/projects/:name/plan`: every row with state, reason and progress), `/shipped` (production and the last 7 days by day), `/hygiene` (`GET /v1/projects/:name/hygiene`: the probe catalogue with each probe's last run, the newest pass's findings and how each ended, the last five passes) and `/setup` (`GET /v1/projects/:name/setup`: the `project.yaml` as a form with each key's meaning from the schema's descriptions, the raw file behind a toggle, and the monitors the door routes to the project). Every tab also reads `GET /v1/projects/:name` (counts, hourly and daily shipped, Watch, incidents and regressions, the monitors). A project the factory has not read is a 404 and the page says so; a work project is shown to the owner only. The words and sums are pure logic in `src/lib/project.ts`.
+`/projects` is one table on TanStack Table (`components/project/table.tsx`; sorting, filters, stored choices and the lamp in `lib/project-table.ts`) fed by one read, `GET /v1/projects`, which carries every figure and the digest the row previews on hover; one row per project in the owner's Herdr groups, busiest first, a card per project below 40 rem; a row opens `/projects/<name>`, and so does **every project chip** of the Console (Issue cards and rows, Needs you, the Chain's nodes and groups, the digest strip, the palette, Throughput's tables, the Issue page and artifact headers). The Overview's own project filter stays a toggle in its sidebar. The page (`routes/projects.$name*.tsx`, `components/project/`) reads top-down. Its header holds the name, a project switcher (a popover that lands on the tab that is open; there is no project list in the sidebar), the links to the Overview, Chain and Artifacts filtered to the project, and the tabs. The project's own address is the first screen, built for 1800 by 1200 with no scrolling: a health band of three answers (production: incidents, regressions and what is in Watch; the checks: the hygiene probes that found or failed; the project files: a `project.yaml` or plan that does not parse), then Moving now (Running and Paused with the reason, five each), Next (Ready and Held, five each, and the plan rows no Issue is on yet) and Shipped (the hourly bars of 7 days and the newest five); each list ends in a count that opens the tab with the rest, and nothing is shown twice. The other screens are tabs with their own address and their own reads: `/work` (every open Issue, sortable, from the cached `GET /v1/flow` so it is as live as the Overview), `/plan` (`GET /v1/projects/:name/plan`: every row with state, reason and progress), `/shipped` (production and the last 7 days by day), `/hygiene` (`GET /v1/projects/:name/hygiene`: the probe catalogue with each probe's last run, the newest pass's findings and how each ended, the last five passes) and `/setup` (`GET /v1/projects/:name/setup`: the `project.yaml` as a form with each key's meaning from the schema's descriptions, the raw file behind a toggle, and the monitors the door routes to the project). Every tab also reads `GET /v1/projects/:name` (counts, hourly and daily shipped, Watch, incidents and regressions, the monitors). A project the factory has not read is a 404 and the page says so; a work project is shown to the owner only. The words and sums are pure logic in `src/lib/project.ts`.
 
-## Flow
+## Overview
 
-`/flow` fills the content area (no width cap). From the top: the header, the digest strip, a stat row, the trend chart and, under
-them, the list of Issues a filter opens, from `GET /v1/flow`, refreshed by the stream like every other screen. There are no
-state columns anywhere: the Chain is the view of the work.
+`/` is the home screen and fills the content area (no width cap); `/flow`, its old address, redirects here with its search. Each
+screen of the navigation shows the question it answers under its title (`purpose` in `src/lib/screens.ts`, the table in `DESIGN.md`).
+From the top: the header, the band, a stat row, the trend chart, the digest strip and, under them, the list of Issues a filter
+opens, from `GET /v1/flow`, refreshed by the stream like every other screen. There are no state columns anywhere: the Chain is
+the view of the work.
 
-**Digest strip.** Above the stat row, one card per project with a digest (`GET /v1/projects/digests`, `components/flow/digest-strip.tsx`): the project (a link to its page), the digest's age, the headline, the five counts (done in 7 days, running, paused, ready, held: `counts.work`, read from the Issues, not from the digest), and a button that opens the shipped, next and risks bullets, each citing its Issues by a link. The busiest projects (most working, queued and waiting) come first, in one scrollable row so the charts stay on screen; "Show all N" lays every card out as a grid. Collapsed to the headline and the counts; with `?project=` the strip shows that project alone, opened. No digest, no strip.
+**Band** (`components/overview/band.tsx`, pure logic in `src/lib/overview.ts`): four panels, each linking to the screen with its
+detail. Needs you: the count and the three open longest (`GET /v1/needs`). Production: the projects with an open incident Issue
+(red) and how many ships are Checking. Shipped in 24 h: done and healed closes of `closedRecently` by project. Host and queue:
+load, memory and swap on the strip's meter rule (`/v1/machine`, `/v1/host`, the queries the strip already holds) and the queue's
+binding reason, the queue reason kind that keeps the most not-started Issues out, with the first one's message. It reads nothing
+the screen did not already load.
+
+**Digest strip.** Under the trend chart, one card per project with a digest (`GET /v1/projects/digests`, `components/flow/digest-strip.tsx`): the project (a link to its page), the digest's age, the headline, the five counts (done in 7 days, running, paused, ready, held: `counts.work`, read from the Issues, not from the digest), and a button that opens the shipped, next and risks bullets, each citing its Issues by a link. The busiest projects (most working, queued and waiting) come first, in one scrollable row so the charts stay on screen; "Show all N" lays every card out as a grid. Collapsed to the headline and the counts; with `?project=` the strip shows that project alone, opened. No digest, no strip.
 
 **Stat row.** Four kit `StatCard`s: Running, Paused, Not started (Ready and Held together; a line of the Issues at eight daily samples,
 `trend` in the model, summed over the stored states a series takes in) and Shipped this week (bars of the done and healed closes per day, against the 7 days before). They
-are factory-wide, never narrowed by the filters; each opens `/flow?state=<word>` (Not started: the whole list, there is no list of Ready and Held together; Shipped: `closed`), the same list the
+are factory-wide, never narrowed by the filters; each opens `/?state=<word>` (Not started: the whole list, there is no list of Ready and Held together; Shipped: `closed`), the same list the
 header strip's counts open. All count Issues, never sessions, by the one definition `workOf` in the contract (`docs/language.md` "Where work stands"), the same as the strip, the sidebar and the project digests; each card carries an InfoHint with that definition in its top right corner. Below `lg` the row scrolls sideways inside itself, snapping per card.
 
-**The list** (`components/flow/issue-table.tsx`, `FlowList` in `routes/flow.tsx`). A plain table of Issues under the charts, collapsed to its
+**The list** (`components/flow/issue-table.tsx`, `FlowList` in `routes/index.tsx`). A plain table of Issues under the charts, collapsed to its
 heading and one line until a filter is set: `?state=`, `?project=` or `?origin=`. Columns: the number with the kind as an icon, the
 title (a link to `/issues/<n>`, opening the peek; a wait's reason or the queue's message under it), the project (a link to its
 page), the origin, the state (a Closed Issue shows its outcome) and the age since it entered it. Every header sorts (`aria-sort`);
@@ -56,7 +75,7 @@ filter leaves a few dozen rows.
 **Trend chart** (`components/flow/trend-chart.tsx`, `GET /v1/flow/trend`): below the stat row, the peak (most Issues at any instant) and the average of one count per bucket, computed by the server from the applied events. Its own frame holds the controls: the count (Running, Paused, Not started, Checking) and the window by bucket (24 h and 7 d by the hour, 30 d by the day; it opens on 7 d; hours in the viewer's zone, days are UTC days). Three windows, one meaning: a Console chart that offers a window offers these.
 
 **Filters.** Projects and origins are toggles in the sidebar (selects on a phone only) and live in the URL
-(`/flow?project=argo&origin=feedback`), so a filtered view is linkable, and the list heading counts what the filters
+(`/?project=argo&origin=feedback`), so a filtered view is linkable, and the list heading counts what the filters
 leave. A sidebar row's figures are its *open* Issues, never closed ones (`openSplits` in `src/lib/flow.ts`): a lit lamp and the Running count, an hourglass and the Paused count, a queue icon and the Ready count, a lock and the Held count (Checking in the hover); a row with none open shows no figure. `?state=running|paused|ready|held|checking|closed` (the stored names of an old link read as the word that replaced them) lists exactly that word's Issues (Checking is its own word and settling is Held) with a "Show all states" link; it never filters the figures. An unknown state is dropped.
 
 **The page never scrolls sideways.** The Shell's `main` clips the x axis (`overflow-x-hidden`), a table too wide for the screen scrolls inside its own container, and text that cannot break (a stat card's sub line, a reason line) wraps anywhere. `tests/e2e/flow.e2e.ts` asserts `document.scrollWidth` equals the viewport width and `main` has no sideways scroll at 1280x800 and 390x844, also with long titles and reasons at 1024.
@@ -194,7 +213,7 @@ titles. `tests/e2e/speed.e2e.ts` holds the skeleton, the update and the hover gu
 
 The stream does not invalidate everything. Changes that arrive within 250 ms of each other (at most 1 s after the first of a
 burst) invalidate, once, the lists and the pages they can alter; the aggregates (on `/improve`: KPIs, friction, finding
-classes, fix commits; on `/flow`: the trend chart) wait for a 2 s pause (at most 10 s). Accounts and machine are not in the stream and only poll. The
+classes, fix commits; on the Overview: the trend chart) wait for a 2 s pause (at most 10 s). Accounts and machine are not in the stream and only poll. The
 first `hello` of a page joins the boot's requests (`cancelRefetch: false`) instead of cancelling and repeating them. Chunks:
 the entry holds the shell and the screens that are small; `@xyflow/react` and dagre (`/chain`), react-markdown
 (`/artifacts`) and the command palette (cmdk, loaded when it is first opened) are their own chunks, all precached by the
@@ -268,7 +287,7 @@ share; bars per attempt from two attempts), the attempts, and how it was filed a
 log in words as a StepRail per attempt. Evidence: each ship with its commits, review, acceptance, watch and verify runs, then
 the evidence. Checkpoints: Decisions with their options, artifacts, the notes you sent; the tab shows how many wait on you.
 The pure model (tabs, groups, series, chain links, tones) is `src/lib/issue-page.ts`. Every figure is the API's, only
-phrased; no id is on screen. A Needs you card and a Flow card link to it. It is read-only on purpose: the listener forwards
+phrased; no id is on screen. A Needs you card and an Overview row link to it. It is read-only on purpose: the listener forwards
 thirteen verbs (eleven answers, pin and unpin) and none of them is a note or a cancel, and the Console never cancels an Issue or starts a session. An open
 Decision links to `/needs-you?item=<id>`, an artifact to `/artifacts/<id>`, where the answer is given.
 `tests/e2e/issue.e2e.ts` compares the page's numbers with the API's.

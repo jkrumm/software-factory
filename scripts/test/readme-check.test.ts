@@ -40,8 +40,8 @@ describe('drift the check catches', () => {
     expect(
       checkReadme(README, withFacts({ tokens: [...facts.tokens, 'FACTORY_NEW_TOKEN'] }), exists).join('\n'),
     ).toContain('missing FACTORY_NEW_TOKEN')
-    expect(checkReadme(README, withFacts({ screens: [...facts.screens, 'Overview'] }), exists).join('\n')).toContain(
-      'omits the screen Overview',
+    expect(checkReadme(README, withFacts({ screens: [...facts.screens, 'Cockpit'] }), exists).join('\n')).toContain(
+      'omits the screen Cockpit',
     )
     expect(checkReadme(README, withFacts({ states: [...facts.states, 'sleeping'] }), exists).join('\n')).toContain(
       'missing sleeping',

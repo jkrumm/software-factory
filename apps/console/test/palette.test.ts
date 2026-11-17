@@ -5,11 +5,14 @@ import { highlightRanges, highlightRuns, queryWords } from '../src/lib/highlight
 import {
   type CommandEntry,
   type IssueEntry,
+  contextActions,
   issueScore,
   MAX_ISSUES,
   type PaletteSource,
+  pageViewOf,
   searchPalette,
   textScore,
+  viewOf,
 } from '../src/lib/palette.ts'
 
 const issue = (number: number, title: string, over: Partial<IssueEntry> = {}): IssueEntry => ({
@@ -30,6 +33,10 @@ const source = (issues: IssueEntry[]): PaletteSource => ({
   issues,
   projects: [{ name: 'argo', open: 3 }],
   artifacts: [{ id: 'art_1', title: 'Export button spec', kind: 'spec' }],
+  collections: [
+    { id: 'col_1', title: 'Export rollout', repo: 'argo' },
+    { id: 'col_2', title: 'Plan of the export', repo: 'argo' },
+  ],
   commands,
 })
 
@@ -137,6 +144,110 @@ test('an empty query shows every command and the five most recently active open 
   expect(found.moreIssues).toBe(0)
 })
 
+test('collections rank by textScore like artifacts and are found by id', () => {
+  expect(searchPalette('export', source([])).collections.map((c) => c.id)).toEqual(['col_1', 'col_2'])
+  expect(searchPalette('col_2', source([])).collections.map((c) => c.id)).toEqual(['col_2'])
+  expect(searchPalette('zzz', source([])).collections).toEqual([])
+})
+
+test('a number no listed Issue has comes back as openNumber; a listed one and a word do not', () => {
+  expect(searchPalette('#999', source([issue(7, 'x')])).openNumber).toBe(999)
+  expect(searchPalette('12', source([])).openNumber).toBe(12)
+  expect(searchPalette('7', source([issue(7, 'x')])).openNumber).toBeNull()
+  expect(searchPalette('export', source([])).openNumber).toBeNull()
+  expect(searchPalette('0', source([])).openNumber).toBeNull()
+  expect(searchPalette('', source([])).openNumber).toBeNull()
+})
+
+describe('the thing in view', () => {
+  test('a peek wins over the page; pages name Issues, artifacts, collections and projects', () => {
+    expect(viewOf('/issues/12', {})).toEqual({ type: 'issue', id: '12' })
+    expect(viewOf('/flow', { peek: 'issues/5' })).toEqual({ type: 'issue', id: '5' })
+    expect(viewOf('/issues/12', { peek: 'artifacts/art_1' })).toEqual({ type: 'artifact', id: 'art_1' })
+    expect(viewOf('/artifacts/art_1', {})).toEqual({ type: 'artifact', id: 'art_1' })
+    expect(pageViewOf('/artifacts/collections/col_1')).toEqual({ type: 'collection', id: 'col_1' })
+    expect(pageViewOf('/projects/argo/plan')).toEqual({ type: 'project', name: 'argo' })
+    expect(viewOf('/artifacts', {})).toBeNull()
+    expect(viewOf('/artifacts/collections', {})).toBeNull()
+    expect(viewOf('/', {})).toBeNull()
+  })
+
+  const facts = { origin: 'https://console.example.com' }
+  const ids = (list: { id: string }[]) => list.map((a) => a.id)
+
+  test('an Issue: link, CLI, Chain only with a known project, Answer only with a waiting item', () => {
+    const view = { type: 'issue', id: '12' } as const
+    const bare = contextActions(view, facts)
+    expect(ids(bare)).toEqual(['context-copy-link', 'context-copy-cli'])
+    expect(bare[0]).toMatchObject({ title: 'Copy link to Issue 12', copy: 'https://console.example.com/issues/12' })
+    expect(bare[1]).toMatchObject({
+      title: 'Copy CLI command: factory issue show 12',
+      copy: 'factory issue show 12',
+    })
+    const full = contextActions(view, { ...facts, repo: 'argo', needItem: 'need_1' })
+    expect(ids(full)).toEqual(['context-copy-link', 'context-copy-cli', 'context-chain', 'context-answer'])
+    expect(full.map((a) => a.title)).toContain("Open Issue 12's project in the Chain")
+    expect(full.map((a) => a.title)).toContain('Answer Issue 12')
+  })
+
+  test('an artifact, a collection (pin state decides the verb) and a project', () => {
+    expect(contextActions({ type: 'artifact', id: 'art_1' }, facts).map((a) => a.copy)).toEqual([
+      'https://console.example.com/artifacts/art_1',
+      'factory artifact show art_1',
+    ])
+    const collection = { type: 'collection', id: 'col_1' } as const
+    expect(contextActions(collection, { ...facts, pinned: false }).map((a) => a.title)).toEqual([
+      'Pin collection',
+      'Copy link to this collection',
+    ])
+    expect(contextActions(collection, { ...facts, pinned: true })[0]?.title).toBe('Unpin collection')
+    expect(ids(contextActions(collection, facts))).toEqual(['context-copy-link'])
+    const project = contextActions({ type: 'project', name: 'argo' }, facts)
+    expect(project.map((a) => a.title)).toEqual([
+      'Open argo in the Chain',
+      "Show argo's Issues on the Overview",
+      'Copy link to argo',
+      'Copy CLI command: factory project plan argo',
+    ])
+    expect(contextActions(null, facts)).toEqual([])
+  })
+
+  test('they are listed on an empty query and ranked by textScore on a query', () => {
+    const context = contextActions({ type: 'project', name: 'argo' }, facts)
+    const withContext = { ...source([]), context }
+    expect(searchPalette('', withContext).context).toHaveLength(4)
+    expect(ids(searchPalette('chain', withContext).context)).toEqual(['context-chain'])
+    expect(searchPalette('zzz', withContext).context).toEqual([])
+    expect(searchPalette('chain', source([])).context).toEqual([])
+  })
+})
+
+describe('recent items come first', () => {
+  const recent = [
+    { type: 'issue', id: '3', at: 3 },
+    { type: 'artifact', id: 'art_1', at: 2 },
+    { type: 'collection', id: 'gone', at: 1 },
+    { type: 'issue', id: '404', at: 0 },
+  ] as const
+
+  test('they resolve to titles, and one the lists lack keeps its reference', () => {
+    const found = searchPalette('', source([issue(3, 'Third')]), recent)
+    expect(found.recent.map((r) => r.title)).toEqual(['Third', 'Export button spec', 'Collection gone', 'Issue #404'])
+    expect(found.recent.map((r) => r.reference)).toEqual(['#3', 'art_1', 'gone', '#404'])
+  })
+
+  test('the Recently active list leaves out Issues already in Recent', () => {
+    const issues = [1, 2, 3, 4].map((n) => issue(n, `Open ${n}`, { updatedAt: `2026-11-0${n}T00:00:00.000Z` }))
+    const found = searchPalette('', source(issues), recent)
+    expect(found.issues.map((i) => i.number)).toEqual([4, 2, 1])
+  })
+
+  test('a query lists no recent group, and without recents the list is empty', () => {
+    expect(searchPalette('open', source([issue(1, 'Open')]), recent).recent).toEqual([])
+    expect(searchPalette('', source([])).recent).toEqual([])
+  })
+})
+
 describe('the palette loads before it is opened', () => {
   const shell = readFileSync(join(import.meta.dir, '../src/components/shell.tsx'), 'utf8')
 
@@ -152,5 +263,6 @@ describe('the palette loads before it is opened', () => {
     expect(shell).toContain('setTimeout(prefetchPalette, prefetchAfterMs)')
     expect(palette).toContain('useIssueCards(open)')
     expect(palette).toContain('usePaletteArtifacts(open)')
+    expect(palette).toContain('enabled: open')
   })
 })

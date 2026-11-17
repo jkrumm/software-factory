@@ -22,7 +22,7 @@ Set here once, so no lead stops to ask for it.
 - **Product.** The place where one developer sees what needs him, what his agents are doing, and how well his factory works.
 - **Character.** Exact, watchful, unhurried.
 - **World.** A plant's control room on a night shift: instrument panels, status lamps, the shift log.
-- **Moments.** The StatCard row above Flow (live figures with their trend), the Chain graph, and Improve's KPIs against
+- **Moments.** The StatCard row of the Overview (live figures with their trend), the Chain graph, and Improve's KPIs against
   their targets. Colour lives there; the chrome stays graphite.
 - **Signature.** The status lamp: a small dot lit only for something live (a working lead, an open stream, a host under
   load), steady, never pulsing.
@@ -47,7 +47,7 @@ laws do not (they are Mantine's; the Console is Base UI and Tailwind on Basalt's
 | | |
 |-|-|
 | Primary viewport | 1800×1200, dark and light. 1280×800 must not break. Phone 390×844 |
-| Width | Working screens (Flow, Chain, the Issue page, an artifact) fill the content area. Only running prose caps at about 76ch, with side panels using the rest |
+| Width | Working screens (the Overview, Chain, the Issue page, an artifact) fill the content area. Only running prose caps at about 76ch, with side panels using the rest |
 | Density | 13 px in rows and cards, 15 px titles, 4 px spacing scale; tabular figures for every number (set once on `body`); an uncounted value reads as a dash with its reason, never 0 or None |
 | Depth | Surface steps (canvas, paper, panel) and one faint shadow scale, never borders for depth; hairlines only between rows |
 | Type | Nunito Sans, JetBrains Mono for ids and times; headings semibold with tight tracking |
@@ -56,20 +56,33 @@ laws do not (they are Mantine's; the Console is Base UI and Tailwind on Basalt's
 ## The frame
 
 - **Sidebar.** The logo slot is the app icon, the metallic tile the PWA shows (`/icons/icon-192.png`), then the wordmark "Factory" at the top. The global nav is compact: icon, label, a count, and the
-  key that reaches it (`g n`, `g f`, …) shown on hover. Under a hairline, **the page's own section**: Flow's projects and origins as toggles, each with what is
+  key that reaches it (`g o`, `g n`, …) shown on hover in the count's place, so a label never truncates under both. It
+  follows the owner's day: Overview, Needs you, Chain, Projects, Artifacts; then a quieter group under "How it runs"
+  (a hairline on the collapsed rail) with Improve and Throughput. Overview is active on `/` only; a screen stays active on
+  its own pages (a project's tabs under Projects). The phone's tab bar holds the first group; the second is in the palette.
+  Under a hairline, **the page's own section**: the Overview's projects and origins as toggles, each with what is
   open behind it as three small figures (a lit lamp and the Running count, an hourglass and the Paused count, a queue icon and the Ready count, a lock and the Held count; never a closed
   Issue, and none at all when nothing is open), Needs you's kinds, Chain's projects, Improve's window. Collapsible to icons.
 - **Header strip.** One line from 1280 up, wrapping to two below. In order: counts (Running, Paused, Ready, Held, Checking, each a link to
-  Flow filtered to it); one meter per subscription (graphite until 75 % / 90 %, then warn / bad; popover with the used share per
+  the Overview filtered to it); one meter per subscription (graphite until 75 % / 90 %, then warn / bad; popover with the used share per
   window and its reset time); host meters for load, memory and swap (same rule; popover with the 24 h charts and their
   ceilings and the top five processes); Live (a dot, the word, `N stale` and `updating` when they are true, and `build 3 h ago` from 1536 px; popover with
   the stream's state, the last event's age, the server's version and uptime, the build and the update, and the stale reads). Under the strip, only when
   true: a stuck update (two minutes, one button) and the age of the screen's own data once it is older than its poll interval.
 - **Everything that names a thing links to it.** An Issue title or an artifact anywhere opens it in the **peek**, a panel on
   the right of the page you are on (below); a modifier-click, "Open full page" in the panel, or a link on the Issue's own
-  page opens the page; a project opens its page (`/projects/<name>`; Flow's own filter stays a toggle in the sidebar); an origin links out to its source (the GitHub issue, the alert).
-- **The palette** finds Issues by title or number across projects, projects, artifacts and commands, each row with an icon,
-  the highlighted match, a muted reference and a kind column; it shows each command's key.
+  page opens the page; a project opens its page (`/projects/<name>`; the Overview's own filter stays a toggle in the sidebar); an origin links out to its source (the GitHub issue, the alert).
+- **The palette** reaches every navigation target: an Issue by title or by number (a number not in the loaded list still
+  opens it), a project by name, an artifact, a collection and every screen. On an empty query it lists what was visited
+  last (Recent), then the actions on the thing in view (This page: copy its link, copy the `factory` command that shows
+  it, open it in the Chain, answer it when it waits on the owner, pin a collection), then the recently active Issues and
+  the commands. Each row has an icon, the highlighted match, a muted reference and a kind column; it shows each command's key.
+- **Keys** (`lib/shortcuts.ts`, the one list; `?` shows it as an overlay by group). `g` then a letter opens each screen
+  (`o n c p a i t`); Mod+K the palette; `/` focuses the page's filter (its sidebar section) and searches where a page has
+  none; Escape closes the peek or a popup first, then goes back from a page of one thing; `j` and `k` move through the
+  rows a page marks (`data-keynav`), Enter opens one; `[` and `]` step a chart's window shorter or longer (the Overview's
+  trend, Improve, Throughput). Every key goes through `@tanstack/react-hotkeys` and shows in its display format; none
+  fires inside a text field.
 
 ## Components
 
@@ -114,7 +127,7 @@ click, and keeps the working screen where it was.
 
 ## Rules
 
-- The page never scrolls sideways, at any viewport. Shell's `main` clips the x axis; only a container made for it (the Flow
+- The page never scrolls sideways, at any viewport. Shell's `main` clips the x axis; only a container made for it (the Overview
   list's table, a carousel) scrolls sideways, inside itself. Text that cannot break wraps anywhere.
 - A meter is graphite; it takes the warn tone from 75 % and the bad tone from 90 % of its ceiling, and no series colour
   otherwise. Colour in the chrome is state only.
@@ -133,7 +146,7 @@ click, and keeps the working screen where it was.
   while something is typed, and at once only for a screen that has no data until it does. A screen that cannot read an answer
   because the server is newer shows its skeleton, not words; only after 20 s without the new bundle does it say so. An answer
   that only adds a field is read as it is.
-- **Every route renders its skeleton at once** (Needs you, Flow, Chain, Improve, an Issue, an artifact, an open card's
+- **Every route renders its skeleton at once** (Needs you, the Overview, Chain, Improve, an Issue, an artifact, an open card's
   body), and every link to an Issue or an artifact warms its data and its code on hover and focus (the route's loader, run by
   the router's intent preload; the Needs-you cards do the same for a review's artifact and a Decision), so opening it after a
   hover renders with no skeleton at all.
@@ -144,16 +157,36 @@ click, and keeps the working screen where it was.
 
 ## The screens
 
+Each screen of the navigation answers one question, shown under its title (`purpose` in `lib/screens.ts`;
+`test/overview.test.ts` fails when this table and the code differ):
+
+| Screen | The question it answers |
+|-|-|
+| Overview | Where does the factory stand right now, and what needs me first? |
+| Needs you | What wants my answer, my review or my hands? |
+| Chain | What depends on what, and what holds the next step back? |
+| Projects | How is each project doing, and what runs, ships and comes next in it? |
+| Artifacts | Which Concepts, Specs and Reports are there to read or to judge? |
+| Improve | Is the factory getting better against its targets, and where does it fall short? |
+| Throughput | Is the host the limit, and what holds the queue back? |
+
+- **Overview** (home, `/`; it was Flow, and `/flow` redirects here with its filters): a band of four panels first, left
+  to right as the owner reads them: what needs him (the count and the three open longest, each opening Needs you),
+  production (the projects with an open incident Issue, red; how many ships are Checking), what shipped in the last 24
+  hours by project, and the host in one line (load, memory, swap on the strip's meter rule) with the queue's binding
+  reason (the reason kind keeping the most not-started Issues out, its count and the first one's message, and the queue's
+  state when it paces or drains). Then the stat row (running, paused, not started, shipped this week, each a StatCard
+  with its sparkline), the trend chart (its window control is 24 h, 7 d, 30 d, opening on 7 d by the hour; 24 h and 7 d
+  are by the hour, 30 d by the day), the project digests, and under them the list of Issues a filter opens: a sortable
+  table, collapsed until a word, project or origin is picked, with a link to the Chain. There are no state columns; the
+  Chain is the view of the work. Regressions stay on a project's own page: the band reads only what the Overview already
+  loads (the flow model, the needs, the host meters).
 - **Needs you**: a "Since you were here" band on top. Its head says since when, in words; each category that has something shows a
   figure, its label with an InfoHint, and one plain sentence of what happened and whether it wants anything from the owner;
   an empty category is absent, and what he may act on (Regressed, Incidents, Dropped) reads first. Its entries are SinceRows, never cards, and the detail lives in their popover. Then the checkpoints, project first and then title. A Decision
   shows its options as cards: the recommendation marked with its reason, cost and consequence per option, free text last.
   An Errand says what it is. A held signal shows where it came from, when, and a link to its source.
-- **Projects**: one table on TanStack Table (`components/project/table.tsx`, the logic in `lib/project-table.ts`), one row per project in the owner's Herdr groups, busiest first, every figure from the one read `GET /v1/projects`. Each column answers one question with an in-cell visual and its figure right-aligned: Now (a `SegmentBar` of running, paused, ready, held and checking on a scale shared by the rows; Held and Checking at half strength beside the part of their tone), Shipped 7 d (an hourly compact `Sparkline` and the count), Last ship, Cycle and Queue wait (medians with a trend arrow against the 7 days before, lower is good), Production (the lamp: bad for an open incident, warn for a regression in 7 days, accent while Checking, faint when quiet, with the age), Hygiene (probes clean of run, the oldest finding's age), Plan (a graphite meter of rows done; progress, never a warn tone), Leads (running of the seats the host admits). Sort on every header, a name search and quick filters (Red, Hygiene gaps, Moving, Idle), Groups or Flat, Compact (26 px rows: 32 projects in six groups fit 1800x1200) or Comfortable, columns to hide; the choices but not the filter stay per browser. Sticky header and name column; a row is the Tab stop with the arrows, Enter and a click open the project, hover or focus previews its digest. Below 40 rem each row is a card with the same cells. A project's page reads top-down and fills the width. Its header holds the name, a switcher between projects (a popover that keeps the tab that is open; the sidebar has no project list) and the links into Flow, Chain and Artifacts with `?project=`, then the tabs. The project's own address is the first screen, which at 1800×1200 answers four questions with no scrolling and tells nothing twice: is it healthy (a band of three lamps with one sentence each: production, the checks, the project's files), what moves now (Running and Paused with the reason, five each), what is next (Ready and Held, five each, and the plan rows no Issue is on yet) and what shipped (a StatCard with the hourly bars of 7 days, then the newest five as SinceRows). A list longer than five ends in a count that opens its tab. The rest is a tab with its own address and its own reads: Work (every open Issue, sortable), Plan (every row with state, reason and progress), Shipped (production, then the last 7 days by day), Hygiene (each probe with its last run, the newest pass's findings and how each ended, earlier passes in a Fold) and Setup (`project.yaml` as a form with each key's meaning from the schema's descriptions and the raw file behind a toggle, then the monitors the door routes to the project).
-- **Flow**: a stat row (running, paused, not started, shipped this week, each a StatCard with its sparkline), then the trend chart
-  (its window control is 24 h, 7 d, 30 d, opening on 7 d by the hour; 24 h and 7 d are by the hour, 30 d by the day) and, under it, the
-  list of Issues a filter opens: a sortable table, collapsed until a word, project or origin is picked, with a link to the Chain. There
-  are no state columns; the Chain is the view of the work.
+- **Projects**: one table on TanStack Table (`components/project/table.tsx`, the logic in `lib/project-table.ts`), one row per project in the owner's Herdr groups, busiest first, every figure from the one read `GET /v1/projects`. Each column answers one question with an in-cell visual and its figure right-aligned: Now (a `SegmentBar` of running, paused, ready, held and checking on a scale shared by the rows; Held and Checking at half strength beside the part of their tone), Shipped 7 d (an hourly compact `Sparkline` and the count), Last ship, Cycle and Queue wait (medians with a trend arrow against the 7 days before, lower is good), Production (the lamp: bad for an open incident, warn for a regression in 7 days, accent while Checking, faint when quiet, with the age), Hygiene (probes clean of run, the oldest finding's age), Plan (a graphite meter of rows done; progress, never a warn tone), Leads (running of the seats the host admits). Sort on every header, a name search and quick filters (Red, Hygiene gaps, Moving, Idle), Groups or Flat, Compact (26 px rows: 32 projects in six groups fit 1800x1200) or Comfortable, columns to hide; the choices but not the filter stay per browser. Sticky header and name column; a row is the Tab stop with the arrows, Enter and a click open the project, hover or focus previews its digest. Below 40 rem each row is a card with the same cells. A project's page reads top-down and fills the width. Its header holds the name, a switcher between projects (a popover that keeps the tab that is open; the sidebar has no project list) and the links into the Overview, Chain and Artifacts with `?project=`, then the tabs. The project's own address is the first screen, which at 1800×1200 answers four questions with no scrolling and tells nothing twice: is it healthy (a band of three lamps with one sentence each: production, the checks, the project's files), what moves now (Running and Paused with the reason, five each), what is next (Ready and Held, five each, and the plan rows no Issue is on yet) and what shipped (a StatCard with the hourly bars of 7 days, then the newest five as SinceRows). A list longer than five ends in a count that opens its tab. The rest is a tab with its own address and its own reads: Work (every open Issue, sortable), Plan (every row with state, reason and progress), Shipped (production, then the last 7 days by day), Hygiene (each probe with its last run, the newest pass's findings and how each ended, earlier passes in a Fold) and Setup (`project.yaml` as a form with each key's meaning from the schema's descriptions and the raw file behind a toggle, then the monitors the door routes to the project).
 - **Issue**: a header (title, project, KindBadge, Lozenge, age, actions), a PropertyList of the facts, tabs for overview,
   activity (StepRail of the event log in words), evidence and checkpoints; a right panel with properties and the chain
   around it.
@@ -204,7 +237,7 @@ holds what a script can hold.
 - **An empty state says why it is empty and gives the first step:** a title and one line under it, or an action. The line is
   the next step, not a second title.
 - **Every StatCard has a `hint`** (never `undefined`): the glossary word for what the figure counts. A figure of the host, an
-  Issue, a project or the queue (Throughput, the Issue and project pages, Flow's Shipped) uses a word of "The host" or "The figures
+  Issue, a project or the queue (Throughput, the Issue and project pages, the Overview's Shipped) uses a word of "The host" or "The figures
   on a card" in `docs/language.md`, whose definition ends in "What to do:" and the step. An Improve KPI is a measure against a
   target: its hint is the glossary word and its `meaning` line says what it counts and which way is good. A definition longer
   than two sentences carries "Read more in the language guide" in the popover.

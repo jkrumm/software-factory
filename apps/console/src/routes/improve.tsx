@@ -24,7 +24,8 @@ import {
   TimerIcon,
   WrenchIcon,
 } from '@phosphor-icons/react'
-import { createFileRoute, Link } from '@tanstack/react-router'
+import { createFileRoute, Link, useNavigate } from '@tanstack/react-router'
+import { useWindowKeys } from '@/components/shortcuts'
 import { Fold, InfoHint, MenuPopover, Section, Skeleton, Sparkline, StackedBars, StatCard } from '@/components/kit'
 import { EmptyState, Page, PageHeader } from '@/components/page'
 import { SidebarEntry, SidebarSection, useSidebarCollapsed } from '@/components/sidebar'
@@ -1074,6 +1075,8 @@ function SeatSection({ model }: { model: KpiModel }) {
 
 function Improve() {
   const { days = DEFAULT_WINDOW } = Route.useSearch()
+  const navigate = useNavigate({ from: Route.fullPath })
+  useWindowKeys(WINDOW_DAYS, days, (next) => void navigate({ search: { days: next } }))
   const kpis = useKpis(days)
   const screen = useScreen(kpis)
   const note = useScreenNote(screen, kpis.error)
