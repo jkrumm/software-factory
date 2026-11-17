@@ -1,5 +1,11 @@
 import { describe, expect, test } from 'bun:test'
-import { judgeLightGate, moveUpBound, type SeatFigures } from '@software-factory/contract'
+import {
+  type ClassStart,
+  judgeClassSeat,
+  judgeLightGate,
+  moveUpBound,
+  type SeatFigures,
+} from '@software-factory/contract'
 import {
   hygieneClass,
   type LightFacts,
@@ -14,6 +20,7 @@ const facts = (over: Partial<LightFacts> = {}): LightFacts => ({
   size: null,
   spec: false,
   hygieneKey: null,
+  hygieneOut: false,
   unroutedMonitor: false,
   movedUp: 0,
   text: 'tidy a log line',
@@ -22,17 +29,23 @@ const facts = (over: Partial<LightFacts> = {}): LightFacts => ({
 })
 
 describe('lightRule', () => {
-  test('a mechanical hygiene class starts light, by probe, judgment kind or declared probe name', () => {
+  test('every hygiene finding starts light, by probe, judgment kind or declared probe name, whatever its size', () => {
     expect(lightRule(facts({ hygieneKey: 'links:docs/guide.md' }))).toBe('hygiene:links')
     expect(lightRule(facts({ hygieneKey: 'judgment:stale:docs/x.md' }))).toBe('hygiene:stale')
     expect(lightRule(facts({ hygieneKey: 'probe:readme' }))).toBe('hygiene:readme')
     expect(lightRule(facts({ hygieneKey: 'deps' }))).toBe('hygiene:deps')
+    // what the catalogue once kept on the lead row, and a size triage called medium or left empty
+    expect(lightRule(facts({ hygieneKey: 'check' }))).toBe('hygiene:check')
+    expect(lightRule(facts({ hygieneKey: 'advisories', size: 'medium' }))).toBe('hygiene:advisories')
+    expect(lightRule(facts({ hygieneKey: 'unused:exports', size: null }))).toBe('hygiene:unused')
+    expect(lightRule(facts({ hygieneKey: 'judgment:slop:docs/x.md', size: 'large' }))).toBe('hygiene:slop')
   })
 
-  test('a hygiene class that needs judgment stays on the lead row', () => {
-    expect(lightRule(facts({ hygieneKey: 'check' }))).toBeNull()
-    expect(lightRule(facts({ hygieneKey: 'judgment:slop:docs/x.md' }))).toBeNull()
-    expect(lightRule(facts({ hygieneKey: 'cochange:a|b' }))).toBeNull()
+  test('a hygiene class that is out starts on the lead row, and no size rule brings it back', () => {
+    expect(lightRule(facts({ hygieneKey: 'links:docs/guide.md', hygieneOut: true }))).toBeNull()
+    expect(
+      lightRule(facts({ hygieneKey: 'links:docs/guide.md', hygieneOut: true, size: 'small', triageSmall: true })),
+    ).toBeNull()
   })
 
   test('kind docs and a monitor with no route start light', () => {
@@ -156,5 +169,34 @@ describe('the light gate', () => {
     const verdict = judgeLightGate({ light: light({ regressionsPerIssue: 0.09 }), lead, bound: null })
     expect(verdict.met).toBe(false)
     expect(verdict.failing).toHaveLength(2)
+  })
+})
+
+describe('judgeClassSeat', () => {
+  const start = (movedUp: boolean, light = true): ClassStart => ({ light, movedUp })
+  const run = (moved: number, kept: number) => [
+    ...Array.from({ length: moved }, () => start(true)),
+    ...Array.from({ length: kept }, () => start(false)),
+  ]
+
+  test('a class is out when its move-up share over the window is above the bound, with the reason', () => {
+    const verdict = judgeClassSeat(run(5, 5), 0.4)
+    expect(verdict).toMatchObject({ starts: 10, movedUp: 5, share: 0.5, out: true })
+    expect(verdict.why).toBe('5 of its last 10 light starts moved up (50 %), above the bound 40 %')
+    // at the bound is still in
+    expect(judgeClassSeat(run(4, 6), 0.4).out).toBe(false)
+  })
+
+  test('under three light starts, or with no bound measured, nothing is out', () => {
+    expect(judgeClassSeat(run(2, 0), 0.1)).toMatchObject({ starts: 2, share: null, out: false })
+    expect(judgeClassSeat(run(8, 2), null)).toMatchObject({ share: 0.8, out: false, why: null })
+  })
+
+  test('only the newest 20 Issues count, and Issues that started on the lead row do not', () => {
+    // the 20 newest moved up less than the bound; older move-ups are outside the window
+    expect(judgeClassSeat([...run(1, 19), ...run(20, 0)], 0.4).out).toBe(false)
+    // a class that is out starts on the lead row: those starts age the light ones out until too few stand, and it is back
+    const newestFirst = [...Array.from({ length: 18 }, () => start(false, false)), ...run(3, 0)]
+    expect(judgeClassSeat(newestFirst, 0.4)).toMatchObject({ starts: 2, share: null, out: false })
   })
 })

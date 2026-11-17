@@ -67,3 +67,50 @@ export function judgeLightGate(input: { light: SeatFigures; lead: SeatFigures; b
     failing: [...broken, ...unmeasured],
   }
 }
+
+/** A hygiene class is judged over its newest Issues whose first lead started: this many. */
+export const CLASS_SEAT_WINDOW = 20
+/** Fewer light starts in the window than this prove nothing: an unmeasured class stays on the light seat. */
+export const CLASS_SEAT_MIN_STARTS = 3
+
+/** One Issue of a hygiene class whose first lead started: on which seat, and whether it was moved up. */
+export interface ClassStart {
+  light: boolean
+  movedUp: boolean
+}
+
+export interface ClassSeatVerdict {
+  /** light starts in the window, and how many of them moved up */
+  starts: number
+  movedUp: number
+  /** moved up / starts; null under `CLASS_SEAT_MIN_STARTS` starts */
+  share: number | null
+  /** true: the class's next Issue starts on the standard lead */
+  out: boolean
+  why: string | null
+}
+
+const percent = (share: number): string => `${Math.round(share * 100)} %`
+
+/**
+ * Where a hygiene class starts. `starts` are the class's Issues whose first lead started, newest first: the window is the
+ * first `CLASS_SEAT_WINDOW` of them, and the move-up share is the move-ups among the light starts in it. A class is out
+ * when that share is above the bound the cost of a move-up sets (`moveUpBound`), the same bound that closes the tripwire
+ * for triage's `small`, and comes back when it is at or under it: Issues of a class that is out start on the lead row,
+ * so they age its light starts out of the window until the share no longer stands on `CLASS_SEAT_MIN_STARTS`. With no
+ * bound measured nothing is out.
+ */
+export function judgeClassSeat(starts: readonly ClassStart[], bound: number | null): ClassSeatVerdict {
+  const light = starts.slice(0, CLASS_SEAT_WINDOW).filter((start) => start.light)
+  const movedUp = light.filter((start) => start.movedUp).length
+  const share = light.length < CLASS_SEAT_MIN_STARTS ? null : movedUp / light.length
+  if (share === null || bound === null || share <= bound)
+    return { starts: light.length, movedUp, share, out: false, why: null }
+  return {
+    starts: light.length,
+    movedUp,
+    share,
+    out: true,
+    why: `${movedUp} of its last ${light.length} light starts moved up (${percent(share)}), above the bound ${percent(bound)}`,
+  }
+}

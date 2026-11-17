@@ -3,7 +3,7 @@ import { startTestCluster, type TestCluster } from '@software-factory/tests/pg'
 import type { SQL } from 'bun'
 import { loadMigrations, migrate } from '../../src/adapters/postgres/migrate.ts'
 import { costOfIssues } from '../../src/read/kpis.ts'
-import { readLightGate, readSeatKpis } from '../../src/read/kpis-seats.ts'
+import { readSeatKpis, readTripwire } from '../../src/read/kpis-seats.ts'
 
 /**
  * The light seat's four figures and the tripwire over a real Postgres, worked out by hand from one fixture. Six Issues
@@ -151,7 +151,7 @@ describe('the light seat delivers', () => {
     expect(kpis.tripwire.failing.join(' ')).toContain('2 of 10')
     // (d) every session of the light Issues: 0.1 + 0.2 + 1 + 0.3
     expect(kpis.delivery.light.cost).toBeCloseTo(1.6)
-    expect(await readLightGate(sql, { now: NOW, cost: priced })).toBe(false)
+    expect((await readTripwire(sql, { now: NOW, cost: priced })).met === true).toBe(false)
   })
 
   test('opens on a measured window and closes on a broken one', async () => {
@@ -175,14 +175,14 @@ describe('the light seat delivers', () => {
     expect(open.tripwire.lead.finishedPassRate).toBeCloseTo(11 / 12)
     expect(open.tripwire.met).toBe(false)
     expect(open.tripwire.failing).toEqual(['light regresses more per Issue than lead'])
-    expect(await readLightGate(sql, { now: NOW, cost: priced })).toBe(false)
+    expect((await readTripwire(sql, { now: NOW, cost: priced })).met === true).toBe(false)
     // a window three days later holds none of them: nothing is measured, the gate narrows by itself
     const later = new Date(NOW.getTime() + 4 * 24 * 3_600_000)
-    expect(await readLightGate(sql, { now: later, cost: priced })).toBe(false)
+    expect((await readTripwire(sql, { now: later, cost: priced })).met === true).toBe(false)
     // with both regressions gone the same Issues widen it
     await sql`UPDATE factory.quality_watches SET answer = 'passed' WHERE key = 'w:issue_3:1' OR key = 'w:issue_6:1'`
     const widened = await readSeatKpis(sql, W, { now: NOW, cost: priced })
     expect(widened.tripwire.met).toBe(true)
-    expect(await readLightGate(sql, { now: NOW, cost: priced })).toBe(true)
+    expect((await readTripwire(sql, { now: NOW, cost: priced })).met === true).toBe(true)
   })
 })

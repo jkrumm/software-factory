@@ -23,9 +23,19 @@ import { typePacer } from './app/type-pace.ts'
 import type { Clock } from './kernel/clock.ts'
 import { freshFor } from './kernel/fresh-for.ts'
 import { costOfIssues } from './read/kpis.ts'
-import { readLightGate } from './read/kpis-seats.ts'
+import { readClassesOut } from './read/finding-seats.ts'
+import { readTripwire } from './read/kpis-seats.ts'
 import type { IdSource } from './kernel/ids.ts'
 import type { PortError, Result } from './kernel/result.ts'
+
+/** The light seat's two readers off one tripwire reading: triage's `small` gate and the hygiene classes that are out. */
+function lightReaders(sql: SQL, clock: Clock): Pick<LeadDeps, 'lightGate' | 'lightClassesOut'> {
+  const tripwire = freshFor(LIGHT_GATE_FRESH_MS, () =>
+    readTripwire(sql, { now: clock.now(), cost: (issues) => costOfIssues(sql, issues) }),
+  )
+  const out = freshFor(LIGHT_GATE_FRESH_MS, async () => readClassesOut(sql, (await tripwire()).bound?.share ?? null))
+  return { lightGate: async () => (await tripwire()).met === true, lightClassesOut: out }
+}
 
 /** How long one reading of the light seat's tripwire serves the starts. */
 const LIGHT_GATE_FRESH_MS = 10 * 60_000
@@ -98,12 +108,8 @@ export function composeLeads(input: {
     graceMs: s.graceMs,
     typePace: typePacer({ clock: input.clock, gapMs: s.typeGapMs }),
     // The tripwire over the last days is a heavy read (it prices attempts): one answer serves every start of the next minutes.
-    lightGate: freshFor(LIGHT_GATE_FRESH_MS, () =>
-      readLightGate(input.sql, {
-        now: input.clock.now(),
-        cost: (issues) => costOfIssues(input.sql, issues),
-      }),
-    ),
+    // The same reading gives the bound a hygiene class stays under to start light.
+    ...lightReaders(input.sql, input.clock),
     ...(s.quiesceAfterMs === null
       ? {}
       : {

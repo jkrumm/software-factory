@@ -191,9 +191,7 @@ export function HygieneSection({ model, now }: { model: ProjectHygieneModel; now
                 <dt>
                   <Mono>{probe.name}</Mono>
                 </dt>
-                <dd className="text-muted-foreground">
-                  {probe.catalogue.silence} Seat of its Issue: {probe.catalogue.seat}.
-                </dd>
+                <dd className="text-muted-foreground">{probe.catalogue.silence}</dd>
               </div>
             ))}
         </dl>

@@ -337,7 +337,7 @@ test('the hygiene reads each probe, the newest pass and how each finding ended',
   // the built-in probes, the project's own and the document judgment: each row carries the catalogue's entry for it
   expect(model.probes.length).toBe(BUILT_IN_PROBES.length + 2)
   expect(model.probes.map((p) => p.catalogue.name)).toEqual([...BUILT_IN_PROBES, 'probe', 'judgment'])
-  expect(probe('links')?.catalogue).toMatchObject({ enabled: 'on', cadence: 'daily', seat: 'light', skippable: true })
+  expect(probe('links')?.catalogue).toMatchObject({ enabled: 'on', cadence: 'daily', skippable: true })
   expect(probe('bundle')?.catalogue).toMatchObject({ name: 'probe', enabled: 'opt-in' })
   expect(probe('links')?.ranAt).toBe(ago(24).toISOString())
   expect(model.lastPass).toMatchObject({ id: 'hp_new', ref: 'abc123', findings: 4, filed: 2 })

@@ -921,6 +921,26 @@ export const FindingClass = z
     open: z.number().int(),
     /** when a held class is asked again; null unless the window is over the share */
     heldUntil: at.nullable(),
+    /** where the class's Issues start (`judgeClassSeat`); null for a friction class, whose Issues start by triage's size */
+    seat: z
+      .strictObject({
+        /** Issues of the class whose first lead started on the light seat, all time */
+        starts: z.number().int(),
+        /** of those, moved up to the lead row */
+        movedUp: z.number().int(),
+        /** first watches of ships by light attempts of the class, and the share that passed; null with none */
+        finishedWatches: z.number().int(),
+        finishedPassRate: z.number().nullable(),
+        /** over the class's last 20 Issues: light starts, the move-ups among them, and their share (null under 3 starts) */
+        windowStarts: z.number().int(),
+        windowMovedUp: z.number().int(),
+        windowShare: z.number().nullable(),
+        /** true: the class's next Issue starts on the standard lead */
+        out: z.boolean(),
+        /** why it is out; null while it is on the light seat */
+        why: z.string().nullable(),
+      })
+      .nullable(),
   })
   .meta({ id: 'FindingClass' })
 export type FindingClass = z.infer<typeof FindingClass>
@@ -928,6 +948,8 @@ export type FindingClass = z.infer<typeof FindingClass>
 export const FindingClassesModel = z
   .strictObject({
     at,
+    /** the move-up share a hygiene class stays under to start light (the tripwire's); null while a cost is unmeasured, and then no class is out */
+    bound: z.number().nullable(),
     /** held first, then probation, then open; then by loop and class */
     classes: z.array(FindingClass),
   })

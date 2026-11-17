@@ -3,8 +3,7 @@ import * as z from 'zod'
 /**
  * The hygiene catalogue: every probe the weekly and daily passes can run, what it checks, whether it is on, when and at what
  * cost, and how a project silences it. The one source for `docs/hygiene.md` (generated; `make check` fails when it is stale),
- * the project page's Hygiene tab and `factory read project-hygiene`; the server's probe order, the cadence of a pass, the seat a
- * finding's Issue starts on and the keys `hygiene.skip` accepts are all read from here.
+ * the project page's Hygiene tab and `factory read project-hygiene`; the server's probe order, the cadence of a pass, the keys `hygiene.skip` accepts are all read from here.
  */
 
 /** `on`: every project; `auto`: on when detection finds what it reads; `opt-in`: only where the project declares it. */
@@ -13,8 +12,6 @@ export const PROBE_ENABLEMENTS = ['on', 'auto', 'opt-in'] as const
 export const PROBE_COSTS = ['file', 'tool', 'make', 'agent'] as const
 /** `daily`: a pass of the cheap probes every day; `weekly`: only the weekly pass (and a busy repo's early one). */
 export const PROBE_CADENCES = ['daily', 'weekly'] as const
-/** The seat the Issue of a finding should start on: `light` for work a rule can name, `standard` otherwise. */
-export const PROBE_SEATS = ['light', 'standard'] as const
 
 export const HygieneCatalogueEntry = z
   .strictObject({
@@ -27,7 +24,6 @@ export const HygieneCatalogueEntry = z
     detect: z.string().nullable(),
     cost: z.enum(PROBE_COSTS),
     cadence: z.enum(PROBE_CADENCES),
-    seat: z.enum(PROBE_SEATS),
     /** whether `hygiene.skip` may name it; the others are silenced the way `silence` says */
     skippable: z.boolean(),
     /** how a project silences it, always with a reason */
@@ -48,7 +44,6 @@ export const HYGIENE_CATALOGUE = [
     detect: null,
     cost: 'make',
     cadence: 'weekly',
-    seat: 'standard',
     skippable: false,
     silence:
       'Set `hygiene: { check: false, reason: <why> }` when the gate needs a lab this host lacks; a red `doctor` skips it on its own.',
@@ -62,7 +57,6 @@ export const HYGIENE_CATALOGUE = [
       'a lockfile of one of those kinds is tracked; the Cargo, Python and Swift ones are skipped on a host without `osv-scanner`',
     cost: 'tool',
     cadence: 'weekly',
-    seat: 'standard',
     skippable: true,
     silence: SKIP,
   },
@@ -73,7 +67,6 @@ export const HYGIENE_CATALOGUE = [
     detect: null,
     cost: 'file',
     cadence: 'daily',
-    seat: 'light',
     skippable: true,
     silence: SKIP,
   },
@@ -85,7 +78,6 @@ export const HYGIENE_CATALOGUE = [
     detect: 'the repo has `scripts/retired-words.ts`',
     cost: 'file',
     cadence: 'daily',
-    seat: 'light',
     skippable: true,
     silence: SKIP,
   },
@@ -97,7 +89,6 @@ export const HYGIENE_CATALOGUE = [
     detect: 'the repo has a `project.yaml`',
     cost: 'file',
     cadence: 'daily',
-    seat: 'light',
     skippable: true,
     silence: SKIP,
   },
@@ -109,7 +100,6 @@ export const HYGIENE_CATALOGUE = [
     detect: 'a package file of one of those kinds is tracked; each ecosystem is its own finding',
     cost: 'tool',
     cadence: 'weekly',
-    seat: 'light',
     skippable: true,
     silence: SKIP,
   },
@@ -121,7 +111,6 @@ export const HYGIENE_CATALOGUE = [
     detect: 'the repo has `.github/workflows/*.yml`',
     cost: 'file',
     cadence: 'daily',
-    seat: 'standard',
     skippable: true,
     silence: SKIP,
   },
@@ -133,7 +122,6 @@ export const HYGIENE_CATALOGUE = [
     detect: 'the repo has an `AGENTS.md`, a `CLAUDE.md` or a `.claude/settings.json`',
     cost: 'file',
     cadence: 'daily',
-    seat: 'light',
     skippable: true,
     silence: SKIP,
   },
@@ -144,7 +132,6 @@ export const HYGIENE_CATALOGUE = [
     detect: 'the repo has a `README.md`',
     cost: 'file',
     cadence: 'daily',
-    seat: 'light',
     skippable: true,
     silence: SKIP,
   },
@@ -156,7 +143,6 @@ export const HYGIENE_CATALOGUE = [
     detect: null,
     cost: 'file',
     cadence: 'daily',
-    seat: 'light',
     skippable: true,
     silence: SKIP,
   },
@@ -168,7 +154,6 @@ export const HYGIENE_CATALOGUE = [
     detect: 'the repo has a `package.json` and `fallow` is installed on the host',
     cost: 'tool',
     cadence: 'weekly',
-    seat: 'standard',
     skippable: true,
     silence: SKIP,
   },
@@ -180,7 +165,6 @@ export const HYGIENE_CATALOGUE = [
     detect: null,
     cost: 'file',
     cadence: 'weekly',
-    seat: 'standard',
     skippable: true,
     silence: SKIP,
   },
@@ -192,7 +176,6 @@ export const HYGIENE_CATALOGUE = [
     detect: 'the repo has a root `mini-services.yaml`, or a deploy target on host `mini` in `project.yaml`',
     cost: 'file',
     cadence: 'daily',
-    seat: 'standard',
     skippable: true,
     silence: SKIP,
   },
@@ -204,7 +187,6 @@ export const HYGIENE_CATALOGUE = [
     detect: null,
     cost: 'file',
     cadence: 'daily',
-    seat: 'standard',
     skippable: true,
     silence: SKIP,
   },
@@ -216,7 +198,6 @@ export const HYGIENE_CATALOGUE = [
     detect: 'the repo has an `AGENTS.md`',
     cost: 'file',
     cadence: 'daily',
-    seat: 'light',
     skippable: true,
     silence: SKIP,
   },
@@ -228,7 +209,6 @@ export const HYGIENE_CATALOGUE = [
     detect: 'the project lists it under `hygiene.probes` in `project.yaml`',
     cost: 'make',
     cadence: 'weekly',
-    seat: 'standard',
     skippable: false,
     silence: 'Remove it from `hygiene.probes`.',
   },
@@ -240,7 +220,6 @@ export const HYGIENE_CATALOGUE = [
     detect: null,
     cost: 'agent',
     cadence: 'weekly',
-    seat: 'standard',
     skippable: false,
     silence: 'Not switchable: it takes at most two signals of a pass and a held class stops it.',
   },
@@ -262,20 +241,8 @@ export const SKIPPABLE_PROBES = HYGIENE_CATALOGUE.filter((entry) => entry.skippa
 export const catalogueEntry = (name: string): HygieneCatalogueEntry | undefined =>
   HYGIENE_CATALOGUE.find((entry) => entry.name === name)
 
-/**
- * The finding classes whose fix is mechanical, so their Issues start on the light seat (`domains/leads/light.ts`): the light
- * entries of the catalogue. The document judgment's `stale` kind is light by the same name; its `slop` kind is not.
- */
-export const LIGHT_CLASSES: readonly string[] = HYGIENE_CATALOGUE.filter((entry) => entry.seat === 'light').map(
-  (entry) => entry.name,
-)
-
 /** The class a hygiene key names: a probe's first segment, a judgment's kind, a declared probe's name. */
 export function hygieneClass(key: string): string {
   const [head = '', second = ''] = key.split(':')
   return head === 'judgment' || head === 'probe' ? second : head
 }
-
-/** The seat the Issue of a finding should start on (`light` or `standard`), as the light rule reads it. */
-export const seatOfKey = (key: string): 'light' | 'standard' =>
-  LIGHT_CLASSES.includes(hygieneClass(key)) ? 'light' : 'standard'

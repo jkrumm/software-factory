@@ -230,6 +230,29 @@ describe('start_lead seats', () => {
     expect((await events(issue, 'lead_started'))[0]?.payload).toMatchObject({ reviewer: 'reviewer-cheap' })
   })
 
+  test('a hygiene finding with no size starts light, and starts on the lead row once its class is out', async () => {
+    const file = async (cls: string) => {
+      const issue = await w.admitted()
+      await w.db
+        .sql`INSERT INTO factory.loop_findings (issue_id, loop, repo, class, key) VALUES (${issue}, 'hygiene', 'example', ${cls}, ${`${cls}:x`})`
+      return issue
+    }
+    const first = await file('unused')
+    expect((await startLead(w.deps, effect(first))).ok).toBe(true)
+    expect(w.terminals.started[0]).toMatchObject({ tier: 'haiku', effort: 'high' })
+    expect(w.terminals.started[0]?.prompt).toContain('rule `hygiene:unused`')
+
+    w.deps.lightClassesOut = async () => new Set(['unused'])
+    const second = await file('unused')
+    expect((await startLead(w.deps, effect(second))).ok).toBe(true)
+    expect(w.terminals.started.at(-1)).toMatchObject({ tier: 'sonnet', effort: 'high' })
+    // another class is not out
+    const third = await file('links')
+    expect((await startLead(w.deps, effect(third))).ok).toBe(true)
+    expect(w.terminals.started.at(-1)).toMatchObject({ tier: 'haiku', effort: 'high' })
+    delete w.deps.lightClassesOut
+  })
+
   test('a docs Issue with no seat starts light, says so in its brief, and a moved-up one starts on the lead row', async () => {
     const issue = await w.admitted([], undefined, 'docs')
     expect((await startLead(w.deps, effect(issue))).ok).toBe(true)

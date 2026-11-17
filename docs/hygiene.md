@@ -20,8 +20,10 @@ page's Hygiene tab and `factory read project-hygiene <name>` render that one lis
   named in the pass record, never dropped. A finding class that mostly ends dropped or cancelled stops filing for 14 days.
 - **Settings.** `FACTORY_HYGIENE_EVERY_MS` (the week), `FACTORY_HYGIENE_DAILY_MS` (the day, 0 turns daily passes off),
   `FACTORY_HYGIENE_RETRY_MS`, `FACTORY_HYGIENE_REPOS` (`apps/server/src/app/loops/settings.ts`, set in the env file).
-- **The seat.** Every signal carries a `Seat:` line. A light seat is for work a rule can name (a link, a word, a budget, a
-  version bump, a project file); the light rule reads the same catalogue.
+- **The seat.** Every signal carries a `Seat:` line. A finding's Issue starts on the light seat whatever its size: the probe that
+  found it turning green proves the fix, and a light lead that struggles is moved up once. A class whose Issues keep moving up
+  (its move-up share over its last 20 Issues above the bound the cost of a move-up sets) starts on the standard lead until the
+  share drops under it; `factory read finding-classes` shows each class's starts, move-ups and pass rate, and which are out.
 
 ## What happens to a finding
 
@@ -43,25 +45,25 @@ few documents, and absence proves nothing. Every action is recorded on the pass 
 
 ## The catalogue
 
-| Probe | Default | Runs | Cost | Seat |
-|-|-|-|-|-|
-| [`check`](#check) | on | weekly | make | standard |
-| [`advisories`](#advisories) | auto | weekly | tool | standard |
-| [`links`](#links) | on | daily | file | light |
-| [`retired`](#retired) | auto | daily | file | light |
-| [`project`](#project) | auto | daily | file | light |
-| [`deps`](#deps) | auto | weekly | tool | light |
-| [`ci`](#ci) | auto | daily | file | standard |
-| [`agentsmd`](#agentsmd) | auto | daily | file | light |
-| [`readme`](#readme) | auto | daily | file | light |
-| [`stale`](#stale) | on | daily | file | light |
-| [`deadcode`](#deadcode) | auto | weekly | tool | standard |
-| [`cochange`](#cochange) | on | weekly | file | standard |
-| [`runrules`](#runrules) | auto | daily | file | standard |
-| [`browser`](#browser) | on | daily | file | standard |
-| [`context`](#context) | auto | daily | file | light |
-| [`probe`](#probe) | opt-in | weekly | make | standard |
-| [`judgment`](#judgment) | on | weekly | agent | standard |
+| Probe | Default | Runs | Cost |
+|-|-|-|-|
+| [`check`](#check) | on | weekly | make |
+| [`advisories`](#advisories) | auto | weekly | tool |
+| [`links`](#links) | on | daily | file |
+| [`retired`](#retired) | auto | daily | file |
+| [`project`](#project) | auto | daily | file |
+| [`deps`](#deps) | auto | weekly | tool |
+| [`ci`](#ci) | auto | daily | file |
+| [`agentsmd`](#agentsmd) | auto | daily | file |
+| [`readme`](#readme) | auto | daily | file |
+| [`stale`](#stale) | on | daily | file |
+| [`deadcode`](#deadcode) | auto | weekly | tool |
+| [`cochange`](#cochange) | on | weekly | file |
+| [`runrules`](#runrules) | auto | daily | file |
+| [`browser`](#browser) | on | daily | file |
+| [`context`](#context) | auto | daily | file |
+| [`probe`](#probe) | opt-in | weekly | make |
+| [`judgment`](#judgment) | on | weekly | agent |
 
 ### check
 
@@ -69,7 +71,6 @@ few documents, and absence proves nothing. Every action is recorded on the pass 
 
 - **Default:** on for every project.
 - **Runs:** in the weekly pass; runs the project's own make target.
-- **Seat of its Issue:** standard.
 - **Silence it:** Set `hygiene: { check: false, reason: <why> }` when the gate needs a lab this host lacks; a red `doctor` skips it on its own.
 
 ### advisories
@@ -78,7 +79,6 @@ Known security advisories of severity high and up in the lockfiles: `bun audit` 
 
 - **Default:** on when detection finds what it reads: a lockfile of one of those kinds is tracked; the Cargo, Python and Swift ones are skipped on a host without `osv-scanner`.
 - **Runs:** in the weekly pass; runs an analyzer or asks a registry.
-- **Seat of its Issue:** standard.
 - **Silence it:** Name it under `hygiene.skip` in `project.yaml` with a reason; the pass shows the reason.
 
 ### links
@@ -87,7 +87,6 @@ Relative links in the living Markdown documents that point at a file that does n
 
 - **Default:** on for every project.
 - **Runs:** in the daily pass and the weekly one; reads tracked files.
-- **Seat of its Issue:** light, work a rule can name.
 - **Silence it:** Name it under `hygiene.skip` in `project.yaml` with a reason; the pass shows the reason.
 
 ### retired
@@ -96,7 +95,6 @@ The repo's own retired-words check (`scripts/retired-words.ts`) over the living 
 
 - **Default:** on when detection finds what it reads: the repo has `scripts/retired-words.ts`.
 - **Runs:** in the daily pass and the weekly one; reads tracked files.
-- **Seat of its Issue:** light, work a rule can name.
 - **Silence it:** Name it under `hygiene.skip` in `project.yaml` with a reason; the pass shows the reason.
 
 ### project
@@ -105,7 +103,6 @@ The `project.yaml` itself, linted like `factory project check`: keys nothing rea
 
 - **Default:** on when detection finds what it reads: the repo has a `project.yaml`.
 - **Runs:** in the daily pass and the weekly one; reads tracked files.
-- **Seat of its Issue:** light, work a rule can name.
 - **Silence it:** Name it under `hygiene.skip` in `project.yaml` with a reason; the pass shows the reason.
 
 ### deps
@@ -114,7 +111,6 @@ Outdated dependencies: `bun outdated` for a `package.json`, and the versions pin
 
 - **Default:** on when detection finds what it reads: a package file of one of those kinds is tracked; each ecosystem is its own finding.
 - **Runs:** in the weekly pass; runs an analyzer or asks a registry.
-- **Seat of its Issue:** light, work a rule can name.
 - **Silence it:** Name it under `hygiene.skip` in `project.yaml` with a reason; the pass shows the reason.
 
 ### ci
@@ -123,7 +119,6 @@ The workflow files: a private repo runs on `[self-hosted, vps]` and never a host
 
 - **Default:** on when detection finds what it reads: the repo has `.github/workflows/*.yml`.
 - **Runs:** in the daily pass and the weekly one; reads tracked files.
-- **Seat of its Issue:** standard.
 - **Silence it:** Name it under `hygiene.skip` in `project.yaml` with a reason; the pass shows the reason.
 
 ### agentsmd
@@ -132,7 +127,6 @@ The repo contract for agent files (dotfiles `docs/agents-md.md`): no `CLAUDE.md`
 
 - **Default:** on when detection finds what it reads: the repo has an `AGENTS.md`, a `CLAUDE.md` or a `.claude/settings.json`.
 - **Runs:** in the daily pass and the weekly one; reads tracked files.
-- **Seat of its Issue:** light, work a rule can name.
 - **Silence it:** Name it under `hygiene.skip` in `project.yaml` with a reason; the pass shows the reason.
 
 ### readme
@@ -141,7 +135,6 @@ Every command (`make <target>`, `bun run <script>`) and path a `README.md` names
 
 - **Default:** on when detection finds what it reads: the repo has a `README.md`.
 - **Runs:** in the daily pass and the weekly one; reads tracked files.
-- **Seat of its Issue:** light, work a rule can name.
 - **Silence it:** Name it under `hygiene.skip` in `project.yaml` with a reason; the pass shows the reason.
 
 ### stale
@@ -150,7 +143,6 @@ Remote branches merged into the default branch or untouched for 30 days, and lef
 
 - **Default:** on for every project.
 - **Runs:** in the daily pass and the weekly one; reads tracked files.
-- **Seat of its Issue:** light, work a rule can name.
 - **Silence it:** Name it under `hygiene.skip` in `project.yaml` with a reason; the pass shows the reason.
 
 ### deadcode
@@ -159,7 +151,6 @@ Unused files, exports and dependencies of a JavaScript or TypeScript repo (fallo
 
 - **Default:** on when detection finds what it reads: the repo has a `package.json` and `fallow` is installed on the host.
 - **Runs:** in the weekly pass; runs an analyzer or asks a registry.
-- **Seat of its Issue:** standard.
 - **Silence it:** Name it under `hygiene.skip` in `project.yaml` with a reason; the pass shows the reason.
 
 ### cochange
@@ -168,7 +159,6 @@ Two files that moved together in nearly every one of the last 300 commits: a cou
 
 - **Default:** on for every project.
 - **Runs:** in the weekly pass; reads tracked files.
-- **Seat of its Issue:** standard.
 - **Silence it:** Name it under `hygiene.skip` in `project.yaml` with a reason; the pass shows the reason.
 
 ### runrules
@@ -177,7 +167,6 @@ The owner's rules for what runs on the Mac mini (restart policy, memory limit, p
 
 - **Default:** on when detection finds what it reads: the repo has a root `mini-services.yaml`, or a deploy target on host `mini` in `project.yaml`.
 - **Runs:** in the daily pass and the weekly one; reads tracked files.
-- **Seat of its Issue:** standard.
 - **Silence it:** Name it under `hygiene.skip` in `project.yaml` with a reason; the pass shows the reason.
 
 ### browser
@@ -186,7 +175,6 @@ The owner's browser rule for suites and agent tooling: Playwright's bundled head
 
 - **Default:** on for every project.
 - **Runs:** in the daily pass and the weekly one; reads tracked files.
-- **Seat of its Issue:** standard.
 - **Silence it:** Name it under `hygiene.skip` in `project.yaml` with a reason; the pass shows the reason.
 
 ### context
@@ -195,7 +183,6 @@ The byte budgets of the files an agent loads every turn: 12,000 bytes for the ro
 
 - **Default:** on when detection finds what it reads: the repo has an `AGENTS.md`.
 - **Runs:** in the daily pass and the weekly one; reads tracked files.
-- **Seat of its Issue:** light, work a rule can name.
 - **Silence it:** Name it under `hygiene.skip` in `project.yaml` with a reason; the pass shows the reason.
 
 ### probe
@@ -204,7 +191,6 @@ The project's own probes: each is `make <target>` in the throwaway checkout, red
 
 - **Default:** only where the project asks: the project lists it under `hygiene.probes` in `project.yaml`.
 - **Runs:** in the weekly pass; runs the project's own make target.
-- **Seat of its Issue:** standard.
 - **Silence it:** Remove it from `hygiene.probes`.
 
 ### judgment
@@ -213,7 +199,6 @@ One agent reads the living documents whose code moved on since they were last ed
 
 - **Default:** on for every project.
 - **Runs:** in the weekly pass; one model call on the cheap seat.
-- **Seat of its Issue:** standard.
 - **Silence it:** Not switchable: it takes at most two signals of a pass and a held class stops it.
 
 ## For a repo author

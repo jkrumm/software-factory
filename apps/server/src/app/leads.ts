@@ -58,6 +58,8 @@ export interface LeadDeps {
   quiesce?: QuiescePorts
   /** whether triage's `small` starts on the light seat now (the tripwire, `read/kpis-seats.ts`); unset or failing, it does not */
   lightGate?: () => Promise<boolean>
+  /** the hygiene classes whose Issues start on the standard lead now (`judgeClassSeat`, `read/finding-seats.ts`); unset or failing, none */
+  lightClassesOut?: () => Promise<ReadonlySet<string>>
   /** whether the cheap reviewer row takes every non-deep review (`domains/leads/reviewer.ts`'s tripwire); unset: the starting share */
   reviewerTakesAll?: () => Promise<boolean>
   /** waits its turn before a note or nudge is typed into a lead: after a server start, one per 10 s; unset, no wait */

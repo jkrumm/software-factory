@@ -313,10 +313,17 @@ test('held finding classes read what the API says: a line when none is held, els
   apiUrl,
 }) => {
   const model = await api<{
-    classes: { loop: string; class: string; status: string; decided: number; noise: number }[]
+    classes: {
+      loop: string
+      class: string
+      status: string
+      decided: number
+      noise: number
+      seat: { out: boolean } | null
+    }[]
   }>(apiUrl, '/v1/finding-classes')
   await page.goto('/improve')
-  const quiet = model.classes.filter((c) => c.status !== 'open')
+  const quiet = model.classes.filter((c) => c.status !== 'open' || c.seat?.out === true)
   if (quiet.length === 0) {
     await expect(page.getByText('No finding class is held.', { exact: true })).toBeVisible()
     return
