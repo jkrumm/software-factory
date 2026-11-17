@@ -80,8 +80,8 @@ function namedTargets(project: ProjectFile): { target: string; path: Path }[] {
 /** The targets a Makefile defines at the start of a line, every one of a `verify deploy:` line too; `include`d files are not read. */
 const makefileTargets = (makefile: string): Set<string> =>
   new Set(
-    [...makefile.matchAll(/^([A-Za-z][A-Za-z0-9_.-]*(?:\s+[A-Za-z][A-Za-z0-9_.-]*)*)\s*:(?!=)/gm)].flatMap((match) =>
-      (match[1] ?? '').split(/\s+/),
+    [...makefile.matchAll(/^([A-Za-z][A-Za-z0-9_.-]*(?:[ \t]+[A-Za-z][A-Za-z0-9_.-]*)*)[ \t]*:(?!=)/gm)].flatMap(
+      (match) => (match[1] ?? '').split(/[ \t]+/),
     ),
   )
 

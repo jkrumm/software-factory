@@ -62,6 +62,12 @@ const same = (value: unknown, fallback: unknown): boolean => {
   return (empty(value) && empty(fallback)) || Bun.deepEquals(value, fallback)
 }
 
+/** A schema description as the form shows it: plain text (no code marks), a capital first letter. */
+const plainText = (text: string): string => {
+  const plain = text.replaceAll('`', '')
+  return `${plain.charAt(0).toUpperCase()}${plain.slice(1)}`
+}
+
 function fieldsOf(node: Node, value: unknown, prefix: string): ProjectSetupField[] {
   const properties = objectOf(node)?.properties ?? {}
   const values = isRecord(value) ? value : {}
@@ -75,7 +81,7 @@ function fieldsOf(node: Node, value: unknown, prefix: string): ProjectSetupField
     const nested = objectOf(child) && isRecord(own) ? fieldsOf(child, own, `${path}.`) : []
     rows.push({
       path,
-      description: `${child.description.charAt(0).toUpperCase()}${child.description.slice(1)}`,
+      description: plainText(child.description),
       value: nested.length > 0 ? '' : render(own),
       isDefault,
     })
