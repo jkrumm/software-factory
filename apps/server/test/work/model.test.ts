@@ -187,7 +187,8 @@ test(`the Issue machine holds its invariants over ${SEQUENCES} random sequences`
   expect([...seen.states].sort()).toEqual([...STATES].sort())
   expect([...seen.waits].sort()).toEqual([...WAIT_REASONS].sort())
   expect(seen.applied.has('closed:reopened')).toBe(true)
-}, 30_000)
+  // 34 s on a step host at the lowest CPU priority (3.8 times the mini's run of the suite): the walk is CPU-bound, so the limit is generous
+}, 120_000)
 
 test('a failing sequence names its seed, and the seed plays it again', () => {
   const seen: Seen = { states: new Set(), waits: new Set(), applied: new Set() }

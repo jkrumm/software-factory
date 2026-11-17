@@ -43,11 +43,19 @@ function start(project: string, cmd: string[], env: Record<string, string> = {})
   }
 }
 
-/** A command that appends `<tag> start`, sleeps, appends `<tag> end`. */
-const marker = (tag: string, seconds = '0.2') => [
+/**
+ * A command that appends `<tag> start`, sleeps, appends `<tag> end`. A test that needs the sleeper to hold while a second
+ * `bun` process starts gives `until`: the mark it waits for instead (at most 20 s), because that start takes seconds on a
+ * starved step host and a fixed sleep ends before it.
+ */
+const marker = (tag: string, seconds = '0.2', until?: string) => [
   'sh',
   '-c',
-  `echo "${tag} start" >> "${marks}"; sleep ${seconds}; echo "${tag} end" >> "${marks}"`,
+  `echo "${tag} start" >> "${marks}"; ${
+    until === undefined
+      ? `sleep ${seconds}`
+      : `i=0; while ! grep -q "${until}" "${marks}" && [ $i -lt 400 ]; do sleep 0.05; i=$((i+1)); done`
+  }; echo "${tag} end" >> "${marks}"`,
 ]
 
 const marksOf = async (): Promise<string[]> => {
@@ -162,7 +170,7 @@ describe('factory deploy-lock', () => {
   })
 
   test('different projects do not wait for each other', async () => {
-    const first = start('one', marker('a', '0.4'))
+    const first = start('one', marker('a', '0', 'b end'))
     while ((await marksOf()).length === 0) await Bun.sleep(10)
     const second = await start('two', marker('b', '0')).done
     expect(second.code).toBe(0)
@@ -251,7 +259,8 @@ describe('factory merge-lock', () => {
       },
     })
     try {
-      const holder = startMerge('app', marker('a', '0.4'))
+      // 3 s, not a fraction: the waiter's own start must be over before the holder lets go, or it never waits
+      const holder = startMerge('app', marker('a', '3'))
       while ((await marksOf()).length < 1) await Bun.sleep(10)
       const waiter = startMerge('app', ['sh', '-c', 'exit 3'], { FACTORY_URL: `http://127.0.0.1:${server.port}` })
       expect((await finish(holder)).code).toBe(0)
@@ -263,7 +272,7 @@ describe('factory merge-lock', () => {
     const [body] = bodies as Record<string, unknown>[]
     expect(body).toMatchObject({ project: 'app', exitCode: 3 })
     const at = (key: string) => Date.parse(String(body?.[key]))
-    // it waited for the holder (about 0.4 s), then held the window only as long as its own command
+    // it waited for the holder, then held the window only as long as its own command
     expect(at('acquiredAt') - at('requestedAt')).toBeGreaterThan(100)
     expect(at('releasedAt')).toBeGreaterThanOrEqual(at('acquiredAt'))
     expect(typeof body?.cwd).toBe('string')
