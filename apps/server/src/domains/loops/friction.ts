@@ -1,13 +1,11 @@
 import type { FrictionCount } from '@software-factory/contract'
+import { MAX_SIGNALS_PER_PASS } from './budget.ts'
 
 /** The weekly pass reads this many days of counts. */
 export const FRICTION_WINDOW_DAYS = 7
 
 /** A pass is due when no pass was recorded within this long. */
 export const FRICTION_PASS_EVERY_MS = FRICTION_WINDOW_DAYS * 24 * 3_600_000
-
-/** One pass files at most this many signals; the patterns left out are named in the pass record. */
-export const MAX_SIGNALS_PER_PASS = 5
 
 /** Evidence Issue refs shown in one signal. */
 export const MAX_EVIDENCE = 5

@@ -1,9 +1,7 @@
 import type { HygieneAnswer, HygieneCandidate, HygieneFinding, HygieneRequest } from '@software-factory/contract'
 import type { HygieneJudgment, HygienePassRecord } from './ports.ts'
+import { MAX_SIGNALS_PER_PASS } from './budget.ts'
 import { PROBES, type ProbeFinding, type SweepReport } from './hygiene-model.ts'
-
-/** One pass files at most this many signals for one project; what is left out is named in the record. */
-export const MAX_SIGNALS_PER_PASS = 5
 
 /** Slots the judgment keeps: the deterministic findings may take `MAX_SIGNALS_PER_PASS - JUDGMENT_RESERVE`. */
 export const JUDGMENT_RESERVE = 2

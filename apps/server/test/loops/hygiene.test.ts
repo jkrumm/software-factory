@@ -1,4 +1,5 @@
 import { expect, test } from 'bun:test'
+import { MAX_SIGNALS_PER_PASS } from '../../src/domains/loops/budget.ts'
 import { loadLoopSettings } from '../../src/app/loops/settings.ts'
 import type { HygieneAnswer, HygieneRequest } from '@software-factory/contract'
 import {
@@ -8,7 +9,6 @@ import {
   judgmentSignalText,
   judgmentTitle,
   MAX_PROBE_SIGNALS,
-  MAX_SIGNALS_PER_PASS,
   NO_REF,
   planHygiene,
   probeBudget,

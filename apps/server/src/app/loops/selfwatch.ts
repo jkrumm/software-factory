@@ -15,13 +15,13 @@ import {
   routesSlowFindings,
   slotLineFindings,
 } from '../../domains/loops/overload.ts'
+import { MAX_SIGNALS_PER_PASS } from '../../domains/loops/budget.ts'
 import { DEFAULT_STEWARD_RULES, idleClockStart } from '../../domains/loops/stall.ts'
 import {
   ciFindings,
   heartbeatFindings,
   idleFindings,
   inertRegressionFindings,
-  MAX_SELFWATCH_FILINGS,
   migrationFindings,
   planSelfwatch,
   processGrowthFindings,
@@ -316,7 +316,7 @@ async function gather(deps: SelfwatchDeps, now: Date): Out<Gathered> {
  * One tick of the self-watch loop: fourteen deterministic conditions (CI, migrations, waits, leads, regressions, the heartbeat, the host process growth, swap and process count, a project `budgets:` breached over the last day, and the factory own capacity: load over the ceiling, the slot line, gates passed, slow routes), filed through intake as signals on
  * the watched repo. A subject is filed once; while it stays open and its evidence is the same nothing is filed, a changed
  * evidence is filed again under the same title (intake amends the open Issue), and a subject that no longer holds is
- * cleared. At most `MAX_SELFWATCH_FILINGS` a pass, the rest on the next. A row is written only after intake took the signal, so a
+ * cleared. At most `MAX_SIGNALS_PER_PASS` a pass, the rest on the next. A row is written only after intake took the signal, so a
  * failed filing is tried again; a crash between the two replays safely, since intake's fingerprint turns a repeat into a note.
  */
 export async function selfwatchPass(deps: SelfwatchDeps): Promise<Result<SelfwatchPass, PortError>> {
@@ -327,7 +327,7 @@ export async function selfwatchPass(deps: SelfwatchDeps): Promise<Result<Selfwat
   if (!gathered.ok) return gathered
 
   const plan = planSelfwatch(gathered.value.findings, read.value, now, gathered.value.unread)
-  const due = plan.file.slice(0, MAX_SELFWATCH_FILINGS)
+  const due = plan.file.slice(0, MAX_SIGNALS_PER_PASS)
   const pass: SelfwatchPass = {
     seen: gathered.value.findings.length,
     filed: [],

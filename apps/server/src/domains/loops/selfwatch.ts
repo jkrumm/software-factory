@@ -14,9 +14,6 @@ import {
   type WaitFact,
 } from './selfwatch-model.ts'
 
-/** One pass files at most this many signals; what is left over is found again on the next tick. */
-export const MAX_SELFWATCH_FILINGS = 5
-
 /** A wait past its exit by this long with no event is overdue (`FACTORY_SELFWATCH_GRACE_MS` overrides). */
 export const DEFAULT_WAIT_GRACE_MS = 10 * 60_000
 

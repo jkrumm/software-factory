@@ -1,8 +1,8 @@
 import { expect, test } from 'bun:test'
+import { MAX_SIGNALS_PER_PASS } from '../../src/domains/loops/budget.ts'
 import type { FrictionCount, SignalRequest } from '@software-factory/contract'
 import {
   isRetired,
-  MAX_SIGNALS_PER_PASS,
   MIN_CLOSED,
   named,
   patternsOver,

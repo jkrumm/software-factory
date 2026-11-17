@@ -1,5 +1,6 @@
 import type { SignalRequest } from '@software-factory/contract'
 import type { Triaged } from '../../domains/intake/model.ts'
+import { MAX_SIGNALS_PER_PASS } from '../../domains/loops/budget.ts'
 import type { LoopStore } from '../../domains/loops/ports.ts'
 import type { PlanningStore } from '../../domains/planning/ports.ts'
 import { budgetsOf } from '../../domains/planning/project.ts'
@@ -91,9 +92,6 @@ export async function projectBudgets(uow: UnitOfWork<{ planning: PlanningStore }
 
 /** A ranking window the epoch cut shorter than this many days files nothing: a day's cost is not a week's. */
 export const MIN_RANK_DAYS = 1
-
-/** One pass files at most this many improvements; the next day's pass takes the rest. */
-export const MAX_IMPROVEMENTS_PER_PASS = 5
 
 const DAY_MS = 86_400_000
 const reasonOf = (error: IntakeError): string => ('detail' in error ? `${error.kind}: ${error.detail}` : error.kind)
@@ -205,7 +203,7 @@ export async function throughputPass(deps: ThroughputDeps): Promise<Result<Throu
   }
   const date = now.toISOString().slice(0, 10)
   for (const [project, candidate] of [...top].toSorted(([, a], [, b]) => b.costMinutes - a.costMinutes)) {
-    if (pass.filed.length >= MAX_IMPROVEMENTS_PER_PASS) break
+    if (pass.filed.length >= MAX_SIGNALS_PER_PASS) break
     const target = byProject.get(project)
     if (!target) continue
     const reopens = reopenedFrom(rows, candidate)
