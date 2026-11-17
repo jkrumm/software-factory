@@ -28,6 +28,7 @@ import {
   fetchProjectIndex,
   fetchProjectPage,
   fetchProjectPlan,
+  fetchProjectSetup,
   fetchSince,
   fetchThroughput,
   onNewerServer,
@@ -145,6 +146,15 @@ export const projectHygieneQuery = (name: string) => ({
   queryFn: ({ signal }: { signal: AbortSignal }) => fetchProjectHygiene(name, signal),
 })
 
+export const projectSetupQuery = (name: string) => ({
+  queryKey: ['project-setup', name],
+  queryFn: ({ signal }: { signal: AbortSignal }) => fetchProjectSetup(name, signal),
+})
+
+export function useProjectSetup(name: string) {
+  return useQuery({ ...projectSetupQuery(name), retry: retryUnlessMissing })
+}
+
 export function useProjectPage(name: string) {
   const live = useLive()
   return useQuery({ ...projectPageQuery(name), retry: retryUnlessMissing, refetchInterval: pollEvery(live) })
@@ -160,12 +170,31 @@ export function useProjectHygiene(name: string) {
   return useQuery({ ...projectHygieneQuery(name), retry: retryUnlessMissing, refetchInterval: pollEvery(live) })
 }
 
-/** Warms what a project's page reads, on a hover or a focus of a link to it. */
+/** The tabs of a project's page; each has its own address (`/projects/<name>/<tab>`, the first screen is the project's own address) and reads only its own data. */
+export const PROJECT_TABS = ['work', 'plan', 'shipped', 'hygiene', 'setup'] as const
+export type ProjectTab = (typeof PROJECT_TABS)[number]
+
+/** Warms the page of a project, which every tab reads, on a hover or a focus of a link to it. */
 export function prefetchProject(name: string): void {
+  void queryClient.prefetchQuery({ ...projectPageQuery(name), staleTime: PREFETCH_STALE_MS })
+}
+
+/** Warms what the first screen of a project reads beside its page: the plan's next rows and the hygiene's red probes. */
+export function prefetchProjectOverview(name: string): void {
   const staleTime = PREFETCH_STALE_MS
-  void queryClient.prefetchQuery({ ...projectPageQuery(name), staleTime })
+  prefetchProject(name)
   void queryClient.prefetchQuery({ ...projectPlanQuery(name), staleTime })
   void queryClient.prefetchQuery({ ...projectHygieneQuery(name), staleTime })
+}
+
+/** Warms the data of one tab. */
+export function prefetchProjectTab(name: string, tab: ProjectTab): void {
+  const staleTime = PREFETCH_STALE_MS
+  prefetchProject(name)
+  if (tab === 'plan') void queryClient.prefetchQuery({ ...projectPlanQuery(name), staleTime })
+  if (tab === 'hygiene') void queryClient.prefetchQuery({ ...projectHygieneQuery(name), staleTime })
+  if (tab === 'setup') void queryClient.prefetchQuery({ ...projectSetupQuery(name), staleTime })
+  if (tab === 'work') void queryClient.prefetchQuery({ ...flowQuery, staleTime })
 }
 
 /** The options of the two first-screen queries, shared by the hooks and by the prefetch at boot. */

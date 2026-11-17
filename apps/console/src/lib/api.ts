@@ -24,6 +24,7 @@ import {
   ProjectIndexModel,
   ProjectPageModel,
   ProjectPlanModel,
+  ProjectSetupModel,
   KpiModel,
   MachineModel,
   NeedsModel,
@@ -137,6 +138,9 @@ export const fetchProjectIndex = (signal?: AbortSignal) => getJson('/v1/projects
 /** One project's page; an unknown project (404) is an `ApiError`. */
 export const fetchProjectPage = (name: string, signal?: AbortSignal) =>
   getJson(`/v1/projects/${encodeURIComponent(name)}`, ProjectPageModel, signal)
+/** The project.yaml in force as a described form and as YAML. */
+export const fetchProjectSetup = (name: string, signal?: AbortSignal) =>
+  getJson(`/v1/projects/${encodeURIComponent(name)}/setup`, ProjectSetupModel, signal)
 export const fetchProjectHygiene = (name: string, signal?: AbortSignal) =>
   getJson(`/v1/projects/${encodeURIComponent(name)}/hygiene`, ProjectHygieneModel, signal)
 /** The project's plan rows with their derived state (`done`, `open`, `filable`, `waiting`). */

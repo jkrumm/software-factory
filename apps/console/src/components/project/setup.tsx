@@ -1,11 +1,11 @@
-import type { ProjectHygieneModel, ProjectPageModel } from '@software-factory/contract'
-import { Fold, InfoHint, Lozenge, PropertyList, Section } from '@/components/kit'
+import type { ProjectHygieneModel, ProjectSetupField, ProjectSetupModel } from '@software-factory/contract'
+import { useState } from 'react'
+import { Fold, Lozenge, Section } from '@/components/kit'
 import { Ago } from '@/components/issue/ago'
 import {
   FINDING_TONES,
   FINDING_WHY,
   FINDING_WORDS,
-  laneWords,
   PASS_TONES,
   PASS_WORDS,
   PROBE_TONES,
@@ -14,74 +14,94 @@ import {
 import { cn } from '@/lib/utils'
 import { Mono, None, NUM, Table, TD, TH } from './parts'
 
-/** How the project is set up, from its `project.yaml`: leads, lanes, checks and the deploy with its probes. */
-export function SetupSection({
-  setup,
-  source,
-}: {
-  setup: ProjectPageModel['setup']
-  source: ProjectPageModel['source']
-}) {
-  const lanes = laneWords(setup.lanes)
-  const { deploy } = setup
+const ALERT =
+  'rounded-lg bg-[color-mix(in_srgb,var(--vx-bad-solid)_12%,transparent)] px-3 py-2 text-[length:var(--vx-text-sm)] text-[color:var(--vx-bad-text)]'
+
+/** A key of the file: its path (the child keys indented), what the schema says it means, and the value in force. */
+function FieldRow({ field, parent }: { field: ProjectSetupField; parent: boolean }) {
+  const depth = field.path.split('.').length - 1
+  const key = field.path.split('.').pop() ?? field.path
+  const empty = field.value === ''
   return (
-    <Section title="Setup" aside={source === 'file' ? 'project.yaml' : 'No project.yaml: the defaults'}>
-      <PropertyList
-        className="min-[40rem]:grid-cols-2 xl:grid-cols-3"
-        items={[
-          { label: 'Leads at once', value: setup.leads },
-          {
-            label: (
-              <span className="inline-flex items-center gap-1">
-                Lanes <InfoHint word="lane" />
-              </span>
-            ),
-            value: lanes.length === 0 ? null : lanes.join('; '),
-          },
-          { label: 'Test slot run limit', value: setup.slotRun ?? 'Default' },
-          {
-            label: 'Checks',
-            value: setup.checks ? (
-              <span>
-                <Mono>{setup.checks.fast}</Mono> locally, <Mono>{setup.checks.full}</Mono>
-                {setup.checks.ci ? ' in CI' : ''}
-              </span>
-            ) : (
-              <Mono>make check</Mono>
-            ),
-          },
-          { label: 'Doctor', value: setup.doctor ? <Mono>{setup.doctor}</Mono> : null },
-          { label: 'Alert sources', value: setup.signals.length === 0 ? null : setup.signals.join(', ') },
-          { label: 'Deploy', value: deploy.mode },
-          { label: 'Watch after a ship', value: deploy.hold },
-          {
-            label: 'Verified by',
-            value:
-              deploy.targets.length === 0 ? null : (
-                <ul className="grid gap-0.5">
-                  {deploy.targets.map((target) => (
-                    <li key={target.name}>
-                      {target.name}: <Mono>{target.verify}</Mono>
-                    </li>
-                  ))}
-                </ul>
-              ),
-          },
-          {
-            label: 'HTTP probes',
-            value:
-              deploy.probes.length === 0 ? null : (
-                <ul className="grid gap-0.5">
-                  {deploy.probes.map((probe) => (
-                    <li key={probe.name}>
-                      {probe.name}: <Mono>{probe.http}</Mono> expects {probe.expect}
-                    </li>
-                  ))}
-                </ul>
-              ),
-          },
-        ]}
-      />
+    <div
+      role="row"
+      className={cn(
+        'grid gap-x-6 gap-y-1 px-4 py-2.5 not-first:border-t min-[40rem]:grid-cols-[minmax(0,2fr)_minmax(0,3fr)]',
+        depth === 0 && 'bg-card',
+      )}
+    >
+      <div role="rowheader" className="min-w-0" style={{ paddingLeft: `${depth * 1.25}rem` }}>
+        <Mono className={cn(depth === 0 && 'font-semibold')}>{key}</Mono>
+        <p className="text-[length:var(--vx-text-sm)] text-muted-foreground">{field.description}</p>
+      </div>
+      <div role="cell" className="min-w-0 text-[length:var(--vx-text-sm)]">
+        {empty ? (
+          !parent ? (
+            <span className="text-muted-foreground">Not set</span>
+          ) : null
+        ) : (
+          <pre className="font-mono text-xs wrap-anywhere whitespace-pre-wrap">{field.value}</pre>
+        )}
+        {!empty && field.isDefault ? <span className="text-xs text-muted-foreground">The default</span> : null}
+      </div>
+    </div>
+  )
+}
+
+const SEGMENT =
+  'inline-flex h-7 cursor-pointer items-center rounded-md px-2.5 text-[length:var(--vx-text-sm)] outline-none transition-colors hover:bg-accent focus-visible:ring-3 focus-visible:ring-ring/50 aria-pressed:bg-muted aria-pressed:font-medium'
+
+/** The `project.yaml` in force as a form, each key with the meaning the schema gives it, and the file itself behind a toggle. */
+export function SetupForm({ model }: { model: ProjectSetupModel }) {
+  const [raw, setRaw] = useState(false)
+  return (
+    <Section
+      title="project.yaml"
+      aside={
+        <span className="inline-flex gap-1" role="group" aria-label="View">
+          <button type="button" aria-pressed={!raw} onClick={() => setRaw(false)} className={SEGMENT}>
+            Form
+          </button>
+          <button type="button" aria-pressed={raw} onClick={() => setRaw(true)} className={SEGMENT}>
+            Raw file
+          </button>
+        </span>
+      }
+    >
+      {model.projectError ? (
+        <p role="alert" className={cn(ALERT, 'mb-4')}>
+          The project.yaml on the default branch does not parse; this is the last valid one. {model.projectError}
+        </p>
+      ) : null}
+      {model.source === 'defaults' ? (
+        <p className="mb-4 text-[length:var(--vx-text-sm)] text-muted-foreground">
+          This project has no project.yaml of its own: every key is its default.
+        </p>
+      ) : null}
+      {raw ? (
+        <pre
+          aria-label="project.yaml, defaults filled in"
+          className="overflow-x-auto rounded-xl bg-card p-4 font-mono text-xs"
+          style={{ boxShadow: 'var(--vx-shadow-card)' }}
+        >
+          {model.yaml}
+        </pre>
+      ) : (
+        <div
+          role="table"
+          aria-label="project.yaml keys"
+          className="overflow-hidden rounded-xl bg-background"
+          style={{ boxShadow: 'var(--vx-shadow-card)' }}
+        >
+          {model.fields.map((field) => (
+            <FieldRow
+              key={field.path}
+              field={field}
+              parent={model.fields.some((other) => other.path.startsWith(`${field.path}.`))}
+            />
+          ))}
+        </div>
+      )}
     </Section>
   )
 }

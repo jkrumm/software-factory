@@ -162,21 +162,31 @@ export function ArtifactSkeleton() {
   )
 }
 
-/** A project's page: the stat row, the open cards, then the bands under them. */
+/** A project's page while its page loads: the tabs, the health band and the three columns of the first screen. */
 export function ProjectSkeleton() {
   return (
     <div {...busy('Loading the project')} className="grid gap-8">
-      <div className="grid gap-3 lg:grid-cols-3">
+      <Skeleton height={32} width={420} />
+      <div className="grid gap-3 min-[40rem]:grid-cols-3">
         {Array.from({ length: 3 }, (_, i) => (
-          <Skeleton key={i} height={273} rounded="rounded-xl" className={cn(i > 0 && 'hidden lg:block')} />
+          <Skeleton key={i} height={68} rounded="rounded-xl" className={cn(i > 0 && 'hidden min-[40rem]:block')} />
         ))}
       </div>
-      <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-3 2xl:grid-cols-4">
-        {Array.from({ length: 4 }, (_, i) => (
-          <Skeleton key={i} height={118} rounded="rounded-xl" className={cn(i > 1 && 'hidden xl:block')} />
+      <div className="grid gap-8 xl:grid-cols-3">
+        {Array.from({ length: 3 }, (_, i) => (
+          <Skeleton key={i} height={420} rounded="rounded-xl" className={cn(i > 0 && 'hidden xl:block')} />
         ))}
       </div>
-      <Skeleton height={240} rounded="rounded-xl" />
+    </div>
+  )
+}
+
+/** One tab of a project while its own data loads. */
+export function ProjectTabSkeleton() {
+  return (
+    <div {...busy('Loading this tab')} className="grid gap-4">
+      <Skeleton height={20} width={160} />
+      <Skeleton height={360} rounded="rounded-xl" />
     </div>
   )
 }
