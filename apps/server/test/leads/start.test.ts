@@ -67,6 +67,18 @@ describe('start_lead', () => {
     expect(w.terminals.started[0]?.prompt).toContain('run `make check-fast` before the first push')
   })
 
+  test("the project's env reaches the terminal start, and a repo with none passes no env", async () => {
+    const plain = await w.admitted()
+    await startLead(w.deps, effect(plain))
+    expect(w.terminals.started[0]).not.toHaveProperty('env')
+
+    await w.reset()
+    w.projectEnv = { ORB_FORMAT: 'json' }
+    const withEnv = await w.admitted()
+    await startLead(w.deps, effect(withEnv))
+    expect(w.terminals.started[0]?.env).toEqual({ ORB_FORMAT: 'json' })
+  })
+
   test('the brief of a repo without merge-guard says so, with it says it has one, unreadable says nothing', async () => {
     const unknown = await w.admitted()
     await startLead(w.deps, effect(unknown))

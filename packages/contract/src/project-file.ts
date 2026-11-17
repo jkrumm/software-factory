@@ -302,7 +302,35 @@ export function budgetsOf(project: Pick<ProjectFile, 'budgets'>): {
   }
 }
 
+const LEAD_START = "the lead's start (apps/server/src/app/leads-start.ts, apps/server/src/adapters/hc/terminals.ts)"
 const BRIEF = "the lead's brief (apps/server/src/domains/leads/brief.ts)"
+
+/** The most variables a project's `env` may set, and the longest value: a lead's environment is a few switches, not a config store. */
+const MAX_ENV_ENTRIES = 32
+const MAX_ENV_VALUE = 500
+
+/**
+ * Names the factory or the host owns: the lead's identity and credentials (`FACTORY_`, `CLAUDE`, `ANTHROPIC_`,
+ * `USAGE_`), and what changes how any program starts (`PATH`, `HOME`, `SHELL`, `USER`, the loader and shell-startup
+ * variables). A project sets its own tools' switches, never these.
+ */
+const RESERVED_ENV =
+  /^(?:FACTORY_|CLAUDE|ANTHROPIC_|USAGE_|LD_|DYLD_)|^(?:PATH|HOME|SHELL|USER|NODE_OPTIONS|BASH_ENV|ENV)$/
+
+const EnvName = z
+  .string()
+  .regex(/^[A-Za-z_][A-Za-z0-9_]{0,63}$/, 'a variable name: letters, digits and underscore, not starting with a digit')
+  .refine(
+    (name) => !RESERVED_ENV.test(name),
+    'a name the factory or the host owns (FACTORY_*, CLAUDE*, PATH, HOME, ...)',
+  )
+
+/** A string on one line: a number or a boolean in YAML is refused, so `1` and `true` are written quoted and mean what they say. */
+const EnvValue = z
+  .string()
+  .max(MAX_ENV_VALUE)
+  // oxlint-disable-next-line no-control-regex -- a value with a line break or NUL is not one environment entry
+  .regex(/^[^\0\r\n]*$/, 'one line, no NUL')
 
 const Checks = z.strictObject({
   fast: MakeCommand.meta(about('what a lead runs locally before each push (`make check-fast`)', BRIEF)),
@@ -608,6 +636,17 @@ const projectObject = <L extends LaneSchema>(lane: L) =>
           about(
             'resource classes inside the repo: `{apple: 1}` lets one lead of lane apple run at once; `{apple: {leads: 1, memory: 18GiB}}` also reserves that memory on the host for every running lead of the lane. A lane a row or Issue names and this does not declare is unlimited within `leads`',
             ADMISSION,
+            { shownDefault: {} },
+          ),
+        ),
+      env: z
+        .record(EnvName, EnvValue)
+        .refine((env) => Object.keys(env).length <= MAX_ENV_ENTRIES, `at most ${MAX_ENV_ENTRIES} variables`)
+        .default({})
+        .meta(
+          about(
+            `variables exported into every lead's session in this repo (\`ORB_FORMAT: json\`), at start and when a dormant lead is resumed; values are strings of one line, at most ${MAX_ENV_VALUE} characters, and this file is public: never a secret. A name the factory or the host owns (\`FACTORY_*\`, \`CLAUDE*\`, \`ANTHROPIC_*\`, \`USAGE_*\`, \`PATH\`, \`HOME\`, ...) is refused`,
+            LEAD_START,
             { shownDefault: {} },
           ),
         ),

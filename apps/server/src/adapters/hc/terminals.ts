@@ -522,7 +522,7 @@ export class HcTerminals implements Terminals {
 
   /**
    * The environment a lead's agent runs with: the account's `CLAUDE_CONFIG_DIR` (absent for the default account, never
-   * empty), and the variables that switch the hooks on and tell the usage record who it is.
+   * empty), the variables that switch the hooks on and tell the usage record who it is, and the project's `env`.
    */
   private async accountEnv(input: StartTerminal): Promise<Record<string, string>> {
     const home = this.options.home
@@ -545,6 +545,8 @@ export class HcTerminals implements Terminals {
       throw new Permanent(`account ${input.account}: no registry at ${this.options.accountsFile}`)
     }
     return {
+      // The project's own switches first: every variable below is the factory's and wins over a name of the same spelling.
+      ...input.env,
       ...(dir ? { CLAUDE_CONFIG_DIR: dir.replace(/^~(?=\/|$)/, home) } : {}),
       CLAUDE_ACCOUNT_PICKED: input.account,
       USAGE_LANE: this.options.usageLane ?? 'wave',

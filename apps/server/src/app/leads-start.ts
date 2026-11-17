@@ -166,6 +166,8 @@ export async function startLead(deps: LeadDeps, effect: StartEffect): Promise<Re
     const notes = notesBefore(history, attempt)
     // A project's check tiers change what the brief tells the lead to run; a read that fails is the brief of today.
     const tiers = await deps.checks.of(repoPath)
+    // The project's `env` reaches the session; a read that fails starts the lead without it, as before the key existed.
+    const projectEnv = await deps.checks.env(repoPath)
     const mergeGuard = await deps.mergeGuard.has(worktree)
     const prompt = buildBrief({
       issue: {
@@ -198,6 +200,7 @@ export async function startLead(deps: LeadDeps, effect: StartEffect): Promise<Re
       tier: role.value.tier,
       effort: role.value.effort,
       account,
+      ...(projectEnv.ok && Object.keys(projectEnv.value).length > 0 ? { env: projectEnv.value } : {}),
       tabName: tabName(current.title),
     })
     if (!started.ok) return fail(started.error)

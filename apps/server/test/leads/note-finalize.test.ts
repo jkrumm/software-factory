@@ -133,11 +133,17 @@ describe('note_lead', () => {
       VALUES ('lead-1-1:session_started:0', 'lead-1-1', ${issue}, 1, 'session_started', ${w.clock.now()}, ${w.clock.now()},
         ${JSON.stringify({ claudeSessionId: 'c-1', transcriptPath: '/x/c-1.jsonl' })}::text::jsonb)`
     w.seatAccount = 'other'
+    w.projectEnv = { ORB_FORMAT: 'json' }
     expect((await noteLead(w.deps, effect)).ok).toBe(true)
     expect(w.terminals.dormant).toEqual(['lead-1-1'])
     expect(w.terminals.typed).toHaveLength(0)
     expect(w.terminals.revived).toHaveLength(1)
-    expect(w.terminals.revived[0]).toMatchObject({ key: 'lead-1-1', account: 'other', session: 'c-1' })
+    expect(w.terminals.revived[0]).toMatchObject({
+      key: 'lead-1-1',
+      account: 'other',
+      session: 'c-1',
+      env: { ORB_FORMAT: 'json' },
+    })
     expect(w.terminals.revived[0]?.prompt).toContain('mind the migration')
     const [row] = await w.db.sql`SELECT account, dormant_at FROM factory.lead_attempts WHERE issue_id = ${issue}`
     expect(row).toMatchObject({ account: 'other', dormant_at: null })

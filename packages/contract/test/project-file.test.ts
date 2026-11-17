@@ -95,6 +95,33 @@ describe('project.yaml schema', () => {
     expect(ProjectFile.safeParse(stored).success).toBe(false)
   })
 
+  test('env is a map of one-line strings exported into a lead; a reserved name, a non-string, a long value and a bad name are refused by both schemas', () => {
+    const validate = validator()
+    const base = { apiVersion: 'factory/v2', name: 'lab' }
+    expect(ProjectFile.parse({ ...base, env: { ORB_FORMAT: 'json' } }).env).toEqual({ ORB_FORMAT: 'json' })
+    expect(ProjectFile.parse(base).env).toEqual({})
+    expect(validate({ ...base, env: { ORB_FORMAT: 'json' } })).toBe(true)
+    for (const env of [
+      { FACTORY_TOKEN: 'x' },
+      { CLAUDE_CONFIG_DIR: '/x' },
+      { PATH: '/bin' },
+      { DYLD_INSERT_LIBRARIES: 'x' },
+      { ORB_FORMAT: 1 },
+      { ORB_FORMAT: true },
+      { ORB_FORMAT: 'a\nb' },
+      { ORB_FORMAT: 'x'.repeat(501) },
+      { '1ORB': 'x' },
+      { 'ORB-FORMAT': 'x' },
+      Object.fromEntries(Array.from({ length: 33 }, (_, i) => [`V${i}`, 'x'])),
+    ]) {
+      expect({ env, zod: ProjectFile.safeParse({ ...base, env }).success }).toEqual({ env, zod: false })
+    }
+    // the schema an editor reads rejects the forms it can express (the reserved list lives in zod only)
+    for (const env of [{ ORB_FORMAT: 1 }, { '1ORB': 'x' }]) {
+      expect({ env, json: validate({ ...base, env }) }).toEqual({ env, json: false })
+    }
+  })
+
   test('a step declares its target, needs and whether it may leave the mini; no host is named in the file', () => {
     const parsed = ProjectFile.parse({
       apiVersion: 'factory/v2',

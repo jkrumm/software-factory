@@ -245,6 +245,7 @@ export async function reviveAndTell(
   const seat = ranOn ? ok(ranOn) : await seatOf(deps, dormant.issue, NO_ORIGIN)
   if (!seat.ok) return seat
   await deps.typePace?.()
+  const projectEnv = await deps.checks.env(dormant.repoPath)
   const started = await deps.terminals.revive({
     key: name,
     cwd: dormant.worktree,
@@ -253,6 +254,7 @@ export async function reviveAndTell(
     tier: seat.value.tier,
     effort: seat.value.effort,
     account,
+    ...(projectEnv.ok && Object.keys(projectEnv.value).length > 0 ? { env: projectEnv.value } : {}),
     tabName: tabName(dormant.issue.title),
     session: dormant.session,
   })

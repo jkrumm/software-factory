@@ -35,6 +35,8 @@ export interface StartTerminal {
   tier: Tier
   effort: Effort
   account: string
+  /** the project's `env` (`project.yaml`): exported into the session; the factory's own variables win over it */
+  env?: Readonly<Record<string, string>>
   /** the name the lead's tab gets in the app, once the app has adopted the tab */
   tabName: string
 }
@@ -147,9 +149,12 @@ export interface CheckTiers {
   ci: boolean
 }
 
-/** The check tiers of the project a repo belongs to; `null` for a project with none: its lead runs `make check` as before. */
+/** What a lead's start reads of the stored project a repo belongs to (the one in force, not a worktree's copy). */
 export interface Checks {
+  /** the check tiers; `null` for a project with none: its lead runs `make check` as before */
   of(repo: string): Promise<Result<CheckTiers | null>>
+  /** the project's `env`: variables exported into every lead of the repo; empty for a repo with no project */
+  env(repo: string): Promise<Result<Readonly<Record<string, string>>>>
 }
 
 /** Whether the lead's worktree has a `make merge-guard` target, so the brief says so and the lead does not look; null: unreadable. */

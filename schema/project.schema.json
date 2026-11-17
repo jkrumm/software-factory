@@ -236,6 +236,21 @@
       },
       "default": {}
     },
+    "env": {
+      "default": {},
+      "description": "variables exported into every lead's session in this repo (`ORB_FORMAT: json`), at start and when a dormant lead is resumed; values are strings of one line, at most 500 characters, and this file is public: never a secret. A name the factory or the host owns (`FACTORY_*`, `CLAUDE*`, `ANTHROPIC_*`, `USAGE_*`, `PATH`, `HOME`, ...) is refused",
+      "consumer": "the lead's start (apps/server/src/app/leads-start.ts, apps/server/src/adapters/hc/terminals.ts)",
+      "type": "object",
+      "propertyNames": {
+        "type": "string",
+        "pattern": "^[A-Za-z_][A-Za-z0-9_]{0,63}$"
+      },
+      "additionalProperties": {
+        "type": "string",
+        "maxLength": 500,
+        "pattern": "^[^\\0\\r\\n]*$"
+      }
+    },
     "slots": {
       "default": {},
       "description": "the repo's test-slot limits",

@@ -69,6 +69,10 @@ factory never edits another repo's file. The server also serves the schema it pa
 - **`checks`**: when the full gate is too heavy for every lead to run locally. `{ fast: make check-fast, full: make
   check, ci: true }` has a lead run `fast` and rely on CI's run of `full` on the pull request head; `merge-guard` still
   demands that run green. Without `ci`, the lead runs `full` once before the first push. `docs/plan.md` "Check tiers".
+- **`env`**: switches the repo's own tools read in every lead's session (`env: { ORB_FORMAT: json }`), exported when the
+  lead starts and again when a dormant one is resumed, so a change reaches leads started after the project syncs. Only
+  what a CLI of the repo needs to behave for an agent; the file is public, so never a secret, and a name the factory or
+  the host owns (`FACTORY_*`, `CLAUDE*`, `PATH`, `HOME`) is refused. A value is a quoted string: `1` and `true` are errors.
 - **`steps`**: one entry per step the Makefile runs through `factory slot run --name "<project> <step>"`, keyed by
   `<step>`: `{ make: test, needs: [git], remote: true, carry: [packages/x/dist] }`. `remote: true` lets the factory run
   the step on its Linux step host when the mini's line would make it wait longer than that host takes. Set it only for a
@@ -143,6 +147,7 @@ list's entry, `<name>` a map's key.
 | `lanes` | map of integer 1–64 or object | `{}` | admission (apps/server/src/app/capacity-admit.ts) | resource classes inside the repo: `{apple: 1}` lets one lead of lane apple run at once; `{apple: {leads: 1, memory: 18GiB}}` also reserves that memory on the host for every running lead of the lane. A lane a row or Issue names and this does not declare is unlimited within `leads` |
 | `lanes.<name>.leads` | integer 1–64 | required | admission (apps/server/src/app/capacity-admit.ts) | how many leads of the lane run at once |
 | `lanes.<name>.memory` | size | — | admission (apps/server/src/app/capacity-admit.ts) | the host memory each running lead of the lane reserves (`18GiB`, at most 1 TiB) |
+| `env` | map of string | `{}` | the lead's start (apps/server/src/app/leads-start.ts, apps/server/src/adapters/hc/terminals.ts) | variables exported into every lead's session in this repo (`ORB_FORMAT: json`), at start and when a dormant lead is resumed; values are strings of one line, at most 500 characters, and this file is public: never a secret. A name the factory or the host owns (`FACTORY_*`, `CLAUDE*`, `ANTHROPIC_*`, `USAGE_*`, `PATH`, `HOME`, ...) is refused |
 | `slots` | object | `{}` | test slots (apps/server/src/app/capacity-slots.ts) | the repo's test-slot limits |
 | `slots.run` | duration | — | test slots (apps/server/src/app/capacity-slots.ts) | how long one `factory slot run` of this repo may hold a test slot before it is stopped (at least 1m, at most 6h; unset: 30m) |
 | `steps` | map of object | `{}` | step placement (apps/server/src/app/capacity-slots.ts, apps/cli/src/remote-step.ts) | the repo's named steps (`unit`, `layout`): the Makefile target, what each needs and where the factory may run it. A step not named runs on the mini |
