@@ -196,6 +196,8 @@ export interface World {
   repoError: PortError | null
   /** the check tiers the fake project has; null: none */
   checkTiers: CheckTiers | null
+  /** the project's `env` the stored project answers with */
+  projectEnv: Record<string, string>
   /** whether the fake repo has a merge-guard target; null: unreadable */
   mergeGuard: boolean | null
   /** whether the role table has the cheap reviewer row, and whether the tripwire has handed it every review */
@@ -252,6 +254,7 @@ export async function startWorld(): Promise<World> {
     },
     repoError: null,
     checkTiers: null,
+    projectEnv: {},
     mergeGuard: null,
     reviewerCheap: false,
     reviewerTakesAll: false,
@@ -301,7 +304,7 @@ export async function startWorld(): Promise<World> {
     worktrees,
     branches,
     repos,
-    checks: { of: async () => ok(world.checkTiers) },
+    checks: { of: async () => ok(world.checkTiers), env: async () => ok(world.projectEnv) },
     mergeGuard: { has: async () => world.mergeGuard },
     reviewerTakesAll: async () => world.reviewerTakesAll,
     roles,
@@ -354,6 +357,7 @@ export async function startWorld(): Promise<World> {
     world.transcripts.error = null
     world.repoError = null
     world.checkTiers = null
+    world.projectEnv = {}
     world.mergeGuard = null
     world.reviewerCheap = false
     world.reviewerTakesAll = false
