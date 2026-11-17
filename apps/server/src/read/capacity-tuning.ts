@@ -7,7 +7,7 @@ export const IDLE_HIGH_PER_DAY = 2
 /** A test-slot wait (p90) from which the base of the slots is too small. */
 export const WAIT_HIGH_MS = 10 * 60_000
 
-/** The share of the idle seat-time behind the memory gate from which the load ceiling is not the setting that held the queue. */
+/** The share of all idle seat-time (a drained queue included, the memory cut is the host's reading) behind the memory gate from which the load ceiling is not the setting that held the queue. */
 export const MEMORY_SHARE_HIGH = 0.5
 
 /** What held the queue in the window: the share of the idle seat-time with the memory gate shut, and the repo whose leads weigh most. */
@@ -18,7 +18,10 @@ export interface QueueHold {
   heaviest: { repo: string; peakMibP80: number } | null
 }
 
-type Totals = Pick<CapacityLoopModel, 'days' | 'throughput' | 'idleSeatHours' | 'minutesOverCeiling' | 'slotWait'>
+type Totals = Pick<
+  CapacityLoopModel,
+  'days' | 'throughput' | 'idleSeatHours' | 'idleSeatHoursDrain' | 'minutesOverCeiling' | 'slotWait'
+>
 
 /**
  * The capacity figures a retro signal can be filed against (`kpi=<key>` in its marker): per day, so a window of any length
@@ -41,7 +44,20 @@ export function capacityFigures(model: Totals): RetroCapacityFigure[] {
     },
     {
       key: 'idle_seat_hours_per_day',
-      label: 'Idle seat-hours a day behind a non-empty queue',
+      label: 'Idle seat-hours a day behind a non-empty queue, a drained queue left out',
+      value: Math.max(0, model.idleSeatHours.total - model.idleSeatHoursDrain.total) / days,
+      unit: 'hours',
+    },
+    {
+      key: 'idle_seat_hours_drain_per_day',
+      label: 'Idle seat-hours a day behind a drained queue',
+      value: model.idleSeatHoursDrain.total / days,
+      unit: 'hours',
+    },
+    // the figure as it was before the drain was split off: kept until the first clean window, so the ledger can still compare
+    {
+      key: 'idle_seat_hours_with_drain_per_day',
+      label: 'Idle seat-hours a day behind a non-empty queue, a drained queue included',
       value: model.idleSeatHours.total / days,
       unit: 'hours',
     },
@@ -109,7 +125,7 @@ export function tuneConstant(
     return {
       constant: hold.trigger === 'swapout' ? 'swapoutCeilingMb' : 'swapCeilingPct',
       direction: 'up',
-      reason: `${idle.toFixed(1)} seat-hours a day sat idle behind a queue, ${Math.round(hold.memoryShare * 100)} % of it with the memory gate shut (mostly ${gate}) and the load over the ceiling only ${Math.round(over)} minutes a day: the load ceiling is not what held it${heavy}`,
+      reason: `${idle.toFixed(1)} seat-hours a day sat idle behind a queue (a drained queue left out), ${Math.round(hold.memoryShare * 100)} % of all idle seat-time with the memory gate shut (mostly ${gate}) and the load over the ceiling only ${Math.round(over)} minutes a day: the load ceiling is not what held it${heavy}`,
     }
   }
   if (lowLoad && idle >= IDLE_HIGH_PER_DAY)

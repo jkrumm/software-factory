@@ -1180,6 +1180,12 @@ export const CapacityLoopModel = z
      */
     idleSeatHoursMemory: z.strictObject({ total: z.number(), swapout: z.number(), swapUsed: z.number() }),
     /**
+     * of `idleSeatHours`, the hours that fell in minutes an Issue was queued behind a drained queue (`queueByReason`'s
+     * `drain`, by the same split): the owner or the orchestrator stopped admission, so it is not capacity going unused.
+     * `idleSeatHours` minus this is the figure the tuner reads
+     */
+    idleSeatHoursDrain: CapacityTotal,
+    /**
      * what the queue waited for over the window, by reason kind (`factory.queue_intervals`), the kind with most queued hours
      * first: the hours Issues were queued for it, how many Issues, and the share of `idleSeatHours` that fell in minutes
      * when an Issue was queued for it. A minute's idle seat-hours are split equally among the distinct kinds queued in it,
@@ -1818,6 +1824,8 @@ export const CAPACITY_FIGURE_KEYS = [
   'closed_per_day',
   'minutes_over_ceiling_per_day',
   'idle_seat_hours_per_day',
+  'idle_seat_hours_drain_per_day',
+  'idle_seat_hours_with_drain_per_day',
   'slot_wait_p90_ms',
   'check_minutes_per_issue',
   'ci_p50_minutes',

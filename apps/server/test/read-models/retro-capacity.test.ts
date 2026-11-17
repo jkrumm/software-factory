@@ -127,12 +127,13 @@ describe('the retro bundle carries the capacity loop', () => {
 })
 
 describe('the fixed tuning rules', () => {
-  const loop = (over: number, idle: number, p90: number | null) =>
+  const loop = (over: number, idle: number, p90: number | null, drain = 0) =>
     capacityFigures({
       days: 1,
       throughput: { total: 5, perDay: [] },
       minutesOverCeiling: { total: over, perDay: [] },
       idleSeatHours: { total: idle, perDay: [] },
+      idleSeatHoursDrain: { total: drain, perDay: [] },
       slotWait: {
         n: p90 === null ? 0 : 3,
         p50Ms: p90,
@@ -143,6 +144,17 @@ describe('the fixed tuning rules', () => {
         byRepo: [],
       },
     })
+
+  test('a drained queue is its own figure and is left out of the one the tuner reads', () => {
+    const figures = loop(5, 10, null, 6)
+    const value = (key: string) => figures.find((f) => f.key === key)?.value
+    expect(value('idle_seat_hours_per_day')).toBe(4)
+    expect(value('idle_seat_hours_drain_per_day')).toBe(6)
+    expect(value('idle_seat_hours_with_drain_per_day')).toBe(10)
+    // 10 idle seat-hours would raise the load ceiling; 4 of them with the rest drained are below the line
+    expect(tuneConstant(loop(5, IDLE_HIGH_PER_DAY * 2, null, IDLE_HIGH_PER_DAY * 2), constants)).toBeNull()
+    expect(tuneConstant(loop(5, IDLE_HIGH_PER_DAY * 2, null, 0), constants)).toMatchObject({ constant: 'loadCeiling' })
+  })
 
   test('too long over the ceiling lowers the seat bonus first, then the seats, then the extra slots', () => {
     const figures = loop(OVER_HIGH_PER_DAY, 0, null)

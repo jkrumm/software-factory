@@ -86,10 +86,12 @@ async function seed() {
   await sql`UPDATE factory.host_samples SET swapout_mb_per_300s = 4000 WHERE at = ${t('11-02T10:04')}` // nothing queued: no idle
 
   // queue intervals: [issue, kind, from, to (null: open)]. 10:00 memory; 10:02 memory and claim together; 11-04 08:00 only an
-  // `after` edge (chain), then 08:01 the memory fit beside it; issue_5 has been waiting for an account cap since 11-06 12:00
+  // `after` edge (chain), then 08:01 the memory fit beside it; issue_3 waits behind a drained queue at 10:02 beside the other two;
+  // issue_5 has been waiting for an account cap since 11-06 12:00
   const waits: Array<[string, string, Date, Date | null]> = [
     ['issue_5', 'memory', t('11-02T10:00'), t('11-02T10:03')],
     ['issue_1', 'claim', t('11-02T10:02'), t('11-02T10:04')],
+    ['issue_3', 'drain', t('11-02T10:02'), t('11-02T10:03')],
     ['issue_2', 'chain', t('11-04T08:00'), t('11-04T08:02')],
     ['issue_5', 'memory_fit', t('11-04T08:01'), t('11-04T08:02')],
     ['issue_5', 'cap', t('11-06T12:00'), null],
@@ -236,10 +238,11 @@ describe('GET /v1/capacity-loop figures', () => {
     const hours = (minutes: number) => minutes / 60
     const wanted = [
       { kind: 'cap', queuedHours: 24, issues: 1, idleSeatHours: 0 },
-      { kind: 'memory', queuedHours: hours(3), issues: 1, idleSeatHours: hours(3.5) },
+      { kind: 'memory', queuedHours: hours(3), issues: 1, idleSeatHours: hours(3) },
       { kind: 'chain', queuedHours: hours(2), issues: 1, idleSeatHours: hours(2) },
-      { kind: 'claim', queuedHours: hours(2), issues: 1, idleSeatHours: hours(1.5) },
+      { kind: 'claim', queuedHours: hours(2), issues: 1, idleSeatHours: hours(1) },
       { kind: 'memory_fit', queuedHours: hours(1), issues: 1, idleSeatHours: hours(6) },
+      { kind: 'drain', queuedHours: hours(1), issues: 1, idleSeatHours: hours(1) },
     ]
     expect(model.queueByReason.map((r) => r.kind)).toEqual(wanted.map((r) => r.kind))
     wanted.forEach((w, i) => {
@@ -250,6 +253,12 @@ describe('GET /v1/capacity-loop figures', () => {
     })
     // the split loses nothing: every idle seat-hour is in one kind
     expect(model.queueByReason.reduce((sum, r) => sum + r.idleSeatHours, 0)).toBeCloseTo(model.idleSeatHours.total, 9)
+
+    // the drained queue's share is queueByReason's drain, in total and per day, and what is left of the idle hours is not drain
+    expect(model.idleSeatHoursDrain.total).toBeCloseTo(hours(1), 9)
+    expect(model.idleSeatHoursDrain.perDay.find((d) => d.day === '2026-11-02')?.value).toBeCloseTo(hours(1), 9)
+    expect(model.idleSeatHoursDrain.perDay.filter((d) => d.day !== '2026-11-02').every((d) => d.value === 0)).toBe(true)
+    expect(model.idleSeatHoursDrain.perDay.map((d) => d.day)).toEqual(model.idleSeatHours.perDay.map((d) => d.day))
 
     // minutes over the load ceiling
     const over = (col: string) =>

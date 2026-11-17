@@ -637,6 +637,13 @@ const CAPACITY_TITLE = {
   wait: 'Test slot wait',
 } as const
 
+/** The idle seat-hours of each day with the drained queue's share taken out. */
+const notDrainPerDay = (model: CapacityLoopModel) =>
+  model.idleSeatHours.perDay.map((d) => ({
+    day: d.day,
+    value: Math.max(0, (d.value ?? 0) - (model.idleSeatHoursDrain.perDay.find((x) => x.day === d.day)?.value ?? 0)),
+  }))
+
 function CapacityCards({ model }: { model: CapacityLoopModel }) {
   const { constants } = model
   const subtitle = `${model.days} days, UTC days`
@@ -675,12 +682,12 @@ function CapacityCards({ model }: { model: CapacityLoopModel }) {
           title={CAPACITY_TITLE.idle}
           hint={CAPACITY_HINT.idle}
           subtitle={subtitle}
-          value={hoursWords(model.idleSeatHours.total)}
-          sub="Seats no lead held while Issues waited"
+          value={hoursWords(Math.max(0, model.idleSeatHours.total - model.idleSeatHoursDrain.total))}
+          sub={`Seats no lead held while Issues waited; ${hoursWords(model.idleSeatHoursDrain.total)} behind a drained queue left out`}
           chart={
             <Sparkline
-              values={dayValues(model.idleSeatHours.perDay)}
-              labels={dayLabels(model.idleSeatHours.perDay)}
+              values={dayValues(notDrainPerDay(model))}
+              labels={dayLabels(notDrainPerDay(model))}
               tone="neutral"
               name="Idle seat-hours per day"
               format={hoursWords}
