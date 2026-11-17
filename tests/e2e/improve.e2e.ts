@@ -430,7 +430,7 @@ test('the queue wait card names what the wait is made of, largest first, from th
   const largest = rows[0]
   // an open interval grows between the API read and the page's, so the share is matched as a number
   await expect(
-    card.getByText(new RegExp(`^Mostly ${largest?.label.toLowerCase()}, \\d+ % of the queued time$`)),
+    card.getByText(new RegExp(`^Mostly ${largest?.label.toLowerCase()}, \\d+ % of the time Issues waited$`)),
   ).toBeVisible()
   const list = card.getByRole('list', { name: /by reason/ })
   await expect(list.getByRole('listitem')).toHaveCount(rows.length)

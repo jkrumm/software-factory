@@ -220,7 +220,7 @@ function PartsList({ kpi }: { kpi: Kpi }) {
   return (
     <div className="flex flex-col gap-1.5 text-[length:var(--vx-text-sm)]">
       <p className="font-medium">
-        Mostly {largest.label.toLowerCase()}, {Math.round(largest.share * 100)} % of the queued time
+        Mostly {largest.label.toLowerCase()}, {Math.round(largest.share * 100)} % of the time Issues waited
       </p>
       <ul aria-label={`${kpi.label}: by reason`} className="flex flex-col gap-1">
         {rows.map((row) => (

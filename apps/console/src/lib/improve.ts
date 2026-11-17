@@ -435,10 +435,12 @@ export const MEANING: Record<KpiKey, string> = {
   fix_commits: 'How many fix commits landed per week, each one a mistake that shipped. Fewer is better.',
   window_points: 'How much of the five-hour Max window the sessions of an Issue used, per Issue. Lower is cheaper.',
   cost: 'What the sessions of an Issue cost in dollars, per Issue. Lower is cheaper.',
-  queue_time: 'The total time Issues spent queued, and how much of it an after edge held. Less is better.',
+  queue_time:
+    'The total time Issues waited for a lead to start, and how much of it an after edge held. Less is better.',
   idle_capacity:
-    'How often an account had room while an Issue sat queued for no dependency. Lower is better: capacity went unused.',
-  working_share: 'How much of a lead’s time is spent working rather than waiting. Higher is better.',
+    'How often an account had room while an Issue waited for a lead with nothing holding it. Lower is better: capacity went unused.',
+  working_share:
+    'How much of a lead’s time goes into the work itself rather than into holding for something. Higher is better.',
   dropped_after_lead:
     'Of the Issues closed after a lead started, how many were dropped or cancelled: lead time that shipped nothing. Lower is better.',
   amend_rate:
