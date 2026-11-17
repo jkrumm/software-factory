@@ -157,7 +157,13 @@ function scalarOf(op: Operation, field: BodyField, label: Label, text: string): 
  * The text of a string or json value: `-` is the whole of stdin, `@path` that file, `@@text` the literal `@text`. Any
  * other kind (a number, a boolean) is the text as given.
  */
-async function sourceOf(op: Operation, field: BodyField, label: Label, text: string, io: Io): Promise<string> {
+async function sourceOf(
+  op: Operation,
+  field: Pick<BodyField, 'kind'>,
+  label: Label,
+  text: string,
+  io: Io,
+): Promise<string> {
   if (field.kind !== 'string' && field.kind !== 'json') return text
   if (text === '-') return io.stdin()
   if (text.startsWith('@@')) return text.slice(1)
@@ -205,14 +211,6 @@ async function request(op: Operation, invocation: Invocation, ioOf: Io) {
   }
   const raw = invocation.flags.body
   if (raw !== undefined && !op.body) throw usage(`${commandOf(op)} takes no --body`)
-  let body: unknown
-  if (typeof raw === 'string') {
-    try {
-      body = JSON.parse(raw)
-    } catch {
-      throw usage('--body is not JSON')
-    }
-  }
   // One read of stdin serves every `-` of the invocation.
   let stdinText: Promise<string> | undefined
   const io: Io = {
@@ -221,6 +219,16 @@ async function request(op: Operation, invocation: Invocation, ioOf: Io) {
       stdinText ??= ioOf.stdin()
       return stdinText
     },
+  }
+  let body: unknown
+  if (typeof raw === 'string') {
+    // `--body` takes its text like every string flag: `-` is stdin, `@path` a file, `@@text` a literal `@text`.
+    const text = await sourceOf(op, { kind: 'string' }, '--body', raw, io)
+    try {
+      body = JSON.parse(text)
+    } catch {
+      throw usage('--body is not JSON')
+    }
   }
   const entries: [BodyField, Label, FlagValue][] = []
   op.args.forEach((name, i) => {

@@ -187,7 +187,7 @@ function commandHelp(op: Operation): string {
       return bare?.boolean ? `--${name} [true|false]` : bare ? `--${name}` : `--${name} <text>`
     }),
     ...op.bodyFields.filter((field) => !op.args.includes(field.name)).map((field) => flagHelp(op, field)),
-    ...(op.body ? ['--body <json>  the whole body as JSON; a flag overrides its key'] : []),
+    ...(op.body ? ['--body <json>  the whole body as JSON (- is stdin, @file a file); a flag overrides its key'] : []),
     ...(op.body && op.bodySchema ? ["--schema  print the body's JSON Schema and exit"] : []),
     '--format json|plain',
   ]
