@@ -1,9 +1,8 @@
 import { WORK_TREND_KEYS, type WorkTrendKey } from '@software-factory/contract'
 import { useState } from 'react'
-import { InfoHint, TimeChart } from '@/components/kit'
+import { InfoHint, Segments, TimeChart } from '@/components/kit'
 import { bucketWords, DEFAULT_TREND_RANGE, TREND_RANGES, type TrendRange, trendLines } from '@/lib/flow'
 import { useFlowTrend } from '@/lib/queries'
-import { cn } from '@/lib/utils'
 
 const COUNT_LABEL: Record<WorkTrendKey, string> = {
   running: 'Running',
@@ -14,43 +13,6 @@ const COUNT_LABEL: Record<WorkTrendKey, string> = {
 
 /** The word each series is defined under in `docs/language.md`. */
 const COUNT_WORD = { running: 'running', paused: 'paused', notStarted: 'not started', checking: 'checking' } as const
-
-const SEGMENT =
-  'h-7 cursor-pointer rounded-md px-2.5 text-xs whitespace-nowrap outline-none transition-colors focus-visible:ring-3 focus-visible:ring-ring/50'
-
-/** One choice of a segmented control: a pressed button, never a link (the choice is the card's own state, not the URL's). */
-function Segments<T extends string>({
-  label,
-  choices,
-  value,
-  onChange,
-}: {
-  label: string
-  choices: readonly { key: T; label: string }[]
-  value: T
-  onChange: (key: T) => void
-}) {
-  return (
-    <div role="group" aria-label={label} className="flex flex-wrap gap-1 rounded-lg bg-muted p-0.5">
-      {choices.map((choice) => (
-        <button
-          key={choice.key}
-          type="button"
-          aria-pressed={choice.key === value}
-          onClick={() => onChange(choice.key)}
-          className={cn(
-            SEGMENT,
-            choice.key === value
-              ? 'bg-background font-medium text-foreground shadow-xs'
-              : 'text-muted-foreground hover:text-foreground',
-          )}
-        >
-          {choice.label}
-        </button>
-      ))}
-    </div>
-  )
-}
 
 /**
  * Issues over time: the peak and the average of one count (running, paused, not started or checking) in every bucket of a window,

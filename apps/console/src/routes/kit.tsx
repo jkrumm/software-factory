@@ -20,11 +20,13 @@ import {
   KindBadge,
   KindIcon,
   LOZENGE_STATES,
+  LOZENGE_TONES,
   Lozenge,
   Meter,
   Peek,
   PropertyList,
   Section,
+  SegmentBar,
   SinceRow,
   Skeleton,
   Sparkline,
@@ -247,6 +249,33 @@ function Kit() {
             at={new Date(KIT_NOW - 40 * 60_000).toISOString()}
             now={KIT_NOW}
           />
+        </div>
+      </Section>
+
+      <Section title="SegmentBar">
+        <Note>
+          A row&rsquo;s open Issues by state on a shared scale, so the rows compare; each part in its state&rsquo;s
+          tone.
+        </Note>
+        <div className="grid max-w-md gap-1">
+          {[
+            [2, 1, 2, 1, 1],
+            [0, 2, 1, 3, 0],
+            [1, 0, 0, 0, 2],
+          ].map(([running = 0, paused = 0, ready = 0, held = 0, checking = 0], i) => (
+            <SegmentBar
+              key={i}
+              name={`Project ${i + 1}`}
+              scale={8}
+              segments={[
+                { key: 'running', label: 'Running', value: running, tone: LOZENGE_TONES.running },
+                { key: 'paused', label: 'Paused', value: paused, tone: LOZENGE_TONES.paused },
+                { key: 'ready', label: 'Ready', value: ready, tone: LOZENGE_TONES.ready },
+                { key: 'held', label: 'Held', value: held, tone: LOZENGE_TONES.held, faint: true },
+                { key: 'checking', label: 'Checking', value: checking, tone: LOZENGE_TONES.checking, faint: true },
+              ]}
+            />
+          ))}
         </div>
       </Section>
 

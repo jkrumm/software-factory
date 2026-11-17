@@ -5,7 +5,6 @@ import {
   type HygieneProbeRow,
   type ProjectCounts,
   type ProjectHygieneModel,
-  type ProjectIndexModel,
   type ProjectPageModel,
 } from '@software-factory/contract'
 import type { SQL } from 'bun'
@@ -131,13 +130,13 @@ export async function loadProjects(sql: SQL): Promise<Project[]> {
 
 // -- the issues ---------------------------------------------------------------------------------------------------------
 
-async function issuesOf(sql: SQL, projects: readonly Project[], now: Date): Promise<Map<string, DigestIssue[]>> {
+export async function issuesOf(sql: SQL, projects: readonly Project[], now: Date): Promise<Map<string, DigestIssue[]>> {
   // two windows: the last 7 days and the 7 before, for the shipped bars
   const issues = await loopReads(sql).digestIssues(new Date(now.getTime() - 2 * DIGEST_WINDOW_MS))
   return groupByProject(projects, issues)
 }
 
-const iso = (date: Date): string => date.toISOString()
+export const iso = (date: Date): string => date.toISOString()
 const isRecord = (value: unknown): value is Record<string, unknown> =>
   typeof value === 'object' && value !== null && !Array.isArray(value)
 
@@ -179,7 +178,7 @@ const PassRow = z.object({
   failed: z.unknown(),
 })
 
-interface Pass {
+export interface Pass {
   id: string
   repo: string
   at: Date
@@ -191,7 +190,7 @@ interface Pass {
   failed: z.infer<typeof Entry>[]
 }
 
-const passOf = (raw: unknown): Pass => {
+export const passOf = (raw: unknown): Pass => {
   const row = PassRow.parse(raw)
   const entries = (value: unknown) =>
     z
@@ -212,14 +211,14 @@ const passOf = (raw: unknown): Pass => {
 }
 
 /** The entries the document judgment filed, left out or had refused: findings that are not a probe's. */
-const documentKeys = (pass: Pass): Set<string> =>
+export const documentKeys = (pass: Pass): Set<string> =>
   new Set(
     [...pass.filed, ...pass.overBudget, ...pass.failed]
       .map((e) => e.key)
       .filter((key) => key.startsWith(DOCUMENT_PREFIX)),
   )
 
-const findingCount = (pass: Pass): number => pass.report.findings.length + documentKeys(pass).size
+export const findingCount = (pass: Pass): number => pass.report.findings.length + documentKeys(pass).size
 
 const passRow = (pass: Pass): HygienePassRow => ({
   id: pass.id,
@@ -315,44 +314,6 @@ export async function readProjectHygiene(
     documents: { stale: last?.report.stale.length ?? 0, slop: last?.report.slop.length ?? 0 },
     findings: last ? findingRows(last) : [],
     passes: passes.map(passRow),
-  }
-}
-
-// -- the list ------------------------------------------------------------------------------------------------------------
-
-/** Every project with its counts and the state of its newest hygiene pass. Read-only SQL. */
-export async function readProjectIndex(
-  sql: SQL,
-  options: { now: Date; queue?: QueueReasons },
-): Promise<ProjectIndexModel> {
-  const { now } = options
-  const projects = await loadProjects(sql)
-  const groups = await issuesOf(sql, projects, now)
-  const rows: unknown[] = await sql`SELECT DISTINCT ON (repo) * FROM factory.hygiene_passes ORDER BY repo, at DESC`
-  const newest = new Map<string, Pass>()
-  for (const pass of rows.map(passOf)) {
-    const owner = projectOf(projects, pass.repo)
-    const seen = owner ? newest.get(owner.name) : undefined
-    if (owner && (!seen || seen.at < pass.at)) newest.set(owner.name, pass)
-  }
-  return {
-    at: iso(now),
-    projects: projects.map((project) => {
-      const issues = groups.get(project.name) ?? []
-      const pass = newest.get(project.name)
-      return {
-        name: project.name,
-        work: project.work,
-        source: project.source,
-        branch: project.branch,
-        counts: countsOf(issues, now, queueKindOf(options.queue)),
-        hygiene: {
-          lastPassAt: pass ? iso(pass.at) : null,
-          outcome: pass?.judgment.outcome ?? null,
-          findings: pass ? findingCount(pass) : 0,
-        },
-      }
-    }),
   }
 }
 

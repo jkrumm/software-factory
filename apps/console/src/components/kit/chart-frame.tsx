@@ -89,6 +89,10 @@ interface ChartFrameProps {
    * point, for a chart that sits near the edge of a popover.
    */
   tooltip?: 'above' | 'inside'
+  /** false: the frame takes no Tab stop (an in-cell chart whose row is the keyboard target and whose figure is written beside it) */
+  focusable?: boolean
+  /** false: no hidden table of every point (an in-cell chart whose figure is written beside it); the summary still names it */
+  table?: boolean
   className?: string
   children: (chart: { width: number; active: number | null }) => ReactNode
 }
@@ -106,6 +110,8 @@ export function ChartFrame({
   initialIndex,
   onActiveChange,
   tooltip = 'above',
+  focusable = true,
+  table = true,
   className,
   children,
 }: ChartFrameProps) {
@@ -147,7 +153,7 @@ export function ChartFrame({
       ref={ref}
       role="group"
       aria-label={summary}
-      tabIndex={0}
+      tabIndex={focusable ? 0 : undefined}
       className={cn(
         'relative w-full min-w-0 rounded-md outline-none focus-visible:ring-3 focus-visible:ring-ring/50',
         className,
@@ -167,19 +173,21 @@ export function ChartFrame({
         <InsideTooltip row={row} x={anchorX(active, width)} width={width} />
       ) : null}
       {/* the clipping box is a div: a table ignores `overflow` and its wide rows would widen the Shell's `main` (a sideways scroll on a phone) */}
-      <div className="sr-only">
-        <table>
-          <caption>{summary}</caption>
-          <tbody>
-            {rows.map((r, i) => (
-              <tr key={i}>
-                <th scope="row">{r.label}</th>
-                <td>{r.lines?.length ? `${r.value}: ${r.lines.join(', ')}` : r.value}</td>
-              </tr>
-            ))}
-          </tbody>
-        </table>
-      </div>
+      {table ? (
+        <div className="sr-only">
+          <table>
+            <caption>{summary}</caption>
+            <tbody>
+              {rows.map((r, i) => (
+                <tr key={i}>
+                  <th scope="row">{r.label}</th>
+                  <td>{r.lines?.length ? `${r.value}: ${r.lines.join(', ')}` : r.value}</td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </div>
+      ) : null}
     </div>
   )
 }

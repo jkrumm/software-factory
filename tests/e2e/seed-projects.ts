@@ -13,6 +13,19 @@ hygiene:
     - name: bundle
       target: bundle-size
 `
+/** The project the Projects table shows red (an open incident), so its Red filter has a row */
+export const RED_PROJECT = 'harbor'
+/** The owner's Herdr groups as the e2e server reads them (`FACTORY_PROJECT_GROUPS_FILE`); a repo none lists is Other */
+export const PROJECT_GROUPS = {
+  fallback: 'OTHER',
+  groups: [
+    { label: 'INFRA', members: ['harbor', 'atlas'] },
+    { label: 'TOOLING', members: ['argo', 'beacon', 'cedar'] },
+    { label: 'PERSONAL', members: ['orion', 'pearl', 'delta'] },
+    { label: 'APPS', members: ['ember', 'flint', 'forge', 'gable', 'haven'] },
+    { label: 'WORK', members: ['chat'] },
+  ],
+}
 export const BROKEN_LINKS = 'Hygiene: broken links in docs/guide.md'
 
 const HOUR = 3_600_000
@@ -79,4 +92,9 @@ export async function seedProjectPage(sql: SQL, now = new Date()): Promise<void>
   )
   await sql`INSERT INTO factory.intake_door_routes (source, monitor, repo, quiet, last_event)
     VALUES ('kuma', 'argo web', ${PROJECT}, 3, 'up') ON CONFLICT (source, monitor) DO NOTHING`
+  // the Projects table's red project: an incident open three days on one of its open Issues
+  await sql`INSERT INTO factory.intake_incidents (issue_id, group_key, opened_at, last_alert_at)
+    SELECT id, 'projects-e2e', ${new Date(now.getTime() - 72 * HOUR)}, ${new Date(now.getTime() - HOUR)}
+    FROM factory.issues WHERE repo = ${RED_PROJECT} AND state <> 'closed' ORDER BY id LIMIT 1
+    ON CONFLICT (issue_id) DO NOTHING`
 }

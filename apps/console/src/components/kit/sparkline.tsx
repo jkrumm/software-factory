@@ -19,6 +19,11 @@ export interface SparklineProps {
   format?: (value: number) => string
   /** How a gap reads in the tooltip and the hidden table. */
   emptyText?: string
+  /**
+   * An in-cell line (a table row): no gridlines, a thinner line and a smaller dot, no Tab stop and no hidden table, so the
+   * figure written beside it and the row carry it for the keyboard and a screen reader. The pointer tooltip stays.
+   */
+  compact?: boolean
   height?: number
   className?: string
 }
@@ -44,8 +49,13 @@ export function Sparkline({
   format = String,
   emptyText = 'No data',
   height = 56,
+  compact = false,
   className,
 }: SparklineProps) {
+  const padX = compact ? 3 : PAD_X
+  const padY = compact ? 3 : PAD_Y
+  const lineWidth = compact ? 1.5 : 2
+  const dotRadius = compact ? 2.5 : DOT_RADIUS
   const n = values.length
   const known = values.filter((v): v is number => v !== null)
   const targets = targetsOf(target)
@@ -58,8 +68,8 @@ export function Sparkline({
   }))
   const targetWords = targets.length === 0 ? '' : `, target ${targets.map(format).join(' to ')}`
   const summary = `${rangeSummary(name, known, format)}${targetWords}`
-  const stepOf = (width: number) => (n > 1 ? (width - 2 * PAD_X) / (n - 1) : 0)
-  const xOf = (i: number, width: number) => (n > 1 ? PAD_X + i * stepOf(width) : width / 2)
+  const stepOf = (width: number) => (n > 1 ? (width - 2 * padX) / (n - 1) : 0)
+  const xOf = (i: number, width: number) => (n > 1 ? padX + i * stepOf(width) : width / 2)
 
   return (
     <ChartFrame
@@ -68,14 +78,16 @@ export function Sparkline({
       rows={rows}
       className={className}
       initialIndex={Math.max(0, lastKnown < 0 ? now : Math.min(now, lastKnown))}
-      indexAt={(x, width) => (n > 1 ? Math.round((x - PAD_X) / stepOf(width)) : 0)}
+      indexAt={(x, width) => (n > 1 ? Math.round((x - padX) / stepOf(width)) : 0)}
       anchorX={xOf}
+      focusable={!compact}
+      table={!compact}
     >
       {({ width, active }) => {
         const all = [...known, ...targets]
         const min = all.length === 0 ? 0 : Math.min(...all)
         const span = (all.length === 0 ? 0 : Math.max(...all) - min) || 1
-        const y = (value: number) => PAD_Y + (1 - (value - min) / span) * (height - 2 * PAD_Y)
+        const y = (value: number) => padY + (1 - (value - min) / span) * (height - 2 * padY)
         const point = (i: number) => `${xOf(i, width).toFixed(1)},${y(values[i] ?? 0).toFixed(1)}`
         const range = (from: number, to: number) =>
           Array.from({ length: Math.max(0, to - from + 1) }, (_, k) => from + k)
@@ -86,14 +98,14 @@ export function Sparkline({
         const line = (stroke: string, dash?: string) => ({
           fill: 'none',
           stroke,
-          strokeWidth: 2,
+          strokeWidth: lineWidth,
           strokeLinejoin: 'round' as const,
           strokeLinecap: 'round' as const,
           strokeDasharray: dash,
         })
         return (
           <svg width={width} height={height} className="block overflow-visible" aria-hidden="true">
-            {[PAD_Y, height / 2, height - PAD_Y].map((gridLine) => (
+            {(compact ? [] : [padY, height / 2, height - padY]).map((gridLine) => (
               <line
                 key={gridLine}
                 x1={0}
@@ -156,7 +168,7 @@ export function Sparkline({
               <circle
                 cx={xOf(dotIndex, width)}
                 cy={y(dotValue)}
-                r={DOT_RADIUS}
+                r={dotRadius}
                 fill={mark}
                 stroke="var(--vx-dot-stroke)"
                 strokeWidth={2}
