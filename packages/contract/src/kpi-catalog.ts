@@ -196,7 +196,7 @@ export const KPI_CATALOG: Record<KpiKey, KpiSpec> = {
     denominator: 'Issues filed in the window',
     decision: 'Whether a tier or a role costs more than its Issues return; the real limit is window points',
   },
-  queue_time: {
+  queue_capacity_share: {
     label: 'Share of queued time held by capacity',
     direction: 'lower',
     target: WATCH,
@@ -266,7 +266,7 @@ export const KPI_CATALOG: Record<KpiKey, KpiSpec> = {
     denominator: 'First watches answered in the window',
     decision: 'Whether first verification passes mean anything: a pass rate over instant watches is not evidence',
   },
-  closed_per_day: {
+  issues_closed_per_day: {
     label: 'Issues closed per day',
     direction: 'higher',
     target: WATCH,

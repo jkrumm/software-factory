@@ -271,7 +271,7 @@ export async function flowKpis(sql: SQL, w: Window): Promise<Array<Omit<Kpi, 'hi
 
   return [
     kpi({
-      key: 'queue_time',
+      key: 'queue_capacity_share',
       value: per(Math.max(0, queued.total - queued.chain), queued.total),
       unit: 'share',
       n: queued.n,
@@ -372,7 +372,7 @@ export async function flowKpis(sql: SQL, w: Window): Promise<Array<Omit<Kpi, 'hi
       ],
     }),
     kpi({
-      key: 'closed_per_day',
+      key: 'issues_closed_per_day',
       value: per(done, windowDays),
       unit: 'per_day',
       n: Math.round(windowDays),

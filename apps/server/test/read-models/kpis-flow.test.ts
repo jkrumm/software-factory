@@ -170,7 +170,7 @@ const num = async (rows: Promise<unknown[]>) => Number(((await rows)[0] as { v: 
 
 describe('queue time, idle capacity and the lead’s time', () => {
   test('queued time is split into what an after edge held and the rest, and matches SQL', async () => {
-    const k = (await flow())('queue_time')
+    const k = (await flow())('queue_capacity_share')
     // issue_1 9 h (5 h chain), issue_2 4.9 h, issue_3 4.9 h
     // of 18.8 h queued, 13.8 h no after edge held
     expect(k.value).toBeCloseTo(13.8 / 18.8, 6)
@@ -306,13 +306,13 @@ describe('the retro model', () => {
   test('the bundle holds the sessions, the samples and the ledger of the earlier retro signals', async () => {
     await sql`INSERT INTO factory.intake_signals (id, source, kind, origin, trust, repo, fingerprint, title, text, received_at, state, issue_id) VALUES
       ('signal_r1', 'agent:software-factory', 'request', 'factory', 'agent', 'app', 'r1', 'Shorter queue', ${'why Retro: 2026-10-30 kpi=dropped_after_lead before=0.2 direction=down'}, ${ago(300)}, 'filed', 'issue_9'),
-      ('signal_r2', 'agent:software-factory', 'request', 'factory', 'agent', 'app', 'r2', 'Not shipped yet', ${'Retro: 2026-10-30 kpi=queue_time before=none direction=down'}, ${ago(300)}, 'filed', 'issue_2'),
+      ('signal_r2', 'agent:software-factory', 'request', 'factory', 'agent', 'app', 'r2', 'Not shipped yet', ${'Retro: 2026-10-30 kpi=queue_capacity_share before=none direction=down'}, ${ago(300)}, 'filed', 'issue_2'),
       ('signal_r3', 'agent:software-factory', 'request', 'factory', 'agent', 'app', 'r3', 'Not a marker', 'Retro: soon', ${ago(300)}, 'filed', 'issue_2')`
     const model = RetroModel.parse(await readRetro(sql, { now: NOW, days: 7 }))
     expect(model.sessions).toEqual([
       { issue: 'issue_1', attempt: 1, model: 'claude-sonnet-5-5', account: 'me', transcriptPath: '/x/t.jsonl' },
     ])
-    expect(model.kpis.kpis.map((k) => k.key)).toContain('queue_time')
+    expect(model.kpis.kpis.map((k) => k.key)).toContain('queue_capacity_share')
     expect(model.samples.regressed.map((s) => s.issue).toSorted()).toEqual(['issue_2', 'issue_3'])
     expect(model.samples.slowest[0]).toMatchObject({ issue: 'issue_1', why: 'cycle' })
     expect(model.samples.dropped.map((s) => s.issue).toSorted()).toEqual(['issue_2', 'issue_3'])

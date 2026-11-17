@@ -60,8 +60,8 @@ const kpi = async (key: string) => {
 }
 
 test('closed per day counts every outcome in the window over its days', async () => {
-  expect(await kpi('closed_per_day')).toMatchObject({ count: 3, n: 7, unit: 'per_day', direction: 'higher' })
-  expect((await kpi('closed_per_day')).value).toBeCloseTo(3 / 7, 6)
+  expect(await kpi('issues_closed_per_day')).toMatchObject({ count: 3, n: 7, unit: 'per_day', direction: 'higher' })
+  expect((await kpi('issues_closed_per_day')).value).toBeCloseTo(3 / 7, 6)
 })
 
 test('the slot wait is the median over the steps of the window, with its 90th percentile as the part', async () => {

@@ -329,7 +329,7 @@ test('targetTally counts the met targets of those judged; trends, unset targets 
 
 test('the parts of a breakdown KPI are listed in its own unit', () => {
   const queued = kpi({
-    key: 'queue_time',
+    key: 'queue_capacity_share',
     unit: 'ms',
     parts: [
       { key: 'chain', label: 'Held by an after edge', value: 5 * 3_600_000, unit: 'ms' },

@@ -378,8 +378,7 @@ export function withReason(k: Omit<Kpi, 'history'>): Omit<Kpi, 'history'> {
   // a count that is zero is a result (a week with no fix commit); every other figure over nothing has no value
   if (k.value === null || (k.n === 0 && k.unit !== 'count'))
     return { ...k, value: null, measured: false, reason: 'Nothing was counted in the window' }
-  // a total of queued time is a sum, not an estimate: two long intervals are still forty hours of queueing
-  if (FLOORED_UNITS.has(k.unit) && k.key !== 'queue_time' && k.n < MIN_SAMPLES)
+  if (FLOORED_UNITS.has(k.unit) && k.n < MIN_SAMPLES)
     return {
       ...k,
       value: null,
