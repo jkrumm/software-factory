@@ -107,6 +107,7 @@ import { composeLeads } from './compose-leads.ts'
 import { loginErrands } from './app/login-errands.ts'
 import { resumeRulesOf } from './app/leads-api-errors.ts'
 import { type Clock, systemClock } from './kernel/clock.ts'
+import { freshFor } from './kernel/fresh-for.ts'
 import { err, ok, portError } from './kernel/result.ts'
 import { systemIds } from './kernel/ids.ts'
 import { deployingSince } from './read/deploy-window.ts'
@@ -139,16 +140,8 @@ const PASS_GRACE_MS = 10_000
 /** A door source refused within this long is a health line; an older refusal has passed. */
 const DOOR_LINES_RECENT_MS = 24 * 3_600_000
 
-/** `read`'s answer, kept for `ms`: the next call inside that time gets the same one. */
-function cachedFor<T>(ms: number, read: () => Promise<T>): () => Promise<T> {
-  let kept: { at: number; value: T } | null = null
-  return async () => {
-    if (kept && Date.now() - kept.at < ms) return kept.value
-    const value = await read()
-    kept = { at: Date.now(), value }
-    return value
-  }
-}
+/** The queue view the read routes share is reused this long (`queueReasons`): the queue loop moves it every 10 s. */
+const QUEUE_REASONS_FRESH_MS = 5_000
 
 const fail = (message: string): never => {
   console.error(message)
@@ -317,7 +310,7 @@ async function main(): Promise<void> {
     loginErrands: loginErrands(checkpoints),
     host: {
       // One read answers a minute of passes (never longer than the threshold itself): `ps -E` and a host-wide `lsof` are too much for every tick of a lead that stays a candidate.
-      processes: cachedFor(
+      processes: freshFor(
         Math.min(60_000, leadSettings.quiesceAfterMs ?? 0),
         async () =>
           (await reaperProcessTable.read())?.map(({ pid, ppid, session }) => ({ pid, ppid, session })) ?? null,
@@ -869,10 +862,13 @@ async function main(): Promise<void> {
     if (!runner.view().some((loop) => loop.name === 'desk' && loop.running)) void runner.runNow('desk')
   }
 
-  const queueReasons = async () => {
+  // Every read route asks for this, and the view behind it spawns `sysctl` a few times and may poll the account picker:
+  // on a loaded host that made `/v1/projects` and its siblings answer in seconds (self-watch routes_slow, 2026-11-17).
+  // A few seconds old is fresh enough for the word on a queued Issue; concurrent requests share one run.
+  const queueReasons = freshFor(QUEUE_REASONS_FRESH_MS, async () => {
     const view = await planning.capacity.queue()
     return view.ok ? queueReasonMap(view.value.queue) : null
-  }
+  })
   const machine = async () => {
     const state = await planning.capacity.state()
     if (!state.ok) return null
