@@ -114,6 +114,15 @@ describe('factory project check', () => {
     expect(out).toContain('warning: make deploy: the Makefile has no target deploy')
   })
 
+  test('a target an included file defines is no missing target', async () => {
+    const file = await repo('includer', {
+      Makefile: 'include $(REPO_DIR)/core/core.mk\n',
+      'project.yaml': 'apiVersion: factory/v2\nname: includer\nchecks: { fast: make check-fast }\n',
+    })
+    const { out } = await cli(['project', 'check', file])
+    expect(out).not.toContain('check-fast')
+  })
+
   test('a leads above the bound is a warning at its line, not a problem', async () => {
     const file = await repo('wide', { 'project.yaml': 'apiVersion: factory/v2\nname: wide\nleads: 100\n' })
     const { code, out } = await cli(['project', 'check', file])
