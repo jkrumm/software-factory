@@ -14,6 +14,8 @@ import { windowOf } from './stats.ts'
 export type CapacityConstants = CapacityLoopModel['constants']
 
 const TOP = 8
+/** The queue kind of a drained queue (`QUEUE_REASONS`): Issues wait for the owner or the orchestrator, not for capacity. */
+const DRAIN_KIND = 'drain'
 const NEWEST_REAPED = 5
 const DAY_MS = 24 * 3_600_000
 
@@ -133,10 +135,15 @@ export async function readCapacityLoop(
             ARRAY['unrecorded']) AS kinds
         FROM idle LEFT JOIN ivs q ON q.from_at <= idle.at AND coalesce(q.to_at, ${w.to}) > idle.at
         GROUP BY idle.at, idle.seats)
-      SELECT kind, sum(seats::float8 / 60 / cardinality(kinds)) AS hours FROM kinds, unnest(kinds) AS kind GROUP BY kind`
+      SELECT to_char(at AT TIME ZONE 'UTC', 'YYYY-MM-DD') AS day, kind, sum(seats::float8 / 60 / cardinality(kinds)) AS hours
+      FROM kinds, unnest(kinds) AS kind GROUP BY 1, 2`
     const Queued = z.object({ kind: z.string(), issues: z.coerce.number().int(), hours: z.coerce.number().nullable() })
-    const Idle = z.object({ kind: z.string(), hours: z.coerce.number().nullable() })
-    const idleByKind = new Map(idleRows.map((raw) => Idle.parse(raw)).map((r) => [r.kind, r.hours ?? 0]))
+    const Idle = z.object({ day: z.string(), kind: z.string(), hours: z.coerce.number().nullable() })
+    const idleParsed = idleRows.map((raw) => Idle.parse(raw))
+    const idleByKind = new Map<string, number>()
+    for (const r of idleParsed) idleByKind.set(r.kind, (idleByKind.get(r.kind) ?? 0) + (r.hours ?? 0))
+    // the share behind a drained queue (an owner or orchestrator state, not capacity going unused), by the same split
+    const drainRows = idleParsed.filter((r) => r.kind === DRAIN_KIND).map((r) => ({ day: r.day, v: r.hours ?? 0 }))
     const queuedByKind = new Map(queuedRows.map((raw) => Queued.parse(raw)).map((r) => [r.kind, r]))
     const queueByReason = [...new Set([...queuedByKind.keys(), ...idleByKind.keys()])]
       .map((kind) => ({
@@ -360,6 +367,7 @@ export async function readCapacityLoop(
       throughput: { total: closed, perDay: perDay(closedDay, 0) },
       idleSeatHours: { total: idle, perDay: perDay(idleDay, 0) },
       idleSeatHoursMemory: idleMemory,
+      idleSeatHoursDrain: { total: idleByKind.get(DRAIN_KIND) ?? 0, perDay: perDay(drainRows, 0) },
       queueByReason,
       edges: await edgesOf(tx, w),
       minutesOverCeiling: { total: over, perDay: perDay(overDay, 0) },
