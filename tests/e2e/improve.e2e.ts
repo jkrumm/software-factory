@@ -172,6 +172,8 @@ test('one card per KPI in the order the Console shows, each the figures the API 
   await expect(grid.getByRole('heading', { level: 2 })).toHaveText([
     ...headings,
     'By seat',
+    'By attempt seat',
+    'Inferred chain edges',
     'Fix commits',
     'Friction',
     'What the loops yielded',
