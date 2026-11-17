@@ -457,6 +457,7 @@ export function ProjectTable({ model, now }: { model: ProjectIndexModel; now: nu
                     }}
                     tabIndex={row.id === current ? 0 : -1}
                     data-project={row.id}
+                    data-keynav=""
                     aria-label={project.name}
                     className={cn(
                       'group/row cursor-pointer text-[length:var(--vx-text-sm)] outline-none',
