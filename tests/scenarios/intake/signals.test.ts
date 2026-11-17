@@ -71,6 +71,52 @@ test('an agent files in its own repo with the same envelope', async () => {
   })
 }, 20000)
 
+const withdraw = (issue: string, args: string[]) =>
+  factory(
+    world,
+    ['--format', 'json', 'issue', 'withdraw', issue, ...args],
+    { FACTORY_URL: server.url },
+    { as: 'agent' },
+  )
+
+test('the filer withdraws its own Issue before a lead takes it; the owner token and a stranger cannot', async () => {
+  const filed = await signalFile({ from: 'agent:argo', repo: 'argo', title: 'The cart badge counts removed items' })
+  const issue = filed.issue as string
+
+  const stranger = await withdraw(issue, ['--from', 'agent:vps', '--reason', 'not mine'])
+  expect(stranger.code).toBe(5)
+  expect(await observe(world, issue)).toMatchObject({ state: 'settling' })
+
+  const done = await withdraw(issue, ['--from', 'agent:argo', '--reason', 'filed with the wrong title', '--call', 'w1'])
+  expect(done.code).toBe(0)
+  expect(JSON.parse(done.out)).toMatchObject({ result: 'applied', issue: { state: 'closed', outcome: 'cancelled' } })
+  expect(await observe(world, issue)).toMatchObject({ state: 'closed', outcome: 'cancelled' })
+
+  const replay = await withdraw(issue, [
+    '--from',
+    'agent:argo',
+    '--reason',
+    'filed with the wrong title',
+    '--call',
+    'w1',
+  ])
+  expect(JSON.parse(replay.out)).toMatchObject({ result: 'replayed' })
+
+  const closed = await withdraw(issue, ['--from', 'agent:argo', '--reason', 'again'])
+  expect(closed.code).toBe(5)
+}, 20000)
+
+test('an Issue another source also reported is not the filer to withdraw', async () => {
+  const first = await signalFile({ from: 'agent:argo', repo: 'argo', title: 'The invoice PDF has no page numbers' })
+  const issue = first.issue as string
+  const joined = await signalFile({ from: 'owner:hermes', repo: 'argo', title: 'The invoice PDF has no page numbers' })
+  expect(joined).toMatchObject({ outcome: 'amended', issue })
+
+  const refused = await withdraw(issue, ['--from', 'agent:argo', '--reason', 'oops'])
+  expect(refused.code).toBe(5)
+  expect(await observe(world, issue)).toMatchObject({ state: 'settling' })
+}, 20000)
+
 test('a replayed alert is one effect', async () => {
   expect((await post(server, '/door/routes', { source: 'kuma', monitor: 'billing', repo: 'argo' })).status).toBe(200)
   const kuma = {

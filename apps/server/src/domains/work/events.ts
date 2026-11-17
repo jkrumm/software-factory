@@ -120,8 +120,8 @@ export const PAYLOADS = {
   regressed: z.object({ watch: z.number().int().min(1).nullable(), detail: text }),
   /** a closed Issue opens again: its own verb, the only way out of `closed` */
   reopened: z.object({ reason: text }),
-  /** the owner's stop */
-  cancelled: z.object({ reason: text }),
+  /** the owner's stop, or the filer's withdrawal (`by`: the signal source that filed it, set only then) */
+  cancelled: z.object({ reason: text, by: text.optional() }),
   /** ended without a watch: done or dropped by its lead, or healed before one started */
   closed: z.object({
     attempt: attempt.nullable(),
@@ -168,7 +168,7 @@ export const SENDERS: { [K in EventKind]: readonly Actor[] } = {
   watch_passed: ['factory'],
   regressed: ['factory'],
   reopened: ['owner', 'orchestrator', 'factory'],
-  cancelled: ['owner', 'orchestrator'],
+  cancelled: ['owner', 'orchestrator', 'factory'],
   closed: ['lead', 'factory'],
 }
 

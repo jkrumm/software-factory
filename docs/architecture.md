@@ -276,7 +276,12 @@ through `receive` in `app/intake.ts`; the answer is a triage outcome (`docs/lang
   approved (`looks_good`/`with_notes`) and every dependent or cancel target being an Issue of the Replan's project (a removed edge's dependent may be another project's open Issue when all its heads in that edge are this project's), then
   edges added and removed and Issues cancelled through `addAfter`, `removeAfter` and `cancelIssue` as the orchestrator
   (the avoidable-touch counts read the owner alone). `/planning/after|unafter` and `cancel` stay owner only: a lead never
-  edits the chain except through an approved Spec.
+  edits the chain except through an approved Spec. The one cancel an agent has is `factory issue withdraw <id> --from
+  agent:<repo> --reason ...` (`POST /issues/:id/withdraw`, `withdrawIssue`): the filer takes back an Issue made from its
+  own signals, only while it is `settling` or `queued` and only when every signal on it came from that source; it records
+  `cancelled` by the factory with `by` set, so the owner-touch counts do not read it. `--from` is the source as
+  stored (`agent:<repo>`, what `signal list` shows), compared as written. Like `signal file`, it is self-asserted: the
+  agent token carries no identity, so the check guards against a mistake, not against another agent.
 - **Start** (`app/leads-start.ts`): claim and look, make the worktree (`factory/<issue>-<attempt>`), then the terminal,
   then record the lead started. The terminal is found by its `factory.key` label before one is made, so a replay after a
   crash attaches to the lead that runs. The prompt is the brief (`domains/leads/brief.ts`): standing orders that are

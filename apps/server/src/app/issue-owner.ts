@@ -1,5 +1,8 @@
 import { parseSeat } from '@software-factory/contract'
 import { parseLeadKey } from '../domains/leads/names.ts'
+import type { LeadStore } from '../domains/leads/ports.ts'
+import type { WorkStore } from '../domains/work/ports.ts'
+import type { UnitOfWork } from './unit-of-work.ts'
 import { fence } from '../domains/intake/rules.ts'
 import { replay } from '../domains/work/machine.ts'
 import type { OwnerActor } from '../kernel/events.ts'
@@ -31,6 +34,53 @@ export function cancelIssue(
     issueId: input.issueId,
     key: key('cancelled', input.issueId, input.call ?? deps.ids.next('call')),
     event: { kind: 'cancelled', payload: { reason: input.reason }, actor: input.actor },
+  })
+}
+
+/** The stores a withdrawal reads in one transaction: the Issue's events and the signals it was filed from. */
+export type WithdrawWrites = UnitOfWork<{ work: WorkStore; leads: LeadStore }>
+
+/** The most signals a withdrawal reads: an Issue with more joined signals than this was never one filer's. */
+const MAX_WITHDRAW_SIGNALS = 200
+
+/**
+ * The filer takes back an Issue its own signal made. Allowed only while no lead has the Issue (`settling` or `queued`)
+ * and only when `from` is the source of every signal the Issue was filed from or joined: an Issue another source also
+ * reported, or the owner filed, is not the filer's to withdraw. It records `cancelled` by the factory with `by` set, so
+ * it is never counted as an owner touch. The state and the sources are read in the transaction that records the event,
+ * and its version guard refuses a write that lost a race with admission.
+ */
+export function withdrawIssue(
+  deps: WriteDeps & { uow: WithdrawWrites },
+  input: { issueId: IssueId; from: string; reason: string; call?: string | undefined },
+): Promise<Result<Recorded, IssueWriteError | PortError>> {
+  const call = input.call ?? deps.ids.next('call')
+  return deps.uow.run<Recorded, IssueWriteError>(async ({ work, leads }) => {
+    const event = {
+      kind: 'cancelled',
+      payload: { reason: input.reason, by: input.from },
+      actor: 'factory',
+    } as const
+    const eventKey = key('cancelled', input.issueId, 'withdraw', call)
+    // A call that was recorded replays whatever the Issue is now.
+    if (await work.eventByKey(eventKey)) return recordIn(work, deps, { issueId: input.issueId, key: eventKey, event })
+    const history = await work.history(input.issueId)
+    if (!history) return err({ kind: 'unknown_issue', issueId: input.issueId })
+    const { state } = replay(input.issueId, history)
+    if (state !== 'settling' && state !== 'queued') {
+      return err({
+        kind: 'filing_refused',
+        detail: `it is ${state}: a lead has taken it (or it is closed); the owner cancels it`,
+      })
+    }
+    const signals = await leads.signalsOf(input.issueId, MAX_WITHDRAW_SIGNALS)
+    if (signals.length === 0 || signals.some((signal) => signal.source !== input.from)) {
+      return err({
+        kind: 'filing_refused',
+        detail: `${input.from} did not file this Issue alone: only the owner cancels it`,
+      })
+    }
+    return recordIn(work, deps, { issueId: input.issueId, key: eventKey, event })
   })
 }
 

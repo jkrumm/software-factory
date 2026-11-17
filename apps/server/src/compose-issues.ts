@@ -9,16 +9,23 @@ import {
 import { linkArtifactToIssue, newStandaloneArtifact, setArtifactRetired } from './app/artifact-new.ts'
 import { answerIssue } from './app/issue-answer.ts'
 import { fileNewIssue, type NewIssueDeps } from './app/issue-new.ts'
-import { cancelIssue, noteIssue, noteSession, seatIssue } from './app/issue-owner.ts'
+import {
+  cancelIssue,
+  noteIssue,
+  noteSession,
+  seatIssue,
+  withdrawIssue,
+  type WithdrawWrites,
+} from './app/issue-owner.ts'
 import type { CheckpointUses } from './app/checkpoints-uses.ts'
-import type { IssueWrites, WriteDeps } from './app/issues.ts'
+import type { WriteDeps } from './app/issues.ts'
 
 /**
  * The owner's Issue verbs and the session note: `new` files through the planning stores (edges), the rest record events
  * on the Issue. `answer` goes through the checkpoints' own use case.
  */
 export function composeIssues(input: {
-  writes: WriteDeps & { uow: IssueWrites }
+  writes: WriteDeps & { uow: WithdrawWrites }
   filing: NewIssueDeps
   checkpoints: Pick<CheckpointUses, 'decisions' | 'answer'>
 }): IssueApi {
@@ -34,6 +41,7 @@ export function composeIssues(input: {
     editCollection: (request) => editCollection(filing, request),
     pinCollection: (request) => pinCollection(filing, request),
     cancel: (request) => cancelIssue(writes, request),
+    withdraw: (request) => withdrawIssue(writes, request),
     note: (request) => noteIssue(writes, request),
     seat: (request) => seatIssue({ ...writes, roles: filing.roles }, request),
     answer: (request) => answerIssue(checkpoints, request),

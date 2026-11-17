@@ -68,6 +68,19 @@ export const CancelBody = z
 export type CancelBody = z.infer<typeof CancelBody>
 
 /**
+ * `issue withdraw`: the filer of a signal takes back the Issue it made, before a lead takes it. `from` is the source the
+ * signal was filed under (`agent:<repo>`); the server refuses unless it is the Issue's one and only signal source.
+ */
+export const WithdrawBody = z
+  .strictObject({
+    from: z.string().regex(/^agent:[A-Za-z0-9._-]{1,64}$/, 'agent:<repo>'),
+    reason: z.string().trim().min(1).max(4_000),
+    call: Call.optional(),
+  })
+  .meta({ id: 'WithdrawBody' })
+export type WithdrawBody = z.infer<typeof WithdrawBody>
+
+/**
  * `issue seat`: sets the lead's seat of an Issue no lead is working: `tier` and `effort` together, or a `role` of the
  * table (resolved now, as at filing). The server checks the shape (422 `seat_refused`, naming the field).
  */

@@ -12,6 +12,7 @@ import {
   NoteBody,
   SeatBody,
   SessionNoteBody,
+  WithdrawBody,
 } from '@software-factory/contract'
 import { Elysia } from 'elysia'
 import * as z from 'zod'
@@ -76,6 +77,7 @@ export interface IssueApi {
     pinned: boolean
   }): Promise<Result<Collection, StandaloneArtifactError | PortError>>
   cancel(input: { issueId: IssueId; reason: string; actor: OwnerActor; call?: string | undefined }): Promise<Written>
+  withdraw(input: { issueId: IssueId; from: string; reason: string; call?: string | undefined }): Promise<Written>
   note(input: NoteInput): Promise<Result<NoteOutcome, NoteError>>
   seat(input: {
     issueId: IssueId
@@ -112,6 +114,7 @@ const unwired: IssueApi = {
   editCollection: gone,
   pinCollection: gone,
   cancel: gone,
+  withdraw: gone,
   note: gone,
   seat: gone,
   answer: gone,
@@ -360,6 +363,24 @@ export const issueRoutes = (wired: IssueApi | undefined) => {
         detail: {
           operationId: 'issue.cancel',
           summary: 'the owner ends an Issue; its lead, worktree and claim are finalized',
+        },
+      },
+    )
+    .post(
+      '/issues/:id/withdraw',
+      async ({ params, body }) => {
+        const issueId = issueRef(params.id)
+        if (!issueId) return unknownIssue(params.id)
+        return verbResponse(await api.withdraw({ issueId, from: body.from, reason: body.reason, call: body.call }))
+      },
+      {
+        params: Params,
+        body: WithdrawBody,
+        response: { 200: LeadVerbAnswer, ...errorResponses(400, 404, 409, 422, 503) },
+        detail: {
+          operationId: 'issue.withdraw',
+          summary:
+            'the filer of a signal takes back the Issue it made, while no lead has it (409 once one does, or when another source also filed it)',
         },
       },
     )
