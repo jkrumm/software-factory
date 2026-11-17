@@ -64,6 +64,8 @@ export interface QualityStore {
   recordShip(ship: ShipRecord, evidence: readonly StoredEvidence[]): Promise<void>
   /** the newest accepted ship of the attempt: what its watch checks the deployed version against */
   lastShip(issueId: IssueId, attempt: number): Promise<{ at: Date; commits: CommitsEvidence | null } | null>
+  /** the attempt's ships the gate or the machine refused: a light lead is moved up after two */
+  refusedShips(issueId: IssueId, attempt: number): Promise<number>
   /**
    * The checks of the newest finished run (green or red, never blocked) of any other Issue's watch in the repo before
    * `before`: what verify said of the repo before this ship. Null when there was none.

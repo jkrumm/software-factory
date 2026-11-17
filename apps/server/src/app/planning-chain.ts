@@ -80,6 +80,7 @@ export async function settleIssue(
     after: readonly IssueId[]
     kind?: Kind | undefined
     checkpoint?: 'spec' | undefined
+    size?: 'small' | 'medium' | 'large' | undefined
     /** who inferred the edges and why, kept on each edge and named in the queue order; absent when they were stated */
     inferredBy?: string | undefined
   },
@@ -87,6 +88,7 @@ export async function settleIssue(
   const settledPayload = {
     ...(input.kind ? { kind: input.kind } : {}),
     ...(input.checkpoint ? { checkpoint: input.checkpoint } : {}),
+    ...(input.size ? { size: input.size } : {}),
   }
   return deps.uow.run(async (stores) => {
     // The cycle check reads the open edges and then writes one: two verbs at once must not both pass it.

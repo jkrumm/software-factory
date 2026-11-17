@@ -6,6 +6,8 @@ import type {
   Kpi,
   KpiKey,
   LoopYieldWindow,
+  SeatKpiRow,
+  SeatKpis,
 } from '@software-factory/contract'
 import type { Tone } from '../components/kit/tone'
 import type { LANGUAGE } from './language.gen'
@@ -713,4 +715,35 @@ export function constantRows(
     { key: 'swapCeilingPct', label: 'Swap in use ceiling', value: `${constants.swapCeilingPct} % of RAM` },
     { key: 'reaperGraceMs', label: 'Reaper grace', value: msWords(constants.reaperGraceMs) },
   ]
+}
+
+/** The seat rows of the "By seat" table, in the words the Console shows. */
+export const SEAT_LABEL: Record<SeatKpiRow['seat'], string> = { light: 'Light', lead: 'Lead', filed: 'Filed seat' }
+
+const rateWords = (rate: number | null): string => (rate === null ? '–' : formatValue('share', rate))
+
+/** A seat row's cells as text: Issues with their share, the rates, the medians and the cost; none is an en dash. */
+export function seatCells(row: SeatKpiRow) {
+  return {
+    issues: row.share === null ? `${row.issues}` : `${row.issues} (${rateWords(row.share)})`,
+    firstPass: row.firstPassRate === null ? '–' : `${rateWords(row.firstPassRate)} of ${row.firstWatches}`,
+    regressions: `${row.regressions}`,
+    refusals: `${row.refusals}`,
+    cycle: msWords(row.cycleP50Ms),
+    working: msWords(row.workingP50Ms),
+    cost: row.costPerIssue === null ? '–' : formatValue('usd', row.costPerIssue),
+    movedUp: row.seat === 'light' ? `${row.movedUp}` : '–',
+  }
+}
+
+/** The tripwire line under the seat table: whether triage's small is on, the two first-pass rates, and the verdict. */
+export function tripwireWords(tripwire: SeatKpis['tripwire']): string {
+  const { on, points, days, light, lead, lightWatches, leadWatches, met } = tripwire
+  const rates =
+    light === null || lead === null
+      ? `Last ${days} days: light has ${lightWatches} first watches and lead ${leadWatches}`
+      : `Last ${days} days: light passed ${rateWords(light)} of ${lightWatches} first watches, lead ${rateWords(lead)} of ${leadWatches}`
+  const verdict =
+    met === null ? 'not measured yet' : met ? `within ${points} points: met` : `not within ${points} points: not met`
+  return `Triage's small is ${on ? 'on' : 'off'}. ${rates}; ${verdict}.`
 }

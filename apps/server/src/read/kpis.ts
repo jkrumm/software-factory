@@ -5,6 +5,7 @@ import { boundedRead } from './bounded.ts'
 import { percentile, per, windowOf } from './stats.ts'
 import { flowKpis } from './kpis-flow.ts'
 import { costBySeat, USAGE_TIMEOUT_MS, type SeatCost } from './usage.ts'
+import { readSeatKpis } from './kpis-seats.ts'
 
 /** The owner's actions on an Issue that the factory should have settled; the events that count are these kinds. */
 export const TOUCH_EVENTS = ['noted', 'woken', 'cancelled', 'reopened'] as const
@@ -204,12 +205,17 @@ async function sessionsOf(tx: SQL, w: Window): Promise<Array<string | number | b
       SELECT DISTINCT issue_id AS v FROM factory.issue_events
       WHERE kind = 'filed' AND result = 'applied' AND at >= ${w.from} AND at < ${w.to}`,
   ).map((r) => r.v)
+  return sessionsOfIssues(tx, filed)
+}
+
+/** The usage sessions of these Issues, by the same two lookups as `sessionsOf`. */
+async function sessionsOfIssues(tx: SQL, filed: readonly string[]): Promise<Array<string | number | bigint>> {
   if (filed.length === 0) return []
   const numbers = filed.map((id) => id.slice('issue_'.length))
   const claude = Texts.parse(
     await tx`
       SELECT DISTINCT payload->>'claudeSessionId' AS v FROM factory.lead_hook_events
-      WHERE issue_id = ANY(${tx.array(filed, 'TEXT')}) AND payload->>'claudeSessionId' IS NOT NULL`,
+      WHERE issue_id = ANY(${tx.array([...filed], 'TEXT')}) AND payload->>'claudeSessionId' IS NOT NULL`,
   ).map((r) => r.v)
   const byNumber = Ids.parse(
     await tx`SELECT s.id FROM usage.sessions s WHERE s.issue_id = ANY(${tx.array(numbers, 'TEXT')})`,
@@ -320,6 +326,29 @@ function seatParts(seats: readonly SeatCost[], issues: number): Kpi['parts'] {
   })
   const rest = seats.slice(SEAT_PARTS).reduce((sum, seat) => sum + seat.cost, 0)
   return rest > 0 ? [...named, part('other', 'Other seats', rest)] : named
+}
+
+/**
+ * Dollars the usage schema priced for these Issues' sessions, in one bounded transaction; null when the schema is not
+ * there, the role may not read it or the read ran past the timeout (unmeasured, never a zero).
+ */
+export async function costOfIssues(sql: SQL, issues: readonly string[], timeoutMs = USAGE_TIMEOUT_MS) {
+  if (issues.length === 0) return 0
+  try {
+    return await boundedRead(sql, timeoutMs, async (tx) => {
+      const [row] =
+        await tx`SELECT to_regclass('usage.sessions') IS NOT NULL AND to_regclass('usage.records_unique') IS NOT NULL AS present`
+      if (!z.object({ present: z.boolean() }).parse(row).present) return null
+      const ids = await sessionsOfIssues(tx, [...issues])
+      if (ids.length === 0) return 0
+      const [sum] = await tx`
+        SELECT coalesce(sum(r.cost_usd), 0)::float8 AS cost FROM usage.records_unique r
+        WHERE r.session_id = ANY(${tx.array(ids, 'BIGINT')})`
+      return z.object({ cost: z.coerce.number() }).parse(sum).cost
+    })
+  } catch {
+    return null
+  }
 }
 
 const NONE = { kind: 'unset', min: null, max: null } as const
@@ -746,5 +775,9 @@ export async function readKpis(
     window: { from: last.from.toISOString(), to: last.to.toISOString() },
     windows: windows.map((w) => ({ from: w.from.toISOString(), to: w.to.toISOString() })),
     kpis,
+    seats: await readSeatKpis(sql, last, {
+      now: options.now,
+      cost: (issues) => costOfIssues(sql, issues, options.usageTimeoutMs),
+    }),
   }
 }

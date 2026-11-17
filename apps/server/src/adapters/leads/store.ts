@@ -144,6 +144,15 @@ export function postgresLeadStore(tx: SQL): LeadStore {
       })
     },
 
+    async originOf(issue) {
+      const [raw] = await tx`
+        SELECT
+          (SELECT key FROM factory.loop_findings WHERE issue_id = ${issue} AND loop = 'hygiene') AS hygiene_key,
+          EXISTS (SELECT 1 FROM factory.intake_door_unrouted WHERE filed_issue = ${issue}) AS unrouted`
+      const row = z.object({ hygiene_key: z.string().nullable(), unrouted: z.boolean() }).parse(raw)
+      return { hygieneKey: row.hygiene_key, unroutedMonitor: row.unrouted }
+    },
+
     async filedSpecOf(issue) {
       const [raw] = await tx`
         SELECT a.id, a.title, v.verdict, v.note

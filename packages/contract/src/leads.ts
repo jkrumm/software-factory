@@ -65,7 +65,13 @@ export const DeferBody = z
 export type DeferBody = z.infer<typeof DeferBody>
 
 export const BlockBody = z
-  .object({ attempt: z.number().int().min(1), reason: Reason, call: Call })
+  .object({
+    attempt: z.number().int().min(1),
+    reason: Reason,
+    call: Call,
+    /** the work is beyond the lead's seat: a light lead is moved up at once, any other lead blocks as before */
+    outOfDepth: z.boolean().optional(),
+  })
   .meta({ id: 'BlockBody' })
 export type BlockBody = z.infer<typeof BlockBody>
 

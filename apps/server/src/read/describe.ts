@@ -17,7 +17,9 @@ function seatWords(payload: unknown): string | null {
   const seat = isRecord(payload) ? payload.seat : null
   const tier = field(seat, 'tier')
   const effort = field(seat, 'effort')
-  return tier && effort ? `${tier} at ${effort} effort` : null
+  const role = field(seat, 'role')
+  if (!tier || !effort) return null
+  return role === 'light' ? `${tier} at ${effort} effort (the light seat)` : `${tier} at ${effort} effort`
 }
 
 const after = (lead: string, quoted: string | null): string =>
@@ -78,6 +80,8 @@ export function describeEvent(kind: string, payload: unknown): string {
     }
     case 'stalled':
       return after('Stalled', field(payload, 'detail'))
+    case 'moved_up':
+      return after('Moved up from the light seat to the lead seat', field(payload, 'why'))
     case 'woken':
       return after('Woken', field(payload, 'detail'))
     case 'shipped':

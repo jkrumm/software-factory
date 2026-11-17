@@ -13,6 +13,10 @@ export type Kind = (typeof KINDS)[number]
 export const ORIGINS = ['you', 'application', 'infrastructure', 'github', 'feedback', 'factory'] as const
 export type Origin = (typeof ORIGINS)[number]
 
+/** Triage's judgment of how much work an Issue is (`docs/language.md`, Size). */
+export const SIZES = ['small', 'medium', 'large'] as const
+export type Size = (typeof SIZES)[number]
+
 /**
  * How a closed Issue ended: `done` (shipped and verified, or closed by its lead with the work done), `dropped` (its lead
  * gave it up with a reason), `healed` (an incident that went away before a lead started), `cancelled` (the owner's stop).
@@ -106,6 +110,12 @@ export interface Issue {
   seat?: { tier: Tier; effort: Effort; role?: string }
   /** `spec`: the lead owes a one-page Spec before it builds, and cannot ship without one */
   checkpoint?: 'spec'
+  /** triage's size, when it judged one */
+  size?: Size
+  /** the seat the current attempt's lead started on; absent before its `lead_started` (and on old events) */
+  ranOn?: { tier: Tier; effort: Effort; role?: string; rule?: string }
+  /** times a light lead was moved up: the next lead starts on the lead row */
+  movedUp: number
   /** the lead number: 0 until admitted, one more with every admission */
   attempt: number
   /** how many times it shipped; the current watch is this number */

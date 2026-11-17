@@ -128,6 +128,13 @@ export function postgresQualityStore(tx: SQL): QualityStore {
       }
     },
 
+    async refusedShips(issueId, attempt) {
+      const [row] = await tx`
+        SELECT count(*) AS n FROM factory.quality_ships
+        WHERE issue_id = ${issueId} AND attempt = ${attempt} AND result = 'refused'`
+      return z.object({ n: z.coerce.number().int() }).parse(row).n
+    },
+
     async lastShip(issueId, attempt) {
       const [ship] = await tx`
         SELECT event_key, at FROM factory.quality_ships

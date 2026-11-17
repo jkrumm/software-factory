@@ -33,7 +33,27 @@ beforeAll(() => {
     at: '2026-11-10T12:00:00.000Z',
     days: 7,
     window: { from: '2026-11-03T12:00:00.000Z', to: '2026-11-10T12:00:00.000Z' },
-    kpis: { at: '', days: 7, window: { from: '', to: '' }, windows: [], kpis: [] },
+    kpis: {
+      at: '',
+      days: 7,
+      window: { from: '', to: '' },
+      windows: [],
+      kpis: [],
+      seats: {
+        rows: [],
+        movedUpShare: null,
+        tripwire: {
+          on: false,
+          points: 3,
+          days: 7,
+          light: null,
+          lead: null,
+          lightWatches: 0,
+          leadWatches: 0,
+          met: null,
+        },
+      },
+    },
     friction: { at: '', days: 7, window: { from: '', to: '' }, since: null, issues: 0, closed: 0, counts: [] },
     sessions: [
       { issue: 'issue_7', attempt: 1, model: null, account: null, transcriptPath: path },

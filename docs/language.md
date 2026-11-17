@@ -25,6 +25,8 @@ check, `docs/architecture.md`).
 | **Outcome** | How a closed Issue ended: `done`, `dropped` (its lead gave it up, with a reason), `healed` (an incident that went away before a lead started), `cancelled` (the owner's stop) | |
 | **Event** | A fact recorded on an Issue, stored with who sent it and what it did. State is derived from events, never the other way | |
 | **Kind** | What an Issue is: feature, bug, chore, docs, incident. Intake files an owner's or agent's request as feature; triage may refine it when it settles the Issue. A failing check of a project's default branch is an incident, never a bug | |
+| **Size** | Triage's judgment of how much work an Issue is: small, medium, large. Kept on the Issue when triage settles it; none for an Issue the rules settled | |
+| **Light seat** | The role table's `light` row, the cheap seat a lead starts on when the Issue is mechanical: a hygiene finding of a mechanical class, kind docs, a monitor with no route. The filer's seat always wins. A light lead that struggles is **moved up**: the next lead starts on the `lead` row (`apps/server/src/domains/leads/light.ts`) | |
 | **Origin** | Where it came from, in words a person uses: you, application, infrastructure, GitHub, feedback, factory | Tool names on screen (never "HyperDX", "Beszel") |
 | **Project** | A repo the factory knows, described by its `project.yaml`. `signals:` says which automatic sources it listens to; a work repo listens to the owner only. `host:` names the host its alerts sit on (a key of `config/infra.json`'s hosts), so its Kuma and HyperDX alerts join that host's incident with Beszel's. `doctor: make doctor` is the project saying whether this host can run it: a read-only command of seconds that exits non-zero with one line per missing prerequisite and its fix; while it is red the project's Issues stay queued (kind `doctor`, with those lines) and hygiene skips its `check` probe | Manifest |
 | **Plan** | A project's `docs/plan.yaml`: rows not yet filed (the format: `docs/plan.md`). A row may target another repo | Wave, track, initiative |
@@ -161,9 +163,9 @@ checkpoint is for that one only: a late one the factory sent is ignored, and a l
 | Event | Means | Sent by |
 |-|-|-|
 | `filed` | Triage made it an Issue; it begins `settling` | factory, owner |
-| `settled` | Triage and the chain are done; it may be queued. Carries the refined Kind when triage corrected an owner's or agent's request, and `checkpoint: spec` when triage flagged it | factory |
+| `settled` | Triage and the chain are done; it may be queued. Carries the refined Kind when triage corrected an owner's or agent's request, and `checkpoint: spec` when triage flagged it, and the size triage judged (`small`, `medium`, `large`) | factory |
 | `admitted` | Capacity lets a lead start: the next attempt | factory |
-| `lead_started` | The attempt's lead runs in its terminal | factory |
+| `lead_started` | The attempt's lead runs in its terminal, on the seat it records (tier, effort and the role row: `lead`, `light`, or the filed seat's) | factory |
 | `lead_gone` | The attempt's lead failed to start or ended; twice a new attempt, the third time a stall | factory |
 | `seated` | The owner set the seat (tier and effort, or a role of the table, resolved now) the next lead starts on; taken while the Issue is `settling` or `queued`, refused once a lead has started | owner, orchestrator |
 | `noted` | An amend or a note reaches the lead | owner, factory, steward, judge |
@@ -175,7 +177,8 @@ checkpoint is for that one only: a late one the factory sent is ignored, and a l
 | `errand_done` | The owner did the Errand, or something ended its wait without his hands: the screen turned it away (`turnedAway`: the reason; with `awaits` the Issue then waits on that pull request's review), or the desk pass found its check no longer needed (`resolved`) | owner, judge, factory |
 | `errand_turned_back` | The owner or the orchestrator turned the Errand back: not done, and `note` says what to do instead; the lead hears it as its next turn | owner, orchestrator |
 | `deferred` | The lead waits until a time, or until other Issues close; the steward defers a working or watching Issue behind a queued Issue of its repo that waits for the claim it holds, and says why | lead, steward (behind Issues only; until a time only for a repeated `blocked` stall after a hold) |
-| `stalled` | A machine cause stopped the work: `wall`, `unreported`, `blocked` | factory, lead (`blocked`) |
+| `stalled` | A machine cause stopped the work: `wall`, `unreported`, `blocked`; a lead's block may say it is out of its depth (`depth`) | factory, lead (`blocked`) |
+| `moved_up` | A light lead struggled (a second stall, a block out of its depth, a second refused ship, a regression of its first watch): its attempt ends and the Issue queues again for a lead on the `lead` row; never twice | factory |
 | `woken` | A wait that needs no person ended; it names the wait | factory, steward, owner |
 | `shipped` | The lead landed and deployed: the watch begins | lead |
 | `watch_passed` | Verify ended the watch green | factory |

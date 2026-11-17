@@ -74,39 +74,67 @@ function messageText(entry: Record<string, unknown>): string {
  * the session's own word, so it must lie under an account's Claude projects directory.
  */
 export function fileTranscriptTails(options: { projectsDirs: () => Promise<string[]> }): TranscriptTails {
+  /** The conversation lines of the transcript's end, newest first; null when the path is not a transcript under a root. */
+  async function tail(path: string): Promise<Record<string, unknown>[] | null> {
+    const from = await realpath(path).catch(() => undefined)
+    if (!from) return null
+    const roots = await Promise.all((await options.projectsDirs()).map((dir) => realpath(dir).catch(() => undefined)))
+    if (!roots.some((root) => root && from.startsWith(`${root}${sep}`))) return null
+    const info = await stat(from)
+    if (!info.isFile()) return null
+    const start = Math.max(0, info.size - TAIL_BYTES)
+    const handle = await open(from, 'r')
+    let raw: string
+    try {
+      const buffer = Buffer.alloc(info.size - start)
+      await handle.read(buffer, 0, buffer.length, start)
+      raw = buffer.toString('utf8')
+    } finally {
+      await handle.close()
+    }
+    const lines = raw.split('\n')
+    // A cut start is a torn first line.
+    if (start > 0) lines.shift()
+    const entries: Record<string, unknown>[] = []
+    for (const line of lines.toReversed()) {
+      if (!line.trim()) continue
+      try {
+        const entry = JSON.parse(line) as Record<string, unknown>
+        if (entry.type === 'assistant' || entry.type === 'user') entries.push(entry)
+      } catch {
+        // a line that does not read is skipped
+      }
+    }
+    return entries
+  }
+
   return {
+    async lastWords(path, max) {
+      try {
+        const entries = await tail(path)
+        if (!entries) return ok(null)
+        const said: string[] = []
+        let length = 0
+        for (const entry of entries) {
+          if (entry.type !== 'assistant' || entry.isApiErrorMessage === true) continue
+          const words = messageText(entry).trim()
+          if (!words) continue
+          said.unshift(words)
+          length += words.length
+          if (length >= max) break
+        }
+        const joined = said.join('\n\n')
+        return ok(joined ? joined.slice(-max) : null)
+      } catch (cause) {
+        return err(portError('gone', `transcript tail of ${path}: ${String(cause)}`))
+      }
+    },
+
     async apiError(path) {
       try {
-        const from = await realpath(path).catch(() => undefined)
-        if (!from) return ok(null)
-        const roots = await Promise.all(
-          (await options.projectsDirs()).map((dir) => realpath(dir).catch(() => undefined)),
-        )
-        if (!roots.some((root) => root && from.startsWith(`${root}${sep}`))) return ok(null)
-        const info = await stat(from)
-        if (!info.isFile()) return ok(null)
-        const start = Math.max(0, info.size - TAIL_BYTES)
-        const handle = await open(from, 'r')
-        let raw: string
-        try {
-          const buffer = Buffer.alloc(info.size - start)
-          await handle.read(buffer, 0, buffer.length, start)
-          raw = buffer.toString('utf8')
-        } finally {
-          await handle.close()
-        }
-        const lines = raw.split('\n')
-        // A cut start is a torn first line.
-        if (start > 0) lines.shift()
-        for (const line of lines.toReversed()) {
-          if (!line.trim()) continue
-          let entry: Record<string, unknown>
-          try {
-            entry = JSON.parse(line) as Record<string, unknown>
-          } catch {
-            continue
-          }
-          if (entry.type !== 'assistant' && entry.type !== 'user') continue
+        const entries = await tail(path)
+        if (!entries) return ok(null)
+        for (const entry of entries) {
           if (entry.isApiErrorMessage !== true) return ok(null)
           const at = new Date(text(entry.timestamp) ?? '')
           if (Number.isNaN(at.getTime())) return ok(null)

@@ -18,6 +18,7 @@ import type { IdSource } from '../kernel/ids.ts'
 import { key } from '../kernel/keys.ts'
 import { err, ok, portError, type PortError, type Result } from '../kernel/result.ts'
 import { recordIn } from './issues.ts'
+import { moveUpIfDue } from './move-up.ts'
 import { checkoutOf, type QualityUnit } from './quality-ship.ts'
 
 export interface OpenDeps {
@@ -184,6 +185,19 @@ async function checkOne(deps: WatchDeps, watch: OpenWatch, pass: WatchPass): Pro
     if (step.kind === 'again') {
       await quality.releaseWatch(watch.key)
       return ok('again' as const)
+    }
+    if (step.kind !== 'pass') {
+      // A light lead's first watch that regressed is not sent back to it: the Issue moves up to the lead row instead.
+      const moved = await moveUpIfDue({ work, quality }, deps, {
+        issueId: watch.issueId,
+        regressedWatch: watch.watch,
+        detail: step.detail,
+      })
+      if (!moved.ok) return moved
+      if (moved.value?.result === 'applied') {
+        await quality.answerWatch(watch.key, 'regressed', at)
+        return ok('regressed' as const)
+      }
     }
     const event =
       step.kind === 'pass'

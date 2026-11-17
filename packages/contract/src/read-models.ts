@@ -376,6 +376,64 @@ export const Kpi = z
   .meta({ id: 'Kpi' })
 export type Kpi = z.infer<typeof Kpi>
 
+/** The seats a lead starts on, as the seat table groups them: the light row, the lead row, a seat the filer named. */
+export const KPI_SEATS = ['light', 'lead', 'filed'] as const
+
+/**
+ * The Issues whose first lead started in the window, grouped by the seat that first lead ran on: an Issue counts for the
+ * seat the rule started it on, so a light Issue moved up stays light's and its move shows in `movedUp`.
+ */
+export const SeatKpiRow = z
+  .strictObject({
+    seat: z.enum(KPI_SEATS),
+    issues: z.number().int(),
+    /** of every Issue whose first lead started in the window; null when none did */
+    share: z.number().nullable(),
+    /** the light Issues moved up to the lead row; 0 on the other seats */
+    movedUp: z.number().int(),
+    /**
+     * first watches that ended passed or regressed, and the share that passed (null with none); on light, a moved-up Issue
+     * whose first watch the light lead did not ship counts as a failed one
+     */
+    firstWatches: z.number().int(),
+    firstPassRate: z.number().nullable(),
+    /** watches that ended regressed */
+    regressions: z.number().int(),
+    /** ships the gate or the machine refused */
+    refusals: z.number().int(),
+    /** median filed to closed of the ones closed, in ms; null with none closed */
+    cycleP50Ms: z.number().nullable(),
+    /** median time an Issue was in the working state, in ms */
+    workingP50Ms: z.number().nullable(),
+    /** dollars per Issue from the usage schema; null while it is not there */
+    costPerIssue: z.number().nullable(),
+  })
+  .meta({ id: 'SeatKpiRow' })
+export type SeatKpiRow = z.infer<typeof SeatKpiRow>
+
+export const SeatKpis = z
+  .strictObject({
+    rows: z.array(SeatKpiRow),
+    /** the light Issues moved up, of the light Issues; null with none light */
+    movedUpShare: z.number().nullable(),
+    /**
+     * Whether triage's `small` joins the light rule: `on` is the code's switch, the rates are over the last `days` days,
+     * `met` when light's first verification pass rate is within `points` of lead's (null while either has no first watch).
+     */
+    tripwire: z.strictObject({
+      on: z.boolean(),
+      points: z.number(),
+      days: z.number().int(),
+      light: z.number().nullable(),
+      lead: z.number().nullable(),
+      lightWatches: z.number().int(),
+      leadWatches: z.number().int(),
+      met: z.boolean().nullable(),
+    }),
+  })
+  .meta({ id: 'SeatKpis' })
+export type SeatKpis = z.infer<typeof SeatKpis>
+
 export const KpiModel = z
   .strictObject({
     at,
@@ -384,6 +442,8 @@ export const KpiModel = z
     /** the consecutive windows behind every `history`, oldest first; the last is `window` */
     windows: z.array(z.strictObject({ from: at, to: at })).length(HISTORY_WINDOWS),
     kpis: z.array(Kpi),
+    /** the current window's Issues by the seat their first lead ran on */
+    seats: SeatKpis,
   })
   .meta({ id: 'KpiModel' })
 export type KpiModel = z.infer<typeof KpiModel>

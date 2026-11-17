@@ -50,6 +50,7 @@ interface IssueRow {
   updated_at: Date
   closed_at: Date | null
   settled_kind: string | null
+  settled_size: string | null
   work: boolean
 }
 
@@ -69,6 +70,7 @@ function seatOf(value: unknown): ReadIssueCard['seat'] {
 const ISSUE_COLUMNS = (sql: SQL) => sql`
   i.id, i.repo, i.state, i.wait_reason, i.outcome, f.payload AS filed,
   (SELECT s.payload->>'kind' FROM factory.issue_events s WHERE s.issue_id = i.id AND s.kind = 'settled' AND s.result = 'applied' ORDER BY s.version DESC LIMIT 1) AS settled_kind,
+  (SELECT s.payload->>'size' FROM factory.issue_events s WHERE s.issue_id = i.id AND s.kind = 'settled' AND s.result = 'applied' ORDER BY s.version DESC LIMIT 1) AS settled_size,
   (SELECT s.payload FROM factory.issue_events s WHERE s.issue_id = i.id AND s.kind = 'seated' AND s.result = 'applied' ORDER BY s.version DESC LIMIT 1) AS seated,
   f.at AS created_at, u.updated_at,
   CASE WHEN i.state = 'closed' THEN u.closed_at END AS closed_at,
@@ -200,7 +202,7 @@ function cardOf(input: {
     repoName: basename(row.repo),
     visible: row.work,
     kind: text(row.settled_kind) ?? text(row.filed?.kind),
-    size: null,
+    size: text(row.settled_size),
     lead: live?.card.id ?? null,
     account,
     quota: account ? (input.quota.get(account) ?? null) : null,
@@ -438,7 +440,7 @@ export async function issueDetail(
   const ranOn = isRecord(started?.payload) ? seatOf(started.payload.seat) : null
   return {
     ...card,
-    ranOn: ranOn && { tier: ranOn.tier, effort: ranOn.effort },
+    ranOn: ranOn && { tier: ranOn.tier, effort: ranOn.effort, role: ranOn.role },
     triage,
     notes,
     timeline,

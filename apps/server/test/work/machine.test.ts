@@ -441,3 +441,58 @@ describe('seated sets the seat before a lead works', () => {
     expect(issue).toMatchObject({ state: 'queued', attempt: 1, seat })
   })
 })
+
+describe('size, the seat a lead ran on, and moved_up', () => {
+  const light = { tier: 'haiku' as const, effort: 'high' as const, role: 'light', rule: 'kind:docs' }
+  const started = ev('lead_started', { attempt: 1, terminal: 't1', seat: light }, 'factory')
+
+  test('settled keeps the size, lead_started the seat of its attempt, and the next admission clears it', () => {
+    const { issue } = drive([ev('settled', { size: 'small' }, 'factory'), ev('admitted', {}, 'factory'), started])
+    expect(issue).toMatchObject({ size: 'small', ranOn: light, movedUp: 0 })
+    expect(
+      drive([ev('moved_up', { attempt: 1, why: 'x' }, 'factory'), ev('admitted', {}, 'factory')], issue).issue.ranOn,
+    ).toBeUndefined()
+  })
+
+  test('a working light lead moved up ends its attempt and queues the Issue again, counted', () => {
+    const { issue: working } = drive([...settledAndWorking, started])
+    const moved = drive([ev('moved_up', { attempt: 1, why: 'the light lead stalled 2 times' }, 'factory')], working)
+    expect(moved.issue).toMatchObject({ state: 'queued', movedUp: 1, attempt: 1 })
+    expect(moved.effects).toEqual(['finalize:issue_7:1'])
+  })
+
+  test('from a stall and from a watch it queues too; a person wait, a later attempt and another sender do not', () => {
+    const { issue: blocked } = drive([
+      ...settledAndWorking,
+      started,
+      ev('stalled', { attempt: 1, cause: 'blocked', detail: 'no idea', depth: true }, 'lead'),
+    ])
+    expect(drive([ev('moved_up', { attempt: 1, why: 'depth' }, 'factory')], blocked).issue.state).toBe('queued')
+    const { issue: watching } = drive([...settledAndWorking, started, ev('shipped', { attempt: 1 }, 'lead')])
+    expect(drive([ev('moved_up', { attempt: 1, why: 'regressed' }, 'factory')], watching).issue.state).toBe('queued')
+    const { issue: asking } = drive([
+      ...settledAndWorking,
+      started,
+      ev('asked', { attempt: 1, decision: { id: 'decision_1', summary: 'which?' } }, 'lead'),
+    ])
+    expect(detail(apply(asking, ev('moved_up', { attempt: 1, why: 'x' }, 'factory'), { now: NOW }))).toBe(
+      'refused: it waits for a decision: that ends with its answer first',
+    )
+    const { issue: working } = drive([...settledAndWorking, started])
+    expect(detail(apply(working, ev('moved_up', { attempt: 2, why: 'x' }, 'factory'), { now: NOW }))).toContain(
+      'ignored',
+    )
+    expect(detail(apply(working, ev('moved_up', { attempt: 1, why: 'x' }, 'lead'), { now: NOW }))).toContain('refused')
+  })
+})
+
+test('a filed light seat is never moved up: only a lead the light rule seated is', () => {
+  const filed = { tier: 'haiku' as const, effort: 'high' as const, role: 'light' }
+  const { issue } = drive([
+    ...settledAndWorking,
+    ev('lead_started', { attempt: 1, terminal: 't1', seat: filed }, 'factory'),
+  ])
+  expect(detail(apply(issue, ev('moved_up', { attempt: 1, why: 'x' }, 'factory'), { now: NOW }))).toBe(
+    'refused: only a lead the light rule seated is moved up',
+  )
+})

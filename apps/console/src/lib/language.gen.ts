@@ -75,6 +75,8 @@ export const LANGUAGE = {
   kind: "What an Issue is: feature, bug, chore, docs, incident. Intake files an owner's or agent's request as feature; triage may refine it when it settles the Issue. A failing check of a project's default branch is an incident, never a bug",
   lane: 'A resource class inside a repo (apple) that an Issue or plan row names; lanes: {apple: 1} in the repo\'s project.yaml caps how many leads of the lane run at once, within leads. An undeclared lane is unlimited (docs/plan.md "Lanes")',
   lead: 'The Claude Code session that owns one attempt of one Issue: understand, build, review, ship, verify',
+  'light seat':
+    "The role table's light row, the cheap seat a lead starts on when the Issue is mechanical: a hygiene finding of a mechanical class, kind docs, a monitor with no route. The filer's seat always wins. A light lead that struggles is moved up: the next lead starts on the lead row (apps/server/src/domains/leads/light.ts)",
   line: "Stop the line: while a repo's alert is unsolved, only its fix is admitted",
   load: "The number of threads that wanted a core, averaged over the last minute (the 1-minute load average). It is a count, not a percentage, and it is not CPU busy: on 12 cores load 4 is a third of the cores' worth of threads, load 12 is one thread for every core, and above that threads wait. It also counts threads waiting on the disk, so it can be high with the CPU quiet. Admission uses load because a storm of waiting processes (git, tests) starves everything on the host whatever the CPU percent says",
   'load ceiling':
@@ -149,6 +151,7 @@ export const LANGUAGE = {
   'ship refused':
     "The gate's answer to a ship that does not hold; recorded, and counted as friction. A review never refuses a ship: it is recorded as evidence",
   signal: 'Anything that arrives and may become work. Has a kind, an origin and a trust level',
+  size: "Triage's judgment of how much work an Issue is: small, medium, large. Kept on the Issue when triage settles it; none for an Issue the rules settled",
   spec: 'A larger plan to review',
   'spec screen':
     "The look a Spec revision passes before it reaches the owner: rules, then factory-spec-screen with the owner's newest needed-me marks as precedents. It passes what is his (a screen or look he has not seen, product direction, spend, security policy, other people or company data, a change that cannot be undone, defaults that lead to materially different work) and settles the rest with the factory's looks_good and its reason, so the lead builds at once",

@@ -102,8 +102,8 @@ async function settleAfter(
   const planned = 'kind' in settled.error ? settled.error.kind : ''
   if (planned === 'cycle' || planned === 'issue_closed' || planned === 'unknown_issue') {
     pass.refused++
-    // The refused answer's kind is dropped with its edges; the Spec flag does not depend on them and stands.
-    await settleWithout(deps, issue, pass, { checkpoint: refinement.checkpoint })
+    // The refused answer's kind is dropped with its edges; the Spec flag and the size do not depend on them and stand.
+    await settleWithout(deps, issue, pass, { checkpoint: refinement.checkpoint, size: refinement.size })
     return
   }
   pass.problems.push(`${issue}: ${JSON.stringify(settled.error)}`.slice(0, 300))

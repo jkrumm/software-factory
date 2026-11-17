@@ -54,7 +54,8 @@ fails on any raw colour.
   offline verbs and `health get` never resolve one.
 - The CLI is the one vocabulary on the host: `rd` keeps only the owner's terminal verbs. An unknown role is exit 4.
 - The role table governs the terminals the factory spawns (the lead, `rd --role`); an Issue's or plan row's `seat`
-  overrides the lead row for that Issue. A lead's in-session subagents take model and effort from the global agent files
+  overrides the lead row for that Issue; with none, `apps/server/src/domains/leads/light.ts` may start it on the `light`
+  row (NL33). A lead's in-session subagents take model and effort from the global agent files
   in dotfiles (`agents/*.md`), and the reviewer's seat comes from `agw review prepare`.
 - The CLI waits a restart out (90 s, `FACTORY_RESTART_WAIT_MS`; 10 minutes while a deploy holds its lock). A script that
   must see the outage at once uses `health get`.

@@ -2112,6 +2112,7 @@ export const OPERATIONS: readonly Operation[] = [
       { name: 'attempt', flag: 'attempt', kind: 'integer', repeatable: false, required: true, untyped: false },
       { name: 'reason', flag: 'reason', kind: 'string', repeatable: false, required: true, untyped: false },
       { name: 'call', flag: 'call', kind: 'string', repeatable: false, required: false, untyped: false },
+      { name: 'outOfDepth', flag: 'out-of-depth', kind: 'boolean', repeatable: false, required: false, untyped: false },
     ],
     args: [],
     bodySchema: BlockBody,
