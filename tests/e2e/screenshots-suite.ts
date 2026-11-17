@@ -229,9 +229,9 @@ export function screenshotSuite(variantName: VariantName) {
         fullPage: true,
         animations: 'disabled',
       })
-      const widths = (await page.evaluate(
+      const widths = await page.evaluate<{ scroll: number; client: number }>(
         '({ scroll: document.documentElement.scrollWidth, client: document.documentElement.clientWidth })',
-      )) as { scroll: number; client: number }
+      )
       expect(widths.scroll).toBeLessThanOrEqual(widths.client)
     })
 

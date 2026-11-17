@@ -75,7 +75,7 @@ test('a comment shows at once while the write takes 3 s, and is kept when the wr
   const composer = page.getByRole('form', { name: 'Comment on the selection' })
   await composer.getByRole('textbox', { name: 'Comment' }).fill('Ten minutes is long for a storm.')
   // timed inside the page, so the test's own round trips do not count against the 100 ms
-  const ms = (await page.evaluate(`(async () => {
+  const ms = await page.evaluate<number>(`(async () => {
     const button = [...document.querySelectorAll('button')].find((b) => b.textContent === 'Add comment')
     const start = performance.now()
     button.click()
@@ -87,7 +87,7 @@ test('a comment shows at once while the write takes 3 s, and is kept when the wr
       look()
     })
     return performance.now() - start
-  })()`)) as number
+  })()`)
   expect(ms).toBeLessThan(100)
   const mine = card(page, 'Ten minutes is long for a storm.')
   await expect(mine).toContainText('Sending')

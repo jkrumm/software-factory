@@ -79,7 +79,7 @@ test('a Markdown Spec: mark text, comment, see it listed and highlighted, then a
 
   // The box opens beside the selection, just below it on its left edge, and the passage stays painted while it is open.
   await page.evaluate(SELECT(SPEC_QUOTE))
-  const passage = (await page.evaluate(RECT)) as { top: number; bottom: number; left: number }
+  const passage = await page.evaluate<{ top: number; bottom: number; left: number }>(RECT)
   await expect(composer).toBeVisible()
   await expect(composer).toContainText(SPEC_QUOTE)
   const box = await composer.boundingBox()
@@ -326,7 +326,7 @@ test.describe('an HTML artifact', () => {
     if (!frame) throw new Error('no frame')
     const claim = 'The probe ships on Friday and nobody pays for it.'
     await expect.poll(() => frame.evaluate(SELECT(claim))).toBe(true)
-    const inFrame = (await frame.evaluate(RECT)) as { top: number; bottom: number }
+    const inFrame = await frame.evaluate<{ top: number; bottom: number }>(RECT)
     const composer = page.getByRole('form', { name: 'Comment on the selection' })
     await expect(composer).toContainText(claim)
     // beside the passage: just below it (the frame's rect plus the frame's own position)
@@ -436,9 +436,9 @@ test('a new revision keeps one anchored comment and resolves the other; compare 
 })
 
 const scrolls = async (page: Page) =>
-  (await page.evaluate(
+  page.evaluate<{ scroll: number; client: number }>(
     '({ scroll: document.documentElement.scrollWidth, client: document.documentElement.clientWidth })',
-  )) as { scroll: number; client: number }
+  )
 
 test.describe('on a phone', () => {
   test.use({ viewport: { width: 390, height: 844 } })
