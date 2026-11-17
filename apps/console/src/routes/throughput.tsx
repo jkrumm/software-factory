@@ -743,6 +743,48 @@ function Scorecard({ model }: { model: Model }) {
   )
 }
 
+function StepsByHost({ model }: { model: Model }) {
+  const hosts = model.tests.byHost
+  return (
+    <Section level={3} title="Steps by host" aside="Test steps of the window on each host">
+      {hosts.length === 0 ? (
+        <Nothing>No step ran in this window.</Nothing>
+      ) : (
+        <Table
+          label="One row per host"
+          head={
+            <>
+              <th className={TH}>Host</th>
+              <th className={cn(TH, NUM)}>Runs</th>
+              <th className={cn(TH, NUM)}>Red</th>
+              <th className={cn(TH, NUM)}>Slot min</th>
+              <th className={cn(TH, NUM)}>Wait p50</th>
+              <th className={cn(TH, NUM)}>Wait p90</th>
+              <th className={cn(TH, NUM)}>Run p50</th>
+              <th className={cn(TH, NUM)}>Red off, green home</th>
+            </>
+          }
+        >
+          {hosts.map((h) => (
+            <tr key={h.host}>
+              <th scope="row" className={cn(TD, 'text-left font-medium')}>
+                {h.host}
+              </th>
+              <td className={cn(TD, NUM)}>{h.runs}</td>
+              <td className={cn(TD, NUM)}>{h.failed}</td>
+              <td className={cn(TD, NUM)}>{h.minutes.toFixed(1)}</td>
+              <td className={cn(TD, NUM)}>{dash(h.waitP50Ms, msWords)}</td>
+              <td className={cn(TD, NUM)}>{dash(h.waitP90Ms, msWords)}</td>
+              <td className={cn(TD, NUM)}>{dash(h.durationP50Ms, msWords)}</td>
+              <td className={cn(TD, NUM)}>{h.disagreed}</td>
+            </tr>
+          ))}
+        </Table>
+      )}
+    </Section>
+  )
+}
+
 function Improvements({ model }: { model: Model }) {
   return (
     <Section level={3} title="Improvements" aside="What the loop filed, before and after">
@@ -872,6 +914,9 @@ function Throughput() {
             </Detail>
             <Detail title="The cost: project scorecard" count={model.project.length}>
               <Scorecard model={model} />
+            </Detail>
+            <Detail title="The cost: steps by host" count={model.tests.byHost.length}>
+              <StepsByHost model={model} />
             </Detail>
             <Detail title="The cost: improvements ledger" count={model.improvements.length}>
               <Improvements model={model} />

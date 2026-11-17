@@ -74,6 +74,7 @@ export function redactThroughput(model: ThroughputModel, open: readonly OpenProj
     },
     tests: {
       byProject: model.tests.byProject.map((row) => ({ ...row, repo: repo(row.repo) })),
+      byHost: model.tests.byHost,
       flaky: model.tests.flaky.filter((row) => keep(row.repo)),
     },
     lead: { ...model.lead, issues: model.lead.issues.map((row) => ({ ...row, repo: repo(row.repo) })) },
