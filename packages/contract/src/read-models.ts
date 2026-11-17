@@ -337,7 +337,7 @@ export const KpiPoint = z
   })
   .meta({ id: 'KpiPoint' })
 
-const KPI_UNITS = ['per_issue', 'per_100_issues', 'share', 'ms', 'usd', 'points'] as const
+const KPI_UNITS = ['per_issue', 'per_100_issues', 'share', 'ms', 'usd', 'points', 'count'] as const
 
 /** One slice of a KPI that is a breakdown (queued time by reason, time by state): same unit as the KPI, never a target. */
 export const KpiPart = z
@@ -362,8 +362,10 @@ export const Kpi = z
     /** the numerator: the events counted (a duration's samples are `n`) */
     count: z.number().int().nullable(),
     target: KpiTarget,
-    /** false: the factory has no data for it yet (it is not a zero) */
+    /** false: there is no figure (it is not a zero): the factory has no data for it, or too few samples stand under it; `reason` says which */
     measured: z.boolean(),
+    /** why `measured` is false, in words; null when it is true */
+    reason: z.string().nullable(),
     /** exactly what was counted */
     definition: z.string(),
     /** the breakdown of the current window, when the figure is one (empty otherwise); history keeps the headline only */
@@ -505,6 +507,8 @@ export const FrictionCount = z
     count: z.number().int(),
     /** per Issue closed in the window; null when none closed */
     perIssue: z.number().nullable(),
+    /** the same count over the window of the same length just before; null when that window is not comparable (it reaches back before the counting began), the row is keyed by its own time, or the comparison was not asked for */
+    previous: z.number().int().nullable(),
   })
   .meta({ id: 'FrictionCount' })
 export type FrictionCount = z.infer<typeof FrictionCount>

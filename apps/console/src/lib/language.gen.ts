@@ -90,6 +90,8 @@ export const LANGUAGE = {
     'The owner\'s one-click mark on a verdict of a Spec or Report: did it need him. The newest marks teach the Spec screen and triage the next time; "Specs at the owner not needed" counts the no\'s',
   needs:
     'What waits on the owner right now: open Decisions, artifacts awaiting a verdict, open Errands, held signals, long waits',
+  'not measured':
+    'A KPI with no figure: nothing was counted in the window, fewer samples than the floor of three stand under a share or a duration, or the source is not there (the usage schema). It never reads as zero, and its card says which. A friction count is read against the window of the same length just before it',
   'not started': 'The Issues no lead has begun: Ready and Held. The trend shows them as one line',
   origin: 'Where it came from, in words a person uses: you, application, infrastructure, GitHub, feedback, factory',
   outcome:

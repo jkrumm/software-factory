@@ -139,6 +139,10 @@ export async function seed(lab: Lab): Promise<void> {
     ('argo', 'e2e0000000a1', now() - interval '1 day', 'fix(ci): pin the runner', 'ci', 'tooling', 'rule', 'scope ci'),
     ('argo', 'e2e0000000a2', now() - interval '2 days', 'fix: a retried job ran twice', NULL, 'concurrency', 'workflow', 'a retry replayed a job'),
     ('chat', 'e2e0000000a3', now() - interval '22 days', 'fix(docs): a stale link', 'docs', 'docs', 'rule', 'scope docs')`
+  // the queue's time by what held it: five hours behind an after edge, two on a lead cap, a day ago
+  await sql`INSERT INTO factory.queue_intervals (issue_id, project, kind, message, from_at, to_at) VALUES
+    (${queued}, 'argo', 'chain', 'after another Issue', now() - interval '30 hours', now() - interval '25 hours'),
+    (${queued}, 'argo', 'cap', 'the lead cap', now() - interval '25 hours', now() - interval '23 hours')`
   // one app each: a source that files again at once is held back by intake
   for (const app of ['argo', 'chat', 'harbor']) await holdSignal(url, 'The export button does nothing', app)
 }

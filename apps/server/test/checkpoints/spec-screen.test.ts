@@ -303,7 +303,13 @@ describe('the Spec screen', () => {
     // a window ends before its `now`: read a minute later
     clock.set(new Date(clock.now().getTime() + 60_000))
     const kpis = KpiModel.parse(await readKpis(db.sql, { now: clock.now(), days: 7 }))
-    expect(kpis.kpis.find((k) => k.key === 'specs_not_needed')).toMatchObject({ count: 1, n: 1, value: 1 })
+    // one verdict is counted but is under the floor of three, so no share is claimed from it
+    expect(kpis.kpis.find((k) => k.key === 'specs_not_needed')).toMatchObject({
+      count: 1,
+      n: 1,
+      value: null,
+      measured: false,
+    })
     const friction = await readFriction(db.sql, { now: clock.now(), days: 7 })
     expect(friction.counts.find((c) => c.key === 'spec_unneeded:triage')).toMatchObject({
       group: 'spec_unneeded',

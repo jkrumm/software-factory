@@ -235,11 +235,18 @@ async function sessionsOf(tx: SQL, w: Window): Promise<Array<string | number | b
  * leaves that figure null (unmeasured) and holds no connection. The points are reused for a few minutes, because the view
  * costs seconds for any filter.
  */
+interface Usage {
+  cost: number | null
+  points: number | null
+  /** why a figure is null; null when both were read */
+  reason: string | null
+}
+
 async function usageOf(
   sql: SQL,
   w: Window,
   options: { now: Date; timeoutMs: number; cache: PointsCache },
-): Promise<{ cost: number | null; points: number | null }> {
+): Promise<Usage> {
   let sessions: Array<string | number | bigint>
   let cost: number
   let shares: boolean
@@ -258,17 +265,18 @@ async function usageOf(
         WHERE r.session_id = ANY(${tx.array(ids, 'BIGINT')})`
       return { ids, cost: z.object({ cost: z.coerce.number() }).parse(sum).cost, shares: present.shares }
     })
-    if (!found) return { cost: null, points: null }
+    if (!found) return { cost: null, points: null, reason: 'The usage schema is not in this database' }
     ;({ ids: sessions, cost, shares } = found)
   } catch {
-    return { cost: null, points: null }
+    return { cost: null, points: null, reason: 'The usage schema could not be read: no access, or the read timed out' }
   }
-  if (!shares) return { cost, points: null }
-  if (sessions.length === 0) return { cost, points: 0 }
+  if (!shares) return { cost, points: null, reason: 'The usage view session_window_share is not in this database' }
+  if (sessions.length === 0)
+    return { cost: null, points: null, reason: 'No usage session is linked to an Issue filed in the window' }
 
   const key = String(Bun.hash(sessions.map(String).sort().join(',')))
   const cached = options.cache.get(key, options.now)
-  if (cached !== undefined) return { cost, points: cached }
+  if (cached !== undefined) return { cost, points: cached, reason: null }
   try {
     const points = await boundedRead(sql, options.timeoutMs, async (tx) => {
       const [sum] = await tx`
@@ -277,21 +285,101 @@ async function usageOf(
       return z.object({ points: z.coerce.number() }).parse(sum).points
     })
     options.cache.set(key, points, options.now)
-    return { cost, points }
+    return { cost, points, reason: null }
   } catch {
-    return { cost, points: null }
+    return { cost, points: null, reason: 'The window points read timed out' }
   }
 }
 
 const NONE = { kind: 'unset', min: null, max: null } as const
 
 const kpi = (
-  k: Omit<Kpi, 'target' | 'history' | 'parts'> & { target?: Kpi['target']; parts?: Kpi['parts'] },
+  k: Omit<Kpi, 'target' | 'history' | 'parts' | 'reason'> & {
+    target?: Kpi['target']
+    parts?: Kpi['parts']
+    reason?: string
+  },
 ): Omit<Kpi, 'history'> => ({
   ...k,
   target: k.target ?? NONE,
   parts: k.parts ?? [],
+  reason: k.reason ?? null,
 })
+
+/**
+ * Fewer samples than this under a share or a duration is noise, not a reading: one verdict is 0 % or 100 %, two watches
+ * are a coin. Such a KPI has no figure (`measured` false, the reason says how many it had); a rate per Issue stands on its
+ * Issues and has no floor beyond one.
+ */
+export const MIN_SAMPLES = 3
+const FLOORED_UNITS: ReadonlySet<Kpi['unit']> = new Set(['share', 'ms'])
+
+/**
+ * A KPI with no figure says so and why, never a zero: nothing counted at all (a ratio over an empty denominator), or
+ * fewer samples than the floor. A KPI the source did not measure already carries its own reason.
+ */
+export function withReason(k: Omit<Kpi, 'history'>): Omit<Kpi, 'history'> {
+  if (!k.measured) return { ...k, value: null, reason: k.reason ?? 'The factory has no data for this figure yet' }
+  // a count that is zero is a result (a week with no fix commit); every other figure over nothing has no value
+  if (k.value === null || (k.n === 0 && k.unit !== 'count'))
+    return { ...k, value: null, measured: false, reason: 'Nothing was counted in the window' }
+  // a total of queued time is a sum, not an estimate: two long intervals are still forty hours of queueing
+  if (FLOORED_UNITS.has(k.unit) && k.key !== 'queue_time' && k.n < MIN_SAMPLES)
+    return {
+      ...k,
+      value: null,
+      measured: false,
+      reason: `Only ${k.n} counted in the window; at least ${MIN_SAMPLES} are needed for a figure`,
+    }
+  return k
+}
+
+/** Queue reasons (`queue_intervals.kind`) in the four groups the owner reads, and the rest. */
+const QUEUE_GROUPS: ReadonlyArray<readonly [key: string, label: string, kinds: readonly string[]]> = [
+  ['capacity', 'Capacity', ['memory', 'memory_fit', 'claim', 'lane', 'window', 'cap', 'load', 'boot']],
+  ['chain', 'An after edge', ['chain']],
+  ['drain', 'Queue draining', ['drain']],
+  ['production_red', 'Production red', ['line']],
+]
+
+const QueueHours = z.object({ kind: z.string(), hours: z.coerce.number().nullable() })
+
+/**
+ * Queued time that fell in the window, in ms, by the group of its reason. The groups are the owner's four (capacity, an
+ * after edge, a draining queue, production red); everything else (a Spec at the owner, another Issue finalizing, no reason
+ * recorded) is `other`. Empty when nothing was queued.
+ */
+async function queueWaitParts(sql: SQL, w: Window): Promise<Kpi['parts']> {
+  const rows: unknown[] = await sql`
+    SELECT kind, sum(extract(epoch FROM least(coalesce(to_at, ${w.to}), ${w.to}) - greatest(from_at, ${w.from})))::float8 / 3600 AS hours
+    FROM factory.queue_intervals
+    WHERE from_at < ${w.to} AND coalesce(to_at, ${w.to}) > ${w.from} GROUP BY kind`
+  const byKind = new Map(rows.map((raw) => QueueHours.parse(raw)).map((r) => [r.kind, r.hours ?? 0]))
+  const grouped = new Set(QUEUE_GROUPS.flatMap(([, , kinds]) => kinds))
+  const other = [...byKind].filter(([kind]) => !grouped.has(kind)).reduce((sum, [, hours]) => sum + hours, 0)
+  return [
+    ...QUEUE_GROUPS.map(([key, label, kinds]) => ({
+      key,
+      label,
+      value: kinds.reduce((sum, kind) => sum + (byKind.get(kind) ?? 0), 0) * 3_600_000,
+      unit: 'ms' as const,
+    })),
+    { key: 'other', label: 'Other', value: other * 3_600_000, unit: 'ms' as const },
+  ]
+    .filter((part) => part.value > 0)
+    .toSorted((a, b) => b.value - a.value)
+}
+
+const FixTotals = z.object({ n: z.coerce.number().int() })
+
+/** Fix commits committed in the window, and whether the fix-classes loop has stored any at all. */
+async function fixCommitCounts(sql: SQL, w: Window): Promise<{ inWindow: number; ever: boolean }> {
+  const [row] = await sql`
+    SELECT count(*) FILTER (WHERE committed_at >= ${w.from} AND committed_at < ${w.to}) AS n,
+      count(*) AS total FROM factory.fix_commits`
+  const parsed = FixTotals.extend({ total: z.coerce.number().int() }).parse(row)
+  return { inWindow: parsed.n, ever: parsed.total > 0 }
+}
 
 type KpiOptions = { now: Date; usageTimeoutMs?: number; pointsCache?: PointsCache }
 
@@ -300,7 +388,7 @@ async function kpisOf(
   sql: SQL,
   w: Window,
   options: KpiOptions,
-  { usage: withUsage }: { usage: boolean },
+  { usage: withUsage, parts: withParts }: { usage: boolean; parts: boolean },
 ): Promise<Array<Omit<Kpi, 'history'>>> {
   const issues = await issuesFiled(sql, w)
 
@@ -342,9 +430,12 @@ async function kpisOf(
         timeoutMs: options.usageTimeoutMs ?? USAGE_TIMEOUT_MS,
         cache: options.pointsCache ?? sharedPoints,
       })
-    : { cost: null, points: null }
+    : { cost: null, points: null, reason: 'Usage is read for the current and the previous window only' }
+  const fixes = await fixCommitCounts(sql, w)
+  const weeks = (w.to.getTime() - w.from.getTime()) / (7 * 24 * 3_600_000)
+  const queueParts = withParts ? await queueWaitParts(sql, w) : []
 
-  return [
+  const figures = [
     kpi({
       key: 'avoidable_touches',
       label: 'Avoidable touches per Issue',
@@ -509,7 +600,8 @@ async function kpisOf(
       count: null,
       measured: true,
       definition:
-        'The median time from filed or reopened to admitted (a lead started) of the admissions in the window; settling and the chain are part of the wait.',
+        'The median time from filed or reopened to admitted (a lead started) of the admissions in the window; settling and the chain are part of the wait. The parts are the queued time of the window by what held it: capacity (a seat, a cap, an account window, memory, load), an after edge, a draining queue, production red (a fix is queued and only fixes are admitted), and the rest.',
+      parts: queueParts,
     }),
     kpi({
       key: 'queue_wait_p90',
@@ -524,14 +616,15 @@ async function kpisOf(
     kpi({
       key: 'fix_commits',
       label: 'Fix commits per week, by class',
-      value: null,
-      unit: 'per_issue',
-      n: 0,
-      count: null,
+      value: fixes.inWindow / weeks,
+      unit: 'count',
+      n: fixes.inWindow,
+      count: fixes.inWindow,
       target: { kind: 'trend', min: null, max: null },
-      measured: false,
+      measured: fixes.ever,
+      ...(fixes.ever ? {} : { reason: 'No fix commit is stored yet: the fix-classes loop has not sorted any' }),
       definition:
-        'Not counted here: fix commits are sorted by class by the fix-classes loop and shown by class and week on the Improve screen (GET /v1/fix-commits).',
+        'Commits on a project’s default branch whose subject is a conventional fix, committed in the window, per week of it. For a seven-day window this is the newest week of GET /v1/fix-commits; the class split is on the Improve screen.',
     }),
     kpi({
       key: 'window_points',
@@ -542,6 +635,7 @@ async function kpisOf(
       count: null,
       target: { kind: 'trend', min: null, max: null },
       measured: usage.points !== null,
+      ...(usage.points === null && usage.reason ? { reason: usage.reason } : {}),
       definition:
         "Points of the five-hour Max window that the sessions of the Issues filed in the window used, from the usage schema's session_window_share, divided by those Issues. Null while the usage schema or that view is not there.",
     }),
@@ -553,11 +647,13 @@ async function kpisOf(
       n: withUsage ? issues : 0,
       count: null,
       measured: usage.cost !== null,
+      ...(usage.cost === null && usage.reason ? { reason: usage.reason } : {}),
       definition:
         "Dollars the usage schema priced for the sessions of the Issues filed in the window (a session tagged with the Issue's number, or a Claude session its lead reported, with its subagents), divided by those Issues. Joined at read, never copied. Null while the usage schema is not there.",
     }),
     ...(await flowKpis(sql, w)),
   ]
+  return figures.map(withReason)
 }
 
 /**
@@ -601,7 +697,7 @@ export async function readKpis(
     windowOf(new Date(options.now.getTime() - (HISTORY_WINDOWS - 1 - i) * step), options.days),
   )
   const lists = await mapBounded(windows, WINDOW_CONCURRENCY, (w, i) =>
-    kpisOf(sql, w, options, { usage: i >= HISTORY_WINDOWS - USAGE_WINDOWS }),
+    kpisOf(sql, w, options, { usage: i >= HISTORY_WINDOWS - USAGE_WINDOWS, parts: i === HISTORY_WINDOWS - 1 }),
   )
   const current = lists[HISTORY_WINDOWS - 1] ?? []
   const kpis: Kpi[] = current.map((k) => ({

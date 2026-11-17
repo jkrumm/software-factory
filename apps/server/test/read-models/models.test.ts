@@ -406,15 +406,25 @@ describe('the fixture', () => {
     // nine Issues were filed in the window
     expect(by.avoidable_touches).toMatchObject({ n: 9, count: 3, value: 3 / 9, measured: true })
     expect(by.asks).toMatchObject({ n: 9, count: 3 })
-    expect(by.worth_asking).toMatchObject({ n: 2, count: 1, value: 0.5 })
-    expect(by.first_verification_passes).toMatchObject({ n: 2, count: 1, value: 0.5 })
+    // two samples are under the floor of three: a share of two is a coin, so there is no figure, and it says why
+    expect(by.worth_asking).toMatchObject({ n: 2, count: 1, value: null, measured: false })
+    expect(by.worth_asking?.reason).toBe('Only 2 counted in the window; at least 3 are needed for a figure')
+    expect(by.first_verification_passes).toMatchObject({ n: 2, count: 1, value: null, measured: false })
     expect(by.refusals).toMatchObject({ n: 9, count: 2 })
-    expect(by.cycle_p50).toMatchObject({ n: 2, value: 15.5 * 3_600_000 })
+    expect(by.cycle_p50).toMatchObject({ n: 2, value: null, measured: false })
     expect(by.queue_wait_p50).toMatchObject({ n: 7, value: 3_600_000 })
     expect(by.queue_wait_p90).toMatchObject({ n: 7, value: 7_200_000 })
-    expect(by.fix_commits).toMatchObject({ measured: false, value: null })
+    expect(by.fix_commits).toMatchObject({ measured: false, value: null, n: 0 })
+    expect(by.fix_commits?.reason).toContain('No fix commit is stored yet')
     expect(by.cost).toMatchObject({ measured: false, value: null })
+    expect(by.cost?.reason).toBe('The usage schema is not in this database')
     expect(by.window_points).toMatchObject({ measured: false, value: null })
+    // no KPI that has no figure is a zero, and every one without a figure says why
+    for (const kpi of model.kpis) {
+      if (kpi.measured) expect(kpi.reason).toBeNull()
+      else expect(kpi.reason?.length ?? 0).toBeGreaterThan(10)
+      if (kpi.value === null) expect(kpi.measured).toBe(false)
+    }
     for (const kpi of model.kpis) expect(kpi.definition.length).toBeGreaterThan(20)
 
     // a window that starts after the fixture sees none of it
@@ -497,7 +507,7 @@ describe('the fixture', () => {
       expect(before('asks')).toEqual({ value: 1 / 2, n: 2 })
       expect(before('refusals')).toEqual({ value: 1 / 2, n: 2 })
       expect(before('first_verification_passes')).toEqual({ value: 2 / 3, n: 3 })
-      expect(before('queue_wait_p50')).toEqual({ value: 2.5 * 3_600_000, n: 2 })
+      expect(before('queue_wait_p50')).toEqual({ value: null, n: 2 })
       expect(before('cycle_p50')).toEqual({ value: null, n: 0 })
       // the current window is unchanged by them
       expect(by.avoidable_touches).toMatchObject({ n: 9, count: 3 })
