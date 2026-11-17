@@ -95,6 +95,29 @@ describe('factory project check', () => {
     ])
   })
 
+  test("a worktree of a bare <name>.git is the repo <name> (a step host's copy)", async () => {
+    const file = await repo('bare-src', {
+      'project.yaml':
+        'apiVersion: factory/v2\nname: lab3\ndeploy: { mode: make, targets: [{ name: mini, host: mini, verify: make verify }] }\nchecks: { fast: make check-fast } # reason\n',
+      Makefile: 'check-fast:\n\ttrue\n',
+    })
+    const src = join(file, '..')
+    const bare = join(dir, 'lab3.git')
+    const sh = async (...cmd: string[]) => {
+      const proc = Bun.spawn(cmd, { stdout: 'ignore', stderr: 'pipe' })
+      if ((await proc.exited) !== 0) throw new Error(`${cmd.join(' ')}: ${await new Response(proc.stderr).text()}`)
+    }
+    const git = ['git', '-c', 'user.name=t', '-c', 'user.email=t@example.com']
+    await sh(...git, '-C', src, 'init', '-q')
+    await sh(...git, '-C', src, 'add', '-A')
+    await sh(...git, '-C', src, 'commit', '-q', '-m', 'x')
+    await sh('git', 'clone', '-q', '--bare', src, bare)
+    const tree = join(dir, 'step-copy')
+    await sh('git', '-C', bare, 'worktree', 'add', '-q', '--detach', tree)
+    const { out } = await cli(['project', 'check', join(tree, 'project.yaml')])
+    expect(out).not.toContain('the repo is')
+  })
+
   test("a step's make target the Makefile lacks is a warning", async () => {
     const file = await repo('stepper', {
       Makefile: 'test:\n\ttrue\n',
