@@ -134,8 +134,23 @@ describe('parsers', () => {
 
   test('newest release and shape', () => {
     expect(newestRelease(['v1.2.0', 'v1.10.0', 'v2.0.0-rc1', 'latest', 'v1.9'])).toBe('1.10.0')
-    expect(newestSameShape('20-alpine', ['22-alpine', '22', '24-slim', '21.1-alpine', '23-alpine'])).toBe('23-alpine')
+    expect(newestSameShape('20-alpine', ['22-alpine', '22', '24-slim', '23.1-alpine', '23-alpine'])).toBe('23-alpine')
     expect(newestSameShape('latest', ['1'])).toBeUndefined()
+  })
+
+  test('a bare tag with no patch tag under it is a pre-release line, not an upgrade', () => {
+    // valkey: 9.2 holds a release candidate; only 9.2.0-rc2 exists below it
+    expect(newestSameShape('9.1', ['9.2', '9.2.0-rc2', '9.1', '9.1.3', '9.0.3', '9.0'])).toBe('9.1')
+    expect(newestSameShape('9.1', ['9.2', '9.2.0', '9.1.3'])).toBe('9.2')
+    // an image with no patch tags at all keeps its newest tag
+    expect(newestSameShape('22.04', ['24.04', '22.04', '20.04'])).toBe('24.04')
+  })
+
+  test('a version prefix is kept and does not make a major of a minor line', () => {
+    expect(newestSameShape('v3.7', ['v3.7', 'v3.7.19', 'v3.6', 'v3.6.2', '3.7'])).toBe('v3.7')
+    expect(gap('v3.7', 'v3.7')).toBeUndefined()
+    expect(gap('v3.7', 'v3.8')).toBe('minor')
+    expect(gap('v3.7', 'v4.0')).toBe('major')
   })
 })
 
@@ -176,6 +191,20 @@ describe('depsProbe', () => {
     expect(cargo?.lines).toEqual(['rand 0.8 -> 0.9.2 (minor)'])
     expect(out.detail).toContain('1 not looked up')
     expect(out.findings.find((f) => f.key === 'deps:docker')?.lines).toEqual(['node 20-alpine -> 24-alpine (major)'])
+  })
+
+  test('a Docker upgrade inside its cooldown names the day it opens', async () => {
+    const dir = repo({ 'compose.yaml': 'services:\n  db:\n    image: mariadb:11.4\n' })
+    const out = await probeWithDates(
+      defaultTools(),
+      dir,
+      lookup({ 'docker:mariadb': '13.0' }),
+      async ({ ecosystem, version }) =>
+        ecosystem === 'docker' && version === '13.0' ? new Date('2026-11-12') : undefined,
+      new Date('2026-11-17'),
+    )
+    const plan = out.findings[0]?.plan ?? []
+    expect(plan.some((line) => line.includes('until 2026-11-26 (14-day cooldown): mariadb 11.4 -> 13.0'))).toBe(true)
   })
 
   test('green', async () => {

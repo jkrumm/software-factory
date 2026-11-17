@@ -227,7 +227,11 @@ export function actionUses(text: string): Dependency[] {
   return out
 }
 
-const numbers = (version: string): number[] => version.split('.').map((part) => Number.parseInt(part, 10) || 0)
+const numbers = (version: string): number[] =>
+  version
+    .replace(/^v/, '')
+    .split('.')
+    .map((part) => Number.parseInt(part, 10) || 0)
 
 /** The gap between `current` and `latest` judged only down to the precision `current` states (`v4` is current at `4.2.1`); patch gaps are none. */
 export function gap(current: string, latest: string): 'major' | 'minor' | undefined {
@@ -257,21 +261,27 @@ export function newestRelease(tags: string[]): string | undefined {
 
 const IMAGE_TAG = /^(v?)(\d+(?:\.\d+)*)(-[A-Za-z][\w.-]*)?$/
 
-/** The newest tag of the same shape (prefix, number of version parts, variant suffix) as `current`. */
+/**
+ * The newest tag of the same shape (prefix, number of version parts, variant suffix) as `current`, prefix and suffix kept.
+ * When the image publishes tags one part deeper (`9.1.3` beside `9.1`), a candidate counts only if such a tag exists under it:
+ * a bare `9.2` with no `9.2.N` is a pre-release line (its `9.2.0-rc2` has another suffix), not an upgrade.
+ */
 export function newestSameShape(current: string, tags: string[]): string | undefined {
   const own = IMAGE_TAG.exec(current)
   if (!own) return undefined
   const [, prefix = '', digits = '', suffix = ''] = own
   const parts = digits.split('.').length
-  return tags
-    .map((tag) => IMAGE_TAG.exec(tag))
-    .filter(
-      (m): m is RegExpExecArray =>
-        m !== null && (m[1] ?? '') === prefix && (m[3] ?? '') === suffix && (m[2] ?? '').split('.').length === parts,
-    )
-    .map((m) => `${m[2]}${suffix}`)
-    .sort((x, y) => compareVersions(x.replace(/-.*$/, ''), y.replace(/-.*$/, '')))
-    .at(-1)
+  const versions = (size: number): string[] =>
+    tags.flatMap((tag) => {
+      const m = IMAGE_TAG.exec(tag)
+      return m !== null && (m[1] ?? '') === prefix && (m[3] ?? '') === suffix && (m[2] ?? '').split('.').length === size
+        ? [m[2] ?? '']
+        : []
+    })
+  const deeper = versions(parts + 1)
+  const released = (version: string): boolean => !deeper.length || deeper.some((full) => full.startsWith(`${version}.`))
+  const newest = versions(parts).filter(released).sort(compareVersions).at(-1)
+  return newest === undefined ? undefined : `${prefix}${newest}${suffix}`
 }
 
 async function fetchJson(url: string): Promise<Record<string, unknown>> {
@@ -309,6 +319,14 @@ async function hubTags(image: string, suffix: string): Promise<string[]> {
   return names
 }
 
+/** When a Docker Hub tag was last pushed (an official tag is moved by each patch, so this is the newest build under it). */
+async function hubPushed(image: string, tag: string): Promise<Date | undefined> {
+  const repo = image.replace(/^(?:docker\.io|registry-1\.docker\.io)\//, '')
+  const path = repo.includes('/') ? repo : `library/${repo}`
+  const body = await fetchJson(`https://hub.docker.com/v2/repositories/${path}/tags/${encodeURIComponent(tag)}`)
+  return asDate(body.tag_last_pushed ?? body.last_updated)
+}
+
 /** The real registries: crates.io, PyPI, `git ls-remote --tags` (Swift, Actions) and Docker Hub. */
 export const registryLookup =
   (tools: Tools): Lookup =>
@@ -338,7 +356,7 @@ export const registryLookup =
 
 /** When a version was published, or undefined / a throw when it cannot be looked up (soft: the plan says the date is unknown). */
 export type Released = (query: {
-  ecosystem: 'npm' | 'cargo' | 'python'
+  ecosystem: 'npm' | 'cargo' | 'python' | 'docker'
   name: string
   version: string
 }) => Promise<Date | undefined>
@@ -348,9 +366,11 @@ const asDate = (value: unknown): Date | undefined => {
   return date && !Number.isNaN(date.getTime()) ? date : undefined
 }
 
-/** The publish dates the registries state: npm's `time`, crates.io's `created_at`, PyPI's upload time. Other ecosystems have no date look-up. */
+/** The publish dates the registries state: npm's `time`, crates.io's `created_at`, PyPI's upload time, Docker Hub's tag push time. Swift and Actions have no date look-up. */
 export const registryReleased: Released = async ({ ecosystem, name, version }) => {
   switch (ecosystem) {
+    case 'docker':
+      return hubPushed(name, version)
     case 'npm':
       return asDate(
         asRecord((await fetchJson(`https://registry.npmjs.org/${name.replace('/', '%2F')}`)).time)?.[version],
@@ -378,7 +398,7 @@ export const registryReleased: Released = async ({ ecosystem, name, version }) =
 async function withPlan(
   base: ProbeFinding,
   rows: UpgradeRow[],
-  dated: 'npm' | 'cargo' | 'python' | undefined,
+  dated: 'npm' | 'cargo' | 'python' | 'docker' | undefined,
   released: Released,
   now: Date,
 ): Promise<ProbeFinding> {
@@ -513,7 +533,9 @@ async function judgeEcosystem(
       await withPlan(
         finding('deps', `deps:${entry.ecosystem}`, entry.title, lines, rows.length),
         rows,
-        entry.ecosystem === 'cargo' || entry.ecosystem === 'python' ? entry.ecosystem : undefined,
+        entry.ecosystem === 'cargo' || entry.ecosystem === 'python' || entry.ecosystem === 'docker'
+          ? entry.ecosystem
+          : undefined,
         released,
         now,
       ),
