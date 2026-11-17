@@ -1,5 +1,5 @@
 .DEFAULT_GOAL := help
-.PHONY: help docs-check check check-fast check-steps check-fast-steps check-static test test-unit test-unit-changed test-scenarios merge-guard e2e fmt deploy rollback verify version hygiene-tools
+.PHONY: help docs-check check check-fast check-steps check-fast-steps check-static guide-check test test-unit test-unit-changed test-scenarios merge-guard e2e fmt deploy rollback verify version hygiene-tools
 
 help:
 	@echo "make check   install, format, lint, shellcheck, tsc, Console tsc, tokens, artifact templates and InfoHint definitions, e2e tsc, boundaries, retired words, state words on screens, public scan, Issue diagram, generated CLI, tests, scenarios, Console build and Playwright (the merge gate)"
@@ -7,6 +7,7 @@ help:
 	@echo "make merge-guard  run right before merging a PR: refuses unless the branch contains origin/master, its migration numbers are free, the head's CI finished green and master's last finished CI run is not red (MERGE_GUARD_ARGS=--wait waits for the head's CI; --allow-red only for the change that fixes a red master)"
 	@echo "make docs-check  the README's counts and lists (event kinds, callers, tokens, screens, domains, states, Console port and writes) against the code; also this repo's hygiene probe \`readme\`"
 	@echo "make hygiene-tools  install the host tools of the hygiene probes that Homebrew provides (osv-scanner, for the advisories probe)"
+	@echo "make guide-check  the guide (docs/guide): its own install, Basalt tokens current, pages and permalinks (scripts/guide-links.ts), the VitePress build"
 	@echo "make test    the unit tests and the scenarios"
 	@echo "make e2e     build the Console and run its Playwright suite against a seeded server (tests/e2e; screenshots land in tests/e2e/out/screenshots)"
 	@echo "make fmt     apply formatting"
@@ -76,6 +77,8 @@ check-static:
 	@bun scripts/vocabulary.ts
 	@echo "==> public hygiene (scripts/public-scan.ts)"
 	@bun scripts/public-scan.ts
+	@echo "==> guide pages and permalinks (scripts/guide-links.ts)"
+	@bun scripts/guide-links.ts
 	@echo "==> Issue diagram is current (apps/server/scripts/issue-diagram.ts --check)"
 	@bun apps/server/scripts/issue-diagram.ts --check
 	@echo "==> project.yaml schema and key reference are current (scripts/project-schema.ts --check)"
@@ -87,6 +90,17 @@ check-static:
 	@echo "==> KPI table of docs/product.md is the catalog (scripts/kpi-table.ts --check)"
 	@bun scripts/kpi-table.ts --check
 	@echo "==> next free migration number (scripts/merge-guard.ts): $$(bun scripts/merge-guard.ts --next-migration)"
+
+# The guide (docs/guide) has its own package and lockfile, outside the workspace: only this target and CI's `guide` job install it.
+guide-check:
+	@echo "==> guide install (bun install --frozen-lockfile in docs/guide)"
+	@bun install --cwd docs/guide --frozen-lockfile
+	@echo "==> guide tokens are current (basalt-ui tokens:check)"
+	@bun run --cwd docs/guide tokens:check
+	@echo "==> guide pages and permalinks (scripts/guide-links.ts)"
+	@bun scripts/guide-links.ts
+	@echo "==> guide build (vitepress build)"
+	@bun run --cwd docs/guide build
 
 # The tests run in one of the host's test slots (FL7) when `factory` is installed, so parallel checks do not pile their
 # load onto each other; without it (CI) the bare command. That is the installed CLI of the running core until the
