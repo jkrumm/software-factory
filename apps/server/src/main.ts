@@ -133,7 +133,7 @@ import { createShutdown } from './shutdown.ts'
 /** The API and the Console's listener both bind loopback only; dotfiles-private's serve row publishes the Console's. */
 const HOSTNAME = '127.0.0.1'
 
-/** A ship call waits for git and agw (up to REVIEW_TIMEOUT_MS) inside one request; Bun's own idle limit is 10 s, and 255 s is its maximum. */
+/** A ship call waits for git and agw (up to REVIEW_TIMEOUT_MS, then THREADS_TIMEOUT_MS for the ledger's threads) inside one request; Bun's own idle limit is 10 s, and 255 s is its maximum. */
 const IDLE_TIMEOUT_S = 255
 
 /** How long a stop waits for the passes in flight (the loops, the intake pollers, the uptime push) before it goes on. */

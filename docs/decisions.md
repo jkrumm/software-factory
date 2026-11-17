@@ -366,7 +366,7 @@ Report `docs/strategy/2026-11-next/report.html`, definition `docs/strategy/2026-
   the brief to pass `/review`'s Agent call that row's tier and effort instead of `prepare`'s `seat` at tier light or
   standard; a deep review keeps agw's seat. At the ship the factory reads each covering review from agw's ledger
   (`agw review covered` names the job, `agw review status <job>` its thread: rounds, findings, dispositions, wall time)
-  and stores it in the review evidence with the seat it ran on (`ReviewEvidence.threads`, no migration). `read/kpis-reviewers.ts`
+  and stores it in the review evidence with the seat it ran on (`ReviewEvidence.threads`, no migration; the Issue is measured on the evidence of its first accepted ship, the one its first watch followed). `read/kpis-reviewers.ts`
   puts the two seats side by side in `factory read kpis` (`reviewers`) and on Improve. The seat a record names is the
   assignment the brief told the lead to follow, not an observation of the session: the usage side's reviewer cost by model
   (haiku or not) is the cross-check, shown as cost per review. **Tripwire, both ways, from stored facts alone** (no mode is
