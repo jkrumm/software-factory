@@ -147,8 +147,8 @@ export function createReader(deps: ReadDeps): ReadApi {
     const limit = Math.min(Math.max(input.limit ?? SESSION_LIMIT, 1), SESSION_LIMIT_MAX)
     const attempts = await loadAttempts(sql, ref ? [ref] : null, limit, input.live === true, input.before ?? null)
     const briefs = await loadBriefs(sql, [...new Set(attempts.map((a) => a.issue_id))])
-    const derived = await deriveLeads(deps, { attempts, briefs, quota: await quotaOf() })
-    const cards = derived
+    const { leads } = await deriveLeads(deps, { attempts, briefs, quota: await quotaOf() })
+    const cards = leads
       .map((lead) => (input.redact ? redactSessionCard(lead.card) : lead.card))
       .filter(
         (card) => (input.role === undefined || card.role === input.role) && (!input.live || card.state !== 'dead'),

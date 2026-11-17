@@ -127,19 +127,36 @@ export function cacheShare(tokens: ReadIssueDetail['insights']['tokens']): numbe
 type Insights = ReadIssueDetail['insights']
 
 /** The reason a token figure is a dash. */
-export const TOKENS_NOT_COUNTED = 'The factory has not counted tokens for this Issue yet.'
-/** The reason a tool-call or subagent figure is a dash. */
-export const TOOL_CALLS_NOT_COUNTED = 'The factory has not counted tool calls and subagents for this Issue yet.'
+export const TOKENS_NOT_COUNTED = 'The usage data has no tokens for this Issue yet.'
+/** The reason a tool-call figure is a dash. */
+export const TOOL_CALLS_NOT_COUNTED = 'The usage data does not count tool calls.'
+/** The reason a subagent figure is a dash. */
+export const SUBAGENTS_NOT_COUNTED = 'The usage data has no sessions for this Issue yet.'
 
-/** Whether the token figures are real: not when the counting is partial, nor when turns ran and every token field is 0. */
+/**
+ * Whether the token figures are real: any counted token is shown (a floor while `partial`); all zeros is a dash while the
+ * counting is partial, and when turns ran.
+ */
 export function tokensCounted(insights: Pick<Insights, 'partial' | 'turns'> & { tokens: Insights['tokens'] }): boolean {
-  if (insights.partial) return false
   const { input, output, cacheRead, cacheWrite } = insights.tokens
-  return !(insights.turns > 0 && input === 0 && output === 0 && cacheRead === 0 && cacheWrite === 0)
+  if (input + output + cacheRead + cacheWrite > 0) return true
+  return !insights.partial && insights.turns === 0
 }
 
-/** Whether the tool-call and subagent figures are real: not when the counting is partial. */
-export const toolCallsCounted = (insights: Pick<Insights, 'partial'>): boolean => !insights.partial
+/** Whether the tool-call figure is real: the usage data counts none, so it is a number only when a source says so. */
+export const toolCallsCounted = (insights: Pick<Insights, 'toolCalls'>): boolean => insights.toolCalls !== null
+
+/** Dollars as the Issue page shows them: cents under ten, whole dollars above; null is a dash. */
+export function dollars(cost: number | null): string | null {
+  if (cost === null) return null
+  const digits = cost < 10 ? 2 : 0
+  return cost.toLocaleString('en-US', {
+    style: 'currency',
+    currency: 'USD',
+    minimumFractionDigits: digits,
+    maximumFractionDigits: digits,
+  })
+}
 
 /** When the Issue's first triage line was filed: the Issue's creation; an amendment keeps its own time. */
 export function triageAt(issue: Pick<ReadIssueDetail, 'createdAt' | 'triage'>, index: number): string {

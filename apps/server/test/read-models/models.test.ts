@@ -551,6 +551,37 @@ describe('the fixture', () => {
     await sql`DROP SCHEMA usage CASCADE`
   })
 
+  test('kpis: the cost KPI groups by seat; a usage side with no seat columns keeps the cost and drops the parts', async () => {
+    await sql`CREATE SCHEMA usage`
+    await sql`CREATE TABLE usage.sessions (id bigint PRIMARY KEY, source_session_id text, issue_id text)`
+    await sql`CREATE TABLE usage.records_unique (session_id bigint, cost_usd numeric, tool text, model text, effort text)`
+    await sql`INSERT INTO usage.sessions VALUES (1, 'claude-a', '2'), (2, 'abc:agent-x', NULL), (3, 'other', '999')`
+    await sql`INSERT INTO usage.records_unique VALUES
+      (1, 3.0, 'lead', 'claude-sonnet-5-5', 'high'), (1, 1.0, 'lead', 'claude-sonnet-5-5', 'high'),
+      (2, 2.0, 'worker', 'claude-haiku-5-5', NULL), (3, 100.0, 'lead', 'claude-opus-5-5', 'max')`
+    await sql`INSERT INTO factory.lead_hook_events (key, session, issue_id, attempt, kind, at, received_at, payload)
+      VALUES ('hook_seat', 'lead-3', 'issue_3', 1, 'session_started', ${ago(19)}, ${ago(19)}, '{"claudeSessionId":"abc"}'::jsonb)`
+    try {
+      const cost = KpiModel.parse(await readKpis(sql, { now: NOW, days: 7 })).kpis.find((k) => k.key === 'cost')
+      expect(cost).toMatchObject({ measured: true, value: 6 / 9 })
+      expect(cost?.parts).toEqual([
+        { key: 'lead · claude-sonnet-5-5 · high', label: 'lead · claude-sonnet-5-5 · high', value: 4 / 9, unit: 'usd' },
+        {
+          key: 'worker · claude-haiku-5-5 · none',
+          label: 'worker · claude-haiku-5-5 · none',
+          value: 2 / 9,
+          unit: 'usd',
+        },
+      ])
+      await sql`ALTER TABLE usage.records_unique DROP COLUMN effort`
+      const bare = KpiModel.parse(await readKpis(sql, { now: NOW, days: 7 })).kpis.find((k) => k.key === 'cost')
+      expect(bare).toMatchObject({ measured: true, value: 6 / 9, parts: [] })
+    } finally {
+      await sql`DROP SCHEMA usage CASCADE`
+      await sql`DELETE FROM factory.lead_hook_events WHERE key = 'hook_seat'`
+    }
+  })
+
   test('kpis: a usage statement past the timeout leaves its figure unmeasured and frees the connection; points are reused', async () => {
     await sql`CREATE SCHEMA usage`
     try {

@@ -3,6 +3,7 @@ import type { SQL } from 'bun'
 import type { HookFact, SessionView } from '../domains/leads/session.ts'
 import type { Clock } from '../kernel/clock.ts'
 import { cut, plainText } from './plain.ts'
+import { loadUsage, type IssueUsage, type UsageFigures } from './usage.ts'
 
 /**
  * A session is one lead attempt: its id is the lead key `lead-<n>-<attempt>`, its state is what its hook events derive when
@@ -16,6 +17,8 @@ export interface SessionDeps {
   sql: SQL
   clock: Clock
   deriveSession: DeriveSession
+  /** the statement timeout of the usage reads; absent, `USAGE_TIMEOUT_MS` */
+  usageTimeoutMs?: number
 }
 
 /** What a session card needs to know of its Issue. */
@@ -59,6 +62,8 @@ export function issueRefOf(text: string): string | null {
 }
 
 export const issueNumberOf = (ref: string): number => Number(ref.slice('issue_'.length))
+
+const text = (value: unknown): string | null => (typeof value === 'string' && value ? value : null)
 
 const isRecord = (value: unknown): value is Record<string, unknown> =>
   typeof value === 'object' && value !== null && !Array.isArray(value)
@@ -151,13 +156,35 @@ export const emptyInsights = (input: { startedAt: Date; endedAt: Date | null; no
   elapsedMs: Math.max(0, (input.endedAt ?? input.now).getTime() - input.startedAt.getTime()),
   workingMs: 0,
   turns: 0,
-  toolCalls: 0,
+  toolCalls: null,
   subagents: 0,
   tokens: { input: 0, output: 0, cacheRead: 0, cacheWrite: 0 },
   models: [],
+  cost: null,
+  windowPoints: null,
   attempts: 1,
   partial: true,
 })
+
+/**
+ * The usage figures on an insights block. `figures` null with the usage data readable means no row has arrived (zeros,
+ * and `partial` says so); `readable` false leaves cost and tokens as the dashes of an unmeasured figure.
+ */
+export function withUsage(
+  base: ReadInsights,
+  input: { figures: UsageFigures | null; readable: boolean; partial: boolean },
+): ReadInsights {
+  const { figures } = input
+  return {
+    ...base,
+    subagents: figures?.subagents ?? 0,
+    tokens: figures?.tokens ?? base.tokens,
+    models: figures?.models ?? [],
+    cost: input.readable ? (figures?.cost ?? 0) : null,
+    windowPoints: figures?.windowPoints ?? null,
+    partial: input.partial || !input.readable,
+  }
+}
 
 /** One derived attempt: the card and what an Issue sums. */
 export interface LeadSession {
@@ -166,6 +193,12 @@ export interface LeadSession {
   alive: boolean
   workingMs: number
   turns: number
+}
+
+/** The attempts' derived sessions and what the usage data says of their Issues (null: it could not be read). */
+export interface DerivedLeads {
+  leads: LeadSession[]
+  usage: ReadonlyMap<number, IssueUsage> | null
 }
 
 const SESSION_SENTENCE: Record<ReadSessionCard['state'], string> = {
@@ -193,12 +226,29 @@ export async function deriveLeads(
     attempts: readonly AttemptRow[]
     briefs: ReadonlyMap<string, IssueBrief>
     quota: ReadonlyMap<string, ReadAccountQuota>
+    /** also read the window share (a slower view): an Issue's page, not a list */
+    points?: boolean
   },
-): Promise<LeadSession[]> {
+): Promise<DerivedLeads> {
   const now = deps.clock.now()
   const keys = input.attempts.map((a) => leadKeyOf(a.issue_id, a.attempt))
   const facts = await loadFacts(deps.sql, keys)
-  return input.attempts.flatMap((attempt): LeadSession[] => {
+  const claudeOf = (key: string): string[] => [
+    ...new Set((facts.get(key) ?? []).flatMap((fact) => text(fact.payload.claudeSessionId) ?? [])),
+  ]
+  const byIssue = new Map<number, { key: string; claudeSessions: string[] }[]>()
+  for (const attempt of input.attempts) {
+    if (!input.briefs.has(attempt.issue_id)) continue
+    const key = leadKeyOf(attempt.issue_id, attempt.attempt)
+    const number = issueNumberOf(attempt.issue_id)
+    byIssue.set(number, [...(byIssue.get(number) ?? []), { key, claudeSessions: claudeOf(key) }])
+  }
+  const usage = await loadUsage(deps.sql, {
+    issues: [...byIssue].map(([number, attempts]) => ({ number, attempts })),
+    timeoutMs: deps.usageTimeoutMs,
+    points: input.points,
+  })
+  const leads = input.attempts.flatMap((attempt): LeadSession[] => {
     const brief = input.briefs.get(attempt.issue_id)
     if (!brief) return []
     const id = leadKeyOf(attempt.issue_id, attempt.attempt)
@@ -210,6 +260,7 @@ export async function deriveLeads(
     const lastActivity = view.lastEventAt ?? attempt.started_at ?? attempt.first_try_at
     const endedAt = dead ? (view.lastEventAt ?? attempt.gone_at ?? now) : null
     const workingMs = workingMsOf(mine, endedAt ?? now)
+    const figures = usage?.get(issueNumberOf(attempt.issue_id))?.attempts.get(id) ?? null
     const terminal = attempt.terminal || attempt.tab || attempt.space
     return [
       {
@@ -248,9 +299,18 @@ export async function deriveLeads(
           visible: brief.visible,
           since: startedAt.toISOString(),
           lastActivityAt: lastActivity.toISOString(),
-          insights: { ...emptyInsights({ startedAt, endedAt, now }), workingMs, turns: view.turns },
+          insights: withUsage(
+            { ...emptyInsights({ startedAt, endedAt, now }), workingMs, turns: view.turns },
+            {
+              figures,
+              readable: usage !== null,
+              // a live session is still using tokens; a session that took turns has rows by the next ingest
+              partial: !dead || (view.turns > 0 && !figures),
+            },
+          ),
         },
       },
     ]
   })
+  return { leads, usage }
 }

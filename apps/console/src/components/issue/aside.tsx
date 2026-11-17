@@ -7,7 +7,7 @@ import { Section } from '@/components/kit/section'
 import { Skeleton } from '@/components/kit/skeleton'
 import { issueNumber, lozengeOf } from '@/lib/chain'
 import { originWords } from '@/lib/issue'
-import { type ChainLink, chainAround } from '@/lib/issue-page'
+import { type ChainLink, chainAround, dollars } from '@/lib/issue-page'
 import { useChain } from '@/lib/queries'
 import { accountMeter, resetWords } from '@/lib/strip'
 import { ProjectChip } from './project-chip'
@@ -67,6 +67,11 @@ export function Properties({ issue, now }: { issue: Issue; now: number }) {
           { label: 'Account', value: issue.account },
           { label: 'Weekly quota', value: <WeeklyQuota issue={issue} now={now} /> },
           { label: 'Models', value: issue.insights.models.join(', ') },
+          { label: 'Cost', value: dollars(issue.insights.cost) },
+          {
+            label: 'Window points',
+            value: issue.insights.windowPoints === null ? null : `${issue.insights.windowPoints.toFixed(1)} points`,
+          },
           { label: 'Waits behind', value: issue.heldBy === null ? null : <WaitsBehind issue={issue} /> },
           closed ? { label: 'Closed', value: issue.outcome?.replaceAll('_', ' ') ?? 'Closed' } : null,
         ].flatMap((item) => (item ? [item] : []))}

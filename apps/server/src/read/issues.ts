@@ -27,7 +27,9 @@ import {
   loadBriefs,
   type LeadSession,
   type SessionDeps,
+  withUsage,
 } from './sessions.ts'
+import type { IssueUsage } from './usage.ts'
 
 /** The default list length of `/v1/issues`, and its ceiling. */
 export const DEFAULT_LIMIT = 100
@@ -147,9 +149,11 @@ function cardOf(input: {
   extras: Extras
   quota: ReadonlyMap<string, ReadAccountQuota>
   queue: QueueReasons | null
+  /** what the usage data says of this Issue's sessions; null when it could not be read */
+  usage: IssueUsage | null
   now: Date
 }): ReadIssueCard {
-  const { row, leads, extras, now } = input
+  const { row, leads, extras, now, usage } = input
   const open = row.state !== 'closed'
   const filedTitle = text(row.filed?.title) ?? row.id
   const latest = leads.at(-1)
@@ -167,12 +171,18 @@ function cardOf(input: {
       queue: queued && { ...queued, repoName: basename(row.repo), heldBy: extras.heldBy.get(row.id) ?? null },
     })
   const startedAt = row.created_at
-  const insights: ReadInsights = {
-    ...emptyInsights({ startedAt, endedAt: row.closed_at, now }),
-    workingMs: leads.reduce((sum, lead) => sum + lead.workingMs, 0),
-    turns: leads.reduce((sum, lead) => sum + lead.turns, 0),
-    attempts: Math.max(leads.length, 1),
-  }
+  const turns = leads.reduce((sum, lead) => sum + lead.turns, 0)
+  const total = usage?.total ?? null
+  const insights: ReadInsights = withUsage(
+    {
+      ...emptyInsights({ startedAt, endedAt: row.closed_at, now }),
+      workingMs: leads.reduce((sum, lead) => sum + lead.workingMs, 0),
+      turns,
+      attempts: Math.max(leads.length, 1),
+    },
+    // partial while a lead is alive or an Issue that ran turns has no usage row yet
+    { figures: total, readable: usage !== null, partial: leads.some((lead) => lead.alive) || (turns > 0 && !total) },
+  )
   return {
     id: issueNumberOf(row.id),
     ref: row.id,
@@ -226,15 +236,31 @@ async function build(
     loadBriefs(deps.sql, ids),
     loadExtras(deps.sql, ids),
   ])
-  const derived = await deriveLeads(deps, { attempts, briefs, quota })
+  // the window share is a slower view: one Issue's page reads it, a list does not
+  const derived = await deriveLeads(deps, { attempts, briefs, quota, points: rows.length === 1 })
   const leads = new Map<string, LeadSession[]>()
-  for (const lead of derived) {
+  for (const lead of derived.leads) {
     const list = leads.get(lead.card.issueRef ?? '') ?? []
     list.push(lead)
     leads.set(lead.card.issueRef ?? '', list)
   }
   const now = deps.clock.now()
-  return { cards: rows.map((row) => cardOf({ row, leads: leads.get(row.id) ?? [], extras, quota, queue, now })), leads }
+  return {
+    cards: rows.map((row) =>
+      cardOf({
+        row,
+        leads: leads.get(row.id) ?? [],
+        extras,
+        quota,
+        queue,
+        usage: derived.usage
+          ? (derived.usage.get(issueNumberOf(row.id)) ?? { attempts: new Map(), total: null })
+          : null,
+        now,
+      }),
+    ),
+    leads,
+  }
 }
 
 /** `GET /v1/issues`: the newest activity first. */
