@@ -55,9 +55,9 @@ export type KeyPredicate = (key: Key) => boolean
 /**
  * Never invalidated by a change: the strip's readings (not in the stream, they poll) and the "Since you were here" band,
  * whose every read moves the server's visit marker, so a tab left open must not keep the visit alive. The band loads
- * when the screen opens and when the window gets focus.
+ * when the screen opens and when the window gets focus. A project's setup (`project-setup`) changes only when the factory reads its project.yaml: it loads when its tab opens.
  */
-const POLLED_ONLY = new Set(['accounts', 'machine', 'since'])
+const POLLED_ONLY = new Set(['accounts', 'machine', 'since', 'project-setup'])
 /** Slower-moving figures over windows of history: they refetch on the longer debounce. */
 const AGGREGATES = new Set(['kpis', 'friction', 'finding-classes', 'fix-commits', 'flow-trend', 'project-hygiene'])
 /** What `needs`, `flow` and `chain` read: Issues, their Decisions, artifacts, Errands and held signals. Hook events (`session`) are not among them. */

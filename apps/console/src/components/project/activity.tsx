@@ -113,7 +113,13 @@ export function ShippedHistory({
     days.set(day, [...(days.get(day) ?? []), item])
   }
   return (
-    <Section title="Shipped, last 7 days" aside={`${items.length} Issues`} className="min-w-0">
+    <Section
+      title="Shipped, last 7 days"
+      aside={
+        items.length < page.counts.done7d ? `newest ${items.length} of ${page.counts.done7d}` : `${items.length} Issues`
+      }
+      className="min-w-0"
+    >
       {items.length === 0 ? (
         <None>Nothing shipped in the last 7 days.</None>
       ) : (

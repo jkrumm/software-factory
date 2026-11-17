@@ -228,13 +228,13 @@ export function ShippedPanel({
           ))}
         </ul>
       )}
-      {shipped.items.length > newest.length ? (
+      {page.counts.done7d > newest.length ? (
         <ScreenLink
           name={name}
           screen="shipped"
           className={cn(LINK, 'inline-block px-1.5 text-xs text-muted-foreground')}
         >
-          {shipped.items.length - newest.length} more shipped in the last 7 days
+          {page.counts.done7d - newest.length} more shipped in the last 7 days
         </ScreenLink>
       ) : null}
     </div>
