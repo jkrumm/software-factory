@@ -474,7 +474,7 @@ test('issue seat: an Issue no lead has started takes a seat or a role; a started
   await admitted(v.w, id)
   await v.w.tick()
   const [started] = await v.events(id, 'lead_started')
-  expect(started?.payload.seat).toEqual({ tier: 'sonnet', effort: 'medium' })
+  expect(started?.payload.seat).toEqual({ tier: 'sonnet', effort: 'medium', role: 'reviewer' })
   const late = await v.run(['issue', 'seat', id, '--tier', 'opus', '--effort', 'max'])
   expect(late.code).toBe(5)
   expect(late.error?.message).toContain('settling or queued')

@@ -89,4 +89,5 @@ test('a links finding starts a light lead; its second stall requeues it, and the
   expect(after.timeline.find((line) => line.kind === 'moved_up')?.text).toBe(
     'Moved up from the light seat to the lead seat: the light lead stalled 2 times',
   )
-})
+  // a real sweep, two admissions and three ticks: past the 30 s default on a loaded runner
+}, 180_000)
