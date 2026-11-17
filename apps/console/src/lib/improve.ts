@@ -211,7 +211,7 @@ function frictionChange(count: number, previous: number | null): Pick<FrictionRo
 export function frictionRanking(
   counts: readonly Pick<FrictionCount, 'key' | 'label' | 'count' | 'previous'>[],
   top = FRICTION_TOP,
-): { top: FrictionRow[]; tail: FrictionRow[]; quiet: number } {
+): { top: FrictionRow[]; tail: FrictionRow[]; quiet: number; compared: boolean } {
   const measured = counts.filter((c) => !c.key.endsWith(':total'))
   const ranked = measured
     .filter((c) => c.count > 0)
@@ -225,7 +225,13 @@ export function frictionRanking(
     ...frictionChange(c.count, c.previous),
     share: c.count / largest,
   }))
-  return { top: rows.slice(0, top), tail: rows.slice(top), quiet: measured.length - ranked.length }
+  return {
+    top: rows.slice(0, top),
+    tail: rows.slice(top),
+    quiet: measured.length - ranked.length,
+    // no row has a window before to be read against (counting began inside it): the column would say so on every row
+    compared: measured.some((c) => c.previous !== null),
+  }
 }
 
 /** "2026-11-01 to 2026-11-08" */

@@ -390,6 +390,8 @@ test('frictionRanking: most first, the totals left out, the top five apart, the 
   expect(ranking.top.map((r) => r.key)).toEqual(['b', 'a', 'd', 'c', 'f'])
   expect(ranking.tail.map((r) => r.key)).toEqual(['e'])
   expect(ranking.quiet).toBe(1)
+  expect(ranking.compared).toBe(true)
+  expect(frictionRanking([row('a', 2, null), row('b', 1, null)]).compared).toBe(false)
   const by = Object.fromEntries([...ranking.top, ...ranking.tail].map((r) => [r.key, r]))
   expect(by.a).toMatchObject({ change: '+5 (4 before)', tone: 'bad', direction: 1, share: 0.75 })
   expect(by.b).toMatchObject({ change: 'same', tone: 'neutral', share: 1 })

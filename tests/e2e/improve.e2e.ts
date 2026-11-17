@@ -182,7 +182,8 @@ test('one card per KPI in the order the Console shows, each the figures the API 
     const item = top.getByRole('listitem').nth(i)
     await expect(item).toContainText(row.label)
     await expect(item.getByLabel('Count')).toHaveText(String(row.count))
-    await expect(item.getByLabel('Change')).toHaveText(row.change)
+    if (ranking.compared) await expect(item.getByLabel('Change')).toHaveText(row.change)
+    else await expect(item.getByLabel('Change')).toHaveCount(0)
   }
   const counts = await top.getByLabel('Count').allTextContents()
   expect(counts.map(Number)).toEqual([...counts.map(Number)].toSorted((x, y) => y - x))
