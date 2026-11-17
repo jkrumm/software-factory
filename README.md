@@ -40,9 +40,9 @@ trend by the hour or the day. A filter opens the list behind a number.
 
 ![Chain: Issues as nodes, the edges that hold one back, grouped by project](docs/demo/chain.png)
 
-**Projects** has one page per project: what runs now, what shipped, its plan, production and its hygiene.
+**Projects** has one page per project, in tabs: an overview of what moves now, what is next and what shipped, then Work, Plan, Shipped, Hygiene and Setup.
 
-![A project page: now, shipped in 7 days, plan, production, setup and hygiene](docs/demo/project.png)
+![A project page: production, checks and project files on top, then what is moving, what is next and what shipped](docs/demo/project.png)
 
 **Artifacts** holds the Concepts, Specs and Reports leads hand over, with revisions, comparison and the owner's
 annotations. An **Issue** page reads one Issue end to end, from signal to verify.
