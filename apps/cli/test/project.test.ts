@@ -95,6 +95,16 @@ describe('factory project check', () => {
     ])
   })
 
+  test("a step's make target the Makefile lacks is a warning", async () => {
+    const file = await repo('stepper', {
+      Makefile: 'test:\n\ttrue\n',
+      'project.yaml': 'apiVersion: factory/v2\nname: stepper\nsteps: { unit: { make: test }, e2e: { make: tset } }\n',
+    })
+    const { out } = await cli(['project', 'check', file])
+    expect(out).toContain('warning: make tset: the Makefile has no target tset')
+    expect(out).not.toContain('make test:')
+  })
+
   test('a bare word on the line before a rule is no target of it', async () => {
     const file = await repo('bare', {
       Makefile: 'deploy\ncheck:\n\ttrue\n',

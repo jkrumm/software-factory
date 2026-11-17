@@ -74,6 +74,16 @@ const RunRow = z.object({
   pairs: num,
   flaky_pairs: num,
 })
+const HostRow = z.object({
+  host: z.string(),
+  runs: num,
+  failed: num,
+  run_ms: num,
+  wait_p50: nullNum,
+  wait_p90: nullNum,
+  duration_p50: nullNum,
+  disagreed: num,
+})
 const FlakyRow = z.object({
   repo: z.string(),
   suite: z.string(),
@@ -270,6 +280,14 @@ export async function readThroughput(
         coalesce(pairs.pairs, 0) AS pairs, coalesce(pairs.flaky_pairs, 0) AS flaky_pairs
       FROM runs LEFT JOIN results USING (repo) LEFT JOIN pairs USING (repo)
       ORDER BY runs.repo`
+    const hostRows: unknown[] = await tx`
+      SELECT coalesce(host, 'mini') AS host, count(*) AS runs, count(*) FILTER (WHERE exit_code IS NOT NULL AND exit_code <> 0) AS failed,
+        coalesce(sum(duration_ms), 0) AS run_ms,
+        percentile_cont(0.5) WITHIN GROUP (ORDER BY wait_ms)::float8 AS wait_p50,
+        percentile_cont(0.9) WITHIN GROUP (ORDER BY wait_ms)::float8 AS wait_p90,
+        percentile_cont(0.5) WITHIN GROUP (ORDER BY duration_ms)::float8 AS duration_p50,
+        count(*) FILTER (WHERE disagreed) AS disagreed
+      FROM factory.step_costs WHERE at >= ${from} AND at < ${to} GROUP BY 1 ORDER BY 1`
     const flakyRows: unknown[] = await tx`
       WITH per_run AS (
         SELECT repo, test_suite_name AS suite, test_case_name AS name, vcs_ref_head_revision AS rev, step_cost_id,
@@ -512,6 +530,19 @@ export async function readThroughput(
             testResults: r.results,
             flakyTests: r.flaky_tests,
             flakeRate: r.pairs === 0 ? null : round(r.flaky_pairs / r.pairs, 4),
+          }
+        }),
+        byHost: hostRows.map((raw) => {
+          const r = HostRow.parse(raw)
+          return {
+            host: r.host,
+            runs: r.runs,
+            failed: r.failed,
+            minutes: round(r.run_ms / 60_000, 1),
+            waitP50Ms: r.wait_p50 === null ? null : Math.round(r.wait_p50),
+            waitP90Ms: r.wait_p90 === null ? null : Math.round(r.wait_p90),
+            durationP50Ms: r.duration_p50 === null ? null : Math.round(r.duration_p50),
+            disagreed: r.disagreed,
           }
         }),
         flaky: flakyRows.map((raw) => {

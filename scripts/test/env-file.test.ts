@@ -28,6 +28,8 @@ const NEVER: Record<string, string> = {
   FACTORY_SLOT_ACTIVE:
     "`factory slot run` sets it for its step; the host loop reads it in other processes' environment",
   FACTORY_ROLE: "the lead's terminal sets it",
+  FACTORY_SLOT_HOST: "a `factory slot run` caller's: pins one call to a host (the server reads it from the request)",
+  FACTORY_STEP_CORES: "`factory slot run` sets it in a step's container: the cores the step host granted it",
 }
 
 async function sources(dir: string): Promise<string[]> {

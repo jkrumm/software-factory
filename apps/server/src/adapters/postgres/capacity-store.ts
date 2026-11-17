@@ -73,12 +73,14 @@ const SlotDbRow = z.object({
     (v) => (typeof v === 'string' ? JSON.parse(v) : v),
     z.partialRecord(z.enum(WAIT_KINDS), z.number()),
   ),
+  host: z.enum(['mini', 'vps']).nullable(),
 })
 
 const RunRow = z.object({
   peak_rss_mib: z.number().int().nullable(),
   cpu_seconds: z.number().nullable(),
   duration_ms: z.coerce.number(),
+  host: z.enum(['mini', 'vps']).nullable(),
 })
 const ProjectPeakRow = z.object({ step: z.string(), peak_rss_mib: z.number().int().nullable() })
 const HostSampleRow = z.object({ at: z.date(), memory_used_pct: z.number().nullable() })
@@ -293,6 +295,7 @@ export function postgresCapacityStore(tx: SQL): CapacityStore {
           passedBy: r.passed_by,
           whyKind: r.why_kind,
           waitSplit: r.wait_split,
+          host: r.host,
         }
       })
     },
@@ -303,25 +306,26 @@ export function postgresCapacityStore(tx: SQL): CapacityStore {
       for (const r of rows) {
         await tx`
           INSERT INTO factory.capacity_slots (id, name, requested_at, seen_at, slot, leased_until, granted_at, run_ms, rss_mib,
-             peak_rss_mib, why, cwd, passed_at, passed_by, why_kind, wait_split)
+             peak_rss_mib, why, cwd, passed_at, passed_by, why_kind, wait_split, host)
           VALUES (${r.id}, ${r.name}, ${r.requestedAt}, ${r.seenAt}, ${r.slot}, ${r.leasedUntil}, ${r.grantedAt}, ${r.runMs},
                   ${r.rssMib}, ${r.peakRssMib}, ${r.why}, ${r.cwd}, ${r.passedAt}, ${r.passedBy}, ${r.whyKind},
-                  ${JSON.stringify(r.waitSplit)}::text::jsonb)`
+                  ${JSON.stringify(r.waitSplit)}::text::jsonb, ${r.host})`
       }
     },
 
     async recordSlotWait(w) {
       await tx`
-        INSERT INTO factory.slot_waits (at, name, repo, cwd, outcome, wait_ms, split)
-        VALUES (${w.at}, ${w.name}, ${w.repo}, ${w.cwd}, ${w.outcome}, ${Math.round(w.waitMs)}, ${JSON.stringify(w.split)}::text::jsonb)`
+        INSERT INTO factory.slot_waits (at, name, repo, cwd, outcome, wait_ms, split, host)
+        VALUES (${w.at}, ${w.name}, ${w.repo}, ${w.cwd}, ${w.outcome}, ${Math.round(w.waitMs)}, ${JSON.stringify(w.split)}::text::jsonb,
+                ${w.host ?? null})`
     },
 
     async recordStepCost(c) {
       const [row] = await tx`
         INSERT INTO factory.step_costs (at, name, repo, peak_rss_mib, cpu_seconds, duration_ms, wait_ms, exit_code,
-           vcs_ref_head_revision, dirty, cwd)
+           vcs_ref_head_revision, dirty, cwd, host, tree, disagreed)
         VALUES (${c.at}, ${c.name}, ${c.repo}, ${c.peakRssMib}, ${c.cpuSeconds}, ${c.durationMs}, ${c.waitMs}, ${c.exitCode},
-           ${c.commit ?? null}, ${c.dirty ?? null}, ${c.cwd})
+           ${c.commit ?? null}, ${c.dirty ?? null}, ${c.cwd}, ${c.host ?? null}, ${c.tree ?? null}, ${c.disagreed ?? null})
         RETURNING id`
       const tests = c.tests ?? []
       if (tests.length === 0) return
@@ -361,24 +365,36 @@ export function postgresCapacityStore(tx: SQL): CapacityStore {
     async recentRuns(name, limit, swapoutCeilingMb, legacy) {
       // A run that ended while the host was under pressure (level above normal, or swapout above the ceiling in a sample
       // within 90 s of its end) measured a thrashing host, not the step.
+      // `limit` newest runs per host, so the VPS's few runs are not crowded out by the mini's many. The mini's pressure
+      // samples say nothing of a run on the VPS, so they filter only the mini's runs.
       const rows: unknown[] = await tx`
-        SELECT peak_rss_mib, cpu_seconds, duration_ms FROM factory.step_costs c
-        WHERE (name = ${name}
-            OR (${legacy?.repo ?? null}::text IS NOT NULL AND repo = ${legacy?.repo ?? null} AND name ~ '^factory-[0-9]+-[0-9]+ '
-                AND substr(name, strpos(name, ' ')) = ${legacy?.words ?? null}))
-          AND NOT EXISTS (
-            SELECT 1 FROM factory.host_samples h
-            WHERE h.at BETWEEN c.at - interval '90 seconds' AND c.at + interval '90 seconds'
-              AND (h.pressure_level > 1 OR h.swapout_mb_per_300s > ${swapoutCeilingMb}))
-        ORDER BY at DESC, id DESC LIMIT ${limit}`
+        SELECT peak_rss_mib, cpu_seconds, duration_ms, host FROM (
+          SELECT c.*, row_number() OVER (PARTITION BY coalesce(c.host, 'mini') ORDER BY c.at DESC, c.id DESC) AS rn
+          FROM factory.step_costs c
+          WHERE (name = ${name}
+              OR (${legacy?.repo ?? null}::text IS NOT NULL AND repo = ${legacy?.repo ?? null} AND name ~ '^factory-[0-9]+-[0-9]+ '
+                  AND substr(name, strpos(name, ' ')) = ${legacy?.words ?? null}))
+            AND (coalesce(c.host, 'mini') <> 'mini' OR NOT EXISTS (
+              SELECT 1 FROM factory.host_samples h
+              WHERE h.at BETWEEN c.at - interval '90 seconds' AND c.at + interval '90 seconds'
+                AND (h.pressure_level > 1 OR h.swapout_mb_per_300s > ${swapoutCeilingMb})))
+        ) runs WHERE rn <= ${limit}
+        ORDER BY at DESC, id DESC`
       return rows.map((raw) => {
         const row = RunRow.parse(raw)
         return {
           peakRssMib: row.peak_rss_mib,
           cores: row.cpu_seconds === null || row.duration_ms <= 0 ? null : row.cpu_seconds / (row.duration_ms / 1000),
           durationMs: row.duration_ms,
+          host: row.host ?? 'mini',
         }
       })
+    },
+
+    async lastDisagreement(name, since) {
+      const [raw] = await tx`
+        SELECT max(at) AS at FROM factory.step_costs WHERE name = ${name} AND disagreed AND at >= ${since}`
+      return z.object({ at: z.date().nullable() }).parse(raw ?? { at: null }).at
     },
 
     async stepMedianMs(since) {

@@ -1635,6 +1635,22 @@ export const ThroughputModel = z
           flakeRate: nullableNumber,
         }),
       ),
+      /** the steps of the window per host (`coalesce(host, 'mini')`), by name; a host with no step is absent */
+      byHost: z.array(
+        z.strictObject({
+          host: z.string(),
+          runs: z.number().int(),
+          failed: z.number().int(),
+          /** sum of `duration_ms` over 60000, one decimal */
+          minutes: z.number(),
+          /** the wait for the slot (`wait_ms`) of the runs, median and 90th percentile; null when no run read one */
+          waitP50Ms: nullableNumber,
+          waitP90Ms: nullableNumber,
+          durationP50Ms: nullableNumber,
+          /** runs on the mini that found a red off the mini green */
+          disagreed: z.number().int(),
+        }),
+      ),
       /** the 20 flaky tests with the most flaky commits, then the newest flake, then name */
       flaky: z.array(
         z.strictObject({

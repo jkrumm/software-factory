@@ -95,6 +95,33 @@ describe('project.yaml schema', () => {
     expect(ProjectFile.safeParse(stored).success).toBe(false)
   })
 
+  test('a step declares its target, needs and whether it may leave the mini; no host is named in the file', () => {
+    const parsed = ProjectFile.parse({
+      apiVersion: 'factory/v2',
+      name: 'lab',
+      steps: { unit: { make: 'test', remote: true, carry: ['packages/x/dist'] }, lint: { make: 'lint' } },
+    })
+    expect(parsed.steps).toEqual({
+      unit: { make: 'test', needs: [], remote: true, carry: ['packages/x/dist'] },
+      lint: { make: 'lint', needs: [], remote: false, carry: [] },
+    })
+    expect(ProjectFile.parse({ apiVersion: 'factory/v2', name: 'lab' }).steps).toEqual({})
+  })
+
+  test('a step that needs what only the mini has cannot leave it, and a browser off the mini needs its own image', () => {
+    const step = (value: unknown) =>
+      ProjectFile.safeParse({ apiVersion: 'factory/v2', name: 'lab', steps: { s: value } })
+    for (const need of ['apple', 'mac', 'secrets', 'services']) {
+      expect(step({ needs: [need], remote: true }).success).toBe(false)
+      expect(step({ needs: [need] }).success).toBe(true)
+    }
+    expect(step({ needs: ['browser'], remote: true }).success).toBe(false)
+    expect(step({ needs: ['browser'], remote: true, dockerfile: 'tests/step.Dockerfile' }).success).toBe(true)
+    expect(step({ needs: ['git', 'network'], remote: true }).success).toBe(true)
+    expect(step({ remote: true, carry: ['../outside'] }).success).toBe(false)
+    expect(step({ runs: ['vps'] }).success).toBe(false)
+  })
+
   test('a row stored while signals was loose still reads back, its kuma and hyperdx dropped', () => {
     const row = {
       ...ProjectFile.parse({ apiVersion: 'factory/v2', name: 'lab' }),

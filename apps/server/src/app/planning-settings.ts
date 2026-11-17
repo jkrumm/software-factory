@@ -48,6 +48,13 @@ const Env = z.object({
   FACTORY_SLOT_PASS_MIN: whole(1, 1440).optional(),
   /** the slot count that follows memory pressure: `off`, `shadow` (record beside the live rule, the default) or `on` */
   FACTORY_SLOT_AIM: z.enum(['off', 'shadow', 'on']).optional(),
+  /** the ssh target of the VPS that runs steps off the mini (an alias of the owner's ssh config); unset: every step runs on the mini */
+  FACTORY_STEP_REMOTE_TARGET: z
+    .string()
+    .regex(/^[A-Za-z0-9][A-Za-z0-9@._-]{0,99}$/, 'an ssh host alias or user@host')
+    .optional(),
+  /** the projects whose declared steps may run off the mini, space- or comma-separated (the owner's admission) */
+  FACTORY_STEP_REMOTE_PROJECTS: z.string().optional(),
   /** the tenant class's budget in MiB: the daily throughput ranking files the class's average footprint above it */
   FACTORY_TENANT_BUDGET_MIB: whole(1, 10_000_000).optional(),
   /** the repo that owns the host's configuration, where tenant findings are filed */
@@ -85,6 +92,8 @@ export interface PlanningSettings {
   slotExtraLoad: number
   slotPassMs: number
   slotAim: AimMode
+  /** the VPS that runs steps off the mini and the projects admitted to it; null: every step runs on the mini */
+  stepRemote: { target: string; projects: readonly string[] } | null
   /** the tenant class's budget (launchd jobs and VMs), MiB; over it, the daily ranking files a finding */
   tenantBudgetMib: number
   /** where tenant findings are filed: a tenant is a job or VM no project's lead can shrink */
@@ -163,6 +172,13 @@ export function planningSettings(
     slotExtraLoad: e.FACTORY_SLOT_EXTRA_LOAD ?? 12,
     slotPassMs: (e.FACTORY_SLOT_PASS_MIN ?? 10) * 60_000,
     slotAim: e.FACTORY_SLOT_AIM ?? 'shadow',
+    stepRemote:
+      e.FACTORY_STEP_REMOTE_TARGET === undefined
+        ? null
+        : {
+            target: e.FACTORY_STEP_REMOTE_TARGET,
+            projects: (e.FACTORY_STEP_REMOTE_PROJECTS ?? '').split(/[\s,]+/).filter((p) => p !== ''),
+          },
     tenantBudgetMib: e.FACTORY_TENANT_BUDGET_MIB ?? DEFAULT_TENANT_BUDGET_MIB,
     tenantProject: e.FACTORY_TENANT_PROJECT ?? DEFAULT_TENANT_PROJECT,
   }

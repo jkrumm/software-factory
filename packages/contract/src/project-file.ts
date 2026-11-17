@@ -162,6 +162,106 @@ const Slots = z.strictObject({
     ),
 })
 
+const STEPS = 'step placement (apps/server/src/app/capacity-slots.ts, apps/cli/src/remote-step.ts)'
+
+/**
+ * What a step needs of its host. `git`: the history (a remote copy is a git worktree with the default branch fetched);
+ * `network`: the step itself reaches the network (off the mini a step runs with none, only its install has one);
+ * `browser`: a Chrome, which off the mini only the repo's own `dockerfile` provides.
+ */
+export const STEP_NEEDS = ['linux', 'mac', 'browser', 'apple', 'secrets', 'services', 'git', 'network'] as const
+export type StepNeed = (typeof STEP_NEEDS)[number]
+
+/** The needs only the mini has: macOS, the Apple toolchain and simulators, the mini's secrets and its services. */
+export const MINI_ONLY_NEEDS: readonly StepNeed[] = ['mac', 'apple', 'secrets', 'services']
+
+/** A repo-relative path: no leading `/`, no `..` segment. */
+const RepoPath = z
+  .string()
+  .min(1)
+  .max(300)
+  .regex(/^(?!\/)(?!.*(?:^|\/)\.\.(?:\/|$))[^\0\n]+$/, 'a path inside the repo, no leading / and no ..')
+
+/** A step's name: the last word of `factory slot run --name "<project> <step>"`. */
+export const StepName = z.string().regex(/^[A-Za-z0-9][A-Za-z0-9._-]{0,63}$/, 'letters, digits, dot, dash, underscore')
+
+const Step = z
+  .strictObject({
+    make: z
+      .string()
+      .regex(/^[A-Za-z0-9][A-Za-z0-9_.-]*$/, 'a Makefile target')
+      .optional()
+      .meta(
+        about(
+          'the Makefile target that runs the step (`test`); `factory project check` warns when it is missing',
+          STEPS,
+        ),
+      ),
+    needs: z
+      .array(z.enum(STEP_NEEDS))
+      .max(STEP_NEEDS.length)
+      .default([])
+      .meta(
+        about(
+          '`linux`, `mac`, `browser`, `apple`, `secrets`, `services`, `git`, `network`: what the step needs of its host. `mac`, `apple`, `secrets` and `services` keep it on the mini',
+          STEPS,
+        ),
+      ),
+    remote: z
+      .boolean()
+      .default(false)
+      .meta(
+        about(
+          "`true`: the factory may run the step off the mini, on a Linux step host of its own settings, when that finishes it sooner. The repo's word that the step passes on Ubuntu 24.04 in the step image; the owner still admits the project (`FACTORY_STEP_REMOTE_PROJECTS`), and a step red there but green on the mini loses its place for 7 days",
+          STEPS,
+        ),
+      ),
+    dockerfile: RepoPath.optional().meta(
+      about(
+        "the repo's own image for the step off the mini (a Dockerfile in the repo, built on the step host once per content); unset: the factory's (Ubuntu 24.04, git, make and bun). Required for `needs: [browser]` off the mini",
+        STEPS,
+      ),
+    ),
+    bun: z
+      .string()
+      .regex(/^\d+\.\d+\.\d+$/, 'a bun version like 1.4.3')
+      .optional()
+      .meta(
+        about(
+          "the bun of the step image; unset: the version of the repo's `packageManager` (`bun@1.4.3` in package.json)",
+          STEPS,
+        ),
+      ),
+    carry: z
+      .array(RepoPath)
+      .max(32)
+      .default([])
+      .meta(
+        about(
+          'git-ignored paths the step reads (build output such as `packages/x/dist`): they travel with the tracked and untracked files',
+          STEPS,
+          { shownDefault: [] },
+        ),
+      ),
+  })
+  .superRefine((step, ctx) => {
+    if (!step.remote) return
+    const held = step.needs.filter((need) => MINI_ONLY_NEEDS.includes(need))
+    if (held.length > 0)
+      ctx.addIssue({
+        code: 'custom',
+        path: ['remote'],
+        message: `a step that needs ${held.join(', ')} runs on the mini only`,
+      })
+    if (step.needs.includes('browser') && step.dockerfile === undefined)
+      ctx.addIssue({
+        code: 'custom',
+        path: ['dockerfile'],
+        message: 'a step that needs a browser off the mini names the Dockerfile that provides it',
+      })
+  })
+export type Step = z.output<typeof Step>
+
 const SIZE = /^(\d+(?:\.\d+)?)(MiB|GiB)$/
 const PERCENT = /^(\d+(?:\.\d+)?)%$/
 const THROUGHPUT = 'the throughput loop (apps/server/src/app/loops/throughput.ts)'
@@ -514,6 +614,16 @@ const projectObject = <L extends LaneSchema>(lane: L) =>
       slots: Slots.default({}).meta(
         about("the repo's test-slot limits", 'test slots (apps/server/src/app/capacity-slots.ts)'),
       ),
+      steps: z
+        .record(StepName, Step)
+        .default({})
+        .meta(
+          about(
+            "the repo's named steps (`unit`, `layout`): the Makefile target, what each needs and where the factory may run it. A step not named runs on the mini",
+            STEPS,
+            { shownDefault: {} },
+          ),
+        ),
       budgets: Budgets.default({}).meta(
         about(
           "what the repo's checks may cost; a day over one is a signal on the repo. A key left out is no budget",

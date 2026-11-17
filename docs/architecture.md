@@ -394,6 +394,48 @@ through `receive` in `app/intake.ts`; the answer is a triage outcome (`docs/lang
   in `slotAim` of `factory read capacity-loop`. Steps run at normal priority: a test of
   `taskpolicy -b` and its neighbours is in `docs/research/2026-11-14-taskpolicy-steps.md`.
 
+### Steps off the mini
+
+Issue 1793, the Spec "Steps that run off the mini" (rev 3) and the planning session's measurements of 2026-11-17. A
+repo names its steps in `project.yaml` `steps:` (`docs/project.md`): the Makefile target, what each `needs`, and
+`remote: true` when it passes on Ubuntu 24.04 in the step image. No host is named in a repo's file: the step host is the
+owner's setting, `FACTORY_STEP_REMOTE_TARGET` (an ssh alias; unset, every step runs on the mini) and
+`FACTORY_STEP_REMOTE_PROJECTS` (the projects admitted to it). One line, two hosts:
+
+- **Placement** (`app/capacity-slots.ts` `touchSlot`, `domains/capacity/remote.ts`). The mini's rule is as before over the
+  rows that are not the VPS's (`capacity_slots.host`). When it makes a caller wait, the caller can run off the mini (the
+  CLI sends `remote`), its project is admitted, its step is declared `remote: true` and needs nothing only the mini has
+  (`mac`, `apple`, `secrets`, `services`; a step of the host-wide class `apple` never, whatever a file says), the VPS gets
+  it when `decideRemote` finds room and `finishesSooner` holds. Room: a probe at most 90 s old, production's own pressure
+  stall (`system.slice` memory and io `some avg10`) under 10 %, the disk under the 90 % its alert pages on with a new copy
+  counted, the step's peak beside the running steps' peaks and the mini's headroom rule in `MemAvailable`, its cores in the
+  idle ones. Sooner: its learned VPS run (unknown: 1.7 times the mini's, as measured) against the expected mini wait (the
+  holder that frees its slot) plus its mini run. There is no fixed share of the VPS.
+- **The probe** (`adapters/remote/probe.ts`): one `ssh` of at most every 30 s, started by a placement read and never awaited
+  by it. It reads cores, load, memory, disk, the PSI and the step containers, and removes a step container whose slot is
+  gone (older than 2 min, the CLI killed with its session up).
+- **The run** (`apps/cli/src/remote-step.ts`). The worktree travels as a git snapshot: a copy of the index, `git add -A`,
+  the `carry` paths forced in, `commit-tree` on HEAD (the worktree and its index untouched); pushed to the project's bare
+  repository on the host (`factory-steps/<project>.git`, with `origin/<default>` so a step that diffs can), checked out in the
+  slot's worktree (`factory-steps/<project>/<n>`), 0.4 to 1.4 s on a warm copy. The image is the repo's `dockerfile` or the
+  factory's (Ubuntu 24.04, git, make, the bun of `packageManager`), built once per content. The install runs in a container
+  with the network, the step in one with none (`needs: [network]` keeps it), both under `--cgroup-parent
+  factory-steps.slice`, `--cpu-shares 2`, `--oom-score-adj 1000`, a memory ceiling of 1.5 times the learned peak (at least
+  1 GiB), `--cap-drop ALL`, `no-new-privileges`, the host user's uid, mounted at the caller's own path; the step gets
+  `FACTORY_STEP_CORES` (the idle cores at the grant) and `FACTORY_STEP_MEM_MIB`. Production wins by priority, not a
+  partition. A whole no-op step costs 1.9 s.
+- **Results.** The exit code is the step's own. ssh's 255 and docker's or the setup's 125 to 127 are the host's failure:
+  the caller goes back to the mini's line at its old place (`notOn`). A red on the VPS is not yet a red: the same call runs
+  the step again on the mini, and only that result reaches the caller; a green there is stored `disagreed`, and the step
+  stays on the mini for 7 days. `step_costs.host`, `tree` (the snapshot's tree) and `disagreed` record it; the run time is
+  learned per host, the peak and cores across hosts. The VPS's holders and pinned waiters are not the mini's test line for
+  the admission. Throughput's "Steps by host" reads them.
+- `FACTORY_SLOT_HOST=mini|vps` pins one call (a step that needs what only the mini has is never pinned off it);
+  `FACTORY_SLOT_REMOTE=0` keeps one call on the mini.
+
+Not built: proving runs in the host's idle time (a step earns its place before it is used), pausing step containers when
+production stalls, a result cache keyed by the tree, a browser in the factory's image, a third host.
+
 ## Quality
 
 - **Ship** (`app/quality-ship.ts`, `domains/quality/gate.ts`): the lead names merged commits; git must find them on the

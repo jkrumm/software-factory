@@ -27,7 +27,15 @@ export interface SlotRow {
   whyKind: WaitKind | null
   /** the ms this waiter has spent under each reason so far: the time between two calls counts to the reason of the first */
   waitSplit: Readonly<Partial<Record<WaitKind, number>>>
+  /**
+   * where the row stands: a holder on the VPS (`vps`) counts in the VPS's fit and never in the mini's; a waiter with `vps` waits for
+   * the VPS alone (`FACTORY_SLOT_HOST=vps`). Null is the mini, and a waiter either host may take.
+   */
+  host?: StepHost | null | undefined
 }
+
+/** The hosts a step may run on (the contract's `STEP_HOSTS`): domains import no contract. */
+export type StepHost = 'mini' | 'vps'
 
 /**
  * What a wait waits for: every slot taken, the memory fit, swap growing, the load gate (the tripwire under the aim), a step
@@ -144,6 +152,8 @@ export interface SlotView {
   runMs: number
   /** why the caller waits, when it does */
   why: string | null
+  /** where the granted step runs */
+  host: StepHost
 }
 
 const gib = (mib: number): string => `${(mib / 1024).toFixed(1)} GiB`
@@ -304,6 +314,7 @@ export function touchSlots(
         passedBy: null,
         whyKind: null,
         waitSplit: {},
+        host: null,
       }
   const others = kept.filter((row) => row.id !== input.id)
   const view = (row: SlotRow, ahead: number, why: string | null = null): SlotView => ({
@@ -315,6 +326,7 @@ export function touchSlots(
     ahead,
     runMs: row.runMs ?? input.runMs,
     why,
+    host: 'mini',
   })
   if (mine.slot !== null) return { rows: [...others, mine], view: view(mine, 0) }
 
@@ -433,11 +445,13 @@ export function testLineOf(
   now: Date,
 ): { waiters: number; holders: number; medianWaitMs: number } {
   const t = now.getTime()
-  const waits = rows
+  // the VPS's holders and the waiters pinned to it load the VPS, not the mini's line
+  const mini = rows.filter((row) => row.host !== 'vps')
+  const waits = mini
     .filter((row) => row.slot === null && row.whyKind !== 'class' && row.seenAt.getTime() >= t - WAITER_TTL_MS)
     .map((row) => Math.max(0, t - row.requestedAt.getTime()))
     .sort((a, b) => a - b)
-  const holders = rows.filter((row) => row.slot !== null && (row.leasedUntil?.getTime() ?? 0) >= t).length
+  const holders = mini.filter((row) => row.slot !== null && (row.leasedUntil?.getTime() ?? 0) >= t).length
   const mid = waits.length === 0 ? 0 : (waits[Math.floor((waits.length - 1) / 2)] ?? 0)
   return { waiters: waits.length, holders, medianWaitMs: mid }
 }
@@ -478,7 +492,7 @@ export function slotLines(rows: readonly SlotRow[], now: Date): string[] {
     .sort((a, b) => (a.slot ?? 0) - (b.slot ?? 0))
     .map(
       (row) =>
-        `test slot ${row.slot} held by "${row.name}" for ${Math.floor((now.getTime() - (row.grantedAt?.getTime() ?? 0)) / 60_000)} min, limit ${Math.round((row.runMs ?? 0) / 60_000)} min`,
+        `${row.host === 'vps' ? 'vps ' : ''}test slot ${row.slot} held by "${row.name}" for ${Math.floor((now.getTime() - (row.grantedAt?.getTime() ?? 0)) / 60_000)} min, limit ${Math.round((row.runMs ?? 0) / 60_000)} min`,
     )
   return [...held, ...waits]
 }

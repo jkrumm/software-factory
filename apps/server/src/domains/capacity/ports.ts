@@ -6,8 +6,9 @@ import type { SnapshotProc } from './classes.ts'
 import type { MemoryReading } from './host.ts'
 import type { AttemptPeak, ProcInfo } from './leadcost.ts'
 import type { QueueState, QueueStates } from './queue-state.ts'
+import type { RemoteReading } from './remote.ts'
 import type { AimState } from './slot-aim.ts'
-import type { SlotRow, WaitKind } from './slots.ts'
+import type { SlotRow, StepHost, WaitKind } from './slots.ts'
 import type { OpenWait, WaitPlan } from './waits.ts'
 
 /** A lead's account, chosen when it was admitted. Package 4's `start_lead` reads the account of its attempt. */
@@ -76,6 +77,8 @@ export interface CapacityStore {
     swapoutCeilingMb: number,
     legacy?: { repo: string; words: string },
   ): Promise<StepRun[]>
+  /** when a run of the step (by its stored name) last found a red off the mini green on the mini, since `since`; null: none */
+  lastDisagreement(name: string, since: Date): Promise<Date | null>
   /** the median run of every step that ended since `since`, in ms; null when none did */
   stepMedianMs(since: Date): Promise<number | null>
   /** the same for every step of a repo (its absolute path): each name, the worktree names of old rows read as `project`'s, with its newest peaks, of the runs since `since` */
@@ -190,6 +193,8 @@ export interface StepRun {
   /** the cores it used: its CPU seconds over its run's seconds; null: not measured */
   cores: number | null
   durationMs: number
+  /** where it ran: its run time is learned per host, its peak and cores across hosts */
+  host: StepHost
 }
 
 /** One row of the cost ledger (`factory.step_costs`). */
@@ -209,6 +214,12 @@ export interface StepCostRow {
   dirty?: boolean | undefined
   /** the test results the step wrote as JUnit (`factory.test_results`), stored beside the cost */
   tests?: readonly TestResultRow[] | undefined
+  /** where it ran; absent: the mini */
+  host?: StepHost | undefined
+  /** off the mini: the git tree it ran on */
+  tree?: string | undefined
+  /** a run on the mini that found a red off the mini green */
+  disagreed?: boolean | undefined
 }
 
 /** One test result of a step: a suite, a test, its status and how long it took. */
@@ -228,6 +239,8 @@ export interface SlotWaitRow {
   outcome: 'granted' | 'gave_up'
   waitMs: number
   split: Readonly<Partial<Record<WaitKind, number>>>
+  /** the host it was granted on; null: it gave up, or the mini before hosts were recorded */
+  host?: StepHost | null | undefined
 }
 
 /** One row of the merge-window ledger (`factory.merge_windows`). */
@@ -242,6 +255,25 @@ export interface MergeWindowRow {
 }
 
 /** The machine the server runs on. Every reading may fail; admission then goes on without it. */
+/** What the VPS's newest probe said: its reading, the project copies on it and the step containers running there. */
+export interface RemoteProbeAnswer {
+  reading: RemoteReading
+  /** `factory-steps/<project>/<slot>` directories on the VPS */
+  copies: readonly string[]
+  /** step containers: their slot id and start (epoch ms; 0 when unlabelled) */
+  steps: readonly { id: string; startedMs: number }[]
+}
+
+/**
+ * The VPS that runs steps off the mini. `latest` returns the newest answer at once (null before the first) and starts a new
+ * probe in the background when that one is old, so the placement never waits on the VPS; `live` names the slot ids that
+ * hold a VPS slot, and a step container of any other id is removed.
+ */
+export interface RemoteHostProbe {
+  /** `live` null: the slots were not read yet in this process, so no container is removed */
+  latest(live: ReadonlySet<string> | null): RemoteProbeAnswer | null
+}
+
 export interface HostReader {
   memory(): Promise<Result<MemoryReading>>
   /** the machine's RAM in MiB, for the memory that lanes reserve as a share of it */

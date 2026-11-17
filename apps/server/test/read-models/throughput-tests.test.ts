@@ -30,11 +30,15 @@ async function run(input: {
   ms: number
   commit?: string
   dirty?: boolean
+  host?: string | null
+  wait?: number
+  disagreed?: boolean
   results?: [suite: string, name: string, status: Status][]
 }): Promise<void> {
   const [row] = await sql`
-    INSERT INTO factory.step_costs (at, name, repo, duration_ms, wait_ms, exit_code, vcs_ref_head_revision, dirty)
-    VALUES (${input.at}, 'app check', ${input.repo}, ${input.ms}, 0, ${input.exit}, ${input.commit ?? null}, ${input.dirty ?? null})
+    INSERT INTO factory.step_costs (at, name, repo, duration_ms, wait_ms, exit_code, vcs_ref_head_revision, dirty, host, disagreed)
+    VALUES (${input.at}, 'app check', ${input.repo}, ${input.ms}, ${input.wait ?? 0}, ${input.exit}, ${input.commit ?? null}, ${input.dirty ?? null},
+      ${input.host ?? null}, ${input.disagreed ?? null})
     RETURNING id`
   for (const [suite, name, status] of input.results ?? [])
     await sql`
@@ -120,6 +124,10 @@ async function seed() {
     results: [['t.test.ts', 'T', 'fail']],
   })
   await run({ at: NOW, repo: 'app', exit: 1, ms: 888_000 })
+  // the VPS: two runs, one red; one mini run found a VPS red green
+  await run({ at: at('11:20'), repo: null, exit: 0, ms: 120_000, host: 'vps', wait: 1_000 })
+  await run({ at: at('11:25'), repo: null, exit: 1, ms: 240_000, host: 'vps', wait: 3_000 })
+  await run({ at: at('11:30'), repo: null, exit: 0, ms: 60_000, host: 'mini', disagreed: true })
 }
 
 const read = () => readThroughput(sql, { now: NOW, hours: 24 })
@@ -172,8 +180,27 @@ describe('readThroughput tests', () => {
     ])
   })
 
+  test('steps per host: the mini is the host a row names none, with its waits and disagreements', async () => {
+    const { byHost } = (await read()).tests
+    expect(byHost.map((h) => h.host)).toEqual(['mini', 'vps'])
+    const [mini, vps] = byHost
+    // 6 app + 1 lib + 1 no-project (the window's end and the older run are out) + the disagreed one
+    expect(mini).toMatchObject({ runs: 9, failed: 4, disagreed: 1, waitP50Ms: 0, waitP90Ms: 0 })
+    expect(mini?.minutes).toBe(27.3)
+    expect(vps).toEqual({
+      host: 'vps',
+      runs: 2,
+      failed: 1,
+      minutes: 6,
+      waitP50Ms: 2000,
+      waitP90Ms: 2800,
+      durationP50Ms: 180_000,
+      disagreed: 0,
+    })
+  })
+
   test('a window that holds no run is empty', async () => {
     const empty = await readThroughput(sql, { now: new Date('2026-10-01T00:00:00Z'), hours: 24 })
-    expect(empty.tests).toEqual({ byProject: [], flaky: [] })
+    expect(empty.tests).toEqual({ byProject: [], byHost: [], flaky: [] })
   })
 })
