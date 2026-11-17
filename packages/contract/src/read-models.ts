@@ -1911,7 +1911,7 @@ export const RetroModel = z
 export type RetroModel = z.infer<typeof RetroModel>
 
 /**
- * The marker a retro signal ends with so the next retro can find it: `Retro: 2026-11-17 kpi=queue_time before=4273327645
+ * The marker a retro signal ends with so the next retro can find it: `Retro: 2026-11-17 kpi=cycle_p50 before=4273327645
  * direction=down` (`before=none` when the KPI had no number). The date is the retro's day, `kpi` a `KPI_KEYS` or `CAPACITY_FIGURE_KEYS` entry,
  * `direction` where the number should go. Intake keeps a signal's text on one line (newlines become spaces), so the marker
  * is found anywhere in the text, never by a line start.
