@@ -373,7 +373,7 @@ function KpiSections({ model }: { model: KpiModel }) {
   )
 }
 
-function FrictionRowItem({ row }: { row: FrictionRow }) {
+function FrictionRowItem({ row, compared }: { row: FrictionRow; compared: boolean }) {
   return (
     <li className="flex flex-col gap-1 py-2">
       <span className="flex items-baseline justify-between gap-4">
@@ -382,9 +382,11 @@ function FrictionRowItem({ row }: { row: FrictionRow }) {
           <span aria-label="Count" className="w-10 text-right font-semibold">
             {row.count}
           </span>
-          <span aria-label="Change" data-tone={row.tone} className={cn('w-36 text-right', TONE_TEXT[row.tone])}>
-            {row.change}
-          </span>
+          {compared ? (
+            <span aria-label="Change" data-tone={row.tone} className={cn('w-36 text-right', TONE_TEXT[row.tone])}>
+              {row.change}
+            </span>
+          ) : null}
         </span>
       </span>
       <Bar share={row.share} tone={row.tone === 'good' ? 'neutral' : 'accent'} />
@@ -406,18 +408,22 @@ function FrictionBody({ model }: { model: FrictionModel }) {
     <div className={cn(PANEL, 'flex flex-col gap-2 p-4 text-sm')} style={PANEL_SHADOW}>
       <p className="flex justify-end gap-4 text-xs text-muted-foreground">
         <span className="w-10 text-right">Count</span>
-        <span className="w-36 text-right">Against the {model.days} days before</span>
+        {ranking.compared ? (
+          <span className="w-36 text-right">Against the {model.days} days before</span>
+        ) : (
+          <span>Counting began too recently to compare with the {model.days} days before</span>
+        )}
       </p>
       <ul aria-label="Friction, most first" className="divide-y">
         {ranking.top.map((row) => (
-          <FrictionRowItem key={row.key} row={row} />
+          <FrictionRowItem key={row.key} row={row} compared={ranking.compared} />
         ))}
       </ul>
       {ranking.tail.length > 0 ? (
         <Fold title="Everything else that counted" count={ranking.tail.length}>
           <ul aria-label="Friction, the rest" className="divide-y">
             {ranking.tail.map((row) => (
-              <FrictionRowItem key={row.key} row={row} />
+              <FrictionRowItem key={row.key} row={row} compared={ranking.compared} />
             ))}
           </ul>
         </Fold>
