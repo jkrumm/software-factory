@@ -7,7 +7,7 @@ import planDoc from '../../../docs/plan.md' with { type: 'text' }
 import { EXIT, usage } from './exit.ts'
 import { type Format, render } from './output.ts'
 import type { Io } from './operation.ts'
-import { type Problem, problemLines, schemaProblems, yamlProblems } from './yaml-problems.ts'
+import { type Problem, problemLines, schemaProblems, yamlProblems } from '@software-factory/project-lint/yaml-problems'
 
 const DEFAULT_FILE = 'docs/plan.yaml'
 

@@ -9,3 +9,7 @@ apps/server/test/checkpoints/need.test.ts host  # fixtures: the seven-day replay
 apps/server/test/loops/desk.test.ts host  # fixtures: an approval Errand's command is addressed to the mini
 apps/server/test/checkpoints/checkpoints.test.ts host  # fixtures: commands addressed to the mini and a server, the shapes the host's-own-work rule refuses
 apps/server/test/checkpoints/triage.test.ts host  # fixtures: commands addressed to the mini and a server, the shapes the host's-own-work rule refuses
+apps/server/src/adapters/hygiene/probes/agentsmd.ts host  # names the local agent file the repo contract forbids: a file name, not a host
+packages/contract/src/hygiene-catalogue.ts host  # the agentsmd entry names that file: a file name, not a host
+docs/hygiene.md host  # generated from the catalogue: a file name, not a host
+apps/server/test/hygiene/ci.test.ts work-repo  # fixture: a merge-request forge remote on example.com, proving the runner rule skips an origin that is not GitHub

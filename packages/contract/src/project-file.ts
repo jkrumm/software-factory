@@ -1,5 +1,6 @@
 import * as z from 'zod'
 import { DEFAULT_SLOT_RUN_MS } from './capacity.ts'
+import { SKIPPABLE_PROBES } from './hygiene-catalogue.ts'
 import { LaneName } from './lane.ts'
 import { issuesMessage } from './plan-file.ts'
 
@@ -238,9 +239,6 @@ const DeclaredProbe = z.strictObject({
       ),
     ),
 })
-
-/** The built-in hygiene probes a project may switch off (`check` has `check: false`, the declared `probes` are the project's own). */
-const SKIPPABLE_PROBES = ['links', 'retired', 'deps', 'cochange', 'runrules', 'browser', 'context'] as const
 
 const SkippedProbe = z.strictObject({
   probe: z.enum(SKIPPABLE_PROBES).meta(about('the built-in probe switched off', HYGIENE)),

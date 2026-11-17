@@ -27,6 +27,7 @@ import type { ReaperAttempt, ReaperProc } from './reaper.ts'
 import type { CallLoop, CallOutcome, CallRow } from './calls.ts'
 import type { ClassIssue, FindingLoop } from './classes.ts'
 import type { FixCommit, FixCommitRow } from './fix-classes.ts'
+import type { FindingIssue, LifecycleAction } from './hygiene-lifecycle.ts'
 import type { SweepReport } from './hygiene-model.ts'
 import type {
   CapacityMinute,
@@ -78,6 +79,8 @@ export interface HygienePassRecord {
   /** left out by the cap or by a held class */
   overBudget: { key: string; title: string }[]
   failed: { key: string; reason: string }[]
+  /** what the pass did to findings already filed (`migrations/1047_hygiene_lifecycle.sql`) */
+  lifecycle: { key: string; issue: string; action: LifecycleAction; why: string; at: Date }[]
 }
 
 /** The loops' own tables, inside one transaction: the agw calls made, so none is made twice, and the friction and hygiene passes. */
@@ -380,6 +383,8 @@ export interface LoopReads {
   blockedCheckouts(streak: number, limit: number): Promise<BlockedWatch[]>
   /** working or watching Issues with an open edge to one of `queued` (still queued, same repo): the claim deadlock */
   claimHolders(queued: readonly IssueId[], limit: number): Promise<ClaimHolder[]>
+  /** the newest Issue each hygiene finding key of one repo filed, with how it stands (the lifecycle's input) */
+  findingIssues(repo: string): Promise<FindingIssue[]>
   /** the Issues each finding class of one loop filed (in every repo), with their closure and outcome, by class */
   classIssues(loop: FindingLoop): Promise<Record<string, ClassIssue[]>>
   /** the same for every loop and class */

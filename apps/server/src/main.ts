@@ -559,6 +559,7 @@ async function main(): Promise<void> {
           workflow: agwHygiene(agw),
           file: (body) => intake.api.file(body, 'agent'),
           everyMs: loopSettings.hygieneEveryMs,
+          dailyMs: loopSettings.hygieneDailyMs,
           retryMs: loopSettings.hygieneRetryMs,
           repos: loopSettings.hygieneRepos,
         })

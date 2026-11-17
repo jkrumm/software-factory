@@ -1,4 +1,4 @@
-import type { HygieneCandidate } from '@software-factory/contract'
+import { type CatalogueName, HYGIENE_CATALOGUE, type HygieneCandidate } from '@software-factory/contract'
 import type { PortError, Result } from '../../kernel/result.ts'
 
 /**
@@ -6,22 +6,27 @@ import type { PortError, Result } from '../../kernel/result.ts'
  * (`app/loops/hygiene.ts`, the decisions). Types only; the rules over them live in `hygiene.ts`.
  */
 
+/** A deterministic probe: every catalogue entry but the document judgment, which is one agent call and no probe. */
+export type Probe = Exclude<CatalogueName, 'judgment'>
+
 /**
- * The deterministic probes, in the order their findings are filed when the budget is short. `probe` is last: the probes a
- * project declares (`hygiene.probes`), one run and at most one finding each, after every built-in probe.
+ * The deterministic probes, in the order their findings are filed when the budget is short: the catalogue's order
+ * (`HYGIENE_CATALOGUE`). `probe` is last: the probes a project declares (`hygiene.probes`), one run and at most one finding
+ * each, after every built-in probe.
  */
-export const PROBES = [
-  'check',
-  'links',
-  'retired',
-  'deps',
-  'cochange',
-  'runrules',
-  'browser',
-  'context',
-  'probe',
-] as const
-export type Probe = (typeof PROBES)[number]
+export const PROBES: readonly Probe[] = HYGIENE_CATALOGUE.map((entry) => entry.name).filter(
+  (name): name is Probe => name !== 'judgment',
+)
+
+/**
+ * How much of the catalogue a pass runs: `full` every probe and the document judgment (weekly, or sooner for a busy repo),
+ * `daily` the probes the catalogue marks `daily` and no judgment.
+ */
+export type Scope = 'full' | 'daily'
+
+/** Whether a probe runs in a pass of this scope. */
+export const runsIn = (probe: Probe, scope: Scope): boolean =>
+  scope === 'full' || HYGIENE_CATALOGUE.some((entry) => entry.name === probe && entry.cadence === 'daily')
 
 /** A probe a project declares in `project.yaml`: `make <target>` in the checkout, red on any exit but 0. */
 export interface DeclaredProbe {
@@ -55,12 +60,22 @@ export interface ProbeRun {
   outcome: 'clean' | 'found' | 'skipped' | 'failed'
   /** one line: what it ran, how long, why it was skipped or failed */
   detail: string
+  /**
+   * The finding keys this run is the verdict on: a key equal to it, or under it (`links` covers `links:docs/a.md`; a declared
+   * probe covers `probe:<name>`). A run that is `clean` or `found` covers them: a covered key it did not raise is green. Absent
+   * on a run recorded before the lifecycle: such a run covers nothing.
+   */
+  covers?: string
+  /** exact keys under `covers` the run did not judge (a part of the probe failed or was skipped), or `*` for all of them: neither raised nor green */
+  unjudged?: string[]
 }
 
 /** What one sweep of one checkout found; stored as the pass's `report`. */
 export interface SweepReport {
   /** the commit swept (full sha) */
   ref: string
+  /** how much of the catalogue ran; absent on a pass recorded before the daily scope: it was `full` */
+  scope?: Scope
   runs: ProbeRun[]
   findings: ProbeFinding[]
   /** living documents whose code moved on since they were last edited, most behind first */
@@ -94,12 +109,15 @@ export interface SweepOptions {
   probes?: readonly DeclaredProbe[]
   /** the built-in probes the project opts out of (`hygiene.skip`): each is `skipped` with its reason */
   skip?: readonly SkippedProbe[]
+  /** how much of the catalogue runs; absent is `full` */
+  scope?: Scope
 }
 
 /**
  * The I/O of a pass. `withCheckout` fetches, makes a detached worktree under the factory's data directory (at origin's default
- * branch when `ref` is null, at `ref` otherwise), calls `use`, and removes the worktree on every path. `sweep` runs every
- * probe in the checkout and never throws: a probe that cannot run is a `ProbeRun` of outcome `failed`.
+ * branch when `ref` is null, at `ref` otherwise), calls `use`, and removes the worktree on every path. `sweep` runs the
+ * probes of the scope in the checkout and never throws: a probe that cannot run is a `ProbeRun` of outcome `failed`.
+ * `commitsSince` counts the commits of the checkout after `ref` (null when `ref` is not in its history or git failed).
  */
 export interface HygieneChecker {
   withCheckout<T>(
@@ -108,4 +126,5 @@ export interface HygieneChecker {
     use: (checkout: Checkout) => Promise<T>,
   ): Promise<Result<T, PortError>>
   sweep(checkout: Checkout, options?: SweepOptions): Promise<SweepReport>
+  commitsSince(checkout: Checkout, ref: string): Promise<number | null>
 }

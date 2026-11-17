@@ -1,4 +1,5 @@
 import * as z from 'zod'
+import { HygieneCatalogueEntry } from './hygiene-catalogue.ts'
 import { IssueRef } from './planning.ts'
 import { WorkCounts } from './work-words.ts'
 
@@ -182,11 +183,31 @@ export const HygieneProbeRow = z
     detail: z.string(),
     /** findings of the newest pass this probe raised */
     findings: z.number().int().min(0),
+    /** when the probe last ran in this project; null before its first run */
+    ranAt: at.nullable(),
+    /** the catalogue's entry for it (`HYGIENE_CATALOGUE`): what it checks, whether it is on, its cost and cadence, how to silence it */
+    catalogue: HygieneCatalogueEntry,
   })
   .meta({ id: 'HygieneProbeRow' })
 export type HygieneProbeRow = z.infer<typeof HygieneProbeRow>
 
-export const HYGIENE_FINDING_STATUSES = ['filed', 'left_out', 'refused', 'not_filed'] as const
+/**
+ * How the newest pass handled a finding: `filed` an Issue was filed; `tracked` an Issue of its key is open already, so none was;
+ * `reopened` its Issue closed done and was opened again; `kept` it is red again after reopens and left to a person; `left_out`
+ * the pass's cap or a held class kept it out; `refused` intake refused it; `not_filed` none of these.
+ */
+export const HYGIENE_FINDING_STATUSES = [
+  'filed',
+  'tracked',
+  'reopened',
+  'kept',
+  'left_out',
+  'refused',
+  'not_filed',
+] as const
+
+/** How the Issue a finding filed stands: open, or how it closed; null when the finding has no Issue (left out, refused, not filed). */
+export const HYGIENE_ISSUE_STATES = ['open', 'done', 'healed', 'dropped', 'cancelled'] as const
 
 export const HygieneFindingRow = z
   .strictObject({
@@ -196,12 +217,33 @@ export const HygieneFindingRow = z
     title: z.string(),
     /** how many items it groups (broken links in a file) */
     count: z.number().int().min(0),
-    /** `filed`: a signal was filed; `left_out`: the pass's cap or a held class kept it out; `refused`: intake refused it (see `reason`) */
+    /** how the newest pass handled it (`HYGIENE_FINDING_STATUSES`); `reason` says why for `refused`, `reopened` and `kept` */
     status: z.enum(HYGIENE_FINDING_STATUSES),
     reason: z.string().nullable(),
+    /** the newest Issue this finding's key filed (`loop_findings`), and how it stands; null with none */
+    issue: z.string().nullable(),
+    issueState: z.enum(HYGIENE_ISSUE_STATES).nullable(),
   })
   .meta({ id: 'HygieneFindingRow' })
 export type HygieneFindingRow = z.infer<typeof HygieneFindingRow>
+
+/**
+ * What a pass did to a finding already filed (`hygiene_passes.lifecycle`): `healed` closed its open Issue because the probe is
+ * green again; `noted` told the lead who is on it that the probe is green; `reopened` opened its Issue closed done again because
+ * the probe is still red; `kept` left a still-red finding with a closed Issue alone, with why.
+ */
+export const HYGIENE_ACTIONS = ['healed', 'noted', 'reopened', 'kept'] as const
+
+export const HygieneLifecycleRow = z
+  .strictObject({
+    key: z.string(),
+    issue: z.string(),
+    action: z.enum(HYGIENE_ACTIONS),
+    why: z.string(),
+    at,
+  })
+  .meta({ id: 'HygieneLifecycleRow' })
+export type HygieneLifecycleRow = z.infer<typeof HygieneLifecycleRow>
 
 export const HygienePassRow = z
   .strictObject({
@@ -228,6 +270,8 @@ export const ProjectHygieneModel = z
     /** how many living documents the newest pass found stale, and edited lately */
     documents: z.strictObject({ stale: z.number().int().min(0), slop: z.number().int().min(0) }),
     findings: z.array(HygieneFindingRow),
+    /** what the recent passes did to findings already filed (healed, noted, reopened, kept), newest first, at most 20 */
+    lifecycle: z.array(HygieneLifecycleRow),
     /** the newest five passes, newest first */
     passes: z.array(HygienePassRow),
   })

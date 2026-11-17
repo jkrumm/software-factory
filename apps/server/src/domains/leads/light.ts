@@ -1,4 +1,6 @@
-import { LIGHT_FROM_TRIAGE_SMALL } from '@software-factory/contract'
+import { hygieneClass, LIGHT_CLASSES, LIGHT_FROM_TRIAGE_SMALL } from '@software-factory/contract'
+
+export { hygieneClass, LIGHT_CLASSES }
 // The light seat: mechanical, well-specified work with a check that proves it starts on the cheap seat (the role table's
 // `light` row) instead of the `lead` row. modelpick's table of 2026-11-16 put haiku at high effort level with sonnet at
 // medium (29.9 against 30.8) at a fifth of its cost, and 12 points under sonnet at high: right for work a rule can name,
@@ -7,18 +9,6 @@ import { LIGHT_FROM_TRIAGE_SMALL } from '@software-factory/contract'
 /** The role table's rows a lead starts on. */
 export const LEAD_ROLE = 'lead'
 export const LIGHT_ROLE = 'light'
-
-/** Hygiene finding classes whose fix is mechanical: a link, a word, a context budget, a dependency bump, a project file. */
-export const LIGHT_CLASSES: readonly string[] = [
-  'links',
-  'retired',
-  'context',
-  'deps',
-  'project',
-  'readme',
-  'agentsmd',
-  'stale',
-]
 
 /** What decides whether an Issue with no filed seat starts light. */
 export interface LightFacts {
@@ -36,12 +26,6 @@ export interface LightFacts {
   movedUp: number
   /** the switch above, passed in so a test can turn it */
   triageSmall?: boolean
-}
-
-/** The class a hygiene key names: a probe's first segment, a judgment's kind, a declared probe's name. */
-export function hygieneClass(key: string): string {
-  const [head = '', second = ''] = key.split(':')
-  return head === 'judgment' || head === 'probe' ? second : head
 }
 
 /** Why the Issue starts light (the rule's name, shown on the Issue), or null when it starts on the lead row. */

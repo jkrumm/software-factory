@@ -3,6 +3,7 @@ export * from './read.ts'
 export * from './read-models.ts'
 export * from './kpi-catalog.ts'
 export * from './project-page.ts'
+export * from './hygiene-catalogue.ts'
 export * from './work-words.ts'
 export {
   CancelBody,

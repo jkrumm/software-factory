@@ -1,5 +1,9 @@
 import {
+  BUILT_IN_PROBE_NAMES,
+  catalogueEntry,
+  HYGIENE_ACTIONS,
   HYGIENE_OUTCOMES,
+  type HygieneCatalogueEntry,
   type HygieneFindingRow,
   type HygienePassRow,
   type HygieneProbeRow,
@@ -8,6 +12,7 @@ import {
   type ProjectPageModel,
 } from '@software-factory/contract'
 import type { SQL } from 'bun'
+import type { FindingIssue } from '../domains/loops/hygiene-lifecycle.ts'
 import * as z from 'zod'
 import { countsOf, DIGEST_WINDOW_MS, groupByProject, shipped, type DigestIssue } from '../kernel/digest-scope.ts'
 import { projectOf } from '../kernel/project-of.ts'
@@ -20,17 +25,8 @@ import { loopReads } from './loops.ts'
  * come from `GET /v1/projects/:name/plan` and the open Issues from `GET /v1/flow`.
  */
 
-/** The built-in probes of the hygiene loop, in its order (`PROBES` of `domains/loops/hygiene-model.ts` less `probe`; a test holds them equal). */
-export const BUILT_IN_PROBES = [
-  'check',
-  'links',
-  'retired',
-  'deps',
-  'cochange',
-  'runrules',
-  'browser',
-  'context',
-] as const
+/** The built-in probes of the hygiene loop in the catalogue's order (`PROBES` of `domains/loops/hygiene-model.ts` less `probe`; a test holds them equal). */
+export const BUILT_IN_PROBES = BUILT_IN_PROBE_NAMES
 
 /** The key prefix of a finding the document judgment filed (`JUDGMENT_PREFIX` of `domains/loops/hygiene.ts`; a test holds them equal). */
 export const DOCUMENT_PREFIX = 'judgment:'
@@ -40,6 +36,9 @@ const SHIPPED_ITEMS = 100
 const HOUR_MS = 3_600_000
 const HOURS = 168
 const PASSES = 5
+/** Passes read for the probes' last runs and the lifecycle: a fortnight of daily passes and the weekly ones. */
+const RECENT_PASSES = 16
+const LIFECYCLE_ROWS = 20
 
 const json = (value: unknown): unknown => (typeof value === 'string' ? JSON.parse(value) : value)
 
@@ -150,6 +149,7 @@ const Run = z.object({
   probe: z.string(),
   outcome: z.enum(['clean', 'found', 'skipped', 'failed']),
   detail: z.string().prefault(''),
+  covers: z.string().optional(),
 })
 const Found = z.object({
   probe: z.string(),
@@ -159,12 +159,20 @@ const Found = z.object({
 })
 const Report = z.object({
   ref: z.string().prefault(''),
+  scope: z.enum(['full', 'daily']).prefault('full'),
   runs: z.array(Run).prefault([]),
   findings: z.array(Found).prefault([]),
   stale: z.array(z.unknown()).prefault([]),
   slop: z.array(z.unknown()).prefault([]),
 })
 const Entry = z.object({ key: z.string(), title: z.string().optional(), reason: z.string().optional() })
+const Lifecycle = z.object({
+  key: z.string(),
+  issue: z.string(),
+  action: z.enum(HYGIENE_ACTIONS),
+  why: z.string(),
+  at: z.string(),
+})
 
 const PassRow = z.object({
   id: z.string(),
@@ -176,6 +184,7 @@ const PassRow = z.object({
   filed: z.unknown(),
   over_budget: z.unknown(),
   failed: z.unknown(),
+  lifecycle: z.unknown().optional(),
 })
 
 export interface Pass {
@@ -188,6 +197,7 @@ export interface Pass {
   filed: z.infer<typeof Entry>[]
   overBudget: z.infer<typeof Entry>[]
   failed: z.infer<typeof Entry>[]
+  lifecycle: z.infer<typeof Lifecycle>[]
 }
 
 export const passOf = (raw: unknown): Pass => {
@@ -207,6 +217,10 @@ export const passOf = (raw: unknown): Pass => {
     filed: entries(row.filed),
     overBudget: entries(row.over_budget),
     failed: entries(row.failed),
+    lifecycle: z
+      .array(Lifecycle)
+      .prefault([])
+      .parse(json(row.lifecycle) ?? []),
   }
 }
 
@@ -229,62 +243,145 @@ const passRow = (pass: Pass): HygienePassRow => ({
   filed: pass.filed.length,
 })
 
-function findingRows(pass: Pass): HygieneFindingRow[] {
-  const statusOf = (key: string): Pick<HygieneFindingRow, 'status' | 'reason'> => {
-    if (pass.filed.some((e) => e.key === key)) return { status: 'filed', reason: null }
-    if (pass.overBudget.some((e) => e.key === key)) return { status: 'left_out', reason: null }
-    const refused = pass.failed.find((e) => e.key === key)
-    if (refused) return { status: 'refused', reason: refused.reason ?? null }
-    return { status: 'not_filed', reason: null }
+/** The newest pass that spoke for a probe (it ran and ended clean or found), with that run; none when no pass did. */
+function lastRun(passes: readonly Pass[], match: (run: Pass['report']['runs'][number]) => boolean) {
+  for (const pass of passes) {
+    const run = pass.report.runs.find(match)
+    if (run) return { pass, run }
   }
-  const probes = pass.report.findings.map((f): HygieneFindingRow => ({
-    probe: f.probe,
-    key: f.key,
-    title: f.title,
-    count: f.count,
-    ...statusOf(f.key),
-  }))
-  const documents = [...documentKeys(pass)].map((key): HygieneFindingRow => {
-    const title = [...pass.filed, ...pass.overBudget].find((e) => e.key === key)?.title ?? key
-    return { probe: 'document', key, title, count: 1, ...statusOf(key) }
-  })
-  return [...probes, ...documents]
+  return null
 }
 
-function probeRows(project: Project, pass: Pass | null): HygieneProbeRow[] {
-  const { hygiene } = project.stored
-  const runs = pass?.report.runs ?? []
-  const found = (probe: string, key?: string) =>
-    (pass?.report.findings ?? []).filter((f) => (key === undefined ? f.probe === probe : f.key === key)).length
-  const never = 'No pass has run it yet'
-  const builtIn = BUILT_IN_PROBES.map((name): HygieneProbeRow => {
-    const skip = hygiene.skip.find((s) => s.probe === name)
-    if (skip) return { name, declared: false, target: null, status: 'skipped', detail: skip.reason, findings: 0 }
-    if (name === 'check' && !hygiene.check) {
-      return { name, declared: false, target: null, status: 'skipped', detail: hygiene.reason ?? '', findings: 0 }
+const verdict = (run: Pass['report']['runs'][number]): boolean => run.outcome === 'clean' || run.outcome === 'found'
+
+type FindingRowInput = HygieneFindingRow['issueState']
+
+function statusOf(pass: Pass, key: string, issueState: FindingRowInput): Pick<HygieneFindingRow, 'status' | 'reason'> {
+  if (pass.filed.some((e) => e.key === key)) return { status: 'filed', reason: null }
+  const step = pass.lifecycle.find((e) => e.key === key && (e.action === 'reopened' || e.action === 'kept'))
+  if (step) return { status: step.action === 'reopened' ? 'reopened' : 'kept', reason: step.why.split('\n')[0] ?? null }
+  if (pass.overBudget.some((e) => e.key === key)) return { status: 'left_out', reason: null }
+  const refused = pass.failed.find((e) => e.key === key)
+  if (refused) return { status: 'refused', reason: refused.reason ?? null }
+  return { status: issueState === 'open' ? 'tracked' : 'not_filed', reason: null }
+}
+
+/**
+ * The findings that stand now: for each probe the findings of the newest pass that ran it (a daily pass runs only the cheap
+ * probes, so the weekly ones stand on the weekly pass), then the document judgment's of the newest full pass. Each carries its
+ * newest Issue and how that stands.
+ */
+function findingRows(passes: readonly Pass[], issues: ReadonlyMap<string, FindingIssue>): HygieneFindingRow[] {
+  const rows: HygieneFindingRow[] = []
+  const seenProbe = new Set<string>()
+  const issueOf = (key: string) => {
+    const entry = issues.get(key)
+    if (!entry) return { issue: null, issueState: null }
+    return { issue: entry.issue, issueState: entry.state === 'closed' ? (entry.outcome ?? 'done') : 'open' } as const
+  }
+  const seenKey = new Set<string>()
+  const push = (pass: Pass, f: Pass['report']['findings'][number]) => {
+    if (seenKey.has(f.key)) return
+    seenKey.add(f.key)
+    const link = issueOf(f.key)
+    rows.push({
+      probe: f.probe,
+      key: f.key,
+      title: f.title,
+      count: f.count,
+      ...statusOf(pass, f.key, link.issueState),
+      ...link,
+    })
+  }
+  const speaks = (run: Pass['report']['runs'][number], f: Pass['report']['findings'][number]): boolean =>
+    run.covers ? f.key === run.covers || f.key.startsWith(`${run.covers}:`) : f.probe === run.probe
+  for (const pass of passes) {
+    for (const run of pass.report.runs) {
+      if (!verdict(run)) continue
+      const id = run.covers ?? run.probe
+      if (seenProbe.has(id)) continue
+      seenProbe.add(id)
+      for (const f of pass.report.findings.filter((f) => speaks(run, f))) push(pass, f)
     }
-    const run = runs.find((r) => r.probe === name)
+    // a finding no run of its pass names (a pass recorded before the runs carried their keys) still stands, once
+    for (const f of pass.report.findings) {
+      if (!pass.report.runs.some((run) => speaks(run, f))) push(pass, f)
+    }
+  }
+  const fullPass = passes.find((pass) => pass.report.scope === 'full')
+  if (fullPass) {
+    for (const key of documentKeys(fullPass)) {
+      const title = [...fullPass.filed, ...fullPass.overBudget].find((e) => e.key === key)?.title ?? key
+      const link = issueOf(key)
+      rows.push({ probe: 'document', key, title, count: 1, ...statusOf(fullPass, key, link.issueState), ...link })
+    }
+  }
+  return rows
+}
+
+/** The catalogue's rows for this project: each probe with its entry, what the project switched off, and the last run in the recent passes. */
+function probeRows(project: Project, passes: readonly Pass[]): HygieneProbeRow[] {
+  const { hygiene } = project.stored
+  const never = 'No pass has run it yet'
+  const entryOf = (name: string): HygieneCatalogueEntry => {
+    const entry = catalogueEntry(name)
+    if (!entry) throw new Error(`the catalogue has no entry ${name}`)
+    return entry
+  }
+  const builtIn = BUILT_IN_PROBES.map((name): HygieneProbeRow => {
+    const catalogue = entryOf(name)
+    const base = { name, declared: false, target: null, catalogue } as const
+    const skip = hygiene.skip.find((s) => s.probe === name)
+    if (skip) return { ...base, status: 'skipped', detail: skip.reason, findings: 0, ranAt: null }
+    if (name === 'check' && !hygiene.check) {
+      return { ...base, status: 'skipped', detail: hygiene.reason ?? '', findings: 0, ranAt: null }
+    }
+    const last = lastRun(passes, (run) => run.probe === name)
     return {
-      name,
-      declared: false,
-      target: null,
-      status: run?.outcome ?? 'never',
-      detail: run?.detail ?? never,
-      findings: found(name),
+      ...base,
+      status: last?.run.outcome ?? 'never',
+      detail: last?.run.detail ?? never,
+      findings: last ? last.pass.report.findings.filter((f) => f.probe === name).length : 0,
+      ranAt: last ? iso(last.pass.at) : null,
     }
   })
   const declared = hygiene.probes.map((probe): HygieneProbeRow => {
-    const run = runs.find((r) => r.probe === 'probe' && r.detail.startsWith(`${probe.name}:`))
+    const last = lastRun(
+      passes,
+      (run) =>
+        run.probe === 'probe' && (run.covers === `probe:${probe.name}` || run.detail.startsWith(`${probe.name}:`)),
+    )
     return {
       name: probe.name,
       declared: true,
       target: probe.target,
-      status: run?.outcome ?? 'never',
-      detail: run?.detail ?? never,
-      findings: found('probe', `probe:${probe.name}`),
+      catalogue: entryOf('probe'),
+      status: last?.run.outcome ?? 'never',
+      detail: last?.run.detail ?? never,
+      findings: last ? last.pass.report.findings.filter((f) => f.key === `probe:${probe.name}`).length : 0,
+      ranAt: last ? iso(last.pass.at) : null,
     }
   })
-  return [...builtIn, ...declared]
+  const fullPass = passes.find((pass) => pass.report.scope === 'full')
+  const judgment: HygieneProbeRow = {
+    name: 'judgment',
+    declared: false,
+    target: null,
+    catalogue: entryOf('judgment'),
+    status: !fullPass
+      ? 'never'
+      : fullPass.judgment.outcome === 'failed'
+        ? 'failed'
+        : fullPass.judgment.outcome === 'skipped'
+          ? 'skipped'
+          : documentKeys(fullPass).size > 0
+            ? 'found'
+            : 'clean',
+    detail: fullPass ? fullPass.judgment.reason || never : never,
+    findings: fullPass ? documentKeys(fullPass).size : 0,
+    ranAt: fullPass ? iso(fullPass.at) : null,
+  }
+  return [...builtIn, ...declared, judgment]
 }
 
 /** The newest passes of the project, newest first: the pass's repo is the project's name or its path. */
@@ -303,17 +400,30 @@ export async function readProjectHygiene(
 ): Promise<ProjectHygieneModel | null> {
   const project = projectOf(await loadProjects(sql), options.name)
   if (!project || (options.redact && project.work)) return null
-  const passes = await passesOf(sql, project, PASSES)
+  const passes = await passesOf(sql, project, RECENT_PASSES)
   const last = passes[0] ?? null
+  const issues = new Map(
+    (await loopReads(sql).findingIssues(project.name.includes('~') ? project.repo : project.name)).map((entry) => [
+      entry.key,
+      entry,
+    ]),
+  )
   return {
     at: iso(options.now),
     project: project.name,
     skipCheck: project.stored.hygiene.check ? null : (project.stored.hygiene.reason ?? ''),
-    probes: probeRows(project, last),
+    probes: probeRows(project, passes),
     lastPass: last ? passRow(last) : null,
-    documents: { stale: last?.report.stale.length ?? 0, slop: last?.report.slop.length ?? 0 },
-    findings: last ? findingRows(last) : [],
-    passes: passes.map(passRow),
+    documents: {
+      stale: passes.find((p) => p.report.scope === 'full')?.report.stale.length ?? 0,
+      slop: passes.find((p) => p.report.scope === 'full')?.report.slop.length ?? 0,
+    },
+    findings: findingRows(passes, issues),
+    lifecycle: passes
+      .flatMap((pass) => pass.lifecycle)
+      .sort((a, b) => b.at.localeCompare(a.at))
+      .slice(0, LIFECYCLE_ROWS),
+    passes: passes.slice(0, PASSES).map(passRow),
   }
 }
 

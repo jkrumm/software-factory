@@ -334,7 +334,12 @@ test('the hygiene reads each probe, the newest pass and how each finding ended',
   expect(probe('deps')).toMatchObject({ status: 'clean', findings: 1 })
   expect(probe('retired')).toMatchObject({ status: 'never' })
   expect(probe('bundle')).toMatchObject({ declared: true, target: 'bundle-size', status: 'found', findings: 1 })
-  expect(model.probes.length).toBe(BUILT_IN_PROBES.length + 1)
+  // the built-in probes, the project's own and the document judgment: each row carries the catalogue's entry for it
+  expect(model.probes.length).toBe(BUILT_IN_PROBES.length + 2)
+  expect(model.probes.map((p) => p.catalogue.name)).toEqual([...BUILT_IN_PROBES, 'probe', 'judgment'])
+  expect(probe('links')?.catalogue).toMatchObject({ enabled: 'on', cadence: 'daily', seat: 'light', skippable: true })
+  expect(probe('bundle')?.catalogue).toMatchObject({ name: 'probe', enabled: 'opt-in' })
+  expect(probe('links')?.ranAt).toBe(ago(24).toISOString())
   expect(model.lastPass).toMatchObject({ id: 'hp_new', ref: 'abc123', findings: 4, filed: 2 })
   expect(model.documents).toEqual({ stale: 2, slop: 1 })
   const status = (key: string) => model.findings.find((f) => f.key === key)

@@ -13,14 +13,20 @@ import {
 import { tmpdir } from 'node:os'
 import { dirname, join } from 'node:path'
 import { rootedRepos } from '../../src/adapters/git/repos.ts'
+import { HYGIENE_CATALOGUE } from '@software-factory/contract'
 import { createHygieneChecker } from '../../src/adapters/hygiene/index.ts'
 import { brokenLinks } from '../../src/adapters/hygiene/probes/links.ts'
-import { coChanged, parseLog } from '../../src/adapters/hygiene/probes/cochange.ts'
+import { allCoChanged, coChanged, parseLog } from '../../src/adapters/hygiene/probes/cochange.ts'
 import { sections } from '../../src/adapters/hygiene/probes/context.ts'
 import { parseOutdated, severity } from '../../src/adapters/hygiene/probes/deps.ts'
 import { retiredScope } from '../../src/adapters/hygiene/probes/retired.ts'
 import { publishedHost } from '../../src/adapters/hygiene/probes/runrules.ts'
-import type { DeclaredProbe, SkippedProbe, SweepReport } from '../../src/domains/loops/hygiene-model.ts'
+import {
+  type DeclaredProbe,
+  PROBES,
+  type SkippedProbe,
+  type SweepReport,
+} from '../../src/domains/loops/hygiene-model.ts'
 
 const REPO_ROOT = join(import.meta.dir, '..', '..', '..', '..')
 const ID = {
@@ -100,11 +106,12 @@ async function sweep(
     skipCheck?: string
     probes?: DeclaredProbe[]
     skip?: SkippedProbe[]
+    scope?: 'full' | 'daily'
   } = {},
 ): Promise<SweepReport> {
-  const { skipCheck, probes, skip, ...tools } = options
+  const { skipCheck, probes, skip, scope, ...tools } = options
   const c = checker(tools)
-  const result = await c.withCheckout(name, null, (checkout) => c.sweep(checkout, { skipCheck, probes, skip }))
+  const result = await c.withCheckout(name, null, (checkout) => c.sweep(checkout, { skipCheck, probes, skip, scope }))
   if (!result.ok) throw new Error(result.error.detail)
   return result.value
 }
@@ -286,18 +293,41 @@ describe('check probe', () => {
     expect(findings(report, 'check')).toEqual([])
   })
 
+  test('a daily sweep runs only the probes the catalogue marks daily, no check, no declared probe, no documents to judge', async () => {
+    const repo = makeRepo({ 'a.txt': 'x', 'docs/guide.md': '[x](missing.md)\n' })
+    const report = await sweep(repo.name, { scope: 'daily', probes: [{ name: 'first', target: 'one' }] })
+    const daily: readonly string[] = HYGIENE_CATALOGUE.filter((entry) => entry.cadence === 'daily').map(
+      (entry) => entry.name,
+    )
+    expect(report.scope).toBe('daily')
+    expect(report.runs.map((r) => r.probe)).toEqual(PROBES.filter((probe) => daily.includes(probe)))
+    expect(report.runs.some((r) => r.probe === 'check' || r.probe === 'probe')).toBe(false)
+    expect(report.stale).toEqual([])
+    expect(report.slop).toEqual([])
+    expect(findings(report, 'links').map((f) => f.key)).toEqual(['links:docs/guide.md'])
+  })
+
+  test('commitsSince counts the commits after a ref, and is null for a ref the history lacks', async () => {
+    const repo = makeRepo({ 'a.txt': '1' })
+    const c = checker()
+    const first = git(repo.work, ['rev-parse', 'HEAD']).trim()
+    commit(repo.work, { 'a.txt': '2' })
+    git(repo.work, ['push', '-q', 'origin', 'HEAD'])
+    commit(repo.work, { 'a.txt': '3' })
+    git(repo.work, ['push', '-q', 'origin', 'HEAD'])
+    const counted = await c.withCheckout(repo.name, null, async (checkout) => [
+      await c.commitsSince(checkout, first),
+      await c.commitsSince(checkout, checkout.ref),
+      await c.commitsSince(checkout, '0'.repeat(40)),
+    ])
+    expect(counted.ok && counted.value).toEqual([2, 0, null])
+  })
+
   test('the sweep runs the probes in PROBES order, one run each', async () => {
     const report = await sweep(makeRepo({ 'a.txt': 'x' }).name)
-    expect(report.runs.map((r) => r.probe)).toEqual([
-      'check',
-      'links',
-      'retired',
-      'deps',
-      'cochange',
-      'runrules',
-      'browser',
-      'context',
-    ])
+    expect(report.runs.map((r) => r.probe)).toEqual(PROBES.filter((probe) => probe !== 'probe'))
+    // each run names the keys it speaks for: its own probe
+    expect(report.runs.map((r) => r.covers)).toEqual(report.runs.map((r) => r.probe))
   })
 })
 
@@ -353,18 +383,8 @@ describe('declared probes', () => {
         { name: 'second', target: 'two' },
       ],
     })
-    expect(two.runs.map((r) => r.probe)).toEqual([
-      'check',
-      'links',
-      'retired',
-      'deps',
-      'cochange',
-      'runrules',
-      'browser',
-      'context',
-      'probe',
-      'probe',
-    ])
+    expect(two.runs.map((r) => r.probe)).toEqual([...PROBES.filter((probe) => probe !== 'probe'), 'probe', 'probe'])
+    expect(two.runs.slice(-2).map((r) => r.covers)).toEqual(['probe:first', 'probe:second'])
     expect(two.runs.slice(-2).map((r) => r.outcome)).toEqual(['found', 'clean'])
   })
 })
@@ -491,6 +511,7 @@ describe('browser probe', () => {
     })
     expect(run(report, 'browser')).toEqual({
       probe: 'browser',
+      covers: 'browser',
       outcome: 'skipped',
       detail: 'the project opts out: keeps the devtools server',
     })
@@ -586,7 +607,12 @@ describe('context probe', () => {
 
   test('no AGENTS.md is skipped, an untracked or non-AGENTS file does not count', async () => {
     const report = await sweep(makeRepo({ 'README.md': sized(20_000), 'docs/agents.md': sized(20_000) }).name)
-    expect(run(report, 'context')).toEqual({ probe: 'context', outcome: 'skipped', detail: 'no AGENTS.md in the repo' })
+    expect(run(report, 'context')).toEqual({
+      probe: 'context',
+      covers: 'context',
+      outcome: 'skipped',
+      detail: 'no AGENTS.md in the repo',
+    })
     expect(keys(report)).toEqual([])
   })
 
@@ -596,6 +622,7 @@ describe('context probe', () => {
     })
     expect(run(report, 'context')).toEqual({
       probe: 'context',
+      covers: 'context',
       outcome: 'skipped',
       detail: 'the project opts out: a generated file, split later',
     })
@@ -759,6 +786,12 @@ describe('deps probe', () => {
 
 describe('cochange probe', () => {
   const commits = (n: number, files: string[]) => Array.from({ length: n }, () => files)
+
+  test('only the strongest pair is raised; the others that qualify are named, so the lifecycle never heals them', () => {
+    const history = [...commits(20, ['src/a/x.ts', 'lib/y.ts']), ...commits(16, ['src/b/p.ts', 'lib/q.ts'])]
+    expect(coChanged(history).map((p) => `${p.a}|${p.b}`)).toEqual(['lib/y.ts|src/a/x.ts'])
+    expect(allCoChanged(history).map((p) => `${p.a}|${p.b}`)).toEqual(['lib/y.ts|src/a/x.ts', 'lib/q.ts|src/b/p.ts'])
+  })
 
   test('a pair in different directories that moves together is a finding; filters hold', () => {
     const pairs = coChanged([

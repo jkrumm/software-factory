@@ -32,7 +32,12 @@ the next reader learns why the value is not the default.
 - `factory project check [file]` checks a file offline (default `project.yaml`, `-` is stdin). An error names its line
   and column and exits 2; the factory would refuse that file and keep the last valid one. A warning exits 0 and names:
   a retired key, a `make <target>` the Makefile beside the file lacks, a `name` that is not the repo's directory, and a
-  comment that cites a document that does not exist.
+  comment that cites a document that does not exist. Three more name what the file leaves unsaid or contradicts: a
+  `doctor` target the Makefile defines but `doctor` does not name; a `verify` target the Makefile defines while the
+  mode deploys and no `deploy.targets` entry says `verify: make verify`; `deploy.targets` listed under `deploy.mode:
+  none` (the default), where nothing deploys and no target is ever verified; and a constant set without its reason
+  (`leads` below the default, `slots.run`, `budgets.*`) that has no comment on its line, the line above or its
+  parent key's line.
 - `factory project schema` prints this page offline; `--format json` adds the JSON Schema.
 - `factory project sync --fetch true` reads the merged file now; `factory project show <repo>` prints what is in force,
   with `projectError` when the file on the default branch does not parse.
@@ -139,8 +144,8 @@ list's entry, `<name>` a map's key.
 | `hygiene` | object | `{"check":true,"skip":[],"probes":[]}` | the hygiene loop (apps/server/src/app/loops/hygiene.ts) | what the weekly hygiene pass runs on the repo |
 | `hygiene.check` | boolean | `true` | the hygiene loop (apps/server/src/app/loops/hygiene.ts) | `false`: the repo's `make check` needs a lab the factory host does not have, so the weekly pass skips its `check` probe (with `reason`) |
 | `hygiene.reason` | string | — | the hygiene loop (apps/server/src/app/loops/hygiene.ts) | why `check` is false; required then |
-| `hygiene.skip` | list of object | `[]` | the hygiene loop (apps/server/src/app/loops/hygiene.ts) | built-in probes the repo opts out of, each with its reason (links, retired, deps, cochange, runrules, browser, context) |
-| `hygiene.skip[].probe` | `links`, `retired`, `deps`, `cochange`, `runrules`, `browser`, `context` | required | the hygiene loop (apps/server/src/app/loops/hygiene.ts) | the built-in probe switched off |
+| `hygiene.skip` | list of object | `[]` | the hygiene loop (apps/server/src/app/loops/hygiene.ts) | built-in probes the repo opts out of, each with its reason (advisories, links, retired, project, deps, ci, agentsmd, readme, stale, deadcode, cochange, runrules, browser, context) |
+| `hygiene.skip[].probe` | `advisories`, `links`, `retired`, `project`, `deps`, `ci`, `agentsmd`, `readme`, `stale`, `deadcode`, `cochange`, `runrules`, `browser`, `context` | required | the hygiene loop (apps/server/src/app/loops/hygiene.ts) | the built-in probe switched off |
 | `hygiene.skip[].reason` | string | required | the hygiene loop (apps/server/src/app/loops/hygiene.ts) | why: a probe is never switched off without one; the pass shows it |
 | `hygiene.probes` | list of object | `[]` | the hygiene loop (apps/server/src/app/loops/hygiene.ts) | the repo's own weekly probes, at most 16 |
 | `hygiene.probes[].name` | string | required | the hygiene loop (apps/server/src/app/loops/hygiene.ts) | the probe's name; a finding is keyed `probe:<name>` |

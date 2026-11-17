@@ -1,5 +1,6 @@
 import type {
   HygieneFindingRow,
+  HygieneLifecycleRow,
   HygieneProbeRow,
   PlanRowView,
   ProjectHygieneModel,
@@ -31,6 +32,9 @@ export const PROBE_TONES: Record<HygieneProbeRow['status'], Tone> = {
 
 export const FINDING_WORDS: Record<HygieneFindingRow['status'], string> = {
   filed: 'Filed',
+  tracked: 'On an Issue',
+  reopened: 'Reopened',
+  kept: 'Left to you',
   left_out: 'Left out',
   refused: 'Refused',
   not_filed: 'Not filed',
@@ -38,6 +42,9 @@ export const FINDING_WORDS: Record<HygieneFindingRow['status'], string> = {
 
 export const FINDING_TONES: Record<HygieneFindingRow['status'], Tone> = {
   filed: 'accent',
+  tracked: 'neutral',
+  reopened: 'warn',
+  kept: 'bad',
   left_out: 'neutral',
   refused: 'bad',
   not_filed: 'neutral',
@@ -45,10 +52,50 @@ export const FINDING_TONES: Record<HygieneFindingRow['status'], Tone> = {
 
 export const FINDING_WHY: Record<HygieneFindingRow['status'], string> = {
   filed: 'A signal was filed for it; it became an Issue or joined one.',
+  tracked: 'An Issue of this finding is open already, so the pass filed nothing.',
+  reopened: 'Its Issue had closed done and the probe is red again: the Issue was opened again, no second one filed.',
+  kept: 'It is red again after its Issue was reopened twice. A person decides; no Issue is filed.',
   left_out:
     "The pass's cap, or a finding class held for mostly dropped Issues, kept it out. The next pass finds it again.",
   refused: 'Intake refused the signal.',
   not_filed: 'The pass raised it and filed nothing.',
+}
+
+/** How the Issue a finding filed stands, in the words of an Issue's end. */
+export const ISSUE_STATE_WORDS: Record<NonNullable<HygieneFindingRow['issueState']>, string> = {
+  open: 'Open',
+  done: 'Done',
+  healed: 'Healed',
+  dropped: 'Dropped',
+  cancelled: 'Cancelled',
+}
+
+/** What the pass did to a finding already filed. */
+export const ACTION_WORDS: Record<HygieneLifecycleRow['action'], string> = {
+  healed: 'Healed',
+  noted: 'Told the lead',
+  reopened: 'Reopened',
+  kept: 'Left to you',
+}
+
+export const ACTION_TONES: Record<HygieneLifecycleRow['action'], Tone> = {
+  healed: 'good',
+  noted: 'neutral',
+  reopened: 'warn',
+  kept: 'bad',
+}
+
+/** The catalogue's words: whether a probe runs by default, when, and at what cost. */
+export const ENABLED_WORDS: Record<HygieneProbeRow['catalogue']['enabled'], string> = {
+  on: 'On',
+  auto: 'When detected',
+  'opt-in': 'Opt in',
+}
+export const COST_WORDS: Record<HygieneProbeRow['catalogue']['cost'], string> = {
+  file: 'reads files',
+  tool: 'runs a tool',
+  make: 'runs make',
+  agent: 'one agent call',
 }
 
 /** How a pass ended in one word, and the tone of that word. */

@@ -12,7 +12,16 @@ export interface Outcome {
   outcome: ProbeRun['outcome']
   detail: string
   findings: ProbeFinding[]
+  /** exact keys this run did not judge, or `*` for all of them: see `unjudging` */
+  unjudged?: string[]
 }
+
+/**
+ * Finding keys a run could not judge although it ended clean or found (a part of the probe failed, a tool was missing): the
+ * lifecycle never heals them on this run's word.
+ */
+export const unjudging = (outcome: Outcome, keys: readonly string[]): Outcome =>
+  keys.length ? { ...outcome, unjudged: [...keys] } : outcome
 
 export const clean = (detail: string): Outcome => ({ outcome: 'clean', detail, findings: [] })
 export const skipped = (detail: string): Outcome => ({ outcome: 'skipped', detail, findings: [] })

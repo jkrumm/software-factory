@@ -177,7 +177,9 @@ export async function readProjectIndex(
   const twoWeeks = new Date(now.getTime() - 2 * WEEK_MS)
   const weekAgo = new Date(now.getTime() - WEEK_MS)
 
-  const passRows: unknown[] = await sql`SELECT DISTINCT ON (repo) * FROM factory.hygiene_passes ORDER BY repo, at DESC`
+  // the list shows the weekly (full) passes: a daily pass runs the cheap probes only, so counting it would end every weekly finding's run
+  const passRows: unknown[] = await sql`
+    SELECT DISTINCT ON (repo) * FROM factory.hygiene_passes WHERE COALESCE(report->>'scope', 'full') = 'full' ORDER BY repo, at DESC`
   const newest = new Map<string, Pass>()
   for (const pass of passRows.map(passOf)) {
     const owner = projectOf(projects, pass.repo)
@@ -186,7 +188,8 @@ export async function readProjectIndex(
   }
   const findingRows: unknown[] = await sql`
     SELECT repo, at, report->'findings' AS keys, coalesce(filed, '[]'::jsonb) || coalesce(over_budget, '[]'::jsonb) || coalesce(failed, '[]'::jsonb) AS entries
-    FROM factory.hygiene_passes WHERE at >= ${new Date(now.getTime() - FINDING_LOOKBACK_MS)}`
+    FROM factory.hygiene_passes
+    WHERE at >= ${new Date(now.getTime() - FINDING_LOOKBACK_MS)} AND COALESCE(report->>'scope', 'full') = 'full'`
   const earlier = byProject(
     projects,
     findingRows.map((raw) => {
