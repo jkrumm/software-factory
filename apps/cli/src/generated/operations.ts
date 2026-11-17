@@ -129,6 +129,7 @@ import {
   VerdictBody,
   VerdictView,
   WaitCensusModel,
+  WithdrawBody,
   WorthBody,
 } from '@software-factory/contract'
 import type { Operation } from '../operation.ts'
@@ -571,6 +572,36 @@ export const OPERATIONS: readonly Operation[] = [
     bodySchema: ShipBody,
     responses: {
       200: ShipAnswer,
+      400: ErrorBody,
+      401: ErrorBody,
+      403: ErrorBody,
+      404: ErrorBody,
+      409: ErrorBody,
+      422: ErrorBody,
+      500: ErrorBody,
+      503: ErrorBody,
+    },
+  },
+  {
+    operationId: 'issue.withdraw',
+    command: ['issue', 'withdraw'],
+    method: 'POST',
+    path: '/issues/{id}/withdraw',
+    summary:
+      'the filer of a signal takes back the Issue it made, while no lead has it (409 once one does, or when another source also filed it)',
+    pathParams: ['id'],
+    queryParams: [],
+    body: true,
+    queryFlags: [],
+    bodyFields: [
+      { name: 'from', flag: 'from', kind: 'string', repeatable: false, required: true, untyped: false },
+      { name: 'reason', flag: 'reason', kind: 'string', repeatable: false, required: true, untyped: false },
+      { name: 'call', flag: 'call', kind: 'string', repeatable: false, required: false, untyped: false },
+    ],
+    args: [],
+    bodySchema: WithdrawBody,
+    responses: {
+      200: LeadVerbAnswer,
       400: ErrorBody,
       401: ErrorBody,
       403: ErrorBody,

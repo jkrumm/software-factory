@@ -19,6 +19,7 @@ export {
   NoteBody,
   SeatBody,
   SessionNoteBody,
+  WithdrawBody,
 } from './issues.ts'
 export * from './filing.ts'
 export * from './seat.ts'
