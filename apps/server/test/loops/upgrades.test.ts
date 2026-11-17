@@ -52,10 +52,17 @@ test('batches: the rest first, then groups, then each major alone; a group of ma
   ])
 })
 
-test('a long plan is cut at 60 packages and says so; an all-held plan says there is no batch', () => {
+test('a long plan is cut at 40 packages and says so; an all-held plan says there is no batch', () => {
   const many = Array.from({ length: 70 }, (_, i) => row(`p${String(i).padStart(2, '0')}`, 'minor'))
   const lines = planLines(planUpgrades(many, now), now)
-  expect(lines.filter((l) => l.startsWith('  p')).length).toBe(60)
-  expect(lines.at(-1)).toContain('and 10 more')
+  expect(lines.filter((l) => l.startsWith('  p')).length).toBe(40)
+  expect(lines.at(-1)).toContain('and 30 more')
   expect(planLines(planUpgrades([row('x', 'minor', 1)], now), now).join('\n')).toContain('none, every outdated version')
+})
+
+test('a long plan cuts batch rows, never the held ones', () => {
+  const many = Array.from({ length: 50 }, (_, i) => row(`p${String(i).padStart(2, '0')}`, 'minor'))
+  const lines = planLines(planUpgrades([...many, row('young', 'minor', 1)], now), now)
+  expect(lines.filter((l) => l.includes('young'))).toHaveLength(1)
+  expect(lines.at(-1)).toContain('and 11 more')
 })

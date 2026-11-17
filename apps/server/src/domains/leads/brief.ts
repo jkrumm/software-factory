@@ -117,7 +117,8 @@ export interface BriefInput {
 
 /** The most signals a brief quotes, and the longest text and facts of each: the brief is one argument of one process. */
 export const MAX_BRIEF_SIGNALS = 5
-export const MAX_SIGNAL_TEXT_CHARS = 2_000
+/** 12 000: a dependency finding's text is its evidence, upgrade plan and procedure (~9 KB at most); the lead must read all of it. */
+export const MAX_SIGNAL_TEXT_CHARS = 12_000
 export const MAX_SIGNAL_FACTS_CHARS = 6_000
 
 /** One signal as the lead reads it: its title, its text, its facts as compact JSON, each clipped. */

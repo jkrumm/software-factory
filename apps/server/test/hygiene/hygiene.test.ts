@@ -19,6 +19,7 @@ import { brokenLinks } from '../../src/adapters/hygiene/probes/links.ts'
 import { allCoChanged, coChanged, parseLog } from '../../src/adapters/hygiene/probes/cochange.ts'
 import { sections } from '../../src/adapters/hygiene/probes/context.ts'
 import { type Released, parseOutdated, severity } from '../../src/adapters/hygiene/probes/deps.ts'
+import { MAX_SIGNAL_TEXT_CHARS, signalLines } from '../../src/domains/leads/brief.ts'
 import { probeSignalText } from '../../src/domains/loops/hygiene.ts'
 import { retiredScope } from '../../src/adapters/hygiene/probes/retired.ts'
 import { publishedHost } from '../../src/adapters/hygiene/probes/runrules.ts'
@@ -822,11 +823,13 @@ describe('deps probe: the Issue carries the upgrade procedure', () => {
     // one batch of the unrelated patches and minors, one of the @tanstack group, the @mantine majors together, left-pad alone
     expect(text).toMatch(/Batch 1 \(patches and minors; one batch\):\n {2}hono .*\n {2}typescript /)
     expect(text).toMatch(/\(@tanstack; move together\):\n {2}@tanstack\/query .*\n {2}@tanstack\/router /)
-    expect(text).toMatch(/\(@mantine, majors that move together; alone\):\n {2}@mantine\/core .*\n {2}@mantine\/hooks /)
+    expect(text).toMatch(
+      /\(@mantine, majors that move together; one batch, apart from every other\):\n {2}@mantine\/core .*\n {2}@mantine\/hooks /,
+    )
     expect(text).toMatch(/\(left-pad; alone\):\n {2}left-pad 1\.0\.0 -> 2\.0\.0 \(major\)/)
     // a major of 10 days and a patch of 2 days are inside the 14- and 7-day cooldowns: held, in no batch
-    const [batches = '', held = ''] = text.split('Held back, do not upgrade yet:')
-    expect(batches).not.toContain('young-')
+    const held = text.slice(text.indexOf('Held back'), text.indexOf('Batch 1'))
+    expect(text.slice(text.indexOf('Batch 1'), text.indexOf('Procedure'))).not.toContain('young-')
     expect(held).toMatch(/until \d{4}-\d\d-\d\d \(14-day cooldown\): young-major 1\.0\.0 -> 2\.0\.0 \(major\)/)
     expect(held).toMatch(/\(7-day cooldown\): young-patch 1\.0\.0 -> 1\.0\.1 \(patch\)/)
     // a version whose date is unknown is not held, and says so
@@ -852,7 +855,11 @@ describe('deps probe: the Issue carries the upgrade procedure', () => {
     expect(text.indexOf('Evidence (')).toBeLessThan(text.indexOf('Upgrade plan as of'))
     expect(text).toContain('Procedure (light seat')
     expect(text).toContain('Seat: light')
-    expect(text.length).toBeLessThan(20_000)
+    expect(text.length).toBeLessThan(MAX_SIGNAL_TEXT_CHARS)
+    // what the lead's brief quotes of the signal still ends in the procedure's last rule
+    const quoted = signalLines({ source: 'agent:app', at: new Date(), title: f.title, text, facts: null })
+    expect(quoted).toContain('7. Report')
+    expect(quoted).toContain('Held back, do not upgrade yet:')
   })
 })
 

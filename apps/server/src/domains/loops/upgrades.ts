@@ -20,7 +20,7 @@ export const COOLDOWN_DAYS = 7
 export const MAJOR_COOLDOWN_DAYS = 14
 const DAY = 86_400_000
 /** The most packages a plan names; the rest are one line. */
-export const MAX_PLAN_ROWS = 60
+export const MAX_PLAN_ROWS = 40
 
 export interface Batch {
   kind: 'together' | 'major' | 'rest'
@@ -116,18 +116,26 @@ export function planLines(plan: UpgradePlan, now: Date): string[] {
     else lines.push(`${prefix}${rowText(row)}`)
     shown++
   }
-  plan.batches.forEach((batch, index) => {
-    const how = batch.kind === 'major' ? 'alone' : batch.kind === 'together' ? 'move together' : 'one batch'
-    lines.push(`Batch ${index + 1} (${batch.label}; ${how}):`)
-    for (const row of batch.rows) take(row, '  ')
-  })
-  if (!plan.batches.length) lines.push('Batches: none, every outdated version is still inside its cooldown.')
+  // The held rows come first: they are the ones a lead must not miss, so a long plan cuts batch rows, never them.
   if (plan.held.length) {
     lines.push('Held back, do not upgrade yet:')
     for (const { row, until } of plan.held)
       take(row, `  until ${day(until)} (${cooldownDays(row.size)}-day cooldown): `)
   }
-  if (cut) lines.push(`  and ${cut} more: the full list is the evidence above and the ecosystem's own outdated command`)
+  if (!plan.batches.length) lines.push('Batches: none, every outdated version is still inside its cooldown.')
+  plan.batches.forEach((batch, index) => {
+    const how =
+      batch.kind === 'major'
+        ? batch.rows.length > 1
+          ? 'one batch, apart from every other'
+          : 'alone'
+        : batch.kind === 'together'
+          ? 'move together'
+          : 'one batch'
+    lines.push(`Batch ${index + 1} (${batch.label}; ${how}):`)
+    for (const row of batch.rows) take(row, '  ')
+  })
+  if (cut) lines.push(`  and ${cut} more: run the ecosystem's own outdated command for them`)
   return lines
 }
 
@@ -136,7 +144,7 @@ export function procedureLines(): string[] {
   return [
     'Procedure (light seat; follow it in order):',
     `1. Cooldown: skip a version younger than ${COOLDOWN_DAYS} days (${MAJOR_COOLDOWN_DAYS} for a major) unless it fixes an advisory (the \`advisories\` finding or \`bun audit\` names it). The held list above is the plan's answer; a version with an unknown release date is checked by hand first (\`npm view <name> time.<version>\`, the registry page or the tag date).`,
-    "2. Batches: work the batches above in order, one commit each. Patches and minors of one ecosystem go together, packages that move together (a framework and its plugins, a monorepo's packages) go together, every major goes alone. If a batch is red, split it by halves to find the package that breaks it.",
+    "2. Batches: work the batches above in order, one commit each. Patches and minors of one ecosystem go together, packages that move together (a framework and its plugins, a monorepo's packages) go together, every major goes alone (the majors of one scope that must move together are one batch of their own). If a batch is red, split it by halves to find the package that breaks it.",
     '3. Read before you edit: for every major, and for every batch that fails, read the changelog and the migration guide through `/research` (never from memory), then write what changed into the commit body (breaking changes met, config touched, a one-line source link).',
     "4. Prove it: after each batch run the repo's fast check (`make check-fast`, else its `make check`), at the end the full check; for a deployed service, ship and wait for verify. A dependency commit is reviewed like any other: run `/review` on the range before the ship (order 6), a `chore(deps)` commit included.",
     '5. Never leave half done: a batch that cannot be made green is reverted and filed as its own signal with the error (`factory signal file --from agent:<repo> --repo <repo> --title "Upgrade <batch> fails: <error>" --text "<package versions, the failing command, the output>"`).',
