@@ -3,14 +3,21 @@ import { mkdtemp, rm } from 'node:fs/promises'
 import { constants, tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { send } from '@software-factory/client'
-import { DEFAULT_SLOT_RUN_MS, type RemoteGrant, Slot, type StepCost, type StepHost } from '@software-factory/contract'
+import {
+  DEFAULT_SLOT_RUN_MS,
+  type RemoteGrant,
+  Slot,
+  type StepCost,
+  type StepDisagreement,
+  type StepHost,
+} from '@software-factory/contract'
 import { usage } from './exit.ts'
 import { credentialOf } from './credentials.ts'
 import { DEFAULT_URL, type Io } from './operation.ts'
 import { collectJunit } from './junit.ts'
 import { cpuOfRun, readProcesses, treeMeter } from './process-tree.ts'
 import { type LocalTry, localSlots } from './local-slots.ts'
-import { runRemoteStep } from './remote-step.ts'
+import { disagreementOf, runRemoteStep } from './remote-step.ts'
 import { restartPatience } from './restart-wait.ts'
 
 /** How long a caller waits for a slot before it gives up with `EX_TEMPFAIL` (`FACTORY_SLOT_WAIT_MS`). */
@@ -358,19 +365,19 @@ export async function slotRun(input: { name?: string; command: string[] }, io: I
   const askedAt = Date.now()
   // when the caller last joined the mini's line (again after a run on the VPS), and whether this run confirms a red there
   let lineSince = askedAt
-  let confirming = false
+  let confirming: StepDisagreement | null = null
 
   /**
    * The granted step on the VPS: the lease renewed while it runs, the run limit and a signal end the ssh session that
    * carries it (the VPS then removes the container), the cost reported with its host. `back`: the VPS failed it before or
-   * instead of the step; `confirm`: the step was red there, and a red off the mini is not yet a red. Either way the caller
+   * instead of the step; `confirm`: the step was red there (what it failed on is `confirm`), and a red off the mini is not yet a red. Either way the caller
    * goes back to the mini's line, and only the mini's result reaches the caller.
    */
   const runOnVps = async (input: {
     grant: RemoteGrant
     cwd: string
     waitedMs: number
-  }): Promise<{ exit: number } | 'back' | 'confirm'> => {
+  }): Promise<{ exit: number } | 'back' | { confirm: StepDisagreement }> => {
     const root = await git(input.cwd, ['rev-parse', '--show-toplevel'])
     if (root === null) {
       io.err('factory: the step is not in a git worktree, so it cannot travel to the VPS; it runs on the mini\n')
@@ -442,7 +449,7 @@ export async function slotRun(input: { name?: string; command: string[] }, io: I
       if (stopped) return { exit: 128 + (constants.signals[stopped] ?? 1) }
       if (exitCode === 0) return { exit: 0 }
       io.err(`factory: "${name}" was red on the VPS (exit ${exitCode}); running it again on the mini to confirm\n`)
-      return 'confirm'
+      return { confirm: disagreementOf({ tests, output: result.output }) }
     } finally {
       clearTimeout(limitTimer)
       clearInterval(renew)
@@ -472,9 +479,9 @@ export async function slotRun(input: { name?: string; command: string[] }, io: I
     let outcome = await take()
     if (outcome === 'granted' && remoteGrant !== null && cwd !== undefined) {
       const ran = await runOnVps({ grant: remoteGrant, cwd, waitedMs: Date.now() - askedAt })
-      if (typeof ran === 'object') return ran.exit
+      if (typeof ran === 'object' && 'exit' in ran) return ran.exit
       // Back to the mini's line at its old place (`notOn`); the wait counted for the mini's run starts again here.
-      confirming = ran === 'confirm'
+      confirming = ran === 'back' ? null : ran.confirm
       remoteGrant = null
       grantedRunMs = undefined
       notOn.push('vps')
@@ -605,7 +612,7 @@ export async function slotRun(input: { name?: string; command: string[] }, io: I
           waitMs: waitedMs,
           exitCode,
           // red on the VPS, green here: the step loses its place off the mini for a while
-          ...(confirming && exitCode === 0 ? { disagreed: true } : {}),
+          ...(confirming !== null && exitCode === 0 ? { disagreed: true, disagreement: confirming } : {}),
           ...code,
           ...(tests.length === 0 ? {} : { tests }),
         },

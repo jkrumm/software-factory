@@ -3,7 +3,7 @@ import { existsSync, readFileSync } from 'node:fs'
 import { rm } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import { join, resolve } from 'node:path'
-import type { RemoteGrant } from '@software-factory/contract'
+import type { RemoteGrant, StepDisagreement, TestResult } from '@software-factory/contract'
 
 /**
  * A step run off the mini (issue 1793, docs/architecture.md "Steps off the mini"). `factory slot run` was granted a slot
@@ -280,6 +280,73 @@ export interface RemoteRun {
   peakRssMib: number | null
   cpuSeconds: number | null
   tree: string | null
+  /** the last lines the step wrote, stdout and stderr in the order they came (`OUTPUT_KEPT_LINES`) */
+  output: string[]
+}
+
+/** The lines of a run's output kept to read a failure from: more than the tail stored, for the timeout a test names. */
+export const OUTPUT_KEPT_LINES = 400
+/** The lines of a red run's output stored when no failing test name parses. */
+export const DISAGREEMENT_TAIL_LINES = 40
+const DISAGREEMENT_TAIL_CHARS = 8000
+const MAX_DISAGREEMENT_TESTS = 200
+
+/** A test as the ledger names it: its suite and name. */
+export const testNameOf = (test: Pick<TestResult, 'suite' | 'name'>): string =>
+  test.suite === '' ? test.name : `${test.suite} > ${test.name}`
+
+/** The timeout a line says a test hit ("timed out after 5000ms", "5 s"), in ms. */
+const TIMEOUT = /timed out after (\d+(?:\.\d+)?)\s*(ms|s)\b/i
+
+/** How many lines either side of the one naming a test its timeout may stand on. */
+const TIMEOUT_NEAR_LINES = 3
+
+/**
+ * What a red run off the mini failed on: the failing tests from its JUnit results, each with its duration there and the
+ * timeout an output line naming it gives; the last `DISAGREEMENT_TAIL_LINES` lines of the output when no failing test
+ * parses.
+ */
+export function disagreementOf(input: { tests: readonly TestResult[]; output: readonly string[] }): StepDisagreement {
+  const failing = input.tests.filter((test) => test.status === 'fail').slice(0, MAX_DISAGREEMENT_TESTS)
+  if (failing.length === 0)
+    return { tests: [], tail: input.output.slice(-DISAGREEMENT_TAIL_LINES).join('\n').slice(-DISAGREEMENT_TAIL_CHARS) }
+  return {
+    tests: failing.map((test) => {
+      // a runner may print the timeout on the line above or below the one that names the test
+      const at = input.output.findIndex((line) => line.includes(test.name))
+      const said =
+        at === -1
+          ? undefined
+          : input.output
+              .slice(Math.max(0, at - TIMEOUT_NEAR_LINES), at + TIMEOUT_NEAR_LINES + 1)
+              .find((l) => TIMEOUT.test(l))
+      const match = said === undefined ? null : TIMEOUT.exec(said)
+      const timeoutMs =
+        match === null ? null : Math.round(Number(match[1]) * (match[2]?.toLowerCase() === 's' ? 1000 : 1))
+      return { name: testNameOf(test).slice(0, 1000), durationMs: test.durationMs, timeoutMs }
+    }),
+    tail: null,
+  }
+}
+
+/** Copies a stream to `sink` as it comes and keeps its lines in `lines` (only the last `OUTPUT_KEPT_LINES`). */
+async function tee(
+  stream: ReadableStream<Uint8Array> | undefined,
+  sink: (chunk: Uint8Array) => void,
+  lines: string[],
+): Promise<void> {
+  if (stream === undefined) return
+  const decoder = new TextDecoder()
+  let pending = ''
+  for await (const chunk of stream) {
+    sink(chunk)
+    pending += decoder.decode(chunk, { stream: true })
+    const parts = pending.split('\n')
+    pending = parts.pop() ?? ''
+    lines.push(...parts)
+    if (lines.length > OUTPUT_KEPT_LINES * 2) lines.splice(0, lines.length - OUTPUT_KEPT_LINES)
+  }
+  if (pending !== '') lines.push(pending)
 }
 
 const PREPARE_TIMEOUT_MS = 15 * 60_000
@@ -312,6 +379,7 @@ export async function runRemoteStep(input: {
     peakRssMib: null,
     cpuSeconds: null,
     tree: null,
+    output: [],
   })
   if (!isStepId(input.id) || !isHostPath(grant.repo) || !isHostPath(grant.dir))
     return failed('the grant names a slot or a path this CLI does not take')
@@ -366,15 +434,23 @@ export async function runRemoteStep(input: {
     })
     proc = Bun.spawn([...ssh, '-n', grant.target, script], {
       stdin: 'ignore',
-      stdout: 'inherit',
-      stderr: 'inherit',
+      stdout: 'pipe',
+      stderr: 'pipe',
       detached: true,
     })
   } catch (error) {
     return failed(`ssh did not start: ${error instanceof Error ? error.message : String(error)}`)
   }
   input.spawned(proc)
+  // the output reaches the caller as it comes; the last lines are kept to say what a red run failed on
+  const output: string[] = []
+  const copied = Promise.all([
+    tee(proc.stdout as ReadableStream<Uint8Array> | undefined, (chunk) => process.stdout.write(chunk), output),
+    tee(proc.stderr as ReadableStream<Uint8Array> | undefined, (chunk) => process.stderr.write(chunk), output),
+  ]).catch(() => undefined)
   const exitCode = await proc.exited
+  // a process that outlives ssh and holds its pipe open must not hold the result back
+  await Promise.race([copied, new Promise((resolve) => setTimeout(resolve, 2000))])
   const stats = await collect(
     [
       ...ssh,
@@ -393,7 +469,7 @@ export async function runRemoteStep(input: {
       ['rsync', '-a', '-e', ssh.map(shq).join(' '), `${grant.target}:${grant.dir}.run/junit/`, `${input.junitDir}/`],
       { timeoutMs: READ_TIMEOUT_MS },
     )
-  const measured = { ...parseStats(anon, cpu), tree: snap.tree }
+  const measured = { ...parseStats(anon, cpu), tree: snap.tree, output: output.slice(-OUTPUT_KEPT_LINES) }
   if (isHostFailure(exitCode))
     return { ...failed(`the step host answered ${exitCode} (ssh, docker or the install, not the step)`), ...measured }
   return { exitCode, hostFailed: false, why: null, ...measured }

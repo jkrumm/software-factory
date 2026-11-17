@@ -12,7 +12,13 @@ import {
   stepPrior,
 } from '../domains/capacity/costs.ts'
 import { DEFAULT_SWAPOUT_CEILING_MB, describeTrip, loadTrip, SUSTAINED_LOAD_SAMPLES } from '../domains/capacity/host.ts'
-import type { HostReader, MergeWindowRow, RemoteHostProbe, StepCostRow } from '../domains/capacity/ports.ts'
+import type {
+  HostReader,
+  MergeWindowRow,
+  PlacementReason,
+  RemoteHostProbe,
+  StepCostRow,
+} from '../domains/capacity/ports.ts'
 import {
   bareRepoOf,
   copyDirOf,
@@ -24,6 +30,8 @@ import {
   memoryCeilingMib,
   REMOTE_REFUSAL_WORDS,
 } from '../domains/capacity/remote.ts'
+import { type PressureBaseline, pressureThreshold } from '../kernel/remote-pressure.ts'
+import { activeHold, HOLD_LOOKBACK_MS, holdOf, holdWords } from '../kernel/remote-hold.ts'
 import { type AimMode, SWAP_WINDOW, swapGrowing } from '../domains/capacity/slot-aim.ts'
 import {
   DEFAULT_PASS_AFTER_MS,
@@ -117,11 +125,22 @@ export interface SlotDeps extends PlanningDeps {
 /** A grant, and how to run it when it is off the mini. */
 export type SlotGrant = SlotView & { remote: RemoteGrant | null }
 
-/** A step red off the mini and green on it loses its place off the mini for this long. */
-export const DISAGREEMENT_HOLD_MS = 7 * 86_400_000
-
 /** The slot ids that held a VPS slot at the last call: the probe removes a step container of any other. */
 const liveOnVps = new WeakMap<object, Set<string>>()
+
+/** The newest probe reading stored as a baseline sample, per remote. */
+const sampledAt = new WeakMap<object, number>()
+
+/** The baseline the pressure lines come from, read at most this often (it is a day of samples). */
+const BASELINE_REREAD_MS = 5 * 60_000
+const baselines = new WeakMap<object, { at: number; value: PressureBaseline | null }>()
+
+/**
+ * Why the VPS did not take a waiting step at its last look, by slot id: the mini's grant says it (`no_room`, `not_sooner`).
+ * Lost with a restart, then a step granted on the mini reads `free`; entries older than an hour are dropped.
+ */
+const refusedOnVps = new Map<string, { reason: PlacementReason; at: number }>()
+const REFUSAL_KEPT_MS = 3_600_000
 
 const onVps = (row: SlotRow): boolean => row.host === 'vps'
 
@@ -309,15 +328,35 @@ export async function touchSlot(
         : null
     const owner = ownerIn(projects, input.cwd)
     const stated = remote ? declaredRemoteStep({ owner, key: mine.key, remote, input }) : null
-    // red off the mini and green on it within the hold: the step stays home until the hold has passed
-    const disagreedAt =
-      stated !== null && typeof stated !== 'string'
-        ? await capacity.lastDisagreement(mine.key, new Date(now.getTime() - DISAGREEMENT_HOLD_MS))
+    const eligible = stated !== null && typeof stated !== 'string'
+    // red off the mini and green on it: the step stays home for a hold that doubles with each repeat within a week and
+    // halves after a green run off the mini (`holdOf`)
+    const held =
+      eligible && input.holding !== true
+        ? activeHold(holdOf(await capacity.holdEvents(mine.key, new Date(now.getTime() - HOLD_LOOKBACK_MS))), now)
         : null
     const declared =
-      disagreedAt === null
+      held === null
         ? stated
-        : `it was red on the VPS and green on the mini at ${disagreedAt.toISOString()}; it stays on the mini for 7 days`
+        : `it was red on the VPS and green on the mini; it stays on the mini for ${holdWords(held.holdMs)}, until ${held.until.toISOString()}`
+    for (const [id, refusal] of refusedOnVps) if (now.getTime() - refusal.at > REFUSAL_KEPT_MS) refusedOnVps.delete(id)
+    if (remote && probed) {
+      // production's pressure at each reading, with how many step containers ran: the samples with none are the baseline
+      if ((sampledAt.get(remote) ?? 0) < probed.reading.at.getTime()) {
+        sampledAt.set(remote, probed.reading.at.getTime())
+        await capacity.recordRemoteSample({
+          at: probed.reading.at,
+          memoryPressure: probed.reading.memoryPressure,
+          ioPressure: probed.reading.ioPressure,
+          stepsRunning: probed.steps.length,
+        })
+      }
+    }
+    let baseline = remote ? (baselines.get(remote) ?? null) : null
+    if (remote && (baseline === null || now.getTime() - baseline.at >= BASELINE_REREAD_MS)) {
+      baseline = { at: now.getTime(), value: await capacity.pressureBaseline(now) }
+      baselines.set(remote, baseline)
+    }
     // A caller pinned to the VPS (with a step that can run there) stays out of the mini's line, as a waiter of the VPS.
     const pinnedVps = input.pin === 'vps' && declared !== null && typeof declared !== 'string'
     const keep = all.filter((row) => onVps(row) && alive(row) && row.id !== input.id)
@@ -382,6 +421,16 @@ export async function touchSlot(
     if (touched && (touched.view.granted || declared === null || typeof declared === 'string')) {
       await capacity.saveSlots([...touched.rows, ...keep])
       await record(touched.waited, 'mini')
+      // a step the project declared remote, granted on the mini: said once, at the grant, with why it did not go
+      if (eligible && touched.view.granted && input.holding !== true) {
+        await capacity.recordPlacement({
+          at: now,
+          name: mine.key,
+          host: 'mini',
+          reason: held !== null ? 'held' : (refusedOnVps.get(input.id)?.reason ?? 'free'),
+        })
+        refusedOnVps.delete(input.id)
+      }
       const why =
         !touched.view.granted && typeof declared === 'string' && touched.view.why !== null
           ? `${touched.view.why}; not on the VPS: ${declared}`
@@ -399,6 +448,7 @@ export async function touchSlot(
     const slot = freeRemoteSlot(projectSlots)
     const dir = copyDirOf(project, slot)
     const room = decideRemote({
+      pressure: pressureThreshold(baseline?.value ?? null),
       reading: probed?.reading ?? null,
       now,
       holders: vpsSized.map((size) => ({ peakMib: size.mib, cores: size.cores })),
@@ -429,6 +479,11 @@ export async function touchSlot(
       const why = !room.grant
         ? `not on the VPS: ${REMOTE_REFUSAL_WORDS[room.kind]}`
         : 'the VPS would not finish it sooner than the mini'
+      if (eligible)
+        refusedOnVps.set(input.id, {
+          reason: held !== null ? 'held' : !room.grant ? 'no_room' : 'not_sooner',
+          at: now.getTime(),
+        })
       if (touched) {
         const waitWhy = `${touched.view.why ?? 'waiting'}; ${why}`
         await capacity.saveSlots([...touched.rows, ...keep])
@@ -463,6 +518,8 @@ export async function touchSlot(
     await capacity.saveSlots([...miniRows.filter((row) => row.id !== input.id), ...keep, granted])
     const waitedMs = Math.max(0, now.getTime() - base.requestedAt.getTime())
     await record(prior ? { ms: waitedMs, split: base.waitSplit } : undefined, 'vps')
+    await capacity.recordPlacement({ at: now, name: mine.key, host: 'vps', reason: 'vps' })
+    refusedOnVps.delete(input.id)
     return ok({
       ...grantView(granted, runMs),
       remote: {
@@ -557,20 +614,74 @@ export function declaredRemoteStep(input: {
   }
 }
 
-/** Appends a finished step to the cost ledger; the repo is the project owning the caller's directory. */
+/** The signal a test that disagreed twice is filed with: a request to the repo that owns the test. */
+export type DisagreementSignal = {
+  from: string
+  kind: 'request'
+  title: string
+  text: string
+  repo: string
+  probe: false
+}
+
+/** Files a signal; its fingerprint (repo and title) makes a repeat one Issue. Late-bound: intake is composed after planning. */
+export type SignalFiler = (body: DisagreementSignal) => Promise<{ ok: boolean }>
+
+/** What the signal for a test that disagreed again says: the test, its remote duration and the timeout its output named. */
+export function disagreementSignal(input: {
+  project: string
+  step: string
+  test: { name: string; durationMs: number; timeoutMs: number | null }
+}): DisagreementSignal {
+  const { project, step, test } = input
+  const seconds = (ms: number) => `${Math.round(ms / 100) / 10} s`
+  return {
+    from: 'agent:software-factory',
+    kind: 'request',
+    title: `Test "${test.name}" fails on the step host and passes on the mini`,
+    text: [
+      `The step \`${step}\` ran red on the step host and green on the mini twice with the test "${test.name}" among its failures.`,
+      `Its duration there: ${seconds(test.durationMs)}. Its timeout: ${test.timeoutMs === null ? 'not named in the output' : seconds(test.timeoutMs)}.`,
+      "A test whose timeout a slower, shared host breaks is the repo's to fix (a longer timeout, or work that does not depend on speed); until then the step is held on the mini for longer after each repeat.",
+    ].join('\n\n'),
+    repo: project,
+    probe: false,
+  }
+}
+
+/**
+ * Appends a finished step to the cost ledger; the repo is the project owning the caller's directory. A run on the mini
+ * that found a red off the mini green and names a failing test the ledger holds a second disagreement for files one
+ * signal to the project (after the transaction: a port is never called inside one).
+ */
 export async function recordStepCost(
   deps: PlanningDeps,
   input: Omit<StepCostRow, 'at' | 'repo' | 'cwd'> & { cwd?: string | undefined },
+  file?: SignalFiler,
 ): Promise<Result<true, PortError>> {
   const { cwd, ...cost } = input
   const owner = await ownerOf(deps, cwd)
   const repo = owner?.repo ?? null
-  return deps.uow.run(async ({ capacity }) => {
+  const stored = await deps.uow.run(async ({ capacity }) => {
     // a worktree's step is stored under its project's name, so every lead's run teaches the same step
     const name = stepNameOf(cost.name, cwd, owner?.name)
     await capacity.recordStepCost({ ...cost, name, at: deps.clock.now(), repo, cwd: cwd ?? null })
-    return ok(true as const)
+    const again = []
+    for (const test of cost.disagreed === true ? (cost.disagreement?.tests ?? []) : [])
+      if ((await capacity.disagreementsOfTest(name, test.name)) === 2) again.push(test)
+    return ok({ name, again })
   })
+  if (!stored.ok) return stored
+  if (file && owner)
+    for (const test of stored.value.again) {
+      const filed = await file(disagreementSignal({ project: owner.name, step: stored.value.name, test })).catch(
+        () => ({ ok: false }),
+      )
+      // it fires once per test (the second disagreement), so a refusal is said, not retried
+      if (!filed.ok)
+        console.error(`steps: the signal for the test "${test.name}" of ${stored.value.name} was not filed`)
+    }
+  return ok(true as const)
 }
 
 /** Appends a finished `factory merge-lock` call (its wait and its hold) to the merge-window ledger. */

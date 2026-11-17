@@ -1725,6 +1725,66 @@ export const ThroughputModel = z
           disagreed: z.number().int(),
         }),
       ),
+      /**
+       * The steps its project declared remote and that were placed or ran on the step host in the window: where they ran,
+       * why the mini kept them, and the hold a disagreement put them under (issue 2028).
+       */
+      remote: z.strictObject({
+        /** the lines above which production's pressure on the step host refuses a step, and what they come from */
+        pressure: z.strictObject({
+          memoryPct: z.number(),
+          ioPct: z.number(),
+          from: z.enum(['default', 'baseline']),
+          /** probe samples with no step running (the last 3 days): how many, over how many hours, their 99th percentiles; null: none */
+          baseline: z
+            .strictObject({
+              samples: z.number().int(),
+              spanHours: z.number(),
+              memoryP99: z.number(),
+              ioP99: z.number(),
+            })
+            .nullable(),
+        }),
+        steps: z.array(
+          z.strictObject({
+            step: z.string(),
+            /** runs of the window per host */
+            miniRuns: z.number().int(),
+            vpsRuns: z.number().int(),
+            /** placements of the window: on the step host, or on the mini because a slot was free, the VPS had no room, would not finish sooner, or the step was held */
+            placed: z.strictObject({
+              vps: z.number().int(),
+              free: z.number().int(),
+              noRoom: z.number().int(),
+              notSooner: z.number().int(),
+              held: z.number().int(),
+            }),
+            /** the hold now (or the last one, ended): its length, when it ends, the disagreements in its chain; null: none in the ledger */
+            hold: z
+              .strictObject({
+                active: z.boolean(),
+                holdMs: z.number().int(),
+                until: at,
+                disagreements: z.number().int(),
+              })
+              .nullable(),
+            /** the newest disagreement and what the red run failed on */
+            lastDisagreement: z
+              .strictObject({
+                at,
+                tests: z.array(
+                  z.strictObject({
+                    name: z.string(),
+                    durationMs: z.number().int(),
+                    timeoutMs: z.number().int().nullable(),
+                  }),
+                ),
+                tail: z.string().nullable(),
+              })
+              .nullable(),
+          }),
+        ),
+      }),
       /** the 20 flaky tests with the most flaky commits, then the newest flake, then name */
       flaky: z.array(
         z.strictObject({

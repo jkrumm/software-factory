@@ -5,6 +5,7 @@
  * CPU weight and its first place for the OOM killer, `apps/cli/src/remote-step.ts`), so the reading only has to keep the
  * VPS out of swap and its disk under the infra alert's line.
  */
+import { type PressureThreshold } from '../../kernel/remote-pressure.ts'
 import { headroomMib } from './costs.ts'
 
 /** What the VPS reported at its newest probe (`ssh <target>`: /proc/meminfo, /proc/loadavg, nproc, df of the home). */
@@ -25,9 +26,6 @@ export interface RemoteReading {
   memoryPressure: number | null
   ioPressure: number | null
 }
-
-/** Production stalled this share of the last 10 s on memory or io: no new step goes to the VPS until it settles. */
-export const PRESSURE_TRIPWIRE_PCT = 10
 
 /** A reading older than this says nothing of the VPS now, and an unreachable VPS has none newer: no step goes there. */
 export const REMOTE_READING_MAX_AGE_MS = 90_000
@@ -95,6 +93,8 @@ export function decideRemote(input: {
   step: RemoteStep
   /** a copy of this project is already on the VPS: no new copy's bytes */
   copyExists: boolean
+  /** the lines above which production's pressure refuses a step (`pressureThreshold`) */
+  pressure: PressureThreshold
 }): { grant: true } | { grant: false; why: string; kind: RemoteRefusal } {
   const { reading, now, step } = input
   if (reading === null) return { grant: false, kind: 'probe', why: 'the VPS has not answered its probe yet' }
@@ -104,15 +104,17 @@ export function decideRemote(input: {
   // the tripwire fails closed: a host whose production pressure cannot be read takes no step
   if (reading.memoryPressure === null || reading.ioPressure === null)
     return { grant: false, kind: 'pressure', why: "the VPS's production pressure (system.slice PSI) is not readable" }
-  const squeezed = [
-    ['memory', reading.memoryPressure],
-    ['io', reading.ioPressure],
-  ].find(([, pct]) => typeof pct === 'number' && pct > PRESSURE_TRIPWIRE_PCT)
+  const squeezed = (
+    [
+      ['memory', reading.memoryPressure, input.pressure.memory],
+      ['io', reading.ioPressure, input.pressure.io],
+    ] as const
+  ).find(([, pct, line]) => typeof pct === 'number' && pct > line)
   if (squeezed)
     return {
       grant: false,
       kind: 'pressure',
-      why: `production on the VPS is stalled on ${squeezed[0]} (${squeezed[1]} % of the last 10 s, over ${PRESSURE_TRIPWIRE_PCT} %)`,
+      why: `production on the VPS is stalled on ${squeezed[0]} (${squeezed[1]} % of the last 10 s, over ${squeezed[2]} %)`,
     }
   const copy = input.copyExists ? 0 : COPY_BYTES
   const usedPct = ((reading.diskUsedBytes + copy) / reading.diskSizeBytes) * 100

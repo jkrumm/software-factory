@@ -95,6 +95,7 @@ import { composeIntake } from './compose-intake.ts'
 import { loadUptimeEnv } from './adapters/uptime/settings.ts'
 import { uptimePoller } from './adapters/uptime/poller.ts'
 import { selfPaced } from './adapters/intake/schedule.ts'
+import type { SignalFiler } from './app/capacity-slots.ts'
 import { composePlanning } from './compose-planning.ts'
 import { leadCheckoutOf } from './app/quality-checkout.ts'
 import { showQuality } from './app/quality-read.ts'
@@ -248,12 +249,14 @@ async function main(): Promise<void> {
   const roles = fileRoles(leadSettings.rolesFile)
   // One reader for admission and hygiene: a reading one took is the other's, and a project's doctor runs once at a time.
   const doctor = createDoctorReader({ now: () => writes.clock.now() })
+  const disagreementSignals: { file?: SignalFiler } = {}
   const planning = composePlanning({
     writes,
     roles,
     settings: planningEnv,
     longWaitMs: loadNeedsSettings(process.env).longWaitMs,
     doctor,
+    signals: disagreementSignals,
   })
   const checkout = leadCheckoutOf(uow)
   const repos = rootedRepos(leadSettings.repoRoots, leadSettings.repoAllow)
@@ -275,6 +278,7 @@ async function main(): Promise<void> {
     projects: planning.signals,
     triage: agwAmend(agw),
   })
+  disagreementSignals.file = (body) => intake.api.file(body, 'agent')
   const checkpointSettings = loadCheckpointSettings(process.env)
   const checkpointDeps = {
     ...writes,

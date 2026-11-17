@@ -6,7 +6,9 @@ import type { SnapshotProc } from './classes.ts'
 import type { MemoryReading } from './host.ts'
 import type { AttemptPeak, ProcInfo } from './leadcost.ts'
 import type { QueueState, QueueStates } from './queue-state.ts'
+import type { PressureBaseline } from '../../kernel/remote-pressure.ts'
 import type { RemoteReading } from './remote.ts'
+import type { HoldEvent } from '../../kernel/remote-hold.ts'
 import type { AimState } from './slot-aim.ts'
 import type { SlotRow, StepHost, WaitKind } from './slots.ts'
 import type { OpenWait, WaitPlan } from './waits.ts'
@@ -77,8 +79,16 @@ export interface CapacityStore {
     swapoutCeilingMb: number,
     legacy?: { repo: string; words: string },
   ): Promise<StepRun[]>
-  /** when a run of the step (by its stored name) last found a red off the mini green on the mini, since `since`; null: none */
-  lastDisagreement(name: string, since: Date): Promise<Date | null>
+  /** the step's disagreements (a run on the mini that found a red off the mini green) and its green runs off the mini since `since`, any order */
+  holdEvents(name: string, since: Date): Promise<HoldEvent[]>
+  /** how many runs of the step (by its stored name) found the named test red off the mini and green on it */
+  disagreementsOfTest(name: string, test: string): Promise<number>
+  /** appends one reading of the step host's pressure: how many step containers ran at the time (`remote_samples`) */
+  recordRemoteSample(sample: RemoteSampleRow): Promise<void>
+  /** the samples taken with no step running over the last `BASELINE_WINDOW_MS`; null: none. Older samples are dropped. */
+  pressureBaseline(now: Date): Promise<PressureBaseline | null>
+  /** appends where a step its project declared remote was placed, and why it stayed on the mini */
+  recordPlacement(placement: PlacementRow): Promise<void>
   /** the median run of every step that ended since `since`, in ms; null when none did */
   stepMedianMs(since: Date): Promise<number | null>
   /** the same for every step of a repo (its absolute path): each name, the worktree names of old rows read as `project`'s, with its newest peaks, of the runs since `since` */
@@ -220,6 +230,32 @@ export interface StepCostRow {
   tree?: string | undefined
   /** a run on the mini that found a red off the mini green */
   disagreed?: boolean | undefined
+  /** with `disagreed`: what the red run off the mini failed on */
+  disagreement?: Disagreement | undefined
+}
+
+/** What a red run off the mini failed on: the failing tests, else the last lines of its output. */
+export interface Disagreement {
+  tests: readonly { name: string; durationMs: number; timeoutMs: number | null }[]
+  tail: string | null
+}
+
+/** One reading of the step host's production pressure (`factory.remote_samples`). */
+export interface RemoteSampleRow {
+  at: Date
+  memoryPressure: number | null
+  ioPressure: number | null
+  stepsRunning: number
+}
+
+/** Why a step its project declared remote ran where it did: `vps`, or on the mini for `free` (a slot was free), `no_room`, `not_sooner` or `held`. */
+export type PlacementReason = 'vps' | 'free' | 'no_room' | 'not_sooner' | 'held'
+
+export interface PlacementRow {
+  at: Date
+  name: string
+  host: StepHost
+  reason: PlacementReason
 }
 
 /** One test result of a step: a suite, a test, its status and how long it took. */

@@ -743,6 +743,79 @@ function Scorecard({ model }: { model: Model }) {
   )
 }
 
+const utc = (iso: string): string => `${iso.slice(0, 16).replace('T', ' ')} UTC`
+
+/** The steps their project declared remote: where they ran, why the mini kept them, the hold, and the pressure line. */
+function RemoteSteps({ model }: { model: Model }) {
+  const { pressure, steps } = model.tests.remote
+  const baseline = pressure.baseline
+  return (
+    <div className="mt-6 grid gap-3">
+      <p className="text-[length:var(--vx-text-sm)] text-muted-foreground">
+        {`Production pressure line: memory ${pressure.memoryPct} %, io ${pressure.ioPct} % of the last 10 s, `}
+        {pressure.from === 'baseline' && baseline
+          ? `from ${baseline.samples} samples over ${baseline.spanHours} h with no step running (p99 memory ${baseline.memoryP99} %, io ${baseline.ioP99} %).`
+          : baseline
+            ? `the default until a day of samples exists (${baseline.samples} so far over ${baseline.spanHours} h, p99 memory ${baseline.memoryP99} %, io ${baseline.ioP99} %).`
+            : 'the default until a day of samples with no step running exists (none yet).'}
+      </p>
+      {steps.length === 0 ? (
+        <Nothing>No step declared remote was placed in this window.</Nothing>
+      ) : (
+        <Table
+          label="One row per step declared remote"
+          head={
+            <>
+              <th className={TH}>Step</th>
+              <th className={cn(TH, NUM)}>Runs VPS</th>
+              <th className={cn(TH, NUM)}>Runs mini</th>
+              <th className={cn(TH, NUM)}>Placed VPS</th>
+              <th className={cn(TH, NUM)}>Mini, slot free</th>
+              <th className={cn(TH, NUM)}>Mini, no room</th>
+              <th className={cn(TH, NUM)}>Mini, not sooner</th>
+              <th className={cn(TH, NUM)}>Mini, held</th>
+              <th className={TH}>Hold</th>
+            </>
+          }
+        >
+          {steps.map((r) => (
+            <tr key={r.step}>
+              <th scope="row" className={cn(TD, 'text-left font-medium')}>
+                {r.step}
+              </th>
+              <td className={cn(TD, NUM)}>{r.vpsRuns}</td>
+              <td className={cn(TD, NUM)}>{r.miniRuns}</td>
+              <td className={cn(TD, NUM)}>{r.placed.vps}</td>
+              <td className={cn(TD, NUM)}>{r.placed.free}</td>
+              <td className={cn(TD, NUM)}>{r.placed.noRoom}</td>
+              <td className={cn(TD, NUM)}>{r.placed.notSooner}</td>
+              <td className={cn(TD, NUM)}>{r.placed.held}</td>
+              <td className={TD}>
+                {r.hold === null
+                  ? '–'
+                  : `${r.hold.active ? 'Held' : 'Held until'} ${utc(r.hold.until)}${r.hold.active ? ' ' : ' (ended) '}for ${msWords(r.hold.holdMs)}, disagreement ${r.hold.disagreements}`}
+                {r.lastDisagreement === null ? null : (
+                  <div className="text-muted-foreground">
+                    {`Red on the VPS ${utc(r.lastDisagreement.at)}: `}
+                    {r.lastDisagreement.tests.length > 0
+                      ? r.lastDisagreement.tests
+                          .map(
+                            (t) =>
+                              `${t.name} (${msWords(t.durationMs)}${t.timeoutMs === null ? '' : `, timeout ${msWords(t.timeoutMs)}`})`,
+                          )
+                          .join('; ')
+                      : (r.lastDisagreement.tail ?? '').split('\n').slice(-3).join(' | ')}
+                  </div>
+                )}
+              </td>
+            </tr>
+          ))}
+        </Table>
+      )}
+    </div>
+  )
+}
+
 function StepsByHost({ model }: { model: Model }) {
   const hosts = model.tests.byHost
   return (
@@ -781,6 +854,7 @@ function StepsByHost({ model }: { model: Model }) {
           ))}
         </Table>
       )}
+      <RemoteSteps model={model} />
     </Section>
   )
 }

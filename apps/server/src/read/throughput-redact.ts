@@ -75,6 +75,11 @@ export function redactThroughput(model: ThroughputModel, open: readonly OpenProj
     tests: {
       byProject: model.tests.byProject.map((row) => ({ ...row, repo: repo(row.repo) })),
       byHost: model.tests.byHost,
+      // a step is named `<project> <kind>`: a work repo's steps and what they failed on stay out
+      remote: {
+        ...model.tests.remote,
+        steps: model.tests.remote.steps.filter((row) => keep(row.step.split(' ')[0] ?? row.step)),
+      },
       flaky: model.tests.flaky.filter((row) => keep(row.repo)),
     },
     lead: { ...model.lead, issues: model.lead.issues.map((row) => ({ ...row, repo: repo(row.repo) })) },

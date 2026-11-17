@@ -9,6 +9,7 @@ import {
   memoryCeilingMib,
   type RemoteReading,
 } from '../../src/domains/capacity/remote.ts'
+import { pressureThreshold } from '../../src/kernel/remote-pressure.ts'
 
 const AT = new Date('2026-11-17T12:00:00Z')
 const GIB = 1024 ** 3
@@ -25,28 +26,39 @@ const reading = (over: Partial<RemoteReading> = {}): RemoteReading => ({
   ...over,
 })
 const step = { peakMib: 2500, cores: 1.4 }
+// no baseline yet: the default line of 1 %
+const AT_REST = pressureThreshold(null)
 
 describe('the VPS has room for a step', () => {
   test('a calm VPS takes it', () => {
-    expect(decideRemote({ reading: reading(), now: AT, holders: [], step, copyExists: false })).toEqual({ grant: true })
+    expect(
+      decideRemote({ reading: reading(), now: AT, holders: [], step, copyExists: false, pressure: AT_REST }),
+    ).toEqual({ grant: true })
   })
 
   test('no reading, or one older than 90 s, takes nothing', () => {
-    expect(decideRemote({ reading: null, now: AT, holders: [], step, copyExists: true }).grant).toBe(false)
+    expect(decideRemote({ reading: null, now: AT, holders: [], step, copyExists: true, pressure: AT_REST }).grant).toBe(
+      false,
+    )
     const old = decideRemote({
       reading: reading({ at: new Date(AT.getTime() - 120_000) }),
       now: AT,
       holders: [],
       step,
       copyExists: true,
+      pressure: AT_REST,
     })
     expect(old).toEqual({ grant: false, kind: 'probe', why: 'the VPS has not answered its probe for 120 s' })
   })
 
   test("a new copy that would push the disk over the alert's line is refused; an existing copy is not counted", () => {
     const near = reading({ diskUsedBytes: Math.floor(177 * GIB * (DISK_CEILING_PCT / 100)) - GIB })
-    expect(decideRemote({ reading: near, now: AT, holders: [], step, copyExists: false }).grant).toBe(false)
-    expect(decideRemote({ reading: near, now: AT, holders: [], step, copyExists: true }).grant).toBe(true)
+    expect(
+      decideRemote({ reading: near, now: AT, holders: [], step, copyExists: false, pressure: AT_REST }).grant,
+    ).toBe(false)
+    expect(decideRemote({ reading: near, now: AT, holders: [], step, copyExists: true, pressure: AT_REST }).grant).toBe(
+      true,
+    )
   })
 
   test("production's own memory or io stall holds every new step", () => {
@@ -56,16 +68,38 @@ describe('the VPS has room for a step', () => {
       holders: [],
       step,
       copyExists: true,
+      pressure: AT_REST,
     })
     expect(squeezed).toEqual({
       grant: false,
       kind: 'pressure',
-      why: 'production on the VPS is stalled on memory (12.5 % of the last 10 s, over 10 %)',
+      why: 'production on the VPS is stalled on memory (12.5 % of the last 10 s, over 1 %)',
+    })
+  })
+
+  test('the line moves with the baseline: a calm host refuses a stall the default line lets through', () => {
+    const stalled = reading({ ioPressure: 0.7 })
+    expect(
+      decideRemote({ reading: stalled, now: AT, holders: [], step, copyExists: true, pressure: AT_REST }).grant,
+    ).toBe(true)
+    const calm = pressureThreshold({ samples: 2000, spanMs: 25 * 3_600_000, memoryP99: 0, ioP99: 0 })
+    expect(calm).toEqual({ memory: 0.5, io: 0.5, from: 'baseline' })
+    expect(decideRemote({ reading: stalled, now: AT, holders: [], step, copyExists: true, pressure: calm })).toEqual({
+      grant: false,
+      kind: 'pressure',
+      why: 'production on the VPS is stalled on io (0.7 % of the last 10 s, over 0.5 %)',
     })
   })
 
   test('a VPS whose production pressure cannot be read takes no step (the tripwire fails closed)', () => {
-    const blind = decideRemote({ reading: reading({ ioPressure: null }), now: AT, holders: [], step, copyExists: true })
+    const blind = decideRemote({
+      reading: reading({ ioPressure: null }),
+      now: AT,
+      holders: [],
+      step,
+      copyExists: true,
+      pressure: AT_REST,
+    })
     expect(blind.grant).toBe(false)
   })
 
@@ -75,7 +109,7 @@ describe('the VPS has room for a step', () => {
       { peakMib: 7000, cores: 2 },
     ]
     // 18000 available, 2048 headroom, 14000 held: 1952 left, the step needs 2500
-    const full = decideRemote({ reading: reading(), now: AT, holders, step, copyExists: true })
+    const full = decideRemote({ reading: reading(), now: AT, holders, step, copyExists: true, pressure: AT_REST })
     expect(full.grant).toBe(false)
     expect(full.grant === false && full.why).toContain('the step needs 2.4 GiB')
   })
@@ -87,6 +121,7 @@ describe('the VPS has room for a step', () => {
       holders: [{ peakMib: 500, cores: 1 }],
       step,
       copyExists: true,
+      pressure: AT_REST,
     })
     expect(busy.grant === false && busy.why).toContain('idle cores')
   })

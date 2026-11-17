@@ -9,6 +9,82 @@ import type { QueueReasons } from './flow.ts'
 import { readAccount } from './throughput-account.ts'
 import { answersOf, readAnswerFacts } from './throughput-answers.ts'
 import { readSeries, readStored } from './throughput-series.ts'
+import { BASELINE_WINDOW_MS, pressureThreshold } from '../kernel/remote-pressure.ts'
+import { activeHold, HOLD_LOOKBACK_MS, holdOf } from '../kernel/remote-hold.ts'
+
+/** The steps off the mini of the window as the read shows them: their runs and placements, the hold and the pressure line. */
+function remoteOf(input: {
+  now: Date
+  runs: readonly z.infer<typeof RemoteRunRow>[]
+  placements: readonly z.infer<typeof PlacementRow>[]
+  events: readonly z.infer<typeof HoldRow>[]
+  last: readonly z.infer<typeof DisagreementRow>[]
+  baseline: z.infer<typeof BaselineRow>
+}): ThroughputModel['tests']['remote'] {
+  const { now, baseline } = input
+  const found =
+    baseline.n > 0 && baseline.span_ms !== null && baseline.memory_p99 !== null && baseline.io_p99 !== null
+      ? {
+          samples: baseline.n,
+          spanMs: Math.round(baseline.span_ms),
+          memoryP99: baseline.memory_p99,
+          ioP99: baseline.io_p99,
+        }
+      : null
+  const threshold = pressureThreshold(found)
+  const names = [...new Set([...input.runs.map((r) => r.name), ...input.placements.map((p) => p.name)])].sort()
+  return {
+    pressure: {
+      memoryPct: threshold.memory,
+      ioPct: threshold.io,
+      from: threshold.from,
+      baseline:
+        found === null
+          ? null
+          : {
+              samples: found.samples,
+              spanHours: round(found.spanMs / 3_600_000, 1),
+              memoryP99: round(found.memoryP99, 2),
+              ioP99: round(found.ioP99, 2),
+            },
+    },
+    steps: names.map((step) => {
+      const runs = (host: string) => input.runs.find((r) => r.name === step && r.host === host)?.runs ?? 0
+      const placed = (reason: string) => input.placements.find((p) => p.name === step && p.reason === reason)?.n ?? 0
+      const state = holdOf(
+        input.events
+          .filter((e) => e.name === step)
+          .map((e) => ({ at: e.at, kind: e.disagreed ? ('disagreed' as const) : ('green' as const) })),
+      )
+      const running = activeHold(state, now)
+      const last = input.last.find((d) => d.name === step)
+      return {
+        step,
+        miniRuns: runs('mini'),
+        vpsRuns: runs('vps'),
+        placed: {
+          vps: placed('vps'),
+          free: placed('free'),
+          noRoom: placed('no_room'),
+          notSooner: placed('not_sooner'),
+          held: placed('held'),
+        },
+        hold:
+          state.until === null || state.lastDisagreementAt === null
+            ? null
+            : {
+                active: running !== null,
+                holdMs: state.until.getTime() - state.lastDisagreementAt.getTime(),
+                until: state.until.toISOString(),
+                disagreements: state.disagreements,
+              },
+        lastDisagreement: last?.disagreement
+          ? { at: last.at.toISOString(), tests: last.disagreement.tests, tail: last.disagreement.tail }
+          : null,
+      }
+    }),
+  }
+}
 
 const TOP_KEYS = 20
 const TOP_PROCESSES = 15
@@ -84,6 +160,20 @@ const HostRow = z.object({
   duration_p50: nullNum,
   disagreed: num,
 })
+const RemoteRunRow = z.object({ name: z.string(), host: z.string(), runs: num })
+const PlacementRow = z.object({ name: z.string(), reason: z.string(), n: num })
+const HoldRow = z.object({ name: z.string(), at: z.coerce.date(), disagreed: z.boolean() })
+const DisagreementRow = z.object({
+  name: z.string(),
+  at: z.coerce.date(),
+  disagreement: z
+    .object({
+      tests: z.array(z.object({ name: z.string(), durationMs: num, timeoutMs: nullNum })),
+      tail: z.string().nullable(),
+    })
+    .nullable(),
+})
+const BaselineRow = z.object({ n: num, span_ms: nullNum, memory_p99: nullNum, io_p99: nullNum })
 const FlakyRow = z.object({
   repo: z.string(),
   suite: z.string(),
@@ -288,6 +378,28 @@ export async function readThroughput(
         percentile_cont(0.5) WITHIN GROUP (ORDER BY duration_ms)::float8 AS duration_p50,
         count(*) FILTER (WHERE disagreed) AS disagreed
       FROM factory.step_costs WHERE at >= ${from} AND at < ${to} GROUP BY 1 ORDER BY 1`
+    // steps off the mini (issue 2028): runs, placements, the hold and the baseline the pressure line comes from
+    const remoteRunRows: unknown[] = await tx`
+      SELECT name, coalesce(host, 'mini') AS host, count(*) AS runs FROM factory.step_costs
+      WHERE at >= ${from} AND at < ${to} AND name IN (
+        SELECT name FROM factory.step_placements WHERE at >= ${from} AND at < ${to}
+        UNION SELECT name FROM factory.step_costs WHERE host = 'vps' AND at >= ${from} AND at < ${to})
+      GROUP BY 1, 2`
+    const placementRows: unknown[] = await tx`
+      SELECT name, reason, count(*) AS n FROM factory.step_placements WHERE at >= ${from} AND at < ${to} GROUP BY 1, 2`
+    const holdRows: unknown[] = await tx`
+      SELECT name, at, coalesce(disagreed, false) AS disagreed FROM factory.step_costs
+      WHERE at >= ${new Date(to.getTime() - HOLD_LOOKBACK_MS)} AND at < ${to} AND (disagreed OR (host = 'vps' AND exit_code = 0))`
+    const disagreementRows: unknown[] = await tx`
+      SELECT DISTINCT ON (name) name, at, disagreement FROM factory.step_costs
+      WHERE disagreed AND at < ${to} ORDER BY name, at DESC`
+    const baselineRows: unknown[] = await tx`
+      SELECT count(*) AS n, extract(epoch FROM max(at) - min(at)) * 1000 AS span_ms,
+        percentile_cont(0.99) WITHIN GROUP (ORDER BY memory_pressure)::float8 AS memory_p99,
+        percentile_cont(0.99) WITHIN GROUP (ORDER BY io_pressure)::float8 AS io_p99
+      FROM factory.remote_samples
+      WHERE steps_running = 0 AND memory_pressure IS NOT NULL AND io_pressure IS NOT NULL
+        AND at >= ${new Date(to.getTime() - BASELINE_WINDOW_MS)} AND at < ${to}`
     const flakyRows: unknown[] = await tx`
       WITH per_run AS (
         SELECT repo, test_suite_name AS suite, test_case_name AS name, vcs_ref_head_revision AS rev, step_cost_id,
@@ -544,6 +656,14 @@ export async function readThroughput(
             durationP50Ms: r.duration_p50 === null ? null : Math.round(r.duration_p50),
             disagreed: r.disagreed,
           }
+        }),
+        remote: remoteOf({
+          now: to,
+          runs: remoteRunRows.map((raw) => RemoteRunRow.parse(raw)),
+          placements: placementRows.map((raw) => PlacementRow.parse(raw)),
+          events: holdRows.map((raw) => HoldRow.parse(raw)),
+          last: disagreementRows.map((raw) => DisagreementRow.parse(raw)),
+          baseline: BaselineRow.parse(baselineRows[0] ?? { n: 0, span_ms: null, memory_p99: null, io_p99: null }),
         }),
         flaky: flakyRows.map((raw) => {
           const r = FlakyRow.parse(raw)

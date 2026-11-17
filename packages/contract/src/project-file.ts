@@ -212,7 +212,7 @@ const Step = z
       .default(false)
       .meta(
         about(
-          "`true`: the factory may run the step off the mini, on a Linux step host of its own settings, when that finishes it sooner. The repo's word that the step passes on Ubuntu 24.04 in the step image; the owner still admits the project (`FACTORY_STEP_REMOTE_PROJECTS`), and a step red there but green on the mini loses its place for 7 days",
+          "`true`: the factory may run the step off the mini, on a Linux step host of its own settings, when that finishes it sooner. The repo's word that the step passes on Ubuntu 24.04 in the step image; the owner still admits the project (`FACTORY_STEP_REMOTE_PROJECTS`), and a step red there but green on the mini loses its place off the mini for a hold that starts at 1 hour and doubles with each repeat, up to 7 days",
           STEPS,
         ),
       ),

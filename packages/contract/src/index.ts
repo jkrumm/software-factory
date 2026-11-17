@@ -180,6 +180,7 @@ export {
   SlotRelease,
   STEP_HOSTS,
   StepCost,
+  StepDisagreement,
   StepHost,
   TestResult,
   MAX_TEST_RESULTS,
