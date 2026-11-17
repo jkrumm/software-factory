@@ -59,10 +59,15 @@ describe('whether an edge held an Issue behind free capacity', () => {
 
     await world.send(first, 'lead_started', 'lead_started', { attempt: 1, terminal: 't1' })
     await world.send(first, 'closed', 'closed', { attempt: 1, outcome: 'done', reason: 'done' }, 'lead')
-    const closed = world.clock.now()
     world.clock.advance(5 * MIN)
+    // the edge is satisfied by the first pass that sees its blocker closed
+    const satisfied = world.clock.now()
     expect(value(await admissionPass(world.deps)).admitted.map((a) => a.issue)).toEqual([second])
-    expect(await edgeOf(second)).toEqual({ ready_since: seen, satisfied_at: closed, inferred_by: 'queue: same files' })
+    expect(await edgeOf(second)).toEqual({
+      ready_since: seen,
+      satisfied_at: satisfied,
+      inferred_by: 'queue: same files',
+    })
   })
 
   test('an Issue its edge holds behind the repo’s only lead is never ready, and one the look clears loses an earlier mark', async () => {
