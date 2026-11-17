@@ -155,7 +155,8 @@ export async function ciProbe(tools: Tools, path: string, privacy: PrivacyLookup
   const findings = []
   const runs: string[] = []
   let unreadable = 0
-  const unjudged: string[] = isPrivate === undefined ? ['*'] : []
+  // without the repo's privacy only the runner rule is unjudged: it can sit in any workflow's key, but never in `ci:gate`
+  const unjudged: string[] = isPrivate === undefined ? files.map((file) => `ci:${file}`) : []
   for (const file of files) {
     let workflow: unknown
     try {

@@ -162,5 +162,7 @@ describe('ciProbe', () => {
     })
     expect(out.outcome).toBe('clean')
     expect(out.detail).toContain('no GitHub origin')
+    // the runner rule was not judged, so a workflow's key is not green; the gate rule was judged
+    expect(out.unjudged).toEqual(['ci:.github/workflows/ci.yml'])
   })
 })
