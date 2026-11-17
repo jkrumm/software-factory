@@ -104,7 +104,7 @@ export const HYGIENE_CATALOGUE = [
   {
     name: 'deps',
     summary:
-      'Outdated dependencies: `bun outdated` for a `package.json`, and the versions pinned in `Cargo.toml`, `pyproject.toml` or `requirements*.txt`, `Package.swift`, Dockerfile base images and GitHub Actions `uses:` lines.',
+      'Outdated dependencies: `bun outdated` for a `package.json`, and the versions pinned in `Cargo.toml`, `pyproject.toml` or `requirements*.txt`, `Package.swift`, Dockerfile base images and GitHub Actions `uses:` lines. Each finding carries an upgrade plan (versions younger than 7 days, 14 for a major, held back; patches and minors, packages that move together, and each major in batches) and the procedure a light lead follows.',
     enabled: 'auto',
     detect: 'a package file of one of those kinds is tracked; each ecosystem is its own finding',
     cost: 'tool',

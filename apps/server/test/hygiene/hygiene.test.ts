@@ -18,7 +18,8 @@ import { createHygieneChecker } from '../../src/adapters/hygiene/index.ts'
 import { brokenLinks } from '../../src/adapters/hygiene/probes/links.ts'
 import { allCoChanged, coChanged, parseLog } from '../../src/adapters/hygiene/probes/cochange.ts'
 import { sections } from '../../src/adapters/hygiene/probes/context.ts'
-import { parseOutdated, severity } from '../../src/adapters/hygiene/probes/deps.ts'
+import { type Released, parseOutdated, severity } from '../../src/adapters/hygiene/probes/deps.ts'
+import { probeSignalText } from '../../src/domains/loops/hygiene.ts'
 import { retiredScope } from '../../src/adapters/hygiene/probes/retired.ts'
 import { publishedHost } from '../../src/adapters/hygiene/probes/runrules.ts'
 import {
@@ -90,11 +91,12 @@ function fakeBun(table: string, installExit = 0): string {
   return script
 }
 
-const checker = (options: { make?: string; bun?: string } = {}) =>
+const checker = (options: { make?: string; bun?: string; released?: Released } = {}) =>
   createHygieneChecker({
     repos: rootedRepos([join(base, 'repos')]),
     workDir: join(base, 'data'),
     bun: fakeBun(''),
+    released: async () => undefined,
     ...options,
   })
 
@@ -103,6 +105,7 @@ async function sweep(
   options: {
     make?: string
     bun?: string
+    released?: Released
     skipCheck?: string
     probes?: DeclaredProbe[]
     skip?: SkippedProbe[]
@@ -766,6 +769,7 @@ describe('deps probe', () => {
           'hono 4.2.3 -> 4.2.9 (patch)',
         ],
         count: 4,
+        plan: expect.any(Array),
       },
     ])
 
@@ -781,6 +785,74 @@ describe('deps probe', () => {
     const gated = await sweep(withGate.name, { bun: fakeBun(TABLE, 1) })
     expect(run(gated, 'check')?.outcome).toBe('failed')
     expect(findings(gated, 'check')).toEqual([])
+  })
+})
+
+describe('deps probe: the Issue carries the upgrade procedure', () => {
+  const day = 86_400_000
+  const OUTDATED = `bun outdated v1.4.2
+|------|
+| Package | Current | Update | Latest |
+|------|
+| @mantine/core | 8.0.0 | 8.0.0 | 9.0.0 |
+| @mantine/hooks | 8.0.0 | 8.0.0 | 9.0.0 |
+| left-pad | 1.0.0 | 1.0.1 | 2.0.0 |
+| young-major | 1.0.0 | 1.0.0 | 2.0.0 |
+| young-patch | 1.0.0 | 1.0.1 | 1.0.1 |
+| @tanstack/query | 5.1.0 | 5.2.0 | 5.2.0 |
+| @tanstack/router | 1.1.0 | 1.2.0 | 1.2.0 |
+| hono | 4.2.3 | 4.2.9 | 4.2.9 |
+| typescript (dev) | 5.8.0 | 5.8.3 | 5.9.1 |
+|------|
+`
+  const ages: Record<string, number> = {
+    '@mantine/core': 30,
+    '@mantine/hooks': 30,
+    'left-pad': 20,
+    'young-major': 10,
+    'young-patch': 2,
+  }
+  const released: Released = async ({ name }) =>
+    ages[name] === undefined ? undefined : new Date(Date.now() - ages[name] * day)
+
+  test('batches: patches and minors together, a group together, each major alone, young versions held back', async () => {
+    const report = await sweep(makeRepo({ 'package.json': '{}' }).name, { bun: fakeBun(OUTDATED), released })
+    const plan = findings(report, 'deps')[0]?.plan ?? []
+    const text = plan.join('\n')
+    // one batch of the unrelated patches and minors, one of the @tanstack group, the @mantine majors together, left-pad alone
+    expect(text).toMatch(/Batch 1 \(patches and minors; one batch\):\n {2}hono .*\n {2}typescript /)
+    expect(text).toMatch(/\(@tanstack; move together\):\n {2}@tanstack\/query .*\n {2}@tanstack\/router /)
+    expect(text).toMatch(/\(@mantine, majors that move together; alone\):\n {2}@mantine\/core .*\n {2}@mantine\/hooks /)
+    expect(text).toMatch(/\(left-pad; alone\):\n {2}left-pad 1\.0\.0 -> 2\.0\.0 \(major\)/)
+    // a major of 10 days and a patch of 2 days are inside the 14- and 7-day cooldowns: held, in no batch
+    const [batches = '', held = ''] = text.split('Held back, do not upgrade yet:')
+    expect(batches).not.toContain('young-')
+    expect(held).toMatch(/until \d{4}-\d\d-\d\d \(14-day cooldown\): young-major 1\.0\.0 -> 2\.0\.0 \(major\)/)
+    expect(held).toMatch(/\(7-day cooldown\): young-patch 1\.0\.0 -> 1\.0\.1 \(patch\)/)
+    // a version whose date is unknown is not held, and says so
+    expect(text).toContain('hono 4.2.3 -> 4.2.9 (patch), release date unknown')
+    // the procedure
+    for (const part of [
+      '1. Cooldown',
+      '2. Batches',
+      '3. Read before you edit',
+      '4. Prove it',
+      '5. Never leave half done',
+      '6. Stay inside the runtime pins',
+      '7. Report',
+    ])
+      expect(text).toContain(part)
+  })
+
+  test('the signal text the lead reads carries the plan after the evidence', async () => {
+    const report = await sweep(makeRepo({ 'package.json': '{}' }).name, { bun: fakeBun(OUTDATED), released })
+    const f = findings(report, 'deps')[0]
+    if (!f) throw new Error('no deps finding')
+    const text = probeSignalText(f, { repo: 'app', ref: '0123456789' })
+    expect(text.indexOf('Evidence (')).toBeLessThan(text.indexOf('Upgrade plan as of'))
+    expect(text).toContain('Procedure (light seat')
+    expect(text).toContain('Seat: light')
+    expect(text.length).toBeLessThan(20_000)
   })
 })
 

@@ -134,6 +134,7 @@ export function probeSignalText(finding: ProbeFinding, swept: Swept): string {
     seatLine(finding.key),
     `Evidence (${finding.count} item(s), up to the first ${finding.lines.length} lines):`,
     ...finding.lines,
+    ...(finding.plan ?? []),
     finding.reproduce !== undefined
       ? `Reproduce: ${finding.reproduce}`
       : finding.probe === 'check'
