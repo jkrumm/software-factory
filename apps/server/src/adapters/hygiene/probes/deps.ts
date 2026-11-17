@@ -3,6 +3,7 @@ import { join } from 'node:path'
 import { EXIT_TIMEOUT } from '../../hc/process.ts'
 import { exec, gitOut, type Tools } from '../git.ts'
 import type { ProbeFinding } from '../../../domains/loops/hygiene-model.ts'
+import { type UpgradeRow, planLines, planUpgrades, procedureLines } from '../../../domains/loops/upgrades.ts'
 import { type Outcome, clean, failed, finding, found, skipped, unjudging } from './finding.ts'
 
 const INSTALL_TIMEOUT_MS = 10 * 60_000
@@ -335,6 +336,61 @@ export const registryLookup =
     }
   }
 
+/** When a version was published, or undefined / a throw when it cannot be looked up (soft: the plan says the date is unknown). */
+export type Released = (query: {
+  ecosystem: 'npm' | 'cargo' | 'python'
+  name: string
+  version: string
+}) => Promise<Date | undefined>
+
+const asDate = (value: unknown): Date | undefined => {
+  const date = typeof value === 'string' ? new Date(value) : undefined
+  return date && !Number.isNaN(date.getTime()) ? date : undefined
+}
+
+/** The publish dates the registries state: npm's `time`, crates.io's `created_at`, PyPI's upload time. Other ecosystems have no date look-up. */
+export const registryReleased: Released = async ({ ecosystem, name, version }) => {
+  switch (ecosystem) {
+    case 'npm':
+      return asDate(
+        asRecord((await fetchJson(`https://registry.npmjs.org/${name.replace('/', '%2F')}`)).time)?.[version],
+      )
+    case 'cargo':
+      return asDate(
+        asRecord(
+          (
+            await fetchJson(
+              `https://crates.io/api/v1/crates/${encodeURIComponent(name)}/${encodeURIComponent(version)}`,
+            )
+          ).version,
+        )?.created_at,
+      )
+    case 'python': {
+      const urls = (
+        await fetchJson(`https://pypi.org/pypi/${encodeURIComponent(name)}/${encodeURIComponent(version)}/json`)
+      ).urls
+      return asDate(asRecord(Array.isArray(urls) ? urls[0] : undefined)?.upload_time_iso_8601)
+    }
+  }
+}
+
+/** The finding's facts after the evidence: the batches, what waits out its cooldown, and the procedure. */
+async function withPlan(
+  base: ProbeFinding,
+  rows: UpgradeRow[],
+  dated: 'npm' | 'cargo' | 'python' | undefined,
+  released: Released,
+  now: Date,
+): Promise<ProbeFinding> {
+  const known = await pool(rows.slice(0, MAX_LOOKUPS), async (row) => {
+    if (!dated) return row
+    const releasedAt = await released({ ecosystem: dated, name: row.name, version: row.latest }).catch(() => undefined)
+    return releasedAt ? { ...row, releasedAt } : row
+  })
+  const plan = planUpgrades([...known, ...rows.slice(MAX_LOOKUPS)], now)
+  return { ...base, plan: [...planLines(plan, now), ...procedureLines()] }
+}
+
 async function pool<T, R>(items: T[], work: (item: T) => Promise<R>): Promise<R[]> {
   const results: R[] = new Array(items.length)
   let next = 0
@@ -413,6 +469,8 @@ async function judgeEcosystem(
   entry: (typeof ECOSYSTEMS)[number],
   dependencies: Dependency[],
   lookup: Lookup,
+  released: Released,
+  now: Date,
 ): Promise<EcosystemRun> {
   const unique = [...new Map(dependencies.map((dep) => [`${dep.name}@${dep.current}`, dep])).values()].sort((a, b) =>
     a.name.localeCompare(b.name),
@@ -451,11 +509,19 @@ async function judgeEcosystem(
   return {
     outcome: 'found',
     detail: `${entry.label}, ${rows.length} outdated${note}`,
-    findings: [finding('deps', `deps:${entry.ecosystem}`, entry.title, lines, rows.length)],
+    findings: [
+      await withPlan(
+        finding('deps', `deps:${entry.ecosystem}`, entry.title, lines, rows.length),
+        rows,
+        entry.ecosystem === 'cargo' || entry.ecosystem === 'python' ? entry.ecosystem : undefined,
+        released,
+        now,
+      ),
+    ],
   }
 }
 
-async function bunRun(tools: Tools, path: string): Promise<EcosystemRun | undefined> {
+async function bunRun(tools: Tools, path: string, released: Released, now: Date): Promise<EcosystemRun | undefined> {
   if (!existsSync(join(path, 'package.json'))) return undefined
   if (!existsSync(join(path, 'node_modules'))) {
     const install = await exec([tools.bun, 'install', '--frozen-lockfile'], INSTALL_TIMEOUT_MS, path)
@@ -500,18 +566,40 @@ async function bunRun(tools: Tools, path: string): Promise<EcosystemRun | undefi
   return {
     outcome: 'found',
     detail: `bun outdated, ${outdated.length} packages`,
-    findings: [finding('deps', 'deps', 'Hygiene: outdated dependencies', lines, outdated.length)],
+    findings: [
+      await withPlan(
+        finding('deps', 'deps', 'Hygiene: outdated dependencies', lines, outdated.length),
+        outdated.map((row) => ({
+          name: row.name,
+          current: row.current,
+          latest: row.latest,
+          size: row.severity,
+          heldBack: row.heldBack,
+        })),
+        'npm',
+        released,
+        now,
+      ),
+    ],
   }
 }
 
 /** Outdated dependencies: `bun outdated` for a package.json, registry look-ups (`lookup`) for Cargo, Python, Swift, Docker and Actions. */
-export async function depsProbe(tools: Tools, path: string, lookup: Lookup = registryLookup(tools)): Promise<Outcome> {
+export async function depsProbe(
+  tools: Tools,
+  path: string,
+  lookup: Lookup = registryLookup(tools),
+  released: Released = registryReleased,
+  now: Date = new Date(),
+): Promise<Outcome> {
   const lists = await declared(tools, path)
   const runs = [
-    await bunRun(tools, path),
+    await bunRun(tools, path, released, now),
     ...(await Promise.all(
       ECOSYSTEMS.map(async (entry) =>
-        lists[entry.ecosystem].length ? judgeEcosystem(entry, lists[entry.ecosystem], lookup) : undefined,
+        lists[entry.ecosystem].length
+          ? judgeEcosystem(entry, lists[entry.ecosystem], lookup, released, now)
+          : undefined,
       ),
     )),
   ].filter((run): run is EcosystemRun => run !== undefined)

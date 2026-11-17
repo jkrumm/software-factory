@@ -6,7 +6,7 @@ import { defaultTools } from '../../src/adapters/hygiene/git.ts'
 import {
   actionUses,
   cargoDependencies,
-  depsProbe,
+  depsProbe as probeWithDates,
   dockerImages,
   gap,
   lowerBound,
@@ -16,6 +16,10 @@ import {
   pythonDependencies,
   swiftPackages,
 } from '../../src/adapters/hygiene/probes/deps.ts'
+
+/** No registry is asked for a publish date: the plan's cooldown has its own tests. */
+const depsProbe = (tools: Parameters<typeof probeWithDates>[0], dir: string, lookup: Lookup) =>
+  probeWithDates(tools, dir, lookup, async () => undefined)
 
 let base: string
 let counter = 0

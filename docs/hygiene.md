@@ -110,7 +110,7 @@ The `project.yaml` itself, linted like `factory project check`: keys nothing rea
 
 ### deps
 
-Outdated dependencies: `bun outdated` for a `package.json`, and the versions pinned in `Cargo.toml`, `pyproject.toml` or `requirements*.txt`, `Package.swift`, Dockerfile base images and GitHub Actions `uses:` lines.
+Outdated dependencies: `bun outdated` for a `package.json`, and the versions pinned in `Cargo.toml`, `pyproject.toml` or `requirements*.txt`, `Package.swift`, Dockerfile base images and GitHub Actions `uses:` lines. Each finding carries an upgrade plan (versions younger than 7 days, 14 for a major, held back; patches and minors, packages that move together, and each major in batches) and the procedure a light lead follows.
 
 - **Default:** on when detection finds what it reads: a package file of one of those kinds is tracked; each ecosystem is its own finding.
 - **Runs:** in the weekly pass; runs an analyzer or asks a registry.

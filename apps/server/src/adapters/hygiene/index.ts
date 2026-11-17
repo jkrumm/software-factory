@@ -21,7 +21,7 @@ import { cochangeProbe } from './probes/cochange.ts'
 import { contextProbe } from './probes/context.ts'
 import { deadcodeProbe } from './probes/deadcode.ts'
 import { declaredProbe } from './probes/declared.ts'
-import { depsProbe } from './probes/deps.ts'
+import { type Released, depsProbe, registryLookup, registryReleased } from './probes/deps.ts'
 import { type Outcome, failed, skipped } from './probes/finding.ts'
 import { linksProbe } from './probes/links.ts'
 import { projectProbe } from './probes/project.ts'
@@ -40,6 +40,8 @@ export interface HygieneCheckerOptions {
   fallow?: string
   osv?: string
   gh?: string
+  /** publish dates for the `deps` plan's cooldown; the registries by default */
+  released?: Released
 }
 
 /** A probe that throws did not run: it is `failed`, never an error out of the sweep. */
@@ -66,6 +68,8 @@ export function createHygieneChecker(options: HygieneCheckerOptions): HygieneChe
     ...(options.gh ? { gh: options.gh } : {}),
   }
 
+  const released = options.released ?? registryReleased
+
   async function sweep(checkout: Checkout, options: SweepOptions = {}): Promise<SweepReport> {
     const { path } = checkout
     const scope = options.scope ?? 'full'
@@ -78,7 +82,7 @@ export function createHygieneChecker(options: HygieneCheckerOptions): HygieneChe
       links: async () => linksProbe(path, await docs),
       retired: async () => retiredProbe(tools, path, await markdown),
       project: () => projectProbe(tools, path),
-      deps: () => depsProbe(tools, path),
+      deps: () => depsProbe(tools, path, registryLookup(tools), released),
       ci: () => ciProbe(tools, path),
       agentsmd: () => agentsmdProbe(tools, path),
       readme: () => readmeProbe(tools, path),

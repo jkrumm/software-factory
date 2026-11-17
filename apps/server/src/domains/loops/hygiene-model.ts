@@ -50,6 +50,8 @@ export interface ProbeFinding {
   count: number
   /** the command that shows it again, when it is not `make check` or a sweep */
   reproduce?: string
+  /** facts after the evidence, uncapped: the `deps` finding's upgrade plan and procedure */
+  plan?: string[]
 }
 
 export const MAX_EVIDENCE_LINES = 8

@@ -1,6 +1,13 @@
 import { describe, expect, test } from 'bun:test'
 import type { EventKind } from '@software-factory/contract/spool'
-import { buildBrief, fenced, fitNotes, MAX_BRIEF_NOTES, STANDING_ORDERS } from '../../src/domains/leads/brief.ts'
+import {
+  buildBrief,
+  fenced,
+  fitNotes,
+  MAX_BRIEF_NOTES,
+  MAX_SIGNAL_TEXT_CHARS,
+  STANDING_ORDERS,
+} from '../../src/domains/leads/brief.ts'
 import type { HistoryRecord } from '../../src/domains/leads/history.ts'
 import { leadBranch, leadKey, parseLeadKey } from '../../src/domains/leads/names.ts'
 import { MAX_NOTE_CHARS, noteText } from '../../src/domains/leads/note.ts'
@@ -471,7 +478,7 @@ describe('the brief', () => {
         {
           source: 'kuma',
           title: 'API down',
-          text: 'x'.repeat(5_000),
+          text: 'x'.repeat(MAX_SIGNAL_TEXT_CHARS + 3_000),
           facts: { monitor: 'api', msg: 'a ``` break' },
           at: new Date(T0),
         },
@@ -480,7 +487,8 @@ describe('the brief', () => {
     expect(brief).toContain('## The signals it was filed from')
     expect(brief).toContain('title: "API down"')
     expect(brief).toContain('facts: {"monitor":"api","msg":"a ``` break"}')
-    expect(brief).not.toContain('x'.repeat(2_001))
+    expect(brief).toContain('x'.repeat(MAX_SIGNAL_TEXT_CHARS))
+    expect(brief).not.toContain('x'.repeat(MAX_SIGNAL_TEXT_CHARS + 1))
     expect(brief).toContain('````\nsource: kuma')
     expect(buildBrief(input)).not.toContain('The signals it was filed from')
   })
