@@ -11,6 +11,9 @@ const SLOWEST_STEPS = 5
 /** Repos whose CI is read at once. */
 const CI_CONCURRENCY = 8
 
+/** The statement timeout of the check reads; the Postgres-backed retro tests widen it on a loaded runner. */
+const CHECK_READ_TIMEOUT_MS = 10_000
+
 /** The whole CI read ends here: a repo not answered by then is unreadable (the CLI waits 120 s for the bundle). */
 const CI_READ_DEADLINE_MS = 80_000
 
@@ -42,8 +45,8 @@ interface CheckRead {
   steps: Map<string, RetroBuildRepo['check']['slowestSteps']>
 }
 
-async function readChecks(sql: SQL, from: Date, to: Date): Promise<CheckRead> {
-  return boundedRead(sql, 10_000, async (tx) => {
+async function readChecks(sql: SQL, from: Date, to: Date, timeoutMs: number): Promise<CheckRead> {
+  return boundedRead(sql, timeoutMs, async (tx) => {
     const closedRows: unknown[] = await tx`
       SELECT i.repo, count(DISTINCT e.issue_id) AS closed
       FROM factory.issue_events e JOIN factory.issues i ON i.id = e.issue_id
@@ -123,10 +126,10 @@ async function inBatches<T, R>(items: readonly T[], limit: number, task: (item: 
  */
 export async function readRetroBuild(
   sql: SQL,
-  options: { now: Date; days: number; ciTimes?: CiTimes; ciDeadlineMs?: number },
+  options: { now: Date; days: number; ciTimes?: CiTimes; ciDeadlineMs?: number; checkReadTimeoutMs?: number },
 ): Promise<RetroBuild> {
   const w = windowOf(options.now, options.days)
-  const checks = await readChecks(sql, w.from, w.to)
+  const checks = await readChecks(sql, w.from, w.to, options.checkReadTimeoutMs ?? CHECK_READ_TIMEOUT_MS)
   const names = [...new Set([...checks.closed.keys(), ...checks.totals.keys()])].sort()
 
   const unreadable: RetroBuild['unreadable'] = []

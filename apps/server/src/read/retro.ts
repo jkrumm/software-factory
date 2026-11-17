@@ -299,6 +299,8 @@ export async function readRetro(
     redact?: boolean
     capacityConstants?: CapacityConstants
     ciTimes?: CiTimes
+    /** the statement timeout of the build's check reads, 10 s when absent */
+    checkReadTimeoutMs?: number
     /** the counting epoch: the throughput and capacity parts count nothing before it */
     epoch?: Date | null
     /** why each queued Issue stays queued now */
@@ -310,7 +312,12 @@ export async function readRetro(
   const kpis = await readKpis(sql, { now, days })
   const friction: FrictionModel = await readFriction(sql, { now, days })
   const sessions = await sessionsOf(sql, w)
-  const build = await readRetroBuild(sql, { now, days, ...(options.ciTimes ? { ciTimes: options.ciTimes } : {}) })
+  const build = await readRetroBuild(sql, {
+    now,
+    days,
+    ...(options.ciTimes ? { ciTimes: options.ciTimes } : {}),
+    ...(options.checkReadTimeoutMs ? { checkReadTimeoutMs: options.checkReadTimeoutMs } : {}),
+  })
   const capacity = options.capacityConstants
     ? await capacityOf(sql, {
         now,

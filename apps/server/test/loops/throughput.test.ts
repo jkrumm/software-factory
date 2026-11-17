@@ -412,7 +412,7 @@ describe('the daily pass', () => {
   })
 
   test('the weekly retro’s ledger carries the loop’s own after as a clean window', async () => {
-    const retro = await readRetro(db.sql, { now, days: 7 })
+    const retro = await readRetro(db.sql, { checkReadTimeoutMs: 60_000, now, days: 7 })
     const alpha = retro.ledger.find((e) => e.kpi === 'failed_run_minutes')
     expect(alpha).toMatchObject({ before: 11.4, now: 0, measured: 'after', moved: 'better' })
   })
