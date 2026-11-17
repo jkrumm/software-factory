@@ -18,6 +18,7 @@ import {
   TAB_LABEL,
   tabCounts,
   tabOf,
+  dollars,
   tokensCounted,
   toolCallsCounted,
   triageAt,
@@ -45,10 +46,12 @@ const session = (id: string, over: Partial<Session['insights']> = {}): Session =
       elapsedMs: 0,
       workingMs: 0,
       turns: 0,
-      toolCalls: 0,
+      toolCalls: null,
       subagents: 0,
       tokens,
       models: [],
+      cost: null,
+      windowPoints: null,
       attempts: 1,
       partial: false,
       ...over,
@@ -291,16 +294,20 @@ test('only a green verify run passed', () => {
 
 const ZERO_TOKENS = { input: 0, output: 0, cacheRead: 0, cacheWrite: 0 }
 
-test('tokens are uncounted while partial, or all zero after turns ran; a fresh Issue has an honest zero', () => {
-  expect(tokensCounted({ partial: true, turns: 3, tokens: { ...ZERO_TOKENS, output: 5 } })).toBe(false)
+test('tokens show as counted when any is nonzero; all zero is a dash while partial or after turns ran', () => {
+  expect(tokensCounted({ partial: true, turns: 3, tokens: { ...ZERO_TOKENS, output: 5 } })).toBe(true)
+  expect(tokensCounted({ partial: true, turns: 3, tokens: ZERO_TOKENS })).toBe(false)
   expect(tokensCounted({ partial: false, turns: 27, tokens: ZERO_TOKENS })).toBe(false)
   expect(tokensCounted({ partial: false, turns: 0, tokens: ZERO_TOKENS })).toBe(true)
   expect(tokensCounted({ partial: false, turns: 27, tokens: { ...ZERO_TOKENS, cacheWrite: 1 } })).toBe(true)
 })
 
-test('tool calls and subagents are uncounted exactly while partial', () => {
-  expect(toolCallsCounted({ partial: true })).toBe(false)
-  expect(toolCallsCounted({ partial: false })).toBe(true)
+test('tool calls are a dash until a source counts them; cost shows cents under ten dollars', () => {
+  expect(toolCallsCounted({ toolCalls: null })).toBe(false)
+  expect(toolCallsCounted({ toolCalls: 0 })).toBe(true)
+  expect(dollars(null)).toBeNull()
+  expect(dollars(3.456)).toBe('$3.46')
+  expect(dollars(1234.5)).toBe('$1,235')
 })
 
 test('the first triage line is the filing at the Issue creation, an amendment keeps its own time', () => {

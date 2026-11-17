@@ -12,6 +12,7 @@ import {
   attemptSeries,
   cacheShare,
   SESSION_TONES,
+  SUBAGENTS_NOT_COUNTED,
   TOKENS_NOT_COUNTED,
   TOOL_CALLS_NOT_COUNTED,
   tokensCounted,
@@ -45,10 +46,10 @@ function Figures({ issue, narrow }: { issue: Issue; narrow?: boolean }) {
   const callsOk = toolCallsCounted(insights)
   /** A token figure, or the dash when the factory has not counted tokens. */
   const token = (value: number): string | null => (tokensOk ? countWords(value) : null)
-  const calls = (value: number): string | null => (callsOk ? countWords(value) : null)
+  const calls = (value: number | null): string | null => (callsOk && value !== null ? countWords(value) : null)
   const share = percent(cacheShare(tokens))
   const cacheShares = sessions.map((s) => Math.round((cacheShare(s.insights.tokens) ?? 0) * 100))
-  const subtitle = many ? 'Per attempt' : 'This attempt'
+  const subtitle = (many ? 'Per attempt' : 'This attempt') + (insights.partial && tokensOk ? ' · so far' : '')
   /** Bars per attempt with the attempts under them; one attempt has nothing to compare, so no chart. */
   const chartOf = (name: string, values: number[], format: (value: number) => string, counted = true) =>
     many && counted
@@ -77,7 +78,7 @@ function Figures({ issue, narrow }: { issue: Issue; narrow?: boolean }) {
         value={countWords(insights.turns)}
         footer={[
           { label: 'Tool calls', value: calls(insights.toolCalls), note: TOOL_CALLS_NOT_COUNTED },
-          { label: 'Subagents', value: calls(insights.subagents), note: TOOL_CALLS_NOT_COUNTED },
+          { label: 'Subagents', value: tokensOk ? countWords(insights.subagents) : null, note: SUBAGENTS_NOT_COUNTED },
         ]}
         {...chartOf('Turns', series.turns, countWords)}
       />

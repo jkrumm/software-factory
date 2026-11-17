@@ -196,14 +196,15 @@ test('the overview figures are the totals of the API, with a bar per attempt', a
   await open(page, rich)
   const { insights } = issue
   await expect(stat(page, 'Turns').locator('span.tabular-nums')).toHaveText(count(insights.turns))
-  // turns ran but no token was counted: the card reads a dash with its reason, never a 0
+  // no token was counted while the figures are partial, or turns ran and none was: the card reads a dash with its reason, never a 0
   const { input, output, cacheRead, cacheWrite } = insights.tokens
-  const tokensCounted = !insights.partial && !(insights.turns > 0 && !input && !output && !cacheRead && !cacheWrite)
+  const anyToken = input + output + cacheRead + cacheWrite > 0
+  const tokensCounted = anyToken || (!insights.partial && insights.turns === 0)
   if (tokensCounted) {
     await expect(stat(page, 'Tokens out').locator('span.tabular-nums')).toHaveText(count(output))
     await expect(stat(page, 'Tokens out')).toContainText(count(input))
   } else {
-    await expect(stat(page, 'Tokens out').locator('span.tabular-nums')).toHaveText(/^–.*not counted tokens/)
+    await expect(stat(page, 'Tokens out').locator('span.tabular-nums')).toHaveText(/^–.*no tokens/)
     await expect(stat(page, 'Cache read share').locator('span.tabular-nums').first()).toHaveText(/^–/)
   }
   await expect(stat(page, 'Active time').locator('span.tabular-nums')).toHaveText(/^[\d.]+ (ms|s|min)$/)

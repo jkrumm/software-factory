@@ -36,8 +36,9 @@ export const ReadInsights = z
     /** time a turn was open, summed over an Issue's attempts */
     workingMs: z.number().int(),
     turns: z.number().int(),
-    /** zero until the usage schema is joined (the KPI read) */
-    toolCalls: z.number().int(),
+    /** null: the usage data does not count tool calls yet (a count, never a guess) */
+    toolCalls: z.number().int().nullable(),
+    /** the sessions the lead's subagents ran as, joined from the usage data */
     subagents: z.number().int(),
     tokens: z.object({
       input: z.number().int(),
@@ -46,8 +47,12 @@ export const ReadInsights = z
       cacheWrite: z.number().int(),
     }),
     models: z.array(z.string()),
+    /** dollars the usage data priced for the sessions; null while it could not be read */
+    cost: z.number().nullable(),
+    /** points of the five-hour Max window the sessions used; null while that figure is not read (lists leave it out) */
+    windowPoints: z.number().nullable(),
     attempts: z.number().int(),
-    /** true while tool calls, subagents and tokens are not yet counted */
+    /** true while a session is live, its usage rows have not arrived or the usage data could not be read: the figures are a floor */
     partial: z.boolean(),
   })
   .meta({ id: 'ReadInsights' })

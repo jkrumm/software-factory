@@ -4,6 +4,7 @@ import { HISTORY_WINDOWS, type Kpi, type KpiModel } from '@software-factory/cont
 import { boundedRead } from './bounded.ts'
 import { percentile, per, windowOf } from './stats.ts'
 import { flowKpis } from './kpis-flow.ts'
+import { costBySeat, USAGE_TIMEOUT_MS, type SeatCost } from './usage.ts'
 
 /** The owner's actions on an Issue that the factory should have settled; the events that count are these kinds. */
 export const TOUCH_EVENTS = ['noted', 'woken', 'cancelled', 'reopened'] as const
@@ -164,8 +165,6 @@ const queueWaits = (sql: SQL, w: Window) =>
     ) s ON true
     WHERE a.kind = 'admitted' AND a.result = 'applied' AND a.at >= ${w.from} AND a.at < ${w.to}`)
 
-/** What one usage statement may take before the KPI degrades to unmeasured instead of holding a connection. */
-const USAGE_TIMEOUT_MS = 20_000
 /** `session_window_share` aggregates every quota interval whatever the filter, so a computed figure is reused this long. */
 const POINTS_TTL_MS = 15 * 60_000
 
@@ -238,6 +237,8 @@ async function sessionsOf(tx: SQL, w: Window): Promise<Array<string | number | b
 interface Usage {
   cost: number | null
   points: number | null
+  /** the cost by tool, model and effort, biggest first; empty when unmeasured or the seat columns are not there */
+  seats: SeatCost[]
   /** why a figure is null; null when both were read */
   reason: string | null
 }
@@ -249,6 +250,7 @@ async function usageOf(
 ): Promise<Usage> {
   let sessions: Array<string | number | bigint>
   let cost: number
+  let seats: SeatCost[]
   let shares: boolean
   try {
     const found = await boundedRead(sql, options.timeoutMs, async (tx) => {
@@ -265,18 +267,27 @@ async function usageOf(
         WHERE r.session_id = ANY(${tx.array(ids, 'BIGINT')})`
       return { ids, cost: z.object({ cost: z.coerce.number() }).parse(sum).cost, shares: present.shares }
     })
-    if (!found) return { cost: null, points: null, reason: 'The usage schema is not in this database' }
+    if (!found) return { cost: null, points: null, seats: [], reason: 'The usage schema is not in this database' }
     ;({ ids: sessions, cost, shares } = found)
+    seats = await costBySeat(sql, { sessions, timeoutMs: options.timeoutMs })
   } catch {
-    return { cost: null, points: null, reason: 'The usage schema could not be read: no access, or the read timed out' }
+    return {
+      cost: null,
+      points: null,
+      seats: [],
+      reason: 'The usage schema could not be read: no access, or the read timed out',
+    }
   }
-  if (!shares) return { cost, points: null, reason: 'The usage view session_window_share is not in this database' }
-  if (sessions.length === 0)
-    return { cost: null, points: null, reason: 'No usage session is linked to an Issue filed in the window' }
+  if (!shares) {
+    return { cost, points: null, seats, reason: 'The usage view session_window_share is not in this database' }
+  }
+  if (sessions.length === 0) {
+    return { cost: null, points: null, seats: [], reason: 'No usage session is linked to an Issue filed in the window' }
+  }
 
   const key = String(Bun.hash(sessions.map(String).sort().join(',')))
   const cached = options.cache.get(key, options.now)
-  if (cached !== undefined) return { cost, points: cached, reason: null }
+  if (cached !== undefined) return { cost, points: cached, seats, reason: null }
   try {
     const points = await boundedRead(sql, options.timeoutMs, async (tx) => {
       const [sum] = await tx`
@@ -285,10 +296,30 @@ async function usageOf(
       return z.object({ points: z.coerce.number() }).parse(sum).points
     })
     options.cache.set(key, points, options.now)
-    return { cost, points, reason: null }
+    return { cost, points, seats, reason: null }
   } catch {
-    return { cost, points: null, reason: 'The window points read timed out' }
+    return { cost, points: null, seats, reason: 'The window points read timed out' }
   }
+}
+
+/** The seats the cost KPI names; the rest are summed as one part. */
+const SEAT_PARTS = 12
+
+/** Cost per Issue by seat: the biggest spenders, then the rest as one part. */
+function seatParts(seats: readonly SeatCost[], issues: number): Kpi['parts'] {
+  if (issues === 0) return []
+  const part = (key: string, label: string, cost: number): Kpi['parts'][number] => ({
+    key,
+    label,
+    value: cost / issues,
+    unit: 'usd',
+  })
+  const named = seats.slice(0, SEAT_PARTS).map((seat) => {
+    const label = `${seat.tool} · ${seat.model} · ${seat.effort}`
+    return part(label, label, seat.cost)
+  })
+  const rest = seats.slice(SEAT_PARTS).reduce((sum, seat) => sum + seat.cost, 0)
+  return rest > 0 ? [...named, part('other', 'Other seats', rest)] : named
 }
 
 const NONE = { kind: 'unset', min: null, max: null } as const
@@ -430,7 +461,7 @@ async function kpisOf(
         timeoutMs: options.usageTimeoutMs ?? USAGE_TIMEOUT_MS,
         cache: options.pointsCache ?? sharedPoints,
       })
-    : { cost: null, points: null, reason: 'Usage is read for the current and the previous window only' }
+    : { cost: null, points: null, seats: [], reason: 'Usage is read for the current and the previous window only' }
   const fixes = await fixCommitCounts(sql, w)
   const weeks = (w.to.getTime() - w.from.getTime()) / (7 * 24 * 3_600_000)
   const queueParts = withParts ? await queueWaitParts(sql, w) : []
@@ -648,8 +679,9 @@ async function kpisOf(
       count: null,
       measured: usage.cost !== null,
       ...(usage.cost === null && usage.reason ? { reason: usage.reason } : {}),
+      parts: usage.cost === null ? [] : seatParts(usage.seats, issues),
       definition:
-        "Dollars the usage schema priced for the sessions of the Issues filed in the window (a session tagged with the Issue's number, or a Claude session its lead reported, with its subagents), divided by those Issues. Joined at read, never copied. Null while the usage schema is not there.",
+        "Dollars the usage schema priced for the sessions of the Issues filed in the window (a session tagged with the Issue's number, or a Claude session its lead reported, with its subagents), divided by those Issues. Joined at read, never copied. The parts are the same dollars by seat (the tool: lead, worker, reviewer or a subagent type; the model; the effort), the twelve biggest and the rest as one. Null while the usage schema is not there.",
     }),
     ...(await flowKpis(sql, w)),
   ]
