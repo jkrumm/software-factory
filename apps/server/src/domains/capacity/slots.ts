@@ -177,11 +177,14 @@ function decide(
   const { peakMib } = step
   const { freeMib } = fit
   const known = peakMib !== null && freeMib !== null
-  const fits = known && peakMib + fit.growthMib <= freeMib - fit.headroomMib
+  // The base slots are the concurrency the host is sized for: they keep no headroom, only the step's own fit (swap growing
+  // is already refused above). The headroom guards the host against the slots beyond the base.
+  const room = holders < base ? 0 : fit.headroomMib
+  const fits = known && peakMib + fit.growthMib <= freeMib - room
   const memory = (): { grant: false; why: string; kind: WaitKind } => ({
     grant: false,
     kind: 'memory',
-    why: `waiting for memory: needs ${gib(peakMib ?? 0)} (${PEAK_SOURCE[step.peakFrom]}), ${gib(Math.max(0, (freeMib ?? 0) - fit.growthMib))} free after ${gib(fit.growthMib)} the running steps still grow, headroom ${gib(fit.headroomMib)}`,
+    why: `waiting for memory: needs ${gib(peakMib ?? 0)} (${PEAK_SOURCE[step.peakFrom]}), ${gib(Math.max(0, (freeMib ?? 0) - fit.growthMib))} free after ${gib(fit.growthMib)} the running steps still grow${room === 0 ? ', no headroom for a base slot' : `, headroom ${gib(room)}`}`,
   })
   if (holders < base) return !known || fits ? { grant: true } : memory()
   if (!fit.loadOk) {
@@ -215,9 +218,15 @@ function decide(
  * the head out for ever, and a step does not keep it out when the head still fits beside it once the holders granted
  * before the passing began have ended (their resident size is then free again). Both sizes must be learned or guessed and
  * the free memory known; otherwise the freeze holds. The holders granted since the passing began are the passers: they stay
- * and are already in the used memory.
+ * and are already in the used memory. `headroomMib` is what the head's slot keeps free: none when both fit in the base.
  */
-function headFitsBeside(head: SlotRow, step: SlotRow, held: readonly SlotRow[], fit: SlotFit): boolean {
+function headFitsBeside(
+  head: SlotRow,
+  step: SlotRow,
+  held: readonly SlotRow[],
+  fit: SlotFit,
+  headroomMib: number,
+): boolean {
   const headMib = fit.peaksByName?.get(head.name) ?? null
   const stepMib = fit.peaksByName?.get(step.name) ?? fit.peakMib
   if (headMib === null || stepMib === null || fit.freeMib === null || head.passedAt === null) return false
@@ -228,7 +237,7 @@ function headFitsBeside(head: SlotRow, step: SlotRow, held: readonly SlotRow[], 
   const staying = held
     .filter((row) => !before(row))
     .reduce((sum, row) => sum + Math.max(0, (fit.heldPeakById?.get(row.id) ?? 0) - (row.rssMib ?? 0)), 0)
-  return headMib + stepMib + staying + fit.headroomMib <= fit.freeMib + released
+  return headMib + stepMib + staying + headroomMib <= fit.freeMib + released
 }
 
 /**
@@ -367,7 +376,7 @@ export function touchSlots(
       theirs.kind !== 'class' &&
       waiter.passedAt !== null &&
       now.getTime() - waiter.passedAt.getTime() >= passAfterMs &&
-      !headFitsBeside(waiter, mine, held, input.fit)
+      !headFitsBeside(waiter, mine, held, input.fit, takenNow.count + 2 <= input.slots ? 0 : input.fit.headroomMib)
     )
       return wait(
         `"${waiter.name}" ahead was passed for ${Math.round(passAfterMs / 60_000)} min and nothing passes it now: ${theirs.why}`,

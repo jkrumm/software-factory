@@ -742,9 +742,29 @@ describe('test slots', () => {
       {
         name: 'the second step waits when peak and growth do not fit, and says memory',
         holders: 1,
-        fit: { growthMib: 10_000 },
+        fit: { growthMib: 13_000 },
         granted: false,
         why: 'waiting for memory: needs 17.6 GiB',
+      },
+      {
+        name: 'a base slot keeps no headroom: the step fits the free memory less growth (issue 1883)',
+        holders: 1,
+        fit: { peakMib: 2048, freeMib: 5990, growthMib: 2355, headroomMib: 2662 },
+        granted: true,
+      },
+      {
+        name: 'a base slot still waits when the step does not fit the free memory itself',
+        holders: 1,
+        fit: { peakMib: 4000, freeMib: 5990, growthMib: 2355, headroomMib: 2662 },
+        granted: false,
+        why: 'no headroom for a base slot',
+      },
+      {
+        name: 'a slot beyond the base keeps the headroom',
+        holders: 2,
+        fit: { peakMib: 2048, freeMib: 6500, growthMib: 2355, headroomMib: 2662, max: 4 },
+        granted: false,
+        why: 'headroom 2.6 GiB',
       },
       { name: 'an unknown peak grants a base slot', holders: 1, fit: { peakMib: null }, granted: true },
       { name: 'an unknown free memory grants a base slot', holders: 1, fit: { freeMib: null }, granted: true },
@@ -795,7 +815,7 @@ describe('test slots', () => {
 
     test('the reason is a line of the view while the waiter asks, and a grant clears it', () => {
       const held = withHolders(1)
-      const waiting = call(held, 'w', now, 2, { ...fit, growthMib: 10_000 })
+      const waiting = call(held, 'w', now, 2, { ...fit, growthMib: 13_000 })
       expect(slotLines(waiting.rows, now)).toEqual([`test slot wait "w": ${waiting.view.why}`])
       expect(slotLines(waiting.rows, at(WAITER_TTL_MS + 1))).toEqual([])
       const later = call(waiting.rows, 'w', at(1000), 2, fit)
@@ -977,7 +997,7 @@ describe('test slots', () => {
     test('a small step that does not fit either does not pass', () => {
       const rows = call([], 'h', now, 2, { ...open, max: 6 }).rows
       const big = ask(rows, 'big', 1000, 0, 5120)
-      const small = ask(big.rows, 's1', 2000, 900, 300)
+      const small = ask(big.rows, 's1', 2000, 3000, 300)
       expect(small.view.granted).toBe(false)
       expect(big.rows.find((r) => r.id === 'big')?.passedAt).toBeNull()
     })
