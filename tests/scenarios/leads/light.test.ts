@@ -2,7 +2,7 @@ import { afterAll, beforeAll, expect, test } from 'bun:test'
 import { mkdtemp, rm } from 'node:fs/promises'
 import { join } from 'node:path'
 import { readState, statePathOf } from '../fakes/hc-state.ts'
-import { admitted, block, must, runLoop, stateOf, tick } from '../flow.ts'
+import { admit, admitted, block, must, runLoop, stateOf, tick } from '../flow.ts'
 import { type Lab, startLab } from '../planning/lab.ts'
 import { script } from '../loops/support.ts'
 
@@ -42,6 +42,18 @@ const flow = () => ({ world: lab.world, server: lab.server })
 const terminals = () => Object.values(readState(statePathOf(join(lab.world.bin, 'calls.jsonl'))).terminals)
 const modelOf = (argv: readonly string[]) => [argv[argv.indexOf('--model') + 1], argv[argv.indexOf('--effort') + 1]]
 
+/** Admits the requeued Issue; on a miss the error carries the queue's own reason for it, not a bare timeout. */
+async function readmitted(issue: string): Promise<void> {
+  const deadline = Date.now() + 120_000
+  let last: unknown = null
+  while (Date.now() < deadline) {
+    const passed = await admit(flow())
+    if (passed.admitted.some((a) => a.issue === issue) || (await stateOf(lab.world, issue)).state === 'working') return
+    last = { queue: passed.queue.filter((entry) => JSON.stringify(entry).includes(issue)), notes: passed.notes }
+  }
+  throw new Error(`${issue} was not admitted again: ${JSON.stringify(last)}`)
+}
+
 test('a links finding starts a light lead; its second stall requeues it, and the next lead starts on the lead row', async () => {
   await runLoop(flow(), 'hygiene')
   const [finding] = await lab.world.db.sql`
@@ -73,7 +85,7 @@ test('a links finding starts a light lead; its second stall requeues it, and the
   ])
 
   await tick(flow())
-  await admitted(flow(), issue)
+  await readmitted(issue)
   await tick(flow())
   const second = terminals().find((terminal) => terminal.labels['factory.key']?.endsWith('-2'))
   expect(modelOf(second?.argv ?? [])).toEqual(['sonnet', 'high'])
