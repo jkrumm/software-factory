@@ -159,6 +159,12 @@ describe('start_lead', () => {
   })
 })
 
+const attemptSeat = async (issue: IssueId, attempt: number) => {
+  const [row] = await w.db
+    .sql`SELECT tier, effort FROM factory.lead_attempts WHERE issue_id = ${issue} AND attempt = ${attempt}`
+  return row as { tier: string | null; effort: string | null } | undefined
+}
+
 describe('start_lead seats', () => {
   test('an Issue filed with a seat starts its lead on it, records it, and reads it back as seat and ranOn', async () => {
     const issue = await w.admitted([], { tier: 'opus', effort: 'high' })
@@ -173,6 +179,7 @@ describe('start_lead seats', () => {
     const shown = await detail(issue)
     expect(shown?.seat).toEqual({ tier: 'opus', effort: 'high', role: null })
     expect(shown?.ranOn).toEqual({ tier: 'opus', effort: 'high', role: null })
+    expect(await attemptSeat(issue, 1)).toEqual({ tier: 'opus', effort: 'high' })
     expect(shown?.timeline.find((line) => line.kind === 'lead_started')?.text).toBe(
       'A lead started on opus at high effort.',
     )
@@ -185,6 +192,8 @@ describe('start_lead seats', () => {
     const shown = await detail(issue)
     expect(shown?.seat).toBeNull()
     expect(shown?.ranOn).toEqual({ tier: 'sonnet', effort: 'high', role: 'lead' })
+    // the attempt's row holds what the role table said at the start
+    expect(await attemptSeat(issue, 1)).toEqual({ tier: 'sonnet', effort: 'high' })
     expect(w.terminals.started[0]?.prompt).not.toContain('## Your seat')
   })
 
@@ -195,6 +204,7 @@ describe('start_lead seats', () => {
     expect(w.terminals.started[0]?.prompt).toContain('You run on the light seat (rule `kind:docs`)')
     expect(w.terminals.started[0]?.prompt).toContain('--out-of-depth')
     expect((await detail(issue))?.ranOn).toEqual({ tier: 'haiku', effort: 'high', role: 'light' })
+    expect(await attemptSeat(issue, 1)).toEqual({ tier: 'haiku', effort: 'high' })
 
     await w.event(issue, 'moved_up:1', {
       kind: 'moved_up',
@@ -209,5 +219,7 @@ describe('start_lead seats', () => {
     expect(second?.prompt).toContain('the light lead stalled 2 times')
     expect(second?.prompt).not.toContain('## Your seat')
     expect((await detail(issue))?.ranOn).toEqual({ tier: 'sonnet', effort: 'high', role: 'lead' })
+    // the second attempt's row holds the seat it moved up to
+    expect(await attemptSeat(issue, 2)).toEqual({ tier: 'sonnet', effort: 'high' })
   })
 })

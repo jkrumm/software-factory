@@ -43,6 +43,12 @@ export interface PlanningStore {
   /** false when no open (unsatisfied) edge was stored */
   removeEdge(edge: { issue: IssueId; after: IssueId }): Promise<boolean>
   markSatisfied(edges: readonly { issue: IssueId; after: IssueId }[], at: Date): Promise<void>
+  /**
+   * What one admission look found of the Issues their edges hold: for each unsatisfied edge of a `ready` Issue (it would
+   * have been admitted without its edges) `ready_since` is set to `at` unless it is set already, and for each of a `held`
+   * Issue (something else would have refused it too) it is cleared. A satisfied edge is never touched: its value is final.
+   */
+  noteReadiness(at: Date, look: { ready: readonly IssueId[]; held: readonly IssueId[] }): Promise<void>
 
   /** the owner's latest `prio` of each Issue that has one */
   prios(): Promise<Map<IssueId, number>>

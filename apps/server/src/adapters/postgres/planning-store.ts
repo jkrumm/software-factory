@@ -129,6 +129,19 @@ export function postgresPlanningStore(tx: SQL): PlanningStore {
       }
     },
 
+    async noteReadiness(at, { ready, held }) {
+      if (ready.length > 0) {
+        await tx`
+          UPDATE factory.planning_edges SET ready_since = ${at}
+          WHERE issue_id IN ${tx([...ready])} AND satisfied_at IS NULL AND ready_since IS NULL`
+      }
+      if (held.length > 0) {
+        await tx`
+          UPDATE factory.planning_edges SET ready_since = NULL
+          WHERE issue_id IN ${tx([...held])} AND satisfied_at IS NULL AND ready_since IS NOT NULL`
+      }
+    },
+
     async prios() {
       const rows: unknown[] = await tx`
         SELECT DISTINCT ON (issue_id) issue_id, value FROM factory.planning_prios ORDER BY issue_id, at DESC, id DESC`

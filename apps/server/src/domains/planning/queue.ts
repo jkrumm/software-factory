@@ -32,6 +32,8 @@ export interface Ordered {
   prio: number
   /** set when the chain keeps this Issue out of the candidates */
   reason: ChainReason | null
+  /** for an Issue its `after` edges hold: what would keep it out with those edges gone (null: nothing of the chain's) */
+  withoutEdges: ChainReason | null
 }
 
 const isFix = (issue: OpenIssue): boolean => issue.kind === FIX_KIND
@@ -70,6 +72,7 @@ export function orderQueue(input: {
       issue,
       prio: input.prio.get(issue.id) ?? 0,
       reason: reasonOf(issue, input.edges, stopped),
+      withoutEdges: reasonOf(issue, [], stopped),
     }))
   const rank = (row: Ordered): number => (row.reason !== null ? 2 : isFix(row.issue) ? 0 : 1)
   return rows.sort((a, b) => rank(a) - rank(b) || b.prio - a.prio || issueNumber(a.issue.id) - issueNumber(b.issue.id))

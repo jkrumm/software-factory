@@ -295,6 +295,8 @@ export interface LeadAttempt {
   dormantAt: Date | null
   /** resumes of the dormant session that failed since it was dormant */
   reviveTries: number
+  /** the seat the lead ran on, set when it started (null: started before the column, or its event carried none) */
+  seat: { tier: Tier; effort: Effort } | null
 }
 
 export interface Delivery {
@@ -359,7 +361,13 @@ export interface LeadStore {
   saveStarted(
     issue: IssueId,
     attempt: number,
-    input: { terminal: string; tab: string | null; space: string | null; at: Date },
+    input: {
+      terminal: string
+      tab: string | null
+      space: string | null
+      at: Date
+      seat: { tier: Tier; effort: Effort }
+    },
   ): Promise<void>
   markGone(issue: IssueId, attempt: number, at: Date): Promise<void>
   /** the lead is dormant (marking twice keeps the first time) */
