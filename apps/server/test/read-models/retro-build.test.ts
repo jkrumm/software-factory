@@ -16,6 +16,8 @@ const DAYS = 7
 const FROM = new Date(NOW.getTime() - DAYS * 24 * 3_600_000)
 const ago = (hours: number): Date => new Date(NOW.getTime() - hours * 3_600_000)
 const MIN = 60_000
+/** The check reads run on a loaded CI runner: the statement timeout is widened here, the production default stays 10 s. */
+const WIDE_READ = { checkReadTimeoutMs: 60_000 }
 
 let keys = 0
 const closed = (issue: string, repo: string, at: Date) => sql`
@@ -89,7 +91,7 @@ const github = (token: string | null = 't', seen: string[] = []) =>
 
 describe('GET /v1/retro `build`', () => {
   test('the check figures match plain SQL, per repo and per step, with the lead prefix dropped', async () => {
-    const { build } = RetroModel.parse(await readRetro(sql, { now: NOW, days: DAYS }))
+    const { build } = RetroModel.parse(await readRetro(sql, { ...WIDE_READ, now: NOW, days: DAYS }))
     expect(build.unreadable).toEqual([])
     const [row] =
       await sql`SELECT sum(duration_ms)::float8 / 60000 AS minutes, count(*)::int AS runs FROM factory.step_costs
@@ -123,7 +125,9 @@ describe('GET /v1/retro `build`', () => {
 
   test('CI times come from the finished runs; an unreadable repo is named and the rest still returns', async () => {
     const seen: string[] = []
-    const model = RetroModel.parse(await readRetro(sql, { now: NOW, days: DAYS, ciTimes: github('t', seen) }))
+    const model = RetroModel.parse(
+      await readRetro(sql, { ...WIDE_READ, now: NOW, days: DAYS, ciTimes: github('t', seen) }),
+    )
     const { build } = model
     expect(build.unreadable).toEqual([])
     const app = build.repos.find((r) => r.repo === 'app')
@@ -141,7 +145,9 @@ describe('GET /v1/retro `build`', () => {
   })
 
   test('without a token, or on a bad answer, the repo is under unreadable with its check figures kept', async () => {
-    const tokenless = RetroModel.parse(await readRetro(sql, { now: NOW, days: DAYS, ciTimes: github(null) })).build
+    const tokenless = RetroModel.parse(
+      await readRetro(sql, { ...WIDE_READ, now: NOW, days: DAYS, ciTimes: github(null) }),
+    ).build
     expect(tokenless.unreadable).toEqual([
       { repo: 'app', reason: 'no token' },
       { repo: 'lib', reason: 'no token' },
@@ -158,7 +164,7 @@ describe('GET /v1/retro `build`', () => {
       run: async () => ({ exitCode: 0, stdout: 'git@github.com:o/broken.git\n' }),
       fetch: fakeGithub(),
     })
-    const broken = RetroModel.parse(await readRetro(sql, { now: NOW, days: DAYS, ciTimes: down })).build
+    const broken = RetroModel.parse(await readRetro(sql, { ...WIDE_READ, now: NOW, days: DAYS, ciTimes: down })).build
     expect(broken.unreadable.map((u) => u.repo)).toEqual(['app', 'lib'])
     expect(broken.unreadable[0]?.reason).toContain('github 500')
     expect(broken.repos.find((r) => r.repo === 'app')?.check.runs).toBe(5)
@@ -178,11 +184,11 @@ describe('GET /v1/retro `build`', () => {
       run: async () => ({ exitCode: 0, stdout: 'git@github.com:o/app.git\n' }),
       fetch: full(),
     })
-    const cut = await readRetroBuild(sql, { now: NOW, days: DAYS, ciTimes: busy })
+    const cut = await readRetroBuild(sql, { ...WIDE_READ, now: NOW, days: DAYS, ciTimes: busy })
     expect(cut.repos.find((r) => r.repo === 'app')?.ci).toMatchObject({ truncated: true, totalMinutes: 1500 })
 
     const never = () => new Promise<never>(() => undefined)
-    const slow = await readRetroBuild(sql, { now: NOW, days: DAYS, ciTimes: never, ciDeadlineMs: 50 })
+    const slow = await readRetroBuild(sql, { ...WIDE_READ, now: NOW, days: DAYS, ciTimes: never, ciDeadlineMs: 50 })
     expect(slow.unreadable).toEqual([
       { repo: 'app', reason: 'the CI read ran out of time' },
       { repo: 'lib', reason: 'the CI read ran out of time' },
@@ -196,7 +202,7 @@ describe('GET /v1/retro `build`', () => {
         ${'Retro: 2026-10-20 kpi=ci_p50_minutes before=30 direction=down'}, ${ago(400)}, 'filed', 'issue_1'),
         ('signal_b2', 'agent:software-factory', 'request', 'factory', 'agent', 'app', 'b2', 'Run affected tests',
         ${'Retro: 2026-10-20 kpi=check_minutes_per_issue before=20 direction=down'}, ${ago(400)}, 'filed', 'issue_2')`
-    const model = RetroModel.parse(await readRetro(sql, { now: NOW, days: DAYS, ciTimes: github() }))
+    const model = RetroModel.parse(await readRetro(sql, { ...WIDE_READ, now: NOW, days: DAYS, ciTimes: github() }))
     const entry = (kpi: string) => model.ledger.find((e) => e.kpi === kpi)
     expect(entry('ci_p50_minutes')).toMatchObject({ before: 30, now: 25 })
     expect(entry('check_minutes_per_issue')?.before).toBe(20)
@@ -204,6 +210,7 @@ describe('GET /v1/retro `build`', () => {
     // with capacity settings the two are also among its figures
     const withCapacity = RetroModel.parse(
       await readRetro(sql, {
+        ...WIDE_READ,
         now: NOW,
         days: DAYS,
         ciTimes: github(),
