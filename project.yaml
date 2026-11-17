@@ -16,4 +16,9 @@ leads: 12 # NL32: the merge window serialises merges (~10 an hour), so a lead wa
 slots: { run: 30m } # `make check-fast` runs in one slot; a rerun of one heavy suite to reproduce a CI failure fits
 budgets: { fast: 5m, peak: 4GiB, fail: 30% } # the throughput loop (docs/architecture.md): a day over one of these is a signal on this repo
 checks: { fast: make check-fast, full: make check, ci: true } # leads run fast locally; CI runs the full gate sharded (.github/workflows/ci.yml)
+# docs-check is pure bun over the tree: it passes in the step image, so it may run off the mini. check-fast stays home: it
+# writes oxfmt's fixes into the worktree and its tests start Postgres, which the image lacks (docs/architecture.md "Steps off the mini")
+steps:
+  docs-check: { make: docs-check, remote: true, bun: 1.4.2 } # the mini's bun: package.json names no packageManager
+  check-fast: { make: check-fast }
 hygiene: { probes: [{ name: readme, target: docs-check }] } # the README's counts and lists against the code (scripts/readme-check.ts)
