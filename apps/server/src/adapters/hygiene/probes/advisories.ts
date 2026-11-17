@@ -173,7 +173,13 @@ async function bunPart(tools: Tools, path: string, locks: string[]): Promise<Par
     }
     advisories.push(...parsed)
   }
-  return { kind: 'ran', advisories: sorted(advisories) }
+  // no fixed version means no dependency bump clears it: named in the detail, never a finding this lead cannot fix
+  const unfixable = advisories.filter((advisory) => !advisory.fixedIn)
+  return {
+    kind: 'ran',
+    advisories: sorted(advisories.filter((advisory) => advisory.fixedIn)),
+    note: unfixable.length ? `not counted, no fixed version: ${unfixable.map(evidence).join('; ')}` : undefined,
+  }
 }
 
 async function osvPart(tools: Tools, path: string, lockfiles: string[]): Promise<Part> {
@@ -228,6 +234,8 @@ export async function advisoriesProbe(tools: Tools, path: string): Promise<Outco
   const ran = parts.flatMap(({ name, part }) => (part.kind === 'ran' ? [{ name, advisories: part.advisories }] : []))
   const notes = parts.flatMap(({ name, part }) => (part.kind === 'ran' ? [] : [`${name}: ${part.reason}`]))
   const suffix = notes.length ? ` (${notes.join('; ')})` : ''
+  const counted = parts.flatMap(({ part }) => (part.kind === 'ran' && part.note ? [part.note] : []))
+  const extra = counted.length ? ` [${counted.join('; ')}]` : ''
   if (!ran.length) {
     const anyFailed = parts.some(({ part }) => part.kind === 'failed')
     return anyFailed
@@ -266,7 +274,8 @@ export async function advisoriesProbe(tools: Tools, path: string): Promise<Outco
   const checked = ran.map(({ name }) => name).join(' and ')
   // a part that failed or was skipped says nothing about its key: it is not green because the other part is
   const unjudged = parts.flatMap(({ name, part }) => (part.kind === 'ran' ? [] : [`advisories:${name}`]))
-  if (!findings.length) return unjudging(clean(`no high or critical advisories (${checked})${suffix}`), unjudged)
+  if (!findings.length)
+    return unjudging(clean(`no high or critical advisories (${checked})${suffix}${extra}`), unjudged)
   const total = findings.reduce((sum, item) => sum + item.count, 0)
-  return unjudging(found(`${total} high or critical advisories (${checked})${suffix}`, findings), unjudged)
+  return unjudging(found(`${total} high or critical advisories (${checked})${suffix}${extra}`, findings), unjudged)
 }

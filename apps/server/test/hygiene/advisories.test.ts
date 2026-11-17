@@ -112,7 +112,7 @@ describe('advisoriesProbe', () => {
       probe: 'advisories',
       key: 'advisories:bun',
       title: 'Hygiene: security advisories in Bun dependencies',
-      count: 3,
+      count: 2,
     })
     expect(item?.lines[0]).toBe('minimist >=1.0.0 <1.2.6: GHSA-xvch-5gv4-984h critical (fixed in 1.2.6)')
     expect(readFileSync(join(dirname(bun), 'args.log'), 'utf8')).toBe('audit --json --audit-level=high\n')
@@ -142,6 +142,22 @@ describe('advisoriesProbe', () => {
     const bun = fakeTool('bun', '{}', 0)
     const outcome = await advisoriesProbe(tools({ bun }), bunRepo())
     expect(outcome.outcome).toBe('clean')
+  })
+
+  test('green: an advisory with no fixed version is not counted, but named in the detail', async () => {
+    const unfixed = JSON.stringify({
+      picomatch: [
+        {
+          id: 2,
+          url: 'https://github.com/advisories/GHSA-fc5q-39xc-vjpf',
+          severity: 'high',
+          vulnerable_versions: '<=4.0.7',
+        },
+      ],
+    })
+    const outcome = await advisoriesProbe(tools({ bun: fakeTool('bun', unfixed, 1) }), bunRepo())
+    expect(outcome.outcome).toBe('clean')
+    expect(outcome.detail).toContain('picomatch <=4.0.7: GHSA-fc5q-39xc-vjpf high (no fixed version)')
   })
 
   test('green: moderate advisories alone raise nothing', async () => {
