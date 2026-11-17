@@ -423,6 +423,8 @@ export const MEANING: Record<KpiKey, string> = {
     'How many Specs the leads wrote per 100 Issues. Neither direction is good by itself; zero for weeks means the Spec path is silent.',
   owner_decisions_per_100:
     'How many Decisions you answered yourself per 100 Issues. Lower means the factory settles more alone; zero for weeks means nothing reaches you.',
+  errands_reached_per_100:
+    'How many Errands got through to you per 100 Issues: a device, a portal or a secret only you can supply. Lower is better.',
   verdict_changes_share:
     'Of your verdicts on a Concept, Spec or Report, how many asked for notes or changes. Lower is better.',
   first_verification_passes: 'Of the first checks after a ship, how many passed. Higher is better.',
@@ -460,6 +462,7 @@ export const KPI_ORDER: readonly KpiKey[] = [
   'specs_not_needed',
   'specs_per_100',
   'owner_decisions_per_100',
+  'errands_reached_per_100',
   'verdict_changes_share',
   'first_watch_dwell_p50',
   'regression_cause',
