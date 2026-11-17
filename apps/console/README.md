@@ -51,10 +51,9 @@ the view of the work.
 
 **Band** (`components/overview/band.tsx`, pure logic in `src/lib/overview.ts`): four panels, each linking to the screen with its
 detail. Needs you: the count and the three open longest (`GET /v1/needs`). Production: the projects with an open incident Issue
-(red) and how many ships are Checking. Shipped in 24 h: done and healed closes of `closedRecently` by project. Host and queue:
+(red), the projects that regressed in the last 7 days without an open incident (`regressedOf`, from `GET /v1/projects`, the lamp the Projects table shows) and how many ships are Checking. Shipped in 24 h: done and healed closes of `closedRecently` in the last rolling 24 hours, by project. Host and queue:
 load, memory and swap on the strip's meter rule (`/v1/machine`, `/v1/host`, the queries the strip already holds) and the queue's
-binding reason, the queue reason kind that keeps the most not-started Issues out, with the first one's message. It reads nothing
-the screen did not already load.
+binding reason, the queue reason kind that keeps the most not-started Issues out, with the first one's message. It reads only queries the Console already holds.
 
 **Digest strip.** Under the trend chart, one card per project with a digest (`GET /v1/projects/digests`, `components/flow/digest-strip.tsx`): the project (a link to its page), the digest's age, the headline, the five counts (done in 7 days, running, paused, ready, held: `counts.work`, read from the Issues, not from the digest), and a button that opens the shipped, next and risks bullets, each citing its Issues by a link. The busiest projects (most working, queued and waiting) come first, in one scrollable row so the charts stay on screen; "Show all N" lays every card out as a grid. Collapsed to the headline and the counts; with `?project=` the strip shows that project alone, opened. No digest, no strip.
 
