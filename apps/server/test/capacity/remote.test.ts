@@ -63,6 +63,11 @@ describe('the VPS has room for a step', () => {
     })
   })
 
+  test('a VPS whose production pressure cannot be read takes no step (the tripwire fails closed)', () => {
+    const blind = decideRemote({ reading: reading({ ioPressure: null }), now: AT, holders: [], step, copyExists: true })
+    expect(blind.grant).toBe(false)
+  })
+
   test('the running steps count at their whole peak, beside the headroom', () => {
     const holders = [
       { peakMib: 7000, cores: 2 },

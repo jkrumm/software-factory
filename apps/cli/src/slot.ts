@@ -453,7 +453,8 @@ export async function slotRun(input: { name?: string; command: string[] }, io: I
       acquire({
         ask,
         io,
-        waitMs: Math.max(0, waitMs - (Date.now() - askedAt)),
+        // a whole wait from when the caller (re)joined the mini's line: a run on the VPS is not a wait
+        waitMs: Math.max(0, waitMs - (Date.now() - lineSince)),
         pollMs,
         open,
         restartWaitMs: restartPatience(io.env, () => undefined).limitMs,

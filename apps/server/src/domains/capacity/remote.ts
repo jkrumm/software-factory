@@ -86,6 +86,9 @@ export function decideRemote(input: {
   const age = now.getTime() - reading.at.getTime()
   if (age > REMOTE_READING_MAX_AGE_MS)
     return { grant: false, why: `the VPS has not answered its probe for ${Math.round(age / 1000)} s` }
+  // the tripwire fails closed: a host whose production pressure cannot be read takes no step
+  if (reading.memoryPressure === null || reading.ioPressure === null)
+    return { grant: false, why: "the VPS's production pressure (system.slice PSI) is not readable" }
   const squeezed = [
     ['memory', reading.memoryPressure],
     ['io', reading.ioPressure],

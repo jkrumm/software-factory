@@ -127,6 +127,8 @@ export function remoteScript(input: {
     '--user "$(id -u):$(id -g)"',
     '-e HOME=/tmp -e CI=true -e BUN_INSTALL_CACHE_DIR=/cache/bun',
     `-v "$HOME"/${dir}:${shq(input.root)}`,
+    // the worktree's `.git` names its gitdir in the bare repository by the host's absolute path: mounted there, git works
+    `-v "$HOME"/${shq(grant.repo)}:"$HOME"/${shq(grant.repo)}`,
     `-v "$HOME"/${dir}.run:/factory`,
     '-v "$HOME"/factory-steps/.cache:/cache',
     `-w ${shq(input.root)}`,

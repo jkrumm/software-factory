@@ -91,7 +91,7 @@ export function sshProbe(input: {
   let answer: RemoteProbeAnswer | null = null
   let askedAt = 0
   let inFlight = false
-  const refresh = async (live: ReadonlySet<string>): Promise<void> => {
+  const refresh = async (live: ReadonlySet<string> | null): Promise<void> => {
     const result = await run([...ssh, SCRIPT], PROBE_TIMEOUT_MS, helperEnv())
     const parsed = result.exit === 0 ? parseProbe(result.stdout, now()) : null
     if (parsed === null) {
@@ -99,6 +99,8 @@ export function sshProbe(input: {
       return
     }
     answer = parsed
+    // no live set read from the slots yet (the first call after a start): nothing is known to be orphaned
+    if (live === null) return
     const t = now().getTime()
     const orphans = parsed.steps.filter((s) => !live.has(s.id) && t - s.startedMs > REAP_AFTER_MS)
     if (orphans.length === 0) return
@@ -112,7 +114,7 @@ export function sshProbe(input: {
       if (!inFlight && t - askedAt >= PROBE_EVERY_MS) {
         inFlight = true
         askedAt = t
-        void refresh(new Set(live)).finally(() => {
+        void refresh(live === null ? null : new Set(live)).finally(() => {
           inFlight = false
         })
       }

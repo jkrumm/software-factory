@@ -39,6 +39,7 @@ import {
   type Waited,
   WAITER_TTL_MS,
 } from '../domains/capacity/slots.ts'
+import type { RemoteGrant } from '@software-factory/contract'
 import { DEFAULT_SLOT_RUN_MS, durationMs, MINI_ONLY_NEEDS, type ProjectFile } from '@software-factory/contract/project'
 import { ok, type PortError, type Result } from '../kernel/result.ts'
 import type { PlanningDeps } from './planning-deps.ts'
@@ -115,19 +116,6 @@ export interface SlotDeps extends PlanningDeps {
 /** A grant, and how to run it when it is off the mini. */
 export type SlotGrant = SlotView & { remote: RemoteGrant | null }
 
-/** What the caller of a VPS slot needs to run its step there (the contract's `RemoteGrant`). */
-export interface RemoteGrant {
-  target: string
-  repo: string
-  dir: string
-  bun: string | null
-  dockerfile: string | null
-  carry: string[]
-  memoryMib: number
-  cores: number
-  network: boolean
-}
-
 /** A step red off the mini and green on it loses its place off the mini for this long. */
 export const DISAGREEMENT_HOLD_MS = 7 * 86_400_000
 
@@ -166,7 +154,8 @@ export async function touchSlot(
   const [ram, load] = await Promise.all([deps.host.ramMib(), deps.host.load()])
   const ramMib = ram.ok ? ram.value : null
   const remote = deps.remote ?? null
-  const probed = remote ? remote.probe.latest(liveOnVps.get(remote) ?? new Set()) : null
+  // the holders of the last call: none read yet after a start is not "no holders", so nothing is reaped until then
+  const probed = remote ? remote.probe.latest(liveOnVps.get(remote) ?? null) : null
   return deps.uow.run(async ({ capacity }): Promise<Result<SlotGrant, PortError>> => {
     await capacity.lock()
     const now = deps.clock.now()

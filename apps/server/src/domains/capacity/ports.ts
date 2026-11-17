@@ -270,7 +270,8 @@ export interface RemoteProbeAnswer {
  * hold a VPS slot, and a step container of any other id is removed.
  */
 export interface RemoteHostProbe {
-  latest(live: ReadonlySet<string>): RemoteProbeAnswer | null
+  /** `live` null: the slots were not read yet in this process, so no container is removed */
+  latest(live: ReadonlySet<string> | null): RemoteProbeAnswer | null
 }
 
 export interface HostReader {

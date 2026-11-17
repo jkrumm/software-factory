@@ -68,6 +68,9 @@ function namedTargets(project: ProjectFile): { target: string; path: Path }[] {
     ...make(project.doctor, ['doctor']),
     ...project.hygiene.probes.map((probe, i) => ({ target: probe.target, path: ['hygiene', 'probes', i, 'target'] })),
     ...project.heal.flatMap((rule, i) => make(rule.runbook, ['heal', i, 'runbook'])),
+    ...Object.entries(project.steps).flatMap(([name, step]) =>
+      step.make === undefined ? [] : [{ target: step.make, path: ['steps', name, 'make'] }],
+    ),
   ]
 }
 
