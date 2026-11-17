@@ -158,6 +158,8 @@ export async function touchSlot(
     const learned = new Map<string, number | null>()
     for (const holder of holders)
       learned.set((await sizeOf(holder.name, holder.cwd)).key, (await sizeOf(holder.name, holder.cwd)).mib)
+    const heldPeakById = new Map<string, number | null>()
+    for (const holder of holders) heldPeakById.set(holder.id, (await sizeOf(holder.name, holder.cwd)).mib)
     const peaksByName = new Map<string, number | null>()
     const peakFromByName = new Map<string, PeakFrom>()
     const coresByName = new Map<string, number>()
@@ -207,6 +209,7 @@ export async function touchSlot(
           peakFrom: mine.from,
           peaksByName,
           peakFromByName,
+          heldPeakById,
           freeMib,
           growthMib: growth,
           max: aimed ?? deps.slotsMax,

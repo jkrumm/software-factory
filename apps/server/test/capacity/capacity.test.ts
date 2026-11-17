@@ -949,10 +949,17 @@ describe('test slots', () => {
         rows = ask(rows, 'big', ms, 0, 5120).rows
       }
       const hOnly = rows.map((r) => (r.id === 'h' ? { ...r, rssMib: 4096 } : r))
-      const fits = (freeMib: number) =>
+      const fits = (freeMib: number, heldPeakById?: Map<string, number | null>) =>
         touchSlots(
           hOnly,
-          { id: 's2', name: 's2', slots: 2, runMs: 1, fit: { ...mem(0, 300), freeMib }, passAfterMs: 10 * MIN },
+          {
+            id: 's2',
+            name: 's2',
+            slots: 2,
+            runMs: 1,
+            fit: { ...mem(0, 300), freeMib, ...(heldPeakById ? { heldPeakById } : {}) },
+            passAfterMs: 10 * MIN,
+          },
           at(late),
         ).view
       // 5120 + 300 + 2048 = 7468 needs 3372 free now beside h's 4096 that ends: it fits
@@ -961,6 +968,10 @@ describe('test slots', () => {
       const held = fits(3371)
       expect(held.granted).toBe(false)
       expect(held.why).toContain('nothing passes it')
+      // the passer s1 still grows by 1000 MiB (learned 1000, resident 0): the head has to fit beside that growth too
+      const growing = new Map<string, number | null>([['s1', 1000]])
+      expect(fits(3372 + 1000, growing).granted).toBe(true)
+      expect(fits(3372 + 999, growing).granted).toBe(false)
     })
 
     test('a small step that does not fit either does not pass', () => {

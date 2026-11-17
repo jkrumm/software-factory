@@ -78,6 +78,8 @@ export interface SlotFit {
   peaksByName?: ReadonlyMap<string, number | null>
   /** how each of those peaks was known; a missing name reads as learned */
   peakFromByName?: ReadonlyMap<string, PeakFrom>
+  /** the learned peak of each holder's step by the holder's id (a missing id has none: its growth reads as 0) */
+  heldPeakById?: ReadonlyMap<string, number | null>
   freeMib: number | null
   /** what the running steps will still grow by */
   growthMib: number
@@ -219,10 +221,14 @@ function headFitsBeside(head: SlotRow, step: SlotRow, held: readonly SlotRow[], 
   const headMib = fit.peaksByName?.get(head.name) ?? null
   const stepMib = fit.peaksByName?.get(step.name) ?? fit.peakMib
   if (headMib === null || stepMib === null || fit.freeMib === null || head.passedAt === null) return false
-  const released = held
-    .filter((row) => row.grantedAt !== null && row.grantedAt.getTime() < (head.passedAt as Date).getTime())
-    .reduce((sum, row) => sum + (row.rssMib ?? 0), 0)
-  return headMib + stepMib + fit.headroomMib <= fit.freeMib + released
+  const passedAt = head.passedAt.getTime()
+  const before = (row: SlotRow): boolean => row.grantedAt !== null && row.grantedAt.getTime() < passedAt
+  const released = held.filter(before).reduce((sum, row) => sum + (row.rssMib ?? 0), 0)
+  // what the holders that stay (the passers) will still take on, as the head's own fit counts the growth of every holder
+  const staying = held
+    .filter((row) => !before(row))
+    .reduce((sum, row) => sum + Math.max(0, (fit.heldPeakById?.get(row.id) ?? 0) - (row.rssMib ?? 0)), 0)
+  return headMib + stepMib + staying + fit.headroomMib <= fit.freeMib + released
 }
 
 /**
@@ -345,7 +351,8 @@ export function touchSlots(
   })
   if (!verdict.grant) return wait(verdict.why + passedNote(mine), verdict.kind)
   // The slot goes to the first waiter in line that fits: a waiter ahead that does not fit is passed, unless it has been
-  // passed for the whole window (then it holds the line), and one that fits takes the slot on its own next call. A waiter
+  // passed for the whole window (then it holds the line, unless it still fits beside the caller: `headFitsBeside`), and
+  // one that fits takes the slot on its own next call. A waiter
   // whose host-wide class is held never holds the line: the line standing still frees no class.
   const passed: SlotRow[] = []
   for (const waiter of line.slice(0, ahead)) {
