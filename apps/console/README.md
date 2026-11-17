@@ -2,7 +2,7 @@
 
 The owner's place for decisions, on a phone and a desktop: a Vite + React SPA (Base UI through shadcn, Tailwind 4, Basalt
 tokens, TanStack Router, Query and Hotkeys), installable as a PWA. It holds no logic the API could hold. This is the shell:
-a sidebar, a one-line header strip, the command palette, and the screens (Needs you, Flow, Projects, the Issue page, the Chain, Improve, Throughput).
+a sidebar, a one-line header strip, the command palette, and the screens (Needs you, Flow, Artifacts, Projects, Chain, Improve, Throughput, and the Issue page).
 
 **Sidebar** (`components/sidebar.tsx`, from `md` up; a tab bar below): the logo slot and wordmark, the seven screens with their
 keys (`g n`, `g f`, `g a`, `g p`, `g c`, `g i`, `g t`) and counts, then the page's own section. A page fills that section with
@@ -34,7 +34,7 @@ field. The address logic is pure (`lib/peek.ts`); the panel's content is its own
 ## Flow
 
 `/flow` fills the content area (no width cap). From the top: the header, the digest strip, a stat row, the trend chart and, under
-them, the list of Issues a filter opens, from `GET /v1/flow`, refreshed by the stream like every other screen. There is no board of
+them, the list of Issues a filter opens, from `GET /v1/flow`, refreshed by the stream like every other screen. There are no
 state columns anywhere: the Chain is the view of the work.
 
 **Digest strip.** Above the stat row, one card per project with a digest (`GET /v1/projects/digests`, `components/flow/digest-strip.tsx`): the project (a link to its page), the digest's age, the headline, the five counts (done in 7 days, running, paused, ready, held: `counts.work`, read from the Issues, not from the digest), and a button that opens the shipped, next and risks bullets, each citing its Issues by a link. The busiest projects (most working, queued and waiting) come first, in one scrollable row so the charts stay on screen; "Show all N" lays every card out as a grid. Collapsed to the headline and the counts; with `?project=` the strip shows that project alone, opened. No digest, no strip.

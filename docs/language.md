@@ -136,8 +136,8 @@ Five words and a sixth for what is not an Issue yet, defined once here and used 
 | **Long wait** | An Issue in a timed wait of an hour or more with other open Issues waiting behind it. It appears in Needs you until the wait ends | |
 | **Stale** | A Needs you item that has waited more than 24 hours | |
 | **Surface** | Console, Herdr, Iris, Argo, ntfy | |
-| **Caller** | Who a request comes from, decided by its token: `owner`, `orchestrator` (the owner's delegate agent: the owner's rights bar eight routes, its own actor in the log), `agent` (a lead session), `machine` (the alert door), `read` (the surfaces) | |
-| **Flow** | The read model of Issues by state over time; **Chain** is its graph | |
+| **Caller** | Who a request comes from, decided by its token: `owner`, `orchestrator` (the owner's delegate agent: the owner's rights bar ten routes, its own actor in the log), `agent` (a lead session), `machine` (the alert door), `signal` (Hermes, which files the owner's words), `read` (the surfaces) | |
+| **Flow** | The read model of Issues by state over time; **Chain** is its graph | Board, for Flow or any view of state columns |
 | **Change** | One row of the change stream: a kind, ids and states, never words. Its **cursor** (`<txid>.<seq>`) resumes the stream without losing or doubling a change | |
 
 ## The host
