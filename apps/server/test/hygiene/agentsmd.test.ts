@@ -60,6 +60,27 @@ describe('agentsImports', () => {
   })
 })
 
+describe('agentsImports managed block', () => {
+  test('skips the basalt-ui managed block, still flags imports around it', () => {
+    const text = [
+      '@docs/before.md',
+      '<!-- basalt:begin -->',
+      '@./DESIGN.md',
+      '<!-- basalt:end -->',
+      '@docs/after.md',
+    ].join('\n')
+    expect(agentsImports(text)).toEqual([
+      { line: 1, target: 'docs/before.md' },
+      { line: 5, target: 'docs/after.md' },
+    ])
+  })
+
+  test('an unclosed block hides the rest, a marker inside a fence is not a block', () => {
+    expect(agentsImports('<!-- basalt:begin -->\n@./DESIGN.md')).toEqual([])
+    expect(agentsImports('```\n<!-- basalt:begin -->\n```\n@docs/x.md')).toEqual([{ line: 4, target: 'docs/x.md' }])
+  })
+})
+
 describe('askRules', () => {
   test('lists ask rules, treats missing as none and reports malformed JSON', () => {
     expect(askRules('{"permissions":{"ask":["Bash(git push:*)"]}}')).toEqual({ rules: ['Bash(git push:*)'] })
