@@ -158,13 +158,13 @@ const keep = (filters: FlowFilters, card: { repo: string; origin: string }): boo
 
 /** The cards of every state under the project and origin filters, in the order the server sent them. */
 export function cardsOf(data: FlowModel, filters: FlowFilters = {}): Cards {
-  const board: Cards = { running: [], paused: [], ready: [], held: [], checking: [], closed: [] }
+  const cards: Cards = { running: [], paused: [], ready: [], held: [], checking: [], closed: [] }
   for (const state of FLOW_STATES) {
     for (const issue of data.states[state].issues) {
       if (!keep(filters, issue)) continue
       const work = workOfIssue(issue, state)
       if (!work) continue
-      board[work.word].push({
+      cards[work.word].push({
         key: issue.id,
         number: numberOf(issue.id),
         title: issue.title,
@@ -183,7 +183,7 @@ export function cardsOf(data: FlowModel, filters: FlowFilters = {}): Cards {
       })
     }
   }
-  board.closed = data.closedRecently
+  cards.closed = data.closedRecently
     .filter((issue) => keep(filters, issue))
     .map((issue) => ({
       key: issue.id,
@@ -197,7 +197,7 @@ export function cardsOf(data: FlowModel, filters: FlowFilters = {}): Cards {
       reason: null,
       since: issue.closedAt,
     }))
-  return board
+  return cards
 }
 
 /** `issue_12` is Issue 12. */
@@ -350,7 +350,7 @@ export function longestWords(since: readonly string[], now: number): string {
 const distinct = (values: readonly string[]): number => new Set(values).size
 const plural = (n: number, word: string): string => `${n} ${word}${n === 1 ? '' : 's'}`
 
-/** The four stat cards above the board: factory-wide, so never from the filtered board. */
+/** The four stat cards above the list: factory-wide, so never from the filtered cards. */
 export function statsOf(data: FlowModel, now: number): FlowStat[] {
   const { trend, work } = data
   const issues = (key: WorkTrendKey) => issuesOf(data, key)

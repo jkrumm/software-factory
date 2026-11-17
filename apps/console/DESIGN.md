@@ -152,7 +152,7 @@ click, and keeps the working screen where it was.
 - **Flow**: a stat row (running, paused, not started, shipped this week, each a StatCard with its sparkline), then the trend chart
   (its window control is 24 h, 7 d, 30 d, opening on 7 d by the hour; 24 h and 7 d are by the hour, 30 d by the day) and, under it, the
   list of Issues a filter opens: a sortable table, collapsed until a word, project or origin is picked, with a link to the Chain. There
-  is no board of state columns; the Chain is the view of the work.
+  are no state columns; the Chain is the view of the work.
 - **Issue**: a header (title, project, KindBadge, Lozenge, age, actions), a PropertyList of the facts, tabs for overview,
   activity (StepRail of the event log in words), evidence and checkpoints; a right panel with properties and the chain
   around it.

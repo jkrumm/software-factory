@@ -4,7 +4,7 @@
 Elysia at the edge, and a generated CLI.** It has been the running factory since the cutover of 2026-11-08
 (`docs/rewrite/state.md` is the log of how it got here). Words follow `docs/language.md`; the rules a change must keep
 are in `AGENTS.md`; why something is as it is, in `docs/decisions.md`. This page says where things are and how they fit.
-What is not built yet is the last section.
+What is not built is the last section.
 
 ## Layout
 
@@ -13,14 +13,18 @@ apps/
   server/     Elysia app: domains, application services, adapters, read models; migrations in apps/server/migrations
   door/       the alert door: loopback, one token (`machine`), posts alerts and refusal reports to the server
   cli/        `factory`: commands generated from the OpenAPI document, plus the hook, slot, deploy-lock, merge-lock, follow, role and issue schema verbs
+  console/    the Console: a Vite and React PWA (shadcn on Base UI, Tailwind 4 with Basalt tokens, TanStack Router and Query); the server's second listener serves its build
 packages/
   contract/   zod schemas: every request, response and event; the OpenAPI source; the spool format the hook shares
   client/     typed client (Eden) and the CLI's transport, including the change-stream follower
 tests/
   scenarios/  use cases run against a real server and Postgres with fake hc and agw: the acceptance suite
-config/       roles.json (tier and effort per role), infra.json (the Beszel thresholds)
-scripts/      deploy, verify, launch, env-file, the boundary and retired-word checks
+  e2e/        Playwright against a seeded server: every Console screen, and the source of the README's screenshots
+integrations/ the client pieces other machines install: the Claude Code hook entries, the Herdr glance mod, rd's contract, the Hermes fleet skill
+config/       roles.json (tier and effort per role), infra.json (the Beszel thresholds), throughput.json (the counting epoch)
+scripts/      deploy, verify, launch, env-file, merge-guard, the checks of the build (boundaries, retired words, vocabulary, public scan, README)
 deploy/       LaunchAgent templates
+docs/         product, language, architecture, operations, decisions, plan format, research, evidence
 ```
 
 ## The server
@@ -801,24 +805,32 @@ The same answer carries `lead` and `project` (`read/throughput-account.ts`, `app
 - **Model test** of the machine.
 - **Scenarios** (`tests/scenarios`): use cases end to end against a real server and Postgres with fake hc and agw. They
   are the acceptance suite, and a lead runs the ones its change touches as its proof.
-- `make check`: frozen install, oxfmt, oxlint (type-aware), shellcheck, `tsc`, the boundary script, the retired-word
-  check, the generated diagram and CLI freshness, `bun test`, scenarios.
+- **E2E** (`tests/e2e`): Playwright against a seeded server, every Console screen at three viewports.
+- `make check`: the whole gate, listed in `docs/operations.md` "Check tiers".
 
-## Not built yet
+## The Console
 
-Rows in `docs/plan.yaml` carry each of these.
+`apps/console` is the owner's window (NL1): Vite, React, shadcn on Base UI, Tailwind 4 with Basalt's tokens, TanStack
+Router, Query and Table, a PWA. `tests/e2e` (Playwright) holds its suite and the README's screenshots. The server's second
+loopback listener serves the build, published by dotfiles-private's serve row (`docs/operations.md` "The Console
+listener"). It is read-only apart from the thirteen verbs (eleven answers, pin and unpin), its perimeter is the tailnet ACL
+(NL25), and it can never spawn a session. The screens are the ones of `apps/console/src/lib/nav.ts` (Needs you, Flow,
+Artifacts, Projects, Chain, Improve, Throughput) and the pages an Issue, a project, an artifact and a collection each have;
+`/checkpoints/<id>`, the link of the owner's pages, lands on its item. `apps/console/README.md` describes each screen and
+`apps/console/DESIGN.md` is the design bar.
 
-- **The Console** (NL1): `apps/console` (Vite, React, shadcn on Base UI, Tailwind 4 with Basalt's tokens, TanStack
-  Router, Query and Table, a PWA), `tests/e2e` (Playwright), and the second loopback listener, published by dotfiles-private's serve row;
-  it is read-only apart from the thirteen verbs (eleven answers, pin and unpin), its perimeter is the tailnet ACL (NL25), and it can never spawn a session. The shell and Needs you (the answers
-  in place; `/checkpoints/<id>`, the link of the owner's pages, lands on its item) the Flow page (the numbers, the charts and a filtered list), the read-only Issue page (`/issues/<n>`, linked from a Needs you card) and the Chain are built; the other screens are not.
 - **The flow trend** (`GET /v1/flow/trend`, `factory read flow-trend`, `read/flow-trend.ts`): the four counts per bucket (running, paused, not started = ready plus held, checking; the trend is by stored state, so it cannot split ready from held), the peak (most Issues at any instant) and the time-weighted average, computed from the applied events' `to_state` intervals, never from samples: 24 hours by the hour, 7 days by the hour (the default), 30 days by the day, buckets on UTC hours and days; 7 days by the day and 30 days by the hour are refused. `FlowModel.trend` (eight daily samples, kept for the Herdr glance) stays; the Console's chart over time is this read.
-- **The 30-minute forward** (NL5): an unsolved alert reaching the owner. The old core's `FACTORY_ALERT_*` settings are gone from
-  the env allow-list; the server reads none of them.
-- **Client work** in other repos: the Herdr glance, Hermes' factory skill, Argo's factory pages leaving for the Console.
+## The throughput loop
 
 **The throughput loop** (`tp-loop`; the measures are `GET /v1/throughput`'s and `read/throughput-loop.ts`'s, the table `throughput_findings`, `migrations/1027_throughput_findings.sql`). Measured costs only pay off when someone acts on the largest one and checks that it moved. Once a day, without a model, the loop ranks what cost most over the last 7 days, in minutes of the host's capacity: a project's slot-minutes of failed `factory slot run` steps (`failed_run_minutes`, a per-day figure); slot-minutes per Issue closed `done` when it is 25% above the median of the same ratio per day over the 14 days before (`slot_minutes_per_issue`, cost the excess times the Issues closed); a step tier whose 90th percentile peak memory is over the project's `budgets.peak` (2 GiB when it sets none), cost the minutes of the runs over it (`step_peak_mib`); a process (not `postgres`, `SHARED_MEMORY_PROGRAMS`, not `kernel_task`, `isKernelTask`, and not of the tenant class, which `tenant_growth_mib` below reads) whose footprint grew by 1 GiB or more between its first and last notable minute, cost its notable minutes, on the repo it belongs to or on software-factory (`process_growth_mib`); and the minutes queued Issues waited, one candidate per binding reason read from the queue intervals (`queued_minutes`, the subject the reason; "What the queue waits for" above): `memory` (interval kinds `memory` and `memory_fit`, the label names the share of the lead-fit refusal) and `account` (`window`, `cap`) are filed on software-factory with the repos they hit most, `claim` and `lane` on the repo whose Issues waited, naming its `leads` and the lanes (with their caps) its Issues waited in (`WAIT_SUBJECTS`, `waitFacts` in `read/throughput-loop.ts`). A wait behind an `after` edge, a stopped line, a Spec at the owner, a drain, the boot grace or the load is not ranked (`queue_time` in `factory read kpis` is still the cut between an `after` edge and capacity, and `queueByReason` shows every kind). A finding filed before the reasons were recorded (subject `*`) is `unmeasured` at its after. A cost under 30 minutes is not a finding. A cost the newest 3 days already left behind (its figure over them is at or under the target: fixed days ago, or a burst that ended) is not filed, though it still sits in the 7-day total; a figure those days cannot give (no run, no closed Issue) says nothing and the candidate stands. Two findings read the tenant class (launchd jobs and VMs) from the hourly rollups `host_class_hours` (complete hours; a cluster's shared mapping is counted once, as the class rows store it), both filed on the repo that owns the host's configuration (`FACTORY_TENANT_PROJECT`, default `dotfiles`) because a tenant is a job or VM no project's lead can shrink: `tenant_class_mib`, the class's mean footprint over the 7 days above its budget (`FACTORY_TENANT_BUDGET_MIB`, default 6144, what the dotfiles program aims at with its work profile up; target the budget), filed with the three largest tenants and their figures; and `tenant_growth_mib`, a tenant whose mean over the newest 24 hours is 1 GiB or more above its own median of the 14 days (24-hour buckets of sampled hours, an absent tenant counting 0, at least 7 buckets or no median) before them, which needs no budget and no list of tenants and catches a VM left on (subject the tenant, target that median). The excess is turned into minutes as slot-minutes: the excess over 2048 MiB (one test slot's default step budget) times the minutes it was held, the 7 days for the class and 24 hours for a tenant, so standing memory ranks against the other costs. The after of both is the same mean over the 3 days past the ship. They hold the repo like any finding: one open at a time. Only the class kinds read a budget: the other classes have none (the Console's Throughput page shows each class's share, and the pressure level and swap carry the state); `GET /v1/throughput` carries `host.tenantBudget` (the budget, the window's tenant footprint, `over`). Per project, with no improvement open, the largest cost that no finding holds is filed as a signal on the project's repo (`agent:<project>`): the measured before in the figure's unit, a target (half of a time figure; the median for the per-Issue ratio; the peak budget for a step), the query that reads it again, and the retro marker (`Retro: <date> kpi=<kpi> before=<n> direction=down`) as its last words, so the weekly retro's ledger lists it. At most 5 a pass. A project holds one open improvement: while a finding's Issue is not shipped, nothing else is filed for it.
 
 The **ledger** is the table: a row per filing (`open`), marked `shipped` with the ship's time once its Issue shipped, or `dropped` when it closed without a ship (the subject is left out for 14 days). Three days after the ship the loop reads the same figure over `[shipped, shipped + 3 days)` (`figureOf`, the same SQL as the ranking, so a figure is read one way) and stores the `after`: `moved` when it fell by 10% of the before or more, `flat` or `worse` otherwise, `unmeasured` when the window has no run, Issue or step of the subject. A finding that moved is held out of the ranking until the 7-day window has left the days before its ship; one that did not move is ranked again at once and filed with the earlier attempt named (`reopens` is that row), because its cost is still there. The weekly retro's ledger (`read/retro.ts`, `ledgerOf`) joins the table by signal: its `now` is the loop's own after and its `measured` is `after`. A reading that fails (the database, a slow query) is a note in the pass and leaves the row for the next day.
 
 `budgets:` in `project.yaml` (`{ fast: 90s, peak: 2GiB, fail: 10% }`, each optional, a duration, a size, a share; `budgetsOf` in `domains/planning/project.ts`) makes a breach a signal the day it happens, through the `selfwatch` loop above, not the daily pass. `peak` is also the step target of the daily ranking.
+
+## Not built
+
+- **The 30-minute forward** (NL5): an unsolved alert reaching the owner. The old core's `FACTORY_ALERT_*` settings are gone from
+  the env allow-list; the server reads none of them.
+- **A per-request identity on the Console listener:** accepted (NL25). The tailnet ACL is the perimeter; see "Perimeter".
+- **Client work in other repos:** Argo's factory pages leaving for the Console; Iris rendering an artifact inside it.

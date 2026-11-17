@@ -1,6 +1,6 @@
 import { useSyncExternalStore } from 'react'
 
-/** Whether a media query matches, live. The board switches layout with this at the `lg` breakpoint. */
+/** Whether a media query matches, live. A screen switches layout with this at the `lg` breakpoint. */
 export function useMediaQuery(query: string): boolean {
   return useSyncExternalStore(
     (notify) => {

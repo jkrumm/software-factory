@@ -116,7 +116,7 @@ export async function seedHistory(lab: Lab): Promise<SeededHistory> {
     VALUES ('start_watch:e2e:2', 1, now() - interval '9 minutes', 'red',
       '[{"name":"deployed version","ok":true,"detail":"the commits are live"},{"name":"make verify","ok":false,"detail":"export.test.ts: the probe timed out"}]'::jsonb)`
 
-  const working = await fileIssue(lab, { repo: 'pearl', title: 'Show the export time on the board' })
+  const working = await fileIssue(lab, { repo: 'pearl', title: 'Show the export time on the dashboard' })
   await admitted(lab, working)
   await tick(lab)
   return { rich, working }

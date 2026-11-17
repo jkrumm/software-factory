@@ -28,7 +28,7 @@ export function PageHeader({
   )
 }
 
-/** `fluid` fills the content area width with no cap and no height rule (a card grid); `wide` caps at the 2xl screen; `full` fills the content area and its height (a board), with no cap. */
+/** `fluid` fills the content area width with no cap and no height rule (a card grid); `wide` caps at the 2xl screen; `full` fills the content area and its height (a canvas such as the Chain), with no cap. */
 export function Page({
   children,
   wide,

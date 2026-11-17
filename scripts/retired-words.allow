@@ -25,3 +25,7 @@ apps/server/src/domains/loops/hygiene-model.ts wave  # docs/waves is a directory
 apps/server/src/adapters/hygiene/probes/cochange.ts manifest  # manifest.json is a file name the co-change probe ignores, not a project manifest
 apps/server/test/hygiene/hygiene.test.ts manifest  # the same file name, in the probe's test
 apps/server/src/adapters/checkpoints/queued-asks.ts human queue  # ask-human.sh's queue directory is the dotfiles' word, read as it is
+packages/contract/src/read.ts board  # the legacy read API's comments name its first reader, the Herdr status board, now the Herdr bar
+apps/cli/src/run.ts board  # the old read verbs were called by the Herdr status board, now the Herdr bar
+tests/scenarios/clients/replay.test.ts board  # the recorded requests of the Herdr status board, now the Herdr bar
+apps/server/migrations/0800_changes.sql board  # an applied migration is never edited (checksum); its comment names the Herdr status board

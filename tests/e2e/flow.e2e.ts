@@ -64,7 +64,7 @@ const pick = (page: Page, group: 'Projects' | 'Origin', label: string) =>
     .getByRole('link', { name: new RegExp(`^${label}( \\d+ (running|paused|ready|held|checking).*)?$`) })
     .click()
 
-test('Flow is the numbers and their charts: no board, and the list is collapsed until a filter is set', async ({
+test('Flow is the numbers and their charts: no state columns, and the list is collapsed until a filter is set', async ({
   page,
   apiUrl,
 }) => {
@@ -72,7 +72,7 @@ test('Flow is the numbers and their charts: no board, and the list is collapsed 
   await page.goto('/flow')
   await expect(page.getByRole('group', { name: 'Totals' })).toBeVisible()
   await expect(page.getByTestId('flow-trend')).toBeVisible()
-  await expect(page.getByTestId('flow-board')).toHaveCount(0)
+  await expect(page.getByTestId('flow-columns')).toHaveCount(0)
   await expect(page.getByRole('tablist')).toHaveCount(0)
   await expect(page.getByRole('region', { name: /^(Running|Paused|Ready|Held|Checking|Closed recently)/ })).toHaveCount(
     0,

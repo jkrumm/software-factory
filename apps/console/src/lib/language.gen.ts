@@ -12,7 +12,7 @@ export const LANGUAGE = {
   'back at desk':
     'The Needs-you view (?mode=desk) of the open Errands by where the hands must be, each with its command to copy and Done and Not needed buttons',
   caller:
-    "Who a request comes from, decided by its token: owner, orchestrator (the owner's delegate agent: the owner's rights bar eight routes, its own actor in the log), agent (a lead session), machine (the alert door), read (the surfaces)",
+    "Who a request comes from, decided by its token: owner, orchestrator (the owner's delegate agent: the owner's rights bar ten routes, its own actor in the log), agent (a lead session), machine (the alert door), signal (Hermes, which files the owner's words), read (the surfaces)",
   cancelled: "Outcome: the owner's stop",
   chain: 'The dependency graph of Issues and plan rows, across projects. What decides what can run at once',
   change:
