@@ -70,6 +70,10 @@ The transition table answers one question for every pair: what does this state d
 - **Effects are data.** A move lists the effects it asks for (`start_lead`, `note_lead`, `start_watch`, `finalize`). The write path stores them in an outbox in the same transaction.
 - **The diagram is generated.** The state diagram and the wait table in `docs/language.md` come from `TABLE`, and `make check` fails when they are stale.
 
+![The Issue lifecycle: settling, queued, working, watching and closed along the main path, with waiting reached from working and from a third regression, lead_gone back to queued, regressed back to working and reopened back to queued.](./diagrams/issue-lifecycle.svg)
+
+The drawing shows the main path and the moves that change it: a wait, a lead that is gone, a regression and a reopen. Arrow labels name the events, some shortened. The generated diagram in `docs/language.md` has every move.
+
 ```ts
 export type Cell =
   | { to: 'waiting'; wait?: WaitSpec; update?: WaitSpec; effects: Effect[] }

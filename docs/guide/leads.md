@@ -28,6 +28,10 @@ issue_1809 is one attempt end to end. The selfwatch loop filed it on 2026-11-17 
 { "at": "2026-11-17T03:04:20.757Z", "kind": "shipped", "text": "Shipped; the watch began.", "session": "lead-1809-1" }
 ```
 
+![A lead from start to watch: the factory types the brief; the lead reviews its range with agw, lands the change inside the merge window on GitHub, deploys under the lock on the host and reports the ship; the factory checks git, starts the watch and returns a red verify to the lead as a note.](./diagrams/lead-sequence.svg)
+
+The drawing follows one attempt in order, as issue_1809 took it, plus the note a red watch sends back. [Gates](./gates.md) covers what each step owes.
+
 **Example files:**
 
 - [`names.ts`](https://github.com/jkrumm/software-factory/blob/2511836af2e3c6f09eb0f76ded4d5e49b47003ab/apps/server/src/domains/leads/names.ts#L3-L19): the session key and the branch name, one per attempt
