@@ -134,11 +134,39 @@ export function movedOf(before: number, now: number, direction: 'up' | 'down'): 
   return change > 0 === (direction === 'up') ? 'better' : 'worse'
 }
 
+/**
+ * Marker keys that name a friction count, not a KPI or capacity figure, and the count each one reads: a retro signal
+ * writes `kpi=unreviewed_ship` for the ships with no review and `kpi=regression_cause` for the regressed Watches. The
+ * figure is the count per closed Issue (`perIssue`), so a 7-day and a 30-day window compare; a `before=` of that kind is
+ * the same rate.
+ */
+export const FRICTION_MARKER_KEYS: Readonly<Record<string, string>> = {
+  unreviewed_ship: 'unreviewed_ship',
+  unstated_acceptance: 'unstated_acceptance',
+  unproven_ci: 'unproven_ci',
+  regression: 'regression',
+  regression_cause: 'regression',
+}
+
+/** The figure a marker's `kpi=` key reads now: a KPI, a capacity figure, or a friction count per closed Issue; null when none holds it. */
+export function figureOf(
+  key: string,
+  sources: { kpis: KpiModel; capacity?: readonly RetroCapacityFigure[]; friction?: FrictionModel | null },
+): number | null {
+  const kpi = sources.kpis.kpis.find((k) => k.key === key)?.value
+  if (kpi !== undefined && kpi !== null) return kpi
+  const figure = sources.capacity?.find((f) => f.key === key)?.value
+  if (figure !== undefined && figure !== null) return figure
+  const counted = FRICTION_MARKER_KEYS[key]
+  return counted === undefined ? null : (sources.friction?.counts.find((c) => c.key === counted)?.perIssue ?? null)
+}
+
 /** The retro signals the factory has seen (`RETRO_MARKER` in their text), against the KPIs as they are now. */
 export async function ledgerOf(
   sql: SQL,
   kpis: KpiModel,
   capacity: readonly RetroCapacityFigure[] = [],
+  friction: FrictionModel | null = null,
 ): Promise<RetroLedgerEntry[]> {
   const rows: unknown[] = await sql`
     SELECT s.id, s.title, s.text, s.received_at, s.issue_id, i.state, i.outcome,
@@ -169,11 +197,7 @@ export async function ledgerOf(
     const [, , key, rawBefore, direction] = marker
     const before = rawBefore === 'none' ? null : Number(rawBefore)
     // A throughput finding carries its own after, read over the 3 days past its ship: that is a clean window, the KPI table has no such figure.
-    const now =
-      row.loop_after ??
-      kpis.kpis.find((k) => k.key === key)?.value ??
-      capacity.find((f) => f.key === key)?.value ??
-      null
+    const now = row.loop_after ?? figureOf(key ?? '', { kpis, capacity, friction })
     const measured =
       row.shipped_at === null
         ? 'not_shipped'
@@ -310,7 +334,7 @@ export async function readRetro(
       refused: await refused(sql, w),
       dropped: await dropped(sql, w),
     },
-    ledger: await ledgerOf(sql, kpis, capacity?.figures ?? build.figures),
+    ledger: await ledgerOf(sql, kpis, capacity?.figures ?? build.figures, friction),
     taste: await readTaste(sql, w),
     capacity,
     build,

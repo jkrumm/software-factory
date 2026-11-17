@@ -1,11 +1,18 @@
 import { afterAll, beforeAll, describe, expect, test } from 'bun:test'
-import { KpiModel, RetroModel } from '@software-factory/contract'
+import {
+  CAPACITY_FIGURE_KEYS,
+  type FrictionModel,
+  KPI_KEYS,
+  KpiModel,
+  RetroModel,
+  type RetroCapacityFigure,
+} from '@software-factory/contract'
 import { startTestCluster, type TestCluster } from '@software-factory/tests/pg'
 import type { SQL } from 'bun'
 import { loadMigrations, migrate } from '../../src/adapters/postgres/migrate.ts'
 import { avoidableTouches, readKpis } from '../../src/read/kpis.ts'
 import { regressionCause } from '../../src/read/kpis-flow.ts'
-import { movedOf, readRetro } from '../../src/read/retro.ts'
+import { figureOf, FRICTION_MARKER_KEYS, movedOf, readRetro } from '../../src/read/retro.ts'
 
 /**
  * The flow KPIs and the retro model over a real Postgres. One fixture, every expectation worked out by hand from it, and
@@ -333,6 +340,35 @@ describe('the retro model', () => {
       before: null,
     })
     expect(model.ledger.map((e) => e.signal)).toEqual(['signal_r1', 'signal_r2'])
+  })
+
+  test('a friction-count marker key reads its rate per closed Issue, so no shipped entry stays unreadable', async () => {
+    await sql`INSERT INTO factory.intake_signals (id, source, kind, origin, trust, repo, fingerprint, title, text, received_at, state, issue_id) VALUES
+      ('signal_f1', 'agent:software-factory', 'request', 'factory', 'agent', 'app', 'f1', 'Review every ship', ${'Retro: 2026-10-30 kpi=unreviewed_ship before=360 direction=down'}, ${ago(300)}, 'filed', 'issue_9'),
+      ('signal_f2', 'agent:software-factory', 'request', 'factory', 'agent', 'app', 'f2', 'Fewer regressions', ${'Retro: 2026-10-30 kpi=regression_cause before=66 direction=down'}, ${ago(300)}, 'filed', 'issue_9')`
+    const model = RetroModel.parse(await readRetro(sql, { now: NOW, days: 7 }))
+    for (const id of ['signal_f1', 'signal_f2']) {
+      const entry = model.ledger.find((e) => e.signal === id)
+      expect(entry?.now).not.toBeNull()
+      expect(entry?.measured).toBe('after')
+    }
+    const rate = (key: string) => model.friction.counts.find((c) => c.key === key)?.perIssue
+    expect(model.ledger.find((e) => e.signal === 'signal_f1')?.now).toBe(rate('unreviewed_ship') ?? Number.NaN)
+    expect(model.ledger.find((e) => e.signal === 'signal_f2')?.now).toBe(rate('regression') ?? Number.NaN)
+  })
+
+  test('every key a retro signal can carry resolves to a figure, or is listed as unreadable', () => {
+    const kpi = (key: string) => ({ key, value: 1 })
+    const kpis = { kpis: KPI_KEYS.map(kpi) } as unknown as KpiModel
+    const capacity = CAPACITY_FIGURE_KEYS.map((key) => ({ key, value: 2 })) as unknown as RetroCapacityFigure[]
+    const friction = {
+      counts: Object.values(FRICTION_MARKER_KEYS).map((key) => ({ key, perIssue: 0.5 })),
+    } as unknown as FrictionModel
+    const unreadable: string[] = []
+    const keys = [...KPI_KEYS, ...CAPACITY_FIGURE_KEYS, ...Object.keys(FRICTION_MARKER_KEYS)]
+    for (const key of keys) if (figureOf(key, { kpis, capacity, friction }) === null) unreadable.push(key)
+    expect(unreadable).toEqual([])
+    expect(figureOf('no_such_key', { kpis, capacity, friction })).toBeNull()
   })
 
   test('the read token gets no transcript path and no words of the Issues', async () => {
