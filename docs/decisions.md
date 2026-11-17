@@ -326,3 +326,16 @@ Report `docs/strategy/2026-11-next/report.html`, definition `docs/strategy/2026-
   the host may sit under 8 % free memory until they end; the next grant waits on swap growing and the fit. Revert by
   using `fit.headroomMib` for every grant in `decide` (`domains/capacity/slots.ts`) if `minutesUnderPressure` or
   `swapoutMib` of `factory read capacity-loop` rises over the three days after.
+- **NL37 A regression is friction by rate, not by count (Issue 1990, 2026-11-17).** The `regression` pattern was a bare
+  count of 1, so any week with one regressed watch filed an Issue, forever. The week 2026-11-10 to 11-17 had 66 (0.05 per
+  Issue closed), read from `quality_watches`: before #1305 (2026-11-15 02:48) 52 of 656 watches regressed (7.9 %), after it 18
+  of 590 (3.1 %). The flood was host-wide `make verify` reds charged to the change that happened to be watched
+  (dotfiles: 33 of 66, 12 of them on one Issue, a pending macOS update); a replay of the stored checks shows that
+  #1305's open-regression baseline already covers the later Issues of such an episode. What is left is mostly the watch
+  doing its job: the default branch's CI red on a landed commit (7 of the 18), a `make deploy` that did not run (2, one of
+  them a light lead's), a monitor or a bulb that flapped (about 6). The regressed Issue goes back to its own lead, so a
+  signal on top of it adds nothing for one. The rule is now 3 in the window and 0.05 per Issue closed (one in twenty,
+  the level the week before the fix ran at), judged from `MIN_CLOSED`. Cost: a single regression files nothing; a rise of the
+  steady 2 to 3 % to 5 % does. Not changed: `stall:regressed` (a stall twice in a week still files; 1 since the fix) and the
+  light seat's move-up on a first-watch regression. Two cases are worth a look if the rate climbs: a light lead that
+  forgets `make deploy`, and an environmental red (a bulb, a monitor in PENDING) that moves a light lead up to a Sonnet one.

@@ -49,7 +49,6 @@ test('a serious pattern is a finding by its count alone, at any sample', () => {
     ['stall:wall', 'stall'],
     ['lead_gone', 'lead_gone'],
     ['undelivered_note', 'undelivered_note'],
-    ['regression', 'regression'],
   ]
   for (const [key, group] of cases) {
     const rule = THRESHOLDS[group as keyof typeof THRESHOLDS]
@@ -68,6 +67,7 @@ test('a rate-judged pattern needs its count, its rate and the minimum sample', (
     ['unreviewed_ship', 'unreviewed_ship'],
     ['unstated_acceptance', 'unstated_acceptance'],
     ['unproven_ci', 'unproven_ci'],
+    ['regression', 'regression'],
     ['touch:woken', 'avoidable_touch'],
     ['signal_held:feedback', 'signal'],
   ]
