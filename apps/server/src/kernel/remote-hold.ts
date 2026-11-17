@@ -8,7 +8,7 @@
 export const FIRST_HOLD_MS = 3_600_000
 export const MAX_HOLD_MS = 7 * 86_400_000
 /** A disagreement more than this after the previous hold ended starts again at the first hold. */
-export const WINDOW_MS = 7 * 86_400_000
+const WINDOW_MS = 7 * 86_400_000
 /**
  * The ledger is read this far back: a chain that doubles to the cap spans nine disagreements, each up to a week after the
  * last hold, so a shorter read would restart a long chain at its oldest visible event and shorten the hold.

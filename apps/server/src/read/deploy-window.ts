@@ -2,7 +2,7 @@ import { lstatSync, readlinkSync } from 'node:fs'
 import { join } from 'node:path'
 
 /** The file `scripts/deploy.sh` holds for the length of a deploy: a symlink to the deploying pid. */
-export const DEPLOY_LOCK = 'deploy.lock'
+const DEPLOY_LOCK = 'deploy.lock'
 
 const alive = (pid: number): boolean => {
   try {

@@ -16,11 +16,11 @@ export interface UpgradeRow {
   heldBack?: boolean
 }
 
-export const COOLDOWN_DAYS = 7
-export const MAJOR_COOLDOWN_DAYS = 14
+const COOLDOWN_DAYS = 7
+const MAJOR_COOLDOWN_DAYS = 14
 const DAY = 86_400_000
 /** The most packages a plan names; the rest are one line. */
-export const MAX_PLAN_ROWS = 40
+const MAX_PLAN_ROWS = 40
 
 export interface Batch {
   kind: 'together' | 'major' | 'rest'
@@ -41,7 +41,7 @@ export interface UpgradePlan {
 }
 
 /** The cooldown of a bump, in days: a major waits twice as long. */
-export const cooldownDays = (size: Bump): number => (size === 'major' ? MAJOR_COOLDOWN_DAYS : COOLDOWN_DAYS)
+const cooldownDays = (size: Bump): number => (size === 'major' ? MAJOR_COOLDOWN_DAYS : COOLDOWN_DAYS)
 
 /** The first day a row's version is past its cooldown; undefined when its release date is not known. */
 export function cooldownEnd(row: UpgradeRow): Date | undefined {

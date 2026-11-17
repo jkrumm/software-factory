@@ -132,7 +132,7 @@ export function untilWords(ms: number): string {
 }
 
 /** The reason line of a plan row that waits for a date, with the instant for its hover. */
-export const notBeforeReason = (iso: string, now: number = Date.now()): { text: string; title: string } => ({
+const notBeforeReason = (iso: string, now: number = Date.now()): { text: string; title: string } => ({
   text: `Not before ${dateWords(iso, now)}`,
   title: utcWords(iso),
 })

@@ -5,10 +5,10 @@ import { MAX_SIGNALS_PER_PASS } from './budget.ts'
 export const FRICTION_WINDOW_DAYS = 7
 
 /** A pass is due when no pass was recorded within this long... */
-export const FRICTION_PASS_EVERY_MS = 24 * 3_600_000
+const FRICTION_PASS_EVERY_MS = 24 * 3_600_000
 
 /** ...or when this many Issues closed since the last one, whichever comes first: at 126 to 166 closed a day the weekly pace looked at a thousand Issues per pass. */
-export const FRICTION_PASS_EVERY_CLOSED = 200
+const FRICTION_PASS_EVERY_CLOSED = 200
 
 /** Why a pass runs now: nothing recorded yet, a day since the last, or the volume of closed Issues. */
 export type PassTrigger = 'first' | 'day' | 'volume'
@@ -23,7 +23,7 @@ export function clockTrigger(lastAt: Date | null, now: Date): PassTrigger | null
 export const volumeDue = (closedSince: number): boolean => closedSince >= FRICTION_PASS_EVERY_CLOSED
 
 /** Evidence Issue refs shown in one signal. */
-export const MAX_EVIDENCE = 5
+const MAX_EVIDENCE = 5
 
 /** The groups whose counts are findings; `decision_settled` and `api_transient` (an edge incident the factory answered itself) are informational and have no row. */
 type Judged = Exclude<FrictionCount['group'], 'decision_settled' | 'api_transient'>

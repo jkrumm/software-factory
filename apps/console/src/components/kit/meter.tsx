@@ -52,8 +52,6 @@ export function MeterBar({ value, tone, track = 'tint', className }: MeterBarPro
   )
 }
 
-export { meterTone }
-
 /** A thin rounded bar, its track a lighter step of the fill's own hue. Shows its value on hover and focus. */
 export function Meter({ value, label, name, valueText, tone, tooltip = true, track, className }: MeterProps) {
   const [shown, setShown] = useState(false)

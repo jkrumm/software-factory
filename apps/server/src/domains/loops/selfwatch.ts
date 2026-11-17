@@ -134,7 +134,7 @@ function uncheckedFinding(unchecked: string[]): Finding {
  * The time a wait should have ended, by the predicates the planning pass wakes with (`wakeTimers`, `wakeDependents`): a
  * timer at its `until`, a dependency once every Issue it is after has closed (the last close). Null while one is still open.
  */
-export function waitExit(wait: WaitFact): Date | null {
+function waitExit(wait: WaitFact): Date | null {
   if (wait.reason === 'timer') return wait.until === null ? null : new Date(Date.parse(wait.until))
   if (wait.after.some((a) => a.closedAt === null)) return null
   const closes = wait.after.flatMap((a) => (a.closedAt ? [a.closedAt.getTime()] : []))
@@ -230,7 +230,7 @@ export function inertRegressionFindings(
  * `tick`: the leads' tick is a failure (`judgeTick`: its reasons start `no tick has succeeded` or `the last successful tick`);
  * `database`: anything else `healthOf` reports.
  */
-export const heartbeatClass = (reason: string | null): 'tick' | 'database' =>
+const heartbeatClass = (reason: string | null): 'tick' | 'database' =>
   reason !== null && (reason.startsWith('no tick has succeeded') || reason.startsWith('the last successful tick'))
     ? 'tick'
     : 'database'
@@ -281,7 +281,7 @@ export function heartbeatFindings(heartbeat: HeartbeatFact, now: Date): Finding[
 // ---- 7. process_growth, 8. swap_growth, 9. process_storm -------------------------------------------------------------------
 
 /** A process that grew by more than this within `GROWTH_WINDOW_MS` is a runaway (the daemons of the 2026-11-13 panic grew by many GiB). */
-export const GROWTH_MIB = 1024
+const GROWTH_MIB = 1024
 export const GROWTH_WINDOW_MS = 60 * 60_000
 /** A growth is judged on a process seen at least this long: a test step that starts and peaks within minutes is not a leak. */
 const GROWTH_MIN_SPAN_MS = 30 * 60_000
@@ -296,7 +296,7 @@ const SWAP_MIN_RISE_PCT = 0.5
 export const MINUTE_GAP_MS = 150_000
 
 /** The process count must stay over the cap this many samples in a row: one `top` reading can be a spike of a build. */
-export const STORM_SAMPLES = 3
+const STORM_SAMPLES = 3
 /** Until `tp-leads` brings its own cap, the host's process count past which the host is in a process storm. */
 export const DEFAULT_PROCESS_CAP = 2500
 
@@ -416,7 +416,7 @@ export function evidenceHash(finding: Pick<Finding, 'facts'>): string {
 }
 
 /** The most lines of a capacity finding's evidence block (`overloadEvidence`) a signal carries. */
-export const MAX_EVIDENCE_LINES = 60
+const MAX_EVIDENCE_LINES = 60
 
 /**
  * A finding as a signal's text: what was seen, where, how to look again; at most `MAX_LINES` lines, and after them the

@@ -3,8 +3,8 @@
  * full of ids; what the read API shows is this text without them. Conservative: it removes what is certainly an id.
  */
 
-export const SHORT_MAX = 60
-export const SUMMARY_MAX = 160
+const SHORT_MAX = 60
+const SUMMARY_MAX = 160
 
 /** One line cut at a word (`…` marks the cut). */
 export function cut(text: string, max = 140): string {

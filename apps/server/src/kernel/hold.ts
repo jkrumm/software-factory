@@ -3,8 +3,8 @@
  * the lead, who would only find the same cause and block again. The first hold waits `HOLD_BASE_MS`; each later one of the
  * same attempt waits twice as long, up to `HOLD_MAX_MS`.
  */
-export const HOLD_BASE_MS = 60 * 60_000
-export const HOLD_MAX_MS = 12 * 60 * 60_000
+const HOLD_BASE_MS = 60 * 60_000
+const HOLD_MAX_MS = 12 * 60 * 60_000
 
 /** An option label that reads as a hold: it begins with one of these words (`Hold until the update lands`). */
 const HOLD_LABEL = /^\s*(hold|wait|pause|defer|keep\s+(holding|waiting)|stay\s+(on\s+hold|blocked))\b/i
@@ -12,7 +12,7 @@ const HOLD_LABEL = /^\s*(hold|wait|pause|defer|keep\s+(holding|waiting)|stay\s+(
 export const isHold = (answer: string): boolean => HOLD_LABEL.test(answer)
 
 /** How long the next hold waits, given the holds this attempt already had. */
-export const holdFor = (priorHolds: number): number =>
+const holdFor = (priorHolds: number): number =>
   Math.min(HOLD_MAX_MS, HOLD_BASE_MS * 2 ** Math.min(Math.max(0, priorHolds), 16))
 
 /** The time the next hold ends. */

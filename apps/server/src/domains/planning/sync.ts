@@ -46,10 +46,10 @@ export interface StoredProject {
   syncedAt: Date | null
 }
 
-export const sha256 = (text: string): string => createHash('sha256').update(text).digest('hex')
+const sha256 = (text: string): string => createHash('sha256').update(text).digest('hex')
 
 /** The key of a second directory of a name already taken: `<name>~<first 8 hex of the sha-256 of its path>`. */
-export const suffixedName = (name: string, path: string): string => `${name}~${sha256(path).slice(0, 8)}`
+const suffixedName = (name: string, path: string): string => `${name}~${sha256(path).slice(0, 8)}`
 
 /**
  * The name a repo goes by: its directory's name, unless another path holds that name already (the one stored first

@@ -121,7 +121,7 @@ export interface BriefInput {
 export const MAX_BRIEF_SIGNALS = 5
 /** 12 000: a dependency finding's text is its evidence, upgrade plan and procedure (~9 KB at most); the lead must read all of it. */
 export const MAX_SIGNAL_TEXT_CHARS = 12_000
-export const MAX_SIGNAL_FACTS_CHARS = 6_000
+const MAX_SIGNAL_FACTS_CHARS = 6_000
 
 /** One signal as the lead reads it: its title, its text, its facts as compact JSON, each clipped. */
 export function signalLines(signal: BriefSignal): string {
@@ -139,7 +139,7 @@ export function signalLines(signal: BriefSignal): string {
 
 /** Most notes a brief lists, and the most bytes of them: the brief is one argument of one process. */
 export const MAX_BRIEF_NOTES = 20
-export const MAX_BRIEF_NOTE_BYTES = 24_000
+const MAX_BRIEF_NOTE_BYTES = 24_000
 
 /** A code fence longer than any run of backticks inside the text, so the text cannot close it. */
 export function fenced(text: string, language = ''): string {
@@ -164,7 +164,7 @@ export function fitNotes(notes: readonly BriefNote[]): { shown: BriefNote[]; mor
  * What a repo with `checks:` changes in orders 6 and 7: the lead's local check is `fast`, and `full` is CI's. The
  * commands are `make <target>` by the schema, so quoting them is quoting data.
  */
-export function checksSection({ fast, full, ci }: CheckTiers): string {
+function checksSection({ fast, full, ci }: CheckTiers): string {
   const gate = ci
     ? `The complete gate (\`${full}\`) runs in CI on the pull request head. Where orders 6 and 7 say \`make check\`, run \`${fast}\` before the first push and after every change you author, and rely on CI for the rest (run \`${full}\` locally only for a change to the test layout, the Makefile or CI itself): \`make merge-guard\` still demands a finished green CI run on the exact head, so nothing ships unchecked. Rerun a heavy suite locally only to reproduce a CI failure: that one suite, inside a slot (\`factory slot run -- <command>\`), never the whole gate.`
     : `Where orders 6 and 7 say \`make check\`, run \`${fast}\` before each push and after every change you author, and \`${full}\` once before the first push and after a change that touches what \`${fast}\` does not run. CI does not run \`${full}\` for this repo.`
@@ -174,7 +174,7 @@ This repo has check tiers: \`fast\` is \`${fast}\`, \`full\` is \`${full}\`${ci 
 }
 
 /** Whether order 7's `make merge-guard` exists in this repo, so the lead does not look for it. */
-export function mergeGuardSection(has: boolean): string {
+function mergeGuardSection(has: boolean): string {
   return `## Merge guard in this repo
 
 ${has ? 'This repo has a `make merge-guard` target: order 7 applies as written.' : "This repo has no `make merge-guard` target (its Makefile was read): do not look for one. Hold order 7's by-hand rule instead (`git merge-base --is-ancestor origin/master HEAD`, every check of `gh pr checks <n>` finished green on the pushed head, no red finished run on the default branch) and wait for CI with `gh pr checks <n> --watch`."}`

@@ -9,8 +9,8 @@ export const MAX_SCREEN_ATTEMPTS = 5
 /** Signals the Judge looks at in one pass. */
 export const SCREEN_BATCH = 10
 /** Open Issues and project names a screening is shown. */
-export const MAX_SCREEN_ISSUES = 40
-export const MAX_SCREEN_PROJECTS = 60
+const MAX_SCREEN_ISSUES = 40
+const MAX_SCREEN_PROJECTS = 60
 
 const BACKOFF_BASE_MS = 10 * 60_000
 const BACKOFF_CAP_MS = 6 * 3_600_000

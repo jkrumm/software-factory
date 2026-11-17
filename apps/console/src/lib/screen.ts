@@ -4,7 +4,7 @@ import { useRestarting } from './connection.ts'
 import { awaitUpdate } from './update.ts'
 
 /** How long a screen shows its skeleton for a new bundle that does not come before it says so. */
-export const UPDATE_STALL_MS = 20_000
+const UPDATE_STALL_MS = 20_000
 
 export type Screen = 'ready' | 'loading' | 'failed'
 

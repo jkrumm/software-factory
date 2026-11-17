@@ -35,7 +35,7 @@ import { err, ok, portError, type PortError, type Result } from '../../src/kerne
 export const BASE = Date.parse('2026-11-07T10:00:00Z')
 
 /** A clock the test moves. */
-export class MovingClock implements Clock {
+class MovingClock implements Clock {
   constructor(private at = BASE) {}
   now(): Date {
     return new Date(this.at)
@@ -63,7 +63,7 @@ const info = (address: string, live = true): TerminalInfo => ({
 })
 
 /** Fake herdr-core: terminals by key, with the answers a test scripts. */
-export class FakeTerminals implements Terminals {
+class FakeTerminals implements Terminals {
   terminals = new Map<string, TerminalInfo[]>()
   started: StartTerminal[] = []
   typed: { terminal: string; text: string; force: boolean; idle?: boolean }[] = []
@@ -144,7 +144,7 @@ export class FakeTerminals implements Terminals {
   }
 }
 
-export class FakeWorktrees implements Worktrees {
+class FakeWorktrees implements Worktrees {
   created: { repo: string; branch: string }[] = []
   removed: WorktreeRemovalInput[] = []
   createError: PortError | null = null
@@ -166,7 +166,7 @@ export class FakeWorktrees implements Worktrees {
   }
 }
 
-export class FakeBranches implements LeadBranches {
+class FakeBranches implements LeadBranches {
   cleaned: { repo: string; issue: number; closed: BranchClosure; shipped: readonly string[] }[] = []
   answer: Result<BranchCleaning> = ok({ deleted: [], kept: [] })
   async clean(input: { repo: string; issue: number; closed: BranchClosure; shipped: readonly string[] }) {

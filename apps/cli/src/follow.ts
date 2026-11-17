@@ -10,8 +10,8 @@ import type { Format } from './output.ts'
 const BIN = 'factory'
 const USAGE = 'usage: follow [--issue <id>] [--since <cursor>] [--until-closed] [--format json|plain]'
 
-export const BACKOFF_FIRST_MS = 1_000
-export const BACKOFF_MAX_MS = 15_000
+const BACKOFF_FIRST_MS = 1_000
+const BACKOFF_MAX_MS = 15_000
 
 export interface Backoff {
   firstMs: number

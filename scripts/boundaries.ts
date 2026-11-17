@@ -53,7 +53,7 @@ interface Import {
 }
 
 /** Drops comments so a word in a comment is no import and no `Bun.` call; strings stay, they hold the specifiers. */
-export function stripComments(source: string): string {
+function stripComments(source: string): string {
   return source
     .replace(/\/\*[\s\S]*?\*\//g, (block) => block.replace(/[^\n]/g, ' '))
     .replace(/(^|[^:'"`\\])\/\/[^\n]*/g, '$1')

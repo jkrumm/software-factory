@@ -174,9 +174,6 @@ export function laneWords(lanes: Record<string, { leads: number; memoryMib: numb
   })
 }
 
-/** The project's own address, one place for the path so a chip and a palette row agree. */
-export const projectPath = (name: string): string => `/projects/${encodeURIComponent(name)}`
-
 /** How many Issues of one kind the first screen lists before the rest sit behind a count. */
 export const FIRST_SCREEN_ROWS = 5
 

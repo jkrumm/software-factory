@@ -172,7 +172,7 @@ function UpcomingRows({ name, rows }: { name: string; rows: readonly PlanRowView
 }
 
 /** The hourly bars of the last 7 days with the newest five shipped; the history is the Shipped tab. */
-export function ShippedPanel({
+function ShippedPanel({
   name,
   page,
   now,

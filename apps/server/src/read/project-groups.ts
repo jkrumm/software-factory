@@ -28,10 +28,10 @@ export interface ProjectGroups {
 }
 
 /** `INFRA` → `Infra`: the file's labels are the sidebar's capitals, the table writes words. */
-export const groupWord = (label: string): string =>
+const groupWord = (label: string): string =>
   label.length === 0 ? label : label.charAt(0).toUpperCase() + label.slice(1).toLowerCase()
 
-export function projectGroupsOf(raw: unknown): ProjectGroups {
+function projectGroupsOf(raw: unknown): ProjectGroups {
   const parsed = GroupsFile.safeParse(raw)
   const file = parsed.success ? parsed.data : { fallback: 'OTHER', groups: [] }
   const fallback = groupWord(file.fallback)

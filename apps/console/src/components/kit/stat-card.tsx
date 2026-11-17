@@ -65,7 +65,7 @@ export interface StatCardProps extends CardLinkProps {
 const DASH = '–'
 
 /** The tone of a delta: direction times `higherIsBetter`; neutral at 0, unknown or text. */
-export function deltaTone(delta: StatCardProps['delta']): Tone {
+function deltaTone(delta: StatCardProps['delta']): Tone {
   if (delta?.tone) return delta.tone
   if (!delta || typeof delta.value === 'string') {
     const sign = typeof delta?.value === 'string' ? Math.sign(Number.parseFloat(delta.value)) : 0

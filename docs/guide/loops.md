@@ -130,7 +130,7 @@ Hygiene is the standing check on a project's health: per-repo probes read a thro
 
 ```ts
 /** Slots the judgment keeps: the deterministic findings may take `MAX_SIGNALS_PER_PASS - JUDGMENT_RESERVE`. */
-export const JUDGMENT_RESERVE = 2
+const JUDGMENT_RESERVE = 2
 export const MAX_PROBE_SIGNALS = MAX_SIGNALS_PER_PASS - JUDGMENT_RESERVE
 ```
 
@@ -185,7 +185,7 @@ The retro is a weekly review written by a lead. Each friction pass files one ret
 
 ```ts
 /** The previous retros' yield in a line for the signal's facts; null when no retro signal was filed in the window. */
-export function outcomesLine(outcomes: RetroOutcomes | null): string | null {
+function outcomesLine(outcomes: RetroOutcomes | null): string | null {
   if (!outcomes || outcomes.signals === 0) return null
   const none = outcomes.signals - outcomes.shipped - outcomes.done - outcomes.dropped - outcomes.open
   const parts = [

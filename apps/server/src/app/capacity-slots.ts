@@ -41,7 +41,6 @@ import {
   type SlotRow,
   type SlotView,
   type PeakFrom,
-  slotLines,
   type StepHost,
   stepClassOf,
   touchSlots,
@@ -581,7 +580,7 @@ const grantView = (row: SlotRow, runMs: number): SlotView => ({
  * mini. Pinned to the VPS (`FACTORY_SLOT_HOST=vps`), a declared step goes whatever its `remote` says, never one that needs
  * what only the mini has.
  */
-export function declaredRemoteStep(input: {
+function declaredRemoteStep(input: {
   owner: { name: string; project: ProjectFile } | undefined
   key: string
   remote: { target: string; projects: readonly string[] }
@@ -628,7 +627,7 @@ export type DisagreementSignal = {
 export type SignalFiler = (body: DisagreementSignal) => Promise<{ ok: boolean }>
 
 /** What the signal for a test that disagreed again says: the test, its remote duration and the timeout its output named. */
-export function disagreementSignal(input: {
+function disagreementSignal(input: {
   project: string
   step: string
   test: { name: string; durationMs: number; timeoutMs: number | null }
@@ -717,12 +716,5 @@ export async function giveSlotBack(deps: PlanningDeps, id: string): Promise<Resu
         split: left.waitSplit,
       })
     return ok(released.had)
-  })
-}
-
-export async function slotRows(deps: PlanningDeps): Promise<Result<{ rows: SlotRow[]; lines: string[] }, PortError>> {
-  return deps.uow.run(async ({ capacity }) => {
-    const rows = await capacity.slots()
-    return ok({ rows, lines: slotLines(rows, deps.clock.now()) })
   })
 }

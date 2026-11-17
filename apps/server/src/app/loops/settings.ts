@@ -103,10 +103,10 @@ export interface LoopSettings {
   askHumanHost: string | null
 }
 
-export const DEFAULT_TICK_MS = 10_000
+const DEFAULT_TICK_MS = 10_000
 
 /** A checkpoint in front of the owner this long is checked once more. */
-export const DEFAULT_RECHECK_MS = 6 * 3_600_000
+const DEFAULT_RECHECK_MS = 6 * 3_600_000
 
 /** One sweep runs `make check` over a project: at most one in this long, unless the tick is off (0). */
 const HYGIENE_MIN_TICK_MS = 15 * 60_000
@@ -125,11 +125,11 @@ const HOST_TICK_MS = 60_000
 const hostTickMs = (tickMs: number): number => (tickMs === 0 ? 0 : HOST_TICK_MS)
 
 /** The project digests are asked for every 3 hours, unless the tick is off (0). */
-export const DIGEST_TICK_MS = 3 * 3_600_000
+const DIGEST_TICK_MS = 3 * 3_600_000
 const digestTickMs = (tickMs: number): number => (tickMs === 0 ? 0 : DIGEST_TICK_MS)
 
 /** The open requests for the owner's hands are looked at every hour, unless the tick is off (0). */
-export const ERRANDS_TICK_MS = 3_600_000
+const ERRANDS_TICK_MS = 3_600_000
 const errandsTickMs = (tickMs: number): number => (tickMs === 0 ? 0 : ERRANDS_TICK_MS)
 
 /** A pull request's review is looked at every 15 minutes, and the desk pass is asked whether it is due as often, unless the tick is off (0). */
@@ -138,7 +138,7 @@ const DESK_TICK_MS = 15 * 60_000
 const deskTickMs = (tickMs: number): number => (tickMs === 0 ? 0 : DESK_TICK_MS)
 
 /** The throughput loop ranks what cost most once a day, unless the tick is off (0). */
-export const THROUGHPUT_TICK_MS = 24 * 3_600_000
+const THROUGHPUT_TICK_MS = 24 * 3_600_000
 const throughputTickMs = (tickMs: number): number => (tickMs === 0 ? 0 : THROUGHPUT_TICK_MS)
 
 /** The reaper looks at the process table every 5 minutes, unless the tick is off (0). */
@@ -146,7 +146,7 @@ const REAPER_TICK_MS = 5 * 60_000
 const reaperTickMs = (tickMs: number): number => (tickMs === 0 ? 0 : REAPER_TICK_MS)
 
 /** A closed attempt's processes are left this long before they are ended. */
-export const DEFAULT_REAPER_GRACE_MS = 5 * 60_000
+const DEFAULT_REAPER_GRACE_MS = 5 * 60_000
 
 /** The self-watch reads GitHub and git: at most one pass in this long, unless the tick is off (0). */
 const SELFWATCH_MIN_TICK_MS = 5 * 60_000

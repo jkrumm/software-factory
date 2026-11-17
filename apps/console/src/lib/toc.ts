@@ -31,7 +31,7 @@ export function scrollParentOf(element: Element): HTMLElement | null {
 }
 
 /** How far under the top of the reading area a heading counts as the section the reader is in. */
-export const SECTION_OFFSET = 48
+const SECTION_OFFSET = 48
 
 /** The reading area the section is judged in: its top and bottom on screen, and whether it is scrolled to its very end. */
 export interface ReadingArea {

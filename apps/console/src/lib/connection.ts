@@ -45,7 +45,7 @@ function polledReads(): PolledRead[] {
   })
 }
 
-export const RESTARTING_LABEL = 'Server restarting, reconnecting'
+const RESTARTING_LABEL = 'Server restarting, reconnecting'
 
 export interface Connection {
   label: string

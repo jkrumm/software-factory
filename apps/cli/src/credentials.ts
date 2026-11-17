@@ -2,7 +2,7 @@ import { readFileSync } from 'node:fs'
 import { join } from 'node:path'
 
 /** The most a token resolution may take: `secrets-run` reads an offline cache, so a longer wait is a hang (a biometric prompt). */
-export const RESOLVE_TIMEOUT_MS = 10_000
+const RESOLVE_TIMEOUT_MS = 10_000
 
 type Env = Record<string, string | undefined>
 
@@ -17,7 +17,7 @@ export interface Credential {
 export const tokenFromEnv = (env: Env): string | undefined => env.FACTORY_TOKEN || env.FACTORY_READ_TOKEN || undefined
 
 /** The deployed release's env template: the one list of refs the factory's own launcher resolves. */
-export function templateOf(env: Env): string | undefined {
+function templateOf(env: Env): string | undefined {
   const root = env.FACTORY_ROOT || (env.HOME ? join(env.HOME, '.software-factory') : undefined)
   return root ? join(root, 'current', '.env.tpl') : undefined
 }

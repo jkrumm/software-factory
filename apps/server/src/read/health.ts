@@ -27,7 +27,7 @@ export const TICK_DEAD_MS = 20 * 60_000
 export const DEPLOY_MAX_MS = 30 * 60_000
 
 /** A load average this many times the CPU count is a starved host: a first tick that has not come yet is the host's, not the server's. */
-export const STARVED_LOAD_PER_CORE = 2
+const STARVED_LOAD_PER_CORE = 2
 
 export interface TickInput {
   tickMs: number

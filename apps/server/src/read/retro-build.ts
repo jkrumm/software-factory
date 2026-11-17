@@ -6,13 +6,13 @@ import { boundedRead } from './bounded.ts'
 import { percentile, windowOf } from './stats.ts'
 
 /** Steps listed per repo. */
-export const SLOWEST_STEPS = 5
+const SLOWEST_STEPS = 5
 
 /** Repos whose CI is read at once. */
 const CI_CONCURRENCY = 8
 
 /** The whole CI read ends here: a repo not answered by then is unreadable (the CLI waits 120 s for the bundle). */
-export const CI_READ_DEADLINE_MS = 80_000
+const CI_READ_DEADLINE_MS = 80_000
 
 const MINUTE_MS = 60_000
 

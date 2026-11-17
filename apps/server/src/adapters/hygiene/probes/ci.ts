@@ -30,7 +30,7 @@ export type PrivacyLookup = (query: { tools: Tools; path: string; repo: GithubRe
  * `gh repo view` when gh is signed in; else the unauthenticated API (200 answers, public) and, for a 404, a private
  * repo only when git itself reaches the remote with its own credentials.
  */
-export const githubPrivacy: PrivacyLookup = async ({ tools, path, repo }) => {
+const githubPrivacy: PrivacyLookup = async ({ tools, path, repo }) => {
   const slug = `${repo.owner}/${repo.repo}`
   const viaGh = await exec([tools.gh, 'repo', 'view', slug, '--json', 'isPrivate'], LOOKUP_TIMEOUT_MS, path).catch(
     () => undefined,

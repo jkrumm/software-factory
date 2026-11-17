@@ -5,7 +5,7 @@ import { type Edge, openBlockers } from './chain.ts'
 type Size = 'small' | 'medium' | 'large'
 
 /** The Issue kind that stops the line: an incident is a fix and is urgent. */
-export const FIX_KIND = 'incident'
+const FIX_KIND = 'incident'
 
 /** An Issue that is not closed, as the queue sees it. */
 export interface OpenIssue {
@@ -66,13 +66,13 @@ const SIZE_RANK: Record<Size, number> = { small: 0, medium: 1, large: 2 }
 const UNSIZED_RANK = SIZE_RANK.medium
 
 /** A queued Issue moves up one size rank for every this long it has waited, so a large one is not starved (12 hours at most). */
-export const AGEING_STEP_MS = 6 * 3_600_000
+const AGEING_STEP_MS = 6 * 3_600_000
 
 /**
  * The throughput key of a queued Issue: its size rank less one for each `AGEING_STEP_MS` it has waited, never below
  * zero (the rank of a small one). Lower runs first.
  */
-export function throughputKey(issue: OpenIssue, now: Date | undefined): number {
+function throughputKey(issue: OpenIssue, now: Date | undefined): number {
   const rank = issue.size ? SIZE_RANK[issue.size] : UNSIZED_RANK
   if (!now || !issue.since) return rank
   const steps = Math.floor(Math.max(0, now.getTime() - issue.since.getTime()) / AGEING_STEP_MS)

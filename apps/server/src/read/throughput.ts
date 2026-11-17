@@ -240,12 +240,12 @@ const FindingRow = z.object({
 })
 
 /** The timeline's bucket: 5 minutes up to a day, 15 up to three days, else an hour. */
-export const bucketMinutesOf = (hours: number): number => (hours <= 24 ? 5 : hours <= 72 ? 15 : 60)
+const bucketMinutesOf = (hours: number): number => (hours <= 24 ? 5 : hours <= 72 ? 15 : 60)
 
 const round = (value: number, decimals: number) => Math.round(value * 10 ** decimals) / 10 ** decimals
 
 /** Why a finding the epoch left unjudged reads `unmeasured`. */
-export const BEFORE_EPOCH = 'filed before the counting epoch'
+const BEFORE_EPOCH = 'filed before the counting epoch'
 
 /**
  * Where the host's memory and CPU went over the last `hours` hours, over the window `[now - hours, now)` (starting at the

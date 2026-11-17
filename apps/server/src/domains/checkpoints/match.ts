@@ -7,7 +7,6 @@ import { createHash } from 'node:crypto'
  * the same command wherever it is raised.
  */
 
-export const MAX_NEED_KEY = 80
 /** the alphabet of a lead's own need key: a short name, lowercase */
 export const NEED_KEY_RE = /^[a-z0-9][a-z0-9._:/-]{0,79}$/
 

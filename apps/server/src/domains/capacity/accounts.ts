@@ -14,7 +14,7 @@ export interface WindowLimits {
 export const DEFAULT_LIMITS: WindowLimits = { fiveHour: DEFAULT_WINDOW_LIMIT, weekly: DEFAULT_WINDOW_LIMIT }
 
 /** A 5-hour window above this share of its use paces an account: one new lead per quota sample. Below it, and with no 5-hour window, a lead takes a seat at once. */
-export const SAMPLE_PACE_ABOVE = 70
+const SAMPLE_PACE_ABOVE = 70
 
 export const WEEK_MS = 7 * 24 * 3_600_000
 
@@ -47,7 +47,7 @@ export interface AccountReading {
  * Whether an account takes at most one new lead per quota sample: only one with a 5-hour window, and only once that
  * window is above `SAMPLE_PACE_ABOVE`. An account with only a weekly limit has no window to overshoot in minutes.
  */
-export const pacedBySample = (reading: AccountReading): boolean =>
+const pacedBySample = (reading: AccountReading): boolean =>
   reading.fiveHourUsed !== null && reading.fiveHourUsed > SAMPLE_PACE_ABOVE
 
 export const isFresh = (reading: AccountReading, now: Date): boolean =>
@@ -79,7 +79,7 @@ export const rankIsFresh = (rank: AccountRank, now: Date): boolean =>
 export type Standing = { open: true } | { open: false; until: Date | null; why: string }
 
 /** The share of its week an account's window has elapsed, in percent. Null when the window's end is unknown or past. */
-export function elapsedWeekShare(reading: AccountReading, now: Date): number | null {
+function elapsedWeekShare(reading: AccountReading, now: Date): number | null {
   if (!reading.weeklyResetsAt || reading.weeklyResetsAt <= now) return null
   const start = reading.weeklyResetsAt.getTime() - WEEK_MS
   return Math.min(100, Math.max(0, ((now.getTime() - start) / WEEK_MS) * 100))
@@ -99,7 +99,7 @@ export function roomLeft(reading: AccountReading, limits: WindowLimits = DEFAULT
 }
 
 /** A wall the reading does not show yet is believed only when a window is this close to its limit: a rate limit at 10 % use is a throttle, not a window. */
-export const NEAR_LIMIT_POINTS = 10
+const NEAR_LIMIT_POINTS = 10
 
 /**
  * The reset of the window nearest its limit (a 5-hour window wins a tie: it opens sooner), when that window is within

@@ -13,7 +13,7 @@ import { leadGone } from './leads-start.ts'
 export const NAME_TABS_BUDGET_MS = 15_000
 
 /** The most wall-clock a pass spends starting sessions again over shells (each start is paced); what is left waits for the next pass. */
-export const REVIVE_BUDGET_MS = 60_000
+const REVIVE_BUDGET_MS = 60_000
 
 /**
  * Finds the leads whose terminal is gone: each started lead of a `working` Issue is looked up in herdr-core by its key,

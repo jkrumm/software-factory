@@ -33,9 +33,9 @@ export interface HcTerminalsOptions {
 }
 
 /** Longest one `start` may take, all steps together. */
-export const DEFAULT_START_BUDGET_MS = 180_000
+const DEFAULT_START_BUDGET_MS = 180_000
 /** How long a started agent may take to report before the start is called silent. */
-export const DEFAULT_DELIVER_WAIT_MS = 30_000
+const DEFAULT_DELIVER_WAIT_MS = 30_000
 const DELIVER_POLL_MS = 1_000
 
 const Status = z.object({ state: z.string() }).loose()

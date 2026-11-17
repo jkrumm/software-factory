@@ -46,7 +46,7 @@ export const EDGE_NEED_DAYS = 14
 /** The measured edges of a source must reach this before the rule judges the kind. */
 export const EDGE_STOP_MIN = 10
 /** The share of measured edges that were not needed above which the kind is no longer added. */
-export const EDGE_STOP_SHARE = 0.6
+const EDGE_STOP_SHARE = 0.6
 
 /** The share of the measured edges (both Issues shipped) that were not needed; null when none was measured. */
 export const notNeededShare = (need: Pick<EdgeNeed, 'needed' | 'notNeeded'>): number | null => {

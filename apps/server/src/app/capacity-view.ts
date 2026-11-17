@@ -29,7 +29,7 @@ export interface AccountState {
   cap: number
 }
 
-export const accountState = (
+const accountState = (
   reading: AccountReading,
   now: Date,
   options: { rank?: AccountRank | null; limits?: WindowLimits; leads?: number; cap: number },

@@ -20,7 +20,7 @@ const MAKE_VERIFY = 'make verify'
  * names it (any other `make <target>` runs as well, never dropped), and an HTTP probe for every target that verifies by URL and for every probe of the file. `makeVerify` is
  * `undefined` where the file names no target, so the caller can fall back to what the Makefile offers.
  */
-export function checksOfFile(project: ProjectFile): Omit<ProjectChecks, 'makeVerify'> & { makeVerify?: boolean } {
+function checksOfFile(project: ProjectFile): Omit<ProjectChecks, 'makeVerify'> & { makeVerify?: boolean } {
   const { targets, hold, mode, probes, paths } = project.deploy
   const makeTargets = targets.flatMap((target) => {
     const named = /^make (\S+)$/.exec(target.verify)?.[1]

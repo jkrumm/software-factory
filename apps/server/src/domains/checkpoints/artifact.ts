@@ -11,7 +11,7 @@ export const ARTIFACT_KINDS = ['concept', 'spec', 'decision', 'report'] as const
 export type ArtifactKind = (typeof ARTIFACT_KINDS)[number]
 
 /** What a lead may hand over with `artifact submit`; a Decision comes from `issue ask`. */
-export const SUBMITTABLE_KINDS = ['concept', 'spec', 'report'] as const
+const SUBMITTABLE_KINDS = ['concept', 'spec', 'report'] as const
 export type SubmittableKind = (typeof SUBMITTABLE_KINDS)[number]
 
 export const FORMATS = ['markdown', 'html'] as const
@@ -26,8 +26,8 @@ export const waitsForReview = (kind: ArtifactKind): kind is 'concept' | 'spec' =
 
 export const MAX_CONTENT = 1_000_000
 export const MAX_TITLE = 200
-export const MAX_QUOTE = 2000
-export const MAX_COMMENT = 5000
+const MAX_QUOTE = 2000
+const MAX_COMMENT = 5000
 
 export interface Submission {
   kind: SubmittableKind

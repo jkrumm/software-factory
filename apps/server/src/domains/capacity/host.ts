@@ -121,7 +121,7 @@ export const describeLoad = (load: number, ceiling: number): string =>
   `load average ${Math.round(load * 10) / 10} (ceiling ${ceiling})`
 
 /** The span the heartbeat grades swapouts over, and the minute samples that make it up. */
-export const SUSTAIN_WINDOW_MS = 300_000
+const SUSTAIN_WINDOW_MS = 300_000
 
 /**
  * The swapouts of the last 300 s from the minute samples (each is one minute's delta scaled to 300 s, so five of them

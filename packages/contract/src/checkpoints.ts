@@ -9,8 +9,8 @@ import { IssueRefInput, MAX_AFTER_IDS } from './issues.ts'
 
 const iso = z.iso.datetime({ offset: true })
 
-export const Option = z.object({ label: z.string(), reversible: z.boolean(), cost: z.string() })
-export const NoAnswer = z.object({
+const Option = z.object({ label: z.string(), reversible: z.boolean(), cost: z.string() })
+const NoAnswer = z.object({
   consequence: z.string(),
   default: z.string().nullable(),
   waitMinutes: z.number().int().nullable(),
@@ -28,20 +28,20 @@ const NoAnswerInput = z.object({
   waitMinutes: z.number().int().nullable().optional(),
 })
 
-export const STEPS = ['policy', 'judge', 'default', 'owner'] as const
-export const SETTLERS = [...STEPS, 'orchestrator'] as const
-export const ARTIFACT_KINDS = ['concept', 'spec', 'decision', 'report'] as const
+const STEPS = ['policy', 'judge', 'default', 'owner'] as const
+const SETTLERS = [...STEPS, 'orchestrator'] as const
+const ARTIFACT_KINDS = ['concept', 'spec', 'decision', 'report'] as const
 export const VERDICTS = ['looks_good', 'with_notes', 'changes', 'no_longer_applies'] as const
 
 /** Where the Issue stands after the write, and the effects it planned (a `note_lead` among them). */
-export const IssueMove = z.object({
+const IssueMove = z.object({
   state: z.string(),
   waitReason: z.string().nullable(),
   version: z.number().int(),
   effects: z.array(z.object({ kind: z.string(), key: z.string() })),
 })
 
-export const Step = z.object({
+const Step = z.object({
   step: z.enum(STEPS),
   outcome: z.enum(['answered', 'passed', 'rejected', 'failed', 'open']).nullable(),
   at: iso.nullable(),
@@ -115,7 +115,7 @@ export type DecisionList = z.infer<typeof DecisionList>
 
 // -- Artifacts --------------------------------------------------------------------------------------------------------
 
-export const RevisionView = z.object({
+const RevisionView = z.object({
   n: z.number().int(),
   sha256: z.string(),
   bytes: z.number().int(),
@@ -123,7 +123,7 @@ export const RevisionView = z.object({
   createdAt: iso,
 })
 
-export const ArtifactSummary = z.object({
+const ArtifactSummary = z.object({
   id: z.string(),
   /** the Issue that owns it; null for a standalone artifact (`artifact new`), which names its `repo` instead */
   issueId: z.string().nullable(),
@@ -265,13 +265,13 @@ export const ArtifactReply = z
   .meta({ id: 'ArtifactReply' })
 export type ArtifactReply = z.infer<typeof ArtifactReply>
 
-export const AnnotationDisposition = z.object({
+const AnnotationDisposition = z.object({
   disposition: z.enum(DISPOSITIONS),
   note: z.string(),
   at: iso,
 })
 
-export const AnnotationView = z.object({
+const AnnotationView = z.object({
   id: z.string(),
   revision: z.number().int(),
   quote: z.string(),
@@ -463,7 +463,7 @@ export const ErrandRequestBody = z
   })
   .meta({ id: 'ErrandRequestBody' })
 
-export const ErrandView = z.object({
+const ErrandView = z.object({
   id: z.string(),
   /** null for a request no Issue raised */
   issueId: z.string().nullable(),
@@ -660,7 +660,7 @@ export type ErrandList = z.infer<typeof ErrandList>
 
 // -- The owner's line -------------------------------------------------------------------------------------------------
 
-export const PageView = z.object({
+const PageView = z.object({
   key: z.string(),
   kind: z.enum(['decision', 'review', 'errand']),
   checkpoint: z.string(),

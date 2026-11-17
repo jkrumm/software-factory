@@ -179,7 +179,7 @@ export function idleNote(minutes: number, lastEvent: string, extra = '', backgro
 export const REVISE_NOTE = 'steward: your revision is owed'
 
 /** What a lead is told when the owner's `changes` verdict has had no revision for `reviseAfterMs` while it sat idle. */
-export function reviseNote(artifact: string, attempt: number, minutes: number): string {
+function reviseNote(artifact: string, attempt: number, minutes: number): string {
   return `${REVISE_NOTE}: the owner's verdict on ${artifact} was changes ${minutes} minute(s) ago and no revised artifact was submitted. Submit the revised artifact with \`factory artifact revise ${artifact} --content @file.md --attempt ${attempt}\` (a push alone does not answer the verdict), answering each annotation with \`factory artifact annotation-reply\` first.`
 }
 

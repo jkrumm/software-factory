@@ -15,7 +15,7 @@ export const windowName = (hours: number): string =>
   hours === 24 ? '24 hours' : hours % 24 === 0 ? `${hours / 24} days` : `${hours} hours`
 
 /** The host's process classes, in the order the page lists them when their figures tie, each with a fixed palette slot (its colour never depends on its rank). */
-export const CLASS_ORDER = ['lead', 'step', 'tenant', 'factory', 'system', 'owner', 'other'] as const
+const CLASS_ORDER = ['lead', 'step', 'tenant', 'factory', 'system', 'owner', 'other'] as const
 export const CLASS_LABEL: Record<string, string> = {
   lead: 'Leads',
   step: 'Check steps',
@@ -27,7 +27,7 @@ export const CLASS_LABEL: Record<string, string> = {
 }
 
 /** The seven places a lead's wall time goes, in the order a lead lives them, each with a fixed palette slot. */
-export const SPLIT_PARTS = [
+const SPLIT_PARTS = [
   { key: 'turnSeconds', label: 'In a turn', slot: 1 },
   { key: 'stepSeconds', label: 'In a check step', slot: 2 },
   { key: 'slotWaitSeconds', label: 'Slot wait', slot: 3 },
@@ -222,7 +222,7 @@ export const levelWords = (level: number | null): string =>
   level === 4 ? 'Critical' : level === 2 ? 'Warning' : level === 1 ? 'Normal' : 'Not read'
 
 /** The tone of a pressure level: graphite when normal, warn and bad as the kernel says. */
-export const levelTone = (level: number | null): Tone => (level === 4 ? 'bad' : level === 2 ? 'warn' : 'neutral')
+const levelTone = (level: number | null): Tone => (level === 4 ? 'bad' : level === 2 ? 'warn' : 'neutral')
 
 /** The pressure level as a chart height: 1, 2 and 4 are the kernel's codes; the chart reads 0 (normal), 1 and 2. */
 export const levelHeight = (level: number | null): number | null =>
@@ -279,7 +279,7 @@ export function splitRows(split: ThroughputModel['lead']['split']): SplitRow[] {
 }
 
 /** What each finding kind measures, in words, and how a figure of it reads. */
-export const KPI_WORDS: Record<string, { label: string; format: (value: number) => string }> = {
+const KPI_WORDS: Record<string, { label: string; format: (value: number) => string }> = {
   failed_run_minutes: { label: 'Failed run minutes per day', format: (v) => `${Math.round(v)} min` },
   slot_minutes_per_issue: { label: 'Slot minutes per closed Issue', format: (v) => `${Math.round(v)} min` },
   step_peak_mib: { label: 'Peak memory of a step', format: mibWords },
@@ -316,7 +316,7 @@ export const progress = (
 }
 
 /** What a queue reason is, as a name for a table row (the kind's own word is `queued for` plus this). */
-export const QUEUE_WORDS: Record<string, string> = {
+const QUEUE_WORDS: Record<string, string> = {
   memory: 'Host memory',
   load: 'Host load',
   window: 'An account whose window is closed',

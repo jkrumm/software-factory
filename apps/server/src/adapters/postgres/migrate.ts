@@ -3,8 +3,8 @@ import { join } from 'node:path'
 import type { SQL } from 'bun'
 import { LOCKS } from './locks.ts'
 
-export const SCHEMA = 'factory'
-export const MIGRATIONS_DIR = join(import.meta.dir, '..', '..', '..', 'migrations')
+const SCHEMA = 'factory'
+const MIGRATIONS_DIR = join(import.meta.dir, '..', '..', '..', 'migrations')
 
 /** `0001_schema.sql`: four digits, so no name can meet one of the old core's three-digit files in a ledger. */
 const MIGRATION_NAME = /^\d{4}_[a-z0-9_]+\.sql$/
@@ -65,7 +65,7 @@ class DryRunApplied extends Error {
 }
 
 /** A dry run runs beside the live server: it gives up on a lock after this long rather than queue the server's statements behind it. */
-export const DRY_RUN_LOCK_TIMEOUT_MS = 3_000
+const DRY_RUN_LOCK_TIMEOUT_MS = 3_000
 const DRY_RUN_STATEMENT_TIMEOUT_MS = 120_000
 
 async function applyPending(sql: SQL, migrations: Migration[], dryRun: boolean): Promise<string[]> {

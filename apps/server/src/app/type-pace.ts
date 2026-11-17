@@ -2,7 +2,7 @@ import { TYPE_GAP_MS } from '../domains/leads/type-gap.ts'
 import type { Clock } from '../kernel/clock.ts'
 
 /** How long after the server's start the gap is kept: the backlog of a restart or a boot drains in this time. */
-export const TYPE_WINDOW_MS = 10 * 60_000
+const TYPE_WINDOW_MS = 10 * 60_000
 
 export type TypePace = () => Promise<void>
 

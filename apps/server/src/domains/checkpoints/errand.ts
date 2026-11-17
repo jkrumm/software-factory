@@ -29,10 +29,10 @@ export interface ErrandRaised extends ErrandInput {
   need: StatedNeed
 }
 
-export const MAX_SUMMARY = 200
-export const MAX_DETAIL = 4000
-export const MAX_TRIED = 2000
-export const MAX_CHECK = 2000
+const MAX_SUMMARY = 200
+const MAX_DETAIL = 4000
+const MAX_TRIED = 2000
+const MAX_CHECK = 2000
 
 /** Reads an Errand: one line for the owner, and the steps his hands must take. */
 export function readErrand(raw: unknown): Result<ErrandRaised, MissingFields> {

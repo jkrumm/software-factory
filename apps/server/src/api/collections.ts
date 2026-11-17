@@ -14,7 +14,7 @@ import { failure } from './written.ts'
 const iso = (at: Date): string => at.toISOString()
 
 /** A collection as the API names it: its pages oldest first, the lead page, what the card shows. */
-export const collectionView = (collection: CollectionRecord, stats: CollectionStats) => ({
+const collectionView = (collection: CollectionRecord, stats: CollectionStats) => ({
   id: collection.id,
   title: collection.title,
   repo: collection.repo,

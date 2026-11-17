@@ -13,11 +13,11 @@ export { type Host, HOSTS, hostOf }
  * still needed, an expiry and a key that replaces an older open request with the same key.
  */
 
-export const MAX_TEXT = 4000
-export const MAX_COMMAND = 2000
-export const MAX_SUMMARY_LINE = 200
+const MAX_TEXT = 4000
+const MAX_COMMAND = 2000
+const MAX_SUMMARY_LINE = 200
 /** the key's alphabet and length are `ask-human.sh`'s */
-export const KEY_RE = /^[A-Za-z0-9._:/@-]{1,80}$/
+const KEY_RE = /^[A-Za-z0-9._:/@-]{1,80}$/
 const SOURCE_RE = /^[a-z0-9][a-z0-9._:-]{0,39}$/
 
 /** Sources whose requests go through the Errand screen like a lead's Errand: an agent's `ask-human`, which may ask for what a token can do. */

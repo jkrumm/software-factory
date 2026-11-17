@@ -105,7 +105,7 @@ export interface AcceptanceEvidence {
 }
 
 /** The most characters of one statement kept; a longer line is cut, never refused. */
-export const MAX_STATEMENT_CHARS = 500
+const MAX_STATEMENT_CHARS = 500
 
 /** What leads put before the status: a list marker, a number, `AC2:`, bold or backticks. */
 const LEAD_IN =

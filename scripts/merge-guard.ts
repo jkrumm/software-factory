@@ -16,7 +16,7 @@
  */
 import { spawnSync } from 'node:child_process'
 
-export const MIGRATIONS_PATH = 'apps/server/migrations'
+const MIGRATIONS_PATH = 'apps/server/migrations'
 const MIGRATION_FILE = /^(\d{4})_[a-z0-9_]+\.sql$/
 /** Numbers two applied migrations already share (`SHARED_NUMBERS` in migrate.ts). */
 export const SHARED_NUMBERS = new Set(['0993'])
@@ -73,7 +73,7 @@ export function masterRed(runs: CiRun[] | null): string | null {
 const newest = (runs: CiRun[]): CiRun | undefined => runs.find((run) => run.conclusion !== 'cancelled')
 
 /** The head's CI verdict: a refusal reason, or null when its newest non-cancelled run finished green. */
-export function headRed(runs: CiRun[] | null, sha: string): string | null {
+function headRed(runs: CiRun[] | null, sha: string): string | null {
   if (runs === null)
     return `the head's CI runs cannot be read (gh failed): refusing, a merge needs green CI on ${sha.slice(0, 7)}`
   const last = newest(runs)

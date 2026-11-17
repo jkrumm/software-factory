@@ -21,6 +21,3 @@ export function key(...parts: readonly (string | number)[]): Key {
     })
     .join(':') as Key
 }
-
-/** A key read back from storage or a request, as given. */
-export const keyOf = (text: string): Key | null => (text === '' ? null : (text as Key))

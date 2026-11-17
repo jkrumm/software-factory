@@ -80,7 +80,7 @@ type Failure = { status: 404 | 409 | 503; body: ErrorBody }
 const nameOf = (issue: IssueId) => `Issue ${issueNumber(issue)}`
 
 /** Every way a planning verb says no, as the status and the body a person reads. */
-export function failureOf(error: PlanningError | PortError): Failure {
+function failureOf(error: PlanningError | PortError): Failure {
   switch (error.kind) {
     case 'unknown_issue':
       return { status: 404, body: failure(`no ${nameOf(error.issue)}`, 'not_found') }

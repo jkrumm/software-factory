@@ -105,7 +105,7 @@ const legacyDecision = (row: Record<string, unknown>): LegacyDecision => ({
 })
 
 /** The old core's Issues, events and decisions, grouped by Issue. */
-export async function readLegacy(sql: SQL, legacy: string) {
+async function readLegacy(sql: SQL, legacy: string) {
   const L = schema(legacy)
   const issues = (await sql.unsafe(`SELECT * FROM ${L}.issues ORDER BY id`)) as Record<string, unknown>[]
   const events = (await sql.unsafe(

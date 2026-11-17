@@ -20,7 +20,7 @@ export interface Claimant {
 const sinceMs = (c: Claimant): number => c.since?.getTime() ?? Number.POSITIVE_INFINITY
 
 /** Urgent first, then the earliest wait end, then the older Issue (the lower number): a total order, the same on every try. */
-export const claimOrder = (a: Claimant, b: Claimant): number => {
+const claimOrder = (a: Claimant, b: Claimant): number => {
   const byUrgent = Number(b.urgent) - Number(a.urgent)
   if (byUrgent !== 0) return byUrgent
   const aSince = sinceMs(a)
@@ -79,7 +79,7 @@ export function claimRoom(input: {
  * place that Issue needs. A stall (a wall, an unreported stop, a block, a regression) keeps it: the lead is alive and
  * the steward ends the stall.
  */
-export const CLAIM_FREEING_WAITS: ReadonlySet<string> = new Set([
+const CLAIM_FREEING_WAITS: ReadonlySet<string> = new Set([
   'timer',
   'dependency',
   'decision',

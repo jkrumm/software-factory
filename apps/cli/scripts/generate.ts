@@ -11,13 +11,13 @@ import { createApp, OPENAPI_PATH } from '@software-factory/server/app'
 import * as z from 'zod'
 import type { BodyField, QueryFlag } from '../src/operation.ts'
 
-export const OUTPUT = join(import.meta.dir, '..', 'src', 'generated', 'operations.ts')
+const OUTPUT = join(import.meta.dir, '..', 'src', 'generated', 'operations.ts')
 
 /** Words the hand-written verbs own; a generated group may not take one. */
-export const RESERVED_GROUPS = ['version', 'role', 'help', 'hook', 'slot', 'follow']
+const RESERVED_GROUPS = ['version', 'role', 'help', 'hook', 'slot', 'follow']
 
 /** Flags the CLI itself owns (`run.ts`); a query parameter or a body property may not take one. */
-export const RESERVED_FLAGS = ['format', 'help', 'body', 'schema']
+const RESERVED_FLAGS = ['format', 'help', 'body', 'schema']
 
 const OPERATION_ID = /^([a-z][a-z0-9-]*)\.([a-z][a-z0-9-]*)$/
 const METHODS = ['get', 'post', 'put', 'patch', 'delete'] as const
@@ -329,7 +329,7 @@ export function render(operations: Generated[]): string {
 const ROOT = join(import.meta.dir, '..', '..', '..')
 
 /** Formats the file with the repo's oxfmt, so `oxfmt --check` and the staleness check never disagree. */
-export async function format(text: string): Promise<string> {
+async function format(text: string): Promise<string> {
   const proc = Bun.spawn([join(ROOT, 'node_modules', '.bin', 'oxfmt'), `--stdin-filepath=${OUTPUT}`], {
     cwd: ROOT,
     stdin: new Blob([text]),

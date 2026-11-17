@@ -6,7 +6,7 @@ import { ok, type PortError, type Result } from '../kernel/result.ts'
 import type { PlanningDeps } from './planning-deps.ts'
 
 /** Shadow rows are kept as long as the host samples they sit beside. */
-export const SLOT_SHADOW_KEEP_MS = 14 * 86_400_000
+const SLOT_SHADOW_KEEP_MS = 14 * 86_400_000
 
 export interface SlotAimDeps extends PlanningDeps {
   mode: AimMode

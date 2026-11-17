@@ -8,7 +8,7 @@ export const AIM_QUIET_MS = 5 * 60_000
 /** Samples (one a minute, newest first) the swap in use is judged over. */
 export const SWAP_WINDOW = 5
 /** Swap in use must rise by this many percentage points of RAM across the window to count as growing. */
-export const SWAP_GROWTH_PCT = 0.5
+const SWAP_GROWTH_PCT = 0.5
 
 export interface AimState {
   /** the slots the aim allows, between 1 and the ceiling */

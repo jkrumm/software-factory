@@ -15,7 +15,7 @@ export interface PageDeps extends CheckpointDeps {
 }
 
 /** Most pages one pass sends. */
-export const SEND_BATCH = 5
+const SEND_BATCH = 5
 
 export interface PagesSent {
   sent: string[]

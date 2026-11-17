@@ -20,7 +20,7 @@ const listeners = new Set<() => void>()
 const isSize = (value: unknown): value is ReadingSize => READING_SIZES.includes(value as ReadingSize)
 
 /** The stored size, the default when none is stored or the browser keeps no storage. */
-export function storedReadingSize(): ReadingSize {
+function storedReadingSize(): ReadingSize {
   try {
     const value = localStorage.getItem(KEY)
     return isSize(value) ? value : 'default'

@@ -128,7 +128,7 @@ export function checkSpecScreen(answer: SpecScreenAnswer): SpecScreenChecked {
 }
 
 /** The Spec's content as the screen reads it: scrubbed, and cut with the cut said. */
-export function screenedContent(content: string): string {
+function screenedContent(content: string): string {
   const clean = scrub(content)
   if (clean.length <= SPEC_SCREEN_CONTENT_MAX) return clean
   return `${clean.slice(0, SPEC_SCREEN_CONTENT_MAX)}\n[cut: ${clean.length - SPEC_SCREEN_CONTENT_MAX} more characters]`
@@ -154,7 +154,7 @@ export function specScreenRequest(input: {
   }
 }
 
-export const scrubPrecedent = (precedent: SpecPrecedent): SpecPrecedent => ({
+const scrubPrecedent = (precedent: SpecPrecedent): SpecPrecedent => ({
   ...precedent,
   title: scrub(precedent.title).slice(0, 200),
   note: precedent.note === null ? null : scrub(precedent.note).slice(0, 2000),

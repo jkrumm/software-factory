@@ -48,7 +48,7 @@ export const DEFAULT_THRESHOLDS: Thresholds = {
   load: { perThread: 3, fallbackAbsolute: 20, sustainMin: 15, clearMin: 10 },
   silent: { staleMin: 10, clearMin: 10 },
 }
-export const DEFAULT_REFILE_AFTER_MIN = 360
+const DEFAULT_REFILE_AFTER_MIN = 360
 
 const OverrideSchema = z.strictObject({
   memory: z.strictObject(shapes.memory).partial().optional(),

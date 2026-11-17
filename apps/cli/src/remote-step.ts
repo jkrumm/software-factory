@@ -17,7 +17,7 @@ import type { RemoteGrant, StepDisagreement, TestResult } from '@software-factor
  */
 
 /** The factory's step image: Ubuntu 24.04 as the VPS and CI's `ubuntu-latest`, git, make and the pinned bun. */
-export function stepDockerfile(): string {
+function stepDockerfile(): string {
   return [
     'FROM ubuntu:24.04',
     'ARG BUN',
@@ -38,7 +38,7 @@ export function imageOf(input: { bun: string; dockerfile: string | null }): { ta
   return { tag: `factory-step:repo-${digest.slice(0, 16)}`, dockerfile: input.dockerfile }
 }
 
-export const containerName = (id: string): string => `factory-step-${id}`
+const containerName = (id: string): string => `factory-step-${id}`
 
 /** A slot id as the CLI makes it (`<pid>-<uuid>`): letters, digits and dashes, so it goes into a shell line as it is. */
 export const isStepId = (id: string): boolean => /^[A-Za-z0-9-]{1,100}$/.test(id)
@@ -53,7 +53,7 @@ export const shq = (word: string): string => `'${word.replaceAll("'", `'\\''`)}'
 const PASSED_ENV = ['TERM', 'NO_COLOR', 'FORCE_COLOR', 'LANG', 'LC_ALL', 'TZ'] as const
 
 /** The cgroup slice every step container runs under: the host's own pressure is read without the steps' (`system.slice`). */
-export const STEP_SLICE = 'factory-steps.slice'
+const STEP_SLICE = 'factory-steps.slice'
 
 /** The version of `"packageManager": "bun@1.4.3"` in the repo's package.json; null when it names no bun. */
 export function bunOfPackage(packageJson: string): string | null {
@@ -70,7 +70,7 @@ export function bunOfPackage(packageJson: string): string | null {
  * The shell the step's container runs: a sampler of the cgroup's anonymous memory (the RSS the mini measures, not the page
  * cache `memory.peak` counts), the step, and its CPU time at the end.
  */
-export function stepWrapper(): string {
+function stepWrapper(): string {
   return [
     'cd "$FACTORY_STEP_CWD" || exit 125',
     "( m=0; while :; do a=$(awk '/^anon /{print $2}' /sys/fs/cgroup/memory.stat 2>/dev/null)",
@@ -85,7 +85,7 @@ export function stepWrapper(): string {
 }
 
 /** The install, with the network: a bun lockfile at the root is installed from the host's warm cache; a failure is the host's (125). */
-export function installWrapper(): string {
+function installWrapper(): string {
   return [
     'if [ -f bun.lock ] || [ -f bun.lockb ]; then',
     '  bun install --frozen-lockfile --ignore-scripts > /factory/install.log 2>&1 || {',
@@ -167,7 +167,7 @@ export function remoteScript(input: {
 }
 
 /** Before the snapshot travels: the project's bare repository, the cache directory and the image (built once per tag). */
-export function prepareScript(input: { repo: string; tag: string; bun: string }): string {
+function prepareScript(input: { repo: string; tag: string; bun: string }): string {
   return [
     'cd "$HOME" || exit 125',
     `mkdir -p factory-steps/.cache && { [ -d ${shq(input.repo)} ] || git init -q --bare ${shq(input.repo)}; } || exit 125`,
@@ -182,7 +182,7 @@ export function prepareScript(input: { repo: string; tag: string; bun: string })
 export const isHostFailure = (code: number): boolean => code === 255 || (code >= 125 && code <= 127)
 
 /** The ssh options of every call: no prompt, a short connect timeout, one shared connection per target. */
-export const sshOptions = (): string[] => [
+const sshOptions = (): string[] => [
   '-o',
   'BatchMode=yes',
   '-o',
@@ -286,14 +286,14 @@ export interface RemoteRun {
 }
 
 /** The lines of a run's output kept to read a failure from: more than the tail stored, for the timeout a test names. */
-export const OUTPUT_KEPT_LINES = 400
+const OUTPUT_KEPT_LINES = 400
 /** The lines of a red run's output stored when no failing test name parses. */
-export const DISAGREEMENT_TAIL_LINES = 40
+const DISAGREEMENT_TAIL_LINES = 40
 const DISAGREEMENT_TAIL_CHARS = 8000
 const MAX_DISAGREEMENT_TESTS = 200
 
 /** A test as the ledger names it: its suite and name. */
-export const testNameOf = (test: Pick<TestResult, 'suite' | 'name'>): string =>
+const testNameOf = (test: Pick<TestResult, 'suite' | 'name'>): string =>
   test.suite === '' ? test.name : `${test.suite} > ${test.name}`
 
 /** The timeout a line says a test hit ("timed out after 5000ms", "5 s"), in ms. */

@@ -9,10 +9,10 @@ import { err, ok, type PortError, type Result } from '../kernel/result.ts'
  * The key of the Spec a filer attached to an Issue: one per Issue, and the only way to tell it from a lead's Spec (the
  * queue holds the Issue for the first, never for the second). The SQL that reads the hold matches `filed-spec:%`.
  */
-export const filedSpecKey = (issue: IssueId): Key => key('filed-spec', issue)
+const filedSpecKey = (issue: IssueId): Key => key('filed-spec', issue)
 
 /** The title of a filed Spec: the one given, else the first `# ` heading, else the Issue's title. */
-export function specTitleOf(input: { content: string; given: string | undefined; fallback: string }): string {
+function specTitleOf(input: { content: string; given: string | undefined; fallback: string }): string {
   const heading = input.content.match(/^#[ \t]+(.+?)[ \t]*#*[ \t]*$/m)?.[1]?.trim()
   return (input.given?.trim() || heading || input.fallback).slice(0, NEW_ISSUE_SPEC_TITLE_MAX)
 }

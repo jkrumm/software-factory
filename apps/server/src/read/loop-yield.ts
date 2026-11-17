@@ -4,7 +4,7 @@ import { YIELD_LOOPS, type LoopYield, type LoopYieldModel, type LoopYieldWindow 
 import { percentile, windowOf } from './stats.ts'
 
 /** The two windows every loop is read over, in days. */
-export const YIELD_DAYS = [7, 30] as const
+const YIELD_DAYS = [7, 30] as const
 
 type YieldLoop = (typeof YIELD_LOOPS)[number]
 
@@ -27,7 +27,7 @@ export interface YieldRecord {
 const by = (a: string, b: string): number => (a < b ? -1 : a > b ? 1 : 0)
 
 /** One loop over one window, from its Issues (filed in the window) and its own record. Pure. */
-export function yieldWindow(
+function yieldWindow(
   issues: readonly YieldIssue[],
   record: YieldRecord,
   window: { days: number; from: Date; to: Date },

@@ -55,7 +55,7 @@ const kindOf = (kind: string | null): FlowIssue['kind'] => FLOW_KINDS.find((know
 
 const QueueRow = z.object({ project: z.string(), state: z.enum(['run', 'pace', 'drain']) })
 
-export const RECENT_MS = 24 * 3_600_000
+const RECENT_MS = 24 * 3_600_000
 
 /** The Issues by state, what closed in the last day, the 7-day trend, the counts per project and the queue state per scope. Read-only SQL. */
 export async function readFlow(

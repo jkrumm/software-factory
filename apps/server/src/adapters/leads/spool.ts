@@ -4,8 +4,8 @@ import { HookEventBody } from '@software-factory/contract'
 import { parseSpool, parseSummary, type SpoolLine, summarize, tryLock } from '@software-factory/contract/spool'
 
 /** An acknowledged spool larger than this is rotated once its session has been quiet for `QUIET_MS`. */
-export const ROTATE_BYTES = 64 * 1024
-export const QUIET_MS = 60_000
+const ROTATE_BYTES = 64 * 1024
+const QUIET_MS = 60_000
 /** How long a rotation waits for a hook that holds a session's lock. */
 const LOCK_WAIT_MS = 500
 
@@ -18,7 +18,7 @@ export interface ReplayResult {
 }
 
 /** A statement the database refused because of the data itself (SQLSTATE class 22: a NUL, a lone surrogate, ...): retrying cannot help. */
-export function isDataError(error: unknown): boolean {
+function isDataError(error: unknown): boolean {
   const errno = (error as { errno?: unknown } | null)?.errno
   return typeof errno === 'string' && errno.startsWith('22')
 }

@@ -91,7 +91,7 @@ An excerpt of `config/roles.json`, cut off before the end of the file:
 
 ```ts
 /** A light lead's second stall, or its second refused ship, moves it up. */
-export const MOVE_UP_AFTER = 2
+const MOVE_UP_AFTER = 2
 ```
 
 > [!NOTE]
@@ -154,22 +154,11 @@ A hook is the Claude Code event handler `factory hook <event>` that tells the fa
 - **It imports only `node:fs`** and the spool half of the contract, so it starts fast.
 
 ```ts
-export const HOOK_EVENTS = [
-  'session-start',
-  'user-prompt-submit',
-  'stop',
-  'stop-failure',
-  'notification',
-  'session-end',
-] as const
-```
-
-```ts
 /** How long a hook waits for another hook of its session before it writes a key that cannot collide. */
-export const LOCK_BUDGET_MS = 200
+const LOCK_BUDGET_MS = 200
 
 /** The post to the server may take this long and no longer. */
-export const POST_TIMEOUT_MS = 300
+const POST_TIMEOUT_MS = 300
 ```
 
 > [!WARNING]

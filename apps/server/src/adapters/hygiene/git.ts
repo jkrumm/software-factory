@@ -24,7 +24,7 @@ export const defaultTools = (git = 'git'): Tools => ({
   gh: 'gh',
 })
 
-export const GIT_TIMEOUT_MS = 60_000
+const GIT_TIMEOUT_MS = 60_000
 
 /** A command that ran and did not succeed, or did not finish; `kind` is what the port reports. */
 export class ProcessFailed extends Error {

@@ -6,7 +6,7 @@ import type { RecentEntry } from './recent.ts'
 export const MAX_ISSUES = 8
 const MAX_OTHERS = 5
 /** Issues shown for an empty query: the most recently active open ones. */
-export const RECENT_ISSUES = 5
+const RECENT_ISSUES = 5
 
 export interface IssueEntry {
   number: number

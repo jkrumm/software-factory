@@ -93,7 +93,7 @@ export function clearPending(): void {
   if (typeof Highlight !== 'undefined') CSS.highlights.delete(PENDING)
 }
 
-export const rectOf = (range: Range): SelectionRect => {
+const rectOf = (range: Range): SelectionRect => {
   const { top, bottom, left } = range.getBoundingClientRect()
   return { top, bottom, left }
 }

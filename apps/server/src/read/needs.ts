@@ -14,7 +14,7 @@ export { isWorkRepo, REDACTED_SUMMARY, REDACTED_TITLE }
 export type { OpenProject } from './work.ts'
 
 /** Waiting longer than this is stale. */
-export const STALE_MS = 24 * 3_600_000
+const STALE_MS = 24 * 3_600_000
 
 /** A need with the scope the redaction needs; the scope never leaves the server. */
 export type ScopedNeed = Omit<NeedItem, 'redacted'> & { work: boolean }
@@ -56,7 +56,7 @@ export function needsModel(needs: ScopedNeeds, options: { redact: boolean }): Ne
 }
 
 /** A held signal's source in a person's word: the origin's, or what the tool watches; never the tool's own name. */
-export function sourceWords(source: string, origin: string): string {
+function sourceWords(source: string, origin: string): string {
   if (source === 'kuma') return 'an uptime check'
   if (source === 'beszel') return 'the server monitor'
   if (source === 'launchd') return 'a background job'
@@ -71,7 +71,7 @@ export function sourceWords(source: string, origin: string): string {
  * The repo the Judge's note on an unrouted monitor names: the one open project whose name the note mentions as a whole
  * word; none, or more than one, is no proposal (the owner types the repo).
  */
-export function proposalOf(note: string | null, open: readonly OpenProject[]): string | null {
+function proposalOf(note: string | null, open: readonly OpenProject[]): string | null {
   if (note === null) return null
   const escaped = (name: string) => name.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')
   const named = open.filter((p) => new RegExp(`(?<![\\w-])${escaped(p.name)}(?![\\w-])`, 'i').test(note))

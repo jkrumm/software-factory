@@ -1,9 +1,9 @@
 import type { DoorSourceRow, UnroutedRow } from './ports.ts'
 
 /** A source refused this many times since its last accepted message is a line (while the last refusal is recent). */
-export const DOOR_SOURCE_REFUSED_MIN = 3
+const DOOR_SOURCE_REFUSED_MIN = 3
 /** A source with no accepted message for this long is a line (a stale token, a monitor that was removed). */
-export const DOOR_SOURCE_QUIET_MS = 14 * 24 * 3_600_000
+const DOOR_SOURCE_QUIET_MS = 14 * 24 * 3_600_000
 
 /** An app's feedback token is a door source named `feedback-<app>`: an app that says nothing is normal, not a stale token. */
 const isFeedback = (source: string): boolean => source.startsWith('feedback-')

@@ -95,7 +95,7 @@ export async function nowCursor(sql: SQL): Promise<Cursor> {
   return row ? { txid: BigInt(row.txid_text), seq: BigInt(row.seq_text) } : { txid: 0n, seq: 0n }
 }
 
-export async function assertResumable(sql: SQL, cursor: Cursor): Promise<void> {
+async function assertResumable(sql: SQL, cursor: Cursor): Promise<void> {
   if (cursor.txid === 0n && cursor.seq === 0n) return
   const rows: { max_seq: string; next_txid: string }[] = await sql`
     SELECT coalesce(max(seq), 0)::text AS max_seq, pg_snapshot_xmax(pg_current_snapshot())::text AS next_txid
@@ -172,7 +172,7 @@ const sleep = (ms: number, signal: AbortSignal): Promise<void> =>
     signal.addEventListener('abort', done)
   })
 
-export const KEEPALIVE_MS = 15_000
+const KEEPALIVE_MS = 15_000
 const BATCH = 200
 
 /**

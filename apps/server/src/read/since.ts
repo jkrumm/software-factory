@@ -12,7 +12,7 @@ import { plain } from './words.ts'
 import { isWorkRepo, loadOpenProjects, REDACTED_TITLE } from './work.ts'
 
 /** Items a category lists; its count is not capped. */
-export const SINCE_ITEMS = 8
+const SINCE_ITEMS = 8
 
 const Row = z.object({
   issue_id: z.string().nullable(),

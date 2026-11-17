@@ -181,7 +181,7 @@ const list = (value: unknown): unknown[] => (Array.isArray(value) ? value : [])
 const clip = (value: string, max = 2000): string => (value.length > max ? `${value.slice(0, max - 1)}…` : value)
 
 /** The new origin of an old Issue, from its source (and, for an alert, which system raised it). */
-export function originOf(source: string, sourceKey: string): Origin {
+function originOf(source: string, sourceKey: string): Origin {
   if (source === 'request') return 'you'
   if (source === 'github') return 'github'
   if (source === 'plan' || source === 'upkeep') return 'factory'

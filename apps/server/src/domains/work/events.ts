@@ -12,7 +12,7 @@ const issueRef = z.custom<IssueId>((value) => typeof value === 'string' && idOf(
 const checkpoint = z.object({ id: text, summary: text })
 
 /** The verdicts on an artifact (`docs/language.md`, Verdict). */
-export const VERDICTS = ['looks_good', 'with_notes', 'changes', 'no_longer_applies'] as const
+const VERDICTS = ['looks_good', 'with_notes', 'changes', 'no_longer_applies'] as const
 
 /**
  * Every event an Issue takes, with its payload. The words are `docs/language.md`'s; an event that names an attempt, a

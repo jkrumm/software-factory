@@ -134,20 +134,20 @@ export function useProjectIndex() {
 }
 
 /** One project's page, its plan rows and its hygiene: the route's loader warms them, the hooks keep them current. */
-export const projectPageQuery = (name: string) => ({
+const projectPageQuery = (name: string) => ({
   queryKey: ['project-page', name],
   queryFn: ({ signal }: { signal: AbortSignal }) => fetchProjectPage(name, signal),
 })
-export const projectPlanQuery = (name: string) => ({
+const projectPlanQuery = (name: string) => ({
   queryKey: ['project-plan', name],
   queryFn: ({ signal }: { signal: AbortSignal }) => fetchProjectPlan(name, signal),
 })
-export const projectHygieneQuery = (name: string) => ({
+const projectHygieneQuery = (name: string) => ({
   queryKey: ['project-hygiene', name],
   queryFn: ({ signal }: { signal: AbortSignal }) => fetchProjectHygiene(name, signal),
 })
 
-export const projectSetupQuery = (name: string) => ({
+const projectSetupQuery = (name: string) => ({
   queryKey: ['project-setup', name],
   queryFn: ({ signal }: { signal: AbortSignal }) => fetchProjectSetup(name, signal),
 })
@@ -339,12 +339,12 @@ export function useHost() {
 }
 
 /** Every Issue card, open and closed (550 KB at 500 Issues): what the command palette searches. */
-export const issueCardsQuery = {
+const issueCardsQuery = {
   queryKey: ['issue-cards'],
   staleTime: 0,
   queryFn: ({ signal }: { signal: AbortSignal }) => fetchIssueCards(signal),
 }
-export const artifactListQuery = {
+const artifactListQuery = {
   queryKey: ['artifact-list'],
   staleTime: 0,
   queryFn: ({ signal }: { signal: AbortSignal }) => fetchArtifacts(signal),
@@ -397,7 +397,7 @@ export function useOpenIssueCards() {
 export const PREFETCH_STALE_MS = 30_000
 
 /** The detail of one item that waits: the same invalidation as the lists, so an answer elsewhere shows at once. */
-export const decisionQuery = (id: string) => ({
+const decisionQuery = (id: string) => ({
   queryKey: ['decision', id],
   queryFn: ({ signal }: { signal: AbortSignal }) => fetchDecision(id, signal),
 })
@@ -429,7 +429,7 @@ export function useArtifact(id: string, revision?: number, enabled = true) {
 }
 
 /** One Issue's page, by number or ref. */
-export const issueQuery = (id: string) => ({
+const issueQuery = (id: string) => ({
   queryKey: ['issue', id],
   queryFn: ({ signal }: { signal: AbortSignal }) => fetchIssue(id, signal),
 })
