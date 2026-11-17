@@ -69,9 +69,7 @@ describe('checkPage', () => {
     expect(check(`[a](${REPO_URL}/blob/master/README.md)`)[0]).toContain('pin it')
     expect(check(`[a](${REPO_URL}/blob/${OTHER}/README.md)`)[0]).toContain('not on master')
     expect(check(`[a](${REPO_URL}/blob/${SHA}/gone.ts)`)[0]).toContain('does not exist')
-    expect(check(`[a](${REPO_URL}/blob/${SHA}/apps/server/src/domains/work/table.ts#L30-L41)`)[0]).toContain(
-      'outside',
-    )
+    expect(check(`[a](${REPO_URL}/blob/${SHA}/apps/server/src/domains/work/table.ts#L30-L41)`)[0]).toContain('outside')
   })
 
   test('links inside fenced and inline code are not links', () => {

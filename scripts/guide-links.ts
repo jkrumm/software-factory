@@ -84,7 +84,8 @@ export function checkPage(file: string, text: string, git: Git, exists: (path: s
     }
     if (fence !== null) return
     if (/^\s*:::/.test(raw)) add(n, '`:::` container: GitHub shows it as text; use a GitHub alert (> [!NOTE])')
-    if (/^\s*<[A-Z][\w.]*[\s/>]/.test(raw) || /^\s*<script\b/.test(raw)) add(n, 'component tag: GitHub shows it as text')
+    if (/^\s*<[A-Z][\w.]*[\s/>]/.test(raw) || /^\s*<script\b/.test(raw))
+      add(n, 'component tag: GitHub shows it as text')
 
     for (const m of stripInlineCode(raw).matchAll(LINK)) {
       const target = m[2] ?? ''
@@ -112,7 +113,10 @@ export function checkPage(file: string, text: string, git: Git, exists: (path: s
     const count = git.lines(link.sha, link.path)
     if (count === null) return add(n, `${url}: ${link.path} does not exist at ${link.sha.slice(0, 12)}`)
     if (link.to !== undefined && (link.to > count || (link.from ?? 1) > link.to))
-      add(n, `${url}: lines ${link.from}-${link.to} are outside ${link.path} (${count} lines) at ${link.sha.slice(0, 12)}`)
+      add(
+        n,
+        `${url}: lines ${link.from}-${link.to} are outside ${link.path} (${count} lines) at ${link.sha.slice(0, 12)}`,
+      )
   }
 }
 
