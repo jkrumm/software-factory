@@ -16,3 +16,4 @@ leads: 12 # NL32: the merge window serialises merges (~10 an hour), so a lead wa
 slots: { run: 30m } # `make check-fast` runs in one slot; a rerun of one heavy suite to reproduce a CI failure fits
 budgets: { fast: 5m, peak: 4GiB, fail: 30% } # the throughput loop (docs/architecture.md): a day over one of these is a signal on this repo
 checks: { fast: make check-fast, full: make check, ci: true } # leads run fast locally; CI runs the full gate sharded (.github/workflows/ci.yml)
+hygiene: { probes: [{ name: readme, target: docs-check }] } # the README's counts and lists against the code (scripts/readme-check.ts)

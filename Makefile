@@ -1,10 +1,11 @@
 .DEFAULT_GOAL := help
-.PHONY: help check check-fast check-steps check-fast-steps check-static test test-unit test-unit-changed test-scenarios merge-guard e2e fmt deploy rollback verify version
+.PHONY: help docs-check check check-fast check-steps check-fast-steps check-static test test-unit test-unit-changed test-scenarios merge-guard e2e fmt deploy rollback verify version
 
 help:
 	@echo "make check   install, format, lint, shellcheck, tsc, Console tsc, tokens, artifact templates and InfoHint definitions, e2e tsc, boundaries, retired words, state words on screens, public scan, Issue diagram, generated CLI, tests, scenarios, Console build and Playwright (the merge gate)"
 	@echo "make check-fast  the lead's local check (project.yaml checks.fast): everything of make check up to the tests, then the unit tests of the files the branch changed (CHECK_FAST_ALL=1: all of them); CI runs the full gate sharded"
 	@echo "make merge-guard  run right before merging a PR: refuses unless the branch contains origin/master, its migration numbers are free, the head's CI finished green and master's last finished CI run is not red (MERGE_GUARD_ARGS=--wait waits for the head's CI; --allow-red only for the change that fixes a red master)"
+	@echo "make docs-check  the README's counts and lists (event kinds, callers, tokens, screens, domains, states, Console port and writes) against the code; also this repo's hygiene probe \`readme\`"
 	@echo "make test    the unit tests and the scenarios"
 	@echo "make e2e     build the Console and run its Playwright suite against a seeded server (tests/e2e; screenshots land in tests/e2e/out/screenshots)"
 	@echo "make fmt     apply formatting"
@@ -66,6 +67,8 @@ check-static:
 	@bun scripts/boundaries.ts
 	@echo "==> retired words (scripts/retired-words.ts)"
 	@bun scripts/retired-words.ts
+	@echo "==> README agrees with the code (make docs-check)"
+	@$(MAKE) --no-print-directory docs-check
 	@echo "==> state words on screens (scripts/vocabulary.ts)"
 	@bun scripts/vocabulary.ts
 	@echo "==> public hygiene (scripts/public-scan.ts)"
@@ -144,3 +147,8 @@ version:
 # A lead runs this right before it merges its pull request (AGENTS.md "Merging"): rebased, free migration number, green master.
 merge-guard:
 	@bun scripts/merge-guard.ts $(MERGE_GUARD_ARGS)
+
+# The README states counts and lists (event kinds, callers, tokens, screens, domains, states, the Console's port and writes): this reads them
+# from the code and fails on a README that disagrees. A step of check-static and this repo's hygiene probe `readme` (project.yaml `hygiene.probes`).
+docs-check:
+	@bun scripts/readme-check.ts
