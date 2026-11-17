@@ -100,13 +100,15 @@ test('attribute: a worktree with no process has no row, an unknown cwd claims no
   expect(costs.map((c) => [c.path, c.procs])).toEqual([['/w/a', 2]])
 })
 
-test('learnedLeadMib: p80 nearest rank of the newest ten, null under three attempts', () => {
+test('learnedLeadMib: median nearest rank of the newest ten, null under three attempts', () => {
   expect(learnedLeadMib([])).toBeNull()
   expect(learnedLeadMib([100, 200])).toBeNull()
-  expect(learnedLeadMib([300, 100, 200])).toBe(300)
-  expect(learnedLeadMib([100, 200, 300, 400, 500])).toBe(400)
-  const twelve = [10, 20, 30, 40, 50, 60, 70, 80, 90, 100, 9999, 9999]
-  expect(learnedLeadMib(twelve)).toBe(80)
+  expect(learnedLeadMib([300, 100, 200])).toBe(200)
+  expect(learnedLeadMib([100, 200, 300, 400, 500])).toBe(300)
+  // only the newest ten count, and a burst among them does not set the figure
+  const twelve = [10, 20, 30, 40, 50, 60, 70, 80, 90, 9999, 9999, 9999]
+  expect(learnedLeadMib(twelve)).toBe(50)
+  expect(learnedLeadMib([1000, 1000, 1000, 1000, 1000, 6000, 6000, 6000, 6000, 6000])).toBe(1000)
 })
 
 test('parseLsofCwd: pid and path lines pair up; noise is skipped', () => {
@@ -151,14 +153,14 @@ const repeat = (n: number, peak: AttemptPeak): AttemptPeak[] => Array.from({ len
 
 test('learnLeadCost: ten attempts at 8 GiB followed by three at 3 GiB learn 3 GiB', () => {
   const newestFirst = [...repeat(3, gib(3)), ...repeat(10, gib(8))]
-  expect(learnLeadCost(newestFirst)).toEqual({ mib: 3 * 1024, basis: 'falling', p80Mib: 8 * 1024 })
+  expect(learnLeadCost(newestFirst)).toEqual({ mib: 3 * 1024, basis: 'falling', typicalMib: 8 * 1024 })
 })
 
-test('learnLeadCost: three at 8 GiB after ten at 3 GiB still learn by the p80 rule', () => {
-  const newestFirst = [...repeat(3, gib(8)), ...repeat(10, gib(3))]
-  expect(learnLeadCost(newestFirst)).toEqual({ mib: 8 * 1024, basis: 'p80', p80Mib: 8 * 1024 })
+test('learnLeadCost: eight of ten at 8 GiB after five at 3 GiB still learn the median', () => {
+  const newestFirst = [...repeat(8, gib(8)), ...repeat(5, gib(3))]
+  expect(learnLeadCost(newestFirst)).toEqual({ mib: 8 * 1024, basis: 'median', typicalMib: 8 * 1024 })
   // one of the newest three still high: no fall is believed
-  expect(learnLeadCost([gib(3), gib(3), gib(8), ...repeat(10, gib(8))])?.basis).toBe('p80')
+  expect(learnLeadCost([gib(3), gib(3), gib(8), ...repeat(10, gib(8))])?.basis).toBe('median')
 })
 
 test('learnLeadCost: the falling figure is the largest of the three, and only settled attempts count', () => {
@@ -169,9 +171,9 @@ test('learnLeadCost: the falling figure is the largest of the three, and only se
     mib: 4 * 1024,
     basis: 'falling',
   })
-  // fewer than three settled: the p80 rule
+  // fewer than three settled: the median rule
   expect(learnLeadCost([gib(1, false), gib(2), gib(4), ...old.map((a) => ({ ...a, settled: false }))])?.basis).toBe(
-    'p80',
+    'median',
   )
 })
 

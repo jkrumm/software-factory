@@ -288,3 +288,14 @@ Report `docs/strategy/2026-11-next/report.html`, definition `docs/strategy/2026-
   and the next lead starts on the `lead` row with why and the light lead's last words in its brief. Never twice. Not
   built: a class of alert whose fix is one config line (none is named by a stored fact today), and triage asking for the
   seat itself (agent-workflows' unused `factory.classify` stays unused: the rule is deterministic first).
+- **NL34 The lead fit reserves a lead's median peak, not its p80 (Issue 1832, 2026-11-17).** The throughput loop ranked
+  host memory the largest queue cost of this repo: 9298 minutes over 7 days, 9283 of it `memory_fit`, a lead that did not
+  fit the free memory (shutterflow, basalt-ui, agent-workflows most). Over 2026-11-15 to 11-17 (`read capacity-loop`)
+  `memory_fit` held 159 queued hours with 303 idle seat-hours, while memory cost 0.7 idle seat-hours and 3 minutes of pressure
+  (swap p50 2.3 %, max 12 % against the 75 % ceiling) and the lead class held a mean 4.6 GiB over 13 to 22 leads. A lead's
+  peak is a burst, so the p80 of ten bursts reserved for every candidate (and for every young lead's growth) was far above
+  what leads hold together. The figure is now the median (nearest rank) of the newest ten peaks; the `falling` rule, the
+  three-attempt minimum, the headroom, the swap and pressure ceilings and the slot grant are unchanged. Cost: a repo whose
+  bursts exceed its median is admitted into a host that may then swap; the ceilings stop the next admission, not the burst.
+  Revert to 0.8 (`LEAD_SHARE`) if `idleSeatHoursMemory` or `minutesUnderPressure` rises over the three days the loop reads.
+  Not changed: the read side's plain p80 (`read/lead-costs.ts`), which shows the burst.

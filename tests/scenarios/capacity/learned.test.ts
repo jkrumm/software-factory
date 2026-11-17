@@ -55,8 +55,8 @@ const hostSamples = async (rows: { load: number; used: number; swap?: number }[]
 }
 
 test('a heavy repo whose second lead would not fit stays queued with the numbers, a small repo is admitted', async () => {
-  // four past attempts of the heavy repo, peaks 14000..18000 MiB (p80 18000; the newest three, 14000..16000, all below it: the figure falls to 16000), three of the small one at 400 MiB
-  for (const [index, peak] of [14_000, 15_000, 16_000, 18_000].entries()) {
+  // seven past attempts of the heavy repo, peaks 14000, 15000, 16000, then four of 18000 MiB (median 18000; the newest three, 14000..16000, all below it: the figure falls to 16000), three of the small one at 400 MiB
+  for (const [index, peak] of [14_000, 15_000, 16_000, 18_000, 18_000, 18_000, 18_000].entries()) {
     await sql()`
       INSERT INTO factory.lead_samples (at, worktree, repo, issue, attempt, rss_mib, procs)
       VALUES (now() - ${index + 1} * interval '1 day', ${`/wt/heavy-${index}`}, ${'heavy'}, ${9000 + index}, 1, ${peak}, 5)`
@@ -88,7 +88,7 @@ test('a heavy repo whose second lead would not fit stays queued with the numbers
   expect(reasonOf(answer, second)).toMatchObject({
     kind: 'memory',
     message:
-      `memory: a lead of heavy takes ~15.6 GiB outside test slots (the largest of the newest 3 settled leads, all below the p80 of 17.6 GiB), the host has 16 GiB free, ` +
+      `memory: a lead of heavy takes ~15.6 GiB outside test slots (the largest of the newest 3 settled leads, all below the median of 17.6 GiB), the host has 16 GiB free, ` +
       // the small lead admitted in this pass is young and takes its 400 MiB before the sample shows it
       'of which 1 young lead still takes 0.4 GiB more, headroom 2.6 GiB',
   })
