@@ -22,7 +22,7 @@ check, `docs/architecture.md`).
 | **Work repo** | A repo no `project.yaml` describes, or whose `project.yaml` says `work: true`. The read token never sees its words | |
 | **Issue** | One unit of work: one repo, one branch, one ship. Warp's work item | Item, task, ticket. A GitHub issue is a signal |
 | **State** | The stored name of where an Issue is, never a word a screen shows (screens show the words of "Where work stands" below): `settling` (triage is not done; shown as Held), `queued` (no lead has started it; shown as Ready or Held by its queue reason), `working` (a lead is running now; shown as Running), `waiting` (a lead started and the Issue is paused on a named wait; shown as Paused), `watching` (shipped and deployed, the watch is on: the factory runs Verify and the probes, and the Issue closes when they pass; shown as Checking), `closed`. Every count is of Issues, never sessions | Phase, as a field |
-| **Outcome** | How a closed Issue ended: `done`, `dropped` (its lead gave it up, with a reason), `healed` (an incident that went away before a lead started), `cancelled` (the owner's stop) | |
+| **Outcome** | How a closed Issue ended: `done`, `dropped` (its lead gave it up, with a reason), `healed` (an incident that went away before a lead started), `cancelled` (the owner's stop, or a filer's withdrawal of the Issue its own signal made before a lead took it) | |
 | **Event** | A fact recorded on an Issue, stored with who sent it and what it did. State is derived from events, never the other way | |
 | **Kind** | What an Issue is: feature, bug, chore, docs, incident. Intake files an owner's or agent's request as feature; triage may refine it when it settles the Issue. A failing check of a project's default branch is an incident, never a bug | |
 | **Size** | Triage's judgment of how much work an Issue is: small, medium, large. Kept on the Issue when triage settles it; none for an Issue the rules settled | |
@@ -200,12 +200,12 @@ checkpoint is for that one only: a late one the factory sent is ignored, and a l
 | `watch_passed` | Verify ended the watch green | factory |
 | `regressed` | The change broke something; the lead goes back to work twice, the third time it is a stall | factory |
 | `reopened` | A closed Issue opens again within 30 days | owner, factory |
-| `cancelled` | The owner's stop | owner |
+| `cancelled` | The owner's stop; or the filer's withdrawal (`issue withdraw`), sent by the factory with `by` naming the source | owner, orchestrator, factory |
 | `closed` | Ended without a watch: done or dropped by its lead, healed before a lead started | lead, factory |
 
 ## Also separated
 
-- **Cancel** is the owner's stop of an Issue. "Stop" stays Claude Code's hook.
+- **Cancel** is the owner's stop of an Issue; **withdraw** is the filer's take-back of an Issue only its own signals made, while no lead has it. "Stop" stays Claude Code's hook.
 - **Review level** (standard, deep) is not **model tier** (haiku, sonnet, opus).
 - **Owner class** (product direction, spend, irreversible data loss, other people, security policy, big architecture)
   is not a classification field.

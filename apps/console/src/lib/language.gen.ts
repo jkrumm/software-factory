@@ -21,7 +21,8 @@ export const LANGUAGE = {
     'The share of prompt tokens a lead read from the cache instead of fresh. What to do: higher is cheaper; a low share on a long attempt means the context was rebuilt, so look in Activity for a restart or a compaction',
   caller:
     "Who a request comes from, decided by its token: owner, orchestrator (the owner's delegate agent: the owner's rights bar ten routes, its own actor in the log), agent (a lead session), machine (the alert door), signal (Hermes, which files the owner's words), read (the surfaces)",
-  cancelled: "Outcome: the owner's stop",
+  cancelled:
+    "Outcome: the owner's stop, or a filer's withdrawal of the Issue its own signal made before a lead took it",
   chain: 'The dependency graph of Issues and plan rows, across projects. What decides what can run at once',
   change:
     'One row of the change stream: a kind, ids and states, never words. Its cursor (<txid>.<seq>) resumes the stream without losing or doubling a change',
@@ -107,7 +108,7 @@ export const LANGUAGE = {
   'not started': 'The Issues no lead has begun: Ready and Held. The trend shows them as one line',
   origin: 'Where it came from, in words a person uses: you, application, infrastructure, GitHub, feedback, factory',
   outcome:
-    "How a closed Issue ended: done, dropped (its lead gave it up, with a reason), healed (an incident that went away before a lead started), cancelled (the owner's stop)",
+    "How a closed Issue ended: done, dropped (its lead gave it up, with a reason), healed (an incident that went away before a lead started), cancelled (the owner's stop, or a filer's withdrawal of the Issue its own signal made before a lead took it)",
   overview:
     "The Console's home screen (/): what needs the owner, production, what shipped in a day, the host and the queue's binding reason, then the flow's counts and trend. It was the Flow screen",
   owed: 'Working in a repo without a claim, because the wait that gave it up has ended. Owed Issues are served first, so a new lead never takes the place a resumed one waits for. Among themselves they are served by the earliest wait end, then the Issue number; an owed lead is held up only by those ahead of it in that order, never by itself or one behind it. An owed lead counts in the leads of the account it resumes on, and the account cap never refuses its resume. A note refused for a claim for FACTORY_CLAIM_STALL_MS while a claim would be granted to that lead now is a steward stall; a herd waiting its turn is not',
