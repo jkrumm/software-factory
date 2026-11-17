@@ -173,10 +173,13 @@ export {
   RefreshAnswer,
   RelearnBody,
   RelearnView,
+  RemoteGrant,
   Slot,
   SlotBody,
   SlotRelease,
+  STEP_HOSTS,
   StepCost,
+  StepHost,
   TestResult,
   MAX_TEST_RESULTS,
 } from './capacity.ts'

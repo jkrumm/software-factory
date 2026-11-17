@@ -69,6 +69,17 @@ factory never edits another repo's file. The server also serves the schema it pa
 - **`checks`**: when the full gate is too heavy for every lead to run locally. `{ fast: make check-fast, full: make
   check, ci: true }` has a lead run `fast` and rely on CI's run of `full` on the pull request head; `merge-guard` still
   demands that run green. Without `ci`, the lead runs `full` once before the first push. `docs/plan.md` "Check tiers".
+- **`steps`**: one entry per step the Makefile runs through `factory slot run --name "<project> <step>"`, keyed by
+  `<step>`: `{ make: test, needs: [git], remote: true, carry: [packages/x/dist] }`. `remote: true` lets the factory run
+  the step on its Linux step host when the mini's line would make it wait longer than that host takes. Set it only for a
+  step that passes in the step image: Ubuntu 24.04 with git, make and the bun of `packageManager`, the install with the
+  network and the step without it. Green on `ubuntu-latest` is not that proof, because GitHub's image has Node, Chrome
+  and a network. A step that needs more names its own `dockerfile` (built on the host, no build context). `needs` keeps
+  a step home for `mac`, `apple`, `secrets` and `services`, and opens the network for `network`. `carry` is the build
+  output the step reads that `.gitignore` leaves out. The step gets `FACTORY_STEP_CORES` and `FACTORY_STEP_MEM_MIB`, so
+  it can size itself. A red on the step host is run again on the mini before anyone sees it; a green there keeps the
+  step home for 7 days. Which host it ran on, its wait and its cost are in Throughput's "Steps by host".
+  `docs/architecture.md` "Steps off the mini".
 - **`deploy.mode`** and **`hold`**: `make` when the lead's `make deploy` releases it and `make version` reads the live
   sha; `auto` when the push itself deploys (CI, Vercel, RollHook), so the Watch never asks for `make version`; `none`
   when nothing the factory can run deploys it. `hold` is how long the Watch keeps verifying before the Issue is done:
@@ -132,6 +143,13 @@ list's entry, `<name>` a map's key.
 | `lanes.<name>.memory` | size | — | admission (apps/server/src/app/capacity-admit.ts) | the host memory each running lead of the lane reserves (`18GiB`, at most 1 TiB) |
 | `slots` | object | `{}` | test slots (apps/server/src/app/capacity-slots.ts) | the repo's test-slot limits |
 | `slots.run` | duration | — | test slots (apps/server/src/app/capacity-slots.ts) | how long one `factory slot run` of this repo may hold a test slot before it is stopped (at least 1m, at most 6h; unset: 30m) |
+| `steps` | map of object | `{}` | step placement (apps/server/src/app/capacity-slots.ts, apps/cli/src/remote-step.ts) | the repo's named steps (`unit`, `layout`): the Makefile target, what each needs and where the factory may run it. A step not named runs on the mini |
+| `steps.<name>.make` | string | — | step placement (apps/server/src/app/capacity-slots.ts, apps/cli/src/remote-step.ts) | the Makefile target that runs the step (`test`); `factory project check` warns when it is missing |
+| `steps.<name>.needs` | list of `linux`, `mac`, `browser`, `apple`, `secrets`, `services`, `git`, `network` | `[]` | step placement (apps/server/src/app/capacity-slots.ts, apps/cli/src/remote-step.ts) | `linux`, `mac`, `browser`, `apple`, `secrets`, `services`, `git`, `network`: what the step needs of its host. `mac`, `apple`, `secrets` and `services` keep it on the mini |
+| `steps.<name>.remote` | boolean | `false` | step placement (apps/server/src/app/capacity-slots.ts, apps/cli/src/remote-step.ts) | `true`: the factory may run the step off the mini, on a Linux step host of its own settings, when that finishes it sooner. The repo's word that the step passes on Ubuntu 24.04 in the step image; the owner still admits the project (`FACTORY_STEP_REMOTE_PROJECTS`), and a step red there but green on the mini loses its place for 7 days |
+| `steps.<name>.dockerfile` | string | — | step placement (apps/server/src/app/capacity-slots.ts, apps/cli/src/remote-step.ts) | the repo's own image for the step off the mini (a Dockerfile in the repo, built on the step host once per content); unset: the factory's (Ubuntu 24.04, git, make and bun). Required for `needs: [browser]` off the mini |
+| `steps.<name>.bun` | string | — | step placement (apps/server/src/app/capacity-slots.ts, apps/cli/src/remote-step.ts) | the bun of the step image; unset: the version of the repo's `packageManager` (`bun@1.4.3` in package.json) |
+| `steps.<name>.carry` | list of string | `[]` | step placement (apps/server/src/app/capacity-slots.ts, apps/cli/src/remote-step.ts) | git-ignored paths the step reads (build output such as `packages/x/dist`): they travel with the tracked and untracked files |
 | `budgets` | object | `{}` | the throughput loop (apps/server/src/app/loops/throughput.ts) | what the repo's checks may cost; a day over one is a signal on the repo. A key left out is no budget |
 | `budgets.fast` | duration | — | the throughput loop (apps/server/src/app/loops/throughput.ts) | the most the median of a day's fast-tier check runs may take (`5m`) |
 | `budgets.peak` | size | — | the throughput loop (apps/server/src/app/loops/throughput.ts) | the most peak memory one check step may take (`4GiB`) |

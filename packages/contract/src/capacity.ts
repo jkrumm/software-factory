@@ -161,7 +161,15 @@ export const CapacityView = z
       total: z.number().int(),
       /** the most steps at once when memory and load allow; absent from an older server */
       max: z.number().int().optional(),
-      held: z.array(z.object({ slot: z.number().int(), name: z.string(), grantedAt: z.string() })),
+      held: z.array(
+        z.object({
+          slot: z.number().int(),
+          name: z.string(),
+          grantedAt: z.string(),
+          /** where it runs; absent from an older server (the mini) */
+          host: z.enum(['mini', 'vps']).optional(),
+        }),
+      ),
       waiting: z.array(z.string()),
       lines: z.array(z.string()),
     }),
@@ -174,6 +182,41 @@ export type RefreshAnswer = z.infer<typeof RefreshAnswer>
 
 /** The default run limit of a test-slot command: 30 minutes. */
 export const DEFAULT_SLOT_RUN_MS = 30 * 60_000
+
+/** The hosts a step may run on: the mini, and the VPS's remote slots (docs/architecture.md "Steps off the mini"). */
+export const STEP_HOSTS = ['mini', 'vps'] as const
+export const StepHost = z.enum(STEP_HOSTS)
+export type StepHost = z.infer<typeof StepHost>
+
+/**
+ * What a caller granted a slot off the mini needs to run its step there: the ssh target (an owner setting, never a
+ * tracked file), the project's bare repository and the slot's worktree on that host, the image (the repo's Dockerfile or
+ * the factory's with a bun), the git-ignored paths it carries, the memory ceiling of the container (1.5 times the step's
+ * learned peak, at least 1 GiB), the cores it may count on, and whether the step itself reaches the network.
+ */
+export const RemoteGrant = z
+  .object({
+    target: z.string().min(1).max(200),
+    /** the project's bare repository on the remote host, relative to the remote user's home */
+    repo: z.string().min(1).max(500),
+    /** the slot's worktree of it, relative to the remote user's home */
+    dir: z.string().min(1).max(500),
+    /** the bun of the factory's image; null: the repo's `packageManager` */
+    bun: z
+      .string()
+      .regex(/^\d+\.\d+\.\d+$/)
+      .nullable(),
+    /** the repo's own Dockerfile for the step, a repo-relative path; null: the factory's image */
+    dockerfile: z.string().min(1).max(300).nullable(),
+    carry: z.array(z.string().min(1).max(300)).max(32),
+    memoryMib: z.number().int().min(256),
+    /** the idle cores of the host at the grant (at least 1): `FACTORY_STEP_CORES` in the step's environment */
+    cores: z.number().int().min(1),
+    /** `needs: [network]`: the step runs with the network; otherwise only its install does */
+    network: z.boolean(),
+  })
+  .meta({ id: 'RemoteGrant' })
+export type RemoteGrant = z.infer<typeof RemoteGrant>
 
 export const SlotBody = z
   .object({
@@ -190,6 +233,12 @@ export const SlotBody = z
     peakRssMib: z.number().int().min(0).optional(),
     /** a renewal of a command that runs under a slot: if the lease lapsed meanwhile, the slot is taken back, not queued for */
     holding: z.boolean().optional(),
+    /** the caller can run its step off the mini (a CLI that knows `RemoteGrant`); absent: the mini only */
+    remote: z.boolean().optional(),
+    /** `FACTORY_SLOT_HOST`: the one host this step may run on, whatever the placement prefers */
+    pin: StepHost.optional(),
+    /** hosts that failed this caller (unreachable, the sync or the container failed): it is not placed there again */
+    notOn: z.array(StepHost).max(STEP_HOSTS.length).optional(),
   })
   .meta({ id: 'SlotBody' })
 export type SlotBody = z.infer<typeof SlotBody>
@@ -208,6 +257,10 @@ export const Slot = z
     runMs: z.number().int(),
     /** why the caller waits, when it does */
     why: z.string().nullable().default(null),
+    /** where the granted step runs; an older server grants on the mini only */
+    host: StepHost.default('mini'),
+    /** set when `host` is not the mini: how to run the step there */
+    remote: RemoteGrant.nullable().default(null),
   })
   .meta({ id: 'Slot' })
 export type Slot = z.infer<typeof Slot>
@@ -249,6 +302,15 @@ export const StepCost = z
     commit: z.string().min(1).max(64).optional(),
     dirty: z.boolean().optional(),
     tests: z.array(TestResult).max(MAX_TEST_RESULTS).optional(),
+    /** where the step ran; absent: the mini (an older CLI) */
+    host: StepHost.optional(),
+    /** off the mini: the git tree the step ran on (the snapshot of the worktree, carried paths included) */
+    tree: z
+      .string()
+      .regex(/^[0-9a-f]{40,64}$/)
+      .optional(),
+    /** a run on the mini that confirmed a red off the mini as green: the step was red on the VPS, green here */
+    disagreed: z.boolean().optional(),
   })
   .meta({ id: 'StepCost' })
 export type StepCost = z.infer<typeof StepCost>

@@ -3,13 +3,14 @@ import { mkdtemp, rm } from 'node:fs/promises'
 import { constants, tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { send } from '@software-factory/client'
-import { DEFAULT_SLOT_RUN_MS, Slot, type StepCost } from '@software-factory/contract'
+import { DEFAULT_SLOT_RUN_MS, type RemoteGrant, Slot, type StepCost, type StepHost } from '@software-factory/contract'
 import { usage } from './exit.ts'
 import { credentialOf } from './credentials.ts'
 import { DEFAULT_URL, type Io } from './operation.ts'
 import { collectJunit } from './junit.ts'
 import { cpuOfRun, readProcesses, treeMeter } from './process-tree.ts'
 import { type LocalTry, localSlots } from './local-slots.ts'
+import { runRemoteStep } from './remote-step.ts'
 import { restartPatience } from './restart-wait.ts'
 
 /** How long a caller waits for a slot before it gives up with `EX_TEMPFAIL` (`FACTORY_SLOT_WAIT_MS`). */
@@ -282,6 +283,12 @@ export async function slotRun(input: { name?: string; command: string[] }, io: I
   let meter: ReturnType<typeof treeMeter> | undefined
   // The limit the server resolved for the grant; a server that does not say leaves it to the env or the default.
   let grantedRunMs: number | undefined
+  // A grant off the mini (issue 1793): how to run the step there. `notOn`: the hosts that failed this call.
+  let remoteGrant: RemoteGrant | null = null
+  let runningRemote = false
+  const notOn: StepHost[] = []
+  const pin =
+    io.env.FACTORY_SLOT_HOST === 'mini' || io.env.FACTORY_SLOT_HOST === 'vps' ? io.env.FACTORY_SLOT_HOST : undefined
   const ask = async (): Promise<Asked> => {
     const answer = await send({
       base,
@@ -294,7 +301,11 @@ export async function slotRun(input: { name?: string; command: string[] }, io: I
         rssMib: meter?.rssMib ?? undefined,
         peakRssMib: meter?.peakRssMib ?? undefined,
         // Set once the command runs: a lease that lapsed meanwhile is taken back, not queued for.
-        holding: meter ? true : undefined,
+        holding: meter || runningRemote ? true : undefined,
+        // `FACTORY_SLOT_REMOTE=0` keeps every step of this call on the mini
+        remote: cwd !== undefined && io.env.FACTORY_SLOT_REMOTE !== '0' ? true : undefined,
+        pin,
+        notOn: notOn.length === 0 ? undefined : notOn,
       },
       token,
     })
@@ -315,6 +326,8 @@ export async function slotRun(input: { name?: string; command: string[] }, io: I
         away: false,
       }
     if (parsed.data.granted && grantedRunMs === undefined) grantedRunMs = parsed.data.runMs
+    if (parsed.data.granted && !runningRemote && !meter)
+      remoteGrant = parsed.data.host === 'vps' ? parsed.data.remote : null
     return { kind: 'slot', slot: parsed.data }
   }
 
@@ -338,22 +351,130 @@ export async function slotRun(input: { name?: string; command: string[] }, io: I
   // The host-local slots of an outage: held (a lock file naming this pid) until this process is done, whatever ends it.
   const local = localSlots(io.env)
   const askedAt = Date.now()
+  // when the caller last joined the mini's line (again after a run on the VPS), and whether this run confirms a red there
+  let lineSince = askedAt
+  let confirming = false
+
+  /**
+   * The granted step on the VPS: the lease renewed while it runs, the run limit and a signal end the ssh session that
+   * carries it (the VPS then removes the container), the cost reported with its host. `back`: the VPS failed it before or
+   * instead of the step; `confirm`: the step was red there, and a red off the mini is not yet a red. Either way the caller
+   * goes back to the mini's line, and only the mini's result reaches the caller.
+   */
+  const runOnVps = async (input: {
+    grant: RemoteGrant
+    cwd: string
+    waitedMs: number
+  }): Promise<{ exit: number } | 'back' | 'confirm'> => {
+    const root = await git(input.cwd, ['rev-parse', '--show-toplevel'])
+    if (root === null) {
+      io.err('factory: the step is not in a git worktree, so it cannot travel to the VPS; it runs on the mini\n')
+      return 'back'
+    }
+    io.err(
+      `factory: running "${name}" on the VPS (memory ceiling ${(input.grant.memoryMib / 1024).toFixed(1)} GiB, lowest CPU priority)\n`,
+    )
+    runningRemote = true
+    const code = await codeOf(input.cwd)
+    const junitDir = await mkdtemp(join(tmpdir(), 'factory-junit-')).catch(() => undefined)
+    const limitMs = grantedRunMs ?? envLimit ?? DEFAULT_SLOT_RUN_MS
+    let proc: ReturnType<typeof Bun.spawn> | undefined
+    let limited = false
+    const limitTimer = setTimeout(() => {
+      limited = true
+      io.err(
+        `factory: the command ran past the test-slot run limit of ${describeLimit(limitMs)}; ended it on the VPS\n`,
+      )
+      if (proc) signalGroup(proc, 'SIGTERM')
+    }, limitMs)
+    const renew = setInterval(
+      () => void ask(),
+      Math.max(MIN_RENEW_MS, number(io.env.FACTORY_SLOT_RENEW_MS, DEFAULT_RENEW_MS)),
+    )
+    const startedAt = Date.now()
+    try {
+      const result = await runRemoteStep({
+        id,
+        grant: input.grant,
+        root,
+        cwd: input.cwd,
+        command: [program, ...args],
+        env: io.env,
+        junitDir,
+        err: (line) => io.err(line),
+        spawned: (spawned) => {
+          proc = spawned
+          child = spawned
+          if (stopped) signalGroup(spawned, stopped)
+        },
+      })
+      if (result.hostFailed && !limited && !stopped) {
+        io.err(`factory: the VPS failed the step (${result.why ?? 'unknown'}); back in the mini's line\n`)
+        return 'back'
+      }
+      const exitCode = limited ? EX_RUN_LIMIT : result.exitCode
+      if (exitCode === 137 && !stopped)
+        io.err(`factory: the step reached its memory ceiling of ${input.grant.memoryMib} MiB on the VPS (exit 137)\n`)
+      const tests = junitDir === undefined ? [] : await collectJunit(junitDir)
+      await reportCost({
+        base,
+        path,
+        token,
+        cost: {
+          name,
+          cwd: input.cwd,
+          peakRssMib: result.peakRssMib,
+          cpuSeconds: result.cpuSeconds,
+          durationMs: Date.now() - startedAt,
+          waitMs: input.waitedMs,
+          exitCode,
+          host: 'vps',
+          ...(result.tree === null ? {} : { tree: result.tree }),
+          ...code,
+          ...(tests.length === 0 ? {} : { tests }),
+        },
+      })
+      if (stopped) return { exit: 128 + (constants.signals[stopped] ?? 1) }
+      if (exitCode === 0) return { exit: 0 }
+      io.err(`factory: "${name}" was red on the VPS (exit ${exitCode}); running it again on the mini to confirm\n`)
+      return 'confirm'
+    } finally {
+      clearTimeout(limitTimer)
+      clearInterval(renew)
+      runningRemote = false
+      child = undefined
+      if (junitDir !== undefined) await rm(junitDir, { recursive: true, force: true }).catch(() => undefined)
+    }
+  }
   // Where the command leaves its JUnit files (the repos' check targets write them there: docs/plan.md "Check tiers").
   let junitDir: string | undefined
   try {
-    const outcome = await acquire({
-      ask,
-      io,
-      waitMs,
-      pollMs,
-      open,
-      restartWaitMs: restartPatience(io.env, () => undefined).limitMs,
-      takeLocal: local.take,
-      engage: () => {
-        engaged = true
-      },
-      stopped: () => stopped !== undefined,
-    })
+    const take = () =>
+      acquire({
+        ask,
+        io,
+        waitMs: Math.max(0, waitMs - (Date.now() - askedAt)),
+        pollMs,
+        open,
+        restartWaitMs: restartPatience(io.env, () => undefined).limitMs,
+        takeLocal: local.take,
+        engage: () => {
+          engaged = true
+        },
+        stopped: () => stopped !== undefined,
+      })
+    let outcome = await take()
+    if (outcome === 'granted' && remoteGrant !== null && cwd !== undefined) {
+      const ran = await runOnVps({ grant: remoteGrant, cwd, waitedMs: Date.now() - askedAt })
+      if (typeof ran === 'object') return ran.exit
+      // Back to the mini's line at its old place (`notOn`); the wait counted for the mini's run starts again here.
+      confirming = ran === 'confirm'
+      remoteGrant = null
+      grantedRunMs = undefined
+      notOn.push('vps')
+      lineSince = Date.now()
+      outcome = await take()
+    }
     if (typeof outcome === 'number') return outcome
     if (typeof outcome === 'object') {
       io.err(
@@ -364,7 +485,7 @@ export async function slotRun(input: { name?: string; command: string[] }, io: I
     }
     const holding = outcome === 'granted'
     const localHeld = typeof outcome === 'object' && outcome.onHost
-    const waitedMs = Date.now() - askedAt
+    const waitedMs = Date.now() - lineSince
     if (!holding) await release()
     if (stopped) return 128 + (constants.signals[stopped] ?? 1)
 
@@ -477,6 +598,8 @@ export async function slotRun(input: { name?: string; command: string[] }, io: I
           durationMs: Date.now() - startedAt,
           waitMs: waitedMs,
           exitCode,
+          // red on the VPS, green here: the step loses its place off the mini for a while
+          ...(confirming && exitCode === 0 ? { disagreed: true } : {}),
           ...code,
           ...(tests.length === 0 ? {} : { tests }),
         },

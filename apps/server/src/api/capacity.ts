@@ -11,10 +11,12 @@ import {
   RefreshAnswer,
   RelearnBody,
   RelearnView,
+  type RemoteGrant,
   Slot,
   SlotBody,
   SlotRelease,
   StepCost,
+  type StepHost,
 } from '@software-factory/contract'
 import { Elysia } from 'elysia'
 import * as z from 'zod'
@@ -56,7 +58,10 @@ export interface CapacityApi {
     rssMib: number | undefined
     peakRssMib: number | undefined
     holding: boolean | undefined
-  }): Promise<Result<SlotView, PortError>>
+    remote: boolean | undefined
+    pin: StepHost | undefined
+    notOn: readonly StepHost[] | undefined
+  }): Promise<Result<SlotView & { remote: RemoteGrant | null }, PortError>>
   giveSlotBack(id: string): Promise<Result<boolean, PortError>>
   recordStepCost(cost: StepCost): Promise<Result<true, PortError>>
   recordMergeWindow(window: {
@@ -111,7 +116,7 @@ const entryView = (entry: QueueEntry) => ({
 const statesView = (states: QueueStates): QueueStatesView =>
   QueueStatesView.parse({ global: states.global, projects: Object.fromEntries(states.projects) })
 
-const slotView = (slot: SlotView): Slot => Slot.parse(slot)
+const slotView = (slot: SlotView & { remote: RemoteGrant | null }): Slot => Slot.parse(slot)
 
 /**
  * Capacity: the accounts, the host, who holds which claim, the queue states, the admission pass, and the test slots. The
@@ -161,7 +166,14 @@ export const capacityRoutes = (api?: CapacityApi) => {
               max: api.limits.slotsMax,
               held: s.slots.flatMap((row) =>
                 row.slot !== null && row.grantedAt
-                  ? [{ slot: row.slot, name: row.name, grantedAt: row.grantedAt.toISOString() }]
+                  ? [
+                      {
+                        slot: row.slot,
+                        name: row.name,
+                        grantedAt: row.grantedAt.toISOString(),
+                        host: row.host === 'vps' ? ('vps' as const) : ('mini' as const),
+                      },
+                    ]
                   : [],
               ),
               waiting: s.slots.filter((row) => row.slot === null).map((row) => row.name),
@@ -311,6 +323,9 @@ export const capacityRoutes = (api?: CapacityApi) => {
           rssMib: body.rssMib,
           peakRssMib: body.peakRssMib,
           holding: body.holding,
+          remote: body.remote,
+          pin: body.pin,
+          notOn: body.notOn,
         })
         return touched.ok ? status(200, slotView(touched.value)) : status(503, unavailable(touched.error))
       },

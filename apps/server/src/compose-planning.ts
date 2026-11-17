@@ -3,6 +3,7 @@ import { basename } from 'node:path'
 import { claudeAccountRanker, claudeAccountSource } from './adapters/planning/claude-accounts.ts'
 import { gitProjectSource } from './adapters/planning/git-projects.ts'
 import { hostReader } from './adapters/planning/host.ts'
+import { sshProbe } from './adapters/remote/probe.ts'
 import type { CapacityApi } from './api/capacity.ts'
 import type { PlanningApi } from './api/planning.ts'
 import {
@@ -105,6 +106,13 @@ export function composePlanning(input: {
     cores: settings.cores,
     loadCeiling: limits.loadCeiling,
     host,
+    remote:
+      settings.stepRemote === null
+        ? null
+        : {
+            ...settings.stepRemote,
+            probe: sshProbe({ target: settings.stepRemote.target, log: (line) => console.error(`steps: ${line}`) }),
+          },
   }
 
   /**

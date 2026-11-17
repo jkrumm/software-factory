@@ -251,6 +251,81 @@
       },
       "additionalProperties": false
     },
+    "steps": {
+      "default": {},
+      "description": "the repo's named steps (`unit`, `layout`): the Makefile target, what each needs and where the factory may run it. A step not named runs on the mini",
+      "consumer": "step placement (apps/server/src/app/capacity-slots.ts, apps/cli/src/remote-step.ts)",
+      "type": "object",
+      "propertyNames": {
+        "type": "string",
+        "pattern": "^[A-Za-z0-9][A-Za-z0-9._-]{0,63}$"
+      },
+      "additionalProperties": {
+        "type": "object",
+        "properties": {
+          "make": {
+            "description": "the Makefile target that runs the step (`test`); `factory project check` warns when it is missing",
+            "consumer": "step placement (apps/server/src/app/capacity-slots.ts, apps/cli/src/remote-step.ts)",
+            "type": "string",
+            "pattern": "^[A-Za-z0-9][A-Za-z0-9_.-]*$"
+          },
+          "needs": {
+            "default": [],
+            "description": "`linux`, `mac`, `browser`, `apple`, `secrets`, `services`, `git`, `network`: what the step needs of its host. `mac`, `apple`, `secrets` and `services` keep it on the mini",
+            "consumer": "step placement (apps/server/src/app/capacity-slots.ts, apps/cli/src/remote-step.ts)",
+            "maxItems": 8,
+            "type": "array",
+            "items": {
+              "type": "string",
+              "enum": [
+                "linux",
+                "mac",
+                "browser",
+                "apple",
+                "secrets",
+                "services",
+                "git",
+                "network"
+              ]
+            }
+          },
+          "remote": {
+            "default": false,
+            "description": "`true`: the factory may run the step off the mini, on a Linux step host of its own settings, when that finishes it sooner. The repo's word that the step passes on Ubuntu 24.04 in the step image; the owner still admits the project (`FACTORY_STEP_REMOTE_PROJECTS`), and a step red there but green on the mini loses its place for 7 days",
+            "consumer": "step placement (apps/server/src/app/capacity-slots.ts, apps/cli/src/remote-step.ts)",
+            "type": "boolean"
+          },
+          "dockerfile": {
+            "description": "the repo's own image for the step off the mini (a Dockerfile in the repo, built on the step host once per content); unset: the factory's (Ubuntu 24.04, git, make and bun). Required for `needs: [browser]` off the mini",
+            "consumer": "step placement (apps/server/src/app/capacity-slots.ts, apps/cli/src/remote-step.ts)",
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 300,
+            "pattern": "^(?!\\/)(?!.*(?:^|\\/)\\.\\.(?:\\/|$))[^\\0\\n]+$"
+          },
+          "bun": {
+            "description": "the bun of the step image; unset: the version of the repo's `packageManager` (`bun@1.4.3` in package.json)",
+            "consumer": "step placement (apps/server/src/app/capacity-slots.ts, apps/cli/src/remote-step.ts)",
+            "type": "string",
+            "pattern": "^\\d+\\.\\d+\\.\\d+$"
+          },
+          "carry": {
+            "default": [],
+            "description": "git-ignored paths the step reads (build output such as `packages/x/dist`): they travel with the tracked and untracked files",
+            "consumer": "step placement (apps/server/src/app/capacity-slots.ts, apps/cli/src/remote-step.ts)",
+            "maxItems": 32,
+            "type": "array",
+            "items": {
+              "type": "string",
+              "minLength": 1,
+              "maxLength": 300,
+              "pattern": "^(?!\\/)(?!.*(?:^|\\/)\\.\\.(?:\\/|$))[^\\0\\n]+$"
+            }
+          }
+        },
+        "additionalProperties": false
+      }
+    },
     "budgets": {
       "default": {},
       "description": "what the repo's checks may cost; a day over one is a signal on the repo. A key left out is no budget",
