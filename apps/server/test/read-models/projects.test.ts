@@ -17,7 +17,7 @@ import { JUDGMENT_PREFIX } from '../../src/domains/loops/hygiene.ts'
 import { PROBES } from '../../src/domains/loops/hygiene-model.ts'
 import { NO_LEAD_CAP, oldestFindingAt } from '../../src/read/project-index.ts'
 import { BUILT_IN_PROBES, DOCUMENT_PREFIX, passOf } from '../../src/read/project-page.ts'
-import { DEFAULT_LEADS } from '../../src/domains/planning/project.ts'
+import { DEFAULT_LEADS } from '@software-factory/contract/project'
 
 /** `GET /v1/projects`, `/v1/projects/:name` and `/v1/projects/:name/hygiene`: every figure equals the stored facts, and a work project is not found for the read token. */
 const TOKENS = {
