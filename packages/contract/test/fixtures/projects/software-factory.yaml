@@ -1,0 +1,33 @@
+# copied from software-factory/project.yaml on 2026-11-17, comments dropped
+apiVersion: factory/v2
+name: software-factory
+host: macmini
+deploy:
+  mode: make
+  targets:
+    - name: mini
+      host: mini
+      verify: make verify
+  hold: 0m
+  migrations:
+    - apps/server/migrations/
+ship:
+  - paths:
+      - '**'
+    via: pr
+signals:
+  github:
+    author: jkrumm
+    since: 2026-11-07T06:30:00Z
+    checks: true
+leads: 12
+slots:
+  run: 30m
+budgets:
+  fast: 5m
+  peak: 4GiB
+  fail: 30%
+checks:
+  fast: make check-fast
+  full: make check
+  ci: true

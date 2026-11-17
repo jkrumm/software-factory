@@ -114,7 +114,7 @@ red master. `make deploy`, `make rollback` and `make verify` act on the mini onl
 
 - Layers, the Issue machine, signals and triage, loops and agw, API and CLI, perimeter, what is not built: `docs/architecture.md`.
 - A word, an event, a wait and its exit: `docs/language.md`. Why a rule exists: `docs/decisions.md`. What is open:
-  `docs/program.md` and `docs/plan.yaml` (the server files its rows as Issues). Writing a plan file: `docs/plan.md`.
+  `docs/program.md` and `docs/plan.yaml` (the server files its rows as Issues). Writing a plan file: `docs/plan.md`; a `project.yaml`: `docs/project.md`.
 - Before changing the Console listener, the CLI's credentials, the merge window, a deploy variable or a CI job, read
   `docs/operations.md`.
 - Why a lead is briefed as it is: `apps/server/src/domains/leads/brief.ts`. What a reviewer treats as failure here: `REVIEW.md`.

@@ -1,0 +1,26 @@
+# copied from shutterflow/project.yaml on 2026-11-17, comments dropped
+apiVersion: factory/v2
+name: shutterflow
+deploy:
+  mode: make
+  targets:
+    - name: vps
+      host: vps
+      verify: make verify
+  hold: 10m
+  migrations:
+    - apps/share/drizzle/
+ship:
+  - paths:
+      - '**'
+    via: push
+leads: 2
+lanes:
+  apple: 1
+checks:
+  fast: make check-changed
+  full: make check
+budgets:
+  fast: 480s
+  peak: 13GiB
+  fail: 20%

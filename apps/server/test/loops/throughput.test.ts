@@ -16,7 +16,7 @@ import {
   rankCandidates,
   type WindowFacts,
 } from '../../src/domains/loops/throughput.ts'
-import { budgetsOf, parseProject } from '../../src/domains/planning/project.ts'
+import { budgetsOf, parseProject } from '@software-factory/contract/project'
 import { ok } from '../../src/kernel/result.ts'
 import { readBudgetFacts, readIssueFates, readWindowFacts } from '../../src/read/throughput-loop.ts'
 import { readRetro } from '../../src/read/retro.ts'

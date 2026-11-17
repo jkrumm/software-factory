@@ -1,0 +1,38 @@
+# copied from weatherorb/project.yaml on 2026-11-17, comments dropped
+apiVersion: factory/v2
+name: weatherorb
+deploy:
+  mode: none
+ship:
+  - paths:
+      - REVIEW.md
+      - docs/v2/lab/**
+    via: pr
+  - paths:
+      - docs/**
+      - '*.md'
+    via: push
+  - paths:
+      - '**'
+    via: pr
+leads: 5
+lanes:
+  round:
+    leads: 1
+    memory: 6GiB
+  bench:
+    leads: 1
+slots:
+  run: 45m
+checks:
+  fast: make check-fast
+  full: make check
+  ci: true
+hygiene:
+  check: false
+  reason: V1's frozen suite; CI runs the gate
+signals:
+  github:
+    author: jkrumm
+    since: 2026-11-07T06:30:00Z
+    checks: true

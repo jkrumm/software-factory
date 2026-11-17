@@ -6,10 +6,14 @@
   "exports": {
     ".": "./src/index.ts",
     "./spool": "./src/spool.ts",
-    "./plan": "./src/plan-file.ts"
+    "./plan": "./src/plan-file.ts",
+    "./project": "./src/project-file.ts"
   },
   "dependencies": {
     "yaml": "2.9.1",
     "zod": "4.6.7"
+  },
+  "devDependencies": {
+    "ajv": "8.20.0"
   }
 }

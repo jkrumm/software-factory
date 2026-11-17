@@ -3,7 +3,7 @@ import * as z from 'zod'
 import type { Edge } from '../../domains/planning/chain.ts'
 import { PlanFile } from '../../domains/planning/plan.ts'
 import type { PlanningStore } from '../../domains/planning/ports.ts'
-import { ProjectFile } from '../../domains/planning/project.ts'
+import { StoredProjectFile } from '@software-factory/contract/project'
 import type { FileError, StoredProject } from '../../domains/planning/sync.ts'
 import { type IssueId, issueId } from '../../kernel/ids.ts'
 
@@ -33,7 +33,7 @@ function projectOf(raw: unknown): StoredProject {
     name: row.name,
     repo: row.repo,
     source: row.source,
-    project: ProjectFile.parse(row.project),
+    project: StoredProjectFile.parse(row.project),
     projectSha: row.project_sha,
     projectError: errorOf(row.project_error),
     projectWarnings: row.project_warnings,

@@ -24,7 +24,7 @@ import {
   touchSlots,
   WAITER_TTL_MS,
 } from '../domains/capacity/slots.ts'
-import { DEFAULT_SLOT_RUN_MS, durationMs } from '../domains/planning/project.ts'
+import { DEFAULT_SLOT_RUN_MS, durationMs } from '@software-factory/contract/project'
 import { ok, type PortError, type Result } from '../kernel/result.ts'
 import type { PlanningDeps } from './planning-deps.ts'
 

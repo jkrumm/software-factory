@@ -1,0 +1,20 @@
+# copied from homelab-private/project.yaml on 2026-11-17, comments dropped
+apiVersion: factory/v2
+name: homelab-private
+deploy:
+  mode: make
+  targets:
+    - name: homelab
+      host: homelab
+      verify: make verify
+  hold: 5m
+  migrations: []
+ship:
+  - paths:
+      - '**'
+    via: push
+signals:
+  github:
+    author: jkrumm
+    since: 2026-11-07T06:30:00Z
+leads: 4

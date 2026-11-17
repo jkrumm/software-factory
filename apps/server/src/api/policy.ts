@@ -113,6 +113,7 @@ export const POLICY: readonly Rule[] = [
   rule('GET', '/v1/projects/:name', READ),
   rule('GET', '/v1/projects/:name/hygiene', READ),
   rule('GET', '/v1/projects/:name/setup', READ),
+  rule('GET', '/v1/schema/project', READ),
   rule('GET', '/v1/*', READ),
 
   // -- owner only: everything else that exists today -----------------------------------------------------------------

@@ -2,7 +2,7 @@ import { afterAll, beforeAll, describe, expect, test } from 'bun:test'
 import { mkdir, mkdtemp, realpath, rm, symlink, writeFile } from 'node:fs/promises'
 import { join } from 'node:path'
 import { gitProjectSource } from '../../src/adapters/planning/git-projects.ts'
-import { MAX_PROJECT_BYTES } from '../../src/domains/planning/project.ts'
+import { MAX_PROJECT_BYTES } from '@software-factory/contract/project'
 import { value } from './support.ts'
 
 let root: string

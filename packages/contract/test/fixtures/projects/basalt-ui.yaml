@@ -1,0 +1,18 @@
+# copied from basalt-ui/project.yaml on 2026-11-17, comments dropped
+apiVersion: factory/v2
+name: basalt-ui
+deploy:
+  mode: none
+ship:
+  - paths:
+      - '**'
+    via: pr
+leads: 16
+checks:
+  fast: make check-fast
+  full: make check
+  ci: true
+lanes:
+  browser:
+    leads: 2
+    memory: 3GiB

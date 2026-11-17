@@ -1,0 +1,20 @@
+# copied from modelpick/project.yaml on 2026-11-17, comments dropped
+apiVersion: factory/v2
+name: modelpick
+deploy:
+  mode: make
+  targets:
+    - name: mini
+      host: mini
+      verify: make verify
+  hold: 0m
+  migrations: []
+ship:
+  - paths:
+      - '**'
+    via: push
+leads: 1
+signals:
+  github:
+    author: jkrumm
+    since: 2026-11-07T06:30:00Z

@@ -1,5 +1,6 @@
 import { describe, expect, test } from 'bun:test'
 import * as z from 'zod'
+import { projectJsonSchema } from '@software-factory/contract/project'
 import { createApp, OPENAPI_PATH } from '../src/api/app.ts'
 import { resolveCaller } from '../src/api/auth.ts'
 import { type Caller, POLICY, ruleFor } from '../src/api/policy.ts'
@@ -268,6 +269,14 @@ describe('the auth plugin over HTTP', () => {
   test('resolveCaller names the orchestrator by its token, and no one by an unset one', () => {
     expect(resolveCaller(TOKENS, `Bearer ${TOKENS.orchestrator}`)).toBe('orchestrator')
     expect(resolveCaller({ owner: TOKENS.owner }, `Bearer ${TOKENS.orchestrator}`)).toBeNull()
+  })
+
+  test('GET /v1/schema/project serves the project.yaml JSON Schema to a reader, with no planning wired', async () => {
+    const read = { headers: { authorization: `Bearer ${TOKENS.read}` } }
+    const response = await app.handle(new Request('http://localhost/v1/schema/project', read))
+    expect(response.status).toBe(200)
+    expect(await response.json()).toEqual(projectJsonSchema())
+    expect((await app.handle(new Request('http://localhost/v1/schema/project'))).status).toBe(401)
   })
 
   test('GET /health needs no token', async () => {

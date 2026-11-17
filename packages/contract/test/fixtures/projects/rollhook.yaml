@@ -1,0 +1,14 @@
+# copied from rollhook/project.yaml on 2026-11-17, comments dropped
+apiVersion: factory/v2
+name: rollhook
+deploy:
+  mode: none
+ship:
+  - paths:
+      - '**'
+    via: pr
+leads: 1
+signals:
+  github:
+    author: jkrumm
+    since: 2026-11-07T06:30:00Z

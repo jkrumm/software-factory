@@ -189,6 +189,7 @@ export {
   PlanRowView,
   PrioAnswer,
   PrioBody,
+  ProjectJsonSchema,
   ProjectList,
   ProjectPlanModel,
   ProjectSyncAnswer,

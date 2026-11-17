@@ -18,6 +18,7 @@
     "apps/console/src/routeTree.gen.ts",
     "apps/console/src/styles/tokens.css",
     "apps/console/dist/**",
-    "apps/console/components.json"
+    "apps/console/components.json",
+    "schema/project.schema.json"
   ]
 }
