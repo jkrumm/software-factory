@@ -227,7 +227,7 @@ function DecisionBody({ item, issueTitle, onSent }: BodyProps) {
               )}
             >
               <div className="flex flex-wrap items-center gap-2">
-                {isRecommended ? <Lozenge state="working">Recommended</Lozenge> : null}
+                {isRecommended ? <Lozenge tone="accent">Recommended</Lozenge> : null}
                 <Lozenge state={lozenge.state}>{lozenge.words}</Lozenge>
               </div>
               <p className="text-base font-semibold">{option.label}</p>
@@ -635,7 +635,7 @@ function LongWaitBody({ item, issueTitle }: BodyProps) {
           { label: 'Issue', value: issueLink(item, issueTitle) },
           { label: 'Deferred until', value: wait ? <Until iso={wait.until} /> : null },
           {
-            label: 'Waiting behind it',
+            label: 'Held behind it',
             value: wait ? `${wait.held} open Issue${wait.held === 1 ? '' : 's'} wait behind it` : null,
           },
           { label: 'Held since', value: <When item={item} /> },

@@ -61,14 +61,14 @@ function Figures({ issue, narrow }: { issue: Issue; narrow?: boolean }) {
     <div className={cn('grid grid-cols-1 gap-3 min-[30rem]:grid-cols-2', !narrow && 'xl:grid-cols-4')}>
       <StatCard
         icon={TimerIcon}
-        title="Working time"
+        title="Active time"
         subtitle={subtitle}
         value={durationWords(insights.workingMs)}
         footer={[
           { label: 'Elapsed', value: spanWords(insights.elapsedMs) },
           { label: 'Attempts', value: String(insights.attempts) },
         ]}
-        {...chartOf('Working time', series.workingMs, durationWords)}
+        {...chartOf('Active time', series.workingMs, durationWords)}
       />
       <StatCard
         icon={ArrowsCounterClockwiseIcon}
@@ -132,7 +132,7 @@ function Attempts({ issue, now }: { issue: Issue; now: number }) {
                 {session.state === 'dead' ? <InfoHint word="gone" className="-my-1" /> : null}
               </span>
               {session.wait ? (
-                <span className="text-muted-foreground">waiting for {session.wait.replaceAll('_', ' ')}</span>
+                <span className="text-muted-foreground">paused on {session.wait.replaceAll('_', ' ')}</span>
               ) : null}
               <span className="text-xs text-muted-foreground tabular-nums">Turn {session.turn}</span>
               {session.model ? <span className="font-mono text-xs text-muted-foreground">{session.model}</span> : null}
@@ -144,7 +144,7 @@ function Attempts({ issue, now }: { issue: Issue; now: number }) {
           </div>
           <dl className="hidden shrink-0 grid-cols-3 gap-x-5 text-right sm:grid">
             {[
-              { label: 'Working time', value: durationWords(session.insights.workingMs) },
+              { label: 'Active time', value: durationWords(session.insights.workingMs) },
               { label: 'Tokens in', value: tokensOf(session.insights, session.insights.tokens.input) },
               { label: 'Tokens out', value: tokensOf(session.insights, session.insights.tokens.output) },
             ].map(({ label, value }) => (

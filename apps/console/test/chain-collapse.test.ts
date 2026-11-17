@@ -1,5 +1,5 @@
 import { expect, test } from 'bun:test'
-import type { ChainEdge, ChainNode } from '@software-factory/contract'
+import { type ChainEdge, type ChainNode, workOf } from '@software-factory/contract'
 import { seededChain } from '../../../tests/e2e/seed-scale-chain.ts'
 import { chainOf } from '../src/lib/chain.ts'
 import { layoutOf } from '../src/lib/chain-layout.ts'
@@ -10,6 +10,8 @@ const node = (id: string, repo: string, kind: 'issue' | 'row', state: string): C
   repo,
   kind,
   state,
+  work:
+    kind === 'row' ? { word: 'planned', split: state === 'filable' ? 'due' : 'issue' } : (workOf({ state }) ?? null),
   title: id,
   issueKind: 'feature',
   since: kind === 'issue' ? '2026-11-08T00:00:00.000Z' : null,

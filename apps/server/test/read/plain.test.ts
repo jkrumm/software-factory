@@ -52,28 +52,28 @@ describe('plain words', () => {
 
   test('state and wait have sentences and phases', () => {
     expect(stateSentence({ state: 'waiting', reason: 'decision', outcome: null })).toBe(
-      'Waiting for the owner to decide.',
+      'Paused: on the owner to decide.',
     )
-    expect(phaseOf({ state: 'waiting', reason: 'decision' })).toBe('waiting for your answer')
+    expect(phaseOf({ state: 'waiting', reason: 'decision' })).toBe('paused on your answer')
   })
 
   test('a queued Issue names the reason the queue order gives', () => {
     const queued = { state: 'queued', reason: null, outcome: null }
-    expect(stateSentence(queued)).toBe('Queued, waiting for a free account.')
+    expect(stateSentence(queued)).toBe('Ready: waits only for a free seat.')
     expect(
       stateSentence({ ...queued, queue: { kind: 'drain', message: 'the queue is draining: nothing new starts' } }),
-    ).toBe('Queued: the queue is draining, so no new work starts.')
+    ).toBe('Held: the queue is draining, so no new work starts.')
     expect(
       stateSentence({
         ...queued,
         queue: { kind: 'claim', message: 'no claim free in the repo', repoName: 'argo', heldBy: 7 },
       }),
-    ).toBe('Queued behind another Issue that holds argo.')
+    ).toBe('Ready: another Issue holds argo, it starts when that claim frees.')
     expect(
       stateSentence({ ...queued, queue: { kind: 'claim', message: 'no claim free in the repo', repoName: 'argo' } }),
-    ).toBe('Queued: the claims on argo are full, so it starts when one frees.')
+    ).toBe('Ready: the claims on argo are full, so it starts when one frees.')
     expect(stateSentence({ ...queued, queue: { kind: 'chain', message: 'waits for Issue 3 to close' } })).toBe(
-      'Queued: waits for an Issue to close.',
+      'Held: waits for an Issue to close.',
     )
     expect(phaseOf({ state: 'working', reason: null })).toBe('building')
   })
@@ -87,9 +87,10 @@ const card = (visible: boolean): ReadIssueCard => ({
   summary: 'secret summary',
   about: 'secret about',
   state: 'waiting',
+  work: { word: 'paused', split: 'you' },
   reason: 'decision',
   outcome: null,
-  phase: 'waiting for your answer',
+  phase: 'paused on your answer',
   repo: 'chat',
   repoName: 'chat',
   visible,

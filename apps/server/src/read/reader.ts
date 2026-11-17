@@ -9,6 +9,7 @@ import {
   type ReadOverview,
   type ReadSessionCard,
   type ReadUptime,
+  workCountsOf,
 } from '@software-factory/contract'
 import { readAccounts } from './accounts.ts'
 import { readAsks } from './asks.ts'
@@ -87,13 +88,23 @@ export function createReader(deps: ReadDeps): ReadApi {
     const openProjects = redact ? await loadOpenProjects(sql) : []
     const accounts = await readAccounts(sql, now)
     const quota = new Map(accounts.map((account) => [account.account, account]))
-    const counts: { state: string; n: number }[] = await sql`
-      SELECT state, count(*)::int AS n FROM factory.issues WHERE state <> 'closed' GROUP BY state`
-    const count = (state: string): number => counts.find((row) => row.state === state)?.n ?? 0
+    const open: { id: string; state: string; wait_reason: string | null }[] = await sql`
+      SELECT id, state, wait_reason FROM factory.issues WHERE state <> 'closed'`
+    // one capacity read serves both the counts and the cards
+    let asked: Promise<QueueReasons | null> | undefined
+    const queueOnce = (): Promise<QueueReasons | null> => (asked ??= queueOf())
+    const reasons = open.some((row) => row.state === 'queued') ? await queueOnce() : null
+    const work = workCountsOf(
+      open.map((row) => ({
+        state: row.state,
+        waitReason: row.wait_reason,
+        queueKind: reasons?.get(row.id)?.kind ?? null,
+      })),
+    )
     const [{ asks, humanQueue }, health, issues, states] = await Promise.all([
       readAsks(sql, now),
       readHealthLines(sql, { now, accounts, sources: deps }),
-      listCards(deps, { scope: 'open', limit: MAX_LIMIT, quota, queue: queueOf }),
+      listCards(deps, { scope: 'open', limit: MAX_LIMIT, quota, queue: queueOnce }),
       sql`SELECT project, state FROM factory.capacity_queue_states` as Promise<
         { project: string; state: 'run' | 'pace' | 'drain' }[]
       >,
@@ -103,10 +114,7 @@ export function createReader(deps: ReadDeps): ReadApi {
       now: now.toISOString(),
       builtAt: now.toISOString(),
       counts: {
-        working: count('working'),
-        waiting: count('waiting'),
-        queued: count('queued'),
-        watching: count('watching'),
+        work,
         asks: asks.length,
         humanQueue: humanQueue.filter((ask) => !ask.stale).length,
         health: health.length,

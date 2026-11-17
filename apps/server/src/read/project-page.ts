@@ -13,6 +13,7 @@ import type { SQL } from 'bun'
 import * as z from 'zod'
 import { countsOf, DIGEST_WINDOW_MS, groupByProject, shipped, type DigestIssue } from '../kernel/digest-scope.ts'
 import { projectOf } from '../kernel/project-of.ts'
+import { queueKindOf, type QueueReasons } from './flow.ts'
 import { loopReads } from './loops.ts'
 
 /**
@@ -132,8 +133,6 @@ async function issuesOf(sql: SQL, projects: readonly Project[], now: Date): Prom
 }
 
 const iso = (date: Date): string => date.toISOString()
-
-const watchingCount = (issues: readonly DigestIssue[]): number => issues.filter((i) => i.state === 'watching').length
 
 // -- hygiene passes ------------------------------------------------------------------------------------------------------
 
@@ -315,7 +314,10 @@ export async function readProjectHygiene(
 // -- the list ------------------------------------------------------------------------------------------------------------
 
 /** Every project with its counts and the state of its newest hygiene pass. Read-only SQL. */
-export async function readProjectIndex(sql: SQL, options: { now: Date }): Promise<ProjectIndexModel> {
+export async function readProjectIndex(
+  sql: SQL,
+  options: { now: Date; queue?: QueueReasons },
+): Promise<ProjectIndexModel> {
   const { now } = options
   const projects = await loadProjects(sql)
   const groups = await issuesOf(sql, projects, now)
@@ -336,8 +338,7 @@ export async function readProjectIndex(sql: SQL, options: { now: Date }): Promis
         work: project.work,
         source: project.source,
         branch: project.branch,
-        counts: countsOf(issues, now),
-        watching: watchingCount(issues),
+        counts: countsOf(issues, now, queueKindOf(options.queue)),
         hygiene: {
           lastPassAt: pass ? iso(pass.at) : null,
           outcome: pass?.judgment.outcome ?? null,
@@ -413,6 +414,7 @@ export async function readProjectPage(
   options: {
     now: Date
     name: string
+    queue?: QueueReasons
     /** the read token: a work project is not found, and no monitor names */ redact?: boolean
   },
 ): Promise<ProjectPageModel | null> {
@@ -444,7 +446,7 @@ export async function readProjectPage(
     SELECT source, monitor, last_event, quiet, last_quiet_at FROM factory.intake_door_routes
     WHERE repo = ${project.name} OR repo = ${project.repo} OR left(repo, length(${project.repo}::text) + 1) = ${project.repo}::text || '/'
     ORDER BY source, monitor`
-  const counts: ProjectCounts = countsOf(issues, now)
+  const counts: ProjectCounts = countsOf(issues, now, queueKindOf(options.queue))
   return {
     at: iso(now),
     name: project.name,

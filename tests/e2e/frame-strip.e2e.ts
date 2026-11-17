@@ -36,17 +36,10 @@ async function world(apiUrl: string): Promise<World> {
 }
 
 test.describe('the counts', () => {
-  for (const state of ['working', 'waiting', 'queued'] as const) {
+  for (const state of ['running', 'paused', 'ready', 'held', 'checking'] as const) {
     test(`${state} links to Flow filtered to it`, async ({ page, apiUrl }) => {
-      const flow = await api<{
-        states: Record<'working' | 'waiting' | 'queued' | 'settling' | 'watching', { count: number }>
-      }>(apiUrl, '/v1/flow')
-      // the one definition of the counts: working takes watching in, queued takes settling in
-      const count = {
-        working: flow.states.working.count + flow.states.watching.count,
-        waiting: flow.states.waiting.count,
-        queued: flow.states.queued.count + flow.states.settling.count,
-      }[state]
+      const flow = await api<{ work: Record<typeof state, number> }>(apiUrl, '/v1/flow')
+      const count = flow.work[state]
       await page.goto('/needs-you')
       const link = flowLinks(page).getByRole('link', { name: new RegExp(`${state}$`) })
       await expect(link).toContainText(String(count))

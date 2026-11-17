@@ -352,19 +352,19 @@ test('the capacity section reads what the API computed: cards, steps, lead costs
   const cards = section.getByRole('group', { name: 'Capacity figures' })
   await expect(cards.getByRole('heading')).toHaveText([
     'Issues closed',
-    'Idle seat-hours with work queued',
+    'Idle seat-hours with work ready',
     'Minutes over the load ceiling',
     'Test slot wait',
   ])
   await expect(cardOf(page, 'Issues closed').getByText(perDayWords(model.throughput.total, model.days))).toBeVisible()
   await expect(
-    cardOf(page, 'Idle seat-hours with work queued').getByText(hoursWords(2), { exact: true }).first(),
+    cardOf(page, 'Idle seat-hours with work ready').getByText(hoursWords(2), { exact: true }).first(),
   ).toBeVisible()
   await expect(cardOf(page, 'Minutes over the load ceiling').getByText('2', { exact: true }).first()).toBeVisible()
   const wait = cardOf(page, 'Test slot wait')
   await expect(wait.getByText(msWords(2000), { exact: true }).first()).toBeVisible()
   await expect(wait.getByText(`Median; 90th percentile ${msWords(55_000)}`, { exact: true })).toBeVisible()
-  await expectHint(cardOf(page, 'Idle seat-hours with work queued'), CAPACITY_HINT.idle)
+  await expectHint(cardOf(page, 'Idle seat-hours with work ready'), CAPACITY_HINT.idle)
   await expectHint(cardOf(page, 'Test slot wait'), CAPACITY_HINT.wait)
 
   const steps = section.getByRole('table', { name: /Test-slot steps/ })

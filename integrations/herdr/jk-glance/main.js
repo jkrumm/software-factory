@@ -1,6 +1,6 @@
 // jk-glance — the factory at a glance, in three roles of one mod (props():
-//   { bar: true }                a status-bar segment: short items, left to right: Needs, Work, Wait, Queue, Ship (today),
-//                                Prod, Health (only above 0). The host (CPU, RAM, load) and Uptime Kuma are the mini's chip in
+//   { bar: true }                a status-bar segment: short items, left to right: Needs you, Running, Paused, Ready, Held,
+//                                Checking (the Console strip's words and figures), Ship (today), Prod, Health (only above 0). The host (CPU, RAM, load) and Uptime Kuma are the mini's chip in
 //                                jk-status, not here. It polls the factory and publishes shared("jk.factory.glance"), with the
 //                                host's load as a percent of its ceiling in `host`; a click on an item opens its popover.
 //   { kind: "detail", item }     the popover (an overlay popup of this same mod): the detail of one item, read from
@@ -12,7 +12,7 @@
 // Every 15 s ONE call on the mini reads `factory read needs`, `read overview` (counts, health, the open Issues),
 // `read issues`, `read sessions` and `read machine` (token through secrets-run, never argv) and the Console's base URL
 // (FACTORY_CONSOLE_URL in the mini's ~/.config/factory/env). Every 60 s a second call reads `factory read flow`: the 7-day
-// trend, the last day's shipped Issues (by hour and project), the reason each queued Issue waits and the projects whose
+// trend, the last day's shipped Issues (by hour and project), the work counts and the projects whose
 // production is red. Each part parses on
 // its own and keeps its last good answer; no good poll for 2 min dims the bar. API text is data, never interpreted; no ticket
 // title or summary is ever drawn (an item shows as its kind, repo and age, a project as its name and a count).
@@ -31,7 +31,7 @@ const READS =
   'echo @@; factory --format json read machine; echo'
 const URL_READ = `grep -m1 '^FACTORY_CONSOLE_URL=' "$HOME/.config/factory/env" | cut -d= -f2-`
 const CMD = `{ ${SECRETS} sh -c '${READS}'; } 2>/dev/null; echo @@; ${URL_READ} 2>/dev/null`
-// The Flow page's own read: the 7-day series live in its `trend`, the queue reasons in its queued column.
+// The Flow page's own read: the 7-day series live in its `trend`, the work counts in its `work`, the queue kinds in its columns.
 const FLOW_CMD = `{ ${SECRETS} sh -c 'factory --format json read flow'; } 2>/dev/null`
 
 const POLL_MS = 15000
@@ -57,7 +57,7 @@ const GLANCE_H = 28
 
 // The bar: the width in px the block needs for its worst case (`barWidth`, held by a test). The layout gives the bar block
 // at least this; a status row is 28 px high.
-const BAR_W = 440
+const BAR_W = 608
 const BAR_H = 28
 // Text metrics for the width estimate: the bar's 11.8 px text is at most this wide per character; an item has 3 px padding
 // each side, a dot is 6 px and 4 px from its text, a value sits 4 px from its label, the items sit 1 px apart and a
@@ -147,7 +147,86 @@ function parseNeeds(text) {
   return { items, counts }
 }
 
-// Counts, the kinds of the health lines (never their words) and the project of each open Issue by state. Nothing else of the
+// Where work stands: the five words and the splits of three of them (packages/contract/src/work-words.ts, copied: the mod
+// has no imports). Stored state names appear only as data keys here.
+const WORK_WORDS = ['running', 'paused', 'ready', 'held', 'checking']
+const SPLITS = {
+  paused: ['you', 'timer', 'issue', 'stalled'],
+  ready: ['seat', 'host', 'repo', 'account'],
+  held: ['issue', 'line', 'drain', 'spec', 'settling'],
+}
+const PAUSED_BY_WAIT = {
+  decision: 'you',
+  review: 'you',
+  errand: 'you',
+  timer: 'timer',
+  dependency: 'issue',
+  external: 'issue',
+}
+const READY_BY_QUEUE = {
+  load: 'host',
+  memory: 'host',
+  boot: 'host',
+  doctor: 'host',
+  claim: 'repo',
+  lane: 'repo',
+  cap: 'repo',
+  window: 'account',
+}
+const HELD_BY_QUEUE = {
+  chain: 'issue',
+  line: 'line',
+  drain: 'drain',
+  spec: 'spec',
+  finalizing: 'settling',
+  unknown_project: 'settling',
+}
+
+const emptyWork = () => ({
+  running: 0,
+  paused: 0,
+  ready: 0,
+  held: 0,
+  checking: 0,
+  split: Object.fromEntries(
+    Object.entries(SPLITS).map(([w, keys]) => [w, Object.fromEntries(keys.map((k) => [k, 0]))]),
+  ),
+})
+
+// The server's `counts.work` (and the flow's `work`): five counts and three splits, numbers only. Null when absent.
+function parseWork(w) {
+  if (!w || typeof w !== 'object') return null
+  const out = emptyWork()
+  for (const word of WORK_WORDS) out[word] = num(w[word])
+  for (const [word, keys] of Object.entries(SPLITS)) {
+    for (const k of keys) out.split[word][k] = num(w.split?.[word]?.[k])
+  }
+  return out
+}
+
+// The same counts from the flow's columns, when its `work` is absent: workOf of the contract over each Issue's wait reason
+// and queue kind.
+function workFromColumns(column) {
+  if (!column || typeof column !== 'object') return null
+  const out = emptyWork()
+  const add = (word, split) => {
+    out[word]++
+    if (split) out.split[word][split]++
+  }
+  const issues = (state) => asArray(column[state]?.issues).filter((i) => i && typeof i === 'object')
+  out.running = issues('working').length
+  out.checking = issues('watching').length
+  for (const i of issues('waiting')) add('paused', PAUSED_BY_WAIT[i.waitReason] ?? 'stalled')
+  issues('settling').forEach(() => add('held', 'settling'))
+  for (const i of issues('queued')) {
+    const kind = typeof i.queue?.kind === 'string' ? i.queue.kind : null
+    if (kind && HELD_BY_QUEUE[kind]) add('held', HELD_BY_QUEUE[kind])
+    else add('ready', (kind && READY_BY_QUEUE[kind]) || 'seat')
+  }
+  return out
+}
+
+// Counts, the kinds of the health lines (never their words) and the project of each open Issue by word. Nothing else of the
 // overview is kept (its uptime roll-up is Uptime Kuma's chip in jk-status).
 function parseOverview(text) {
   let d
@@ -159,9 +238,7 @@ function parseOverview(text) {
   if (!d || typeof d !== 'object' || !d.counts || typeof d.counts !== 'object') return null
   const c = d.counts
   return {
-    working: num(c.working),
-    waiting: num(c.waiting),
-    queued: num(c.queued),
+    work: parseWork(c.work) ?? emptyWork(),
     asks: num(c.asks),
     humanQueue: num(c.humanQueue),
     health: num(c.health),
@@ -170,13 +247,16 @@ function parseOverview(text) {
   }
 }
 
-// The open Issues that are working, waiting or queued, as their project only (never a number, phase or words): the project
-// name of each, per state.
+// The open Issues as their project only (never a number, phase or words): the project name of each, per word. An Issue's
+// word is its card's `work.word`; a card without one falls back to the word its stored state alone decides.
+const WORD_OF_STATE = { working: 'running', waiting: 'paused', watching: 'checking' }
 function parseProjects(issues) {
-  const out = { working: [], waiting: [], queued: [] }
+  const out = Object.fromEntries(WORK_WORDS.map((w) => [w, []]))
   for (const i of asArray(issues)) {
-    if (!i || !Number.isInteger(i.id) || !Array.isArray(out[i.state])) continue
-    out[i.state].push(clip(typeof i.repoName === 'string' && i.repoName ? i.repoName : '?', 40))
+    if (!i || !Number.isInteger(i.id)) continue
+    const word = WORK_WORDS.includes(i.work?.word) ? i.work.word : WORD_OF_STATE[i.state]
+    if (!word) continue
+    out[word].push(clip(typeof i.repoName === 'string' && i.repoName ? i.repoName : '?', 40))
   }
   return out
 }
@@ -204,9 +284,10 @@ function parseJson(text) {
 }
 
 // The Flow page's trend, numbers only (the read also holds Issue titles; they never leave this function): the daily samples
-// of working, waiting and queued (oldest first, the last is now), the daily shipped counts and the week before, the shipped
-// Issues by the hour of the last 7 days (168 buckets, the last is the hour ending now) and by the day of the last 30, and from
-// what closed in the last day the shipped Issues by project.
+// (oldest first, the last is now) of Running, Paused, Not started (Ready and Held share the stored queued and settling
+// states, so the trend shows their sum) and Checking, the daily shipped counts and the week before, the shipped
+// Issues by the hour of the last 7 days (168 buckets, the last is the hour ending now) and by the day of the last 30, the
+// work counts, and from what closed in the last day the shipped Issues by project.
 function parseFlow(text) {
   const d = parseJson(text)
   if (!d) return null
@@ -214,10 +295,13 @@ function parseFlow(text) {
   const states = t.states && typeof t.states === 'object' ? t.states : {}
   const line = (v) => (Array.isArray(v) && v.length >= 2 ? v.map(num) : null)
   const series = (v, n) => (Array.isArray(v) && v.length === n ? v.map(num) : null)
+  const queued = line(states.queued)
+  const settling = line(states.settling)
   const flow = {
-    working: line(states.working),
-    waiting: line(states.waiting),
-    queued: line(states.queued),
+    running: line(states.working),
+    paused: line(states.waiting),
+    notStarted: queued ? queued.map((n, i) => n + (settling?.[i] ?? 0)) : null,
+    checking: line(states.watching),
     shipped: Array.isArray(t.shipped) && t.shipped.length ? t.shipped.map(num) : null,
     shippedBefore: Number.isFinite(t.shippedBefore) ? num(t.shippedBefore) : null,
     shippedHourly: series(t.shippedHourly, 168),
@@ -226,7 +310,12 @@ function parseFlow(text) {
   const column = d.states && typeof d.states === 'object' ? d.states : null
   const hasTrend = Object.values(flow).some((v) => v !== null)
   if (!hasTrend && !column) return null
-  return { ...flow, ...{ shippedProjects: shippedProjectsOf(d.closedRecently) }, ...queueReasons(column) }
+  return {
+    ...flow,
+    work: parseWork(d.work) ?? workFromColumns(column),
+    shippedProjects: shippedProjectsOf(d.closedRecently),
+    ...queueReasons(column),
+  }
 }
 
 // What shipped in the last day (outcome done or healed, the Flow page's own rule) by project, the busiest first. Only the
@@ -246,12 +335,10 @@ function shippedProjectsOf(closed) {
 const NOT_A_FIX_LINE = new Set(['chain', 'spec', 'finalizing', 'unknown_project'])
 const LINE_MESSAGE = /^production of (\S+) is red \(Issue (\d+)\)/
 
-// From the board's columns: why each queued Issue waits (`why`: its queue kind, `seat` when nothing but a free account holds
-// it, and its project) and the projects whose production is red (`red`: the incident that stops the line). Words of an
+// From the board's columns: the projects whose production is red (`red`: the incident that stops the line). Words of an
 // Issue never leave this function. A project is red while an incident Issue is queued or working and nothing blocks it (the
 // server's own rule, domains/planning/queue.ts); the queued Issues held by that line carry the same project and incident.
 function queueReasons(column) {
-  const why = []
   const red = new Map()
   const put = (project, n) => {
     if (project && !red.has(project)) red.set(project, n)
@@ -265,7 +352,6 @@ function queueReasons(column) {
       if (!i || typeof i !== 'object') continue
       const repo = typeof i.repo === 'string' ? clip(i.repo, 40) : null
       const kind = typeof i.queue?.kind === 'string' ? i.queue.kind.slice(0, 24) : null
-      if (state === 'queued') why.push({ kind: kind ?? 'seat', project: repo })
       if (i.kind === 'incident' && !(kind && NOT_A_FIX_LINE.has(kind))) put(repo, numberOf(i.id))
       if (kind === 'line') {
         const m = LINE_MESSAGE.exec(String(i.queue.message ?? ''))
@@ -273,7 +359,7 @@ function queueReasons(column) {
       }
     }
   }
-  return { why, red: [...red].map(([project, n]) => ({ project, n })) }
+  return { red: [...red].map(([project, n]) => ({ project, n })) }
 }
 
 const parseIssues = (text) => {
@@ -307,7 +393,7 @@ function repoOf(path) {
 }
 
 // What the pane header and the tab show per terminal: app terminal address (`mini/<id>`) -> the Issue's words, its state
-// (the language's: settling, queued, working, waiting, watching) and the Console link. No ids, roles or phases: the screen
+// (the stored one, a data key) and the Console link. No ids, roles or phases: the screen
 // says what the work is about, the link is where the Issue is. Only these fields are shared (shared is persisted and every
 // mod re-renders on a change): no insights, no elapsed time.
 function terminalsMap(issues, sessions, needs, base) {
@@ -363,9 +449,10 @@ function consoleLink(base, kind, item) {
     .replace(/\/+$/, '')
   if (!/^https?:\/\/[^\s/]+/i.test(b)) return null
   if (kind === 'flow') return `${b}/flow`
-  if (kind === 'working' || kind === 'waiting' || kind === 'queued') return `${b}/flow?state=${kind}`
+  if (WORK_WORDS.includes(kind)) return `${b}/flow?state=${kind}`
   if (kind === 'project') return `${b}/projects/${encodeURIComponent(String(item ?? ''))}`
   if (kind === 'issue') return Number.isInteger(item) ? `${b}/issues/${item}` : `${b}/flow`
+  if (kind === 'chain') return `${b}/chain`
   if (kind === 'health') return HEALTH_PATH ? `${b}${HEALTH_PATH}` : null
   const id = item?.id
   return `${b}/needs-you${id != null && id !== '' ? `?item=${encodeURIComponent(String(id))}` : ''}`
@@ -382,10 +469,13 @@ function issueLink(base, issue, needs) {
 
 // -- the figures behind the bar: the Console's Flow page figures (apps/console/src/lib/flow.ts statsOf), the same rules.
 
+// `series` is the trend line a word is read from; Ready and Held share the Not started one.
 const KPIS = [
-  { key: 'working', label: 'Working', higherIsBetter: true },
-  { key: 'waiting', label: 'Waiting', higherIsBetter: false },
-  { key: 'queued', label: 'Queued', higherIsBetter: false },
+  { key: 'running', label: 'Running', higherIsBetter: true, series: 'running' },
+  { key: 'paused', label: 'Paused', higherIsBetter: false, series: 'paused' },
+  { key: 'ready', label: 'Ready', higherIsBetter: false, series: 'notStarted' },
+  { key: 'held', label: 'Held', higherIsBetter: false, series: 'notStarted' },
+  { key: 'checking', label: 'Checking', higherIsBetter: false, series: 'checking' },
   { key: 'shipped', label: 'Shipped this week', higherIsBetter: true },
 ]
 const KPI_TITLE = Object.fromEntries(KPIS.map((k) => [k.key, k.label]))
@@ -402,10 +492,14 @@ function deltaText(delta) {
   return delta > 0 ? `▲ +${delta}` : `▼ −${Math.abs(delta)}`
 }
 
-// Per KPI: its figure and the change against 7 days ago. The figure of a state is the overview's count (the last trend
-// sample when the overview is missing); the change is last sample minus first, shipped this week minus the week before. A
-// part that is missing leaves its fields null.
+// The work counts the strip shows: the overview's, else the flow's (the server computes both with one function).
+const workOf = (overview, flow) => overview?.work ?? flow?.work ?? null
+
+// Per KPI: its figure and the change against 7 days ago. The figure of a word is the work count (the last trend sample of
+// a word that has its own line when no count is there); the change is last sample minus first, shipped this week minus the
+// week before. A part that is missing leaves its fields null.
 function kpiCells(overview, flow) {
+  const work = workOf(overview, flow)
   return KPIS.map((def) => {
     if (def.key === 'shipped') {
       const bars = flow?.shipped ?? null
@@ -413,8 +507,9 @@ function kpiCells(overview, flow) {
       const delta = bars && flow.shippedBefore !== null ? value - flow.shippedBefore : null
       return { ...def, value, delta, tone: toneOf(delta, def.higherIsBetter) }
     }
-    const line = flow?.[def.key] ?? null
-    const value = overview ? overview[def.key] : line ? line[line.length - 1] : null
+    const line = flow?.[def.series] ?? null
+    const own = def.series === def.key && line ? line[line.length - 1] : null
+    const value = work ? work[def.key] : own
     const delta = line ? line[line.length - 1] - line[0] : null
     return { ...def, value, delta, tone: toneOf(delta, def.higherIsBetter) }
   })
@@ -472,41 +567,42 @@ function projectRows(projects, base, reasonOf = null) {
     }))
 }
 
-// How a queued Issue's binding reason reads, short enough to stand beside a project name (the queue kinds of
-// domains/planning/queue.ts and describe.ts; `seat` is none recorded: only a free account holds it).
-const WHY_WORD = {
-  line: 'production red',
-  chain: 'waits for an Issue',
-  drain: 'queue draining',
-  claim: 'repo has no free claim',
-  spec: 'Spec waits for you',
-  finalizing: 'last attempt ending',
-  unknown_project: 'repo not known yet',
-  doctor: 'host doctor',
-  boot: 'host just booted',
-  load: 'host busy',
-  memory: 'host short of memory',
-  lane: 'lane full',
-  window: 'account windows closed',
-  cap: 'accounts at lead cap',
-  seat: 'waits for a seat',
+// What each split of Paused, Ready and Held reads as (`seat`: only a free seat holds it).
+const SPLIT_WORD = {
+  paused: {
+    you: 'on you',
+    timer: 'on a timer',
+    issue: 'on another Issue',
+    stalled: 'stalled',
+  },
+  ready: {
+    seat: 'a free seat',
+    host: 'the host',
+    repo: "the repo's claims",
+    account: "the account's window",
+  },
+  held: {
+    issue: 'behind another Issue',
+    line: 'the line is red',
+    drain: 'drained',
+    spec: 'an open Spec',
+    settling: 'being settled',
+  },
 }
 
-// The reason that binds most of a project's queued Issues (the larger group wins, then the kind's name), a word from WHY_WORD.
-function queueReasonOf(why) {
-  const counts = new Map()
-  for (const w of asArray(why)) {
-    if (!w.project) continue
-    const byKind = counts.get(w.project) ?? new Map()
-    byKind.set(w.kind, (byKind.get(w.kind) ?? 0) + 1)
-    counts.set(w.project, byKind)
-  }
-  return (project) => {
-    const byKind = counts.get(project)
-    if (!byKind) return null
-    const [kind] = [...byKind].sort((a, b) => b[1] - a[1] || a[0].localeCompare(b[0]))[0]
-    return WHY_WORD[kind] ?? kind
-  }
+// One row per non-empty split of a word, the largest first; the held-by-another-Issue row opens the chain. A word with no
+// counts yet (null) has no rows.
+function splitRows(work, word, base) {
+  const split = work?.split?.[word]
+  if (!split) return []
+  return SPLITS[word]
+    .filter((k) => split[k] > 0)
+    .sort((a, b) => split[b] - split[a])
+    .map((k) => ({
+      text: SPLIT_WORD[word][k],
+      right: String(split[k]),
+      link: consoleLink(base, word === 'held' && k === 'issue' ? 'chain' : word, null),
+    }))
 }
 
 // Production per project: red while an incident stops its line; each red project links to that incident's page.
@@ -585,10 +681,15 @@ function glanceModel({ needs, overview, flow, machine, base, at, now, flowAt }) 
   })
   const count = (key, label, value, tip) => item(1, key, label, fig(value), 'neutral', tip)
   const items = [
-    item(0, 'needs', 'Needs', fig(n), n > 0 ? 'bad' : 'dim', n > 0 ? `${n} wait on you` : 'Nothing waits on you'),
-    count('working', 'Work', cells.working.value, 'Leads working'),
-    count('waiting', 'Wait', cells.waiting.value, 'Issues waiting'),
-    count('queued', 'Queue', cells.queued.value, 'Issues queued'),
+    item(0, 'needs', 'Needs you', fig(n), n > 0 ? 'bad' : 'dim', n > 0 ? `${n} wait on you` : 'Nothing waits on you'),
+    count('running', 'Running', cells.running.value, 'A lead works on these now'),
+    count('paused', 'Paused', cells.paused.value, 'Started, held by a named wait'),
+    count('ready', 'Ready', cells.ready.value, 'Not started, held only by capacity'),
+    count('held', 'Held', cells.held.value, 'Not started, cannot start whatever the capacity'),
+    {
+      ...count('checking', 'Checking', cells.checking.value, 'Shipped, its check pending'),
+      tone: 'dim', // quiet: last in the strip
+    },
     count('shipped', 'Ship', shippedToday, 'Shipped in the last day'),
     item(
       2,
@@ -617,8 +718,8 @@ function glanceModel({ needs, overview, flow, machine, base, at, now, flowAt }) 
 
   const flowLink = consoleLink(base, 'flow', null)
   const needsLink = consoleLink(base, 'needs', newestItem(needs))
-  const trendRow = (c) =>
-    c.delta === null ? [] : [{ text: 'Change in 7 days', right: deltaText(c.delta), tone: c.tone }]
+  const trendRow = (c, text = 'Change in 7 days') =>
+    c.delta === null ? [] : [{ text, right: deltaText(c.delta), tone: c.tone }]
   const detail = (title, tone, link, rows, chart = null) => ({
     title,
     tone,
@@ -628,14 +729,19 @@ function glanceModel({ needs, overview, flow, machine, base, at, now, flowAt }) 
     height: popupHeight(rows.length, chart ? chartHeight(chart.length) : 0),
   })
   const needsList = needsRows(needs, base)
-  // Working, Waiting, Queued: one row per project with its count, the busiest first, then the change in 7 days.
-  const byState = (state, reasonOf = null) => {
-    const link = consoleLink(base, state, null)
-    const trendRows = trendRow(cells[state])
-    const rows = capRows(projectRows(overview?.projects?.[state], base, reasonOf), link, MAX_ROWS - trendRows.length)
-    const all = [...rows, ...trendRows]
+  const work = workOf(overview, trend)
+  const notStarted = 'Not started, change in 7 days'
+  // A word's popover: its split rows (Paused, Ready, Held), then one row per project with its count, the busiest first, then
+  // the change in 7 days (Ready and Held: the Not started one). The rows are at most MAX_ROWS.
+  const byWord = (word, text = 'Change in 7 days') => {
+    const link = consoleLink(base, word, null)
+    const trendRows = trendRow(cells[word], text)
+    const splits = splitRows(work, word, base)
+    const room = MAX_ROWS - trendRows.length - splits.length
+    const projects = room >= 1 ? capRows(projectRows(overview?.projects?.[word], base), link, room) : []
+    const all = [...splits, ...projects, ...trendRows]
     return detail(
-      `${KPI_TITLE[state]} · ${fig(cells[state].value)}`,
+      `${KPI_TITLE[word]} · ${fig(cells[word].value)}`,
       'neutral',
       link,
       all.length ? all : [{ text: 'Open the Flow page', tone: 'dim' }],
@@ -673,9 +779,11 @@ function glanceModel({ needs, overview, flow, machine, base, at, now, flowAt }) 
         ? capRows(needsList, needsLink)
         : [{ text: n > 0 ? 'Open the Console' : 'Nothing to answer', tone: 'dim' }],
     ),
-    working: byState('working'),
-    waiting: byState('waiting'),
-    queued: byState('queued', queueReasonOf(trend?.why)),
+    running: byWord('running'),
+    paused: byWord('paused'),
+    ready: byWord('ready', notStarted),
+    held: byWord('held', notStarted),
+    checking: byWord('checking'),
     shipped: detail(
       `Shipped in the last day · ${fig(shippedToday)}`,
       'neutral',
@@ -711,7 +819,7 @@ function glanceModel({ needs, overview, flow, machine, base, at, now, flowAt }) 
     host: hostOf(machine),
     // the sidebar block's one line: what waits on the owner and how many leads run
     side: {
-      text: `${needsLabel(n)}${overview ? ` · ${overview.working} ${overview.working === 1 ? 'lead' : 'leads'}` : ''}`,
+      text: `${needsLabel(n)}${overview ? ` · ${overview.work.running} ${overview.work.running === 1 ? 'lead' : 'leads'}` : ''}`,
       tone: n > 0 ? 'bad' : 'dim',
       link: needsLink,
       tip: staleTip ?? (needsLink ? 'Open the Console' : unset),

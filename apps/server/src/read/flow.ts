@@ -1,9 +1,12 @@
 import type { SQL } from 'bun'
 import * as z from 'zod'
 import {
+  addWork,
+  emptyWorkCounts,
   FLOW_KINDS,
-  flowCountOfState,
   FLOW_STATES,
+  workOf,
+  type WorkCounts,
   type FlowIssue,
   type FlowModel,
   type QueueReason as QueueReasonSchema,
@@ -14,6 +17,12 @@ import { isWorkRepo, loadOpenProjects, REDACTED_REPO, REDACTED_TITLE } from './w
 
 /** Why each queued Issue stays queued, by Issue id; the capacity use case knows (it reads the host), so the caller passes it. */
 export type QueueReasons = ReadonlyMap<string, z.infer<typeof QueueReasonSchema>>
+
+/** The queue kind of an Issue for `workOf`: null when the capacity read gave none (nothing but a free seat keeps it out, or it is unknown). */
+export const queueKindOf =
+  (queue: QueueReasons | undefined) =>
+  (id: string): string | null =>
+    queue?.get(id)?.kind ?? null
 
 const Open = z.object({
   id: z.string(),
@@ -141,7 +150,8 @@ export async function readFlow(
     waiting: { count: 0, issues: [] },
     watching: { count: 0, issues: [] },
   }
-  const perProject = new Map<string, { open: number; working: number; waiting: number; queued: number }>()
+  const perProject = new Map<string, { open: number; work: WorkCounts }>()
+  const work = emptyWorkCounts()
   for (const raw of open) {
     const row = Open.parse(raw)
     const issue: FlowIssue = {
@@ -157,11 +167,16 @@ export async function readFlow(
     const column = columns[row.state]
     column.count++
     column.issues.push(issue)
-    const counts = perProject.get(repoOf(row.repo)) ?? { open: 0, working: 0, waiting: 0, queued: 0 }
+    const counts = perProject.get(repoOf(row.repo)) ?? { open: 0, work: emptyWorkCounts() }
     counts.open++
-    // the one definition of the three counts (`FLOW_COUNT_STATES`): they add up to `open`
-    const count = flowCountOfState(row.state)
-    if (count) counts[count]++
+    // the one definition of the five words (`workOf`): they add up to `open`; a hidden repo still counts by its real queue reason
+    const placed = workOf({
+      state: row.state,
+      waitReason: row.wait_reason,
+      queueKind: options.queue?.get(row.id)?.kind,
+    })
+    addWork(counts.work, placed)
+    addWork(work, placed)
     perProject.set(repoOf(row.repo), counts)
   }
 
@@ -216,6 +231,7 @@ export async function readFlow(
     perProject: [...perProject]
       .map(([repo, counts]) => ({ repo, ...counts }))
       .sort((a, b) => a.repo.localeCompare(b.repo)),
+    work,
     trend,
     queueStates: {
       global: states.find((row) => row.project === '')?.state ?? 'run',

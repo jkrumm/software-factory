@@ -28,9 +28,9 @@ const TAB_NAME: Record<Tab, string> = {
 }
 const SESSION_WORD: Record<string, string> = {
   starting: 'Starting',
-  working: 'Working',
+  working: 'Active',
   idle: 'Idle between turns',
-  waiting: 'Waiting',
+  waiting: 'Paused',
   walled: 'Stopped at its account limit',
   blocked: 'Blocked',
   stuck: 'Stuck',
@@ -81,7 +81,7 @@ test('the header shows title, kind, state, project, regressions and the facts', 
       page.getByText(issue.kind.charAt(0).toUpperCase() + issue.kind.slice(1), { exact: true }).first(),
     ).toBeVisible()
   const header = page.locator('main header').first()
-  await expect(header.getByText(/^(Being settled|Queued|Working|Waiting|Watching|Done|Closed)/).first()).toBeVisible()
+  await expect(header.getByText(/^(Running|Paused|Ready|Held|Checking|Done|Closed)/).first()).toBeVisible()
   const project = page.getByRole('link', { name: issue.repoName, exact: true }).first()
   await expect(project).toHaveAttribute('href', `/projects/${issue.repoName}`)
   await project.click()
@@ -127,7 +127,7 @@ test('the working Issue has no regression badge and shows its live attempt', asy
   await expect(row).toContainText(`Attempt ${issue.sessions.length}`)
   await expect(row).toContainText(SESSION_WORD[live.state] ?? '')
   await expect(row).toContainText(`Turn ${live.turn}`)
-  await expect(page.getByText('Waiting on you')).toHaveCount(0)
+  await expect(page.getByText('On you', { exact: true })).toHaveCount(0)
   await noIds(page, idsOf(issue))
 })
 
@@ -206,7 +206,7 @@ test('the overview figures are the totals of the API, with a bar per attempt', a
     await expect(stat(page, 'Tokens out').locator('span.tabular-nums')).toHaveText(/^–.*not counted tokens/)
     await expect(stat(page, 'Cache read share').locator('span.tabular-nums').first()).toHaveText(/^–/)
   }
-  await expect(stat(page, 'Working time').locator('span.tabular-nums')).toHaveText(/^[\d.]+ (ms|s|min)$/)
+  await expect(stat(page, 'Active time').locator('span.tabular-nums')).toHaveText(/^[\d.]+ (ms|s|min)$/)
   for (const [title, pick] of [
     ['Turns', (s: ReadIssueDetail['sessions'][number]) => s.insights.turns],
     ...(tokensCounted

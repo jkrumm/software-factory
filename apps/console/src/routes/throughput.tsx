@@ -272,15 +272,15 @@ function Answers({ model }: { model: Model }) {
         <StatCard
           id="throughput-queue"
           icon={HourglassIcon}
-          title="What do queued Issues wait for?"
-          subtitle={`Queued hours over ${windowName(model.hours)}`}
+          title="What keeps Issues from starting?"
+          subtitle={`Hours in the queue over ${windowName(model.hours)}`}
           value={queue.binding ? hoursWords(queue.binding.hours) : null}
           valueNote="No Issue waited for a cost of the factory in this window"
           sub={queue.sentence}
           chart={
             queue.binding ? (
               <Sparkline
-                name={`Queued hours for ${queueWords(queue.binding.kind)}`}
+                name={`Hours in the queue for ${queueWords(queue.binding.kind)}`}
                 values={queue.perDay.map((d) => d.hours)}
                 labels={queue.perDay.map((d) => dayWords(d.day))}
                 format={hoursWords}
@@ -598,17 +598,17 @@ function Timeline({ model }: { model: Model }) {
 function Reasons({ model }: { model: Model }) {
   const { byReason } = model.answers.queue
   return (
-    <Section level={3} title="What each reason cost" aside="Queued hours in the window">
+    <Section level={3} title="What each reason cost" aside="Hours in the queue in the window">
       {byReason.length === 0 ? (
         <Nothing>No Issue waited for a cost of the factory in this window.</Nothing>
       ) : (
         <Table
           narrow
-          label="Queued hours by reason"
+          label="Hours in the queue by reason"
           head={
             <>
               <th className={TH}>Reason</th>
-              <th className={cn(TH, NUM)}>Queued</th>
+              <th className={cn(TH, NUM)}>Hours</th>
               <th className={cn(TH, NUM)}>Issues</th>
             </>
           }

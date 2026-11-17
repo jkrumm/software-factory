@@ -54,7 +54,7 @@ export const SINCE_SUBTITLE: Record<SinceKey, string> = {
   incidents: 'Something in production raised an alarm and an Issue was opened for it. Its lead is on it.',
   dropped: 'Ended without shipping: the lead gave up and said why. Open one to read the reason.',
   shipped: 'Live, and its check passed. Nothing to do.',
-  filed: 'New work, from you or from what the factory noticed. Nothing to do; it is queued.',
+  filed: 'New work, from you or from what the factory noticed. Nothing to do; it starts when there is room.',
   judge: 'Questions the Judge answered, so they never reached you. Nothing to do.',
   screen: 'Alerts and requests turned away before they reached you. Nothing to do.',
   errands: 'Requests for your hands that ended without you. Nothing to do.',

@@ -1,4 +1,4 @@
-import type { ChainEdge, ChainModel, ChainNode } from '@software-factory/contract'
+import { type ChainEdge, type ChainModel, type ChainNode, workOf } from '@software-factory/contract'
 
 export const SCALE_PROJECT = 'basalt-ui'
 
@@ -7,6 +7,13 @@ const titleOf = (id: string): string => {
   const number = /^issue_(\d+)$/.exec(id)?.[1]
   if (number) return `Export step ${number}`
   return `Plan row ${id.slice(id.lastIndexOf(':') + 1)}`
+}
+
+/** The word the server gives a node: an Issue's by `workOf`, a plan row's Planned with its split. */
+const workFor = (kind: 'issue' | 'row', state: string): ChainNode['work'] => {
+  if (kind === 'row') return { word: 'planned', split: state === 'filable' ? 'due' : 'issue' }
+  const work = workOf({ state })
+  return work ? { word: work.word, split: work.split } : null
 }
 
 const node = (
@@ -21,6 +28,7 @@ const node = (
   repo,
   title: titleOf(id),
   state,
+  work: workFor(kind, state),
   issueKind: 'feature',
   since: kind === 'issue' ? '2026-11-08T00:00:00.000Z' : null,
   waitReason: null,

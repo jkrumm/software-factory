@@ -1,5 +1,5 @@
 import { expect, test } from 'bun:test'
-import type { ChainEdge, ChainModel } from '@software-factory/contract'
+import { type ChainEdge, type ChainModel, type ChainNode, workOf } from '@software-factory/contract'
 import {
   chainCounts,
   chainOf,
@@ -18,12 +18,20 @@ import {
 } from '../src/lib/chain.ts'
 import { layoutOf } from '../src/lib/chain-layout.ts'
 
+/** The `work` the server attaches: an Issue's word by `workOf`, a plan row's Planned with its split; null for a closed Issue. */
+const workFor = (kind: 'issue' | 'row', state: string): ChainNode['work'] => {
+  if (kind === 'row') return { word: 'planned', split: state === 'filable' ? 'due' : 'issue' }
+  const work = workOf({ state })
+  return work ? { word: work.word, split: work.split } : null
+}
+
 const node = (id: string, repo: string, title = id, kind: 'issue' | 'row' = 'issue', state = 'queued') => ({
   id,
   kind,
   repo,
   title,
   state,
+  work: workFor(kind, state),
   issueKind: 'feature' as const,
   since: kind === 'issue' ? '2026-11-08T00:00:00.000Z' : null,
   waitReason: null,
@@ -86,11 +94,14 @@ test('a project keeps its nodes and the nodes an edge joins them to', () => {
 test('words and links: no ids, a number for an Issue only', () => {
   expect(issueNumber(node('issue_12', 'argo'))).toBe('12')
   expect(issueNumber(node('row:argo:x', 'argo', 'X', 'row'))).toBeNull()
-  expect(stateWord('filable')).toBe('Ready to file')
-  expect(stateWord('settling')).toBe('Settling')
+  expect(stateWord(node('row:argo:x', 'argo', 'X', 'row', 'filable'))).toBe('Planned, due to file')
+  expect(stateWord(node('row:argo:y', 'argo', 'Y', 'row', 'waiting'))).toBe('Planned, after another Issue')
+  expect(stateWord(node('issue_1', 'argo'))).toBe('Ready')
+  expect(stateWord(node('issue_4', 'argo', 'S', 'issue', 'settling'))).toBe('Held')
+  expect(stateWord(node('issue_9', 'argo', 'Z', 'issue', 'closed'))).toBe('Closed')
   const byId = new Map(model.nodes.map((n) => [n.id, n]))
   expect(edgeText(model.edges[0] as ChainEdge, byId)).toBe('A blocks B')
-  expect(edgeText(model.edges[2] as ChainEdge, byId)).toBe('Z is done, B no longer waits for it')
+  expect(edgeText(model.edges[2] as ChainEdge, byId)).toBe('Z is done, B is no longer held by it')
 })
 
 const DAY = 86_400_000
@@ -161,9 +172,11 @@ test('words for a date, a distance and a state the kit does not know', () => {
   // the year is named only when it is not `now`'s year
   expect(dateWords('2027-01-05T09:00:00.000Z', NOW)).toMatch(/ Jan 2027, /)
   expect(dateWords('2027-01-05T09:00:00.000Z', Date.parse('2027-02-01T00:00:00.000Z'))).not.toMatch(/2027/)
-  expect(lozengeOf({ kind: 'row', state: 'filable' })).toEqual({ state: 'queued', label: 'Ready to file' })
-  expect(lozengeOf({ kind: 'row', state: 'waiting' })).toEqual({ state: 'waiting' })
-  expect(lozengeOf({ kind: 'issue', state: 'odd' })).toEqual({ state: 'queued', label: 'Odd' })
+  expect(lozengeOf(node('row:q:x', 'quartz', 'X', 'row', 'filable'))).toEqual({ state: 'planned' })
+  expect(lozengeOf(node('row:q:y', 'quartz', 'Y', 'row', 'waiting'))).toEqual({ state: 'planned' })
+  expect(lozengeOf(node('issue_1', 'argo'))).toEqual({ state: 'ready' })
+  expect(lozengeOf(node('issue_2', 'argo', 'W', 'issue', 'waiting'))).toEqual({ state: 'paused' })
+  expect(lozengeOf(node('issue_3', 'argo', 'C', 'issue', 'closed'))).toEqual({ state: 'closed' })
 })
 
 test('a node that waits on open blockers says for whom', () => {
@@ -185,20 +198,21 @@ test('every node has one factual reason line, in the words of docs/language.md',
     waitReason,
   })
   expect(reasonOf(issue('closed'), null)).toEqual({ text: 'Closed, no longer blocks', icon: 'state' })
-  expect(reasonOf(issue('settling'), null)?.text).toBe('Triage is not done')
+  expect(reasonOf(issue('settling'), null)?.text).toBe('Cannot start yet')
   expect(reasonOf(issue('queued'), null)?.text).toBe('Ready to start')
   expect(reasonOf(issue('queued'), 'Waits for A')).toEqual({ text: 'Waits for A', icon: 'hourglass' })
-  expect(reasonOf(issue('working'), null)?.text).toBe('A lead is working')
+  expect(reasonOf(issue('working'), null)?.text).toBe('A lead is on it')
   expect(reasonOf(issue('watching'), null)?.text).toBe('Shipped, the watch is on')
   expect(reasonOf(issue('odd'), null)).toBeNull()
   const dated = { ...node('row:q:x', 'quartz', 'X', 'row', 'waiting'), notBefore: '2026-11-16T09:00:00.000Z' }
   expect(reasonOf(dated, 'Waits for A', NOW)).toMatchObject({ icon: 'clock', title: '2026-11-16 09:00 UTC' })
   expect(reasonOf(dated, 'Waits for A', NOW)?.text).toMatch(/^Not before [A-Z][a-z]{2} \d{1,2} Nov, \d{2}:\d{2}$/)
   expect(reasonOf(node('row:q:y', 'quartz', 'Y', 'row', 'waiting'), 'Waits for X')?.text).toBe('Waits for X')
-  expect(reasonOf(node('row:q:y', 'quartz', 'Y', 'row', 'waiting'), null)).toBeNull()
+  expect(reasonOf(node('row:q:y', 'quartz', 'Y', 'row', 'waiting'), null)?.text).toBe('After another Issue')
+  expect(reasonOf(node('row:q:z', 'quartz', 'Z', 'row', 'filable'), null)?.text).toBe('Due to file')
 })
 
-test('a waiting Issue is worded by its wait reason; a dependency wait names the open blocker', () => {
+test('a paused Issue is worded by its wait reason; a dependency wait names the open blocker', () => {
   const waiting = (waitReason: string) => ({ ...node('issue_7', 'argo', 'T', 'issue', 'waiting'), waitReason })
   // dependency with an open blocker: who it waits for, never the raw enum
   expect(reasonOf(waiting('dependency'), 'Waits for A')).toEqual({ text: 'Waits for A', icon: 'hourglass' })

@@ -1,11 +1,19 @@
-import { FLOW_COUNTS, type FlowCount } from '@software-factory/contract'
+import { WORK_TREND_KEYS, type WorkTrendKey } from '@software-factory/contract'
 import { useState } from 'react'
 import { InfoHint, TimeChart } from '@/components/kit'
 import { bucketWords, DEFAULT_TREND_RANGE, TREND_RANGES, type TrendRange, trendLines } from '@/lib/flow'
 import { useFlowTrend } from '@/lib/queries'
 import { cn } from '@/lib/utils'
 
-const COUNT_LABEL: Record<FlowCount, string> = { working: 'Working', waiting: 'Waiting', queued: 'Queued' }
+const COUNT_LABEL: Record<WorkTrendKey, string> = {
+  running: 'Running',
+  paused: 'Paused',
+  notStarted: 'Not started',
+  checking: 'Checking',
+}
+
+/** The word each series is defined under in `docs/language.md`. */
+const COUNT_WORD = { running: 'running', paused: 'paused', notStarted: 'not started', checking: 'checking' } as const
 
 const SEGMENT =
   'h-7 cursor-pointer rounded-md px-2.5 text-xs whitespace-nowrap outline-none transition-colors focus-visible:ring-3 focus-visible:ring-ring/50'
@@ -45,13 +53,13 @@ function Segments<T extends string>({
 }
 
 /**
- * Issues over time: the peak and the average of one count (working, waiting or queued) in every bucket of a window,
+ * Issues over time: the peak and the average of one count (running, paused, not started or checking) in every bucket of a window,
  * from the server's applied events, so a daytime peak between two instants still shows. The window and the bucket are
  * chosen in the chart's own frame; both lines are plotted from zero.
  */
 export function TrendChart() {
   const [rangeKey, setRangeKey] = useState<TrendRange['key']>(DEFAULT_TREND_RANGE.key)
-  const [count, setCount] = useState<FlowCount>('working')
+  const [count, setCount] = useState<WorkTrendKey>('running')
   const range = TREND_RANGES.find((choice) => choice.key === rangeKey) ?? DEFAULT_TREND_RANGE
   const { data, error, isPending } = useFlowTrend(range.window, range.bucket)
   const lines = data ? trendLines(data, count) : null
@@ -69,7 +77,7 @@ export function TrendChart() {
         <div className="mr-auto min-w-0">
           <h2 className="flex items-center gap-0.5 text-[length:var(--vx-text-md)] leading-tight font-semibold tracking-tight">
             Issues over time
-            <InfoHint word={count} className="-my-1" />
+            <InfoHint word={COUNT_WORD[count]} className="-my-1" />
           </h2>
           <p className="text-xs text-muted-foreground">
             Issues, never sessions: the most at any instant of {range.bucket === 'hour' ? 'an hour' : 'a day'} and the
@@ -78,7 +86,7 @@ export function TrendChart() {
         </div>
         <Segments
           label="Count"
-          choices={FLOW_COUNTS.map((key) => ({ key, label: COUNT_LABEL[key] }))}
+          choices={WORK_TREND_KEYS.map((key) => ({ key, label: COUNT_LABEL[key] }))}
           value={count}
           onChange={setCount}
         />

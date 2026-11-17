@@ -1,4 +1,4 @@
-import { HourglassIcon, QueueIcon, SidebarSimpleIcon, XIcon } from '@phosphor-icons/react'
+import { HourglassIcon, LockSimpleIcon, QueueIcon, SidebarSimpleIcon, XIcon } from '@phosphor-icons/react'
 import { useFormatForDisplay } from '@tanstack/react-hotkeys'
 import { Link } from '@tanstack/react-router'
 import { createContext, type ReactElement, type ReactNode, use, useCallback, useMemo, useState } from 'react'
@@ -6,7 +6,8 @@ import { createPortal } from 'react-dom'
 import { InfoHint, type InfoWord } from '@/components/kit'
 import { Logo } from '@/components/logo'
 import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip'
-import { cardsOf, countsOf, type OpenSplit, openCount } from '@/lib/flow'
+import { openOfWork, WORK_WORDS, type WorkCounts } from '@software-factory/contract'
+import { cardsOf, countsOf, LIST_LABEL, openCount } from '@/lib/flow'
 import { NAV, type NavItem } from '@/lib/nav'
 import { useFlow } from '@/lib/queries'
 import { cn } from '@/lib/utils'
@@ -111,50 +112,36 @@ export function ActiveFilters({ chips }: { chips: FilterChip[] }) {
 }
 
 /**
- * Working, waiting and queued Issues of a row, as three small figures by the one definition of the three counts: a lit
- * lamp, an hourglass and a queue. A zero keeps its slot empty so the figures of every row line up; with all three at
- * zero nothing shows.
+ * The open Issues of a row by the five words, as small figures: a lit lamp (Running), an hourglass (Paused), a queue
+ * (Ready) and a lock (Held); Checking is in the hover only. A zero keeps its slot empty so the figures of every row line
+ * up; with all five at zero nothing shows.
  */
-function OpenFigures({ working, waiting, queued }: OpenSplit) {
-  if (working + waiting + queued === 0) return null
-  const words = [
-    working ? `${working} working` : null,
-    waiting ? `${waiting} waiting` : null,
-    queued ? `${queued} queued` : null,
-  ]
-    .filter(Boolean)
-    .join(', ')
+function OpenFigures({ work }: { work: WorkCounts }) {
+  if (openOfWork(work) === 0) return null
+  const words = WORK_WORDS.flatMap((word) =>
+    work[word] ? [`${work[word]} ${LIST_LABEL[word].toLowerCase()}`] : [],
+  ).join(', ')
   const slot = 'flex w-7 shrink-0 items-center gap-0.5'
+  const figure = (count: number, mark: ReactNode, strong?: boolean) => (
+    <span aria-hidden className={slot}>
+      {count ? (
+        <>
+          {mark}
+          <span className={cn('w-[2ch] text-right', strong && 'text-foreground')}>{count}</span>
+        </>
+      ) : null}
+    </span>
+  )
   return (
     <span
       aria-label={words}
       title={`${words} (Issues, not sessions)`}
       className="flex shrink-0 items-center gap-0.5 text-xs font-normal tabular-nums"
     >
-      <span aria-hidden className={slot}>
-        {working ? (
-          <>
-            <span className="mx-[3px] size-1.5 shrink-0 rounded-full bg-good" />
-            <span className="w-[2ch] text-right text-foreground">{working}</span>
-          </>
-        ) : null}
-      </span>
-      <span aria-hidden className={slot}>
-        {waiting ? (
-          <>
-            <HourglassIcon className="size-3 shrink-0" />
-            <span className="w-[2ch] text-right">{waiting}</span>
-          </>
-        ) : null}
-      </span>
-      <span aria-hidden className={slot}>
-        {queued ? (
-          <>
-            <QueueIcon className="size-3 shrink-0" />
-            <span className="w-[2ch] text-right">{queued}</span>
-          </>
-        ) : null}
-      </span>
+      {figure(work.running, <span className="mx-[3px] size-1.5 shrink-0 rounded-full bg-good" />, true)}
+      {figure(work.paused, <HourglassIcon className="size-3 shrink-0" />)}
+      {figure(work.ready, <QueueIcon className="size-3 shrink-0" />)}
+      {figure(work.held, <LockSimpleIcon className="size-3 shrink-0" />)}
     </span>
   )
 }
@@ -180,8 +167,8 @@ export function SidebarEntry({
   countLabel?: string
   /** The sentence for the count's hover, saying what exactly is counted. */
   countTitle?: string
-  /** The open Issues behind this row, split into working, waiting and queued; a row with none shows no figure. */
-  open?: OpenSplit
+  /** The open Issues behind this row, by the five words; a row with none shows no figure. */
+  open?: WorkCounts
   pressed?: boolean
   current?: boolean
   /** A domain word to define: its InfoHint sits beside the row, never inside the toggle. */
@@ -214,7 +201,7 @@ export function SidebarEntry({
             {countLabel ? <span className="ml-1 text-muted-foreground">{countLabel}</span> : null}
           </span>
         )}
-        {open ? <OpenFigures {...open} /> : null}
+        {open ? <OpenFigures work={open} /> : null}
       </>
     ),
   })
@@ -319,7 +306,7 @@ export function Sidebar({ needs }: { needs: number | null }) {
             item={item}
             collapsed={collapsed}
             count={item.to === '/needs-you' ? needs : item.to === '/flow' ? open : null}
-            countLabel={item.to === '/flow' ? 'open' : 'waiting'}
+            countLabel={item.to === '/flow' ? 'open' : 'to answer'}
             prominent={item.to === '/needs-you'}
           />
         ))}

@@ -1,3 +1,4 @@
+import { workOf } from '@software-factory/contract'
 import { cut, plainText } from './plain.ts'
 
 /** What an Issue's event says in plain words, and what each state and wait means as one sentence. All input is data and is only quoted. */
@@ -38,7 +39,7 @@ export function describeEvent(kind: string, payload: unknown): string {
     case 'filed':
       return 'Filed.'
     case 'settled':
-      return 'Settled and queued.'
+      return 'Settled; not started yet.'
     case 'admitted':
       return 'A lead was admitted.'
     case 'lead_started':
@@ -73,7 +74,7 @@ export function describeEvent(kind: string, payload: unknown): string {
       return `An errand was turned back: ${cut(plainText(field(payload, 'note') ?? ''))}`
     case 'deferred': {
       const review = field(payload, 'review')
-      return review ? `Waiting on the review of ${cut(plainText(review))}.` : 'Deferred.'
+      return review ? `Paused on the review of ${cut(plainText(review))}.` : 'Deferred.'
     }
     case 'stalled':
       return after('Stalled', field(payload, 'detail'))
@@ -106,15 +107,15 @@ export function stateSentence(input: {
 }): string {
   switch (input.state) {
     case 'settling':
-      return 'Being settled.'
+      return 'Held: being settled.'
     case 'queued':
       return queueSentence(input.queue ?? null)
     case 'working':
-      return 'The lead is working on it.'
+      return 'Running: a lead is on it.'
     case 'watching':
-      return 'Shipped, held for its check.'
+      return 'Checking: shipped, its check is pending.'
     case 'waiting':
-      return (input.reason && WAIT_SENTENCE[input.reason]) || 'Waiting.'
+      return (input.reason && WAIT_SENTENCE[input.reason]) || 'Paused: named wait unknown.'
     default:
       return input.outcome === 'dropped'
         ? 'Dropped.'
@@ -126,63 +127,68 @@ export function stateSentence(input: {
   }
 }
 
-/** One sentence for a queued Issue: the real reason when the queue order gives one, else the account it waits for. */
+/**
+ * One sentence for a not-started Issue, opening with its word: Held when nothing but another Issue, a line, a drain or a
+ * Spec keeps it out, else Ready with the limit that binds it (the queue order's own words, or a free seat).
+ */
 function queueSentence(
   queue: { kind: string; message: string; repoName?: string; heldBy?: number | null } | null,
 ): string {
-  if (!queue) return 'Queued, waiting for a free account.'
+  const work = workOf({ state: 'queued', queueKind: queue?.kind ?? null })
+  const word = work?.word === 'held' ? 'Held' : 'Ready'
+  if (!queue) return 'Ready: waits only for a free seat.'
   switch (queue.kind) {
     case 'drain':
-      return 'Queued: the queue is draining, so no new work starts.'
+      return 'Held: the queue is draining, so no new work starts.'
     case 'claim': {
       const repo = queue.repoName ? ` ${queue.repoName}` : ' its repo'
       return queue.heldBy
-        ? `Queued behind another Issue that holds${repo}.`
-        : `Queued: the claims on${repo} are full, so it starts when one frees.`
+        ? `Ready: another Issue holds${repo}, it starts when that claim frees.`
+        : `Ready: the claims on${repo} are full, so it starts when one frees.`
     }
     default: {
       const message = cut(plainText(queue.message))
       return message
-        ? `Queued: ${message.charAt(0).toLowerCase()}${message.slice(1)}.`
-        : 'Queued, waiting for a free account.'
+        ? `${word}: ${message.charAt(0).toLowerCase()}${message.slice(1)}.`
+        : `${word}: see the queue order.`
     }
   }
 }
 
 const WAIT_SENTENCE: Record<string, string> = {
-  timer: 'Waiting for a set time.',
-  dependency: 'Waiting for another Issue to land.',
-  wall: "Paused at the account's usage limit.",
-  unreported: 'The lead stopped without reporting.',
-  blocked: 'Blocked, waiting for the steward to look again.',
-  lead_gone: 'The lead ended; a new attempt is due.',
-  regressed: 'The change broke something; the steward is looking.',
-  decision: 'Waiting for the owner to decide.',
-  review: 'Waiting for the owner to review.',
-  errand: "Waiting for the owner's hands.",
-  external: "Waiting on someone else's review of its pull request.",
+  timer: 'Paused: until a set time.',
+  dependency: 'Paused: for another Issue to land.',
+  wall: "Paused: at the account's usage limit.",
+  unreported: 'Paused: the lead stopped without reporting.',
+  blocked: 'Paused: blocked, the steward looks again.',
+  lead_gone: 'Paused: the lead ended, a new attempt is due.',
+  regressed: 'Paused: the change broke something, the steward is looking.',
+  decision: 'Paused: on the owner to decide.',
+  review: 'Paused: on the owner to review.',
+  errand: "Paused: on the owner's hands.",
+  external: "Paused: on someone else's review of its pull request.",
 }
 
 /** A plain word for what the Issue is doing now. */
 export function phaseOf(input: { state: string; reason: string | null }): string {
   switch (input.state) {
     case 'settling':
-      return 'settling'
+      return 'being settled'
     case 'queued':
-      return 'queued'
+      return 'not started'
     case 'working':
       return 'building'
     case 'watching':
-      return 'watching the ship'
+      return 'checking the ship'
     case 'waiting':
       return input.reason === 'decision'
-        ? 'waiting for your answer'
+        ? 'paused on your answer'
         : input.reason === 'review'
-          ? 'waiting for your review'
+          ? 'paused on your review'
           : input.reason === 'errand'
-            ? 'waiting for your hands'
+            ? 'paused on your hands'
             : input.reason === 'timer' || input.reason === 'dependency' || input.reason === 'external'
-              ? 'waiting'
+              ? 'paused'
               : 'stalled'
     default:
       return 'closed'

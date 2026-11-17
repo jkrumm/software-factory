@@ -80,7 +80,7 @@ function TabBar({ count }: { count: number | null }) {
           {to === '/needs-you' && count ? (
             <Badge
               className="absolute top-1.5 left-1/2 ml-2 h-4 min-w-4 justify-center px-1"
-              aria-label={`${count} waiting`}
+              aria-label={`${count} to answer`}
             >
               {count}
             </Badge>

@@ -192,7 +192,7 @@ export const KPI_HINT = {
   cost: 'cost',
   queue_time: 'queue wait',
   idle_capacity: 'idle',
-  working_share: 'working',
+  working_share: 'running',
   dropped_after_lead: 'dropped',
   amend_rate: 'amend',
   nudges_acted: 'steward',

@@ -1,5 +1,5 @@
 import { createFileRoute, Link, useNavigate } from '@tanstack/react-router'
-import type { FlowModel } from '@software-factory/contract'
+import type { FlowModel, WorkCounts } from '@software-factory/contract'
 import { CheckCircleIcon, HourglassIcon, QueueIcon, RocketLaunchIcon } from '@phosphor-icons/react'
 import { useState } from 'react'
 import { DigestStrip } from '@/components/flow/digest-strip'
@@ -17,7 +17,6 @@ import {
   LIST_LABEL,
   listOf,
   listStateOf,
-  type OpenSplit,
   openSplits,
   originsOf,
   originWord,
@@ -38,7 +37,7 @@ import { useFlow, useProjectDigests } from '@/lib/queries'
 const text = (value: unknown): string | undefined => (typeof value === 'string' && value !== '' ? value : undefined)
 
 export const Route = createFileRoute('/flow')({
-  /** `project` and `origin` filter the list, `state` picks what it lists: `/flow?project=argo&state=working` is a linkable view. */
+  /** `project` and `origin` filter the list, `state` picks what it lists: `/flow?project=argo&state=running` is a linkable view. */
   validateSearch: (search: Record<string, unknown>): FlowFilters => {
     const project = text(search.project)
     const origin = text(search.origin)
@@ -54,7 +53,7 @@ function FlowSidebar({ data, filters }: { data: FlowModel; filters: FlowFilters 
   const entries = (
     name: 'project' | 'origin',
     values: readonly string[],
-    splits: Record<string, OpenSplit>,
+    splits: Record<string, WorkCounts>,
     word: (value: string) => string,
   ) =>
     values.map((value) => {
@@ -93,13 +92,14 @@ function FlowSidebar({ data, filters }: { data: FlowModel; filters: FlowFilters 
 }
 
 const STAT_ICON = {
-  working: RocketLaunchIcon,
-  waiting: HourglassIcon,
-  queued: QueueIcon,
-  settling: QueueIcon,
-  watching: QueueIcon,
+  running: RocketLaunchIcon,
+  paused: HourglassIcon,
+  notStarted: QueueIcon,
   shipped: CheckCircleIcon,
 } as const
+
+/** The domain word each card carries an InfoHint for. */
+const STAT_HINT = { running: 'running', paused: 'paused', notStarted: 'not started' } as const
 
 /** The four stat cards: factory-wide, each opens the list of the Issues it counts. */
 function StatRow({ data, now }: { data: FlowModel; now: number }) {
@@ -115,7 +115,7 @@ function StatRow({ data, now }: { data: FlowModel; now: number }) {
           className="w-72 shrink-0 snap-start lg:w-auto"
           icon={STAT_ICON[stat.key]}
           title={stat.title}
-          hint={stat.key === 'shipped' ? undefined : stat.key}
+          hint={stat.key === 'shipped' ? undefined : STAT_HINT[stat.key]}
           subtitle={stat.subtitle}
           value={stat.value}
           delta={{ value: stat.delta, higherIsBetter: stat.higherIsBetter }}
@@ -147,7 +147,7 @@ function FlowList({ data, filters, now }: { data: FlowModel; filters: FlowFilter
           Issues
         </h2>
         <p className="pt-2 text-sm text-muted-foreground">
-          Pick a count, a project or an origin to list its Issues here.
+          Pick a word, a project or an origin to list its Issues here.
         </p>
       </section>
     )

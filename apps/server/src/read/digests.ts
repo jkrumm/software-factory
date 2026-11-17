@@ -1,8 +1,9 @@
-import { DigestAnswer, type ProjectDigest, type ProjectDigestsModel } from '@software-factory/contract'
+import { DigestAnswer, type ProjectDigest, type ProjectDigestsModel, sumWorkCounts } from '@software-factory/contract'
 import type { SQL } from 'bun'
 import * as z from 'zod'
 import { countsOf, DIGEST_WINDOW_MS, groupByProject } from '../kernel/digest-scope.ts'
 import { loopReads } from './loops.ts'
+import { queueKindOf, type QueueReasons } from './flow.ts'
 import { isWorkRepo, loadOpenProjects, REDACTED_REPO, REDACTED_TITLE } from './work.ts'
 
 const Project = z.object({ name: z.string(), repo: z.string() })
@@ -16,7 +17,7 @@ const Latest = z.object({ project: z.string(), at: z.date(), digest: z.unknown()
  */
 export async function readProjectDigests(
   sql: SQL,
-  options: { now: Date; redact?: boolean },
+  options: { now: Date; redact?: boolean; queue?: QueueReasons },
 ): Promise<ProjectDigestsModel> {
   const { now } = options
   const projectRows: unknown[] = await sql`
@@ -38,7 +39,7 @@ export async function readProjectDigests(
     if (!group || group.length === 0 || !stored) continue
     const digest = DigestAnswer.safeParse(typeof stored.digest === 'string' ? JSON.parse(stored.digest) : stored.digest)
     if (!digest.success) continue
-    const counts = countsOf(group, now)
+    const counts = countsOf(group, now, queueKindOf(options.queue))
     const hide = options.redact === true && isWorkRepo(project.name, open)
     entries.push({
       project: hide ? REDACTED_REPO : project.name,
@@ -68,9 +69,7 @@ function mergeHidden(entries: readonly ProjectDigest[]): ProjectDigest[] {
       at: seen.at > entry.at ? seen.at : entry.at,
       counts: {
         done7d: seen.counts.done7d + entry.counts.done7d,
-        working: seen.counts.working + entry.counts.working,
-        queued: seen.counts.queued + entry.counts.queued,
-        waiting: seen.counts.waiting + entry.counts.waiting,
+        work: sumWorkCounts(seen.counts.work, entry.counts.work),
       },
     })
   }

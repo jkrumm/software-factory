@@ -1,8 +1,9 @@
 import { createHmac, randomBytes } from 'node:crypto'
 import type { SQL } from 'bun'
 import * as z from 'zod'
-import { FLOW_KINDS } from '@software-factory/contract'
+import { FLOW_KINDS, workOf } from '@software-factory/contract'
 import type { ChainEdge, ChainModel, ChainNode } from '@software-factory/contract'
+import type { QueueReasons } from './flow.ts'
 import { plain } from './words.ts'
 import { isWorkRepo, loadOpenProjects, REDACTED_REPO, REDACTED_TITLE } from './work.ts'
 
@@ -65,7 +66,10 @@ const OPAQUE_KEY = randomBytes(32)
 export async function readChain(
   sql: SQL,
   now: Date,
-  options: { /** the read token: a work repo's words go */ redact?: boolean } = {},
+  options: {
+    /** the read token: a work repo's words go */ redact?: boolean
+    /** why each queued Issue stays queued */ queue?: QueueReasons
+  } = {},
 ): Promise<ChainModel> {
   const openProjects = options.redact ? await loadOpenProjects(sql) : []
   const hidden = (repo: string): boolean => options.redact === true && isWorkRepo(repo, openProjects)
@@ -180,6 +184,11 @@ export async function readChain(
       repo: repoOf(row.repo),
       title: titleOf(row.repo, row.title),
       state: row.state,
+      work: workOf({
+        state: row.state,
+        waitReason: row.wait_reason,
+        queueKind: options.queue?.get(row.id)?.kind ?? null,
+      }),
       issueKind: kindOf(row.kind),
       since: row.since?.toISOString() ?? null,
       waitReason: row.wait_reason,
@@ -207,6 +216,7 @@ export async function readChain(
       repo: repoOf(row.repo ?? project),
       title: titleOf(row.repo ?? project, row.title ?? row.key),
       state: waiting ? 'waiting' : 'filable',
+      work: { word: 'planned', split: !waiting ? 'due' : mine.some((edge) => !edge.closed) || held ? 'issue' : 'date' },
       issueKind: kindOf(row.kind ?? 'feature'),
       since: null,
       waitReason: null,

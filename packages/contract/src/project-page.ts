@@ -1,5 +1,6 @@
 import * as z from 'zod'
 import { IssueRef } from './planning.ts'
+import { WorkCounts } from './work-words.ts'
 
 /**
  * The Console's project screens: every project in one list, one project's page, and one project's hygiene. Read models over
@@ -14,11 +15,8 @@ export const ProjectCounts = z
   .strictObject({
     /** closed done or healed in the last 7 days */
     done7d: z.number().int().min(0),
-    /** working or watching now */
-    working: z.number().int().min(0),
-    /** settling or queued now */
-    queued: z.number().int().min(0),
-    waiting: z.number().int().min(0),
+    /** the open Issues by the five words (`workOf`) */
+    work: WorkCounts,
   })
   .meta({ id: 'ProjectCounts' })
 export type ProjectCounts = z.infer<typeof ProjectCounts>
@@ -36,8 +34,6 @@ export const ProjectIndexRow = z
     source: z.enum(['file', 'defaults']),
     branch: z.string().nullable(),
     counts: ProjectCounts,
-    /** Issues in Watch now (counted in `counts.working` too) */
-    watching: z.number().int().min(0),
     /** the newest hygiene pass; null: the project was never swept */
     hygiene: z.strictObject({
       lastPassAt: at.nullable(),

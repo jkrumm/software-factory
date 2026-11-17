@@ -4,7 +4,6 @@ import { KindBadge } from '@/components/kit/kind-badge'
 import { Lozenge } from '@/components/kit/lozenge'
 import { PropertyList } from '@/components/kit/property-list'
 import { durationWords } from '@/components/kit/step-rail'
-import { ISSUE_STATE_WORDS } from '@/lib/issue'
 import { kindOf, lozengeStateOf, nextActions, regressionCount } from '@/lib/issue-page'
 import { spanWords } from '@/lib/needs'
 import { cn } from '@/lib/utils'
@@ -23,10 +22,8 @@ export function Header({ issue, now, narrow }: { issue: ReadIssueDetail; now: nu
     <header className="flex flex-col gap-3">
       <div className="flex flex-wrap items-center gap-2">
         {kind ? <KindBadge kind={kind} /> : null}
-        <Lozenge state={lozengeStateOf(issue)}>
-          {issue.state === 'closed' ? undefined : ISSUE_STATE_WORDS[issue.state]}
-        </Lozenge>
-        {issue.waitingOnOwner ? <Lozenge state="waiting">Waiting on you</Lozenge> : null}
+        <Lozenge state={lozengeStateOf(issue)} />
+        {issue.waitingOnOwner ? <Lozenge state="paused">On you</Lozenge> : null}
         {regressions > 0 ? <Lozenge tone="bad">{`Regressed ${regressions}×`}</Lozenge> : null}
         <ProjectChip name={issue.repoName} />
       </div>
@@ -58,7 +55,7 @@ export function Header({ issue, now, narrow }: { issue: ReadIssueDetail; now: nu
             ? { label: 'Closed', value: <Ago iso={closedAt} now={now} className="font-mono text-xs" /> }
             : { label: 'Updated', value: <Ago iso={issue.updatedAt} now={now} className="font-mono text-xs" /> },
           { label: 'Elapsed', value: <span className="tabular-nums">{spanWords(insights.elapsedMs)}</span> },
-          { label: 'Working time', value: <span className="tabular-nums">{durationWords(insights.workingMs)}</span> },
+          { label: 'Active time', value: <span className="tabular-nums">{durationWords(insights.workingMs)}</span> },
           { label: 'Attempts', value: <span className="tabular-nums">{insights.attempts}</span> },
         ]}
       />

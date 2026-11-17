@@ -105,6 +105,7 @@ Patterns a factory needs, each one held by a check and not by a convention:
 | **A caller is its token.** A route with no policy row is refused for everyone | `api/policy.ts` and the test that fails without a row |
 | **Hooks never speak.** Claude Code injects a hook's stdout into the session | the hook imports two modules and prints nothing |
 | **One word per thing.** A retired word fails the build | `scripts/retired-words.ts` |
+| **One vocabulary for where work stands.** A stored state word on a screen fails the build | `scripts/vocabulary.ts` |
 | **No private data in a public repo** | `scripts/public-scan.ts` (hosts, addresses, accounts, secrets, work repos) |
 
 ## Architecture

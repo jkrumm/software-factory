@@ -1,5 +1,5 @@
 import type { ChainEdge, ChainModel, ChainNode } from '@software-factory/contract'
-import { LOZENGE_STATES, type LozengeState } from '@/components/kit/lozenge'
+import type { LozengeState } from '@/components/kit/lozenge'
 
 export const NODE_WIDTH = 320
 export const NODE_HEIGHT = 144
@@ -59,19 +59,21 @@ export function chainCounts(data: Pick<ChainModel, 'nodes' | 'edges'>): {
   return { projects, isolated: chainOf(data).isolated }
 }
 
-const STATE_WORD: Record<string, string> = {
-  settling: 'Settling',
-  queued: 'Queued',
-  working: 'Working',
-  waiting: 'Waiting',
-  watching: 'Watching',
-  closed: 'Closed',
-  filable: 'Ready to file',
+const PLANNED_WORD: Record<string, string> = {
+  due: 'Due to file',
+  issue: 'After another Issue',
+  date: 'Not before a set date',
 }
 
-/** A node's state as the word the owner reads. */
-export const stateWord = (state: string): string =>
-  STATE_WORD[state] ?? `${state.charAt(0).toUpperCase()}${state.slice(1)}`
+const lowerFirst = (text: string): string => `${text.charAt(0).toLowerCase()}${text.slice(1)}`
+
+/** A node's place as the word the owner reads: an Issue's one of the five, a plan row's Planned with why. */
+export function stateWord(node: Pick<ChainNode, 'state' | 'work'>): string {
+  const { work } = node
+  if (!work) return node.state === 'closed' ? 'Closed' : `${node.state.charAt(0).toUpperCase()}${node.state.slice(1)}`
+  const word = `${work.word.charAt(0).toUpperCase()}${work.word.slice(1)}`
+  return work.word === 'planned' && work.split ? `${word}, ${lowerFirst(PLANNED_WORD[work.split] ?? work.split)}` : word
+}
 
 /** The Issue's number for its page (`issue_12` is `12`); a plan row has no page. */
 export const issueNumber = (node: ChainNode): string | null =>
@@ -80,20 +82,16 @@ export const issueNumber = (node: ChainNode): string | null =>
 /** The text of an edge for a screen reader and its label: who blocks whom, or that the blocker is done. */
 export const edgeText = (edge: ChainEdge, byId: Map<string, Pick<ChainNode, 'title'>>): string => {
   const blocker = byId.get(edge.to)?.title ?? 'Unknown'
-  const waiting = byId.get(edge.from)?.title ?? 'Unknown'
-  return isBlocked(edge) ? `${blocker} blocks ${waiting}` : `${blocker} is done, ${waiting} no longer waits for it`
+  const held = byId.get(edge.from)?.title ?? 'Unknown'
+  return isBlocked(edge) ? `${blocker} blocks ${held}` : `${blocker} is done, ${held} is no longer held by it`
 }
 
 export const isolatedNote = (count: number): string =>
   `${count} more ${count === 1 ? 'item has' : 'items have'} no dependencies, so ${count === 1 ? 'it is' : 'they are'} not drawn`
 
-const isLozenge = (state: string): state is LozengeState => (LOZENGE_STATES as readonly string[]).includes(state)
-
-/** The Lozenge of a node: its state, or a neutral one carrying the state's word where the kit has no such state. */
-export function lozengeOf(node: Pick<ChainNode, 'kind' | 'state'>): { state: LozengeState; label?: string } {
-  if (node.kind === 'row' && node.state === 'filable') return { state: 'queued', label: stateWord('filable') }
-  if (isLozenge(node.state)) return { state: node.state }
-  return { state: 'queued', label: stateWord(node.state) }
+/** The Lozenge of a node: the word its work stands under, Planned for a plan row, Closed for a closed Issue. */
+export function lozengeOf(node: Pick<ChainNode, 'work'>): { state: LozengeState; label?: string } {
+  return { state: node.work?.word ?? 'closed' }
 }
 
 const DAY = 86_400_000
@@ -244,11 +242,11 @@ export interface NodeReason {
 }
 
 const STATE_REASON: Record<string, string> = {
-  settling: 'Triage is not done',
-  queued: 'Ready to start',
-  working: 'A lead is working',
-  watching: 'Shipped, the watch is on',
-  waiting: 'A named wait',
+  running: 'A lead is on it',
+  paused: 'A named wait',
+  ready: 'Ready to start',
+  held: 'Cannot start yet',
+  checking: 'Shipped, the watch is on',
   closed: 'Closed, no longer blocks',
 }
 
@@ -266,7 +264,10 @@ export function reasonOf(node: ChainNode, waitsFor: string | null, now: number =
   if (node.waitReason === 'dependency' && waitsFor) return { text: waitsFor, icon: 'hourglass' }
   if (node.waitReason) return { text: node.waitReason, icon: 'state' }
   if (waitsFor) return { text: waitsFor, icon: 'hourglass' }
-  if (node.kind === 'row') return node.state === 'filable' ? { text: 'Nothing holds it back', icon: 'state' } : null
-  const text = STATE_REASON[node.state]
+  if (node.kind === 'row') {
+    const text = PLANNED_WORD[node.work?.split ?? '']
+    return text ? { text, icon: 'state' } : null
+  }
+  const text = STATE_REASON[node.work?.word ?? '']
   return text ? { text, icon: 'state' } : null
 }

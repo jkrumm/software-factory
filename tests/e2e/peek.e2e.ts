@@ -34,7 +34,7 @@ test('from Flow, a row opens the Issue in the peek and Escape leaves the list wh
   apiUrl,
 }) => {
   const working = await firstWorking(apiUrl)
-  await page.goto(`/flow?project=${working.repo}&state=working`)
+  await page.goto(`/flow?project=${working.repo}&state=running`)
   const card = row(page, working.title)
   await expect(card).toBeVisible()
   // a mark on the live list: the page underneath must never be remounted, or its scroll and filters would be lost
@@ -62,7 +62,7 @@ test('from Flow, a row opens the Issue in the peek and Escape leaves the list wh
 
 test('the peek address reloads into the same state, and back closes it', async ({ page, apiUrl }) => {
   const working = await firstWorking(apiUrl)
-  await page.goto('/flow?state=working')
+  await page.goto('/flow?state=running')
   await row(page, working.title).getByRole('link', { name: working.title, exact: true }).click()
   await expect(panel(page)).toBeVisible()
   const opened = page.url()
@@ -82,7 +82,7 @@ test('the peek address reloads into the same state, and back closes it', async (
 
   await page.goBack()
   await expect(panel(page)).toBeHidden()
-  await expect(page).toHaveURL(/\/flow\?state=working$/)
+  await expect(page).toHaveURL(/\/flow\?state=running$/)
   await page.goForward()
   await expect(panel(page)).toBeVisible()
 })
@@ -108,7 +108,7 @@ test('another card swaps what the peek shows in one history step; Escape closes 
 
 test('a modifier click and "Open full page" go to the page', async ({ page, apiUrl, context }) => {
   const working = await firstWorking(apiUrl)
-  await page.goto('/flow?state=working')
+  await page.goto('/flow?state=running')
   const link = row(page, working.title).getByRole('link', { name: working.title, exact: true })
   const [tab] = await Promise.all([context.waitForEvent('page'), link.click({ modifiers: ['ControlOrMeta'] })])
   expect(new URL(tab.url()).pathname).toBe(`/issues/${numberOf(working.id)}`)

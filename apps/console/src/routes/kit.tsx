@@ -92,12 +92,12 @@ function Kit() {
         <div className="grid grid-cols-[repeat(auto-fill,minmax(22rem,1fr))] gap-4">
           <StatCard
             icon={RocketLaunchIcon}
-            {...KIT_STATS.working}
+            {...KIT_STATS.running}
             as={(p) => <Link to="/flow" {...p} />}
             onMenu={() => undefined}
           />
-          <StatCard icon={HourglassIcon} {...KIT_STATS.waiting} onMenu={() => undefined} />
-          <StatCard icon={QueueIcon} {...KIT_STATS.queued} onMenu={() => undefined} />
+          <StatCard icon={HourglassIcon} {...KIT_STATS.paused} onMenu={() => undefined} />
+          <StatCard icon={QueueIcon} {...KIT_STATS.notStarted} onMenu={() => undefined} />
           <StatCard icon={CheckCircleIcon} {...KIT_STATS.shipped} onMenu={() => undefined} />
         </div>
       </Section>
@@ -166,7 +166,7 @@ function Kit() {
           The whole card is the link: hover it, tab to it, press the three dots that show on hover (they swap with the
           Lozenge). It is built like a StatCard: the header holds the kind as an icon (its name is the tooltip), the
           project, the Issue number and the origin word; the title sits alone in the inset body, 13 px and clamped to
-          three lines; the footer holds the reason and the age. A card in a column that names the state (the working
+          three lines; the footer holds the reason and the age. A card in a column that names the state (the running
           ones here) leaves the Lozenge out. After them come a long title, a plan row (no number, no age) and a compact
           card (the Chain's node: two-line title, one-line reason). The origin word is shown only where it is not You.
           The row is the dense variant for lists, hairlines between rows and no box.
@@ -177,7 +177,7 @@ function Kit() {
               key={i.key}
               {...view(i)}
               origin={KIT_ORIGIN[i.key]}
-              showState={i.state !== 'working'}
+              showState={i.state !== 'running'}
               className={i.number === null ? 'border border-dashed border-muted-foreground/50' : undefined}
               as={i.key === 'export-time' ? (p) => <Link to="/flow" {...p} /> : undefined}
               href={i.key === 'export-time' ? undefined : `#${i.key}`}
@@ -188,11 +188,11 @@ function Kit() {
             project="argo"
             kind="bug"
             number={642}
-            state="waiting"
+            state="paused"
             since={KIT_ISSUES[1]?.since ?? null}
             now={KIT_NOW}
             title="Compact: a title that runs to a second line to show where the clamp falls and what it cuts off"
-            reason="Waiting for the answer to a Decision: which session store to keep, and why the old one goes"
+            reason="On you: a Decision about which session store to keep, and why the old one goes"
             compact
             raised
             href="#compact"
@@ -291,8 +291,8 @@ function Kit() {
             <Word word="Errand">Errand</Word>
             <Word word="Decision">Decision</Word>
             <Word word="Judge">Judge</Word>
-            <Word word="Settling">Settling</Word>
-            <Word word="Watching">Watching</Word>
+            <Word word="Running">Running</Word>
+            <Word word="Checking">Checking</Word>
           </div>
         </Section>
 

@@ -1,34 +1,95 @@
 import {
-  type FlowCount,
-  FLOW_COUNT_STATES,
-  flowCountOfState,
-  flowCountsOf,
+  addWork,
+  emptyWorkCounts,
   FLOW_STATES,
   type FlowModel,
   type FlowState,
   type FlowTrendSeries,
+  type HeldSplit,
+  type PausedSplit,
+  type ReadyLimit,
+  WORK_TREND_STATES,
+  WORK_WORDS,
+  type WorkCounts,
+  type WorkTrendKey,
+  type WorkWord,
+  workOf,
 } from '@software-factory/contract'
 import type { IssueKind } from '@/components/kit/kind-badge'
 import type { LozengeState } from '@/components/kit/lozenge'
 import { ageWords } from '@/lib/age'
+import { pausedReason } from '@/lib/paused-reason'
 
-/** An Issue's state, or `closed` for one that is done, dropped, healed or cancelled lately: the key of `cardsOf`. */
-export type StateKey = FlowState | 'closed'
-export const STATE_KEYS: readonly StateKey[] = [...FLOW_STATES, 'closed']
+export { pausedReason }
 
-/** What the list can be opened on: one of the three counts (working takes watching in, queued takes settling in) or what closed lately. */
-export const LIST_STATES = ['working', 'waiting', 'queued', 'closed'] as const
-export type ListState = (typeof LIST_STATES)[number]
+/** An Issue's place under the five words, or `closed` for one that is done, dropped, healed or cancelled lately: the key of `cardsOf`. */
+export type StateKey = WorkWord | 'closed'
+export const STATE_KEYS: readonly StateKey[] = [...WORK_WORDS, 'closed']
+
+/** What the list can be opened on: one of the five words or what closed lately. */
+export const LIST_STATES = STATE_KEYS
+export type ListState = StateKey
 
 export const LIST_LABEL: Record<ListState, string> = {
-  working: 'Working',
-  waiting: 'Waiting',
-  queued: 'Queued',
+  running: 'Running',
+  paused: 'Paused',
+  ready: 'Ready',
+  held: 'Held',
+  checking: 'Checking',
   closed: 'Closed recently',
 }
 
-/** A `state` search value that names a list, or undefined. */
-export const listStateOf = (value: unknown): ListState | undefined => LIST_STATES.find((key) => key === value)
+/** Paused, by who or what it waits for (`PausedSplit`), as the words after the count. */
+export const PAUSED_LABEL: Record<PausedSplit, string> = {
+  you: 'on you',
+  timer: 'on a timer',
+  issue: 'on another Issue',
+  stalled: 'stalled',
+}
+
+/** Ready, by the one limit that holds it (`ReadyLimit`). */
+export const READY_LABEL: Record<ReadyLimit, string> = {
+  seat: 'a free seat',
+  host: 'the host',
+  repo: "the repo's claims",
+  account: "the account's window",
+}
+
+/** Held, by what keeps it from starting (`HeldSplit`). */
+export const HELD_LABEL: Record<HeldSplit, string> = {
+  issue: 'behind another Issue',
+  line: 'the line is red',
+  drain: 'drained',
+  spec: 'an open Spec',
+  settling: 'being settled',
+}
+
+/** "on you 1, on a timer 4": the non-zero parts of a split, in the order of its labels. */
+export function splitWords(counts: Readonly<Record<string, number>>, labels: Readonly<Record<string, string>>): string {
+  return Object.keys(labels)
+    .flatMap((key) => (counts[key] ? [`${labels[key]} ${counts[key]}`] : []))
+    .join(', ')
+}
+
+/** What each word holds and why, for a title: "4 Paused. <definition>" follows with this ("on you 1, stalled 1"). */
+export function workSplitWords(work: WorkCounts, word: WorkWord): string {
+  if (word === 'paused') return splitWords(work.split.paused, PAUSED_LABEL)
+  if (word === 'ready') return splitWords(work.split.ready, READY_LABEL)
+  if (word === 'held') return splitWords(work.split.held, HELD_LABEL)
+  return ''
+}
+
+const LEGACY_STATE = new Map<string, ListState>([
+  ['working', 'running'],
+  ['waiting', 'paused'],
+  ['queued', 'ready'],
+  ['settling', 'held'],
+  ['watching', 'checking'],
+])
+
+/** A `state` search value that names a list, or undefined; the stored names of an old link read as the word that replaced them. */
+export const listStateOf = (value: unknown): ListState | undefined =>
+  LIST_STATES.find((key) => key === value) ?? (typeof value === 'string' ? LEGACY_STATE.get(value) : undefined)
 
 /** An Issue's origin as the word the owner reads. */
 export const ORIGIN_LABEL = {
@@ -55,8 +116,10 @@ export interface FlowCard {
   repo: string
   origin: string
   kind: IssueKind
-  /** the Issue's state, or a closed Issue's outcome */
+  /** the word the Issue stands under, or a closed Issue's outcome */
   state: LozengeState
+  /** the split of the word (who it is paused on, what holds it); null: running, checking or closed */
+  split: string | null
   /** the queue or wait reason, or the outcome of a closed one; null: no line */
   reason: string | null
   since: string
@@ -65,35 +128,28 @@ export interface FlowCard {
 export interface FlowFilters {
   project?: string
   origin?: string
-  /** Chooses which Issues the list shows (`/flow?state=working`); it never filters the cards of `cardsOf`. */
+  /** Chooses which Issues the list shows (`/flow?state=running`); it never filters the cards of `cardsOf`. */
   state?: ListState
 }
 
-/** What a project or origin has open, split by the one definition of the three counts (`FLOW_COUNT_STATES`): Issues, never sessions. */
-export type OpenSplit = Record<FlowCount, number>
+type OpenIssue = FlowModel['states'][FlowState]['issues'][number]
+
+const workOfIssue = (issue: OpenIssue, state: FlowState) =>
+  workOf({ state, waitReason: issue.waitReason, queueKind: issue.queue?.kind ?? null })
 
 /**
- * The open Issues of each project or origin, split into working, waiting and queued, before any filter. A closed Issue is
- * never counted, so a value whose Issues all closed has no entry at all.
+ * The open Issues of each project or origin by the five words, before any filter. A closed Issue is never counted, so a
+ * value whose Issues all closed has no entry at all.
  */
-export function openSplits(data: FlowModel, field: 'repo' | 'origin'): Record<string, OpenSplit> {
-  const splits: Record<string, OpenSplit> = {}
+export function openSplits(data: FlowModel, field: 'repo' | 'origin'): Record<string, WorkCounts> {
+  const splits: Record<string, WorkCounts> = {}
   for (const state of FLOW_STATES) {
-    const count = flowCountOfState(state)
-    if (!count) continue
     for (const issue of data.states[state].issues) {
-      const split = (splits[issue[field]] ??= { working: 0, waiting: 0, queued: 0 })
-      split[count] += 1
+      addWork((splits[issue[field]] ??= emptyWorkCounts()), workOfIssue(issue, state))
     }
   }
   return splits
 }
-
-/** The three counts of the whole factory: what the strip, the stat cards and the project digests show. */
-export const flowCounts = (data: FlowModel): Record<FlowCount, number> =>
-  flowCountsOf(
-    Object.fromEntries(FLOW_STATES.map((state) => [state, data.states[state].count])) as Record<FlowState, number>,
-  )
 
 export type Cards = Record<StateKey, FlowCard[]>
 
@@ -102,40 +158,46 @@ const keep = (filters: FlowFilters, card: { repo: string; origin: string }): boo
 
 /** The cards of every state under the project and origin filters, in the order the server sent them. */
 export function cardsOf(data: FlowModel, filters: FlowFilters = {}): Cards {
-  const open = (state: FlowState): FlowCard[] =>
-    data.states[state].issues
-      .filter((issue) => keep(filters, issue))
-      .map((issue) => ({
+  const board: Cards = { running: [], paused: [], ready: [], held: [], checking: [], closed: [] }
+  for (const state of FLOW_STATES) {
+    for (const issue of data.states[state].issues) {
+      if (!keep(filters, issue)) continue
+      const work = workOfIssue(issue, state)
+      if (!work) continue
+      board[work.word].push({
         key: issue.id,
         number: numberOf(issue.id),
         title: issue.title,
         repo: issue.repo,
         origin: issue.origin,
         kind: issue.kind,
-        state,
-        reason: state === 'waiting' ? issue.waitReason : state === 'queued' ? (issue.queue?.message ?? null) : null,
+        state: work.word,
+        split: work.split,
+        reason:
+          work.word === 'paused'
+            ? pausedReason(issue.waitReason)
+            : work.word === 'ready' || work.word === 'held'
+              ? (issue.queue?.message ?? (state === 'settling' ? 'Being settled' : null))
+              : null,
         since: issue.since,
-      }))
-  return {
-    settling: open('settling'),
-    queued: open('queued'),
-    working: open('working'),
-    waiting: open('waiting'),
-    watching: open('watching'),
-    closed: data.closedRecently
-      .filter((issue) => keep(filters, issue))
-      .map((issue) => ({
-        key: issue.id,
-        number: numberOf(issue.id),
-        title: issue.title,
-        repo: issue.repo,
-        origin: issue.origin,
-        kind: issue.kind,
-        state: issue.outcome,
-        reason: null,
-        since: issue.closedAt,
-      })),
+      })
+    }
   }
+  board.closed = data.closedRecently
+    .filter((issue) => keep(filters, issue))
+    .map((issue) => ({
+      key: issue.id,
+      number: numberOf(issue.id),
+      title: issue.title,
+      repo: issue.repo,
+      origin: issue.origin,
+      kind: issue.kind,
+      state: issue.outcome,
+      split: null,
+      reason: null,
+      since: issue.closedAt,
+    }))
+  return board
 }
 
 /** `issue_12` is Issue 12. */
@@ -159,9 +221,9 @@ export function originsOf(data: FlowModel): Origin[] {
 export const countsOf = (cards: Cards): Record<StateKey, number> =>
   Object.fromEntries(STATE_KEYS.map((key) => [key, cards[key].length])) as Record<StateKey, number>
 
-/** The Issues in a state other than closed: the one "open" figure of the sidebar and the Flow page's note. */
+/** The Issues under one of the five words: the one "open" figure of the sidebar and the Flow page's note. */
 export const openCount = (counts: Record<StateKey, number>): number =>
-  FLOW_STATES.reduce((sum, state) => sum + counts[state], 0)
+  WORK_WORDS.reduce((sum, word) => sum + counts[word], 0)
 
 /** "12 open, 3 closed in the last day" */
 export function flowNote(counts: Record<StateKey, number>): string {
@@ -169,12 +231,11 @@ export function flowNote(counts: Record<StateKey, number>): string {
 }
 
 /**
- * The Issues the list shows: a count's states together (the number the strip and the stat card show), what closed lately,
- * or with no `state` every open Issue and then what closed lately. The project and origin filters are already in `cards`.
+ * The Issues the list shows: one word's (or what closed lately), or with no `state` every open Issue and then what closed
+ * lately. The project and origin filters are already in `cards`.
  */
 export function listOf(cards: Cards, state?: ListState): FlowCard[] {
-  if (state === 'closed') return cards.closed
-  if (state) return FLOW_COUNT_STATES[state].flatMap((key) => cards[key])
+  if (state) return cards[state]
   return STATE_KEYS.flatMap((key) => cards[key])
 }
 
@@ -219,15 +280,23 @@ export function singleProject(cards: readonly FlowCard[]): string | null {
   return repos.size === 1 ? ([...repos][0] ?? null) : null
 }
 
-/** The count each stat card shows, and the card's address: `/flow?state=<count>` (the list of the Issues it counts). */
-export const STAT_STATES = ['working', 'waiting', 'queued'] as const
+/** The cards above the list, each counting one trend series (Not started is Ready and Held together). */
+export const STAT_KEYS = ['running', 'paused', 'notStarted'] as const satisfies readonly WorkTrendKey[]
 
-/** Issues of the states a count takes in (`FLOW_COUNT_STATES`), in the order the server sent them. */
-const issuesOf = (data: FlowModel, count: FlowCount) =>
-  FLOW_COUNT_STATES[count].flatMap((state) => data.states[state].issues)
+/** The list a stat card opens on /flow. */
+const STAT_COLUMN: Record<(typeof STAT_KEYS)[number], ListState | undefined> = {
+  running: 'running',
+  paused: 'paused',
+  // Ready and Held together have no list of their own: the card opens the whole list
+  notStarted: undefined,
+}
+
+/** Issues in the stored states a trend series counts, in the order the server sent them. */
+const issuesOf = (data: FlowModel, key: WorkTrendKey) =>
+  WORK_TREND_STATES[key].flatMap((state) => data.states[state].issues)
 
 export interface FlowStat {
-  key: FlowState | 'shipped'
+  key: (typeof STAT_KEYS)[number] | 'shipped'
   title: string
   subtitle: string
   value: number
@@ -243,7 +312,8 @@ export interface FlowStat {
   sub: string
   footer: [{ label: string; value: string }, { label: string; value: string }]
   /** the list the card opens on /flow */
-  state: ListState
+  /** the list the card opens; none: the whole list */
+  state: ListState | undefined
 }
 
 const sum = (values: readonly number[]): number => values.reduce((total, n) => total + n, 0)
@@ -280,101 +350,70 @@ export function longestWords(since: readonly string[], now: number): string {
 const distinct = (values: readonly string[]): number => new Set(values).size
 const plural = (n: number, word: string): string => `${n} ${word}${n === 1 ? '' : 's'}`
 
-/** The four stat cards: factory-wide, so never from the filtered cards. */
+/** The four stat cards above the board: factory-wide, so never from the filtered board. */
 export function statsOf(data: FlowModel, now: number): FlowStat[] {
-  const { trend } = data
-  const issues = (count: FlowCount) => issuesOf(data, count)
+  const { trend, work } = data
+  const issues = (key: WorkTrendKey) => issuesOf(data, key)
   const labels = trend.at.map(shortDate)
   const xLabels = xLabelsOf(trend.at)
-  const counts = flowCounts(data)
-  const line = (count: (typeof STAT_STATES)[number]) => {
-    // the daily samples of the count: the sum of the states it takes in, as the figure above them is
+  const values = { running: work.running, paused: work.paused, notStarted: work.ready + work.held }
+  const line = (key: (typeof STAT_KEYS)[number]) => {
+    // the daily samples: the sum of the stored states the series takes in, as the figure above them is
     const series = trend.at.map((_, i) =>
-      FLOW_COUNT_STATES[count].reduce((total, state) => total + (trend.states[state][i] ?? 0), 0),
+      WORK_TREND_STATES[key].reduce((total, state) => total + (trend.states[state][i] ?? 0), 0),
     )
     return {
-      key: count,
-      value: counts[count],
+      key,
+      value: values[key],
       delta: (series.at(-1) ?? 0) - (series[0] ?? 0),
       series,
       labels,
       xLabels,
       subtitle: 'Issues, vs 7 days ago',
-      state: count,
+      state: STAT_COLUMN[key],
     } as const
   }
-  const watching = data.states.watching.count
-  const settling = data.states.settling.count
   const shipped = sum(trend.shipped)
   const queue = data.queueStates.global
   const queueWord = `${queue.charAt(0).toUpperCase()}${queue.slice(1)}`
+  const oldest = (key: WorkTrendKey) =>
+    longestWords(
+      issues(key).map((i) => i.since),
+      now,
+    )
+  const projects = (key: WorkTrendKey) => String(distinct(issues(key).map((i) => i.repo)))
   return [
     {
-      ...line('working'),
-      title: 'Working',
+      ...line('running'),
+      title: 'Running',
       higherIsBetter: true,
       sub:
-        issues('working').length === 0
+        work.running === 0
           ? 'Nothing running'
-          : `in ${plural(distinct(issues('working').map((i) => i.repo)), 'project')}${watching > 0 ? `, ${watching} of them watching` : ''}`,
+          : `in ${plural(distinct(issues('running').map((i) => i.repo)), 'project')}${work.checking > 0 ? `, ${work.checking} more checking` : ''}`,
       footer: [
-        {
-          label: 'Oldest',
-          value: longestWords(
-            issues('working').map((i) => i.since),
-            now,
-          ),
-        },
+        { label: 'Oldest', value: oldest('running') },
         { label: 'Queue', value: queueWord },
       ],
     },
     {
-      ...line('waiting'),
-      title: 'Waiting',
+      ...line('paused'),
+      title: 'Paused',
       higherIsBetter: false,
-      sub:
-        issues('waiting').length === 0
-          ? 'Nothing waits'
-          : countWords(
-              issues('waiting').map((i) => i.waitReason),
-              'unknown',
-            ),
+      sub: work.paused === 0 ? 'Nothing paused' : splitWords(work.split.paused, PAUSED_LABEL),
       footer: [
-        {
-          label: 'Oldest',
-          value: longestWords(
-            issues('waiting').map((i) => i.since),
-            now,
-          ),
-        },
-        { label: 'Projects', value: String(distinct(issues('waiting').map((i) => i.repo))) },
+        { label: 'Oldest', value: oldest('paused') },
+        { label: 'Projects', value: projects('paused') },
       ],
     },
     {
-      ...line('queued'),
-      title: 'Queued',
+      ...line('notStarted'),
+      title: 'Not started',
       higherIsBetter: false,
-      sub:
-        issues('queued').length === 0
-          ? 'Nothing queued'
-          : [
-              countWords(
-                data.states.queued.issues.map((i) => i.queue?.kind ?? null),
-                'ready',
-              ),
-              settling > 0 ? `${settling} settling` : '',
-            ]
-              .filter(Boolean)
-              .join(', '),
+      sub: work.ready + work.held === 0 ? 'Nothing to start' : `${work.ready} ready, ${work.held} held`,
       footer: [
-        {
-          label: 'Oldest',
-          value: longestWords(
-            issues('queued').map((i) => i.since),
-            now,
-          ),
-        },
-        { label: 'Projects', value: String(distinct(issues('queued').map((i) => i.repo))) },
+        { label: 'Oldest', value: oldest('notStarted') },
+        { label: 'Projects', value: projects('notStarted') },
       ],
     },
     {
@@ -422,7 +461,7 @@ export function bucketWords(at: number, bucket: FlowTrendSeries['bucket']): stri
 }
 
 /** One count of the trend as the chart plots it: the bucket starts, and the peak and the average of each bucket. */
-export function trendLines(series: FlowTrendSeries, count: FlowCount) {
+export function trendLines(series: FlowTrendSeries, count: WorkTrendKey) {
   return {
     times: series.buckets.map((b) => Date.parse(b.at)),
     peak: series.buckets.map((b) => b[count].peak),

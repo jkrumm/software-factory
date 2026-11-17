@@ -10,6 +10,7 @@ import type {
   ReadSessionCard,
   ReadTimelineLine,
 } from '@software-factory/contract'
+import { workOf } from '@software-factory/contract'
 import { basename } from 'node:path'
 import type { SQL } from 'bun'
 import { DESK_EVERY_MS } from '../kernel/run.ts'
@@ -180,6 +181,7 @@ function cardOf(input: {
     summary,
     about: aboutOf(filedTitle, extras.goals.get(row.id) ?? null),
     state: row.state,
+    work: workOf({ state: row.state, waitReason: row.wait_reason, queueKind: queued?.kind ?? null }),
     reason: row.wait_reason,
     outcome: row.outcome,
     phase: phaseOf({ state: row.state, reason: row.wait_reason }),

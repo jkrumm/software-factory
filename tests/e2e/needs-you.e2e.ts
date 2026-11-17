@@ -63,7 +63,7 @@ test('the list groups what waits and the open cards show everything the owner de
   for (const heading of ['Decisions', 'Reviews', 'Errands', 'Held signals']) {
     await expect(page.getByRole('heading', { level: 2, name: new RegExp(`^${heading}`) })).toBeVisible()
   }
-  await expect(card(page, 'Which logging library').getByText('Waiting 2 hours')).toBeVisible()
+  await expect(card(page, 'Which logging library').getByText('Open 2 hours')).toBeVisible()
   const everything = async () => {
     const text = await textWithoutBand(page)
     expect(text).not.toMatch(/issue_\d+|lead-\d+|#\d+/)

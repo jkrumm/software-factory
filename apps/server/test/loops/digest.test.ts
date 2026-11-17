@@ -1,4 +1,5 @@
 import { describe, expect, test } from 'bun:test'
+import { openOfWork } from '@software-factory/contract'
 import type { IssueId } from '../../src/kernel/ids.ts'
 import {
   checkDigest,
@@ -57,7 +58,7 @@ describe('project of a repo', () => {
 })
 
 describe('counts', () => {
-  test('done in 7 days counts done and healed only; settling is queued and watching is working', () => {
+  test('done in 7 days counts done and healed only; the open Issues land under one of the five words', () => {
     const counts = countsOf(
       [
         issue(1, { state: 'closed', outcome: 'done', at: hours(2) }),
@@ -72,7 +73,10 @@ describe('counts', () => {
       ],
       NOW,
     )
-    expect(counts).toEqual({ done7d: 2, working: 2, queued: 2, waiting: 1 })
+    expect(counts.done7d).toBe(2)
+    // settling is Held, a queued Issue with no reason is Ready
+    expect(counts.work).toMatchObject({ running: 1, checking: 1, held: 1, ready: 1, paused: 1 })
+    expect(openOfWork(counts.work)).toBe(5)
   })
 })
 

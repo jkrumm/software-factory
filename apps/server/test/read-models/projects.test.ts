@@ -1,5 +1,11 @@
 import { afterAll, beforeAll, expect, test } from 'bun:test'
-import { ProjectHygieneModel, ProjectIndexModel, ProjectPageModel } from '@software-factory/contract'
+import {
+  emptyWorkCounts,
+  openOfWork,
+  ProjectHygieneModel,
+  ProjectIndexModel,
+  ProjectPageModel,
+} from '@software-factory/contract'
 import { startTestCluster, type TestCluster } from '@software-factory/tests/pg'
 import { loadMigrations, migrate } from '../../src/adapters/postgres/migrate.ts'
 import { createApp } from '../../src/api/app.ts'
@@ -140,8 +146,9 @@ test("the built-in probes and the judgment key prefix are the hygiene loop's", (
 test('the list counts the Issues and names the newest hygiene pass', async () => {
   const model = ProjectIndexModel.parse(await get('/v1/projects'))
   const open = model.projects.find((p) => p.name === 'open-app')
-  expect(open?.counts).toEqual({ done7d: 2, working: 2, queued: 1, waiting: 1 })
-  expect(open?.watching).toBe(1)
+  expect(open?.counts.done7d).toBe(2)
+  expect(open?.counts.work).toMatchObject({ running: 1, checking: 1, paused: 1 })
+  expect(openOfWork(open?.counts.work ?? emptyWorkCounts())).toBe(4)
   expect(open?.work).toBe(false)
   expect(open?.hygiene).toEqual({ lastPassAt: ago(24).toISOString(), outcome: 'answered', findings: 4 })
   expect(model.projects.find((p) => p.name === 'work-app')?.work).toBe(true)

@@ -2,7 +2,7 @@
 .PHONY: help check check-fast check-steps check-fast-steps check-static test test-unit test-unit-changed test-scenarios merge-guard e2e fmt deploy rollback verify version
 
 help:
-	@echo "make check   install, format, lint, shellcheck, tsc, Console tsc, tokens, artifact templates and InfoHint definitions, e2e tsc, boundaries, retired words, public scan, Issue diagram, generated CLI, tests, scenarios, Console build and Playwright (the merge gate)"
+	@echo "make check   install, format, lint, shellcheck, tsc, Console tsc, tokens, artifact templates and InfoHint definitions, e2e tsc, boundaries, retired words, state words on screens, public scan, Issue diagram, generated CLI, tests, scenarios, Console build and Playwright (the merge gate)"
 	@echo "make check-fast  the lead's local check (project.yaml checks.fast): everything of make check up to the tests, then the unit tests of the files the branch changed (CHECK_FAST_ALL=1: all of them); CI runs the full gate sharded"
 	@echo "make merge-guard  run right before merging a PR: refuses unless the branch contains origin/master, its migration numbers are free, the head's CI finished green and master's last finished CI run is not red (MERGE_GUARD_ARGS=--wait waits for the head's CI; --allow-red only for the change that fixes a red master)"
 	@echo "make test    the unit tests and the scenarios"
@@ -66,6 +66,8 @@ check-static:
 	@bun scripts/boundaries.ts
 	@echo "==> retired words (scripts/retired-words.ts)"
 	@bun scripts/retired-words.ts
+	@echo "==> state words on screens (scripts/vocabulary.ts)"
+	@bun scripts/vocabulary.ts
 	@echo "==> public hygiene (scripts/public-scan.ts)"
 	@bun scripts/public-scan.ts
 	@echo "==> Issue diagram is current (apps/server/scripts/issue-diagram.ts --check)"

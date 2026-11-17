@@ -1896,7 +1896,7 @@ export const OPERATIONS: readonly Operation[] = [
     method: 'GET',
     path: '/v1/flow',
     summary:
-      'the Issues by state (settling, queued, working, waiting, watching), what closed in the last day, counts per project and the queue state per scope',
+      'the Issues by stored state (settling, queued, working, waiting, watching), what closed in the last day, the five words (running, paused, ready, held, checking) per project and in all, and the queue state per scope',
     pathParams: [],
     queryParams: [],
     body: false,
@@ -1911,7 +1911,7 @@ export const OPERATIONS: readonly Operation[] = [
     method: 'GET',
     path: '/v1/flow/trend',
     summary:
-      'the Issues counted as working, waiting and queued over a window (24h by hour, 7d by hour, 30d by day; default 7d by hour), per bucket the peak and the average, computed from the applied events; counts only',
+      'the Issues counted as running, paused, not started (ready and held) and checking over a window (24h by hour, 7d by hour, 30d by day; default 7d by hour), per bucket the peak and the average, computed from the applied events; counts only',
     pathParams: [],
     queryParams: ['window', 'bucket'],
     body: false,
@@ -2391,7 +2391,7 @@ export const OPERATIONS: readonly Operation[] = [
     method: 'GET',
     path: '/v1/projects',
     summary:
-      'every project the factory has read, with its counts (done in 7 days, working, queued, waiting, in Watch) and the state of its newest hygiene pass; the read token gets no work project',
+      'every project the factory has read, with its counts (done in 7 days and the five words running, paused, ready, held, checking) and the state of its newest hygiene pass; the read token gets no work project',
     pathParams: [],
     queryParams: [],
     body: false,
@@ -2406,7 +2406,7 @@ export const OPERATIONS: readonly Operation[] = [
     method: 'GET',
     path: '/v1/projects/digests',
     summary:
-      "each project's newest digest (headline, shipped, next and risks bullets citing Issues, themes) made every few hours by agw's factory digest, for projects with an Issue open or closed in the last 7 days, with counts (done in 7 days, working, queued, waiting) read from the Issues now; the read token gets the counts of a work project and no words",
+      "each project's newest digest (headline, shipped, next and risks bullets citing Issues, themes) made every few hours by agw's factory digest, for projects with an Issue open or closed in the last 7 days, with counts (done in 7 days and the five words running, paused, ready, held, checking) read from the Issues now; the read token gets the counts of a work project and no words",
     pathParams: [],
     queryParams: [],
     body: false,

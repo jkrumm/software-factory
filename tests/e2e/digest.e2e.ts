@@ -9,7 +9,7 @@ interface Digests {
   projects: {
     project: string
     headline: string
-    counts: { done7d: number; working: number; queued: number; waiting: number }
+    counts: { done7d: number; work: { running: number; paused: number; ready: number; held: number } }
   }[]
 }
 
@@ -30,7 +30,14 @@ test('Flow opens with one card per digested project: headline, counts from the A
     const card = strip.locator(`[data-project="${project.project}"]`)
     await expect(card).toContainText(project.headline)
     await expect(card).toContainText(/\d+ min ago|\d+ h ago/)
-    for (const [key, value] of Object.entries(project.counts))
+    const { done7d, work } = project.counts
+    for (const [key, value] of Object.entries({
+      done7d,
+      running: work.running,
+      paused: work.paused,
+      ready: work.ready,
+      held: work.held,
+    }))
       await expect(card.locator(`[data-count="${key}"]`)).toHaveText(String(value))
     // collapsed by default: the bullets are there but hidden
     await expect(card.getByRole('group', { name: 'Shipped' })).toBeHidden()

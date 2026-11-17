@@ -25,10 +25,10 @@ export const tabOf = (value: unknown): TabKey => TAB_KEYS.find((key) => key === 
 
 const OUTCOMES = ['done', 'dropped', 'healed', 'cancelled'] as const
 
-/** What the lozenge shows: the outcome once the Issue closed with a known one, else its state. */
-export function lozengeStateOf(issue: Pick<ReadIssueDetail, 'state' | 'outcome'>): LozengeState {
-  if (issue.state !== 'closed') return issue.state
-  return OUTCOMES.find((outcome) => outcome === issue.outcome) ?? issue.state
+/** What the lozenge shows: the outcome once the Issue closed with a known one, else the word its work stands under. */
+export function lozengeStateOf(issue: Pick<ReadIssueDetail, 'state' | 'outcome' | 'work'>): LozengeState {
+  if (issue.work) return issue.work.word
+  return OUTCOMES.find((outcome) => outcome === issue.outcome) ?? 'closed'
 }
 
 /** The Issue's kind when it is one of the five known, else null. */
@@ -218,7 +218,7 @@ export function shipStatus(ship: Ship): { label: string; tone: 'good' | 'bad' | 
   const answer = ship.watch?.answer
   if (answer === 'regressed') return { label: 'Regressed', tone: 'bad' }
   if (answer === 'passed') return { label: 'Passed', tone: 'good' }
-  if (ship.watch !== null && answer === null) return { label: 'Watching', tone: 'warn' }
+  if (ship.watch !== null && answer === null) return { label: 'Under watch', tone: 'warn' }
   return { label: 'Shipped', tone: 'neutral' }
 }
 

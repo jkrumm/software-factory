@@ -1,11 +1,11 @@
 import type { ReadIssueDetail } from '@software-factory/contract'
 import { Link } from '@tanstack/react-router'
-import { Lozenge, LOZENGE_STATES, type LozengeState } from '@/components/kit/lozenge'
+import { Lozenge } from '@/components/kit/lozenge'
 import { MeterBar } from '@/components/kit/meter'
 import { PropertyList } from '@/components/kit/property-list'
 import { Section } from '@/components/kit/section'
 import { Skeleton } from '@/components/kit/skeleton'
-import { issueNumber, stateWord } from '@/lib/chain'
+import { issueNumber, lozengeOf } from '@/lib/chain'
 import { originWords } from '@/lib/issue'
 import { type ChainLink, chainAround } from '@/lib/issue-page'
 import { useChain } from '@/lib/queries'
@@ -14,8 +14,6 @@ import { ProjectChip } from './project-chip'
 import { LINK_CLASS, SourceLink } from './source-link'
 
 type Issue = ReadIssueDetail
-
-const asLozengeState = (state: string): LozengeState | null => LOZENGE_STATES.find((known) => known === state) ?? null
 
 function WeeklyQuota({ issue, now }: { issue: Issue; now: number }) {
   if (!issue.quota) return null
@@ -80,7 +78,6 @@ export function Properties({ issue, now }: { issue: Issue; now: number }) {
 function LinkRow({ link }: { link: ChainLink }) {
   const { node } = link
   const number = issueNumber(node)
-  const state = asLozengeState(node.state)
   return (
     <li className="flex flex-col gap-1 py-2 not-first:border-t">
       <div className="flex items-start gap-2">
@@ -95,7 +92,7 @@ function LinkRow({ link }: { link: ChainLink }) {
       </div>
       <div className="flex flex-wrap items-center gap-2 text-xs text-muted-foreground">
         {node.repo ? <ProjectChip name={node.repo} /> : null}
-        {state ? <Lozenge state={state} /> : <span>{stateWord(node.state)}</span>}
+        <Lozenge state={lozengeOf(node).state} />
       </div>
     </li>
   )
