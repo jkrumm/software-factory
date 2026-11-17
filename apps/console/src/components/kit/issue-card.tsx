@@ -21,7 +21,7 @@ export type IssueCardProps = Omit<IssueViewProps, 'since'> & {
   reasonTitle?: string
   /** The raised shadow step (a card on a canvas step, such as the chain's) instead of the card step. */
   raised?: boolean
-  /** This is the Issue open beside the board (the peek): the shell takes the next surface step. */
+  /** This is the Issue open beside the page (the peek): the shell takes the next surface step. */
   selected?: boolean
   /** The Chain's node: a two-line title and a one-line reason, so the card fits a fixed, shorter height. */
   compact?: boolean

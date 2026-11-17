@@ -63,7 +63,7 @@ export async function seedChain(lab: Lab): Promise<SeededChain> {
   const gate = await fileIssue(lab, { repo: 'pearl', title: 'Choose the export format' })
   const done = await fileIssue(lab, { repo: 'orion', title: 'Move the export job to the new queue' })
   const middle = await fileIssue(lab, { repo: 'orion', title: 'Add a retry to the export job' })
-  const last = await fileIssue(lab, { repo: 'pearl', title: 'Show the retry count on the board' })
+  const last = await fileIssue(lab, { repo: 'pearl', title: 'Show the retry count on the dashboard' })
   await must(lab, ['planning', 'settle', '--body', JSON.stringify({ issue: middle, after: [gate, done] })])
   await must(lab, ['planning', 'settle', '--body', JSON.stringify({ issue: last, after: [middle] })])
   await must(lab, ['issue', 'cancel', done, '--reason', 'replaced by the gate'])

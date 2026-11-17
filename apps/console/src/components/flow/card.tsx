@@ -5,8 +5,8 @@ import type { FlowCard } from '@/lib/flow'
 import { originWord } from '@/lib/flow'
 
 /**
- * One Issue on the board: the kit's IssueCard, the whole card a link to the Issue page. The number shows next to the project. The state
- * Lozenge shows only where the column does not already say it (the Closed recently column shows the outcome).
+ * One Issue in a Flow list or a project's Now: the kit's IssueCard, the whole card a link to the Issue page. The number shows next to the project. The state
+ * Lozenge shows only where the list does not already say the state (a Closed Issue shows its outcome).
  */
 export function FlowCardView({ card, now, showState = false }: { card: FlowCard; now: number; showState?: boolean }) {
   const origin = originWord(card.origin)

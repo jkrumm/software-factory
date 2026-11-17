@@ -231,7 +231,9 @@ test('the schedule follows the project filter', async ({ page }) => {
 test('an Issue that waits on an open blocker says for whom', async ({ page }) => {
   await page.goto('/chain')
   await expect(node(page, 'Add a retry to the export job')).toContainText('Waits for Choose the export format')
-  await expect(node(page, 'Show the retry count on the board')).toContainText('Waits for Add a retry to the export job')
+  await expect(node(page, 'Show the retry count on the dashboard')).toContainText(
+    'Waits for Add a retry to the export job',
+  )
   await expect(node(page, 'Publish the export schema')).toContainText('Waits for Draft the export schema')
 })
 

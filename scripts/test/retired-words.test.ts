@@ -47,6 +47,7 @@ const FIXTURES: Record<string, { failing: string; passing: string }> = {
   'human queue': { failing: 'humanQueue', passing: 'errandQueue' },
   'zero-touch': { failing: 'zero_touch', passing: 'avoidable_touch' },
   classify: { failing: 'classifier.run()', passing: 'triage.run() // classification of nothing' },
+  board: { failing: '// the board of Issues', passing: '// the Flow screen // dashboard, keyboard' },
   dedup: { failing: 'dedupe(signals)', passing: 'triage(signals)' },
 }
 

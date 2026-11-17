@@ -26,7 +26,7 @@ export const KIT_ISSUES: KitIssue[] = [
   {
     key: 'export-time',
     number: 657,
-    title: 'Show the export time on the board',
+    title: 'Show the export time on the dashboard',
     project: 'pearl',
     kind: 'feature',
     state: 'running',
@@ -229,7 +229,7 @@ export const KIT_STEPS: Step[] = [
     at: '10:02:33',
     durationMs: 4_200,
     failed: true,
-    detail: 'make check failed: 2 tests in the board suite',
+    detail: 'make check failed: 2 tests in the dashboard suite',
   },
   { id: 'shipped', label: 'Shipped', at: '10:41:19', durationMs: 120_000 },
 ]

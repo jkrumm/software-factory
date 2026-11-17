@@ -43,6 +43,11 @@ export const RETIRED: Retired[] = [
   { term: 'human queue', pattern: 'human\\s+queues?', use: 'errand' },
   { term: 'zero-touch', pattern: 'zero\\s+touch', use: 'touch, avoidable touch' },
   { term: 'classify', pattern: 'classif(y|ies|ied|ying|ier|iers)', use: 'triage' },
+  {
+    term: 'board',
+    pattern: 'board',
+    use: 'Flow, the numbers and their charts, or the Chain (there are no state columns)',
+  },
   { term: 'dedup', pattern: 'dedup(e|es|ed|ing|licate|licated|lication)?', use: 'triage (amend or incident)' },
 ]
 
