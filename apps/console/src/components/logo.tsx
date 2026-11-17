@@ -1,6 +1,6 @@
 /**
- * The sidebar's logo slot: the app icon, the metallic tile the installed PWA shows (`/icons/icon-192.png`; the flat
- * `mark.svg` is the browser tab's favicon only). `tests/e2e/frame-sidebar.e2e.ts` finds it by `sidebar-logo`.
+ * The sidebar's logo slot: the app icon, the blue tile the installed PWA shows (`/icons/icon-192.png`; `mark.svg` is
+ * the browser tab's favicon). `tests/e2e/frame-sidebar.e2e.ts` finds it by `sidebar-logo`.
  */
 export function Logo() {
   return (
