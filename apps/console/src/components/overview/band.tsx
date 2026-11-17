@@ -5,8 +5,8 @@ import type { ReactNode } from 'react'
 import { Age } from '@/components/kit/issue-parts'
 import { TONE_MARK, TONE_TEXT, type Tone } from '@/components/kit/tone'
 import type { KIND_LABEL } from '@/lib/needs'
-import { needsOf, productionOf, type ProjectCount, queueBindingOf, shippedOf } from '@/lib/overview'
-import { useHost, useMachine, useNeeds } from '@/lib/queries'
+import { needsOf, productionOf, type ProjectCount, queueBindingOf, regressedOf, shippedOf } from '@/lib/overview'
+import { useHost, useMachine, useNeeds, useProjectIndex } from '@/lib/queries'
 import { hostMeters } from '@/lib/strip'
 import { cn } from '@/lib/utils'
 
@@ -160,6 +160,8 @@ function NeedsPanel({ now }: { now: number }) {
 function ProductionPanel({ data }: { data: FlowModel }) {
   const { red, checking } = productionOf(data)
   const checks = checking.reduce((sum, row) => sum + row.count, 0)
+  const index = useProjectIndex().data
+  const regressed = index ? regressedOf(index.projects) : []
   return (
     <Panel
       icon={SirenIcon}
@@ -167,10 +169,23 @@ function ProductionPanel({ data }: { data: FlowModel }) {
       to="/projects"
       figure={red.length}
       figureLabel={red.length === 1 ? 'project red' : 'projects red'}
-      tone={red.length > 0 ? 'bad' : 'good'}
+      tone={red.length > 0 ? 'bad' : regressed.length > 0 ? 'warn' : 'good'}
       testId="overview-production"
     >
       <ProjectList rows={red} unit="incident" empty="No open incident in any project." />
+      {regressed.length > 0 ? (
+        <p className={cn('text-[13px]', TONE_TEXT.warn)} data-testid="overview-regressed">
+          Regressed in 7 days:{' '}
+          {regressed.map((row, i) => (
+            <span key={row.project}>
+              {i > 0 ? ', ' : null}
+              <Link to="/projects/$name" params={{ name: row.project }} className={LINK}>
+                {row.project}
+              </Link>
+            </span>
+          ))}
+        </p>
+      ) : null}
       <p className="mt-auto text-xs text-muted-foreground">
         {checks === 0
           ? 'No ship is being checked in production.'

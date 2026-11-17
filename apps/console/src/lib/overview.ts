@@ -1,4 +1,10 @@
-import { FLOW_STATES, type FlowModel, type NeedItem, type NeedsModel } from '@software-factory/contract'
+import {
+  FLOW_STATES,
+  type FlowModel,
+  type NeedItem,
+  type NeedsModel,
+  type ProjectIndexRow,
+} from '@software-factory/contract'
 import { queueReasonWords } from './improve.ts'
 
 /** How many needs the Overview names; the rest are the count. */
@@ -28,7 +34,7 @@ const tally = (repos: readonly string[]): ProjectCount[] => {
 
 /**
  * Production as the open Issues tell it: a project is red while an incident Issue of it is open, and a ship is in its
- * Checking window while its Issue is in Watch. Regressions live on a project's own page.
+ * Checking window while its Issue is in Watch. Regressions come from the project index (`regressedOf`).
  */
 export function productionOf(data: Pick<FlowModel, 'states'>): { red: ProjectCount[]; checking: ProjectCount[] } {
   const open = FLOW_STATES.flatMap((state) => data.states[state].issues)
@@ -36,6 +42,17 @@ export function productionOf(data: Pick<FlowModel, 'states'>): { red: ProjectCou
     red: tally(open.filter((issue) => issue.kind === 'incident').map((issue) => issue.repo)),
     checking: tally(data.states.watching.issues.map((issue) => issue.repo)),
   }
+}
+
+/**
+ * Projects whose newest watch regressed in the last 7 days and that have no open incident (those are red already), the
+ * newest regression first: the lamp the Projects table shows, so the Overview and the table agree.
+ */
+export function regressedOf(rows: readonly Pick<ProjectIndexRow, 'name' | 'production'>[]): ProjectCount[] {
+  return rows
+    .filter((row) => row.production.incidents === 0 && row.production.regressionAt !== null)
+    .sort((a, b) => (b.production.regressionAt ?? '').localeCompare(a.production.regressionAt ?? ''))
+    .map((row) => ({ project: row.name, count: 1 }))
 }
 
 /** What shipped in the last 24 hours (closed done or healed), by project, the most first. */

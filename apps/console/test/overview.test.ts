@@ -2,7 +2,7 @@ import { describe, expect, test } from 'bun:test'
 import { readFileSync } from 'node:fs'
 import { join } from 'node:path'
 import type { FlowModel, NeedItem } from '@software-factory/contract'
-import { needsOf, productionOf, queueBindingOf, shippedOf } from '../src/lib/overview.ts'
+import { needsOf, productionOf, queueBindingOf, regressedOf, shippedOf } from '../src/lib/overview.ts'
 import { parentOf, SHORTCUT_GROUPS, stepChoice, stepIndex } from '../src/lib/shortcuts.ts'
 import { SCREENS as NAV } from '../src/lib/screens.ts'
 
@@ -151,5 +151,25 @@ describe('shortcuts', () => {
     expect(parentOf('/projects/argo/plan')).toBe('/projects')
     expect(parentOf('/projects')).toBeNull()
     expect(parentOf('/')).toBeNull()
+  })
+})
+
+describe('regressedOf', () => {
+  const row = (name: string, incidents: number, regressionAt: string | null) => ({
+    name,
+    production: { incidents, incidentAt: null, regressionAt },
+  })
+  test('lists projects that regressed in the week and have no open incident, the newest first', () => {
+    expect(
+      regressedOf([
+        row('old', 0, '2026-11-12T00:00:00.000Z'),
+        row('red', 1, '2026-11-16T00:00:00.000Z'),
+        row('quiet', 0, null),
+        row('new', 0, '2026-11-16T12:00:00.000Z'),
+      ]),
+    ).toEqual([
+      { project: 'new', count: 1 },
+      { project: 'old', count: 1 },
+    ])
   })
 })
