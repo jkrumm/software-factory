@@ -16,7 +16,7 @@ import { callsOf, runLoop, script, state } from './support.ts'
 let lab: Lab
 let dir: string
 let hygieneScript: string
-const PROJECTS = ['h1', 'h2', 'h3', 'h4', 'h5', 'h6']
+const PROJECTS = ['h1', 'h2', 'h3', 'h4', 'h5', 'h6', 'h7']
 const FAKE_RETRY_MS = 3_600_000
 
 const projectFile = (name: string) =>
@@ -400,4 +400,31 @@ test('a still-red probe after a done Issue reopens that Issue: no second Issue, 
   expect(third.summary).toMatch(/filed 0 signal\(s\)/)
   expect(await issueIds('h6')).toEqual([issue ?? ''])
   expect(await signalsFrom('h6')).toHaveLength(1)
+})
+
+test('a lead at work is told once that the probe is green: the next pass finds the note stored and records nothing', async () => {
+  expect((await sweep('h7')).error).toBeNull()
+  const [issue] = await issueIds('h7')
+  await admitted(lab, issue ?? '')
+  await tick(lab)
+  expect((await state(lab, issue ?? '')).state).toBe('working')
+
+  await lab.commit('h7', { Makefile: GREEN })
+  await agedWeek('h7')
+  const told = await sweep('h7')
+  expect(told.summary).toMatch(/; noted 1$/)
+  const notes = async () =>
+    (
+      await sql()`SELECT payload FROM factory.issue_events WHERE issue_id = ${issue} AND kind = 'noted' AND actor = 'factory' AND result = 'applied'`
+    )
+      .map((r: { payload: unknown }) => JSON.stringify(r.payload))
+      .filter((text: string) => text.includes('no longer raises'))
+  expect(await notes()).toHaveLength(1)
+
+  await agedWeek('h7')
+  const again = await sweep('h7')
+  expect(again.summary).not.toMatch(/noted/)
+  expect(await notes()).toHaveLength(1)
+  expect((await passes('h7')).at(-1)?.lifecycle).toEqual([])
+  expect((await state(lab, issue ?? '')).state).toBe('working')
 })
