@@ -285,6 +285,7 @@ export async function slotRun(input: { name?: string; command: string[] }, io: I
   let grantedRunMs: number | undefined
   // A grant off the mini (issue 1793): how to run the step there. `notOn`: the hosts that failed this call.
   let remoteGrant: RemoteGrant | null = null
+  let remoteSlot: number | null = null
   let runningRemote = false
   const notOn: StepHost[] = []
   const pin =
@@ -306,6 +307,8 @@ export async function slotRun(input: { name?: string; command: string[] }, io: I
         remote: cwd !== undefined && io.env.FACTORY_SLOT_REMOTE !== '0' ? true : undefined,
         pin,
         notOn: notOn.length === 0 ? undefined : notOn,
+        // a lapsed lease is taken back where the step runs, not on the mini
+        runningOn: runningRemote && remoteSlot !== null ? { host: 'vps', slot: remoteSlot } : undefined,
       },
       token,
     })
@@ -326,8 +329,10 @@ export async function slotRun(input: { name?: string; command: string[] }, io: I
         away: false,
       }
     if (parsed.data.granted && grantedRunMs === undefined) grantedRunMs = parsed.data.runMs
-    if (parsed.data.granted && !runningRemote && !meter)
+    if (parsed.data.granted && !runningRemote && !meter) {
       remoteGrant = parsed.data.host === 'vps' ? parsed.data.remote : null
+      remoteSlot = parsed.data.host === 'vps' ? parsed.data.slot : null
+    }
     return { kind: 'slot', slot: parsed.data }
   }
 

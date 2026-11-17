@@ -40,7 +40,7 @@ describe('the VPS has room for a step', () => {
       step,
       copyExists: true,
     })
-    expect(old).toEqual({ grant: false, why: 'the VPS has not answered its probe for 120 s' })
+    expect(old).toEqual({ grant: false, kind: 'probe', why: 'the VPS has not answered its probe for 120 s' })
   })
 
   test("a new copy that would push the disk over the alert's line is refused; an existing copy is not counted", () => {
@@ -59,6 +59,7 @@ describe('the VPS has room for a step', () => {
     })
     expect(squeezed).toEqual({
       grant: false,
+      kind: 'pressure',
       why: 'production on the VPS is stalled on memory (12.5 % of the last 10 s, over 10 %)',
     })
   })

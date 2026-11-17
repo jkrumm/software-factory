@@ -22,6 +22,7 @@ import {
   freeRemoteSlot,
   grantedCores,
   memoryCeilingMib,
+  REMOTE_REFUSAL_WORDS,
 } from '../domains/capacity/remote.ts'
 import { type AimMode, SWAP_WINDOW, swapGrowing } from '../domains/capacity/slot-aim.ts'
 import {
@@ -147,6 +148,7 @@ export async function touchSlot(
     remote?: boolean | undefined
     pin?: StepHost | undefined
     notOn?: readonly StepHost[] | undefined
+    runningOn?: { host: StepHost; slot: number } | undefined
   },
 ): Promise<Result<SlotGrant, PortError>> {
   const runMs = await runLimitMs(deps, input)
@@ -168,14 +170,42 @@ export async function touchSlot(
     const failedOnVps = input.notOn?.includes('vps') === true
     const all = stored.map((row) =>
       row.id === input.id && onVps(row) && failedOnVps
-        ? { ...row, host: null, slot: null, leasedUntil: null, grantedAt: null, runMs: null, seenAt: now }
+        ? // its wait was recorded with the VPS grant: the mini's grant records only the wait from here
+          {
+            ...row,
+            host: null,
+            slot: null,
+            leasedUntil: null,
+            grantedAt: null,
+            runMs: null,
+            seenAt: now,
+            waitSplit: {},
+          }
         : row,
     )
     const vpsRows = all.filter((row) => onVps(row) && alive(row))
     const vpsHolders = vpsRows.filter((row) => row.slot !== null)
-    if (remote) liveOnVps.set(remote, new Set(vpsHolders.map((row) => row.id)))
-    // a lease that lapsed while the step ran (the server was away) is taken back on the VPS, as the mini's rule does
-    const mineOnVps = all.find((row) => row.id === input.id && onVps(row) && (alive(row) || input.holding === true))
+    // A lease that lapsed while the step ran (the server was away) is taken back on the VPS, as the mini's rule does: from
+    // its stored row, or, once another caller's save dropped that row, from the slot the caller says it runs in. Never on
+    // the mini, where the step does not run.
+    const stillStored = all.find((row) => row.id === input.id && onVps(row) && (alive(row) || input.holding === true))
+    const runningOnVps = input.holding === true && input.runningOn?.host === 'vps' ? input.runningOn.slot : null
+    const mineOnVps =
+      stillStored ??
+      (runningOnVps === null
+        ? undefined
+        : {
+            ...newWaiter(input, now),
+            slot: runningOnVps,
+            host: 'vps' as const,
+            grantedAt: now,
+            runMs,
+          })
+    if (remote)
+      liveOnVps.set(
+        remote,
+        new Set([...vpsHolders.map((row) => row.id), ...(mineOnVps?.slot != null ? [input.id] : [])]),
+      )
     if (mineOnVps?.slot != null) {
       const renewed: SlotRow = {
         ...mineOnVps,
@@ -395,7 +425,10 @@ export async function touchSlot(
       })
     const miniRows = touched?.rows ?? rows.filter((row) => row.id !== input.id && alive(row))
     if (!room.grant || !sooner || declared === null || typeof declared === 'string') {
-      const why = !room.grant ? `not on the VPS: ${room.why}` : 'the VPS would not finish it sooner than the mini'
+      // the stable words, not the figures (`REMOTE_REFUSAL_WORDS`): the CLI prints a line whenever the reason changes
+      const why = !room.grant
+        ? `not on the VPS: ${REMOTE_REFUSAL_WORDS[room.kind]}`
+        : 'the VPS would not finish it sooner than the mini'
       if (touched) {
         const waitWhy = `${touched.view.why ?? 'waiting'}; ${why}`
         await capacity.saveSlots([...touched.rows, ...keep])

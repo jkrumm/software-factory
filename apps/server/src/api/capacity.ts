@@ -61,6 +61,7 @@ export interface CapacityApi {
     remote: boolean | undefined
     pin: StepHost | undefined
     notOn: readonly StepHost[] | undefined
+    runningOn: { host: StepHost; slot: number } | undefined
   }): Promise<Result<SlotView & { remote: RemoteGrant | null }, PortError>>
   giveSlotBack(id: string): Promise<Result<boolean, PortError>>
   recordStepCost(cost: StepCost): Promise<Result<true, PortError>>
@@ -326,6 +327,7 @@ export const capacityRoutes = (api?: CapacityApi) => {
           remote: body.remote,
           pin: body.pin,
           notOn: body.notOn,
+          runningOn: body.runningOn,
         })
         return touched.ok ? status(200, slotView(touched.value)) : status(503, unavailable(touched.error))
       },
