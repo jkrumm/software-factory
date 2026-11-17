@@ -148,6 +148,13 @@ export function sameWords(a: string, b: string): number {
 export const SAME_STALL = 0.5
 
 /**
+ * A lead woken by a Decision's answer that blocks again this soon, having reported nothing else, did no new work: its block
+ * is the stall the answer settled, however it words it ("Still paused: the Judge answered ..." reads 0.1 to 0.4 alike to
+ * the block before it, which is how one stand-down was asked 47 times).
+ */
+export const QUICK_REBLOCK_MS = 10 * 60_000
+
+/**
  * The text every idle wake begins with, and so how a later pass counts them from the events alone (a `noted` event of the
  * steward that starts with it). The wake an answer of the workflow sends begins with it too.
  */
