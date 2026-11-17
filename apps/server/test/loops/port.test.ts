@@ -65,21 +65,39 @@ test('a pending run that names no run is unreadable, not a loop', async () => {
   expect(await agwPort({ bin }).run(call)).toMatchObject({ ok: false, error: { kind: 'unreadable' } })
 })
 
-test('a run that never ends is killed at the hang guard and is a timeout', async () => {
+test('a silent process is ended by the idle watchdog and is a timeout', async () => {
   const bin = await agw('hang', 'sleep 30')
   const started = Date.now()
-  const result = await agwPort({ bin, hangGuardMs: 300 }).run(call)
+  const result = await agwPort({ bin, idleMs: 300 }).run(call)
   expect(result).toMatchObject({ ok: false, error: { kind: 'timeout' } })
   expect(Date.now() - started).toBeLessThan(5_000)
 })
 
-test('the hang guard covers the whole call, the waits of a pending run included', async () => {
+test('a process that keeps printing runs past the idle time and is not killed', async () => {
+  const bin = await agw(
+    'chatty',
+    `i=0; while [ $i -lt 15 ]; do echo "step $i" >&2; sleep 0.1; i=$((i+1)); done; echo '${envelope({ answer: 'slow' })}'`,
+  )
+  const started = Date.now()
+  expect(await agwPort({ bin, idleMs: 400 }).run(call)).toEqual({ ok: true, value: { answer: 'slow' } })
+  expect(Date.now() - started).toBeGreaterThan(1_200)
+})
+
+test('a pending run that keeps answering is waited for past the idle time: there is no wall-clock ceiling', async () => {
+  const counter = join(dir, 'slow-waits')
+  await writeFile(counter, '')
   const bin = await agw(
     'slow-pending',
-    `if [ "$1" = run ]; then sleep 0.2; echo '{"runId":"r"}'; exit 10; fi; echo '{"runId":"r"}'; exit 10`,
+    `if [ "$1" = run ]; then sleep 0.2; echo x >> ${counter}; if [ "$(wc -l < ${counter})" -lt 6 ]; then echo '{"runId":"r"}'; exit 10; fi; echo '${envelope({ answer: 'late' })}'; exit 0; fi; echo '{"runId":"r"}'; exit 10`,
   )
-  const result = await agwPort({ bin, hangGuardMs: 700 }).run(call)
-  expect(result).toMatchObject({ ok: false, error: { kind: 'timeout' } })
+  const started = Date.now()
+  expect(await agwPort({ bin, idleMs: 700 }).run(call)).toEqual({ ok: true, value: { answer: 'late' } })
+  expect(Date.now() - started).toBeGreaterThan(1_000)
+})
+
+test('a wait that goes silent after the run began pending is ended by the watchdog', async () => {
+  const bin = await agw('wedged-wait', `if [ "$1" = run ]; then sleep 30; fi; echo '{"runId":"r"}'; exit 10`)
+  expect(await agwPort({ bin, idleMs: 300 }).run(call)).toMatchObject({ ok: false, error: { kind: 'timeout' } })
 })
 
 test('a failed exit is gone, with what agw said; a failed or cancelled run is gone too', async () => {

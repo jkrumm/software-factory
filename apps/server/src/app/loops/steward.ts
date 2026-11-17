@@ -48,7 +48,7 @@ import type { WorkStore } from '../../domains/work/ports.ts'
 import { type IssueId, issueNumber } from '../../kernel/ids.ts'
 import { key, type Key } from '../../kernel/keys.ts'
 import { err, ok, portError, type PortError, type Result } from '../../kernel/result.ts'
-import { AGW_HANG_GUARD_MS } from '../../kernel/agw.ts'
+import { AGW_CALL_LEASE_MS } from '../../kernel/agw.ts'
 import { askDecision, type CheckpointDeps } from '../checkpoints.ts'
 import { type Claimed, claimRound } from './claim.ts'
 import { recordIn, type WriteDeps } from '../issues.ts'
@@ -217,8 +217,8 @@ export function factsOf(issue: Issue, history: readonly AppliedRecord[]): StallF
 const policyOf = (deps: StewardDeps): CallPolicy => ({
   maxRounds: MAX_ROUNDS,
   retryMs: deps.retryMs,
-  // The lease outlives the hang guard, so a second pass takes over only when the first call can no longer be running.
-  leaseMs: AGW_HANG_GUARD_MS + 5 * 60_000,
+  // A second pass takes the claim over after the lease; its call carries the same key, so agw joins the run the first one started.
+  leaseMs: AGW_CALL_LEASE_MS,
 })
 
 type Out<T> = Promise<Result<T, PortError>>

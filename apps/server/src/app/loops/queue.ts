@@ -14,7 +14,7 @@ import {
   shapeOf,
 } from '../../domains/loops/queue.ts'
 import { MAX_ROUNDS } from '../../domains/loops/stall.ts'
-import { AGW_HANG_GUARD_MS } from '../../kernel/agw.ts'
+import { AGW_CALL_LEASE_MS } from '../../kernel/agw.ts'
 import type { Clock } from '../../kernel/clock.ts'
 import { type Key, key } from '../../kernel/keys.ts'
 import { ok, type PortError, type Result } from '../../kernel/result.ts'
@@ -57,7 +57,7 @@ type Out<T> = Promise<Result<T, PortError>>
 const policyOf = (deps: QueueDeps): CallPolicy => ({
   maxRounds: MAX_ROUNDS,
   retryMs: deps.retryMs,
-  leaseMs: AGW_HANG_GUARD_MS + 5 * 60_000,
+  leaseMs: AGW_CALL_LEASE_MS,
 })
 
 /** What the loop does about one shape: the stored ask, a wait, or a call this pass now owns (`claimed`, a retaken one included). */

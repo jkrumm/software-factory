@@ -5,7 +5,7 @@ import type { LoopReads, LoopStore, SettleWorkflow, SettlingRow } from '../../do
 import { checkSettle, MAX_CANDIDATES, type Refinement, settleRequest, settleRule } from '../../domains/loops/settle.ts'
 import { MAX_ROUNDS } from '../../domains/loops/stall.ts'
 import type { WorkStore } from '../../domains/work/ports.ts'
-import { AGW_HANG_GUARD_MS } from '../../kernel/agw.ts'
+import { AGW_CALL_LEASE_MS } from '../../kernel/agw.ts'
 import type { IssueId } from '../../kernel/ids.ts'
 import { key } from '../../kernel/keys.ts'
 import { ok, type PortError, type Result } from '../../kernel/result.ts'
@@ -52,7 +52,7 @@ type Out<T> = Promise<Result<T, PortError>>
 const policyOf = (deps: TriageDeps): CallPolicy => ({
   maxRounds: MAX_ROUNDS,
   retryMs: deps.retryMs,
-  leaseMs: AGW_HANG_GUARD_MS + 5 * 60_000,
+  leaseMs: AGW_CALL_LEASE_MS,
 })
 
 /** Settles with no edges; a repeat of the call settles nothing twice. */

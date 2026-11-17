@@ -1,18 +1,18 @@
 import type { AgwCall, AgwPort } from '../../kernel/agw.ts'
-import { AGW_HANG_GUARD_MS } from '../../kernel/agw.ts'
+import { AGW_IDLE_MS } from '../../kernel/agw.ts'
 import { err, ok, portError, type PortError, type Result } from '../../kernel/result.ts'
 
 export interface AgwOptions {
   bin: string
-  /** the whole call, pending runs included; 30 minutes, never a shorter budget (`rules/agent-limits.md`) */
-  hangGuardMs?: number
+  /** the idle watchdog: an `agw` process silent this long is killed; a call has no other limit (`rules/agent-limits.md`) */
+  idleMs?: number
 }
 
 interface Finished {
   code: number
   out: string
   err: string
-  /** the process was killed at the hang guard */
+  /** the process was killed by the idle watchdog */
   hung: boolean
 }
 
@@ -33,14 +33,15 @@ function killGroup(proc: { pid: number; kill: (signal: NodeJS.Signals) => void }
 }
 
 /**
- * Runs `agw` to the end or to the hang guard. The program leads its own process group, so the guard kills what it started
- * too, and a grandchild that still holds the pipes does not keep the call waiting: after the kill they get a short grace.
+ * Runs `agw` to the end or until it goes silent. The program leads its own process group, so the watchdog kills what it
+ * started too, and a grandchild that still holds the pipes does not keep the call waiting: after the kill they get a short
+ * grace. Output on either pipe is progress and restarts the idle clock; there is no other limit on how long it runs.
  */
 async function exec(
   bin: string,
   args: string[],
   stdin: string | null,
-  killAt: number,
+  idleMs: number,
   purpose: string,
 ): Promise<Finished> {
   const proc = Bun.spawn([bin, ...args], {
@@ -50,17 +51,28 @@ async function exec(
     env: { ...process.env, AGW_PURPOSE: purpose },
     detached: true,
   })
+  let lastActivity = Date.now()
   let hung = false
-  const timer = setTimeout(
+  const readers = [proc.stdout, proc.stderr].map((stream) => (stream as ReadableStream<Uint8Array>).getReader())
+  const collect = async (reader: { read(): Promise<{ done: boolean; value?: Uint8Array }> }): Promise<string> => {
+    const decoder = new TextDecoder()
+    let text = ''
+    for (;;) {
+      const { done, value } = await reader.read()
+      if (done) return text + decoder.decode()
+      lastActivity = Date.now()
+      text += decoder.decode(value, { stream: true })
+    }
+  }
+  const finished = Promise.all([collect(readers[0]!), collect(readers[1]!), proc.exited])
+  const timer = setInterval(
     () => {
+      if (hung || Date.now() - lastActivity < idleMs) return
       hung = true
       killGroup(proc)
     },
-    Math.max(1, killAt - Date.now()),
+    Math.max(10, Math.min(idleMs / 4, 5_000)),
   )
-  const stdout = proc.stdout as ReadableStream<Uint8Array>
-  const stderr = proc.stderr as ReadableStream<Uint8Array>
-  const finished = Promise.all([new Response(stdout).text(), new Response(stderr).text(), proc.exited])
   try {
     const gaveUp = new Promise<null>((resolve) => {
       const watch = setInterval(() => {
@@ -72,12 +84,12 @@ async function exec(
     })
     const done = await Promise.race([finished, gaveUp])
     if (done === null) {
-      await Promise.allSettled([stdout.cancel(), stderr.cancel()])
+      await Promise.allSettled(readers.map((reader) => reader.cancel()))
       return { code: 137, out: '', err: '', hung: true }
     }
     return { code: done[2], out: done[0], err: done[1], hung }
   } finally {
-    clearTimeout(timer)
+    clearInterval(timer)
   }
 }
 
@@ -102,13 +114,12 @@ function runIdOf(finished: Finished): string | null {
 /**
  * `agw <workflow> --format json --idempotency-key <key>` with the input on stdin. Exit 10 is pending: the printed resume
  * command (`agw run wait <runId>`) runs until the run ends. The envelope's `output` is checked against the call's schema.
- * Every failure is a `PortError`; the process is killed only at the hang guard.
+ * Every failure is a `PortError`; a process is killed only when it goes silent (`AGW_IDLE_MS`), never for taking long.
  */
 export function agwPort(options: AgwOptions): AgwPort {
-  const guard = options.hangGuardMs ?? AGW_HANG_GUARD_MS
+  const idleMs = options.idleMs ?? AGW_IDLE_MS
   return {
     async run<T>(call: AgwCall<T>): Promise<Result<T, PortError>> {
-      const deadline = Date.now() + guard
       // agw takes 1 to 64 of [A-Za-z0-9_.-] as a purpose (a colon is refused with a 400)
       const purpose = `software-factory.${call.workflow.replaceAll(' ', '.')}`
       try {
@@ -116,18 +127,18 @@ export function agwPort(options: AgwOptions): AgwPort {
           options.bin,
           [...call.workflow.split(' '), '--format', 'json', '--idempotency-key', call.key],
           JSON.stringify(call.input),
-          deadline,
+          idleMs,
           purpose,
         )
         while (finished.code === 10 && !finished.hung) {
           const runId = runIdOf(finished)
           if (!runId)
             return err(portError('unreadable', `agw ${call.workflow} is pending and named no run to wait for`))
-          finished = await exec(options.bin, ['run', 'wait', runId, '--format', 'json'], null, deadline, purpose)
+          finished = await exec(options.bin, ['run', 'wait', runId, '--format', 'json'], null, idleMs, purpose)
         }
         if (finished.hung) {
           return err(
-            portError('timeout', `agw ${call.workflow} did not end within ${Math.round(guard / 60_000)} minutes`),
+            portError('timeout', `agw ${call.workflow} went silent for ${Math.round(idleMs / 1000)} s`),
           )
         }
         if (finished.code !== 0) {
