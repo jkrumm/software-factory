@@ -129,7 +129,7 @@ export function createHygieneChecker(options: HygieneCheckerOptions): HygieneChe
         'check',
         options.skipCheck !== undefined
           ? skipped(`make check not run, this host cannot run the project's check: ${options.skipCheck}`)
-          : deps?.outcome === 'failed' && deps.detail.startsWith('bun install')
+          : (deps?.outcome === 'failed' || deps?.unjudged?.includes('deps')) && deps.detail.startsWith('bun install')
             ? failed(`not run: ${deps.detail}`)
             : await guarded(() => checkProbe(tools, checkout)),
       )

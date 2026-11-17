@@ -1,4 +1,4 @@
-import { spawnSync } from 'node:child_process'
+import { execFile } from 'node:child_process'
 import { basename, dirname, join } from 'node:path'
 import { YAML_OPTIONS } from '@software-factory/contract/plan'
 import {
@@ -84,15 +84,13 @@ const CITATION =
   /(?:([A-Za-z0-9._-]+)\s+)?((?:[A-Za-z0-9._-]+\/)*[A-Za-z0-9_-][A-Za-z0-9._-]*\.(?:md|json|ya?ml))(?![\w/])/g
 
 /** The cited documents of the file's comments that do not exist, at the line that cites them. */
-async function missingCitations(text: string, repo: string, io: LintIo): Promise<Problem[]> {
+async function missingCitations(text: string, repo: string, siblings: string, io: LintIo): Promise<Problem[]> {
   const exists = (path: string) =>
     io.readFile(path).then(
       () => true,
       () => false,
     )
   const problems: Problem[] = []
-  // the directory the sibling repos sit in: beside the main checkout, also when `repo` is a linked worktree
-  const siblings = dirname(mainCheckout(repo))
   const lines = text.split('\n')
   for (const [index, line] of lines.entries()) {
     const hash = line.search(/(^|\s)#/)
@@ -122,17 +120,18 @@ async function missingCitations(text: string, repo: string, io: LintIo): Promise
 }
 
 /** The main checkout a directory belongs to: itself, or for a linked worktree (the hygiene pass's throwaway one) the repo it was made from. */
-function mainCheckout(directory: string): string {
-  const common = spawnSync('git', ['-C', directory, 'rev-parse', '--path-format=absolute', '--git-common-dir'], {
-    encoding: 'utf8',
-    timeout: 5000,
+async function mainCheckout(directory: string): Promise<string> {
+  // asynchronous: the server's hygiene pass lints from its event loop, which a stuck git must not hold
+  const path = await new Promise<string>((resolve) => {
+    execFile(
+      'git',
+      ['-C', directory, '--no-optional-locks', 'rev-parse', '--path-format=absolute', '--git-common-dir'],
+      { encoding: 'utf8', timeout: 5000 },
+      (error, stdout) => resolve(error ? '' : stdout.trim()),
+    )
   })
-  const path = common.status === 0 ? common.stdout.trim() : ''
   return path.endsWith('/.git') ? dirname(path) : directory
 }
-
-/** The repo's own name: the main checkout's directory, also from a linked worktree (as the server stores it). */
-const repoName = (directory: string): string => basename(mainCheckout(directory))
 
 /** The comment at the end of a line, if the line has one before no quote opens (the values this reads are plain scalars). */
 const hasComment = (line: string): boolean => /(^|\s)#/.test(line)
@@ -237,7 +236,9 @@ export async function checkProject(text: string, repo: string | null, io: LintIo
   ]
   warnings.push(...unreasoned(text, value, (path) => positionOf(doc, lineCounter, path)))
   if (repo !== null) {
-    const name = repoName(repo)
+    // asked once: the repo's own name, and the directory its sibling repos sit in, are both the main checkout's
+    const main = await mainCheckout(repo)
+    const name = basename(main)
     if (parsed.data.name !== name) {
       warnings.push(at(['name'], `name is "${parsed.data.name}", the repo is "${name}": the factory refuses the file`))
     }
@@ -255,7 +256,7 @@ export async function checkProject(text: string, repo: string | null, io: LintIo
       )
     }
     warnings.push(...undeclared(parsed.data, targets, at))
-    warnings.push(...(await missingCitations(text, repo, io)))
+    warnings.push(...(await missingCitations(text, repo, dirname(main), io)))
   }
   return { problems: [], warnings: warnings.sort((a, b) => a.line - b.line || a.column - b.column) }
 }

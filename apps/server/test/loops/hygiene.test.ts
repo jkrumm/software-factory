@@ -22,7 +22,8 @@ import type { ClassIssue } from '../../src/domains/loops/classes.ts'
 import type { FindingIssue, LifecycleStep } from '../../src/domains/loops/hygiene-lifecycle.ts'
 import type { HygienePassRecord, LoopReads, LoopStore } from '../../src/domains/loops/ports.ts'
 import { hygieneSummary, hygienePass, type HygieneDeps } from '../../src/app/loops/hygiene.ts'
-import { planLifecycle } from '../../src/domains/loops/hygiene-lifecycle.ts'
+import { planLifecycle, REOPEN_WINDOW_MS } from '../../src/domains/loops/hygiene-lifecycle.ts'
+import { REOPEN_WINDOW_MS as MACHINE_REOPEN_WINDOW_MS } from '../../src/domains/work/issue.ts'
 import type { StoredProject } from '../../src/domains/planning/sync.ts'
 import { sequentialIds } from '../../src/kernel/ids.ts'
 import { err, ok, portError } from '../../src/kernel/result.ts'
@@ -602,4 +603,8 @@ test('a daily pass runs the cheap scope; a busy repo is promoted to a full pass,
   young.rows.push({ ...row('app', ago(DAY + HOUR)), ref: 'abc123def456abc123def456abc123def456abcd' })
   await hygienePass(young.deps)
   expect(young.scopes).toEqual(['daily'])
+})
+
+test("the pass's reopen window stays a day inside the machine's, so a reopen it asks for is never refused for age", () => {
+  expect(MACHINE_REOPEN_WINDOW_MS - REOPEN_WINDOW_MS).toBe(DAY)
 })
