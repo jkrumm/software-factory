@@ -2,7 +2,7 @@ import { readFileSync } from 'node:fs'
 import { join } from 'node:path'
 import { parse } from 'yaml'
 import { exec, gitOut, type Tools } from '../git.ts'
-import { type Outcome, clean, finding, found, skipped } from './finding.ts'
+import { type Outcome, clean, finding, found, skipped, unjudging } from './finding.ts'
 
 const WORKFLOW = /^\.github\/workflows\/[^/]+\.ya?ml$/
 const LOOKUP_TIMEOUT_MS = 30_000
@@ -155,12 +155,14 @@ export async function ciProbe(tools: Tools, path: string, privacy: PrivacyLookup
   const findings = []
   const runs: string[] = []
   let unreadable = 0
+  const unjudged: string[] = isPrivate === undefined ? ['*'] : []
   for (const file of files) {
     let workflow: unknown
     try {
       workflow = parse(read(path, file) ?? '')
     } catch {
       unreadable++
+      unjudged.push(`ci:${file}`)
       continue
     }
     const breaches: string[] = []
@@ -183,7 +185,10 @@ export async function ciProbe(tools: Tools, path: string, privacy: PrivacyLookup
   const target = ciTarget(read(path, 'project.yaml'))
   // `make ${{ matrix.make }}` names its target at run time: the file cannot say the gate is missing
   const templated = runs.some((script) => /\bmake\s+[^\n]*\$\{\{/.test(script))
-  if (target && templated) notes.push('gate rule skipped: a step runs a templated make target')
+  if (target && templated) {
+    notes.push('gate rule skipped: a step runs a templated make target')
+    unjudged.push('ci:gate')
+  }
   if (target && !templated && !runs.some((script) => runsMake(script, target))) {
     findings.push(
       finding(
@@ -197,6 +202,8 @@ export async function ciProbe(tools: Tools, path: string, privacy: PrivacyLookup
   }
 
   const suffix = notes.length ? ` (${notes.join('; ')})` : ''
-  if (findings.length) return found(`${files.length} workflows, ${findings.length} with breaches${suffix}`, findings)
-  return clean(`${files.length} workflows follow the rules${suffix}`)
+  if (findings.length) {
+    return unjudging(found(`${files.length} workflows, ${findings.length} with breaches${suffix}`, findings), unjudged)
+  }
+  return unjudging(clean(`${files.length} workflows follow the rules${suffix}`), unjudged)
 }

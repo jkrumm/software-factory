@@ -2,7 +2,7 @@ import { readFileSync } from 'node:fs'
 import { basename, dirname, join } from 'node:path'
 import { EXIT_TIMEOUT } from '../../hc/process.ts'
 import { gitOut, type Tools } from '../git.ts'
-import { type Outcome, clean, failed, finding, found, skipped } from './finding.ts'
+import { type Outcome, clean, failed, finding, found, skipped, unjudging } from './finding.ts'
 import { execKeepingStderr, firstLine, installed } from './toolrun.ts'
 
 // Verified against bun 1.4.2 / 1.4.4 (`bun audit --json`) and osv-scanner 2.7.1 (`scan source -L <lockfile> --format json`).
@@ -264,7 +264,9 @@ export async function advisoriesProbe(tools: Tools, path: string): Promise<Outco
         ]
   })
   const checked = ran.map(({ name }) => name).join(' and ')
-  if (!findings.length) return clean(`no high or critical advisories (${checked})${suffix}`)
+  // a part that failed or was skipped says nothing about its key: it is not green because the other part is
+  const unjudged = parts.flatMap(({ name, part }) => (part.kind === 'ran' ? [] : [`advisories:${name}`]))
+  if (!findings.length) return unjudging(clean(`no high or critical advisories (${checked})${suffix}`), unjudged)
   const total = findings.reduce((sum, item) => sum + item.count, 0)
-  return found(`${total} high or critical advisories (${checked})${suffix}`, findings)
+  return unjudging(found(`${total} high or critical advisories (${checked})${suffix}`, findings), unjudged)
 }

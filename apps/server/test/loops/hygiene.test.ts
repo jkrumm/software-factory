@@ -471,6 +471,16 @@ test('only a run with a verdict speaks for a key: skipped, failed and a run of a
   ).toEqual([])
 })
 
+test('a run that left a key unjudged does not heal it, though its probe ran', () => {
+  const issues = [
+    issueOf('deps:cargo', { issue: 'issue_1', state: 'queued' }),
+    issueOf('deps:python', { issue: 'issue_2', state: 'queued' }),
+    issueOf('deps', { issue: 'issue_3', state: 'queued' }),
+  ]
+  const partial: ProbeRun = { ...run('deps'), unjudged: ['deps:cargo', 'deps'] }
+  expect(lifecycle({ issues, runs: [partial] }).steps.map((s) => [s.issue, s.action])).toEqual([['issue_2', 'healed']])
+})
+
 test('the document judgment is never healed: it read a few documents, absence proves nothing', () => {
   const issues = [issueOf('judgment:slop:docs/a.md', { state: 'queued' })]
   expect(lifecycle({ issues, runs: [run('judgment')] }).steps).toEqual([])

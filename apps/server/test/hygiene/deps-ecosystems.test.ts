@@ -179,6 +179,27 @@ describe('depsProbe', () => {
     expect((await depsProbe(defaultTools(), dir, lookup({ 'cargo:serde': '1.0.229' }))).outcome).toBe('clean')
   })
 
+  test('a look-up that failed leaves its key unjudged, a green one does not', async () => {
+    const dir = repo({
+      'Cargo.toml': '[dependencies]\nserde = "1.0"\nrand = "0.8"\n',
+      Dockerfile: 'FROM node:20-alpine\n',
+    })
+    const partial = await depsProbe(
+      defaultTools(),
+      dir,
+      lookup({ 'cargo:serde': '1.0.229', 'docker:node': '20-alpine' }, ['rand']),
+    )
+    expect(partial.outcome).toBe('clean')
+    expect(partial.unjudged).toEqual(['deps:cargo'])
+    const whole = await depsProbe(
+      defaultTools(),
+      dir,
+      lookup({ 'cargo:serde': '1.0.229', 'cargo:rand': '0.8.5', 'docker:node': '20-alpine' }),
+    )
+    expect(whole.outcome).toBe('clean')
+    expect(whole.unjudged).toBeUndefined()
+  })
+
   test('skip: no package file', async () => {
     const out = await depsProbe(defaultTools(), repo({ 'a.txt': 'x' }), lookup({}))
     expect(out).toMatchObject({ outcome: 'skipped', detail: 'no package file' })

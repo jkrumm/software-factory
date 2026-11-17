@@ -179,6 +179,8 @@ describe('advisoriesProbe', () => {
     )
     expect(outcome.outcome).toBe('clean')
     expect(outcome.detail).toContain('bun: bun audit failed')
+    // the part that did not run says nothing about its key: the lifecycle must not heal advisories:bun on this run
+    expect(outcome.unjudged).toEqual(['advisories:bun'])
   })
 
   test('unusual: osv-scanner exit 127 (usage or network error) is failed; 128 (no packages) is clean', async () => {

@@ -2,7 +2,7 @@ import { existsSync } from 'node:fs'
 import { join } from 'node:path'
 import { EXIT_TIMEOUT } from '../../hc/process.ts'
 import { exec, gitOut, type Tools } from '../git.ts'
-import { type Outcome, clean, failed, finding, found, skipped } from './finding.ts'
+import { type Outcome, clean, failed, finding, found, skipped, unjudging } from './finding.ts'
 import { execKeepingStderr, firstLine, installed } from './toolrun.ts'
 
 // Verified against fallow 3.38.1 (`fallow dead-code --format json`, JSON schema_version 10) and bun 1.4.2.
@@ -109,9 +109,14 @@ export async function deadcodeProbe(tools: Tools, path: string): Promise<Outcome
       reproduce,
     }))
   const detail = notes.length ? ` (${notes.join('; ')})` : ''
-  if (!findings.length) return clean(`fallow dead-code: nothing unused${detail}`)
-  return found(
-    `fallow dead-code: ${findings.map((f) => `${f.count} unused ${f.key.replace('deadcode:', '')}`).join(', ')}${detail}`,
-    findings,
+  // without installed packages the unused-dependency kind is not judged: it is not green for want of a finding
+  const unjudged = depsAreReliable ? [] : ['deadcode:deps']
+  if (!findings.length) return unjudging(clean(`fallow dead-code: nothing unused${detail}`), unjudged)
+  return unjudging(
+    found(
+      `fallow dead-code: ${findings.map((f) => `${f.count} unused ${f.key.replace('deadcode:', '')}`).join(', ')}${detail}`,
+      findings,
+    ),
+    unjudged,
   )
 }

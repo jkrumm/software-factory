@@ -3,7 +3,7 @@ import { join } from 'node:path'
 import { EXIT_TIMEOUT } from '../../hc/process.ts'
 import { exec, gitOut, type Tools } from '../git.ts'
 import type { ProbeFinding } from '../../../domains/loops/hygiene-model.ts'
-import { type Outcome, clean, failed, finding, found, skipped } from './finding.ts'
+import { type Outcome, clean, failed, finding, found, skipped, unjudging } from './finding.ts'
 
 const INSTALL_TIMEOUT_MS = 10 * 60_000
 const OUTDATED_TIMEOUT_MS = 120_000
@@ -283,7 +283,7 @@ async function fetchJson(url: string): Promise<Record<string, unknown>> {
 }
 
 async function gitTags(tools: Tools, url: string): Promise<string[]> {
-  const result = await exec([tools.git, 'ls-remote', '--tags', '--refs', url], LOOKUP_TIMEOUT_MS)
+  const result = await exec([tools.git, 'ls-remote', '--tags', '--refs', '--', url], LOOKUP_TIMEOUT_MS)
   if (result.exitCode !== 0) throw new Error(`git ls-remote ${url} failed (exit ${result.exitCode})`)
   return result.stdout.split('\n').flatMap((line) => line.split('\trefs/tags/')[1]?.trim() ?? [])
 }
@@ -405,6 +405,8 @@ interface EcosystemRun {
   outcome: 'found' | 'clean' | 'failed'
   detail: string
   findings: ProbeFinding[]
+  /** the finding key the run could not judge: its part failed, or some of its look-ups did */
+  unjudged?: string[]
 }
 
 async function judgeEcosystem(
@@ -424,7 +426,12 @@ async function judgeEcosystem(
   )
   const notLooked = unique.length - batch.length + answers.filter((latest) => latest === undefined).length
   if (answers.length > 0 && answers.every((latest) => latest === undefined)) {
-    return { outcome: 'failed', detail: `${entry.label}: no look-up worked (${notLooked} not looked up)`, findings: [] }
+    return {
+      outcome: 'failed',
+      detail: `${entry.label}: no look-up worked (${notLooked} not looked up)`,
+      findings: [],
+      unjudged: [`deps:${entry.ecosystem}`],
+    }
   }
   const rows = batch.flatMap((dep, index) => {
     const latest = answers[index]
@@ -434,7 +441,12 @@ async function judgeEcosystem(
   rows.sort((a, b) => a.size.localeCompare(b.size) || a.name.localeCompare(b.name))
   const note = notLooked ? `, ${notLooked} not looked up` : ''
   if (!rows.length)
-    return { outcome: 'clean', detail: `${entry.label}: nothing a minor or major behind${note}`, findings: [] }
+    return {
+      outcome: 'clean',
+      detail: `${entry.label}: nothing a minor or major behind${note}`,
+      findings: [],
+      ...(notLooked ? { unjudged: [`deps:${entry.ecosystem}`] } : {}),
+    }
   const lines = rows.map((row) => `${row.name} ${row.current} -> ${row.latest} (${row.size})`)
   return {
     outcome: 'found',
@@ -455,15 +467,26 @@ async function bunRun(tools: Tools, path: string): Promise<EcosystemRun | undefi
             ? `bun install did not finish in ${INSTALL_TIMEOUT_MS / 60_000} min`
             : `bun install --frozen-lockfile failed (exit ${install.exitCode})`,
         findings: [],
+        unjudged: ['deps'],
       }
     }
   }
   const result = await exec([tools.bun, 'outdated'], OUTDATED_TIMEOUT_MS, path)
   if (result.exitCode === EXIT_TIMEOUT) {
-    return { outcome: 'failed', detail: `bun outdated did not finish in ${OUTDATED_TIMEOUT_MS / 1000} s`, findings: [] }
+    return {
+      outcome: 'failed',
+      detail: `bun outdated did not finish in ${OUTDATED_TIMEOUT_MS / 1000} s`,
+      findings: [],
+      unjudged: ['deps'],
+    }
   }
   if (result.exitCode !== 0) {
-    return { outcome: 'failed', detail: `bun outdated failed (exit ${result.exitCode})`, findings: [] }
+    return {
+      outcome: 'failed',
+      detail: `bun outdated failed (exit ${result.exitCode})`,
+      findings: [],
+      unjudged: ['deps'],
+    }
   }
   const outdated = parseOutdated(result.stdout)
     .filter((row) => row.current !== row.latest)
@@ -495,7 +518,8 @@ export async function depsProbe(tools: Tools, path: string, lookup: Lookup = reg
   if (!runs.length) return skipped('no package file')
   const findings = runs.flatMap((run) => run.findings)
   const detail = runs.map((run) => run.detail).join('; ')
-  if (findings.length) return found(detail, findings)
-  if (runs.some((run) => run.outcome === 'clean')) return clean(detail)
+  const unjudged = runs.flatMap((run) => run.unjudged ?? [])
+  if (findings.length) return unjudging(found(detail, findings), unjudged)
+  if (runs.some((run) => run.outcome === 'clean')) return unjudging(clean(detail), unjudged)
   return failed(detail)
 }

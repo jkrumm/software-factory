@@ -145,6 +145,20 @@ describe('projectProbe', () => {
     expect(green.outcome).toBe('clean')
   })
 
+  test('a citation of a sibling repo resolves beside the main checkout, also from a linked worktree', async () => {
+    const cited = `${GOOD}# the reason is in repo-b docs/why.md\n`
+    const main = repo({ 'project.yaml': cited, Makefile: MAKEFILE })
+    const sibling = join(dirname(main), 'repo-b')
+    mkdirSync(join(sibling, 'docs'), { recursive: true })
+    writeFileSync(join(sibling, 'project.yaml'), 'apiVersion: factory/v2\nname: repo-b\n')
+    writeFileSync(join(sibling, 'docs', 'why.md'), 'why\n')
+    expect((await projectProbe(TOOLS, main)).outcome).toBe('clean')
+    // the hygiene pass reads a throwaway worktree that lives elsewhere: the sibling is still found beside the main checkout
+    const linked = join(base, `throwaway-${++counter}`)
+    git(main, ['worktree', 'add', '-q', '--detach', linked])
+    expect((await projectProbe(TOOLS, linked)).outcome).toBe('clean')
+  })
+
   test('the name is compared with the main checkout, also from a linked worktree', async () => {
     const main = repo({ 'project.yaml': GOOD, Makefile: MAKEFILE })
     const linked = join(dirname(main), 'throwaway-1a2b3c4-xyz')

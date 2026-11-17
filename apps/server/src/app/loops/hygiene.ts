@@ -114,8 +114,9 @@ async function applyStep(
       }),
     )
     if (!reopened.ok) return done('kept', `could not reopen: ${JSON.stringify(reopened.error).slice(0, 200)}`)
-    return reopened.value.result === 'refused' || reopened.value.result === 'ignored'
-      ? done('kept', `the machine did not reopen it: ${reopened.value.event.detail ?? reopened.value.result}`)
+    // a replay answers with the stored event, whatever the machine decided then: only an applied one reopened it
+    return reopened.value.event.result !== 'applied'
+      ? done('kept', `the machine did not reopen it: ${reopened.value.event.detail ?? reopened.value.event.result}`)
       : done('reopened', step.why.split('\n')[0] ?? step.why)
   }
   const note = async () => {
@@ -136,7 +137,7 @@ async function applyStep(
   })
   if (!healed.ok) return done('kept', `could not heal: ${JSON.stringify(healed.error).slice(0, 200)}`)
   // a lead started between the read and the write: tell it instead
-  return healed.value.result === 'applied' || healed.value.result === 'replayed' ? done('healed', step.why) : note()
+  return healed.value.event.result === 'applied' ? done('healed', step.why) : note()
 }
 
 /** File one signal. A filed, amended or repeat-dropped outcome stands (an Issue carries it); any other drop is a failure. */

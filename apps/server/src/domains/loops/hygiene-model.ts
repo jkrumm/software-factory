@@ -66,6 +66,8 @@ export interface ProbeRun {
    * on a run recorded before the lifecycle: such a run covers nothing.
    */
   covers?: string
+  /** exact keys under `covers` the run did not judge (a part of the probe failed or was skipped), or `*` for all of them: neither raised nor green */
+  unjudged?: string[]
 }
 
 /** What one sweep of one checkout found; stored as the pass's `report`. */

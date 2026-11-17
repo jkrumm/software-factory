@@ -52,13 +52,18 @@ export interface LifecyclePlan {
   suppress: Set<string>
 }
 
-/** A run speaks for a key when it ended with a verdict (clean or found) and the key is its own or under it. */
+/** An `unjudged` entry that means every key of the run. */
+export const ALL = '*'
+
+/** A run speaks for a key when it ended with a verdict (clean or found), the key is its own or under it, and the run did not leave that key unjudged. */
 export function coveringRun(runs: readonly ProbeRun[], key: string): ProbeRun | undefined {
+  const under = (prefix: string): boolean => key === prefix || key.startsWith(`${prefix}:`)
   return runs.find(
     (run) =>
       (run.outcome === 'clean' || run.outcome === 'found') &&
       run.covers !== undefined &&
-      (key === run.covers || key.startsWith(`${run.covers}:`)),
+      under(run.covers) &&
+      !(run.unjudged ?? []).some((unjudged) => unjudged === ALL || unjudged === key),
   )
 }
 

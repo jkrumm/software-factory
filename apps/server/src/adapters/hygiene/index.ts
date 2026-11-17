@@ -153,7 +153,13 @@ export function createHygieneChecker(options: HygieneCheckerOptions): HygieneChe
             ? [{ covers: probe, outcome: outcomes.get(probe) ?? failed('did not run') }]
             : []
       for (const { covers, outcome } of list) {
-        runs.push({ probe, outcome: outcome.outcome, detail: outcome.detail, covers })
+        runs.push({
+          probe,
+          outcome: outcome.outcome,
+          detail: outcome.detail,
+          covers,
+          ...(outcome.unjudged?.length ? { unjudged: outcome.unjudged } : {}),
+        })
         findings.push(...outcome.findings)
       }
     }

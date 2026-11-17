@@ -91,6 +91,8 @@ async function missingCitations(text: string, repo: string, io: LintIo): Promise
       () => false,
     )
   const problems: Problem[] = []
+  // the directory the sibling repos sit in: beside the main checkout, also when `repo` is a linked worktree
+  const siblings = dirname(mainCheckout(repo))
   const lines = text.split('\n')
   for (const [index, line] of lines.entries()) {
     const hash = line.search(/(^|\s)#/)
@@ -100,7 +102,7 @@ async function missingCitations(text: string, repo: string, io: LintIo): Promise
       const [, word, path] = match
       if (!path || comment.slice(Math.max(0, (match.index ?? 0) - 3), match.index).includes('://')) continue
       // `<repo> <path>` cites another repo's file when <repo> is a sibling the factory knows (it has a project.yaml)
-      const sibling = word ? join(dirname(repo), word) : null
+      const sibling = word ? join(siblings, word) : null
       const other = sibling !== null && (await exists(join(sibling, 'project.yaml'))) ? sibling : null
       // a bare name (`deploy.yml`, `AGENTS.md`) is a workflow or a file named in passing; only a path or `<repo> <file>` cites
       if (!path.includes('/') && other === null) continue
@@ -119,15 +121,18 @@ async function missingCitations(text: string, repo: string, io: LintIo): Promise
   return problems
 }
 
-/** The repo's own name: the main checkout's directory, also from a linked worktree (as the server stores it). */
-function repoName(directory: string): string {
+/** The main checkout a directory belongs to: itself, or for a linked worktree (the hygiene pass's throwaway one) the repo it was made from. */
+function mainCheckout(directory: string): string {
   const common = spawnSync('git', ['-C', directory, 'rev-parse', '--path-format=absolute', '--git-common-dir'], {
     encoding: 'utf8',
     timeout: 5000,
   })
   const path = common.status === 0 ? common.stdout.trim() : ''
-  return path.endsWith('/.git') ? basename(dirname(path)) : basename(directory)
+  return path.endsWith('/.git') ? dirname(path) : directory
 }
+
+/** The repo's own name: the main checkout's directory, also from a linked worktree (as the server stores it). */
+const repoName = (directory: string): string => basename(mainCheckout(directory))
 
 /** The comment at the end of a line, if the line has one before no quote opens (the values this reads are plain scalars). */
 const hasComment = (line: string): boolean => /(^|\s)#/.test(line)
