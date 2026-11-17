@@ -128,7 +128,7 @@ The workflow files: a private repo runs on `[self-hosted, vps]` and never a host
 
 ### agentsmd
 
-The repo contract for agent files (dotfiles `docs/agents-md.md`): no `CLAUDE.md` or `CLAUDE.local.md`, no `@imports` in an `AGENTS.md`, no `ask` rules in a checked-in `.claude/settings.json`.
+The repo contract for agent files (dotfiles `docs/agents-md.md`): no `CLAUDE.md` or `CLAUDE.local.md`, no `@imports` in an `AGENTS.md`, no `ask` rules in a checked-in `.claude/settings.json`. A `CLAUDE.md` under a `fixtures/` directory is a documented benchmark fixture and is not a finding.
 
 - **Default:** on when detection finds what it reads: the repo has an `AGENTS.md`, a `CLAUDE.md` or a `.claude/settings.json`.
 - **Runs:** in the daily pass and the weekly one; reads tracked files.

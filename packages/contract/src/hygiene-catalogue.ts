@@ -128,7 +128,7 @@ export const HYGIENE_CATALOGUE = [
   {
     name: 'agentsmd',
     summary:
-      'The repo contract for agent files (dotfiles `docs/agents-md.md`): no `CLAUDE.md` or `CLAUDE.local.md`, no `@imports` in an `AGENTS.md`, no `ask` rules in a checked-in `.claude/settings.json`.',
+      'The repo contract for agent files (dotfiles `docs/agents-md.md`): no `CLAUDE.md` or `CLAUDE.local.md`, no `@imports` in an `AGENTS.md`, no `ask` rules in a checked-in `.claude/settings.json`. A `CLAUDE.md` under a `fixtures/` directory is a documented benchmark fixture and is not a finding.',
     enabled: 'auto',
     detect: 'the repo has an `AGENTS.md`, a `CLAUDE.md` or a `.claude/settings.json`',
     cost: 'file',

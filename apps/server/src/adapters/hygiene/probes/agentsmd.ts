@@ -63,6 +63,9 @@ export function askRules(text: string): { rules: string[] } | { malformed: true 
   return { rules: Array.isArray(ask) ? ask.map(String) : [] }
 }
 
+/** A `CLAUDE.md` under a `fixtures/` directory is test data a benchmark loads on purpose (dotfiles `docs/agents-md.md` rule 4), not a repo agent file. */
+const FIXTURE = /(^|\/)fixtures\//
+
 const readText = (root: string, file: string): string | undefined => {
   try {
     return readFileSync(join(root, file), 'utf8')
@@ -77,7 +80,7 @@ const readText = (root: string, file: string): string | undefined => {
  */
 export async function agentsmdProbe(tools: Tools, path: string): Promise<Outcome> {
   const tracked = (await gitOut(tools, path, ['ls-files', '-z'])).split('\0').filter(Boolean)
-  const claude = tracked.filter((f) => ['CLAUDE.md', 'CLAUDE.local.md'].includes(basename(f)))
+  const claude = tracked.filter((f) => ['CLAUDE.md', 'CLAUDE.local.md'].includes(basename(f)) && !FIXTURE.test(f))
   const agents = tracked.filter((f) => basename(f) === 'AGENTS.md')
   const settings = tracked.filter((f) => f === '.claude/settings.json' || f.endsWith('/.claude/settings.json'))
   if (!claude.length && !agents.length && !settings.length)
