@@ -15,7 +15,9 @@ import { loadMigrations, migrate } from '../../src/adapters/postgres/migrate.ts'
 import { createApp } from '../../src/api/app.ts'
 import { JUDGMENT_PREFIX } from '../../src/domains/loops/hygiene.ts'
 import { PROBES } from '../../src/domains/loops/hygiene-model.ts'
+import { NO_LEAD_CAP } from '../../src/read/project-index.ts'
 import { BUILT_IN_PROBES, DOCUMENT_PREFIX } from '../../src/read/project-page.ts'
+import { DEFAULT_LEADS } from '../../src/domains/planning/project.ts'
 
 /** `GET /v1/projects`, `/v1/projects/:name` and `/v1/projects/:name/hygiene`: every figure equals the stored facts, and a work project is not found for the read token. */
 const TOKENS = {
@@ -177,6 +179,7 @@ afterAll(() => db.stop())
 test("the built-in probes and the judgment key prefix are the hygiene loop's", () => {
   expect([...BUILT_IN_PROBES]).toEqual(PROBES.filter((probe) => probe !== 'probe'))
   expect(DOCUMENT_PREFIX).toBe(JUDGMENT_PREFIX)
+  expect(NO_LEAD_CAP).toBe(DEFAULT_LEADS)
 })
 
 test('the list counts the Issues and names the newest hygiene pass', async () => {
@@ -253,6 +256,8 @@ test("the list groups by the owner's Herdr groups and carries what the table dra
 test('the read token hears of no work project', async () => {
   const model = ProjectIndexModel.parse(await get('/v1/projects', TOKENS.read))
   expect(model.projects.map((p) => p.name)).toEqual(['open-app'])
+  // Work holds only work-app and Other only bare (both work projects): their labels go too
+  expect(model.groups).toEqual(['Tooling'])
   for (const path of ['/v1/projects/work-app', '/v1/projects/work-app/hygiene', '/v1/projects/bare']) {
     expect((await call(path, TOKENS.read)).status).toBe(404)
   }

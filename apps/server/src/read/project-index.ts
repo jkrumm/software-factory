@@ -13,6 +13,7 @@ import { projectOf } from '../kernel/project-of.ts'
 import { queueKindOf, type QueueReasons } from './flow.ts'
 import type { ProjectGroups } from './project-groups.ts'
 import {
+  DOCUMENT_PREFIX,
   documentKeys,
   findingCount,
   iso,
@@ -36,8 +37,8 @@ const WEEK_MS = DIGEST_WINDOW_MS
 const FINDING_LOOKBACK_MS = 30 * 24 * HOUR_MS
 /** a host sample older than this says nothing about the seats now */
 const SEATS_MAX_AGE_MS = 10 * 60_000
-/** `leads:` at or above this is no cap of the project's own (`docs/plan.md`: none stated is 64, the bound) */
-const NO_LEAD_CAP = 64
+/** `leads:` at or above this is no cap of the project's own (`DEFAULT_LEADS` of `domains/planning/project.ts`; a test holds them equal) */
+export const NO_LEAD_CAP = 64
 
 const json = (value: unknown): unknown => (typeof value === 'string' ? JSON.parse(value) : value)
 
@@ -186,7 +187,7 @@ export async function readProjectIndex(
         .array(z.object({ key: z.string() }))
         .catch([])
         .parse(json(row.entries) ?? [])
-      const keys = new Set([...found, ...entries.filter((e) => e.key.startsWith('judgment:'))].map((e) => e.key))
+      const keys = new Set([...found, ...entries.filter((e) => e.key.startsWith(DOCUMENT_PREFIX))].map((e) => e.key))
       return { repo: row.repo, at: row.at, keys }
     }),
   )

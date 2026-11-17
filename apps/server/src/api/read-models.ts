@@ -226,9 +226,11 @@ export const readModelRoutes = (deps: ReadModelDeps | undefined, caller: (reques
         const model = await readProjectIndex(deps.sql, { now: now(), groups, queue: queue ?? undefined })
         // the read token hears no word of a work project, not even that it exists (NL18)
         const redact = caller(request) === 'read'
-        return Response.json(
-          ProjectIndexModel.parse(redact ? { ...model, projects: model.projects.filter((p) => !p.work) } : model),
-        )
+        if (!redact) return Response.json(ProjectIndexModel.parse(model))
+        // and no group label only work projects fill: the owner's file may name an employer
+        const projects = model.projects.filter((p) => !p.work)
+        const groupsLeft = model.groups.filter((group) => projects.some((p) => p.group === group))
+        return Response.json(ProjectIndexModel.parse({ ...model, projects, groups: groupsLeft }))
       },
       {
         response: { 200: ProjectIndexModel, ...errorResponses(503) },
