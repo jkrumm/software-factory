@@ -47,7 +47,8 @@ jobs:
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
-          fetch-depth: ${{ matrix.history == 'true' && 0 || 1 }}
+          # Strings: in an expression the number 0 is falsy, so `&& 0 || 1` always gave 1.
+          fetch-depth: ${{ matrix.history == 'true' && '0' || '1' }}
       - uses: ./.github/actions/setup
         with:
           playwright: ${{ matrix.playwright || 'false' }}
