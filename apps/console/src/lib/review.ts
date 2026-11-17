@@ -117,7 +117,10 @@ export function useReview(id: string) {
       else if (write.kind === 'edit') await patchAnnotation(id, write.annotationId, write.comment)
       else await deleteAnnotation(id, write.annotationId)
     } catch (error) {
-      patch(write.key, { state: 'failed', error: error instanceof Error ? error.message : 'The request failed' })
+      patch(write.key, {
+        state: 'failed',
+        error: error instanceof Error ? error.message : 'The request failed. Try again.',
+      })
       return
     }
     patch(write.key, { state: 'saved' })

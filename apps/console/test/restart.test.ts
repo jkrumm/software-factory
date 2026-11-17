@@ -26,6 +26,10 @@ test('only a rejected fetch is a network error, with a 1 s to 10 s backoff', () 
 test('failureNote says the server restarts for a network error or no error while it does', () => {
   expect(failureNote(new TypeError('x'), true)).toBe(RESTART_NOTE)
   expect(failureNote(null, true)).toBe(RESTART_NOTE)
-  expect(failureNote(new TypeError('x'))).toBe('The server cannot be reached')
-  expect(failureNote(new ApiError(503, '/v1/x'), true)).toBe('The server answered 503')
+  expect(failureNote(new TypeError('x'))).toBe(
+    'The server cannot be reached. This page retries by itself; check that the factory is running.',
+  )
+  expect(failureNote(new ApiError(503, '/v1/x'), true)).toBe(
+    'The server answered 503. Reload the page; if it stays, read the server log.',
+  )
 })

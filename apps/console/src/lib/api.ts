@@ -105,9 +105,10 @@ export const RESTART_NOTE = 'The server is restarting. This page reloads by itse
 export function failureNote(error: Error | null, restarting = false): string {
   if (restarting && (!error || isNetworkError(error))) return RESTART_NOTE
   if (error instanceof ShapeError) return 'This Console is older than the server. Reload the page to update it'
-  if (error instanceof ApiError) return `The server answered ${error.status}`
-  if (error) return 'The server cannot be reached'
-  return 'No data yet'
+  if (error instanceof ApiError)
+    return `The server answered ${error.status}. Reload the page; if it stays, read the server log.`
+  if (error) return 'The server cannot be reached. This page retries by itself; check that the factory is running.'
+  return 'No data yet. The page fills in when the server answers.'
 }
 
 /** `fetch` that tells the restart state whether the server answered at all (an HTTP status, even an error, is an answer). */

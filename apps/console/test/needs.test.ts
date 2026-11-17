@@ -55,9 +55,9 @@ test('the origin is the repo, or App feedback; reversibility is a lozenge from a
 
 test('errorWords: 409 is settled elsewhere, no status is unreachable, the rest says what the API said', () => {
   expect(errorWords(409, 'already_answered')).toBe('Already settled elsewhere')
-  expect(errorWords(null, null)).toBe('Could not reach the factory')
+  expect(errorWords(null, null)).toBe('Could not reach the factory. Send it again in a moment.')
   expect(errorWords(422, 'a verdict needs: note')).toBe('a verdict needs: note')
-  expect(errorWords(500, null)).toBe('The factory refused this')
+  expect(errorWords(500, null)).toBe('The factory refused this. Change your answer and send it again.')
 })
 
 test('issueNumber turns an Issue ref into the page parameter', () => {

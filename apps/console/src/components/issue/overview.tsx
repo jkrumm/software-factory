@@ -63,6 +63,7 @@ function Figures({ issue, narrow }: { issue: Issue; narrow?: boolean }) {
       <StatCard
         icon={TimerIcon}
         title="Active time"
+        hint="active time"
         subtitle={subtitle}
         value={durationWords(insights.workingMs)}
         footer={[
@@ -74,6 +75,7 @@ function Figures({ issue, narrow }: { issue: Issue; narrow?: boolean }) {
       <StatCard
         icon={ArrowsCounterClockwiseIcon}
         title="Turns"
+        hint="turns"
         subtitle={subtitle}
         value={countWords(insights.turns)}
         footer={[
@@ -85,6 +87,7 @@ function Figures({ issue, narrow }: { issue: Issue; narrow?: boolean }) {
       <StatCard
         icon={TextAlignLeftIcon}
         title="Tokens out"
+        hint="tokens out"
         subtitle={subtitle}
         value={token(tokens.output)}
         valueNote={TOKENS_NOT_COUNTED}
@@ -97,6 +100,7 @@ function Figures({ issue, narrow }: { issue: Issue; narrow?: boolean }) {
       <StatCard
         icon={DatabaseIcon}
         title="Cache read share"
+        hint="cache read share"
         subtitle={subtitle}
         value={tokensOk ? share : null}
         valueNote={tokensOk ? 'No prompt tokens were counted.' : TOKENS_NOT_COUNTED}

@@ -60,7 +60,7 @@ export function TocColumn({
       </div>
       <div className="min-h-0 flex-1 overflow-x-hidden overflow-y-auto px-2 pb-4">
         {props.items.length === 0 ? (
-          <p className="px-2 text-xs text-muted-foreground">This document has no headings.</p>
+          <p className="px-2 text-xs text-muted-foreground">This artifact has no headings.</p>
         ) : (
           <TocList {...props} />
         )}

@@ -105,7 +105,9 @@ export function TrendChart() {
           </>
         ) : (
           <p className="py-10 text-center text-sm text-muted-foreground">
-            {isPending ? 'Reading the events…' : `The trend could not be read${error ? `: ${error.message}` : ''}`}
+            {isPending
+              ? 'Reading the events…'
+              : `The trend could not be read${error ? `: ${error.message}` : ''}. Reload the page to try again.`}
           </p>
         )}
       </div>

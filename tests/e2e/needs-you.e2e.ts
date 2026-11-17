@@ -269,7 +269,7 @@ test('an Errand done, a held signal promoted and a verdict each move the API sta
   const signal = card(page, held.title)
   if (held.repo === null) {
     await expect(signal.getByRole('button', { name: 'Promote' })).toBeDisabled()
-    await signal.getByLabel('Repository').fill('argo')
+    await signal.getByLabel('Repo').fill('argo')
   }
   await signal.getByRole('button', { name: 'Promote' }).click()
   await expect(page.getByRole('status').filter({ hasText: 'Promoted' })).toBeVisible()

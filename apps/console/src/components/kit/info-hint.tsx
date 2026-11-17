@@ -1,5 +1,6 @@
 import { InfoIcon } from '@phosphor-icons/react'
 import { Popover } from '@base-ui/react/popover'
+import { GUIDE_URL, needsGuide } from '@/lib/guide'
 import { LANGUAGE } from '@/lib/language.gen'
 import { cn } from '@/lib/utils'
 
@@ -39,6 +40,16 @@ export function InfoHint({ word, className }: InfoHintProps) {
             <Popover.Description className="mt-1 text-[length:var(--vx-text-sm)] text-muted-foreground">
               {LANGUAGE[key]}
             </Popover.Description>
+            {needsGuide(LANGUAGE[key]) ? (
+              <a
+                href={GUIDE_URL}
+                target="_blank"
+                rel="noopener noreferrer"
+                className="mt-2 inline-block text-[length:var(--vx-text-sm)] underline underline-offset-2 outline-none focus-visible:ring-3 focus-visible:ring-ring/50"
+              >
+                Read more in the language guide
+              </a>
+            ) : null}
           </Popover.Popup>
         </Popover.Positioner>
       </Popover.Portal>

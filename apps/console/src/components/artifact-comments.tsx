@@ -436,7 +436,7 @@ export function Annotations({
           </h2>
           {action}
         </div>
-        <p className="text-xs text-muted-foreground">Select text in the document to comment on it.</p>
+        <p className="text-xs text-muted-foreground">Select text in the artifact to comment on it.</p>
       </div>
       <div className="flex min-h-0 flex-1 flex-col gap-5 px-4 pb-4 lg:overflow-y-auto">
         {current.length === 0 ? (

@@ -134,8 +134,8 @@ export const VERDICTS = [
 /** The words an error shows inline: a settled thing says so, anything else says what the API said. */
 export function errorWords(status: number | null, detail: string | null): string {
   if (status === 409) return 'Already settled elsewhere'
-  if (status === null) return 'Could not reach the factory'
-  return detail ?? 'The factory refused this'
+  if (status === null) return 'Could not reach the factory. Send it again in a moment.'
+  return detail ?? 'The factory refused this. Change your answer and send it again.'
 }
 
 /** A Lozenge for an option's reversibility, from an explicit map: reversible is good, not reversible is a warning. */

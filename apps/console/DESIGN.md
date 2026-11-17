@@ -192,6 +192,28 @@ click, and keeps the working screen where it was.
   the passage itself stays painted. Revisions side by side stay.
   The shared templates follow these rules.
 
+## Copy
+
+The words a person reads are part of the screen, built with its layout. They follow the owner's voice guide (`brain/voice.md`,
+"UI and product surfaces") and `docs/language.md`; `bun run --cwd apps/console copy` (in `make check`, with `test/copy.test.ts`)
+holds what a script can hold.
+
+- **A label is an action:** verb and object ("Send verdict", "Open the Chain"), never "Submit", "OK" or "Click here".
+- **An error says what happened and what to do next:** "The server cannot be reached. This page retries by itself; check that the
+  factory is running." Never a bare "Error" or "Failed", never blame.
+- **An empty state says why it is empty and gives the first step:** a title and one line under it, or an action. The line is
+  the next step, not a second title.
+- **Every StatCard has a `hint`** (never `undefined`): the glossary word for what the figure counts. A figure of the host, an
+  Issue, a project or the queue (Throughput, the Issue and project pages, Flow's Shipped) uses a word of "The host" or "The figures
+  on a card" in `docs/language.md`, whose definition ends in "What to do:" and the step. An Improve KPI is a measure against a
+  target: its hint is the glossary word and its `meaning` line says what it counts and which way is good. A definition longer
+  than two sentences carries "Read more in the language guide" in the popover.
+- **One word per glossary term:** repo (not repository), artifact (not document), Issue (not item or task), lead (not worker).
+  The state words are Running, Paused, Ready, Held, Checking and Planned (`scripts/vocabulary.ts`).
+- **Cut what the layout says,** and every word on the voice guide's ban list (leverage, robust, seamless, harness, ...).
+- **Not a guide tab.** The concepts are explained in the guide; the Console explains a word where it shows, in two sentences.
+- An exception is a line with its reason in `scripts/copy.allow`.
+
 ## Done means
 
 1. Playwright's default viewport is 1800×1200; the screenshot suite shoots 1800×1200 dark and light, 1280×800 and
@@ -202,4 +224,4 @@ click, and keeps the working screen where it was.
    in the factory's home directory) and this file, fixes what falls short, shoots again, and writes down what it compared.
 3. The rounds' verdicts (each round's findings P0 to P3 and what changed) are in the evidence; the last round is clean
    in both passes.
-4. `make check` passes, including the Console's Playwright suite.
+4. `make check` passes, including the Console's Playwright suite and its copy rules.

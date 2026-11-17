@@ -15,7 +15,7 @@ import { ageWords } from '@/lib/age'
 export const PROBE_WORDS: Record<HygieneProbeRow['status'], string> = {
   clean: 'Clean',
   found: 'Found',
-  failed: 'Failed',
+  failed: 'Could not run',
   skipped: 'Skipped',
   never: 'Not run',
 }
@@ -188,7 +188,7 @@ export function healthOf({
 
   const checksCell: HealthCell = (() => {
     const base = { key: 'checks', label: 'Checks', tab: 'hygiene' } as const
-    if (!hygiene) return { ...base, tone: 'neutral', text: 'The hygiene has not loaded' }
+    if (!hygiene) return { ...base, tone: 'neutral', text: 'The hygiene report did not load. Reload the page.' }
     if (!hygiene.lastPass) return { ...base, tone: 'neutral', text: 'No hygiene pass has swept this project yet' }
     const red = hygiene.probes.filter((probe) => probe.status === 'failed')
     const found = hygiene.probes.filter((probe) => probe.status === 'found')

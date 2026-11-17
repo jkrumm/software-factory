@@ -74,8 +74,8 @@ test('nodes without an edge are counted, not drawn', () => {
   const view = chainOf(model)
   expect(view.nodes.map((n) => n.id).sort()).toEqual(['issue_1', 'issue_2', 'issue_3', 'issue_9'])
   expect(view.isolated).toBe(2)
-  expect(isolatedNote(1)).toBe('1 more item has no dependencies, so it is not drawn')
-  expect(isolatedNote(2)).toBe('2 more items have no dependencies, so they are not drawn')
+  expect(isolatedNote(1)).toBe('1 more Issue has no dependencies, so it is not drawn')
+  expect(isolatedNote(2)).toBe('2 more Issues have no dependencies, so they are not drawn')
 })
 
 test('a project keeps its nodes and the nodes an edge joins them to', () => {

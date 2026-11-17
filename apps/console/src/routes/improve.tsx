@@ -273,7 +273,6 @@ function FixCard({ model, pending }: { model: FixCommitsModel | undefined; pendi
   const common = {
     icon: WrenchIcon,
     title: 'Fix commits per week',
-    hint: KPI_HINT.fix_commits,
     subtitle: 'This week against the one before',
     meaning: MEANING.fix_commits,
   }
@@ -281,6 +280,7 @@ function FixCard({ model, pending }: { model: FixCommitsModel | undefined; pendi
     return (
       <StatCard
         {...common}
+        hint={KPI_HINT.fix_commits}
         value={model || !pending ? 'Not measured' : 'Loading'}
         sub={model ? 'No fix commit is stored yet: the fix-classes loop has not sorted any' : undefined}
         chart={model ? null : <Skeleton height={CHART_HEIGHT} />}
@@ -297,6 +297,7 @@ function FixCard({ model, pending }: { model: FixCommitsModel | undefined; pendi
   return (
     <StatCard
       {...common}
+      hint={KPI_HINT.fix_commits}
       value={card.latest}
       delta={{ value: card.change.text, direction: card.change.direction, tone: card.tone }}
       sub="Falling is the target"
@@ -406,7 +407,9 @@ function FrictionBody({ model }: { model: FrictionModel }) {
   if (ranking.top.length === 0) {
     return (
       <div className={cn(PANEL, 'p-4')} style={PANEL_SHADOW}>
-        <EmptyState title="Nothing counted" />
+        <EmptyState title="Nothing counted">
+          No friction was recorded in this window. Choose a longer window above.
+        </EmptyState>
       </div>
     )
   }
@@ -687,6 +690,7 @@ function CapacityCards({ model }: { model: CapacityLoopModel }) {
         <StatCard
           icon={GaugeIcon}
           title={CAPACITY_TITLE.over}
+          hint="load ceiling"
           subtitle={subtitle}
           value={String(model.minutesOverCeiling.total)}
           sub="Host minutes above the ceiling in force"

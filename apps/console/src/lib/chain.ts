@@ -87,7 +87,7 @@ export const edgeText = (edge: ChainEdge, byId: Map<string, Pick<ChainNode, 'tit
 }
 
 export const isolatedNote = (count: number): string =>
-  `${count} more ${count === 1 ? 'item has' : 'items have'} no dependencies, so ${count === 1 ? 'it is' : 'they are'} not drawn`
+  `${count} more ${count === 1 ? 'Issue has' : 'Issues have'} no dependencies, so ${count === 1 ? 'it is' : 'they are'} not drawn`
 
 /** The Lozenge of a node: the word its work stands under, Planned for a plan row, Closed for a closed Issue. */
 export function lozengeOf(node: Pick<ChainNode, 'work'>): { state: LozengeState; label?: string } {

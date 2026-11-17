@@ -58,7 +58,12 @@ const KIND_ICON: Record<string, Icon> = {
 }
 
 export function Activity({ issue, now, narrow }: { issue: ReadIssueDetail; now: number; narrow?: boolean }) {
-  if (issue.timeline.length === 0) return <EmptyState title="Nothing has happened to this Issue yet." />
+  if (issue.timeline.length === 0)
+    return (
+      <EmptyState title="Nothing has happened to this Issue yet.">
+        Its first event shows here when a lead starts or a note arrives.
+      </EmptyState>
+    )
   const groups = activityGroups({
     timeline: issue.timeline,
     sessions: issue.sessions,
