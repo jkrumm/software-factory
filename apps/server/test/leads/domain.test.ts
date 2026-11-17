@@ -370,6 +370,9 @@ describe('the brief', () => {
     )
     expect(STANDING_ORDERS).toContain('with no verdict in 24 hours you go on with your defaults')
     expect(STANDING_ORDERS).toMatch(/Most Issues need none/)
+    expect(STANDING_ORDERS).toContain(
+      'When the Spec proposes a mechanism of its own (an updater, a release feed, a pipeline, a docs framework), it first names what the field standard tools do, from research and not memory, and why they do not fit, measured where it can be.',
+    )
   })
 
   test('a flagged Issue says so under Checkpoint, and an unflagged one does not', () => {
