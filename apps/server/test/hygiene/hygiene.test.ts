@@ -395,11 +395,16 @@ describe('declared probes', () => {
 
 describe('browser probe', () => {
   const keys = (report: SweepReport) => findings(report, 'browser').map((f) => f.key)
+  // The fixtures are assembled so this file's own lines never spell what the probe reports (the sweep reads test files).
+  const CHANNEL = ['channel', "'chrome'"].join(': ')
+  const CHANNEL_DQ = ['channel', '"chrome"'].join(': ')
+  const HEADED = ['headless', 'false'].join(': ')
+  const GOOGLE = ['Google', 'Chrome'].join(' ')
   const CONFIG = (line: string) =>
     `import { defineConfig } from '@playwright/test'\nexport default defineConfig({\n  use: {\n${line}\n  },\n})\n`
 
   test('a config with a bare channel chrome is reported with its line and the rule', async () => {
-    const report = await sweep(makeRepo({ 'playwright.config.ts': CONFIG("    channel: 'chrome',") }).name)
+    const report = await sweep(makeRepo({ 'playwright.config.ts': CONFIG(`    ${CHANNEL},`) }).name)
     expect(run(report, 'browser')?.outcome).toBe('found')
     const [one, ...rest] = findings(report, 'browser')
     expect(rest).toEqual([])
@@ -409,17 +414,17 @@ describe('browser probe', () => {
       count: 1,
     })
     expect(one?.lines).toHaveLength(1)
-    expect(one?.lines[0]).toStartWith("playwright.config.ts:4: channel: 'chrome',: no `// chrome: <reason>`")
+    expect(one?.lines[0]).toStartWith(`playwright.config.ts:4: ${CHANNEL},: no \`// chrome: <reason>\``)
     expect(one?.lines[0]).toContain('with the reason on the line')
-    const double = await sweep(makeRepo({ 'playwright.config.ts': CONFIG('    channel: "chrome",') }).name)
+    const double = await sweep(makeRepo({ 'playwright.config.ts': CONFIG(`    ${CHANNEL_DQ},`) }).name)
     expect(keys(double)).toEqual(['browser:playwright.config.ts'])
   })
 
   test('a chrome: reason on the line or the line above clears it, an empty one does not', async () => {
-    const same = CONFIG("    channel: 'chrome', // chrome: pixel baselines recorded in Chrome")
-    const above = CONFIG("    // chrome: pixel baselines recorded in Chrome\n    channel: 'chrome',")
-    const empty = CONFIG("    channel: 'chrome', // chrome:")
-    const far = CONFIG("    // chrome: baselines\n    retries: 1,\n    channel: 'chrome',")
+    const same = CONFIG(`    ${CHANNEL}, // chrome: pixel baselines recorded in Chrome`)
+    const above = CONFIG(`    // chrome: pixel baselines recorded in Chrome\n    ${CHANNEL},`)
+    const empty = CONFIG(`    ${CHANNEL}, // chrome:`)
+    const far = CONFIG(`    // chrome: baselines\n    retries: 1,\n    ${CHANNEL},`)
     expect(keys(await sweep(makeRepo({ 'playwright.config.ts': same }).name))).toEqual([])
     expect(keys(await sweep(makeRepo({ 'playwright.config.ts': above }).name))).toEqual([])
     expect(keys(await sweep(makeRepo({ 'playwright.config.ts': empty }).name))).toEqual([
@@ -428,12 +433,12 @@ describe('browser probe', () => {
     expect(keys(await sweep(makeRepo({ 'playwright.config.ts': far }).name))).toEqual(['browser:playwright.config.ts'])
   })
 
-  test('an executablePath naming Google Chrome is reported, one finding per file with every line', async () => {
+  test('an executablePath naming the installed Google browser is reported, one finding per file with every line', async () => {
     const spec = [
-      "const path = '/Applications/Google Chrome.app/Contents/MacOS/Google Chrome'",
-      'const a = { executablePath: "/Applications/Google Chrome.app/Contents/MacOS/Google Chrome" }',
-      'const b = { headless: false }',
-      "// channel: 'chrome' in a comment is nothing",
+      `const path = '/Applications/${GOOGLE}.app/Contents/MacOS/${GOOGLE}'`,
+      `const a = { executablePath: "/Applications/${GOOGLE}.app/Contents/MacOS/${GOOGLE}" }`,
+      `const b = { ${HEADED} }`,
+      `// ${CHANNEL} in a comment is nothing`,
       '',
     ].join('\n')
     const report = await sweep(makeRepo({ 'e2e/login.spec.ts': spec }).name)
@@ -444,16 +449,15 @@ describe('browser probe', () => {
   })
 
   test('headless false in a spec is reported, whatever its comments say', async () => {
-    const spec =
-      "import { chromium } from '@playwright/test'\nconst b = await chromium.launch({ headless: false }) // chrome: because\n"
+    const spec = `import { chromium } from '@playwright/test'\nconst b = await chromium.launch({ ${HEADED} }) // chrome: because\n`
     const report = await sweep(makeRepo({ 'src/login.spec.ts': spec }).name)
     const [one] = findings(report, 'browser')
     expect(one?.key).toBe('browser:src/login.spec.ts')
-    expect(one?.lines[0]).toContain('never `headless: false` in a suite')
+    expect(one?.lines[0]).toContain(`never \`${HEADED}\` in a suite`)
   })
 
   test('files outside tests are not judged: scripts, product code, evidence, spikes', async () => {
-    const shot = "const b = await chromium.launch({ channel: 'chrome', headless: false })\n"
+    const shot = `const b = await chromium.launch({ ${CHANNEL}, ${HEADED} })\n`
     const report = await sweep(
       makeRepo({
         'scripts/shot.ts': shot,
@@ -461,7 +465,7 @@ describe('browser probe', () => {
         'docs/evidence/run/probe.test.ts': shot,
         'tools/spikes/chrome/launch.spec.ts': shot,
         'node_modules/x/tests/a.ts': shot,
-        'tests/notes.md': "channel: 'chrome'\n",
+        'tests/notes.md': `${CHANNEL}\n`,
       }).name,
     )
     expect(run(report, 'browser')?.outcome).toBe('clean')
@@ -469,7 +473,7 @@ describe('browser probe', () => {
   })
 
   test('a file under tests/ or named *.e2e.ts is judged', async () => {
-    const shot = "const b = await chromium.launch({ channel: 'chrome' })\n"
+    const shot = `const b = await chromium.launch({ ${CHANNEL} })\n`
     const report = await sweep(makeRepo({ 'apps/web/tests/harness/launch.ts': shot, 'a/x.e2e.ts': shot }).name)
     expect(keys(report).sort()).toEqual(['browser:a/x.e2e.ts', 'browser:apps/web/tests/harness/launch.ts'])
   })
