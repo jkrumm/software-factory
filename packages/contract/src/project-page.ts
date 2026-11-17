@@ -60,7 +60,7 @@ export const ProjectIndexRow = z
       /** probes the newest pass ran clean, of the probes it ran (a skipped or never-run probe is in neither) */
       clean: z.number().int().min(0),
       run: z.number().int().min(0),
-      /** the first pass, of the last 30 days, that raised a finding the newest pass still raises; null: none */
+      /** since when the longest-standing finding of the newest pass has stood: the oldest of an unbroken run of passes back from the newest (within 30 days) that raised it; null: none */
       oldestFindingAt: at.nullable(),
     }),
     /** Issues closed done or healed per hour, `PROJECT_SHIPPED_HOURS` of them, the last hour ending at `at`; the newest ship ever */
@@ -83,7 +83,7 @@ export const ProjectIndexRow = z
     plan: z.strictObject({ done: z.number().int().min(0), total: z.number().int().min(0) }),
     /** leads running in the project now (Issues `working`), and its own `leads:` cap; null: it states none */
     leads: z.strictObject({ running: z.number().int().min(0), cap: z.number().int().nullable() }),
-    /** the project's newest digest; null: none made, or the read token on a work project */
+    /** the project's newest digest; null: none made, or its newest digest does not read */
     digest: z
       .strictObject({
         at,

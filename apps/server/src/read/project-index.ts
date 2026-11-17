@@ -89,12 +89,24 @@ function shippedHours(issues: readonly DigestIssue[], now: Date): number[] {
 /** A pass's finding keys: the probes' and the document judgment's. */
 const keysOf = (pass: Pass): Set<string> => new Set([...pass.report.findings.map((f) => f.key), ...documentKeys(pass)])
 
-/** The first pass that raised a key the newest pass still raises; null when the newest raises none. */
+/**
+ * Since when the longest-standing finding of the newest pass has stood: for each of its keys, the oldest pass of an
+ * unbroken run of passes back from the newest that all raised it (a pass that did not ends the run); null when the
+ * newest raises none.
+ */
 function oldestFindingAt(newest: Pass, earlier: readonly { at: Date; keys: Set<string> }[]): Date | null {
   const keys = keysOf(newest)
   if (keys.size === 0) return null
+  const before = earlier.filter((pass) => pass.at < newest.at).sort((a, b) => b.at.getTime() - a.at.getTime())
   let oldest = newest.at
-  for (const pass of earlier) if (pass.at < oldest && [...keys].some((k) => pass.keys.has(k))) oldest = pass.at
+  for (const key of keys) {
+    let since = newest.at
+    for (const pass of before) {
+      if (!pass.keys.has(key)) break
+      since = pass.at
+    }
+    if (since < oldest) oldest = since
+  }
   return oldest
 }
 
