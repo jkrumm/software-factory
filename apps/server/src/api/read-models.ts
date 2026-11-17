@@ -410,7 +410,9 @@ export const readModelRoutes = (deps: ReadModelDeps | undefined, caller: (reques
       '/friction',
       async ({ query }) => {
         if (!deps) return unavailable
-        return Response.json(FrictionModel.parse(await readFriction(deps.sql, { now: now(), days: days(query) })))
+        return Response.json(
+          FrictionModel.parse(await readFriction(deps.sql, { now: now(), days: days(query), compare: true })),
+        )
       },
       {
         query: DaysQuery,

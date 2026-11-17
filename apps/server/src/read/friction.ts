@@ -79,6 +79,9 @@ const issuesClosed = async (sql: SQL, w: Window): Promise<number> =>
     SELECT count(*) AS n FROM factory.issue_events
     WHERE to_state = 'closed' AND result = 'applied' AND at >= ${w.from} AND at < ${w.to}`)
 
+/** An edge incident is keyed by when it began, so no earlier window can hold the same row: it has no comparison. */
+const RECORDED_BY_TIME = /^api_transient:\d{4}-/
+
 type Counted = Omit<FrictionCount, 'previous'>
 
 /** Every friction count of one window, with the Issues filed and closed in it. */
@@ -251,15 +254,18 @@ async function countsOf(
  * The counts of waste in the last `days` days since the import: counts only, no model. Read-only SQL. Each count also
  * carries the same count over the window of the same length just before it, so a reader sees which way it moved; that
  * window is not read (`previous` null) when it reaches back before the import marker, because it would be shorter than
- * the one it is compared with.
+ * the one it is compared with. The comparison is read only when asked for (`compare`): the Console wants it, the loops do not.
  */
-export async function readFriction(sql: SQL, options: { now: Date; days: number }): Promise<FrictionModel> {
+export async function readFriction(
+  sql: SQL,
+  options: { now: Date; days: number; compare?: boolean },
+): Promise<FrictionModel> {
   const { now } = options
   const { w, since } = await frictionWindow(sql, options)
   const current = await countsOf(sql, w, now)
   const span = w.to.getTime() - w.from.getTime()
   const before = { from: new Date(w.from.getTime() - span), to: w.from }
-  const comparable = since === null || since <= before.from
+  const comparable = options.compare === true && (since === null || since <= before.from)
   const earlier = comparable ? await countsOf(sql, before, before.to) : null
   const previous = new Map((earlier?.counts ?? []).map((c) => [c.key, c.count]))
   return {
@@ -269,6 +275,9 @@ export async function readFriction(sql: SQL, options: { now: Date; days: number 
     since: since?.toISOString() ?? null,
     issues: current.issues,
     closed: current.closed,
-    counts: current.counts.map((c) => ({ ...c, previous: earlier === null ? null : (previous.get(c.key) ?? 0) })),
+    counts: current.counts.map((c) => ({
+      ...c,
+      previous: earlier === null || RECORDED_BY_TIME.test(c.key) ? null : (previous.get(c.key) ?? 0),
+    })),
   }
 }

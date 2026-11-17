@@ -507,7 +507,7 @@ export const FrictionCount = z
     count: z.number().int(),
     /** per Issue closed in the window; null when none closed */
     perIssue: z.number().nullable(),
-    /** the same count over the window of the same length just before; null when that window is not comparable (it reaches back before the counting began) */
+    /** the same count over the window of the same length just before; null when that window is not comparable (it reaches back before the counting began), the row is keyed by its own time, or the comparison was not asked for */
     previous: z.number().int().nullable(),
   })
   .meta({ id: 'FrictionCount' })

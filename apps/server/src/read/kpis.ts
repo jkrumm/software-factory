@@ -320,7 +320,8 @@ const FLOORED_UNITS: ReadonlySet<Kpi['unit']> = new Set(['share', 'ms'])
  */
 export function withReason(k: Omit<Kpi, 'history'>): Omit<Kpi, 'history'> {
   if (!k.measured) return { ...k, value: null, reason: k.reason ?? 'The factory has no data for this figure yet' }
-  if (k.value === null || k.n === 0)
+  // a count that is zero is a result (a week with no fix commit); every other figure over nothing has no value
+  if (k.value === null || (k.n === 0 && k.unit !== 'count'))
     return { ...k, value: null, measured: false, reason: 'Nothing was counted in the window' }
   if (FLOORED_UNITS.has(k.unit) && k.n < MIN_SAMPLES)
     return {
@@ -386,7 +387,7 @@ async function kpisOf(
   sql: SQL,
   w: Window,
   options: KpiOptions,
-  { usage: withUsage }: { usage: boolean },
+  { usage: withUsage, parts: withParts }: { usage: boolean; parts: boolean },
 ): Promise<Array<Omit<Kpi, 'history'>>> {
   const issues = await issuesFiled(sql, w)
 
@@ -431,7 +432,7 @@ async function kpisOf(
     : { cost: null, points: null, reason: 'Usage is read for the current and the previous window only' }
   const fixes = await fixCommitCounts(sql, w)
   const weeks = (w.to.getTime() - w.from.getTime()) / (7 * 24 * 3_600_000)
-  const queueParts = await queueWaitParts(sql, w)
+  const queueParts = withParts ? await queueWaitParts(sql, w) : []
 
   const figures = [
     kpi({
@@ -695,7 +696,7 @@ export async function readKpis(
     windowOf(new Date(options.now.getTime() - (HISTORY_WINDOWS - 1 - i) * step), options.days),
   )
   const lists = await mapBounded(windows, WINDOW_CONCURRENCY, (w, i) =>
-    kpisOf(sql, w, options, { usage: i >= HISTORY_WINDOWS - USAGE_WINDOWS }),
+    kpisOf(sql, w, options, { usage: i >= HISTORY_WINDOWS - USAGE_WINDOWS, parts: i === HISTORY_WINDOWS - 1 }),
   )
   const current = lists[HISTORY_WINDOWS - 1] ?? []
   const kpis: Kpi[] = current.map((k) => ({

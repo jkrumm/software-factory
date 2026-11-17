@@ -68,6 +68,18 @@ test('fix commits are the number the fix-commits read returns, and not measured 
   expect(thirty.kpis.find((k) => k.key === 'fix_commits')?.value).toBe(5 / 4)
 })
 
+test('a week with no fix commit is a measured zero, as the fix-commits read says', async () => {
+  const later = new Date(NOW.getTime() + 30 * DAY * 3_600_000)
+  const model = KpiModel.parse(await readKpis(sql, { now: later, days: 7 }))
+  expect((await readFixCommits(sql, { now: later })).weeks[0]?.total).toBe(0)
+  expect(model.kpis.find((k) => k.key === 'fix_commits')).toMatchObject({
+    measured: true,
+    value: 0,
+    n: 0,
+    reason: null,
+  })
+})
+
 test('the queue wait is split by what held it, the largest first, and nothing is made up', async () => {
   const model = KpiModel.parse(await readKpis(sql, { now: NOW, days: 7 }))
   const wait = model.kpis.find((k) => k.key === 'queue_wait_p50')
@@ -93,7 +105,7 @@ test('a ratio over nothing and a share under the floor read as not measured, nev
 })
 
 test('a friction count carries the same count over the window before, and none where that window is not comparable', async () => {
-  const friction = FrictionModel.parse(await readFriction(sql, { now: NOW, days: 7 }))
+  const friction = FrictionModel.parse(await readFriction(sql, { now: NOW, days: 7, compare: true }))
   const row = friction.counts.find((c) => c.key === 'refusal:total')
   expect(row).toMatchObject({ count: 2, previous: 5 })
   expect(friction.counts.every((c) => c.previous !== null)).toBe(true)
@@ -101,7 +113,7 @@ test('a friction count carries the same count over the window before, and none w
   // an import ends the old core's history: a window that reaches back before it is shorter than the one it would be read against
   await sql`INSERT INTO factory.import_issues (issue_id, legacy_id, imported_at, last_event, carried_version)
     VALUES ('issue_2', 2, ${ago(3 * DAY)}, 0, 1)`
-  const cut = FrictionModel.parse(await readFriction(sql, { now: NOW, days: 7 }))
+  const cut = FrictionModel.parse(await readFriction(sql, { now: NOW, days: 7, compare: true }))
   expect(cut.since).not.toBeNull()
   expect(cut.counts.every((c) => c.previous === null)).toBe(true)
 })
