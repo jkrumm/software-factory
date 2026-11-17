@@ -66,7 +66,7 @@ describe('project.yaml schema', () => {
 
   test('retired keys are deprecated in the JSON Schema, accepted and dropped by the parse', () => {
     const schema = JSON.stringify(projectJsonSchema())
-    expect(schema.match(/"deprecated":true/g)?.length).toBe(5)
+    expect(schema.match(/"deprecated":true/g)?.length).toBe(4)
     const parsed = ProjectFile.parse({
       apiVersion: 'factory/v2',
       name: 'lab',
@@ -75,7 +75,7 @@ describe('project.yaml schema', () => {
     })
     expect(parsed.deploy).toEqual({
       mode: 'none',
-      targets: [{ name: 'mini', verify: 'make verify' }],
+      targets: [{ name: 'mini', host: 'mini', verify: 'make verify' }],
       hold: '0m',
       paths: [],
       probes: [],

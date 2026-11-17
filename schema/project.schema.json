@@ -41,6 +41,7 @@
           ]
         },
         "targets": {
+          "default": [],
           "description": "where a deploy is verified, one entry per place. Empty: the Watch runs `make verify` when the Makefile has it",
           "consumer": "the Watch (apps/server/src/app/quality-projects.ts)",
           "type": "array",
@@ -54,9 +55,8 @@
                 "consumer": "the Watch (apps/server/src/app/quality-projects.ts)"
               },
               "host": {
-                "description": "Retired: read by nothing. The Watch verifies a target by `verify` alone, and the host whose alerts join an incident is the top-level `host`. Remove it.",
-                "consumer": "nothing (retired)",
-                "deprecated": true,
+                "description": "the machine the target runs on (`mini`, `vps`, `homelab`). `mini` makes the weekly hygiene pass judge the repo against the run rules for the mini (`runrules`), which it otherwise does only for a repo with a root `mini-services.yaml`",
+                "consumer": "the hygiene runrules probe (apps/server/src/adapters/hygiene/probes/runrules.ts, read from the raw file)",
                 "type": "string",
                 "pattern": "^[A-Za-z0-9][A-Za-z0-9._-]{0,127}$"
               },
@@ -72,8 +72,7 @@
               "verify"
             ],
             "additionalProperties": false
-          },
-          "default": []
+          }
         },
         "hold": {
           "default": "0m",

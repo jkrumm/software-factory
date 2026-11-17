@@ -71,22 +71,21 @@ const MakeCommand = z.string().regex(/^make [A-Za-z0-9][A-Za-z0-9_.-]*$/, '`make
 
 const WATCH = 'the Watch (apps/server/src/app/quality-projects.ts)'
 
-const Target = z
-  .strictObject({
-    name: Slug.meta(about("the target's name, shown on the project page (`mini`, `prod`)", WATCH)),
-    host: Slug.optional().meta(
-      retired(
-        'Retired: read by nothing. The Watch verifies a target by `verify` alone, and the host whose alerts join an incident is the top-level `host`. Remove it.',
-      ),
+const Target = z.strictObject({
+  name: Slug.meta(about("the target's name, shown on the project page (`mini`, `prod`)", WATCH)),
+  host: Slug.optional().meta(
+    about(
+      'the machine the target runs on (`mini`, `vps`, `homelab`). `mini` makes the weekly hygiene pass judge the repo against the run rules for the mini (`runrules`), which it otherwise does only for a repo with a root `mini-services.yaml`',
+      'the hygiene runrules probe (apps/server/src/adapters/hygiene/probes/runrules.ts, read from the raw file)',
     ),
-    verify: Verify.meta(
-      about(
-        'how a deploy is proved: `make verify` (or another `make <target>`) run in the repo, or an http(s) URL the Watch GETs and expects 200 from',
-        WATCH,
-      ),
+  ),
+  verify: Verify.meta(
+    about(
+      'how a deploy is proved: `make verify` (or another `make <target>`) run in the repo, or an http(s) URL the Watch GETs and expects 200 from',
+      WATCH,
     ),
-  })
-  .transform(({ host: _host, ...kept }) => kept)
+  ),
+})
 
 const Probe = z.strictObject({
   name: Slug.meta(about("the probe's name in the Watch's evidence", WATCH)),

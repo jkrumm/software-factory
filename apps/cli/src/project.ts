@@ -77,7 +77,7 @@ function namedTargets(project: ProjectFile): { target: string; path: Path }[] {
   ]
 }
 
-/** A Makefile target at the start of a line, as the server reads them (`adapters/quality/projects.ts`). */
+/** The targets a Makefile defines at the start of a line, every one of a `verify deploy:` line too; `include`d files are not read. */
 const makefileTargets = (makefile: string): Set<string> =>
   new Set(
     [...makefile.matchAll(/^([A-Za-z][A-Za-z0-9_.-]*(?:\s+[A-Za-z][A-Za-z0-9_.-]*)*)\s*:(?!=)/gm)].flatMap((match) =>

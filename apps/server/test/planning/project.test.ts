@@ -148,7 +148,7 @@ describe('project.yaml', () => {
     expect(defaultProject('lab').host).toBeUndefined()
   })
 
-  test('leads, slots.run and signals are read; retired keys (jobs, ticktick, migrations, a target host, ship paths) are accepted and dropped', () => {
+  test('leads, slots.run and signals are read; retired keys (jobs, ticktick, migrations, ship paths) are accepted and dropped', () => {
     const parsed = parseProject(
       yaml(
         [
@@ -172,7 +172,7 @@ describe('project.yaml', () => {
     if (!parsed.ok) return
     expect('jobs' in parsed.project || 'ticktick' in parsed.project).toBe(false)
     expect(parsed.project.deploy).not.toHaveProperty('migrations')
-    expect(parsed.project.deploy.targets).toEqual([{ name: 'mini', verify: 'make verify' }])
+    expect(parsed.project.deploy.targets).toEqual([{ name: 'mini', host: 'mini', verify: 'make verify' }])
     expect(parsed.project.ship).toEqual([{ via: 'pr' }])
   })
 

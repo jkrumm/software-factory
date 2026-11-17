@@ -15,7 +15,7 @@ name: my-repo # the repo's directory name
 deploy:
   mode: make # `make deploy` releases it; the Watch runs `make verify`
   targets:
-    - { name: mini, verify: make verify }
+    - { name: mini, host: mini, verify: make verify } # host mini: hygiene judges the mini's run rules
   hold: 10m # the deploy finishes after the push; watch 10 minutes before done
 ship:
   - { via: push }
@@ -84,13 +84,11 @@ factory never edits another repo's file. The server also serves the schema it pa
 ## Retired keys
 
 A retired key is accepted and dropped, so a file written before it was retired still parses, and `factory project
-check` warns on it. These were parsed and read by nothing, checked against the server, the CLI, the contract and the
-Console on 2026-11-17:
+check` warns on it. These were parsed and read by nothing, checked on 2026-11-17 against the server, the CLI, the
+contract, the Console and the probes that read the raw file (`deploy.targets[].host` stays: the `runrules` probe reads it):
 
 - **`deploy.migrations`**: no gate or brief ever used it. Where a repo's migrations live and how they run belongs in its
   `AGENTS.md`, which its lead reads first.
-- **`deploy.targets[].host`**: the Watch verifies a target by `verify` alone; the host whose alerts join an incident is
-  the top-level `host`.
 - **`ship[].paths`**: no code ever matched a change against the globs; only `via` is read.
 - **`signals.kuma`**, **`signals.hyperdx`**: removed, not retired (no repo set them, and a typo under `signals` is now an
   error). The door's registry routes those alerts.
@@ -112,6 +110,7 @@ list's entry, `<name>` a map's key.
 | `deploy.mode` | `auto`, `make`, `agentic`, `none` | `"none"` | the Watch (apps/server/src/app/quality-projects.ts) | how a shipped change reaches production. `auto`: a push to the default branch deploys (CI, Vercel, RollHook), the Watch asks no `make version`; `make`: the lead runs `make deploy` and `make version` reads the live sha; `agentic`: the lead deploys by its own steps; `none`: nothing deploys, done is merged with CI green |
 | `deploy.targets` | list of object | `[]` | the Watch (apps/server/src/app/quality-projects.ts) | where a deploy is verified, one entry per place. Empty: the Watch runs `make verify` when the Makefile has it |
 | `deploy.targets[].name` | string | required | the Watch (apps/server/src/app/quality-projects.ts) | the target's name, shown on the project page (`mini`, `prod`) |
+| `deploy.targets[].host` | string | — | the hygiene runrules probe (apps/server/src/adapters/hygiene/probes/runrules.ts, read from the raw file) | the machine the target runs on (`mini`, `vps`, `homelab`). `mini` makes the weekly hygiene pass judge the repo against the run rules for the mini (`runrules`), which it otherwise does only for a repo with a root `mini-services.yaml` |
 | `deploy.targets[].verify` | string | required | the Watch (apps/server/src/app/quality-projects.ts) | how a deploy is proved: `make verify` (or another `make <target>`) run in the repo, or an http(s) URL the Watch GETs and expects 200 from |
 | `deploy.hold` | duration | `"0m"` | the Watch (apps/server/src/app/quality-projects.ts) | how long a shipped change is watched before it counts as done (`30m`, `2h`, `1d`, at most 7d). Give an asynchronous deploy (CI, a rolling swap) its time here |
 | `deploy.paths` | list of string | `[]` | the ship gate (apps/server/src/domains/quality/gate.ts) and the Watch | globs of the paths a deploy carries (`apps/**`, `Makefile`). Empty: every path that is not inert deploys. Set: a ship touching none of them records no deploy and no deployed-version check, as a rewrite built beside the running system must |
@@ -167,7 +166,6 @@ Retired keys: accepted and dropped so an older file still parses, read by nothin
 
 | Key | Type | Default | Read by | What it means |
 |-|-|-|-|-|
-| `deploy.targets[].host` | string | — | nothing (retired) | Retired: read by nothing. The Watch verifies a target by `verify` alone, and the host whose alerts join an incident is the top-level `host`. Remove it. |
 | `deploy.migrations` | list of string | — | nothing (retired) | Retired: read by nothing; no gate or brief ever used it. Where migrations live and how they run belongs in the repo's AGENTS.md. Remove it. |
 | `ship[].paths` | list of string | — | nothing (retired) | Retired: read by nothing; no code ever matched a change against these globs. The factory reads only whether any rule ships `via: pr`. Remove it. |
 | `jobs` | any | — | nothing (retired) | Retired with the old core; accepted and dropped. Remove it. |

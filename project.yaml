@@ -6,7 +6,7 @@ host: macmini # the host its alerts sit on (config/infra.json), so its Kuma and 
 deploy:
   mode: make # `make deploy` on the mini, `make verify` proves it
   targets:
-    - { name: mini, verify: make verify }
+    - { name: mini, host: mini, verify: make verify } # host mini: the weekly hygiene pass judges the repo by the mini's run rules
   hold: 0m
 ship:
   - { via: pr }

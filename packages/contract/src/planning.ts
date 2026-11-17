@@ -64,11 +64,11 @@ export type ProjectPlanModel = z.infer<typeof ProjectPlanModel>
 
 const FileError = z.object({ message: z.string(), sha: z.string().nullable() })
 
-/** A project the factory has read: its `project.yaml` in force and its plan. */
 /** The JSON Schema of `project.yaml` (draft-07), generated from `project-file.ts`'s schema: `GET /v1/schema/project`. */
 export const ProjectJsonSchema = z.record(z.string(), z.unknown()).meta({ id: 'ProjectJsonSchema' })
 export type ProjectJsonSchema = z.infer<typeof ProjectJsonSchema>
 
+/** A project the factory has read: its `project.yaml` in force and its plan. */
 export const ProjectView = z
   .object({
     /** the repo directory's name (`<name>~<hash>` for a second directory of that name) */

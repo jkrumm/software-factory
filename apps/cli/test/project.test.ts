@@ -90,7 +90,6 @@ describe('factory project check', () => {
     expect(answer.warnings.map((w) => [w.line, w.message])).toEqual([
       [1, 'a comment cites docs/gone.md, which does not exist: point it at the document that holds the reason'],
       [3, 'name is "lab2", the repo is "lab": the factory refuses the file'],
-      [7, 'deploy.targets[0].host is retired: the factory accepts it and reads nothing from it; remove it'],
       [8, 'deploy.migrations is retired: the factory accepts it and reads nothing from it; remove it'],
       [9, 'make check-fast: the Makefile has no target check-fast'],
     ])
