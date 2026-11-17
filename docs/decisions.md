@@ -144,7 +144,7 @@ Strategy `docs/strategy/2026-11-reset/report.html`, design `docs/strategy/2026-1
 - **RS15 Work repos get plan tabs (owner, 2026-11-06).** Replaces RS11 (d)'s "WorkRoot repos get no factory space or `plan:` tab": leads run there now, so the WORK members of
   dotfiles' `groups.json` get spaces and plan tabs like every other repo, and the `WorkRoot` root gets one too, for cross-repo planning. A root is a plan tab only, never a lead's repo.
 
-- **RS16 The role table states what runs (owner, 2026-11-06).** `config/roles.json` now has Explore Haiku/high and verifier Haiku/high, matching `dotfiles/agents/{Explore,verifier}.md`, which is what a lead's subagents run. Measured: the Explore probe spent 5.2k tokens on Haiku against 11.6k on Opus; the verifier used 28M fresh tokens in 30 days, so a Sonnet seat there costs far more for a read-and-report job. Implementer stays Sonnet/high (the table governs `spawn create` and `rd --role`; a lead's `@implementer` runs Sonnet/medium from its agent file). The table governs terminals the factory spawns; in-session subagents take model and effort from the global agent files, the reviewer's seat from `agw review prepare`.
+- **RS16 The role table states what runs (owner, 2026-11-06).** `config/roles.json` now has Explore Haiku/high and verifier Haiku/high, matching `dotfiles/agents/{Explore,verifier}.md`, which is what a lead's subagents run. Measured: the Explore probe spent 5.2k tokens on Haiku against 11.6k on Opus; the verifier used 28M fresh tokens in 30 days, so a Sonnet seat there costs far more for a read-and-report job. Implementer is Sonnet/medium since 2026-11-17 (NL33), what `dotfiles/agents/implementer.md` runs; the table governs `spawn create` and `rd --role`. The table governs terminals the factory spawns; in-session subagents take model and effort from the global agent files, the reviewer's seat from `agw review prepare`.
 
 ## The next level (owner, 2026-11-07)
 
@@ -273,3 +273,18 @@ Report `docs/strategy/2026-11-next/report.html`, definition `docs/strategy/2026-
   Issue). A stated `leads: N` stays in force and is a line with its reason beside it. This repo: 5 to 12, where the merge
   window serves a lead within about 1.2 h of its 90 min; expect more rebases per merge, not more waiting past the lock.
   Not changed: the account seat caps, the memory-fit and load gates, `lanes:` (the cap of a truly scarce resource).
+- **NL33 Seat by size: mechanical Issues start on a light lead, a struggling one is moved up (Issue 1791, 2026-11-17).**
+  Of the 500 Issues closed 2026-11-12 to 2026-11-17, 461 ran on the role table's `lead` row (sonnet, high); a third of the
+  done ones took a lead 5 minutes or less. modelpick's table of 2026-11-16: haiku at high effort scores 29.9 at 0.16 a task,
+  sonnet medium 30.8 at 0.78, sonnet high 41.5 at 1.64. So the cheap seat is level with the reviewer's at a fifth of the
+  cost and 12 points under the lead's: right for mechanical work a check proves, not as the default lead. The role table
+  gains `light` (haiku, high). An Issue with no filed seat starts light when `lightRule` (`domains/leads/light.ts`) names
+  it: a hygiene finding of a mechanical class (links, retired, context, deps, project, readme, agentsmd, stale), kind docs,
+  a monitor filed home for want of a route. The filer's seat always wins. Triage's size is now kept on the Issue
+  (`settled.size`); triage's `small` with no design choice joins the rule only once light's first verification pass rate
+  is within 3 points of lead's over a week (`LIGHT_FROM_TRIAGE_SMALL`, off; the Improve screen's seat table shows both
+  rates and the tripwire). A light lead that stalls twice, has its ship refused twice, says it is out of its depth
+  (`issue block --out-of-depth`) or regresses on its first watch is `moved_up`: the attempt ends, the Issue queues again,
+  and the next lead starts on the `lead` row with why and the light lead's last words in its brief. Never twice. Not
+  built: a class of alert whose fix is one config line (none is named by a stored fact today), and triage asking for the
+  seat itself (agent-workflows' unused `factory.classify` stays unused: the rule is deterministic first).

@@ -42,11 +42,19 @@ function evolve(
   const settled = kind === 'settled' ? PAYLOADS.settled.parse(payload) : undefined
   const refined = settled?.kind
   const checkpoint = settled?.checkpoint ?? issue.checkpoint
+  const size = settled?.size ?? issue.size
+  const started = kind === 'lead_started' ? PAYLOADS.lead_started.parse(payload) : undefined
+  // A new attempt has not started yet; the started lead's seat is its attempt's.
+  const { ranOn: previous, ...rest } = issue
+  const ranOn = kind === 'admitted' ? undefined : started && started.attempt === issue.attempt ? started.seat : previous
   return {
-    ...issue,
+    ...rest,
     ...(kind === 'seated' ? { seat: PAYLOADS.seated.parse(payload) } : {}),
     kind: refined ?? issue.kind,
     ...(checkpoint ? { checkpoint } : {}),
+    ...(size ? { size } : {}),
+    ...(ranOn ? { ranOn } : {}),
+    movedUp: kind === 'moved_up' && transition.to === 'queued' ? issue.movedUp + 1 : issue.movedUp,
     version,
     state: transition.to,
     wait: transition.wait,
@@ -68,6 +76,7 @@ function opened(id: IssueId, event: IssueEvent<'filed'>): Issue {
     wait: null,
     outcome: null,
     ...event.payload,
+    movedUp: 0,
     attempt: 0,
     watch: 0,
     restarts: 0,

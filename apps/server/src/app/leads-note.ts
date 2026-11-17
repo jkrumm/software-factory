@@ -6,7 +6,7 @@ import type { Issue } from '../domains/work/issue.ts'
 import type { EffectOf } from '../domains/work/effects.ts'
 import type { IssueId } from '../kernel/ids.ts'
 import { err, ok, portError, type PortError, type Result } from '../kernel/result.ts'
-import { leadGone, seatOf } from './leads-start.ts'
+import { leadGone, NO_ORIGIN, seatOf } from './leads-start.ts'
 import { tabName } from '../domains/leads/names.ts'
 import { type LeadDeps, loadIssue } from './leads.ts'
 
@@ -240,7 +240,9 @@ export async function reviveAndTell(
   if (!dormant.session || !dormant.worktree || !dormant.repoPath || !account) {
     return leadGone(deps, issue, attempt, 'the lead was dormant without a session to resume')
   }
-  const seat = await seatOf(deps, dormant.issue)
+  // The session resumes on the seat its attempt started on; an attempt recorded before seats were stored reads the table.
+  const ranOn = dormant.issue.ranOn
+  const seat = ranOn ? ok(ranOn) : await seatOf(deps, dormant.issue, NO_ORIGIN)
   if (!seat.ok) return seat
   await deps.typePace?.()
   const started = await deps.terminals.revive({

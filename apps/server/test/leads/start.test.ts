@@ -51,7 +51,7 @@ describe('start_lead', () => {
     expect(started?.prompt).toContain('## Notes from the owner, recorded before you started')
     expect(started?.prompt).not.toContain('## Notes recorded before you started')
     expect(await events(issue, 'lead_started')).toEqual([
-      { payload: { attempt: 1, terminal: 't1', seat: { tier: 'sonnet', effort: 'high' } }, version: 5 },
+      { payload: { attempt: 1, terminal: 't1', seat: { tier: 'sonnet', effort: 'high', role: 'lead' } }, version: 5 },
     ])
   })
 
@@ -172,7 +172,7 @@ describe('start_lead seats', () => {
     ])
     const shown = await detail(issue)
     expect(shown?.seat).toEqual({ tier: 'opus', effort: 'high', role: null })
-    expect(shown?.ranOn).toEqual({ tier: 'opus', effort: 'high' })
+    expect(shown?.ranOn).toEqual({ tier: 'opus', effort: 'high', role: null })
     expect(shown?.timeline.find((line) => line.kind === 'lead_started')?.text).toBe(
       'A lead started on opus at high effort.',
     )
@@ -184,6 +184,30 @@ describe('start_lead seats', () => {
     expect(w.terminals.started[0]).toMatchObject({ tier: 'sonnet', effort: 'high' })
     const shown = await detail(issue)
     expect(shown?.seat).toBeNull()
-    expect(shown?.ranOn).toEqual({ tier: 'sonnet', effort: 'high' })
+    expect(shown?.ranOn).toEqual({ tier: 'sonnet', effort: 'high', role: 'lead' })
+    expect(w.terminals.started[0]?.prompt).not.toContain('## Your seat')
+  })
+
+  test('a docs Issue with no seat starts light, says so in its brief, and a moved-up one starts on the lead row', async () => {
+    const issue = await w.admitted([], undefined, 'docs')
+    expect((await startLead(w.deps, effect(issue))).ok).toBe(true)
+    expect(w.terminals.started[0]).toMatchObject({ tier: 'haiku', effort: 'high' })
+    expect(w.terminals.started[0]?.prompt).toContain('You run on the light seat (rule `kind:docs`)')
+    expect(w.terminals.started[0]?.prompt).toContain('--out-of-depth')
+    expect((await detail(issue))?.ranOn).toEqual({ tier: 'haiku', effort: 'high', role: 'light' })
+
+    await w.event(issue, 'moved_up:1', {
+      kind: 'moved_up',
+      payload: { attempt: 1, why: 'the light lead stalled 2 times' },
+      actor: 'factory',
+    })
+    await w.event(issue, 'admitted:2', { kind: 'admitted', payload: {}, actor: 'factory' })
+    expect((await startLead(w.deps, effect(issue, 2))).ok).toBe(true)
+    const second = w.terminals.started.at(-1)
+    expect(second).toMatchObject({ tier: 'sonnet', effort: 'high' })
+    expect(second?.prompt).toContain('## Moved up from the light seat')
+    expect(second?.prompt).toContain('the light lead stalled 2 times')
+    expect(second?.prompt).not.toContain('## Your seat')
+    expect((await detail(issue))?.ranOn).toEqual({ tier: 'sonnet', effort: 'high', role: 'lead' })
   })
 })

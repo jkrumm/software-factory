@@ -1,5 +1,7 @@
 import type { Effort, Tier } from '@software-factory/contract'
 import { buildBrief, fitNotes, MAX_BRIEF_SIGNALS } from '../domains/leads/brief.ts'
+import { LEAD_ROLE, LIGHT_ROLE, lightRule } from '../domains/leads/light.ts'
+import { deriveSession } from '../domains/leads/session.ts'
 import { leadBranch, leadKey, tabName } from '../domains/leads/names.ts'
 import type { BriefSignal, BriefSpec, LeadAttempt } from '../domains/leads/ports.ts'
 import type { EffectOf } from '../domains/work/effects.ts'
@@ -31,6 +33,8 @@ type Look =
       previous: PreviousAttempt | null
       signals: BriefSignal[]
       filedSpec: BriefSpec | null
+      origin: { hygieneKey: string | null; unroutedMonitor: boolean }
+      movedFrom: { attempt: number; why: string; transcript: string | null } | null
     }
 
 /** The notes recorded before the attempt's admission: the new lead has no memory, so all of them. */
@@ -83,11 +87,32 @@ export async function startLead(deps: LeadDeps, effect: StartEffect): Promise<Re
         : null
     const signals = await leads.signalsOf(issue, MAX_BRIEF_SIGNALS)
     const filedSpec = await leads.filedSpecOf(issue)
-    return ok({ stop: false, issue: loaded.issue, history: loaded.history, row, previous, signals, filedSpec })
+    const origin = await leads.originOf(issue)
+    const moved = loaded.history.findLast(
+      (record) => record.kind === 'moved_up' && (record.payload as { attempt?: number }).attempt === attempt - 1,
+    )
+    const movedFrom = moved
+      ? {
+          attempt: attempt - 1,
+          why: String((moved.payload as { why?: unknown }).why ?? ''),
+          transcript: deriveSession(await leads.hookFacts(leadKey(issue, attempt - 1))).transcriptPath,
+        }
+      : null
+    return ok({
+      stop: false,
+      issue: loaded.issue,
+      history: loaded.history,
+      row,
+      previous,
+      signals,
+      filedSpec,
+      origin,
+      movedFrom,
+    })
   })
   if (!looked.ok) return looked
   if (looked.value.stop) return ok(undefined)
-  const { issue: current, history, row, previous, signals, filedSpec } = looked.value
+  const { issue: current, history, row, previous, signals, filedSpec, origin, movedFrom } = looked.value
 
   const spent = deps.clock.now().getTime() - row.firstTryAt.getTime() > deps.startBudgetMs
   // A refusal retrying cannot fix is the lead gone; so is a start that has outlived its budget.
@@ -123,8 +148,13 @@ export async function startLead(deps: LeadDeps, effect: StartEffect): Promise<Re
       })
       if (!saved.ok) return saved
     }
-    const role = await seatOf(deps, current)
+    const role = await seatOf(deps, current, origin)
     if (!role.ok) return fail(role.error)
+    const movedUp = movedFrom && {
+      attempt: movedFrom.attempt,
+      why: movedFrom.why,
+      lastWords: await lastWordsOf(deps, movedFrom.transcript),
+    }
 
     const notes = notesBefore(history, attempt)
     // A project's check tiers change what the brief tells the lead to run; a read that fails is the brief of today.
@@ -149,6 +179,8 @@ export async function startLead(deps: LeadDeps, effect: StartEffect): Promise<Re
       signals,
       filedSpec,
       ...(previous ? { previous } : {}),
+      light: role.value.rule,
+      movedUp,
     })
     const started = await deps.terminals.start({
       key: name,
@@ -182,19 +214,64 @@ export async function startLead(deps: LeadDeps, effect: StartEffect): Promise<Re
     return recorded.ok ? ok(undefined) : err(toPortError(recorded.error))
   }
 
-  // Attached: the terminal runs already. The fact is recorded again if a crash came between the two transactions. The
-  // role table is not read: a seat the Issue carries is what ran, and for one without, the table may have changed since.
+  // Attached: the terminal runs already. The fact is recorded again if a crash came between the two transactions, with
+  // the seat decided again (the rule reads stored facts); a table that cannot be read leaves the filed seat, or none.
+  const decided = await seatOf(deps, current, origin)
+  const seat = decided.ok ? decided.value : current.seat
   const recorded = await deps.uow.run(({ work }) =>
-    recordStarted(work, deps, issue, attempt, row.terminal ?? name, current.seat),
+    recordStarted(work, deps, issue, attempt, row.terminal ?? name, seat),
   )
   return recorded.ok ? ok(undefined) : err(toPortError(recorded.error))
 }
 
-/** The tier and effort the lead starts on: the Issue's seat as filed, else the table's `lead` row. */
-export async function seatOf(deps: LeadDeps, issue: Issue): Promise<Result<{ tier: Tier; effort: Effort }, PortError>> {
-  if (!issue.seat) return deps.roles.lead()
-  return ok({ tier: issue.seat.tier, effort: issue.seat.effort })
+/** An Issue no loop or monitor filed: the light rule reads its kind and size alone. */
+export const NO_ORIGIN = { hygieneKey: null, unroutedMonitor: false } as const
+
+/** A lead seat: its tier and effort, the role row it came from, and the light rule that chose it. */
+export interface LeadSeat {
+  tier: Tier
+  effort: Effort
+  role?: string | undefined
+  /** the light seat's rule (`domains/leads/light.ts`); null on any other seat */
+  rule: string | null
 }
+
+/**
+ * The seat the lead starts on: the Issue's seat as filed always wins; with none, the table's `light` row when the light
+ * rule names the Issue (and the table has the row), else its `lead` row.
+ */
+export async function seatOf(
+  deps: LeadDeps,
+  issue: Issue,
+  origin: { hygieneKey: string | null; unroutedMonitor: boolean },
+): Promise<Result<LeadSeat, PortError>> {
+  if (issue.seat) return ok({ tier: issue.seat.tier, effort: issue.seat.effort, role: issue.seat.role, rule: null })
+  const rule = lightRule({
+    kind: issue.kind,
+    size: issue.size ?? null,
+    spec: issue.checkpoint === 'spec',
+    hygieneKey: origin.hygieneKey,
+    unroutedMonitor: origin.unroutedMonitor,
+    movedUp: issue.movedUp,
+  })
+  if (rule) {
+    const light = await deps.roles.role(LIGHT_ROLE)
+    if (light.ok) return ok({ ...light.value, role: LIGHT_ROLE, rule })
+    if (light.error.kind !== 'refused') return light
+  }
+  const lead = await deps.roles.lead()
+  return lead.ok ? ok({ ...lead.value, role: LEAD_ROLE, rule: null }) : lead
+}
+
+/** The last words of a moved-up light lead, for its successor's brief; nothing when they cannot be read. */
+async function lastWordsOf(deps: LeadDeps, transcript: string | null): Promise<string | null> {
+  if (!transcript || !deps.apiErrors) return null
+  const words = await deps.apiErrors.tails.lastWords(transcript, LAST_WORDS_CHARS)
+  return words.ok ? words.value : null
+}
+
+/** How much of a moved-up lead's last words its successor reads. */
+const LAST_WORDS_CHARS = 3_000
 
 async function recordStarted(
   work: Parameters<Parameters<LeadDeps['uow']['run']>[0]>[0]['work'],
@@ -202,14 +279,18 @@ async function recordStarted(
   issue: IssueId,
   attempt: number,
   terminal: string,
-  seat: { tier: Tier; effort: Effort } | undefined,
+  seat: { tier: Tier; effort: Effort; role?: string | undefined } | undefined,
 ) {
   const result = await recordIn(work, deps, {
     issueId: issue,
     key: key('lead_started', issue, attempt),
     event: {
       kind: 'lead_started',
-      payload: { attempt, terminal, ...(seat ? { seat: { tier: seat.tier, effort: seat.effort } } : {}) },
+      payload: {
+        attempt,
+        terminal,
+        ...(seat ? { seat: { tier: seat.tier, effort: seat.effort, ...(seat.role ? { role: seat.role } : {}) } } : {}),
+      },
       actor: 'factory',
     },
   })

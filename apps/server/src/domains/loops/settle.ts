@@ -29,6 +29,8 @@ export interface Refinement {
   kind?: Refined | undefined
   /** `spec`: a new public surface, a data model, a dependency of weight or an unseen screen: the lead owes a Spec first */
   checkpoint?: 'spec' | undefined
+  /** triage's size of the work, kept on the Issue: the light seat's rule reads it */
+  size?: 'small' | 'medium' | 'large' | undefined
 }
 
 /** The open Issues of the repo, other than this one, that an edge may name. */
@@ -152,5 +154,11 @@ export function checkSettle(
     facts.kind !== 'incident' && answer.checkpoint === 'spec' && SPEC_SIZES.includes(answer.size ?? '')
       ? 'spec'
       : undefined
-  return { ok: true, after, dropped, reason: answer.reason, refinement: { kind: refined, checkpoint } }
+  return {
+    ok: true,
+    after,
+    dropped,
+    reason: answer.reason,
+    refinement: { kind: refined, checkpoint, size: answer.size ?? undefined },
+  }
 }

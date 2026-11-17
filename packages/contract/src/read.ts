@@ -113,6 +113,7 @@ export const ReadIssueCard = z
     /** a work repo's: shown read-only, nothing of its text goes to the read token */
     visible: z.boolean(),
     kind: z.string().nullable(),
+    /** triage's size of the work (`small`, `medium`, `large`); null when it judged none */
     size: z.string().nullable(),
     /** the live lead's key */
     lead: z.string().nullable(),
@@ -341,8 +342,8 @@ export const ReadErrandLine = z
 export type ReadErrandLine = z.infer<typeof ReadErrandLine>
 
 export const ReadIssueDetail = ReadIssueCard.extend({
-  /** the tier and effort the latest lead actually started on; null before one started (or for an older lead) */
-  ranOn: z.object({ tier: z.string(), effort: z.string() }).nullable(),
+  /** the tier and effort the latest lead actually started on, and the table row it came from (`lead`, `light`, or the filed seat's role; null when unknown); null before one started (or for an older lead) */
+  ranOn: z.object({ tier: z.string(), effort: z.string(), role: z.string().nullable() }).nullable(),
   /** how the Issue came to be: the signals routed to it, oldest first; empty for an Issue filed another way */
   triage: z.array(ReadTriageLine),
   /** the owner's notes to the lead, oldest first */

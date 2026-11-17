@@ -162,7 +162,9 @@ function checkShape(issue: Issue, now: Date, fail: (what: string) => never): voi
   }
   if (WAITS[wait.reason].exit === 'machine') {
     // The lead's own verbs leave a timer wait too, but the lead is not the machine: the clock or the steward must.
-    if (!exits.some((event) => (event.actor === 'factory' || event.actor === 'steward') && leaves(event))) {
+    // `moved_up` leaves a wait only for a light lead that struggled: it is no exit the wait can count on.
+    const counted = exits.filter((event) => event.kind !== 'moved_up')
+    if (!counted.some((event) => (event.actor === 'factory' || event.actor === 'steward') && leaves(event))) {
       fail(`the machine wait ${wait.reason} has no exit`)
     }
     return

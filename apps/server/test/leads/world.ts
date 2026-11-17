@@ -203,7 +203,7 @@ export interface World {
   seatAccount: string
   windowReset: Date | null
   /** files, settles and admits an Issue in the repo `example`; returns its id */
-  admitted(notes?: string[], seat?: ResolvedSeat): Promise<IssueId>
+  admitted(notes?: string[], seat?: ResolvedSeat, kind?: 'bug' | 'docs'): Promise<IssueId>
   event(issue: IssueId, name: string, event: AnyIssueEvent): Promise<unknown>
   /** empties every table and every fake */
   reset(): Promise<void>
@@ -275,9 +275,11 @@ export async function startWorld(): Promise<World> {
     role: async (name) =>
       name === 'lead'
         ? ok({ tier: 'sonnet' as const, effort: 'high' as const })
-        : name === 'deep'
-          ? ok({ tier: 'opus' as const, effort: 'max' as const })
-          : err(portError('refused', `no role "${name}"`)),
+        : name === 'light'
+          ? ok({ tier: 'haiku' as const, effort: 'high' as const })
+          : name === 'deep'
+            ? ok({ tier: 'opus' as const, effort: 'max' as const })
+            : err(portError('refused', `no role "${name}"`)),
   }
   const seats: Seats = {
     seat: async () => (world.seatError ? err(world.seatError) : ok({ account: world.seatAccount })),
@@ -310,13 +312,13 @@ export async function startWorld(): Promise<World> {
     if (!result.ok) throw new Error(`event ${name}: ${JSON.stringify(result.error)}`)
     return result.value
   }
-  world.admitted = async (notes = [], seat) => {
+  world.admitted = async (notes = [], seat, kind = 'bug') => {
     const filed = await uow.run(({ work }) =>
       fileIn(work, world.deps, {
         key: key('filed', world.deps.ids.next('signal')),
         event: {
           kind: 'filed',
-          payload: { repo: 'example', title: 'the probe fails', kind: 'bug', origin: 'you', ...(seat ? { seat } : {}) },
+          payload: { repo: 'example', title: 'the probe fails', kind, origin: 'you', ...(seat ? { seat } : {}) },
           actor: 'factory',
         },
       }),

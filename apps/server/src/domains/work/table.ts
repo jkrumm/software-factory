@@ -365,6 +365,22 @@ const regress = (ctx: Ctx<'regressed'>): Cell => {
   return { to: 'waiting', wait: { reason: 'regressed', detail: why }, effects: [] }
 }
 
+/**
+ * A light lead moved up (`domains/leads/light.ts` says when): its attempt ends and the Issue queues again, so the next
+ * admission starts a lead on the lead row. Only for the attempt there is; a person's wait keeps its checkpoint.
+ */
+const moveUp = (ctx: Ctx<'moved_up'>): Cell => {
+  const { issue } = ctx
+  if (ctx.event.payload.attempt !== issue.attempt) {
+    return ignore(`moved_up is for attempt ${ctx.event.payload.attempt}; the Issue is on attempt ${issue.attempt}`)
+  }
+  if (issue.ranOn?.role !== 'light') return refuse('only a lead on the light seat is moved up')
+  if (issue.wait && WAITS[issue.wait.reason].exit === 'person') {
+    return refuse(`it waits for a ${issue.wait.reason}: that ends with its answer first`)
+  }
+  return { to: 'queued', effects: [finalize(issue.id, issue.attempt)] }
+}
+
 const reopen = (ctx: Ctx<'reopened'>): Cell => {
   const closedAt = ctx.issue.closedAt
   if (closedAt && ctx.now.getTime() - closedAt.getTime() > REOPEN_WINDOW_MS) {
@@ -395,6 +411,7 @@ export const TABLE: Table = {
     errand_turned_back: said('nothing waits for an errand'),
     deferred: noLeadYet,
     stalled: said('settling: no lead is working'),
+    moved_up: noLeadYet,
     woken: said('it is not waiting'),
     shipped: noLeadYet,
     watch_passed: said('it is not watching'),
@@ -420,6 +437,7 @@ export const TABLE: Table = {
     errand_turned_back: said('nothing waits for an errand'),
     deferred: noLeadYet,
     stalled: said('queued: no lead is working'),
+    moved_up: noLeadYet,
     woken: said('it is not waiting'),
     shipped: noLeadYet,
     watch_passed: said('it is not watching'),
@@ -445,6 +463,7 @@ export const TABLE: Table = {
     errand_turned_back: said('nothing waits for an errand'),
     deferred: deferredBy(defer),
     stalled: stall,
+    moved_up: moveUp,
     woken: said('it is not waiting'),
     shipped: ship,
     watch_passed: said('it is not watching'),
@@ -472,6 +491,7 @@ export const TABLE: Table = {
     deferred: heldOrFromTimer,
     stalled: (ctx) =>
       ctx.event.payload.cause === 'blocked' ? fromTimer(stall)(ctx) : ignore('waiting: no lead turn is running'),
+    moved_up: moveUp,
     woken: wake,
     shipped: fromTimer(ship),
     watch_passed: said('it is not watching'),
@@ -497,6 +517,7 @@ export const TABLE: Table = {
     errand_turned_back: said('nothing waits for an errand'),
     deferred: deferWatching,
     stalled: (ctx) => (ctx.event.actor === 'lead' ? refuse('it shipped: the watch is on') : ignore('watching')),
+    moved_up: moveUp,
     woken: said('it is not waiting'),
     shipped: watchIsOn,
     watch_passed: watchPassed,
@@ -522,6 +543,7 @@ export const TABLE: Table = {
     errand_turned_back: said('it is closed: nothing waits for an errand'),
     deferred: isClosed,
     stalled: said('it is closed'),
+    moved_up: said('it is closed'),
     woken: said('it is closed'),
     shipped: isClosed,
     watch_passed: said('it is closed'),

@@ -212,6 +212,8 @@ export interface TranscriptApiError {
 export interface TranscriptTails {
   /** the error the transcript ends on, or null when its last message is not one (or the file says nothing) */
   apiError(path: string): Promise<Result<TranscriptApiError | null>>
+  /** the session's last assistant words, newest last, at most `max` characters; null when it said nothing readable */
+  lastWords(path: string, max: number): Promise<Result<string | null>>
 }
 
 /** An account's login mark: capacity reads an open one as "not signed in". */
@@ -343,6 +345,8 @@ export interface LeadStore {
   signalsOf(issue: IssueId, limit: number): Promise<BriefSignal[]>
   /** the Spec the Issue was filed with, or null */
   filedSpecOf(issue: IssueId): Promise<BriefSpec | null>
+  /** what the light seat's rule reads beyond the Issue: the hygiene finding that filed it, an unrouted monitor filed home */
+  originOf(issue: IssueId): Promise<{ hygieneKey: string | null; unroutedMonitor: boolean }>
 
   attempt(issue: IssueId, attempt: number): Promise<LeadAttempt | null>
   /** the attempt's row, made on the first try; every later try counts */

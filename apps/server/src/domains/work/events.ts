@@ -2,7 +2,7 @@ import { EFFORTS, LaneName, MAX_AFTER_IDS, TIERS } from '@software-factory/contr
 import * as z from 'zod'
 import type { Actor } from '../../kernel/events.ts'
 import { idOf, type IssueId } from '../../kernel/ids.ts'
-import { KINDS, ORIGINS } from './issue.ts'
+import { KINDS, ORIGINS, SIZES } from './issue.ts'
 
 const text = z.string().trim().min(1)
 const attempt = z.number().int().min(1)
@@ -35,15 +35,20 @@ export const PAYLOADS = {
     edges: z.literal('stated').optional(),
   }),
   /** triage and the chain are done: it may be queued; triage may refine an owner or agent request's kind and flag it `checkpoint: spec` (old events carry none) */
-  settled: z.object({ kind: z.enum(KINDS).optional(), checkpoint: z.literal('spec').optional() }),
+  settled: z.object({
+    kind: z.enum(KINDS).optional(),
+    checkpoint: z.literal('spec').optional(),
+    /** triage's judgment of the work's size, kept as it answered it (old events and a rule settle carry none) */
+    size: z.enum(SIZES).optional(),
+  }),
   /** capacity lets a lead start: the next attempt */
   admitted: z.object({}),
   /** the attempt's lead runs in its terminal */
   lead_started: z.object({
     attempt,
     terminal: text,
-    /** what the lead started on (old events carry none) */
-    seat: z.object({ tier: z.enum(TIERS), effort: z.enum(EFFORTS) }).optional(),
+    /** what the lead started on (old events carry none); `role` is the table row it came from (`lead`, `light`), or the filed seat's role */
+    seat: z.object({ tier: z.enum(TIERS), effort: z.enum(EFFORTS), role: text.optional() }).optional(),
   }),
   /** the attempt's lead failed to start or ended */
   lead_gone: z.object({ attempt, detail: text }),
@@ -90,7 +95,15 @@ export const PAYLOADS = {
     z.object({ attempt, review: text }),
   ]),
   /** a machine cause stopped the work: the steward's to end */
-  stalled: z.object({ attempt, cause: z.enum(['wall', 'unreported', 'blocked']), detail: text }),
+  stalled: z.object({
+    attempt,
+    cause: z.enum(['wall', 'unreported', 'blocked']),
+    detail: text,
+    /** the lead said the work is beyond its seat (`issue block --out-of-depth`): a light lead is moved up at once */
+    depth: z.literal(true).optional(),
+  }),
+  /** a light lead struggled (`domains/leads/light.ts`): its attempt ends and the Issue queues again for the lead row */
+  moved_up: z.object({ attempt, why: text }),
   /** a wait ended without a person; `since` names the wait */
   woken: z.object({ since: z.number().int().min(1), detail: text }),
   /** the lead landed and deployed: the watch begins */
@@ -143,6 +156,7 @@ export const SENDERS: { [K in EventKind]: readonly Actor[] } = {
   errand_turned_back: ['owner', 'orchestrator'],
   deferred: ['lead', 'steward'],
   stalled: ['lead', 'factory'],
+  moved_up: ['factory'],
   woken: ['factory', 'steward', 'owner', 'orchestrator'],
   shipped: ['lead'],
   watch_passed: ['factory'],

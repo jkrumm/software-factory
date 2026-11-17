@@ -64,6 +64,7 @@ import { idOf, issueNumber, issueRef } from '../kernel/ids.ts'
 import { key as keyOf, type Key } from '../kernel/keys.ts'
 import { err, ok, portError, type PortError, type Result } from '../kernel/result.ts'
 import { fileIn, type IssueWriteError, recordIn, type WriteDeps } from './issues.ts'
+import { moveUpIfDue } from './move-up.ts'
 import type { UnitOfWork } from './unit-of-work.ts'
 
 export type Stores = { work: WorkStore; intake: IntakeStore }
@@ -279,6 +280,13 @@ export function createIntake(deps: IntakeDeps) {
     let detail: Triaged['detail'] = 'repeat'
     let recorded = false
     if (issue.state === 'watching') {
+      // A light lead's first watch that breaks moves the Issue up instead of going back to that lead.
+      const moved = await moveUpIfDue({ work: s.work }, deps, { issueId: issue.id, regressedWatch: issue.watch })
+      if (!moved.ok) return moved
+      recorded = moved.value?.result === 'applied'
+      if (recorded) detail = 'regression'
+    }
+    if (issue.state === 'watching' && !recorded) {
       // A `down` while the watch runs is the change breaking something: the machine takes it back to its lead.
       const regressed = await recordIn(s.work, deps, {
         issueId: issue.id,

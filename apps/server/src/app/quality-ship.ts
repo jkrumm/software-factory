@@ -12,6 +12,7 @@ import type { IdSource, IssueId } from '../kernel/ids.ts'
 import { type Key, key } from '../kernel/keys.ts'
 import { err, ok, type PortError, type Result } from '../kernel/result.ts'
 import { type IssueWriteError, type Recorded, recordIn } from './issues.ts'
+import { moveUpIfDue } from './move-up.ts'
 import type { UnitOfWork } from './unit-of-work.ts'
 
 /** The stores the quality use cases write: the Issue's own, and the quality domain's. */
@@ -208,6 +209,9 @@ export async function shipIssue(
     }
     if (!verdict.accepted) {
       await quality.recordShip({ ...ship, result: 'refused', detail: verdict.error }, [])
+      // A light lead's second refused ship moves it up; the answer is still the refusal.
+      const moved = await moveUpIfDue({ work, quality }, deps, { issueId: input.issueId })
+      if (!moved.ok) return moved
       return ok({ result: 'refused', detail: verdict.error, issue, evidence: [] })
     }
     const recorded = await recordIn(work, deps, { issueId: input.issueId, key: eventKey, event })
@@ -217,6 +221,8 @@ export async function shipIssue(
       // The machine said no (the Issue is closed, or it is another attempt): the refusal is the verb's error.
       const detail = recorded.value.event.detail
       await quality.recordShip({ ...ship, result: 'refused', detail: detail ?? 'the Issue refused the ship' }, [])
+      const moved = await moveUpIfDue({ work, quality }, deps, { issueId: input.issueId })
+      if (!moved.ok) return moved
       return ok({ result, detail, issue: recorded.value.issue, evidence: [] })
     }
     const evidence: StoredEvidence[] = [

@@ -7,6 +7,7 @@ import type { QualityStore } from '../domains/quality/store.ts'
 import type { WorkStore } from '../domains/work/ports.ts'
 import type { IssueWriteError, IssueWrites, Recorded, WriteDeps } from './issues.ts'
 import { recordIn, recordIssueEvent } from './issues.ts'
+import { moveUpIfDue } from './move-up.ts'
 import { annotationsOwed } from './quality-ship.ts'
 import type { UnitOfWork } from './unit-of-work.ts'
 
@@ -67,10 +68,26 @@ export const deferIssue = (deps: Deps, issueId: IssueId, body: DeferBody): Promi
     actor: 'lead',
   })
 
-/** The lead cannot go on and nobody can answer: a stall the steward re-checks. */
-export const blockIssue = (deps: Deps, issueId: IssueId, body: BlockBody): Promise<Written> =>
-  verb(deps, issueId, 'block', body.attempt, body.call, {
+/**
+ * The lead cannot go on and nobody can answer: a stall the steward re-checks. A light lead's second stall, or one that
+ * says it is out of its depth, moves it up in the same transaction (`move-up.ts`): the answer is still the block's.
+ */
+export function blockIssue(deps: CloseDeps, issueId: IssueId, body: BlockBody): Promise<Written> {
+  const event: AnyIssueEvent = {
     kind: 'stalled',
-    payload: { attempt: body.attempt, cause: 'blocked', detail: body.reason },
+    payload: {
+      attempt: body.attempt,
+      cause: 'blocked',
+      detail: body.reason,
+      ...(body.outOfDepth ? { depth: true as const } : {}),
+    },
     actor: 'lead',
+  }
+  const eventKey = key(issueId, body.attempt, 'block', body.call ?? deps.ids.next('call'))
+  return deps.uow.run(async ({ work, quality }) => {
+    const recorded = await recordIn(work, deps, { issueId, key: eventKey, event })
+    if (!recorded.ok || recorded.value.result !== 'applied') return recorded
+    const moved = await moveUpIfDue({ work, quality }, deps, { issueId })
+    return moved.ok ? recorded : moved
   })
+}
