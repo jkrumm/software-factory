@@ -114,6 +114,20 @@ describe('agentsmdProbe', () => {
     expect((await agentsmdProbe(tools, dir)).outcome).toBe('clean')
   })
 
+  test('green: a CLAUDE.md under fixtures/ is a documented benchmark fixture', async () => {
+    const dir = repo({ 'AGENTS.md': '# A\n', 'fixtures/bench/house-rules/CLAUDE.md': 'rules\n' })
+    expect((await agentsmdProbe(tools, dir)).outcome).toBe('clean')
+  })
+
+  test('red: a CLAUDE.md beside a fixture is still a finding', async () => {
+    const dir = repo({ 'fixtures/x/CLAUDE.md': 'a\n', 'src/CLAUDE.md': 'b\n', 'myfixtures/CLAUDE.md': 'c\n' })
+    const out = await agentsmdProbe(tools, dir)
+    expect(out.findings[0]?.lines).toEqual([
+      'myfixtures/CLAUDE.md: either file suppresses AGENTS.md',
+      'src/CLAUDE.md: either file suppresses AGENTS.md',
+    ])
+  })
+
   test('skipped: no agent files at all', async () => {
     expect((await agentsmdProbe(tools, repo({ 'a.txt': 'x' }))).outcome).toBe('skipped')
   })
