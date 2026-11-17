@@ -15,6 +15,8 @@ export const LANGUAGE = {
     'A touch the factory should have settled: a Decision answered and not marked worth asking, an owner note, wake, cancel or reopen. Not the first note of a filing, a verdict on a Concept or Spec, or a done Errand',
   'back at desk':
     'The Needs-you view (?mode=desk) of the open Errands by where the hands must be, each with its command to copy and Done and Not needed buttons',
+  'binding reason':
+    'The queue reason that kept Issues waiting for the most hours in the window, with how many Issues it held. What to do: it is the limit worth lifting; open the Issues it names and read their reason',
   'cache read share':
     'The share of prompt tokens a lead read from the cache instead of fresh. What to do: higher is cheaper; a low share on a long attempt means the context was rebuilt, so look in Activity for a restart or a compaction',
   caller:
@@ -158,6 +160,8 @@ export const LANGUAGE = {
   ship: 'Land and deploy',
   'ship refused':
     "The gate's answer to a ship that does not hold; recorded, and counted as friction. A review never refuses a ship: it is recorded as evidence",
+  'shipped this week':
+    'How many Issues closed done in the last 7 days across all projects, against the 7 days before. What to do: a fall while Issues are Ready means something holds them; open Throughput and read what keeps Issues from starting',
   signal: 'Anything that arrives and may become work. Has a kind, an origin and a trust level',
   size: "Triage's judgment of how much work an Issue is: small, medium, large. Kept on the Issue when triage settles it; none for an Issue the rules settled",
   spec: 'A larger plan to review',

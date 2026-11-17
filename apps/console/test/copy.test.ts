@@ -92,3 +92,27 @@ test('a definition of more than two sentences links to the guide', () => {
   expect(needsGuide(LANGUAGE.attempt)).toBe(false)
   expect(needsGuide(LANGUAGE.load)).toBe(true)
 })
+
+test('a card hint that is undefined is no hint', () => {
+  expect(rules(`<StatCard title="A" hint={stat.key === 'shipped' ? undefined : WORD[stat.key]} />`)).toEqual([
+    'card:hint',
+  ])
+})
+
+test('the cards of the host, an Issue, a project and Flow hint a word that says what to do', () => {
+  const markdown = readFileSync(join(root, '../../docs/language.md'), 'utf8')
+  const figures = new Set([...sectionWords(markdown, 'The host'), ...sectionWords(markdown, 'The figures on a card')])
+  const files = [
+    'src/routes/throughput.tsx',
+    'src/components/issue/overview.tsx',
+    'src/components/project/overview.tsx',
+  ]
+  const hints = files.flatMap((file) =>
+    openingTags(readFileSync(join(root, file), 'utf8'), 'StatCard').map(({ tag }) => /\shint="([^"]+)"/.exec(tag)?.[1]),
+  )
+  expect(hints.length).toBeGreaterThan(10)
+  for (const hint of hints) expect(figures.has(hint ?? '')).toBe(true)
+  const flow = readFileSync(join(root, 'src/routes/flow.tsx'), 'utf8')
+  expect(flow).toContain("shipped: 'shipped this week'")
+  expect(figures.has('shipped this week')).toBe(true)
+})

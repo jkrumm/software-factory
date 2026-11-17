@@ -166,6 +166,8 @@ Every number on a Console card has a word here or in a table above, and its defi
 | **Tokens out** | The tokens a lead's sessions wrote, from the usage data, summed over the attempts; the tokens read in and the cache are beneath it. What to do: a high figure on a small Issue is a lead that rewrote a lot; compare the attempts | |
 | **Cache read share** | The share of prompt tokens a lead read from the cache instead of fresh. What to do: higher is cheaper; a low share on a long attempt means the context was rebuilt, so look in Activity for a restart or a compaction | |
 | **Issues per hour** | How many Issues of a project shipped in each hour of the last 7 days, against the 7 days before. What to do: a drop while Issues are Ready or Held may mean something holds them; open Work and read the reason on each | |
+| **Shipped this week** | How many Issues closed done in the last 7 days across all projects, against the 7 days before. What to do: a fall while Issues are Ready means something holds them; open Throughput and read what keeps Issues from starting | |
+| **Binding reason** | The queue reason that kept Issues waiting for the most hours in the window, with how many Issues it held. What to do: it is the limit worth lifting; open the Issues it names and read their reason | |
 | **Avoidable cost** | The open improvement that costs the factory most, in minutes of queue wait or MiB over the memory budget; without one, the standing tenants' memory against its budget. What to do: it is the next thing worth fixing; open the improvement's Issue | |
 
 ## Events

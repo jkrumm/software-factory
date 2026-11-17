@@ -99,7 +99,12 @@ const STAT_ICON = {
 } as const
 
 /** The domain word each card carries an InfoHint for. */
-const STAT_HINT = { running: 'running', paused: 'paused', notStarted: 'not started' } as const
+const STAT_HINT = {
+  running: 'running',
+  paused: 'paused',
+  notStarted: 'not started',
+  shipped: 'shipped this week',
+} as const
 
 /** The four stat cards: factory-wide, each opens the list of the Issues it counts. */
 function StatRow({ data, now }: { data: FlowModel; now: number }) {
@@ -115,7 +120,7 @@ function StatRow({ data, now }: { data: FlowModel; now: number }) {
           className="w-72 shrink-0 snap-start lg:w-auto"
           icon={STAT_ICON[stat.key]}
           title={stat.title}
-          hint={stat.key === 'shipped' ? undefined : STAT_HINT[stat.key]}
+          hint={STAT_HINT[stat.key]}
           subtitle={stat.subtitle}
           value={stat.value}
           delta={{ value: stat.delta, higherIsBetter: stat.higherIsBetter }}

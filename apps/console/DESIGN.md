@@ -203,9 +203,11 @@ holds what a script can hold.
   factory is running." Never a bare "Error" or "Failed", never blame.
 - **An empty state says why it is empty and gives the first step:** a title and one line under it, or an action. The line is
   the next step, not a second title.
-- **Every figure on a StatCard has a `hint`:** the glossary word whose definition says what the figure counts and, after
-  "What to do:", what to do about it. A new figure adds its row to `docs/language.md` ("The host", "The figures on a card").
-  A definition longer than two sentences carries "Read more in the language guide" in the popover.
+- **Every StatCard has a `hint`** (never `undefined`): the glossary word for what the figure counts. A figure of the host, an
+  Issue, a project or the queue (Throughput, the Issue and project pages, Flow's Shipped) uses a word of "The host" or "The figures
+  on a card" in `docs/language.md`, whose definition ends in "What to do:" and the step. An Improve KPI is a measure against a
+  target: its hint is the glossary word and its `meaning` line says what it counts and which way is good. A definition longer
+  than two sentences carries "Read more in the language guide" in the popover.
 - **One word per glossary term:** repo (not repository), artifact (not document), Issue (not item or task), lead (not worker).
   The state words are Running, Paused, Ready, Held, Checking and Planned (`scripts/vocabulary.ts`).
 - **Cut what the layout says,** and every word on the voice guide's ban list (leverage, robust, seamless, harness, ...).

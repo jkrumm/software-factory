@@ -279,7 +279,7 @@ function Answers({ model }: { model: Model }) {
           id="throughput-queue"
           icon={HourglassIcon}
           title="What keeps Issues from starting?"
-          hint="queue reason"
+          hint="binding reason"
           subtitle={`Hours in the queue over ${windowName(model.hours)}`}
           value={queue.binding ? hoursWords(queue.binding.hours) : null}
           valueNote="No Issue waited for a cost of the factory in this window"
@@ -746,7 +746,9 @@ function Improvements({ model }: { model: Model }) {
   return (
     <Section level={3} title="Improvements" aside="What the loop filed, before and after">
       {model.improvements.length === 0 ? (
-        <Nothing next="An improvement shows here once the loop files it.">The loop has filed no improvement yet.</Nothing>
+        <Nothing next="An improvement shows here once the loop files it.">
+          The loop has filed no improvement yet.
+        </Nothing>
       ) : (
         <Table
           label="Improvement findings"

@@ -190,7 +190,7 @@ function childrenOf(source: string, at: number, tag: string, name: string): stri
 export function structureFindings(file: string, source: string): Finding[] {
   const out: Finding[] = []
   for (const { at, tag } of openingTags(source, 'StatCard')) {
-    if (hasProp(tag, 'hint')) continue
+    if (hasProp(tag, 'hint') && !/\shint=\{[^}]*\bundefined\b/.test(tag)) continue
     out.push({
       file,
       line: lineOf(source, at),
