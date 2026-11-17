@@ -260,6 +260,7 @@ export function CommandPalette({ open, onOpenChange }: { open: boolean; onOpenCh
     (result.openNumber !== null && `open-${result.openNumber}`) ||
     (result.recent[0] && `recent-${result.recent[0].type}-${result.recent[0].id}`) ||
     (!typed && result.context[0] && `context-${result.context[0].id}`) ||
+    (result.projectFirst && result.projects[0] && `project-${result.projects[0].name}`) ||
     (result.issues[0] && `issue-${result.issues[0].number}`) ||
     (result.projects[0] && `project-${result.projects[0].name}`) ||
     (result.artifacts[0] && `artifact-${result.artifacts[0].id}`) ||
@@ -289,6 +290,24 @@ export function CommandPalette({ open, onOpenChange }: { open: boolean; onOpenCh
     if (!next) setQuery('')
     onOpenChange(next)
   }
+
+  const projectGroup =
+    result.projects.length > 0 ? (
+      <CommandGroup heading="Projects">
+        {result.projects.map((project) => (
+          <Row
+            key={project.name}
+            value={`project-${project.name}`}
+            icon={FolderIcon}
+            title={project.name}
+            query={query}
+            reference={`${project.open} open`}
+            kind="Project"
+            onSelect={visit('project', project.name, () => openThing('project', project.name))}
+          />
+        ))}
+      </CommandGroup>
+    ) : null
 
   const thisPage =
     result.context.length > 0 ? (
@@ -354,6 +373,7 @@ export function CommandPalette({ open, onOpenChange }: { open: boolean; onOpenCh
             </CommandGroup>
           ) : null}
           {typed ? null : thisPage}
+          {result.projectFirst ? projectGroup : null}
           {result.issues.length > 0 ? (
             <CommandGroup heading={query.trim() === '' ? 'Recently active' : 'Issues'}>
               {result.issues.map((issue) => (
@@ -376,22 +396,7 @@ export function CommandPalette({ open, onOpenChange }: { open: boolean; onOpenCh
               ) : null}
             </CommandGroup>
           ) : null}
-          {result.projects.length > 0 ? (
-            <CommandGroup heading="Projects">
-              {result.projects.map((project) => (
-                <Row
-                  key={project.name}
-                  value={`project-${project.name}`}
-                  icon={FolderIcon}
-                  title={project.name}
-                  query={query}
-                  reference={`${project.open} open`}
-                  kind="Project"
-                  onSelect={visit('project', project.name, () => openThing('project', project.name))}
-                />
-              ))}
-            </CommandGroup>
-          ) : null}
+          {result.projectFirst ? null : projectGroup}
           {result.artifacts.length > 0 ? (
             <CommandGroup heading="Artifacts">
               {result.artifacts.map((artifact) => (
