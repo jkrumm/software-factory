@@ -94,7 +94,7 @@ const keysOf = (pass: Pass): Set<string> => new Set([...pass.report.findings.map
  * unbroken run of passes back from the newest that all raised it (a pass that did not ends the run); null when the
  * newest raises none.
  */
-function oldestFindingAt(newest: Pass, earlier: readonly { at: Date; keys: Set<string> }[]): Date | null {
+export function oldestFindingAt(newest: Pass, earlier: readonly { at: Date; keys: Set<string> }[]): Date | null {
   const keys = keysOf(newest)
   if (keys.size === 0) return null
   const before = earlier.filter((pass) => pass.at < newest.at).sort((a, b) => b.at.getTime() - a.at.getTime())

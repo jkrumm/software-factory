@@ -15,8 +15,8 @@ import { loadMigrations, migrate } from '../../src/adapters/postgres/migrate.ts'
 import { createApp } from '../../src/api/app.ts'
 import { JUDGMENT_PREFIX } from '../../src/domains/loops/hygiene.ts'
 import { PROBES } from '../../src/domains/loops/hygiene-model.ts'
-import { NO_LEAD_CAP } from '../../src/read/project-index.ts'
-import { BUILT_IN_PROBES, DOCUMENT_PREFIX } from '../../src/read/project-page.ts'
+import { NO_LEAD_CAP, oldestFindingAt } from '../../src/read/project-index.ts'
+import { BUILT_IN_PROBES, DOCUMENT_PREFIX, passOf } from '../../src/read/project-page.ts'
 import { DEFAULT_LEADS } from '../../src/domains/planning/project.ts'
 
 /** `GET /v1/projects`, `/v1/projects/:name` and `/v1/projects/:name/hygiene`: every figure equals the stored facts, and a work project is not found for the read token. */
@@ -350,4 +350,29 @@ test('a project never swept lists its probes as never run', async () => {
   expect(model.lastPass).toBeNull()
   expect(model.findings).toEqual([])
   expect(model.probes.every((p) => p.status === 'never')).toBe(true)
+})
+
+test('the oldest finding counts only the unbroken run of passes back from the newest that raised it', () => {
+  const finding = (key: string) => ({ probe: 'deps', key, title: key, count: 1 })
+  const newest = passOf({
+    id: 'p3',
+    repo: 'open-app',
+    at: ago(24),
+    ref: 'c',
+    report: { runs: [], findings: [finding('deps'), finding('links')] },
+    judgment: {},
+    filed: [],
+    over_budget: [],
+    failed: [],
+  })
+  const earlier = [
+    // `deps` stood 20 days ago, went away 10 days ago, and is back: its run starts after the gap
+    { at: ago(24 * 20), keys: new Set(['deps']) },
+    { at: ago(24 * 10), keys: new Set<string>() },
+    // `links` stood without a break for the last 5 days
+    { at: ago(24 * 5), keys: new Set(['deps', 'links']) },
+    { at: ago(24 * 3), keys: new Set(['deps', 'links']) },
+  ]
+  expect(oldestFindingAt(newest, earlier)).toEqual(ago(24 * 5))
+  expect(oldestFindingAt(newest, earlier.slice(0, 2))).toEqual(ago(24))
 })
