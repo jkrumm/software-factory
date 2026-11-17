@@ -218,7 +218,7 @@ const Step = z
       ),
     dockerfile: RepoPath.optional().meta(
       about(
-        "the repo's own image for the step off the mini (a Dockerfile in the repo, built on the step host once per content); unset: the factory's (Ubuntu 24.04, git, make and bun). Required for `needs: [browser]` off the mini",
+        "the repo's own image for the step off the mini (a Dockerfile in the repo, built on the step host once per content); unset: the factory's (Ubuntu 24.04, git, make, bun and the PostgreSQL server binaries). Required for `needs: [browser]` off the mini",
         STEPS,
       ),
     ),

@@ -16,13 +16,31 @@ import type { RemoteGrant, StepDisagreement, TestResult } from '@software-factor
  * (`hostFailed`) is never reported as the step's result: the caller goes back to the mini's line.
  */
 
-/** The factory's step image: Ubuntu 24.04 as the VPS and CI's `ubuntu-latest`, git, make and the pinned bun. */
+/** PostgreSQL's major in the step image (Ubuntu 24.04's own package, the major CI's `ubuntu-latest` ships). */
+const POSTGRES_MAJOR = 16
+
+/**
+ * Bumped when the factory's image changes without its bun: part of the tag, so a host that holds the old image builds the
+ * new one once instead of keeping it. 2: PostgreSQL server binaries and jq (the shell tests of the unit step read JSON with it).
+ */
+const IMAGE_REVISION = 2
+
+/**
+ * The factory's step image: Ubuntu 24.04 as the VPS and CI's `ubuntu-latest`, git, jq, make, the pinned bun and the PostgreSQL
+ * server binaries (`initdb`, `pg_ctl`, `postgres` on PATH, `PG_BIN_DIR` set) so a step can start a private cluster in its
+ * container, as the mini's tests do. No cluster is created and none runs: the step starts and stops its own.
+ */
 function stepDockerfile(): string {
+  const bin = `/usr/lib/postgresql/${POSTGRES_MAJOR}/bin`
   return [
     'FROM ubuntu:24.04',
     'ARG BUN',
-    'RUN apt-get update && apt-get install -y --no-install-recommends ca-certificates curl git make unzip \\',
+    // the package's default cluster would be created at build time: no step reads it
+    'RUN mkdir -p /etc/postgresql-common && echo "create_main_cluster = false" > /etc/postgresql-common/createcluster.conf',
+    `RUN apt-get update && apt-get install -y --no-install-recommends ca-certificates curl git jq make unzip postgresql-${POSTGRES_MAJOR} \\`,
     ' && rm -rf /var/lib/apt/lists/*',
+    `ENV PG_BIN_DIR=${bin}`,
+    `ENV PATH=${bin}:/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin`,
     // `$BUN` is the Dockerfile's build argument, not a template placeholder
     'RUN curl -fsSL -o /tmp/bun.zip "https://github.com/oven-sh/bun/releases/download/bun-v$BUN/bun-linux-x64.zip" \\',
     ' && unzip -q /tmp/bun.zip -d /tmp && mv /tmp/bun-linux-x64/bun /usr/local/bin/bun && ln -s bun /usr/local/bin/bunx \\',
@@ -33,7 +51,8 @@ function stepDockerfile(): string {
 
 /** The image a step runs in: the factory's by bun version, or the repo's own by its Dockerfile's content. */
 export function imageOf(input: { bun: string; dockerfile: string | null }): { tag: string; dockerfile: string } {
-  if (input.dockerfile === null) return { tag: `factory-step:bun-${input.bun}`, dockerfile: stepDockerfile() }
+  if (input.dockerfile === null)
+    return { tag: `factory-step:bun-${input.bun}-r${IMAGE_REVISION}`, dockerfile: stepDockerfile() }
   const digest = createHash('sha256').update(input.bun).update('\n').update(input.dockerfile).digest('hex')
   return { tag: `factory-step:repo-${digest.slice(0, 16)}`, dockerfile: input.dockerfile }
 }

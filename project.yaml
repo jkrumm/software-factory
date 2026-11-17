@@ -17,8 +17,10 @@ slots: { run: 30m } # `make check-fast` runs in one slot; a rerun of one heavy s
 budgets: { fast: 5m, peak: 4GiB, fail: 30% } # the throughput loop (docs/architecture.md): a day over one of these is a signal on this repo
 checks: { fast: make check-fast, full: make check, ci: true } # leads run fast locally; CI runs the full gate sharded (.github/workflows/ci.yml)
 # docs-check is pure bun over the tree: it passes in the step image, so it may run off the mini. check-fast stays home: it
-# writes oxfmt's fixes into the worktree and its tests start Postgres, which the image lacks (docs/architecture.md "Steps off the mini")
+# writes oxfmt's fixes into the worktree. unit runs the unit tests, each of which starts its own Postgres from the image's server
+# binaries (docs/architecture.md "Steps off the mini")
 steps:
   docs-check: { make: docs-check, remote: true, bun: 1.4.2 } # the mini's bun: package.json names no packageManager
+  unit: { make: test-unit, remote: true, bun: 1.4.2 } # make test-unit directly (inside check-fast it is the lead's own slot and stays home)
   check-fast: { make: check-fast }
 hygiene: { probes: [{ name: readme, target: docs-check }] } # the README's counts and lists against the code (scripts/readme-check.ts)

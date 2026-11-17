@@ -87,7 +87,10 @@ describe('the step on the step host', () => {
 
 describe('the image', () => {
   test("the factory's by bun version, a repo's by its content", () => {
-    expect(imageOf({ bun: '1.4.3', dockerfile: null }).tag).toBe('factory-step:bun-1.4.3')
+    expect(imageOf({ bun: '1.4.3', dockerfile: null }).tag).toMatch(/^factory-step:bun-1\.4\.3-r\d+$/)
+    const factory = imageOf({ bun: '1.4.3', dockerfile: null }).dockerfile
+    expect(factory).toContain('postgresql-16')
+    expect(factory).toContain('ENV PG_BIN_DIR=/usr/lib/postgresql/16/bin')
     const own = imageOf({ bun: '1.4.3', dockerfile: 'FROM ubuntu:24.04\n' })
     expect(own.tag).toMatch(/^factory-step:repo-[0-9a-f]{16}$/)
     expect(imageOf({ bun: '1.4.3', dockerfile: 'FROM ubuntu:24.04\nRUN true\n' }).tag).not.toBe(own.tag)

@@ -428,7 +428,12 @@ owner's setting, `FACTORY_STEP_REMOTE_TARGET` (an ssh alias; unset, every step r
   the `carry` paths forced in, `commit-tree` on HEAD (the worktree and its index untouched); pushed to the project's bare
   repository on the host (`factory-steps/<project>.git`, with `origin/<default>` so a step that diffs can), checked out in the
   slot's worktree (`factory-steps/<project>/<n>`), 0.4 to 1.4 s on a warm copy. The image is the repo's `dockerfile` or the
-  factory's (Ubuntu 24.04, git, make, the bun of `packageManager`), built once per content. The install runs in a container
+  factory's (Ubuntu 24.04, git, make, the bun of `packageManager` and the PostgreSQL 16 server binaries: `initdb`, `pg_ctl` and
+  `postgres` on `PATH`, `PG_BIN_DIR` set, issue 2114), built once per content and per image revision (`factory-step:bun-<bun>-r<n>`,
+  `IMAGE_REVISION` in `remote-step.ts`, bumped when the image changes without its bun). A step starts and stops a private cluster in
+  its own container (loopback and a unix socket need no network, a non-root uid needs a passwd entry: the image's `ubuntu` is uid
+  1000, the step host user's); there is no `needs` word for it, because every factory-image step has it and a repo's own
+  `dockerfile` carries what it needs itself. The install runs in a container
   with the network, the step in one with none (`needs: [network]` keeps it), both under `--cgroup-parent
   factory-steps.slice`, `--cpu-shares 2`, `--oom-score-adj 1000`, a memory ceiling of 1.5 times the learned peak (at least
   1 GiB), `--cap-drop ALL`, `no-new-privileges`, the host user's uid, mounted at the caller's own path; the step gets
