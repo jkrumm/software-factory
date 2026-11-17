@@ -163,7 +163,7 @@ async function readLeadSplits(tx: SQL, from: Date, to: Date) {
          OR (kind = 'session_started' AND coalesce(payload->>'source', '') <> 'compact')),
     turned AS (
       SELECT w.issue_id, w.closed_at,
-        range_agg(tstzrange(h.at, coalesce(h.e, upper(w.wall)), '[)') * w.wall) AS mr
+        range_agg(tstzrange(h.at, greatest(h.at, coalesce(h.e, upper(w.wall))), '[)') * w.wall) AS mr
       FROM walls w JOIN hook h ON h.issue_id = w.issue_id AND h.kind = 'turn_started'
       GROUP BY w.issue_id, w.closed_at),
     sets AS (

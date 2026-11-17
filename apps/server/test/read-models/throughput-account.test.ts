@@ -119,6 +119,9 @@ async function seed() {
   ])
   await attempt(2, 1, t('10:00'), '/w/factory-2-1')
   await step(t('10:10'), 'factory-2-1 check-fast', '/src/lib', null, 4, 1, 0, 500)
+  // a turn that began after the close and has not ended (the lead still answering the ship): it is outside the wall and
+  // must not make the read fail with an inverted range
+  await hook(2, 1, 'turn_started', t('10:45'))
 
   // Issue 3 (app) closed before the window; Issue 4 (app) closed in it, its lead never started
   await issue(3, 'app', [
