@@ -121,7 +121,7 @@ export function NeedCard({
               <InfoHint word="stale" className="-my-1" />
             </span>
           ) : null}
-          {item.issue ? <SeatBadge seat={item.seat} className="relative z-10" /> : null}
+          {item.issue ? <SeatBadge seat={item.seat} /> : null}
           {item.issue ? (
             <Link to="/issues/$id" params={{ id: issueNumber(item.issue) }} className={cn(LINK, 'min-w-0 truncate')}>
               {issueTitle ?? 'Open Issue'}

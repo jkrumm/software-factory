@@ -38,7 +38,7 @@ export function SeatBadge({ seat, className }: { seat: LeadSeat | null | undefin
       title={words}
       data-planned={seat.planned}
       className={cn(
-        'inline-flex h-5 shrink-0 items-center rounded-md px-1 font-mono text-xs font-medium tabular-nums',
+        'relative z-10 inline-flex h-5 shrink-0 items-center rounded-md px-1 font-mono text-xs font-medium tabular-nums',
         seat.planned
           ? 'border border-dashed border-muted-foreground/50 text-muted-foreground'
           : 'bg-muted text-foreground',

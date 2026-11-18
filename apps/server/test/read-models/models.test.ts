@@ -387,6 +387,45 @@ describe('the fixture', () => {
     expect(byId('issue_1')?.issueKind).toBe('feature')
   })
 
+  test('seat: Flow, the Chain and Needs carry the lead seat, planned before a lead started and real after', async () => {
+    const leadRow = async () => ({ tier: 'sonnet' as const, effort: 'high' as const })
+    const planned = { tier: 'sonnet', effort: 'high', role: 'lead', planned: true }
+    const seatsOf = async () => {
+      const flow = FlowModel.parse(await readFlow(sql, { now: NOW, leadRow }))
+      const chain = ChainModel.parse(await readChain(sql, NOW, { leadRow }))
+      const needs = NeedsModel.parse(needsModel(await readNeeds(sql, NOW, { leadRow }), { redact: false }))
+      return {
+        queued: flow.states.queued.issues.find((i) => i.id === 'issue_5')?.seat,
+        working: flow.states.working.issues.find((i) => i.id === 'issue_6')?.seat,
+        closedFlow: flow.closedRecently.find((i) => i.id === 'issue_9')?.seat,
+        chainWorking: chain.nodes.find((n) => n.id === 'issue_6')?.seat,
+        row: chain.nodes.find((n) => n.kind === 'row')?.seat,
+        need: needs.items.find((item) => item.kind === 'decision' && item.issue === 'issue_2')?.seat,
+        signal: needs.items.find((item) => item.kind === 'held_signal' && item.issue === null)?.seat,
+      }
+    }
+    const before = await seatsOf()
+    expect(before).toMatchObject({ queued: planned, working: planned, chainWorking: planned, need: planned })
+    expect(before.closedFlow).toBeNull()
+    expect(before.row).toBeNull()
+    expect(before.signal).toBeNull()
+    // without the table's row nothing is invented
+    expect(FlowModel.parse(await readFlow(sql, { now: NOW })).states.queued.issues[0]?.seat).toBeNull()
+
+    await event('issue_6', 6, 'lead_started', ago(0.5), {
+      from: 'working',
+      to: 'working',
+      payload: { attempt: 1, terminal: 't1', seat: { tier: 'haiku', effort: 'high', role: 'light' } },
+    })
+    try {
+      const after = await seatsOf()
+      const light = { tier: 'haiku', effort: 'high', role: 'light', planned: false }
+      expect(after).toMatchObject({ working: light, chainWorking: light, queued: planned })
+    } finally {
+      await sql`DELETE FROM factory.issue_events WHERE issue_id = 'issue_6' AND version = 6`
+    }
+  })
+
   test('chain: a row that needs its blocker shipped stays waiting behind a cancelled one, and a plain row is filable', async () => {
     const [{ plan }] = await sql`SELECT plan FROM factory.planning_projects WHERE name = 'app'`
     const original = typeof plan === 'string' ? JSON.parse(plan) : plan
