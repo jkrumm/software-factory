@@ -51,6 +51,11 @@ beforeAll(async () => {
     'issue_6',
     Array.from({ length: 6 }, () => [{ name: 'checkout', ok: true, detail: 'read in a scratch worktree' }, CI_RUNNING]),
   )
+  // a checkout failed on the older runs, but the newest run reads it fine beside a CI wait: not a blocked checkout now
+  await watch('issue_7', [
+    ...Array.from({ length: 5 }, () => [CHECKOUT, VERIFY]),
+    [{ name: 'checkout', ok: true, detail: 'read' }, CI_RUNNING],
+  ])
   // a checkout blocked for six runs, but answered: no longer open
   await watch(
     'issue_4',
