@@ -26,6 +26,15 @@ export const PROBES: readonly Probe[] = HYGIENE_CATALOGUE.map((entry) => entry.n
 )
 
 /**
+ * The probes whose red findings a pass reads again at origin's default branch just before it files, when that branch moved while
+ * the sweep ran: the ones that read tracked files and answer in seconds (the catalogue's cost `file`). A finding the new head no
+ * longer raises is not filed, and its key reads green for the lifecycle.
+ */
+export const REREAD_PROBES: readonly Probe[] = HYGIENE_CATALOGUE.filter((entry) => entry.cost === 'file').map(
+  (entry) => entry.name,
+)
+
+/**
  * How much of the catalogue a pass runs: `full` every probe and the document judgment (weekly, monthly for an idle repo, or
  * sooner for a busy one), `steady` all but the probes and the judgment the catalogue marks `idle: 'monthly'` (an idle repo's
  * weekly pass), `daily` the probes the catalogue marks `daily` and no judgment.

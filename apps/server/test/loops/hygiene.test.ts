@@ -244,6 +244,10 @@ interface Extra {
   commits?: number | null
   /** the scripted fix of the checker; absent: the checker has none */
   fix?: HygieneChecker['fix']
+  /** the commit each checkout is at, in the order they are made (the last repeats); absent: one commit throughout */
+  refs?: string[]
+  /** what a sweep reports once the first has run: the findings and runs of a second reading of `only` probes */
+  again?: { findings: ProbeFinding[]; runs: ProbeRun[] }
 }
 
 function world(
@@ -276,11 +280,15 @@ function world(
   } as unknown as LoopReads
   const steps: LifecycleStep[] = []
   const scopes: (Scope | undefined)[] = []
+  const onlys: (readonly Probe[] | undefined)[] = []
+  let made = 0
   const checker: HygieneChecker = {
-    withCheckout: async (repo, _ref, use) =>
-      broken.has(repo)
-        ? err(portError('gone', 'fetch failed'))
-        : ok(await use({ path: '/tmp/x', ref: 'abcdef1234abcdef', source: '/tmp/src' })),
+    withCheckout: async (repo, _ref, use) => {
+      if (broken.has(repo)) return err(portError('gone', 'fetch failed'))
+      const refs = extra.refs ?? ['abcdef1234abcdef']
+      const ref = refs[Math.min(made++, refs.length - 1)] ?? 'abcdef1234abcdef'
+      return ok(await use({ path: '/tmp/x', ref, source: '/tmp/src' }))
+    },
     commitsSince: async () => extra.commits ?? null,
     ...(extra.fix ? { fix: extra.fix } : {}),
     sweep: async (co, options) => {
@@ -288,11 +296,13 @@ function world(
       sweeps.push(co.ref)
       skips.push(options?.skipCheck)
       probes.push(options?.probes)
+      onlys.push(options?.only)
+      const second = options?.only && extra.again
       return {
         ref: co.ref,
         scope: options?.scope ?? 'full',
-        runs: extra.runs ?? [],
-        findings: extra.findings ?? [],
+        runs: (second ? extra.again?.runs : extra.runs) ?? [],
+        findings: (second ? extra.again?.findings : extra.findings) ?? [],
         stale: [],
         slop: [],
       }
@@ -336,6 +346,7 @@ function world(
     sweeps,
     skips,
     probes,
+    onlys,
     recorded,
     filedBodies,
     advance: (ms: number) => (at = new Date(at.getTime() + ms)),
@@ -774,4 +785,85 @@ test('a deferred fix does not reopen the closed Issue of its key', async () => {
   await hygienePass({ ...w.deps, fixes: true })
   expect(w.steps).toEqual([])
   expect(w.filedBodies).toEqual([])
+})
+
+// ---- read again before filing ----------------------------------------------------------------------------------------------
+
+const imports = finding('agentsmd', 'agentsmd:imports', 1)
+const importsRun = (outcome: ProbeRun['outcome']): ProbeRun => ({
+  probe: 'agentsmd',
+  outcome,
+  detail: 'one AGENTS.md',
+  covers: 'agentsmd',
+})
+
+test('a default branch that moved during the sweep: the file probes are read again at the new head and a finding it no longer raises is not filed', async () => {
+  const w = world(['a'], new Set(), undefined, {
+    findings: [imports],
+    runs: [importsRun('found')],
+    refs: ['aaaaaaa1', 'bbbbbbb2'],
+    again: { findings: [], runs: [importsRun('clean')] },
+  })
+  const pass = await hygienePass(w.deps)
+  expect(pass).toMatchObject({ ok: true, value: { due: true, filedNow: 0 } })
+  expect(w.filedBodies).toEqual([])
+  expect(w.onlys).toEqual([undefined, ['agentsmd']])
+  const run = w.rows[0]?.report.runs.find((r) => r.probe === 'agentsmd')
+  expect(run).toMatchObject({ outcome: 'clean' })
+  expect(run?.detail).toContain('read again at bbbbbbb before filing')
+  expect(w.rows[0]?.report.findings).toEqual([])
+})
+
+test('a finding the new head still raises is filed once, and a default branch that did not move reads nothing again', async () => {
+  const moved = world(['a'], new Set(), undefined, {
+    findings: [imports],
+    runs: [importsRun('found')],
+    refs: ['aaaaaaa1', 'bbbbbbb2'],
+    again: { findings: [imports], runs: [importsRun('found')] },
+  })
+  await hygienePass(moved.deps)
+  expect(moved.filedBodies).toHaveLength(1)
+  expect(moved.rows[0]?.report.runs.find((r) => r.probe === 'agentsmd')?.detail).toBe('one AGENTS.md')
+  const still = world(['a'], new Set(), undefined, { findings: [imports], runs: [importsRun('found')] })
+  await hygienePass(still.deps)
+  expect(still.filedBodies).toHaveLength(1)
+  expect(still.onlys).toEqual([undefined])
+})
+
+test('a second reading that could not run (a failed probe) keeps the first: the finding is filed, nothing heals', async () => {
+  const w = world(['a'], new Set(), undefined, {
+    findings: [imports],
+    runs: [importsRun('found')],
+    refs: ['aaaaaaa1', 'bbbbbbb2'],
+    again: { findings: [], runs: [importsRun('failed')] },
+  })
+  await hygienePass(w.deps)
+  expect(w.filedBodies).toHaveLength(1)
+  expect(w.rows[0]?.report.runs.find((r) => r.probe === 'agentsmd')).toMatchObject({ outcome: 'found' })
+})
+
+test("a re-read keeps the note a scripted fix put on the finding's plan", async () => {
+  const fixed = { ...finding('stale', 'stale:branches', 2), plan: ['A scripted fix ran and the probe is still red'] }
+  const w = world(['a'], new Set(), undefined, {
+    findings: [fixed],
+    runs: [{ probe: 'stale', outcome: 'found', detail: 'two', covers: 'stale' }],
+    refs: ['aaaaaaa1', 'bbbbbbb2'],
+    again: {
+      findings: [finding('stale', 'stale:branches', 2)],
+      runs: [{ probe: 'stale', outcome: 'found', detail: 'two', covers: 'stale' }],
+    },
+  })
+  await hygienePass(w.deps)
+  expect(w.filedBodies).toHaveLength(1)
+  expect(w.rows[0]?.report.findings[0]?.plan).toEqual(['A scripted fix ran and the probe is still red'])
+})
+
+test('only the probes that read files are read again: a red check or a deps refresh is filed as swept', async () => {
+  const w = world(['a'], new Set(), undefined, {
+    findings: [finding('check', 'check', 1), finding('deps', 'deps', 3)],
+    refs: ['aaaaaaa1', 'bbbbbbb2'],
+  })
+  await hygienePass(w.deps)
+  expect(w.onlys).toEqual([undefined])
+  expect(w.filedBodies).toHaveLength(2)
 })
