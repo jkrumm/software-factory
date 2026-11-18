@@ -656,6 +656,7 @@ describe('links probe', () => {
       'docs/sub/x.md': '# x',
       'docs/my file.md': '# m',
       'docs/research/r.md': '[archived](nope.md)',
+      'docs/history/h.md': '[archived](nope.md)',
       'README.md': '[fine](docs/a.md)',
     })
     const report = await sweep(name)
