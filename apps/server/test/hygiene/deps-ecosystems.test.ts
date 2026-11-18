@@ -72,10 +72,23 @@ describe('parsers', () => {
       { name: 'serde', current: '1.0' },
       { name: 'tokio', current: '1.30' },
       { name: 'real', current: '2' },
-      { name: 'criterion', current: '0.5' },
+      { name: 'criterion', current: '0.5', dev: true },
       { name: 'libc', current: '0.2' },
     ])
     expect(cargoDependencies('not = [toml')).toEqual([])
+  })
+
+  test('python: dependency groups, Poetry groups and development requirements files are dev', () => {
+    const toml = `[project]\ndependencies = ["requests>=2.30"]\n[dependency-groups]\ndev = ["pytest>=8.0"]\n[tool.poetry.group.lint.dependencies]\nruff = "^0.5"\n`
+    expect(pythonDependencies(toml)).toEqual([
+      { name: 'requests', current: '2.30' },
+      { name: 'pytest', current: '8.0', dev: true },
+      { name: 'ruff', current: '0.5', dev: true },
+    ])
+    expect(pythonDependencies('pytest>=8\n', 'requirements-dev.txt')).toEqual([
+      { name: 'pytest', current: '8', dev: true },
+    ])
+    expect(pythonDependencies('flask>=2\n', 'requirements.txt')).toEqual([{ name: 'flask', current: '2' }])
   })
 
   test('python', () => {
@@ -187,13 +200,16 @@ describe('depsProbe', () => {
     expect(out.outcome).toBe('found')
     expect(out.findings.map((f) => f.key).sort()).toEqual(['deps:actions', 'deps:cargo', 'deps:docker', 'deps:python'])
     const cargo = out.findings.find((f) => f.key === 'deps:cargo')
-    expect(cargo?.title).toBe('Hygiene: outdated Cargo dependencies')
     expect(cargo?.lines).toEqual(['rand 0.8 -> 0.9.2 (minor)'])
+    expect(cargo?.rows).toMatchObject([{ ecosystem: 'cargo', name: 'rand', size: 'minor', dev: false }])
+    // a workflow's actions run in CI, never in the product: they are tooling
+    expect(out.findings.find((f) => f.key === 'deps:actions')?.rows?.map((row) => row.dev)).toEqual([true])
+    expect(out.findings.find((f) => f.key === 'deps:docker')?.rows?.map((row) => row.dev)).toEqual([false])
     expect(out.detail).toContain('1 not looked up')
     expect(out.findings.find((f) => f.key === 'deps:docker')?.lines).toEqual(['node 20-alpine -> 24-alpine (major)'])
   })
 
-  test('a Docker upgrade inside its cooldown names the day it opens', async () => {
+  test('a row carries the day its latest version was published, for the refresh to plan the cooldown', async () => {
     const dir = repo({ 'compose.yaml': 'services:\n  db:\n    image: mariadb:11.4\n' })
     const out = await probeWithDates(
       defaultTools(),
@@ -201,10 +217,17 @@ describe('depsProbe', () => {
       lookup({ 'docker:mariadb': '13.0' }),
       async ({ ecosystem, version }) =>
         ecosystem === 'docker' && version === '13.0' ? new Date('2026-11-12') : undefined,
-      new Date('2026-11-17'),
     )
-    const plan = out.findings[0]?.plan ?? []
-    expect(plan.some((line) => line.includes('until 2026-11-26 (14-day cooldown): mariadb 11.4 -> 13.0'))).toBe(true)
+    expect(out.findings[0]?.rows).toMatchObject([
+      { name: 'mariadb', latest: '13.0', size: 'major', releasedAt: new Date('2026-11-12') },
+    ])
+  })
+
+  test('a found run with a look-up that failed leaves the key unjudged: it is no green verdict', async () => {
+    const dir = repo({ 'Cargo.toml': '[dependencies]\nserde = "1.0"\nrand = "0.8"\n' })
+    const out = await depsProbe(defaultTools(), dir, lookup({ 'cargo:serde': '2.0.0' }, ['rand']))
+    expect(out.outcome).toBe('found')
+    expect(out.unjudged).toEqual(['deps'])
   })
 
   test('green', async () => {
@@ -223,7 +246,7 @@ describe('depsProbe', () => {
       lookup({ 'cargo:serde': '1.0.229', 'docker:node': '20-alpine' }, ['rand']),
     )
     expect(partial.outcome).toBe('clean')
-    expect(partial.unjudged).toEqual(['deps:cargo'])
+    expect(partial.unjudged).toEqual(['deps'])
     const whole = await depsProbe(
       defaultTools(),
       dir,

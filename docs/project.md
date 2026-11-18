@@ -94,7 +94,9 @@ factory never edits another repo's file. The server also serves the schema it pa
   head. One rule is enough: the factory reads only whether any rule says `pr`.
 - **`hygiene`**: the weekly pass runs every built-in probe and the repo's `make check`. Switch one off only with a
   reason (`skip: [{ probe: browser, reason: … }]`, or `check: false` with `reason` when `make check` needs a lab this host
-  lacks); add the repo's own read-only checks as `probes: [{ name, target }]`, each a Makefile target.
+  lacks); add the repo's own read-only checks as `probes: [{ name, target }]`, each a Makefile target. The dependency
+  refresh's bar and the days after which a repo is idle have defaults (`docs/hygiene.md`); `deps` and `idleAfterDays`
+  change them for one repo, with a `reason`.
 - **`doctor`**: `make doctor` when the repo needs something on the host (a toolchain, a simulator, a mounted volume)
   that can go missing. While it is red no lead of the repo is admitted, so it must be read-only and take seconds.
 - **`signals`**: `github` brings the repo's GitHub issues in (the label, and every issue `author` opens after `since`),
@@ -168,7 +170,11 @@ list's entry, `<name>` a map's key.
 | `doctor` | string or null | `null` | admission (apps/server/src/app/capacity-admit.ts) and the hygiene loop (apps/server/src/app/loops/hygiene.ts) | `make doctor`: a read-only command of seconds that exits 0 when this host can run the project, else non-zero with one line per missing prerequisite and its fix. Red keeps every lead of the repo from being admitted and the hygiene `check` probe from running |
 | `hygiene` | object | `{"check":true,"skip":[],"probes":[]}` | the hygiene loop (apps/server/src/app/loops/hygiene.ts) | what the weekly hygiene pass runs on the repo |
 | `hygiene.check` | boolean | `true` | the hygiene loop (apps/server/src/app/loops/hygiene.ts) | `false`: the repo's `make check` needs a lab the factory host does not have, so the weekly pass skips its `check` probe (with `reason`) |
-| `hygiene.reason` | string | — | the hygiene loop (apps/server/src/app/loops/hygiene.ts) | why `check` is false; required then |
+| `hygiene.reason` | string | — | the hygiene loop (apps/server/src/app/loops/hygiene.ts) | why `check` is false, or why `idleAfterDays` or `deps` depart from the defaults; required then |
+| `hygiene.idleAfterDays` | integer 0–3650 | — | the hygiene loop (apps/server/src/app/loops/hygiene.ts) | days without a commit on the default branch after which the repo is idle: its `deps` refresh and document judgment run monthly instead of weekly (default 30); 0 is never idle; needs `reason` |
+| `hygiene.deps` | object | — | the hygiene loop (apps/server/src/app/loops/hygiene.ts) | the bar the `deps` refresh must clear before it is filed; a key left out keeps its default |
+| `hygiene.deps.runtimeStaleDays` | integer 1–365 | — | the hygiene loop (apps/server/src/app/loops/hygiene.ts) | a runtime dependency a minor or more behind whose latest version is at least this many days old files the `deps` refresh (default 30); needs `reason` |
+| `hygiene.deps.behindRows` | integer 1–1000 | — | the hygiene loop (apps/server/src/app/loops/hygiene.ts) | this many dependencies behind in all (after their cooldown, patches and dev tools included) file the `deps` refresh (default 10); needs `reason` |
 | `hygiene.skip` | list of object | `[]` | the hygiene loop (apps/server/src/app/loops/hygiene.ts) | built-in probes the repo opts out of, each with its reason (advisories, links, retired, project, deps, ci, agentsmd, readme, stale, deadcode, cochange, runrules, browser, context) |
 | `hygiene.skip[].probe` | `advisories`, `links`, `retired`, `project`, `deps`, `ci`, `agentsmd`, `readme`, `stale`, `deadcode`, `cochange`, `runrules`, `browser`, `context` | required | the hygiene loop (apps/server/src/app/loops/hygiene.ts) | the built-in probe switched off |
 | `hygiene.skip[].reason` | string | required | the hygiene loop (apps/server/src/app/loops/hygiene.ts) | why: a probe is never switched off without one; the pass shows it |

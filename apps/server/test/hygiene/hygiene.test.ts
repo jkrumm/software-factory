@@ -60,7 +60,7 @@ function commit(work: string, files: Record<string, string>, message = 'c', date
 }
 
 /** A repo named `repoN` under the allowed root whose origin is a bare repo next to it. */
-function makeRepo(files: Record<string, string>): { name: string; work: string } {
+function makeRepo(files: Record<string, string>, date?: string): { name: string; work: string } {
   const name = `repo${++counter}`
   const origin = join(base, 'origins', `${name}.git`)
   const work = join(base, 'repos', name)
@@ -69,7 +69,7 @@ function makeRepo(files: Record<string, string>): { name: string; work: string }
   git(origin, ['init', '-q', '--bare', '-b', 'master'])
   git(work, ['init', '-q', '-b', 'master'])
   git(work, ['remote', 'add', 'origin', origin])
-  commit(work, files, 'init')
+  commit(work, files, 'init', date)
   git(work, ['push', '-q', 'origin', 'master'])
   git(work, ['remote', 'set-head', 'origin', 'master'])
   return { name, work }
@@ -79,14 +79,15 @@ function push(work: string): void {
   git(work, ['push', '-q', '-f', 'origin', 'master'])
 }
 
-/** A `bun` that answers `install` and `outdated` from files in `fake` and runs everything else on the real bun. */
-function fakeBun(table: string, installExit = 0): string {
+/** A `bun` that answers `install`, `outdated` and `audit` from files in `fake` and runs everything else on the real bun. */
+function fakeBun(table: string, installExit = 0, audit = '{}'): string {
   const dir = mkdtempSync(join(fake, 'bun-'))
   writeFileSync(join(dir, 'outdated.txt'), table)
+  writeFileSync(join(dir, 'audit.txt'), audit)
   const script = join(dir, 'bun')
   writeFileSync(
     script,
-    `#!/bin/sh\ncase "$1" in\n  outdated) cat "${dir}/outdated.txt" ;;\n  install) exit ${installExit} ;;\n  *) exec "${process.execPath}" "$@" ;;\nesac\n`,
+    `#!/bin/sh\ncase "$1" in\n  outdated) cat "${dir}/outdated.txt" ;;\n  audit) cat "${dir}/audit.txt" ;;\n  install) exit ${installExit} ;;\n  *) exec "${process.execPath}" "$@" ;;\nesac\n`,
   )
   chmodSync(script, 0o755)
   return script
@@ -110,12 +111,16 @@ async function sweep(
     skipCheck?: string
     probes?: DeclaredProbe[]
     skip?: SkippedProbe[]
-    scope?: 'full' | 'daily'
+    scope?: 'full' | 'steady' | 'daily'
+    deps?: { runtimeStaleDays: number; behindRows: number }
+    idleAfterDays?: number
   } = {},
 ): Promise<SweepReport> {
-  const { skipCheck, probes, skip, scope, ...tools } = options
+  const { skipCheck, probes, skip, scope, deps, idleAfterDays, ...tools } = options
   const c = checker(tools)
-  const result = await c.withCheckout(name, null, (checkout) => c.sweep(checkout, { skipCheck, probes, skip, scope }))
+  const result = await c.withCheckout(name, null, (checkout) =>
+    c.sweep(checkout, { skipCheck, probes, skip, scope, deps, idleAfterDays }),
+  )
   if (!result.ok) throw new Error(result.error.detail)
   return result.value
 }
@@ -749,35 +754,39 @@ Note: The * indicates that version isn't true latest due to minimum release age
 describe('deps probe', () => {
   test('parses the table: names without (dev), Latest without *', () => {
     expect(parseOutdated(TABLE)).toEqual([
-      { name: 'zod', current: '4.1.0', latest: '4.1.0', heldBack: true },
-      { name: 'oxlint', current: '1.91.0', latest: '1.92.1', heldBack: true },
-      { name: 'left-pad', current: '1.0.0', latest: '2.0.0', heldBack: false },
-      { name: 'typescript', current: '5.8.0', latest: '5.9.1', heldBack: false },
-      { name: 'hono', current: '4.2.3', latest: '4.2.9', heldBack: false },
+      { name: 'zod', current: '4.1.0', latest: '4.1.0', heldBack: true, dev: false },
+      { name: 'oxlint', current: '1.91.0', latest: '1.92.1', heldBack: true, dev: true },
+      { name: 'left-pad', current: '1.0.0', latest: '2.0.0', heldBack: false, dev: false },
+      { name: 'typescript', current: '5.8.0', latest: '5.9.1', heldBack: false, dev: true },
+      { name: 'hono', current: '4.2.3', latest: '4.2.9', heldBack: false, dev: false },
     ])
     expect(severity('1.0.0', '2.0.0')).toBe('major')
     expect(severity('5.8.0', '5.9.1')).toBe('minor')
     expect(severity('4.2.3', '4.2.9')).toBe('patch')
   })
 
-  test('one finding, major first, held back noted; clean; skipped; failed', async () => {
+  test('one finding, runtime first, held back left out; clean; skipped; failed', async () => {
     const found = await sweep(makeRepo({ 'package.json': '{}' }).name, { bun: fakeBun(TABLE) })
     expect(run(found, 'deps')?.outcome).toBe('found')
+    expect(run(found, 'deps')?.detail).toContain('filed as one refresh: 1 runtime major behind (left-pad)')
     expect(findings(found, 'deps')).toEqual([
       {
         probe: 'deps',
         key: 'deps',
-        title: 'Hygiene: outdated dependencies',
+        title: 'Hygiene: dependency refresh',
         lines: [
-          'left-pad 1.0.0 -> 2.0.0 (major)',
-          'oxlint 1.91.0 -> 1.92.1 (minor), held back by the release-age cooldown',
-          'typescript 5.8.0 -> 5.9.1 (minor)',
-          'hono 4.2.3 -> 4.2.9 (patch)',
+          'Why filed: 1 runtime major behind (left-pad)',
+          'npm: left-pad 1.0.0 -> 2.0.0 (major)',
+          'npm: hono 4.2.3 -> 4.2.9 (patch)',
+          'npm: typescript 5.8.0 -> 5.9.1 (minor, dev)',
         ],
-        count: 4,
+        // the held oxlint is in the plan, not in the count
+        count: 3,
         plan: expect.any(Array),
       },
     ])
+    // what the sweep stores holds no rows: they are folded into the finding
+    expect(JSON.stringify(found)).not.toContain('"rows"')
 
     const tidy = await sweep(makeRepo({ 'package.json': '{}' }).name, {
       bun: fakeBun('|--|\n| Package | Current | Update | Latest |\n|--|\n| zod | 1.0.0 | 1.0.0 | 1.0.0 * |\n'),
@@ -791,6 +800,115 @@ describe('deps probe', () => {
     const gated = await sweep(withGate.name, { bun: fakeBun(TABLE, 1) })
     expect(run(gated, 'check')?.outcome).toBe('failed')
     expect(findings(gated, 'check')).toEqual([])
+  })
+})
+
+const outdated = (...rows: string[]): string =>
+  `bun outdated v1.4.2\n|------|\n| Package | Current | Update | Latest |\n|------|\n${rows.join('\n')}\n|------|\n`
+const AUDIT_FIXED = JSON.stringify({
+  minimist: [
+    {
+      id: 1,
+      url: 'https://github.com/advisories/GHSA-xvch-5gv4-984h',
+      title: 't',
+      severity: 'critical',
+      vulnerable_versions: '>=1.0.0 <1.2.6',
+    },
+  ],
+})
+const AUDIT_UNFIXED = JSON.stringify({
+  picomatch: [
+    {
+      id: 2,
+      url: 'https://github.com/advisories/GHSA-fc5q-39xc-vjpf',
+      title: 't',
+      severity: 'high',
+      vulnerable_versions: '<=4.0.7',
+    },
+  ],
+})
+const LOCKED = { 'package.json': '{}', 'bun.lock': '' }
+
+describe('the dependency refresh: one finding per repo, only past the bar', () => {
+  test('a dev dependency one patch behind files nothing and the tab says why', async () => {
+    const report = await sweep(makeRepo(LOCKED).name, {
+      bun: fakeBun(outdated('| typescript (dev) | 5.8.0 | 5.8.3 | 5.8.3 |')),
+    })
+    expect(findings(report, 'deps')).toEqual([])
+    expect(run(report, 'deps')).toMatchObject({ outcome: 'clean' })
+    expect(run(report, 'deps')?.detail).toContain('below the bar, not filed: 1 of 10 behind (0 runtime)')
+  })
+
+  test('a high advisory with a fixed version files the one deps finding, and no finding of the advisories probe', async () => {
+    const report = await sweep(makeRepo(LOCKED).name, { bun: fakeBun(outdated(), 0, AUDIT_FIXED) })
+    expect(report.findings.map((f) => f.key)).toEqual(['deps'])
+    expect(report.findings[0]?.lines[0]).toBe('Why filed: 1 high or critical advisory with a fixed version (minimist)')
+    expect(report.findings[0]?.lines[1]).toBe('minimist >=1.0.0 <1.2.6: GHSA-xvch-5gv4-984h critical (fixed in 1.2.6)')
+    expect(report.findings[0]?.plan?.join('\n')).toContain('## Advisories with a fixed version')
+    expect(JSON.stringify(report)).not.toContain('"advisories":[{')
+  })
+
+  test('an advisory with no fixed version files nothing and stays named on the tab', async () => {
+    const report = await sweep(makeRepo(LOCKED).name, { bun: fakeBun(outdated(), 0, AUDIT_UNFIXED) })
+    expect(report.findings).toEqual([])
+    expect(run(report, 'advisories')?.detail).toContain(
+      'picomatch <=4.0.7: GHSA-fc5q-39xc-vjpf high (no fixed version)',
+    )
+  })
+
+  test('an advisories run that could not judge keeps a green deps from closing its Issue', async () => {
+    const report = await sweep(makeRepo(LOCKED).name, { bun: fakeBun(outdated(), 0, 'not json') })
+    expect(run(report, 'advisories')?.outcome).toBe('failed')
+    expect(run(report, 'deps')?.unjudged).toEqual(['deps'])
+  })
+
+  test("the project's own bar: ten rows by default, two when it says so", async () => {
+    const rows = outdated('| a | 1.0.0 | 1.0.1 | 1.0.1 |', '| b | 1.0.0 | 1.0.1 | 1.0.1 |')
+    const repo = makeRepo(LOCKED)
+    expect((await sweep(repo.name, { bun: fakeBun(rows) })).findings).toEqual([])
+    const lower = await sweep(repo.name, { bun: fakeBun(rows), deps: { runtimeStaleDays: 30, behindRows: 2 } })
+    expect(lower.findings[0]?.lines[0]).toBe('Why filed: 2 dependencies behind, the bar is 2')
+  })
+})
+
+describe('cadence by activity: a steady pass of an idle repo leaves the monthly probes out', () => {
+  const OLD = '2026-01-01T00:00:00Z'
+
+  test('an idle repo: no deps run, no judgment candidates, the rest as ever; the pass records when it was last committed to', async () => {
+    const report = await sweep(makeRepo({ ...LOCKED, 'docs/a.md': '# a\n' }, OLD).name, {
+      bun: fakeBun(outdated('| left-pad | 1.0.0 | 2.0.0 | 2.0.0 |')),
+      scope: 'steady',
+    })
+    expect(report.scope).toBe('steady')
+    expect(report.lastCommitAt).toBe('2026-01-01T00:00:00Z')
+    expect(run(report, 'deps')).toBeUndefined()
+    expect(run(report, 'advisories')).toBeDefined()
+    expect(run(report, 'stale')).toBeDefined()
+    expect(report.stale).toEqual([])
+  })
+
+  test('a steady pass installs the packages itself before the gate reads them', async () => {
+    const report = await sweep(makeRepo({ ...LOCKED, Makefile: 'check:\n\ttest -d node_modules\n' }, OLD).name, {
+      bun: fakeBun(outdated(), 1),
+      scope: 'steady',
+    })
+    expect(run(report, 'deps')).toBeUndefined()
+    expect(run(report, 'check')).toMatchObject({
+      outcome: 'failed',
+      detail: 'not run: bun install --frozen-lockfile failed (exit 1)',
+    })
+  })
+
+  test('a repo with a fresh commit is swept in full whatever was planned; so is one whose project says never idle', async () => {
+    const fresh = await sweep(makeRepo(LOCKED).name, { bun: fakeBun(outdated()), scope: 'steady' })
+    expect(fresh.scope).toBe('full')
+    expect(run(fresh, 'deps')).toBeDefined()
+    const never = await sweep(makeRepo(LOCKED, OLD).name, {
+      bun: fakeBun(outdated()),
+      scope: 'steady',
+      idleAfterDays: 0,
+    })
+    expect(never.scope).toBe('full')
   })
 })
 

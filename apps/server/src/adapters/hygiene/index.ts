@@ -1,8 +1,12 @@
+import { HYGIENE_DEFAULTS } from '@software-factory/contract'
+import { foldDependencies } from '../../domains/loops/dependency-refresh.ts'
 import {
   type Checkout,
   type HygieneChecker,
+  isIdle,
   PROBES,
   type Probe,
+  type ProbeFinding,
   type ProbeRun,
   runsIn,
   type SweepOptions,
@@ -21,7 +25,7 @@ import { cochangeProbe } from './probes/cochange.ts'
 import { contextProbe } from './probes/context.ts'
 import { deadcodeProbe } from './probes/deadcode.ts'
 import { declaredProbe } from './probes/declared.ts'
-import { type Released, depsProbe, registryLookup, registryReleased } from './probes/deps.ts'
+import { type Released, depsProbe, installPackages, registryLookup, registryReleased } from './probes/deps.ts'
 import { type Outcome, failed, skipped } from './probes/finding.ts'
 import { linksProbe } from './probes/links.ts'
 import { projectProbe } from './probes/project.ts'
@@ -72,7 +76,12 @@ export function createHygieneChecker(options: HygieneCheckerOptions): HygieneChe
 
   async function sweep(checkout: Checkout, options: SweepOptions = {}): Promise<SweepReport> {
     const { path } = checkout
-    const scope = options.scope ?? 'full'
+    const now = new Date()
+    const lastCommitAt = (await gitTry(tools, path, ['log', '-1', '--format=%cI', 'HEAD']))?.trim() || undefined
+    // A repo that was idle when the pass was planned but has a commit now is swept in full: the monthly probes are not skipped for it.
+    const planned = options.scope ?? 'full'
+    const scope =
+      planned === 'steady' && !isIdle({ lastCommitAt, idleAfterDays: options.idleAfterDays, now }) ? 'full' : planned
     const markdown = trackedMarkdown(tools, path)
     markdown.catch(() => {})
     const docs = markdown.then(livingDocs)
@@ -116,6 +125,9 @@ export function createHygieneChecker(options: HygieneCheckerOptions): HygieneChe
       }),
     ])
     const outcomes = new Map<Probe, Outcome>(results)
+    // A pass that reads the installed tree (`check`, `deadcode`) without the `deps` probe (a steady one) installs the packages itself, once.
+    const readsPackages = runsIn('check', scope) || runsIn('deadcode', scope)
+    const installFailure = runsIn('deps', scope) || !readsPackages ? undefined : await installPackages(tools, path)
     // After `deps`, never beside it: both install the checkout's packages, and two installs in one tree break each other.
     if (runsIn('deadcode', scope)) {
       const reason = optOut.get('deadcode')
@@ -133,9 +145,11 @@ export function createHygieneChecker(options: HygieneCheckerOptions): HygieneChe
         'check',
         options.skipCheck !== undefined
           ? skipped(`make check not run, this host cannot run the project's check: ${options.skipCheck}`)
-          : (deps?.outcome === 'failed' || deps?.unjudged?.includes('deps')) && deps.detail.startsWith('bun install')
-            ? failed(`not run: ${deps.detail}`)
-            : await guarded(() => checkProbe(tools, checkout)),
+          : installFailure !== undefined
+            ? failed(`not run: ${installFailure}`)
+            : (deps?.outcome === 'failed' || deps?.unjudged?.includes('deps')) && deps.detail.startsWith('bun install')
+              ? failed(`not run: ${deps.detail}`)
+              : await guarded(() => checkProbe(tools, checkout)),
       )
     }
 
@@ -148,7 +162,7 @@ export function createHygieneChecker(options: HygieneCheckerOptions): HygieneChe
     }
 
     const runs: ProbeRun[] = []
-    const findings = []
+    const findings: ProbeFinding[] = []
     for (const probe of PROBES) {
       const list =
         probe === 'probe'
@@ -167,7 +181,16 @@ export function createHygieneChecker(options: HygieneCheckerOptions): HygieneChe
         findings.push(...outcome.findings)
       }
     }
-    return { ref: checkout.ref, scope, runs, findings, ...read }
+    // Every ecosystem's rows and every advisory with a fix are one refresh: filed only when it clears the bar.
+    const folded = foldDependencies({ findings, runs, thresholds: options.deps ?? HYGIENE_DEFAULTS.deps, now })
+    return {
+      ref: checkout.ref,
+      scope,
+      ...(lastCommitAt ? { lastCommitAt } : {}),
+      runs: folded.runs,
+      findings: folded.findings,
+      ...read,
+    }
   }
 
   async function commitsSince(checkout: Checkout, ref: string): Promise<number | null> {

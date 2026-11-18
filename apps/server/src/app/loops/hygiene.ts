@@ -1,4 +1,4 @@
-import type { SignalRequest } from '@software-factory/contract'
+import { type DepsThresholds, HYGIENE_DEFAULTS, type SignalRequest } from '@software-factory/contract'
 import { isBusy, type LifecycleStep, planLifecycle } from '../../domains/loops/hygiene-lifecycle.ts'
 import {
   checkAnswer,
@@ -70,7 +70,13 @@ export interface HygieneDeps {
 
 export type HygienePass =
   | { due: false }
-  | { due: true; mode: 'full' | 'daily' | 'retry'; record: HygienePassRecord; filedNow: number; overNow: number }
+  | {
+      due: true
+      mode: 'full' | 'steady' | 'daily' | 'retry'
+      record: HygienePassRecord
+      filedNow: number
+      overNow: number
+    }
 
 const reasonOf = (error: IntakeError): string => ('detail' in error ? `${error.kind}: ${error.detail}` : error.kind)
 
@@ -181,6 +187,10 @@ interface Target {
   probes?: readonly DeclaredProbe[]
   /** the built-in probes the project opts out of (`hygiene.skip`) */
   skip?: readonly SkippedProbe[]
+  /** the bar the `deps` refresh must clear: the catalogue's defaults, with the project's own keys over them */
+  deps?: DepsThresholds
+  /** the project's own `hygiene.idleAfterDays`; absent is the catalogue's */
+  idleAfterDays?: number
 }
 
 /**
@@ -281,6 +291,8 @@ async function sweepPass(
       probes: target.probes,
       skip: target.skip,
       scope,
+      deps: target.deps,
+      idleAfterDays: target.idleAfterDays,
     })
     const plan = planLifecycle({
       red: report.findings,
@@ -314,10 +326,11 @@ async function sweepPass(
     for (const finding of ranked) {
       if (!file.includes(finding)) added.overBudget.push({ key: finding.key, title: finding.title })
     }
+    // the sweep promotes a steady pass to a full one when the repo has a fresh commit: what ran is what it recorded
     const judgment =
-      scope === 'full'
+      (report.scope ?? scope) === 'full'
         ? await judge(deps, gate, target, checkout, report, { probeFiled: added.filed.length, attempt: 1 }, added)
-        : skipped('a daily pass: the document judgment runs in the weekly pass')
+        : skipped(`a ${report.scope ?? scope} pass: the document judgment runs in the full pass`)
     return { report, judgment }
   })
   // A checkout that cannot be made is recorded as a sweep that ran nothing: the project is asked again after `retryMs`, and
@@ -441,6 +454,7 @@ export async function hygienePass(deps: HygieneDeps): Promise<Result<HygienePass
     dailyMs: deps.dailyMs,
     retryMs: deps.retryMs,
     allow: allowed,
+    idleAfterDays: (repo) => byText.get(repo)?.project.hygiene.idleAfterDays,
   })
   if (work.kind === 'none') return ok({ due: false })
   const project = byText.get(work.repo)
@@ -459,16 +473,31 @@ export async function hygienePass(deps: HygieneDeps): Promise<Result<HygienePass
       skipCheck,
       probes: hygiene.probes,
       skip: hygiene.skip,
+      deps: {
+        runtimeStaleDays: hygiene.deps?.runtimeStaleDays ?? HYGIENE_DEFAULTS.deps.runtimeStaleDays,
+        behindRows: hygiene.deps?.behindRows ?? HYGIENE_DEFAULTS.deps.behindRows,
+      },
+      idleAfterDays: hygiene.idleAfterDays,
     },
     now,
-    { scope: work.kind === 'daily' ? 'daily' : 'full', lastFull: work.kind === 'daily' ? work.lastFull : null },
+    {
+      scope: work.kind === 'daily' || work.kind === 'steady' ? work.kind : 'full',
+      lastFull: work.kind === 'daily' ? work.lastFull : null,
+    },
   )
 }
 
 export const hygieneSummary = (pass: HygienePass): string => {
   if (!pass.due) return 'not due'
   const { record } = pass
-  const what = pass.mode === 'retry' ? 'judged again' : pass.mode === 'daily' ? 'swept daily' : 'swept'
+  const what =
+    pass.mode === 'retry'
+      ? 'judged again'
+      : pass.mode === 'daily'
+        ? 'swept daily'
+        : pass.mode === 'steady'
+          ? 'swept steady'
+          : 'swept'
   const lifecycle = ['healed', 'noted', 'reopened', 'kept']
     .map((action) => [action, record.lifecycle.filter((entry) => entry.action === action).length] as const)
     .filter(([, count]) => count > 0)
