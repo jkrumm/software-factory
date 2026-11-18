@@ -511,9 +511,10 @@ export const readModelRoutes = (deps: ReadModelDeps | undefined, caller: (reques
           constants: deps.capacityConstants,
           epoch: deps.epoch ?? null,
         })
-        // the read token hears no work repo's name: its queued hours are summed under one
-        const shown = caller(request) === 'read' ? redactCapacityLoop(model, await loadOpenProjects(deps.sql)) : model
-        return Response.json(CapacityLoopModel.parse(shown))
+        // only the owner and the orchestrator hear a work repo's name: for anyone else its queued hours are summed under one
+        const who = caller(request)
+        if (who === 'owner' || who === 'orchestrator') return Response.json(CapacityLoopModel.parse(model))
+        return Response.json(CapacityLoopModel.parse(redactCapacityLoop(model, await loadOpenProjects(deps.sql))))
       },
       {
         query: DaysQuery,
