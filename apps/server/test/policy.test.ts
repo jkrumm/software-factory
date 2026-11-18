@@ -177,6 +177,7 @@ describe('the policy table', () => {
     expect(allowed('POST', '/v1/sessions/:session/note')).toEqual(['owner', 'orchestrator', 'agent'])
     expect(allowed('POST', '/issues/:id/note')).toEqual(['owner', 'orchestrator', 'agent'])
     expect(allowed('POST', '/issues/:id/ship')).toEqual(['owner', 'orchestrator', 'agent'])
+    expect(allowed('POST', '/v1/decisions/:id/take-default')).toEqual(['owner', 'orchestrator', 'agent'])
     // a lead answers the owner's annotations on its own Issue (the use case gates the attempt); the owner's own annotation verbs stay person-only
     expect(allowed('POST', '/v1/artifacts/:id/annotations/:annotationId/reply')).toEqual([
       'owner',

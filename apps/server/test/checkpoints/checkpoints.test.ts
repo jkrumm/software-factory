@@ -23,6 +23,7 @@ import {
   showArtifact,
   showDecision,
   submitArtifact,
+  takeDefault,
 } from '../../src/app/checkpoints.ts'
 import { type PageDeps, sendDuePages } from '../../src/app/checkpoints-pages.ts'
 import { lookAtReview, recheckReviews } from '../../src/app/checkpoints-reviews.ts'
@@ -548,6 +549,81 @@ describe('settling, in turn', () => {
     expect(await effectsOf(issueId, 'note_lead')).toBe(1)
     const again = await answerDecision(deps, { decisionId: decision.id, answer: 'pino' })
     expect(errorOf(again)).toMatchObject({ kind: 'already_answered' })
+  })
+
+  describe('the lead takes its own default', () => {
+    const withDefault = { noAnswer: { consequence: 'Console logging.', default: 'pino', waitMinutes: 1440 } }
+
+    test('the Decision is answered as the default, the Issue works again and ship is taken', async () => {
+      const issueId = await workingIssue()
+      const { decision } = await ask(issueId, withDefault)
+      const shipped: AnyIssueEvent = { kind: 'shipped', payload: { attempt: 1 }, actor: 'lead' }
+      const early = value(
+        await recordIssueEvent(deps, { issueId, key: key('test', issueId, 'ship-early'), event: shipped }),
+      )
+      expect(early.result).toBe('refused')
+
+      const taken = value(await takeDefault(deps, { decisionId: decision.id, attempt: 1 }))
+      expect(taken).toMatchObject({
+        decision: {
+          settledBy: 'default',
+          answer: 'pino',
+          source: expect.stringContaining('the lead took the default'),
+        },
+        issue: { state: 'working' },
+      })
+      expect(value(await showDecision(deps, decision.id)).steps.map((s) => [s.step, s.outcome])).toContainEqual([
+        'default',
+        'answered',
+      ])
+      expect(await eventsOf(issueId)).toEqual([
+        'filed',
+        'settled',
+        'admitted',
+        'lead_started',
+        'asked',
+        'noted',
+        'answered',
+      ])
+      expect(await effectsOf(issueId, 'note_lead')).toBe(1)
+
+      const after = value(await recordIssueEvent(deps, { issueId, key: key('test', issueId, 'ship'), event: shipped }))
+      expect(after.issue.state).toBe('watching')
+      // the pass finds nothing left to settle
+      expect(value(await settleDecision(deps, decision.id))).toMatchObject({ status: 'answered', settledBy: 'default' })
+      expect(judgeCalls).toEqual([])
+    })
+
+    test('a second call is already_answered, and no event is added', async () => {
+      const issueId = await workingIssue()
+      const { decision } = await ask(issueId, withDefault)
+      value(await takeDefault(deps, { decisionId: decision.id, attempt: 1 }))
+      expect(errorOf(await takeDefault(deps, { decisionId: decision.id, attempt: 1 }))).toMatchObject({
+        kind: 'already_answered',
+        by: 'default',
+      })
+      expect((await eventsOf(issueId)).filter((kind) => kind === 'answered')).toHaveLength(1)
+    })
+
+    test('a Decision with no default, of another attempt or raised by the steward is refused', async () => {
+      const issueId = await workingIssue()
+      const bare = await ask(issueId)
+      expect(errorOf(await takeDefault(deps, { decisionId: bare.decision.id, attempt: 1 }))).toMatchObject({
+        kind: 'invalid',
+        detail: expect.stringContaining('names no default'),
+      })
+      const other = await ask(issueId, { ...withDefault, question: 'Which formatter?' })
+      expect(errorOf(await takeDefault(deps, { decisionId: other.decision.id, attempt: 2 }))).toMatchObject({
+        kind: 'invalid',
+        detail: expect.stringContaining('attempt 1'),
+      })
+      expect(errorOf(await takeDefault(deps, { decisionId: 'decision_none' as DecisionId, attempt: 1 }))).toMatchObject(
+        {
+          kind: 'not_found',
+        },
+      )
+      expect(await eventsOf(issueId)).not.toContain('answered')
+    })
   })
 
   test('a Decision whose Issue was cancelled is withdrawn without calling anyone', async () => {

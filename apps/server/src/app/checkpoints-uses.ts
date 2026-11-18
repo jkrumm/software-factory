@@ -6,6 +6,7 @@ import {
   replyAnnotation,
   answerDecision,
   askDecision,
+  takeDefault,
   finishErrand,
   turnBackErrand,
   requestErrand,
@@ -36,6 +37,7 @@ export function checkpointUses(deps: SettleDeps & PageDeps) {
   return {
     ask: (input: Parameters<typeof askDecision>[1]) => askDecision(deps, input),
     answer: (input: Parameters<typeof answerDecision>[1]) => answerDecision(deps, input),
+    takeDefault: (input: Parameters<typeof takeDefault>[1]) => takeDefault(deps, input),
     worthAsking: (input: Parameters<typeof markWorthAsking>[1]) => markWorthAsking(deps, input),
     decision: (id: Parameters<typeof showDecision>[1]) => showDecision(deps, id),
     decisions: (filter: Parameters<typeof ledger>[1]) => ledger(deps, filter),

@@ -68,6 +68,7 @@ export const POLICY: readonly Rule[] = [
   rule('POST', '/v1/issues/:id/defer', LEAD),
   rule('POST', '/v1/issues/:id/block', LEAD),
   rule('POST', '/v1/issues/:id/ask', LEAD),
+  rule('POST', '/v1/decisions/:id/take-default', LEAD),
   rule('POST', '/v1/issues/:id/replan', LEAD),
   rule('POST', '/v1/issues/:id/artifacts', LEAD),
   rule('POST', '/v1/issues/:id/errands', LEAD),

@@ -111,6 +111,9 @@ export const DecisionReply = z
   .meta({ id: 'DecisionReply' })
 export type DecisionReply = z.infer<typeof DecisionReply>
 
+/** `decision take-default`: the lead settles its own open Decision with the default it named, once it built on it. */
+export const TakeDefaultBody = z.object({ attempt: z.number().int().min(1) }).meta({ id: 'TakeDefaultBody' })
+
 export const WorthBody = z.object({ worth: z.boolean() }).meta({ id: 'WorthBody' })
 
 export const DecisionList = z.object({ decisions: z.array(DecisionView) }).meta({ id: 'DecisionList' })
