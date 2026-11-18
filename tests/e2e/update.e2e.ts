@@ -10,7 +10,7 @@ import { chip } from './shell-support.ts'
 /**
  * The Console is current without a hard reload (Issue 1800): a build swapped under an open page takes over by itself, an
  * update that cannot be applied says so with one button, and data older than its poll interval is said to be old.
- * The clock is the page's: a minute of "idle" and of "waiting" passes in a fast-forward, the worker's install takes real time.
+ * The clock is the page's: a minute of "waiting" passes in a fast-forward, the worker's install takes real time.
  */
 const buildOf = (page: Page): Promise<string | null> =>
   chip(page)
@@ -27,7 +27,7 @@ async function openUnderClock(page: Page, url: string): Promise<string> {
   return id
 }
 
-test('a build swapped under an open page is the one on screen, with no reload by hand', async ({
+test('a build swapped under an open page is the one on screen once its tab is hidden, with no reload by hand', async ({
   page,
   consoleUrl,
 }, info) => {
@@ -38,11 +38,19 @@ test('a build swapped under an open page is the one on screen, with no reload by
     const before = await openUnderClock(page, site.url)
     const after = await site.swap(before)
     expect(after).not.toBe(before)
-    // a minute passes: the window asks for a new worker, takes it, and loads its bundle once it has sat idle
+    // a minute passes: the window asks for a new worker and takes it, and a reading tab stays on its bundle until it is hidden
     await expect
       .poll(
         async () => {
           await page.clock.fastForward(10_000).catch(() => undefined)
+          await page
+            .evaluate(
+              `(() => {
+                Object.defineProperty(document, 'visibilityState', { configurable: true, get: () => 'hidden' })
+                document.dispatchEvent(new Event('visibilitychange'))
+              })()`,
+            )
+            .catch(() => undefined)
           return buildOf(page)
         },
         { timeout: patient(60_000), intervals: [500] },
