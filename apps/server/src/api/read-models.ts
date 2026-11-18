@@ -59,7 +59,7 @@ import { readHostSamples } from '../read/host.ts'
 import { costOfIssues, readKpis } from '../read/kpis.ts'
 import { readRetro } from '../read/retro.ts'
 import { readThroughput } from '../read/throughput.ts'
-import { redactThroughput } from '../read/throughput-redact.ts'
+import { redactCapacityLoop, redactThroughput } from '../read/throughput-redact.ts'
 import { loadOpenProjects } from '../read/work.ts'
 import { readLoopYield } from '../read/loop-yield.ts'
 import { loopReads } from '../read/loops.ts'
@@ -503,18 +503,18 @@ export const readModelRoutes = (deps: ReadModelDeps | undefined, caller: (reques
     )
     .get(
       '/capacity-loop',
-      async ({ query }) => {
+      async ({ query, request }) => {
         if (!deps?.capacityConstants) return unavailable
-        return Response.json(
-          CapacityLoopModel.parse(
-            await readCapacityLoop(deps.sql, {
-              now: now(),
-              days: days(query),
-              constants: deps.capacityConstants,
-              epoch: deps.epoch ?? null,
-            }),
-          ),
-        )
+        const model = await readCapacityLoop(deps.sql, {
+          now: now(),
+          days: days(query),
+          constants: deps.capacityConstants,
+          epoch: deps.epoch ?? null,
+        })
+        // only the owner and the orchestrator hear a work repo's name: for anyone else its queued hours are summed under one
+        const who = caller(request)
+        if (who === 'owner' || who === 'orchestrator') return Response.json(CapacityLoopModel.parse(model))
+        return Response.json(CapacityLoopModel.parse(redactCapacityLoop(model, await loadOpenProjects(deps.sql))))
       },
       {
         query: DaysQuery,

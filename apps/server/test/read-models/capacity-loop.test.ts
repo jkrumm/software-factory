@@ -4,6 +4,7 @@ import { startTestCluster, type TestCluster } from '@software-factory/tests/pg'
 import type { SQL } from 'bun'
 import { loadMigrations, migrate } from '../../src/adapters/postgres/migrate.ts'
 import { readCapacityLoop } from '../../src/read/capacity-loop.ts'
+import { redactCapacityLoop } from '../../src/read/throughput-redact.ts'
 
 /**
  * The capacity-loop figures against plain SQL written here in another shape (scalar subqueries, FILTER, generate_series,
@@ -88,18 +89,19 @@ async function seed() {
   // queue intervals: [issue, kind, from, to (null: open)]. 10:00 memory; 10:02 memory and claim together; 11-04 08:00 only an
   // `after` edge (chain), then 08:01 the memory fit beside it; issue_3 waits behind a drained queue at 10:02 beside the other two;
   // issue_5 has been waiting for an account cap since 11-06 12:00
-  const waits: Array<[string, string, Date, Date | null]> = [
-    ['issue_5', 'memory', t('11-02T10:00'), t('11-02T10:03')],
-    ['issue_1', 'claim', t('11-02T10:02'), t('11-02T10:04')],
-    ['issue_3', 'drain', t('11-02T10:02'), t('11-02T10:03')],
-    ['issue_2', 'chain', t('11-04T08:00'), t('11-04T08:02')],
-    ['issue_5', 'memory_fit', t('11-04T08:01'), t('11-04T08:02')],
-    ['issue_5', 'cap', t('11-06T12:00'), null],
-    ['issue_4', 'claim', t('10-30T09:00'), t('10-30T10:00')], // before the window
+  const waits: Array<[string, string, string, Date, Date | null]> = [
+    ['issue_5', 'app', 'memory', t('11-02T10:00'), t('11-02T10:03')],
+    ['issue_1', 'api', 'claim', t('11-02T10:02'), t('11-02T10:04')],
+    ['issue_3', 'app', 'drain', t('11-02T10:02'), t('11-02T10:03')],
+    ['issue_2', 'app', 'chain', t('11-04T08:00'), t('11-04T08:02')],
+    ['issue_5', 'web', 'memory_fit', t('11-04T08:01'), t('11-04T08:02')],
+    ['issue_5', 'web', 'cap', t('11-06T12:00'), null],
+    ['issue_4', 'api', 'cap', t('11-03T12:00'), t('11-03T12:01')], // a second repo behind the same kind, in a minute with no sample
+    ['issue_4', 'api', 'claim', t('10-30T09:00'), t('10-30T10:00')], // before the window
   ]
-  for (const [issue, kind, from, to] of waits)
+  for (const [issue, project, kind, from, to] of waits)
     await sql`INSERT INTO factory.queue_intervals (issue_id, project, kind, message, from_at, to_at)
-      VALUES (${issue}, 'app', ${kind}, 'because', ${from}, ${to})`
+      VALUES (${issue}, ${project}, ${kind}, 'because', ${from}, ${to})`
 
   // test-slot steps: [at, name, peak, duration, wait]
   const steps: Array<[Date, string, number | null, number, number]> = [
@@ -237,12 +239,51 @@ describe('GET /v1/capacity-loop figures', () => {
     // seat-hours split among the kinds queued in the minute, the owner's kinds (an `after` edge) only when nothing else waits
     const hours = (minutes: number) => minutes / 60
     const wanted = [
-      { kind: 'cap', queuedHours: 24, issues: 1, idleSeatHours: 0 },
-      { kind: 'memory', queuedHours: hours(3), issues: 1, idleSeatHours: hours(3) },
-      { kind: 'chain', queuedHours: hours(2), issues: 1, idleSeatHours: hours(2) },
-      { kind: 'claim', queuedHours: hours(2), issues: 1, idleSeatHours: hours(1) },
-      { kind: 'memory_fit', queuedHours: hours(1), issues: 1, idleSeatHours: hours(6) },
-      { kind: 'drain', queuedHours: hours(1), issues: 1, idleSeatHours: hours(1) },
+      {
+        kind: 'cap',
+        queuedHours: 24 + hours(1),
+        issues: 2,
+        idleSeatHours: 0,
+        byRepo: [
+          { repo: 'web', queuedHours: 24, issues: 1 },
+          { repo: 'api', queuedHours: hours(1), issues: 1 },
+        ],
+      },
+      {
+        kind: 'memory',
+        queuedHours: hours(3),
+        issues: 1,
+        idleSeatHours: hours(3),
+        byRepo: [{ repo: 'app', queuedHours: hours(3), issues: 1 }],
+      },
+      {
+        kind: 'chain',
+        queuedHours: hours(2),
+        issues: 1,
+        idleSeatHours: hours(2),
+        byRepo: [{ repo: 'app', queuedHours: hours(2), issues: 1 }],
+      },
+      {
+        kind: 'claim',
+        queuedHours: hours(2),
+        issues: 1,
+        idleSeatHours: hours(1),
+        byRepo: [{ repo: 'api', queuedHours: hours(2), issues: 1 }],
+      },
+      {
+        kind: 'memory_fit',
+        queuedHours: hours(1),
+        issues: 1,
+        idleSeatHours: hours(6),
+        byRepo: [{ repo: 'web', queuedHours: hours(1), issues: 1 }],
+      },
+      {
+        kind: 'drain',
+        queuedHours: hours(1),
+        issues: 1,
+        idleSeatHours: hours(1),
+        byRepo: [{ repo: 'app', queuedHours: hours(1), issues: 1 }],
+      },
     ]
     expect(model.queueByReason.map((r) => r.kind)).toEqual(wanted.map((r) => r.kind))
     wanted.forEach((w, i) => {
@@ -250,6 +291,13 @@ describe('GET /v1/capacity-loop figures', () => {
       expect(got?.issues).toBe(w.issues)
       expect(got?.queuedHours).toBeCloseTo(w.queuedHours, 9)
       expect(got?.idleSeatHours).toBeCloseTo(w.idleSeatHours, 9)
+      expect(got?.byRepo.map((r) => r.repo)).toEqual(w.byRepo.map((r) => r.repo))
+      w.byRepo.forEach((wr, j) => {
+        expect(got?.byRepo[j]?.issues).toBe(wr.issues)
+        expect(got?.byRepo[j]?.queuedHours).toBeCloseTo(wr.queuedHours, 9)
+      })
+      // the repos split the kind's queued hours without loss
+      expect(got?.byRepo.reduce((sum, r) => sum + r.queuedHours, 0)).toBeCloseTo(w.queuedHours, 9)
     })
     // the split loses nothing: every idle seat-hour is in one kind
     expect(model.queueByReason.reduce((sum, r) => sum + r.idleSeatHours, 0)).toBeCloseTo(model.idleSeatHours.total, 9)
@@ -369,6 +417,19 @@ describe('GET /v1/capacity-loop figures', () => {
     expect(model.reaped.newest.map((r) => r.comm)).toEqual(['proc7', 'proc6', 'proc5', 'proc4', 'proc2'])
 
     expect(model.constants).toEqual(constants)
+  })
+
+  test('the read token sees the work repos of a reason summed under one name', async () => {
+    const model = CapacityLoopModel.parse(await readCapacityLoop(sql, { now: NOW, days: DAYS, constants }))
+    // only `app` is an open project: `api` and `web` are work repos
+    const shown = CapacityLoopModel.parse(redactCapacityLoop(model, [{ name: 'app', repo: '/src/app' }]))
+    const cap = shown.queueByReason.find((r) => r.kind === 'cap')
+    expect(cap?.byRepo.map((r) => [r.repo, r.issues])).toEqual([['private', 2]])
+    expect(cap?.byRepo[0]?.queuedHours).toBeCloseTo(cap?.queuedHours ?? Number.NaN, 9)
+    expect(shown.queueByReason.find((r) => r.kind === 'memory')?.byRepo.map((r) => r.repo)).toEqual(['app'])
+    expect(JSON.stringify(shown.queueByReason)).not.toMatch(/"(api|web)"/)
+    // every figure but the names is the model's own
+    expect(shown.queueByReason.map((r) => r.queuedHours)).toEqual(model.queueByReason.map((r) => r.queuedHours))
   })
 
   test('an empty database answers zeros and nulls, never an error', async () => {

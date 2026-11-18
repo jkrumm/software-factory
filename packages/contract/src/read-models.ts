@@ -1332,6 +1332,11 @@ export const SlotAimMinutes = z
   })
   .meta({ id: 'SlotAimMinutes' })
 
+/** One repo's share of a reason kind's queued hours: the project name its Issues are stored under. */
+export const CapacityReasonRepo = z
+  .strictObject({ repo: z.string(), queuedHours: z.number(), issues: z.number().int() })
+  .meta({ id: 'CapacityReasonRepo' })
+
 /** One reason kind the queue waited for in the window. */
 export const CapacityReason = z
   .strictObject({
@@ -1339,6 +1344,8 @@ export const CapacityReason = z
     queuedHours: z.number(),
     issues: z.number().int(),
     idleSeatHours: z.number(),
+    /** `queuedHours` and `issues` split by the repo the Issues were queued in, most hours first; the idle seat-hours are not split */
+    byRepo: z.array(CapacityReasonRepo),
   })
   .meta({ id: 'CapacityReason' })
 
@@ -1389,7 +1396,8 @@ export const CapacityLoopModel = z
      * when an Issue was queued for it. A minute's idle seat-hours are split equally among the distinct kinds queued in it,
      * leaving out the kinds that are no cost of the factory (an `after` edge, a Spec at the owner) unless only those wait;
      * `unrecorded` is a minute no interval covers. The kinds are the queue's (`memory` is the host's reading, `memory_fit`
-     * the learned cost of a repo's lead against the free memory).
+     * the learned cost of a repo's lead against the free memory). `byRepo` names the repos behind a kind's queued hours
+     * (which repo's `leads: N` binds a `claim`).
      */
     queueByReason: z.array(CapacityReason),
     /**

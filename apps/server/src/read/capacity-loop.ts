@@ -119,6 +119,25 @@ export async function readCapacityLoop(
         sum(extract(epoch FROM least(coalesce(to_at, ${w.to}), ${w.to}) - greatest(from_at, ${w.from})))::float8 / 3600 AS hours
       FROM factory.queue_intervals
       WHERE from_at < ${w.to} AND coalesce(to_at, ${w.to}) > ${w.from} GROUP BY kind`
+    const repoQueuedRows: unknown[] = await tx`
+      SELECT kind, project AS repo, count(DISTINCT issue_id) AS issues,
+        sum(extract(epoch FROM least(coalesce(to_at, ${w.to}), ${w.to}) - greatest(from_at, ${w.from})))::float8 / 3600 AS hours
+      FROM factory.queue_intervals
+      WHERE from_at < ${w.to} AND coalesce(to_at, ${w.to}) > ${w.from} GROUP BY kind, project`
+    const RepoQueued = z.object({
+      kind: z.string(),
+      repo: z.string(),
+      issues: z.coerce.number().int(),
+      hours: z.coerce.number().nullable(),
+    })
+    const reposByKind = new Map<string, Array<{ repo: string; queuedHours: number; issues: number }>>()
+    for (const raw of repoQueuedRows) {
+      const r = RepoQueued.parse(raw)
+      reposByKind.set(r.kind, [
+        ...(reposByKind.get(r.kind) ?? []),
+        { repo: r.repo, queuedHours: r.hours ?? 0, issues: r.issues },
+      ])
+    }
     // The idle samples are read twice from the table (not from one CTE): a CTE used twice is materialized, and the join from
     // each interval to the samples it covers (the primary key's range scan) is then a nested loop over every pair, 7,500 samples
     // by 19,000 intervals took 6 s (the route's p95 of 2026-11-18). The samples with no interval left-join back as 'unrecorded'.
@@ -156,6 +175,9 @@ export async function readCapacityLoop(
         queuedHours: queuedByKind.get(kind)?.hours ?? 0,
         issues: queuedByKind.get(kind)?.issues ?? 0,
         idleSeatHours: idleByKind.get(kind) ?? 0,
+        byRepo: (reposByKind.get(kind) ?? []).toSorted(
+          (a, b) => b.queuedHours - a.queuedHours || a.repo.localeCompare(b.repo),
+        ),
       }))
       .toSorted(
         (a, b) => b.queuedHours - a.queuedHours || b.idleSeatHours - a.idleSeatHours || a.kind.localeCompare(b.kind),
