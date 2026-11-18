@@ -413,6 +413,7 @@ describe('the brief', () => {
     expect(without).toContain('## Merge guard in this repo')
     expect(without).toContain('has no `make merge-guard` target')
     expect(without).toContain('do not look for one')
+    expect(without).toContain('gated by the local `make check` rc=0')
     expect(without.startsWith(STANDING_ORDERS)).toBe(true)
     expect(buildBrief({ ...input, mergeGuard: true })).toContain('has a `make merge-guard` target')
     expect(buildBrief({ ...input, mergeGuard: null })).toBe(buildBrief(input))
@@ -438,6 +439,8 @@ describe('the brief', () => {
     expect(STANDING_ORDERS).toContain("the repo's guard has `--wait`")
     expect(STANDING_ORDERS).toContain('a head with no finished green CI run')
     expect(STANDING_ORDERS).toContain('gh pr checks <n>')
+    expect(STANDING_ORDERS).toContain('every workflow is path-filtered; make check rc=0 on <sha>')
+    expect(STANDING_ORDERS).toContain('never merge on it')
   })
 
   test('the watch fallback first waits for the pushed head to have a run', () => {
