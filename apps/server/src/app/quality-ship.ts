@@ -202,14 +202,15 @@ async function judge(
   }
   // The Watch would fail on a landed commit the deployed version lacks: say so now, with the missing step. Only a version
   // that is readable and lacks the commit refuses; one that cannot be read is the Watch's to report, never the ship's.
-  if (landedAt && verdict.commits.deploys && project.ok && project.value.deployMode === 'make') {
+  const deployedAt = verdict.commits.landedAt
+  if (deployedAt && verdict.commits.deploys && project.ok && project.value.deployMode === 'make') {
     const ran = await deps.proof.run(
       {
         repo,
         makeVerify: false,
         probes: [],
         version: {
-          landedAt,
+          landedAt: deployedAt,
           ...(project.value.deployPaths ? { deployPaths: project.value.deployPaths } : {}),
         },
       },
