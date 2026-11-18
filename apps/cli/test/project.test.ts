@@ -179,6 +179,14 @@ describe('factory project check', () => {
     expect(out).toContain('records no reason')
   })
 
+  test('a leads for a serialised resource that is not the merge window passes', async () => {
+    const file = await repo('device', {
+      'project.yaml': 'apiVersion: factory/v2\nname: device\nleads: 2 # tests serialise on one hardware device\n',
+    })
+    const { out } = await cli(['project', 'check', file])
+    expect(out).not.toContain('already models')
+  })
+
   test('a leads for a resource the factory does not model passes', async () => {
     const file = await repo('shared-licence', {
       'project.yaml':

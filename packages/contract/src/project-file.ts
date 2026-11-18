@@ -493,7 +493,7 @@ const CAP_REASONS: readonly { reason: Exclude<CapReason, 'other'>; pattern: RegE
   },
   {
     reason: 'merge',
-    pattern: /merge[- ](window|queue|lock)|serialis|serializ/i,
+    pattern: /merge[- ](window|queue|lock)/i,
     hint: 'the merge window is serialised by `factory merge-lock`, so a lead that waits for it holds no seat of its own: remove the cap',
   },
   {
