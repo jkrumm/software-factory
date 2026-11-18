@@ -170,6 +170,15 @@ export interface LeadSampleRow {
   procs: number
 }
 
+/** One worktree's measured size (the checkout with its build output). */
+export interface WorktreeSizeRow {
+  worktree: string
+  repo: string
+  issue: number | null
+  attempt: number | null
+  mib: number
+}
+
 /** An attempt's worktree, from `lead_attempts`. */
 export interface AttemptWorktree {
   path: string
@@ -223,6 +232,9 @@ export interface LoopStore {
   pruneHostSamples(before: Date): Promise<number>
   /** drops the lead samples older than `before`; how many */
   pruneLeadSamples(before: Date): Promise<number>
+  /** stores each worktree's size, keeping the largest it ever measured (`migrations/1055_worktree_sizes.sql`) */
+  recordWorktreeSizes(at: Date, sizes: readonly WorktreeSizeRow[]): Promise<void>
+  pruneWorktreeSizes(before: Date): Promise<number>
   /** drops the test results older than `before`; how many */
   pruneTestResults(before: Date): Promise<number>
   /** the class rows and the notable processes of the minute at `at`; a process already stored at `at` is ignored */

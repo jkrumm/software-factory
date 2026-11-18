@@ -109,6 +109,8 @@ export interface CapacityStore {
    * attempts have ended.
    */
   leadPeaks(now: Date): Promise<LeadPeaks[]>
+  /** per repo (project name): the largest measured size of the newest twenty attempts' worktrees, newest first (what `learnedWorktreeMib` takes) */
+  worktreeSizes(): Promise<WorktreeSizes[]>
   /** every repo's relearn point: samples before it are not learned from */
   relearns(): Promise<Relearn[]>
   /** stores the repo's relearn point (replacing an earlier one) */
@@ -187,6 +189,14 @@ export interface HostSampleFact {
   processes: number | null
   /** `kern.memorystatus_vm_pressure_level`: 1 normal, 2 warning, 4 critical */
   pressureLevel: number | null
+}
+
+/** What a repo's attempts' worktrees measured: the largest size of each, newest first. */
+export interface WorktreeSizes {
+  repo: string
+  /** the attempts measured (all of them, not only the newest twenty) */
+  attempts: number
+  sizesMibNewestFirst: number[]
 }
 
 export interface LeadPeaks {
@@ -326,6 +336,13 @@ export interface HostReader {
   load(): Promise<Result<number>>
   /** how long the host has been up, in ms (`kern.boottime`); the boot grace counts from it */
   uptimeMs(): Promise<Result<number>>
+  /** the free and the total disk of the volume the worktrees live on, in MiB; absent: no disk reading, and no lead is kept out for disk */
+  disk?(): Promise<Result<{ freeMib: number; totalMib: number }>>
+}
+
+/** Measures what a worktree takes on disk, the checkout and its build output together; null when it could not be read. */
+export interface WorktreeSizer {
+  sizeMib(path: string): Promise<number | null>
 }
 
 /** The accounts and their windows, as the running core reads them (`claude-account usage --json`). */

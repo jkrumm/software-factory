@@ -57,6 +57,10 @@ export const waitSubjectOf = (kind: string): WaitSubject | null =>
   (Object.keys(WAIT_SUBJECTS) as WaitSubject[]).find((s) => (WAIT_SUBJECTS[s] as readonly string[]).includes(kind)) ??
   null
 
+/** The hours a binding lead cap is read over, and the minutes of them in which it kept an Issue queued with a seat idle that make a finding (NL48). */
+export const CAP_WINDOW_HOURS = 6
+export const BINDING_MINUTES = 60
+
 /** The queue interval kind of the memory gate's lead-fit refusal (what a repo's lead is learned to take); the host's reading is `memory`. */
 export const MEMORY_FIT_KIND = 'memory_fit'
 

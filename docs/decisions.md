@@ -544,3 +544,32 @@ Report `docs/strategy/2026-11-next/report.html`, definition `docs/strategy/2026-
   `memory_fit` idle seat-hours down and `minutesUnderPressure` near zero. Shutterflow: of its 4.4 GiB lead figure the largest
   process is a `rustc` the lead runs directly (peak 4991 MiB, 84 % of the repo's rustc CPU outside slots); filed to shutterflow
   as signal_01a1ee86, Issue 2272.
+- **NL48 A static cap is a claim about a resource, and it is re-checked against measurements (Issue 2269, 2026-11-18).** The owner's rule
+  (NL32) is that only host resources and real chains hold work back, and a `leads:` was meant as the exception with its reason
+  beside it. On 2026-11-18 11:46, 6 Issues ran, 29 were queued and 22 of 40 seats sat idle (host load 4.3 of 36, no test step
+  waiting): 25 of the 29 queued waited on `claim`, the per-repo caps (shutterflow 2 with 18 queued, argo 1, free-planning-poker
+  1). Each cap had outlived its premise: argo's comment said "no reason was recorded"; shutterflow's said each worktree has its own
+  `target/` of tens of GiB, but targets are APFS clones of the target seed and the largest of 17 worktrees measured 2.1 GiB with
+  130 GiB free; free-planning-poker's was the merge window, which `factory merge-lock` serialises. `read throughput` had said
+  so a day earlier (54.2 h of queue for a claim over 62 Issues) and nothing acted on it, because no loop turned a binding cap into a
+  challenge. Now: (1) **a binding cap is a finding.** When `claim` (a repo's `leads`) or `lane` is the reason an Issue of a repo
+  stays queued, and an account seat is idle in the same minute (`host_samples.seats` over `leads`), for 60 minutes or more of
+  the newest 6 hours, the throughput pass files one signal on the repo while the cap is still set
+  (`domains/loops/caps.ts`, `read/cap-facts.ts`): the cap, the comment beside it in the default branch's `project.yaml`, and the
+  measured figures for the resource that comment names (worktree size and free disk, a lead's memory, the merge windows of the
+  last 7 days). The title (the cap and the repo) is the fingerprint, so there is no repeat while it is open; the generic
+  `queued_minutes` finding for the same claim or lane wait is not filed beside it. Default fix: remove the cap, or raise it to what
+  the figures allow. (2) **Disk is admitted by fit.** The host loop measures each running attempt's worktree with its build output
+  (`du -sk`, at most every 10 minutes per worktree, 3 per pass; `worktree_sizes`, the largest size per worktree, kept 30 days;
+  APFS clones are counted in full, so the figure errs towards refusing) and admission learns a repo's footprint as the p80 of the
+  newest ten attempts (at least three, `learnedWorktreeMib`, a size is a plateau, not a burst, so the upper share, unlike the
+  memory fit's median). A lead stays queued as `disk` when that figure does not fit the free disk of the home volume less the
+  headroom (10 GiB or 5 % of the volume) and what the leads started in the last 10 minutes will still take
+  (`diskRefusal`, `youngDiskMib`); with no lead running, no learned figure or no reading it keeps nobody out. A disk reason
+  needs no static cap. (3) **`factory project check` and the hygiene `project` probe** warn on a `leads` below the default
+  whose comment names a resource the factory models: the merge window (pointer to `factory merge-lock`), the deploy queue
+  (`factory deploy-lock`), disk (this fit), and on a comment that records no reason (`capReasonOf`); a cap is for a resource the
+  factory does not model. This repo's own `leads: 12`, whose comment was the merge window, is removed for the same reason. Not
+  done: a lane cap's wait is not told apart per lane in the finding (every capped lane of the repo is named); the disk refusal is
+  not a ranked queue wait (`WAIT_SUBJECTS`) until it shows in the data. Count after a week: no cap finding open for more than a
+  day, `disk` queue minutes near zero, and `read capacity-loop` `claim` idle seat-hours down.

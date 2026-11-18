@@ -2,6 +2,7 @@ import { afterAll, beforeAll, expect, test } from 'bun:test'
 import { HostHistoryModel } from '@software-factory/contract'
 import { startTestCluster, type TestCluster } from '@software-factory/tests/pg'
 import { loadMigrations, migrate } from '../src/adapters/postgres/migrate.ts'
+import { postgresCapacityStore } from '../src/adapters/postgres/capacity-store.ts'
 import { postgresLoopStore } from '../src/adapters/postgres/loop-store.ts'
 import { postgresUnitOfWork } from '../src/adapters/postgres/unit-of-work.ts'
 import { hostWatch } from '../src/adapters/planning/host-watch.ts'
@@ -380,6 +381,59 @@ test('a pass with a process table stores the facts and one row per lead, and pru
   await db.sql`DELETE FROM factory.lead_samples`
   await db.sql`DELETE FROM factory.lead_attempts`
   await db.sql`DELETE FROM factory.host_samples WHERE at = ${now}`
+})
+
+test("a pass measures the attempts' worktrees at most every ten minutes, and the store learns a repo's sizes from them", async () => {
+  const uow = postgresUnitOfWork(db.sql, (tx) => ({ loops: postgresLoopStore(tx) }))
+  const t0 = new Date()
+  const trees = [1, 2, 3, 4].map((n) => `/work/app/.claude/worktrees/factory-${n}-1`)
+  for (const [i, path] of trees.entries()) {
+    await db.sql`
+      INSERT INTO factory.lead_attempts (issue_id, attempt, branch, repo_path, worktree_path, first_try_at)
+      VALUES (${`issue_${i + 1}`}, 1, ${`factory/${i + 1}-1`}, '/work/app', ${path}, ${t0})`
+  }
+  const measured: string[] = []
+  const sizer = {
+    reader: {
+      sizeMib: async (path: string) => {
+        measured.push(path)
+        // the first tree is gone already: du could not read it
+        return path === trees[0] ? null : 2000 + trees.indexOf(path)
+      },
+    },
+    measuredAt: new Map<string, number>(),
+  }
+  const deps = {
+    uow,
+    sampler: { sample: async () => ({ load: 1, memoryUsedPct: 5, swapUsedPct: 1, swapoutMbPer300s: 0, ...NO_BYTES }) },
+    processes: { read: async () => null },
+    snapshot: { read: async () => null },
+    memory: { current: emptySnapshotMemory() },
+    self: { pid: 1, dirs: [] },
+    facts: async () => ({ ok: true as const, value: { leads: 4, queued: 0, seats: 16, loadCeiling: 6.5 } }),
+    sizer,
+  }
+  await hostPass({ ...deps, clock: { now: () => t0 } })
+  // three per pass, the unreadable one included; the fourth waits for the next minute
+  expect(measured).toEqual(trees.slice(0, 3))
+  await hostPass({ ...deps, clock: { now: () => new Date(t0.getTime() + 60_000) } })
+  expect(measured).toEqual(trees)
+  // ten minutes on, all four are due again, but only three are read in the pass
+  await hostPass({ ...deps, clock: { now: () => new Date(t0.getTime() + 11 * 60_000) } })
+  expect(measured).toHaveLength(7)
+
+  const rows = await db.sql`SELECT worktree, repo, issue, attempt, mib FROM factory.worktree_sizes ORDER BY worktree`
+  expect(rows).toEqual([
+    { worktree: trees[1], repo: 'app', issue: 2, attempt: 1, mib: 2001 },
+    { worktree: trees[2], repo: 'app', issue: 3, attempt: 1, mib: 2002 },
+    { worktree: trees[3], repo: 'app', issue: 4, attempt: 1, mib: 2003 },
+  ])
+  const learned = await postgresCapacityStore(db.sql).worktreeSizes()
+  expect(learned).toEqual([{ repo: 'app', attempts: 3, sizesMibNewestFirst: expect.any(Array) }])
+  expect(learned[0]?.sizesMibNewestFirst.toSorted()).toEqual([2001, 2002, 2003])
+  await db.sql`DELETE FROM factory.worktree_sizes`
+  await db.sql`DELETE FROM factory.lead_attempts`
+  await db.sql`DELETE FROM factory.host_samples WHERE at >= ${t0}`
 })
 
 test('a pass with a snapshot stores the signals, the class rows and the notable processes, rolls hours up and prunes', async () => {

@@ -8,8 +8,9 @@ import {
   stepNames,
   type SnapshotMemory,
 } from '../../domains/capacity/classes.ts'
+import { dueWorktrees } from '../../domains/capacity/disk.ts'
 import { attribute } from '../../domains/capacity/leadcost.ts'
-import type { HostSnapshotReader, ProcessReader } from '../../domains/capacity/ports.ts'
+import type { HostSnapshotReader, ProcessReader, WorktreeSizer } from '../../domains/capacity/ports.ts'
 import type {
   CapacityFacts,
   ClassSampleRow,
@@ -17,6 +18,7 @@ import type {
   HostSignals,
   LoopStore,
   ProcessSampleRow,
+  WorktreeSizeRow,
 } from '../../domains/loops/ports.ts'
 import type { Clock } from '../../kernel/clock.ts'
 import { ok, type PortError, type Result } from '../../kernel/result.ts'
@@ -34,6 +36,11 @@ export interface HostPassDeps {
   memory: { current: SnapshotMemory }
   /** the server's own pid and the directories of its release: the factory class */
   self: { pid: number; dirs: readonly string[] }
+  /**
+   * measures what an attempt's worktree takes on disk, which admission learns a repo's footprint from; absent: no worktree is
+   * measured. `measuredAt` is when each path was last measured, kept by the caller between passes.
+   */
+  sizer?: { reader: WorktreeSizer; measuredAt: Map<string, number> }
   /** what the capacity layer holds now; an error is nulls in the sample */
   facts: () => Promise<Result<CapacityFacts, PortError>>
 }
@@ -49,6 +56,9 @@ const CLASS_HOURS_KEEP_MS = 400 * 86_400_000
 
 /** What each lead cost is learned from a month of minutes. */
 const LEAD_SAMPLES_KEEP_MS = 30 * 86_400_000
+
+/** What the measured worktree sizes are learned from: a month. */
+const SIZES_KEEP_MS = 30 * 86_400_000
 
 /** An attempt that ended this long ago still has its processes sampled, so a finishing lead's last minute is kept. */
 const ENDED_GRACE_MS = 10 * 60_000
@@ -108,6 +118,8 @@ export async function hostPass(deps: HostPassDeps): Promise<Result<HostPass, Por
           procs: cost.procs,
         }))
 
+  const sizes = await measureWorktrees(deps, known.value, at)
+
   let classes: ClassSampleRow[] | null = null
   let notable: ProcessSampleRow[] = []
   // a degraded snapshot (no procs) stores its signals only; the memory is kept, so the next minute's CPU covers both
@@ -156,6 +168,8 @@ export async function hostPass(deps: HostPassDeps): Promise<Result<HostPass, Por
     if (classes !== null) await loops.recordClassSnapshot(at, classes, notable)
     await loops.rollUpClassHours(at)
     await loops.pruneLeadSamples(new Date(at.getTime() - LEAD_SAMPLES_KEEP_MS))
+    if (sizes.length > 0) await loops.recordWorktreeSizes(at, sizes)
+    await loops.pruneWorktreeSizes(new Date(at.getTime() - SIZES_KEEP_MS))
     const keep = new Date(at.getTime() - HOST_KEEP_MS)
     const pruned =
       (await loops.pruneHostSamples(keep)) +
@@ -168,6 +182,30 @@ export async function hostPass(deps: HostPassDeps): Promise<Result<HostPass, Por
       classRows: classes === null ? null : classes.length,
     })
   })
+}
+
+/** The attempts' worktrees due a measurement (`dueWorktrees`), measured side by side; one that could not be read is left for the next pass. */
+async function measureWorktrees(
+  deps: HostPassDeps,
+  worktrees: readonly { path: string; repo: string; issue: number | null; attempt: number | null }[],
+  at: Date,
+): Promise<WorktreeSizeRow[]> {
+  const { sizer } = deps
+  if (!sizer) return []
+  const due = dueWorktrees(worktrees, sizer.measuredAt, at.getTime())
+  const read = await Promise.all(
+    due.map(async (path) => ({ path, mib: await sizer.reader.sizeMib(path).catch(() => null) })),
+  )
+  const rows: WorktreeSizeRow[] = []
+  for (const { path, mib } of read) {
+    // a read that failed (a worktree already gone) waits as long as one that did not, so it never crowds the others out of a pass
+    sizer.measuredAt.set(path, at.getTime())
+    if (mib === null) continue
+    const worktree = worktrees.find((w) => w.path === path)
+    if (worktree)
+      rows.push({ worktree: path, repo: worktree.repo, issue: worktree.issue, attempt: worktree.attempt, mib })
+  }
+  return rows
 }
 
 export const hostSummary = (pass: HostPass): string =>

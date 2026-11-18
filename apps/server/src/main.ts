@@ -19,6 +19,9 @@ import { fileStandingPolicies } from './adapters/checkpoints/policies.ts'
 import { makeNotifier } from './adapters/ntfy/ntfy.ts'
 import { postgresCheckpointStore } from './adapters/postgres/checkpoint-store.ts'
 import { hostReader } from './adapters/planning/host.ts'
+import { duSizer } from './adapters/planning/worktree-sizer.ts'
+import { readCapComment } from './adapters/planning/cap-comments.ts'
+import { readCapFacts } from './read/cap-facts.ts'
 import { hostWatch } from './adapters/planning/host-watch.ts'
 import { textRunner } from './adapters/planning/process.ts'
 import { processTable, sharedCwds } from './adapters/planning/processes.ts'
@@ -243,7 +246,10 @@ async function main(): Promise<void> {
     sysctlBin: planningEnv.sysctlBin,
     vmVolume: process.env.FACTORY_VM_VOLUME ?? '/System/Volumes/VM',
   })
+  const diskHost = hostReader({ sysctlBin: planningEnv.sysctlBin, minSampleMs: 0 })
   const hostMemory = freshHostMemory()
+  // What each attempt's worktree takes on disk, measured by the host loop; the times it was last measured live here between passes.
+  const worktreeSizing = { reader: duSizer(), measuredAt: new Map<string, number>() }
   const reaperProcessTable = reaperProcesses({
     psBin: process.env.FACTORY_PS_BIN ?? '/bin/ps',
     lsofBin: process.env.FACTORY_LSOF_BIN ?? '/usr/sbin/lsof',
@@ -678,8 +684,20 @@ async function main(): Promise<void> {
               repo: b.repo,
               peakMib: b.peakMib,
               shape: b.shape,
+              path: b.path,
             })),
           facts: (window, options) => readWindowFacts(sql, { ...window, ...options, epoch }),
+          caps: async (at, shapes) => {
+            const disk = await diskHost.disk?.()
+            const facts = await readCapFacts(sql, { to: at, shapes, disk: disk?.ok ? disk.value : null })
+            const paths = new Map((await projectBudgets()).map((b) => [b.project, b.path]))
+            return Promise.all(
+              facts.map(async (fact) => {
+                const path = paths.get(fact.project)
+                return { ...fact, comment: path ? await readCapComment(path, fact.lane) : null }
+              }),
+            )
+          },
           fates: (ids) => readIssueFates(sql, ids),
           file: (body) => intake.api.file(body, 'agent'),
         })
@@ -739,6 +757,7 @@ async function main(): Promise<void> {
           processes: hostProcesses,
           snapshot: hostClasses,
           memory: hostMemory,
+          sizer: worktreeSizing,
           self: { pid: process.pid, dirs: [process.cwd()] },
           facts: planning.capacityFacts,
         })

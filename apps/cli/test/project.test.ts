@@ -152,6 +152,42 @@ describe('factory project check', () => {
     expect(out).toContain(`${file}:3:1: warning: leads is 100`)
     expect(code).toBe(0)
   })
+
+  test('a leads of 1 for a merge window is a warning that points at factory merge-lock, exit 0', async () => {
+    const file = await repo('windowed', {
+      'project.yaml': 'apiVersion: factory/v2\nname: windowed\nleads: 1 # the merge window serialises merges\n',
+    })
+    const { code, out } = await cli(['project', 'check', file])
+    expect(out).toContain(`${file}:3:1: warning: leads is 1 for a resource the factory already models`)
+    expect(out).toContain('factory merge-lock')
+    expect(code).toBe(0)
+  })
+
+  test('a leads for a deploy queue points at factory deploy-lock', async () => {
+    const file = await repo('queued', {
+      'project.yaml': 'apiVersion: factory/v2\nname: queued\n# the deploy queue is one at a time\nleads: 2\n',
+    })
+    const { out } = await cli(['project', 'check', file])
+    expect(out).toContain('factory deploy-lock')
+  })
+
+  test('a leads whose comment records no reason is a finding', async () => {
+    const file = await repo('unreasoned', {
+      'project.yaml': 'apiVersion: factory/v2\nname: unreasoned\nleads: 1 # no reason was recorded\n',
+    })
+    const { out } = await cli(['project', 'check', file])
+    expect(out).toContain('records no reason')
+  })
+
+  test('a leads for a resource the factory does not model passes', async () => {
+    const file = await repo('shared-licence', {
+      'project.yaml':
+        'apiVersion: factory/v2\nname: shared-licence\nleads: 2 # one floating licence per lead, two seats bought\n',
+    })
+    const { out } = await cli(['project', 'check', file])
+    expect(out).not.toContain('already models')
+    expect(out).not.toContain('records no reason')
+  })
 })
 
 describe('factory project schema', () => {

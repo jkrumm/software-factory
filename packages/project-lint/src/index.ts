@@ -4,6 +4,7 @@ import { YAML_OPTIONS } from '@software-factory/contract/plan'
 import {
   MAX_PROJECT_BYTES,
   type ProjectFile,
+  capReasonOf,
   DEFAULT_LEADS,
   projectJsonSchema,
   readProject,
@@ -158,6 +159,47 @@ const REASONED: { path: Path; isDefault: (value: unknown) => boolean }[] = [
 const valueAt = (root: unknown, path: Path): unknown =>
   path.reduce<unknown>((node, key) => (isJson(node) ? node[key] : undefined), root)
 
+/** The comment of a line (from its `#`) and the comment line above it, joined; empty when neither has one. */
+function commentsAround(lines: readonly string[], line: number): string {
+  const own = lines[line - 1] ?? ''
+  const hash = own.search(/(^|\s)#/)
+  const above = (lines[line - 2] ?? '').trimStart()
+  return [above.startsWith('#') ? above : '', hash === -1 ? '' : own.slice(hash)].join(' ')
+}
+
+/** The warnings for a `leads` below the default whose comment records no reason, or names a resource the factory already models (`capReasonOf`). */
+function leadsReasons(
+  text: string,
+  value: unknown,
+  locate: (path: Path) => { line: number; column: number },
+): Problem[] {
+  const set = valueAt(value, ['leads'])
+  if (set === undefined || set === DEFAULT_LEADS) return []
+  const at = locate(['leads'])
+  const { reason, hint } = capReasonOf(commentsAround(text.split('\n'), at.line))
+  if (hint === null) return []
+  const message =
+    reason === 'unrecorded'
+      ? `leads is ${String(set)} and its comment records no reason: ${hint}`
+      : `leads is ${String(set)} for a resource the factory already models: ${hint}; a cap is for a resource the factory does not model`
+  return [{ ...at, path: ['leads'], message }]
+}
+
+/**
+ * The comment beside a top-level `leads:` or a lane's `leads` (the lane's line, or the line above), from a project file's
+ * text: what the throughput loop quotes when the cap binds while seats idle. Null: no such line, or it has no comment.
+ */
+export function capComment(text: string, cap: { lane: string | null }): string | null {
+  const lines = text.split('\n')
+  const lanes = lines.findIndex((l) => /^lanes\s*:/.test(l))
+  const laneLine = (line: string, i: number) =>
+    lanes !== -1 && i > lanes && /^\s/.test(line) && line.trimStart().startsWith(`${cap.lane}:`)
+  const index = cap.lane === null ? lines.findIndex((l) => /^leads\s*:/.test(l)) : lines.findIndex(laneLine)
+  if (index === -1) return null
+  const comment = commentsAround(lines, index + 1).trim()
+  return comment === '' ? null : comment
+}
+
 /** The warnings for constants set without a stated reason (docs/project.md: "Add a key when the repo differs, with the reason in a comment beside it"). */
 function unreasoned(text: string, value: unknown, locate: (path: Path) => { line: number; column: number }): Problem[] {
   const lines = text.split('\n')
@@ -245,6 +287,7 @@ export async function checkProject(text: string, repo: string | null, io: LintIo
     ),
   ]
   warnings.push(...unreasoned(text, value, (path) => positionOf(doc, lineCounter, path)))
+  warnings.push(...leadsReasons(text, value, (path) => positionOf(doc, lineCounter, path)))
   if (repo !== null) {
     // asked once: the repo's own name, and the directory its sibling repos sit in, are both the main checkout's
     const main = await mainCheckout(repo)

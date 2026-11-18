@@ -21,6 +21,7 @@ import { freeMibOf, headroomMib, SAMPLE_MAX_AGE_MS } from '../domains/capacity/c
 import { type DoctorReader, doctorMessage } from '../domains/capacity/doctor.ts'
 import { DEFAULT_TYPICAL_LEAD_MIB, SEAT_SAMPLE_MAX_AGE_MS, SEAT_SAMPLES, seatBonus } from '../domains/capacity/seats.ts'
 import { type LeadGrowth, leadGrowth, learnLeadCost } from '../domains/capacity/leadcost.ts'
+import { DISK_RAMP_MS, type DiskFit, diskHeadroomMib, learnedWorktreeMib } from '../domains/capacity/disk.ts'
 import {
   type LoadTrip,
   loadTrip,
@@ -102,6 +103,10 @@ export interface HostInputs {
     string,
     { mib: number | null; attempts: number; basis: 'median' | 'falling' | null; typicalMib: number | null }
   >
+  /** the free and total disk of the volume the worktrees live on; null: unread, and no lead is kept out for disk */
+  disk?: { freeMib: number; totalMib: number } | null
+  /** per project name: what a worktree is learned to take on disk (null with fewer than three attempts measured), and the attempts measured */
+  worktrees?: ReadonlyMap<string, { mib: number | null; attempts: number }>
   /** per project name: the relearn point, when the repo has one */
   relearns: ReadonlyMap<string, Date>
   /** per Issue number: the MiB its lead holds by a sample not older than three minutes */
@@ -217,6 +222,7 @@ export async function readHost(deps: CapacityDeps): Promise<HostInputs> {
       slots: await capacity.slots(),
       stepMs: await capacity.stepMedianMs(new Date(now.getTime() - STEP_WINDOW_MS)),
       peaks: await capacity.leadPeaks(now),
+      sizes: await capacity.worktreeSizes(),
       relearns: await capacity.relearns(),
       rss: await capacity.leadRssSince(new Date(now.getTime() - RSS_MAX_AGE_MS)),
       leadAim: deps.limits.slotAim === 'on' ? ((await capacity.leadAim())?.target ?? 0) : null,
@@ -230,7 +236,18 @@ export async function readHost(deps: CapacityDeps): Promise<HostInputs> {
     : false
   const newest = facts.ok ? facts.value.recent[0] : undefined
   const doctors = await readDoctors(deps.doctor, facts.ok ? facts.value.projects : [])
+  const disk = deps.host.disk ? await deps.host.disk() : null
+  if (disk && !disk.ok) notes.push(`disk reading failed (${disk.error.detail}): new leads are admitted without it`)
   return {
+    disk: disk?.ok ? disk.value : null,
+    worktrees: new Map(
+      facts.ok
+        ? facts.value.sizes.map((s) => [
+            s.repo,
+            { mib: learnedWorktreeMib(s.sizesMibNewestFirst), attempts: s.attempts },
+          ])
+        : [],
+    ),
     load: load.ok ? load.value : null,
     processes: newest && now.getTime() - newest.at.getTime() <= RSS_MAX_AGE_MS ? newest.processes : null,
     // The instant reading (a rate since the last pass) and the minute samples' 300 s window: the higher gates, so a lull
@@ -468,6 +485,19 @@ function evaluateQueue(snap: Snapshot, host: HostInputs, limits: CapacityLimits)
  * The extra leads per account an idle host allows this pass: for the entries that stay queued for the account cap, as
  * many leads of the repos' typical learned size as the free memory holds. Never past a window: the pick still follows it.
  */
+/**
+ * What the claims that just started will still take on disk, host-wide: each claim younger than `DISK_RAMP_MS` is counted at its
+ * repo's learned worktree size, since the checkout and the install that fill it take minutes and the free reading does not show
+ * them yet. A lead admitted in this pass has no age and counts whole, so one pass cannot admit several against one reading.
+ */
+function youngDiskMib(claims: readonly Claim[], snap: Snapshot, host: HostInputs): number {
+  const nameOf = new Map(snap.projects.map((p) => [p.repo, p.name]))
+  return claims.reduce((sum, claim) => {
+    if (snap.now.getTime() - claim.takenAt.getTime() >= DISK_RAMP_MS) return sum
+    return sum + (host.worktrees?.get(nameOf.get(claim.repo) ?? '')?.mib ?? 0)
+  }, 0)
+}
+
 function seatBonusOf(snap: Snapshot, host: HostInputs, limits: CapacityLimits, base: readonly QueueEntry[]): number {
   const capped = base.filter((entry) => entry.reason?.kind === 'cap')
   if (capped.length === 0) return 0
@@ -569,6 +599,18 @@ function decide(snap: Snapshot, host: HostInputs, limits: CapacityLimits, bonus:
       running: claims.length,
       growing: youngGrowth(claims, snap, host),
     }
+    const worktree = host.worktrees?.get(project.name)
+    const diskFit: DiskFit | null = host.disk
+      ? {
+          repo: project.name,
+          candidateMib: worktree?.mib ?? null,
+          attempts: worktree?.attempts ?? 0,
+          freeMib: host.disk.freeMib,
+          headroomMib: diskHeadroomMib(host.disk.totalMib),
+          running: claims.length,
+          growingMib: youngDiskMib(claims, snap, host),
+        }
+      : null
     return checkAdmission({
       lane: laneOf(issue.id, project, claims, owed, laneByIssue),
       now: snap.now,
@@ -597,6 +639,7 @@ function decide(snap: Snapshot, host: HostInputs, limits: CapacityLimits, bonus:
       memory: host.memory,
       memoryCeilings: limits.memoryCeilings,
       leadFit,
+      diskFit,
       leadAim: host.leadAim ? { ...host.leadAim, running: claims.length } : null,
       reserved: reservedOf(
         reservedMib(issue.id, project, claims, owed, snap.projects, laneByIssue, host.learned),

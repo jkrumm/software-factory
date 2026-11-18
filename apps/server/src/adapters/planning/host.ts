@@ -1,4 +1,5 @@
-import { loadavg } from 'node:os'
+import { statfs } from 'node:fs/promises'
+import { homedir, loadavg } from 'node:os'
 import {
   bootTimeSeconds,
   memoryReadingOf,
@@ -17,6 +18,8 @@ export interface HostOptions {
   minSampleMs: number
   timeoutMs?: number
   now?: () => number
+  /** a path on the volume the worktrees live on (disk is read there); absent: the home directory */
+  diskPath?: string
 }
 
 const MIB = 1024 * 1024
@@ -99,6 +102,18 @@ export function hostReader(options: HostOptions): HostReader {
       const bootedAt = bootTimeSeconds(text.value)
       if (bootedAt === null) return err(portError('unreadable', `kern.boottime not understood: ${text.value}`))
       return ok(Math.max(0, now() - bootedAt * 1000))
+    },
+
+    async disk() {
+      try {
+        const stats = await statfs(options.diskPath ?? homedir())
+        const free = (stats.bavail * stats.bsize) / MIB
+        const total = (stats.blocks * stats.bsize) / MIB
+        if (!(total > 0)) return err(portError('unreadable', 'the volume reports no size'))
+        return ok({ freeMib: Math.round(free), totalMib: Math.round(total) })
+      } catch (error) {
+        return err(portError('unreadable', `statfs failed: ${error instanceof Error ? error.message : String(error)}`))
+      }
     },
 
     async load() {
