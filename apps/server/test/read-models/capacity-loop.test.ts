@@ -4,6 +4,7 @@ import { startTestCluster, type TestCluster } from '@software-factory/tests/pg'
 import type { SQL } from 'bun'
 import { loadMigrations, migrate } from '../../src/adapters/postgres/migrate.ts'
 import { readCapacityLoop } from '../../src/read/capacity-loop.ts'
+import { redactCapacityLoop } from '../../src/read/throughput-redact.ts'
 
 /**
  * The capacity-loop figures against plain SQL written here in another shape (scalar subqueries, FILTER, generate_series,
@@ -416,6 +417,19 @@ describe('GET /v1/capacity-loop figures', () => {
     expect(model.reaped.newest.map((r) => r.comm)).toEqual(['proc7', 'proc6', 'proc5', 'proc4', 'proc2'])
 
     expect(model.constants).toEqual(constants)
+  })
+
+  test('the read token sees the work repos of a reason summed under one name', async () => {
+    const model = CapacityLoopModel.parse(await readCapacityLoop(sql, { now: NOW, days: DAYS, constants }))
+    // only `app` is an open project: `api` and `web` are work repos
+    const shown = CapacityLoopModel.parse(redactCapacityLoop(model, [{ name: 'app', repo: '/src/app' }]))
+    const cap = shown.queueByReason.find((r) => r.kind === 'cap')
+    expect(cap?.byRepo.map((r) => [r.repo, r.issues])).toEqual([['private', 2]])
+    expect(cap?.byRepo[0]?.queuedHours).toBeCloseTo(cap?.queuedHours ?? Number.NaN, 9)
+    expect(shown.queueByReason.find((r) => r.kind === 'memory')?.byRepo.map((r) => r.repo)).toEqual(['app'])
+    expect(JSON.stringify(shown.queueByReason)).not.toMatch(/"(api|web)"/)
+    // every figure but the names is the model's own
+    expect(shown.queueByReason.map((r) => r.queuedHours)).toEqual(model.queueByReason.map((r) => r.queuedHours))
   })
 
   test('an empty database answers zeros and nulls, never an error', async () => {

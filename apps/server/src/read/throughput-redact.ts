@@ -1,4 +1,4 @@
-import type { ThroughputModel } from '@software-factory/contract'
+import type { CapacityLoopModel, ThroughputModel } from '@software-factory/contract'
 import { hostSentence, improvementSentence } from './throughput-answers.ts'
 import { isWorkRepo, type OpenProject, REDACTED_REPO } from './work.ts'
 
@@ -32,6 +32,29 @@ export function redactAnswers(
             }),
           }
         : cost,
+  }
+}
+
+/**
+ * The capacity loop as the read token sees it: the hours behind each queue reason stay, the work repos among them are
+ * summed under one name (`byRepo`). Only the repo split of `queueByReason` is handled here.
+ */
+export function redactCapacityLoop(model: CapacityLoopModel, open: readonly OpenProject[]): CapacityLoopModel {
+  return {
+    ...model,
+    queueByReason: model.queueByReason.map((reason) => {
+      const merged = new Map<string, CapacityLoopModel['queueByReason'][number]['byRepo'][number]>()
+      for (const row of reason.byRepo) {
+        const repo = isWorkRepo(row.repo, open) ? REDACTED_REPO : row.repo
+        const had = merged.get(repo)
+        merged.set(repo, {
+          repo,
+          queuedHours: (had?.queuedHours ?? 0) + row.queuedHours,
+          issues: (had?.issues ?? 0) + row.issues,
+        })
+      }
+      return { ...reason, byRepo: [...merged.values()].toSorted((a, b) => b.queuedHours - a.queuedHours) }
+    }),
   }
 }
 

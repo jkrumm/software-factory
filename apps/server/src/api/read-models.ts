@@ -59,7 +59,7 @@ import { readHostSamples } from '../read/host.ts'
 import { costOfIssues, readKpis } from '../read/kpis.ts'
 import { readRetro } from '../read/retro.ts'
 import { readThroughput } from '../read/throughput.ts'
-import { redactThroughput } from '../read/throughput-redact.ts'
+import { redactCapacityLoop, redactThroughput } from '../read/throughput-redact.ts'
 import { loadOpenProjects } from '../read/work.ts'
 import { readLoopYield } from '../read/loop-yield.ts'
 import { loopReads } from '../read/loops.ts'
@@ -503,18 +503,17 @@ export const readModelRoutes = (deps: ReadModelDeps | undefined, caller: (reques
     )
     .get(
       '/capacity-loop',
-      async ({ query }) => {
+      async ({ query, request }) => {
         if (!deps?.capacityConstants) return unavailable
-        return Response.json(
-          CapacityLoopModel.parse(
-            await readCapacityLoop(deps.sql, {
-              now: now(),
-              days: days(query),
-              constants: deps.capacityConstants,
-              epoch: deps.epoch ?? null,
-            }),
-          ),
-        )
+        const model = await readCapacityLoop(deps.sql, {
+          now: now(),
+          days: days(query),
+          constants: deps.capacityConstants,
+          epoch: deps.epoch ?? null,
+        })
+        // the read token hears no work repo's name: its queued hours are summed under one
+        const shown = caller(request) === 'read' ? redactCapacityLoop(model, await loadOpenProjects(deps.sql)) : model
+        return Response.json(CapacityLoopModel.parse(shown))
       },
       {
         query: DaysQuery,
