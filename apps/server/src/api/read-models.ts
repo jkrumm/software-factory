@@ -563,8 +563,8 @@ export const readModelRoutes = (deps: ReadModelDeps | undefined, caller: (reques
         if (!deps) return unavailable
         const at = now()
         const bound =
-          (await readTripwire(deps.sql, { now: at, cost: (issues) => costOfIssues(deps.sql, issues) })).bound?.share ??
-          null
+          (await readTripwire(deps.sql, { now: at, cost: (issues) => costOfIssues(deps.sql, issues) })).bound
+            ?.classShare ?? null
         const byClass = await readClassSeats(deps.sql, bound)
         return Response.json(
           FindingClassesModel.parse(await findingClasses(loopReads(deps.sql), at, { bound, byClass })),

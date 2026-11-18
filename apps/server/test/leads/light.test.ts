@@ -3,7 +3,9 @@ import {
   type ClassStart,
   judgeClassSeat,
   judgeLightGate,
+  classMoveUpBound,
   moveUpBound,
+  moveUpTimeBound,
   regressionGap,
   type SeatFigures,
   TRIPWIRE_CONFIDENCE,
@@ -138,6 +140,19 @@ describe('the light gate', () => {
     expect(moveUpBound({ lightAttempt: 0.15, leadAttempt: 2.7, followUpAttempt: 0 })).toBeNull()
   })
 
+  test('the time bound is the same break-even in minutes, and the class bound is the lower of the two', () => {
+    const MIN = 60_000
+    // light attempts average 20 min, the lead row's median Issue 35: 20 + share * 35 = 35 at share 0.43
+    const time = moveUpTimeBound({ lightAttemptMs: 20 * MIN, leadMs: 35 * MIN, followUpMs: 35 * MIN })
+    expect(time).toBeCloseTo(0.4286, 3)
+    expect(moveUpTimeBound({ lightAttemptMs: null, leadMs: 35 * MIN, followUpMs: 35 * MIN })).toBeNull()
+    // dollars allow every share (bound 1), minutes do not
+    expect(classMoveUpBound({ dollars: 1, time })).toBeCloseTo(0.4286, 3)
+    expect(classMoveUpBound({ dollars: 0.3, time })).toBe(0.3)
+    expect(classMoveUpBound({ dollars: 1, time: null })).toBe(1)
+    expect(classMoveUpBound({ dollars: null, time })).toBeNull()
+  })
+
   test("opens on today's figures: a 3.06 point gap on 75 watches is not shown", () => {
     const verdict = judgeLightGate({ light: light(71, 75), lead, bound: 0.94 })
     expect(verdict.met).toBe(true)
@@ -243,6 +258,21 @@ describe('judgeClassSeat', () => {
     expect(verdict.why).toBe('5 of its last 10 light starts moved up (50 %), above the bound 40 %')
     // at the bound is still in
     expect(judgeClassSeat(run(4, 6), 0.4).out).toBe(false)
+  })
+
+  test("a class that moves up every time is out of the light seat on today's figures, one at a quarter is not", () => {
+    const MIN = 60_000
+    const bound = classMoveUpBound({
+      dollars: 1,
+      time: moveUpTimeBound({ lightAttemptMs: 20 * MIN, leadMs: 35 * MIN, followUpMs: 35 * MIN }),
+    })
+    // advisories: 4 of 4 moved up (share 1, which dollars alone never put above their bound of 1)
+    expect(judgeClassSeat(run(4, 0), 1)).toMatchObject({ share: 1, out: false })
+    expect(judgeClassSeat(run(4, 0), bound)).toMatchObject({ share: 1, out: true })
+    // agentsmd: 2 of 3
+    expect(judgeClassSeat(run(2, 1), bound).out).toBe(true)
+    // deps: 2 of 8
+    expect(judgeClassSeat(run(2, 6), bound).out).toBe(false)
   })
 
   test('under three light starts, or with no bound measured, nothing is out', () => {

@@ -24,6 +24,13 @@ export interface AttemptCosts {
   followUpAttempt: number | null
 }
 
+/** Milliseconds a light attempt runs, the lead row's median Issue takes, and a lead attempt after a move-up takes (null: unmeasured). */
+export interface AttemptTimes {
+  lightAttemptMs: number | null
+  leadMs: number | null
+  followUpMs: number | null
+}
+
 /** A gap between two seats' rates and the lower bound it clears at `TRIPWIRE_Z`, in the unit of the rates. */
 export interface Gap {
   gap: number
@@ -102,9 +109,34 @@ export function tripwireFrom(input: { now: Date; watchAts: readonly Date[] }): D
  * than the lead row per attempt.
  */
 export function moveUpBound(costs: AttemptCosts): number | null {
-  const { lightAttempt, leadAttempt, followUpAttempt } = costs
-  if (lightAttempt === null || leadAttempt === null || followUpAttempt === null || followUpAttempt <= 0) return null
-  return Math.min(1, Math.max(0, (leadAttempt - lightAttempt) / followUpAttempt))
+  return breakEven(costs.lightAttempt, costs.leadAttempt, costs.followUpAttempt)
+}
+
+/**
+ * The same bound in minutes: the move-up share at which a light start takes as long as a start on the lead row. A light
+ * attempt that moves up runs `light` minutes and then a lead attempt runs too, so per Issue the light route takes
+ * `light + share * followUp` against the lead row's `lead` (its median minutes per Issue). Dollars alone cap the bound at
+ * 1 (a share cannot pass it), so a class that moves up every time looked affordable while each move-up cost a seat and a
+ * slot for the light attempt's minutes before the real lead started. Null while a time is unmeasured.
+ */
+export function moveUpTimeBound(times: AttemptTimes): number | null {
+  return breakEven(times.lightAttemptMs, times.leadMs, times.followUpMs)
+}
+
+/**
+ * The bound a hygiene class leaves the light seat at: the lower of the dollar bound and the time bound, so a class is out
+ * when moving up costs more than the seat saves in either. With no time measured, the dollar bound alone.
+ */
+export function classMoveUpBound(input: { dollars: number | null; time: number | null }): number | null {
+  const { dollars, time } = input
+  if (dollars === null) return null
+  return time === null ? dollars : Math.min(dollars, time)
+}
+
+/** `(lead - light) / followUp` in [0, 1]: the share at which `light + share * followUp` equals `lead`; null while a figure is unmeasured. */
+function breakEven(light: number | null, lead: number | null, followUp: number | null): number | null {
+  if (light === null || lead === null || followUp === null || followUp <= 0) return null
+  return Math.min(1, Math.max(0, (lead - light) / followUp))
 }
 
 /**
@@ -174,8 +206,7 @@ const percent = (share: number): string => `${Math.round(share * 100)} %`
 /**
  * Where a hygiene class starts. `starts` are the class's Issues whose first lead started, newest first: the window is the
  * first `CLASS_SEAT_WINDOW` of them, and the move-up share is the move-ups among the light starts in it. A class is out
- * when that share is above the bound the cost of a move-up sets (`moveUpBound`), the same bound that closes the tripwire
- * for triage's `small`, and comes back when it is at or under it: Issues of a class that is out start on the lead row,
+ * when that share is above the bound the cost of a move-up sets in dollars and in minutes (`classMoveUpBound`), and comes back when it is at or under it: Issues of a class that is out start on the lead row,
  * so they age its light starts out of the window until the share no longer stands on `CLASS_SEAT_MIN_STARTS`. With no
  * bound measured nothing is out.
  */

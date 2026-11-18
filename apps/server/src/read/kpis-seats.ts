@@ -4,8 +4,10 @@ import {
   judgeLightGate,
   KPI_SEATS,
   regressionGap,
+  classMoveUpBound,
   type MoveUpBound,
   moveUpBound,
+  moveUpTimeBound,
   SEAT_DELIVERY_DEFINITIONS,
   type SeatDelivery,
   type SeatKpiRow,
@@ -200,6 +202,9 @@ function deliveryOf(
  * The light seat's and the lead row's four figures over the facts' Issues, and the move-up bound from the per-attempt
  * dollars of the same Issues (`moveUpBound`): light attempts, the lead row's attempts on Issues that started there, and
  * the lead attempts that followed a move-up. A cost the usage schema cannot give leaves the figure and the bound null.
+ * The same break-even in minutes (`moveUpTimeBound`) reads the light attempts' ms (to the move-up, else the Issue's working
+ * time), the lead row's median working ms per Issue, and uses that median for a follow-up; the hygiene classes are judged
+ * against the lower of the two (`classShare`).
  */
 async function readDelivery(
   sql: SQL,
@@ -230,10 +235,28 @@ async function readDelivery(
     followUpAttempt: followDollars !== null && followDollars.length >= MIN_FOLLOW_UPS ? mean(followDollars) : leadMean,
   }
   const share = moveUpBound({ lightAttempt, leadAttempt: leadMean, followUpAttempt })
+  const workingOf = new Map(facts.map((fact) => [fact.issue_id, fact.working_ms]))
+  const lightMs = mean(onLight.map((a) => a.moved_after_ms ?? workingOf.get(a.issue_id) ?? 0))
+  const leadMs = percentile(
+    leadFacts.map((fact) => fact.working_ms),
+    0.5,
+  )
+  const timeShare = moveUpTimeBound({ lightAttemptMs: lightMs, leadMs, followUpMs: leadMs })
+  const time =
+    timeShare === null || lightMs === null || leadMs === null
+      ? null
+      : { lightAttemptMs: lightMs, leadMs, followUpMs: leadMs, share: timeShare }
   const bound =
     share === null || lightAttempt === null || leadMean === null || followUpAttempt === null
       ? null
-      : { lightAttempt, leadAttempt: leadMean, followUpAttempt, share }
+      : {
+          lightAttempt,
+          leadAttempt: leadMean,
+          followUpAttempt,
+          share,
+          time,
+          classShare: classMoveUpBound({ dollars: share, time: timeShare }) ?? share,
+        }
   const priced = async (list: readonly Fact[]) =>
     options.cost ? options.cost(list.map((fact) => fact.issue_id)) : null
   return {
@@ -283,7 +306,7 @@ async function tripwireOf(
 
 /**
  * The tripwire over its window (`TRIPWIRE_DAYS`, longer until light has `TRIPWIRE_TARGET_WATCHES` finished first watches), read for the starts: `met` says whether triage's `small` starts on the
- * light seat now (only a measured pass opens it), `bound.share` is the move-up share a hygiene class stays under.
+ * light seat now (only a measured pass opens it), `bound.share` is the dollar break-even of a move-up and `bound.classShare` (the lower of it and the minute break-even) the move-up share a hygiene class stays under.
  */
 export async function readTripwire(
   sql: SQL,

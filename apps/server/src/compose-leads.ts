@@ -33,7 +33,9 @@ function lightReaders(sql: SQL, clock: Clock): Pick<LeadDeps, 'lightGate' | 'lig
   const tripwire = freshFor(LIGHT_GATE_FRESH_MS, () =>
     readTripwire(sql, { now: clock.now(), cost: (issues) => costOfIssues(sql, issues) }),
   )
-  const out = freshFor(LIGHT_GATE_FRESH_MS, async () => readClassesOut(sql, (await tripwire()).bound?.share ?? null))
+  const out = freshFor(LIGHT_GATE_FRESH_MS, async () =>
+    readClassesOut(sql, (await tripwire()).bound?.classShare ?? null),
+  )
   return { lightGate: async () => (await tripwire()).met === true, lightClassesOut: out }
 }
 

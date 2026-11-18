@@ -499,6 +499,17 @@ export const MoveUpBound = z
     leadAttempt: z.number(),
     followUpAttempt: z.number(),
     share: z.number(),
+    /** the same break-even in minutes (`moveUpTimeBound`): ms per light attempt, the lead row's median ms per Issue, and per follow-up (the lead's median); null while a time is unmeasured */
+    time: z
+      .strictObject({
+        lightAttemptMs: z.number(),
+        leadMs: z.number(),
+        followUpMs: z.number(),
+        share: z.number(),
+      })
+      .nullable(),
+    /** the bound a hygiene class is judged against (`classMoveUpBound`): the lower of `share` and `time.share` */
+    classShare: z.number(),
   })
   .meta({ id: 'MoveUpBound' })
 export type MoveUpBound = z.infer<typeof MoveUpBound>
@@ -964,7 +975,7 @@ export type FindingClass = z.infer<typeof FindingClass>
 export const FindingClassesModel = z
   .strictObject({
     at,
-    /** the move-up share a hygiene class stays under to start light (the tripwire's); null while a cost is unmeasured, and then no class is out */
+    /** the move-up share a hygiene class stays under to start light (`bound.classShare`: the lower of the dollar and the minute break-even); null while a cost is unmeasured, and then no class is out */
     bound: z.number().nullable(),
     /** held first, then probation, then open; then by loop and class */
     classes: z.array(FindingClass),
