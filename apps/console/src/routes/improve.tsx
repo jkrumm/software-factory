@@ -838,6 +838,9 @@ function CapacityTables({ model }: { model: CapacityLoopModel }) {
                     <th scope="col" className="px-4 py-2 text-right font-medium">
                       Idle seats
                     </th>
+                    <th scope="col" className="px-4 py-2 font-medium">
+                      Repos, most hours first
+                    </th>
                   </tr>
                 </thead>
                 <tbody>
@@ -849,6 +852,14 @@ function CapacityTables({ model }: { model: CapacityLoopModel }) {
                       <td className="px-4 py-2 text-right tabular-nums">{reason.issues}</td>
                       <td className="px-4 py-2 text-right tabular-nums">{hoursWords(reason.queuedHours)}</td>
                       <td className="px-4 py-2 text-right tabular-nums">{hoursWords(reason.idleSeatHours)}</td>
+                      <td className="px-4 py-2 text-muted-foreground">
+                        {reason.byRepo.length === 0
+                          ? 'none'
+                          : reason.byRepo
+                              .slice(0, 4)
+                              .map((r) => `${r.repo} ${hoursWords(r.queuedHours)}`)
+                              .join(', ') + (reason.byRepo.length > 4 ? `, ${reason.byRepo.length - 4} more` : '')}
+                      </td>
                     </tr>
                   ))}
                 </tbody>
