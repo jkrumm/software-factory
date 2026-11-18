@@ -35,6 +35,7 @@ import type {
   HostMinute,
   MigrationSnapshot,
   ProcessMinute,
+  ClassCpuWindow,
   QueueReasonCount,
   SelfwatchChange,
   SelfwatchRow,
@@ -421,6 +422,8 @@ export interface LoopReads {
   slotMinutes(since: Date): Promise<SlotMinute[]>
   /** the queued Issues by the reason they stay queued, from the open queue intervals (the incident's evidence) */
   queueReasons(): Promise<QueueReasonCount[]>
+  /** the CPU each class and repo took in the host minutes since `since` (the incident's evidence: whose work the load is) */
+  classCpu(since: Date): Promise<ClassCpuWindow>
   /** the owner's newest needed-me marks on Specs, newest first: triage's precedents for the `spec` flag */
   specPrecedents(limit: number): Promise<SpecPrecedent[]>
 }

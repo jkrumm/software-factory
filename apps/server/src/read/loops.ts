@@ -115,6 +115,13 @@ const SlotMinuteRow = z.object({
   waiters: z.number().int(),
 })
 
+const ClassCpuRow = z.object({
+  class: z.string(),
+  repo: z.string().nullable(),
+  cpu_ms: z.coerce.number(),
+  minutes: z.coerce.number().int(),
+})
+
 const QueueReasonRow = z.object({ kind: z.string(), count: z.coerce.number().int(), since: z.date() })
 
 const WaitRowSchema = z.object({
@@ -476,6 +483,18 @@ export function loopReads(tx: SQL): LoopReads {
         SELECT kind, count(*) AS count, min(from_at) AS since FROM factory.queue_intervals WHERE to_at IS NULL
         GROUP BY kind ORDER BY count(*) DESC, kind`
       return rows.map((raw) => QueueReasonRow.parse(raw))
+    },
+
+    async classCpu(since) {
+      const rows: unknown[] = await tx`
+        SELECT class, repo, sum(cpu_ms) AS cpu_ms, (SELECT count(DISTINCT at) FROM factory.host_class_samples WHERE at >= ${since}) AS minutes
+        FROM factory.host_class_samples WHERE at >= ${since} AND cpu_ms IS NOT NULL
+        GROUP BY class, repo ORDER BY sum(cpu_ms) DESC`
+      const parsed = rows.map((raw) => ClassCpuRow.parse(raw))
+      return {
+        minutes: parsed[0]?.minutes ?? 0,
+        rows: parsed.map((row) => ({ class: row.class, repo: row.repo, cpuMs: row.cpu_ms })),
+      }
     },
 
     specPrecedents: (limit) => readSpecPrecedents(tx, limit),
