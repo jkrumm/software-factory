@@ -12,6 +12,7 @@ import { err, ok, portError } from '../../src/kernel/result.ts'
 
 const read: CommitRead = {
   landedAt: 'f'.repeat(40),
+  mergedSha: 'a'.repeat(40),
   commits: ['a'.repeat(40)],
   paths: ['docs/a.md', 'src/a.ts'],
   mergedAt: new Date('2026-01-01T12:00:00Z'),
@@ -80,7 +81,13 @@ test('merged commits are evidence: what landed, what it touched, whether it depl
   })
   expect(verdict).toMatchObject({
     accepted: true,
-    commits: { commits: read.commits, landedAt: read.landedAt, mergedAt: '2026-01-01T12:00:00.000Z', deploys: true },
+    commits: {
+      commits: read.commits,
+      landedAt: read.landedAt,
+      mergedSha: read.mergedSha,
+      mergedAt: '2026-01-01T12:00:00.000Z',
+      deploys: true,
+    },
     review: { status: 'covered', tier: 'standard', reason: null },
   })
 })

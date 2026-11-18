@@ -17,6 +17,12 @@ export interface CommitRead {
    * proven landed.
    */
   landedAt: string | null
+  /**
+   * The commit of the default branch's first-parent line that holds the commits named (the squash, the merge commit, or
+   * the newest of a rebased run): the one CI ran for when the change merged. Unlike `landedAt`, a commit someone else
+   * landed after it is not it. Null where the line could not say, and CI is then read at `landedAt`.
+   */
+  mergedSha: string | null
   /** the commits named, full, then what else the lead's branch holds */
   commits: string[]
   /** every path they touched */
@@ -63,6 +69,8 @@ export interface LedgerThread {
 export interface CommitsEvidence {
   commits: string[]
   landedAt: string | null
+  /** the commit CI is read for; absent on evidence recorded before it existed, where `landedAt` stands in */
+  mergedSha?: string | null
   mergedAt: string | null
   /** whether any path is one a deploy carries: docs, text and tests are not */
   deploys: boolean

@@ -19,6 +19,8 @@ const CommitsEvidence = z.object({
   kind: z.literal('commits'),
   commits: z.array(z.string()),
   landedAt: z.string().nullable(),
+  /** the commit CI is read for (the one that merged the change); absent on evidence recorded before it existed */
+  mergedSha: z.string().nullable().optional(),
   mergedAt: z.iso.datetime({ offset: true }).nullable(),
   /** whether any path is one a deploy carries: docs, text and tests are not */
   deploys: z.boolean(),

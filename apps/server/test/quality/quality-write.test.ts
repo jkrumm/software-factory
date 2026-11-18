@@ -58,6 +58,7 @@ let project: ProjectChecks
 
 const landed = (extra: Partial<CommitRead> = {}): CommitRead => ({
   landedAt: 'f'.repeat(40),
+  mergedSha: 'e'.repeat(40),
   commits: [SHA],
   paths: ['src/a.ts'],
   mergedAt: new Date('2026-03-01T11:59:00Z'),
@@ -880,7 +881,7 @@ describe('the watch', () => {
       commitCi = ok(red)
       const refused = value(await ship(issueId, 'call-2'))
       expect(refused.result).toBe('refused')
-      expect(refused.detail).toContain(`CI is still red for ${'f'.repeat(7)}: Sonar failure (https://ci.example/run/1)`)
+      expect(refused.detail).toContain(`CI is still red for ${'e'.repeat(7)}: Sonar failure (https://ci.example/run/1)`)
       expect(refused.detail).toContain('factory issue ask')
       expect(await stateOf(issueId)).toMatchObject({ state: 'working' })
       commitCi = ok({ status: 'running', url: null, reason: 'Sonar is still running' })
@@ -954,6 +955,21 @@ describe('the watch', () => {
     clock.advance(30 * 60_000)
     value(await checkWatches(watchDeps({ proof: spy })))
     expect(seen).toEqual([{ landedAt: 'f'.repeat(40) }])
+    expect((await stateOf(issueId)).state).toBe('closed')
+  })
+
+  test('the ci check is asked for the commit that merged the change, not the tip the ship found', async () => {
+    const seen: unknown[] = []
+    const spy: Proof = {
+      run: async (input) => {
+        seen.push(input.ci)
+        return ok([])
+      },
+    }
+    const issueId = await watching()
+    clock.advance(30 * 60_000)
+    value(await checkWatches(watchDeps({ proof: spy })))
+    expect(seen).toMatchObject([{ landedAt: 'f'.repeat(40), mergedSha: 'e'.repeat(40) }])
     expect((await stateOf(issueId)).state).toBe('closed')
   })
 

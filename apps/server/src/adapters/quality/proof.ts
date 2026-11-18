@@ -102,11 +102,12 @@ export class MakeAndProbes implements Proof {
    */
   private async ci(repo: string, input: ProofInput['ci']): Promise<Check[]> {
     if (!input || !this.options.ci) return []
-    const read = await this.options.ci.ofCommit({ repo, sha: input.landedAt })
+    const sha = input.mergedSha ?? input.landedAt
+    const read = await this.options.ci.ofCommit({ repo, sha })
     if (!read.ok) return [{ name: 'ci', ok: true, detail: `CI was not read: ${read.error.detail}` }]
     return [
       ciCheck(read.value, {
-        sha: input.landedAt,
+        sha,
         mergedAt: input.mergedAt ? new Date(input.mergedAt) : null,
         now: new Date(input.now),
       }),
