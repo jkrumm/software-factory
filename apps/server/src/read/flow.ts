@@ -12,6 +12,7 @@ import {
   type QueueReason as QueueReasonSchema,
   SIGNAL_ORIGINS,
 } from '@software-factory/contract'
+import { type LeadRow, readLeadSeats } from './seats.ts'
 import { plain } from './words.ts'
 import { isWorkRepo, loadOpenProjects, REDACTED_REPO, REDACTED_TITLE } from './work.ts'
 
@@ -60,7 +61,12 @@ const RECENT_MS = 24 * 3_600_000
 /** The Issues by state, what closed in the last day, the 7-day trend, the counts per project and the queue state per scope. Read-only SQL. */
 export async function readFlow(
   sql: SQL,
-  options: { now: Date; queue?: QueueReasons; /** the read token: a work repo's words go */ redact?: boolean },
+  options: {
+    now: Date
+    queue?: QueueReasons
+    /** the read token: a work repo's words go */ redact?: boolean
+    /** the role table's lead row, for the seat of an Issue with no lead yet */ leadRow?: LeadRow
+  },
 ): Promise<FlowModel> {
   const { now } = options
   const openProjects = options.redact ? await loadOpenProjects(sql) : []
@@ -143,6 +149,11 @@ export async function readFlow(
     GROUP BY bucket`
   const scopes: unknown[] = await sql`SELECT project, state FROM factory.capacity_queue_states`
 
+  const seats = await readLeadSeats(
+    sql,
+    [...open, ...closed].map((raw) => z.object({ id: z.string() }).parse(raw).id),
+    options.leadRow,
+  )
   const columns: FlowModel['states'] = {
     settling: { count: 0, issues: [] },
     queued: { count: 0, issues: [] },
@@ -163,6 +174,7 @@ export async function readFlow(
       since: row.since.toISOString(),
       waitReason: row.wait_reason,
       queue: row.state === 'queued' && !hidden(row.repo) ? (options.queue?.get(row.id) ?? null) : null,
+      seat: seats.get(row.id) ?? null,
     }
     const column = columns[row.state]
     column.count++
@@ -226,6 +238,7 @@ export async function readFlow(
         kind: kindOf(row.kind),
         outcome: row.outcome,
         closedAt: row.closed_at.toISOString(),
+        seat: seats.get(row.id) ?? null,
       }
     }),
     perProject: [...perProject]

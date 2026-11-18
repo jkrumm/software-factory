@@ -72,6 +72,7 @@ function Kit() {
     project: i.project,
     kind: i.kind,
     number: i.number,
+    seat: i.seat,
     state: i.state,
     reason: i.reason,
     since: i.since,

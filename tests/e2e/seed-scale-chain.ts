@@ -33,6 +33,7 @@ const node = (
   since: kind === 'issue' ? '2026-11-08T00:00:00.000Z' : null,
   waitReason: null,
   notBefore: null,
+  seat: null,
   ...extra,
 })
 

@@ -1,4 +1,5 @@
 import { CheckCircleIcon, ClockIcon, HourglassIcon, type Icon, QueueIcon } from '@phosphor-icons/react'
+import type { LeadSeat } from '@software-factory/contract'
 import { ageWords } from '@/lib/age'
 import { cn } from '@/lib/utils'
 import type { CardLinkProps, LinkRender } from './card-link'
@@ -19,6 +20,8 @@ export interface IssueViewProps extends CardLinkProps {
   reason?: string | null
   /** The Issue's number, shown as `#657` in mono. Omitted or null (a plan row): none. */
   number?: number | null
+  /** The seat of the Issue's lead as a badge between the number and the state; omitted or null: none. */
+  seat?: LeadSeat | null
   /** When it entered its state (ISO). */
   since: string
   /** The clock the age is read against (ms), so a screen has one `now`. */

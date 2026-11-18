@@ -26,6 +26,16 @@ const RoleFile = z.object({ roles: z.record(RoleName, z.object({ tier: Tier, eff
 export type RoleTable = ReadonlyMap<string, RoleEntry>
 
 /**
+ * The seat an Issue's lead runs on, for the badge beside the Issue's number: the tier and effort the current attempt
+ * started on, or (`planned`) the ones it will start on (its filed seat, else the `lead` row). `role` is the table row it
+ * came from (`lead`, `light`, the filed seat's role), null when unknown. Never a model id.
+ */
+export const LeadSeat = z
+  .strictObject({ tier: Tier, effort: Effort, role: z.string().nullable(), planned: z.boolean() })
+  .meta({ id: 'LeadSeat' })
+export type LeadSeat = z.infer<typeof LeadSeat>
+
+/**
  * The tripwire for triage's `small` on the light seat (`apps/server/src/domains/leads/light.ts`). The light seat starts
  * with the rule classes; triage's `small` with no design choice joins them while, over the last `TRIPWIRE_DAYS` days, the
  * light seat delivers: the first verification pass rate of the attempts that finished on it is within `TRIPWIRE_POINTS`

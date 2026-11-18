@@ -5,6 +5,7 @@ import { ERRAND_NEEDS } from '@software-factory/contract'
 import { CHECK_BROKEN_NOTE, RUN_STATUSES, STILL_NEEDED_NOTE, triedLine } from '../kernel/run.ts'
 import { hostOf } from '../kernel/hands.ts'
 import { readLongWaits } from './long-waits.ts'
+import { type LeadRow, readLeadSeats } from './seats.ts'
 import { screenPassed } from './spec-screen.ts'
 import { DEFAULT_LONG_WAIT_MS } from './needs-settings.ts'
 import { plain } from './words.ts'
@@ -18,6 +19,8 @@ const STALE_MS = 24 * 3_600_000
 
 /** A need with the scope the redaction needs; the scope never leaves the server. */
 export type ScopedNeed = Omit<NeedItem, 'redacted'> & { work: boolean }
+
+type Unseated = Omit<ScopedNeed, 'seat'>
 
 export interface ScopedNeeds {
   at: Date
@@ -170,7 +173,11 @@ const SignalRow = z.object({
  * Concepts and Specs under review, open Errands (a lead's, whose Issue is still open, and requests no Issue raised), held
  * signals, and the long timed waits other Issues wait behind (`longWaitMs` and up) whose time has passed. Read-only SQL.
  */
-export async function readNeeds(sql: SQL, now: Date, options: { longWaitMs?: number } = {}): Promise<ScopedNeeds> {
+export async function readNeeds(
+  sql: SQL,
+  now: Date,
+  options: { longWaitMs?: number; leadRow?: LeadRow } = {},
+): Promise<ScopedNeeds> {
   const open = await loadOpenProjects(sql)
   // A timer that is still running is information, not a request: Flow shows the waiting Issue. It reaches the owner only once
   // its time has passed and the Issue is still not awake.
@@ -237,8 +244,8 @@ export async function readNeeds(sql: SQL, now: Date, options: { longWaitMs?: num
     stale: now.getTime() - since.getTime() > STALE_MS,
   })
 
-  const items: ScopedNeed[] = [
-    ...decisions.map((raw): ScopedNeed => {
+  const unseated: Unseated[] = [
+    ...decisions.map((raw): Unseated => {
       const row = DecisionRow.parse(raw)
       const wait = row.no_answer.default ? row.no_answer.waitMinutes : null
       return {
@@ -267,7 +274,7 @@ export async function readNeeds(sql: SQL, now: Date, options: { longWaitMs?: num
         work: isWorkRepo(row.repo, open),
       }
     }),
-    ...reviews.map((raw): ScopedNeed => {
+    ...reviews.map((raw): Unseated => {
       const row = ReviewRow.parse(raw)
       const noun = row.kind === 'spec' ? 'A spec' : row.kind === 'concept' ? 'A concept' : 'An artifact'
       return {
@@ -299,7 +306,7 @@ export async function readNeeds(sql: SQL, now: Date, options: { longWaitMs?: num
         work: isWorkRepo(row.repo, open),
       }
     }),
-    ...errands.map((raw): ScopedNeed => {
+    ...errands.map((raw): Unseated => {
       const row = ErrandRow.parse(raw)
       return {
         ...base(row.raised_at),
@@ -329,7 +336,7 @@ export async function readNeeds(sql: SQL, now: Date, options: { longWaitMs?: num
         work: row.repo === null || isWorkRepo(row.repo, open),
       }
     }),
-    ...signals.map((raw): ScopedNeed => {
+    ...signals.map((raw): Unseated => {
       const row = SignalRow.parse(raw)
       return {
         ...base(row.received_at),
@@ -364,7 +371,7 @@ export async function readNeeds(sql: SQL, now: Date, options: { longWaitMs?: num
         work: isWorkRepo(row.repo, open),
       }
     }),
-    ...longWaits.map((wait): ScopedNeed => ({
+    ...longWaits.map((wait): Unseated => ({
       ...base(wait.since),
       kind: 'long_wait',
       id: wait.issue,
@@ -390,5 +397,11 @@ export async function readNeeds(sql: SQL, now: Date, options: { longWaitMs?: num
       work: isWorkRepo(wait.repo, open),
     })),
   ]
+  const seats = await readLeadSeats(
+    sql,
+    unseated.flatMap((item) => (item.issue ? [item.issue] : [])),
+    options.leadRow,
+  )
+  const items = unseated.map((item): ScopedNeed => ({ ...item, seat: (item.issue && seats.get(item.issue)) || null }))
   return { at: now, items: items.sort((a, b) => KIND_ORDER.indexOf(a.kind) - KIND_ORDER.indexOf(b.kind)) }
 }

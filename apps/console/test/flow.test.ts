@@ -36,6 +36,7 @@ const issue = (id: string, repo: string, origin: Origin, extra: Record<string, u
   since: SINCE,
   waitReason: null,
   queue: null,
+  seat: null,
   ...extra,
 })
 

@@ -3,6 +3,7 @@ import type { SQL } from 'bun'
 import type { HookFact, SessionView } from '../domains/leads/session.ts'
 import type { Clock } from '../kernel/clock.ts'
 import { cut, plainText } from './plain.ts'
+import type { LeadRow } from './seats.ts'
 import { loadUsage, type IssueUsage, type UsageFigures } from './usage.ts'
 
 /**
@@ -17,6 +18,8 @@ export interface SessionDeps {
   sql: SQL
   clock: Clock
   deriveSession: DeriveSession
+  /** the role table's `lead` row, for the seat an Issue without a lead will start on; absent, such an Issue shows none */
+  leadRow?: LeadRow
   /** the statement timeout of the usage reads; absent, `USAGE_TIMEOUT_MS` */
   usageTimeoutMs?: number
 }

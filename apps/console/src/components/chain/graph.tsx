@@ -95,6 +95,7 @@ function Card({ id, data }: NodeProps<CardNode>) {
         }
         kind={node.issueKind}
         number={number ? Number(number) : null}
+        seat={node.seat}
         selected={peeked}
         state={state}
         stateLabel={label}

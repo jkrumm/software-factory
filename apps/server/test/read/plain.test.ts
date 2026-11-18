@@ -97,6 +97,7 @@ const card = (visible: boolean): ReadIssueCard => ({
   kind: 'bug',
   size: null,
   gate: false,
+  leadSeat: null,
   lead: 'lead-12-1',
   account: 'max1',
   quota: null,

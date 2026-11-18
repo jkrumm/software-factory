@@ -64,6 +64,7 @@ import { loadOpenProjects } from '../read/work.ts'
 import { readLoopYield } from '../read/loop-yield.ts'
 import { loopReads } from '../read/loops.ts'
 import { needsModel, readNeeds } from '../read/needs.ts'
+import type { LeadRow } from '../read/seats.ts'
 import { readSince, storedSince } from '../read/since.ts'
 import { callerOf } from './auth.ts'
 import { errorResponses } from './errors.ts'
@@ -74,6 +75,8 @@ export interface ReadModelDeps {
   sql: SQL
   /** why each queued Issue stays queued; absent or failing, the Flow screen shows the Issues without a reason */
   queueReasons?: () => Promise<QueueReasons | null>
+  /** the role table's lead row, for the seat badge of an Issue with no lead yet; absent or null, such an Issue shows none */
+  leadRow?: LeadRow
   /** the role table's reviewer rows, for the Improve screen's reviewer table; absent or null, its numbers have no tier words */
   reviewerRows?: () => Promise<{
     cheap: { tier: Tier; effort: Effort }
@@ -156,7 +159,7 @@ export const readModelRoutes = (deps: ReadModelDeps | undefined, caller: (reques
       '/needs',
       async ({ request }) => {
         if (!deps) return unavailable
-        const needs = await readNeeds(deps.sql, now(), { longWaitMs: deps.longWaitMs })
+        const needs = await readNeeds(deps.sql, now(), { longWaitMs: deps.longWaitMs, leadRow: deps.leadRow })
         return Response.json(NeedsModel.parse(needsModel(needs, { redact: caller(request) === 'read' })))
       },
       {
@@ -175,7 +178,9 @@ export const readModelRoutes = (deps: ReadModelDeps | undefined, caller: (reques
         const queue = await deps.queueReasons?.().catch(() => null)
         const redact = caller(request) === 'read'
         return Response.json(
-          FlowModel.parse(await readFlow(deps.sql, { now: now(), queue: queue ?? undefined, redact })),
+          FlowModel.parse(
+            await readFlow(deps.sql, { now: now(), queue: queue ?? undefined, redact, leadRow: deps.leadRow }),
+          ),
         )
       },
       {
@@ -392,7 +397,11 @@ export const readModelRoutes = (deps: ReadModelDeps | undefined, caller: (reques
         const queue = await deps.queueReasons?.().catch(() => null)
         return Response.json(
           ChainModel.parse(
-            await readChain(deps.sql, now(), { redact: caller(request) === 'read', queue: queue ?? undefined }),
+            await readChain(deps.sql, now(), {
+              redact: caller(request) === 'read',
+              queue: queue ?? undefined,
+              leadRow: deps.leadRow,
+            }),
           ),
         )
       },

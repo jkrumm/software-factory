@@ -1,6 +1,6 @@
 import { CaretDownIcon, CaretUpIcon } from '@phosphor-icons/react'
 import { Link } from '@tanstack/react-router'
-import { Lozenge } from '@/components/kit'
+import { Lozenge, SeatBadge } from '@/components/kit'
 import { Age, IssueNumber } from '@/components/kit/issue-parts'
 import { KindIcon } from '@/components/kit/kind-badge'
 import { LINK, Table, TD, TH } from '@/components/project/parts'
@@ -61,6 +61,7 @@ function Row({ card, now }: { card: FlowCard; now: number }) {
         <span className="inline-flex items-center gap-2">
           <KindIcon kind={card.kind} />
           <IssueNumber number={card.number} />
+          <SeatBadge seat={card.seat} />
         </span>
       </td>
       <td className={cn(TD, 'min-w-48')}>

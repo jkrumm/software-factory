@@ -17,6 +17,7 @@ const issue = (id: number, repo: string, extra: Partial<Open> = {}): Open => ({
   since: '2026-11-17T00:00:00.000Z',
   waitReason: null,
   queue: null,
+  seat: null,
   ...extra,
 })
 
@@ -70,6 +71,7 @@ describe('shippedOf', () => {
       kind: 'feature' as const,
       outcome,
       closedAt: '2026-11-17T00:00:00.000Z',
+      seat: null,
     })
     const result = shippedOf({
       closedRecently: [closed('a', 'done'), closed('b', 'healed'), closed('a', 'done'), closed('a', 'dropped')],

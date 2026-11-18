@@ -1,6 +1,7 @@
 import type { ReadIssueDetail } from '@software-factory/contract'
 import { Link } from '@tanstack/react-router'
 import { Lozenge } from '@/components/kit/lozenge'
+import { SeatBadge } from '@/components/kit/seat-badge'
 import { MeterBar } from '@/components/kit/meter'
 import { PropertyList } from '@/components/kit/property-list'
 import { Section } from '@/components/kit/section'
@@ -97,6 +98,7 @@ function LinkRow({ link }: { link: ChainLink }) {
       </div>
       <div className="flex flex-wrap items-center gap-2 text-xs text-muted-foreground">
         {node.repo ? <ProjectChip name={node.repo} /> : null}
+        <SeatBadge seat={node.seat} />
         <Lozenge state={lozengeOf(node).state} />
       </div>
     </li>

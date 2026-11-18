@@ -1,4 +1,5 @@
 /** Data for the `/kit` route: real-shaped Issues, projects and series, pure data with no I/O. */
+import type { LeadSeat } from '@software-factory/contract'
 import type { StatCardProps } from './stat-card'
 import type { IssueKind } from './kind-badge'
 import type { LozengeState } from './lozenge'
@@ -20,6 +21,8 @@ export interface KitIssue {
   state: LozengeState
   reason: string | null
   since: string | null
+  /** The seat of its lead: actual, planned (not started yet) or none. */
+  seat?: LeadSeat | null
 }
 
 export const KIT_ISSUES: KitIssue[] = [
@@ -32,6 +35,7 @@ export const KIT_ISSUES: KitIssue[] = [
     state: 'running',
     reason: null,
     since: ago(42),
+    seat: { tier: 'sonnet', effort: 'high', role: 'lead', planned: false },
   },
   {
     key: 'login-crash',
@@ -52,6 +56,7 @@ export const KIT_ISSUES: KitIssue[] = [
     state: 'held',
     reason: 'Behind Choose the export format: the chain is not done',
     since: ago(7),
+    seat: { tier: 'sonnet', effort: 'high', role: 'lead', planned: true },
   },
   {
     key: 'export-queue',
@@ -92,6 +97,7 @@ export const KIT_ISSUES: KitIssue[] = [
     state: 'running',
     reason: null,
     since: ago(95),
+    seat: { tier: 'haiku', effort: 'high', role: 'light', planned: false },
   },
   {
     key: 'old-flags',

@@ -1,4 +1,5 @@
 import * as z from 'zod'
+import { LeadSeat } from './roles.ts'
 import { WORK_WORDS, WorkCounts } from './work-words.ts'
 
 /**
@@ -130,6 +131,8 @@ export const ReadIssueCard = z
     waitingOnOwner: z.boolean(),
     /** the seat the Issue asked its lead for; null when it asked for none (the lead role of the table) */
     seat: z.object({ tier: z.string(), effort: z.string(), role: z.string().nullable() }).nullable(),
+    /** the seat of the Issue's lead for the badge: what the current attempt started on, else (`planned`) what it will start on; null when neither is known or the Issue is closed with no lead */
+    leadSeat: LeadSeat.nullable(),
     /** the resource class the Issue was filed in (the repo's `lanes:` cap it); null for none */
     lane: z.string().nullable(),
   })

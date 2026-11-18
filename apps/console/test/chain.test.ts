@@ -36,6 +36,7 @@ const node = (id: string, repo: string, title = id, kind: 'issue' | 'row' = 'iss
   since: kind === 'issue' ? '2026-11-08T00:00:00.000Z' : null,
   waitReason: null,
   notBefore: null,
+  seat: null,
 })
 
 // c waits for b waits for a; b also waits for the closed z; "solo" waits for nothing
