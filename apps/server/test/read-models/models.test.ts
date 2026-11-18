@@ -197,12 +197,15 @@ async function seed() {
   })
   await sql`INSERT INTO factory.lead_deliveries (key, issue_id, attempt, kind, text, claimed_at)
     VALUES ('note_1', 'issue_7', 1, 'note', 'wake up', ${ago(2)})`
-  // notes nobody can hear, none of them counted: a closed Issue's, and a lost lead's
+  // notes nobody can hear, none of them counted: a closed Issue's, a lost lead's, and a replaced attempt's
   await sql`INSERT INTO factory.lead_attempts (issue_id, attempt, branch, first_try_at, gone_at)
     VALUES ('issue_6', 1, 'factory/6-1', ${ago(1.5)}, ${ago(1.2)})`
   await sql`INSERT INTO factory.lead_deliveries (key, issue_id, attempt, kind, text, claimed_at) VALUES
     ('note_2', 'issue_1', 1, 'note', 'too late', ${ago(49)}),
-    ('note_3', 'issue_6', 1, 'note', 'lead was lost', ${ago(1.3)})`
+    ('note_3', 'issue_6', 1, 'note', 'lead was lost', ${ago(1.3)}),
+    ('note_4', 'issue_4', 1, 'note', 'replaced', ${ago(1.5)})`
+  await sql`INSERT INTO factory.lead_attempts (issue_id, attempt, branch, first_try_at)
+    VALUES ('issue_4', 1, 'factory/4-1', ${ago(2)}), ('issue_4', 2, 'factory/4-2', ${ago(1.4)})`
 
   // issue_8 (work repo): settling
   await issue('issue_8', 'work-app', 'settling', 1)
