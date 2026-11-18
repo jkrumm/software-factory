@@ -98,7 +98,12 @@ test('the deployed version must hold where the work landed', async () => {
     ),
   )
   expect(behind).toMatchObject([
-    { name: 'deployed version', ok: false, detail: expect.stringContaining('`make deploy` has not run') },
+    {
+      name: 'deployed version',
+      ok: false,
+      lacks: true,
+      detail: expect.stringContaining('`make deploy` has not run'),
+    },
   ])
 })
 

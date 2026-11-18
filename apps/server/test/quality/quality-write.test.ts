@@ -96,8 +96,10 @@ const checkout: LeadCheckout = {
     return checkoutAnswer
   },
 }
+let proofInputs: Parameters<Proof['run']>[0][]
 const proof: Proof = {
-  run: async () => {
+  run: async (input) => {
+    proofInputs.push(input)
     proofRuns++
     if (uow.inTransaction()) inside.push('proof')
     await duringProof()
@@ -155,6 +157,7 @@ beforeEach(async () => {
   commitRepos = []
   proofAnswer = () => ok([{ name: 'make verify', ok: true, detail: 'exit 0' }])
   proofRuns = 0
+  proofInputs = []
   commitCi = err(portError('refused', 'no token'))
   duringProof = async () => {}
   project = { windowMs: 30 * 60_000, deployMode: 'none', makeVerify: true, ci: true, probes: [] }
@@ -888,6 +891,9 @@ describe('the watch', () => {
       expect(refused.detail).toContain('make deploy')
       expect(refused.detail).toContain('factory deploy-lock --project example')
       expect(inside).toEqual([])
+      expect(proofInputs).toEqual([
+        { repo: '/repo/example', makeVerify: false, probes: [], version: { landedAt: 'f'.repeat(40) } },
+      ])
       expect(await stateOf(issueId)).toMatchObject({ state: 'working' })
       proofAnswer = () => ok([{ name: 'deployed version', ok: true, detail: 'deployed holds' }])
       expect(value(await ship(issueId, 'call-2')).result).toBe('applied')
