@@ -302,7 +302,7 @@ describe('fixDeps for a repo that ships by pull request', () => {
       'pr create --base master --head factory/hygiene-deps --title chore(deps): bump 2 patch and minor packages',
     )
     expect(calls).toContain('pr merge 7 --squash --delete-branch')
-    expect(calls.match(/pr checks/g)).toHaveLength(3)
+    expect(calls.match(/pr checks/g)).toHaveLength(4)
     expect(JSON.parse(git(f.origin, ['show', 'master:package.json'])).dependencies.hono).toBe('4.2.9')
     expect(remoteBranches(f.origin)).toEqual(['factory/hygiene-deps', 'master'])
   })
@@ -339,6 +339,14 @@ describe('fixDeps for a repo that ships by pull request', () => {
   test('a pull request that gets no CI check at all is closed, not merged', async () => {
     const f = fixture(files)
     const { gh, dir } = fakeGh({ checks: '[]' })
+    const [entry] = await fixDeps(byPr(gh), f.checkout, prInput)
+    expect(entry).toMatchObject({ outcome: 'failed', detail: expect.stringContaining('no CI check appeared') })
+    expect(callsOf(dir)).not.toContain('pr merge')
+  })
+
+  test('checks that were all skipped are no CI: the pull request is closed, not merged', async () => {
+    const f = fixture(files)
+    const { gh, dir } = fakeGh({ checks: '[{"name":"ci","bucket":"skipping"}]' })
     const [entry] = await fixDeps(byPr(gh), f.checkout, prInput)
     expect(entry).toMatchObject({ outcome: 'failed', detail: expect.stringContaining('no CI check appeared') })
     expect(callsOf(dir)).not.toContain('pr merge')

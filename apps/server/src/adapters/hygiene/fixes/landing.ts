@@ -129,15 +129,21 @@ async function checksOf(tools: Tools, cwd: string, number: number): Promise<Chec
   if (!rows.length) return { state: 'none', failed: [] }
   const failed = rows.filter((row) => row.bucket === 'fail' || row.bucket === 'cancel').map((row) => row.name ?? '?')
   if (failed.length) return { state: 'red', failed }
+  // Green is a check that ran and passed: a set that is all skipped (a path or `if` filter) is no CI at all.
   const done = rows.every((row) => row.bucket === 'pass' || row.bucket === 'skipping')
+  if (done && !rows.some((row) => row.bucket === 'pass')) return { state: 'none', failed: [] }
   return { state: done ? 'green' : 'pending', failed: [] }
 }
 
 async function waitForCi(tools: Tools, cwd: string, number: number, wait: CiWait): Promise<Checks | 'timeout'> {
   const started = Date.now()
+  let greens = 0
   for (;;) {
     const checks = await checksOf(tools, cwd, number)
-    if (checks.state === 'green' || checks.state === 'red') return checks
+    if (checks.state === 'red') return checks
+    // Green twice in a row: a workflow that registers a moment after the first one must not be merged past.
+    greens = checks.state === 'green' ? greens + 1 : 0
+    if (greens >= 2) return checks
     const elapsed = Date.now() - started
     if (checks.state === 'none' && elapsed >= wait.noChecksMs) return { state: 'none', failed: [] }
     if (elapsed >= wait.maxMs) return 'timeout'
