@@ -262,7 +262,9 @@ function headFitsBeside(
  * steps' learned remaining runtime (the learned run less the time they ran). The holders are taken to end in that order, each
  * freeing its resident size, until the head's size, what the holders left still grow by and the headroom fit in the free memory
  * plus what ended. A holder with no learned run reads as ending now, so the reserved start is never later than the true one:
- * a step that ends before it cannot delay the head. Null when the head's size or the free memory is unknown, or when it does
+ * a step that ends before it cannot delay the head. A holder that has run past its learned run is still running, so "now" is
+ * known to be wrong for it (the head would be reserved a start that never comes and every step behind it would wait, a base
+ * slot idle, for as long as the holder runs): it is taken to need as much longer as it has already overrun. Null when the head's size or the free memory is unknown, or when it does
  * not fit even with every holder gone: no step backfills then, and the head keeps the whole line. `base` is the number of
  * base slots: below it the head keeps no headroom.
  */
@@ -281,7 +283,7 @@ export function reservedStartMs(
       const ran = now.getTime() - (row.grantedAt?.getTime() ?? now.getTime())
       return {
         row,
-        remainingMs: learned === null ? 0 : Math.max(0, learned - ran),
+        remainingMs: learned === null ? 0 : Math.abs(learned - ran),
         growMib: Math.max(0, (fit.heldPeakById?.get(row.id) ?? 0) - (row.rssMib ?? 0)),
       }
     })
