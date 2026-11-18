@@ -29,6 +29,8 @@ const NEVER: Record<string, string> = {
     "`factory slot run` sets it for its step; the host loop reads it in other processes' environment",
   FACTORY_ROLE: "the lead's terminal sets it",
   FACTORY_SLOT_HOST: "a `factory slot run` caller's: pins one call to a host (the server reads it from the request)",
+  FACTORY_MERGE_LOCK_WAIT_MS:
+    "`factory merge-lock` reads it; the hygiene landing sets it in its child's environment: how long it waits for the window",
   FACTORY_STEP_CORES: "`factory slot run` sets it in a step's container: the cores the step host granted it",
 }
 
