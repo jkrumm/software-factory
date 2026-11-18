@@ -167,7 +167,7 @@ list's entry, `<name>` a map's key.
 | `budgets` | object | `{}` | the throughput loop (apps/server/src/app/loops/throughput.ts) | what the repo's checks may cost; a day over one is a signal on the repo. A key left out is no budget |
 | `budgets.fast` | duration | — | the throughput loop (apps/server/src/app/loops/throughput.ts) | the most the median of a day's fast-tier check runs may take (`5m`) |
 | `budgets.peak` | size | — | the throughput loop (apps/server/src/app/loops/throughput.ts) | the most peak memory one check step may take (`4GiB`) |
-| `budgets.fail` | share | — | the throughput loop (apps/server/src/app/loops/throughput.ts) | the most of a day's check steps that may exit non-zero (`30%`) |
+| `budgets.fail` | share | — | the throughput loop (apps/server/src/app/loops/throughput.ts) | the most of a day's check steps that may exit non-zero (`30%`); a red `check-fast` is not counted, and a breach needs the share on two days in a row |
 | `checks` | object or null | `null` | the lead's brief (apps/server/src/domains/leads/brief.ts) | check tiers: a fast local check and the full gate (CI's when `ci` is true). Unset: the lead runs `make check` |
 | `checks.fast` | string | required | the lead's brief (apps/server/src/domains/leads/brief.ts) | what a lead runs locally before each push (`make check-fast`) |
 | `checks.full` | string | `"make check"` | the lead's brief (apps/server/src/domains/leads/brief.ts) | the complete gate |
