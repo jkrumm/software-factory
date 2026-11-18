@@ -47,9 +47,13 @@ export {
   type RoleTable,
   TIERS,
   Tier,
+  TRIPWIRE_CONFIDENCE,
   TRIPWIRE_DAYS,
+  TRIPWIRE_MAX_DAYS,
   TRIPWIRE_MIN_WATCHES,
   TRIPWIRE_POINTS,
+  TRIPWIRE_TARGET_WATCHES,
+  TRIPWIRE_Z,
 } from './roles.ts'
 export {
   QualityEvidence,

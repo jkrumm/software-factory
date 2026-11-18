@@ -533,15 +533,23 @@ export const SeatKpis = z
       }),
     }),
     /**
-     * Whether triage's `small` starts on the light seat now: the same four figures over the last `days` days, whatever
-     * window the page shows. `met` when light's finished pass rate is within `points` of lead's, its regressions per Issue
-     * are not higher and its move-up share is under `bound` (null while any figure is unmeasured, or light has fewer than
-     * `minWatches` finished first watches); `failing` names each condition that is not met or not measured.
+     * Whether triage's `small` starts on the light seat now: the same four figures over the window of `days` days from
+     * `from` (3 days, reaching back until light has `targetWatches` finished first watches, at most 14), whatever window
+     * the page shows. `met` unless light is shown worse: the lower bound (at `confidence`, one-sided) of lead's pass rate
+     * over light's is within `points`, and its move-up share is under `bound` (null while any figure is unmeasured, or
+     * light has fewer than `minWatches` finished first watches); `failing` names each condition that is not met or not
+     * measured. `passGap` and `regressionGap` are the gaps with their lower bounds, `passGap` in points and
+     * `regressionGap` in regressions per Issue (light over lead; shown, not a condition).
      */
     tripwire: z.strictObject({
       points: z.number(),
       days: z.number().int(),
+      from: z.string(),
+      confidence: z.number(),
+      targetWatches: z.number().int(),
       minWatches: z.number().int(),
+      passGap: z.strictObject({ points: z.number(), lower: z.number() }).nullable(),
+      regressionGap: z.strictObject({ perIssue: z.number(), lower: z.number() }).nullable(),
       light: SeatDelivery,
       lead: SeatDelivery,
       bound: MoveUpBound.nullable(),

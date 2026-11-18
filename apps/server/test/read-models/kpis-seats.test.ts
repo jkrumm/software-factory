@@ -168,21 +168,26 @@ describe('the light seat delivers', () => {
       await watch(`issue_${n}`, 1, 'passed')
     }
     const open = await readSeatKpis(sql, W, { now: NOW, cost: priced })
-    // light passed 9 of 10 finished (0.9) against lead 11 of 12 (0.917): within 3 points, and the move-up share is far
-    // under the bound; but light regressed 1 in 11 Issues against the lead row's 1 in 12, so only that condition fails
+    // light passed 9 of 10 finished (0.9) against lead 11 of 12 (0.917): the gap is not shown, the move-up share is far
+    // under the bound, and light regressing 1 in 11 Issues against the lead row's 1 in 12 is shown, not a condition
     expect(open.tripwire.light.finishedWatches).toBe(10)
     expect(open.tripwire.light.finishedPassRate).toBeCloseTo(0.9)
     expect(open.tripwire.lead.finishedPassRate).toBeCloseTo(11 / 12)
-    expect(open.tripwire.met).toBe(false)
-    expect(open.tripwire.failing).toEqual(['light regresses more per Issue than lead'])
-    expect((await readTripwire(sql, { now: NOW, cost: priced })).met === true).toBe(false)
-    // a window three days later holds none of them: nothing is measured, the gate narrows by itself
-    const later = new Date(NOW.getTime() + 4 * 24 * 3_600_000)
-    expect((await readTripwire(sql, { now: later, cost: priced })).met === true).toBe(false)
-    // with both regressions gone the same Issues widen it
-    await sql`UPDATE factory.quality_watches SET answer = 'passed' WHERE key = 'w:issue_3:1' OR key = 'w:issue_6:1'`
-    const widened = await readSeatKpis(sql, W, { now: NOW, cost: priced })
-    expect(widened.tripwire.met).toBe(true)
+    expect(open.tripwire.met).toBe(true)
+    expect(open.tripwire.failing).toEqual([])
+    expect(open.tripwire.passGap?.lower).toBeLessThan(0)
+    expect(open.tripwire.regressionGap?.perIssue).toBeGreaterThan(0)
+    expect(open.tripwire).toMatchObject({ days: 14, confidence: 0.95, targetWatches: 100 })
     expect((await readTripwire(sql, { now: NOW, cost: priced })).met === true).toBe(true)
+    // four more light first watches regressed: light passed 5 of 10, shown far under lead's rate
+    await sql`UPDATE factory.quality_watches SET answer = 'regressed'
+      WHERE key IN ('w:issue_10:1', 'w:issue_11:1', 'w:issue_12:1', 'w:issue_13:1')`
+    const closed = await readSeatKpis(sql, W, { now: NOW, cost: priced })
+    expect(closed.tripwire.met).toBe(false)
+    expect(closed.tripwire.failing[0]).toContain('shown more than 3 points under')
+    expect((await readTripwire(sql, { now: NOW, cost: priced })).met === true).toBe(false)
+    // a window 15 days later holds none of them: nothing is measured, the gate narrows by itself
+    const later = new Date(NOW.getTime() + 15 * 24 * 3_600_000)
+    expect((await readTripwire(sql, { now: later, cost: priced })).met).toBeNull()
   })
 })

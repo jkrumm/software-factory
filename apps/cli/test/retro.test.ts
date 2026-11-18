@@ -65,7 +65,12 @@ beforeAll(() => {
         tripwire: {
           points: 3,
           days: 3,
+          from: '2026-11-15T00:00:00.000Z',
+          confidence: 0.95,
+          targetWatches: 100,
           minWatches: 10,
+          passGap: null,
+          regressionGap: null,
           light: noDelivery,
           lead: noDelivery,
           bound: null,
