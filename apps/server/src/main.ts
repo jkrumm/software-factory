@@ -94,6 +94,7 @@ import { rootedRepos } from './adapters/git/repos.ts'
 import { createFixCommitReader } from './adapters/hygiene/fix-commits.ts'
 import { createDoctorReader } from './adapters/doctor/index.ts'
 import { createHygieneChecker } from './adapters/hygiene/index.ts'
+import { reapHygieneDir } from './adapters/hygiene/checkout.ts'
 import { fileRoles } from './adapters/leads/roles.ts'
 import { composeIntake } from './compose-intake.ts'
 import { loadUptimeEnv } from './adapters/uptime/settings.ts'
@@ -282,6 +283,8 @@ async function main(): Promise<void> {
   const repos = rootedRepos(leadSettings.repoRoots, leadSettings.repoAllow)
   const mainCheckoutLines = new MainCheckoutLines()
   const hygieneChecker = createHygieneChecker({ repos, workDir: factoryDataDir(process.env) })
+  // the checkouts a killed pass left: no pass of this process exists yet, so they go (in the background)
+  void reapHygieneDir(factoryDataDir(process.env))
   const projects = projectFileProjects({
     uow,
     fallback: makefileProjects({ windowMs: settings.quality.windowMs }),
