@@ -223,6 +223,13 @@ describe('depsProbe', () => {
     ])
   })
 
+  test('a found run with a look-up that failed leaves the key unjudged: it is no green verdict', async () => {
+    const dir = repo({ 'Cargo.toml': '[dependencies]\nserde = "1.0"\nrand = "0.8"\n' })
+    const out = await depsProbe(defaultTools(), dir, lookup({ 'cargo:serde': '2.0.0' }, ['rand']))
+    expect(out.outcome).toBe('found')
+    expect(out.unjudged).toEqual(['deps'])
+  })
+
   test('green', async () => {
     const dir = repo({ 'Cargo.toml': '[dependencies]\nserde = "1.0"\n' })
     expect((await depsProbe(defaultTools(), dir, lookup({ 'cargo:serde': '1.0.229' }))).outcome).toBe('clean')

@@ -25,7 +25,7 @@ import { cochangeProbe } from './probes/cochange.ts'
 import { contextProbe } from './probes/context.ts'
 import { deadcodeProbe } from './probes/deadcode.ts'
 import { declaredProbe } from './probes/declared.ts'
-import { type Released, depsProbe, registryLookup, registryReleased } from './probes/deps.ts'
+import { type Released, depsProbe, installPackages, registryLookup, registryReleased } from './probes/deps.ts'
 import { type Outcome, failed, skipped } from './probes/finding.ts'
 import { linksProbe } from './probes/links.ts'
 import { projectProbe } from './probes/project.ts'
@@ -125,6 +125,8 @@ export function createHygieneChecker(options: HygieneCheckerOptions): HygieneChe
       }),
     ])
     const outcomes = new Map<Probe, Outcome>(results)
+    // A pass without the `deps` probe (a steady one) installs the packages itself, once, before the probes that read them.
+    const installFailure = runsIn('deps', scope) ? undefined : await installPackages(tools, path)
     // After `deps`, never beside it: both install the checkout's packages, and two installs in one tree break each other.
     if (runsIn('deadcode', scope)) {
       const reason = optOut.get('deadcode')
@@ -142,9 +144,11 @@ export function createHygieneChecker(options: HygieneCheckerOptions): HygieneChe
         'check',
         options.skipCheck !== undefined
           ? skipped(`make check not run, this host cannot run the project's check: ${options.skipCheck}`)
-          : (deps?.outcome === 'failed' || deps?.unjudged?.includes('deps')) && deps.detail.startsWith('bun install')
-            ? failed(`not run: ${deps.detail}`)
-            : await guarded(() => checkProbe(tools, checkout)),
+          : installFailure !== undefined
+            ? failed(`not run: ${installFailure}`)
+            : (deps?.outcome === 'failed' || deps?.unjudged?.includes('deps')) && deps.detail.startsWith('bun install')
+              ? failed(`not run: ${deps.detail}`)
+              : await guarded(() => checkProbe(tools, checkout)),
       )
     }
 

@@ -887,6 +887,18 @@ describe('cadence by activity: a steady pass of an idle repo leaves the monthly 
     expect(report.stale).toEqual([])
   })
 
+  test('a steady pass installs the packages itself before the gate reads them', async () => {
+    const report = await sweep(makeRepo({ ...LOCKED, Makefile: 'check:\n\ttest -d node_modules\n' }, OLD).name, {
+      bun: fakeBun(outdated(), 1),
+      scope: 'steady',
+    })
+    expect(run(report, 'deps')).toBeUndefined()
+    expect(run(report, 'check')).toMatchObject({
+      outcome: 'failed',
+      detail: 'not run: bun install --frozen-lockfile failed (exit 1)',
+    })
+  })
+
   test('a repo with a fresh commit is swept in full whatever was planned; so is one whose project says never idle', async () => {
     const fresh = await sweep(makeRepo(LOCKED).name, { bun: fakeBun(outdated()), scope: 'steady' })
     expect(fresh.scope).toBe('full')

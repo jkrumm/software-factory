@@ -330,7 +330,7 @@ async function sweepPass(
     const judgment =
       (report.scope ?? scope) === 'full'
         ? await judge(deps, gate, target, checkout, report, { probeFiled: added.filed.length, attempt: 1 }, added)
-        : skipped('a daily pass: the document judgment runs in the weekly pass')
+        : skipped(`a ${report.scope ?? scope} pass: the document judgment runs in the full pass`)
     return { report, judgment }
   })
   // A checkout that cannot be made is recorded as a sweep that ran nothing: the project is asked again after `retryMs`, and

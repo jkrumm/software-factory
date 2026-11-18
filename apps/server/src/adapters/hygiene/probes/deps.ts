@@ -576,6 +576,8 @@ async function judgeEcosystem(
   return {
     outcome: 'found',
     detail: `${entry.label}, ${rows.length} outdated${note}`,
+    // a row whose look-up failed is unknown, not current: a run that raises nothing for want of it is no green verdict
+    ...(notLooked ? { unjudged: ['deps'] } : {}),
     findings: [
       await ecosystemFinding(
         entry.ecosystem,
@@ -589,21 +591,25 @@ async function judgeEcosystem(
   }
 }
 
+/**
+ * Installs the checkout's packages when it has a `package.json` and no `node_modules` yet; returns why it could not, undefined
+ * when there was nothing to do or it worked. The `check` and `deadcode` probes read the installed tree, so a pass that does not
+ * run the `deps` probe (a steady one) installs them itself.
+ */
+export async function installPackages(tools: Tools, path: string): Promise<string | undefined> {
+  if (!existsSync(join(path, 'package.json')) || existsSync(join(path, 'node_modules'))) return undefined
+  const install = await exec([tools.bun, 'install', '--frozen-lockfile'], INSTALL_TIMEOUT_MS, path)
+  if (install.exitCode === 0) return undefined
+  return install.exitCode === EXIT_TIMEOUT
+    ? `bun install did not finish in ${INSTALL_TIMEOUT_MS / 60_000} min`
+    : `bun install --frozen-lockfile failed (exit ${install.exitCode})`
+}
+
 async function bunRun(tools: Tools, path: string, released: Released): Promise<EcosystemRun | undefined> {
   if (!existsSync(join(path, 'package.json'))) return undefined
-  if (!existsSync(join(path, 'node_modules'))) {
-    const install = await exec([tools.bun, 'install', '--frozen-lockfile'], INSTALL_TIMEOUT_MS, path)
-    if (install.exitCode !== 0) {
-      return {
-        outcome: 'failed',
-        detail:
-          install.exitCode === EXIT_TIMEOUT
-            ? `bun install did not finish in ${INSTALL_TIMEOUT_MS / 60_000} min`
-            : `bun install --frozen-lockfile failed (exit ${install.exitCode})`,
-        findings: [],
-        unjudged: ['deps'],
-      }
-    }
+  const installFailure = await installPackages(tools, path)
+  if (installFailure !== undefined) {
+    return { outcome: 'failed', detail: installFailure, findings: [], unjudged: ['deps'] }
   }
   const result = await exec([tools.bun, 'outdated'], OUTDATED_TIMEOUT_MS, path)
   if (result.exitCode === EXIT_TIMEOUT) {
