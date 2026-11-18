@@ -23,7 +23,7 @@ export interface NewIssueInput {
   /** the resource class, already a valid lane name */
   lane?: string | undefined
   /** `spec`: the lead owes a Spec before it builds */
-  checkpoint?: 'spec' | undefined
+  checkpoint?: 'spec' | 'gate' | undefined
   /** a Spec the filer wrote (markdown): stored with the Issue, which the queue holds until it has a verdict; implies the `spec` checkpoint */
   spec?: string | undefined
   /** its title; default: the first `# ` heading, else the Issue's title */
@@ -118,7 +118,7 @@ export async function fileNewIssue(
           origin: input.source === 'alert' ? 'application' : 'you',
           ...(seat ? { seat } : {}),
           ...(input.lane ? { lane: input.lane } : {}),
-          ...(input.checkpoint || spec ? { checkpoint: 'spec' as const } : {}),
+          ...(input.checkpoint || spec ? { checkpoint: input.checkpoint ?? ('spec' as const) } : {}),
           ...(input.after.length > 0 || input.alone ? { edges: 'stated' as const } : {}),
         },
         actor: input.actor,

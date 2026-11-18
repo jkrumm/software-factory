@@ -58,7 +58,12 @@ export interface ShipAnswer {
 }
 
 /** What a flagged Issue's ship is refused with until its lead has submitted a Spec. */
-const SPEC_OWED = `ship refused: this Issue carries the checkpoint \`spec\` and no Spec was submitted: hand over a one-page Spec with \`factory artifact submit --kind spec\` (at most three open choices, each with your default); with no verdict in ${SPEC_WAIT_HOURS} hours you go on with your defaults`
+const specOwedMessage = (checkpoint: 'spec' | 'gate'): string =>
+  `ship refused: this Issue carries the checkpoint \`${checkpoint}\` and no Spec was submitted: hand over a one-page Spec with \`factory artifact submit --kind spec\` (at most three open choices, each with your default); ${
+    checkpoint === 'gate'
+      ? "only the owner's own verdict ends the wait: there is no default after the hours, so do not build before it"
+      : `with no verdict in ${SPEC_WAIT_HOURS} hours you go on with your defaults`
+  }`
 
 /**
  * What a ship, or a close with outcome done, is refused with while the owner's annotations on its Specs and Concepts are
@@ -231,7 +236,7 @@ export async function shipIssue(
       eventKey,
       issue,
       accepted: await quality.shipAccepted(eventKey),
-      specOwed: issue.checkpoint === 'spec' && !(await quality.specSubmitted(input.issueId)),
+      specOwed: issue.checkpoint && !(await quality.specSubmitted(input.issueId)) ? issue.checkpoint : null,
       annotationsOwed: await quality.undisposedAnnotations(input.issueId),
       reviewer: assignedReviewer(history, input.attempt),
       afterCiRegression: regressedOnCi((await quality.view(input.issueId)).watches),
@@ -255,7 +260,7 @@ export async function shipIssue(
   }
 
   const verdict: ShipVerdict = specOwed
-    ? { accepted: false, error: SPEC_OWED }
+    ? { accepted: false, error: specOwedMessage(specOwed) }
     : owed.length > 0
       ? { accepted: false, error: annotationsOwed(owed) }
       : await judge(deps, issue, input, { reviewer, afterCiRegression })

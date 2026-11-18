@@ -27,6 +27,7 @@ export function Header({ issue, now, narrow }: { issue: ReadIssueDetail; now: nu
         {kind ? <KindBadge kind={kind} /> : null}
         <Lozenge state={lozengeStateOf(issue)} />
         {issue.waitingOnOwner ? <Lozenge state="paused">On you</Lozenge> : null}
+        {issue.gate ? <Lozenge tone="accent">Owner gate</Lozenge> : null}
         {regressions > 0 ? <Lozenge tone="bad">{`Regressed ${regressions}×`}</Lozenge> : null}
         <ProjectChip name={issue.repoName} />
       </div>

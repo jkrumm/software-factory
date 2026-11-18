@@ -59,11 +59,12 @@ export const FILING = {
   },
   checkpoint: {
     shape:
-      'optional; `spec` makes the lead hand over a one-page Spec before it builds, and the ship is refused without one',
+      "optional; `spec` makes the lead hand over a one-page Spec before it builds, and the ship is refused without one; `gate` is an owner gate: the same Spec, but only the owner's own verdict ends the wait",
     notes: [
       "Set it for a new public surface (an API, a CLI verb, a contract), a new data model or a migration that changes meaning, a new dependency of weight, or a UI screen the owner has not seen, and only for work of a session or more. Never for an hour's change (a constant, a limit, a config line) or a change inside an existing surface: its lead decides those.",
       "A Spec passes the Spec screen before it reaches the owner: one that is not his to read (no unseen screen or look, product direction, spend, security policy, other people or company data, irreversible change, or defaults that lead to materially different work) gets the factory's looks_good and its lead builds at once.",
       `The Spec has at most three open choices, each with the lead's default; with no verdict in ${SPEC_WAIT_HOURS} hours the lead goes on with its defaults, so the queue never waits on the owner.`,
+      '`gate` is for an Issue whose rows must not start until the owner has said so (a product gate): no default is taken, the Spec screen never settles it, and every Issue `after` it waits for his own verdict. It costs a waiting lead and a held chain for as long as he takes: never use it for a choice the lead can make.',
     ],
     example: 'spec',
   },
@@ -87,7 +88,11 @@ export const FILING = {
     { flag: '--facts', meaning: 'the facts object as JSON; @file reads a file, - reads stdin' },
     { flag: '--seat', meaning: 'optional lead seat as JSON: {"tier":"opus","effort":"high"} or {"role":"lead"}' },
     { flag: '--lane', meaning: "optional resource class, capped by the repo's `lanes:` in project.yaml (`apple`)" },
-    { flag: '--checkpoint', meaning: 'optional gate: `spec` makes the lead submit a one-page Spec before it builds' },
+    {
+      flag: '--checkpoint',
+      meaning:
+        'optional: `spec` makes the lead submit a one-page Spec before it builds; `gate` the same, with no default after 24 hours',
+    },
     {
       flag: '--spec',
       meaning:

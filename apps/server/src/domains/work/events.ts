@@ -30,7 +30,7 @@ export const PAYLOADS = {
     /** the resource class it runs in; the project's `lanes:` cap the leads of a lane (old events carry none) */
     lane: LaneName.optional(),
     /** the lead owes a Spec before it builds, and the ship is refused without one (`docs/architecture.md`, "The Spec checkpoint") */
-    checkpoint: z.literal('spec').optional(),
+    checkpoint: z.enum(['spec', 'gate']).optional(),
     /** the filer stated the edges (`--after`, or `--alone` for none): they are final, settling adds none */
     edges: z.literal('stated').optional(),
   }),

@@ -46,7 +46,7 @@ interface IssueRow {
   wait_reason: string | null
   seated: unknown
   outcome: string | null
-  filed: { title?: unknown; kind?: unknown; seat?: unknown; lane?: unknown } | null
+  filed: { title?: unknown; kind?: unknown; seat?: unknown; lane?: unknown; checkpoint?: unknown } | null
   created_at: Date
   updated_at: Date
   closed_at: Date | null
@@ -202,6 +202,7 @@ function cardOf(input: {
     visible: row.work,
     kind: text(row.settled_kind) ?? text(row.filed?.kind),
     size: text(row.settled_size),
+    gate: row.filed?.checkpoint === 'gate',
     lead: live?.card.id ?? null,
     account,
     quota: account ? (input.quota.get(account) ?? null) : null,

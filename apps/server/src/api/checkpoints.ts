@@ -117,6 +117,7 @@ const verdictView = (v: VerdictRecord) => ({
   verdict: v.verdict,
   note: v.note,
   at: iso(v.at),
+  by: v.by,
   neededMe: v.neededMe,
 })
 

@@ -112,6 +112,8 @@ export const LANGUAGE = {
   overview:
     "The Console's home screen (/): what needs the owner, production, what shipped in a day, the host and the queue's binding reason, then the flow's counts and trend. It was the Flow screen",
   owed: 'Working in a repo without a claim, because the wait that gave it up has ended. Owed Issues are served first, so a new lead never takes the place a resumed one waits for. Among themselves they are served by the earliest wait end, then the Issue number; an owed lead is held up only by those ahead of it in that order, never by itself or one behind it. An owed lead counts in the leads of the account it resumes on, and the account cap never refuses its resume. A note refused for a claim for FACTORY_CLAIM_STALL_MS while a claim would be granted to that lead now is a steward stall; a herd waiting its turn is not',
+  'owner gate':
+    "An Issue filed with the checkpoint gate: it owes the same Spec as spec, but only the owner's own verdict ends its wait. No default after 24 hours, no Spec screen settle, so what is after it is released by him alone. Only a filer sets it, never triage",
   page: "One message on the owner's line (ntfy). It carries a checkpoint, is never sent twice, and goes on until the checkpoint is settled",
   pass: 'One run of a loop. A pass claims, commits, calls, records: a replayed pass acts on what the first stored',
   paused:
@@ -200,7 +202,8 @@ export const LANGUAGE = {
     "The owner's or the orchestrator's verb that ends an Errand wait without doing it (factory errand turn-back <id> --note ..., the Console's Turn back button): the Errand closes turned_back and the lead hears the note as its next turn",
   turns:
     'How many times a lead was prompted and worked until it stopped: the brief, each note, each wake. What to do: many turns on a small Issue means the lead was steered a lot; read the notes in Activity',
-  verdict: "The owner's answer on an artifact: Looks good, With notes, Changes, No longer applies",
+  verdict:
+    'The answer on an artifact: Looks good, With notes, Changes, No longer applies. Every verdict says who gave it (by): the owner, or the factory for him (the default after 24 hours, a Spec screen settle, a withdrawal), which is never read as his',
   verified:
     'A shipped change whose watch passed: it is live and Verify and the probes found nothing broken. The "Since you were here" band counts these as Shipped and verified, one per Issue',
   verify: 'The check that ends the watch: make verify, probes',

@@ -100,6 +100,8 @@ const ReviewRow = z.object({
   summary: z.string().nullable(),
   at: z.date(),
   origin: z.string().nullable(),
+  /** an owner gate: no default is taken, so the card says so */
+  gate: z.boolean(),
 })
 
 const ErrandRow = z.object({
@@ -190,7 +192,8 @@ export async function readNeeds(sql: SQL, now: Date, options: { longWaitMs?: num
     SELECT * FROM (
       SELECT i.id AS issue_id, i.repo, e.wait->'holds'->>'id' AS artifact_id, a.title, a.kind,
         e.wait->'holds'->>'summary' AS summary, e.at,
-        (SELECT f.payload->>'origin' FROM factory.issue_events f WHERE f.issue_id = i.id AND f.kind = 'filed' AND f.version = 1) AS origin
+        (SELECT f.payload->>'origin' FROM factory.issue_events f WHERE f.issue_id = i.id AND f.kind = 'filed' AND f.version = 1) AS origin,
+        EXISTS (SELECT 1 FROM factory.issue_events g WHERE g.issue_id = i.id AND g.kind = 'filed' AND g.version = 1 AND g.payload->>'checkpoint' = 'gate') AS gate
       FROM factory.issues i
       JOIN LATERAL (
         SELECT x.wait, x.at FROM factory.issue_events x
@@ -201,7 +204,8 @@ export async function readNeeds(sql: SQL, now: Date, options: { longWaitMs?: num
         AND ${screenPassed(sql)}
       UNION ALL
       SELECT i.id AS issue_id, i.repo, a.id AS artifact_id, a.title, a.kind, NULL::text AS summary, r.created_at AS at,
-        (SELECT f.payload->>'origin' FROM factory.issue_events f WHERE f.issue_id = i.id AND f.kind = 'filed' AND f.version = 1) AS origin
+        (SELECT f.payload->>'origin' FROM factory.issue_events f WHERE f.issue_id = i.id AND f.kind = 'filed' AND f.version = 1) AS origin,
+        EXISTS (SELECT 1 FROM factory.issue_events g WHERE g.issue_id = i.id AND g.kind = 'filed' AND g.version = 1 AND g.payload->>'checkpoint' = 'gate') AS gate
       FROM factory.artifacts a
       JOIN factory.issues i ON i.id = a.issue_id AND i.state IN ('settling', 'queued')
       JOIN LATERAL (
@@ -273,7 +277,10 @@ export async function readNeeds(sql: SQL, now: Date, options: { longWaitMs?: num
         issue: row.issue_id,
         repo: row.repo,
         title: plain(row.title ?? row.summary ?? `${noun} waits for your verdict`, 120),
-        summary: plain(row.summary ?? `${noun} waits for your verdict.`, 200),
+        summary: plain(
+          `${row.summary ?? `${noun} waits for your verdict.`}${row.gate ? ' An owner gate: no default is taken, and what is after it waits.' : ''}`,
+          200,
+        ),
         defaultAt: null,
         judge: null,
         link: { type: 'artifact', id: row.artifact_id },

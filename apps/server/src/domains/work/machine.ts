@@ -41,7 +41,8 @@ function evolve(
 ): Issue {
   const settled = kind === 'settled' ? PAYLOADS.settled.parse(payload) : undefined
   const refined = settled?.kind
-  const checkpoint = settled?.checkpoint ?? issue.checkpoint
+  // a filer's gate is never turned into a plain Spec by triage
+  const checkpoint = issue.checkpoint ?? settled?.checkpoint
   const size = settled?.size ?? issue.size
   const started = kind === 'lead_started' ? PAYLOADS.lead_started.parse(payload) : undefined
   // A new attempt has not started yet; the started lead's seat is its attempt's.

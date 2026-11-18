@@ -54,11 +54,15 @@ export const trustWords = (trust: string): string => word(TRUST_WORDS, trust)
 export const triageKindWords = (kind: string): string => word(KIND_WORDS, kind)
 export const settledByWords = (by: string | null): string => (by === null ? '' : word(SETTLED_BY_WORDS, by))
 
-/** A latest verdict, in the artifact page's words; "No verdict yet" while none. */
-export const verdictWords = (verdict: string | null): string =>
-  verdict === null
-    ? 'No verdict yet'
-    : (VERDICT_WORDS[verdict as keyof typeof VERDICT_WORDS] ?? verdict.replaceAll('_', ' '))
+/**
+ * A latest verdict, in the artifact page's words; "No verdict yet" while none. One the factory gave (the default after the
+ * wait, a screen settle, a withdrawal) says so: it is never read as the owner's.
+ */
+export const verdictWords = (verdict: string | null, by: 'owner' | 'factory' | null = null): string => {
+  if (verdict === null) return 'No verdict yet'
+  const words = VERDICT_WORDS[verdict as keyof typeof VERDICT_WORDS] ?? verdict.replaceAll('_', ' ')
+  return by === 'factory' ? `${words}, by the factory` : words
+}
 
 export const askStatusWords = (status: ReadAskLine['status']): string =>
   ({ open: 'Open', answered: 'Answered', withdrawn: 'Withdrawn' })[status]
