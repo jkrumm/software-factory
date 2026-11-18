@@ -830,6 +830,18 @@ test('a finding the new head still raises is filed once, and a default branch th
   expect(still.onlys).toEqual([undefined])
 })
 
+test('a second reading that could not run (a failed probe) keeps the first: the finding is filed, nothing heals', async () => {
+  const w = world(['a'], new Set(), undefined, {
+    findings: [imports],
+    runs: [importsRun('found')],
+    refs: ['aaaaaaa1', 'bbbbbbb2'],
+    again: { findings: [], runs: [importsRun('failed')] },
+  })
+  await hygienePass(w.deps)
+  expect(w.filedBodies).toHaveLength(1)
+  expect(w.rows[0]?.report.runs.find((r) => r.probe === 'agentsmd')).toMatchObject({ outcome: 'found' })
+})
+
 test('only the probes that read files are read again: a red check or a deps refresh is filed as swept', async () => {
   const w = world(['a'], new Set(), undefined, {
     findings: [finding('check', 'check', 1), finding('deps', 'deps', 3)],

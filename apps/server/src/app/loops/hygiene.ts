@@ -17,7 +17,8 @@ import {
   NO_REF,
   type Swept,
 } from '../../domains/loops/hygiene.ts'
-import { REREAD_PROBES, rereadReport } from '../../domains/loops/hygiene-model.ts'
+import { applyFixes } from '../../domains/loops/hygiene-fixes.ts'
+import { REREAD_PROBES } from '../../domains/loops/hygiene-model.ts'
 import type {
   Checkout,
   DeclaredProbe,
@@ -286,7 +287,24 @@ async function readAgain(
   const head = await deps.checker.withCheckout(target.repoText, null, async (now) =>
     now.ref === checkout.ref ? null : deps.checker.sweep(now, { ...options, only: probes }),
   )
-  return head.ok && head.value ? rereadReport(report, head.value, probes) : report
+  if (!head.ok || !head.value) return report
+  // the merge rule of a scripted fix's second run: a probe that did not end with a verdict keeps its first reading
+  const merged = applyFixes({ report, rerun: head.value, fixes: [] })
+  const keysOf = (from: SweepReport, probe: string): string =>
+    from.findings
+      .filter((finding) => finding.probe === probe)
+      .map((finding) => finding.key)
+      .sort()
+      .join('\n')
+  const sha = head.value.ref.slice(0, 7)
+  return {
+    ...merged,
+    runs: merged.runs.map((run) =>
+      probes.includes(run.probe) && keysOf(report, run.probe) !== keysOf(merged, run.probe)
+        ? { ...run, detail: `${run.detail}; read again at ${sha} before filing` }
+        : run,
+    ),
+  }
 }
 
 /**
