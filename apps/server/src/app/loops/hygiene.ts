@@ -297,8 +297,13 @@ async function readAgain(
       .sort()
       .join('\n')
   const sha = head.value.ref.slice(0, 7)
+  // a re-read finding has no plan: the note a scripted fix put on the first reading's finding of that key goes with it
+  const plans = new Map(report.findings.filter((finding) => finding.plan).map((finding) => [finding.key, finding.plan]))
   return {
     ...merged,
+    findings: merged.findings.map((finding) =>
+      !finding.plan && plans.get(finding.key) ? { ...finding, plan: plans.get(finding.key) } : finding,
+    ),
     runs: merged.runs.map((run) =>
       probes.includes(run.probe) && keysOf(report, run.probe) !== keysOf(merged, run.probe)
         ? { ...run, detail: `${run.detail}; read again at ${sha} before filing` }

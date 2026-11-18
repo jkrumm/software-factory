@@ -842,6 +842,22 @@ test('a second reading that could not run (a failed probe) keeps the first: the 
   expect(w.rows[0]?.report.runs.find((r) => r.probe === 'agentsmd')).toMatchObject({ outcome: 'found' })
 })
 
+test("a re-read keeps the note a scripted fix put on the finding's plan", async () => {
+  const fixed = { ...finding('stale', 'stale:branches', 2), plan: ['A scripted fix ran and the probe is still red'] }
+  const w = world(['a'], new Set(), undefined, {
+    findings: [fixed],
+    runs: [{ probe: 'stale', outcome: 'found', detail: 'two', covers: 'stale' }],
+    refs: ['aaaaaaa1', 'bbbbbbb2'],
+    again: {
+      findings: [finding('stale', 'stale:branches', 2)],
+      runs: [{ probe: 'stale', outcome: 'found', detail: 'two', covers: 'stale' }],
+    },
+  })
+  await hygienePass(w.deps)
+  expect(w.filedBodies).toHaveLength(1)
+  expect(w.rows[0]?.report.findings[0]?.plan).toEqual(['A scripted fix ran and the probe is still red'])
+})
+
 test('only the probes that read files are read again: a red check or a deps refresh is filed as swept', async () => {
   const w = world(['a'], new Set(), undefined, {
     findings: [finding('check', 'check', 1), finding('deps', 'deps', 3)],
