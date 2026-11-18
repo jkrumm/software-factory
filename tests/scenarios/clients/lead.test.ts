@@ -85,7 +85,6 @@ test('issue show reads the Issue by ref and by number; the fields a lead reads a
 test('an owner verb with the agent token is 403 forbidden (exit 3)', async () => {
   for (const args of [
     ['issue', 'cancel', issue, '--reason', 'no'],
-    ['issue', 'note', issue, 'hello'],
     ['issue', 'answer', issue, 'yes'],
     ['issue', 'prio', issue, '5'],
     ['queue', 'set', 'drain'],

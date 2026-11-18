@@ -389,6 +389,15 @@ export const issueRoutes = (wired: IssueApi | undefined) => {
       async ({ params, body, request }) => {
         const issueId = issueRef(params.id)
         if (!issueId) return unknownIssue(params.id)
+        // An agent's note is the factory's, fenced as data for the lead; it cannot wake a wait the owner ends.
+        if (callerOf(request) === 'agent') {
+          if (body.wake) {
+            return Response.json(failure('an agent note cannot wake a wait: only the owner ends one', 'forbidden'), {
+              status: 403,
+            })
+          }
+          return noteResponse(await api.note({ issueId, text: body.text, actor: 'factory', call: body.call }))
+        }
         return noteResponse(
           await api.note({
             issueId,
@@ -407,7 +416,7 @@ export const issueRoutes = (wired: IssueApi | undefined) => {
         detail: {
           operationId: 'issue.note',
           summary:
-            "the owner's note for the lead, which hears it as a note; with wake, a wait the owner may end is ended too",
+            "a note on the Issue for its lead, which hears it as a note (an agent's reaches it fenced as data, on any open Issue, and cannot wake; a closed Issue answers 409); with wake, a wait the owner may end is ended too",
           'x-cli': { args: ['text'] },
         },
       },

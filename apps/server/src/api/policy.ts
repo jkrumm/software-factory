@@ -16,9 +16,9 @@
  * - read: `GET /v1/*`, for owner, agent and read, except `GET /v1/errands` (the owner's hands) and a lead's own session read
  *   (`GET /v1/issues/:id/lead`), which are placed before it. A GET outside `/v1` is the owner's.
  * - lead verbs: what a lead session calls on its own Issue (owner and agent): `POST /issues/:id/withdraw` (the filer of the Issue's signals takes it back while no lead has it; the server checks the state and that `from` is the only source, and records `cancelled` as the factory, never as an owner touch), the `POST /v1/issues/:id/*` verbs (`replan` included: the server gates it on the Replan's approved Spec and its own project's Issues, while `/planning/after|unafter` and `cancel` stay owner only), `ship`,
- *   `quality`, a revision, a standalone Report (`POST /v1/artifacts`), an artifact's link to an Issue (`POST /v1/artifacts/:id/links`), and a Report's retire and restore (`POST /v1/artifacts/:id/retire|restore`; none is scoped to the caller's own Issue: an agent may file a Report under any repo inside the roots and link or retire any artifact), a collection of artifacts and its pin (`POST /v1/artifact-collections[/:id[/pin|/unpin]]`), its answer to an annotation (`POST /v1/artifacts/:id/annotations/:annotationId/reply`; the server gates it on the Issue's current attempt when an Issue owns the artifact), a request for the owner's hands that no Issue raised (`POST /v1/errands/requests`: its `check` is a shell command the `errands` loop runs, so only a caller that can run shell itself may set one), an Errand's check run now (`POST /v1/errands/:id/check`: it runs the command the Errand already carries), its own session read, a note to a session, the signal it files, the test slots it takes, a repo's relearn point (`POST /capacity/relearn`: an Issue's own ship step may set one, any repo; the actor is recorded as `agent`) and the
+ *   `quality`, a revision, a standalone Report (`POST /v1/artifacts`), an artifact's link to an Issue (`POST /v1/artifacts/:id/links`), and a Report's retire and restore (`POST /v1/artifacts/:id/retire|restore`; none is scoped to the caller's own Issue: an agent may file a Report under any repo inside the roots and link or retire any artifact), a collection of artifacts and its pin (`POST /v1/artifact-collections[/:id[/pin|/unpin]]`), its answer to an annotation (`POST /v1/artifacts/:id/annotations/:annotationId/reply`; the server gates it on the Issue's current attempt when an Issue owns the artifact), a request for the owner's hands that no Issue raised (`POST /v1/errands/requests`: its `check` is a shell command the `errands` loop runs, so only a caller that can run shell itself may set one), an Errand's check run now (`POST /v1/errands/:id/check`: it runs the command the Errand already carries), its own session read, a note to a session, a note on an Issue (`POST /issues/:id/note`: recorded as the factory's and fenced as data, `wake` refused; a closed Issue answers 409), the signal it files, the test slots it takes, a repo's relearn point (`POST /capacity/relearn`: an Issue's own ship step may set one, any repo; the actor is recorded as `agent`) and the
  *   door routes it sets or removes for its own Issue's repo (`POST /door/routes`, `/door/routes/remove`; `app/intake.ts` holds the repo check).
- * - owner only: everything else, and every route nobody has listed yet (new, cancel, note, seat, answer, prio, reopen, verdicts, projects, queue,
+ * - owner only: everything else, and every route nobody has listed yet (new, cancel, seat, answer, prio, reopen, verdicts, projects, queue,
  *   capacity writes, loops, reading the door's registry; `GET /capacity` is the one capacity read a lead has). When in doubt, the owner alone.
  * - person: the owner's own judgment and hands, never the orchestrator's: `POST /v1/decisions/:id/worth-asking`,
  *   `POST /v1/artifacts/:id/verdict`, `POST /v1/artifacts/:id/needed` (his "needed me" mark), `POST /v1/artifacts/:id/annotations` and its `PATCH`/`DELETE /v1/artifacts/:id/annotations/:annotationId`, `POST /v1/errands/:id/done`, `POST /v1/errands/:id/approve` (his yes: the server runs the Errand's command on the mini), and
@@ -84,6 +84,8 @@ export const POLICY: readonly Rule[] = [
   rule('POST', '/v1/sessions/:session/note', LEAD),
   rule('POST', '/issues/:id/ship', LEAD),
   rule('POST', '/issues/:id/withdraw', LEAD),
+  // an agent's note is recorded as the factory's, fenced as data, and may not wake; any Issue, as a session note reaches any lead
+  rule('POST', '/issues/:id/note', LEAD),
   rule('GET', '/issues/:id/quality', LEAD),
   rule('GET', '/v1/issues/:id/lead', LEAD),
   rule('POST', '/signals', FILE),
@@ -121,7 +123,6 @@ export const POLICY: readonly Rule[] = [
   rule('POST', '/issues', OWNER),
   rule('POST', '/issues/:id/reopen', OWNER),
   rule('POST', '/issues/:id/cancel', OWNER),
-  rule('POST', '/issues/:id/note', OWNER),
   rule('POST', '/issues/:id/seat', OWNER),
   rule('POST', '/issues/:id/answer', OWNER),
   rule('POST', '/issues/:id/prio', OWNER),
