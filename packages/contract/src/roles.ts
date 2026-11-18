@@ -50,7 +50,7 @@ export const TRIPWIRE_MIN_WATCHES = 10
 /** The window reaches back until light has this many finished first watches (a Wilson half-width of about 4 points), at most `TRIPWIRE_MAX_DAYS`. */
 export const TRIPWIRE_TARGET_WATCHES = 100
 export const TRIPWIRE_MAX_DAYS = 14
-/** One-sided 95 %: the z of the interval a gap must clear to be shown. */
+/** One-sided 95 %: the z of the interval a gap must clear to be shown. `TRIPWIRE_Z` is its normal quantile: change both together. */
 export const TRIPWIRE_CONFIDENCE = 0.95
 export const TRIPWIRE_Z = 1.6449
 

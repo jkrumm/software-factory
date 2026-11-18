@@ -459,7 +459,7 @@ Report `docs/strategy/2026-11-next/report.html`, definition `docs/strategy/2026-
 - **NL45 The light gate decides on evidence, not on a gap between two small samples (Issue 2226, 2026-11-18).** NL38's gate
   compared point estimates: light's pass rate more than 3 points under lead's, or any regression rate above lead's. The
   reading of 2026-11-18 (3 days: light 71 of 75 finished first watches, lead 515 of 527; regressions 4 of 117 and 12 of 619
-  Issues) was 94.7 against 97.7, a gap of 3.05 points, about two Issues, and the gate stayed closed: nearly all default-seat
+  Issues) was 94.7 against 97.7, a gap of 3.06 points, about two Issues, and the gate stayed closed: nearly all default-seat
   work ran on the lead row at about 2.79 dollars an Issue, against 0.30 on light. Over the longer window in `seats.delivery`
   light was within one point and regressed less. The owner's steer: optimise for throughput, extra regressions are
   acceptable, open on numbers like these. Now: (a) the pass-rate condition is broken only when the one-sided 95 % lower

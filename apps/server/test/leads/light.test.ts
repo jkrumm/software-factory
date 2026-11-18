@@ -6,6 +6,8 @@ import {
   moveUpBound,
   regressionGap,
   type SeatFigures,
+  TRIPWIRE_CONFIDENCE,
+  TRIPWIRE_Z,
   tripwireFrom,
 } from '@software-factory/contract'
 import {
@@ -136,7 +138,7 @@ describe('the light gate', () => {
     expect(moveUpBound({ lightAttempt: 0.15, leadAttempt: 2.7, followUpAttempt: 0 })).toBeNull()
   })
 
-  test("opens on today's figures: a 3.05 point gap on 75 watches is not shown", () => {
+  test("opens on today's figures: a 3.06 point gap on 75 watches is not shown", () => {
     const verdict = judgeLightGate({ light: light(71, 75), lead, bound: 0.94 })
     expect(verdict.met).toBe(true)
     expect(verdict.failing).toEqual([])
@@ -201,6 +203,11 @@ describe('the light gate', () => {
     expect(verdict.met).toBe(false)
     expect(verdict.failing).toHaveLength(2)
   })
+})
+
+test('the reported confidence and the z the gaps are bound at are one level', () => {
+  expect(TRIPWIRE_CONFIDENCE).toBe(0.95)
+  expect(TRIPWIRE_Z).toBeCloseTo(1.6449, 4)
 })
 
 describe('tripwireFrom', () => {
