@@ -290,7 +290,7 @@ export const FRESH_MS = 3 * 60_000
 
 /** Swap use that rose over this many minute samples, never falling, is a swap that grows. */
 export const SWAP_RISE_MINUTES = 15
-/** The rise over those minutes, in points of swap use, below which a flat reading is noise. */
+/** The rise over those minutes, in points of swap use, below which a flat reading is noise; the largest one-minute step is not counted in it. */
 const SWAP_MIN_RISE_PCT = 0.5
 /** Two minute samples further apart than this are not consecutive: one skipped host tick under load does not break a run. */
 export const MINUTE_GAP_MS = 150_000
@@ -355,7 +355,9 @@ export function processGrowthFindings(samples: readonly ProcessMinute[], now: Da
 
 /**
  * Swap use that did not fall and ended higher over the last 15 minutes in a row: 16 consecutive minute samples, every one
- * read, the newest not older than 3 minutes. Cleared at the first minute it falls or a reading is missing.
+ * read, the newest not older than 3 minutes. Cleared at the first minute it falls or a reading is missing. The rise must be
+ * 0.5 points without its largest one-minute step: a burst that moved swap once (3.4% to 6.1% in one minute, then 50 flat
+ * minutes, 2026-11-18) is a step, not growth, and a run that keeps growing is judged on the rest of its rise.
  */
 export function swapGrowthFindings(minutes: readonly HostMinute[], now: Date): Finding[] {
   const ordered = [...minutes].sort((a, b) => a.at.getTime() - b.at.getTime())
@@ -373,7 +375,13 @@ export function swapGrowthFindings(minutes: readonly HostMinute[], now: Date): F
   const last = run[run.length - 1]
   if (!last || now.getTime() - last.at.getTime() > FRESH_MS || run.length < SWAP_RISE_MINUTES + 1) return []
   const start = run[run.length - 1 - SWAP_RISE_MINUTES]
-  if (!start || last.pct - start.pct < SWAP_MIN_RISE_PCT) return []
+  if (!start) return []
+  const window = run.slice(-(SWAP_RISE_MINUTES + 1))
+  const largestStep = window.reduce(
+    (most, point, i) => (i === 0 ? most : Math.max(most, point.pct - (window[i - 1]?.pct ?? point.pct))),
+    0,
+  )
+  if (last.pct - start.pct - largestStep < SWAP_MIN_RISE_PCT) return []
   return [
     {
       kind: 'swap_growth',

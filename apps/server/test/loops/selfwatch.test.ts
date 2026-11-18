@@ -484,6 +484,12 @@ test('swap_growth: 15 minutes in a row that never fell and ended higher', () => 
   expect(swapGrowthFindings(swap(rising.slice(1)), NOW)).toEqual([])
   // swap that sits at one level, or rises by noise, is not growth
   expect(swapGrowthFindings(swap(rising.map(() => 40)), NOW)).toEqual([])
+  // one burst is a step, not fifteen minutes of growth (3.4% to 6.1% in one minute, flat after, 2026-11-18)
+  const burst = Array.from({ length: 16 }, (_, i) => (i < 12 ? 3.4 : 6.1))
+  expect(swapGrowthFindings(swap(burst), NOW)).toEqual([])
+  // a burst inside a rise that goes on is judged on the rest of it
+  const burstThenGrowing = Array.from({ length: 16 }, (_, i) => 3.4 + (i >= 4 ? 2.7 : 0) + i * 0.1)
+  expect(swapGrowthFindings(swap(burstThenGrowing), NOW)).toHaveLength(1)
   expect(swapGrowthFindings(swap(rising.map((_, i) => 40 + i * 0.01)), NOW)).toEqual([])
   // a gap in the minutes breaks the run; a host loop that stopped is no growth now
   const gap = swap(rising).map((m, i) => (i < 8 ? { ...m, at: new Date(m.at.getTime() - 300_000) } : m))
