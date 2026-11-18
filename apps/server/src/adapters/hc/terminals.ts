@@ -5,7 +5,7 @@ import type { StartTerminal, TerminalInfo, Terminals } from '../../domains/leads
 import { err, ok, portError, type PortError, type Result } from '../../kernel/result.ts'
 import { appSpaces, nameTab as nameTabInDoc, real, seedSpace, type Rpc } from './app-doc.ts'
 import { CannotExecute, HcClient, HcError } from './client.ts'
-import { DEFAULT_PROCESS_TIMEOUT_MS, runProcess } from './process.ts'
+import { DEFAULT_PROCESS_TIMEOUT_MS, runProcess, withStderr } from './process.ts'
 import { apiErrorAbove, atPrompt, inputBoxText } from './screen.ts'
 
 export interface HcTerminalsOptions {
@@ -485,12 +485,17 @@ export class HcTerminals implements Terminals {
     const limit = budget.limit(this.options.processTimeoutMs ?? DEFAULT_PROCESS_TIMEOUT_MS)
     let result: Awaited<ReturnType<typeof runProcess>>
     try {
-      result = await runProcess([this.options.pretrustBin, cwd], limit)
+      // Its stderr names why a path could not be trusted: without it a start that failed here (a lead lost for good) says only "exited 1".
+      result = await runProcess(withStderr([this.options.pretrustBin, cwd]), limit)
     } catch (error) {
       if (error instanceof CannotExecute) throw new Permanent(error.message)
       throw error
     }
-    if (result.exitCode !== 0) throw new HcError(`${this.options.pretrustBin} exited ${result.exitCode} for ${cwd}`)
+    if (result.exitCode === 0) return
+    const said = result.stdout.trim().split('\n').slice(-3).join('; ').slice(0, 400)
+    const failure = `${this.options.pretrustBin} exited ${result.exitCode} for ${cwd}${said ? `: ${said}` : ''}`
+    // The shell that folds stderr in answers 126/127 for a program it cannot run, which a retry cannot fix.
+    throw result.exitCode === 126 || result.exitCode === 127 ? new Permanent(failure) : new HcError(failure)
   }
 
   /** The agent started when its terminal reports within the window, or is live but silent (unconfirmed: the hooks confirm it later); else an error. */

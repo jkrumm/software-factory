@@ -5,6 +5,9 @@ export interface ProcessResult {
   stdout: string
 }
 
+/** `cmd` with stderr folded into stdout, which `runProcess` alone drops. */
+export const withStderr = (cmd: string[]): string[] => ['/bin/sh', '-c', 'exec "$@" 2>&1', 'sh', ...cmd]
+
 /** Stands in for an exit code when the process had to be killed. */
 export const EXIT_TIMEOUT = -1
 

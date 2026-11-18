@@ -21,6 +21,7 @@ import {
 } from '@software-factory/contract/spool'
 import { rootedRepos } from '../../src/adapters/git/repos.ts'
 import { gitWorktrees } from '../../src/adapters/git/worktrees.ts'
+import { runProcess, withStderr } from '../../src/adapters/hc/process.ts'
 import { terminalName, tabId } from '../../src/adapters/hc/terminals.ts'
 import { SpoolReplayer } from '../../src/adapters/leads/spool.ts'
 import { loadLeadSettings } from '../../src/adapters/leads/settings.ts'
@@ -344,6 +345,15 @@ describe('git worktrees', () => {
     await git(work, 'checkout', '-q', 'master')
     const result = await trees.create({ repo: work, branch: 'factory/5-1' })
     expect(result.ok).toBe(false)
+  })
+})
+
+describe('a helper that fails', () => {
+  test('its stderr comes back with its stdout, and a program that cannot run answers 126 or 127', async () => {
+    const failing = await runProcess(withStderr(['sh', '-c', 'echo "✗ could not trust /x" >&2; exit 1']), 5_000)
+    expect(failing).toEqual({ exitCode: 1, stdout: '✗ could not trust /x\n' })
+    const missing = await runProcess(withStderr([join(base, 'no-such-helper')]), 5_000)
+    expect([126, 127]).toContain(missing.exitCode)
   })
 })
 
