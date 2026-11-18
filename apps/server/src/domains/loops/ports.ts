@@ -344,7 +344,7 @@ export interface SettlingRow {
   prio: number
 }
 
-/** A watch whose last checks were all blocked: the checkout could not be moved to the shipped commit. */
+/** A watch whose last checks were all blocked, the newest with a failing `checkout` check: the checkout could not be moved to the shipped commit. */
 export interface BlockedWatch {
   issue: IssueId
   watch: number
@@ -396,7 +396,7 @@ export interface LoopReads {
   removedEdges(): Promise<{ issue: IssueId; after: IssueId }[]>
   /** whether the edges the factory added were needed, per source, over the edges added in the window */
   edgeNeed(window: { from: Date; to: Date }): Promise<EdgeNeed[]>
-  /** watching Issues whose open watch has had at least `streak` checks in a row, all blocked */
+  /** watching Issues whose open watch has had at least `streak` checks in a row, all blocked, and whose newest run has a failing `checkout` check */
   blockedCheckouts(streak: number, limit: number): Promise<BlockedWatch[]>
   /** working or watching Issues with an open edge to one of `queued` (still queued, same repo): the claim deadlock */
   claimHolders(queued: readonly IssueId[], limit: number): Promise<ClaimHolder[]>
