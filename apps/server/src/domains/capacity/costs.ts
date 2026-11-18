@@ -52,14 +52,21 @@ const HEADROOM_SHARE = 0.08
 export const headroomMib = (ramMib: number | null): number =>
   Math.max(MIB_HEADROOM_FLOOR, Math.round((ramMib ?? 0) * HEADROOM_SHARE))
 
-/** The memory free by the newest host sample (not older than five minutes) and the machine's RAM; null when either is unknown. */
+/**
+ * The memory free by the newest host sample (not older than five minutes) and the machine's RAM; null when either is unknown.
+ * The kernel's own figure (`kern.memorystatus_level`: what it counts as available before it signals pressure) is taken when the
+ * sample has it; the factory's sum (anonymous pageable memory less purgeable, plus wired and compressed) is the fallback, and
+ * it overstates what is in use: on 2026-11-18 it left 7.5 GiB of 32 while the kernel said 57 % free at pressure normal.
+ */
 export function freeMibOf(
-  sample: { at: Date; memoryUsedPct: number | null } | null,
+  sample: { at: Date; memoryUsedPct: number | null; kernelFreePct?: number | null | undefined } | null,
   ramMib: number | null,
   now: Date,
 ): number | null {
-  if (!sample || sample.memoryUsedPct === null || ramMib === null) return null
+  if (!sample || ramMib === null) return null
   if (now.getTime() - sample.at.getTime() > SAMPLE_MAX_AGE_MS) return null
+  if (sample.kernelFreePct != null) return Math.round((ramMib * sample.kernelFreePct) / 100)
+  if (sample.memoryUsedPct === null) return null
   return Math.round(ramMib * (1 - sample.memoryUsedPct / 100))
 }
 

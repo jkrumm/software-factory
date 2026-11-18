@@ -149,6 +149,26 @@ describe('the aim pass and the grant', () => {
     expect((await shadow()).map((r) => r.reason)).toEqual(['pressure level 2: halved', 'pressure not read: held'])
   })
 
+  test('the lead aim is seeded and stored beside the slot aim, with the leads that waited for it', async () => {
+    await sample(0)
+    value(await slotAimPass({ ...aimDeps('shadow'), leadWaiters: async () => 3 }))
+    const [aim] = await world.db.sql`SELECT lead_target, lead_since FROM factory.slot_aim WHERE id = 1`
+    expect(aim?.lead_target).toBe(1)
+    const [row] = await world.db.sql`SELECT lead_aim, leads_running FROM factory.slot_shadow`
+    expect(row).toMatchObject({ lead_aim: 1, leads_running: 0 })
+  })
+
+  test('swapouts over the ceiling for five minutes halve the slot aim', async () => {
+    for (let m = 0; m <= 2; m++) {
+      await world.db.sql`
+        INSERT INTO factory.host_samples (at, load, memory_used_pct, swap_used_pct, swapout_mb_per_300s, pressure_level)
+        VALUES (${at(m)}, 5, 40, 30, 5000, 1)`
+      world.clock.set(at(m))
+      value(await slotAimPass({ ...aimDeps('shadow'), swapoutCeilingMb: 2048 }))
+    }
+    expect((await shadow()).map((r) => r.reason)).toContain('swapouts over the ceiling: halved')
+  })
+
   test('rows older than 14 days are pruned', async () => {
     await world.db.sql`
       INSERT INTO factory.slot_shadow (at, live_slots, live_max, aim_slots, holders, waiters, swap_growing, reason)

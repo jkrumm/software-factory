@@ -56,6 +56,7 @@ const ENDED_GRACE_MS = 10 * 60_000
 const NO_FACTS: CapacityFacts = { leads: null, queued: null, seats: null, loadCeiling: null }
 const NO_SIGNALS: HostSignals = {
   pressureLevel: null,
+  kernelFreePct: null,
   compressorMib: null,
   processes: null,
   cpuIdlePct: null,
@@ -140,6 +141,7 @@ export async function hostPass(deps: HostPassDeps): Promise<Result<HostPass, Por
       ? NO_SIGNALS
       : {
           pressureLevel: snapshot.pressureLevel,
+          kernelFreePct: snapshot.kernelFreePct,
           compressorMib: snapshot.compressorMib,
           processes: snapshot.processes,
           cpuIdlePct: snapshot.cpuIdlePct,

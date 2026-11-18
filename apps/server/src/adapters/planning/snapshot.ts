@@ -158,7 +158,13 @@ export function hostSnapshot(options: HostSnapshotOptions): HostSnapshotReader {
         run([options.psBin, '-Eww', '-Ao', 'pid=,ppid=,user=,command=']),
         run([options.launchctlBin, 'list']),
         options.cwds().catch(() => null),
-        run([options.sysctlBin, '-n', 'kern.memorystatus_vm_pressure_level', 'vm.compressor_bytes_used']),
+        run([
+          options.sysctlBin,
+          '-n',
+          'kern.memorystatus_vm_pressure_level',
+          'vm.compressor_bytes_used',
+          'kern.memorystatus_level',
+        ]),
         freeGib(options.vmVolume),
       ])
       if (top === null) {
@@ -174,7 +180,7 @@ export function hostSnapshot(options: HostSnapshotOptions): HostSnapshotReader {
         !complete || vmPids.length === 0
           ? null
           : await run([options.lsofBin, '-nP', '-p', vmPids.join(','), '-Fpn'], true)
-      const [pressure, compressor] = (sysctlText ?? '').trim().split('\n').map(Number)
+      const [pressure, compressor, kernelFree] = (sysctlText ?? '').trim().split('\n').map(Number)
       return {
         procs: complete
           ? joinSnapshot({
@@ -190,6 +196,10 @@ export function hostSnapshot(options: HostSnapshotOptions): HostSnapshotReader {
         cpuUserPct: top.cpuUserPct,
         cpuSysPct: top.cpuSysPct,
         pressureLevel: pressure !== undefined && [1, 2, 4].includes(pressure) ? pressure : null,
+        kernelFreePct:
+          kernelFree !== undefined && Number.isFinite(kernelFree) && kernelFree >= 0 && kernelFree <= 100
+            ? Math.round(kernelFree)
+            : null,
         compressorMib:
           compressor !== undefined && Number.isFinite(compressor) && compressor >= 0
             ? Math.round(compressor / 1024 ** 2)

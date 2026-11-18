@@ -396,7 +396,8 @@ export async function touchSlot(
                     ? loadNow !== null && loadNow <= deps.loadCeiling
                     : !trip.tripped,
               ...(aimed !== null && trip?.tripped ? { loadWhy: describeTrip(trip.loads, deps.loadCeiling) } : {}),
-              headroomMib: headroomMib(ramMib),
+              // under the aim the pressure level is the margin: the fit refuses a step only when its peak and the growth of the running ones exceed the free memory
+              headroomMib: aimed === null ? headroomMib(ramMib) : 0,
               swapGrowing: swapRising,
               load: loadNow === null ? null : Math.round(loadNow * 10) / 10,
               extraLoad: aimed === null ? deps.slotExtraLoad : deps.loadCeiling,

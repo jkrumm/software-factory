@@ -180,7 +180,7 @@ test('hostSnapshot: a full reading joins every helper; a failed ps, launchctl or
   )
   const ps = await fakeBin('ps', `printf '%s\\n' '7 1 me /opt/bin/worker' '8 7 me /opt/bin/child'`)
   const launchctl = await fakeBin('launchctl', `printf 'PID\\tStatus\\tLabel\\n7\\t0\\tcom.example.worker\\n'`)
-  const sysctl = await fakeBin('sysctl', `printf '2\\n1073741824\\n'`)
+  const sysctl = await fakeBin('sysctl', `printf '2\\n1073741824\\n57\\n'`)
   const failing = await fakeBin('fails', 'exit 1')
   const reader = (overrides: { psBin?: string; launchctlBin?: string; cwds?: Map<number, string> | null }) => {
     const runner = textRunner(5_000)
@@ -203,6 +203,7 @@ test('hostSnapshot: a full reading joins every helper; a failed ps, launchctl or
     cpuUserPct: 1,
     cpuSysPct: 2,
     pressureLevel: 2,
+    kernelFreePct: 57,
     compressorMib: 1024,
   })
   expect(full?.vmFreeGib).toBeGreaterThan(0)
@@ -348,6 +349,7 @@ test('a pass with a process table stores the facts and one row per lead, and pru
         cpuUserPct: null,
         cpuSysPct: null,
         pressureLevel: null,
+        kernelFreePct: null,
         compressorMib: null,
         vmFreeGib: null,
         collectorCpuMs: 0,
@@ -434,6 +436,7 @@ test('a pass with a snapshot stores the signals, the class rows and the notable 
         cpuUserPct: 35,
         cpuSysPct: 24.5,
         pressureLevel: 2,
+        kernelFreePct: 57,
         compressorMib: 900,
         vmFreeGib: 120.5,
         collectorCpuMs: 420,

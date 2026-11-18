@@ -115,6 +115,8 @@ export interface HostReading {
 export interface HostSignals {
   /** `kern.memorystatus_vm_pressure_level`: 1 normal, 2 warning, 4 critical */
   pressureLevel: number | null
+  /** `kern.memorystatus_level`: the share of RAM the kernel counts as available, percent; null when unread */
+  kernelFreePct: number | null
   compressorMib: number | null
   processes: number | null
   cpuIdlePct: number | null

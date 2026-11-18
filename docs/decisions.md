@@ -519,3 +519,28 @@ Report `docs/strategy/2026-11-next/report.html`, definition `docs/strategy/2026-
   row, so its light starts age out of the window until the share no longer stands). Cost: a class with a real light win in
   dollars but a slow light attempt can start on the lead row; the first wrong call of the bound is visible in `windowShare`
   against `bound`.
+- **NL47 Open-loop estimates are calibrated by the pressure they predict, or they only ever hold work back (Issue 2271, 2026-11-18).**
+  At 11:48 UTC 24 Issues were queued for `memory` with 22 of 40 seats idle and load 4.3 of 36. Admission summed 7.5 GiB "free"
+  (the factory's own count of anonymous pageable memory plus wired plus compressed), less 4.8 GiB for two young leads, less
+  2.6 GiB headroom, against a shutterflow lead of 4.3 GiB: nothing fit. The same minute the kernel read 57 % free, pressure level
+  normal, swap 3.5 % and steady, and 0 of 360 minutes at warning or critical in six hours. Over the three days before
+  (`read capacity-loop`), `memory_fit` held 364 Issues for 274 queued hours with 357 idle seat-hours, while real swap-out
+  pressure cost 1.1. Every margin in that sum was conservative and none was ever checked against what the host felt, so the sum
+  could only refuse; it was never wrong in the direction that shows up as a cost. Two controllers also governed one resource:
+  the test slots by AIMD on the pressure level, the leads by the open-loop sum. Now one verdict of the host (pressure level, swap
+  growth, swapouts, the load tripwire) moves both counts, and the sum is a guard. **Lead admission** (`FACTORY_SLOT_AIM=on`): no
+  lead beyond the count the aim holds; the count adds one per two quiet minutes while it binds and halves what runs on a warning,
+  swap growth or swapouts. The learned-peak fit refuses only a lead that cannot fit the free memory less what young leads still
+  take; headroom is not taken off, since the pressure level is the margin. A missing pressure reading admits nothing beyond what
+  runs. **The free memory** is the kernel's `kern.memorystatus_level` when the sample has it: on this host the factory's sum reads
+  about 83 % used where the kernel says 69 % free, because the sum counts every anonymous page as in use and the kernel counts
+  what the compressor and swap can absorb; the earlier note in `domains/capacity/host.ts` that the free share "lies" (65 % free
+  with swap nearly full) is answered by the swap growth, swapout and swap-ceiling signals, which stay. Not taken: a lead's
+  footprint as the unit of a single combined budget of leads and slots (a MiB window): the two counts are separate because the
+  steps' peaks are learned per step and the leads' per repo, and a combined unit would need both on one scale before it could be
+  tuned; revisit if the two counts disagree in `slot_shadow`. Cost: a lead's first minutes burst above its learned figure, so
+  the first signs of a wrong call are a pressure level 2 minute or a swap-growth halving in `slot_shadow.reason`; the aim adds
+  one lead per two minutes, so 22 idle seats fill in about 45 minutes, not at once. Count after a day: `read capacity-loop`
+  `memory_fit` idle seat-hours down and `minutesUnderPressure` near zero. Shutterflow: of its 4.4 GiB lead figure the largest
+  process is a `rustc` the lead runs directly (peak 4991 MiB, 84 % of the repo's rustc CPU outside slots); filed to shutterflow
+  as signal_01a1ee86, Issue 2272.

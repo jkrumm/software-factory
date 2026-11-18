@@ -6,7 +6,7 @@
 import { MEMORY_FIT_KIND } from '../../kernel/throughput-limits.ts'
 
 /** The interval kind of a refusal: its queue kind, with the memory gate's lead-fit refusal as its own kind (`MEMORY_FIT_KIND`). */
-export const waitKindOf = (reason: { kind: string; part?: 'fit' }): string =>
+export const waitKindOf = (reason: { kind: string; part?: 'fit' | 'aim' }): string =>
   reason.kind === 'memory' && reason.part === 'fit' ? MEMORY_FIT_KIND : reason.kind
 
 /** The interval an Issue has open. */

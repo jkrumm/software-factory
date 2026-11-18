@@ -87,6 +87,7 @@ export function composePlanning(input: {
     ...hostRule(settings),
     memoryCeilings: settings.memoryCeilings,
     seatsMaxBonus: settings.seatsMaxBonus,
+    slotAim: settings.slotAim,
   }
   const host = hostReader({ sysctlBin: settings.sysctlBin, minSampleMs: settings.memorySampleMs })
   const capacity = {
