@@ -344,7 +344,7 @@ export interface SettlingRow {
   prio: number
 }
 
-/** A watch whose last checks were all blocked: the checkout could not be moved to the shipped commit. */
+/** A watch whose last checks were all blocked, the newest with a failing `checkout` check: the checkout could not be moved to the shipped commit. */
 export interface BlockedWatch {
   issue: IssueId
   watch: number

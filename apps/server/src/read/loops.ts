@@ -347,7 +347,7 @@ export function loopReads(tx: SQL): LoopReads {
     },
 
     async blockedCheckouts(streak, limit) {
-      // The open watch of a watching Issue, with its newest `streak` checks: all of them blocked.
+      // The open watch of a watching Issue, with its newest `streak` checks all blocked, and a failing `checkout` check on the newest run (proof writes it only when the checkout is blocked): a CI wait has none.
       const rows: unknown[] = await tx`
         SELECT w.issue_id, w.watch, w.attempt, last.checks, last.since,
           (SELECT c.checks::text FROM factory.quality_checks c WHERE c.watch_key = w.key ORDER BY c.n DESC LIMIT 1) AS detail
@@ -359,6 +359,13 @@ export function loopReads(tx: SQL): LoopReads {
           WHERE outcome = 'blocked'
         ) last ON last.checks >= ${streak}
         WHERE w.answer IS NULL
+          AND EXISTS (
+            SELECT 1 FROM factory.quality_checks c
+            CROSS JOIN LATERAL jsonb_array_elements(c.checks) AS e
+            WHERE c.watch_key = w.key
+              AND c.n = (SELECT max(m.n) FROM factory.quality_checks m WHERE m.watch_key = w.key)
+              AND e->>'name' = 'checkout' AND e->>'ok' = 'false'
+          )
         ORDER BY w.issue_id LIMIT ${limit}`
       return rows.map((raw) => {
         const row = Blocked.parse(raw)
