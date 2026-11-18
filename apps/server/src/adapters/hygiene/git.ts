@@ -14,6 +14,8 @@ export interface Tools {
   gh: string
   /** the command a scripted fix puts before its check, so the check runs in one of the host's test slots (`factory slot run`); empty: no slot, the fix is not run */
   slot: string[]
+  /** the command that takes a project's merge window around what follows `--project <name> --` (`factory merge-lock`); empty: no fix lands a pull request */
+  mergeLock: string[]
 }
 
 /** The tools of the sweep by their PATH names; `HygieneCheckerOptions` and the tests replace single ones. */
@@ -25,6 +27,7 @@ export const defaultTools = (git = 'git'): Tools => ({
   osv: 'osv-scanner',
   gh: 'gh',
   slot: ['factory', 'slot', 'run', '--name', 'hygiene-fix', '--'],
+  mergeLock: ['factory', 'merge-lock'],
 })
 
 const GIT_TIMEOUT_MS = 60_000

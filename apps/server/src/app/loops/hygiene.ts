@@ -195,7 +195,7 @@ interface Target {
   deps?: DepsThresholds
   /** the project's own `hygiene.idleAfterDays`; absent is the catalogue's */
   idleAfterDays?: number
-  /** how the project's changes land (`ship`): a scripted fix pushes only where the repo ships by push */
+  /** how the project's changes land (`ship`): a scripted fix pushes where the repo ships by push and merges a pull request where it ships by pull request */
   landing?: Landing
 }
 
@@ -304,7 +304,11 @@ async function sweepPass(
     let report = await deps.checker.sweep(checkout, sweepOptions)
     // A finding with a script is fixed before anything is filed; the probe, run again, says what is still red.
     if (deps.fixes && deps.checker.fix) {
-      const fixed = await deps.checker.fix(checkout, report, { sweep: sweepOptions, landing: target.landing ?? 'push' })
+      const fixed = await deps.checker.fix(checkout, report, {
+        sweep: sweepOptions,
+        landing: target.landing ?? 'push',
+        project: target.name,
+      })
       report = fixed.report
       fixes.push(...fixed.fixes.map((entry) => ({ ...entry, at: now })))
     }

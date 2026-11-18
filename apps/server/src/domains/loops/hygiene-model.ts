@@ -193,13 +193,15 @@ export interface FixEntry {
   output?: string[]
 }
 
-/** How a project's changes land (`project.yaml` `ship`): a fix that pushes only does so where the repo ships by push. */
+/** How a project's changes land (`project.yaml` `ship`): a fix pushes to the default branch where the repo ships by push and merges a pull request where it ships by pull request. */
 export type Landing = 'push' | 'pr'
 
 export interface FixOptions {
   /** what the sweep ran with; the probes a fix ran for are asked again with the same opt-outs */
   sweep: SweepOptions
   landing: Landing
+  /** the project's name: the merge window a pull request lands in is the project's */
+  project: string
 }
 
 /** The sweep after its scripted fixes: the report with the fixed probes' second run in it, and what each fix did. */

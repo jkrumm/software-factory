@@ -1,10 +1,11 @@
 import { afterAll, beforeAll, describe, expect, test } from 'bun:test'
-import { chmodSync, mkdirSync, mkdtempSync, rmSync, utimesSync, writeFileSync } from 'node:fs'
+import { chmodSync, mkdirSync, mkdtempSync, readFileSync, rmSync, utimesSync, writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { fixDeps } from '../../src/adapters/hygiene/fixes/deps.ts'
 import { fixStale } from '../../src/adapters/hygiene/fixes/stale.ts'
 import { defaultTools, type Tools } from '../../src/adapters/hygiene/git.ts'
+import type { CiWait } from '../../src/adapters/hygiene/fixes/landing.ts'
 import type { Checkout } from '../../src/domains/loops/hygiene-model.ts'
 
 const ID = {
@@ -205,11 +206,9 @@ describe('fixDeps', () => {
     expect(git(f.origin, ['rev-parse', 'master']).trim()).toBe(before)
   })
 
-  test('a repo that ships by pull request is skipped; no test slot in time is deferred', async () => {
+  test('no test slot in time is deferred', async () => {
     const f = fixture({ 'package.json': PKG, 'bun.lock': '{}\n', Makefile: MAKE_GREEN })
     const before = git(f.origin, ['rev-parse', 'master']).trim()
-    const [pr] = await fixDeps(withBun(), f.checkout, { landing: 'pr', released: released(30), now: NOW })
-    expect(pr).toMatchObject({ outcome: 'skipped' })
     const [late] = await fixDeps(withBun(TABLE, ['sh', '-c', 'exit 75', 'sh']), f.checkout, {
       landing: 'push',
       released: released(30),
@@ -239,5 +238,136 @@ describe('fixDeps', () => {
     const f = fixture({ 'package.json': PKG, 'bun.lock': '{}\n', Makefile: MAKE_GREEN })
     const entries = await fixDeps(withBun(), f.checkout, { landing: 'push', released: async () => undefined, now: NOW })
     expect(entries).toEqual([])
+  })
+})
+
+// ---- deps, by pull request -------------------------------------------------------------------------------------------------
+
+const FAST: CiWait = { everyMs: 5, noChecksMs: 100, maxMs: 1500 }
+const GREEN = '[{"name":"ci","bucket":"pass"},{"name":"lint","bucket":"skipping"}]'
+const PASSTHROUGH = ['sh', '-c', 'while [ "$1" != -- ]; do shift; done; shift; exec "$@"', 'sh']
+
+/**
+ * A gh that keeps its state in a directory: the repo allows squash, `pr create` answers a URL, `pr checks` prints `checks.json`
+ * (and the first `pending` calls of it print a running check), `pr merge` lands the branch on origin's master, `pr close`
+ * deletes the branch. Every call is a line of `calls.log`.
+ */
+function fakeGh(options: { checks?: string; pending?: number; repoView?: string } = {}): { gh: string; dir: string } {
+  const dir = mkdtempSync(join(base, 'gh-'))
+  writeFileSync(join(dir, 'checks.json'), options.checks ?? GREEN)
+  writeFileSync(join(dir, 'pending'), String(options.pending ?? 0))
+  const script = join(dir, 'gh')
+  writeFileSync(
+    script,
+    `#!/bin/sh
+d="${dir}"
+echo "$*" >> "$d/calls.log"
+case "$1 $2" in
+  "repo view") ${options.repoView === undefined ? 'echo \'{"squashMergeAllowed":true,"rebaseMergeAllowed":true,"mergeCommitAllowed":false}\'' : options.repoView} ;;
+  "pr list") echo '[]' ;;
+  "pr create") echo "https://github.com/o/r/pull/7" ;;
+  "pr checks")
+    n=$(cat "$d/pending")
+    if [ "$n" -gt 0 ]; then echo $((n - 1)) > "$d/pending"; echo '[{"name":"ci","bucket":"pending"}]'; exit 8; fi
+    cat "$d/checks.json" ;;
+  "run list") echo '[{"status":"completed","conclusion":"success"}]' ;;
+  "pr merge") git push -q origin HEAD:refs/heads/master ;;
+  "pr close") git push -q origin :refs/heads/factory/hygiene-deps ;;
+esac
+`,
+  )
+  chmodSync(script, 0o755)
+  return { gh: script, dir }
+}
+
+const byPr = (gh: string, mergeLock = PASSTHROUGH): Tools => ({ ...withBun(), gh, mergeLock })
+const prInput = { landing: 'pr' as const, project: 'demo', released: released(30), now: NOW, wait: FAST }
+const callsOf = (dir: string): string => readFileSync(join(dir, 'calls.log'), 'utf8')
+
+describe('fixDeps for a repo that ships by pull request', () => {
+  const files = { 'package.json': PKG, 'bun.lock': '{}\n', Makefile: MAKE_GREEN }
+
+  test('opens the pull request on its branch, waits for green CI and merges it by the allowed method', async () => {
+    const f = fixture(files)
+    const { gh, dir } = fakeGh({ pending: 2 })
+    const entries = await fixDeps(byPr(gh), f.checkout, prInput)
+    expect(entries).toHaveLength(1)
+    expect(entries[0]).toMatchObject({
+      key: 'deps',
+      outcome: 'fixed',
+      detail: expect.stringContaining('pull request #7 (squash)'),
+    })
+    const calls = callsOf(dir)
+    expect(calls).toContain(
+      'pr create --base master --head factory/hygiene-deps --title chore(deps): bump 2 patch and minor packages',
+    )
+    expect(calls).toContain('pr merge 7 --squash --delete-branch')
+    expect(calls.match(/pr checks/g)).toHaveLength(3)
+    expect(JSON.parse(git(f.origin, ['show', 'master:package.json'])).dependencies.hono).toBe('4.2.9')
+    expect(remoteBranches(f.origin)).toEqual(['factory/hygiene-deps', 'master'])
+  })
+
+  test('master moved while the check ran: the bump is rebased onto it inside the window', async () => {
+    const f = fixture(files)
+    writeFileSync(join(f.work, 'other.txt'), 'later')
+    git(f.work, ['add', '-A'])
+    git(f.work, ['commit', '-q', '-m', 'later work'])
+    git(f.work, ['push', '-q', 'origin', 'master'])
+    const { gh } = fakeGh()
+    const [entry] = await fixDeps(byPr(gh), f.checkout, prInput)
+    expect(entry).toMatchObject({ outcome: 'fixed' })
+    expect(git(f.origin, ['show', 'master:other.txt'])).toBe('later')
+    expect(JSON.parse(git(f.origin, ['show', 'master:package.json'])).dependencies.hono).toBe('4.2.9')
+  })
+
+  test('red CI closes the pull request and merges nothing; the failing check is on the failure', async () => {
+    const f = fixture(files)
+    const { gh, dir } = fakeGh({ checks: '[{"name":"unit","bucket":"fail"},{"name":"lint","bucket":"pass"}]' })
+    const before = git(f.origin, ['rev-parse', 'master']).trim()
+    const [entry] = await fixDeps(byPr(gh), f.checkout, prInput)
+    expect(entry).toMatchObject({
+      outcome: 'failed',
+      detail: expect.stringContaining('#7 is red'),
+      output: ['failed: unit'],
+    })
+    expect(callsOf(dir)).toContain('pr close 7 --delete-branch')
+    expect(callsOf(dir)).not.toContain('pr merge')
+    expect(git(f.origin, ['rev-parse', 'master']).trim()).toBe(before)
+    expect(remoteBranches(f.origin)).toEqual(['master'])
+  })
+
+  test('a pull request that gets no CI check at all is closed, not merged', async () => {
+    const f = fixture(files)
+    const { gh, dir } = fakeGh({ checks: '[]' })
+    const [entry] = await fixDeps(byPr(gh), f.checkout, prInput)
+    expect(entry).toMatchObject({ outcome: 'failed', detail: expect.stringContaining('no CI check appeared') })
+    expect(callsOf(dir)).not.toContain('pr merge')
+  })
+
+  test('a merge window that is not free in time is deferred before anything is pushed', async () => {
+    const f = fixture(files)
+    const { gh, dir } = fakeGh()
+    const [entry] = await fixDeps(byPr(gh, ['sh', '-c', 'exit 75', 'sh']), f.checkout, prInput)
+    expect(entry).toMatchObject({ outcome: 'deferred', detail: expect.stringContaining('merge window') })
+    expect(callsOf(dir)).not.toContain('pr create')
+    expect(remoteBranches(f.origin)).toEqual(['master'])
+  })
+
+  test("the repo's own merge guard is run when the Makefile has one, and its refusal defers the merge", async () => {
+    const f = fixture({ ...files, Makefile: `${MAKE_GREEN}merge-guard:\n\t@echo master-is-red >&2\n\t@exit 1\n` })
+    const { gh, dir } = fakeGh()
+    const [entry] = await fixDeps(byPr(gh), f.checkout, prInput)
+    expect(entry).toMatchObject({ outcome: 'deferred', detail: expect.stringContaining('merge guard refused') })
+    expect(callsOf(dir)).toContain('pr close 7')
+    expect(callsOf(dir)).not.toContain('pr merge')
+  })
+
+  test('a gh that cannot read the repo skips the fix before any work', async () => {
+    const f = fixture(files)
+    const { gh } = fakeGh({ repoView: 'exit 1' })
+    const before = git(f.origin, ['rev-parse', 'master']).trim()
+    const [entry] = await fixDeps(byPr(gh), f.checkout, prInput)
+    expect(entry).toMatchObject({ outcome: 'skipped', detail: expect.stringContaining('gh cannot read') })
+    expect(git(f.origin, ['rev-parse', 'master']).trim()).toBe(before)
   })
 })
