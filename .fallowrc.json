@@ -1,0 +1,14 @@
+{
+  "entry": [
+    "apps/server/src/main.ts",
+    "apps/server/src/migrate-check.ts",
+    "apps/server/scripts/*.ts",
+    "apps/door/src/main.ts",
+    "scripts/*.ts",
+    "apps/console/public/frame/*.js",
+    "integrations/herdr/jk-glance/main.js",
+    "docs/guide/.vitepress/config.ts",
+    "docs/guide/.vitepress/theme/index.ts",
+    "docs/evidence/**/*.mjs"
+  ]
+}

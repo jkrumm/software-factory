@@ -18,7 +18,7 @@ export interface ReaperPassDeps {
 }
 
 /** The attempts weighed (closed within it) and the rows kept. */
-export const REAPED_KEEP_MS = 30 * 86_400_000
+const REAPED_KEEP_MS = 30 * 86_400_000
 
 /** A SIGTERM is followed up by a SIGKILL only on a later pass that is within this long. */
 const ESCALATE_WITHIN_MS = 6 * 3_600_000

@@ -104,7 +104,7 @@ export async function checkoutOf(
 }
 
 /** The reviewer row the attempt's lead was assigned when it started (`lead_started`'s payload), or null: none was recorded. */
-export function assignedReviewer(history: readonly AppliedRecord[], attempt: number): string | null {
+function assignedReviewer(history: readonly AppliedRecord[], attempt: number): string | null {
   const started = history.findLast(
     (record) => record.kind === 'lead_started' && (record.payload as { attempt?: number }).attempt === attempt,
   )

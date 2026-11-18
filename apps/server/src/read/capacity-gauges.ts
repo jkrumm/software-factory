@@ -24,7 +24,7 @@ export interface CapacityGauges {
 }
 
 /** A host sample older than this says nothing about now (a minute sample, three missed). */
-export const HOST_FRESH_MS = 3 * 60_000
+const HOST_FRESH_MS = 3 * 60_000
 
 const Queue = z.object({ kind: z.string(), n: z.coerce.number() })
 const Waits = z.object({

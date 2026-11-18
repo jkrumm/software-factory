@@ -3,7 +3,7 @@ import type { Notifier } from '../../domains/checkpoints/ports.ts'
 import { err, ok, portError } from '../../kernel/result.ts'
 
 /** Longest one publish may take before it is abandoned: a plain HTTP request, not an agent run. */
-export const SEND_TIMEOUT_MS = 10_000
+const SEND_TIMEOUT_MS = 10_000
 /** ntfy turns a longer message into an attachment. */
 const MAX_BODY_BYTES = 4000
 
@@ -60,7 +60,7 @@ const headerSafe = (value: string): string => value.replace(/[^\x20-\x7e]/g, '?'
  * Publishes a page to `<url>/<topic>` with a bearer token; the `Click` header is the deep link. The token never appears
  * in an error. At-least-once: the outbox may send a page again after a crash between the send and its record.
  */
-export function ntfyNotifier(line: OwnersLine & { url: string; token: string }, timeoutMs = SEND_TIMEOUT_MS): Notifier {
+function ntfyNotifier(line: OwnersLine & { url: string; token: string }, timeoutMs = SEND_TIMEOUT_MS): Notifier {
   return {
     async send(page) {
       try {
@@ -90,7 +90,7 @@ export function ntfyNotifier(line: OwnersLine & { url: string; token: string }, 
 }
 
 /** Honest about being one: with no URL or token the page waits in the outbox and the error says why. */
-export const stubNotifier = (reason: string): Notifier => ({
+const stubNotifier = (reason: string): Notifier => ({
   send: () => Promise.resolve(err(portError('refused', reason))),
 })
 

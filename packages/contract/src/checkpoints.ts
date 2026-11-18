@@ -34,7 +34,7 @@ const ARTIFACT_KINDS = ['concept', 'spec', 'decision', 'report'] as const
 export const VERDICTS = ['looks_good', 'with_notes', 'changes', 'no_longer_applies'] as const
 
 /** Who a verdict came from: the owner, or the factory for him (a default after the wait, a Spec screen settle, a withdrawal). */
-export const VERDICT_GIVERS = ['owner', 'factory'] as const
+const VERDICT_GIVERS = ['owner', 'factory'] as const
 
 /** Where the Issue stands after the write, and the effects it planned (a `note_lead` among them). */
 const IssueMove = z.object({

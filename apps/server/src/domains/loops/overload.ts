@@ -331,7 +331,7 @@ const CPU_GROUPS = 6
  * no test slot saw, a `step` group is one a slot admitted. The host loop samples once a minute, so a process shorter than that
  * is under-counted: read it as a ranking, not a total.
  */
-export function cpuLine(window: ClassCpuWindow | null): string {
+function cpuLine(window: ClassCpuWindow | null): string {
   if (!window || window.minutes === 0 || window.rows.length === 0)
     return '- CPU by class and repo: no host minutes read'
   const groups = [...window.rows]

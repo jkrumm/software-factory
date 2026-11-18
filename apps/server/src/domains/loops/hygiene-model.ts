@@ -180,7 +180,7 @@ export interface SweepOptions {
  * not apply here, with why), `deferred` (it could not start now, say for want of a test slot: nothing is filed for the key
  * this pass and the next pass asks again).
  */
-export const FIX_OUTCOMES = ['fixed', 'failed', 'skipped', 'deferred'] as const
+const FIX_OUTCOMES = ['fixed', 'failed', 'skipped', 'deferred'] as const
 export type FixOutcome = (typeof FIX_OUTCOMES)[number]
 
 /** One scripted fix, as the pass records it (`hygiene_passes.fixes`). The probe's second run says whether the key is green. */

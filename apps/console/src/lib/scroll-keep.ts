@@ -43,7 +43,7 @@ export interface Surface {
   loading: () => boolean
 }
 
-export function surfaceOf(doc: Document): Surface {
+function surfaceOf(doc: Document): Surface {
   const page = (): Box | null => doc.scrollingElement ?? null
   return {
     box: (id) =>

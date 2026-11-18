@@ -3,7 +3,7 @@ import { MAX_EVIDENCE_LINES } from '../../../domains/loops/hygiene-model.ts'
 import { exec, gitTry, type Tools } from '../git.ts'
 
 /** The branch every landing bump uses: one name, so a leftover of a pass that was cut short is found and closed by the next. */
-export const BUMP_BRANCH = 'factory/hygiene-deps'
+const BUMP_BRANCH = 'factory/hygiene-deps'
 const GIT_TIMEOUT_MS = 90_000
 const GH_TIMEOUT_MS = 60_000
 const MAKE_TIMEOUT_MS = 10 * 60_000
@@ -22,7 +22,7 @@ export interface CiWait {
   noChecksMs: number
   maxMs: number
 }
-export const CI_WAIT: CiWait = { everyMs: 30_000, noChecksMs: 3 * 60_000, maxMs: 45 * 60_000 }
+const CI_WAIT: CiWait = { everyMs: 30_000, noChecksMs: 3 * 60_000, maxMs: 45 * 60_000 }
 
 const tailOf = (text: string, lines = MAX_EVIDENCE_LINES): string[] =>
   text
