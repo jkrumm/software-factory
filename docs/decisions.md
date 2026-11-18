@@ -471,8 +471,9 @@ Report `docs/strategy/2026-11-next/report.html`, definition `docs/strategy/2026-
   rate and its follow-up attempt's dollars are already in the cost per Issue and the move-up bound; a third test counted the
   same event again, on counts of 4 and 12. They stay on the Improve page and in `seats.tripwire.regressionGap` (the gap
   and its lower bound), and a limit on them needs a measured line, so none is set. A first design priced a regression at the
-  lead row's cost per Issue; it double-counted those dollars and was dropped on the owner's note. (c) The move-up bound is
-  unchanged: it is the money condition. (d) The window is the last 3 days, reaching back up to 14 until light has 100
+  lead row's cost per Issue; it double-counted those dollars and was dropped on the owner's note. (c) The move-up bound's formula is
+  unchanged: it is the money condition. It is read over the same window, so the hygiene classes judged against it
+  (`judgeClassSeat`, NL40) inherit the window of 3 to 14 days. (d) The window is the last 3 days, reaching back up to 14 until light has 100
   finished first watches (`tripwireFrom`; a Wilson half-width of about 4 points, the resolution at which the 3-point line
   can be seen); `seats.tripwire` carries `days`, `from`, `confidence`, `targetWatches`, `passGap` and `regressionGap`.
   Unchanged: the out-of-scope words, the 10-watch floor (below it the gate is unmeasured and closed), the 10-minute cache,
