@@ -11,8 +11,13 @@ page's Hygiene tab and `factory read project-hygiene <name>` render that one lis
 | Pass | When | What runs |
 |-|-|-|
 | Weekly (full) | a project's newest full pass is a week old, or sooner for a busy repo | every probe the project has on, the project's own probes, and the document judgment |
+| Monthly (full) | an idle repo's newest full pass is 30 days old | the same as the weekly full pass |
+| Steady | an idle repo's newest weekly or steady pass is a week old | every probe but the ones marked `idle: monthly` (`deps`) and no judgment |
 | Daily | the newest pass of any scope is a day old | only the probes marked `daily` below, no judgment |
 
+- **An idle repo goes slower.** A repo whose default branch has had no commit for 30 days (read from its
+  newest pass) is swept in full monthly and steady in between: the `deps` refresh and the document judgment wait for the month,
+  `advisories` and every other probe keep their cadence, and a commit that lands before a steady pass makes it a full one.
 - **A busy repo goes sooner.** A daily pass becomes a full one when 30 or more commits landed since the last full pass and that
   pass is at least two days old.
 - **One project per tick.** Full passes come before daily ones, never-swept projects first, then the oldest.
@@ -24,6 +29,23 @@ page's Hygiene tab and `factory read project-hygiene <name>` render that one lis
   found it turning green proves the fix, and a light lead that struggles is moved up once. A class whose Issues keep moving up
   (its move-up share over its last 20 Issues above the bound the cost of a move-up sets) starts on the standard lead until the
   share drops under it; `factory read finding-classes` shows each class's starts, move-ups and pass rate, and which are out.
+
+## The dependency refresh
+
+The `deps` and `advisories` probes read every ecosystem (`package.json`, Cargo, Python, Swift, Dockerfile base images, GitHub
+Actions) and fold what they read into **one finding, `deps`, per repo**: a section and an upgrade plan per ecosystem and the
+procedure once. It is filed only when it clears the bar; versions still inside their cooldown (7 days, 14 for a major) never count.
+
+| It is filed when | Default |
+|-|-|
+| a high or critical advisory has a fixed version | always |
+| a runtime dependency is a major behind (non-dev npm, Cargo, Python, Swift, a Docker base image) | always; dev tools and GitHub Actions do not file alone |
+| a runtime dependency is a minor or more behind and its latest is at least this old | 30 days |
+| this many dependencies are behind in all, dev tools and patches included | 10 |
+
+Below the bar nothing is filed: the `deps` run on the Hygiene tab says what is behind. An advisory with no fixed version is never
+filed; the `advisories` run lists it and the next pass reads it again. A project changes the numbers under `hygiene` (see below),
+with its reason.
 
 ## What happens to a finding
 
@@ -52,7 +74,7 @@ few documents, and absence proves nothing. Every action is recorded on the pass 
 | [`links`](#links) | on | daily | file |
 | [`retired`](#retired) | auto | daily | file |
 | [`project`](#project) | auto | daily | file |
-| [`deps`](#deps) | auto | weekly | tool |
+| [`deps`](#deps) | auto | weekly (monthly when idle) | tool |
 | [`ci`](#ci) | auto | daily | file |
 | [`agentsmd`](#agentsmd) | auto | daily | file |
 | [`readme`](#readme) | auto | daily | file |
@@ -63,7 +85,7 @@ few documents, and absence proves nothing. Every action is recorded on the pass 
 | [`browser`](#browser) | on | daily | file |
 | [`context`](#context) | auto | daily | file |
 | [`probe`](#probe) | opt-in | weekly | make |
-| [`judgment`](#judgment) | on | weekly | agent |
+| [`judgment`](#judgment) | on | weekly (monthly when idle) | agent |
 
 ### check
 
@@ -75,7 +97,7 @@ few documents, and absence proves nothing. Every action is recorded on the pass 
 
 ### advisories
 
-Known security advisories of severity high and up in the lockfiles: `bun audit` for a `bun.lock`, `osv-scanner` for `Cargo.lock`, `uv.lock`, `requirements*.txt` and `Package.resolved`.
+Known security advisories of severity high and up in the lockfiles: `bun audit` for a `bun.lock`, `osv-scanner` for `Cargo.lock`, `uv.lock`, `requirements*.txt` and `Package.resolved`. An advisory with a fixed version files the `deps` refresh; one with none is listed on the tab and read again every pass, never filed.
 
 - **Default:** on when detection finds what it reads: a lockfile of one of those kinds is tracked; the Cargo, Python and Swift ones are skipped on a host without `osv-scanner`.
 - **Runs:** in the weekly pass; runs an analyzer or asks a registry.
@@ -107,10 +129,10 @@ The `project.yaml` itself, linted like `factory project check`: keys nothing rea
 
 ### deps
 
-Outdated dependencies: `bun outdated` for a `package.json`, and the versions pinned in `Cargo.toml`, `pyproject.toml` or `requirements*.txt`, `Package.swift`, Dockerfile base images and GitHub Actions `uses:` lines. Each finding carries an upgrade plan (versions younger than 7 days, 14 for a major, held back; patches and minors, packages that move together, and each major in batches) and the procedure a light lead follows.
+Outdated dependencies and the advisories above, as one refresh per repo: `bun outdated` for a `package.json`, and the versions pinned in `Cargo.toml`, `pyproject.toml` or `requirements*.txt`, `Package.swift`, Dockerfile base images and GitHub Actions `uses:` lines. One finding `deps` is filed only when the refresh clears the bar (below); it carries a section and an upgrade plan per ecosystem (versions younger than 7 days, 14 for a major, held back; patches and minors, packages that move together, and each major in batches) and the procedure a light lead follows. Below the bar nothing is filed and the Hygiene tab names what is behind.
 
-- **Default:** on when detection finds what it reads: a package file of one of those kinds is tracked; each ecosystem is its own finding.
-- **Runs:** in the weekly pass; runs an analyzer or asks a registry.
+- **Default:** on when detection finds what it reads: a package file of one of those kinds is tracked; every ecosystem is one finding.
+- **Runs:** in the weekly pass, and only monthly on an idle repo; runs an analyzer or asks a registry.
 - **Silence it:** Name it under `hygiene.skip` in `project.yaml` with a reason; the pass shows the reason.
 
 ### ci
@@ -198,7 +220,7 @@ The project's own probes: each is `make <target>` in the throwaway checkout, red
 One agent reads the living documents whose code moved on since they were last edited, and those edited lately, and files `stale` and `slop` findings; the factory checks every answer again.
 
 - **Default:** on for every project.
-- **Runs:** in the weekly pass; one model call on the cheap seat.
+- **Runs:** in the weekly pass, and only monthly on an idle repo; one model call on the cheap seat.
 - **Silence it:** Not switchable: it takes at most two signals of a pass and a held class stops it.
 
 ## For a repo author
@@ -213,6 +235,15 @@ hygiene:
     - { probe: deadcode, reason: generated code is imported by the build, not by source }
   check: false # the gate needs a lab this host lacks
   reason: needs the device farm
+```
+
+- **Move the bar or the idle cadence** with the reason that explains it (`idleAfterDays: 0` is never idle):
+
+```yaml
+hygiene:
+  deps: { runtimeStaleDays: 14, behindRows: 6 }
+  idleAfterDays: 60
+  reason: a runtime that ships to users weekly; a long-lived branch model
 ```
 
 - **Add your own probe**: a make target that exits 0 when green, and `hygiene: { probes: [{ name, target }] }`. It runs weekly,

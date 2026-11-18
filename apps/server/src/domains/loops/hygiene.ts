@@ -4,9 +4,10 @@ import {
   type HygieneFinding,
   type HygieneRequest,
 } from '@software-factory/contract'
+import { HYGIENE_DEFAULTS } from '@software-factory/contract'
 import type { HygieneJudgment, HygienePassRecord } from './ports.ts'
 import { MAX_SIGNALS_PER_PASS } from './budget.ts'
-import { PROBES, type ProbeFinding, type Scope, type SweepReport } from './hygiene-model.ts'
+import { isIdle, PROBES, type ProbeFinding, type Scope, type SweepReport } from './hygiene-model.ts'
 
 /** Slots the judgment keeps: the deterministic findings may take `MAX_SIGNALS_PER_PASS - JUDGMENT_RESERVE`. */
 const JUDGMENT_RESERVE = 2
@@ -160,6 +161,7 @@ export function judgmentSignalText(finding: HygieneFinding, swept: Swept): strin
 export type HygieneWork =
   | { kind: 'none' }
   | { kind: 'full'; repo: string }
+  | { kind: 'steady'; repo: string }
   | { kind: 'daily'; repo: string; lastFull: HygienePassRecord | null }
   | { kind: 'retry'; repo: string; row: HygienePassRecord }
 
@@ -175,6 +177,10 @@ const scopeOf = (row: Pick<HygienePassRecord, 'report'>): Scope => row.report.sc
  * due a daily pass (the cheap probes; `dailyMs` 0 is off), the full ones first. Otherwise a project whose newest full pass is
  * within `everyMs` and whose judgment failed, with attempts left and `retryMs` gone since the attempt, is due a
  * judgment-only retry. `rows` holds the newest pass of each repo and scope. `allow` null is every project.
+ *
+ * An idle repo (no commit on its default branch for `idleAfterDays`, read from its newest pass) is due its full pass monthly
+ * (`monthlyMs`), the document judgment and the `deps` refresh with it; in between its weekly pass is `steady` (the rest of the
+ * catalogue). Full first, then steady, then daily.
  */
 export function planHygiene(input: {
   projects: readonly string[]
@@ -184,14 +190,21 @@ export function planHygiene(input: {
   dailyMs?: number
   retryMs: number
   allow: readonly string[] | null
+  /** a project's own `hygiene.idleAfterDays`; undefined is the catalogue's default */
+  idleAfterDays?: (repo: string) => number | undefined
+  monthlyMs?: number
 }): HygieneWork {
   const { now } = input
   const dailyMs = input.dailyMs ?? 0
   const newest = new Map<string, HygienePassRecord>()
   const newestFull = new Map<string, HygienePassRecord>()
+  const newestWeekly = new Map<string, HygienePassRecord>()
   for (const row of input.rows) {
     const any = newest.get(row.repo)
     if (!any || row.at.getTime() > any.at.getTime()) newest.set(row.repo, row)
+    if (scopeOf(row) === 'daily') continue
+    const weekly = newestWeekly.get(row.repo)
+    if (!weekly || row.at.getTime() > weekly.at.getTime()) newestWeekly.set(row.repo, row)
     if (scopeOf(row) !== 'full') continue
     const full = newestFull.get(row.repo)
     if (!full || row.at.getTime() > full.at.getTime()) newestFull.set(row.repo, row)
@@ -205,8 +218,19 @@ export function planHygiene(input: {
   const oldest = (a: string, b: string): number =>
     (newest.get(a)?.at.getTime() ?? 0) - (newest.get(b)?.at.getTime() ?? 0)
 
-  const full = repos.filter((repo) => due(newestFull.get(repo), input.everyMs)).sort(oldest)[0]
+  const monthlyMs = input.monthlyMs ?? HYGIENE_DEFAULTS.monthlyDays * 86_400_000
+  const idle = (repo: string): boolean =>
+    isIdle({
+      lastCommitAt: newest.get(repo)?.report.lastCommitAt,
+      idleAfterDays: input.idleAfterDays?.(repo),
+      now,
+    })
+
+  const full = repos.filter((repo) => due(newestFull.get(repo), idle(repo) ? monthlyMs : input.everyMs)).sort(oldest)[0]
   if (full !== undefined) return { kind: 'full', repo: full }
+
+  const steady = repos.filter((repo) => idle(repo) && due(newestWeekly.get(repo), input.everyMs)).sort(oldest)[0]
+  if (steady !== undefined) return { kind: 'steady', repo: steady }
 
   const daily = dailyMs > 0 ? repos.filter((repo) => due(newest.get(repo), dailyMs)).sort(oldest)[0] : undefined
   if (daily !== undefined) return { kind: 'daily', repo: daily, lastFull: newestFull.get(daily) ?? null }

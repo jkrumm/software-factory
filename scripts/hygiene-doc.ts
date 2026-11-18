@@ -9,6 +9,7 @@ import { join } from 'node:path'
 import {
   type HygieneCatalogueEntry,
   HYGIENE_CATALOGUE,
+  HYGIENE_DEFAULTS,
   type PROBE_COSTS,
 } from '../packages/contract/src/hygiene-catalogue.ts'
 
@@ -32,7 +33,8 @@ const summaryTable = (): string =>
     '| Probe | Default | Runs | Cost |',
     '|-|-|-|-|',
     ...HYGIENE_CATALOGUE.map(
-      (entry) => `| [\`${entry.name}\`](#${entry.name}) | ${entry.enabled} | ${entry.cadence} | ${entry.cost} |`,
+      (entry: HygieneCatalogueEntry) =>
+        `| [\`${entry.name}\`](#${entry.name}) | ${entry.enabled} | ${entry.cadence}${entry.idle ? ` (${entry.idle} when idle)` : ''} | ${entry.cost} |`,
     ),
   ].join('\n')
 
@@ -43,7 +45,7 @@ const section = (entry: HygieneCatalogueEntry): string =>
     entry.summary,
     '',
     `- **Default:** ${ENABLED[entry.enabled]}${entry.detect ? `: ${entry.detect}` : ''}.`,
-    `- **Runs:** ${entry.cadence === 'daily' ? 'in the daily pass and the weekly one' : 'in the weekly pass'}; ${COST[entry.cost]}.`,
+    `- **Runs:** ${entry.cadence === 'daily' ? 'in the daily pass and the weekly one' : 'in the weekly pass'}${entry.idle ? `, and only monthly on an idle repo` : ''}; ${COST[entry.cost]}.`,
     `- **Silence it:** ${entry.silence}`,
   ].join('\n')
 
@@ -62,8 +64,13 @@ page's Hygiene tab and \`factory read project-hygiene <name>\` render that one l
 | Pass | When | What runs |
 |-|-|-|
 | Weekly (full) | a project's newest full pass is a week old, or sooner for a busy repo | every probe the project has on, the project's own probes, and the document judgment |
+| Monthly (full) | an idle repo's newest full pass is ${HYGIENE_DEFAULTS.monthlyDays} days old | the same as the weekly full pass |
+| Steady | an idle repo's newest weekly or steady pass is a week old | every probe but the ones marked \`idle: monthly\` (\`deps\`) and no judgment |
 | Daily | the newest pass of any scope is a day old | only the probes marked \`daily\` below, no judgment |
 
+- **An idle repo goes slower.** A repo whose default branch has had no commit for ${HYGIENE_DEFAULTS.idleAfterDays} days (read from its
+  newest pass) is swept in full monthly and steady in between: the \`deps\` refresh and the document judgment wait for the month,
+  \`advisories\` and every other probe keep their cadence, and a commit that lands before a steady pass makes it a full one.
 - **A busy repo goes sooner.** A daily pass becomes a full one when 30 or more commits landed since the last full pass and that
   pass is at least two days old.
 - **One project per tick.** Full passes come before daily ones, never-swept projects first, then the oldest.
@@ -75,6 +82,23 @@ page's Hygiene tab and \`factory read project-hygiene <name>\` render that one l
   found it turning green proves the fix, and a light lead that struggles is moved up once. A class whose Issues keep moving up
   (its move-up share over its last 20 Issues above the bound the cost of a move-up sets) starts on the standard lead until the
   share drops under it; \`factory read finding-classes\` shows each class's starts, move-ups and pass rate, and which are out.
+
+## The dependency refresh
+
+The \`deps\` and \`advisories\` probes read every ecosystem (\`package.json\`, Cargo, Python, Swift, Dockerfile base images, GitHub
+Actions) and fold what they read into **one finding, \`deps\`, per repo**: a section and an upgrade plan per ecosystem and the
+procedure once. It is filed only when it clears the bar; versions still inside their cooldown (7 days, 14 for a major) never count.
+
+| It is filed when | Default |
+|-|-|
+| a high or critical advisory has a fixed version | always |
+| a runtime dependency is a major behind (non-dev npm, Cargo, Python, Swift, a Docker base image) | always; dev tools and GitHub Actions do not file alone |
+| a runtime dependency is a minor or more behind and its latest is at least this old | ${HYGIENE_DEFAULTS.deps.runtimeStaleDays} days |
+| this many dependencies are behind in all, dev tools and patches included | ${HYGIENE_DEFAULTS.deps.behindRows} |
+
+Below the bar nothing is filed: the \`deps\` run on the Hygiene tab says what is behind. An advisory with no fixed version is never
+filed; the \`advisories\` run lists it and the next pass reads it again. A project changes the numbers under \`hygiene\` (see below),
+with its reason.
 
 ## What happens to a finding
 
@@ -112,6 +136,15 @@ hygiene:
     - { probe: deadcode, reason: generated code is imported by the build, not by source }
   check: false # the gate needs a lab this host lacks
   reason: needs the device farm
+\`\`\`
+
+- **Move the bar or the idle cadence** with the reason that explains it (\`idleAfterDays: 0\` is never idle):
+
+\`\`\`yaml
+hygiene:
+  deps: { runtimeStaleDays: 14, behindRows: 6 }
+  idleAfterDays: 60
+  reason: a runtime that ships to users weekly; a long-lived branch model
 \`\`\`
 
 - **Add your own probe**: a make target that exits 0 when green, and \`hygiene: { probes: [{ name, target }] }\`. It runs weekly,

@@ -148,6 +148,54 @@ test('a project never swept comes first, then the oldest pass, and nothing when 
   expect(plan([row('a', ago(DAY)), row('b', ago(DAY)), row('c', ago(DAY))])).toEqual({ kind: 'none' })
 })
 
+// ---- cadence by activity ----------------------------------------------------------------------------------------------------
+
+const activeRow = (repo: string, at: Date, lastCommitAgo: number, scope: 'full' | 'steady' | 'daily' = 'full') => ({
+  ...row(repo, at),
+  report: { ...row(repo, at).report, scope, lastCommitAt: ago(lastCommitAgo).toISOString() },
+})
+
+test('an idle repo (no commit for 30 days) gets its full pass monthly and a steady one weekly; an active one stays weekly', () => {
+  const others = [row('b', ago(DAY)), row('c', ago(DAY))]
+  const run = (rows: HygienePassRecord[]) => plan([...rows, ...others])
+  // full 10 days ago: not due for a full pass, but its weekly pass is a steady one
+  expect(run([activeRow('a', ago(10 * DAY), 40 * DAY)])).toEqual({ kind: 'steady', repo: 'a' })
+  // a steady pass 2 days ago after a full one 10 days ago: nothing is due
+  expect(run([activeRow('a', ago(10 * DAY), 40 * DAY), activeRow('a', ago(2 * DAY), 40 * DAY, 'steady')])).toEqual({
+    kind: 'none',
+  })
+  // the same, 8 days on: steady again
+  expect(run([activeRow('a', ago(10 * DAY), 40 * DAY), activeRow('a', ago(8 * DAY), 40 * DAY, 'steady')])).toEqual({
+    kind: 'steady',
+    repo: 'a',
+  })
+  // 31 days since the last full pass: the monthly one, the deps refresh and the judgment with it
+  expect(run([activeRow('a', ago(31 * DAY), 40 * DAY), activeRow('a', ago(2 * DAY), 40 * DAY, 'steady')])).toEqual({
+    kind: 'full',
+    repo: 'a',
+  })
+  // an active repo: a full pass every week, never a steady one
+  expect(run([activeRow('a', ago(10 * DAY), 3 * DAY)])).toEqual({ kind: 'full', repo: 'a' })
+  expect(run([activeRow('a', ago(5 * DAY), 3 * DAY)])).toEqual({ kind: 'none' })
+})
+
+test('a project that says it is never idle, or idle sooner, is read as it says', () => {
+  const rows = [activeRow('a', ago(10 * DAY), 20 * DAY), row('b', ago(DAY)), row('c', ago(DAY))]
+  const planWith = (idleAfterDays: number) =>
+    planHygiene({
+      projects: ['a', 'b', 'c'],
+      rows,
+      now,
+      everyMs: 7 * DAY,
+      retryMs: 6 * HOUR,
+      allow: null,
+      idleAfterDays: (repo) => (repo === 'a' ? idleAfterDays : undefined),
+    })
+  expect(planWith(14)).toEqual({ kind: 'steady', repo: 'a' })
+  expect(planWith(0)).toEqual({ kind: 'full', repo: 'a' })
+  expect(plan(rows)).toEqual({ kind: 'full', repo: 'a' })
+})
+
 test('the allow-list narrows the projects', () => {
   expect(plan([], { allow: ['b'] })).toEqual({ kind: 'full', repo: 'b' })
   expect(plan([row('b', ago(DAY))], { allow: ['b'] })).toEqual({ kind: 'none' })

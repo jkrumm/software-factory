@@ -415,3 +415,23 @@ Report `docs/strategy/2026-11-next/report.html`, definition `docs/strategy/2026-
   re-shipped the same commits, mostly that). Not changed: the alert case (2055: an incident open before and after the ship
   re-regresses each repeat), `stall:regressed`'s threshold (NL37 left it) and the lead's note. Count over the next week:
   Issues with two or more regressions on the same `ci` sha, and refused ships that name this red.
+- **NL43 A repo's dependencies are one refresh, filed past a bar, slower when the repo is idle (Issue 2228, 2026-11-18).** Over the
+  last 7 days hygiene filed 164 of 1439 Issues (11 %); the cost was seats, test slots, CI runs, merge windows and deploys, not
+  tokens, and test slots bind. The dependency probes filed up to five Issues per repo (basalt-ui: npm, Docker, Actions,
+  advisories in two days), each on the day its pass came. Now the `deps` and `advisories` probes hand their rows to one fold
+  (`domains/loops/dependency-refresh.ts`): one finding `deps` per repo, a section and a plan per ecosystem, filed only when it
+  clears a bar (`HYGIENE_DEFAULTS`): a high or critical advisory with a fixed version; a runtime major (non-dev npm, Cargo,
+  Python, Swift, a Docker base image; dev tools and Actions do not file alone); a runtime minor whose latest is 30 days old; or 10
+  rows behind in all. Rows inside their cooldown never count. Below the bar nothing is filed and the `deps` run's detail on the
+  Hygiene tab names what is behind. An advisory with no fixed version is never filed (osv too; bun already was, #474): it is in
+  the `advisories` run's detail and read again each pass. Replayed over the 60 readings of 2026-11-08 to 11-18: 60 filings
+  (43 `deps*`, 17 `advisories*`) become 22; the count is flat from 8 to 15 rows and from 14 to 60 days. An idle repo (no commit
+  on the default branch for 30 days, read from its newest pass) is swept in full monthly (`deps` and the judgment run only
+  then) and in a `steady` pass weekly (the rest); daily file probes and `advisories` keep their cadence, and a commit that
+  lands before a steady pass makes it full. A project overrides `idleAfterDays` and `deps.{runtimeStaleDays,behindRows}` in
+  `project.yaml` `hygiene:` with its `reason`. Not changed: the upgrade plan and procedure; the class gate. No repo is idle
+  today (every one had a commit in the last two days, much of it the factory's own), so the cadence changes nothing yet.
+  Known limits: "behind for N days" is the age of the latest version, because first-seen dates are not stored; open Issues
+  under the old keys (`deps:docker`, `advisories:bun`) are healed or noted once by the lifecycle, as no pass raises them. Count over
+  the next week: `deps` Issues filed against the 43 of the last 30 days, and any repo that went a month with a runtime major
+  unfiled. Revert: the numbers are one catalogue edit; the fold is one call in `adapters/hygiene/index.ts`.

@@ -1,6 +1,6 @@
 import * as z from 'zod'
 import { DEFAULT_SLOT_RUN_MS } from './capacity.ts'
-import { SKIPPABLE_PROBES } from './hygiene-catalogue.ts'
+import { HYGIENE_DEFAULTS, SKIPPABLE_PROBES } from './hygiene-catalogue.ts'
 import { LaneName } from './lane.ts'
 import { issuesMessage } from './plan-file.ts'
 
@@ -378,6 +378,33 @@ const SkippedProbe = z.strictObject({
     .meta(about('why: a probe is never switched off without one; the pass shows it', HYGIENE)),
 })
 
+const DepsBar = z.strictObject({
+  runtimeStaleDays: z
+    .number()
+    .int()
+    .min(1)
+    .max(365)
+    .optional()
+    .meta(
+      about(
+        `a runtime dependency a minor or more behind whose latest version is at least this many days old files the \`deps\` refresh (default ${HYGIENE_DEFAULTS.deps.runtimeStaleDays}); needs \`reason\``,
+        HYGIENE,
+      ),
+    ),
+  behindRows: z
+    .number()
+    .int()
+    .min(1)
+    .max(1000)
+    .optional()
+    .meta(
+      about(
+        `this many dependencies behind in all (after their cooldown, patches and dev tools included) file the \`deps\` refresh (default ${HYGIENE_DEFAULTS.deps.behindRows}); needs \`reason\``,
+        HYGIENE,
+      ),
+    ),
+})
+
 const Hygiene = z
   .strictObject({
     check: z
@@ -389,7 +416,33 @@ const Hygiene = z
           HYGIENE,
         ),
       ),
-    reason: z.string().trim().min(1).max(300).optional().meta(about('why `check` is false; required then', HYGIENE)),
+    reason: z
+      .string()
+      .trim()
+      .min(1)
+      .max(300)
+      .optional()
+      .meta(
+        about(
+          'why `check` is false, or why `idleAfterDays` or `deps` depart from the defaults; required then',
+          HYGIENE,
+        ),
+      ),
+    idleAfterDays: z
+      .number()
+      .int()
+      .min(0)
+      .max(3650)
+      .optional()
+      .meta(
+        about(
+          `days without a commit on the default branch after which the repo is idle: its \`deps\` refresh and document judgment run monthly instead of weekly (default ${HYGIENE_DEFAULTS.idleAfterDays}); 0 is never idle; needs \`reason\``,
+          HYGIENE,
+        ),
+      ),
+    deps: DepsBar.optional().meta(
+      about('the bar the `deps` refresh must clear before it is filed; a key left out keeps its default', HYGIENE),
+    ),
     skip: z
       .array(SkippedProbe)
       .max(SKIPPABLE_PROBES.length)
@@ -405,10 +458,15 @@ const Hygiene = z
       .default([])
       .meta(about(`the repo's own weekly probes, at most ${MAX_DECLARED_PROBES}`, HYGIENE)),
   })
-  .refine((hygiene) => hygiene.check || hygiene.reason !== undefined, {
-    message: '`reason` is required when `check` is false',
-    path: ['reason'],
-  })
+  .refine(
+    (hygiene) =>
+      hygiene.reason !== undefined ||
+      (hygiene.check && hygiene.idleAfterDays === undefined && hygiene.deps === undefined),
+    {
+      message: '`reason` is required when `check` is false or `idleAfterDays` or `deps` is set',
+      path: ['reason'],
+    },
+  )
 
 /** The most leads a repo, or a lane of it, may state: a value above is clamped to it, with a warning, never refused. */
 export const MAX_LEADS = 64

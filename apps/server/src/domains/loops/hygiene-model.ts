@@ -1,5 +1,12 @@
-import { type CatalogueName, HYGIENE_CATALOGUE, type HygieneCandidate } from '@software-factory/contract'
+import {
+  type CatalogueName,
+  HYGIENE_CATALOGUE,
+  HYGIENE_DEFAULTS,
+  type HygieneCandidate,
+} from '@software-factory/contract'
+import type { DepsThresholds } from '@software-factory/contract'
 import type { PortError, Result } from '../../kernel/result.ts'
+import type { UpgradeRow } from './upgrades.ts'
 
 /**
  * The shapes the hygiene loop moves between its deterministic sweep (`adapters/hygiene/`, the I/O) and its pass
@@ -19,14 +26,30 @@ export const PROBES: readonly Probe[] = HYGIENE_CATALOGUE.map((entry) => entry.n
 )
 
 /**
- * How much of the catalogue a pass runs: `full` every probe and the document judgment (weekly, or sooner for a busy repo),
- * `daily` the probes the catalogue marks `daily` and no judgment.
+ * How much of the catalogue a pass runs: `full` every probe and the document judgment (weekly, monthly for an idle repo, or
+ * sooner for a busy one), `steady` all but the probes and the judgment the catalogue marks `idle: 'monthly'` (an idle repo's
+ * weekly pass), `daily` the probes the catalogue marks `daily` and no judgment.
  */
-export type Scope = 'full' | 'daily'
+export type Scope = 'full' | 'steady' | 'daily'
+
+/**
+ * Whether the default branch has had no commit for `idleAfterDays` (the catalogue's default when absent; 0 is never idle).
+ * A repo whose newest commit is unknown is never idle: the weekly pass stays whole.
+ */
+export function isIdle(input: { lastCommitAt: string | undefined; idleAfterDays?: number; now: Date }): boolean {
+  const days = input.idleAfterDays ?? HYGIENE_DEFAULTS.idleAfterDays
+  const at = input.lastCommitAt === undefined ? Number.NaN : Date.parse(input.lastCommitAt)
+  if (days === 0 || Number.isNaN(at)) return false
+  return input.now.getTime() - at > days * 86_400_000
+}
 
 /** Whether a probe runs in a pass of this scope. */
-export const runsIn = (probe: Probe, scope: Scope): boolean =>
-  scope === 'full' || HYGIENE_CATALOGUE.some((entry) => entry.name === probe && entry.cadence === 'daily')
+export const runsIn = (probe: Probe, scope: Scope): boolean => {
+  if (scope === 'full') return true
+  const entry = HYGIENE_CATALOGUE.find((candidate) => candidate.name === probe)
+  if (scope === 'steady') return !(entry && 'idle' in entry)
+  return entry?.cadence === 'daily'
+}
 
 /** A probe a project declares in `project.yaml`: `make <target>` in the checkout, red on any exit but 0. */
 export interface DeclaredProbe {
@@ -44,6 +67,24 @@ export const ARCHIVE_DIRS = [
   'docs/history',
 ] as const
 
+export type DependencyEcosystem = 'npm' | 'cargo' | 'python' | 'swift' | 'docker' | 'actions'
+
+/** One outdated dependency of one ecosystem; `dev` is a tool the build uses and the product does not run (a dev dependency, a GitHub Action). */
+export interface DependencyRow extends UpgradeRow {
+  ecosystem: DependencyEcosystem
+  dev: boolean
+}
+
+/** A high or critical advisory that has a fixed version; one without is listed in the probe's detail and never filed. */
+export interface AdvisoryRow {
+  pkg: string
+  version: string
+  id: string
+  severity: 'critical' | 'high'
+  fixedIn: string
+  source: 'bun' | 'osv'
+}
+
 /** One thing a probe found, ready to be a signal: `key` is stable per subject, so the same finding next week dedups. */
 export interface ProbeFinding {
   probe: Probe
@@ -59,6 +100,10 @@ export interface ProbeFinding {
   reproduce?: string
   /** facts after the evidence, uncapped: the `deps` finding's upgrade plan and procedure */
   plan?: string[]
+  /** the `deps` probe's rows of one ecosystem, folded into the one `deps` finding by `foldDependencies` and never stored */
+  rows?: DependencyRow[]
+  /** the `advisories` probe's advisories with a fixed version, folded the same way */
+  advisories?: AdvisoryRow[]
 }
 
 export const MAX_EVIDENCE_LINES = 8
@@ -85,6 +130,8 @@ export interface SweepReport {
   ref: string
   /** how much of the catalogue ran; absent on a pass recorded before the daily scope: it was `full` */
   scope?: Scope
+  /** when the default branch's newest commit was made (ISO); absent when git could not say: the repo is then never idle */
+  lastCommitAt?: string
   runs: ProbeRun[]
   findings: ProbeFinding[]
   /** living documents whose code moved on since they were last edited, most behind first */
@@ -120,6 +167,10 @@ export interface SweepOptions {
   skip?: readonly SkippedProbe[]
   /** how much of the catalogue runs; absent is `full` */
   scope?: Scope
+  /** the bar the `deps` refresh must clear; absent is the catalogue's defaults */
+  deps?: DepsThresholds
+  /** a `steady` pass becomes a full one when the default branch has a commit younger than this many days; 0 never */
+  idleAfterDays?: number
 }
 
 /**

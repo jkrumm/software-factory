@@ -1,8 +1,12 @@
+import { HYGIENE_DEFAULTS } from '@software-factory/contract'
+import { foldDependencies } from '../../domains/loops/dependency-refresh.ts'
 import {
   type Checkout,
   type HygieneChecker,
+  isIdle,
   PROBES,
   type Probe,
+  type ProbeFinding,
   type ProbeRun,
   runsIn,
   type SweepOptions,
@@ -72,7 +76,12 @@ export function createHygieneChecker(options: HygieneCheckerOptions): HygieneChe
 
   async function sweep(checkout: Checkout, options: SweepOptions = {}): Promise<SweepReport> {
     const { path } = checkout
-    const scope = options.scope ?? 'full'
+    const now = new Date()
+    const lastCommitAt = (await gitTry(tools, path, ['log', '-1', '--format=%cI', 'HEAD']))?.trim() || undefined
+    // A repo that was idle when the pass was planned but has a commit now is swept in full: the monthly probes are not skipped for it.
+    const planned = options.scope ?? 'full'
+    const scope =
+      planned === 'steady' && !isIdle({ lastCommitAt, idleAfterDays: options.idleAfterDays, now }) ? 'full' : planned
     const markdown = trackedMarkdown(tools, path)
     markdown.catch(() => {})
     const docs = markdown.then(livingDocs)
@@ -148,7 +157,7 @@ export function createHygieneChecker(options: HygieneCheckerOptions): HygieneChe
     }
 
     const runs: ProbeRun[] = []
-    const findings = []
+    const findings: ProbeFinding[] = []
     for (const probe of PROBES) {
       const list =
         probe === 'probe'
@@ -167,7 +176,16 @@ export function createHygieneChecker(options: HygieneCheckerOptions): HygieneChe
         findings.push(...outcome.findings)
       }
     }
-    return { ref: checkout.ref, scope, runs, findings, ...read }
+    // Every ecosystem's rows and every advisory with a fix are one refresh: filed only when it clears the bar.
+    const folded = foldDependencies({ findings, runs, thresholds: options.deps ?? HYGIENE_DEFAULTS.deps, now })
+    return {
+      ref: checkout.ref,
+      scope,
+      ...(lastCommitAt ? { lastCommitAt } : {}),
+      runs: folded.runs,
+      findings: folded.findings,
+      ...read,
+    }
   }
 
   async function commitsSince(checkout: Checkout, ref: string): Promise<number | null> {

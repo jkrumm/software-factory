@@ -437,11 +437,40 @@
           "type": "boolean"
         },
         "reason": {
-          "description": "why `check` is false; required then",
+          "description": "why `check` is false, or why `idleAfterDays` or `deps` depart from the defaults; required then",
           "consumer": "the hygiene loop (apps/server/src/app/loops/hygiene.ts)",
           "type": "string",
           "minLength": 1,
           "maxLength": 300
+        },
+        "idleAfterDays": {
+          "description": "days without a commit on the default branch after which the repo is idle: its `deps` refresh and document judgment run monthly instead of weekly (default 30); 0 is never idle; needs `reason`",
+          "consumer": "the hygiene loop (apps/server/src/app/loops/hygiene.ts)",
+          "type": "integer",
+          "minimum": 0,
+          "maximum": 3650
+        },
+        "deps": {
+          "description": "the bar the `deps` refresh must clear before it is filed; a key left out keeps its default",
+          "consumer": "the hygiene loop (apps/server/src/app/loops/hygiene.ts)",
+          "type": "object",
+          "properties": {
+            "runtimeStaleDays": {
+              "description": "a runtime dependency a minor or more behind whose latest version is at least this many days old files the `deps` refresh (default 30); needs `reason`",
+              "consumer": "the hygiene loop (apps/server/src/app/loops/hygiene.ts)",
+              "type": "integer",
+              "minimum": 1,
+              "maximum": 365
+            },
+            "behindRows": {
+              "description": "this many dependencies behind in all (after their cooldown, patches and dev tools included) file the `deps` refresh (default 10); needs `reason`",
+              "consumer": "the hygiene loop (apps/server/src/app/loops/hygiene.ts)",
+              "type": "integer",
+              "minimum": 1,
+              "maximum": 1000
+            }
+          },
+          "additionalProperties": false
         },
         "skip": {
           "default": [],

@@ -2,6 +2,7 @@ import { readFileSync } from 'node:fs'
 import { basename, dirname, join } from 'node:path'
 import { EXIT_TIMEOUT } from '../../hc/process.ts'
 import { gitOut, type Tools } from '../git.ts'
+import type { AdvisoryRow } from '../../../domains/loops/hygiene-model.ts'
 import { type Outcome, clean, failed, finding, found, skipped, unjudging } from './finding.ts'
 import { execKeepingStderr, firstLine, installed } from './toolrun.ts'
 
@@ -148,6 +149,10 @@ export function parseOsv(stdout: string): Advisory[] | undefined {
   return sorted(advisories)
 }
 
+/** The advisories the refresh files: each has a fixed version (the parts counted only those). */
+const withFix = (advisories: Advisory[], source: AdvisoryRow['source']): AdvisoryRow[] =>
+  advisories.flatMap(({ fixedIn, ...rest }) => (fixedIn ? [{ ...rest, fixedIn, source }] : []))
+
 export const evidence = (advisory: Advisory): string =>
   `${advisory.pkg} ${advisory.version}: ${advisory.id} ${advisory.severity} (${advisory.fixedIn ? `fixed in ${advisory.fixedIn}` : 'no fixed version'})`
 
@@ -204,7 +209,13 @@ async function osvPart(tools: Tools, path: string, lockfiles: string[]): Promise
     )
     return { kind: 'failed', reason: `osv-scanner failed (exit ${result.exitCode})${why ? `: ${why}` : ''}` }
   }
-  return { kind: 'ran', advisories: parsed }
+  // no fixed version means no dependency change clears it: named in the detail, never a finding
+  const unfixable = parsed.filter((advisory) => !advisory.fixedIn)
+  return {
+    kind: 'ran',
+    advisories: parsed.filter((advisory) => advisory.fixedIn),
+    note: unfixable.length ? `not counted, no fixed version: ${unfixable.map(evidence).join('; ')}` : undefined,
+  }
 }
 
 /** The tracked files the osv part scans: the lockfile kinds it reads, and requirements files that pin a version with `==`. */
@@ -255,6 +266,7 @@ export async function advisoriesProbe(tools: Tools, path: string): Promise<Outco
               advisories.map(evidence),
               advisories.length,
             ),
+            advisories: withFix(advisories, 'bun'),
             reproduce: 'bun audit --audit-level=high',
           },
         ]
@@ -267,6 +279,7 @@ export async function advisoriesProbe(tools: Tools, path: string): Promise<Outco
               advisories.map(evidence),
               advisories.length,
             ),
+            advisories: withFix(advisories, 'osv'),
             reproduce: `osv-scanner scan source ${osvLocks.map((lock) => `-L ${lock}`).join(' ')}`,
           },
         ]

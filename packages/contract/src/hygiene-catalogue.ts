@@ -28,9 +28,30 @@ export const HygieneCatalogueEntry = z
     skippable: z.boolean(),
     /** how a project silences it, always with a reason */
     silence: z.string(),
+    /** on a repo with no commit for `HYGIENE_DEFAULTS.idleAfterDays`: `monthly` runs it in the monthly pass only; absent, as often as `cadence` */
+    idle: z.literal('monthly').optional(),
   })
   .meta({ id: 'HygieneCatalogueEntry' })
 export type HygieneCatalogueEntry = z.infer<typeof HygieneCatalogueEntry>
+
+/**
+ * The numbers the hygiene loop decides by, one place: a project overrides them under `hygiene` in `project.yaml`, with its reason.
+ * `idleAfterDays`: a repo whose default branch has no commit for this long is idle, and its `idle: 'monthly'` probes (and the
+ * document judgment) run every `monthlyDays`; 0 in a project is never idle. `deps`: the bar a dependency refresh must clear
+ * before it is filed (`runtimeStaleDays`: a runtime dependency a minor or more behind whose latest is this old; `behindRows`:
+ * rows behind in all, after the cooldown). Measured on the 60 readings of 2026-11-08 to 11-18: 22 filed, flat from 8 to 15 rows
+ * and from 14 to 60 days (`docs/decisions.md`).
+ */
+export const HYGIENE_DEFAULTS = {
+  idleAfterDays: 30,
+  monthlyDays: 30,
+  deps: { runtimeStaleDays: 30, behindRows: 10 },
+} as const
+
+export interface DepsThresholds {
+  runtimeStaleDays: number
+  behindRows: number
+}
 
 const SKIP = 'Name it under `hygiene.skip` in `project.yaml` with a reason; the pass shows the reason.'
 
@@ -51,7 +72,7 @@ export const HYGIENE_CATALOGUE = [
   {
     name: 'advisories',
     summary:
-      'Known security advisories of severity high and up in the lockfiles: `bun audit` for a `bun.lock`, `osv-scanner` for `Cargo.lock`, `uv.lock`, `requirements*.txt` and `Package.resolved`.',
+      'Known security advisories of severity high and up in the lockfiles: `bun audit` for a `bun.lock`, `osv-scanner` for `Cargo.lock`, `uv.lock`, `requirements*.txt` and `Package.resolved`. An advisory with a fixed version files the `deps` refresh; one with none is listed on the tab and read again every pass, never filed.',
     enabled: 'auto',
     detect:
       'a lockfile of one of those kinds is tracked; the Cargo, Python and Swift ones are skipped on a host without `osv-scanner`',
@@ -95,11 +116,12 @@ export const HYGIENE_CATALOGUE = [
   {
     name: 'deps',
     summary:
-      'Outdated dependencies: `bun outdated` for a `package.json`, and the versions pinned in `Cargo.toml`, `pyproject.toml` or `requirements*.txt`, `Package.swift`, Dockerfile base images and GitHub Actions `uses:` lines. Each finding carries an upgrade plan (versions younger than 7 days, 14 for a major, held back; patches and minors, packages that move together, and each major in batches) and the procedure a light lead follows.',
+      'Outdated dependencies and the advisories above, as one refresh per repo: `bun outdated` for a `package.json`, and the versions pinned in `Cargo.toml`, `pyproject.toml` or `requirements*.txt`, `Package.swift`, Dockerfile base images and GitHub Actions `uses:` lines. One finding `deps` is filed only when the refresh clears the bar (below); it carries a section and an upgrade plan per ecosystem (versions younger than 7 days, 14 for a major, held back; patches and minors, packages that move together, and each major in batches) and the procedure a light lead follows. Below the bar nothing is filed and the Hygiene tab names what is behind.',
     enabled: 'auto',
-    detect: 'a package file of one of those kinds is tracked; each ecosystem is its own finding',
+    detect: 'a package file of one of those kinds is tracked; every ecosystem is one finding',
     cost: 'tool',
     cadence: 'weekly',
+    idle: 'monthly',
     skippable: true,
     silence: SKIP,
   },
@@ -220,6 +242,7 @@ export const HYGIENE_CATALOGUE = [
     detect: null,
     cost: 'agent',
     cadence: 'weekly',
+    idle: 'monthly',
     skippable: false,
     silence: 'Not switchable: it takes at most two signals of a pass and a held class stops it.',
   },

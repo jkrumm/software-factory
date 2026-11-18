@@ -2,8 +2,7 @@ import { existsSync, readFileSync } from 'node:fs'
 import { join } from 'node:path'
 import { EXIT_TIMEOUT } from '../../hc/process.ts'
 import { exec, gitOut, type Tools } from '../git.ts'
-import type { ProbeFinding } from '../../../domains/loops/hygiene-model.ts'
-import { type UpgradeRow, planLines, planUpgrades, procedureLines } from '../../../domains/loops/upgrades.ts'
+import type { DependencyEcosystem, DependencyRow, ProbeFinding } from '../../../domains/loops/hygiene-model.ts'
 import { type Outcome, clean, failed, finding, found, skipped, unjudging } from './finding.ts'
 
 const INSTALL_TIMEOUT_MS = 10 * 60_000
@@ -15,6 +14,8 @@ export interface OutdatedRow {
   latest: string
   /** the latest is not the true latest: the release-age cooldown holds it back */
   heldBack: boolean
+  /** the package manager lists it as a dev dependency */
+  dev: boolean
 }
 
 /** Rows of the `| Package | Current | Update | Latest |` table of `bun outdated`; separators and the header are skipped. */
@@ -30,6 +31,7 @@ export function parseOutdated(output: string): OutdatedRow[] {
     if (cells.length < 4 || !name || !current || !latest || name === 'Package') continue
     rows.push({
       name: name.replace(/\s*\(dev\)$/, ''),
+      dev: /\(dev\)$/.test(name),
       current: current.replace(/\s*\*$/, ''),
       latest: latest.replace(/\s*\*$/, ''),
       heldBack: latest.endsWith('*'),
@@ -55,17 +57,20 @@ export type Ecosystem = 'cargo' | 'python' | 'swift' | 'docker' | 'actions'
 export interface Dependency {
   name: string
   current: string
+  /** a tool the build uses and the product does not run (a dev dependency); absent is a runtime dependency */
+  dev?: boolean
 }
 
 /** The newest version of a dependency, or undefined / a throw when it cannot be looked up (soft: counted, never a finding). */
 export type Lookup = (query: { ecosystem: Ecosystem; name: string; current: string }) => Promise<string | undefined>
 
-const ECOSYSTEMS: { ecosystem: Ecosystem; label: string; title: string }[] = [
-  { ecosystem: 'cargo', label: 'Cargo', title: 'Hygiene: outdated Cargo dependencies' },
-  { ecosystem: 'python', label: 'Python', title: 'Hygiene: outdated Python dependencies' },
-  { ecosystem: 'swift', label: 'Swift', title: 'Hygiene: outdated Swift dependencies' },
-  { ecosystem: 'docker', label: 'Docker', title: 'Hygiene: outdated Docker base images' },
-  { ecosystem: 'actions', label: 'GitHub Actions', title: 'Hygiene: outdated GitHub Actions' },
+/** `dev`: every dependency of the ecosystem is a build tool (a workflow's actions run in CI, never in the product). */
+const ECOSYSTEMS: { ecosystem: Ecosystem; label: string; dev: boolean }[] = [
+  { ecosystem: 'cargo', label: 'Cargo', dev: false },
+  { ecosystem: 'python', label: 'Python', dev: false },
+  { ecosystem: 'swift', label: 'Swift', dev: false },
+  { ecosystem: 'docker', label: 'Docker', dev: false },
+  { ecosystem: 'actions', label: 'GitHub Actions', dev: true },
 ]
 
 const MAX_LOOKUPS = 40
@@ -96,71 +101,79 @@ function parseToml(text: string): Record<string, unknown> | undefined {
 }
 
 const CARGO_SECTIONS = ['dependencies', 'dev-dependencies', 'build-dependencies']
+const CARGO_DEV_SECTIONS = new Set(['dev-dependencies', 'build-dependencies'])
 
 /** The versioned crates.io dependencies of a `Cargo.toml`; path and git dependencies and ones without a version are left out. */
 export function cargoDependencies(text: string): Dependency[] {
   const toml = parseToml(text)
   if (!toml) return []
-  const tables = [
-    ...CARGO_SECTIONS.map((section) => toml[section]),
-    asRecord(toml.workspace)?.dependencies,
+  const tables: { table: unknown; dev: boolean }[] = [
+    ...CARGO_SECTIONS.map((section) => ({ table: toml[section], dev: CARGO_DEV_SECTIONS.has(section) })),
+    { table: asRecord(toml.workspace)?.dependencies, dev: false },
     ...Object.values(asRecord(toml.target) ?? {}).flatMap((target) =>
-      CARGO_SECTIONS.map((section) => asRecord(target)?.[section]),
+      CARGO_SECTIONS.map((section) => ({ table: asRecord(target)?.[section], dev: CARGO_DEV_SECTIONS.has(section) })),
     ),
   ]
   const out: Dependency[] = []
-  for (const table of tables) {
+  for (const { table, dev } of tables) {
     for (const [key, value] of Object.entries(asRecord(table) ?? {})) {
       const spec = asRecord(value)
       const requirement = typeof value === 'string' ? value : spec?.version
       if (typeof requirement !== 'string' || spec?.path !== undefined || spec?.git !== undefined) continue
       const current = lowerBound(requirement)
       const name = typeof spec?.package === 'string' ? spec.package : key
-      if (current) out.push({ name, current })
+      if (current) out.push({ name, current, ...(dev ? { dev } : {}) })
     }
   }
   return out
 }
 
 /** `name[extra]>=1.2; marker` -> the name and lower bound; a direct reference (`@ url`) or an unversioned line is left out. */
-function pythonRequirement(raw: string): Dependency | undefined {
+function pythonRequirement(raw: string, dev = false): Dependency | undefined {
   const line = raw.split(';')[0]?.split(' #')[0]?.trim() ?? ''
   const match = /^([A-Za-z0-9][A-Za-z0-9._-]*)\s*(?:\[[^\]]*\])?\s*([<>=!~^][^@]*)$/.exec(line)
   const current = match?.[2] ? lowerBound(match[2]) : undefined
-  return match?.[1] && current ? { name: match[1], current } : undefined
+  return match?.[1] && current ? { name: match[1], current, ...(dev ? { dev } : {}) } : undefined
 }
 
-/** The dependencies of a `pyproject.toml` (PEP 621, dependency groups, Poetry) or, for a `requirements*.txt`, its pins. */
+/** A requirements file named for development (`requirements-dev.txt`, `dev-requirements.txt`, `requirements/test.txt`, lint, docs). */
+const DEV_REQUIREMENTS = /(?:^|[/_.-])(?:dev|test|tests|lint|docs|ci)(?:[/_.-]|$)/i
+
+/** The dependencies of a `pyproject.toml` (PEP 621, dependency groups, Poetry) or, for a `requirements*.txt`, its pins. Dependency groups, Poetry groups and development requirements files are dev. */
 export function pythonDependencies(text: string, file = 'pyproject.toml'): Dependency[] {
   if (!file.endsWith('.toml')) {
+    const dev = DEV_REQUIREMENTS.test(file)
     return text
       .split('\n')
       .filter((line) => !line.trim().startsWith('-') && !line.includes('://'))
-      .flatMap((line) => pythonRequirement(line) ?? [])
+      .flatMap((line) => pythonRequirement(line, dev) ?? [])
   }
   const toml = parseToml(text)
   if (!toml) return []
   const project = asRecord(toml.project)
   const poetry = asRecord(asRecord(toml.tool)?.poetry)
-  const lists: unknown[] = [
-    project?.dependencies,
-    ...Object.values(asRecord(project?.['optional-dependencies']) ?? {}),
-    ...Object.values(asRecord(toml['dependency-groups']) ?? {}),
+  const lists: { list: unknown; dev: boolean }[] = [
+    { list: project?.dependencies, dev: false },
+    ...Object.values(asRecord(project?.['optional-dependencies']) ?? {}).map((list) => ({ list, dev: false })),
+    ...Object.values(asRecord(toml['dependency-groups']) ?? {}).map((list) => ({ list, dev: true })),
   ]
-  const out = lists.flatMap((list) =>
+  const out = lists.flatMap(({ list, dev }) =>
     (Array.isArray(list) ? list : []).flatMap((item) =>
-      typeof item === 'string' ? (pythonRequirement(item) ?? []) : [],
+      typeof item === 'string' ? (pythonRequirement(item, dev) ?? []) : [],
     ),
   )
   const poetryTables = [
-    poetry?.dependencies,
-    ...Object.values(asRecord(poetry?.group) ?? {}).map((group) => asRecord(group)?.dependencies),
+    { table: poetry?.dependencies, dev: false },
+    ...Object.values(asRecord(poetry?.group) ?? {}).map((group) => ({
+      table: asRecord(group)?.dependencies,
+      dev: true,
+    })),
   ]
-  for (const table of poetryTables) {
+  for (const { table, dev } of poetryTables) {
     for (const [name, value] of Object.entries(asRecord(table) ?? {})) {
       const requirement = typeof value === 'string' ? value : asRecord(value)?.version
       const current = typeof requirement === 'string' ? lowerBound(requirement) : undefined
-      if (name !== 'python' && current) out.push({ name, current })
+      if (name !== 'python' && current) out.push({ name, current, ...(dev ? { dev } : {}) })
     }
   }
   return out
@@ -394,21 +407,41 @@ export const registryReleased: Released = async ({ ecosystem, name, version }) =
   }
 }
 
-/** The finding's facts after the evidence: the batches, what waits out its cooldown, and the procedure. */
-async function withPlan(
-  base: ProbeFinding,
-  rows: UpgradeRow[],
+/** The rows with the day their latest version was published, where the registry says it (the first `MAX_LOOKUPS`). The refresh plans the cooldown from it. */
+async function withReleased(
+  rows: DependencyRow[],
   dated: 'npm' | 'cargo' | 'python' | 'docker' | undefined,
   released: Released,
-  now: Date,
-): Promise<ProbeFinding> {
+): Promise<DependencyRow[]> {
   const known = await pool(rows.slice(0, MAX_LOOKUPS), async (row) => {
     if (!dated) return row
     const releasedAt = await released({ ecosystem: dated, name: row.name, version: row.latest }).catch(() => undefined)
     return releasedAt ? { ...row, releasedAt } : row
   })
-  const plan = planUpgrades([...known, ...rows.slice(MAX_LOOKUPS)], now)
-  return { ...base, plan: [...planLines(plan, now), ...procedureLines()] }
+  return [...known, ...rows.slice(MAX_LOOKUPS)]
+}
+
+/** One ecosystem's evidence; the refresh (`foldDependencies`) turns every ecosystem's finding into the one `deps` finding. */
+async function ecosystemFinding(
+  ecosystem: DependencyEcosystem,
+  rows: DependencyRow[],
+  dated: 'npm' | 'cargo' | 'python' | 'docker' | undefined,
+  released: Released,
+): Promise<ProbeFinding> {
+  const lines = rows.map(
+    (row) =>
+      `${row.name} ${row.current} -> ${row.latest} (${row.size})${row.heldBack ? ', held back by the release-age cooldown' : ''}`,
+  )
+  return {
+    ...finding(
+      'deps',
+      ecosystem === 'npm' ? 'deps' : `deps:${ecosystem}`,
+      'Hygiene: outdated dependencies',
+      lines,
+      rows.length,
+    ),
+    rows: await withReleased(rows, dated, released),
+  }
 }
 
 async function pool<T, R>(items: T[], work: (item: T) => Promise<R>): Promise<R[]> {
@@ -474,7 +507,7 @@ function uvLocked(text: string): Dependency[] {
 function lockedPython(declaredDeps: Dependency[], locked: Dependency[]): Dependency[] {
   const normal = (name: string): string => name.toLowerCase().replace(/[-_.]+/g, '-')
   const versions = new Map(locked.map((dep) => [normal(dep.name), dep.current]))
-  return declaredDeps.map((dep) => ({ name: dep.name, current: versions.get(normal(dep.name)) ?? dep.current }))
+  return declaredDeps.map((dep) => ({ ...dep, current: versions.get(normal(dep.name)) ?? dep.current }))
 }
 
 interface EcosystemRun {
@@ -490,11 +523,15 @@ async function judgeEcosystem(
   dependencies: Dependency[],
   lookup: Lookup,
   released: Released,
-  now: Date,
 ): Promise<EcosystemRun> {
-  const unique = [...new Map(dependencies.map((dep) => [`${dep.name}@${dep.current}`, dep])).values()].sort((a, b) =>
-    a.name.localeCompare(b.name),
-  )
+  // one dependency named in a dev group and a runtime table is a runtime dependency
+  const merged = new Map<string, Dependency>()
+  for (const dep of dependencies) {
+    const id = `${dep.name}@${dep.current}`
+    const seen = merged.get(id)
+    merged.set(id, seen ? { ...seen, dev: seen.dev === true && dep.dev === true } : dep)
+  }
+  const unique = [...merged.values()].sort((a, b) => a.name.localeCompare(b.name))
   const batch = unique.slice(0, MAX_LOOKUPS)
   const answers = await pool(batch, (dep) =>
     lookup({ ecosystem: entry.ecosystem, name: dep.name, current: dep.current }).then(
@@ -508,13 +545,24 @@ async function judgeEcosystem(
       outcome: 'failed',
       detail: `${entry.label}: no look-up worked (${notLooked} not looked up)`,
       findings: [],
-      unjudged: [`deps:${entry.ecosystem}`],
+      unjudged: ['deps'],
     }
   }
-  const rows = batch.flatMap((dep, index) => {
+  const rows = batch.flatMap((dep, index): DependencyRow[] => {
     const latest = answers[index]
     const size = latest === undefined ? undefined : gap(dep.current, latest)
-    return latest !== undefined && size ? [{ name: dep.name, current: dep.current, latest, size }] : []
+    return latest !== undefined && size
+      ? [
+          {
+            name: dep.name,
+            current: dep.current,
+            latest,
+            size,
+            ecosystem: entry.ecosystem,
+            dev: entry.dev || dep.dev === true,
+          },
+        ]
+      : []
   })
   rows.sort((a, b) => a.size.localeCompare(b.size) || a.name.localeCompare(b.name))
   const note = notLooked ? `, ${notLooked} not looked up` : ''
@@ -523,27 +571,25 @@ async function judgeEcosystem(
       outcome: 'clean',
       detail: `${entry.label}: nothing a minor or major behind${note}`,
       findings: [],
-      ...(notLooked ? { unjudged: [`deps:${entry.ecosystem}`] } : {}),
+      ...(notLooked ? { unjudged: ['deps'] } : {}),
     }
-  const lines = rows.map((row) => `${row.name} ${row.current} -> ${row.latest} (${row.size})`)
   return {
     outcome: 'found',
     detail: `${entry.label}, ${rows.length} outdated${note}`,
     findings: [
-      await withPlan(
-        finding('deps', `deps:${entry.ecosystem}`, entry.title, lines, rows.length),
+      await ecosystemFinding(
+        entry.ecosystem,
         rows,
         entry.ecosystem === 'cargo' || entry.ecosystem === 'python' || entry.ecosystem === 'docker'
           ? entry.ecosystem
           : undefined,
         released,
-        now,
       ),
     ],
   }
 }
 
-async function bunRun(tools: Tools, path: string, released: Released, now: Date): Promise<EcosystemRun | undefined> {
+async function bunRun(tools: Tools, path: string, released: Released): Promise<EcosystemRun | undefined> {
   if (!existsSync(join(path, 'package.json'))) return undefined
   if (!existsSync(join(path, 'node_modules'))) {
     const install = await exec([tools.bun, 'install', '--frozen-lockfile'], INSTALL_TIMEOUT_MS, path)
@@ -581,47 +627,44 @@ async function bunRun(tools: Tools, path: string, released: Released, now: Date)
     .map((row) => ({ ...row, severity: severity(row.current, row.latest) }))
     .sort((a, b) => SEVERITIES.indexOf(a.severity) - SEVERITIES.indexOf(b.severity) || a.name.localeCompare(b.name))
   if (!outdated.length) return { outcome: 'clean', detail: 'bun outdated: everything is at its latest', findings: [] }
-  const lines = outdated.map(
-    (row) =>
-      `${row.name} ${row.current} -> ${row.latest} (${row.severity})${row.heldBack ? ', held back by the release-age cooldown' : ''}`,
-  )
   return {
     outcome: 'found',
     detail: `bun outdated, ${outdated.length} packages`,
     findings: [
-      await withPlan(
-        finding('deps', 'deps', 'Hygiene: outdated dependencies', lines, outdated.length),
+      await ecosystemFinding(
+        'npm',
         outdated.map((row) => ({
           name: row.name,
           current: row.current,
           latest: row.latest,
           size: row.severity,
           heldBack: row.heldBack,
+          ecosystem: 'npm' as const,
+          dev: row.dev,
         })),
         'npm',
         released,
-        now,
       ),
     ],
   }
 }
 
-/** Outdated dependencies: `bun outdated` for a package.json, registry look-ups (`lookup`) for Cargo, Python, Swift, Docker and Actions. */
+/**
+ * Outdated dependencies: `bun outdated` for a package.json, registry look-ups (`lookup`) for Cargo, Python, Swift, Docker and
+ * Actions. One finding per ecosystem, each carrying its rows; `foldDependencies` decides whether anything is filed.
+ */
 export async function depsProbe(
   tools: Tools,
   path: string,
   lookup: Lookup = registryLookup(tools),
   released: Released = registryReleased,
-  now: Date = new Date(),
 ): Promise<Outcome> {
   const lists = await declared(tools, path)
   const runs = [
-    await bunRun(tools, path, released, now),
+    await bunRun(tools, path, released),
     ...(await Promise.all(
       ECOSYSTEMS.map(async (entry) =>
-        lists[entry.ecosystem].length
-          ? judgeEcosystem(entry, lists[entry.ecosystem], lookup, released, now)
-          : undefined,
+        lists[entry.ecosystem].length ? judgeEcosystem(entry, lists[entry.ecosystem], lookup, released) : undefined,
       ),
     )),
   ].filter((run): run is EcosystemRun => run !== undefined)

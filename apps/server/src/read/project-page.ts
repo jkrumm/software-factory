@@ -159,7 +159,7 @@ const Found = z.object({
 })
 const Report = z.object({
   ref: z.string().prefault(''),
-  scope: z.enum(['full', 'daily']).prefault('full'),
+  scope: z.enum(['full', 'steady', 'daily']).prefault('full'),
   runs: z.array(Run).prefault([]),
   findings: z.array(Found).prefault([]),
   stale: z.array(z.unknown()).prefault([]),
