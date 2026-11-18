@@ -388,3 +388,17 @@ Report `docs/strategy/2026-11-next/report.html`, definition `docs/strategy/2026-
   that is out start on the lead row, so they age its light starts out of the window until fewer than 3 remain: the class is back
   on light with no switch to flip (10 min cache in `compose-leads.ts`). With no bound measured nothing is out. Not changed:
   friction, selfwatch and owner-filed Issues keep NL38's rule; 20 and 3 are floors of this Issue, not measurements.
+- **NL41 A block and a full window are friction by rate, not by count (Issue 2187, 2026-11-18).** `stall:blocked` (48) and
+  `stall:wall` (21) filed every day on a bare count of 2, one week after `issue_1818` traced the same pattern. Read from
+  `factory read waits --days 7`: 48 blocks had a median of 129 s (p90 144 s), 33 ended by the steward and 15 by the factory
+  (a timer); 21 full windows had a median of 126 s, 20 ended by the steward moving the lead to an open account; no person ended
+  either. 24 of the 48 blocks were re-blocks of 5 Issues that the steward holds on a timer or the owner paused (`issue_867` 8,
+  `issue_1067` 6, `issue_1285` 4, `issue_1400` 3, `issue_1300` 3): the designed valve, each wake a new count. The other 24
+  were 22 Issues with their own cause (a repo with no CI, an advisory with no fixed version, a light lead that found the work
+  bigger, a dirty checkout), none shared by more than two. The 21 walls came in
+  three bursts (00:45, 15:20 to 15:32, 21:24 to 21:34 on 2026-11-17), one account's window filling. The rule is now 3 in the
+  window and 0.05 per Issue closed for these two keys (NL37's level): the week of the 47-stall loop was 0.07, this week 0.033
+  and 0.015. Cost: a block loop under about 70 stalls a week on 1400 closed Issues no longer files by itself; `unreported` and
+  `regressed` stay on the bare count. Revert: set `STALL_BY_RATE` back to `{ min: 2, rate: null }`, or delete the two `BY_KEY`
+  lines in `domains/loops/friction.ts`. Not changed: the steward's 2 min before it moves a lead (`minStallMs`), which is the
+  whole of a wall stall's cost, 6300 s a week.

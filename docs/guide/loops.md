@@ -44,7 +44,7 @@ The rules of each loop live in `domains/loops/` as pure functions over counts an
 
 Friction is any counted waste: an avoidable touch, a refusal, an undelivered note. The friction loop counts the lead events of the last 7 days and files a signal for each pattern over its rule. Each pass also files one signal for the retro (see The retro).
 
-- **A count or a rate.** A serious pattern (a stall, a lost lead, an undelivered note, a regression) files on a bare count. The others need a share of the Issues closed in the window, and only once 10 have closed.
+- **A count or a rate.** A serious pattern (a lead that stopped reporting, a lost lead, an undelivered note) files on a bare count. The others need a share of the Issues closed in the window, and only once 10 have closed. Two stalls the steward ends by itself, a lead's block and a full account window, are judged by rate too (3 and one in twenty).
 - **Pace:** one pass a day, or sooner when 200 Issues have closed since the last. At 126 to 166 closed a day, a weekly pace would have looked at about a thousand Issues per pass.
 - **One signal per pattern,** with the evidence Issues (five at most) and the command that shows the count again. An open Issue of the same pattern is amended, not doubled.
 - **Retired mechanisms are never judged.** The review gate is gone, so its refusals do not count.
