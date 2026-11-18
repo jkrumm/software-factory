@@ -1,3 +1,4 @@
+import { readdirSync, existsSync } from 'node:fs'
 import { mkdir, mkdtemp, readdir, realpath, rm, stat } from 'node:fs/promises'
 import { join } from 'node:path'
 import type { Checkout } from '../../domains/loops/hygiene-model.ts'
@@ -53,6 +54,20 @@ async function removeStale(tools: Tools, repo: string, hygieneDir: string): Prom
     // the next pass tries again
   }
   await gitTry(tools, repo, ['worktree', 'prune'])
+}
+
+/**
+ * At boot, before any pass of this process: the throwaway checkouts under `<workDir>/hygiene/` belong to a pass that a restart or a
+ * drain past its grace killed (its `finally` never ran), and no pass is alive yet. The snapshot of the names is taken now, so a
+ * checkout made later is never among them; the removal runs in the background. A killed checkout's registration in its source
+ * repo goes at that repo's next checkout (`removeStale` prunes). Returns the number of entries it removes.
+ */
+export function reapHygieneDir(workDir: string): Promise<number> {
+  const hygieneDir = join(workDir, 'hygiene')
+  const entries = existsSync(hygieneDir) ? readdirSync(hygieneDir) : []
+  return Promise.all(
+    entries.map((entry) => rm(join(hygieneDir, entry), { recursive: true, force: true }).catch(() => {})),
+  ).then(() => entries.length)
 }
 
 /**
