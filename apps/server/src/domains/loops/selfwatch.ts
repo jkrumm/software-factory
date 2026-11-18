@@ -1,5 +1,5 @@
 import { isRedConclusion } from '../../kernel/checks.ts'
-import { isKernelTask, isSharedMemoryProgram } from '../../kernel/throughput-limits.ts'
+import { isKernelTask, isSharedMemoryProgram, isTransientScanner } from '../../kernel/throughput-limits.ts'
 import {
   type CiRun,
   type Finding,
@@ -315,7 +315,7 @@ export function processGrowthFindings(samples: readonly ProcessMinute[], now: Da
   const byProcess = new Map<string, ProcessMinute[]>()
   for (const sample of samples) {
     if (sample.at.getTime() < now.getTime() - GROWTH_WINDOW_MS) continue
-    if (isSharedMemoryProgram(sample.name) || isKernelTask(sample.name)) continue
+    if (isSharedMemoryProgram(sample.name) || isKernelTask(sample.name) || isTransientScanner(sample.name)) continue
     // a tenant (a launchd job, a VM) is no process a lead of this repo can shrink: `tenant_growth_mib` reads it and files on the repo that owns the host
     if (sample.class === 'tenant') continue
     const key = `${sample.name}:${sample.pid}`

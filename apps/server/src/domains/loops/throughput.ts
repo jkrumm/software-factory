@@ -15,6 +15,7 @@ import {
   TENANT_GROWTH_MIB,
   isKernelTask,
   isSharedMemoryProgram,
+  isTransientScanner,
   WAIT_SUBJECTS,
   type WaitSubject,
 } from '../../kernel/throughput-limits.ts'
@@ -225,6 +226,7 @@ export function rankCandidates(facts: WindowFacts, tenants: TenantPolicy | null 
       p.grownMib < PROCESS_GROWTH_MIB ||
       isSharedMemoryProgram(p.name) ||
       isKernelTask(p.name) ||
+      isTransientScanner(p.name) ||
       p.class === 'tenant'
     )
       continue
