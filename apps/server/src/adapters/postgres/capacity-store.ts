@@ -3,7 +3,13 @@ import * as z from 'zod'
 import type { AccountReading } from '../../domains/capacity/accounts.ts'
 import type { Claim } from '../../domains/capacity/claims.ts'
 import { BASELINE_WINDOW_MS } from '../../kernel/remote-pressure.ts'
-import type { Assignment, CapacityStore, HostSampleFact, LeadPeaks } from '../../domains/capacity/ports.ts'
+import type {
+  Assignment,
+  CapacityStore,
+  HostSampleFact,
+  LeadPeaks,
+  WorktreeSizes,
+} from '../../domains/capacity/ports.ts'
 import { ENDED_AFTER_MS, LEARN_WINDOW_MS, PEAKS_FETCHED, SETTLED_RUN_MS } from '../../domains/capacity/leadcost.ts'
 import type { AimState, LeadAim } from '../../domains/capacity/slot-aim.ts'
 import { QUEUE_STATES, type QueueStates } from '../../domains/capacity/queue-state.ts'
@@ -108,6 +114,7 @@ const PeakFactRow = z.object({
   n: z.coerce.number().int(),
   settled: z.boolean(),
 })
+const SizeRow = z.object({ repo: z.string(), mib: z.number().int(), n: z.coerce.number().int() })
 const RelearnRow = z.object({ repo: z.string(), at: z.date(), set_at: z.date(), set_by: z.string() })
 const RssRow = z.object({ issue: z.number().int(), rss_mib: z.number().int() })
 
@@ -571,6 +578,24 @@ export function postgresCapacityStore(tx: SQL): CapacityStore {
         const row = PeakFactRow.parse(raw)
         const found = byRepo.get(row.repo) ?? { repo: row.repo, attempts: row.n, peaksNewestFirst: [] }
         found.peaksNewestFirst.push({ peakMib: row.peak, settled: row.settled })
+        byRepo.set(row.repo, found)
+      }
+      return [...byRepo.values()]
+    },
+
+    async worktreeSizes() {
+      const rows: unknown[] = await tx`
+        WITH ranked AS (
+          SELECT repo, mib, row_number() OVER (PARTITION BY repo ORDER BY measured_at DESC, worktree) AS newest,
+            count(*) OVER (PARTITION BY repo) AS n
+          FROM factory.worktree_sizes
+        )
+        SELECT repo, mib, n FROM ranked WHERE newest <= 20 ORDER BY repo, newest`
+      const byRepo = new Map<string, WorktreeSizes>()
+      for (const raw of rows) {
+        const row = SizeRow.parse(raw)
+        const found = byRepo.get(row.repo) ?? { repo: row.repo, attempts: row.n, sizesMibNewestFirst: [] }
+        found.sizesMibNewestFirst.push(row.mib)
         byRepo.set(row.repo, found)
       }
       return [...byRepo.values()]

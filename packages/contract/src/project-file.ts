@@ -477,6 +477,43 @@ export const MAX_LEADS = 64
  */
 export const DEFAULT_LEADS = MAX_LEADS
 
+/**
+ * What a comment beside a `leads:` cap says it is for, as the factory reads it (docs/decisions.md, NL48). A cap holds work back
+ * for a resource, and a resource the factory already models needs none: the merge window is `factory merge-lock`'s, the
+ * deploy queue `factory deploy-lock`'s, disk is admitted by the learned size of a worktree. `unrecorded` is a comment that says
+ * no reason was recorded; `other` is a resource the factory does not model, which a cap may stand for.
+ */
+export type CapReason = 'merge' | 'deploy' | 'disk' | 'unrecorded' | 'other'
+
+const CAP_REASONS: readonly { reason: Exclude<CapReason, 'other'>; pattern: RegExp; hint: string }[] = [
+  {
+    reason: 'unrecorded',
+    pattern: /no reason (was |has been )?(recorded|given|stated)/i,
+    hint: 'a cap with no reason is a claim about a resource nobody measured: remove it',
+  },
+  {
+    reason: 'merge',
+    pattern: /merge[- ](window|queue|lock)|serialis|serializ/i,
+    hint: 'the merge window is serialised by `factory merge-lock`, so a lead that waits for it holds no seat of its own: remove the cap',
+  },
+  {
+    reason: 'deploy',
+    pattern: /deploy[- ](queue|window|lock)/i,
+    hint: 'the deploy queue is serialised by `factory deploy-lock`: remove the cap',
+  },
+  {
+    reason: 'disk',
+    pattern: /\bdisk\b|\btarget\/|worktree size|gib each|gb each/i,
+    hint: 'disk is admitted by the learned size of a worktree against the free disk (a lead that does not fit stays queued): remove the cap',
+  },
+]
+
+/** The resource a cap's comment names, with where the factory holds it instead (`hint`). */
+export function capReasonOf(comment: string | null): { reason: CapReason; hint: string | null } {
+  const found = comment === null ? undefined : CAP_REASONS.find((r) => r.pattern.test(comment))
+  return found ? { reason: found.reason, hint: found.hint } : { reason: 'other', hint: null }
+}
+
 const LANE_MEMORY = /^(\d+(?:\.\d+)?)(MiB|GiB)$/
 const MAX_LANE_MEMORY_MIB = 1024 * 1024
 

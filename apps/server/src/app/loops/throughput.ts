@@ -4,6 +4,7 @@ import { MAX_SIGNALS_PER_PASS } from '../../domains/loops/budget.ts'
 import type { LoopStore } from '../../domains/loops/ports.ts'
 import type { PlanningStore } from '../../domains/planning/ports.ts'
 import { budgetsOf } from '@software-factory/contract/project'
+import { bindingCaps, type CapFact, capName, capText, capTitle } from '../../domains/loops/caps.ts'
 import { repoTextOf } from '../../domains/planning/sync.ts'
 import {
   type Candidate,
@@ -39,6 +40,8 @@ export interface ThroughputProject {
   peakMib: number | null
   /** its `leads` and lane caps; absent: a claim or lane wait does not name them */
   shape?: ProjectShape
+  /** the repo's absolute path; absent: the comment of a cap is not quoted */
+  path?: string
 }
 
 export interface ThroughputDeps {
@@ -58,6 +61,11 @@ export interface ThroughputDeps {
       shapes: ReadonlyMap<string, ProjectShape>
     },
   ): Promise<WindowFacts>
+  /**
+   * the caps that bound while seats idled, over the newest hours (`readCapFacts`, the cap's comment filled in); absent: caps are
+   * not checked. `shapes` are the caps in force now.
+   */
+  caps?(at: Date, shapes: ReadonlyMap<string, ProjectShape>): Promise<CapFact[]>
   /** how the Issues ended and when they shipped (`readIssueFates`) */
   fates(ids: readonly string[]): Promise<ReadonlyMap<string, IssueFate>>
   /** intake's entry for an agent (`intake.api.file`): its fingerprint rules decide a repeat */
@@ -71,6 +79,8 @@ export interface ThroughputPass {
   filed: { project: string; kpi: string; subject: string; issue: string | null; costMinutes: number }[]
   /** projects with a finding left for the next pass (an improvement already open, or nothing over its threshold) */
   held: string[]
+  /** the caps whose binding was filed (or found already open) this pass */
+  caps: { project: string; cap: string; issue: string | null }[]
   failed: { key: string; reason: string }[]
   notes: string[]
 }
@@ -82,6 +92,7 @@ export async function projectBudgets(uow: UnitOfWork<{ planning: PlanningStore }
   return stored.value.map((p) => ({
     project: p.name,
     repo: repoTextOf(p),
+    path: p.repo,
     ...budgetsOf(p.project),
     shape: {
       leads: p.project.leads,
@@ -105,7 +116,7 @@ const reasonOf = (error: IntakeError): string => ('detail' in error ? `${error.k
  */
 export async function throughputPass(deps: ThroughputDeps): Promise<Result<ThroughputPass, PortError>> {
   const now = deps.clock.now()
-  const pass: ThroughputPass = { ledger: [], filed: [], held: [], failed: [], notes: [] }
+  const pass: ThroughputPass = { ledger: [], filed: [], held: [], caps: [], failed: [], notes: [] }
   const read = async () => deps.uow.run(async ({ loops }) => ok(await loops.throughputFindings()))
   const stored = await read()
   if (!stored.ok) return stored
@@ -162,6 +173,9 @@ export async function throughputPass(deps: ThroughputDeps): Promise<Result<Throu
     }
   }
 
+  // 1b. the caps that bind while seats idle: a finding of their own, whatever the ranking says
+  await fileBindingCaps(deps, pass, projects, shapes, now)
+
   // 2. the ranking
   let facts: WindowFacts
   let recent: WindowFacts
@@ -193,8 +207,16 @@ export async function throughputPass(deps: ThroughputDeps): Promise<Result<Throu
   if (!byProject.has(deps.tenants.project) && ranked.some((c) => c.project === deps.tenants.project)) {
     pass.notes.push(`standing memory not filed: ${deps.tenants.project} is not a followed project`)
   }
+  // a claim or lane wait of a repo whose cap was just filed as binding is that finding's: not asked for twice
+  const capped = new Set(pass.caps.map((c) => c.project))
   for (const candidate of ranked) {
     if (!byProject.has(candidate.project) || top.has(candidate.project) || pass.held.includes(candidate.project))
+      continue
+    if (
+      candidate.kpi === 'queued_minutes' &&
+      (candidate.subject === 'claim' || candidate.subject === 'lane') &&
+      capped.has(candidate.project)
+    )
       continue
     if (held.has(subjectKey(candidate))) continue
     // a cost the newest days already left behind (fixed, or a burst that ended) is not asked for again
@@ -263,11 +285,62 @@ export async function throughputPass(deps: ThroughputDeps): Promise<Result<Throu
   return ok(pass)
 }
 
+/**
+ * One signal per cap that kept Issues queued for an hour or more while seats idled: its title is its fingerprint (the cap and
+ * the repo), so intake drops a repeat while one is open and files again once it is closed and the cap still binds.
+ */
+async function fileBindingCaps(
+  deps: ThroughputDeps,
+  pass: ThroughputPass,
+  projects: readonly ThroughputProject[],
+  shapes: ReadonlyMap<string, ProjectShape>,
+  now: Date,
+): Promise<void> {
+  if (!deps.caps) return
+  let facts: CapFact[]
+  try {
+    facts = await deps.caps(now, shapes)
+  } catch (error) {
+    pass.notes.push(`caps not read: ${error instanceof Error ? error.message : String(error)}`)
+    return
+  }
+  const byProject = new Map(projects.map((p) => [p.project, p]))
+  for (const fact of bindingCaps(facts).toSorted(
+    (a, b) =>
+      b.bindingMinutes - a.bindingMinutes || a.project.localeCompare(b.project) || capName(a).localeCompare(capName(b)),
+  )) {
+    const target = byProject.get(fact.project)
+    if (!target || pass.caps.length >= MAX_SIGNALS_PER_PASS) continue
+    const filed = await deps.file({
+      from: `agent:${fact.project}`,
+      kind: 'request',
+      title: capTitle(fact).slice(0, 512),
+      text: capText(fact),
+      repo: target.repo,
+      probe: false,
+    })
+    const id = key('cap', fact.project, capName(fact))
+    if (!filed.ok) {
+      pass.failed.push({ key: id, reason: reasonOf(filed.error).slice(0, 300) })
+      continue
+    }
+    const { outcome, detail } = filed.value
+    if (outcome === 'filed' || outcome === 'amended' || (outcome === 'dropped' && detail === 'repeat')) {
+      pass.caps.push({ project: fact.project, cap: capName(fact), issue: filed.value.issue })
+    } else {
+      pass.failed.push({ key: id, reason: `${outcome}: ${detail}`.slice(0, 300) })
+    }
+  }
+}
+
 export const throughputSummary = (pass: ThroughputPass): string =>
   [
     `ledger moved ${pass.ledger.length}${pass.ledger.length > 0 ? ` (${pass.ledger.map((l) => `${l.project} ${l.kpi} ${l.status}`).join(', ')})` : ''}`,
     `filed ${pass.filed.length}${pass.filed.length > 0 ? ` (${pass.filed.map((f) => `${f.project} ${f.kpi}`).join(', ')})` : ''}`,
     pass.held.length > 0 ? `${pass.held.length} project(s) with an improvement already open` : null,
+    pass.caps.length > 0
+      ? `${pass.caps.length} binding cap(s) (${pass.caps.map((c) => `${c.project} ${c.cap}`).join(', ')})`
+      : null,
     pass.failed.length > 0 ? `${pass.failed.length} failed` : null,
     ...pass.notes,
   ]

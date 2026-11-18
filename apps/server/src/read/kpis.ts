@@ -421,7 +421,7 @@ function withReason(k: Omit<Kpi, 'history'>): Omit<Kpi, 'history'> {
 
 /** Queue reasons (`queue_intervals.kind`) in the four groups the owner reads, and the rest. */
 const QUEUE_GROUPS: ReadonlyArray<readonly [key: string, label: string, kinds: readonly string[]]> = [
-  ['capacity', 'Capacity', ['memory', 'memory_fit', 'claim', 'lane', 'window', 'cap', 'load', 'boot']],
+  ['capacity', 'Capacity', ['memory', 'memory_fit', 'disk', 'claim', 'lane', 'window', 'cap', 'load', 'boot']],
   ['chain', 'An after edge', ['chain']],
   ['drain', 'Queue draining', ['drain']],
   ['production_red', 'Production red', ['line']],

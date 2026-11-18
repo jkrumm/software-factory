@@ -583,6 +583,8 @@ export interface ProjectBudgets {
   failShare: number | null
   /** its `leads` and lane caps, named by a claim or lane wait's finding */
   shape?: ProjectShape
+  /** the repo's absolute path: where its `project.yaml` is read to quote the comment of a cap */
+  path?: string
 }
 
 /**

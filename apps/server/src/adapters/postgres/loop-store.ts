@@ -319,6 +319,21 @@ export function postgresLoopStore(tx: SQL): LoopStore {
         VALUES (${record.project}, ${record.at}, ${record.hash}, ${record.route}, ${JSON.stringify(record.digest satisfies DigestAnswer)}::text::jsonb)`
     },
 
+    async recordWorktreeSizes(at, sizes) {
+      for (const s of sizes) {
+        await tx`
+          INSERT INTO factory.worktree_sizes (worktree, repo, issue, attempt, mib, measured_at)
+          VALUES (${s.worktree}, ${s.repo}, ${s.issue}, ${s.attempt}, ${s.mib}, ${at})
+          ON CONFLICT (worktree) DO UPDATE SET mib = GREATEST(factory.worktree_sizes.mib, EXCLUDED.mib), measured_at = EXCLUDED.measured_at`
+      }
+    },
+
+    async pruneWorktreeSizes(before) {
+      const rows: unknown[] =
+        await tx`DELETE FROM factory.worktree_sizes WHERE measured_at < ${before} RETURNING worktree`
+      return rows.length
+    },
+
     async pruneLeadSamples(before) {
       const rows: unknown[] = await tx`DELETE FROM factory.lead_samples WHERE at < ${before} RETURNING at`
       return rows.length

@@ -14,6 +14,7 @@ import {
   overProcesses,
   type Reserved,
 } from './host.ts'
+import { type DiskFit, diskRefusal } from './disk.ts'
 import { type LaneInput, laneRoom } from './lanes.ts'
 import type { LeadGrowth } from './leadcost.ts'
 import type { QueueState } from './queue-state.ts'
@@ -28,6 +29,7 @@ export const REFUSALS = [
   'boot',
   'load',
   'memory',
+  'disk',
   'tests',
   'lane',
   'claim',
@@ -104,6 +106,8 @@ export interface AdmissionInputs {
   memoryCeilings: MemoryCeilings
   /** the learned cost of the candidate's lead against the free memory; null: nothing learned is known */
   leadFit?: LeadFit | null
+  /** the learned worktree footprint of the candidate's repo against the free disk (`disk.ts`); null or absent: nothing learned or no reading, and disk keeps nobody out */
+  diskFit?: DiskFit | null
   /**
    * The lead aim (`FACTORY_SLOT_AIM=on`): the count of leads the host takes at its pressure now, and the leads running. Then the
    * memory fit above is only the guard of what cannot fit at all, and this count is the gate. Null or absent: no aim, the fit
@@ -146,7 +150,7 @@ const no = (kind: RefusalKind, message: string, opensAt: Date | null = null, par
 /**
  * Whether a new lead may start now, in the order of the rules: the queue state (`drain` starts nothing), the host's
  * boot grace, its load (the tripwire: sustained minutes over the ceiling), its memory (the reading, then the learned fit
- * of the candidate's lead), the host's test line (`lineRefusal`), the candidate's lane (the repo's
+ * of the candidate's lead), its disk (the learned worktree footprint of the candidate's repo against the free disk), the host's test line (`lineRefusal`), the candidate's lane (the repo's
  * cap on a resource class), the repo's claims (`leads: N` plus one for a fix; `pace` allows one), then an account with room.
  * Never spills: with every account closed the answer is to wait for the first opening. Pure: the readings are passed
  * in, and the caller decides again at every claim, inside one transaction.
@@ -173,6 +177,8 @@ export function checkAdmission(input: AdmissionInputs): Admission {
   }
   const fit = input.leadFit ? fitRefusal(input.leadFit) : null
   if (fit) return no('memory', fit, null, 'fit')
+  const diskFull = input.diskFit ? diskRefusal(input.diskFit) : null
+  if (diskFull) return no('disk', diskFull)
   const line = input.tests && !input.candidate.urgent ? lineRefusal(input.tests) : null
   if (line) return no('tests', line)
   const laneFree = laneRoom({ lane: input.lane, urgent: input.candidate.urgent })

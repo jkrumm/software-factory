@@ -140,9 +140,17 @@ describe('projectProbe', () => {
       'project.yaml:9: leads is set to 12',
       'project.yaml:11: budgets.fast is set to 5m',
     ])
-    const reasoned = `${GOOD}leads: 12 # the merge window\n# the throughput loop\nbudgets:\n  fast: 5m\n`
+    const reasoned = `${GOOD}leads: 12 # one signing keychain\n# the throughput loop\nbudgets:\n  fast: 5m\n`
     const green = await projectProbe(TOOLS, repo({ 'project.yaml': reasoned, Makefile: MAKEFILE }))
     expect(green.outcome).toBe('clean')
+  })
+
+  test('a leads whose comment names the merge window is a finding that points at factory merge-lock', async () => {
+    const windowed = `${GOOD}leads: 12 # the merge window\n`
+    const { evidence } = await lines({ 'project.yaml': windowed, Makefile: MAKEFILE })
+    expect(evidence).toHaveLength(1)
+    expect(evidence[0]).toContain('project.yaml:9: leads is 12 for a resource the factory already models')
+    expect(evidence[0]).toContain('factory merge-lock')
   })
 
   test('a citation of a sibling repo resolves beside the main checkout, also from a linked worktree', async () => {

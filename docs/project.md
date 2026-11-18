@@ -37,7 +37,8 @@ the next reader learns why the value is not the default.
   mode deploys and no `deploy.targets` entry says `verify: make verify`; `deploy.targets` listed under `deploy.mode:
   none` (the default), where nothing deploys and no target is ever verified; and a constant set without its reason
   (`leads` below the default, `slots.run`, `budgets.*`) that has no comment on its line, the line above or its
-  parent key's line.
+  parent key's line; and a `leads` below the default whose comment names a resource the factory already holds (a merge
+  window or deploy queue, with a pointer to `factory merge-lock` or `deploy-lock`; disk) or says no reason was recorded.
 - `factory project schema` prints this page offline; `--format json` adds the JSON Schema.
 - `factory project sync --fetch true` reads the merged file now; `factory project show <repo>` prints what is in force,
   with `projectError` when the file on the default branch does not parse.
@@ -60,9 +61,13 @@ factory never edits another repo's file. The server also serves the schema it pa
 ## Choosing the values
 
 - **`leads`**: leave it out. Unset is 64, no cap beyond the host's memory fit, load and the accounts, which already
-  decide what runs (NL32). State a lower number only for a resource the repo cannot share, with the number behind it:
-  software-factory caps at 12 because its merge window serialises about ten merges an hour and a lead at 12 waits
-  ~1.2 h of the lock's 90 minutes. "It is a small repo" is no reason; an idle seat costs more than a rebase.
+  decide what runs (NL32). State a lower number only for a resource the repo cannot share and the factory does not
+  model, with the measured number behind it. Not a reason: a merge window (`factory merge-lock` serialises it and a lead
+  that waits holds no seat of its own), a deploy queue (`factory deploy-lock`), disk (admission fits the learned size of a
+  worktree, build output included, against the free disk), "it is a small repo" (an idle seat costs more than a rebase).
+  `factory project check` warns on those comments and on "no reason was recorded". A cap is re-checked against
+  measurements: while it keeps Issues queued for an hour with account seats idle, the throughput loop files a signal on
+  the repo naming it, its comment and the figures (NL48).
 - **`lanes`**: for a kind of row that is heavier than the rest of the repo. `{apple: 1}` lets one Apple row run beside
   any number of others; `{round: {leads: 1, memory: 6GiB}}` also reserves 6 GiB on the host for each running lead of the
   lane. A row or Issue names its lane (`lane: apple`); an undeclared lane limits nothing. `docs/plan.md` "Lanes".
