@@ -119,22 +119,27 @@ export async function readCapacityLoop(
         sum(extract(epoch FROM least(coalesce(to_at, ${w.to}), ${w.to}) - greatest(from_at, ${w.from})))::float8 / 3600 AS hours
       FROM factory.queue_intervals
       WHERE from_at < ${w.to} AND coalesce(to_at, ${w.to}) > ${w.from} GROUP BY kind`
+    // The idle samples are read twice from the table (not from one CTE): a CTE used twice is materialized, and the join from
+    // each interval to the samples it covers (the primary key's range scan) is then a nested loop over every pair, 7,500 samples
+    // by 19,000 intervals took 6 s (the route's p95 of 2026-11-18). The samples with no interval left-join back as 'unrecorded'.
     const idleRows: unknown[] = await tx`
-      WITH idle AS (
-        SELECT at, greatest(seats - leads, 0) AS seats FROM factory.host_samples
-        WHERE queued > 0 AND seats IS NOT NULL AND leads IS NOT NULL AND greatest(seats - leads, 0) > 0
-          AND at >= ${w.from} AND at < ${w.to}),
-      ivs AS (
+      WITH ivs AS (
         SELECT kind, from_at, to_at FROM factory.queue_intervals
         WHERE from_at < ${w.to} AND coalesce(to_at, ${w.to}) > ${w.from}),
+      covered AS (
+        SELECT h.at,
+          array_agg(DISTINCT q.kind) FILTER (WHERE q.kind NOT IN ${tx([...OWNED_ELSEWHERE_KINDS])}) AS capacity_kinds,
+          array_agg(DISTINCT q.kind) AS all_kinds
+        FROM ivs q JOIN factory.host_samples h ON h.at >= q.from_at AND h.at < coalesce(q.to_at, ${w.to})
+        WHERE h.queued > 0 AND h.seats IS NOT NULL AND h.leads IS NOT NULL AND greatest(h.seats - h.leads, 0) > 0
+          AND h.at >= ${w.from} AND h.at < ${w.to}
+        GROUP BY h.at),
       kinds AS (
-        SELECT idle.at, idle.seats,
-          coalesce(
-            array_agg(DISTINCT q.kind) FILTER (WHERE q.kind NOT IN ${tx([...OWNED_ELSEWHERE_KINDS])}),
-            array_agg(DISTINCT q.kind) FILTER (WHERE q.kind IS NOT NULL),
-            ARRAY['unrecorded']) AS kinds
-        FROM idle LEFT JOIN ivs q ON q.from_at <= idle.at AND coalesce(q.to_at, ${w.to}) > idle.at
-        GROUP BY idle.at, idle.seats)
+        SELECT h.at, greatest(h.seats - h.leads, 0) AS seats,
+          coalesce(c.capacity_kinds, c.all_kinds, ARRAY['unrecorded']) AS kinds
+        FROM factory.host_samples h LEFT JOIN covered c ON c.at = h.at
+        WHERE h.queued > 0 AND h.seats IS NOT NULL AND h.leads IS NOT NULL AND greatest(h.seats - h.leads, 0) > 0
+          AND h.at >= ${w.from} AND h.at < ${w.to})
       SELECT to_char(at AT TIME ZONE 'UTC', 'YYYY-MM-DD') AS day, kind, sum(seats::float8 / 60 / cardinality(kinds)) AS hours
       FROM kinds, unnest(kinds) AS kind GROUP BY 1, 2`
     const Queued = z.object({ kind: z.string(), issues: z.coerce.number().int(), hours: z.coerce.number().nullable() })
