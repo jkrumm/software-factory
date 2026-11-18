@@ -328,14 +328,20 @@ export function render(operations: Generated[]): string {
 
 const ROOT = join(import.meta.dir, '..', '..', '..')
 
-/** Formats the file with the repo's oxfmt, so `oxfmt --check` and the staleness check never disagree. */
+/**
+ * Formats the file with the repo's oxfmt, so `oxfmt --check` and the staleness check never disagree. Run under bun (`--bun`):
+ * the bin's `#!/usr/bin/env node` shebang needs a node the step image does not carry, and `bunx oxfmt` runs it this way too.
+ */
 async function format(text: string): Promise<string> {
-  const proc = Bun.spawn([join(ROOT, 'node_modules', '.bin', 'oxfmt'), `--stdin-filepath=${OUTPUT}`], {
-    cwd: ROOT,
-    stdin: new Blob([text]),
-    stdout: 'pipe',
-    stderr: 'pipe',
-  })
+  const proc = Bun.spawn(
+    [process.execPath, '--bun', join(ROOT, 'node_modules', '.bin', 'oxfmt'), `--stdin-filepath=${OUTPUT}`],
+    {
+      cwd: ROOT,
+      stdin: new Blob([text]),
+      stdout: 'pipe',
+      stderr: 'pipe',
+    },
+  )
   const [out, err, code] = await Promise.all([proc.stdout.text(), proc.stderr.text(), proc.exited])
   if (code !== 0) throw new Error(`oxfmt exited ${code}: ${err}`)
   return out
