@@ -2,6 +2,10 @@ import type { CapacityLoopModel, ThroughputModel } from '@software-factory/contr
 import { hostSentence, improvementSentence } from './throughput-answers.ts'
 import { isWorkRepo, type OpenProject, REDACTED_REPO } from './work.ts'
 
+type WaitRepo = CapacityLoopModel['slotWait']['byRepo'][number]
+type WaitReason = WaitRepo['byReason'][number]
+type Wait = Pick<WaitRepo, 'waits' | 'totalMs' | 'p50Ms' | 'p90Ms' | 'maxMs'>
+
 /**
  * The three answers as a lead sees them: the queue's own words for a memory wait can name a repo, and a finding names its
  * project, so neither reaches it; the sentences are rebuilt without them.
@@ -36,8 +40,8 @@ export function redactAnswers(
 }
 
 /**
- * The capacity loop as the read token sees it: the hours behind each queue reason stay, the work repos among them are
- * summed under one name (`byRepo`). Only the repo split of `queueByReason` is handled here.
+ * The capacity loop as the read token sees it: the hours and the waits behind each reason stay, the work repos among them
+ * are summed under one name (`REDACTED_REPO`). That covers the repo split of `queueByReason` and of `slotWait.byRepo`.
  */
 export function redactCapacityLoop(model: CapacityLoopModel, open: readonly OpenProject[]): CapacityLoopModel {
   return {
@@ -55,6 +59,41 @@ export function redactCapacityLoop(model: CapacityLoopModel, open: readonly Open
       }
       return { ...reason, byRepo: [...merged.values()].toSorted((a, b) => b.queuedHours - a.queuedHours) }
     }),
+    slotWait: { ...model.slotWait, byRepo: redactWaitRepos(model.slotWait.byRepo, open) },
+  }
+}
+
+function redactWaitRepos(rows: readonly WaitRepo[], open: readonly OpenProject[]): WaitRepo[] {
+  const groups = new Map<string, WaitRepo[]>()
+  for (const row of rows) {
+    const repo = isWorkRepo(row.repo, open) ? REDACTED_REPO : row.repo
+    groups.set(repo, [...(groups.get(repo) ?? []), row])
+  }
+  return [...groups]
+    .map(([repo, group]) => ({ repo, ...sumWaits(group), byReason: sumReasons(group.flatMap((row) => row.byReason)) }))
+    .toSorted((a, b) => b.totalMs - a.totalMs)
+}
+
+function sumReasons(rows: readonly WaitReason[]): WaitReason[] {
+  const groups = new Map<WaitReason['reason'], Wait[]>()
+  for (const row of rows) groups.set(row.reason, [...(groups.get(row.reason) ?? []), row])
+  return [...groups]
+    .map(([reason, group]) => ({ reason, ...sumWaits(group) }))
+    .toSorted((a, b) => b.totalMs - a.totalMs)
+}
+
+/** Counts and ms add, the largest max stays; a percentile of a sum is not known, so it stays only for a single row. */
+function sumWaits(rows: readonly Wait[]): Wait {
+  const only = rows.length === 1 ? rows[0] : undefined
+  return {
+    waits: rows.reduce((sum, row) => sum + row.waits, 0),
+    totalMs: rows.reduce((sum, row) => sum + row.totalMs, 0),
+    p50Ms: only?.p50Ms ?? null,
+    p90Ms: only?.p90Ms ?? null,
+    maxMs: rows.reduce<number | null>(
+      (max, row) => (row.maxMs === null ? max : Math.max(max ?? row.maxMs, row.maxMs)),
+      null,
+    ),
   }
 }
 

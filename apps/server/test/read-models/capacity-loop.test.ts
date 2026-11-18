@@ -430,6 +430,16 @@ describe('GET /v1/capacity-loop figures', () => {
     expect(JSON.stringify(shown.queueByReason)).not.toMatch(/"(api|web)"/)
     // every figure but the names is the model's own
     expect(shown.queueByReason.map((r) => r.queuedHours)).toEqual(model.queueByReason.map((r) => r.queuedHours))
+    // the waits by repo: a work repo's name goes, its waits and ms are summed under the redacted name
+    expect(JSON.stringify(shown.slotWait)).not.toMatch(/"(alpha|beta)"/)
+    expect(shown.slotWait.byRepo.map((r) => r.repo)).toEqual(['private'])
+    expect(shown.slotWait.byRepo[0]?.waits).toBe(model.slotWait.byRepo.reduce((sum, r) => sum + r.waits, 0))
+    expect(shown.slotWait.byRepo[0]?.totalMs).toBeCloseTo(
+      model.slotWait.byRepo.reduce((sum, r) => sum + r.totalMs, 0),
+      6,
+    )
+    expect(shown.slotWait.byRepo[0]?.p50Ms).toBeNull()
+    expect(shown.slotWait.byReason).toEqual(model.slotWait.byReason)
   })
 
   test('an empty database answers zeros and nulls, never an error', async () => {
