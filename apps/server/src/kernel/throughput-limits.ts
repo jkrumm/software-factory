@@ -21,6 +21,12 @@ export const isSharedMemoryProgram = (name: string): boolean => SHARED_MEMORY_PR
  * a lead can shrink. `swap_growth` and the pressure level read the pressure itself; neither growth rule reads this process.
  */
 export const isKernelTask = (name: string): boolean => name === 'kernel_task'
+/**
+ * Apple's malware scanners (`XProtectRemediatorPirrit <uuid>` and its siblings). A scan reads the disk into memory (491 MiB
+ * to 6.3 GiB within 33 minutes, 2026-11-18, back at 27 MiB after) and the process ends or shrinks by itself: a transient peak
+ * of the OS, nothing a lead can shrink. Neither growth rule reads it.
+ */
+export const isTransientScanner = (name: string): boolean => name.startsWith('XProtectRemediator')
 /** The runs of a day a budget is judged on: fewer than this many is too few to say. */
 export const MIN_FAST_RUNS = 3
 export const MIN_FAIL_RUNS = 5

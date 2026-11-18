@@ -453,6 +453,9 @@ test('process_growth: more than 1 GiB in the last hour of a process still there,
   expect(processGrowthFindings([proc(60, 300, 25267, 'postgres'), proc(1, 2059, 25267, 'postgres')], NOW)).toEqual([])
   // the kernel's footprint follows memory pressure (2026-11-16: 2772 to 8795 MiB in 46 minutes): never a finding
   expect(processGrowthFindings([proc(60, 2772, 0, 'kernel_task'), proc(1, 8795, 0, 'kernel_task')], NOW)).toEqual([])
+  // Apple's malware scanner peaks during a scan and ends by itself (2026-11-18: 491 to 6319 MiB): never a finding
+  const scan = 'XProtectRemediatorPirrit A74C5727-559F-455C-882C-74EDF0AB1D5F'
+  expect(processGrowthFindings([proc(40, 491, 55841, scan), proc(1, 6319, 55841, scan)], NOW)).toEqual([])
   // a tenant (a VM, a launchd job) is `tenant_growth_mib`'s, never this repo's to shrink
   const vm = (minutesAgo: number, footprintMib: number): ProcessMinute => ({
     ...proc(minutesAgo, footprintMib, 49543, 'com.apple.Virtualization.VirtualMachine'),
