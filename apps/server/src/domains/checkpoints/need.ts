@@ -116,6 +116,13 @@ export const isSyncCommand = (command: string): boolean => SYNC_COMMAND.test(com
 /** Runs of a pushed or approved command that came back unsuccessful before it is no longer offered unchanged. */
 export const MAX_RUN_TRIES = 2
 
+/**
+ * What the lead or the asker is told when the pushed command ran (exit 0) and the Errand's check still says the step is
+ * needed: the command is not pushed again (a second run may repeat a side effect), and the next one must be safe to repeat.
+ */
+export const ranStillNeededNote = (checkLine: string): string =>
+  `its command ran on the MacBook (exit 0) and its check still says the step is needed${checkLine === '' ? '' : ` (${checkLine})`}; the command was not pushed again. Look at what it did, then raise it again with a command that is safe to repeat (look before create) and a check that exits 0 only on positive evidence that the step is missing, never \`! <cmd>\`, which reads any error as "needed" (a new \`--call\` id for an Errand, the same key for a request)`
+
 /** What the lead or the asker is told when its command failed twice. */
 export const failedTwiceNote = (head: string): string =>
   `its command failed ${MAX_RUN_TRIES} times${head === '' ? '' : ` (${head})`} and was not offered a third time unchanged: raise it again with a corrected command (a new \`--call\` id for an Errand, the same key for a request)`

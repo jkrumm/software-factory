@@ -507,6 +507,72 @@ describe('the desk pass', () => {
     expect(value(await deskPass({ settle: deps, desk: deps.uow as never, push })).ran).toBe(false)
   })
 
+  test('a command that ran (exit 0) while its check still says needed is stored, never pushed again, and turned back to its lead once', async () => {
+    const issueId = await workingIssue('example')
+    const id = await reached(issueId, {
+      summary: 'Create the hyperdx item',
+      cmd: 'op item create --title hyperdx',
+      host: 'macbook',
+      check: 'item-missing',
+    })
+    // the dialog ran it; ask-human.sh closes the Errand with these words, and the check still exits 0
+    const done = value(
+      await finishErrand(deps, { errandId: id, note: 'answered on the MacBook (exit 0): created hyperdx' }),
+    )
+    expect(done.errand).toMatchObject({ doneAt: null, runStatus: 'done', runExit: 0, runAttempts: 0 })
+    expect(await errandRow(id)).toMatchObject({ done_at: null, run_status: 'done', run_exit: 0, run_attempts: 0 })
+    expect((await errandRow(id))?.run_head).toBe('created hyperdx')
+
+    checks['item-missing'] = { exit: 0, timedOut: false, output: 'More than one item matches' }
+    const pass = value(await deskPass({ settle: deps, desk: deps.uow as never, push, force: true }))
+    expect(pass).toMatchObject({ ran: true, ranBack: 1, pushed: [] })
+    expect(pushed).toEqual([])
+    expect(await errandRow(id)).toMatchObject({ closed_kind: 'turned_back', closed_by: 'loop' })
+    expect((await errandRow(id))?.done_note).toContain('ran on the MacBook (exit 0)')
+    expect((await errandRow(id))?.done_note).toContain('More than one item matches')
+    const told = await db.sql`
+      SELECT payload FROM factory.issue_events WHERE issue_id = ${issueId} AND kind = 'errand_done'`
+    expect(told).toHaveLength(1)
+    expect(told[0]?.payload.turnedAway).toContain('safe to repeat')
+
+    // later passes find nothing to push and tell nobody again
+    clock.set(new Date(clock.now().getTime() + 7 * HOUR))
+    expect(value(await deskPass({ settle: deps, desk: deps.uow as never, push, force: true }))).toMatchObject({
+      looked: 0,
+      ranBack: 0,
+      pushed: [],
+    })
+    expect(
+      await db.sql`SELECT 1 FROM factory.issue_events WHERE issue_id = ${issueId} AND kind = 'errand_done'`,
+    ).toHaveLength(1)
+  })
+
+  test('a command that ran while its check cannot answer is left open and not pushed again', async () => {
+    const issueId = await workingIssue('example')
+    const id = await reached(issueId, {
+      summary: 'Create the item',
+      cmd: 'op item create x',
+      host: 'macbook',
+      check: 'flaky',
+    })
+    value(await finishErrand(deps, { errandId: id, note: 'answered on the MacBook (exit 0)' }))
+    checks.flaky = { exit: null, timedOut: true, output: '' }
+    const pass = value(await deskPass({ settle: deps, desk: deps.uow as never, push, force: true }))
+    expect(pass).toMatchObject({ ranBack: 0, pushed: [] })
+    expect(await errandRow(id)).toMatchObject({ done_at: null, run_status: 'done' })
+  })
+
+  test('a command that failed once is pushed once more, and ended after the second failure', async () => {
+    const issueId = await workingIssue('example')
+    const id = await reached(issueId, { summary: 'Reseal the cache', cmd: 'make secrets-seed', host: 'macbook' })
+    value(await finishErrand(deps, { errandId: id, note: 'ran on the MacBook and failed (exit 2): vault is locked' }))
+    expect(await errandRow(id)).toMatchObject({ done_at: null, run_status: 'failed', run_attempts: 1 })
+    expect(value(await deskPass({ settle: deps, desk: deps.uow as never, push, force: true })).pushed).toEqual([id])
+    value(await finishErrand(deps, { errandId: id, note: 'ran on the MacBook and failed (exit 2): vault is locked' }))
+    expect(await errandRow(id)).toMatchObject({ closed_kind: 'turned_back', run_attempts: 2 })
+    expect(value(await deskPass({ settle: deps, desk: deps.uow as never, push, force: true })).pushed).toEqual([])
+  })
+
   test('his button runs the pass at once, as on a return', async () => {
     const issueId = await workingIssue('example')
     const queued = await reached(issueId, {
