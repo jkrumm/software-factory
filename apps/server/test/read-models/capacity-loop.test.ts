@@ -440,6 +440,12 @@ describe('GET /v1/capacity-loop figures', () => {
     )
     expect(shown.slotWait.byRepo[0]?.p50Ms).toBeNull()
     expect(shown.slotWait.byReason).toEqual(model.slotWait.byReason)
+    // a work repo's lead and its steps are left out: the fixture has such rows, and no name of one stays in the response
+    expect(model.leadCosts.some((l) => l.repo !== 'app')).toBe(true)
+    expect(model.topSteps.some((s) => s.name.split(' ')[0] !== 'app')).toBe(true)
+    expect(shown.leadCosts).toEqual(model.leadCosts.filter((l) => l.repo === 'app'))
+    expect(shown.topSteps).toEqual(model.topSteps.filter((s) => s.name.split(' ')[0] === 'app'))
+    expect(JSON.stringify(shown)).not.toMatch(/"(alpha|beta|api|web)[ "]/)
   })
 
   test('an empty database answers zeros and nulls, never an error', async () => {
