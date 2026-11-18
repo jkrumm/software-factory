@@ -31,11 +31,19 @@ export function routeLabel(request: Request): string {
   return `${request.method} ${path}`
 }
 
-/** The routes whose time says nothing about the database: the health route (it never queries) and a stream that stays open by design. */
+/**
+ * The routes that wait on a port by design, whose time is the port's and not the server's: filing a signal waits up to
+ * `triageWaitMs` (8 s) for agw's triage, and a ship waits for git, agw's review read and GitHub's CI (2026-11-18: 6.4 s and
+ * 4.8 s at a load of 45 lifted the p95 to 3 s while every other route answered). The routes that read or write only the database stay timed.
+ */
+const PORT_WAITING = [/^\/signals(?:\/(?:alerts|feedback))?$/, /^\/issues\/[^/]+\/ship$/]
+
+/** The routes whose time says nothing about the database: the health route (it never queries), a stream that stays open by design and the routes that wait on a port. */
 const untimed = (request: Request): boolean => {
   const { pathname } = new URL(request.url)
   return (
     pathname === '/health' ||
+    (request.method === 'POST' && PORT_WAITING.some((route) => route.test(pathname))) ||
     pathname.endsWith('/stream') ||
     (request.headers.get('accept') ?? '').includes('text/event-stream')
   )

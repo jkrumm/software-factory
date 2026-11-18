@@ -860,7 +860,7 @@ model, not a signal: an agent-trust signal files an Issue, and no loops page exi
   process is alive, with the age and the load) or `failing: …` (the same, with the tick's error).
   **Up but useless.** `/health` never queries the database, so on 2026-11-14 it answered while every database-backed route timed out. The heartbeat therefore also carries
   `routeP95Ms` and `routeSamples` (additive: the four names stay): the p95 in ms of the answer times of the server's own routes over the last 5 minutes
-  and how many requests that is (`api/route-timer.ts`, in the process, from memory; `/health` and the event stream are not timed, a request still
+  and how many requests that is (`api/route-timer.ts`, in the process, from memory; `/health`, the event stream and the routes that wait on a port by design (`POST /signals` with `/alerts` and `/feedback`, which wait up to 8 s for triage, and `POST /issues/:id/ship`, which waits for git, agw and GitHub) are not timed, a request still
   unanswered counts at its age; requests begun in the first 120 s after the process starts are not timed, since a deploy's cold, loaded restart is not a useless server; null with no request). The reader outside the server is the dev host's Uptime Kuma push monitor (the heartbeat pusher in
   the dotfiles repo), which today reads the four names: it should push down while `routeP95Ms` is over 2000 with `routeSamples` of 20 or more (below 20 the nearest-rank p95 is the one slowest answer, which a cold request after a deploy is), the
   same line `routes_slow` draws inside the server. That change is the pusher's repo's (a signal was filed there); until it lands the figure is read by hand
