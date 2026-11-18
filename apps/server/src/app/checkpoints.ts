@@ -885,7 +885,7 @@ export async function verdictIn(
 
     const at = deps.clock.now()
     const note = input.note?.trim() || null
-    const record: VerdictRecord = { artifactId: artifact.id, revision, verdict, note, at, neededMe: null }
+    const record: VerdictRecord = { artifactId: artifact.id, revision, verdict, note, at, by, neededMe: null }
     await checkpoints.insertVerdict({ ...record, key: verdictKey })
     let move: IssueMove | null = null
     // The Spec its filer attached holds the Issue in the queue, not in a wait: the verdict has no wait to end, and only

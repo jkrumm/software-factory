@@ -168,6 +168,8 @@ export interface VerdictRecord {
   verdict: Verdict
   note: string | null
   at: Date
+  /** who gave it: the owner, or the factory for him (the default after the wait, a Spec screen settle, a withdrawal) */
+  by: 'owner' | 'factory'
   /** the owner's mark: did it need him; null while unmarked */
   neededMe: boolean | null
 }

@@ -717,6 +717,8 @@ brief test pins the wording). Three parts:
   section.
 - *The gate.* `shipIssue` refuses a flagged Issue's ship until a Spec exists for it (any attempt; a Concept does not count),
   before any git read, as a refused ship on the record (so `refusals` counts it) with `SPEC_OWED` as the verb's error.
+- *The owner gate* (issue 2157). `checkpoint: gate` (a filer's flag, never triage's; `filed.checkpoint`, `ReadIssueCard.gate`) owes the same Spec and refuses the ship alike, but only the owner's own verdict ends its wait: `staleReviews` leaves an open gate's review out (a closed one is still withdrawn), `screenSpecByRule` passes its Spec to him whatever its origin, the brief says so, and the Needs you card and the Issue header name it. What is `after` it stays blocked until the lead closes it from his verdict, and a verdict by the factory never ends it. A `settled` event cannot turn a gate into a plain `spec`.
+- *Who gave a verdict.* `factory.verdicts.by` (`owner`|`factory`, migration `1051_verdict_by.sql`, backfilled from the factory's own events, rechecks and screen settles) is on `VerdictView.by` and `ReadArtifactLine.verdictBy`; the Console shows "By the factory" on a verdict the owner did not give. The KPIs still tell the owner's own verdicts from the factory's by the event's actor.
 - *The timeout.* A Concept or Spec the owner has not answered for 24 hours is looked at once per revision by
   `recheckReviews` (`app/checkpoints-reviews.ts`, run by `settle` and `checkpoint pass` after `recheckOpen`; no model, no port):
   its Issue closed or no longer waiting: withdrawn (verdict `no_longer_applies` by the factory, pages cancelled); anything

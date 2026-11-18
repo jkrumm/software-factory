@@ -30,7 +30,7 @@ import { type IssueId, sequentialIds } from '../../src/kernel/ids.ts'
 import { key } from '../../src/kernel/keys.ts'
 import { err, ok, portError, type Result } from '../../src/kernel/result.ts'
 
-const ORIGIN = { replan: false, filedSpec: false, triaged: false, filedWithCheckpoint: false }
+const ORIGIN = { replan: false, filedSpec: false, triaged: false, filedWithCheckpoint: false, gate: false }
 
 describe('the rules', () => {
   test('a revision after the owner asked for changes passes; a filed Spec passes', () => {
@@ -39,6 +39,10 @@ describe('the rules', () => {
     })
     expect(
       screenSpecByRule({ revision: 1, earlier: [], origin: { ...ORIGIN, filedSpec: true }, content: '' }),
+    ).toMatchObject({ outcome: 'passed' })
+    // an owner gate is never decided by a rule, whatever its origin
+    expect(
+      screenSpecByRule({ revision: 1, earlier: [], origin: { ...ORIGIN, replan: true, gate: true }, content: '' }),
     ).toMatchObject({ outcome: 'passed' })
     // a lead's Spec is the workflow's to judge
     expect(screenSpecByRule({ revision: 1, earlier: [], origin: ORIGIN, content: '# A Spec' })).toBeNull()

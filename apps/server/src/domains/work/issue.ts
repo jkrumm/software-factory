@@ -108,8 +108,8 @@ export interface Issue {
   origin: Origin
   /** the seat asked for at filing, resolved; absent: the lead row of the role table */
   seat?: { tier: Tier; effort: Effort; role?: string }
-  /** `spec`: the lead owes a one-page Spec before it builds, and cannot ship without one */
-  checkpoint?: 'spec'
+  /** `spec`: the lead owes a one-page Spec before it builds, and cannot ship without one; `gate`: the same, and only the owner's own verdict ends the wait */
+  checkpoint?: 'spec' | 'gate'
   /** triage's size, when it judged one */
   size?: Size
   /** the seat the current attempt's lead started on; absent before its `lead_started` (and on old events) */

@@ -110,7 +110,9 @@ export function Checkpoints({ issue, now }: { issue: Issue; now: number }) {
                   <span className="text-xs text-muted-foreground tabular-nums">
                     {artifact.revisions} {artifact.revisions === 1 ? 'revision' : 'revisions'}
                   </span>
-                  <span className="text-xs text-muted-foreground">{verdictWords(artifact.verdict)}</span>
+                  <span className="text-xs text-muted-foreground">
+                    {verdictWords(artifact.verdict, artifact.verdictBy)}
+                  </span>
                   <Ago iso={artifact.at} now={now} className="font-mono text-xs text-muted-foreground" />
                 </Link>
               </li>

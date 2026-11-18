@@ -31,6 +31,9 @@ test('verdicts, statuses and settlers have plain words, and an unknown one is no
   expect(verdictWords('looks_good')).toBe('Looks good')
   expect(verdictWords(null)).toBe('No verdict yet')
   expect(verdictWords('something_new')).toBe('something new')
+  // a verdict the factory gave is never read as the owner's
+  expect(verdictWords('looks_good', 'factory')).toBe('Looks good, by the factory')
+  expect(verdictWords('looks_good', 'owner')).toBe('Looks good')
   expect(askStatusWords('withdrawn')).toBe('Withdrawn')
   expect(settledByWords('owner')).toBe('by you')
   expect(settledByWords(null)).toBe('')

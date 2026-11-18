@@ -384,6 +384,15 @@ describe('the brief', () => {
     expect(buildBrief(input)).not.toContain('## Checkpoint')
   })
 
+  test('an owner gate says the default does not apply, and a plain Spec does not mention a gate', () => {
+    const gate = buildBrief({ ...input, issue: { ...input.issue, checkpoint: 'gate' } })
+    expect(gate).toContain('## Checkpoint')
+    expect(gate).toContain('owner gate')
+    expect(gate).toContain('The 24 hour default does not apply')
+    expect(gate).toContain('`factory issue ship` is refused until a Spec is submitted')
+    expect(buildBrief({ ...input, issue: { ...input.issue, checkpoint: 'spec' } })).not.toContain('owner gate')
+  })
+
   test('a project with check tiers gets a section that says fast locally and full in CI; one without gets none', () => {
     const sharded = buildBrief({ ...input, checks: { fast: 'make check-fast', full: 'make check', ci: true } })
     expect(sharded).toContain('## Checks in this repo')

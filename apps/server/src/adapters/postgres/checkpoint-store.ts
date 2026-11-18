@@ -146,6 +146,7 @@ const VerdictRow = z.object({
   verdict: z.enum(VERDICTS),
   note: z.string().nullable(),
   at: z.date(),
+  by: z.enum(['owner', 'factory']),
   needed_me: z.boolean().nullable().optional(),
 })
 
@@ -313,6 +314,7 @@ const verdictOf = (raw: unknown): VerdictRecord => {
     verdict: row.verdict,
     note: row.note,
     at: row.at,
+    by: row.by,
     neededMe: row.needed_me ?? null,
   }
 }
@@ -781,8 +783,8 @@ export function postgresCheckpointStore(tx: SQL): CheckpointStore {
 
     async insertVerdict(v) {
       const rows: unknown[] = await tx`
-        INSERT INTO factory.verdicts (artifact_id, revision, key, verdict, note, at)
-        VALUES (${v.artifactId}, ${v.revision}, ${v.key}, ${v.verdict}, ${v.note}, ${v.at})
+        INSERT INTO factory.verdicts (artifact_id, revision, key, verdict, note, at, by)
+        VALUES (${v.artifactId}, ${v.revision}, ${v.key}, ${v.verdict}, ${v.note}, ${v.at}, ${v.by})
         ON CONFLICT DO NOTHING
         RETURNING revision`
       return rows.length === 1
@@ -851,9 +853,16 @@ export function postgresCheckpointStore(tx: SQL): CheckpointStore {
           EXISTS (
             SELECT 1 FROM factory.issue_events e
             WHERE e.issue_id = ${artifact.issueId} AND e.kind = 'filed' AND e.result = 'applied'
-              AND e.payload->>'checkpoint' = 'spec'
-          ) AS filed`
-      const facts = z.object({ replan: z.boolean(), triaged: z.boolean(), filed: z.boolean() }).parse(origin)
+              AND e.payload->>'checkpoint' IN ('spec', 'gate')
+          ) AS filed,
+          EXISTS (
+            SELECT 1 FROM factory.issue_events e
+            WHERE e.issue_id = ${artifact.issueId} AND e.kind = 'filed' AND e.result = 'applied'
+              AND e.payload->>'checkpoint' = 'gate'
+          ) AS gate`
+      const facts = z
+        .object({ replan: z.boolean(), triaged: z.boolean(), filed: z.boolean(), gate: z.boolean() })
+        .parse(origin)
       const verdicts: unknown[] = await tx`
         SELECT * FROM factory.verdicts WHERE artifact_id = ${id} ORDER BY revision`
       const all = verdicts.map(verdictOf)
@@ -867,6 +876,7 @@ export function postgresCheckpointStore(tx: SQL): CheckpointStore {
           filedSpec: artifact.key.startsWith('filed-spec:'),
           triaged: facts.triaged,
           filedWithCheckpoint: facts.filed,
+          gate: facts.gate,
         },
         answered: all.some((v) => v.revision === revision),
         earlier: all.filter((v) => v.revision < revision).map((v) => v.verdict),
@@ -1147,6 +1157,11 @@ export function postgresCheckpointStore(tx: SQL): CheckpointStore {
           AND NOT EXISTS (SELECT 1 FROM factory.verdicts v WHERE v.artifact_id = a.id AND v.revision = r.n)
           AND NOT EXISTS (
             SELECT 1 FROM factory.checkpoint_rechecks c WHERE c.checkpoint_id = a.id AND c.through_version = r.n)
+          -- an owner gate waits for his own verdict: no default after the hours (it is looked at only once it is closed)
+          AND NOT EXISTS (
+            SELECT 1 FROM factory.issues gi JOIN factory.issue_events ge ON ge.issue_id = gi.id
+            WHERE gi.id = a.issue_id AND gi.state <> 'closed'
+              AND ge.kind = 'filed' AND ge.version = 1 AND ge.payload->>'checkpoint' = 'gate')
         ORDER BY r.created_at, a.id LIMIT ${limit}`
       return rows.map((raw) => {
         const row = StaleReviewRow.parse(raw)

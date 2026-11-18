@@ -145,7 +145,7 @@ const record = async (issueId: IssueId, name: string, event: AnyIssueEvent) =>
   value(await recordIssueEvent(deps, { issueId, key: key('test', issueId, name), event }))
 
 /** An Issue with a lead working: attempt 1. */
-async function workingIssue(repo = 'example', extra: { checkpoint?: 'spec' } = {}): Promise<IssueId> {
+async function workingIssue(repo = 'example', extra: { checkpoint?: 'spec' | 'gate' } = {}): Promise<IssueId> {
   const filed = value(
     await fileIssue(deps, {
       key: key('filed', deps.ids.next('signal')),
@@ -1463,8 +1463,8 @@ describe('a Concept or Spec the owner has not answered for a day', () => {
       'noted',
       'verdict_given',
     ])
-    const [verdict] = await db.sql`SELECT verdict, note FROM factory.verdicts WHERE artifact_id = ${artifact.id}`
-    expect(verdict).toMatchObject({ verdict: 'looks_good' })
+    const [verdict] = await db.sql`SELECT verdict, note, by FROM factory.verdicts WHERE artifact_id = ${artifact.id}`
+    expect(verdict).toMatchObject({ verdict: 'looks_good', by: 'factory' })
     expect(String(verdict.note)).toContain('no verdict in 24 hours')
     const [note] = await db.sql`
       SELECT payload->>'text' AS text, actor FROM factory.issue_events WHERE issue_id = ${issueId} AND kind = 'noted' AND actor = 'factory'`
@@ -1501,6 +1501,45 @@ describe('a Concept or Spec the owner has not answered for a day', () => {
       expect(await rows('checkpoint_pages')).toBe(kind === 'concept' ? 1 : 0)
     },
   )
+
+  test('an owner gate takes no default: its wait runs past the hours, and only the owner gives the verdict', async () => {
+    const issueId = await workingIssue('example', { checkpoint: 'gate' })
+    const { artifact } = value(await submitArtifact(deps, { issueId, attempt: 1, raw: SPEC }))
+    later(25)
+    expect(value(await recheckReviews(deps))).toEqual([])
+    later(24 * 30)
+    expect(value(await recheckReviews(deps))).toEqual([])
+    const [waiting] = await db.sql`SELECT state, wait_reason FROM factory.issues WHERE id = ${issueId}`
+    expect(waiting).toMatchObject({ state: 'waiting', wait_reason: 'review' })
+    expect(await db.sql`SELECT 1 FROM factory.verdicts WHERE artifact_id = ${artifact.id}`).toHaveLength(0)
+
+    const given = value(
+      await giveVerdict(deps, { artifactId: artifact.id, verdict: 'looks_good', note: null, revision: null }),
+    )
+    expect(given.verdict.by).toBe('owner')
+    const [verdict] = await db.sql`SELECT by FROM factory.verdicts WHERE artifact_id = ${artifact.id}`
+    expect(verdict).toMatchObject({ by: 'owner' })
+    const [after] = await db.sql`SELECT state FROM factory.issues WHERE id = ${issueId}`
+    expect(after).toMatchObject({ state: 'working' })
+  })
+
+  test('an owner gate in Needs you says that no default is taken', async () => {
+    const issueId = await workingIssue('example', { checkpoint: 'gate' })
+    value(await submitArtifact(deps, { issueId, attempt: 1, raw: { ...SPEC, kind: 'concept' } }))
+    const needs = await readNeeds(db.sql, clock.now())
+    const review = needs.items.find((item) => item.kind === 'review' && item.issue === issueId)
+    expect(review?.summary).toContain('An owner gate: no default is taken')
+  })
+
+  test('an owner gate that closed is still withdrawn, and triage never turns it into a plain Spec', async () => {
+    const issueId = await workingIssue('example', { checkpoint: 'gate' })
+    const { artifact } = value(await submitArtifact(deps, { issueId, attempt: 1, raw: SPEC }))
+    await record(issueId, 'cancelled', { kind: 'cancelled', payload: { reason: 'not needed' }, actor: 'owner' })
+    later(25)
+    expect(value(await recheckReviews(deps))).toEqual([{ artifact: artifact.id, outcome: 'withdrawn' }])
+    const [verdict] = await db.sql`SELECT verdict, by FROM factory.verdicts WHERE artifact_id = ${artifact.id}`
+    expect(verdict).toMatchObject({ verdict: 'no_longer_applies', by: 'factory' })
+  })
 
   test('a Spec whose Issue closed meanwhile is withdrawn, and its pages are never sent', async () => {
     const issueId = await workingIssue('example', { checkpoint: 'spec' })

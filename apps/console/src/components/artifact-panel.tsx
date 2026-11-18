@@ -161,15 +161,24 @@ export function VerdictControl({ detail, now }: { detail: ArtifactDetail; now: n
       <div className="inline-flex flex-wrap items-center gap-3">
         <Popover>
           <PopoverTrigger
-            aria-label="Your verdict"
+            aria-label={given.by === 'factory' ? "The factory's verdict" : 'Your verdict'}
             className="inline-flex cursor-pointer items-center gap-2 rounded-md text-xs text-muted-foreground outline-none focus-visible:ring-3 focus-visible:ring-ring/50"
           >
             <Lozenge tone={VERDICT_TONE[given.verdict]}>{VERDICT_WORDS[given.verdict]}</Lozenge>
+            {given.by === 'factory' ? <Lozenge tone="neutral">By the factory</Lozenge> : null}
             <Ago iso={given.at} now={now} className="font-mono" />
           </PopoverTrigger>
           <PopoverContent align="end" className="flex flex-col gap-1">
-            <p className="font-heading font-semibold">Your verdict</p>
+            <p className="font-heading font-semibold">
+              {given.by === 'factory' ? "The factory's verdict" : 'Your verdict'}
+            </p>
             <p>{VERDICT_WORDS[given.verdict]}</p>
+            {given.by === 'factory' ? (
+              <p className="text-xs text-muted-foreground">
+                The factory gave this for you (no answer in time, a screen settle or a withdrawal). It is not your
+                verdict.
+              </p>
+            ) : null}
             <p className="text-xs text-muted-foreground">{VERDICT_CONSEQUENCES[given.verdict]}</p>
             <p className="text-muted-foreground">{given.note ?? 'No note.'}</p>
           </PopoverContent>

@@ -33,6 +33,8 @@ export interface SpecOrigin {
   triaged: boolean
   /** the filer set `checkpoint: spec` */
   filedWithCheckpoint: boolean
+  /** the filer set `checkpoint: gate`: only the owner's own verdict ends it, so no screen settles it */
+  gate: boolean
 }
 
 /** Who made the Spec owed: the Replan's own proposal, the filer, triage's flag, or the lead's judgment. */
@@ -86,6 +88,7 @@ export type RuleOutcome = { outcome: 'passed' | 'settled'; reason: string }
 /**
  * The deterministic first look; null leaves the Spec to the workflow.
  * - A revision after the owner asked for changes is his to read again: he asked for it.
+ * - A Spec of an owner gate (`checkpoint: gate`) is always his to read: no rule and no workflow settles it.
  * - A Spec its filer attached is handed over for the owner's review on purpose.
  * - A Replan whose block changes no plan row and cancels nothing only reorders open Issues (it frees one from a stalled
  *   head, or adds an edge): the lead applies it on its defaults. Edges are reversible with one call.
@@ -93,6 +96,9 @@ export type RuleOutcome = { outcome: 'passed' | 'settled'; reason: string }
 export function screenSpecByRule(input: RuleInput): RuleOutcome | null {
   if (input.revision > 1 && input.earlier.includes('changes')) {
     return { outcome: 'passed', reason: 'a revision the owner asked for with his verdict of changes' }
+  }
+  if (input.origin.gate) {
+    return { outcome: 'passed', reason: 'an owner gate: only the owner gives its verdict' }
   }
   if (input.origin.filedSpec) {
     return { outcome: 'passed', reason: 'its filer attached it with the Issue for the owner to review' }

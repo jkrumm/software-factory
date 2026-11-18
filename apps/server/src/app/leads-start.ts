@@ -264,7 +264,7 @@ export async function seatOf(deps: LeadDeps, issue: Issue, origin: SeatOrigin): 
   const rule = lightRule({
     kind: issue.kind,
     size: issue.size ?? null,
-    spec: issue.checkpoint === 'spec',
+    spec: issue.checkpoint !== undefined,
     hygieneKey: origin.hygieneKey,
     hygieneOut: origin.hygieneClass !== null && (await classesOut(deps)).has(origin.hygieneClass),
     unroutedMonitor: origin.unroutedMonitor,

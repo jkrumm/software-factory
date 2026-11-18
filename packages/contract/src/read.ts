@@ -115,6 +115,8 @@ export const ReadIssueCard = z
     kind: z.string().nullable(),
     /** triage's size of the work (`small`, `medium`, `large`); null when it judged none */
     size: z.string().nullable(),
+    /** an owner gate (`checkpoint: gate`): its Spec waits for the owner's own verdict, never a default, so what is `after` it waits too */
+    gate: z.boolean().default(false),
     /** the live lead's key */
     lead: z.string().nullable(),
     account: z.string().nullable(),
@@ -252,6 +254,8 @@ export const ReadArtifactLine = z
     revisions: z.number().int(),
     /** the owner's latest verdict word (looks_good, with_notes, changes, no_longer_applies); null while none */
     verdict: z.string().nullable(),
+    /** who gave that verdict: `owner`, or `factory` for the default after the wait; null while none */
+    verdictBy: z.enum(['owner', 'factory']).nullable().default(null),
     at: iso,
     /** true when another Issue owns it (or none does) and this Issue is only linked to it (`artifact link`) */
     linked: z.boolean().default(false),
