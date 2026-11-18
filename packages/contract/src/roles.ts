@@ -37,15 +37,22 @@ export type LeadSeat = z.infer<typeof LeadSeat>
 
 /**
  * The tripwire for triage's `small` on the light seat (`apps/server/src/domains/leads/light.ts`). The light seat starts
- * with the rule classes; triage's `small` with no design choice joins them while, over the last `TRIPWIRE_DAYS` days, the
- * light seat delivers: the first verification pass rate of the attempts that finished on it is within `TRIPWIRE_POINTS`
- * of lead's, its regressions per Issue are not higher than lead's, and its move-up share is under the bound the cost of a
- * move-up sets (`judgeLightGate`). It is read, not switched: a window that breaks any of them closes it again. Fewer than
- * `TRIPWIRE_MIN_WATCHES` finished first watches on light is no reading, and a closed gate.
+ * with the rule classes; triage's `small` with no design choice joins them unless the light seat is shown worse (NL45): the
+ * first verification pass rate of the attempts that finished on it is not shown more than `TRIPWIRE_POINTS` under lead's
+ * (the lower bound of the gap at `TRIPWIRE_Z`), and its move-up share is under the bound the cost of a move-up sets
+ * (`judgeLightGate`). The window is the last `TRIPWIRE_DAYS` days, reaching back up to `TRIPWIRE_MAX_DAYS` until light has
+ * `TRIPWIRE_TARGET_WATCHES` finished first watches. It is read, not switched: a window that breaks either closes it again.
+ * Fewer than `TRIPWIRE_MIN_WATCHES` finished first watches on light is no reading, and a closed gate.
  */
 export const TRIPWIRE_POINTS = 3
 export const TRIPWIRE_DAYS = 3
 export const TRIPWIRE_MIN_WATCHES = 10
+/** The window reaches back until light has this many finished first watches (a Wilson half-width of about 4 points), at most `TRIPWIRE_MAX_DAYS`. */
+export const TRIPWIRE_TARGET_WATCHES = 100
+export const TRIPWIRE_MAX_DAYS = 14
+/** One-sided 95 %: the z of the interval a gap must clear to be shown. `TRIPWIRE_Z` is its normal quantile: change both together. */
+export const TRIPWIRE_CONFIDENCE = 0.95
+export const TRIPWIRE_Z = 1.6449
 
 /** Parses the role table's text; throws with zod's message when it is not one. */
 export function parseRoleTable(text: string): RoleTable {

@@ -757,7 +757,7 @@ export function seatCells(row: SeatKpiRow) {
 
 /** The tripwire line under the seat table: whether triage's small starts light now, the inputs, and why not. */
 export function tripwireWords(tripwire: SeatKpis['tripwire']): string {
-  const { points, days, minWatches, light, lead, bound, met, failing } = tripwire
+  const { points, days, minWatches, light, lead, bound, met, failing, passGap, regressionGap, confidence } = tripwire
   const state =
     met === true
       ? "Triage's small starts on the light seat"
@@ -772,8 +772,18 @@ export function tripwireWords(tripwire: SeatKpis['tripwire']): string {
     bound === null || light.movedUpShare === null
       ? 'move-up bound not measured'
       : `${rateWords(light.movedUpShare)} moved up, bound ${rateWords(bound.share)}`
+  const gap =
+    passGap === null
+      ? ''
+      : passGap.points < 0
+        ? `; light's pass rate is ${(-passGap.points).toFixed(1)} points over lead's`
+        : `; lead's pass rate is ${passGap.points.toFixed(1)} points over light's, at least ${passGap.lower.toFixed(1)} at ${Math.round(confidence * 100)} % (shown only above ${points})`
+  const regressions =
+    regressionGap === null
+      ? ''
+      : `, light ${regressionGap.perIssue >= 0 ? '+' : ''}${perIssueWords(regressionGap.perIssue)} on lead's (at least ${perIssueWords(regressionGap.lower)})`
   const why = failing.length === 0 ? '' : ` Not met: ${failing.join('; ')}.`
-  return `${state}. Last ${days} days: ${rates}; regressions per Issue ${perIssueWords(light.regressionsPerIssue)} against ${perIssueWords(lead.regressionsPerIssue)}; ${moves}; within ${points} points, regressions not higher, moves under the bound.${why}`
+  return `${state}. Last ${days} days: ${rates}${gap}; regressions per Issue ${perIssueWords(light.regressionsPerIssue)} against ${perIssueWords(lead.regressionsPerIssue)}${regressions}, shown and not a condition; ${moves}.${why}`
 }
 
 const perIssueWords = (value: number | null): string => (value === null ? '–' : value.toFixed(3))

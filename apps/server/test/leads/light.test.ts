@@ -4,7 +4,11 @@ import {
   judgeClassSeat,
   judgeLightGate,
   moveUpBound,
+  regressionGap,
   type SeatFigures,
+  TRIPWIRE_CONFIDENCE,
+  TRIPWIRE_Z,
+  tripwireFrom,
 } from '@software-factory/contract'
 import {
   hygieneClass,
@@ -113,12 +117,15 @@ describe('the light gate', () => {
   const figures = (over: Partial<SeatFigures> = {}): SeatFigures => ({
     finishedWatches: 40,
     finishedPassRate: 0.95,
-    regressionsPerIssue: 0.03,
     movedUpShare: null,
     ...over,
   })
-  const lead = figures({ finishedWatches: 900, finishedPassRate: 0.956, regressionsPerIssue: 0.05 })
-  const light = (over: Partial<SeatFigures> = {}) => figures({ movedUpShare: 0.17, ...over })
+  // a seat from its counts: passes of watches
+  const seat = (passed: number, watches: number, over: Partial<SeatFigures> = {}) =>
+    figures({ finishedWatches: watches, finishedPassRate: passed / watches, ...over })
+  // today's 3-day reading of 2026-11-18: light 71 of 75, lead 515 of 527
+  const lead = seat(515, 527)
+  const light = (passed: number, watches: number) => seat(passed, watches, { movedUpShare: 0.17 })
 
   test('the move-up bound is the share at which light plus a follow-up costs what the lead row costs', () => {
     // 0.15 + share * 2.70 = 2.70 at share 0.944
@@ -131,44 +138,95 @@ describe('the light gate', () => {
     expect(moveUpBound({ lightAttempt: 0.15, leadAttempt: 2.7, followUpAttempt: 0 })).toBeNull()
   })
 
-  test("widens on the owner's first figures: 94.9 against 95.6, 17 % moved up", () => {
-    const verdict = judgeLightGate({ light: light({ finishedPassRate: 0.949 }), lead, bound: 0.94 })
-    expect(verdict).toEqual({ met: true, failing: [] })
+  test("opens on today's figures: a 3.06 point gap on 75 watches is not shown", () => {
+    const verdict = judgeLightGate({ light: light(71, 75), lead, bound: 0.94 })
+    expect(verdict.met).toBe(true)
+    expect(verdict.failing).toEqual([])
+    // the point gap is over the 3 points; its lower bound at 95 % is under zero
+    expect(verdict.passGap?.points).toBeCloseTo(3.06, 1)
+    expect(verdict.passGap?.lower).toBeCloseTo(-0.15, 1)
   })
 
-  test("narrows when the window's pass rate falls more than 3 points under lead's", () => {
-    const verdict = judgeLightGate({ light: light({ finishedPassRate: 0.92 }), lead, bound: 0.94 })
+  test('stays closed where light is clearly worse: 80 of 100 against lead 515 of 527', () => {
+    const verdict = judgeLightGate({ light: light(80, 100), lead, bound: 0.94 })
     expect(verdict.met).toBe(false)
+    expect(verdict.passGap?.lower).toBeCloseTo(11.8, 0)
     expect(verdict.failing).toHaveLength(1)
-    expect(judgeLightGate({ light: light({ finishedPassRate: 0.926 }), lead, bound: 0.94 }).met).toBe(true)
+    expect(verdict.failing[0]).toContain('shown more than 3 points under')
   })
 
-  test('narrows when light regresses more per Issue than lead', () => {
-    const verdict = judgeLightGate({ light: light({ regressionsPerIssue: 0.06 }), lead, bound: 0.94 })
-    expect(verdict.met).toBe(false)
-    expect(judgeLightGate({ light: light({ regressionsPerIssue: 0.05 }), lead, bound: 0.94 }).met).toBe(true)
+  test('the line sits between 90 and 92 of 100, and 8 of 10 is shown worse already', () => {
+    expect(judgeLightGate({ light: light(90, 100), lead, bound: 0.94 }).met).toBe(false)
+    expect(judgeLightGate({ light: light(92, 100), lead, bound: 0.94 }).met).toBe(true)
+    expect(judgeLightGate({ light: light(8, 10), lead, bound: 0.94 }).met).toBe(false)
+    // few watches that all passed show nothing
+    expect(judgeLightGate({ light: light(10, 10), lead, bound: 0.94 }).met).toBe(true)
+  })
+
+  test('a gap is read in the other direction too: light ahead of lead is never shown worse', () => {
+    expect(judgeLightGate({ light: light(75, 75), lead: seat(450, 527), bound: 0.94 }).met).toBe(true)
+  })
+
+  test('regressions are shown, never a condition', () => {
+    // light regressed 4 in 117 Issues, lead 12 in 619: not shown higher, and not read by the gate
+    const gap = regressionGap({ light: { regressions: 4, issues: 117 }, lead: { regressions: 12, issues: 619 } })
+    expect(gap?.gap).toBeCloseTo(4 / 117 - 12 / 619, 5)
+    expect(gap?.lower).toBeLessThan(0)
+    // clearly more: 20 in 100 against 12 in 619
+    const worse = regressionGap({ light: { regressions: 20, issues: 100 }, lead: { regressions: 12, issues: 619 } })
+    expect(worse?.lower).toBeGreaterThan(0.05)
+    expect(regressionGap({ light: { regressions: 0, issues: 0 }, lead: { regressions: 1, issues: 5 } })).toBeNull()
   })
 
   test('narrows when too many Issues move up for the bound the cost sets', () => {
-    expect(judgeLightGate({ light: light({ movedUpShare: 0.5 }), lead, bound: 0.47 }).met).toBe(false)
-    expect(judgeLightGate({ light: light({ movedUpShare: 0.46 }), lead, bound: 0.47 }).met).toBe(true)
+    expect(judgeLightGate({ light: seat(71, 75, { movedUpShare: 0.5 }), lead, bound: 0.47 }).met).toBe(false)
+    expect(judgeLightGate({ light: seat(71, 75, { movedUpShare: 0.46 }), lead, bound: 0.47 }).met).toBe(true)
   })
 
   test('a move-up is not a failed pass: a heavy move-up share under the bound still widens', () => {
-    expect(judgeLightGate({ light: light({ movedUpShare: 0.4 }), lead, bound: 0.94 }).met).toBe(true)
+    expect(judgeLightGate({ light: seat(71, 75, { movedUpShare: 0.4 }), lead, bound: 0.94 }).met).toBe(true)
   })
 
   test('is not measured, and so closed, with too few finished first watches, no cost or no rate', () => {
-    expect(judgeLightGate({ light: light({ finishedWatches: 9 }), lead, bound: 0.94 }).met).toBeNull()
-    expect(judgeLightGate({ light: light(), lead, bound: null }).met).toBeNull()
-    expect(judgeLightGate({ light: light({ regressionsPerIssue: null }), lead, bound: 0.94 }).met).toBeNull()
-    expect(judgeLightGate({ light: light(), lead: figures({ finishedPassRate: null }), bound: 0.94 }).met).toBeNull()
+    expect(judgeLightGate({ light: light(9, 9), lead, bound: 0.94 }).met).toBeNull()
+    expect(judgeLightGate({ light: light(71, 75), lead, bound: null }).met).toBeNull()
+    expect(
+      judgeLightGate({ light: figures({ finishedPassRate: null, movedUpShare: 0.1 }), lead, bound: 0.94 }).met,
+    ).toBeNull()
+    expect(
+      judgeLightGate({ light: light(71, 75), lead: figures({ finishedPassRate: null }), bound: 0.94 }).met,
+    ).toBeNull()
   })
 
   test('a broken condition is false even when another is not measured', () => {
-    const verdict = judgeLightGate({ light: light({ regressionsPerIssue: 0.09 }), lead, bound: null })
+    const verdict = judgeLightGate({ light: light(80, 100), lead, bound: null })
     expect(verdict.met).toBe(false)
     expect(verdict.failing).toHaveLength(2)
+  })
+})
+
+test('the reported confidence and the z the gaps are bound at are one level', () => {
+  expect(TRIPWIRE_CONFIDENCE).toBe(0.95)
+  expect(TRIPWIRE_Z).toBeCloseTo(1.6449, 4)
+})
+
+describe('tripwireFrom', () => {
+  const now = new Date('2026-11-18T12:00:00Z')
+  const daysAgo = (days: number) => new Date(now.getTime() - days * 86_400_000)
+  const at = (days: number, count: number) => Array.from({ length: count }, () => daysAgo(days))
+
+  test('is the last 3 days when they hold 100 finished light watches', () => {
+    expect(tripwireFrom({ now, watchAts: at(1, 100) })).toEqual(daysAgo(3))
+  })
+
+  test('reaches back to the day of the 100th newest watch when 3 days hold fewer', () => {
+    expect(tripwireFrom({ now, watchAts: [...at(1, 75), ...at(5, 40)] })).toEqual(daysAgo(5))
+  })
+
+  test('is at most 14 days, whatever is found, and the whole 14 with fewer than 100', () => {
+    expect(tripwireFrom({ now, watchAts: [...at(1, 75), ...at(20, 40)] })).toEqual(daysAgo(14))
+    expect(tripwireFrom({ now, watchAts: at(1, 5) })).toEqual(daysAgo(14))
+    expect(tripwireFrom({ now, watchAts: [] })).toEqual(daysAgo(14))
   })
 })
 

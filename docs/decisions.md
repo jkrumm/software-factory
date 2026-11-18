@@ -338,7 +338,7 @@ Report `docs/strategy/2026-11-next/report.html`, definition `docs/strategy/2026-
   steady 2 to 3 % to 5 % does. Not changed: `stall:regressed` (a stall twice in a week still files; 1 since the fix) and the
   light seat's move-up on a first-watch regression. Two cases are worth a look if the rate climbs: a light lead that
   forgets `make deploy`, and an environmental red (a bulb, a monitor in PENDING) that moves a light lead up to a Sonnet one.
-- **NL38 The light seat widens on what it delivers: finished passes, move-ups priced, a gate that reads (Issue 2026, 2026-11-17).**
+- **NL38 The light seat widens on what it delivers: finished passes, move-ups priced, a gate that reads (Issue 2026, 2026-11-17; the gate rule is replaced by NL45).**
   NL33's tripwire read light's first-pass rate with every moved-up Issue counted as a failed first pass: 37 of 47 (78.7 %)
   against the lead's 95.6 %, so it could never open. By the seat an attempt ran on, the cheap tier at high effort passed
   37 of 39 (94.9 %): the whole gap was the Issues that moved up, and moving up is the designed valve, not a bad result.
@@ -455,3 +455,29 @@ Report `docs/strategy/2026-11-next/report.html`, definition `docs/strategy/2026-
   a pushed bump is not deployed or watched (the repo's next ship carries it); a push refused because master moved is a failed
   fix, not a retry. Switch: `FACTORY_HYGIENE_FIX=0`. Count over the next week: stale-branch and deps Issues filed against
   `fixes` rows of outcome `fixed`, and how many `failed` ones a lead then closed done.
+
+- **NL45 The light gate decides on evidence, not on a gap between two small samples (Issue 2226, 2026-11-18).** NL38's gate
+  compared point estimates: light's pass rate more than 3 points under lead's, or any regression rate above lead's. The
+  reading of 2026-11-18 (3 days: light 71 of 75 finished first watches, lead 515 of 527; regressions 4 of 117 and 12 of 619
+  Issues) was 94.7 against 97.7, a gap of 3.06 points, about two Issues, and the gate stayed closed: nearly all default-seat
+  work ran on the lead row at about 2.79 dollars an Issue, against 0.30 on light. Over the longer window in `seats.delivery`
+  light was within one point and regressed less. The owner's steer: optimise for throughput, extra regressions are
+  acceptable, open on numbers like these. Now: (a) the pass-rate condition is broken only when the one-sided 95 % lower
+  bound of (lead rate minus light rate) is above `TRIPWIRE_POINTS` (3): Newcombe's hybrid score interval, a Wilson interval
+  per rate combined by square-and-add (`passGap`). A small count widens the interval and reads as "not shown worse". Today:
+  -0.15 points, open; light 80 of 100: +11.8, closed; 90 of 100: +3.6, closed; 92 of 100: +2.0, open; 8 of 10: +4.5, closed.
+  (b) Regressions per Issue are no longer a condition. A regressed first watch of a light lead moves the Issue up and the
+  next lead goes forward from the light branch (`brief.ts`, "Moved up from the light seat"), so it is already in the pass
+  rate and its follow-up attempt's dollars are already in the cost per Issue and the move-up bound; a third test counted the
+  same event again, on counts of 4 and 12. They stay on the Improve page and in `seats.tripwire.regressionGap` (the gap
+  and its lower bound), and a limit on them needs a measured line, so none is set. A first design priced a regression at the
+  lead row's cost per Issue; it double-counted those dollars and was dropped on the owner's note. (c) The move-up bound is
+  unchanged: it is the money condition. (d) The window is the last 3 days, reaching back up to 14 until light has 100
+  finished first watches (`tripwireFrom`; a Wilson half-width of about 4 points, the resolution at which the 3-point line
+  can be seen); `seats.tripwire` carries `days`, `from`, `confidence`, `targetWatches`, `passGap` and `regressionGap`.
+  Unchanged: the out-of-scope words, the 10-watch floor (below it the gate is unmeasured and closed), the 10-minute cache,
+  `judgeClassSeat` and the closing: a window that breaks a condition closes the gate at the next read. Replaces the gate rule
+  of NL38 (its bound formula and figures stand). The confidence (`TRIPWIRE_Z`), the 100-watch target and the 14-day ceiling
+  are choices of this Issue, not measurements; 90 % would also open on today's figures and close at 90 of 100. Count over
+  the next week: the share of `small` Issues that start light, and their first pass rate and regressions per Issue in
+  `seats.tripwire`.

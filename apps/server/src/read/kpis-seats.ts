@@ -3,15 +3,19 @@ import * as z from 'zod'
 import {
   judgeLightGate,
   KPI_SEATS,
+  regressionGap,
   type MoveUpBound,
   moveUpBound,
   SEAT_DELIVERY_DEFINITIONS,
   type SeatDelivery,
   type SeatKpiRow,
   type SeatKpis,
-  TRIPWIRE_DAYS,
+  TRIPWIRE_CONFIDENCE,
+  TRIPWIRE_MAX_DAYS,
   TRIPWIRE_MIN_WATCHES,
   TRIPWIRE_POINTS,
+  TRIPWIRE_TARGET_WATCHES,
+  tripwireFrom,
 } from '@software-factory/contract'
 import { costOfAttempts, keyOf } from './kpis-attempts.ts'
 import { percentile, per, windowOf } from './stats.ts'
@@ -29,6 +33,8 @@ const Fact = z.object({
   issue_id: z.string(),
   seat: z.enum(KPI_SEATS),
   moved_up: z.boolean(),
+  /** when the Issue's first lead started */
+  started_at: z.coerce.date(),
   first_watch: z.string().nullable(),
   /** watch 1 shipped from an attempt the light rule seated */
   first_watch_light: z.boolean().nullable(),
@@ -61,10 +67,10 @@ async function factsOf(sql: SQL, w: Window, now: Date): Promise<Fact[]> {
             WHERE x.issue_id = f.issue_id AND x.kind = 'seated' AND x.result = 'applied') THEN 'filed'
           ELSE 'lead'
         END AS seat,
-        fl.at AS filed_at
+        fl.at AS filed_at, f.at AS started_at
       FROM first f JOIN factory.issue_events fl ON fl.issue_id = f.issue_id AND fl.version = 1
       WHERE f.at >= ${w.from} AND f.at < ${w.to})
-    SELECT c.issue_id, c.seat,
+    SELECT c.issue_id, c.seat, c.started_at,
       EXISTS (
         SELECT 1 FROM factory.issue_events m
         WHERE m.issue_id = c.issue_id AND m.kind = 'moved_up' AND m.result = 'applied') AS moved_up,
@@ -240,18 +246,34 @@ async function readDelivery(
   }
 }
 
-/** The tripwire over the last `TRIPWIRE_DAYS` days: the four figures of each seat, the bound and the verdict. */
+/**
+ * The tripwire over its window (`tripwireFrom`: `TRIPWIRE_DAYS`, reaching back until light has `TRIPWIRE_TARGET_WATCHES` finished
+ * first watches, at most `TRIPWIRE_MAX_DAYS`): the four figures of each seat, the bound, the gaps and the verdict.
+ */
 async function tripwireOf(
   sql: SQL,
   options: { now: Date; cost: CostOf; usageTimeoutMs: number },
 ): Promise<SeatKpis['tripwire']> {
-  const recent = await factsOf(sql, windowOf(options.now, TRIPWIRE_DAYS), options.now)
+  const longest = await factsOf(sql, windowOf(options.now, TRIPWIRE_MAX_DAYS), options.now)
+  const from = tripwireFrom({
+    now: options.now,
+    watchAts: longest
+      .filter((fact) => fact.seat === 'light' && fact.first_watch_light === true && fact.first_watch !== null)
+      .map((fact) => fact.started_at),
+  })
+  const recent = longest.filter((fact) => fact.started_at >= from)
   const { light, lead, bound } = await readDelivery(sql, recent, options)
-  const verdict = judgeLightGate({ light, lead, bound: bound?.share ?? null })
+  const { passGap, ...verdict } = judgeLightGate({ light, lead, bound: bound?.share ?? null })
+  const regressions = regressionGap({ light, lead })
   return {
     points: TRIPWIRE_POINTS,
-    days: TRIPWIRE_DAYS,
+    days: Math.ceil((options.now.getTime() - from.getTime()) / 86_400_000),
+    from: from.toISOString(),
+    confidence: TRIPWIRE_CONFIDENCE,
+    targetWatches: TRIPWIRE_TARGET_WATCHES,
     minWatches: TRIPWIRE_MIN_WATCHES,
+    passGap,
+    regressionGap: regressions && { perIssue: regressions.gap, lower: regressions.lower },
     light,
     lead,
     bound,
@@ -260,7 +282,7 @@ async function tripwireOf(
 }
 
 /**
- * The tripwire over the last `TRIPWIRE_DAYS` days, read for the starts: `met` says whether triage's `small` starts on the
+ * The tripwire over its window (`TRIPWIRE_DAYS`, longer until light has `TRIPWIRE_TARGET_WATCHES` finished first watches), read for the starts: `met` says whether triage's `small` starts on the
  * light seat now (only a measured pass opens it), `bound.share` is the move-up share a hygiene class stays under.
  */
 export async function readTripwire(
@@ -273,7 +295,7 @@ export async function readTripwire(
 /**
  * The seat table of the Improve screen: the window's Issues by the seat their first lead ran on, the light seat's four
  * figures beside the lead row's, and the tripwire for triage's `small` (`domains/leads/light.ts`) over the last
- * `TRIPWIRE_DAYS` days, whatever window the page shows.
+ * window above, whatever window the page shows.
  */
 export async function readSeatKpis(
   sql: SQL,
