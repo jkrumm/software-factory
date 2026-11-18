@@ -51,6 +51,8 @@ const Env = z.object({
   FACTORY_HYGIENE_EVERY_MS: ms.optional(),
   /** the cheap probes of a project are run again after this long (a daily pass); 0 turns daily passes off */
   FACTORY_HYGIENE_DAILY_MS: ms.optional(),
+  /** 0: no scripted hygiene fix runs (a fix deletes remote branches and pushes dependency bumps); unset: they run */
+  FACTORY_HYGIENE_FIX: z.enum(['0', '1']).optional(),
   /** a failed hygiene judgment is asked again after this long */
   FACTORY_HYGIENE_RETRY_MS: ms.optional(),
   /** a repo is asked about a new queue shape at most once in this long */
@@ -90,6 +92,7 @@ export interface LoopSettings {
   hygieneRepos: string[] | null
   hygieneEveryMs: number
   hygieneDailyMs: number
+  hygieneFix: boolean
   hygieneRetryMs: number
   selfwatchGraceMs: number
   selfwatchBranch: string | null
@@ -229,6 +232,7 @@ export function loadLoopSettings(env: Record<string, string | undefined>): LoopS
     hygieneRepos: repos.length > 0 ? repos : null,
     hygieneEveryMs: e.FACTORY_HYGIENE_EVERY_MS ?? 7 * 24 * 3_600_000,
     hygieneDailyMs: e.FACTORY_HYGIENE_DAILY_MS ?? 24 * 3_600_000,
+    hygieneFix: e.FACTORY_HYGIENE_FIX !== '0',
     hygieneRetryMs: e.FACTORY_HYGIENE_RETRY_MS ?? 6 * 3_600_000,
     selfwatchGraceMs: e.FACTORY_SELFWATCH_GRACE_MS ?? DEFAULT_WAIT_GRACE_MS,
     selfwatchBranch: e.FACTORY_SELFWATCH_BRANCH ?? null,

@@ -140,6 +140,7 @@ const HygieneRow = z.object({
   over_budget: z.unknown(),
   failed: z.unknown(),
   lifecycle: z.unknown().optional(),
+  fixes: z.unknown().optional(),
 })
 
 /** The lifecycle entries as stored: ISO times back to dates; a pass recorded before the column has none. */
@@ -147,6 +148,13 @@ const lifecycleOf = (value: unknown): HygienePassRecord['lifecycle'] =>
   ((json(value) ?? []) as { key: string; issue: string; action: string; why: string; at: string }[]).map((entry) => ({
     ...entry,
     action: entry.action as HygienePassRecord['lifecycle'][number]['action'],
+    at: new Date(entry.at),
+  }))
+
+/** The scripted fixes as stored: ISO times back to dates; a pass recorded before the column has none. */
+const fixesOf = (value: unknown): HygienePassRecord['fixes'] =>
+  ((json(value) ?? []) as (Omit<HygienePassRecord['fixes'][number], 'at'> & { at: string })[]).map((entry) => ({
+    ...entry,
     at: new Date(entry.at),
   }))
 
@@ -164,6 +172,7 @@ const hygieneOf = (raw: unknown): HygienePassRecord => {
     overBudget: json(row.over_budget) as HygienePassRecord['overBudget'],
     failed: json(row.failed) as HygienePassRecord['failed'],
     lifecycle: lifecycleOf(row.lifecycle),
+    fixes: fixesOf(row.fixes),
   }
 }
 
@@ -494,11 +503,11 @@ export function postgresLoopStore(tx: SQL): LoopStore {
 
     async recordHygienePass(pass) {
       await tx`
-        INSERT INTO factory.hygiene_passes (id, repo, at, ref, report, judgment, filed, over_budget, failed, lifecycle)
+        INSERT INTO factory.hygiene_passes (id, repo, at, ref, report, judgment, filed, over_budget, failed, lifecycle, fixes)
         VALUES (${pass.id}, ${pass.repo}, ${pass.at}, ${pass.ref}, ${JSON.stringify(pass.report)}::jsonb,
           ${JSON.stringify(pass.judgment)}::jsonb, ${JSON.stringify(pass.filed)}::jsonb,
           ${JSON.stringify(pass.overBudget)}::jsonb, ${JSON.stringify(pass.failed)}::jsonb,
-          ${JSON.stringify(pass.lifecycle)}::jsonb)`
+          ${JSON.stringify(pass.lifecycle)}::jsonb, ${JSON.stringify(pass.fixes)}::jsonb)`
     },
 
     async updateHygieneJudgment(id, next) {

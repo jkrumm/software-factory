@@ -12,6 +12,8 @@ export interface Tools {
   osv: string
   /** GitHub's CLI, for facts about the repo on GitHub (`ci`, `deps`) */
   gh: string
+  /** the command a scripted fix puts before its check, so the check runs in one of the host's test slots (`factory slot run`); empty: no slot, the fix is not run */
+  slot: string[]
 }
 
 /** The tools of the sweep by their PATH names; `HygieneCheckerOptions` and the tests replace single ones. */
@@ -22,6 +24,7 @@ export const defaultTools = (git = 'git'): Tools => ({
   fallow: 'fallow',
   osv: 'osv-scanner',
   gh: 'gh',
+  slot: ['factory', 'slot', 'run', '--name', 'hygiene-fix', '--'],
 })
 
 const GIT_TIMEOUT_MS = 60_000

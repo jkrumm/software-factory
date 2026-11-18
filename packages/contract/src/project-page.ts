@@ -245,6 +245,21 @@ export const HygieneLifecycleRow = z
   .meta({ id: 'HygieneLifecycleRow' })
 export type HygieneLifecycleRow = z.infer<typeof HygieneLifecycleRow>
 
+/** What a scripted fix did (`hygiene_passes.fixes`): ran to its end, did not, does not apply here, or could not start now and is asked again next pass. */
+export const HYGIENE_FIX_OUTCOMES = ['fixed', 'failed', 'skipped', 'deferred'] as const
+
+export const HygieneFixRow = z
+  .strictObject({
+    key: z.string(),
+    outcome: z.enum(HYGIENE_FIX_OUTCOMES),
+    detail: z.string(),
+    /** the tail of the script's output when it failed */
+    output: z.array(z.string()),
+    at,
+  })
+  .meta({ id: 'HygieneFixRow' })
+export type HygieneFixRow = z.infer<typeof HygieneFixRow>
+
 export const HygienePassRow = z
   .strictObject({
     id: z.string(),
@@ -272,6 +287,8 @@ export const ProjectHygieneModel = z
     findings: z.array(HygieneFindingRow),
     /** what the recent passes did to findings already filed (healed, noted, reopened, kept), newest first, at most 20 */
     lifecycle: z.array(HygieneLifecycleRow),
+    /** the scripted fixes of the recent passes, newest first, at most 20: what each did before anything was filed */
+    fixes: z.array(HygieneFixRow),
     /** the newest five passes, newest first */
     passes: z.array(HygienePassRow),
   })

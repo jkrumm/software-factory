@@ -435,3 +435,23 @@ Report `docs/strategy/2026-11-next/report.html`, definition `docs/strategy/2026-
   under the old keys (`deps:docker`, `advisories:bun`) are healed or noted once by the lifecycle, as no pass raises them. Count over
   the next week: `deps` Issues filed against the 43 of the last 30 days, and any repo that went a month with a runtime major
   unfiled. Revert: the numbers are one catalogue edit; the fold is one call in `adapters/hygiene/index.ts`.
+- **NL44 A hygiene finding with a mechanical fix is fixed by script, a lead only when the script fails (Issue 2229, 2026-11-18).**
+  Hygiene filed 164 of 1439 Issues in 7 days (11 %) at $89 and 20 lead-hours; the cost that mattered was not tokens but the
+  seat, test slot, CI run, merge window and deploy each Issue takes, and the test slots were what held 31 of 51 queued Issues
+  on 2026-11-17. The probe that finds a thing already proves its fix, so the pass now runs the catalogue's optional `fix`
+  (`domains/loops/hygiene-fixes.ts`, scripts in `adapters/hygiene/fixes/`) before it files: the script runs in the sweep's
+  throwaway checkout, then the same probe runs again and what it no longer raises files nothing (an unstarted Issue of that
+  key is closed as healed by the lifecycle that was there). Two scripts: `stale` deletes the branches the probe calls merged
+  and removes merged idle or prunable worktrees (never `--force`; untouched-only branches and worktrees stay a finding);
+  `deps` (`bun` only; it runs on the one `deps` finding NL43's bar lets through, and the probe is run again with the advisories) sets each patch or minor past the 7-day cooldown of the root `package.json` with `bun add`, runs
+  `make check-fast` (else `check`) under `factory slot run`, and pushes the commit to the default branch of a repo that
+  ships by push. A failed fix files the finding with the script's name and output first in its plan, so the light lead starts
+  from the failure; no test slot in time is `deferred` (nothing is filed this pass, the next asks again); a version with no
+  release date, a major, a held version, a workspace package, a tilde or tagged range and every other ecosystem are a lead's.
+  Every attempt is on the pass (`hygiene_passes.fixes`) and the Hygiene tab. The field standard, Renovate with grouped
+  patch and minor updates and `automergeType: branch`, was not taken: it runs its check as CI on GitHub's side, never in a
+  test slot, needs an app and a config per repo and does nothing for branches or worktrees. Not done: repos that ship by pull
+  request (6 of them, this one too) keep their Issue until the factory can hold a PR across passes and a merge window itself;
+  a pushed bump is not deployed or watched (the repo's next ship carries it); a push refused because master moved is a failed
+  fix, not a retry. Switch: `FACTORY_HYGIENE_FIX=0`. Count over the next week: stale-branch and deps Issues filed against
+  `fixes` rows of outcome `fixed`, and how many `failed` ones a lead then closed done.

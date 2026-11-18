@@ -3,6 +3,7 @@ import { join } from 'node:path'
 import { EXIT_TIMEOUT } from '../../hc/process.ts'
 import { exec, gitOut, type Tools } from '../git.ts'
 import type { DependencyEcosystem, DependencyRow, ProbeFinding } from '../../../domains/loops/hygiene-model.ts'
+import { type UpgradePlan, type UpgradeRow, planUpgrades } from '../../../domains/loops/upgrades.ts'
 import { type Outcome, clean, failed, finding, found, skipped, unjudging } from './finding.ts'
 
 const INSTALL_TIMEOUT_MS = 10 * 60_000
@@ -653,6 +654,28 @@ async function bunRun(tools: Tools, path: string, released: Released): Promise<E
       ),
     ],
   }
+}
+
+/**
+ * The upgrade plan of the checkout's `bun outdated` right now: every outdated package with the day its latest version was
+ * published (a row whose date could not be looked up has none) and the plan's batches and held rows. A string is why it could
+ * not be read. The scripted fix of the `deps` probe reads it, the probe's own finding is made from the same rows.
+ */
+export async function bunPlan(
+  tools: Tools,
+  path: string,
+  released: Released,
+  now: Date,
+): Promise<{ rows: UpgradeRow[]; plan: UpgradePlan } | string> {
+  const result = await exec([tools.bun, 'outdated'], OUTDATED_TIMEOUT_MS, path)
+  if (result.exitCode !== 0) return `bun outdated failed (exit ${result.exitCode})`
+  const outdated = parseOutdated(result.stdout).filter((row) => row.current !== row.latest)
+  const rows = await pool(outdated.slice(0, MAX_LOOKUPS), async (row): Promise<UpgradeRow> => {
+    const base = { name: row.name, current: row.current, latest: row.latest, size: severity(row.current, row.latest) }
+    const releasedAt = await released({ ecosystem: 'npm', name: row.name, version: row.latest }).catch(() => undefined)
+    return { ...base, heldBack: row.heldBack, ...(releasedAt ? { releasedAt } : {}) }
+  })
+  return { rows, plan: planUpgrades(rows, now) }
 }
 
 /**

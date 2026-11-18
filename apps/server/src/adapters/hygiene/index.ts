@@ -13,6 +13,7 @@ import {
   type SweepReport,
 } from '../../domains/loops/hygiene-model.ts'
 import { type RepoLocator, withCheckout } from './checkout.ts'
+import { runFixes } from './fixes/index.ts'
 import { livingDocs, trackedMarkdown } from './docs.ts'
 import { defaultTools, gitTry, type Tools } from './git.ts'
 import { candidates } from './history.ts'
@@ -44,6 +45,10 @@ export interface HygieneCheckerOptions {
   fallow?: string
   osv?: string
   gh?: string
+  /** the command that puts a scripted fix's check in a test slot (`factory slot run`); empty: no fix that needs a check runs */
+  slot?: string[]
+  /** the clock of a fix's cooldown rule; the system's by default */
+  now?: () => Date
   /** publish dates for the `deps` plan's cooldown; the registries by default */
   released?: Released
 }
@@ -70,9 +75,11 @@ export function createHygieneChecker(options: HygieneCheckerOptions): HygieneChe
     ...(options.fallow ? { fallow: options.fallow } : {}),
     ...(options.osv ? { osv: options.osv } : {}),
     ...(options.gh ? { gh: options.gh } : {}),
+    ...(options.slot ? { slot: options.slot } : {}),
   }
 
   const released = options.released ?? registryReleased
+  const clock = options.now ?? (() => new Date())
 
   async function sweep(checkout: Checkout, options: SweepOptions = {}): Promise<SweepReport> {
     const { path } = checkout
@@ -82,6 +89,8 @@ export function createHygieneChecker(options: HygieneCheckerOptions): HygieneChe
     const planned = options.scope ?? 'full'
     const scope =
       planned === 'steady' && !isIdle({ lastCommitAt, idleAfterDays: options.idleAfterDays, now }) ? 'full' : planned
+    const only = options.only
+    const wanted = (probe: Probe): boolean => !only || only.includes(probe)
     const markdown = trackedMarkdown(tools, path)
     markdown.catch(() => {})
     const docs = markdown.then(livingDocs)
@@ -102,10 +111,12 @@ export function createHygieneChecker(options: HygieneCheckerOptions): HygieneChe
       context: () => contextProbe(tools, path),
     }
     const optOut = new Map((options.skip ?? []).map((entry) => [entry.probe, entry.reason]))
-    const names = (Object.keys(quick) as (keyof typeof quick)[]).filter((probe) => runsIn(probe, scope))
+    const names = (Object.keys(quick) as (keyof typeof quick)[]).filter(
+      (probe) => runsIn(probe, scope) && wanted(probe),
+    )
     // The documents the agent judges are read in the weekly pass only: the daily one files no judgment.
     const history =
-      scope === 'full'
+      scope === 'full' && !only
         ? docs
             .then((list) => candidates(tools, path, list))
             .catch((error: unknown) => ({
@@ -126,10 +137,11 @@ export function createHygieneChecker(options: HygieneCheckerOptions): HygieneChe
     ])
     const outcomes = new Map<Probe, Outcome>(results)
     // A pass that reads the installed tree (`check`, `deadcode`) without the `deps` probe (a steady one) installs the packages itself, once.
-    const readsPackages = runsIn('check', scope) || runsIn('deadcode', scope)
+    const readsPackages =
+      (runsIn('check', scope) && wanted('check')) || (runsIn('deadcode', scope) && wanted('deadcode'))
     const installFailure = runsIn('deps', scope) || !readsPackages ? undefined : await installPackages(tools, path)
     // After `deps`, never beside it: both install the checkout's packages, and two installs in one tree break each other.
-    if (runsIn('deadcode', scope)) {
+    if (runsIn('deadcode', scope) && wanted('deadcode')) {
       const reason = optOut.get('deadcode')
       outcomes.set(
         'deadcode',
@@ -138,7 +150,7 @@ export function createHygieneChecker(options: HygieneCheckerOptions): HygieneChe
           : skipped(`the project opts out: ${reason}`),
       )
     }
-    if (runsIn('check', scope)) {
+    if (runsIn('check', scope) && wanted('check')) {
       // A gate that cannot run for want of its dependencies says nothing about the branch: it is not a red check.
       const deps = outcomes.get('deps')
       outcomes.set(
@@ -155,7 +167,7 @@ export function createHygieneChecker(options: HygieneCheckerOptions): HygieneChe
 
     // The project's own probes run one after another, after the built-in ones: each is a make target of its own.
     const declared: { name: string; outcome: Outcome }[] = []
-    if (runsIn('probe', scope)) {
+    if (runsIn('probe', scope) && wanted('probe')) {
       for (const probe of options.probes ?? []) {
         declared.push({ name: probe.name, outcome: await guarded(() => declaredProbe(tools, checkout, probe)) })
       }
@@ -203,5 +215,15 @@ export function createHygieneChecker(options: HygieneCheckerOptions): HygieneChe
     withCheckout: (repo, ref, use) => withCheckout(tools, options.repos, options.workDir, repo, ref, use),
     sweep,
     commitsSince,
+    fix: (checkout, report, fixOptions) =>
+      runFixes({
+        tools,
+        checkout,
+        report,
+        options: fixOptions,
+        released,
+        now: clock(),
+        sweepAgain: (only) => sweep(checkout, { ...fixOptions.sweep, only }),
+      }),
   }
 }

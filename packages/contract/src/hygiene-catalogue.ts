@@ -30,6 +30,14 @@ export const HygieneCatalogueEntry = z
     silence: z.string(),
     /** on a repo with no commit for `HYGIENE_DEFAULTS.idleAfterDays`: `monthly` runs it in the monthly pass only; absent, as often as `cadence` */
     idle: z.literal('monthly').optional(),
+    /**
+     * The deterministic fix the pass runs before it files (absent: none). `keys` are the finding keys it covers, `does` what
+     * the script does, `lands` where its result goes. The probe, run again, is the proof; a failed fix files the finding with
+     * the script's output attached.
+     */
+    fix: z
+      .strictObject({ keys: z.array(z.string()).min(1).readonly(), does: z.string(), lands: z.string() })
+      .optional(),
   })
   .meta({ id: 'HygieneCatalogueEntry' })
 export type HygieneCatalogueEntry = z.infer<typeof HygieneCatalogueEntry>
@@ -115,6 +123,12 @@ export const HYGIENE_CATALOGUE = [
   },
   {
     name: 'deps',
+    fix: {
+      keys: ['deps'],
+      does: "For `bun`: each patch or minor past its cooldown that the root `package.json` declares is set with `bun add --exact <name>@<version>`, then the repo's check runs in a test slot.",
+      lands:
+        "On green, a `chore(deps)` commit pushed to the default branch of a repo that ships by push; the next ship of the repo deploys it. A repo that ships by pull request, a red check, a major, a held version, a workspace package and every other ecosystem go to a lead; the check's output is on the Issue.",
+    },
     summary:
       'Outdated dependencies and the advisories above, as one refresh per repo: `bun outdated` for a `package.json`, and the versions pinned in `Cargo.toml`, `pyproject.toml` or `requirements*.txt`, `Package.swift`, Dockerfile base images and GitHub Actions `uses:` lines. One finding `deps` is filed only when the refresh clears the bar (below); it carries a section and an upgrade plan per ecosystem (versions younger than 7 days, 14 for a major, held back; patches and minors, packages that move together, and each major in batches) and the procedure a light lead follows. Below the bar nothing is filed and the Hygiene tab names what is behind.',
     enabled: 'auto',
@@ -159,6 +173,12 @@ export const HYGIENE_CATALOGUE = [
   },
   {
     name: 'stale',
+    fix: {
+      keys: ['stale:branches', 'stale:worktrees'],
+      does: 'Deletes the remote branches merged into the default branch (`git push origin --delete`), prunes worktrees git calls prunable and removes the merged ones that are idle (`git worktree remove`, never `--force`: a dirty or locked one stays).',
+      lands:
+        'On the remote and the project checkout at once. Branches only untouched for 30 days and worktrees only untouched are not deleted: they stay a finding for a lead.',
+    },
     summary:
       'Remote branches merged into the default branch or untouched for 30 days, and leftover worktrees of branches that are gone.',
     enabled: 'on',

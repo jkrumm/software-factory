@@ -171,6 +171,41 @@ export interface SweepOptions {
   deps?: DepsThresholds
   /** a `steady` pass becomes a full one when the default branch has a commit younger than this many days; 0 never */
   idleAfterDays?: number
+  /** only these probes run, no judgment candidates: a scripted fix asks the probe it fixed again (`applyFixes`) */
+  only?: readonly Probe[]
+}
+
+/**
+ * What a scripted fix did to one finding key: `fixed` (the script ran to its end), `failed` (it did not), `skipped` (it does
+ * not apply here, with why), `deferred` (it could not start now, say for want of a test slot: nothing is filed for the key
+ * this pass and the next pass asks again).
+ */
+export const FIX_OUTCOMES = ['fixed', 'failed', 'skipped', 'deferred'] as const
+export type FixOutcome = (typeof FIX_OUTCOMES)[number]
+
+/** One scripted fix, as the pass records it (`hygiene_passes.fixes`). The probe's second run says whether the key is green. */
+export interface FixEntry {
+  key: string
+  outcome: FixOutcome
+  /** one line: what the script did, or why it failed or did not start */
+  detail: string
+  /** the tail of the script's output when it failed: it goes on the finding, so the lead who gets the Issue has the failure */
+  output?: string[]
+}
+
+/** How a project's changes land (`project.yaml` `ship`): a fix that pushes only does so where the repo ships by push. */
+export type Landing = 'push' | 'pr'
+
+export interface FixOptions {
+  /** what the sweep ran with; the probes a fix ran for are asked again with the same opt-outs */
+  sweep: SweepOptions
+  landing: Landing
+}
+
+/** The sweep after its scripted fixes: the report with the fixed probes' second run in it, and what each fix did. */
+export interface FixedReport {
+  report: SweepReport
+  fixes: FixEntry[]
 }
 
 /**
@@ -187,4 +222,10 @@ export interface HygieneChecker {
   ): Promise<Result<T, PortError>>
   sweep(checkout: Checkout, options?: SweepOptions): Promise<SweepReport>
   commitsSince(checkout: Checkout, ref: string): Promise<number | null>
+  /**
+   * Runs the scripted fix of each red finding of `report` that has one (`HYGIENE_CATALOGUE` `fix`), in the checkout, then asks
+   * the probes it fixed again and returns the report with their second run in it. Never throws: a fix that cannot run is a
+   * `FixEntry` of outcome `failed` or `skipped`. Absent: no fix exists (a seam for tests of the decisions).
+   */
+  fix?(checkout: Checkout, report: SweepReport, options: FixOptions): Promise<FixedReport>
 }

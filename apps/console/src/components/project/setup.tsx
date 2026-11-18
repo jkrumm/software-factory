@@ -9,6 +9,8 @@ import {
   COST_WORDS,
   ENABLED_WORDS,
   FINDING_TONES,
+  FIX_TONES,
+  FIX_WORDS,
   FINDING_WHY,
   FINDING_WORDS,
   ISSUE_STATE_WORDS,
@@ -274,6 +276,42 @@ export function HygieneSection({ model, now }: { model: ProjectHygieneModel; now
                   </td>
                   <td className={TD}>
                     <Lozenge tone={ACTION_TONES[entry.action]}>{ACTION_WORDS[entry.action]}</Lozenge>
+                  </td>
+                </tr>
+              ))}
+            </Table>
+          </div>
+        </Fold>
+      ) : null}
+      {model.fixes.length > 0 ? (
+        <Fold title="What scripts fixed before anything was filed" count={model.fixes.length} className="mt-4">
+          <div className="pt-3">
+            <Table
+              label="Scripted fixes"
+              head={
+                <>
+                  <th className={TH}>When</th>
+                  <th className={TH}>Finding</th>
+                  <th className={TH}>Did</th>
+                </>
+              }
+            >
+              {model.fixes.map((entry) => (
+                <tr key={`${entry.at}:${entry.key}`}>
+                  <td className={TD}>
+                    <Ago iso={entry.at} now={now} />
+                  </td>
+                  <td className={cn(TD, 'wrap-anywhere')}>
+                    <Mono>{entry.key}</Mono>
+                    <p className="mt-1 text-xs text-muted-foreground">{entry.detail}</p>
+                    {entry.output.map((line) => (
+                      <p key={line} className="mt-1 font-mono text-xs text-muted-foreground">
+                        {line}
+                      </p>
+                    ))}
+                  </td>
+                  <td className={TD}>
+                    <Lozenge tone={FIX_TONES[entry.outcome]}>{FIX_WORDS[entry.outcome]}</Lozenge>{' '}
                   </td>
                 </tr>
               ))}

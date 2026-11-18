@@ -63,10 +63,31 @@ async function idleSeconds(tools: Tools, worktree: string, now: number): Promise
 const reason = (merged: boolean, days: number): string | undefined =>
   merged ? 'merged' : days > STALE_DAYS ? `untouched ${days} days` : undefined
 
-/** Remote branches merged into the default branch or untouched for 30 days, and leftover worktrees (prunable, merged or untouched). */
-export async function staleProbe(tools: Tools, path: string): Promise<Outcome> {
+/** One remote branch the scan flags, and why. */
+export interface StaleBranch {
+  name: string
+  why: string
+  ts: number
+}
+export interface StaleWorktree {
+  worktree: Worktree
+  why: string
+}
+
+/** What the probe saw: the flagged remote branches (merged ones first), the flagged linked worktrees, and the totals. */
+export interface StaleScan {
+  /** the default branch's short name (`master`) */
+  defaultName: string
+  remoteCount: number
+  linkedCount: number
+  branches: StaleBranch[]
+  worktrees: StaleWorktree[]
+}
+
+/** Reads the repo: a string (its reason) when there is nothing to scan. The probe and its scripted fix share it, so the fix deletes exactly what the probe flags. */
+export async function scanStale(tools: Tools, path: string): Promise<StaleScan | string> {
   const target = await originDefault(tools, path)
-  if (!target) return skipped('no origin default branch')
+  if (!target) return 'no origin default branch'
   const now = Math.floor(Date.now() / 1000)
   const defaultName = target.replace(/^origin\//, '')
 
@@ -95,23 +116,22 @@ export async function staleProbe(tools: Tools, path: string): Promise<Outcome> {
   const linked = parseWorktrees(await gitOut(tools, path, ['worktree', 'list', '--porcelain'])).filter(
     (w) => realOrSelf(w.path) !== here && !w.path.split(/[\\/]/).includes('hygiene'),
   )
-  if (!remote.length && !linked.length) return skipped('no remote branches and no linked worktrees')
+  if (!remote.length && !linked.length) return 'no remote branches and no linked worktrees'
 
   const defaultTip = (await gitTry(tools, path, ['rev-parse', '--verify', '-q', target]))?.trim()
-  const branchLines = remote
+  const branches = remote
     .map((b) => ({
-      ...b,
-      days: Math.floor((now - b.ts) / DAY_S),
+      name: b.name,
+      ts: b.ts,
       why: reason(
         mergedRemote.has(b.name) && (b.tip !== defaultTip || now - b.ts >= QUIET_S),
         Math.floor((now - b.ts) / DAY_S),
       ),
     }))
-    .filter((b) => b.why)
+    .flatMap((b) => (b.why ? [{ ...b, why: b.why }] : []))
     .sort((a, b) => Number(b.why === 'merged') - Number(a.why === 'merged') || a.ts - b.ts)
-    .map((b) => `origin/${b.name} (${b.why})`)
 
-  const worktreeLines: string[] = []
+  const worktrees: StaleWorktree[] = []
   for (const w of linked) {
     const committed = Number(
       (await gitTry(tools, w.path, ['log', '-1', '--format=%ct', w.head || 'HEAD']))?.trim() || now,
@@ -124,9 +144,19 @@ export async function staleProbe(tools: Tools, path: string): Promise<Outcome> {
       w.head !== defaultTip &&
       (await gitTry(tools, path, ['merge-base', '--is-ancestor', w.head, target])) !== undefined
     const why = w.prunable ? 'prunable' : reason(Boolean(ancestor) && idle !== undefined && idle >= QUIET_S, days)
-    if (why) worktreeLines.push(`${shortPath(w.path)}${w.branch ? ` [${w.branch}]` : ''} (${why})`)
+    if (why) worktrees.push({ worktree: w, why })
   }
+  return { defaultName, remoteCount: remote.length, linkedCount: linked.length, branches, worktrees }
+}
 
+/** Remote branches merged into the default branch or untouched for 30 days, and leftover worktrees (prunable, merged or untouched). */
+export async function staleProbe(tools: Tools, path: string): Promise<Outcome> {
+  const scan = await scanStale(tools, path)
+  if (typeof scan === 'string') return skipped(scan)
+  const branchLines = scan.branches.map((b) => `origin/${b.name} (${b.why})`)
+  const worktreeLines = scan.worktrees.map(
+    ({ worktree: w, why }) => `${shortPath(w.path)}${w.branch ? ` [${w.branch}]` : ''} (${why})`,
+  )
   const findings = []
   if (branchLines.length) {
     findings.push(finding('stale', 'stale:branches', 'Hygiene: stale remote branches', branchLines, branchLines.length))
@@ -136,6 +166,6 @@ export async function staleProbe(tools: Tools, path: string): Promise<Outcome> {
       finding('stale', 'stale:worktrees', 'Hygiene: leftover worktrees', worktreeLines, worktreeLines.length),
     )
   }
-  const detail = `${remote.length} remote branches, ${linked.length} worktrees against ${defaultName}`
+  const detail = `${scan.remoteCount} remote branches, ${scan.linkedCount} worktrees against ${scan.defaultName}`
   return findings.length ? found(detail, findings) : clean(detail)
 }
