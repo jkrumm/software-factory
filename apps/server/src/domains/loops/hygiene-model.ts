@@ -26,6 +26,45 @@ export const PROBES: readonly Probe[] = HYGIENE_CATALOGUE.map((entry) => entry.n
 )
 
 /**
+ * The probes whose red findings a pass reads again at origin's default branch just before it files, when that branch moved while
+ * the sweep ran: the ones that read tracked files and answer in seconds (the catalogue's cost `file`). A finding the new head no
+ * longer raises is not filed, and its key reads green for the lifecycle.
+ */
+export const REREAD_PROBES: readonly Probe[] = HYGIENE_CATALOGUE.filter((entry) => entry.cost === 'file').map(
+  (entry) => entry.name,
+)
+
+/**
+ * The report with the runs and findings of `probes` taken from `again` (a second sweep of those probes at a newer commit); a
+ * probe `again` has no run for keeps its first reading. A run whose findings changed says at which commit it was read again.
+ * Pure.
+ */
+export function rereadReport(report: SweepReport, again: SweepReport, probes: readonly Probe[]): SweepReport {
+  const second = new Map(again.runs.filter((run) => probes.includes(run.probe)).map((run) => [run.probe, run]))
+  if (!second.size) return report
+  const keysOf = (findings: readonly ProbeFinding[], probe: Probe): string =>
+    findings
+      .filter((finding) => finding.probe === probe)
+      .map((finding) => finding.key)
+      .sort()
+      .join('\n')
+  const runs = report.runs.map((run): ProbeRun => {
+    const next = second.get(run.probe)
+    if (!next) return run
+    const changed = keysOf(report.findings, run.probe) !== keysOf(again.findings, run.probe)
+    return changed ? { ...next, detail: `${next.detail}; read again at ${again.ref.slice(0, 7)} before filing` } : next
+  })
+  return {
+    ...report,
+    runs,
+    findings: [
+      ...report.findings.filter((finding) => !second.has(finding.probe)),
+      ...again.findings.filter((finding) => second.has(finding.probe)),
+    ],
+  }
+}
+
+/**
  * How much of the catalogue a pass runs: `full` every probe and the document judgment (weekly, monthly for an idle repo, or
  * sooner for a busy one), `steady` all but the probes and the judgment the catalogue marks `idle: 'monthly'` (an idle repo's
  * weekly pass), `daily` the probes the catalogue marks `daily` and no judgment.

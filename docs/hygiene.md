@@ -20,6 +20,9 @@ page's Hygiene tab and `factory read project-hygiene <name>` render that one lis
   `advisories` and every other probe keep their cadence, and a commit that lands before a steady pass makes it a full one.
 - **A busy repo goes sooner.** A daily pass becomes a full one when 30 or more commits landed since the last full pass and that
   pass is at least two days old.
+- **Read again before filing.** A sweep takes minutes and the default branch moves meanwhile. When it is no longer the commit swept,
+  the red findings of the probes that only read tracked files (cost `file`, `agentsmd` among them) are read again at the new
+  head and only what it still raises is filed; a finding it no longer raises reads green, and the run says at which commit.
 - **One project per tick.** Full passes come before daily ones, never-swept projects first, then the oldest.
 - **Budget.** At most 3 probe findings and 5 signals in all per pass, probes ranked in the catalogue's order; the rest are
   named in the pass record, never dropped. A finding class that mostly ends dropped or cancelled stops filing for 14 days.

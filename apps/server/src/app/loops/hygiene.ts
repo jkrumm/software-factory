@@ -17,6 +17,7 @@ import {
   NO_REF,
   type Swept,
 } from '../../domains/loops/hygiene.ts'
+import { REREAD_PROBES, rereadReport } from '../../domains/loops/hygiene-model.ts'
 import type {
   Checkout,
   DeclaredProbe,
@@ -267,6 +268,28 @@ async function judge(
 }
 
 /**
+ * Just before anything is filed: a sweep and its fixes can take minutes, and the default branch moves meanwhile (a lead that
+ * picked up an Issue found its finding already gone: 2026-11-17 `agentsmd:imports`). When origin's default branch is no longer
+ * the commit swept, the red findings of the cheap file-reading probes (`REREAD_PROBES`: `agentsmd` among them) are read again at
+ * the new head and only what it still raises is filed; what it no longer raises reads green for the lifecycle. A checkout that
+ * cannot be made keeps the first reading.
+ */
+async function readAgain(
+  deps: HygieneDeps,
+  target: Target,
+  options: SweepOptions,
+  checkout: Checkout,
+  report: SweepReport,
+): Promise<SweepReport> {
+  const probes = REREAD_PROBES.filter((probe) => report.findings.some((finding) => finding.probe === probe))
+  if (!probes.length) return report
+  const head = await deps.checker.withCheckout(target.repoText, null, async (now) =>
+    now.ref === checkout.ref ? null : deps.checker.sweep(now, { ...options, only: probes }),
+  )
+  return head.ok && head.value ? rereadReport(report, head.value, probes) : report
+}
+
+/**
  * One sweep of one project: `planned` is how much of the catalogue the clock asks for, and a daily pass becomes a full one when
  * the repo is busy (`isBusy`). The findings already filed are looked at first (`planLifecycle`): a probe that ran green closes
  * or tells the Issue of a finding it no longer raises, a still-red finding of an Issue closed done reopens that Issue instead of
@@ -312,6 +335,7 @@ async function sweepPass(
       report = fixed.report
       fixes.push(...fixed.fixes.map((entry) => ({ ...entry, at: now })))
     }
+    report = await readAgain(deps, target, sweepOptions, checkout, report)
     const plan = planLifecycle({
       red: report.findings,
       runs: report.runs,
