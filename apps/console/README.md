@@ -185,8 +185,11 @@ worker when it becomes visible, when it comes online, on every stream `hello`, e
 contract (`ShapeError` in `src/lib/api.ts`: the server is newer than the bundle; an answer that only adds a field is no
 `ShapeError`: it is read as it is and asks for the new bundle in the background). Once the new worker has taken over the
 page does not reload under the owner: it loads the bundle at the next navigation to another screen (`reloadOnNavigation`,
-called from the router's `onBeforeLoad` in `main.tsx`), when the tab hides, or after 45 s without input (`reloadNow` in
-`src/lib/policy.ts` holds the rule, and never while a field has focus or a textarea holds a draft). A screen that has no data
+called from the router's `onBeforeLoad` in `main.tsx`), or when the tab hides (`reloadNow` in
+`src/lib/policy.ts` holds the rule, and never while a field has focus or a textarea holds a draft); a quiet tab is someone
+reading, so no idle timer reloads it. The reload keeps the reading position: `src/lib/scroll-keep.ts` stores the scroll of every
+container marked `data-scroll-restoration-id` by address before it and puts each back once the screen's skeletons are gone and
+its content reaches the position. The router's `scrollRestoration` keeps the same containers across back and forward. A screen that has no data
 because of a `ShapeError` is the exception: it shows its skeleton (`useScreen`, `src/lib/screen.ts`) and reloads the moment the
 worker is in; after 20 s without it the screen says "This Console is older than the server. Reload the page to update it".
 Any other failure says the status.

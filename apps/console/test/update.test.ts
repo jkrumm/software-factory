@@ -1,7 +1,8 @@
 import { describe, expect, test } from 'bun:test'
 import * as z from 'zod'
 import { ApiError, awaitsUpdate, failureNote, parseShape, ShapeError } from '../src/lib/api.ts'
-import { IDLE_RELOAD_MS, reloadNow } from '../src/lib/policy.ts'
+import { reloadNow } from '../src/lib/policy.ts'
+import { keepOf, keptFor, placeKept, type Box, type Kept, type Surface } from '../src/lib/scroll-keep.ts'
 
 const Model = z.strictObject({ id: z.string(), count: z.number() })
 const field = { tagName: 'TEXTAREA', isContentEditable: false }
@@ -52,19 +53,68 @@ describe('when a new bundle loads', () => {
     expect(reloadNow('activated', { ...idle, blocked: true })).toBe(true)
   })
 
-  test('a navigation, a hidden tab and an idle page each load it', () => {
-    for (const moment of ['navigation', 'hidden', 'idle'] as const) expect(reloadNow(moment, idle)).toBe(true)
+  test('a navigation, a hidden tab and a lazy chunk that is gone each load it', () => {
+    for (const moment of ['navigation', 'hidden', 'broken'] as const) expect(reloadNow(moment, idle)).toBe(true)
   })
 
   test('nothing reloads without a waiting worker, a focused field or a draft', () => {
-    for (const moment of ['activated', 'navigation', 'hidden', 'idle'] as const) {
+    for (const moment of ['activated', 'navigation', 'hidden', 'broken'] as const) {
       expect(reloadNow(moment, { ...idle, blocked: true, waiting: false })).toBe(false)
       expect(reloadNow(moment, { ...idle, blocked: true, focused: field })).toBe(false)
       expect(reloadNow(moment, { ...idle, blocked: true, hasDraft: true })).toBe(false)
     }
   })
 
-  test('idle means three quarters of a minute without input', () => {
-    expect(IDLE_RELOAD_MS).toBe(45_000)
+  test('a quiet tab is someone reading: no moment of its own reloads a screen that has data', () => {
+    // the type has no `idle` moment, and the worker taking over reloads only a blocked screen
+    expect(reloadNow('activated', idle)).toBe(false)
+  })
+})
+
+/** A page of containers: each id has the box a test gives it, and a skeleton that may still show. */
+const surface = (boxes: Record<string, Box>, loading = false): Surface => ({
+  box: (id) => boxes[id] ?? null,
+  boxes: () => Object.entries(boxes),
+  loading: () => loading,
+})
+const box = (scrollTop: number, scrollHeight = 5000, clientHeight = 800): Box => ({
+  scrollTop,
+  scrollLeft: 0,
+  scrollHeight,
+  clientHeight,
+})
+
+describe('the reading position across an update reload', () => {
+  const url = '/artifacts/art_1'
+
+  test('an artifact scrolled to the middle comes back at the same place after the reload', () => {
+    // before the reload: the document scroller is in the middle of a long page
+    const before = surface({ main: box(0), 'artifact-document': box(2100) })
+    const kept = keepOf(before, url, 1_000)
+    expect(kept).toEqual({ url, at: 1_000, boxes: { 'artifact-document': { top: 2100, left: 0 } } })
+    // after the reload: the same page, rendered fresh and not scrolled
+    const after = { main: box(0), 'artifact-document': box(0) }
+    expect(keptFor(kept, url, 5_000)).toBe(true)
+    const left = placeKept(surface(after), kept?.boxes ?? {})
+    expect(after['artifact-document'].scrollTop).toBe(2100)
+    expect(left).toEqual({})
+  })
+
+  test('nothing is put back while a skeleton shows, nor before the content is tall enough', () => {
+    const pending = { 'artifact-document': { top: 2100, left: 0 } }
+    const skeleton = { 'artifact-document': box(0, 5000) }
+    expect(placeKept(surface(skeleton, true), pending)).toEqual(pending)
+    expect(skeleton['artifact-document'].scrollTop).toBe(0)
+    const short = { 'artifact-document': box(0, 1200) }
+    expect(placeKept(surface(short), pending)).toEqual(pending)
+    expect(short['artifact-document'].scrollTop).toBe(0)
+  })
+
+  test('a page read from its top stores nothing, and a position belongs to its address and the moment only', () => {
+    expect(keepOf(surface({ main: box(0) }), url, 1)).toBeNull()
+    const kept: Kept = { url, at: 1_000, boxes: { main: { top: 10, left: 0 } } }
+    expect(keptFor(kept, '/artifacts/art_2', 2_000)).toBe(false)
+    expect(keptFor(kept, url, 1_000 + 10 * 60_000)).toBe(false)
+    expect(keptFor(null, url, 2_000)).toBe(false)
   })
 })

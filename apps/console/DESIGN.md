@@ -142,8 +142,10 @@ click, and keeps the working screen where it was.
 - The page never goes stale: an event invalidates the queries, a reconnect refetches, a persisted snapshot never hides
   live data.
 - **A new bundle never blocks a screen and never shows a banner.** The service worker updates in the background; the page
-  loads the new bundle at the next navigation to another screen, when the tab is hidden, or after 45 s without input, never
-  while something is typed, and at once only for a screen that has no data until it does. A screen that cannot read an answer
+  loads the new bundle at the next navigation to another screen or when the tab is hidden, never after a stretch without
+  input (a quiet tab is someone reading), never while something is typed, and at once only for a screen that has no data
+  until it does. An update reload keeps the reading position (`lib/scroll-keep.ts`: the containers marked
+  `data-scroll-restoration-id`, stored by address before the reload and put back once the data has rendered). A screen that cannot read an answer
   because the server is newer shows its skeleton, not words; only after 20 s without the new bundle does it say so. An answer
   that only adds a field is read as it is.
 - **Every route renders its skeleton at once** (Needs you, the Overview, Chain, Improve, an Issue, an artifact, an open card's

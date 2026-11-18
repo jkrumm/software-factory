@@ -382,6 +382,7 @@ export function Annotations({
   focus,
   now,
   onFocus,
+  scrollId,
   action,
 }: {
   detail: ArtifactDetail
@@ -390,6 +391,8 @@ export function Annotations({
   focus: Focus | null
   now: number
   onFocus: (item: ReviewItem) => void
+  /** names the pane's scroller for `scroll-keep.ts` and the router; only the page's own pane has one (a peek stacks) */
+  scrollId?: string
   /** the pane's own control (fold it away), at the end of its header */
   action?: ReactNode
 }) {
@@ -438,7 +441,10 @@ export function Annotations({
         </div>
         <p className="text-xs text-muted-foreground">Select text in the artifact to comment on it.</p>
       </div>
-      <div className="flex min-h-0 flex-1 flex-col gap-5 px-4 pb-4 lg:overflow-y-auto">
+      <div
+        data-scroll-restoration-id={scrollId}
+        className="flex min-h-0 flex-1 flex-col gap-5 px-4 pb-4 lg:overflow-y-auto"
+      >
         {current.length === 0 ? (
           <div className="flex flex-col items-center gap-2 rounded-lg bg-background px-4 py-8 text-center text-sm text-muted-foreground">
             <ChatCircleTextIcon aria-hidden="true" className="size-6" />

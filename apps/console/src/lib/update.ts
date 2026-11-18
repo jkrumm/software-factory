@@ -1,11 +1,11 @@
 import { useEffect, useState, useSyncExternalStore } from 'react'
 import { registerSW } from 'virtual:pwa-register'
 import { updatePhase, UPDATE_STUCK_MS, type UpdatePhase } from './freshness.ts'
-import { reloadNow, IDLE_RELOAD_MS, type ReloadMoment } from './policy.ts'
+import { reloadNow, type ReloadMoment } from './policy.ts'
+import { keepScroll } from './scroll-keep.ts'
 
 /** One small request for `sw.js` a minute: a deploy reaches an open window within about a minute even when its stream never dropped. */
 const UPDATE_CHECK_MS = 60_000
-const IDLE_TICK_MS = 5_000
 
 let registration: ServiceWorkerRegistration | undefined
 /** A new worker has taken over: the next page load runs the new bundle. */
@@ -49,12 +49,17 @@ export async function updateNow(): Promise<void> {
     await Promise.all(registrations.map((registered) => registered.unregister()))
     await Promise.all((await caches.keys()).map((name) => caches.delete(name)))
   } finally {
-    location.reload()
+    reloadPage()
   }
+}
+
+/** The page loads again, and the screen comes back where the owner was reading (`scroll-keep.ts`). */
+function reloadPage(): void {
+  keepScroll()
+  location.reload()
 }
 /** A screen has no data because this bundle is older than the server: it shows its skeleton and has nothing to lose. */
 let blocked = false
-let lastActivityAt = Date.now()
 
 /** Every answer from a newer server asks for the new bundle: one request a half minute is enough. */
 const CHECK_THROTTLE_MS = 30_000
@@ -73,7 +78,7 @@ const hasDraft = (): boolean => [...document.querySelectorAll('textarea')].some(
 function reloadAt(moment: ReloadMoment): boolean {
   const focused = document.activeElement instanceof HTMLElement ? document.activeElement : null
   if (!reloadNow(moment, { waiting: reloadWaiting, blocked, focused, hasDraft: hasDraft() })) return false
-  location.reload()
+  reloadPage()
   return true
 }
 
@@ -107,8 +112,8 @@ function activated(): void {
 /**
  * Registers the service worker and keeps a long-lived tab or installed app from running an old bundle against a newer
  * server. A new worker takes over by itself (`skipWaiting`, `clientsClaim` in `vite.config.ts`). It never blocks a screen:
- * the page loads the new bundle at the next navigation, when the tab is hidden, or after `IDLE_RELOAD_MS` without input,
- * and at once only for a screen that has nothing to show until it does. A reload never eats what the owner is typing
+ * the page loads the new bundle at the next navigation or when the tab is hidden (a quiet tab is someone reading, not an
+ * idle one), and at once only for a screen that has nothing to show until it does; the reload keeps the reading position. A reload never eats what the owner is typing
  * (`safeToReload`); while the new build waits for such a moment the strip says `updating`, and after `UPDATE_STUCK_MS`
  * it offers the button.
  */
@@ -141,20 +146,12 @@ export function startUpdates(): void {
   // a lazy chunk of the old build is gone from the server once the new one is live: its load fails, and only a reload cures it.
   // The event is not cancelled: a cancelled one makes `import()` resolve to nothing, which `React.lazy` cannot render.
   window.addEventListener('vite:preloadError', () => {
-    if (!reloadAt('idle')) checkForUpdate()
+    if (!reloadAt('broken')) checkForUpdate()
   })
   document.addEventListener('visibilitychange', () => {
     if (document.visibilityState === 'visible') checkForUpdate()
     else reloadAt('hidden')
   })
-  const active = () => {
-    lastActivityAt = Date.now()
-  }
-  for (const type of ['pointerdown', 'keydown', 'wheel', 'touchstart'] as const)
-    document.addEventListener(type, active, { passive: true, capture: true })
-  setInterval(() => {
-    if (document.visibilityState === 'visible' && Date.now() - lastActivityAt >= IDLE_RELOAD_MS) reloadAt('idle')
-  }, IDLE_TICK_MS)
   window.addEventListener('online', checkForUpdate)
   setInterval(checkForUpdate, UPDATE_CHECK_MS)
 }

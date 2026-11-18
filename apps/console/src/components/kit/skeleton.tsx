@@ -14,6 +14,7 @@ export function Skeleton({ height = 16, width = '100%', rounded = 'rounded-lg', 
   return (
     <div
       aria-hidden="true"
+      data-skeleton=""
       className={cn('animate-pulse bg-foreground/8 motion-reduce:animate-none', rounded, className)}
       style={{ height, width }}
     />

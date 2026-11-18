@@ -6,11 +6,13 @@ import { createRoot } from 'react-dom/client'
 import { startLive } from '@/lib/live'
 import { flowQuery, needsQuery, persister, queryClient, SNAPSHOT_MAX_AGE_MS } from '@/lib/queries'
 import { initTheme } from '@/lib/theme'
+import { restoreKeptScroll } from '@/lib/scroll-keep'
 import { reloadOnNavigation, startUpdates } from '@/lib/update'
 import { router } from './router'
 import './styles/index.css'
 
 initTheme()
+restoreKeptScroll()
 startUpdates()
 startLive(queryClient)
 
