@@ -453,6 +453,7 @@ describe('the brief', () => {
     expect(STANDING_ORDERS).toContain('--json bucket')
     expect(STANDING_ORDERS).toContain('| grep -qx true')
     expect(STANDING_ORDERS).toContain("the watch's exit code is not the verdict")
+    expect(STANDING_ORDERS).toContain('one parenthesised group')
   })
 
   test('the standing orders list every verb in its plain flag form and say how news arrives', () => {

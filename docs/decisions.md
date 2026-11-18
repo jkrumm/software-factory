@@ -224,7 +224,7 @@ Report `docs/strategy/2026-11-next/report.html`, definition `docs/strategy/2026-
   `make merge-guard` and merge inside it, so master cannot move under a CI run. The guard's rule is unchanged (no path-overlap
   exception). A head that gets no CI run because every workflow is path-filtered (a docs-only PR, Issue 2290) is gated by the
   local full check rc=0 on the rebased head, run inside the merge window before the push and named in the ship; any other run-less head is a stall, never a merge. The same brief line now says the CI wait is `MERGE_GUARD_ARGS=--wait` only where the repo's guard has it
-  (iris and basalt-ui do not), else `gh pr checks <n> --watch` after the head has a run (Issue 2143: right after a push the PR has no checks, the watch returns at once and the window ended rc=1). A lead outside the window (a human, a repo without the CLI)
+  (iris and basalt-ui do not), else `gh pr checks <n> --watch` after the head has a run (#467: the bucket read decides, not the watch exit code; Issue 2143: right after a push the PR has no checks, the watch returns at once and the window ended rc=1). A lead outside the window (a human, a repo without the CLI)
   can still race; the guard refuses it as before. Counted after: rebases per merged PR.
 
 - **NL30 A turn that ends on an API error is answered by class, from the fields (Issue 992, 2026-11-13).** Between 09:47 and
