@@ -376,9 +376,9 @@ test.describe('an HTML artifact', () => {
     await expect(region(page, 'On the text')).toContainText('Which target?')
     await expect(region(page, 'Unanchored')).toHaveCount(0)
     await expect.poll(() => frame.evaluate("CSS.highlights.get('factory')?.size ?? 0")).toBe(2)
-    const both = await detail(apiUrl, report)
-    expect(both.unanchored).toEqual([])
-    expect(both.annotations.map((a) => a.quote)).toContain(markup)
+    // the comment shows at once, before its write lands: read the stored side by polling
+    await expect.poll(async () => (await detail(apiUrl, report)).annotations.map((a) => a.quote)).toContain(markup)
+    expect((await detail(apiUrl, report)).unanchored).toEqual([])
   })
 
   test('is not written to by a message of its own', async ({ page, apiUrl }) => {
