@@ -24,6 +24,7 @@ check:
 # Two parts: the home part below edits the worktree (oxfmt --write) and always runs on the mini; the slot's part
 # (check-fast-steps: static checks, the changed files' unit tests) edits nothing and is project.yaml `steps.check-fast`, `remote: true`:
 # when the mini's line is long it runs on the step host (docs/architecture.md "Steps off the mini"), over the tree as formatted here.
+# The slot's command is a bare `make`, not $(MAKE): that is the mini's absolute path (an Xcode make), which the step host lacks (exit 127).
 #
 # A lead's tree is formatted first, outside the slot (oxfmt --write takes ~50 ms): a format-only red used to cost a whole
 # slot wait (up to 12 min measured) plus a rerun, and 11 of 21 steps of a day exited non-zero (#1639). CI ($$CI set) keeps
@@ -31,7 +32,7 @@ check:
 check-fast:
 	@if [ -z "$$CI" ]; then before=$$(git diff | cksum); bunx --no-install oxfmt --write . >/dev/null; \
 	  [ "$$before" = "$$(git diff | cksum)" ] || echo "==> oxfmt reformatted files in this tree: commit them"; fi
-	@$(call slot,check-fast) $(MAKE) --no-print-directory check-fast-steps
+	@$(call slot,check-fast) make --no-print-directory check-fast-steps
 
 # The whole check is one lease on a test slot (a lead sees "queued for a test slot" and waits, it does not poll the load);
 # the test steps below it run inside that lease (FACTORY_SLOT_ACTIVE) and do not queue again.
