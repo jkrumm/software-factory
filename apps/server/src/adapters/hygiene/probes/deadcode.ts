@@ -1,5 +1,5 @@
 import { existsSync } from 'node:fs'
-import { join } from 'node:path'
+import { dirname, join } from 'node:path'
 import { EXIT_TIMEOUT } from '../../hc/process.ts'
 import { exec, gitOut, type Tools } from '../git.ts'
 import { type Outcome, clean, failed, finding, found, skipped, unjudging } from './finding.ts'
@@ -61,6 +61,17 @@ export function parseFallow(stdout: string): DeadCode | { error: string } {
   }
 }
 
+/** Every directory of the checkout with a package.json ('.' is the root), vendored copies left out. */
+function packageDirs(tracked: string[]): string[] {
+  const dirs = tracked
+    .filter(
+      (file) =>
+        (file === 'package.json' || file.endsWith('/package.json')) && !file.split('/').includes('node_modules'),
+    )
+    .map((file) => dirname(file))
+  return [...new Set(dirs)].sort()
+}
+
 export async function deadcodeProbe(tools: Tools, path: string): Promise<Outcome> {
   const tracked = (await gitOut(tools, path, ['ls-files', '-z'])).split('\0')
   if (!tracked.includes('package.json')) return skipped('no package.json')
@@ -68,17 +79,20 @@ export async function deadcodeProbe(tools: Tools, path: string): Promise<Outcome
 
   const notes: string[] = []
   let depsAreReliable = true
-  if (!existsSync(join(path, 'node_modules'))) {
-    if (tracked.includes('bun.lock')) {
-      const install = await exec([tools.bun, 'install', '--frozen-lockfile'], INSTALL_TIMEOUT_MS, path)
-      if (install.exitCode === EXIT_TIMEOUT)
-        return failed(`bun install did not finish in ${INSTALL_TIMEOUT_MS / 60_000} min`)
-      if (install.exitCode !== 0) return failed(`bun install --frozen-lockfile failed (exit ${install.exitCode})`)
-      notes.push('ran bun install --frozen-lockfile first')
-    } else {
+  // fallow misreports the dependencies of a package whose node_modules is missing, so every package directory is installed
+  for (const dir of packageDirs(tracked)) {
+    if (existsSync(join(path, dir, 'node_modules'))) continue
+    const at = dir === '.' ? '' : ` in ${dir}`
+    if (!tracked.includes(dir === '.' ? 'bun.lock' : `${dir}/bun.lock`)) {
       depsAreReliable = false
-      notes.push('no bun.lock and no node_modules: unused dependencies are not reported')
+      notes.push(`no bun.lock and no node_modules${at}: unused dependencies are not reported`)
+      continue
     }
+    const install = await exec([tools.bun, 'install', '--frozen-lockfile'], INSTALL_TIMEOUT_MS, join(path, dir))
+    if (install.exitCode === EXIT_TIMEOUT)
+      return failed(`bun install did not finish in ${INSTALL_TIMEOUT_MS / 60_000} min`)
+    if (install.exitCode !== 0) return failed(`bun install --frozen-lockfile failed${at} (exit ${install.exitCode})`)
+    notes.push(`ran bun install --frozen-lockfile${at}`)
   }
 
   const result = await execKeepingStderr(
