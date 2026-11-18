@@ -84,7 +84,11 @@ describe('the series', () => {
     expect(point('factory.slot.waits')).toEqual([{ value: 3, attributes: { reason: 'load', repo: 'alpha' } }])
     expect(point('factory.slot.wait.ms')?.[0]?.value).toBe(4500)
     expect(point('factory.slot.wait.p90.ms')).toEqual([{ value: 2000, attributes: { reason: 'load' } }])
-    expect(point('factory.step.placements')).toEqual([{ value: 4, attributes: { host: 'vps', reason: 'free' } }])
+    // every placement pair is a series, 0 until one happens; a pair the code does not know yet is kept
+    const placements = point('factory.step.placements') ?? []
+    expect(placements.find((p) => p.attributes?.host === 'vps' && p.attributes.reason === 'free')?.value).toBe(4)
+    expect(placements.find((p) => p.attributes?.host === 'mini' && p.attributes.reason === 'held')?.value).toBe(0)
+    expect(placements.find((p) => p.attributes?.host === 'vps' && p.attributes.reason === 'vps')?.value).toBe(0)
     expect(point('factory.host.load')).toEqual([{ value: 9.5 }])
     expect(point('factory.host.load.ceiling')).toEqual([{ value: 8 }])
     const stale = gaugesOf({ ...figures, host: null }, caps)

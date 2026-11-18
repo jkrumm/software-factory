@@ -26,11 +26,27 @@ export interface OtelExporterDeps {
   log?: (line: string) => void
 }
 
+/** Where a step its project declared remote ran and why (`PlacementReason`): a placement is rare, so every pair is a series, 0 until one happens. */
+const PLACEMENTS: readonly (readonly [host: string, reason: string])[] = [
+  ['vps', 'vps'],
+  ['mini', 'free'],
+  ['mini', 'no_room'],
+  ['mini', 'not_sooner'],
+  ['mini', 'held'],
+]
+
 /** The series, named under the `factory.` prefix the telemetry contract asks for (the product's namespace). */
 export function gaugesOf(figures: CapacityGauges, caps: OtelExporterDeps['seatCaps']): Gauge[] {
   // every queue kind is a series, 0 when nothing waits for it, so a chart falls to 0 instead of leaving a gap
   const kinds = [...new Set<string>([...QUEUE_REASONS, ...figures.queue.map((q) => q.reason)])]
   const queued = new Map(figures.queue.map((q) => [q.reason, q.issues]))
+  const placed = new Map(figures.placements.map((p) => [`${p.host}/${p.reason}`, p.steps]))
+  const placementPairs = [
+    ...PLACEMENTS,
+    ...figures.placements
+      .map((p) => [p.host, p.reason] as const)
+      .filter(([host, reason]) => !PLACEMENTS.some(([h, r]) => h === host && r === reason)),
+  ]
   const accounts = [...new Set([...Object.keys(caps.byAccount), ...figures.seats.map((s) => s.account)])].sort()
   const used = new Map(figures.seats.map((s) => [s.account, s.used]))
   return [
@@ -57,7 +73,10 @@ export function gaugesOf(figures: CapacityGauges, caps: OtelExporterDeps['seatCa
     {
       name: 'factory.step.placements',
       unit: '{step}',
-      points: figures.placements.map((p) => ({ value: p.steps, attributes: { host: p.host, reason: p.reason } })),
+      points: placementPairs.map(([host, reason]) => ({
+        value: placed.get(`${host}/${reason}`) ?? 0,
+        attributes: { host, reason },
+      })),
     },
     {
       name: 'factory.seats.used',
