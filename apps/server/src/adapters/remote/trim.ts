@@ -1,7 +1,7 @@
 /**
  * The step host's own retention (issue 2035). `factory-steps` on the VPS holds one worktree per project and slot (with
  * its `node_modules`, 1.6 GB for basalt-ui) and the bun cache every install shares; nothing else ever removes either, and
- * the host's disk alert pages at 90 %. One ssh of this script, at most every `TRIM_EVERY_MS`, keeps both bounded:
+ * the host's disk alert pages at 85 %. One ssh of this script, at most every `TRIM_EVERY_MS`, keeps both bounded:
  *
  * - a slot copy (`<project>/<n>` and `<project>/<n>.run`) whose `.run` directory, rewritten by every step of the slot, has
  *   not changed for `COPY_IDLE_DAYS` is removed, then the project's bare repository prunes the worktree record. The bare
