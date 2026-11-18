@@ -52,7 +52,12 @@ export async function runFixes(input: {
   }
   if (probesOf(todo).includes('deps')) {
     const entries = await guarded(keysOf('deps'), () =>
-      fixDeps(tools, checkout, { landing: options.landing, released: input.released, now: input.now }),
+      fixDeps(tools, checkout, {
+        landing: options.landing,
+        project: options.project,
+        released: input.released,
+        now: input.now,
+      }),
     )
     fixes.push(...entries)
     // Only a push changed what the probe reads: a fix that did not get that far leaves the checkout's findings as they were.

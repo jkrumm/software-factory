@@ -455,6 +455,26 @@ Report `docs/strategy/2026-11-next/report.html`, definition `docs/strategy/2026-
   a pushed bump is not deployed or watched (the repo's next ship carries it); a push refused because master moved is a failed
   fix, not a retry. Switch: `FACTORY_HYGIENE_FIX=0`. Count over the next week: stale-branch and deps Issues filed against
   `fixes` rows of outcome `fixed`, and how many `failed` ones a lead then closed done.
+- **NL45 The bun `deps` fix lands a pull request where a repo ships by pull request (Issue 2264, 2026-11-18).** NL44 left the 6
+  `via: pr` repos with their `deps` Issue because a pass could not hold a PR across passes or the merge window. It does not
+  have to: the pass already waits on a test slot for up to 100 minutes, so the landing runs inside one pass and keeps no state.
+  After the check is green the pass takes the repo's merge window (`factory merge-lock`, the lock a lead's merge takes, held by
+  a child that prints "held" and waits on its stdin, so it is let go when the pass closes the pipe or dies), rebases the commit
+  onto the default branch's tip (a conflict is `deferred`: the next pass bumps from a fresh master), pushes
+  `factory/hygiene-deps`, opens the PR, waits for its CI (30 s polls, 3 min for a first check, 45 min at most), runs the repo's
+  `make merge-guard` (else: contains master, master's last finished run not red) and merges by the first method the repo allows
+  (squash, rebase, merge; `gh repo view`). Anything that stops it after the PR exists closes the PR and deletes the branch, so a
+  lead who gets the finding starts clean; a branch left by a pass that was cut short is closed by the next one. A red CI, no CI
+  check, a refused push or merge is `failed` with the check names on the finding; a window not free in 30 minutes, a conflict
+  and a guard refusal are `deferred`. `gh` that cannot read the repo (not signed in, not GitHub, no merge method) skips before
+  any work. Rule for deploy: none. A merged bump rides the repo's next ship exactly as a pushed one does (NL44); the pass never
+  runs `make deploy`, least of all for this repo, whose deploy restarts the server that runs the pass. Field standard: Renovate
+  with grouped updates and platform automerge; not taken for the reasons NL44 gives, and it would not run the check in a
+  test slot. Not done: Cargo, Python, Swift, Docker and Actions pins, and squash- or rebase-merged branches that
+  `stale:branches` does not call merged (a `gh pr list --state merged` read): each is its own signal. Review-gated repos are
+  not reached (work repos have no hygiene pass); a repo that requires a human review fails at the merge and goes to a lead.
+  Switch: `FACTORY_HYGIENE_FIX=0`. Count over the next week: `fixes` rows of `deps` by outcome for the pull-request repos, the
+  merge windows the passes held (`merge_windows` has them only where the CLI had a token) and `deps` Issues filed for them.
 
 - **NL45 The light gate decides on evidence, not on a gap between two small samples (Issue 2226, 2026-11-18).** NL38's gate
   compared point estimates: light's pass rate more than 3 points under lead's, or any regression rate above lead's. The

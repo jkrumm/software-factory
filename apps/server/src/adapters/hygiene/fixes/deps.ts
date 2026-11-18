@@ -8,6 +8,7 @@ import { originDefault } from '../checkout.ts'
 import { exec, gitOut, type Tools } from '../git.ts'
 import { type Released, bunPlan } from '../probes/deps.ts'
 import { installed } from '../probes/toolrun.ts'
+import { type CiWait, landByPullRequest, mergeMethod } from './landing.ts'
 
 const KEY = 'deps'
 const ADD_TIMEOUT_MS = 10 * 60_000
@@ -65,16 +66,17 @@ const fail = (detail: string, output?: string[]): FixEntry[] => [
  * The scripted fix of the `deps` probe, for `bun`: every patch or minor of the root `package.json` that is past its cooldown
  * (the probe's own plan: 7 days, release date known, not held back by bun's own age gate) is set with `bun add [--exact]
  * name@version`, the repo's check runs in a test slot, and on green the commit is pushed to the default branch. Nothing is
- * pushed on red. A major, a held version, a workspace package and any range style but exact and caret stay with a lead, as does
- * every repo that ships by pull request. The probe, run again, says whether the finding is still past its bar.
+ * pushed on red. A major, a held version, a workspace package and any range style but exact and caret stay with a lead. A repo
+ * that ships by push gets the commit on its default branch; one that ships by pull request gets it through `landByPullRequest`
+ * (the merge window, the pull request, its CI, the guard, the merge). The probe, run again, says whether the finding is still
+ * past its bar.
  */
 export async function fixDeps(
   tools: Tools,
   checkout: Checkout,
-  input: { landing: Landing; released: Released; now: Date },
+  input: { landing: Landing; released: Released; now: Date; project?: string; wait?: CiWait },
 ): Promise<FixEntry[]> {
   const { path } = checkout
-  if (input.landing === 'pr') return skip('this repo ships by pull request: a lead lands the bump')
   const locks = (await gitOut(tools, path, ['ls-files', '--', 'bun.lock', 'bun.lockb']).catch(() => '')).trim()
   // The `deps` probe reads any package.json as bun's; a script that rewrites it must be sure bun owns the lockfile.
   if (!locks) return skip('no bun.lock is tracked: this is not a bun repo, a lead bumps it')
@@ -90,6 +92,12 @@ export async function fixDeps(
     return skip('no readable package.json or Makefile in the checkout')
   }
   if (!target) return skip('no check or check-fast target in the Makefile')
+  // Asked before any work: a repo gh cannot read (not signed in, not GitHub) or that allows no merge method is a lead's.
+  const method = input.landing === 'pr' ? await mergeMethod(tools, path) : undefined
+  if (input.landing === 'pr' && !method)
+    return skip('gh cannot read this repo or it allows no merge method: a lead lands the bump')
+  if (input.landing === 'pr' && !input.project)
+    return skip('no project name for the merge window: a lead lands the bump')
 
   const read = await bunPlan(tools, path, input.released, input.now)
   if (typeof read === 'string') return fail(read)
@@ -157,6 +165,40 @@ export async function fixDeps(
   if (commit.exitCode !== 0) return fail(`git commit failed (exit ${commit.exitCode})`, tailOf(commit.stdout))
   const branch = (await originDefault(tools, path))?.replace(/^origin\//, '')
   if (!branch) return fail('no origin default branch to push to')
+  const shortNames = `${names.length} package${names.length === 1 ? '' : 's'} (${names.slice(0, 6).join(', ')}${names.length > 6 ? ', …' : ''})`
+
+  if (input.landing === 'pr' && method && input.project) {
+    const [title = '', ...rest] = message.split('\n')
+    const landed = await landByPullRequest({
+      tools,
+      cwd: path,
+      project: input.project,
+      base: branch,
+      method,
+      title,
+      body: rest.join('\n').trim(),
+      hasGuardTarget: /^merge-guard:/m.test(readFileSync(join(path, 'Makefile'), 'utf8')),
+      ...(input.wait ? { wait: input.wait } : {}),
+    })
+    if (landed.kind === 'merged') {
+      return [
+        {
+          key: KEY,
+          outcome: 'fixed',
+          detail: `bumped ${shortNames}, make ${target} green in ${seconds}s, CI green, merged pull request #${landed.number} (${landed.method}) into ${branch}; the repo's next ship deploys it`,
+        },
+      ]
+    }
+    return [
+      {
+        key: KEY,
+        outcome: landed.kind,
+        detail: landed.detail,
+        ...('output' in landed && landed.output?.length ? { output: landed.output } : {}),
+      },
+    ]
+  }
+
   const push = await exec(
     withStderr([tools.git, 'push', '-q', 'origin', `HEAD:refs/heads/${branch}`]),
     GIT_TIMEOUT_MS,
@@ -175,7 +217,7 @@ export async function fixDeps(
     {
       key: KEY,
       outcome: 'fixed',
-      detail: `bumped ${names.length} package${names.length === 1 ? '' : 's'} (${names.slice(0, 6).join(', ')}${names.length > 6 ? ', …' : ''}), make ${target} green in ${seconds}s, pushed ${sha} to ${branch}`,
+      detail: `bumped ${shortNames}, make ${target} green in ${seconds}s, pushed ${sha} to ${branch}`,
     },
   ]
 }

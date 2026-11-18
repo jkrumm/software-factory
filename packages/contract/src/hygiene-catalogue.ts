@@ -127,7 +127,7 @@ export const HYGIENE_CATALOGUE = [
       keys: ['deps'],
       does: "For `bun`: each patch or minor past its cooldown that the root `package.json` declares is set with `bun add <name>@<version>` (an exact pin stays exact), then the repo's check runs in a test slot.",
       lands:
-        "On green, a `chore(deps)` commit pushed to the default branch of a repo that ships by push; the next ship of the repo deploys it. A repo that ships by pull request, a red check, a major, a held version, a workspace package and every other ecosystem go to a lead; the check's output is on the Issue.",
+        "On green, a `chore(deps)` commit: pushed to the default branch of a repo that ships by push, or, for one that ships by pull request, opened as a pull request inside the repo's merge window, merged once its CI and the merge guard are green (a red CI closes it). Neither deploys: the next ship of the repo does. A red check, a major, a held version, a workspace package and every other ecosystem go to a lead; the check's output is on the Issue.",
     },
     summary:
       'Outdated dependencies and the advisories above, as one refresh per repo: `bun outdated` for a `package.json`, and the versions pinned in `Cargo.toml`, `pyproject.toml` or `requirements*.txt`, `Package.swift`, Dockerfile base images and GitHub Actions `uses:` lines. One finding `deps` is filed only when the refresh clears the bar (below); it carries a section and an upgrade plan per ecosystem (versions younger than 7 days, 14 for a major, held back; patches and minors, packages that move together, and each major in batches) and the procedure a light lead follows. Below the bar nothing is filed and the Hygiene tab names what is behind.',

@@ -141,7 +141,7 @@ Outdated dependencies and the advisories above, as one refresh per repo: `bun ou
 - **Default:** on when detection finds what it reads: a package file of one of those kinds is tracked; every ecosystem is one finding.
 - **Runs:** in the weekly pass, and only monthly on an idle repo; runs an analyzer or asks a registry.
 - **Silence it:** Name it under `hygiene.skip` in `project.yaml` with a reason; the pass shows the reason.
-- **Scripted fix:** For `bun`: each patch or minor past its cooldown that the root `package.json` declares is set with `bun add <name>@<version>` (an exact pin stays exact), then the repo's check runs in a test slot. On green, a `chore(deps)` commit pushed to the default branch of a repo that ships by push; the next ship of the repo deploys it. A repo that ships by pull request, a red check, a major, a held version, a workspace package and every other ecosystem go to a lead; the check's output is on the Issue.
+- **Scripted fix:** For `bun`: each patch or minor past its cooldown that the root `package.json` declares is set with `bun add <name>@<version>` (an exact pin stays exact), then the repo's check runs in a test slot. On green, a `chore(deps)` commit: pushed to the default branch of a repo that ships by push, or, for one that ships by pull request, opened as a pull request inside the repo's merge window, merged once its CI and the merge guard are green (a red CI closes it). Neither deploys: the next ship of the repo does. A red check, a major, a held version, a workspace package and every other ecosystem go to a lead; the check's output is on the Issue.
 
 ### ci
 
