@@ -1,5 +1,5 @@
 import { afterAll, beforeAll, describe, expect, test } from 'bun:test'
-import { chmodSync, mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs'
+import { chmodSync, existsSync, mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { dirname, join } from 'node:path'
 import { defaultTools, type Tools } from '../../src/adapters/hygiene/git.ts'
@@ -152,6 +152,23 @@ describe('deadcodeProbe', () => {
     expect(ok.detail).toContain('bun install --frozen-lockfile')
     const bad = await deadcodeProbe(tools({ fallow, bun: fakeTool('bun', '', 1) }), repo(files))
     expect(bad).toEqual({ outcome: 'failed', detail: 'bun install --frozen-lockfile failed (exit 1)', findings: [] })
+  })
+
+  test('unusual: a package directory without node_modules is installed too, so its dependencies are judged', async () => {
+    const dir = repo({
+      'package.json': '{}',
+      'bun.lock': '{}',
+      'node_modules/.keep': '',
+      'ui/package.json': '{}',
+      'ui/bun.lock': '{}',
+    })
+    const bun = join(base, `bun-${++counter}`)
+    writeFileSync(bun, '#!/bin/sh\nmkdir -p node_modules\n')
+    chmodSync(bun, 0o755)
+    const outcome = await deadcodeProbe(tools({ fallow: fakeTool('fallow', REPORT, 1), bun }), dir)
+    expect(existsSync(join(dir, 'ui', 'node_modules'))).toBe(true)
+    expect(outcome.findings.map((f) => f.key)).toContain('deadcode:deps')
+    expect(outcome.detail).toContain('in ui')
   })
 
   test('unusual: no node_modules and no bun.lock leaves unused dependencies out', async () => {
