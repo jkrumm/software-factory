@@ -207,25 +207,75 @@ describe('a seeded budget breach', () => {
         name: 'cut check-fast',
         at: ago((i + 1) * 5 * 60_000),
         ms: 600_000,
-        exit: i < 2 ? 1 : 0,
         peak: 3000,
       })
     }
-    const budgets = [{ project: 'cut', repo: 'cut', fastMs: 90_000, peakMib: 2048, failShare: 0.3 }]
+    const budgets = [{ project: 'cut', repo: 'cut', fastMs: 90_000, peakMib: 2048, failShare: null }]
     const over = (epoch: Date | null) =>
       readBudgetFacts(db.sql, { now: T0, budgets, epoch }).then((facts) => facts.map((f) => [f.budget, f.over]))
     expect(await over(null)).toEqual([
       ['fast', true],
       ['peak', true],
-      ['fail', true],
     ])
     expect(await over(ago(HOUR))).toEqual([
       ['fast', false],
       ['peak', true],
-      ['fail', false],
     ])
     // an epoch a whole day back cuts nothing the day would not
     expect(await over(ago(DAY))).toEqual(await over(null))
+  })
+
+  describe('the failure share', () => {
+    // the tests share one database, so each judges a project of its own
+    let project = 'fl'
+    const run = (at: Date, name: string, exit: number) =>
+      step({ repo: project, name: `${project} ${name}`, at, ms: 1000, exit })
+    const fail = async (epoch: Date | null = null) => {
+      const budgets = [{ project, repo: project, fastMs: null, peakMib: null, failShare: 0.3 }]
+      const [fact] = await readBudgetFacts(db.sql, { now: T0, budgets, epoch })
+      if (!fact) throw new Error('no fail fact')
+      return fact
+    }
+
+    test('is over only when it held on the day before too, and names the failing steps', async () => {
+      project = 'fl1'
+      for (const day of [0, 1]) {
+        for (let i = 0; i < 4; i++) await run(ago(day * DAY + (i + 1) * HOUR), 'unit', i < 2 ? 1 : 0)
+        await run(ago(day * DAY + 5 * HOUR), 'layout', 2)
+        await run(ago(day * DAY + 6 * HOUR), 'layout', 0)
+      }
+      const fact = await fail()
+      expect(fact.over).toBe(true)
+      expect(fact.value).toContain('3 of 6 steps failed (50%), the day before 3 of 6 (50%)')
+      expect(fact.detail?.[0]).toBe('Failing steps: fl1 unit exit 1 x2; fl1 layout exit 2 x1.')
+      const [finding] = budgetFindings([fact])
+      expect(finding?.context.join(' ')).toContain('Failing steps: fl1 unit exit 1 x2')
+      // a day that reaches back past the epoch is no judged day
+      expect((await fail(ago(DAY + HOUR))).over).toBe(false)
+    })
+
+    test('a one-day burst is no breach', async () => {
+      project = 'fl2'
+      for (let i = 0; i < 6; i++) await run(ago((i + 1) * HOUR), 'unit', i < 4 ? 1 : 0)
+      for (let i = 0; i < 6; i++) await run(ago(DAY + (i + 1) * HOUR), 'unit', 0)
+      const fact = await fail()
+      expect(fact.value).toContain('4 of 6 steps failed (66.7%)')
+      expect(fact.over).toBe(false)
+    })
+
+    test('a red check-fast is left out of both counts and said', async () => {
+      project = 'fl3'
+      for (const day of [0, 1]) {
+        for (let i = 0; i < 6; i++) await run(ago(day * DAY + (i + 1) * HOUR), 'check-fast', i < 4 ? 1 : 0)
+        for (let i = 0; i < 5; i++) await run(ago(day * DAY + (i + 7) * HOUR), 'unit', 0)
+      }
+      const fact = await fail()
+      expect(fact.value).toContain('0 of 7 steps failed (0%)')
+      expect(fact.over).toBe(false)
+      expect(fact.detail).toEqual([
+        '4 red check-fast runs are left out of the count: a lead fixes them before it pushes.',
+      ])
+    })
   })
 
   test('too few runs say nothing, and a budget left out is not judged', async () => {

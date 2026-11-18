@@ -559,6 +559,8 @@ export interface BudgetFact {
   /** the day's figure in words, and whether it is over the limit */
   value: string
   over: boolean
+  /** more lines for the lead (the failing steps of a `fail` breach): context, never hashed */
+  detail?: string[]
 }
 
 /** A breach of a project budget as a self-watch finding: one signal on the project's repo until the figure is back inside. */
@@ -571,7 +573,11 @@ export function budgetFindings(facts: readonly BudgetFact[]): Finding[] {
       repo: fact.repo,
       title: `Throughput budget: ${fact.project} is over its ${fact.budget} budget of ${fact.limit}`,
       facts: [`budget ${fact.budget} of ${fact.project} is ${fact.limit}`, 'the last day is over it'],
-      context: [`Last day: ${fact.value}.`, 'The budget is `budgets:` in the project’s project.yaml.'],
+      context: [
+        `Last day: ${fact.value}.`,
+        ...(fact.detail ?? []),
+        'The budget is `budgets:` in the project’s project.yaml.',
+      ],
       reproduce: `factory read throughput --hours 24 | .project[] | select(.repo == "${fact.project}")`,
     }))
 }

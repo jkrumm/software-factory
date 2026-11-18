@@ -41,6 +41,7 @@ const StepRow = z.object({
   duration_ms: num,
   exit_code: z.coerce.number().nullable(),
   peak: z.coerce.number().nullable(),
+  at: z.coerce.date(),
 })
 
 const percentile = (sorted: readonly number[], p: number): number => {
@@ -110,7 +111,7 @@ function waitFacts(rows: readonly WaitRow[], shapes: ReadonlyMap<string, Project
 const stepRows = async (tx: SQL, from: Date, to: Date) =>
   (
     (await tx`
-      SELECT ${tx.unsafe(REPO_OF_STEP)} AS repo, name, duration_ms, exit_code, peak_rss_mib AS peak
+      SELECT ${tx.unsafe(REPO_OF_STEP)} AS repo, name, duration_ms, exit_code, peak_rss_mib AS peak, at
       FROM factory.step_costs WHERE repo IS NOT NULL AND at >= ${from} AND at < ${to}`) as unknown[]
   ).map((raw) => StepRow.parse(raw))
 
@@ -345,6 +346,46 @@ export async function readWindowFacts(
   })
 }
 
+const isRed = (s: { exit_code: number | null }): boolean => s.exit_code !== null && s.exit_code !== 0
+
+interface FailShare {
+  failed: number
+  /** the steps counted: every step bar a red `check-fast` */
+  counted: number
+  rate: number
+}
+
+/** The share of steps that exited non-zero, a red `check-fast` left out of both counts (a lead's pre-push fix loop). */
+function failShare(steps: readonly z.infer<typeof StepRow>[]): FailShare {
+  const counted = steps.filter((s) => !(isRed(s) && tierOf(s.name) === 'fast'))
+  const red = counted.filter(isRed).length
+  return { failed: red, counted: counted.length, rate: counted.length === 0 ? 0 : red / counted.length }
+}
+
+/** How many failing steps a breach names: the rest are a count, so the text stays one short line. */
+const FAILURES_NAMED = 8
+
+/** The counted failing steps by name and exit code, most first, so a lead needs no database read; `kept` red check-fast runs are said. */
+function failureLines(steps: readonly z.infer<typeof StepRow>[], kept: number): string[] {
+  const groups = new Map<string, { name: string; exit: number; count: number }>()
+  for (const s of steps) {
+    if (!isRed(s) || tierOf(s.name) === 'fast') continue
+    const exit = s.exit_code ?? 0
+    const key = `${s.name}\n${exit}`
+    const group = groups.get(key) ?? { name: s.name, exit, count: 0 }
+    group.count++
+    groups.set(key, group)
+  }
+  const ranked = [...groups.values()].toSorted(
+    (a, b) => b.count - a.count || a.name.localeCompare(b.name) || a.exit - b.exit,
+  )
+  const named = ranked.slice(0, FAILURES_NAMED).map((g) => `${g.name} exit ${g.exit} x${g.count}`)
+  const rest = ranked.slice(FAILURES_NAMED).reduce((sum, g) => sum + g.count, 0)
+  const lines = named.length === 0 ? [] : [`Failing steps: ${named.join('; ')}${rest > 0 ? `; ${rest} more` : ''}.`]
+  if (kept > 0) lines.push(`${kept} red check-fast runs are left out of the count: a lead fixes them before it pushes.`)
+  return lines
+}
+
 const seconds = (ms: number): string => `${Math.round(ms / 1000)}s`
 const share = (value: number): string => `${Math.round(value * 1000) / 10}%`
 
@@ -354,6 +395,10 @@ const share = (value: number): string => `${Math.round(value * 1000) / 10}%`
  * least `MIN_FAIL_RUNS` steps). A budget the day has too few runs to judge is not over, and neither is a median or a share
  * over a window the counting epoch cut under a day: it is one lead's red-green loop, not the project's day (the ranking
  * waits the same way, `MIN_RANK_DAYS`). `peak` is a maximum: a step over it is over in any window.
+ *
+ * `fail` leaves out a red `check-fast` (lint, tsc and the changed unit tests a lead fixes before it pushes: it never reaches
+ * master), and is over only when the share held on the day before as well, judged over a whole day too: a one-day burst or
+ * a window that reaches back past the epoch is no breach. The failing steps by name and exit code ride along as context.
  */
 export async function readBudgetFacts(
   sql: SQL,
@@ -363,7 +408,14 @@ export async function readBudgetFacts(
   const wholeDay = options.now.getTime() - from.getTime() >= DAY_MS
   const wanted = options.budgets.filter((b) => b.fastMs !== null || b.peakMib !== null || b.failShare !== null)
   if (wanted.length === 0) return []
-  const steps = await boundedRead(sql, 20_000, (tx) => stepRows(tx, from, options.now))
+  const dayAgo = new Date(options.now.getTime() - DAY_MS)
+  const before = countedFrom(new Date(dayAgo.getTime() - DAY_MS), options.epoch ?? null)
+  const beforeWhole = dayAgo.getTime() - before.getTime() >= DAY_MS
+  const wantsFail = wanted.some((b) => b.failShare !== null)
+  const { steps, prior } = await boundedRead(sql, 20_000, async (tx) => ({
+    steps: await stepRows(tx, from, options.now),
+    prior: wantsFail && beforeWhole ? await stepRows(tx, before, dayAgo) : [],
+  }))
   const facts: BudgetFact[] = []
   for (const b of wanted) {
     const mine = steps.filter((s) => s.repo === b.project)
@@ -394,15 +446,20 @@ export async function readBudgetFacts(
       })
     }
     if (b.failShare !== null) {
-      const failed = mine.filter((s) => s.exit_code !== null && s.exit_code !== 0).length
-      const rate = mine.length === 0 ? 0 : failed / mine.length
+      const today = failShare(mine)
+      const yesterday = failShare(prior.filter((s) => s.repo === b.project))
+      const holds = (day: FailShare): boolean => day.counted >= MIN_FAIL_RUNS && day.rate > (b.failShare ?? 1)
+      const kept = mine.filter((s) => isRed(s) && tierOf(s.name) === 'fast').length
       facts.push({
         project: b.project,
         repo: b.repo,
         budget: 'fail',
         limit: share(b.failShare),
-        value: `${failed} of ${mine.length} steps failed (${share(rate)})`,
-        over: wholeDay && mine.length >= MIN_FAIL_RUNS && rate > b.failShare,
+        value: `${today.failed} of ${today.counted} steps failed (${share(today.rate)})${
+          beforeWhole ? `, the day before ${yesterday.failed} of ${yesterday.counted} (${share(yesterday.rate)})` : ''
+        }`,
+        over: wholeDay && beforeWhole && holds(today) && holds(yesterday),
+        detail: failureLines(mine, kept),
       })
     }
   }

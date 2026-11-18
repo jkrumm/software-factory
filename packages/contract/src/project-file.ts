@@ -283,7 +283,12 @@ const Budgets = z.strictObject({
       return share > 0 && share <= 100
     }, 'a share like 10%')
     .optional()
-    .meta(about("the most of a day's check steps that may exit non-zero (`30%`)", THROUGHPUT)),
+    .meta(
+      about(
+        "the most of a day's check steps that may exit non-zero (`30%`); a red `check-fast` is not counted, and a breach needs the share on two days in a row",
+        THROUGHPUT,
+      ),
+    ),
 })
 
 /** A project's budgets as numbers: milliseconds, MiB, a share of 1; each `null` when the project sets none. */
