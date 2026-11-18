@@ -95,6 +95,33 @@ export function ciCheck(state: CiState, input: { sha: string; mergedAt: Date | n
   }
 }
 
+/** The part of an Issue's quality view the ship gate reads: its watches, each with the checks of its runs. */
+export interface WatchHistory {
+  answer: string | null
+  checks: readonly { checks: readonly CheckRecord[] }[]
+}
+
+/**
+ * Whether the Issue's newest watch ended in a regression on the default branch's CI (a `ci` check red in its last run,
+ * not inherited): the red its lead was sent back with. A later pass, or a watch another check regressed, is not.
+ */
+export function regressedOnCi(watches: readonly WatchHistory[]): boolean {
+  const last = watches.at(-1)
+  if (last?.answer !== 'regressed') return false
+  return last.checks.at(-1)?.checks.some((check) => check.name === 'ci' && !check.ok && !check.inherited) === true
+}
+
+/**
+ * The refusal of a ship that follows a CI regression while the default branch's CI is still red for the commit it
+ * landed at: a red CI is a function of the commit, so shipping again reads the same red and spends a regression on it.
+ * Null when CI is green, running, missing or could not be read: only a red that stands refuses.
+ */
+export function ciStillRed(state: CiState | null, sha: string): string | null {
+  if (state?.status !== 'red') return null
+  const link = state.url ? ` (${state.url})` : ''
+  return `ship refused: the default branch's CI is still red for ${sha.slice(0, 7)}: ${state.reason ?? 'a check failed'}${link}, the red your last Watch regressed on, and shipping again reads the same red. Land a commit that fixes or reverts it, or re-run the failed check where it is a flake; where the red is not this change's (it was red before it), say so in a Decision (\`factory issue ask\`) instead of shipping`
+}
+
 export function outcomeOf(checks: readonly Check[]): Outcome {
   if (checks.some((check) => check.blocked)) return 'blocked'
   return checks.every((check) => check.ok || check.inherited) ? 'green' : 'red'

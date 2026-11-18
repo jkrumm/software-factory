@@ -11,7 +11,7 @@ import { showQuality } from '../../src/app/quality-read.ts'
 import { reopenIssue } from '../../src/app/quality-reopen.ts'
 import { type QualityUnit, type ShipDeps, shipIssue } from '../../src/app/quality-ship.ts'
 import { checkWatches, startWatchPort, type WatchDeps } from '../../src/app/quality-watch.ts'
-import type { AcceptanceEvidence, CommitRead, ReviewRead } from '../../src/domains/quality/evidence.ts'
+import type { AcceptanceEvidence, CiState, CommitRead, ReviewRead } from '../../src/domains/quality/evidence.ts'
 import type {
   AttemptCheckout,
   Ci,
@@ -104,12 +104,13 @@ const proof: Proof = {
   },
 }
 
+let commitCi: Result<CiState> = err(portError('refused', 'no token'))
 const ci: Ci = {
   ofShip: async () => {
     if (uow.inTransaction()) inside.push('ci')
     return err(portError('refused', 'no token'))
   },
-  ofCommit: async () => err(portError('refused', 'no token')),
+  ofCommit: async () => commitCi,
 }
 let reviewerRows: ShipDeps['reviewerRows']
 const deps = (): ShipDeps => ({ uow, clock, ids, commits, review, ci, projects: watch(), checkout, reviewerRows })
@@ -141,6 +142,7 @@ beforeEach(async () => {
   commitRepos = []
   proofAnswer = () => ok([{ name: 'make verify', ok: true, detail: 'exit 0' }])
   proofRuns = 0
+  commitCi = err(portError('refused', 'no token'))
   duringProof = async () => {}
   project = { windowMs: 30 * 60_000, deployMode: 'none', makeVerify: true, ci: true, probes: [] }
 })
@@ -853,6 +855,57 @@ describe('the watch', () => {
       states.push(`${now.state}${now.wait_reason ? `:${now.wait_reason}` : ''}`)
     }
     expect(states).toEqual(['working', 'working', 'waiting:regressed'])
+  })
+
+  describe('a ship after a regression on the default branch’s CI', () => {
+    const red: CiState = { status: 'red', url: 'https://ci.example/run/1', reason: 'Sonar failure' }
+
+    /** An Issue whose first watch regressed on the check named, back with its lead. */
+    async function regressedOn(name: string): Promise<IssueId> {
+      const issueId = await working()
+      value(await ship(issueId, 'call-1'))
+      await runEffects()
+      proofAnswer = () => ok([{ name, ok: false, detail: 'exit 1: boom' }])
+      clock.advance(30 * 60_000)
+      for (let i = 0; i < 12; i++) {
+        if (value(await checkWatches(watchDeps())).regressed > 0) break
+        clock.advance(60_000)
+      }
+      expect(await stateOf(issueId)).toMatchObject({ state: 'working' })
+      return issueId
+    }
+
+    test('is refused while the CI of the landed commit is still red, and goes through once it is not', async () => {
+      const issueId = await regressedOn('ci')
+      commitCi = ok(red)
+      const refused = value(await ship(issueId, 'call-2'))
+      expect(refused.result).toBe('refused')
+      expect(refused.detail).toContain(`CI is still red for ${'f'.repeat(7)}: Sonar failure (https://ci.example/run/1)`)
+      expect(refused.detail).toContain('factory issue ask')
+      expect(await stateOf(issueId)).toMatchObject({ state: 'working' })
+      commitCi = ok({ status: 'running', url: null, reason: 'Sonar is still running' })
+      expect(value(await ship(issueId, 'call-3')).result).toBe('applied')
+      expect(await stateOf(issueId)).toMatchObject({ state: 'watching' })
+    })
+
+    test('a CI that cannot be read never refuses', async () => {
+      const issueId = await regressedOn('ci')
+      commitCi = err(portError('refused', 'no token'))
+      expect(value(await ship(issueId, 'call-2')).result).toBe('applied')
+    })
+
+    test('a regression of another check does not hold the ship, even with a red CI', async () => {
+      const issueId = await regressedOn('make verify')
+      commitCi = ok(red)
+      expect(value(await ship(issueId, 'call-2')).result).toBe('applied')
+    })
+
+    test('a project that ships by push never asks GitHub', async () => {
+      const issueId = await regressedOn('ci')
+      project = { ...project, ci: false }
+      commitCi = ok(red)
+      expect(value(await ship(issueId, 'call-2')).result).toBe('applied')
+    })
   })
 
   test('a blocked checkout is neither a pass nor a regression: verify looks again later', async () => {

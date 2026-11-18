@@ -3,6 +3,7 @@ import { reviewSeat } from '../domains/leads/reviewer.ts'
 import { type CiOutcome, judgeShip, type ReviewOutcome, type ShipVerdict } from '../domains/quality/gate.ts'
 import type { AcceptanceEvidence, ReviewEvidence } from '../domains/quality/evidence.ts'
 import type { Ci, Commits, LeadCheckout, Projects, Review } from '../domains/quality/ports.ts'
+import { ciStillRed, regressedOnCi } from '../domains/quality/watch.ts'
 import type { QualityStore, StoredEvidence, UndisposedAnnotation } from '../domains/quality/store.ts'
 import type { AnyIssueEvent } from '../domains/work/events.ts'
 import type { Issue } from '../domains/work/issue.ts'
@@ -132,7 +133,13 @@ async function withThreads(
 }
 
 /** The git and agw reads of a ship: outside any transaction, the lead's call waits for them. */
-async function judge(deps: ShipDeps, issue: Issue, input: ShipInput, reviewer: string | null): Promise<ShipVerdict> {
+async function judge(
+  deps: ShipDeps,
+  issue: Issue,
+  input: ShipInput,
+  context: { reviewer: string | null; afterCiRegression: boolean },
+): Promise<ShipVerdict> {
+  const { reviewer } = context
   const refuse = (why: string): ShipVerdict => ({ accepted: false, error: `ship refused: ${why}` })
   if (input.commits.length === 0) return refuse('ship names no merged commit')
   const checkout = await checkoutOf(deps.checkout, issue, input.attempt)
@@ -175,6 +182,14 @@ async function judge(deps: ShipDeps, issue: Issue, input: ShipInput, reviewer: s
     ...(project.ok && project.value.deployPaths ? { deployPaths: project.value.deployPaths } : {}),
   })
   if (!verdict.accepted) return verdict
+  // The last Watch regressed on the default branch's CI: a ship is held while that CI is still red for the commit it
+  // landed at. A CI that cannot be read never refuses (NL23).
+  const landedAt = verdict.commits.landedAt
+  if (context.afterCiRegression && landedAt && project.ok && project.value.ci) {
+    const state = await deps.ci.ofCommit({ repo, sha: landedAt })
+    const refusal = ciStillRed(state.ok ? state.value : null, landedAt)
+    if (refusal) return { accepted: false, error: refusal }
+  }
   return {
     ...verdict,
     review: await withThreads(deps, { repo, review: verdict.review, jobs: review.read?.jobs ?? [], reviewer }),
@@ -219,10 +234,11 @@ export async function shipIssue(
       specOwed: issue.checkpoint === 'spec' && !(await quality.specSubmitted(input.issueId)),
       annotationsOwed: await quality.undisposedAnnotations(input.issueId),
       reviewer: assignedReviewer(history, input.attempt),
+      afterCiRegression: regressedOnCi((await quality.view(input.issueId)).watches),
     })
   })
   if (!loaded.ok) return loaded
-  const { eventKey, issue, accepted, specOwed, annotationsOwed: owed, reviewer } = loaded.value
+  const { eventKey, issue, accepted, specOwed, annotationsOwed: owed, reviewer, afterCiRegression } = loaded.value
 
   if (accepted) {
     return deps.uow.run(async ({ work, quality }) => {
@@ -242,7 +258,7 @@ export async function shipIssue(
     ? { accepted: false, error: SPEC_OWED }
     : owed.length > 0
       ? { accepted: false, error: annotationsOwed(owed) }
-      : await judge(deps, issue, input, reviewer)
+      : await judge(deps, issue, input, { reviewer, afterCiRegression })
   return deps.uow.run<ShipAnswer, IssueWriteError>(async ({ work, quality }) => {
     const at = deps.clock.now()
     const ship = {
