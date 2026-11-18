@@ -72,6 +72,14 @@ function packageDirs(tracked: string[]): string[] {
   return [...new Set(dirs)].sort()
 }
 
+/** A lockfile at this directory or any ancestor: a workspace member is installed by the root's install. */
+function lockfileAbove(tracked: string[], dir: string): boolean {
+  for (let at = dir; ; at = dirname(at)) {
+    if (tracked.includes(at === '.' ? 'bun.lock' : `${at}/bun.lock`)) return true
+    if (at === '.') return false
+  }
+}
+
 export async function deadcodeProbe(tools: Tools, path: string): Promise<Outcome> {
   const tracked = (await gitOut(tools, path, ['ls-files', '-z'])).split('\0')
   if (!tracked.includes('package.json')) return skipped('no package.json')
@@ -84,6 +92,7 @@ export async function deadcodeProbe(tools: Tools, path: string): Promise<Outcome
     if (existsSync(join(path, dir, 'node_modules'))) continue
     const at = dir === '.' ? '' : ` in ${dir}`
     if (!tracked.includes(dir === '.' ? 'bun.lock' : `${dir}/bun.lock`)) {
+      if (lockfileAbove(tracked, dir)) continue
       depsAreReliable = false
       notes.push(`no bun.lock and no node_modules${at}: unused dependencies are not reported`)
       continue
