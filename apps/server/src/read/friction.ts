@@ -7,7 +7,7 @@ import { specSourceSql } from './spec-screen.ts'
 import { per, windowOf } from './stats.ts'
 import { plain } from './words.ts'
 
-/** A note typed into a lead later than this after it was claimed is undelivered. */
+/** A note of a lead that is still there and not typed this long after it was claimed is undelivered. */
 const NOTE_GRACE_MS = 10 * 60_000
 
 /** The wait reasons that are stalls (`WAITS` in the work domain), in words. */
@@ -171,10 +171,17 @@ async function countsOf(
     'undelivered_note',
     'undelivered_note',
     'Notes that never reached the lead',
+    // A note nobody can hear is no broken promise: a closed Issue has no lead to tell, and a lead that was lost (or whose
+    // attempt a later one replaced) is its own count, its notes carried by the next attempt's brief.
     await one(sql`
-      SELECT count(*) AS n FROM factory.lead_deliveries
-      WHERE kind = 'note' AND typed_at IS NULL AND claimed_at >= ${w.from} AND claimed_at < ${w.to}
-        AND claimed_at <= ${new Date(now.getTime() - NOTE_GRACE_MS)}`),
+      SELECT count(*) AS n FROM factory.lead_deliveries d
+      JOIN factory.issues i ON i.id = d.issue_id
+      WHERE d.kind = 'note' AND d.typed_at IS NULL AND d.claimed_at >= ${w.from} AND d.claimed_at < ${w.to}
+        AND d.claimed_at <= ${new Date(now.getTime() - NOTE_GRACE_MS)}
+        AND i.state <> 'closed'
+        AND NOT EXISTS (
+          SELECT 1 FROM factory.lead_attempts a
+          WHERE a.issue_id = d.issue_id AND (a.attempt > d.attempt OR (a.attempt = d.attempt AND a.gone_at IS NOT NULL)))`),
   )
 
   add(
