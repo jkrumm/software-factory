@@ -1700,7 +1700,7 @@ export const OPERATIONS: readonly Operation[] = [
     method: 'POST',
     path: '/v1/decisions/{id}/take-default',
     summary:
-      'the lead settles its own open Decision with the default it named, once it built on it: the Issue is working again and ship is taken',
+      'the lead settles its own open Decision with the default it named, once it built on it: that Decision no longer holds the Issue (it works again unless a review or another Decision still holds it), so ship is taken',
     pathParams: ['id'],
     queryParams: [],
     body: true,

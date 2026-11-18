@@ -506,7 +506,7 @@ export function takeDefault(
       text: label,
       by: 'default',
       source: 'the lead took the default and went on with it',
-      note: `You took the default of ${decision.id} (${label}) and went on with it; the Decision is closed and the Issue is yours again. The owner can still overrule it with a note.`,
+      note: `You took the default of ${decision.id} (${label}) and went on with it; the Decision is closed and no longer holds the Issue. The owner can still overrule it with a note.`,
     })
     if (!outcome.ok) return outcome
     if (outcome.value.status === 'withdrawn') return ok<Answered>({ decision: outcome.value.decision, issue: null })

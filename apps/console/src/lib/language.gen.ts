@@ -186,7 +186,7 @@ export const LANGUAGE = {
   'swap used':
     "The part of the swap file the host has written memory out to, in GB of the swap's current size (macOS grows it on demand, so the size is not a limit). Swap stays full after its cause is gone, so a high figure alone is not a fault: swap that keeps growing is the alarm, and admission turns new leads away above 75 % of the RAM in swap or a fast rate of swapouts. What to do: if it keeps growing, read Memory by class on Throughput to find what writes memory out; a full but steady swap needs nothing",
   'take the default':
-    "The lead's verb that settles its own open Decision with the default it named, once it went on with that option (factory decision take-default <id> --attempt <n>). Recorded as settled by default, the source saying the lead took it; the Issue works again, so a ship is not refused for the rest of the wait",
+    "The lead's verb that settles its own open Decision with the default it named, once it went on with that option (factory decision take-default <id> --attempt <n>). Recorded as settled by default, the source saying the lead took it; the Decision no longer holds the Issue, so a ship is not refused for the rest of its wait (a review wait or another open Decision still holds it)",
   'taste pass':
     "The weekly retro's reading of the owner's verdict notes and comments: a preference seen twice becomes a rule in the repo's AGENTS.md or DESIGN.md",
   'test slot':
