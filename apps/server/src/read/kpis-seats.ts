@@ -247,7 +247,7 @@ async function readDelivery(
 }
 
 /**
- * The tripwire over its window (`tripwireFrom`: 3 days, reaching back until light has `TRIPWIRE_TARGET_WATCHES` finished
+ * The tripwire over its window (`tripwireFrom`: `TRIPWIRE_DAYS`, reaching back until light has `TRIPWIRE_TARGET_WATCHES` finished
  * first watches, at most `TRIPWIRE_MAX_DAYS`): the four figures of each seat, the bound, the gaps and the verdict.
  */
 async function tripwireOf(
@@ -282,7 +282,7 @@ async function tripwireOf(
 }
 
 /**
- * The tripwire over its window (3 days, longer until light has 100 finished first watches), read for the starts: `met` says whether triage's `small` starts on the
+ * The tripwire over its window (`TRIPWIRE_DAYS`, longer until light has `TRIPWIRE_TARGET_WATCHES` finished first watches), read for the starts: `met` says whether triage's `small` starts on the
  * light seat now (only a measured pass opens it), `bound.share` is the move-up share a hygiene class stays under.
  */
 export async function readTripwire(

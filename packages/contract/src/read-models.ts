@@ -534,7 +534,7 @@ export const SeatKpis = z
     }),
     /**
      * Whether triage's `small` starts on the light seat now: the same four figures over the window of `days` days from
-     * `from` (3 days, reaching back until light has `targetWatches` finished first watches, at most 14), whatever window
+     * `from` (`TRIPWIRE_DAYS` days, reaching back until light has `targetWatches` finished first watches, at most `TRIPWIRE_MAX_DAYS`), whatever window
      * the page shows. `met` unless light is shown worse: the lower bound (at `confidence`, one-sided) of lead's pass rate
      * over light's is within `points`, and its move-up share is under `bound` (null while any figure is unmeasured, or
      * light has fewer than `minWatches` finished first watches); `failing` names each condition that is not met or not

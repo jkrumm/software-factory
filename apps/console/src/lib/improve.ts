@@ -775,7 +775,9 @@ export function tripwireWords(tripwire: SeatKpis['tripwire']): string {
   const gap =
     passGap === null
       ? ''
-      : `; lead's pass rate is ${passGap.points.toFixed(1)} points over light's, at least ${passGap.lower.toFixed(1)} at ${Math.round(confidence * 100)} % (shown only above ${points})`
+      : passGap.points < 0
+        ? `; light's pass rate is ${(-passGap.points).toFixed(1)} points over lead's`
+        : `; lead's pass rate is ${passGap.points.toFixed(1)} points over light's, at least ${passGap.lower.toFixed(1)} at ${Math.round(confidence * 100)} % (shown only above ${points})`
   const regressions =
     regressionGap === null
       ? ''
