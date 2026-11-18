@@ -4,6 +4,14 @@ import type { RouteLatency } from '../domains/loops/selfwatch-model.ts'
 /** The window the p95 is read over: the self-watch's `routes_slow` and `GET /health`'s `routeP95Ms`. */
 export const ROUTE_WINDOW_MS = 5 * 60_000
 
+/**
+ * Requests that begin within this long of the process start are not timed: a deploy restarts the server on a loaded host (cold
+ * code, every lead and loop reconnecting at once) and those first answers say nothing about a server that is up but useless
+ * (2026-11-18: 279 answers in the 75 s after a restart, p95 2.3 s at a load of 44, 333 ms two minutes on). A server that is
+ * truly hung is still caught: every request begun after the grace counts, answered or not.
+ */
+export const ROUTE_WARMUP_MS = 120_000
+
 /** The most answers kept; the oldest go first. A busy server answers a few hundred in five minutes. */
 const MAX_SAMPLES = 20_000
 
@@ -49,9 +57,11 @@ export function p95Of(values: readonly number[]): number | null {
  * numbers (the database-backed routes timed out for hours on 2026-11-14 while `/health`, which never queries, answered).
  * A request that never reports its end (a client that left) is dropped from the in-flight set once it is older than the window.
  */
-export function routeTimer(options: { windowMs?: number; now?: () => number } = {}): RouteTimer {
+export function routeTimer(options: { windowMs?: number; warmupMs?: number; now?: () => number } = {}): RouteTimer {
   const windowMs = options.windowMs ?? ROUTE_WINDOW_MS
+  const warmupMs = options.warmupMs ?? ROUTE_WARMUP_MS
   const now = options.now ?? Date.now
+  const timedFrom = now() + warmupMs
   const pending = new Map<Request, number>()
   let answered: { endedAt: number; ms: number; route: string }[] = []
 
@@ -80,7 +90,8 @@ export function routeTimer(options: { windowMs?: number; now?: () => number } = 
     },
     plugin: new Elysia({ name: 'route-timer' })
       .onRequest(({ request }) => {
-        if (!untimed(request)) pending.set(request, now())
+        const began = now()
+        if (began >= timedFrom && !untimed(request)) pending.set(request, began)
       })
       .onAfterResponse({ as: 'global' }, ({ request }) => {
         const began = pending.get(request)
