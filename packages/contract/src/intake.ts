@@ -61,7 +61,7 @@ export const SIGNAL_TRUSTS = ['owner', 'machine', 'agent', 'outside'] as const
  */
 export const Signal = z
   .object({
-    /** kuma, hyperdx, beszel, github, checks, launchd, feedback:<app>, owner:hermes, agent:<repo> */
+    /** kuma, hyperdx, github, checks, launchd, feedback:<app>, owner:hermes, agent:<repo> */
     source: z.string(),
     kind: z.enum(SIGNAL_KINDS),
     origin: z.enum(SIGNAL_ORIGINS),

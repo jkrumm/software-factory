@@ -299,9 +299,9 @@ describe('a stateful source: one episode per subject', () => {
 })
 
 describe('correlation: one incident per host', () => {
-  test("a VPS outage's alerts from Beszel, HyperDX and Kuma make one incident Issue; their ups heal it", async () => {
-    const beszel = done(await intake.receive(down('beszel', 'vps:silent', 'down@1')))
-    expect(beszel).toMatchObject({ outcome: 'filed', issue: 'issue_1' })
+  test("a VPS outage's alerts from two HyperDX alerts and Kuma make one incident Issue; their ups heal it", async () => {
+    const infra = done(await intake.receive(down('hyperdx', 'Infra memory >= 90%', 'down@1')))
+    expect(infra).toMatchObject({ outcome: 'filed', issue: 'issue_1' })
     clock.advance(60_000)
     const hyperdx = done(await intake.receive(down('hyperdx', 'api latency', 'h1')))
     clock.advance(60_000)
@@ -315,7 +315,7 @@ describe('correlation: one incident per host', () => {
     expect(log).toEqual([{ kind: 'incident' }])
 
     // two of three are up: the Issue stays open; the third heals it
-    expect(done(await intake.receive(up('beszel', 'vps:silent', 'up@1')))).toMatchObject({
+    expect(done(await intake.receive(up('hyperdx', 'Infra memory >= 90%', 'up@1')))).toMatchObject({
       outcome: 'amended',
       detail: 'matched',
     })
@@ -338,7 +338,7 @@ describe('correlation: one incident per host', () => {
 
   test('alerts on one host that arrive at once open one incident, not one each', async () => {
     const outs = await Promise.all([
-      intake.receive(down('beszel', 'vps:silent', 'down@1')),
+      intake.receive(down('hyperdx', 'Infra memory >= 90%', 'down@1')),
       intake.receive(down('kuma', 'vps - Push', 'k1')),
       intake.receive(down('hyperdx', 'api latency', 'h1')),
       intake.receive(down('kuma', 'vps - Door', 'k2')),
@@ -357,7 +357,7 @@ describe('correlation: one incident per host', () => {
   })
 
   test('an alert after the window opens its own incident', async () => {
-    done(await intake.receive(down('beszel', 'vps:silent', 'down@1')))
+    done(await intake.receive(down('hyperdx', 'Infra memory >= 90%', 'down@1')))
     clock.advance(DEFAULT_INTAKE_SETTINGS.incidentWindowMs + 60_000)
     expect(done(await intake.receive(down('kuma', 'vps - Push', 'k1')))).toMatchObject({
       outcome: 'filed',
@@ -366,7 +366,7 @@ describe('correlation: one incident per host', () => {
   })
 
   test('an alert on another host or on none joins nothing', async () => {
-    done(await intake.receive(down('beszel', 'vps:silent', 'down@1')))
+    done(await intake.receive(down('hyperdx', 'Infra memory >= 90%', 'down@1')))
     projects.push(project('homelab'))
     expect(done(await intake.receive(down('kuma', 'nas', 'k1', 'homelab')))).toMatchObject({
       outcome: 'filed',

@@ -144,6 +144,12 @@ describe('hyperdx', () => {
     expect(alert.facts).toMatchObject({ link: expect.stringContaining('hyperdx'), alertId: '65f1c0ffee00112233445566' })
   })
 
+  test('an infra alert of ClickStack: the alert name is the monitor, the host stays in the body', async () => {
+    const alert = alertOf(parseHyperdx(await fixture('hyperdx-infra-mini.json')))
+    expect(alert).toMatchObject({ monitor: 'Infra mini filesystem >= 93% (15m)', status: 'down' })
+    expect(alert.facts).toMatchObject({ body: expect.stringContaining(':mini /System/Volumes/Data') })
+  })
+
   test('the recovery has the same monitor and another event, though the eventId is the same', async () => {
     const down = alertOf(parseHyperdx(await fixture('hyperdx-alert.json')))
     const up = alertOf(parseHyperdx(await fixture('hyperdx-ok.json')))

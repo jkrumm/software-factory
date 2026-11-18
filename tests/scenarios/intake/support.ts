@@ -63,7 +63,6 @@ export async function makeEstate(
       FACTORY_INFRA_FILE: infraFile,
       FACTORY_SETTLE_POLL: '1s',
       FACTORY_GITHUB_POLL: 'off',
-      FACTORY_BESZEL_POLL: 'off',
       FACTORY_LAUNCHD_POLL: 'off',
       FACTORY_FAKE_LAUNCHCTL: launchctlFile,
     },
@@ -187,51 +186,6 @@ export async function startDoor(estate: Estate, server: ServerProcess, sources: 
   }
   throw new Error(`the door did not start in ${DOOR_BOOT_ATTEMPTS} attempts:\n${failures.join('\n')}`)
 }
-
-/** A Beszel hub that answers with one system at a steady memory level. */
-export interface FakeBeszel {
-  url: string
-  /** memory percent of every sample from now on */
-  setMemory(pct: number): void
-  stop(): void
-}
-
-export function fakeBeszel(system = 'vps'): FakeBeszel {
-  let memory = 30
-  const server = Bun.serve({
-    hostname: '127.0.0.1',
-    port: 0,
-    fetch(req) {
-      const url = new URL(req.url)
-      if (url.pathname.endsWith('/auth-with-password')) return Response.json({ token: 'hub-token' })
-      if (url.pathname.endsWith('/systems/records')) {
-        return Response.json({
-          items: [
-            { id: 'sys1', name: system, status: 'up', updated: stamp(new Date()), info: { t: 4, c: 4, u: 3600 } },
-          ],
-        })
-      }
-      if (url.pathname.endsWith('/system_stats/records')) {
-        const now = Date.now()
-        const items = Array.from({ length: 30 }, (_, i) => ({
-          created: stamp(new Date(now - i * 60_000 - 5_000)),
-          stats: { mp: memory, dp: 40, la: [0.4], swap: [8 * 1024 ** 3, 0] },
-        }))
-        return Response.json({ items })
-      }
-      return new Response('not found', { status: 404 })
-    },
-  })
-  return {
-    url: `http://127.0.0.1:${server.port}`,
-    setMemory: (pct) => {
-      memory = pct
-    },
-    stop: () => void server.stop(true),
-  }
-}
-
-const stamp = (at: Date): string => at.toISOString().replace('T', ' ')
 
 export interface GithubIssueJson {
   number: number

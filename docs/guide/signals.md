@@ -45,7 +45,7 @@ The source name decides the origin and, for an alert, which projects listen.
 | Source | Origin | Enters through |
 |-|-|-|
 | `kuma`, `hyperdx` | infrastructure, application | the door, one token per source |
-| `beszel`, `launchd` | infrastructure | pollers inside the server |
+| `launchd` | infrastructure | a poller inside the server |
 | `github`, `checks` | github | pollers, only for projects whose `signals:` list them |
 | `owner:<who>` | you | `factory signal file`, the owner's own words |
 | `agent:<repo>` | factory | a lead's or a loop's `factory signal file` |
@@ -53,7 +53,7 @@ The source name decides the origin and, for an alert, which projects listen.
 
 ```ts
 export function originOf(source: string): OriginName {
-  if (source === 'kuma' || source === 'beszel' || source === 'launchd') return 'infrastructure'
+  if (source === 'kuma' || source === 'launchd') return 'infrastructure'
   if (source === 'hyperdx') return 'application'
   if (source === 'github' || source === 'checks') return 'github'
   if (source.startsWith('feedback:')) return 'feedback'
@@ -129,7 +129,7 @@ The factory itself calls no model. Every judgment goes through an adapter in `ap
 
 An incident is one root cause seen through many signals. An amendment is a signal added to an open Issue as a note instead of a new Issue.
 
-- **Incident.** Alerts from `kuma`, `hyperdx` and `beszel` that sit on one host join one Issue. When the VPS is down, three monitors fire and one Issue opens.
+- **Incident.** Alerts from `kuma` and `hyperdx` that sit on one host join one Issue. When the VPS is down, three monitors fire and one Issue opens.
 - **Amendment.** The lead of the open Issue hears the signal as a note. The Issue's scope grows; the queue does not.
 - **Healing.** A `down` waits out its project's heal grace. An `up` inside it files nothing (`healed`).
 - **A lead never amends itself.** The Issue whose lead files a signal is not a candidate for it: a follow-up is work for someone else.

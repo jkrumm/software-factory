@@ -32,10 +32,6 @@ const Env = z.object({
   FACTORY_GITHUB_API_URL: z.string().min(1).default('https://api.github.com'),
   FACTORY_GITHUB_POLL: Every('5m'),
   FACTORY_GITHUB_BACKLOG: z.enum(['0', '1']).default('0'),
-  FACTORY_BESZEL_URL: z.string().min(1).optional(),
-  FACTORY_BESZEL_EMAIL: z.string().min(1).optional(),
-  FACTORY_BESZEL_PASSWORD: z.string().min(1).optional(),
-  FACTORY_BESZEL_POLL: Every('1m'),
   FACTORY_LAUNCHD_POLL: Every('5m'),
   FACTORY_SETTLE_POLL: Every('10s'),
 })
@@ -51,7 +47,6 @@ export interface IntakeEnv {
   incidentWindowMs: number
   fingerprintWindowMs: number
   github: { token: string | null; apiUrl: string; everyMs: number | null; backlog: boolean }
-  beszel: { url: string | null; email: string | null; password: string | null; everyMs: number | null }
   launchd: { everyMs: number | null }
   settleEveryMs: number | null
 }
@@ -77,12 +72,6 @@ export function loadIntakeEnv(env: Record<string, string | undefined>): IntakeEn
       apiUrl: e.FACTORY_GITHUB_API_URL,
       everyMs: e.FACTORY_GITHUB_POLL,
       backlog: e.FACTORY_GITHUB_BACKLOG === '1',
-    },
-    beszel: {
-      url: e.FACTORY_BESZEL_URL ?? null,
-      email: e.FACTORY_BESZEL_EMAIL ?? null,
-      password: e.FACTORY_BESZEL_PASSWORD ?? null,
-      everyMs: e.FACTORY_BESZEL_POLL,
     },
     launchd: { everyMs: e.FACTORY_LAUNCHD_POLL },
     settleEveryMs: e.FACTORY_SETTLE_POLL,

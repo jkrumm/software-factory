@@ -34,7 +34,7 @@ The reset (RS1–RS15) and the rewrite (NL11–NL24) are built and live; their l
 | # | Track | Repo(s) | Status |
 |-|-|-|-|
 | U | Claude Code cost program on usage v2 | usage-tracker, dotfiles, hermes-agent, email-gateway | Waves 1–5 done and reviewed (plan `usage-tracker/docs/waves/PLAN.md`); Wave 6 time-gated, see Open work |
-| A2 | Argo pages: Fleet and Factory, agw insight, Infra (Beszel), Usage v2 | argo | not tracked here (Argo's own Issues); the factory side is `/v1` (`docs/architecture.md`, "API, client, CLI"); the factory's own pages leave for the Console (NL3) |
+| A2 | Argo pages: Fleet and Factory, agw insight, Infra, Usage v2 | argo | not tracked here (Argo's own Issues); the factory side is `/v1` (`docs/architecture.md`, "API, client, CLI"); the factory's own pages leave for the Console (NL3) |
 | IR | iris: fleet, waves and quota screens | iris | iris reads `/v1` and pushes decision cards (Issue 171, done); the rest is iris's own plan |
 | L | Later, owner-timed: finances on the mini behind Touch ID; calendar and mail via email-gateway | finances (MacBook), argo, email-gateway | not started |
 
@@ -64,7 +64,7 @@ give the 5 h and 7 d share; `usage-tracker report weekly` (LaunchAgent Mondays 0
 
 ### A2: Argo pages
 The Fleet and Factory pages read the factory's read API (`/v1`, `docs/architecture.md`) through a server-side call with the read-only token; Argo builds no
-collector of its own for sessions, plans or asks. Usage v2, agw insight and Infra (Beszel) stay Argo's.
+collector of its own for sessions, plans or asks. Usage v2, agw insight and Infra stay Argo's (the factory itself polls no infra hub since Issue 2099; A4).
 
 ### IR: iris
 iris reads the factory through `/v1`, not herdr or Argo directly.

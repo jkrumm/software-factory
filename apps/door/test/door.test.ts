@@ -86,6 +86,13 @@ describe('the route', () => {
     expect(filed[0]).toMatchObject({ source: 'hyperdx', monitor: 'API error rate' })
   })
 
+  test('an infra alert for host.name=mini is filed as a signal of its alert name', async () => {
+    const response = await alert('hyperdx-infra-mini.json', '/alert/hyperdx', { token: HYPERDX_TOKEN })
+    expect(response.status).toBe(200)
+    expect(filed[0]).toMatchObject({ source: 'hyperdx', monitor: 'Infra mini filesystem >= 93% (15m)', status: 'down' })
+    expect(JSON.stringify(filed[0])).toContain(':mini /System/Volumes/Data')
+  })
+
   test('a Kuma test message and a beat that is neither down nor up are answered 200 and file nothing', async () => {
     for (const name of ['kuma-test.json', 'kuma-pending.json']) {
       const response = await alert(name)

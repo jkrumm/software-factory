@@ -45,7 +45,7 @@ const TRANSACTION_ADAPTERS = new Set([
 ])
 
 /** An intake source: it reads the outside world and hands signals to the sink, and touches nothing else of the server. */
-const INTAKE_POLLER = /^adapters\/intake\/(github|beszel|launchd)\.ts$/
+const INTAKE_POLLER = /^adapters\/intake\/(github|launchd)\.ts$/
 
 interface Import {
   specifier: string

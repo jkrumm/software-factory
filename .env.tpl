@@ -10,6 +10,3 @@ FACTORY_AGENT_TOKEN=op://mini/software-factory/FACTORY_AGENT_TOKEN
 FACTORY_DOOR_TOKEN=op://mini/software-factory/FACTORY_DOOR_TOKEN
 FACTORY_GITHUB_TOKEN=op://mini/github/token
 NTFY_TOKEN=op://common/ntfy/TOKEN
-# The Beszel intake (a read-only hub user); FACTORY_BESZEL_URL is a non-secret setting in ~/.config/factory/env.
-FACTORY_BESZEL_EMAIL=op://mini/beszel/EMAIL
-FACTORY_BESZEL_PASSWORD=op://mini/beszel/PASSWORD
