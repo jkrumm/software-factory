@@ -483,7 +483,7 @@ production stalls, a result cache keyed by the tree, a browser in the factory's 
   friction (`unstated_acceptance`) like an unreviewed one. The pull request the commits landed through is read from GitHub
   (`adapters/quality/ci.ts`, the `Ci` port) and its head's CI recorded as `ci` evidence (`green`, `red`, `running`, `missing`
   when no pull request or no check was found, `unknown` when GitHub could not be read); it never refuses a ship, and a red
-  or missing one is counted as friction (`unproven_ci`). One refusal reads CI at the ship (NL41): after a Watch regressed on the default
+  or missing one is counted as friction (`unproven_ci`). One refusal reads CI at the ship (NL42): after a Watch regressed on the default
   branch's CI, a ship is refused while that CI is still red for the commit it lands at (`ciStillRed`, `quality-ship.ts`). A project that ships by push (no `via: pr` rule) or has no
   `project.yaml` records no `ci` evidence and asks GitHub nothing. `evidence.ts` decides whether the paths deploy at all; its built-in inert
   paths equal `scripts/verify.sh`'s. A project's `deploy.paths` (globs in `project.yaml`; empty by default, which changes nothing) narrows
