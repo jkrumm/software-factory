@@ -1091,6 +1091,19 @@ describe('test slots', () => {
       expect(askStep(base, fit(9 * MIN)).view.granted).toBe(true)
     })
 
+    test('a holder past its learned run is taken to need as much longer as it has overrun, so a base slot does not idle behind it', () => {
+      // h2 was learned to run 5 min and has run 11: it is 6 min over, so big's start is reserved 6 min out, not now
+      const over = new Map<string, number | null>([
+        ['h1', 30 * MIN],
+        ['h2', 5 * MIN],
+      ])
+      expect(reservedStartMs(big, [held('h1', 3000), held('h2', 3000)], fit(null, over), 2, at(11 * MIN))).toBe(6 * MIN)
+      expect(askStep(base, fit(5 * MIN, over)).view.granted).toBe(true)
+      const long = askStep(base, fit(7 * MIN, over))
+      expect(long.view.granted).toBe(false)
+      expect(long.view.why).toContain('(free in ~6 min; this step runs ~7 min)')
+    })
+
     test('the starvation guarantee holds: with no learned run of the holders nothing backfills', () => {
       const none = new Map<string, number | null>()
       expect(askStep(base, fit(1000, none)).view.granted).toBe(false)
