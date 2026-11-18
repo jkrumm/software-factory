@@ -35,7 +35,7 @@ export async function readSeries(tx: SQL, window: { from: Date; to: Date; bucket
   // an attempt runs from its start to the earlier of its `gone_at` (set only for a lost lead) and the first close of its Issue
   // after the start: a lead whose Issue closed is finished, whatever its row says
   const running: unknown[] = await tx`
-    WITH attempts AS (
+    WITH attempts AS MATERIALIZED (
       SELECT a.issue_id, a.started_at,
         least(a.gone_at, (SELECT min(e.at) FROM factory.issue_events e
           WHERE e.issue_id = a.issue_id AND e.result = 'applied' AND e.to_state = 'closed' AND e.at >= a.started_at)) AS ended_at
@@ -46,14 +46,20 @@ export async function readSeries(tx: SQL, window: { from: Date; to: Date; bucket
     JOIN factory.issues i ON i.id = a.issue_id
     GROUP BY b.t, i.repo`
   const queuedByReason: unknown[] = await tx`
+    WITH q AS MATERIALIZED (
+      SELECT kind, project, from_at, to_at FROM factory.queue_intervals
+      WHERE from_at <= ${to} AND (to_at IS NULL OR to_at > ${start}))
     SELECT b.t AS at, q.kind AS key, count(*) AS n
     FROM generate_series(${start}::timestamptz, ${to}::timestamptz, ${step}::interval) AS b(t)
-    JOIN factory.queue_intervals q ON q.from_at <= b.t AND (q.to_at IS NULL OR q.to_at > b.t)
+    JOIN q ON q.from_at <= b.t AND (q.to_at IS NULL OR q.to_at > b.t)
     GROUP BY b.t, q.kind`
   const queuedByRepo: unknown[] = await tx`
+    WITH q AS MATERIALIZED (
+      SELECT kind, project, from_at, to_at FROM factory.queue_intervals
+      WHERE from_at <= ${to} AND (to_at IS NULL OR to_at > ${start}))
     SELECT b.t AS at, q.project AS key, count(*) AS n
     FROM generate_series(${start}::timestamptz, ${to}::timestamptz, ${step}::interval) AS b(t)
-    JOIN factory.queue_intervals q ON q.from_at <= b.t AND (q.to_at IS NULL OR q.to_at > b.t)
+    JOIN q ON q.from_at <= b.t AND (q.to_at IS NULL OR q.to_at > b.t)
     GROUP BY b.t, q.project`
   const peaks: unknown[] = await tx`
     SELECT to_timestamp(floor(extract(epoch FROM at) / ${bucketSeconds}::int) * ${bucketSeconds}::int) AS at,

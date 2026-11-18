@@ -124,14 +124,22 @@ async function readLeadSplits(tx: SQL, from: Date, to: Date) {
       FROM walls w JOIN states s ON s.issue_id = w.issue_id AND s.to_state = 'waiting' AND s.e IS NOT NULL
         AND s.reason IN ('decision', 'review', 'errand', 'external')
       GROUP BY w.issue_id, w.closed_at),
+    cwd_issue AS MATERIALIZED (
+      SELECT c.cwd, (SELECT a.issue_id FROM factory.lead_attempts a
+         WHERE a.worktree_path IS NOT NULL
+           AND (c.cwd = a.worktree_path OR left(c.cwd, length(a.worktree_path) + 1) = a.worktree_path || '/')
+         ORDER BY a.attempt DESC LIMIT 1) AS issue_id
+      FROM (
+        SELECT cwd FROM factory.step_costs WHERE at >= (SELECT min(lower(wall)) FROM walls) AND cwd IS NOT NULL
+        UNION
+        SELECT cwd FROM factory.merge_windows WHERE released_at >= (SELECT min(lower(wall)) FROM walls) AND cwd IS NOT NULL
+      ) c),
     step_issue AS (
       SELECT s.at, s.duration_ms, s.wait_ms, coalesce(
-        (SELECT a.issue_id FROM factory.lead_attempts a
-         WHERE s.cwd IS NOT NULL AND a.worktree_path IS NOT NULL
-           AND (s.cwd = a.worktree_path OR left(s.cwd, length(a.worktree_path) + 1) = a.worktree_path || '/')
-         ORDER BY a.attempt DESC LIMIT 1),
+        ci.issue_id,
         CASE WHEN s.name ~ '^factory-[0-9]+-[0-9]+ ' THEN 'issue_' || substring(s.name FROM '^factory-([0-9]+)-') END) AS issue_id
-      FROM factory.step_costs s WHERE s.at >= (SELECT min(lower(wall)) FROM walls)),
+      FROM factory.step_costs s LEFT JOIN cwd_issue ci ON ci.cwd = s.cwd
+      WHERE s.at >= (SELECT min(lower(wall)) FROM walls)),
     stepped AS (
       SELECT w.issue_id, w.closed_at,
         range_agg(tstzrange(s.at - s.duration_ms * interval '1 millisecond', s.at, '[)') * w.wall) AS step_mr,
@@ -140,12 +148,9 @@ async function readLeadSplits(tx: SQL, from: Date, to: Date) {
       FROM walls w JOIN step_issue s ON s.issue_id = w.issue_id
       GROUP BY w.issue_id, w.closed_at),
     lock_issue AS (
-      SELECT m.requested_at, coalesce(m.acquired_at, m.released_at) AS got, coalesce(
-        (SELECT a.issue_id FROM factory.lead_attempts a
-         WHERE m.cwd IS NOT NULL AND a.worktree_path IS NOT NULL
-           AND (m.cwd = a.worktree_path OR left(m.cwd, length(a.worktree_path) + 1) = a.worktree_path || '/')
-         ORDER BY a.attempt DESC LIMIT 1), '') AS issue_id
-      FROM factory.merge_windows m WHERE m.released_at >= (SELECT min(lower(wall)) FROM walls)),
+      SELECT m.requested_at, coalesce(m.acquired_at, m.released_at) AS got, coalesce(ci.issue_id, '') AS issue_id
+      FROM factory.merge_windows m LEFT JOIN cwd_issue ci ON ci.cwd = m.cwd
+      WHERE m.released_at >= (SELECT min(lower(wall)) FROM walls)),
     locked AS (
       SELECT w.issue_id, w.closed_at, range_agg(tstzrange(m.requested_at, m.got, '[)') * w.wall) AS mr
       FROM walls w JOIN lock_issue m ON m.issue_id = w.issue_id
