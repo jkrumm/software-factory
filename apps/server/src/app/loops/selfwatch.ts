@@ -149,6 +149,7 @@ async function overloadLines(deps: SelfwatchDeps & { overload: OverloadHost }, n
       slots: slotLines(await capacity.slots(), now),
       queue: await loopReads.queueReasons(),
       host: (await loopReads.capacityMinutes(new Date(now.getTime() - EVIDENCE_HOST_MS))).at(-1) ?? null,
+      cpu: await loopReads.classCpu(new Date(now.getTime() - EVIDENCE_HOST_MS)),
     }),
   )
   const [ps, deployLines] = await Promise.all([deps.overload.processes(), deps.overload.deployLines(DEPLOY_LINES)])
@@ -156,6 +157,7 @@ async function overloadLines(deps: SelfwatchDeps & { overload: OverloadHost }, n
     now,
     slotLines: stored.ok ? stored.value.slots : [],
     queue: stored.ok ? stored.value.queue : [],
+    cpu: stored.ok ? stored.value.cpu : null,
     host: stored.ok ? stored.value.host : null,
     ps: ps.ok ? { output: ps.value } : { failure: ps.error.detail },
     serverPid: deps.serverPid,

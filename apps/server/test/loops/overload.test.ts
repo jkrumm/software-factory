@@ -303,6 +303,14 @@ test('overloadEvidence: slot lines with reasons, queue by reason, host memory, t
       { kind: 'memory', count: 3, since: ago(40) },
       { kind: 'load', count: 2, since: ago(5) },
     ],
+    cpu: {
+      minutes: 10,
+      rows: [
+        { class: 'step', repo: 'shutterflow', cpuMs: 600_000 },
+        { class: 'lead', repo: 'shutterflow', cpuMs: 3_000_000 },
+        { class: 'system', repo: null, cpuMs: 1_200_000 },
+      ],
+    },
     host: minute({
       at: ago(1),
       load: 187.5,
@@ -323,6 +331,9 @@ test('overloadEvidence: slot lines with reasons, queue by reason, host memory, t
   expect(text).toContain('memory used 91%')
   expect(text).toContain('compressor 9120 MiB')
   expect(text).toContain('swap 62%')
+  // the groups ranked by CPU, as cores over the window: 3 000 000 ms over 10 minutes is 5 cores
+  expect(text).toContain('over the last 10 host minutes')
+  expect(text).toContain('lead shutterflow 5 cores, system 2 cores, step shutterflow 1 cores')
   expect(text).toContain('The 7 busiest processes of 7')
   expect(text).toContain('Scheduling priority (ps -o pri')
   expect(text).toContain('unreachable_s=40')
@@ -334,6 +345,7 @@ test('overloadEvidence: slot lines with reasons, queue by reason, host memory, t
     now: NOW,
     slotLines: [],
     queue: [],
+    cpu: null,
     host: null,
     ps: { output: many },
     serverPid: 1,
@@ -344,6 +356,7 @@ test('overloadEvidence: slot lines with reasons, queue by reason, host memory, t
     now: NOW,
     slotLines: [],
     queue: [],
+    cpu: null,
     host: null,
     ps: { failure: 'ps took longer than 20 s' },
     serverPid: 1,
@@ -352,6 +365,7 @@ test('overloadEvidence: slot lines with reasons, queue by reason, host memory, t
   expect(failed.join('\n')).toContain('Processes: not read: ps took longer than 20 s')
   expect(failed.join('\n')).toContain('Queue by reason: nothing queued')
   expect(failed.join('\n')).toContain('Host: no sample')
+  expect(failed.join('\n')).toContain('CPU by class and repo: no host minutes read')
 })
 
 test('a signal carries the evidence block after the eight lines, which never move the evidence hash', () => {
@@ -372,6 +386,7 @@ test('overloadEvidence: a credential in a command line or a log line never reach
     now: NOW,
     slotLines: [],
     queue: [],
+    cpu: null,
     host: null,
     ps: {
       output:

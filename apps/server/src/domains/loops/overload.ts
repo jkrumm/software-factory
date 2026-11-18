@@ -1,6 +1,14 @@
 import { scrub } from '../../kernel/scrub.ts'
 import { FRESH_MS, MINUTE_GAP_MS } from './selfwatch.ts'
-import type { CapacityMinute, Finding, PsRow, QueueReasonCount, RouteLatency, SlotMinute } from './selfwatch-model.ts'
+import type {
+  CapacityMinute,
+  ClassCpuWindow,
+  Finding,
+  PsRow,
+  QueueReasonCount,
+  RouteLatency,
+  SlotMinute,
+} from './selfwatch-model.ts'
 
 /**
  * The factory's own overload, as four conditions read from rows that already exist (the host samples with their capacity
@@ -314,6 +322,27 @@ export function priorityLine(rows: readonly PsRow[], serverPid: number): string 
 }
 
 const BUSIEST = 15
+/** The class and repo groups the CPU line names. */
+const CPU_GROUPS = 6
+
+/**
+ * Whose work the load is: the CPU of each class and repo over the host minutes of the window, as cores (CPU time over the
+ * window). One parallel build is a dozen rows in the busiest-processes list but one group here, and a `lead` group is work
+ * no test slot saw, a `step` group is one a slot admitted. The host loop samples once a minute, so a process shorter than that
+ * is under-counted: read it as a ranking, not a total.
+ */
+export function cpuLine(window: ClassCpuWindow | null): string {
+  if (!window || window.minutes === 0 || window.rows.length === 0)
+    return '- CPU by class and repo: no host minutes read'
+  const groups = [...window.rows]
+    .sort((a, b) => b.cpuMs - a.cpuMs)
+    .slice(0, CPU_GROUPS)
+    .map(
+      (row) =>
+        `${row.class}${row.repo ? ` ${row.repo}` : ''} ${Math.round((row.cpuMs / (window.minutes * 60_000)) * 10) / 10} cores`,
+    )
+  return `- CPU by class and repo over the last ${window.minutes} host minutes (sampled once a minute, a ranking): ${groups.join(', ')}`
+}
 const SLOT_LINES_LISTED = 12
 
 export interface EvidenceInputs {
@@ -321,6 +350,8 @@ export interface EvidenceInputs {
   /** `slotLines(rows, now)`: a held slot past half its limit, and a waiter with its reason */
   slotLines: readonly string[]
   queue: readonly QueueReasonCount[]
+  /** `classCpu`: the CPU by class and repo over the newest host minutes; null: not read */
+  cpu: ClassCpuWindow | null
   /** the newest host sample with its capacity facts; null: none */
   host: CapacityMinute | null
   /** `ps`'s output, or why it was not read */
@@ -334,7 +365,7 @@ const figure = (value: number | null, unit = ''): string =>
 
 /**
  * What a lead needs to find the cause instead of the symptom: the slot lines with their reasons, the queue by reason, the
- * host's memory, compressor and swap, the busiest processes with their scheduling priority, the priority of the server, the
+ * host's memory, compressor and swap, the CPU by class and repo, the busiest processes with their scheduling priority, the priority of the server, the
  * door and Postgres against a lead's process, and the last deploy lines. Read when a signal is filed, never hashed.
  */
 export function overloadEvidence(input: EvidenceInputs): string[] {
@@ -362,6 +393,8 @@ export function overloadEvidence(input: EvidenceInputs): string[] {
       ? `- Host at ${iso(host.at)}: load ${figure(host.load)} (ceiling ${figure(host.loadCeiling)}), leads ${figure(host.leads)} of ${figure(host.seats)} seats, memory used ${figure(host.memoryUsedPct, '%')}, compressor ${figure(host.compressorMib, ' MiB')}, swap ${figure(host.swapUsedPct, '%')}, swapouts ${figure(host.swapoutMbPer300s, ' MiB/300s')}, pressure level ${figure(host.pressureLevel)}`
       : '- Host: no sample',
   )
+
+  lines.push(cpuLine(input.cpu))
 
   if ('failure' in input.ps) {
     lines.push(`- Processes: not read: ${oneLine(input.ps.failure)}`)

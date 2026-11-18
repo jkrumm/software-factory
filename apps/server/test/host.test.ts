@@ -10,6 +10,7 @@ import { parsePs, residentBytes, topProcesses } from '../src/adapters/planning/p
 import { parseTopFootprints } from '../src/adapters/planning/top.ts'
 import { memoryUsedPct } from '../src/adapters/planning/vm-memory.ts'
 import { readLeadCosts } from '../src/read/lead-costs.ts'
+import { loopReads } from '../src/read/loops.ts'
 import { createApp } from '../src/api/app.ts'
 import { hostPass } from '../src/app/loops/host.ts'
 import { textRunner } from '../src/adapters/planning/process.ts'
@@ -582,6 +583,28 @@ test('a pass with a snapshot stores the signals, the class rows and the notable 
   await db.sql`DELETE FROM factory.host_class_hours`
   await db.sql`DELETE FROM factory.host_samples WHERE at IN (${t0}, ${t1})`
   await db.sql`DELETE FROM factory.lead_attempts`
+})
+
+test('classCpu: the CPU of each class and repo over the window, ranked, with the host minutes it spans', async () => {
+  const at = (min: number) => new Date(Date.UTC(2026, 10, 18, 14, min))
+  const row = (min: number, cls: string, repo: string | null, cpuMs: number | null) =>
+    db.sql`INSERT INTO factory.host_class_samples (at, class, repo, footprint_mib, cpu_ms, procs) VALUES (${at(min)}, ${cls}, ${repo}, 1, ${cpuMs}, 1)`
+  await db.sql`DELETE FROM factory.host_class_samples`
+  await row(0, 'lead', 'app', 999_000) // before the window
+  await row(5, 'lead', 'app', 30_000)
+  await row(5, 'step', 'app', 5_000)
+  await row(6, 'lead', 'app', 45_000)
+  await row(6, 'system', null, 10_000)
+  await row(6, 'owner', null, null) // CPU not read: not a group
+  const window = await loopReads(db.sql).classCpu(at(1))
+  expect(window.minutes).toBe(2)
+  expect(window.rows).toEqual([
+    { class: 'lead', repo: 'app', cpuMs: 75_000 },
+    { class: 'system', repo: null, cpuMs: 10_000 },
+    { class: 'step', repo: 'app', cpuMs: 5_000 },
+  ])
+  expect(await loopReads(db.sql).classCpu(at(30))).toEqual({ minutes: 0, rows: [] })
+  await db.sql`DELETE FROM factory.host_class_samples`
 })
 
 test('readLeadCosts: per repo, the attempts, the p80 of the newest ten attempt peaks and the newest peak', async () => {

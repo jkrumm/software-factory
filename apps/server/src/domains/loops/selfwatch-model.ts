@@ -180,6 +180,19 @@ export interface QueueReasonCount {
   since: Date
 }
 
+/** The CPU of one class and repo over the host minutes since a time (`host_class_samples`), `cpuMs` summed over them. */
+export interface ClassCpu {
+  class: string
+  repo: string | null
+  cpuMs: number
+}
+
+/** What `classCpu` read: the groups and the number of host minutes sampled in the window (the divisor of a core count). */
+export interface ClassCpuWindow {
+  minutes: number
+  rows: ClassCpu[]
+}
+
 /** One line of `ps`: the process, its scheduling priority (`ps -o pri`), CPU share, resident size and command. */
 export interface PsRow {
   pid: number
