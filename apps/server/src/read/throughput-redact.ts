@@ -42,6 +42,7 @@ export function redactAnswers(
 /**
  * The capacity loop as the read token sees it: the hours and the waits behind each reason stay, the work repos among them
  * are summed under one name (`REDACTED_REPO`). That covers the repo split of `queueByReason` and of `slotWait.byRepo`.
+ * A work repo's lead and its steps (`<project> <kind>`) are left out: a lead row or a step row has no sum to fold into.
  */
 export function redactCapacityLoop(model: CapacityLoopModel, open: readonly OpenProject[]): CapacityLoopModel {
   return {
@@ -60,7 +61,14 @@ export function redactCapacityLoop(model: CapacityLoopModel, open: readonly Open
       return { ...reason, byRepo: [...merged.values()].toSorted((a, b) => b.queuedHours - a.queuedHours) }
     }),
     slotWait: { ...model.slotWait, byRepo: redactWaitRepos(model.slotWait.byRepo, open) },
+    leadCosts: model.leadCosts.filter((lead) => !isWorkRepo(lead.repo, open)),
+    topSteps: model.topSteps.filter((step) => !isWorkRepo(stepProject(step.name), open)),
   }
+}
+
+/** A step is named `<project> <kind>`: its project is the first word. */
+export function stepProject(step: string): string {
+  return step.split(' ')[0] ?? step
 }
 
 function redactWaitRepos(rows: readonly WaitRepo[], open: readonly OpenProject[]): WaitRepo[] {
@@ -140,7 +148,7 @@ export function redactThroughput(model: ThroughputModel, open: readonly OpenProj
       // a step is named `<project> <kind>`: a work repo's steps and what they failed on stay out
       remote: {
         ...model.tests.remote,
-        steps: model.tests.remote.steps.filter((row) => keep(row.step.split(' ')[0] ?? row.step)),
+        steps: model.tests.remote.steps.filter((row) => keep(stepProject(row.step))),
       },
       flaky: model.tests.flaky.filter((row) => keep(row.repo)),
     },
