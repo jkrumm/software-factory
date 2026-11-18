@@ -24,11 +24,11 @@ export interface AttemptCosts {
   followUpAttempt: number | null
 }
 
-/** Milliseconds a light attempt runs, the lead row's median Issue takes, and a lead attempt after a move-up takes (null: unmeasured). */
+/** Median milliseconds (null: unmeasured): a light attempt that finished, one that moved up before it did, and the lead row's Issue. */
 export interface AttemptTimes {
-  lightAttemptMs: number | null
+  lightFinishMs: number | null
+  movedMs: number | null
   leadMs: number | null
-  followUpMs: number | null
 }
 
 /** A gap between two seats' rates and the lower bound it clears at `TRIPWIRE_Z`, in the unit of the rates. */
@@ -109,18 +109,26 @@ export function tripwireFrom(input: { now: Date; watchAts: readonly Date[] }): D
  * than the lead row per attempt.
  */
 export function moveUpBound(costs: AttemptCosts): number | null {
-  return breakEven(costs.lightAttempt, costs.leadAttempt, costs.followUpAttempt)
+  const { lightAttempt, leadAttempt, followUpAttempt } = costs
+  if (lightAttempt === null || leadAttempt === null || followUpAttempt === null || followUpAttempt <= 0) return null
+  return Math.min(1, Math.max(0, (leadAttempt - lightAttempt) / followUpAttempt))
 }
 
 /**
  * The same bound in minutes: the move-up share at which a light start takes as long as a start on the lead row. A light
- * attempt that moves up runs `light` minutes and then a lead attempt runs too, so per Issue the light route takes
- * `light + share * followUp` against the lead row's `lead` (its median minutes per Issue). Dollars alone cap the bound at
- * 1 (a share cannot pass it), so a class that moves up every time looked affordable while each move-up cost a seat and a
- * slot for the light attempt's minutes before the real lead started. Null while a time is unmeasured.
+ * attempt that finishes takes `finish` minutes where the lead row's median Issue takes `lead`, so it saves
+ * `lead - finish`; one that moves up has spent `moved` minutes before the lead attempt that follows takes the lead row's
+ * time anyway. Per Issue the light route takes `(1 - share) * finish + share * (moved + lead)` against `lead`, equal at
+ * `share = (lead - finish) / (lead - finish + moved)`. Dollars alone cap the bound at 1 (a share cannot pass it), so a
+ * class that moves up every time looked affordable while each move-up cost a seat and a slot for those minutes. 0 when a
+ * light attempt that finishes is no faster than the lead row, 1 when a move-up wastes none; null while a time is unmeasured.
  */
 export function moveUpTimeBound(times: AttemptTimes): number | null {
-  return breakEven(times.lightAttemptMs, times.leadMs, times.followUpMs)
+  const { lightFinishMs, movedMs, leadMs } = times
+  if (lightFinishMs === null || movedMs === null || leadMs === null) return null
+  const saved = leadMs - lightFinishMs
+  if (saved <= 0) return 0
+  return saved / (saved + Math.max(0, movedMs))
 }
 
 /**
@@ -132,13 +140,6 @@ export function classMoveUpBound(input: { dollars: number | null; time: number |
   if (dollars === null) return null
   return time === null ? dollars : Math.min(dollars, time)
 }
-
-/** `(lead - light) / followUp` in [0, 1]: the share at which `light + share * followUp` equals `lead`; null while a figure is unmeasured. */
-function breakEven(light: number | null, lead: number | null, followUp: number | null): number | null {
-  if (light === null || lead === null || followUp === null || followUp <= 0) return null
-  return Math.min(1, Math.max(0, (lead - light) / followUp))
-}
-
 /**
  * Whether triage's `small` starts light now. Met unless light is shown worse: its first pass rate on what it finished is
  * not shown more than `TRIPWIRE_POINTS` under lead's (the lower bound of the gap, `passGap`, is at or under them: a small

@@ -202,9 +202,9 @@ function deliveryOf(
  * The light seat's and the lead row's four figures over the facts' Issues, and the move-up bound from the per-attempt
  * dollars of the same Issues (`moveUpBound`): light attempts, the lead row's attempts on Issues that started there, and
  * the lead attempts that followed a move-up. A cost the usage schema cannot give leaves the figure and the bound null.
- * The same break-even in minutes (`moveUpTimeBound`) reads the light attempts' ms (to the move-up, else the Issue's working
- * time), the lead row's median working ms per Issue, and uses that median for a follow-up; the hygiene classes are judged
- * against the lower of the two (`classShare`).
+ * The same break-even in minutes (`moveUpTimeBound`) reads three medians: the working ms of light Issues that did not move up,
+ * the ms the moved-up attempts ran before they moved, and the lead row's working ms per Issue; the hygiene classes are
+ * judged against the lower of the two (`classShare`).
  */
 async function readDelivery(
   sql: SQL,
@@ -235,17 +235,23 @@ async function readDelivery(
     followUpAttempt: followDollars !== null && followDollars.length >= MIN_FOLLOW_UPS ? mean(followDollars) : leadMean,
   }
   const share = moveUpBound({ lightAttempt, leadAttempt: leadMean, followUpAttempt })
-  const workingOf = new Map(facts.map((fact) => [fact.issue_id, fact.working_ms]))
-  const lightMs = mean(onLight.map((a) => a.moved_after_ms ?? workingOf.get(a.issue_id) ?? 0))
+  const lightFinishMs = percentile(
+    lightFacts.filter((fact) => !fact.moved_up).map((fact) => fact.working_ms),
+    0.5,
+  )
+  const movedMs = percentile(
+    movedOnes.flatMap((a) => (a.moved_after_ms === null ? [] : [a.moved_after_ms])),
+    0.5,
+  )
   const leadMs = percentile(
     leadFacts.map((fact) => fact.working_ms),
     0.5,
   )
-  const timeShare = moveUpTimeBound({ lightAttemptMs: lightMs, leadMs, followUpMs: leadMs })
+  const timeShare = moveUpTimeBound({ lightFinishMs, movedMs, leadMs })
   const time =
-    timeShare === null || lightMs === null || leadMs === null
+    timeShare === null || lightFinishMs === null || movedMs === null || leadMs === null
       ? null
-      : { lightAttemptMs: lightMs, leadMs, followUpMs: leadMs, share: timeShare }
+      : { lightFinishMs, movedMs, leadMs, share: timeShare }
   const bound =
     share === null || lightAttempt === null || leadMean === null || followUpAttempt === null
       ? null
