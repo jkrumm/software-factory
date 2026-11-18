@@ -413,6 +413,10 @@ test('the ci check reads the landed commit; a CI that cannot be read does not ho
     { name: 'ci', ok: false, detail: 'build failure for abcdef0' },
   ])
   expect(asked).toEqual(['abcdef0123'])
+  // The merged commit is the one asked after, not the tip a later commit moved.
+  asked.length = 0
+  await new MakeAndProbes({ ci }).run({ ...input, ci: { ...input.ci, mergedSha: '1234567890' } }, signal())
+  expect(asked).toEqual(['1234567890'])
   const unread: Ci = { ...ci, ofCommit: async () => err(portError('refused', 'no token')) }
   expect(checks(await new MakeAndProbes({ ci: unread }).run(input, signal()))).toEqual([
     { name: 'ci', ok: true, detail: 'CI was not read: no token' },

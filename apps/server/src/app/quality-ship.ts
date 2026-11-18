@@ -189,7 +189,7 @@ async function judge(
   if (!verdict.accepted) return verdict
   // The last Watch regressed on the default branch's CI: a ship is held while that CI is still red for the commit it
   // landed at. A CI that cannot be read never refuses (NL23).
-  const landedAt = verdict.commits.landedAt
+  const landedAt = verdict.commits.mergedSha ?? verdict.commits.landedAt
   if (context.afterCiRegression && landedAt && project.ok && project.value.ci) {
     const state = await deps.ci.ofCommit({ repo, sha: landedAt })
     const refusal = ciStillRed(state.ok ? state.value : null, landedAt)

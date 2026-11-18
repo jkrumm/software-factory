@@ -154,7 +154,14 @@ async function checkOne(deps: WatchDeps, watch: OpenWatch, pass: WatchPass): Pro
       : {}),
     // CI applies to an inert change too: only a project that ships by pull request, and a landed commit, are asked.
     ...(project.value.ci && ship?.commits?.landedAt
-      ? { ci: { landedAt: ship.commits.landedAt, mergedAt: ship.commits.mergedAt, now: now.toISOString() } }
+      ? {
+          ci: {
+            landedAt: ship.commits.landedAt,
+            mergedSha: ship.commits.mergedSha ?? null,
+            mergedAt: ship.commits.mergedAt,
+            now: now.toISOString(),
+          },
+        }
       : {}),
   }
   // The checks: git, make and HTTP, with a process timeout each, never inside a transaction.

@@ -34,6 +34,27 @@ test('a commit on origin’s default branch is evidence: where it landed, what i
   expect(got.reviewRanges).toEqual([{ base: await repo.git('rev-parse', `${sha}^`), head: sha }])
 })
 
+test('mergedSha is the commit that holds the named ones, not the tip a later commit of someone else moved', async () => {
+  const repo = await fresh()
+  const sha = await repo.commit('src/a.ts', 'export const a = 1\n', 'feat: a')
+  const other = await repo.other()
+  const later = await other.commit('theirs.ts', 'x\n', 'feat: theirs')
+  await repo.git('pull', '-q', '--ff-only', 'origin', 'master')
+  const got = value(await read(repo, [sha]))
+  expect(got.landedAt).toBe(later)
+  expect(got.mergedSha).toBe(sha)
+})
+
+test('mergedSha of a rebased run is its newest commit; of a merge commit, the merge', async () => {
+  const repo = await fresh()
+  const one = await repo.commit('a.ts', '1\n')
+  const two = await repo.commit('b.ts', '2\n')
+  await (await repo.other()).commit('theirs.ts', 'x\n')
+  await repo.git('pull', '-q', '--ff-only', 'origin', 'master')
+  expect(value(await read(repo, [one, two])).mergedSha).toBe(two)
+  expect(value(await read(repo, [one])).mergedSha).toBe(one)
+})
+
 test('two neighbouring commits are one range; a commit by someone else between them splits it', async () => {
   const repo = await fresh()
   const one = await repo.commit('a.ts', '1\n')

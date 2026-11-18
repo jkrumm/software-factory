@@ -226,7 +226,32 @@ export class GitCommits implements Commits {
     // Without a cut (no worktree on record) the ship's range starts at the parent of the oldest commit it names.
     const from = cut ?? (await this.parentOfOldest(repo, full))
     const reviewRanges = landedAt && from ? await this.rangesOf(repo, from, landedAt, commits, onBranch) : []
-    return { landedAt, commits, paths, mergedAt: await this.newestOf(repo, full), reviewRanges }
+    const mergedSha = landedAt && from ? await this.mergedCommit(repo, from, landedAt, full) : null
+    return { landedAt, mergedSha, commits, paths, mergedAt: await this.newestOf(repo, full), reviewRanges }
+  }
+
+  /**
+   * The newest commit of `tip`'s first-parent line since `cut` that holds one of the commits named: the commit itself
+   * where it is on the line, else the merge that brought it in. CI for the change ran for that commit; `tip` is only
+   * where the default branch stood at the ship, and a ship held for a day has other leads' commits above it. Null where
+   * the line has none of them.
+   */
+  private async mergedCommit(repo: string, cut: string, tip: string, named: readonly string[]): Promise<string | null> {
+    const listed = async (args: string[]): Promise<string[]> => {
+      const done = await gitIn(repo, ['rev-list', ...args], this.options)
+      if (done.exitCode !== 0) throw new Error(`git rev-list failed (exit ${done.exitCode})`)
+      return lines(done.stdout)
+    }
+    const line = (await listed(['--first-parent', `${cut}..${tip}`])).reverse()
+    const index = new Map(line.map((sha, i) => [sha, i]))
+    let newest = -1
+    for (const sha of named) {
+      const holder = index.has(sha)
+        ? sha
+        : (await listed(['--first-parent', '--ancestry-path', `${sha}..${tip}`])).at(-1)
+      newest = Math.max(newest, (holder === undefined ? undefined : index.get(holder)) ?? -1)
+    }
+    return line[newest] ?? null
   }
 
   /** Every path the commits touched, sorted: a merge commit counts as what it brought in. */

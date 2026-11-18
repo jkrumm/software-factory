@@ -49,10 +49,12 @@ export interface ProofInput {
    */
   version?: { landedAt: string; deployPaths?: string[] } | { problem: string }
   /**
-   * Set where the project ships by pull request: the default branch's CI for the landed commit must be green. `mergedAt`
-   * (null when unknown) and `now` are ISO times, passed in so the check stays deterministic.
+   * Set where the project ships by pull request: the default branch's CI for the merged commit must be green. `mergedSha`
+   * is the commit that merged the change, `landedAt` (the default branch's tip at the ship, which a later commit of
+   * someone else may have moved) stands in where it is unknown. `mergedAt` (null when unknown) and `now` are ISO times,
+   * passed in so the check stays deterministic.
    */
-  ci?: { landedAt: string; mergedAt: string | null; now: string }
+  ci?: { landedAt: string; mergedSha?: string | null; mergedAt: string | null; now: string }
   probes: ProjectChecks['probes']
 }
 
