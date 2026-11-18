@@ -574,3 +574,13 @@ Report `docs/strategy/2026-11-next/report.html`, definition `docs/strategy/2026-
   done: a lane cap's wait is not told apart per lane in the finding (every capped lane of the repo is named); the disk refusal is
   not a ranked queue wait (`WAIT_SUBJECTS`) until it shows in the data. Count after a week: no cap finding open for more than a
   day, `disk` queue minutes near zero, and `read capacity-loop` `claim` idle seat-hours down.
+- **NL49 A ship before `make deploy` is refused at the ship, not failed by the Watch (Issue 2343, 2026-11-18).** 3 of the 10 sampled
+  regressions (1896, 2139, 2239) had one cause: the lead shipped before `make deploy` ran and the Watch failed with `deployed
+  <sha> does not hold <sha>, where the work landed` (in 1896 the ship was at 02:15 and the note at 03:07; 2239 needed a second
+  attempt only to deploy). The ship gate now runs the Watch's own deployed-version comparison (`MakeAndProbes.run` with the
+  version alone: the same checkout sync, `make version`, `deployedHolds` and `deploy.paths`) when the project's deploy mode
+  is `make` and the shipped paths deploy, and refuses with the missing step. Only a readable version that lacks the commit
+  refuses (`Check.lacks`); a missing `make version`, a timeout, a blocked checkout or a git that cannot compare is recorded
+  by the Watch as before (NL23's rule for evidence). Cost: a ship waits for `make version` (30 s cap) and, as the Watch does,
+  may fast-forward the checkout. Revert: delete the block after `ciStillRed` in `quality-ship.ts`. Count after a week:
+  regressions with cause `not_deployed` (`read/kpis-flow.ts`) near zero, and ship refusals naming `does not hold`.

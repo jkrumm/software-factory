@@ -577,7 +577,7 @@ export async function deployedHolds(
   deployed: string,
   landedAt: string,
   { deployPaths, ...options }: GitOptions & { deployPaths?: readonly string[] } = {},
-): Promise<{ ok: boolean; detail: string }> {
+): Promise<{ ok: boolean; detail: string; lacks?: boolean }> {
   const git = (args: string[]) => gitIn(repo, args, options)
   const resolve = (ref: string) => git(['rev-parse', '-q', '--verify', `${ref}^{commit}`])
   let known = await resolve(deployed)
@@ -608,6 +608,7 @@ export async function deployedHolds(
     }
     return {
       ok: false,
+      lacks: true,
       detail: `deployed ${full.slice(0, 12)} does not hold ${landedAt.slice(0, 12)}, where the work landed: \`make deploy\` has not run on it`,
     }
   }
