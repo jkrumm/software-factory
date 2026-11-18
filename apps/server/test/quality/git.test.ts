@@ -45,7 +45,23 @@ test('mergedSha is the commit that holds the named ones, not the tip a later com
   expect(got.mergedSha).toBe(sha)
 })
 
-test('mergedSha of a rebased run is its newest commit; of a merge commit, the merge', async () => {
+test('mergedSha of a commit a merge commit brought in is the merge commit', async () => {
+  const repo = await fresh()
+  const cut = await repo.git('rev-parse', 'HEAD')
+  await repo.git('checkout', '-q', '-b', 'side')
+  const side = await repo.commit('side.ts', 's\n', 'feat: side')
+  await repo.git('checkout', '-q', 'master')
+  await repo.git('merge', '-q', '--no-ff', '-m', 'Merge side', 'side')
+  const merge = await repo.git('rev-parse', 'HEAD')
+  await repo.git('push', '-q', 'origin', 'master')
+  await (await repo.other()).commit('theirs.ts', 'x\n')
+  await repo.git('pull', '-q', '--ff-only', 'origin', 'master')
+  const got = value(await read(repo, [side], { cut }))
+  expect(got.mergedSha).toBe(merge)
+  expect(got.landedAt).not.toBe(merge)
+})
+
+test('mergedSha of a rebased run is its newest commit', async () => {
   const repo = await fresh()
   const one = await repo.commit('a.ts', '1\n')
   const two = await repo.commit('b.ts', '2\n')

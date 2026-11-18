@@ -958,6 +958,21 @@ describe('the watch', () => {
     expect((await stateOf(issueId)).state).toBe('closed')
   })
 
+  test('the ci check is asked for the commit that merged the change, not the tip the ship found', async () => {
+    const seen: unknown[] = []
+    const spy: Proof = {
+      run: async (input) => {
+        seen.push(input.ci)
+        return ok([])
+      },
+    }
+    const issueId = await watching()
+    clock.advance(30 * 60_000)
+    value(await checkWatches(watchDeps({ proof: spy })))
+    expect(seen).toMatchObject([{ landedAt: 'f'.repeat(40), mergedSha: 'e'.repeat(40) }])
+    expect((await stateOf(issueId)).state).toBe('closed')
+  })
+
   test('a docs-only ship skips the version check; a ship that found no landed commit reds it', async () => {
     const seen: unknown[] = []
     const spy: Proof = {
