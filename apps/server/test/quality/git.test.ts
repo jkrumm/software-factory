@@ -258,12 +258,14 @@ test('the deployed commit must hold where the work landed', async () => {
   expect(await deployedHolds(repo.path, later, landed)).toMatchObject({ ok: true })
   expect(await deployedHolds(repo.path, early, landed)).toMatchObject({
     ok: false,
+    lacks: true,
     detail: expect.stringContaining('`make deploy` has not run'),
   })
   expect(await deployedHolds(repo.path, 'f'.repeat(40), landed)).toMatchObject({
     ok: false,
     detail: expect.stringContaining('is not in'),
   })
+  expect(await deployedHolds(repo.path, 'f'.repeat(40), landed)).not.toHaveProperty('lacks')
 })
 
 test('deploy.paths: a deployed commit behind only by paths the project does not deploy still holds', async () => {

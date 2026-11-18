@@ -362,6 +362,7 @@ async function main(): Promise<void> {
   const socket = await leads.listen()
 
   const ci = githubCi({ token: intakeEnv.github.token, apiUrl: intakeEnv.github.apiUrl })
+  const draining = new AbortController()
   const shipping = {
     ...writes,
     commits: new GitCommits(),
@@ -370,8 +371,9 @@ async function main(): Promise<void> {
     projects,
     checkout,
     reviewerRows,
+    proof: new MakeAndProbes({ ci }),
+    signal: draining.signal,
   }
-  const draining = new AbortController()
 
   // The loops: every recurring job of the server is one named loop on the runner, each with its interval
   // (`FACTORY_TICK_MS` the default), its trigger and its single-flight pass. Intake's pollers keep their own schedules.

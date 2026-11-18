@@ -96,8 +96,10 @@ const checkout: LeadCheckout = {
     return checkoutAnswer
   },
 }
+let proofInputs: Parameters<Proof['run']>[0][]
 const proof: Proof = {
-  run: async () => {
+  run: async (input) => {
+    proofInputs.push(input)
     proofRuns++
     if (uow.inTransaction()) inside.push('proof')
     await duringProof()
@@ -114,7 +116,19 @@ const ci: Ci = {
   ofCommit: async () => commitCi,
 }
 let reviewerRows: ShipDeps['reviewerRows']
-const deps = (): ShipDeps => ({ uow, clock, ids, commits, review, ci, projects: watch(), checkout, reviewerRows })
+const deps = (): ShipDeps => ({
+  uow,
+  clock,
+  ids,
+  commits,
+  review,
+  ci,
+  projects: watch(),
+  checkout,
+  reviewerRows,
+  proof,
+  signal: new AbortController().signal,
+})
 const watchDeps = (extra: Partial<WatchDeps> = {}): WatchDeps => ({
   uow,
   clock,
@@ -143,6 +157,7 @@ beforeEach(async () => {
   commitRepos = []
   proofAnswer = () => ok([{ name: 'make verify', ok: true, detail: 'exit 0' }])
   proofRuns = 0
+  proofInputs = []
   commitCi = err(portError('refused', 'no token'))
   duringProof = async () => {}
   project = { windowMs: 30 * 60_000, deployMode: 'none', makeVerify: true, ci: true, probes: [] }
@@ -856,6 +871,55 @@ describe('the watch', () => {
       states.push(`${now.state}${now.wait_reason ? `:${now.wait_reason}` : ''}`)
     }
     expect(states).toEqual(['working', 'working', 'waiting:regressed'])
+  })
+
+  describe('a ship of a project that deploys with make', () => {
+    const lacking: Check = {
+      name: 'deployed version',
+      ok: false,
+      lacks: true,
+      detail: `deployed ${'1'.repeat(12)} does not hold ${'f'.repeat(12)}, where the work landed: \`make deploy\` has not run on it`,
+    }
+
+    test('is refused, naming the missing deploy, while the deployed version lacks the landed commit', async () => {
+      project = { ...project, deployMode: 'make' }
+      proofAnswer = () => ok([lacking])
+      const issueId = await working()
+      const refused = value(await ship(issueId, 'call-1'))
+      expect(refused.result).toBe('refused')
+      expect(refused.detail).toContain('does not hold')
+      expect(refused.detail).toContain('make deploy')
+      expect(refused.detail).toContain('factory deploy-lock --project example')
+      expect(inside).toEqual([])
+      expect(proofInputs).toEqual([
+        { repo: '/repo/example', makeVerify: false, probes: [], version: { landedAt: 'f'.repeat(40) } },
+      ])
+      expect(await stateOf(issueId)).toMatchObject({ state: 'working' })
+      proofAnswer = () => ok([{ name: 'deployed version', ok: true, detail: 'deployed holds' }])
+      expect(value(await ship(issueId, 'call-2')).result).toBe('applied')
+    })
+
+    test('a version that cannot be read never refuses: the Watch reports it', async () => {
+      project = { ...project, deployMode: 'make' }
+      proofAnswer = () => ok([{ name: 'deployed version', ok: false, detail: 'make version exit 2' }])
+      expect(value(await ship(await working(), 'call-1')).result).toBe('applied')
+      proofAnswer = () => err(portError('gone', 'the server is stopping'))
+      expect(value(await ship(await working(), 'call-1')).result).toBe('applied')
+    })
+
+    test('asks nothing of a change that deploys nothing, or of a project that does not deploy with make', async () => {
+      proofAnswer = () => ok([lacking])
+      project = { ...project, deployMode: 'make' }
+      commitAnswer = ok(landed({ paths: ['docs/a.md'] }))
+      expect(value(await ship(await working(), 'call-1')).result).toBe('applied')
+      expect(proofRuns).toBe(0)
+      commitAnswer = ok(landed())
+      for (const deployMode of ['none', 'auto'] as const) {
+        project = { ...project, deployMode }
+        expect(value(await ship(await working(), 'call-1')).result).toBe('applied')
+      }
+      expect(proofRuns).toBe(0)
+    })
   })
 
   describe('a ship after a regression on the default branch’s CI', () => {

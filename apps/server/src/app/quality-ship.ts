@@ -1,9 +1,10 @@
 import { type Effort, SPEC_WAIT_HOURS, type Tier } from '@software-factory/contract'
+import { repoNameOf } from '../domains/planning/sync.ts'
 import { reviewSeat } from '../domains/leads/reviewer.ts'
 import { type CiOutcome, judgeShip, type ReviewOutcome, type ShipVerdict } from '../domains/quality/gate.ts'
 import type { AcceptanceEvidence, ReviewEvidence } from '../domains/quality/evidence.ts'
-import type { Ci, Commits, LeadCheckout, Projects, Review } from '../domains/quality/ports.ts'
-import { ciStillRed, regressedOnCi } from '../domains/quality/watch.ts'
+import type { Ci, Commits, LeadCheckout, Projects, Proof, Review } from '../domains/quality/ports.ts'
+import { ciStillRed, notDeployed, regressedOnCi } from '../domains/quality/watch.ts'
 import type { QualityStore, StoredEvidence, UndisposedAnnotation } from '../domains/quality/store.ts'
 import type { AnyIssueEvent } from '../domains/work/events.ts'
 import type { Issue } from '../domains/work/issue.ts'
@@ -30,6 +31,10 @@ export interface ShipDeps {
   /** whether the project ships by pull request: a push-shipping project has no pull request whose CI to read */
   projects: Projects
   checkout: LeadCheckout
+  /** reads the deployed version for a project that deploys with `make`: a ship the deployed version does not hold is refused */
+  proof: Proof
+  /** the server stopping: nothing the proof runs outlives it */
+  signal: AbortSignal
   /** the role table's `reviewer` and `reviewer-cheap` rows, for the seat a review's record names; unset or null: no review is recorded with a seat */
   reviewerRows?: () => Promise<{
     cheap: { tier: Tier; effort: Effort }
@@ -194,6 +199,25 @@ async function judge(
     const state = await deps.ci.ofCommit({ repo, sha: landedAt })
     const refusal = ciStillRed(state.ok ? state.value : null, landedAt)
     if (refusal) return { accepted: false, error: refusal }
+  }
+  // The Watch would fail on a landed commit the deployed version lacks: say so now, with the missing step. Only a version
+  // that is readable and lacks the commit refuses; one that cannot be read is the Watch's to report, never the ship's.
+  const deployedAt = verdict.commits.landedAt
+  if (deployedAt && verdict.commits.deploys && project.ok && project.value.deployMode === 'make') {
+    const ran = await deps.proof.run(
+      {
+        repo,
+        makeVerify: false,
+        probes: [],
+        version: {
+          landedAt: deployedAt,
+          ...(project.value.deployPaths ? { deployPaths: project.value.deployPaths } : {}),
+        },
+      },
+      deps.signal,
+    )
+    const lacking = ran.ok ? ran.value.find((check) => check.name === 'deployed version' && check.lacks) : undefined
+    if (lacking) return { accepted: false, error: notDeployed(lacking.detail, repoNameOf(issue.repo)) }
   }
   return {
     ...verdict,

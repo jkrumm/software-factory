@@ -16,6 +16,12 @@ export interface Check {
    * neither fails the watch nor is retried (`markInherited`)
    */
   inherited?: boolean
+  /**
+   * the deployed version is readable and does not hold the landed commit: `make deploy` has not run on it. Set by the
+   * deployed-version check alone; the ship gate refuses on it, and on no other red of that check (a version that cannot
+   * be read is no proof of a missing deploy).
+   */
+  lacks?: boolean
 }
 
 export type Outcome = 'green' | 'red' | 'blocked'
@@ -120,6 +126,14 @@ export function ciStillRed(state: CiState | null, sha: string): string | null {
   if (state?.status !== 'red') return null
   const link = state.url ? ` (${state.url})` : ''
   return `ship refused: the default branch's CI is still red for ${sha.slice(0, 7)}: ${state.reason ?? 'a check failed'}${link}, the red your last Watch regressed on, and shipping again reads the same red. Land a commit that fixes or reverts it, or re-run the failed check where it is a flake; where the red is not this change's (it was red before it), say so in a Decision (\`factory issue ask\`) instead of shipping`
+}
+
+/**
+ * The refusal of a ship whose landed commit the deployed version does not hold: the Watch would fail on exactly this
+ * line within the hour, so the ship says it now with the missing step. `detail` is the check's own line.
+ */
+export function notDeployed(detail: string, project: string): string {
+  return `ship refused: ${detail}. Deploy first (\`make deploy\`, inside \`factory deploy-lock --project ${project} -- make deploy\` where leads share the deploy), then ship again with the same commits`
 }
 
 export function outcomeOf(checks: readonly Check[]): Outcome {
