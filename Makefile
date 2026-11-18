@@ -21,6 +21,9 @@ check:
 	@$(call slot,check) $(MAKE) --no-print-directory check-steps
 
 # The lead's check after each change (project.yaml `checks.fast`): its own slot name, so the ledger learns its peak apart from the whole gate's.
+# Two parts: the home part below edits the worktree (oxfmt --write) and always runs on the mini; the slot's part
+# (check-fast-steps: static checks, the changed files' unit tests) edits nothing and is project.yaml `steps.check-fast`, `remote: true`:
+# when the mini's line is long it runs on the step host (docs/architecture.md "Steps off the mini"), over the tree as formatted here.
 #
 # A lead's tree is formatted first, outside the slot (oxfmt --write takes ~50 ms): a format-only red used to cost a whole
 # slot wait (up to 12 min measured) plus a rerun, and 11 of 21 steps of a day exited non-zero (#1639). CI ($$CI set) keeps

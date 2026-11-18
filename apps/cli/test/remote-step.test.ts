@@ -90,6 +90,7 @@ describe('the image', () => {
     expect(imageOf({ bun: '1.4.3', dockerfile: null }).tag).toMatch(/^factory-step:bun-1\.4\.3-r\d+$/)
     const factory = imageOf({ bun: '1.4.3', dockerfile: null }).dockerfile
     expect(factory).toContain('postgresql-16')
+    expect(factory).toContain('shellcheck')
     expect(factory).toContain('ENV PG_BIN_DIR=/usr/lib/postgresql/16/bin')
     const own = imageOf({ bun: '1.4.3', dockerfile: 'FROM ubuntu:24.04\n' })
     expect(own.tag).toMatch(/^factory-step:repo-[0-9a-f]{16}$/)

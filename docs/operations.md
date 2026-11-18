@@ -79,7 +79,9 @@ outage never starts every waiting step at once.
 **Tiers** (`project.yaml` `checks:`, `docs/plan.md` "Check tiers"). A lead runs `make check-fast`: everything of `make
 check` that is not a test run, then the unit tests of the files the branch changed (`bun test --changed` against the merge
 base with `origin/master`; `CHECK_FAST_ALL=1` runs all of them). Outside CI it first applies `oxfmt --write` to the tree,
-outside the slot, so a format-only red never costs a slot wait: commit what it reformats. CI leaves the rest:
+outside the slot, so a format-only red never costs a slot wait: commit what it reformats. The rest (`check-fast-steps`) edits
+nothing, so it is `steps.check-fast` in `project.yaml` with `remote: true`: when the mini's line is long it runs on the step host over
+the tree as just formatted (`step_placements`, Throughput's "Steps by host"; the step image carries shellcheck and Postgres for it). CI leaves the rest:
 `.github/workflows/ci.yml` runs the full gate on `ubuntu-latest` as jobs:
 
 - `static`: `make check-fast` with `CHECK_FAST_ALL=1 UNIT_SHARD=1/2`, the checks and the first half of the unit tests.

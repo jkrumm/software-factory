@@ -22,11 +22,12 @@ const POSTGRES_MAJOR = 16
 /**
  * Bumped when the factory's image changes without its bun: part of the tag, so a host that holds the old image builds the
  * new one once instead of keeping it. 2: PostgreSQL server binaries and jq (the shell tests of the unit step read JSON with it).
+ * 3: shellcheck (software-factory's `check-fast` step runs it).
  */
-const IMAGE_REVISION = 2
+const IMAGE_REVISION = 3
 
 /**
- * The factory's step image: Ubuntu 24.04 as the VPS and CI's `ubuntu-latest`, git, jq, make, the pinned bun and the PostgreSQL
+ * The factory's step image: Ubuntu 24.04 as the VPS and CI's `ubuntu-latest`, git, jq, make, shellcheck, the pinned bun and the PostgreSQL
  * server binaries (`initdb`, `pg_ctl`, `postgres` on PATH, `PG_BIN_DIR` set) so a step can start a private cluster in its
  * container, as the mini's tests do. No cluster is created and none runs: the step starts and stops its own.
  */
@@ -37,7 +38,7 @@ function stepDockerfile(): string {
     'ARG BUN',
     // the package's default cluster would be created at build time: no step reads it
     'RUN mkdir -p /etc/postgresql-common && echo "create_main_cluster = false" > /etc/postgresql-common/createcluster.conf',
-    `RUN apt-get update && apt-get install -y --no-install-recommends ca-certificates curl git jq make unzip postgresql-${POSTGRES_MAJOR} \\`,
+    `RUN apt-get update && apt-get install -y --no-install-recommends ca-certificates curl git jq make shellcheck unzip postgresql-${POSTGRES_MAJOR} \\`,
     ' && rm -rf /var/lib/apt/lists/*',
     `ENV PG_BIN_DIR=${bin}`,
     `ENV PATH=${bin}:/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin`,
