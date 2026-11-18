@@ -171,6 +171,18 @@ describe('deadcodeProbe', () => {
     expect(outcome.detail).toContain('in ui')
   })
 
+  test('unusual: a workspace member without its own lockfile does not unjudge the root dependencies', async () => {
+    const dir = repo({
+      'package.json': '{}',
+      'bun.lock': '{}',
+      'node_modules/.keep': '',
+      'packages/x/package.json': '{}',
+    })
+    const outcome = await deadcodeProbe(tools({ fallow: fakeTool('fallow', REPORT, 1) }), dir)
+    expect(outcome.findings.map((f) => f.key)).toContain('deadcode:deps')
+    expect(outcome.detail).not.toContain('packages/x')
+  })
+
   test('unusual: no node_modules and no bun.lock leaves unused dependencies out', async () => {
     const outcome = await deadcodeProbe(
       tools({ fallow: fakeTool('fallow', REPORT, 1) }),
