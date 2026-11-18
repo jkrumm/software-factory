@@ -64,7 +64,7 @@ describe.skipIf(!canRun)('the plans', () => {
     expect(out).toContain('scripts/launch.sh')
     expect(out).toContain('scripts/launch-door.sh')
     expect(out).toMatch(
-      /door: apps\/door from [0-9a-f<>a-z]+, launcher .*launch-door\.sh, credentials: FACTORY_DOOR_TOKEN from its \.env\.door\.tpl/,
+      /door: apps\/door from (?:[0-9a-f]{12}|<origin\/rewr), launcher .*launch-door\.sh, credentials: FACTORY_DOOR_TOKEN from its \.env\.door\.tpl/,
     )
     expect(out).toContain('the settings file is accepted')
     expect(out).toContain('one-minute load average')
