@@ -42,8 +42,8 @@ export interface Refusal {
   message: string
   /** when a reading says the reason may end (a window's reset); null when nothing names a time */
   opensAt: Date | null
-  /** `fit`: the memory refusal is the learned cost of the candidate's lead, not the host's reading; absent otherwise */
-  part?: 'fit'
+  /** `fit`: the memory refusal is the learned cost of the candidate's lead, not the host's reading; `aim`: the lead aim's count (the host's pressure) holds it; absent otherwise */
+  part?: 'fit' | 'aim'
 }
 
 /**
@@ -104,6 +104,12 @@ export interface AdmissionInputs {
   memoryCeilings: MemoryCeilings
   /** the learned cost of the candidate's lead against the free memory; null: nothing learned is known */
   leadFit?: LeadFit | null
+  /**
+   * The lead aim (`FACTORY_SLOT_AIM=on`): the count of leads the host takes at its pressure now, and the leads running. Then the
+   * memory fit above is only the guard of what cannot fit at all, and this count is the gate. Null or absent: no aim, the fit
+   * decides alone.
+   */
+  leadAim?: LeadAimGate | null
   /** the memory the running leads' lanes and the candidate's lane reserve (the lanes' `memory`); null: none */
   reserved: Reserved | null
   accounts: readonly AccountReading[]
@@ -125,7 +131,14 @@ export interface AdmissionInputs {
 
 export type Admission = { admit: true; account: AccountReading } | { admit: false; refusal: Refusal }
 
-const no = (kind: RefusalKind, message: string, opensAt: Date | null = null, part?: 'fit'): Admission => ({
+/** The lead aim as the admission sees it: its count, the leads running (this pass's admissions included), and whether the pressure was read. */
+export interface LeadAimGate {
+  target: number
+  running: number
+  pressureRead: boolean
+}
+
+const no = (kind: RefusalKind, message: string, opensAt: Date | null = null, part?: 'fit' | 'aim'): Admission => ({
   admit: false,
   refusal: { kind, message, opensAt, ...(part ? { part } : {}) },
 })
@@ -183,7 +196,12 @@ export function checkAdmission(input: AdmissionInputs): Admission {
     pace,
     rank: input.rank,
   })
-  if (pick.picked) return { admit: true, account: pick.picked }
+  // Last: the aim holds back only a lead every other rule lets in, so its reason is the true one and what it holds back is
+  // what the aim's count binds (`leadWaiters`).
+  if (pick.picked) {
+    const aimed = input.leadAim ? aimRefusal(input.leadAim) : null
+    return aimed ? no('memory', aimed, null, 'aim') : { admit: true, account: pick.picked }
+  }
   if (!pick.capped) return no('window', pick.why, pick.opensAt)
   return no('cap', raise > 0 ? `${pick.why} (raised by ${raise}: the host is idle)` : pick.why)
 }
@@ -221,6 +239,16 @@ export function lineRefusal(line: TestLine): string | null {
   )
 }
 
+/**
+ * The lead aim's refusal: no new lead while as many run as the host takes at its pressure, and none while the pressure is not
+ * read (a missing reading admits nothing beyond what runs). Null: the aim has room.
+ */
+export function aimRefusal(aim: LeadAimGate): string | null {
+  if (!aim.pressureRead) return `memory: the host's pressure is not read, so no lead beyond the ${aim.running} running`
+  if (aim.running < aim.target) return null
+  return `memory: the host takes ${aim.target} leads at its pressure now (the aim adds one after two quiet minutes), ${aim.running} run`
+}
+
 /** The refusal of a lead that would not fit by what its repo's leads are learned to take; null: it fits or nothing is known. */
 function fitRefusal(fit: LeadFit): string | null {
   if (fit.candidateMib === null || fit.freeMib === null) return null
@@ -238,6 +266,6 @@ function fitRefusal(fit: LeadFit): string | null {
       : ''
   return (
     `memory: a lead of ${fit.repo} takes ~${gib(fit.candidateMib)} GiB outside test slots (${basis}${since}), ` +
-    `the host has ${gib(fit.freeMib)} GiB free${growing}, headroom ${gib(fit.headroomMib)} GiB`
+    `the host has ${gib(fit.freeMib)} GiB free${growing}${fit.headroomMib > 0 ? `, headroom ${gib(fit.headroomMib)} GiB` : ''}`
   )
 }

@@ -5,7 +5,7 @@ import type { Claim } from '../../domains/capacity/claims.ts'
 import { BASELINE_WINDOW_MS } from '../../kernel/remote-pressure.ts'
 import type { Assignment, CapacityStore, HostSampleFact, LeadPeaks } from '../../domains/capacity/ports.ts'
 import { ENDED_AFTER_MS, LEARN_WINDOW_MS, PEAKS_FETCHED, SETTLED_RUN_MS } from '../../domains/capacity/leadcost.ts'
-import type { AimState } from '../../domains/capacity/slot-aim.ts'
+import type { AimState, LeadAim } from '../../domains/capacity/slot-aim.ts'
 import { QUEUE_STATES, type QueueStates } from '../../domains/capacity/queue-state.ts'
 import { type SlotRow, WAIT_KINDS } from '../../domains/capacity/slots.ts'
 import { type IssueId, issueId } from '../../kernel/ids.ts'
@@ -84,7 +84,11 @@ const RunRow = z.object({
   host: z.enum(['mini', 'vps']).nullable(),
 })
 const ProjectPeakRow = z.object({ step: z.string(), peak_rss_mib: z.number().int().nullable() })
-const HostSampleRow = z.object({ at: z.date(), memory_used_pct: z.number().nullable() })
+const HostSampleRow = z.object({
+  at: z.date(),
+  memory_used_pct: z.number().nullable(),
+  kernel_free_pct: z.number().nullable(),
+})
 
 const HostFactRow = z.object({
   at: z.date(),
@@ -94,8 +98,10 @@ const HostFactRow = z.object({
   swapout_mb_per_300s: z.number().nullable(),
   processes: z.number().int().nullable(),
   pressure_level: z.number().int().nullable(),
+  kernel_free_pct: z.number().int().nullable(),
 })
 const AimRow = z.object({ target: z.number().int(), quiet_since: z.date().nullable() })
+const LeadAimRow = z.object({ lead_target: z.number().int().nullable(), lead_since: z.date().nullable() })
 const PeakFactRow = z.object({
   repo: z.string(),
   peak: z.number().int(),
@@ -472,15 +478,16 @@ export function postgresCapacityStore(tx: SQL): CapacityStore {
     },
 
     async latestHostSample() {
-      const [raw] = await tx`SELECT at, memory_used_pct FROM factory.host_samples ORDER BY at DESC LIMIT 1`
+      const [raw] =
+        await tx`SELECT at, memory_used_pct, kernel_free_pct FROM factory.host_samples ORDER BY at DESC LIMIT 1`
       if (!raw) return null
       const row = HostSampleRow.parse(raw)
-      return { at: row.at, memoryUsedPct: row.memory_used_pct }
+      return { at: row.at, memoryUsedPct: row.memory_used_pct, kernelFreePct: row.kernel_free_pct }
     },
 
     async recentHostSamples(limit) {
       const rows: unknown[] = await tx`
-        SELECT at, load, memory_used_pct, swap_used_pct, swapout_mb_per_300s, processes, pressure_level FROM factory.host_samples ORDER BY at DESC LIMIT ${limit}`
+        SELECT at, load, memory_used_pct, swap_used_pct, swapout_mb_per_300s, processes, pressure_level, kernel_free_pct FROM factory.host_samples ORDER BY at DESC LIMIT ${limit}`
       return rows.map((raw): HostSampleFact => {
         const row = HostFactRow.parse(raw)
         return {
@@ -491,6 +498,7 @@ export function postgresCapacityStore(tx: SQL): CapacityStore {
           swapoutMbPer300s: row.swapout_mb_per_300s,
           processes: row.processes,
           pressureLevel: row.pressure_level,
+          kernelFreePct: row.kernel_free_pct,
         }
       })
     },
@@ -509,12 +517,24 @@ export function postgresCapacityStore(tx: SQL): CapacityStore {
           changed_at = CASE WHEN factory.slot_aim.target = EXCLUDED.target THEN factory.slot_aim.changed_at ELSE EXCLUDED.changed_at END`
     },
 
+    async leadAim() {
+      const [raw] = await tx`SELECT lead_target, lead_since FROM factory.slot_aim WHERE id = 1`
+      if (!raw) return null
+      const row = LeadAimRow.parse(raw)
+      return row.lead_target === null ? null : ({ target: row.lead_target, since: row.lead_since } satisfies LeadAim)
+    },
+
+    async saveLeadAim(state) {
+      // the slot aim's row holds it; the slot pass has stored the row by the time this runs, and a missing row stores nothing
+      await tx`UPDATE factory.slot_aim SET lead_target = ${state.target}, lead_since = ${state.since} WHERE id = 1`
+    },
+
     async recordSlotShadow(r) {
       await tx`
         INSERT INTO factory.slot_shadow (at, live_slots, live_max, aim_slots, holders, waiters, pressure_level, swap_used_pct,
-          swapout_mb_per_300s, swap_growing, load, reason)
+          swapout_mb_per_300s, swap_growing, load, reason, lead_aim, leads_running)
         VALUES (${r.at}, ${r.liveSlots}, ${r.liveMax}, ${r.aimSlots}, ${r.holders}, ${r.waiters}, ${r.pressureLevel},
-          ${r.swapUsedPct}, ${r.swapoutMbPer300s}, ${r.swapGrowing}, ${r.load}, ${r.reason})
+          ${r.swapUsedPct}, ${r.swapoutMbPer300s}, ${r.swapGrowing}, ${r.load}, ${r.reason}, ${r.leadAim}, ${r.leadsRunning})
         ON CONFLICT (at) DO NOTHING`
     },
 

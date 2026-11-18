@@ -1,6 +1,6 @@
 import { SAMPLE_MAX_AGE_MS } from '../domains/capacity/costs.ts'
-import { loadTrip, SUSTAINED_LOAD_SAMPLES } from '../domains/capacity/host.ts'
-import { type AimMode, type AimState, aimStep, swapGrowing } from '../domains/capacity/slot-aim.ts'
+import { loadTrip, SUSTAINED_LOAD_SAMPLES, sustainedSwapoutMb } from '../domains/capacity/host.ts'
+import { type AimMode, type AimState, aimStep, leadAimStep, swapGrowing } from '../domains/capacity/slot-aim.ts'
 import { slotCounts } from '../domains/capacity/slots.ts'
 import { ok, type PortError, type Result } from '../kernel/result.ts'
 import type { PlanningDeps } from './planning-deps.ts'
@@ -16,6 +16,10 @@ export interface SlotAimDeps extends PlanningDeps {
   slotsMax: number
   /** the load ceiling of the lead admission: the slot aim's tripwire is set at it */
   loadCeiling: number
+  /** the swapouts of 300 s above which the aim halves (`memoryCeilings.swapoutMbPer300s`) */
+  swapoutCeilingMb?: number
+  /** the queued Issues that only the lead aim holds back; null: unread. Absent or unread, the lead aim adds nothing */
+  leadWaiters?: () => Promise<number | null>
 }
 
 /**
@@ -26,6 +30,8 @@ export interface SlotAimDeps extends PlanningDeps {
  */
 export async function slotAimPass(deps: SlotAimDeps): Promise<Result<string, PortError>> {
   if (deps.mode === 'off') return ok('slot aim is off')
+  // read outside the transaction: it is a look at the queue, which opens its own
+  const leadWaiting = (await deps.leadWaiters?.().catch(() => null)) ?? null
   return deps.uow.run(async ({ capacity }) => {
     await capacity.lock()
     const now = deps.clock.now()
@@ -35,6 +41,9 @@ export async function slotAimPass(deps: SlotAimDeps): Promise<Result<string, Por
     const before: AimState = (await capacity.slotAim()) ?? { target: deps.slots, quietSince: null }
     const { holders, waiters } = slotCounts(await capacity.slots(), now)
     const growing = fresh && swapGrowing(samples)
+    const swapouts =
+      fresh && deps.swapoutCeilingMb !== undefined && sustainedSwapoutMb(samples, now) > deps.swapoutCeilingMb
+    const trip = loadTrip(samples, deps.loadCeiling, now, fresh ? newest.load : null)
     const step = aimStep(
       before,
       {
@@ -42,13 +51,28 @@ export async function slotAimPass(deps: SlotAimDeps): Promise<Result<string, Por
         pressureLevel: fresh ? newest.pressureLevel : null,
         swapGrowing: growing,
         load: fresh ? newest.load : null,
-        loadTrip: loadTrip(samples, deps.loadCeiling, now, fresh ? newest.load : null),
+        loadTrip: trip,
         loadCeiling: deps.loadCeiling,
         waiters,
+        swapouts,
       },
       deps.slotsMax,
     )
     await capacity.saveSlotAim(step.state, now)
+    // The lead aim moves on the same signals: one verdict of the host, two counts it governs.
+    const running = (await capacity.claims()).length
+    const lead = leadAimStep(await capacity.leadAim(), {
+      at: now,
+      pressureLevel: fresh ? newest.pressureLevel : null,
+      swapGrowing: growing,
+      swapouts,
+      load: fresh ? newest.load : null,
+      loadTrip: trip,
+      loadCeiling: deps.loadCeiling,
+      running,
+      waiting: leadWaiting ?? 0,
+    })
+    await capacity.saveLeadAim(lead.state)
     await capacity.recordSlotShadow({
       at: now,
       liveSlots: deps.slots,
@@ -62,8 +86,12 @@ export async function slotAimPass(deps: SlotAimDeps): Promise<Result<string, Por
       swapGrowing: growing,
       load: fresh ? newest.load : null,
       reason: step.reason,
+      leadAim: lead.state.target,
+      leadsRunning: running,
     })
     await capacity.pruneSlotShadow(new Date(now.getTime() - SLOT_SHADOW_KEEP_MS))
-    return ok(`slot aim ${before.target} to ${step.state.target} (${deps.mode}): ${step.reason}`)
+    return ok(
+      `slot aim ${before.target} to ${step.state.target} (${deps.mode}): ${step.reason}; lead aim ${lead.state.target} for ${running} running: ${lead.reason}`,
+    )
   })
 }

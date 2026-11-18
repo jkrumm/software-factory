@@ -281,11 +281,11 @@ export function postgresLoopStore(tx: SQL): LoopStore {
     async recordHostSample(at, sample, leads) {
       await tx`
         INSERT INTO factory.host_samples (at, load, memory_used_pct, swap_used_pct, swapout_mb_per_300s, leads, queued, seats,
-          load_ceiling, pressure_level, compressor_mib, processes, cpu_idle_pct, cpu_user_pct, cpu_sys_pct, vm_free_gib, collector_cpu_ms,
+          load_ceiling, pressure_level, kernel_free_pct, compressor_mib, processes, cpu_idle_pct, cpu_user_pct, cpu_sys_pct, vm_free_gib, collector_cpu_ms,
           ram_bytes, memory_used_bytes, swap_used_bytes, swap_total_bytes)
         VALUES (${at}, ${sample.load}, ${sample.memoryUsedPct}, ${sample.swapUsedPct}, ${sample.swapoutMbPer300s},
           ${sample.leads}, ${sample.queued}, ${sample.seats}, ${sample.loadCeiling}, ${sample.pressureLevel},
-          ${sample.compressorMib}, ${sample.processes}, ${sample.cpuIdlePct}, ${sample.cpuUserPct}, ${sample.cpuSysPct}, ${sample.vmFreeGib}, ${sample.collectorCpuMs},
+          ${sample.kernelFreePct}, ${sample.compressorMib}, ${sample.processes}, ${sample.cpuIdlePct}, ${sample.cpuUserPct}, ${sample.cpuSysPct}, ${sample.vmFreeGib}, ${sample.collectorCpuMs},
           ${sample.ramBytes}, ${sample.memoryUsedBytes}, ${sample.swapUsedBytes}, ${sample.swapTotalBytes})
         ON CONFLICT (at) DO NOTHING`
       for (const lead of leads) {

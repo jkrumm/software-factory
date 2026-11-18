@@ -54,6 +54,52 @@ const state = async (n: number) => {
 const reasons = (result: Awaited<ReturnType<typeof pass>>) =>
   Object.fromEntries(result.queue.map((e) => [e.issue, e.reason?.kind ?? null]))
 
+describe('the lead aim (FACTORY_SLOT_AIM=on)', () => {
+  const aimDeps = () => ({ ...world.deps, limits: { ...world.deps.limits, slotAim: 'on' as const } })
+  const sample = (level: number | null, ageMs = 0) =>
+    world.db.sql`
+      INSERT INTO factory.host_samples (at, load, memory_used_pct, kernel_free_pct, swap_used_pct, swapout_mb_per_300s, pressure_level)
+      VALUES (${new Date(world.clock.now().getTime() - ageMs)}, 4, 80, 57, 3.5, 0, ${level})`
+  const aim = (target: number) =>
+    world.db.sql`
+      INSERT INTO factory.slot_aim (id, target, quiet_since, changed_at, lead_target)
+      VALUES (1, 2, NULL, ${world.clock.now()}, ${target})`
+
+  test('no stored count, an unread pressure or a count the running leads reach holds a new lead; room and a normal pressure admit it', async () => {
+    world.accounts.rows = [account('a')]
+    const one = await world.queued({ repo: 'app' })
+    await sample(1)
+    const start = value(await admissionPass(aimDeps()))
+    expect(start.admitted).toEqual([])
+    expect(start.queue.find((e) => e.issue === one)?.reason).toMatchObject({ kind: 'memory', part: 'aim' })
+
+    await aim(1)
+    await world.db.sql`DELETE FROM factory.host_samples`
+    await sample(null)
+    const unread = value(await admissionPass(aimDeps()))
+    expect(unread.queue.find((e) => e.issue === one)?.reason?.message).toContain('pressure is not read')
+
+    await world.db.sql`DELETE FROM factory.host_samples`
+    await sample(1)
+    const open = value(await admissionPass(aimDeps()))
+    expect(open.admitted.map((a) => a.issue)).toEqual([one])
+    // the claim it took is a lead running: with a count of one a second lead of the repo waits for the aim, not the claim
+    const two = await world.queued({ repo: 'app' })
+    nextSample()
+    await world.db.sql`DELETE FROM factory.host_samples`
+    await sample(1)
+    const full = value(await admissionPass(aimDeps()))
+    expect(full.queue.find((e) => e.issue === two)?.reason).toMatchObject({ kind: 'memory', part: 'aim' })
+  })
+
+  test('without the aim a repo with the same readings is admitted as before', async () => {
+    world.accounts.rows = [account('a')]
+    const one = await world.queued({ repo: 'app' })
+    await sample(1)
+    expect(value(await admissionPass(world.deps)).admitted.map((a) => a.issue)).toEqual([one])
+  })
+})
+
 describe('admission', () => {
   test('leads: 2 admits two leads in one repo, a third waits for a claim, and a close frees it', async () => {
     world.accounts.rows = [account('a'), account('b')]

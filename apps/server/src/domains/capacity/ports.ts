@@ -9,7 +9,7 @@ import type { QueueState, QueueStates } from './queue-state.ts'
 import type { PressureBaseline } from '../../kernel/remote-pressure.ts'
 import type { RemoteReading } from './remote.ts'
 import type { HoldEvent } from '../../kernel/remote-hold.ts'
-import type { AimState } from './slot-aim.ts'
+import type { AimState, LeadAim } from './slot-aim.ts'
 import type { SlotRow, StepHost, WaitKind } from './slots.ts'
 import type { OpenWait, WaitPlan } from './waits.ts'
 
@@ -100,7 +100,7 @@ export interface CapacityStore {
     swapoutCeilingMb: number,
   ): Promise<Map<string, (number | null)[]>>
   /** the newest minute sample of the host: when, and the share of RAM in use */
-  latestHostSample(): Promise<{ at: Date; memoryUsedPct: number | null } | null>
+  latestHostSample(): Promise<{ at: Date; memoryUsedPct: number | null; kernelFreePct: number | null } | null>
   /** the newest minute samples of the host, newest first */
   recentHostSamples(limit: number): Promise<HostSampleFact[]>
   /**
@@ -124,6 +124,9 @@ export interface CapacityStore {
   /** the aimed slot count and the minute since which the host has been quiet; null before the first minute */
   slotAim(): Promise<AimState | null>
   saveSlotAim(state: AimState, at: Date): Promise<void>
+  /** the count of leads the host takes (the lead aim) and the minute since which it has been quiet; null before the first minute */
+  leadAim(): Promise<LeadAim | null>
+  saveLeadAim(state: LeadAim): Promise<void>
   /** one minute of the aim beside the live rule (shadow) */
   recordSlotShadow(row: SlotShadowRow): Promise<void>
   pruneSlotShadow(before: Date): Promise<number>
@@ -166,12 +169,17 @@ export interface SlotShadowRow {
   swapGrowing: boolean
   load: number | null
   reason: string
+  /** the lead aim's count that minute and the leads running; null: not recorded */
+  leadAim: number | null
+  leadsRunning: number | null
 }
 
 export interface HostSampleFact {
   at: Date
   load: number | null
   memoryUsedPct: number | null
+  /** the kernel's own free share (`kern.memorystatus_level`), percent; null or absent: not read, the factory's own sum stands */
+  kernelFreePct?: number | null
   swapUsedPct: number | null
   /** that minute's swapouts, scaled to 300 s */
   swapoutMbPer300s: number | null
@@ -351,6 +359,8 @@ export interface HostSnapshotReading {
   cpuSysPct: number | null
   /** `kern.memorystatus_vm_pressure_level`: 1 normal, 2 warning, 4 critical */
   pressureLevel: number | null
+  /** `kern.memorystatus_level`: the share of RAM the kernel counts as available, percent; null when unread */
+  kernelFreePct: number | null
   compressorMib: number | null
   vmFreeGib: number | null
   /** the CPU the readings' helper processes took since the last snapshot */

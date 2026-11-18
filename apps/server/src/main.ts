@@ -750,6 +750,11 @@ async function main(): Promise<void> {
           slots: planningEnv.slots,
           slotsMax: planningEnv.slotsMax,
           loadCeiling: hostRule(planningEnv).loadCeiling,
+          swapoutCeilingMb: planningEnv.memoryCeilings.swapoutMbPer300s,
+          leadWaiters: async () => {
+            const view = await planning.capacity.queue()
+            return view.ok ? view.value.queue.filter((e) => e.reason?.part === 'aim').length : null
+          },
         })
         return ok(
           aim.ok

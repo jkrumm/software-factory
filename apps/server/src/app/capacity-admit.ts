@@ -17,7 +17,7 @@ import {
   REFUSALS,
   type TestLine,
 } from '../domains/capacity/admission.ts'
-import { freeMibOf, headroomMib } from '../domains/capacity/costs.ts'
+import { freeMibOf, headroomMib, SAMPLE_MAX_AGE_MS } from '../domains/capacity/costs.ts'
 import { type DoctorReader, doctorMessage } from '../domains/capacity/doctor.ts'
 import { DEFAULT_TYPICAL_LEAD_MIB, SEAT_SAMPLE_MAX_AGE_MS, SEAT_SAMPLES, seatBonus } from '../domains/capacity/seats.ts'
 import { type LeadGrowth, leadGrowth, learnLeadCost } from '../domains/capacity/leadcost.ts'
@@ -31,6 +31,7 @@ import {
   sustainedSwapoutMb,
 } from '../domains/capacity/host.ts'
 import { testLineOf } from '../domains/capacity/slots.ts'
+import type { AimMode } from '../domains/capacity/slot-aim.ts'
 import { type LaneInput, laneRoom } from '../domains/capacity/lanes.ts'
 import type { AccountRanker, AccountSource, Assignment, HostReader, ShadowDecision } from '../domains/capacity/ports.ts'
 import { effectiveState, type QueueStates } from '../domains/capacity/queue-state.ts'
@@ -64,6 +65,11 @@ export interface CapacityLimits {
   memoryCeilings: MemoryCeilings
   /** `FACTORY_SEATS_MAX_BONUS`: the most extra leads per account while the host idles; absent or 0: off */
   seatsMaxBonus?: number
+  /**
+   * `FACTORY_SLOT_AIM`: with `on`, the lead aim (the count of leads the host takes at its pressure, `domains/capacity/slot-aim.ts`)
+   * is the gate and the memory fit only the guard of what cannot fit at all. Absent or other: the fit decides alone.
+   */
+  slotAim?: AimMode
 }
 
 export interface CapacityDeps extends PlanningDeps {
@@ -104,6 +110,11 @@ export interface HostInputs {
   recent: readonly { load: number | null; swapUsedPct: number | null }[]
   /** per project name: why its doctor says this host cannot run it; a project whose doctor is green, or has none, is absent */
   doctors: ReadonlyMap<string, string>
+  /**
+   * the lead aim under `FACTORY_SLOT_AIM=on`: its count (0 before its first minute) and whether the newest minute sample, not
+   * older than five minutes, read the pressure level; absent or null: no aim, the memory fit decides alone
+   */
+  leadAim?: { target: number; pressureRead: boolean } | null
   /** the load tripwire over the minute samples; absent or null: too few fresh samples, the instant reading decides */
   loadTrip?: LoadTrip
   /** the host's test line now; absent or null: unread, it keeps nobody out */
@@ -142,8 +153,8 @@ export interface QueueReason {
   message: string
   /** when a reading says the reason may end */
   opensAt: Date | null
-  /** `fit`: the memory refusal is the learned cost of the candidate's lead (see `waitKindOf`) */
-  part?: 'fit'
+  /** `fit`: the memory refusal is the learned cost of the candidate's lead (see `waitKindOf`); `aim`: the lead aim's count */
+  part?: 'fit' | 'aim'
 }
 
 export interface QueueEntry {
@@ -208,6 +219,7 @@ export async function readHost(deps: CapacityDeps): Promise<HostInputs> {
       peaks: await capacity.leadPeaks(now),
       relearns: await capacity.relearns(),
       rss: await capacity.leadRssSince(new Date(now.getTime() - RSS_MAX_AGE_MS)),
+      leadAim: deps.limits.slotAim === 'on' ? ((await capacity.leadAim())?.target ?? 0) : null,
     }),
   )
   if (!facts.ok)
@@ -261,6 +273,16 @@ export async function readHost(deps: CapacityDeps): Promise<HostInputs> {
         ? facts.value.recent.slice(0, SEAT_SAMPLES).map((s) => ({ load: s.load, swapUsedPct: s.swapUsedPct }))
         : [],
     doctors,
+    leadAim:
+      facts.ok && facts.value.leadAim !== null
+        ? {
+            target: facts.value.leadAim,
+            pressureRead:
+              newest !== undefined &&
+              now.getTime() - newest.at.getTime() <= SAMPLE_MAX_AGE_MS &&
+              newest.pressureLevel !== null,
+          }
+        : null,
     loadTrip: facts.ok ? loadTrip(facts.value.recent, deps.limits.loadCeiling, now, load.ok ? load.value : null) : null,
     tests: facts.ok ? { ...testLineOf(facts.value.slots, now), stepMs: facts.value.stepMs } : null,
     notes,
@@ -542,7 +564,8 @@ function decide(snap: Snapshot, host: HostInputs, limits: CapacityLimits, bonus:
       typicalMib: learned?.typicalMib ?? null,
       relearnedAt: host.relearns.get(project.name) ?? null,
       freeMib: host.freeMib,
-      headroomMib: headroomMib(host.ramMib),
+      // under the lead aim the headroom is the pressure level's to keep: the fit refuses only what cannot fit at all
+      headroomMib: host.leadAim ? 0 : headroomMib(host.ramMib),
       running: claims.length,
       growing: youngGrowth(claims, snap, host),
     }
@@ -574,6 +597,7 @@ function decide(snap: Snapshot, host: HostInputs, limits: CapacityLimits, bonus:
       memory: host.memory,
       memoryCeilings: limits.memoryCeilings,
       leadFit,
+      leadAim: host.leadAim ? { ...host.leadAim, running: claims.length } : null,
       reserved: reservedOf(
         reservedMib(issue.id, project, claims, owed, snap.projects, laneByIssue, host.learned),
         host.ramMib,

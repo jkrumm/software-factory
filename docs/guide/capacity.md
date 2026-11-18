@@ -45,7 +45,7 @@ Two groups share the field. The chain answers first with `chain`, `line`, `final
 | `doctor` | the project's own `doctor:` command reports a missing prerequisite |
 | `boot` | the host booted recently and has not yet been calm for five minutes |
 | `load` | load over the ceiling in each of the last 5 minutes, or too many processes |
-| `memory` | swapouts or swap over their ceilings, or the repo's learned lead does not fit the free memory |
+| `memory` | swapouts or swap over their ceilings, the repo's learned lead cannot fit the free memory at all, or (with `FACTORY_SLOT_AIM=on`) as many leads run as the lead aim allows at the host's pressure now |
 | `tests` | more steps wait for a test slot than run, for longer than a step takes |
 | `lane` | the repo's cap on a resource class is full |
 | `claim` | the repo runs `leads` leads already |
