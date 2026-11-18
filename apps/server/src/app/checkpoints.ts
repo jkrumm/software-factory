@@ -469,6 +469,57 @@ export function answerDecision(
   })
 }
 
+/**
+ * `factory decision take-default`: the lead settles its own open Decision with the default it named, because it went on
+ * with that option and a ship is refused while the Issue waits. Recorded as the `default` settler, the source saying the lead
+ * took it. Only the lead's own Decision of the attempt there is, and only one that names a default (a reversible option,
+ * which the form guarantees); an answered one is `already_answered`, a Decision the Issue no longer waits for is withdrawn.
+ */
+export function takeDefault(
+  deps: CheckpointDeps,
+  input: { decisionId: DecisionId; attempt: number },
+): Promise<CheckpointResult<Answered>> {
+  return deps.uow.run(async (stores) => {
+    const decision = await stores.checkpoints.decision(input.decisionId)
+    if (!decision) return err(notFound('Decision', input.decisionId))
+    if (decision.askedBy !== 'lead') {
+      return err({
+        kind: 'invalid',
+        detail: 'only the lead takes the default, and only of a Decision it raised itself',
+      })
+    }
+    if (decision.attempt !== input.attempt) {
+      return err({
+        kind: 'invalid',
+        detail: `${decision.id} was raised in attempt ${decision.attempt}; this is attempt ${input.attempt}`,
+      })
+    }
+    const label = decision.form.noAnswer.default
+    if (label === null) {
+      return err({
+        kind: 'invalid',
+        detail: `${decision.id} names no default, so there is none to take: it waits for an answer (or ask again with a default)`,
+      })
+    }
+    const outcome = await answerIn(stores, deps, {
+      decision,
+      text: label,
+      by: 'default',
+      source: 'the lead took the default and went on with it',
+      note: `You took the default of ${decision.id} (${label}) and went on with it; the Decision is closed and no longer holds the Issue. The owner can still overrule it with a note.`,
+    })
+    if (!outcome.ok) return outcome
+    if (outcome.value.status === 'withdrawn') return ok<Answered>({ decision: outcome.value.decision, issue: null })
+    const { recorded } = outcome.value
+    await stores.checkpoints.recordStep(decision.id, 'default', {
+      outcome: 'answered',
+      detail: `${label} (taken by the lead)`,
+      at: deps.clock.now(),
+    })
+    return ok<Answered>({ decision: outcome.value.decision, issue: moveOf(recorded.issue, recorded.effects) })
+  })
+}
+
 /** The owner's flag on an answered Decision: it feeds the ledger and the Judge's precedent. */
 export function markWorthAsking(
   deps: CheckpointDeps,

@@ -92,7 +92,7 @@ function waitHint(issue: Issue, event: { kind: EventKind; payload?: unknown }): 
     case 'errand':
       return `it waits for an Errand (${wait.holds.id}: ${ends}), so \`${verb}\` is not taken now: raise the Errand as the last step, end the turn, and ${repeats ? `\`${verb}\`` : 'carry on'} after the note that it is done; an Errand's wait is never ended by a verb of yours, so raise one only for a person's hands`
     case 'decision':
-      return `it waits for the answer to a Decision (${wait.holds.id}: ${ends}), so \`${verb}\` is not taken now: end the turn; the answer comes back as a note, ${later}`
+      return `it waits for the answer to a Decision (${wait.holds.id}: ${ends}), so \`${verb}\` is not taken now: end the turn; the answer comes back as a note, ${later}. If the Decision names a default and you already went on with it, settle it yourself: \`factory decision take-default ${wait.holds.id} --attempt <n>\` ends this wait at once`
     case 'review':
       return `it waits for the verdict on an artifact (${wait.holds.id}: ${ends}), so \`${verb}\` is not taken now: end the turn; the verdict comes back as a note, ${later}`
     case 'dependency': {

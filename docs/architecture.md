@@ -534,7 +534,7 @@ its open Decision amends that Decision: the form is replaced, the new rendering 
 the amend is dropped (the form digest taken at claim no longer matches). The same form again is a replay; an answered or
 withdrawn Decision is never amended. An Errand names what the lead tried (`tried`, a gate: not stored) and is refused at the raise, nothing raised
 and the route named, when it asks for what the host does (`refuseHostClass`: a door token or route, an install, a sudo step with no
-no-sudo attempt shown, a Report missing from Needs you); `call` on an ask or an Errand makes a repeat one event. Every refusal of the state
+no-sudo attempt shown, a Report missing from Needs you); `call` on an ask or an Errand makes a repeat one event. A lead that went on with the default it named settles its own Decision with `factory decision take-default` (`takeDefault` in `app/checkpoints.ts`: the lead's own Decision of the attempt there is, one that names a default; `answerIn` records it as `default`, `the lead took the default`), so the wait ends and a ship is taken at once instead of after the default's wait. Every refusal of the state
 machine for a lead verb names the wait, how it ends and the verb to use (`waitHint`, `domains/work/table.ts`). An Errand passes a screen before it reaches the owner, in order: deterministic rules
 (`screenByReview`, then `screenByRule`: a command a token can run and no hands word), then `factory-errand`, then the owner. The Issue waits from
 the raise, but the owner is not paged and the Errand is not in Needs until `errands.reached_owner_at`

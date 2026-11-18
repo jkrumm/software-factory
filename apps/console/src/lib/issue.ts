@@ -37,7 +37,7 @@ const SETTLED_BY_WORDS: Record<string, string> = {
   orchestrator: 'by the orchestrator, for you',
   policy: 'by policy',
   judge: 'by the judge',
-  default: 'by the default, no one answered in time',
+  default: 'by the default it named',
 }
 
 const KIND_WORDS: Record<string, string> = {

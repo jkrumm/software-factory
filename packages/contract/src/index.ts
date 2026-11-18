@@ -119,6 +119,7 @@ export {
   VERDICTS,
   VerdictBody,
   VerdictView,
+  TakeDefaultBody,
   WorthBody,
 } from './checkpoints.ts'
 export {

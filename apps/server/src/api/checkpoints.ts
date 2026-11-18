@@ -30,6 +30,7 @@ import {
   SubmitBody,
   VerdictBody,
   VerdictView,
+  TakeDefaultBody,
   WorthBody,
 } from '@software-factory/contract'
 import { Elysia } from 'elysia'
@@ -322,6 +323,28 @@ export const checkpointRoutes = (uses: CheckpointUses) =>
           operationId: 'decision.answer',
           summary: "the owner's answer to a Decision",
           'x-cli': { args: ['answer'] },
+        },
+      },
+    )
+    .post(
+      '/decisions/:id/take-default',
+      async ({ params, body }) => {
+        const id = idOf('decision', params.id)
+        if (!id) return unknownId('Decision', params.id)
+        const result = await uses.takeDefault({ decisionId: id, attempt: body.attempt })
+        if (!result.ok) return failed(result.error)
+        return Response.json(
+          DecisionReply.parse({ decision: decisionView(result.value.decision), issue: result.value.issue }),
+        )
+      },
+      {
+        params: Id,
+        body: TakeDefaultBody,
+        response: RESPONSES(DecisionReply, 400, 404, 409, 422, 503),
+        detail: {
+          operationId: 'decision.take-default',
+          summary:
+            'the lead settles its own open Decision with the default it named, once it built on it: that Decision no longer holds the Issue (it works again unless a review or another Decision still holds it), so ship is taken',
         },
       },
     )

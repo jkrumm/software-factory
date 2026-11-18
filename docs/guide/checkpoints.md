@@ -10,9 +10,9 @@ A Decision is one question as a form. The lead raises it with `factory issue ask
 
 - **Required fields.** `question`, `recommendation`, `checked` (what the lead looked at), at least two `options` each with a `label`, a `cost` and a `reversible` flag, and `noAnswer.consequence`. A form with a missing field is refused with every missing field named, and nothing is stored.
 - **A recommendation is an option.** It must be the label of one of the options.
-- **A default is reversible.** `noAnswer.default` names a reversible option and comes with `waitMinutes` (1 to 10080). Both are given or neither is. When the wait runs out, the default is taken.
+- **A default is reversible.** `noAnswer.default` names a reversible option and comes with `waitMinutes` (1 to 10080). Both are given or neither is. When the wait runs out, the default is taken; a lead that already went on with it takes it sooner with `factory decision take-default <id> --attempt <n>`.
 - **Waiting is not a choice.** A recommendation or default of "Keep waiting", "Wait for review", "Do nothing" or "Hold" is refused. What it waits for is a person's chore, and a chore is an Errand. The steward's own asks are exempt: a hold is a real answer to a stall.
-- **Four steps, in order.** Standing policy from `project.yaml`, the Judge (next section), the default after its wait, the owner. The Decision records who settled it: `policy`, `judge`, `default`, `owner`, or `orchestrator` when it answers for the owner.
+- **Four steps, in order.** Standing policy from `project.yaml`, the Judge (next section), the default after its wait (or taken by the lead), the owner. The Decision records who settled it: `policy`, `judge`, `default`, `owner`, or `orchestrator` when it answers for the owner.
 
 ```ts
 const NO_OP_LABELS: readonly RegExp[] = [

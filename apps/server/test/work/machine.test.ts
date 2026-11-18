@@ -153,6 +153,9 @@ describe('the paths', () => {
       expect(refusal([...settledAndWorking, asked], 'shipped')).toContain(
         'the answer comes back as a note, then `ship`',
       )
+      expect(refusal([...settledAndWorking, asked], 'shipped')).toContain(
+        'factory decision take-default decision_1 --attempt <n>',
+      )
       const submitted = ev('submitted', { attempt: 1, artifact: { id: 'artifact_1', summary: 'Spec' } }, 'lead')
       expect(refusal([...settledAndWorking, submitted], 'shipped')).toContain(
         'the verdict comes back as a note, then `ship`',
