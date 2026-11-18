@@ -243,7 +243,7 @@ async function readDelivery(
     leadFacts.map((fact) => fact.working_ms),
     0.5,
   )
-  // with no light Issue finished, light has saved nothing that is shown: it finishes no faster than the lead row (bound 0)
+  // with no light Issue that did not move up, light has shown no saving: it reads as no faster than the lead row (bound 0)
   const lightFinishMs =
     percentile(
       lightFacts.filter((fact) => !fact.moved_up).map((fact) => fact.working_ms),
