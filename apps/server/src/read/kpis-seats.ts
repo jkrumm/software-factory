@@ -306,7 +306,7 @@ async function tripwireOf(
 
 /**
  * The tripwire over its window (`TRIPWIRE_DAYS`, longer until light has `TRIPWIRE_TARGET_WATCHES` finished first watches), read for the starts: `met` says whether triage's `small` starts on the
- * light seat now (only a measured pass opens it), `bound.share` is the move-up share a hygiene class stays under.
+ * light seat now (only a measured pass opens it), `bound.share` is the dollar break-even of a move-up and `bound.classShare` (the lower of it and the minute break-even) the move-up share a hygiene class stays under.
  */
 export async function readTripwire(
   sql: SQL,
