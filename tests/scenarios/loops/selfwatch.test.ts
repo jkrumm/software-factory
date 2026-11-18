@@ -627,7 +627,7 @@ test('slot_line and gates_passed: the stored slot minutes and capacity facts fil
     INSERT INTO factory.host_samples (at, load, load_ceiling, leads, seats)
     SELECT a.at + o.shift, 150, 60, 4, 12
     FROM (SELECT max(at) AS at FROM factory.issue_events WHERE issue_id = ${admittedIssue} AND kind = 'admitted' AND result = 'applied') a,
-      (VALUES (interval '-30 seconds'), (interval '30 seconds')) AS o(shift)`
+      (VALUES (interval '-330 seconds'), (interval '-270 seconds'), (interval '-210 seconds'), (interval '-150 seconds'), (interval '-90 seconds'), (interval '-30 seconds'), (interval '30 seconds')) AS o(shift)`
 
   await pass()
   const [slot, ...slotMore] = await signalsOf('slot_line')

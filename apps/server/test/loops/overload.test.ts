@@ -23,6 +23,7 @@ const NOW = new Date('2026-11-14T20:00:00Z')
 const ago = (n: number) => new Date(NOW.getTime() - n * 60_000)
 const RULES: AdmissionRules = {
   overLoad: (load, ceiling) => load > ceiling,
+  sustainedLoad: { samples: 5, spanMs: 6 * 60_000 },
   overMemory: (reading) => reading.swapoutMbPer300s > 2048 || reading.swapUsedPct > 75,
 }
 const overCeiling = (minutes: CapacityMinute[], now: Date) => loadOverCeilingFindings(minutes, RULES, now)
@@ -173,6 +174,22 @@ test('gates_passed: a lead admitted between two samples that both read the load 
       NOW,
     ),
   ).toEqual([])
+})
+
+test('gates_passed: the load rule is the tripwire: a lead admitted under a short peak was let in by the rule, only a sustained overshoot is a passed gate', () => {
+  // the load over the ceiling for the sample before and the one after, but not five in a row: the tripwire (five in a row) is not tripped, the rule admits (issue 2208)
+  const peak = loads([10, 10, 10, 10, 10, 51.6, 51.6, 51.6], 36)
+  expect(gatesPassedFindings(peak, [admit(2)], RULES, NOW)).toEqual([])
+  // five samples in a row over at the admission, and over in the sample after: the rule refused and the lead came in anyway
+  const sustained = loads([10, 50, 50, 50, 50, 50, 51.6, 51.6], 36)
+  const found = gatesPassedFindings(sustained, [admit(2)], RULES, NOW)
+  expect(found).toHaveLength(1)
+  expect(found[0]?.facts).toEqual(['a lead was admitted while the load was over its ceiling'])
+  // the load fell under the ceiling by the sample after: a lead the rule let in
+  expect(gatesPassedFindings(loads([50, 50, 50, 50, 50, 50, 10, 10], 36), [admit(2)], RULES, NOW)).toEqual([])
+  // a gap in the minute samples is no reading of five in a row: the instant decides, as admission does
+  const gap = [minute({ at: ago(30), load: 50, loadCeiling: 36 }), ...loads([50, 50, 50], 36)]
+  expect(gatesPassedFindings(gap, [admit(2)], RULES, NOW)).toHaveLength(1)
 })
 
 test('gates_passed: the memory rule is its own fact of the one signal, and it clears when the window passes', () => {

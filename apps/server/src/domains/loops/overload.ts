@@ -128,6 +128,8 @@ const GATE_WINDOW_MS = 10 * 60_000
  */
 export interface AdmissionRules {
   overLoad(load: number, ceiling: number): boolean
+  /** The load tripwire: admission pulls back only when this many minute samples in a row, the oldest at most `spanMs` old, were over (`loadTrip`). */
+  sustainedLoad: { samples: number; spanMs: number }
   overMemory(reading: { swapoutMbPer300s: number; swapUsedPct: number }): boolean
 }
 
@@ -139,6 +141,27 @@ export interface Admission {
 
 const loadOver = (m: CapacityMinute, rules: AdmissionRules): boolean =>
   m.load !== null && m.loadCeiling !== null && rules.overLoad(m.load, m.loadCeiling)
+/**
+ * Whether the load rule refused at `t`: admission reads the tripwire (`loadTrip`), the newest `samples` minute samples all over
+ * their ceiling, never one peak. With fewer fresh samples than that it falls back to the reading of the instant, here the
+ * sample before and the one after.
+ */
+function loadRuleRefused(
+  ordered: readonly CapacityMinute[],
+  t: number,
+  after: CapacityMinute,
+  rules: AdmissionRules,
+): boolean {
+  if (!loadOver(after, rules)) return false
+  const { samples, spanMs } = rules.sustainedLoad
+  const window = ordered.filter((m) => m.at.getTime() <= t).slice(-samples)
+  const oldest = window[0]
+  const unknown =
+    window.length < samples || !oldest || t - oldest.at.getTime() > spanMs || window.some((m) => m.load === null)
+  if (unknown) return window.length > 0 && loadOver(window[window.length - 1] as CapacityMinute, rules)
+  return window.every((m) => loadOver(m, rules))
+}
+
 const memoryOver = (m: CapacityMinute, rules: AdmissionRules): boolean =>
   m.swapUsedPct !== null &&
   m.swapoutMbPer300s !== null &&
@@ -147,8 +170,9 @@ const memoryOver = (m: CapacityMinute, rules: AdmissionRules): boolean =>
 /**
  * More leads working than the admission rules allow, judged per admission (an `admitted` event; a lead that resumes from a
  * wait takes its claim again without these gates and is no admission). Each is set against the host samples on either side
- * of it, within `MINUTE_GAP_MS`: it passed the load rule when the load was over its ceiling in both, the memory rule when
- * swap use or the swapout rate was over its ceiling in both (a lead the rule let in has one of the two under). The seat cap
+ * of it, within `MINUTE_GAP_MS`: it passed the load rule when the tripwire admission reads (the load over its ceiling in each
+ * of the newest 5 minute samples, and over in the sample after) held, not for one or two minutes over it, which the rule lets
+ * through by design; the memory rule when swap use or the swapout rate was over its ceiling in both (a lead the rule let in has one of the two under). The seat cap
  * is not judged: the idle host's seat bonus lets leads exceed `host_samples.seats` by the rule. Judged over the ten minutes
  * before the newest sample; one signal, the passed gates are its facts.
  */
@@ -171,7 +195,7 @@ export function gatesPassedFindings(
     const after = ordered.find((m) => m.at.getTime() >= t)
     if (!before || !after || t - before.at.getTime() > MINUTE_GAP_MS || after.at.getTime() - t > MINUTE_GAP_MS) continue
     const seen = `${admission.issue} admitted at ${iso(admission.at)}: load ${after.load?.toFixed(1) ?? 'unread'} (ceiling ${after.loadCeiling ?? 'unread'}), swap ${after.swapUsedPct ?? 'unread'}%, swapouts ${after.swapoutMbPer300s ?? 'unread'} MiB/300s, ${after.leads ?? 'unread'} leads of ${after.seats ?? 'unread'} seats`
-    if (loadOver(before, rules) && loadOver(after, rules)) passed.load ??= seen
+    if (loadRuleRefused(ordered, t, after, rules)) passed.load ??= seen
     if (memoryOver(before, rules) && memoryOver(after, rules)) passed.memory ??= seen
   }
   if (passed.load) {
