@@ -8,23 +8,26 @@ export interface ConsoleHandlerOptions {
   dir: string
   /** answers `/health`, `/v1/*` and the thirteen verbs (`WRITES`) from the API; the caller decides what credentials it carries */
   forward: (request: Request) => Promise<Response>
+  /** hosts the page may load images from over https (`FACTORY_CONSOLE_IMAGE_HOSTS`, already validated); none by default */
+  imageHosts?: readonly string[]
 }
 
-const CSP = [
-  "default-src 'self'",
-  "script-src 'self'",
-  "style-src 'self' 'unsafe-inline'",
-  "img-src 'self' data:",
-  "connect-src 'self'",
-  "font-src 'self'",
-  "manifest-src 'self'",
-  "worker-src 'self'",
-  "frame-src 'self'",
-  "object-src 'none'",
-  "base-uri 'none'",
-  "form-action 'none'",
-  "frame-ancestors 'none'",
-].join('; ')
+const pageCsp = (imageHosts: readonly string[]): string =>
+  [
+    "default-src 'self'",
+    "script-src 'self'",
+    "style-src 'self' 'unsafe-inline'",
+    ['img-src', "'self'", 'data:', ...imageHosts.map((host) => `https://${host}`)].join(' '),
+    "connect-src 'self'",
+    "font-src 'self'",
+    "manifest-src 'self'",
+    "worker-src 'self'",
+    "frame-src 'self'",
+    "object-src 'none'",
+    "base-uri 'none'",
+    "form-action 'none'",
+    "frame-ancestors 'none'",
+  ].join('; ')
 
 /**
  * The policy of the artifact frame (`/frame.html` and `/frame/*`, the one document the page frames). A srcdoc, blob or
@@ -184,6 +187,7 @@ function fileOf(dir: string, rawPath: string): string | null {
  */
 export function consoleHandler(options: ConsoleHandlerOptions): (request: Request) => Promise<Response> {
   const indexFile = join(resolve(options.dir), 'index.html')
+  const csp = pageCsp(options.imageHosts ?? [])
 
   /** An API answer is never cached by the browser or a proxy; the stream keeps the cache-control it sets. */
   const forward = async (request: Request): Promise<Response> => {
@@ -212,7 +216,7 @@ export function consoleHandler(options: ConsoleHandlerOptions): (request: Reques
       'referrer-policy': 'no-referrer',
     })
     if (isFrame(rawPath)) headers.set('content-security-policy', FRAME_CSP)
-    else if (name.endsWith('.html')) headers.set('content-security-policy', CSP)
+    else if (name.endsWith('.html')) headers.set('content-security-policy', csp)
     if (NO_CACHE.test(name)) headers.set('cache-control', 'no-cache')
     else if (rawPath.startsWith('/assets/')) headers.set('cache-control', 'public, max-age=31536000, immutable')
     if (request.method === 'HEAD') {

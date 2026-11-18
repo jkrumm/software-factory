@@ -1,5 +1,5 @@
 import { useRouter } from '@tanstack/react-router'
-import { type ReactNode, useEffect, useRef } from 'react'
+import { type ReactNode, useEffect, useRef, useState } from 'react'
 import Markdown, { defaultUrlTransform } from 'react-markdown'
 import remarkGfm from 'remark-gfm'
 import { linkTarget, parseFrameMessage, type SelectionRect, type TocItem } from '@/lib/artifact'
@@ -97,10 +97,35 @@ function MarkdownLink({ href, children }: { href?: string; children?: ReactNode 
   )
 }
 
+/** The alt text, shown where an image is not loaded. */
+function ImageAlt({ alt }: { alt?: string }) {
+  return <span className="italic text-muted-foreground">{alt ? `[image: ${alt}]` : '[image]'}</span>
+}
+
+/**
+ * An `https` image. The page's CSP (`img-src`) decides which hosts load: only those the owner lists in
+ * `FACTORY_CONSOLE_IMAGE_HOSTS`, none by default. A blocked, expired or broken image fires `error` and shows its alt text
+ * instead; no referrer is sent.
+ */
+function MarkdownImage({ src, alt }: { src?: string; alt?: string }) {
+  const [failed, setFailed] = useState(false)
+  if (failed || !src?.startsWith('https://')) return <ImageAlt alt={alt} />
+  return (
+    <img
+      src={src}
+      alt={alt ?? ''}
+      loading="lazy"
+      referrerPolicy="no-referrer"
+      onError={() => setFailed(true)}
+      className="my-3 max-w-full rounded-md border border-border"
+    />
+  )
+}
+
 /**
  * Markdown through react-markdown: raw HTML is dropped, links keep only the protocols `defaultUrlTransform` allows
- * (`javascript:`, `data:` and the like become empty), and an image is never loaded (the Console's CSP is `img-src 'self'
- * data:`, and a network image would be a request the owner did not make): its alt text shows instead.
+ * (`javascript:`, `data:` and the like become empty), and an image loads only over `https` from a host the Console's CSP
+ * allows (`img-src`, `FACTORY_CONSOLE_IMAGE_HOSTS`); every other image shows its alt text.
  */
 function MarkdownContent({
   content,
@@ -250,7 +275,13 @@ function MarkdownContent({
             </div>
           ),
           a: ({ node: _node, href, children }) => <MarkdownLink href={href}>{children}</MarkdownLink>,
-          img: ({ alt }) => <span className="italic text-muted-foreground">{alt ? `[image: ${alt}]` : '[image]'}</span>,
+          img: ({ node: _node, src, alt }) => (
+            <MarkdownImage
+              key={typeof src === 'string' ? src : ''}
+              src={typeof src === 'string' ? src : undefined}
+              alt={alt}
+            />
+          ),
         }}
       >
         {content}

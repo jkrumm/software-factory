@@ -297,6 +297,26 @@ describe('the API forward', () => {
   })
 })
 
+describe('the page CSP and image hosts', () => {
+  const policy = async (path: string, imageHosts?: string[]) => {
+    const handler = consoleHandler({ dir: join(dir, 'build'), forward: async () => new Response(), imageHosts })
+    const response = await handler(new Request(`http://127.0.0.1${path}`))
+    return response.headers.get('content-security-policy') ?? ''
+  }
+
+  test('img-src is self and data: until a host is listed', async () => {
+    expect(await policy('/')).toContain("img-src 'self' data:;")
+  })
+
+  test('a listed host is added to the page img-src over https, and the frame stays data: only', async () => {
+    const hosts = ['images.example.com', '*.cdn.example.com']
+    expect(await policy('/', hosts)).toContain(
+      "img-src 'self' data: https://images.example.com https://*.cdn.example.com;",
+    )
+    expect(await policy('/frame.html', hosts)).toContain('img-src data:;')
+  })
+})
+
 describe('console settings', () => {
   test('the port defaults to 7795 and the dir to apps/console/dist', () => {
     const settings = loadConsoleSettings({})
@@ -308,7 +328,29 @@ describe('console settings', () => {
     expect(loadConsoleSettings({ FACTORY_CONSOLE_PORT: '9000', FACTORY_CONSOLE_DIR: '/tmp/x' })).toEqual({
       port: 9000,
       dir: '/tmp/x',
+      imageHosts: [],
     })
+  })
+
+  test('image hosts default to none and are read as a lower-cased list', () => {
+    expect(loadConsoleSettings({}).imageHosts).toEqual([])
+    expect(
+      loadConsoleSettings({ FACTORY_CONSOLE_IMAGE_HOSTS: ' Images.Example.com, *.cdn.example.com ,' }).imageHosts,
+    ).toEqual(['images.example.com', '*.cdn.example.com'])
+  })
+
+  test('an image host that is not a bare host refuses', () => {
+    for (const bad of [
+      '*',
+      'https://a.example.com',
+      'a.example.com:443',
+      'a.example.com/x',
+      '*.com',
+      'localhost',
+      'a.example.com; script-src *',
+    ]) {
+      expect(() => loadConsoleSettings({ FACTORY_CONSOLE_IMAGE_HOSTS: bad })).toThrow(/FACTORY_CONSOLE_IMAGE_HOSTS/)
+    }
   })
 
   test('a bad port refuses', () => {
