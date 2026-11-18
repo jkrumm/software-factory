@@ -388,7 +388,7 @@ through `receive` in `app/intake.ts`; the answer is a triage outcome (`docs/lang
   compressed, the `memory_used_pct`) left 7.5 GiB at 2026-11-18 11:48 while the kernel said 57 % free at pressure normal, and
   on this host reads about 83 % used against the kernel's 69 % free; the sum stays as the fallback when the level is not read. A
   slot beyond the base keeps no headroom under the aim either (the pressure level is the margin); the step's peak plus the growth
-  of the running steps must still fit the free memory. `slot_shadow` stores `lead_aim` and `leads_running` per minute. **The bottleneck rules** (issue 1743): *the tripwire* (`loadTrip`, `SUSTAINED_LOAD_SAMPLES`
+  of the running steps must still fit the free memory. `slot_shadow` stores `lead_aim` and `leads_running` per minute; under `shadow` the count is re-seeded at the leads running every minute (it gates nothing, so no lead waits for it and it could not grow), and `on` starts from what the host takes. **The bottleneck rules** (issue 1743): *the tripwire* (`loadTrip`, `SUSTAINED_LOAD_SAMPLES`
   in `domains/capacity/host.ts`) is the load over the lead admission's ceiling in each of the newest five minute samples and
   still by the reading now (2026-11-14 to 16 had no run over the ceiling of five minutes: 174 of one, 27 of two, 5 of three, 1
   of four); one peak trips nothing, and with too few fresh samples the instant reading decides (`load 40 is over 36 (the load

@@ -61,7 +61,9 @@ export async function slotAimPass(deps: SlotAimDeps): Promise<Result<string, Por
     await capacity.saveSlotAim(step.state, now)
     // The lead aim moves on the same signals: one verdict of the host, two counts it governs.
     const running = (await capacity.claims()).length
-    const lead = leadAimStep(await capacity.leadAim(), {
+    // Only under `on` does the count carry from minute to minute: under `shadow` nothing is refused by it, so no lead ever waits for it
+    // and it could not grow; it is re-seeded at the leads running each minute, so the switch to `on` starts from what the host takes.
+    const lead = leadAimStep(deps.mode === 'on' ? await capacity.leadAim() : null, {
       at: now,
       pressureLevel: fresh ? newest.pressureLevel : null,
       swapGrowing: growing,

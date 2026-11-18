@@ -109,7 +109,7 @@ export interface LeadAimSignals {
   load: number | null
   loadTrip: LoadTrip
   loadCeiling: number
-  /** leads running now: claims held and owed leads */
+  /** leads running now: the claims held (a lead resumed from a wait takes its claim back and counts then) */
   running: number
   /** queued Issues that only the aim holds back (every other rule would let them in) */
   waiting: number
