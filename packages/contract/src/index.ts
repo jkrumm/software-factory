@@ -31,6 +31,7 @@ export { Health, HealthLine, HealthLoop, Heartbeat } from './health.ts'
 export {
   EFFORTS,
   Effort,
+  LeadSeat,
   parseRoleTable,
   ROLE_NAME,
   RoleEntry,

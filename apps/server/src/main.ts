@@ -251,6 +251,11 @@ async function main(): Promise<void> {
   const reaperKiller = processKiller({ psBin: process.env.FACTORY_PS_BIN ?? '/bin/ps' })
   // Planning and capacity own the projects and the claims; the leads, intake and the checkpoints take their ports.
   const roles = fileRoles(leadSettings.rolesFile)
+  // The table's lead row: the seat an Issue with no lead yet will start on, for the Console's seat badge.
+  const leadRow = async () => {
+    const lead = await roles.lead()
+    return lead.ok ? lead.value : null
+  }
   // The two reviewer rows as the table stands: the seat a review's record names, and the words beside the Improve numbers.
   const reviewerRows = async () => {
     const [cheap, reviewer] = await Promise.all([roles.role(REVIEWER_CHEAP_ROLE), roles.role(REVIEWER_ROLE)])
@@ -989,6 +994,7 @@ async function main(): Promise<void> {
       macbookProbe: loopSettings.askHumanHost !== null,
       maxRunTries: MAX_RUN_TRIES,
       queueReasons,
+      leadRow,
       uptime: () => uptime.snapshot(),
     }),
     readModels: {
@@ -1001,6 +1007,7 @@ async function main(): Promise<void> {
       tenantBudget: { project: planningEnv.tenantProject, budgetMib: planningEnv.tenantBudgetMib },
       cores: planningEnv.cores,
       queueReasons,
+      leadRow,
       reviewerRows,
       machine,
       ciTimes: githubCiTimes({

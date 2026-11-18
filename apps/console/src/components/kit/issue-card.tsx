@@ -5,6 +5,7 @@ import { Age, type IssueViewProps, IssueNumber, ProjectChip, ReasonLine } from '
 import { KindIcon } from './kind-badge'
 import { Lozenge } from './lozenge'
 import { MenuButton } from './menu-button'
+import { SeatBadge } from './seat-badge'
 
 export type IssueCardProps = Omit<IssueViewProps, 'since'> & {
   /** When it entered its state (ISO). `null`: the card has no age (a plan row) and none is shown. */
@@ -39,6 +40,7 @@ export function IssueCard({
   projectAs,
   kind,
   number,
+  seat,
   state,
   reason,
   since,
@@ -73,6 +75,7 @@ export function IssueCard({
         <KindIcon kind={kind} />
         <ProjectChip project={project} as={projectAs} />
         {number == null ? null : <IssueNumber number={number} />}
+        <SeatBadge seat={seat} />
         {origin ? <span className="text-xs text-muted-foreground">{origin}</span> : null}
         {showState || onMenu ? (
           <div className="relative ml-auto flex h-6 items-center justify-end">

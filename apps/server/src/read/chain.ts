@@ -4,6 +4,7 @@ import * as z from 'zod'
 import { FLOW_KINDS, workOf } from '@software-factory/contract'
 import type { ChainEdge, ChainModel, ChainNode } from '@software-factory/contract'
 import type { QueueReasons } from './flow.ts'
+import { type LeadRow, readLeadSeats } from './seats.ts'
 import { plain } from './words.ts'
 import { isWorkRepo, loadOpenProjects, REDACTED_REPO, REDACTED_TITLE } from './work.ts'
 
@@ -69,6 +70,7 @@ export async function readChain(
   options: {
     /** the read token: a work repo's words go */ redact?: boolean
     /** why each queued Issue stays queued */ queue?: QueueReasons
+    /** the role table's lead row, for the seat of an Issue with no lead yet */ leadRow?: LeadRow
   } = {},
 ): Promise<ChainModel> {
   const openProjects = options.redact ? await loadOpenProjects(sql) : []
@@ -175,6 +177,7 @@ export async function readChain(
   ]
   const unique = [...new Map(edges.map((edge) => [`${edge.from}>${edge.to}`, edge])).values()]
 
+  const seats = await readLeadSeats(sql, [...issues.keys()], options.leadRow)
   const usedClosed = new Set(unique.flatMap((edge) => [edge.from, edge.to]))
   const issueNodes = [...issues.values()]
     .filter((row) => row.state !== 'closed' || usedClosed.has(row.id))
@@ -193,6 +196,7 @@ export async function readChain(
       since: row.since?.toISOString() ?? null,
       waitReason: row.wait_reason,
       notBefore: null,
+      seat: seats.get(row.id) ?? null,
     }))
   const rowNodes = unfiled.map(({ project, row }): ChainNode => {
     // the `after_days` window ends that many days after the latest close among the row's blockers (once all are closed)
@@ -221,6 +225,7 @@ export async function readChain(
       since: null,
       waitReason: null,
       notBefore: until === 0 ? null : new Date(until).toISOString(),
+      seat: null,
     }
   })
 

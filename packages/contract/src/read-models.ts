@@ -2,7 +2,7 @@ import * as z from 'zod'
 import { QueueReason, QueueStatesView } from './capacity.ts'
 import { SIGNAL_ORIGINS } from './intake.ts'
 import { IssueRef } from './planning.ts'
-import { EFFORTS, TIERS } from './roles.ts'
+import { EFFORTS, LeadSeat, TIERS } from './roles.ts'
 import { WORK_WORDS, WorkCounts } from './work-words.ts'
 
 /**
@@ -59,6 +59,8 @@ export const NeedItem = z
     joinedIssues: z.array(z.string()),
     /** a long wait: why the Issue waits, when it ends and how many open Issues wait behind it; null for everything else */
     wait: z.strictObject({ reason: z.literal('timer'), until: at, held: z.number().int().min(1) }).nullable(),
+    /** the seat of the item's Issue's lead (`LeadSeat`); null for an item with no Issue or none known */
+    seat: LeadSeat.nullable(),
     /** the title and summary were replaced: the item is work-repo text and the caller may not read it */
     redacted: z.boolean(),
   })
@@ -103,6 +105,8 @@ export const FlowIssue = z
     waitReason: z.string().nullable(),
     /** why a queued Issue stays queued; null: nothing keeps it out, or it is not queued */
     queue: QueueReason.nullable(),
+    /** the seat of its lead (`LeadSeat`); null when none is known */
+    seat: LeadSeat.nullable(),
   })
   .meta({ id: 'FlowIssue' })
 export type FlowIssue = z.infer<typeof FlowIssue>
@@ -121,6 +125,8 @@ export const FlowClosed = z
     kind: z.enum(FLOW_KINDS),
     outcome: z.enum(['done', 'dropped', 'healed', 'cancelled']),
     closedAt: at,
+    /** the seat its last lead ran on; null when it never had one */
+    seat: LeadSeat.nullable(),
   })
   .meta({ id: 'FlowClosed' })
 
@@ -260,6 +266,8 @@ export const ChainNode = z
     waitReason: z.string().nullable(),
     /** a row's `not_before` as a full ISO instant, past or future; null for an Issue and for a row without one */
     notBefore: z.string().nullable(),
+    /** the seat of an Issue's lead (`LeadSeat`); null for a row and for an Issue with none known */
+    seat: LeadSeat.nullable(),
   })
   .meta({ id: 'ChainNode' })
 export type ChainNode = z.infer<typeof ChainNode>

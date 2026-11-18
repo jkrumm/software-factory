@@ -89,6 +89,7 @@ const node = (id: string, title: string): ChainNode => ({
   since: null,
   waitReason: null,
   notBefore: null,
+  seat: null,
 })
 
 // local-time dates so the clock words are the same in any zone

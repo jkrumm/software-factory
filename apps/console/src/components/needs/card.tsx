@@ -1,7 +1,7 @@
 import type { NeedItem } from '@software-factory/contract'
 import { Link, useRouter } from '@tanstack/react-router'
 import { useEffect, useRef } from 'react'
-import { InfoHint, Lozenge } from '@/components/kit'
+import { InfoHint, Lozenge, SeatBadge } from '@/components/kit'
 import { issueNumber, metaParts, projectOf, summaryLine } from '@/lib/needs'
 import { prefetchDetail } from '@/lib/queries'
 import { cn } from '@/lib/utils'
@@ -121,6 +121,7 @@ export function NeedCard({
               <InfoHint word="stale" className="-my-1" />
             </span>
           ) : null}
+          {item.issue ? <SeatBadge seat={item.seat} className="relative z-10" /> : null}
           {item.issue ? (
             <Link to="/issues/$id" params={{ id: issueNumber(item.issue) }} className={cn(LINK, 'min-w-0 truncate')}>
               {issueTitle ?? 'Open Issue'}

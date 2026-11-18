@@ -3,6 +3,7 @@ import { CardLink, isLinked, LINKED_CARD } from './card-link'
 import { AgeColumn, type IssueViewProps, IssueNumber, ProjectChip, ReasonLine } from './issue-parts'
 import { KindIcon } from './kind-badge'
 import { Lozenge } from './lozenge'
+import { SeatBadge } from './seat-badge'
 
 export type IssueRowProps = IssueViewProps
 
@@ -12,6 +13,7 @@ export function IssueRow({
   project,
   kind,
   number,
+  seat,
   state,
   reason,
   since,
@@ -43,7 +45,8 @@ export function IssueRow({
       <span className="hidden w-20 shrink-0 min-[40rem]:block">
         <ProjectChip project={project} as={projectAs} />
       </span>
-      <span className="shrink-0 min-[40rem]:w-24">
+      <span className="flex shrink-0 items-center gap-2 min-[40rem]:w-32">
+        <SeatBadge seat={seat} />
         <Lozenge state={state} />
       </span>
       <div className="hidden shrink-0 min-[64rem]:block min-[64rem]:w-80 min-[90rem]:w-[28rem]">

@@ -35,6 +35,9 @@ The Console's components, each depending only on Basalt tokens (`--vx-*` through
   clamped to 3 lines. It takes `compact` (the Chain's node: 2-line title, 1-line reason, for a fixed shorter card), `number` (none for a plan row), `since: null` for a card with no age (a plan row: none shown), `stateLabel` for the
   Lozenge's words, `reasonIcon` and `reasonTitle` where the reason line's icon or hover text is not the state's, and
   `projectAs`, a router link that turns the project chip into a link above the stretched card link.
+- **SeatBadge** is the lead's seat as letters (`SH` is Sonnet at high effort; `XX` is max), solid when started, dashed and
+  muted when planned, its words in the tooltip. IssueCard and IssueRow take it as `seat` (a `LeadSeat`) and place it after the
+  number and before the state; a screen without those parts places it itself.
 - **SinceRow** is a button that opens a Base UI popover to its side (`side`: `right`, or `bottom` on a phone) on hover, on
   keyboard focus (Escape closes it and the focus it gets back does not reopen it) and on a tap. Its `children` are the
   popover's links; it takes `outcome` (also the icon's accessible name), `happened`, `number` (none for a signal), and

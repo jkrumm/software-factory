@@ -177,6 +177,36 @@ const attemptSeat = async (issue: IssueId, attempt: number) => {
   return row as { tier: string | null; effort: string | null } | undefined
 }
 
+describe('the seat badge (leadSeat)', () => {
+  const leadRow = async () => ({ tier: 'sonnet' as const, effort: 'high' as const })
+  const shown = async (issue: IssueId) =>
+    (await issueDetail({ sql: w.db.sql, clock: w.deps.clock, deriveSession, leadRow }, { id: issue, quota: new Map() }))
+      ?.leadSeat
+
+  test('an Issue with no lead yet shows the lead row as planned; its lead, once started, the seat it started on', async () => {
+    const issue = await w.admitted()
+    expect(await shown(issue)).toEqual({ tier: 'sonnet', effort: 'high', role: 'lead', planned: true })
+    expect((await startLead(w.deps, effect(issue))).ok).toBe(true)
+    expect(await shown(issue)).toEqual({ tier: 'sonnet', effort: 'high', role: 'lead', planned: false })
+  })
+
+  test('a filed seat is the planned one before the start and the real one after', async () => {
+    const issue = await w.admitted([], { tier: 'opus', effort: 'high' })
+    expect(await shown(issue)).toEqual({ tier: 'opus', effort: 'high', role: null, planned: true })
+    expect((await startLead(w.deps, effect(issue))).ok).toBe(true)
+    expect(await shown(issue)).toEqual({ tier: 'opus', effort: 'high', role: null, planned: false })
+  })
+
+  test('with no lead row and no filed seat, nothing is shown', async () => {
+    const issue = await w.admitted()
+    const none = await issueDetail(
+      { sql: w.db.sql, clock: w.deps.clock, deriveSession },
+      { id: issue, quota: new Map() },
+    )
+    expect(none?.leadSeat).toBeNull()
+  })
+})
+
 describe('start_lead seats', () => {
   test('an Issue filed with a seat starts its lead on it, records it, and reads it back as seat and ranOn', async () => {
     const issue = await w.admitted([], { tier: 'opus', effort: 'high' })

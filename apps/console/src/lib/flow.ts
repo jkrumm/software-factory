@@ -2,6 +2,7 @@ import {
   addWork,
   emptyWorkCounts,
   FLOW_STATES,
+  type FlowIssue,
   type FlowModel,
   type FlowState,
   type FlowTrendSeries,
@@ -118,6 +119,8 @@ export interface FlowCard {
   split: string | null
   /** the queue or wait reason, or the outcome of a closed one; null: no line */
   reason: string | null
+  /** the seat of its lead for the badge (planned: not started yet); null: none known */
+  seat: FlowIssue['seat']
   since: string
 }
 
@@ -175,6 +178,7 @@ export function cardsOf(data: FlowModel, filters: FlowFilters = {}): Cards {
             : work.word === 'ready' || work.word === 'held'
               ? (issue.queue?.message ?? (state === 'settling' ? 'Being settled' : null))
               : null,
+        seat: issue.seat,
         since: issue.since,
       })
     }
@@ -191,6 +195,7 @@ export function cardsOf(data: FlowModel, filters: FlowFilters = {}): Cards {
       state: issue.outcome,
       split: null,
       reason: null,
+      seat: issue.seat,
       since: issue.closedAt,
     }))
   return cards

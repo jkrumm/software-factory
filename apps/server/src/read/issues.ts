@@ -30,6 +30,7 @@ import {
   type SessionDeps,
   withUsage,
 } from './sessions.ts'
+import { readLeadSeats } from './seats.ts'
 import type { IssueUsage } from './usage.ts'
 
 /** The default list length of `/v1/issues`, and its ceiling. */
@@ -146,6 +147,7 @@ async function loadExtras(sql: SQL, ids: readonly string[]): Promise<Extras> {
 
 function cardOf(input: {
   row: IssueRow
+  leadSeat: ReadIssueCard['leadSeat']
   leads: readonly LeadSession[]
   extras: Extras
   quota: ReadonlyMap<string, ReadAccountQuota>
@@ -214,6 +216,7 @@ function cardOf(input: {
     waitingOnOwner:
       open && ((row.state === 'waiting' && OWNER_WAITS.has(row.wait_reason ?? '')) || extras.asking.has(row.id)),
     seat: seatOf(row.seated) ?? seatOf(row.filed?.seat),
+    leadSeat: input.leadSeat,
     lane: text(row.filed?.lane),
   }
 }
@@ -233,10 +236,11 @@ async function build(
   const ids = rows.map((row) => row.id)
   // the queue order reads the host, so it is asked only when a queued card is in the page
   const queue = queueOf && rows.some((row) => row.state === 'queued') ? await queueOf() : null
-  const [attempts, briefs, extras] = await Promise.all([
+  const [attempts, briefs, extras, seats] = await Promise.all([
     loadAttempts(deps.sql, ids, 0),
     loadBriefs(deps.sql, ids),
     loadExtras(deps.sql, ids),
+    readLeadSeats(deps.sql, ids, deps.leadRow),
   ])
   // the window share is a slower view: one Issue's page reads it, a list does not
   const derived = await deriveLeads(deps, { attempts, briefs, quota, points: rows.length === 1 })
@@ -251,6 +255,7 @@ async function build(
     cards: rows.map((row) =>
       cardOf({
         row,
+        leadSeat: seats.get(row.id) ?? null,
         leads: leads.get(row.id) ?? [],
         extras,
         quota,
