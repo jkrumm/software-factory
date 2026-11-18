@@ -177,7 +177,6 @@ export async function fixDeps(
       method,
       title,
       body: rest.join('\n').trim(),
-      hasGuardTarget: /^merge-guard:/m.test(readFileSync(join(path, 'Makefile'), 'utf8')),
       ...(input.wait ? { wait: input.wait } : {}),
     })
     if (landed.kind === 'merged') {

@@ -145,9 +145,13 @@ async function waitForCi(tools: Tools, cwd: string, number: number, wait: CiWait
   }
 }
 
-/** The guard of the merge window: the repo's own `make merge-guard` where it has one, else the branch contains master and master's last finished run is not red. */
-async function guard(tools: Tools, cwd: string, base: string, hasTarget: boolean): Promise<string[] | undefined> {
-  if (hasTarget) {
+/**
+ * The guard of the merge window: the repo's own `make merge-guard` where it has one (`make -n` says so for any way a Makefile
+ * declares or includes it), else the branch contains master and master's last finished run is not red.
+ */
+async function guard(tools: Tools, cwd: string, base: string): Promise<string[] | undefined> {
+  const declared = await exec([tools.make, '-n', 'merge-guard'], GIT_TIMEOUT_MS, cwd).catch(() => undefined)
+  if (declared?.exitCode === 0) {
     const run = await exec(withStderr([tools.make, 'merge-guard']), MAKE_TIMEOUT_MS, cwd)
     return run.exitCode === 0 ? undefined : tailOf(run.stdout)
   }
@@ -198,7 +202,6 @@ export async function landByPullRequest(input: {
   method: string
   title: string
   body: string
-  hasGuardTarget: boolean
   wait?: CiWait
 }): Promise<Landed> {
   const { tools, cwd, base, method } = input
@@ -287,7 +290,7 @@ export async function landByPullRequest(input: {
         'CI is red with these bumps.',
       )
     }
-    const refused = await guard(tools, cwd, base, input.hasGuardTarget)
+    const refused = await guard(tools, cwd, base)
     if (refused) {
       return stop(
         { kind: 'deferred', detail: `the merge guard refused pull request #${number}: asked again at the next pass` },

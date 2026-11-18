@@ -455,7 +455,7 @@ Report `docs/strategy/2026-11-next/report.html`, definition `docs/strategy/2026-
   a pushed bump is not deployed or watched (the repo's next ship carries it); a push refused because master moved is a failed
   fix, not a retry. Switch: `FACTORY_HYGIENE_FIX=0`. Count over the next week: stale-branch and deps Issues filed against
   `fixes` rows of outcome `fixed`, and how many `failed` ones a lead then closed done.
-- **NL45 The bun `deps` fix lands a pull request where a repo ships by pull request (Issue 2264, 2026-11-18).** NL44 left the 6
+- **NL46 The bun `deps` fix lands a pull request where a repo ships by pull request (Issue 2264, 2026-11-18).** NL44 left the 6
   `via: pr` repos with their `deps` Issue because a pass could not hold a PR across passes or the merge window. It does not
   have to: the pass already waits on a test slot for up to 100 minutes, so the landing runs inside one pass and keeps no state.
   After the check is green the pass takes the repo's merge window (`factory merge-lock`, the lock a lead's merge takes, held by
