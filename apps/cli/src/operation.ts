@@ -259,6 +259,15 @@ async function request(op: Operation, invocation: Invocation, ioOf: Io) {
   if (op.operationId === 'signal.file' && lead && isObject(body) && body.filer === undefined) {
     body = { ...body, filer: `issue_${lead[1]}` }
   }
+  // A lead's door route is its own Issue's: the session says which, so a lead need not repeat it with --issue.
+  if (
+    (op.operationId === 'door.route-set' || op.operationId === 'door.route-remove') &&
+    lead &&
+    isObject(body) &&
+    body.issue === undefined
+  ) {
+    body = { ...body, issue: `issue_${lead[1]}` }
+  }
   // The contract's own limits, checked before anything is sent: Issue ids are normalised, then every issue is named.
   if (op.body) {
     body = normalizeBody(op, body)

@@ -174,6 +174,20 @@ describe('the filing contract', () => {
     expect(JSON.parse(sentBody)).not.toHaveProperty('filer')
   })
 
+  test("a lead's door route names the lead's Issue unless --issue says otherwise", async () => {
+    answer = { status: 200, body: {} }
+    const set = ['door', 'route-set', '--source', 'kuma', '--monitor', 'm', '--repo', 'r']
+    const remove = ['door', 'route-remove', '--source', 'kuma', '--monitor', 'm']
+    await cli(set, { FACTORY_SESSION: 'lead-2055-1' })
+    expect(JSON.parse(sentBody)).toMatchObject({ issue: 'issue_2055' })
+    await cli(remove, { FACTORY_SESSION: 'lead-2055-1' })
+    expect(JSON.parse(sentBody)).toMatchObject({ issue: 'issue_2055' })
+    await cli([...set, '--issue', 'issue_7'], { FACTORY_SESSION: 'lead-2055-1' })
+    expect(JSON.parse(sentBody)).toMatchObject({ issue: 'issue_7' })
+    await cli(set)
+    expect(JSON.parse(sentBody)).not.toHaveProperty('issue')
+  })
+
   test('the limits the server holds are in the help of the verbs they bound', async () => {
     const { MAX_CONTENT, MAX_TITLE } = await import('../../server/src/domains/checkpoints/artifact.ts')
     const submit = (await cli(['artifact', 'submit', '--help'])).out

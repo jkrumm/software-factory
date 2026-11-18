@@ -213,10 +213,36 @@ const deferredBy =
  * From a wait: the steward holds a lead's repeated block until a time (a timed wait, so the lead is not woken to block again);
  * every other deferral is a timed wait's own.
  */
-const heldOrFromTimer = (ctx: Ctx<'deferred'>): Cell =>
-  ctx.event.actor === 'steward' && 'until' in ctx.event.payload && ctx.issue.wait?.reason === 'blocked'
-    ? defer(ctx)
-    : fromTimer(deferredBy(defer))(ctx)
+const heldOrFromTimer = (ctx: Ctx<'deferred'>): Cell => {
+  if (ctx.event.actor === 'steward' && 'until' in ctx.event.payload && ctx.issue.wait?.reason === 'blocked') {
+    return defer(ctx)
+  }
+  return repeatedWait(ctx) ?? fromTimer(deferredBy(defer))(ctx)
+}
+
+/**
+ * A lead's defer that says what the Issue already waits for (the same Issues, the same review, the same time) is a retry
+ * that changes nothing: answered as such, never refused, since the lead cannot know its first call went through.
+ */
+function repeatedWait(ctx: Ctx<'deferred'>): Cell | null {
+  const { wait } = ctx.issue
+  const { payload } = ctx.event
+  if (ctx.event.actor === 'steward' || !wait || payload.attempt !== ctx.issue.attempt) return null
+  if (wait.reason === 'dependency' && 'after' in payload && !wait.watching) {
+    const same = new Set(payload.after)
+    if (same.size !== wait.after.length || !wait.after.every((id) => same.has(id))) return null
+    return ignore(
+      `it is already waiting for ${wait.after.join(', ')}: nothing changed, it resumes by itself when they close, so end the turn`,
+    )
+  }
+  if (wait.reason === 'external' && 'review' in payload && payload.review === wait.holds.id) {
+    return ignore(`it is already waiting on the review of ${wait.holds.id}: nothing changed, end the turn`)
+  }
+  if (wait.reason === 'timer' && 'until' in payload && Date.parse(payload.until) === Date.parse(wait.until)) {
+    return ignore(`it is already waiting until ${wait.until}: nothing changed, end the turn`)
+  }
+  return null
+}
 
 /** A shipped Issue deferred by the steward waits like any dependency, and goes back to its watch. */
 const deferWatching = (ctx: Ctx<'deferred'>): Cell => {

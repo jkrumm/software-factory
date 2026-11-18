@@ -100,7 +100,9 @@ export function readDecisionForm(raw: unknown): Result<DecisionForm, MissingFiel
           .join(' | ')}`
       : 'no option has a label yet'
   if (recommendation !== '' && !recommended) {
-    problems.push(`recommendation (not one of the options: it is the label of one, ${labelList})`)
+    problems.push(
+      `recommendation (not one of the options: it is the label of one, exactly as in options and case ignored, not a sentence about it; ${labelList})`,
+    )
   }
 
   const rawNo = isRecord(body.noAnswer) ? body.noAnswer : {}
@@ -130,7 +132,11 @@ export function readDecisionForm(raw: unknown): Result<DecisionForm, MissingFiel
     return err({
       kind: 'missing_field',
       fields: problems,
-      detail: `a Decision needs: ${problems.join('; ')}. Nothing was raised: ask again with every field.`,
+      detail: `a Decision needs: ${problems.join('; ')}. Nothing was raised: ask again with every field.${
+        problems.some((problem) => problem.startsWith('recommendation'))
+          ? ` --recommendation is the label of one option, exactly as in --options and case ignored (--recommendation "<label>"), not a sentence about it.`
+          : ''
+      }`,
     })
   }
   return ok({

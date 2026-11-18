@@ -277,7 +277,8 @@ export const DoorRouteInput = z
       .optional()
       .meta({
         ...ISSUE_ID_META,
-        description: 'the Issue a lead sets the route for; required with the agent token, ignored for the owner',
+        description:
+          "the Issue a lead sets the route for; required with the agent token (the CLI fills it in from the lead's session), ignored for the owner",
       }),
   })
   .meta({ id: 'DoorRouteInput' })

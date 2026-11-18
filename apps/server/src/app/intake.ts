@@ -1128,7 +1128,11 @@ export function createIntake(deps: IntakeDeps) {
     caller: RequestCaller,
   ): Out<string> {
     if (caller !== 'agent') return ok('owner')
-    if (!input.issue) return refuse('trust_refused', 'a lead names its Issue with --issue to route a monitor')
+    if (!input.issue)
+      return refuse(
+        'trust_refused',
+        'a lead names its Issue to route a monitor: --issue <id> (the CLI fills it in a lead session, where FACTORY_SESSION is set)',
+      )
     const id = issueRef(input.issue)
     if (!id) return refuse('not_found', `no Issue ${input.issue}`)
     const issue = await loadIssue(s.work, id)
