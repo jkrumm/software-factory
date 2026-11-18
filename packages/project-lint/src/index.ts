@@ -186,7 +186,7 @@ function leadsReasons(
 }
 
 /**
- * The comment beside a top-level `leads:` or a lane's `leads` (the lane's line, or the line above), from a project file's
+ * The comment beside a top-level `leads:` or a lane's `leads` (the lane's line, the `lanes:` line for a flow-style lane, or the line above), from a project file's
  * text: what the throughput loop quotes when the cap binds while seats idle. Null: no such line, or it has no comment.
  */
 export function capComment(text: string, cap: { lane: string | null }): string | null {
@@ -194,7 +194,10 @@ export function capComment(text: string, cap: { lane: string | null }): string |
   const lanes = lines.findIndex((l) => /^lanes\s*:/.test(l))
   const laneLine = (line: string, i: number) =>
     lanes !== -1 && i > lanes && /^\s/.test(line) && line.trimStart().startsWith(`${cap.lane}:`)
-  const index = cap.lane === null ? lines.findIndex((l) => /^leads\s*:/.test(l)) : lines.findIndex(laneLine)
+  // a lane declared in flow style (`lanes: { apple: 1 } # reason`) sits on the `lanes:` line itself
+  const inFlow = lanes !== -1 && new RegExp(`[{,]\\s*${cap.lane}\\s*:`).test(lines[lanes] ?? '')
+  const index =
+    cap.lane === null ? lines.findIndex((l) => /^leads\s*:/.test(l)) : inFlow ? lanes : lines.findIndex(laneLine)
   if (index === -1) return null
   const comment = commentsAround(lines, index + 1).trim()
   return comment === '' ? null : comment

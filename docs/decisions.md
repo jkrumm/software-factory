@@ -554,7 +554,7 @@ Report `docs/strategy/2026-11-next/report.html`, definition `docs/strategy/2026-
   so a day earlier (54.2 h of queue for a claim over 62 Issues) and nothing acted on it, because no loop turned a binding cap into a
   challenge. Now: (1) **a binding cap is a finding.** When `claim` (a repo's `leads`) or `lane` is the reason an Issue of a repo
   stays queued, and an account seat is idle in the same minute (`host_samples.seats` over `leads`), for 60 minutes or more of
-  the newest 6 hours, the throughput pass files one signal on the repo while the cap is still set
+  the last 24 hours (the pass is daily), the throughput pass files one signal on the repo while the cap is still set
   (`domains/loops/caps.ts`, `read/cap-facts.ts`): the cap, the comment beside it in the default branch's `project.yaml`, and the
   measured figures for the resource that comment names (worktree size and free disk, a lead's memory, the merge windows of the
   last 7 days). The title (the cap and the repo) is the fingerprint, so there is no repeat while it is open; the generic

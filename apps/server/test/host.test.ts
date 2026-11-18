@@ -385,7 +385,8 @@ test('a pass with a process table stores the facts and one row per lead, and pru
 
 test("a pass measures the attempts' worktrees at most every ten minutes, and the store learns a repo's sizes from them", async () => {
   const uow = postgresUnitOfWork(db.sql, (tx) => ({ loops: postgresLoopStore(tx) }))
-  const t0 = new Date()
+  // a fixed past instant: passes ten minutes on must not cross the real clock's hour, which would roll up other tests' class samples
+  const t0 = new Date('2026-11-17T03:00:00Z')
   const trees = [1, 2, 3, 4].map((n) => `/work/app/.claude/worktrees/factory-${n}-1`)
   for (const [i, path] of trees.entries()) {
     await db.sql`
@@ -433,7 +434,7 @@ test("a pass measures the attempts' worktrees at most every ten minutes, and the
   expect(learned[0]?.sizesMibNewestFirst.toSorted()).toEqual([2001, 2002, 2003])
   await db.sql`DELETE FROM factory.worktree_sizes`
   await db.sql`DELETE FROM factory.lead_attempts`
-  await db.sql`DELETE FROM factory.host_samples WHERE at >= ${t0}`
+  await db.sql`DELETE FROM factory.host_samples WHERE at >= ${t0} AND at < ${new Date(t0.getTime() + 3_600_000)}`
 })
 
 test('a pass with a snapshot stores the signals, the class rows and the notable processes, rolls hours up and prunes', async () => {

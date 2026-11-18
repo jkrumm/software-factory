@@ -1,4 +1,5 @@
 import { afterAll, beforeAll, describe, expect, test } from 'bun:test'
+import { capComment } from '@software-factory/project-lint'
 import { startTestCluster, type TestCluster } from '@software-factory/tests/pg'
 import { loadMigrations, migrate } from '../../src/adapters/postgres/migrate.ts'
 import { postgresLoopStore } from '../../src/adapters/postgres/loop-store.ts'
@@ -114,7 +115,7 @@ describe('a binding cap is a finding', () => {
     expect(signal?.title).toBe('The lead cap `leads: 2` of shutterflow binds while seats idle')
     expect(signal?.repo).toBe('shutterflow')
     const text = signal?.text ?? ''
-    expect(text).toContain('queued for a claim for 90 of the last 6 hours while a median 8 account seats sat idle')
+    expect(text).toContain('queued for a claim for 90 of the last 24 hours while a median 8 account seats sat idle')
     expect(text).toContain(COMMENT)
     expect(text).toContain(
       'a worktree with its build output measured 2.1 GiB (p80 of 3 attempts), the largest 2.1 GiB; the host has 130 GiB free',
@@ -153,6 +154,23 @@ describe('a binding cap is a finding', () => {
     const pass = await run(deps(shapes(64), filed))
     expect(pass.caps).toEqual([])
     expect(filed.filter((f) => f.title.startsWith('The lead cap'))).toEqual([])
+  })
+})
+
+describe('the comment beside a cap', () => {
+  test('is read from the leads line, a lane line and a flow-style lanes line', () => {
+    const file = [
+      'apiVersion: factory/v2',
+      'leads: 2 # one licence per lead',
+      '# the lane above the line',
+      'lanes:',
+      '  apple: 1 # one signing keychain',
+      '',
+    ].join('\n')
+    expect(capComment(file, { lane: null })).toBe('# one licence per lead')
+    expect(capComment(file, { lane: 'apple' })).toContain('one signing keychain')
+    expect(capComment('lanes: { apple: 1 } # one keychain\n', { lane: 'apple' })).toBe('# one keychain')
+    expect(capComment('leads: 2\n', { lane: null })).toBeNull()
   })
 })
 
