@@ -583,6 +583,7 @@ async function main(): Promise<void> {
           file: (body) => intake.api.file(body, 'agent'),
           everyMs: loopSettings.hygieneEveryMs,
           dailyMs: loopSettings.hygieneDailyMs,
+          fixes: loopSettings.hygieneFix,
           retryMs: loopSettings.hygieneRetryMs,
           repos: loopSettings.hygieneRepos,
         })

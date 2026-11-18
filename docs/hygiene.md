@@ -24,7 +24,7 @@ page's Hygiene tab and `factory read project-hygiene <name>` render that one lis
 - **Budget.** At most 3 probe findings and 5 signals in all per pass, probes ranked in the catalogue's order; the rest are
   named in the pass record, never dropped. A finding class that mostly ends dropped or cancelled stops filing for 14 days.
 - **Settings.** `FACTORY_HYGIENE_EVERY_MS` (the week), `FACTORY_HYGIENE_DAILY_MS` (the day, 0 turns daily passes off),
-  `FACTORY_HYGIENE_RETRY_MS`, `FACTORY_HYGIENE_REPOS` (`apps/server/src/app/loops/settings.ts`, set in the env file).
+  `FACTORY_HYGIENE_RETRY_MS`, `FACTORY_HYGIENE_FIX` (0 turns the scripted fixes off), `FACTORY_HYGIENE_REPOS` (`apps/server/src/app/loops/settings.ts`, set in the env file).
 - **The seat.** Every signal carries a `Seat:` line. A finding's Issue starts on the light seat whatever its size: the probe that
   found it turning green proves the fix, and a light lead that struggles is moved up once. A class whose Issues keep moving up
   (its move-up share over its last 20 Issues above the bound the cost of a move-up sets) starts on the standard lead until the
@@ -61,6 +61,13 @@ those Issues and from the next pass's verdict, never stored.
 | green (ran, did not raise the key) | queued or settling: no lead has started | closes it as healed, with the probe's run as the reason |
 | green | a lead is working or waiting | tells the lead once; the lead decides |
 | green | in its Watch, or closed | nothing |
+
+**A scripted fix comes first.** A probe whose catalogue entry has a `fix` (below) is fixed by script before anything is filed: the
+script runs in the pass's throwaway checkout, then the same probe runs again. What it no longer raises files nothing, and an
+Issue of that key that no lead has started is closed as healed by the table above. A fix that failed, or left something red,
+leaves the finding as it was with the script's output on it, and the Issue goes to a light lead as always. Every attempt is
+listed on the Hygiene tab (`fixes` of `factory read project-hygiene <name>`). `FACTORY_HYGIENE_FIX=0` switches every scripted
+fix off.
 
 A run that was skipped or failed says nothing about a key, so it never heals. The document judgment never heals: it reads a
 few documents, and absence proves nothing. Every action is recorded on the pass and listed on the Hygiene tab.
@@ -134,6 +141,7 @@ Outdated dependencies and the advisories above, as one refresh per repo: `bun ou
 - **Default:** on when detection finds what it reads: a package file of one of those kinds is tracked; every ecosystem is one finding.
 - **Runs:** in the weekly pass, and only monthly on an idle repo; runs an analyzer or asks a registry.
 - **Silence it:** Name it under `hygiene.skip` in `project.yaml` with a reason; the pass shows the reason.
+- **Scripted fix:** For `bun`: each patch or minor past its cooldown that the root `package.json` declares is set with `bun add <name>@<version>` (an exact pin stays exact), then the repo's check runs in a test slot. On green, a `chore(deps)` commit pushed to the default branch of a repo that ships by push; the next ship of the repo deploys it. A repo that ships by pull request, a red check, a major, a held version, a workspace package and every other ecosystem go to a lead; the check's output is on the Issue.
 
 ### ci
 
@@ -166,6 +174,7 @@ Remote branches merged into the default branch or untouched for 30 days, and lef
 - **Default:** on for every project.
 - **Runs:** in the daily pass and the weekly one; reads tracked files.
 - **Silence it:** Name it under `hygiene.skip` in `project.yaml` with a reason; the pass shows the reason.
+- **Scripted fix:** Deletes the remote branches merged into the default branch (`git push origin --delete`), prunes worktrees git calls prunable and removes the merged ones that are idle (`git worktree remove`, never `--force`: a dirty or locked one stays). On the remote and the project checkout at once. Branches only untouched for 30 days and worktrees only untouched are not deleted: they stay a finding for a lead.
 
 ### deadcode
 

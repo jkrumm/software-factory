@@ -1,5 +1,6 @@
 import type {
   HygieneFindingRow,
+  HygieneFixRow,
   HygieneLifecycleRow,
   HygieneProbeRow,
   PlanRowView,
@@ -83,6 +84,21 @@ export const ACTION_TONES: Record<HygieneLifecycleRow['action'], Tone> = {
   noted: 'neutral',
   reopened: 'warn',
   kept: 'bad',
+}
+
+/** What a scripted fix did, in the words the Hygiene tab shows (no state words of an Issue: `scripts/vocabulary.ts`). */
+export const FIX_WORDS: Record<HygieneFixRow['outcome'], string> = {
+  fixed: 'Fixed by script',
+  failed: 'Failed, a lead has it',
+  skipped: 'Does not apply',
+  deferred: 'Held until the next pass',
+}
+
+export const FIX_TONES: Record<HygieneFixRow['outcome'], Tone> = {
+  fixed: 'good',
+  failed: 'bad',
+  skipped: 'neutral',
+  deferred: 'warn',
 }
 
 /** The catalogue's words: whether a probe runs by default, when, and at what cost. */

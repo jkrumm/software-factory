@@ -21,8 +21,10 @@ import type {
   Checkout,
   DeclaredProbe,
   HygieneChecker,
+  Landing,
   Scope,
   SkippedProbe,
+  SweepOptions,
   SweepReport,
 } from '../../domains/loops/hygiene-model.ts'
 import type {
@@ -62,6 +64,8 @@ export interface HygieneDeps {
   dailyMs?: number
   /** writes one lifecycle step to its Issue; absent, the machine's events (`applyStep`). A seam for tests of the decisions. */
   apply?: (step: LifecycleStep, now: Date, reopens: number) => Promise<HygienePassRecord['lifecycle'][number] | null>
+  /** the scripted fixes run (`FACTORY_HYGIENE_FIX`); absent or false: every finding is filed as before */
+  fixes?: boolean
   /** a failed judgment is asked again this long on */
   retryMs: number
   /** only these projects (names or repo texts); null is every project with a `project.yaml` */
@@ -191,6 +195,8 @@ interface Target {
   deps?: DepsThresholds
   /** the project's own `hygiene.idleAfterDays`; absent is the catalogue's */
   idleAfterDays?: number
+  /** how the project's changes land (`ship`): a scripted fix pushes only where the repo ships by push */
+  landing?: Landing
 }
 
 /**
@@ -280,20 +286,28 @@ async function sweepPass(
   if (!known.ok) return known
   const added = nothingAdded()
   const lifecycle: HygienePassRecord['lifecycle'] = []
+  const fixes: HygienePassRecord['fixes'] = []
   const swept = await deps.checker.withCheckout(target.repoText, null, async (checkout) => {
     let { scope } = planned
     if (scope === 'daily' && planned.lastFull && planned.lastFull.ref !== NO_REF) {
       const commits = await deps.checker.commitsSince(checkout, planned.lastFull.ref)
       if (isBusy({ commits, lastFullAt: planned.lastFull.at, now })) scope = 'full'
     }
-    const report = await deps.checker.sweep(checkout, {
+    const sweepOptions: SweepOptions = {
       skipCheck: target.skipCheck,
       probes: target.probes,
       skip: target.skip,
       scope,
       deps: target.deps,
       idleAfterDays: target.idleAfterDays,
-    })
+    }
+    let report = await deps.checker.sweep(checkout, sweepOptions)
+    // A finding with a script is fixed before anything is filed; the probe, run again, says what is still red.
+    if (deps.fixes && deps.checker.fix) {
+      const fixed = await deps.checker.fix(checkout, report, { sweep: sweepOptions, landing: target.landing ?? 'push' })
+      report = fixed.report
+      fixes.push(...fixed.fixes.map((entry) => ({ ...entry, at: now })))
+    }
     const plan = planLifecycle({
       red: report.findings,
       runs: report.runs,
@@ -301,13 +315,18 @@ async function sweepPass(
       now,
       swept: `${target.name} @ ${checkout.ref.slice(0, 7)}`,
     })
-    for (const step of plan.steps) {
+    // A fix that could not start now (no test slot in time) holds its finding back one pass: the next pass asks again. Its key
+    // stays red for the lifecycle (green would heal its Issue), but a closed Issue is not reopened for a lead meanwhile.
+    const deferred = new Set(fixes.filter((entry) => entry.outcome === 'deferred').map((entry) => entry.key))
+    for (const step of plan.steps.filter((entry) => !deferred.has(entry.key))) {
       const reopens = known.value.find((entry) => entry.key === step.key)?.reopens ?? 0
       const applied = await (deps.apply ?? ((s, n, r) => applyStep(deps, s, n, r)))(step, now, reopens)
       if (applied) lifecycle.push(applied)
     }
     // A held class is named before the budget counts: it does not use up a slot.
-    const ranked = rankProbeFindings(report.findings.filter((finding) => !plan.suppress.has(finding.key)))
+    const ranked = rankProbeFindings(
+      report.findings.filter((finding) => !plan.suppress.has(finding.key) && !deferred.has(finding.key)),
+    )
     const allowed = ranked.filter((finding) => gate.allows(finding.key))
     const { file } = probeBudget(allowed)
     for (const finding of file) {
@@ -345,6 +364,7 @@ async function sweepPass(
         judgment: swept.value.judgment,
         ...added,
         lifecycle,
+        fixes,
       }
     : {
         id: target.passId,
@@ -357,6 +377,7 @@ async function sweepPass(
         overBudget: [],
         failed: [{ key: 'checkout', reason: `${swept.error.kind}: ${swept.error.detail}`.slice(0, 300) }],
         lifecycle: [],
+        fixes: [],
       }
   const recorded = await deps.uow.run(async ({ loops }) => {
     await loops.recordHygienePass(record)
@@ -478,6 +499,7 @@ export async function hygienePass(deps: HygieneDeps): Promise<Result<HygienePass
         behindRows: hygiene.deps?.behindRows ?? HYGIENE_DEFAULTS.deps.behindRows,
       },
       idleAfterDays: hygiene.idleAfterDays,
+      landing: project.project.ship.some((rule) => rule.via === 'pr') ? 'pr' : 'push',
     },
     now,
     {
@@ -502,8 +524,13 @@ export const hygieneSummary = (pass: HygienePass): string => {
     .map((action) => [action, record.lifecycle.filter((entry) => entry.action === action).length] as const)
     .filter(([, count]) => count > 0)
     .map(([action, count]) => `${action} ${count}`)
+  const fixed = ['fixed', 'failed', 'skipped', 'deferred']
+    .map((outcome) => [outcome, record.fixes.filter((entry) => entry.outcome === outcome).length] as const)
+    .filter(([, count]) => count > 0)
+    .map(([outcome, count]) => `fix ${outcome} ${count}`)
   return [
     `${what} ${record.repo} @${record.ref.slice(0, 7)}: filed ${pass.filedNow} signal(s), ${pass.overNow} over budget; judgment ${record.judgment.outcome}`,
     ...lifecycle,
+    ...fixed,
   ].join('; ')
 }

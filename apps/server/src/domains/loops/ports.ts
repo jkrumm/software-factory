@@ -28,7 +28,7 @@ import type { CallLoop, CallOutcome, CallRow } from './calls.ts'
 import type { ClassIssue, FindingLoop } from './classes.ts'
 import type { FixCommit, FixCommitRow } from './fix-classes.ts'
 import type { FindingIssue, LifecycleAction } from './hygiene-lifecycle.ts'
-import type { SweepReport } from './hygiene-model.ts'
+import type { FixEntry, SweepReport } from './hygiene-model.ts'
 import type {
   CapacityMinute,
   CiRun,
@@ -81,6 +81,8 @@ export interface HygienePassRecord {
   failed: { key: string; reason: string }[]
   /** what the pass did to findings already filed (`migrations/1047_hygiene_lifecycle.sql`) */
   lifecycle: { key: string; issue: string; action: LifecycleAction; why: string; at: Date }[]
+  /** the scripted fixes the pass ran (`migrations/1053_hygiene_fixes.sql`); a pass recorded before the column has none */
+  fixes: (FixEntry & { at: Date })[]
 }
 
 /** The loops' own tables, inside one transaction: the agw calls made, so none is made twice, and the friction and hygiene passes. */

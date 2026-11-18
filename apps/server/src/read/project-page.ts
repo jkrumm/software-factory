@@ -2,6 +2,7 @@ import {
   BUILT_IN_PROBE_NAMES,
   catalogueEntry,
   HYGIENE_ACTIONS,
+  HYGIENE_FIX_OUTCOMES,
   HYGIENE_OUTCOMES,
   type HygieneCatalogueEntry,
   type HygieneFindingRow,
@@ -39,6 +40,7 @@ const PASSES = 5
 /** Passes read for the probes' last runs and the lifecycle: a fortnight of daily passes and the weekly ones. */
 const RECENT_PASSES = 16
 const LIFECYCLE_ROWS = 20
+const FIX_ROWS = 20
 
 const json = (value: unknown): unknown => (typeof value === 'string' ? JSON.parse(value) : value)
 
@@ -174,6 +176,14 @@ const Lifecycle = z.object({
   at: z.string(),
 })
 
+const Fix = z.object({
+  key: z.string(),
+  outcome: z.enum(HYGIENE_FIX_OUTCOMES),
+  detail: z.string(),
+  output: z.array(z.string()).prefault([]),
+  at: z.string(),
+})
+
 const PassRow = z.object({
   id: z.string(),
   repo: z.string(),
@@ -185,6 +195,7 @@ const PassRow = z.object({
   over_budget: z.unknown(),
   failed: z.unknown(),
   lifecycle: z.unknown().optional(),
+  fixes: z.unknown().optional(),
 })
 
 export interface Pass {
@@ -198,6 +209,7 @@ export interface Pass {
   overBudget: z.infer<typeof Entry>[]
   failed: z.infer<typeof Entry>[]
   lifecycle: z.infer<typeof Lifecycle>[]
+  fixes: z.infer<typeof Fix>[]
 }
 
 export const passOf = (raw: unknown): Pass => {
@@ -221,6 +233,10 @@ export const passOf = (raw: unknown): Pass => {
       .array(Lifecycle)
       .prefault([])
       .parse(json(row.lifecycle) ?? []),
+    fixes: z
+      .array(Fix)
+      .prefault([])
+      .parse(json(row.fixes) ?? []),
   }
 }
 
@@ -423,6 +439,10 @@ export async function readProjectHygiene(
       .flatMap((pass) => pass.lifecycle)
       .sort((a, b) => b.at.localeCompare(a.at))
       .slice(0, LIFECYCLE_ROWS),
+    fixes: passes
+      .flatMap((pass) => pass.fixes)
+      .sort((a, b) => b.at.localeCompare(a.at))
+      .slice(0, FIX_ROWS),
     passes: passes.slice(0, PASSES).map(passRow),
   }
 }

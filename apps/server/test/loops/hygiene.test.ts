@@ -17,7 +17,14 @@ import {
   requestOf,
   skipped,
 } from '../../src/domains/loops/hygiene.ts'
-import type { HygieneChecker, Probe, ProbeFinding, ProbeRun, Scope } from '../../src/domains/loops/hygiene-model.ts'
+import type {
+  FixEntry,
+  HygieneChecker,
+  Probe,
+  ProbeFinding,
+  ProbeRun,
+  Scope,
+} from '../../src/domains/loops/hygiene-model.ts'
 import type { ClassIssue } from '../../src/domains/loops/classes.ts'
 import type { FindingIssue, LifecycleStep } from '../../src/domains/loops/hygiene-lifecycle.ts'
 import type { HygienePassRecord, LoopReads, LoopStore } from '../../src/domains/loops/ports.ts'
@@ -123,6 +130,7 @@ const row = (repo: string, at: Date, judgment: Partial<HygienePassRecord['judgme
   at,
   ref: 'abcdef1234',
   report: { ref: 'abcdef1234', runs: [], findings: [], stale: [], slop: [] },
+  fixes: [],
   judgment: { ...skipped('none'), ...judgment },
   filed: [],
   overBudget: [],
@@ -217,7 +225,13 @@ test('a failed judgment is retried after the gap while attempts remain; a full p
 const project = (
   name: string,
   hygiene: { check: boolean; reason?: string; probes?: { name: string; target: string }[] } = { check: true },
-) => ({ name, repo: `/src/${name}`, source: 'file', project: { hygiene } }) as unknown as StoredProject
+) =>
+  ({
+    name,
+    repo: `/src/${name}`,
+    source: 'file',
+    project: { hygiene, ship: [{ via: 'push' }] },
+  }) as unknown as StoredProject
 
 interface Extra {
   findings?: ProbeFinding[]
@@ -228,6 +242,8 @@ interface Extra {
   runs?: ProbeRun[]
   /** commits since the last full pass */
   commits?: number | null
+  /** the scripted fix of the checker; absent: the checker has none */
+  fix?: HygieneChecker['fix']
 }
 
 function world(
@@ -266,6 +282,7 @@ function world(
         ? err(portError('gone', 'fetch failed'))
         : ok(await use({ path: '/tmp/x', ref: 'abcdef1234abcdef', source: '/tmp/src' })),
     commitsSince: async () => extra.commits ?? null,
+    ...(extra.fix ? { fix: extra.fix } : {}),
     sweep: async (co, options) => {
       scopes.push(options?.scope)
       sweeps.push(co.ref)
@@ -354,7 +371,10 @@ test('a project with hygiene.check false is swept with its reason; the default a
 
 test("a red doctor skips the project's check with its lines, so hygiene.check needs no switching off; a green one and no doctor do not", async () => {
   const withDoctor = (name: string) =>
-    ({ ...project(name), project: { hygiene: { check: true }, doctor: 'make doctor' } }) as unknown as StoredProject
+    ({
+      ...project(name),
+      project: { hygiene: { check: true }, doctor: 'make doctor', ship: [{ via: 'push' }] },
+    }) as unknown as StoredProject
   const w = world([], new Set(), [
     withDoctor('a-red'),
     withDoctor('b-green'),
@@ -655,4 +675,103 @@ test('a daily pass runs the cheap scope; a busy repo is promoted to a full pass,
 
 test("the pass's reopen window stays a day inside the machine's, so a reopen it asks for is never refused for age", () => {
   expect(MACHINE_REOPEN_WINDOW_MS - REOPEN_WINDOW_MS).toBe(DAY)
+})
+
+// ---- scripted fixes ---------------------------------------------------------------------------------------------------------
+
+const stale = finding('stale', 'stale:branches', 3)
+const fixedBranches: FixEntry = { key: 'stale:branches', outcome: 'fixed', detail: 'deleted 3 merged remote branches' }
+
+test('a finding the script fixed files nothing and the pass records the fix', async () => {
+  const seen: unknown[] = []
+  const w = world(['a'], new Set(), undefined, {
+    findings: [stale],
+    fix: async (_co, report, options) => {
+      seen.push(options.landing)
+      return { report: { ...report, findings: [] }, fixes: [fixedBranches] }
+    },
+  })
+  const pass = await hygienePass({ ...w.deps, fixes: true })
+  expect(pass).toMatchObject({ ok: true, value: { due: true, filedNow: 0 } })
+  expect(w.filedBodies).toEqual([])
+  expect(w.rows[0]?.fixes).toEqual([{ ...fixedBranches, at: now }])
+  expect(seen).toEqual(['push'])
+})
+
+test('a finding whose fix failed is filed as it stands, and a fix that could not start holds it back one pass', async () => {
+  const failedFix: FixEntry = {
+    key: 'stale:branches',
+    outcome: 'failed',
+    detail: 'refused',
+    output: ['protected branch'],
+  }
+  const failed = world(['a'], new Set(), undefined, {
+    findings: [stale],
+    fix: async (_co, report) => ({ report, fixes: [failedFix] }),
+  })
+  await hygienePass({ ...failed.deps, fixes: true })
+  expect(failed.filedBodies).toEqual(['title of stale:branches'])
+  expect(failed.rows[0]?.fixes[0]).toMatchObject({ outcome: 'failed', output: ['protected branch'] })
+
+  const deferred = world(['a'], new Set(), undefined, {
+    findings: [stale],
+    fix: async (_co, report) => ({
+      report,
+      fixes: [{ key: 'stale:branches', outcome: 'deferred', detail: 'no test slot came in time' }],
+    }),
+  })
+  await hygienePass({ ...deferred.deps, fixes: true })
+  expect(deferred.filedBodies).toEqual([])
+  expect(deferred.rows[0]?.fixes[0]).toMatchObject({ outcome: 'deferred' })
+})
+
+test('no fix runs when the switch is off, and a repo that ships by pull request is told so', async () => {
+  let calls = 0
+  const off = world(['a'], new Set(), undefined, {
+    findings: [stale],
+    fix: async (_co, report) => {
+      calls++
+      return { report, fixes: [] }
+    },
+  })
+  await hygienePass({ ...off.deps, fixes: false })
+  expect(calls).toBe(0)
+  expect(off.filedBodies).toHaveLength(1)
+
+  const landings: string[] = []
+  const viaPr = {
+    ...project('pr'),
+    project: { hygiene: { check: true }, ship: [{ via: 'push' }, { via: 'pr' }] },
+  } as unknown as StoredProject
+  const pr = world([], new Set(), [viaPr], {
+    findings: [stale],
+    fix: async (_co, report, options) => {
+      landings.push(options.landing)
+      return { report, fixes: [] }
+    },
+  })
+  await hygienePass({ ...pr.deps, fixes: true })
+  expect(landings).toEqual(['pr'])
+})
+
+test('a deferred fix does not reopen the closed Issue of its key', async () => {
+  const closed: FindingIssue = {
+    key: 'stale:branches',
+    issue: 'issue_9',
+    state: 'closed',
+    outcome: 'done',
+    closedAt: new Date(now.getTime() - 3 * DAY),
+    reopens: 0,
+  }
+  const w = world(['a'], new Set(), undefined, {
+    findings: [stale],
+    issues: [closed],
+    fix: async (_co, report) => ({
+      report,
+      fixes: [{ key: 'stale:branches', outcome: 'deferred', detail: 'no test slot came in time' }],
+    }),
+  })
+  await hygienePass({ ...w.deps, fixes: true })
+  expect(w.steps).toEqual([])
+  expect(w.filedBodies).toEqual([])
 })
