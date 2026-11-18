@@ -1095,6 +1095,7 @@ async function main(): Promise<void> {
         idleTimeout: IDLE_TIMEOUT_S,
         fetch: consoleHandler({
           dir: consoleSettings.dir,
+          imageHosts: consoleSettings.imageHosts,
           forward: apiForward({
             handle: (request) => app.handle(request),
             origin: `http://${HOSTNAME}:${settings.port}`,

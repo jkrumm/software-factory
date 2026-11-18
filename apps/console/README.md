@@ -252,8 +252,11 @@ risks, proof; tables with the minimum separator `|-|-|`) or `templates/artifact.
 CSS variables with light and dark, semantic classes (`callout`, `table-wrap`, `pre`, `figure`), pictures as inline SVG or
 `data:` URLs. Its token block is generated (`bun run --cwd apps/console templates`, `templates:check` in `make check`).
 
-Markdown is rendered with react-markdown: raw HTML is dropped, `javascript:`/`data:` links are refused and an image shows
-its alt text instead of loading (the CSP is `img-src 'self' data:`). HTML runs in
+Markdown is rendered with react-markdown: raw HTML is dropped and `javascript:`/`data:` links are refused. An image loads
+only over `https` from a host the owner lists in `FACTORY_CONSOLE_IMAGE_HOSTS` (comma-separated `host` or `*.domain`, in
+`~/.config/factory/env`, none by default, a restart applies it): the page's CSP is `img-src 'self' data:` plus those
+hosts. Any other image, or one that fails (an expired presigned link), shows its alt text. A lead links shots from a listed
+host (for a private bucket a presigned URL) or inlines them in an HTML artifact. HTML runs in
 `<iframe sandbox="allow-scripts" src="/frame.html">`, a separate document: the listener serves `/frame.html` and `/frame/*`
 (`public/`) under their own CSP (`default-src 'none'`, no `connect-src`, `frame-src`, `form-action` or `base-uri`; images
 and fonts from `data:`; `sandbox allow-scripts`), so the artifact's inline script runs while nothing leaves the frame, and
