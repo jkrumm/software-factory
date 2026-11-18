@@ -1,7 +1,7 @@
 import { expect, test } from 'bun:test'
 import { Elysia } from 'elysia'
 import { createApp } from '../src/api/app.ts'
-import { p95Of, ROUTE_WINDOW_MS, routeLabel, routeTimer } from '../src/api/route-timer.ts'
+import { p95Of, ROUTE_WARMUP_MS, ROUTE_WINDOW_MS, routeLabel, routeTimer } from '../src/api/route-timer.ts'
 import { healthOf } from '../src/read/health.ts'
 
 test('p95Of: nearest rank, null without a value', () => {
@@ -24,7 +24,7 @@ const health = {
 
 test('routeTimer times every route but /health, with a failing one counted too', async () => {
   let clock = 1_000_000
-  const timer = routeTimer({ now: () => clock })
+  const timer = routeTimer({ now: () => clock, warmupMs: 0 })
   const app = createApp({ health, routes: timer, tokens: { owner: 'secret' } })
   await app.handle(new Request('http://localhost/health'))
   expect(timer.snapshot().samples).toBe(0)
@@ -38,7 +38,7 @@ test('routeTimer times every route but /health, with a failing one counted too',
 
 test('routeTimer: a request still unanswered counts at its age, a stream never counts, a request nobody answers ages out', async () => {
   let clock = 0
-  const timer = routeTimer({ now: () => clock })
+  const timer = routeTimer({ now: () => clock, warmupMs: 0 })
   let release: () => void = () => {}
   const held = new Promise<void>((resolve) => (release = resolve))
   const app = new Elysia()
@@ -96,4 +96,16 @@ test('healthOf: the heartbeat gains routeP95Ms and routeSamples beside the four 
     routeSamples: 31,
   })
   expect(healthOf({ ...base, routes: { p95Ms: null, samples: 0 } }).heartbeat.routeP95Ms).toBeNull()
+})
+
+test('routeTimer: requests begun in the warm-up after the start are not timed, later ones are', async () => {
+  let clock = 5_000
+  const timer = routeTimer({ now: () => clock })
+  const app = new Elysia().use(timer.plugin).get('/v1/ping', () => 'pong')
+  await app.handle(new Request('http://localhost/v1/ping'))
+  await app.handle(new Request('http://localhost/v1/ping'))
+  expect(timer.snapshot().samples).toBe(0)
+  clock += ROUTE_WARMUP_MS
+  await app.handle(new Request('http://localhost/v1/ping'))
+  expect(timer.snapshot().samples).toBe(1)
 })
