@@ -39,7 +39,7 @@ export interface CiOutcome {
 /**
  * The ship gate. A ship names merged commits, and git must have found them on the default branch: without that the
  * ship is refused, with the error named. A review is recorded as evidence when it exists and its absence is recorded
- * with its reason; it never refuses a ship (NL23). Pure: the same answers give the same verdict.
+ * with its reason; it never refuses a ship (NL23); nor does this gate judge CI (a ship after a CI regression is held in `quality-ship.ts`, NL41). Pure: the same answers give the same verdict.
  */
 export function judgeShip(input: {
   reported: readonly string[]
