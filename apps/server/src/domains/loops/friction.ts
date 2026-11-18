@@ -93,8 +93,22 @@ export const THRESHOLDS: Record<Judged, Rule> = {
   },
 }
 
-/** Touches the owner uses to steer and to triage: they file only at a higher rate than a touch that is a failure. */
-const STEERING: Record<string, Rule> = {
+/**
+ * A full window and a lead's own report that it is blocked are the factory working: the steward moves the lead to an open
+ * account or holds it on a timer, 20 of 21 and 33 of 48 ended that way in the week to 2026-11-18 with no person, median 2 min.
+ * A week at 0.03 and 0.015 per Issue closed is weather; the week one Issue's block loop made 47 of 77 stalls was 0.07, so one
+ * in twenty (the level NL37 chose for a regression) tells the two apart. `unreported` and `regressed` stay at the bare count.
+ */
+const STALL_BY_RATE: Rule = {
+  min: 3,
+  rate: 0.05,
+  why: 'a block or a full window on one in twenty closed Issues is a loop or a cap that is wrong; fewer are the steward moving or holding a lead',
+}
+
+/** Rules of one key, over the rule of its group: the touches the owner uses to steer and to triage file only at a higher rate than a touch that is a failure; the stalls the factory ends itself file by rate. */
+const BY_KEY: Record<string, Rule> = {
+  'stall:wall': STALL_BY_RATE,
+  'stall:blocked': STALL_BY_RATE,
   'touch:noted': {
     min: 5,
     rate: 0.5,
@@ -112,7 +126,7 @@ const RETIRED: readonly RegExp[] = [/^ship_refused:ship refused, review /]
 
 export const isRetired = (key: string): boolean => RETIRED.some((pattern) => pattern.test(key))
 
-const ruleOf = (key: string, group: Judged): Rule => STEERING[key] ?? THRESHOLDS[group]
+const ruleOf = (key: string, group: Judged): Rule => BY_KEY[key] ?? THRESHOLDS[group]
 
 /** Groups whose events map to Issues; the others (an undelivered note, a held signal) carry no Issue refs. */
 const WITHOUT_ISSUES = new Set<FrictionCount['group']>(['undelivered_note', 'signal'])

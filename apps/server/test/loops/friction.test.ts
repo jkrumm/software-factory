@@ -46,7 +46,8 @@ test('aggregate keys and the decision_settled group are never findings', () => {
 
 test('a serious pattern is a finding by its count alone, at any sample', () => {
   const cases: [string, FrictionCount['group']][] = [
-    ['stall:wall', 'stall'],
+    ['stall:unreported', 'stall'],
+    ['stall:regressed', 'stall'],
     ['lead_gone', 'lead_gone'],
     ['undelivered_note', 'undelivered_note'],
   ]
@@ -93,6 +94,26 @@ test('a rate-judged pattern needs its count, its rate and the minimum sample', (
   }
 })
 
+test('a block or a full window the steward ends itself is a finding by rate, not by count', () => {
+  for (const key of ['stall:blocked', 'stall:wall']) {
+    // 48 and 21 in a week of 1443 closed Issues: weather
+    expect(over([count(key, 'stall', 48, key, 1443)], 1443), key).toEqual([])
+    // one Issue's block loop, 77 of 1183 closed
+    expect(
+      over([count(key, 'stall', 77, key, 1183)], 1183).map((p) => p.key),
+      key,
+    ).toEqual([key])
+    // 2 of 40 is under the count, 3 of 40 is over the rate
+    expect(over([count(key, 'stall', 2)]), key).toEqual([])
+    expect(
+      over([count(key, 'stall', 3)]).map((p) => p.key),
+      key,
+    ).toEqual([key])
+    // under the minimum sample a rate means nothing
+    expect(over([count(key, 'stall', 9, key, MIN_CLOSED - 1)], MIN_CLOSED - 1), key).toEqual([])
+  }
+})
+
 test('owner notes and cancels, the owner steering, need a far higher rate than another touch', () => {
   expect(over([count('touch:noted', 'avoidable_touch', 12)])).toEqual([]) // 0.30 per Issue closed
   expect(over([count('touch:cancelled', 'avoidable_touch', 12)])).toEqual([])
@@ -111,12 +132,12 @@ test('a retired pattern, the review gate that is gone, is never a finding', () =
 
 test('patterns come most frequent first, ties by key', () => {
   const found = over([
-    count('stall:wall', 'stall', 2),
+    count('stall:unreported', 'stall', 2),
     count('regression', 'regression', 4),
     count('lead_gone', 'lead_gone', 2),
     count('undelivered_note', 'undelivered_note', 9),
   ])
-  expect(found.map((p) => p.key)).toEqual(['undelivered_note', 'regression', 'lead_gone', 'stall:wall'])
+  expect(found.map((p) => p.key)).toEqual(['undelivered_note', 'regression', 'lead_gone', 'stall:unreported'])
 })
 
 test('the budget files the first five and names the rest with their counts', () => {
