@@ -753,3 +753,25 @@ test('no fix runs when the switch is off, and a repo that ships by pull request 
   await hygienePass({ ...pr.deps, fixes: true })
   expect(landings).toEqual(['pr'])
 })
+
+test('a deferred fix does not reopen the closed Issue of its key', async () => {
+  const closed: FindingIssue = {
+    key: 'stale:branches',
+    issue: 'issue_9',
+    state: 'closed',
+    outcome: 'done',
+    closedAt: new Date(now.getTime() - 3 * DAY),
+    reopens: 0,
+  }
+  const w = world(['a'], new Set(), undefined, {
+    findings: [stale],
+    issues: [closed],
+    fix: async (_co, report) => ({
+      report,
+      fixes: [{ key: 'stale:branches', outcome: 'deferred', detail: 'no test slot came in time' }],
+    }),
+  })
+  await hygienePass({ ...w.deps, fixes: true })
+  expect(w.steps).toEqual([])
+  expect(w.filedBodies).toEqual([])
+})

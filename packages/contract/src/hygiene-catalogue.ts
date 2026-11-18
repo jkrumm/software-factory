@@ -125,7 +125,7 @@ export const HYGIENE_CATALOGUE = [
     name: 'deps',
     fix: {
       keys: ['deps'],
-      does: "For `bun`: each patch or minor past its cooldown that the root `package.json` declares is set with `bun add --exact <name>@<version>`, then the repo's check runs in a test slot.",
+      does: "For `bun`: each patch or minor past its cooldown that the root `package.json` declares is set with `bun add <name>@<version>` (an exact pin stays exact), then the repo's check runs in a test slot.",
       lands:
         "On green, a `chore(deps)` commit pushed to the default branch of a repo that ships by push; the next ship of the repo deploys it. A repo that ships by pull request, a red check, a major, a held version, a workspace package and every other ecosystem go to a lead; the check's output is on the Issue.",
     },

@@ -176,7 +176,7 @@ const MAKE_GREEN = 'check-fast:\n\t@echo green\n'
 
 describe('fixDeps', () => {
   test('bumps the patches and minors past their cooldown, runs the check, pushes to the default branch', async () => {
-    const f = fixture({ 'package.json': PKG, Makefile: MAKE_GREEN })
+    const f = fixture({ 'package.json': PKG, 'bun.lock': '{}\n', Makefile: MAKE_GREEN })
     const entries = await fixDeps(withBun(), f.checkout, { landing: 'push', released: released(30), now: NOW })
     expect(entries).toHaveLength(1)
     expect(entries[0]).toMatchObject({
@@ -193,7 +193,11 @@ describe('fixDeps', () => {
   })
 
   test('a red check pushes nothing and puts its output on the failure', async () => {
-    const f = fixture({ 'package.json': PKG, Makefile: 'check-fast:\n\t@echo boom-in-test\n\t@exit 1\n' })
+    const f = fixture({
+      'package.json': PKG,
+      'bun.lock': '{}\n',
+      Makefile: 'check-fast:\n\t@echo boom-in-test\n\t@exit 1\n',
+    })
     const before = git(f.origin, ['rev-parse', 'master']).trim()
     const [entry] = await fixDeps(withBun(), f.checkout, { landing: 'push', released: released(30), now: NOW })
     expect(entry).toMatchObject({ outcome: 'failed', detail: expect.stringContaining('make check-fast is red') })
@@ -202,7 +206,7 @@ describe('fixDeps', () => {
   })
 
   test('a repo that ships by pull request is skipped; no test slot in time is deferred', async () => {
-    const f = fixture({ 'package.json': PKG, Makefile: MAKE_GREEN })
+    const f = fixture({ 'package.json': PKG, 'bun.lock': '{}\n', Makefile: MAKE_GREEN })
     const before = git(f.origin, ['rev-parse', 'master']).trim()
     const [pr] = await fixDeps(withBun(), f.checkout, { landing: 'pr', released: released(30), now: NOW })
     expect(pr).toMatchObject({ outcome: 'skipped' })
@@ -216,15 +220,23 @@ describe('fixDeps', () => {
   })
 
   test('with every version inside its cooldown nothing is bumped', async () => {
-    const f = fixture({ 'package.json': PKG, Makefile: MAKE_GREEN })
+    const f = fixture({ 'package.json': PKG, 'bun.lock': '{}\n', Makefile: MAKE_GREEN })
     const before = git(f.origin, ['rev-parse', 'master']).trim()
     const table = TABLE.replace('| left-pad | 1.0.0 | 1.0.1 | 2.0.0 |\n', '')
     expect(await fixDeps(withBun(table), f.checkout, { landing: 'push', released: released(1), now: NOW })).toEqual([])
     expect(git(f.origin, ['rev-parse', 'master']).trim()).toBe(before)
   })
 
+  test('a package.json without a tracked bun.lock is not ours', async () => {
+    const f = fixture({ 'package.json': PKG, 'package-lock.json': '{}\n', Makefile: MAKE_GREEN })
+    const before = git(f.origin, ['rev-parse', 'master']).trim()
+    const [entry] = await fixDeps(withBun(), f.checkout, { landing: 'push', released: released(30), now: NOW })
+    expect(entry).toMatchObject({ outcome: 'skipped', detail: expect.stringContaining('not a bun repo') })
+    expect(git(f.origin, ['rev-parse', 'master']).trim()).toBe(before)
+  })
+
   test('a version with no release date is never bumped by script', async () => {
-    const f = fixture({ 'package.json': PKG, Makefile: MAKE_GREEN })
+    const f = fixture({ 'package.json': PKG, 'bun.lock': '{}\n', Makefile: MAKE_GREEN })
     const entries = await fixDeps(withBun(), f.checkout, { landing: 'push', released: async () => undefined, now: NOW })
     expect(entries).toEqual([])
   })

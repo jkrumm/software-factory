@@ -315,13 +315,14 @@ async function sweepPass(
       now,
       swept: `${target.name} @ ${checkout.ref.slice(0, 7)}`,
     })
-    for (const step of plan.steps) {
+    // A fix that could not start now (no test slot in time) holds its finding back one pass: the next pass asks again. Its key
+    // stays red for the lifecycle (green would heal its Issue), but a closed Issue is not reopened for a lead meanwhile.
+    const deferred = new Set(fixes.filter((entry) => entry.outcome === 'deferred').map((entry) => entry.key))
+    for (const step of plan.steps.filter((entry) => !deferred.has(entry.key))) {
       const reopens = known.value.find((entry) => entry.key === step.key)?.reopens ?? 0
       const applied = await (deps.apply ?? ((s, n, r) => applyStep(deps, s, n, r)))(step, now, reopens)
       if (applied) lifecycle.push(applied)
     }
-    // A fix that could not start now (no test slot in time) holds its finding back one pass: the next pass asks again.
-    const deferred = new Set(fixes.filter((entry) => entry.outcome === 'deferred').map((entry) => entry.key))
     // A held class is named before the budget counts: it does not use up a slot.
     const ranked = rankProbeFindings(
       report.findings.filter((finding) => !plan.suppress.has(finding.key) && !deferred.has(finding.key)),

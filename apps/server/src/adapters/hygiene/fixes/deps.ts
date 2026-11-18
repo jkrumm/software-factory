@@ -75,6 +75,9 @@ export async function fixDeps(
 ): Promise<FixEntry[]> {
   const { path } = checkout
   if (input.landing === 'pr') return skip('this repo ships by pull request: a lead lands the bump')
+  const locks = (await gitOut(tools, path, ['ls-files', '--', 'bun.lock', 'bun.lockb']).catch(() => '')).trim()
+  // The `deps` probe reads any package.json as bun's; a script that rewrites it must be sure bun owns the lockfile.
+  if (!locks) return skip('no bun.lock is tracked: this is not a bun repo, a lead bumps it')
   const slot = tools.slot[0]
   if (!slot || !installed(slot))
     return skip(`no \`${slot ?? 'slot command'}\` on the PATH: the check needs a test slot`)
