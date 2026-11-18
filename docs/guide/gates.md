@@ -97,6 +97,7 @@ A ship is the lead's report that its change landed and deployed. The ship gate c
 - **Git finds the commits.** The lead names merged commits and the factory reads them on the default branch. With none found, the ship is refused as `ship refused: ship names no merged commit`, or with the error named, and counted as friction.
 - **Acceptance lines are stated, not judged.** One `--acceptance` per line of the Issue, each starting `met: ` or `not met: `. A `not met` is honest and never refuses; a ship stating nothing is counted as friction like an unreviewed one.
 - **CI is recorded** as `green`, `red`, `running`, `missing` or `unknown`, and a red or missing one is counted as friction.
+- **A red CI that a Watch regressed on refuses.** After a Watch regressed on the default branch's CI, a ship is refused while that CI is still red for the commit it lands at: the same commit reads the same red. A fix or a revert, or a re-run that turns it green, goes through; a CI that cannot be read never refuses.
 - **An owed Spec refuses.** An Issue with checkpoint `spec` and no Spec submitted is refused until one is.
 - **A ship is idempotent.** `--call <id>` makes a repeated call one ship.
 

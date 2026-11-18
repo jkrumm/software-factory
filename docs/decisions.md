@@ -402,3 +402,16 @@ Report `docs/strategy/2026-11-next/report.html`, definition `docs/strategy/2026-
   `regressed` stay on the bare count. Revert: set `STALL_BY_RATE` back to `{ min: 2, rate: null }`, or delete the two `BY_KEY`
   lines in `domains/loops/friction.ts`. Not changed: the steward's 2 min before it moves a lead (`minStallMs`), which is the
   whole of a wall stall's cost, 6300 s a week.
+- **NL42 A ship into a red CI that the last Watch regressed on is refused (Issue 2190, 2026-11-18).** `stall:regressed` filed at 5 in
+  7 days. Three Issues were read: 1346 (a dependency bump) shipped the same commits three times into a SonarCloud failure of
+  the landed commit and was escalated to a Decision after the third; 2055 re-shipped identical commits four times into a
+  host alert that was still firing; 1177 shipped different commits each time (registry drift, real fix-forward). The CI
+  case is mechanical: the default branch's CI is a function of the commit, so a ship that lands at the same red re-reads it
+  and spends one of the three regressions. A ship is now refused while the default branch's CI of the commit it lands at is
+  red, when the Issue's newest Watch regressed on its `ci` check (`watch.ts` `regressedOnCi`, `ciStillRed`); the refusal names
+  the red and the exits (a fix or revert, a re-run of a flake, a Decision where the red is not this change's). Green,
+  running, missing or unreadable CI never refuses (NL23's rule for evidence stays), and a regression of another check does
+  not hold the ship: a missed `make deploy` is cured by an identical re-ship (7 of 10 regressed Issues of 1700 to 2189
+  re-shipped the same commits, mostly that). Not changed: the alert case (2055: an incident open before and after the ship
+  re-regresses each repeat), `stall:regressed`'s threshold (NL37 left it) and the lead's note. Count over the next week:
+  Issues with two or more regressions on the same `ci` sha, and refused ships that name this red.
