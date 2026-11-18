@@ -235,10 +235,6 @@ async function readDelivery(
     followUpAttempt: followDollars !== null && followDollars.length >= MIN_FOLLOW_UPS ? mean(followDollars) : leadMean,
   }
   const share = moveUpBound({ lightAttempt, leadAttempt: leadMean, followUpAttempt })
-  const lightFinishMs = percentile(
-    lightFacts.filter((fact) => !fact.moved_up).map((fact) => fact.working_ms),
-    0.5,
-  )
   const movedMs = percentile(
     movedOnes.flatMap((a) => (a.moved_after_ms === null ? [] : [a.moved_after_ms])),
     0.5,
@@ -247,6 +243,12 @@ async function readDelivery(
     leadFacts.map((fact) => fact.working_ms),
     0.5,
   )
+  // with no light Issue finished, light has saved nothing that is shown: it finishes no faster than the lead row (bound 0)
+  const lightFinishMs =
+    percentile(
+      lightFacts.filter((fact) => !fact.moved_up).map((fact) => fact.working_ms),
+      0.5,
+    ) ?? (movedMs === null ? null : leadMs)
   const timeShare = moveUpTimeBound({ lightFinishMs, movedMs, leadMs })
   const time =
     timeShare === null || lightFinishMs === null || movedMs === null || leadMs === null
