@@ -3,7 +3,7 @@ import { err, ok, portError } from '../kernel/result.ts'
 import type { CheckpointUses } from './checkpoints-uses.ts'
 
 /** The Errand's own source name: the Console shows who asks. */
-export const LOGIN_ERRAND_SOURCE = 'factory-accounts'
+const LOGIN_ERRAND_SOURCE = 'factory-accounts'
 
 /**
  * The Errand "log in account X" on the checkpoints' use cases: a standalone request keyed on the account, so a second lead

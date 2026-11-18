@@ -358,7 +358,7 @@ export async function costOfIssues(sql: SQL, issues: readonly string[], timeoutM
  * The reviewer-agent dollars (the usage side's tool `reviewer`) of these Issues' sessions, split by the seat that ran
  * them: the haiku tier is the cheap seat, any other the rest. Null when the usage schema cannot be read.
  */
-export async function reviewerCostOfIssues(
+async function reviewerCostOfIssues(
   sql: SQL,
   issues: readonly string[],
   timeoutMs = USAGE_TIMEOUT_MS,

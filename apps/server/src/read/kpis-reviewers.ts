@@ -108,7 +108,7 @@ function issuesOf(seat: Seat, reviews: readonly Review[], outcomes: readonly Out
  * mechanical work with a proving check passes more often whatever the reviewer, so they would flatter the cheap row. What
  * is compared is the even and odd Issue numbers of the rest.
  */
-export function evidenceOf(seat: Seat, reviews: readonly Review[], outcomes: readonly Outcome[]): SeatEvidence {
+function evidenceOf(seat: Seat, reviews: readonly Review[], outcomes: readonly Outcome[]): SeatEvidence {
   const like = reviews.filter((review) => !review.light)
   const issues = issuesOf(
     seat,
@@ -137,11 +137,7 @@ const within = <T extends { at: Date }>(rows: readonly T[], w: Window): T[] =>
  * The tripwire from every recorded review of all time and the cheap row's last days; the same call the lead start asks
  * (`reviewerTakesAll`), so what the page shows is what decides.
  */
-export function tripwireOf(
-  reviews: readonly Review[],
-  outcomes: readonly Outcome[],
-  now: Date,
-): ReviewerKpis['tripwire'] {
+function tripwireOf(reviews: readonly Review[], outcomes: readonly Outcome[], now: Date): ReviewerKpis['tripwire'] {
   const recent = windowOf(now, REVIEWER_TRIPWIRE_DAYS)
   const cheap = evidenceOf('cheap', reviews, outcomes)
   const plain = evidenceOf('plain', reviews, outcomes)

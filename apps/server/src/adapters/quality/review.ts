@@ -38,7 +38,7 @@ const MAX_THREADS = 8
  * The ledger reads of a ship's threads share this limit, a hang guard on top of `REVIEW_TIMEOUT_MS`: the call that waits for
  * them has already waited for `covered`, and the two must stay under the server's 255 s idle limit.
  */
-export const THREADS_TIMEOUT_MS = 20_000
+const THREADS_TIMEOUT_MS = 20_000
 
 const Status = z.object({
   job: z

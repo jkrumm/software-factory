@@ -99,7 +99,7 @@ export function judgeRefresh(input: {
 
 const clip = (text: string): string => (text.length > MAX_LINE ? `${text.slice(0, MAX_LINE - 1)}…` : text)
 
-export const advisoryLine = (advisory: AdvisoryRow): string =>
+const advisoryLine = (advisory: AdvisoryRow): string =>
   `${advisory.pkg} ${advisory.version}: ${advisory.id} ${advisory.severity} (fixed in ${advisory.fixedIn})`
 
 const rowLine = (row: DependencyRow): string =>
