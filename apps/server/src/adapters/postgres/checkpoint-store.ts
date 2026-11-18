@@ -967,7 +967,7 @@ export function postgresCheckpointStore(tx: SQL): CheckpointStore {
     async recordRun(id, run) {
       const rows: unknown[] = await tx`
         UPDATE factory.errands
-        SET run_attempts = run_attempts + 1, run_status = ${run.status}, run_exit = ${run.exit}, run_at = ${run.at},
+        SET run_attempts = run_attempts + ${run.status === 'done' ? 0 : 1}, run_status = ${run.status}, run_exit = ${run.exit}, run_at = ${run.at},
             run_head = ${run.head}, run_tail = ${run.tail}
         WHERE id = ${id} AND done_at IS NULL RETURNING id`
       return rows.length === 1

@@ -48,7 +48,15 @@ import {
   readRequest,
   SCREENED_SOURCES,
 } from '../domains/checkpoints/request.ts'
-import { exitedNote, firstErrorLine, headTail, runFailureOf, STILL_NEEDED_NOTE } from '../kernel/run.ts'
+import {
+  exitedNote,
+  firstErrorLine,
+  headTail,
+  type RunSuccess,
+  runFailureOf,
+  runSuccessOf,
+  STILL_NEEDED_NOTE,
+} from '../kernel/run.ts'
 import { deepLink, reviewPage } from '../domains/checkpoints/page.ts'
 import type {
   AnnotationRecord,
@@ -1221,7 +1229,11 @@ export async function finishErrand(
 
   const run = await deps.checks.run(checkCommand)
   const verdict = checkVerdict(run)
-  if (verdict === 'needed') return keepOpen(deps, input.errandId, { kind: 'still_needed' })
+  if (verdict === 'needed')
+    return keepOpen(deps, input.errandId, {
+      kind: 'still_needed',
+      ran: runSuccessOf({ run: input.run, note: input.note?.trim() || null }),
+    })
   const said = input.note?.trim() ?? ''
   // a check that could not answer (missing command, timeout) never overrules his done: it is said in the note
   const checked =
@@ -1250,8 +1262,20 @@ export async function retireFailed(
   deps: CheckpointDeps,
   errand: ErrandRecord,
 ): Promise<Result<null, CheckpointError>> {
+  return turnBackErrandWith(stores, deps, errand, failedTwiceNote(firstErrorLine(errand.runHead ?? '')))
+}
+
+/**
+ * An Errand the factory ends by itself, with the words its lead or asker reads (`turnedAway`): the Issue that raised it, and
+ * every Issue that joined it, hear `errand_done`; a request is closed `turned_back` with the same words.
+ */
+export async function turnBackErrandWith(
+  stores: CheckpointStores,
+  deps: CheckpointDeps,
+  errand: ErrandRecord,
+  why: string,
+): Promise<Result<null, CheckpointError>> {
   const at = deps.clock.now()
-  const why = failedTwiceNote(firstErrorLine(errand.runHead ?? ''))
   const end = async (issueId: IssueId): Promise<Result<unknown, CheckpointError>> =>
     applied(
       await recordIn(stores.work, deps, {
@@ -1273,7 +1297,10 @@ export async function retireFailed(
   return ok(null)
 }
 
-type KeptOpen = { kind: 'run'; failure: NonNullable<ReturnType<typeof runFailureOf>> } | { kind: 'still_needed' }
+type KeptOpen =
+  | { kind: 'run'; failure: NonNullable<ReturnType<typeof runFailureOf>> }
+  /** `ran`: the command it came back from exited 0, so the Errand keeps that run and is not pushed again */
+  | { kind: 'still_needed'; ran: RunSuccess | null }
 
 /** The Errand stays open and says why: the run that failed, or the check that overruled the done. A replay when it is done already. */
 function keepOpen(deps: CheckpointDeps, errandId: ErrandId, why: KeptOpen): Promise<CheckpointResult<ErrandWritten>> {
@@ -1295,6 +1322,10 @@ function keepOpen(deps: CheckpointDeps, errandId: ErrandId, why: KeptOpen): Prom
         if (!retired.ok) return retired
       }
     } else {
+      if (why.ran) {
+        const { head, tail } = headTail(why.ran.output)
+        await checkpoints.recordRun(errand.id, { at, status: 'done', exit: why.ran.exit, head, tail })
+      }
       await checkpoints.recordCheck(errand.id, { at, note: STILL_NEEDED_NOTE, fails: 0 })
     }
     const kept = await checkpoints.errand(errand.id)

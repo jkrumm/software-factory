@@ -50,7 +50,8 @@ export function deskDue(input: {
  * The MacBook commands the pass pushes, in order: an open Errand, Issue's or request, that reached the owner with a command
  * to run on the MacBook and needs him there (`secret`, `hands`). An `approval` never is one (Needs you has its button), and a
  * `place` is pushed only on his own button (`includePlace`): no secret, no reason to page him. One whose pushed run is still
- * going in a MacBook terminal is left (a second push would run it again), and one whose command came back unsuccessful
+ * going in a MacBook terminal is left (a second push would run it again), one whose command already ran and exited 0 is
+ * never pushed again (the desk pass turns it back to its lead), and one whose command came back unsuccessful
  * `MAX_RUN_TRIES` times is not offered unchanged.
  *
  * He is back: every one, oldest raised first, to be pushed one dialog at a time (the next after the last was answered or
@@ -84,6 +85,7 @@ function pushable(errand: ErrandRecord, includePlace: boolean): boolean {
     errand.command !== null &&
     errand.host === 'macbook' &&
     errand.runStatus !== 'running' &&
+    errand.runStatus !== 'done' &&
     errand.runAttempts < MAX_RUN_TRIES &&
     dialog
   )

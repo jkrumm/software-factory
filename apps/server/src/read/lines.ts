@@ -175,7 +175,7 @@ async function macbookErrandsOpen(sql: SQL, maxRunTries: number): Promise<number
     SELECT count(*)::int AS n
     FROM factory.errands e LEFT JOIN factory.issues i ON i.id = e.issue_id
     WHERE e.done_at IS NULL AND e.reached_owner_at IS NOT NULL AND e.command IS NOT NULL AND e.host = 'macbook'
-      AND e.need IN ('secret', 'hands') AND e.run_status IS DISTINCT FROM 'running' AND e.run_attempts < ${maxRunTries}
+      AND e.need IN ('secret', 'hands') AND (e.run_status IS NULL OR e.run_status NOT IN ('running', 'done')) AND e.run_attempts < ${maxRunTries}
       AND (e.issue_id IS NULL OR i.state <> 'closed')`
   return z.object({ n: z.number().int() }).parse(row).n
 }

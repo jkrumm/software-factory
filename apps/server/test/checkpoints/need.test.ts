@@ -127,6 +127,18 @@ describe('the seven-day replay of the 15 command Errands', () => {
     expect(button.filter((id) => id.startsWith('gate'))).toEqual([])
   })
 
+  test('a command that ran and exited 0 is never pushed again, one that failed once is', () => {
+    const seen = week[0]
+    if (!seen) throw new Error('no fixture')
+    const at = new Date('2026-11-14T08:00:00Z')
+    const ran = { ...record(seen, 'secret'), runStatus: 'done', runAttempts: 0 } as unknown as ErrandRecord
+    const failed = { ...record(seen, 'secret'), runStatus: 'failed', runAttempts: 1 } as unknown as ErrandRecord
+    for (const returned of [true, false]) {
+      expect(pushQueue([ran], at, returned)).toEqual([])
+      expect(pushQueue([failed], at, returned)).toEqual([failed])
+    }
+  })
+
   test('a command that failed twice is not offered a third time unchanged', () => {
     const seen = week[0]
     if (!seen) throw new Error('no fixture')

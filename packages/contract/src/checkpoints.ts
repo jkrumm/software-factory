@@ -499,10 +499,10 @@ const ErrandView = z.object({
   closedBy: z.enum(['owner', 'orchestrator', 'check', 'judge', 'loop', 'request']).nullable(),
   /** the last run of its check or look of the still-needed workflow: what it said */
   checkNote: z.string().nullable(),
-  /** the last pushed run that came back unsuccessful (a failure, a timeout, still running); null when none did */
+  /** the last pushed run that left it open: it failed, timed out, is still running, or exited 0 and the check still says it is needed; null when none did */
   lastRun: z
     .object({
-      status: z.enum(['failed', 'timeout', 'running']),
+      status: z.enum(['done', 'failed', 'timeout', 'running']),
       exit: z.number().int().nullable(),
       at: iso,
       attempts: z.number().int(),

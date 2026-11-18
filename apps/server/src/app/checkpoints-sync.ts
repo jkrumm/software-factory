@@ -36,7 +36,8 @@ export async function syncPlaceErrands(deps: CheckpointDeps, port: SyncPort): Pr
       errand.command !== null &&
       isSyncCommand(errand.command) &&
       (errand.need ?? needOf(errand)) === 'place' &&
-      errand.runStatus !== 'running',
+      errand.runStatus !== 'running' &&
+      errand.runStatus !== 'done',
   )
   pass.looked = open.length
   if (open.length === 0) return ok(pass)

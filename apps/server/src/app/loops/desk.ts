@@ -8,10 +8,12 @@ import {
   pushQueue,
 } from '../../domains/checkpoints/desk.ts'
 import type { ErrandId } from '../../domains/checkpoints/errand.ts'
+import type { CheckRun } from '../../domains/checkpoints/request.ts'
+import { exitedNote } from '../../kernel/run.ts'
 import { MAX_RUN_TRIES } from '../../domains/checkpoints/need.ts'
 import type { DeskStore, ErrandRecord, PushPort } from '../../domains/checkpoints/ports.ts'
 import { ok, type PortError, type Result } from '../../kernel/result.ts'
-import { rescreenErrand, resolveErrand, retireErrand, tellCheckBroken } from '../checkpoints-errands.ts'
+import { rescreenErrand, resolveErrand, retireErrand, tellCheckBroken, turnBackRan } from '../checkpoints-errands.ts'
 import { runCheck } from './errands.ts'
 import type { SettleDeps } from '../checkpoints-settle.ts'
 import type { UnitOfWork } from '../unit-of-work.ts'
@@ -38,6 +40,8 @@ export interface DeskPass {
   turnedAway: number
   /** ended because their command failed twice */
   retired: number
+  /** turned back because their command ran (exit 0) and their check still says the step is needed: never pushed again */
+  ranBack: number
   /** he was back for this pass: every pending MacBook command was pushed, not one */
   returned: boolean
   /** the Errands whose command was pushed to the MacBook, in the order they were */
@@ -73,6 +77,7 @@ export async function deskPass(deps: DeskDeps): Out<DeskPass> {
     resolved: 0,
     turnedAway: 0,
     retired: 0,
+    ranBack: 0,
     returned: false,
     pushed: [],
     problems: [],
@@ -104,7 +109,10 @@ export async function deskPass(deps: DeskDeps): Out<DeskPass> {
   const left = []
   // the errands loop's own check step, with an Issue's Errand closed through its wait
   const checked = { kept: 0, checkedOut: 0, unrunnable: 0, problems: pass.problems }
+  // the checks this pass saw say "still needed" (exit 0), with what they printed
+  const stillNeeded = new Map<string, CheckRun>()
   const checkDeps = {
+    stillNeeded: (errand: ErrandRecord, run: CheckRun) => void stillNeeded.set(errand.id, run),
     uow: settle.uow,
     clock: settle.clock,
     checks: settle.checks,
@@ -134,7 +142,23 @@ export async function deskPass(deps: DeskDeps): Out<DeskPass> {
   const stillOpen = []
   for (const errand of left) {
     // its command came back unsuccessful twice: it is not offered again, and whoever raised it is told to correct it
-    if (errand.runAttempts >= MAX_RUN_TRIES && errand.runStatus !== null && errand.runStatus !== 'running') {
+    // its command ran and exited 0, and the check this pass just ran still says the step is needed: it is not pushed again,
+    // and whoever raised it is told once with what the check printed
+    const seen = stillNeeded.get(errand.id)
+    if (errand.runStatus === 'done' && seen) {
+      const back = await turnBackRan(settle, errand.id, exitedNote(seen.exit, seen.output))
+      if (!back.ok) pass.problems.push(`${errand.id}: ${JSON.stringify(back.error)}`.slice(0, 300))
+      else if (back.value) {
+        pass.ranBack++
+        continue
+      }
+    }
+    if (
+      errand.runAttempts >= MAX_RUN_TRIES &&
+      errand.runStatus !== null &&
+      errand.runStatus !== 'running' &&
+      errand.runStatus !== 'done'
+    ) {
       const retired = await retireErrand(settle, errand.id)
       if (!retired.ok) pass.problems.push(`${errand.id}: ${JSON.stringify(retired.error)}`.slice(0, 300))
       else if (retired.value) {
@@ -176,7 +200,7 @@ export async function deskPass(deps: DeskDeps): Out<DeskPass> {
 
 export const deskSummary = (pass: DeskPass): string =>
   pass.ran
-    ? `${pass.looked} open Errands: ${pass.resolved} closed by their check, ${pass.turnedAway} turned back by the second screen, ${pass.retired} ended after a command failed twice, ${pass.pushed.length > 0 ? `${pass.pushed.length} pushed${pass.returned ? ' (he was back)' : ''}` : 'none pushed'}${
+    ? `${pass.looked} open Errands: ${pass.resolved} closed by their check, ${pass.turnedAway} turned back by the second screen, ${pass.retired} ended after a command failed twice, ${pass.ranBack} turned back after their command ran and the check still said needed, ${pass.pushed.length > 0 ? `${pass.pushed.length} pushed${pass.returned ? ' (he was back)' : ''}` : 'none pushed'}${
         pass.problems.length ? `: ${pass.problems.slice(0, 3).join(' | ')}` : ''
       }`
     : 'not due'

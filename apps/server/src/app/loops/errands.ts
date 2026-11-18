@@ -3,6 +3,7 @@ import type { CheckRunner, CheckpointStore, ErrandNeededPort, ErrandRecord } fro
 import {
   brokenLine,
   CHECK_BROKEN_NOTE,
+  type CheckRun,
   CHECK_FAILS_NOTED,
   CHECKS_PER_PASS,
   checkVerdict,
@@ -28,6 +29,8 @@ export interface CheckDeps {
   resolve?: (errand: ErrandRecord, why: string) => Promise<boolean>
   /** tells the lead whose Issue waits on the Errand that its check is broken (once); a request has no one to tell */
   broken?: (errand: ErrandRecord, line: string) => Promise<void>
+  /** hears the check run that said the Errand is still needed (exit 0), with what it printed */
+  stillNeeded?: (errand: ErrandRecord, run: CheckRun) => void
   /** ends a request by the loop's own finding and tells the Issues that joined it; default: close the row (no one joined) */
   end?: (
     errand: ErrandRecord,
@@ -100,6 +103,7 @@ export async function runCheck(
     // an owner's done that the check overruled keeps saying so until the Errand closes
     const kept = errand.checkNote?.startsWith(STILL_NEEDED_NOTE) ? errand.checkNote : 'the check exited 0: still needed'
     await noteCheck(deps, errand, kept, 0)
+    deps.stillNeeded?.(errand, run)
     return
   }
   if (verdict === 'not_needed') {

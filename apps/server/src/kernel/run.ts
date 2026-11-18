@@ -4,12 +4,14 @@
  * top and the end of a long output says how it stopped.
  */
 
-export const RUN_STATUSES = ['failed', 'timeout', 'running'] as const
+export const RUN_STATUSES = ['done', 'failed', 'timeout', 'running'] as const
 export type RunStatus = (typeof RUN_STATUSES)[number]
+/** A run that came back unsuccessful or has not come back: what `run_attempts` counts (the first three). */
+export type FailedRunStatus = Exclude<RunStatus, 'done'>
 
 /** An unsuccessful run as it came back. `exit` is null when the run has none (still running, killed). */
 export interface RunFailure {
-  status: RunStatus
+  status: FailedRunStatus
   exit: number | null
   output: string
 }
@@ -79,7 +81,7 @@ export function runFailureOf(input: {
   const { run } = input
   if (run) {
     const exit = run.exit ?? null
-    const status: RunStatus | null =
+    const status: FailedRunStatus | null =
       run.status === 'running'
         ? 'running'
         : run.status === 'timeout' || exit === EXIT_TIMED_OUT
@@ -95,8 +97,34 @@ export function runFailureOf(input: {
   return { status: exit === EXIT_TIMED_OUT ? 'timeout' : 'failed', exit, output: input.note.slice(legacy[0].length) }
 }
 
-/** The line Needs-you shows for an Errand whose run came back unsuccessful. */
+/** A run that exited 0, as the factory keeps it: what its output said. */
+export interface RunSuccess {
+  exit: number
+  output: string
+}
+
+/**
+ * The success a done request carries, if it carries one: an explicit `run` that did not fail, or the words `ask-human.sh`
+ * wrote after a dialog's command exited 0 (`answered on the MacBook (exit 0): <output>`). An owner's plain done, which says
+ * nothing of a command, is none.
+ */
+export function runSuccessOf(input: {
+  run?: { status: 'done' | RunStatus; exit?: number | null | undefined; output?: string | undefined } | undefined
+  note: string | null
+}): RunSuccess | null {
+  const { run } = input
+  if (run) {
+    if (runFailureOf(input) !== null || run.status !== 'done') return null
+    return { exit: run.exit ?? 0, output: run.output ?? input.note ?? '' }
+  }
+  const answered = /^answered on the MacBook \(exit 0\):?\s*/.exec(input.note ?? '')
+  if (!answered || input.note === null) return null
+  return { exit: 0, output: input.note.slice(answered[0].length) }
+}
+
+/** The line Needs-you shows for an Errand whose run came back unsuccessful, or ran and left its check saying it is needed. */
 export function triedLine(run: { status: RunStatus; exit: number | null; head: string; attempts: number }): string {
+  if (run.status === 'done') return `tried, ran (exit ${run.exit ?? 0}) and its check still says it is needed`
   const what = run.status === 'running' ? 'still running' : run.status === 'timeout' ? 'timed out' : 'failed'
   const times = run.attempts > 1 ? ` (${run.attempts} tries)` : ''
   return `tried, ${what}${times}: ${firstErrorLine(run.head)}`

@@ -394,7 +394,10 @@ export interface CheckpointStore {
   supersedeRequests(requestKey: string, by: ErrandId, at: Date): Promise<ErrandId[]>
   /** the standalone Errands that are open or were closed at `closedSince` or later, oldest first */
   requests(input: { closedSince: Date; limit: number }): Promise<ErrandRecord[]>
-  /** an unsuccessful run of the Errand's command: it stays open, and this is what it came to; false when it is done already */
+  /**
+   * a run of the Errand's command that left it open, and what it came to (`done`: it exited 0 and the check still says it is needed;
+   * only the unsuccessful ones count in `runAttempts`); false when it is done already
+   */
   recordRun(
     id: ErrandId,
     run: { at: Date; status: RunStatus; exit: number | null; head: string; tail: string },

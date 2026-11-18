@@ -8,7 +8,7 @@ import {
   screenByNeed,
   screenByRule,
 } from '../domains/checkpoints/errand.ts'
-import { MAX_RUN_TRIES, type Need, needOf } from '../domains/checkpoints/need.ts'
+import { MAX_RUN_TRIES, type Need, needOf, ranStillNeededNote } from '../domains/checkpoints/need.ts'
 import { closedNote, SCREENED_SOURCES } from '../domains/checkpoints/request.ts'
 import { type MacbookVerb, verbFor, verbWords } from '../domains/checkpoints/triage.ts'
 import { firstErrorLine, outputNote } from '../kernel/run.ts'
@@ -25,6 +25,7 @@ import {
   endJoined,
   issueOf,
   retireFailed,
+  turnBackErrandWith,
   waitingOn,
 } from './checkpoints.ts'
 import { PASS_LIMIT, type SettleDeps } from './checkpoints-settle.ts'
@@ -494,10 +495,31 @@ export async function tellCheckBroken(deps: SettleDeps, errand: ErrandRecord, li
 export async function retireErrand(deps: SettleDeps, id: ErrandId): Step<boolean> {
   return deps.uow.run<boolean, CheckpointError>(async (stores) => {
     const errand = await stores.checkpoints.lockErrand(id)
-    if (!errand || errand.doneAt || errand.runAttempts < MAX_RUN_TRIES || errand.runStatus === 'running')
+    if (
+      !errand ||
+      errand.doneAt ||
+      errand.runAttempts < MAX_RUN_TRIES ||
+      errand.runStatus === 'running' ||
+      errand.runStatus === 'done'
+    )
       return ok(false)
     const retired = await retireFailed(stores, deps, errand)
     return retired.ok ? ok(true) : retired
+  })
+}
+
+/**
+ * An open Errand whose pushed command already ran and exited 0, and whose check still says the step is needed (`checkLine`:
+ * what that check said just now): it is not pushed again, since a second run may repeat what the first did. It ends, and its
+ * lead or asker is told with the check's words to raise it again with a command that is safe to repeat. False when it closed
+ * under the call or has no such run, so a repeat of the call tells nobody twice.
+ */
+export async function turnBackRan(deps: SettleDeps, id: ErrandId, checkLine: string): Step<boolean> {
+  return deps.uow.run<boolean, CheckpointError>(async (stores) => {
+    const errand = await stores.checkpoints.lockErrand(id)
+    if (!errand || errand.doneAt || errand.runStatus !== 'done') return ok(false)
+    const turned = await turnBackErrandWith(stores, deps, errand, ranStillNeededNote(checkLine))
+    return turned.ok ? ok(true) : turned
   })
 }
 
