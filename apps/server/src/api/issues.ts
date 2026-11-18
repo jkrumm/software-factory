@@ -416,7 +416,7 @@ export const issueRoutes = (wired: IssueApi | undefined) => {
         detail: {
           operationId: 'issue.note',
           summary:
-            "a note on the Issue for its lead, which hears it as a note (an agent's reaches it fenced as data, on any Issue, closed ones too, and cannot wake); with wake, a wait the owner may end is ended too",
+            "a note on the Issue for its lead, which hears it as a note (an agent's reaches it fenced as data, on any open Issue, and cannot wake; a closed Issue answers 409); with wake, a wait the owner may end is ended too",
           'x-cli': { args: ['text'] },
         },
       },
