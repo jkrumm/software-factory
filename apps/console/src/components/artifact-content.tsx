@@ -276,7 +276,11 @@ function MarkdownContent({
           ),
           a: ({ node: _node, href, children }) => <MarkdownLink href={href}>{children}</MarkdownLink>,
           img: ({ node: _node, src, alt }) => (
-            <MarkdownImage src={typeof src === 'string' ? src : undefined} alt={alt} />
+            <MarkdownImage
+              key={typeof src === 'string' ? src : ''}
+              src={typeof src === 'string' ? src : undefined}
+              alt={alt}
+            />
           ),
         }}
       >
