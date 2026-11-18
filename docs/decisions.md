@@ -482,3 +482,17 @@ Report `docs/strategy/2026-11-next/report.html`, definition `docs/strategy/2026-
   are choices of this Issue, not measurements; 90 % would also open on today's figures and close at 90 of 100. Count over
   the next week: the share of `small` Issues that start light, and their first pass rate and regressions per Issue in
   `seats.tripwire`.
+- **NL46 A hygiene class leaves the light seat on minutes as well as dollars (Issue 2230, 2026-11-18).** NL40 judged a class
+  against NL38's dollar bound, which is capped at 1: a share cannot pass 1, so no class could leave the light seat on cost.
+  `factory read finding-classes` that morning: advisories 4 starts, 4 moved up (share 1), agentsmd 3 starts, 2 moved up, both
+  `out: false`, each move-up spending about 19 minutes of a seat and a slot before the real lead started. Now the same
+  break-even is read in minutes (`moveUpTimeBound`): a light route takes `l + share * f` per Issue against the lead row's `s`,
+  where `l` is the mean ms of a light attempt (to its move-up, else the Issue's working time), `s` the lead row's median working
+  ms per Issue, and `f` is `s` (a follow-up is a lead attempt; no per-attempt time is stored). Classes are judged against the
+  lower of the two bounds (`classMoveUpBound`, `seats.tripwire.bound.classShare`, shown as `bound` in `factory read
+  finding-classes`); a time not measured leaves the dollar bound. With the 14-day figures of 2026-11-18 (light about 20 minutes,
+  lead median 35) the bound is about 43 %: advisories (100 %) and agentsmd (67 %) are out, deps, context and readme (23 to 25 %)
+  stay. Unchanged: triage's `small` gate still reads the dollar bound only (it is not a hygiene class's record), the 20-Issue
+  window, the 3-start floor and the return path (a class that is out starts on the lead row, so its light starts age out of the
+  window until the share no longer stands). Cost: a class with a real light win in dollars but a slow light attempt can start on
+  the lead row; the first wrong call of the bound is visible in `windowShare` against `bound`.
