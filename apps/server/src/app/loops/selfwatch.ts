@@ -2,7 +2,13 @@ import type { ResumeRules } from '../../domains/leads/apierror.ts'
 import type { SignalRequest } from '@software-factory/contract'
 import type { Triaged } from '../../domains/intake/model.ts'
 import type { CapacityStore } from '../../domains/capacity/ports.ts'
-import { type MemoryCeilings, overLoad, overMemory } from '../../domains/capacity/host.ts'
+import {
+  type MemoryCeilings,
+  overLoad,
+  overMemory,
+  SUSTAINED_LOAD_SAMPLES,
+  SUSTAINED_SPAN_MS,
+} from '../../domains/capacity/host.ts'
 import type { AimMode } from '../../domains/capacity/slot-aim.ts'
 import { slotLines } from '../../domains/capacity/slots.ts'
 import type { CiRuns, LoopReads, LoopStore, MigrationFiles, OverloadHost } from '../../domains/loops/ports.ts'
@@ -282,6 +288,7 @@ async function gather(deps: SelfwatchDeps, now: Date): Out<Gathered> {
   // the comparisons admission itself makes (`domains/capacity/host.ts`), so a changed rule moves these conditions with it
   const rules: AdmissionRules = {
     overLoad,
+    sustainedLoad: { samples: SUSTAINED_LOAD_SAMPLES, spanMs: SUSTAINED_SPAN_MS },
     overMemory: (reading) => overMemory(reading, deps.memoryCeilings),
   }
   gathered.findings.push(

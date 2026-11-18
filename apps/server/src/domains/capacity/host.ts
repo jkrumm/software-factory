@@ -59,7 +59,7 @@ export const overLoad = (load: number, ceiling: number): boolean => load > ceili
  */
 export const SUSTAINED_LOAD_SAMPLES = 5
 /** The oldest of those samples may be at most this old: a gap in the minute samples is no reading. */
-const SUSTAINED_SPAN_MS = (SUSTAINED_LOAD_SAMPLES + 1) * 60_000
+export const SUSTAINED_SPAN_MS = (SUSTAINED_LOAD_SAMPLES + 1) * 60_000
 
 /** The tripwire's verdict: tripped with the loads that tripped it, clear, or unknown (too few fresh samples). */
 export type LoadTrip = { tripped: true; loads: number[] } | { tripped: false } | null
