@@ -67,6 +67,7 @@ describe('readDecisionForm', () => {
     const read = readDecisionForm(without)
     expect(read).toMatchObject({ ok: false, error: { kind: 'missing_field' } })
     expect(!read.ok && read.error.fields).toContain('recommendation')
+    expect(!read.ok && read.error.detail).toContain('--recommendation "<label>"')
   })
 
   test('every missing field is named at once, nested ones by their path', () => {

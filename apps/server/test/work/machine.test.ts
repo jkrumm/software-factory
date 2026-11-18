@@ -176,6 +176,23 @@ describe('the paths', () => {
       expect(second).not.toContain('then `artifact submit`')
     })
 
+    test('the same defer again is answered as a no-op, never refused; a different one still is', () => {
+      const after = ev('deferred', { attempt: 1, after: ['issue_445', 'issue_436'] as IssueId[] }, 'lead')
+      const { issue } = drive([...settledAndWorking, after])
+      const again = ev('deferred', { attempt: 1, after: ['issue_436', 'issue_445'] as IssueId[] }, 'lead')
+      const repeated = apply(issue, again, { now: NOW })
+      expect(repeated.result).toBe('ignored')
+      expect(detail(repeated)).toContain('already waiting for issue_445, issue_436: nothing changed')
+      const other = ev('deferred', { attempt: 1, after: ['issue_445'] as IssueId[] }, 'lead')
+      expect(apply(issue, other, { now: NOW }).result).toBe('refused')
+      const review = ev('deferred', { attempt: 1, review: '#12' }, 'lead')
+      const reviewing = drive([...settledAndWorking, review]).issue
+      expect(apply(reviewing, review, { now: NOW }).result).toBe('ignored')
+      const timer = ev('deferred', { attempt: 1, until: '2030-01-01T00:00:00Z' }, 'lead')
+      const timed = drive([...settledAndWorking, timer]).issue
+      expect(apply(timed, timer, { now: NOW }).result).toBe('ignored')
+    })
+
     test('a defer on an Issue that already waits for others names them', () => {
       const after = ev('deferred', { attempt: 1, after: ['issue_445', 'issue_436'] as IssueId[] }, 'lead')
       expect(refusal([...settledAndWorking, after], 'deferred')).toBe(
