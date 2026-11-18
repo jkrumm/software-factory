@@ -61,7 +61,6 @@ export function needsModel(needs: ScopedNeeds, options: { redact: boolean }): Ne
 /** A held signal's source in a person's word: the origin's, or what the tool watches; never the tool's own name. */
 function sourceWords(source: string, origin: string): string {
   if (source === 'kuma') return 'an uptime check'
-  if (source === 'beszel') return 'the server monitor'
   if (source === 'launchd') return 'a background job'
   if (source === 'hyperdx') return 'the application'
   if (source === 'github' || source === 'checks') return 'GitHub'

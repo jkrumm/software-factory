@@ -24,7 +24,7 @@ that keeps `lib/` and `signals/topology.out.json` as siblings of `golden/`.
 - `signals/topology.out.json` is the one file kept from `signals/`; `golden/backtest.py` reads it. The script that
   produced it (`signals/signals.py`) and `postmortem/`, `incidents/`, `toil/`, `gameday/`, `projects/`, `questions/`
   stayed in the archive.
-- `infra-alert-parity.md` is the 2026-11-18 parity table of the Beszel host rules against the ClickStack infra alerts, with the gaps that block the Beszel intake's removal.
+- `infra-alert-parity.md` is the 2026-11-18 parity table of the Beszel host rules against the ClickStack infra alerts, that let the factory drop the Beszel intake.
 - `alert-sources/` is the 2026-11-08 check that every Kuma, HyperDX and Beszel alert reaches the factory: inventory, one live
   test per source, and `routes.tsv`, the proposed door registry.
 

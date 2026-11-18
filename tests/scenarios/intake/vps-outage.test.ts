@@ -3,8 +3,6 @@ import { startWorld, type ServerProcess, type World } from '../harness.ts'
 import {
   type Door,
   type Estate,
-  fakeBeszel,
-  type FakeBeszel,
   get,
   makeEstate,
   observe,
@@ -15,32 +13,24 @@ import {
 } from './support.ts'
 
 /**
- * A VPS outage fires Beszel (a poll of the hub), HyperDX and Kuma (both through the real door process). The three become
+ * A VPS outage fires two HyperDX alerts (an infra alert for host.name=mini, as ClickStack sends it, and an app alert) and Kuma, all through the real door process. The three become
  * one incident Issue, and their `up`s heal it: no second Issue, no lead ever started.
  */
 let world: World
 let estate: Estate
-let hub: FakeBeszel
 let server: ServerProcess
 let door: Door
 
 beforeAll(async () => {
   world = await startWorld()
   estate = await makeEstate(world, [{ repo: 'vps' }])
-  hub = fakeBeszel('vps')
-  server = await startIntakeServer(world, estate, {
-    FACTORY_BESZEL_URL: hub.url,
-    FACTORY_BESZEL_EMAIL: 'owner@example.com',
-    FACTORY_BESZEL_PASSWORD: 'hub-password-0123',
-    FACTORY_BESZEL_POLL: '1s',
-  })
+  server = await startIntakeServer(world, estate)
   door = await startDoor(estate, server, ['kuma', 'hyperdx'])
 })
 
 afterAll(async () => {
   await door.stop()
   await server.stop()
-  hub.stop()
   await estate.stop()
   await world.stop()
 })
@@ -62,28 +52,34 @@ const hyperdx = (state: 'ALERT' | 'OK') => ({
   alertId: 'alert-1',
 })
 
+/** What ClickStack sends for an infra alert: the host is in the body's group, the alert's name is the monitor. */
+const INFRA_MONITOR = 'Infra mini filesystem >= 93% (15m)'
+const infra = (state: 'ALERT' | 'OK') => ({
+  title: `🚨 ${INFRA_MONITOR}`,
+  body: "Group: \"concat(arrayElement(ResourceAttributes, 'host.name'), ' ', arrayElement(Attributes, 'mountpoint')):mini /System/Volumes/Data\"\n0.94 meets or exceeds 0.93\n",
+  link: 'https://hyperdx.example.com/dashboards/dash-1?granularity=5+minute',
+  state,
+  startTime: '2026-11-07T10:00:00.000Z',
+  endTime: '2026-11-07T10:05:00.000Z',
+  eventId: 'evt-infra',
+  alertId: 'alert-infra',
+})
+
 test("a VPS outage's three alerts make one incident Issue, and their ups heal it", async () => {
   for (const [source, monitor] of [
     ['kuma', 'vps - Push'],
     ['hyperdx', 'API error rate'],
+    ['hyperdx', INFRA_MONITOR],
   ] as const) {
     expect((await post(server, '/door/routes', { source, monitor, repo: 'vps' })).status).toBe(200)
   }
 
-  // Beszel first: the hub reports the VPS choking on memory.
-  hub.setMemory(96)
-  const first = await until('the Beszel alert to file an Issue', async () => {
-    const signals = (await get(server, '/v1/signals')).body.signals as {
-      source: string
-      issue: string | null
-      state: string
-    }[]
-    return signals.find((s) => s.source === 'beszel' && s.issue)
-  })
-  expect(first.state).toBe('filed')
-  const issue = first.issue as string
+  // The infra alert first: a ClickStack alert for host.name=mini becomes a signal and an Issue.
+  const first = await door.post('hyperdx', infra('ALERT'))
+  expect(first).toMatchObject({ status: 200, body: { outcome: 'filed' } })
+  const issue = (first.body as { issue: string }).issue
 
-  // Then HyperDX and Kuma, through the door.
+  // Then the app alert and Kuma, through the door.
   const h = await door.post('hyperdx', hyperdx('ALERT'))
   const k = await door.post('kuma', kuma(0, '2026-11-07 10:06:00.000'))
   expect(h).toMatchObject({ status: 200, body: { outcome: 'incident', detail: 'joined', issue } })
@@ -91,22 +87,24 @@ test("a VPS outage's three alerts make one incident Issue, and their ups heal it
 
   const signals = (await get(server, '/v1/signals')).body.signals as {
     source: string
+    title: string
     issue: string | null
     state: string
   }[]
   expect(signals.map((s) => s.issue)).toEqual([issue, issue, issue])
-  expect(new Set(signals.map((s) => s.source))).toEqual(new Set(['beszel', 'hyperdx', 'kuma']))
+  expect(new Set(signals.map((s) => s.source))).toEqual(new Set(['hyperdx', 'kuma']))
+  expect(signals.some((s) => s.title === INFRA_MONITOR && s.state === 'filed')).toBe(true)
   // filed + two notes: three applied events, nothing else, and still `settling`
   expect(await observe(world, issue)).toMatchObject({ state: 'settling', outcome: null, version: 3 })
 
-  // The ups: Kuma and HyperDX through the door amend, the hub recovering heals it.
+  // The ups: Kuma and the app alert amend, the infra alert recovering heals it.
   expect(await door.post('kuma', kuma(1, '2026-11-07 10:20:00.000'))).toMatchObject({
     body: { outcome: 'amended', detail: 'matched', issue },
   })
   expect(await door.post('hyperdx', hyperdx('OK'))).toMatchObject({
     body: { outcome: 'amended', detail: 'matched', issue },
   })
-  hub.setMemory(30)
+  expect(await door.post('hyperdx', infra('OK'))).toMatchObject({ status: 200, body: { outcome: 'amended' } })
   await until('the Issue to close as healed', async () => {
     const seen = await observe(world, issue)
     return seen.state === 'closed' ? seen : null

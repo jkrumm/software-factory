@@ -21,7 +21,7 @@ tests/
   scenarios/  use cases run against a real server and Postgres with fake hc and agw: the acceptance suite
   e2e/        Playwright against a seeded server: every Console screen, and the source of the README's screenshots
 integrations/ the client pieces other machines install: the Claude Code hook entries, the Herdr glance mod, rd's contract, the Hermes fleet skill
-config/       roles.json (tier and effort per role), infra.json (the Beszel thresholds), throughput.json (the counting epoch)
+config/       roles.json (tier and effort per role), infra.json (host to repo, for incidents), throughput.json (the counting epoch)
 scripts/      deploy, verify, launch, env-file, merge-guard, the checks of the build (boundaries, retired words, vocabulary, public scan, README)
 deploy/       LaunchAgent templates
 docs/         product, language, architecture, operations, decisions, plan format, research, evidence
@@ -33,7 +33,7 @@ docs/         product, language, architecture, operations, decisions, plan forma
 apps/server/src/
   kernel/        Result, ids, clock, keys, the event envelope, agw call types. Imports nothing else
   domains/       pure: types, rules, state machines, ports (interfaces). No I/O, no SQL, no Elysia
-    intake/        signal envelope, trust and routing rules, fingerprints, incidents, the Beszel rules
+    intake/        signal envelope, trust and routing rules, fingerprints, incidents, the incident correlation
     planning/      projects, plans, the chain, queue order
     capacity/      accounts and windows, memory, load, repo claims, queue state, test slots, admission
     work/          the Issue: events, the total transition table, effects, the generated diagram
@@ -87,10 +87,10 @@ Every input is one envelope (`source`, `kind`, `origin`, `trust`, `repo`, `finge
 through `receive` in `app/intake.ts`; the answer is a triage outcome (`docs/language.md`).
 
 - **Sources.** The owner (`factory signal`, Hermes through the narrow `signal` caller as `owner:hermes`), agents
-  (`agent:<repo>`), the alert door (Kuma and HyperDX), and three pollers: GitHub (the owner's new issues and failing
+  (`agent:<repo>`), the alert door (Kuma and HyperDX), and two pollers: GitHub (the owner's new issues and failing
   checks, a failing one filed as an `incident` so it takes the fix's place beyond the repo's `leads` and the lead of every
-  other Issue of the repo with an open pull request is noted once; anyone else's need the label and are held), Beszel (host rules from `config/infra.json`) and launchd (a
-  LaunchAgent's state). `repo` comes from the route, the door registry or the caller, never from an outside payload.
+  other Issue of the repo with an open pull request is noted once; anyone else's need the label and are held) and launchd (a
+  LaunchAgent's state). Infra alerts (memory, disk, load, swap, silent hosts, containers) are ClickStack alerts through the door (A4), not a poller. `repo` comes from the route, the door registry or the caller, never from an outside payload.
   **App feedback** is a door source of its own: `POST /feedback/<app>` with the app's token (`feedback-<app>` in the door's
   tokens file) becomes `POST /signals/feedback`, one envelope for every app (`FeedbackRequest`: app, version, route, title,
   text, link). It is a signal from `feedback:<app>`, trust `outside`, whose text opens with an `app/version/route` header;
@@ -108,10 +108,10 @@ through `receive` in `app/intake.ts`; the answer is a triage outcome (`docs/lang
   GitHub for it (promoting a held one keeps that); one `github backlog:` log line per issue says the outcome. A replay is idempotent (the subject and event keys), and a sweep
   that could not read a repo whole runs again on the next pass. Unset it after the sweep.
 - **Who may file where.** `domains/intake/rules.ts` gates a signal: a work repo hears only the owner (NL18), an unknown
-  repo hears no one, and a project hears the automatic sources its `signals:` lists. The door's and Beszel's are routed.
+  repo hears no one, and a project hears the automatic sources its `signals:` lists. The door's are routed.
   One exception to the work-repo rule: a lead's signal (`from agent:<its repo>`, `filer` set by the CLI) whose own Issue the owner filed (origin `you`) is held, not dropped, so the owner can promote work it owes a work repo; any other agent signal there is dropped (`work_repo`). The `screen` loop never reads such a signal (a work repo's words go to no workflow, and the last look never dismisses it): it stays held in Needs you.
 - **Incidents.** Alerts of the monitoring sources on one host or dependency inside a window join one incident: the VPS
-  down fires Beszel, HyperDX and Kuma, and there is one Issue. The window is a setting (`FACTORY_INCIDENT_WINDOW_MIN`).
+  down fires HyperDX (its infra and app alerts) and Kuma, and there is one Issue. The window is a setting (`FACTORY_INCIDENT_WINDOW_MIN`).
 - **Amend or new.** A repeat of a fingerprint inside its window changes nothing. An owner or agent signal that matches an
   open Issue clearly (title overlap) amends it and reaches its lead as a note. Otherwise, unless a fingerprint, subject or
   open incident already settles it, the `factory-triage` workflow sees the repo's open Issues and those closed in the last

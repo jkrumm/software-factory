@@ -4,14 +4,14 @@ import type { OpenIssue, Received, RepoSignals } from './model.ts'
 /** The sources whose alerts come through the door; a route in the registry is the owner's act of listening. */
 const DOOR_SOURCES: readonly string[] = ['kuma', 'hyperdx']
 /** The sources that correlate into an incident when they sit on one host. */
-const CORRELATED_SOURCES: readonly string[] = ['kuma', 'hyperdx', 'beszel']
+const CORRELATED_SOURCES: readonly string[] = ['kuma', 'hyperdx']
 
 export type IssueKindName = 'feature' | 'bug' | 'chore' | 'docs' | 'incident'
 export type OriginName = Signal['origin']
 
 /** Where a source comes from, in the words a person uses (`docs/language.md`, Origin). */
 export function originOf(source: string): OriginName {
-  if (source === 'kuma' || source === 'beszel' || source === 'launchd') return 'infrastructure'
+  if (source === 'kuma' || source === 'launchd') return 'infrastructure'
   if (source === 'hyperdx') return 'application'
   if (source === 'github' || source === 'checks') return 'github'
   if (source.startsWith('feedback:')) return 'feedback'
@@ -30,9 +30,9 @@ export function issueKindOf(received: Received): IssueKindName {
   return signal.kind === 'remark' ? 'chore' : 'feature'
 }
 
-/** Whether a project hears this automatic source. The door's and Beszel's are routed; the rest its `signals:` lists. */
+/** Whether a project hears this automatic source. The door's are routed; the rest its `signals:` lists. */
 export function hears(info: RepoSignals, source: string): boolean {
-  return DOOR_SOURCES.includes(source) || source === 'beszel' || info.sources.includes(source)
+  return DOOR_SOURCES.includes(source) || info.sources.includes(source)
 }
 
 export type Gate =
@@ -125,21 +125,17 @@ export function fence(text: string): string {
 export interface Topology {
   /** the host a repo's alerts sit on, from `config/infra.json`'s hosts; a project's own `host:` is the fallback in `groupOf` */
   hostOfRepo: ReadonlyMap<string, string>
-  /** every host the Beszel source may name */
+  /** every host of `config/infra.json` */
   hosts: ReadonlySet<string>
 }
 
 /**
- * The incident an alert would belong to: alerts on one host or dependency join one root cause. Beszel names its system
- * in the subject; Kuma and HyperDX alert in the repo whose host it is: the infra table's host for the repo, else the host the project names (`ownHost`) when
- * it is a known host. Null when the alert sits on no known host.
+ * The incident an alert would belong to: alerts on one host or dependency join one root cause. Kuma and HyperDX alert in the
+ * repo whose host it is: the infra table's host for the repo, else the host the project names (`ownHost`) when it is a known
+ * host. Null when the alert sits on no known host.
  */
 export function groupOf(topology: Topology, received: Received, repo: string, ownHost?: string | null): string | null {
   if (received.signal.kind !== 'alert' || !CORRELATED_SOURCES.includes(received.signal.source)) return null
-  if (received.signal.source === 'beszel') {
-    const system = received.alert?.subject.split(':')[0]?.toLowerCase()
-    return system && topology.hosts.has(system) ? `host:${system}` : null
-  }
   const named = ownHost?.toLowerCase()
   const host = topology.hostOfRepo.get(repo) ?? (named && topology.hosts.has(named) ? named : null)
   return host ? `host:${host}` : null

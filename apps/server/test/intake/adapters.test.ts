@@ -33,7 +33,6 @@ describe('settings', () => {
       incidentWindowMs: 30 * 60_000,
       fingerprintWindowMs: 24 * 60 * 60_000,
       github: { token: null, everyMs: 300_000, backlog: false },
-      beszel: { everyMs: 60_000 },
       settleEveryMs: 10_000,
     })
     expect(() => loadIntakeEnv({ FACTORY_GITHUB_POLL: 'often', FACTORY_INCIDENT_WINDOW_MIN: '0' })).toThrow(

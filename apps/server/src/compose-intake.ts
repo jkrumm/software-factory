@@ -1,5 +1,4 @@
 import type { SQL } from 'bun'
-import { beszelPoller } from './adapters/intake/beszel.ts'
 import { githubPoller } from './adapters/intake/github.ts'
 import { launchdPoller } from './adapters/intake/launchd.ts'
 import { fileProjectSignals } from './adapters/intake/projects.ts'
@@ -73,14 +72,6 @@ export async function composeIntake(input: {
     backlog: env.github.backlog,
     clock: input.clock,
   })
-  const beszel = beszelPoller({
-    sink: intake.sink,
-    clock: input.clock,
-    infra,
-    url: env.beszel.url,
-    email: env.beszel.email,
-    password: env.beszel.password,
-  })
   const launchd = launchdPoller({
     sink: intake.sink,
     projects,
@@ -104,7 +95,6 @@ export async function composeIntake(input: {
       const jobs: [string, number | null, boolean, () => Promise<void>][] = [
         ['settle', env.settleEveryMs, true, settle],
         ['github intake', env.github.everyMs, github.enabled, () => github.pass()],
-        ['beszel intake', env.beszel.everyMs, beszel.enabled, () => beszel.pass()],
         ['launchd intake', env.launchd.everyMs, launchd.enabled, () => launchd.pass()],
       ]
       for (const [name, every, enabled, pass] of jobs) {

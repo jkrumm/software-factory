@@ -78,7 +78,7 @@ export const LANGUAGE = {
     "Outside text the factory did not trust enough to turn into work. It waits in Needs you for the owner to promote or dismiss it. Two held signals are not outside text: a lead's follow-up for a work repo, when its own Issue was owner-filed (the Judge never reads it), and a monitor that stayed down with no route and no home repo to place it in: its card says what fired, and promoting it with a repo sets the monitor's route and files the alert there",
   idle: 'Session state: its last turn ended',
   incident:
-    'One root cause seen through many signals: the VPS is down, so Beszel, HyperDX and Kuma all fire. Triage groups them under one Issue',
+    'One root cause seen through many signals: the VPS is down, so HyperDX and Kuma all fire. Triage groups them under one Issue',
   issue: "One unit of work: one repo, one branch, one ship. Warp's work item",
   'issues per hour':
     'How many Issues of a project shipped in each hour of the last 7 days, against the 7 days before. What to do: a drop while Issues are Ready or Held may mean something holds them; open Work and read the reason on each',
@@ -124,7 +124,7 @@ export const LANGUAGE = {
   probe:
     'A test signal a lead marks (probe: true) so it is stored dismissed and never held; its ack is dropped, detail probe',
   project:
-    "A repo the factory knows, described by its project.yaml (every key: docs/project.md). signals: says which automatic sources it listens to; a work repo listens to the owner only. host: names the host its alerts sit on (a key of config/infra.json's hosts), so its Kuma and HyperDX alerts join that host's incident with Beszel's. doctor: make doctor is the project saying whether this host can run it: a read-only command of seconds that exits non-zero with one line per missing prerequisite and its fix; while it is red the project's Issues stay queued (kind doctor, with those lines) and hygiene skips its check probe",
+    "A repo the factory knows, described by its project.yaml (every key: docs/project.md). signals: says which automatic sources it listens to; a work repo listens to the owner only. host: names the host its alerts sit on (a key of config/infra.json's hosts), so its Kuma and HyperDX alerts join that host's incident. doctor: make doctor is the project saying whether this host can run it: a read-only command of seconds that exits non-zero with one line per missing prerequisite and its fix; while it is red the project's Issues stay queued (kind doctor, with those lines) and hygiene skips its check probe",
   promote: "A held signal becomes work: the owner's or the Judge's call",
   'queue reason':
     'Why a queued Issue stays queued, in one plain sentence that names the cause and its numbers. Its kind: chain, line, finalizing, spec, unknown_project, drain, doctor, boot, load, memory, tests (the test line is long: more steps wait for a slot than run, for longer than a step takes), lane, claim, window, cap',

@@ -22,7 +22,7 @@ export interface Retired {
  * One line per retired word, from the Retires cells of `docs/language.md`. Left out on purpose, because the plain
  * English word collides with code and the factory sense cannot be matched precisely: request (HTTP), item, task,
  * track, worker, document, question, ask, and hold (triage's `held` and the memory hold are live words).
- * Tool names on screen are a Console rule, not a word: `hyperdx` and `beszel` stay as signal sources.
+ * Tool names on screen are a Console rule, not a word: `hyperdx` stays a signal source.
  */
 export const RETIRED: Retired[] = [
   { term: 'mother', pattern: 'mothers?', use: 'lead' },

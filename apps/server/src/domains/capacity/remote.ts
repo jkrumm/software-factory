@@ -33,7 +33,7 @@ const REMOTE_READING_MAX_AGE_MS = 90_000
 /**
  * The share of the disk no step may push the VPS past: the line ClickStack's "Infra filesystem >= 85%" alert pages on for
  * the VPS and the homelab (the mini's own is 93 %). A step that would cross it would page the owner for the factory's own
- * copies. This is not `config/infra.json` `defaults.disk.pct` (90 %), which belongs to the Beszel intake rule.
+ * copies.
  */
 export const DISK_CEILING_PCT = 85
 

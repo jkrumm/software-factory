@@ -14,8 +14,6 @@ const NEVER: Record<string, string> = {
   FACTORY_READ_TOKEN: 'secret (.env.tpl)',
   FACTORY_GITHUB_TOKEN: 'secret (.env.tpl)',
   FACTORY_DB_PASSWORD: 'secret (.env.tpl); launch.sh builds DATABASE_URL from it',
-  FACTORY_BESZEL_EMAIL: 'secret (needs an .env.tpl ref before the Beszel source can run)',
-  FACTORY_BESZEL_PASSWORD: 'secret (needs an .env.tpl ref before the Beszel source can run)',
   FACTORY_UPTIME_TOKEN: 'secret (.env.server.tpl)',
   FACTORY_OTEL_KEY: 'secret (.env.server.tpl)',
   FACTORY_OTEL_ENDPOINT: 'a ref of .env.server.tpl: the ingest host is not for a file anyone reads',

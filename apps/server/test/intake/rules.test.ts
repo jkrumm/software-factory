@@ -55,12 +55,11 @@ describe('gate: who may put work in which repo', () => {
     expect(gate(signal({ repo: null }), null)).toMatchObject({ pass: false, detail: 'no_repo' })
   })
 
-  test('a project hears the sources its signals list; the door and Beszel come by route', () => {
+  test('a project hears the sources its signals list; the door comes by route', () => {
     const listed = project({ sources: ['github'] })
     expect(gate(signal({ source: 'github' }), listed)).toEqual({ pass: true })
     expect(gate(signal({ source: 'launchd' }), listed)).toMatchObject({ pass: false, detail: 'not_listened' })
     expect(hears(project(), 'kuma')).toBe(true)
-    expect(hears(project(), 'beszel')).toBe(true)
     expect(hears(project(), 'checks')).toBe(false)
   })
 
@@ -106,9 +105,7 @@ describe('correlation, origin and kind', () => {
     alert: { subject, event: 'e', status: 'down', facts: {} },
   })
 
-  test("Beszel names its host in the subject, Kuma and HyperDX sit on their repo's host", () => {
-    expect(groupOf(topology, received({ source: 'beszel' }, 'vps:memory'), 'vps')).toBe('host:vps')
-    expect(groupOf(topology, received({ source: 'beszel' }, 'unknown:memory'), 'vps')).toBeNull()
+  test("Kuma and HyperDX sit on their repo's host", () => {
     expect(groupOf(topology, received({ source: 'kuma' }), 'vps')).toBe('host:vps')
     expect(groupOf(topology, received({ source: 'hyperdx' }), 'vps')).toBe('host:vps')
     expect(groupOf(topology, received({ source: 'kuma' }), 'argo')).toBeNull()
@@ -120,7 +117,6 @@ describe('correlation, origin and kind', () => {
     expect(groupOf(topology, received({ source: 'hyperdx' }), 'argo', 'VPS')).toBe('host:vps')
     expect(groupOf(topology, received({ source: 'kuma' }), 'argo', 'nowhere')).toBeNull()
     expect(groupOf(topology, received({ source: 'kuma' }), 'vps', 'homelab')).toBe('host:vps')
-    expect(groupOf(topology, received({ source: 'beszel' }, 'vps:memory'), 'argo', 'homelab')).toBe('host:vps')
   })
 
   test('origin is a word a person uses; an alert is an incident, a failing check on the default branch too', () => {
