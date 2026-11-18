@@ -43,7 +43,7 @@ apps/server/src/
     loops/         what the steward and triage decide: stall rules, settling
   app/           use cases: one transaction to claim, the port call outside it, one to record
     loops/         the loop runner and the steward and triage passes
-  adapters/      postgres stores, hc terminals, agw, git, ntfy, filesystem blobs, the intake pollers, the hook socket, the uptime poller (`adapters/uptime/`: Argo's Kuma snapshot, `uptime` of `GET /v1/overview`: up, down, total, at most 10 down names, null when `FACTORY_UPTIME_URL` is unset, never read or older than 10 min; `FACTORY_UPTIME_TOKEN`, `FACTORY_UPTIME_EVERY_MS` default 60 s)
+  adapters/      postgres stores, hc terminals, agw, git, ntfy, filesystem blobs, the intake pollers, the hook socket, the uptime poller (`adapters/uptime/`: Argo's Kuma snapshot, `uptime` of `GET /v1/overview`: up, down, total, at most 10 down names, null when `FACTORY_UPTIME_URL` is unset, never read or older than 10 min; `FACTORY_UPTIME_TOKEN`, `FACTORY_UPTIME_EVERY_MS` default 60 s), the metrics export (`adapters/otel/`: the queue by reason, slot waits by reason and repo, step placements, seats per account and the load beside its ceiling, from `read/capacity-gauges.ts`, as OTLP/HTTP JSON gauges to ClickStack every `FACTORY_OTEL_EVERY_MS` (60 s) over the last `FACTORY_OTEL_WINDOW_MS` (5 min); off without `FACTORY_OTEL_ENDPOINT`, a failed push is one log line and touches no loop; `FACTORY_OTEL_ENDPOINT` and `FACTORY_OTEL_KEY` are refs of `.env.server.tpl`)
   api/           Elysia route groups, auth and the caller policy
   read/          read models (SQL projections) for the API and the stream
   compose-*.ts   wiring of each domain; main.ts boots, takes the process lock first and shuts down in order

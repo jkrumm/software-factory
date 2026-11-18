@@ -95,6 +95,9 @@ import { fileRoles } from './adapters/leads/roles.ts'
 import { composeIntake } from './compose-intake.ts'
 import { loadUptimeEnv } from './adapters/uptime/settings.ts'
 import { uptimePoller } from './adapters/uptime/poller.ts'
+import { otelExporter } from './adapters/otel/exporter.ts'
+import { loadOtelEnv } from './adapters/otel/settings.ts'
+import { readCapacityGauges } from './read/capacity-gauges.ts'
 import { selfPaced } from './adapters/intake/schedule.ts'
 import type { SignalFiler } from './app/capacity-slots.ts'
 import { composePlanning } from './compose-planning.ts'
@@ -275,6 +278,17 @@ async function main(): Promise<void> {
   const intakeEnv = loadIntakeEnv(process.env)
   const uptimeEnv = loadUptimeEnv(process.env)
   const uptime = uptimePoller({ clock, url: uptimeEnv.url, token: uptimeEnv.token })
+  // The capacity figures to ClickStack, beside the host and CI series; off without FACTORY_OTEL_ENDPOINT. Its own pass: a push
+  // that fails is one log line and touches no loop.
+  const otelEnv = loadOtelEnv(process.env)
+  const otel = otelExporter({
+    clock,
+    endpoint: otelEnv.endpoint,
+    key: otelEnv.key,
+    version: settings.version,
+    seatCaps: { perAccount: planningEnv.leadsPerAccount, byAccount: Object.fromEntries(planningEnv.accountLeads) },
+    read: () => readCapacityGauges(sql, { now: clock.now(), windowMs: otelEnv.windowMs }),
+  })
   const intake = await composeIntake({
     sql,
     uow,
@@ -1063,6 +1077,7 @@ async function main(): Promise<void> {
   const stopUptime = uptime.enabled
     ? selfPaced('uptime', uptimeEnv.everyMs, () => uptime.pass(), { firstMs: 1_000 })
     : null
+  const stopOtel = otel.enabled ? selfPaced('otel', otelEnv.everyMs, () => otel.pass(), { firstMs: 15_000 }) : null
   await runner.start()
 
   // Active connections are closed (`stop(true)`): an SSE stream never completes on its own, and without the flag Bun
@@ -1080,7 +1095,12 @@ async function main(): Promise<void> {
       {
         name: 'passes.stop',
         run: async () => {
-          await Promise.all([runner.stop(PASS_GRACE_MS), intake.stop(PASS_GRACE_MS), stopUptime?.(PASS_GRACE_MS)])
+          await Promise.all([
+            runner.stop(PASS_GRACE_MS),
+            intake.stop(PASS_GRACE_MS),
+            stopUptime?.(PASS_GRACE_MS),
+            stopOtel?.(PASS_GRACE_MS),
+          ])
           const cut = runner
             .view()
             .filter((loop) => loop.running)

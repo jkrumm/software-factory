@@ -17,6 +17,8 @@ const NEVER: Record<string, string> = {
   FACTORY_BESZEL_EMAIL: 'secret (needs an .env.tpl ref before the Beszel source can run)',
   FACTORY_BESZEL_PASSWORD: 'secret (needs an .env.tpl ref before the Beszel source can run)',
   FACTORY_UPTIME_TOKEN: 'secret (.env.server.tpl)',
+  FACTORY_OTEL_KEY: 'secret (.env.server.tpl)',
+  FACTORY_OTEL_ENDPOINT: 'a ref of .env.server.tpl: the ingest host is not for a file anyone reads',
   FACTORY_VERSION: "the plist's: the deployed sha",
   FACTORY_LAUNCH_ENTRY:
     "deploy.sh's, for one launch of the migration dry check: a settings file must never redirect the server's start",

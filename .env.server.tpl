@@ -6,3 +6,6 @@ FACTORY_SIGNAL_TOKEN=op://mini/software-factory/FACTORY_SIGNAL_TOKEN
 FACTORY_ORCHESTRATOR_TOKEN=op://mini/software-factory/FACTORY_ORCHESTRATOR_TOKEN
 # The uptime count in the overview (Argo's Kuma snapshot), off without FACTORY_UPTIME_URL; FACTORY_UPTIME_URL is a non-secret setting in ~/.config/factory/env.
 FACTORY_UPTIME_TOKEN=op://common/api/SECRET
+# The capacity figures pushed to ClickStack (adapters/otel/), off without the endpoint. The same two refs Argo's exporter reads: the ingest URL and key.
+FACTORY_OTEL_ENDPOINT=op://mini/agent-workflows/OTEL_EXPORTER_OTLP_ENDPOINT
+FACTORY_OTEL_KEY=op://vps/argo/HYPERDX_API_KEY_PROD
