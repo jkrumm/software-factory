@@ -97,7 +97,7 @@ export type SeatBody = z.infer<typeof SeatBody>
 /** The orchestrator steering a lead on the owner's token: not an owner touch. */
 const Via = z.enum(['orchestrator'])
 
-/** `issue note`: the owner's words for the lead. With `wake`, a wait the owner may end is ended too. */
+/** `issue note`: a note for the lead of an Issue (the owner's, or an agent's fenced as data). With `wake` (owner only), a wait the owner may end is ended too. A closed Issue refuses it. */
 export const NoteBody = z
   .strictObject({ text: Text, wake: z.boolean().optional(), call: Call.optional(), via: Via.optional() })
   .meta({ id: 'NoteBody' })
