@@ -105,7 +105,10 @@ export async function followLeads(deps: LeadDeps, signal?: AbortSignal): Promise
       return ok(undefined)
     })
     if (!recorded.ok) continue
-    const gone = await leadGone(deps, row.issueId, row.attempt, 'its terminal was lost')
+    // What the look saw goes with the loss: the next lead and the friction read can tell a vanished terminal from a dead one.
+    const seen = found.value.length === 0 ? 'none under its key' : `${found.value.length} under its key, none live`
+    const detail = `its terminal was lost (terminals: ${seen}; last hook event: ${since ? `${Math.round((deps.clock.now().getTime() - since.getTime()) / 60_000)} min ago` : 'none'}; session: ${session ? 'on file' : 'unknown'})`
+    const gone = await leadGone(deps, row.issueId, row.attempt, detail)
     if (gone.ok) lost++
   }
   return lost

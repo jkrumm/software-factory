@@ -41,8 +41,7 @@ export function exec(cmd: string[], timeoutMs: number, cwd?: string): Promise<Pr
   return runProcess(cmd, timeoutMs, childEnv(), undefined, cwd)
 }
 
-/** `cmd` with stderr folded into stdout, which `runProcess` alone drops. */
-export const withStderr = (cmd: string[]): string[] => ['/bin/sh', '-c', 'exec "$@" 2>&1', 'sh', ...cmd]
+export { withStderr } from '../hc/process.ts'
 
 /** The stdout of `git <args>` in `cwd`; a non-zero exit or a timeout is a `ProcessFailed`. */
 export async function gitOut(tools: Tools, cwd: string, args: string[], timeoutMs = GIT_TIMEOUT_MS): Promise<string> {

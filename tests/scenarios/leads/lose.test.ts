@@ -45,6 +45,12 @@ test('lose a terminal: lead_gone, a new attempt up to the limit, then a stall', 
   const gone = await w.world.db.sql`
     SELECT payload->>'attempt' AS attempt FROM factory.issue_events WHERE issue_id = ${issue} AND kind = 'lead_gone' ORDER BY version`
   expect(gone.map((row: { attempt: string }) => row.attempt)).toEqual(['1', '2', '3'])
+  // The loss says what the look saw, so a vanished terminal reads apart from a dead one.
+  const [lost] = await w.world.db.sql`
+    SELECT payload->>'detail' AS detail FROM factory.issue_events WHERE issue_id = ${issue} AND kind = 'lead_gone' ORDER BY version`
+  expect(lost?.detail).toMatch(
+    /^its terminal was lost \(terminals: .+; last hook event: (none|\d+ min ago); session: (on file|unknown)\)$/,
+  )
   // Finalizing the first two lost attempts took their terminals away. The third is a stall, not a restart: the steward's
   // wake (package 7) finalizes it, so its finished terminal waits.
   await w.tick()
