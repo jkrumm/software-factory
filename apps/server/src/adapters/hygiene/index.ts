@@ -125,8 +125,9 @@ export function createHygieneChecker(options: HygieneCheckerOptions): HygieneChe
       }),
     ])
     const outcomes = new Map<Probe, Outcome>(results)
-    // A pass without the `deps` probe (a steady one) installs the packages itself, once, before the probes that read them.
-    const installFailure = runsIn('deps', scope) ? undefined : await installPackages(tools, path)
+    // A pass that reads the installed tree (`check`, `deadcode`) without the `deps` probe (a steady one) installs the packages itself, once.
+    const readsPackages = runsIn('check', scope) || runsIn('deadcode', scope)
+    const installFailure = runsIn('deps', scope) || !readsPackages ? undefined : await installPackages(tools, path)
     // After `deps`, never beside it: both install the checkout's packages, and two installs in one tree break each other.
     if (runsIn('deadcode', scope)) {
       const reason = optOut.get('deadcode')
