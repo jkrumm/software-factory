@@ -880,7 +880,7 @@ describe('cadence by activity: a steady pass of an idle repo leaves the monthly 
       scope: 'steady',
     })
     expect(report.scope).toBe('steady')
-    expect(report.lastCommitAt).toBe('2026-01-01T00:00:00Z')
+    expect(report.lastCommitAt).toBe(new Date(OLD).toISOString())
     expect(run(report, 'deps')).toBeUndefined()
     expect(run(report, 'advisories')).toBeDefined()
     expect(run(report, 'stale')).toBeDefined()

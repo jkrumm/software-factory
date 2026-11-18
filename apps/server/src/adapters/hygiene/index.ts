@@ -84,7 +84,10 @@ export function createHygieneChecker(options: HygieneCheckerOptions): HygieneChe
   async function sweep(checkout: Checkout, options: SweepOptions = {}): Promise<SweepReport> {
     const { path } = checkout
     const now = new Date()
-    const lastCommitAt = (await gitTry(tools, path, ['log', '-1', '--format=%cI', 'HEAD']))?.trim() || undefined
+    // git writes a UTC committer date as `Z` or `+00:00` depending on its version; the record keeps one form, JavaScript's.
+    const committed = (await gitTry(tools, path, ['log', '-1', '--format=%cI', 'HEAD']))?.trim()
+    const lastCommitAt =
+      committed && !Number.isNaN(Date.parse(committed)) ? new Date(committed).toISOString() : undefined
     // A repo that was idle when the pass was planned but has a commit now is swept in full: the monthly probes are not skipped for it.
     const planned = options.scope ?? 'full'
     const scope =
