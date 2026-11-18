@@ -58,8 +58,7 @@ and where) → `docs/decisions.md` (what was decided and why).
   to anything but `GET`/`HEAD` bar its thirteen write verbs (`WRITES` there), forwards only `/health` and `/v1/*` with the
   owner token held in the closure, and can never start a session or cancel, reopen or file an Issue by its own words. **A
   new write goes through the Issue, never onto that list.** The verbs, their guards and the accepted residual:
-  `docs/operations.md` "The Console listener". The Console (`apps/console`) holds no logic the API could hold;
-  `apps/console/test/no-raw-colour.test.ts` fails on a raw colour.
+  `docs/operations.md` "The Console listener". The Console (`apps/console`) holds no logic the API could hold (a test fails on a raw colour).
 - **Work repos hear only the owner** (NL18: no `project.yaml`, or `work: true` in it), and the read token never sees their
   words (`read/surface.ts` keeps shape, ids, states and counts). Their text may go to agw (NL22).
 - **The door** (`apps/door`) holds only `FACTORY_DOOR_TOKEN` (caller `machine`: `POST /signals/alerts`,
@@ -98,8 +97,8 @@ and where) → `docs/decisions.md` (what was decided and why).
 ## Validate and ship
 
 `make check-fast` is the lead's check (everything of `make check` that is not a test run, then the unit tests of the files
-the branch changed; outside CI it first applies `oxfmt --write`, so commit what it reformats). CI runs the full gate
-sharded; `make check` stays the whole gate locally for a change to the test layout, the Makefile or CI itself, and takes
+the branch changed; outside CI it first applies `oxfmt --write` at home, so commit what it reformats; the rest may run on the
+step host). CI runs the full gate sharded; `make check` stays the whole gate locally for a change to the test layout, the Makefile or CI itself, and takes
 minutes in a test slot (`factory slot run` wraps it; "queued for a test slot" is a wait, not a hang). Reproduce
 one CI failure by running that suite alone inside a slot. The tests start a private Postgres with `initdb` (`PATH` or `PG_BIN_DIR`). The jobs, shards and slot rules: `docs/operations.md` "Check tiers".
 

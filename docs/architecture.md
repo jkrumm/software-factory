@@ -428,7 +428,7 @@ owner's setting, `FACTORY_STEP_REMOTE_TARGET` (an ssh alias; unset, every step r
   the `carry` paths forced in, `commit-tree` on HEAD (the worktree and its index untouched); pushed to the project's bare
   repository on the host (`factory-steps/<project>.git`, with `origin/<default>` so a step that diffs can), checked out in the
   slot's worktree (`factory-steps/<project>/<n>`), 0.4 to 1.4 s on a warm copy. The image is the repo's `dockerfile` or the
-  factory's (Ubuntu 24.04, git, jq, make, the bun of `packageManager` and the PostgreSQL 16 server binaries: `initdb`, `pg_ctl` and
+  factory's (Ubuntu 24.04, git, jq, make, shellcheck, the bun of `packageManager` and the PostgreSQL 16 server binaries: `initdb`, `pg_ctl` and
   `postgres` on `PATH`, `PG_BIN_DIR` set, issue 2114), built once per content and per image revision (`factory-step:bun-<bun>-r<n>`,
   `IMAGE_REVISION` in `remote-step.ts`, bumped when the image changes without its bun). A step starts and stops a private cluster in
   its own container (loopback and a unix socket need no network, a non-root uid needs a passwd entry: the image's `ubuntu` is uid
