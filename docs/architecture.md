@@ -407,7 +407,7 @@ owner's setting, `FACTORY_STEP_REMOTE_TARGET` (an ssh alias; unset, every step r
   CLI sends `remote`), its project is admitted, its step is declared `remote: true` and needs nothing only the mini has
   (`mac`, `apple`, `secrets`, `services`; a step of the host-wide class `apple` never, whatever a file says), the VPS gets
   it when `decideRemote` finds room and `finishesSooner` holds. Room: a probe at most 90 s old, production's own pressure
-  stall (`system.slice` memory and io `some avg10`) not over the pressure line (below), the disk under the 90 % its alert pages on with a new copy
+  stall (`system.slice` memory and io `some avg10`) not over the pressure line (below), the disk under the 85 % its alert pages on with a new copy
   counted, the step's peak beside the running steps' peaks and the mini's headroom rule in `MemAvailable`, its cores in the
   idle ones. Sooner: its learned VPS run (unknown: 1.7 times the mini's, as measured) against the expected mini wait (the
   holder that frees its slot) plus its mini run. There is no fixed share of the VPS.
