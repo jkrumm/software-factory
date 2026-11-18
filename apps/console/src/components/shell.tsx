@@ -201,7 +201,10 @@ export function Shell() {
             <Notices />
             <div className="relative flex min-h-0 flex-1 flex-col">
               {/* `relative` makes `main` the containing block of an absolute descendant (a chart's sr-only table), so its overflow clips it; otherwise the box sits past the viewport and the document scrolls. */}
-              <main className="relative min-h-0 flex-1 overflow-x-hidden overflow-y-auto">
+              <main
+                data-scroll-restoration-id="main"
+                className="relative min-h-0 flex-1 overflow-x-hidden overflow-y-auto"
+              >
                 <Outlet />
               </main>
               <PeekHost />

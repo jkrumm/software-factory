@@ -274,7 +274,11 @@ function ArtifactViewOf({ id, revision, compare, onPick, peek }: ArtifactViewPro
       </header>
 
       {tocSide ? null : <TocBar items={toc} section={section} onJump={onJump} />}
-      <div ref={docScroll} className={cn('flex min-w-0 flex-col', !peek && 'lg:min-h-0 lg:flex-1 lg:overflow-y-auto')}>
+      <div
+        ref={docScroll}
+        data-scroll-restoration-id={peek ? undefined : 'artifact-document'}
+        className={cn('flex min-w-0 flex-col', !peek && 'lg:min-h-0 lg:flex-1 lg:overflow-y-auto')}
+      >
         <div
           className={
             comparing
@@ -334,6 +338,7 @@ function ArtifactViewOf({ id, revision, compare, onPick, peek }: ArtifactViewPro
       focus={focus}
       now={now}
       onFocus={onFocus}
+      scrollId={paned ? 'artifact-comments' : undefined}
       action={
         paned ? (
           <CollapseButton label="Fold Comments away" side="right" onClick={() => commentsPane.current?.collapse()} />

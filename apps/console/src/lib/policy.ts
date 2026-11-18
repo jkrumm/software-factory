@@ -25,15 +25,15 @@ const isField = (element: FocusedElement | null): boolean =>
 export const safeToReload = (focused: FocusedElement | null, hasDraft: boolean): boolean =>
   !isField(focused) && !hasDraft
 
-/** A tab with no input for this long counts as left alone: a waiting new bundle loads then. */
-export const IDLE_RELOAD_MS = 45_000
-
-/** When the page may load a new bundle: the worker just took over, the tab was hidden, the owner navigates, or the page sat idle. */
-export type ReloadMoment = 'activated' | 'hidden' | 'navigation' | 'idle'
+/**
+ * When the page may load a new bundle: the worker just took over, the tab was hidden, the owner navigates, or a lazy chunk
+ * of the old build is gone (`broken`). A quiet tab is no moment: someone reading sends no input for minutes.
+ */
+export type ReloadMoment = 'activated' | 'hidden' | 'navigation' | 'broken'
 
 /**
  * Whether the page reloads now. Never while something is typed. At the moment the worker takes over only a screen that is
- * blocked on the new bundle (it has no data to show) reloads; every other screen waits for a quiet moment, so a new
+ * blocked on the new bundle (it has no data to show) reloads; every other screen waits for the tab to be hidden or the owner to navigate, so a new
  * bundle never interrupts reading and never shows a banner.
  */
 export const reloadNow = (

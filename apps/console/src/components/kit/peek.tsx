@@ -90,7 +90,11 @@ export function Peek({ label, tag, page, onClose, children, className }: PeekPro
           </Tooltip>
         </div>
       </header>
-      <div className="min-h-0 flex-1 overflow-y-auto overscroll-contain" data-peek-body="">
+      <div
+        className="min-h-0 flex-1 overflow-y-auto overscroll-contain"
+        data-peek-body=""
+        data-scroll-restoration-id="peek"
+      >
         {children}
       </div>
     </aside>
