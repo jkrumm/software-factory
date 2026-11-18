@@ -35,7 +35,14 @@ export interface DeclaredProbe {
 }
 
 /** Documents under these directories are a record, not a reference: no staleness, filler or link finding is raised for them. */
-export const ARCHIVE_DIRS = ['docs/research', 'docs/rewrite', 'docs/evidence', 'docs/spikes', 'docs/waves'] as const
+export const ARCHIVE_DIRS = [
+  'docs/research',
+  'docs/rewrite',
+  'docs/evidence',
+  'docs/spikes',
+  'docs/waves',
+  'docs/history',
+] as const
 
 /** One thing a probe found, ready to be a signal: `key` is stable per subject, so the same finding next week dedups. */
 export interface ProbeFinding {
