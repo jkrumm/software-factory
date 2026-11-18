@@ -486,13 +486,16 @@ Report `docs/strategy/2026-11-next/report.html`, definition `docs/strategy/2026-
   against NL38's dollar bound, which is capped at 1: a share cannot pass 1, so no class could leave the light seat on cost.
   `factory read finding-classes` that morning: advisories 4 starts, 4 moved up (share 1), agentsmd 3 starts, 2 moved up, both
   `out: false`, each move-up spending about 19 minutes of a seat and a slot before the real lead started. Now the same
-  break-even is read in minutes (`moveUpTimeBound`): a light route takes `l + share * f` per Issue against the lead row's `s`,
-  where `l` is the mean ms of a light attempt (to its move-up, else the Issue's working time), `s` the lead row's median working
-  ms per Issue, and `f` is `s` (a follow-up is a lead attempt; no per-attempt time is stored). Classes are judged against the
-  lower of the two bounds (`classMoveUpBound`, `seats.tripwire.bound.classShare`, shown as `bound` in `factory read
-  finding-classes`); a time not measured leaves the dollar bound. With the 14-day figures of 2026-11-18 (light about 20 minutes,
-  lead median 35) the bound is about 43 %: advisories (100 %) and agentsmd (67 %) are out, deps, context and readme (23 to 25 %)
-  stay. Unchanged: triage's `small` gate still reads the dollar bound only (it is not a hygiene class's record), the 20-Issue
-  window, the 3-start floor and the return path (a class that is out starts on the lead row, so its light starts age out of the
-  window until the share no longer stands). Cost: a class with a real light win in dollars but a slow light attempt can start on
-  the lead row; the first wrong call of the bound is visible in `windowShare` against `bound`.
+  break-even is read in minutes (`moveUpTimeBound`): a light attempt that finishes saves `lead - finish` against the lead row's
+  median Issue; one that moves up has spent `moved` minutes before a lead attempt that takes the lead row's time anyway, so the
+  light route breaks even at `share = (lead - finish) / (lead - finish + moved)`. All three are medians (the lead row's working
+  ms per Issue, the working ms of light Issues that did not move up, the ms the moved-up attempts ran before moving), as the
+  means are skewed by a few multi-hour Issues. Classes are judged against the lower of the two bounds (`classMoveUpBound`,
+  `seats.tripwire.bound.classShare`, shown as `bound` in `factory read finding-classes`); a time not measured leaves the dollar
+  bound. With no light Issue in the window that did not move up, light has shown no saving: its finish time reads as the lead
+  row's and the bound is 0. A light Issue still working counts with its working time so far, as in every other figure here. A first reading used the mean of every light attempt for the light side against the lead's median: it put the bound at
+  11 % and 7 of 10 classes out on the day it deployed, so it was replaced by this one. Unchanged: triage's `small` gate still
+  reads the dollar bound only, the 20-Issue window, the 3-start floor and the return path (a class that is out starts on the lead
+  row, so its light starts age out of the window until the share no longer stands). Cost: a class with a real light win in
+  dollars but a slow light attempt can start on the lead row; the first wrong call of the bound is visible in `windowShare`
+  against `bound`.

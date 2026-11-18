@@ -142,12 +142,16 @@ describe('the light gate', () => {
 
   test('the time bound is the same break-even in minutes, and the class bound is the lower of the two', () => {
     const MIN = 60_000
-    // light attempts average 20 min, the lead row's median Issue 35: 20 + share * 35 = 35 at share 0.43
-    const time = moveUpTimeBound({ lightAttemptMs: 20 * MIN, leadMs: 35 * MIN, followUpMs: 35 * MIN })
-    expect(time).toBeCloseTo(0.4286, 3)
-    expect(moveUpTimeBound({ lightAttemptMs: null, leadMs: 35 * MIN, followUpMs: 35 * MIN })).toBeNull()
+    // a light attempt that finishes takes 9 min against the lead row's 35, one that moves up spent 19 before the lead took
+    // over: 26 min saved against 19 wasted, even at share 26 / 45
+    const time = moveUpTimeBound({ lightFinishMs: 9 * MIN, movedMs: 19 * MIN, leadMs: 35 * MIN })
+    expect(time).toBeCloseTo(0.5778, 3)
+    expect(moveUpTimeBound({ lightFinishMs: null, movedMs: 19 * MIN, leadMs: 35 * MIN })).toBeNull()
+    // light no faster than the lead row: no share saves; a move-up that wastes nothing: any share does
+    expect(moveUpTimeBound({ lightFinishMs: 40 * MIN, movedMs: 19 * MIN, leadMs: 35 * MIN })).toBe(0)
+    expect(moveUpTimeBound({ lightFinishMs: 9 * MIN, movedMs: 0, leadMs: 35 * MIN })).toBe(1)
     // dollars allow every share (bound 1), minutes do not
-    expect(classMoveUpBound({ dollars: 1, time })).toBeCloseTo(0.4286, 3)
+    expect(classMoveUpBound({ dollars: 1, time })).toBeCloseTo(0.5778, 3)
     expect(classMoveUpBound({ dollars: 0.3, time })).toBe(0.3)
     expect(classMoveUpBound({ dollars: 1, time: null })).toBe(1)
     expect(classMoveUpBound({ dollars: null, time })).toBeNull()
@@ -264,7 +268,7 @@ describe('judgeClassSeat', () => {
     const MIN = 60_000
     const bound = classMoveUpBound({
       dollars: 1,
-      time: moveUpTimeBound({ lightAttemptMs: 20 * MIN, leadMs: 35 * MIN, followUpMs: 35 * MIN }),
+      time: moveUpTimeBound({ lightFinishMs: 9 * MIN, movedMs: 19 * MIN, leadMs: 35 * MIN }),
     })
     // advisories: 4 of 4 moved up (share 1, which dollars alone never put above their bound of 1)
     expect(judgeClassSeat(run(4, 0), 1)).toMatchObject({ share: 1, out: false })

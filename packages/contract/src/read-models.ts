@@ -499,12 +499,12 @@ export const MoveUpBound = z
     leadAttempt: z.number(),
     followUpAttempt: z.number(),
     share: z.number(),
-    /** the same break-even in minutes (`moveUpTimeBound`): ms per light attempt, the lead row's median ms per Issue, and per follow-up (the lead's median); null while a time is unmeasured */
+    /** the same break-even in minutes (`moveUpTimeBound`): median ms of a light attempt that finished, of one that moved up before the lead took over, and of the lead row's Issue; null while a time is unmeasured */
     time: z
       .strictObject({
-        lightAttemptMs: z.number(),
+        lightFinishMs: z.number(),
+        movedMs: z.number(),
         leadMs: z.number(),
-        followUpMs: z.number(),
         share: z.number(),
       })
       .nullable(),
