@@ -117,7 +117,7 @@ claude-account remove <id>
   and the `verify` command, then runs `host.afterAdd`. It refuses an id that is taken, a plan other than `max` and `ultra`, a dir another account uses and `~/.claude` named explicitly.
 - **`verify`** checks on this machine, in order: *login* (`claude auth status` for the account's config dir), *plan* (the tier of its Keychain login item is the registered plan: an account added as `max` whose login is an Ultra
   fails, with the `--plan` to add it again with), *sample* (a weekly quota sample: the usage endpoint with the account's own token, else the account's own cached usage; it lands in the cache). A disabled account is checked all the same.
-  `--enable` enables it when all three pass; exit 1 and nothing changed otherwise.
+  `--enable` enables it when all three pass; exit 1 and the registry is left as it is otherwise.
 - **`remove`** sets `enabled: false` (no pick, rank or refresh touches it) and lists what it leaves: the registry entry, the config directory, the Keychain login (with the logout command),
   the cache files and the history. Running it again changes nothing. Deleting those is the user's: the package never removes a login or a directory.
 

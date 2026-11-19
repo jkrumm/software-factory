@@ -3,7 +3,7 @@ import { afterAll, beforeAll, describe, expect, test } from 'bun:test'
 import { chmodSync, existsSync, mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
-import { resolveMachine } from '../src/index.ts'
+import { type Registry, type Sample, resolveMachine, verifyAccount } from '../src/index.ts'
 import { OWNER_HOST } from './owner-host.ts'
 
 const CLI = join(import.meta.dir, '..', 'bin', 'claude-account.ts')
@@ -281,5 +281,69 @@ describe('the host block', () => {
     const saved = JSON.parse(readFileSync(real, 'utf8'))
     expect(saved.note).toBe('kept') // keys the package does not know stay
     expect(saved.accounts.viaLink.enabled).toBe(false)
+  })
+})
+
+describe('verify reads the weekly window from this run, not from the merged cache', () => {
+  const old: Sample = {
+    s: 1,
+    w: 31,
+    s_reset: null,
+    w_reset: null,
+    s_ts: Date.now() - 7 * 86400_000,
+    w_ts: Date.now() - 7 * 86400_000,
+    src: 'old',
+  }
+  const run = async (endpoint: unknown) => {
+    const dir = mkdtempSync(join(tmpdir(), 'ca-verify-'))
+    const cache = join(dir, 'cache')
+    mkdirSync(cache)
+    writeFileSync(join(cache, 'fresh1.sample.json'), JSON.stringify(old))
+    const prev = process.env.CLAUDE_ACCOUNTS_CACHE_DIR
+    process.env.CLAUDE_ACCOUNTS_CACHE_DIR = cache
+    try {
+      const reg: Registry = {
+        accounts: { fresh1: { dir: join(dir, 'cfg'), plan: 'max', homeLanes: ['bulk'], enabled: false } },
+      }
+      const blob = JSON.stringify({
+        claudeAiOauth: {
+          accessToken: 'T',
+          refreshTokenExpiresAt: Date.now() + 30 * 86400_000,
+          expiresAt: Date.now() + 3600_000,
+          rateLimitTier: 'default_claude_max_5x',
+        },
+      })
+      return await verifyAccount({
+        reg,
+        id: 'fresh1',
+        spawn: (cmd) => ({ status: 0, stdout: cmd.endsWith('claude') ? '{"loggedIn":true}' : blob, stderr: '' }),
+        httpGet: async () => ({ status: 200, json: endpoint }),
+        claudeBin: '/x/claude',
+        securityBin: '/x/security',
+        baseEnv: {},
+        now: Date.now,
+      })
+    } finally {
+      if (prev === undefined) delete process.env.CLAUDE_ACCOUNTS_CACHE_DIR
+      else process.env.CLAUDE_ACCOUNTS_CACHE_DIR = prev
+      rmSync(dir, { recursive: true, force: true })
+    }
+  }
+  const reset = new Date(Date.now() + 3 * 86400_000).toISOString()
+
+  test('an endpoint answer with no weekly window does not pass on the weekly a week-old cache holds', async () => {
+    const checks = await run({ five_hour: { utilization: 10, resets_at: reset } })
+    expect(checks.find((c) => c.name === 'sample')).toMatchObject({ ok: false })
+  })
+
+  test('an endpoint answer with the weekly window passes with its age', async () => {
+    const checks = await run({
+      five_hour: { utilization: 10, resets_at: reset },
+      seven_day: { utilization: 44, resets_at: reset },
+    })
+    expect(checks.find((c) => c.name === 'sample')).toMatchObject({
+      ok: true,
+      detail: expect.stringContaining('weekly 44%'),
+    })
   })
 })

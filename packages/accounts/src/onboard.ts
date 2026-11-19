@@ -168,11 +168,15 @@ export async function verifyAccount(d: VerifyDeps): Promise<Check[]> {
     now: d.now,
     log: d.log,
   }
+  const startedAt = d.now()
   const results = await runRefresh(deps)
   const own = readClaudeJsonSample(a)
   if (own) saveSample(d.id, own, undefined, hasSessionLimit(a), d.now())
   // only a sample this run read counts: the cache may hold a removed account's old one under the same id
-  const x = results[d.id] === 'fresh' ? loadCache().samples[d.id] : usable(own ?? undefined, d.now()) ? own : null
+  // (an endpoint answer without a weekly window leaves the stored one in the merged cache sample: its own timestamp tells)
+  const cached = results[d.id] === 'fresh' ? loadCache().samples[d.id] : undefined
+  const fromEndpoint = cached?.w_ts != null && cached.w_ts >= startedAt ? cached : null
+  const x = fromEndpoint ?? (usable(own ?? undefined, d.now()) ? own : null)
   const w = x?.w ?? null
   const age = x?.w_ts != null ? `, read ${Math.max(0, Math.round((d.now() - x.w_ts) / 60_000))} min ago` : ''
   checks.push(
