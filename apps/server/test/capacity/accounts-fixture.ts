@@ -6,7 +6,7 @@ import type { AccountPaths } from '@software-factory/accounts'
 export const NOW = new Date('2026-11-19T12:00:00Z')
 const NOW_S = NOW.getTime() / 1000
 const HOUR_S = 3600
-export const IDS = ['a', 'b', 'c', 'd'] as const
+const IDS = ['a', 'b', 'c', 'd'] as const
 
 export interface Window {
   s?: number

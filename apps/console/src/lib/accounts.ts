@@ -6,7 +6,7 @@ import { resetWords } from './strip.ts'
 // words them and builds the bodies of the four intents. No limit, threshold or rule lives here.
 
 /** What the owner calls each mode kind. */
-export const MODE_WORDS: Record<AccountMode['kind'], string> = {
+const MODE_WORDS: Record<AccountMode['kind'], string> = {
   normal: 'Normal',
   drain: 'Fill first',
   reserve: 'Held back',

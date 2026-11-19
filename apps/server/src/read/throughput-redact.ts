@@ -67,7 +67,7 @@ export function redactCapacityLoop(model: CapacityLoopModel, open: readonly Open
 }
 
 /** A step is named `<project> <kind>`: its project is the first word. */
-export function stepProject(step: string): string {
+function stepProject(step: string): string {
   return step.split(' ')[0] ?? step
 }
 

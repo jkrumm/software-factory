@@ -74,7 +74,7 @@ export function refuseKeyless(input: TriageInput): string | null {
  * Commands installed on the mini only (`factory`: the dialog's command exited 127 on the MacBook, Issue 2302; `secrets-run`:
  * the headless secrets shim). A word joins this list on evidence, never on a guess: a false refusal blocks a real Errand.
  */
-export const MINI_ONLY_COMMANDS: readonly string[] = ['factory', 'secrets-run']
+const MINI_ONLY_COMMANDS: readonly string[] = ['factory', 'secrets-run']
 
 /** The first word of every segment of a shell line (after `&&`, `||`, `;`, `|`), `VAR=value` assignments skipped. */
 function commandWords(line: string): string[] {

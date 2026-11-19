@@ -39,7 +39,7 @@ export function headingPath(before: readonly Heading[]): string {
 /** What the annotator in an HTML artifact's frame posts out: the selected text and where it is, or that it is loaded. */
 const FrameRectShape = z.object({ top: z.number().finite(), bottom: z.number().finite(), left: z.number().finite() })
 /** The text kept either side of a quote, as the API takes it. */
-export const MAX_CONTEXT = 200
+const MAX_CONTEXT = 200
 const FrameSelect = z.object({
   type: z.literal('factory.select'),
   quote: z.string().min(1).max(MAX_QUOTE),
@@ -191,7 +191,7 @@ export interface Span {
 }
 
 /** The text kept either side of a selection to tell equal passages apart (the W3C TextQuoteSelector's prefix and suffix). */
-export const CONTEXT = 32
+const CONTEXT = 32
 
 /** Which of the equal passages a comment hangs on: its quote, the heading path, and what tells the occurrences apart. */
 export interface QuoteHint {
