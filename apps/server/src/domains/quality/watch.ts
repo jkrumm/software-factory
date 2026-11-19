@@ -86,7 +86,8 @@ function redBefore(state: CiState, parent: CiState | null): boolean {
  * regression); one still going after an hour is red, and none after ten minutes passes (the repo may have no CI). With
  * no merge time the commit is taken as old enough for both. A red whose first failing check was red the same way in
  * `parent` (CI of the default branch before the commit landed) is `inherited`: it was there before the change, so the
- * watch passes on it. A parent that is not red, or not read (null), leaves the red the change's.
+ * watch passes on it. A parent that is not red, or not read (null), leaves the red the change's. Only the first failing
+ * check of each is compared, so a second, new red behind an inherited first one is not told apart.
  */
 export function ciCheck(
   state: CiState,
@@ -222,8 +223,9 @@ function failedBefore(now: string, before: readonly string[]): boolean {
  * run before the ship, and the last run of each other Issue's watch in the repo that ended in a regression no pass has
  * answered yet (one red, one owner: that Issue's lead has it, and it is not the Issue's whose watch sees the same red).
  * A verify red in a component the change never touched (a pending OS update, a dependency that moved, a drift list
- * that shrank) is not a regression of the Issue. A line none of them had keeps the check the change's. The version, CI,
- * checkout and probe checks stay the change's: each reads this ship's own commit or the live system. With no baseline,
+ * that shrank) is not a regression of the Issue. A line none of them had keeps the check the change's. The version,
+ * checkout and probe checks stay the change's: each reads this ship's own commit or the live system. The CI check is
+ * marked by `ciCheck`, from the CI of the commit before the merge, not from a baseline. With no baseline,
  * or one that was green, nothing is marked.
  */
 export function markInherited(checks: readonly Check[], baseline: readonly CheckRecord[] | null): Check[] {
