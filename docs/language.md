@@ -192,7 +192,7 @@ checkpoint is for that one only: a late one the factory sent is ignored, and a l
 | `submitted` | A Concept or Spec is handed over for review | lead |
 | `verdict_given` | The owner's Verdict on it; with Decisions still open the wait goes on until the last answer, and the lead hears verdict and answers in one note. The factory sends it for a Concept or Spec nobody answered in 24 hours, flagged Issue or not (the lead goes on with its defaults) and to withdraw a review its Issue moved past | owner, factory |
 | `errand_raised` | The lead needs the owner's hands | lead |
-| `errand_done` | The owner did the Errand, or something ended its wait without his hands: the screen turned it away (`turnedAway`: the reason; with `awaits` the Issue then waits on that pull request's review), or the desk pass found its check no longer needed (`resolved`) | owner, judge, factory |
+| `errand_done` | The owner did the Errand (or his delegate, the orchestrator, closed it on its operator's confirmation: `confirmedBy`, never an approval Errand), or something ended its wait without his hands: the screen turned it away (`turnedAway`: the reason; with `awaits` the Issue then waits on that pull request's review), or the desk pass found its check no longer needed (`resolved`) | owner, orchestrator, judge, factory |
 | `errand_turned_back` | The owner or the orchestrator turned the Errand back: not done, and `note` says what to do instead; the lead hears it as its next turn | owner, orchestrator |
 | `deferred` | The lead waits until a time, or until other Issues close; the steward defers a working or watching Issue behind a queued Issue of its repo that waits for the claim it holds, and says why | lead, steward (behind Issues only; until a time only for a repeated `blocked` stall after a hold) |
 | `stalled` | A machine cause stopped the work: `wall`, `unreported`, `blocked`; a lead's block may say it is out of its depth (`depth`) | factory, lead (`blocked`) |
@@ -267,7 +267,7 @@ stateDiagram-v2
 | `regressed` | no person | yes | woken by the steward, or turned into a Decision |
 | `decision` | a person | no | answered by standing policy, the Judge, a default, or the owner |
 | `review` | a person | no | verdict given on the Concept or Spec by the owner, and every Decision the lead raised about it answered |
-| `errand` | a person | no | errand done by the owner's hands, or turned back with a note |
+| `errand` | a person | no | errand done by the owner's hands (or the orchestrator's, with evidence), or turned back with a note |
 | `external` | no person | no | woken by the review poll when the pull request is approved, gets changes requested or a new review comment, merges or closes |
 
 Outcomes of `closed`: `done`, `dropped`, `healed`, `cancelled`.

@@ -53,7 +53,11 @@ export const WAITS = {
     stall: false,
     ends: 'verdict given on the Concept or Spec by the owner, and every Decision the lead raised about it answered',
   },
-  errand: { exit: 'person', stall: false, ends: "errand done by the owner's hands, or turned back with a note" },
+  errand: {
+    exit: 'person',
+    stall: false,
+    ends: "errand done by the owner's hands (or the orchestrator's, with evidence), or turned back with a note",
+  },
   external: {
     exit: 'machine',
     stall: false,
