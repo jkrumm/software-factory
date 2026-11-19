@@ -12,8 +12,9 @@ export interface Check {
    */
   blocked?: boolean
   /**
-   * a `make` target that failed the same way in the repo's last run before this ship: red, but not this change's, so it
-   * neither fails the watch nor is retried (`markInherited`)
+   * red, but not this change's, so it neither fails the watch nor is retried: a `make` target that failed the same way in
+   * the repo's last run before this ship (`markInherited`), or the `ci` check that was red on the same first failing
+   * check at the commit before the merge (`ciCheck`)
    */
   inherited?: boolean
   /**
