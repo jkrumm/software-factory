@@ -3,10 +3,12 @@
 // so it wins on the other machine too. Reading, expiry and the peer merge are here; the file lives in store.ts.
 import {
   type Cache,
+  type Hold,
   type Mode,
   type ModeKind,
   type Registry,
   type Sample,
+  HOLDS,
   MODE_KINDS,
   RESET_JUMP_S,
   isNum,
@@ -18,6 +20,7 @@ import {
 export interface OverrideRecord {
   kind?: ModeKind
   for?: string | null
+  hold?: Hold | null
   until?: string | null
   why?: string | null
   /** epoch ms */
@@ -42,6 +45,7 @@ export function isOverrideRecord(v: unknown): v is OverrideRecord {
   return (
     MODE_KINDS.includes(r.kind as ModeKind) &&
     strOrNull(r.for) &&
+    (r.hold === undefined || r.hold === null || HOLDS.includes(r.hold)) &&
     strOrNull(r.until) &&
     strOrNull(r.why) &&
     (r.baseline_w_reset === undefined || r.baseline_w_reset === null || isNum(r.baseline_w_reset)) &&
@@ -116,7 +120,13 @@ export function resolveModes(
     const live = r && !overrideExpired(r, cache.samples[id], cache, id, nowMs) ? r : undefined
     if (live) {
       out[id] = {
-        mode: { kind: live.kind!, for: live.for ?? null, until: live.until ?? null, why: live.why ?? null },
+        mode: {
+          kind: live.kind!,
+          for: live.for ?? null,
+          ...(live.hold ? { hold: live.hold } : {}),
+          until: live.until ?? null,
+          why: live.why ?? null,
+        },
         source: 'override',
         override: r!,
         expired: false,

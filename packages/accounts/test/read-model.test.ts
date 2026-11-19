@@ -345,7 +345,10 @@ describe('closure', () => {
 
   test('a reserve account whose unused allowance fills the ceiling is closed until the allowance is released', () => {
     const reg = reg3({
-      accounts: { ...reg3().accounts, me2: acc('/x', 'max', ['bulk'], { mode: { kind: 'reserve', for: 'fable' } }) },
+      accounts: {
+        ...reg3().accounts,
+        me2: acc('/x', 'max', ['bulk'], { mode: { kind: 'reserve', for: 'fable', hold: 'allowance' } }),
+      },
     })
     const cache = cacheOf({ iu: smp(null, 10), me: smp(10, 10), me2: smp(10, 60, 100, fableLimits(60, 2, 1)) })
     expect(closure(reg, cache, 'me2', NOW)).toMatchObject({ closed: 'reserve-budget' }) // 60 + 49 unused ≥ 95

@@ -20,7 +20,10 @@ import {
   fableAccount,
   modeOf,
   hasSessionLimit,
+  HOLDS,
+  type Hold,
   reserveBudget,
+  reserveHold,
   mergeSample,
   newestAge,
   pick,
@@ -31,7 +34,7 @@ import {
   withoutSessionWindows,
 } from './policy.ts'
 import { historyDir, picksPath } from './paths.ts'
-import { type OverrideRecord, applyModes, baselineReset, modeField, resolveModes } from './modes.ts'
+import { type ModeView, type OverrideRecord, applyModes, baselineReset, modeField, resolveModes } from './modes.ts'
 import { accountFromConfigDir, claudeJsonPath, loadRegistry, shellLine } from './registry.ts'
 import { claimRefresh, loadCache, loadOverrides, markExhausted, recordSample, writeOverride } from './store.ts'
 import { readLoginExpiry } from './keychain.ts'
@@ -205,6 +208,12 @@ function expiry(reg: Registry, json: boolean, ids?: string[]): void {
   for (const r of rows) console.log(`${r.id}  ${r.grade}  ${r.detail}`)
 }
 
+/** `modeField` plus the reserve's `hold` (`account` or `allowance`, null for any other mode): the `mode` of `usage --json` and `mode --json`. */
+const modeWithHold = (v: ModeView) => ({
+  ...modeField(v),
+  hold: v.mode.kind === 'reserve' ? reserveHold(v.mode) : null,
+})
+
 const withAge = (list: Record<string, unknown>[] | undefined, ts: number | undefined, now: number) =>
   list && ts !== undefined ? list.map((l) => ({ ...l, age_s: Math.round((now - ts) / 1000) })) : null
 
@@ -230,7 +239,7 @@ function usage(reg0: Registry, json: boolean): void {
       auth_ok: !cache.auth_failed[id],
       exhausted_until: until && until * 1000 > now ? until : null,
       // additive (registry v2): the mode in force, the raw override the peer imports, the endpoint's limits with their age
-      mode: modeField(views[id]),
+      mode: modeWithHold(views[id]),
       mode_override: views[id].override,
       limits: withAge(x?.limits, x?.limits_ts, now),
       weekly_scoped_shares: withAge(x?.scoped_shares, x?.limits_ts, now),
@@ -257,7 +266,7 @@ function modeVerb(reg0: Registry, rest: string[]): number {
       const b = reserveBudget(reg, cache, a, now)
       return {
         id: a,
-        ...modeField(views[a]),
+        ...modeWithHold(views[a]),
         expired: views[a].expired,
         budget: b && {
           for: b.for,
@@ -284,11 +293,13 @@ function modeVerb(reg0: Registry, rest: string[]): number {
         r.until ? `until ${r.until}${r.until_at ? ` (${when(r.until_at)})` : ''}` : '',
         r.set_at ? `set ${when(r.set_at)} on ${r.set_on}` : '',
         r.why ? JSON.stringify(r.why) : '',
-        r.budget
-          ? r.budget.known
-            ? `budget ${r.budget.open ? 'open' : 'closed'} (${r.budget.weekly! + r.budget.unused!}/${r.budget.ceiling}${r.budget.released ? ', released' : ''})`
-            : 'budget unknown: last resort'
-          : '',
+        r.hold === 'account'
+          ? 'holds the account'
+          : r.budget
+            ? r.budget.known
+              ? `budget ${r.budget.open ? 'open' : 'closed'} (${r.budget.weekly! + r.budget.unused!}/${r.budget.ceiling}${r.budget.released ? ', released' : ''})`
+              : 'budget unknown: last resort'
+            : '',
         r.expired ? '(override ended)' : '',
       ]
       console.log(parts.filter(Boolean).join('  '))
@@ -308,6 +319,10 @@ function modeVerb(reg0: Registry, rest: string[]): number {
   const model = flag(rest, '--for')
   if (kind === 'reserve' && !model) throw new Error('mode: reserve needs --for <model>')
   if (kind !== 'reserve' && model) throw new Error('mode: --for belongs to reserve only')
+  const hold = flag(rest, '--hold')
+  if (hold !== null && kind !== 'reserve') throw new Error('mode: --hold belongs to reserve only')
+  if (hold !== null && !HOLDS.includes(hold as Hold))
+    throw new Error(`mode: --hold must be ${HOLDS.join(' or ')}, not '${hold}'`)
   const until = flag(rest, '--until') ?? (kind === 'drain' ? 'reset' : null)
   if (until !== null && until !== 'reset') {
     const t = Date.parse(until)
@@ -318,6 +333,7 @@ function modeVerb(reg0: Registry, rest: string[]): number {
   const record: OverrideRecord = {
     kind,
     for: model,
+    ...(kind === 'reserve' ? { hold: (hold as Hold | null) ?? 'account' } : {}),
     until,
     why: flag(rest, '--why'),
     set_at: now,
@@ -325,7 +341,9 @@ function modeVerb(reg0: Registry, rest: string[]): number {
     baseline_w_reset: until === 'reset' ? baselineReset(cache.samples[id], now) : null,
   }
   writeOverride(id, record, { action: 'set', machine, nowMs: now })
-  console.log(`${id}: ${kind}${model ? ` for ${model}` : ''}${until ? ` until ${until}` : ''} (override)`)
+  console.log(
+    `${id}: ${kind}${model ? ` for ${model}` : ''}${kind === 'reserve' ? ` (holds the ${(hold as Hold | null) ?? 'account'})` : ''}${until ? ` until ${until}` : ''} (override)`,
+  )
   return 0
 }
 
@@ -552,13 +570,15 @@ export const VERBS: Verb[] = [
   {
     name: 'mode',
     usage:
-      'mode [--json] | mode <id> <normal|drain|reserve|paused> [--for <model>] [--until reset|<iso>] [--why <text>] | mode <id> --clear',
+      'mode [--json] | mode <id> <normal|drain|reserve|paused> [--for <model>] [--hold account|allowance] [--until reset|<iso>] [--why <text>] | mode <id> --clear',
     summary: "every account's mode in force with its source, expiry and why; or set / clear an override",
     detail: [
       "no id         every account: mode, source (override | registry), until, set, why, a reserve's budget",
       '<id> <mode>   an override in the state file (~/.local/share/claude-accounts/modes.json), one audit line each;',
       '              the peer machine adopts it at its next refresh',
-      '--for <model> reserve only, required: the model whose unused weekly allowance the account holds (fable)',
+      '--for <model> reserve only, required: the model the account is kept for (fable)',
+      "--hold        reserve only: account (default: the last resort for every pick but the model's launcher) or allowance (only the",
+      "              model's unused weekly allowance, inside a budget; released in the last 24 h)",
       '--until       reset (the next observed weekly reset, a manual one too) or an ISO time; drain defaults to reset',
       '--why <text>  shown wherever the mode is',
       '--clear       remove the override (a tombstone, so the peer drops it too)',

@@ -15,15 +15,19 @@ import {
   defaultAccountId,
   eligible,
   emptyCache,
+  fableAccount,
   hasSessionLimit,
   launchAccount,
   loadCache,
   loadOverrides,
   loadRegistry,
+  modeOf,
   observedReset,
+  parseMode,
   pick,
   rank,
   reserveBudget,
+  reserveHold,
   resolveModes,
   applyModes,
   runRefresh,
@@ -114,8 +118,14 @@ describe('samples keep the endpoint limits', () => {
   })
 })
 
-describe('the reserve budget (registry v1 fable: iu reads as reserve for fable)', () => {
-  const reg = () => reg3({ fable: 'iu' })
+describe('hold: allowance, the reserve budget', () => {
+  const reg = () =>
+    reg3({
+      accounts: {
+        ...reg3().accounts,
+        iu: { ...reg3().accounts.iu, mode: { kind: 'reserve', for: 'fable', hold: 'allowance' } },
+      },
+    })
   const others = { me: sample(10, 20, NOW / 1000 + 120 * H), me2: sample(10, 20, NOW / 1000 + 130 * H) }
   test('inside its budget the reserve account takes its normal place: iu is home for interactive again', () => {
     const c = cacheOf({ iu: { ...sample(null, 15), ...fable(15, 6, 3) }, ...others })
@@ -169,6 +179,70 @@ describe('the reserve budget (registry v1 fable: iu reads as reserve for fable)'
     expect(dueIds(reg(), fresh, NOW)).toEqual([])
     expect(dueIds(reg(), old, NOW)).toEqual(['iu'])
     expect(dueIds(reg3(), old, NOW)).toEqual([]) // not a reserve: the statusline keeps it fresh enough
+  })
+})
+
+describe('hold: account (the default, and what the v1 fable key means)', () => {
+  const others = { me: sample(10, 20, NOW / 1000 + 120 * H), me2: sample(10, 20, NOW / 1000 + 130 * H) }
+  const open = cacheOf({ iu: { ...sample(null, 15), ...fable(15, 6, 3) }, ...others })
+  const regs: [string, Registry][] = [
+    ['the v1 fable key', reg3({ fable: 'iu' })],
+    [
+      'a registry mode without hold',
+      reg3({
+        accounts: {
+          ...reg3().accounts,
+          iu: acc(null, 'ultra', ['interactive', 'headless'], { mode: { kind: 'reserve', for: 'fable' } }),
+        },
+      }),
+    ],
+    [
+      'hold: account',
+      reg3({
+        accounts: {
+          ...reg3().accounts,
+          iu: acc(null, 'ultra', ['interactive', 'headless'], {
+            mode: { kind: 'reserve', for: 'fable', hold: 'account' },
+          }),
+        },
+      }),
+    ],
+  ]
+  for (const [name, reg] of regs)
+    test(`${name}: iu is the last resort in every lane whatever its open budget says, reason fable-reserve`, () => {
+      expect(modeOf(reg, 'iu', NOW)).toMatchObject({ kind: 'reserve', for: 'fable' })
+      expect(reserveHold(modeOf(reg, 'iu', NOW))).toBe('account')
+      expect(reserveBudget(reg, open, 'iu', NOW)).toBeNull()
+      for (const lane of ['interactive', 'headless', 'bulk', 'lead']) {
+        expect(pick(reg, open, lane, NOW).picked, lane).not.toBe('iu')
+        const order = rank({ reg, cache: open, lane, nowMs: NOW })
+        expect(order.at(-1), lane).toMatchObject({ account: 'iu', reason: 'fable-reserve' })
+      }
+      const only = cacheOf({ iu: open.samples.iu, me: sample(95, 20), me2: sample(95, 20) })
+      expect(pick(reg, only, 'bulk', NOW)).toMatchObject({ picked: 'iu', reason: 'fable-reserve' })
+      expect(fableAccount(reg, open, NOW)).toBe('iu')
+    })
+  test('a reserve inside the last 24 h and over its budget is still held, not released or refused', () => {
+    const reg = reg3({ fable: 'iu' })
+    const c = cacheOf({ iu: { ...sample(null, 60, NOW / 1000 + 20 * H), ...fable(60, 6, 3) }, ...others })
+    expect(rank({ reg, cache: c, lane: 'interactive', nowMs: NOW }).at(-1)).toMatchObject({
+      account: 'iu',
+      reason: 'fable-reserve',
+    })
+    const full = cacheOf({ iu: { ...sample(null, 48), ...fable(48, 6, 3) }, ...others })
+    expect(rank({ reg, cache: full, lane: 'bulk', nowMs: NOW }).at(-1)).toMatchObject({
+      account: 'iu',
+      reason: 'fable-reserve',
+    })
+  })
+  test('a hold other than account or allowance is refused in the registry; hold belongs to reserve', () => {
+    expect(parseMode({ kind: 'reserve', for: 'fable', hold: 'allowance' })).toEqual({
+      kind: 'reserve',
+      for: 'fable',
+      hold: 'allowance',
+    })
+    expect(parseMode({ kind: 'reserve', for: 'fable', hold: 'half' })).toMatch('hold must be')
+    expect(parseMode({ kind: 'drain', hold: 'account' })).toMatch('hold belongs to reserve')
   })
 })
 
@@ -432,6 +506,24 @@ describe('an override reaches the other machine through the peer import', () => 
     expect(a.cli(['mode']).out).toMatch(/^me\s+drain\s+override\s+until reset/m)
     rmSync(a.home, { recursive: true })
   })
+  test('mode reserve --hold: account is the default, allowance keeps the budget; both show in the listing and usage --json', () => {
+    const a = machine()
+    expect(a.cli(['mode', 'me', 'reserve', '--for', 'fable', '--hold', 'half']).rc).toBe(2)
+    expect(a.cli(['mode', 'me', 'paused', '--hold', 'account']).rc).toBe(2)
+    expect(a.cli(['mode', 'me', 'reserve', '--for', 'fable']).out).toContain('holds the account')
+    expect(loadOverrides(a.env.CLAUDE_ACCOUNTS_MODES).accounts.me).toMatchObject({ kind: 'reserve', hold: 'account' })
+    expect(a.cli(['mode']).out).toMatch(/^me\s+reserve for fable\s+override.*holds the account/m)
+    const row = (id: string) =>
+      (JSON.parse(a.cli(['usage', '--json']).out).accounts as { id: string; mode: { hold: string | null } }[]).find(
+        (r) => r.id === id,
+      )!
+    expect(row('me').mode.hold).toBe('account')
+    expect(row('me2').mode.hold).toBeNull()
+    expect(a.cli(['mode', 'me', 'reserve', '--for', 'fable', '--hold', 'allowance']).rc).toBe(0)
+    expect(a.cli(['mode']).out).toMatch(/^me\s+reserve for fable\s+override.*budget unknown/m)
+    expect(row('me').mode.hold).toBe('allowance')
+    rmSync(a.home, { recursive: true })
+  })
   test('a registry version this build does not know: pick falls back to the default account with exit 4', () => {
     const a = machine()
     writeFileSync(a.env.CLAUDE_ACCOUNTS_REGISTRY, JSON.stringify({ version: 9, ...reg3() }))
@@ -468,7 +560,8 @@ describe('property: 1 to 8 accounts, random plans, reset times and modes', () =>
         LANES.filter(() => r() < 0.3),
         {
           enabled: r() < 0.9,
-          mode: kind === 'reserve' ? { kind, for: 'fable' } : { kind },
+          mode:
+            kind === 'reserve' ? { kind, for: 'fable', ...(r() < 0.5 ? { hold: 'account' as const } : {}) } : { kind },
         },
       )
       const s = plan === 'ultra' ? null : int(101)
@@ -504,5 +597,30 @@ describe('property: 1 to 8 accounts, random plans, reset times and modes', () =>
         for (const e of order) expect(reg.accounts[e.account].mode?.kind, ctx).not.toBe('paused')
       }
     }
+  })
+  test('a hold: account reserve is never ranked before an open account that is not a reserve', () => {
+    let held = 0
+    for (let seed = 1; seed <= 400; seed++) {
+      const { reg, cache } = world(seed)
+      for (const lane of LANES) {
+        const order = rank({ reg, cache, lane, nowMs: NOW }).map((e) => e.account)
+        const ctx = `seed ${seed} lane ${lane} order ${order.join(',')}`
+        const holders = order.filter((id) => {
+          const m = reg.accounts[id].mode
+          return m?.kind === 'reserve' && reserveHold(m) === 'account'
+        })
+        if (!holders.length) continue
+        held++
+        const firstHolder = Math.min(...holders.map((id) => order.indexOf(id)))
+        const openPlain = Object.keys(reg.accounts).filter(
+          (id) => reg.accounts[id].mode?.kind !== 'reserve' && eligible(reg, cache, id, NOW),
+        )
+        for (const id of openPlain) {
+          expect(order.indexOf(id), ctx).toBeGreaterThanOrEqual(0)
+          expect(order.indexOf(id), ctx).toBeLessThan(firstHolder)
+        }
+      }
+    }
+    expect(held).toBeGreaterThan(50)
   })
 })
