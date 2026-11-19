@@ -351,7 +351,7 @@ describe('expiry: until reset ends at an observed reset, a manual one included',
     saveSample('me2', { ...sample(1, 2, R), s_ts: NOW + 60_000, w_ts: NOW + 60_000 }, dir, true, NOW + 60_000)
     expect(endOverrides(loadCache(dir), NOW + 120_000, { machine: 'mini', path })).toEqual(['me2'])
     expect(endOverrides(loadCache(dir), NOW + 180_000, { machine: 'mini', path })).toEqual([])
-    expect(loadOverrides(path).accounts.me2).toMatchObject({ cleared: true, set_on: 'mini' })
+    expect(loadOverrides(path).accounts.me2).toEqual({ cleared: true, set_at: NOW, set_on: 'mini' }) // the ended record's own stamp
     const audit = readFileSync(join(dir, 'modes.jsonl'), 'utf8').trim().split('\n')
     expect(audit).toHaveLength(1)
     expect(JSON.parse(audit[0])).toMatchObject({ id: 'me2', action: 'end', prev: { kind: 'drain', until: 'reset' } })

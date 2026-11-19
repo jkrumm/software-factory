@@ -355,7 +355,7 @@ is observed when a written sample's weekly reset moved forward by more than 24 h
 drain as a scheduled one does. A weekly window the recorded reset already closed, read late (its reset time is the closed window's or
 earlier, its percent 50 points or more above the cache's), never replaces the cache (`staleAfterReset`): one reset is one ledger row, and
 the next fresh sample is no second reset. An expired override is skipped where it is read, and the next `refresh`, `record` or `mode`
-writes it down once: a tombstone and an `end` line in `modes.jsonl`. `mode <id> drain`
+writes it down once: a tombstone (stamped as the record it ends, so an override set later still wins) and an `end` line in `modes.jsonl`. `mode <id> drain`
 without `--until` is until reset; the other modes have no expiry by default.
 
 ### Overrides

@@ -160,7 +160,7 @@ export function writeOverride(
 }
 
 /**
- * Writes down the overrides that ended (a time that passed, a reset observed): each becomes a tombstone with an `end`
+ * Writes down the overrides that ended (a time that passed, a reset observed): each becomes a tombstone (stamped as the record it ends) with an `end`
  * audit line in modes.jsonl, so the ending is recorded once and `mode` reads the same. Returns the ids it ended.
  */
 export function endOverrides(cache: Cache, nowMs: number, o: { machine: string; path?: string }): string[] {
@@ -171,7 +171,7 @@ export function endOverrides(cache: Cache, nowMs: number, o: { machine: string; 
     try {
       writeOverride(
         id,
-        { cleared: true, set_at: nowMs, set_on: o.machine },
+        { cleared: true, set_at: r.set_at, set_on: r.set_on }, // the record's own stamp: a record set later still wins, and the peer's copy is no newer
         { action: 'end', machine: o.machine, nowMs, path: o.path },
       )
       ended.push(id)
