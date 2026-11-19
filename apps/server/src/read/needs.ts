@@ -2,6 +2,7 @@ import type { SQL } from 'bun'
 import * as z from 'zod'
 import type { NeedItem, NeedKind, NeedsModel } from '@software-factory/contract'
 import { ERRAND_NEEDS } from '@software-factory/contract'
+import { JUDGE_MAX_TRIES } from '../kernel/judge-tries.ts'
 import { CHECK_BROKEN_NOTE, RUN_STATUSES, STILL_NEEDED_NOTE, triedLine } from '../kernel/run.ts'
 import { hostOf } from '../kernel/hands.ts'
 import { readLongWaits } from './long-waits.ts'
@@ -168,7 +169,7 @@ const SignalRow = z.object({
 })
 
 /**
- * Everything that waits on the owner, newest first within a kind: Decisions that reached him (the owner's step is open),
+ * Everything that waits on the owner, newest first within a kind: Decisions that reached him (the owner's step is open, or the Judge passed it on while a default still runs down its wait),
  * Concepts and Specs under review, open Errands (a lead's, whose Issue is still open, and requests no Issue raised), held
  * signals, and the long timed waits other Issues wait behind (`longWaitMs` and up) whose time has passed. Read-only SQL.
  */
@@ -190,7 +191,14 @@ export async function readNeeds(
       (SELECT f.payload->>'origin' FROM factory.issue_events f WHERE f.issue_id = d.issue_id AND f.kind = 'filed' AND f.version = 1) AS origin
     FROM factory.decisions d
     WHERE d.answered_at IS NULL AND d.withdrawn_at IS NULL
-      AND EXISTS (SELECT 1 FROM factory.decision_steps s WHERE s.decision_id = d.id AND s.step = 'owner' AND s.outcome = 'open')
+      AND (
+        EXISTS (SELECT 1 FROM factory.decision_steps s WHERE s.decision_id = d.id AND s.step = 'owner' AND s.outcome = 'open')
+        -- a default still running down its wait records no owner step (and pages no one), but the Issue waits on the owner and
+        -- he can answer now: it is a need once the Judge is done with it (passed, rejected, or failed for the last time)
+        OR (d.no_answer->>'default' IS NOT NULL AND EXISTS (
+          SELECT 1 FROM factory.decision_steps j WHERE j.decision_id = d.id AND j.step = 'judge'
+            AND (j.outcome IN ('passed', 'rejected') OR (j.outcome = 'failed' AND j.tries >= ${JUDGE_MAX_TRIES}))))
+      )
     ORDER BY d.asked_at DESC, d.id DESC`
   // A Spec its filer attached holds its Issue in the queue, not in a wait: it is under review while it has no verdict on
   // its latest revision and the Issue has no lead yet (the same predicate as `spec_pending` in `read/planning.ts`).
