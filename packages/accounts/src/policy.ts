@@ -6,6 +6,8 @@
 export const DEFAULT_ACCOUNT_ID = 'iu'
 /** pick() result when no account is usable: the caller spills to its IU path (not an account id). */
 export const SPILL = 'spill'
+/** The rule's name as the ledger and `status` carry it: v1.9 plus the modes of registry v2 (docs/accounts.md §Modes). */
+export const RULE_VERSION = 'v1.10'
 export const SESSION_MAX = 90
 /** 5h% from which an account only takes work when nothing cooler is eligible (SESSION_MAX stays the hard stop). */
 export const SESSION_SOFT_MAX = 80
@@ -475,9 +477,10 @@ export function scopedDue(reg: Registry, cache: Cache, id: string, nowMs: number
   return !isNum(ts) || nowMs - ts > SCOPED_FRESH_MS
 }
 
-function weeklyMax(x: Sample, nowMs: number, drain = false): number {
+/** The weekly ceiling (percent) at `nowMs` for a window resetting at `wReset` (epoch s): 95, 98 in the last 24 h, 100 in the last 3 h; 100 for a drain. */
+export function weeklyCeiling(wReset: number | null, nowMs: number, drain = false): number {
   if (drain) return WEEKLY_MAX_FINAL
-  const msLeft = x.w_reset === null ? null : x.w_reset * 1000 - nowMs
+  const msLeft = wReset === null ? null : wReset * 1000 - nowMs
   if (msLeft === null || msLeft <= 0) return WEEKLY_MAX
   return msLeft < FINAL_S * 1000
     ? WEEKLY_MAX_FINAL
@@ -485,6 +488,8 @@ function weeklyMax(x: Sample, nowMs: number, drain = false): number {
       ? WEEKLY_MAX_EXPIRING
       : WEEKLY_MAX
 }
+
+const weeklyMax = (x: Sample, nowMs: number, drain = false): number => weeklyCeiling(x.w_reset, nowMs, drain)
 
 /**
  * The account's 5 h percent when it can be judged: the plan has a session limit and the window is younger than
@@ -508,6 +513,73 @@ export function eligible(reg: Registry, cache: Cache, id: string, nowMs: number)
   const until = cache.exhausted[id]
   if (until && until * 1000 > nowMs) return false
   return true
+}
+
+/** Why an account takes no work now (docs/accounts.md §status). The codes are `status --json`'s `closed`. */
+export const CLOSED_CODES = [
+  'disabled',
+  'paused',
+  'auth',
+  'no-sample',
+  'session-max',
+  'weekly-ceiling',
+  'exhausted',
+  'reserve-budget',
+] as const
+export type ClosedCode = (typeof CLOSED_CODES)[number]
+export interface Closure {
+  closed: ClosedCode
+  /** epoch ms when it takes work again, as far as the sample says; null = unknown or only by a person (a login, a mode) */
+  opens_at: number | null
+}
+
+/**
+ * The first reason an account is closed to every lane at `nowMs`, null when it is open. Mirrors `eligible` check by check
+ * and adds the reserve budget, so `closure === null` is exactly "`rank` lists it" for the account's own state
+ * (test/read-model.test.ts holds the two together).
+ */
+export function closure(reg: Registry, cache0: Cache, id: string, nowMs: number): Closure | null {
+  const cache = withoutSessionWindows(reg, cache0)
+  const a = Object.hasOwn(reg.accounts, id) ? reg.accounts[id] : undefined
+  if (!a?.enabled) return { closed: 'disabled', opens_at: null }
+  if (cache.auth_failed[id]) return { closed: 'auth', opens_at: null }
+  if (isPaused(reg, id, nowMs)) {
+    const t = modeOf(reg, id, nowMs).until
+    const at = t && t !== 'reset' ? Date.parse(t) : Number.NaN
+    return { closed: 'paused', opens_at: Number.isNaN(at) ? null : at }
+  }
+  const x = cache.samples[id]
+  if (!x || !usable(x, nowMs)) return { closed: 'no-sample', opens_at: null }
+  const sessionPct0 = sessionPct(reg, cache, id, nowMs)
+  if ((sessionPct0 ?? 0) >= SESSION_MAX)
+    return { closed: 'session-max', opens_at: x.s_reset === null ? null : x.s_reset * 1000 }
+  const drain = isDrain(reg, id, nowMs)
+  if (hasW(x) && nowMs - (x.w_ts ?? 0) < STALE_OK_MS && x.w! >= weeklyMax(x, nowMs, drain))
+    return { closed: 'weekly-ceiling', opens_at: ceilingOpensAt(x, x.w!, nowMs, drain) }
+  const until = cache.exhausted[id]
+  if (until && until * 1000 > nowMs) return { closed: 'exhausted', opens_at: until * 1000 }
+  const b = reserveBudget(reg, cache, id, nowMs)
+  if (b?.known && !b.open) return { closed: 'reserve-budget', opens_at: reserveOpensAt(x, b, nowMs) }
+  return null
+}
+
+/** The next moment the ceiling rises above `w` (98 and 100 come with the last 24 h and 3 h), else the reset itself. */
+function ceilingOpensAt(x: Sample, w: number, nowMs: number, drain: boolean): number | null {
+  if (x.w_reset === null) return null
+  const reset = x.w_reset * 1000
+  for (const t of [reset - CEILING_EXPIRING_S * 1000, reset - FINAL_S * 1000]) {
+    if (t > nowMs && weeklyCeiling(x.w_reset, t + 1, drain) > w) return t
+  }
+  return reset > nowMs ? reset : null
+}
+
+/** A closed reserve takes work again when its allowance is released (24 h before the reset) if that leaves room, else at the reset. */
+function reserveOpensAt(x: Sample, b: ReserveBudget, nowMs: number): number | null {
+  if (x.w_reset === null) return null
+  const reset = x.w_reset * 1000
+  const release = reset - RESERVE_RELEASE_S * 1000
+  if (release > nowMs && b.weekly !== null && b.weekly < weeklyCeiling(x.w_reset, release + 1)) return release
+  return reset > nowMs ? reset : null
 }
 
 /** Percent of x's 7-day window already elapsed (0..100); null without a weekly reset to measure against. */

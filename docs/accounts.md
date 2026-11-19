@@ -19,6 +19,7 @@ lists the verbs, `claude-account <verb> --help` one in full; `claude-account --v
 | Registry | `$CLAUDE_ACCOUNTS_REGISTRY`, else `~/.config/claude-accounts/registry.json` when it exists, else the dotfiles checkout's `config/claude-accounts.json` |
 | Quota cache | `~/.cache/claude-accounts/` (`$CLAUDE_ACCOUNTS_CACHE_DIR`): `<id>.sample.json`, `.exhausted.json`, `.auth.json`, `.verified.json`, `.statusline.json`, `.refresh.claim`, `.relogin-ask.json` |
 | Pick log | `~/.local/share/claude-accounts/picks.jsonl` (`$CLAUDE_ACCOUNTS_PICKS`); usage tracker, the browser extension and the dashboards read it |
+| History | `~/.local/share/claude-accounts/` (`$CLAUDE_ACCOUNTS_HISTORY` is the directory): `samples-YYYY-MM.jsonl` and `resets.jsonl` (§History) |
 | Mode overrides | `~/.local/share/claude-accounts/modes.json` (`$CLAUDE_ACCOUNTS_MODES`) and its audit `modes.jsonl` (§Modes) |
 | Keepalive log | `~/Library/Logs/claude-accounts-keepalive.log`: the stdio of the keepalive job and of the detached refresh a pick spawns |
 | Test seams | `$CLAUDE_ACCOUNTS_SECURITY_BIN` replaces `/usr/bin/security`; `$CLAUDE_ACCOUNTS_SSH`, `$CLAUDE_ACCOUNTS_HC` and `$CLAUDE_ACCOUNTS_RELOGIN` replace the peer's adapters |
@@ -52,6 +53,8 @@ lists the verbs, `claude-account <verb> --help` one in full; `claude-account --v
 |-|-|
 | `policy.ts` | The pure rule: types, `pick`, `rank`, `eligible`, `accountWeight`, `modeOf`, `reserveBudget`, `launchAccount`, the sample merge and parsers, `observedReset`, login grades, `dueIds`, `reloginCandidates`. No file, process, network or clock access (`test/policy-pure.test.ts` fails on one); the clock and the random source are arguments |
 | `modes.ts` | Pure: the override records, their expiry, `resolveModes` and `applyModes` (§Modes) |
+| `history.ts`, `history-store.ts` | The sample line, the reset replay and the forecast (pure); the monthly sample log and the ledger on disk (§History) |
+| `status.ts` | Pure: `buildStatus`, its schema, the plain lines (§status) |
 | `health.ts` | Pure grading of one machine's `usage` and `expiry` into health rows |
 | `registry.ts`, `paths.ts`, `store.ts` | The registry file, every path, the per-account cache files, the claim and stamp files and the override state file |
 | `ports.ts` | The ports: `Spawner`, `HttpGet`, `PeerUsage` |
@@ -326,17 +329,70 @@ account, every other verb exit 2). `accounts.<id>.mode`: a kind (`"paused"`) or 
 reserve and only there; `until` is an ISO time. An account's own `mode` wins over `fable` and `drain`, which keep their v1
 meaning and check (one account cannot be both).
 
-### `usage --json` (additive) and `status --json` (shape)
+### `usage --json` (additive)
 
 `usage --json` rows gain `mode` (`{kind, for, until, until_at, why, source, set_at, set_on}`, the mode in force), `mode_override`
 (the raw record, a tombstone included, or null), `limits` and `weekly_scoped_shares` (as the endpoint gave them, each with
 `age_s`, or null). Every other field and the plain text are unchanged.
 
-`status --json` is built by row `subs-read-model` in this shape (fixed by the Spec of `subs-model-v2`):
+`claude-account status [--json] [--resets]` is the read model (§status). `usage --json` stays as it is.
+
+With `"fable": "iu", "drain": ["me2"]` and no scoped sample the order is me2 (drain), then me, then iu (fable-reserve) in every
+lane; the simulation fills me2 within 3-4 hours and keeps iu under 65 % for the week.
+
+## History
+
+The cache holds only the latest sample of an account, so the package keeps its own record, with no database: two files under
+`~/.local/share/claude-accounts/`, written by whichever machine writes the sample (statusline record, endpoint GET, peer import), so a
+machine's history is what it saw.
+
+| File | One line per | Fields |
+|-|-|-|
+| `samples-YYYY-MM.jsonl` | change of a percent or a reset time of one of the account's limits (a reset time that moves by under a minute is the same) | `ts` (epoch ms the values were true: a peer sample keeps the time it was taken, not the time it arrived), `id`, `s`, `s_reset`, `w`, `w_reset` (epoch s), `scoped` (the highest scoped percent, null without an endpoint sample), `src`, `mode` (kind in force), `rule` |
+| `resets.jsonl` | observed weekly reset of an account | `key` (account and reset time rounded to 10 min), `at` (the scheduled reset, or the first sample that showed it when that came earlier: a manual reset), `reset_at`, `weekly` and `scoped` (the last percent before it), `modes` (the modes seen that week), `rule`, `closed_hours` (hours the account stood at or over its weekly ceiling in that week; a drain's ceiling is 100), `manual` (more than an hour before the schedule) |
+
+A reset is what `observedReset` calls one (§Expiry), judged between two consecutive lines. A manual reset shows twice, the percent
+first and the new reset time a sample later: both are one ledger line (same `key`), and a repeated line, a peer's echo of a
+state already logged or a shuffled order add none. The ledger is derived from the log (`replayResets`): `history` brings it up to
+date, a writer appends the line of a reset it sees, and a key that is there is never added again. Nothing is rotated out of the ledger;
+the sample log is a file per month and `status` reads the last 40 days. A write to the history is a record, never a gate: a failure
+leaves the sample written and the verb running.
+
+```
+claude-account history [--json] [--id <id>] [--days n]   # the ledger of the last n days (28)
+claude-account history import <file>                      # sample lines (JSON per line) into the log; a line at a time the log has is skipped
+```
+
+The import seeds the weeks from before the history existed: a throwaway conversion of usage tracker's quota series
+(`make -C ~/SourceRoot/usage-tracker quota DAYS=<n>`) into `{ts, id, s, s_reset, w, w_reset}` lines, run once; it is not shipped.
+
+### Forecast
+
+`forecastWeekly`, method `burn-rate-24h-v1` (`status` names it): the rate is the weekly percent gained over the last 24 hours of the
+running week (since its first line when the week is younger, never over less than 3 h), held to the reset.
+
+```
+weekly_at_reset = min(100, weekly + rate × hours to the reset)       full_at = when weekly reaches 100 at that rate (the time it did, when it is there)
+waste_percent   = 100 − weekly_at_reset        waste_units = waste_percent / 100 × the plan's weekly units   # an Ultra's 2 units weigh double a Max's
+```
+
+It is a projection of the burn so far, not of the rule: it does not know the ceiling (95, 98, 100) or a mode, and an account that
+the rule holds back reads as one that stops burning. The goal it measures is the one the owner set: every account near 100 % at its reset.
+
+## status
+
+`claude-account status [--json] [--resets]`: a file read (no Keychain, no network), computed by `buildStatus` in `status.ts` over the
+registry, the cache, the modes in force, the history and the clock, so every display reads one definition of "takes work, and why".
+
+Plain: one line per account, led by the forecast: `me2 drain until reset · weekly 92 % · full Fri 14:00 · resets Sat 18:00` (times are the
+machine's local time); a forecast that does not fill the week says `ends at 88 % (0.12 units unused)`; a closed account ends with
+`closed: <why>, opens <time>`. `--resets` adds each account's last resets.
+
+`--json` is `STATUS_SCHEMA` (`status.ts`; `test/schema.ts` validates it):
 
 ```json
 { "schema": 1, "at": "<iso>", "machine": "mini", "rule": "v1.10", "default_account": "iu",
-  "lanes": ["interactive", "headless", "bulk", "other"],
+  "lanes": ["interactive", "bulk", "headless", "other"],
   "accounts": [{
     "id": "me2", "plan": "max", "units": {"session": 1, "weekly": 1}, "enabled": true, "auth_ok": true, "exhausted_until": null,
     "limits": [{"kind": "session", "percent": 51, "resets_at": "<iso>", "age_s": 30, "source": "statusline"},
@@ -346,17 +402,23 @@ meaning and check (one account cannot be both).
     "mode": {"kind": "drain", "for": null, "until": "reset", "until_at": "<iso>", "why": "…", "source": "override",
              "set_at": "<iso>", "set_on": "mini", "expired": false},
     "reserve": null,
-    "lanes": {"bulk": {"open": true, "position": 1, "reason": "drain", "closed": null, "opens_at": null}},
-    "forecast": {"method": "<name>", "weekly_at_reset": 100, "full_at": "<iso>", "waste_percent": 0, "waste_units": 0},
-    "resets": [{"at": "<iso>", "weekly": 99, "scoped": 12, "modes": ["drain"], "rule": "v1.10", "closed_hours": 3.5}] }] }
+    "closed": null,
+    "lanes": {"bulk": {"open": true, "position": 1, "reason": "drain", "closed": null, "why": null, "opens_at": null}},
+    "forecast": {"method": "burn-rate-24h-v1", "weekly_at_reset": 100, "full_at": "<iso>", "waste_percent": 0, "waste_units": 0, "burn_per_hour": 1.4, "basis_hours": 24},
+    "resets": [{"at": "<iso>", "weekly": 99, "scoped": 12, "modes": ["drain"], "rule": "v1.10", "closed_hours": 3.5, "manual": false}] }] }
 ```
 
-`reserve` is `{for, unused, budget_left, released}` for a reserve account. `lanes` covers `interactive`, `bulk`, every exact home
-lane and `other` (a lane with no home); `position` and `reason` equal `rank`'s. `closed` is one of `disabled`, `paused`, `auth`,
-`no-sample`, `session-max`, `weekly-ceiling`, `exhausted`, `reserve-budget`, with `opens_at`.
-
-With `"fable": "iu", "drain": ["me2"]` and no scoped sample the order is me2 (drain), then me, then iu (fable-reserve) in every
-lane; the simulation fills me2 within 3-4 hours and keeps iu under 65 % for the week.
+- `lanes` is `interactive`, `bulk`, every exact home lane and `other` (a lane no account claims). `position` and `reason` are `rank --lane`'s
+  (test: the order of every lane equals rank's); an account `rank` does not list is closed there.
+- `closed` (top level and per lane) is one of `disabled`, `paused`, `auth`, `no-sample`, `session-max`, `weekly-ceiling`, `exhausted`,
+  `reserve-budget`: the first that applies, the same checks as `eligible` plus the reserve budget (`closure` in `policy.ts`, tested against `rank`
+  over random registries of 1 to 8 accounts). `why` says it in words and `opens_at` when it takes work again as far as the sample says: the 5 h
+  reset, the moment the weekly ceiling rises (98 in the last 24 h, 100 in the last 3 h) or the reset, the end of an exhausted mark, the release
+  of a reserve's allowance 24 h before the reset. Null when only a person opens it (a login, a mode, `enabled`).
+- One quirk of `rank`, kept as it is: with no account open the interactive lane lands on the default account, which `rank` lists as
+  `<model>-reserve` when that is a reserve account, whatever its sample says; `status` shows that place as it is.
+- `reserve` is `{for, known, unused, budget_left, released}` for a reserve account, `forecast` null without a weekly sample, `resets` the last 8
+  ledger lines, newest first. The rule is `RULE_VERSION` (`v1.10`: v1.9 with the modes).
 
 ## Installing
 
@@ -384,6 +446,5 @@ picker indexes records by an id it has just checked) and the root typecheck excl
 
 The spawn integration (`c`, `rd`, `cf`), the keepalive and heartbeat jobs, the statusline hook, the login logistics and the
 attribution of usage stay in dotfiles and call these verbs; the switch row moves them. No new rule, window or account setting
-was added by the port (`subs-package`); registry v2 and the modes came with `subs-model-v2` (§Modes). The status verb, the history
-and the forecast are `subs-read-model`'s; the server and the Console read modes through `rank` and `usage --json` until
-`subs-server`.
+was added by the port (`subs-package`); registry v2 and the modes came with `subs-model-v2` (§Modes). The history, the forecast and the status verb came with `subs-read-model` (§History, §status); the server and the Console read modes through `rank`
+and `usage --json` until `subs-server`.
