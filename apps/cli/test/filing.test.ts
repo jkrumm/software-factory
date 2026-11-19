@@ -193,6 +193,8 @@ describe('the filing contract', () => {
     const submit = (await cli(['artifact', 'submit', '--help'])).out
     expect(submit).toContain(`--title at most ${MAX_TITLE} characters`)
     expect(submit).toContain(`--content at most ${MAX_CONTENT} characters`)
+    expect(submit).toContain('starts from apps/console/templates/artifact.html')
+    expect(submit).toContain('declares color-scheme')
     expect((await cli(['issue', 'ship', '--help'])).out).toContain('1-4000 characters')
     const errand = (await cli(['errand', 'raise', '--help'])).out
     for (const word of ['--tried', 'factory door token new', 'secrets-run']) expect(errand).toContain(word)
