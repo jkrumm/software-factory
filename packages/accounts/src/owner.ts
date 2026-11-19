@@ -153,7 +153,7 @@ export function notifyIfChanged(rows: HealthRow[], nowMs: number) {
     mkdirSync(dirname(stamp), { recursive: true })
     writeFileSync(stamp, JSON.stringify({ sig, ts: nowMs }))
   } catch {
-    // dedupe is best-effort
+    // suppressing a repeat is best-effort
   }
 }
 
