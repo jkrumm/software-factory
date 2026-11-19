@@ -146,10 +146,10 @@ describe('projectProbe', () => {
   })
 
   test('a leads whose comment names the merge window is a finding that points at factory merge-lock', async () => {
-    const windowed = `${GOOD}leads: 12 # the merge window\n`
+    const windowed = `${GOOD}ship:\n  - { via: pr }\nleads: 12 # the merge window\n`
     const { evidence } = await lines({ 'project.yaml': windowed, Makefile: MAKEFILE })
     expect(evidence).toHaveLength(1)
-    expect(evidence[0]).toContain('project.yaml:9: leads is 12 for a resource the factory already models')
+    expect(evidence[0]).toContain('project.yaml:11: leads is 12 for a resource the factory already models')
     expect(evidence[0]).toContain('factory merge-lock')
   })
 
