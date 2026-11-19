@@ -9,10 +9,10 @@ export interface HealthRow {
   check: 'reach' | 'login' | 'quota' | 'queue'
   state: HealthState
   detail: string
-  /** shell command that repairs it, null when nothing to run */
+  /** shell command that repairs it, run on the MacBook; null when nothing to run */
   fix: string | null
   /** transport the peer's data came over; absent for the local machine */
-  via?: string
+  via?: 'core' | 'ssh'
 }
 
 interface UsageAcct {
@@ -35,9 +35,7 @@ export interface PendingAsk {
 /** Sample older than this while the login claims to be fine means the usage endpoint is rejecting the token. */
 export const STALE_QUOTA_S = 6 * 3600
 
-/** The repair command of a row: the user's `integrations.health.fix` template (`{id}`, `{machine}`), null without one. */
-const relogin = (fix: string | undefined, machine: string, id: string) =>
-  fix === undefined ? null : fix.replaceAll('{id}', id).replaceAll('{machine}', machine)
+const relogin = (machine: string, id: string) => `claude-relogin ${id} --machine ${machine}`
 
 export function gradeMachine(
   machine: string,
@@ -45,9 +43,8 @@ export function gradeMachine(
     usage: { default_account?: string; accounts: UsageAcct[] } | null
     expiry: { accounts: ExpiryAcct[] } | null
     pending: PendingAsk[] | null
-    via?: string
+    via?: 'core' | 'ssh'
   },
-  fix?: string,
 ): HealthRow[] {
   if (!d.usage) return [{ machine, id: '-', check: 'reach', state: 'fail', detail: 'unreachable', fix: null }]
   const rows: HealthRow[] = []
@@ -63,7 +60,7 @@ export function gradeMachine(
         check: 'login',
         state: a.id === dflt ? 'fail' : 'warn',
         detail: 'logged out',
-        fix: relogin(fix, machine, a.id),
+        fix: relogin(machine, a.id),
       })
     } else if (exp && exp.refresh_expires_at !== null && exp.severity !== 'PASS') {
       const detail = exp.expired ? 'login expired' : `login ends in ${exp.days_left} d`
@@ -73,7 +70,7 @@ export function gradeMachine(
         check: 'login',
         state: exp.severity === 'FAIL' ? 'fail' : 'warn',
         detail,
-        fix: relogin(fix, machine, a.id),
+        fix: relogin(machine, a.id),
       })
     } else if (exp?.severity === 'PASS' && exp.days_left !== null) {
       rows.push({ machine, id: a.id, check: 'login', state: 'ok', detail: `${exp.days_left} d left`, fix: null })
@@ -95,7 +92,7 @@ export function gradeMachine(
         check: 'quota',
         state: 'warn',
         detail: `no quota sample for ${Math.round(a.age_s / 3600)} h (token rejected?)`,
-        fix: relogin(fix, machine, a.id),
+        fix: relogin(machine, a.id),
       })
     }
   }

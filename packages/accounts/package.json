@@ -9,8 +9,5 @@
   "exports": {
     ".": "./src/index.ts",
     "./policy": "./src/policy.ts"
-  },
-  "dependencies": {
-    "zod": "4.6.7"
   }
 }

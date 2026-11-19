@@ -1206,7 +1206,7 @@ const OAUTH_BODY = {
     locked_reason: null,
   },
 }
-const TOKEN = 'sk-ant-oat01-SECRET-TOKEN-VALUE'
+const TOKEN = 'oat-SECRET-TOKEN-VALUE'
 const CREDS = JSON.stringify({ claudeAiOauth: { accessToken: TOKEN, refreshToken: 'r', expiresAt: 1 }, mcpOAuth: {} })
 
 describe('OAuth usage source', () => {
@@ -1513,8 +1513,8 @@ describe('runRefresh', () => {
 })
 
 describe('runRefresh: HTTP 401 renews the token via `claude auth status`', () => {
-  const OLD = 'sk-ant-oat01-OLD-EXPIRED-TOKEN'
-  const NEW = 'sk-ant-oat01-NEW-RENEWED-TOKEN'
+  const OLD = 'oat-OLD-EXPIRED-TOKEN'
+  const NEW = 'oat-NEW-RENEWED-TOKEN'
   const creds = (t: string) => JSON.stringify({ claudeAiOauth: { accessToken: t, refreshToken: 'r', expiresAt: 1 } })
   const bearer = (h: Record<string, string>) => h.Authorization.slice('Bearer '.length)
 
@@ -1972,7 +1972,7 @@ describe('CLI (isolated HOME)', () => {
     CLAUDE_ACCOUNTS_CACHE_DIR: dir,
     CLAUDE_ACCOUNTS_PICKS: join(home, 'picks.jsonl'),
     CLAUDE_ACCOUNTS_SECURITY_BIN: join(bin, 'security'),
-    CLAUDE_ACCOUNTS_INTEGRATIONS: join(home, 'no-integrations.json'),
+    CLAUDE_ACCOUNTS_SSH: join(bin, 'ssh'),
     PATH: `${bin}:${process.env.PATH}`,
   }
   delete (base as Record<string, string | undefined>).CLAUDE_CONFIG_DIR
@@ -2081,22 +2081,12 @@ describe('CLI (isolated HOME)', () => {
     expect(bad.err).toContain('unknown account nope')
   })
 
-  const integrations = (name: string, body: unknown) => {
-    const p = join(home, `integrations-${name}.json`)
-    writeFileSync(p, JSON.stringify(body))
-    return { CLAUDE_ACCOUNTS_INTEGRATIONS: p }
-  }
-  const script = (name: string, body: string) => {
-    const p = join(bin, name)
-    writeFileSync(p, `#!/bin/sh\n${body}\n`)
-    chmodSync(p, 0o755)
-    return p
-  }
-
-  test("refresh --all imports the peer's usage through integrations.peerUsage once, counts it as a fresh sample, and survives a dead peer", () => {
+  test("refresh --all imports the peer's usage over ssh once (BatchMode), counts it as a fresh sample, and survives a dead peer", () => {
     const peerJson = join(home, 'peer-usage.json')
-    const callLog = join(home, 'peer-args')
-    const peer = script('peer-usage', `echo "$@" >> "${callLog}"\ncat "${peerJson}"`)
+    const sshLog = join(home, 'ssh-args')
+    const sshStub = join(bin, 'ssh-peer')
+    writeFileSync(sshStub, `#!/bin/sh\necho "$@" >> "${sshLog}"\ncat "${peerJson}"\n`)
+    chmodSync(sshStub, 0o755)
     const nowS = Math.floor(Date.now() / 1000)
     writeFileSync(
       peerJson,
@@ -2120,78 +2110,28 @@ describe('CLI (isolated HOME)', () => {
       }),
     )
     seed(60 * 60_000) // a stale local sample: without the peer this is the "neither a sample nor a verdict" exit 1
-    rmSync(callLog, { force: true })
+    rmSync(sshLog, { force: true })
     const okBin = join(home, 'bin-peer-ok')
     mkdirSync(okBin, { recursive: true })
     writeFileSync(join(okBin, 'claude'), `#!/bin/sh\necho '{"loggedIn":true}'\n`) // a peer sample counts only with this machine's own verdict
     chmodSync(join(okBin, 'claude'), 0o755)
-    const r = cli(['refresh', '--all'], {
-      ...integrations('peer', { peerUsage: [peer, 'usage', '--json'] }),
-      PATH: `${okBin}:${bin}:${process.env.PATH}`,
-    })
+    const r = cli(['refresh', '--all'], { CLAUDE_ACCOUNTS_SSH: sshStub, PATH: `${okBin}:${bin}:${process.env.PATH}` })
     expect(r.rc).toBe(0)
-    expect(readFileSync(callLog, 'utf8').trim().split('\n')).toEqual(['usage --json'])
+    const args = readFileSync(sshLog, 'utf8').trim().split('\n')
+    expect(args.length).toBe(1)
+    expect(args[0]).toMatch(
+      /BatchMode=yes .*ConnectTimeout=5 (iumac account-usage$|mini .*claude-account usage --json)/,
+    )
     expect(loadCache(dir).samples.iu).toMatchObject({ s: 21, w: 44, src: 'peer' })
     // a dead peer: one log line, and the run behaves exactly as it did before the import existed
     seed(60 * 60_000)
-    const dead = cli(['refresh', '--all'], integrations('dead', { peerUsage: [script('peer-dead', 'exit 255')] }))
+    const dead = cli(['refresh', '--all'])
     expect(dead.rc).toBe(1)
     expect(dead.err.split('\n').filter((l) => l.includes('peer usage'))).toHaveLength(1)
     expect(dead.err).toContain('no fresh sample and no auth verdict for iu')
-    // no integration configured: no peer, same exit
-    seed(60 * 60_000)
-    expect(cli(['refresh', '--all']).rc).toBe(1)
   })
 
-  test("integrations: the registry's key is read, the machine's overlay file wins key by key, a malformed one switches only its feature off", () => {
-    const peerJson = join(home, 'peer-usage2.json')
-    const nowS = Math.floor(Date.now() / 1000)
-    writeFileSync(
-      peerJson,
-      JSON.stringify({
-        accounts: [
-          {
-            id: 'iu',
-            five_hour: 7,
-            seven_day: 8,
-            five_hour_resets_at: nowS + 3600,
-            seven_day_resets_at: nowS + 86400,
-            five_hour_age_s: 1,
-            seven_day_age_s: 1,
-          },
-        ],
-      }),
-    )
-    const loggedIn = join(home, 'bin-logged-in')
-    mkdirSync(loggedIn, { recursive: true })
-    writeFileSync(join(loggedIn, 'claude'), `#!/bin/sh\necho '{"loggedIn":true}'\n`)
-    chmodSync(join(loggedIn, 'claude'), 0o755)
-    const env = { PATH: `${loggedIn}:${bin}:${process.env.PATH}` }
-    const reg1 = join(home, 'registry-integrations.json')
-    writeFileSync(
-      reg1,
-      JSON.stringify({
-        ...reg(false),
-        integrations: { peerUsage: [script('peer-from-registry', `echo '{"accounts":[]}'`)] },
-      }),
-    )
-    const viaRegistry = { ...env, CLAUDE_ACCOUNTS_REGISTRY: reg1 }
-    seed(60 * 60_000)
-    cli(['refresh', '--all'], viaRegistry) // the registry's peer answers an empty list: nothing imported
-    expect(loadCache(dir).samples.iu.src).toBe('t')
-    seed(60 * 60_000)
-    cli(['refresh', '--all'], {
-      ...viaRegistry,
-      ...integrations('overlay', { peerUsage: [script('peer-from-overlay', `cat "${peerJson}"`)] }),
-    })
-    expect(loadCache(dir).samples.iu).toMatchObject({ s: 7, w: 8, src: 'peer' })
-    seed(60 * 60_000)
-    const bad = cli(['refresh', '--all'], { ...env, ...integrations('bad', { peerUsage: 'ssh somewhere' }) })
-    expect(bad.err).toContain('claude-account: integrations: peerUsage')
-    expect(bad.rc).toBe(0) // logged in, the stored sample is only an hour old
-  })
-
-  test('health: the first configured transport that answers wins, a last resort prints its note, an unreadable login is never ok, a silent peer is unreachable', () => {
+  test('health reads the peer through its core (linked, else its own over ssh), falls back to plain ssh with a NOTE, and never grades an unreadable login ok', () => {
     const usageJson = JSON.stringify({ default_account: 'iu', accounts: [{ id: 'iu', auth_ok: true, age_s: 30 }] })
     const exp = (severity: string, days: number | null) =>
       JSON.stringify({
@@ -2204,93 +2144,70 @@ describe('CLI (isolated HOME)', () => {
     const unreadableOut = join(home, 'peer-unreadable.txt')
     writeFileSync(okOut, payload(exp('PASS', 12)))
     writeFileSync(unreadableOut, payload(exp('WARN', null)))
-    const good = script('snap-good', `cat "${okOut}"`)
-    const down = script('snap-down', 'exit 99')
-    const plain = script('snap-plain', `cat "${unreadableOut}"`)
-    const cfg = (snapshots: unknown[]) =>
-      integrations(`health-${Math.random().toString(36).slice(2)}`, {
-        health: { local: 'here', fix: 'relogin {id} --machine {machine}', peer: { name: 'there', snapshots } },
-      })
+    const hcStub = join(bin, 'hc-stub')
+    const machines = JSON.stringify({
+      machines: [
+        { name: 'mini', state: 'connected' },
+        { name: 'macbook', state: 'connected' },
+      ],
+    })
+    writeFileSync(
+      hcStub,
+      `#!/bin/sh\ncase "$1" in\n server) exit 0;;\n machine) echo '${machines}';;\n exec) cat "${okOut}";;\nesac\n`,
+    )
+    chmodSync(hcStub, 0o755)
+    // ssh: the remote command names `hc exec` when it goes through the peer's own core (ok payload unless STUB_PEER_CORE=down:
+    // lib/core-up.sh says the core is not up, exit 99); a plain script read answers the unreadable payload (no Keychain over ssh).
+    const sshStub = join(bin, 'ssh-peer')
+    const sshSeen = join(bin, 'ssh-peer.log')
+    writeFileSync(
+      sshStub,
+      `#!/bin/sh\necho "$*" >> "${sshSeen}"\ncase "$*" in\n *"hc exec"*|*" account-snapshot-core") [ "$STUB_PEER_CORE" = down ] && exit 99; cat "${okOut}";;\n *) cat "${unreadableOut}";;\nesac\n`,
+    )
+    chmodSync(sshStub, 0o755)
     const run = (env: Record<string, string>) => {
       const r = cli(['health', '--json'], env)
       const rows = (
-        JSON.parse(r.out).rows as {
-          machine: string
-          check: string
-          state: string
-          detail: string
-          via?: string
-          fix: string | null
-        }[]
-      ).filter((x) => x.machine === 'there')
+        JSON.parse(r.out).rows as { machine: string; check: string; state: string; detail: string; via?: string }[]
+      ).filter((x) => x.via && x.check === 'login')
       return { rows, err: r.err, text: cli(['health'], env).out }
     }
-    const first = run(
-      cfg([
-        { via: 'core', argv: [good] },
-        { via: 'plain', argv: [plain], note: 'went over the plain transport' },
-      ]),
-    )
-    expect(first.rows).toMatchObject([{ state: 'ok', detail: '12 d left', via: 'core', fix: null }])
-    expect(first.err).not.toContain('NOTE')
-    const second = run(
-      cfg([
-        { via: 'core', argv: [down] },
-        { via: 'plain', argv: [plain], note: 'went over the plain transport' },
-      ]),
-    )
-    expect(second.rows).toMatchObject([{ state: 'warn', detail: 'login expiry unreadable (via plain)', via: 'plain' }])
-    expect(second.err).toContain('NOTE there: went over the plain transport')
-    expect(second.text).toMatch(/^NOTE there: went over the plain transport/m)
+    // (1) this machine's core lists the peer connected
+    const linked = run({ CLAUDE_ACCOUNTS_HC: hcStub, CLAUDE_ACCOUNTS_SSH: sshStub, STUB_PEER_CORE: 'down' })
+    expect(linked.rows).toMatchObject([{ state: 'ok', detail: '12 d left', via: 'core' }])
+    expect(linked.err).not.toContain('NOTE')
+    // (2) not linked here: one ssh hop, then the peer's own core
+    const itsCore = run({ CLAUDE_ACCOUNTS_HC: '/usr/bin/false', CLAUDE_ACCOUNTS_SSH: sshStub })
+    expect(itsCore.rows).toMatchObject([{ state: 'ok', detail: '12 d left', via: 'core' }])
+    expect(itsCore.err).not.toContain('NOTE')
+    // (3) no core answers anywhere: plain ssh, flagged in the output (stderr under --json, a line in text), and not ok
+    const fallback = run({ CLAUDE_ACCOUNTS_HC: '/usr/bin/false', CLAUDE_ACCOUNTS_SSH: sshStub, STUB_PEER_CORE: 'down' })
+    expect(fallback.rows).toMatchObject([{ state: 'warn', detail: 'login expiry unreadable (via ssh)', via: 'ssh' }])
+    expect(fallback.err).toContain('NOTE')
+    expect(fallback.err).toContain('plain ssh')
+    expect(fallback.text).toMatch(/^NOTE .*plain ssh/m)
+    // the stderr note never reaches the JSON on stdout
     expect(() =>
-      JSON.parse(cli(['health', '--json'], cfg([{ via: 'plain', argv: [plain], note: 'n' }])).out),
-    ).not.toThrow() // the note never reaches the JSON on stdout
-    const none = run(cfg([{ via: 'core', argv: [down] }]))
-    expect(none.rows).toMatchObject([{ check: 'reach', state: 'fail', detail: 'unreachable' }])
-    expect(cli(['health'], cfg([{ via: 'core', argv: [down] }])).rc).toBe(1)
-    // this machine's own rows carry the configured name and fix; without a peer there are no peer rows
-    const local = JSON.parse(cli(['health', '--json'], cfg([{ via: 'core', argv: [good] }])).out).rows.filter(
-      (x: { machine: string }) => x.machine === 'here',
-    )
-    expect(local.length).toBeGreaterThan(0)
-    expect(
-      JSON.parse(cli(['health', '--json']).out).rows.every((x: { machine: string }) => x.machine !== 'there'),
-    ).toBe(true)
+      JSON.parse(
+        cli(['health', '--json'], {
+          CLAUDE_ACCOUNTS_HC: '/usr/bin/false',
+          CLAUDE_ACCOUNTS_SSH: sshStub,
+          STUB_PEER_CORE: 'down',
+        }).out,
+      ),
+    ).not.toThrow()
+    // every send to the MacBook is a bare verb: no shell metacharacters, quotes or substitutions
+    const toMac = readFileSync(sshSeen, 'utf8')
+      .split('\n')
+      .filter((l) => / iumac /.test(l))
+    for (const l of toMac) expect(l.split(' iumac ')[1]).toMatch(/^[a-z0-9 -]+$/)
   })
 
-  test("health --wake runs the configured notify once per change and re-pushes the peer's pending asks younger than 24 h", async () => {
-    const noteLog = join(home, 'notes.log')
-    const pushLog = join(home, 'pushes.log')
-    rmSync(noteLog, { force: true })
-    rmSync(pushLog, { force: true })
-    const nowS = Math.floor(Date.now() / 1000)
-    const snap = join(home, 'peer-wake.txt')
-    writeFileSync(
-      snap,
-      `${JSON.stringify({ default_account: 'iu', accounts: [{ id: 'iu', auth_ok: false, age_s: 1 }] })}\n@@\n${JSON.stringify({ accounts: [] })}\n@@\n20261119T080000 ${nowS - 60}\nold ${nowS - 3 * 86400}\n`,
-    )
-    const env = integrations('wake', {
-      health: {
-        local: 'here',
-        notify: [script('notify', `echo "$1" >> "${noteLog}"`), '{message}'],
-        peer: {
-          name: 'there',
-          snapshots: [{ via: 'core', argv: [script('snap-wake', `cat "${snap}"`)] }],
-          repush: [script('repush', `echo "$1" >> "${pushLog}"`), '{id}'],
-        },
-      },
-    })
-    cli(['health', '--wake'], env)
-    for (let i = 0; i < 100 && !existsSync(pushLog); i++) await Bun.sleep(50)
-    expect(readFileSync(pushLog, 'utf8').trim().split('\n')).toEqual(['20261119T080000']) // the 3-day-old ask stays
-    expect(readFileSync(noteLog, 'utf8')).toContain('there/iu')
-    cli(['health', '--wake'], env) // the same picture: the notify is muted
-    expect(readFileSync(noteLog, 'utf8').trim().split('\n')).toHaveLength(1)
-  })
-
-  test('refresh --all asks for a re-login of a dead login once per 24 h through integrations.reloginAsk', async () => {
+  test('refresh --all asks for a re-login of a dead login once per 24 h (stub dialog script)', async () => {
     const asks = join(home, 'asks.log')
-    const ask = script('relogin-stub', `echo "$@" >> "${asks}"`)
+    const stubScript = join(bin, 'relogin-stub')
+    writeFileSync(stubScript, `#!/bin/sh\necho "$@" >> "${asks}"\n`)
+    chmodSync(stubScript, 0o755)
     const deadBin = join(home, 'bin-dead')
     mkdirSync(deadBin, { recursive: true })
     writeFileSync(join(deadBin, 'claude'), `#!/bin/sh\necho '{"loggedIn": false}'\n`)
@@ -2298,8 +2215,9 @@ describe('CLI (isolated HOME)', () => {
     const cache2 = join(home, 'cache-ask')
     rmSync(asks, { force: true })
     rmSync(cache2, { recursive: true, force: true })
+    // `bash <stub> …`: the CLI starts the relogin script through bash, so a plain script works as the stand-in
     const env = {
-      ...integrations('ask', { reloginAsk: [ask, '{id}', '--ask', '--reason', '{reason}'] }),
+      CLAUDE_ACCOUNTS_RELOGIN: stubScript,
       CLAUDE_ACCOUNTS_CACHE_DIR: cache2,
       PATH: `${deadBin}:${bin}:${process.env.PATH}`,
     }
@@ -2318,13 +2236,6 @@ describe('CLI (isolated HOME)', () => {
     cli(['refresh', '--ids', 'iu'], env)
     await Bun.sleep(300)
     expect(existsSync(asks)).toBe(false)
-    // nobody to ask (no command configured): nothing is stamped
-    rmSync(join(cache2, 'iu.refresh.claim'), { force: true })
-    expect(
-      cli(['refresh', '--all'], { CLAUDE_ACCOUNTS_CACHE_DIR: cache2, PATH: `${deadBin}:${bin}:${process.env.PATH}` })
-        .rc,
-    ).toBe(0)
-    expect(existsSync(join(cache2, 'iu.relogin-ask.json'))).toBe(false)
   })
 
   test('latest: newest transcript of the cwd under $HOME/.claude/projects; exit 1 when there is none', () => {
@@ -2693,7 +2604,7 @@ describe('help (--help lists every verb the dispatch accepts and never runs one)
   // The verbs `main` dispatches: the `case "<verb>":` labels of its switch.
   const dispatched = (() => {
     const body = src.slice(src.indexOf('switch (cmd) {'), src.indexOf('default:', src.indexOf('switch (cmd) {')))
-    return [...body.matchAll(/^ {4}case "([a-z-]+)":/gm)].map((m) => m[1])
+    return [...body.matchAll(/^ {4}case ['"]([a-z-]+)['"]:/gm)].map((m) => m[1])
   })()
 
   test('the dispatch was found (the parse below is not vacuous)', () => {

@@ -65,7 +65,7 @@ describe.skipIf(!canRun)('the plans', () => {
     expect(out).toContain('scripts/launch-door.sh')
     expect(out).toContain('packages/accounts/bin/claude-account.ts')
     expect(out).toContain('claude-account-next')
-    expect(out).toContain('dist/claude-account')
+    expect(out).toContain('packages/accounts/dist/claude-account')
     expect(out).toMatch(
       /door: apps\/door from (?:[0-9a-f]{12}|<origin\/rewr), launcher .*launch-door\.sh, credentials: FACTORY_DOOR_TOKEN from its \.env\.door\.tpl/,
     )

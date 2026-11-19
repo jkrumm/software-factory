@@ -20,7 +20,7 @@ lists the verbs, `claude-account <verb> --help` one in full; `claude-account --v
 | Quota cache | `~/.cache/claude-accounts/` (`$CLAUDE_ACCOUNTS_CACHE_DIR`): `<id>.sample.json`, `.exhausted.json`, `.auth.json`, `.verified.json`, `.statusline.json`, `.refresh.claim`, `.relogin-ask.json` |
 | Pick log | `~/.local/share/claude-accounts/picks.jsonl` (`$CLAUDE_ACCOUNTS_PICKS`); usage tracker, the browser extension and the dashboards read it |
 | Keepalive log | `~/Library/Logs/claude-accounts-keepalive.log`: the stdio of the keepalive job and of the detached refresh a pick spawns |
-| Test seam | `$CLAUDE_ACCOUNTS_SECURITY_BIN` replaces `/usr/bin/security` |
+| Test seams | `$CLAUDE_ACCOUNTS_SECURITY_BIN` replaces `/usr/bin/security`; `$CLAUDE_ACCOUNTS_SSH`, `$CLAUDE_ACCOUNTS_HC` and `$CLAUDE_ACCOUNTS_RELOGIN` replace the peer's adapters |
 
 ## The registry
 
@@ -31,8 +31,7 @@ lists the verbs, `claude-account <verb> --help` one in full; `claude-account --v
   "accounts": {
     "main": { "dir": null, "plan": "ultra", "homeLanes": ["interactive", "headless"], "enabled": true },
     "bulk": { "dir": "~/.claude-bulk", "plan": "max", "homeLanes": ["bulk"], "units": { "session": 1, "weekly": 1 }, "loginBrowser": "Google Chrome", "enabled": true }
-  },
-  "integrations": {}
+  }
 }
 ```
 
@@ -43,7 +42,7 @@ lists the verbs, `claude-account <verb> --help` one in full; `claude-account --v
   `units` default from the plan (ultra 4 / 2, max 1 / 1).
 - `homeLanes`: the lanes whose spawns start here; an exact lane name wins over a `prefix:*` wildcard. `loginBrowser`: the app a
   re-login opens (data for the relogin command). `enabled: false` ships an account dark until its login exists.
-- `fable`, `drain`: §Fable mode, §Drain mode. Unknown top-level keys are ignored, so a registry shared with the dotfiles CLI is valid.
+- `fable`, `drain`: §Fable mode, §Drain mode. Unknown top-level keys are ignored, so one registry serves this CLI and the dotfiles one.
 - The ids are letters, digits, `_` and `-` (they name cache files); `spill` is reserved.
 
 ## Layout of the package
@@ -56,32 +55,21 @@ lists the verbs, `claude-account <verb> --help` one in full; `claude-account --v
 | `ports.ts` | The ports: `Spawner`, `HttpGet`, `PeerUsage` |
 | `keychain.ts`, `oauth.ts`, `claude-auth.ts`, `spawn.ts` | The adapters: the login item through `security`, the usage endpoint, `claude auth status`, processes with a deadline that returns |
 | `refresh.ts`, `relogin.ts` | The orchestration over the ports: claim, sample, record; the re-login asks |
-| `integrations.ts`, `peers.ts` | The configurable adapters (§Integrations) and the health reads of a machine |
+| `owner.ts` | The owner's adapters (§The owner's adapters): the peer over ssh, the re-login dialog, the wake notification |
 | `cli.ts`, `bin/claude-account.ts` | The verbs; the entry |
 
-## Integrations
+## The owner's adapters
 
-What was code for one owner's machines is a command in configuration, so a user without a peer machine or a dialog tool omits
-it and loses only that feature. The registry's `integrations` object is overlaid key by key with the per-machine file
-`$CLAUDE_ACCOUNTS_INTEGRATIONS`, else `~/.config/claude-accounts/integrations.json` when it exists (the registry is shared by
-machines; the commands that reach a peer are not). A command is an argv, never a shell string; `{id}`, `{reason}`, `{machine}` and
-`{message}` in an element are replaced. A malformed object is one stderr line and switches off the features it configures; `pick`
-never reads it.
+Four adapters are the owner's machines and stay the defaults behind their ports in this row (`owner.ts`); the registry gets no key for
+them, and a later row (`subs-onboard`) makes them configurable so a user without them omits them. Until then a machine with no peer
+loses only the feature: the peer import logs one line, `health` reports the peer unreachable, no ask is sent.
 
-| Key | Command | Used by |
+| Adapter | What it does | Seam for tests |
 |-|-|-|
-| `peerUsage` | prints the peer machine's `claude-account usage --json` | `refresh`: the peer's samples are imported once per run (§Quota sources, 4) |
-| `reloginAsk` | started detached with `{id}` and `{reason}`: a dialog asking its owner for a re-login | `refresh --all`: a dead login or one inside its last 7 days asks once per 24 h per account and once per hour per machine, never an auto-run. Absent: nothing is read or stamped |
-| `health.local` | this machine's name in the rows (default: the host name) | `health` |
-| `health.pending` | prints this machine's pending re-login asks, one `<id> <epoch s>` per line | `health` |
-| `health.fix` | the repair command shown on a row, with `{id}` and `{machine}` | `health` |
-| `health.peer` | `{ name, snapshots: [{ via, argv, note? }], repush? }`: the peer is read through the first snapshot whose stdout is `<usage --json> @@ <expiry --json> @@ <pending asks>`; its `note` is printed when it answered or was the last tried; `repush` runs per pending ask younger than 24 h on `--wake` | `health` |
-| `health.notify` | started once per change of the picture on `health --wake`, with `{message}` | `health --wake` |
-
-```json
-{ "peerUsage": ["ssh", "-o", "BatchMode=yes", "<peer>", "claude-account", "usage", "--json"],
-  "reloginAsk": ["bash", "<path>/relogin.sh", "{id}", "--ask", "--reason", "{reason}"] }
-```
+| Peer import (`PeerUsage` port) | `refresh` reads the peer machine's `claude-account usage --json` once per run over ssh (BatchMode, 5 s connect, 20 s cap): the mini asks the MacBook, the MacBook the mini | `CLAUDE_ACCOUNTS_SSH` |
+| Re-login ask | `refresh --all` starts the owner's re-login dialog script detached for a dead login or one inside its last 7 days: once per 24 h per account, once per hour per machine, never an auto-run | `CLAUDE_ACCOUNTS_RELOGIN` (the script) |
+| Health peer | `health` reads the peer through its herdr-core, plain ssh only when no core answers (a NOTE line says so); `--wake` re-pushes the peer's pending asks and notifies on a change | `CLAUDE_ACCOUNTS_SSH`, `CLAUDE_ACCOUNTS_HC` |
+| `loginBrowser` | the macOS app a re-login opens: registry data for the dialog script | |
 
 ## Quota sources
 
@@ -116,7 +104,7 @@ written into `~/.cache/claude-accounts/` as one small file per account and kind 
    good as ours. Seen 2026-10-27: a laptop's `me` had no sample for 36 h (idle Keychain access token expired, every GET 401,
    and `claude auth status` in 2.1.311 no longer renews it) while the server, where `me` is busy, had fresh ones.
    `runRefresh` (keepalive `--all` and the detached pick-time refresh) first fetches the peer's `claude-account usage
-   --json` once (the command `integrations.peerUsage` names, 20 s cap; §Integrations) and turns each row of a locally registered, enabled account into a sample (`src: peer`).
+   --json` once (ssh, 20 s cap; §The owner's adapters) and turns each row of a locally registered, enabled account into a sample (`src: peer`).
    Each window's timestamp is rebuilt from the row's age (now minus `*_age_s`; null age, null timestamp), so an old
    number is never laundered into a fresh one, and `mergeSample` keeps the newer window. A full endpoint answer (`src: oauth`) with a weekly window but no `five_hour` drops the stored session half instead of keeping it frozen; the other feeds only omit. A future `exhausted_until`
    is imported as a mark. **Auth state is never imported** (logins are per machine): an account served from the peer still
@@ -278,15 +266,15 @@ the simulation fills me2 within 3-4 hours and keeps iu under 65 % for the week.
 - **On the mini** the deploy (`make deploy`) links `~/.local/bin/claude-account-next` to the release's `packages/accounts/bin/claude-account.ts`
   beside the live `claude-account`, which it never touches (a regular file at that path is left alone). `make rollback`
   re-links it. The release holds the dependencies, so the entry runs as it is.
-- **Without the factory** (a laptop): the deploy builds one file into the release, `<release>/dist/claude-account` (`make accounts-bundle`, `ACCOUNTS_OUT=<path>`,
+- **Without the factory** (the MacBook has no checkout): the deploy builds one file beside the CLI entry, `<release>/packages/accounts/dist/claude-account` (`make accounts-bundle`, `ACCOUNTS_OUT=<path>`,
   builds it from a checkout), that runs with bun alone: no checkout, no `node_modules`, the commit baked in. Copy it to `~/.local/bin/claude-account`.
-  A machine with no peer, no dialog tool and no mini needs no `integrations` and works as it is.
+  The package has no runtime dependency outside itself, so the file runs with bun alone; from an empty directory it answers `--version` and `usage --json` (`test/bundle.test.ts`).
 - `--version` names the commit from the build, else from the `releases/<sha>/` directory it runs in, else from the checkout.
 
 ## Tests and parity
 
 `bun test packages/accounts`: the ported unit tests of the dotfiles picker (rule, cache files, refresh, login expiry, the CLI against fakes), the
-three-week simulation (`sim.test.ts`: it fails when a rule change wastes quota), the integrations and the bundle.
+three-week simulation (`sim.test.ts`: it fails when a rule change wastes quota), the owner's adapters against fakes and the bundle.
 `test/parity.test.ts` runs one fixture registry, cache and clock through the dotfiles CLI and this one for every verb and lane
 (257 cases, each stdout, exit code and, for a writing verb, the files it left): identical. Where the dotfiles checkout exists
 it runs both; everywhere it holds the package to `test/fixtures/parity-golden.json`, what the dotfiles CLI printed
@@ -299,4 +287,4 @@ picker indexes records by an id it has just checked) and the root typecheck excl
 
 The spawn integration (`c`, `rd`, `cf`), the keepalive and heartbeat jobs, the statusline hook, the login logistics and the
 attribution of usage stay in dotfiles and call these verbs; the switch row moves them. No new rule, window or account setting
-is added here: the registry for N subscriptions with per-account modes is the next row.
+is added here, and no registry key: it is a port, not a redesign.

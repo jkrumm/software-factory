@@ -31,7 +31,6 @@ test('the single-file build runs on its own: no checkout, no node_modules, the c
       HOME: join(dir, 'home'),
       CLAUDE_ACCOUNTS_REGISTRY: registry,
       CLAUDE_ACCOUNTS_CACHE_DIR: join(dir, 'cache'),
-      CLAUDE_ACCOUNTS_INTEGRATIONS: join(dir, 'none.json'),
     }
     const v = run([out, '--version'], env, work)
     expect(v).toMatchObject({ rc: 0, out: '@software-factory/accounts 0.1.0 (abc123def456)\n' })

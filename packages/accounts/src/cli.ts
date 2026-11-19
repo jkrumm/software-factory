@@ -5,8 +5,8 @@
 //
 // Idle-account samples: one read-only GET of the OAuth usage endpoint with the account's own Keychain token
 // (never copied, logged or written back; on HTTP 401 `claude auth status` renews it first, one retry); `claude -p /usage` no longer refreshes cachedUsageUtilization (2.1.310).
-import { appendFileSync, mkdirSync, readFileSync, writeFileSync } from 'node:fs'
-import { homedir, hostname } from 'node:os'
+import { appendFileSync, mkdirSync, readFileSync } from 'node:fs'
+import { homedir } from 'node:os'
 import { dirname, join } from 'node:path'
 import {
   type Cache,
@@ -26,7 +26,7 @@ import {
   sampleFromClaudeJson,
   withoutSessionWindows,
 } from './policy.ts'
-import { cacheDir, picksPath, registryPath } from './paths.ts'
+import { picksPath } from './paths.ts'
 import { accountFromConfigDir, claudeJsonPath, loadRegistry, shellLine } from './registry.ts'
 import { claimRefresh, loadCache, markExhausted, recordSample } from './store.ts'
 import { readLoginExpiry } from './keychain.ts'
@@ -35,10 +35,17 @@ import { runRefresh, refreshBeforePick } from './refresh.ts'
 import { askRelogins } from './relogin.ts'
 import { latestSessionId, sessionAccount } from './sessions.ts'
 import { spawnDetached, spawner } from './spawn.ts'
-import { type Integrations, fill, loadIntegrations, peerUsageFrom } from './integrations.ts'
-import { type HealthRow, gradeMachine, healthSignature, localPending, parseJson, peerSnapshot, worst } from './peers.ts'
+import { type HealthRow, gradeMachine, worst } from './health.ts'
+import {
+  SSH_OPTS,
+  fetchPeerUsage,
+  machineSnapshot,
+  notifyIfChanged,
+  peerMachine,
+  reloginAsk,
+  spawnLogged,
+} from './owner.ts'
 import { versionLine } from './version.ts'
-import { boundedSpawnSync } from './spawn.ts'
 
 const SPILL_EXIT = 3
 const REGISTRY_EXIT = 4 // pick answered `unset CLAUDE_CONFIG_DIR` (iu) because the registry was unreadable
@@ -92,7 +99,6 @@ async function refresh(
   reg: Registry,
   o: { ids?: string[]; claimed?: string[]; all?: boolean; peer?: boolean } = {},
 ): Promise<Record<string, RefreshResult>> {
-  const integrations: Integrations = o.peer === false ? {} : integrationsOrNone()
   const enabled = (id: string) => Object.hasOwn(reg.accounts, id) && reg.accounts[id].enabled
   const todo = o.claimed
     ? o.claimed.filter(enabled)
@@ -115,7 +121,7 @@ async function refresh(
     ids: todo,
     now: Date.now,
     log: (m) => console.error(m),
-    peerUsage: integrations.peerUsage ? peerUsageFrom(integrations.peerUsage) : undefined, // the synchronous pick-time refresh never waits on a peer
+    peerUsage: o.peer === false ? undefined : fetchPeerUsage, // the synchronous pick-time refresh never waits on ssh
   })
 }
 
@@ -133,23 +139,21 @@ const loginExpiry = (reg: Registry, now: number, ids?: string[]) =>
   })
 
 /**
- * Keepalive only: a dead login, or one inside its last 7 days, asks its owner once per 24 h for a re-login through the
- * configured command (integrations.reloginAsk, detached; the dialog is the human's click, nothing runs by itself).
- * Without that command there is nobody to ask: nothing is read, nothing is stamped.
+ * Keepalive only: a dead login, or one inside its last 7 days, asks its owner once per 24 h for a re-login through a
+ * native approval dialog (claude-relogin --ask, detached; the dialog is the human's click, nothing runs by itself).
  */
 function askForRelogins(reg: Registry, results: Record<string, RefreshResult>): void {
-  const cmd = integrationsOrNone().reloginAsk
-  if (!cmd) return
   const now = Date.now()
   try {
     const o = askRelogins({
       results,
       logins: loginExpiry(reg, now),
       now,
-      ask: (c) => spawnDetached(fill(cmd, { id: c.id, reason: c.reason })),
+      ask: reloginAsk,
       log: (m) => console.error(`claude-account: ${m}`),
     })
-    for (const id of o.asked) console.error(`claude-account: asked for a re-login of ${id} (next ask in 24 h)`)
+    for (const id of o.asked)
+      console.error(`claude-account: asked for a re-login of ${id} (dialog on the MacBook, next ask in 24 h)`)
     if (o.capped.length)
       console.error(`claude-account: re-login ask for ${o.capped.join(', ')} deferred (one dialog per hour)`)
   } catch (e) {
@@ -166,9 +170,9 @@ function expiry(reg: Registry, json: boolean, ids?: string[]): void {
   for (const r of rows) console.log(`${r.id}  ${r.grade}  ${r.detail}`)
 }
 
-/** The rows of `usage --json`, from the cache files alone (no Keychain, no network). */
-function usageDoc(reg: Registry, now = Date.now()) {
+function usage(reg: Registry, json: boolean): void {
   const cache = readClaudeJson(reg, loadCache())
+  const now = Date.now()
   const rows = Object.entries(reg.accounts).map(([id, a]) => {
     const x = cache.samples[id]
     const until = cache.exhausted[id]
@@ -189,13 +193,7 @@ function usageDoc(reg: Registry, now = Date.now()) {
       exhausted_until: until && until * 1000 > now ? until : null,
     }
   })
-  return { default_account: defaultAccountId(reg), accounts: rows }
-}
-
-function usage(reg: Registry, json: boolean): void {
-  const doc = usageDoc(reg)
-  const rows = doc.accounts
-  if (json) return void console.log(JSON.stringify(doc, null, 2))
+  if (json) return void console.log(JSON.stringify({ default_account: defaultAccountId(reg), accounts: rows }, null, 2))
   const reset = (e: number | null) => (e ? new Date(e * 1000).toISOString().slice(5, 16).replace('T', ' ') : '-')
   for (const r of rows) {
     console.log(
@@ -206,38 +204,15 @@ function usage(reg: Registry, json: boolean): void {
 
 // ── health (wake check) ─────────────────────────────────────────────────────────────────────────────────────────
 
-/** The registry's and the machine's integrations; a malformed one is logged and the feature it configures is off (a refresh must still run). */
-function integrationsOrNone(): Integrations {
-  try {
-    return loadIntegrations(registryPath())
-  } catch (e) {
-    console.error(`claude-account: ${(e as Error).message}`)
-    return {}
-  }
-}
-
-/** This machine's `usage`, `expiry` and pending asks, read in process. */
-function localSnapshot(reg: Registry, cfg: NonNullable<Integrations['health']>, nowMs: number) {
-  return {
-    usage: usageDoc(reg, nowMs),
-    expiry: { accounts: loginExpiry(reg, nowMs) },
-    pending: localPending(cfg.pending, nowMs),
-  }
-}
-
-async function health(reg: Registry, argv: string[]): Promise<number> {
+async function health(argv: string[]): Promise<number> {
   const now = Date.now()
-  const cfg = integrationsOrNone().health ?? {}
-  const local = cfg.local ?? hostname()
-  const mine = localSnapshot(reg, cfg, now)
-  const theirs = cfg.peer ? peerSnapshot(cfg.peer, now) : null
-  const rows: HealthRow[] = [
-    ...gradeMachine(local, mine, cfg.fix),
-    ...(cfg.peer && theirs ? gradeMachine(cfg.peer.name, theirs as Parameters<typeof gradeMachine>[1], cfg.fix) : []),
-  ]
-  // A transport that is only a last resort says so, whatever the format (stderr keeps --json parseable).
-  if (cfg.peer && theirs?.note) {
-    const note = `NOTE ${cfg.peer.name}: ${theirs.note}`
+  const { onMini, local, peer } = peerMachine()
+  const mine = machineSnapshot(null, now)
+  const theirs = machineSnapshot(peer.ssh, now, peer.name)
+  const rows: HealthRow[] = [...gradeMachine(local, mine), ...gradeMachine(peer.name, theirs)]
+  // The plain-ssh read cannot see the peer's Keychain: say so, whatever the format (stderr keeps --json parseable).
+  if (theirs.via === 'ssh') {
+    const note = `NOTE ${peer.name}: its herdr-core was not reachable, so this read went over plain ssh; Keychain logins may show as unreadable here`
     if (argv.includes('--json')) console.error(note)
     else console.log(note)
   }
@@ -248,40 +223,20 @@ async function health(reg: Registry, argv: string[]): Promise<number> {
         `${r.state.toUpperCase().padEnd(4)} ${r.machine}/${r.id} ${r.check}: ${r.detail}${r.fix ? `  -> ${r.fix}` : ''}`,
       )
   if (argv.includes('--wake')) {
-    // The dialogs the peer could not deliver while this machine slept: push them again now that it is awake.
-    if (cfg.peer?.repush)
-      for (const p of theirs?.pending ?? [])
-        if (p.ageMs < 24 * 3600_000) spawnDetached(fill(cfg.peer.repush, { id: p.id }))
-    if (cfg.notify) notifyIfChanged(rows, now, cfg.notify)
+    if (!onMini) {
+      // The dialogs the mini could not deliver while this Mac slept: push them again now that it is awake.
+      for (const p of theirs.pendingIds)
+        if (p.ageMs < 24 * 3600_000) {
+          spawnLogged('ssh', [
+            ...SSH_OPTS,
+            ...peer.ssh,
+            `bash "$HOME/SourceRoot/dotfiles/scripts/ask-human.sh" push ${p.id}`,
+          ])
+        }
+      notifyIfChanged(rows, now)
+    }
   }
   return worst(rows) === 'fail' ? 1 : 0
-}
-
-function notifyIfChanged(rows: HealthRow[], nowMs: number, cmd: string[]) {
-  const sig = healthSignature(rows)
-  const stamp = join(cacheDir(), 'health-notified.json')
-  const prev = parseJson(
-    (() => {
-      try {
-        return readFileSync(stamp, 'utf8')
-      } catch {
-        return ''
-      }
-    })(),
-  ) as { sig?: string; ts?: number } | null
-  if (!sig || (prev?.sig === sig && nowMs - (prev.ts ?? 0) < 12 * 3600_000)) return
-  const bad = rows
-    .filter((r) => r.state !== 'ok')
-    .map((r) => `${r.machine}/${r.id}: ${r.detail}`)
-    .join('; ')
-  const argv = fill(cmd, { message: bad.slice(0, 200) })
-  boundedSpawnSync(argv[0], argv.slice(1), { timeoutMs: 10_000 })
-  try {
-    mkdirSync(dirname(stamp), { recursive: true })
-    writeFileSync(stamp, JSON.stringify({ sig, ts: nowMs }))
-  } catch {
-    // suppressing a repeat is best-effort
-  }
 }
 
 type Verb = { name: string; usage: string; summary: string; detail: string[]; caller?: string }
@@ -544,7 +499,7 @@ export async function main(argv: string[]): Promise<number> {
       return 0
     }
     case 'health':
-      return health(reg, rest)
+      return health(rest)
     case 'record': {
       const id = account(reg, rest)
       const part = {

@@ -274,7 +274,7 @@ build_release() { # $1 sha
   (cd "$dir" && bun install --frozen-lockfile) || { remove_release "$1"; die "bun install failed; the live release is untouched"; }
   build_console "$1" || { remove_release "$1"; die "the Console build failed; the live release is untouched"; }
   # The picker as one file beside the CLI entry: a machine with no checkout (the MacBook) pulls it from the live release (docs/accounts.md). Not the service: a failure is a warning.
-  (cd "$dir" && BUILD_COMMIT="${1:0:12}" bun packages/accounts/scripts/build.ts "$dir/dist/claude-account" >/dev/null) || log "WARNING: building the single-file claude-account failed; the release has none"
+  (cd "$dir" && BUILD_COMMIT="${1:0:12}" bun packages/accounts/scripts/build.ts "$dir/packages/accounts/dist/claude-account" >/dev/null) || log "WARNING: building the single-file claude-account failed; the release has none"
   chmod +x "$dir"/scripts/*.sh "$dir/$CLI_ENTRY" "$dir/$ACCOUNTS_ENTRY"
   touch "$dir/.complete"
 }
@@ -672,7 +672,7 @@ main() {
     act git -C "$REPO_DIR" fetch --prune origin "$REF"
     act "export $sha to $RELEASES/$sha and bun install --frozen-lockfile there"
     act "build the Console there (bun run --cwd apps/console build); a failed build removes the release and stops the deploy, the live release untouched"
-    act "build the single-file claude-account there (packages/accounts/scripts/build.ts to dist/claude-account); a failure is a warning"
+    act "build the single-file claude-account there (packages/accounts/scripts/build.ts to packages/accounts/dist/claude-account); a failure is a warning"
     act "check every ref of .env.tpl through secrets-run (those of .env.server.tpl only warn)"
     act "fetch master again once the release is built: a newer commit is built and deployed instead (up to $DEPLOY_ROUNDS releases); a sha that is live and healthy already restarts nothing (FACTORY_DEPLOY_FORCE=1 restarts it)"
     act "dry-run the release's pending migrations against the live database (rolled back, 3 s lock timeout): a refused migration stops the deploy before anything is stopped"

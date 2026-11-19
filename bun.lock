@@ -104,9 +104,6 @@
       "bin": {
         "claude-account": "./bin/claude-account.ts",
       },
-      "dependencies": {
-        "zod": "4.6.7",
-      },
     },
     "packages/client": {
       "name": "@software-factory/client",

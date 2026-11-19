@@ -279,7 +279,6 @@ export const run = async (cli: string, c: Case) => {
     CLAUDE_ACCOUNTS_SECURITY_BIN: join(bin, 'security'),
     CLAUDE_ACCOUNTS_SSH: join(bin, 'ssh'),
     CLAUDE_ACCOUNTS_RELOGIN: join(bin, 'relogin'),
-    CLAUDE_ACCOUNTS_INTEGRATIONS: join(root, 'integrations.json'),
     PATH: `${bin}:${process.env.PATH}`,
     PARITY_NOW: String(NOW),
     ...c.env,
@@ -306,16 +305,12 @@ export const run = async (cli: string, c: Case) => {
 
 export type Result = Awaited<ReturnType<typeof run>>
 
-/** Creates the fixture root (stubs, registries, integrations, a transcript and a hook log). Call removeFixtures() when done. */
+/** Creates the fixture root (stubs, registries, a transcript and a hook log). Call removeFixtures() when done. */
 export function setupFixtures(): void {
   root = mkdtempSync(join(tmpdir(), 'parity-'))
   stubs()
   for (const [name, body] of Object.entries(registries))
     writeFileSync(join(root, `registry-${name}.json`), JSON.stringify(body))
-  writeFileSync(
-    join(root, 'integrations.json'),
-    JSON.stringify({ reloginAsk: ['bash', join(root, 'bin', 'relogin'), '{id}', '--ask', '--reason', '{reason}'] }),
-  )
   const home = join(root, 'home')
   mkdirSync(join(home, '.claude', 'logs'), { recursive: true })
   writeFileSync(
