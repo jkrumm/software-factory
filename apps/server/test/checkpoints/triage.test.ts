@@ -59,6 +59,11 @@ describe('(f) a MacBook command that runs a mini-only command is refused', () =>
     expect(
       refuseOffMacbook(input({ summary: 's', command: "ssh mini 'cd x && factory errand done e1'", host: 'macbook' })),
     ).toBeNull()
+    expect(
+      refuseOffMacbook(
+        input({ summary: 's', command: "ssh work-box 'uptime' && factory errand list", host: 'macbook' }),
+      ),
+    ).toContain('mini only')
   })
 })
 

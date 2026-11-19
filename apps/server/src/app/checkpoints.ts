@@ -1296,7 +1296,7 @@ export async function finishErrand(
     // an `approval` Errand is the owner's yes (Approve): his delegate does not give it
     const held = await deps.uow.run(async ({ checkpoints }) => ok(await checkpoints.errand(input.errandId)))
     if (!held.ok) return held
-    if (held.value?.need === 'approval' && !held.value.doneAt)
+    if (held.value && !held.value.doneAt && (held.value.need ?? needOf(held.value)) === 'approval')
       return err({
         kind: 'invalid',
         detail:

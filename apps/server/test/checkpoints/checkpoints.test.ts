@@ -1284,7 +1284,19 @@ describe('errands', () => {
       confirmedBy: 'the operator',
     })
     expect(approval).toMatchObject({ ok: false, error: { kind: 'invalid' } })
-    await db.sql`UPDATE factory.errands SET need = 'hands' WHERE id = ${raised.errand.id}`
+    // an approval by rule that has no stored need yet (the settle pass has not reached it) is the same
+    await db.sql`
+      UPDATE factory.errands SET need = NULL, command = 'ssh mini ''make -C ~/gate deploy-release SHA=feedbeef'''
+      WHERE id = ${raised.errand.id}`
+    expect(
+      await finishErrand(deps, {
+        errandId: raised.errand.id,
+        note: null,
+        by: 'orchestrator',
+        confirmedBy: 'the operator',
+      }),
+    ).toMatchObject({ ok: false, error: { kind: 'invalid' } })
+    await db.sql`UPDATE factory.errands SET need = 'hands', command = NULL WHERE id = ${raised.errand.id}`
 
     const done = value(
       await finishErrand(deps, {
