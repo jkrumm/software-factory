@@ -1,5 +1,5 @@
 import { noteText } from '../domains/leads/note.ts'
-import { leadKey } from '../domains/leads/names.ts'
+import { leadBranch, leadKey } from '../domains/leads/names.ts'
 import { deriveSession } from '../domains/leads/session.ts'
 import type { Delivery } from '../domains/leads/ports.ts'
 import type { Issue } from '../domains/work/issue.ts'
@@ -26,6 +26,12 @@ export const HOST_RESTARTED =
   'The host restarted: your terminal came back as a shell and this session was started again with `--resume`. ' +
   'Everything that ran in the background (checks, builds, merge windows, subagents, waits) is gone. ' +
   'Check git, the pull request and production before you repeat anything that left the machine, then go on.'
+
+/** What a session resumed in a worktree made again is told first: the old tree was removed while it waited. */
+export const WORKTREE_RESTORED =
+  'Your worktree was removed while you waited and has been made again at the same path, on your branch: from your local branch, ' +
+  "else from the remote's copy of it, else cut afresh from the default branch. Look at `git log` and `git status`: uncommitted changes " +
+  'and installed dependencies are not there, so reinstall what you need, then go on.'
 
 type Look =
   | { done: true }
@@ -246,18 +252,27 @@ export async function reviveAndTell(
   if (!seat.ok) return seat
   await deps.typePace?.()
   const projectEnv = await deps.checks.env(dormant.repoPath)
-  const started = await deps.terminals.revive({
-    key: name,
-    cwd: dormant.worktree,
-    space: dormant.repoPath,
-    prompt: text,
-    tier: seat.value.tier,
-    effort: seat.value.effort,
-    account,
-    ...(projectEnv.ok && Object.keys(projectEnv.value).length > 0 ? { env: projectEnv.value } : {}),
-    tabName: tabName(dormant.issue.title),
-    session: dormant.session,
+  // Something removed the tree while the lead waited (a days-long wait outlasts every sweep of the host): make it again.
+  const tree = await deps.worktrees.restore({
+    repo: dormant.repoPath,
+    branch: leadBranch(issue, attempt),
+    path: dormant.worktree,
   })
+  const prompt = tree.ok && tree.value.restored ? `${WORKTREE_RESTORED}\n\n${text}` : text
+  const started = !tree.ok
+    ? tree
+    : await deps.terminals.revive({
+        key: name,
+        cwd: dormant.worktree,
+        space: dormant.repoPath,
+        prompt,
+        tier: seat.value.tier,
+        effort: seat.value.effort,
+        account,
+        ...(projectEnv.ok && Object.keys(projectEnv.value).length > 0 ? { env: projectEnv.value } : {}),
+        tabName: tabName(dormant.issue.title),
+        session: dormant.session,
+      })
   if (!started.ok) {
     const failed = await deps.uow.run(async ({ leads }) => ok(await leads.reviveFailed(issue, attempt)))
     const tries = failed.ok ? failed.value : 0

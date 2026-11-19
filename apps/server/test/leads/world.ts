@@ -154,6 +154,16 @@ class FakeWorktrees implements Worktrees {
     this.created.push(input)
     return ok({ path: `/w/${input.branch.replace('/', '-')}`, base: 'origin/master', sha: 'a'.repeat(40) })
   }
+  restored: { repo: string; branch: string; path: string }[] = []
+  /** the worktrees `restore` finds gone, by path */
+  gone = new Set<string>()
+  restoreError: PortError | null = null
+  async restore(input: { repo: string; branch: string; path: string }) {
+    if (this.restoreError) return err(this.restoreError)
+    const restored = this.gone.delete(input.path)
+    if (restored) this.restored.push(input)
+    return ok({ restored })
+  }
   async remove(input: WorktreeRemovalInput) {
     this.removed.push(input)
     return ok(this.removal)
@@ -161,6 +171,9 @@ class FakeWorktrees implements Worktrees {
   reset() {
     this.created = []
     this.removed = []
+    this.restored = []
+    this.gone = new Set()
+    this.restoreError = null
     this.createError = null
     this.removal = { removed: true }
   }

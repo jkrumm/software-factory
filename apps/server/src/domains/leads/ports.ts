@@ -111,6 +111,11 @@ export interface WorktreeRemovalInput {
 export interface Worktrees {
   create(input: { repo: string; branch: string }): Promise<Result<Worktree>>
   remove(input: WorktreeRemovalInput): Promise<Result<WorktreeRemoval>>
+  /**
+   * A dormant lead's worktree at the path it had: untouched when it is there, made again on its branch when something
+   * removed it while the lead waited (`restored`). Never replaces a directory that is no worktree.
+   */
+  restore(input: { repo: string; branch: string; path: string }): Promise<Result<{ restored: boolean }>>
 }
 
 /** How the Issue ended, as far as its branches care: a dropped or cancelled one has no work worth keeping. */

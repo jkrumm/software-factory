@@ -101,6 +101,27 @@ describe('fixStale', () => {
     expect(remoteBranches(f.origin)).toContain('prot')
   })
 
+  test("a lead's own worktree is left alone, merged, idle or prunable: its finalization removes it", async () => {
+    const f = fixture()
+    branch(f.work, 'lead9', 3, true)
+    git(f.work, ['branch', '-m', 'lead9', 'factory/9-1'])
+    git(f.work, ['commit', '-q', '--allow-empty', '-m', 'later'])
+    git(f.work, ['push', '-q', 'origin', 'master'])
+    const wts = join(base, 'wts')
+    const idle = join(wts, `factory-9-1`)
+    const gone = join(wts, `factory-9-2`)
+    git(f.work, ['worktree', 'add', '-q', idle, 'factory/9-1'])
+    git(f.work, ['worktree', 'add', '-q', gone, '-b', 'factory/9-2'])
+    rmSync(gone, { recursive: true })
+    const dir = git(idle, ['rev-parse', '--absolute-git-dir']).trim()
+    const old = new Date(Date.now() - 4 * 86_400_000)
+    for (const name of ['index', 'HEAD']) utimesSync(join(dir, name), old, old)
+    git(f.throwaway, ['fetch', '-q', 'origin'])
+    expect(await fixStale(tools, f.checkout, new Set(['stale:worktrees']))).toEqual([])
+    expect(git(f.work, ['worktree', 'list'])).toContain('factory-9-1')
+    expect(git(f.work, ['worktree', 'list'])).toContain('factory-9-2')
+  })
+
   test('removes a merged idle worktree and a prunable one; a dirty one stays and fails the fix', async () => {
     const f = fixture()
     branch(f.work, 'done-two', 3, true)

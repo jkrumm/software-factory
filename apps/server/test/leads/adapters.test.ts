@@ -250,6 +250,75 @@ describe('git worktrees', () => {
     expect(again).toEqual(first)
   })
 
+  test('restore leaves a worktree that is there, and makes one that was removed again on its branch, commits kept', async () => {
+    const work = await repo()
+    const made = await value(trees.create({ repo: work, branch: 'factory/6-1' }))
+    expect(await value(trees.restore({ repo: work, branch: 'factory/6-1', path: made.path }))).toEqual({
+      restored: false,
+    })
+
+    writeFileSync(join(made.path, 'kept.txt'), 'k')
+    await git(made.path, 'add', '.')
+    await git(made.path, 'commit', '-q', '-m', 'work')
+    rmSync(made.path, { recursive: true, force: true })
+    expect(await value(trees.restore({ repo: work, branch: 'factory/6-1', path: made.path }))).toEqual({
+      restored: true,
+    })
+    expect(existsSync(join(made.path, 'kept.txt'))).toBe(true)
+
+    // the branch gone too: cut afresh from the base at the same path
+    await git(work, 'worktree', 'remove', '--force', made.path)
+    await git(work, 'branch', '-D', 'factory/6-1')
+    expect(await value(trees.restore({ repo: work, branch: 'factory/6-1', path: made.path }))).toEqual({
+      restored: true,
+    })
+    expect(existsSync(join(made.path, 'a.txt'))).toBe(true)
+    expect(existsSync(join(made.path, 'kept.txt'))).toBe(false)
+  })
+
+  test('restore keeps the tracking of a pushed branch and needs no network for one that is here', async () => {
+    const work = await repo()
+    const made = await value(trees.create({ repo: work, branch: 'factory/8-1' }))
+    await git(made.path, 'push', '-q', '-u', 'origin', 'factory/8-1')
+    await git(work, 'worktree', 'remove', '--force', made.path)
+    await git(work, 'remote', 'set-url', 'origin', join(work, 'no-such-remote'))
+    expect(await value(trees.restore({ repo: work, branch: 'factory/8-1', path: made.path }))).toEqual({
+      restored: true,
+    })
+    expect(await git(made.path, 'rev-parse', '--abbrev-ref', 'factory/8-1@{upstream}')).toBe('origin/factory/8-1')
+  })
+
+  test('restore of a branch gone here checks out the remote copy with its tracking, and refuses when the remote cannot be read', async () => {
+    const work = await repo()
+    const made = await value(trees.create({ repo: work, branch: 'factory/9-1' }))
+    writeFileSync(join(made.path, 'pushed.txt'), 'p')
+    await git(made.path, 'add', '.')
+    await git(made.path, 'commit', '-q', '-m', 'pushed work')
+    await git(made.path, 'push', '-q', '-u', 'origin', 'factory/9-1')
+    await git(work, 'worktree', 'remove', '--force', made.path)
+    await git(work, 'branch', '-D', 'factory/9-1')
+    const origin = await git(work, 'remote', 'get-url', 'origin')
+    await git(work, 'remote', 'set-url', 'origin', join(work, 'no-such-remote'))
+    expect((await trees.restore({ repo: work, branch: 'factory/9-1', path: made.path })).ok).toBe(false)
+    expect(existsSync(made.path)).toBe(false)
+    await git(work, 'remote', 'set-url', 'origin', origin)
+    expect(await value(trees.restore({ repo: work, branch: 'factory/9-1', path: made.path }))).toEqual({
+      restored: true,
+    })
+    expect(existsSync(join(made.path, 'pushed.txt'))).toBe(true)
+    expect(await git(made.path, 'rev-parse', '--abbrev-ref', 'factory/9-1@{upstream}')).toBe('origin/factory/9-1')
+  })
+
+  test('restore never replaces a directory that is no worktree', async () => {
+    const work = await repo()
+    const path = join(work, '.claude', 'worktrees', 'factory-7-1')
+    mkdirSync(path, { recursive: true })
+    writeFileSync(join(path, 'mine.txt'), 'm')
+    const result = await trees.restore({ repo: work, branch: 'factory/7-1', path })
+    expect(result.ok).toBe(false)
+    expect(existsSync(join(path, 'mine.txt'))).toBe(true)
+  })
+
   test('remove takes a clean worktree whose branch is on the base; one with changes or commits is kept, and says why', async () => {
     const work = await repo()
     const clean = await value(trees.create({ repo: work, branch: 'factory/2-1' }))

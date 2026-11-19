@@ -35,6 +35,15 @@ export function parseWorktrees(porcelain: string): Worktree[] {
   })
 }
 
+/**
+ * A lead's own worktree (`factory/<issue>-<attempt>`, or its `factory-<issue>-<attempt>` directory once its branch is gone):
+ * the lead's finalization removes it when the work landed, and a lead that waits days for a Decision or a date is idle in it,
+ * not done with it. The scan leaves them out, so the probe never flags one and the fix never removes one.
+ */
+export const isLeadWorktree = (w: Worktree): boolean =>
+  /^factory\/\d+-\d+$/.test(w.branch ?? '') ||
+  /^factory-\d+-\d+$/.test(w.path.split(/[\\/]/).filter(Boolean).at(-1) ?? '')
+
 /** The last two path segments, never an absolute path. */
 export const shortPath = (path: string): string => path.split(/[\\/]/).filter(Boolean).slice(-2).join('/')
 
@@ -114,7 +123,7 @@ export async function scanStale(tools: Tools, path: string): Promise<StaleScan |
 
   const here = realOrSelf(path)
   const linked = parseWorktrees(await gitOut(tools, path, ['worktree', 'list', '--porcelain'])).filter(
-    (w) => realOrSelf(w.path) !== here && !w.path.split(/[\\/]/).includes('hygiene'),
+    (w) => realOrSelf(w.path) !== here && !w.path.split(/[\\/]/).includes('hygiene') && !isLeadWorktree(w),
   )
   if (!remote.length && !linked.length) return 'no remote branches and no linked worktrees'
 
