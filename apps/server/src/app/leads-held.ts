@@ -1,0 +1,52 @@
+import { leadKey } from '../domains/leads/names.ts'
+import { deriveSession } from '../domains/leads/session.ts'
+import { ok } from '../kernel/result.ts'
+import { recordHook } from './leads-hooks.ts'
+import { type LeadDeps, loadIssue } from './leads.ts'
+
+/** A turn open and silent this long on an account whose window is closed is held at the wall, not working. */
+export const HELD_AFTER_MS = 2 * 60_000
+
+/**
+ * A prompt submitted to an account that is out of window is refused by Claude Code before any answer: `UserPromptSubmit`
+ * fires (a turn starts), the message goes back into the input box, and neither `Stop` nor `StopFailure` follows. The hooks
+ * then show a turn that never ends, so the lead counts as working and nothing wakes it (a resumed lead's first message
+ * is the usual case, issue 2414). A working lead whose turn has been silent for `HELD_AFTER_MS` on an account that
+ * capacity reads as closed is recorded as the limit stop the hook missed: the same fact, so the Issue stalls as a `wall`
+ * and the steward wakes it when the window opens (or moves it to an open account). Once per turn (the key carries it);
+ * a turn that starts later clears the wall as any turn does. Returns how many leads it recorded.
+ */
+export async function holdWalledLeads(deps: LeadDeps): Promise<number> {
+  const now = deps.clock.now()
+  const candidates = await deps.uow.run(async ({ work, leads }) => {
+    const found: { name: string; account: string; turns: number }[] = []
+    for (const row of await leads.followed()) {
+      if (!row.terminal || !row.account) continue
+      const loaded = await loadIssue(work, row.issueId)
+      if (loaded?.issue.state !== 'working' || loaded.issue.attempt !== row.attempt) continue
+      const name = leadKey(row.issueId, row.attempt)
+      const view = deriveSession(await leads.hookFacts(name))
+      if (view.state !== 'working' || view.walled || !view.turnStartedAt) continue
+      const quietFrom = Math.max(view.lastEventAt?.getTime() ?? 0, view.turnStartedAt.getTime())
+      if (now.getTime() - quietFrom < HELD_AFTER_MS) continue
+      found.push({ name, account: row.account, turns: view.turns })
+    }
+    return ok(found)
+  })
+  if (!candidates.ok) return 0
+  let held = 0
+  for (const { name, account, turns } of candidates.value) {
+    // Capacity is asked outside any transaction. No `since`: the newest reading decides, so a lead is never held on a window that is open.
+    const window = await deps.windows.wall(account)
+    if (!window.ok || !window.value.resetAt || window.value.resetAt <= now) continue
+    const recorded = await recordHook(deps, {
+      key: `${name}:limit_stop:${turns}:held`,
+      session: name,
+      kind: 'limit_stop',
+      at: now.toISOString(),
+      payload: { error: 'rate_limit', source: 'held' },
+    })
+    if (recorded.ok && recorded.value.recorded) held++
+  }
+  return held
+}
