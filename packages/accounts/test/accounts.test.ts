@@ -2224,7 +2224,8 @@ describe('CLI (isolated HOME)', () => {
       PATH: `${deadBin}:${bin}:${process.env.PATH}`,
     }
     expect(cli(['refresh', '--all'], env).rc).toBe(0)
-    for (let i = 0; i < 100 && !existsSync(asks); i++) await Bun.sleep(50)
+    // the stub's redirection creates the file before its echo lands: wait for content, not for the file
+    for (let i = 0; i < 100 && !(existsSync(asks) && readFileSync(asks, 'utf8').trim() !== ''); i++) await Bun.sleep(50)
     expect(readFileSync(asks, 'utf8').trim()).toBe('iu --ask --reason login is dead')
     rmSync(join(cache2, 'iu.refresh.claim'), { force: true }) // let the second run through the 5-min refresh budget
     expect(cli(['refresh', '--all'], env).rc).toBe(0)
