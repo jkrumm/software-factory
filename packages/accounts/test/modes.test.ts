@@ -394,6 +394,32 @@ describe('an override reaches the other machine through the peer import', () => 
     rmSync(a.home, { recursive: true })
     rmSync(b.home, { recursive: true })
   })
+  test('an empty limit set from the peer carries no age and never replaces a local one', async () => {
+    const b = machine()
+    const local = {
+      ...sample(10, 20),
+      s_ts: Date.now(),
+      w_ts: Date.now(),
+      ...fable(20, 6, 3),
+      limits_ts: Date.now() - 60_000,
+    }
+    saveSample('me', local, b.env.CLAUDE_ACCOUNTS_CACHE_DIR)
+    await importInto(b, {
+      accounts: [
+        {
+          id: 'me',
+          five_hour: 10,
+          seven_day: 20,
+          five_hour_age_s: 5,
+          seven_day_age_s: 5,
+          limits: [],
+          weekly_scoped_shares: [],
+        },
+      ],
+    })
+    expect(loadCache(b.env.CLAUDE_ACCOUNTS_CACHE_DIR).samples.me.limits).toEqual(local.limits)
+    rmSync(b.home, { recursive: true })
+  })
   test('the mode verb refuses bad input with exit 2; drain defaults to until reset', () => {
     const a = machine()
     expect(a.cli(['mode', 'nope', 'drain']).rc).toBe(2)

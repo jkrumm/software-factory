@@ -143,12 +143,12 @@ function peerLimits(r: Record<string, unknown>, now: number) {
       .filter((e): e is Record<string, unknown> => !!e && typeof e === 'object' && !Array.isArray(e))
       .map((e) => Object.fromEntries(Object.entries(e).filter(([k]) => k !== 'age_s')))
   const ages = (r.limits as { age_s?: unknown }[]).map((l) => l?.age_s).filter(isNum)
-  if (!ages.length && r.limits.length) return null // an age-less limit set cannot be dated: never laundered into a fresh one
+  if (!ages.length) return null // an age-less (or empty) limit set cannot be dated: never laundered into a fresh one
   const limits = strip(r.limits)
   return {
     limits,
     ...(Array.isArray(r.weekly_scoped_shares) ? { scoped_shares: strip(r.weekly_scoped_shares) } : {}),
-    limits_ts: now - (ages.length ? Math.max(...ages) : 0) * 1000,
+    limits_ts: now - Math.max(...ages) * 1000,
   }
 }
 
