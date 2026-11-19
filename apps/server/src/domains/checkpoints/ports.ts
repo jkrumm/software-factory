@@ -1,4 +1,5 @@
 import type {
+  ImageAnchor,
   ErrandNeededAnswer,
   ErrandNeededRequest,
   ErrandScreenAnswer,
@@ -155,6 +156,8 @@ export interface AnnotationRecord {
   occurrence: number | null
   prefix: string | null
   suffix: string | null
+  /** the picture it hangs on (its quote is then derived from it); null for a comment on text */
+  image: ImageAnchor | null
   comment: string
   author: 'owner' | 'lead'
   at: Date

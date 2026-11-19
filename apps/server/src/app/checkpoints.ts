@@ -2,6 +2,7 @@ import {
   type Anchor,
   anchorOf,
   type AnnotationInput,
+  imageAnchorOf,
   type ArtifactId,
   type ArtifactKind,
   readAnnotation,
@@ -783,11 +784,13 @@ export function annotateArtifact(
       artifact.id,
       revision,
       input.author,
-      // the same words on another occurrence are another comment; one made without an occurrence keeps its old key
+      // the same words on another occurrence (or picture, or spot) are another comment; one made without an occurrence keeps its old key
       digest(
-        annotation.occurrence === null
-          ? `${annotation.quote}\n${annotation.comment}`
-          : `${annotation.quote}\n${annotation.comment}\n${annotation.occurrence}`,
+        annotation.image
+          ? `image\n${annotation.image.srcHash}\n${annotation.image.occurrence}\n${annotation.image.x ?? ''}\n${annotation.image.y ?? ''}\n${annotation.comment}`
+          : annotation.occurrence === null
+            ? `${annotation.quote}\n${annotation.comment}`
+            : `${annotation.quote}\n${annotation.comment}\n${annotation.occurrence}`,
       ),
     )
     if (await checkpoints.annotationByKey(annotateKey)) {
@@ -803,6 +806,7 @@ export function annotateArtifact(
       occurrence: annotation.occurrence,
       prefix: annotation.prefix,
       suffix: annotation.suffix,
+      image: annotation.image,
       comment: annotation.comment,
       author: input.author,
       at: deps.clock.now(),
@@ -1081,7 +1085,9 @@ export async function showArtifact(
     content: content.value,
     annotations: annotations.map((annotation) => ({
       annotation,
-      anchor: anchorOf(content.value, artifact.format, annotation.quote),
+      anchor: annotation.image
+        ? imageAnchorOf(content.value, artifact.format, annotation.image)
+        : anchorOf(content.value, artifact.format, annotation.quote),
     })),
     verdicts,
     links,

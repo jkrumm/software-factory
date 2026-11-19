@@ -1,6 +1,7 @@
 import { afterAll, beforeAll, beforeEach, describe, expect, test } from 'bun:test'
 import { mkdtemp, rm } from 'node:fs/promises'
 import { startTestCluster, type TestCluster } from '@software-factory/tests/pg'
+import { srcHash } from '@software-factory/contract'
 import { fileBlobStore } from '../../src/adapters/blobs/filesystem.ts'
 import { postgresCheckpointStore } from '../../src/adapters/postgres/checkpoint-store.ts'
 import { loadMigrations, migrate } from '../../src/adapters/postgres/migrate.ts'
@@ -1019,6 +1020,157 @@ describe('artifacts', () => {
       ['anchored', 2, 'Risks '],
       ['anchored', null, null],
     ])
+  })
+
+  test('an annotation hangs on a picture: whole or at a spot, each its own comment, and it follows the picture through a revision', async () => {
+    const issueId = await workingIssue()
+    const shots = (...pictures: [src: string, alt: string][]) =>
+      pictures.map(([src, alt]) => `<img src="${src}" alt="${alt}">`).join('<p>between</p>')
+    const artifact = value(
+      await submitArtifact(deps, {
+        issueId,
+        attempt: 1,
+        raw: {
+          kind: 'report',
+          title: 'Screens',
+          contentFormat: 'html',
+          content: `<h1>Screens</h1>${shots(['/1.png', 'one'], ['/2.png', 'two'], ['/3.png', 'three'])}`,
+        },
+      }),
+    ).artifact
+    const annotate = (raw: Record<string, unknown>) =>
+      annotateArtifact(deps, { artifactId: artifact.id, revision: null, author: 'owner', raw })
+    const second = { occurrence: 1, srcHash: srcHash('/2.png'), label: 'two' }
+    const third = { occurrence: 2, srcHash: srcHash('/3.png'), label: 'three', x: 0.5, y: 0.25 }
+    value(await annotate({ comment: 'crop it', image: second }))
+    value(await annotate({ comment: 'crop it', image: third }))
+    expect(value(await annotate({ comment: 'crop it', image: second }))).toMatchObject({ result: 'replayed' })
+    // a quote sent along is ignored: the picture is the identity
+    expect(value(await annotate({ comment: 'crop it', quote: 'something else', image: second }))).toMatchObject({
+      result: 'replayed',
+    })
+    // the same words on another picture, or on another spot of the same one, are other comments
+    value(
+      await annotate({
+        comment: 'crop it',
+        image: { ...second, occurrence: 0, srcHash: srcHash('/1.png'), label: 'one' },
+      }),
+    )
+    value(await annotate({ comment: 'crop it', image: { ...third, x: 0.1 } }))
+    expect(await rows('annotations')).toBe(4)
+    // a comment on text next to them is as before
+    value(await annotate({ comment: 'why?', quote: 'Screens' }))
+    expect(value(await annotate({ comment: 'why?', quote: 'Screens' }))).toMatchObject({ result: 'replayed' })
+    expect(await rows('annotations')).toBe(5)
+
+    const imageOf = async (revision: number | null) => {
+      const shown = value(await showArtifact(deps, { artifactId: artifact.id, revision }))
+      return shown.annotations.map((a) => ({
+        quote: a.annotation.quote,
+        image: a.annotation.image,
+        occurrence: a.annotation.occurrence,
+        anchor: a.anchor,
+      }))
+    }
+    const first = await imageOf(null)
+    expect(first.find((a) => a.image?.occurrence === 1)).toEqual({
+      quote: 'Image 2: two',
+      image: { ...second, x: null, y: null },
+      occurrence: null,
+      anchor: 'anchored',
+    })
+    expect(first.find((a) => a.image?.x === 0.5)).toMatchObject({
+      quote: 'Image 3: three · spot 50% / 25%',
+      image: third,
+      anchor: 'anchored',
+    })
+    expect(first.find((a) => a.image === null)).toMatchObject({ quote: 'Screens', anchor: 'anchored' })
+    expect((await showAnnotations(artifact.id)).find((a) => a.image?.occurrence === 1)?.image).toEqual({
+      ...second,
+      x: null,
+      y: null,
+    })
+
+    // a revision that reorders the pictures keeps both comments anchored
+    value(
+      await reviseArtifact(deps, {
+        artifactId: artifact.id,
+        attempt: null,
+        content: `<h1>Screens</h1>${shots(['/3.png', 'three'], ['/1.png', 'one'], ['/2.png', 'two'])}`,
+        note: null,
+      }),
+    )
+    expect((await imageOf(null)).every((a) => a.anchor === 'anchored')).toBe(true)
+
+    // a revision that replaces the second picture moves its comment to Unanchored, and only that one
+    value(
+      await reviseArtifact(deps, {
+        artifactId: artifact.id,
+        attempt: null,
+        content: `<h1>Screens</h1>${shots(['/1.png', 'one'], ['/9.png', 'nine'], ['/3.png', 'three'])}`,
+        note: null,
+      }),
+    )
+    expect(
+      (await imageOf(null))
+        .map((a) => [a.image?.srcHash === srcHash('/2.png') ? 'second' : (a.image?.label ?? 'text'), a.anchor])
+        .sort(),
+    ).toEqual([
+      ['one', 'anchored'],
+      ['second', 'unanchored'],
+      ['text', 'anchored'],
+      ['three', 'anchored'],
+      ['three', 'anchored'],
+    ])
+  })
+
+  test('a picture comment on a Markdown artifact hangs on its ![alt](src) images', async () => {
+    const issueId = await workingIssue()
+    const artifact = value(
+      await submitArtifact(deps, {
+        issueId,
+        attempt: 1,
+        raw: {
+          kind: 'report',
+          title: 'Notes',
+          content: '# Notes\n\n![a](https://x.test/1.png)\n\n![b](https://x.test/2.png "Second")',
+        },
+      }),
+    ).artifact
+    const image = { occurrence: 1, srcHash: srcHash('https://x.test/2.png'), label: 'b' }
+    value(
+      await annotateArtifact(deps, {
+        artifactId: artifact.id,
+        revision: null,
+        author: 'owner',
+        raw: { comment: 'blurry', image },
+      }),
+    )
+    expect(value(await showArtifact(deps, { artifactId: artifact.id, revision: null })).annotations).toMatchObject([
+      { anchor: 'anchored', annotation: { quote: 'Image 2: b', image } },
+    ])
+    value(
+      await reviseArtifact(deps, {
+        artifactId: artifact.id,
+        attempt: null,
+        content: '# Notes\n\n![b](https://x.test/2.png)\n\n![a](https://x.test/1.png)',
+        note: null,
+      }),
+    )
+    expect(value(await showArtifact(deps, { artifactId: artifact.id, revision: null })).annotations[0]?.anchor).toBe(
+      'anchored',
+    )
+    value(
+      await reviseArtifact(deps, {
+        artifactId: artifact.id,
+        attempt: null,
+        content: '# Notes\n\n![a](https://x.test/1.png)',
+        note: null,
+      }),
+    )
+    expect(value(await showArtifact(deps, { artifactId: artifact.id, revision: null })).annotations[0]?.anchor).toBe(
+      'unanchored',
+    )
   })
 
   test('the lead answers an annotation with a disposition: its own attempt only, a note for a deferral and a decline, a repeat is a replay', async () => {

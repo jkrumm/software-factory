@@ -1,4 +1,4 @@
-import { ChatCircleTextIcon, PencilSimpleIcon, TrashIcon } from '@phosphor-icons/react'
+import { ChatCircleTextIcon, ImageIcon, PencilSimpleIcon, TrashIcon } from '@phosphor-icons/react'
 import { type ReactNode, useEffect, useRef, useState } from 'react'
 import type { ArtifactDetail } from '@software-factory/contract'
 import { Ago } from '@/components/issue/ago'
@@ -28,6 +28,39 @@ export interface Focus extends PaintAnchor {
   scroll: boolean
   /** the card opens for editing (a click on the passage, the owner's own comment) */
   edit: boolean
+  /** a comment on a picture: its viewer opens on it when it marks a spot */
+  image?: { spot: boolean }
+}
+
+/** What a comment on a picture quotes: the picture's thumbnail (where the page can show it), its label and its place. */
+function ImageQuote({ image, thumbnail }: { image: NonNullable<ReviewItem['image']>; thumbnail?: string }) {
+  const [failed, setFailed] = useState(false)
+  const frame = 'h-12 w-[4.5rem] shrink-0 rounded-sm border border-border'
+  return (
+    <span className={cn('flex items-center gap-2.5 rounded-md p-1.5 text-xs text-muted-foreground', TONE_TINT.neutral)}>
+      {thumbnail && !failed ? (
+        <img
+          src={thumbnail}
+          alt=""
+          loading="lazy"
+          referrerPolicy="no-referrer"
+          onError={() => setFailed(true)}
+          className={cn(frame, 'bg-background object-cover')}
+        />
+      ) : (
+        <span aria-hidden="true" className={cn(frame, 'flex items-center justify-center bg-background')}>
+          <ImageIcon className="size-5" />
+        </span>
+      )}
+      <span className="flex min-w-0 flex-col gap-0.5">
+        <span className="line-clamp-2">{image.label || `Image ${image.occurrence + 1}`}</span>
+        <span className="font-mono text-[11px]">
+          Image {image.occurrence + 1}
+          {image.x === null ? '' : ' · at a spot'}
+        </span>
+      </span>
+    </span>
+  )
 }
 
 const ACTION =
@@ -75,6 +108,7 @@ function AnnotationItem({
   now,
   names,
   mark,
+  thumbnail,
   onFocus,
 }: {
   item: ReviewItem
@@ -86,6 +120,8 @@ function AnnotationItem({
   names: readonly string[]
   /** what became of a comment from an earlier revision */
   mark?: 'carried' | 'resolved by revision'
+  /** the source of the picture a comment on a picture hangs on, where the page can load it */
+  thumbnail?: string
   onFocus?: (item: ReviewItem) => void
 }) {
   const [mode, setMode] = useState<'view' | 'edit' | 'delete'>('view')
@@ -183,7 +219,9 @@ function AnnotationItem({
   const body = (
     <>
       {who}
-      {isGeneral ? null : (
+      {isGeneral ? null : item.image ? (
+        <ImageQuote image={item.image} thumbnail={thumbnail} />
+      ) : (
         <span className={cn('line-clamp-2 rounded-md px-2 py-1.5 text-xs text-muted-foreground', TONE_TINT.neutral)}>
           “{item.quote}”
         </span>
@@ -300,6 +338,7 @@ function Group({
   now,
   names,
   marks,
+  sources,
   onFocus,
 }: {
   title: string
@@ -312,6 +351,7 @@ function Group({
   now: number
   names: readonly string[]
   marks?: boolean
+  sources: ReadonlyMap<string, string>
   onFocus?: (item: ReviewItem) => void
 }) {
   if (items.length === 0) return null
@@ -330,6 +370,7 @@ function Group({
             now={now}
             names={names}
             mark={marks ? (item.anchored || item.path === GLOBAL_PATH ? 'carried' : 'resolved by revision') : undefined}
+            thumbnail={item.image ? sources.get(item.image.srcHash) : undefined}
             onFocus={onFocus}
           />
         ))}
@@ -381,6 +422,7 @@ export function Annotations({
   review,
   focus,
   now,
+  sources,
   onFocus,
   scrollId,
   action,
@@ -390,6 +432,8 @@ export function Annotations({
   review: Review
   focus: Focus | null
   now: number
+  /** the artifact's pictures by hash, for the thumbnail of a comment on a picture */
+  sources: ReadonlyMap<string, string>
   onFocus: (item: ReviewItem) => void
   /** names the pane's scroller for `scroll-keep.ts` and the router; only the page's own pane has one (a peek stacks) */
   scrollId?: string
@@ -404,7 +448,7 @@ export function Annotations({
     detail.artifact.title,
     ...(detail.artifact.format === 'markdown' ? [firstH1(detail.content) ?? ''] : []),
   ]
-  const shared = { focus, review, now, names }
+  const shared = { focus, review, now, names, sources }
   const [opened, setOpened] = useState({ previous: false, later: false })
   // a click on the passage of a carried comment opens its card, so the fold it is in opens with it
   const focusedIn =

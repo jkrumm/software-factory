@@ -303,6 +303,23 @@ mirrored between `anchor:begin` and `anchor:end` in `frame/annotator.js`, both r
 with the same text around it, then the number, then the first one under the stored heading path, then the first one, which is
 all a comment made without them gets.
 
+**Comments on pictures.** A picture is commented like a passage, with an `image` anchor in place of the quote: its place among the
+document's pictures (the lightbox's list), the hash of its `src` as written (`srcHash` in `packages/contract/src/image-anchor.ts`,
+FNV-1a, eight hex digits), its caption or alt text, and optionally a spot on it (`x`, `y`, 0..1). The API derives the quote
+from it (`Image 2: Queue screen · spot 42% / 63%`), so the lead reads and answers it as any comment. A later revision finds the
+picture by the same hash, else the same label, else (only for a picture that had neither) its place (`resolveImage`, mirrored
+between `image:begin` and `image:end` in `frame/lightbox.js`, both run by `test/image-anchor.test.ts`); a replaced picture goes
+"Unanchored" rather than moving its comment onto another one. The server sorts Anchored from Unanchored by reading the
+pictures from the source text (`imageRefs`), which cannot see sizes or links, so it is approximate; the frame and the page place
+the marker exactly. In an HTML artifact the lightbox script, once the page has sent `factory.images`, shows a comment button on a
+hovered or focused picture (`C` on a focused one), a count badge on a commented one, and in the viewer a "Comment" and a "Mark a
+spot" button (the next click drops a pin), numbered pins and the picture's comments in a side list; it posts
+`factory.image` (open the comment box here) and `factory.image-open` (a badge or pin was clicked) and takes
+`factory.image-focus` (a card was clicked: scroll to the picture, or open the viewer with its pin when it marks a spot). All of it
+is built outside `<body>`, so the annotator's text index is untouched. A Markdown image has the same button and badge
+(whole-picture comments only: Markdown has no viewer, so no spot); a card in the Comments pane shows the picture's thumbnail
+where the page can load it (`pictureSources`).
+
 **Reviewing** (`lib/review.ts`, `components/artifact-comments.tsx`, `artifact-toc.tsx`). A comment, an edit and a delete show
 at once and are sent in the background: each write is kept in local state, marked "Sending", until the server has answered and
 the artifact has been read back; a failed one stays on its card with the error, Retry and Discard (Undo, Keep), the text never

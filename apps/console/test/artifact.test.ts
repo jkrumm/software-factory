@@ -11,7 +11,9 @@ import {
   MAX_QUOTE,
   normalizeQuote,
   parseFrameMessage,
+  pictureSources,
   popoverPosition,
+  quoteOfImage,
   slugOf,
   splitByRevision,
 } from '../src/lib/artifact.ts'
@@ -226,5 +228,75 @@ describe('popoverPosition', () => {
   })
   test('a box that fits neither side sits at the bottom edge', () => {
     expect(popoverPosition({ top: 100, bottom: 1100, left: 10 }, { width: 352, height: 400 }, viewport).top).toBe(792)
+  })
+})
+
+describe('a comment on a picture', () => {
+  const rect = { top: 10, bottom: 40, left: 5 }
+  const image = { occurrence: 1, srcHash: 'a1b2c3d4', label: 'Queue screen' }
+
+  test('the frame names the picture, and a spot only with both coordinates', () => {
+    expect(parseFrameMessage({ type: 'factory.image', image, path: 'Screens > Queue', rect })).toEqual({
+      type: 'image',
+      image,
+      path: 'Screens > Queue',
+      rect,
+    })
+    expect(
+      parseFrameMessage({ type: 'factory.image', image: { ...image, x: 0.25, y: 0.5 }, path: '', rect }),
+    ).toMatchObject({
+      image: { ...image, x: 0.25, y: 0.5 },
+    })
+    expect(parseFrameMessage({ type: 'factory.image', image: { ...image, x: 0.25 }, path: '', rect })).toMatchObject({
+      image,
+    })
+  })
+
+  test('a malformed picture message is nothing', () => {
+    for (const bad of [
+      { type: 'factory.image', image: { ...image, occurrence: -1 }, path: '', rect },
+      { type: 'factory.image', image: { ...image, x: 2, y: 0 }, path: '', rect },
+      { type: 'factory.image', image: { ...image, srcHash: 'a'.repeat(9) }, path: '', rect },
+      { type: 'factory.image', image: { ...image, label: 'x'.repeat(301) }, path: '', rect },
+      { type: 'factory.image', image, rect },
+      { type: 'factory.image', path: '', rect },
+    ])
+      expect(parseFrameMessage(bad)).toBeNull()
+  })
+
+  test('a click on a badge or a pin names its comment', () => {
+    expect(parseFrameMessage({ type: 'factory.image-open', id: 'annotation_1' })).toEqual({
+      type: 'image-open',
+      id: 'annotation_1',
+    })
+    expect(parseFrameMessage({ type: 'factory.image-open', id: '' })).toBeNull()
+  })
+
+  test('its quote is the words that name it', () => {
+    expect(quoteOfImage(image)).toBe('Image 2: Queue screen')
+    expect(quoteOfImage({ ...image, x: 0.4, y: 0.6 })).toBe('Image 2: Queue screen · spot 40% / 60%')
+  })
+})
+
+describe('pictureSources', () => {
+  const png = 'data:image/png;base64,AAAA'
+  test('reads an HTML artifact’s images as the browser would: quotes, entities, the first of equal sources', () => {
+    const html = `<p>x</p><IMG alt="a" SRC="${png}"><img src='https://x.test/a.png?x=1&amp;y=2'><img src=https://x.test/b.png><img src="${png}">`
+    const found = pictureSources(html, 'html')
+    expect([...found.values()]).toEqual([png, 'https://x.test/a.png?x=1&y=2', 'https://x.test/b.png'])
+  })
+
+  test('keeps only what the page may load, and has no source for an inline svg or an image without one', () => {
+    const html =
+      '<svg><image href="data:image/png;base64,AA"/></svg><img alt="no src"><img src="javascript:0"><img src="http://x.test/a.png"><img src="relative.png">'
+    expect(pictureSources(html, 'html').size).toBe(0)
+  })
+
+  test('reads Markdown images by their link', () => {
+    const found = pictureSources(
+      '![one](https://x.test/a.png)\n\n![two](https://x.test/b.png "Title") and ![none]()',
+      'markdown',
+    )
+    expect([...found.values()]).toEqual(['https://x.test/a.png', 'https://x.test/b.png'])
   })
 })

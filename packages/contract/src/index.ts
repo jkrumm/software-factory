@@ -24,6 +24,15 @@ export {
   WithdrawBody,
 } from './issues.ts'
 export * from './filing.ts'
+export {
+  ImageAnchor,
+  ImageAnchorInput,
+  imageQuote,
+  MAX_IMAGE_LABEL,
+  resolveImage,
+  srcHash,
+  type ImageRef,
+} from './image-anchor.ts'
 export * from './seat.ts'
 export * from './light-gate.ts'
 export * from './reviewer.ts'

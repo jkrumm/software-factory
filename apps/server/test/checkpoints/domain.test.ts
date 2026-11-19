@@ -1,12 +1,15 @@
 import { describe, expect, test } from 'bun:test'
 import {
   anchorOf,
+  imageAnchorOf,
+  imageRefs,
   readableText,
   readAnnotation,
   readComment,
   readSubmission,
   renderDecisionForm,
 } from '../../src/domains/checkpoints/artifact.ts'
+import { srcHash } from '@software-factory/contract'
 import {
   defaultAt,
   defaultDue,
@@ -246,14 +249,14 @@ describe('artifacts', () => {
     expect(!read.ok && read.error.fields).toEqual(expect.arrayContaining(['quote', 'comment']))
     expect(readAnnotation({ quote: 'a', comment: 'b' })).toMatchObject({
       ok: true,
-      value: { path: null, occurrence: null, prefix: null, suffix: null },
+      value: { path: null, occurrence: null, prefix: null, suffix: null, image: null },
     })
   })
 
   test('an annotation may name its occurrence and the text around the quote; all three are optional', () => {
     expect(readAnnotation({ quote: 'a', comment: 'b', occurrence: 2, prefix: 'before ', suffix: ' after' })).toEqual({
       ok: true,
-      value: { quote: 'a', path: null, occurrence: 2, prefix: 'before ', suffix: ' after', comment: 'b' },
+      value: { quote: 'a', path: null, occurrence: 2, prefix: 'before ', suffix: ' after', image: null, comment: 'b' },
     })
     // a space at the edge is part of the context, an empty one is none
     expect(readAnnotation({ quote: 'a', comment: 'b', occurrence: 0, prefix: '', suffix: ' x' })).toMatchObject({
@@ -270,6 +273,72 @@ describe('artifacts', () => {
       const read = readAnnotation({ quote: 'a', comment: 'b', ...bad })
       expect(read.ok).toBe(false)
     }
+  })
+
+  test('an annotation may hang on a picture: the quote is derived, a spot is both coordinates, the text fields are not kept', () => {
+    expect(
+      readAnnotation({
+        quote: 'ignored',
+        occurrence: 4,
+        prefix: 'x',
+        path: ' Screens ',
+        comment: ' b ',
+        image: { occurrence: 1, srcHash: 'a1b2c3d4', label: '  Overview \n page ' },
+      }),
+    ).toEqual({
+      ok: true,
+      value: {
+        quote: 'Image 2: Overview page',
+        path: 'Screens',
+        occurrence: null,
+        prefix: null,
+        suffix: null,
+        image: { occurrence: 1, srcHash: 'a1b2c3d4', label: 'Overview page', x: null, y: null },
+        comment: 'b',
+      },
+    })
+    expect(readAnnotation({ comment: 'b', image: { occurrence: 0, srcHash: '', x: 0.25, y: 1 } })).toMatchObject({
+      ok: true,
+      value: { quote: 'Image 1 · spot 25% / 100%', image: { label: '', x: 0.25, y: 1 } },
+    })
+    // a null x and y are none
+    expect(readAnnotation({ comment: 'b', image: { occurrence: 0, srcHash: '', x: null, y: null } })).toMatchObject({
+      value: { image: { x: null, y: null } },
+    })
+  })
+
+  test('a picture annotation names each wrong field of its image, and still needs its comment', () => {
+    const fields = (raw: Record<string, unknown>) => {
+      const read = readAnnotation({ comment: 'b', ...raw })
+      return read.ok ? [] : read.error.fields
+    }
+    expect(fields({ image: {} })).toEqual([
+      'image.occurrence (a whole number from 0)',
+      "image.srcHash ('' or up to 8 lowercase hex characters)",
+    ])
+    expect(fields({ image: 'first' })).toEqual(['image (an object: occurrence, srcHash, label, x, y)'])
+    expect(fields({ comment: ' ', image: { occurrence: 0, srcHash: '' } })).toEqual(['comment'])
+    const good = { occurrence: 0, srcHash: 'abcdef12' }
+    for (const [image, field] of [
+      [{ ...good, occurrence: -1 }, 'image.occurrence'],
+      [{ ...good, occurrence: 1.5 }, 'image.occurrence'],
+      [{ ...good, occurrence: 2_147_483_648 }, 'image.occurrence'],
+      [{ ...good, occurrence: '1' }, 'image.occurrence'],
+      [{ ...good, srcHash: 'ABCDEF12' }, 'image.srcHash'],
+      [{ ...good, srcHash: 'abcdef123' }, 'image.srcHash'],
+      [{ ...good, srcHash: 7 }, 'image.srcHash'],
+      [{ ...good, label: 3 }, 'image.label'],
+      [{ ...good, label: 'x'.repeat(301) }, 'image.label'],
+      [{ ...good, x: 0.5 }, 'image.x and image.y'],
+      [{ ...good, y: 0.5 }, 'image.x and image.y'],
+      [{ ...good, x: 1.1, y: 0.5 }, 'image.x and image.y'],
+      [{ ...good, x: 0.5, y: -0.1 }, 'image.x and image.y'],
+      [{ ...good, x: '0.5', y: 0.5 }, 'image.x and image.y'],
+    ] as const) {
+      expect(fields({ image }).map((f) => f.split(' (')[0])).toEqual([field])
+    }
+    // a label of exactly the cap is fine once its whitespace is folded
+    expect(readAnnotation({ comment: 'b', image: { ...good, label: ` ${'x'.repeat(300)} ` } }).ok).toBe(true)
   })
 
   test('an edited comment is trimmed, not empty and not over the cap', () => {
@@ -318,6 +387,89 @@ describe('artifacts', () => {
     const md = 'Run `make_check` and keep the *queue*.'
     expect(anchorOf(md, 'markdown', 'make_check and keep the queue')).toBe('anchored')
     expect(anchorOf(md, 'markdown', 'keep the *queue*')).toBe('anchored')
+  })
+
+  test('the pictures of an HTML document: a figure is one, a bare img or svg is one, one inside an svg is not', () => {
+    const html = [
+      '<figure><img src="/a.png" alt="alt a"><figcaption>The <b>first</b>\n shot</figcaption></figure>',
+      '<img src="/b.png" alt="  Shot  b ">',
+      '<svg aria-label="Diagram"><svg aria-label="inner"><circle/></svg><img src="/in.png" alt="inside"></svg>',
+      '<figure><figcaption>Late caption</figcaption><svg aria-label="chart"></svg><img src="/skipped.png"></figure>',
+      '<figure><p>no picture</p></figure>',
+      '<figure><div><figure><img src="/n.png" alt="nested"></figure></div></figure>',
+      "<IMG SRC='/c.png' ALT=Upper>",
+      '<img data-src="/lazy.png" alt="no src">',
+    ].join('\n')
+    expect(imageRefs(html, 'html')).toEqual([
+      { hash: srcHash('/a.png'), label: 'The first shot' },
+      { hash: srcHash('/b.png'), label: 'Shot b' },
+      { hash: '', label: 'Diagram' },
+      { hash: '', label: 'Late caption' },
+      { hash: srcHash('/n.png'), label: 'nested' },
+      { hash: srcHash('/c.png'), label: 'Upper' },
+      { hash: '', label: 'no src' },
+    ])
+  })
+
+  test('an image src is read as written: entities decoded, quotes stripped; comments, scripts and styles hide pictures', () => {
+    const html = [
+      '<img src="/x.png?a=1&amp;b=2" alt="Fish &amp; chips">',
+      '<!-- <img src="/commented.png"> -->',
+      '<script>document.write(\'<img src="/script.png">\')</script>',
+      '<style>img[src="/style.png"] { color: red }</style>',
+    ].join('')
+    expect(imageRefs(html, 'html')).toEqual([{ hash: srcHash('/x.png?a=1&b=2'), label: 'Fish & chips' }])
+  })
+
+  test('an inline svg is labelled as the frame labels it: aria-label, else its <title> (an alt, a caption or none otherwise)', () => {
+    const html = [
+      '<svg><title>Queue &amp; flow</title><rect/></svg>',
+      '<svg aria-label="Named"><title>Ignored</title></svg>',
+      '<svg><g/></svg><svg><title>Second title</title></svg>',
+      '<figure><svg><title>In a figure</title></svg><figcaption>Caption wins</figcaption></figure>',
+      '<svg/><svg><title>After a self-closed one</title></svg>',
+      '<svg><svg><circle/></svg><title>After a nested one</title></svg>',
+    ].join('')
+    expect(imageRefs(html, 'html')).toEqual([
+      { hash: '', label: 'Queue & flow' },
+      { hash: '', label: 'Named' },
+      { hash: '', label: '' },
+      { hash: '', label: 'Second title' },
+      { hash: '', label: 'Caption wins' },
+      { hash: '', label: '' },
+      { hash: '', label: 'After a self-closed one' },
+      { hash: '', label: 'After a nested one' },
+    ])
+  })
+
+  test('the pictures of a Markdown document: every image in order, with its title cut off, none in fenced code', () => {
+    const md = [
+      '# Shots',
+      '![First  shot](https://x.test/1.png)',
+      'text ![](https://x.test/2.png "A title") and [a link](https://x.test/3.png)',
+      '```md',
+      '![in code](https://x.test/code.png)',
+      '```',
+      '~~~',
+      '![in tilde](https://x.test/tilde.png)',
+      '~~~',
+      '![last](./4.png)',
+    ].join('\n')
+    expect(imageRefs(md, 'markdown')).toEqual([
+      { hash: srcHash('https://x.test/1.png'), label: 'First shot' },
+      { hash: srcHash('https://x.test/2.png'), label: '' },
+      { hash: srcHash('./4.png'), label: 'last' },
+    ])
+  })
+
+  test('a picture comment is anchored while a picture of the revision resolves from it', () => {
+    const image = { occurrence: 1, srcHash: srcHash('/b.png'), label: 'b', x: null, y: null }
+    const two = '<img src="/a.png" alt="a"><img src="/b.png" alt="b">'
+    expect(imageAnchorOf(two, 'html', image)).toBe('anchored')
+    expect(imageAnchorOf('<img src="/b.png" alt="b"><img src="/a.png" alt="a">', 'html', image)).toBe('anchored')
+    expect(imageAnchorOf('<img src="/a.png" alt="a"><img src="/c.png" alt="c">', 'html', image)).toBe('unanchored')
+    expect(imageAnchorOf('<p>no pictures</p>', 'html', image)).toBe('unanchored')
+    expect(imageAnchorOf('![b](/b.png)', 'markdown', image)).toBe('anchored')
   })
 
   test('an empty quote anchors nowhere', () => {

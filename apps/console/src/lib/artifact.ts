@@ -1,3 +1,4 @@
+import { imageQuote, MAX_IMAGE_LABEL, srcHash } from '@software-factory/contract'
 import * as z from 'zod'
 
 /** The pure parts of the artifact page: quotes, paths, the frame's messages, the text index highlights are found in. */
@@ -49,6 +50,27 @@ const FrameSelect = z.object({
   suffix: z.string().max(MAX_CONTEXT).optional(),
   rect: FrameRectShape,
 })
+/** A picture the owner is commenting on, as the frame names it; `x` and `y` (0..1) are a spot on it, both or neither. */
+export interface ImageTarget {
+  occurrence: number
+  srcHash: string
+  label: string
+  x?: number
+  y?: number
+}
+const FrameImage = z.object({
+  type: z.literal('factory.image'),
+  image: z.object({
+    occurrence: z.number().int().min(0).max(2_147_483_647),
+    srcHash: z.string().max(8),
+    label: z.string().max(MAX_IMAGE_LABEL),
+    x: z.number().min(0).max(1).optional(),
+    y: z.number().min(0).max(1).optional(),
+  }),
+  path: z.string().max(MAX_PATH),
+  rect: FrameRectShape,
+})
+const FrameImageOpen = z.object({ type: z.literal('factory.image-open'), id: z.string().min(1).max(200) })
 const MAX_HREF = 2048
 const MAX_HEADING = 300
 const MAX_HEADINGS = 500
@@ -85,6 +107,10 @@ export interface Occurrence {
 export type FrameMessage =
   | ({ type: 'select'; quote: string; path: string; rect: SelectionRect } & Occurrence)
   | { type: 'ready' }
+  /** the owner asked to comment on a picture (and a spot on it): where, and which one */
+  | { type: 'image'; image: ImageTarget; path: string; rect: SelectionRect }
+  /** a click on a picture's badge or a pin in the viewer: the comment it stands for */
+  | { type: 'image-open'; id: string }
   /** a click on a highlighted passage: the quote that was painted there, and the comment it was painted for */
   | { type: 'open'; quote: string; id?: string }
   /** a click on a link that leaves the frame: an absolute http(s) URL, to be opened by the page */
@@ -103,6 +129,20 @@ export function parseFrameMessage(data: unknown): FrameMessage | null {
   }
   const link = FrameLink.safeParse(data)
   if (link.success) return /^https?:\/\//i.test(link.data.href) ? { type: 'link', href: link.data.href } : null
+  const picture = FrameImage.safeParse(data)
+  if (picture.success) {
+    const { x, y, ...rest } = picture.data.image
+    const { top, bottom, left } = picture.data.rect
+    return {
+      type: 'image',
+      // a spot is both coordinates or none
+      image: x !== undefined && y !== undefined ? { ...rest, x, y } : rest,
+      path: picture.data.path.trim(),
+      rect: { top, bottom, left },
+    }
+  }
+  const pictureOpen = FrameImageOpen.safeParse(data)
+  if (pictureOpen.success) return { type: 'image-open', id: pictureOpen.data.id }
   const headings = FrameHeadings.safeParse(data)
   if (headings.success)
     return {
@@ -294,6 +334,45 @@ export function locateQuote(
   const last = index.at[from + wanted.length - 1]
   if (!first || !last) return null
   return { start: first, end: [last[0], last[1] + 1] }
+}
+
+/** The quote a picture comment carries: the same words the server derives from the anchor. */
+export const quoteOfImage = (image: ImageTarget): string => imageQuote(image)
+
+const MD_IMAGE = /!\[([^\]]*)\]\(\s*([^\s)]*)[^)]*\)/g
+const IMG_TAG = /<img\b[^>]*>/gi
+const NAMED_ENTITIES: Record<string, string> = { amp: '&', lt: '<', gt: '>', quot: '"', apos: "'" }
+
+/** A source a thumbnail may load from: the page's CSP lets only `data:` and the listed hosts through. */
+const thumbnailSource = (src: string): boolean => src.startsWith('data:image/') || src.startsWith('https://')
+
+/** The `src` of an `<img>` tag as the browser reads the attribute (quotes off, entities decoded), or null. */
+function srcOfTag(tag: string): string | null {
+  const found = /(?<=[\s"'/])src\s*=\s*(?:"([^"]*)"|'([^']*)'|([^\s>]+))/i.exec(tag)
+  const raw = found?.[1] ?? found?.[2] ?? found?.[3]
+  if (raw === undefined) return null
+  return raw.replace(/&(?:#(\d+)|#x([0-9a-f]+)|([a-z]+));/gi, (entity, dec?: string, hex?: string, name?: string) => {
+    if (name) return NAMED_ENTITIES[name.toLowerCase()] ?? entity
+    const code = dec ? Number(dec) : Number.parseInt(hex ?? '', 16)
+    return Number.isInteger(code) && code > 0 && code <= 0x10ffff ? String.fromCodePoint(code) : entity
+  })
+}
+
+/**
+ * The sources of an artifact's pictures by their `srcHash`, to show a comment's thumbnail: an HTML artifact's `<img src>` or a
+ * Markdown image's link, read from the text (nothing is parsed into a document, so nothing loads or runs). An inline svg has none.
+ */
+export function pictureSources(content: string, format: 'markdown' | 'html'): Map<string, string> {
+  const found = new Map<string, string>()
+  const note = (src: string | null) => {
+    if (src && thumbnailSource(src) && !found.has(srcHash(src))) found.set(srcHash(src), src)
+  }
+  if (format === 'markdown') {
+    for (const match of content.matchAll(MD_IMAGE)) note(match[2] ?? null)
+    return found
+  }
+  for (const tag of content.matchAll(IMG_TAG)) note(srcOfTag(tag[0]))
+  return found
 }
 
 export const KIND_WORDS = { concept: 'Concept', spec: 'Spec', decision: 'Decision', report: 'Report' } as const

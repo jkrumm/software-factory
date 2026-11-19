@@ -2,7 +2,7 @@ import { useQueryClient } from '@tanstack/react-query'
 import { useRef, useState } from 'react'
 import type { ArtifactDetail } from '@software-factory/contract'
 import { deleteAnnotation, patchAnnotation, postAnnotation } from '@/lib/api'
-import { GLOBAL_PATH, type Occurrence, type PaintAnchor } from '@/lib/artifact'
+import { GLOBAL_PATH, type ImageTarget, type Occurrence, type PaintAnchor } from '@/lib/artifact'
 
 /**
  * The review's writes as the owner sees them: a comment, an edit or a delete shows at once and is sent in the background.
@@ -16,6 +16,8 @@ export interface NewComment extends Occurrence {
   revision: number
   quote: string
   path?: string
+  /** a comment on a picture: its quote is the one derived from it */
+  image?: ImageTarget
   comment: string
 }
 
@@ -64,7 +66,7 @@ export function reviewItems(detail: ArtifactDetail, pending: readonly Delivery[]
   }
   for (const d of pending) {
     if (d.kind !== 'create') continue
-    const { revision, quote, path, comment, occurrence, prefix, suffix } = d.body
+    const { revision, quote, path, comment, occurrence, prefix, suffix, image } = d.body
     // a saved comment hides when the server's list already has it (the read-back can overtake the write's bookkeeping)
     if (
       d.state === 'saved' &&
@@ -85,6 +87,7 @@ export function reviewItems(detail: ArtifactDetail, pending: readonly Delivery[]
       occurrence: occurrence ?? null,
       prefix: prefix ?? null,
       suffix: suffix ?? null,
+      image: image ? { ...image, x: image.x ?? null, y: image.y ?? null } : null,
       comment,
       author: 'owner',
       at: d.at,
@@ -114,7 +117,41 @@ export function paintAnchorOf(item: ReviewItem): PaintAnchor {
  * comment too, found by its text around it), a new one at once, a deleted one gone.
  */
 export function highlightAnchors(items: readonly ReviewItem[]): PaintAnchor[] {
-  return items.filter((i) => i.anchored && i.path !== GLOBAL_PATH).map(paintAnchorOf)
+  return items.filter((i) => i.anchored && i.path !== GLOBAL_PATH && !i.image).map(paintAnchorOf)
+}
+
+/** A comment on a picture as the frame draws it: which picture, where on it, who said what. */
+export interface ImageComment {
+  id: string
+  occurrence: number
+  srcHash: string
+  label: string
+  x: number | null
+  y: number | null
+  author: 'owner' | 'lead'
+  text: string
+}
+
+const MAX_IMAGE_COMMENT = 500
+
+/** The comments to draw on the pictures of the document: every one whose picture is still in the revision shown. */
+export function imageComments(items: readonly ReviewItem[]): ImageComment[] {
+  return items.flatMap((item) =>
+    item.anchored && item.image
+      ? [
+          {
+            id: item.id,
+            occurrence: item.image.occurrence,
+            srcHash: item.image.srcHash,
+            label: item.image.label,
+            x: item.image.x,
+            y: item.image.y,
+            author: item.author,
+            text: item.comment.slice(0, MAX_IMAGE_COMMENT),
+          },
+        ]
+      : [],
+  )
 }
 
 export function useReview(id: string) {
