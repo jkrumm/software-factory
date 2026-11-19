@@ -18,6 +18,7 @@ import {
   SPILL,
   defaultAccountId,
   isNum,
+  required,
   sampleFromClaudeJson,
 } from './policy.ts'
 import { expandHome, registryPath } from './paths.ts'
@@ -146,6 +147,6 @@ export function readClaudeJsonSample(a: Account): Sample | null {
 /** Shell fragment for a pick; null for the IU spill signal. */
 export function shellLine(reg: Registry, p: PickResult): string | null {
   if (p.picked === SPILL) return null
-  const dir = accountDir(reg.accounts[p.picked])
+  const dir = accountDir(required(reg.accounts, p.picked))
   return dir === null ? 'unset CLAUDE_CONFIG_DIR' : `export CLAUDE_CONFIG_DIR=${shQuote(dir)}`
 }

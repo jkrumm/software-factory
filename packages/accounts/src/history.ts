@@ -162,7 +162,7 @@ export function closedMs(a: number, b: number, w: number | null, wReset: number 
   if (drain) return overlap(-Infinity, Infinity, weeklyCeiling(null, 0, true))
   if (wReset === null) return overlap(-Infinity, Infinity, WEEKLY_MAX)
   const end = wReset * 1000
-  const edges = [end - CEILING_EXPIRING_S * 1000, end - FINAL_S * 1000, end]
+  const edges: [number, number, number] = [end - CEILING_EXPIRING_S * 1000, end - FINAL_S * 1000, end]
   return (
     overlap(-Infinity, edges[0], weeklyCeiling(wReset, edges[0] - 1)) +
     overlap(edges[0], edges[1], weeklyCeiling(wReset, edges[0] + 1)) +
@@ -176,7 +176,8 @@ export function closedHours(week: Held[], endMs: number): number {
   let ms = 0
   week.forEach((h, i) => {
     const from = Math.min(h.ts, endMs)
-    const to = Math.min(i + 1 < week.length ? week[i + 1].ts : endMs, endMs)
+    const next = week[i + 1]
+    const to = Math.min(next ? next.ts : endMs, endMs)
     ms += closedMs(from, to, h.w, h.w_reset, h.mode === 'drain')
   })
   return Math.round(ms / 360_000) / 10
@@ -312,4 +313,57 @@ export function forecastWeekly(i: {
     burn_per_hour: Math.round(rate * 100) / 100,
     basis_hours: base ? round1(span) : 0,
   }
+}
+
+/** What `quotaUsedAtResetIn` found: the capacity-weighted mean of the weekly percent at reset, and how many resets stand under it. */
+export interface QuotaAtReset {
+  /** null when no reset of an account with a known capacity and a weekly percent fell in the span */
+  percent: number | null
+  resets: number
+}
+
+/**
+ * Quota used at reset: the capacity-weighted mean of the weekly percent each account stood at when its weekly window reset
+ * (`at` in `[from, to)`, epoch ms), from the reset ledger. The weight is the account's weekly capacity (`weeklyUnits`), so a
+ * big plan counts for more than a small one; an account with no capacity given, or a reset with no weekly percent, is left out.
+ */
+export function quotaUsedAtResetIn(i: {
+  entries: readonly ResetEntry[]
+  weeklyUnits: Readonly<Record<string, number>>
+  from: number
+  to: number
+}): QuotaAtReset {
+  let weight = 0
+  let sum = 0
+  let resets = 0
+  for (const e of i.entries) {
+    const units = i.weeklyUnits[e.id]
+    if (e.at < i.from || e.at >= i.to || e.weekly === null || units === undefined || !(units > 0)) continue
+    weight += units
+    sum += units * e.weekly
+    resets += 1
+  }
+  return { percent: weight > 0 ? sum / weight : null, resets }
+}
+
+/** One week of `quotaUsedAtReset`. */
+export interface QuotaAtResetWeek extends QuotaAtReset {
+  /** epoch ms, the week's start (inclusive) and end (exclusive) */
+  from: number
+  to: number
+}
+
+/** `quotaUsedAtResetIn` per week: the `weeks` blocks of seven days that end at `nowMs`, oldest first, the last the newest. */
+export function quotaUsedAtReset(i: {
+  entries: readonly ResetEntry[]
+  weeklyUnits: Readonly<Record<string, number>>
+  nowMs: number
+  weeks: number
+}): QuotaAtResetWeek[] {
+  const WEEK = 7 * 24 * 3600_000
+  return Array.from({ length: i.weeks }, (_, k): QuotaAtResetWeek => {
+    const to = i.nowMs - (i.weeks - 1 - k) * WEEK
+    const from = to - WEEK
+    return { from, to, ...quotaUsedAtResetIn({ entries: i.entries, weeklyUnits: i.weeklyUnits, from, to }) }
+  })
 }

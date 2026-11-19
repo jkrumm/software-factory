@@ -28,6 +28,7 @@ import {
   mergeSample,
   noSession,
   observedReset,
+  required,
 } from './policy.ts'
 import { type OverrideRecord, type OverrideState, parseOverrides } from './modes.ts'
 import { cacheDir, modesAuditPath, modesPath } from './paths.ts'
@@ -72,9 +73,8 @@ export function loadCache(dir = cacheDir()): Cache {
     return c
   }
   for (const name of names) {
-    const m = /^([A-Za-z0-9_-]+)\.(sample|exhausted|auth|reset)\.json$/.exec(name)
-    if (!m) continue
-    const [, id, kind] = m
+    const [, id, kind] = /^([A-Za-z0-9_-]+)\.(sample|exhausted|auth|reset)\.json$/.exec(name) ?? []
+    if (!id || !kind) continue
     const j = readJson(join(dir, name)) as Record<string, unknown> | null
     if (!j) continue
     if (kind === 'sample') {
@@ -280,7 +280,7 @@ export function claimRefresh(
   }
   // `all` (the daily login keepalive): every enabled account, whatever its sample age; the claim budget still applies.
   const candidates = all
-    ? Object.keys(reg.accounts).filter((id) => reg.accounts[id].enabled)
+    ? Object.keys(reg.accounts).filter((id) => required(reg.accounts, id).enabled)
     : dueIds(reg, cache, nowMs, ignoreAuthMark)
   return candidates.filter((id) => {
     if (!ids.includes(id)) return false

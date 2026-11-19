@@ -21,10 +21,10 @@ export function sessionAccount(sessionId: string, logDir: string): string | null
     } catch {
       continue
     }
-    for (let i = lines.length - 1; i >= 0; i--) {
-      if (!lines[i].includes(sessionId) || !lines[i].includes('session_env')) continue
+    for (const line of lines.reverse()) {
+      if (!line.includes(sessionId) || !line.includes('session_env')) continue
       try {
-        const e = JSON.parse(lines[i])
+        const e = JSON.parse(line)
         if (e.event === 'session_env' && e.data?.session === sessionId)
           return typeof e.data.account === 'string' ? e.data.account : null
       } catch {
@@ -45,15 +45,15 @@ export function latestSessionId(projectsDir: string, cwd: string): string | null
   let best: { id: string; mtime: number } | null = null
   try {
     for (const f of readdirSync(dir)) {
-      const m = /^([A-Za-z0-9_-]+)\.jsonl$/.exec(f)
-      if (!m) continue
+      if (!/^[A-Za-z0-9_-]+\.jsonl$/.test(f)) continue
+      const id = f.slice(0, -'.jsonl'.length)
       let mtime: number
       try {
         mtime = statSync(join(dir, f)).mtimeMs
       } catch {
         continue // vanished between readdir and stat (a session cleaning up): skip it, keep the others
       }
-      if (!best || mtime > best.mtime) best = { id: m[1], mtime }
+      if (!best || mtime > best.mtime) best = { id, mtime }
     }
   } catch {
     return null
