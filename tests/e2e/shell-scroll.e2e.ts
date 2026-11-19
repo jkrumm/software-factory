@@ -32,6 +32,7 @@ const routes = (): string[] => {
     '/improve?days=90',
     '/throughput',
     '/throughput?hours=168',
+    '/accounts',
     '/kit',
     `/issues/${rich.replace('issue_', '')}`,
     `/artifacts/${spec}`,

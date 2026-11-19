@@ -10,6 +10,7 @@ const SCREENS = [
   { label: 'Artifacts', path: '/artifacts', key: 'A' },
   { label: 'Improve', path: '/improve', key: 'I' },
   { label: 'Throughput', path: '/throughput', key: 'T' },
+  { label: 'Accounts', path: '/accounts', key: 'S' },
 ] as const
 
 test('the root is the Overview with its band, the badge is the API count and no id leaks onto the page', async ({
@@ -27,7 +28,7 @@ test('the root is the Overview with its band, the badge is the API count and no 
   expect(await page.getByTestId('overview-band').innerText()).not.toMatch(/issue_\d+|lead-\d+|#\d+/)
 })
 
-test('the seven screens open from the navigation and from G then O, N, C, P, A, I, T', async ({ page }) => {
+test('the eight screens open from the navigation and from G then O, N, C, P, A, I, T, S', async ({ page }) => {
   await page.goto('/needs-you')
   const nav = page.getByRole('navigation', { name: 'Main' })
   for (const { label, path } of SCREENS) {

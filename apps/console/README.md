@@ -2,10 +2,10 @@
 
 The owner's place for decisions, on a phone and a desktop: a Vite + React SPA (Base UI through shadcn, Tailwind 4, Basalt
 tokens, TanStack Router, Query and Hotkeys), installable as a PWA. It holds no logic the API could hold. This is the shell:
-a sidebar, a one-line header strip, the command palette, and the screens (Overview, Needs you, Chain, Projects, Artifacts, Improve, Throughput, and the Issue page).
+a sidebar, a one-line header strip, the command palette, and the screens (Overview, Needs you, Chain, Projects, Artifacts, Improve, Throughput, Accounts, and the Issue page).
 
-**Sidebar** (`components/sidebar.tsx`, from `md` up; a tab bar below): the logo slot and wordmark, the seven screens in two groups (Overview, Needs you, Chain, Projects, Artifacts; then Improve and Throughput under "How it runs") with their
-keys (`g o`, `g n`, `g c`, `g p`, `g a`, `g i`, `g t`, shown on hover in the count's place) and counts, then the page's own section. A page fills that section with
+**Sidebar** (`components/sidebar.tsx`, from `md` up; a tab bar below): the logo slot and wordmark, the eight screens in two groups (Overview, Needs you, Chain, Projects, Artifacts; then Improve, Throughput and Accounts under "How it runs") with their
+keys (`g o`, `g n`, `g c`, `g p`, `g a`, `g i`, `g t`, `g s`, shown on hover in the count's place) and counts, then the page's own section. A page fills that section with
 `<SidebarSection title>` (a portal into the sidebar's slot, gone when the page unmounts): the Overview's projects and origins,
 Needs you's kinds and projects (`?kind=`, `?project=`), Chain's projects, Improve's window. Each is a toggle on a search param, and the page's own
 select or switch stays below `md`. Collapsed to icons (14 rem or 3.5 rem, kept in `localStorage` as `console-sidebar`) the
@@ -38,6 +38,8 @@ replaces it, so closing is one step. Escape yields to an open popover or the pal
 field. The address logic is pure (`lib/peek.ts`); the panel's content is its own chunk. The rules: `DESIGN.md` "The peek".
 
 ## Projects
+
+`/accounts` (`routes/accounts.tsx`, the words in `lib/accounts.ts`) reads `GET /v1/accounts` and holds no rule: the package's state, lanes, forecast, reset ledger and order, worded. It shows the order the chosen lane (`?lane=`, default bulk) gives now with each place's reason, the KPI quota used at reset over the last six weeks (from `GET /v1/kpis`), and one panel per account: plan, mode with its expiry and source, each limit as a meter with its reset, the forecast in words, per lane whether it takes work and why not, the seats, the weekly percent at the last eight resets, and the four intents (Fill first, Hold for a model, Pause, Back to normal) with their expiry. The intents are `POST` and `DELETE /v1/accounts/:id/mode`, two of the listener's fifteen verbs. The strip shows a mode beside the account's meter when it is not normal.
 
 `/projects` is one table on TanStack Table (`components/project/table.tsx`; sorting, filters, stored choices and the lamp in `lib/project-table.ts`) fed by one read, `GET /v1/projects`, which carries every figure and the digest the row previews on hover; one row per project in the owner's Herdr groups, busiest first, a card per project below 40 rem; a row opens `/projects/<name>`, and so does **every project chip** of the Console (Issue cards and rows, Needs you, the Chain's nodes and groups, the digest strip, the palette, Throughput's tables, the Issue page and artifact headers). The Overview's own project filter stays a toggle in its sidebar. The page (`routes/projects.$name*.tsx`, `components/project/`) reads top-down. Its header holds the name, a project switcher (a popover that lands on the tab that is open; there is no project list in the sidebar), the links to the Overview, Chain and Artifacts filtered to the project, and the tabs. The project's own address is the first screen, built for 1800 by 1200 with no scrolling: a health band of three answers (production: incidents, regressions and what is in Watch; the checks: the hygiene probes that found or failed; the project files: a `project.yaml` or plan that does not parse), then Moving now (Running and Paused with the reason, five each), Next (Ready and Held, five each, and the plan rows no Issue is on yet) and Shipped (the hourly bars of 7 days and the newest five); each list ends in a count that opens the tab with the rest, and nothing is shown twice. The other screens are tabs with their own address and their own reads: `/work` (every open Issue, sortable, from the cached `GET /v1/flow` so it is as live as the Overview), `/plan` (`GET /v1/projects/:name/plan`: every row with state, reason and progress), `/shipped` (production and the last 7 days by day), `/hygiene` (`GET /v1/projects/:name/hygiene`: the probe catalogue with each probe's last run, the newest pass's findings and how each ended, the last five passes) and `/setup` (`GET /v1/projects/:name/setup`: the `project.yaml` as a form with each key's meaning from the schema's descriptions, the raw file behind a toggle, and the monitors the door routes to the project). Every tab also reads `GET /v1/projects/:name` (counts, hourly and daily shipped, Watch, incidents and regressions, the monitors). A project the factory has not read is a 404 and the page says so; a work project is shown to the owner only. The words and sums are pure logic in `src/lib/project.ts`.
 
@@ -168,7 +170,7 @@ The server's second listener serves `apps/console/dist` as static files and forw
 API with the owner token; an extension-less path falls back to `index.html`. So the app calls same-origin `/v1/...`, with no
 auth header and no base URL, and every response is parsed with the schema from `@software-factory/contract`. The service
 worker never caches `/v1`: the last snapshot lives in the Query persister (`localStorage`, key `console-snapshot`, 7 days,
-invalidated by the build id; artifact and Issue detail queries stay out of it, being large). The listener forwards exactly thirteen writes, the owner's answers and a collection's pin and unpin (a Decision's answer, an
+invalidated by the build id; artifact and Issue detail queries stay out of it, being large). The listener forwards exactly fifteen writes, the owner's answers, a collection's pin and unpin and an account's mode set and clear (a Decision's answer, an
 artifact's verdict and its needed-me mark, a comment and the edit or deletion of one, an Errand done, an Errand approved, a held signal promoted or dismissed with a reason); the app posts JSON to them same-origin, and
 `/checkpoints/<id>` (the link of the owner's pages) redirects to `/needs-you?item=<id>`. `GET /v1/stream` (server-sent events) invalidates the queries a change can alter (`affected` in `src/lib/policy.ts`: a frame's `kind`, `ref` and `detail` name them; a frame that does not parse, or has an unknown kind, alters all but the strip's readings); while it is not open the
 queries poll every 15 s and the strip's Live says `Polling`, and while it is open they still poll once a minute, because the
@@ -294,7 +296,7 @@ log in words as a StepRail per attempt. Evidence: each ship with its commits, re
 the evidence. Checkpoints: Decisions with their options, artifacts, the notes you sent; the tab shows how many wait on you.
 The pure model (tabs, groups, series, chain links, tones) is `src/lib/issue-page.ts`. Every figure is the API's, only
 phrased; no id is on screen. A Needs you card and an Overview row link to it. It is read-only on purpose: the listener forwards
-thirteen verbs (eleven answers, pin and unpin) and none of them is a note or a cancel, and the Console never cancels an Issue or starts a session. An open
+fifteen verbs (eleven answers, pin and unpin, an account's mode) and none of them is a note or a cancel, and the Console never cancels an Issue or starts a session. An open
 Decision links to `/needs-you?item=<id>`, an artifact to `/artifacts/<id>`, where the answer is given.
 `tests/e2e/issue.e2e.ts` compares the page's numbers with the API's.
 

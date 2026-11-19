@@ -43,6 +43,21 @@ export function CardBodySkeleton() {
   )
 }
 
+/** The Accounts screen: the order strip, the score, then two account panels. */
+export function AccountsSkeleton() {
+  return (
+    <div {...busy('Loading the accounts')} className="grid gap-8">
+      <Skeleton height={44} rounded="rounded-lg" />
+      <Skeleton height={96} rounded="rounded-xl" />
+      <div className="grid gap-4">
+        {Array.from({ length: 2 }, (_, i) => (
+          <Skeleton key={i} height={248} rounded="rounded-xl" />
+        ))}
+      </div>
+    </div>
+  )
+}
+
 /** The stat row and the trend chart: four StatCards, then the chart's frame. */
 export function FlowSkeleton() {
   return (

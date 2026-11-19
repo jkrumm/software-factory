@@ -54,6 +54,13 @@ export const SCREENS = [
     group: 'insight',
     purpose: 'Is the host the limit, and what holds the queue back?',
   },
+  {
+    to: '/accounts',
+    label: 'Accounts',
+    key: 'S',
+    group: 'insight',
+    purpose: 'Will each subscription be full at its reset, and if not, why?',
+  },
 ] as const satisfies ReadonlyArray<{
   to: string
   label: string

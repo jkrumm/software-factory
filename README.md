@@ -58,7 +58,8 @@ annotations. An **Issue** page reads one Issue end to end, from signal to verify
 ![The Issue page: its facts, the attempts of its leads and how it came to be, from the request to the amendment; tabs for the activity, the evidence and the checkpoints](docs/demo/issue.png)
 
 **Improve** holds the KPIs against their targets in 7-day windows. **Throughput** shows where the host's memory and
-the leads' hours go, and the improvements the loop filed.
+the leads' hours go, and the improvements the loop filed. **Accounts** answers, per Claude Code subscription, whether it will be full at its
+reset and if not why, shows the order each lane gets now, and sets a mode (Fill first, Hold for a model, Pause) with its expiry.
 
 ![Throughput: the host's memory by class and the leads' time](docs/demo/throughput.png)
 
@@ -118,7 +119,7 @@ flowchart LR
   end
   read[read: SQL views]
   spa[Console: React PWA] --> console
-  console -->|reads, and 13 write verbs| api
+  console -->|reads, and 15 write verbs| api
   cli --> api
   door --> api
   api --> app
@@ -130,7 +131,7 @@ flowchart LR
 ```
 
 The Console listener is a second loopback port. It forwards `/health` and `/v1/*` to the API with the owner's token
-held on the server, and forwards thirteen write verbs (the owner's answers, annotations and a collection's pin) and
+held on the server, and forwards fifteen write verbs (the owner's answers, annotations, a collection's pin and an account's mode) and
 nothing else. It can never start a session.
 
 ## The language
@@ -223,7 +224,7 @@ token of the owner's and takes the repo from a server-side route registry, never
 | `apps/server` | the server: API, Console listener, domains, use cases, loops, adapters, read models, migrations |
 | `apps/cli` | the `factory` CLI, generated from the server's OpenAPI document plus hand-written hook and slot verbs |
 | `apps/door` | the alert door: alerts from monitors become signals |
-| `apps/console` | the Console, a React PWA: Overview, Needs you, Chain, Projects, Artifacts, Improve and Throughput, and a page per Issue |
+| `apps/console` | the Console, a React PWA: Overview, Needs you, Chain, Projects, Artifacts, Improve, Throughput and Accounts, and a page per Issue |
 | `packages/contract` | zod schemas for every request, response and event; the source of the OpenAPI document |
 | `packages/client` | the typed client shared by the CLI and the door |
 | `packages/accounts` | the picker for N Claude Code subscriptions and the `claude-account` CLI (`docs/accounts.md`); independent of the server |

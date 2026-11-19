@@ -147,7 +147,7 @@ The owner's and the orchestrator's tokens can start Claude Code with `--dangerou
 
 - **A spawn's repo must be inside `FACTORY_REPO_ROOTS`** after `realpath` on both sides, so neither `..` nor a link leads out. The root itself is never a repo.
 - **`FACTORY_REPO_ALLOW` admits single repos outside the roots.** A repo of another organisation is admitted by name there, never by adding the directory that holds it as a root.
-- **The API is loopback only.** The Console listener is a second loopback port. It answers `GET` and `HEAD`, and 405 to every other method except its 13 write verbs. It holds the owner token in its closure.
+- **The API is loopback only.** The Console listener is a second loopback port. It answers `GET` and `HEAD`, and 405 to every other method except its 15 write verbs. It holds the owner token in its closure.
 - **Work repos hear only the owner.** The read token sees none of their text.
 
 ```ts

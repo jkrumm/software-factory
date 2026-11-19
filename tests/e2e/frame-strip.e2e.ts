@@ -80,9 +80,11 @@ test.describe('the meters and their popovers', () => {
         },
       }),
     )
-    const { accounts } = await api<{ accounts: object[] }>(apiUrl, '/v1/accounts')
+    const view = await api<{ accounts: object[] }>(apiUrl, '/v1/accounts')
     await page.route('**/v1/accounts', (route) =>
-      route.fulfill({ json: { accounts: accounts.map((quota) => ({ ...quota, weeklyUsed, exhaustedUntil: null })) } }),
+      route.fulfill({
+        json: { ...view, accounts: view.accounts.map((quota) => ({ ...quota, weeklyUsed, exhaustedUntil: null })) },
+      }),
     )
   }
   const tones = (page: Page) =>

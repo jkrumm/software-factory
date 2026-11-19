@@ -1,6 +1,7 @@
 {
   "artifact-panes.e2e.ts": 8,
   "artifact-review.e2e.ts": 22,
+  "accounts.e2e.ts": 20,
   "artifact.e2e.ts": 13,
   "chain-scale.e2e.ts": 13,
   "chain.e2e.ts": 13,

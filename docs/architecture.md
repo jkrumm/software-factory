@@ -878,9 +878,9 @@ model, not a signal: an agent-trust signal files an Issue, and no loops page exi
 The API stays loopback. The door and the Console are published on the tailnet by dotfiles-private's `tailscale serve`
 rows (the Console on :8797, to its loopback listener), and the perimeter is the tailnet ACL by device tag (a grant of
 `tag:mac` and `tag:phone` to `tag:devhost` on tcp:8797), as Collie's (NL25); the deploy publishes nothing. There is no
-per-request identity: anything that reaches :8797 reads what the owner reads, and no more than reads and the owner's thirteen write
+per-request identity: anything that reaches :8797 reads what the owner reads, and no more than reads and the owner's fifteen write
 verbs below, never a session start. The door holds only its own token; the orchestrator's is the owner's rights minus nine owner-only routes, and the Console proxy never uses it. Nothing that can start Claude Code is reachable from
-another node. The Console listener reads, and forwards exactly the owner's thirteen verbs, his eleven answers and a collection's pin and unpin (a Decision's answer, an artifact's verdict and its needed-me mark,
+another node. The Console listener reads, and forwards exactly the owner's fifteen verbs, his eleven answers, a collection's pin and unpin and an account's mode set and clear (a Decision's answer, an artifact's verdict and its needed-me mark,
 annotation and its edit and delete, an Errand done, an Errand approved, a held signal promoted or dismissed), guarded against a cross-site page (JSON only bar a delete, no cross-site fetch
 metadata, no foreign `origin`, 64 KiB); it starts no session and cancels or reopens no Issue, and promote files one only
 from a signal already held and dismiss files nothing. The artifact frame (`/frame.html`, `/frame/*`) is the one document the page frames and is
@@ -927,9 +927,9 @@ The same answer carries `lead` and `project` (`read/throughput-account.ts`, `app
 `apps/console` is the owner's window (NL1): Vite, React, shadcn on Base UI, Tailwind 4 with Basalt's tokens, TanStack
 Router, Query and Table, a PWA. `tests/e2e` (Playwright) holds its suite and the README's screenshots. The server's second
 loopback listener serves the build, published by dotfiles-private's serve row (`docs/operations.md` "The Console
-listener"). It is read-only apart from the thirteen verbs (eleven answers, pin and unpin), its perimeter is the tailnet ACL
+listener"). It is read-only apart from the fifteen verbs (eleven answers, pin and unpin, an account's mode), its perimeter is the tailnet ACL
 (NL25), and it can never spawn a session. The screens are the ones of `apps/console/src/lib/screens.ts` (Overview,
-Needs you, Chain, Projects, Artifacts, Improve, Throughput) and the pages an Issue, a project, an artifact and a collection each have;
+Needs you, Chain, Projects, Artifacts, Improve, Throughput, Accounts) and the pages an Issue, a project, an artifact and a collection each have;
 `/checkpoints/<id>`, the link of the owner's pages, lands on its item. `apps/console/README.md` describes each screen and
 `apps/console/DESIGN.md` is the design bar.
 

@@ -10,11 +10,11 @@ shaped as it is: `docs/architecture.md` "Perimeter".
 gateway's). The tailnet publishes it on :8797 through dotfiles-private's serve row, not through `make deploy`. It starts
 whenever the Console is built.
 
-- It answers 405 to anything but `GET` and `HEAD`, bar the thirteen write verbs below.
+- It answers 405 to anything but `GET` and `HEAD`, bar the fifteen write verbs below.
 - It forwards only `/health` and `/v1/*` to the API. The owner token stays in the closure; the client's
   `authorization`, `cookie` and `tailscale-*` headers are dropped; an answer with no `cache-control` of its own gets
   `no-store`. Everything else is `apps/console/dist`.
-- The writes are the owner's eleven answer verbs and the pin and unpin of a collection, nothing else (405):
+- The writes are the owner's eleven answer verbs, the pin and unpin of a collection and the set and clear of an account's mode, nothing else (405):
   - `decisions/:id/answer`
   - `artifacts/:id/verdict`
   - `artifacts/:id/needed` (his needed-me mark)
@@ -24,6 +24,7 @@ whenever the Console is built.
   - `errands/:id/turn-back` (the owner or the orchestrator ends an Errand wait: not done, the lead hears the note)
   - `POST /signals/:id/promote` and `POST /signals/:id/dismiss`
   - `artifact-collections/:id/pin` and `/unpin` (one timestamp)
+  - `POST` and `DELETE accounts/:id/mode` (the Accounts screen: Fill first, Hold for a model, Pause, Back to normal; a mode expires, `claude-account mode` shows and clears it, and it starts and cancels nothing)
 - Each write but the `DELETE` needs `content-type: application/json` (415), no cross-site `sec-fetch-site` and no foreign
   `origin` (403; there is no per-request identity, so a page in the owner's browser could send one), and at most 64 KiB
   (413).
@@ -37,7 +38,7 @@ whenever the Console is built.
 
 Residual, accepted (`docs/architecture.md` "Perimeter", NL25): there is no per-request identity and the ACL tag grant is
 the perimeter, so any tagged node granted :8797 and any process on the mini reads what the owner reads (including what
-the read token is denied) and can make those thirteen writes, promote among them. The `origin` check compares with the
+the read token is denied) and can make those fifteen writes, promote among them (and so pause or drain an account until the mode ends). The `origin` check compares with the
 request's own `Host`, so a page rebound to loopback in a browser on the mini passes it.
 
 The Console (`apps/console`, its README) holds no logic the API could hold, and `apps/console/test/no-raw-colour.test.ts`
