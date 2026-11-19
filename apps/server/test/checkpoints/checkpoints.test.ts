@@ -41,6 +41,7 @@ import {
   type JudgeVerdict,
   type PolicyRule,
 } from '../../src/domains/checkpoints/decision.ts'
+import { AUTO_RUN_NOTE } from '../../src/kernel/auto-run.ts'
 import { ERRAND_SCREEN_BACKOFF_MS, type ErrandId } from '../../src/domains/checkpoints/errand.ts'
 import type { ErrandScreenAnswer } from '@software-factory/contract'
 import type { ErrandScreenPort, Notifier, JudgePort, StandingPolicies } from '../../src/domains/checkpoints/ports.ts'
@@ -1321,6 +1322,32 @@ describe('errands', () => {
     expect(await effectsOf(issueId, 'note_lead')).toBe(1)
   })
 
+  test('an auto-run close says the MacBook ran it by itself, and is stored with its evidence', async () => {
+    const issueId = await workingIssue()
+    const raised = await raise(issueId)
+    expect(value(await screenErrands(deps))).toEqual([{ errand: raised.errand.id, outcome: 'reached_owner' }])
+
+    const done = value(
+      await finishErrand(deps, {
+        errandId: raised.errand.id,
+        note: 'ran by itself on the MacBook (auto-run secrets-seed, exit 0): 125 refs sealed',
+        by: 'orchestrator',
+        confirmedBy:
+          'ask-human: auto-run class secrets-seed, granted by the owner on the MacBook, ran it with no dialog',
+      }),
+    )
+    expect(done).toMatchObject({
+      errand: { closedBy: 'orchestrator', closedKind: 'done' },
+    })
+    expect(done.errand.doneNote).toStartWith(AUTO_RUN_NOTE)
+    const noted = await db.sql`
+      SELECT payload->>'text' AS text FROM factory.issue_events WHERE issue_id = ${issueId} AND kind = 'noted' ORDER BY id DESC LIMIT 1`
+    expect(noted[0].text).toContain(
+      "ran by itself on the owner's MacBook (auto-run class secrets-seed), with no dialog and no owner",
+    )
+    expect(noted[0].text).not.toContain('delegate')
+  })
+
   test('turned away by the screen: the wait ends, the lead hears why, nothing is paged', async () => {
     const issueId = await workingIssue()
     const raised = await raise(issueId)
@@ -1882,6 +1909,25 @@ describe('decided by rule before the owner (issue 1714)', () => {
     const band = (await readSince(db.sql, { now: clock.now(), since: new Date(clock.now().getTime() - 60_000) }))
       .categories.errands
     expect(band.items).toMatchObject([{ title: 'Pull brain on the MacBook (run by the factory)' }])
+  })
+
+  test('an ask-human request the MacBook ran by itself is in the band of Errands closed without the owner', async () => {
+    const made = value(
+      await requestErrand(deps, {
+        raw: { source: 'ask-human', text: 'Reseal the cache', command: "hc run 'make secrets-seed'", where: 'macbook' },
+      }),
+    )
+    value(
+      await finishErrand(deps, {
+        errandId: made.errand.id,
+        note: 'ran by itself on the MacBook (auto-run secrets-seed, exit 0)',
+        by: 'orchestrator',
+        confirmedBy: 'ask-human: auto-run class secrets-seed (granted by the owner on the MacBook)',
+      }),
+    )
+    const band = (await readSince(db.sql, { now: clock.now(), since: new Date(clock.now().getTime() - 60_000) }))
+      .categories.errands
+    expect(band.items).toMatchObject([{ title: 'Reseal the cache (ran by itself on your MacBook)' }])
   })
 
   test('(b) a verb that did not run leaves the command with the owner as a place Errand, with the reason', async () => {

@@ -7,6 +7,7 @@ import {
   type SinceItem,
   type SinceModel,
 } from '@software-factory/contract'
+import { AUTO_RUN_NOTE_PATTERN } from '../kernel/auto-run.ts'
 import { FIRST_WINDOW_MS } from '../kernel/visit.ts'
 import { plain } from './words.ts'
 import { isWorkRepo, loadOpenProjects, REDACTED_TITLE } from './work.ts'
@@ -97,10 +98,10 @@ export async function readSince(sql: SQL, options: { now: Date; since: Date; red
   const closedErrands = parse(
     await sql`
     SELECT NULL::text AS issue_id, NULL::text AS repo, e.summary || ' (' ||
-        CASE e.closed_kind WHEN 'expired' THEN 'expired' WHEN 'superseded' THEN 'replaced by a newer request' WHEN 'done' THEN 'run by the factory' ELSE 'no longer needed' END || ')' AS title,
+        CASE e.closed_kind WHEN 'expired' THEN 'expired' WHEN 'superseded' THEN 'replaced by a newer request' WHEN 'done' THEN CASE WHEN e.closed_by = 'orchestrator' THEN 'ran by itself on your MacBook' ELSE 'run by the factory' END ELSE 'no longer needed' END || ')' AS title,
       e.done_at AS at, count(*) OVER () AS total
     FROM factory.errands e
-    WHERE e.issue_id IS NULL AND e.done_at > ${since} AND e.closed_by IN ('check', 'judge', 'loop', 'request')
+    WHERE e.issue_id IS NULL AND e.done_at > ${since} AND (e.closed_by IN ('check', 'judge', 'loop', 'request') OR (e.closed_by = 'orchestrator' AND e.done_note ~ ${AUTO_RUN_NOTE_PATTERN}))
     ORDER BY e.done_at DESC, e.id DESC LIMIT ${SINCE_ITEMS}`,
   )
 

@@ -117,6 +117,7 @@ const SAMPLE_NOUN: Record<KpiKey, readonly [string, string]> = {
   asks: ['Issue', 'Issues'],
   recommendation_taken: ['Decision', 'Decisions'],
   errands_no_secret_no_hands: ['Errand', 'Errands'],
+  errands_auto_run_share: ['Errand', 'Errands'],
   issues_closed_per_day: ['day', 'days'],
   test_slot_wait_p50: ['step', 'steps'],
   minutes_over_ceiling: ['minute', 'minutes'],
@@ -153,6 +154,7 @@ export const KPI_HINT = {
   asks: 'ask',
   recommendation_taken: 'decision',
   errands_no_secret_no_hands: 'errand',
+  errands_auto_run_share: 'errand',
   issues_closed_per_day: 'cycle',
   test_slot_wait_p50: 'test slot',
   minutes_over_ceiling: 'load ceiling',
@@ -461,6 +463,8 @@ export const MEANING: Record<KpiKey, string> = {
     'Of the Decisions you answered, how many you answered with the option the lead recommended: a question the lead could have decided. Lower is better.',
   errands_no_secret_no_hands:
     'Of the Errands that reached you, how many needed neither a secret nor your hands: a step a command could take. Lower is better.',
+  errands_auto_run_share:
+    'Of the Errands that reached you, or that your MacBook ran by itself before they reached you, how many ran with no click from a command class you granted once. Higher is better.',
   issues_closed_per_day: 'How many Issues closed per day, whatever the outcome. Higher is faster.',
   test_slot_wait_p50: 'How long a typical check step waited for a test slot before it ran. Shorter is better.',
   minutes_over_ceiling:
@@ -507,6 +511,7 @@ export const KPI_ORDER: readonly KpiKey[] = [
   'owner_decisions_per_100',
   'errands_reached_per_100',
   'errands_no_secret_no_hands',
+  'errands_auto_run_share',
   'verdict_changes_share',
   'first_watch_dwell_p50',
   'issues_closed_per_day',

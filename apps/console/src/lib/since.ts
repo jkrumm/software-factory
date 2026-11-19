@@ -43,7 +43,7 @@ export const SINCE_HAPPENED: Record<SinceKey, string> = {
   judge: 'The Judge settled a Decision on it before it reached you.',
   screen: 'The screen turned it away before it reached you.',
   errands:
-    'Its check said it was no longer needed, it expired, a newer request replaced it, or the factory ran its MacBook command through a fixed verb.',
+    'Its check said it was no longer needed, it expired, a newer request replaced it, the factory ran its MacBook command through a fixed verb, or your MacBook ran it by itself from a class you granted.',
   filed: 'It was filed as a new Issue.',
   incidents: 'An incident was opened for it.',
 }

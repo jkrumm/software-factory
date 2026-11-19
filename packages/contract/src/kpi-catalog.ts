@@ -107,6 +107,18 @@ export const KPI_CATALOG: Record<KpiKey, KpiSpec> = {
     decision:
       'Each one is a step a token or a command could take: add the verb (the lead does it itself) or a screen rule that turns the Errand away',
   },
+  errands_auto_run_share: {
+    label: 'Errands the MacBook ran by itself',
+    direction: 'higher',
+    target: WATCH,
+    targetSource:
+      'Watch only: the first class (secrets-seed) shipped 2026-11-19, so there is no reading to set a number from',
+    numerator: 'Errands closed by a granted auto-run class in the window',
+    denominator:
+      'Errands that reached the owner in the window, plus those that ran by themselves before they reached him',
+    decision:
+      'Which command shape repeats with no refusal and joins the catalogue next: the lead of dotfiles adds a row, he grants it once',
+  },
   specs_not_needed: {
     label: 'Specs at the owner not needed',
     direction: 'lower',

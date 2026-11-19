@@ -13,6 +13,7 @@ import {
 import { startTestCluster, type TestCluster } from '@software-factory/tests/pg'
 import type { SQL } from 'bun'
 import { loadMigrations, migrate } from '../../src/adapters/postgres/migrate.ts'
+import { AUTO_RUN_NOTE } from '../../src/kernel/auto-run.ts'
 import { readChain } from '../../src/read/chain.ts'
 import { DIGEST_WINDOW_MS, countsOf } from '../../src/kernel/digest-scope.ts'
 import { readFlow } from '../../src/read/flow.ts'
@@ -90,7 +91,7 @@ describe('the empty database', () => {
     expect(chain).toMatchObject({ nodes: [], edges: [], blocking: {} })
 
     const kpis = KpiModel.parse(await readKpis(sql, { now: NOW, days: 7 }))
-    expect(kpis.kpis.map((k) => k.key)).toHaveLength(26)
+    expect(kpis.kpis.map((k) => k.key)).toHaveLength(27)
     // a count per day is a real zero when nothing closed; every other figure has nothing to divide and is null
     for (const kpi of kpis.kpis) expect(kpi.value).toBe(kpi.key === 'issues_closed_per_day' ? 0 : null)
     expect(kpis.kpis.find((k) => k.key === 'cost')).toMatchObject({ measured: false, n: 0 })
@@ -499,6 +500,25 @@ describe('the fixture', () => {
       expect(parts).toEqual({ secret_or_hands: 2 / 4, secret: 1 / 4, hands: 1 / 4, place: 1 / 4, approval: 0 })
     } finally {
       await sql`DELETE FROM factory.errands WHERE id LIKE 'errand_k%'`
+    }
+  })
+
+  test('kpis: the share of Errands the MacBook ran by itself', async () => {
+    await sql`INSERT INTO factory.errands (id, key, issue_id, attempt, summary, raised_at, reached_owner_at, need, done_at, done_note, closed_kind, closed_by) VALUES
+      ('errand_a1', 'key_a1', 'issue_4', 1, 'a', ${ago(3)}, ${ago(3)}, 'secret', ${ago(2)}, ${`${AUTO_RUN_NOTE}secrets-seed, ran it`}, 'done', 'orchestrator'),
+      ('errand_a2', 'key_a2', 'issue_4', 1, 'b', ${ago(4)}, ${ago(4)}, 'secret', ${ago(3)}, 'confirmed by the MacBook operator', 'done', 'orchestrator'),
+      ('errand_a3', 'key_a3', 'issue_4', 1, 'c', ${ago(5)}, ${ago(5)}, 'hands', NULL, NULL, NULL, NULL)`
+    // a request: pushed at once, closed by the auto-run before the screen set reached_owner_at
+    await sql`INSERT INTO factory.errands (id, key, source, summary, raised_at, done_at, done_note, closed_kind, closed_by) VALUES
+      ('errand_a4', 'key_a4', 'ask-human', 'd', ${ago(3)}, ${ago(2)}, ${`${AUTO_RUN_NOTE}secrets-seed (granted)`}, 'done', 'orchestrator')`
+    try {
+      const model = KpiModel.parse(await readKpis(sql, { now: NOW, days: 7 }))
+      const kpi = model.kpis.find((k) => k.key === 'errands_auto_run_share')
+      // the fixture's own Errand and three above reached him in the window, a fourth (a request) ran by itself before the screen reached it: two of five were auto-runs
+      expect(kpi).toMatchObject({ n: 5, count: 2, measured: true, unit: 'share' })
+      expect(kpi?.value).toBeCloseTo(2 / 5, 6)
+    } finally {
+      await sql`DELETE FROM factory.errands WHERE id LIKE 'errand_a%'`
     }
   })
 
