@@ -48,6 +48,7 @@ import {
   gate,
   groupOf,
   issueKindOf,
+  isRetroSignal,
   matchOpen,
   noteOf,
   originOf,
@@ -818,9 +819,11 @@ export function createIntake(deps: IntakeDeps) {
     const inRepo = signal.repo ? await deps.openIssues.inRepo(signal.repo) : ok<OpenIssue[]>([])
     if (!inRepo.ok) return inRepo
     const open = inRepo.value.filter((issue) => issue.id !== filer)
-    const match = matchOpen(signal.title, open)
+    // A retro recommendation files its own Issue: only its own fingerprint (the same ask again) folds into an open one.
+    const retro = isRetroSignal(signal.text)
+    const match = retro ? ({ kind: 'none' } as const) : matchOpen(signal.title, open)
     let decision: Decision = { amend: match.kind === 'match' ? match.issue.id : null }
-    if (match.kind !== 'match') {
+    if (!retro && match.kind !== 'match') {
       const known = await uow.run(async (s) => ok(await fingerprintKnown(s, r)))
       if (!known.ok) return known
       if (!known.value) {
