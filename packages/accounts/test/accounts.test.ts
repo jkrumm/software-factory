@@ -2309,6 +2309,11 @@ describe('CLI (isolated HOME)', () => {
         'seven_day_age_s',
         'seven_day_resets_at',
         'source',
+        // additive since registry v2 (docs/accounts.md §usage --json)
+        'mode',
+        'mode_override',
+        'limits',
+        'weekly_scoped_shares',
       ].sort(),
     )
     expect(j.default_account).toBe('iu')

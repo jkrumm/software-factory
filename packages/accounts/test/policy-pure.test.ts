@@ -3,7 +3,7 @@ import { readFileSync } from 'node:fs'
 import { join } from 'node:path'
 
 // The policy decides over a snapshot handed in: nothing in these files may reach a file, a process, the network or the clock.
-const PURE = ['policy.ts', 'health.ts']
+const PURE = ['policy.ts', 'health.ts', 'modes.ts']
 const FORBIDDEN: [string, RegExp][] = [
   ['a node: or bun import', /from\s+["'](node:|bun)/],
   ['a process or Bun global', /\b(process|Bun)\./],

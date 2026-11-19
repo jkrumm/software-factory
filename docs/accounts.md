@@ -1,8 +1,8 @@
 # Claude Code subscriptions: the account picker
 
 `packages/accounts` is the picker for N Claude Code subscriptions as a library and as the `claude-account` CLI: a registry of
-accounts, a per-account quota cache, the rule that says which account a new session starts on (rule v1.9, Fable and drain
-mode), and the logins' health. It is the port of the dotfiles picker (program "subscriptions", `docs/plan.yaml` row
+accounts, a per-account quota cache, the rule that says which account a new session starts on (rule v1.9, with the
+modes of registry v2 as rule v1.10: §Modes), and the logins' health. It is the port of the dotfiles picker (program "subscriptions", `docs/plan.yaml` row
 `subs-package`): the same behaviour behind the same CLI contract, installed beside the live CLI as `claude-account-next`
 until a switch row moves the callers.
 
@@ -19,6 +19,7 @@ lists the verbs, `claude-account <verb> --help` one in full; `claude-account --v
 | Registry | `$CLAUDE_ACCOUNTS_REGISTRY`, else `~/.config/claude-accounts/registry.json` when it exists, else the dotfiles checkout's `config/claude-accounts.json` |
 | Quota cache | `~/.cache/claude-accounts/` (`$CLAUDE_ACCOUNTS_CACHE_DIR`): `<id>.sample.json`, `.exhausted.json`, `.auth.json`, `.verified.json`, `.statusline.json`, `.refresh.claim`, `.relogin-ask.json` |
 | Pick log | `~/.local/share/claude-accounts/picks.jsonl` (`$CLAUDE_ACCOUNTS_PICKS`); usage tracker, the browser extension and the dashboards read it |
+| Mode overrides | `~/.local/share/claude-accounts/modes.json` (`$CLAUDE_ACCOUNTS_MODES`) and its audit `modes.jsonl` (§Modes) |
 | Keepalive log | `~/Library/Logs/claude-accounts-keepalive.log`: the stdio of the keepalive job and of the detached refresh a pick spawns |
 | Test seams | `$CLAUDE_ACCOUNTS_SECURITY_BIN` replaces `/usr/bin/security`; `$CLAUDE_ACCOUNTS_SSH`, `$CLAUDE_ACCOUNTS_HC` and `$CLAUDE_ACCOUNTS_RELOGIN` replace the peer's adapters |
 
@@ -42,16 +43,17 @@ lists the verbs, `claude-account <verb> --help` one in full; `claude-account --v
   `units` default from the plan (ultra 4 / 2, max 1 / 1).
 - `homeLanes`: the lanes whose spawns start here; an exact lane name wins over a `prefix:*` wildcard. `loginBrowser`: the app a
   re-login opens (data for the relogin command). `enabled: false` ships an account dark until its login exists.
-- `fable`, `drain`: §Fable mode, §Drain mode. Unknown top-level keys are ignored, so one registry serves this CLI and the dotfiles one.
+- `fable`, `drain`, `version` and an account's `mode`: §Modes. Unknown top-level keys are ignored, so one registry serves this CLI and the dotfiles one.
 - The ids are letters, digits, `_` and `-` (they name cache files); `spill` is reserved.
 
 ## Layout of the package
 
 | Module | What it holds |
 |-|-|
-| `policy.ts` | The pure rule: types, `pick`, `rank`, `eligible`, `accountWeight`, the sample merge and parsers, login grades, `dueIds`, `reloginCandidates`. No file, process, network or clock access (`test/policy-pure.test.ts` fails on one); the clock and the random source are arguments |
+| `policy.ts` | The pure rule: types, `pick`, `rank`, `eligible`, `accountWeight`, `modeOf`, `reserveBudget`, `launchAccount`, the sample merge and parsers, `observedReset`, login grades, `dueIds`, `reloginCandidates`. No file, process, network or clock access (`test/policy-pure.test.ts` fails on one); the clock and the random source are arguments |
+| `modes.ts` | Pure: the override records, their expiry, `resolveModes` and `applyModes` (§Modes) |
 | `health.ts` | Pure grading of one machine's `usage` and `expiry` into health rows |
-| `registry.ts`, `paths.ts`, `store.ts` | The registry file, every path, the per-account cache files and the claim and stamp files |
+| `registry.ts`, `paths.ts`, `store.ts` | The registry file, every path, the per-account cache files, the claim and stamp files and the override state file |
 | `ports.ts` | The ports: `Spawner`, `HttpGet`, `PeerUsage` |
 | `keychain.ts`, `oauth.ts`, `claude-auth.ts`, `spawn.ts` | The adapters: the login item through `security`, the usage endpoint, `claude auth status`, processes with a deadline that returns |
 | `refresh.ts`, `relogin.ts` | The orchestration over the ports: claim, sample, record; the re-login asks |
@@ -238,28 +240,123 @@ Every decision is appended as JSONL (`ts, lane, picked, reason, stale`, and `{s,
 account with the most slack left at its own reset, which spends capacity before
 it expires. Upgrade `me` to 20x if its weekly stays > 80% two weeks running.
 
-## Fable mode
+## Modes
 
-Fable resets refill only Fable usage, so one account is set aside for Fable. The registry's top-level `"fable": "<id>"`
- does two things:
+Each account is in one mode (registry v2, rule v1.10; Spec of `docs/plan.yaml` row `subs-model-v2`). The mode in force is the live
+override (§Overrides), else the account's registry `mode`, else the v1 keys (`drain: [<id>]` reads as drain, `fable: <id>` as
+reserve for fable), else normal. `modeOf` (`policy.ts`) is the one place that answers it; `resolveModes` (`modes.ts`) adds the
+override and its source, and `applyModes` hands the rule a registry with the live overrides in place.
 
-- `cf` launches on it (`claude-account fable` prints it; Fable mode off, the account disabled or the CLI failing → the
-  default account). `cf --account <id>` still wins.
-- every pick, any lane, runs the rule without it first; it takes work only when no other account is eligible (reason
-  `fable-reserve`). `rank` therefore lists it last, so factory leads reach it last too. Its `homeLanes` stay as they are,
-  so switching the mode off restores the plain rule.
+| Mode | Takes work from `pick` / `rank` | Sampled, login checked |
+|-|-|-|
+| `normal` | rule v1.9 as above | yes |
+| `drain` | first in every lane while its 5h is under `SESSION_SOFT_MAX` (reason `drain`; several share by weight), weekly ceiling 100 | yes |
+| `reserve` for `<model>` | only inside its reserve budget (§Reserve); the model's launcher lands here | yes |
+| `paused` | never (`eligible` is false) | yes |
 
-Switch: set `"fable"` to another account id, or to `null` for off, and commit. Read on every call, no restart.
+`enabled: false` stays what it was: an account that is not set up, neither sampled nor checked. The one exception to "never
+picked" is the interactive fallback (step 6): it lands on the default account whatever its mode, and Claude Code shows the limit.
 
-## Drain mode
+### Reserve
 
-The registry's top-level `"drain": ["<id>", …]` names accounts the owner wants at the wall fast (an account to empty before
-a reset he controls, or a week he knows will go unused otherwise). Every pick, any lane, takes a drain account first while its
-5h window is under `SESSION_SOFT_MAX` (reason `drain`; several share by weight); its weekly ceiling is 100, not 95/98. A hot
-5h window hands the work to the plain rule until the window cools. A drain account cannot be the Fable account (`loadRegistry`
-refuses it). Drain mode does not end by itself: remove the id once the account is full, or it keeps draining the next week.
-With `"fable": "iu", "drain": ["me2"]` the order is me2 (drain), then me, then iu (fable-reserve) in every lane;
-the simulation fills me2 within 3-4 hours and keeps iu under 65 % for the week.
+A reserve holds back the unused part of its model's weekly allowance, not the account. The usage endpoint gives the allowance:
+`limits[]` has a `weekly_scoped` limit whose `scope.model.display_name` (or `id`) names the model, and `weekly_scoped_shares[]`
+gives its `used_percent_of_weekly` and `allowance_percent_of_weekly` (50 for Fable on every account, checked 2026-11-19): the
+model's use counts against the weekly limit and resets with it. With a scoped sample younger than 6 h (`reserveBudget`):
+
+```
+unused = max(0, allowance − used)          0 in the last 24 h before the weekly reset (RESERVE_RELEASE_S: the allowance is released)
+open   = weekly + unused < weeklyMax       (95, 98 in the last 24 h, 100 in the last 3 h)
+```
+
+- Open: the account takes its normal place in the rule; its weight counts only `weeklyMax − weekly − unused`.
+- Closed: other work is refused, not even taken as the last resort. Bulk spills; interactive falls back to the default account.
+- No fresh scoped sample: the budget is unknown and the account is the last resort, as v1's Fable mode (reason `<model>-reserve`).
+- **Launcher:** `claude-account fable` (what `cf` evals) prints the open reserve-for-fable account (eligible, scoped percent under 100)
+  with the most unused allowance; none open → the first enabled reserve-for-fable account; none → the default account.
+  `cf --account <id>` still wins.
+
+**Where a v1 registry picks differently from v1.9.** Only with a fresh scoped sample on the `fable` account (the endpoint GET
+fetches it, below): inside the budget the Fable account takes its normal place (iu, the default, is the interactive and headless
+home again) where v1.9 put it last; over the budget it is refused where v1.9 took it as the last resort; in the final 24 h it is a
+normal account. Without a scoped sample every lane picks and ranks as v1.9 (`test/parity.test.ts`).
+
+The statusline feed carries no scoped limit, so a reserve account is due for one endpoint GET when its `limits_ts` is older than
+30 min (`SCOPED_FRESH_MS`), even while its windows are fresh; the 5-min claim still binds (at most 48 GETs a day per reserve
+account and machine). A stale scoped number counts the model's use twice (in `weekly` and in `unused`), so staleness costs
+room, never the reserve. Samples keep `limits`, `scoped_shares` and `limits_ts` beside the windows; the merge keeps the newer set.
+
+### Expiry
+
+A mode can carry `until`: an ISO time, `reset` or nothing. `reset` (overrides only: a committed file has no time it was set) ends at
+the earliest of: the scheduled weekly reset it was set in (`baseline_w_reset`, the sample's reset when set, moved a week on while
+it lies in the past), a sample whose weekly reset lies more than a day past it, or an **observed reset** after it was set. A reset
+is observed when a written sample's weekly reset moved forward by more than 24 h or its weekly percent fell by 50 points or more
+(`observedReset`); `<id>.reset.json` keeps the latest (`{at, w_before, w_reset_before, w_reset_after}`). So a manual reset ends a
+drain as a scheduled one does. An expired override is skipped where it is read; nothing has to remove it. `mode <id> drain`
+without `--until` is until reset; the other modes have no expiry by default.
+
+### Overrides
+
+```
+claude-account mode [--json]                    # every account: mode, source (override | registry), until, set, why, a reserve's budget
+claude-account mode <id> <normal|drain|reserve|paused> [--for <model>] [--until reset|<iso>] [--why <text>]
+claude-account mode <id> --clear
+```
+
+An override is a record in `~/.local/share/claude-accounts/modes.json` (`$CLAUDE_ACCOUNTS_MODES`), one per account, written
+atomically, with one audit line per set, clear or adoption in `modes.jsonl` beside it:
+
+```json
+{ "version": 1, "accounts": {
+  "me2": { "kind": "drain", "for": null, "until": "reset", "why": "empty before the manual reset",
+           "set_at": 1795080000000, "set_on": "mini", "baseline_w_reset": 1795370400 },
+  "me":  { "cleared": true, "set_at": 1795081000000, "set_on": "macbook" } } }
+```
+
+It is a last-writer-wins register per account: the newer `set_at` wins, ties go to the later `set_on`, and a clear is a tombstone
+so it wins on the other machine too. `usage --json` carries each account's record as `mode_override`, and the peer import
+(`refresh`, both directions) adopts the newer one. On the machine that set it an override shows in `rank` at once; on the other
+after its next refresh (the hourly keepalive, or a pick-time refresh). `normal` as an override switches a registry mode off.
+
+### Registry v2
+
+v1 plus two optional fields. `version`: absent, 1 or 2; any other value is "registry unreadable" (`pick` exit 4 with the default
+account, every other verb exit 2). `accounts.<id>.mode`: a kind (`"paused"`) or `{kind, for, until, why}`; `for` is required for
+reserve and only there; `until` is an ISO time. An account's own `mode` wins over `fable` and `drain`, which keep their v1
+meaning and check (one account cannot be both).
+
+### `usage --json` (additive) and `status --json` (shape)
+
+`usage --json` rows gain `mode` (`{kind, for, until, until_at, why, source, set_at, set_on}`, the mode in force), `mode_override`
+(the raw record, a tombstone included, or null), `limits` and `weekly_scoped_shares` (as the endpoint gave them, each with
+`age_s`, or null). Every other field and the plain text are unchanged.
+
+`status --json` is built by row `subs-read-model` in this shape (fixed by the Spec of `subs-model-v2`):
+
+```json
+{ "schema": 1, "at": "<iso>", "machine": "mini", "rule": "v1.10", "default_account": "iu",
+  "lanes": ["interactive", "headless", "bulk", "other"],
+  "accounts": [{
+    "id": "me2", "plan": "max", "units": {"session": 1, "weekly": 1}, "enabled": true, "auth_ok": true, "exhausted_until": null,
+    "limits": [{"kind": "session", "percent": 51, "resets_at": "<iso>", "age_s": 30, "source": "statusline"},
+               {"kind": "weekly_all", "percent": 97, "resets_at": "<iso>", "age_s": 30, "source": "statusline"},
+               {"kind": "weekly_scoped", "model": "Fable", "percent": 6, "resets_at": "<iso>", "age_s": 900, "source": "oauth",
+                "allowance_percent_of_weekly": 50, "used_percent_of_weekly": 3}],
+    "mode": {"kind": "drain", "for": null, "until": "reset", "until_at": "<iso>", "why": "…", "source": "override",
+             "set_at": "<iso>", "set_on": "mini", "expired": false},
+    "reserve": null,
+    "lanes": {"bulk": {"open": true, "position": 1, "reason": "drain", "closed": null, "opens_at": null}},
+    "forecast": {"method": "<name>", "weekly_at_reset": 100, "full_at": "<iso>", "waste_percent": 0, "waste_units": 0},
+    "resets": [{"at": "<iso>", "weekly": 99, "scoped": 12, "modes": ["drain"], "rule": "v1.10", "closed_hours": 3.5}] }] }
+```
+
+`reserve` is `{for, unused, budget_left, released}` for a reserve account. `lanes` covers `interactive`, `bulk`, every exact home
+lane and `other` (a lane with no home); `position` and `reason` equal `rank`'s. `closed` is one of `disabled`, `paused`, `auth`,
+`no-sample`, `session-max`, `weekly-ceiling`, `exhausted`, `reserve-budget`, with `opens_at`.
+
+With `"fable": "iu", "drain": ["me2"]` and no scoped sample the order is me2 (drain), then me, then iu (fable-reserve) in every
+lane; the simulation fills me2 within 3-4 hours and keeps iu under 65 % for the week.
 
 ## Installing
 
@@ -287,4 +384,6 @@ picker indexes records by an id it has just checked) and the root typecheck excl
 
 The spawn integration (`c`, `rd`, `cf`), the keepalive and heartbeat jobs, the statusline hook, the login logistics and the
 attribution of usage stay in dotfiles and call these verbs; the switch row moves them. No new rule, window or account setting
-is added here, and no registry key: it is a port, not a redesign.
+was added by the port (`subs-package`); registry v2 and the modes came with `subs-model-v2` (§Modes). The status verb, the history
+and the forecast are `subs-read-model`'s; the server and the Console read modes through `rank` and `usage --json` until
+`subs-server`.

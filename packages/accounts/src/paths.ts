@@ -17,6 +17,12 @@ export const cacheDir = () => process.env.CLAUDE_ACCOUNTS_CACHE_DIR ?? join(home
 export const picksPath = () =>
   process.env.CLAUDE_ACCOUNTS_PICKS ?? join(homedir(), '.local', 'share', 'claude-accounts', 'picks.jsonl')
 
+/** The mode overrides (docs/accounts.md §Modes): state, not cache, so it sits beside the pick log. */
+export const modesPath = () =>
+  process.env.CLAUDE_ACCOUNTS_MODES ?? join(homedir(), '.local', 'share', 'claude-accounts', 'modes.json')
+/** One audit line per set, clear or adoption, beside the state file. */
+export const modesAuditPath = (statePath = modesPath()) => `${statePath.replace(/\.json$/, '')}.jsonl`
+
 /** The keepalive job's log: its stdout/stderr, and the stdio of the detached refresh a pick spawns. */
 export const keepaliveLogPath = () => join(homedir(), 'Library', 'Logs', 'claude-accounts-keepalive.log')
 

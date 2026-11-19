@@ -2,7 +2,18 @@
 import { readFileSync } from 'node:fs'
 import { homedir } from 'node:os'
 import { join, resolve } from 'node:path'
-import { type Account, type PickResult, type Registry, ID, SPILL, defaultAccountId, isNum } from './policy.ts'
+import {
+  type Account,
+  type Mode,
+  type ModeKind,
+  type PickResult,
+  type Registry,
+  ID,
+  MODE_KINDS,
+  SPILL,
+  defaultAccountId,
+  isNum,
+} from './policy.ts'
 import { expandHome, registryPath } from './paths.ts'
 
 function validAccount(a: unknown): a is Account {
@@ -40,7 +51,40 @@ export function loadRegistry(path = registryPath()): Registry {
     throw new Error(`${path}: drain must be a list of account ids`)
   if (drain !== null && fable !== null && drain.includes(fable))
     throw new Error(`${path}: '${fable}' cannot be both the fable and a drain account`)
-  return { accounts: raw.accounts, fable, drain }
+  const version = raw.version
+  if (version !== undefined && version !== 1 && version !== 2)
+    throw new Error(`${path}: registry version ${JSON.stringify(version)} is not known to this build (1 or 2)`)
+  const accounts: Record<string, Account> = {}
+  for (const [id, a] of Object.entries(raw.accounts as Record<string, Account & { mode?: unknown }>)) {
+    if (a.mode === undefined) {
+      accounts[id] = a
+      continue
+    }
+    const mode = parseMode(a.mode)
+    if (typeof mode === 'string') throw new Error(`${path}: account '${id}' mode: ${mode}`)
+    accounts[id] = { ...a, mode }
+  }
+  return { ...(version !== undefined ? { version } : {}), accounts, fable, drain }
+}
+
+/** A registry `mode`: a kind (`"drain"`) or `{kind, for?, until?, why?}`; a string answer is what is wrong with it. */
+export function parseMode(v: unknown): Mode | string {
+  const o = (typeof v === 'string' ? { kind: v } : v) as Record<string, unknown> | null
+  if (!o || typeof o !== 'object' || Array.isArray(o)) return 'must be a kind or an object'
+  if (!MODE_KINDS.includes(o.kind as ModeKind)) return `kind must be one of ${MODE_KINDS.join(', ')}`
+  const str = (k: string) => o[k] === undefined || o[k] === null || typeof o[k] === 'string'
+  if (!str('for') || !str('until') || !str('why')) return 'for, until and why must be strings'
+  if (o.kind === 'reserve' && typeof o.for !== 'string') return 'reserve needs for: <model>'
+  if (o.kind !== 'reserve' && o.for) return 'for belongs to reserve only'
+  if (o.until === 'reset')
+    return 'until: reset is for overrides only (claude-account mode); the registry takes an ISO time'
+  if (typeof o.until === 'string' && Number.isNaN(Date.parse(o.until))) return `until '${o.until}' is not an ISO time`
+  return {
+    kind: o.kind as ModeKind,
+    ...(o.for ? { for: o.for as string } : {}),
+    ...(o.until ? { until: o.until as string } : {}),
+    ...(o.why ? { why: o.why as string } : {}),
+  }
 }
 
 /** Absolute config dir of an account; null = default ~/.claude (env unset). */

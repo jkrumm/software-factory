@@ -1,6 +1,7 @@
 // Parity with the dotfiles CLI (the live one): the same fixture registry, cache and clock go through both, every verb and
 // every lane, and stdout and the exit code must be identical. Where the dotfiles checkout exists (the mini) the test runs
-// both; everywhere (CI) the package is held to test/fixtures/parity-golden.json, what the dotfiles CLI printed.
+// both; everywhere (CI) the package is held to test/fixtures/parity-golden.json, what the dotfiles CLI printed. Registry v2's
+// additive fields (usage --json rows, sample files) are stripped first (v1View): the v1 CLI never printed or wrote them.
 // Record it again after a deliberate change of the contract: bun packages/accounts/scripts/record-golden.ts
 import { afterAll, beforeAll, describe, expect, test } from 'bun:test'
 import { existsSync, readFileSync } from 'node:fs'
@@ -10,6 +11,7 @@ import {
   PACKAGE_CLI,
   type Result,
   cases,
+  v1View,
   haveDotfiles,
   pool,
   removeFixtures,
@@ -28,7 +30,10 @@ describe('package CLI against the dotfiles CLI', () => {
   test.skipIf(!haveDotfiles)(
     'every verb and lane: identical stdout, exit code and cache state',
     async () => {
-      const pairs = await pool(cases, async (c) => [c, await run(DOTFILES_CLI, c), await run(PACKAGE_CLI, c)] as const)
+      const pairs = await pool(
+        cases,
+        async (c) => [c, v1View(c, await run(DOTFILES_CLI, c)), v1View(c, await run(PACKAGE_CLI, c))] as const,
+      )
       const diffs = pairs
         .filter(([, want, got]) => JSON.stringify(want) !== JSON.stringify(got))
         .map(([c, want, got]) => `${c.name}\n  dotfiles: ${show(want)}\n  package:  ${show(got)}`)
@@ -40,7 +45,7 @@ describe('package CLI against the dotfiles CLI', () => {
 
   test('every verb and lane: the package prints what the dotfiles CLI printed (golden)', async () => {
     expect(Object.keys(golden).sort()).toEqual(cases.map((c) => c.name).sort())
-    const gots = await pool(cases, (c) => run(PACKAGE_CLI, c))
+    const gots = await pool(cases, async (c) => v1View(c, await run(PACKAGE_CLI, c)))
     const diffs = cases.flatMap((c, i) =>
       JSON.stringify(golden[c.name]) === JSON.stringify(gots[i])
         ? []

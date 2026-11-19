@@ -11,7 +11,10 @@ export const oauthUsageHeaders = (token: string): Record<string, string> => ({
 })
 export const OAUTH_TIMEOUT_MS = 10_000
 
-/** Parse the `GET /api/oauth/usage` body (`five_hour` / `seven_day` with `utilization` percent + ISO `resets_at`); a window it omits stays null. */
+/**
+ * Parse the `GET /api/oauth/usage` body (`five_hour` / `seven_day` with `utilization` percent + ISO `resets_at`); a window it
+ * omits stays null. `limits[]` and `weekly_scoped_shares[]` are kept as the endpoint gives them, stamped with the fetch time.
+ */
 export function sampleFromOAuthUsage(json: unknown, nowMs: number): Sample | null {
   if (!json || typeof json !== 'object' || Array.isArray(json)) return null
   const j = json as Record<string, unknown>
@@ -22,7 +25,7 @@ export function sampleFromOAuthUsage(json: unknown, nowMs: number): Sample | nul
       ? { utilization: w.utilization, resets_at: w.resets_at }
       : null
   }
-  return sampleFromClaudeJson(
+  const sample = sampleFromClaudeJson(
     {
       cachedUsageUtilization: {
         fetchedAtMs: nowMs,
@@ -31,6 +34,14 @@ export function sampleFromOAuthUsage(json: unknown, nowMs: number): Sample | nul
     },
     'oauth',
   )
+  const objects = (v: unknown) =>
+    Array.isArray(v)
+      ? (v.filter((e) => !!e && typeof e === 'object' && !Array.isArray(e)) as Record<string, unknown>[])
+      : null
+  const limits = objects(j.limits)
+  if (!sample || !limits) return sample
+  const shares = objects(j.weekly_scoped_shares)
+  return { ...sample, limits, ...(shares ? { scoped_shares: shares } : {}), limits_ts: nowMs }
 }
 
 /** The real HttpGet: a hard timeout, no redirects, an unreadable body is just "no sample". */

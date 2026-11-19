@@ -47,7 +47,8 @@ const sample = (s: number | null, w: number, wResetH: number, ageS = 60) => ({
 type Cache = Record<string, Record<string, unknown>>
 const caches: Record<string, Cache> = {
   calm: {
-    'iu.sample.json': sample(null, 12, 100),
+    // an endpoint limit set without a scoped limit: iu (the v1 Fable account in `modes`) is not due for one, and its budget is unknown (v1)
+    'iu.sample.json': { ...sample(null, 12, 100), limits: [], limits_ts: NOW - 60_000 },
     'me.sample.json': sample(10, 30, 120),
     'me2.sample.json': sample(5, 11, 150),
   },
@@ -304,6 +305,33 @@ export const run = async (cli: string, c: Case) => {
 }
 
 export type Result = Awaited<ReturnType<typeof run>>
+
+/** The additive fields of registry v2 (docs/accounts.md §usage --json, §Samples): the v1 CLI has none of them. */
+const ADDITIVE_ROW = ['mode', 'mode_override', 'limits', 'weekly_scoped_shares']
+const ADDITIVE_SAMPLE = ['limits', 'scoped_shares', 'limits_ts']
+const strip = (o: Record<string, unknown>, keys: string[]) => {
+  for (const k of keys) delete o[k]
+  return o
+}
+
+/** A result as the v1 CLI shows it: the additive fields of `usage --json` rows and of sample files removed, nothing else touched. */
+export function v1View(c: Case, r: Result): Result {
+  let out = r.out
+  if (c.args[0] === 'usage' && c.args.includes('--json') && r.rc === 0) {
+    const j = JSON.parse(out) as { accounts: Record<string, unknown>[] }
+    j.accounts.forEach((row) => strip(row, ADDITIVE_ROW))
+    out = `${JSON.stringify(j, null, 2)}\n`
+  }
+  const state =
+    r.state &&
+    Object.fromEntries(
+      Object.entries(r.state).map(([f, body]) => [
+        f,
+        f.endsWith('.sample.json') ? JSON.stringify(strip(JSON.parse(body), ADDITIVE_SAMPLE)) : body,
+      ]),
+    )
+  return { ...r, out, ...(state ? { state } : {}) }
+}
 
 /** Creates the fixture root (stubs, registries, a transcript and a hook log). Call removeFixtures() when done. */
 export function setupFixtures(): void {
