@@ -235,8 +235,9 @@ export function gitWorktrees(options: GitWorktreesOptions = {}): Worktrees {
     await gitIn(repo, 'worktree', 'prune')
     if (existsSync(path)) throw new Failed(`${path} exists and is no worktree: it is left as it is`, 'refused')
     const local = Boolean(await gitIn(repo, 'rev-parse', '-q', '--verify', `refs/heads/${branch}`))
-    // A branch that is here needs no network. One that is gone looks at the remote's copy, as far as the last fetch knows it.
-    if (!local) await gitIn(repo, 'fetch', '-q', 'origin')
+    // A branch that is here needs no network. One that is gone looks at the remote's copy, and a remote that cannot be read
+    // is no answer: cutting afresh then would hand the lead a tree without the commits it pushed.
+    if (!local) await run([git, '-C', repo, 'fetch', '-q', 'origin'], FETCH_TIMEOUT_MS, 'git fetch origin')
     const pushed = `origin/${branch}`
     const onRemote = !local && Boolean(await gitIn(repo, 'rev-parse', '-q', '--verify', `refs/remotes/${pushed}`))
     const base = onRemote ? pushed : await originDefault(repo)

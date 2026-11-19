@@ -288,6 +288,27 @@ describe('git worktrees', () => {
     expect(await git(made.path, 'rev-parse', '--abbrev-ref', 'factory/8-1@{upstream}')).toBe('origin/factory/8-1')
   })
 
+  test('restore of a branch gone here checks out the remote copy with its tracking, and refuses when the remote cannot be read', async () => {
+    const work = await repo()
+    const made = await value(trees.create({ repo: work, branch: 'factory/9-1' }))
+    writeFileSync(join(made.path, 'pushed.txt'), 'p')
+    await git(made.path, 'add', '.')
+    await git(made.path, 'commit', '-q', '-m', 'pushed work')
+    await git(made.path, 'push', '-q', '-u', 'origin', 'factory/9-1')
+    await git(work, 'worktree', 'remove', '--force', made.path)
+    await git(work, 'branch', '-D', 'factory/9-1')
+    const origin = await git(work, 'remote', 'get-url', 'origin')
+    await git(work, 'remote', 'set-url', 'origin', join(work, 'no-such-remote'))
+    expect((await trees.restore({ repo: work, branch: 'factory/9-1', path: made.path })).ok).toBe(false)
+    expect(existsSync(made.path)).toBe(false)
+    await git(work, 'remote', 'set-url', 'origin', origin)
+    expect(await value(trees.restore({ repo: work, branch: 'factory/9-1', path: made.path }))).toEqual({
+      restored: true,
+    })
+    expect(existsSync(join(made.path, 'pushed.txt'))).toBe(true)
+    expect(await git(made.path, 'rev-parse', '--abbrev-ref', 'factory/9-1@{upstream}')).toBe('origin/factory/9-1')
+  })
+
   test('restore never replaces a directory that is no worktree', async () => {
     const work = await repo()
     const path = join(work, '.claude', 'worktrees', 'factory-7-1')

@@ -29,8 +29,9 @@ export const HOST_RESTARTED =
 
 /** What a session resumed in a worktree made again is told first: the old tree was removed while it waited. */
 export const WORKTREE_RESTORED =
-  'Your worktree was removed while you waited and has been made again at the same path, on your branch. ' +
-  'What you had committed is there; uncommitted changes and installed dependencies are not: look at `git status`, reinstall what you need, then go on.'
+  'Your worktree was removed while you waited and has been made again at the same path, on your branch: from your local branch, ' +
+  "else from the remote's copy of it, else cut afresh from the default branch. Look at `git log` and `git status`: uncommitted changes " +
+  'and installed dependencies are not there, so reinstall what you need, then go on.'
 
 type Look =
   | { done: true }
