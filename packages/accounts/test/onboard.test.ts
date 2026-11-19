@@ -29,8 +29,10 @@ beforeAll(() => {
     join(bin, 'claude'),
     `[ -e "${state}/loggedout" ] && { echo '{"loggedIn":false}'; exit 0; }
 [ -e "${state}/nocache" ] && { echo '{"loggedIn":true}'; exit 0; }
+[ -e "${state}/oldcache" ] && old=1
 f="${'$'}{CLAUDE_CONFIG_DIR:-${'$'}HOME}/.claude.json"
 now=${'$'}(date +%s)000
+[ -n "${'$'}old" ] && now=${'$'}(( ( ${'$'}(date +%s) - 8*3600 ) * 1000 ))
 reset=${'$'}(date -u -v+3d +%Y-%m-%dT%H:%M:%SZ 2>/dev/null || date -u -d '+3 days' +%Y-%m-%dT%H:%M:%SZ)
 echo "{\\"cachedUsageUtilization\\":{\\"fetchedAtMs\\":${'$'}now,\\"utilization\\":{\\"five_hour\\":{\\"utilization\\":12,\\"resets_at\\":\\"${'$'}reset\\"},\\"seven_day\\":{\\"utilization\\":30,\\"resets_at\\":\\"${'$'}reset\\"}}}}" > "${'$'}f"
 echo '{"loggedIn":true}'`,
@@ -151,6 +153,17 @@ describe('a new user: nothing to a first pick with two accounts, no host block',
     expect(JSON.parse(readFileSync(registryFile(), 'utf8')).accounts.again.enabled).toBe(false)
   })
 
+  test('verify refuses an own-file usage cache older than 6 h', () => {
+    flag('oldcache', true)
+    const r = cli(['add', 'stale', '--plan', 'max'])
+    expect(r.rc).toBe(0)
+    const v = cli(['verify', 'stale', '--enable'])
+    flag('oldcache', false)
+    expect(v.rc).toBe(1)
+    expect(v.out).toMatch(/sample\s+FAIL/)
+    expect(v.out).toContain('older than 6 h')
+  })
+
   test('remove: disabled, out of rank, names what stays; a second run changes nothing', () => {
     const r = cli(['remove', 'second'])
     expect(r.rc, r.err).toBe(0)
@@ -177,7 +190,7 @@ describe('a new user: nothing to a first pick with two accounts, no host block',
     expect(err(['add', 'x', '--plan', 'max', '--dir', '~/.claude-second'])).toContain('second already uses')
     expect(err(['add', 'x', '--plan', 'max', '--dir', '~/.claude'])).toContain('default account')
     expect(err(['add', 'x'])).toContain('usage: claude-account add')
-    expect(Object.keys(registry().accounts)).toEqual(['main', 'second', 'again'])
+    expect(Object.keys(registry().accounts)).toEqual(['main', 'second', 'again', 'stale'])
   })
 
   test('a registry the add would break is never written', () => {
@@ -191,11 +204,12 @@ describe('a new user: nothing to a first pick with two accounts, no host block',
     const sshLog = join(home, 'ssh.log')
     put(join(bin, 'ssh'), `echo "$@" >> "${sshLog}"; exit 255`)
     flag('loggedout', true)
-    cli(['refresh', '--all'])
+    const refreshed = cli(['refresh', '--all'])
     const h = cli(['health'])
     flag('loggedout', false)
     put(join(bin, 'ssh'), 'exit 255')
     expect(existsSync(sshLog)).toBe(false)
+    expect(refreshed.err).not.toContain('re-login ask') // the guard prints nothing: no ask, not even a skipped one
     expect(h.out).not.toContain('NOTE')
     expect(h.out).toContain('claude auth login') // the repair hint is this machine's own login command
   })

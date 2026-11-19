@@ -7,11 +7,11 @@ import { resolve } from 'node:path'
 import { loginVerdict, refreshEnv } from './claude-auth.ts'
 import { shQuote } from './host.ts'
 import { keychainService, readLoginExpiry } from './keychain.ts'
-import { type Account, type Registry, ID, SPILL, hasSessionLimit, planTier } from './policy.ts'
+import { type Account, type Registry, ID, SPILL, hasSessionLimit, planTier, usable } from './policy.ts'
 import type { HttpGet, Spawner } from './ports.ts'
 import { type RefreshDeps, runRefresh } from './refresh.ts'
 import { accountDir, readClaudeJsonSample } from './registry.ts'
-import { expandHome, cacheDir as defaultCacheDir, modesPath, picksPath } from './paths.ts'
+import { expandHome, cacheDir as defaultCacheDir, historyDir, modesPath, picksPath } from './paths.ts'
 import { loadCache, saveSample, writeAtomic } from './store.ts'
 
 /** The plans `add` takes: a Max (5 h session window and weekly) or an Ultra (weekly only). */
@@ -55,7 +55,10 @@ export function withAccount(raw: RegistryJson, a: AddInput): { raw: RegistryJson
   if (Object.hasOwn(raw.accounts, a.id)) throw new Error(`add: '${a.id}' is already in the registry`)
   if (!ADD_PLANS.includes(a.plan as (typeof ADD_PLANS)[number]))
     throw new Error(`add: --plan must be one of ${ADD_PLANS.join(', ')}`)
-  const owned = Object.values(raw.accounts).some((x) => x.dir === null)
+  const defaultDir = resolve(homedir(), '.claude')
+  const owned = Object.values(raw.accounts).some(
+    (x) => x.dir === null || (typeof x.dir === 'string' && resolve(expandHome(x.dir)) === defaultDir),
+  )
   let dir: string | null
   if (a.dir) {
     const abs = resolve(expandHome(a.dir))
@@ -169,20 +172,21 @@ export async function verifyAccount(d: VerifyDeps): Promise<Check[]> {
   const own = readClaudeJsonSample(a)
   if (own) saveSample(d.id, own, undefined, hasSessionLimit(a), d.now())
   // only a sample this run read counts: the cache may hold a removed account's old one under the same id
-  const x = results[d.id] === 'fresh' ? loadCache().samples[d.id] : own
+  const x = results[d.id] === 'fresh' ? loadCache().samples[d.id] : usable(own ?? undefined, d.now()) ? own : null
   const w = x?.w ?? null
+  const age = x?.w_ts != null ? `, read ${Math.max(0, Math.round((d.now() - x.w_ts) / 60_000))} min ago` : ''
   checks.push(
     w === null
       ? {
           name: 'sample',
           ok: false,
           detail:
-            "no quota sample read by this run: the usage endpoint gave none and the account's own cached usage has none (a sample left in the cache earlier does not count; see the lines above)",
+            "no quota sample read by this run: the usage endpoint gave none and the account's own cached usage is missing or older than 6 h (a sample left in the cache earlier does not count; see the lines above)",
         }
       : {
           name: 'sample',
           ok: true,
-          detail: `weekly ${w}%${x?.s != null && hasSessionLimit(a) ? `, 5 h ${x.s}%` : ''} (${x?.src})`,
+          detail: `weekly ${w}%${x?.s != null && hasSessionLimit(a) ? `, 5 h ${x.s}%` : ''} (${x?.src}${age})`,
         },
   )
   return checks
@@ -199,6 +203,6 @@ export function leftBehind(reg: Registry, id: string, registryPath: string): str
     `config dir ${configDir(a)} (not deleted)`,
     `login      Keychain item '${keychainService(dir)}'; \`${dir === null ? 'claude auth logout' : `CLAUDE_CONFIG_DIR=${shQuote(dir)} claude auth logout`}\` removes it`,
     `cache      ${files.length} file(s) ${cache}/${id}.* (samples, marks); they age out of every rule and are safe to delete`,
-    `history    lines naming ${id} in ${picksPath()} and any mode override in ${modesPath()}`,
+    `history    lines naming ${id} in ${picksPath()}, its samples and resets in ${historyDir()} (samples-*.jsonl, resets.jsonl) and any mode override in ${modesPath()}`,
   ]
 }
