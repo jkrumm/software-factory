@@ -1,0 +1,121 @@
+// Cross-machine session health for the wake check (docs/accounts.md §Health).
+// Pure grading: callers pass the parsed `usage --json` / `expiry --json` of one machine plus its pending re-login asks.
+
+export type HealthState = 'ok' | 'warn' | 'fail'
+
+export interface HealthRow {
+  machine: string
+  id: string
+  check: 'reach' | 'login' | 'quota' | 'queue'
+  state: HealthState
+  detail: string
+  /** shell command that repairs it, run on the MacBook; null when nothing to run */
+  fix: string | null
+  /** transport the peer's data came over; absent for the local machine */
+  via?: 'core' | 'ssh'
+}
+
+interface UsageAcct {
+  id: string
+  auth_ok: boolean
+  age_s: number | null
+}
+interface ExpiryAcct {
+  id: string
+  severity: string
+  days_left: number | null
+  expired: boolean
+  refresh_expires_at: number | null
+}
+export interface PendingAsk {
+  id: string
+  ageMs: number
+}
+
+/** Sample older than this while the login claims to be fine means the usage endpoint is rejecting the token. */
+export const STALE_QUOTA_S = 6 * 3600
+
+const relogin = (machine: string, id: string) => `claude-relogin ${id} --machine ${machine}`
+
+export function gradeMachine(
+  machine: string,
+  d: {
+    usage: { default_account?: string; accounts: UsageAcct[] } | null
+    expiry: { accounts: ExpiryAcct[] } | null
+    pending: PendingAsk[] | null
+    via?: 'core' | 'ssh'
+  },
+): HealthRow[] {
+  if (!d.usage) return [{ machine, id: '-', check: 'reach', state: 'fail', detail: 'unreachable', fix: null }]
+  const rows: HealthRow[] = []
+  const via = d.via
+  const hint = via ? ` (via ${via})` : ''
+  const dflt = d.usage.default_account ?? 'iu'
+  for (const a of d.usage.accounts) {
+    const exp = d.expiry?.accounts.find((e) => e.id === a.id)
+    if (!a.auth_ok) {
+      rows.push({
+        machine,
+        id: a.id,
+        check: 'login',
+        state: a.id === dflt ? 'fail' : 'warn',
+        detail: 'logged out',
+        fix: relogin(machine, a.id),
+      })
+    } else if (exp && exp.refresh_expires_at !== null && exp.severity !== 'PASS') {
+      const detail = exp.expired ? 'login expired' : `login ends in ${exp.days_left} d`
+      rows.push({
+        machine,
+        id: a.id,
+        check: 'login',
+        state: exp.severity === 'FAIL' ? 'fail' : 'warn',
+        detail,
+        fix: relogin(machine, a.id),
+      })
+    } else if (exp?.severity === 'PASS' && exp.days_left !== null) {
+      rows.push({ machine, id: a.id, check: 'login', state: 'ok', detail: `${exp.days_left} d left`, fix: null })
+    } else {
+      // No readable expiry (Keychain unreadable over ssh, entry missing, check failed): never "ok" without data.
+      rows.push({
+        machine,
+        id: a.id,
+        check: 'login',
+        state: 'warn',
+        detail: `login expiry unreadable${hint}`,
+        fix: null,
+      })
+    }
+    if (a.auth_ok && a.age_s !== null && a.age_s > STALE_QUOTA_S) {
+      rows.push({
+        machine,
+        id: a.id,
+        check: 'quota',
+        state: 'warn',
+        detail: `no quota sample for ${Math.round(a.age_s / 3600)} h (token rejected?)`,
+        fix: relogin(machine, a.id),
+      })
+    }
+  }
+  const waiting = (d.pending ?? []).filter((p) => p.ageMs < 24 * 3600_000)
+  if (waiting.length)
+    rows.push({
+      machine,
+      id: '-',
+      check: 'queue',
+      state: 'warn',
+      detail: `${waiting.length} re-login request(s) waiting for your click`,
+      fix: null,
+    })
+  return via ? rows.map((r) => ({ ...r, via })) : rows
+}
+
+/** Stable signature of the non-ok rows: the notifier only speaks again when it changes. */
+export const healthSignature = (rows: HealthRow[]) =>
+  rows
+    .filter((r) => r.state !== 'ok')
+    .map((r) => `${r.machine}/${r.id}/${r.check}/${r.state}`)
+    .sort()
+    .join('|')
+
+export const worst = (rows: HealthRow[]): HealthState =>
+  rows.some((r) => r.state === 'fail') ? 'fail' : rows.some((r) => r.state === 'warn') ? 'warn' : 'ok'

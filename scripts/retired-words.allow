@@ -29,3 +29,4 @@ packages/contract/src/read.ts board  # the legacy read API's comments name its f
 apps/cli/src/run.ts board  # the old read verbs were called by the Herdr status board, now the Herdr bar
 tests/scenarios/clients/replay.test.ts board  # the recorded requests of the Herdr status board, now the Herdr bar
 apps/server/migrations/0800_changes.sql board  # an applied migration is never edited (checksum); its comment names the Herdr status board
+packages/accounts/src/owner.ts human queue  # the directory of the owner's pending dialog requests (`~/.local/state/human-queue`) the wake check lists: an external path
