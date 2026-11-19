@@ -104,9 +104,12 @@ const errandHelp = [
 const htmlHelp =
   'An HTML artifact (--content-format html) starts from apps/console/templates/artifact.html in the factory repo and declares color-scheme: the Console shows it in its own theme (light or dark, set as data-theme on <html>), keeps the text and every heading in one centred column, gives a picture wider than the column the pane and opens it in a lightbox on a click; one that declares no scheme gets a generic dark base. The template lists the rules in its head.'
 
+const imagesHelp =
+  'Images: a Markdown artifact shows an https image only from a host the owner lists for the Console (his image bucket); any other host, such as raw.githubusercontent.com, shows its alt text. Put a shot there with `imgcli private <file> --json` (prints a presigned `url`, valid 7 days; it refuses .svg, so rasterise a diagram to png first) and link that url as `![alt](url)`; an HTML artifact inlines it as a `data:` URL.'
+
 const submitHelp = [
   'Limits: --title at most 200 characters, --content at most 1000000 characters. A Concept or Spec waits for its verdict (end the turn); a Report never waits.',
-  'Images: a Markdown artifact shows an https image only from a host the owner lists for the Console (his image bucket); any other host, such as raw.githubusercontent.com, shows its alt text. Put a shot there with `imgcli private <file> --json` (prints a presigned `url`, valid 7 days) and link that url as `![alt](url)`; an HTML artifact inlines it as a `data:` URL.',
+  imagesHelp,
   htmlHelp,
 ].join(' ')
 
@@ -139,7 +142,14 @@ export const OPERATION_EXTENSIONS: Readonly<Record<string, OperationExtension>> 
   'issue.ask': { help: decisionHelp },
   'errand.raise': { help: errandHelp },
   'artifact.submit': { help: submitHelp },
-  'artifact.new': { help: htmlHelp },
+  'artifact.new': { help: [imagesHelp, htmlHelp].join(' ') },
+  'artifact.revise': {
+    help: [
+      'A Concept or Spec a lead submitted needs --attempt (your attempt number); a Spec filed with an Issue that no lead works yet (`issue new --spec`) is revised without one, and the screen then passes the new revision to the owner. A Report never needs it.',
+      imagesHelp,
+      htmlHelp,
+    ].join(' '),
+  },
   'signal.file': { fieldHints: { kind: signalKindHint } },
   'issue.new': {
     help: filingGuide(),

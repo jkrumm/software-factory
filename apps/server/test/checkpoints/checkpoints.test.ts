@@ -28,6 +28,7 @@ import {
 import { type PageDeps, sendDuePages } from '../../src/app/checkpoints-pages.ts'
 import { lookAtReview, recheckReviews } from '../../src/app/checkpoints-reviews.ts'
 import { requestErrand } from '../../src/app/checkpoints.ts'
+import { attachSpec, storeSpecBlob } from '../../src/app/filed-spec.ts'
 import { screenErrands } from '../../src/app/checkpoints-errands.ts'
 import { screenSpecs } from '../../src/app/checkpoints-specs.ts'
 import { type SettleDeps, settleDecision, settleOpen } from '../../src/app/checkpoints-settle.ts'
@@ -1124,6 +1125,38 @@ describe('artifacts', () => {
     expect(value(await revise('X')).revisions).toHaveLength(3)
     expect(value(await revise('X'))).toMatchObject({ result: 'replayed' })
     expect(await rows('artifact_revisions')).toBe(3)
+  })
+
+  test('a Spec filed with a queued Issue is revised without an attempt; once a lead works it, the attempt is needed', async () => {
+    const filed = value(
+      await fileIssue(deps, {
+        key: key('filed', deps.ids.next('signal')),
+        event: {
+          kind: 'filed',
+          payload: { repo: 'example', title: 'a gated change', kind: 'feature', origin: 'you', checkpoint: 'gate' },
+          actor: 'factory',
+        },
+      }),
+    )
+    const id = filed.issue.id
+    await record(id, 'settled', { kind: 'settled', payload: {}, actor: 'factory' })
+    const stored = value(await storeSpecBlob(deps, { content: '# v1', given: undefined, fallback: 'a gated change' }))
+    value(await deps.uow.run(({ checkpoints }) => attachSpec(deps, checkpoints, { id, repo: 'example' }, stored)))
+    const artifactId = (await postgresCheckpointStore(db.sql).artifactByKey(key('filed-spec', id)))?.id as ArtifactId
+    const revised = value(await reviseArtifact(deps, { artifactId, attempt: null, content: '# v2', note: null }))
+    expect(revised.revisions).toHaveLength(2)
+    expect(await eventsOf(id)).toEqual(['filed', 'settled'])
+    await record(id, 'admitted', { kind: 'admitted', payload: {}, actor: 'factory' })
+    await record(id, 'lead_started', {
+      kind: 'lead_started',
+      payload: { attempt: 1, terminal: 't1' },
+      actor: 'factory',
+    })
+    expect(
+      errorOf(await reviseArtifact(deps, { artifactId, attempt: null, content: '# v3', note: null })),
+    ).toMatchObject({
+      kind: 'missing_field',
+    })
   })
 
   test('a revision of a Concept needs the attempt; a Decision is not revised', async () => {
