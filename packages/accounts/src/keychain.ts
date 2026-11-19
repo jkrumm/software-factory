@@ -3,7 +3,7 @@
 import { createHash } from 'node:crypto'
 import { userInfo } from 'node:os'
 import { resolve } from 'node:path'
-import { type LoginGrade, type LoginRow, type Registry, gradeLogin, isNum } from './policy.ts'
+import { type LoginGrade, type LoginRow, type Registry, gradeLogin, isNum, required } from './policy.ts'
 import type { Spawner } from './ports.ts'
 import { accountDir } from './registry.ts'
 
@@ -158,7 +158,7 @@ export function readLoginExpiry(d: {
 
 /** Access token of the account's Keychain item; null (with the reason logged) when it cannot be read. Never log the result. */
 export function keychainToken(d: KeychainDeps, id: string): string | null {
-  const svc = keychainService(accountDir(d.reg.accounts[id]))
+  const svc = keychainService(accountDir(required(d.reg.accounts, id)))
   const kc = d.spawn(d.securityBin ?? SECURITY_BIN, keychainLookupArgs(svc, d.baseEnv), {
     env: d.baseEnv as Record<string, string>,
     timeoutMs: KEYCHAIN_TIMEOUT_MS,

@@ -325,6 +325,7 @@ export const KPI_KEYS = [
   'nudges_acted',
   'errands_turned_away',
   'first_watch_dwell_p50',
+  'quota_at_reset',
 ] as const
 export type KpiKey = (typeof KPI_KEYS)[number]
 
@@ -1491,9 +1492,6 @@ export const CapacityLoopModel = z
       leadsPerAccount: z.number(),
       /** the accounts that have a cap of their own (`FACTORY_ACCOUNT_LEADS`); the rest take `leadsPerAccount` */
       accountLeads: z.record(z.string(), z.number()),
-      /** the percent of its 5-hour window and of its week at which an account takes no new lead */
-      fiveHourLimit: z.number(),
-      weeklyLimit: z.number(),
       loadCeiling: z.number(),
       slots: z.number(),
       slotsMax: z.number(),

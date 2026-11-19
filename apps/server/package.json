@@ -8,6 +8,7 @@
   },
   "dependencies": {
     "@elysiajs/openapi": "1.4.17",
+    "@software-factory/accounts": "workspace:*",
     "@software-factory/contract": "workspace:*",
     "@software-factory/project-lint": "workspace:*",
     "elysia": "1.4.30",

@@ -1,12 +1,4 @@
-import {
-  type AccountRank,
-  type AccountReading,
-  isFresh,
-  RANK_LANE,
-  rankIsFresh,
-  standing,
-  type WindowLimits,
-} from '../domains/capacity/accounts.ts'
+import { type AccountReading, isFresh, orderOf, RANK_LANE, READING_MAX_AGE_MS } from '../domains/capacity/accounts.ts'
 import type { Claim } from '../domains/capacity/claims.ts'
 import type { MemoryReading } from '../domains/capacity/host.ts'
 import type { QueueStates } from '../domains/capacity/queue-state.ts'
@@ -29,30 +21,22 @@ export interface AccountState {
   cap: number
 }
 
-const accountState = (
-  reading: AccountReading,
-  now: Date,
-  options: { rank?: AccountRank | null; limits?: WindowLimits; leads?: number; cap: number },
-): AccountState => {
-  const rank = options.rank ?? null
-  const stand = standing(reading, now, { limits: options.limits })
-  const index = rank && rankIsFresh(rank, now) ? rank.order.findIndex((r) => r.account === reading.account) : -1
-  return {
-    reading,
-    fresh: isFresh(reading, now),
-    open: stand.open,
-    why: stand.open ? null : stand.why,
-    opensAt: stand.open ? null : stand.until,
-    rank: index < 0 ? null : index + 1,
-    rankReason: index < 0 ? null : (rank?.order[index]?.reason ?? null),
-    leads: options.leads ?? 0,
-    cap: options.cap,
-  }
-}
+const accountState = (reading: AccountReading, now: Date, options: { leads?: number; cap: number }): AccountState => ({
+  reading,
+  fresh: isFresh(reading, now),
+  open: reading.open,
+  why: reading.open ? null : reading.closedWhy,
+  opensAt: reading.open ? null : reading.opensAt,
+  rank: reading.position,
+  rankReason: reading.reason,
+  leads: options.leads ?? 0,
+  cap: options.cap,
+})
 
 export interface CapacityState {
   accounts: AccountState[]
-  rank: AccountRank | null
+  /** the package's order of the open accounts for the bulk lane, as the newest poll read it; null: nothing read yet */
+  rank: { lane: string; at: Date; readAt: Date; order: { account: string; reason: string; weight: null }[] } | null
   rankFresh: boolean
   host: { load: number | null; memory: MemoryReading | null; notes: string[] }
   claims: Claim[]
@@ -61,16 +45,15 @@ export interface CapacityState {
   slotLines: string[]
 }
 
-const optionsOf = (
-  deps: CapacityDeps,
-  reading: AccountReading,
-  seen: { rank: AccountRank | null; claims: readonly Claim[] },
-) => ({
-  rank: seen.rank,
-  limits: deps.limits.windowLimits,
-  leads: seen.claims.filter((claim) => claim.account === reading.account).length,
+const optionsOf = (deps: CapacityDeps, reading: AccountReading, claims: readonly Claim[]) => ({
+  leads: claims.filter((claim) => claim.account === reading.account).length,
   cap: deps.limits.accountLeads?.get(reading.account) ?? deps.limits.leadsPerAccount,
 })
+
+const rankOf = (readings: readonly AccountReading[]): CapacityState['rank'] => {
+  const readAt = readings.reduce<Date | null>((newest, r) => (!newest || r.readAt > newest ? r.readAt : newest), null)
+  return readAt ? { lane: RANK_LANE, at: readAt, readAt, order: orderOf(readings) } : null
+}
 
 /** The poll, now: what `factory capacity refresh` runs. */
 export async function refreshState(deps: CapacityDeps): Promise<Result<AccountState[], PortError>> {
@@ -78,10 +61,12 @@ export async function refreshState(deps: CapacityDeps): Promise<Result<AccountSt
   if (!polled.ok) return polled
   const now = deps.clock.now()
   const seen = await deps.uow.run(async ({ capacity }) =>
-    ok({ rank: await capacity.latestRank(RANK_LANE), claims: await capacity.claims() }),
+    ok({ readings: await capacity.latestReadings(), claims: await capacity.claims() }),
   )
   if (!seen.ok) return seen
-  return ok(polled.value.map((reading) => accountState(reading, now, optionsOf(deps, reading, seen.value))))
+  return ok(
+    seen.value.readings.map((reading) => accountState(reading, now, optionsOf(deps, reading, seen.value.claims))),
+  )
 }
 
 /** Accounts and their windows, the host, who holds which claim, the queue states and the test slots. Reads (and polls when the readings are old). */
@@ -91,14 +76,13 @@ export async function capacityState(deps: CapacityDeps): Promise<Result<Capacity
   const now = deps.clock.now()
   return deps.uow.run(async ({ capacity }) => {
     const slots = await capacity.slots()
-    const rank = await capacity.latestRank(RANK_LANE)
+    const readings = await capacity.latestReadings()
     const claims = await capacity.claims()
+    const rank = rankOf(readings)
     return ok<CapacityState>({
-      accounts: (await capacity.latestReadings()).map((reading) =>
-        accountState(reading, now, optionsOf(deps, reading, { rank, claims })),
-      ),
+      accounts: readings.map((reading) => accountState(reading, now, optionsOf(deps, reading, claims))),
       rank,
-      rankFresh: rank !== null && rankIsFresh(rank, now),
+      rankFresh: rank !== null && now.getTime() - rank.readAt.getTime() <= READING_MAX_AGE_MS,
       host: { load: host.load, memory: host.memory, notes: [...notes, ...host.notes] },
       claims,
       states: await capacity.queueStates(),

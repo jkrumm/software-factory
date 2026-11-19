@@ -1,6 +1,6 @@
 import { rootedRepos } from './adapters/git/repos.ts'
 import { basename } from 'node:path'
-import { claudeAccountRanker, claudeAccountSource } from './adapters/planning/claude-accounts.ts'
+import { deskAccountSource, packageAccountDesk } from './adapters/planning/accounts-source.ts'
 import { gitProjectSource } from './adapters/planning/git-projects.ts'
 import { hostReader } from './adapters/planning/host.ts'
 import { sshProbe } from './adapters/remote/probe.ts'
@@ -17,6 +17,7 @@ import {
 import { capacityForLeads } from './app/capacity-leads.ts'
 import { getQueueStates, setQueueState, setRelearn } from './app/capacity-queue.ts'
 import { giveSlotBack, recordMergeWindow, recordStepCost, type SignalFiler, touchSlot } from './app/capacity-slots.ts'
+import { accountsView, clearAccountMode, setAccountMode } from './app/accounts-view.ts'
 import { capacityState, refreshState } from './app/capacity-view.ts'
 import { addAfter, removeAfter, settleIssue, setPrio } from './app/planning-chain.ts'
 import type { PlanningDeps } from './app/planning-deps.ts'
@@ -83,20 +84,20 @@ export function composePlanning(input: {
   const limits = {
     leadsPerAccount: settings.leadsPerAccount,
     accountLeads: settings.accountLeads,
-    windowLimits: settings.windowLimits,
     ...hostRule(settings),
     memoryCeilings: settings.memoryCeilings,
     seatsMaxBonus: settings.seatsMaxBonus,
     slotAim: settings.slotAim,
   }
+  const desk = packageAccountDesk()
   const host = hostReader({ sysctlBin: settings.sysctlBin, minSampleMs: settings.memorySampleMs })
   const capacity = {
     ...writes,
     limits,
     host,
     ...(doctor ? { doctor } : {}),
-    accounts: claudeAccountSource({ bin: settings.claudeAccountBin }),
-    ranker: claudeAccountRanker({ bin: settings.claudeAccountBin }),
+    accounts: deskAccountSource(desk),
+    desk,
   }
   const slots = {
     ...writes,
@@ -171,6 +172,9 @@ export function composePlanning(input: {
       limits: { ...limits, slots: settings.slots, slotsMax: settings.slotsMax },
       state: () => capacityState(capacity),
       refresh: () => refreshState(capacity),
+      accounts: () => accountsView(capacity),
+      setAccountMode: (account, body) => setAccountMode(capacity, account, body),
+      clearAccountMode: (account) => clearAccountMode(capacity, account),
       admit: () => admissionPass(capacity),
       queue: () => queueView(capacity),
       queueStates: async (project) => {

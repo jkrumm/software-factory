@@ -71,6 +71,7 @@ const CARD_ORDER = [
   'errands_turned_away',
   'window_points',
   'cost',
+  'quota_at_reset',
 ]
 const FIX_TITLE = 'Fix commits per week'
 
@@ -96,7 +97,7 @@ const openFolds = async (page: Page) => {
 
 /** Each KPI card shows what the lib makes of the API's figure, history and target: figure, change, distance, footer. */
 async function expectCards(page: Page, model: KpiModel) {
-  expect(model.kpis).toHaveLength(27)
+  expect(model.kpis).toHaveLength(28)
   expect(model.windows).toHaveLength(6)
   for (const kpi of cardKpis(model)) {
     const card = cardOf(page, kpi.label)

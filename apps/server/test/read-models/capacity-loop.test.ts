@@ -20,8 +20,6 @@ const t = (iso: string): Date => new Date(`2026-${iso}:00Z`)
 const constants = {
   leadsPerAccount: 3,
   accountLeads: {},
-  fiveHourLimit: 100,
-  weeklyLimit: 100,
   loadCeiling: 8,
   slots: 2,
   slotsMax: 6,

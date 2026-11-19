@@ -1,14 +1,4 @@
-import {
-  type AccountRank,
-  type AccountReading,
-  DEFAULT_LIMITS,
-  pickAccount,
-  POLL_EVERY_MS,
-  RANK_LANE,
-  standing,
-  tightestReset,
-  type WindowLimits,
-} from '../domains/capacity/accounts.ts'
+import { type AccountReading, pickAccount, POLL_EVERY_MS } from '../domains/capacity/accounts.ts'
 import type { BootSample } from '../domains/capacity/boot.ts'
 import {
   checkAdmission,
@@ -34,7 +24,7 @@ import {
 import { testLineOf } from '../domains/capacity/slots.ts'
 import type { AimMode } from '../domains/capacity/slot-aim.ts'
 import { type LaneInput, laneRoom } from '../domains/capacity/lanes.ts'
-import type { AccountRanker, AccountSource, Assignment, HostReader, ShadowDecision } from '../domains/capacity/ports.ts'
+import type { AccountDesk, AccountSource, Assignment, HostReader, ShadowDecision } from '../domains/capacity/ports.ts'
 import { effectiveState, type QueueStates } from '../domains/capacity/queue-state.ts'
 import { type Claim, type Claimant, claimRoom, holdsClaim } from '../domains/capacity/claims.ts'
 import { planWaits, type SeenWait, waitKindOf } from '../domains/capacity/waits.ts'
@@ -56,8 +46,6 @@ export interface CapacityLimits {
   leadsPerAccount: number
   /** each named account's own cap (`FACTORY_ACCOUNT_LEADS`) */
   accountLeads?: ReadonlyMap<string, number>
-  /** the percent of a window at which an account takes no new lead (`FACTORY_FIVE_HOUR_LIMIT`, `FACTORY_WEEKLY_LIMIT`); absent: 100 */
-  windowLimits?: WindowLimits
   loadCeiling: number
   /** no new lead above this many processes (the throughput rule once switched on); null or absent: no cap */
   processCap?: number | null
@@ -78,7 +66,8 @@ export interface CapacityDeps extends PlanningDeps {
   /** the projects' own doctors; absent: no project is asked whether this host can run it */
   doctor?: DoctorReader
   accounts: AccountSource
-  ranker: AccountRanker
+  /** the accounts' read model and the mode override, from `packages/accounts` (`GET /v1/accounts`) */
+  desk: AccountDesk
   limits: CapacityLimits
 }
 
@@ -189,8 +178,6 @@ export interface Snapshot {
   queueOrder: Map<IssueId, number>
   claims: Claim[]
   readings: AccountReading[]
-  /** the picker's order of accounts; null: none stored */
-  rank: AccountRank | null
   states: QueueStates
   assignments: Assignment[]
   /** the account each owed lead resumes on: its newest assignment, however old */
@@ -328,28 +315,18 @@ async function readDoctors(
 }
 
 /**
- * Polls the account picker and stores the readings as facts, with the picker's rank when it answers. A failed rank
- * read leaves the stored rank to go stale and puts a note in `notes`: the readings are still stored and admission
- * orders new leads by most room left.
+ * Reads the accounts through `packages/accounts` (the registry, the cache files, the modes in force) and stores the readings
+ * as facts, each with the package's verdict for the bulk lane: whether the account takes work, its place, why not and when
+ * it opens. A failed read stores nothing; the stored readings go stale and admit nothing.
  */
-export async function refreshAccounts(
-  deps: CapacityDeps,
-  notes: string[] = [],
-): Promise<Result<AccountReading[], PortError>> {
-  const at = deps.clock.now()
-  const read = await deps.accounts.read(at)
+export async function refreshAccounts(deps: CapacityDeps): Promise<Result<AccountReading[], PortError>> {
+  const read = await deps.accounts.read(deps.clock.now())
   if (!read.ok) return read
-  const rank = await deps.ranker.read(at)
-  if (!rank.ok) {
-    notes.push(`account rank read failed (${rank.error.detail}): new leads are ordered by most room left`)
-  }
-  const stored = await deps.uow.run(async ({ capacity }) => {
+  return deps.uow.run(async ({ capacity }) => {
     await capacity.lock()
     await capacity.recordReadings(read.value)
-    if (rank.ok) await capacity.recordRank(rank.value)
     return ok(read.value)
   })
-  return stored
 }
 
 /** Polls when the newest reading is older than a minute; a failed poll leaves the stored readings (stale ones admit nothing). */
@@ -359,7 +336,7 @@ export async function pollIfDue(deps: CapacityDeps): Promise<string[]> {
   const newest = latest.ok ? Math.max(0, ...latest.value.map((r) => r.readAt.getTime())) : 0
   if (latest.ok && newest > 0 && now - newest < POLL_EVERY_MS) return []
   const notes: string[] = []
-  const polled = await refreshAccounts(deps, notes)
+  const polled = await refreshAccounts(deps)
   if (!polled.ok) notes.push(`account poll failed (${polled.error.detail}): admission goes on the readings it has`)
   return notes
 }
@@ -379,7 +356,6 @@ async function snapshotOf(stores: PlanningStores, now: Date): Promise<Snapshot> 
     queueOrder: await stores.planning.queueOrder(),
     claims,
     readings: await stores.capacity.latestReadings(),
-    rank: await stores.capacity.latestRank(RANK_LANE),
     states: await stores.capacity.queueStates(),
     assignments: await stores.capacity.recentAssignments(),
     owedAccounts: latestAccounts(await stores.capacity.latestAssignments(owedIds)),
@@ -650,9 +626,7 @@ function decide(snap: Snapshot, host: HostInputs, limits: CapacityLimits, bonus:
       leadsByAccount,
       leadsPerAccount: limits.leadsPerAccount + bonus,
       accountLeads: limits.accountLeads,
-      windowLimits: limits.windowLimits,
       seatBonus: bonus,
-      rank: snap.rank,
     })
   }
 
@@ -1106,25 +1080,24 @@ export async function accountOf(
 
 /**
  * When an account's window opens again by its newest reading: what a lead that hit the wall at `since` waits for. A
- * reading that closes the account says when. A reading below the limits that was sampled before the wall has not caught
- * up with it: it names the window nearest its limit, the one the lead ran into, so a lead is never woken into a wall the
- * reading does not show yet. A reading below the limits sampled after the wall (or with no `since`) says the account is
- * open. Null when no reset is known, and then the lead is woken at once.
+ * reading that closes the account says when (the package's `opens_at`). A reading that takes work but was sampled before the
+ * wall has not caught up with it: it names the window nearest its ceiling (`wallResetAt`, from the package), the one the lead
+ * ran into, so a lead is never woken into a wall the reading does not show yet. A reading that takes work and was sampled
+ * after the wall (or with no `since`) says the account is open. Null when no reset is known, and then the lead is woken at once.
  */
 export async function windowOf(
   deps: PlanningDeps,
   account: string,
-  limits: WindowLimits = DEFAULT_LIMITS,
   since?: Date,
 ): Promise<Result<{ resetAt: Date | null }, PortError>> {
   return deps.uow.run(async ({ capacity }) => {
     const reading = (await capacity.latestReadings()).find((r) => r.account === account)
     if (!reading) return ok({ resetAt: null })
     const now = deps.clock.now()
-    const stand = standing(reading, now, { limits })
-    if (!stand.open) return ok({ resetAt: stand.until })
+    if (!reading.open) return ok({ resetAt: reading.opensAt && reading.opensAt > now ? reading.opensAt : null })
     const behind = since !== undefined && reading.sampledAt !== null && reading.sampledAt < since
-    return ok({ resetAt: behind ? tightestReset(reading, now, limits) : null })
+    const wall = reading.wallResetAt
+    return ok({ resetAt: behind && wall && wall > now ? wall : null })
   })
 }
 
@@ -1136,7 +1109,7 @@ export interface AccountMove {
 /**
  * **A walled lead moves to another open account.** The lead's account ran out (a `wall` stall of its attempt) and the
  * window is still closed: instead of waiting for it, the attempt is given to the account the picker would give a new
- * lead (`pickAccount`: open, below its cap and its window limits, never the account it left), and its claim goes with it.
+ * lead (`pickAccount`: open by the package's verdict, below its cap, never the account it left), and its claim goes with it.
  * The lead's session follows when its wake is delivered (`noteLead` starts the same session again under the new account;
  * the transcripts of every account lie in one `projects/` directory, so nothing is copied). The prompt cache is per account,
  * so the resumed session reads its whole context uncached once: cheaper than hours of waiting for a window, which is why
@@ -1164,10 +1137,7 @@ export async function moveWalled(
       leads: leadsOnAccounts(snap.claims, owed, snap.owedAccounts),
       leadsPerAccount: limits.leadsPerAccount,
       ...(limits.accountLeads ? { accountCaps: limits.accountLeads } : {}),
-      limits: limits.windowLimits,
       now,
-      pace: row.project !== null && effectiveState(snap.states, row.project) === 'pace',
-      rank: snap.rank,
     })
     if (!pick.picked) return ok(null)
     if (!(await stores.capacity.reassign(input.issue, input.attempt, pick.picked.account, now))) return ok(null)

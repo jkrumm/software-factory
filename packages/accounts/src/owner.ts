@@ -45,8 +45,8 @@ export const parseJson = (t: string) => {
 }
 export function pendingFrom(text: string, nowMs: number): PendingAsk[] {
   return text.split('\n').flatMap((l) => {
-    const m = /^([0-9T-]+) (\d+)$/.exec(l.trim())
-    return m ? [{ id: m[1], ageMs: nowMs - Number(m[2]) * 1000 }] : []
+    const [, id, secs] = /^([0-9T-]+) (\d+)$/.exec(l.trim()) ?? []
+    return id && secs ? [{ id, ageMs: nowMs - Number(secs) * 1000 }] : []
   })
 }
 const hcBin = () => process.env.CLAUDE_ACCOUNTS_HC ?? 'hc' // test seam, like CLAUDE_ACCOUNTS_SSH

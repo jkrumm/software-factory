@@ -33,6 +33,12 @@ const reading = (account: string) => ({
   fiveHourResetsAt: new Date(T.getTime() + 3_600_000),
   weeklyResetsAt: new Date(T.getTime() + 2 * 86_400_000),
   exhaustedUntil: null,
+  open: true,
+  position: 1,
+  reason: 'home',
+  closedWhy: null,
+  opensAt: null,
+  wallResetAt: null,
 })
 
 /** The accounts and their caps as they stood (`FACTORY_ACCOUNT_LEADS=iu=20,me=10,me2=10`, 16 for any other). */

@@ -79,6 +79,8 @@ export const ReadAccountQuota = z
     fiveHourResetsAt: iso.nullable(),
     weeklyResetsAt: iso.nullable(),
     exhaustedUntil: iso.nullable(),
+    /** false: the account is switched off in the registry (the strip leaves it out); absent: the card list, which holds none */
+    enabled: z.boolean().optional(),
     fresh: z.boolean(),
     /** 1-based place in the picker's order for new leads; null: not ranked, or the rank is stale */
     rank: z.number().int().nullable(),

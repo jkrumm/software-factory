@@ -1,6 +1,7 @@
+import type { AccountMode, AccountModeBody, AccountRow, AccountsView } from '@software-factory/contract'
 import type { IssueId } from '../../kernel/ids.ts'
 import type { PortError, Result } from '../../kernel/result.ts'
-import type { AccountRank, AccountReading } from './accounts.ts'
+import type { AccountReading } from './accounts.ts'
 import type { Claim } from './claims.ts'
 import type { SnapshotProc } from './classes.ts'
 import type { MemoryReading } from './host.ts'
@@ -33,9 +34,6 @@ export interface CapacityStore {
   recordReadings(readings: readonly AccountReading[]): Promise<void>
   /** the newest reading of every account that ever had one */
   latestReadings(): Promise<AccountReading[]>
-  /** replaces the stored rank of its lane */
-  recordRank(rank: AccountRank): Promise<void>
-  latestRank(lane: string): Promise<AccountRank | null>
 
   claims(): Promise<Claim[]>
   takeClaim(claim: Claim): Promise<void>
@@ -345,16 +343,40 @@ export interface WorktreeSizer {
   sizeMib(path: string): Promise<number | null>
 }
 
-/** The accounts and their windows, as the running core reads them (`claude-account usage --json`). */
+/** What `packages/accounts` says of one account: `claude-account status --json` as the contract names it, before the factory adds its seats. */
+export type AccountStatusRow = Omit<
+  AccountRow,
+  | 'seats'
+  | 'leads'
+  | 'account'
+  | 'fiveHourUsed'
+  | 'weeklyUsed'
+  | 'fiveHourResetsAt'
+  | 'weeklyResetsAt'
+  | 'exhaustedUntil'
+  | 'fresh'
+  | 'rank'
+  | 'rankReason'
+>
+export type AccountsStatus = Omit<AccountsView, 'accounts'> & { accounts: AccountStatusRow[] }
+
+/**
+ * The accounts' read model and its one write, in this process (`packages/accounts`): the status of every account and the
+ * mode override. Nothing here keeps a rule of its own; the package decides what state an account is in.
+ */
+export interface AccountDesk {
+  /** the status at `at`; `history` false skips the forecast and the reset ledger (what a poll that needs only the lanes asks) */
+  status(at: Date, options?: { history?: boolean }): Result<AccountsStatus>
+  /** sets a mode override; a request the package refuses (an unknown account, a past time) is `refused` */
+  setMode(account: string, body: AccountModeBody, at: Date): Result<AccountMode>
+  /** clears the override; the registry's mode applies again */
+  clearMode(account: string, at: Date): Result<AccountMode>
+}
+
+/** The accounts and their windows with the package's verdict for the bulk lane, read in-process (`packages/accounts`). */
 export interface AccountSource {
   /** one poll; `at` is the poll's time, which a reading's `readAt` and `sampledAt` count from */
   read(at: Date): Promise<Result<AccountReading[]>>
-}
-
-/** The picker's order of accounts for a lane (`claude-account rank --lane <lane> --json`). */
-export interface AccountRanker {
-  /** one poll; `at` is the poll's time, which the rank's `readAt` is */
-  read(at: Date): Promise<Result<AccountRank>>
 }
 
 export type { PortError }

@@ -5,6 +5,7 @@ import { loadMigrations, migrate } from '../../src/adapters/postgres/migrate.ts'
 import { createApp } from '../../src/api/app.ts'
 import { deriveSession } from '../../src/domains/leads/session.ts'
 import { fixedClock } from '../../src/kernel/clock.ts'
+import { readAccounts } from '../../src/read/accounts.ts'
 import { healthOf } from '../../src/read/health.ts'
 import { createReader } from '../../src/read/reader.ts'
 
@@ -61,11 +62,9 @@ beforeAll(async () => {
     INSERT INTO factory.errands (id, key, issue_id, attempt, summary, raised_at, reached_owner_at)
     VALUES ('errand_1', 'ek', 'issue_1', 1, 'Approve the portal step', ${NOW}, ${NOW})`
   await sql`
-    INSERT INTO factory.capacity_readings (account, read_at, enabled, auth_ok, five_hour_used, weekly_used, exhausted_until)
-    VALUES ('max1', ${NOW}, true, true, 40, 50, '2026-11-07T13:00:00.000Z')`
-  await sql`
-    INSERT INTO factory.capacity_ranks (lane, read_at, picked_at, ordering)
-    VALUES ('bulk', ${NOW}, ${NOW}, ${JSON.stringify([{ account: 'max1', reason: 'home', weight: 0.2 }])}::jsonb)`
+    INSERT INTO factory.capacity_readings (account, read_at, enabled, auth_ok, five_hour_used, weekly_used, exhausted_until,
+      bulk_open, bulk_position, bulk_reason)
+    VALUES ('max1', ${NOW}, true, true, 40, 50, '2026-11-07T13:00:00.000Z', true, 1, 'home')`
 
   const read = createReader({
     sql,
@@ -215,8 +214,7 @@ describe('as the owner', () => {
     const { body } = await json('/v1/health')
     const kinds = body.health.map((line: { kind: string }) => line.kind).sort()
     expect(kinds).toEqual(['account', 'door'])
-    const accounts = (await json('/v1/accounts')).body.accounts
-    expect(accounts).toEqual([
+    expect(await readAccounts(db.sql, new Date(NOW))).toEqual([
       {
         account: 'max1',
         fiveHourUsed: 40,
@@ -231,21 +229,22 @@ describe('as the owner', () => {
     ])
   })
 
-  test('a missing or stale rank is a health line while a reading is fresh, and the accounts carry no rank', async () => {
-    const kindsOf = async () => (await json('/v1/health')).body.health.map((line: { kind: string }) => line.kind).sort()
+  test('a stale reading or one the package closed carries no rank', async () => {
     try {
-      await db.sql`UPDATE factory.capacity_ranks SET read_at = '2026-11-07T11:00:00.000Z'`
-      expect(await kindsOf()).toEqual(['account', 'account-rank', 'door'])
-      expect((await json('/v1/accounts')).body.accounts[0]).toMatchObject({ rank: null, rankReason: null })
-      await db.sql`DELETE FROM factory.capacity_ranks`
-      const line = (await json('/v1/health')).body.health.find((l: { kind: string }) => l.kind === 'account-rank')
-      expect(line.id).toBe('account-rank')
-      expect(line.text).toContain('last read never')
+      await db.sql`UPDATE factory.capacity_readings SET read_at = '2026-11-07T11:00:00.000Z'`
+      expect((await readAccounts(db.sql, new Date(NOW)))[0]).toMatchObject({
+        fresh: false,
+        rank: null,
+        rankReason: null,
+      })
+      await db.sql`UPDATE factory.capacity_readings SET read_at = ${NOW}, bulk_open = false, bulk_position = NULL`
+      expect((await readAccounts(db.sql, new Date(NOW)))[0]).toMatchObject({
+        fresh: true,
+        rank: null,
+        rankReason: null,
+      })
     } finally {
-      await db.sql`DELETE FROM factory.capacity_ranks`
-      await db.sql`
-        INSERT INTO factory.capacity_ranks (lane, read_at, picked_at, ordering)
-        VALUES ('bulk', ${NOW}, ${NOW}, ${JSON.stringify([{ account: 'max1', reason: 'home', weight: 0.2 }])}::jsonb)`
+      await db.sql`UPDATE factory.capacity_readings SET read_at = ${NOW}, bulk_open = true, bulk_position = 1`
     }
   })
 

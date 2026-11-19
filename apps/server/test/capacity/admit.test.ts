@@ -18,7 +18,7 @@ import { syncProjects } from '../../src/app/planning-sync.ts'
 import { issueId, issueNumber } from '../../src/kernel/ids.ts'
 import { key } from '../../src/kernel/keys.ts'
 import { err, ok, portError } from '../../src/kernel/result.ts'
-import { account, startWorld, value, type World } from '../planning/support.ts'
+import { account, closedAccount, startWorld, value, type World } from '../planning/support.ts'
 
 let world: World
 
@@ -530,12 +530,12 @@ describe('admission', () => {
   })
 
   test('every account closed: never spills, and the reason names when the first one opens', async () => {
-    world.accounts.rows = [account('a', { fiveHourUsed: 100 })]
+    world.accounts.rows = [closedAccount('a')]
     const issue = await world.queued({ repo: 'app' })
     const result = await pass()
     const reason = result.queue.find((e) => e.issue === issue)?.reason
     expect(reason).toMatchObject({ kind: 'window', opensAt: new Date('2026-11-07T15:00:00Z') })
-    expect(reason?.message).toContain('5-hour window at 100%')
+    expect(reason?.message).toContain('5 h window is at 100 %')
   })
 
   test('prio orders the queue, higher first, before age', async () => {
@@ -841,7 +841,7 @@ describe('a walled lead moves to another account', () => {
     const one = await world.queued({ repo: 'solo' })
     expect((await pass()).admitted).toEqual([{ issue: one, attempt: 1, account: 'me', repo: 'solo' }])
     await wall(one)
-    world.accounts.rows = [account('me', { fiveHourUsed: 100 }), account('other', { weeklyUsed: 60 })]
+    world.accounts.rows = [closedAccount('me'), account('other', { weeklyUsed: 60 })]
     nextSample()
     await pass()
     expect(value(await moveWalled(world.deps, limits, { issue: one, attempt: 1 }))).toEqual({ from: 'me', to: 'other' })
@@ -863,7 +863,7 @@ describe('a walled lead moves to another account', () => {
       value(await moveWalled(world.deps, { ...limits, leadsPerAccount: 0 }, { issue: one, attempt: 1 })),
     ).toBeNull()
     // the other account is closed too
-    world.accounts.rows = [account('me', { fiveHourUsed: 100 }), account('other', { fiveHourUsed: 100 })]
+    world.accounts.rows = [closedAccount('me'), closedAccount('other')]
     nextSample()
     await pass()
     expect(value(await moveWalled(world.deps, limits, { issue: one, attempt: 1 }))).toBeNull()
@@ -889,10 +889,10 @@ describe('the ports other packages take', () => {
   test('the window of an account is when its newest reading says it opens again; an unknown account or reset has none', async () => {
     const port = capacityForLeads(world.deps)
     world.accounts.rows = [
-      account('me', { fiveHourUsed: 100 }),
+      closedAccount('me'),
       // the wall came before the sample: the window nearest its limit is the one that closes
-      account('behind', { fiveHourUsed: 97, weeklyUsed: 40 }),
-      account('week', { fiveHourUsed: null, weeklyUsed: 98 }),
+      account('behind', { fiveHourUsed: 97, weeklyUsed: 40, wallResetAt: new Date('2026-11-07T15:00:00Z') }),
+      account('week', { fiveHourUsed: null, weeklyUsed: 98, wallResetAt: new Date('2026-11-10T00:00:00Z') }),
       account('open', { fiveHourResetsAt: null, weeklyResetsAt: null }),
     ]
     value(await admissionPass(world.deps))
@@ -936,57 +936,48 @@ describe('the ports other packages take', () => {
   })
 })
 
-describe('the picker rank', () => {
-  test('an ok rank is stored and decides: its head is admitted though another account has lower weekly use', async () => {
+describe("the package's order", () => {
+  test('the open account first in the order is admitted though another has lower weekly use, and the order is stored', async () => {
     world.accounts.rows = [
       account('a', { weeklyUsed: 60, fiveHourUsed: 80 }),
       account('b', { weeklyUsed: 10, fiveHourUsed: 80 }),
-    ]
-    world.ranker.rows = [
-      { account: 'a', reason: 'home', weight: 0.4 },
-      { account: 'b', reason: 'home', weight: 0.1 },
     ]
     await world.queued({ repo: 'solo' })
     const result = await pass()
     expect(result.admitted.map((a) => a.account)).toEqual(['a'])
     expect(result.notes).toEqual([])
-    const [stored] = await world.db.sql`SELECT lane, ordering FROM factory.capacity_ranks`
-    expect(stored?.lane).toBe('bulk')
-    const ordering = typeof stored?.ordering === 'string' ? JSON.parse(stored.ordering) : stored?.ordering
-    expect(ordering.map((r: { account: string }) => r.account)).toEqual(['a', 'b'])
+    const stored = await world.db
+      .sql`SELECT account, bulk_open, bulk_position FROM factory.capacity_readings ORDER BY account`
+    expect(stored.map((r: { account: string; bulk_position: number }) => [r.account, r.bulk_position])).toEqual([
+      ['a', 1],
+      ['b', 2],
+    ])
   })
 
-  test('the head of the rank is admitted before the account with the most room', async () => {
-    world.accounts.rows = [account('a', { weeklyUsed: 90 }), account('b', { weeklyUsed: 10 })]
-    world.ranker.rows = [
-      { account: 'a', reason: 'home', weight: 0.4 },
-      { account: 'b', reason: 'home', weight: 0.1 },
-    ]
+  test('a position the package names decides, not the order of the rows', async () => {
+    world.accounts.rows = [account('a', { position: 2 }), account('b', { position: 1 })]
     await world.queued({ repo: 'solo' })
-    expect((await pass()).admitted.map((a) => a.account)).toEqual(['a'])
+    expect((await pass()).admitted.map((a) => a.account)).toEqual(['b'])
   })
 
-  test('a failed rank read admits by most room, then lowest weekly use, and puts a note in the pass notes', async () => {
-    world.accounts.rows = [account('a', { weeklyUsed: 60 }), account('b', { weeklyUsed: 10 })]
-    world.ranker.fail = true
+  test('an account the package closes takes no lead, and the refusal says why and when it opens', async () => {
+    const opens = new Date('2026-11-07T15:00:00Z')
+    world.accounts.rows = [account('a', { open: false, closedWhy: 'paused by its mode', opensAt: opens })]
     await world.queued({ repo: 'solo' })
     const result = await pass()
-    expect(result.admitted.map((a) => a.account)).toEqual(['b'])
-    expect(result.notes).toEqual([expect.stringContaining('account rank read failed')])
-    expect(result.notes[0]).toContain('ordered by most room left')
-    expect(await world.db.sql`SELECT lane FROM factory.capacity_ranks`).toHaveLength(0)
+    expect(result.admitted).toEqual([])
+    expect(result.queue[0]?.reason).toMatchObject({ kind: 'window', opensAt: opens })
+    expect(result.queue[0]?.reason?.message).toContain('paused by its mode')
   })
 
-  test('a rank the poll stopped renewing goes stale and no longer orders the pick', async () => {
-    world.accounts.rows = [account('a', { weeklyUsed: 60 }), account('b', { weeklyUsed: 10 })]
-    world.ranker.rows = [{ account: 'a', reason: 'home', weight: null }]
+  test('readings the poll stopped renewing go stale and admit nothing', async () => {
+    world.accounts.rows = [account('a')]
     await world.queued({ repo: 'solo' })
     value(await admissionPass(world.deps, { limit: 0 }))
-    world.ranker.fail = true
+    world.accounts.fail = true
     world.clock.advance(11 * 60_000)
-    // the readings are renewed by the poll, the rank is not: it is 11 minutes old
     const result = await pass()
-    expect(result.admitted.map((a) => a.account)).toEqual(['b'])
-    expect(result.notes).toEqual([expect.stringContaining('account rank read failed')])
+    expect(result.admitted).toEqual([])
+    expect(result.notes).toEqual([expect.stringContaining('account poll failed')])
   })
 })

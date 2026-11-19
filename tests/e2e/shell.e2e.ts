@@ -1,6 +1,6 @@
 import { expect, test } from './fixtures.ts'
 import { badge, chip } from './shell-support.ts'
-import { api, holdSignal, needsCount } from './seed.ts'
+import { accountsInService, api, holdSignal, needsCount } from './seed.ts'
 
 const SCREENS = [
   { label: 'Overview', path: '/', key: 'O' },
@@ -197,7 +197,7 @@ test('the strip shows the counts, each account weekly and the host, and opens th
     apiUrl,
     '/v1/flow',
   )
-  const { accounts } = await api<{ accounts: { account: string }[] }>(apiUrl, '/v1/accounts')
+  const accounts = await accountsInService(apiUrl)
   expect(accounts.length).toBeGreaterThan(0)
   await page.goto('/needs-you')
   const counts = page.getByRole('navigation', { name: 'Issues in flight' })

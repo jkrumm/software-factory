@@ -101,7 +101,7 @@ test('leads: 2 admits two leads in one repo, a third waits for a claim and is ad
 
   const capacity = CapacityView.parse((await lab.cli(['capacity', 'get'])).json)
   expect(capacity.claims.map((s) => s.issue).sort()).toEqual([two, three].sort())
-  expect(capacity.accounts.map((a) => [a.account, a.open])).toEqual([
+  expect(capacity.accounts.filter((a) => a.account !== 'spare').map((a) => [a.account, a.open])).toEqual([
     ['a', true],
     ['b', true],
   ])

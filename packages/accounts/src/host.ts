@@ -2,6 +2,7 @@
 // that stand in for what only one person's machines have. No block = one machine with plain logins; nothing below runs.
 import { hostname } from 'node:os'
 import type { HostConfig, HostMachine, HostPeer, HostWake } from './policy.ts'
+import { required } from './required.ts'
 
 const isObj = (v: unknown): v is Record<string, unknown> => !!v && typeof v === 'object' && !Array.isArray(v)
 const isStr = (v: unknown): v is string => typeof v === 'string' && v.length > 0
@@ -86,15 +87,17 @@ export function resolveMachine(host: HostConfig | undefined, host_: string = hos
     list.find((e) => e.match !== undefined && new RegExp(e.match, 'i').test(host_)) ??
     list.find((e) => e.match === undefined)
   if (m) return { name: m.name, peer: m.peer ?? null, wake: m.wake ?? null, configured: true }
-  return { name: host_.split('.')[0].toLowerCase() || 'local', peer: null, wake: null, configured: false }
+  return { name: (host_.split('.')[0] ?? '').toLowerCase() || 'local', peer: null, wake: null, configured: false }
 }
 
 export const shQuote = (v: string) => `'${v.replaceAll("'", `'\\''`)}'`
 
 /** A hint template ({placeholders} filled as they are: the text is shown, never run). */
 export const fillHint = (template: string, vars: Record<string, string>) =>
-  template.replace(/\{([a-zA-Z]+)\}/g, (whole, k: string) => (Object.hasOwn(vars, k) ? vars[k] : whole))
+  template.replace(/\{([a-zA-Z]+)\}/g, (whole, k: string) => (Object.hasOwn(vars, k) ? required(vars, k) : whole))
 
 /** A command template with every {placeholder} replaced by the shell-quoted value; an unknown placeholder is left as it is. */
 export const renderCommand = (template: string, vars: Record<string, string>) =>
-  template.replace(/\{([a-zA-Z]+)\}/g, (whole, k: string) => (Object.hasOwn(vars, k) ? shQuote(vars[k]) : whole))
+  template.replace(/\{([a-zA-Z]+)\}/g, (whole, k: string) =>
+    Object.hasOwn(vars, k) ? shQuote(required(vars, k)) : whole,
+  )

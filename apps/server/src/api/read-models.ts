@@ -56,7 +56,7 @@ import { readFlowTrend } from '../read/flow-trend.ts'
 import { readFixCommits } from '../read/fix-commits.ts'
 import { readFriction } from '../read/friction.ts'
 import { readHostSamples } from '../read/host.ts'
-import { costOfIssues, readKpis } from '../read/kpis.ts'
+import { costOfIssues, type QuotaAtResetReader, readKpis } from '../read/kpis.ts'
 import { readRetro } from '../read/retro.ts'
 import { readThroughput } from '../read/throughput.ts'
 import { redactCapacityLoop, redactThroughput } from '../read/throughput-redact.ts'
@@ -77,6 +77,8 @@ export interface ReadModelDeps {
   queueReasons?: () => Promise<QueueReasons | null>
   /** the role table's lead row, for the seat badge of an Issue with no lead yet; absent or null, such an Issue shows none */
   leadRow?: LeadRow
+  /** the accounts' reset ledger for the KPI `quota_at_reset` (`packages/accounts`); absent, that KPI has no figure */
+  quotaAtReset?: QuotaAtResetReader
   /** the role table's reviewer rows, for the Improve screen's reviewer table; absent or null, its numbers have no tier words */
   reviewerRows?: () => Promise<{
     cheap: { tier: Tier; effort: Effort }
@@ -424,6 +426,7 @@ export const readModelRoutes = (deps: ReadModelDeps | undefined, caller: (reques
               now: now(),
               days: days(query),
               reviewerRows: await deps.reviewerRows?.().catch(() => null),
+              ...(deps.quotaAtReset ? { quotaAtReset: deps.quotaAtReset } : {}),
             }),
           ),
         )

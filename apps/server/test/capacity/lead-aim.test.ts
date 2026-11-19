@@ -41,6 +41,12 @@ const reading = {
   fiveHourResetsAt: at(60),
   weeklyResetsAt: at(3 * 24 * 60),
   exhaustedUntil: null,
+  open: true,
+  position: 1,
+  reason: 'home',
+  closedWhy: null,
+  opensAt: null,
+  wallResetAt: null,
 }
 const verdict = (over: Partial<AdmissionInputs>) =>
   checkAdmission({

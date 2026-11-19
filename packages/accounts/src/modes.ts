@@ -14,6 +14,7 @@ import {
   isNum,
   modeOf,
   untilPassed,
+  required,
 } from './policy.ts'
 
 /** One account's override as the state file and `usage --json` (`mode_override`) carry it. */
@@ -149,7 +150,7 @@ export function applyModes(reg: Registry, views: Record<string, ModeView>): Regi
     ...reg,
     accounts: {
       ...reg.accounts,
-      ...Object.fromEntries(live.map(([id, v]) => [id, { ...reg.accounts[id], mode: v.mode }])),
+      ...Object.fromEntries(live.map(([id, v]) => [id, { ...required(reg.accounts, id), mode: v.mode }])),
     },
   }
 }

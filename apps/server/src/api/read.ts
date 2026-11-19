@@ -1,7 +1,6 @@
 import {
   ChangeList,
   ErrorBody,
-  ReadAccountList,
   ISSUE_ID_META,
   ReadAskList,
   ReadHealthList,
@@ -163,14 +162,6 @@ export const readRoutes = (read: ReadApi | undefined) =>
           operationId: 'read.health',
           summary: 'lines that need a look: the door, accounts, loops, a blocked checkout',
         },
-      },
-    )
-    .get(
-      '/accounts',
-      async () => (read ? Response.json(ReadAccountList.parse({ accounts: await read.accounts() })) : unavailable()),
-      {
-        response: { 200: ReadAccountList, ...errorResponses(503) },
-        detail: { operationId: 'read.accounts', summary: "each account's newest reading" },
       },
     )
     .get(

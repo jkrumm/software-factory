@@ -12,6 +12,7 @@ import {
   hasSessionLimit,
   isNum,
   newestAge,
+  required,
   sampleAge,
   scopedDue,
   usable,
@@ -113,7 +114,7 @@ async function importPeerSamples(d: RefreshDeps): Promise<Set<string>> {
     const id = r?.id
     if (typeof id !== 'string' || !Object.hasOwn(d.reg.accounts, id)) continue
     adoptOverride(d, id, r.mode_override, now)
-    if (!d.reg.accounts[id].enabled) continue
+    if (!required(d.reg.accounts, id).enabled) continue
     const win = (value: unknown, reset: unknown, age: unknown) => {
       const v = pct(value)
       return v === null
@@ -128,7 +129,7 @@ async function importPeerSamples(d: RefreshDeps): Promise<Set<string>> {
         id,
         { s: s.v, s_reset: s.reset, s_ts: s.ts, w: w.v, w_reset: w.reset, w_ts: w.ts, src: 'peer', ...lim },
         d.dir,
-        hasSessionLimit(d.reg.accounts[id]),
+        hasSessionLimit(required(d.reg.accounts, id)),
         now,
         d.history,
       )
@@ -173,7 +174,7 @@ export async function runRefresh(d: RefreshDeps): Promise<Record<string, Refresh
   const imported = d.ids.length ? await importPeerSamples(d) : new Set<string>()
   for (const id of d.ids) {
     results[id] = 'unresolved' // neither a fresh sample nor an auth verdict, until proven otherwise
-    const env = refreshEnv(d.baseEnv, accountDir(d.reg.accounts[id]))
+    const env = refreshEnv(d.baseEnv, accountDir(required(d.reg.accounts, id)))
     let verdict: LoginVerdict | undefined
     const status = () => (verdict ??= loginVerdict(d, env)) // at most one `auth status` per account and run
     const afterImport = loadCache(d.dir)
@@ -202,7 +203,7 @@ export async function runRefresh(d: RefreshDeps): Promise<Record<string, Refresh
     }
     const sample = await oauthSample(d, id, status)
     if (sample) {
-      saveSample(id, sample, d.dir, hasSessionLimit(d.reg.accounts[id]), d.now(), d.history)
+      saveSample(id, sample, d.dir, hasSessionLimit(required(d.reg.accounts, id)), d.now(), d.history)
       setAuthFailed(id, false, d.now(), d.dir)
       markVerified(id, d.now(), d.dir)
       results[id] = 'fresh'

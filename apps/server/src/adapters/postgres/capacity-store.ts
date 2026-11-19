@@ -30,17 +30,14 @@ const ReadingRow = z.object({
   five_hour_resets_at: z.date().nullable(),
   weekly_resets_at: z.date().nullable(),
   exhausted_until: z.date().nullable(),
-})
-
-const RankDbRow = z.object({
-  lane: z.string(),
-  read_at: z.date(),
-  picked_at: z.date(),
-  // the driver hands jsonb back as text
-  ordering: z.preprocess(
-    (v) => (typeof v === 'string' ? JSON.parse(v) : v),
-    z.array(z.object({ account: z.string(), reason: z.string(), weight: z.number().nullable() })),
-  ),
+  bulk_open: z.boolean(),
+  bulk_position: z.number().int().nullable(),
+  bulk_reason: z.string().nullable(),
+  closed_why: z.string().nullable(),
+  opens_at: z.date().nullable(),
+  wall_reset_at: z.date().nullable(),
+  /** a lead's turn ended on a 401 and the owner's login Errand is still open */
+  auth_marked: z.boolean(),
 })
 
 const ClaimRow = z.object({
@@ -143,9 +140,10 @@ export function postgresCapacityStore(tx: SQL): CapacityStore {
         await tx`
           INSERT INTO factory.capacity_readings
             (account, read_at, sampled_at, enabled, auth_ok, five_hour_used, weekly_used, five_hour_resets_at,
-             weekly_resets_at, exhausted_until)
+             weekly_resets_at, exhausted_until, bulk_open, bulk_position, bulk_reason, closed_why, opens_at, wall_reset_at)
           VALUES (${r.account}, ${r.readAt}, ${r.sampledAt}, ${r.enabled}, ${r.authOk}, ${r.fiveHourUsed}, ${r.weeklyUsed},
-                  ${r.fiveHourResetsAt}, ${r.weeklyResetsAt}, ${r.exhaustedUntil})`
+                  ${r.fiveHourResetsAt}, ${r.weeklyResetsAt}, ${r.exhaustedUntil}, ${r.open}, ${r.position}, ${r.reason},
+                  ${r.closedWhy}, ${r.opensAt}, ${r.wallResetAt})`
       }
       // The table stays small enough to scan: a week of history, and always the newest reading of each account.
       const newest = readings.reduce((latest, r) => Math.max(latest, r.readAt.getTime()), 0)
@@ -159,44 +157,37 @@ export function postgresCapacityStore(tx: SQL): CapacityStore {
 
     async latestReadings() {
       // An account the API-error path marked (a lead's turn ended on a 401) is not signed in whatever the picker says, until
-      // the owner's login Errand closes: `auth_ok` is what stops new admissions on it (`standing`).
+      // the owner's login Errand closes: it takes no new lead, so `open` and `auth_ok` are false while the mark is open.
       const rows: unknown[] = await tx`
-        SELECT DISTINCT ON (r.account) r.account, r.read_at, r.sampled_at, r.enabled,
-          (r.auth_ok AND NOT EXISTS (
+        SELECT DISTINCT ON (r.account) r.account, r.read_at, r.sampled_at, r.enabled, r.auth_ok,
+          r.five_hour_used, r.weekly_used, r.five_hour_resets_at, r.weekly_resets_at, r.exhausted_until,
+          r.bulk_open, r.bulk_position, r.bulk_reason, r.closed_why, r.opens_at, r.wall_reset_at,
+          EXISTS (
             SELECT 1 FROM factory.account_auth_marks m WHERE m.account = r.account AND m.cleared_at IS NULL
-          )) AS auth_ok,
-          r.five_hour_used, r.weekly_used, r.five_hour_resets_at, r.weekly_resets_at, r.exhausted_until
+          ) AS auth_marked
         FROM factory.capacity_readings r ORDER BY r.account, r.id DESC`
       return rows.map((raw): AccountReading => {
         const r = ReadingRow.parse(raw)
+        const open = r.bulk_open && !r.auth_marked
         return {
           account: r.account,
           readAt: r.read_at,
           sampledAt: r.sampled_at,
           enabled: r.enabled,
-          authOk: r.auth_ok,
+          authOk: r.auth_ok && !r.auth_marked,
           fiveHourUsed: r.five_hour_used,
           weeklyUsed: r.weekly_used,
           fiveHourResetsAt: r.five_hour_resets_at,
           weeklyResetsAt: r.weekly_resets_at,
           exhaustedUntil: r.exhausted_until,
+          open,
+          position: open ? r.bulk_position : null,
+          reason: open ? r.bulk_reason : null,
+          closedWhy: open ? null : r.auth_marked ? 'not signed in' : r.closed_why,
+          opensAt: open || r.auth_marked ? null : r.opens_at,
+          wallResetAt: r.wall_reset_at,
         }
       })
-    },
-
-    async recordRank(rank) {
-      await tx`
-        INSERT INTO factory.capacity_ranks (lane, read_at, picked_at, ordering)
-        VALUES (${rank.lane}, ${rank.readAt}, ${rank.at}, ${JSON.stringify(rank.order)}::jsonb)
-        ON CONFLICT (lane) DO UPDATE
-          SET read_at = EXCLUDED.read_at, picked_at = EXCLUDED.picked_at, ordering = EXCLUDED.ordering`
-    },
-
-    async latestRank(lane) {
-      const [raw] = await tx`SELECT lane, read_at, picked_at, ordering FROM factory.capacity_ranks WHERE lane = ${lane}`
-      if (!raw) return null
-      const row = RankDbRow.parse(raw)
-      return { lane: row.lane, order: row.ordering, at: row.picked_at, readAt: row.read_at }
     },
 
     async claims() {

@@ -3,6 +3,7 @@
 // the ports in ports.ts and the files in registry.ts and store.ts, so a test (or a simulation) hands in the snapshot.
 import { laxityHours } from './laxity.ts'
 import { type LoadModel, MEASURED, sessionRatio } from './load-model.ts'
+import { required, requiredAt } from './required.ts'
 
 /** Account whose config dir is the default ~/.claude (CLAUDE_CONFIG_DIR unset). */
 export const DEFAULT_ACCOUNT_ID = 'iu'
@@ -170,6 +171,9 @@ export interface PickResult {
 export const emptyCache = (): Cache => ({ samples: {}, exhausted: {}, auth_failed: {}, auth_failed_at: {} })
 
 export const isNum = (v: unknown): v is number => typeof v === 'number' && Number.isFinite(v)
+
+export { required, requiredAt } from './required.ts'
+
 export const numOrNull = (v: unknown) => v === null || isNum(v)
 
 /** An account id: letters, digits, `_` and `-` (it names cache files). */
@@ -279,7 +283,7 @@ export const noSession = (x: Sample): Sample => ({ ...x, s: null, s_reset: null,
 /** The cache as the picker must see it: a plan without a 5 h window carries no session half, whatever an older file or feed left behind. */
 export function withoutSessionWindows(reg: Registry, cache: Cache): Cache {
   const stale = Object.entries(cache.samples).filter(
-    ([id, x]) => Object.hasOwn(reg.accounts, id) && !hasSessionLimit(reg.accounts[id]) && hasS(x),
+    ([id, x]) => Object.hasOwn(reg.accounts, id) && !hasSessionLimit(required(reg.accounts, id)) && hasS(x),
   )
   return stale.length
     ? { ...cache, samples: { ...cache.samples, ...Object.fromEntries(stale.map(([id, x]) => [id, noSession(x)])) } }
@@ -409,8 +413,10 @@ const matchesLane = (pattern: string, lane: string) =>
 /** Accounts whose home lanes claim `lane`: exact matches win outright, wildcards only count when nobody matches exactly. */
 export function homeIds(reg: Registry, lane: string): string[] {
   const ids = Object.keys(reg.accounts)
-  const exact = ids.filter((id) => reg.accounts[id].homeLanes.includes(lane))
-  return exact.length ? exact : ids.filter((id) => reg.accounts[id].homeLanes.some((h) => matchesLane(h, lane)))
+  const exact = ids.filter((id) => required(reg.accounts, id).homeLanes.includes(lane))
+  return exact.length
+    ? exact
+    : ids.filter((id) => required(reg.accounts, id).homeLanes.some((h) => matchesLane(h, lane)))
 }
 
 /** The pick rests on a sample with a window older than FRESH_MS. */
@@ -472,7 +478,7 @@ export function scopedLimit(x: Sample | undefined, model: string): Scoped | null
   if (i < 0) return null
   const share = x.scoped_shares?.find((s) => s.limit_index === i)
   if (!share || !isNum(share.used_percent_of_weekly) || !isNum(share.allowance_percent_of_weekly)) return null
-  const p = x.limits[i].percent
+  const p = x.limits.at(i)?.percent
   return {
     percent: isNum(p) ? p : null,
     used: share.used_percent_of_weekly,
@@ -647,7 +653,7 @@ export function overPace(reg: Registry, cache: Cache, id: string, nowMs: number)
   if (!eligible(reg, cache, id, nowMs)) return false
   const x = cache.samples[id]
   const p = pace(x, nowMs)
-  return p !== null && x.w! > p + PACE_MARGIN
+  return p !== null && !!x && x.w !== null && x.w > p + PACE_MARGIN
 }
 
 /**
@@ -748,7 +754,7 @@ export function dueAccounts(reg: Registry, cache: Cache, ids: string[], nowMs: n
   for (const id of ids) {
     const x = cache.samples[id]
     if (!x || !hasW(x) || x.w_reset === null) continue
-    const a = reg.accounts[id]
+    const a = required(reg.accounts, id)
     const ratio = hasSessionLimit(a) ? sessionRatio(load, planTier(a.plan)) : null
     const h = laxityHours({
       w: x.w!,
@@ -776,7 +782,7 @@ export function accountWeight(reg: Registry, cache: Cache, id: string, nowMs: nu
   const spare = (hasWeek && !rolled ? weeklyMax(x, nowMs, isDrain(reg, id, nowMs)) - x.w! : WEEKLY_MAX) - held
   const hoursLeft =
     hasWeek && !rolled && x.w_reset !== null ? Math.max(1, (x.w_reset * 1000 - nowMs) / 3600_000) : WEEK_S / 3600
-  return (spare * accountUnits(reg.accounts[id]).weekly) / hoursLeft ** URGENCY_EXP
+  return (spare * accountUnits(required(reg.accounts, id)).weekly) / hoursLeft ** URGENCY_EXP
 }
 
 /**
@@ -787,7 +793,7 @@ export function launchAccount(reg: Registry, cache: Cache, model: string, nowMs:
   const want = model.toLowerCase()
   const ids = Object.keys(reg.accounts).filter((id) => {
     const m = modeOf(reg, id, nowMs)
-    return reg.accounts[id].enabled && m.kind === 'reserve' && m.for?.toLowerCase() === want
+    return required(reg.accounts, id).enabled && m.kind === 'reserve' && m.for?.toLowerCase() === want
   })
   const fresh = (id: string) => {
     const sc = scopedLimit(cache.samples[id], model)
@@ -822,7 +828,7 @@ function pickRaw(reg: Registry, cache: Cache, lane: string, nowMs: number, ctx: 
   let open = reg
   const lastResort: string[] = []
   for (const id of Object.keys(reg.accounts)) {
-    if (!reg.accounts[id].enabled) continue
+    if (!required(reg.accounts, id).enabled) continue
     const m = modeOf(reg, id, nowMs)
     if (m.kind === 'reserve' && m.for && reserveHold(m) === 'account') {
       lastResort.push(id)
@@ -869,20 +875,21 @@ function pickRule(reg: Registry, cache: Cache, lane: string, nowMs: number, ctx:
 
   if (bulk && def.due) {
     const due = dueAccounts(reg, cache, ok, nowMs, ctx.load)
-    if (due.length) return { picked: due[0], reason: 'due' }
+    if (due.length) return { picked: requiredAt(due, 0), reason: 'due' }
   }
   if (bulk && def.expiringS !== null) {
     const horizonMs = def.expiringS * 1000
     const expiring = ok
       .filter((id) => {
-        const x = cache.samples[id]
+        const x = required(cache.samples, id)
         const msLeft = x.w_reset === null || !hasW(x) ? null : x.w_reset * 1000 - nowMs
         const cool =
           def.expiringSessionBelow === null || (sessionPct(reg, cache, id, nowMs) ?? 0) < def.expiringSessionBelow
         return cool && msLeft !== null && msLeft > 0 && msLeft < horizonMs
       })
-      .sort((p, q) => cache.samples[p].w_reset! - cache.samples[q].w_reset!)
-    if (expiring.length) return { picked: expiring[0], reason: 'expiring-capacity' }
+      .sort((p, q) => (required(cache.samples, p).w_reset ?? 0) - (required(cache.samples, q).w_reset ?? 0))
+    const [soonest] = expiring
+    if (soonest !== undefined) return { picked: soonest, reason: 'expiring-capacity' }
   }
   const homes = homeIds(reg, lane)
   const home = choose(ok.filter((id) => homes.includes(id)))
@@ -924,7 +931,7 @@ function pickRule(reg: Registry, cache: Cache, lane: string, nowMs: number, ctx:
 /** The registry with one account switched off: how the rule is asked for the next-best choice. */
 const withoutAccount = (reg: Registry, id: string): Registry => ({
   ...reg,
-  accounts: { ...reg.accounts, [id]: { ...reg.accounts[id], enabled: false } },
+  accounts: { ...reg.accounts, [id]: { ...required(reg.accounts, id), enabled: false } },
 })
 
 export interface RankEntry {
@@ -984,7 +991,7 @@ export function dueIds(reg: Registry, cache0: Cache, nowMs: number, ignoreAuthMa
   // a reserve account is also due when its scoped sample (endpoint only) is older than SCOPED_FRESH_MS
   return Object.keys(reg.accounts).filter(
     (id) =>
-      reg.accounts[id].enabled &&
+      required(reg.accounts, id).enabled &&
       !authBlocked(id) &&
       (sampleAge(cache.samples[id], nowMs) > FRESH_MS || scopedDue(reg, cache, id, nowMs)),
   )

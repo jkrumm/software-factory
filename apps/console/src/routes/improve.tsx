@@ -137,6 +137,7 @@ const KPI_ICON: Record<KpiKey, Icon> = {
   nudges_acted: ChatCircleDotsIcon,
   errands_turned_away: HandPointingIcon,
   first_watch_dwell_p50: TimerIcon,
+  quota_at_reset: GaugeIcon,
 }
 
 /** A surface card that is not a StatCard: a panel step with the faint card shadow, no border. */

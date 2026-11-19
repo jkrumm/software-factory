@@ -14,6 +14,12 @@ export async function api<T = unknown>(url: string, path: string, body?: unknown
   return JSON.parse(text) as T
 }
 
+/** The accounts the strip shows: the registry's disabled ones (the lab keeps one as the default account) have no meter. */
+export async function accountsInService(url: string): Promise<{ account: string }[]> {
+  const { accounts } = await api<{ accounts: { account: string; enabled?: boolean }[] }>(url, '/v1/accounts')
+  return accounts.filter((a) => a.enabled !== false)
+}
+
 let held = 0
 
 /** Outside text is held until the owner promotes it: one more thing that waits on the owner, through the public route. */

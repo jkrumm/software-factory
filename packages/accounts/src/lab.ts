@@ -13,6 +13,7 @@ import {
   livePolicy,
   pickWith,
   policyOfRule,
+  required,
 } from './policy.ts'
 import { type Comparison, type Scenario, type SimResult } from './sim.ts'
 
@@ -95,7 +96,7 @@ export function liveResults(ledger: ResetEntry[], reg: Registry): LiveResult[] {
     groups.set(key, [...(groups.get(key) ?? []), e])
   }
   return [...groups].map(([policy, es]) => {
-    const units = (e: ResetEntry) => accountUnits(reg.accounts[e.id]).weekly
+    const units = (e: ResetEntry) => accountUnits(required(reg.accounts, e.id)).weekly
     const quota = es.reduce((s, e) => s + units(e), 0)
     return {
       policy,
@@ -120,7 +121,7 @@ export function simulateText(sc: Scenario & { policy: PolicyName }, r: SimResult
     `policy ${sc.policy} · demand ${sc.demand} · ${sc.accts.length} accounts · ${sc.weeks ?? 3} weeks · seed ${sc.seed ?? 7}`,
     ...sc.accts.map(
       (a) =>
-        `  ${a.id.padEnd(4)} ${a.plan.padEnd(5)} at reset [${r.atReset[a.id].join(', ')}]  picks ${r.picks[a.id] ?? 0}  full after ${r.firstFull[a.id] ?? '-'} h`,
+        `  ${a.id.padEnd(4)} ${a.plan.padEnd(5)} at reset [${required(r.atReset, a.id).join(', ')}]  picks ${r.picks[a.id] ?? 0}  full after ${r.firstFull[a.id] ?? '-'} h`,
     ),
     `used at reset ${pct(r.used)} (capacity-weighted) · blocked ${pct(r.blocked, 2)} · moved ${r.moved} of ${r.sessions} sessions`,
   ].join('\n')

@@ -1,7 +1,7 @@
 import { join } from 'node:path'
 import { expect, test } from './fixtures.ts'
 import { SPEC_QUOTE } from './seed-artifacts.ts'
-import { api } from './seed.ts'
+import { accountsInService, api } from './seed.ts'
 
 const OUT = join(import.meta.dir, 'out', 'screenshots')
 
@@ -284,7 +284,7 @@ export function screenshotSuite(variantName: VariantName) {
     test('the header strip closed, each popover open, and the palette with a query', async ({ page, apiUrl }) => {
       const shot = (name: string) =>
         page.screenshot({ path: join(OUT, `${variant.name}-${name}.png`), animations: 'disabled' })
-      const { accounts } = await api<{ accounts: { account: string }[] }>(apiUrl, '/v1/accounts')
+      const accounts = await accountsInService(apiUrl)
       const { issues } = await api<{ issues: { id: number; title: string }[] }>(apiUrl, '/v1/issues?state=all&limit=50')
       const word = issues[0]?.title.split(/\s+/).find((w) => w.length > 3) ?? 'a'
       await page.goto('/')

@@ -9,6 +9,7 @@ import { shQuote } from './host.ts'
 import { keychainService, readLoginExpiry } from './keychain.ts'
 import { type Account, type Registry, ID, SPILL, hasSessionLimit, planTier, usable } from './policy.ts'
 import type { HttpGet, Spawner } from './ports.ts'
+import { required, requiredAt } from './required.ts'
 import { type RefreshDeps, runRefresh } from './refresh.ts'
 import { accountDir, readClaudeJsonSample } from './registry.ts'
 import { expandHome, cacheDir as defaultCacheDir, historyDir, modesPath, picksPath } from './paths.ts'
@@ -122,7 +123,7 @@ export interface VerifyDeps {
  * `.claude.json` holds). A failed login stops there: nothing after it can be read. The sample lands in the cache like any refresh's.
  */
 export async function verifyAccount(d: VerifyDeps): Promise<Check[]> {
-  const a = d.reg.accounts[d.id]
+  const a = required(d.reg.accounts, d.id)
   const login = loginVerdict({ spawn: d.spawn, claudeBin: d.claudeBin }, refreshEnv(d.baseEnv, accountDir(a)))
   if (login.loggedIn !== true)
     return [
@@ -137,14 +138,17 @@ export async function verifyAccount(d: VerifyDeps): Promise<Check[]> {
       },
     ]
   const checks: Check[] = [{ name: 'login', ok: true, detail: 'claude auth status: logged in' }]
-  const row = readLoginExpiry({
-    reg: d.reg,
-    spawn: d.spawn,
-    securityBin: d.securityBin,
-    baseEnv: d.baseEnv,
-    now: d.now(),
-    ids: [d.id],
-  })[0]
+  const row = requiredAt(
+    readLoginExpiry({
+      reg: d.reg,
+      spawn: d.spawn,
+      securityBin: d.securityBin,
+      baseEnv: d.baseEnv,
+      now: d.now(),
+      ids: [d.id],
+    }),
+    0,
+  )
   const registered = planTier(a.plan)
   if (!row.plan_detected)
     checks.push({ name: 'plan', ok: false, detail: `the plan cannot be read from the login item (${row.detail})` })
@@ -199,7 +203,7 @@ export async function verifyAccount(d: VerifyDeps): Promise<Check[]> {
 
 /** What `remove` leaves behind, one line each: the registry entry, the directory, the login, the cache, the history. */
 export function leftBehind(reg: Registry, id: string, registryPath: string): string[] {
-  const a = reg.accounts[id]
+  const a = required(reg.accounts, id)
   const dir = accountDir(a)
   const cache = defaultCacheDir()
   const files = existsSync(cache) ? readdirSync(cache).filter((f) => f.startsWith(`${id}.`)) : []

@@ -14,11 +14,13 @@ import {
   livePolicy,
   planTier,
   rank,
+  required,
   ruleTag,
   reserveBudget,
   weeklyCeiling,
   withoutSessionWindows,
   isDrain,
+  weeklyCeiling as ceilingOf,
 } from './policy.ts'
 import { type ModeView, modeField } from './modes.ts'
 import { type Forecast, type Held, type ResetEntry, forecastWeekly } from './history.ts'
@@ -165,7 +167,7 @@ export function buildStatus(i: StatusInput): Status {
   const order = Object.fromEntries(lanes.map((lane) => [lane, rank({ reg, cache, lane, nowMs })]))
   const accounts = Object.entries(reg.accounts).map(([id, a]): AccountStatus => {
     const x = cache.samples[id]
-    const view = i.views[id]
+    const view = required(i.views, id)
     const hist = i.history[id] ?? { week: [], resets: [] }
     const units = accountUnits(a)
     const drain = isDrain(reg, id, nowMs)
@@ -173,19 +175,18 @@ export function buildStatus(i: StatusInput): Status {
     const cl = closure(reg, cache, id, nowMs)
     const ctx = {
       ceiling: weeklyCeiling(x?.w_reset ?? null, nowMs, drain),
-      model: view?.mode.for ?? null,
-      mode: view?.mode.kind,
+      model: view.mode.for ?? null,
+      mode: view.mode.kind,
     }
     const why = (code: (typeof CLOSED_CODES)[number]) => closedWhy(code, x, ctx)
     const until = cache.exhausted[id]
     const laneStatus = Object.fromEntries(
       lanes.map((lane): [string, LaneStatus] => {
-        const at = order[lane].findIndex((e) => e.account === id)
-        if (at >= 0)
-          return [
-            lane,
-            { open: true, position: at + 1, reason: order[lane][at].reason, closed: null, why: null, opens_at: null },
-          ]
+        const rows = required(order, lane)
+        const at = rows.findIndex((e) => e.account === id)
+        const hit = rows[at]
+        if (hit)
+          return [lane, { open: true, position: at + 1, reason: hit.reason, closed: null, why: null, opens_at: null }]
         // closure() is null exactly for the accounts rank lists; the guard keeps a disagreement visible instead of silent
         const c = cl ?? { closed: 'no-sample' as const, opens_at: null }
         return [
@@ -247,6 +248,41 @@ export function buildStatus(i: StatusInput): Status {
     lanes,
     accounts,
   }
+}
+
+/** A window this close to its ceiling (points) is the one a limit hit most likely came from. */
+export const WALL_NEAR_POINTS = 10
+
+/**
+ * Where a lead that ran into a wall should wait: the reset (epoch ms) of the window nearest its ceiling, when that window is
+ * within `WALL_NEAR_POINTS` of it and the reset is ahead (a 5 h window wins a tie: it opens sooner); null otherwise. A rate
+ * limit at 10 % use is a throttle, not a window. Read from the status row, so the ceilings are the rule's own.
+ */
+export function wallResetAt(
+  a: { limits: AccountStatus['limits']; mode: { kind: string } },
+  nowMs: number,
+): number | null {
+  const find = (kind: string) => a.limits.find((l) => l.kind === kind)
+  const session = find('session')
+  const weekly = find('weekly_all')
+  const resetOf = (l: Record<string, unknown> | undefined): number | null => {
+    const t = typeof l?.resets_at === 'string' ? Date.parse(l.resets_at) : Number.NaN
+    return Number.isNaN(t) ? null : t
+  }
+  const percentOf = (l: Record<string, unknown> | undefined): number | null => (isNum(l?.percent) ? l.percent : null)
+  const sessionPct = percentOf(session)
+  const weeklyPct = percentOf(weekly)
+  const weeklyReset = resetOf(weekly)
+  const sessionLeft = sessionPct === null ? null : SESSION_MAX - sessionPct
+  const weeklyLeft =
+    weeklyPct === null
+      ? null
+      : ceilingOf(weeklyReset === null ? null : weeklyReset / 1000, nowMs, a.mode.kind === 'drain') - weeklyPct
+  const left = Math.min(sessionLeft ?? Number.POSITIVE_INFINITY, weeklyLeft ?? Number.POSITIVE_INFINITY)
+  if (left > WALL_NEAR_POINTS) return null
+  const useWeekly = weeklyLeft !== null && (sessionLeft === null || weeklyLeft < sessionLeft)
+  const at = useWeekly ? weeklyReset : resetOf(session)
+  return at !== null && at > nowMs ? at : null
 }
 
 const DAYS = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat']

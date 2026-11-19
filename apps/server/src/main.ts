@@ -21,6 +21,7 @@ import { postgresCheckpointStore } from './adapters/postgres/checkpoint-store.ts
 import { hostReader } from './adapters/planning/host.ts'
 import { duSizer } from './adapters/planning/worktree-sizer.ts'
 import { readCapComment } from './adapters/planning/cap-comments.ts'
+import { ledgerQuotaReader } from './adapters/planning/accounts-source.ts'
 import { readCapFacts } from './read/cap-facts.ts'
 import { hostWatch } from './adapters/planning/host-watch.ts'
 import { textRunner } from './adapters/planning/process.ts'
@@ -1039,6 +1040,7 @@ async function main(): Promise<void> {
       queueReasons,
       leadRow,
       reviewerRows,
+      quotaAtReset: ledgerQuotaReader(),
       machine,
       ciTimes: githubCiTimes({
         locate: (repo) => repos.locate(repo),
@@ -1048,8 +1050,6 @@ async function main(): Promise<void> {
       capacityConstants: {
         leadsPerAccount: planningEnv.leadsPerAccount,
         accountLeads: Object.fromEntries(planningEnv.accountLeads),
-        fiveHourLimit: planningEnv.windowLimits.fiveHour,
-        weeklyLimit: planningEnv.windowLimits.weekly,
         loadCeiling: hostRule(planningEnv).loadCeiling,
         loadRule: planningEnv.loadRule,
         loadPerCore: planningEnv.loadPerCore,

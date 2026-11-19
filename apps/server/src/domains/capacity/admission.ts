@@ -1,4 +1,4 @@
-import { type AccountReading, type AccountRank, pickAccount, type WindowLimits } from './accounts.ts'
+import { type AccountReading, pickAccount } from './accounts.ts'
 import { type BootInputs, bootRefusal } from './boot.ts'
 import { type Claimant, claimRoom } from './claims.ts'
 import {
@@ -125,12 +125,8 @@ export interface AdmissionInputs {
   leadsPerAccount: number
   /** an account's own cap (`FACTORY_ACCOUNT_LEADS`), before the idle host's raise */
   accountLeads?: ReadonlyMap<string, number>
-  /** the limits the windows close an account at; absent: 100 % */
-  windowLimits?: WindowLimits
   /** extra leads per account the idle host allows this pass (already in `leadsPerAccount`, added to `accountLeads`); named in a `cap` refusal */
   seatBonus?: number
-  /** the picker's order of accounts; the gates above stay, only the pick among open accounts follows it */
-  rank?: AccountRank | null
 }
 
 export type Admission = { admit: true; account: AccountReading } | { admit: false; refusal: Refusal }
@@ -197,10 +193,7 @@ export function checkAdmission(input: AdmissionInputs): Admission {
     leads: input.leadsByAccount,
     leadsPerAccount: input.leadsPerAccount,
     accountCaps: new Map([...(input.accountLeads ?? [])].map(([account, cap]) => [account, cap + raise])),
-    limits: input.windowLimits,
     now: input.now,
-    pace,
-    rank: input.rank,
   })
   // Last: the aim holds back only a lead every other rule lets in, so its reason is the true one and what it holds back is
   // what the aim's count binds (`leadWaiters`).

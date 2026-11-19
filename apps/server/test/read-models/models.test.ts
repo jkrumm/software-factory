@@ -91,7 +91,7 @@ describe('the empty database', () => {
     expect(chain).toMatchObject({ nodes: [], edges: [], blocking: {} })
 
     const kpis = KpiModel.parse(await readKpis(sql, { now: NOW, days: 7 }))
-    expect(kpis.kpis.map((k) => k.key)).toHaveLength(27)
+    expect(kpis.kpis.map((k) => k.key)).toHaveLength(28)
     // a count per day is a real zero when nothing closed; every other figure has nothing to divide and is null
     for (const kpi of kpis.kpis) expect(kpi.value).toBe(kpi.key === 'issues_closed_per_day' ? 0 : null)
     expect(kpis.kpis.find((k) => k.key === 'cost')).toMatchObject({ measured: false, n: 0 })
@@ -481,6 +481,40 @@ describe('the fixture', () => {
     const later = new Date(NOW.getTime() + 10 * 24 * 3_600_000)
     const narrow = KpiModel.parse(await readKpis(sql, { now: later, days: 1 }))
     expect(narrow.kpis.find((k) => k.key === 'recommendation_taken')).toMatchObject({ n: 0, value: null })
+  })
+
+  test('kpis: quota used at reset is the accounts’ ledger over each window, a share, and has no figure without three resets or a reader', async () => {
+    const at = (reader?: Parameters<typeof readKpis>[1]['quotaAtReset']) =>
+      readKpis(sql, { now: NOW, days: 7, ...(reader ? { quotaAtReset: reader } : {}) }).then((model) =>
+        model.kpis.find((k) => k.key === 'quota_at_reset'),
+      )
+    expect(await at(() => ({ percent: 72, resets: 3 }))).toMatchObject({
+      value: 0.72,
+      unit: 'share',
+      n: 3,
+      count: 3,
+      measured: true,
+      direction: 'higher',
+    })
+    // the span the reader is asked for is the KPI's own window
+    const asked: { from: Date; to: Date }[] = []
+    await at((span) => {
+      asked.push(span)
+      return { percent: null, resets: 0 }
+    })
+    expect(asked[asked.length - 1]?.to).toEqual(NOW)
+    expect(await at(() => ({ percent: 90, resets: 2 }))).toMatchObject({ measured: false, value: null })
+    expect(await at(() => ({ percent: null, resets: 0 }))).toMatchObject({ measured: false, value: null })
+    expect(await at()).toMatchObject({
+      measured: false,
+      value: null,
+      reason: expect.stringContaining('not read in this process'),
+    })
+    expect(
+      await at(() => {
+        throw new Error('no ledger')
+      }),
+    ).toMatchObject({ measured: false, reason: expect.stringContaining('no ledger') })
   })
 
   test('kpis: Errands that reached the owner per 100 Issues, and what they needed', async () => {

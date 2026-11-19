@@ -556,6 +556,22 @@ quota used, though far fewer sessions moved (the 72 h step piles bulk work on on
 keeps v1.9's use within the noise and moves a third fewer sessions; it loses only on the "more used" count. The shadow log records
 how often each would have picked otherwise, so the next round has live disagreement beside the simulation.
 
+## The factory server
+
+The factory server reads the accounts through this package, in its own process (`apps/server/src/adapters/planning/accounts-source.ts`):
+no `claude-account` call, no copy of the rule, no registry setting of its own (the paths above decide; `CLAUDE_ACCOUNTS_REGISTRY`
+moves them). The package stays independent of the server: `claude-account` works with the server down and on a machine without a checkout.
+
+| Library call (`src/read.ts`) | What the server does with it |
+|-|-|
+| `readStatus({ nowMs, paths, history })` | `status --json` as a value. Each poll stores, per account, the windows beside the lane verdict for `bulk`: open, place, reason, why not, when it opens; `GET /v1/accounts` returns it whole |
+| `wallResetAt(row, nowMs)` (`status.ts`) | the reset of the window nearest its ceiling when within 10 points of it: what a lead that ran into a wall waits for |
+| `setModeOverride` / `clearModeOverride` | `POST` and `DELETE /v1/accounts/:id/mode`, the owner's (`factory accounts mode <id> <mode> [--until <iso|reset>] [--for <model>] [--why <text>]`); written to the override file, so `claude-account mode` sees it |
+| `readQuotaAtReset({ weeks })` / `quotaUsedAtReset` (`history.ts`) | the KPI `quota_at_reset`: per week, the capacity-weighted mean of the weekly percent each account stood at when its weekly window reset, from the reset ledger |
+
+What stays the server's: the seats per account, one new lead per quota sample on an account whose 5-hour window is above 70 %,
+the age (10 minutes) after which a reading admits nothing, the 401 mark of an account, and moving a walled lead.
+
 ## Installing
 
 - **On the mini** the deploy (`make deploy`) links `~/.local/bin/claude-account-next` to the release's `packages/accounts/bin/claude-account.ts`
@@ -577,15 +593,13 @@ against fakes and the bundle.
 it runs both; everywhere it holds the package to `test/fixtures/parity-golden.json`, what the dotfiles CLI printed
 (`bun packages/accounts/scripts/record-golden.ts` records it from the dotfiles CLI, only for a deliberate change of the contract).
 
-The package keeps the dotfiles code's index access rule: its own `tsconfig.json` leaves `noUncheckedIndexedAccess` off (the
-picker indexes records by an id it has just checked) and the root typecheck excludes it; `make check` runs both.
+The package's `src` type-checks under the root `noUncheckedIndexedAccess` (the server's program imports it: a lookup of an id that must exist goes through `required`, which throws where the old code would have crashed); its own `tsconfig.json` keeps the flag off for `test/` and `scripts/`, and `make check` runs both.
 
 ## Left out on purpose
 
 The spawn integration (`c`, `rd`, `cf`), the keepalive and heartbeat jobs, the statusline hook, the login logistics and the
 attribution of usage stay in dotfiles and call these verbs; the switch row moves them. No new rule, window or account setting
-was added by the port (`subs-package`); registry v2 and the modes came with `subs-model-v2` (§Modes). The history, the forecast and the status verb came with `subs-read-model` (§History, §status); the server and the Console read modes through `rank`
-and `usage --json` until `subs-server`. The policy lab (`subs-policy-lab`) added policies, the measured load model, `simulate`,
+was added by the port (`subs-package`); registry v2 and the modes came with `subs-model-v2` (§Modes). The history, the forecast and the status verb came with `subs-read-model` (§History, §status); the server reads the accounts in-process from `src/read.ts` since `subs-server` (§The factory server), and the Console reads them through the server's `GET /v1/accounts`. The policy lab (`subs-policy-lab`) added policies, the measured load model, `simulate`,
 `compare` and the shadow log; it does not re-measure the model on a schedule (`measure-load.ts` by hand, and the file is
 committed) and judges no policy on live outcomes, which need weeks of a policy actually live. Onboarding (`subs-onboard`) does not run the login itself (it is a browser the user signs in with: `add` prints the command) and
 does not delete anything on `remove`; a peer needs no more than ssh and its own `claude-account`, there is no sync service.
