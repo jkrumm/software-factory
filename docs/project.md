@@ -65,7 +65,7 @@ factory never edits another repo's file. The server also serves the schema it pa
   model, with the measured number behind it. Not a reason: a merge window (`factory merge-lock` serialises it and a lead
   that waits holds no seat of its own), a deploy queue (`factory deploy-lock`), disk (admission fits the learned size of a
   worktree, build output included, against the free disk), "it is a small repo" (an idle seat costs more than a rebase).
-  `factory project check` warns on those comments and on "no reason was recorded". A cap is re-checked against
+  `factory project check` warns on those comments (a merge window only where a change lands by `ship: via: pr`) and on "no reason was recorded". A cap is re-checked against
   measurements: while it keeps Issues queued for an hour with account seats idle, the throughput loop files a signal on
   the repo naming it, its comment and the figures (NL48).
 - **`lanes`**: for a kind of row that is heavier than the rest of the repo. `{apple: 1}` lets one Apple row run beside
