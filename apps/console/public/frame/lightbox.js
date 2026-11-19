@@ -154,12 +154,6 @@ dialog.factory-lightbox[open] { display: flex; flex-direction: column; }
     // nothing inside the dialog reaches the annotator, which would read a click as one on the passage beneath it
     for (const type of ['mousemove', 'mouseup', 'touchend'])
       dialog.addEventListener(type, (event) => event.stopPropagation())
-    dialog.addEventListener('keydown', (event) => {
-      if (event.key === 'ArrowLeft') step(-1)
-      else if (event.key === 'ArrowRight') step(1)
-      else return
-      event.preventDefault()
-    })
     dialog.addEventListener('close', () => {
       stage.replaceChildren()
       const opener = items[at]?.el
@@ -377,7 +371,14 @@ dialog.factory-lightbox[open] { display: flex; flex-direction: column; }
     if (picture) open(picture)
   })
 
+  // The arrows follow the open dialog, not the focus: a focused Next button that turns disabled on the last picture drops
+  // focus to the body, which the dialog's own listener never hears.
   document.addEventListener('keydown', (event) => {
+    if (dialog?.open && (event.key === 'ArrowLeft' || event.key === 'ArrowRight')) {
+      event.preventDefault()
+      step(event.key === 'ArrowLeft' ? -1 : 1)
+      return
+    }
     if ((event.key !== 'Enter' && event.key !== ' ') || !(event.target instanceof Element)) return
     if (!event.target.hasAttribute('data-factory-zoomable')) return
     const picture = pictureOf(event.target)
