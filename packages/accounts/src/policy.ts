@@ -36,6 +36,10 @@ const WEEK_S = 7 * 24 * 3600
 /** How much more a sooner reset weighs than a later one when sharing work (1 = pure spare-per-hour, higher = harder front-loading of the expiring account). */
 export const URGENCY_EXP = 1.5
 
+/** What a reserve holds: `account` (last resort for every pick but its model's launcher, v1's Fable mode) or `allowance` (the model's unused weekly allowance only). */
+export const HOLDS = ['account', 'allowance'] as const
+export type Hold = (typeof HOLDS)[number]
+
 /** The four modes of an account (docs/accounts.md §Modes). */
 export const MODE_KINDS = ['normal', 'drain', 'reserve', 'paused'] as const
 export type ModeKind = (typeof MODE_KINDS)[number]
@@ -46,6 +50,8 @@ export type ModeKind = (typeof MODE_KINDS)[number]
 export interface Mode {
   kind: ModeKind
   for?: string | null
+  /** reserve only: what it holds back (reserveHold); absent = the account */
+  hold?: Hold | null
   until?: string | null
   why?: string | null
 }
@@ -386,6 +392,9 @@ export function untilPassed(until: string | null | undefined, nowMs: number): bo
   return !Number.isNaN(t) && t <= nowMs
 }
 
+/** A reserve's hold; the default, and what the v1 `fable` key means, is the whole account. */
+export const reserveHold = (m: Mode): Hold => (m.hold === 'allowance' ? 'allowance' : 'account')
+
 /** True for an enabled account in drain mode. */
 export const isDrain = (reg: Registry, id: string, nowMs: number): boolean =>
   !!reg.accounts[id]?.enabled && modeOf(reg, id, nowMs).kind === 'drain'
@@ -440,10 +449,10 @@ export interface ReserveBudget {
   released: boolean
 }
 
-/** Null for an account that is not in reserve mode. */
+/** Null for an account that is not a reserve holding its model's allowance (hold: account has no budget: it holds the whole account). */
 export function reserveBudget(reg: Registry, cache: Cache, id: string, nowMs: number): ReserveBudget | null {
   const m = modeOf(reg, id, nowMs)
-  if (m.kind !== 'reserve' || !m.for) return null
+  if (m.kind !== 'reserve' || !m.for || reserveHold(m) !== 'allowance') return null
   const x = cache.samples[id]
   const ceiling = x ? weeklyMax(x, nowMs) : WEEKLY_MAX
   const unknown: ReserveBudget = {
@@ -658,12 +667,18 @@ function pickRaw(
   nowMs: number,
   rng?: () => number,
 ): Omit<PickResult, 'stale'> {
-  // Reserve mode: inside its budget an account takes its normal place; over it, other work is refused; without a fresh
-  // scoped sample the budget is unknown and the account is the last resort (v1's Fable mode)
+  // Reserve mode, hold: account: the last resort for every pick, whatever its budget says (v1's Fable mode). hold: allowance:
+  // inside its budget an account takes its normal place; over it, other work is refused; without a fresh scoped sample the
+  // budget is unknown and the account is the last resort
   let open = reg
   const lastResort: string[] = []
   for (const id of Object.keys(reg.accounts)) {
     if (!reg.accounts[id].enabled) continue
+    const m = modeOf(reg, id, nowMs)
+    if (m.kind === 'reserve' && m.for && reserveHold(m) === 'account') {
+      lastResort.push(id)
+      continue
+    }
     const b = reserveBudget(reg, cache, id, nowMs)
     if (!b) continue
     if (!b.known) lastResort.push(id)

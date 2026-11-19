@@ -254,7 +254,7 @@ override and its source, and `applyModes` hands the rule a registry with the liv
 |-|-|-|
 | `normal` | rule v1.9 as above | yes |
 | `drain` | first in every lane while its 5h is under `SESSION_SOFT_MAX` (reason `drain`; several share by weight), weekly ceiling 100 | yes |
-| `reserve` for `<model>` | only inside its reserve budget (§Reserve); the model's launcher lands here | yes |
+| `reserve` for `<model>` | `hold: account` (default): last resort for every pick; `hold: allowance`: only inside its reserve budget (§Reserve). The model's launcher lands here | yes |
 | `paused` | never (`eligible` is false) | yes |
 
 `enabled: false` stays what it was: an account that is not set up, neither sampled nor checked. The one exception to "never
@@ -262,27 +262,36 @@ picked" is the interactive fallback (step 6): it lands on the default account wh
 
 ### Reserve
 
-A reserve holds back the unused part of its model's weekly allowance, not the account. The usage endpoint gives the allowance:
+A reserve carries `hold: account | allowance` (owner decision 2026-11-19: Fable mode keeps the whole account for the model, and the owner resets
+its Fable usage by hand, so the 50-point allowance is not what binds). The default is `account`, and the v1 `fable: <id>` key reads as it.
+
+- **`hold: account`:** the account is the last resort for every pick except its model's launcher, whatever its budget or the time to its
+  reset: v1's Fable mode exactly (reason `<model>-reserve`, last in every lane of `rank`, taken only when no other account can take the work).
+  It has no budget; `mode` lists it as "holds the account".
+- **`hold: allowance`:** the account holds back only the unused part of its model's weekly allowance, below.
+
+The usage endpoint gives the allowance:
 `limits[]` has a `weekly_scoped` limit whose `scope.model.display_name` (or `id`) names the model, and `weekly_scoped_shares[]`
 gives its `used_percent_of_weekly` and `allowance_percent_of_weekly` (50 for Fable on every account, checked 2026-11-19): the
-model's use counts against the weekly limit and resets with it. With a scoped sample younger than 6 h (`reserveBudget`):
+model's use counts against the weekly limit and resets with it. For `hold: allowance`, with a scoped sample younger than 6 h (`reserveBudget`):
 
 ```
 unused = max(0, allowance − used)          0 in the last 24 h before the weekly reset (RESERVE_RELEASE_S: the allowance is released)
 open   = weekly + unused < weeklyMax       (95, 98 in the last 24 h, 100 in the last 3 h)
 ```
 
-- Open: the account takes its normal place in the rule; its weight counts only `weeklyMax − weekly − unused`.
+- Open (`hold: allowance`): the account takes its normal place in the rule; its weight counts only `weeklyMax − weekly − unused`.
 - Closed: other work is refused, not even taken as the last resort. Bulk spills; interactive falls back to the default account.
 - No fresh scoped sample: the budget is unknown and the account is the last resort, as v1's Fable mode (reason `<model>-reserve`).
 - **Launcher:** `claude-account fable` (what `cf` evals) prints the open reserve-for-fable account (eligible, scoped percent under 100)
   with the most unused allowance; none open → the first enabled reserve-for-fable account; none → the default account.
   `cf --account <id>` still wins.
 
-**Where a v1 registry picks differently from v1.9.** Only with a fresh scoped sample on the `fable` account (the endpoint GET
-fetches it, below): inside the budget the Fable account takes its normal place (iu, the default, is the interactive and headless
-home again) where v1.9 put it last; over the budget it is refused where v1.9 took it as the last resort; in the final 24 h it is a
-normal account. Without a scoped sample every lane picks and ranks as v1.9 (`test/parity.test.ts`).
+**Where a v1 registry picks differently from v1.9.** Nowhere: `fable: <id>` is `hold: account`, so every lane picks and ranks as v1.9
+(`test/parity.test.ts`). Only a reserve set to `hold: allowance` differs, and only with a fresh scoped sample (the endpoint GET fetches it,
+below): inside the budget it takes its normal place (iu, the default, is the interactive and headless home again) where v1.9 put it last;
+over the budget it is refused where v1.9 took it as the last resort; in the final 24 h it is a normal account. The scoped sample is still
+fetched for `hold: account`: the launcher picks among reserves by it.
 
 The statusline feed carries no scoped limit, so a reserve account is due for one endpoint GET when its `limits_ts` is older than
 30 min (`SCOPED_FRESH_MS`), even while its windows are fresh; the 5-min claim still binds (at most 48 GETs a day per reserve
@@ -302,8 +311,8 @@ without `--until` is until reset; the other modes have no expiry by default.
 ### Overrides
 
 ```
-claude-account mode [--json]                    # every account: mode, source (override | registry), until, set, why, a reserve's budget
-claude-account mode <id> <normal|drain|reserve|paused> [--for <model>] [--until reset|<iso>] [--why <text>]
+claude-account mode [--json]                    # every account: mode, source (override | registry), until, set, why, a reserve's hold (holds the account, or its budget)
+claude-account mode <id> <normal|drain|reserve|paused> [--for <model>] [--hold account|allowance] [--until reset|<iso>] [--why <text>]
 claude-account mode <id> --clear
 ```
 
@@ -325,13 +334,13 @@ after its next refresh (the hourly keepalive, or a pick-time refresh). `normal` 
 ### Registry v2
 
 v1 plus two optional fields. `version`: absent, 1 or 2; any other value is "registry unreadable" (`pick` exit 4 with the default
-account, every other verb exit 2). `accounts.<id>.mode`: a kind (`"paused"`) or `{kind, for, until, why}`; `for` is required for
-reserve and only there; `until` is an ISO time. An account's own `mode` wins over `fable` and `drain`, which keep their v1
+account, every other verb exit 2). `accounts.<id>.mode`: a kind (`"paused"`) or `{kind, for, hold, until, why}`; `for` is required for
+reserve and only there; `hold` (`account`, the default, or `allowance`) is for reserve only; `until` is an ISO time. An account's own `mode` wins over `fable` and `drain`, which keep their v1
 meaning and check (one account cannot be both).
 
 ### `usage --json` (additive)
 
-`usage --json` rows gain `mode` (`{kind, for, until, until_at, why, source, set_at, set_on}`, the mode in force), `mode_override`
+`usage --json` rows gain `mode` (`{kind, for, hold, until, until_at, why, source, set_at, set_on}`, the mode in force; `hold` is `account` or `allowance` for a reserve, else null), `mode_override`
 (the raw record, a tombstone included, or null), `limits` and `weekly_scoped_shares` (as the endpoint gave them, each with
 `age_s`, or null). Every other field and the plain text are unchanged.
 

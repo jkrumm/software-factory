@@ -5,9 +5,11 @@ import { join, resolve } from 'node:path'
 import {
   type Account,
   type Mode,
+  type Hold,
   type ModeKind,
   type PickResult,
   type Registry,
+  HOLDS,
   ID,
   MODE_KINDS,
   SPILL,
@@ -67,7 +69,7 @@ export function loadRegistry(path = registryPath()): Registry {
   return { ...(version !== undefined ? { version } : {}), accounts, fable, drain }
 }
 
-/** A registry `mode`: a kind (`"drain"`) or `{kind, for?, until?, why?}`; a string answer is what is wrong with it. */
+/** A registry `mode`: a kind (`"drain"`) or `{kind, for?, hold?, until?, why?}`; a string answer is what is wrong with it. */
 export function parseMode(v: unknown): Mode | string {
   const o = (typeof v === 'string' ? { kind: v } : v) as Record<string, unknown> | null
   if (!o || typeof o !== 'object' || Array.isArray(o)) return 'must be a kind or an object'
@@ -76,12 +78,16 @@ export function parseMode(v: unknown): Mode | string {
   if (!str('for') || !str('until') || !str('why')) return 'for, until and why must be strings'
   if (o.kind === 'reserve' && typeof o.for !== 'string') return 'reserve needs for: <model>'
   if (o.kind !== 'reserve' && o.for) return 'for belongs to reserve only'
+  if (o.hold !== undefined && o.hold !== null && !HOLDS.includes(o.hold as Hold))
+    return `hold must be one of ${HOLDS.join(', ')}`
+  if (o.kind !== 'reserve' && o.hold) return 'hold belongs to reserve only'
   if (o.until === 'reset')
     return 'until: reset is for overrides only (claude-account mode); the registry takes an ISO time'
   if (typeof o.until === 'string' && Number.isNaN(Date.parse(o.until))) return `until '${o.until}' is not an ISO time`
   return {
     kind: o.kind as ModeKind,
     ...(o.for ? { for: o.for as string } : {}),
+    ...(o.hold ? { hold: o.hold as Hold } : {}),
     ...(o.until ? { until: o.until as string } : {}),
     ...(o.why ? { why: o.why as string } : {}),
   }
