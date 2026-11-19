@@ -1,6 +1,6 @@
 // The ports of the library: everything that leaves the process sits behind one of these, and a test hands in a fake.
 // The adapters: spawn.ts (processes), oauth.ts (the usage endpoint), keychain.ts (the login item), claude-auth.ts
-// (`claude auth status`), integrations.ts (the peer import, the relogin ask and the health peer: commands the user configures).
+// (`claude auth status`), owner.ts (the peer import over ssh, the relogin dialog script and the health peer: the owner's machines).
 
 export interface SpawnResult {
   status: number | null

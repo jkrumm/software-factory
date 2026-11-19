@@ -1,5 +1,5 @@
-// Re-login asks (keepalive path): a dead or soon-dead login asks its owner for a re-login through the command the user
-// configured (integrations.reloginAsk). At most one ask per account per 24 h and one per machine per hour, never an auto-run.
+// Re-login asks (keepalive path): a dead or soon-dead login asks its owner for a re-login through the dialog script of the owner's
+// adapters (owner.ts). At most one ask per account per 24 h and one per machine per hour, never an auto-run.
 import { type LoginRow, type RefreshResult, type ReloginCandidate, reloginCandidates } from './policy.ts'
 import {
   RELOGIN_ASK_INTERVAL_MS,

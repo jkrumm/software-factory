@@ -106,6 +106,10 @@ link_accounts() {
     log "WARNING: $ACCOUNTS_LINK is a regular file; leaving it"
     return 0
   fi
+  if [[ ! -e "$CURRENT/$ACCOUNTS_ENTRY" ]]; then
+    log "WARNING: $CURRENT has no $ACCOUNTS_ENTRY (a release from before the picker): $ACCOUNTS_LINK not linked"
+    return 0
+  fi
   ln -sf "$CURRENT/$ACCOUNTS_ENTRY" "$ACCOUNTS_LINK" || log "WARNING: linking $ACCOUNTS_LINK failed"
 }
 

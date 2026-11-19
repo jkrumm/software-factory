@@ -289,17 +289,17 @@ export const VERBS: Verb[] = [
       '--all       the login keepalive: ignores the 10 min freshness and the auth cooldown (the 5 min claim still applies);',
       '            exits 1 when an account got neither a fresh sample nor an auth verdict, or is logged in with a stored sample older than 6 h',
       '--claimed a,b   internal: the detached refresh `pick` spawns for accounts it already claimed',
-      "Imports the peer machine's samples once per run (integrations.peerUsage, when configured); the usage GET has a 10 s timeout.",
+      "Imports the peer machine's samples once per run (`usage --json` over ssh); the usage GET has a 10 s timeout.",
     ],
   },
   {
     name: 'health',
     usage: 'health [--json] [--wake]',
-    summary: 'login, quota and waiting-ask health of this machine and its configured peer; exit 1 on any fail',
+    summary: 'login, quota and waiting-ask health of this machine and its peer; exit 1 on any fail',
     detail: [
       '--json   {state, rows}',
-      "--wake   run integrations.health.notify (only when the picture changed) and integrations.health.peer.repush for the peer's pending asks younger than 24 h",
-      'The peer is read through the first of integrations.health.peer.snapshots that answers (its `note` is printed when that was the last resort).',
+      "--wake   notify (MacBook, only when the picture changed) and re-push the peer's pending ask dialogs younger than 24 h",
+      'The peer is read through its herdr-core, plain ssh only when no core answers (with a NOTE line).',
     ],
   },
   {
