@@ -66,6 +66,7 @@ export function readSubmission(raw: unknown): Result<Submission, MissingFields> 
 
 /** The text kept either side of a quote to tell equal passages apart: about 32 characters, never more than this. */
 const MAX_CONTEXT = 200
+const MAX_OCCURRENCE = 2_147_483_647
 
 export interface AnnotationInput {
   quote: string
@@ -138,7 +139,11 @@ export function readAnnotation(raw: unknown): Result<AnnotationInput, MissingFie
   const path = body.path === undefined || body.path === null ? null : filled(body.path)
   if (body.path !== undefined && body.path !== null && path === null) problems.push('path (when given, not empty)')
   const occurrence = body.occurrence === undefined || body.occurrence === null ? null : body.occurrence
-  if (occurrence !== null && !(Number.isInteger(occurrence) && (occurrence as number) >= 0))
+  // the column is a 32-bit integer
+  if (
+    occurrence !== null &&
+    !(Number.isInteger(occurrence) && (occurrence as number) >= 0 && (occurrence as number) <= MAX_OCCURRENCE)
+  )
     problems.push('occurrence (when given, a whole number from 0)')
   const prefix = context(body.prefix, 'prefix', problems)
   const suffix = context(body.suffix, 'suffix', problems)

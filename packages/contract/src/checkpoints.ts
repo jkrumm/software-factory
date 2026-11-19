@@ -199,7 +199,7 @@ export const AnnotateBody = z
     quote: z.string().optional(),
     path: z.string().optional(),
     /** which occurrence of the quote in the document's text it is (0-based); with the context it tells equal passages apart */
-    occurrence: z.number().int().min(0).optional(),
+    occurrence: z.number().int().min(0).max(2_147_483_647).optional(),
     /** the text just before and just after the quote, about 32 normalised characters each */
     prefix: z.string().optional(),
     suffix: z.string().optional(),

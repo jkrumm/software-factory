@@ -262,6 +262,7 @@ describe('artifacts', () => {
     for (const bad of [
       { occurrence: -1 },
       { occurrence: 1.5 },
+      { occurrence: 2_147_483_648 },
       { occurrence: '1' },
       { prefix: 3 },
       { suffix: 'x'.repeat(500) },
