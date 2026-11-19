@@ -214,6 +214,34 @@ export function gitWorktrees(options: GitWorktreesOptions = {}): Worktrees {
     return { removed: true }
   }
 
+  /**
+   * A dormant lead's worktree, made again at the path it had when something removed it meanwhile: the session resumes by
+   * that path. Its branch is checked out again (what it committed survives); a branch gone too is cut afresh from the base.
+   * What was uncommitted or installed in the old tree is gone.
+   */
+  async function restore(input: { repo: string; branch: string; path: string }): Promise<{ restored: boolean }> {
+    const { repo, branch, path } = input
+    // The tree's own top level: a plain directory under the repo answers `rev-parse` with the repo's.
+    const top = existsSync(path) ? await gitIn(path, 'rev-parse', '--show-toplevel') : undefined
+    if (top !== undefined && real(top) === real(path)) return { restored: false }
+    await gitIn(repo, 'worktree', 'prune')
+    if (existsSync(path)) throw new Failed(`${path} exists and is no worktree: it is left as it is`, 'refused')
+    if (await gitIn(repo, 'rev-parse', '-q', '--verify', `refs/heads/${branch}`)) {
+      await run([git, '-C', repo, 'worktree', 'add', '-q', path, branch], GIT_TIMEOUT_MS, 'git worktree add')
+    } else {
+      await run([git, '-C', repo, 'fetch', '-q', 'origin'], FETCH_TIMEOUT_MS, 'git fetch origin')
+      const base = await originDefault(repo)
+      if (!base) throw new Failed(`no origin default branch in ${repo}`, 'refused')
+      await run(
+        [git, '-C', repo, 'worktree', 'add', '-q', '-b', branch, path, base],
+        GIT_TIMEOUT_MS,
+        'git worktree add',
+      )
+      await gitIn(path, 'branch', '--unset-upstream', branch)
+    }
+    return { restored: true }
+  }
+
   const guarded = async <T>(step: () => Promise<T>): Promise<Result<T>> => {
     try {
       return ok(await step())
@@ -223,5 +251,9 @@ export function gitWorktrees(options: GitWorktreesOptions = {}): Worktrees {
       throw error
     }
   }
-  return { create: (input) => guarded(() => create(input)), remove: (input) => guarded(() => remove(input)) }
+  return {
+    create: (input) => guarded(() => create(input)),
+    remove: (input) => guarded(() => remove(input)),
+    restore: (input) => guarded(() => restore(input)),
+  }
 }

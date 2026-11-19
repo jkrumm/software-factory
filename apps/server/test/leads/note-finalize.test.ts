@@ -152,6 +152,38 @@ describe('note_lead', () => {
     expect(w.terminals.revived).toHaveLength(1)
   })
 
+  test('a moved lead whose worktree was removed meanwhile gets it back before its session resumes, and is told so', async () => {
+    w.seatAccount = 'me'
+    const { issue, effect } = await withNote()
+    await w.db.sql`
+      INSERT INTO factory.lead_hook_events (key, session, issue_id, attempt, kind, at, received_at, payload)
+      VALUES ('lead-1-1:session_started:0', 'lead-1-1', ${issue}, 1, 'session_started', ${w.clock.now()}, ${w.clock.now()},
+        ${JSON.stringify({ claudeSessionId: 'c-1', transcriptPath: '/x/c-1.jsonl' })}::text::jsonb)`
+    w.seatAccount = 'other'
+    const [row] = await w.db.sql`SELECT worktree_path FROM factory.lead_attempts WHERE issue_id = ${issue}`
+    w.worktrees.gone.add(String(row?.worktree_path))
+    expect((await noteLead(w.deps, effect)).ok).toBe(true)
+    expect(w.worktrees.restored).toEqual([
+      { repo: expect.any(String), branch: 'factory/1-1', path: row?.worktree_path },
+    ])
+    expect(w.terminals.revived).toHaveLength(1)
+    expect(w.terminals.revived[0]?.prompt).toContain('made again at the same path')
+    expect(w.terminals.revived[0]?.prompt).toContain('mind the migration')
+  })
+
+  test('a worktree that cannot be made again fails the revive like any failed start: counted, tried again, nothing resumed', async () => {
+    w.seatAccount = 'me'
+    const { issue, effect } = await withNote()
+    await w.db.sql`
+      INSERT INTO factory.lead_hook_events (key, session, issue_id, attempt, kind, at, received_at, payload)
+      VALUES ('lead-1-1:session_started:0', 'lead-1-1', ${issue}, 1, 'session_started', ${w.clock.now()}, ${w.clock.now()},
+        ${JSON.stringify({ claudeSessionId: 'c-1', transcriptPath: '/x/c-1.jsonl' })}::text::jsonb)`
+    w.seatAccount = 'other'
+    w.worktrees.restoreError = portError('gone', 'git worktree add failed (exit 128)')
+    expect((await noteLead(w.deps, effect)).ok).toBe(false)
+    expect(w.terminals.revived).toEqual([])
+  })
+
   test('a lead with no session id on file is not ended for a move: the note is typed to it where it runs', async () => {
     w.seatAccount = 'me'
     const { effect } = await withNote()

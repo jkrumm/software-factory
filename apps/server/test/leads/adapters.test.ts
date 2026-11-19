@@ -250,6 +250,42 @@ describe('git worktrees', () => {
     expect(again).toEqual(first)
   })
 
+  test('restore leaves a worktree that is there, and makes one that was removed again on its branch, commits kept', async () => {
+    const work = await repo()
+    const made = await value(trees.create({ repo: work, branch: 'factory/6-1' }))
+    expect(await value(trees.restore({ repo: work, branch: 'factory/6-1', path: made.path }))).toEqual({
+      restored: false,
+    })
+
+    writeFileSync(join(made.path, 'kept.txt'), 'k')
+    await git(made.path, 'add', '.')
+    await git(made.path, 'commit', '-q', '-m', 'work')
+    rmSync(made.path, { recursive: true, force: true })
+    expect(await value(trees.restore({ repo: work, branch: 'factory/6-1', path: made.path }))).toEqual({
+      restored: true,
+    })
+    expect(existsSync(join(made.path, 'kept.txt'))).toBe(true)
+
+    // the branch gone too: cut afresh from the base at the same path
+    await git(work, 'worktree', 'remove', '--force', made.path)
+    await git(work, 'branch', '-D', 'factory/6-1')
+    expect(await value(trees.restore({ repo: work, branch: 'factory/6-1', path: made.path }))).toEqual({
+      restored: true,
+    })
+    expect(existsSync(join(made.path, 'a.txt'))).toBe(true)
+    expect(existsSync(join(made.path, 'kept.txt'))).toBe(false)
+  })
+
+  test('restore never replaces a directory that is no worktree', async () => {
+    const work = await repo()
+    const path = join(work, '.claude', 'worktrees', 'factory-7-1')
+    mkdirSync(path, { recursive: true })
+    writeFileSync(join(path, 'mine.txt'), 'm')
+    const result = await trees.restore({ repo: work, branch: 'factory/7-1', path })
+    expect(result.ok).toBe(false)
+    expect(existsSync(join(path, 'mine.txt'))).toBe(true)
+  })
+
   test('remove takes a clean worktree whose branch is on the base; one with changes or commits is kept, and says why', async () => {
     const work = await repo()
     const clean = await value(trees.create({ repo: work, branch: 'factory/2-1' }))
