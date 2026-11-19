@@ -5,6 +5,7 @@
     "apps/server/scripts/*.ts",
     "apps/door/src/main.ts",
     "scripts/*.ts",
+    "packages/accounts/scripts/*.ts",
     "apps/console/public/frame/*.js",
     "integrations/herdr/jk-glance/main.js",
     "docs/guide/.vitepress/config.ts",
