@@ -157,6 +157,34 @@ export const REPORT_HTML = `<!doctype html>
 </body></html>
 `
 
+/**
+ * An HTML Report that names no colour scheme and paints with its own light colours, the way most leads write one: a heading in a
+ * `header` and in a wrapper that sets its own max-width, a screenshot, an SVG figure, a diagram kept in the column
+ * (`data-measure`), and an icon. Pictures are data: URLs (the frame's policy is closed).
+ */
+const PICTURE = (width: number, height: number, label: string) =>
+  `data:image/svg+xml,${encodeURIComponent(`<svg xmlns="http://www.w3.org/2000/svg" width="${width}" height="${height}"><rect width="100%" height="100%" fill="#dbe7f5"/><text x="20" y="40" font-size="28">${label}</text></svg>`)}`
+export const FRAME_MEDIA_HTML = `<!doctype html>
+<html><head><meta charset="utf-8"><title>Frame media</title><style>
+body{background:#ffffff;color:#222222;font-family:system-ui}
+article{max-width:1200px;background:#fafafa}
+.note{background:#f6f8fa;border:1px solid #e1e4e8;color:#444444;padding:8px}
+</style></head>
+<body>
+<header><h1>Frame media report</h1></header>
+<article style="max-width:1200px">
+<h2 id="first">The first heading</h2>
+<p id="first-p">The first paragraph sits below the first heading in the text column.</p>
+<p class="note" id="note">A callout in the artifact's own light grey.</p>
+<img id="shot" src="${PICTURE(1600, 500, 'Screenshot')}" width="1600" height="500" alt="The screenshot">
+<h3 id="second">The second heading</h3>
+<p id="second-p">Icons such as <img id="icon" src="${PICTURE(24, 24, 'i')}" width="24" height="24" alt="icon"> stay inline.</p>
+<figure id="figure"><svg viewBox="0 0 1400 300" role="img" aria-label="A wide diagram"><rect width="1400" height="300" fill="#dbe7f5"/><text x="20" y="40" font-size="28">Diagram</text></svg><figcaption>The diagram caption</figcaption></figure>
+<img id="kept" data-measure src="${PICTURE(1200, 400, 'Kept in the column')}" width="1200" height="400" alt="Kept in the column">
+</article>
+</body></html>
+`
+
 export interface SeededArtifacts {
   spec: string
   report: string
@@ -169,6 +197,8 @@ export interface SeededArtifacts {
   review: string
   /** an HTML Report with an external link, an anchor, a Console link and headings to scroll through */
   links: string
+  /** an HTML Report with no colour scheme, wide pictures, an icon and a picture kept in the column */
+  frameMedia: string
   collections: SeededCollections
 }
 
@@ -276,6 +306,12 @@ export async function seedArtifacts(lab: Lab): Promise<SeededArtifacts> {
     contentFormat: 'html',
     content: LINKS_HTML,
   })
+  const frameMedia = await submit(reportIssue, {
+    kind: 'report',
+    title: 'The frame media report',
+    contentFormat: 'html',
+    content: FRAME_MEDIA_HTML,
+  })
   const standalone = async (title: string, content: string): Promise<string> =>
     (await api<{ artifact: { id: string } }>(url, '/v1/artifacts', { repo: 'ember', title, content })).artifact.id
   const overview = await standalone('Orb rewrite: overview', '# Orb rewrite\n\nWhere the rewrite stands.')
@@ -307,6 +343,7 @@ export async function seedArtifacts(lab: Lab): Promise<SeededArtifacts> {
     shotReport,
     review,
     links,
+    frameMedia,
     collections: {
       pinned: { id: pinnedId, title: PINNED_COLLECTION, lead: overview, pages: [overview, notes] },
       unpinned: { id: unpinnedId, title: UNPINNED_COLLECTION },

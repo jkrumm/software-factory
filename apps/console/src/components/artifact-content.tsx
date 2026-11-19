@@ -5,6 +5,7 @@ import remarkGfm from 'remark-gfm'
 import { linkTarget, parseFrameMessage, type SelectionRect, type TocItem } from '@/lib/artifact'
 import { isPlainClick } from '@/lib/peek'
 import { READING_PX, type ReadingSize } from '@/lib/reading'
+import { currentTheme, onThemeChange } from '@/lib/theme'
 import { cn } from '@/lib/utils'
 import {
   clearHighlights,
@@ -405,6 +406,9 @@ function HtmlContent({
     if (primary && cleared > 0) send({ type: 'factory.clear' })
   }, [primary, cleared])
 
+  // the Console's theme changes under a frame that is already rendered; the first paint carries it in the render message
+  useEffect(() => onThemeChange((theme) => send({ type: 'factory.theme', theme })), [])
+
   // the reading size changes under a frame that is already rendered; the first paint carries it in the render message
   useEffect(() => {
     send({ type: 'factory.reading', px: READING_PX[reading] })
@@ -421,7 +425,15 @@ function HtmlContent({
       title="Artifact"
       sandbox={FRAME_SANDBOX}
       src="/frame.html"
-      onLoad={() => send({ type: 'factory.render', html: content, annotate: primary, px: READING_PX[size.current] })}
+      onLoad={() =>
+        send({
+          type: 'factory.render',
+          html: content,
+          annotate: primary,
+          px: READING_PX[size.current],
+          theme: currentTheme(),
+        })
+      }
       className={cn('h-[calc(100dvh-14rem)] min-h-96 w-full bg-background', !stacked && 'lg:h-full lg:min-h-0')}
     />
   )

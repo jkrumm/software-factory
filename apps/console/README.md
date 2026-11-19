@@ -255,6 +255,33 @@ factory artifact revise <artifact> --content @artifact.md --note "what changed" 
 risks, proof; tables with the minimum separator `|-|-|`) or `templates/artifact.html`: self-contained, Basalt's tokens as
 CSS variables with light and dark, semantic classes (`callout`, `table-wrap`, `pre`, `figure`), pictures as inline SVG or
 `data:` URLs. Its token block is generated (`bun run --cwd apps/console templates`, `templates:check` in `make check`).
+An HTML artifact starts from the template and declares `color-scheme`; the CLI's `artifact submit` and `artifact new` help say so.
+
+**What the frame enforces on an HTML artifact** (`public/frame/frame.js`, `public/frame/lightbox.js`; the template's head lists
+the same rules for the author):
+
+- **Theme.** The artifact follows the Console's theme, not the system's. The page sends `theme` (`light` or `dark`, from
+  `document.documentElement.dataset.theme`, `lib/theme.ts`) in `factory.render` and `{type:'factory.theme', theme}` when it
+  changes; the frame sets `data-theme` and `color-scheme` on the artifact's `<html>` and a `<meta name="color-scheme">`, so a
+  toggle re-themes an open frame without a reload. The artifact's own `@media (prefers-color-scheme: …)` rules are rewritten to
+  hold for the Console's theme instead of the system's. The template's tokens key dark on `:root[data-theme='dark']` as well as
+  the media query. An artifact whose CSS names no scheme (no `color-scheme`, no `prefers-color-scheme`, no `data-theme`) gets a
+  Basalt dark base in dark, appended after its CSS: the page and text colours from the dark tokens, links, and the pure light
+  greys and whites it paints with (a card, a table header, code, a rule) swapped for the dark surfaces, found by the computed
+  style of each element before the base exists. Nothing is inverted, an `img` is never recoloured, and an inline SVG that draws
+  on the page stays a light plate. One that declares a scheme is left to its own CSS.
+- **One text column.** Paragraphs, lists, definition lists, quotes and every heading share one centred 76-character column with
+  one left edge, wherever they sit (header, aside, nested wrappers, a wrapper with its own `max-width`, which is centred in the
+  pane). The measure is registered as a length on `body`, so a heading's larger font does not widen it.
+- **Wide media.** An `img`, `video`, `canvas`, an `svg` outside a figure, a `figure` or a `data-wide` table that is wider than the
+  column and fills it leaves it: it is as wide as it is, up to the pane less the page padding, centred on the pane, never
+  upscaled. A smaller one, a picture that a table cell, a row or a list holds, and one the artifact sized itself stay put;
+  `data-measure` keeps one in the column.
+- **Lightbox.** A click (or Enter) on a picture (an image of 200 px or more, an svg of 160 px or more, a figure that holds one;
+  not one in a link) opens it in a fullscreen `<dialog>` inside the frame: Esc, the close button or a click beside it closes,
+  arrows and buttons step through every picture of the document with an "n / N" counter and the figcaption, a second click
+  shows the natural size and a drag pans. It opens only with no text selected and the pointer where it went down, so the
+  comment flow is untouched, and the dialog lives outside `<body>`, which the annotator indexes. No network, no dependency.
 
 Markdown is rendered with react-markdown: raw HTML is dropped and `javascript:`/`data:` links are refused. An image loads
 only over `https` from a host the owner lists in `FACTORY_CONSOLE_IMAGE_HOSTS` (comma-separated `host` or `*.domain`, in

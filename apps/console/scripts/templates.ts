@@ -2,7 +2,7 @@
 /**
  * Keeps the token block of `templates/artifact.html` in step with `src/styles/tokens.css`. The template is hand-written
  * around two markers (oxfmt may re-indent them; the block follows); what sits between them is generated: the Basalt tokens the template uses, the light values as the
- * default and the dark values under `prefers-color-scheme: dark`.
+ * default and the dark values under `prefers-color-scheme: dark` and under `data-theme='dark'`. The Console's frame sets `data-theme` on the artifact, so its toggle wins over the system: `data-theme='light'` holds the light values on a dark system.
  *
  *   bun scripts/templates.ts            rewrite the block
  *   bun scripts/templates.ts --check    exit 1 when the file is stale
@@ -69,9 +69,12 @@ export function tokenBlock(css: string): string {
     '  color-scheme: light dark;',
     '}',
     '@media (prefers-color-scheme: dark) {',
-    '  :root {',
+    "  :root:not([data-theme='light']) {",
     indent(pick(dark), '    '),
     '  }',
+    '}',
+    ":root[data-theme='dark'] {",
+    indent(pick(dark), '  '),
     '}',
     END,
   ].join('\n')

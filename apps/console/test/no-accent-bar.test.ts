@@ -11,6 +11,7 @@ const FILES = [
   'public/frame.html',
   'public/frame/frame.js',
   'public/frame/annotator.js',
+  'public/frame/lightbox.js',
 ]
 
 /** `border-left`, `border-inline-start`, Tailwind's `border-l-*` / `border-s-*`, and an inset box-shadow stripe. */
