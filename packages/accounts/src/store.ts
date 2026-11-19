@@ -29,8 +29,9 @@ import {
   noSession,
   observedReset,
   required,
+  staleAfterReset,
 } from './policy.ts'
-import { type OverrideRecord, type OverrideState, parseOverrides } from './modes.ts'
+import { type OverrideRecord, type OverrideState, overrideExpired, parseOverrides } from './modes.ts'
 import { cacheDir, modesAuditPath, modesPath } from './paths.ts'
 import { type HistoryTarget, recordHistory } from './history-store.ts'
 
@@ -101,7 +102,14 @@ export function saveSample(
 ): void {
   const path = file(dir, id, 'sample.json')
   const prev = readJson(path) as Sample | null
-  const merged = mergeSample(sessionLimit || !prev ? prev : noSession(prev), sessionLimit ? inc : noSession(inc))
+  const seen = readJson(file(dir, id, 'reset.json')) as ObservedReset | null
+  // the weekly window a recorded reset closed, read late: kept out so one reset stays one reset
+  const stale = isSample(prev) && staleAfterReset(prev, inc, seen ?? undefined)
+  const incoming = stale ? { ...inc, w: null, w_reset: null, w_ts: null } : inc
+  const merged = mergeSample(
+    sessionLimit || !prev ? prev : noSession(prev),
+    sessionLimit ? incoming : noSession(incoming),
+  )
   writeAtomic(path, JSON.stringify(merged))
   if (history) {
     try {
@@ -134,7 +142,7 @@ export const loadOverrides = (path = modesPath()): OverrideState => parseOverrid
 export function writeOverride(
   id: string,
   record: OverrideRecord,
-  o: { action: 'set' | 'clear' | 'adopt'; machine: string; nowMs: number; path?: string },
+  o: { action: 'set' | 'clear' | 'adopt' | 'end'; machine: string; nowMs: number; path?: string },
 ): void {
   const path = o.path ?? modesPath()
   const state = loadOverrides(path)
@@ -149,6 +157,29 @@ export function writeOverride(
   } catch {
     // the audit line is a record, never a gate
   }
+}
+
+/**
+ * Writes down the overrides that ended (a time that passed, a reset observed): each becomes a tombstone (stamped as the record it ends) with an `end`
+ * audit line in modes.jsonl, so the ending is recorded once and `mode` reads the same. Returns the ids it ended.
+ */
+export function endOverrides(cache: Cache, nowMs: number, o: { machine: string; path?: string }): string[] {
+  const state = loadOverrides(o.path)
+  const ended: string[] = []
+  for (const [id, r] of Object.entries(state.accounts)) {
+    if (r.cleared || !overrideExpired(r, cache.samples[id], cache, id, nowMs)) continue
+    try {
+      writeOverride(
+        id,
+        { cleared: true, set_at: r.set_at, set_on: r.set_on }, // the record's own stamp: a record set later still wins, and the peer's copy is no newer
+        { action: 'end', machine: o.machine, nowMs, path: o.path },
+      )
+      ended.push(id)
+    } catch {
+      // the next run tries again
+    }
+  }
+  return ended
 }
 
 export function markExhausted(id: string, untilS: number, dir = cacheDir()): void {

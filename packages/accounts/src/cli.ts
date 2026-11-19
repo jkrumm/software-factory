@@ -36,7 +36,7 @@ import { compare, mixedPool, simulate } from './sim.ts'
 import { type ModeView, modeField } from './modes.ts'
 import { clearModeOverride, liveAccounts, mergeClaudeJson, setModeOverride } from './read.ts'
 import { accountFromConfigDir, loadRegistry, parseRegistry, shellLine } from './registry.ts'
-import { claimRefresh, loadCache, markExhausted, recordSample } from './store.ts'
+import { claimRefresh, endOverrides, loadCache, markExhausted, recordSample } from './store.ts'
 import { readLoginExpiry } from './keychain.ts'
 import { httpGet } from './oauth.ts'
 import { runRefresh, refreshBeforePick } from './refresh.ts'
@@ -280,6 +280,7 @@ function modeVerb(reg0: Registry, rest: string[]): number {
   const id = rest[0] && !rest[0].startsWith('--') ? rest[0] : null
   if (id === null) {
     const { reg, cache, views } = liveAccounts(reg0, now)
+    endOverrides(cache, now, { machine: resolveMachine(reg0.host).name })
     const rows = Object.keys(reg.accounts).map((a) => {
       const b = reserveBudget(reg, cache, a, now)
       return {
@@ -966,6 +967,7 @@ export async function main(argv: string[]): Promise<number> {
         hasSessionLimit(reg.accounts[id]),
         historyTarget(() => liveAccounts(reg).reg),
       )
+      endOverrides(loadCache(), Date.now(), { machine: resolveMachine(reg.host).name })
       return 0
     }
     case 'account': {

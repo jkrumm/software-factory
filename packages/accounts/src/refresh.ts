@@ -30,6 +30,7 @@ import {
   readVerified,
   releaseClaim,
   saveSample,
+  endOverrides,
   setAuthFailed,
   loadOverrides,
   writeOverride,
@@ -232,6 +233,11 @@ export async function runRefresh(d: RefreshDeps): Promise<Record<string, Refresh
       d.log?.(
         `refresh ${id}: logged in but the usage endpoint gave no sample and the stored one is ${Number.isFinite(age) ? `${Math.round(age / 3600_000)} h old` : 'missing'}`,
       )
+  }
+  try {
+    endOverrides(loadCache(d.dir), d.now(), { machine: d.machine ?? 'local', path: d.modesPath })
+  } catch {
+    // the ending is a record, never a gate
   }
   return results
 }

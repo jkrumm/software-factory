@@ -278,6 +278,21 @@ export function observedReset(prev: Sample | null, next: Sample): boolean {
   return moved || fell
 }
 
+/** A reset time within this of the closed window's end is still that window (the endpoint's time jitters by minutes). */
+export const RESET_SLACK_S = 3600
+
+/**
+ * True when `inc` is the weekly window a recorded reset already closed, read late: its reset time is still the closed
+ * window's (or earlier) and its percent sits at least RESET_DROP above what the cache holds now. Such a sample (a delayed
+ * endpoint answer, a peer's old row, a session that has not refreshed its numbers) must never replace the post-reset one:
+ * it would show the next fresh sample as a second reset (docs/accounts.md §Expiry).
+ */
+export function staleAfterReset(stored: Sample | null, inc: Sample, seen: ObservedReset | undefined): boolean {
+  if (seen?.w_reset_before == null || inc.w === null || inc.w_reset === null) return false
+  if (stored?.w == null) return false
+  return inc.w_reset <= seen.w_reset_before + RESET_SLACK_S && inc.w - stored.w >= RESET_DROP
+}
+
 export const noSession = (x: Sample): Sample => ({ ...x, s: null, s_reset: null, s_ts: null })
 
 /** The cache as the picker must see it: a plan without a 5 h window carries no session half, whatever an older file or feed left behind. */
