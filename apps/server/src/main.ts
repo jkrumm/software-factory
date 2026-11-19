@@ -119,7 +119,7 @@ import { resumeRulesOf } from './app/leads-api-errors.ts'
 import { type Clock, systemClock } from './kernel/clock.ts'
 import { freshFor } from './kernel/fresh-for.ts'
 import { err, ok, portError } from './kernel/result.ts'
-import { systemIds } from './kernel/ids.ts'
+import { type IssueId, systemIds } from './kernel/ids.ts'
 import { deployingSince } from './read/deploy-window.ts'
 import { healthOf, judgeTick } from './read/health.ts'
 import { startHealthProbe } from './read/health-probe.ts'
@@ -377,6 +377,11 @@ async function main(): Promise<void> {
     reviewerRows,
     proof: new MakeAndProbes({ ci }),
     signal: draining.signal,
+    alertsDown: async (issueId: IssueId) => {
+      const read = await uow.run(async ({ intake }) => ok(await intake.subjectsOfIssue(issueId)))
+      // an alert that cannot be read is not down: the gate never refuses on it
+      return read.ok ? read.value.filter((row) => row.upAt === null).map((row) => row.subject) : []
+    },
   }
 
   // The loops: every recurring job of the server is one named loop on the runner, each with its interval

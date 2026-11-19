@@ -129,6 +129,36 @@ export function ciStillRed(state: CiState | null, sha: string): string | null {
 }
 
 /**
+ * What a ship that follows an alert's regression owes: the commits of the last accepted ship, when the Issue regressed
+ * after it and that regression was an alert (a monitor's `down` while the Watch ran) and not a check of the Watch's own.
+ * Null otherwise. The history is the Issue's applied events; `watches` are its Watches, whose last answer is
+ * `regressed` only where a check regressed it.
+ */
+export function afterAlertRegression(
+  history: readonly { kind: string }[],
+  watches: readonly WatchHistory[],
+  ships: readonly { result: 'accepted' | 'refused'; reported: readonly string[] }[],
+): readonly string[] | null {
+  const shippedAt = history.findLastIndex((record) => record.kind === 'shipped')
+  if (shippedAt < 0 || !history.slice(shippedAt + 1).some((record) => record.kind === 'regressed')) return null
+  if (watches.at(-1)?.answer === 'regressed') return null
+  return ships.findLast((ship) => ship.result === 'accepted')?.reported ?? null
+}
+
+/** Whether every commit named is one of `previous` (a sha may be named by any prefix of seven characters or more). */
+export function addsNoCommit(named: readonly string[], previous: readonly string[]): boolean {
+  return named.every((sha) => previous.some((old) => old.startsWith(sha) || sha.startsWith(old)))
+}
+
+/**
+ * The refusal of a ship that names no commit its predecessor did, after an alert regressed that one and while the alert
+ * is still down: the same commits read the same alert, so the ship only spends a regression. `down` names the subjects.
+ */
+export function alertStillDown(down: readonly string[]): string {
+  return `ship refused: an alert regressed your last ship and is still down (${down.join(', ')}), and this ship names no commit that one did not: shipping again cannot change what the alert reads and spends a regression on it. Land a commit that fixes or reverts the change; where the alert is not this change's (a load that was there before, a window that lags the fix), say so in a Decision (\`factory issue ask\`) instead of shipping`
+}
+
+/**
  * The refusal of a ship whose landed commit the deployed version does not hold: the Watch would fail on exactly this
  * line within the hour, so the ship says it now with the missing step. `detail` is the check's own line.
  */
