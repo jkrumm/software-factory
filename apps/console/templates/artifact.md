@@ -41,6 +41,6 @@ What was run and what it showed. For a Report, this is the section to read first
 <!--
   The Console renders this at 18 px (the reader can make it 16 or 20), about 76 characters wide and centred in the pane.
   A table takes that width and scrolls sideways inside itself when it is wider: keep it to about five columns. Raw HTML is
-  dropped; an https image loads from a host the owner lists (a presigned link from his bucket) and any other image shows its alt text. Submit it with:
+  dropped; an https image loads from a host the owner lists (a presigned link from his bucket: `imgcli private <file> --json`) and any other image, raw.githubusercontent.com included, shows its alt text. Submit it with:
     factory artifact submit <issue> --attempt <n> --kind spec --title "..." --content @artifact.md
 -->

@@ -97,9 +97,26 @@ function MarkdownLink({ href, children }: { href?: string; children?: ReactNode 
   )
 }
 
-/** The alt text, shown where an image is not loaded. */
-function ImageAlt({ alt }: { alt?: string }) {
-  return <span className="italic text-muted-foreground">{alt ? `[image: ${alt}]` : '[image]'}</span>
+/** The host of an image link, or null where it is not a URL. */
+function hostOf(src?: string): string | null {
+  try {
+    return src ? new URL(src).host : null
+  } catch {
+    return null
+  }
+}
+
+/** The alt text, shown where an image is not loaded; its tooltip names the host the page would not load from. */
+function ImageAlt({ alt, src }: { alt?: string; src?: string }) {
+  const host = hostOf(src)
+  const reason = !src?.startsWith('https://')
+    ? 'only https images load'
+    : `${host} is not in FACTORY_CONSOLE_IMAGE_HOSTS, or the link has expired`
+  return (
+    <span className="italic text-muted-foreground" title={host ? `Not loaded from ${host}: ${reason}` : undefined}>
+      {alt ? `[image: ${alt}]` : '[image]'}
+    </span>
+  )
 }
 
 /**
@@ -109,7 +126,7 @@ function ImageAlt({ alt }: { alt?: string }) {
  */
 function MarkdownImage({ src, alt }: { src?: string; alt?: string }) {
   const [failed, setFailed] = useState(false)
-  if (failed || !src?.startsWith('https://')) return <ImageAlt alt={alt} />
+  if (failed || !src?.startsWith('https://')) return <ImageAlt alt={alt} src={src} />
   return (
     <img
       src={src}

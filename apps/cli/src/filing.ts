@@ -102,7 +102,8 @@ const errandHelp = [
 ].join('\n')
 
 const submitHelp =
-  'Limits: --title at most 200 characters, --content at most 1000000 characters. A Concept or Spec waits for its verdict (end the turn); a Report never waits.'
+  'Limits: --title at most 200 characters, --content at most 1000000 characters. A Concept or Spec waits for its verdict (end the turn); a Report never waits. ' +
+  'Images: a Markdown artifact shows an https image only from a host the owner lists for the Console (his image bucket); any other host, such as raw.githubusercontent.com, shows its alt text. Put a shot there with `imgcli private <file> --json` (prints a presigned `url`, valid 7 days) and link that url as `![alt](url)`; an HTML artifact inlines it as a `data:` URL.'
 
 const signalKindHint =
   "a signal's kind is request, feedback or remark; bug, feature or chore is an Issue's kind, set by triage; to choose it yourself file the Issue: `factory issue new --kind bug|feature|chore`"
