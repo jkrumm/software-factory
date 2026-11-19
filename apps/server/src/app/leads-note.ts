@@ -31,7 +31,7 @@ export const HOST_RESTARTED =
 export const WORKTREE_RESTORED =
   'Your worktree was removed while you waited and has been made again at the same path, on your branch: from your local branch, ' +
   "else from the remote's copy of it, else cut afresh from the default branch. Look at `git log` and `git status`: uncommitted changes " +
-  'and installed dependencies are not there, so reinstall what you need, then go on.'
+  'are not there, and the tree has the setup a new one gets, nothing you installed since. Then go on.'
 
 type Look =
   | { done: true }

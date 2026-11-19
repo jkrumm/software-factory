@@ -1,5 +1,6 @@
 import { realpathSync, statSync } from 'node:fs'
 import { join } from 'node:path'
+import { leadBranchIssue } from '../../../kernel/ids.ts'
 import { originDefault } from '../checkout.ts'
 import { gitOut, gitTry, type Tools } from '../git.ts'
 import { type Outcome, clean, finding, found, skipped } from './finding.ts'
@@ -41,8 +42,8 @@ export function parseWorktrees(porcelain: string): Worktree[] {
  * not done with it. The scan leaves them out, so the probe never flags one and the fix never removes one.
  */
 export const isLeadWorktree = (w: Worktree): boolean =>
-  /^factory\/\d+-\d+$/.test(w.branch ?? '') ||
-  /^factory-\d+-\d+$/.test(w.path.split(/[\\/]/).filter(Boolean).at(-1) ?? '')
+  leadBranchIssue(w.branch ?? '') !== null ||
+  /^factory-[1-9][0-9]*-[1-9][0-9]*$/.test(w.path.split(/[\\/]/).filter(Boolean).at(-1) ?? '')
 
 /** The last two path segments, never an absolute path. */
 export const shortPath = (path: string): string => path.split(/[\\/]/).filter(Boolean).slice(-2).join('/')

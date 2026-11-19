@@ -225,7 +225,7 @@ export function gitWorktrees(options: GitWorktreesOptions = {}): Worktrees {
    * A dormant lead's worktree, made again at the path it had when something removed it meanwhile: the session resumes by
    * that path. Set up as `create` sets one up (the repo's `wtp` hooks included). Its branch is checked out again (what it
    * committed survives); a branch gone too is cut from the remote's copy of it, else afresh from the base. What was
-   * uncommitted or installed in the old tree is gone.
+   * uncommitted in the old tree is gone, and so is anything installed in it beyond the repo's setup.
    */
   async function restore(input: { repo: string; branch: string; path: string }): Promise<{ restored: boolean }> {
     const { repo, branch, path } = input
