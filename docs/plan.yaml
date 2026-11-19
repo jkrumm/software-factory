@@ -440,3 +440,121 @@ rows:
       what: "apps/console (a new route under apps/console/DESIGN.md's rules), the retro bundle (apps/server/src/read/retro.ts), tests/e2e."
       change: "Build the page from `factory read throughput`: footprint by class against the class budgets, the top tenants and processes, the pressure and swap timeline, the lead time split and the project scorecard, and the open improvement Issues with their before and after. Add the same figures to the weekly retro's bundle. Load the dataviz skill first; screenshots at 1800x1200 dark and light."
       acceptance: "Playwright on seeded rows; screenshots in evidence; the owner's verdict on the page is recorded."
+
+  # Subscriptions program (2026-11-19): N Claude Code subscriptions as a part of the factory, built beside the dotfiles
+  # picker, switched with a rollback, compared in shadow, then the old code deleted. Rows file themselves in order.
+  - key: subs-package
+    title: "Subscriptions: port the dotfiles account picker into packages/accounts with the same CLI contract"
+    facts:
+      why: |-
+        Program "subscriptions" (owner decision 2026-11-19): Claude Code subscription handling moves from dotfiles into the factory as an independent part of the product, for N subscriptions and for other users. Today the registry (dotfiles config/claude-accounts.json), the quota sampler and the picker (dotfiles scripts/lib/claude-accounts.ts, the claude-account CLI, rule v1.9: earliest weekly reset first within 72 h, pace guards, 5h balance, Fable mode, drain mode) live in dotfiles, and the factory, agent-workflows (gateway credit pools, fleet quota), tinycast-extensions, usage-tracker and argo read dotfiles paths or that CLI. Order: build the package beside the live one, switch with a one-command rollback, compare policies in shadow, then delete the old code. No downtime: the CLI contract (verbs, flags, JSON shapes, exit codes, cache and log paths) holds through the switch. Design and rationale of today's rule: dotfiles docs/claude-accounts.md (§The picker, §Fable mode, §Drain mode, Why v1.7-v1.9).
+        This row is the drop-in: the same behaviour in the factory repo, installed beside the live CLI.
+      what: |-
+        A new packages/accounts (library + the claude-account CLI entry) and its docs. Sources to port: ~/SourceRoot/dotfiles/scripts/lib/claude-accounts.ts, scripts/claude-account.ts, scripts/claude-account.test.ts, scripts/claude-account-sim.test.ts, docs/claude-accounts.md. Nothing in dotfiles changes in this row; the live ~/.local/bin/claude-account stays the dotfiles one.
+      change: |-
+        Port the code and its tests as they are (rule v1.9, Fable and drain mode). Keep every verb, flag, stdout and --json shape, exit code and file location: registry from $CLAUDE_ACCOUNTS_REGISTRY, else ~/.config/claude-accounts/registry.json when it exists, else ~/SourceRoot/dotfiles/config/claude-accounts.json; cache ~/.cache/claude-accounts/; picks ~/.local/share/claude-accounts/picks.jsonl (usage-tracker, tinycast-extensions and argo read these). Split the pure policy (pick and rank over a snapshot of registry, samples, marks and time) from the adapters behind ports: Keychain token read, the OAuth usage GET, claude auth status, the statusline record, the peer import over ssh, the relogin ask. Make the owner-specific adapters (peer import to mini/iumac, relogin through ask-human, loginBrowser) configurable commands in the registry, so a user without them omits them. Add claude-account --version naming the package and its commit. Deploy installs it as ~/.local/bin/claude-account-next on the mini, and a way to build one self-contained file for the MacBook (it must work without the mini).
+      acceptance: |-
+        A parity test runs the dotfiles CLI and the package CLI on the same fixture registry, cache and clock for every verb and lane: identical stdout and exit code. Every ported test and the simulation pass in the package. On the mini, claude-account-next rank --lane bulk --json and usage --json equal the live claude-account output apart from timestamps. make check-fast passes and CI is green.
+  - key: subs-switch-dotfiles
+    repo: dotfiles
+    after: [subs-package]
+    after_needs: shipped
+    title: "Switch the live claude-account to the factory accounts package, with a one-command rollback"
+    facts:
+      why: |-
+        Program "subscriptions" (owner decision 2026-11-19): Claude Code subscription handling moves from dotfiles into the factory as an independent part of the product, for N subscriptions and for other users. Today the registry (dotfiles config/claude-accounts.json), the quota sampler and the picker (dotfiles scripts/lib/claude-accounts.ts, the claude-account CLI, rule v1.9: earliest weekly reset first within 72 h, pace guards, 5h balance, Fable mode, drain mode) live in dotfiles, and the factory, agent-workflows (gateway credit pools, fleet quota), tinycast-extensions, usage-tracker and argo read dotfiles paths or that CLI. Order: build the package beside the live one, switch with a one-command rollback, compare policies in shadow, then delete the old code. No downtime: the CLI contract (verbs, flags, JSON shapes, exit codes, cache and log paths) holds through the switch. Design and rationale of today's rule: dotfiles docs/claude-accounts.md (§The picker, §Fable mode, §Drain mode, Why v1.7-v1.9).
+        This row moves both machines onto the package while the dotfiles code stays in place as the rollback.
+      what: |-
+        make setup / the symlink for ~/.local/bin/claude-account, docs/symlink-map.md, docs/claude-accounts.md, docs/architecture.md, the keepalive and heartbeat callers only if their invocation changes. Do not delete scripts/lib/claude-accounts.ts or its tests (the cleanup row does).
+      change: |-
+        Point ~/.local/bin/claude-account at the package build on both machines (the mini through the software-factory checkout, the MacBook through the self-contained build subs-package provides). Link config/claude-accounts.json to ~/.config/claude-accounts/registry.json so the package reads it without a dotfiles path. Keep the dotfiles adapters (relogin, peer import, keepalive LaunchAgent, heartbeat, statusline record) calling the same verbs. Document the rollback (one make target that points the symlink back at scripts/claude-account.ts) and run it once to prove it.
+      acceptance: |-
+        make check passes. On both machines, for an hour after the switch, claude-account usage, rank for every lane, the statusline segment, c / cf launches, rd work, make doctor and the keepalive log give the same answers as before (diff the outputs taken just before the switch). The usage-tracker quota collector, the tinycast-extensions usage view and argo's accounts list still read their data unchanged. The rollback target works and is undone.
+  - key: subs-model-v2
+    after: [subs-package]
+    checkpoint: spec
+    seat: {tier: opus, effort: high}
+    title: "Subscriptions: a registry for N subscriptions with per-account modes, expiring overrides and every quota window"
+    facts:
+      why: |-
+        Program "subscriptions" (owner decision 2026-11-19): Claude Code subscription handling moves from dotfiles into the factory as an independent part of the product, for N subscriptions and for other users. Today the registry (dotfiles config/claude-accounts.json), the quota sampler and the picker (dotfiles scripts/lib/claude-accounts.ts, the claude-account CLI, rule v1.9: earliest weekly reset first within 72 h, pace guards, 5h balance, Fable mode, drain mode) live in dotfiles, and the factory, agent-workflows (gateway credit pools, fleet quota), tinycast-extensions, usage-tracker and argo read dotfiles paths or that CLI. Order: build the package beside the live one, switch with a one-command rollback, compare policies in shadow, then delete the old code. No downtime: the CLI contract (verbs, flags, JSON shapes, exit codes, cache and log paths) holds through the switch. Design and rationale of today's rule: dotfiles docs/claude-accounts.md (§The picker, §Fable mode, §Drain mode, Why v1.7-v1.9).
+        Opus: a new data model other repos and the Console build on. Today Fable mode and drain are top-level special cases (fable: <id>, drain: [<id>]), drain never ends by itself (the owner must remember to remove it), every toggle is a git commit, and only the 5h and weekly windows are read although Fable has its own weekly window (a Fable reset refills only Fable usage). Adding a subscription should be one registry entry, with its reset day and quota learned from samples.
+      what: |-
+        packages/accounts (schema, policy, CLI verbs status and mode, state file), its docs, the parity and policy tests.
+      change: |-
+        Registry v2, reading v1 unchanged: each account has id, dir, plan, optional units, enabled, homeLanes, optional platform (the agent-workflows credit pool, passed through as today) and a mode: normal, reserve (the last resort for other work; with for: <model>, the launcher for that model lands there, as cf does for Fable today), drain (first in every lane while its 5h window is cool, weekly ceiling 100) or paused; until: reset (the account's next weekly reset) or a datetime ends a mode. Runtime overrides live in a state file written by claude-account mode <id> <mode> [--until reset|<iso>] [--why <text>], each change one audit line; the effective mode is the live override, else the registry. Parse every window the OAuth usage endpoint returns (five_hour, seven_day and any per-model window such as Fable's; log the raw keys of one live response first and name them in the Spec) into the sample by name, and judge a reserve-for-model account by its model window. claude-account status shows, per account, every window with its reset countdown, the effective mode with its source and expiry, and the projected weekly % at the reset at the current burn rate.
+      acceptance: |-
+        The Spec lists the v2 schema, the verbs and the state file. A v1 registry gives the same ranks as before (parity test). A drain override with until=reset is gone after the reset in a test. A reserve-for-fable account is judged by its Fable window in a test. claude-account status on the mini shows the three live accounts. make check-fast passes and CI is green.
+  - key: subs-policy-lab
+    after: [subs-model-v2]
+    seat: {tier: opus, effort: high}
+    title: "Subscriptions: compare picking policies in shadow and in simulation, promote one by config"
+    facts:
+      why: |-
+        Program "subscriptions" (owner decision 2026-11-19): Claude Code subscription handling moves from dotfiles into the factory as an independent part of the product, for N subscriptions and for other users. Today the registry (dotfiles config/claude-accounts.json), the quota sampler and the picker (dotfiles scripts/lib/claude-accounts.ts, the claude-account CLI, rule v1.9: earliest weekly reset first within 72 h, pace guards, 5h balance, Fable mode, drain mode) live in dotfiles, and the factory, agent-workflows (gateway credit pools, fleet quota), tinycast-extensions, usage-tracker and argo read dotfiles paths or that CLI. Order: build the package beside the live one, switch with a one-command rollback, compare policies in shadow, then delete the old code. No downtime: the CLI contract (verbs, flags, JSON shapes, exit codes, cache and log paths) holds through the switch. Design and rationale of today's rule: dotfiles docs/claude-accounts.md (§The picker, §Fable mode, §Drain mode, Why v1.7-v1.9).
+        Opus: novel optimisation logic. The rule grew by hand (v1.1 to v1.9), each step from one bad week. The goal the owner set: every subscription at about 100 % at its weekly reset, nothing blocked. dotfiles' scripts/claude-account-sim.test.ts showed the 24 h expiring horizon leaving iu at 88-92 % at its reset where 72 h gives 99-100 %, and the factory's former roomLeft choice leaving every account at 75-98 %; its load model (session length, burn rate, the 5h share of a week, the day curve) is guessed.
+      what: |-
+        packages/accounts (policies, simulate and compare verbs, the shadow field of the pick log), its docs and tests.
+      change: |-
+        Make policies named pure functions over the same snapshot: v1.9 (today's) and a candidate v2 that projects each account's weekly % at its reset from its recent burn rate and the lane mix (projected = weekly% + burn × hours to reset) and sends work to the account with the most projected waste its 5h window can still absorb. The registry's policy: names the live one. Every live pick also records, in a shadow field of picks.jsonl, what each other policy would have picked. claude-account simulate [--policy <name>] [--demand <x>] runs the three-week simulation with its load model measured from usage-tracker's quota series (usage.quota_samples, usage.account_picks) instead of guessed. claude-account compare --days <n> reports per policy the weekly % each account reached at its resets (replayed from the quota series) and in simulation, and the shadow disagreements.
+      acceptance: |-
+        In simulation over demand 0.85 to 1.2, v2 brings at least as many windows to 98 % or more at their reset as v1.9, with no more moved sessions and nothing blocked at demand 1.0 or below (asserted in tests). claude-account compare --days 7 runs on the mini. The live policy changes by one registry line. make check-fast passes and CI is green.
+  - key: subs-server
+    after: [subs-model-v2]
+    title: "Subscriptions: the server picks accounts in-process from the accounts package and exposes them"
+    facts:
+      why: |-
+        Program "subscriptions" (owner decision 2026-11-19): Claude Code subscription handling moves from dotfiles into the factory as an independent part of the product, for N subscriptions and for other users. Today the registry (dotfiles config/claude-accounts.json), the quota sampler and the picker (dotfiles scripts/lib/claude-accounts.ts, the claude-account CLI, rule v1.9: earliest weekly reset first within 72 h, pace guards, 5h balance, Fable mode, drain mode) live in dotfiles, and the factory, agent-workflows (gateway credit pools, fleet quota), tinycast-extensions, usage-tracker and argo read dotfiles paths or that CLI. Order: build the package beside the live one, switch with a one-command rollback, compare policies in shadow, then delete the old code. No downtime: the CLI contract (verbs, flags, JSON shapes, exit codes, cache and log paths) holds through the switch. Design and rationale of today's rule: dotfiles docs/claude-accounts.md (§The picker, §Fable mode, §Drain mode, Why v1.7-v1.9).
+        Since issue_2379 admission follows claude-account rank, but through a shell-out (FACTORY_CLAUDE_ACCOUNT_BIN) and a registry path that defaults into dotfiles (FACTORY_ACCOUNTS_FILE). One policy in one process removes both.
+      what: |-
+        apps/server (capacity admission, moveWalled, the planning claude-accounts adapter, settings), the API and apps/cli, docs/architecture.md.
+      change: |-
+        Admission and moveWalled take their order from the package's rank in-process; remove the shell-out ranker and the dotfiles default path (the package's own registry resolution decides). Add GET /v1/accounts (each subscription with its windows, effective mode and expiry, projected % at reset, the rank per lane, the latest picks) and POST of a mode override (owner token), and factory accounts status|mode verbs mirroring claude-account status|mode.
+      acceptance: |-
+        In tests the admitted account equals the package's rank for the bulk lane; capacity get shows the same order as claude-account rank --lane bulk on the mini; a mode set through factory accounts mode shows in claude-account status and the next rank. make check-fast passes and CI is green.
+  - key: subs-console
+    after: [subs-server, subs-policy-lab]
+    checkpoint: spec
+    title: "Subscriptions: a Console page to see and steer N subscriptions"
+    facts:
+      why: |-
+        Program "subscriptions" (owner decision 2026-11-19): Claude Code subscription handling moves from dotfiles into the factory as an independent part of the product, for N subscriptions and for other users. Today the registry (dotfiles config/claude-accounts.json), the quota sampler and the picker (dotfiles scripts/lib/claude-accounts.ts, the claude-account CLI, rule v1.9: earliest weekly reset first within 72 h, pace guards, 5h balance, Fable mode, drain mode) live in dotfiles, and the factory, agent-workflows (gateway credit pools, fleet quota), tinycast-extensions, usage-tracker and argo read dotfiles paths or that CLI. Order: build the package beside the live one, switch with a one-command rollback, compare policies in shadow, then delete the old code. No downtime: the CLI contract (verbs, flags, JSON shapes, exit codes, cache and log paths) holds through the switch. Design and rationale of today's rule: dotfiles docs/claude-accounts.md (§The picker, §Fable mode, §Drain mode, Why v1.7-v1.9).
+        The owner steers subscriptions today by editing JSON and reading claude-account usage in a terminal. One page should show every subscription and let him change a mode in a click.
+      what: |-
+        apps/console (a new route under apps/console/DESIGN.md, the status strip's accounts component src/components/strip/accounts.tsx), tests/e2e.
+      change: |-
+        A page with every subscription: plan, each window (5h, weekly, per-model) with its reset countdown and the projected % at the reset, the effective mode with its source and expiry, controls (drain until the reset, reserve for a model, pause, back to normal), the order the picker gives each lane now, picks over time, and the policy comparison from subs-policy-lab. Load the dataviz skill first.
+      acceptance: |-
+        Playwright on seeded data; a mode change on the page shows in claude-account status and the next rank; screenshots at 1800x1200 dark and light in evidence; the owner's verdict on the page is recorded.
+  - key: subs-switch-agw
+    repo: agent-workflows
+    after: [subs-switch-dotfiles]
+    after_needs: shipped
+    title: "Read subscriptions through the accounts package instead of dotfiles paths"
+    facts:
+      why: |-
+        Program "subscriptions" (owner decision 2026-11-19): Claude Code subscription handling moves from dotfiles into the factory as an independent part of the product, for N subscriptions and for other users. Today the registry (dotfiles config/claude-accounts.json), the quota sampler and the picker (dotfiles scripts/lib/claude-accounts.ts, the claude-account CLI, rule v1.9: earliest weekly reset first within 72 h, pace guards, 5h balance, Fable mode, drain mode) live in dotfiles, and the factory, agent-workflows (gateway credit pools, fleet quota), tinycast-extensions, usage-tracker and argo read dotfiles paths or that CLI. Order: build the package beside the live one, switch with a one-command rollback, compare policies in shadow, then delete the old code. No downtime: the CLI contract (verbs, flags, JSON shapes, exit codes, cache and log paths) holds through the switch. Design and rationale of today's rule: dotfiles docs/claude-accounts.md (§The picker, §Fable mode, §Drain mode, Why v1.7-v1.9).
+        The gateway's credit pools read the platform blocks from ~/SourceRoot/dotfiles/config/claude-accounts.json (deploy/com.jkrumm.agent-workflows-gateway.plist.template, packages/gateway/src/pools/registry.ts) and the fleet quota calls claude-account (packages/host/src/fleet/quota.ts).
+      what: |-
+        packages/gateway/src/pools/registry.ts, the gateway plist template and its deploy test, packages/host/src/fleet/quota.ts only if a verb's output changed, docs/gateway.md.
+      change: |-
+        Point the gateway at the registry the package resolves (~/.config/claude-accounts/registry.json, or the package's resolver) and accept the v2 shape of an account's platform block as well as v1. Keep calling claude-account for quota (its contract holds).
+      acceptance: |-
+        After deploy the gateway starts with the same pools enabled as before (its status lists iu, me, me2 pools), a request lands on a pool as before, make check passes and CI is green.
+  - key: subs-cleanup-dotfiles
+    repo: dotfiles
+    kind: chore
+    after: [subs-switch-dotfiles, subs-switch-agw, subs-server]
+    after_needs: shipped
+    after_days: 7
+    title: "Delete the dotfiles copy of the account picker after a week on the package"
+    facts:
+      why: |-
+        Program "subscriptions" (owner decision 2026-11-19): Claude Code subscription handling moves from dotfiles into the factory as an independent part of the product, for N subscriptions and for other users. Today the registry (dotfiles config/claude-accounts.json), the quota sampler and the picker (dotfiles scripts/lib/claude-accounts.ts, the claude-account CLI, rule v1.9: earliest weekly reset first within 72 h, pace guards, 5h balance, Fable mode, drain mode) live in dotfiles, and the factory, agent-workflows (gateway credit pools, fleet quota), tinycast-extensions, usage-tracker and argo read dotfiles paths or that CLI. Order: build the package beside the live one, switch with a one-command rollback, compare policies in shadow, then delete the old code. No downtime: the CLI contract (verbs, flags, JSON shapes, exit codes, cache and log paths) holds through the switch. Design and rationale of today's rule: dotfiles docs/claude-accounts.md (§The picker, §Fable mode, §Drain mode, Why v1.7-v1.9).
+        After a week on the package with no rollback, the dotfiles copy is dead code that drifts.
+      what: |-
+        scripts/lib/claude-accounts.ts, scripts/claude-account.ts, scripts/claude-account.test.ts, scripts/claude-account-sim.test.ts, the rollback target, docs/claude-accounts.md, docs/architecture.md, rules/clis.md (the claude-account row), cli-refs.
+      change: |-
+        Delete the files and the rollback target; cut docs/claude-accounts.md to what stays in dotfiles (the owner's registry data, the host adapters: relogin, peer import, keepalive, heartbeat, statusline record) and link the package docs for the rule; update every reference.
+      acceptance: |-
+        rg finds no reference to the deleted files outside the archive; make check and make doctor pass; claude-account works on both machines and names the package in --version.
