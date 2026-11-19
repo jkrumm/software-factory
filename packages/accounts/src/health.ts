@@ -37,6 +37,7 @@ export const STALE_QUOTA_S = 6 * 3600
 
 const relogin = (machine: string, id: string) => `claude-relogin ${id} --machine ${machine}`
 
+/** `fix` is the repair hint of a row for an account id (default: the owner's `claude-relogin`); null = none. */
 export function gradeMachine(
   machine: string,
   d: {
@@ -45,6 +46,7 @@ export function gradeMachine(
     pending: PendingAsk[] | null
     via?: 'core' | 'ssh'
   },
+  fix: (id: string) => string | null = (id) => relogin(machine, id),
 ): HealthRow[] {
   if (!d.usage) return [{ machine, id: '-', check: 'reach', state: 'fail', detail: 'unreachable', fix: null }]
   const rows: HealthRow[] = []
@@ -60,7 +62,7 @@ export function gradeMachine(
         check: 'login',
         state: a.id === dflt ? 'fail' : 'warn',
         detail: 'logged out',
-        fix: relogin(machine, a.id),
+        fix: fix(a.id),
       })
     } else if (exp && exp.refresh_expires_at !== null && exp.severity !== 'PASS') {
       const detail = exp.expired ? 'login expired' : `login ends in ${exp.days_left} d`
@@ -70,7 +72,7 @@ export function gradeMachine(
         check: 'login',
         state: exp.severity === 'FAIL' ? 'fail' : 'warn',
         detail,
-        fix: relogin(machine, a.id),
+        fix: fix(a.id),
       })
     } else if (exp?.severity === 'PASS' && exp.days_left !== null) {
       rows.push({ machine, id: a.id, check: 'login', state: 'ok', detail: `${exp.days_left} d left`, fix: null })
@@ -92,7 +94,7 @@ export function gradeMachine(
         check: 'quota',
         state: 'warn',
         detail: `no quota sample for ${Math.round(a.age_s / 3600)} h (token rejected?)`,
-        fix: relogin(machine, a.id),
+        fix: fix(a.id),
       })
     }
   }

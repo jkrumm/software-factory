@@ -7,11 +7,20 @@ import { dirname, join } from 'node:path'
 /** The shared registry of a machine that runs the factory beside a dotfiles checkout; the fallback when no per-user file exists. */
 const LEGACY_REGISTRY = ['SourceRoot', 'dotfiles', 'config', 'claude-accounts.json']
 
+/** The per-user registry file: where a registry that does not exist yet is created. */
+export const ownRegistryPath = () => join(homedir(), '.config', 'claude-accounts', 'registry.json')
+
 /** $CLAUDE_ACCOUNTS_REGISTRY, else `~/.config/claude-accounts/registry.json` when it exists, else the legacy shared file. */
 export const registryPath = () => {
   if (process.env.CLAUDE_ACCOUNTS_REGISTRY) return process.env.CLAUDE_ACCOUNTS_REGISTRY
-  const own = join(homedir(), '.config', 'claude-accounts', 'registry.json')
+  const own = ownRegistryPath()
   return existsSync(own) ? own : join(homedir(), ...LEGACY_REGISTRY)
+}
+/** Where `add`, `remove` and `verify --enable` write: the file the readers use, else the per-user file a new registry starts as. */
+export const registryWritePath = () => {
+  if (process.env.CLAUDE_ACCOUNTS_REGISTRY) return process.env.CLAUDE_ACCOUNTS_REGISTRY
+  const own = ownRegistryPath()
+  return existsSync(own) || !existsSync(join(homedir(), ...LEGACY_REGISTRY)) ? own : join(homedir(), ...LEGACY_REGISTRY)
 }
 export const cacheDir = () => process.env.CLAUDE_ACCOUNTS_CACHE_DIR ?? join(homedir(), '.cache', 'claude-accounts')
 export const picksPath = () =>

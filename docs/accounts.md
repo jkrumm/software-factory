@@ -22,7 +22,7 @@ lists the verbs, `claude-account <verb> --help` one in full; `claude-account --v
 | History | `~/.local/share/claude-accounts/` (`$CLAUDE_ACCOUNTS_HISTORY` is the directory): `samples-YYYY-MM.jsonl` and `resets.jsonl` (§History) |
 | Mode overrides | `~/.local/share/claude-accounts/modes.json` (`$CLAUDE_ACCOUNTS_MODES`) and its audit `modes.jsonl` (§Modes) |
 | Keepalive log | `~/Library/Logs/claude-accounts-keepalive.log`: the stdio of the keepalive job and of the detached refresh a pick spawns |
-| Test seams | `$CLAUDE_ACCOUNTS_SECURITY_BIN` replaces `/usr/bin/security`; `$CLAUDE_ACCOUNTS_SSH`, `$CLAUDE_ACCOUNTS_HC` and `$CLAUDE_ACCOUNTS_RELOGIN` replace the peer's adapters |
+| Test seams | `$CLAUDE_ACCOUNTS_SECURITY_BIN` replaces `/usr/bin/security`; `$CLAUDE_ACCOUNTS_SSH` and `$CLAUDE_ACCOUNTS_HC` replace the peer's adapters (the owner's `reloginAsk` command reads `$CLAUDE_ACCOUNTS_RELOGIN` for its script) |
 
 ## The registry
 
@@ -44,7 +44,7 @@ lists the verbs, `claude-account <verb> --help` one in full; `claude-account --v
   `units` default from the plan (ultra 4 / 2, max 1 / 1).
 - `homeLanes`: the lanes whose spawns start here; an exact lane name wins over a `prefix:*` wildcard. `loginBrowser`: the app a
   re-login opens (data for the relogin command). `enabled: false` ships an account dark until its login exists.
-- `policy`: the live picking policy (§The policy lab), absent = `v1.9`.
+- `policy`: the live picking policy (§The policy lab), absent = `v1.9`. `host`: the optional adapters, §The host block.
 - `fable`, `drain`, `version` and an account's `mode`: §Modes. Unknown top-level keys are ignored, so one registry serves this CLI and the dotfiles one.
 - The ids are letters, digits, `_` and `-` (they name cache files); `spill` is reserved.
 
@@ -62,21 +62,66 @@ lists the verbs, `claude-account <verb> --help` one in full; `claude-account --v
 | `ports.ts` | The ports: `Spawner`, `HttpGet`, `PeerUsage` |
 | `keychain.ts`, `oauth.ts`, `claude-auth.ts`, `spawn.ts` | The adapters: the login item through `security`, the usage endpoint, `claude auth status`, processes with a deadline that returns |
 | `refresh.ts`, `relogin.ts` | The orchestration over the ports: claim, sample, record; the re-login asks |
-| `owner.ts` | The owner's adapters (§The owner's adapters): the peer over ssh, the re-login dialog, the wake notification |
+| `host.ts`, `owner.ts` | The host block (§The host block): its checks, this machine, the command templates; the adapters behind it: the peer over ssh, the wake push and notification |
+| `onboard.ts` | `add`, `verify`, `remove` (§Onboarding): the registry edit, the three checks, what a removal leaves |
 | `cli.ts`, `bin/claude-account.ts` | The verbs; the entry |
 
-## The owner's adapters
+## The host block
 
-Four adapters are the owner's machines and stay the defaults behind their ports in this row (`owner.ts`); the registry gets no key for
-them, and a later row (`subs-onboard`) makes them configurable so a user without them omits them. Until then a machine with no peer
-loses only the feature: the peer import logs one line, `health` reports the peer unreachable, no ask is sent.
+Everything the package does beyond one machine with plain logins sits behind an optional `host` block of the registry (`host.ts`,
+`owner.ts`). **Without the block the package runs one machine: no peer import, no re-login ask, no wake notification, no setup command,
+and `health` grades this machine alone with its own login command as the repair hint.** The block is checked at load (a bad one makes the
+registry unreadable and names the field); keys it does not know are ignored.
 
-| Adapter | What it does | Seam for tests |
+```json
+"host": {
+  "machines": [
+    { "match": "mini", "name": "mini",
+      "peer": { "name": "macbook", "ssh": ["<peer-alias>"], "fixedVerbs": true, "herdrCore": true } },
+    { "name": "macbook",
+      "peer": { "name": "mini", "ssh": ["<peer-alias>"], "herdrCore": true },
+      "wake": { "push": "<cmd on the peer, {id}>", "notify": "<local cmd, {message}>" } }
+  ],
+  "reloginAsk": "<cmd, {id} {reason}>",
+  "reloginFix": "claude-relogin {id} --machine {machine}",
+  "afterAdd": "<cmd, {id} {dir} {plan}>"
+}
+```
+
+| Key | What it does | Seam for tests |
 |-|-|-|
-| Peer import (`PeerUsage` port) | `refresh` reads the peer machine's `claude-account usage --json` once per run over ssh (BatchMode, 5 s connect, 20 s cap): the mini asks the MacBook, the MacBook the mini | `CLAUDE_ACCOUNTS_SSH` |
-| Re-login ask | `refresh --all` starts the owner's re-login dialog script detached for a dead login or one inside its last 7 days: once per 24 h per account, once per hour per machine, never an auto-run | `CLAUDE_ACCOUNTS_RELOGIN` (the script) |
-| Health peer | `health` reads the peer through its herdr-core, plain ssh only when no core answers (a NOTE line says so); `--wake` re-pushes the peer's pending asks and notifies on a change | `CLAUDE_ACCOUNTS_SSH`, `CLAUDE_ACCOUNTS_HC` |
-| `loginBrowser` | the macOS app a re-login opens: registry data for the dialog script | |
+| `machines[]` | This machine is the first entry whose `match` (a case-insensitive regex over the hostname) fits, else the first without a `match`; no fit, no peer. `name` is the machine in audit lines and health rows | |
+| `peer` | The other machine, reached with ssh (BatchMode, 5 s connect). `refresh` reads its `claude-account usage --json` once per run (20 s cap) and imports its samples; `health` reads its snapshot. `bin` is its claude-account (default `$HOME/.local/bin/claude-account`); `fixedVerbs`: its key runs the verbs `account-usage`, `account-snapshot`, `account-snapshot-core` only; `herdrCore`: `health` goes through the herdr-cores first, plain ssh only when none answers (a NOTE line says so) | `CLAUDE_ACCOUNTS_SSH`, `CLAUDE_ACCOUNTS_HC` |
+| `wake` | `health --wake` runs `push` on the peer per pending re-login ask younger than 24 h, and `notify` locally when the picture of non-ok rows changed (once per 12 h for the same one) | |
+| `reloginAsk` | `refresh --all` starts it detached for a dead login or one inside its last 7 days: once per 24 h per account, once per hour per machine, never an auto-run. Whatever asks the human (a dialog, a chat message) is the command's business | |
+| `reloginFix` | The repair hint of a `health` row. Absent: this machine's own login command (`claude auth login`, with `CLAUDE_CONFIG_DIR` for another dir) | |
+| `afterAdd` | Runs once after `add` wrote the entry and created the directory: machine setup such as rendered settings or MCP registration. `$CLAUDE_ACCOUNT_ID`, `_DIR` and `_PLAN` are set too. A failing command leaves the account registered and `add` exits 1 | |
+
+Commands are shell templates run with `sh -c`; a `{placeholder}` is replaced by the value, shell-quoted (`reloginFix` is shown, not run, and takes it as it is).
+`loginBrowser` on an account is data for the `reloginAsk` command. The owner's registry gets the block that keeps what the package did on his
+two machines before the block existed (`test/owner-host.ts` is that block, the registry's copy lands with the dotfiles Issue that files it; the CLI tests and the parity fixtures run with it, and the golden outputs of
+`health`, `refresh` and `expiry` are unchanged).
+
+## Onboarding
+
+```
+claude-account add <id> --plan <max|ultra> [--dir <path>] [--lanes <a,b>]
+claude-account verify <id> [--enable]
+claude-account remove <id>
+```
+
+- **`add`** writes a disabled entry and creates the config directory. The first account of a registry takes the default `~/.claude` (`dir: null`) and the lanes
+  `interactive,headless`; every later one takes `~/.claude-<id>` and `bulk`. `units` is never written (it comes from the plan table; the key only overrides).
+  The registry is `$CLAUDE_ACCOUNTS_REGISTRY`, else the per-user file `~/.config/claude-accounts/registry.json` (created when there is none), else the dotfiles
+  file a machine already uses; a symlink is written through, keys the package does not know stay. It prints the login command for this machine
+  and the `verify` command, then runs `host.afterAdd`. It refuses an id that is taken, a plan other than `max` and `ultra`, a dir another account uses and `~/.claude` named explicitly.
+- **`verify`** checks on this machine, in order: *login* (`claude auth status` for the account's config dir), *plan* (the tier of its Keychain login item is the registered plan: an account added as `max` whose login is an Ultra
+  fails, with the `--plan` to add it again with), *sample* (a weekly quota sample: the usage endpoint with the account's own token, else the account's own cached usage; it lands in the cache). A disabled account is checked all the same.
+  `--enable` enables it when all three pass; exit 1 and nothing changed otherwise.
+- **`remove`** sets `enabled: false` (no pick, rank or refresh touches it) and lists what it leaves: the registry entry, the config directory, the Keychain login (with the logout command),
+  the cache files and the history. Running it again changes nothing. Deleting those is the user's: the package never removes a login or a directory.
+
+`packages/accounts/README.md` takes a new user from nothing to a first pick with two accounts.
 
 ## Quota sources
 
@@ -111,7 +156,7 @@ written into `~/.cache/claude-accounts/` as one small file per account and kind 
    good as ours. Seen 2026-10-27: a laptop's `me` had no sample for 36 h (idle Keychain access token expired, every GET 401,
    and `claude auth status` in 2.1.311 no longer renews it) while the server, where `me` is busy, had fresh ones.
    `runRefresh` (keepalive `--all` and the detached pick-time refresh) first fetches the peer's `claude-account usage
-   --json` once (ssh, 20 s cap; §The owner's adapters) and turns each row of a locally registered, enabled account into a sample (`src: peer`).
+   --json` once (ssh, 20 s cap; §The host block) and turns each row of a locally registered, enabled account into a sample (`src: peer`).
    Each window's timestamp is rebuilt from the row's age (now minus `*_age_s`; null age, null timestamp), so an old
    number is never laundered into a fresh one, and `mergeSample` keeps the newer window. A full endpoint answer (`src: oauth`) with a weekly window but no `five_hour` drops the stored session half instead of keeping it frozen; the other feeds only omit. A future `exhausted_until`
    is imported as a mark. **Auth state is never imported** (logins are per machine): an account served from the peer still
@@ -542,4 +587,5 @@ attribution of usage stay in dotfiles and call these verbs; the switch row moves
 was added by the port (`subs-package`); registry v2 and the modes came with `subs-model-v2` (§Modes). The history, the forecast and the status verb came with `subs-read-model` (§History, §status); the server and the Console read modes through `rank`
 and `usage --json` until `subs-server`. The policy lab (`subs-policy-lab`) added policies, the measured load model, `simulate`,
 `compare` and the shadow log; it does not re-measure the model on a schedule (`measure-load.ts` by hand, and the file is
-committed) and judges no policy on live outcomes, which need weeks of a policy actually live.
+committed) and judges no policy on live outcomes, which need weeks of a policy actually live. Onboarding (`subs-onboard`) does not run the login itself (it is a browser the user signs in with: `add` prints the command) and
+does not delete anything on `remove`; a peer needs no more than ssh and its own `claude-account`, there is no sync service.

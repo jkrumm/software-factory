@@ -12,7 +12,6 @@ import {
   type Cache,
   type RefreshResult,
   type Registry,
-  type Sample,
   MODE_KINDS,
   type ModeKind,
   SPILL,
@@ -32,34 +31,38 @@ import {
   pick,
   pickLine,
   planTier,
+  accountUnits,
   rank,
   ruleTag,
-  sampleFromClaudeJson,
   withoutSessionWindows,
 } from './policy.ts'
-import { historyDir, picksPath, shadowPath } from './paths.ts'
+import { historyDir, picksPath, registryWritePath, shadowPath } from './paths.ts'
 import { MEASURED } from './load-model.ts'
 import { compareText, disagreement, liveResults, shadowLine, simulateText } from './lab.ts'
 import { compare, mixedPool, simulate } from './sim.ts'
 import { type ModeView, type OverrideRecord, applyModes, baselineReset, modeField, resolveModes } from './modes.ts'
-import { accountFromConfigDir, claudeJsonPath, loadRegistry, shellLine } from './registry.ts'
+import { accountFromConfigDir, loadRegistry, parseRegistry, readClaudeJsonSample, shellLine } from './registry.ts'
 import { claimRefresh, loadCache, loadOverrides, markExhausted, recordSample, writeOverride } from './store.ts'
 import { readLoginExpiry } from './keychain.ts'
 import { httpGet } from './oauth.ts'
 import { runRefresh, refreshBeforePick } from './refresh.ts'
 import { askRelogins } from './relogin.ts'
+import { fillHint, renderCommand, resolveMachine } from './host.ts'
+import {
+  ADD_PLANS,
+  ensureConfigDir,
+  leftBehind,
+  loginCommand,
+  readRegistryJson,
+  verifyAccount,
+  withAccount,
+  withEnabled,
+  writeRegistryJson,
+} from './onboard.ts'
 import { latestSessionId, sessionAccount } from './sessions.ts'
 import { spawnDetached, spawner } from './spawn.ts'
 import { type HealthRow, gradeMachine, worst } from './health.ts'
-import {
-  SSH_OPTS,
-  fetchPeerUsage,
-  machineSnapshot,
-  notifyIfChanged,
-  peerMachine,
-  reloginAsk,
-  spawnLogged,
-} from './owner.ts'
+import { SSH_OPTS, fetchPeerUsage, machineSnapshot, notifyIfChanged, reloginAsk, spawnLogged } from './owner.ts'
 import { versionLine } from './version.ts'
 import {
   type HistoryTarget,
@@ -96,19 +99,11 @@ function account(reg: Registry, argv: string[]): string {
   return id
 }
 
-function readSample(reg: Registry, id: string): Sample | null {
-  try {
-    return sampleFromClaudeJson(JSON.parse(readFileSync(claudeJsonPath(reg.accounts[id]), 'utf8')))
-  } catch {
-    return null // missing or unreadable .claude.json: the account simply has no sample
-  }
-}
-
 /** Merge each enabled account's own .claude.json cachedUsageUtilization into the cache. */
 function readClaudeJson(reg: Registry, cache: Cache): Cache {
   for (const [id, a] of Object.entries(reg.accounts)) {
     if (!a.enabled) continue
-    const s = readSample(reg, id)
+    const s = readClaudeJsonSample(a) // a missing or unreadable .claude.json: the account simply has no sample
     if (s) cache = { ...cache, samples: { ...cache.samples, [id]: mergeSample(cache.samples[id] ?? null, s) } }
   }
   return withoutSessionWindows(reg, cache) // a plan without a 5 h window never shows or judges a leftover session half
@@ -180,6 +175,7 @@ async function refresh(
 ): Promise<Record<string, RefreshResult>> {
   const enabled = (id: string) => Object.hasOwn(reg.accounts, id) && reg.accounts[id].enabled
   reg = live(reg).reg // a reserve (registry or override) is due for its scoped limit
+  const peer = resolveMachine(reg.host).peer
   const todo = o.claimed
     ? o.claimed.filter(enabled)
     : claimRefresh(
@@ -201,8 +197,8 @@ async function refresh(
     ids: todo,
     now: Date.now,
     log: (m) => console.error(m),
-    peerUsage: o.peer === false ? undefined : fetchPeerUsage, // the synchronous pick-time refresh never waits on ssh
-    machine: peerMachine().local,
+    peerUsage: o.peer === false || !peer ? undefined : () => fetchPeerUsage(peer), // the synchronous pick-time refresh never waits on ssh
+    machine: resolveMachine(reg.host).name,
     history: historyTarget(() => reg),
   })
 }
@@ -225,13 +221,14 @@ const loginExpiry = (reg: Registry, now: number, ids?: string[]) =>
  * native approval dialog (claude-relogin --ask, detached; the dialog is the human's click, nothing runs by itself).
  */
 function askForRelogins(reg: Registry, results: Record<string, RefreshResult>): void {
+  if (!reg.host?.reloginAsk) return // no host block, no ask: the login is the user's to renew (health names the command)
   const now = Date.now()
   try {
     const o = askRelogins({
       results,
       logins: loginExpiry(reg, now),
       now,
-      ask: reloginAsk,
+      ask: reloginAsk(reg.host.reloginAsk),
       log: (m) => console.error(`claude-account: ${m}`),
     })
     for (const id of o.asked)
@@ -352,7 +349,7 @@ function modeVerb(reg0: Registry, rest: string[]): number {
   }
   if (!Object.hasOwn(reg0.accounts, id))
     throw new Error(`mode: unknown account '${id}' (${Object.keys(reg0.accounts).join(', ')})`)
-  const machine = peerMachine().local
+  const machine = resolveMachine(reg0.host).name
   if (rest.includes('--clear')) {
     writeOverride(id, { cleared: true, set_at: now, set_on: machine }, { action: 'clear', machine, nowMs: now })
     console.log(`${id}: override cleared, the registry's mode applies`)
@@ -397,7 +394,7 @@ function statusVerb(reg0: Registry, rest: string[]): number {
   const now = Date.now()
   const { reg, cache, views } = live(reg0, now)
   const history = Object.fromEntries(Object.keys(reg.accounts).map((id) => [id, loadHistory(id, now)]))
-  const status = buildStatus({ reg, cache, views, history, nowMs: now, machine: peerMachine().local })
+  const status = buildStatus({ reg, cache, views, history, nowMs: now, machine: resolveMachine(reg0.host).name })
   if (rest.includes('--json')) {
     console.log(JSON.stringify(status, null, 2))
     return 0
@@ -474,15 +471,25 @@ function historyVerb(reg: Registry, rest: string[]): number {
 
 // ── health (wake check) ─────────────────────────────────────────────────────────────────────────────────────────
 
-async function health(argv: string[]): Promise<number> {
+async function health(reg: Registry, argv: string[]): Promise<number> {
   const now = Date.now()
-  const { onMini, local, peer } = peerMachine()
+  const m = resolveMachine(reg.host)
   const mine = machineSnapshot(null, now)
-  const theirs = machineSnapshot(peer.ssh, now, peer.name)
-  const rows: HealthRow[] = [...gradeMachine(local, mine), ...gradeMachine(peer.name, theirs)]
+  const theirs = m.peer ? machineSnapshot(m.peer, now) : null
+  // the repair hint: the host block's template, else this machine's own login command (a peer's row has none to offer)
+  const fixFor = (machine: string, local: boolean) => (id: string) =>
+    reg.host?.reloginFix
+      ? fillHint(reg.host.reloginFix, { id, machine })
+      : local && Object.hasOwn(reg.accounts, id)
+        ? loginCommand(reg.accounts[id])
+        : null
+  const rows: HealthRow[] = [
+    ...gradeMachine(m.name, mine, fixFor(m.name, true)),
+    ...(m.peer && theirs ? gradeMachine(m.peer.name, theirs, fixFor(m.peer.name, false)) : []),
+  ]
   // The plain-ssh read cannot see the peer's Keychain: say so, whatever the format (stderr keeps --json parseable).
-  if (theirs.via === 'ssh') {
-    const note = `NOTE ${peer.name}: its herdr-core was not reachable, so this read went over plain ssh; Keychain logins may show as unreadable here`
+  if (m.peer && theirs?.via === 'ssh' && m.peer.herdrCore) {
+    const note = `NOTE ${m.peer.name}: its herdr-core was not reachable, so this read went over plain ssh; Keychain logins may show as unreadable here`
     if (argv.includes('--json')) console.error(note)
     else console.log(note)
   }
@@ -492,21 +499,107 @@ async function health(argv: string[]): Promise<number> {
       console.log(
         `${r.state.toUpperCase().padEnd(4)} ${r.machine}/${r.id} ${r.check}: ${r.detail}${r.fix ? `  -> ${r.fix}` : ''}`,
       )
-  if (argv.includes('--wake')) {
-    if (!onMini) {
-      // The dialogs the mini could not deliver while this Mac slept: push them again now that it is awake.
+  if (argv.includes('--wake') && m.wake) {
+    // The dialogs the peer could not deliver while this machine slept: push them again now that it is awake.
+    if (m.wake.push && m.peer && theirs)
       for (const p of theirs.pendingIds)
-        if (p.ageMs < 24 * 3600_000) {
-          spawnLogged('ssh', [
-            ...SSH_OPTS,
-            ...peer.ssh,
-            `bash "$HOME/SourceRoot/dotfiles/scripts/ask-human.sh" push ${p.id}`,
-          ])
-        }
-      notifyIfChanged(rows, now)
-    }
+        if (p.ageMs < 24 * 3600_000)
+          spawnLogged('ssh', [...SSH_OPTS, ...m.peer.ssh, renderCommand(m.wake.push, { id: p.id })])
+    if (m.wake.notify) notifyIfChanged(rows, now, m.wake.notify)
   }
   return worst(rows) === 'fail' ? 1 : 0
+}
+
+// ── onboarding: add, verify, remove ──────────────────────────────────────────────────────────────────────────────
+
+function addVerb(rest: string[]): number {
+  const id = rest[0] && !rest[0].startsWith('--') ? rest[0] : null
+  const plan = flag(rest, '--plan')
+  if (!id || !plan)
+    throw new Error(`usage: claude-account add <id> --plan <${ADD_PLANS.join('|')}> [--dir <path>] [--lanes <a,b>]`)
+  const path = registryWritePath()
+  const { raw, account } = withAccount(readRegistryJson(path), {
+    id,
+    plan,
+    dir: flag(rest, '--dir'),
+    lanes: flag(rest, '--lanes')?.split(',') ?? null,
+  })
+  const reg = parseRegistry(raw, path) // never write a registry the readers would refuse
+  const dir = ensureConfigDir(account)
+  writeRegistryJson(path, raw)
+  const u = accountUnits(account)
+  console.log(
+    `added ${id}: plan ${account.plan} (units session ${u.session}, weekly ${u.weekly}), dir ${account.dir ?? '~/.claude (the default account)'}, lanes ${account.homeLanes.join(',')}, disabled`,
+  )
+  console.log(`registry: ${path}`)
+  console.log('sign in as that account on this machine, then check it:')
+  console.log(`  ${loginCommand(account)}`)
+  console.log(`  claude-account verify ${id} --enable`)
+  const after = reg.host?.afterAdd
+  if (!after) return 0
+  const r = Bun.spawnSync(['sh', '-c', renderCommand(after, { id, dir, plan: account.plan })], {
+    stdio: ['inherit', 'inherit', 'inherit'],
+    env: { ...process.env, CLAUDE_ACCOUNT_ID: id, CLAUDE_ACCOUNT_DIR: dir, CLAUDE_ACCOUNT_PLAN: account.plan },
+  })
+  if (r.exitCode === 0) return 0
+  console.error(
+    `claude-account: the afterAdd command of the host block exited ${r.exitCode}; ${id} is registered (disabled), run the command again after fixing it`,
+  )
+  return 1
+}
+
+async function verifyVerb(reg: Registry, rest: string[]): Promise<number> {
+  const id = rest[0] && !rest[0].startsWith('--') ? rest[0] : null
+  if (!id || !Object.hasOwn(reg.accounts, id))
+    throw new Error(`usage: claude-account verify <id> [--enable] (${Object.keys(reg.accounts).join(', ')})`)
+  const checks = await verifyAccount({
+    reg,
+    id,
+    spawn: spawner,
+    httpGet,
+    claudeBin: claudeBin(),
+    securityBin: process.env.CLAUDE_ACCOUNTS_SECURITY_BIN,
+    baseEnv: process.env,
+    now: Date.now,
+    log: (m) => console.error(m),
+  })
+  for (const c of checks) console.log(`${id}  ${c.name.padEnd(6)} ${c.ok ? 'ok  ' : 'FAIL'} ${c.detail}`)
+  const ok = checks.length === 3 && checks.every((c) => c.ok)
+  if (!ok) {
+    console.log(`${id}: not verified${rest.includes('--enable') ? ', left as it is' : ''}`)
+    return 1
+  }
+  if (!rest.includes('--enable')) {
+    console.log(
+      reg.accounts[id].enabled
+        ? `${id}: verified (enabled)`
+        : `${id}: verified; claude-account verify ${id} --enable enables it`,
+    )
+    return 0
+  }
+  if (reg.accounts[id].enabled) console.log(`${id}: verified, already enabled`)
+  else {
+    const path = registryWritePath()
+    writeRegistryJson(path, withEnabled(readRegistryJson(path), id, true))
+    console.log(`${id}: verified and enabled in ${path}`)
+  }
+  return 0
+}
+
+function removeVerb(reg: Registry, rest: string[]): number {
+  const id = rest[0] && !rest[0].startsWith('--') ? rest[0] : null
+  if (!id || !Object.hasOwn(reg.accounts, id))
+    throw new Error(`usage: claude-account remove <id> (${Object.keys(reg.accounts).join(', ')})`)
+  const path = registryWritePath()
+  const was = reg.accounts[id].enabled
+  if (was) writeRegistryJson(path, withEnabled(readRegistryJson(path), id, false))
+  console.log(`${id}: ${was ? 'disabled' : 'already disabled'}: it takes no work and is out of every rank`)
+  const others = Object.entries(reg.accounts).filter(([k, a]) => k !== id && a.enabled).length
+  if (was && others === 0)
+    console.log('note: no enabled account is left; pick will answer unset CLAUDE_CONFIG_DIR or spill')
+  console.log('left on disk:')
+  for (const l of leftBehind(reg, id, path)) console.log(`  ${l}`)
+  return 0
 }
 
 type Verb = { name: string; usage: string; summary: string; detail: string[]; caller?: string }
@@ -658,6 +751,42 @@ export const VERBS: Verb[] = [
     ],
   },
   {
+    name: 'add',
+    usage: 'add <id> --plan <max|ultra> [--dir <path>] [--lanes <a,b>]',
+    summary: 'register a new account, disabled, and print the login command for this machine',
+    detail: [
+      '<id>           letters, digits, _ and -; it names the cache files',
+      '--plan         max (5 h session window and weekly) or ultra (weekly only); units come from the plan table',
+      '--dir <path>   the config directory; default ~/.claude-<id>, and the first account of a registry takes the default ~/.claude (dir null)',
+      '--lanes a,b    the lanes whose spawns start here; default interactive,headless for the default account, bulk for the others',
+      "Creates the registry when there is none (~/.config/claude-accounts/registry.json) and the config directory, runs the host block's afterAdd command",
+      'when there is one, and prints the login command and the verify command. The account takes no work until `verify <id> --enable`.',
+      'exit 2 on a bad id, plan, dir or lane list, or an id already registered; 1 when the afterAdd command failed',
+    ],
+  },
+  {
+    name: 'verify',
+    usage: 'verify <id> [--enable]',
+    summary: 'check an account on this machine: the login, the plan, a readable sample',
+    detail: [
+      "login    `claude auth status` for the account's config directory says logged in",
+      'plan     the plan the login item reports (max or ultra) is the registered one',
+      "sample   a weekly quota sample can be read (the usage endpoint with the account's own token, else its own cached usage); it lands in the cache",
+      '--enable  enable the account when all three pass (a disabled account is checked all the same)',
+      'exit 0 verified; 1 a check failed (nothing is changed); 2 unknown account',
+    ],
+  },
+  {
+    name: 'remove',
+    usage: 'remove <id>',
+    summary: 'disable an account and name what it leaves on disk',
+    detail: [
+      'Sets enabled: false: no pick, rank or refresh touches it. The registry entry, the config directory, the login, the cache files and the history stay;',
+      'the output lists each with where it is and how to delete it. Running it again changes nothing.',
+      'exit 2 on an unknown account',
+    ],
+  },
+  {
     name: 'env',
     usage: 'env <id>',
     summary: 'shell line forcing an enabled account (what `c --account <id>` evals)',
@@ -754,6 +883,7 @@ export async function main(argv: string[]): Promise<number> {
     process.stdout.write(forVerb)
     return 0
   }
+  if (cmd === 'add') return addVerb(rest) // the one verb that starts from no registry
   let reg: Registry
   try {
     reg = loadRegistry()
@@ -863,7 +993,7 @@ export async function main(argv: string[]): Promise<number> {
       return 0
     }
     case 'health':
-      return health(rest)
+      return health(reg, rest)
     case 'record': {
       const id = account(reg, rest)
       const part = {
@@ -897,6 +1027,10 @@ export async function main(argv: string[]): Promise<number> {
     }
     case 'mode':
       return modeVerb(reg, rest)
+    case 'verify':
+      return verifyVerb(reg, rest)
+    case 'remove':
+      return removeVerb(reg, rest)
     case 'env': {
       const id = rest[0]
       const a = id && Object.hasOwn(reg.accounts, id) ? reg.accounts[id] : undefined
