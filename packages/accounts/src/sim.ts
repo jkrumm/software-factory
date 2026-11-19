@@ -12,6 +12,8 @@ import {
   SPILL,
   emptyCache,
   pickWith,
+  required,
+  requiredAt,
 } from './policy.ts'
 import { type LaneClass, type LoadModel, curveAt, fixedSessions, sessionHoursAt, sessionRatio } from './load-model.ts'
 
@@ -121,7 +123,7 @@ export function mixedPool(n: number): SimAccount[] {
     plan,
     weeklyUnits,
     sessionUnits,
-    resetOffsetH: OFFSETS[i],
+    resetOffsetH: requiredAt(OFFSETS, i),
   }))
 }
 
@@ -131,7 +133,7 @@ const stepsOf = (hours: number) => Math.max(1, Math.round((hours * HOUR_MS) / ST
 
 /** Mean steps a session runs, over the model's length distribution. */
 function meanSteps(m: LoadModel): number {
-  if (fixedSessions(m)) return stepsOf(m.session_hours[0][1])
+  if (fixedSessions(m)) return stepsOf(requiredAt(m.session_hours, 0)[1])
   const n = 1000
   let s = 0
   for (let i = 0; i < n; i++) s += stepsOf(sessionHoursAt(m, (i + 0.5) / n))
@@ -183,7 +185,7 @@ export function simulate(sc: Scenario): SimResult {
   const cacheAt = (now: number): Cache => {
     const samples: Record<string, Sample> = {}
     for (const a of sc.accts) {
-      const x = st[a.id]
+      const x = required(st, a.id)
       const open = a.sessionUnits !== null && x.sEnd > now
       samples[a.id] = {
         s: a.sessionUnits === null ? null : open ? Math.round(x.s) : 0,
@@ -199,7 +201,7 @@ export function simulate(sc: Scenario): SimResult {
   }
   const walled = (id: string, now: number) => {
     const a = byId.get(id)!
-    const x = st[id]
+    const x = required(st, id)
     return x.w >= 100 || (a.sessionUnits !== null && x.sEnd > now && x.s >= 100)
   }
   const choose = (lane: string, now: number): string | null => {
@@ -212,9 +214,9 @@ export function simulate(sc: Scenario): SimResult {
   const fixed = fixedSessions(m)
   for (let now = t0; now < t0 + weeks * WEEK_MS; now += STEP_MS) {
     for (const a of sc.accts) {
-      const x = st[a.id]
+      const x = required(st, a.id)
       if (now >= x.wReset) {
-        if (sc.start || now - t0 >= WEEK_MS) atReset[a.id].push(Math.round(x.w))
+        if (sc.start || now - t0 >= WEEK_MS) required(atReset, a.id).push(Math.round(x.w))
         x.w = 0
         x.wReset += WEEK_MS
       }
@@ -225,8 +227,8 @@ export function simulate(sc: Scenario): SimResult {
     while (acc >= 1) {
       acc -= 1
       let r = rng() * mixTotal
-      const lane = mix.find(([, w]) => (r -= w) < 0)?.[0] ?? mix[0][0]
-      const steps = stepsOf(fixed ? m.session_hours[0][1] : sessionHoursAt(m, rng()))
+      const lane = mix.find(([, w]) => (r -= w) < 0)?.[0] ?? requiredAt(mix, 0)[0]
+      const steps = stepsOf(fixed ? requiredAt(m.session_hours, 0)[1] : sessionHoursAt(m, rng()))
       sessions.push({ account: '', left: steps, lane })
       spawned++
     }
@@ -244,7 +246,7 @@ export function simulate(sc: Scenario): SimResult {
         picks[id] = (picks[id] ?? 0) + 1
       }
       const a = byId.get(se.account)!
-      const x = st[a.id]
+      const x = required(st, a.id)
       x.w += (100 * perStep) / a.weeklyUnits
       if (a.sessionUnits !== null) {
         if (x.sEnd <= now) {
@@ -260,7 +262,7 @@ export function simulate(sc: Scenario): SimResult {
   let usedUnits = 0
   let quotaUnits = 0
   for (const a of sc.accts)
-    for (const w of atReset[a.id]) {
+    for (const w of required(atReset, a.id)) {
       usedUnits += (Math.min(100, w) / 100) * a.weeklyUnits
       quotaUnits += a.weeklyUnits
     }
@@ -366,7 +368,7 @@ export function verdicts(cells: Cell[]): Verdict[] {
     .filter((p) => p !== DEFAULT_POLICY)
     .map((policy) => {
       const cs = of(policy).filter((c) => baseOf(c))
-      const diffs = cs.flatMap((c) => c.usedBySeed.map((u, i) => u - baseOf(c)!.usedBySeed[i]))
+      const diffs = cs.flatMap((c) => c.usedBySeed.map((u, i) => u - requiredAt(baseOf(c)!.usedBySeed, i)))
       const gain = diffs.reduce((s, d) => s + d, 0) / Math.max(1, diffs.length)
       const se =
         diffs.length > 1

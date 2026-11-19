@@ -2,7 +2,17 @@
 // session transcripts' first and last write. Pure: scripts/measure-load.ts reads the files and writes the result.
 import { type SampleLine } from './history.ts'
 import { type LaneClass, type LoadModel } from './load-model.ts'
-import { type Registry, RESET_DROP, RESET_JUMP_S, accountUnits, hasSessionLimit, homeIds, planTier } from './policy.ts'
+import {
+  type Registry,
+  RESET_DROP,
+  RESET_JUMP_S,
+  accountUnits,
+  hasSessionLimit,
+  homeIds,
+  planTier,
+  required,
+  requiredAt,
+} from './policy.ts'
 
 const HOUR_MS = 3600_000
 const WEEK_MS = 168 * HOUR_MS
@@ -42,7 +52,7 @@ export function consumption(i: Pick<MeasureInput, 'reg' | 'lines' | 'fromMs' | '
   const byHourOfWeek = new Array<number>(168).fill(0)
   const perAccount: Record<string, number> = {}
   for (const id of Object.keys(i.reg.accounts)) {
-    const a = i.reg.accounts[id]
+    const a = required(i.reg.accounts, id)
     const lines = i.lines.filter((l) => l.id === id && l.w !== null).sort((p, q) => p.ts - q.ts)
     let week: number | null = null
     let top = 0
@@ -65,7 +75,8 @@ export function consumption(i: Pick<MeasureInput, 'reg' | 'lines' | 'fromMs' | '
         const n = Math.max(1, Math.round((l.ts - t0) / (15 * 60_000)))
         for (let k = 0; k < n; k++) {
           const t = new Date(t0 + ((k + 0.5) * (l.ts - t0)) / n)
-          byHourOfWeek[((t.getUTCDay() + 6) % 7) * 24 + t.getUTCHours()] += u / n
+          const hour = ((t.getUTCDay() + 6) % 7) * 24 + t.getUTCHours()
+          byHourOfWeek[hour] = requiredAt(byHourOfWeek, hour) + u / n
         }
       }
       if (w > top) top = w
@@ -93,7 +104,7 @@ export function sessionRatios(
       .filter((l) => l.id === id && l.ts >= i.fromMs && l.ts < i.toMs && l.s !== null && l.w !== null)
       .sort((p, q) => p.ts - q.ts)
     for (let k = 1; k < lines.length; k++) {
-      const [p, q] = [lines[k - 1], lines[k]]
+      const [p, q] = [requiredAt(lines, k - 1), requiredAt(lines, k)]
       const sameWindow = p.s_reset !== null && q.s_reset !== null && Math.abs(p.s_reset - q.s_reset) <= 120
       const sameWeek = p.w_reset !== null && q.w_reset !== null && Math.abs(p.w_reset - q.w_reset) <= 120
       if (!sameWindow || !sameWeek || q.s! < p.s! || q.w! < p.w!) continue
@@ -118,12 +129,12 @@ export function measureLoad(i: MeasureInput): LoadModel {
     .map(([start, end]) => (end - start) / HOUR_MS)
     .sort((a, b) => a - b)
   if (!hours.length) throw new Error('no session in the range: the session length cannot be measured')
-  const at = (p: number) => hours[Math.floor(p * (hours.length - 1))]
+  const at = (p: number) => requiredAt(hours, Math.floor(p * (hours.length - 1)))
   const cap = at(SESSION_WINSOR)
   const sessionHours = hours.reduce((s, h) => s + Math.min(h, cap), 0)
 
   const hod = Array.from({ length: 24 }, (_, h) =>
-    [0, 1, 2, 3, 4, 5, 6].reduce((s, d) => s + use.byHourOfWeek[d * 24 + h], 0),
+    [0, 1, 2, 3, 4, 5, 6].reduce((s, d) => s + requiredAt(use.byHourOfWeek, d * 24 + h), 0),
   )
   const dow = Array.from({ length: 7 }, (_, d) =>
     use.byHourOfWeek.slice(d * 24, d * 24 + 24).reduce((s, x) => s + x, 0),

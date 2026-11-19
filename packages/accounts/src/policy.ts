@@ -3,6 +3,7 @@
 // the ports in ports.ts and the files in registry.ts and store.ts, so a test (or a simulation) hands in the snapshot.
 import { laxityHours } from './laxity.ts'
 import { type LoadModel, MEASURED, sessionRatio } from './load-model.ts'
+import { required, requiredAt } from './required.ts'
 
 /** Account whose config dir is the default ~/.claude (CLAUDE_CONFIG_DIR unset). */
 export const DEFAULT_ACCOUNT_ID = 'iu'
@@ -171,12 +172,7 @@ export const emptyCache = (): Cache => ({ samples: {}, exhausted: {}, auth_faile
 
 export const isNum = (v: unknown): v is number => typeof v === 'number' && Number.isFinite(v)
 
-/** The entry for a key the caller knows is present; a missing one throws. */
-export function required<T>(record: Record<string, T>, key: string): T {
-  const value = record[key]
-  if (value === undefined) throw new Error(`no entry for '${key}'`)
-  return value
-}
+export { required, requiredAt } from './required.ts'
 
 export const numOrNull = (v: unknown) => v === null || isNum(v)
 
@@ -758,7 +754,7 @@ export function dueAccounts(reg: Registry, cache: Cache, ids: string[], nowMs: n
   for (const id of ids) {
     const x = cache.samples[id]
     if (!x || !hasW(x) || x.w_reset === null) continue
-    const a = reg.accounts[id]
+    const a = required(reg.accounts, id)
     const ratio = hasSessionLimit(a) ? sessionRatio(load, planTier(a.plan)) : null
     const h = laxityHours({
       w: x.w!,
@@ -879,7 +875,7 @@ function pickRule(reg: Registry, cache: Cache, lane: string, nowMs: number, ctx:
 
   if (bulk && def.due) {
     const due = dueAccounts(reg, cache, ok, nowMs, ctx.load)
-    if (due.length) return { picked: due[0], reason: 'due' }
+    if (due.length) return { picked: requiredAt(due, 0), reason: 'due' }
   }
   if (bulk && def.expiringS !== null) {
     const horizonMs = def.expiringS * 1000
