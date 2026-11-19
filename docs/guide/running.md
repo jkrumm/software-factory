@@ -167,7 +167,7 @@ Each of these is one wiring of a part you can replace.
 
 - **macOS LaunchAgents** run the server and the door, from release directories, with `ProcessType` Interactive so the server is not throttled below the work it controls.
 - **A secrets shim over a password manager** resolves the refs, because a biometric prompt cannot be answered on a headless machine.
-- **The Claude Code accounts** are picked per lead by a launcher script, the program `FACTORY_CLAUDE_ACCOUNT_BIN` names.
+- **The Claude Code accounts** are read in the server's own process from `packages/accounts` (its registry and cache files): which account takes a lead, in what order and why not is that package's rule, and `claude-account` is the same code as a command.
 - **A push-notification topic** pages the owner, and an uptime monitor reads the heartbeat from `/health`.
 - **A shared Postgres** hosts the schema `factory` beside other databases, so the factory's role owns that schema and no more.
 - **The capacity numbers** (load per core, test slots, the shutdown deadline) are settings tuned to this one machine, not constants.

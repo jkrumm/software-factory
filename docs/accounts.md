@@ -556,6 +556,22 @@ quota used, though far fewer sessions moved (the 72 h step piles bulk work on on
 keeps v1.9's use within the noise and moves a third fewer sessions; it loses only on the "more used" count. The shadow log records
 how often each would have picked otherwise, so the next round has live disagreement beside the simulation.
 
+## The factory server
+
+The factory server reads the accounts through this package, in its own process (`apps/server/src/adapters/planning/accounts-source.ts`):
+no `claude-account` call, no copy of the rule, no registry setting of its own (the paths above decide; `CLAUDE_ACCOUNTS_REGISTRY`
+moves them). The package stays independent of the server: `claude-account` works with the server down and on a machine without a checkout.
+
+| Library call (`src/read.ts`) | What the server does with it |
+|-|-|
+| `readStatus({ nowMs, paths, history })` | `status --json` as a value. Each poll stores, per account, the windows beside the lane verdict for `bulk`: open, place, reason, why not, when it opens; `GET /v1/accounts` returns it whole |
+| `wallResetAt(row, nowMs)` (`status.ts`) | the reset of the window nearest its ceiling when within 10 points of it: what a lead that ran into a wall waits for |
+| `setModeOverride` / `clearModeOverride` | `POST` and `DELETE /v1/accounts/:id/mode`, the owner's (`factory accounts mode <id> <mode> [--until <iso|reset>] [--for <model>] [--why <text>]`); written to the override file, so `claude-account mode` sees it |
+| `readQuotaAtReset({ weeks })` / `quotaUsedAtReset` (`history.ts`) | the KPI `quota_at_reset`: per week, the capacity-weighted mean of the weekly percent each account stood at when its weekly window reset, from the reset ledger |
+
+What stays the server's: the seats per account, one new lead per quota sample on an account whose 5-hour window is above 70 %,
+the age (10 minutes) after which a reading admits nothing, the 401 mark of an account, and moving a walled lead.
+
 ## Installing
 
 - **On the mini** the deploy (`make deploy`) links `~/.local/bin/claude-account-next` to the release's `packages/accounts/bin/claude-account.ts`

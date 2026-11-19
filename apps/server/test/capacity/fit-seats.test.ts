@@ -16,6 +16,12 @@ const reading = {
   fiveHourResetsAt: new Date(now.getTime() + 3_600_000),
   weeklyResetsAt: new Date(now.getTime() + 3 * 86_400_000),
   exhaustedUntil: null,
+  open: true,
+  position: 1,
+  reason: 'home',
+  closedWhy: null,
+  opensAt: null,
+  wallResetAt: null,
 }
 const inputs = (extra: Partial<AdmissionInputs> = {}): AdmissionInputs => ({
   now,

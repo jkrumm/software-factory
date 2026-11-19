@@ -483,6 +483,40 @@ describe('the fixture', () => {
     expect(narrow.kpis.find((k) => k.key === 'recommendation_taken')).toMatchObject({ n: 0, value: null })
   })
 
+  test('kpis: quota used at reset is the accounts’ ledger over each window, a share, and has no figure without three resets or a reader', async () => {
+    const at = (reader?: Parameters<typeof readKpis>[1]['quotaAtReset']) =>
+      readKpis(sql, { now: NOW, days: 7, ...(reader ? { quotaAtReset: reader } : {}) }).then((model) =>
+        model.kpis.find((k) => k.key === 'quota_at_reset'),
+      )
+    expect(await at(() => ({ percent: 72, resets: 3 }))).toMatchObject({
+      value: 0.72,
+      unit: 'share',
+      n: 3,
+      count: 3,
+      measured: true,
+      direction: 'higher',
+    })
+    // the span the reader is asked for is the KPI's own window
+    const asked: { from: Date; to: Date }[] = []
+    await at((span) => {
+      asked.push(span)
+      return { percent: null, resets: 0 }
+    })
+    expect(asked[asked.length - 1]?.to).toEqual(NOW)
+    expect(await at(() => ({ percent: 90, resets: 2 }))).toMatchObject({ measured: false, value: null })
+    expect(await at(() => ({ percent: null, resets: 0 }))).toMatchObject({ measured: false, value: null })
+    expect(await at()).toMatchObject({
+      measured: false,
+      value: null,
+      reason: expect.stringContaining('not read in this process'),
+    })
+    expect(
+      await at(() => {
+        throw new Error('no ledger')
+      }),
+    ).toMatchObject({ measured: false, reason: expect.stringContaining('no ledger') })
+  })
+
   test('kpis: Errands that reached the owner per 100 Issues, and what they needed', async () => {
     // the fixture's one Errand reached him 2 hours ago with no need stored; three more with one, one before the window
     await sql`INSERT INTO factory.errands (id, key, issue_id, attempt, summary, raised_at, reached_owner_at, need) VALUES

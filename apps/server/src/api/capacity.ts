@@ -1,4 +1,7 @@
 import {
+  AccountModeAnswer,
+  AccountModeBody,
+  AccountsView,
   AccountView,
   AdmitAnswer,
   CapacityView,
@@ -21,6 +24,7 @@ import {
 import { Elysia } from 'elysia'
 import * as z from 'zod'
 import type { CapacityLimits, PassResult, QueueEntry, QueueReasonKind } from '../app/capacity-admit.ts'
+import type { AccountMode } from '@software-factory/contract'
 import type { AccountState, CapacityState } from '../app/capacity-view.ts'
 import type { QueueState, QueueStates } from '../domains/capacity/queue-state.ts'
 import type { Relearn } from '../domains/capacity/ports.ts'
@@ -42,6 +46,11 @@ export interface CapacityApi {
   limits: CapacityLimits & { slots: number; slotsMax: number }
   state(): Promise<Result<CapacityState, PortError>>
   refresh(): Promise<Result<AccountState[], PortError>>
+  /** `GET /v1/accounts`: the package's status of every account with the factory's seats and leads beside it */
+  accounts(): Promise<Result<AccountsView, PortError>>
+  /** sets a mode override through the package; a request it refuses is `refused` */
+  setAccountMode(account: string, body: AccountModeBody): Promise<Result<AccountMode, PortError>>
+  clearAccountMode(account: string): Promise<Result<AccountMode, PortError>>
   admit(): Promise<Result<PassResult, PortError>>
   queue(): Promise<Result<{ queue: QueueEntry[]; notes: string[] }, PortError>>
   /** `project` (a name or a path inside a source root) narrows the answer to that project; a path outside the roots is `refused` */
@@ -189,6 +198,63 @@ export const capacityRoutes = (api?: CapacityApi) => {
           operationId: 'capacity.get',
           summary:
             'the accounts and their windows, the host, who holds which claim, the queue states and the test slots',
+        },
+      },
+    )
+    .get(
+      '/v1/accounts',
+      async ({ status }) => {
+        if (!api) return status(503, unbound)
+        const view = await api.accounts()
+        return view.ok ? status(200, AccountsView.parse(view.value)) : status(503, unavailable(view.error))
+      },
+      {
+        response: { 200: AccountsView, ...errorResponses(503) },
+        detail: {
+          operationId: 'accounts.status',
+          summary:
+            'every account as the picker judges it (state, mode, limits, lanes, forecast, resets) with the seats taken and free and the leads running',
+        },
+      },
+    )
+    .post(
+      '/v1/accounts/:id/mode',
+      async ({ params, body, status }) => {
+        if (!api) return status(503, unbound)
+        const set = await api.setAccountMode(params.id, body)
+        if (set.ok) return status(200, AccountModeAnswer.parse({ account: params.id, mode: set.value }))
+        return set.error.kind === 'refused'
+          ? status(422, failure(set.error.detail, 'refused'))
+          : status(503, unavailable(set.error))
+      },
+      {
+        params: z.object({ id: z.string().min(1) }),
+        body: AccountModeBody,
+        response: { 200: AccountModeAnswer, ...errorResponses(400, 422, 503) },
+        detail: {
+          operationId: 'accounts.mode',
+          summary:
+            'set a mode override on an account: normal, drain, reserve (with for) or paused, until an ISO time or reset; claude-account sees it',
+          'x-cli': { args: ['mode'] },
+        },
+      },
+    )
+    .delete(
+      '/v1/accounts/:id/mode',
+      async ({ params, status }) => {
+        if (!api) return status(503, unbound)
+        const cleared = await api.clearAccountMode(params.id)
+        if (cleared.ok) return status(200, AccountModeAnswer.parse({ account: params.id, mode: cleared.value }))
+        return cleared.error.kind === 'refused'
+          ? status(422, failure(cleared.error.detail, 'refused'))
+          : status(503, unavailable(cleared.error))
+      },
+      {
+        params: z.object({ id: z.string().min(1) }),
+        response: { 200: AccountModeAnswer, ...errorResponses(400, 422, 503) },
+        detail: {
+          operationId: 'accounts.mode-clear',
+          summary: "clear an account's mode override; the registry's mode applies again",
         },
       },
     )

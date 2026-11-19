@@ -1,5 +1,7 @@
 // Generated from docs/language.md by scripts/language.ts: do not edit (`bun run --cwd apps/console language`).
 export const LANGUAGE = {
+  account:
+    "One Claude Code subscription the factory runs leads on. Whether it takes work, why not, when it opens again and the order of the open ones are packages/accounts' to decide (claude-account status, GET /v1/accounts); the factory adds only its seats and the leads running on it. A mode (normal, drain, reserve, paused) can be set on it for a time",
   'active time':
     'How long a lead worked on this Issue, summed over its attempts. Time spent waiting on a person, a timer or another Issue is not in it. What to do: when elapsed time is far above active time, read the Activity tab to see what it waited on',
   amend: "Adding to an open Issue's scope or facts instead of filing a new one. The lead hears it as a note",
@@ -131,10 +133,12 @@ export const LANGUAGE = {
   'queue reason':
     "Why a queued Issue stays queued, in one plain sentence that names the cause and its numbers. Its kind: chain, line, finalizing, spec, unknown_project, drain, doctor, boot, load, memory, disk (the repo's worktree, build output included, is learned to take more than the free disk less the headroom), tests (the test line is long: more steps wait for a slot than run, for longer than a step takes), lane, claim, window, cap",
   'queue state':
-    'run (admission decides), pace (one lead per project, spending toward the weekly pace), drain (no new lead), for the whole queue or one project. The more restrictive of the two applies',
+    'run (admission decides), pace (one lead per project), drain (no new lead), for the whole queue or one project. The more restrictive of the two applies',
   'queue wait':
     'The time from an Issue filed or reopened to admitted (a lead started); settling and the chain are part of it',
   queued: 'State: no lead has started it; shown as Ready or Held by its queue reason',
+  'quota used at reset':
+    'The capacity-weighted mean of the weekly percent each account stood at when its weekly window reset, per week, from the reset ledger. What the accounts left unused shows as the rest',
   ready:
     "No lead has begun it and nothing but capacity keeps it out: it starts when its turn and a seat come. Its limit names what binds it: a free seat, the host (load, memory, boot, doctor), the repo's claims, the lane or the cap, or the account's window",
   reaper: 'The loop that ends, by session key and worktree path, the processes a closed lead attempt left behind',

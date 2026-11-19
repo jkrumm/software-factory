@@ -7,9 +7,9 @@ import { postgresWorkStore } from '../../src/adapters/postgres/work-store.ts'
 import type { CapacityDeps } from '../../src/app/capacity-admit.ts'
 import { fileIssue, recordIssueEvent } from '../../src/app/issues.ts'
 import type { SyncDeps } from '../../src/app/planning-sync.ts'
-import type { AccountRank, AccountReading, RankedAccount } from '../../src/domains/capacity/accounts.ts'
+import type { AccountReading } from '../../src/domains/capacity/accounts.ts'
 import type { MemoryReading } from '../../src/domains/capacity/host.ts'
-import type { AccountRanker, AccountSource, HostReader } from '../../src/domains/capacity/ports.ts'
+import type { AccountDesk, AccountSource, HostReader } from '../../src/domains/capacity/ports.ts'
 import type { ProjectSource, RepoRef } from '../../src/domains/planning/ports.ts'
 import type { RepoRead } from '../../src/domains/planning/sync.ts'
 import type { AnyIssueEvent, EventKind, IssueEvent } from '../../src/domains/work/events.ts'
@@ -99,6 +99,12 @@ class FakeHost implements HostReader {
   }
 }
 
+const unusedDesk: AccountDesk = {
+  status: () => err(portError('gone', 'no desk in this world')),
+  setMode: () => err(portError('gone', 'no desk in this world')),
+  clearMode: () => err(portError('gone', 'no desk in this world')),
+}
+
 class FakeAccounts implements AccountSource {
   rows: Omit<AccountReading, 'readAt' | 'sampledAt'>[] = []
   fail = false
@@ -106,18 +112,19 @@ class FakeAccounts implements AccountSource {
   async read(at: Date) {
     this.reads++
     if (this.fail) return err(portError('gone', 'the picker is not installed'))
-    return ok(this.rows.map((row) => ({ ...row, readAt: at, sampledAt: new Date(at.getTime() - 30_000) })))
-  }
-}
-
-class FakeRanker implements AccountRanker {
-  rows: RankedAccount[] = []
-  fail = false
-  reads = 0
-  async read(at: Date) {
-    this.reads++
-    if (this.fail) return err(portError('gone', 'the rank is not printed'))
-    return ok<AccountRank>({ lane: 'bulk', order: this.rows, at: new Date(at.getTime() - 30_000), readAt: at })
+    // the package's order of the bulk lane: the rows' order, unless a row names its own place
+    let place = 0
+    return ok(
+      this.rows.map((row) => {
+        if (row.open) place++
+        return {
+          ...row,
+          position: row.open ? (row.position ?? place) : null,
+          readAt: at,
+          sampledAt: new Date(at.getTime() - 30_000),
+        }
+      }),
+    )
   }
 }
 
@@ -133,8 +140,29 @@ export const account = (
   fiveHourResetsAt: new Date('2026-11-07T15:00:00Z'),
   weeklyResetsAt: new Date('2026-11-10T00:00:00Z'),
   exhaustedUntil: null,
+  open: true,
+  position: null,
+  reason: 'home',
+  closedWhy: null,
+  opensAt: null,
+  wallResetAt: null,
   ...extra,
 })
+
+/** An account the package closes: its 5-hour window is full until 15:00 on the test day. */
+export const closedAccount = (
+  name: string,
+  extra: Partial<AccountReading> = {},
+): Omit<AccountReading, 'readAt' | 'sampledAt'> =>
+  account(name, {
+    fiveHourUsed: 100,
+    open: false,
+    position: null,
+    reason: null,
+    closedWhy: 'its 5 h window is at 100 % (limit 90)',
+    opensAt: new Date('2026-11-07T15:00:00Z'),
+    ...extra,
+  })
 
 export interface World {
   db: TestCluster
@@ -142,7 +170,6 @@ export interface World {
   source: FakeSource
   host: FakeHost
   accounts: FakeAccounts
-  ranker: FakeRanker
   deps: CapacityDeps & SyncDeps
   reset(): Promise<void>
   stop(): Promise<void>
@@ -168,7 +195,6 @@ export async function startWorld(): Promise<World> {
   const source = new FakeSource()
   const host = new FakeHost()
   const accounts = new FakeAccounts()
-  const ranker = new FakeRanker()
   const uow = postgresUnitOfWork(db.sql, (tx) => ({
     work: postgresWorkStore(tx),
     planning: postgresPlanningStore(tx),
@@ -181,7 +207,6 @@ export async function startWorld(): Promise<World> {
     source,
     host,
     accounts,
-    ranker,
     deps: {
       uow,
       clock,
@@ -190,7 +215,7 @@ export async function startWorld(): Promise<World> {
       roles: ROLES,
       host,
       accounts,
-      ranker,
+      desk: unusedDesk,
       limits: { leadsPerAccount: 2, loadCeiling: 60, memoryCeilings: { swapoutMbPer300s: 2048, swapUsedPct: 75 } },
     },
     async reset() {
@@ -204,9 +229,6 @@ export async function startWorld(): Promise<World> {
       accounts.rows = [account('me')]
       accounts.fail = false
       accounts.reads = 0
-      ranker.rows = []
-      ranker.fail = false
-      ranker.reads = 0
       clock.set(new Date('2026-11-07T12:00:00Z'))
       world.deps.ids = sequentialIds()
     },

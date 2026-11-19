@@ -140,6 +140,13 @@ describe('the policy table', () => {
     }
   })
 
+  test("the accounts' status is a read route; a mode override is the owner's and the orchestrator's, never a lead's or the read token's", () => {
+    expect(allowed('GET', '/v1/accounts')).toEqual(['owner', 'orchestrator', 'agent', 'read'])
+    for (const method of ['POST', 'DELETE'] as const) {
+      expect(allowed(method, '/v1/accounts/:id/mode')).toEqual(['owner', 'orchestrator'])
+    }
+  })
+
   test('an agent is not allowed on an owner verb', () => {
     for (const [method, route] of [
       ['POST', '/issues/:id/reopen'],

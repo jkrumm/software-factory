@@ -1,4 +1,4 @@
-/** `run`: admission decides. `pace`: one lead at a time, spending only toward the weekly pace. `drain`: no new lead. */
+/** `run`: admission decides. `pace`: one lead at a time in a project. `drain`: no new lead. */
 export const QUEUE_STATES = ['run', 'pace', 'drain'] as const
 export type QueueState = (typeof QUEUE_STATES)[number]
 

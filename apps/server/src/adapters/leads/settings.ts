@@ -1,5 +1,6 @@
 import { existsSync } from 'node:fs'
 import { fileURLToPath } from 'node:url'
+import { registryPath } from '@software-factory/accounts'
 import * as z from 'zod'
 import { RESUME_DELAYS_MS, STAGGER_MS } from '../../domains/leads/apierror.ts'
 import { MAX_REVIVE_TRIES, QUIESCE_AFTER_MS } from '../../domains/leads/quiesce.ts'
@@ -14,7 +15,6 @@ const Env = z.object({
   FACTORY_REPO_ROOTS: z.string().min(1).optional(),
   FACTORY_REPO_ALLOW: z.string().min(1).optional(),
   FACTORY_ROLES_FILE: z.string().min(1).optional(),
-  FACTORY_ACCOUNTS_FILE: z.string().min(1).optional(),
   FACTORY_PRETRUST_BIN: z.string().min(1).optional(),
   FACTORY_SPOOL_DIR: z.string().min(1).optional(),
   FACTORY_SOCKET: z.string().min(1).optional(),
@@ -54,6 +54,7 @@ export interface LeadSettings {
   /** single repos admitted outside the roots: absolute paths of the repos themselves */
   repoAllow: string[]
   rolesFile: string
+  /** the account registry: where the package resolves it (`CLAUDE_ACCOUNTS_REGISTRY`, the per-user file, the legacy shared one) */
   accountsFile: string
   /** unset when dotfiles' script is not there: the folder-trust dialog is then the owner's */
   pretrustBin: string | undefined
@@ -108,7 +109,7 @@ export function loadLeadSettings(env: Record<string, string | undefined>): LeadS
     repoRoots: roots,
     repoAllow: allow,
     rolesFile: e.FACTORY_ROLES_FILE ?? DEFAULT_ROLES_FILE,
-    accountsFile: e.FACTORY_ACCOUNTS_FILE ?? `${e.HOME}/SourceRoot/dotfiles/config/claude-accounts.json`,
+    accountsFile: registryPath(),
     pretrustBin: e.FACTORY_PRETRUST_BIN ?? (existsSync(pretrust) ? pretrust : undefined),
     spoolDir: e.FACTORY_SPOOL_DIR ?? `${e.HOME}/.local/share/factory/spool`,
     socket: e.FACTORY_SOCKET ?? `${e.HOME}/.local/share/factory/hook.sock`,

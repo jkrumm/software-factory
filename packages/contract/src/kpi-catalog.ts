@@ -279,6 +279,18 @@ export const KPI_CATALOG: Record<KpiKey, KpiSpec> = {
     denominator: 'First watches answered in the window',
     decision: 'Whether first verification passes mean anything: a pass rate over instant watches is not evidence',
   },
+  quota_at_reset: {
+    label: 'Quota used at reset',
+    direction: 'higher',
+    target: WATCH,
+    targetSource:
+      'Watch only: demand sets the ceiling, not a goal (docs/accounts.md, the v1.9 simulation: at a demand below the pool slack is unavoidable, at or above it every window fills to 91-100 %); read it beside how many Issues waited',
+    numerator:
+      'The weekly percent each account stood at when its weekly window reset, weighted by the account’s weekly capacity (the reset ledger of packages/accounts)',
+    denominator: 'Account resets in the window, weighted by capacity',
+    decision:
+      'Whether the subscriptions are used: a low figure with Issues waiting means the rule leaves quota unspent (docs/accounts.md §The picker); a high one with a long queue means a subscription is missing',
+  },
   issues_closed_per_day: {
     label: 'Issues closed per day',
     direction: 'higher',

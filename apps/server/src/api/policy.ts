@@ -162,6 +162,9 @@ export const POLICY: readonly Rule[] = [
   // the settings in force (an acceptance line names `factory capacity get`): a lead reads them, the read token does not
   rule('GET', '/capacity', LEAD),
   rule('POST', '/capacity/refresh', OWNER),
+  // a mode override on an account (docs/accounts.md §Modes): owner and orchestrator, written through packages/accounts so claude-account sees it
+  rule('POST', '/v1/accounts/:id/mode', OWNER),
+  rule('DELETE', '/v1/accounts/:id/mode', OWNER),
   rule('POST', '/capacity/admit', OWNER),
   rule('POST', '/capacity/relearn', LEAD),
   rule('GET', '/queue/order', OWNER),

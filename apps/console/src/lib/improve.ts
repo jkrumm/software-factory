@@ -140,6 +140,7 @@ const SAMPLE_NOUN: Record<KpiKey, readonly [string, string]> = {
   nudges_acted: ['nudge', 'nudges'],
   errands_turned_away: ['Errand', 'Errands'],
   first_watch_dwell_p50: ['watch', 'watches'],
+  quota_at_reset: ['reset', 'resets'],
 }
 
 /** What a KPI's sample was: "13 Issues", "1 Decision". */
@@ -177,6 +178,7 @@ export const KPI_HINT = {
   nudges_acted: 'steward',
   errands_turned_away: 'turn away',
   first_watch_dwell_p50: 'watch',
+  quota_at_reset: 'quota used at reset',
 } as const satisfies Record<KpiKey, InfoWord>
 
 /** The breakdown of a KPI as the "what is counted" popover lists it: one line per part, in the KPI's unit. */
@@ -496,6 +498,8 @@ export const MEANING: Record<KpiKey, string> = {
   nudges_acted: 'Of the steward’s reminders to a lead, how many the lead acted on within 30 minutes. Higher is better.',
   errands_turned_away:
     'Of the Errands leads raised, how many the screen turned away before they reached you. Higher means less of your time went to needless Errands.',
+  quota_at_reset:
+    'How much of its weekly quota each account had used when its week reset, weighted by plan size. Higher means less went unused.',
   first_watch_dwell_p50:
     'How long a first check takes to answer. Neither direction is good by itself: a pass over checks that answer in seconds proves little, and one that takes an hour slows the queue.',
 }
@@ -528,6 +532,7 @@ export const KPI_ORDER: readonly KpiKey[] = [
   'errands_turned_away',
   'window_points',
   'cost',
+  'quota_at_reset',
 ]
 
 export interface KpiGroups<T> {
@@ -725,11 +730,6 @@ export function constantRows(
 ): { key: string; label: string; value: string }[] {
   return [
     { key: 'leadsPerAccount', label: 'Leads per account', value: leadsWords(constants) },
-    {
-      key: 'windowLimits',
-      label: 'Account limits',
-      value: `${constants.fiveHourLimit} % of 5 hours, ${constants.weeklyLimit} % of the week`,
-    },
     { key: 'seatsMaxBonus', label: 'Seat bonus at most', value: String(constants.seatsMaxBonus) },
     { key: 'loadCeiling', label: 'Load ceiling', value: String(constants.loadCeiling) },
     { key: 'slots', label: 'Test slots', value: String(constants.slots) },

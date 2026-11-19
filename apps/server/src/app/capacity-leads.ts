@@ -32,6 +32,6 @@ export function capacityForLeads(
         return resumed.ok ? { ok: true, value: undefined } : resumed
       },
     },
-    windows: { wall: (account, since) => windowOf(deps, account, limits?.windowLimits, since) },
+    windows: { wall: (account, since) => windowOf(deps, account, since) },
   }
 }

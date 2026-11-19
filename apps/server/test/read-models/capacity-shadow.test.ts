@@ -15,8 +15,6 @@ const minute = (m: number): Date => new Date(NOW.getTime() - m * 60_000)
 const constants = {
   leadsPerAccount: 3,
   accountLeads: {},
-  fiveHourLimit: 100,
-  weeklyLimit: 100,
   loadCeiling: 120,
   slots: 2,
   slotsMax: 6,

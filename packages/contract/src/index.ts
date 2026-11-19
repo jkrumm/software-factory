@@ -1,4 +1,5 @@
 export { ErrorBody } from './errors.ts'
+export * from './accounts.ts'
 export * from './read.ts'
 export * from './read-models.ts'
 export * from './kpi-catalog.ts'

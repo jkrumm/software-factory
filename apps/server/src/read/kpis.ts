@@ -435,6 +435,34 @@ function withReason(k: Omit<Kpi, 'history'>): Omit<Kpi, 'history'> {
   return k
 }
 
+/**
+ * Quota used at reset: the share of its weekly quota each account had used when its window reset, weighted by capacity, from the
+ * reset ledger the accounts package keeps. A share of the quota (0 to 1), counted over the resets in the window; a window with
+ * none, or a ledger this process cannot read, has no figure.
+ */
+function quotaAtResetKpi(read: QuotaAtResetReader | undefined, w: Window): Omit<Kpi, 'history'> {
+  let found: ReturnType<QuotaAtResetReader> = null
+  let reason: string | undefined
+  try {
+    found = read ? read({ from: w.from, to: w.to }) : null
+    if (!read) reason = 'The accounts’ reset ledger is not read in this process'
+  } catch (error) {
+    reason = `The accounts’ reset ledger could not be read: ${error instanceof Error ? error.message : String(error)}`
+  }
+  const measured = found !== null && found.percent !== null
+  return kpi({
+    key: 'quota_at_reset',
+    value: found?.percent == null ? null : found.percent / 100,
+    unit: 'share',
+    n: found?.resets ?? 0,
+    count: found?.resets ?? 0,
+    measured,
+    ...(!measured && reason ? { reason } : {}),
+    definition:
+      'The weekly percent each account stood at when its weekly window reset, weighted by the account’s weekly capacity, over the resets in the window (the reset ledger of packages/accounts, read in the server’s process). Higher means less quota went unused; the target is none, demand sets the ceiling.',
+  })
+}
+
 /** Queue reasons (`queue_intervals.kind`) in the four groups the owner reads, and the rest. */
 const QUEUE_GROUPS: ReadonlyArray<readonly [key: string, label: string, kinds: readonly string[]]> = [
   ['capacity', 'Capacity', ['memory', 'memory_fit', 'disk', 'claim', 'lane', 'window', 'cap', 'load', 'boot']],
@@ -482,7 +510,10 @@ async function fixCommitCounts(sql: SQL, w: Window): Promise<{ inWindow: number;
   return { inWindow: parsed.n, ever: parsed.total > 0 }
 }
 
-type KpiOptions = { now: Date; usageTimeoutMs?: number; pointsCache?: PointsCache }
+/** What the reset ledger of the accounts says of a span: the capacity-weighted mean weekly percent at reset, and how many resets stand under it. */
+export type QuotaAtResetReader = (span: { from: Date; to: Date }) => { percent: number | null; resets: number } | null
+
+type KpiOptions = { now: Date; usageTimeoutMs?: number; pointsCache?: PointsCache; quotaAtReset?: QuotaAtResetReader }
 
 /** The KPIs of one window. Without `usage`, cost and window points are left unmeasured and the usage schema is not read. */
 async function kpisOf(
@@ -740,6 +771,7 @@ async function kpisOf(
       definition:
         "Dollars the usage schema priced for the sessions of the Issues filed in the window (a session tagged with the Issue's number, or a Claude session its lead reported, with its subagents), divided by those Issues. Joined at read, never copied. The parts are the same dollars by seat (the tool: lead, worker, reviewer or a subagent type; the model; the effort), the twelve biggest and the rest as one. Null while the usage schema is not there.",
     }),
+    quotaAtResetKpi(options.quotaAtReset, w),
     ...(await flowKpis(sql, w)),
   ]
   return figures.map(withReason)
@@ -783,6 +815,8 @@ export async function readKpis(
     days: number
     usageTimeoutMs?: number
     pointsCache?: PointsCache
+    /** the accounts' reset ledger (`packages/accounts`); absent or null, `quota_at_reset` has no figure */
+    quotaAtReset?: QuotaAtResetReader
     /** the role table's reviewer rows, for the words beside the reviewer numbers; absent: the numbers stand alone */
     reviewerRows?: { cheap: { tier: Tier; effort: Effort }; reviewer: { tier: Tier; effort: Effort } } | null
   },

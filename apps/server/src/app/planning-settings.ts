@@ -11,7 +11,6 @@ import {
   type MemoryCeilings,
 } from '../domains/capacity/host.ts'
 import { DEFAULT_TENANT_BUDGET_MIB, DEFAULT_TENANT_PROJECT } from '../kernel/throughput-limits.ts'
-import { DEFAULT_WINDOW_LIMIT, type WindowLimits } from '../domains/capacity/accounts.ts'
 import type { AimMode } from '../domains/capacity/slot-aim.ts'
 
 const whole = (min: number, max: number) => z.coerce.number().int().min(min).max(max)
@@ -25,9 +24,6 @@ const Env = z.object({
   FACTORY_LEADS_PER_ACCOUNT: whole(1, 64).optional(),
   /** an account's own cap: `iu=20,me=10,me2=10` */
   FACTORY_ACCOUNT_LEADS: z.string().optional(),
-  /** an account takes new leads until its 5-hour window / week is at this percent (default 100: reached, not reserved) */
-  FACTORY_FIVE_HOUR_LIMIT: whole(1, 100).optional(),
-  FACTORY_WEEKLY_LIMIT: whole(1, 100).optional(),
   FACTORY_LOAD_CEILING: whole(1, 100_000).optional(),
   /** `shadow` (default): the fixed ceiling is live and the throughput rule is only recorded; `on`: the throughput rule is live */
   FACTORY_LOAD_RULE: z.enum(['shadow', 'on']).optional(),
@@ -59,7 +55,6 @@ const Env = z.object({
   FACTORY_TENANT_BUDGET_MIB: whole(1, 10_000_000).optional(),
   /** the repo that owns the host's configuration, where tenant findings are filed */
   FACTORY_TENANT_PROJECT: z.string().min(1).optional(),
-  FACTORY_CLAUDE_ACCOUNT_BIN: z.string().min(1).optional(),
   FACTORY_SYSCTL_BIN: z.string().min(1).optional(),
   /** a swapout rate is the delta between two readings; readings closer than this return the last one */
   FACTORY_MEMORY_SAMPLE_MS: whole(0, 3_600_000).optional(),
@@ -70,14 +65,11 @@ export interface PlanningSettings {
   repoRoots: string[]
   repoAllow: string[]
   gitTimeoutMs: number
-  claudeAccountBin: string
   sysctlBin: string
   memorySampleMs: number
   leadsPerAccount: number
   /** each named account's own cap (`FACTORY_ACCOUNT_LEADS`); an account not in it takes `leadsPerAccount` */
   accountLeads: Map<string, number>
-  /** the percent of a window at which an account takes no new lead */
-  windowLimits: WindowLimits
   /** the fixed load ceiling (`FACTORY_LOAD_CEILING`); live while the throughput rule is in shadow */
   loadCeiling: number
   loadRule: 'shadow' | 'on'
@@ -121,9 +113,8 @@ function accountLeadsOf(text: string | undefined): Map<string, number> {
 /** The planning and capacity settings from the environment; throws one message naming every bad key. */
 export function planningSettings(
   env: Record<string, string | undefined>,
-  options: { home?: string; repoRoots?: readonly string[]; repoAllow?: readonly string[]; cores?: number } = {},
+  options: { repoRoots?: readonly string[]; repoAllow?: readonly string[]; cores?: number } = {},
 ): PlanningSettings {
-  const home = options.home ?? env.HOME ?? '/'
   const parsed = Env.safeParse(env)
   if (!parsed.success) {
     throw new Error(parsed.error.issues.map((issue) => `${issue.path.join('.')}: ${issue.message}`).join('; '))
@@ -148,15 +139,10 @@ export function planningSettings(
     repoRoots,
     repoAllow,
     gitTimeoutMs: e.FACTORY_GIT_TIMEOUT_MS ?? 20_000,
-    claudeAccountBin: e.FACTORY_CLAUDE_ACCOUNT_BIN ?? `${home}/.local/bin/claude-account`,
     sysctlBin: e.FACTORY_SYSCTL_BIN ?? '/usr/sbin/sysctl',
     memorySampleMs: e.FACTORY_MEMORY_SAMPLE_MS ?? 30_000,
     leadsPerAccount: e.FACTORY_LEADS_PER_ACCOUNT ?? 2,
     accountLeads: accountLeadsOf(e.FACTORY_ACCOUNT_LEADS),
-    windowLimits: {
-      fiveHour: e.FACTORY_FIVE_HOUR_LIMIT ?? DEFAULT_WINDOW_LIMIT,
-      weekly: e.FACTORY_WEEKLY_LIMIT ?? DEFAULT_WINDOW_LIMIT,
-    },
     loadCeiling: e.FACTORY_LOAD_CEILING ?? DEFAULT_LOAD_CEILING,
     loadRule: e.FACTORY_LOAD_RULE ?? 'shadow',
     loadPerCore: e.FACTORY_LOAD_PER_CORE ?? DEFAULT_LOAD_PER_CORE,

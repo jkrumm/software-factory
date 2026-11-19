@@ -71,6 +71,7 @@ const CARD_ORDER = [
   'errands_turned_away',
   'window_points',
   'cost',
+  'quota_at_reset',
 ]
 const FIX_TITLE = 'Fix commits per week'
 

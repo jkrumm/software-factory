@@ -2,7 +2,7 @@ import { mkdir, mkdtemp, realpath, rm, writeFile } from 'node:fs/promises'
 import { join } from 'node:path'
 import { fileIncident, fileIssue } from '../flow.ts'
 import { factory, type ServerProcess, startServer, startWorld, type World } from '../harness.ts'
-import { type AccountRow, setAccounts, setMemory } from '../host.ts'
+import { type AccountRow, renewSamples, setAccounts, setMemory } from '../host.ts'
 
 /** What a repo of the lab has on its default branch. */
 export interface RepoFiles {
@@ -121,6 +121,7 @@ export async function startLab(options: {
     server,
     root,
     cli: async (args, env = {}) => {
+      await renewSamples(world.bin)
       const result = await factory(world, args, { FACTORY_URL: server.url, ...env })
       let json: unknown = null
       try {

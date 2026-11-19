@@ -29,7 +29,16 @@ beforeAll(async () => {
   projects = join(dir, 'config', 'projects')
   await mkdir(projects, { recursive: true })
   const registry = join(dir, 'accounts.json')
-  await writeFile(registry, JSON.stringify({ accounts: { me: { dir: join(dir, 'config') } } }))
+  await writeFile(
+    registry,
+    JSON.stringify({
+      version: 2,
+      accounts: {
+        spare: { dir: null, plan: 'max5x', homeLanes: ['interactive'], enabled: false },
+        me: { dir: join(dir, 'config'), plan: 'max5x', homeLanes: ['bulk'], enabled: true },
+      },
+    }),
+  )
   lab = await startLab({
     leads: true,
     // a project holds at most 8 leads and the lead of an earlier test keeps its claim: the leads are spread over three repos
@@ -38,7 +47,7 @@ beforeAll(async () => {
     ),
     env: {
       FACTORY_LEADS_PER_ACCOUNT: '16',
-      FACTORY_ACCOUNTS_FILE: registry,
+      CLAUDE_ACCOUNTS_REGISTRY: registry,
       FACTORY_STEWARD_MIN_STALL_MS: '0',
       FACTORY_STEWARD_IDLE_MS: '0',
       FACTORY_STEWARD_IDLE_BACKGROUND_MS: '0',

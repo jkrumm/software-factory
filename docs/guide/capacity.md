@@ -104,8 +104,8 @@ A load of 61.6 against a ceiling of 36 refuses nothing by itself. A reading back
 
 A seat is one lead an account may carry at once. An account is a Claude login with a 5-hour window and a weekly window.
 
-- **Open until the limit.** An account takes leads below 100 % of both windows. A lead that runs into the wall continues when the window resets, so a reserve would only leave usage unused.
-- **The picker.** Among open accounts below their cap, the first in the picker's fresh rank wins; the rank carries reset timing, Fable and drain mode and weekly pace, and the factory's own pace rule does not close an account it lists (the window limits still do). Without a fresh rank, and for accounts it does not list, the one with the most room in its tightest window wins, then the lowest weekly use. A nearly full account gets a lead only when the roomier ones are at their caps.
+- **The package decides.** Whether an account takes a lead, why not, when it opens again and the order of the open ones are `packages/accounts`' rule (`claude-account status`), read in the server's process on every poll: its ceilings, reset timing, Fable, drain and pause modes and weekly pace. The server keeps no limit of its own.
+- **The pick.** Among open accounts below their cap, the first in the package's order for the bulk lane wins. A reading the poll has not renewed for ten minutes admits nothing.
 - **Paced by sample.** An account whose 5-hour window is above 70 % takes one new lead per usage sample, because a lead started after the latest sample is not in it yet.
 - **The idle raise.** When work is queued behind the cap and each of the last five minute samples shows a load of at most a quarter of the ceiling and swap below its ceiling, `seatBonus` lifts every cap by as many typical leads as fit into the free memory. The lift stops at the bonus limit or when no work waits.
 
