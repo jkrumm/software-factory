@@ -120,6 +120,7 @@ for (const path of [
   '/improve?days=90',
   '/throughput',
   '/throughput?hours=168',
+  '/accounts',
   '/needs-you',
   '/',
   '/?state=running',

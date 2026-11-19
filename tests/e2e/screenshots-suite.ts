@@ -18,6 +18,7 @@ const SCREENS = [
   { name: 'improve-30', path: '/improve?days=30' },
   { name: 'throughput', path: '/throughput' },
   { name: 'throughput-7d', path: '/throughput?hours=168' },
+  { name: 'accounts', path: '/accounts' },
   { name: 'kit', path: '/kit' },
 ] as const
 

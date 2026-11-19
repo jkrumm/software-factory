@@ -1,4 +1,7 @@
 import {
+  AccountModeAnswer,
+  type AccountModeBody,
+  AccountsView,
   ArtifactDetail,
   CapacityLoopModel,
   ArtifactList,
@@ -29,7 +32,6 @@ import {
   KpiModel,
   MachineModel,
   NeedsModel,
-  ReadAccountList,
   ReadIssueCards,
   ReadIssueDetail,
   SignalAck,
@@ -166,11 +168,8 @@ export const fetchFriction = (days: number, signal?: AbortSignal) =>
 export const fetchFindingClasses = (signal?: AbortSignal) => getJson('/v1/finding-classes', FindingClassesModel, signal)
 export const fetchLoopYield = (signal?: AbortSignal) => getJson('/v1/loop-yield', LoopYieldModel, signal)
 export const fetchFixCommits = (signal?: AbortSignal) => getJson('/v1/fix-commits', FixCommitsModel, signal)
-/** The accounts in service: one the registry switches off has nothing to meter and takes no lead. */
-export const fetchAccounts = async (signal?: AbortSignal) => {
-  const list = await getJson('/v1/accounts', ReadAccountList, signal)
-  return { ...list, accounts: list.accounts.filter((a) => a.enabled !== false) }
-}
+/** Every account as the picker judges it, with its seats and leads. One the registry switches off is in the list (`enabled: false`): the strip leaves it out, the Accounts screen names it. */
+export const fetchAccounts = (signal?: AbortSignal) => getJson('/v1/accounts', AccountsView, signal)
 export const fetchMachine = (signal?: AbortSignal) => getJson('/v1/machine', MachineModel, signal)
 /** The host over the last 24 hours, its busiest processes, and the server's version and start time. */
 export const fetchHost = (signal?: AbortSignal) => getJson('/v1/host', HostHistoryModel, signal)
@@ -234,6 +233,11 @@ export const turnBackErrand = (id: string, note: string) =>
 /** The owner's pin or unpin of a collection: the page it leads, with the cards. */
 export const pinCollection = (id: string, pinned: boolean) =>
   postJson(`/v1/artifact-collections/${encodeURIComponent(id)}/${pinned ? 'pin' : 'unpin'}`, {}, CollectionReply)
+/** The owner's mode on an account (Fill first, Hold for a model, Pause) and its clear (Back to normal); the answer is the mode now in force. */
+export const setAccountMode = (id: string, body: AccountModeBody) =>
+  postJson(`/v1/accounts/${encodeURIComponent(id)}/mode`, body, AccountModeAnswer)
+export const clearAccountMode = (id: string) =>
+  sendJson('DELETE', `/v1/accounts/${encodeURIComponent(id)}/mode`, undefined, AccountModeAnswer)
 export const promoteSignal = (id: string, repo: string | null) =>
   postJson(`/signals/${encodeURIComponent(id)}/promote`, repo ? { repo } : {}, SignalAck)
 

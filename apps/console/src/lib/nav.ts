@@ -3,6 +3,7 @@ import {
   FileTextIcon,
   FolderSimpleIcon,
   GraphIcon,
+  IdentificationBadgeIcon,
   LightningIcon,
   SquaresFourIcon,
   TrendUpIcon,
@@ -18,6 +19,7 @@ const ICON = {
   '/artifacts': FileTextIcon,
   '/improve': TrendUpIcon,
   '/throughput': CpuIcon,
+  '/accounts': IdentificationBadgeIcon,
 } as const satisfies Record<ScreenTarget, Icon>
 
 /** The screens of `screens.ts` with their icons, in the navigation's order. */

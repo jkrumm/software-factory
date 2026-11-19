@@ -6,7 +6,7 @@ import { Live } from '@/components/strip/live'
 
 /**
  * The header strip. From 1280 px up it is one line: the counts, one meter per subscription, the host's load, memory and
- * swap, then Live and `trailing` at the right end. Below, it is two: the counts with Live and `trailing` pinned to the
+ * swap, then Live and `trailing` at the right end; with more subscriptions than the line holds (eight at 1800 px) the meters wrap to a line of their own. Below, it is two: the counts with Live and `trailing` pinned to the
  * first, and the meters on a second that scrolls sideways if it must (no wrap, no scrollbar). Each meter opens a
  * popover with the detail.
  */
@@ -17,7 +17,7 @@ export function StatusStrip({ trailing }: { trailing?: ReactNode }) {
       className="flex min-w-0 flex-wrap items-center gap-x-2 py-1 md:py-0 min-[1280px]:flex-nowrap 2xl:gap-x-4"
     >
       <Counts />
-      <div className="no-scrollbar order-3 flex min-h-7 min-w-0 basis-full items-center gap-x-2 overflow-x-auto min-[1280px]:order-2 min-[1280px]:min-h-0 min-[1280px]:basis-auto min-[1280px]:overflow-visible 2xl:gap-x-4">
+      <div className="no-scrollbar order-3 flex min-h-7 min-w-0 basis-full items-center gap-x-2 overflow-x-auto min-[1280px]:order-2 min-[1280px]:min-h-0 min-[1280px]:basis-auto min-[1280px]:flex-wrap min-[1280px]:overflow-visible min-[1280px]:gap-y-1 2xl:gap-x-4">
         <Accounts />
         <Host />
       </div>

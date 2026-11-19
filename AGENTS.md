@@ -55,7 +55,7 @@ and where) → `docs/decisions.md` (what was decided and why).
   `adapters/git/repos.ts`). A work repo of another organisation is admitted by name through the allowlist, never by
   adding the directory that holds it as a root. The API is loopback only; `FACTORY_REF=<branch>` deploys that branch, the same boundary.
 - **The Console listener** (`api/console.ts`, `FACTORY_CONSOLE_PORT`, default 7795; 7794 is the agw gateway's) answers 405
-  to anything but `GET`/`HEAD` bar its thirteen write verbs (`WRITES` there), forwards only `/health` and `/v1/*` with the
+  to anything but `GET`/`HEAD` bar its fifteen write verbs (`WRITES` there), forwards only `/health` and `/v1/*` with the
   owner token held in the closure, and can never start a session or cancel, reopen or file an Issue by its own words. **A
   new write goes through the Issue, never onto that list.** The verbs, their guards and the accepted residual:
   `docs/operations.md` "The Console listener". The Console (`apps/console`) holds no logic the API could hold (a test fails on a raw colour).

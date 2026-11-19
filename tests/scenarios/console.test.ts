@@ -35,7 +35,7 @@ test('the Console listener starts when the build exists and serves the read slic
   const index = await fetch(consoleUrl)
   expect(index.status).toBe(200)
   expect(await index.text()).toBe('<title>console</title>')
-  // a write that is not one of the thirteen verbs never passes, and the client's own token buys nothing here
+  // a write that is not one of the fifteen verbs never passes, and the client's own token buys nothing here
   const post = await fetch(`${consoleUrl}/v1/issues`, { method: 'POST', headers: bearer() })
   expect(post.status).toBe(405)
 })
@@ -51,6 +51,7 @@ const ANSWERS = [
   '/signals/signal_none/dismiss',
   '/v1/artifact-collections/collection_none/pin',
   '/v1/artifact-collections/collection_none/unpin',
+  '/v1/accounts/no-such-account/mode',
 ]
 
 const API_REFUSALS = [404, 422]
@@ -80,6 +81,19 @@ test('the POST verbs reach the API with the body; the API, not the listener, ans
   expect(API_REFUSALS).toContain(
     (await write(ANSWERS[0] ?? '', { authorization: 'Bearer not-the-owner-token' })).status,
   )
+})
+
+test("an account's mode clear is the one DELETE that reaches the API, and only on its own path", async () => {
+  const reply = await fetch(`${consoleUrl}/v1/accounts/no-such-account/mode`, { method: 'DELETE' })
+  expect([404, 409, 422], 'the API answers').toContain(reply.status)
+  expect(await reply.json()).toMatchObject({ code: expect.any(String) })
+  for (const path of [
+    '/v1/accounts/no-such-account',
+    '/v1/accounts/a/b/mode',
+    '/v1/accounts/no-such-account/mode/extra',
+  ]) {
+    expect((await fetch(`${consoleUrl}${path}`, { method: 'DELETE' })).status, path).toBe(405)
+  }
 })
 
 test('everything else that writes stays 405, OPTIONS too', async () => {

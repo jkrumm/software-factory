@@ -1,7 +1,9 @@
-import type { ReadAccountQuota } from '@software-factory/contract'
+import type { AccountRow } from '@software-factory/contract'
+import { Link } from '@tanstack/react-router'
 import { Meter, MeterBar } from '@/components/kit/meter'
 import { meterTone } from '@/components/kit/tone'
 import { PopoverTitle } from '@/components/ui/popover'
+import { modeLabel, modeSource, modeUntil } from '@/lib/accounts'
 import { useNow } from '@/lib/now'
 import { useAccounts } from '@/lib/queries'
 import { accountMeter, isExhausted, resetWords, usedPct } from '@/lib/strip'
@@ -44,7 +46,7 @@ function Window({
   )
 }
 
-function AccountDetail({ quota, now }: { quota: ReadAccountQuota; now: Date }) {
+function AccountDetail({ quota, now }: { quota: AccountRow; now: Date }) {
   return (
     <>
       <PopoverTitle>Subscription {quota.account}</PopoverTitle>
@@ -63,8 +65,19 @@ function AccountDetail({ quota, now }: { quota: ReadAccountQuota; now: Date }) {
           resetsAt={quota.fiveHourResetsAt}
           now={now}
         />
+        {quota.mode.kind === 'normal' ? null : (
+          <p>
+            {modeLabel(quota.mode)} {modeUntil(quota.mode, now)} · {modeSource(quota.mode)}
+          </p>
+        )}
         {quota.fresh ? null : <p className="text-[color:var(--vx-warn-solid)]">Stale</p>}
         {isExhausted(quota, now) ? <p>At its limit until {resetWords(quota.exhaustedUntil, now)}</p> : null}
+        <Link
+          to="/accounts"
+          className="underline underline-offset-2 outline-none focus-visible:ring-3 focus-visible:ring-ring/50"
+        >
+          Open the accounts
+        </Link>
       </div>
     </>
   )
@@ -72,11 +85,11 @@ function AccountDetail({ quota, now }: { quota: ReadAccountQuota; now: Date }) {
 
 /** One meter per subscription: its weekly share on a 4 rem bar, and the used share per window in a popover. */
 export function Accounts() {
-  const accounts = useAccounts().data?.accounts
+  const accounts = useAccounts().data?.accounts.filter((a) => a.enabled)
   const now = new Date(useNow(30_000))
   if (!accounts) return null
   return (
-    <div className="flex shrink-0 items-center gap-x-1">
+    <div className="flex items-center gap-x-1 min-[1280px]:flex-wrap">
       {accounts.map((quota) => {
         const { weeklyPct, tone } = accountMeter(quota, now)
         return (
@@ -87,6 +100,7 @@ export function Accounts() {
             trigger={
               <>
                 <span className="max-w-28 truncate">{quota.account}</span>
+                {quota.mode.kind === 'normal' ? null : <span data-testid="strip-mode">{modeLabel(quota.mode)}</span>}
                 <span className="w-16">
                   <MeterBar value={(weeklyPct ?? 0) / 100} tone={tone} track="surface" />
                 </span>
