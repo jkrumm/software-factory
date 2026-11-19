@@ -18,7 +18,7 @@ const WHERE = [
   'When the factory itself surprises you (a refusal --help did not predict, a hidden limit, an id format, a wrong state, a help text that misleads): report it once as a signal, `factory signal file --from agent:<your repo> --repo software-factory --title <what happened> --text <the command, the answer, what you expected>`. Triage merges duplicates into one Issue. Never file that Issue yourself with `factory issue new`, and never work around it silently.',
   'Elsewhere, FACTORY_TOKEN must be set, else the server answers 401.',
   'A lead (its session holds the agent token) cannot file an Issue: `factory issue new` answers 403 for it. It files a signal, `factory signal file --repo <repo> ...`, and triage makes the Issue. A work repo hears the owner only, so a signal there is dropped (`work_repo`), except the follow-up of a lead whose own Issue the owner filed: that signal is held for the owner to promote (Needs you).',
-  'Something only for the owner to read and comment on, with no work for a lead (a report, a research page, a specification several Issues build from) is not an Issue: `factory artifact new --repo <repo> --title <title> --content @file [--content-format html] [--issue <id>]...` stores a Report no Issue owns; it shows on the Artifacts screen, takes his comments and revisions (`factory artifact revise <id> --content @file`) and links to the Issues it concerns (`factory artifact link <id> --issue <id>`). Never file an Issue and cancel it to carry one.',
+  'Something only for the owner to read and comment on, with no work for a lead (a report, a research page, a specification several Issues build from) is not an Issue: `factory artifact new --repo <repo> --title <title> --content @file [--content-format html] [--issue <id>]...` stores a Report no Issue owns (an HTML one starts from `apps/console/templates/artifact.html` in the factory repo and declares color-scheme); it shows on the Artifacts screen, takes his comments and revisions (`factory artifact revise <id> --content @file`) and links to the Issues it concerns (`factory artifact link <id> --issue <id>`). Never file an Issue and cancel it to carry one.',
   '`issue new` answers `{"issue": "issue_N", "id": "issue_N", "state", "filed"}`: read `.id`. Other verbs answer `issue` as an object.',
   'Several Issues that depend on each other, or that are filed over time: do not file them one by one. Write rows into the repo `docs/plan.yaml` (the server files each row as an Issue once its `after` rows are done).',
   'Format: `factory plan schema` (docs/plan.md); check before pushing: `factory plan check docs/plan.yaml`; read back after pushing: `factory project sync --fetch true`, then `factory project show <repo> --format plain`.',
@@ -101,9 +101,14 @@ const errandHelp = [
   "An Errand with a `--check` closes itself when the check exits 1..125 (at the owner's return or every 6 hours); `factory errand check <id>` runs it now, and `factory issue show` lists `errands` with when it last ran and runs next.",
 ].join('\n')
 
+const htmlHelp =
+  'An HTML artifact (--content-format html) starts from apps/console/templates/artifact.html in the factory repo and declares color-scheme: the Console shows it in its own theme (light or dark, set as data-theme on <html>), keeps the text and every heading in one centred column, gives a picture wider than the column the pane and opens it in a lightbox on a click; one that declares no scheme gets a generic dark base. The template lists the rules in its head.'
+
 const submitHelp =
   'Limits: --title at most 200 characters, --content at most 1000000 characters. A Concept or Spec waits for its verdict (end the turn); a Report never waits. ' +
-  'Images: a Markdown artifact shows an https image only from a host the owner lists for the Console (his image bucket); any other host, such as raw.githubusercontent.com, shows its alt text. Put a shot there with `imgcli private <file> --json` (prints a presigned `url`, valid 7 days) and link that url as `![alt](url)`; an HTML artifact inlines it as a `data:` URL.'
+  'Images: a Markdown artifact shows an https image only from a host the owner lists for the Console (his image bucket); any other host, such as raw.githubusercontent.com, shows its alt text. Put a shot there with `imgcli private <file> --json` (prints a presigned `url`, valid 7 days) and link that url as `![alt](url)`; an HTML artifact inlines it as a `data:` URL.' +
+  ' ' +
+  htmlHelp
 
 const signalKindHint =
   "a signal's kind is request, feedback or remark; bug, feature or chore is an Issue's kind, set by triage; to choose it yourself file the Issue: `factory issue new --kind bug|feature|chore`"
@@ -134,6 +139,7 @@ export const OPERATION_EXTENSIONS: Readonly<Record<string, OperationExtension>> 
   'issue.ask': { help: decisionHelp },
   'errand.raise': { help: errandHelp },
   'artifact.submit': { help: submitHelp },
+  'artifact.new': { help: htmlHelp },
   'signal.file': { fieldHints: { kind: signalKindHint } },
   'issue.new': {
     help: filingGuide(),
