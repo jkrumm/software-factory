@@ -244,7 +244,31 @@ describe('artifacts', () => {
   test('an annotation needs its quote and its comment', () => {
     const read = readAnnotation({ path: '' })
     expect(!read.ok && read.error.fields).toEqual(expect.arrayContaining(['quote', 'comment']))
-    expect(readAnnotation({ quote: 'a', comment: 'b' })).toMatchObject({ ok: true, value: { path: null } })
+    expect(readAnnotation({ quote: 'a', comment: 'b' })).toMatchObject({
+      ok: true,
+      value: { path: null, occurrence: null, prefix: null, suffix: null },
+    })
+  })
+
+  test('an annotation may name its occurrence and the text around the quote; all three are optional', () => {
+    expect(readAnnotation({ quote: 'a', comment: 'b', occurrence: 2, prefix: 'before ', suffix: ' after' })).toEqual({
+      ok: true,
+      value: { quote: 'a', path: null, occurrence: 2, prefix: 'before ', suffix: ' after', comment: 'b' },
+    })
+    // a space at the edge is part of the context, an empty one is none
+    expect(readAnnotation({ quote: 'a', comment: 'b', occurrence: 0, prefix: '', suffix: ' x' })).toMatchObject({
+      value: { occurrence: 0, prefix: null, suffix: ' x' },
+    })
+    for (const bad of [
+      { occurrence: -1 },
+      { occurrence: 1.5 },
+      { occurrence: '1' },
+      { prefix: 3 },
+      { suffix: 'x'.repeat(500) },
+    ]) {
+      const read = readAnnotation({ quote: 'a', comment: 'b', ...bad })
+      expect(read.ok).toBe(false)
+    }
   })
 
   test('an edited comment is trimmed, not empty and not over the cap', () => {

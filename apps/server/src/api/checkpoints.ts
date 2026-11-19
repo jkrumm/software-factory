@@ -127,6 +127,9 @@ const annotationView = (a: AnnotationRecord) => ({
   revision: a.revision,
   quote: a.quote,
   path: a.path,
+  occurrence: a.occurrence,
+  prefix: a.prefix,
+  suffix: a.suffix,
   comment: a.comment,
   author: a.author,
   at: iso(a.at),
@@ -505,7 +508,14 @@ export const checkpointRoutes = (uses: CheckpointUses) =>
           artifactId: id as string as ArtifactId,
           revision: body.revision ?? null,
           author: body.author,
-          raw: { quote: body.quote, path: body.path, comment: body.comment },
+          raw: {
+            quote: body.quote,
+            path: body.path,
+            occurrence: body.occurrence,
+            prefix: body.prefix,
+            suffix: body.suffix,
+            comment: body.comment,
+          },
         })
         if (!result.ok) return failed(result.error)
         const { artifact, revisions, issue } = result.value

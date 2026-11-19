@@ -245,8 +245,18 @@ export const dismissSignal = (id: string, reason: string) =>
   postJson(`/signals/${encodeURIComponent(id)}/dismiss`, { reason }, SignalDismissed)
 
 /** The artifact page's own writes: an annotation on the revision shown, with its heading path, and the verdict on it. */
-export const postAnnotation = (id: string, body: { revision: number; quote: string; path?: string; comment: string }) =>
-  postJson(`/v1/artifacts/${encodeURIComponent(id)}/annotations`, { ...body, author: 'owner' }, ArtifactReply)
+export const postAnnotation = (
+  id: string,
+  body: {
+    revision: number
+    quote: string
+    path?: string
+    occurrence?: number
+    prefix?: string
+    suffix?: string
+    comment: string
+  },
+) => postJson(`/v1/artifacts/${encodeURIComponent(id)}/annotations`, { ...body, author: 'owner' }, ArtifactReply)
 
 export const postVerdict = (
   id: string,

@@ -2,7 +2,7 @@ import { useQueryClient } from '@tanstack/react-query'
 import { useRef, useState } from 'react'
 import type { ArtifactDetail } from '@software-factory/contract'
 import { deleteAnnotation, patchAnnotation, postAnnotation } from '@/lib/api'
-import { GLOBAL_PATH } from '@/lib/artifact'
+import { GLOBAL_PATH, type Occurrence, type PaintAnchor } from '@/lib/artifact'
 
 /**
  * The review's writes as the owner sees them: a comment, an edit or a delete shows at once and is sent in the background.
@@ -12,7 +12,7 @@ import { GLOBAL_PATH } from '@/lib/artifact'
 
 type Annotation = ArtifactDetail['annotations'][number]
 
-export interface NewComment {
+export interface NewComment extends Occurrence {
   revision: number
   quote: string
   path?: string
@@ -64,12 +64,16 @@ export function reviewItems(detail: ArtifactDetail, pending: readonly Delivery[]
   }
   for (const d of pending) {
     if (d.kind !== 'create') continue
-    const { revision, quote, path, comment } = d.body
+    const { revision, quote, path, comment, occurrence, prefix, suffix } = d.body
     // a saved comment hides when the server's list already has it (the read-back can overtake the write's bookkeeping)
     if (
       d.state === 'saved' &&
       server.some(
-        (s) => s.annotation.revision === revision && s.annotation.quote === quote && s.annotation.comment === comment,
+        (s) =>
+          s.annotation.revision === revision &&
+          s.annotation.quote === quote &&
+          s.annotation.comment === comment &&
+          s.annotation.occurrence === (occurrence ?? null),
       )
     )
       continue
@@ -78,6 +82,9 @@ export function reviewItems(detail: ArtifactDetail, pending: readonly Delivery[]
       revision,
       quote,
       path: path ?? null,
+      occurrence: occurrence ?? null,
+      prefix: prefix ?? null,
+      suffix: suffix ?? null,
       comment,
       author: 'owner',
       at: d.at,
@@ -90,12 +97,24 @@ export function reviewItems(detail: ArtifactDetail, pending: readonly Delivery[]
   return items
 }
 
+/** A comment's passage as the document paints and scrolls to it: its quote, which occurrence, and its id. */
+export function paintAnchorOf(item: ReviewItem): PaintAnchor {
+  return {
+    id: item.id,
+    quote: item.quote,
+    path: item.path,
+    occurrence: item.occurrence,
+    prefix: item.prefix,
+    suffix: item.suffix,
+  }
+}
+
 /**
- * The quotes to paint in the document: every comment whose passage is in the text shown (an earlier revision's carried
- * comment too), a new one at once, a deleted one gone.
+ * The passages to paint in the document: every comment whose passage is in the text shown (an earlier revision's carried
+ * comment too, found by its text around it), a new one at once, a deleted one gone.
  */
-export function highlightQuotes(items: readonly ReviewItem[]): string[] {
-  return items.filter((i) => i.anchored && i.path !== GLOBAL_PATH).map((i) => i.quote)
+export function highlightAnchors(items: readonly ReviewItem[]): PaintAnchor[] {
+  return items.filter((i) => i.anchored && i.path !== GLOBAL_PATH).map(paintAnchorOf)
 }
 
 export function useReview(id: string) {

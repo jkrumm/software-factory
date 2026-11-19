@@ -151,6 +151,10 @@ export interface AnnotationRecord {
   revision: number
   quote: string
   path: string | null
+  /** which occurrence of the quote in the text (0-based) and the text around it; null when the comment was made without them */
+  occurrence: number | null
+  prefix: string | null
+  suffix: string | null
   comment: string
   author: 'owner' | 'lead'
   at: Date

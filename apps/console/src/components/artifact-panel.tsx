@@ -88,6 +88,9 @@ export function Composer({
           revision,
           quote: selected.quote,
           ...(selected.path ? { path: selected.path } : {}),
+          ...(selected.occurrence === undefined
+            ? {}
+            : { occurrence: selected.occurrence, prefix: selected.prefix, suffix: selected.suffix }),
           comment,
         })
         onDone()

@@ -64,9 +64,16 @@ export function readSubmission(raw: unknown): Result<Submission, MissingFields> 
   return ok({ kind, title, format, content })
 }
 
+/** The text kept either side of a quote to tell equal passages apart: about 32 characters, never more than this. */
+const MAX_CONTEXT = 200
+
 export interface AnnotationInput {
   quote: string
   path: string | null
+  /** which occurrence of the quote in the document's text (0-based), and the text around it: null on a comment without them */
+  occurrence: number | null
+  prefix: string | null
+  suffix: string | null
   comment: string
 }
 
@@ -106,7 +113,19 @@ export function readDisposition(raw: unknown): Result<DispositionInput, MissingF
   return ok({ disposition, note })
 }
 
-/** Reads an annotation: the quote it hangs on, an optional path hint (a heading path, a selector), and the comment. */
+/** The text around a quote as it is written: spaces at its edge count, an empty one is none. */
+function context(value: unknown, name: string, problems: string[]): string | null {
+  if (value === undefined || value === null || value === '') return null
+  if (typeof value !== 'string') problems.push(`${name} (text)`)
+  else if (value.length > MAX_CONTEXT) problems.push(`${name} (longer than ${MAX_CONTEXT} characters)`)
+  else return value
+  return null
+}
+
+/**
+ * Reads an annotation: the quote it hangs on, an optional path hint (a heading path, a selector), an optional
+ * occurrence number with the text before and after the quote, and the comment.
+ */
 export function readAnnotation(raw: unknown): Result<AnnotationInput, MissingFields> {
   const body = isRecord(raw) ? raw : {}
   const problems: string[] = []
@@ -118,8 +137,13 @@ export function readAnnotation(raw: unknown): Result<AnnotationInput, MissingFie
   if (comment.length > MAX_COMMENT) problems.push(`comment (longer than ${MAX_COMMENT} characters)`)
   const path = body.path === undefined || body.path === null ? null : filled(body.path)
   if (body.path !== undefined && body.path !== null && path === null) problems.push('path (when given, not empty)')
+  const occurrence = body.occurrence === undefined || body.occurrence === null ? null : body.occurrence
+  if (occurrence !== null && !(Number.isInteger(occurrence) && (occurrence as number) >= 0))
+    problems.push('occurrence (when given, a whole number from 0)')
+  const prefix = context(body.prefix, 'prefix', problems)
+  const suffix = context(body.suffix, 'suffix', problems)
   if (problems.length > 0) return refused(problems, 'an annotation')
-  return ok({ quote, path: path?.trim() ?? null, comment })
+  return ok({ quote, path: path?.trim() ?? null, occurrence: occurrence as number | null, prefix, suffix, comment })
 }
 
 const ENTITIES: Record<string, string> = {
