@@ -70,9 +70,50 @@ export interface Account {
   /** Registry v2: the account's standing mode; a live override replaces it (applyModes). */
   mode?: Mode
 }
+/** The ssh-reachable peer machine whose quota samples this machine imports and whose health `health` reads. */
+export interface HostPeer {
+  /** Name in health rows. */
+  name: string
+  /** ssh arguments naming the peer (host alias, user@host, -p ...); read with BatchMode, 5 s connect. */
+  ssh: string[]
+  /** The peer's claude-account (default `$HOME/.local/bin/claude-account`), as the peer's shell resolves it. */
+  bin?: string
+  /** The peer's ssh key runs fixed verbs only (`account-usage`, `account-snapshot`, `account-snapshot-core`) instead of a shell command. */
+  fixedVerbs?: boolean
+  /** `health` reads the peer through its herdr-core (this machine's, else one ssh hop to the peer's own) before plain ssh. */
+  herdrCore?: boolean
+}
+/** What `health --wake` does on a machine: a command run on the peer over ssh per pending re-login ask ({id}), a local notification command ({message}). */
+export interface HostWake {
+  push?: string
+  notify?: string
+}
+/** One machine of the host block: the entry whose `match` (a case-insensitive regex over the hostname) fits, else the first without one. */
+export interface HostMachine {
+  match?: string
+  /** This machine's name in audit lines and health rows. */
+  name: string
+  peer?: HostPeer
+  wake?: HostWake
+}
+/**
+ * The registry's optional `host` block: everything the package does beyond one machine with plain logins. No block, no
+ * adapter: no peer import, no re-login ask, no setup command. Commands are shell templates; {placeholders} are filled with quoted values.
+ */
+export interface HostConfig {
+  machines?: HostMachine[]
+  /** Run detached for a dead or soon-dead login ({id}, {reason}); the human's click lives in the command. */
+  reloginAsk?: string
+  /** The repair hint a `health` row shows ({id}, {machine}); absent = the plain login command of this machine's own rows. */
+  reloginFix?: string
+  /** Run once after `add` wrote the entry and created the directory ({id}, {dir}, {plan}); machine setup (rendered settings, MCP registration). */
+  afterAdd?: string
+}
 export interface Registry {
   /** Absent or 1: the v1 file; 2: v1 plus the per-account `mode`. Any other version is refused at load. */
   version?: number
+  /** Optional adapters for the machines this registry serves (HostConfig). */
+  host?: HostConfig
   accounts: Record<string, Account>
   /** v1 Fable mode: reads as mode reserve for fable on that account (modeOf). Absent or null = off. */
   fable?: string | null

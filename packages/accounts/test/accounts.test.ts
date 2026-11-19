@@ -74,6 +74,8 @@ import {
   type RefreshResult,
 } from '../src/index.ts'
 
+import { OWNER_HOST } from './owner-host.ts'
+
 const NOW = 1_800_000_000_000
 const H = 3600
 const reg = (bEnabled = true): Registry => ({
@@ -1964,7 +1966,7 @@ describe('CLI (isolated HOME)', () => {
   writeFileSync(join(bin, 'ssh'), '#!/bin/sh\nexit 255\n') // the peer is unreachable by default (ssh reads the real ~/.ssh/config whatever $HOME says)
   chmodSync(join(bin, 'ssh'), 0o755)
   const registry = join(home, 'registry.json')
-  writeFileSync(registry, JSON.stringify(reg(false))) // iu only: the second account is disabled
+  writeFileSync(registry, JSON.stringify({ ...reg(false), host: OWNER_HOST })) // iu only: the second account is disabled; the owner's host block keeps his adapters
   const base = {
     ...(process.env as Record<string, string>),
     HOME: home,
@@ -2609,7 +2611,8 @@ describe('help (--help lists every verb the dispatch accepts and never runs one)
   // The verbs `main` dispatches: the `case "<verb>":` labels of its switch.
   const dispatched = (() => {
     const body = src.slice(src.indexOf('switch (cmd) {'), src.indexOf('default:', src.indexOf('switch (cmd) {')))
-    return [...body.matchAll(/^ {4}case ['"]([a-z-]+)['"]:/gm)].map((m) => m[1])
+    const early = [...src.matchAll(/^ {2}if \(cmd === '([a-z-]+)'\) return/gm)].map((m) => m[1]) // a verb answered before the registry loads
+    return [...body.matchAll(/^ {4}case ['"]([a-z-]+)['"]:/gm)].map((m) => m[1]).concat(early)
   })()
 
   test('the dispatch was found (the parse below is not vacuous)', () => {

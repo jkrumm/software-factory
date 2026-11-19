@@ -10,6 +10,7 @@ import {
   type PickResult,
   type Registry,
   HOLDS,
+  type Sample,
   ID,
   MODE_KINDS,
   POLICY_NAMES,
@@ -17,8 +18,10 @@ import {
   SPILL,
   defaultAccountId,
   isNum,
+  sampleFromClaudeJson,
 } from './policy.ts'
 import { expandHome, registryPath } from './paths.ts'
+import { parseHost, shQuote } from './host.ts'
 
 function validAccount(a: unknown): a is Account {
   const x = a as Account | null
@@ -36,7 +39,11 @@ function validAccount(a: unknown): a is Account {
 }
 
 export function loadRegistry(path = registryPath()): Registry {
-  const raw = JSON.parse(readFileSync(path, 'utf8'))
+  return parseRegistry(JSON.parse(readFileSync(path, 'utf8')), path)
+}
+
+/** A registry as parsed JSON, checked; `path` only names the file in the messages. */
+export function parseRegistry(raw: ReturnType<typeof JSON.parse>, path: string): Registry {
   if (!raw || typeof raw.accounts !== 'object' || raw.accounts === null) throw new Error(`${path}: missing accounts`)
   for (const [id, a] of Object.entries(raw.accounts)) {
     if (!ID.test(id) || id === SPILL) throw new Error(`${path}: bad account id '${id}'`)
@@ -61,6 +68,8 @@ export function loadRegistry(path = registryPath()): Registry {
   const policy = raw.policy
   if (policy !== undefined && !isPolicyName(policy))
     throw new Error(`${path}: policy ${JSON.stringify(policy)} is not one of ${POLICY_NAMES.join(', ')}`)
+  const host = raw.host === undefined ? undefined : parseHost(raw.host)
+  if (typeof host === 'string') throw new Error(`${path}: host ${host}`)
   const accounts: Record<string, Account> = {}
   for (const [id, a] of Object.entries(raw.accounts as Record<string, Account & { mode?: unknown }>)) {
     if (a.mode === undefined) {
@@ -73,6 +82,7 @@ export function loadRegistry(path = registryPath()): Registry {
   }
   return {
     ...(version !== undefined ? { version } : {}),
+    ...(host ? { host } : {}),
     accounts,
     fable,
     drain,
@@ -124,7 +134,14 @@ export function accountFromConfigDir(reg: Registry, configDir: string | undefine
   return null
 }
 
-const shQuote = (v: string) => `'${v.replaceAll("'", `'\\''`)}'`
+/** The account's own `.claude.json` `cachedUsageUtilization` as a sample; null when the file is missing or unreadable. */
+export function readClaudeJsonSample(a: Account): Sample | null {
+  try {
+    return sampleFromClaudeJson(JSON.parse(readFileSync(claudeJsonPath(a), 'utf8')))
+  } catch {
+    return null
+  }
+}
 
 /** Shell fragment for a pick; null for the IU spill signal. */
 export function shellLine(reg: Registry, p: PickResult): string | null {

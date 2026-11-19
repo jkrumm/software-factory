@@ -13,5 +13,5 @@ apps/server/src/adapters/hygiene/probes/agentsmd.ts host  # names the local agen
 packages/contract/src/hygiene-catalogue.ts host  # the agentsmd entry names that file: a file name, not a host
 docs/hygiene.md host  # generated from the catalogue: a file name, not a host
 apps/server/test/hygiene/ci.test.ts work-repo  # fixture: a merge-request forge remote on example.com, proving the runner rule skips an origin that is not GitHub
-packages/accounts/src/owner.ts host  # the owner's peer adapters (the other machine's ssh alias), the defaults behind the ports until a later row makes them configurable
 packages/accounts/test/accounts.test.ts host  # fixtures: the commands the owner's peer adapters send to the peer
+packages/accounts/test/owner-host.ts host  # fixture: the owner's host block (the ssh aliases of his two machines) that the parity and CLI tests run with
