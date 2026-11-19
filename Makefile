@@ -135,11 +135,15 @@ test-unit:
 
 # The unit tests of what the branch changed (bun follows the imports from each changed file; committed and uncommitted
 # changes against the merge base with origin/master). CHECK_FAST_ALL=1 (CI's `static` job) runs every unit test.
+# The lead's run stops at the first failing test (UNIT_BAIL=--bail): a red run used to go on through every remaining file, and
+# its minutes were a third of the slot time of failed software-factory runs (Issue 2375; the failing test itself takes seconds).
+# `make check-fast UNIT_BAIL=` lists every failure in one run, as CI does.
+UNIT_BAIL ?= --bail
 UNIT_BASE = $(shell git merge-base HEAD origin/master 2>/dev/null)
 test-unit-changed:
 	@if [ -n "$(CHECK_FAST_ALL)" ] || [ -z "$(UNIT_BASE)" ]; then $(MAKE) --no-print-directory test-unit; else \
 	  echo "==> unit tests of the changed files (bun test --changed=$(UNIT_BASE))"; \
-	  $(SLOT) bun test $(call JUNIT,unit-changed) $(TEST_TIMEOUT) --changed=$(UNIT_BASE) --pass-with-no-tests ./apps ./packages ./scripts ./integrations; fi
+	  $(SLOT) bun test $(call JUNIT,unit-changed) $(TEST_TIMEOUT) $(UNIT_BAIL) --changed=$(UNIT_BASE) --pass-with-no-tests ./apps ./packages ./scripts ./integrations; fi
 
 # SHARD=1/3 runs the files scripts/shard.ts plans for the first of three shards of the scenarios (CI's matrix; seconds per file in
 # tests/scenarios/shard-weights.json); unset, all of them.

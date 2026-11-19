@@ -14,6 +14,9 @@ export default defineConfig({
   workers: 1,
   fullyParallel: false,
   retries: 0,
+  // In a test slot (FACTORY_JUNIT_DIR is set) the run stops at the first failing test: one broken screen used to fail the rest
+  // of its file one 30 s timeout at a time (4 to 6 failures per red run). CI runs every test; `--max-failures=0` does too.
+  maxFailures: process.env.FACTORY_JUNIT_DIR ? 1 : 0,
   // stretched by the host's load when the run starts (Issue 719): a screenshot that takes 3 s idle took 35 s at load 40
   timeout: patient(30_000),
   expect: { timeout: patient(10_000) },
