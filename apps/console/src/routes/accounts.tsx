@@ -256,7 +256,10 @@ function Actions({ account, now }: { account: AccountRow; now: Date }) {
       variant="outline"
       disabled={busy}
       aria-label={`${INTENT_LABELS[intent]} ${account.id}`}
-      onClick={() => set.mutate(intent)}
+      onClick={() => {
+        clear.reset()
+        set.mutate(intent)
+      }}
     >
       {INTENT_LABELS[intent]}
     </Button>
@@ -289,7 +292,10 @@ function Actions({ account, now }: { account: AccountRow; now: Date }) {
             variant="ghost"
             disabled={busy}
             aria-label={`Back to normal ${account.id}`}
-            onClick={() => clear.mutate()}
+            onClick={() => {
+              set.reset()
+              clear.mutate()
+            }}
           >
             Back to normal
           </Button>
