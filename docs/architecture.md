@@ -527,7 +527,7 @@ which reads the plan, the docs and the precedents of the ledger), the default af
 the owner. A step is a claimed call with a 35-minute lease: a takeover point, not a limit on the call, since a retaken call carries the same idempotency key and agw joins the run it started. A form with a missing
 field is refused (422 `missing_field`, the fields named, nothing stored). The Judge sees every Decision before the owner
 does: a failed Judge call is tried again after a 5-minute backoff, three tries in all (`decision_steps.tries`), and while
-tries are left the Decision is not the owner's (no owner step, no page, not in Needs). After the third failure it reaches
+tries are left the Decision is not the owner's (no owner step, no page, not in Needs). A Decision with a default still running down its wait has no owner step and no page either, but it is in Needs from the moment the Judge passed it on (`read/needs.ts`: the Issue waits on the owner, who may answer before the default is taken). After the third failure it reaches
 him with the failure in the Judge step's detail; `passed` and `rejected` stay final. The Judge's step is on the
 `DecisionView` (`judge`) and its reason on the Needs item. A second ask from the same asker while the Issue still waits on
 its open Decision amends that Decision: the form is replaced, the new rendering is the artifact's next revision (note

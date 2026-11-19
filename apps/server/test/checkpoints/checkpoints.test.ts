@@ -520,6 +520,32 @@ describe('settling, in turn', () => {
     expect(await effectsOf(issueId, 'note_lead')).toBe(1)
   })
 
+  test('a Decision whose default is still running down its wait is in Needs once the Judge passed it on, with no page', async () => {
+    const issueId = await workingIssue()
+    const { decision } = await ask(issueId, {
+      noAnswer: { consequence: 'Console logging.', default: 'pino', waitMinutes: 30 },
+    })
+    value(await settleDecision(deps, decision.id))
+    const needs = await readNeeds(db.sql, clock.now())
+    expect(needs.items.map((item) => [item.kind, item.id])).toEqual([['decision', decision.id]])
+    expect(needs.items[0]?.defaultAt).toBe(new Date(clock.now().getTime() + 30 * 60_000).toISOString())
+    expect(await rows('checkpoint_pages')).toBe(0)
+
+    clock.advance(30 * 60_000)
+    value(await settleDecision(deps, decision.id))
+    expect((await readNeeds(db.sql, clock.now())).items).toEqual([])
+  })
+
+  test('a Decision with a default is not in Needs while the Judge still has tries left', async () => {
+    const issueId = await workingIssue()
+    judgeAnswer = () => err(portError('timeout', 'agw did not answer'))
+    const { decision } = await ask(issueId, {
+      noAnswer: { consequence: 'Console logging.', default: 'pino', waitMinutes: 600 },
+    })
+    value(await settleDecision(deps, decision.id))
+    expect((await readNeeds(db.sql, clock.now())).items).toEqual([])
+  })
+
   test('the owner is reached when nothing else settles it: paged once, however often the pass runs', async () => {
     const issueId = await workingIssue()
     const { decision } = await ask(issueId)
