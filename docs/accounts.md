@@ -593,15 +593,13 @@ against fakes and the bundle.
 it runs both; everywhere it holds the package to `test/fixtures/parity-golden.json`, what the dotfiles CLI printed
 (`bun packages/accounts/scripts/record-golden.ts` records it from the dotfiles CLI, only for a deliberate change of the contract).
 
-The package keeps the dotfiles code's index access rule: its own `tsconfig.json` leaves `noUncheckedIndexedAccess` off (the
-picker indexes records by an id it has just checked) and the root typecheck excludes it; `make check` runs both.
+The package's `src` type-checks under the root `noUncheckedIndexedAccess` (the server's program imports it: a lookup of an id that must exist goes through `required`, which throws where the old code would have crashed); its own `tsconfig.json` keeps the flag off for `test/` and `scripts/`, and `make check` runs both.
 
 ## Left out on purpose
 
 The spawn integration (`c`, `rd`, `cf`), the keepalive and heartbeat jobs, the statusline hook, the login logistics and the
 attribution of usage stay in dotfiles and call these verbs; the switch row moves them. No new rule, window or account setting
-was added by the port (`subs-package`); registry v2 and the modes came with `subs-model-v2` (§Modes). The history, the forecast and the status verb came with `subs-read-model` (§History, §status); the server and the Console read modes through `rank`
-and `usage --json` until `subs-server`. The policy lab (`subs-policy-lab`) added policies, the measured load model, `simulate`,
+was added by the port (`subs-package`); registry v2 and the modes came with `subs-model-v2` (§Modes). The history, the forecast and the status verb came with `subs-read-model` (§History, §status); the server reads the accounts in-process from `src/read.ts` since `subs-server` (§The factory server), and the Console reads them through the server's `GET /v1/accounts`. The policy lab (`subs-policy-lab`) added policies, the measured load model, `simulate`,
 `compare` and the shadow log; it does not re-measure the model on a schedule (`measure-load.ts` by hand, and the file is
 committed) and judges no policy on live outcomes, which need weeks of a policy actually live. Onboarding (`subs-onboard`) does not run the login itself (it is a browser the user signs in with: `add` prints the command) and
 does not delete anything on `remove`; a peer needs no more than ssh and its own `claude-account`, there is no sync service.

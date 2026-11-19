@@ -95,6 +95,7 @@ export const AccountRow = z
     weeklyUsed: nullableNumber,
     fiveHourResetsAt: nullableString,
     weeklyResetsAt: nullableString,
+    exhaustedUntil: nullableString,
     fresh: z.boolean(),
     /** 1-based place in the order new leads are given accounts (the bulk lane); null: closed, or the reading is stale */
     rank: z.number().int().nullable(),

@@ -353,6 +353,7 @@ export type AccountStatusRow = Omit<
   | 'weeklyUsed'
   | 'fiveHourResetsAt'
   | 'weeklyResetsAt'
+  | 'exhaustedUntil'
   | 'fresh'
   | 'rank'
   | 'rankReason'

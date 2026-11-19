@@ -1,10 +1,11 @@
 import { afterAll, beforeAll, describe, expect, test } from 'bun:test'
-import { loadRegistry, liveAccounts } from '@software-factory/accounts'
+import { liveAccounts, loadRegistry } from '@software-factory/accounts'
+import { ReadAccountList } from '@software-factory/contract'
 import { createApp } from '../../src/api/app.ts'
 import type { CapacityApi } from '../../src/api/capacity.ts'
-import { packageAccountDesk } from '../../src/adapters/planning/accounts-source.ts'
+import { deskAccountSource, packageAccountDesk } from '../../src/adapters/planning/accounts-source.ts'
 import { accountsView, clearAccountMode, setAccountMode } from '../../src/app/accounts-view.ts'
-import { admissionPass } from '../../src/app/capacity-admit.ts'
+import { admissionPass, refreshAccounts } from '../../src/app/capacity-admit.ts'
 import { syncProjects } from '../../src/app/planning-sync.ts'
 import { account, startWorld, value, type World } from '../planning/support.ts'
 import { accountsFixture, cleanFixtures, NOW } from './accounts-fixture.ts'
@@ -64,6 +65,8 @@ describe('GET /v1/accounts', () => {
     expect(response.status).toBe(200)
     // oxlint-disable-next-line typescript/no-explicit-any -- the test reads fields of an answer the contract already guarantees
     const body = (await response.json()) as any
+    // the Console still reads this URL as the cards' list: the answer is a superset of it
+    expect(() => ReadAccountList.parse(body)).not.toThrow()
     expect(body).toMatchObject({ schema: 1, machine: expect.any(String), default_account: 'iu' })
     expect(body.lanes).toContain('bulk')
     const a = body.accounts.find((row: { id: string }) => row.id === 'a')
@@ -112,6 +115,21 @@ describe('POST and DELETE /v1/accounts/:id/mode', () => {
     expect(cleared.status).toBe(200)
     expect(await cleared.json()).toMatchObject({ account: 'b', mode: { kind: 'normal', source: 'registry' } })
     expect((await modeOf('b')).lanes.bulk).toMatchObject({ open: true })
+  })
+
+  test('the stored verdict follows the override at once: no lead on an account just paused', async () => {
+    const desk = packageAccountDesk({ paths })
+    const deps = { ...world.deps, accounts: deskAccountSource(desk), desk }
+    const openOf = async () =>
+      (
+        await world.db.sql`SELECT bulk_open FROM factory.capacity_readings WHERE account = 'c' ORDER BY id DESC LIMIT 1`
+      )[0]?.bulk_open
+    value(await refreshAccounts(deps)) // a poll stores every account of the fixture as the package judges it
+    expect(await openOf()).toBe(true)
+    value(await setAccountMode(deps, 'c', { mode: 'paused', until: '2026-11-20T12:00:00Z' }))
+    expect(await openOf()).toBe(false)
+    value(await clearAccountMode(deps, 'c'))
+    expect(await openOf()).toBe(true)
   })
 
   test('a request the package refuses is 422 with its words', async () => {

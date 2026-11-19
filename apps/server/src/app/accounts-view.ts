@@ -1,7 +1,7 @@
 import type { AccountMode, AccountModeBody, AccountsView } from '@software-factory/contract'
 import { isFresh } from '../domains/capacity/accounts.ts'
 import { ok, type PortError, type Result } from '../kernel/result.ts'
-import type { CapacityDeps } from './capacity-admit.ts'
+import { type CapacityDeps, refreshAccounts } from './capacity-admit.ts'
 
 /**
  * `GET /v1/accounts`: the package's status of every account, plus the factory's own: the seats each carries, how many are
@@ -31,6 +31,7 @@ export async function accountsView(deps: CapacityDeps): Promise<Result<AccountsV
       weeklyUsed: reading?.weeklyUsed ?? null,
       fiveHourResetsAt: iso(reading?.fiveHourResetsAt),
       weeklyResetsAt: iso(reading?.weeklyResetsAt),
+      exhaustedUntil: iso(reading?.exhaustedUntil),
       fresh,
       rank: fresh && reading?.open ? reading.position : null,
       rankReason: fresh && reading?.open ? reading.reason : null,
@@ -39,16 +40,24 @@ export async function accountsView(deps: CapacityDeps): Promise<Result<AccountsV
   return ok({ ...status.value, accounts })
 }
 
-/** Sets the mode override of one account through the package, so `claude-account` sees it; the answer is the mode now in force. */
+/**
+ * Sets the mode override of one account through the package, so `claude-account` sees it; the answer is the mode now in force.
+ * The poll runs again at once, so the stored verdict admission reads follows the override and a claim in the next minute
+ * cannot start a lead on an account just paused.
+ */
 export async function setAccountMode(
   deps: CapacityDeps,
   account: string,
   body: AccountModeBody,
 ): Promise<Result<AccountMode, PortError>> {
-  return deps.desk.setMode(account, body, deps.clock.now())
+  const set = deps.desk.setMode(account, body, deps.clock.now())
+  if (set.ok) await refreshAccounts(deps)
+  return set
 }
 
-/** Clears the override of one account; the registry's mode applies again. */
+/** Clears the override of one account; the registry's mode applies again, and the poll runs again at once. */
 export async function clearAccountMode(deps: CapacityDeps, account: string): Promise<Result<AccountMode, PortError>> {
-  return deps.desk.clearMode(account, deps.clock.now())
+  const cleared = deps.desk.clearMode(account, deps.clock.now())
+  if (cleared.ok) await refreshAccounts(deps)
+  return cleared
 }
