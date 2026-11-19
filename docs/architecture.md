@@ -113,7 +113,7 @@ through `receive` in `app/intake.ts`; the answer is a triage outcome (`docs/lang
   One exception to the work-repo rule: a lead's signal (`from agent:<its repo>`, `filer` set by the CLI) whose own Issue the owner filed (origin `you`) is held, not dropped, so the owner can promote work it owes a work repo; any other agent signal there is dropped (`work_repo`). The `screen` loop never reads such a signal (a work repo's words go to no workflow, and the last look never dismisses it): it stays held in Needs you.
 - **Incidents.** Alerts of the monitoring sources on one host or dependency inside a window join one incident: the VPS
   down fires HyperDX (its infra and app alerts) and Kuma, and there is one Issue. The window is a setting (`FACTORY_INCIDENT_WINDOW_MIN`).
-- **Amend or new.** A repeat of a fingerprint inside its window changes nothing. An owner or agent signal that matches an
+- **Amend or new.** A repeat of a fingerprint inside its window changes nothing. A signal that ends in the retro marker (`Retro: <date> kpi=…`) is one recommendation with its own number to move: it skips the title match and the workflow and files its own Issue (only its own fingerprint folds it into an open one). An owner or agent signal that matches an
   open Issue clearly (title overlap) amends it and reaches its lead as a note. Otherwise, unless a fingerprint, subject or
   open incident already settles it, the `factory-triage` workflow sees the repo's open Issues and those closed in the last
   day (outcome, reason) and answers amend `<open Issue>`, "already settled: `<closed Issue>`" or neither (file anew): a

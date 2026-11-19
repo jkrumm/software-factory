@@ -7,6 +7,7 @@ import {
   groupOf,
   hears,
   issueKindOf,
+  isRetroSignal,
   matchOpen,
   originOf,
   overlap,
@@ -90,6 +91,12 @@ describe("matching a person's signal against open Issues", () => {
     })
     expect(matchOpen('add dark mode to settings', issues)).toEqual({ kind: 'none' })
     expect(matchOpen('login crashes', issues)).toMatchObject({ kind: 'unsure' })
+  })
+
+  test('the retro marker names a retro signal, found anywhere in the text', () => {
+    expect(isRetroSignal('a change. Retro: 2026-11-19 kpi=cycle_p50 before=none direction=down')).toBe(true)
+    expect(isRetroSignal('Retro: 2026-11-19 kpi=cycle_p50 before=12 direction=up then more')).toBe(true)
+    expect(isRetroSignal('the retro said so')).toBe(false)
   })
 
   test('two Issues that match equally well are unsure, never a coin flip', () => {

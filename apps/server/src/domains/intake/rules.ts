@@ -1,4 +1,4 @@
-import type { Signal } from '@software-factory/contract'
+import { RETRO_MARKER, type Signal } from '@software-factory/contract'
 import type { OpenIssue, Received, RepoSignals } from './model.ts'
 
 /** The sources whose alerts come through the door; a route in the registry is the owner's act of listening. */
@@ -99,6 +99,15 @@ export function matchOpen(title: string, open: readonly OpenIssue[]): Match {
   // A clear match is both high and well ahead of the next candidate.
   if (best.score >= MATCH_AT && (!second || second.score < MATCH_AT)) return { kind: 'match', issue: best.issue }
   return { kind: 'unsure', candidates: scored.slice(0, 5).map((entry) => entry.issue) }
+}
+
+/**
+ * A signal that ends in the retro marker is one recommendation with its own number to move: it files its own Issue and
+ * is never folded into another by title or by the triage workflow (an amended signal rides on an Issue that asked for
+ * other work and is counted shipped with it).
+ */
+export function isRetroSignal(text: string): boolean {
+  return RETRO_MARKER.test(text)
 }
 
 /** The same ask under another day's words: the repo and the title lower-cased, digits and punctuation out. */

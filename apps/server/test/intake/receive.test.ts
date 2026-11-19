@@ -589,6 +589,20 @@ describe("a person's or an agent's signal", () => {
     expect(Date.now() - started).toBeLessThan(2_000)
   })
 
+  test('a retro recommendation files its own Issue: no title match, no workflow, the same ask again still folds in', async () => {
+    done(await intake.receive(owner('Hygiene: the root AGENTS.md is over its byte budget')))
+    triageAnswer = () => ok({ amend: 'issue_1' as IssueId })
+    const marker = 'Retro: 2026-11-19 kpi=verdict_changes_share before=0.4747 direction=down'
+    const retro = owner(
+      'Hygiene: the root AGENTS.md is a tunable, never a constant',
+      `a setting with a default. ${marker}`,
+    )
+    expect(done(await intake.receive(retro))).toMatchObject({ outcome: 'filed', issue: 'issue_2' })
+    expect(triageCalls).toBe(0)
+    expect(done(await intake.receive(retro))).toMatchObject({ outcome: 'amended', detail: 'repeat', issue: 'issue_2' })
+    expect(await issues()).toHaveLength(2)
+  })
+
   test('a request with no title overlap still reaches the workflow, whose amend answer amends the open Issue', async () => {
     done(await intake.receive(owner('Login page crashes on submit')))
     triageAnswer = () => ok({ amend: 'issue_1' as IssueId })
