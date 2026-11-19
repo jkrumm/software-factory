@@ -173,7 +173,8 @@ export async function verifyAccount(d: VerifyDeps): Promise<Check[]> {
   const own = readClaudeJsonSample(a)
   if (own) saveSample(d.id, own, undefined, hasSessionLimit(a), d.now())
   // only a sample this run read counts: the cache may hold a removed account's old one under the same id
-  // (an endpoint answer without a weekly window leaves the stored one in the merged cache sample: its own timestamp tells)
+  // the weekly of an endpoint answer counts only with a timestamp from this run (an answer without it leaves the stored one in the merged cache sample);
+  // else the account's own .claude.json usage counts, within 6 h
   const cached = results[d.id] === 'fresh' ? loadCache().samples[d.id] : undefined
   const fromEndpoint = cached?.w_ts != null && cached.w_ts >= startedAt ? cached : null
   const x = fromEndpoint ?? (usable(own ?? undefined, d.now()) ? own : null)
