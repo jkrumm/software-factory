@@ -104,11 +104,11 @@ const errandHelp = [
 const htmlHelp =
   'An HTML artifact (--content-format html) starts from apps/console/templates/artifact.html in the factory repo and declares color-scheme: the Console shows it in its own theme (light or dark, set as data-theme on <html>), keeps the text and every heading in one centred column, gives a picture wider than the column the pane and opens it in a lightbox on a click; one that declares no scheme gets a generic dark base. The template lists the rules in its head.'
 
-const submitHelp =
-  'Limits: --title at most 200 characters, --content at most 1000000 characters. A Concept or Spec waits for its verdict (end the turn); a Report never waits. ' +
-  'Images: a Markdown artifact shows an https image only from a host the owner lists for the Console (his image bucket); any other host, such as raw.githubusercontent.com, shows its alt text. Put a shot there with `imgcli private <file> --json` (prints a presigned `url`, valid 7 days) and link that url as `![alt](url)`; an HTML artifact inlines it as a `data:` URL.' +
-  ' ' +
-  htmlHelp
+const submitHelp = [
+  'Limits: --title at most 200 characters, --content at most 1000000 characters. A Concept or Spec waits for its verdict (end the turn); a Report never waits.',
+  'Images: a Markdown artifact shows an https image only from a host the owner lists for the Console (his image bucket); any other host, such as raw.githubusercontent.com, shows its alt text. Put a shot there with `imgcli private <file> --json` (prints a presigned `url`, valid 7 days) and link that url as `![alt](url)`; an HTML artifact inlines it as a `data:` URL.',
+  htmlHelp,
+].join(' ')
 
 const signalKindHint =
   "a signal's kind is request, feedback or remark; bug, feature or chore is an Issue's kind, set by triage; to choose it yourself file the Issue: `factory issue new --kind bug|feature|chore`"
