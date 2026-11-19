@@ -30,6 +30,7 @@ import {
   refuseUndialogable,
   refuseQueuedAsk,
 } from '../domains/checkpoints/errand.ts'
+import { autoRunClassOf } from '../kernel/auto-run.ts'
 import { matchKeyOf } from '../domains/checkpoints/match.ts'
 import { failedTwiceNote, MAX_RUN_TRIES, needOf } from '../domains/checkpoints/need.ts'
 import {
@@ -1448,6 +1449,7 @@ function closeErrand(
     const at = deps.clock.now()
     const said0 = input.note?.trim() || null
     const evidence = input.confirmedBy?.trim() || null
+    const autoRun = by === 'orchestrator' ? autoRunClassOf(evidence) : null
     // the delegate's evidence is part of the stored note, so the Errand shows who confirmed it
     const note = by === 'orchestrator' && evidence ? `confirmed by ${evidence}${said0 ? ` · ${said0}` : ''}` : said0
     let move: IssueMove | null = null
@@ -1457,11 +1459,13 @@ function closeErrand(
         ? null
         : outcome === 'not_needed'
           ? `The owner says the Errand "${errand.summary}" is not needed${note ? `: ${note}` : ''}. Go on without it.`
-          : by === 'orchestrator'
-            ? `The owner's delegate (the orchestrator) closed the Errand "${errand.summary}" on ${evidence ?? 'evidence'}${said0 ? `: ${said0}` : ''}.`
-            : note
-              ? `The owner did the Errand "${errand.summary}": ${note}`
-              : null
+          : autoRun !== null
+            ? `The Errand "${errand.summary}" ran by itself on the owner's MacBook (auto-run class ${autoRun}), with no dialog and no owner${said0 ? `: ${said0}` : ''}.`
+            : by === 'orchestrator'
+              ? `The owner's delegate (the orchestrator) closed the Errand "${errand.summary}" on ${evidence ?? 'evidence'}${said0 ? `: ${said0}` : ''}.`
+              : note
+                ? `The owner did the Errand "${errand.summary}": ${note}`
+                : null
     // the Issue that raised it, and every Issue that joined it, hear the end the same way
     const endFor = async (issueId: IssueId): Promise<Result<IssueMove | null, CheckpointError>> => {
       if (said) {

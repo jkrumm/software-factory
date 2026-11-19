@@ -9,6 +9,8 @@ export const LANGUAGE = {
     'What a lead hands to a person. One model, four kinds: Concept, Spec, Decision, Report. An Issue owns it, or none does (a standalone Report, artifact new); links name the other Issues it concerns; it may belong to one collection (a named set with one lead page, pinned or not)',
   ask: "The lead's verb that raises a Decision (factory issue ask)",
   attempt: 'Lead number n of an Issue',
+  'auto-run':
+    "The MacBook gate's verb that runs a command with no dialog when it is exactly a catalogue class the owner granted once (dotfiles config/macbook-auto-classes.tsv, his local consent file; first class secrets-seed). ask-human.sh push tries it before the dialog, so an Issue's Errand and an ask-human request take the same path; a command no granted class covers keeps its dialog. It closes the Errand through the orchestrator's done with the evidence ask-human: auto-run class <class>, which the factory reads as \"ran by itself\" (KPI errands_auto_run_share)",
   'avoidable cost':
     "The open improvement that costs the factory most, in minutes of queue wait or MiB over the memory budget; without one, the standing tenants' memory against its budget. What to do: it is the next thing worth fixing; open the improvement's Issue",
   'avoidable touch':
@@ -35,7 +37,7 @@ export const LANGUAGE = {
   claim:
     "A lead's place in its repo: leads: N (64 when the project states none: the host's fit is the limit, NL32) plus one for a fix. A wait that needs a person or a clock gives it back; the lead takes one again before it is told its wait is over",
   'closed without you':
-    'An Errand that ended with no action from the owner: its check found it no longer needed, it expired, a newer request replaced it, or the factory ran its MacBook command through a fixed verb. Nothing to do, and its title says which',
+    'An Errand that ended with no action from the owner: its check found it no longer needed, it expired, a newer request replaced it, the factory ran its MacBook command through a fixed verb, or his MacBook ran it by itself from a class he granted (an auto-run). Nothing to do, and its title says which',
   compacted: 'Session state: its context was just compacted, no turn since',
   concept:
     "A direction for a whole product, UX or architecture, before building. Three or four per project, ever. Its result goes into the project's DESIGN.md",

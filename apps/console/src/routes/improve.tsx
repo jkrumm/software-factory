@@ -115,6 +115,7 @@ const KPI_ICON: Record<KpiKey, Icon> = {
   asks: ChatCircleDotsIcon,
   recommendation_taken: ScalesIcon,
   errands_no_secret_no_hands: HandPointingIcon,
+  errands_auto_run_share: HandPointingIcon,
   issues_closed_per_day: SealCheckIcon,
   test_slot_wait_p50: HourglassIcon,
   minutes_over_ceiling: GaugeIcon,

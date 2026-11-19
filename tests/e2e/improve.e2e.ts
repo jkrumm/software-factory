@@ -54,6 +54,7 @@ const CARD_ORDER = [
   'owner_decisions_per_100',
   'errands_reached_per_100',
   'errands_no_secret_no_hands',
+  'errands_auto_run_share',
   'verdict_changes_share',
   'first_watch_dwell_p50',
   'issues_closed_per_day',
@@ -95,7 +96,7 @@ const openFolds = async (page: Page) => {
 
 /** Each KPI card shows what the lib makes of the API's figure, history and target: figure, change, distance, footer. */
 async function expectCards(page: Page, model: KpiModel) {
-  expect(model.kpis).toHaveLength(26)
+  expect(model.kpis).toHaveLength(27)
   expect(model.windows).toHaveLength(6)
   for (const kpi of cardKpis(model)) {
     const card = cardOf(page, kpi.label)

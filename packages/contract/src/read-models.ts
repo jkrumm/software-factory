@@ -307,6 +307,7 @@ export const KPI_KEYS = [
   'owner_decisions_per_100',
   'errands_reached_per_100',
   'errands_no_secret_no_hands',
+  'errands_auto_run_share',
   'first_verification_passes',
   'refusals',
   'cycle_p50',

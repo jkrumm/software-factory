@@ -1,6 +1,7 @@
 import type { SQL } from 'bun'
 import * as z from 'zod'
 import { type Effort, HISTORY_WINDOWS, type Kpi, type KpiModel, type Tier } from '@software-factory/contract'
+import { AUTO_RUN_NOTE_PATTERN } from '../kernel/auto-run.ts'
 import { boundedRead } from './bounded.ts'
 import { percentile, per, windowOf } from './stats.ts'
 import { catalogFields, type CatalogField } from './kpi-fields.ts'
@@ -78,6 +79,21 @@ async function errandsReached(sql: SQL, w: Window) {
       approval: z.coerce.number().int(),
     })
     .parse(row)
+}
+
+/**
+ * The Errands that reached the owner in the window or that his MacBook ran by itself in it, and how many of those ran by
+ * themselves. An `ask-human` request is pushed at once and can close before the screen has reached it, so the run is counted
+ * by its close and not only by a reach.
+ */
+async function errandsAutoRun(sql: SQL, w: Window) {
+  const [row] = await sql`
+    SELECT count(*) AS n, count(*) FILTER (WHERE auto) AS auto FROM (
+      SELECT closed_by = 'orchestrator' AND done_note ~ ${AUTO_RUN_NOTE_PATTERN} AND done_at >= ${w.from} AND done_at < ${w.to} AS auto,
+        reached_owner_at >= ${w.from} AND reached_owner_at < ${w.to} AS reached
+      FROM factory.errands) e
+    WHERE auto OR reached`
+  return z.object({ n: z.coerce.number().int(), auto: z.coerce.number().int() }).parse(row)
 }
 
 /** Issues filed in the window: what every per-Issue figure divides by. */
@@ -491,6 +507,7 @@ async function kpisOf(
     WHERE settled_by = 'owner' AND lower(trim(answer)) = lower(trim(recommendation))
       AND answered_at >= ${w.from} AND answered_at < ${w.to}`)
   const reached = await errandsReached(sql, w)
+  const autoRun = await errandsAutoRun(sql, w)
   const verdicts = await one(sql`SELECT count(*) AS n FROM factory.verdicts v WHERE ${ownerVerdict(sql, w)}`)
   const verdictsChanged = await one(
     sql`SELECT count(*) AS n FROM factory.verdicts v WHERE ${ownerVerdict(sql, w)} AND v.verdict IN ('with_notes', 'changes')`,
@@ -607,6 +624,16 @@ async function kpisOf(
       measured: true,
       definition:
         'Of the Errands that reached the owner in the window, the share that needed neither a secret nor hands: a command on his MacBook (`place`) or only his yes (`approval`). An Errand that reached him before `need` was stored counts under neither. Each one is a step the lead or a rule could have taken.',
+    }),
+    kpi({
+      key: 'errands_auto_run_share',
+      value: per(autoRun.auto, autoRun.n),
+      unit: 'share',
+      n: autoRun.n,
+      count: autoRun.auto,
+      measured: true,
+      definition:
+        "Of the Errands that reached the owner in the window, or that his MacBook ran by itself in it (a request can close before the screen reaches it), the share the MacBook's gate ran by itself (a granted auto-run class: no dialog, no click), closed with the evidence `ask-human: auto-run class <class>`. A command that no granted class covers keeps its dialog and does not count. Higher is less of his time.",
     }),
     kpi({
       key: 'recommendation_taken',
