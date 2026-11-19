@@ -18,6 +18,7 @@ import {
   SPILL,
   defaultAccountId,
   fableAccount,
+  modeOf,
   hasSessionLimit,
   reserveBudget,
   mergeSample,
@@ -29,8 +30,8 @@ import {
   sampleFromClaudeJson,
   withoutSessionWindows,
 } from './policy.ts'
-import { picksPath } from './paths.ts'
-import { type ModeView, type OverrideRecord, applyModes, baselineReset, resolveModes } from './modes.ts'
+import { historyDir, picksPath } from './paths.ts'
+import { type OverrideRecord, applyModes, baselineReset, modeField, resolveModes } from './modes.ts'
 import { accountFromConfigDir, claudeJsonPath, loadRegistry, shellLine } from './registry.ts'
 import { claimRefresh, loadCache, loadOverrides, markExhausted, recordSample, writeOverride } from './store.ts'
 import { readLoginExpiry } from './keychain.ts'
@@ -50,6 +51,16 @@ import {
   spawnLogged,
 } from './owner.ts'
 import { versionLine } from './version.ts'
+import {
+  type HistoryTarget,
+  importLines,
+  loadHistory,
+  readLedger,
+  readSampleLines,
+  syncLedger,
+} from './history-store.ts'
+import { parseSampleLine } from './history.ts'
+import { buildStatus, resetLine, statusLine } from './status.ts'
 
 const SPILL_EXIT = 3
 const REGISTRY_EXIT = 4 // pick answered `unset CLAUDE_CONFIG_DIR` (iu) because the registry was unreadable
@@ -100,6 +111,11 @@ function live(reg0: Registry, now = Date.now()) {
   return { reg: applyModes(reg0, views), cache, views }
 }
 
+/** Where the history of this run is written: the sample log and the ledger, each line with the account's mode in force then. */
+function historyTarget(reg: Registry): HistoryTarget {
+  return { mode: (id) => (Object.hasOwn(reg.accounts, id) ? modeOf(reg, id, Date.now()).kind : null) }
+}
+
 const claudeBin = () => Bun.which('claude') ?? join(homedir(), '.local', 'bin', 'claude')
 
 /**
@@ -135,6 +151,7 @@ async function refresh(
     log: (m) => console.error(m),
     peerUsage: o.peer === false ? undefined : fetchPeerUsage, // the synchronous pick-time refresh never waits on ssh
     machine: peerMachine().local,
+    history: historyTarget(reg),
   })
 }
 
@@ -181,23 +198,6 @@ function expiry(reg: Registry, json: boolean, ids?: string[]): void {
   const rows = loginExpiry(reg, Date.now(), ids)
   if (json) return void console.log(JSON.stringify({ accounts: rows }, null, 2))
   for (const r of rows) console.log(`${r.id}  ${r.grade}  ${r.detail}`)
-}
-
-const iso = (ms: number | null | undefined) => (ms === null || ms === undefined ? null : new Date(ms).toISOString())
-
-/** The `mode` field of `usage --json` and `mode --json`: the mode in force with its source (docs/accounts.md §usage --json). */
-export function modeField(v: ModeView) {
-  const live = v.source === 'override' ? v.override : null
-  return {
-    kind: v.mode.kind,
-    for: v.mode.for ?? null,
-    until: v.mode.until ?? null,
-    until_at: iso(v.until_at),
-    why: v.mode.why ?? null,
-    source: v.source,
-    set_at: iso(live?.set_at),
-    set_on: live?.set_on ?? null,
-  }
 }
 
 const withAge = (list: Record<string, unknown>[] | undefined, ts: number | undefined, now: number) =>
@@ -324,6 +324,87 @@ function modeVerb(reg0: Registry, rest: string[]): number {
   return 0
 }
 
+// ── status and history ───────────────────────────────────────────────────────────────────────────────────────────
+
+function statusVerb(reg0: Registry, rest: string[]): number {
+  const now = Date.now()
+  const { reg, cache, views } = live(reg0, now)
+  const history = Object.fromEntries(Object.keys(reg.accounts).map((id) => [id, loadHistory(id, now)]))
+  const status = buildStatus({ reg, cache, views, history, nowMs: now, machine: peerMachine().local })
+  if (rest.includes('--json')) {
+    console.log(JSON.stringify(status, null, 2))
+    return 0
+  }
+  for (const a of status.accounts) console.log(statusLine(a, now))
+  if (rest.includes('--resets'))
+    for (const a of status.accounts) for (const r of a.resets) console.log(resetLine(a.id, r, now))
+  return 0
+}
+
+/** `history`: the ledger of observed weekly resets; `history import <file>`: sample lines from a file into the log. */
+function historyVerb(reg: Registry, rest: string[]): number {
+  const now = Date.now()
+  const dir = historyDir()
+  if (rest[0] === 'import') {
+    const path = rest[1]
+    if (!path || path.startsWith('--'))
+      throw new Error('usage: claude-account history import <file> (one JSON sample line per line)')
+    const raw = readFileSync(path, 'utf8')
+      .split('\n')
+      .filter((l) => l.trim())
+    const lines = raw.flatMap((l) => {
+      try {
+        const s = parseSampleLine(JSON.parse(l))
+        return s && Object.hasOwn(reg.accounts, s.id) ? [s] : []
+      } catch {
+        return []
+      }
+    })
+    const r = importLines(dir, lines)
+    console.log(
+      `history import: ${r.added} lines added, ${r.duplicates} already there, ${raw.length - lines.length} skipped (not a sample line or not a registered account), ${r.resets.length} resets added to the ledger`,
+    )
+    return 0
+  }
+  const id = flag(rest, '--id')
+  if (id !== null && !Object.hasOwn(reg.accounts, id))
+    throw new Error(`history: unknown account '${id}' (${Object.keys(reg.accounts).join(', ')})`)
+  syncLedger(dir, id ? [id] : undefined) // the ledger is derived: a log written by an older build or an import gets its lines
+  const since = now - (num(rest, '--days') ?? 28) * 86400_000
+  const rows = readLedger(dir, id ?? undefined).filter((e) => e.at >= since)
+  if (rest.includes('--json')) {
+    console.log(
+      JSON.stringify(
+        {
+          since: new Date(since).toISOString(),
+          samples: readSampleLines(dir, { id: id ?? undefined, sinceMs: since }).length,
+          resets: rows,
+        },
+        null,
+        2,
+      ),
+    )
+    return 0
+  }
+  for (const e of rows)
+    console.log(
+      resetLine(
+        e.id,
+        {
+          at: new Date(e.at).toISOString(),
+          weekly: e.weekly,
+          scoped: e.scoped,
+          modes: e.modes,
+          rule: e.rule,
+          closed_hours: e.closed_hours,
+          manual: e.manual,
+        },
+        now,
+      ),
+    )
+  return 0
+}
+
 // ── health (wake check) ─────────────────────────────────────────────────────────────────────────────────────────
 
 async function health(argv: string[]): Promise<number> {
@@ -389,6 +470,31 @@ export const VERBS: Verb[] = [
     usage: 'usage [--json]',
     summary: "every account's quota, from the cache (a file read: no Keychain, no network)",
     detail: ['--json   machine-readable rows'],
+  },
+  {
+    name: 'status',
+    usage: 'status [--json] [--resets]',
+    summary:
+      'one line per account, led by its forecast; --json is the whole read model (per lane: open, place, why not, when it opens)',
+    detail: [
+      'plain: `me2 drain until reset · weekly 92 % · full Fri 14:00 · resets Sat 18:00`; a closed account adds why and when it opens',
+      '--resets   also the last resets of each account (the ledger)',
+      "--json     {schema, at, machine, rule, lanes, accounts:[{limits, mode, reserve, closed, lanes, forecast, resets}]}; every lane's order is `rank`'s",
+      'The forecast is burn-rate-24h-v1: the weekly percent at the reset if the last 24 h of burn goes on (docs/accounts.md §History).',
+      'A file read: no Keychain, no network.',
+    ],
+  },
+  {
+    name: 'history',
+    usage: 'history [--json] [--id <id>] [--days n] | history import <file>',
+    summary:
+      'the reset ledger: every observed weekly reset with the last weekly and scoped percent before it, the modes of that week, hours closed',
+    detail: [
+      '--days n     resets of the last n days (default 28)',
+      'import <f>   adds sample lines (JSON per line: ts in epoch ms, id, s, s_reset, w, w_reset, scoped) to the sample log and the ledger they imply;',
+      '             lines already in the log (same account and time) are skipped',
+      '~/.local/share/claude-accounts/samples-YYYY-MM.jsonl and resets.jsonl ($CLAUDE_ACCOUNTS_HISTORY is the directory)',
+    ],
   },
   {
     name: 'expiry',
@@ -611,6 +717,10 @@ export async function main(argv: string[]): Promise<number> {
     case 'usage':
       usage(reg, rest.includes('--json'))
       return 0
+    case 'status':
+      return statusVerb(reg, rest)
+    case 'history':
+      return historyVerb(reg, rest)
     case 'expiry':
       expiry(reg, rest.includes('--json'), flag(rest, '--ids')?.split(','))
       return 0
@@ -648,7 +758,7 @@ export async function main(argv: string[]): Promise<number> {
         s_reset: num(rest, '--s-reset'),
         w_reset: num(rest, '--w-reset'),
       }
-      recordSample(id, part, Date.now(), undefined, hasSessionLimit(reg.accounts[id]))
+      recordSample(id, part, Date.now(), undefined, hasSessionLimit(reg.accounts[id]), historyTarget(live(reg).reg))
       return 0
     }
     case 'account': {

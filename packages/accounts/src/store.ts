@@ -31,6 +31,7 @@ import {
 } from './policy.ts'
 import { type OverrideRecord, type OverrideState, parseOverrides } from './modes.ts'
 import { cacheDir, modesAuditPath, modesPath } from './paths.ts'
+import { type HistoryTarget, recordHistory } from './history-store.ts'
 
 export function writeAtomic(path: string, data: string): void {
   mkdirSync(dirname(path), { recursive: true })
@@ -90,11 +91,25 @@ export function loadCache(dir = cacheDir()): Cache {
 }
 
 /** `sessionLimit` false (a plan without a 5 h window): the session half of both the incoming and the stored sample is discarded. */
-export function saveSample(id: string, inc: Sample, dir = cacheDir(), sessionLimit = true, nowMs = Date.now()): void {
+export function saveSample(
+  id: string,
+  inc: Sample,
+  dir = cacheDir(),
+  sessionLimit = true,
+  nowMs = Date.now(),
+  history?: HistoryTarget,
+): void {
   const path = file(dir, id, 'sample.json')
   const prev = readJson(path) as Sample | null
   const merged = mergeSample(sessionLimit || !prev ? prev : noSession(prev), sessionLimit ? inc : noSession(inc))
   writeAtomic(path, JSON.stringify(merged))
+  if (history) {
+    try {
+      recordHistory(id, isSample(prev) ? prev : null, merged, nowMs, history)
+    } catch {
+      // the history is a record, never a gate
+    }
+  }
   // the latest observed weekly reset: what ends an override `until: reset` (docs/accounts.md §Expiry)
   if (isSample(prev) && observedReset(prev, merged)) {
     const r: ObservedReset = {
@@ -170,6 +185,7 @@ export function recordSample(
   nowMs: number,
   dir = cacheDir(),
   sessionLimit = true,
+  history?: HistoryTarget,
 ): void {
   const has = (v: number | null | undefined): v is number => typeof v === 'number'
   saveSample(
@@ -186,6 +202,7 @@ export function recordSample(
     dir,
     sessionLimit,
     nowMs,
+    history,
   )
   setAuthFailed(id, false, nowMs, dir)
   // The sample's `src` flips to "oauth" when a refresh lands later, so the verify suite reads this stamp for "a statusline fed it".

@@ -20,6 +20,7 @@ import {
 } from './policy.ts'
 import { isOverrideRecord, newerRecord } from './modes.ts'
 import type { HttpGet, PeerUsage } from './ports.ts'
+import type { HistoryTarget } from './history-store.ts'
 import { accountDir } from './registry.ts'
 import {
   loadCache,
@@ -46,6 +47,8 @@ export interface RefreshDeps extends KeychainDeps {
   modesPath?: string
   /** This machine's name for the audit line of an adopted override. */
   machine?: string
+  /** Where the sample log and the reset ledger are written (docs/accounts.md §History); absent = no history. */
+  history?: HistoryTarget
 }
 
 /**
@@ -127,6 +130,7 @@ async function importPeerSamples(d: RefreshDeps): Promise<Set<string>> {
         d.dir,
         hasSessionLimit(d.reg.accounts[id]),
         now,
+        d.history,
       )
       imported.add(id)
     }
@@ -198,7 +202,7 @@ export async function runRefresh(d: RefreshDeps): Promise<Record<string, Refresh
     }
     const sample = await oauthSample(d, id, status)
     if (sample) {
-      saveSample(id, sample, d.dir, hasSessionLimit(d.reg.accounts[id]), d.now())
+      saveSample(id, sample, d.dir, hasSessionLimit(d.reg.accounts[id]), d.now(), d.history)
       setAuthFailed(id, false, d.now(), d.dir)
       markVerified(id, d.now(), d.dir)
       results[id] = 'fresh'

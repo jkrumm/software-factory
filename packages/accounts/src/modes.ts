@@ -151,3 +151,20 @@ export function baselineReset(sample: Sample | undefined, nowMs: number): number
   while (r * 1000 <= nowMs) r += 7 * 24 * 3600
   return r
 }
+
+const isoOf = (ms: number | null | undefined) => (ms === null || ms === undefined ? null : new Date(ms).toISOString())
+
+/** The `mode` field of `usage --json`, `mode --json` and `status --json`: the mode in force with its source (docs/accounts.md §usage --json). */
+export function modeField(v: ModeView) {
+  const live = v.source === 'override' ? v.override : null
+  return {
+    kind: v.mode.kind,
+    for: v.mode.for ?? null,
+    until: v.mode.until ?? null,
+    until_at: isoOf(v.until_at),
+    why: v.mode.why ?? null,
+    source: v.source,
+    set_at: isoOf(live?.set_at),
+    set_on: live?.set_on ?? null,
+  }
+}
