@@ -526,7 +526,7 @@ Default range: from the day every enabled account has sample lines to now. Measu
 | Weekly points per 5 h point | Max 0.156 (the sim guessed 0.125); Ultra none | consecutive sample lines inside one 5 h window and one week |
 | Demand | 1.16 of the pool's weekly capacity | weekly units consumed per week (a week's running maximum, so feeds that disagree by a point never count twice); a floor, since walls cut the rest |
 | Demand curve | 0.42 at 05 UTC to 1.48 at 17 UTC; Sunday 0.76, Monday 1.17 | the consumption spread over the hours between sample lines (at most 6 h back) |
-| Lane mix | interactive 14 %, homeless (`lead`, `fan`, `wave`, agent-gateway lanes) 86 %, `bulk` and `headless` 0 | picks.jsonl lanes classed against the registry |
+| Lane mix | interactive 14 %, homeless (`lead`, `fan`, the factory's usage lane, agent-gateway lanes) 86 %, `bulk` and `headless` 0 | picks.jsonl lanes classed against the registry |
 
 The pick log holds only the spawns that called `claude-account pick` (since 2026-11-05 mostly interactive and `lead`): the factory's
 own account choice does not write it, so the mix is the best the log can tell, not the whole load.
