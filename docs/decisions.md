@@ -584,3 +584,14 @@ Report `docs/strategy/2026-11-next/report.html`, definition `docs/strategy/2026-
   by the Watch as before (NL23's rule for evidence). Cost: a ship waits for `make version` (30 s cap) and, as the Watch does,
   may fast-forward the checkout. Revert: delete the block after `ciStillRed` in `quality-ship.ts`. Count after a week:
   regressions with cause `not_deployed` (`read/kpis-flow.ts`) near zero, and ship refusals naming `does not hold`.
+- **NL50 A block that moved a light lead up is the seat's cost, not a stall to count (Issue 2471, 2026-11-19).** `stall:blocked` filed
+  at 85 in 7 days (0.054 per Issue closed, over NL41's 0.05). Read from the Issues' timelines: 47 of the 85 were a light lead's own
+  `issue block --out-of-depth` (or second stall), each followed in the same transaction by `moved_up` (median 0 s, ended by the
+  factory; 47 of 268 light starts of the week, 17 %), across 47 Issues of 14 repos, none more than once. The other 38 (0.024) are
+  the steward's holds and one-off causes NL41 already calls weather. The light seat's tripwire (NL38, NL40, NL46) judges that
+  cost per class with its own bound, so the friction count read it a second time and, since NL40 seats every hygiene finding
+  light, grew with it. `readFriction` now leaves out a stall whose next event is an applied `moved_up`; the move-ups stay in
+  `read finding-classes`, `read kpis` (seats) and the Issue's timeline. `stall:unreported` (2, both 2026-11-14, before the
+  send-back fix of 2026-11-15, `34927f43`) is left alone: none since, and it leaves the window on 2026-11-21. Revert: delete the
+  `NOT EXISTS` in `read/friction.ts`. Count after a week: `stall:blocked` under 0.05 per Issue closed with the move-up share
+  of light starts unchanged in `read finding-classes`.

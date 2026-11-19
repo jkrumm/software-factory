@@ -98,6 +98,7 @@ export const THRESHOLDS: Record<Judged, Rule> = {
  * account or holds it on a timer, 20 of 21 and 33 of 48 ended that way in the week to 2026-11-18 with no person, median 2 min.
  * A week at 0.03 and 0.015 per Issue closed is weather; the week one Issue's block loop made 47 of 77 stalls was 0.07, so one
  * in twenty (the level NL37 chose for a regression) tells the two apart. `unreported` and `regressed` stay at the bare count.
+ * A block that moved a light lead up is not counted at all (`readFriction`): 47 of the 85 blocks of the week to 2026-11-19.
  */
 const STALL_BY_RATE: Rule = {
   min: 3,
