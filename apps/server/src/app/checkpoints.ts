@@ -668,6 +668,11 @@ export async function submitArtifact(
   })
 }
 
+/** The Spec a filer attached to an Issue that no lead works yet: the queue holds the Issue, not a wait. */
+function isHeldFiledSpec(artifact: { key: string }, issue: { state: string } | null): boolean {
+  return artifact.key.startsWith('filed-spec:') && (issue?.state === 'settling' || issue?.state === 'queued')
+}
+
 /**
  * `factory artifact revise`: a new revision after a verdict of Changes. A Concept or Spec is submitted again (the Issue
  * waits again, the owner is paged for this revision); a Report just gains a revision.
@@ -695,12 +700,14 @@ export async function reviseArtifact(
     }
     const n = (revisions.at(-1)?.n ?? 0) + 1
     let move: IssueMove | null = null
-    if (waitsForReview(artifact.kind) && issue) {
+    // The Spec its filer attached sits in the queue with no lead: it is revised like a Report, by whoever filed it.
+    if (waitsForReview(artifact.kind) && issue && !isHeldFiledSpec(artifact, issue)) {
       if (input.attempt === null) {
         return err({
           kind: 'missing_field',
           fields: ['attempt'],
-          detail: 'a revision of a Concept or Spec needs: attempt',
+          detail:
+            'a revision of a Concept or Spec needs: attempt (its number is in the brief); a Spec filed with an Issue that no lead works yet is revised without one',
         })
       }
       const recorded = applied(
@@ -951,8 +958,7 @@ export async function verdictIn(
     let move: IssueMove | null = null
     // The Spec its filer attached holds the Issue in the queue, not in a wait: the verdict has no wait to end, and only
     // its note is left for the lead that starts next.
-    const heldInQueue =
-      artifact.key.startsWith('filed-spec:') && (issue?.state === 'settling' || issue?.state === 'queued')
+    const heldInQueue = isHeldFiledSpec(artifact, issue)
     const verdictNote = async (): Promise<Result<unknown, CheckpointError | PortError>> => {
       if (!artifact.issueId) return ok(null)
       if (!note && verdict !== 'with_notes' && verdict !== 'changes') return ok(null)
