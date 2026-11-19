@@ -80,7 +80,7 @@ outage never starts every waiting step at once.
 
 **Tiers** (`project.yaml` `checks:`, `docs/plan.md` "Check tiers"). A lead runs `make check-fast`: everything of `make
 check` that is not a test run, then the unit tests of the files the branch changed (`bun test --changed` against the merge
-base with `origin/master`; `CHECK_FAST_ALL=1` runs all of them). Outside CI it first applies `oxfmt --write` to the tree,
+base with `origin/master`; `CHECK_FAST_ALL=1` runs all of them; the run stops at the first failing test, `UNIT_BAIL=` lists every failure, and a Playwright run in a slot stops at its first failure, `--max-failures=0` runs all: failed-run slot minutes, Issue 2375). Outside CI it first applies `oxfmt --write` to the tree,
 outside the slot, so a format-only red never costs a slot wait: commit what it reformats. The rest (`check-fast-steps`) edits
 nothing, so it is `steps.check-fast` in `project.yaml` with `remote: true`: when the mini's line is long it runs on the step host over
 the tree as just formatted (`step_placements`, Throughput's "Steps by host"; the step image carries shellcheck and Postgres for it). CI leaves the rest:
