@@ -34,6 +34,8 @@ export interface Ci {
   ofShip(input: { repo: string; commits: readonly string[] }): Promise<Result<CiRead>>
   /** the CI of one commit as the default branch has it */
   ofCommit(input: { repo: string; sha: string }): Promise<Result<CiState>>
+  /** the CI of the first parent of one commit: the default branch as it stood before that commit landed */
+  ofParent(input: { repo: string; sha: string }): Promise<Result<CiState>>
 }
 
 /** What the watch's verify runs; `signal` is the server stopping, and nothing of a check may outlive it. */
@@ -49,7 +51,7 @@ export interface ProofInput {
    */
   version?: { landedAt: string; deployPaths?: string[] } | { problem: string }
   /**
-   * Set where the project ships by pull request: the default branch's CI for the merged commit must be green. `mergedSha`
+   * Set where the project ships by pull request: the default branch's CI for the merged commit must be green (or red only as it already was on its first parent). `mergedSha`
    * is the commit that merged the change, `landedAt` (the default branch's tip at the ship, which a later commit of
    * someone else may have moved) stands in where it is unknown. `mergedAt` (null when unknown) and `now` are ISO times,
    * passed in so the check stays deterministic.

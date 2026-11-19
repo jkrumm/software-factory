@@ -12,8 +12,9 @@ export interface Check {
    */
   blocked?: boolean
   /**
-   * a `make` target that failed the same way in the repo's last run before this ship: red, but not this change's, so it
-   * neither fails the watch nor is retried (`markInherited`)
+   * red, but not this change's, so it neither fails the watch nor is retried: a `make` target that failed the same way in
+   * the repo's last run before this ship (`markInherited`), or the `ci` check that was red on the same first failing
+   * check at the commit before the merge (`ciCheck`)
    */
   inherited?: boolean
   /**
@@ -70,13 +71,29 @@ const CI_VISIBLE_MS = 10 * 60_000
 /** CI still running this long after the merge did not finish. */
 const CI_RUNNING_MAX_MS = 60 * 60_000
 
+/** The failing check's name: `CiState.reason` is "<name> <conclusion>", the conclusion being one word. */
+const failingCheck = (state: CiState): string | null => state.reason?.replace(/\s+\S+$/, '') || null
+
+/** Whether `parent` was red on the same first failing check as `state`. A parent running, missing or unread is not. */
+function redBefore(state: CiState, parent: CiState | null): boolean {
+  if (parent?.status !== 'red') return false
+  const name = failingCheck(state)
+  return name !== null && name === failingCheck(parent)
+}
+
 /**
  * What the default branch's CI says of the landed commit, as a check named `ci`. Green is a pass and red names the
  * failing check; a run still going, or none visible in the first ten minutes, is `blocked` (looked at again, no
  * regression); one still going after an hour is red, and none after ten minutes passes (the repo may have no CI). With
- * no merge time the commit is taken as old enough for both.
+ * no merge time the commit is taken as old enough for both. A red whose first failing check was red the same way in
+ * `parent` (CI of the default branch before the commit landed) is `inherited`: it was there before the change, so the
+ * watch passes on it. A parent that is not red, or not read (null), leaves the red the change's. Only the first failing
+ * check of each is compared, so a second, new red behind an inherited first one is not told apart.
  */
-export function ciCheck(state: CiState, input: { sha: string; mergedAt: Date | null; now: Date }): Check {
+export function ciCheck(
+  state: CiState,
+  input: { sha: string; mergedAt: Date | null; now: Date; parent?: CiState | null },
+): Check {
   const name = 'ci'
   const short = input.sha.slice(0, 7)
   const age = input.mergedAt ? input.now.getTime() - input.mergedAt.getTime() : Number.POSITIVE_INFINITY
@@ -85,6 +102,13 @@ export function ciCheck(state: CiState, input: { sha: string; mergedAt: Date | n
     case 'green':
       return { name, ok: true, detail: `CI green for ${short}` }
     case 'red':
+      if (redBefore(state, input.parent ?? null))
+        return {
+          name,
+          ok: false,
+          inherited: true,
+          detail: `${state.reason ?? 'a check failed'} for ${short}${link}, already red on the commit before it`,
+        }
       return { name, ok: false, detail: `${state.reason ?? 'a check failed'} for ${short}${link}` }
     case 'running':
       if (age > CI_RUNNING_MAX_MS)
@@ -200,8 +224,9 @@ function failedBefore(now: string, before: readonly string[]): boolean {
  * run before the ship, and the last run of each other Issue's watch in the repo that ended in a regression no pass has
  * answered yet (one red, one owner: that Issue's lead has it, and it is not the Issue's whose watch sees the same red).
  * A verify red in a component the change never touched (a pending OS update, a dependency that moved, a drift list
- * that shrank) is not a regression of the Issue. A line none of them had keeps the check the change's. The version, CI,
- * checkout and probe checks stay the change's: each reads this ship's own commit or the live system. With no baseline,
+ * that shrank) is not a regression of the Issue. A line none of them had keeps the check the change's. The version,
+ * checkout and probe checks stay the change's: each reads this ship's own commit or the live system. The CI check is
+ * marked by `ciCheck`, from the CI of the commit before the merge, not from a baseline. With no baseline,
  * or one that was green, nothing is marked.
  */
 export function markInherited(checks: readonly Check[], baseline: readonly CheckRecord[] | null): Check[] {

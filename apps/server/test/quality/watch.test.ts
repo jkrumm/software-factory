@@ -132,6 +132,25 @@ test('CI green passes and red names the failing check with its page', () => {
   ).toEqual({ name: 'ci', ok: false, detail: 'build failure for abcdef0 (https://example.com/run/1)' })
 })
 
+test('a red on the same failing check as the parent’s is inherited and the watch passes; a new red regresses', () => {
+  const red = { status: 'red' as const, url: null, reason: 'Sonar Code Analysis failure' }
+  const same = ciCheck(red, { ...when(minutesAfter(1)), parent: { ...red, reason: 'Sonar Code Analysis timed_out' } })
+  expect(same).toMatchObject({ ok: false, inherited: true })
+  expect(outcomeOf([same])).toBe('green')
+  expect(stepOf([], [same])).toEqual({ kind: 'pass' })
+  const fresh = ciCheck(red, { ...when(minutesAfter(1)), parent: { status: 'green', url: null, reason: null } })
+  expect(fresh.inherited).toBeUndefined()
+  expect(stepOf(Array(MAX_RETRIES).fill({ at: MERGED, outcome: 'red' }), [fresh]).kind).toBe('regress')
+  // another check red on the parent, or a parent that has not finished, is no inheritance
+  for (const parent of [
+    { status: 'red' as const, url: null, reason: 'build failure' },
+    { status: 'running' as const, url: null, reason: 'Sonar Code Analysis is still running' },
+    { status: 'missing' as const, url: null, reason: 'no check ran' },
+    null,
+  ])
+    expect(ciCheck(red, { ...when(minutesAfter(1)), parent }).inherited).toBeUndefined()
+})
+
 test('CI still running is blocked (neither a pass nor a regression) until an hour after the merge, then red', () => {
   const running = { status: 'running' as const, url: null, reason: 'build is still running' }
   const early = ciCheck(running, when(minutesAfter(59)))
