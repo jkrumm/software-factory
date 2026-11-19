@@ -68,6 +68,39 @@ export function refuseKeyless(input: TriageInput): string | null {
 }
 
 // ---------------------------------------------------------------------------------------------------------------------
+// (f) a command for the MacBook that only the mini has
+
+/**
+ * Commands installed on the mini only (`factory`: the dialog's command exited 127 on the MacBook, Issue 2302; `secrets-run`:
+ * the headless secrets shim). A word joins this list on evidence, never on a guess: a false refusal blocks a real Errand.
+ */
+export const MINI_ONLY_COMMANDS: readonly string[] = ['factory', 'secrets-run']
+
+/** The first word of every segment of a shell line (after `&&`, `||`, `;`, `|`), `VAR=value` assignments skipped. */
+function commandWords(line: string): string[] {
+  const words: string[] = []
+  for (const segment of line.split(/&&|\|\||;|\|/)) {
+    const first = segment
+      .trim()
+      .split(/\s+/)
+      .find((word) => !/^[A-Za-z_][A-Za-z0-9_]*=/.test(word))
+    if (first) words.push(first.replace(/^["']|["']$/g, ''))
+  }
+  return words
+}
+
+/**
+ * A command for the MacBook (or one with no host named) that runs a mini-only command: the dialog would fail with exit 127
+ * and leave a second Errand behind. Refused at the raise, before any page or dialog; the lead or asker runs it on the mini.
+ */
+export function refuseOffMacbook(input: TriageInput): string | null {
+  if (input.command === null || (input.host !== null && input.host !== 'macbook' && input.host !== 'any')) return null
+  const word = commandWords(input.command).find((w) => MINI_ONLY_COMMANDS.includes(w.replace(/^.*\//, '')))
+  if (word === undefined) return null
+  return `\`${word}\` is installed on the mini only, so this command would fail on his MacBook (exit 127) and leave a second Errand behind. Run it on the mini yourself, or give the MacBook a command that exists there. Nothing was raised.`
+}
+
+// ---------------------------------------------------------------------------------------------------------------------
 // (c) a bot check is not an Errand
 
 const BOT_CHECK =
@@ -163,7 +196,11 @@ export function verbFor(input: TriageInput): MacbookVerb | null {
 // the whole decision, as the replay reads it
 
 export type Triage =
-  | { action: 'refuse'; rule: 'declined' | 'bot_check' | 'keyless' | 'unroutable' | 'empty_place'; reason: string }
+  | {
+      action: 'refuse'
+      rule: 'declined' | 'bot_check' | 'keyless' | 'off_macbook' | 'unroutable' | 'empty_place'
+      reason: string
+    }
   | { action: 'run'; verb: MacbookVerb }
   | { action: 'reach' }
 
@@ -182,6 +219,8 @@ export function triage(
   if (bot) return { action: 'refuse', rule: 'bot_check', reason: bot }
   const keyless = refuseKeyless(input)
   if (keyless) return { action: 'refuse', rule: 'keyless', reason: keyless }
+  const offMacbook = refuseOffMacbook(input)
+  if (offMacbook) return { action: 'refuse', rule: 'off_macbook', reason: offMacbook }
   const empty = refuseEmptyPlace(input, context.stated)
   if (empty) return { action: 'refuse', rule: 'empty_place', reason: empty }
   const unroutable = refuseUnroutable(input, context.stated)

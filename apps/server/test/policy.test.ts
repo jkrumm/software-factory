@@ -48,7 +48,6 @@ const PERSON_ROUTES = [
   ['POST', '/v1/artifacts/:id/annotations'],
   ['PATCH', '/v1/artifacts/:id/annotations/:annotationId'],
   ['DELETE', '/v1/artifacts/:id/annotations/:annotationId'],
-  ['POST', '/v1/errands/:id/done'],
   ['POST', '/v1/errands/:id/approve'],
   ['POST', '/signals/:id/promote'],
   ['POST', '/signals/:id/dismiss'],
@@ -250,10 +249,18 @@ describe('the auth plugin over HTTP', () => {
   })
 
   test('the orchestrator is refused on a PERSON row over HTTP, and an unset token is no caller', async () => {
-    for (const path of ['/v1/decisions/d1/worth-asking', '/v1/artifacts/a1/verdict', '/v1/errands/e1/done']) {
+    for (const path of [
+      '/v1/decisions/d1/worth-asking',
+      '/v1/artifacts/a1/verdict',
+      '/v1/artifacts/a1/needed',
+      '/v1/errands/e1/approve',
+    ]) {
       const response = await call('POST', path, TOKENS.orchestrator)
       expect(response.status).toBe(403)
     }
+    // an Errand's done is an owner row: the orchestrator passes the plugin (the unwired route answers 503, never 403)
+    expect((await call('POST', '/v1/errands/e1/done', TOKENS.orchestrator)).status).not.toBe(403)
+    expect((await call('POST', '/v1/errands/e1/done', TOKENS.agent)).status).toBe(403)
     const without = createApp({
       tokens: { owner: TOKENS.owner },
       health: { read: () => Promise.reject(new Error('unused')) },

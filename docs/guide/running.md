@@ -121,8 +121,8 @@ A caller is decided by its bearer token alone. `apps/server/src/api/policy.ts` h
 
 | Caller | Token | May |
 |-|-|-|
-| `owner` | `FACTORY_TOKEN`, required | every route; the 10 person-only rows are the owner's alone |
-| `orchestrator` | `FACTORY_ORCHESTRATOR_TOKEN` | the owner's rights bar those 10 rows, so the log tells it apart |
+| `owner` | `FACTORY_TOKEN`, required | every route; the 9 person-only rows are the owner's alone |
+| `orchestrator` | `FACTORY_ORCHESTRATOR_TOKEN` | the owner's rights bar those 9 rows, so the log tells it apart |
 | `agent` | `FACTORY_AGENT_TOKEN` | a lead's verbs on its own Issue, and reads |
 | `machine` | `FACTORY_DOOR_TOKEN` | `POST /signals/alerts`, `/signals/feedback` and `/door/reports` |
 | `signal` | `FACTORY_SIGNAL_TOKEN` | `POST /signals`, as one narrow filer |

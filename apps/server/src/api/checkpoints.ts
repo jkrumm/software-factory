@@ -740,12 +740,14 @@ export const checkpointRoutes = (uses: CheckpointUses) =>
     )
     .post(
       '/errands/:id/done',
-      async ({ params, body }) => {
+      async ({ params, body, request }) => {
         const id = idOf('errand', params.id)
         if (!id) return unknownId('Errand', params.id)
         const result = await uses.finishErrand({
           errandId: id,
           note: body.note ?? null,
+          by: ownerActorOf(request),
+          ...(body.confirmedBy ? { confirmedBy: body.confirmedBy } : {}),
           ...(body.outcome ? { outcome: body.outcome } : {}),
           ...(body.run ? { run: body.run } : {}),
         })
@@ -764,7 +766,8 @@ export const checkpointRoutes = (uses: CheckpointUses) =>
         response: RESPONSES(ErrandReply, 400, 404, 409, 422, 503),
         detail: {
           operationId: 'errand.done',
-          summary: 'the owner did it, or found it not needed (`outcome`): the lead hears it as its next turn',
+          summary:
+            "the owner did it, or found it not needed (`outcome`); the orchestrator may close one its operator confirmed, with `confirmedBy` (recorded as the orchestrator's): the lead hears it as its next turn",
         },
       },
     )

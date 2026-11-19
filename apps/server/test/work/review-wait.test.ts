@@ -140,11 +140,9 @@ describe('a turn back', () => {
     expect(note).toContain('was turned back by the owner, not done: "merge it yourself"')
   })
 
-  test('a lead cannot send it, and the orchestrator still cannot finish an Errand', () => {
+  test('a lead can neither send it nor finish an Errand', () => {
     const decided = apply(raised(), ev('errand_turned_back', { errand: 'errand_1', note: 'x' }, 'lead'), { now: NOW })
     expect(decided.result).toBe('refused')
-    expect(apply(raised(), ev('errand_done', { errand: 'errand_1' }, 'orchestrator'), { now: NOW }).result).toBe(
-      'refused',
-    )
+    expect(apply(raised(), ev('errand_done', { errand: 'errand_1' }, 'lead'), { now: NOW }).result).toBe('refused')
   })
 })

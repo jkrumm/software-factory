@@ -11,7 +11,7 @@
  * below. No token, or an unknown one, is 401 `unauthorized`; a known caller the row does not list is 403 `forbidden`.
  * The first row that matches wins, so a narrower row goes before a wider one.
  *
- * **The classes** (the owner is on every row but `public`; the orchestrator is on every row the owner is, bar the ten `PERSON` rows):
+ * **The classes** (the owner is on every row but `public`; the orchestrator is on every row the owner is, bar the nine `PERSON` rows):
  * - public: `GET /health`, the only route without a token.
  * - read: `GET /v1/*`, for owner, agent and read, except `GET /v1/errands` (the owner's hands) and a lead's own session read
  *   (`GET /v1/issues/:id/lead`), which are placed before it. A GET outside `/v1` is the owner's.
@@ -21,8 +21,10 @@
  * - owner only: everything else, and every route nobody has listed yet (new, cancel, seat, answer, prio, reopen, verdicts, projects, queue,
  *   capacity writes, loops, reading the door's registry; `GET /capacity` is the one capacity read a lead has). When in doubt, the owner alone.
  * - person: the owner's own judgment and hands, never the orchestrator's: `POST /v1/decisions/:id/worth-asking`,
- *   `POST /v1/artifacts/:id/verdict`, `POST /v1/artifacts/:id/needed` (his "needed me" mark), `POST /v1/artifacts/:id/annotations` and its `PATCH`/`DELETE /v1/artifacts/:id/annotations/:annotationId`, `POST /v1/errands/:id/done`, `POST /v1/errands/:id/approve` (his yes: the server runs the Errand's command on the mini), and
+ *   `POST /v1/artifacts/:id/verdict`, `POST /v1/artifacts/:id/needed` (his "needed me" mark), `POST /v1/artifacts/:id/annotations` and its `PATCH`/`DELETE /v1/artifacts/:id/annotations/:annotationId`, `POST /v1/errands/:id/approve` (his yes: the server runs the Errand's command on the mini), and
  *   `POST /signals/:id/promote` and `/dismiss` (releasing or refusing quarantined outside text).
+ * - Errand done (`POST /v1/errands/:id/done`) is an owner row: the orchestrator may close an Errand its operator confirmed, with `confirmedBy`
+ *   and only as `done` (the server refuses the rest, 422), recorded as `orchestrator`, never `owner`. A `not_needed` stays the owner's.
  * - orchestrator: the owner's delegate agent. It has the owner's rights on every other row (it steers, cancels, reopens, files and
  *   answers) so the log and the owner-touch counts can tell it from the owner; its token is the only difference.
  * - machine: exactly `POST /signals/alerts`, `POST /signals/feedback` and `POST /door/reports`, the door's three calls (the owner may make them too).
@@ -134,7 +136,8 @@ export const POLICY: readonly Rule[] = [
   rule('DELETE', '/v1/artifacts/:id/annotations/:annotationId', PERSON),
   rule('POST', '/v1/artifacts/:id/verdict', PERSON),
   rule('POST', '/v1/artifacts/:id/needed', PERSON),
-  rule('POST', '/v1/errands/:id/done', PERSON),
+  // the orchestrator closes an Errand only with evidence, as `done`, recorded as itself (`finishErrand`); approve stays his
+  rule('POST', '/v1/errands/:id/done', OWNER),
   rule('POST', '/v1/errands/:id/approve', PERSON),
   rule('POST', '/v1/errands/:id/turn-back', OWNER),
   // a pin is one reversible timestamp, and an Issue may be filed for the owner to have one pinned: a lead pins like it retires

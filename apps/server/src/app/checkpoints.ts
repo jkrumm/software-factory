@@ -38,6 +38,7 @@ import {
   refuseDeclined,
   refuseEmptyPlace,
   refuseKeyless,
+  refuseOffMacbook,
   refuseUnroutable,
 } from '../domains/checkpoints/triage.ts'
 import {
@@ -1116,7 +1117,8 @@ export function raiseErrand(
   const undialogable = refuseUndialogable(read.value)
   if (undialogable) return Promise.resolve(err({ kind: 'invalid', detail: undialogable }))
   // the host's own work and an empty place are refused before an Issue waits (`domains/checkpoints/triage.ts`)
-  const byRule = refuseKeyless(read.value) ?? refuseEmptyPlace(read.value, read.value.need)
+  const byRule =
+    refuseKeyless(read.value) ?? refuseOffMacbook(read.value) ?? refuseEmptyPlace(read.value, read.value.need)
   if (byRule) return Promise.resolve(err({ kind: 'invalid', detail: byRule }))
   return raiseChecked(deps, input, read.value)
 }
@@ -1265,9 +1267,31 @@ export interface ErrandRun {
  */
 export async function finishErrand(
   deps: CheckpointDeps,
-  input: { errandId: ErrandId; note: string | null; outcome?: ErrandOutcome; run?: ErrandRun },
+  input: {
+    errandId: ErrandId
+    note: string | null
+    outcome?: ErrandOutcome
+    run?: ErrandRun
+    /** who closes it: the owner (default) or his delegate, which must say who confirmed the work */
+    by?: 'owner' | 'orchestrator'
+    confirmedBy?: string
+  },
 ): Promise<CheckpointResult<ErrandWritten>> {
   const outcome = input.outcome ?? 'done'
+  if (input.by === 'orchestrator') {
+    if (outcome !== 'done')
+      return err({
+        kind: 'invalid',
+        detail:
+          "the orchestrator closes an Errand as done only: a not_needed is the owner's call (or turn it back with a note)",
+      })
+    if (!input.confirmedBy?.trim())
+      return err({
+        kind: 'invalid',
+        detail:
+          "the orchestrator closes an Errand with evidence: pass confirmedBy, who confirmed the work and how (the operator's report, what was looked at)",
+      })
+  }
   if (outcome === 'not_needed') return closeErrand(deps, { ...input, outcome })
 
   const failure = runFailureOf({ run: input.run, note: input.note?.trim() || null })
@@ -1395,8 +1419,10 @@ function closeErrand(
     errandId: ErrandId
     note: string | null
     outcome: ErrandOutcome | 'turned_back'
-    /** who closes it: the owner, or his delegate for a turn-back */
+    /** who closes it: the owner, or his delegate (a turn-back, or a done with evidence) */
     by?: 'owner' | 'orchestrator'
+    /** the delegate's evidence for a done */
+    confirmedBy?: string | undefined
   },
 ): Promise<CheckpointResult<ErrandWritten>> {
   const { outcome } = input
@@ -1409,7 +1435,10 @@ function closeErrand(
     if (errand.doneAt) return ok<ErrandWritten>({ result: 'replayed', errand, issue: issue ? moveOf(issue) : null })
 
     const at = deps.clock.now()
-    const note = input.note?.trim() || null
+    const said0 = input.note?.trim() || null
+    const evidence = input.confirmedBy?.trim() || null
+    // the delegate's evidence is part of the stored note, so the Errand shows who confirmed it
+    const note = by === 'orchestrator' && evidence ? `confirmed by ${evidence}${said0 ? ` · ${said0}` : ''}` : said0
     let move: IssueMove | null = null
     // a turn-back carries its note in `errand_done` itself, which the lead reads as one item
     const said =
@@ -1417,9 +1446,11 @@ function closeErrand(
         ? null
         : outcome === 'not_needed'
           ? `The owner says the Errand "${errand.summary}" is not needed${note ? `: ${note}` : ''}. Go on without it.`
-          : note
-            ? `The owner did the Errand "${errand.summary}": ${note}`
-            : null
+          : by === 'orchestrator'
+            ? `The owner's delegate (the orchestrator) closed the Errand "${errand.summary}" on ${evidence ?? 'evidence'}${said0 ? `: ${said0}` : ''}.`
+            : note
+              ? `The owner did the Errand "${errand.summary}": ${note}`
+              : null
     // the Issue that raised it, and every Issue that joined it, hear the end the same way
     const endFor = async (issueId: IssueId): Promise<Result<IssueMove | null, CheckpointError>> => {
       if (said) {
@@ -1427,7 +1458,7 @@ function closeErrand(
           await recordIn(work, deps, {
             issueId,
             key: key('noted', 'errand', errand.id, ...(issueId === errand.issueId ? [] : [issueId])),
-            event: { kind: 'noted', payload: { text: said }, actor: 'owner' },
+            event: { kind: 'noted', payload: { text: said }, actor: by },
           }),
           'noted',
         )
@@ -1440,7 +1471,7 @@ function closeErrand(
           event:
             outcome === 'turned_back'
               ? { kind: 'errand_turned_back', payload: { errand: errand.id, note: note ?? '' }, actor: by }
-              : { kind: 'errand_done', payload: { errand: errand.id }, actor: 'owner' },
+              : { kind: 'errand_done', payload: { errand: errand.id }, actor: by },
         }),
         outcome === 'turned_back' ? 'errand_turned_back' : 'errand_done',
       )
@@ -1498,6 +1529,7 @@ export function requestErrand(
   const byRule =
     refuseBotCheck(request) ??
     refuseKeyless(request) ??
+    refuseOffMacbook(request) ??
     refuseEmptyPlace(request, request.need) ??
     refuseUnroutable(request, request.need)
   if (byRule) return Promise.resolve(err({ kind: 'invalid', detail: byRule }))

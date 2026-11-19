@@ -48,7 +48,7 @@ and where) → `docs/decisions.md` (what was decided and why).
 - **Who may call what is `apps/server/src/api/policy.ts`.** A caller is decided by its bearer token alone (`owner`,
   `orchestrator`, `agent`, `machine`, `signal`, `read`); a route with no row is 403 for everyone, so a new route gets its
   row first and `apps/server/test/policy.test.ts` fails without one. Only `GET /health` is public. When in doubt, the
-  owner alone. The orchestrator has the owner's rights bar the ten owner-only routes of that file's header.
+  owner alone. The orchestrator has the owner's rights bar the nine owner-only routes of that file's header.
 - **Trust boundary.** The owner's and the orchestrator's tokens can start Claude Code with
   `--dangerously-skip-permissions`: a spawn's repo must be inside `FACTORY_REPO_ROOTS` after `realpath`, or be one of the
   repos `FACTORY_REPO_ALLOW` names (colon-separated absolute paths, each one repo and its worktrees, never its siblings;

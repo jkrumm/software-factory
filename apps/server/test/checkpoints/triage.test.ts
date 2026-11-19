@@ -8,6 +8,7 @@ import {
   refuseDeclined,
   refuseEmptyPlace,
   refuseKeyless,
+  refuseOffMacbook,
   refuseUnroutable,
   triage,
   type StatedNeed,
@@ -36,6 +37,27 @@ const decide = (
     now: NOW,
     ...context,
   })
+
+describe('(f) a MacBook command that runs a mini-only command is refused', () => {
+  test.each([
+    ['factory errand done errand_1', 'macbook'],
+    ['cd ~/x && factory issue show 1', null],
+    ['FOO=1 secrets-run read op://a/b/c', 'any'],
+    ['echo hi | /opt/bin/factory errand list', 'macbook'],
+  ] as const)('%s', (command, host) => {
+    const refusal = refuseOffMacbook(input({ summary: 'Run it', command, host }))
+    expect(refusal).toContain('mini only')
+    expect(refusal).toContain('Nothing was raised')
+    expect(decide({ summary: 'Run it', command, host })).toMatchObject({ action: 'refuse', rule: 'off_macbook' })
+  })
+
+  test('a command that exists there, a mini-bound ssh and another host are left alone', () => {
+    expect(refuseOffMacbook(input({ summary: 's', command: 'brew install exiftool', host: 'macbook' }))).toBeNull()
+    expect(refuseOffMacbook(input({ summary: 's', command: 'echo factory', host: 'macbook' }))).toBeNull()
+    expect(refuseOffMacbook(input({ summary: 's', command: 'factory errand list', host: 'portal' }))).toBeNull()
+    expect(refuseOffMacbook(input({ summary: 's', command: null, host: 'macbook' }))).toBeNull()
+  })
+})
 
 describe('(a) a command that runs wholly on the mini or over keyless ssh is refused', () => {
   test.each([

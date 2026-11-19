@@ -414,6 +414,12 @@ export const ErrandDoneBody = z
     /** `not_needed`: the owner found it needless; the default is that his hands did it */
     outcome: z.enum(['done', 'not_needed']).optional(),
     /**
+     * who confirmed the work and how (the operator's report, the file or page that was looked at). The orchestrator may close
+     * an Errand only with it, only as `done`; it is recorded as the orchestrator's close and the lead reads the evidence. The
+     * owner's own close ignores it.
+     */
+    confirmedBy: z.string().trim().min(1).max(300).optional(),
+    /**
      * what the command pushed for this Errand came to. Anything but `done` (a non-zero exit, 124, `running`) is not done: the
      * Errand stays open and records the run. `output` is kept as its first and last 20 lines.
      */
