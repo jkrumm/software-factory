@@ -4,7 +4,14 @@ import { reviewSeat } from '../domains/leads/reviewer.ts'
 import { type CiOutcome, judgeShip, type ReviewOutcome, type ShipVerdict } from '../domains/quality/gate.ts'
 import type { AcceptanceEvidence, ReviewEvidence } from '../domains/quality/evidence.ts'
 import type { Ci, Commits, LeadCheckout, Projects, Proof, Review } from '../domains/quality/ports.ts'
-import { ciStillRed, notDeployed, regressedOnCi } from '../domains/quality/watch.ts'
+import {
+  addsNoCommit,
+  afterAlertRegression,
+  alertStillDown,
+  ciStillRed,
+  notDeployed,
+  regressedOnCi,
+} from '../domains/quality/watch.ts'
 import type { QualityStore, StoredEvidence, UndisposedAnnotation } from '../domains/quality/store.ts'
 import type { AnyIssueEvent } from '../domains/work/events.ts'
 import type { Issue } from '../domains/work/issue.ts'
@@ -35,6 +42,8 @@ export interface ShipDeps {
   proof: Proof
   /** the server stopping: nothing the proof runs outlives it */
   signal: AbortSignal
+  /** the names of the Issue's alerts that are down now; unset: none is read and no ship is held for an alert */
+  alertsDown?: (issueId: IssueId) => Promise<readonly string[]>
   /** the role table's `reviewer` and `reviewer-cheap` rows, for the seat a review's record names; unset or null: no review is recorded with a seat */
   reviewerRows?: () => Promise<{
     cheap: { tier: Tier; effort: Effort }
@@ -147,11 +156,16 @@ async function judge(
   deps: ShipDeps,
   issue: Issue,
   input: ShipInput,
-  context: { reviewer: string | null; afterCiRegression: boolean },
+  context: { reviewer: string | null; afterCiRegression: boolean; afterAlert: readonly string[] | null },
 ): Promise<ShipVerdict> {
   const { reviewer } = context
   const refuse = (why: string): ShipVerdict => ({ accepted: false, error: `ship refused: ${why}` })
   if (input.commits.length === 0) return refuse('ship names no merged commit')
+  // An alert regressed the last ship and still fires: the same commits read the same alert. A monitor that cannot be read never refuses.
+  if (context.afterAlert && deps.alertsDown && addsNoCommit(input.commits, context.afterAlert)) {
+    const down = await deps.alertsDown(issue.id)
+    if (down.length > 0) return { accepted: false, error: alertStillDown(down) }
+  }
   const checkout = await checkoutOf(deps.checkout, issue, input.attempt)
   if (!checkout.ok) return refuse(`the lead's checkout could not be read: ${checkout.error.detail}`)
   const { repo } = checkout.value
@@ -256,6 +270,7 @@ export async function shipIssue(
     if (!history) return err<IssueWriteError>({ kind: 'unknown_issue', issueId: input.issueId })
     const issue = replay(input.issueId, history)
     const eventKey = await shipKey(work, input)
+    const view = await quality.view(input.issueId)
     return ok({
       eventKey,
       issue,
@@ -263,11 +278,21 @@ export async function shipIssue(
       specOwed: issue.checkpoint && !(await quality.specSubmitted(input.issueId)) ? issue.checkpoint : null,
       annotationsOwed: await quality.undisposedAnnotations(input.issueId),
       reviewer: assignedReviewer(history, input.attempt),
-      afterCiRegression: regressedOnCi((await quality.view(input.issueId)).watches),
+      afterCiRegression: regressedOnCi(view.watches),
+      afterAlert: afterAlertRegression(history, view.watches, view.ships),
     })
   })
   if (!loaded.ok) return loaded
-  const { eventKey, issue, accepted, specOwed, annotationsOwed: owed, reviewer, afterCiRegression } = loaded.value
+  const {
+    eventKey,
+    issue,
+    accepted,
+    specOwed,
+    annotationsOwed: owed,
+    reviewer,
+    afterCiRegression,
+    afterAlert,
+  } = loaded.value
 
   if (accepted) {
     return deps.uow.run(async ({ work, quality }) => {
@@ -287,7 +312,7 @@ export async function shipIssue(
     ? { accepted: false, error: specOwedMessage(specOwed) }
     : owed.length > 0
       ? { accepted: false, error: annotationsOwed(owed) }
-      : await judge(deps, issue, input, { reviewer, afterCiRegression })
+      : await judge(deps, issue, input, { reviewer, afterCiRegression, afterAlert })
   return deps.uow.run<ShipAnswer, IssueWriteError>(async ({ work, quality }) => {
     const at = deps.clock.now()
     const ship = {

@@ -116,7 +116,9 @@ const ci: Ci = {
   ofCommit: async () => commitCi,
 }
 let reviewerRows: ShipDeps['reviewerRows']
+let alertsDownNow: string[] = []
 const deps = (): ShipDeps => ({
+  alertsDown: async () => alertsDownNow,
   uow,
   clock,
   ids,
@@ -159,6 +161,7 @@ beforeEach(async () => {
   proofRuns = 0
   proofInputs = []
   commitCi = err(portError('refused', 'no token'))
+  alertsDownNow = []
   duringProof = async () => {}
   project = { windowMs: 30 * 60_000, deployMode: 'none', makeVerify: true, ci: true, probes: [] }
 })
@@ -919,6 +922,53 @@ describe('the watch', () => {
         expect(value(await ship(await working(), 'call-1')).result).toBe('applied')
       }
       expect(proofRuns).toBe(0)
+    })
+  })
+
+  describe('a ship after an alert regressed the last one', () => {
+    /** An Issue shipped once, then taken back to its lead by a monitor's `down` while the Watch ran. */
+    async function regressedByAlert(): Promise<IssueId> {
+      const issueId = await working()
+      value(await ship(issueId, 'call-1'))
+      await record(
+        issueId,
+        'regressed-1',
+        ev('regressed', { watch: 1, detail: 'Infra load5 per core >= 1.5' }, 'factory'),
+      )
+      expect(await stateOf(issueId)).toMatchObject({ state: 'working' })
+      alertsDownNow = ['Infra load5 per core']
+      return issueId
+    }
+
+    test('is refused while the alert is down and the ship names no new commit', async () => {
+      const issueId = await regressedByAlert()
+      const refused = value(await ship(issueId, 'call-2'))
+      expect(refused.result).toBe('refused')
+      expect(refused.detail).toContain('Infra load5 per core')
+      expect(refused.detail).toContain('factory issue ask')
+      expect(await stateOf(issueId)).toMatchObject({ state: 'working' })
+    })
+
+    test('a new commit, or an alert that is up, goes through', async () => {
+      const issueId = await regressedByAlert()
+      expect(value(await ship(issueId, 'call-2', 1, ['9'.repeat(40)])).result).toBe('applied')
+      const again = await regressedByAlert()
+      alertsDownNow = []
+      expect(value(await ship(again, 'call-2')).result).toBe('applied')
+    })
+
+    test('a regression of the Watch’s own checks does not hold the ship', async () => {
+      const issueId = await working()
+      value(await ship(issueId, 'call-1'))
+      await runEffects()
+      proofAnswer = () => ok([{ name: 'make verify', ok: false, detail: 'exit 1: boom' }])
+      clock.advance(30 * 60_000)
+      for (let i = 0; i < 12; i++) {
+        if (value(await checkWatches(watchDeps())).regressed > 0) break
+        clock.advance(60_000)
+      }
+      alertsDownNow = ['Infra load5 per core']
+      expect(value(await ship(issueId, 'call-2')).result).toBe('applied')
     })
   })
 
