@@ -54,7 +54,7 @@ dialog.factory-lightbox[open] { display: flex; flex-direction: column; }
 .factory-lightbox .factory-lightbox-pin { position: absolute; transform: translate(-50%, -50%); min-width: 24px; width: 24px; height: 24px; padding: 0; border-radius: 50%;
   font-size: 12px; font-weight: 600; line-height: 1; background: #3b82f6; border: 2px solid #fff; color: #fff; box-shadow: 0 1px 4px rgb(0 0 0 / 0.5); cursor: pointer; }
 .factory-lightbox .factory-lightbox-pin:hover:not(:disabled), .factory-lightbox .factory-lightbox-pin[data-active] { background: #2563eb; outline: 2px solid #a2c3f0; outline-offset: 2px; }
-.factory-lightbox-side { flex: none; width: 300px; max-width: 40%; overflow: auto; padding: 8px 14px 16px; border-inline-start: 1px solid var(--lb-line, #444447); }
+.factory-lightbox-side { flex: none; width: 300px; max-width: 40%; overflow: auto; margin: 0 14px 16px 0; padding: 8px 14px 16px; border: 1px solid var(--lb-line, #444447); border-radius: 8px; box-sizing: border-box; }
 .factory-lightbox-side[hidden] { display: none; }
 .factory-lightbox-side h2 { margin: 0 0 8px; font-size: 13px; font-weight: 600; color: var(--lb-faint, #a7a7aa); }
 .factory-lightbox-side ul { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: 8px; }
