@@ -60,8 +60,11 @@ const RECT_OF = (name: string) => `(() => {
 
 /** Where the second painted passage of a highlight is: a point on it, and its edges, in the viewport of its page or frame. */
 const SPOT = (name: string) => `(() => {
-  const r = [...CSS.highlights.get(${JSON.stringify(name)})][1].getBoundingClientRect()
-  return { x: r.left + 12, y: r.top + r.height / 2, top: r.top, bottom: r.bottom, viewport: innerHeight }
+  const range = [...CSS.highlights.get(${JSON.stringify(name)})][1]
+  const r = range.getBoundingClientRect()
+  // a point on the first line: where the passage wraps, the middle of its box can fall between two lines
+  const line = range.getClientRects()[0] ?? r
+  return { x: line.left + Math.min(12, line.width / 2), y: line.top + line.height / 2, top: r.top, bottom: r.bottom, viewport: innerHeight }
 })()`
 
 interface Spot {
@@ -72,13 +75,13 @@ interface Spot {
   viewport: number
 }
 
-/** The spot once a smooth scroll has stopped with it in view: a click made while it moves lands beside the passage. */
+/** The spot once a smooth scroll has stopped with it in view: a click made while it moves lands beside the passage. x and y are where a click goes. */
 async function stillInView(measure: () => Promise<Spot>, centered = false): Promise<Spot> {
   let last = await measure()
   await expect
     .poll(async () => {
       const now = await measure()
-      const still = now.top === last.top
+      const still = now.x === last.x && now.y === last.y
       last = now
       // the third passage can be in view before the scroll starts: a frame's own viewport also has it come to the middle
       const middle = !centered || Math.abs((now.top + now.bottom) / 2 - now.viewport / 2) < 80
@@ -223,10 +226,17 @@ test('HTML: a comment on the second and on the third occurrence stays on each af
   await frame.evaluate(
     "[...CSS.highlights.get('factory')][1].startContainer.parentElement.scrollIntoView({ block: 'center' })",
   )
-  const at = await stillInView(() => frame.evaluate<Spot>(SPOT('factory')), true)
-  const box = await page.locator('iframe[title="Artifact"]').boundingBox()
-  if (!box) throw new Error('no frame box')
-  await page.mouse.click(box.x + at.x, box.y + at.y)
+  // the frame's scrollIntoView can scroll the Console page too (a narrow layout), so the frame's own box is measured with the passage
+  const iframe = page.locator('iframe[title="Artifact"]')
+  const at = await stillInView(async () => {
+    const [spot, box] = await Promise.all([frame.evaluate<Spot>(SPOT('factory')), iframe.boundingBox()])
+    if (!box) throw new Error('no frame box')
+    return { ...spot, x: box.x + spot.x, y: box.y + spot.y }
+  }, true)
+  // the frame answers a hover over a painted passage with a pointer cursor: it has the passage under the mouse, so the click is its own
+  await page.mouse.move(at.x, at.y)
+  await expect.poll(() => frame.evaluate('document.documentElement.style.cursor')).toBe('pointer')
+  await page.mouse.click(at.x, at.y)
   const form = page.getByRole('complementary', { name: 'Comments' }).getByRole('form', { name: 'Edit comment' })
   await expect(form.getByRole('textbox', { name: 'Comment' })).toHaveValue('About the third one.')
 })
