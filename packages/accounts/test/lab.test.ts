@@ -11,6 +11,9 @@ import {
   type Sample,
   type SampleLine,
   DEFAULT_POLICY,
+  buildStatus,
+  emptyOverrides,
+  resolveModes,
   MEASURED,
   POLICY_NAMES,
   compare,
@@ -193,6 +196,18 @@ describe('policies', () => {
     expect(policyOfRule(ruleTag('laxity'))).toBe('laxity')
     expect(policyOfRule(null)).toBeNull()
     expect(policyOfRule('v1.10+nope')).toBeNull()
+    const cache = cacheOf({ iu: sample(null, 20, 100), me: sample(10, 30, 50), me2: sample(5, 60, 150) })
+    const statusRule = (reg: Registry) =>
+      buildStatus({
+        reg,
+        cache,
+        views: resolveModes(reg, emptyOverrides(), cache, NOW),
+        history: {},
+        nowMs: NOW,
+        machine: 'mini',
+      }).rule
+    expect(statusRule(REG)).toBe('v1.10')
+    expect(statusRule({ ...REG, policy: 'laxity' })).toBe('v1.10+laxity')
   })
 })
 

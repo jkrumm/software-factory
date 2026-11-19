@@ -429,7 +429,7 @@ machine's local time); a forecast that does not fill the week says `ends at 88 %
 - One quirk of `rank`, kept as it is: with no account open the interactive lane lands on the default account, which `rank` lists as
   `<model>-reserve` when that is a reserve account, whatever its sample says; `status` shows that place as it is.
 - `reserve` is `{for, known, unused, budget_left, released}` for a reserve account, `forecast` null without a weekly sample, `resets` the last 8
-  ledger lines, newest first. The rule is `RULE_VERSION` (`v1.10`: v1.9 with the modes).
+  ledger lines, newest first. The rule is `RULE_VERSION` (`v1.10`: v1.9 with the modes), `v1.10+<policy>` under a policy other than `v1.9` (§The policy lab), as the sample log names it.
 
 ## The policy lab
 
