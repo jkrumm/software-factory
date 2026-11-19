@@ -2,7 +2,7 @@ import { SPEC_WAIT_HOURS } from '@software-factory/contract'
 import type { ArtifactId } from '../domains/checkpoints/artifact.ts'
 import { type Recheck, type ReviewWait, STALE_REVIEW_MS } from '../domains/checkpoints/recheck.ts'
 import { ok, type PortError, type Result } from '../kernel/result.ts'
-import { type CheckpointError, giveVerdict, issueOf, waitingOn } from './checkpoints.ts'
+import { type CheckpointError, giveVerdict, holdsFiledSpec, issueOf, waitingOn } from './checkpoints.ts'
 import type { SettleDeps } from './checkpoints-settle.ts'
 
 /** What the look at a Concept or Spec that waited a day for the owner came to. */
@@ -15,9 +15,6 @@ export interface ReviewLooked {
 const REVIEW_LIMIT = 50
 
 const SPEC_WAIT_MS = SPEC_WAIT_HOURS * 3_600_000
-
-/** A filed Spec holds its Issue in the queue: until a lead starts, the Issue is settling or queued. */
-const holdsFiledSpec = (issue: { state: string }): boolean => issue.state === 'settling' || issue.state === 'queued'
 
 type Step<T> = Promise<Result<T, CheckpointError | PortError>>
 

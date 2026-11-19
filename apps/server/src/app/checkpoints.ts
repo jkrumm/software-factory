@@ -668,10 +668,13 @@ export async function submitArtifact(
   })
 }
 
-/** The Spec a filer attached to an Issue that no lead works yet: the queue holds the Issue, not a wait. */
-function isHeldFiledSpec(artifact: { key: string }, issue: { state: string } | null): boolean {
-  return artifact.key.startsWith('filed-spec:') && (issue?.state === 'settling' || issue?.state === 'queued')
-}
+/** A filed Spec holds its Issue in the queue: until a lead works it, the Issue is settling or queued. */
+export const holdsFiledSpec = (issue: { state: string }): boolean =>
+  issue.state === 'settling' || issue.state === 'queued'
+
+/** The Spec a filer attached to an Issue that no lead works: the queue holds the Issue, not a wait. */
+const isHeldFiledSpec = (artifact: { key: string }, issue: { state: string } | null): boolean =>
+  artifact.key.startsWith('filed-spec:') && issue !== null && holdsFiledSpec(issue)
 
 /**
  * `factory artifact revise`: a new revision after a verdict of Changes. A Concept or Spec is submitted again (the Issue
