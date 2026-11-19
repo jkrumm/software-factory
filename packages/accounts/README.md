@@ -39,7 +39,7 @@ $ claude-account verify second --enable
 ```
 
 `verify` refuses an account whose login is not the plan you registered (an Ultra added as `max` fails with the `--plan` to use) and one that has no readable quota sample, and
-changes nothing when it fails.
+leaves the registry as it is when it fails.
 
 **3. Pick.**
 
