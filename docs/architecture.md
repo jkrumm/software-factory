@@ -708,7 +708,7 @@ designed page: a header band (a link back to its Issue with the Issue's state an
 words, a revision selector, and for a Concept or Spec the verdict control, a button whose popover holds the four words and
 a note), a reading-size control (16, 18 or 20 px, kept per browser), and three resizable panes in a row (the document
 centred in its pane with prose near 76ch, Contents from 1280 px, Comments; drag handles, sizes kept per browser, each
-folding to a rail; `public/frame/frame.js` adds the reading stylesheet inside an HTML artifact's frame), and the comments pane: one card per
+folding to a rail; `public/frame/frame.js` adds the reading stylesheet, follows the Console's theme and gives wide pictures the pane inside an HTML artifact's frame, and `public/frame/lightbox.js` opens a picture fullscreen), and the comments pane: one card per
 comment (author, time, the quoted passage, the words, where in the document), with "General" (a comment on the whole
 artifact hangs on the title with the path `global`) and "Unanchored" as their own groups when more than one group exists,
 and a box for a general comment at its foot. A card is a button: it brings its passage into view and paints it stronger
