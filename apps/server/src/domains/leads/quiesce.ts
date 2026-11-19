@@ -6,6 +6,19 @@ export const QUIESCE_AFTER_MS = 30 * 60_000
 /** Failed resumes of a dormant session after which the lead is called gone. */
 export const MAX_REVIVE_TRIES = 3
 
+const treeOf = (processes: readonly QuiesceProcess[], session: string): QuiesceProcess[] =>
+  processes.filter((proc) => proc.session === session)
+
+/** A process of the tree whose parent is in it too: a tool, a check or a lock the lead runs, which the hooks never report. */
+const childOf = (tree: readonly QuiesceProcess[]): QuiesceProcess | undefined => {
+  const pids = new Set(tree.map((proc) => proc.pid))
+  return tree.find((proc) => pids.has(proc.ppid))
+}
+
+/** Whether the session runs anything below its own process: the one rule quiescing and the held-wall route share. */
+export const runsAChild = (processes: readonly QuiesceProcess[], session: string): boolean =>
+  childOf(treeOf(processes, session)) !== undefined
+
 export type QuiesceVerdict = { quiesce: true } | { quiesce: false; why: string }
 
 /**
@@ -47,11 +60,10 @@ export function quiesceVerdict(input: {
   if (input.now.getTime() - quietFrom < input.afterMs) return { quiesce: false, why: 'it has not waited long enough' }
 
   if (input.processes === null) return { quiesce: false, why: 'the process table could not be read' }
-  const tree = input.processes.filter((proc) => proc.session === input.session)
-  const pids = new Set(tree.map((proc) => proc.pid))
-  if (!tree.some((proc) => !pids.has(proc.ppid)))
+  const tree = treeOf(input.processes, input.session)
+  if (!tree.some((proc) => !tree.some((other) => other.pid === proc.ppid)))
     return { quiesce: false, why: 'its process is not in the process table' }
-  const child = tree.find((proc) => pids.has(proc.ppid))
+  const child = childOf(tree)
   if (child) return { quiesce: false, why: `process ${child.pid} runs in its tree` }
 
   const inside = input.worktree

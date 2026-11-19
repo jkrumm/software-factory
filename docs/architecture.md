@@ -187,6 +187,9 @@ through `receive` in `app/intake.ts`; the answer is a triage outcome (`docs/lang
   the last `assistant`/`user` record with `isApiErrorMessage`, its `error` and `apiErrorStatus`) at most every
   `FACTORY_API_PROBE_MS`, and the same fact is stored. `deriveSession` reads an `api_error` as the end of the turn
   (`SessionView.apiIncident`: the errors since the last clean `turn_ended`), so a note waiting for the turn to end is delivered.
+  A prompt the account's closed window refuses (a resumed lead's first message) fires `UserPromptSubmit` and nothing after it: a
+  turn open and silent for two minutes, with no process in the lead's tree, on an account capacity reads as closed (the table is read fresh, and does not depend on quiescing) is stored as
+  the `limit_stop` the hook missed (`app/leads-held.ts`), so the Issue stalls as a `wall` and is woken or moved like any other.
   `kindOfApiError` reads the fields before the words: a 401 or an expired or revoked token is **auth**; a 429, 5xx, a
   timeout or reset, `server_error` (also mid-response, which adds "your last response may be cut off, re-check what you did" to
   the note) and a 403 typed `authentication_failed` (a Cloudflare challenge: 10 of 10 on 2026-11-13, none needed a login, though
