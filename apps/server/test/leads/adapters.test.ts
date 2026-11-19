@@ -276,6 +276,18 @@ describe('git worktrees', () => {
     expect(existsSync(join(made.path, 'kept.txt'))).toBe(false)
   })
 
+  test('restore keeps the tracking of a pushed branch and needs no network for one that is here', async () => {
+    const work = await repo()
+    const made = await value(trees.create({ repo: work, branch: 'factory/8-1' }))
+    await git(made.path, 'push', '-q', '-u', 'origin', 'factory/8-1')
+    await git(work, 'worktree', 'remove', '--force', made.path)
+    await git(work, 'remote', 'set-url', 'origin', join(work, 'no-such-remote'))
+    expect(await value(trees.restore({ repo: work, branch: 'factory/8-1', path: made.path }))).toEqual({
+      restored: true,
+    })
+    expect(await git(made.path, 'rev-parse', '--abbrev-ref', 'factory/8-1@{upstream}')).toBe('origin/factory/8-1')
+  })
+
   test('restore never replaces a directory that is no worktree', async () => {
     const work = await repo()
     const path = join(work, '.claude', 'worktrees', 'factory-7-1')
