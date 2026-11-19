@@ -49,6 +49,7 @@ describe('the artifact frame (public/frame.html, public/frame/*)', () => {
 interface Loader {
   followConsole: (css: string, theme: string) => string
   declaresScheme: (css: string) => boolean
+  pinsScheme: (css: string) => boolean
   parseColor: (value: string) => { r: number; g: number; b: number; a: number } | null
   surfaceOf: (c: ReturnType<Loader['parseColor']>) => { state: string; mark: string }
   inkOf: (c: ReturnType<Loader['parseColor']>) => string
@@ -92,6 +93,12 @@ describe('the theme of an artifact in the frame (public/frame/frame.js)', () => 
     for (const css of ['body{color:#222;background:#fff}', '/* no color-scheme here */ p{margin:0}', '']) {
       expect(frame.declaresScheme(css)).toBe(false)
     }
+    // a scheme pinned to one value is not overridden by the Console's theme; one that allows both is
+    expect(frame.pinsScheme(':root { color-scheme: light }')).toBe(true)
+    expect(frame.pinsScheme('html{color-scheme:only dark;}')).toBe(true)
+    expect(frame.pinsScheme(':root { color-scheme: light dark }')).toBe(false)
+    expect(frame.pinsScheme('/* color-scheme: light; */ p{margin:0}')).toBe(false)
+    expect(frame.pinsScheme(read('templates/artifact.html'))).toBe(false)
     // the template declares one, so it is never repainted
     expect(frame.declaresScheme(read('templates/artifact.html'))).toBe(true)
   })

@@ -20,13 +20,13 @@
 [data-factory-zoomable] { cursor: zoom-in; }
 [data-factory-zoomable]:focus-visible { outline: 2px solid #a2c3f0; outline-offset: 3px; }
 dialog.factory-lightbox { position: fixed; inset: 0; width: 100%; height: 100%; max-width: none; max-height: none; margin: 0; padding: 0; border: 0;
-  background: rgba(12, 12, 14, 0.98); color: #e5e5e9; font: 14px/1.4 system-ui, sans-serif; cursor: default; overflow: hidden; }
+  background: var(--lb-bg, #0c0c0e); color: var(--lb-fg, #e5e5e9); font: 14px/1.4 system-ui, sans-serif; cursor: default; overflow: hidden; }
 dialog.factory-lightbox[open] { display: flex; flex-direction: column; }
 .factory-lightbox-bar { flex: none; display: flex; align-items: center; gap: 8px; padding: 10px 14px; }
-.factory-lightbox-count { margin-inline-end: auto; font-variant-numeric: tabular-nums; color: #a7a7aa; }
+.factory-lightbox-count { margin-inline-end: auto; font-variant-numeric: tabular-nums; color: var(--lb-faint, #a7a7aa); }
 .factory-lightbox button { appearance: none; font: inherit; font-size: 20px; line-height: 1; min-width: 40px; height: 40px; padding: 0 12px; border-radius: 8px;
-  border: 1px solid #444447; background: #2b2b2e; color: #e5e5e9; cursor: pointer; }
-.factory-lightbox button:hover:not(:disabled) { background: #323235; }
+  border: 1px solid var(--lb-line, #444447); background: var(--lb-control, #2b2b2e); color: var(--lb-fg, #e5e5e9); cursor: pointer; }
+.factory-lightbox button:hover:not(:disabled) { background: var(--lb-hover, #323235); }
 .factory-lightbox button:focus-visible { outline: 2px solid #a2c3f0; outline-offset: 2px; }
 .factory-lightbox button:disabled { opacity: 0.35; cursor: default; }
 .factory-lightbox-stage { flex: 1 1 0; min-height: 0; display: flex; overflow: auto; }
@@ -35,7 +35,7 @@ dialog.factory-lightbox[open] { display: flex; flex-direction: column; }
 .factory-lightbox-stage[data-zoomable] > * { cursor: zoom-in; }
 .factory-lightbox-stage[data-zoom] > * { cursor: grab; }
 .factory-lightbox-stage[data-panning] > * { cursor: grabbing; }
-.factory-lightbox-caption { flex: none; min-height: 1.4em; padding: 10px 24px 16px; text-align: center; color: #cfcfd4; }
+.factory-lightbox-caption { flex: none; min-height: 1.4em; padding: 10px 24px 16px; text-align: center; color: var(--lb-fg, #cfcfd4); }
 @media (prefers-reduced-motion: no-preference) {
   dialog.factory-lightbox[open] { animation: factory-lightbox-in 0.14s ease-out; }
   @keyframes factory-lightbox-in { from { opacity: 0; } to { opacity: 1; } }
@@ -251,12 +251,51 @@ dialog.factory-lightbox[open] { display: flex; flex-direction: column; }
     stage.scrollTop += after.top + fy * after.height - event.clientY
   }
 
+  const COLOR = /^rgba?\(\s*([\d.]+)[\s,]+([\d.]+)[\s,]+([\d.]+)(?:\s*[,/]\s*([\d.]+)(%?))?\s*\)$/
+
+  /**
+   * The surface a picture sits on in the page now (the dark base and the theme included): the nearest ancestor background that
+   * is not clear, else the page's. A diagram drawn for a light page stays dark ink on light, one for a dark page the reverse.
+   */
+  function surfaceOf(el) {
+    for (let node = el.parentElement; node; node = node.parentElement) {
+      const found = COLOR.exec(getComputedStyle(node).backgroundColor)
+      if (!found) continue
+      const alpha = found[4] === undefined ? 1 : found[5] ? Number(found[4]) / 100 : Number(found[4])
+      if (alpha > 0.5) return [Number(found[1]), Number(found[2]), Number(found[3])]
+    }
+    return document.documentElement.dataset.theme === 'dark' ? [39, 39, 42] : [255, 255, 255]
+  }
+
+  /** The viewer takes the picture's surface, and ink, controls and lines to suit it. */
+  function paintDialog(picture) {
+    const [r, g, b] = surfaceOf(picture.el)
+    const dark = (0.299 * r + 0.587 * g + 0.114 * b) / 255 < 0.5
+    const vars = dark
+      ? {
+          bg: `rgb(${r} ${g} ${b})`,
+          fg: '#e5e5e9',
+          faint: '#a7a7aa',
+          line: '#444447',
+          control: '#2b2b2e',
+          hover: '#323235',
+        }
+      : {
+          bg: `rgb(${r} ${g} ${b})`,
+          fg: '#262629',
+          faint: '#69696c',
+          line: '#d6d6da',
+          control: '#f2f2f5',
+          hover: '#e6e6ea',
+        }
+    for (const [name, value] of Object.entries(vars)) dialog.style.setProperty(`--lb-${name}`, value)
+  }
+
   function cloneOf(media) {
     const clone = media.cloneNode(true)
     for (const name of [
       'data-factory-wide',
       'data-factory-zoomable',
-      'data-factory-dark',
       'tabindex',
       'id',
       'class',
@@ -281,6 +320,7 @@ dialog.factory-lightbox[open] { display: flex; flex-direction: column; }
     zoomed = false
     const picture = items[at]
     stage.replaceChildren()
+    paintDialog(picture)
     shown = cloneOf(picture.media)
     // an svg takes the artifact's own rules by class; the clone keeps them, only the layout attributes are the viewer's
     if (picture.media.localName === 'svg') {

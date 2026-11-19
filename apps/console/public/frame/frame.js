@@ -23,6 +23,8 @@
   /** the dark base of an artifact that declares no scheme; null when it declares one */
   let darkBase = null
   let schemeMeta = null
+  /** the artifact pins its own single colour scheme: the Console's theme keeps off color-scheme */
+  let pinned = false
   let reading = null
   let probe = null
 
@@ -92,6 +94,10 @@ hr { border-color: var(--fd-border) !important; }
   function declaresScheme(css) {
     return SCHEME_DECLARED.test(String(css).replace(/\/\*[\s\S]*?\*\//g, ''))
   }
+
+  /** A scheme the artifact pins to one value (color-scheme: light): the Console's theme does not override it. */
+  const SINGLE_SCHEME = /color-scheme\s*:\s*(?:only\s+)?(?:light|dark)\s*(?:[;}!"']|$)/i
+  const pinsScheme = (css) => SINGLE_SCHEME.test(String(css).replace(/\/\*[\s\S]*?\*\//g, ''))
 
   const COLOR = /^rgba?\(\s*([\d.]+)[\s,]+([\d.]+)[\s,]+([\d.]+)(?:\s*[,/]\s*([\d.]+)(%?))?\s*\)$/
   /** A computed sRGB colour; null for anything else (a computed oklch() stays oklch): such a colour is left alone. */
@@ -213,8 +219,8 @@ hr { border-color: var(--fd-border) !important; }
     followTheme(theme)
     const root = document.documentElement
     root.dataset.theme = theme
-    root.style.colorScheme = theme
-    if (schemeMeta) schemeMeta.content = theme
+    if (!pinned) root.style.colorScheme = theme
+    if (schemeMeta && !pinned) schemeMeta.content = theme
     if (darkBase) darkBase.disabled = theme !== 'dark'
   }
 
@@ -369,7 +375,9 @@ hr { border-color: var(--fd-border) !important; }
     const lock = document.createElement('meta')
     lock.name = 'darkreader-lock'
     document.head.appendChild(lock)
-    const declared = declaresScheme(collectCss())
+    const css = collectCss()
+    const declared = declaresScheme(css)
+    pinned = pinsScheme(css)
     reading = document.createElement('style')
     reading.textContent = READING_CSS
     document.head.appendChild(reading)
@@ -411,6 +419,7 @@ hr { border-color: var(--fd-border) !important; }
     module.exports = {
       followConsole,
       declaresScheme,
+      pinsScheme,
       parseColor,
       surfaceOf,
       inkOf,

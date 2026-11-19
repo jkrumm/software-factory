@@ -119,7 +119,16 @@ test.describe('an HTML artifact in a wide frame', () => {
     await page.goto(`/artifacts/${seeded().frameMedia}`)
     const frame = await artifactFrame(page)
     await expect.poll(() => width(frame, '#shot')).toBeGreaterThan(900)
-    await frame.locator('#first-p').click({ clickCount: 3 })
+    // a click that arrives while text is selected is the end of a selection, not a request for the picture
+    await frame.evaluate(
+      `(() => { const r = document.createRange(); r.selectNodeContents(document.querySelector('#first-p')); getSelection().removeAllRanges(); getSelection().addRange(r) })()`,
+    )
+    const click = `document.querySelector('#shot').dispatchEvent(new MouseEvent('click', { bubbles: true, button: 0 }))`
+    await frame.evaluate(click)
     await expect(frame.locator('dialog.factory-lightbox')).toHaveCount(0)
+    // with the selection gone the same click opens it
+    await frame.evaluate('getSelection().removeAllRanges()')
+    await frame.evaluate(click)
+    await expect(frame.locator('dialog.factory-lightbox')).toBeVisible()
   })
 })
