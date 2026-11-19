@@ -26,14 +26,21 @@ import {
   reserveHold,
   mergeSample,
   newestAge,
+  POLICY_NAMES,
+  isPolicyName,
+  livePolicy,
   pick,
   pickLine,
   planTier,
   rank,
+  ruleTag,
   sampleFromClaudeJson,
   withoutSessionWindows,
 } from './policy.ts'
-import { historyDir, picksPath } from './paths.ts'
+import { historyDir, picksPath, shadowPath } from './paths.ts'
+import { MEASURED } from './load-model.ts'
+import { compareText, disagreement, liveResults, shadowLine, simulateText } from './lab.ts'
+import { compare, mixedPool, simulate } from './sim.ts'
 import { type ModeView, type OverrideRecord, applyModes, baselineReset, modeField, resolveModes } from './modes.ts'
 import { accountFromConfigDir, claudeJsonPath, loadRegistry, shellLine } from './registry.ts'
 import { claimRefresh, loadCache, loadOverrides, markExhausted, recordSample, writeOverride } from './store.ts'
@@ -121,7 +128,44 @@ function historyTarget(reg: () => Registry): HistoryTarget {
       const r = reg() // only when a line is written: `record` runs on every statusline render
       return Object.hasOwn(r.accounts, id) ? modeOf(r, id, Date.now()).kind : null
     },
+    rule: () => ruleTag(livePolicy(reg())),
   }
+}
+
+/** `simulate`: one run of the lab's simulation on the measured load model. */
+function simulateVerb(reg: Registry, rest: string[]): number {
+  const policy = flag(rest, '--policy') ?? livePolicy(reg)
+  if (!isPolicyName(policy)) throw new Error(`--policy must be one of ${POLICY_NAMES.join(', ')}`)
+  const sc = {
+    accts: mixedPool(num(rest, '--accounts') ?? 3),
+    demand: num(rest, '--demand') ?? 1,
+    model: MEASURED,
+    policy,
+    weeks: num(rest, '--weeks') ?? 3,
+    seed: num(rest, '--seed') ?? 7,
+  }
+  const r = simulate(sc)
+  console.log(rest.includes('--json') ? JSON.stringify({ ...sc, model: undefined, result: r }) : simulateText(sc, r))
+  return 0
+}
+
+/** `compare`: every policy over the demand range and the pool sizes, beside the live ledger and the shadow log. */
+function compareVerb(reg: Registry, rest: string[]): number {
+  const c = compare({ model: MEASURED, weeks: num(rest, '--weeks') ?? 3 })
+  const live = liveResults(readLedger(), reg)
+  let lines: unknown[] = []
+  try {
+    lines = readFileSync(shadowPath(), 'utf8')
+      .split('\n')
+      .filter(Boolean)
+      .map((l) => JSON.parse(l) as unknown)
+  } catch {
+    // no shadow log yet
+  }
+  const shadow = disagreement(lines)
+  if (rest.includes('--json')) console.log(JSON.stringify({ ...c, live, shadow, model: MEASURED.range }))
+  else console.log(compareText(c, MEASURED, live, shadow))
+  return 0
 }
 
 const claudeBin = () => Bun.which('claude') ?? join(homedir(), '.local', 'bin', 'claude')
@@ -520,6 +564,34 @@ export const VERBS: Verb[] = [
     ],
   },
   {
+    name: 'simulate',
+    usage: 'simulate [--policy <name>] [--demand <x>] [--accounts <n>] [--weeks <n>] [--seed <n>] [--json]',
+    summary:
+      "one run of the policy lab's simulation on the measured load model: each account's weekly % at its resets, blocked work, moved sessions",
+    detail: [
+      `--policy <name>   ${POLICY_NAMES.join(' | ')}; default the live one (the registry's \`policy\`)`,
+      "--demand <x>      the pool's demand as a share of its weekly capacity (default 1)",
+      '--accounts <n>    1..8 accounts of mixed plans (one Ultra, then Max and Ultra with staggered resets; default 3)',
+      '--weeks <n>       simulated weeks (default 3; resets of the first week are warm-up)',
+      "--seed <n>        the run's random seed (default 7)",
+      'The load model (session length, burn, 5 h share of a week, demand curve, lane mix) is packages/accounts/src/load-model.json,',
+      'measured by packages/accounts/scripts/measure-load.ts (docs/accounts.md §The policy lab). A pure computation: no file is read.',
+    ],
+  },
+  {
+    name: 'compare',
+    usage: 'compare [--weeks <n>] [--json]',
+    summary:
+      'every policy over demand 0.85..1.2 and 1, 2, 3, 5 and 8 accounts, the verdict against v1.9, the live ledger per policy, the shadow log',
+    detail: [
+      '--weeks <n>   simulated weeks per run (default 3)',
+      'Each cell is the mean of 10 seeded runs: used at reset (capacity-weighted) / blocked / moved sessions.',
+      'A candidate beats v1.9 with more quota used beyond 2 standard errors of the paired difference, no more moved sessions,',
+      'and no more work blocked at demand 1.0 or below.',
+      'The live rows group the reset ledger by the rule each week ran under; the shadow rows are disagreement rates only.',
+    ],
+  },
+  {
     name: 'expiry',
     usage: 'expiry [--json] [--ids a,b]',
     summary: "when each account's login (refresh token) ends, from its own Keychain item",
@@ -716,13 +788,26 @@ export async function main(argv: string[]): Promise<number> {
         console.error(`claude-account: refresh skipped: ${(e as Error).message}`) // a pick must always answer; go on with the current cache
       }
       const { reg: applied, cache } = live(reg, now)
-      const p = pick(applied, cache, lane, now, dry ? undefined : Math.random) // --dry stays deterministic (verify and previews)
+      // --dry stays deterministic (verify and previews); a live pick keeps its draws for the shadow policies
+      const draws: number[] = []
+      const rng = () => {
+        const v = Math.random()
+        draws.push(v)
+        return v
+      }
+      const p = pick(applied, cache, lane, now, dry ? undefined : rng)
       if (!dry) {
         try {
           mkdirSync(dirname(picksPath()), { recursive: true })
           appendFileSync(picksPath(), `${JSON.stringify(pickLine(reg, cache, lane, p, now))}\n`)
         } catch {
           // the pick log is a dataset, never a gate
+        }
+        try {
+          mkdirSync(dirname(shadowPath()), { recursive: true })
+          appendFileSync(shadowPath(), `${JSON.stringify(shadowLine(applied, cache, lane, now, p, draws))}\n`)
+        } catch {
+          // so is the shadow log
         }
       }
       const line = shellLine(reg, p)
@@ -746,6 +831,10 @@ export async function main(argv: string[]): Promise<number> {
       return statusVerb(reg, rest)
     case 'history':
       return historyVerb(reg, rest)
+    case 'simulate':
+      return simulateVerb(reg, rest)
+    case 'compare':
+      return compareVerb(reg, rest)
     case 'expiry':
       expiry(reg, rest.includes('--json'), flag(rest, '--ids')?.split(','))
       return 0

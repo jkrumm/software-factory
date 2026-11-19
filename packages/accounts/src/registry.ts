@@ -12,6 +12,8 @@ import {
   HOLDS,
   ID,
   MODE_KINDS,
+  POLICY_NAMES,
+  isPolicyName,
   SPILL,
   defaultAccountId,
   isNum,
@@ -56,6 +58,9 @@ export function loadRegistry(path = registryPath()): Registry {
   const version = raw.version
   if (version !== undefined && version !== 1 && version !== 2)
     throw new Error(`${path}: registry version ${JSON.stringify(version)} is not known to this build (1 or 2)`)
+  const policy = raw.policy
+  if (policy !== undefined && !isPolicyName(policy))
+    throw new Error(`${path}: policy ${JSON.stringify(policy)} is not one of ${POLICY_NAMES.join(', ')}`)
   const accounts: Record<string, Account> = {}
   for (const [id, a] of Object.entries(raw.accounts as Record<string, Account & { mode?: unknown }>)) {
     if (a.mode === undefined) {
@@ -66,7 +71,13 @@ export function loadRegistry(path = registryPath()): Registry {
     if (typeof mode === 'string') throw new Error(`${path}: account '${id}' mode: ${mode}`)
     accounts[id] = { ...a, mode }
   }
-  return { ...(version !== undefined ? { version } : {}), accounts, fable, drain }
+  return {
+    ...(version !== undefined ? { version } : {}),
+    accounts,
+    fable,
+    drain,
+    ...(policy !== undefined ? { policy } : {}),
+  }
 }
 
 /** A registry `mode`: a kind (`"drain"`) or `{kind, for?, hold?, until?, why?}`; a string answer is what is wrong with it. */
