@@ -95,7 +95,8 @@ export function gitWorktrees(options: GitWorktreesOptions = {}): Worktrees {
     await gitIn(repo, 'branch', '-D', branch)
   }
 
-  async function make(repo: string, branch: string, base: string): Promise<string> {
+  /** `existing`: the branch is there already and is checked out, not cut from the base (a restored tree). */
+  async function make(repo: string, branch: string, base: string, existing = false): Promise<string> {
     const wtp = options.wtp ?? Bun.which('wtp')
     // As the base has it: a checkout that is behind must not decide how a worktree of what is pushed is set up.
     const wantsWtp = (await gitIn(repo, 'cat-file', '-e', `${base}:.wtp.yml`)) !== undefined
@@ -103,15 +104,13 @@ export function gitWorktrees(options: GitWorktreesOptions = {}): Worktrees {
     if (wantsWtp && !wtp) throw new Failed(`${repo} has a .wtp.yml and wtp is not on PATH: install wtp`, 'refused')
     let path: string
     if (wtp && wantsWtp) {
-      const out = await run([wtp, 'add', '-b', branch, base, '--quiet'], WTP_TIMEOUT_MS, 'wtp add', repo)
+      const args = existing ? ['add', branch, '--quiet'] : ['add', '-b', branch, base, '--quiet']
+      const out = await run([wtp, ...args], WTP_TIMEOUT_MS, 'wtp add', repo)
       path = out.split('\n').pop()?.trim() ?? ''
     } else {
       path = `${repo}/.claude/worktrees/${branch.replaceAll('/', '-')}`
-      await run(
-        [git, '-C', repo, 'worktree', 'add', '-q', '-b', branch, path, base],
-        GIT_TIMEOUT_MS,
-        'git worktree add',
-      )
+      const args = existing ? [path, branch] : ['-b', branch, path, base]
+      await run([git, '-C', repo, 'worktree', 'add', '-q', ...args], GIT_TIMEOUT_MS, 'git worktree add')
     }
     if (!path || !existsSync(path)) throw new Failed(`worktree path '${path}' is missing after the create`)
     // A branch cut from origin/<default> must not track it: a bare `git push` would target the default branch.
@@ -216,8 +215,9 @@ export function gitWorktrees(options: GitWorktreesOptions = {}): Worktrees {
 
   /**
    * A dormant lead's worktree, made again at the path it had when something removed it meanwhile: the session resumes by
-   * that path. Its branch is checked out again (what it committed survives); a branch gone too is cut afresh from the base.
-   * What was uncommitted or installed in the old tree is gone.
+   * that path. Set up as `create` sets one up (the repo's `wtp` hooks included). Its branch is checked out again (what it
+   * committed survives); a branch gone too is cut from the remote's copy of it, else afresh from the base. What was
+   * uncommitted or installed in the old tree is gone.
    */
   async function restore(input: { repo: string; branch: string; path: string }): Promise<{ restored: boolean }> {
     const { repo, branch, path } = input
@@ -226,18 +226,20 @@ export function gitWorktrees(options: GitWorktreesOptions = {}): Worktrees {
     if (top !== undefined && real(top) === real(path)) return { restored: false }
     await gitIn(repo, 'worktree', 'prune')
     if (existsSync(path)) throw new Failed(`${path} exists and is no worktree: it is left as it is`, 'refused')
-    if (await gitIn(repo, 'rev-parse', '-q', '--verify', `refs/heads/${branch}`)) {
-      await run([git, '-C', repo, 'worktree', 'add', '-q', path, branch], GIT_TIMEOUT_MS, 'git worktree add')
-    } else {
-      await run([git, '-C', repo, 'fetch', '-q', 'origin'], FETCH_TIMEOUT_MS, 'git fetch origin')
-      const base = await originDefault(repo)
-      if (!base) throw new Failed(`no origin default branch in ${repo}`, 'refused')
-      await run(
-        [git, '-C', repo, 'worktree', 'add', '-q', '-b', branch, path, base],
-        GIT_TIMEOUT_MS,
-        'git worktree add',
-      )
-      await gitIn(path, 'branch', '--unset-upstream', branch)
+    await run([git, '-C', repo, 'fetch', '-q', 'origin'], FETCH_TIMEOUT_MS, 'git fetch origin')
+    const local = Boolean(await gitIn(repo, 'rev-parse', '-q', '--verify', `refs/heads/${branch}`))
+    const pushed = `origin/${branch}`
+    const base = local
+      ? ((await originDefault(repo)) ?? pushed)
+      : (await gitIn(repo, 'rev-parse', '-q', '--verify', `refs/remotes/${pushed}`))
+        ? pushed
+        : await originDefault(repo)
+    if (!base) throw new Failed(`no origin default branch in ${repo}`, 'refused')
+    const made = await make(repo, branch, base, local)
+    // The session resumes by the path it ran in: a tree anywhere else is no use to it.
+    if (real(made) !== real(path)) {
+      await gitIn(repo, 'worktree', 'remove', '--force', made)
+      throw new Failed(`the worktree came back at ${made}, not at ${path}`)
     }
     return { restored: true }
   }

@@ -1,7 +1,7 @@
 import { EXIT_TIMEOUT, withStderr } from '../../hc/process.ts'
 import type { Checkout, FixEntry } from '../../../domains/loops/hygiene-model.ts'
 import { exec, type Tools } from '../git.ts'
-import { isLeadWorktree, scanStale } from '../probes/stale.ts'
+import { scanStale } from '../probes/stale.ts'
 
 const GIT_TIMEOUT_MS = 60_000
 
@@ -19,7 +19,7 @@ const GONE = /remote ref does not exist|unable to delete .*remote ref does not e
 /**
  * The scripted fix of the `stale` probe: it deletes what the probe calls merged and nothing else. A remote branch merged
  * into the default branch loses nothing (its commits are in the default); a worktree whose head is in the default branch and
- * that nobody touched for two days loses nothing either (a lead's own worktree excepted: a lead waiting days is idle in it), and `git worktree remove` without `--force` still refuses one with
+ * that nobody touched for two days loses nothing either, and `git worktree remove` without `--force` still refuses one with
  * changes or a lock. A branch or worktree that is only untouched is a decision, not a script's. Idempotent: a branch that is
  * gone already counts as deleted.
  */
@@ -64,9 +64,7 @@ export async function fixStale(tools: Tools, checkout: Checkout, keys: ReadonlyS
   }
 
   if (keys.has('stale:worktrees')) {
-    const targets = scan.worktrees.filter(
-      ({ worktree, why }) => (why === 'prunable' || why === 'merged') && !isLeadWorktree(worktree),
-    )
+    const targets = scan.worktrees.filter(({ why }) => why === 'prunable' || why === 'merged')
     if (targets.length) {
       await exec(withStderr([tools.git, 'worktree', 'prune']), GIT_TIMEOUT_MS, checkout.path)
       let removed = 0

@@ -161,14 +161,25 @@ describe('staleProbe', () => {
     git(work, ['commit', '-q', '--allow-empty', '-m', 'moved on'])
     git(work, ['push', '-q', 'origin', 'master'])
     const wt = join(base, 'wts', `fresh-${counter}`)
-    git(work, ['worktree', 'add', '-q', wt, '-b', 'factory/1-1', 'HEAD~1'])
+    git(work, ['worktree', 'add', '-q', wt, '-b', 'fresh-branch', 'HEAD~1'])
     const out = await staleProbe(tools, throwaway)
     expect(out.findings.find((f) => f.key === 'stale:worktrees')).toBeUndefined()
     quiet(work, wt, 3)
     const later = await staleProbe(tools, throwaway)
     expect(later.findings.find((f) => f.key === 'stale:worktrees')?.lines).toEqual([
-      `wts/fresh-${counter} [factory/1-1] (merged)`,
+      `wts/fresh-${counter} [fresh-branch] (merged)`,
     ])
+  })
+
+  test("a lead's own worktree is never flagged, merged and quiet or not", async () => {
+    const { work, throwaway } = fixture()
+    branch(work, 'lead-base', 40, true)
+    git(work, ['commit', '-q', '--allow-empty', '-m', 'moved on'])
+    git(work, ['push', '-q', 'origin', 'master'])
+    const wt = join(base, 'wts', `factory-1-${counter}`)
+    git(work, ['worktree', 'add', '-q', wt, '-b', 'factory/1-1', 'HEAD~1'])
+    quiet(work, wt, 3)
+    expect((await staleProbe(tools, throwaway)).findings.find((f) => f.key === 'stale:worktrees')).toBeUndefined()
   })
 
   test('a branch at the default tip is merged only once its tip is 2 days old', async () => {
