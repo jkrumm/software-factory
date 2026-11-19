@@ -10,6 +10,7 @@ let dir: string
 let socket: string
 let received: unknown[]
 let delayMs = 0
+let generation = 0
 let stopChecks: string[]
 let stopBodies: unknown[]
 let stopAnswer: unknown
@@ -21,7 +22,11 @@ beforeAll(() => {
   server = Bun.serve({
     unix: socket,
     fetch: async (req) => {
+      const asked = generation
       if (delayMs) await Bun.sleep(delayMs)
+      // A request its client gave up on (the 300 ms cut-off) is still handled when its delay ends: it is answered into
+      // nothing, so it never lands in the arrays of the test that runs by then.
+      if (asked !== generation) return new Response(null, { status: 204 })
       if (new URL(req.url).pathname.endsWith('/stop-check')) {
         stopChecks.push(new URL(req.url).pathname)
         stopBodies.push(await req.json())
@@ -37,6 +42,7 @@ afterAll(async () => {
   rmSync(dir, { recursive: true, force: true })
 })
 beforeEach(() => {
+  generation += 1
   received = []
   stopChecks = []
   stopBodies = []
