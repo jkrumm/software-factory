@@ -34,6 +34,20 @@ const WEEK_S = 7 * 24 * 3600
 /** How much more a sooner reset weighs than a later one when sharing work (1 = pure spare-per-hour, higher = harder front-loading of the expiring account). */
 export const URGENCY_EXP = 1.5
 
+/** The four modes of an account (docs/accounts.md §Modes). */
+export const MODE_KINDS = ['normal', 'drain', 'reserve', 'paused'] as const
+export type ModeKind = (typeof MODE_KINDS)[number]
+/**
+ * One account's mode. `for`: the model a reserve holds its allowance for (matched against the endpoint's scoped limit).
+ * `until`: an ISO time, `reset` (an override only: until the account's weekly window was observed to reset) or absent.
+ */
+export interface Mode {
+  kind: ModeKind
+  for?: string | null
+  until?: string | null
+  why?: string | null
+}
+
 export interface Account {
   dir: string | null
   plan: string
@@ -43,19 +57,16 @@ export interface Account {
   /** macOS app (as `open -a` names it) signed in to this account; where `claude-relogin` opens the authorize URL. Absent = system default. */
   loginBrowser?: string
   enabled: boolean
+  /** Registry v2: the account's standing mode; a live override replaces it (applyModes). */
+  mode?: Mode
 }
 export interface Registry {
+  /** Absent or 1: the v1 file; 2: v1 plus the per-account `mode`. Any other version is refused at load. */
+  version?: number
   accounts: Record<string, Account>
-  /**
-   * Fable mode: the account `cf` launches on. Every other pick treats it as the last resort (used only when no
-   * other account is eligible), so its weekly room stays for Fable. Absent or null = off (`cf` on the default account).
-   */
+  /** v1 Fable mode: reads as mode reserve for fable on that account (modeOf). Absent or null = off. */
   fable?: string | null
-  /**
-   * Drain mode: accounts filled first, in every lane, up to a weekly ceiling of 100 (the owner wants them at the wall,
-   * e.g. ahead of a reset he triggers himself). A drain account with a hot 5h window (SESSION_SOFT_MAX) falls back to
-   * the plain rule. Absent or empty = off. Never the Fable account.
-   */
+  /** v1 drain mode: reads as mode drain on these accounts (modeOf). Absent or empty = off. Never the fable account. */
   drain?: string[] | null
 }
 
@@ -72,6 +83,10 @@ export interface Sample {
   s_ts: number | null
   w_ts: number | null
   src: string
+  /** The usage endpoint's `limits[]` and `weekly_scoped_shares[]` as it gave them, and when (epoch ms); no other feed carries them. */
+  limits?: Record<string, unknown>[]
+  scoped_shares?: Record<string, unknown>[]
+  limits_ts?: number
 }
 /** In-memory view assembled from the per-account files under cacheDir(). */
 export interface Cache {
@@ -82,6 +97,15 @@ export interface Cache {
   auth_failed: Record<string, boolean>
   /** epoch ms of the last auth failure per id (the retry cooldown starts there) */
   auth_failed_at: Record<string, number>
+  /** The latest observed weekly reset per id (`<id>.reset.json`); absent when none was seen. */
+  resets?: Record<string, ObservedReset>
+}
+/** A weekly reset seen in the samples: when (epoch ms) and the weekly reset time after it (epoch s, null when unknown). */
+export interface ObservedReset {
+  at: number
+  w_before: number | null
+  w_reset_before: number | null
+  w_reset_after: number | null
 }
 /** `stale`: the picked account was chosen on a sample older than FRESH_MS (reason keeps the routing rule). */
 export interface PickResult {
@@ -137,8 +161,25 @@ export function isSample(v: unknown): v is Sample {
     numOrNull(x.w_reset) &&
     numOrNull(x.s_ts) &&
     numOrNull(x.w_ts) &&
-    typeof x.src === 'string'
+    typeof x.src === 'string' &&
+    (x.limits === undefined || isObjectList(x.limits)) &&
+    (x.scoped_shares === undefined || isObjectList(x.scoped_shares)) &&
+    (x.limits_ts === undefined || isNum(x.limits_ts))
   )
+}
+
+const isObjectList = (v: unknown): v is Record<string, unknown>[] =>
+  Array.isArray(v) && v.every((e) => !!e && typeof e === 'object' && !Array.isArray(e))
+
+/** The endpoint's limit set of whichever side fetched it later; nothing when neither has one (a v1 sample stays as it was). */
+function newerLimits(prev: Sample, inc: Sample): Pick<Sample, 'limits' | 'scoped_shares' | 'limits_ts'> {
+  const from = isNum(inc.limits_ts) && !(isNum(prev.limits_ts) && prev.limits_ts > inc.limits_ts) ? inc : prev
+  if (!isNum(from.limits_ts)) return {}
+  return {
+    limits: from.limits ?? [],
+    ...(from.scoped_shares ? { scoped_shares: from.scoped_shares } : {}),
+    limits_ts: from.limits_ts,
+  }
 }
 
 const hasS = (x: Sample) => x.s !== null
@@ -163,7 +204,21 @@ export function mergeSample(prev: Sample | null, inc: Sample): Sample {
     w_reset: takeW ? inc.w_reset : prev.w_reset,
     w_ts: takeW ? inc.w_ts : prev.w_ts,
     src: takeS || takeW ? inc.src : prev.src,
+    ...newerLimits(prev, inc),
   }
+}
+
+/** A weekly window moved forward by more than this (s) between two samples: it reset. */
+export const RESET_JUMP_S = 24 * 3600
+/** Or its percent fell by at least this many points (a manual reset can keep the old time for a moment). */
+export const RESET_DROP = 50
+
+/** True when `next` shows a weekly reset against `prev` (docs/accounts.md §Expiry). */
+export function observedReset(prev: Sample | null, next: Sample): boolean {
+  if (!prev) return false
+  const moved = prev.w_reset !== null && next.w_reset !== null && next.w_reset - prev.w_reset > RESET_JUMP_S
+  const fell = prev.w !== null && next.w !== null && prev.w - next.w >= RESET_DROP
+  return moved || fell
 }
 
 export const noSession = (x: Sample): Sample => ({ ...x, s: null, s_reset: null, s_ts: null })
@@ -309,10 +364,118 @@ export function homeIds(reg: Registry, lane: string): string[] {
 export const isStaleOk = (cache: Cache, id: string, nowMs: number) =>
   usable(cache.samples[id], nowMs) && sampleAge(cache.samples[id], nowMs) >= FRESH_MS
 
-/** True for an enabled account the registry names in `drain`. */
-export const isDrain = (reg: Registry, id: string): boolean => !!reg.drain?.includes(id) && !!reg.accounts[id]?.enabled
+/**
+ * The account's mode at `nowMs`: its own `mode` (the registry's, or the live override applyModes put there) unless its
+ * ISO `until` has passed, else the v1 keys (`drain` → drain, `fable` → reserve for fable), else normal.
+ */
+export function modeOf(reg: Registry, id: string, nowMs: number): Mode {
+  const a = Object.hasOwn(reg.accounts, id) ? reg.accounts[id] : undefined
+  const m = a?.mode
+  if (m && !untilPassed(m.until, nowMs)) return m
+  if (reg.drain?.includes(id)) return { kind: 'drain' }
+  if (reg.fable === id) return { kind: 'reserve', for: 'fable' }
+  return { kind: 'normal' }
+}
 
-const weeklyMax = (x: Sample, nowMs: number, drain = false) => {
+/** An ISO `until` at or before now; `reset` and none never pass here (modes.ts judges `reset`). */
+export function untilPassed(until: string | null | undefined, nowMs: number): boolean {
+  if (!until || until === 'reset') return false
+  const t = Date.parse(until)
+  return !Number.isNaN(t) && t <= nowMs
+}
+
+/** True for an enabled account in drain mode. */
+export const isDrain = (reg: Registry, id: string, nowMs: number): boolean =>
+  !!reg.accounts[id]?.enabled && modeOf(reg, id, nowMs).kind === 'drain'
+/** True for an account in paused mode: sampled and checked, never handed work. */
+export const isPaused = (reg: Registry, id: string, nowMs: number): boolean => modeOf(reg, id, nowMs).kind === 'paused'
+
+/** A reserve's scoped sample is fetched again once it is older than this (one usage GET; the 5-min claim still binds). */
+export const SCOPED_FRESH_MS = 30 * 60_000
+/** In the final hours before the weekly reset a reserve's unused allowance is released to other work (spec choice A). */
+export const RESERVE_RELEASE_S = 24 * 3600
+
+/** One model's scoped weekly limit in a sample: its percent and its share of the weekly limit. */
+export interface Scoped {
+  percent: number | null
+  used: number
+  allowance: number
+  ts: number
+}
+
+const scopeModel = (scope: unknown): string[] => {
+  const m = (scope as { model?: { display_name?: unknown; id?: unknown } } | null)?.model
+  return [m?.display_name, m?.id].filter((v): v is string => typeof v === 'string').map((v) => v.toLowerCase())
+}
+
+/** The `weekly_scoped` limit for `model` (display name or id, any case) with its share; null when the sample has none. */
+export function scopedLimit(x: Sample | undefined, model: string): Scoped | null {
+  if (!x?.limits || !isNum(x.limits_ts)) return null
+  const want = model.toLowerCase()
+  const i = x.limits.findIndex((l) => l.kind === 'weekly_scoped' && scopeModel(l.scope).includes(want))
+  if (i < 0) return null
+  const share = x.scoped_shares?.find((s) => s.limit_index === i)
+  if (!share || !isNum(share.used_percent_of_weekly) || !isNum(share.allowance_percent_of_weekly)) return null
+  const p = x.limits[i].percent
+  return {
+    percent: isNum(p) ? p : null,
+    used: share.used_percent_of_weekly,
+    allowance: share.allowance_percent_of_weekly,
+    ts: x.limits_ts,
+  }
+}
+
+/** A reserve account's budget for other work (docs/accounts.md §Reserve). `known` false: no fresh scoped sample. */
+export interface ReserveBudget {
+  for: string
+  known: boolean
+  /** allowance points not used yet (0 once released) */
+  unused: number | null
+  weekly: number | null
+  ceiling: number
+  /** takes other work: weekly + unused under the ceiling */
+  open: boolean
+  released: boolean
+}
+
+/** Null for an account that is not in reserve mode. */
+export function reserveBudget(reg: Registry, cache: Cache, id: string, nowMs: number): ReserveBudget | null {
+  const m = modeOf(reg, id, nowMs)
+  if (m.kind !== 'reserve' || !m.for) return null
+  const x = cache.samples[id]
+  const ceiling = x ? weeklyMax(x, nowMs) : WEEKLY_MAX
+  const unknown: ReserveBudget = {
+    for: m.for,
+    known: false,
+    unused: null,
+    weekly: null,
+    ceiling,
+    open: false,
+    released: false,
+  }
+  const sc = scopedLimit(x, m.for)
+  if (!x || !sc || nowMs - sc.ts >= STALE_OK_MS) return unknown
+  const weekly = hasW(x) && nowMs - (x.w_ts ?? 0) < STALE_OK_MS ? x.w! : weeklyAllPercent(x)
+  if (weekly === null) return unknown
+  const msLeft = x.w_reset === null ? null : x.w_reset * 1000 - nowMs
+  const released = msLeft !== null && msLeft > 0 && msLeft < RESERVE_RELEASE_S * 1000
+  const unused = released ? 0 : Math.max(0, sc.allowance - sc.used)
+  return { for: m.for, known: true, unused, weekly, ceiling, open: weekly + unused < ceiling, released }
+}
+
+const weeklyAllPercent = (x: Sample): number | null => {
+  const p = x.limits?.find((l) => l.kind === 'weekly_all')?.percent
+  return isNum(p) ? p : null
+}
+
+/** A reserve account whose scoped sample is missing or older than SCOPED_FRESH_MS: due for one usage GET. */
+export function scopedDue(reg: Registry, cache: Cache, id: string, nowMs: number): boolean {
+  if (modeOf(reg, id, nowMs).kind !== 'reserve') return false
+  const ts = cache.samples[id]?.limits_ts
+  return !isNum(ts) || nowMs - ts > SCOPED_FRESH_MS
+}
+
+function weeklyMax(x: Sample, nowMs: number, drain = false): number {
   if (drain) return WEEKLY_MAX_FINAL
   const msLeft = x.w_reset === null ? null : x.w_reset * 1000 - nowMs
   if (msLeft === null || msLeft <= 0) return WEEKLY_MAX
@@ -336,11 +499,12 @@ function sessionPct(reg: Registry, cache: Cache, id: string, nowMs: number): num
 /** Enabled, logged in, not exhausted, and every window young enough to judge (< 6 h) is below its threshold. Each window is judged by its own timestamp. */
 export function eligible(reg: Registry, cache: Cache, id: string, nowMs: number): boolean {
   const a = Object.hasOwn(reg.accounts, id) ? reg.accounts[id] : undefined
-  if (!a?.enabled || cache.auth_failed[id]) return false
+  if (!a?.enabled || cache.auth_failed[id] || isPaused(reg, id, nowMs)) return false
   const x = cache.samples[id]
   if (!x || !usable(x, nowMs)) return false
   if ((sessionPct(reg, cache, id, nowMs) ?? 0) >= SESSION_MAX) return false
-  if (hasW(x) && nowMs - (x.w_ts ?? 0) < STALE_OK_MS && x.w! >= weeklyMax(x, nowMs, isDrain(reg, id))) return false
+  if (hasW(x) && nowMs - (x.w_ts ?? 0) < STALE_OK_MS && x.w! >= weeklyMax(x, nowMs, isDrain(reg, id, nowMs)))
+    return false
   const until = cache.exhausted[id]
   if (until && until * 1000 > nowMs) return false
   return true
@@ -376,20 +540,44 @@ export function accountWeight(reg: Registry, cache: Cache, id: string, nowMs: nu
   const hasWeek = !!x && hasW(x)
   // a reset that already passed means the cached % predates the rollover: judge it as a fresh week
   const rolled = hasWeek && x.w_reset !== null && x.w_reset * 1000 <= nowMs
-  const spare = hasWeek && !rolled ? weeklyMax(x, nowMs, isDrain(reg, id)) - x.w! : WEEKLY_MAX
+  // a reserve inside its budget offers only the room its model's unused allowance leaves (0 without a fresh scoped sample)
+  const budget = reserveBudget(reg, cache, id, nowMs)
+  const held = budget?.known ? budget.unused! : 0
+  const spare = (hasWeek && !rolled ? weeklyMax(x, nowMs, isDrain(reg, id, nowMs)) - x.w! : WEEKLY_MAX) - held
   const hoursLeft =
     hasWeek && !rolled && x.w_reset !== null ? Math.max(1, (x.w_reset * 1000 - nowMs) / 3600_000) : WEEK_S / 3600
   return (spare * accountUnits(reg.accounts[id]).weekly) / hoursLeft ** URGENCY_EXP
 }
 
-/** The Fable account, held back from every pick; null when Fable mode is off or that account is disabled. */
-export function fableReserve(reg: Registry): string | null {
-  const id = reg.fable ?? null
-  return id !== null && Object.hasOwn(reg.accounts, id) && reg.accounts[id].enabled ? id : null
+/**
+ * The account a model's launcher lands on: among the enabled accounts in reserve for `model`, the open one (eligible, scoped
+ * percent under 100) with the most unused allowance; none open → the first of them (v1's answer); none at all → the default.
+ */
+export function launchAccount(reg: Registry, cache: Cache, model: string, nowMs: number): string {
+  const want = model.toLowerCase()
+  const ids = Object.keys(reg.accounts).filter((id) => {
+    const m = modeOf(reg, id, nowMs)
+    return reg.accounts[id].enabled && m.kind === 'reserve' && m.for?.toLowerCase() === want
+  })
+  const fresh = (id: string) => {
+    const sc = scopedLimit(cache.samples[id], model)
+    return sc && nowMs - sc.ts < STALE_OK_MS ? sc : null
+  }
+  const unused = (id: string) => {
+    const sc = fresh(id)
+    return sc ? Math.max(0, sc.allowance - sc.used) : -1
+  }
+  const open = ids.filter((id) => eligible(reg, cache, id, nowMs) && (fresh(id)?.percent ?? 0) < 100)
+  const best = open.reduce<string | undefined>(
+    (b, id) => (b === undefined || unused(id) > unused(b) ? id : b),
+    undefined,
+  )
+  return best ?? ids[0] ?? defaultAccountId(reg)
 }
 
-/** The account `cf` launches on: the Fable account, else the default one. */
-export const fableAccount = (reg: Registry): string => fableReserve(reg) ?? defaultAccountId(reg)
+/** The account `cf` launches on (launchAccount for Fable); without a cache it is v1's answer: the Fable account, else the default. */
+export const fableAccount = (reg: Registry, cache: Cache = emptyCache(), nowMs = 0): string =>
+  launchAccount(reg, cache, 'fable', nowMs)
 
 function pickRaw(
   reg: Registry,
@@ -398,13 +586,22 @@ function pickRaw(
   nowMs: number,
   rng?: () => number,
 ): Omit<PickResult, 'stale'> {
-  const reserve = fableReserve(reg)
-  if (reserve === null) return pickRule(reg, cache, lane, nowMs, rng)
-  // Fable mode: the rule runs without the Fable account first; only when that finds nothing does it get the work
-  const spared = pickRule(withoutAccount(reg, reserve), cache, lane, nowMs, rng)
+  // Reserve mode: inside its budget an account takes its normal place; over it, other work is refused; without a fresh
+  // scoped sample the budget is unknown and the account is the last resort (v1's Fable mode)
+  let open = reg
+  const lastResort: string[] = []
+  for (const id of Object.keys(reg.accounts)) {
+    if (!reg.accounts[id].enabled) continue
+    const b = reserveBudget(reg, cache, id, nowMs)
+    if (!b) continue
+    if (!b.known) lastResort.push(id)
+    else if (!b.open) open = withoutAccount(open, id)
+  }
+  if (!lastResort.length) return pickRule(open, cache, lane, nowMs, rng)
+  const spared = pickRule(lastResort.reduce(withoutAccount, open), cache, lane, nowMs, rng)
   if (spared.picked !== SPILL && spared.reason !== 'interactive-fallback') return spared
-  const r = pickRule(reg, cache, lane, nowMs, rng)
-  return r.picked === reserve ? { ...r, reason: 'fable-reserve' } : r
+  const r = pickRule(open, cache, lane, nowMs, rng)
+  return lastResort.includes(r.picked) ? { ...r, reason: `${modeOf(reg, r.picked, nowMs).for}-reserve` } : r
 }
 
 function pickRule(
@@ -436,7 +633,7 @@ function pickRule(
     return cands.find((id) => (r -= weight(id)) < 0) ?? cands[cands.length - 1]
   }
   // drain mode: the owner's chosen accounts go first in every lane while their 5h window is cool
-  const draining = cool.filter((id) => isDrain(reg, id))
+  const draining = cool.filter((id) => isDrain(reg, id, nowMs))
   if (draining.length) return { picked: choose(draining)!, reason: 'drain' }
 
   if (bulk) {
@@ -546,7 +743,11 @@ export function dueIds(reg: Registry, cache0: Cache, nowMs: number, ignoreAuthMa
   // a successful refresh or a statusline record clears the mark. `refresh --ids` bypasses it (manual retry).
   const authBlocked = (id: string) =>
     !ignoreAuthMark && cache.auth_failed[id] && nowMs - (cache.auth_failed_at[id] ?? 0) <= AUTH_RETRY_MS
+  // a reserve account is also due when its scoped sample (endpoint only) is older than SCOPED_FRESH_MS
   return Object.keys(reg.accounts).filter(
-    (id) => reg.accounts[id].enabled && !authBlocked(id) && sampleAge(cache.samples[id], nowMs) > FRESH_MS,
+    (id) =>
+      reg.accounts[id].enabled &&
+      !authBlocked(id) &&
+      (sampleAge(cache.samples[id], nowMs) > FRESH_MS || scopedDue(reg, cache, id, nowMs)),
   )
 }

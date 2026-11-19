@@ -1,5 +1,6 @@
 // The per-account cache files under cacheDir() (docs/accounts.md §Files) and the claim and stamp files beside them.
 import {
+  appendFileSync,
   closeSync,
   fsyncSync,
   linkSync,
@@ -15,6 +16,7 @@ import {
 import { dirname, join } from 'node:path'
 import {
   type Cache,
+  type ObservedReset,
   type Registry,
   type Sample,
   REFRESH_MIN_MS,
@@ -25,8 +27,10 @@ import {
   isSample,
   mergeSample,
   noSession,
+  observedReset,
 } from './policy.ts'
-import { cacheDir } from './paths.ts'
+import { type OverrideRecord, type OverrideState, parseOverrides } from './modes.ts'
+import { cacheDir, modesAuditPath, modesPath } from './paths.ts'
 
 export function writeAtomic(path: string, data: string): void {
   mkdirSync(dirname(path), { recursive: true })
@@ -67,13 +71,15 @@ export function loadCache(dir = cacheDir()): Cache {
     return c
   }
   for (const name of names) {
-    const m = /^([A-Za-z0-9_-]+)\.(sample|exhausted|auth)\.json$/.exec(name)
+    const m = /^([A-Za-z0-9_-]+)\.(sample|exhausted|auth|reset)\.json$/.exec(name)
     if (!m) continue
     const [, id, kind] = m
     const j = readJson(join(dir, name)) as Record<string, unknown> | null
     if (!j) continue
     if (kind === 'sample') {
       if (isSample(j)) c.samples[id] = j // a malformed file is dropped, the next feed rewrites it
+    } else if (kind === 'reset') {
+      if (isNum(j.at)) (c.resets ??= {})[id] = j as unknown as ObservedReset
     } else if (kind === 'exhausted' && isNum(j.until)) c.exhausted[id] = j.until
     else if (kind === 'auth' && j.failed === true) {
       c.auth_failed[id] = true
@@ -84,11 +90,50 @@ export function loadCache(dir = cacheDir()): Cache {
 }
 
 /** `sessionLimit` false (a plan without a 5 h window): the session half of both the incoming and the stored sample is discarded. */
-export function saveSample(id: string, inc: Sample, dir = cacheDir(), sessionLimit = true): void {
+export function saveSample(id: string, inc: Sample, dir = cacheDir(), sessionLimit = true, nowMs = Date.now()): void {
   const path = file(dir, id, 'sample.json')
   const prev = readJson(path) as Sample | null
   const merged = mergeSample(sessionLimit || !prev ? prev : noSession(prev), sessionLimit ? inc : noSession(inc))
   writeAtomic(path, JSON.stringify(merged))
+  // the latest observed weekly reset: what ends an override `until: reset` (docs/accounts.md §Expiry)
+  if (isSample(prev) && observedReset(prev, merged)) {
+    const r: ObservedReset = {
+      at: nowMs,
+      w_before: prev.w,
+      w_reset_before: prev.w_reset,
+      w_reset_after: merged.w_reset,
+    }
+    writeAtomic(file(dir, id, 'reset.json'), JSON.stringify(r))
+  }
+}
+
+// ── Mode overrides (docs/accounts.md §Modes) ─────────────────────────────────────────────────────────────────────
+
+/** The override state; a missing or unreadable file is an empty state. */
+export const loadOverrides = (path = modesPath()): OverrideState => parseOverrides(readJson(path))
+
+/**
+ * Write one account's record (a set, a clear's tombstone, or one adopted from the peer) and its audit line. Each writer
+ * replaces the whole small file atomically; two writers at once lose one update at worst, as with the cache files.
+ */
+export function writeOverride(
+  id: string,
+  record: OverrideRecord,
+  o: { action: 'set' | 'clear' | 'adopt'; machine: string; nowMs: number; path?: string },
+): void {
+  const path = o.path ?? modesPath()
+  const state = loadOverrides(path)
+  const prev = state.accounts[id] ?? null
+  state.accounts[id] = record
+  writeAtomic(path, `${JSON.stringify(state, null, 2)}\n`)
+  try {
+    appendFileSync(
+      modesAuditPath(path),
+      `${JSON.stringify({ ts: new Date(o.nowMs).toISOString(), machine: o.machine, id, action: o.action, record, prev })}\n`,
+    )
+  } catch {
+    // the audit line is a record, never a gate
+  }
 }
 
 export function markExhausted(id: string, untilS: number, dir = cacheDir()): void {
@@ -140,6 +185,7 @@ export function recordSample(
     },
     dir,
     sessionLimit,
+    nowMs,
   )
   setAuthFailed(id, false, nowMs, dir)
   // The sample's `src` flips to "oauth" when a refresh lands later, so the verify suite reads this stamp for "a statusline fed it".

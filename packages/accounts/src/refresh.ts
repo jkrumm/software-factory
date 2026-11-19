@@ -13,10 +13,12 @@ import {
   isNum,
   newestAge,
   sampleAge,
+  scopedDue,
   usable,
   dueIds,
   withoutSessionWindows,
 } from './policy.ts'
+import { isOverrideRecord, newerRecord } from './modes.ts'
 import type { HttpGet, PeerUsage } from './ports.ts'
 import { accountDir } from './registry.ts'
 import {
@@ -27,6 +29,8 @@ import {
   releaseClaim,
   saveSample,
   setAuthFailed,
+  loadOverrides,
+  writeOverride,
 } from './store.ts'
 
 export interface RefreshDeps extends KeychainDeps {
@@ -38,6 +42,10 @@ export interface RefreshDeps extends KeychainDeps {
   ids: string[]
   /** The peer machine's `claude-account usage --json` body (parsed), fetched once per run; throws or answers null when unreachable. Absent = no import. */
   peerUsage?: PeerUsage
+  /** The mode override state file (default: modesPath()); the peer's newer overrides are adopted into it. */
+  modesPath?: string
+  /** This machine's name for the audit line of an adopted override. */
+  machine?: string
 }
 
 /**
@@ -100,7 +108,9 @@ async function importPeerSamples(d: RefreshDeps): Promise<Set<string>> {
   const pct = (v: unknown) => (isNum(v) ? v : null)
   for (const r of rows as Record<string, unknown>[]) {
     const id = r?.id
-    if (typeof id !== 'string' || !Object.hasOwn(d.reg.accounts, id) || !d.reg.accounts[id].enabled) continue
+    if (typeof id !== 'string' || !Object.hasOwn(d.reg.accounts, id)) continue
+    adoptOverride(d, id, r.mode_override, now)
+    if (!d.reg.accounts[id].enabled) continue
     const win = (value: unknown, reset: unknown, age: unknown) => {
       const v = pct(value)
       return v === null
@@ -109,18 +119,49 @@ async function importPeerSamples(d: RefreshDeps): Promise<Set<string>> {
     }
     const s = win(r.five_hour, r.five_hour_resets_at, r.five_hour_age_s)
     const w = win(r.seven_day, r.seven_day_resets_at, r.seven_day_age_s)
-    if (s.v !== null || w.v !== null) {
+    const lim = peerLimits(r, now)
+    if (s.v !== null || w.v !== null || lim) {
       saveSample(
         id,
-        { s: s.v, s_reset: s.reset, s_ts: s.ts, w: w.v, w_reset: w.reset, w_ts: w.ts, src: 'peer' },
+        { s: s.v, s_reset: s.reset, s_ts: s.ts, w: w.v, w_reset: w.reset, w_ts: w.ts, src: 'peer', ...lim },
         d.dir,
         hasSessionLimit(d.reg.accounts[id]),
+        now,
       )
       imported.add(id)
     }
     if (isNum(r.exhausted_until) && r.exhausted_until * 1000 > now) markExhausted(id, r.exhausted_until, d.dir)
   }
   return imported
+}
+
+/** The peer row's `limits` / `weekly_scoped_shares` (each with `age_s`) as sample fields, the fetch time rebuilt from the oldest age. */
+function peerLimits(r: Record<string, unknown>, now: number) {
+  if (!Array.isArray(r.limits)) return null
+  const strip = (v: unknown) =>
+    (Array.isArray(v) ? v : [])
+      .filter((e): e is Record<string, unknown> => !!e && typeof e === 'object' && !Array.isArray(e))
+      .map((e) => Object.fromEntries(Object.entries(e).filter(([k]) => k !== 'age_s')))
+  const ages = (r.limits as { age_s?: unknown }[]).map((l) => l?.age_s).filter(isNum)
+  if (!ages.length && r.limits.length) return null // an age-less limit set cannot be dated: never laundered into a fresh one
+  const limits = strip(r.limits)
+  return {
+    limits,
+    ...(Array.isArray(r.weekly_scoped_shares) ? { scoped_shares: strip(r.weekly_scoped_shares) } : {}),
+    limits_ts: now - (ages.length ? Math.max(...ages) : 0) * 1000,
+  }
+}
+
+/** The peer's override for `id` replaces ours when it is newer (a clear's tombstone too): how a mode set on one machine reaches the other. */
+function adoptOverride(d: RefreshDeps, id: string, rec: unknown, now: number): void {
+  if (!isOverrideRecord(rec)) return
+  try {
+    if (!newerRecord(rec, loadOverrides(d.modesPath).accounts[id])) return
+    writeOverride(id, rec, { action: 'adopt', machine: d.machine ?? 'local', nowMs: now, path: d.modesPath })
+    d.log?.(`refresh: adopted the peer's mode override for ${id} (${rec.cleared ? 'cleared' : rec.kind})`)
+  } catch (e) {
+    d.log?.(`refresh: peer mode override for ${id} not adopted: ${(e as Error).message}`)
+  }
 }
 
 export async function runRefresh(d: RefreshDeps): Promise<Record<string, RefreshResult>> {
@@ -131,7 +172,12 @@ export async function runRefresh(d: RefreshDeps): Promise<Record<string, Refresh
     const env = refreshEnv(d.baseEnv, accountDir(d.reg.accounts[id]))
     let verdict: LoginVerdict | undefined
     const status = () => (verdict ??= loginVerdict(d, env)) // at most one `auth status` per account and run
-    if (imported.has(id) && sampleAge(loadCache(d.dir).samples[id], d.now()) < FRESH_MS) {
+    const afterImport = loadCache(d.dir)
+    if (
+      imported.has(id) &&
+      sampleAge(afterImport.samples[id], d.now()) < FRESH_MS &&
+      !scopedDue(d.reg, afterImport, id, d.now()) // a reserve still needs its scoped limit, which only the endpoint gives
+    ) {
       // A fresh peer sample replaces the endpoint GET, but says nothing about THIS machine's login: the verdict still runs.
       const v = status()
       if (v.startFailed) {
@@ -152,7 +198,7 @@ export async function runRefresh(d: RefreshDeps): Promise<Record<string, Refresh
     }
     const sample = await oauthSample(d, id, status)
     if (sample) {
-      saveSample(id, sample, d.dir, hasSessionLimit(d.reg.accounts[id]))
+      saveSample(id, sample, d.dir, hasSessionLimit(d.reg.accounts[id]), d.now())
       setAuthFailed(id, false, d.now(), d.dir)
       markVerified(id, d.now(), d.dir)
       results[id] = 'fresh'

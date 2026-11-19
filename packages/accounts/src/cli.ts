@@ -13,10 +13,13 @@ import {
   type RefreshResult,
   type Registry,
   type Sample,
+  MODE_KINDS,
+  type ModeKind,
   SPILL,
   defaultAccountId,
   fableAccount,
   hasSessionLimit,
+  reserveBudget,
   mergeSample,
   newestAge,
   pick,
@@ -27,8 +30,9 @@ import {
   withoutSessionWindows,
 } from './policy.ts'
 import { picksPath } from './paths.ts'
+import { type ModeView, type OverrideRecord, applyModes, baselineReset, resolveModes } from './modes.ts'
 import { accountFromConfigDir, claudeJsonPath, loadRegistry, shellLine } from './registry.ts'
-import { claimRefresh, loadCache, markExhausted, recordSample } from './store.ts'
+import { claimRefresh, loadCache, loadOverrides, markExhausted, recordSample, writeOverride } from './store.ts'
 import { readLoginExpiry } from './keychain.ts'
 import { httpGet } from './oauth.ts'
 import { runRefresh, refreshBeforePick } from './refresh.ts'
@@ -89,6 +93,13 @@ function readClaudeJson(reg: Registry, cache: Cache): Cache {
   return withoutSessionWindows(reg, cache) // a plan without a 5 h window never shows or judges a leftover session half
 }
 
+/** What every reading verb works on: the cache, each account's mode in force, and the registry with the live overrides applied. */
+function live(reg0: Registry, now = Date.now()) {
+  const cache = readClaudeJson(reg0, loadCache())
+  const views = resolveModes(reg0, loadOverrides(), cache, now)
+  return { reg: applyModes(reg0, views), cache, views }
+}
+
 const claudeBin = () => Bun.which('claude') ?? join(homedir(), '.local', 'bin', 'claude')
 
 /**
@@ -100,6 +111,7 @@ async function refresh(
   o: { ids?: string[]; claimed?: string[]; all?: boolean; peer?: boolean } = {},
 ): Promise<Record<string, RefreshResult>> {
   const enabled = (id: string) => Object.hasOwn(reg.accounts, id) && reg.accounts[id].enabled
+  reg = live(reg).reg // a reserve (registry or override) is due for its scoped limit
   const todo = o.claimed
     ? o.claimed.filter(enabled)
     : claimRefresh(
@@ -122,6 +134,7 @@ async function refresh(
     now: Date.now,
     log: (m) => console.error(m),
     peerUsage: o.peer === false ? undefined : fetchPeerUsage, // the synchronous pick-time refresh never waits on ssh
+    machine: peerMachine().local,
   })
 }
 
@@ -170,9 +183,29 @@ function expiry(reg: Registry, json: boolean, ids?: string[]): void {
   for (const r of rows) console.log(`${r.id}  ${r.grade}  ${r.detail}`)
 }
 
-function usage(reg: Registry, json: boolean): void {
-  const cache = readClaudeJson(reg, loadCache())
+const iso = (ms: number | null | undefined) => (ms === null || ms === undefined ? null : new Date(ms).toISOString())
+
+/** The `mode` field of `usage --json` and `mode --json`: the mode in force with its source (docs/accounts.md §usage --json). */
+export function modeField(v: ModeView) {
+  const live = v.source === 'override' ? v.override : null
+  return {
+    kind: v.mode.kind,
+    for: v.mode.for ?? null,
+    until: v.mode.until ?? null,
+    until_at: iso(v.until_at),
+    why: v.mode.why ?? null,
+    source: v.source,
+    set_at: iso(live?.set_at),
+    set_on: live?.set_on ?? null,
+  }
+}
+
+const withAge = (list: Record<string, unknown>[] | undefined, ts: number | undefined, now: number) =>
+  list && ts !== undefined ? list.map((l) => ({ ...l, age_s: Math.round((now - ts) / 1000) })) : null
+
+function usage(reg0: Registry, json: boolean): void {
   const now = Date.now()
+  const { reg, cache, views } = live(reg0, now)
   const rows = Object.entries(reg.accounts).map(([id, a]) => {
     const x = cache.samples[id]
     const until = cache.exhausted[id]
@@ -191,6 +224,11 @@ function usage(reg: Registry, json: boolean): void {
       source: x?.src ?? null,
       auth_ok: !cache.auth_failed[id],
       exhausted_until: until && until * 1000 > now ? until : null,
+      // additive (registry v2): the mode in force, the raw override the peer imports, the endpoint's limits with their age
+      mode: modeField(views[id]),
+      mode_override: views[id].override,
+      limits: withAge(x?.limits, x?.limits_ts, now),
+      weekly_scoped_shares: withAge(x?.scoped_shares, x?.limits_ts, now),
     }
   })
   if (json) return void console.log(JSON.stringify({ default_account: defaultAccountId(reg), accounts: rows }, null, 2))
@@ -200,6 +238,90 @@ function usage(reg: Registry, json: boolean): void {
       `${r.id} ${r.plan}${r.enabled ? '' : ' (disabled)'}  ${r.session_limit ? `5h ${r.five_hour ?? '-'}% ↺${reset(r.five_hour_resets_at)}  ` : ''}7d ${r.seven_day ?? '-'}% ↺${reset(r.seven_day_resets_at)}  age ${r.age_s ?? '-'}s  auth ${r.auth_ok ? 'ok' : 'FAILED'}${r.exhausted_until ? '  EXHAUSTED' : ''}`,
     )
   }
+}
+
+// ── mode (overrides) ─────────────────────────────────────────────────────────────────────────────────────────────
+
+function modeVerb(reg0: Registry, rest: string[]): number {
+  const now = Date.now()
+  const json = rest.includes('--json')
+  const id = rest[0] && !rest[0].startsWith('--') ? rest[0] : null
+  if (id === null) {
+    const { reg, cache, views } = live(reg0, now)
+    const rows = Object.keys(reg.accounts).map((a) => {
+      const b = reserveBudget(reg, cache, a, now)
+      return {
+        id: a,
+        ...modeField(views[a]),
+        expired: views[a].expired,
+        budget: b && {
+          for: b.for,
+          known: b.known,
+          unused: b.unused,
+          weekly: b.weekly,
+          ceiling: b.ceiling,
+          open: b.open,
+          released: b.released,
+        },
+      }
+    })
+    if (json) {
+      console.log(JSON.stringify({ accounts: rows }, null, 2))
+      return 0
+    }
+    const when = (s: string | null) => (s ? new Date(s).toUTCString().slice(0, 22) : '')
+    for (const r of rows) {
+      const kind = r.kind === 'reserve' ? `reserve for ${r.for}` : r.kind
+      const parts = [
+        r.id.padEnd(6),
+        kind.padEnd(18),
+        r.source.padEnd(9),
+        r.until ? `until ${r.until}${r.until_at ? ` (${when(r.until_at)})` : ''}` : '',
+        r.set_at ? `set ${when(r.set_at)} on ${r.set_on}` : '',
+        r.why ? JSON.stringify(r.why) : '',
+        r.budget
+          ? r.budget.known
+            ? `budget ${r.budget.open ? 'open' : 'closed'} (${r.budget.weekly! + r.budget.unused!}/${r.budget.ceiling}${r.budget.released ? ', released' : ''})`
+            : 'budget unknown: last resort'
+          : '',
+        r.expired ? '(override ended)' : '',
+      ]
+      console.log(parts.filter(Boolean).join('  '))
+    }
+    return 0
+  }
+  if (!Object.hasOwn(reg0.accounts, id))
+    throw new Error(`mode: unknown account '${id}' (${Object.keys(reg0.accounts).join(', ')})`)
+  const machine = peerMachine().local
+  if (rest.includes('--clear')) {
+    writeOverride(id, { cleared: true, set_at: now, set_on: machine }, { action: 'clear', machine, nowMs: now })
+    console.log(`${id}: override cleared, the registry's mode applies`)
+    return 0
+  }
+  const kind = rest[1] as ModeKind
+  if (!MODE_KINDS.includes(kind)) throw new Error(`mode: <mode> must be one of ${MODE_KINDS.join(', ')}, or --clear`)
+  const model = flag(rest, '--for')
+  if (kind === 'reserve' && !model) throw new Error('mode: reserve needs --for <model>')
+  if (kind !== 'reserve' && model) throw new Error('mode: --for belongs to reserve only')
+  const until = flag(rest, '--until') ?? (kind === 'drain' ? 'reset' : null)
+  if (until !== null && until !== 'reset') {
+    const t = Date.parse(until)
+    if (Number.isNaN(t)) throw new Error(`mode: --until must be reset or an ISO time, not '${until}'`)
+    if (t <= now) throw new Error(`mode: --until ${until} is already past`)
+  }
+  const cache = readClaudeJson(reg0, loadCache())
+  const record: OverrideRecord = {
+    kind,
+    for: model,
+    until,
+    why: flag(rest, '--why'),
+    set_at: now,
+    set_on: machine,
+    baseline_w_reset: until === 'reset' ? baselineReset(cache.samples[id], now) : null,
+  }
+  writeOverride(id, record, { action: 'set', machine, nowMs: now })
+  console.log(`${id}: ${kind}${model ? ` for ${model}` : ''}${until ? ` until ${until}` : ''} (override)`)
+  return 0
 }
 
 // ── health (wake check) ─────────────────────────────────────────────────────────────────────────────────────────
@@ -311,8 +433,26 @@ export const VERBS: Verb[] = [
   {
     name: 'fable',
     usage: 'fable',
-    summary: "the account `cf` launches on: the registry's `fable` when enabled, else the default",
-    detail: [],
+    summary: 'the account `cf` launches on: the open reserve-for-fable account with the most unused allowance',
+    detail: [
+      "none open: the first enabled reserve-for-fable account (the registry's `fable` in v1); none at all: the default account",
+    ],
+  },
+  {
+    name: 'mode',
+    usage:
+      'mode [--json] | mode <id> <normal|drain|reserve|paused> [--for <model>] [--until reset|<iso>] [--why <text>] | mode <id> --clear',
+    summary: "every account's mode in force with its source, expiry and why; or set / clear an override",
+    detail: [
+      "no id         every account: mode, source (override | registry), until, set, why, a reserve's budget",
+      '<id> <mode>   an override in the state file (~/.local/share/claude-accounts/modes.json), one audit line each;',
+      '              the peer machine adopts it at its next refresh',
+      '--for <model> reserve only, required: the model whose unused weekly allowance the account holds (fable)',
+      '--until       reset (the next observed weekly reset, a manual one too) or an ISO time; drain defaults to reset',
+      '--why <text>  shown wherever the mode is',
+      '--clear       remove the override (a tombstone, so the peer drops it too)',
+      'exit 2 on an unknown id or mode, a reserve without --for, an --until that is past',
+    ],
   },
   {
     name: 'env',
@@ -430,22 +570,22 @@ export async function main(argv: string[]): Promise<number> {
       // only an account with no sample at all is refreshed synchronously first.
       const dry = rest.includes('--dry')
       try {
-        const cache0 = readClaudeJson(reg, loadCache())
+        const { reg: applied0, cache: cache0 } = live(reg, now)
         if (!dry)
           await refreshBeforePick({
-            reg,
+            reg: applied0,
             lane,
             now,
             cache: cache0,
-            claim: (ids) => claimRefresh(reg, ids, now, cache0),
+            claim: (ids) => claimRefresh(applied0, ids, now, cache0),
             runSync: async (ids) => void (await refresh(reg, { claimed: ids, peer: false })),
             detach: (ids) => spawnDetachedRefresh(ids),
           })
       } catch (e) {
         console.error(`claude-account: refresh skipped: ${(e as Error).message}`) // a pick must always answer; go on with the current cache
       }
-      const cache = readClaudeJson(reg, loadCache())
-      const p = pick(reg, cache, lane, now, dry ? undefined : Math.random) // --dry stays deterministic (verify and previews)
+      const { reg: applied, cache } = live(reg, now)
+      const p = pick(applied, cache, lane, now, dry ? undefined : Math.random) // --dry stays deterministic (verify and previews)
       if (!dry) {
         try {
           mkdirSync(dirname(picksPath()), { recursive: true })
@@ -463,7 +603,7 @@ export async function main(argv: string[]): Promise<number> {
       const lane = flag(rest, '--lane')
       if (!lane) throw new Error('usage: claude-account rank --lane <lane> [--json]')
       const now = Date.now()
-      const order = rank({ reg, cache: readClaudeJson(reg, loadCache()), lane, nowMs: now })
+      const order = rank({ ...live(reg, now), lane, nowMs: now })
       if (rest.includes('--json')) console.log(JSON.stringify({ lane, order, at: new Date(now).toISOString() }))
       else order.forEach((e, i) => console.log(`${i + 1}. ${e.account}  ${e.reason}  w=${e.weight!.toFixed(3)}`))
       return 0
@@ -518,9 +658,14 @@ export async function main(argv: string[]): Promise<number> {
       else if (Object.values(reg.accounts).filter((a) => a.enabled).length > 1) console.log(id.toUpperCase())
       return 0
     }
-    case 'fable':
-      console.log(fableAccount(reg))
+    case 'fable': {
+      const now = Date.now()
+      const { reg: applied, cache } = live(reg, now)
+      console.log(fableAccount(applied, cache, now))
       return 0
+    }
+    case 'mode':
+      return modeVerb(reg, rest)
     case 'env': {
       const id = rest[0]
       const a = id && Object.hasOwn(reg.accounts, id) ? reg.accounts[id] : undefined
