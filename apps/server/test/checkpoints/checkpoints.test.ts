@@ -1275,6 +1275,17 @@ describe('errands', () => {
     expect(needless).toMatchObject({ ok: false, error: { kind: 'invalid' } })
     expect(value(await raiseErrandRead(raised.errand.id)).doneAt).toBeNull()
 
+    // an approval Errand is the owner's yes: his delegate does not give it
+    await db.sql`UPDATE factory.errands SET need = 'approval' WHERE id = ${raised.errand.id}`
+    const approval = await finishErrand(deps, {
+      errandId: raised.errand.id,
+      note: null,
+      by: 'orchestrator',
+      confirmedBy: 'the operator',
+    })
+    expect(approval).toMatchObject({ ok: false, error: { kind: 'invalid' } })
+    await db.sql`UPDATE factory.errands SET need = 'hands' WHERE id = ${raised.errand.id}`
+
     const done = value(
       await finishErrand(deps, {
         errandId: raised.errand.id,

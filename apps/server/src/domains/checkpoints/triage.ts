@@ -95,6 +95,8 @@ function commandWords(line: string): string[] {
  */
 export function refuseOffMacbook(input: TriageInput): string | null {
   if (input.command === null || (input.host !== null && input.host !== 'macbook' && input.host !== 'any')) return null
+  // an ssh or an `hc --on` runs its quoted command elsewhere: only the host-class rules read that
+  if (keylessRoute(input.command) !== null || /^\s*ssh\s/.test(input.command)) return null
   const word = commandWords(input.command).find((w) => MINI_ONLY_COMMANDS.includes(w.replace(/^.*\//, '')))
   if (word === undefined) return null
   return `\`${word}\` is installed on the mini only, so this command would fail on his MacBook (exit 127) and leave a second Errand behind. Run it on the mini yourself, or give the MacBook a command that exists there. Nothing was raised.`

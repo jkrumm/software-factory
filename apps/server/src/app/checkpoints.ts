@@ -1292,6 +1292,17 @@ export async function finishErrand(
           "the orchestrator closes an Errand with evidence: pass confirmedBy, who confirmed the work and how (the operator's report, what was looked at)",
       })
   }
+  if (input.by === 'orchestrator') {
+    // an `approval` Errand is the owner's yes (Approve): his delegate does not give it
+    const held = await deps.uow.run(async ({ checkpoints }) => ok(await checkpoints.errand(input.errandId)))
+    if (!held.ok) return held
+    if (held.value?.need === 'approval' && !held.value.doneAt)
+      return err({
+        kind: 'invalid',
+        detail:
+          "this Errand needs the owner's yes (approval): only the owner closes it, in the Console or with `factory errand approve`",
+      })
+  }
   if (outcome === 'not_needed') return closeErrand(deps, { ...input, outcome })
 
   const failure = runFailureOf({ run: input.run, note: input.note?.trim() || null })

@@ -57,8 +57,8 @@ fails on any raw colour.
   interactive `claude` session on the mini (which starts with the orchestrator token set) is the orchestrator, not the owner:
   it may close an Errand its operator confirmed (`factory errand done <id> --confirmed-by "…"`, recorded as the orchestrator's),
   but approve, verdicts and a Decision's worth-asking stay the owner's. `FACTORY_TOKEN= factory …` resolves the owner token and
-  is recorded as the owner: do not use it to close an Errand. The owner's own shell has no `FACTORY_TOKEN` and resolves it. A set token always wins;
-  offline verbs and `health get` never resolve one.
+  is recorded as the owner: do not use it to close an Errand. The owner's own shell has no `FACTORY_TOKEN` and resolves it.
+  Offline verbs and `health get` never resolve one.
 - The CLI is the one vocabulary on the host: `rd` keeps only the owner's terminal verbs. An unknown role is exit 4.
 - The role table governs the terminals the factory spawns (the lead, `rd --role`); an Issue's or plan row's `seat`
   overrides the lead row for that Issue; with none, `apps/server/src/domains/leads/light.ts` may start it on the `light`

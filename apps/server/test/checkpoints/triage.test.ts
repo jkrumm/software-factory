@@ -56,6 +56,9 @@ describe('(f) a MacBook command that runs a mini-only command is refused', () =>
     expect(refuseOffMacbook(input({ summary: 's', command: 'echo factory', host: 'macbook' }))).toBeNull()
     expect(refuseOffMacbook(input({ summary: 's', command: 'factory errand list', host: 'portal' }))).toBeNull()
     expect(refuseOffMacbook(input({ summary: 's', command: null, host: 'macbook' }))).toBeNull()
+    expect(
+      refuseOffMacbook(input({ summary: 's', command: "ssh mini 'cd x && factory errand done e1'", host: 'macbook' })),
+    ).toBeNull()
   })
 })
 
