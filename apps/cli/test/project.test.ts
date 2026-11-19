@@ -155,11 +155,22 @@ describe('factory project check', () => {
 
   test('a leads of 1 for a merge window is a warning that points at factory merge-lock, exit 0', async () => {
     const file = await repo('windowed', {
-      'project.yaml': 'apiVersion: factory/v2\nname: windowed\nleads: 1 # the merge window serialises merges\n',
+      'project.yaml':
+        'apiVersion: factory/v2\nname: windowed\nship:\n  - { via: pr }\nleads: 1 # the merge window serialises merges\n',
     })
     const { code, out } = await cli(['project', 'check', file])
-    expect(out).toContain(`${file}:3:1: warning: leads is 1 for a resource the factory already models`)
+    expect(out).toContain(`${file}:5:1: warning: leads is 1 for a resource the factory already models`)
     expect(out).toContain('factory merge-lock')
+    expect(code).toBe(0)
+  })
+
+  test('a leads for a merge window in a repo that ships by push is not a finding', async () => {
+    const file = await repo('pushed', {
+      'project.yaml':
+        'apiVersion: factory/v2\nname: pushed\nship:\n  - { via: push }\nleads: 4 # the merge window serialises merges\n',
+    })
+    const { code, out } = await cli(['project', 'check', file])
+    expect(out).not.toContain('merge-lock')
     expect(code).toBe(0)
   })
 

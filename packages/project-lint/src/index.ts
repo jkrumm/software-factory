@@ -167,6 +167,12 @@ function commentsAround(lines: readonly string[], line: number): string {
   return [above.startsWith('#') ? above : '', hash === -1 ? '' : own.slice(hash)].join(' ')
 }
 
+/** A merge window exists only where a change lands by pull request (`ship[].via: pr`): a push-shipping repo has none for `factory merge-lock` to serialise. */
+const landsByPr = (value: unknown): boolean => {
+  const rules = valueAt(value, ['ship'])
+  return Array.isArray(rules) && rules.some((rule) => isJson(rule) && rule.via === 'pr')
+}
+
 /** The warnings for a `leads` below the default whose comment records no reason, or names a resource the factory already models (`capReasonOf`). */
 function leadsReasons(
   text: string,
@@ -177,7 +183,7 @@ function leadsReasons(
   if (set === undefined || set === DEFAULT_LEADS) return []
   const at = locate(['leads'])
   const { reason, hint } = capReasonOf(commentsAround(text.split('\n'), at.line))
-  if (hint === null) return []
+  if (hint === null || (reason === 'merge' && !landsByPr(value))) return []
   const message =
     reason === 'unrecorded'
       ? `leads is ${String(set)} and its comment records no reason: ${hint}`
