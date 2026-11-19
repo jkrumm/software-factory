@@ -73,18 +73,23 @@ interface Spot {
 }
 
 /** The spot once a smooth scroll has stopped with it in view: a click made while it moves lands beside the passage. */
-async function stillInView(measure: () => Promise<Spot>): Promise<Spot> {
+async function stillInView(measure: () => Promise<Spot>, centered = false): Promise<Spot> {
   let last = await measure()
   await expect
     .poll(async () => {
       const now = await measure()
       const still = now.top === last.top
       last = now
-      return still && now.top >= 0 && now.bottom <= now.viewport
+      // the third passage can be in view before the scroll starts: a frame's own viewport also has it come to the middle
+      const middle = !centered || Math.abs((now.top + now.bottom) / 2 - now.viewport / 2) < 80
+      return still && middle && now.top >= 0 && now.bottom <= now.viewport
     })
     .toBe(true)
   return last
 }
+
+/** A line that makes a fixture new on every run: filing the same content again is a replay onto the same artifact. */
+const unique = () => `Run ${Date.now()}-${Math.random().toString(36).slice(2, 8)}.`
 
 const region = (page: Page, name: string) => page.getByRole('region', { name, exact: true })
 const card = (page: Page, text: string) => region(page, 'On the text').getByRole('listitem').filter({ hasText: text })
@@ -130,7 +135,7 @@ test('Markdown: a comment on the second and on the third occurrence stays on eac
   page,
   apiUrl,
 }) => {
-  const id = await file(apiUrl, 'Warm-up notes, Markdown', MARKDOWN, 'markdown')
+  const id = await file(apiUrl, 'Warm-up notes, Markdown', `${MARKDOWN}\n\n${unique()}`, 'markdown')
   await page.goto(`/artifacts/${id}`)
   await expect(page.getByRole('heading', { level: 1, name: 'Warm-up notes, Markdown' })).toBeVisible()
 
@@ -176,7 +181,7 @@ test('HTML: a comment on the second and on the third occurrence stays on each af
   page,
   apiUrl,
 }) => {
-  const id = await file(apiUrl, 'Warm-up notes, HTML', HTML, 'html')
+  const id = await file(apiUrl, 'Warm-up notes, HTML', HTML.replace('</body>', `<p>${unique()}</p></body>`), 'html')
   // the frame is a navigation of its own: once the service worker controls the page, it must not answer it with the app shell
   await page.goto('/needs-you')
   await page.evaluate('navigator.serviceWorker.ready.then(() => true)')
@@ -218,7 +223,7 @@ test('HTML: a comment on the second and on the third occurrence stays on each af
   await frame.evaluate(
     "[...CSS.highlights.get('factory')][1].startContainer.parentElement.scrollIntoView({ block: 'center' })",
   )
-  const at = await stillInView(() => frame.evaluate<Spot>(SPOT('factory')))
+  const at = await stillInView(() => frame.evaluate<Spot>(SPOT('factory')), true)
   const box = await page.locator('iframe[title="Artifact"]').boundingBox()
   if (!box) throw new Error('no frame box')
   await page.mouse.click(box.x + at.x, box.y + at.y)
