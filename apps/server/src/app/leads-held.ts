@@ -1,17 +1,19 @@
 import { leadKey } from '../domains/leads/names.ts'
+import { runsAChild } from '../domains/leads/quiesce.ts'
 import { deriveSession } from '../domains/leads/session.ts'
 import { ok } from '../kernel/result.ts'
 import { recordHook } from './leads-hooks.ts'
 import { type LeadDeps, loadIssue } from './leads.ts'
 
-/** A turn open and silent this long on an account whose window is closed is held at the wall, not working. */
+/** A turn open and silent this long, with nothing running in its tree, on an account whose window is closed is held at the wall, not working. */
 export const HELD_AFTER_MS = 2 * 60_000
 
 /**
  * A prompt submitted to an account that is out of window is refused by Claude Code before any answer: `UserPromptSubmit`
  * fires (a turn starts), the message goes back into the input box, and neither `Stop` nor `StopFailure` follows. The hooks
  * then show a turn that never ends, so the lead counts as working and nothing wakes it (a resumed lead's first message
- * is the usual case, issue 2414). A working lead whose turn has been silent for `HELD_AFTER_MS` on an account that
+ * is the usual case, issue 2414). A working lead whose turn has been silent for `HELD_AFTER_MS`, with no process in its
+ * tree (a tool that runs is silent to the hooks too, and a move of the lead would end it), on an account that
  * capacity reads as closed is recorded as the limit stop the hook missed: the same fact, so the Issue stalls as a `wall`
  * and the steward wakes it when the window opens (or moves it to an open account). Once per turn (the key carries it);
  * a turn that starts later clears the wall as any turn does. Returns how many leads it recorded.
@@ -33,9 +35,13 @@ export async function holdWalledLeads(deps: LeadDeps): Promise<number> {
     }
     return ok(found)
   })
-  if (!candidates.ok) return 0
+  if (!candidates.ok || candidates.value.length === 0) return 0
+  // Read once: the host's table. One that cannot be read says nothing of what runs, so nothing is held on a guess.
+  const processes = await deps.quiesce?.processes().catch(() => null)
+  if (!processes) return 0
   let held = 0
   for (const { name, account, turns } of candidates.value) {
+    if (runsAChild(processes, name)) continue
     // Capacity is asked outside any transaction. No `since`: the newest reading decides, so a lead is never held on a window that is open.
     const window = await deps.windows.wall(account)
     if (!window.ok || !window.value.resetAt || window.value.resetAt <= now) continue

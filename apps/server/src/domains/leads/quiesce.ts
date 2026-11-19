@@ -6,6 +6,13 @@ export const QUIESCE_AFTER_MS = 30 * 60_000
 /** Failed resumes of a dormant session after which the lead is called gone. */
 export const MAX_REVIVE_TRIES = 3
 
+/** Whether a process of the session's tree has a parent in it too: a tool, a check or a lock the lead runs, which the hooks never report. */
+export function runsAChild(processes: readonly QuiesceProcess[], session: string): boolean {
+  const tree = processes.filter((proc) => proc.session === session)
+  const pids = new Set(tree.map((proc) => proc.pid))
+  return tree.some((proc) => pids.has(proc.ppid))
+}
+
 export type QuiesceVerdict = { quiesce: true } | { quiesce: false; why: string }
 
 /**
