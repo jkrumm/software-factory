@@ -78,14 +78,16 @@ interface Spot {
 /** The spot once a smooth scroll has stopped with it in view: a click made while it moves lands beside the passage. x and y are where a click goes. */
 async function stillInView(measure: () => Promise<Spot>, centered = false): Promise<Spot> {
   let last = await measure()
+  let since = Date.now()
   await expect
     .poll(async () => {
       const now = await measure()
-      const still = now.x === last.x && now.y === last.y
+      // nested smooth scrolls (the frame's, then the page's) can pause between animations: it must hold for a while
+      if (now.x !== last.x || now.y !== last.y) since = Date.now()
       last = now
       // the third passage can be in view before the scroll starts: a frame's own viewport also has it come to the middle
       const middle = !centered || Math.abs((now.top + now.bottom) / 2 - now.viewport / 2) < 80
-      return still && middle && now.top >= 0 && now.bottom <= now.viewport
+      return Date.now() - since >= 700 && middle && now.top >= 0 && now.bottom <= now.viewport
     })
     .toBe(true)
   return last
@@ -234,8 +236,12 @@ test('HTML: a comment on the second and on the third occurrence stays on each af
     return { ...spot, x: box.x + spot.x, y: box.y + spot.y }
   }, true)
   // the frame answers a hover over a painted passage with a pointer cursor: it has the passage under the mouse, so the click is its own
-  await page.mouse.move(at.x, at.y)
-  await expect.poll(() => frame.evaluate('document.documentElement.style.cursor')).toBe('pointer')
+  // (it reads the point on each mouse move, so a move made before the frame was ready is made again)
+  await expect(async () => {
+    await page.mouse.move(at.x - 3, at.y)
+    await page.mouse.move(at.x, at.y)
+    expect(await frame.evaluate('document.documentElement.style.cursor')).toBe('pointer')
+  }).toPass({ timeout: 20_000 })
   await page.mouse.click(at.x, at.y)
   const form = page.getByRole('complementary', { name: 'Comments' }).getByRole('form', { name: 'Edit comment' })
   await expect(form.getByRole('textbox', { name: 'Comment' })).toHaveValue('About the third one.')
