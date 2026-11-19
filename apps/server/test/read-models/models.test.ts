@@ -91,7 +91,7 @@ describe('the empty database', () => {
     expect(chain).toMatchObject({ nodes: [], edges: [], blocking: {} })
 
     const kpis = KpiModel.parse(await readKpis(sql, { now: NOW, days: 7 }))
-    expect(kpis.kpis.map((k) => k.key)).toHaveLength(27)
+    expect(kpis.kpis.map((k) => k.key)).toHaveLength(28)
     // a count per day is a real zero when nothing closed; every other figure has nothing to divide and is null
     for (const kpi of kpis.kpis) expect(kpi.value).toBe(kpi.key === 'issues_closed_per_day' ? 0 : null)
     expect(kpis.kpis.find((k) => k.key === 'cost')).toMatchObject({ measured: false, n: 0 })

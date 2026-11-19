@@ -9,21 +9,15 @@ import { appendFileSync, mkdirSync, readFileSync } from 'node:fs'
 import { homedir } from 'node:os'
 import { dirname, join } from 'node:path'
 import {
-  type Cache,
   type RefreshResult,
   type Registry,
-  MODE_KINDS,
-  type ModeKind,
   SPILL,
   defaultAccountId,
   fableAccount,
   modeOf,
   hasSessionLimit,
-  HOLDS,
-  type Hold,
   reserveBudget,
   reserveHold,
-  mergeSample,
   newestAge,
   POLICY_NAMES,
   isPolicyName,
@@ -34,7 +28,6 @@ import {
   accountUnits,
   rank,
   ruleTag,
-  withoutSessionWindows,
 } from './policy.ts'
 import { historyDir, picksPath, registryWritePath, shadowPath } from './paths.ts'
 import { MEASURED } from './load-model.ts'
