@@ -14,6 +14,8 @@ const PAGE_SIZE = 100
 /** A ship names its commits, and a pull request is looked for through the first few only. */
 const MAX_COMMITS_ASKED = 3
 
+const Commit = z.looseObject({ parents: z.array(z.looseObject({ sha: z.string().min(1) })) })
+
 const Pulls = z.array(
   z.looseObject({
     number: z.number().int(),
@@ -119,6 +121,16 @@ export function githubCi(options: GithubCiOptions): Ci {
       const slug = await slugOf(repo)
       if (!slug.ok) return slug
       return stateOf(slug.value, sha)
+    },
+
+    async ofParent({ repo, sha }): Promise<Result<CiState>> {
+      const slug = await slugOf(repo)
+      if (!slug.ok) return slug
+      const commit = await read(`${api}/repos/${slug.value}/commits/${encodeURIComponent(sha)}`, Commit)
+      if (!commit.ok) return commit
+      const parent = commit.value.parents[0]
+      if (!parent) return err(portError('refused', `${sha.slice(0, 7)} has no parent`))
+      return stateOf(slug.value, parent.sha)
     },
   }
 }

@@ -114,6 +114,7 @@ const ci: Ci = {
     return err(portError('refused', 'no token'))
   },
   ofCommit: async () => commitCi,
+  ofParent: async () => err(portError('refused', 'unused')),
 }
 let reviewerRows: ShipDeps['reviewerRows']
 let alertsDownNow: string[] = []

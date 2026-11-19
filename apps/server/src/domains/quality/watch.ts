@@ -70,13 +70,28 @@ const CI_VISIBLE_MS = 10 * 60_000
 /** CI still running this long after the merge did not finish. */
 const CI_RUNNING_MAX_MS = 60 * 60_000
 
+/** The failing check's name: `CiState.reason` is "<name> <conclusion>", the conclusion being one word. */
+const failingCheck = (state: CiState): string | null => state.reason?.replace(/\s+\S+$/, '') || null
+
+/** Whether `parent` was red on the same first failing check as `state`. A parent running, missing or unread is not. */
+function redBefore(state: CiState, parent: CiState | null): boolean {
+  if (parent?.status !== 'red') return false
+  const name = failingCheck(state)
+  return name !== null && name === failingCheck(parent)
+}
+
 /**
  * What the default branch's CI says of the landed commit, as a check named `ci`. Green is a pass and red names the
  * failing check; a run still going, or none visible in the first ten minutes, is `blocked` (looked at again, no
  * regression); one still going after an hour is red, and none after ten minutes passes (the repo may have no CI). With
- * no merge time the commit is taken as old enough for both.
+ * no merge time the commit is taken as old enough for both. A red whose first failing check was red the same way in
+ * `parent` (CI of the default branch before the commit landed) is `inherited`: it was there before the change, so the
+ * watch passes on it. A parent that is not red, or not read (null), leaves the red the change's.
  */
-export function ciCheck(state: CiState, input: { sha: string; mergedAt: Date | null; now: Date }): Check {
+export function ciCheck(
+  state: CiState,
+  input: { sha: string; mergedAt: Date | null; now: Date; parent?: CiState | null },
+): Check {
   const name = 'ci'
   const short = input.sha.slice(0, 7)
   const age = input.mergedAt ? input.now.getTime() - input.mergedAt.getTime() : Number.POSITIVE_INFINITY
@@ -85,6 +100,13 @@ export function ciCheck(state: CiState, input: { sha: string; mergedAt: Date | n
     case 'green':
       return { name, ok: true, detail: `CI green for ${short}` }
     case 'red':
+      if (redBefore(state, input.parent ?? null))
+        return {
+          name,
+          ok: false,
+          inherited: true,
+          detail: `${state.reason ?? 'a check failed'} for ${short}${link}, already red on the commit before it`,
+        }
       return { name, ok: false, detail: `${state.reason ?? 'a check failed'} for ${short}${link}` }
     case 'running':
       if (age > CI_RUNNING_MAX_MS)

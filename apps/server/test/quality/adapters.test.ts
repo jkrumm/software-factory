@@ -406,6 +406,7 @@ test('the ci check reads the landed commit; a CI that cannot be read does not ho
       asked.push(sha)
       return ok({ status: 'red', url: null, reason: 'build failure' })
     },
+    ofParent: async () => err(portError('unreadable', 'github 502')),
   }
   const now = '2026-01-01T12:05:00.000Z'
   const input = {
@@ -427,6 +428,79 @@ test('the ci check reads the landed commit; a CI that cannot be read does not ho
     { name: 'ci', ok: true, detail: 'CI was not read: no token' },
   ])
   expect(checks(await new MakeAndProbes({ ci }).run({ ...input, ci: undefined }, signal()))).toEqual([])
+})
+
+test('the ci check: a red already on the first parent with the same failing check is inherited; any other parent leaves it the change’s', async () => {
+  const repo = await fresh()
+  const asked: string[] = []
+  let parent: Awaited<ReturnType<Ci['ofParent']>> = ok({ status: 'red', url: null, reason: 'build failure' })
+  const ci: Ci = {
+    ofShip: async () => err(portError('refused', 'unused')),
+    ofCommit: async () => ok({ status: 'red', url: 'https://x/run/2', reason: 'build failure' }),
+    ofParent: async ({ sha }) => {
+      asked.push(sha)
+      return parent
+    },
+  }
+  const input = {
+    repo: repo.path,
+    makeVerify: false,
+    probes: [],
+    ci: {
+      landedAt: 'abcdef0123',
+      mergedSha: '1234567890',
+      mergedAt: '2026-01-01T12:00:00.000Z',
+      now: '2026-01-01T12:05:00.000Z',
+    },
+  }
+  const run = async () => checks(await new MakeAndProbes({ ci }).run(input, signal()))
+  expect(await run()).toEqual([
+    {
+      name: 'ci',
+      ok: false,
+      inherited: true,
+      detail: 'build failure for 1234567 (https://x/run/2), already red on the commit before it',
+    },
+  ])
+  expect(asked).toEqual(['1234567890'])
+  const mine = { name: 'ci', ok: false, detail: 'build failure for 1234567 (https://x/run/2)' }
+  parent = ok({ status: 'green', url: null, reason: null })
+  expect(await run()).toEqual([mine])
+  parent = ok({ status: 'red', url: null, reason: 'lint failure' })
+  expect(await run()).toEqual([mine])
+  parent = ok({ status: 'running', url: null, reason: 'build is still running' })
+  expect(await run()).toEqual([mine])
+  parent = err(portError('unreadable', 'github 502'))
+  expect(await run()).toEqual([mine])
+  // a green commit asks nothing of its parent
+  asked.length = 0
+  const green: Ci = { ...ci, ofCommit: async () => ok({ status: 'green', url: null, reason: null }) }
+  await new MakeAndProbes({ ci: green }).run(input, signal())
+  expect(asked).toEqual([])
+})
+
+test('github CI: the parent is the first parent of the commit; a commit with none is an error', async () => {
+  const repo = await withOrigin('https://github.com/o/app.git')
+  const fetch = github({
+    '/repos/o/app/commits/s1': { parents: [{ sha: 'p1' }, { sha: 'p2' }] },
+    '/repos/o/app/commits/p1/check-runs': {
+      check_runs: [
+        { name: 'build', head_sha: 'p1', status: 'completed', conclusion: 'failure', html_url: 'https://x/b' },
+      ],
+    },
+    '/repos/o/app/commits/p1/status': { sha: 'p1', statuses: [] },
+    '/repos/o/app/commits/root': { parents: [] },
+  })
+  const ci = githubCi({ token: 't', apiUrl: 'https://api.example.test', fetch })
+  expect(await ci.ofParent({ repo: repo.path, sha: 's1' })).toEqual({
+    ok: true,
+    value: { status: 'red', url: 'https://x/b', reason: 'build failure' },
+  })
+  expect(await ci.ofParent({ repo: repo.path, sha: 'root' })).toMatchObject({ ok: false })
+  expect(await ci.ofParent({ repo: repo.path, sha: 'gone' })).toMatchObject({
+    ok: false,
+    error: { detail: 'github 404' },
+  })
 })
 
 test('agw review: the covering jobs of a range are named, each once, and each thread’s record is read from the ledger', async () => {

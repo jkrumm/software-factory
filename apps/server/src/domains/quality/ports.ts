@@ -34,6 +34,8 @@ export interface Ci {
   ofShip(input: { repo: string; commits: readonly string[] }): Promise<Result<CiRead>>
   /** the CI of one commit as the default branch has it */
   ofCommit(input: { repo: string; sha: string }): Promise<Result<CiState>>
+  /** the CI of the first parent of one commit: the default branch as it stood before that commit landed */
+  ofParent(input: { repo: string; sha: string }): Promise<Result<CiState>>
 }
 
 /** What the watch's verify runs; `signal` is the server stopping, and nothing of a check may outlive it. */

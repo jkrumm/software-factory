@@ -105,11 +105,14 @@ export class MakeAndProbes implements Proof {
     const sha = input.mergedSha ?? input.landedAt
     const read = await this.options.ci.ofCommit({ repo, sha })
     if (!read.ok) return [{ name: 'ci', ok: true, detail: `CI was not read: ${read.error.detail}` }]
+    // A red is compared with the commit before it: the same check red there was not this change's. Only a red asks.
+    const parent = read.value.status === 'red' ? await this.options.ci.ofParent({ repo, sha }) : null
     return [
       ciCheck(read.value, {
         sha,
         mergedAt: input.mergedAt ? new Date(input.mergedAt) : null,
         now: new Date(input.now),
+        parent: parent?.ok ? parent.value : null,
       }),
     ]
   }
