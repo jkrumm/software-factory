@@ -17,6 +17,7 @@ apps/
 packages/
   contract/   zod schemas: every request, response and event; the OpenAPI source; the spool format the hook shares
   client/     typed client (Eden) and the CLI's transport, including the change-stream follower
+  accounts/   the Claude Code subscription picker and the `claude-account` CLI (`docs/accounts.md`): a pure rule over ports, no server or database, one file buildable for a machine without a checkout
 tests/
   scenarios/  use cases run against a real server and Postgres with fake hc and agw: the acceptance suite
   e2e/        Playwright against a seeded server: every Console screen, and the source of the README's screenshots

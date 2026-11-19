@@ -51,6 +51,9 @@ KEEP_RELEASES=3
 CLI_ENTRY="apps/cli/bin/factory.ts"
 BIN_DIR="$HOME/.local/bin"
 CLI_LINK="$BIN_DIR/factory"
+# The Claude account picker (packages/accounts) is installed beside the live `claude-account`, never over it: `claude-account-next`.
+ACCOUNTS_ENTRY="packages/accounts/bin/claude-account.ts"
+ACCOUNTS_LINK="$BIN_DIR/claude-account-next"
 PLIST="$HOME/Library/LaunchAgents/$LABEL.plist"
 HEALTH_URL="http://127.0.0.1:$PORT/health"
 # A cold start migrates the schema first. 60 s was enough on an idle host and not at a load of 200+ (issue 885: the new release
@@ -94,6 +97,16 @@ read_sha() { [[ -f "$1" ]] && tr -d '[:space:]' < "$1"; }
 write_atomic() { # $1 path, $2 content
   local tmp="$1.tmp.$$"
   printf '%s\n' "$2" > "$tmp" && mv -f "$tmp" "$1"
+}
+
+# `claude-account-next` -> the release's picker (packages/accounts). A failure is a warning: the picker is not the service, and the live
+# `claude-account` is never touched. A regular file there is somebody's own build: left alone.
+link_accounts() {
+  if [[ -e "$ACCOUNTS_LINK" && ! -L "$ACCOUNTS_LINK" ]]; then
+    log "WARNING: $ACCOUNTS_LINK is a regular file; leaving it"
+    return 0
+  fi
+  ln -sf "$CURRENT/$ACCOUNTS_ENTRY" "$ACCOUNTS_LINK" || log "WARNING: linking $ACCOUNTS_LINK failed"
 }
 
 # The dotfiles heartbeat pages on every restart of a KeepAlive job; one epoch line marks this one deliberate.
@@ -260,7 +273,9 @@ build_release() { # $1 sha
   git -C "$REPO_DIR" archive --format=tar "$1" | tar -x -C "$dir" || { remove_release "$1"; die "exporting $1 failed"; }
   (cd "$dir" && bun install --frozen-lockfile) || { remove_release "$1"; die "bun install failed; the live release is untouched"; }
   build_console "$1" || { remove_release "$1"; die "the Console build failed; the live release is untouched"; }
-  chmod +x "$dir"/scripts/*.sh "$dir/$CLI_ENTRY"
+  # The picker as one file beside the CLI entry: a machine with no checkout (the MacBook) pulls it from the live release (docs/accounts.md). Not the service: a failure is a warning.
+  (cd "$dir" && BUILD_COMMIT="${1:0:12}" bun packages/accounts/scripts/build.ts "$dir/dist/claude-account" >/dev/null) || log "WARNING: building the single-file claude-account failed; the release has none"
+  chmod +x "$dir"/scripts/*.sh "$dir/$CLI_ENTRY" "$dir/$ACCOUNTS_ENTRY"
   touch "$dir/.complete"
 }
 
@@ -584,6 +599,7 @@ rollback() {
     act "on failure: boot ${live:-none} again, exit 1"
     act ln -sfn "$release" "$CURRENT"
     act ln -sf "$CURRENT/$CLI_ENTRY" "$CLI_LINK"
+    act ln -sf "$CURRENT/$ACCOUNTS_ENTRY" "$ACCOUNTS_LINK"
     act "write $SHA_FILE ($prev) and $PREV_FILE (${live:-none}): the two trade places"
     log "rendered $DOOR_PLIST (the door of the previous release):"
     render_plist "$(door_template_of "$release")" "$release" "$prev"
@@ -611,6 +627,7 @@ rollback() {
     mark_up
     ln -sfn "$release" "$CURRENT" || die "updating $CURRENT failed"
     ln -sf "$CURRENT/$CLI_ENTRY" "$CLI_LINK" || die "linking $CLI_LINK failed"
+    link_accounts
     [[ -z "$live" ]] || write_atomic "$PREV_FILE" "$live"
     write_atomic "$SHA_FILE" "$prev" || die "writing $SHA_FILE failed"
     deploy_door "$release" "$prev"
@@ -655,6 +672,7 @@ main() {
     act git -C "$REPO_DIR" fetch --prune origin "$REF"
     act "export $sha to $RELEASES/$sha and bun install --frozen-lockfile there"
     act "build the Console there (bun run --cwd apps/console build); a failed build removes the release and stops the deploy, the live release untouched"
+    act "build the single-file claude-account there (packages/accounts/scripts/build.ts to dist/claude-account); a failure is a warning"
     act "check every ref of .env.tpl through secrets-run (those of .env.server.tpl only warn)"
     act "fetch master again once the release is built: a newer commit is built and deployed instead (up to $DEPLOY_ROUNDS releases); a sha that is live and healthy already restarts nothing (FACTORY_DEPLOY_FORCE=1 restarts it)"
     act "dry-run the release's pending migrations against the live database (rolled back, 3 s lock timeout): a refused migration stops the deploy before anything is stopped"
@@ -668,6 +686,7 @@ main() {
     act "on failure: print the log tails, boot the previous release again (${old:-none}), exit 1"
     act ln -sfn "$RELEASES/$sha" "$CURRENT"
     act ln -sf "$CURRENT/$CLI_ENTRY" "$CLI_LINK"
+    act ln -sf "$CURRENT/$ACCOUNTS_ENTRY" "$ACCOUNTS_LINK"
     act "write $SHA_FILE ($sha) and $PREV_FILE (${old:-none})"
     log "rendered $DOOR_PLIST (the door, from the same release):"
     render_plist "$(door_template_of "$SELF_DIR/..")" "$RELEASES/$sha" "$sha"
@@ -769,6 +788,7 @@ main() {
   ln -sfn "$release" "$CURRENT" || die "updating $CURRENT failed"
   if [[ -n "$old" && "$old" != "$sha" ]]; then write_atomic "$PREV_FILE" "$old"; fi
   ln -sf "$CURRENT/$CLI_ENTRY" "$CLI_LINK" || die "linking $CLI_LINK failed"
+  link_accounts
   write_atomic "$SHA_FILE" "$sha" || die "writing $SHA_FILE failed"
   deploy_door "$release" "$sha"
   post_deploy_hook "$release" "$sha"

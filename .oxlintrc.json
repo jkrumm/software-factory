@@ -150,6 +150,10 @@
   ],
   "overrides": [
     {
+      "files": ["packages/accounts/**"],
+      "rules": { "typescript/no-non-null-assertion": "off" }
+    },
+    {
       "files": ["apps/server/test/work/table-types.test.ts"],
       "rules": {
         "typescript/ban-ts-comment": [

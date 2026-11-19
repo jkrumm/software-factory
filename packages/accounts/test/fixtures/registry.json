@@ -1,0 +1,25 @@
+{
+  "_note": "Fixture registry for the package tests: three accounts, Fable and drain off. dir null is the default ~/.claude.",
+  "fable": null,
+  "drain": [],
+  "accounts": {
+    "iu": {
+      "dir": null,
+      "plan": "ultra",
+      "homeLanes": ["interactive", "headless"],
+      "enabled": true
+    },
+    "me": {
+      "dir": "~/.claude-me",
+      "plan": "max",
+      "homeLanes": ["bulk"],
+      "enabled": true
+    },
+    "me2": {
+      "dir": "~/.claude-me2",
+      "plan": "max",
+      "homeLanes": ["bulk"],
+      "enabled": true
+    }
+  }
+}

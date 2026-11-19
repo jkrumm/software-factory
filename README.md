@@ -226,6 +226,7 @@ token of the owner's and takes the repo from a server-side route registry, never
 | `apps/console` | the Console, a React PWA: Overview, Needs you, Chain, Projects, Artifacts, Improve and Throughput, and a page per Issue |
 | `packages/contract` | zod schemas for every request, response and event; the source of the OpenAPI document |
 | `packages/client` | the typed client shared by the CLI and the door |
+| `packages/accounts` | the picker for N Claude Code subscriptions and the `claude-account` CLI (`docs/accounts.md`); independent of the server |
 | `tests/scenarios` | use cases run end to end against a real server and Postgres with fake runner and agw: the acceptance suite |
 | `tests/e2e` | Playwright against a seeded server: every Console screen, and the source of the demo screenshots |
 | `integrations/` | the client pieces other machines install: the Claude Code hooks, a Herdr mod, `rd`, a Hermes skill |
