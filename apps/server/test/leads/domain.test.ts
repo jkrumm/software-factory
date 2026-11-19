@@ -348,6 +348,9 @@ describe('the brief', () => {
     expect(STANDING_ORDERS).toMatch(/only while the commit's context lines are unchanged/)
     expect(STANDING_ORDERS).toMatch(/no Grep or Glob tool/i)
     expect(STANDING_ORDERS).toMatch(/Write a change that fits a few files yourself/)
+    expect(STANDING_ORDERS).toMatch(
+      /before any probe or build step that runs longer than two minutes, re-check the finding on origin\/master/,
+    )
     expect(STANDING_ORDERS).toMatch(/about 30 minutes/)
     expect(STANDING_ORDERS).toMatch(/"waiting on its own background work" is not done/)
   })
