@@ -72,6 +72,9 @@ test('a window above 70 % takes one lead per sample; with no window an account t
   ])
   const issues = [await queued('one'), await queued('two'), await queued('three')]
   expect((await admit()).admitted).toHaveLength(1)
+  // a sample's age is rounded to whole seconds, so the sample can read as taken up to half a second before its time: the next
+  // sample has to come more than that after the lead, or the lead counts as already in it
+  await Bun.sleep(1100)
   expect((await admit()).admitted).toHaveLength(1)
   await cancel(issues)
   await lab.accounts([
