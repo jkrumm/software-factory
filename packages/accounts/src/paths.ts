@@ -2,7 +2,7 @@
 // part of the CLI contract: other tools (usage tracker, extension, dashboards) read them.
 import { existsSync } from 'node:fs'
 import { homedir } from 'node:os'
-import { join } from 'node:path'
+import { dirname, join } from 'node:path'
 
 /** The shared registry of a machine that runs the factory beside a dotfiles checkout; the fallback when no per-user file exists. */
 const LEGACY_REGISTRY = ['SourceRoot', 'dotfiles', 'config', 'claude-accounts.json']
@@ -16,6 +16,9 @@ export const registryPath = () => {
 export const cacheDir = () => process.env.CLAUDE_ACCOUNTS_CACHE_DIR ?? join(homedir(), '.cache', 'claude-accounts')
 export const picksPath = () =>
   process.env.CLAUDE_ACCOUNTS_PICKS ?? join(homedir(), '.local', 'share', 'claude-accounts', 'picks.jsonl')
+
+/** The policy lab's shadow log (docs/accounts.md §The policy lab): beside the pick log, whose shape it leaves alone. */
+export const shadowPath = () => process.env.CLAUDE_ACCOUNTS_SHADOW ?? join(dirname(picksPath()), 'shadow.jsonl')
 
 /** The mode overrides (docs/accounts.md §Modes): state, not cache, so it sits beside the pick log. */
 export const modesPath = () =>

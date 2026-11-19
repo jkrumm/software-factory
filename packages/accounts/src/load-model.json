@@ -1,0 +1,42 @@
+{
+  "v": 1,
+  "measured_at": "2026-11-19T11:31:34.204Z",
+  "range": {
+    "from": "2026-10-27T11:36:05.325Z",
+    "to": "2026-11-19T11:31:34.204Z"
+  },
+  "sources": {
+    "samples": "the sample log (samples-YYYY-MM.jsonl): weekly increments per account (a week's running maximum), 5 h and weekly increments inside one window",
+    "picks": "picks.jsonl: the lane of every pick",
+    "sessions": "session transcripts (<account dir>/projects/*/*.jsonl): first to last write; units per session hour = the weekly units consumed / the session hours",
+    "counts": "2867 sample lines, 1174 picks, 3718 sessions"
+  },
+  "session_hours": [
+    [0, 0],
+    [0.1, 0.019],
+    [0.25, 0.104],
+    [0.5, 0.672],
+    [0.75, 1.844],
+    [0.9, 5.248],
+    [1, 12.861]
+  ],
+  "units_per_session_hour": 0.002168,
+  "weekly_per_session_point": {
+    "ultra": null,
+    "max": 0.1564
+  },
+  "demand": 1.159,
+  "curve": {
+    "hour_of_day_utc": [
+      1.105, 0.637, 0.631, 0.632, 0.52, 0.417, 0.58, 0.944, 1.39, 1.369, 1.235, 1.08, 1.188, 1.196, 1.06, 1.411, 1.236,
+      1.479, 1.14, 1.021, 0.905, 1.062, 0.858, 0.906
+    ],
+    "day_of_week": [1.17, 1.134, 0.856, 1.133, 0.865, 1.081, 0.761]
+  },
+  "mix": {
+    "interactive": 0.139,
+    "headless": 0,
+    "bulk": 0,
+    "homeless": 0.861
+  }
+}

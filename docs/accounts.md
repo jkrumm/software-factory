@@ -44,6 +44,7 @@ lists the verbs, `claude-account <verb> --help` one in full; `claude-account --v
   `units` default from the plan (ultra 4 / 2, max 1 / 1).
 - `homeLanes`: the lanes whose spawns start here; an exact lane name wins over a `prefix:*` wildcard. `loginBrowser`: the app a
   re-login opens (data for the relogin command). `enabled: false` ships an account dark until its login exists.
+- `policy`: the live picking policy (§The policy lab), absent = `v1.9`.
 - `fable`, `drain`, `version` and an account's `mode`: §Modes. Unknown top-level keys are ignored, so one registry serves this CLI and the dotfiles one.
 - The ids are letters, digits, `_` and `-` (they name cache files); `spill` is reserved.
 
@@ -52,6 +53,7 @@ lists the verbs, `claude-account <verb> --help` one in full; `claude-account --v
 | Module | What it holds |
 |-|-|
 | `policy.ts` | The pure rule: types, `pick`, `rank`, `eligible`, `accountWeight`, `modeOf`, `reserveBudget`, `launchAccount`, the sample merge and parsers, `observedReset`, login grades, `dueIds`, `reloginCandidates`. No file, process, network or clock access (`test/policy-pure.test.ts` fails on one); the clock and the random source are arguments |
+| `load-model.ts`, `laxity.ts`, `sim.ts`, `lab.ts`, `measure.ts` | Pure: the policy lab (§The policy lab): the measured load model (`load-model.json`), laxity, the simulation and `compare`'s verdict, the reports and the shadow line, the measurement `scripts/measure-load.ts` writes |
 | `modes.ts` | Pure: the override records, their expiry, `resolveModes` and `applyModes` (§Modes) |
 | `history.ts`, `history-store.ts` | The sample line, the reset replay and the forecast (pure); the monthly sample log and the ledger on disk (§History) |
 | `status.ts` | Pure: `buildStatus`, its schema, the plain lines (§status) |
@@ -429,6 +431,86 @@ machine's local time); a forecast that does not fill the week says `ends at 88 %
 - `reserve` is `{for, known, unused, budget_left, released}` for a reserve account, `forecast` null without a weekly sample, `resets` the last 8
   ledger lines, newest first. The rule is `RULE_VERSION` (`v1.10`: v1.9 with the modes).
 
+## The policy lab
+
+```
+claude-account simulate [--policy <name>] [--demand <x>] [--accounts <n>] [--weeks <n>] [--seed <n>] [--json]
+claude-account compare [--weeks <n>] [--json]
+bun packages/accounts/scripts/measure-load.ts [--from <iso>] [--to <iso>]   # re-measures src/load-model.json
+```
+
+A **policy** is a named pure function over the picker's snapshot (`pickWith(name, {reg, cache, lane, nowMs, rng, load})`,
+`POLICIES` in `policy.ts`). The registry's top-level `policy` names the live one; absent, it is `v1.9`, and a name the build
+does not know is refused at load. Every policy is rule v1.9 with its expiring-capacity step varied:
+
+| Policy | Bulk lanes, before the v1.9 home and spill steps |
+|-|-|
+| `v1.9` | the earliest weekly reset among accounts resetting within 72 h |
+| `laxity` | the **due** account with the least slack, else v1.9's step |
+| `laxity-pure` | the due account with the least slack, and no fixed 72 h step |
+| `v1.9-cool` | v1.9's step, skipping an account whose 5 h window is at 60 % or more |
+
+**Laxity** (`laxity.ts`): an account's slack is the hours to its weekly reset minus the hours it needs to fill the rest of its
+week to 100 %, hour by hour at the rate it can absorb: the smaller of what its 5 h window lets through (one full window every
+5 h, the measured weekly points per 5 h point times its session units) and the bulk lanes' share of the pool's demand on the
+measured day and week curve. Due means a slack of 0 h or less. The live picker reads the measured demand; the simulation hands
+it the demand it simulates.
+
+**The sample log's `rule`** is `v1.10` under the default policy and `v1.10+<policy>` under another one, so the reset ledger
+records which policy each week ran under; `compare` groups the ledger by it (weeks before 2026-11-19 carry no rule:
+`unrecorded`).
+
+**The shadow log** `~/.local/share/claude-accounts/shadow.jsonl` (`$CLAUDE_ACCOUNTS_SHADOW`, beside the pick log, which keeps its
+shape): every live pick (not `--dry`) appends `{ts, lane, policy, picked, shadowed: [the other policies], differs: {<policy>:
+<account>}}`. Each other policy decides over the same snapshot and replays the live pick's random draws, so a difference is the
+policy's, not the dice's. `compare` reports it as a disagreement rate only: a pick that was not made has no outcome.
+
+### The load model
+
+`src/load-model.json`, bundled into the CLI, measured by `scripts/measure-load.ts` (`measure.ts`) from this machine's records.
+Default range: from the day every enabled account has sample lines to now. Measured 2026-11-19 over 2026-10-27 .. 2026-11-19
+(2867 sample lines, 1174 picks, 3718 sessions):
+
+| Number | Value | From |
+|-|-|-|
+| Session length | median 0.67 h, p75 1.8 h, p90 5.2 h, cut at p95 12.9 h | each transcript's first to last write (`<dir>/projects/*/*.jsonl`); a transcript resumed days later is not one running session, hence the cut |
+| Burn per running session | 0.0022 Max-weeks per hour | weekly units consumed / session hours |
+| Weekly points per 5 h point | Max 0.156 (the sim guessed 0.125); Ultra none | consecutive sample lines inside one 5 h window and one week |
+| Demand | 1.16 of the pool's weekly capacity | weekly units consumed per week (a week's running maximum, so feeds that disagree by a point never count twice); a floor, since walls cut the rest |
+| Demand curve | 0.42 at 05 UTC to 1.48 at 17 UTC; Sunday 0.76, Monday 1.17 | the consumption spread over the hours between sample lines (at most 6 h back) |
+| Lane mix | interactive 14 %, homeless (`lead`, `fan`, `wave`, agent-gateway lanes) 86 %, `bulk` and `headless` 0 | picks.jsonl lanes classed against the registry |
+
+The pick log holds only the spawns that called `claude-account pick` (since 2026-11-05 mostly interactive and `lead`): the factory's
+own account choice does not write it, so the mix is the best the log can tell, not the whole load.
+
+### Compare and the verdict
+
+`compare` runs every policy over demand 0.85, 0.9, 1.0, 1.1, 1.2 and pools of 1, 2, 3, 5 and 8 accounts of mixed plans (`mixedPool`:
+an Ultra with the interactive and headless lanes, then Max (`bulk`) and Ultra accounts with staggered resets, the first three at
+this machine's offsets), 3 weeks each, 10 seeds per cell, judged on the resets after the first week. A candidate **beats v1.9**
+with all three of: more capacity-weighted quota used at reset, the mean paired difference (same pool, demand and seed) above two
+standard errors; no more moved sessions over the grid; and no more work blocked than v1.9 in any cell at demand 1.0 or below. The
+last is "nothing blocked" read against the pool: a single account blocks about 1 % at demand 1.0 under every policy (with one
+account there is no choice to make), so the candidate is held to blocking nothing that v1.9 does not.
+
+**Finding (2026-11-19, the model above): no candidate beats v1.9, which stays live.**
+
+| Candidate | Used at reset (v1.9 94.45 %) | Paired gain | Moved sessions (v1.9 73245) | Blocked at <= 1.0 |
+|-|-|-|-|-|
+| `laxity` | 94.37 % | −0.08 ± 0.09 points | 67836 (−7 %) | as v1.9 |
+| `laxity-pure` | 93.68 % | −0.77 ± 0.13 points | 26494 (−64 %) | as v1.9 |
+| `v1.9-cool` | 94.32 % | −0.13 ± 0.11 points | 48574 (−34 %) | as v1.9 |
+
+Why: on the measured load the pool runs at its wall (demand 1.16) and v1.9 already ends nearly every week at 96-100 % from
+demand 1.0 up; below 1.0 the slack must land somewhere, and where it lands changes the capacity-weighted total by less than the
+seed noise. Laxity's due step answers a fifth to a quarter of the picks at demand 1.0 (3 to 8 accounts), but it changes the
+order in which accounts fill, not how full they end: a Max at 0.156 per 5 h point needs about 32 h of full windows, well inside the
+72 h horizon that already serves the soonest reset. Without the fixed horizon
+(`laxity-pure`) the due step starts an account only when it can just barely fill, so a dip in demand leaves it short: less
+quota used, though far fewer sessions moved (the 72 h step piles bulk work on one Max until its 5 h window walls). `v1.9-cool`
+keeps v1.9's use within the noise and moves a third fewer sessions; it loses only on the "more used" count. The shadow log records
+how often each would have picked otherwise, so the next round has live disagreement beside the simulation.
+
 ## Installing
 
 - **On the mini** the deploy (`make deploy`) links `~/.local/bin/claude-account-next` to the release's `packages/accounts/bin/claude-account.ts`
@@ -442,7 +524,9 @@ machine's local time); a forecast that does not fill the week says `ends at 88 %
 ## Tests and parity
 
 `bun test packages/accounts`: the ported unit tests of the dotfiles picker (rule, cache files, refresh, login expiry, the CLI against fakes), the
-three-week simulation (`sim.test.ts`: it fails when a rule change wastes quota), the owner's adapters against fakes and the bundle.
+three-week simulation on the guessed load (`sim.test.ts`: it fails when a rule change wastes quota), the policy lab on the measured
+one (`lab.test.ts`: the load model's shape and its measurement, laxity, the verdict rule, the shadow log), the owner's adapters
+against fakes and the bundle.
 `test/parity.test.ts` runs one fixture registry, cache and clock through the dotfiles CLI and this one for every verb and lane
 (257 cases, each stdout, exit code and, for a writing verb, the files it left): identical. Where the dotfiles checkout exists
 it runs both; everywhere it holds the package to `test/fixtures/parity-golden.json`, what the dotfiles CLI printed
@@ -456,4 +540,6 @@ picker indexes records by an id it has just checked) and the root typecheck excl
 The spawn integration (`c`, `rd`, `cf`), the keepalive and heartbeat jobs, the statusline hook, the login logistics and the
 attribution of usage stay in dotfiles and call these verbs; the switch row moves them. No new rule, window or account setting
 was added by the port (`subs-package`); registry v2 and the modes came with `subs-model-v2` (§Modes). The history, the forecast and the status verb came with `subs-read-model` (§History, §status); the server and the Console read modes through `rank`
-and `usage --json` until `subs-server`.
+and `usage --json` until `subs-server`. The policy lab (`subs-policy-lab`) added policies, the measured load model, `simulate`,
+`compare` and the shadow log; it does not re-measure the model on a schedule (`measure-load.ts` by hand, and the file is
+committed) and judges no policy on live outcomes, which need weeks of a policy actually live.

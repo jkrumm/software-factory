@@ -1,6 +1,8 @@
 // The picker's rule (docs/accounts.md §The picker, rule v1.9) as pure functions over a snapshot of the registry, the
 // quota samples, the marks and the clock. No file, process, network or clock access lives here: the adapters sit behind
 // the ports in ports.ts and the files in registry.ts and store.ts, so a test (or a simulation) hands in the snapshot.
+import { laxityHours } from './laxity.ts'
+import { type LoadModel, MEASURED, sessionRatio } from './load-model.ts'
 
 /** Account whose config dir is the default ~/.claude (CLAUDE_CONFIG_DIR unset). */
 export const DEFAULT_ACCOUNT_ID = 'iu'
@@ -76,6 +78,8 @@ export interface Registry {
   fable?: string | null
   /** v1 drain mode: reads as mode drain on these accounts (modeOf). Absent or empty = off. Never the fable account. */
   drain?: string[] | null
+  /** The live picking policy, a key of POLICIES (docs/accounts.md §The policy lab). Absent = DEFAULT_POLICY. */
+  policy?: string
 }
 
 /**
@@ -606,13 +610,117 @@ export function overPace(reg: Registry, cache: Cache, id: string, nowMs: number)
 }
 
 /**
- * Rule v1.5 (docs/claude-accounts.md §The picker). Among several candidates the highest weight wins (ties follow
- * registry order); with `rng` the candidates share the work in proportion to their weights instead.
+ * A picking policy (docs/accounts.md §The policy lab): the rule's steps with the expiring-capacity step varied. `due`
+ * adds a step before it in the bulk lanes: the due account (laxity: no more hours to its reset than it needs to fill
+ * its week at the rate it can absorb) with the least slack. `expiringS`: the horizon of the earliest-reset-first step,
+ * null for none.
  */
-export function pick(reg: Registry, cache0: Cache, lane: string, nowMs: number, rng?: () => number): PickResult {
+export interface PolicyDef {
+  about: string
+  due: boolean
+  expiringS: number | null
+  /** the expiring step only takes an account whose 5 h window is below this percent (null: any eligible one) */
+  expiringSessionBelow: number | null
+}
+export const POLICIES = {
+  'v1.9': {
+    about: 'earliest weekly reset first among accounts resetting within 72 h (rule v1.9)',
+    due: false,
+    expiringS: EXPIRING_S,
+    expiringSessionBelow: null,
+  },
+  laxity: {
+    about: 'the due account with the least slack first (laxity), else v1.9',
+    due: true,
+    expiringS: EXPIRING_S,
+    expiringSessionBelow: null,
+  },
+  'laxity-pure': {
+    about: 'the due account with the least slack first (laxity), and no fixed 72 h horizon',
+    due: true,
+    expiringS: null,
+    expiringSessionBelow: null,
+  },
+  'v1.9-cool': {
+    about: 'v1.9, but the expiring step skips an account whose 5 h window is at 60 % or more (SESSION_PRESSURE)',
+    due: false,
+    expiringS: EXPIRING_S,
+    expiringSessionBelow: SESSION_PRESSURE,
+  },
+} as const satisfies Record<string, PolicyDef>
+export type PolicyName = keyof typeof POLICIES
+export const POLICY_NAMES = Object.keys(POLICIES) as PolicyName[]
+export const DEFAULT_POLICY: PolicyName = 'v1.9'
+export const isPolicyName = (v: unknown): v is PolicyName => typeof v === 'string' && Object.hasOwn(POLICIES, v)
+/** The registry's live policy; an unknown name (refused at load) reads as the default. */
+export const livePolicy = (reg: Registry): PolicyName => (isPolicyName(reg.policy) ? reg.policy : DEFAULT_POLICY)
+/** What the sample log's `rule` names: the rule version, and the policy when it is not the default. */
+export const ruleTag = (policy: PolicyName): string =>
+  policy === DEFAULT_POLICY ? RULE_VERSION : `${RULE_VERSION}+${policy}`
+/** The policy a ledger line's `rule` names; null for a line from before the rule was recorded. */
+export function policyOfRule(rule: string | null): PolicyName | null {
+  if (rule === null) return null
+  const name = rule.split('+')[1]
+  return name === undefined ? DEFAULT_POLICY : isPolicyName(name) ? name : null
+}
+
+/** Everything a policy decides over. `load`: the measured load model, which the laxity step reads. */
+export interface PolicySnapshot {
+  reg: Registry
+  cache: Cache
+  lane: string
+  nowMs: number
+  rng?: () => number
+  load?: LoadModel
+}
+
+/** A named policy as a pure function over a snapshot (the registry's own `policy` is ignored). */
+export const pickWith = (name: PolicyName, s: PolicySnapshot): PickResult =>
+  pick({ ...s.reg, policy: name }, s.cache, s.lane, s.nowMs, s.rng, s.load)
+
+/**
+ * Rule v1.5 (docs/claude-accounts.md §The picker) under the registry's live policy. Among several candidates the highest
+ * weight wins (ties follow registry order); with `rng` the candidates share the work in proportion to their weights instead.
+ */
+export function pick(
+  reg: Registry,
+  cache0: Cache,
+  lane: string,
+  nowMs: number,
+  rng?: () => number,
+  load: LoadModel = MEASURED,
+): PickResult {
   const cache = withoutSessionWindows(reg, cache0)
-  const r = pickRaw(reg, cache, lane, nowMs, rng)
+  const r = pickRaw(reg, cache, lane, nowMs, { rng, def: POLICIES[livePolicy(reg)], load })
   return { ...r, stale: r.reason !== 'interactive-fallback' && r.picked !== SPILL && isStaleOk(cache, r.picked, nowMs) }
+}
+
+/**
+ * The due accounts among `ids`, least slack first (laxity.ts). An account is due when its slack is 0 h or less; the
+ * pool is every enabled account, so the demand it may draw on is the whole pool's.
+ */
+export function dueAccounts(reg: Registry, cache: Cache, ids: string[], nowMs: number, load: LoadModel): string[] {
+  const poolUnits = Object.values(reg.accounts)
+    .filter((a) => a.enabled)
+    .reduce((s, a) => s + accountUnits(a).weekly, 0)
+  const slack = new Map<string, number>()
+  for (const id of ids) {
+    const x = cache.samples[id]
+    if (!x || !hasW(x) || x.w_reset === null) continue
+    const a = reg.accounts[id]
+    const ratio = hasSessionLimit(a) ? sessionRatio(load, planTier(a.plan)) : null
+    const h = laxityHours({
+      w: x.w!,
+      resetMs: x.w_reset * 1000,
+      nowMs,
+      weeklyUnits: accountUnits(a).weekly,
+      windowUnits: ratio === null ? null : ratio * accountUnits(a).session,
+      poolUnits,
+      load,
+    })
+    if (h !== null && h <= 0) slack.set(id, h)
+  }
+  return [...slack.keys()].sort((p, q) => slack.get(p)! - slack.get(q)!)
 }
 
 /** Weekly capacity left under the account's own ceiling (scaled by its plan) per hour to its own reset, sharpened by URGENCY_EXP. */
@@ -660,13 +768,13 @@ export function launchAccount(reg: Registry, cache: Cache, model: string, nowMs:
 export const fableAccount = (reg: Registry, cache: Cache = emptyCache(), nowMs = 0): string =>
   launchAccount(reg, cache, 'fable', nowMs)
 
-function pickRaw(
-  reg: Registry,
-  cache: Cache,
-  lane: string,
-  nowMs: number,
-  rng?: () => number,
-): Omit<PickResult, 'stale'> {
+interface RuleCtx {
+  rng?: () => number
+  def: PolicyDef
+  load: LoadModel
+}
+
+function pickRaw(reg: Registry, cache: Cache, lane: string, nowMs: number, ctx: RuleCtx): Omit<PickResult, 'stale'> {
   // Reserve mode, hold: account: the last resort for every pick, whatever its budget says (v1's Fable mode). hold: allowance:
   // inside its budget an account takes its normal place; over it, other work is refused; without a fresh scoped sample the
   // budget is unknown and the account is the last resort
@@ -684,20 +792,15 @@ function pickRaw(
     if (!b.known) lastResort.push(id)
     else if (!b.open) open = withoutAccount(open, id)
   }
-  if (!lastResort.length) return pickRule(open, cache, lane, nowMs, rng)
-  const spared = pickRule(lastResort.reduce(withoutAccount, open), cache, lane, nowMs, rng)
+  if (!lastResort.length) return pickRule(open, cache, lane, nowMs, ctx)
+  const spared = pickRule(lastResort.reduce(withoutAccount, open), cache, lane, nowMs, ctx)
   if (spared.picked !== SPILL && spared.reason !== 'interactive-fallback') return spared
-  const r = pickRule(open, cache, lane, nowMs, rng)
+  const r = pickRule(open, cache, lane, nowMs, ctx)
   return lastResort.includes(r.picked) ? { ...r, reason: `${modeOf(reg, r.picked, nowMs).for}-reserve` } : r
 }
 
-function pickRule(
-  reg: Registry,
-  cache: Cache,
-  lane: string,
-  nowMs: number,
-  rng?: () => number,
-): Omit<PickResult, 'stale'> {
+function pickRule(reg: Registry, cache: Cache, lane: string, nowMs: number, ctx: RuleCtx): Omit<PickResult, 'stale'> {
+  const { rng, def } = ctx
   const ids = Object.keys(reg.accounts)
   const eligibleIds = ids.filter((id) => eligible(reg, cache, id, nowMs))
   const hot = (id: string) => (sessionPct(reg, cache, id, nowMs) ?? 0) >= SESSION_SOFT_MAX
@@ -723,12 +826,19 @@ function pickRule(
   const draining = cool.filter((id) => isDrain(reg, id, nowMs))
   if (draining.length) return { picked: choose(draining)!, reason: 'drain' }
 
-  if (bulk) {
+  if (bulk && def.due) {
+    const due = dueAccounts(reg, cache, ok, nowMs, ctx.load)
+    if (due.length) return { picked: due[0], reason: 'due' }
+  }
+  if (bulk && def.expiringS !== null) {
+    const horizonMs = def.expiringS * 1000
     const expiring = ok
       .filter((id) => {
         const x = cache.samples[id]
         const msLeft = x.w_reset === null || !hasW(x) ? null : x.w_reset * 1000 - nowMs
-        return msLeft !== null && msLeft > 0 && msLeft < EXPIRING_S * 1000
+        const cool =
+          def.expiringSessionBelow === null || (sessionPct(reg, cache, id, nowMs) ?? 0) < def.expiringSessionBelow
+        return cool && msLeft !== null && msLeft > 0 && msLeft < horizonMs
       })
       .sort((p, q) => cache.samples[p].w_reset! - cache.samples[q].w_reset!)
     if (expiring.length) return { picked: expiring[0], reason: 'expiring-capacity' }

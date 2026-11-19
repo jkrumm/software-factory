@@ -18,6 +18,8 @@ import { historyDir } from './paths.ts'
 export interface HistoryTarget {
   dir?: string
   mode?: (id: string) => string | null
+  /** the rule (and policy) the line names; default RULE_VERSION */
+  rule?: () => string
 }
 
 export const sampleLogPath = (dir: string, ts: number) =>
@@ -105,7 +107,7 @@ export function recordHistory(
 ): void {
   if (before && !sampleChanged(before, after)) return
   const dir = t.dir ?? historyDir()
-  const ctx = { mode: t.mode?.(id) ?? null, rule: RULE_VERSION }
+  const ctx = { mode: t.mode?.(id) ?? null, rule: t.rule?.() ?? RULE_VERSION }
   const reset = before !== null && observedReset(before, after)
   const line = lineOf(id, before, after, nowMs, ctx)
   const prior =
