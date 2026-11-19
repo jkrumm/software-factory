@@ -570,7 +570,7 @@ best-effort: its approvals appear only where `glab mr view -F json` carries `app
 **Turn back** (`POST /v1/errands/:id/turn-back`, `factory errand turn-back <id> --note ...`, the Console's Turn back button; owner and
 orchestrator). The Errand is not done: `errand_turned_back` ends the Issue's errand wait, the lead hears the note, and the Errand
 closes `turned_back` by `owner` or `orchestrator`. It is not the only way: the orchestrator also closes an Errand its operator confirmed (below), and `not_needed` stays the owner's.
-**The orchestrator's done** (`POST /v1/errands/:id/done` with `confirmedBy`, Issue 2302). The route is an owner row: the orchestrator may close an Errand as `done` only, and only with `confirmedBy` (who confirmed the work and how; 422 without it, and for `not_needed`). It is stored `closed_by orchestrator`, the Issue's `errand_done` and its note carry the actor `orchestrator`, and the lead reads "the owner's delegate closed it on <evidence>". `finishErrand` is the same code: a failed run keeps the Errand open and a check that still says needed reopens it, so the delegate cannot overrule a check. Before this, the row was the owner's alone and the orchestrator's only way was `FACTORY_TOKEN= factory errand done`, which resolves the owner token and is recorded as `owner`.
+**The orchestrator's done** (`POST /v1/errands/:id/done` with `confirmedBy`, Issue 2302). The route is an owner row: the orchestrator may close an Errand as `done` only, and only with `confirmedBy` (who confirmed the work and how; 422 without it, and for `not_needed`). It is stored `closed_by orchestrator`, the Issue's `errand_done` and its note carry the actor `orchestrator`, and the lead reads "the owner's delegate closed it on <evidence>". `finishErrand` is the same code: a failed run keeps the Errand open and a check that still says needed reopens it, so the delegate cannot overrule a check. An `approval` Errand (stored or by rule) stays the owner's yes: 422. Before this, the row was the owner's alone and the orchestrator's only way was `FACTORY_TOKEN= factory errand done`, which resolves the owner token and is recorded as `owner`.
 
 **The desk pass** (`desk` loop, every 15 minutes it asks whether it is due; `app/loops/desk.ts`, `domains/checkpoints/desk.ts`). The owner's return is an
 event: the `GET /v1/since` read that starts a new visit (two hours or more after the last, `console_visit.returned_at`) starts the pass at once (`ReadModelDeps.onReturn`),
@@ -598,7 +598,7 @@ in Needs without a page. Why not an Issue that holds it: an Issue per request fi
 when it has no check and none was given; `never` and a check keep it) and `request_key`: a new request with the key of an open
 one closes it as `superseded` in the same transaction (the same words again are a replay; asked again after it closed is a new
 Errand). `closed_kind` and `closed_by` say how any Errand ended (`done`, `not_needed`, `expired`, `superseded`, `turned_away`;
-by `owner`, `check`, `judge`, `loop`, `request`); the owner closes one as `not_needed` with `outcome` on `POST /v1/errands/:id/done`
+by `owner`, `orchestrator`, `check`, `judge`, `loop`, `request`); the owner closes one as `not_needed` with `outcome` on `POST /v1/errands/:id/done`
 (the Console's existing verb, no ninth one), and a lead's Errand closed that way tells its lead so. The `check` is a shell command
 the server runs, so only the callers that can run a shell may set one (`api/policy.ts`); it runs through `sh -c` in its own process
 group, 30 s, the server's secrets left out of its environment (`adapters/shell/check-runner.ts`); wherever the factory quotes output it
@@ -628,7 +628,7 @@ cannot be answered without the page raises an Errand of its own. (d) The same ne
 within `DECLINE_HOLD_MS` (3 days) is refused with the turn-back note as the refusal text (`declinedMatch`; no new column). (e) A lead's
 Errand states its need (`--need secret|hands|place`, `ErrandBody.need`; `place` needs `--cmd`), else it is refused with the field named; a request
 with no command whose words name no secret and no physical step must state one too. A stated need never lowers the rules' need: it is
-checked for presence, not stored. (b) `verbFor`: a MacBook command that is exactly a fixed class and names no secret or physical step is run by
+checked for presence, not stored. (f) `refuseOffMacbook`: a command for the MacBook (or with no host) whose head word, in any segment outside quotes, is a mini-only CLI (`factory`, `secrets-run`; `MINI_ONLY_COMMANDS`) is refused at the raise, before any page or dialog, because the dialog would fail with exit 127 and leave a second Errand; a best-effort read of the shell line, and a word joins the list on evidence. (b) `verbFor`: a MacBook command that is exactly a fixed class and names no secret or physical step is run by
 the screen (`screenErrand`, before the other looks, only when `SettleDeps.macbook` is set) through the gate's fixed verbs
 (`report <name>` for the commands of `MACBOOK_REPORTS`, `repo-pull <name>` for `git -C ~/SourceRoot/<name> pull --ff-only`,
 `dotfiles-sync`; `adapters/shell/ask-human.ts` `askHumanVerbs`, no transaction open) with no dialog: exit 0 closes the Errand `done` by `loop`
