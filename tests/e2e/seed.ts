@@ -3,6 +3,12 @@ import { bearer } from '../scenarios/harness.ts'
 import type { Lab } from '../scenarios/planning/lab.ts'
 
 /** Calls the API on the main port as the owner; a refusal throws with the body. */
+/** The accounts the strip shows: the registry's disabled ones (the lab keeps one as the default account) have no meter. */
+export async function accountsInService(url: string): Promise<{ account: string }[]> {
+  const { accounts } = await api<{ accounts: { account: string; enabled?: boolean }[] }>(url, '/v1/accounts')
+  return accounts.filter((a) => a.enabled !== false)
+}
+
 export async function api<T = unknown>(url: string, path: string, body?: unknown, method?: string): Promise<T> {
   const response = await fetch(`${url}${path}`, {
     method: method ?? (body === undefined ? 'GET' : 'POST'),

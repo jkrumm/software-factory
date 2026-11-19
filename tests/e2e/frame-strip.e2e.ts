@@ -1,6 +1,6 @@
 import type { Page } from '@playwright/test'
 import { expect, test } from './fixtures.ts'
-import { api } from './seed.ts'
+import { accountsInService, api } from './seed.ts'
 
 const strip = (page: Page) => page.locator('[aria-label="Status"]')
 const flowLinks = (page: Page) => page.getByRole('navigation', { name: 'Issues in flight' })
@@ -17,7 +17,7 @@ interface World {
 
 /** Facts to search for, read from the API. */
 async function world(apiUrl: string): Promise<World> {
-  const { accounts } = await api<{ accounts: { account: string }[] }>(apiUrl, '/v1/accounts')
+  const accounts = await accountsInService(apiUrl)
   const { issues } = await api<{ issues: { id: number; title: string }[] }>(apiUrl, '/v1/issues?state=all&limit=500')
   const { artifacts } = await api<{ artifacts: { id: string; title: string }[] }>(apiUrl, '/v1/artifacts?limit=200')
   const flow = await api<{ perProject: { repo: string }[] }>(apiUrl, '/v1/flow')

@@ -166,7 +166,11 @@ export const fetchFriction = (days: number, signal?: AbortSignal) =>
 export const fetchFindingClasses = (signal?: AbortSignal) => getJson('/v1/finding-classes', FindingClassesModel, signal)
 export const fetchLoopYield = (signal?: AbortSignal) => getJson('/v1/loop-yield', LoopYieldModel, signal)
 export const fetchFixCommits = (signal?: AbortSignal) => getJson('/v1/fix-commits', FixCommitsModel, signal)
-export const fetchAccounts = (signal?: AbortSignal) => getJson('/v1/accounts', ReadAccountList, signal)
+/** The accounts in service: one the registry switches off has nothing to meter and takes no lead. */
+export const fetchAccounts = async (signal?: AbortSignal) => {
+  const list = await getJson('/v1/accounts', ReadAccountList, signal)
+  return { ...list, accounts: list.accounts.filter((a) => a.enabled !== false) }
+}
 export const fetchMachine = (signal?: AbortSignal) => getJson('/v1/machine', MachineModel, signal)
 /** The host over the last 24 hours, its busiest processes, and the server's version and start time. */
 export const fetchHost = (signal?: AbortSignal) => getJson('/v1/host', HostHistoryModel, signal)
