@@ -102,7 +102,7 @@ export function matchOpen(title: string, open: readonly OpenIssue[]): Match {
 }
 
 /**
- * A signal that ends in the retro marker is one recommendation with its own number to move: it files its own Issue and
+ * A signal that carries the retro marker (it ends with it, but a stray full stop must not lose the guard) is one recommendation with its own number to move: it files its own Issue and
  * is never folded into another by title or by the triage workflow (an amended signal rides on an Issue that asked for
  * other work and is counted shipped with it).
  */

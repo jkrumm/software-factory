@@ -85,7 +85,7 @@ The rules decide first and in this order:
 
 - **The loop guard.** A signal that reports a change a loop made never fires an automatic sender again (`loop_guard`). A loop cannot trigger itself through its own filing.
 - **The gate.** An unknown repo hears no one, a work repo hears only the owner, and a project hears the automatic sources its `signals:` list names.
-- **A match on an open Issue.** A title that clearly names an open Issue amends it.
+- **A match on an open Issue.** A title that clearly names an open Issue amends it. A retro recommendation (its text carries the `Retro: <date> kpi=…` marker) is the exception: it files its own Issue, since it asks for a change of its own.
 - **The fingerprint.** A signal an open Issue already carries, or one closed in the last 24 hours, is a `repeat`, not a second Issue.
 
 Only when the rules cannot say does the factory call a workflow. `agwAmend` hands `factory-triage` the signal, the open Issues of the repo and the ones closed in the last day, and takes an Issue id back. The adapter refuses an id it did not show. The call's key is built from the source, the fingerprint and a digest of the text, so a replayed pass asks nothing twice.
