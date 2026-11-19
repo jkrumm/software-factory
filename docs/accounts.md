@@ -352,7 +352,10 @@ the earliest of: the scheduled weekly reset it was set in (`baseline_w_reset`, t
 it lies in the past), a sample whose weekly reset lies more than a day past it, or an **observed reset** after it was set. A reset
 is observed when a written sample's weekly reset moved forward by more than 24 h or its weekly percent fell by 50 points or more
 (`observedReset`); `<id>.reset.json` keeps the latest (`{at, w_before, w_reset_before, w_reset_after}`). So a manual reset ends a
-drain as a scheduled one does. An expired override is skipped where it is read; nothing has to remove it. `mode <id> drain`
+drain as a scheduled one does. A weekly window the recorded reset already closed, read late (its reset time is the closed window's or
+earlier, its percent 50 points or more above the cache's), never replaces the cache (`staleAfterReset`): one reset is one ledger row, and
+the next fresh sample is no second reset. An expired override is skipped where it is read, and the next `refresh`, `record` or `mode`
+writes it down once: a tombstone and an `end` line in `modes.jsonl`. `mode <id> drain`
 without `--until` is until reset; the other modes have no expiry by default.
 
 ### Overrides
@@ -364,7 +367,7 @@ claude-account mode <id> --clear
 ```
 
 An override is a record in `~/.local/share/claude-accounts/modes.json` (`$CLAUDE_ACCOUNTS_MODES`), one per account, written
-atomically, with one audit line per set, clear or adoption in `modes.jsonl` beside it:
+atomically, with one audit line per set, clear, adoption or end in `modes.jsonl` beside it:
 
 ```json
 { "version": 1, "accounts": {

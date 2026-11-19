@@ -15,6 +15,7 @@ import {
   defaultAccountId,
   eligible,
   emptyCache,
+  endOverrides,
   fableAccount,
   hasSessionLimit,
   launchAccount,
@@ -315,6 +316,45 @@ describe('expiry: until reset ends at an observed reset, a manual one included',
     saveSample('me2', sample(10, 97, R), dir, true, NOW - 60_000)
     saveSample('me2', { ...sample(1, 2, R), s_ts: NOW + 60_000, w_ts: NOW + 60_000 }, dir, true, NOW + 60_000)
     expect(view(dir, NOW + 120_000).expired).toBe(true)
+    rmSync(dir, { recursive: true })
+  })
+  test('a stale pre-reset sample after a manual reset is kept out: one reset, and the next fresh sample is no second one', () => {
+    const dir = tmp()
+    const at = (ms: number, x: Sample): Sample => ({ ...x, s_ts: ms, w_ts: ms })
+    saveSample('me2', sample(10, 97, R), dir, true, NOW - 60_000)
+    // the manual reset, fed by a statusline without a reset time
+    saveSample('me2', at(NOW + 60_000, { ...sample(0, 0, R), w_reset: null }), dir, true, NOW + 60_000)
+    // the old window's numbers come back with a newer stamp
+    saveSample('me2', at(NOW + 120_000, sample(null, 99, R)), dir, true, NOW + 120_000)
+    expect(loadCache(dir).samples.me2).toMatchObject({ w: 0 })
+    saveSample('me2', at(NOW + 180_000, sample(1, 1, R + 7 * D)), dir, true, NOW + 180_000)
+    expect(loadCache(dir).samples.me2).toMatchObject({ w: 1, w_reset: R + 7 * D })
+    expect(loadCache(dir).resets?.me2).toMatchObject({ at: NOW + 60_000, w_before: 97, w_reset_before: R })
+    rmSync(dir, { recursive: true })
+  })
+  test('a later week or a climb of less than 50 points is never mistaken for a stale sample', () => {
+    const dir = tmp()
+    saveSample('me2', sample(10, 97, R), dir, true, NOW - 60_000)
+    saveSample('me2', { ...sample(0, 2, R + 7 * D), s_ts: NOW + 1000, w_ts: NOW + 1000 }, dir, true, NOW + 1000)
+    saveSample('me2', { ...sample(0, 30, R + 7 * D), s_ts: NOW + 2000, w_ts: NOW + 2000 }, dir, true, NOW + 2000)
+    expect(loadCache(dir).samples.me2).toMatchObject({ w: 30 })
+    saveSample('me2', { ...sample(0, 40, R), s_ts: NOW + 3000, w_ts: NOW + 3000 }, dir, true, NOW + 3000)
+    expect(loadCache(dir).samples.me2).toMatchObject({ w: 40 })
+    rmSync(dir, { recursive: true })
+  })
+  test('an override that ended is written down once: a tombstone and an end line in modes.jsonl', () => {
+    const dir = tmp()
+    const path = join(dir, 'modes.json')
+    writeFileSync(path, JSON.stringify(state(drain())))
+    saveSample('me2', sample(10, 97, R), dir, true, NOW - 60_000)
+    expect(endOverrides(loadCache(dir), NOW + 60_000, { machine: 'mini', path })).toEqual([])
+    saveSample('me2', { ...sample(1, 2, R), s_ts: NOW + 60_000, w_ts: NOW + 60_000 }, dir, true, NOW + 60_000)
+    expect(endOverrides(loadCache(dir), NOW + 120_000, { machine: 'mini', path })).toEqual(['me2'])
+    expect(endOverrides(loadCache(dir), NOW + 180_000, { machine: 'mini', path })).toEqual([])
+    expect(loadOverrides(path).accounts.me2).toMatchObject({ cleared: true, set_on: 'mini' })
+    const audit = readFileSync(join(dir, 'modes.jsonl'), 'utf8').trim().split('\n')
+    expect(audit).toHaveLength(1)
+    expect(JSON.parse(audit[0])).toMatchObject({ id: 'me2', action: 'end', prev: { kind: 'drain', until: 'reset' } })
     rmSync(dir, { recursive: true })
   })
   test('the scheduled reset passing ends it, with or without a sample', () => {
