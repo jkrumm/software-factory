@@ -40,7 +40,7 @@ import {
   ThroughputModel,
   VerdictView,
 } from '@software-factory/contract'
-import type { VERDICT_WORDS } from './artifact.ts'
+import type { ImageTarget, VERDICT_WORDS } from './artifact.ts'
 import { isNetworkError, markFailing, markRecovered } from './restart.ts'
 
 let newerServer: (() => void) | undefined
@@ -254,6 +254,8 @@ export const postAnnotation = (
     occurrence?: number
     prefix?: string
     suffix?: string
+    /** a comment on a picture instead of a passage: the server derives the quote from it */
+    image?: ImageTarget
     comment: string
   },
 ) => postJson(`/v1/artifacts/${encodeURIComponent(id)}/annotations`, { ...body, author: 'owner' }, ArtifactReply)

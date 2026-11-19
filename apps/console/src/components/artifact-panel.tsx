@@ -48,6 +48,7 @@ export function Composer({
   selected,
   anchor,
   docked,
+  thumbnail,
   onDone,
 }: {
   review: Review
@@ -55,6 +56,8 @@ export function Composer({
   selected: Selected
   anchor: Selected['rect']
   docked: boolean
+  /** the picture a comment on a picture is about, where the page can load it */
+  thumbnail?: string
   onDone: () => void
 }) {
   const [comment, setComment] = useState('')
@@ -68,7 +71,7 @@ export function Composer({
   return (
     <form
       ref={box}
-      aria-label="Comment on the selection"
+      aria-label={selected.image ? 'Comment on the picture' : 'Comment on the selection'}
       data-anchored={docked ? undefined : ''}
       style={docked ? SHADOW : { ...SHADOW, ...(at ?? { top: 0, left: 0 }), width: POPOVER_WIDTH }}
       className={cn(
@@ -88,6 +91,7 @@ export function Composer({
           revision,
           quote: selected.quote,
           ...(selected.path ? { path: selected.path } : {}),
+          ...(selected.image ? { image: selected.image } : {}),
           ...(selected.occurrence === undefined
             ? {}
             : { occurrence: selected.occurrence, prefix: selected.prefix, suffix: selected.suffix }),
@@ -96,8 +100,21 @@ export function Composer({
         onDone()
       }}
     >
-      <p className={cn('line-clamp-2 rounded-md px-2 py-1.5 text-xs text-muted-foreground', TONE_TINT.neutral)}>
-        “{selected.quote}”
+      <p
+        className={cn(
+          'flex items-center gap-2 rounded-md px-2 py-1.5 text-xs text-muted-foreground',
+          TONE_TINT.neutral,
+        )}
+      >
+        {thumbnail ? (
+          <img
+            src={thumbnail}
+            alt=""
+            referrerPolicy="no-referrer"
+            className="h-10 w-14 shrink-0 rounded-sm border border-border bg-background object-cover"
+          />
+        ) : null}
+        <span className="line-clamp-2">{selected.image ? selected.quote : `“${selected.quote}”`}</span>
       </p>
       <Textarea
         aria-label="Comment"

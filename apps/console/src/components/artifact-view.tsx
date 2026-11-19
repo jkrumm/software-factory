@@ -16,7 +16,7 @@ import { EmptyState } from '@/components/page'
 import { ArtifactSkeleton } from '@/components/skeletons'
 import { Badge } from '@/components/ui/badge'
 import { ResizableHandle, ResizablePanel, ResizablePanelGroup } from '@/components/ui/resizable'
-import { FORMAT_WORDS, GLOBAL_PATH, KIND_WORDS, type TocItem } from '@/lib/artifact'
+import { FORMAT_WORDS, GLOBAL_PATH, KIND_WORDS, pictureSources, type TocItem } from '@/lib/artifact'
 import { lozengeStateOf } from '@/lib/issue-page'
 import { useMediaQuery } from '@/lib/media'
 import { setReadingSize, useReadingSize } from '@/lib/reading'
@@ -24,7 +24,7 @@ import { useNow } from '@/lib/now'
 import { useScreen } from '@/lib/screen'
 import { issueNumber } from '@/lib/policy'
 import { useArtifact, useIssue } from '@/lib/queries'
-import { highlightAnchors, paintAnchorOf, type ReviewItem, reviewItems, useReview } from '@/lib/review'
+import { highlightAnchors, imageComments, paintAnchorOf, type ReviewItem, reviewItems, useReview } from '@/lib/review'
 import { cn } from '@/lib/utils'
 
 /** The Issue this artifact belongs to: its number and title as a link back, with its state and project. */
@@ -154,6 +154,7 @@ function ArtifactViewOf({ id, revision, compare, onPick, peek }: ArtifactViewPro
         tick: (was?.tick ?? 0) + 1,
         scroll: true,
         edit: false,
+        ...(item.image ? { image: { spot: item.image.x !== null } } : {}),
       })),
     [],
   )
@@ -182,9 +183,29 @@ function ArtifactViewOf({ id, revision, compare, onPick, peek }: ArtifactViewPro
   const detail = primary.data
   const items = useMemo(() => (detail ? reviewItems(detail, review.pending) : []), [detail, review.pending])
   const quotes = useMemo(() => highlightAnchors(items), [items])
+  const images = useMemo(() => imageComments(items), [items])
+  // the sources of the artifact's pictures by hash: what a picture comment's card shows as its thumbnail
+  const sources = useMemo(
+    () => (detail ? pictureSources(detail.content, detail.artifact.format) : new Map<string, string>()),
+    [detail],
+  )
   // a click on a highlighted passage opens its comment: for the owner's own, in edit mode; the passage is already in view
   const onOpen = useCallback(
     (quote: string, id?: string) => {
+      // a badge or a pin on a picture names its comment
+      const picture = id ? items.find((i) => i.id === id && i.image && i.anchored) : undefined
+      if (picture?.image) {
+        const edit = picture.author === 'owner' && !picture.id.startsWith('pending:')
+        setFocus((was) => ({
+          ...paintAnchorOf(picture),
+          id: picture.id,
+          tick: (was?.tick ?? 0) + 1,
+          scroll: false,
+          edit,
+          image: { spot: picture.image?.x !== null },
+        }))
+        return
+      }
       const found = items.filter((i) => i.anchored && i.path !== GLOBAL_PATH && i.quote === quote)
       // the passage clicked names its comment; with equal quotes the owner's own comes first
       const item =
@@ -304,6 +325,7 @@ function ArtifactViewOf({ id, revision, compare, onPick, peek }: ArtifactViewPro
               content={detail.content}
               primary
               quotes={quotes}
+              images={images}
               focus={focus}
               onSelect={onSelect}
               onOpen={onOpen}
@@ -324,6 +346,7 @@ function ArtifactViewOf({ id, revision, compare, onPick, peek }: ArtifactViewPro
                 content={other.data.content}
                 primary={false}
                 quotes={[]}
+                images={[]}
                 focus={null}
                 onSelect={onSelect}
                 onOpen={onOpen}
@@ -347,6 +370,7 @@ function ArtifactViewOf({ id, revision, compare, onPick, peek }: ArtifactViewPro
       review={review}
       focus={focus}
       now={now}
+      sources={sources}
       onFocus={onFocus}
       scrollId={paned ? 'artifact-comments' : undefined}
       action={
@@ -444,6 +468,7 @@ function ArtifactViewOf({ id, revision, compare, onPick, peek }: ArtifactViewPro
       {selected && anchor ? (
         <Composer
           key={`${selected.quote}|${selected.path}|${selected.occurrence ?? ''}`}
+          thumbnail={selected.image ? sources.get(selected.image.srcHash) : undefined}
           review={review}
           revision={detail.revision}
           selected={selected}

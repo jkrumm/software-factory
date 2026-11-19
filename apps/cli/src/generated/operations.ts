@@ -1305,7 +1305,7 @@ export const OPERATIONS: readonly Operation[] = [
     method: 'POST',
     path: '/v1/artifacts/{id}/annotations',
     summary:
-      'a comment anchored by a quote and a path; the owner token only, a lead or the orchestrator gets 403 whatever --author says (a lead answers a comment with annotation-reply)',
+      'a comment anchored by a quote and a path, or by an image anchor (a picture, and optionally a spot on it); the owner token only, a lead or the orchestrator gets 403 whatever --author says (a lead answers a comment with annotation-reply)',
     pathParams: ['id'],
     queryParams: [],
     body: true,
@@ -1318,6 +1318,7 @@ export const OPERATIONS: readonly Operation[] = [
       { name: 'occurrence', flag: 'occurrence', kind: 'integer', repeatable: false, required: false, untyped: false },
       { name: 'prefix', flag: 'prefix', kind: 'string', repeatable: false, required: false, untyped: false },
       { name: 'suffix', flag: 'suffix', kind: 'string', repeatable: false, required: false, untyped: false },
+      { name: 'image', flag: 'image', kind: 'json', repeatable: false, required: false, untyped: false },
       { name: 'comment', flag: 'comment', kind: 'string', repeatable: false, required: false, untyped: false },
     ],
     args: [],

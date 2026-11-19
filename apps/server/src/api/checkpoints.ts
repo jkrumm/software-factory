@@ -130,6 +130,7 @@ const annotationView = (a: AnnotationRecord) => ({
   occurrence: a.occurrence,
   prefix: a.prefix,
   suffix: a.suffix,
+  image: a.image,
   comment: a.comment,
   author: a.author,
   at: iso(a.at),
@@ -514,6 +515,7 @@ export const checkpointRoutes = (uses: CheckpointUses) =>
             occurrence: body.occurrence,
             prefix: body.prefix,
             suffix: body.suffix,
+            image: body.image,
             comment: body.comment,
           },
         })
@@ -535,7 +537,7 @@ export const checkpointRoutes = (uses: CheckpointUses) =>
         detail: {
           operationId: 'artifact.annotate',
           summary:
-            'a comment anchored by a quote and a path; the owner token only, a lead or the orchestrator gets 403 whatever --author says (a lead answers a comment with annotation-reply)',
+            'a comment anchored by a quote and a path, or by an image anchor (a picture, and optionally a spot on it); the owner token only, a lead or the orchestrator gets 403 whatever --author says (a lead answers a comment with annotation-reply)',
         },
       },
     )

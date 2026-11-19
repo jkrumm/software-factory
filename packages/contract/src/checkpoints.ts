@@ -1,4 +1,5 @@
 import * as z from 'zod'
+import { ImageAnchor, ImageAnchorInput } from './image-anchor.ts'
 import { IssueRefInput, MAX_AFTER_IDS } from './issues.ts'
 
 /**
@@ -203,6 +204,8 @@ export const AnnotateBody = z
     /** the text just before and just after the quote, about 32 normalised characters each */
     prefix: z.string().optional(),
     suffix: z.string().optional(),
+    /** a comment on a picture: which one, and optionally a spot on it; the quote is then derived from it (`imageQuote`) */
+    image: ImageAnchorInput.optional(),
     comment: z.string().optional(),
   })
   .meta({ id: 'AnnotateBody' })
@@ -293,6 +296,8 @@ const AnnotationView = z.object({
   occurrence: z.number().int().nullable().default(null),
   prefix: z.string().nullable().default(null),
   suffix: z.string().nullable().default(null),
+  /** the picture it hangs on; null for a comment on text */
+  image: ImageAnchor.nullable().default(null),
   comment: z.string(),
   author: z.enum(['owner', 'lead']),
   at: iso,

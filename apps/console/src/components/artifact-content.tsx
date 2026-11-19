@@ -1,15 +1,22 @@
+import { MAX_IMAGE_LABEL, resolveImage, srcHash } from '@software-factory/contract'
 import { useRouter } from '@tanstack/react-router'
 import { type ReactNode, useEffect, useRef, useState } from 'react'
+import { createPortal } from 'react-dom'
 import Markdown, { defaultUrlTransform } from 'react-markdown'
 import remarkGfm from 'remark-gfm'
 import {
+  headingPath,
+  type ImageTarget,
   linkTarget,
+  normalizeQuote,
   type Occurrence,
   type PaintAnchor,
   parseFrameMessage,
+  quoteOfImage,
   type SelectionRect,
   type TocItem,
 } from '@/lib/artifact'
+import type { ImageComment } from '@/lib/review'
 import { isPlainClick } from '@/lib/peek'
 import { READING_PX, type ReadingSize } from '@/lib/reading'
 import { currentTheme, onThemeChange } from '@/lib/theme'
@@ -43,6 +50,8 @@ export interface Selected extends Occurrence {
   rect: SelectionRect
   /** the Markdown passage's range, so its position can follow the page's scroll; an HTML artifact's frame has none */
   range?: Range
+  /** a comment on a picture (and a spot on it) instead of a passage: `quote` is then the words that name it */
+  image?: ImageTarget
 }
 
 export interface ContentProps {
@@ -53,7 +62,9 @@ export interface ContentProps {
   /** the passages of the anchored annotations to paint */
   quotes: readonly PaintAnchor[]
   /** the passage to paint as the comment in focus; `tick` makes the same passage scroll twice; `scroll: false` paints without scrolling */
-  focus: (PaintAnchor & { tick: number; scroll?: boolean }) | null
+  focus: (PaintAnchor & { tick: number; scroll?: boolean; image?: { spot: boolean } }) | null
+  /** the comments on pictures to mark: a badge on the picture, pins and a list in the HTML viewer */
+  images: readonly ImageComment[]
   onSelect: (selected: Selected) => void
   /** a click on a highlighted passage: its quote, and the id of the comment it was painted for */
   onOpen: (quote: string, id?: string) => void
@@ -142,18 +153,64 @@ function ImageAlt({ alt, src }: { alt?: string; src?: string }) {
  * `FACTORY_CONSOLE_IMAGE_HOSTS`, none by default. A blocked, expired or broken image fires `error` and shows its alt text
  * instead; no referrer is sent.
  */
-function MarkdownImage({ src, alt }: { src?: string; alt?: string }) {
+function MarkdownImage({ src, alt, annotate }: { src?: string; alt?: string; annotate: boolean }) {
   const [failed, setFailed] = useState(false)
-  if (failed || !src?.startsWith('https://')) return <ImageAlt alt={alt} src={src} />
+  const loaded = !failed && src?.startsWith('https://')
   return (
-    <img
-      src={src}
-      alt={alt ?? ''}
-      loading="lazy"
-      referrerPolicy="no-referrer"
-      onError={() => setFailed(true)}
-      className="my-3 max-w-full rounded-md border border-border"
-    />
+    // the picture a comment hangs on: its src hash and label are what the comment records and finds it by
+    <span
+      data-md-image=""
+      data-hash={src ? srcHash(src) : ''}
+      data-label={normalizeQuote(alt ?? '').slice(0, MAX_IMAGE_LABEL)}
+      className="group/image relative inline-block max-w-full align-top data-[focused]:outline-2 data-[focused]:outline-offset-4 data-[focused]:outline-ring"
+    >
+      {loaded ? (
+        <img
+          src={src}
+          alt={alt ?? ''}
+          loading="lazy"
+          referrerPolicy="no-referrer"
+          onError={() => setFailed(true)}
+          className="my-3 max-w-full rounded-md border border-border"
+        />
+      ) : (
+        <ImageAlt alt={alt} src={src} />
+      )}
+      {annotate ? (
+        <button
+          type="button"
+          data-md-comment=""
+          aria-label="Comment on this image"
+          className="absolute top-5 right-2 hidden size-8 items-center justify-center rounded-md border bg-popover text-lg text-popover-foreground shadow-sm group-focus-within/image:flex group-hover/image:flex focus-visible:flex pointer-coarse:flex"
+        >
+          +
+        </button>
+      ) : null}
+      <span data-md-badge-slot="" className="contents" />
+    </span>
+  )
+}
+
+/** The pictures of a rendered Markdown document in order, each as the comments name them. */
+function markdownPictures(root: HTMLElement): {
+  elements: HTMLElement[]
+  refs: Array<{ hash: string; label: string }>
+} {
+  const elements = Array.from(root.querySelectorAll<HTMLElement>('[data-md-image]'))
+  return { elements, refs: elements.map((el) => ({ hash: el.dataset.hash ?? '', label: el.dataset.label ?? '' })) }
+}
+
+/** A comment's count on a picture; a click brings that comment's card up. */
+function ImageBadge({ count, onClick }: { count: number; onClick: () => void }) {
+  return (
+    <button
+      type="button"
+      aria-label={`${count} comment${count === 1 ? '' : 's'} on this image`}
+      onClick={onClick}
+      className="absolute top-5 left-2 flex h-7 min-w-7 cursor-pointer items-center justify-center rounded-full border-2 border-background bg-primary px-1.5 text-xs font-semibold text-primary-foreground shadow-sm tabular-nums"
+    >
+      {count}
+    </button>
   )
 }
 
@@ -167,6 +224,7 @@ function MarkdownContent({
   primary,
   quotes,
   focus,
+  images,
   onSelect,
   cleared,
   onOpen,
@@ -177,6 +235,8 @@ function MarkdownContent({
 }: Omit<ContentProps, 'format'>) {
   const root = useRef<HTMLDivElement>(null)
   const hover = useRef(0)
+  /** where a badge goes: the slot of a picture that has comments, and how many */
+  const [placed, setPlaced] = useState<Array<{ slot: Element; count: number; id: string }>>([])
 
   // A selection is committed when the drag ends (mouse up, touch end, key up), or after it has rested for a moment (touch
   // handles end no event); never while the button is still down, so the composer does not take focus mid-drag.
@@ -232,12 +292,63 @@ function MarkdownContent({
   }, [primary, quotes, content])
 
   useEffect(() => {
-    if (primary && focus && focus.scroll !== false && root.current) scrollToQuote(root.current, focus)
+    if (primary && focus && !focus.image && focus.scroll !== false && root.current) scrollToQuote(root.current, focus)
   }, [primary, focus])
   // the passage in focus is painted again whenever the text or the comments change under it, without scrolling to it
   useEffect(() => {
-    if (primary && root.current) paintActive(root.current, focus)
+    if (primary && root.current) paintActive(root.current, focus?.image ? null : focus)
   }, [primary, focus, content, quotes])
+
+  // The pictures that have comments get their badge (in a slot the picture's markup holds); a card's click scrolls to its picture.
+  useEffect(() => {
+    if (!primary || !root.current) {
+      setPlaced([])
+      return
+    }
+    const { elements, refs } = markdownPictures(root.current)
+    const byPicture = new Map<number, string[]>()
+    for (const image of images) {
+      const at = resolveImage(refs, image)
+      if (at !== -1) byPicture.set(at, [...(byPicture.get(at) ?? []), image.id])
+    }
+    setPlaced(
+      [...byPicture].flatMap(([at, ids]) => {
+        const slot = elements[at]?.querySelector('[data-md-badge-slot]')
+        return slot ? [{ slot, count: ids.length, id: ids[0] ?? '' }] : []
+      }),
+    )
+  }, [primary, images, content])
+  useEffect(() => {
+    if (!primary || !focus?.image || focus.scroll === false || !root.current) return
+    const image = images.find((candidate) => candidate.id === focus.id)
+    const { elements, refs } = markdownPictures(root.current)
+    const picture = image ? elements[resolveImage(refs, image)] : undefined
+    if (!picture) return
+    picture.scrollIntoView({ block: 'center', behavior: 'smooth' })
+    picture.setAttribute('data-focused', '')
+    const timer = setTimeout(() => picture.removeAttribute('data-focused'), 2400)
+    return () => {
+      clearTimeout(timer)
+      picture.removeAttribute('data-focused')
+    }
+  }, [primary, focus])
+
+  /** The comment box for a picture: which one, where its button is, and the headings above it. */
+  const commentOnPicture = (button: Element) => {
+    const picture = button.closest<HTMLElement>('[data-md-image]')
+    if (!picture || !root.current) return
+    const { elements } = markdownPictures(root.current)
+    const before = Array.from(root.current.querySelectorAll('h1,h2,h3,h4,h5,h6'))
+      .filter((h) => h.compareDocumentPosition(picture) & Node.DOCUMENT_POSITION_FOLLOWING)
+      .map((h) => ({ level: Number(h.tagName.charAt(1)), text: h.textContent ?? '' }))
+    const image: ImageTarget = {
+      occurrence: elements.indexOf(picture),
+      srcHash: picture.dataset.hash ?? '',
+      label: picture.dataset.label ?? '',
+    }
+    const { top, bottom, left } = button.getBoundingClientRect()
+    onSelect({ quote: quoteOfImage(image), path: headingPath(before), image, rect: { top, bottom, left } })
+  }
   useEffect(() => () => paintActive(document.body, null), [])
 
   // The table of contents: the headings get their anchors once the text is in, and the section in view follows the scroll.
@@ -283,6 +394,11 @@ function MarkdownContent({
       className="artifact-prose"
       style={{ '--reading-size': `${READING_PX[reading]}px` } as React.CSSProperties}
       onClick={(event) => {
+        const add = primary ? (event.target as Element).closest('[data-md-comment]') : null
+        if (add) {
+          commentOnPicture(add)
+          return
+        }
         // a drag that ends on a highlight selects text; only a plain click opens the comment
         if (window.getSelection()?.isCollapsed === false) return
         const found = passageAt(event)
@@ -315,12 +431,16 @@ function MarkdownContent({
               key={typeof src === 'string' ? src : ''}
               src={typeof src === 'string' ? src : undefined}
               alt={alt}
+              annotate={primary}
             />
           ),
         }}
       >
         {content}
       </Markdown>
+      {placed.map(({ slot, count, id }) =>
+        createPortal(<ImageBadge count={count} onClick={() => onOpen('', id)} />, slot, id),
+      )}
     </div>
   )
 }
@@ -340,6 +460,7 @@ function HtmlContent({
   primary,
   quotes,
   focus,
+  images,
   onSelect,
   cleared,
   stacked,
@@ -356,6 +477,8 @@ function HtmlContent({
   const ready = useRef(false)
   const latest = useRef(quotes)
   latest.current = quotes
+  const latestImages = useRef(images)
+  latestImages.current = images
   /** the frame names a heading by its index; the page's table of contents by an id */
   const headings = useRef<TocItem[]>([])
   const handlers = useRef({ onOpen, onHeadings, onSection })
@@ -370,7 +493,24 @@ function HtmlContent({
       if (message?.type === 'ready') {
         ready.current = true
         send({ type: 'factory.highlight', quotes: latest.current })
+        if (primary) send({ type: 'factory.images', items: latestImages.current })
       }
+      if (message?.type === 'image' && primary) {
+        // the frame's rect is relative to its own viewport
+        const origin = frame.current?.getBoundingClientRect()
+        const { top, bottom, left } = message.rect
+        onSelect({
+          quote: quoteOfImage(message.image),
+          path: message.path,
+          image: message.image,
+          rect: {
+            top: top + (origin?.top ?? 0),
+            bottom: bottom + (origin?.top ?? 0),
+            left: left + (origin?.left ?? 0),
+          },
+        })
+      }
+      if (message?.type === 'image-open' && primary) handlers.current.onOpen('', message.id)
       if (message?.type === 'select' && primary) {
         // the frame's rect is relative to its own viewport
         const origin = frame.current?.getBoundingClientRect()
@@ -414,7 +554,17 @@ function HtmlContent({
   }, [primary, quotes])
 
   useEffect(() => {
+    if (primary && ready.current) send({ type: 'factory.images', items: images })
+  }, [primary, images])
+
+  useEffect(() => {
     if (!primary || !ready.current) return
+    if (focus?.image) {
+      // a card's click goes to its picture (into the viewer when the comment marks a spot); a click on the picture's own marker is already there
+      if (focus.scroll !== false) send({ type: 'factory.image-focus', id: focus.id, open: focus.image.spot })
+      send({ type: 'factory.deactivate' })
+      return
+    }
     send(
       focus
         ? { type: 'factory.scroll', quote: focus.quote, anchor: hintOf(focus), center: focus.scroll !== false }
