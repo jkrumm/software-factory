@@ -130,3 +130,26 @@ test('routeTimer: filing a signal and a ship wait on a port by design and are no
   await post('/issues/issue_7/note')
   expect(timer.snapshot().samples).toBe(3)
 })
+
+test('routeTimer: the report reads (retro, throughput, kpis) are not timed; the other reads and a write to the same path are', async () => {
+  const timer = routeTimer({ now: () => 0, warmupMs: 0 })
+  const ok = () => 'ok'
+  const app = new Elysia()
+    .use(timer.plugin)
+    .get('/v1/retro', ok)
+    .get('/v1/throughput', ok)
+    .get('/v1/kpis', ok)
+    .post('/v1/kpis', ok)
+    .get('/v1/capacity-loop', ok)
+    .get('/v1/friction', ok)
+  await Promise.all(
+    ['/v1/retro?days=7', '/v1/throughput', '/v1/kpis'].map((path) =>
+      app.handle(new Request(`http://localhost${path}`)),
+    ),
+  )
+  expect(timer.snapshot().samples).toBe(0)
+  await app.handle(new Request('http://localhost/v1/kpis', { method: 'POST' }))
+  await app.handle(new Request('http://localhost/v1/capacity-loop'))
+  await app.handle(new Request('http://localhost/v1/friction'))
+  expect(timer.snapshot().samples).toBe(3)
+})
