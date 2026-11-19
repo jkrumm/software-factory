@@ -151,7 +151,7 @@ export const CapacityView = z
         lane: z.string(),
         at: z.string(),
         readAt: z.string(),
-        /** false once the poll has not confirmed it for 10 minutes: new leads are ordered by lowest weekly use */
+        /** false once the poll has not confirmed it for 10 minutes: new leads are ordered by most room left */
         fresh: z.boolean(),
         order: z.array(z.object({ account: z.string(), reason: z.string(), weight: z.number().nullable() })),
       })

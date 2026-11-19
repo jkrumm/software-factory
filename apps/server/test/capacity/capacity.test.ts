@@ -1239,7 +1239,7 @@ describe('a slot is live work of the lead whose worktree its command started in'
   })
 })
 
-describe('the picker rank breaks a tie in room, the gates stay', () => {
+describe('a fresh picker rank decides, room is the fallback, the gates stay', () => {
   const hour = 3_600_000
   const readings = [
     // the 5-hour window is the tightest of each (25 points of room), so the rank decides
@@ -1256,16 +1256,48 @@ describe('the picker rank breaks a tie in room, the gates stay', () => {
   const base = { readings, loaded: new Set<string>(), leads: new Map<string, number>(), leadsPerAccount: 2, now }
   const order = ['me', 'me2', 'iu']
 
-  test('among accounts with the same room the head of a fresh rank is picked over the lowest weekly use', () => {
+  test('the head of a fresh rank is picked whatever its room or weekly use', () => {
     expect(pickAccount({ ...base, rank: rank(order) })).toMatchObject({ picked: { account: 'me' } })
   })
 
-  test('the most room beats the rank: a ranked account near its limit goes after one with room', () => {
-    const near = [
-      reading('me', { fiveHourUsed: 95, weeklyUsed: 54 }),
-      ...readings.slice(1).filter((r) => r.account !== 'me'),
+  test('a ranked account near its limit still goes before a roomier one lower in the rank', () => {
+    const near = [reading('me', { fiveHourUsed: 95, weeklyUsed: 54 }), ...readings.filter((r) => r.account !== 'me')]
+    expect(pickAccount({ ...base, readings: near, rank: rank(order) })).toMatchObject({ picked: { account: 'me' } })
+  })
+
+  test('a fresh rank [me2, me, iu] picks me2 at 91 % of its week over me at 0 and iu at 12; at its lead cap it picks me', () => {
+    const week = [
+      reading('me2', { fiveHourUsed: 10, weeklyUsed: 91 }),
+      reading('me', { fiveHourUsed: 10, weeklyUsed: 0 }),
+      reading('iu', { fiveHourUsed: 10, weeklyUsed: 12 }),
     ]
-    expect(pickAccount({ ...base, readings: near, rank: rank(order) })).toMatchObject({ picked: { account: 'me2' } })
+    const input = { ...base, readings: week, rank: rank(['me2', 'me', 'iu']) }
+    expect(pickAccount(input)).toMatchObject({ picked: { account: 'me2' } })
+    expect(pickAccount({ ...input, leads: new Map([['me2', 2]]) })).toMatchObject({ picked: { account: 'me' } })
+    expect(pickAccount({ ...input, rank: rank(['me2', 'me', 'iu'], at(-READING_MAX_AGE_MS - 1)) })).toMatchObject({
+      picked: { account: 'me' },
+    })
+  })
+
+  test('a ranked account ahead of its pace is not closed by the pace rule; an unranked one still is', () => {
+    const ahead = [
+      reading('me2', { fiveHourUsed: 10, weeklyUsed: 91, weeklyResetsAt: at(WEEK_MS / 2) }),
+      reading('me', { fiveHourUsed: 10, weeklyUsed: 0, weeklyResetsAt: at(WEEK_MS / 2) }),
+    ]
+    const input = { ...base, readings: ahead, pace: true }
+    expect(pickAccount({ ...input, rank: rank(['me2', 'me']) })).toMatchObject({ picked: { account: 'me2' } })
+    expect(pickAccount({ ...input, rank: rank(['me']) })).toMatchObject({ picked: { account: 'me' } })
+    expect(pickAccount({ ...input, rank: null })).toMatchObject({ picked: { account: 'me' } })
+  })
+
+  test('an account at its weekly limit is not picked whatever its place in the rank', () => {
+    const full = [
+      reading('me2', { fiveHourUsed: 10, weeklyUsed: 100 }),
+      reading('me', { fiveHourUsed: 10, weeklyUsed: 5 }),
+    ]
+    expect(pickAccount({ ...base, readings: full, rank: rank(['me2', 'me']), pace: true })).toMatchObject({
+      picked: { account: 'me' },
+    })
   })
 
   test('an account at its lead cap or (with a 5-hour window above 70 %) loaded since its sample is passed over to the next in the rank', () => {
@@ -1283,7 +1315,7 @@ describe('the picker rank breaks a tie in room, the gates stay', () => {
     })
   })
 
-  test('a stale or missing rank leaves the lowest weekly use', () => {
+  test('a stale or missing rank leaves the most room, then the lowest weekly use', () => {
     const stale = rank(order, at(-READING_MAX_AGE_MS - 1))
     expect(pickAccount({ ...base, rank: stale })).toMatchObject({ picked: { account: 'me2' } })
     expect(pickAccount({ ...base, rank: null })).toMatchObject({ picked: { account: 'me2' } })
