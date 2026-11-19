@@ -112,8 +112,13 @@ function live(reg0: Registry, now = Date.now()) {
 }
 
 /** Where the history of this run is written: the sample log and the ledger, each line with the account's mode in force then. */
-function historyTarget(reg: Registry): HistoryTarget {
-  return { mode: (id) => (Object.hasOwn(reg.accounts, id) ? modeOf(reg, id, Date.now()).kind : null) }
+function historyTarget(reg: () => Registry): HistoryTarget {
+  return {
+    mode: (id) => {
+      const r = reg() // only when a line is written: `record` runs on every statusline render
+      return Object.hasOwn(r.accounts, id) ? modeOf(r, id, Date.now()).kind : null
+    },
+  }
 }
 
 const claudeBin = () => Bun.which('claude') ?? join(homedir(), '.local', 'bin', 'claude')
@@ -151,7 +156,7 @@ async function refresh(
     log: (m) => console.error(m),
     peerUsage: o.peer === false ? undefined : fetchPeerUsage, // the synchronous pick-time refresh never waits on ssh
     machine: peerMachine().local,
-    history: historyTarget(reg),
+    history: historyTarget(() => reg),
   })
 }
 
@@ -758,7 +763,14 @@ export async function main(argv: string[]): Promise<number> {
         s_reset: num(rest, '--s-reset'),
         w_reset: num(rest, '--w-reset'),
       }
-      recordSample(id, part, Date.now(), undefined, hasSessionLimit(reg.accounts[id]), historyTarget(live(reg).reg))
+      recordSample(
+        id,
+        part,
+        Date.now(),
+        undefined,
+        hasSessionLimit(reg.accounts[id]),
+        historyTarget(() => live(reg).reg),
+      )
       return 0
     }
     case 'account': {
