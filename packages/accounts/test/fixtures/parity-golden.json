@@ -1,1132 +1,1132 @@
 {
- "pick --dry --why interactive [plain/calm]": {
-  "rc": 0,
-  "out": "unset CLAUDE_CONFIG_DIR\n# picked=iu reason=home stale=false\n"
- },
- "rank --json interactive [plain/calm]": {
-  "rc": 0,
-  "out": "{\"lane\":\"interactive\",\"order\":[{\"account\":\"iu\",\"reason\":\"home\",\"weight\":0.166},{\"account\":\"me\",\"reason\":\"spill\",\"weight\":0.0494471753303275},{\"account\":\"me2\",\"reason\":\"spill\",\"weight\":0.04572380853195266}],\"at\":\"2027-01-15T08:00:00.000Z\"}\n"
- },
- "pick --dry --why headless [plain/calm]": {
-  "rc": 0,
-  "out": "unset CLAUDE_CONFIG_DIR\n# picked=iu reason=home stale=false\n"
- },
- "rank --json headless [plain/calm]": {
-  "rc": 0,
-  "out": "{\"lane\":\"headless\",\"order\":[{\"account\":\"iu\",\"reason\":\"home\",\"weight\":0.166},{\"account\":\"me\",\"reason\":\"spill\",\"weight\":0.0494471753303275},{\"account\":\"me2\",\"reason\":\"spill\",\"weight\":0.04572380853195266}],\"at\":\"2027-01-15T08:00:00.000Z\"}\n"
- },
- "pick --dry --why bulk [plain/calm]": {
-  "rc": 0,
-  "out": "export CLAUDE_CONFIG_DIR='/home/x/.claude-me'\n# picked=me reason=home stale=false\n"
- },
- "rank --json bulk [plain/calm]": {
-  "rc": 0,
-  "out": "{\"lane\":\"bulk\",\"order\":[{\"account\":\"me\",\"reason\":\"home\",\"weight\":0.0494471753303275},{\"account\":\"me2\",\"reason\":\"home\",\"weight\":0.04572380853195266},{\"account\":\"iu\",\"reason\":\"spill\",\"weight\":0.166}],\"at\":\"2027-01-15T08:00:00.000Z\"}\n"
- },
- "pick --dry --why lead [plain/calm]": {
-  "rc": 0,
-  "out": "unset CLAUDE_CONFIG_DIR\n# picked=iu reason=spill stale=false\n"
- },
- "rank --json lead [plain/calm]": {
-  "rc": 0,
-  "out": "{\"lane\":\"lead\",\"order\":[{\"account\":\"iu\",\"reason\":\"spill\",\"weight\":0.166},{\"account\":\"me\",\"reason\":\"spill\",\"weight\":0.0494471753303275},{\"account\":\"me2\",\"reason\":\"spill\",\"weight\":0.04572380853195266}],\"at\":\"2027-01-15T08:00:00.000Z\"}\n"
- },
- "pick --dry --why wave:7 [plain/calm]": {
-  "rc": 0,
-  "out": "export CLAUDE_CONFIG_DIR='/home/x/.claude-me2'\n# picked=me2 reason=home stale=false\n"
- },
- "rank --json wave:7 [plain/calm]": {
-  "rc": 0,
-  "out": "{\"lane\":\"wave:7\",\"order\":[{\"account\":\"me2\",\"reason\":\"home\",\"weight\":0.04572380853195266},{\"account\":\"iu\",\"reason\":\"spill\",\"weight\":0.166},{\"account\":\"me\",\"reason\":\"spill\",\"weight\":0.0494471753303275}],\"at\":\"2027-01-15T08:00:00.000Z\"}\n"
- },
- "pick --dry --why unknown-lane [plain/calm]": {
-  "rc": 0,
-  "out": "unset CLAUDE_CONFIG_DIR\n# picked=iu reason=spill stale=false\n"
- },
- "rank --json unknown-lane [plain/calm]": {
-  "rc": 0,
-  "out": "{\"lane\":\"unknown-lane\",\"order\":[{\"account\":\"iu\",\"reason\":\"spill\",\"weight\":0.166},{\"account\":\"me\",\"reason\":\"spill\",\"weight\":0.0494471753303275},{\"account\":\"me2\",\"reason\":\"spill\",\"weight\":0.04572380853195266}],\"at\":\"2027-01-15T08:00:00.000Z\"}\n"
- },
- "rank text [plain/calm]": {
-  "rc": 0,
-  "out": "1. me  home  w=0.049\n2. me2  home  w=0.046\n3. iu  spill  w=0.166\n"
- },
- "usage [plain/calm]": {
-  "rc": 0,
-  "out": "iu ultra  7d 12% ↺01-19 12:00  age 60s  auth ok\nme max  5h 10% ↺01-15 11:00  7d 30% ↺01-20 08:00  age 60s  auth ok\nme2 max  5h 5% ↺01-15 11:00  7d 11% ↺01-21 14:00  age 60s  auth ok\n"
- },
- "usage --json [plain/calm]": {
-  "rc": 0,
-  "out": "{\n  \"default_account\": \"iu\",\n  \"accounts\": [\n    {\n      \"id\": \"iu\",\n      \"plan\": \"ultra\",\n      \"session_limit\": false,\n      \"enabled\": true,\n      \"five_hour\": null,\n      \"seven_day\": 12,\n      \"five_hour_resets_at\": null,\n      \"seven_day_resets_at\": 1800360000,\n      \"age_s\": 60,\n      \"five_hour_age_s\": null,\n      \"seven_day_age_s\": 60,\n      \"source\": \"oauth\",\n      \"auth_ok\": true,\n      \"exhausted_until\": null\n    },\n    {\n      \"id\": \"me\",\n      \"plan\": \"max\",\n      \"session_limit\": true,\n      \"enabled\": true,\n      \"five_hour\": 10,\n      \"seven_day\": 30,\n      \"five_hour_resets_at\": 1800010800,\n      \"seven_day_resets_at\": 1800432000,\n      \"age_s\": 60,\n      \"five_hour_age_s\": 60,\n      \"seven_day_age_s\": 60,\n      \"source\": \"oauth\",\n      \"auth_ok\": true,\n      \"exhausted_until\": null\n    },\n    {\n      \"id\": \"me2\",\n      \"plan\": \"max\",\n      \"session_limit\": true,\n      \"enabled\": true,\n      \"five_hour\": 5,\n      \"seven_day\": 11,\n      \"five_hour_resets_at\": 1800010800,\n      \"seven_day_resets_at\": 1800540000,\n      \"age_s\": 60,\n      \"five_hour_age_s\": 60,\n      \"seven_day_age_s\": 60,\n      \"source\": \"oauth\",\n      \"auth_ok\": true,\n      \"exhausted_until\": null\n    }\n  ]\n}\n"
- },
- "expiry [plain/calm]": {
-  "rc": 0,
-  "out": "iu  WARN  login valid until 2027-01-20 (5 d left)\nme  WARN  login valid until 2027-01-20 (5 d left)\nme2  WARN  login valid until 2027-01-20 (5 d left)\n"
- },
- "expiry --json [plain/calm]": {
-  "rc": 0,
-  "out": "{\n  \"accounts\": [\n    {\n      \"id\": \"iu\",\n      \"default\": true,\n      \"grade\": \"WARN\",\n      \"severity\": \"WARN\",\n      \"refresh_expires_at\": 1800432000000,\n      \"access_expires_at\": 1800003600000,\n      \"tier\": \"default_claude_max_5x\",\n      \"plan_detected\": \"max\",\n      \"days_left\": 5,\n      \"expired\": false,\n      \"detail\": \"login valid until 2027-01-20 (5 d left)\"\n    },\n    {\n      \"id\": \"me\",\n      \"default\": false,\n      \"grade\": \"WARN\",\n      \"severity\": \"WARN\",\n      \"refresh_expires_at\": 1800432000000,\n      \"access_expires_at\": 1800003600000,\n      \"tier\": \"default_claude_max_5x\",\n      \"plan_detected\": \"max\",\n      \"days_left\": 5,\n      \"expired\": false,\n      \"detail\": \"login valid until 2027-01-20 (5 d left)\"\n    },\n    {\n      \"id\": \"me2\",\n      \"default\": false,\n      \"grade\": \"WARN\",\n      \"severity\": \"WARN\",\n      \"refresh_expires_at\": 1800432000000,\n      \"access_expires_at\": 1800003600000,\n      \"tier\": \"default_claude_max_5x\",\n      \"plan_detected\": \"max\",\n      \"days_left\": 5,\n      \"expired\": false,\n      \"detail\": \"login valid until 2027-01-20 (5 d left)\"\n    }\n  ]\n}\n"
- },
- "expiry --json --ids me [plain/calm]": {
-  "rc": 0,
-  "out": "{\n  \"accounts\": [\n    {\n      \"id\": \"me\",\n      \"default\": false,\n      \"grade\": \"WARN\",\n      \"severity\": \"WARN\",\n      \"refresh_expires_at\": 1800432000000,\n      \"access_expires_at\": 1800003600000,\n      \"tier\": \"default_claude_max_5x\",\n      \"plan_detected\": \"max\",\n      \"days_left\": 5,\n      \"expired\": false,\n      \"detail\": \"login valid until 2027-01-20 (5 d left)\"\n    }\n  ]\n}\n"
- },
- "account [plain/calm]": {
-  "rc": 0,
-  "out": "iu\n"
- },
- "account --badge [plain/calm]": {
-  "rc": 0,
-  "out": "IU\n"
- },
- "fable [plain/calm]": {
-  "rc": 0,
-  "out": "iu\n"
- },
- "env iu [plain/calm]": {
-  "rc": 0,
-  "out": "unset CLAUDE_CONFIG_DIR\n"
- },
- "env me2 [plain/calm]": {
-  "rc": 0,
-  "out": "export CLAUDE_CONFIG_DIR='/home/x/.claude-me2'\n"
- },
- "env nope [plain/calm]": {
-  "rc": 2,
-  "out": ""
- },
- "account in a registered dir [plain/calm]": {
-  "rc": 0,
-  "out": "ME2\n"
- },
- "account in an unknown dir [plain/calm]": {
-  "rc": 0,
-  "out": "?\n"
- },
- "pick --dry --why interactive [plain/expiring]": {
-  "rc": 0,
-  "out": "unset CLAUDE_CONFIG_DIR\n# picked=iu reason=home stale=false\n"
- },
- "rank --json interactive [plain/expiring]": {
-  "rc": 0,
-  "out": "{\"lane\":\"interactive\",\"order\":[{\"account\":\"iu\",\"reason\":\"home\",\"weight\":0.16572815184059705},{\"account\":\"me\",\"reason\":\"spill\",\"weight\":0.1314156565728431},{\"account\":\"me2\",\"reason\":\"spill\",\"weight\":0.05667144124753112}],\"at\":\"2027-01-15T08:00:00.000Z\"}\n"
- },
- "pick --dry --why headless [plain/expiring]": {
-  "rc": 0,
-  "out": "unset CLAUDE_CONFIG_DIR\n# picked=iu reason=expiring-capacity stale=false\n"
- },
- "rank --json headless [plain/expiring]": {
-  "rc": 0,
-  "out": "{\"lane\":\"headless\",\"order\":[{\"account\":\"iu\",\"reason\":\"expiring-capacity\",\"weight\":0.16572815184059705},{\"account\":\"me\",\"reason\":\"expiring-capacity\",\"weight\":0.1314156565728431},{\"account\":\"me2\",\"reason\":\"spill\",\"weight\":0.05667144124753112}],\"at\":\"2027-01-15T08:00:00.000Z\"}\n"
- },
- "pick --dry --why bulk [plain/expiring]": {
-  "rc": 0,
-  "out": "unset CLAUDE_CONFIG_DIR\n# picked=iu reason=expiring-capacity stale=false\n"
- },
- "rank --json bulk [plain/expiring]": {
-  "rc": 0,
-  "out": "{\"lane\":\"bulk\",\"order\":[{\"account\":\"iu\",\"reason\":\"expiring-capacity\",\"weight\":0.16572815184059705},{\"account\":\"me\",\"reason\":\"expiring-capacity\",\"weight\":0.1314156565728431},{\"account\":\"me2\",\"reason\":\"home\",\"weight\":0.05667144124753112}],\"at\":\"2027-01-15T08:00:00.000Z\"}\n"
- },
- "pick --dry --why lead [plain/expiring]": {
-  "rc": 0,
-  "out": "unset CLAUDE_CONFIG_DIR\n# picked=iu reason=expiring-capacity stale=false\n"
- },
- "rank --json lead [plain/expiring]": {
-  "rc": 0,
-  "out": "{\"lane\":\"lead\",\"order\":[{\"account\":\"iu\",\"reason\":\"expiring-capacity\",\"weight\":0.16572815184059705},{\"account\":\"me\",\"reason\":\"expiring-capacity\",\"weight\":0.1314156565728431},{\"account\":\"me2\",\"reason\":\"spill\",\"weight\":0.05667144124753112}],\"at\":\"2027-01-15T08:00:00.000Z\"}\n"
- },
- "pick --dry --why wave:7 [plain/expiring]": {
-  "rc": 0,
-  "out": "unset CLAUDE_CONFIG_DIR\n# picked=iu reason=expiring-capacity stale=false\n"
- },
- "rank --json wave:7 [plain/expiring]": {
-  "rc": 0,
-  "out": "{\"lane\":\"wave:7\",\"order\":[{\"account\":\"iu\",\"reason\":\"expiring-capacity\",\"weight\":0.16572815184059705},{\"account\":\"me\",\"reason\":\"expiring-capacity\",\"weight\":0.1314156565728431},{\"account\":\"me2\",\"reason\":\"home\",\"weight\":0.05667144124753112}],\"at\":\"2027-01-15T08:00:00.000Z\"}\n"
- },
- "pick --dry --why unknown-lane [plain/expiring]": {
-  "rc": 0,
-  "out": "unset CLAUDE_CONFIG_DIR\n# picked=iu reason=expiring-capacity stale=false\n"
- },
- "rank --json unknown-lane [plain/expiring]": {
-  "rc": 0,
-  "out": "{\"lane\":\"unknown-lane\",\"order\":[{\"account\":\"iu\",\"reason\":\"expiring-capacity\",\"weight\":0.16572815184059705},{\"account\":\"me\",\"reason\":\"expiring-capacity\",\"weight\":0.1314156565728431},{\"account\":\"me2\",\"reason\":\"spill\",\"weight\":0.05667144124753112}],\"at\":\"2027-01-15T08:00:00.000Z\"}\n"
- },
- "rank text [plain/expiring]": {
-  "rc": 0,
-  "out": "1. iu  expiring-capacity  w=0.166\n2. me  expiring-capacity  w=0.131\n3. me2  home  w=0.057\n"
- },
- "usage [plain/expiring]": {
-  "rc": 0,
-  "out": "iu ultra  7d 80% ↺01-16 16:00  age 60s  auth ok\nme max  5h 4% ↺01-15 11:00  7d 54% ↺01-17 06:00  age 60s  auth ok\nme2 max  5h 85% ↺01-15 11:00  7d 11% ↺01-20 18:00  age 60s  auth ok\n"
- },
- "usage --json [plain/expiring]": {
-  "rc": 0,
-  "out": "{\n  \"default_account\": \"iu\",\n  \"accounts\": [\n    {\n      \"id\": \"iu\",\n      \"plan\": \"ultra\",\n      \"session_limit\": false,\n      \"enabled\": true,\n      \"five_hour\": null,\n      \"seven_day\": 80,\n      \"five_hour_resets_at\": null,\n      \"seven_day_resets_at\": 1800115200,\n      \"age_s\": 60,\n      \"five_hour_age_s\": null,\n      \"seven_day_age_s\": 60,\n      \"source\": \"oauth\",\n      \"auth_ok\": true,\n      \"exhausted_until\": null\n    },\n    {\n      \"id\": \"me\",\n      \"plan\": \"max\",\n      \"session_limit\": true,\n      \"enabled\": true,\n      \"five_hour\": 4,\n      \"seven_day\": 54,\n      \"five_hour_resets_at\": 1800010800,\n      \"seven_day_resets_at\": 1800165600,\n      \"age_s\": 60,\n      \"five_hour_age_s\": 60,\n      \"seven_day_age_s\": 60,\n      \"source\": \"oauth\",\n      \"auth_ok\": true,\n      \"exhausted_until\": null\n    },\n    {\n      \"id\": \"me2\",\n      \"plan\": \"max\",\n      \"session_limit\": true,\n      \"enabled\": true,\n      \"five_hour\": 85,\n      \"seven_day\": 11,\n      \"five_hour_resets_at\": 1800010800,\n      \"seven_day_resets_at\": 1800468000,\n      \"age_s\": 60,\n      \"five_hour_age_s\": 60,\n      \"seven_day_age_s\": 60,\n      \"source\": \"oauth\",\n      \"auth_ok\": true,\n      \"exhausted_until\": null\n    }\n  ]\n}\n"
- },
- "expiry [plain/expiring]": {
-  "rc": 0,
-  "out": "iu  WARN  login valid until 2027-01-20 (5 d left)\nme  WARN  login valid until 2027-01-20 (5 d left)\nme2  WARN  login valid until 2027-01-20 (5 d left)\n"
- },
- "expiry --json [plain/expiring]": {
-  "rc": 0,
-  "out": "{\n  \"accounts\": [\n    {\n      \"id\": \"iu\",\n      \"default\": true,\n      \"grade\": \"WARN\",\n      \"severity\": \"WARN\",\n      \"refresh_expires_at\": 1800432000000,\n      \"access_expires_at\": 1800003600000,\n      \"tier\": \"default_claude_max_5x\",\n      \"plan_detected\": \"max\",\n      \"days_left\": 5,\n      \"expired\": false,\n      \"detail\": \"login valid until 2027-01-20 (5 d left)\"\n    },\n    {\n      \"id\": \"me\",\n      \"default\": false,\n      \"grade\": \"WARN\",\n      \"severity\": \"WARN\",\n      \"refresh_expires_at\": 1800432000000,\n      \"access_expires_at\": 1800003600000,\n      \"tier\": \"default_claude_max_5x\",\n      \"plan_detected\": \"max\",\n      \"days_left\": 5,\n      \"expired\": false,\n      \"detail\": \"login valid until 2027-01-20 (5 d left)\"\n    },\n    {\n      \"id\": \"me2\",\n      \"default\": false,\n      \"grade\": \"WARN\",\n      \"severity\": \"WARN\",\n      \"refresh_expires_at\": 1800432000000,\n      \"access_expires_at\": 1800003600000,\n      \"tier\": \"default_claude_max_5x\",\n      \"plan_detected\": \"max\",\n      \"days_left\": 5,\n      \"expired\": false,\n      \"detail\": \"login valid until 2027-01-20 (5 d left)\"\n    }\n  ]\n}\n"
- },
- "expiry --json --ids me [plain/expiring]": {
-  "rc": 0,
-  "out": "{\n  \"accounts\": [\n    {\n      \"id\": \"me\",\n      \"default\": false,\n      \"grade\": \"WARN\",\n      \"severity\": \"WARN\",\n      \"refresh_expires_at\": 1800432000000,\n      \"access_expires_at\": 1800003600000,\n      \"tier\": \"default_claude_max_5x\",\n      \"plan_detected\": \"max\",\n      \"days_left\": 5,\n      \"expired\": false,\n      \"detail\": \"login valid until 2027-01-20 (5 d left)\"\n    }\n  ]\n}\n"
- },
- "account [plain/expiring]": {
-  "rc": 0,
-  "out": "iu\n"
- },
- "account --badge [plain/expiring]": {
-  "rc": 0,
-  "out": "IU\n"
- },
- "fable [plain/expiring]": {
-  "rc": 0,
-  "out": "iu\n"
- },
- "env iu [plain/expiring]": {
-  "rc": 0,
-  "out": "unset CLAUDE_CONFIG_DIR\n"
- },
- "env me2 [plain/expiring]": {
-  "rc": 0,
-  "out": "export CLAUDE_CONFIG_DIR='/home/x/.claude-me2'\n"
- },
- "env nope [plain/expiring]": {
-  "rc": 2,
-  "out": ""
- },
- "account in a registered dir [plain/expiring]": {
-  "rc": 0,
-  "out": "ME2\n"
- },
- "account in an unknown dir [plain/expiring]": {
-  "rc": 0,
-  "out": "?\n"
- },
- "pick --dry --why interactive [plain/walled]": {
-  "rc": 0,
-  "out": "unset CLAUDE_CONFIG_DIR\n# picked=iu reason=home stale=false\n"
- },
- "rank --json interactive [plain/walled]": {
-  "rc": 0,
-  "out": "{\"lane\":\"interactive\",\"order\":[{\"account\":\"iu\",\"reason\":\"home\",\"weight\":0.022360679774997897}],\"at\":\"2027-01-15T08:00:00.000Z\"}\n"
- },
- "pick --dry --why headless [plain/walled]": {
-  "rc": 0,
-  "out": "unset CLAUDE_CONFIG_DIR\n# picked=iu reason=expiring-capacity stale=false\n"
- },
- "rank --json headless [plain/walled]": {
-  "rc": 0,
-  "out": "{\"lane\":\"headless\",\"order\":[{\"account\":\"iu\",\"reason\":\"expiring-capacity\",\"weight\":0.022360679774997897}],\"at\":\"2027-01-15T08:00:00.000Z\"}\n"
- },
- "pick --dry --why bulk [plain/walled]": {
-  "rc": 0,
-  "out": "unset CLAUDE_CONFIG_DIR\n# picked=iu reason=expiring-capacity stale=false\n"
- },
- "rank --json bulk [plain/walled]": {
-  "rc": 0,
-  "out": "{\"lane\":\"bulk\",\"order\":[{\"account\":\"iu\",\"reason\":\"expiring-capacity\",\"weight\":0.022360679774997897}],\"at\":\"2027-01-15T08:00:00.000Z\"}\n"
- },
- "pick --dry --why lead [plain/walled]": {
-  "rc": 0,
-  "out": "unset CLAUDE_CONFIG_DIR\n# picked=iu reason=expiring-capacity stale=false\n"
- },
- "rank --json lead [plain/walled]": {
-  "rc": 0,
-  "out": "{\"lane\":\"lead\",\"order\":[{\"account\":\"iu\",\"reason\":\"expiring-capacity\",\"weight\":0.022360679774997897}],\"at\":\"2027-01-15T08:00:00.000Z\"}\n"
- },
- "pick --dry --why wave:7 [plain/walled]": {
-  "rc": 0,
-  "out": "unset CLAUDE_CONFIG_DIR\n# picked=iu reason=expiring-capacity stale=false\n"
- },
- "rank --json wave:7 [plain/walled]": {
-  "rc": 0,
-  "out": "{\"lane\":\"wave:7\",\"order\":[{\"account\":\"iu\",\"reason\":\"expiring-capacity\",\"weight\":0.022360679774997897}],\"at\":\"2027-01-15T08:00:00.000Z\"}\n"
- },
- "pick --dry --why unknown-lane [plain/walled]": {
-  "rc": 0,
-  "out": "unset CLAUDE_CONFIG_DIR\n# picked=iu reason=expiring-capacity stale=false\n"
- },
- "rank --json unknown-lane [plain/walled]": {
-  "rc": 0,
-  "out": "{\"lane\":\"unknown-lane\",\"order\":[{\"account\":\"iu\",\"reason\":\"expiring-capacity\",\"weight\":0.022360679774997897}],\"at\":\"2027-01-15T08:00:00.000Z\"}\n"
- },
- "rank text [plain/walled]": {
-  "rc": 0,
-  "out": "1. iu  expiring-capacity  w=0.022\n"
- },
- "usage [plain/walled]": {
-  "rc": 0,
-  "out": "iu ultra  7d 97% ↺01-16 04:00  age 60s  auth ok\nme max  5h 95% ↺01-15 11:00  7d 40% ↺01-19 02:00  age 60s  auth FAILED\nme2 max  5h 10% ↺01-15 11:00  7d 100% ↺01-17 20:00  age 400s  auth ok  EXHAUSTED\n"
- },
- "usage --json [plain/walled]": {
-  "rc": 0,
-  "out": "{\n  \"default_account\": \"iu\",\n  \"accounts\": [\n    {\n      \"id\": \"iu\",\n      \"plan\": \"ultra\",\n      \"session_limit\": false,\n      \"enabled\": true,\n      \"five_hour\": null,\n      \"seven_day\": 97,\n      \"five_hour_resets_at\": null,\n      \"seven_day_resets_at\": 1800072000,\n      \"age_s\": 60,\n      \"five_hour_age_s\": null,\n      \"seven_day_age_s\": 60,\n      \"source\": \"oauth\",\n      \"auth_ok\": true,\n      \"exhausted_until\": null\n    },\n    {\n      \"id\": \"me\",\n      \"plan\": \"max\",\n      \"session_limit\": true,\n      \"enabled\": true,\n      \"five_hour\": 95,\n      \"seven_day\": 40,\n      \"five_hour_resets_at\": 1800010800,\n      \"seven_day_resets_at\": 1800324000,\n      \"age_s\": 60,\n      \"five_hour_age_s\": 60,\n      \"seven_day_age_s\": 60,\n      \"source\": \"oauth\",\n      \"auth_ok\": false,\n      \"exhausted_until\": null\n    },\n    {\n      \"id\": \"me2\",\n      \"plan\": \"max\",\n      \"session_limit\": true,\n      \"enabled\": true,\n      \"five_hour\": 10,\n      \"seven_day\": 100,\n      \"five_hour_resets_at\": 1800010800,\n      \"seven_day_resets_at\": 1800216000,\n      \"age_s\": 400,\n      \"five_hour_age_s\": 400,\n      \"seven_day_age_s\": 400,\n      \"source\": \"oauth\",\n      \"auth_ok\": true,\n      \"exhausted_until\": 1800000600\n    }\n  ]\n}\n"
- },
- "expiry [plain/walled]": {
-  "rc": 0,
-  "out": "iu  WARN  login valid until 2027-01-20 (5 d left)\nme  WARN  login valid until 2027-01-20 (5 d left)\nme2  WARN  login valid until 2027-01-20 (5 d left)\n"
- },
- "expiry --json [plain/walled]": {
-  "rc": 0,
-  "out": "{\n  \"accounts\": [\n    {\n      \"id\": \"iu\",\n      \"default\": true,\n      \"grade\": \"WARN\",\n      \"severity\": \"WARN\",\n      \"refresh_expires_at\": 1800432000000,\n      \"access_expires_at\": 1800003600000,\n      \"tier\": \"default_claude_max_5x\",\n      \"plan_detected\": \"max\",\n      \"days_left\": 5,\n      \"expired\": false,\n      \"detail\": \"login valid until 2027-01-20 (5 d left)\"\n    },\n    {\n      \"id\": \"me\",\n      \"default\": false,\n      \"grade\": \"WARN\",\n      \"severity\": \"WARN\",\n      \"refresh_expires_at\": 1800432000000,\n      \"access_expires_at\": 1800003600000,\n      \"tier\": \"default_claude_max_5x\",\n      \"plan_detected\": \"max\",\n      \"days_left\": 5,\n      \"expired\": false,\n      \"detail\": \"login valid until 2027-01-20 (5 d left)\"\n    },\n    {\n      \"id\": \"me2\",\n      \"default\": false,\n      \"grade\": \"WARN\",\n      \"severity\": \"WARN\",\n      \"refresh_expires_at\": 1800432000000,\n      \"access_expires_at\": 1800003600000,\n      \"tier\": \"default_claude_max_5x\",\n      \"plan_detected\": \"max\",\n      \"days_left\": 5,\n      \"expired\": false,\n      \"detail\": \"login valid until 2027-01-20 (5 d left)\"\n    }\n  ]\n}\n"
- },
- "expiry --json --ids me [plain/walled]": {
-  "rc": 0,
-  "out": "{\n  \"accounts\": [\n    {\n      \"id\": \"me\",\n      \"default\": false,\n      \"grade\": \"WARN\",\n      \"severity\": \"WARN\",\n      \"refresh_expires_at\": 1800432000000,\n      \"access_expires_at\": 1800003600000,\n      \"tier\": \"default_claude_max_5x\",\n      \"plan_detected\": \"max\",\n      \"days_left\": 5,\n      \"expired\": false,\n      \"detail\": \"login valid until 2027-01-20 (5 d left)\"\n    }\n  ]\n}\n"
- },
- "account [plain/walled]": {
-  "rc": 0,
-  "out": "iu\n"
- },
- "account --badge [plain/walled]": {
-  "rc": 0,
-  "out": "IU\n"
- },
- "fable [plain/walled]": {
-  "rc": 0,
-  "out": "iu\n"
- },
- "env iu [plain/walled]": {
-  "rc": 0,
-  "out": "unset CLAUDE_CONFIG_DIR\n"
- },
- "env me2 [plain/walled]": {
-  "rc": 0,
-  "out": "export CLAUDE_CONFIG_DIR='/home/x/.claude-me2'\n"
- },
- "env nope [plain/walled]": {
-  "rc": 2,
-  "out": ""
- },
- "account in a registered dir [plain/walled]": {
-  "rc": 0,
-  "out": "ME2\n"
- },
- "account in an unknown dir [plain/walled]": {
-  "rc": 0,
-  "out": "?\n"
- },
- "pick --dry --why interactive [modes/calm]": {
-  "rc": 0,
-  "out": "export CLAUDE_CONFIG_DIR='/home/x/.claude-me2'\n# picked=me2 reason=drain stale=false\n"
- },
- "rank --json interactive [modes/calm]": {
-  "rc": 0,
-  "out": "{\"lane\":\"interactive\",\"order\":[{\"account\":\"me2\",\"reason\":\"drain\",\"weight\":0.04844546380171175},{\"account\":\"me\",\"reason\":\"spill\",\"weight\":0.0494471753303275},{\"account\":\"iu\",\"reason\":\"fable-reserve\",\"weight\":0.166}],\"at\":\"2027-01-15T08:00:00.000Z\"}\n"
- },
- "pick --dry --why headless [modes/calm]": {
-  "rc": 0,
-  "out": "export CLAUDE_CONFIG_DIR='/home/x/.claude-me2'\n# picked=me2 reason=drain stale=false\n"
- },
- "rank --json headless [modes/calm]": {
-  "rc": 0,
-  "out": "{\"lane\":\"headless\",\"order\":[{\"account\":\"me2\",\"reason\":\"drain\",\"weight\":0.04844546380171175},{\"account\":\"me\",\"reason\":\"spill\",\"weight\":0.0494471753303275},{\"account\":\"iu\",\"reason\":\"fable-reserve\",\"weight\":0.166}],\"at\":\"2027-01-15T08:00:00.000Z\"}\n"
- },
- "pick --dry --why bulk [modes/calm]": {
-  "rc": 0,
-  "out": "export CLAUDE_CONFIG_DIR='/home/x/.claude-me2'\n# picked=me2 reason=drain stale=false\n"
- },
- "rank --json bulk [modes/calm]": {
-  "rc": 0,
-  "out": "{\"lane\":\"bulk\",\"order\":[{\"account\":\"me2\",\"reason\":\"drain\",\"weight\":0.04844546380171175},{\"account\":\"me\",\"reason\":\"home\",\"weight\":0.0494471753303275},{\"account\":\"iu\",\"reason\":\"fable-reserve\",\"weight\":0.166}],\"at\":\"2027-01-15T08:00:00.000Z\"}\n"
- },
- "pick --dry --why lead [modes/calm]": {
-  "rc": 0,
-  "out": "export CLAUDE_CONFIG_DIR='/home/x/.claude-me2'\n# picked=me2 reason=drain stale=false\n"
- },
- "rank --json lead [modes/calm]": {
-  "rc": 0,
-  "out": "{\"lane\":\"lead\",\"order\":[{\"account\":\"me2\",\"reason\":\"drain\",\"weight\":0.04844546380171175},{\"account\":\"me\",\"reason\":\"spill\",\"weight\":0.0494471753303275},{\"account\":\"iu\",\"reason\":\"fable-reserve\",\"weight\":0.166}],\"at\":\"2027-01-15T08:00:00.000Z\"}\n"
- },
- "pick --dry --why wave:7 [modes/calm]": {
-  "rc": 0,
-  "out": "export CLAUDE_CONFIG_DIR='/home/x/.claude-me2'\n# picked=me2 reason=drain stale=false\n"
- },
- "rank --json wave:7 [modes/calm]": {
-  "rc": 0,
-  "out": "{\"lane\":\"wave:7\",\"order\":[{\"account\":\"me2\",\"reason\":\"drain\",\"weight\":0.04844546380171175},{\"account\":\"me\",\"reason\":\"spill\",\"weight\":0.0494471753303275},{\"account\":\"iu\",\"reason\":\"fable-reserve\",\"weight\":0.166}],\"at\":\"2027-01-15T08:00:00.000Z\"}\n"
- },
- "pick --dry --why unknown-lane [modes/calm]": {
-  "rc": 0,
-  "out": "export CLAUDE_CONFIG_DIR='/home/x/.claude-me2'\n# picked=me2 reason=drain stale=false\n"
- },
- "rank --json unknown-lane [modes/calm]": {
-  "rc": 0,
-  "out": "{\"lane\":\"unknown-lane\",\"order\":[{\"account\":\"me2\",\"reason\":\"drain\",\"weight\":0.04844546380171175},{\"account\":\"me\",\"reason\":\"spill\",\"weight\":0.0494471753303275},{\"account\":\"iu\",\"reason\":\"fable-reserve\",\"weight\":0.166}],\"at\":\"2027-01-15T08:00:00.000Z\"}\n"
- },
- "rank text [modes/calm]": {
-  "rc": 0,
-  "out": "1. me2  drain  w=0.048\n2. me  home  w=0.049\n3. iu  fable-reserve  w=0.166\n"
- },
- "usage [modes/calm]": {
-  "rc": 0,
-  "out": "iu ultra  7d 12% ↺01-19 12:00  age 60s  auth ok\nme max  5h 10% ↺01-15 11:00  7d 30% ↺01-20 08:00  age 60s  auth ok\nme2 max  5h 5% ↺01-15 11:00  7d 11% ↺01-21 14:00  age 60s  auth ok\n"
- },
- "usage --json [modes/calm]": {
-  "rc": 0,
-  "out": "{\n  \"default_account\": \"iu\",\n  \"accounts\": [\n    {\n      \"id\": \"iu\",\n      \"plan\": \"ultra\",\n      \"session_limit\": false,\n      \"enabled\": true,\n      \"five_hour\": null,\n      \"seven_day\": 12,\n      \"five_hour_resets_at\": null,\n      \"seven_day_resets_at\": 1800360000,\n      \"age_s\": 60,\n      \"five_hour_age_s\": null,\n      \"seven_day_age_s\": 60,\n      \"source\": \"oauth\",\n      \"auth_ok\": true,\n      \"exhausted_until\": null\n    },\n    {\n      \"id\": \"me\",\n      \"plan\": \"max\",\n      \"session_limit\": true,\n      \"enabled\": true,\n      \"five_hour\": 10,\n      \"seven_day\": 30,\n      \"five_hour_resets_at\": 1800010800,\n      \"seven_day_resets_at\": 1800432000,\n      \"age_s\": 60,\n      \"five_hour_age_s\": 60,\n      \"seven_day_age_s\": 60,\n      \"source\": \"oauth\",\n      \"auth_ok\": true,\n      \"exhausted_until\": null\n    },\n    {\n      \"id\": \"me2\",\n      \"plan\": \"max\",\n      \"session_limit\": true,\n      \"enabled\": true,\n      \"five_hour\": 5,\n      \"seven_day\": 11,\n      \"five_hour_resets_at\": 1800010800,\n      \"seven_day_resets_at\": 1800540000,\n      \"age_s\": 60,\n      \"five_hour_age_s\": 60,\n      \"seven_day_age_s\": 60,\n      \"source\": \"oauth\",\n      \"auth_ok\": true,\n      \"exhausted_until\": null\n    }\n  ]\n}\n"
- },
- "expiry [modes/calm]": {
-  "rc": 0,
-  "out": "iu  WARN  login valid until 2027-01-20 (5 d left)\nme  WARN  login valid until 2027-01-20 (5 d left)\nme2  WARN  login valid until 2027-01-20 (5 d left)\n"
- },
- "expiry --json [modes/calm]": {
-  "rc": 0,
-  "out": "{\n  \"accounts\": [\n    {\n      \"id\": \"iu\",\n      \"default\": true,\n      \"grade\": \"WARN\",\n      \"severity\": \"WARN\",\n      \"refresh_expires_at\": 1800432000000,\n      \"access_expires_at\": 1800003600000,\n      \"tier\": \"default_claude_max_5x\",\n      \"plan_detected\": \"max\",\n      \"days_left\": 5,\n      \"expired\": false,\n      \"detail\": \"login valid until 2027-01-20 (5 d left)\"\n    },\n    {\n      \"id\": \"me\",\n      \"default\": false,\n      \"grade\": \"WARN\",\n      \"severity\": \"WARN\",\n      \"refresh_expires_at\": 1800432000000,\n      \"access_expires_at\": 1800003600000,\n      \"tier\": \"default_claude_max_5x\",\n      \"plan_detected\": \"max\",\n      \"days_left\": 5,\n      \"expired\": false,\n      \"detail\": \"login valid until 2027-01-20 (5 d left)\"\n    },\n    {\n      \"id\": \"me2\",\n      \"default\": false,\n      \"grade\": \"WARN\",\n      \"severity\": \"WARN\",\n      \"refresh_expires_at\": 1800432000000,\n      \"access_expires_at\": 1800003600000,\n      \"tier\": \"default_claude_max_5x\",\n      \"plan_detected\": \"max\",\n      \"days_left\": 5,\n      \"expired\": false,\n      \"detail\": \"login valid until 2027-01-20 (5 d left)\"\n    }\n  ]\n}\n"
- },
- "expiry --json --ids me [modes/calm]": {
-  "rc": 0,
-  "out": "{\n  \"accounts\": [\n    {\n      \"id\": \"me\",\n      \"default\": false,\n      \"grade\": \"WARN\",\n      \"severity\": \"WARN\",\n      \"refresh_expires_at\": 1800432000000,\n      \"access_expires_at\": 1800003600000,\n      \"tier\": \"default_claude_max_5x\",\n      \"plan_detected\": \"max\",\n      \"days_left\": 5,\n      \"expired\": false,\n      \"detail\": \"login valid until 2027-01-20 (5 d left)\"\n    }\n  ]\n}\n"
- },
- "account [modes/calm]": {
-  "rc": 0,
-  "out": "iu\n"
- },
- "account --badge [modes/calm]": {
-  "rc": 0,
-  "out": "IU\n"
- },
- "fable [modes/calm]": {
-  "rc": 0,
-  "out": "iu\n"
- },
- "env iu [modes/calm]": {
-  "rc": 0,
-  "out": "unset CLAUDE_CONFIG_DIR\n"
- },
- "env me2 [modes/calm]": {
-  "rc": 0,
-  "out": "export CLAUDE_CONFIG_DIR='/home/x/.claude-me2'\n"
- },
- "env nope [modes/calm]": {
-  "rc": 2,
-  "out": ""
- },
- "account in a registered dir [modes/calm]": {
-  "rc": 0,
-  "out": "ME2\n"
- },
- "account in an unknown dir [modes/calm]": {
-  "rc": 0,
-  "out": "?\n"
- },
- "pick --dry --why interactive [modes/expiring]": {
-  "rc": 0,
-  "out": "export CLAUDE_CONFIG_DIR='/home/x/.claude-me'\n# picked=me reason=spill stale=false\n"
- },
- "rank --json interactive [modes/expiring]": {
-  "rc": 0,
-  "out": "{\"lane\":\"interactive\",\"order\":[{\"account\":\"me\",\"reason\":\"spill\",\"weight\":0.1314156565728431},{\"account\":\"me2\",\"reason\":\"spill\",\"weight\":0.06004474132178892},{\"account\":\"iu\",\"reason\":\"fable-reserve\",\"weight\":0.16572815184059705}],\"at\":\"2027-01-15T08:00:00.000Z\"}\n"
- },
- "pick --dry --why headless [modes/expiring]": {
-  "rc": 0,
-  "out": "export CLAUDE_CONFIG_DIR='/home/x/.claude-me'\n# picked=me reason=expiring-capacity stale=false\n"
- },
- "rank --json headless [modes/expiring]": {
-  "rc": 0,
-  "out": "{\"lane\":\"headless\",\"order\":[{\"account\":\"me\",\"reason\":\"expiring-capacity\",\"weight\":0.1314156565728431},{\"account\":\"me2\",\"reason\":\"spill\",\"weight\":0.06004474132178892},{\"account\":\"iu\",\"reason\":\"fable-reserve\",\"weight\":0.16572815184059705}],\"at\":\"2027-01-15T08:00:00.000Z\"}\n"
- },
- "pick --dry --why bulk [modes/expiring]": {
-  "rc": 0,
-  "out": "export CLAUDE_CONFIG_DIR='/home/x/.claude-me'\n# picked=me reason=expiring-capacity stale=false\n"
- },
- "rank --json bulk [modes/expiring]": {
-  "rc": 0,
-  "out": "{\"lane\":\"bulk\",\"order\":[{\"account\":\"me\",\"reason\":\"expiring-capacity\",\"weight\":0.1314156565728431},{\"account\":\"me2\",\"reason\":\"home\",\"weight\":0.06004474132178892},{\"account\":\"iu\",\"reason\":\"fable-reserve\",\"weight\":0.16572815184059705}],\"at\":\"2027-01-15T08:00:00.000Z\"}\n"
- },
- "pick --dry --why lead [modes/expiring]": {
-  "rc": 0,
-  "out": "export CLAUDE_CONFIG_DIR='/home/x/.claude-me'\n# picked=me reason=expiring-capacity stale=false\n"
- },
- "rank --json lead [modes/expiring]": {
-  "rc": 0,
-  "out": "{\"lane\":\"lead\",\"order\":[{\"account\":\"me\",\"reason\":\"expiring-capacity\",\"weight\":0.1314156565728431},{\"account\":\"me2\",\"reason\":\"spill\",\"weight\":0.06004474132178892},{\"account\":\"iu\",\"reason\":\"fable-reserve\",\"weight\":0.16572815184059705}],\"at\":\"2027-01-15T08:00:00.000Z\"}\n"
- },
- "pick --dry --why wave:7 [modes/expiring]": {
-  "rc": 0,
-  "out": "export CLAUDE_CONFIG_DIR='/home/x/.claude-me'\n# picked=me reason=expiring-capacity stale=false\n"
- },
- "rank --json wave:7 [modes/expiring]": {
-  "rc": 0,
-  "out": "{\"lane\":\"wave:7\",\"order\":[{\"account\":\"me\",\"reason\":\"expiring-capacity\",\"weight\":0.1314156565728431},{\"account\":\"me2\",\"reason\":\"home\",\"weight\":0.06004474132178892},{\"account\":\"iu\",\"reason\":\"fable-reserve\",\"weight\":0.16572815184059705}],\"at\":\"2027-01-15T08:00:00.000Z\"}\n"
- },
- "pick --dry --why unknown-lane [modes/expiring]": {
-  "rc": 0,
-  "out": "export CLAUDE_CONFIG_DIR='/home/x/.claude-me'\n# picked=me reason=expiring-capacity stale=false\n"
- },
- "rank --json unknown-lane [modes/expiring]": {
-  "rc": 0,
-  "out": "{\"lane\":\"unknown-lane\",\"order\":[{\"account\":\"me\",\"reason\":\"expiring-capacity\",\"weight\":0.1314156565728431},{\"account\":\"me2\",\"reason\":\"spill\",\"weight\":0.06004474132178892},{\"account\":\"iu\",\"reason\":\"fable-reserve\",\"weight\":0.16572815184059705}],\"at\":\"2027-01-15T08:00:00.000Z\"}\n"
- },
- "rank text [modes/expiring]": {
-  "rc": 0,
-  "out": "1. me  expiring-capacity  w=0.131\n2. me2  home  w=0.060\n3. iu  fable-reserve  w=0.166\n"
- },
- "usage [modes/expiring]": {
-  "rc": 0,
-  "out": "iu ultra  7d 80% ↺01-16 16:00  age 60s  auth ok\nme max  5h 4% ↺01-15 11:00  7d 54% ↺01-17 06:00  age 60s  auth ok\nme2 max  5h 85% ↺01-15 11:00  7d 11% ↺01-20 18:00  age 60s  auth ok\n"
- },
- "usage --json [modes/expiring]": {
-  "rc": 0,
-  "out": "{\n  \"default_account\": \"iu\",\n  \"accounts\": [\n    {\n      \"id\": \"iu\",\n      \"plan\": \"ultra\",\n      \"session_limit\": false,\n      \"enabled\": true,\n      \"five_hour\": null,\n      \"seven_day\": 80,\n      \"five_hour_resets_at\": null,\n      \"seven_day_resets_at\": 1800115200,\n      \"age_s\": 60,\n      \"five_hour_age_s\": null,\n      \"seven_day_age_s\": 60,\n      \"source\": \"oauth\",\n      \"auth_ok\": true,\n      \"exhausted_until\": null\n    },\n    {\n      \"id\": \"me\",\n      \"plan\": \"max\",\n      \"session_limit\": true,\n      \"enabled\": true,\n      \"five_hour\": 4,\n      \"seven_day\": 54,\n      \"five_hour_resets_at\": 1800010800,\n      \"seven_day_resets_at\": 1800165600,\n      \"age_s\": 60,\n      \"five_hour_age_s\": 60,\n      \"seven_day_age_s\": 60,\n      \"source\": \"oauth\",\n      \"auth_ok\": true,\n      \"exhausted_until\": null\n    },\n    {\n      \"id\": \"me2\",\n      \"plan\": \"max\",\n      \"session_limit\": true,\n      \"enabled\": true,\n      \"five_hour\": 85,\n      \"seven_day\": 11,\n      \"five_hour_resets_at\": 1800010800,\n      \"seven_day_resets_at\": 1800468000,\n      \"age_s\": 60,\n      \"five_hour_age_s\": 60,\n      \"seven_day_age_s\": 60,\n      \"source\": \"oauth\",\n      \"auth_ok\": true,\n      \"exhausted_until\": null\n    }\n  ]\n}\n"
- },
- "expiry [modes/expiring]": {
-  "rc": 0,
-  "out": "iu  WARN  login valid until 2027-01-20 (5 d left)\nme  WARN  login valid until 2027-01-20 (5 d left)\nme2  WARN  login valid until 2027-01-20 (5 d left)\n"
- },
- "expiry --json [modes/expiring]": {
-  "rc": 0,
-  "out": "{\n  \"accounts\": [\n    {\n      \"id\": \"iu\",\n      \"default\": true,\n      \"grade\": \"WARN\",\n      \"severity\": \"WARN\",\n      \"refresh_expires_at\": 1800432000000,\n      \"access_expires_at\": 1800003600000,\n      \"tier\": \"default_claude_max_5x\",\n      \"plan_detected\": \"max\",\n      \"days_left\": 5,\n      \"expired\": false,\n      \"detail\": \"login valid until 2027-01-20 (5 d left)\"\n    },\n    {\n      \"id\": \"me\",\n      \"default\": false,\n      \"grade\": \"WARN\",\n      \"severity\": \"WARN\",\n      \"refresh_expires_at\": 1800432000000,\n      \"access_expires_at\": 1800003600000,\n      \"tier\": \"default_claude_max_5x\",\n      \"plan_detected\": \"max\",\n      \"days_left\": 5,\n      \"expired\": false,\n      \"detail\": \"login valid until 2027-01-20 (5 d left)\"\n    },\n    {\n      \"id\": \"me2\",\n      \"default\": false,\n      \"grade\": \"WARN\",\n      \"severity\": \"WARN\",\n      \"refresh_expires_at\": 1800432000000,\n      \"access_expires_at\": 1800003600000,\n      \"tier\": \"default_claude_max_5x\",\n      \"plan_detected\": \"max\",\n      \"days_left\": 5,\n      \"expired\": false,\n      \"detail\": \"login valid until 2027-01-20 (5 d left)\"\n    }\n  ]\n}\n"
- },
- "expiry --json --ids me [modes/expiring]": {
-  "rc": 0,
-  "out": "{\n  \"accounts\": [\n    {\n      \"id\": \"me\",\n      \"default\": false,\n      \"grade\": \"WARN\",\n      \"severity\": \"WARN\",\n      \"refresh_expires_at\": 1800432000000,\n      \"access_expires_at\": 1800003600000,\n      \"tier\": \"default_claude_max_5x\",\n      \"plan_detected\": \"max\",\n      \"days_left\": 5,\n      \"expired\": false,\n      \"detail\": \"login valid until 2027-01-20 (5 d left)\"\n    }\n  ]\n}\n"
- },
- "account [modes/expiring]": {
-  "rc": 0,
-  "out": "iu\n"
- },
- "account --badge [modes/expiring]": {
-  "rc": 0,
-  "out": "IU\n"
- },
- "fable [modes/expiring]": {
-  "rc": 0,
-  "out": "iu\n"
- },
- "env iu [modes/expiring]": {
-  "rc": 0,
-  "out": "unset CLAUDE_CONFIG_DIR\n"
- },
- "env me2 [modes/expiring]": {
-  "rc": 0,
-  "out": "export CLAUDE_CONFIG_DIR='/home/x/.claude-me2'\n"
- },
- "env nope [modes/expiring]": {
-  "rc": 2,
-  "out": ""
- },
- "account in a registered dir [modes/expiring]": {
-  "rc": 0,
-  "out": "ME2\n"
- },
- "account in an unknown dir [modes/expiring]": {
-  "rc": 0,
-  "out": "?\n"
- },
- "pick --dry --why interactive [modes/walled]": {
-  "rc": 0,
-  "out": "unset CLAUDE_CONFIG_DIR\n# picked=iu reason=fable-reserve stale=false\n"
- },
- "rank --json interactive [modes/walled]": {
-  "rc": 0,
-  "out": "{\"lane\":\"interactive\",\"order\":[{\"account\":\"iu\",\"reason\":\"fable-reserve\",\"weight\":0.022360679774997897}],\"at\":\"2027-01-15T08:00:00.000Z\"}\n"
- },
- "pick --dry --why headless [modes/walled]": {
-  "rc": 0,
-  "out": "unset CLAUDE_CONFIG_DIR\n# picked=iu reason=fable-reserve stale=false\n"
- },
- "rank --json headless [modes/walled]": {
-  "rc": 0,
-  "out": "{\"lane\":\"headless\",\"order\":[{\"account\":\"iu\",\"reason\":\"fable-reserve\",\"weight\":0.022360679774997897}],\"at\":\"2027-01-15T08:00:00.000Z\"}\n"
- },
- "pick --dry --why bulk [modes/walled]": {
-  "rc": 0,
-  "out": "unset CLAUDE_CONFIG_DIR\n# picked=iu reason=fable-reserve stale=false\n"
- },
- "rank --json bulk [modes/walled]": {
-  "rc": 0,
-  "out": "{\"lane\":\"bulk\",\"order\":[{\"account\":\"iu\",\"reason\":\"fable-reserve\",\"weight\":0.022360679774997897}],\"at\":\"2027-01-15T08:00:00.000Z\"}\n"
- },
- "pick --dry --why lead [modes/walled]": {
-  "rc": 0,
-  "out": "unset CLAUDE_CONFIG_DIR\n# picked=iu reason=fable-reserve stale=false\n"
- },
- "rank --json lead [modes/walled]": {
-  "rc": 0,
-  "out": "{\"lane\":\"lead\",\"order\":[{\"account\":\"iu\",\"reason\":\"fable-reserve\",\"weight\":0.022360679774997897}],\"at\":\"2027-01-15T08:00:00.000Z\"}\n"
- },
- "pick --dry --why wave:7 [modes/walled]": {
-  "rc": 0,
-  "out": "unset CLAUDE_CONFIG_DIR\n# picked=iu reason=fable-reserve stale=false\n"
- },
- "rank --json wave:7 [modes/walled]": {
-  "rc": 0,
-  "out": "{\"lane\":\"wave:7\",\"order\":[{\"account\":\"iu\",\"reason\":\"fable-reserve\",\"weight\":0.022360679774997897}],\"at\":\"2027-01-15T08:00:00.000Z\"}\n"
- },
- "pick --dry --why unknown-lane [modes/walled]": {
-  "rc": 0,
-  "out": "unset CLAUDE_CONFIG_DIR\n# picked=iu reason=fable-reserve stale=false\n"
- },
- "rank --json unknown-lane [modes/walled]": {
-  "rc": 0,
-  "out": "{\"lane\":\"unknown-lane\",\"order\":[{\"account\":\"iu\",\"reason\":\"fable-reserve\",\"weight\":0.022360679774997897}],\"at\":\"2027-01-15T08:00:00.000Z\"}\n"
- },
- "rank text [modes/walled]": {
-  "rc": 0,
-  "out": "1. iu  fable-reserve  w=0.022\n"
- },
- "usage [modes/walled]": {
-  "rc": 0,
-  "out": "iu ultra  7d 97% ↺01-16 04:00  age 60s  auth ok\nme max  5h 95% ↺01-15 11:00  7d 40% ↺01-19 02:00  age 60s  auth FAILED\nme2 max  5h 10% ↺01-15 11:00  7d 100% ↺01-17 20:00  age 400s  auth ok  EXHAUSTED\n"
- },
- "usage --json [modes/walled]": {
-  "rc": 0,
-  "out": "{\n  \"default_account\": \"iu\",\n  \"accounts\": [\n    {\n      \"id\": \"iu\",\n      \"plan\": \"ultra\",\n      \"session_limit\": false,\n      \"enabled\": true,\n      \"five_hour\": null,\n      \"seven_day\": 97,\n      \"five_hour_resets_at\": null,\n      \"seven_day_resets_at\": 1800072000,\n      \"age_s\": 60,\n      \"five_hour_age_s\": null,\n      \"seven_day_age_s\": 60,\n      \"source\": \"oauth\",\n      \"auth_ok\": true,\n      \"exhausted_until\": null\n    },\n    {\n      \"id\": \"me\",\n      \"plan\": \"max\",\n      \"session_limit\": true,\n      \"enabled\": true,\n      \"five_hour\": 95,\n      \"seven_day\": 40,\n      \"five_hour_resets_at\": 1800010800,\n      \"seven_day_resets_at\": 1800324000,\n      \"age_s\": 60,\n      \"five_hour_age_s\": 60,\n      \"seven_day_age_s\": 60,\n      \"source\": \"oauth\",\n      \"auth_ok\": false,\n      \"exhausted_until\": null\n    },\n    {\n      \"id\": \"me2\",\n      \"plan\": \"max\",\n      \"session_limit\": true,\n      \"enabled\": true,\n      \"five_hour\": 10,\n      \"seven_day\": 100,\n      \"five_hour_resets_at\": 1800010800,\n      \"seven_day_resets_at\": 1800216000,\n      \"age_s\": 400,\n      \"five_hour_age_s\": 400,\n      \"seven_day_age_s\": 400,\n      \"source\": \"oauth\",\n      \"auth_ok\": true,\n      \"exhausted_until\": 1800000600\n    }\n  ]\n}\n"
- },
- "expiry [modes/walled]": {
-  "rc": 0,
-  "out": "iu  WARN  login valid until 2027-01-20 (5 d left)\nme  WARN  login valid until 2027-01-20 (5 d left)\nme2  WARN  login valid until 2027-01-20 (5 d left)\n"
- },
- "expiry --json [modes/walled]": {
-  "rc": 0,
-  "out": "{\n  \"accounts\": [\n    {\n      \"id\": \"iu\",\n      \"default\": true,\n      \"grade\": \"WARN\",\n      \"severity\": \"WARN\",\n      \"refresh_expires_at\": 1800432000000,\n      \"access_expires_at\": 1800003600000,\n      \"tier\": \"default_claude_max_5x\",\n      \"plan_detected\": \"max\",\n      \"days_left\": 5,\n      \"expired\": false,\n      \"detail\": \"login valid until 2027-01-20 (5 d left)\"\n    },\n    {\n      \"id\": \"me\",\n      \"default\": false,\n      \"grade\": \"WARN\",\n      \"severity\": \"WARN\",\n      \"refresh_expires_at\": 1800432000000,\n      \"access_expires_at\": 1800003600000,\n      \"tier\": \"default_claude_max_5x\",\n      \"plan_detected\": \"max\",\n      \"days_left\": 5,\n      \"expired\": false,\n      \"detail\": \"login valid until 2027-01-20 (5 d left)\"\n    },\n    {\n      \"id\": \"me2\",\n      \"default\": false,\n      \"grade\": \"WARN\",\n      \"severity\": \"WARN\",\n      \"refresh_expires_at\": 1800432000000,\n      \"access_expires_at\": 1800003600000,\n      \"tier\": \"default_claude_max_5x\",\n      \"plan_detected\": \"max\",\n      \"days_left\": 5,\n      \"expired\": false,\n      \"detail\": \"login valid until 2027-01-20 (5 d left)\"\n    }\n  ]\n}\n"
- },
- "expiry --json --ids me [modes/walled]": {
-  "rc": 0,
-  "out": "{\n  \"accounts\": [\n    {\n      \"id\": \"me\",\n      \"default\": false,\n      \"grade\": \"WARN\",\n      \"severity\": \"WARN\",\n      \"refresh_expires_at\": 1800432000000,\n      \"access_expires_at\": 1800003600000,\n      \"tier\": \"default_claude_max_5x\",\n      \"plan_detected\": \"max\",\n      \"days_left\": 5,\n      \"expired\": false,\n      \"detail\": \"login valid until 2027-01-20 (5 d left)\"\n    }\n  ]\n}\n"
- },
- "account [modes/walled]": {
-  "rc": 0,
-  "out": "iu\n"
- },
- "account --badge [modes/walled]": {
-  "rc": 0,
-  "out": "IU\n"
- },
- "fable [modes/walled]": {
-  "rc": 0,
-  "out": "iu\n"
- },
- "env iu [modes/walled]": {
-  "rc": 0,
-  "out": "unset CLAUDE_CONFIG_DIR\n"
- },
- "env me2 [modes/walled]": {
-  "rc": 0,
-  "out": "export CLAUDE_CONFIG_DIR='/home/x/.claude-me2'\n"
- },
- "env nope [modes/walled]": {
-  "rc": 2,
-  "out": ""
- },
- "account in a registered dir [modes/walled]": {
-  "rc": 0,
-  "out": "ME2\n"
- },
- "account in an unknown dir [modes/walled]": {
-  "rc": 0,
-  "out": "?\n"
- },
- "pick --dry --why interactive [oneoff/calm]": {
-  "rc": 0,
-  "out": "unset CLAUDE_CONFIG_DIR\n# picked=iu reason=home stale=false\n"
- },
- "rank --json interactive [oneoff/calm]": {
-  "rc": 0,
-  "out": "{\"lane\":\"interactive\",\"order\":[{\"account\":\"iu\",\"reason\":\"home\",\"weight\":0.166},{\"account\":\"me2\",\"reason\":\"spill\",\"weight\":0.04572380853195266}],\"at\":\"2027-01-15T08:00:00.000Z\"}\n"
- },
- "pick --dry --why headless [oneoff/calm]": {
-  "rc": 0,
-  "out": "unset CLAUDE_CONFIG_DIR\n# picked=iu reason=home stale=false\n"
- },
- "rank --json headless [oneoff/calm]": {
-  "rc": 0,
-  "out": "{\"lane\":\"headless\",\"order\":[{\"account\":\"iu\",\"reason\":\"home\",\"weight\":0.166},{\"account\":\"me2\",\"reason\":\"spill\",\"weight\":0.04572380853195266}],\"at\":\"2027-01-15T08:00:00.000Z\"}\n"
- },
- "pick --dry --why bulk [oneoff/calm]": {
-  "rc": 0,
-  "out": "export CLAUDE_CONFIG_DIR='/home/x/.claude-me2'\n# picked=me2 reason=home stale=false\n"
- },
- "rank --json bulk [oneoff/calm]": {
-  "rc": 0,
-  "out": "{\"lane\":\"bulk\",\"order\":[{\"account\":\"me2\",\"reason\":\"home\",\"weight\":0.04572380853195266},{\"account\":\"iu\",\"reason\":\"spill\",\"weight\":0.166}],\"at\":\"2027-01-15T08:00:00.000Z\"}\n"
- },
- "pick --dry --why lead [oneoff/calm]": {
-  "rc": 0,
-  "out": "unset CLAUDE_CONFIG_DIR\n# picked=iu reason=spill stale=false\n"
- },
- "rank --json lead [oneoff/calm]": {
-  "rc": 0,
-  "out": "{\"lane\":\"lead\",\"order\":[{\"account\":\"iu\",\"reason\":\"spill\",\"weight\":0.166},{\"account\":\"me2\",\"reason\":\"spill\",\"weight\":0.04572380853195266}],\"at\":\"2027-01-15T08:00:00.000Z\"}\n"
- },
- "pick --dry --why wave:7 [oneoff/calm]": {
-  "rc": 0,
-  "out": "export CLAUDE_CONFIG_DIR='/home/x/.claude-me2'\n# picked=me2 reason=home stale=false\n"
- },
- "rank --json wave:7 [oneoff/calm]": {
-  "rc": 0,
-  "out": "{\"lane\":\"wave:7\",\"order\":[{\"account\":\"me2\",\"reason\":\"home\",\"weight\":0.04572380853195266},{\"account\":\"iu\",\"reason\":\"spill\",\"weight\":0.166}],\"at\":\"2027-01-15T08:00:00.000Z\"}\n"
- },
- "pick --dry --why unknown-lane [oneoff/calm]": {
-  "rc": 0,
-  "out": "unset CLAUDE_CONFIG_DIR\n# picked=iu reason=spill stale=false\n"
- },
- "rank --json unknown-lane [oneoff/calm]": {
-  "rc": 0,
-  "out": "{\"lane\":\"unknown-lane\",\"order\":[{\"account\":\"iu\",\"reason\":\"spill\",\"weight\":0.166},{\"account\":\"me2\",\"reason\":\"spill\",\"weight\":0.04572380853195266}],\"at\":\"2027-01-15T08:00:00.000Z\"}\n"
- },
- "rank text [oneoff/calm]": {
-  "rc": 0,
-  "out": "1. me2  home  w=0.046\n2. iu  spill  w=0.166\n"
- },
- "usage [oneoff/calm]": {
-  "rc": 0,
-  "out": "iu ultra  7d 12% ↺01-19 12:00  age 60s  auth ok\nme max (disabled)  5h 10% ↺01-15 11:00  7d 30% ↺01-20 08:00  age 60s  auth ok\nme2 max  5h 5% ↺01-15 11:00  7d 11% ↺01-21 14:00  age 60s  auth ok\n"
- },
- "usage --json [oneoff/calm]": {
-  "rc": 0,
-  "out": "{\n  \"default_account\": \"iu\",\n  \"accounts\": [\n    {\n      \"id\": \"iu\",\n      \"plan\": \"ultra\",\n      \"session_limit\": false,\n      \"enabled\": true,\n      \"five_hour\": null,\n      \"seven_day\": 12,\n      \"five_hour_resets_at\": null,\n      \"seven_day_resets_at\": 1800360000,\n      \"age_s\": 60,\n      \"five_hour_age_s\": null,\n      \"seven_day_age_s\": 60,\n      \"source\": \"oauth\",\n      \"auth_ok\": true,\n      \"exhausted_until\": null\n    },\n    {\n      \"id\": \"me\",\n      \"plan\": \"max\",\n      \"session_limit\": true,\n      \"enabled\": false,\n      \"five_hour\": 10,\n      \"seven_day\": 30,\n      \"five_hour_resets_at\": 1800010800,\n      \"seven_day_resets_at\": 1800432000,\n      \"age_s\": 60,\n      \"five_hour_age_s\": 60,\n      \"seven_day_age_s\": 60,\n      \"source\": \"oauth\",\n      \"auth_ok\": true,\n      \"exhausted_until\": null\n    },\n    {\n      \"id\": \"me2\",\n      \"plan\": \"max\",\n      \"session_limit\": true,\n      \"enabled\": true,\n      \"five_hour\": 5,\n      \"seven_day\": 11,\n      \"five_hour_resets_at\": 1800010800,\n      \"seven_day_resets_at\": 1800540000,\n      \"age_s\": 60,\n      \"five_hour_age_s\": 60,\n      \"seven_day_age_s\": 60,\n      \"source\": \"oauth\",\n      \"auth_ok\": true,\n      \"exhausted_until\": null\n    }\n  ]\n}\n"
- },
- "expiry [oneoff/calm]": {
-  "rc": 0,
-  "out": "iu  WARN  login valid until 2027-01-20 (5 d left)\nme2  WARN  login valid until 2027-01-20 (5 d left)\n"
- },
- "expiry --json [oneoff/calm]": {
-  "rc": 0,
-  "out": "{\n  \"accounts\": [\n    {\n      \"id\": \"iu\",\n      \"default\": true,\n      \"grade\": \"WARN\",\n      \"severity\": \"WARN\",\n      \"refresh_expires_at\": 1800432000000,\n      \"access_expires_at\": 1800003600000,\n      \"tier\": \"default_claude_max_5x\",\n      \"plan_detected\": \"max\",\n      \"days_left\": 5,\n      \"expired\": false,\n      \"detail\": \"login valid until 2027-01-20 (5 d left)\"\n    },\n    {\n      \"id\": \"me2\",\n      \"default\": false,\n      \"grade\": \"WARN\",\n      \"severity\": \"WARN\",\n      \"refresh_expires_at\": 1800432000000,\n      \"access_expires_at\": 1800003600000,\n      \"tier\": \"default_claude_max_5x\",\n      \"plan_detected\": \"max\",\n      \"days_left\": 5,\n      \"expired\": false,\n      \"detail\": \"login valid until 2027-01-20 (5 d left)\"\n    }\n  ]\n}\n"
- },
- "expiry --json --ids me [oneoff/calm]": {
-  "rc": 0,
-  "out": "{\n  \"accounts\": [\n    {\n      \"id\": \"me\",\n      \"default\": false,\n      \"grade\": \"WARN\",\n      \"severity\": \"WARN\",\n      \"refresh_expires_at\": 1800432000000,\n      \"access_expires_at\": 1800003600000,\n      \"tier\": \"default_claude_max_5x\",\n      \"plan_detected\": \"max\",\n      \"days_left\": 5,\n      \"expired\": false,\n      \"detail\": \"login valid until 2027-01-20 (5 d left)\"\n    }\n  ]\n}\n"
- },
- "account [oneoff/calm]": {
-  "rc": 0,
-  "out": "iu\n"
- },
- "account --badge [oneoff/calm]": {
-  "rc": 0,
-  "out": "IU\n"
- },
- "fable [oneoff/calm]": {
-  "rc": 0,
-  "out": "iu\n"
- },
- "env iu [oneoff/calm]": {
-  "rc": 0,
-  "out": "unset CLAUDE_CONFIG_DIR\n"
- },
- "env me2 [oneoff/calm]": {
-  "rc": 0,
-  "out": "export CLAUDE_CONFIG_DIR='/home/x/.claude-me2'\n"
- },
- "env nope [oneoff/calm]": {
-  "rc": 2,
-  "out": ""
- },
- "account in a registered dir [oneoff/calm]": {
-  "rc": 0,
-  "out": "ME2\n"
- },
- "account in an unknown dir [oneoff/calm]": {
-  "rc": 0,
-  "out": "?\n"
- },
- "pick --dry --why interactive [oneoff/expiring]": {
-  "rc": 0,
-  "out": "unset CLAUDE_CONFIG_DIR\n# picked=iu reason=home stale=false\n"
- },
- "rank --json interactive [oneoff/expiring]": {
-  "rc": 0,
-  "out": "{\"lane\":\"interactive\",\"order\":[{\"account\":\"iu\",\"reason\":\"home\",\"weight\":0.16572815184059705},{\"account\":\"me2\",\"reason\":\"spill\",\"weight\":0.05667144124753112}],\"at\":\"2027-01-15T08:00:00.000Z\"}\n"
- },
- "pick --dry --why headless [oneoff/expiring]": {
-  "rc": 0,
-  "out": "unset CLAUDE_CONFIG_DIR\n# picked=iu reason=expiring-capacity stale=false\n"
- },
- "rank --json headless [oneoff/expiring]": {
-  "rc": 0,
-  "out": "{\"lane\":\"headless\",\"order\":[{\"account\":\"iu\",\"reason\":\"expiring-capacity\",\"weight\":0.16572815184059705},{\"account\":\"me2\",\"reason\":\"spill\",\"weight\":0.05667144124753112}],\"at\":\"2027-01-15T08:00:00.000Z\"}\n"
- },
- "pick --dry --why bulk [oneoff/expiring]": {
-  "rc": 0,
-  "out": "unset CLAUDE_CONFIG_DIR\n# picked=iu reason=expiring-capacity stale=false\n"
- },
- "rank --json bulk [oneoff/expiring]": {
-  "rc": 0,
-  "out": "{\"lane\":\"bulk\",\"order\":[{\"account\":\"iu\",\"reason\":\"expiring-capacity\",\"weight\":0.16572815184059705},{\"account\":\"me2\",\"reason\":\"home\",\"weight\":0.05667144124753112}],\"at\":\"2027-01-15T08:00:00.000Z\"}\n"
- },
- "pick --dry --why lead [oneoff/expiring]": {
-  "rc": 0,
-  "out": "unset CLAUDE_CONFIG_DIR\n# picked=iu reason=expiring-capacity stale=false\n"
- },
- "rank --json lead [oneoff/expiring]": {
-  "rc": 0,
-  "out": "{\"lane\":\"lead\",\"order\":[{\"account\":\"iu\",\"reason\":\"expiring-capacity\",\"weight\":0.16572815184059705},{\"account\":\"me2\",\"reason\":\"spill\",\"weight\":0.05667144124753112}],\"at\":\"2027-01-15T08:00:00.000Z\"}\n"
- },
- "pick --dry --why wave:7 [oneoff/expiring]": {
-  "rc": 0,
-  "out": "unset CLAUDE_CONFIG_DIR\n# picked=iu reason=expiring-capacity stale=false\n"
- },
- "rank --json wave:7 [oneoff/expiring]": {
-  "rc": 0,
-  "out": "{\"lane\":\"wave:7\",\"order\":[{\"account\":\"iu\",\"reason\":\"expiring-capacity\",\"weight\":0.16572815184059705},{\"account\":\"me2\",\"reason\":\"home\",\"weight\":0.05667144124753112}],\"at\":\"2027-01-15T08:00:00.000Z\"}\n"
- },
- "pick --dry --why unknown-lane [oneoff/expiring]": {
-  "rc": 0,
-  "out": "unset CLAUDE_CONFIG_DIR\n# picked=iu reason=expiring-capacity stale=false\n"
- },
- "rank --json unknown-lane [oneoff/expiring]": {
-  "rc": 0,
-  "out": "{\"lane\":\"unknown-lane\",\"order\":[{\"account\":\"iu\",\"reason\":\"expiring-capacity\",\"weight\":0.16572815184059705},{\"account\":\"me2\",\"reason\":\"spill\",\"weight\":0.05667144124753112}],\"at\":\"2027-01-15T08:00:00.000Z\"}\n"
- },
- "rank text [oneoff/expiring]": {
-  "rc": 0,
-  "out": "1. iu  expiring-capacity  w=0.166\n2. me2  home  w=0.057\n"
- },
- "usage [oneoff/expiring]": {
-  "rc": 0,
-  "out": "iu ultra  7d 80% ↺01-16 16:00  age 60s  auth ok\nme max (disabled)  5h 4% ↺01-15 11:00  7d 54% ↺01-17 06:00  age 60s  auth ok\nme2 max  5h 85% ↺01-15 11:00  7d 11% ↺01-20 18:00  age 60s  auth ok\n"
- },
- "usage --json [oneoff/expiring]": {
-  "rc": 0,
-  "out": "{\n  \"default_account\": \"iu\",\n  \"accounts\": [\n    {\n      \"id\": \"iu\",\n      \"plan\": \"ultra\",\n      \"session_limit\": false,\n      \"enabled\": true,\n      \"five_hour\": null,\n      \"seven_day\": 80,\n      \"five_hour_resets_at\": null,\n      \"seven_day_resets_at\": 1800115200,\n      \"age_s\": 60,\n      \"five_hour_age_s\": null,\n      \"seven_day_age_s\": 60,\n      \"source\": \"oauth\",\n      \"auth_ok\": true,\n      \"exhausted_until\": null\n    },\n    {\n      \"id\": \"me\",\n      \"plan\": \"max\",\n      \"session_limit\": true,\n      \"enabled\": false,\n      \"five_hour\": 4,\n      \"seven_day\": 54,\n      \"five_hour_resets_at\": 1800010800,\n      \"seven_day_resets_at\": 1800165600,\n      \"age_s\": 60,\n      \"five_hour_age_s\": 60,\n      \"seven_day_age_s\": 60,\n      \"source\": \"oauth\",\n      \"auth_ok\": true,\n      \"exhausted_until\": null\n    },\n    {\n      \"id\": \"me2\",\n      \"plan\": \"max\",\n      \"session_limit\": true,\n      \"enabled\": true,\n      \"five_hour\": 85,\n      \"seven_day\": 11,\n      \"five_hour_resets_at\": 1800010800,\n      \"seven_day_resets_at\": 1800468000,\n      \"age_s\": 60,\n      \"five_hour_age_s\": 60,\n      \"seven_day_age_s\": 60,\n      \"source\": \"oauth\",\n      \"auth_ok\": true,\n      \"exhausted_until\": null\n    }\n  ]\n}\n"
- },
- "expiry [oneoff/expiring]": {
-  "rc": 0,
-  "out": "iu  WARN  login valid until 2027-01-20 (5 d left)\nme2  WARN  login valid until 2027-01-20 (5 d left)\n"
- },
- "expiry --json [oneoff/expiring]": {
-  "rc": 0,
-  "out": "{\n  \"accounts\": [\n    {\n      \"id\": \"iu\",\n      \"default\": true,\n      \"grade\": \"WARN\",\n      \"severity\": \"WARN\",\n      \"refresh_expires_at\": 1800432000000,\n      \"access_expires_at\": 1800003600000,\n      \"tier\": \"default_claude_max_5x\",\n      \"plan_detected\": \"max\",\n      \"days_left\": 5,\n      \"expired\": false,\n      \"detail\": \"login valid until 2027-01-20 (5 d left)\"\n    },\n    {\n      \"id\": \"me2\",\n      \"default\": false,\n      \"grade\": \"WARN\",\n      \"severity\": \"WARN\",\n      \"refresh_expires_at\": 1800432000000,\n      \"access_expires_at\": 1800003600000,\n      \"tier\": \"default_claude_max_5x\",\n      \"plan_detected\": \"max\",\n      \"days_left\": 5,\n      \"expired\": false,\n      \"detail\": \"login valid until 2027-01-20 (5 d left)\"\n    }\n  ]\n}\n"
- },
- "expiry --json --ids me [oneoff/expiring]": {
-  "rc": 0,
-  "out": "{\n  \"accounts\": [\n    {\n      \"id\": \"me\",\n      \"default\": false,\n      \"grade\": \"WARN\",\n      \"severity\": \"WARN\",\n      \"refresh_expires_at\": 1800432000000,\n      \"access_expires_at\": 1800003600000,\n      \"tier\": \"default_claude_max_5x\",\n      \"plan_detected\": \"max\",\n      \"days_left\": 5,\n      \"expired\": false,\n      \"detail\": \"login valid until 2027-01-20 (5 d left)\"\n    }\n  ]\n}\n"
- },
- "account [oneoff/expiring]": {
-  "rc": 0,
-  "out": "iu\n"
- },
- "account --badge [oneoff/expiring]": {
-  "rc": 0,
-  "out": "IU\n"
- },
- "fable [oneoff/expiring]": {
-  "rc": 0,
-  "out": "iu\n"
- },
- "env iu [oneoff/expiring]": {
-  "rc": 0,
-  "out": "unset CLAUDE_CONFIG_DIR\n"
- },
- "env me2 [oneoff/expiring]": {
-  "rc": 0,
-  "out": "export CLAUDE_CONFIG_DIR='/home/x/.claude-me2'\n"
- },
- "env nope [oneoff/expiring]": {
-  "rc": 2,
-  "out": ""
- },
- "account in a registered dir [oneoff/expiring]": {
-  "rc": 0,
-  "out": "ME2\n"
- },
- "account in an unknown dir [oneoff/expiring]": {
-  "rc": 0,
-  "out": "?\n"
- },
- "pick --dry --why interactive [oneoff/walled]": {
-  "rc": 0,
-  "out": "unset CLAUDE_CONFIG_DIR\n# picked=iu reason=home stale=false\n"
- },
- "rank --json interactive [oneoff/walled]": {
-  "rc": 0,
-  "out": "{\"lane\":\"interactive\",\"order\":[{\"account\":\"iu\",\"reason\":\"home\",\"weight\":0.022360679774997897}],\"at\":\"2027-01-15T08:00:00.000Z\"}\n"
- },
- "pick --dry --why headless [oneoff/walled]": {
-  "rc": 0,
-  "out": "unset CLAUDE_CONFIG_DIR\n# picked=iu reason=expiring-capacity stale=false\n"
- },
- "rank --json headless [oneoff/walled]": {
-  "rc": 0,
-  "out": "{\"lane\":\"headless\",\"order\":[{\"account\":\"iu\",\"reason\":\"expiring-capacity\",\"weight\":0.022360679774997897}],\"at\":\"2027-01-15T08:00:00.000Z\"}\n"
- },
- "pick --dry --why bulk [oneoff/walled]": {
-  "rc": 0,
-  "out": "unset CLAUDE_CONFIG_DIR\n# picked=iu reason=expiring-capacity stale=false\n"
- },
- "rank --json bulk [oneoff/walled]": {
-  "rc": 0,
-  "out": "{\"lane\":\"bulk\",\"order\":[{\"account\":\"iu\",\"reason\":\"expiring-capacity\",\"weight\":0.022360679774997897}],\"at\":\"2027-01-15T08:00:00.000Z\"}\n"
- },
- "pick --dry --why lead [oneoff/walled]": {
-  "rc": 0,
-  "out": "unset CLAUDE_CONFIG_DIR\n# picked=iu reason=expiring-capacity stale=false\n"
- },
- "rank --json lead [oneoff/walled]": {
-  "rc": 0,
-  "out": "{\"lane\":\"lead\",\"order\":[{\"account\":\"iu\",\"reason\":\"expiring-capacity\",\"weight\":0.022360679774997897}],\"at\":\"2027-01-15T08:00:00.000Z\"}\n"
- },
- "pick --dry --why wave:7 [oneoff/walled]": {
-  "rc": 0,
-  "out": "unset CLAUDE_CONFIG_DIR\n# picked=iu reason=expiring-capacity stale=false\n"
- },
- "rank --json wave:7 [oneoff/walled]": {
-  "rc": 0,
-  "out": "{\"lane\":\"wave:7\",\"order\":[{\"account\":\"iu\",\"reason\":\"expiring-capacity\",\"weight\":0.022360679774997897}],\"at\":\"2027-01-15T08:00:00.000Z\"}\n"
- },
- "pick --dry --why unknown-lane [oneoff/walled]": {
-  "rc": 0,
-  "out": "unset CLAUDE_CONFIG_DIR\n# picked=iu reason=expiring-capacity stale=false\n"
- },
- "rank --json unknown-lane [oneoff/walled]": {
-  "rc": 0,
-  "out": "{\"lane\":\"unknown-lane\",\"order\":[{\"account\":\"iu\",\"reason\":\"expiring-capacity\",\"weight\":0.022360679774997897}],\"at\":\"2027-01-15T08:00:00.000Z\"}\n"
- },
- "rank text [oneoff/walled]": {
-  "rc": 0,
-  "out": "1. iu  expiring-capacity  w=0.022\n"
- },
- "usage [oneoff/walled]": {
-  "rc": 0,
-  "out": "iu ultra  7d 97% ↺01-16 04:00  age 60s  auth ok\nme max (disabled)  5h 95% ↺01-15 11:00  7d 40% ↺01-19 02:00  age 60s  auth FAILED\nme2 max  5h 10% ↺01-15 11:00  7d 100% ↺01-17 20:00  age 400s  auth ok  EXHAUSTED\n"
- },
- "usage --json [oneoff/walled]": {
-  "rc": 0,
-  "out": "{\n  \"default_account\": \"iu\",\n  \"accounts\": [\n    {\n      \"id\": \"iu\",\n      \"plan\": \"ultra\",\n      \"session_limit\": false,\n      \"enabled\": true,\n      \"five_hour\": null,\n      \"seven_day\": 97,\n      \"five_hour_resets_at\": null,\n      \"seven_day_resets_at\": 1800072000,\n      \"age_s\": 60,\n      \"five_hour_age_s\": null,\n      \"seven_day_age_s\": 60,\n      \"source\": \"oauth\",\n      \"auth_ok\": true,\n      \"exhausted_until\": null\n    },\n    {\n      \"id\": \"me\",\n      \"plan\": \"max\",\n      \"session_limit\": true,\n      \"enabled\": false,\n      \"five_hour\": 95,\n      \"seven_day\": 40,\n      \"five_hour_resets_at\": 1800010800,\n      \"seven_day_resets_at\": 1800324000,\n      \"age_s\": 60,\n      \"five_hour_age_s\": 60,\n      \"seven_day_age_s\": 60,\n      \"source\": \"oauth\",\n      \"auth_ok\": false,\n      \"exhausted_until\": null\n    },\n    {\n      \"id\": \"me2\",\n      \"plan\": \"max\",\n      \"session_limit\": true,\n      \"enabled\": true,\n      \"five_hour\": 10,\n      \"seven_day\": 100,\n      \"five_hour_resets_at\": 1800010800,\n      \"seven_day_resets_at\": 1800216000,\n      \"age_s\": 400,\n      \"five_hour_age_s\": 400,\n      \"seven_day_age_s\": 400,\n      \"source\": \"oauth\",\n      \"auth_ok\": true,\n      \"exhausted_until\": 1800000600\n    }\n  ]\n}\n"
- },
- "expiry [oneoff/walled]": {
-  "rc": 0,
-  "out": "iu  WARN  login valid until 2027-01-20 (5 d left)\nme2  WARN  login valid until 2027-01-20 (5 d left)\n"
- },
- "expiry --json [oneoff/walled]": {
-  "rc": 0,
-  "out": "{\n  \"accounts\": [\n    {\n      \"id\": \"iu\",\n      \"default\": true,\n      \"grade\": \"WARN\",\n      \"severity\": \"WARN\",\n      \"refresh_expires_at\": 1800432000000,\n      \"access_expires_at\": 1800003600000,\n      \"tier\": \"default_claude_max_5x\",\n      \"plan_detected\": \"max\",\n      \"days_left\": 5,\n      \"expired\": false,\n      \"detail\": \"login valid until 2027-01-20 (5 d left)\"\n    },\n    {\n      \"id\": \"me2\",\n      \"default\": false,\n      \"grade\": \"WARN\",\n      \"severity\": \"WARN\",\n      \"refresh_expires_at\": 1800432000000,\n      \"access_expires_at\": 1800003600000,\n      \"tier\": \"default_claude_max_5x\",\n      \"plan_detected\": \"max\",\n      \"days_left\": 5,\n      \"expired\": false,\n      \"detail\": \"login valid until 2027-01-20 (5 d left)\"\n    }\n  ]\n}\n"
- },
- "expiry --json --ids me [oneoff/walled]": {
-  "rc": 0,
-  "out": "{\n  \"accounts\": [\n    {\n      \"id\": \"me\",\n      \"default\": false,\n      \"grade\": \"WARN\",\n      \"severity\": \"WARN\",\n      \"refresh_expires_at\": 1800432000000,\n      \"access_expires_at\": 1800003600000,\n      \"tier\": \"default_claude_max_5x\",\n      \"plan_detected\": \"max\",\n      \"days_left\": 5,\n      \"expired\": false,\n      \"detail\": \"login valid until 2027-01-20 (5 d left)\"\n    }\n  ]\n}\n"
- },
- "account [oneoff/walled]": {
-  "rc": 0,
-  "out": "iu\n"
- },
- "account --badge [oneoff/walled]": {
-  "rc": 0,
-  "out": "IU\n"
- },
- "fable [oneoff/walled]": {
-  "rc": 0,
-  "out": "iu\n"
- },
- "env iu [oneoff/walled]": {
-  "rc": 0,
-  "out": "unset CLAUDE_CONFIG_DIR\n"
- },
- "env me2 [oneoff/walled]": {
-  "rc": 0,
-  "out": "export CLAUDE_CONFIG_DIR='/home/x/.claude-me2'\n"
- },
- "env nope [oneoff/walled]": {
-  "rc": 2,
-  "out": ""
- },
- "account in a registered dir [oneoff/walled]": {
-  "rc": 0,
-  "out": "ME2\n"
- },
- "account in an unknown dir [oneoff/walled]": {
-  "rc": 0,
-  "out": "?\n"
- },
- "pick interactive [oneoff/calm]": {
-  "rc": 0,
-  "out": "unset CLAUDE_CONFIG_DIR\n",
-  "state": {
-   "iu.sample.json": "{\"s\":null,\"w\":12,\"s_reset\":null,\"w_reset\":1800360000,\"s_ts\":null,\"w_ts\":1799999940000,\"src\":\"oauth\"}",
-   "me.sample.json": "{\"s\":10,\"w\":30,\"s_reset\":1800010800,\"w_reset\":1800432000,\"s_ts\":1799999940000,\"w_ts\":1799999940000,\"src\":\"oauth\"}",
-   "me2.sample.json": "{\"s\":5,\"w\":11,\"s_reset\":1800010800,\"w_reset\":1800540000,\"s_ts\":1799999940000,\"w_ts\":1799999940000,\"src\":\"oauth\"}",
-   "picks.jsonl": "{\"ts\":\"2027-01-15T08:00:00.000Z\",\"lane\":\"interactive\",\"picked\":\"iu\",\"reason\":\"home\",\"stale\":false,\"iu\":{\"s\":null,\"w\":12},\"me\":{\"s\":10,\"w\":30},\"me2\":{\"s\":5,\"w\":11}}\n"
+  "pick --dry --why interactive [plain/calm]": {
+    "rc": 0,
+    "out": "unset CLAUDE_CONFIG_DIR\n# picked=iu reason=home stale=false\n"
+  },
+  "rank --json interactive [plain/calm]": {
+    "rc": 0,
+    "out": "{\"lane\":\"interactive\",\"order\":[{\"account\":\"iu\",\"reason\":\"home\",\"weight\":0.166},{\"account\":\"me\",\"reason\":\"spill\",\"weight\":0.0494471753303275},{\"account\":\"me2\",\"reason\":\"spill\",\"weight\":0.04572380853195266}],\"at\":\"2027-01-15T08:00:00.000Z\"}\n"
+  },
+  "pick --dry --why headless [plain/calm]": {
+    "rc": 0,
+    "out": "unset CLAUDE_CONFIG_DIR\n# picked=iu reason=home stale=false\n"
+  },
+  "rank --json headless [plain/calm]": {
+    "rc": 0,
+    "out": "{\"lane\":\"headless\",\"order\":[{\"account\":\"iu\",\"reason\":\"home\",\"weight\":0.166},{\"account\":\"me\",\"reason\":\"spill\",\"weight\":0.0494471753303275},{\"account\":\"me2\",\"reason\":\"spill\",\"weight\":0.04572380853195266}],\"at\":\"2027-01-15T08:00:00.000Z\"}\n"
+  },
+  "pick --dry --why bulk [plain/calm]": {
+    "rc": 0,
+    "out": "export CLAUDE_CONFIG_DIR='/home/x/.claude-me'\n# picked=me reason=home stale=false\n"
+  },
+  "rank --json bulk [plain/calm]": {
+    "rc": 0,
+    "out": "{\"lane\":\"bulk\",\"order\":[{\"account\":\"me\",\"reason\":\"home\",\"weight\":0.0494471753303275},{\"account\":\"me2\",\"reason\":\"home\",\"weight\":0.04572380853195266},{\"account\":\"iu\",\"reason\":\"spill\",\"weight\":0.166}],\"at\":\"2027-01-15T08:00:00.000Z\"}\n"
+  },
+  "pick --dry --why lead [plain/calm]": {
+    "rc": 0,
+    "out": "unset CLAUDE_CONFIG_DIR\n# picked=iu reason=spill stale=false\n"
+  },
+  "rank --json lead [plain/calm]": {
+    "rc": 0,
+    "out": "{\"lane\":\"lead\",\"order\":[{\"account\":\"iu\",\"reason\":\"spill\",\"weight\":0.166},{\"account\":\"me\",\"reason\":\"spill\",\"weight\":0.0494471753303275},{\"account\":\"me2\",\"reason\":\"spill\",\"weight\":0.04572380853195266}],\"at\":\"2027-01-15T08:00:00.000Z\"}\n"
+  },
+  "pick --dry --why batch:7 [plain/calm]": {
+    "rc": 0,
+    "out": "export CLAUDE_CONFIG_DIR='/home/x/.claude-me2'\n# picked=me2 reason=home stale=false\n"
+  },
+  "rank --json batch:7 [plain/calm]": {
+    "rc": 0,
+    "out": "{\"lane\":\"batch:7\",\"order\":[{\"account\":\"me2\",\"reason\":\"home\",\"weight\":0.04572380853195266},{\"account\":\"iu\",\"reason\":\"spill\",\"weight\":0.166},{\"account\":\"me\",\"reason\":\"spill\",\"weight\":0.0494471753303275}],\"at\":\"2027-01-15T08:00:00.000Z\"}\n"
+  },
+  "pick --dry --why unknown-lane [plain/calm]": {
+    "rc": 0,
+    "out": "unset CLAUDE_CONFIG_DIR\n# picked=iu reason=spill stale=false\n"
+  },
+  "rank --json unknown-lane [plain/calm]": {
+    "rc": 0,
+    "out": "{\"lane\":\"unknown-lane\",\"order\":[{\"account\":\"iu\",\"reason\":\"spill\",\"weight\":0.166},{\"account\":\"me\",\"reason\":\"spill\",\"weight\":0.0494471753303275},{\"account\":\"me2\",\"reason\":\"spill\",\"weight\":0.04572380853195266}],\"at\":\"2027-01-15T08:00:00.000Z\"}\n"
+  },
+  "rank text [plain/calm]": {
+    "rc": 0,
+    "out": "1. me  home  w=0.049\n2. me2  home  w=0.046\n3. iu  spill  w=0.166\n"
+  },
+  "usage [plain/calm]": {
+    "rc": 0,
+    "out": "iu ultra  7d 12% ↺01-19 12:00  age 60s  auth ok\nme max  5h 10% ↺01-15 11:00  7d 30% ↺01-20 08:00  age 60s  auth ok\nme2 max  5h 5% ↺01-15 11:00  7d 11% ↺01-21 14:00  age 60s  auth ok\n"
+  },
+  "usage --json [plain/calm]": {
+    "rc": 0,
+    "out": "{\n  \"default_account\": \"iu\",\n  \"accounts\": [\n    {\n      \"id\": \"iu\",\n      \"plan\": \"ultra\",\n      \"session_limit\": false,\n      \"enabled\": true,\n      \"five_hour\": null,\n      \"seven_day\": 12,\n      \"five_hour_resets_at\": null,\n      \"seven_day_resets_at\": 1800360000,\n      \"age_s\": 60,\n      \"five_hour_age_s\": null,\n      \"seven_day_age_s\": 60,\n      \"source\": \"oauth\",\n      \"auth_ok\": true,\n      \"exhausted_until\": null\n    },\n    {\n      \"id\": \"me\",\n      \"plan\": \"max\",\n      \"session_limit\": true,\n      \"enabled\": true,\n      \"five_hour\": 10,\n      \"seven_day\": 30,\n      \"five_hour_resets_at\": 1800010800,\n      \"seven_day_resets_at\": 1800432000,\n      \"age_s\": 60,\n      \"five_hour_age_s\": 60,\n      \"seven_day_age_s\": 60,\n      \"source\": \"oauth\",\n      \"auth_ok\": true,\n      \"exhausted_until\": null\n    },\n    {\n      \"id\": \"me2\",\n      \"plan\": \"max\",\n      \"session_limit\": true,\n      \"enabled\": true,\n      \"five_hour\": 5,\n      \"seven_day\": 11,\n      \"five_hour_resets_at\": 1800010800,\n      \"seven_day_resets_at\": 1800540000,\n      \"age_s\": 60,\n      \"five_hour_age_s\": 60,\n      \"seven_day_age_s\": 60,\n      \"source\": \"oauth\",\n      \"auth_ok\": true,\n      \"exhausted_until\": null\n    }\n  ]\n}\n"
+  },
+  "expiry [plain/calm]": {
+    "rc": 0,
+    "out": "iu  WARN  login valid until 2027-01-20 (5 d left)\nme  WARN  login valid until 2027-01-20 (5 d left)\nme2  WARN  login valid until 2027-01-20 (5 d left)\n"
+  },
+  "expiry --json [plain/calm]": {
+    "rc": 0,
+    "out": "{\n  \"accounts\": [\n    {\n      \"id\": \"iu\",\n      \"default\": true,\n      \"grade\": \"WARN\",\n      \"severity\": \"WARN\",\n      \"refresh_expires_at\": 1800432000000,\n      \"access_expires_at\": 1800003600000,\n      \"tier\": \"default_claude_max_5x\",\n      \"plan_detected\": \"max\",\n      \"days_left\": 5,\n      \"expired\": false,\n      \"detail\": \"login valid until 2027-01-20 (5 d left)\"\n    },\n    {\n      \"id\": \"me\",\n      \"default\": false,\n      \"grade\": \"WARN\",\n      \"severity\": \"WARN\",\n      \"refresh_expires_at\": 1800432000000,\n      \"access_expires_at\": 1800003600000,\n      \"tier\": \"default_claude_max_5x\",\n      \"plan_detected\": \"max\",\n      \"days_left\": 5,\n      \"expired\": false,\n      \"detail\": \"login valid until 2027-01-20 (5 d left)\"\n    },\n    {\n      \"id\": \"me2\",\n      \"default\": false,\n      \"grade\": \"WARN\",\n      \"severity\": \"WARN\",\n      \"refresh_expires_at\": 1800432000000,\n      \"access_expires_at\": 1800003600000,\n      \"tier\": \"default_claude_max_5x\",\n      \"plan_detected\": \"max\",\n      \"days_left\": 5,\n      \"expired\": false,\n      \"detail\": \"login valid until 2027-01-20 (5 d left)\"\n    }\n  ]\n}\n"
+  },
+  "expiry --json --ids me [plain/calm]": {
+    "rc": 0,
+    "out": "{\n  \"accounts\": [\n    {\n      \"id\": \"me\",\n      \"default\": false,\n      \"grade\": \"WARN\",\n      \"severity\": \"WARN\",\n      \"refresh_expires_at\": 1800432000000,\n      \"access_expires_at\": 1800003600000,\n      \"tier\": \"default_claude_max_5x\",\n      \"plan_detected\": \"max\",\n      \"days_left\": 5,\n      \"expired\": false,\n      \"detail\": \"login valid until 2027-01-20 (5 d left)\"\n    }\n  ]\n}\n"
+  },
+  "account [plain/calm]": {
+    "rc": 0,
+    "out": "iu\n"
+  },
+  "account --badge [plain/calm]": {
+    "rc": 0,
+    "out": "IU\n"
+  },
+  "fable [plain/calm]": {
+    "rc": 0,
+    "out": "iu\n"
+  },
+  "env iu [plain/calm]": {
+    "rc": 0,
+    "out": "unset CLAUDE_CONFIG_DIR\n"
+  },
+  "env me2 [plain/calm]": {
+    "rc": 0,
+    "out": "export CLAUDE_CONFIG_DIR='/home/x/.claude-me2'\n"
+  },
+  "env nope [plain/calm]": {
+    "rc": 2,
+    "out": ""
+  },
+  "account in a registered dir [plain/calm]": {
+    "rc": 0,
+    "out": "ME2\n"
+  },
+  "account in an unknown dir [plain/calm]": {
+    "rc": 0,
+    "out": "?\n"
+  },
+  "pick --dry --why interactive [plain/expiring]": {
+    "rc": 0,
+    "out": "unset CLAUDE_CONFIG_DIR\n# picked=iu reason=home stale=false\n"
+  },
+  "rank --json interactive [plain/expiring]": {
+    "rc": 0,
+    "out": "{\"lane\":\"interactive\",\"order\":[{\"account\":\"iu\",\"reason\":\"home\",\"weight\":0.16572815184059705},{\"account\":\"me\",\"reason\":\"spill\",\"weight\":0.1314156565728431},{\"account\":\"me2\",\"reason\":\"spill\",\"weight\":0.05667144124753112}],\"at\":\"2027-01-15T08:00:00.000Z\"}\n"
+  },
+  "pick --dry --why headless [plain/expiring]": {
+    "rc": 0,
+    "out": "unset CLAUDE_CONFIG_DIR\n# picked=iu reason=expiring-capacity stale=false\n"
+  },
+  "rank --json headless [plain/expiring]": {
+    "rc": 0,
+    "out": "{\"lane\":\"headless\",\"order\":[{\"account\":\"iu\",\"reason\":\"expiring-capacity\",\"weight\":0.16572815184059705},{\"account\":\"me\",\"reason\":\"expiring-capacity\",\"weight\":0.1314156565728431},{\"account\":\"me2\",\"reason\":\"spill\",\"weight\":0.05667144124753112}],\"at\":\"2027-01-15T08:00:00.000Z\"}\n"
+  },
+  "pick --dry --why bulk [plain/expiring]": {
+    "rc": 0,
+    "out": "unset CLAUDE_CONFIG_DIR\n# picked=iu reason=expiring-capacity stale=false\n"
+  },
+  "rank --json bulk [plain/expiring]": {
+    "rc": 0,
+    "out": "{\"lane\":\"bulk\",\"order\":[{\"account\":\"iu\",\"reason\":\"expiring-capacity\",\"weight\":0.16572815184059705},{\"account\":\"me\",\"reason\":\"expiring-capacity\",\"weight\":0.1314156565728431},{\"account\":\"me2\",\"reason\":\"home\",\"weight\":0.05667144124753112}],\"at\":\"2027-01-15T08:00:00.000Z\"}\n"
+  },
+  "pick --dry --why lead [plain/expiring]": {
+    "rc": 0,
+    "out": "unset CLAUDE_CONFIG_DIR\n# picked=iu reason=expiring-capacity stale=false\n"
+  },
+  "rank --json lead [plain/expiring]": {
+    "rc": 0,
+    "out": "{\"lane\":\"lead\",\"order\":[{\"account\":\"iu\",\"reason\":\"expiring-capacity\",\"weight\":0.16572815184059705},{\"account\":\"me\",\"reason\":\"expiring-capacity\",\"weight\":0.1314156565728431},{\"account\":\"me2\",\"reason\":\"spill\",\"weight\":0.05667144124753112}],\"at\":\"2027-01-15T08:00:00.000Z\"}\n"
+  },
+  "pick --dry --why batch:7 [plain/expiring]": {
+    "rc": 0,
+    "out": "unset CLAUDE_CONFIG_DIR\n# picked=iu reason=expiring-capacity stale=false\n"
+  },
+  "rank --json batch:7 [plain/expiring]": {
+    "rc": 0,
+    "out": "{\"lane\":\"batch:7\",\"order\":[{\"account\":\"iu\",\"reason\":\"expiring-capacity\",\"weight\":0.16572815184059705},{\"account\":\"me\",\"reason\":\"expiring-capacity\",\"weight\":0.1314156565728431},{\"account\":\"me2\",\"reason\":\"home\",\"weight\":0.05667144124753112}],\"at\":\"2027-01-15T08:00:00.000Z\"}\n"
+  },
+  "pick --dry --why unknown-lane [plain/expiring]": {
+    "rc": 0,
+    "out": "unset CLAUDE_CONFIG_DIR\n# picked=iu reason=expiring-capacity stale=false\n"
+  },
+  "rank --json unknown-lane [plain/expiring]": {
+    "rc": 0,
+    "out": "{\"lane\":\"unknown-lane\",\"order\":[{\"account\":\"iu\",\"reason\":\"expiring-capacity\",\"weight\":0.16572815184059705},{\"account\":\"me\",\"reason\":\"expiring-capacity\",\"weight\":0.1314156565728431},{\"account\":\"me2\",\"reason\":\"spill\",\"weight\":0.05667144124753112}],\"at\":\"2027-01-15T08:00:00.000Z\"}\n"
+  },
+  "rank text [plain/expiring]": {
+    "rc": 0,
+    "out": "1. iu  expiring-capacity  w=0.166\n2. me  expiring-capacity  w=0.131\n3. me2  home  w=0.057\n"
+  },
+  "usage [plain/expiring]": {
+    "rc": 0,
+    "out": "iu ultra  7d 80% ↺01-16 16:00  age 60s  auth ok\nme max  5h 4% ↺01-15 11:00  7d 54% ↺01-17 06:00  age 60s  auth ok\nme2 max  5h 85% ↺01-15 11:00  7d 11% ↺01-20 18:00  age 60s  auth ok\n"
+  },
+  "usage --json [plain/expiring]": {
+    "rc": 0,
+    "out": "{\n  \"default_account\": \"iu\",\n  \"accounts\": [\n    {\n      \"id\": \"iu\",\n      \"plan\": \"ultra\",\n      \"session_limit\": false,\n      \"enabled\": true,\n      \"five_hour\": null,\n      \"seven_day\": 80,\n      \"five_hour_resets_at\": null,\n      \"seven_day_resets_at\": 1800115200,\n      \"age_s\": 60,\n      \"five_hour_age_s\": null,\n      \"seven_day_age_s\": 60,\n      \"source\": \"oauth\",\n      \"auth_ok\": true,\n      \"exhausted_until\": null\n    },\n    {\n      \"id\": \"me\",\n      \"plan\": \"max\",\n      \"session_limit\": true,\n      \"enabled\": true,\n      \"five_hour\": 4,\n      \"seven_day\": 54,\n      \"five_hour_resets_at\": 1800010800,\n      \"seven_day_resets_at\": 1800165600,\n      \"age_s\": 60,\n      \"five_hour_age_s\": 60,\n      \"seven_day_age_s\": 60,\n      \"source\": \"oauth\",\n      \"auth_ok\": true,\n      \"exhausted_until\": null\n    },\n    {\n      \"id\": \"me2\",\n      \"plan\": \"max\",\n      \"session_limit\": true,\n      \"enabled\": true,\n      \"five_hour\": 85,\n      \"seven_day\": 11,\n      \"five_hour_resets_at\": 1800010800,\n      \"seven_day_resets_at\": 1800468000,\n      \"age_s\": 60,\n      \"five_hour_age_s\": 60,\n      \"seven_day_age_s\": 60,\n      \"source\": \"oauth\",\n      \"auth_ok\": true,\n      \"exhausted_until\": null\n    }\n  ]\n}\n"
+  },
+  "expiry [plain/expiring]": {
+    "rc": 0,
+    "out": "iu  WARN  login valid until 2027-01-20 (5 d left)\nme  WARN  login valid until 2027-01-20 (5 d left)\nme2  WARN  login valid until 2027-01-20 (5 d left)\n"
+  },
+  "expiry --json [plain/expiring]": {
+    "rc": 0,
+    "out": "{\n  \"accounts\": [\n    {\n      \"id\": \"iu\",\n      \"default\": true,\n      \"grade\": \"WARN\",\n      \"severity\": \"WARN\",\n      \"refresh_expires_at\": 1800432000000,\n      \"access_expires_at\": 1800003600000,\n      \"tier\": \"default_claude_max_5x\",\n      \"plan_detected\": \"max\",\n      \"days_left\": 5,\n      \"expired\": false,\n      \"detail\": \"login valid until 2027-01-20 (5 d left)\"\n    },\n    {\n      \"id\": \"me\",\n      \"default\": false,\n      \"grade\": \"WARN\",\n      \"severity\": \"WARN\",\n      \"refresh_expires_at\": 1800432000000,\n      \"access_expires_at\": 1800003600000,\n      \"tier\": \"default_claude_max_5x\",\n      \"plan_detected\": \"max\",\n      \"days_left\": 5,\n      \"expired\": false,\n      \"detail\": \"login valid until 2027-01-20 (5 d left)\"\n    },\n    {\n      \"id\": \"me2\",\n      \"default\": false,\n      \"grade\": \"WARN\",\n      \"severity\": \"WARN\",\n      \"refresh_expires_at\": 1800432000000,\n      \"access_expires_at\": 1800003600000,\n      \"tier\": \"default_claude_max_5x\",\n      \"plan_detected\": \"max\",\n      \"days_left\": 5,\n      \"expired\": false,\n      \"detail\": \"login valid until 2027-01-20 (5 d left)\"\n    }\n  ]\n}\n"
+  },
+  "expiry --json --ids me [plain/expiring]": {
+    "rc": 0,
+    "out": "{\n  \"accounts\": [\n    {\n      \"id\": \"me\",\n      \"default\": false,\n      \"grade\": \"WARN\",\n      \"severity\": \"WARN\",\n      \"refresh_expires_at\": 1800432000000,\n      \"access_expires_at\": 1800003600000,\n      \"tier\": \"default_claude_max_5x\",\n      \"plan_detected\": \"max\",\n      \"days_left\": 5,\n      \"expired\": false,\n      \"detail\": \"login valid until 2027-01-20 (5 d left)\"\n    }\n  ]\n}\n"
+  },
+  "account [plain/expiring]": {
+    "rc": 0,
+    "out": "iu\n"
+  },
+  "account --badge [plain/expiring]": {
+    "rc": 0,
+    "out": "IU\n"
+  },
+  "fable [plain/expiring]": {
+    "rc": 0,
+    "out": "iu\n"
+  },
+  "env iu [plain/expiring]": {
+    "rc": 0,
+    "out": "unset CLAUDE_CONFIG_DIR\n"
+  },
+  "env me2 [plain/expiring]": {
+    "rc": 0,
+    "out": "export CLAUDE_CONFIG_DIR='/home/x/.claude-me2'\n"
+  },
+  "env nope [plain/expiring]": {
+    "rc": 2,
+    "out": ""
+  },
+  "account in a registered dir [plain/expiring]": {
+    "rc": 0,
+    "out": "ME2\n"
+  },
+  "account in an unknown dir [plain/expiring]": {
+    "rc": 0,
+    "out": "?\n"
+  },
+  "pick --dry --why interactive [plain/walled]": {
+    "rc": 0,
+    "out": "unset CLAUDE_CONFIG_DIR\n# picked=iu reason=home stale=false\n"
+  },
+  "rank --json interactive [plain/walled]": {
+    "rc": 0,
+    "out": "{\"lane\":\"interactive\",\"order\":[{\"account\":\"iu\",\"reason\":\"home\",\"weight\":0.022360679774997897}],\"at\":\"2027-01-15T08:00:00.000Z\"}\n"
+  },
+  "pick --dry --why headless [plain/walled]": {
+    "rc": 0,
+    "out": "unset CLAUDE_CONFIG_DIR\n# picked=iu reason=expiring-capacity stale=false\n"
+  },
+  "rank --json headless [plain/walled]": {
+    "rc": 0,
+    "out": "{\"lane\":\"headless\",\"order\":[{\"account\":\"iu\",\"reason\":\"expiring-capacity\",\"weight\":0.022360679774997897}],\"at\":\"2027-01-15T08:00:00.000Z\"}\n"
+  },
+  "pick --dry --why bulk [plain/walled]": {
+    "rc": 0,
+    "out": "unset CLAUDE_CONFIG_DIR\n# picked=iu reason=expiring-capacity stale=false\n"
+  },
+  "rank --json bulk [plain/walled]": {
+    "rc": 0,
+    "out": "{\"lane\":\"bulk\",\"order\":[{\"account\":\"iu\",\"reason\":\"expiring-capacity\",\"weight\":0.022360679774997897}],\"at\":\"2027-01-15T08:00:00.000Z\"}\n"
+  },
+  "pick --dry --why lead [plain/walled]": {
+    "rc": 0,
+    "out": "unset CLAUDE_CONFIG_DIR\n# picked=iu reason=expiring-capacity stale=false\n"
+  },
+  "rank --json lead [plain/walled]": {
+    "rc": 0,
+    "out": "{\"lane\":\"lead\",\"order\":[{\"account\":\"iu\",\"reason\":\"expiring-capacity\",\"weight\":0.022360679774997897}],\"at\":\"2027-01-15T08:00:00.000Z\"}\n"
+  },
+  "pick --dry --why batch:7 [plain/walled]": {
+    "rc": 0,
+    "out": "unset CLAUDE_CONFIG_DIR\n# picked=iu reason=expiring-capacity stale=false\n"
+  },
+  "rank --json batch:7 [plain/walled]": {
+    "rc": 0,
+    "out": "{\"lane\":\"batch:7\",\"order\":[{\"account\":\"iu\",\"reason\":\"expiring-capacity\",\"weight\":0.022360679774997897}],\"at\":\"2027-01-15T08:00:00.000Z\"}\n"
+  },
+  "pick --dry --why unknown-lane [plain/walled]": {
+    "rc": 0,
+    "out": "unset CLAUDE_CONFIG_DIR\n# picked=iu reason=expiring-capacity stale=false\n"
+  },
+  "rank --json unknown-lane [plain/walled]": {
+    "rc": 0,
+    "out": "{\"lane\":\"unknown-lane\",\"order\":[{\"account\":\"iu\",\"reason\":\"expiring-capacity\",\"weight\":0.022360679774997897}],\"at\":\"2027-01-15T08:00:00.000Z\"}\n"
+  },
+  "rank text [plain/walled]": {
+    "rc": 0,
+    "out": "1. iu  expiring-capacity  w=0.022\n"
+  },
+  "usage [plain/walled]": {
+    "rc": 0,
+    "out": "iu ultra  7d 97% ↺01-16 04:00  age 60s  auth ok\nme max  5h 95% ↺01-15 11:00  7d 40% ↺01-19 02:00  age 60s  auth FAILED\nme2 max  5h 10% ↺01-15 11:00  7d 100% ↺01-17 20:00  age 400s  auth ok  EXHAUSTED\n"
+  },
+  "usage --json [plain/walled]": {
+    "rc": 0,
+    "out": "{\n  \"default_account\": \"iu\",\n  \"accounts\": [\n    {\n      \"id\": \"iu\",\n      \"plan\": \"ultra\",\n      \"session_limit\": false,\n      \"enabled\": true,\n      \"five_hour\": null,\n      \"seven_day\": 97,\n      \"five_hour_resets_at\": null,\n      \"seven_day_resets_at\": 1800072000,\n      \"age_s\": 60,\n      \"five_hour_age_s\": null,\n      \"seven_day_age_s\": 60,\n      \"source\": \"oauth\",\n      \"auth_ok\": true,\n      \"exhausted_until\": null\n    },\n    {\n      \"id\": \"me\",\n      \"plan\": \"max\",\n      \"session_limit\": true,\n      \"enabled\": true,\n      \"five_hour\": 95,\n      \"seven_day\": 40,\n      \"five_hour_resets_at\": 1800010800,\n      \"seven_day_resets_at\": 1800324000,\n      \"age_s\": 60,\n      \"five_hour_age_s\": 60,\n      \"seven_day_age_s\": 60,\n      \"source\": \"oauth\",\n      \"auth_ok\": false,\n      \"exhausted_until\": null\n    },\n    {\n      \"id\": \"me2\",\n      \"plan\": \"max\",\n      \"session_limit\": true,\n      \"enabled\": true,\n      \"five_hour\": 10,\n      \"seven_day\": 100,\n      \"five_hour_resets_at\": 1800010800,\n      \"seven_day_resets_at\": 1800216000,\n      \"age_s\": 400,\n      \"five_hour_age_s\": 400,\n      \"seven_day_age_s\": 400,\n      \"source\": \"oauth\",\n      \"auth_ok\": true,\n      \"exhausted_until\": 1800000600\n    }\n  ]\n}\n"
+  },
+  "expiry [plain/walled]": {
+    "rc": 0,
+    "out": "iu  WARN  login valid until 2027-01-20 (5 d left)\nme  WARN  login valid until 2027-01-20 (5 d left)\nme2  WARN  login valid until 2027-01-20 (5 d left)\n"
+  },
+  "expiry --json [plain/walled]": {
+    "rc": 0,
+    "out": "{\n  \"accounts\": [\n    {\n      \"id\": \"iu\",\n      \"default\": true,\n      \"grade\": \"WARN\",\n      \"severity\": \"WARN\",\n      \"refresh_expires_at\": 1800432000000,\n      \"access_expires_at\": 1800003600000,\n      \"tier\": \"default_claude_max_5x\",\n      \"plan_detected\": \"max\",\n      \"days_left\": 5,\n      \"expired\": false,\n      \"detail\": \"login valid until 2027-01-20 (5 d left)\"\n    },\n    {\n      \"id\": \"me\",\n      \"default\": false,\n      \"grade\": \"WARN\",\n      \"severity\": \"WARN\",\n      \"refresh_expires_at\": 1800432000000,\n      \"access_expires_at\": 1800003600000,\n      \"tier\": \"default_claude_max_5x\",\n      \"plan_detected\": \"max\",\n      \"days_left\": 5,\n      \"expired\": false,\n      \"detail\": \"login valid until 2027-01-20 (5 d left)\"\n    },\n    {\n      \"id\": \"me2\",\n      \"default\": false,\n      \"grade\": \"WARN\",\n      \"severity\": \"WARN\",\n      \"refresh_expires_at\": 1800432000000,\n      \"access_expires_at\": 1800003600000,\n      \"tier\": \"default_claude_max_5x\",\n      \"plan_detected\": \"max\",\n      \"days_left\": 5,\n      \"expired\": false,\n      \"detail\": \"login valid until 2027-01-20 (5 d left)\"\n    }\n  ]\n}\n"
+  },
+  "expiry --json --ids me [plain/walled]": {
+    "rc": 0,
+    "out": "{\n  \"accounts\": [\n    {\n      \"id\": \"me\",\n      \"default\": false,\n      \"grade\": \"WARN\",\n      \"severity\": \"WARN\",\n      \"refresh_expires_at\": 1800432000000,\n      \"access_expires_at\": 1800003600000,\n      \"tier\": \"default_claude_max_5x\",\n      \"plan_detected\": \"max\",\n      \"days_left\": 5,\n      \"expired\": false,\n      \"detail\": \"login valid until 2027-01-20 (5 d left)\"\n    }\n  ]\n}\n"
+  },
+  "account [plain/walled]": {
+    "rc": 0,
+    "out": "iu\n"
+  },
+  "account --badge [plain/walled]": {
+    "rc": 0,
+    "out": "IU\n"
+  },
+  "fable [plain/walled]": {
+    "rc": 0,
+    "out": "iu\n"
+  },
+  "env iu [plain/walled]": {
+    "rc": 0,
+    "out": "unset CLAUDE_CONFIG_DIR\n"
+  },
+  "env me2 [plain/walled]": {
+    "rc": 0,
+    "out": "export CLAUDE_CONFIG_DIR='/home/x/.claude-me2'\n"
+  },
+  "env nope [plain/walled]": {
+    "rc": 2,
+    "out": ""
+  },
+  "account in a registered dir [plain/walled]": {
+    "rc": 0,
+    "out": "ME2\n"
+  },
+  "account in an unknown dir [plain/walled]": {
+    "rc": 0,
+    "out": "?\n"
+  },
+  "pick --dry --why interactive [modes/calm]": {
+    "rc": 0,
+    "out": "export CLAUDE_CONFIG_DIR='/home/x/.claude-me2'\n# picked=me2 reason=drain stale=false\n"
+  },
+  "rank --json interactive [modes/calm]": {
+    "rc": 0,
+    "out": "{\"lane\":\"interactive\",\"order\":[{\"account\":\"me2\",\"reason\":\"drain\",\"weight\":0.04844546380171175},{\"account\":\"me\",\"reason\":\"spill\",\"weight\":0.0494471753303275},{\"account\":\"iu\",\"reason\":\"fable-reserve\",\"weight\":0.166}],\"at\":\"2027-01-15T08:00:00.000Z\"}\n"
+  },
+  "pick --dry --why headless [modes/calm]": {
+    "rc": 0,
+    "out": "export CLAUDE_CONFIG_DIR='/home/x/.claude-me2'\n# picked=me2 reason=drain stale=false\n"
+  },
+  "rank --json headless [modes/calm]": {
+    "rc": 0,
+    "out": "{\"lane\":\"headless\",\"order\":[{\"account\":\"me2\",\"reason\":\"drain\",\"weight\":0.04844546380171175},{\"account\":\"me\",\"reason\":\"spill\",\"weight\":0.0494471753303275},{\"account\":\"iu\",\"reason\":\"fable-reserve\",\"weight\":0.166}],\"at\":\"2027-01-15T08:00:00.000Z\"}\n"
+  },
+  "pick --dry --why bulk [modes/calm]": {
+    "rc": 0,
+    "out": "export CLAUDE_CONFIG_DIR='/home/x/.claude-me2'\n# picked=me2 reason=drain stale=false\n"
+  },
+  "rank --json bulk [modes/calm]": {
+    "rc": 0,
+    "out": "{\"lane\":\"bulk\",\"order\":[{\"account\":\"me2\",\"reason\":\"drain\",\"weight\":0.04844546380171175},{\"account\":\"me\",\"reason\":\"home\",\"weight\":0.0494471753303275},{\"account\":\"iu\",\"reason\":\"fable-reserve\",\"weight\":0.166}],\"at\":\"2027-01-15T08:00:00.000Z\"}\n"
+  },
+  "pick --dry --why lead [modes/calm]": {
+    "rc": 0,
+    "out": "export CLAUDE_CONFIG_DIR='/home/x/.claude-me2'\n# picked=me2 reason=drain stale=false\n"
+  },
+  "rank --json lead [modes/calm]": {
+    "rc": 0,
+    "out": "{\"lane\":\"lead\",\"order\":[{\"account\":\"me2\",\"reason\":\"drain\",\"weight\":0.04844546380171175},{\"account\":\"me\",\"reason\":\"spill\",\"weight\":0.0494471753303275},{\"account\":\"iu\",\"reason\":\"fable-reserve\",\"weight\":0.166}],\"at\":\"2027-01-15T08:00:00.000Z\"}\n"
+  },
+  "pick --dry --why batch:7 [modes/calm]": {
+    "rc": 0,
+    "out": "export CLAUDE_CONFIG_DIR='/home/x/.claude-me2'\n# picked=me2 reason=drain stale=false\n"
+  },
+  "rank --json batch:7 [modes/calm]": {
+    "rc": 0,
+    "out": "{\"lane\":\"batch:7\",\"order\":[{\"account\":\"me2\",\"reason\":\"drain\",\"weight\":0.04844546380171175},{\"account\":\"me\",\"reason\":\"spill\",\"weight\":0.0494471753303275},{\"account\":\"iu\",\"reason\":\"fable-reserve\",\"weight\":0.166}],\"at\":\"2027-01-15T08:00:00.000Z\"}\n"
+  },
+  "pick --dry --why unknown-lane [modes/calm]": {
+    "rc": 0,
+    "out": "export CLAUDE_CONFIG_DIR='/home/x/.claude-me2'\n# picked=me2 reason=drain stale=false\n"
+  },
+  "rank --json unknown-lane [modes/calm]": {
+    "rc": 0,
+    "out": "{\"lane\":\"unknown-lane\",\"order\":[{\"account\":\"me2\",\"reason\":\"drain\",\"weight\":0.04844546380171175},{\"account\":\"me\",\"reason\":\"spill\",\"weight\":0.0494471753303275},{\"account\":\"iu\",\"reason\":\"fable-reserve\",\"weight\":0.166}],\"at\":\"2027-01-15T08:00:00.000Z\"}\n"
+  },
+  "rank text [modes/calm]": {
+    "rc": 0,
+    "out": "1. me2  drain  w=0.048\n2. me  home  w=0.049\n3. iu  fable-reserve  w=0.166\n"
+  },
+  "usage [modes/calm]": {
+    "rc": 0,
+    "out": "iu ultra  7d 12% ↺01-19 12:00  age 60s  auth ok\nme max  5h 10% ↺01-15 11:00  7d 30% ↺01-20 08:00  age 60s  auth ok\nme2 max  5h 5% ↺01-15 11:00  7d 11% ↺01-21 14:00  age 60s  auth ok\n"
+  },
+  "usage --json [modes/calm]": {
+    "rc": 0,
+    "out": "{\n  \"default_account\": \"iu\",\n  \"accounts\": [\n    {\n      \"id\": \"iu\",\n      \"plan\": \"ultra\",\n      \"session_limit\": false,\n      \"enabled\": true,\n      \"five_hour\": null,\n      \"seven_day\": 12,\n      \"five_hour_resets_at\": null,\n      \"seven_day_resets_at\": 1800360000,\n      \"age_s\": 60,\n      \"five_hour_age_s\": null,\n      \"seven_day_age_s\": 60,\n      \"source\": \"oauth\",\n      \"auth_ok\": true,\n      \"exhausted_until\": null\n    },\n    {\n      \"id\": \"me\",\n      \"plan\": \"max\",\n      \"session_limit\": true,\n      \"enabled\": true,\n      \"five_hour\": 10,\n      \"seven_day\": 30,\n      \"five_hour_resets_at\": 1800010800,\n      \"seven_day_resets_at\": 1800432000,\n      \"age_s\": 60,\n      \"five_hour_age_s\": 60,\n      \"seven_day_age_s\": 60,\n      \"source\": \"oauth\",\n      \"auth_ok\": true,\n      \"exhausted_until\": null\n    },\n    {\n      \"id\": \"me2\",\n      \"plan\": \"max\",\n      \"session_limit\": true,\n      \"enabled\": true,\n      \"five_hour\": 5,\n      \"seven_day\": 11,\n      \"five_hour_resets_at\": 1800010800,\n      \"seven_day_resets_at\": 1800540000,\n      \"age_s\": 60,\n      \"five_hour_age_s\": 60,\n      \"seven_day_age_s\": 60,\n      \"source\": \"oauth\",\n      \"auth_ok\": true,\n      \"exhausted_until\": null\n    }\n  ]\n}\n"
+  },
+  "expiry [modes/calm]": {
+    "rc": 0,
+    "out": "iu  WARN  login valid until 2027-01-20 (5 d left)\nme  WARN  login valid until 2027-01-20 (5 d left)\nme2  WARN  login valid until 2027-01-20 (5 d left)\n"
+  },
+  "expiry --json [modes/calm]": {
+    "rc": 0,
+    "out": "{\n  \"accounts\": [\n    {\n      \"id\": \"iu\",\n      \"default\": true,\n      \"grade\": \"WARN\",\n      \"severity\": \"WARN\",\n      \"refresh_expires_at\": 1800432000000,\n      \"access_expires_at\": 1800003600000,\n      \"tier\": \"default_claude_max_5x\",\n      \"plan_detected\": \"max\",\n      \"days_left\": 5,\n      \"expired\": false,\n      \"detail\": \"login valid until 2027-01-20 (5 d left)\"\n    },\n    {\n      \"id\": \"me\",\n      \"default\": false,\n      \"grade\": \"WARN\",\n      \"severity\": \"WARN\",\n      \"refresh_expires_at\": 1800432000000,\n      \"access_expires_at\": 1800003600000,\n      \"tier\": \"default_claude_max_5x\",\n      \"plan_detected\": \"max\",\n      \"days_left\": 5,\n      \"expired\": false,\n      \"detail\": \"login valid until 2027-01-20 (5 d left)\"\n    },\n    {\n      \"id\": \"me2\",\n      \"default\": false,\n      \"grade\": \"WARN\",\n      \"severity\": \"WARN\",\n      \"refresh_expires_at\": 1800432000000,\n      \"access_expires_at\": 1800003600000,\n      \"tier\": \"default_claude_max_5x\",\n      \"plan_detected\": \"max\",\n      \"days_left\": 5,\n      \"expired\": false,\n      \"detail\": \"login valid until 2027-01-20 (5 d left)\"\n    }\n  ]\n}\n"
+  },
+  "expiry --json --ids me [modes/calm]": {
+    "rc": 0,
+    "out": "{\n  \"accounts\": [\n    {\n      \"id\": \"me\",\n      \"default\": false,\n      \"grade\": \"WARN\",\n      \"severity\": \"WARN\",\n      \"refresh_expires_at\": 1800432000000,\n      \"access_expires_at\": 1800003600000,\n      \"tier\": \"default_claude_max_5x\",\n      \"plan_detected\": \"max\",\n      \"days_left\": 5,\n      \"expired\": false,\n      \"detail\": \"login valid until 2027-01-20 (5 d left)\"\n    }\n  ]\n}\n"
+  },
+  "account [modes/calm]": {
+    "rc": 0,
+    "out": "iu\n"
+  },
+  "account --badge [modes/calm]": {
+    "rc": 0,
+    "out": "IU\n"
+  },
+  "fable [modes/calm]": {
+    "rc": 0,
+    "out": "iu\n"
+  },
+  "env iu [modes/calm]": {
+    "rc": 0,
+    "out": "unset CLAUDE_CONFIG_DIR\n"
+  },
+  "env me2 [modes/calm]": {
+    "rc": 0,
+    "out": "export CLAUDE_CONFIG_DIR='/home/x/.claude-me2'\n"
+  },
+  "env nope [modes/calm]": {
+    "rc": 2,
+    "out": ""
+  },
+  "account in a registered dir [modes/calm]": {
+    "rc": 0,
+    "out": "ME2\n"
+  },
+  "account in an unknown dir [modes/calm]": {
+    "rc": 0,
+    "out": "?\n"
+  },
+  "pick --dry --why interactive [modes/expiring]": {
+    "rc": 0,
+    "out": "export CLAUDE_CONFIG_DIR='/home/x/.claude-me'\n# picked=me reason=spill stale=false\n"
+  },
+  "rank --json interactive [modes/expiring]": {
+    "rc": 0,
+    "out": "{\"lane\":\"interactive\",\"order\":[{\"account\":\"me\",\"reason\":\"spill\",\"weight\":0.1314156565728431},{\"account\":\"me2\",\"reason\":\"spill\",\"weight\":0.06004474132178892},{\"account\":\"iu\",\"reason\":\"fable-reserve\",\"weight\":0.16572815184059705}],\"at\":\"2027-01-15T08:00:00.000Z\"}\n"
+  },
+  "pick --dry --why headless [modes/expiring]": {
+    "rc": 0,
+    "out": "export CLAUDE_CONFIG_DIR='/home/x/.claude-me'\n# picked=me reason=expiring-capacity stale=false\n"
+  },
+  "rank --json headless [modes/expiring]": {
+    "rc": 0,
+    "out": "{\"lane\":\"headless\",\"order\":[{\"account\":\"me\",\"reason\":\"expiring-capacity\",\"weight\":0.1314156565728431},{\"account\":\"me2\",\"reason\":\"spill\",\"weight\":0.06004474132178892},{\"account\":\"iu\",\"reason\":\"fable-reserve\",\"weight\":0.16572815184059705}],\"at\":\"2027-01-15T08:00:00.000Z\"}\n"
+  },
+  "pick --dry --why bulk [modes/expiring]": {
+    "rc": 0,
+    "out": "export CLAUDE_CONFIG_DIR='/home/x/.claude-me'\n# picked=me reason=expiring-capacity stale=false\n"
+  },
+  "rank --json bulk [modes/expiring]": {
+    "rc": 0,
+    "out": "{\"lane\":\"bulk\",\"order\":[{\"account\":\"me\",\"reason\":\"expiring-capacity\",\"weight\":0.1314156565728431},{\"account\":\"me2\",\"reason\":\"home\",\"weight\":0.06004474132178892},{\"account\":\"iu\",\"reason\":\"fable-reserve\",\"weight\":0.16572815184059705}],\"at\":\"2027-01-15T08:00:00.000Z\"}\n"
+  },
+  "pick --dry --why lead [modes/expiring]": {
+    "rc": 0,
+    "out": "export CLAUDE_CONFIG_DIR='/home/x/.claude-me'\n# picked=me reason=expiring-capacity stale=false\n"
+  },
+  "rank --json lead [modes/expiring]": {
+    "rc": 0,
+    "out": "{\"lane\":\"lead\",\"order\":[{\"account\":\"me\",\"reason\":\"expiring-capacity\",\"weight\":0.1314156565728431},{\"account\":\"me2\",\"reason\":\"spill\",\"weight\":0.06004474132178892},{\"account\":\"iu\",\"reason\":\"fable-reserve\",\"weight\":0.16572815184059705}],\"at\":\"2027-01-15T08:00:00.000Z\"}\n"
+  },
+  "pick --dry --why batch:7 [modes/expiring]": {
+    "rc": 0,
+    "out": "export CLAUDE_CONFIG_DIR='/home/x/.claude-me'\n# picked=me reason=expiring-capacity stale=false\n"
+  },
+  "rank --json batch:7 [modes/expiring]": {
+    "rc": 0,
+    "out": "{\"lane\":\"batch:7\",\"order\":[{\"account\":\"me\",\"reason\":\"expiring-capacity\",\"weight\":0.1314156565728431},{\"account\":\"me2\",\"reason\":\"home\",\"weight\":0.06004474132178892},{\"account\":\"iu\",\"reason\":\"fable-reserve\",\"weight\":0.16572815184059705}],\"at\":\"2027-01-15T08:00:00.000Z\"}\n"
+  },
+  "pick --dry --why unknown-lane [modes/expiring]": {
+    "rc": 0,
+    "out": "export CLAUDE_CONFIG_DIR='/home/x/.claude-me'\n# picked=me reason=expiring-capacity stale=false\n"
+  },
+  "rank --json unknown-lane [modes/expiring]": {
+    "rc": 0,
+    "out": "{\"lane\":\"unknown-lane\",\"order\":[{\"account\":\"me\",\"reason\":\"expiring-capacity\",\"weight\":0.1314156565728431},{\"account\":\"me2\",\"reason\":\"spill\",\"weight\":0.06004474132178892},{\"account\":\"iu\",\"reason\":\"fable-reserve\",\"weight\":0.16572815184059705}],\"at\":\"2027-01-15T08:00:00.000Z\"}\n"
+  },
+  "rank text [modes/expiring]": {
+    "rc": 0,
+    "out": "1. me  expiring-capacity  w=0.131\n2. me2  home  w=0.060\n3. iu  fable-reserve  w=0.166\n"
+  },
+  "usage [modes/expiring]": {
+    "rc": 0,
+    "out": "iu ultra  7d 80% ↺01-16 16:00  age 60s  auth ok\nme max  5h 4% ↺01-15 11:00  7d 54% ↺01-17 06:00  age 60s  auth ok\nme2 max  5h 85% ↺01-15 11:00  7d 11% ↺01-20 18:00  age 60s  auth ok\n"
+  },
+  "usage --json [modes/expiring]": {
+    "rc": 0,
+    "out": "{\n  \"default_account\": \"iu\",\n  \"accounts\": [\n    {\n      \"id\": \"iu\",\n      \"plan\": \"ultra\",\n      \"session_limit\": false,\n      \"enabled\": true,\n      \"five_hour\": null,\n      \"seven_day\": 80,\n      \"five_hour_resets_at\": null,\n      \"seven_day_resets_at\": 1800115200,\n      \"age_s\": 60,\n      \"five_hour_age_s\": null,\n      \"seven_day_age_s\": 60,\n      \"source\": \"oauth\",\n      \"auth_ok\": true,\n      \"exhausted_until\": null\n    },\n    {\n      \"id\": \"me\",\n      \"plan\": \"max\",\n      \"session_limit\": true,\n      \"enabled\": true,\n      \"five_hour\": 4,\n      \"seven_day\": 54,\n      \"five_hour_resets_at\": 1800010800,\n      \"seven_day_resets_at\": 1800165600,\n      \"age_s\": 60,\n      \"five_hour_age_s\": 60,\n      \"seven_day_age_s\": 60,\n      \"source\": \"oauth\",\n      \"auth_ok\": true,\n      \"exhausted_until\": null\n    },\n    {\n      \"id\": \"me2\",\n      \"plan\": \"max\",\n      \"session_limit\": true,\n      \"enabled\": true,\n      \"five_hour\": 85,\n      \"seven_day\": 11,\n      \"five_hour_resets_at\": 1800010800,\n      \"seven_day_resets_at\": 1800468000,\n      \"age_s\": 60,\n      \"five_hour_age_s\": 60,\n      \"seven_day_age_s\": 60,\n      \"source\": \"oauth\",\n      \"auth_ok\": true,\n      \"exhausted_until\": null\n    }\n  ]\n}\n"
+  },
+  "expiry [modes/expiring]": {
+    "rc": 0,
+    "out": "iu  WARN  login valid until 2027-01-20 (5 d left)\nme  WARN  login valid until 2027-01-20 (5 d left)\nme2  WARN  login valid until 2027-01-20 (5 d left)\n"
+  },
+  "expiry --json [modes/expiring]": {
+    "rc": 0,
+    "out": "{\n  \"accounts\": [\n    {\n      \"id\": \"iu\",\n      \"default\": true,\n      \"grade\": \"WARN\",\n      \"severity\": \"WARN\",\n      \"refresh_expires_at\": 1800432000000,\n      \"access_expires_at\": 1800003600000,\n      \"tier\": \"default_claude_max_5x\",\n      \"plan_detected\": \"max\",\n      \"days_left\": 5,\n      \"expired\": false,\n      \"detail\": \"login valid until 2027-01-20 (5 d left)\"\n    },\n    {\n      \"id\": \"me\",\n      \"default\": false,\n      \"grade\": \"WARN\",\n      \"severity\": \"WARN\",\n      \"refresh_expires_at\": 1800432000000,\n      \"access_expires_at\": 1800003600000,\n      \"tier\": \"default_claude_max_5x\",\n      \"plan_detected\": \"max\",\n      \"days_left\": 5,\n      \"expired\": false,\n      \"detail\": \"login valid until 2027-01-20 (5 d left)\"\n    },\n    {\n      \"id\": \"me2\",\n      \"default\": false,\n      \"grade\": \"WARN\",\n      \"severity\": \"WARN\",\n      \"refresh_expires_at\": 1800432000000,\n      \"access_expires_at\": 1800003600000,\n      \"tier\": \"default_claude_max_5x\",\n      \"plan_detected\": \"max\",\n      \"days_left\": 5,\n      \"expired\": false,\n      \"detail\": \"login valid until 2027-01-20 (5 d left)\"\n    }\n  ]\n}\n"
+  },
+  "expiry --json --ids me [modes/expiring]": {
+    "rc": 0,
+    "out": "{\n  \"accounts\": [\n    {\n      \"id\": \"me\",\n      \"default\": false,\n      \"grade\": \"WARN\",\n      \"severity\": \"WARN\",\n      \"refresh_expires_at\": 1800432000000,\n      \"access_expires_at\": 1800003600000,\n      \"tier\": \"default_claude_max_5x\",\n      \"plan_detected\": \"max\",\n      \"days_left\": 5,\n      \"expired\": false,\n      \"detail\": \"login valid until 2027-01-20 (5 d left)\"\n    }\n  ]\n}\n"
+  },
+  "account [modes/expiring]": {
+    "rc": 0,
+    "out": "iu\n"
+  },
+  "account --badge [modes/expiring]": {
+    "rc": 0,
+    "out": "IU\n"
+  },
+  "fable [modes/expiring]": {
+    "rc": 0,
+    "out": "iu\n"
+  },
+  "env iu [modes/expiring]": {
+    "rc": 0,
+    "out": "unset CLAUDE_CONFIG_DIR\n"
+  },
+  "env me2 [modes/expiring]": {
+    "rc": 0,
+    "out": "export CLAUDE_CONFIG_DIR='/home/x/.claude-me2'\n"
+  },
+  "env nope [modes/expiring]": {
+    "rc": 2,
+    "out": ""
+  },
+  "account in a registered dir [modes/expiring]": {
+    "rc": 0,
+    "out": "ME2\n"
+  },
+  "account in an unknown dir [modes/expiring]": {
+    "rc": 0,
+    "out": "?\n"
+  },
+  "pick --dry --why interactive [modes/walled]": {
+    "rc": 0,
+    "out": "unset CLAUDE_CONFIG_DIR\n# picked=iu reason=fable-reserve stale=false\n"
+  },
+  "rank --json interactive [modes/walled]": {
+    "rc": 0,
+    "out": "{\"lane\":\"interactive\",\"order\":[{\"account\":\"iu\",\"reason\":\"fable-reserve\",\"weight\":0.022360679774997897}],\"at\":\"2027-01-15T08:00:00.000Z\"}\n"
+  },
+  "pick --dry --why headless [modes/walled]": {
+    "rc": 0,
+    "out": "unset CLAUDE_CONFIG_DIR\n# picked=iu reason=fable-reserve stale=false\n"
+  },
+  "rank --json headless [modes/walled]": {
+    "rc": 0,
+    "out": "{\"lane\":\"headless\",\"order\":[{\"account\":\"iu\",\"reason\":\"fable-reserve\",\"weight\":0.022360679774997897}],\"at\":\"2027-01-15T08:00:00.000Z\"}\n"
+  },
+  "pick --dry --why bulk [modes/walled]": {
+    "rc": 0,
+    "out": "unset CLAUDE_CONFIG_DIR\n# picked=iu reason=fable-reserve stale=false\n"
+  },
+  "rank --json bulk [modes/walled]": {
+    "rc": 0,
+    "out": "{\"lane\":\"bulk\",\"order\":[{\"account\":\"iu\",\"reason\":\"fable-reserve\",\"weight\":0.022360679774997897}],\"at\":\"2027-01-15T08:00:00.000Z\"}\n"
+  },
+  "pick --dry --why lead [modes/walled]": {
+    "rc": 0,
+    "out": "unset CLAUDE_CONFIG_DIR\n# picked=iu reason=fable-reserve stale=false\n"
+  },
+  "rank --json lead [modes/walled]": {
+    "rc": 0,
+    "out": "{\"lane\":\"lead\",\"order\":[{\"account\":\"iu\",\"reason\":\"fable-reserve\",\"weight\":0.022360679774997897}],\"at\":\"2027-01-15T08:00:00.000Z\"}\n"
+  },
+  "pick --dry --why batch:7 [modes/walled]": {
+    "rc": 0,
+    "out": "unset CLAUDE_CONFIG_DIR\n# picked=iu reason=fable-reserve stale=false\n"
+  },
+  "rank --json batch:7 [modes/walled]": {
+    "rc": 0,
+    "out": "{\"lane\":\"batch:7\",\"order\":[{\"account\":\"iu\",\"reason\":\"fable-reserve\",\"weight\":0.022360679774997897}],\"at\":\"2027-01-15T08:00:00.000Z\"}\n"
+  },
+  "pick --dry --why unknown-lane [modes/walled]": {
+    "rc": 0,
+    "out": "unset CLAUDE_CONFIG_DIR\n# picked=iu reason=fable-reserve stale=false\n"
+  },
+  "rank --json unknown-lane [modes/walled]": {
+    "rc": 0,
+    "out": "{\"lane\":\"unknown-lane\",\"order\":[{\"account\":\"iu\",\"reason\":\"fable-reserve\",\"weight\":0.022360679774997897}],\"at\":\"2027-01-15T08:00:00.000Z\"}\n"
+  },
+  "rank text [modes/walled]": {
+    "rc": 0,
+    "out": "1. iu  fable-reserve  w=0.022\n"
+  },
+  "usage [modes/walled]": {
+    "rc": 0,
+    "out": "iu ultra  7d 97% ↺01-16 04:00  age 60s  auth ok\nme max  5h 95% ↺01-15 11:00  7d 40% ↺01-19 02:00  age 60s  auth FAILED\nme2 max  5h 10% ↺01-15 11:00  7d 100% ↺01-17 20:00  age 400s  auth ok  EXHAUSTED\n"
+  },
+  "usage --json [modes/walled]": {
+    "rc": 0,
+    "out": "{\n  \"default_account\": \"iu\",\n  \"accounts\": [\n    {\n      \"id\": \"iu\",\n      \"plan\": \"ultra\",\n      \"session_limit\": false,\n      \"enabled\": true,\n      \"five_hour\": null,\n      \"seven_day\": 97,\n      \"five_hour_resets_at\": null,\n      \"seven_day_resets_at\": 1800072000,\n      \"age_s\": 60,\n      \"five_hour_age_s\": null,\n      \"seven_day_age_s\": 60,\n      \"source\": \"oauth\",\n      \"auth_ok\": true,\n      \"exhausted_until\": null\n    },\n    {\n      \"id\": \"me\",\n      \"plan\": \"max\",\n      \"session_limit\": true,\n      \"enabled\": true,\n      \"five_hour\": 95,\n      \"seven_day\": 40,\n      \"five_hour_resets_at\": 1800010800,\n      \"seven_day_resets_at\": 1800324000,\n      \"age_s\": 60,\n      \"five_hour_age_s\": 60,\n      \"seven_day_age_s\": 60,\n      \"source\": \"oauth\",\n      \"auth_ok\": false,\n      \"exhausted_until\": null\n    },\n    {\n      \"id\": \"me2\",\n      \"plan\": \"max\",\n      \"session_limit\": true,\n      \"enabled\": true,\n      \"five_hour\": 10,\n      \"seven_day\": 100,\n      \"five_hour_resets_at\": 1800010800,\n      \"seven_day_resets_at\": 1800216000,\n      \"age_s\": 400,\n      \"five_hour_age_s\": 400,\n      \"seven_day_age_s\": 400,\n      \"source\": \"oauth\",\n      \"auth_ok\": true,\n      \"exhausted_until\": 1800000600\n    }\n  ]\n}\n"
+  },
+  "expiry [modes/walled]": {
+    "rc": 0,
+    "out": "iu  WARN  login valid until 2027-01-20 (5 d left)\nme  WARN  login valid until 2027-01-20 (5 d left)\nme2  WARN  login valid until 2027-01-20 (5 d left)\n"
+  },
+  "expiry --json [modes/walled]": {
+    "rc": 0,
+    "out": "{\n  \"accounts\": [\n    {\n      \"id\": \"iu\",\n      \"default\": true,\n      \"grade\": \"WARN\",\n      \"severity\": \"WARN\",\n      \"refresh_expires_at\": 1800432000000,\n      \"access_expires_at\": 1800003600000,\n      \"tier\": \"default_claude_max_5x\",\n      \"plan_detected\": \"max\",\n      \"days_left\": 5,\n      \"expired\": false,\n      \"detail\": \"login valid until 2027-01-20 (5 d left)\"\n    },\n    {\n      \"id\": \"me\",\n      \"default\": false,\n      \"grade\": \"WARN\",\n      \"severity\": \"WARN\",\n      \"refresh_expires_at\": 1800432000000,\n      \"access_expires_at\": 1800003600000,\n      \"tier\": \"default_claude_max_5x\",\n      \"plan_detected\": \"max\",\n      \"days_left\": 5,\n      \"expired\": false,\n      \"detail\": \"login valid until 2027-01-20 (5 d left)\"\n    },\n    {\n      \"id\": \"me2\",\n      \"default\": false,\n      \"grade\": \"WARN\",\n      \"severity\": \"WARN\",\n      \"refresh_expires_at\": 1800432000000,\n      \"access_expires_at\": 1800003600000,\n      \"tier\": \"default_claude_max_5x\",\n      \"plan_detected\": \"max\",\n      \"days_left\": 5,\n      \"expired\": false,\n      \"detail\": \"login valid until 2027-01-20 (5 d left)\"\n    }\n  ]\n}\n"
+  },
+  "expiry --json --ids me [modes/walled]": {
+    "rc": 0,
+    "out": "{\n  \"accounts\": [\n    {\n      \"id\": \"me\",\n      \"default\": false,\n      \"grade\": \"WARN\",\n      \"severity\": \"WARN\",\n      \"refresh_expires_at\": 1800432000000,\n      \"access_expires_at\": 1800003600000,\n      \"tier\": \"default_claude_max_5x\",\n      \"plan_detected\": \"max\",\n      \"days_left\": 5,\n      \"expired\": false,\n      \"detail\": \"login valid until 2027-01-20 (5 d left)\"\n    }\n  ]\n}\n"
+  },
+  "account [modes/walled]": {
+    "rc": 0,
+    "out": "iu\n"
+  },
+  "account --badge [modes/walled]": {
+    "rc": 0,
+    "out": "IU\n"
+  },
+  "fable [modes/walled]": {
+    "rc": 0,
+    "out": "iu\n"
+  },
+  "env iu [modes/walled]": {
+    "rc": 0,
+    "out": "unset CLAUDE_CONFIG_DIR\n"
+  },
+  "env me2 [modes/walled]": {
+    "rc": 0,
+    "out": "export CLAUDE_CONFIG_DIR='/home/x/.claude-me2'\n"
+  },
+  "env nope [modes/walled]": {
+    "rc": 2,
+    "out": ""
+  },
+  "account in a registered dir [modes/walled]": {
+    "rc": 0,
+    "out": "ME2\n"
+  },
+  "account in an unknown dir [modes/walled]": {
+    "rc": 0,
+    "out": "?\n"
+  },
+  "pick --dry --why interactive [oneoff/calm]": {
+    "rc": 0,
+    "out": "unset CLAUDE_CONFIG_DIR\n# picked=iu reason=home stale=false\n"
+  },
+  "rank --json interactive [oneoff/calm]": {
+    "rc": 0,
+    "out": "{\"lane\":\"interactive\",\"order\":[{\"account\":\"iu\",\"reason\":\"home\",\"weight\":0.166},{\"account\":\"me2\",\"reason\":\"spill\",\"weight\":0.04572380853195266}],\"at\":\"2027-01-15T08:00:00.000Z\"}\n"
+  },
+  "pick --dry --why headless [oneoff/calm]": {
+    "rc": 0,
+    "out": "unset CLAUDE_CONFIG_DIR\n# picked=iu reason=home stale=false\n"
+  },
+  "rank --json headless [oneoff/calm]": {
+    "rc": 0,
+    "out": "{\"lane\":\"headless\",\"order\":[{\"account\":\"iu\",\"reason\":\"home\",\"weight\":0.166},{\"account\":\"me2\",\"reason\":\"spill\",\"weight\":0.04572380853195266}],\"at\":\"2027-01-15T08:00:00.000Z\"}\n"
+  },
+  "pick --dry --why bulk [oneoff/calm]": {
+    "rc": 0,
+    "out": "export CLAUDE_CONFIG_DIR='/home/x/.claude-me2'\n# picked=me2 reason=home stale=false\n"
+  },
+  "rank --json bulk [oneoff/calm]": {
+    "rc": 0,
+    "out": "{\"lane\":\"bulk\",\"order\":[{\"account\":\"me2\",\"reason\":\"home\",\"weight\":0.04572380853195266},{\"account\":\"iu\",\"reason\":\"spill\",\"weight\":0.166}],\"at\":\"2027-01-15T08:00:00.000Z\"}\n"
+  },
+  "pick --dry --why lead [oneoff/calm]": {
+    "rc": 0,
+    "out": "unset CLAUDE_CONFIG_DIR\n# picked=iu reason=spill stale=false\n"
+  },
+  "rank --json lead [oneoff/calm]": {
+    "rc": 0,
+    "out": "{\"lane\":\"lead\",\"order\":[{\"account\":\"iu\",\"reason\":\"spill\",\"weight\":0.166},{\"account\":\"me2\",\"reason\":\"spill\",\"weight\":0.04572380853195266}],\"at\":\"2027-01-15T08:00:00.000Z\"}\n"
+  },
+  "pick --dry --why batch:7 [oneoff/calm]": {
+    "rc": 0,
+    "out": "export CLAUDE_CONFIG_DIR='/home/x/.claude-me2'\n# picked=me2 reason=home stale=false\n"
+  },
+  "rank --json batch:7 [oneoff/calm]": {
+    "rc": 0,
+    "out": "{\"lane\":\"batch:7\",\"order\":[{\"account\":\"me2\",\"reason\":\"home\",\"weight\":0.04572380853195266},{\"account\":\"iu\",\"reason\":\"spill\",\"weight\":0.166}],\"at\":\"2027-01-15T08:00:00.000Z\"}\n"
+  },
+  "pick --dry --why unknown-lane [oneoff/calm]": {
+    "rc": 0,
+    "out": "unset CLAUDE_CONFIG_DIR\n# picked=iu reason=spill stale=false\n"
+  },
+  "rank --json unknown-lane [oneoff/calm]": {
+    "rc": 0,
+    "out": "{\"lane\":\"unknown-lane\",\"order\":[{\"account\":\"iu\",\"reason\":\"spill\",\"weight\":0.166},{\"account\":\"me2\",\"reason\":\"spill\",\"weight\":0.04572380853195266}],\"at\":\"2027-01-15T08:00:00.000Z\"}\n"
+  },
+  "rank text [oneoff/calm]": {
+    "rc": 0,
+    "out": "1. me2  home  w=0.046\n2. iu  spill  w=0.166\n"
+  },
+  "usage [oneoff/calm]": {
+    "rc": 0,
+    "out": "iu ultra  7d 12% ↺01-19 12:00  age 60s  auth ok\nme max (disabled)  5h 10% ↺01-15 11:00  7d 30% ↺01-20 08:00  age 60s  auth ok\nme2 max  5h 5% ↺01-15 11:00  7d 11% ↺01-21 14:00  age 60s  auth ok\n"
+  },
+  "usage --json [oneoff/calm]": {
+    "rc": 0,
+    "out": "{\n  \"default_account\": \"iu\",\n  \"accounts\": [\n    {\n      \"id\": \"iu\",\n      \"plan\": \"ultra\",\n      \"session_limit\": false,\n      \"enabled\": true,\n      \"five_hour\": null,\n      \"seven_day\": 12,\n      \"five_hour_resets_at\": null,\n      \"seven_day_resets_at\": 1800360000,\n      \"age_s\": 60,\n      \"five_hour_age_s\": null,\n      \"seven_day_age_s\": 60,\n      \"source\": \"oauth\",\n      \"auth_ok\": true,\n      \"exhausted_until\": null\n    },\n    {\n      \"id\": \"me\",\n      \"plan\": \"max\",\n      \"session_limit\": true,\n      \"enabled\": false,\n      \"five_hour\": 10,\n      \"seven_day\": 30,\n      \"five_hour_resets_at\": 1800010800,\n      \"seven_day_resets_at\": 1800432000,\n      \"age_s\": 60,\n      \"five_hour_age_s\": 60,\n      \"seven_day_age_s\": 60,\n      \"source\": \"oauth\",\n      \"auth_ok\": true,\n      \"exhausted_until\": null\n    },\n    {\n      \"id\": \"me2\",\n      \"plan\": \"max\",\n      \"session_limit\": true,\n      \"enabled\": true,\n      \"five_hour\": 5,\n      \"seven_day\": 11,\n      \"five_hour_resets_at\": 1800010800,\n      \"seven_day_resets_at\": 1800540000,\n      \"age_s\": 60,\n      \"five_hour_age_s\": 60,\n      \"seven_day_age_s\": 60,\n      \"source\": \"oauth\",\n      \"auth_ok\": true,\n      \"exhausted_until\": null\n    }\n  ]\n}\n"
+  },
+  "expiry [oneoff/calm]": {
+    "rc": 0,
+    "out": "iu  WARN  login valid until 2027-01-20 (5 d left)\nme2  WARN  login valid until 2027-01-20 (5 d left)\n"
+  },
+  "expiry --json [oneoff/calm]": {
+    "rc": 0,
+    "out": "{\n  \"accounts\": [\n    {\n      \"id\": \"iu\",\n      \"default\": true,\n      \"grade\": \"WARN\",\n      \"severity\": \"WARN\",\n      \"refresh_expires_at\": 1800432000000,\n      \"access_expires_at\": 1800003600000,\n      \"tier\": \"default_claude_max_5x\",\n      \"plan_detected\": \"max\",\n      \"days_left\": 5,\n      \"expired\": false,\n      \"detail\": \"login valid until 2027-01-20 (5 d left)\"\n    },\n    {\n      \"id\": \"me2\",\n      \"default\": false,\n      \"grade\": \"WARN\",\n      \"severity\": \"WARN\",\n      \"refresh_expires_at\": 1800432000000,\n      \"access_expires_at\": 1800003600000,\n      \"tier\": \"default_claude_max_5x\",\n      \"plan_detected\": \"max\",\n      \"days_left\": 5,\n      \"expired\": false,\n      \"detail\": \"login valid until 2027-01-20 (5 d left)\"\n    }\n  ]\n}\n"
+  },
+  "expiry --json --ids me [oneoff/calm]": {
+    "rc": 0,
+    "out": "{\n  \"accounts\": [\n    {\n      \"id\": \"me\",\n      \"default\": false,\n      \"grade\": \"WARN\",\n      \"severity\": \"WARN\",\n      \"refresh_expires_at\": 1800432000000,\n      \"access_expires_at\": 1800003600000,\n      \"tier\": \"default_claude_max_5x\",\n      \"plan_detected\": \"max\",\n      \"days_left\": 5,\n      \"expired\": false,\n      \"detail\": \"login valid until 2027-01-20 (5 d left)\"\n    }\n  ]\n}\n"
+  },
+  "account [oneoff/calm]": {
+    "rc": 0,
+    "out": "iu\n"
+  },
+  "account --badge [oneoff/calm]": {
+    "rc": 0,
+    "out": "IU\n"
+  },
+  "fable [oneoff/calm]": {
+    "rc": 0,
+    "out": "iu\n"
+  },
+  "env iu [oneoff/calm]": {
+    "rc": 0,
+    "out": "unset CLAUDE_CONFIG_DIR\n"
+  },
+  "env me2 [oneoff/calm]": {
+    "rc": 0,
+    "out": "export CLAUDE_CONFIG_DIR='/home/x/.claude-me2'\n"
+  },
+  "env nope [oneoff/calm]": {
+    "rc": 2,
+    "out": ""
+  },
+  "account in a registered dir [oneoff/calm]": {
+    "rc": 0,
+    "out": "ME2\n"
+  },
+  "account in an unknown dir [oneoff/calm]": {
+    "rc": 0,
+    "out": "?\n"
+  },
+  "pick --dry --why interactive [oneoff/expiring]": {
+    "rc": 0,
+    "out": "unset CLAUDE_CONFIG_DIR\n# picked=iu reason=home stale=false\n"
+  },
+  "rank --json interactive [oneoff/expiring]": {
+    "rc": 0,
+    "out": "{\"lane\":\"interactive\",\"order\":[{\"account\":\"iu\",\"reason\":\"home\",\"weight\":0.16572815184059705},{\"account\":\"me2\",\"reason\":\"spill\",\"weight\":0.05667144124753112}],\"at\":\"2027-01-15T08:00:00.000Z\"}\n"
+  },
+  "pick --dry --why headless [oneoff/expiring]": {
+    "rc": 0,
+    "out": "unset CLAUDE_CONFIG_DIR\n# picked=iu reason=expiring-capacity stale=false\n"
+  },
+  "rank --json headless [oneoff/expiring]": {
+    "rc": 0,
+    "out": "{\"lane\":\"headless\",\"order\":[{\"account\":\"iu\",\"reason\":\"expiring-capacity\",\"weight\":0.16572815184059705},{\"account\":\"me2\",\"reason\":\"spill\",\"weight\":0.05667144124753112}],\"at\":\"2027-01-15T08:00:00.000Z\"}\n"
+  },
+  "pick --dry --why bulk [oneoff/expiring]": {
+    "rc": 0,
+    "out": "unset CLAUDE_CONFIG_DIR\n# picked=iu reason=expiring-capacity stale=false\n"
+  },
+  "rank --json bulk [oneoff/expiring]": {
+    "rc": 0,
+    "out": "{\"lane\":\"bulk\",\"order\":[{\"account\":\"iu\",\"reason\":\"expiring-capacity\",\"weight\":0.16572815184059705},{\"account\":\"me2\",\"reason\":\"home\",\"weight\":0.05667144124753112}],\"at\":\"2027-01-15T08:00:00.000Z\"}\n"
+  },
+  "pick --dry --why lead [oneoff/expiring]": {
+    "rc": 0,
+    "out": "unset CLAUDE_CONFIG_DIR\n# picked=iu reason=expiring-capacity stale=false\n"
+  },
+  "rank --json lead [oneoff/expiring]": {
+    "rc": 0,
+    "out": "{\"lane\":\"lead\",\"order\":[{\"account\":\"iu\",\"reason\":\"expiring-capacity\",\"weight\":0.16572815184059705},{\"account\":\"me2\",\"reason\":\"spill\",\"weight\":0.05667144124753112}],\"at\":\"2027-01-15T08:00:00.000Z\"}\n"
+  },
+  "pick --dry --why batch:7 [oneoff/expiring]": {
+    "rc": 0,
+    "out": "unset CLAUDE_CONFIG_DIR\n# picked=iu reason=expiring-capacity stale=false\n"
+  },
+  "rank --json batch:7 [oneoff/expiring]": {
+    "rc": 0,
+    "out": "{\"lane\":\"batch:7\",\"order\":[{\"account\":\"iu\",\"reason\":\"expiring-capacity\",\"weight\":0.16572815184059705},{\"account\":\"me2\",\"reason\":\"home\",\"weight\":0.05667144124753112}],\"at\":\"2027-01-15T08:00:00.000Z\"}\n"
+  },
+  "pick --dry --why unknown-lane [oneoff/expiring]": {
+    "rc": 0,
+    "out": "unset CLAUDE_CONFIG_DIR\n# picked=iu reason=expiring-capacity stale=false\n"
+  },
+  "rank --json unknown-lane [oneoff/expiring]": {
+    "rc": 0,
+    "out": "{\"lane\":\"unknown-lane\",\"order\":[{\"account\":\"iu\",\"reason\":\"expiring-capacity\",\"weight\":0.16572815184059705},{\"account\":\"me2\",\"reason\":\"spill\",\"weight\":0.05667144124753112}],\"at\":\"2027-01-15T08:00:00.000Z\"}\n"
+  },
+  "rank text [oneoff/expiring]": {
+    "rc": 0,
+    "out": "1. iu  expiring-capacity  w=0.166\n2. me2  home  w=0.057\n"
+  },
+  "usage [oneoff/expiring]": {
+    "rc": 0,
+    "out": "iu ultra  7d 80% ↺01-16 16:00  age 60s  auth ok\nme max (disabled)  5h 4% ↺01-15 11:00  7d 54% ↺01-17 06:00  age 60s  auth ok\nme2 max  5h 85% ↺01-15 11:00  7d 11% ↺01-20 18:00  age 60s  auth ok\n"
+  },
+  "usage --json [oneoff/expiring]": {
+    "rc": 0,
+    "out": "{\n  \"default_account\": \"iu\",\n  \"accounts\": [\n    {\n      \"id\": \"iu\",\n      \"plan\": \"ultra\",\n      \"session_limit\": false,\n      \"enabled\": true,\n      \"five_hour\": null,\n      \"seven_day\": 80,\n      \"five_hour_resets_at\": null,\n      \"seven_day_resets_at\": 1800115200,\n      \"age_s\": 60,\n      \"five_hour_age_s\": null,\n      \"seven_day_age_s\": 60,\n      \"source\": \"oauth\",\n      \"auth_ok\": true,\n      \"exhausted_until\": null\n    },\n    {\n      \"id\": \"me\",\n      \"plan\": \"max\",\n      \"session_limit\": true,\n      \"enabled\": false,\n      \"five_hour\": 4,\n      \"seven_day\": 54,\n      \"five_hour_resets_at\": 1800010800,\n      \"seven_day_resets_at\": 1800165600,\n      \"age_s\": 60,\n      \"five_hour_age_s\": 60,\n      \"seven_day_age_s\": 60,\n      \"source\": \"oauth\",\n      \"auth_ok\": true,\n      \"exhausted_until\": null\n    },\n    {\n      \"id\": \"me2\",\n      \"plan\": \"max\",\n      \"session_limit\": true,\n      \"enabled\": true,\n      \"five_hour\": 85,\n      \"seven_day\": 11,\n      \"five_hour_resets_at\": 1800010800,\n      \"seven_day_resets_at\": 1800468000,\n      \"age_s\": 60,\n      \"five_hour_age_s\": 60,\n      \"seven_day_age_s\": 60,\n      \"source\": \"oauth\",\n      \"auth_ok\": true,\n      \"exhausted_until\": null\n    }\n  ]\n}\n"
+  },
+  "expiry [oneoff/expiring]": {
+    "rc": 0,
+    "out": "iu  WARN  login valid until 2027-01-20 (5 d left)\nme2  WARN  login valid until 2027-01-20 (5 d left)\n"
+  },
+  "expiry --json [oneoff/expiring]": {
+    "rc": 0,
+    "out": "{\n  \"accounts\": [\n    {\n      \"id\": \"iu\",\n      \"default\": true,\n      \"grade\": \"WARN\",\n      \"severity\": \"WARN\",\n      \"refresh_expires_at\": 1800432000000,\n      \"access_expires_at\": 1800003600000,\n      \"tier\": \"default_claude_max_5x\",\n      \"plan_detected\": \"max\",\n      \"days_left\": 5,\n      \"expired\": false,\n      \"detail\": \"login valid until 2027-01-20 (5 d left)\"\n    },\n    {\n      \"id\": \"me2\",\n      \"default\": false,\n      \"grade\": \"WARN\",\n      \"severity\": \"WARN\",\n      \"refresh_expires_at\": 1800432000000,\n      \"access_expires_at\": 1800003600000,\n      \"tier\": \"default_claude_max_5x\",\n      \"plan_detected\": \"max\",\n      \"days_left\": 5,\n      \"expired\": false,\n      \"detail\": \"login valid until 2027-01-20 (5 d left)\"\n    }\n  ]\n}\n"
+  },
+  "expiry --json --ids me [oneoff/expiring]": {
+    "rc": 0,
+    "out": "{\n  \"accounts\": [\n    {\n      \"id\": \"me\",\n      \"default\": false,\n      \"grade\": \"WARN\",\n      \"severity\": \"WARN\",\n      \"refresh_expires_at\": 1800432000000,\n      \"access_expires_at\": 1800003600000,\n      \"tier\": \"default_claude_max_5x\",\n      \"plan_detected\": \"max\",\n      \"days_left\": 5,\n      \"expired\": false,\n      \"detail\": \"login valid until 2027-01-20 (5 d left)\"\n    }\n  ]\n}\n"
+  },
+  "account [oneoff/expiring]": {
+    "rc": 0,
+    "out": "iu\n"
+  },
+  "account --badge [oneoff/expiring]": {
+    "rc": 0,
+    "out": "IU\n"
+  },
+  "fable [oneoff/expiring]": {
+    "rc": 0,
+    "out": "iu\n"
+  },
+  "env iu [oneoff/expiring]": {
+    "rc": 0,
+    "out": "unset CLAUDE_CONFIG_DIR\n"
+  },
+  "env me2 [oneoff/expiring]": {
+    "rc": 0,
+    "out": "export CLAUDE_CONFIG_DIR='/home/x/.claude-me2'\n"
+  },
+  "env nope [oneoff/expiring]": {
+    "rc": 2,
+    "out": ""
+  },
+  "account in a registered dir [oneoff/expiring]": {
+    "rc": 0,
+    "out": "ME2\n"
+  },
+  "account in an unknown dir [oneoff/expiring]": {
+    "rc": 0,
+    "out": "?\n"
+  },
+  "pick --dry --why interactive [oneoff/walled]": {
+    "rc": 0,
+    "out": "unset CLAUDE_CONFIG_DIR\n# picked=iu reason=home stale=false\n"
+  },
+  "rank --json interactive [oneoff/walled]": {
+    "rc": 0,
+    "out": "{\"lane\":\"interactive\",\"order\":[{\"account\":\"iu\",\"reason\":\"home\",\"weight\":0.022360679774997897}],\"at\":\"2027-01-15T08:00:00.000Z\"}\n"
+  },
+  "pick --dry --why headless [oneoff/walled]": {
+    "rc": 0,
+    "out": "unset CLAUDE_CONFIG_DIR\n# picked=iu reason=expiring-capacity stale=false\n"
+  },
+  "rank --json headless [oneoff/walled]": {
+    "rc": 0,
+    "out": "{\"lane\":\"headless\",\"order\":[{\"account\":\"iu\",\"reason\":\"expiring-capacity\",\"weight\":0.022360679774997897}],\"at\":\"2027-01-15T08:00:00.000Z\"}\n"
+  },
+  "pick --dry --why bulk [oneoff/walled]": {
+    "rc": 0,
+    "out": "unset CLAUDE_CONFIG_DIR\n# picked=iu reason=expiring-capacity stale=false\n"
+  },
+  "rank --json bulk [oneoff/walled]": {
+    "rc": 0,
+    "out": "{\"lane\":\"bulk\",\"order\":[{\"account\":\"iu\",\"reason\":\"expiring-capacity\",\"weight\":0.022360679774997897}],\"at\":\"2027-01-15T08:00:00.000Z\"}\n"
+  },
+  "pick --dry --why lead [oneoff/walled]": {
+    "rc": 0,
+    "out": "unset CLAUDE_CONFIG_DIR\n# picked=iu reason=expiring-capacity stale=false\n"
+  },
+  "rank --json lead [oneoff/walled]": {
+    "rc": 0,
+    "out": "{\"lane\":\"lead\",\"order\":[{\"account\":\"iu\",\"reason\":\"expiring-capacity\",\"weight\":0.022360679774997897}],\"at\":\"2027-01-15T08:00:00.000Z\"}\n"
+  },
+  "pick --dry --why batch:7 [oneoff/walled]": {
+    "rc": 0,
+    "out": "unset CLAUDE_CONFIG_DIR\n# picked=iu reason=expiring-capacity stale=false\n"
+  },
+  "rank --json batch:7 [oneoff/walled]": {
+    "rc": 0,
+    "out": "{\"lane\":\"batch:7\",\"order\":[{\"account\":\"iu\",\"reason\":\"expiring-capacity\",\"weight\":0.022360679774997897}],\"at\":\"2027-01-15T08:00:00.000Z\"}\n"
+  },
+  "pick --dry --why unknown-lane [oneoff/walled]": {
+    "rc": 0,
+    "out": "unset CLAUDE_CONFIG_DIR\n# picked=iu reason=expiring-capacity stale=false\n"
+  },
+  "rank --json unknown-lane [oneoff/walled]": {
+    "rc": 0,
+    "out": "{\"lane\":\"unknown-lane\",\"order\":[{\"account\":\"iu\",\"reason\":\"expiring-capacity\",\"weight\":0.022360679774997897}],\"at\":\"2027-01-15T08:00:00.000Z\"}\n"
+  },
+  "rank text [oneoff/walled]": {
+    "rc": 0,
+    "out": "1. iu  expiring-capacity  w=0.022\n"
+  },
+  "usage [oneoff/walled]": {
+    "rc": 0,
+    "out": "iu ultra  7d 97% ↺01-16 04:00  age 60s  auth ok\nme max (disabled)  5h 95% ↺01-15 11:00  7d 40% ↺01-19 02:00  age 60s  auth FAILED\nme2 max  5h 10% ↺01-15 11:00  7d 100% ↺01-17 20:00  age 400s  auth ok  EXHAUSTED\n"
+  },
+  "usage --json [oneoff/walled]": {
+    "rc": 0,
+    "out": "{\n  \"default_account\": \"iu\",\n  \"accounts\": [\n    {\n      \"id\": \"iu\",\n      \"plan\": \"ultra\",\n      \"session_limit\": false,\n      \"enabled\": true,\n      \"five_hour\": null,\n      \"seven_day\": 97,\n      \"five_hour_resets_at\": null,\n      \"seven_day_resets_at\": 1800072000,\n      \"age_s\": 60,\n      \"five_hour_age_s\": null,\n      \"seven_day_age_s\": 60,\n      \"source\": \"oauth\",\n      \"auth_ok\": true,\n      \"exhausted_until\": null\n    },\n    {\n      \"id\": \"me\",\n      \"plan\": \"max\",\n      \"session_limit\": true,\n      \"enabled\": false,\n      \"five_hour\": 95,\n      \"seven_day\": 40,\n      \"five_hour_resets_at\": 1800010800,\n      \"seven_day_resets_at\": 1800324000,\n      \"age_s\": 60,\n      \"five_hour_age_s\": 60,\n      \"seven_day_age_s\": 60,\n      \"source\": \"oauth\",\n      \"auth_ok\": false,\n      \"exhausted_until\": null\n    },\n    {\n      \"id\": \"me2\",\n      \"plan\": \"max\",\n      \"session_limit\": true,\n      \"enabled\": true,\n      \"five_hour\": 10,\n      \"seven_day\": 100,\n      \"five_hour_resets_at\": 1800010800,\n      \"seven_day_resets_at\": 1800216000,\n      \"age_s\": 400,\n      \"five_hour_age_s\": 400,\n      \"seven_day_age_s\": 400,\n      \"source\": \"oauth\",\n      \"auth_ok\": true,\n      \"exhausted_until\": 1800000600\n    }\n  ]\n}\n"
+  },
+  "expiry [oneoff/walled]": {
+    "rc": 0,
+    "out": "iu  WARN  login valid until 2027-01-20 (5 d left)\nme2  WARN  login valid until 2027-01-20 (5 d left)\n"
+  },
+  "expiry --json [oneoff/walled]": {
+    "rc": 0,
+    "out": "{\n  \"accounts\": [\n    {\n      \"id\": \"iu\",\n      \"default\": true,\n      \"grade\": \"WARN\",\n      \"severity\": \"WARN\",\n      \"refresh_expires_at\": 1800432000000,\n      \"access_expires_at\": 1800003600000,\n      \"tier\": \"default_claude_max_5x\",\n      \"plan_detected\": \"max\",\n      \"days_left\": 5,\n      \"expired\": false,\n      \"detail\": \"login valid until 2027-01-20 (5 d left)\"\n    },\n    {\n      \"id\": \"me2\",\n      \"default\": false,\n      \"grade\": \"WARN\",\n      \"severity\": \"WARN\",\n      \"refresh_expires_at\": 1800432000000,\n      \"access_expires_at\": 1800003600000,\n      \"tier\": \"default_claude_max_5x\",\n      \"plan_detected\": \"max\",\n      \"days_left\": 5,\n      \"expired\": false,\n      \"detail\": \"login valid until 2027-01-20 (5 d left)\"\n    }\n  ]\n}\n"
+  },
+  "expiry --json --ids me [oneoff/walled]": {
+    "rc": 0,
+    "out": "{\n  \"accounts\": [\n    {\n      \"id\": \"me\",\n      \"default\": false,\n      \"grade\": \"WARN\",\n      \"severity\": \"WARN\",\n      \"refresh_expires_at\": 1800432000000,\n      \"access_expires_at\": 1800003600000,\n      \"tier\": \"default_claude_max_5x\",\n      \"plan_detected\": \"max\",\n      \"days_left\": 5,\n      \"expired\": false,\n      \"detail\": \"login valid until 2027-01-20 (5 d left)\"\n    }\n  ]\n}\n"
+  },
+  "account [oneoff/walled]": {
+    "rc": 0,
+    "out": "iu\n"
+  },
+  "account --badge [oneoff/walled]": {
+    "rc": 0,
+    "out": "IU\n"
+  },
+  "fable [oneoff/walled]": {
+    "rc": 0,
+    "out": "iu\n"
+  },
+  "env iu [oneoff/walled]": {
+    "rc": 0,
+    "out": "unset CLAUDE_CONFIG_DIR\n"
+  },
+  "env me2 [oneoff/walled]": {
+    "rc": 0,
+    "out": "export CLAUDE_CONFIG_DIR='/home/x/.claude-me2'\n"
+  },
+  "env nope [oneoff/walled]": {
+    "rc": 2,
+    "out": ""
+  },
+  "account in a registered dir [oneoff/walled]": {
+    "rc": 0,
+    "out": "ME2\n"
+  },
+  "account in an unknown dir [oneoff/walled]": {
+    "rc": 0,
+    "out": "?\n"
+  },
+  "pick interactive [oneoff/calm]": {
+    "rc": 0,
+    "out": "unset CLAUDE_CONFIG_DIR\n",
+    "state": {
+      "iu.sample.json": "{\"s\":null,\"w\":12,\"s_reset\":null,\"w_reset\":1800360000,\"s_ts\":null,\"w_ts\":1799999940000,\"src\":\"oauth\"}",
+      "me.sample.json": "{\"s\":10,\"w\":30,\"s_reset\":1800010800,\"w_reset\":1800432000,\"s_ts\":1799999940000,\"w_ts\":1799999940000,\"src\":\"oauth\"}",
+      "me2.sample.json": "{\"s\":5,\"w\":11,\"s_reset\":1800010800,\"w_reset\":1800540000,\"s_ts\":1799999940000,\"w_ts\":1799999940000,\"src\":\"oauth\"}",
+      "picks.jsonl": "{\"ts\":\"2027-01-15T08:00:00.000Z\",\"lane\":\"interactive\",\"picked\":\"iu\",\"reason\":\"home\",\"stale\":false,\"iu\":{\"s\":null,\"w\":12},\"me\":{\"s\":10,\"w\":30},\"me2\":{\"s\":5,\"w\":11}}\n"
+    }
+  },
+  "pick headless [oneoff/calm]": {
+    "rc": 0,
+    "out": "unset CLAUDE_CONFIG_DIR\n",
+    "state": {
+      "iu.sample.json": "{\"s\":null,\"w\":12,\"s_reset\":null,\"w_reset\":1800360000,\"s_ts\":null,\"w_ts\":1799999940000,\"src\":\"oauth\"}",
+      "me.sample.json": "{\"s\":10,\"w\":30,\"s_reset\":1800010800,\"w_reset\":1800432000,\"s_ts\":1799999940000,\"w_ts\":1799999940000,\"src\":\"oauth\"}",
+      "me2.sample.json": "{\"s\":5,\"w\":11,\"s_reset\":1800010800,\"w_reset\":1800540000,\"s_ts\":1799999940000,\"w_ts\":1799999940000,\"src\":\"oauth\"}",
+      "picks.jsonl": "{\"ts\":\"2027-01-15T08:00:00.000Z\",\"lane\":\"headless\",\"picked\":\"iu\",\"reason\":\"home\",\"stale\":false,\"iu\":{\"s\":null,\"w\":12},\"me\":{\"s\":10,\"w\":30},\"me2\":{\"s\":5,\"w\":11}}\n"
+    }
+  },
+  "pick bulk [oneoff/calm]": {
+    "rc": 0,
+    "out": "export CLAUDE_CONFIG_DIR='/home/x/.claude-me2'\n",
+    "state": {
+      "iu.sample.json": "{\"s\":null,\"w\":12,\"s_reset\":null,\"w_reset\":1800360000,\"s_ts\":null,\"w_ts\":1799999940000,\"src\":\"oauth\"}",
+      "me.sample.json": "{\"s\":10,\"w\":30,\"s_reset\":1800010800,\"w_reset\":1800432000,\"s_ts\":1799999940000,\"w_ts\":1799999940000,\"src\":\"oauth\"}",
+      "me2.sample.json": "{\"s\":5,\"w\":11,\"s_reset\":1800010800,\"w_reset\":1800540000,\"s_ts\":1799999940000,\"w_ts\":1799999940000,\"src\":\"oauth\"}",
+      "picks.jsonl": "{\"ts\":\"2027-01-15T08:00:00.000Z\",\"lane\":\"bulk\",\"picked\":\"me2\",\"reason\":\"home\",\"stale\":false,\"iu\":{\"s\":null,\"w\":12},\"me\":{\"s\":10,\"w\":30},\"me2\":{\"s\":5,\"w\":11}}\n"
+    }
+  },
+  "pick lead [oneoff/calm]": {
+    "rc": 0,
+    "out": "unset CLAUDE_CONFIG_DIR\n",
+    "state": {
+      "iu.sample.json": "{\"s\":null,\"w\":12,\"s_reset\":null,\"w_reset\":1800360000,\"s_ts\":null,\"w_ts\":1799999940000,\"src\":\"oauth\"}",
+      "me.sample.json": "{\"s\":10,\"w\":30,\"s_reset\":1800010800,\"w_reset\":1800432000,\"s_ts\":1799999940000,\"w_ts\":1799999940000,\"src\":\"oauth\"}",
+      "me2.sample.json": "{\"s\":5,\"w\":11,\"s_reset\":1800010800,\"w_reset\":1800540000,\"s_ts\":1799999940000,\"w_ts\":1799999940000,\"src\":\"oauth\"}",
+      "picks.jsonl": "{\"ts\":\"2027-01-15T08:00:00.000Z\",\"lane\":\"lead\",\"picked\":\"iu\",\"reason\":\"spill\",\"stale\":false,\"iu\":{\"s\":null,\"w\":12},\"me\":{\"s\":10,\"w\":30},\"me2\":{\"s\":5,\"w\":11}}\n"
+    }
+  },
+  "pick batch:7 [oneoff/calm]": {
+    "rc": 0,
+    "out": "export CLAUDE_CONFIG_DIR='/home/x/.claude-me2'\n",
+    "state": {
+      "iu.sample.json": "{\"s\":null,\"w\":12,\"s_reset\":null,\"w_reset\":1800360000,\"s_ts\":null,\"w_ts\":1799999940000,\"src\":\"oauth\"}",
+      "me.sample.json": "{\"s\":10,\"w\":30,\"s_reset\":1800010800,\"w_reset\":1800432000,\"s_ts\":1799999940000,\"w_ts\":1799999940000,\"src\":\"oauth\"}",
+      "me2.sample.json": "{\"s\":5,\"w\":11,\"s_reset\":1800010800,\"w_reset\":1800540000,\"s_ts\":1799999940000,\"w_ts\":1799999940000,\"src\":\"oauth\"}",
+      "picks.jsonl": "{\"ts\":\"2027-01-15T08:00:00.000Z\",\"lane\":\"batch:7\",\"picked\":\"me2\",\"reason\":\"home\",\"stale\":false,\"iu\":{\"s\":null,\"w\":12},\"me\":{\"s\":10,\"w\":30},\"me2\":{\"s\":5,\"w\":11}}\n"
+    }
+  },
+  "pick unknown-lane [oneoff/calm]": {
+    "rc": 0,
+    "out": "unset CLAUDE_CONFIG_DIR\n",
+    "state": {
+      "iu.sample.json": "{\"s\":null,\"w\":12,\"s_reset\":null,\"w_reset\":1800360000,\"s_ts\":null,\"w_ts\":1799999940000,\"src\":\"oauth\"}",
+      "me.sample.json": "{\"s\":10,\"w\":30,\"s_reset\":1800010800,\"w_reset\":1800432000,\"s_ts\":1799999940000,\"w_ts\":1799999940000,\"src\":\"oauth\"}",
+      "me2.sample.json": "{\"s\":5,\"w\":11,\"s_reset\":1800010800,\"w_reset\":1800540000,\"s_ts\":1799999940000,\"w_ts\":1799999940000,\"src\":\"oauth\"}",
+      "picks.jsonl": "{\"ts\":\"2027-01-15T08:00:00.000Z\",\"lane\":\"unknown-lane\",\"picked\":\"iu\",\"reason\":\"spill\",\"stale\":false,\"iu\":{\"s\":null,\"w\":12},\"me\":{\"s\":10,\"w\":30},\"me2\":{\"s\":5,\"w\":11}}\n"
+    }
+  },
+  "pick bulk [plain/calm] with the fixed random source": {
+    "rc": 0,
+    "out": "export CLAUDE_CONFIG_DIR='/home/x/.claude-me'\n# picked=me reason=home stale=false\n",
+    "state": {
+      "iu.sample.json": "{\"s\":null,\"w\":12,\"s_reset\":null,\"w_reset\":1800360000,\"s_ts\":null,\"w_ts\":1799999940000,\"src\":\"oauth\"}",
+      "me.sample.json": "{\"s\":10,\"w\":30,\"s_reset\":1800010800,\"w_reset\":1800432000,\"s_ts\":1799999940000,\"w_ts\":1799999940000,\"src\":\"oauth\"}",
+      "me2.sample.json": "{\"s\":5,\"w\":11,\"s_reset\":1800010800,\"w_reset\":1800540000,\"s_ts\":1799999940000,\"w_ts\":1799999940000,\"src\":\"oauth\"}",
+      "picks.jsonl": "{\"ts\":\"2027-01-15T08:00:00.000Z\",\"lane\":\"bulk\",\"picked\":\"me\",\"reason\":\"home\",\"stale\":false,\"iu\":{\"s\":null,\"w\":12},\"me\":{\"s\":10,\"w\":30},\"me2\":{\"s\":5,\"w\":11}}\n"
+    }
+  },
+  "pick bulk [modes/calm] with the fixed random source": {
+    "rc": 0,
+    "out": "export CLAUDE_CONFIG_DIR='/home/x/.claude-me2'\n# picked=me2 reason=drain stale=false\n",
+    "state": {
+      "iu.sample.json": "{\"s\":null,\"w\":12,\"s_reset\":null,\"w_reset\":1800360000,\"s_ts\":null,\"w_ts\":1799999940000,\"src\":\"oauth\"}",
+      "me.sample.json": "{\"s\":10,\"w\":30,\"s_reset\":1800010800,\"w_reset\":1800432000,\"s_ts\":1799999940000,\"w_ts\":1799999940000,\"src\":\"oauth\"}",
+      "me2.sample.json": "{\"s\":5,\"w\":11,\"s_reset\":1800010800,\"w_reset\":1800540000,\"s_ts\":1799999940000,\"w_ts\":1799999940000,\"src\":\"oauth\"}",
+      "picks.jsonl": "{\"ts\":\"2027-01-15T08:00:00.000Z\",\"lane\":\"bulk\",\"picked\":\"me2\",\"reason\":\"drain\",\"stale\":false,\"iu\":{\"s\":null,\"w\":12},\"me\":{\"s\":10,\"w\":30},\"me2\":{\"s\":5,\"w\":11}}\n"
+    }
+  },
+  "pick with an unreadable registry": {
+    "rc": 4,
+    "out": "unset CLAUDE_CONFIG_DIR\n# picked=iu reason=registry-error stale=false\n"
+  },
+  "usage with an unreadable registry": {
+    "rc": 2,
+    "out": ""
+  },
+  "record then read": {
+    "rc": 0,
+    "out": "",
+    "state": {
+      "iu.sample.json": "{\"s\":null,\"w\":12,\"s_reset\":null,\"w_reset\":1800360000,\"s_ts\":null,\"w_ts\":1799999940000,\"src\":\"oauth\"}",
+      "me.sample.json": "{\"s\":33,\"s_reset\":1800000999,\"s_ts\":1800000000000,\"w\":44,\"w_reset\":null,\"w_ts\":1800000000000,\"src\":\"statusline\"}",
+      "me.statusline.json": "{\"ts\":1800000000000}",
+      "me2.sample.json": "{\"s\":5,\"w\":11,\"s_reset\":1800010800,\"w_reset\":1800540000,\"s_ts\":1799999940000,\"w_ts\":1799999940000,\"src\":\"oauth\"}"
+    }
+  },
+  "record an ultra account keeps no session half": {
+    "rc": 0,
+    "out": "",
+    "state": {
+      "iu.sample.json": "{\"s\":null,\"s_reset\":null,\"s_ts\":null,\"w\":44,\"w_reset\":1800100000,\"w_ts\":1800000000000,\"src\":\"statusline\"}",
+      "iu.statusline.json": "{\"ts\":1800000000000}",
+      "me.sample.json": "{\"s\":10,\"w\":30,\"s_reset\":1800010800,\"w_reset\":1800432000,\"s_ts\":1799999940000,\"w_ts\":1799999940000,\"src\":\"oauth\"}",
+      "me2.sample.json": "{\"s\":5,\"w\":11,\"s_reset\":1800010800,\"w_reset\":1800540000,\"s_ts\":1799999940000,\"w_ts\":1799999940000,\"src\":\"oauth\"}"
+    }
+  },
+  "record an unknown account": {
+    "rc": 2,
+    "out": "",
+    "state": {
+      "iu.sample.json": "{\"s\":null,\"w\":12,\"s_reset\":null,\"w_reset\":1800360000,\"s_ts\":null,\"w_ts\":1799999940000,\"src\":\"oauth\"}",
+      "me.sample.json": "{\"s\":10,\"w\":30,\"s_reset\":1800010800,\"w_reset\":1800432000,\"s_ts\":1799999940000,\"w_ts\":1799999940000,\"src\":\"oauth\"}",
+      "me2.sample.json": "{\"s\":5,\"w\":11,\"s_reset\":1800010800,\"w_reset\":1800540000,\"s_ts\":1799999940000,\"w_ts\":1799999940000,\"src\":\"oauth\"}"
+    }
+  },
+  "exhausted": {
+    "rc": 0,
+    "out": "",
+    "state": {
+      "iu.sample.json": "{\"s\":null,\"w\":12,\"s_reset\":null,\"w_reset\":1800360000,\"s_ts\":null,\"w_ts\":1799999940000,\"src\":\"oauth\"}",
+      "me.exhausted.json": "{\"until\":1800000999}",
+      "me.sample.json": "{\"s\":10,\"w\":30,\"s_reset\":1800010800,\"w_reset\":1800432000,\"s_ts\":1799999940000,\"w_ts\":1799999940000,\"src\":\"oauth\"}",
+      "me2.sample.json": "{\"s\":5,\"w\":11,\"s_reset\":1800010800,\"w_reset\":1800540000,\"s_ts\":1799999940000,\"w_ts\":1799999940000,\"src\":\"oauth\"}"
+    }
+  },
+  "exhausted without until": {
+    "rc": 2,
+    "out": "",
+    "state": {
+      "iu.sample.json": "{\"s\":null,\"w\":12,\"s_reset\":null,\"w_reset\":1800360000,\"s_ts\":null,\"w_ts\":1799999940000,\"src\":\"oauth\"}",
+      "me.sample.json": "{\"s\":10,\"w\":30,\"s_reset\":1800010800,\"w_reset\":1800432000,\"s_ts\":1799999940000,\"w_ts\":1799999940000,\"src\":\"oauth\"}",
+      "me2.sample.json": "{\"s\":5,\"w\":11,\"s_reset\":1800010800,\"w_reset\":1800540000,\"s_ts\":1799999940000,\"w_ts\":1799999940000,\"src\":\"oauth\"}"
+    }
+  },
+  "refresh --all, logged in, no Keychain token": {
+    "rc": 0,
+    "out": "",
+    "state": {
+      "iu.relogin-ask.json": "{\"ts\":1800000000000}",
+      "iu.sample.json": "{\"s\":null,\"w\":12,\"s_reset\":null,\"w_reset\":1800360000,\"s_ts\":null,\"w_ts\":1799999940000,\"src\":\"oauth\"}",
+      "iu.verified.json": "{\"ts\":1800000000000}",
+      "me.sample.json": "{\"s\":10,\"w\":30,\"s_reset\":1800010800,\"w_reset\":1800432000,\"s_ts\":1799999940000,\"w_ts\":1799999940000,\"src\":\"oauth\"}",
+      "me.verified.json": "{\"ts\":1800000000000}",
+      "me2.sample.json": "{\"s\":5,\"w\":11,\"s_reset\":1800010800,\"w_reset\":1800540000,\"s_ts\":1799999940000,\"w_ts\":1799999940000,\"src\":\"oauth\"}",
+      "me2.verified.json": "{\"ts\":1800000000000}",
+      "relogin-ask.cap": "{\"ts\":1800000000000}"
+    }
+  },
+  "refresh --all on stale samples": {
+    "rc": 0,
+    "out": "",
+    "state": {
+      "iu.relogin-ask.json": "{\"ts\":1800000000000}",
+      "iu.sample.json": "{\"s\":null,\"w\":12,\"s_reset\":null,\"w_reset\":1800360000,\"s_ts\":null,\"w_ts\":1799989200000,\"src\":\"oauth\"}",
+      "iu.verified.json": "{\"ts\":1800000000000}",
+      "me.sample.json": "{\"s\":10,\"w\":30,\"s_reset\":1800010800,\"w_reset\":1800432000,\"s_ts\":1799989200000,\"w_ts\":1799989200000,\"src\":\"oauth\"}",
+      "me.verified.json": "{\"ts\":1800000000000}",
+      "me2.sample.json": "{\"s\":5,\"w\":11,\"s_reset\":1800010800,\"w_reset\":1800540000,\"s_ts\":1799989200000,\"w_ts\":1799989200000,\"src\":\"oauth\"}",
+      "me2.verified.json": "{\"ts\":1800000000000}",
+      "relogin-ask.cap": "{\"ts\":1800000000000}"
+    }
+  },
+  "refresh --ids me": {
+    "rc": 0,
+    "out": "",
+    "state": {
+      "iu.sample.json": "{\"s\":null,\"w\":12,\"s_reset\":null,\"w_reset\":1800360000,\"s_ts\":null,\"w_ts\":1799989200000,\"src\":\"oauth\"}",
+      "me.sample.json": "{\"s\":10,\"w\":30,\"s_reset\":1800010800,\"w_reset\":1800432000,\"s_ts\":1799989200000,\"w_ts\":1799989200000,\"src\":\"oauth\"}",
+      "me.verified.json": "{\"ts\":1800000000000}",
+      "me2.sample.json": "{\"s\":5,\"w\":11,\"s_reset\":1800010800,\"w_reset\":1800540000,\"s_ts\":1799989200000,\"w_ts\":1799989200000,\"src\":\"oauth\"}"
+    }
+  },
+  "unknown verb": {
+    "rc": 2,
+    "out": ""
+  },
+  "latest without a transcript": {
+    "rc": 1,
+    "out": ""
+  },
+  "latest": {
+    "rc": 0,
+    "out": "aaaa-1111\n"
+  },
+  "session": {
+    "rc": 0,
+    "out": "me2\n"
+  },
+  "session unknown": {
+    "rc": 1,
+    "out": ""
   }
- },
- "pick headless [oneoff/calm]": {
-  "rc": 0,
-  "out": "unset CLAUDE_CONFIG_DIR\n",
-  "state": {
-   "iu.sample.json": "{\"s\":null,\"w\":12,\"s_reset\":null,\"w_reset\":1800360000,\"s_ts\":null,\"w_ts\":1799999940000,\"src\":\"oauth\"}",
-   "me.sample.json": "{\"s\":10,\"w\":30,\"s_reset\":1800010800,\"w_reset\":1800432000,\"s_ts\":1799999940000,\"w_ts\":1799999940000,\"src\":\"oauth\"}",
-   "me2.sample.json": "{\"s\":5,\"w\":11,\"s_reset\":1800010800,\"w_reset\":1800540000,\"s_ts\":1799999940000,\"w_ts\":1799999940000,\"src\":\"oauth\"}",
-   "picks.jsonl": "{\"ts\":\"2027-01-15T08:00:00.000Z\",\"lane\":\"headless\",\"picked\":\"iu\",\"reason\":\"home\",\"stale\":false,\"iu\":{\"s\":null,\"w\":12},\"me\":{\"s\":10,\"w\":30},\"me2\":{\"s\":5,\"w\":11}}\n"
-  }
- },
- "pick bulk [oneoff/calm]": {
-  "rc": 0,
-  "out": "export CLAUDE_CONFIG_DIR='/home/x/.claude-me2'\n",
-  "state": {
-   "iu.sample.json": "{\"s\":null,\"w\":12,\"s_reset\":null,\"w_reset\":1800360000,\"s_ts\":null,\"w_ts\":1799999940000,\"src\":\"oauth\"}",
-   "me.sample.json": "{\"s\":10,\"w\":30,\"s_reset\":1800010800,\"w_reset\":1800432000,\"s_ts\":1799999940000,\"w_ts\":1799999940000,\"src\":\"oauth\"}",
-   "me2.sample.json": "{\"s\":5,\"w\":11,\"s_reset\":1800010800,\"w_reset\":1800540000,\"s_ts\":1799999940000,\"w_ts\":1799999940000,\"src\":\"oauth\"}",
-   "picks.jsonl": "{\"ts\":\"2027-01-15T08:00:00.000Z\",\"lane\":\"bulk\",\"picked\":\"me2\",\"reason\":\"home\",\"stale\":false,\"iu\":{\"s\":null,\"w\":12},\"me\":{\"s\":10,\"w\":30},\"me2\":{\"s\":5,\"w\":11}}\n"
-  }
- },
- "pick lead [oneoff/calm]": {
-  "rc": 0,
-  "out": "unset CLAUDE_CONFIG_DIR\n",
-  "state": {
-   "iu.sample.json": "{\"s\":null,\"w\":12,\"s_reset\":null,\"w_reset\":1800360000,\"s_ts\":null,\"w_ts\":1799999940000,\"src\":\"oauth\"}",
-   "me.sample.json": "{\"s\":10,\"w\":30,\"s_reset\":1800010800,\"w_reset\":1800432000,\"s_ts\":1799999940000,\"w_ts\":1799999940000,\"src\":\"oauth\"}",
-   "me2.sample.json": "{\"s\":5,\"w\":11,\"s_reset\":1800010800,\"w_reset\":1800540000,\"s_ts\":1799999940000,\"w_ts\":1799999940000,\"src\":\"oauth\"}",
-   "picks.jsonl": "{\"ts\":\"2027-01-15T08:00:00.000Z\",\"lane\":\"lead\",\"picked\":\"iu\",\"reason\":\"spill\",\"stale\":false,\"iu\":{\"s\":null,\"w\":12},\"me\":{\"s\":10,\"w\":30},\"me2\":{\"s\":5,\"w\":11}}\n"
-  }
- },
- "pick wave:7 [oneoff/calm]": {
-  "rc": 0,
-  "out": "export CLAUDE_CONFIG_DIR='/home/x/.claude-me2'\n",
-  "state": {
-   "iu.sample.json": "{\"s\":null,\"w\":12,\"s_reset\":null,\"w_reset\":1800360000,\"s_ts\":null,\"w_ts\":1799999940000,\"src\":\"oauth\"}",
-   "me.sample.json": "{\"s\":10,\"w\":30,\"s_reset\":1800010800,\"w_reset\":1800432000,\"s_ts\":1799999940000,\"w_ts\":1799999940000,\"src\":\"oauth\"}",
-   "me2.sample.json": "{\"s\":5,\"w\":11,\"s_reset\":1800010800,\"w_reset\":1800540000,\"s_ts\":1799999940000,\"w_ts\":1799999940000,\"src\":\"oauth\"}",
-   "picks.jsonl": "{\"ts\":\"2027-01-15T08:00:00.000Z\",\"lane\":\"wave:7\",\"picked\":\"me2\",\"reason\":\"home\",\"stale\":false,\"iu\":{\"s\":null,\"w\":12},\"me\":{\"s\":10,\"w\":30},\"me2\":{\"s\":5,\"w\":11}}\n"
-  }
- },
- "pick unknown-lane [oneoff/calm]": {
-  "rc": 0,
-  "out": "unset CLAUDE_CONFIG_DIR\n",
-  "state": {
-   "iu.sample.json": "{\"s\":null,\"w\":12,\"s_reset\":null,\"w_reset\":1800360000,\"s_ts\":null,\"w_ts\":1799999940000,\"src\":\"oauth\"}",
-   "me.sample.json": "{\"s\":10,\"w\":30,\"s_reset\":1800010800,\"w_reset\":1800432000,\"s_ts\":1799999940000,\"w_ts\":1799999940000,\"src\":\"oauth\"}",
-   "me2.sample.json": "{\"s\":5,\"w\":11,\"s_reset\":1800010800,\"w_reset\":1800540000,\"s_ts\":1799999940000,\"w_ts\":1799999940000,\"src\":\"oauth\"}",
-   "picks.jsonl": "{\"ts\":\"2027-01-15T08:00:00.000Z\",\"lane\":\"unknown-lane\",\"picked\":\"iu\",\"reason\":\"spill\",\"stale\":false,\"iu\":{\"s\":null,\"w\":12},\"me\":{\"s\":10,\"w\":30},\"me2\":{\"s\":5,\"w\":11}}\n"
-  }
- },
- "pick bulk [plain/calm] with the fixed random source": {
-  "rc": 0,
-  "out": "export CLAUDE_CONFIG_DIR='/home/x/.claude-me'\n# picked=me reason=home stale=false\n",
-  "state": {
-   "iu.sample.json": "{\"s\":null,\"w\":12,\"s_reset\":null,\"w_reset\":1800360000,\"s_ts\":null,\"w_ts\":1799999940000,\"src\":\"oauth\"}",
-   "me.sample.json": "{\"s\":10,\"w\":30,\"s_reset\":1800010800,\"w_reset\":1800432000,\"s_ts\":1799999940000,\"w_ts\":1799999940000,\"src\":\"oauth\"}",
-   "me2.sample.json": "{\"s\":5,\"w\":11,\"s_reset\":1800010800,\"w_reset\":1800540000,\"s_ts\":1799999940000,\"w_ts\":1799999940000,\"src\":\"oauth\"}",
-   "picks.jsonl": "{\"ts\":\"2027-01-15T08:00:00.000Z\",\"lane\":\"bulk\",\"picked\":\"me\",\"reason\":\"home\",\"stale\":false,\"iu\":{\"s\":null,\"w\":12},\"me\":{\"s\":10,\"w\":30},\"me2\":{\"s\":5,\"w\":11}}\n"
-  }
- },
- "pick bulk [modes/calm] with the fixed random source": {
-  "rc": 0,
-  "out": "export CLAUDE_CONFIG_DIR='/home/x/.claude-me2'\n# picked=me2 reason=drain stale=false\n",
-  "state": {
-   "iu.sample.json": "{\"s\":null,\"w\":12,\"s_reset\":null,\"w_reset\":1800360000,\"s_ts\":null,\"w_ts\":1799999940000,\"src\":\"oauth\"}",
-   "me.sample.json": "{\"s\":10,\"w\":30,\"s_reset\":1800010800,\"w_reset\":1800432000,\"s_ts\":1799999940000,\"w_ts\":1799999940000,\"src\":\"oauth\"}",
-   "me2.sample.json": "{\"s\":5,\"w\":11,\"s_reset\":1800010800,\"w_reset\":1800540000,\"s_ts\":1799999940000,\"w_ts\":1799999940000,\"src\":\"oauth\"}",
-   "picks.jsonl": "{\"ts\":\"2027-01-15T08:00:00.000Z\",\"lane\":\"bulk\",\"picked\":\"me2\",\"reason\":\"drain\",\"stale\":false,\"iu\":{\"s\":null,\"w\":12},\"me\":{\"s\":10,\"w\":30},\"me2\":{\"s\":5,\"w\":11}}\n"
-  }
- },
- "pick with an unreadable registry": {
-  "rc": 4,
-  "out": "unset CLAUDE_CONFIG_DIR\n# picked=iu reason=registry-error stale=false\n"
- },
- "usage with an unreadable registry": {
-  "rc": 2,
-  "out": ""
- },
- "record then read": {
-  "rc": 0,
-  "out": "",
-  "state": {
-   "iu.sample.json": "{\"s\":null,\"w\":12,\"s_reset\":null,\"w_reset\":1800360000,\"s_ts\":null,\"w_ts\":1799999940000,\"src\":\"oauth\"}",
-   "me.sample.json": "{\"s\":33,\"s_reset\":1800000999,\"s_ts\":1800000000000,\"w\":44,\"w_reset\":null,\"w_ts\":1800000000000,\"src\":\"statusline\"}",
-   "me.statusline.json": "{\"ts\":1800000000000}",
-   "me2.sample.json": "{\"s\":5,\"w\":11,\"s_reset\":1800010800,\"w_reset\":1800540000,\"s_ts\":1799999940000,\"w_ts\":1799999940000,\"src\":\"oauth\"}"
-  }
- },
- "record an ultra account keeps no session half": {
-  "rc": 0,
-  "out": "",
-  "state": {
-   "iu.sample.json": "{\"s\":null,\"s_reset\":null,\"s_ts\":null,\"w\":44,\"w_reset\":1800100000,\"w_ts\":1800000000000,\"src\":\"statusline\"}",
-   "iu.statusline.json": "{\"ts\":1800000000000}",
-   "me.sample.json": "{\"s\":10,\"w\":30,\"s_reset\":1800010800,\"w_reset\":1800432000,\"s_ts\":1799999940000,\"w_ts\":1799999940000,\"src\":\"oauth\"}",
-   "me2.sample.json": "{\"s\":5,\"w\":11,\"s_reset\":1800010800,\"w_reset\":1800540000,\"s_ts\":1799999940000,\"w_ts\":1799999940000,\"src\":\"oauth\"}"
-  }
- },
- "record an unknown account": {
-  "rc": 2,
-  "out": "",
-  "state": {
-   "iu.sample.json": "{\"s\":null,\"w\":12,\"s_reset\":null,\"w_reset\":1800360000,\"s_ts\":null,\"w_ts\":1799999940000,\"src\":\"oauth\"}",
-   "me.sample.json": "{\"s\":10,\"w\":30,\"s_reset\":1800010800,\"w_reset\":1800432000,\"s_ts\":1799999940000,\"w_ts\":1799999940000,\"src\":\"oauth\"}",
-   "me2.sample.json": "{\"s\":5,\"w\":11,\"s_reset\":1800010800,\"w_reset\":1800540000,\"s_ts\":1799999940000,\"w_ts\":1799999940000,\"src\":\"oauth\"}"
-  }
- },
- "exhausted": {
-  "rc": 0,
-  "out": "",
-  "state": {
-   "iu.sample.json": "{\"s\":null,\"w\":12,\"s_reset\":null,\"w_reset\":1800360000,\"s_ts\":null,\"w_ts\":1799999940000,\"src\":\"oauth\"}",
-   "me.exhausted.json": "{\"until\":1800000999}",
-   "me.sample.json": "{\"s\":10,\"w\":30,\"s_reset\":1800010800,\"w_reset\":1800432000,\"s_ts\":1799999940000,\"w_ts\":1799999940000,\"src\":\"oauth\"}",
-   "me2.sample.json": "{\"s\":5,\"w\":11,\"s_reset\":1800010800,\"w_reset\":1800540000,\"s_ts\":1799999940000,\"w_ts\":1799999940000,\"src\":\"oauth\"}"
-  }
- },
- "exhausted without until": {
-  "rc": 2,
-  "out": "",
-  "state": {
-   "iu.sample.json": "{\"s\":null,\"w\":12,\"s_reset\":null,\"w_reset\":1800360000,\"s_ts\":null,\"w_ts\":1799999940000,\"src\":\"oauth\"}",
-   "me.sample.json": "{\"s\":10,\"w\":30,\"s_reset\":1800010800,\"w_reset\":1800432000,\"s_ts\":1799999940000,\"w_ts\":1799999940000,\"src\":\"oauth\"}",
-   "me2.sample.json": "{\"s\":5,\"w\":11,\"s_reset\":1800010800,\"w_reset\":1800540000,\"s_ts\":1799999940000,\"w_ts\":1799999940000,\"src\":\"oauth\"}"
-  }
- },
- "refresh --all, logged in, no Keychain token": {
-  "rc": 0,
-  "out": "",
-  "state": {
-   "iu.relogin-ask.json": "{\"ts\":1800000000000}",
-   "iu.sample.json": "{\"s\":null,\"w\":12,\"s_reset\":null,\"w_reset\":1800360000,\"s_ts\":null,\"w_ts\":1799999940000,\"src\":\"oauth\"}",
-   "iu.verified.json": "{\"ts\":1800000000000}",
-   "me.sample.json": "{\"s\":10,\"w\":30,\"s_reset\":1800010800,\"w_reset\":1800432000,\"s_ts\":1799999940000,\"w_ts\":1799999940000,\"src\":\"oauth\"}",
-   "me.verified.json": "{\"ts\":1800000000000}",
-   "me2.sample.json": "{\"s\":5,\"w\":11,\"s_reset\":1800010800,\"w_reset\":1800540000,\"s_ts\":1799999940000,\"w_ts\":1799999940000,\"src\":\"oauth\"}",
-   "me2.verified.json": "{\"ts\":1800000000000}",
-   "relogin-ask.cap": "{\"ts\":1800000000000}"
-  }
- },
- "refresh --all on stale samples": {
-  "rc": 0,
-  "out": "",
-  "state": {
-   "iu.relogin-ask.json": "{\"ts\":1800000000000}",
-   "iu.sample.json": "{\"s\":null,\"w\":12,\"s_reset\":null,\"w_reset\":1800360000,\"s_ts\":null,\"w_ts\":1799989200000,\"src\":\"oauth\"}",
-   "iu.verified.json": "{\"ts\":1800000000000}",
-   "me.sample.json": "{\"s\":10,\"w\":30,\"s_reset\":1800010800,\"w_reset\":1800432000,\"s_ts\":1799989200000,\"w_ts\":1799989200000,\"src\":\"oauth\"}",
-   "me.verified.json": "{\"ts\":1800000000000}",
-   "me2.sample.json": "{\"s\":5,\"w\":11,\"s_reset\":1800010800,\"w_reset\":1800540000,\"s_ts\":1799989200000,\"w_ts\":1799989200000,\"src\":\"oauth\"}",
-   "me2.verified.json": "{\"ts\":1800000000000}",
-   "relogin-ask.cap": "{\"ts\":1800000000000}"
-  }
- },
- "refresh --ids me": {
-  "rc": 0,
-  "out": "",
-  "state": {
-   "iu.sample.json": "{\"s\":null,\"w\":12,\"s_reset\":null,\"w_reset\":1800360000,\"s_ts\":null,\"w_ts\":1799989200000,\"src\":\"oauth\"}",
-   "me.sample.json": "{\"s\":10,\"w\":30,\"s_reset\":1800010800,\"w_reset\":1800432000,\"s_ts\":1799989200000,\"w_ts\":1799989200000,\"src\":\"oauth\"}",
-   "me.verified.json": "{\"ts\":1800000000000}",
-   "me2.sample.json": "{\"s\":5,\"w\":11,\"s_reset\":1800010800,\"w_reset\":1800540000,\"s_ts\":1799989200000,\"w_ts\":1799989200000,\"src\":\"oauth\"}"
-  }
- },
- "unknown verb": {
-  "rc": 2,
-  "out": ""
- },
- "latest without a transcript": {
-  "rc": 1,
-  "out": ""
- },
- "latest": {
-  "rc": 0,
-  "out": "aaaa-1111\n"
- },
- "session": {
-  "rc": 0,
-  "out": "me2\n"
- },
- "session unknown": {
-  "rc": 1,
-  "out": ""
- }
 }

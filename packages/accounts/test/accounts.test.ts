@@ -161,7 +161,7 @@ describe('Fable mode: the fable account is the last resort', () => {
   const fable = (): Registry => ({ ...reg3(), fable: 'me2' })
   const all = () => cache3(sample(10, 10), sample(10, 10), sample(5, 5, { wReset: NOW / 1000 + 2 * H }))
   test('no lane picks it while another account is eligible', () => {
-    for (const lane of ['interactive', 'headless', 'bulk', 'wave'])
+    for (const lane of ['interactive', 'headless', 'bulk', 'batch'])
       expect(pick(fable(), all(), lane, NOW).picked).not.toBe('me2')
     // without Fable mode the expiring me2 window would have won the bulk pick
     expect(pick(reg3(), all(), 'bulk', NOW)).toMatchObject({ picked: 'me2', reason: 'expiring-capacity' })
@@ -717,7 +717,7 @@ describe('re-login asks', () => {
   const run = (dir: string, now: number, logins: LoginRow[], ask: (id: string) => void, results = none) =>
     askRelogins({ results, logins, now, dir, ask: (c) => ask(c.id) })
 
-  test('dedupe: one ask per account per 24 h; another account has its own clock', () => {
+  test('repeat suppression: one ask per account per 24 h; another account has its own clock', () => {
     const dir = tmp()
     const asked: string[] = []
     const ask = (id: string) => void asked.push(id)
@@ -1488,7 +1488,7 @@ describe('runRefresh', () => {
       (await harness({ http: async () => ({ status: 404, json: null }), auth: loggedIn(false) })).verified,
     ).toBeNull()
   })
-  test('each account is classified on its own', async () => {
+  test('each account is judged on its own', async () => {
     const dir = tmp()
     const r = await runRefresh({
       reg: reg(),

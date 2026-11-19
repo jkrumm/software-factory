@@ -27,7 +27,7 @@ type Account = { dir: string | null; plan: string; homeLanes: string[]; enabled:
 const accounts = (): Record<string, Account> => ({
   iu: { dir: null, plan: 'ultra', homeLanes: ['interactive', 'headless'], enabled: true },
   me: { dir: '/home/x/.claude-me', plan: 'max5x', homeLanes: ['bulk'], enabled: true },
-  me2: { dir: '/home/x/.claude-me2', plan: 'max', homeLanes: ['bulk', 'wave:*'], enabled: true },
+  me2: { dir: '/home/x/.claude-me2', plan: 'max', homeLanes: ['bulk', 'batch:*'], enabled: true },
 })
 const registries: Record<string, unknown> = {
   plain: { accounts: accounts() },
@@ -64,7 +64,7 @@ const caches: Record<string, Cache> = {
     'me.auth.json': { failed: true, ts: NOW - 3600_000 },
   },
 }
-const lanes = ['interactive', 'headless', 'bulk', 'lead', 'wave:7', 'unknown-lane']
+const lanes = ['interactive', 'headless', 'bulk', 'lead', 'batch:7', 'unknown-lane']
 
 let root = ''
 const stubs = () => {

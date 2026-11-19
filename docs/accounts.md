@@ -160,7 +160,7 @@ best(S)     = the member of S with the highest weight (registry order breaks tie
 share(S)    = a draw from S with probability ∝ weight   # what the CLI uses; `pick --dry` and tests use best(S)
 home(lane)  = share(eligible x whose homeLanes claim the lane)
               iu for interactive, headless
-              me and me2 for bulk (only the lane named `bulk`; any other lane name has no home and picks by headroom. Factory spawns carry the picked-marker, so `USAGE_LANE=wave` there is only a usage label)
+              me and me2 for bulk (only the lane named `bulk`; any other lane name has no home and picks by headroom. Factory spawns carry the picked-marker, so `USAGE_LANE=batch` there is only a usage label)
 coolSet      = eligible accounts with session% < 80 (SESSION_SOFT_MAX), else all eligible   # a hot 5h window is the last choice, not excluded
                  every step below reads coolSet as "eligible"
 pick(lane):
