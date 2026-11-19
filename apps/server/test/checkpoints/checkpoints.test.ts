@@ -546,6 +546,23 @@ describe('settling, in turn', () => {
     expect((await readNeeds(db.sql, clock.now())).items).toEqual([])
   })
 
+  test('a Decision with a default is in Needs, with no page, once the Judge failed its last try', async () => {
+    const issueId = await workingIssue()
+    judgeAnswer = () => err(portError('timeout', 'agw did not answer'))
+    const { decision } = await ask(issueId, {
+      noAnswer: { consequence: 'Console logging.', default: 'pino', waitMinutes: 600 },
+    })
+    for (let i = 0; i < 3; i++) {
+      value(await settleDecision(deps, decision.id))
+      clock.advance(JUDGE_BACKOFF_MS)
+    }
+    expect(judgeCalls).toHaveLength(3)
+    const needs = await readNeeds(db.sql, clock.now())
+    expect(needs.items.map((item) => item.id)).toEqual([decision.id])
+    expect(needs.items[0]?.judge).toContain('could not be reached after 3 tries')
+    expect(await rows('checkpoint_pages')).toBe(0)
+  })
+
   test('the owner is reached when nothing else settles it: paged once, however often the pass runs', async () => {
     const issueId = await workingIssue()
     const { decision } = await ask(issueId)
