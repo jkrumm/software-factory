@@ -175,8 +175,7 @@ through `receive` in `app/intake.ts`; the answer is a triage outcome (`docs/lang
   its account's leads, so a new lead cannot take the seat it will run on. A lead in a wait that gave its claim up is idle and
   counts nowhere. A herd woken at once (a red master closing and waking a dozen deferred leads) takes the repo's places in
   order of its waits, oldest first, up to `leads: N`; the steward counts a refusal for a claim as a stall only when a claim
-  would be granted to that lead now, and names the account it resumes on. The gates (windows, lead cap, loaded) stay the factory's; only the order among accounts with the same room
-  comes from the picker, `claude-account rank --lane bulk --json`, polled with the usage readings and stored in
+  would be granted to that lead now, and names the account it resumes on. The gates (windows, lead cap, loaded) stay the factory's; the order comes from the picker (a fresh rank decides; room and weekly use order only the accounts it does not list), `claude-account rank --lane bulk --json`, polled with the usage readings and stored in
   `capacity_ranks`. A missing or stale rank (older than a reading may be) falls back to the most room, then the lowest weekly use, and shows
   as the health line `account-rank`; it never blocks admission.
 - **A turn that ends on an API error** (`domains/leads/apierror.ts`, `app/leads-api-errors.ts`, a step of the leads tick). Claude Code
