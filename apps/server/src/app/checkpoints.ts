@@ -783,7 +783,12 @@ export function annotateArtifact(
       artifact.id,
       revision,
       input.author,
-      digest(`${annotation.quote}\n${annotation.comment}`),
+      // the same words on another occurrence are another comment; one made without an occurrence keeps its old key
+      digest(
+        annotation.occurrence === null
+          ? `${annotation.quote}\n${annotation.comment}`
+          : `${annotation.quote}\n${annotation.comment}\n${annotation.occurrence}`,
+      ),
     )
     if (await checkpoints.annotationByKey(annotateKey)) {
       return ok(await written(checkpoints, artifact.id, 'replayed', null))
@@ -795,6 +800,9 @@ export function annotateArtifact(
       revision,
       quote: annotation.quote,
       path: annotation.path,
+      occurrence: annotation.occurrence,
+      prefix: annotation.prefix,
+      suffix: annotation.suffix,
       comment: annotation.comment,
       author: input.author,
       at: deps.clock.now(),

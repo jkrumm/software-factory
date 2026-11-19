@@ -716,7 +716,8 @@ and a box for a general comment at its foot. A card is a button: it brings its p
 delete in place. The owner marks text and comments on it; selecting a passage opens the comment box as a popover anchored
 under it (`popoverPosition`, flipped above when there is no room, following the passage through scroll; a bottom sheet below
 `lg`); the page posts the quote (the selection with its whitespace
-folded, which is what the API anchors on) and the nearest heading path, and highlights the anchored comments with the CSS
+folded, which is what the API anchors on), the nearest heading path, and which occurrence of the quote it is with the text
+just before and after it (optional, so an older comment resolves to the first match), and highlights the anchored comments with the CSS
 Custom Highlight API. Markdown renders through react-markdown without raw HTML, with unsafe URLs refused and an image loaded only over https from
 the hosts the owner lists in `FACTORY_CONSOLE_IMAGE_HOSTS` (the page's `img-src`; alt text otherwise); HTML renders in an `<iframe sandbox="allow-scripts" src="/frame.html">`: a separate document the Console listener serves
 under its own CSP (no request can leave it, and unlike a `srcdoc` frame it does not inherit the page's policy, which keeps

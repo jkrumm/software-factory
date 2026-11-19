@@ -10,6 +10,11 @@
  * comment in its own UI.
  *
  * The text index and the heading path mirror src/lib/artifact.ts (indexText, locateQuote, headingPath); keep them alike.
+ * So does the occurrence resolver between "anchor:begin" and "anchor:end" (test/anchor.test.ts runs both on one table).
+ * A comment hangs on one occurrence of its quote: a selection posts which one it is (its number among the quote's matches
+ * in the text, and the text just before and after it), and a passage is painted from the same three, the heading path
+ * and the comment's id ({type:'factory.highlight', quotes:[{id, quote, path, occurrence, prefix, suffix}]}; a plain
+ * string is a quote with no hint, which resolves to its first match).
  */
 
 ;(() => {
@@ -25,6 +30,55 @@
     '::highlight(factory-pending){background-color:var(--factory-highlight-active,color-mix(in srgb,var(--vx-accent,Mark) 40%,transparent));color:var(--factory-highlight-ink,MarkText)}' +
     '::highlight(factory-active){background-color:var(--factory-highlight-active,color-mix(in srgb,var(--vx-accent,Mark) 48%,transparent));color:var(--factory-highlight-ink,MarkText);text-decoration:underline;text-decoration-thickness:2px;text-underline-offset:3px}'
   document.head.appendChild(style)
+
+  // anchor:begin
+  const CONTEXT = 32
+
+  function occurrencesOf(flat, wanted) {
+    const found = []
+    if (wanted === '') return found
+    for (let at = flat.indexOf(wanted); at !== -1; at = flat.indexOf(wanted, at + 1)) found.push(at)
+    return found
+  }
+
+  function anchorAround(flat, wanted, near) {
+    const found = occurrencesOf(flat, wanted)
+    if (near === null || found.length === 0) return null
+    let occurrence = 0
+    found.forEach((at, i) => {
+      if (Math.abs(at - near) < Math.abs(found[occurrence] - near)) occurrence = i
+    })
+    const from = found[occurrence]
+    return {
+      occurrence,
+      prefix: flat.slice(Math.max(0, from - CONTEXT), from),
+      suffix: flat.slice(from + wanted.length, from + wanted.length + CONTEXT),
+    }
+  }
+
+  function resolveQuote(flat, wanted, hint, pathAt) {
+    const found = occurrencesOf(flat, wanted)
+    const first = found[0]
+    if (first === undefined) return -1
+    if (!hint || found.length === 1) return first
+    const prefix = hint.prefix || ''
+    const suffix = hint.suffix || ''
+    const numbered = typeof hint.occurrence === 'number' ? found[hint.occurrence] : undefined
+    if (prefix !== '' || suffix !== '') {
+      const same = found.filter(
+        (at) =>
+          flat.slice(Math.max(0, at - prefix.length), at) === prefix && flat.startsWith(suffix, at + wanted.length),
+      )
+      if (same.length > 0) return numbered !== undefined && same.includes(numbered) ? numbered : same[0]
+    }
+    if (numbered !== undefined) return numbered
+    if (hint.path && pathAt) {
+      const under = found.find((at) => pathAt(at) === hint.path)
+      if (under !== undefined) return under
+    }
+    return first
+  }
+  // anchor:end
 
   const norm = (s) => String(s).replace(/\s+/g, ' ').trim()
   const elementOf = (node) => (node.nodeType === 1 ? node : node.parentElement)
@@ -83,10 +137,24 @@
     return { flat, at }
   }
 
-  function rangeOf(idx, quote) {
-    const wanted = norm(quote).slice(0, MAX_QUOTE)
+  /** a painted or scrolled-to passage as the page sends it: a string is a quote alone, an object has the hint too */
+  function anchorOfMessage(item) {
+    if (typeof item === 'string') return { quote: item }
+    if (!item || typeof item !== 'object' || typeof item.quote !== 'string') return null
+    return {
+      id: typeof item.id === 'string' ? item.id.slice(0, 200) : undefined,
+      quote: item.quote,
+      path: typeof item.path === 'string' ? item.path : undefined,
+      occurrence: Number.isInteger(item.occurrence) ? item.occurrence : undefined,
+      prefix: typeof item.prefix === 'string' ? item.prefix : undefined,
+      suffix: typeof item.suffix === 'string' ? item.suffix : undefined,
+    }
+  }
+
+  function rangeOf(idx, anchor) {
+    const wanted = norm(anchor.quote).slice(0, MAX_QUOTE)
     if (!wanted) return null
-    const from = idx.flat.indexOf(wanted)
+    const from = resolveQuote(idx.flat, wanted, anchor, (at) => (idx.at[at] ? headingPath(idx.at[at][0]) : ''))
     if (from === -1) return null
     const first = idx.at[from]
     const last = idx.at[from + wanted.length - 1]
@@ -99,12 +167,13 @@
 
   /** the passages that are painted, to tell which one a click is on */
   let painted = []
-  function paint(quotes) {
+  function paint(items) {
     if (!window.CSS || !CSS.highlights || typeof Highlight === 'undefined') return
     const idx = index()
-    painted = quotes.flatMap((quote) => {
-      const range = typeof quote === 'string' ? rangeOf(idx, quote) : null
-      return range ? [{ quote: norm(quote).slice(0, MAX_QUOTE), range }] : []
+    painted = items.flatMap((item) => {
+      const anchor = anchorOfMessage(item)
+      const range = anchor ? rangeOf(idx, anchor) : null
+      return range ? [{ id: anchor.id, quote: norm(anchor.quote).slice(0, MAX_QUOTE), range }] : []
     })
     CSS.highlights.set('factory', new Highlight(...painted.map((found) => found.range)))
   }
@@ -118,7 +187,7 @@
     return range ? { node: range.startContainer, offset: range.startOffset } : null
   }
 
-  /** the narrowest painted passage under a point: the caret snaps to the nearest character, so the point must be on the text */
+  /** the narrowest painted passage under a point ({quote, id}): the caret snaps to the nearest character, so the point must be on the text */
   function quoteAt(x, y) {
     const caret = painted.length ? caretAt(x, y) : null
     if (!caret) return null
@@ -129,9 +198,9 @@
       )
       if (!on || !found.range.isPointInRange(caret.node, caret.offset)) continue
       const size = found.range.toString().length
-      if (!best || size < best.size) best = { quote: found.quote, size }
+      if (!best || size < best.size) best = { quote: found.quote, id: found.id, size }
     }
-    return best ? best.quote : null
+    return best ? { quote: best.quote, id: best.id } : null
   }
 
   const headingElements = () => Array.from(document.querySelectorAll('h1,h2,h3,h4,h5,h6'))
@@ -184,8 +253,8 @@
     }
     const sel = window.getSelection()
     if (sel && !sel.isCollapsed) return
-    const quote = quoteAt(event.clientX, event.clientY)
-    if (quote) parent.postMessage({ type: 'factory.open', quote }, '*')
+    const found = quoteAt(event.clientX, event.clientY)
+    if (found) parent.postMessage({ type: 'factory.open', quote: found.quote, id: found.id }, '*')
   })
 
   let hoverFrame = 0
@@ -198,6 +267,19 @@
     })
   })
 
+  /** the first index of the text index at or after the selection's start, or null: its characters are in document order */
+  function startOf(idx, range) {
+    let low = 0
+    let high = idx.at.length
+    while (low < high) {
+      const mid = (low + high) >> 1
+      // comparePoint: the point is before the range (-1), in it (0) or after it (1)
+      if (range.comparePoint(idx.at[mid][0], idx.at[mid][1]) < 0) low = mid + 1
+      else high = mid
+    }
+    return low < idx.at.length ? low : null
+  }
+
   let lastKey = ''
   function post() {
     const sel = window.getSelection()
@@ -208,14 +290,16 @@
     }
     const range = sel.getRangeAt(0)
     const path = headingPath(range.startContainer)
-    const key = `${quote}\n${path}`
+    const idx = index()
+    const around = anchorAround(idx.flat, quote, startOf(idx, range))
+    const key = `${quote}\n${path}\n${around ? around.occurrence : ''}`
     if (key === lastKey) return
     lastKey = key
     // the comment box is open in the parent and has the focus: keep the passage painted without the real selection
     if (window.CSS && CSS.highlights && typeof Highlight !== 'undefined')
       CSS.highlights.set('factory-pending', new Highlight(range.cloneRange()))
     const { top, bottom, left } = range.getBoundingClientRect()
-    parent.postMessage({ type: 'factory.select', quote, path, rect: { top, bottom, left } }, '*')
+    parent.postMessage({ type: 'factory.select', quote, path, ...around, rect: { top, bottom, left } }, '*')
   }
   let timer
   const soon = () => {
@@ -238,7 +322,7 @@
     }
     if (data.type === 'factory.deactivate' && window.CSS && CSS.highlights) CSS.highlights.delete('factory-active')
     if (data.type === 'factory.scroll' && typeof data.quote === 'string') {
-      const range = rangeOf(index(), data.quote)
+      const range = rangeOf(index(), anchorOfMessage(data.anchor) || { quote: data.quote })
       if (data.center !== false)
         range?.startContainer.parentElement?.scrollIntoView({ block: 'center', behavior: 'smooth' })
       if (window.CSS && CSS.highlights && typeof Highlight !== 'undefined') {

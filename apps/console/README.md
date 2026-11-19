@@ -296,7 +296,12 @@ the page keeps `script-src 'self'` (a `srcdoc` frame would inherit it). The page
 the frame has loaded; `frame/frame.js` writes it into the document and adds `frame/annotator.js`, which posts
 `factory.ready` and `factory.select` back and paints `factory.highlight` with the CSS Custom Highlight API. Each side
 believes only its parent or its own frame's window, in the exact shape (zod on the page). A quote is the selected text with
-whitespace folded to single spaces: the API anchors it on the artifact's readable text.
+whitespace folded to single spaces: the API anchors it on the artifact's readable text. A comment also records which
+occurrence it is (its 0-based number among the quote's matches in that text) and about 32 characters before and after it;
+the page and the frame paint, scroll to and open a passage by the same resolver (`resolveQuote` in `lib/artifact.ts`,
+mirrored between `anchor:begin` and `anchor:end` in `frame/annotator.js`, both run by `test/anchor.test.ts`): the occurrence
+with the same text around it, then the number, then the first one under the stored heading path, then the first one, which is
+all a comment made without them gets.
 
 **Reviewing** (`lib/review.ts`, `components/artifact-comments.tsx`, `artifact-toc.tsx`). A comment, an edit and a delete show
 at once and are sent in the background: each write is kept in local state, marked "Sending", until the server has answered and

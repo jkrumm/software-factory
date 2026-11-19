@@ -14,15 +14,15 @@ import {
   firstH1,
   GLOBAL_PATH,
   normalizeQuote,
+  type PaintAnchor,
   splitByRevision,
 } from '@/lib/artifact'
 import type { Review, ReviewItem } from '@/lib/review'
 import { cn } from '@/lib/utils'
 
 /** The comment the owner is on: which card is open and which passage to bring into view (`tick` repeats a click). */
-export interface Focus {
+export interface Focus extends PaintAnchor {
   id: string
-  quote: string
   tick: number
   /** the passage is scrolled to (a click on the card); a click on the passage itself is already there */
   scroll: boolean

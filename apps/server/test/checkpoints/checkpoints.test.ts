@@ -966,6 +966,61 @@ describe('artifacts', () => {
     expect(first.annotations.every((a) => a.anchor === 'anchored')).toBe(true)
   })
 
+  test('an annotation keeps the occurrence it hangs on: equal passages are separate comments, and one without it is as before', async () => {
+    const issueId = await workingIssue()
+    const sentence = 'We keep the queue in Postgres.'
+    const artifact = value(
+      await submitArtifact(deps, {
+        issueId,
+        attempt: 1,
+        raw: {
+          kind: 'report',
+          title: 'Notes',
+          content: `# Notes\n\n${sentence}\n\n## Options\n\n${sentence}\n\n## Risks\n\n${sentence}`,
+        },
+      }),
+    ).artifact
+    const annotate = (raw: Record<string, unknown>) =>
+      annotateArtifact(deps, {
+        artifactId: artifact.id,
+        revision: null,
+        author: 'owner',
+        raw: { quote: sentence, ...raw },
+      })
+    value(await annotate({ comment: 'why?', occurrence: 1, prefix: 'Options ', suffix: ' Risks' }))
+    // the same words on the third occurrence are another comment, not a replay of the second
+    value(await annotate({ comment: 'why?', occurrence: 2, prefix: 'Risks ', suffix: '' }))
+    expect(value(await annotate({ comment: 'why?', occurrence: 2, prefix: 'Risks ', suffix: '' }))).toMatchObject({
+      result: 'replayed',
+    })
+    // a comment made without them keeps its old identity and resolves to the first occurrence
+    value(await annotate({ comment: 'why?' }))
+    expect(value(await annotate({ comment: 'why?' }))).toMatchObject({ result: 'replayed' })
+    expect(await rows('annotations')).toBe(3)
+
+    const stored = await showAnnotations(artifact.id)
+    expect(stored.map((a) => [a.occurrence, a.prefix, a.suffix])).toEqual([
+      [1, 'Options ', ' Risks'],
+      [2, 'Risks ', null],
+      [null, null, null],
+    ])
+    // a revision that inserts a paragraph above keeps all three anchored, and their context with them
+    value(
+      await reviseArtifact(deps, {
+        artifactId: artifact.id,
+        attempt: null,
+        content: `# Notes\n\nNew paragraph.\n\n${sentence}\n\n## Options\n\n${sentence}\n\n## Risks\n\n${sentence}`,
+        note: null,
+      }),
+    )
+    const shown = value(await showArtifact(deps, { artifactId: artifact.id, revision: null }))
+    expect(shown.annotations.map((a) => [a.anchor, a.annotation.occurrence, a.annotation.prefix])).toEqual([
+      ['anchored', 1, 'Options '],
+      ['anchored', 2, 'Risks '],
+      ['anchored', null, null],
+    ])
+  })
+
   test('the lead answers an annotation with a disposition: its own attempt only, a note for a deferral and a decline, a repeat is a replay', async () => {
     const issueId = await workingIssue()
     const artifact = value(

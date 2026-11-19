@@ -1,4 +1,14 @@
-import { headingPath, indexText, locateQuote, normalizeQuote, type Heading, type SelectionRect } from './artifact.ts'
+import {
+  anchorAround,
+  headingPath,
+  indexText,
+  locateQuote,
+  normalizeQuote,
+  type Heading,
+  type Occurrence,
+  type PaintAnchor,
+  type SelectionRect,
+} from './artifact.ts'
 
 /** The DOM side of marking in the Console's own page (Markdown): selection to quote and path, quotes to highlights. */
 
@@ -12,34 +22,54 @@ function textNodes(root: Element): Text[] {
   return nodes
 }
 
-function rangesOf(root: Element, quotes: readonly string[]): { quote: string; range: Range }[] {
+function textIndex(root: Element) {
   const nodes = textNodes(root)
   const index = indexText(nodes.map((node) => ({ text: node.data, block: node.parentElement?.closest(BLOCK) ?? root })))
-  return quotes.flatMap((quote) => {
-    const span = locateQuote(index, quote)
+  return { nodes, index }
+}
+
+/** The heading path of a node: the headings before it in document order, the way a selection names its place. */
+function pathBefore(headings: readonly Element[], node: Node): string {
+  const before: Heading[] = []
+  for (const heading of headings) {
+    const precedes = heading.contains(node) || heading.compareDocumentPosition(node) & Node.DOCUMENT_POSITION_FOLLOWING
+    if (precedes) before.push({ level: Number(heading.tagName.charAt(1)), text: heading.textContent ?? '' })
+  }
+  return headingPath(before)
+}
+
+function rangesOf(root: Element, anchors: readonly PaintAnchor[]): { id?: string; quote: string; range: Range }[] {
+  const { nodes, index } = textIndex(root)
+  const headings = [...root.querySelectorAll('h1,h2,h3,h4,h5,h6')]
+  const pathAt = (at: number) => {
+    const node = nodes[index.at[at]?.[0] ?? -1]
+    return node ? pathBefore(headings, node) : ''
+  }
+  return anchors.flatMap((anchor) => {
+    const span = locateQuote(index, anchor.quote, anchor, pathAt)
     const from = span && nodes[span.start[0]]
     const to = span && nodes[span.end[0]]
     if (!span || !from || !to) return []
     const range = document.createRange()
     range.setStart(from, span.start[1])
     range.setEnd(to, span.end[1])
-    return [{ quote, range }]
+    return [{ ...(anchor.id === undefined ? {} : { id: anchor.id }), quote: anchor.quote, range }]
   })
 }
 
 /** Paints the quotes that are in `root` (no DOM change: the CSS Custom Highlight API). */
-export function paintHighlights(root: Element, quotes: readonly string[]): void {
+export function paintHighlights(root: Element, anchors: readonly PaintAnchor[]): void {
   if (typeof Highlight === 'undefined') return
-  CSS.highlights.set(HIGHLIGHT, new Highlight(...rangesOf(root, quotes).map((found) => found.range)))
+  CSS.highlights.set(HIGHLIGHT, new Highlight(...rangesOf(root, anchors).map((found) => found.range)))
 }
 
 export function clearHighlights(): void {
   if (typeof Highlight !== 'undefined') CSS.highlights.delete(HIGHLIGHT)
 }
 
-/** Brings the first place a quote is shown in `root` to the middle of the screen. */
-export function scrollToQuote(root: Element, quote: string): void {
-  const found = rangesOf(root, [quote])[0]
+/** Brings the place a comment's passage is shown in `root` to the middle of the screen. */
+export function scrollToQuote(root: Element, anchor: PaintAnchor): void {
+  const found = rangesOf(root, [anchor])[0]
   const element = found?.range.startContainer.parentElement
   element?.scrollIntoView({ block: 'center', behavior: 'smooth' })
 }
@@ -57,27 +87,32 @@ function caretAt(x: number, y: number): { node: Node; offset: number } | null {
   return range ? { node: range.startContainer, offset: range.startOffset } : null
 }
 
-/** The quote of the highlighted passage under a point (the narrowest when passages overlap), or null. */
-export function quoteAt(root: Element, quotes: readonly string[], x: number, y: number): string | null {
+/** The quote, and the comment's id, of the highlighted passage under a point (the narrowest when passages overlap), or null. */
+export function quoteAt(
+  root: Element,
+  anchors: readonly PaintAnchor[],
+  x: number,
+  y: number,
+): { quote: string; id?: string } | null {
   const caret = caretAt(x, y)
   if (!caret || !root.contains(caret.node)) return null
-  let best: { quote: string; size: number } | null = null
-  for (const { quote, range } of rangesOf(root, quotes)) {
+  let best: { quote: string; id?: string; size: number } | null = null
+  for (const { quote, id, range } of rangesOf(root, anchors)) {
     // the caret snaps to the nearest character, so a click past the end of a line must not count: the point must be on the text
     const on = [...range.getClientRects()].some((r) => x >= r.left && x <= r.right && y >= r.top && y <= r.bottom)
     if (!on || !range.isPointInRange(caret.node, caret.offset)) continue
     const size = range.toString().length
-    if (!best || size < best.size) best = { quote, size }
+    if (!best || size < best.size) best = { quote, ...(id === undefined ? {} : { id }), size }
   }
-  return best?.quote ?? null
+  return best ? { quote: best.quote, ...(best.id === undefined ? {} : { id: best.id }) } : null
 }
 
 const ACTIVE = 'annotation-active'
 
 /** The passage of the comment the owner is on, painted stronger than the others (null drops it). */
-export function paintActive(root: Element, quote: string | null): void {
+export function paintActive(root: Element, anchor: PaintAnchor | null): void {
   if (typeof Highlight === 'undefined') return
-  const found = quote === null ? undefined : rangesOf(root, [quote])[0]
+  const found = anchor === null ? undefined : rangesOf(root, [anchor])[0]
   if (found) CSS.highlights.set(ACTIVE, new Highlight(found.range))
   else CSS.highlights.delete(ACTIVE)
 }
@@ -98,23 +133,36 @@ const rectOf = (range: Range): SelectionRect => {
   return { top, bottom, left }
 }
 
-/** The owner's current selection inside `root`: its quote, heading path, position and range, or null. */
-export function selectionIn(root: Element): { quote: string; path: string; rect: SelectionRect; range: Range } | null {
+/** The first index of `index` at or after the start of `range`, or null: the characters are in document order. */
+function startOf(nodes: readonly Text[], index: ReturnType<typeof textIndex>['index'], range: Range): number | null {
+  let low = 0
+  let high = index.at.length
+  while (low < high) {
+    const mid = (low + high) >> 1
+    const [part, offset] = index.at[mid] ?? [0, 0]
+    const node = nodes[part]
+    // comparePoint: the point is before the range (-1), in it (0) or after it (1)
+    if (node && range.comparePoint(node, offset) < 0) low = mid + 1
+    else high = mid
+  }
+  return low < index.at.length ? low : null
+}
+
+/** The owner's current selection inside `root`: its quote, heading path, which occurrence it is, position and range, or null. */
+export function selectionIn(
+  root: Element,
+): ({ quote: string; path: string; rect: SelectionRect; range: Range } & Occurrence) | null {
   const selection = window.getSelection()
   if (!selection || selection.rangeCount === 0 || selection.isCollapsed) return null
   const range = selection.getRangeAt(0)
   if (!root.contains(range.commonAncestorContainer)) return null
   const quote = normalizeQuote(selection.toString())
   if (quote === '') return null
-  const before: Heading[] = []
-  for (const heading of root.querySelectorAll('h1,h2,h3,h4,h5,h6')) {
-    const precedes =
-      heading.contains(range.startContainer) ||
-      heading.compareDocumentPosition(range.startContainer) & Node.DOCUMENT_POSITION_FOLLOWING
-    if (precedes) before.push({ level: Number(heading.tagName.charAt(1)), text: heading.textContent ?? '' })
-  }
+  const path = pathBefore([...root.querySelectorAll('h1,h2,h3,h4,h5,h6')], range.startContainer)
+  const { nodes, index } = textIndex(root)
   const kept = range.cloneRange()
-  return { quote, path: headingPath(before), rect: rectOf(kept), range: kept }
+  const around = anchorAround(index.flat, quote, startOf(nodes, index, kept))
+  return { quote, path, ...(around ?? {}), rect: rectOf(kept), range: kept }
 }
 
 /** The words of a search: lower-cased, split on spaces, a leading `#` dropped ("#534" is the number 534). */

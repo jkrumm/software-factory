@@ -24,7 +24,7 @@ import { useNow } from '@/lib/now'
 import { useScreen } from '@/lib/screen'
 import { issueNumber } from '@/lib/policy'
 import { useArtifact, useIssue } from '@/lib/queries'
-import { highlightQuotes, type ReviewItem, reviewItems, useReview } from '@/lib/review'
+import { highlightAnchors, paintAnchorOf, type ReviewItem, reviewItems, useReview } from '@/lib/review'
 import { cn } from '@/lib/utils'
 
 /** The Issue this artifact belongs to: its number and title as a link back, with its state and project. */
@@ -148,7 +148,13 @@ function ArtifactViewOf({ id, revision, compare, onPick, peek }: ArtifactViewPro
   // a click on a card brings its passage into view in the document
   const onFocus = useCallback(
     (item: ReviewItem) =>
-      setFocus((was) => ({ id: item.id, quote: item.quote, tick: (was?.tick ?? 0) + 1, scroll: true, edit: false })),
+      setFocus((was) => ({
+        ...paintAnchorOf(item),
+        id: item.id,
+        tick: (was?.tick ?? 0) + 1,
+        scroll: true,
+        edit: false,
+      })),
     [],
   )
 
@@ -175,15 +181,19 @@ function ArtifactViewOf({ id, revision, compare, onPick, peek }: ArtifactViewPro
 
   const detail = primary.data
   const items = useMemo(() => (detail ? reviewItems(detail, review.pending) : []), [detail, review.pending])
-  const quotes = useMemo(() => highlightQuotes(items), [items])
+  const quotes = useMemo(() => highlightAnchors(items), [items])
   // a click on a highlighted passage opens its comment: for the owner's own, in edit mode; the passage is already in view
   const onOpen = useCallback(
-    (quote: string) => {
+    (quote: string, id?: string) => {
       const found = items.filter((i) => i.anchored && i.path !== GLOBAL_PATH && i.quote === quote)
-      const item = found.find((i) => i.author === 'owner' && !i.id.startsWith('pending:')) ?? found[0]
+      // the passage clicked names its comment; with equal quotes the owner's own comes first
+      const item =
+        found.find((i) => i.id === id) ??
+        found.find((i) => i.author === 'owner' && !i.id.startsWith('pending:')) ??
+        found[0]
       if (!item) return
       const edit = item.author === 'owner' && !item.id.startsWith('pending:')
-      setFocus((was) => ({ id: item.id, quote, tick: (was?.tick ?? 0) + 1, scroll: false, edit }))
+      setFocus((was) => ({ ...paintAnchorOf(item), id: item.id, tick: (was?.tick ?? 0) + 1, scroll: false, edit }))
     },
     [items],
   )
@@ -433,7 +443,7 @@ function ArtifactViewOf({ id, revision, compare, onPick, peek }: ArtifactViewPro
       )}
       {selected && anchor ? (
         <Composer
-          key={`${selected.quote}|${selected.path}`}
+          key={`${selected.quote}|${selected.path}|${selected.occurrence ?? ''}`}
           review={review}
           revision={detail.revision}
           selected={selected}

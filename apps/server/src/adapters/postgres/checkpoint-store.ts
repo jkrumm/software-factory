@@ -131,6 +131,9 @@ const AnnotationRow = z.object({
   revision: z.number().int(),
   quote: z.string(),
   path: z.string().nullable(),
+  occurrence: z.number().int().nullable(),
+  prefix: z.string().nullable(),
+  suffix: z.string().nullable(),
   comment: z.string(),
   author: z.enum(['owner', 'lead']),
   at: z.date(),
@@ -296,6 +299,9 @@ const annotationOf = (raw: unknown): AnnotationRecord => {
     revision: row.revision,
     quote: row.quote,
     path: row.path,
+    occurrence: row.occurrence,
+    prefix: row.prefix,
+    suffix: row.suffix,
     comment: row.comment,
     author: row.author,
     at: row.at,
@@ -737,8 +743,8 @@ export function postgresCheckpointStore(tx: SQL): CheckpointStore {
 
     async insertAnnotation(a) {
       const rows: unknown[] = await tx`
-        INSERT INTO factory.annotations (id, key, artifact_id, revision, quote, path, comment, author, at)
-        VALUES (${a.id}, ${a.key}, ${a.artifactId}, ${a.revision}, ${a.quote}, ${a.path}, ${a.comment}, ${a.author}, ${a.at})
+        INSERT INTO factory.annotations (id, key, artifact_id, revision, quote, path, occurrence, prefix, suffix, comment, author, at)
+        VALUES (${a.id}, ${a.key}, ${a.artifactId}, ${a.revision}, ${a.quote}, ${a.path}, ${a.occurrence}, ${a.prefix}, ${a.suffix}, ${a.comment}, ${a.author}, ${a.at})
         ON CONFLICT (key) DO NOTHING
         RETURNING id`
       return rows.length === 1

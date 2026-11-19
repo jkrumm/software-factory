@@ -2,7 +2,14 @@ import { useRouter } from '@tanstack/react-router'
 import { type ReactNode, useEffect, useRef, useState } from 'react'
 import Markdown, { defaultUrlTransform } from 'react-markdown'
 import remarkGfm from 'remark-gfm'
-import { linkTarget, parseFrameMessage, type SelectionRect, type TocItem } from '@/lib/artifact'
+import {
+  linkTarget,
+  type Occurrence,
+  type PaintAnchor,
+  parseFrameMessage,
+  type SelectionRect,
+  type TocItem,
+} from '@/lib/artifact'
 import { isPlainClick } from '@/lib/peek'
 import { READING_PX, type ReadingSize } from '@/lib/reading'
 import { currentTheme, onThemeChange } from '@/lib/theme'
@@ -19,7 +26,17 @@ import {
 } from '@/lib/highlight'
 import { collectHeadings, readingArea, scrollParentOf, scrollToId, sectionIndex } from '@/lib/toc'
 
-export interface Selected {
+/** The part of a focus the frame needs to find its passage: what it paints from, without the page's own bookkeeping. */
+const hintOf = (anchor: PaintAnchor): PaintAnchor => ({
+  id: anchor.id,
+  quote: anchor.quote,
+  path: anchor.path,
+  occurrence: anchor.occurrence,
+  prefix: anchor.prefix,
+  suffix: anchor.suffix,
+})
+
+export interface Selected extends Occurrence {
   quote: string
   path: string
   /** where the passage is on screen (viewport coordinates) when it was selected */
@@ -33,13 +50,13 @@ export interface ContentProps {
   content: string
   /** the primary revision: its selections can be commented on and its annotations are highlighted */
   primary: boolean
-  /** the quotes of the anchored annotations to paint */
-  quotes: readonly string[]
-  /** the quote to paint as the comment in focus; `tick` makes the same quote scroll twice; `scroll: false` paints without scrolling */
-  focus: { quote: string; tick: number; scroll?: boolean } | null
+  /** the passages of the anchored annotations to paint */
+  quotes: readonly PaintAnchor[]
+  /** the passage to paint as the comment in focus; `tick` makes the same passage scroll twice; `scroll: false` paints without scrolling */
+  focus: (PaintAnchor & { tick: number; scroll?: boolean }) | null
   onSelect: (selected: Selected) => void
-  /** a click on a highlighted passage: its quote */
-  onOpen: (quote: string) => void
+  /** a click on a highlighted passage: its quote, and the id of the comment it was painted for */
+  onOpen: (quote: string, id?: string) => void
   /** the document's headings once it is rendered (the primary one only) */
   onHeadings: (items: TocItem[]) => void
   /** the heading of the section the reader is in, null before the first */
@@ -215,11 +232,11 @@ function MarkdownContent({
   }, [primary, quotes, content])
 
   useEffect(() => {
-    if (primary && focus && focus.scroll !== false && root.current) scrollToQuote(root.current, focus.quote)
+    if (primary && focus && focus.scroll !== false && root.current) scrollToQuote(root.current, focus)
   }, [primary, focus])
   // the passage in focus is painted again whenever the text or the comments change under it, without scrolling to it
   useEffect(() => {
-    if (primary && root.current) paintActive(root.current, focus?.quote ?? null)
+    if (primary && root.current) paintActive(root.current, focus)
   }, [primary, focus, content, quotes])
   useEffect(() => () => paintActive(document.body, null), [])
 
@@ -268,8 +285,8 @@ function MarkdownContent({
       onClick={(event) => {
         // a drag that ends on a highlight selects text; only a plain click opens the comment
         if (window.getSelection()?.isCollapsed === false) return
-        const quote = passageAt(event)
-        if (quote) onOpen(quote)
+        const found = passageAt(event)
+        if (found) onOpen(found.quote, found.id)
       }}
       onMouseMove={(event) => {
         const { clientX, clientY, target } = event
@@ -361,6 +378,9 @@ function HtmlContent({
         onSelect({
           quote: message.quote,
           path: message.path,
+          ...(message.occurrence === undefined
+            ? {}
+            : { occurrence: message.occurrence, prefix: message.prefix, suffix: message.suffix }),
           rect: {
             top: top + (origin?.top ?? 0),
             bottom: bottom + (origin?.top ?? 0),
@@ -368,7 +388,7 @@ function HtmlContent({
           },
         })
       }
-      if (message?.type === 'open' && primary) handlers.current.onOpen(message.quote)
+      if (message?.type === 'open' && primary) handlers.current.onOpen(message.quote, message.id)
       if (message?.type === 'headings' && primary) {
         headings.current = message.items.map((item, i) => ({ ...item, id: `frame-${i}` }))
         handlers.current.onHeadings(headings.current)
@@ -397,7 +417,7 @@ function HtmlContent({
     if (!primary || !ready.current) return
     send(
       focus
-        ? { type: 'factory.scroll', quote: focus.quote, center: focus.scroll !== false }
+        ? { type: 'factory.scroll', quote: focus.quote, anchor: hintOf(focus), center: focus.scroll !== false }
         : { type: 'factory.deactivate' },
     )
   }, [primary, focus])
