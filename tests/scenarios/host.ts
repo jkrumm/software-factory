@@ -99,7 +99,7 @@ const current = new Map<string, AccountRow[]>()
 
 /** The server may read a file while it is written: replace it whole. */
 async function writeAtomic(path: string, text: string): Promise<void> {
-  const temp = `${path}.${process.pid}.tmp`
+  const temp = `${path}.${process.pid}.${Math.random().toString(36).slice(2)}.tmp`
   await writeFile(temp, text)
   await rename(temp, path)
 }
@@ -124,7 +124,9 @@ export async function setAccounts(bin: string, rows: AccountRow[]): Promise<void
   const cache = join(host, 'cache')
   await mkdir(cache, { recursive: true })
   for (const name of await readdir(cache)) {
-    if (!rows.some((row) => name === `${row.id}.sample.json`)) await rm(join(cache, name), { force: true })
+    // only a sample of an account no longer listed: another call's temp file is mid-write
+    if (name.endsWith('.sample.json') && !rows.some((row) => name === `${row.id}.sample.json`))
+      await rm(join(cache, name), { force: true })
   }
   current.set(bin, rows)
   const nowMs = Date.now()
