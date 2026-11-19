@@ -1258,6 +1258,69 @@ describe('errands', () => {
     expect(await effectsOf(issueId, 'note_lead')).toBe(1)
   })
 
+  test('the orchestrator closes an Errand only as done and with evidence, recorded as itself', async () => {
+    const issueId = await workingIssue()
+    const raised = await raise(issueId)
+    expect(value(await screenErrands(deps))).toEqual([{ errand: raised.errand.id, outcome: 'reached_owner' }])
+
+    const bare = await finishErrand(deps, { errandId: raised.errand.id, note: 'did it', by: 'orchestrator' })
+    expect(bare).toMatchObject({ ok: false, error: { kind: 'invalid' } })
+    const needless = await finishErrand(deps, {
+      errandId: raised.errand.id,
+      note: null,
+      outcome: 'not_needed',
+      by: 'orchestrator',
+      confirmedBy: 'the operator',
+    })
+    expect(needless).toMatchObject({ ok: false, error: { kind: 'invalid' } })
+    expect(value(await raiseErrandRead(raised.errand.id)).doneAt).toBeNull()
+
+    // an approval Errand is the owner's yes: his delegate does not give it
+    await db.sql`UPDATE factory.errands SET need = 'approval' WHERE id = ${raised.errand.id}`
+    const approval = await finishErrand(deps, {
+      errandId: raised.errand.id,
+      note: null,
+      by: 'orchestrator',
+      confirmedBy: 'the operator',
+    })
+    expect(approval).toMatchObject({ ok: false, error: { kind: 'invalid' } })
+    // an approval by rule that has no stored need yet (the settle pass has not reached it) is the same
+    await db.sql`
+      UPDATE factory.errands SET need = NULL, command = 'ssh mini ''make -C ~/gate deploy-release SHA=feedbeef'''
+      WHERE id = ${raised.errand.id}`
+    expect(
+      await finishErrand(deps, {
+        errandId: raised.errand.id,
+        note: null,
+        by: 'orchestrator',
+        confirmedBy: 'the operator',
+      }),
+    ).toMatchObject({ ok: false, error: { kind: 'invalid' } })
+    await db.sql`UPDATE factory.errands SET need = 'hands', command = NULL WHERE id = ${raised.errand.id}`
+
+    const done = value(
+      await finishErrand(deps, {
+        errandId: raised.errand.id,
+        note: 'archive moved',
+        by: 'orchestrator',
+        confirmedBy: 'the MacBook operator, who listed the folder',
+      }),
+    )
+    expect(done).toMatchObject({
+      result: 'applied',
+      errand: {
+        closedBy: 'orchestrator',
+        closedKind: 'done',
+        doneNote: 'confirmed by the MacBook operator, who listed the folder · archive moved',
+      },
+    })
+    const events = await db.sql`
+      SELECT kind, actor FROM factory.issue_events WHERE issue_id = ${issueId} AND kind IN ('errand_done', 'noted') ORDER BY id`
+    expect(events.filter((e: { kind: string }) => e.kind === 'errand_done')).toMatchObject([{ actor: 'orchestrator' }])
+    expect(events.some((e: { actor: string }) => e.actor === 'owner')).toBe(false)
+    expect(await effectsOf(issueId, 'note_lead')).toBe(1)
+  })
+
   test('turned away by the screen: the wait ends, the lead hears why, nothing is paged', async () => {
     const issueId = await workingIssue()
     const raised = await raise(issueId)

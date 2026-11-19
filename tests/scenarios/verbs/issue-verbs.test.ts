@@ -380,7 +380,7 @@ test('the orchestrator token files, notes, cancels and answers under its own nam
   for (const path of [
     '/v1/decisions/decision_1/worth-asking',
     '/v1/artifacts/artifact_1/verdict',
-    '/v1/errands/errand_1/done',
+    '/v1/errands/errand_1/approve',
   ]) {
     const refused = await fetch(`${v.w.server.url}${path}`, {
       method: 'POST',
@@ -389,6 +389,13 @@ test('the orchestrator token files, notes, cancels and answers under its own nam
     })
     expect(refused.status).toBe(403)
   }
+  // an Errand's done is the orchestrator's with evidence: without it the server says so (422), never 403
+  const bare = await fetch(`${v.w.server.url}/v1/errands/errand_1/done`, {
+    method: 'POST',
+    headers: { 'content-type': 'application/json', ...bearer('orchestrator') },
+    body: '{}',
+  })
+  expect(bare.status).toBe(422)
 })
 
 test('a seat is resolved at filing: tier and effort are kept, a role is stored with what it said, and issue show reports it', async () => {

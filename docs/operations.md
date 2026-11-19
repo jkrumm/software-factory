@@ -19,7 +19,7 @@ whenever the Console is built.
   - `artifacts/:id/verdict`
   - `artifacts/:id/needed` (his needed-me mark)
   - `artifacts/:id/annotations` (`POST`), with `PATCH` and `DELETE` on `artifacts/:id/annotations/:annotationId`
-  - `errands/:id/done`
+  - `errands/:id/done` (the owner's click; the orchestrator closes through the API, with `confirmedBy`, recorded as itself)
   - `errands/:id/approve` (his yes on an `approval` Errand: the server runs its command on the mini)
   - `errands/:id/turn-back` (the owner or the orchestrator ends an Errand wait: not done, the lead hears the note)
   - `POST /signals/:id/promote` and `POST /signals/:id/dismiss`
@@ -53,8 +53,12 @@ fails on any raw colour.
   that appends a branch's rows to master's `docs/plan.yaml` (`.gitattributes` `merge=plan`), so a rebase of that file ends
   no merge window.
 - On the host a call with neither `FACTORY_TOKEN` nor `FACTORY_READ_TOKEN` resolves the owner token itself
-  (`apps/cli/src/credentials.ts`: the deployed release's `.env.tpl` through `secrets-run`). A set token always wins;
-  offline verbs and `health get` never resolve one.
+  (`apps/cli/src/credentials.ts`: the deployed release's `.env.tpl` through `secrets-run`). A set token always wins, so an
+  interactive `claude` session on the mini (which starts with the orchestrator token set) is the orchestrator, not the owner:
+  it may close an Errand its operator confirmed (`factory errand done <id> --confirmed-by "…"`, recorded as the orchestrator's),
+  but approve, verdicts and a Decision's worth-asking stay the owner's. `FACTORY_TOKEN= factory …` resolves the owner token and
+  is recorded as the owner: do not use it to close an Errand. The owner's own shell has no `FACTORY_TOKEN` and resolves it.
+  Offline verbs and `health get` never resolve one.
 - The CLI is the one vocabulary on the host: `rd` keeps only the owner's terminal verbs. An unknown role is exit 4.
 - The role table governs the terminals the factory spawns (the lead, `rd --role`); an Issue's or plan row's `seat`
   overrides the lead row for that Issue; with none, `apps/server/src/domains/leads/light.ts` may start it on the `light`

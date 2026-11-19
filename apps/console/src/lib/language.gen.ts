@@ -20,7 +20,7 @@ export const LANGUAGE = {
   'cache read share':
     'The share of prompt tokens a lead read from the cache instead of fresh. What to do: higher is cheaper; a low share on a long attempt means the context was rebuilt, so look in Activity for a restart or a compaction',
   caller:
-    "Who a request comes from, decided by its token: owner, orchestrator (the owner's delegate agent: the owner's rights bar ten routes, its own actor in the log), agent (a lead session), machine (the alert door), signal (Hermes, which files the owner's words), read (the surfaces)",
+    "Who a request comes from, decided by its token: owner, orchestrator (the owner's delegate agent: the owner's rights bar nine routes, its own actor in the log), agent (a lead session), machine (the alert door), signal (Hermes, which files the owner's words), read (the surfaces)",
   cancelled:
     "Outcome: the owner's stop, or a filer's withdrawal of the Issue its own signal made before a lead took it",
   chain: 'The dependency graph of Issues and plan rows, across projects. What decides what can run at once',

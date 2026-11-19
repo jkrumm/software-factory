@@ -1873,7 +1873,8 @@ export const OPERATIONS: readonly Operation[] = [
     command: ['errand', 'done'],
     method: 'POST',
     path: '/v1/errands/{id}/done',
-    summary: 'the owner did it, or found it not needed (`outcome`): the lead hears it as its next turn',
+    summary:
+      "the owner did it, or found it not needed (`outcome`); the orchestrator may close one its operator confirmed, with `confirmedBy` (recorded as the orchestrator's): the lead hears it as its next turn",
     pathParams: ['id'],
     queryParams: [],
     body: true,
@@ -1881,6 +1882,7 @@ export const OPERATIONS: readonly Operation[] = [
     bodyFields: [
       { name: 'note', flag: 'note', kind: 'string', repeatable: false, required: false, untyped: false },
       { name: 'outcome', flag: 'outcome', kind: 'string', repeatable: false, required: false, untyped: false },
+      { name: 'confirmedBy', flag: 'confirmed-by', kind: 'string', repeatable: false, required: false, untyped: false },
       { name: 'run', flag: 'run', kind: 'json', repeatable: false, required: false, untyped: false },
     ],
     args: [],
