@@ -937,7 +937,7 @@ describe('the ports other packages take', () => {
 })
 
 describe('the picker rank', () => {
-  test('an ok rank is stored and orders accounts with the same room: its head is admitted though another account has lower weekly use', async () => {
+  test('an ok rank is stored and decides: its head is admitted though another account has lower weekly use', async () => {
     world.accounts.rows = [
       account('a', { weeklyUsed: 60, fiveHourUsed: 80 }),
       account('b', { weeklyUsed: 10, fiveHourUsed: 80 }),
@@ -956,24 +956,24 @@ describe('the picker rank', () => {
     expect(ordering.map((r: { account: string }) => r.account)).toEqual(['a', 'b'])
   })
 
-  test('the account with the most room is admitted before the head of the rank', async () => {
+  test('the head of the rank is admitted before the account with the most room', async () => {
     world.accounts.rows = [account('a', { weeklyUsed: 90 }), account('b', { weeklyUsed: 10 })]
     world.ranker.rows = [
       { account: 'a', reason: 'home', weight: 0.4 },
       { account: 'b', reason: 'home', weight: 0.1 },
     ]
     await world.queued({ repo: 'solo' })
-    expect((await pass()).admitted.map((a) => a.account)).toEqual(['b'])
+    expect((await pass()).admitted.map((a) => a.account)).toEqual(['a'])
   })
 
-  test('a failed rank read admits by lowest weekly use and puts a note in the pass notes', async () => {
+  test('a failed rank read admits by most room, then lowest weekly use, and puts a note in the pass notes', async () => {
     world.accounts.rows = [account('a', { weeklyUsed: 60 }), account('b', { weeklyUsed: 10 })]
     world.ranker.fail = true
     await world.queued({ repo: 'solo' })
     const result = await pass()
     expect(result.admitted.map((a) => a.account)).toEqual(['b'])
     expect(result.notes).toEqual([expect.stringContaining('account rank read failed')])
-    expect(result.notes[0]).toContain('ordered by lowest weekly use')
+    expect(result.notes[0]).toContain('ordered by most room left')
     expect(await world.db.sql`SELECT lane FROM factory.capacity_ranks`).toHaveLength(0)
   })
 

@@ -80,7 +80,7 @@ export async function readHealthLines(
       line({
         id: 'account-rank',
         kind: 'account-rank',
-        text: `The account rank is unavailable or stale (last read ${rank ? `${rank.readAt.toISOString().slice(0, 16)}Z` : 'never'}): new leads are ordered by lowest weekly use`,
+        text: `The account rank is unavailable or stale (last read ${rank ? `${rank.readAt.toISOString().slice(0, 16)}Z` : 'never'}): new leads are ordered by most room left`,
       }),
     )
   }

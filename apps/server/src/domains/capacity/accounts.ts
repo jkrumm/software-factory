@@ -181,16 +181,20 @@ export interface PickInput {
   pace?: boolean
   /** the windows' limits; absent: 100 % */
   limits?: WindowLimits
-  /** the picker's order; a missing or stale rank leaves the order to the lowest weekly use */
+  /** the picker's order, which decides when fresh; a missing or stale rank leaves the order to the most room, then the lowest weekly use */
   rank?: AccountRank | null
 }
 
 export type Pick = { picked: AccountReading } | { picked: null; why: string; opensAt: Date | null; capped: boolean }
 
 /**
- * The open account with the most room left in its tightest window (`roomLeft`), among the fresh readings and below its
- * lead cap; a tie goes to the first in the picker's fresh rank, then to the lowest weekly use. A nearly full account so
- * gets a lead only when the roomier ones are at their caps, and every account is used up to its limit. An account with a
+ * The open account first in the picker's fresh rank, among the fresh readings and below its lead cap: the rank carries
+ * reset timing, Fable and drain mode and the weekly pace, so it decides, and `roomLeft` then the lowest weekly use only
+ * break a tie and order the accounts the rank does not list, which go after every ranked one. An account the rank lists
+ * is not closed by the factory's own pace rule (the picker applied pace already; a drain account runs ahead of it on
+ * purpose); the window limits stay. With no rank or a stale one the open account with the most room left in its
+ * tightest window (`roomLeft`) is taken, then the lowest weekly use: a nearly full account so gets a lead only when the
+ * roomier ones are at their caps, and every account is used up to its limit. An account with a
  * 5-hour window above `SAMPLE_PACE_ABOVE` takes one new lead per sample: while a lead started after the latest sample is
  * not in it yet, it is not offered again; any other account takes leads up to its cap in one pass.
  * Never spills: with nothing open the answer names why and, when a reading says so, when the first account opens.
@@ -202,9 +206,10 @@ export function pickAccount(input: PickInput): Pick {
     return { picked: null, why: 'no fresh usage reading of any account', opensAt: null, capped: false }
   }
   const limits = input.limits ?? DEFAULT_LIMITS
+  const order = input.rank && rankIsFresh(input.rank, now) ? input.rank.order.map((r) => r.account) : null
   const standings = fresh.map((reading) => ({
     reading,
-    standing: standing(reading, now, { pace: input.pace, limits }),
+    standing: standing(reading, now, { pace: (input.pace ?? false) && !order?.includes(reading.account), limits }),
   }))
   const open = standings.filter((s) => s.standing.open).map((s) => s.reading)
   const free = open.filter((r) => !(input.loaded.has(r.account) && pacedBySample(r)))
@@ -213,13 +218,12 @@ export function pickAccount(input: PickInput): Pick {
   const withRoom = free.filter((r) => heldBy(r.account) < capOf(r.account))
   const byUse = (a: AccountReading, b: AccountReading) =>
     (a.weeklyUsed ?? 0) - (b.weeklyUsed ?? 0) || a.account.localeCompare(b.account)
-  const order = input.rank && rankIsFresh(input.rank, now) ? input.rank.order.map((r) => r.account) : null
   const place = (r: AccountReading): number => {
     const index = order ? order.indexOf(r.account) : -1
     return index < 0 ? Number.MAX_SAFE_INTEGER : index
   }
   const best = withRoom.sort(
-    (a, b) => roomLeft(b, limits) - roomLeft(a, limits) || place(a) - place(b) || byUse(a, b),
+    (a, b) => place(a) - place(b) || roomLeft(b, limits) - roomLeft(a, limits) || byUse(a, b),
   )[0]
   if (best) return { picked: best }
   if (free.length > 0) {

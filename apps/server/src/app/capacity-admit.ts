@@ -330,7 +330,7 @@ async function readDoctors(
 /**
  * Polls the account picker and stores the readings as facts, with the picker's rank when it answers. A failed rank
  * read leaves the stored rank to go stale and puts a note in `notes`: the readings are still stored and admission
- * orders new leads by lowest weekly use.
+ * orders new leads by most room left.
  */
 export async function refreshAccounts(
   deps: CapacityDeps,
@@ -341,7 +341,7 @@ export async function refreshAccounts(
   if (!read.ok) return read
   const rank = await deps.ranker.read(at)
   if (!rank.ok) {
-    notes.push(`account rank read failed (${rank.error.detail}): new leads are ordered by lowest weekly use`)
+    notes.push(`account rank read failed (${rank.error.detail}): new leads are ordered by most room left`)
   }
   const stored = await deps.uow.run(async ({ capacity }) => {
     await capacity.lock()
