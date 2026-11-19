@@ -36,15 +36,14 @@ export async function holdWalledLeads(deps: LeadDeps): Promise<number> {
     return ok(found)
   })
   if (!candidates.ok || candidates.value.length === 0) return 0
-  // Read once: the host's table. One that cannot be read says nothing of what runs, so nothing is held on a guess.
-  const processes = await deps.quiesce?.processes().catch(() => null)
-  if (!processes) return 0
   let held = 0
   for (const { name, account, turns } of candidates.value) {
-    if (runsAChild(processes, name)) continue
     // Capacity is asked outside any transaction. No `since`: the newest reading decides, so a lead is never held on a window that is open.
     const window = await deps.windows.wall(account)
     if (!window.ok || !window.value.resetAt || window.value.resetAt <= now) continue
+    // Fresh, and last before the record: a table that cannot be read says nothing of what runs, so nothing is held on a guess.
+    const processes = await deps.processTable?.().catch(() => null)
+    if (!processes || runsAChild(processes, name)) continue
     const recorded = await recordHook(deps, {
       key: `${name}:limit_stop:${turns}:held`,
       session: name,

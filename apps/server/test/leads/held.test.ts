@@ -23,7 +23,7 @@ let table: QuiesceProcess[] | null
 beforeEach(async () => {
   await w.reset()
   table = [{ pid: 10, ppid: 1, session: 'lead-1-1' }]
-  w.deps.quiesce = { afterMs: 30 * 60_000, processes: async () => table, slotCwds: async () => [], maxReviveTries: 3 }
+  w.deps.processTable = async () => table
 })
 
 async function running(): Promise<IssueId> {

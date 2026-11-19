@@ -56,6 +56,8 @@ export interface LeadDeps {
   apiErrors?: ApiErrorPorts
   /** quiescing of waiting leads; unset, no lead is dormant */
   quiesce?: QuiescePorts
+  /** the host's process table, read fresh (never cached); null when it cannot be read. Unset, no lead is held at the wall (`holdWalledLeads`), whatever quiescing is set to */
+  processTable?: QuiescePorts['processes']
   /** whether triage's `small` starts on the light seat now (the tripwire, `read/kpis-seats.ts`); unset or failing, it does not */
   lightGate?: () => Promise<boolean>
   /** the hygiene classes whose Issues start on the standard lead now (`judgeClassSeat`, `read/finding-seats.ts`); unset or failing, none */

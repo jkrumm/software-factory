@@ -335,6 +335,8 @@ async function main(): Promise<void> {
   }
   const checkpoints = checkpointUses(checkpointDeps)
   // One outbox runs every effect: the leads' tick, with quality's port for the Watch.
+  const readProcesses = async () =>
+    (await reaperProcessTable.read())?.map(({ pid, ppid, session }) => ({ pid, ppid, session })) ?? null
   const leads = composeLeads({
     sql,
     uow,
@@ -348,11 +350,9 @@ async function main(): Promise<void> {
     loginErrands: loginErrands(checkpoints),
     host: {
       // One read answers a minute of passes (never longer than the threshold itself): `ps -E` and a host-wide `lsof` are too much for every tick of a lead that stays a candidate.
-      processes: freshFor(
-        Math.min(60_000, leadSettings.quiesceAfterMs ?? 0),
-        async () =>
-          (await reaperProcessTable.read())?.map(({ pid, ppid, session }) => ({ pid, ppid, session })) ?? null,
-      ),
+      processes: freshFor(Math.min(60_000, leadSettings.quiesceAfterMs ?? 0), readProcesses),
+      // A lead held at the wall is looked at as it is now: a tool started a few seconds ago must show, which a minute-old read would hide.
+      processTable: readProcesses,
       slotCwds: async () => {
         const rows = await uow.run(async ({ capacity }) => ok(await capacity.slots()))
         // A table that cannot be read says nothing of the slots: nothing is dormant on it.

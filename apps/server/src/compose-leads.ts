@@ -70,7 +70,10 @@ export function composeLeads(input: {
   /** the checkpoints' side of the Errand "log in account X" */
   loginErrands: NonNullable<LeadDeps['apiErrors']>['errands']
   /** the host's processes and the slots granted now: what quiescing looks at before it ends a lead */
-  host: Pick<NonNullable<LeadDeps['quiesce']>, 'processes' | 'slotCwds'>
+  host: Pick<NonNullable<LeadDeps['quiesce']>, 'processes' | 'slotCwds'> & {
+    /** the same table read fresh every time: a lead held at the wall must be looked at as it is now (see `holdWalledLeads`) */
+    processTable: NonNullable<LeadDeps['processTable']>
+  }
 }): LeadsComposition {
   const { settings: s } = input
   if (!s.agentToken)
@@ -109,6 +112,7 @@ export function composeLeads(input: {
     forceNoteAfterMs: s.forceNoteAfterMs,
     graceMs: s.graceMs,
     typePace: typePacer({ clock: input.clock, gapMs: s.typeGapMs }),
+    processTable: input.host.processTable,
     // The tripwire over the last days is a heavy read (it prices attempts): one answer serves every start of the next minutes.
     // The same reading gives the bound a hygiene class stays under to start light.
     ...lightReaders(input.sql, input.clock),
