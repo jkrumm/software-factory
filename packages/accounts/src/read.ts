@@ -2,18 +2,14 @@
 // set or clear a mode override. The CLI's reading verbs run on the same functions, so the picker, `claude-account status` and
 // the server cannot disagree (docs/accounts.md §status). Every location defaults to the CLI's (paths.ts); a caller may hand
 // others in (a test does).
-import { readFileSync } from 'node:fs'
 import {
   type Cache,
   type ModeKind,
   type Registry,
-  type Sample,
   HOLDS,
   type Hold,
   MODE_KINDS,
   mergeSample,
-  required,
-  sampleFromClaudeJson,
   withoutSessionWindows,
 } from './policy.ts'
 import { accountUnits } from './policy.ts'
