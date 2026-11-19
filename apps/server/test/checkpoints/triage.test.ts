@@ -44,6 +44,8 @@ describe('(f) a MacBook command that runs a mini-only command is refused', () =>
     ['cd ~/x && factory issue show 1', null],
     ['FOO=1 secrets-run read op://a/b/c', 'any'],
     ['echo hi | /opt/bin/factory errand list', 'macbook'],
+    ['"factory" errand list', 'macbook'],
+    ["'secrets-run' read op://a/b/c", 'macbook'],
   ] as const)('%s', (command, host) => {
     const refusal = refuseOffMacbook(input({ summary: 'Run it', command, host }))
     expect(refusal).toContain('mini only')

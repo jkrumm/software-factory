@@ -79,8 +79,10 @@ export const MINI_ONLY_COMMANDS: readonly string[] = ['factory', 'secrets-run']
 /** The first word of every segment of a shell line (after `&&`, `||`, `;`, `|`), `VAR=value` assignments skipped. */
 function commandWords(line: string): string[] {
   const words: string[] = []
-  // a quoted string (an ssh's remote command, an argument) never starts a segment of this shell line
-  const bare = line.replace(/'[^']*'|"[^"]*"/g, ' ')
+  // a separator inside a quoted string (an ssh's remote command, an argument) does not start a segment; the quoted text stays,
+  // so a quoted command name is still read. Best effort: an escaped quote is not told from a quote, and a miss only
+  // leaves the dialog that fails with exit 127, while a false refusal would block a real Errand.
+  const bare = line.replace(/'[^']*'|"[^"]*"/g, (span) => span.replace(/[&|;]/g, ' '))
   for (const segment of bare.split(/&&|\|\||;|\|/)) {
     const first = segment
       .trim()
