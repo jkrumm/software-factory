@@ -2,8 +2,7 @@ import { cleanText, MAX_TITLE_CHARS, storable } from '@software-factory/contract
 import type { Received } from '../../domains/intake/model.ts'
 import type { IntakeSink, ProjectSignals } from '../../domains/intake/ports.ts'
 import type { Clock } from '../../kernel/clock.ts'
-import { runProcess } from './process.ts'
-import type { RunProcess } from './process.ts'
+import { runHelper, type RunProcess } from './process.ts'
 
 const PRINT_TIMEOUT_MS = 10_000
 /** A label is an argument of `launchctl`, never a path or a shell word; anything else in a project.yaml is skipped. */
@@ -76,7 +75,7 @@ function receivedOf(
  */
 export function launchdPoller(deps: LaunchdPollerDeps): { enabled: boolean; pass(): Promise<void> } {
   const log = deps.log ?? ((line: string) => console.error(line))
-  const run = deps.run ?? runProcess
+  const run = deps.run ?? runHelper
 
   async function read(label: string): Promise<Job | undefined> {
     try {

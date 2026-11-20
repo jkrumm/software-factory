@@ -7,8 +7,7 @@ import { fingerprintOf } from '../../domains/intake/rules.ts'
 import type { Clock } from '../../kernel/clock.ts'
 import { conclusionVerdict, statusVerdict } from '../../kernel/checks.ts'
 import { CheckRuns, CommitStatus, githubGet, githubHeaders } from '../github/checks.ts'
-import { helperEnv, runProcess } from './process.ts'
-import type { RunProcess } from './process.ts'
+import { helperEnv, runHelper, type RunProcess } from './process.ts'
 
 const REMOTE_TIMEOUT_MS = 10_000
 const HTTP_TIMEOUT_MS = 15_000
@@ -207,7 +206,7 @@ export function githubPoller(deps: GithubPollerDeps): { enabled: boolean; pass()
   if (!enabled) log('github intake is off: FACTORY_GITHUB_TOKEN not set')
   const api = (deps.apiUrl ?? 'https://api.github.com').replace(/\/+$/, '')
   const doFetch = deps.fetch ?? fetch
-  const run = deps.run ?? runProcess
+  const run = deps.run ?? runHelper
 
   const request = (url: string, write?: { method: 'POST' | 'PATCH'; body: unknown }): Promise<Response> =>
     doFetch(url, {

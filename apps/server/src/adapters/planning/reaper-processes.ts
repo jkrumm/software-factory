@@ -1,7 +1,7 @@
 import { basename } from 'node:path'
 import type { ProcessKiller, ReaperProcesses } from '../../domains/loops/ports.ts'
 import type { ReaperProc } from '../../domains/loops/reaper.ts'
-import { runProcess } from './process.ts'
+import { runProcess } from '../process.ts'
 import { readCwds } from './processes.ts'
 
 const LINE = /^\s*(\d+)\s+(\d+)\s+(\S+)\s+(\S.*?)\s*$/
@@ -52,8 +52,10 @@ export function reaperProcesses(options: ReaperProcessesOptions): ReaperProcesse
   return {
     async read() {
       try {
-        const out = await runProcess([options.psBin, '-Eww', '-Ao', 'pid=,ppid=,etime=,command='], { timeoutMs })
-        if (out.timedOut || out.code !== 0) return null
+        const out = await runProcess([options.psBin, '-Eww', '-Ao', 'pid=,ppid=,etime=,command='], timeoutMs, {
+          group: true,
+        })
+        if (out.timedOut || out.exitCode !== 0) return null
         const rows = parseSessionPs(out.stdout)
         if (rows.length === 0) return null
         const cwds = await readCwds(options.lsofBin, timeoutMs)
@@ -77,9 +79,13 @@ export function processKiller(options: { psBin: string; timeoutMs?: number }): P
   return {
     async signal(target, signal) {
       try {
-        const out = await runProcess([options.psBin, '-o', 'etime=', '-p', String(target.pid)], {
-          timeoutMs: options.timeoutMs ?? 10_000,
-        })
+        const out = await runProcess(
+          [options.psBin, '-o', 'etime=', '-p', String(target.pid)],
+          options.timeoutMs ?? 10_000,
+          {
+            group: true,
+          },
+        )
         const ageS = parseEtime(out.stdout)
         if (out.timedOut || ageS === null || ageS + AGE_SLACK_S < target.ageS) return false
         process.kill(target.pid, signal)

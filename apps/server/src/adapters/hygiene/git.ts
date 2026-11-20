@@ -1,5 +1,5 @@
 import { type PortError } from '../../kernel/result.ts'
-import { childEnv, EXIT_TIMEOUT, type ProcessResult, runProcess } from '../hc/process.ts'
+import { GitTimeout, gitIn, type ProcessResult, runProcess } from '../process.ts'
 
 /** The commands the sweep runs; the defaults are the PATH's, the tests put fakes here. */
 export interface Tools {
@@ -44,18 +44,20 @@ export class ProcessFailed extends Error {
 
 /** Runs `cmd` in `cwd` under the server's secret-free environment; the process cannot start -> `CannotExecute`. */
 export function exec(cmd: string[], timeoutMs: number, cwd?: string): Promise<ProcessResult> {
-  return runProcess(cmd, timeoutMs, childEnv(), undefined, cwd)
+  return runProcess(cmd, timeoutMs, { cwd })
 }
 
-export { withStderr } from '../hc/process.ts'
+export { withStderr } from '../process.ts'
 
 /** The stdout of `git <args>` in `cwd`; a non-zero exit or a timeout is a `ProcessFailed`. */
 export async function gitOut(tools: Tools, cwd: string, args: string[], timeoutMs = GIT_TIMEOUT_MS): Promise<string> {
   const what = `git ${args[0] ?? ''}`
-  const result = await exec([tools.git, '-c', 'core.quotePath=false', ...args], timeoutMs, cwd)
-  if (result.exitCode === EXIT_TIMEOUT) {
-    throw new ProcessFailed(`${what} did not finish in ${Math.round(timeoutMs / 1000)} s`, 'timeout')
-  }
+  const result = await gitIn(cwd, ['-c', 'core.quotePath=false', ...args], { git: tools.git, timeoutMs }).catch(
+    (error: unknown) => {
+      if (!(error instanceof GitTimeout)) throw error
+      throw new ProcessFailed(`${what} did not finish in ${Math.round(timeoutMs / 1000)} s`, 'timeout')
+    },
+  )
   if (result.exitCode !== 0) throw new ProcessFailed(`${what} failed (exit ${result.exitCode})`)
   return result.stdout
 }

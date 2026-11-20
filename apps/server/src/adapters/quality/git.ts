@@ -4,36 +4,12 @@ import { join } from 'node:path'
 import { type CommitRead, deploys, type ReviewRange } from '../../domains/quality/evidence.ts'
 import type { BranchCut, Commits, LandedRead } from '../../domains/quality/ports.ts'
 import { err, ok, portError, type Result } from '../../kernel/result.ts'
-import { CannotExecute, childEnv, EXIT_TIMEOUT, type Run, runProcess } from './process.ts'
+import { CannotExecute, type GitOptions, GitTimeout, gitIn, type Run } from '../process.ts'
 
-const GIT_TIMEOUT_MS = 30_000
 const FETCH_TIMEOUT_MS = 30_000
-
-export interface GitOptions {
-  run?: Run
-  git?: string
-  signal?: AbortSignal
-}
-
-export class GitTimeout extends Error {}
 
 /** Why the commits cannot count; the answer the lead gets. */
 class CommitsRefused extends Error {}
-
-/** Git in a repo: no prompt, the server's secrets left out, a process timeout. A timeout throws; an exit code is the caller's. */
-export async function gitIn(
-  repo: string,
-  args: string[],
-  options: GitOptions & { timeoutMs?: number } = {},
-): Promise<{ exitCode: number; stdout: string }> {
-  const run = options.run ?? runProcess
-  const done = await run([options.git ?? 'git', '-C', repo, ...args], options.timeoutMs ?? GIT_TIMEOUT_MS, {
-    env: childEnv({ GIT_TERMINAL_PROMPT: '0' }),
-    ...(options.signal ? { group: true, signal: options.signal } : {}),
-  })
-  if (done.exitCode === EXIT_TIMEOUT) throw new GitTimeout(`git ${args[0]} did not finish in time`)
-  return done
-}
 
 /** Asks the remote what it has now. False when it could not: what the last fetch left is then the best there is. */
 const fetchOrigin = async (repo: string, options: GitOptions): Promise<boolean> => {

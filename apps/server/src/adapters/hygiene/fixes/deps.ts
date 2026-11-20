@@ -1,6 +1,6 @@
 import { readFileSync } from 'node:fs'
 import { join } from 'node:path'
-import { EXIT_TIMEOUT, withStderr } from '../../hc/process.ts'
+import { EXIT_TIMEOUT, withStderr } from '../../process.ts'
 import type { Checkout, FixEntry, Landing } from '../../../domains/loops/hygiene-model.ts'
 import { MAX_EVIDENCE_LINES } from '../../../domains/loops/hygiene-model.ts'
 import type { UpgradeRow } from '../../../domains/loops/upgrades.ts'

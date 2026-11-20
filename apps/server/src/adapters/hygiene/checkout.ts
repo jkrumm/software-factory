@@ -3,7 +3,7 @@ import { mkdir, mkdtemp, readdir, realpath, rm, stat } from 'node:fs/promises'
 import { join } from 'node:path'
 import type { Checkout } from '../../domains/loops/hygiene-model.ts'
 import { err, ok, portError, type PortError, type Result } from '../../kernel/result.ts'
-import { CannotExecute } from '../hc/process.ts'
+import { CannotExecute } from '../process.ts'
 import { gitOut, gitTry, ProcessFailed, type Tools } from './git.ts'
 
 const FETCH_TIMEOUT_MS = 90_000

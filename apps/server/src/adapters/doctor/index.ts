@@ -1,6 +1,6 @@
 import { type DoctorReader, type DoctorReading, DOCTOR_TIMEOUT_MS, doctorDue } from '../../domains/capacity/doctor.ts'
 import { exec, withStderr } from '../hygiene/git.ts'
-import { CannotExecute, EXIT_TIMEOUT } from '../hc/process.ts'
+import { CannotExecute, EXIT_TIMEOUT } from '../process.ts'
 
 /** The most lines of one doctor's output a reading keeps: the rest is a doctor that says too much. */
 const MAX_LINES = 20

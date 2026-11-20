@@ -13,7 +13,7 @@
 import { realpathSync } from 'node:fs'
 import { dirname, resolve } from 'node:path'
 import { gitBranches } from '../apps/server/src/adapters/git/branches.ts'
-import { runProcess, type Run } from '../apps/server/src/adapters/quality/process.ts'
+import { runProcess, type Run } from '../apps/server/src/adapters/process.ts'
 import type { BranchClosure } from '../apps/server/src/domains/leads/ports.ts'
 
 const args = process.argv.slice(2)

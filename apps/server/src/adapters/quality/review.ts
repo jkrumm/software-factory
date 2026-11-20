@@ -2,7 +2,7 @@ import * as z from 'zod'
 import type { LedgerThread, ReviewRead, UncoveredCommit } from '../../domains/quality/evidence.ts'
 import type { Review } from '../../domains/quality/ports.ts'
 import { err, ok, portError, type Result } from '../../kernel/result.ts'
-import { childEnv, EXIT_STOPPED, EXIT_TIMEOUT, type Run, runProcess } from './process.ts'
+import { childEnv, EXIT_STOPPED, EXIT_TIMEOUT, type Run, runProcess } from '../process.ts'
 
 const RouteAnswer = z.object({ tier: z.string() })
 const CoveredAnswer = z.object({

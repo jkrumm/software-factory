@@ -1,5 +1,6 @@
 import type { ProcInfo } from '../../domains/capacity/leadcost.ts'
-import { runProcess, type TextRunner } from './process.ts'
+import { runProcess } from '../process.ts'
+import type { TextRunner } from './process.ts'
 import type { PsRow } from './ps.ts'
 
 /** The working directories of `lsof -nP -a -d cwd -Fpn`: a `p<pid>` line, then the `n<path>` of that process. */
@@ -34,9 +35,9 @@ export const joinProcesses = (
 /** The working directory of every process `lsof` can see; null when it timed out or failed outright. */
 export async function readCwds(lsofBin: string, timeoutMs: number): Promise<Map<number, string> | null> {
   try {
-    const out = await runProcess([lsofBin, '-nP', '-a', '-d', 'cwd', '-Fpn'], { timeoutMs })
+    const out = await runProcess([lsofBin, '-nP', '-a', '-d', 'cwd', '-Fpn'], timeoutMs, { group: true })
     // lsof exits 1 when it could not look at some process but still lists the rest
-    if (out.timedOut || (out.code !== 0 && out.stdout.trim() === '')) return null
+    if (out.timedOut || (out.exitCode !== 0 && out.stdout.trim() === '')) return null
     return parseLsofCwd(out.stdout)
   } catch {
     return null

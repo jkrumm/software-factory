@@ -6,7 +6,7 @@
  */
 import type { RemoteHostProbe, RemoteProbeAnswer } from '../../domains/capacity/ports.ts'
 import { TRIM_EVERY_MS } from '../../domains/capacity/remote.ts'
-import { helperEnv, type RunProcess, runProcess } from '../intake/process.ts'
+import { helperEnv, type RunProcess, runHelper } from '../intake/process.ts'
 import { trimScript } from './trim.ts'
 
 /** How often the VPS is asked at most. */
@@ -89,7 +89,7 @@ export function sshProbe(input: {
   now?: () => Date
   log?: (line: string) => void
 }): RemoteHostProbe {
-  const run = input.run ?? runProcess
+  const run = input.run ?? runHelper
   const now = input.now ?? (() => new Date())
   const ssh = ['ssh', '-o', 'BatchMode=yes', '-o', 'ConnectTimeout=5', input.target]
   let answer: RemoteProbeAnswer | null = null

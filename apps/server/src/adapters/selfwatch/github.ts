@@ -2,8 +2,7 @@ import * as z from 'zod'
 import type { CiLedgerRun, CiLedgerRuns, CiLive, CiRuns, CiRunTime, CiTimes } from '../../domains/loops/ports.ts'
 import { err, ok, portError, type PortError, type Result } from '../../kernel/result.ts'
 import { parseRemote } from '../intake/github.ts'
-import { gitIn } from '../quality/git.ts'
-import type { Run } from '../quality/process.ts'
+import { gitIn, type Run } from '../process.ts'
 
 const HTTP_TIMEOUT_MS = 15_000
 const REMOTE_TIMEOUT_MS = 10_000

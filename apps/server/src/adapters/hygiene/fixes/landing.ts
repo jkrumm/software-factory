@@ -1,4 +1,4 @@
-import { EXIT_TIMEOUT, childEnv, withStderr } from '../../hc/process.ts'
+import { EXIT_TIMEOUT, childEnv, withStderr } from '../../process.ts'
 import { MAX_EVIDENCE_LINES } from '../../../domains/loops/hygiene-model.ts'
 import { exec, gitTry, type Tools } from '../git.ts'
 

@@ -1,6 +1,6 @@
 import { mibOfDu } from '../../domains/capacity/disk.ts'
 import type { WorktreeSizer } from '../../domains/capacity/ports.ts'
-import { childEnv, runProcess } from '../hc/process.ts'
+import { runProcess } from '../process.ts'
 
 /** A worktree with a build output is some GiB over many files: `du` reads it in seconds, and past this it is left for the next try. */
 const DU_TIMEOUT_MS = 90_000
@@ -13,7 +13,7 @@ export function duSizer(options: { du?: string } = {}): WorktreeSizer {
   const du = options.du ?? 'du'
   return {
     async sizeMib(path) {
-      const out = await runProcess([du, '-sk', path], DU_TIMEOUT_MS, childEnv())
+      const out = await runProcess([du, '-sk', path], DU_TIMEOUT_MS)
       return out.exitCode === 0 ? mibOfDu(out.stdout) : null
     },
   }

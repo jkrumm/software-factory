@@ -2,8 +2,7 @@ import * as z from 'zod'
 import type { BranchCleaning, LeadBranches } from '../../domains/leads/ports.ts'
 import { err, ok, portError, type Result } from '../../kernel/result.ts'
 import { parseRemote } from '../intake/github.ts'
-import { gitIn as runGit } from '../quality/git.ts'
-import type { Run } from '../quality/process.ts'
+import { gitIn as runGit, type Run } from '../process.ts'
 import { type GitProbe, originDefaultOf, refOnBase } from './worktrees.ts'
 
 const FETCH_TIMEOUT_MS = 90_000

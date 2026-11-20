@@ -12,8 +12,7 @@ const ALLOWED = new Set([
   'app/loops/runner.ts',
   'adapters/intake/schedule.ts',
   'adapters/postgres/process-lock.ts',
-  // the pipe grace after a helper process is killed at its timeout: a poll inside one call, not a pass
-  'adapters/planning/process.ts',
+  // the pipe grace after a helper process is killed at its idle limit: a poll inside one call, not a pass
   'adapters/agw/port.ts',
 ])
 

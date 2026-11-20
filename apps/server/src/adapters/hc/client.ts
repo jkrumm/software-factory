@@ -1,5 +1,5 @@
 import * as z from 'zod'
-import { CannotExecute, childEnv, EXIT_TIMEOUT, runProcess } from './process.ts'
+import { CannotExecute, childEnv, EXIT_TIMEOUT, runProcess } from '../process.ts'
 
 /**
  * A call to herdr-core that did not give an answer. `refusal` is set when the core replied with an error body: it looked
@@ -73,12 +73,10 @@ export class HcClient {
       { jsonrpc: '2.0', id: ID, method, params },
     ]
     const env = childEnv(this.options.session ? { HC_SESSION: this.options.session } : {})
-    const result = await runProcess(
-      [this.options.bin, 'connect'],
-      timeoutMs,
+    const result = await runProcess([this.options.bin, 'connect'], timeoutMs, {
       env,
-      `${request.map((line) => JSON.stringify(line)).join('\n')}\n`,
-    )
+      input: `${request.map((line) => JSON.stringify(line)).join('\n')}\n`,
+    })
     const reply = findReply(result.stdout)
     if (!reply) {
       const what = result.exitCode === EXIT_TIMEOUT ? 'timed out' : `exited ${result.exitCode}`

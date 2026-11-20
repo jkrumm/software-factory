@@ -1,7 +1,7 @@
 import { mkdtempSync, readFileSync, rmSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
-import { childEnv, type ProcessResult } from '../../hc/process.ts'
+import { childEnv, type ProcessResult } from '../../process.ts'
 import { exec } from '../git.ts'
 
 /** Whether `tool` (a PATH name or a path) names an executable in the PATH the probes' children get (`childEnv`). */

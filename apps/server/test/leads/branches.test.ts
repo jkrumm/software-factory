@@ -2,7 +2,7 @@ import { afterAll, beforeAll, describe, expect, test } from 'bun:test'
 import { mkdirSync, mkdtempSync, realpathSync, rmSync, writeFileSync } from 'node:fs'
 import { join } from 'node:path'
 import { gitBranches } from '../../src/adapters/git/branches.ts'
-import { type Run, runProcess } from '../../src/adapters/quality/process.ts'
+import { type Run, runProcess } from '../../src/adapters/process.ts'
 import type { BranchClosure } from '../../src/domains/leads/ports.ts'
 
 let base: string

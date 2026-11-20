@@ -1,6 +1,6 @@
 import { existsSync } from 'node:fs'
 import { dirname, join } from 'node:path'
-import { EXIT_TIMEOUT } from '../../hc/process.ts'
+import { EXIT_TIMEOUT } from '../../process.ts'
 import { exec, gitOut, type Tools } from '../git.ts'
 import { type Outcome, clean, failed, finding, found, skipped, unjudging } from './finding.ts'
 import { execKeepingStderr, firstLine, installed } from './toolrun.ts'

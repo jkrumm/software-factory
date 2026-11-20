@@ -1,8 +1,7 @@
 import type { MigrationFiles } from '../../domains/loops/ports.ts'
 import { leadBranchIssue } from '../../kernel/ids.ts'
 import { err, ok, portError, type Result } from '../../kernel/result.ts'
-import { GitTimeout, gitIn } from '../quality/git.ts'
-import { CannotExecute, type Run } from '../quality/process.ts'
+import { CannotExecute, GitTimeout, gitIn, type Run } from '../process.ts'
 
 const MIGRATIONS_DIR = 'apps/server/migrations'
 const BASE = 'origin/master'

@@ -1,4 +1,4 @@
-import { EXIT_TIMEOUT } from '../../hc/process.ts'
+import { EXIT_TIMEOUT } from '../../process.ts'
 import { exec, gitTry, type Tools, withStderr } from '../git.ts'
 import { type Outcome, clean, failed, finding, found, skipped } from './finding.ts'
 import { type Checkout, MAX_EVIDENCE_LINES } from '../../../domains/loops/hygiene-model.ts'
