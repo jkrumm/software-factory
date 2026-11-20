@@ -71,7 +71,6 @@ Every name a settings loader reads from the environment: its default in the code
 | `FACTORY_REPO_ROOTS` | unset | `FACTORY_REPO_ROOTS`: directories whose direct children are the repos the factory may read as projects | `apps/server/src/app/planning-settings.ts` |
 | `FACTORY_ROLES_FILE` | `DEFAULT_ROLES_FILE` | the role table; config/roles.json of this checkout when unset | `apps/server/src/adapters/leads/settings.ts` |
 | `FACTORY_SEATS_MAX_BONUS` | `2` | the most extra leads per account while the host idles with work queued; 0 turns it off | `apps/server/src/app/planning-settings.ts` |
-| `FACTORY_SELFWATCH_BRANCH` | `null` | the branch whose CI the self-watch reads; unset is the repo's default branch | `apps/server/src/app/loops/settings.ts` |
 | `FACTORY_SELFWATCH_GRACE_MS` | `DEFAULT_WAIT_GRACE_MS` | a timer or dependency wait is overdue this long after its exit | `apps/server/src/app/loops/settings.ts` |
 | `FACTORY_SETTLE_POLL` | `10s` | how often the intake's settle pass runs; off disables it | `apps/server/src/adapters/intake/settings.ts` |
 | `FACTORY_SETTLE_TIMEOUT_MS` | `15 * 60_000` | an Issue still settling this long after it was filed is settled with no edges by the steward | `apps/server/src/app/loops/settings.ts` |
