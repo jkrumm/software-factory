@@ -1893,7 +1893,7 @@ export const ThroughputModel = z
       ),
     }),
     /**
-     * The throughput loop's findings (`throughput_findings`), the 50 newest by filing, whatever the window: what each measured
+     * The throughput loop's findings (its rows of `loop_findings`), the 50 newest by filing, whatever the window: what each measured
      * before it was filed, the target, the figure read three days after its Issue shipped, and where it stands.
      */
     improvements: z.array(

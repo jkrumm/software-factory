@@ -624,6 +624,23 @@ test('a pass reopens the closed finding instead of filing it, and records what i
   expect(w.rows[0]?.filed.map((f) => f.key)).toEqual(['links:b.md'])
 })
 
+test('an Issue the lifecycle reopens is not judged: its verdict is the one of the close that ends it', async () => {
+  const issues = [issueOf('links:a.md', { issue: 'issue_9', state: 'closed', outcome: 'done', closedAt: ago(2 * DAY) })]
+  const w = world(['app'], new Set(), undefined, {
+    findings: [finding('links', 'links:a.md', 1)],
+    issues,
+    runs: [run('links', 'found')],
+    closedFindings: [
+      closedFinding({ issue: 'issue_9', key: 'links:a.md' }),
+      closedFinding({ issue: 'issue_8', key: 'links:b.md' }),
+    ],
+  })
+  await hygienePass(w.deps)
+  expect(w.steps.map((s) => [s.issue, s.action])).toEqual([['issue_9', 'reopened']])
+  // issue_8's key was not raised and links ran clean: judged; issue_9 stays open to a verdict
+  expect(w.verdicts).toEqual([{ issue: 'issue_8', verdict: 'moved', measured: 0 }])
+})
+
 test('a pass heals the finding whose probe ran green and files nothing', async () => {
   const issues = [issueOf('links:a.md', { issue: 'issue_7', state: 'queued' })]
   const w = world(['app'], new Set(), undefined, { findings: [], issues, runs: [run('links')] })

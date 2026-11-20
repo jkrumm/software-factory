@@ -369,18 +369,6 @@ async function sweepPass(
       fixes.push(...fixed.fixes.map((entry) => ({ ...entry, at: now })))
     }
     report = await readAgain(deps, target, sweepOptions, checkout, report)
-    // what the Issues of earlier findings of this repo did: a key a run judged and did not raise is at 0
-    const settled = await settleClosed(deps, {
-      loop: 'hygiene',
-      repo: target.repoText,
-      now,
-      read: (row) => figureNow(report, row.key),
-    })
-    // a ledger that could not be read costs the "last time" line and the verdicts of this pass, never the filing
-    if (!settled.ok)
-      added.failed.push({ key: 'ledger', reason: `${settled.error.kind}: ${settled.error.detail}`.slice(0, 300) })
-    const lastTime = (key: string, figure: number): string | null =>
-      settled.ok ? settled.value.lastTime(key, figure) : null
     const plan = planLifecycle({
       red: report.findings,
       runs: report.runs,
@@ -391,6 +379,22 @@ async function sweepPass(
     // A fix that could not start now (no test slot in time) holds its finding back one pass: the next pass asks again. Its key
     // stays red for the lifecycle (green would heal its Issue), but a closed Issue is not reopened for a lead meanwhile.
     const deferred = new Set(fixes.filter((entry) => entry.outcome === 'deferred').map((entry) => entry.key))
+    // what the Issues of earlier findings of this repo did: a key a run judged and did not raise is at 0. An Issue the lifecycle
+    // reopens below is not judged: it is open again, and its verdict is the one of the close that ends it
+    const reopened = new Set(
+      plan.steps.filter((step) => step.action === 'reopened' && !deferred.has(step.key)).map((step) => step.key),
+    )
+    const settled = await settleClosed(deps, {
+      loop: 'hygiene',
+      repo: target.repoText,
+      now,
+      read: (row) => (reopened.has(row.key) ? undefined : figureNow(report, row.key)),
+    })
+    // a ledger that could not be read costs the "last time" line and the verdicts of this pass, never the filing
+    if (!settled.ok)
+      added.failed.push({ key: 'ledger', reason: `${settled.error.kind}: ${settled.error.detail}`.slice(0, 300) })
+    const lastTime = (key: string, figure: number): string | null =>
+      settled.ok ? settled.value.lastTime(key, figure) : null
     for (const step of plan.steps.filter((entry) => !deferred.has(entry.key))) {
       const reopens = known.value.find((entry) => entry.key === step.key)?.reopens ?? 0
       const applied = await (deps.apply ?? ((s, n, r) => applyStep(deps, s, n, r)))(step, now, reopens)
