@@ -195,4 +195,17 @@ describe('the light seat delivers', () => {
     const later = new Date(NOW.getTime() + 15 * 24 * 3_600_000)
     expect((await readTripwire(sql, { now: later, cost: priced })).met).toBeNull()
   })
+
+  test('prices a subagent with its attempt and leaves an unreported session tagged to the Issue out', async () => {
+    // issue_2's light attempt 1 moved up: its subagent session (`<session>:<agent>`) is priced with it, 0.5. Session 9 is
+    // tagged to issue 2 but no hook reported it, so it belongs to no attempt and is not counted.
+    await sql`INSERT INTO usage.sessions VALUES (8, ${'claude-issue_2-1:explore'}, NULL)`
+    await sql`INSERT INTO usage.records_unique VALUES (8, 0.5)`
+    await sql`INSERT INTO usage.sessions VALUES (9, ${'claude-issue_2-9'}, '2')`
+    await sql`INSERT INTO usage.records_unique VALUES (9, 7)`
+    const kpis = await readSeatKpis(sql, W, { now: NOW, cost: priced })
+    // 11 light Issues; the moved-up attempts cost 0.2 + 0.5 (subagent) and 0.3, over the 11
+    expect(kpis.delivery.light.issues).toBe(11)
+    expect(kpis.delivery.light.movedUpCost).toBeCloseTo(1 / 11)
+  })
 })
