@@ -3,6 +3,8 @@
  * its `node_modules`, 1.6 GB for basalt-ui) and the bun cache every install shares; nothing else ever removes either, and
  * the host's disk alert pages at 85 %. One ssh of this script, at most every `TRIM_EVERY_MS`, keeps both bounded:
  *
+ * - a scratch directory `~/exp<issue>` (a lead's experiment on the VPS, which nothing else ever removes) in which no
+ *   file or directory changed for `EXP_IDLE_DAYS` is removed. This part needs neither the step directory nor docker.
  * - a slot copy (`<project>/<n>` and `<project>/<n>.run`) whose `.run` directory, rewritten by every step of the slot, has
  *   not changed for `COPY_IDLE_DAYS` is removed, then the project's bare repository prunes the worktree record. The bare
  *   repository (50 to 140 MB) stays, so the next snapshot pushes only what is new.
@@ -10,23 +12,25 @@
  *   one) no install has read for `CACHE_IDLE_DAYS` is removed; while the cache is still over `CACHE_CAP_GIB` the age
  *   tightens to 7, 3 and then 1 day. The mount is `relatime`, so a read marks a file's access time within a day.
  *
- * It does nothing while a step container runs or when docker does not answer, so it never removes what an install is
- * reading. A step that starts mid-trim and meets a removed copy fails as a host failure and runs on the mini.
+ * The slot and cache parts do nothing while a step container runs or when docker does not answer, so they never remove what
+ * an install is reading; the exp part touches neither and runs regardless. A step that starts mid-trim and meets a removed copy fails as a host failure and runs on the mini.
  */
-import { CACHE_CAP_GIB, CACHE_IDLE_DAYS, COPY_IDLE_DAYS } from '../../domains/capacity/remote.ts'
+import { CACHE_CAP_GIB, CACHE_IDLE_DAYS, COPY_IDLE_DAYS, EXP_IDLE_DAYS } from '../../domains/capacity/remote.ts'
 
 const KIB_PER_GIB = 1024 * 1024
 
-/** The shell script the step host runs (POSIX sh, run from the remote user's home); its last line says what it did. */
+/** The shell script the step host runs (POSIX sh, run from the remote user's home); it prints a `trim:` line per kind of removal, and the probe logs each one. */
 export function trimScript(input: {
   /** the label every step container carries: one running means nothing is removed */
   stepLabel: string
   copyDays?: number
   cacheDays?: number
   cacheCapGib?: number
+  expDays?: number
   root?: string
 }): string {
   const copyDays = input.copyDays ?? COPY_IDLE_DAYS
+  const expDays = input.expDays ?? EXP_IDLE_DAYS
   const cacheDays = input.cacheDays ?? CACHE_IDLE_DAYS
   const capKib = Math.round((input.cacheCapGib ?? CACHE_CAP_GIB) * KIB_PER_GIB)
   const root = input.root ?? 'factory-steps'
@@ -34,10 +38,19 @@ export function trimScript(input: {
   const ages = [cacheDays, ...[7, 3, 1].filter((days) => days < cacheDays)]
   return [
     'cd "$HOME" || exit 0',
+    // `exp` and digits only: anything else in the home is not ours; a symlink is skipped, never followed
+    'exps=0',
+    'for dir in exp[0-9]*; do',
+    '  [ -d "$dir" ] && [ ! -L "$dir" ] || continue',
+    `  case "\${dir#exp}" in *[!0-9]*) continue ;; esac`,
+    `  [ -z "$(find "$dir" -mtime -${expDays} -print -quit)" ] || continue`,
+    '  rm -rf "$dir" && exps=$((exps + 1))',
+    'done',
+    '[ "$exps" -eq 0 ] || echo "trim: removed $exps idle exp dirs"',
     `[ -d ${root} ] || exit 0`,
     // docker not answering reads as "a step may be running": fail closed
-    `running=$(docker ps -q --filter label=${input.stepLabel}) || { echo "trim: docker did not answer, nothing removed"; exit 0; }`,
-    '[ -z "$running" ] || { echo "trim: a step is running, nothing removed"; exit 0; }',
+    `running=$(docker ps -q --filter label=${input.stepLabel}) || { echo "trim: docker did not answer, no slot copy or cache entry removed"; exit 0; }`,
+    '[ -z "$running" ] || { echo "trim: a step is running, no slot copy or cache entry removed"; exit 0; }',
     'copies=0; entries=0',
     `for run in ${root}/*/[0-9]*.run; do`,
     '  [ -d "$run" ] || continue',

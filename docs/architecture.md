@@ -463,12 +463,14 @@ owner's setting, `FACTORY_STEP_REMOTE_TARGET` (an ssh alias; unset, every step r
   partition. A whole no-op step costs 1.9 s.
 - **Retention** (`adapters/remote/trim.ts`, issue 2035; measured 2026-11-17: `factory-steps` 7.2 GB, slot worktrees 1.6 GB
   each with `node_modules`, the bun cache 1.9 GB with no bound). The probe starts one ssh of a shell script at most every
-  6 h (`TRIM_EVERY_MS`), apart from its own call, after a probe that saw no step container; the script itself does nothing
-  while one runs or docker does not answer. It removes a slot copy (`<project>/<n>` and `<n>.run`) whose `.run`
+  6 h (`TRIM_EVERY_MS`), apart from its own call, after a probe that saw no step container; the slot and cache parts of the
+  script do nothing while one runs or docker does not answer. It removes a slot copy (`<project>/<n>` and `<n>.run`) whose `.run`
   directory, rewritten by every step of the slot, is older than 7 days (`COPY_IDLE_DAYS`), prunes the bare repository's
   worktree record and keeps the bare repository; and a whole bun cache entry no install read for 14 days
   (`CACHE_IDLE_DAYS`, by access time: the mount is `relatime`), tightening to 7, 3 and 1 day while the cache is over 3 GiB
-  (`CACHE_CAP_GIB`). A removed copy costs the slot's next step one checkout and install, a removed entry one download.
+  (`CACHE_CAP_GIB`). The same script removes a scratch directory `~/exp<issue>` of the VPS home (a lead's experiment; 13 GB at
+  8 of them, 2026-11-20) in which no file or directory changed for 2 days (`EXP_IDLE_DAYS`); that part needs neither the step
+  directory nor docker. A removed copy costs the slot's next step one checkout and install, a removed entry one download.
   A step that starts mid-trim and meets a removed copy fails as a host failure and runs on the mini. The server logs a
   line when something was removed (`steps: trim: removed ...`). The step images carry `factory.image=step` (set at build;
   an image built before it has none), so the host's daily `docker image prune` can keep them with
