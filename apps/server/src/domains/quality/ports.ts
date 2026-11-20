@@ -13,9 +13,31 @@ export interface Commits {
     /** the lead's branch and where its worktree was cut, when known: what else the branch holds counts too */
     branch: string | null
     cut: string | null
-    /** the commits the ship names, as the lead wrote them */
+    /** the Issue's cut (its first attempt's): a commit the default branch held before it proves nothing; null: the attempt's cut */
+    since: string | null
+    /** the commits the ship names, as the lead wrote them, or as `landed` found them */
     reported: readonly string[]
   }): Promise<Result<CommitRead>>
+  /**
+   * For a ship that names no commit: what of the Issue's branches is on the remote's default branch, each attempt's
+   * branch newest first, the first that landed. Empty `commits` with `held`: some branch has work, none of it landed.
+   */
+  landed(input: { repo: string; branches: readonly BranchCut[] }): Promise<Result<LandedRead>>
+}
+
+/** An attempt's branch and the commit its worktree was cut from. */
+export interface BranchCut {
+  branch: string
+  cut: string
+}
+
+export interface LandedRead {
+  /** the landed commits; empty when none of the branches has landed */
+  commits: string[]
+  /** whether any of the branches holds work since its cut */
+  held: boolean
+  /** the default branch looked at, `origin/<it>` */
+  base: string
 }
 
 /** agw's review ledger: the factory only asks, and records the answer. */
@@ -84,4 +106,8 @@ export interface AttemptCheckout {
   branch: string
   /** the commit the worktree was cut from; null before it was made */
   cut: string | null
+  /** the Issue's cut: the first attempt's that has one, so a later attempt can ship what an earlier one landed */
+  issueCut: string | null
+  /** every attempt's branch up to this one that has a cut, newest first: where a ship that names no commit looks */
+  branches: BranchCut[]
 }

@@ -109,7 +109,7 @@ A verb is a plain `factory` command that reports one outcome of an attempt.
 
 | Verb | Reports |
 |-|-|
-| `factory issue ship` | Landed and deployed: commits, one `--acceptance` line per acceptance line, each `met:` or `not met:` |
+| `factory issue ship` | Landed and deployed: one `--acceptance` line per acceptance line, each `met:` or `not met:`; the factory finds the merged commits |
 | `factory issue defer` | A wait it can name: until a time, until other Issues close, or on a pull request's review |
 | `factory issue block` | It cannot go on and nobody can answer |
 | `factory issue close` | No commit needed; outcome `done` or `dropped`, with a reason |

@@ -3,7 +3,7 @@ import { repoNameOf } from '../domains/planning/sync.ts'
 import { reviewSeat } from '../domains/leads/reviewer.ts'
 import { type CiOutcome, judgeShip, type ReviewOutcome, type ShipVerdict } from '../domains/quality/gate.ts'
 import type { AcceptanceEvidence, ReviewEvidence } from '../domains/quality/evidence.ts'
-import type { Ci, Commits, LeadCheckout, Projects, Proof, Review } from '../domains/quality/ports.ts'
+import type { BranchCut, Ci, Commits, LeadCheckout, Projects, Proof, Review } from '../domains/quality/ports.ts'
 import {
   addsNoCommit,
   afterAlertRegression,
@@ -56,7 +56,7 @@ export interface ShipInput {
   attempt: number
   /** the lead's id for this call: the same call twice is one ship */
   call: string
-  /** the merged commits the lead names */
+  /** the merged commits the lead names; empty: the ones of the Issue's branches git finds on the default branch */
   commits: readonly string[]
   /** what the lead states against each acceptance line; empty when it states nothing */
   acceptance: AcceptanceEvidence
@@ -107,14 +107,44 @@ export async function checkoutOf(
   checkout: LeadCheckout,
   issue: { id: IssueId; repo: string },
   attempt: number,
-): Promise<Result<{ repo: string; branch: string | null; cut: string | null }>> {
+): Promise<
+  Result<{ repo: string; branch: string | null; cut: string | null; issueCut: string | null; branches: BranchCut[] }>
+> {
   const found = await checkout.of(issue.id, attempt)
   if (!found.ok) return found
   return ok({
     repo: found.value?.repo ?? issue.repo,
     branch: found.value?.branch ?? null,
     cut: found.value?.cut ?? null,
+    issueCut: found.value?.issueCut ?? null,
+    branches: found.value?.branches ?? [],
   })
+}
+
+/**
+ * The commits a ship stands for: the ones the lead named, or, where it named none, what of the Issue's branches git
+ * finds on the default branch. A refusal names the step that is missing.
+ */
+async function shipCommits(
+  deps: ShipDeps,
+  issue: Issue,
+  input: ShipInput,
+  where: { repo: string; branch: string | null; branches: readonly BranchCut[] },
+): Promise<Result<readonly string[], string>> {
+  if (input.commits.length > 0) return ok(input.commits)
+  const branch = where.branch ?? "the lead's branch"
+  const none = `ship names no merged commit and ${branch} holds none since its cut: commit the work and land it (order 7 of the brief), or close the Issue with \`factory issue close\` if it needs no commit`
+  if (where.branches.length === 0) return err(none)
+  const found = await deps.commits.landed({ repo: where.repo, branches: where.branches })
+  if (!found.ok) {
+    const { kind, detail } = found.error
+    return err(kind === 'refused' ? detail : `the landed commits could not be read: ${detail}`)
+  }
+  if (found.value.commits.length > 0) return ok(found.value.commits)
+  if (!found.value.held) return err(none)
+  return err(
+    `nothing of ${branch} is on ${found.value.base} yet: land it first inside the merge window, \`factory merge-lock --project ${repoNameOf(issue.repo)} -- sh -c '<rebase, push, wait for CI, make merge-guard, gh pr merge <n>>'\` (order 7 of the brief), then ship again`,
+  )
 }
 
 /** The reviewer row the attempt's lead was assigned when it started (`lead_started`'s payload), or null: none was recorded. */
@@ -151,29 +181,42 @@ async function withThreads(
   }
 }
 
+/** The gate's verdict, and the commits the ship stands for: the ones named, or the ones git found landed. */
+interface Judged {
+  verdict: ShipVerdict
+  reported: readonly string[]
+}
+
 /** The git and agw reads of a ship: outside any transaction, the lead's call waits for them. */
 async function judge(
   deps: ShipDeps,
   issue: Issue,
   input: ShipInput,
   context: { reviewer: string | null; afterCiRegression: boolean; afterAlert: readonly string[] | null },
-): Promise<ShipVerdict> {
+): Promise<Judged> {
   const { reviewer } = context
-  const refuse = (why: string): ShipVerdict => ({ accepted: false, error: `ship refused: ${why}` })
-  if (input.commits.length === 0) return refuse('ship names no merged commit')
-  // An alert regressed the last ship and still fires: the same commits read the same alert. A monitor that cannot be read never refuses.
-  if (context.afterAlert && deps.alertsDown && addsNoCommit(input.commits, context.afterAlert)) {
-    const down = await deps.alertsDown(issue.id)
-    if (down.length > 0) return { accepted: false, error: alertStillDown(down) }
-  }
+  const refuse = (why: string): Judged => ({
+    verdict: { accepted: false, error: `ship refused: ${why}` },
+    reported: input.commits,
+  })
   const checkout = await checkoutOf(deps.checkout, issue, input.attempt)
   if (!checkout.ok) return refuse(`the lead's checkout could not be read: ${checkout.error.detail}`)
   const { repo } = checkout.value
+  const named = await shipCommits(deps, issue, input, checkout.value)
+  if (!named.ok) return refuse(named.error)
+  const reported = named.value
+  const answer = (verdict: ShipVerdict): Judged => ({ verdict, reported })
+  // An alert regressed the last ship and still fires: the same commits read the same alert. A monitor that cannot be read never refuses.
+  if (context.afterAlert && deps.alertsDown && addsNoCommit(reported, context.afterAlert)) {
+    const down = await deps.alertsDown(issue.id)
+    if (down.length > 0) return answer({ accepted: false, error: alertStillDown(down) })
+  }
   const commits = await deps.commits.read({
     repo,
     branch: checkout.value.branch,
     cut: checkout.value.cut,
-    reported: input.commits,
+    since: checkout.value.issueCut,
+    reported,
   })
   // agw is asked only for what git found on the default branch; any failure of it is a recorded absence, never a refusal (NL23).
   // The review (agw, minutes under load) and the CI (GitHub) are independent: asked together, so a slow review keeps the
@@ -198,21 +241,21 @@ async function judge(
   }
   const [review, ci] = await Promise.all([readReview(), readCi()])
   const verdict = judgeShip({
-    reported: input.commits,
+    reported,
     commits,
     review,
     ci,
     acceptance: input.acceptance,
     ...(project.ok && project.value.deployPaths ? { deployPaths: project.value.deployPaths } : {}),
   })
-  if (!verdict.accepted) return verdict
+  if (!verdict.accepted) return answer(verdict)
   // The last Watch regressed on the default branch's CI: a ship is held while that CI is still red for the commit it
   // landed at. A CI that cannot be read never refuses (NL23).
   const landedAt = verdict.commits.mergedSha ?? verdict.commits.landedAt
   if (context.afterCiRegression && landedAt && project.ok && project.value.ci) {
     const state = await deps.ci.ofCommit({ repo, sha: landedAt })
     const refusal = ciStillRed(state.ok ? state.value : null, landedAt)
-    if (refusal) return { accepted: false, error: refusal }
+    if (refusal) return answer({ accepted: false, error: refusal })
   }
   // The Watch would fail on a landed commit the deployed version lacks: say so now, with the missing step. Only a version
   // that is readable and lacks the commit refuses; one that cannot be read is the Watch's to report, never the ship's.
@@ -231,12 +274,12 @@ async function judge(
       deps.signal,
     )
     const lacking = ran.ok ? ran.value.find((check) => check.name === 'deployed version' && check.lacks) : undefined
-    if (lacking) return { accepted: false, error: notDeployed(lacking.detail, repoNameOf(issue.repo)) }
+    if (lacking) return answer({ accepted: false, error: notDeployed(lacking.detail, repoNameOf(issue.repo)) })
   }
-  return {
+  return answer({
     ...verdict,
     review: await withThreads(deps, { repo, review: verdict.review, jobs: review.read?.jobs ?? [], reviewer }),
-  }
+  })
 }
 
 /**
@@ -308,10 +351,10 @@ export async function shipIssue(
     })
   }
 
-  const verdict: ShipVerdict = specOwed
-    ? { accepted: false, error: specOwedMessage(specOwed) }
+  const { verdict, reported }: Judged = specOwed
+    ? { verdict: { accepted: false, error: specOwedMessage(specOwed) }, reported: input.commits }
     : owed.length > 0
-      ? { accepted: false, error: annotationsOwed(owed) }
+      ? { verdict: { accepted: false, error: annotationsOwed(owed) }, reported: input.commits }
       : await judge(deps, issue, input, { reviewer, afterCiRegression, afterAlert })
   return deps.uow.run<ShipAnswer, IssueWriteError>(async ({ work, quality }) => {
     const at = deps.clock.now()
@@ -321,7 +364,7 @@ export async function shipIssue(
       attempt: input.attempt,
       eventKey,
       at,
-      reported: input.commits,
+      reported,
     }
     if (!verdict.accepted) {
       await quality.recordShip({ ...ship, result: 'refused', detail: verdict.error }, [])

@@ -95,12 +95,12 @@ export const QualityEvidence = z
   .meta({ id: 'QualityEvidence' })
 export type QualityEvidence = z.infer<typeof QualityEvidence>
 
-/** `ship`: the lead lands and deploys, then names the merged commits. The same `call` twice is one ship. */
+/** `ship`: the lead lands and deploys, then ships; the server finds the merged commits unless the lead names them. The same `call` twice is one ship. */
 export const ShipBody = z
   .object({
     attempt: z.number().int().min(1),
     call: z.string().min(1),
-    /** an empty list is refused by the gate with its error named, not by the schema */
+    /** omitted or empty: the commits of the Issue's branches that are on the default branch, as git finds them */
     commits: z.array(z.string().min(1)).max(50).optional(),
     /** the flag form `--commit <sha>` (repeatable), joined with `commits` */
     commit: z.array(z.string().min(1)).max(50).optional(),

@@ -1,14 +1,16 @@
 import { afterAll, beforeAll, describe, expect, setDefaultTimeout, test } from 'bun:test'
-import { tick } from '../flow.ts'
+import { admit, loseLead, tick } from '../flow.ts'
 import { factory } from '../harness.ts'
 import type { LeadsWorld } from '../leads/support.ts'
 import {
   commit,
   gitIn,
+  leadCommits,
   projectMake,
   scriptReview,
   ship,
   show,
+  squashMerge,
   startQualityWorld,
   stateOf,
   until,
@@ -135,17 +137,72 @@ describe('ship: the gate', () => {
     expect(merged.json.result).toBe('applied')
     const view = await show(it.lw.world, it.lw.server, id)
     expect(view.ships.map((s) => s.result)).toEqual(['refused', 'refused', 'refused', 'accepted'])
-    expect(view.ships[0]?.detail).toBe('ship refused: ship names no merged commit')
+    expect(view.ships[0]?.detail).toStartWith('ship refused: ship names no merged commit')
   })
 
-  test('the lead’s cut is the attempt’s: a commit from before the lead started proves nothing', async () => {
+  test('the cut is the Issue’s: a commit from before its first lead started proves nothing', async () => {
     await scriptReview(it.lw.world, 'covered')
     const old = await commit(it.lw, 'src/old.ts', 'export const old = 1\n', 'feat: old')
     const id = await workingIssue(it.lw, 'older')
     const refused = await ship(it.lw.world, it.lw.server, id, { call: 'ship-1', commits: [old] })
     expect(refused.code).toBe(5)
-    expect(refused.refusal).toContain('is older than this attempt')
+    expect(refused.refusal).toContain('is older than this Issue')
     expect(await stateOf(it.lw.world, id)).toBe('working')
+  })
+})
+
+describe('ship: the server finds the merged commits', () => {
+  const it = lab(60_000)
+  const branchOf = (id: string, attempt: number) => `factory/${id.slice('issue_'.length)}-${attempt}`
+
+  test('a ship that names no commit is refused while the branch is unmerged, naming the merge window; after the merge it ships the squash', async () => {
+    await scriptReview(it.lw.world, 'covered')
+    const id = await workingIssue(it.lw, 'derived')
+    const branch = branchOf(id, 1)
+    await leadCommits(it.lw, branch, 'src/derived.ts', 'export const derived = 1\n')
+
+    const unmerged = await ship(it.lw.world, it.lw.server, id, { call: 'ship-1' })
+    expect(unmerged.code).toBe(5)
+    expect(unmerged.refusal).toContain(`nothing of ${branch} is on origin/master yet`)
+    expect(unmerged.refusal).toContain('factory merge-lock --project example --')
+    expect(await stateOf(it.lw.world, id)).toBe('working')
+
+    const squashed = await squashMerge(it.lw, branch)
+    const shipped = await ship(it.lw.world, it.lw.server, id, { call: 'ship-1' })
+    expect(shipped.code).toBe(0)
+    expect(shipped.json.result).toBe('applied')
+    expect(shipped.json.evidence[0]).toMatchObject({ kind: 'commits', paths: ['src/derived.ts'] })
+    expect(shipped.json.evidence[0]).toMatchObject({ commits: expect.arrayContaining([squashed]) })
+    const view = await show(it.lw.world, it.lw.server, id)
+    expect(view.ships.map((s) => [s.result, s.commits])).toEqual([
+      ['refused', []],
+      ['accepted', [squashed]],
+    ])
+  })
+
+  test('attempt 2 ships what attempt 1 landed: the cut is the Issue’s, and the earlier branch is looked at', async () => {
+    await scriptReview(it.lw.world, 'covered')
+    const id = await workingIssue(it.lw, 'handover')
+    const first = branchOf(id, 1)
+    await leadCommits(it.lw, first, 'src/handover.ts', 'export const handover = 1\n')
+    const squashed = await squashMerge(it.lw, first)
+
+    // The first lead is lost after its merge and before its ship; the second is cut from a master that holds the work.
+    const flow = { world: it.lw.world, server: it.lw.server }
+    await loseLead(flow, id, 1)
+    await until('the Issue to queue again', async () => (await stateOf(it.lw.world, id)) === 'queued')
+    await until('attempt 2 to be admitted', async () => {
+      await tick(it.lw)
+      return (await admit(flow)).admitted.some((a) => a.issue === id && a.attempt === 2)
+    })
+    await tick(it.lw)
+    await until('the second lead to work', async () => (await stateOf(it.lw.world, id)) === 'working')
+
+    const shipped = await ship(it.lw.world, it.lw.server, id, { attempt: 2, call: 'ship-1' })
+    expect(shipped.code).toBe(0)
+    expect(shipped.json.result).toBe('applied')
+    const view = await show(it.lw.world, it.lw.server, id)
+    expect(view.ships).toMatchObject([{ attempt: 2, result: 'accepted', commits: [squashed] }])
   })
 
   test('a ship is accepted without a review, and the absence is recorded with its reason (NL23)', async () => {

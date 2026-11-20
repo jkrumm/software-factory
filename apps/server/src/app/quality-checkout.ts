@@ -1,19 +1,35 @@
-import type { LeadCheckout } from '../domains/quality/ports.ts'
-import type { LeadStore } from '../domains/leads/ports.ts'
+import type { LeadAttempt, LeadStore } from '../domains/leads/ports.ts'
+import type { BranchCut, LeadCheckout } from '../domains/quality/ports.ts'
 import { ok } from '../kernel/result.ts'
 import type { UnitOfWork } from './unit-of-work.ts'
 
 /**
- * Quality's view of the lead's package: where an attempt worked, read from the lead attempt row (the leads store, never
+ * Quality's view of the lead's package: where an attempt worked, read from the lead attempt rows (the leads store, never
  * a query into its tables). The branch is the lead's branch, the cut the commit its worktree was cut from, and the repo
- * the directory it located inside the allowed roots.
+ * the directory it located inside the allowed roots. The Issue's cut is its first attempt's, and the branches are every
+ * attempt's up to this one: what an earlier attempt landed is this Issue's work too.
  */
 export function leadCheckoutOf(uow: UnitOfWork<{ leads: LeadStore }>): LeadCheckout {
   return {
     of: (issue, attempt) =>
       uow.run(async ({ leads }) => {
-        const row = await leads.attempt(issue, attempt)
-        return ok(row ? { repo: row.repoPath, branch: row.branch, cut: row.baseSha } : null)
+        const rows: LeadAttempt[] = []
+        for (let n = 1; n <= attempt; n++) {
+          const row = await leads.attempt(issue, n)
+          if (row) rows.push(row)
+        }
+        const row = rows.find((one) => one.attempt === attempt)
+        if (!row) return ok(null)
+        const branches: BranchCut[] = rows
+          .flatMap((one) => (one.baseSha ? [{ branch: one.branch, cut: one.baseSha }] : []))
+          .reverse()
+        return ok({
+          repo: row.repoPath,
+          branch: row.branch,
+          cut: row.baseSha,
+          issueCut: branches.at(-1)?.cut ?? null,
+          branches,
+        })
       }),
   }
 }

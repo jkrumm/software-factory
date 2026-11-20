@@ -2,7 +2,7 @@ import { mkdtemp, rm } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { type CommitRead, deploys, type ReviewRange } from '../../domains/quality/evidence.ts'
-import type { Commits } from '../../domains/quality/ports.ts'
+import type { BranchCut, Commits, LandedRead } from '../../domains/quality/ports.ts'
 import { err, ok, portError, type Result } from '../../kernel/result.ts'
 import { CannotExecute, childEnv, EXIT_TIMEOUT, type Run, runProcess } from './process.ts'
 
@@ -171,7 +171,90 @@ export class GitCommits implements Commits {
     }
   }
 
-  private async readOrThrow({ repo, branch, cut, reported }: Parameters<Commits['read']>[0]): Promise<CommitRead> {
+  /**
+   * What of the Issue's branches landed, for a ship that names no commit: each branch, newest attempt first, until one
+   * has. A branch's own commits since its cut that are on the base count as they are (a merge or a fast-forward kept
+   * them); where none is, the first commit of the base's first-parent line since the branch forked that holds every file
+   * the branch changed as the branch has it (a squash or a rebase rewrote them). A branch whose local ref is gone is read
+   * from the remote's copy, by content only: without its reflog its own commits cannot be told from what it was rebased onto.
+   */
+  async landed(input: Parameters<Commits['landed']>[0]): Promise<Result<LandedRead>> {
+    try {
+      return ok(await this.landedOrThrow(input))
+    } catch (error) {
+      if (error instanceof CommitsRefused) return err(portError('refused', error.message))
+      if (error instanceof CannotExecute) return err(portError('gone', error.message))
+      const detail = error instanceof Error ? error.message : String(error)
+      return err(portError(error instanceof GitTimeout ? 'timeout' : 'unreadable', detail))
+    }
+  }
+
+  private async landedOrThrow({
+    repo,
+    branches,
+  }: {
+    repo: string
+    branches: readonly BranchCut[]
+  }): Promise<LandedRead> {
+    const git = (args: string[]) => gitIn(repo, args, this.options)
+    await fetchOrigin(repo, this.options)
+    const base = await originDefault(repo, this.options)
+    if (!base) throw new CommitsRefused(`${repo} has no origin default branch to look for the commits on`)
+    let held = false
+    for (const { branch, cut } of branches) {
+      const local = `refs/heads/${branch}`
+      const remote = `refs/remotes/origin/${branch}`
+      const isLocal = (await git(['rev-parse', '-q', '--verify', local])).exitCode === 0
+      const ref = isLocal ? local : (await git(['rev-parse', '-q', '--verify', remote])).exitCode === 0 ? remote : null
+      if (!ref) continue
+      if (isLocal) {
+        const own = await this.branchCommits(repo, branch, cut)
+        if (own.length === 0) continue
+        held = true
+        const onBase: string[] = []
+        for (const sha of own) {
+          if ((await git(['merge-base', '--is-ancestor', sha, base])).exitCode === 0) onBase.push(sha)
+        }
+        if (onBase.length > 0) return { commits: onBase.reverse(), held, base }
+      } else {
+        const ahead = await git(['rev-list', '--count', ref, '--not', cut])
+        if (ahead.exitCode !== 0 || ahead.stdout.trim() === '0') continue
+        held = true
+      }
+      const holder = await this.holderOf(repo, ref, base, cut)
+      if (holder) return { commits: [holder], held, base }
+    }
+    return { commits: [], held, base }
+  }
+
+  /**
+   * The first commit of `base`'s first-parent line since `ref` forked from it at which every file `ref` changed is as
+   * `ref` has it: where a squash or a rebase of the branch landed. Null where none is, or the branch changes nothing.
+   */
+  private async holderOf(repo: string, ref: string, base: string, cut: string): Promise<string | null> {
+    const git = (args: string[]) => gitIn(repo, ['--literal-pathspecs', ...args], this.options)
+    const merged = (await git(['merge-base', '--is-ancestor', ref, base])).exitCode === 0
+    const fork = merged ? cut : (await git(['merge-base', base, ref])).stdout.trim()
+    if (!fork) return null
+    const changed = await git(['-c', 'core.quotePath=false', 'diff', '--no-renames', '--name-only', '-z', fork, ref])
+    if (changed.exitCode !== 0) throw new Error(`git diff failed (exit ${changed.exitCode})`)
+    const paths = changed.stdout.split('\0').filter(Boolean)
+    if (paths.length === 0) return null
+    const line = await git(['rev-list', '--first-parent', '--reverse', `${fork}..${base}`, '--', ...paths])
+    if (line.exitCode !== 0) throw new Error(`git rev-list failed (exit ${line.exitCode})`)
+    for (const sha of lines(line.stdout)) {
+      if ((await git(['diff', '--quiet', sha, ref, '--', ...paths])).exitCode === 0) return sha
+    }
+    return null
+  }
+
+  private async readOrThrow({
+    repo,
+    branch,
+    cut,
+    since,
+    reported,
+  }: Parameters<Commits['read']>[0]): Promise<CommitRead> {
     const git = (args: string[]) => gitIn(repo, args, this.options)
     let fetched = false
     const fetch = async () => {
@@ -211,10 +294,13 @@ export class GitCommits implements Commits {
       const reason = await lacking()
       if (reason) throw new CommitsRefused(reason)
     }
+    // An old commit of the base proves nothing about this Issue; what an earlier attempt of it landed does.
+    const issueCut = since ?? cut
     for (const sha of full) {
-      // An old commit of the base proves nothing about this attempt.
-      if (cut && (await git(['merge-base', '--is-ancestor', sha, cut])).exitCode === 0)
-        throw new CommitsRefused(`commit ${sha.slice(0, 12)} is older than this attempt`)
+      if (issueCut && (await git(['merge-base', '--is-ancestor', sha, issueCut])).exitCode === 0)
+        throw new CommitsRefused(
+          `commit ${sha.slice(0, 12)} is older than this Issue: the default branch held it before its first attempt was cut`,
+        )
     }
 
     const base = await originDefault(repo, this.options)
@@ -224,7 +310,7 @@ export class GitCommits implements Commits {
     const commits = [...new Set([...full, ...onBranch])]
     const paths = await this.pathsOf(repo, full, onBranch)
     // Without a cut (no worktree on record) the ship's range starts at the parent of the oldest commit it names.
-    const from = cut ?? (await this.parentOfOldest(repo, full))
+    const from = issueCut ?? (await this.parentOfOldest(repo, full))
     const reviewRanges = landedAt && from ? await this.rangesOf(repo, from, landedAt, commits, onBranch) : []
     const mergedSha = landedAt && from ? await this.mergedCommit(repo, from, landedAt, full) : null
     return { landedAt, mergedSha, commits, paths, mergedAt: await this.newestOf(repo, full), reviewRanges }
