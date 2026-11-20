@@ -37,7 +37,8 @@ const lines = (text: string): string[] => text.split('\n').filter(Boolean)
 
 /**
  * A branch's reflog (`reflog show --format='%H %gs'`): the tips the lead made on it (a commit, a merge, a cherry-pick, a
- * revert, an am; never a fast-forward) and each rebase's finish, with what it was rebased onto.
+ * revert, an am; never a fast-forward) and each rebase's finish, with what it was rebased onto, and the tips its
+ * fast-forwards moved it to.
  */
 function readReflog(stdout: string): {
   made: Set<string>
@@ -546,8 +547,8 @@ export class GitCommits implements Commits {
   /**
    * The lead's own commits on its branch since its worktree was cut. A branch rebased over what others landed holds
    * their commits too; its reflog says what it was rebased onto, and what that holds is theirs, except what sat on top
-   * of an earlier onto and what was made on the branch. A merge of the default branch into the branch, and what it
-   * brought in, is theirs too. A reflog that cannot be read, or no rebase in it, leaves the whole range.
+   * of an earlier onto and what was made on the branch. A merge of the default branch into the branch, or a
+   * fast-forward to it, and what it brought in, is theirs too. A reflog that cannot be read, or no rebase in it, leaves the whole range.
    */
   private async branchCommits(repo: string, branch: string, cut: string): Promise<string[]> {
     const ref = `refs/heads/${branch}`
@@ -607,21 +608,26 @@ export class GitCommits implements Commits {
     if (!base) return { merges: [], tips: [] }
     const listed = await gitIn(repo, ['rev-list', '--merges', '--parents', `${cut}..${ref}`], this.options)
     if (listed.exitCode !== 0) return undefined
+    /** Whether the commit is on the default branch; undefined where git cannot say. */
+    const onBase = async (sha: string): Promise<boolean | undefined> => {
+      const done = await gitIn(repo, ['merge-base', '--is-ancestor', sha, base], this.options)
+      return done.exitCode > 1 ? undefined : done.exitCode === 0
+    }
     const merges: string[] = []
     const tips: string[] = []
     for (const tip of forwarded) {
-      const onBase = await gitIn(repo, ['merge-base', '--is-ancestor', tip, base], this.options)
-      if (onBase.exitCode > 1) return undefined
-      if (onBase.exitCode === 0) tips.push(tip)
+      const found = await onBase(tip)
+      if (found === undefined) return undefined
+      if (found) tips.push(tip)
     }
     for (const line of lines(listed.stdout)) {
       const [merge, , ...taken] = line.split(' ')
       if (!merge) continue
       let fromDefault = false
       for (const parent of taken) {
-        const onBase = await gitIn(repo, ['merge-base', '--is-ancestor', parent, base], this.options)
-        if (onBase.exitCode > 1) return undefined
-        if (onBase.exitCode === 0) {
+        const found = await onBase(parent)
+        if (found === undefined) return undefined
+        if (found) {
           tips.push(parent)
           fromDefault = true
         }
