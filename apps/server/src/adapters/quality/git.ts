@@ -208,7 +208,11 @@ export class GitCommits implements Commits {
       const ref = isLocal ? local : (await git(['rev-parse', '-q', '--verify', remote])).exitCode === 0 ? remote : null
       if (!ref) continue
       if (isLocal) {
-        const own = await this.branchCommits(repo, branch, cut)
+        // A default branch merged into the branch hangs off its second parents: those commits are on the base and not the lead's.
+        const line = await git(['rev-list', '--first-parent', `${cut}..${local}`])
+        if (line.exitCode !== 0) throw new Error(`git rev-list failed (exit ${line.exitCode})`)
+        const firstParent = new Set(lines(line.stdout))
+        const own = (await this.branchCommits(repo, branch, cut)).filter((sha) => firstParent.has(sha))
         if (own.length === 0) continue
         held = true
         const onBase: string[] = []

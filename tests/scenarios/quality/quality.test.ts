@@ -199,6 +199,7 @@ describe('ship: the server finds the merged commits', () => {
     await until('the second lead to work', async () => (await stateOf(it.lw.world, id)) === 'working')
 
     const shipped = await ship(it.lw.world, it.lw.server, id, { attempt: 2, call: 'ship-1' })
+    expect(shipped.refusal).toBe('')
     expect(shipped.code).toBe(0)
     expect(shipped.json.result).toBe('applied')
     const view = await show(it.lw.world, it.lw.server, id)

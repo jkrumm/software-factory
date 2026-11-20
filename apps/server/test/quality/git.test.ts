@@ -193,6 +193,18 @@ test('landed: a squashed branch is the squash commit, found by content past late
   expect(value(await read(repo, found.commits, { branch: 'factory/1-1', cut })).commits).toContain(squashed)
 })
 
+test('landed: a branch that merged the default branch in and was squashed is the squash, never the merged-in commits', async () => {
+  const repo = await fresh()
+  const { cut } = await branchWith(repo, 'factory/1-1', 'mine.ts')
+  await (await repo.other()).commit('theirs.ts', 'x\n', 'feat: theirs')
+  await repo.git('pull', '-q', '--ff-only', 'origin', 'master')
+  await repo.git('checkout', '-q', 'factory/1-1')
+  await repo.git('merge', '-q', '--no-edit', 'master')
+  await repo.git('checkout', '-q', 'master')
+  const squashed = await squash(repo, 'factory/1-1')
+  expect(value(await landed(repo, [{ branch: 'factory/1-1', cut }])).commits).toEqual([squashed])
+})
+
 test('landed: a branch that has not landed is held work and no commit; a branch with nothing is neither', async () => {
   const repo = await fresh()
   const { cut } = await branchWith(repo, 'factory/1-1', 'u.ts')
