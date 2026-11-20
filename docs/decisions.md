@@ -475,3 +475,14 @@ Report `docs/archive/strategy/2026-11-next/report.html`, definition `docs/archiv
   `config/roles.json`. A filed seat, a Spec checkpoint and a move-up still keep an Issue off the light seat; such a stated-edge Issue is sized too (one rule is simpler than a second skip, and the size is read elsewhere). Revert: return
   `'now'` for `statedEdges` in `settleRule` and restore the plan pass's `settled` event. Count after a week: the share of
   lead-row starts with no size (above: 37.5 %) near zero outside alerts, and the light share of starts above the 15 % of 2026-11-20.
+
+- **NL52 The stall of a regressed Watch is judged by the regression rule (Issue 2664, 2026-11-20).** `stall:regressed` filed at 3 in the
+  week to 2026-11-20 (1310 closed, 0.002) on the bare count of 2 that NL37, NL41 and NL42 each left alone, while `regression`, the
+  same Watch outcomes, stayed quiet under its rate of 0.05 from 3. One Watch regressing is one event the friction counts twice
+  (`regression` from `quality_watches`, `stall:regressed` from the wait it puts the Issue in), so the rule is now one object
+  (`REGRESSION_RULE` in the contract's thresholds) for both: a regression is a signal only when one closed Issue in twenty ends in
+  one. The causes that were findings (a repeat ship into a red CI, NL42; a Watch charged with a red the change did not cause,
+  Issue 2473; a ship before `make deploy`, NL49) each have their own fix; a bare count of 2 on top of them filed the same
+  weather again. Cost: two regressions in a week file nothing; a rise to one in twenty files both patterns. Revert: set
+  `'stall:regressed'` in `THRESHOLDS.friction.keys` to `{ min: 2, rate: null, why: ... }` or delete the key (the group rule is the bare count of 2).
+  Count over the next week: `stall:regressed` against `regression` in `factory read friction`; they should be equal.
