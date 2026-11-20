@@ -641,7 +641,7 @@ export const hygieneSummary = (pass: HygienePass): string => {
     .filter(([, count]) => count > 0)
     .map(([outcome, count]) => `fix ${outcome} ${count}`)
   return [
-    `${what} ${record.repo} @${record.ref.slice(0, 7)}: filed ${pass.filedNow} signal(s), ${pass.overNow} over budget; judgment ${record.judgment.outcome}`,
+    `${what} ${record.repo} @${record.ref.slice(0, 7)}: filed ${pass.filedNow} finding(s) as one signal, ${pass.overNow} over budget; judgment ${record.judgment.outcome}`,
     ...lifecycle,
     ...fixed,
   ].join('; ')

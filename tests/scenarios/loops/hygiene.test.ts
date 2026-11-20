@@ -173,7 +173,9 @@ test('a due project is swept: red check and a broken link are filed, the answer 
   )
   const ran = await sweep('h1')
   expect(ran.error).toBeNull()
-  expect(ran.summary).toMatch(/^swept h1 @[0-9a-f]{7}: filed 3 signal\(s\), 0 over budget; judgment answered$/)
+  expect(ran.summary).toMatch(
+    /^swept h1 @[0-9a-f]{7}: filed 3 finding\(s\) as one signal, 0 over budget; judgment answered$/,
+  )
 
   // the pass's findings are one signal and one Issue: a section per key, under the key
   const signals = await signalsFrom('h1')
@@ -231,7 +233,9 @@ test('not due again in the window; a week on it is swept again and nothing is fi
   const later = await sweep('h1')
   expect(later.error).toBeNull()
   // every key is on the one open Issue: the pass files nothing, the judgment finding included
-  expect(later.summary).toMatch(/^swept h1 @[0-9a-f]{7}: filed 0 signal\(s\), 0 over budget; judgment answered$/)
+  expect(later.summary).toMatch(
+    /^swept h1 @[0-9a-f]{7}: filed 0 finding\(s\) as one signal, 0 over budget; judgment answered$/,
+  )
   expect(await passes('h1')).toHaveLength(2)
   expect(await issuesOf('h1')).toBe(1)
   expect(sweepsOf('h1')).toBe(2)
@@ -242,7 +246,7 @@ test('more findings than the budget: five are filed, the rest are named in the r
   await script(hygieneScript, answer('h2', ...docs))
   const ran = await sweep('h2')
   expect(ran.error).toBeNull()
-  expect(ran.summary).toMatch(/filed 5 signal\(s\), 5 over budget; judgment answered$/)
+  expect(ran.summary).toMatch(/filed 5 finding\(s\) as one signal, 5 over budget; judgment answered$/)
 
   const [pass] = await passes('h2')
   expect(pass?.filed.map((f) => f.key)).toEqual([
@@ -271,7 +275,7 @@ test('a failed judgment keeps the deterministic signals and is retried at the st
   await script(hygieneScript, [{ match: '"repo":"h3"', answer: null, fail: true }])
   const ran = await sweep('h3')
   expect(ran.error).toBeNull()
-  expect(ran.summary).toMatch(/filed 1 signal\(s\), 0 over budget; judgment failed$/)
+  expect(ran.summary).toMatch(/filed 1 finding\(s\) as one signal, 0 over budget; judgment failed$/)
   const [first] = await passes('h3')
   expect(first?.judgment).toMatchObject({ outcome: 'failed', attempts: 1 })
   expect(first?.filed.map((f) => f.key)).toEqual(['check'])
@@ -283,7 +287,7 @@ test('a failed judgment keeps the deterministic signals and is retried at the st
   const retried = await sweep('h3')
   expect(retried.error).toBeNull()
   expect(retried.summary).toMatch(
-    /^judged again h3 @[0-9a-f]{7}: filed 1 signal\(s\), 0 over budget; judgment answered$/,
+    /^judged again h3 @[0-9a-f]{7}: filed 1 finding\(s\) as one signal, 0 over budget; judgment answered$/,
   )
 
   const all = await passes('h3')
@@ -360,7 +364,7 @@ test('a probe that turns green closes its Issue as healed, with the run as the r
   const green = await sweep('h5')
   expect(green.error).toBeNull()
   expect(green.summary).toMatch(
-    /^swept h5 @[0-9a-f]{7}: filed 0 signal\(s\), 0 over budget; judgment skipped; healed 1$/,
+    /^swept h5 @[0-9a-f]{7}: filed 0 finding\(s\) as one signal, 0 over budget; judgment skipped; healed 1$/,
   )
 
   const ended = await closure(issue ?? '')
@@ -393,7 +397,7 @@ test('a still-red probe after a done Issue reopens that Issue: no second Issue, 
   const again = await sweep('h6')
   expect(again.error).toBeNull()
   expect(again.summary).toMatch(
-    /^swept h6 @[0-9a-f]{7}: filed 0 signal\(s\), 0 over budget; judgment skipped; reopened 1$/,
+    /^swept h6 @[0-9a-f]{7}: filed 0 finding\(s\) as one signal, 0 over budget; judgment skipped; reopened 1$/,
   )
   const reopened = await closure(issue ?? '')
   expect(reopened.state).toBe('queued')
@@ -409,7 +413,7 @@ test('a still-red probe after a done Issue reopens that Issue: no second Issue, 
   // red a week later with its Issue open again: it stays the one Issue, and nothing is filed or noted
   await agedWeek('h6')
   const third = await sweep('h6')
-  expect(third.summary).toMatch(/filed 0 signal\(s\)/)
+  expect(third.summary).toMatch(/filed 0 finding\(s\) as one signal/)
   expect(await issueIds('h6')).toEqual([issue ?? ''])
   expect(await signalsFrom('h6')).toHaveLength(1)
 })

@@ -128,7 +128,8 @@ export async function readLoopYield(sql: SQL, options: { now: Date }): Promise<L
         ? await sql`SELECT count(*) AS passes, coalesce(sum(jsonb_array_length(CASE WHEN jsonb_typeof(filed) = 'string' THEN (filed #>> '{}')::jsonb ELSE filed END)), 0) AS signals
             FROM factory.friction_passes WHERE at >= ${from} AND at < ${to}`
         : loop === 'hygiene'
-          ? await sql`SELECT count(*) AS passes, coalesce(sum(jsonb_array_length(CASE WHEN jsonb_typeof(filed) = 'string' THEN (filed #>> '{}')::jsonb ELSE filed END)), 0) AS signals
+          ? // a pass files its findings as one signal: the passes that filed anything
+            await sql`SELECT count(*) AS passes, count(*) FILTER (WHERE jsonb_array_length(CASE WHEN jsonb_typeof(filed) = 'string' THEN (filed #>> '{}')::jsonb ELSE filed END) > 0) AS signals
               FROM factory.hygiene_passes WHERE at >= ${from} AND at < ${to}`
           : await sql`SELECT 0 AS passes, count(*) AS signals
               FROM factory.loop_findings WHERE loop = ${loop} AND filed_at >= ${from} AND filed_at < ${to}`

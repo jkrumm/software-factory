@@ -29,7 +29,7 @@ EF_ALLOWED=" \
 
 # Retired settings (the load rule and the slot aim are always on): a file that still sets one is accepted, the line is dropped with a
 # warning on stderr and the server never sees it. Delete the names from this list one release after the file lost them.
-EF_RETIRED=" FACTORY_LOAD_CEILING FACTORY_LOAD_RULE FACTORY_SLOT_AIM "
+EF_RETIRED=" FACTORY_LOAD_CEILING FACTORY_LOAD_RULE FACTORY_SLOT_AIM FACTORY_SELFWATCH_BRANCH "
 
 # load_env_file <path>: returns 0 (an absent file included) or prints one line to stderr and returns 78.
 load_env_file() {
