@@ -249,6 +249,22 @@ test('landed: the default branch fast-forwarded into the branch is not the leadâ
   expect(value(await landed(repo, branches)).commits).toEqual([squashed])
 })
 
+test('landed: what every attempt landed counts, the newest attempt first', async () => {
+  const repo = await fresh()
+  const first = await branchWith(repo, 'factory/1-1', 'one.ts')
+  const s1 = await squash(repo, 'factory/1-1')
+  const second = await branchWith(repo, 'factory/1-2', 'two.ts')
+  const s2 = await squash(repo, 'factory/1-2')
+  const branches = [
+    { branch: 'factory/1-2', cut: second.cut },
+    { branch: 'factory/1-1', cut: first.cut },
+  ]
+  expect(value(await landed(repo, branches)).commits).toEqual([s2, s1])
+  expect(value(await read(repo, [s2, s1], { branch: 'factory/1-2', cut: second.cut, since: first.cut })).paths).toEqual(
+    ['one.ts', 'two.ts'],
+  )
+})
+
 test('landed: a branch that has not landed is held work and no commit; a branch with nothing is neither', async () => {
   const repo = await fresh()
   const { cut } = await branchWith(repo, 'factory/1-1', 'u.ts')

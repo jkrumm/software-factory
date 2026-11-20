@@ -133,7 +133,7 @@ async function shipCommits(
 ): Promise<Result<readonly string[], string>> {
   if (input.commits.length > 0) return ok(input.commits)
   const branch = where.branch ?? "the lead's branch"
-  const none = `ship names no merged commit and ${branch} holds none since its cut: commit the work and land it (order 7 of the brief), or close the Issue with \`factory issue close\` if it needs no commit`
+  const none = `ship names no merged commit and ${branch} holds none since its cut: commit the work and land it (order 7 of the brief), or close the Issue with \`factory issue close\` if it needs no commit; work already on the default branch under a sha git cannot tie to the branch ships with \`--commit <sha>\``
   if (where.branches.length === 0) return err(none)
   const found = await deps.commits.landed({ repo: where.repo, branches: where.branches })
   if (!found.ok) {

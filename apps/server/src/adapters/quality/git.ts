@@ -60,6 +60,25 @@ async function originDefault(repo: string, options: GitOptions): Promise<string 
 const lines = (text: string): string[] => text.split('\n').filter(Boolean)
 
 /**
+ * A branch's reflog (`reflog show --format='%H %gs'`): the tips the lead made on it (a commit, a merge, a cherry-pick, a
+ * revert, an am; never a fast-forward) and each rebase's finish, with what it was rebased onto.
+ */
+function readReflog(stdout: string): { made: Set<string>; rebased: { onto: string; tip: string }[] } {
+  const made = new Set<string>()
+  const rebased: { onto: string; tip: string }[] = []
+  for (const entry of stdout.split('\n')) {
+    const [tip, ...words] = entry.split(' ')
+    if (!tip) continue
+    const message = words.join(' ')
+    if (/^(commit|cherry-pick|revert|am|merge)\b[^:]*:/.test(message) && !message.endsWith(': Fast-forward'))
+      made.add(tip)
+    const onto = /\(finish\): \S+ onto ([0-9a-f]{40})\b/.exec(message)?.[1]
+    if (onto) rebased.push({ onto, tip })
+  }
+  return { made, rebased }
+}
+
+/**
  * A repo's main checkout as it is now, from local refs only (no fetch): the branch (null: a detached HEAD), the remote's
  * default branch as last fetched (null when unknown), and the paths with tracked uncommitted changes (untracked files
  * are not changes). A git that fails throws; `GitMainCheckouts` maps it.
@@ -172,8 +191,8 @@ export class GitCommits implements Commits {
   }
 
   /**
-   * What of the Issue's branches landed, for a ship that names no commit: each branch, newest attempt first, until one
-   * has. Content decides, never a list of whose commits are whose. A branch the base does not hold landed where the
+   * What of the Issue's branches landed, for a ship that names no commit: every branch's landing, newest attempt first.
+   * Content decides, never a list of whose commits are whose. A branch the base does not hold landed where the
    * first commit of the base's first-parent line since the branch forked holds every file the branch changed as the
    * branch has it (a squash or a rebase rewrote it); what the branch took in from the base sits below the fork and is not
    * its change. A branch the base holds landed by a merge, a fast-forward or a push, at the first-parent commit that
@@ -204,6 +223,7 @@ export class GitCommits implements Commits {
     const base = await originDefault(repo, this.options)
     if (!base) throw new CommitsRefused(`${repo} has no origin default branch to look for the commits on`)
     let held = false
+    const found: string[] = []
     for (const { branch, cut } of branches) {
       const local = `refs/heads/${branch}`
       const remote = `refs/remotes/origin/${branch}`
@@ -215,15 +235,15 @@ export class GitCommits implements Commits {
         if (paths.length === 0) continue
         held = true
         const holder = await this.holderOf(repo, ref, base, paths)
-        if (holder) return { commits: [holder], held, base }
+        if (holder) found.push(holder)
         continue
       }
       if (!isLocal || !(await this.madeOn(repo, local, cut))) continue
       held = true
       const holder = await this.holderOnLine(repo, ref, base, cut)
-      if (holder) return { commits: [holder], held, base }
+      if (holder) found.push(holder)
     }
-    return { commits: [], held, base }
+    return { commits: [...new Set(found)], held, base }
   }
 
   /** The files `ref` changed since it forked from `base`: its own change, whatever it took in from the base. */
@@ -275,14 +295,10 @@ export class GitCommits implements Commits {
     const since = new Set(lines(listed.stdout))
     const reflog = await gitIn(repo, ['reflog', 'show', '--format=%H %gs', ref], this.options)
     if (reflog.exitCode !== 0) return false
-    for (const entry of reflog.stdout.split('\n')) {
-      const [tip, ...words] = entry.split(' ')
-      if (!tip || !since.has(tip)) continue
-      const message = words.join(' ')
-      if (/^(commit|cherry-pick|revert|am|merge)\b[^:]*:/.test(message) && !message.endsWith(': Fast-forward'))
-        return true
-      const onto = /\(finish\): \S+ onto ([0-9a-f]{40})\b/.exec(message)?.[1]
-      if (!onto) continue
+    const { made, rebased } = readReflog(reflog.stdout)
+    if ([...made].some((sha) => since.has(sha))) return true
+    for (const { onto, tip } of rebased) {
+      if (!since.has(tip)) continue
       const carried = await gitIn(repo, ['rev-list', '--count', tip, '--not', onto, cut], this.options)
       if (carried.exitCode === 0 && Number(carried.stdout.trim()) > 0) return true
     }
@@ -573,16 +589,7 @@ export class GitCommits implements Commits {
   ): Promise<Set<string> | undefined> {
     const reflog = await gitIn(repo, ['reflog', 'show', '--format=%H %gs', ref], this.options)
     if (reflog.exitCode !== 0) return undefined
-    const made = new Set<string>()
-    const rebased: { onto: string; tip: string }[] = []
-    for (const entry of reflog.stdout.split('\n')) {
-      const [tip, ...words] = entry.split(' ')
-      const message = words.join(' ')
-      if (tip && /^(commit|cherry-pick|revert|am|merge)\b[^:]*:/.test(message) && !message.endsWith(': Fast-forward'))
-        made.add(tip)
-      const onto = /\(finish\): \S+ onto ([0-9a-f]{40})\b/.exec(message)?.[1]
-      if (tip && onto) rebased.push({ onto, tip })
-    }
+    const { made, rebased } = readReflog(reflog.stdout)
     if (rebased.length === 0) return undefined
     const theirs = await gitIn(
       repo,

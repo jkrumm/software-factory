@@ -13,13 +13,15 @@ export function leadCheckoutOf(uow: UnitOfWork<{ leads: LeadStore }>): LeadCheck
   return {
     of: (issue, attempt) =>
       uow.run(async ({ leads }) => {
-        const rows: LeadAttempt[] = []
-        for (let n = 1; n <= attempt; n++) {
-          const row = await leads.attempt(issue, n)
-          if (row) rows.push(row)
-        }
-        const row = rows.find((one) => one.attempt === attempt)
+        // The attempt's own row first: an attempt that never started has none, and bounds nothing.
+        const row = await leads.attempt(issue, attempt)
         if (!row) return ok(null)
+        const rows: LeadAttempt[] = []
+        for (let n = 1; n < attempt; n++) {
+          const earlier = await leads.attempt(issue, n)
+          if (earlier) rows.push(earlier)
+        }
+        rows.push(row)
         const branches: BranchCut[] = rows
           .flatMap((one) => (one.baseSha ? [{ branch: one.branch, cut: one.baseSha }] : []))
           .reverse()
