@@ -51,10 +51,10 @@ const one = async (rows: Promise<unknown[]>): Promise<number> => Count.parse((aw
 
 /**
  * The owner's own verdicts on a Concept, Spec or Report: one the factory gave for him (a wait that ran out, `verdict_given`
- * by actor `factory`) and a withdrawal (`no_longer_applies`) are not his. Shared by the verdict KPI and the retro's taste.
+ * by actor `factory`), one his delegate gave (`by` orchestrator, until he replaces it) and a withdrawal (`no_longer_applies`) are not his. Shared by the verdict KPI and the retro's taste.
  */
 export const ownerVerdict = (sql: SQL, w: Window) => sql`
-  v.verdict IN ('looks_good', 'with_notes', 'changes') AND v.at >= ${w.from} AND v.at < ${w.to}
+  v.verdict IN ('looks_good', 'with_notes', 'changes') AND v.at >= ${w.from} AND v.at < ${w.to} AND v.by <> 'orchestrator'
   AND NOT EXISTS (
     SELECT 1 FROM factory.issue_events e
     WHERE e.key = 'verdict_given:' || v.artifact_id || ':' || v.revision AND e.actor = 'factory')`

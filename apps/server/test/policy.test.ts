@@ -43,7 +43,6 @@ async function routes(): Promise<{ method: string; route: string }[]> {
 
 const PERSON_ROUTES = [
   ['POST', '/v1/decisions/:id/worth-asking'],
-  ['POST', '/v1/artifacts/:id/verdict'],
   ['POST', '/v1/artifacts/:id/needed'],
   ['POST', '/v1/artifacts/:id/annotations'],
   ['PATCH', '/v1/artifacts/:id/annotations/:annotationId'],
@@ -158,6 +157,7 @@ describe('the policy table', () => {
       ['POST', '/issues/:id/prio'],
       ['PUT', '/queue'],
       ['POST', '/v1/loops/:name/run'],
+      ['POST', '/v1/artifacts/:id/verdict'],
     ] as const) {
       expect(allowed(method, route)).toEqual(['owner', 'orchestrator'])
     }
@@ -256,15 +256,13 @@ describe('the auth plugin over HTTP', () => {
   })
 
   test('the orchestrator is refused on a PERSON row over HTTP, and an unset token is no caller', async () => {
-    for (const path of [
-      '/v1/decisions/d1/worth-asking',
-      '/v1/artifacts/a1/verdict',
-      '/v1/artifacts/a1/needed',
-      '/v1/errands/e1/approve',
-    ]) {
+    for (const path of ['/v1/decisions/d1/worth-asking', '/v1/artifacts/a1/needed', '/v1/errands/e1/approve']) {
       const response = await call('POST', path, TOKENS.orchestrator)
       expect(response.status).toBe(403)
     }
+    // a verdict is an owner row since 2541: the orchestrator passes the plugin (the unwired route answers 503, never 403); a lead does not
+    expect((await call('POST', '/v1/artifacts/a1/verdict', TOKENS.orchestrator)).status).not.toBe(403)
+    expect((await call('POST', '/v1/artifacts/a1/verdict', TOKENS.agent)).status).toBe(403)
     // an Errand's done is an owner row: the orchestrator passes the plugin (the unwired route answers 503, never 403)
     expect((await call('POST', '/v1/errands/e1/done', TOKENS.orchestrator)).status).not.toBe(403)
     expect((await call('POST', '/v1/errands/e1/done', TOKENS.agent)).status).toBe(403)

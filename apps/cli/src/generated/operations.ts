@@ -1594,7 +1594,7 @@ export const OPERATIONS: readonly Operation[] = [
     method: 'POST',
     path: '/v1/artifacts/{id}/verdict',
     summary:
-      "the owner's verdict: looks_good, with_notes, changes or no_longer_applies; it reaches the lead as its next turn",
+      "the owner's verdict: looks_good, with_notes, changes or no_longer_applies; it reaches the lead as its next turn. The orchestrator may give it for him on a Spec that is no owner gate (recorded as its own; his verdict on the same revision replaces it)",
     pathParams: ['id'],
     queryParams: [],
     body: true,

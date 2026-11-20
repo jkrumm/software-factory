@@ -103,7 +103,8 @@ export async function loadArtifacts(sql: SQL, issue: string): Promise<ReadArtifa
     title: r.title,
     revisions: Number(r.revisions),
     verdict: r.verdict,
-    verdictBy: r.verdict_by === 'factory' ? 'factory' : r.verdict_by === 'owner' ? 'owner' : null,
+    verdictBy:
+      r.verdict_by === 'factory' || r.verdict_by === 'owner' || r.verdict_by === 'orchestrator' ? r.verdict_by : null,
     at: r.created_at.toISOString(),
     linked: r.linked,
   }))

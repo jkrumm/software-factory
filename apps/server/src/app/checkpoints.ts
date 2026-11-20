@@ -899,6 +899,9 @@ export function deleteAnnotation(
  * verdict is stored and `verdict_given` ends the wait, so the verdict reaches the lead as its next turn in one
  * `note_lead`, once. A note goes to the lead with it as the owner's own words. The first verdict on a revision stands; a
  * repeat is a replay. A Report may carry a verdict (a spike's) and wakes no one.
+ *
+ * His delegate, the orchestrator (`by: 'orchestrator'`), may give it on a Spec that is no owner gate, recorded as its own. That
+ * one does not stand against the owner: his verdict on the same revision replaces it (he reopens it) and the lead hears so.
  */
 export function giveVerdict(
   deps: CheckpointDeps,
@@ -908,7 +911,7 @@ export function giveVerdict(
     note: string | null
     revision: number | null
     /** `factory`: the verdict a wait that ran out stands for (a flagged Issue's Spec, an artifact its Issue moved past); default the owner */
-    by?: 'owner' | 'factory'
+    by?: VerdictBy
   },
 ): Promise<CheckpointResult<ArtifactWritten & { verdict: VerdictRecord }>> {
   const verdict = VERDICTS.find((candidate) => candidate === input.verdict)
@@ -927,6 +930,29 @@ export function giveVerdict(
   )
 }
 
+export type VerdictBy = VerdictRecord['by']
+
+const verdictWho = (by: VerdictBy, reopens: boolean): string => {
+  if (reopens) return "The owner reopened his delegate's verdict with his own"
+  if (by === 'factory') return 'No verdict from the owner'
+  if (by === 'orchestrator')
+    return "The owner's delegate (the orchestrator) gave this verdict on his behalf; he can reopen it with his own"
+  return "The owner's verdict"
+}
+
+/** Why his delegate may not give this verdict, or null: only a Spec, and not an owner gate (only his own verdict ends that). */
+async function delegateRefusal(
+  checkpoints: CheckpointStores['checkpoints'],
+  artifact: { id: ArtifactId; kind: string },
+  revision: number,
+): Promise<string | null> {
+  if (artifact.kind !== 'spec')
+    return `the orchestrator gives a verdict on a Spec only: ${artifact.id} is a ${artifact.kind}`
+  const spec = await checkpoints.lockSpecRevision(artifact.id, revision, { lock: false })
+  if (spec?.origin.gate) return `${artifact.id} is an owner gate: only the owner's own verdict ends it`
+  return null
+}
+
 /** A verdict inside a transaction the caller holds: the Spec screen gives its looks_good with its own record in one. */
 export async function verdictIn(
   { work, checkpoints }: CheckpointStores,
@@ -936,7 +962,7 @@ export async function verdictIn(
     verdict: Verdict
     note: string | null
     revision: number | null
-    by: 'owner' | 'factory'
+    by: VerdictBy
   },
 ): Promise<CheckpointResult<ArtifactWritten & { verdict: VerdictRecord }>> {
   const { verdict, by } = input
@@ -959,7 +985,12 @@ export async function verdictIn(
     const existing = await checkpoints.verdictByKey(verdictKey)
     const issue = artifact.issueId ? await issueOf(work, artifact.issueId) : null
     if (artifact.issueId && !issue) return err({ kind: 'unknown_issue', issueId: artifact.issueId })
-    if (existing) {
+    if (by === 'orchestrator') {
+      const refusal = await delegateRefusal(checkpoints, artifact, revision)
+      if (refusal) return err({ kind: 'invalid', detail: refusal })
+    }
+    const reopens = existing?.by === 'orchestrator' && by === 'owner'
+    if (existing && !reopens) {
       return ok({
         ...(await written(checkpoints, artifact.id, 'replayed', issue ? moveOf(issue) : null)),
         verdict: existing,
@@ -969,25 +1000,36 @@ export async function verdictIn(
     const at = deps.clock.now()
     const note = input.note?.trim() || null
     const record: VerdictRecord = { artifactId: artifact.id, revision, verdict, note, at, by, neededMe: null }
-    await checkpoints.insertVerdict({ ...record, key: verdictKey })
+    if (reopens) {
+      const replaced = await checkpoints.replaceDelegatedVerdict(record)
+      if (!replaced)
+        return err({ kind: 'invalid', detail: `the verdict of ${artifact.id} revision ${revision} changed meanwhile` })
+    } else await checkpoints.insertVerdict({ ...record, key: verdictKey })
     let move: IssueMove | null = null
     // The Spec its filer attached holds the Issue in the queue, not in a wait: the verdict has no wait to end, and only
     // its note is left for the lead that starts next.
     const heldInQueue = isHeldFiledSpec(artifact, issue)
     const verdictNote = async (): Promise<Result<unknown, CheckpointError | PortError>> => {
       if (!artifact.issueId) return ok(null)
-      if (!note && verdict !== 'with_notes' && verdict !== 'changes') return ok(null)
-      const text = `${by === 'factory' ? 'No verdict from the owner' : "The owner's verdict"} on "${artifact.title}" (revision ${revision}): ${labelOf[verdict]}${note ? `. ${note}` : ''}. Read it with: factory artifact show ${artifact.id}`
+      if (!reopens && by !== 'orchestrator' && !note && verdict !== 'with_notes' && verdict !== 'changes')
+        return ok(null)
+      const text = `${verdictWho(by, reopens)} on "${artifact.title}" (revision ${revision}): ${labelOf[verdict]}${note ? `. ${note}` : ''}. Read it with: factory artifact show ${artifact.id}`
       return applied(
         await recordIn(work, deps, {
           issueId: artifact.issueId,
-          key: key('noted', 'verdict', artifact.id, revision),
+          key: reopens
+            ? key('noted', 'verdict', artifact.id, revision, 'reopened')
+            : key('noted', 'verdict', artifact.id, revision),
           event: { kind: 'noted', payload: { text }, actor: by },
         }),
         'noted',
       )
     }
-    if (heldInQueue) {
+    if (reopens) {
+      // his delegate's verdict already ended the wait: the lead only hears that he took it back
+      const noted = await verdictNote()
+      if (!noted.ok) return noted
+    } else if (heldInQueue) {
       const noted = await verdictNote()
       if (!noted.ok) return noted
     } else if (issue && artifact.issueId && waitsForReview(artifact.kind) && waitingOn(issue, 'review', artifact.id)) {

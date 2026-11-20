@@ -331,17 +331,24 @@ describe('the paths', () => {
     ).toBe('refused')
   })
 
-  test('the orchestrator may cancel, note and reopen, and may not give a verdict, and a lead may not finish an Errand', () => {
+  test('the orchestrator may cancel, note and reopen and give a verdict for the owner, and a lead may give none or finish an Errand', () => {
     const working = drive(settledAndWorking).issue
     expect(apply(working, ev('noted', { text: 'steer' }, 'orchestrator'), { now: NOW }).result).toBe('applied')
     expect(apply(working, ev('cancelled', { reason: 'no' }, 'orchestrator'), { now: NOW }).result).toBe('applied')
+    expect(
+      detail(
+        apply(working, ev('verdict_given', { artifact: 'artifact_1', verdict: 'looks_good' }, 'lead'), {
+          now: NOW,
+        }),
+      ),
+    ).toBe("refused: verdict_given is not the lead's to send")
     expect(
       detail(
         apply(working, ev('verdict_given', { artifact: 'artifact_1', verdict: 'looks_good' }, 'orchestrator'), {
           now: NOW,
         }),
       ),
-    ).toBe("refused: verdict_given is not the orchestrator's to send")
+    ).toBe('ignored: nothing waits for a verdict')
     expect(detail(apply(working, ev('errand_done', { errand: 'errand_1' }, 'lead'), { now: NOW }))).toBe(
       "refused: errand_done is not the lead's to send",
     )

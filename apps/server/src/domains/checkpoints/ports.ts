@@ -166,8 +166,8 @@ export interface VerdictRecord {
   verdict: Verdict
   note: string | null
   at: Date
-  /** who gave it: the owner, or the factory for him (the default after the wait, a Spec screen settle, a withdrawal) */
-  by: 'owner' | 'factory'
+  /** who gave it: the owner, the factory for him (the default after the wait, a Spec screen settle, a withdrawal), or his delegate */
+  by: 'owner' | 'factory' | 'orchestrator'
   /** the owner's mark: did it need him; null while unmarked */
   neededMe: boolean | null
 }
@@ -363,6 +363,8 @@ export interface CheckpointStore {
   disposeAnnotation(id: string, disposition: Disposition, note: string, at: Date): Promise<boolean>
   insertVerdict(verdict: VerdictRecord & { key: Key }): Promise<boolean>
   verdictByKey(key: Key): Promise<VerdictRecord | null>
+  /** the owner's verdict in place of his delegate's on a revision: its mark is cleared; null when the revision has no delegate's verdict */
+  replaceDelegatedVerdict(verdict: VerdictRecord): Promise<VerdictRecord | null>
   verdicts(id: ArtifactId): Promise<VerdictRecord[]>
   /** the owner's mark on the verdict of a revision: `unchanged` when it had that value, `no_verdict` when the revision has none */
   setNeededMe(
