@@ -11,8 +11,11 @@ const MAX_BODY_BYTES = 4000
 const TOPIC = /^[A-Za-z0-9_-]{1,64}$/
 
 const Env = z.object({
+  /** the ntfy server the owner's line posts to; unset, nothing is pushed */
   FACTORY_NTFY_URL: z.string().optional(),
+  /** the ntfy topic the owner's line posts to (letters, digits, - and _) */
   FACTORY_NTFY_TOPIC: z.string().regex(TOPIC).default('factory'),
+  /** the bearer token for the ntfy server, when it needs one */
   NTFY_TOKEN: z.string().optional(),
   /** where a checkpoint is answered; a placeholder until the Console exists */
   FACTORY_CONSOLE_URL: z.string().min(1).default('http://127.0.0.1:7793/console'),
