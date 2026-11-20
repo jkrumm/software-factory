@@ -94,16 +94,24 @@ test('a closed Issue refuses a lead verb, stores the refusal once and keeps its 
   ]
   const refused = await run(w, verb, 'agent')
   expect(refused.code).toBe(5)
-  expect(refused.err).toContain('it is closed already')
+  expect(refused.err).toContain('it is closed already: file the work as a signal with')
   // The same call again is the stored refusal, not a second one.
   const again = await run(w, verb, 'agent')
-  expect(again.json).toMatchObject({ result: 'replayed', detail: 'it is closed already', issue: { version: 4 } })
+  expect(again.json).toMatchObject({
+    result: 'replayed',
+    detail: expect.stringContaining('it is closed already: file the work'),
+    issue: { version: 4 },
+  })
   const [row] = await w.world.db
     .sql`SELECT max(version) AS version, count(*)::int AS n FROM factory.issue_events WHERE issue_id = ${issueId}`
   expect(row).toEqual({ version: 4, n: 5 })
   const [refusal] = await w.world.db
     .sql`SELECT kind, result, detail FROM factory.issue_events WHERE issue_id = ${issueId} AND result = 'refused'`
-  expect(refusal).toMatchObject({ kind: 'closed', result: 'refused', detail: 'it is closed already' })
+  expect(refusal).toMatchObject({
+    kind: 'closed',
+    result: 'refused',
+    detail: expect.stringContaining('it is closed already: file the work'),
+  })
 })
 
 test('writing Issues called neither hc nor agw', async () => {

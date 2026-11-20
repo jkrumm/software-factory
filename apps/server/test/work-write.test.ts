@@ -125,7 +125,7 @@ describe('the write path', () => {
     const refused = value(await record(id, 'ship', ev('shipped', { attempt: 1 }, 'lead')))
     expect(refused).toMatchObject({ result: 'refused', issue: { version: 1, state: 'settling' } })
     const [row] = await db.sql`SELECT result, version, detail FROM factory.issue_events WHERE kind = 'shipped'`
-    expect(row).toEqual({ result: 'refused', version: null, detail: 'no lead works it yet' })
+    expect(row).toEqual({ result: 'refused', version: null, detail: expect.stringContaining('no lead works it yet: ') })
     expect((await counts(db.sql)).version).toBe(1)
   })
 

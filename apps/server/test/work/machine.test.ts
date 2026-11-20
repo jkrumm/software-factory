@@ -78,7 +78,7 @@ describe('the paths', () => {
       'ignored: it waits for decision decision_1, not decision_2',
     )
     expect(detail(apply(issue, ev('woken', { since: 4, detail: 'go' }, 'steward'), { now: NOW }))).toBe(
-      'refused: a decision wait ends with its answer, not a wake',
+      'refused: a decision wait ends with its answer, not a wake: answer it with `factory decision answer decision_1`',
     )
     const answered = drive([ev('answered', { decision: 'decision_1', answer: 'Postgres' }, 'judge')], issue)
     expect(answered.issue.state).toBe('working')
@@ -199,7 +199,7 @@ describe('the paths', () => {
     test('a defer on an Issue that already waits for others names them', () => {
       const after = ev('deferred', { attempt: 1, after: ['issue_445', 'issue_436'] as IssueId[] }, 'lead')
       expect(refusal([...settledAndWorking, after], 'deferred')).toBe(
-        'refused: it is already waiting for issue_445, issue_436: it resumes by itself when they close, so end the turn',
+        'refused: it is already waiting for issue_445, issue_436: it resumes by itself when they close, so end the turn; `factory issue show issue_7` lists what it waits for',
       )
     })
   })
@@ -228,10 +228,10 @@ describe('the paths', () => {
     test('is refused to the steward and to another attempt', () => {
       const review = reviewing()
       expect(detail(apply(review, ev('asked', { attempt: 1, decision }, 'steward'), { now: NOW }))).toBe(
-        'refused: the steward asks only of a stall: the lead asks for itself',
+        'refused: the steward asks only of a stall: the lead asks for itself with `factory issue ask issue_7 --attempt 1`',
       )
       expect(detail(apply(review, ev('asked', { attempt: 2, decision }, 'lead'), { now: NOW }))).toBe(
-        'refused: asked was filed for attempt 2; the Issue is on attempt 1',
+        'refused: asked was filed for attempt 2; the Issue is on attempt 1: read what is current with `factory issue show issue_7`',
       )
     })
 
@@ -302,11 +302,11 @@ describe('the paths', () => {
     const { issue } = drive([...settledAndWorking, ev('cancelled', { reason: 'not now' }, 'owner')])
     expect(issue).toMatchObject({ state: 'closed', outcome: 'cancelled' })
     expect(detail(apply(issue, ev('noted', { text: 'hello' }, 'owner'), { now: NOW }))).toBe(
-      'refused: it is closed: reopen it first',
+      'refused: it is closed: reopen it with `factory issue reopen issue_7 --reason "..."`',
     )
     const late = new Date(NOW.getTime() + 31 * 24 * 60 * 60_000)
     expect(detail(apply(issue, ev('reopened', { reason: 'again' }, 'owner'), { now: late }))).toBe(
-      'refused: closed more than 30 days ago: file a new Issue',
+      'refused: closed more than 30 days ago: file a new Issue with `factory issue new`',
     )
     expect(drive([ev('reopened', { reason: 'again' }, 'owner')], issue).issue).toMatchObject({
       state: 'queued',
@@ -321,7 +321,7 @@ describe('the paths', () => {
       "refused: cancelled is not the lead's to send",
     )
     expect(detail(apply(working, ev('shipped', { attempt: 2 }, 'lead'), { now: NOW }))).toBe(
-      'refused: shipped was filed for attempt 2; the Issue is on attempt 1',
+      'refused: shipped was filed for attempt 2; the Issue is on attempt 1: read what is current with `factory issue show issue_7`',
     )
     expect(detail(apply(working, ev('lead_gone', { attempt: 2, detail: 'x' }, 'factory'), { now: NOW }))).toBe(
       'ignored: lead_gone is for attempt 2; the Issue is on attempt 1',
@@ -351,7 +351,7 @@ describe('the paths', () => {
     const healed = ev('closed', { attempt: null, outcome: 'healed', reason: 'cleared' }, 'factory')
     expect(drive([healed]).issue).toMatchObject({ state: 'closed', outcome: 'healed' })
     expect(detail(apply(drive(settledAndWorking).issue, healed, { now: NOW }))).toBe(
-      'refused: a lead works it: healed is for an Issue no lead has started',
+      'refused: a lead works it: healed is for an Issue no lead has started; the lead closes with `factory issue close issue_7 --attempt 1 --outcome done --reason "..."`',
     )
   })
 })
@@ -496,7 +496,7 @@ describe('size, the seat a lead ran on, and moved_up', () => {
       ev('asked', { attempt: 1, decision: { id: 'decision_1', summary: 'which?' } }, 'lead'),
     ])
     expect(detail(apply(asking, ev('moved_up', { attempt: 1, why: 'x' }, 'factory'), { now: NOW }))).toBe(
-      'refused: it waits for a decision: that ends with its answer first',
+      'refused: it waits for a decision: that ends with its answer first: answer it with `factory decision answer decision_1`',
     )
     const { issue: working } = drive([...settledAndWorking, started])
     expect(detail(apply(working, ev('moved_up', { attempt: 2, why: 'x' }, 'factory'), { now: NOW }))).toContain(
@@ -513,6 +513,6 @@ test('a filed light seat is never moved up: only a lead the light rule seated is
     ev('lead_started', { attempt: 1, terminal: 't1', seat: filed }, 'factory'),
   ])
   expect(detail(apply(issue, ev('moved_up', { attempt: 1, why: 'x' }, 'factory'), { now: NOW }))).toBe(
-    'refused: only a lead the light rule seated is moved up',
+    'refused: only a lead the light rule seated is moved up: `factory issue show issue_7` names its seat',
   )
 })

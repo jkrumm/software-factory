@@ -65,8 +65,16 @@ const WEEK: { detail: string; class: string }[] = [
       'it waits (regressed: woken by the steward, or turned into a Decision); `ship` is taken only from a timed wait',
     class: 'waits_stalled',
   },
-  { detail: 'it is closed: reopen it first', class: 'closed' },
-  { detail: 'it shipped: the watch is on, and verify ends it', class: 'watch_is_on' },
+  { detail: 'it is closed: reopen it with `factory issue reopen issue_7 --reason "..."`', class: 'closed' },
+  {
+    detail: 'it is closed already: file the work as a signal with `factory signal file --from agent:app`',
+    class: 'closed',
+  },
+  {
+    detail:
+      'it shipped: the watch is on, and verify ends it: end the turn, and file a fault with `factory signal file`',
+    class: 'watch_is_on',
+  },
   { detail: 'a decision wait ends with its answer, not a wake', class: 'wake_of_answer_wait' },
   { detail: 'a errand wait ends with its answer, not a wake', class: 'wake_of_answer_wait' },
   {

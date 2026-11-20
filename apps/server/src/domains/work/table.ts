@@ -1,3 +1,4 @@
+import type { Actor } from '../../kernel/events.ts'
 import { type Effect, finalize, finalizeClosed, noteLead, startLead, startWatch } from './effects.ts'
 import type { EventKind, IssueEvent } from './events.ts'
 import {
@@ -9,6 +10,7 @@ import {
   REOPEN_WINDOW_MS,
   type State,
   WAITS,
+  type Wait,
   type WaitReason,
   type WaitSpec,
 } from './issue.ts'
@@ -36,9 +38,15 @@ export type Cell =
 export type Table = { [S in State]: { [E in EventKind]: (ctx: Ctx<E>) => Cell } }
 
 const refuse = (why: string): Cell => ({ refuse: why })
+/** The read that tells a refused caller where the Issue stands; every refusal names a command (`table-refusals.test.ts` walks the table and fails on one that names none). */
+const show = (issue: Issue): string => `\`factory issue show ${issue.id}\``
 const ignore = (why: string): Cell => ({ ignore: why })
 const said = (why: string) => (): Cell => ({ ignore: why })
-const refused = (why: string) => (): Cell => ({ refuse: why })
+const refused =
+  (why: (ctx: { issue: Issue; event: { actor: Actor } }) => string) =>
+  (ctx: { issue: Issue; event: { actor: Actor } }): Cell => ({
+    refuse: why(ctx),
+  })
 
 const next = (issue: Issue): number => issue.version + 1
 /** A close finalizes the attempt there is, and cleans the Issue's branches; an Issue never admitted has none. */
@@ -60,7 +68,9 @@ const byLead =
   (ctx: C): Cell => {
     const filedFor = ctx.event.payload.attempt
     if (filedFor !== ctx.issue.attempt) {
-      return refuse(`${ctx.event.kind} was filed for attempt ${filedFor}; the Issue is on attempt ${ctx.issue.attempt}`)
+      return refuse(
+        `${ctx.event.kind} was filed for attempt ${filedFor}; the Issue is on attempt ${ctx.issue.attempt}: read what is current with ${show(ctx.issue)}`,
+      )
     }
     return cell(ctx)
   }
@@ -98,7 +108,7 @@ function waitHint(issue: Issue, event: { kind: EventKind; payload?: unknown }): 
     case 'dependency': {
       const after = wait.after.join(', ')
       if (event.kind === 'deferred') {
-        return `it is already waiting for ${after}: it resumes by itself when they close, so end the turn`
+        return `it is already waiting for ${after}: it resumes by itself when they close, so end the turn; ${show(issue)} lists what it waits for`
       }
       return `it waits for ${after} to close, so \`${verb}\` is not taken now: end the turn; it resumes by itself`
     }
@@ -117,9 +127,21 @@ const fromTimer =
   (ctx: C): Cell =>
     ctx.issue.wait?.reason === 'timer' ? cell(ctx) : refuse(waitHint(ctx.issue, ctx.event))
 
-const noLeadYet = refused('no lead works it yet')
-const watchIsOn = refused('it shipped: the watch is on, and verify ends it')
-const isClosed = refused('it is closed: reopen it first')
+const noLeadYet = refused(
+  ({ issue }) => `no lead works it yet: a lead's verbs are taken once one starts; ${show(issue)} says where it stands`,
+)
+/** A shipped Issue's watch ends by itself: a fault the lead finds meanwhile is a signal. */
+const watchHint = (issue: Issue): string =>
+  `it shipped: the watch is on, and verify ends it: end the turn, and file a fault found meanwhile with \`factory signal file --from agent:${issue.repo} --title "..." --text "..."\``
+const watchIsOn = refused(({ issue }) => watchHint(issue))
+/** The owner reopens a closed Issue; everyone else files the work as a signal. */
+const closedWay = (issue: Issue, actor: Actor): string =>
+  actor === 'owner' || actor === 'orchestrator'
+    ? `reopen it with \`factory issue reopen ${issue.id} --reason "..."\``
+    : `file the work as a signal with \`factory signal file --from agent:${issue.repo} --repo ${issue.repo} --title "..." --text "..."\``
+const isClosed = refused(({ issue, event }) => `it is closed: ${closedWay(issue, event.actor)}`)
+const closedAlready = refused(({ issue, event }) => `it is closed already: ${closedWay(issue, event.actor)}`)
+const notClosed = refused(({ issue }) => `it is not closed: nothing to reopen; ${show(issue)} says where it stands`)
 const factoryNews = (state: string) => said(`${state}: no attempt is running for this to concern`)
 
 const admit = (ctx: Ctx<'admitted'>): Cell => ({
@@ -144,7 +166,9 @@ const leadGone = (ctx: Ctx<'lead_gone'>): Cell => {
 
 /** The seat is set only while no lead works: a lead that started keeps the seat it started on. */
 const seatTaken = (ctx: Ctx<'seated'>): Cell =>
-  refuse(`it is ${ctx.issue.state} (attempt ${ctx.issue.attempt}): the seat is set only while it is settling or queued`)
+  refuse(
+    `it is ${ctx.issue.state} (attempt ${ctx.issue.attempt}): the seat is set only while it is settling or queued; ${show(ctx.issue)} names the seat it runs on`,
+  )
 
 const noteWorking = (ctx: Ctx<'noted'>): Cell => ({
   to: 'working',
@@ -164,7 +188,9 @@ const ask = byLead((ctx: Ctx<'asked'>): Cell => ({
 const stewardAsk = (ctx: Ctx<'asked'>): Cell =>
   ctx.issue.wait && WAITS[ctx.issue.wait.reason].stall
     ? ask(ctx)
-    : refuse('the steward asks only of a stall: the lead asks for itself')
+    : refuse(
+        `the steward asks only of a stall: the lead asks for itself with \`factory issue ask ${ctx.issue.id} --attempt ${ctx.issue.attempt}\``,
+      )
 const askedBy =
   (lead: (ctx: Ctx<'asked'>) => Cell) =>
   (ctx: Ctx<'asked'>): Cell =>
@@ -183,7 +209,11 @@ const raiseErrand = byLead((ctx: Ctx<'errand_raised'>): Cell => ({
 const defer = byLead((ctx: Ctx<'deferred'>): Cell => {
   const { payload } = ctx.event
   if ('until' in payload) {
-    if (Date.parse(payload.until) <= ctx.now.getTime()) return refuse('deferred needs a time ahead of now')
+    if (Date.parse(payload.until) <= ctx.now.getTime()) {
+      return refuse(
+        `deferred needs a time ahead of now: \`factory issue defer ${ctx.issue.id} --attempt ${ctx.issue.attempt} --until <a time in the future>\``,
+      )
+    }
     return { to: 'waiting', wait: { reason: 'timer', until: payload.until }, effects: [] }
   }
   if ('review' in payload) {
@@ -193,15 +223,20 @@ const defer = byLead((ctx: Ctx<'deferred'>): Cell => {
       effects: [],
     }
   }
-  if (payload.after.includes(ctx.issue.id)) return refuse('an Issue is not after itself')
+  if (payload.after.includes(ctx.issue.id)) {
+    return refuse(
+      `an Issue is not after itself: name other Issues with \`factory issue defer ${ctx.issue.id} --attempt ${ctx.issue.attempt} --after <issue id>\``,
+    )
+  }
   return { to: 'waiting', wait: { reason: 'dependency', after: [...new Set(payload.after)] }, effects: [] }
 })
 
 /** The steward defers a holder behind an Issue that waits for the claim it keeps: only `after`, only for the attempt there is. */
 const stewardDefer = (ctx: Ctx<'deferred'>): Cell => {
   const { payload } = ctx.event
-  if ('until' in payload) return refuse('the steward defers only behind other Issues, never until a time')
-  if ('review' in payload) return refuse('the steward defers only behind other Issues, never on a review')
+  const behind = `\`factory issue defer ${ctx.issue.id} --attempt ${ctx.issue.attempt} --after <issue id>\``
+  if ('until' in payload) return refuse(`the steward defers only behind other Issues, never until a time: ${behind}`)
+  if ('review' in payload) return refuse(`the steward defers only behind other Issues, never on a review: ${behind}`)
   return defer(ctx)
 }
 const deferredBy =
@@ -246,7 +281,7 @@ function repeatedWait(ctx: Ctx<'deferred'>): Cell | null {
 
 /** A shipped Issue deferred by the steward waits like any dependency, and goes back to its watch. */
 const deferWatching = (ctx: Ctx<'deferred'>): Cell => {
-  if (ctx.event.actor !== 'steward') return refuse('it shipped: the watch is on')
+  if (ctx.event.actor !== 'steward') return refuse(watchHint(ctx.issue))
   const deferred = stewardDefer(ctx)
   if (!('to' in deferred) || deferred.to !== 'waiting' || deferred.wait?.reason !== 'dependency') return deferred
   return { ...deferred, wait: { ...deferred.wait, watching: true } }
@@ -256,9 +291,15 @@ const deferWatching = (ctx: Ctx<'deferred'>): Cell => {
 const stall = (ctx: Ctx<'stalled'>): Cell => {
   const { cause, attempt, detail } = ctx.event.payload
   const reporter = cause === 'blocked' ? 'lead' : 'factory'
-  if (ctx.event.actor !== reporter) return refuse(`a ${cause} stall is the ${reporter}'s to report`)
+  if (ctx.event.actor !== reporter) {
+    const next =
+      reporter === 'lead'
+        ? `the lead reports it with \`factory issue block ${ctx.issue.id} --attempt ${ctx.issue.attempt} --reason "..."\``
+        : `${show(ctx.issue)} shows what holds it`
+    return refuse(`a ${cause} stall is the ${reporter}'s to report: ${next}`)
+  }
   if (attempt !== ctx.issue.attempt) {
-    const why = `${cause} was filed for attempt ${attempt}; the Issue is on attempt ${ctx.issue.attempt}`
+    const why = `${cause} was filed for attempt ${attempt}; the Issue is on attempt ${ctx.issue.attempt}: read what is current with ${show(ctx.issue)}`
     return reporter === 'lead' ? refuse(why) : ignore(why)
   }
   return { to: 'waiting', wait: { reason: cause, detail }, effects: [] }
@@ -272,18 +313,34 @@ const ship = byLead((ctx: Ctx<'shipped'>): Cell => ({
 /** The lead ends its work without a watch: done (nothing to deploy) or dropped. */
 const closeByLead = (ctx: Ctx<'closed'>): Cell => {
   const { outcome, attempt } = ctx.event.payload
-  if (outcome === 'healed') return refuse('a lead works it: healed is for an Issue no lead has started')
-  if (ctx.event.actor !== 'lead') return refuse(`${outcome} is the lead's to report`)
+  if (outcome === 'healed') {
+    return refuse(
+      `a lead works it: healed is for an Issue no lead has started; the lead closes with \`factory issue close ${ctx.issue.id} --attempt ${ctx.issue.attempt} --outcome done --reason "..."\``,
+    )
+  }
+  if (ctx.event.actor !== 'lead') {
+    return refuse(
+      `${outcome} is the lead's to report: the owner ends an Issue with \`factory issue cancel ${ctx.issue.id} --reason "..."\``,
+    )
+  }
   if (attempt !== ctx.issue.attempt) {
-    return refuse(`closed was filed for attempt ${attempt}; the Issue is on attempt ${ctx.issue.attempt}`)
+    return refuse(
+      `closed was filed for attempt ${attempt}; the Issue is on attempt ${ctx.issue.attempt}: read what is current with ${show(ctx.issue)}`,
+    )
   }
   return { to: 'closed', outcome, effects: closing(ctx.issue) }
 }
 
 /** Before a lead starts, only the factory closes it, and only as healed. */
 const heal = (ctx: Ctx<'closed'>): Cell => {
-  if (ctx.event.payload.outcome !== 'healed') return refuse('no lead works it yet: only healed closes it')
-  if (ctx.event.actor !== 'factory') return refuse("healed is the factory's to report")
+  if (ctx.event.payload.outcome !== 'healed') {
+    return refuse(
+      `no lead works it yet: only healed closes it; the owner stops it with \`factory issue cancel ${ctx.issue.id} --reason "..."\``,
+    )
+  }
+  if (ctx.event.actor !== 'factory') {
+    return refuse(`healed is the factory's to report: ${show(ctx.issue)} says where it stands`)
+  }
   return { to: 'closed', outcome: 'healed', effects: closing(ctx.issue) }
 }
 
@@ -316,7 +373,8 @@ const errandEnded = (ctx: Ctx<'errand_done'>): Cell => {
 /** A review wait takes the lead's `asked` for a Decision about the artifact; the steward's ask is for a stall only. */
 const askDuringReview = byLead((ctx: Ctx<'asked'>): Cell => {
   const { wait } = ctx.issue
-  if (wait?.reason !== 'review') return refuse('it does not wait for a review')
+  if (wait?.reason !== 'review')
+    return refuse(`it does not wait for a review: ${show(ctx.issue)} says what it waits for`)
   const { decision } = ctx.event.payload
   const decisions = [...(wait.decisions ?? []).filter((open) => open.id !== decision.id), decision]
   return { to: 'waiting', update: { ...wait, decisions }, effects: [] }
@@ -355,14 +413,25 @@ const verdictWhileWaiting = (ctx: Ctx<'verdict_given'>): Cell => {
   return { to: 'waiting', update: { ...wait, verdictGiven: true }, effects: [] }
 }
 
+/** The verb that answers a person's wait: what ends it instead of a wake. */
+const ANSWER_VERBS: Partial<Record<WaitReason, string>> = {
+  decision: 'factory decision answer',
+  errand: 'factory errand done',
+  review: 'factory artifact verdict',
+}
+const answerOf = (wait: Wait): string =>
+  `\`${ANSWER_VERBS[wait.reason] ?? 'factory issue show'} ${'holds' in wait ? wait.holds.id : '<id>'}\``
+
 const wake = (ctx: Ctx<'woken'>): Cell => {
   const { issue } = ctx
   const { wait } = issue
-  if (!wait) return refuse('waiting without a wait') // unreachable: replay keeps the two together
+  if (!wait) return refuse(`waiting without a wait: ${show(issue)}`) // unreachable: replay keeps the two together
   if (ctx.event.payload.since !== wait.since) {
     return ignore(`wakes the wait that began at version ${ctx.event.payload.since}; this one began at ${wait.since}`)
   }
-  if (WAITS[wait.reason].exit === 'person') return refuse(`a ${wait.reason} wait ends with its answer, not a wake`)
+  if (WAITS[wait.reason].exit === 'person') {
+    return refuse(`a ${wait.reason} wait ends with its answer, not a wake: answer it with ${answerOf(wait)}`)
+  }
   if (wait.reason === 'lead_gone') return { to: 'queued', effects: [finalize(issue.id, issue.attempt)] }
   if (wait.reason === 'dependency' && wait.watching) {
     // The lead hears the note first; the new watch is the next one, and the old one ends with the wake.
@@ -400,9 +469,11 @@ const moveUp = (ctx: Ctx<'moved_up'>): Cell => {
   if (ctx.event.payload.attempt !== issue.attempt) {
     return ignore(`moved_up is for attempt ${ctx.event.payload.attempt}; the Issue is on attempt ${issue.attempt}`)
   }
-  if (!issue.ranOn?.rule) return refuse('only a lead the light rule seated is moved up')
+  if (!issue.ranOn?.rule) return refuse(`only a lead the light rule seated is moved up: ${show(issue)} names its seat`)
   if (issue.wait && WAITS[issue.wait.reason].exit === 'person') {
-    return refuse(`it waits for a ${issue.wait.reason}: that ends with its answer first`)
+    return refuse(
+      `it waits for a ${issue.wait.reason}: that ends with its answer first: answer it with ${answerOf(issue.wait)}`,
+    )
   }
   return { to: 'queued', effects: [finalize(issue.id, issue.attempt)] }
 }
@@ -410,7 +481,7 @@ const moveUp = (ctx: Ctx<'moved_up'>): Cell => {
 const reopen = (ctx: Ctx<'reopened'>): Cell => {
   const closedAt = ctx.issue.closedAt
   if (closedAt && ctx.now.getTime() - closedAt.getTime() > REOPEN_WINDOW_MS) {
-    return refuse('closed more than 30 days ago: file a new Issue')
+    return refuse('closed more than 30 days ago: file a new Issue with `factory issue new`')
   }
   return { to: 'queued', effects: [] }
 }
@@ -423,7 +494,7 @@ export const TABLE: Table = {
   settling: {
     filed: said('it is filed already'),
     settled: () => ({ to: 'queued', effects: [] }),
-    admitted: refused('triage is not done: it is not queued'),
+    admitted: refused(({ issue }) => `triage is not done: it is not queued; ${show(issue)} says where it stands`),
     lead_started: factoryNews('settling'),
     lead_gone: factoryNews('settling'),
     seated: () => ({ to: 'settling', effects: [] }),
@@ -442,7 +513,7 @@ export const TABLE: Table = {
     shipped: noLeadYet,
     watch_passed: said('it is not watching'),
     regressed: said('it is not watching'),
-    reopened: refused('it is not closed'),
+    reopened: notClosed,
     cancelled: cancel,
     closed: heal,
   },
@@ -468,7 +539,7 @@ export const TABLE: Table = {
     shipped: noLeadYet,
     watch_passed: said('it is not watching'),
     regressed: said('it is not watching'),
-    reopened: refused('it is not closed'),
+    reopened: notClosed,
     cancelled: cancel,
     closed: heal,
   },
@@ -494,7 +565,7 @@ export const TABLE: Table = {
     shipped: ship,
     watch_passed: said('it is not watching'),
     regressed: said('it is working already: the lead hears it as a note'),
-    reopened: refused('it is not closed'),
+    reopened: notClosed,
     cancelled: cancel,
     closed: closeByLead,
   },
@@ -522,7 +593,7 @@ export const TABLE: Table = {
     shipped: fromTimer(ship),
     watch_passed: said('it is not watching'),
     regressed: said('it is not watching'),
-    reopened: refused('it is not closed'),
+    reopened: notClosed,
     cancelled: cancel,
     closed: fromTimer(closeByLead),
   },
@@ -542,13 +613,13 @@ export const TABLE: Table = {
     errand_done: said('nothing waits for an errand'),
     errand_turned_back: said('nothing waits for an errand'),
     deferred: deferWatching,
-    stalled: (ctx) => (ctx.event.actor === 'lead' ? refuse('it shipped: the watch is on') : ignore('watching')),
+    stalled: (ctx) => (ctx.event.actor === 'lead' ? refuse(watchHint(ctx.issue)) : ignore('watching')),
     moved_up: moveUp,
     woken: said('it is not waiting'),
     shipped: watchIsOn,
     watch_passed: watchPassed,
     regressed: regress,
-    reopened: refused('it is not closed'),
+    reopened: notClosed,
     cancelled: cancel,
     closed: watchIsOn,
   },
@@ -575,7 +646,7 @@ export const TABLE: Table = {
     watch_passed: said('it is closed'),
     regressed: said('it is closed: a new fault reopens it or files a new Issue'),
     reopened: reopen,
-    cancelled: refused('it is closed already'),
-    closed: refused('it is closed already'),
+    cancelled: closedAlready,
+    closed: closedAlready,
   },
 }

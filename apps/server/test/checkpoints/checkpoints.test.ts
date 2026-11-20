@@ -1354,6 +1354,12 @@ describe('artifacts', () => {
     const revised = value(await reviseArtifact(deps, { artifactId, attempt: null, content: '# v2', note: null }))
     expect(revised.revisions).toHaveLength(2)
     expect(await eventsOf(id)).toEqual(['filed', 'settled'])
+    // the owner sees the new revision: the screen passes it, and it is the one he reads and gives his verdict on
+    expect(value(await screenSpecs(deps))).toMatchObject([{ revision: 2, outcome: 'passed' }])
+    expect(value(await showArtifact(deps, { artifactId, revision: null }))).toMatchObject({ revision: 2 })
+    expect(
+      errorOf(await giveVerdict(deps, { artifactId, verdict: 'looks_good', note: null, revision: 1 })),
+    ).toMatchObject({ kind: 'invalid' })
     await record(id, 'admitted', { kind: 'admitted', payload: {}, actor: 'factory' })
     await record(id, 'lead_started', {
       kind: 'lead_started',
