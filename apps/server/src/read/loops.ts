@@ -515,7 +515,7 @@ export function loopReads(tx: SQL): LoopReads {
 
     async classCpu(since) {
       const rows: unknown[] = await tx`
-        SELECT class, repo, sum(cpu_ms) AS cpu_ms, (SELECT count(DISTINCT at) FROM factory.host_class_samples WHERE at >= ${since}) AS minutes
+        SELECT class, repo, sum(cpu_ms) AS cpu_ms, (SELECT count(DISTINCT at) FROM factory.host_class_samples WHERE at >= ${since} AND cpu_ms IS NOT NULL) AS minutes
         FROM factory.host_class_samples WHERE at >= ${since} AND cpu_ms IS NOT NULL
         GROUP BY class, repo ORDER BY sum(cpu_ms) DESC`
       const parsed = rows.map((raw) => ClassCpuRow.parse(raw))
@@ -523,7 +523,7 @@ export function loopReads(tx: SQL): LoopReads {
         SELECT count(*) AS samples, avg(cpu_idle_pct) AS idle, avg(cpu_user_pct) AS usr, avg(cpu_sys_pct) AS sys
         FROM factory.host_samples
         WHERE at >= ${since} AND cpu_idle_pct IS NOT NULL AND cpu_user_pct IS NOT NULL AND cpu_sys_pct IS NOT NULL
-          AND at IN (SELECT at FROM factory.host_class_samples WHERE at >= ${since})`
+          AND at IN (SELECT at FROM factory.host_class_samples WHERE at >= ${since} AND cpu_ms IS NOT NULL)`
       const header = HostCpuSplitRow.parse(split[0])
       return {
         minutes: parsed[0]?.minutes ?? 0,

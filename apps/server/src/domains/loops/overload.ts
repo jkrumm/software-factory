@@ -368,8 +368,9 @@ function cpuLine(window: ClassCpuWindow | null): string {
  */
 export function cpuAccountingLine(window: ClassCpuWindow | null, cores: number | undefined): string {
   const host = window?.host
-  // the split and the groups are read over the same host minutes; a window with no class minutes has no groups to net against
-  if (!window || !host || window.minutes === 0) return '- CPU accounting: no host CPU split read'
+  // the split and the groups are read over the same host minutes; a window with no class CPU has no groups to net against (the first snapshot after a restart has none)
+  if (!window || !host || window.minutes === 0 || window.rows.length === 0)
+    return '- CPU accounting: no host CPU split read'
   const busyPct = Math.max(0, 100 - host.idlePct)
   const split = `host ${Math.round(busyPct)}% busy (user ${Math.round(host.userPct)}%, system ${Math.round(host.sysPct)}%, idle ${Math.round(host.idlePct)}%) over ${host.samples} host minutes`
   if (cores === undefined || cores <= 0)

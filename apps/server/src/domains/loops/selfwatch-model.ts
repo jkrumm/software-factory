@@ -202,7 +202,7 @@ export interface HostCpuSplit {
 }
 
 /**
- * What `classCpu` read: the groups, the number of host minutes sampled in the window (the divisor of a core count) and the
+ * What `classCpu` read: the groups, the number of host minutes with CPU figures in the window (the divisor of a core count; the first snapshot after a restart has none) and the
  * host's CPU split over the same window, null when no host minute carried one.
  */
 export interface ClassCpuWindow {

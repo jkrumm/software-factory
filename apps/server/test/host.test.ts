@@ -596,6 +596,7 @@ test('classCpu: the CPU of each class and repo over the window, ranked, with the
   await row(6, 'lead', 'app', 45_000)
   await row(6, 'system', null, 10_000)
   await row(6, 'owner', null, null) // CPU not read: not a group
+  await row(9, 'lead', 'app', null) // a minute whose rows carry no CPU (the first snapshot after a restart)
   const hostRow = (min: number, idle: number | null, user: number, sys: number) =>
     db.sql`INSERT INTO factory.host_samples (at, cpu_idle_pct, cpu_user_pct, cpu_sys_pct) VALUES (${at(min)}, ${idle}, ${user}, ${sys})`
   const clearHostRows = () => db.sql`DELETE FROM factory.host_samples WHERE at >= ${at(0)} AND at <= ${at(59)}`
@@ -605,6 +606,7 @@ test('classCpu: the CPU of each class and repo over the window, ranked, with the
   await hostRow(6, 0, 70, 30)
   await hostRow(7, null, 1, 1) // no split read: not averaged
   await hostRow(8, 50, 25, 25) // no class rows that minute: the split covers the minutes the groups do
+  await hostRow(9, 40, 30, 30) // class rows without CPU that minute: not covered either
   const window = await loopReads(db.sql).classCpu(at(1))
   expect(window.minutes).toBe(2)
   expect(window.host).toEqual({ samples: 2, idlePct: 5, userPct: 65, sysPct: 30 })

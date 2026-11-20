@@ -402,6 +402,8 @@ test('cpuAccountingLine: the remainder never goes negative, and an unknown core 
   expect(cpuAccountingLine({ ...window, host: null }, 4)).toBe('- CPU accounting: no host CPU split read')
   // no class minute in the window: nothing to net the host's busy CPU against, never "everything unattributed"
   expect(cpuAccountingLine({ ...window, minutes: 0, rows: [] }, 4)).toBe('- CPU accounting: no host CPU split read')
+  // class minutes whose rows carry no CPU (the first snapshot after a restart): the same
+  expect(cpuAccountingLine({ ...window, minutes: 1, rows: [] }, 4)).toBe('- CPU accounting: no host CPU split read')
 })
 
 test('a signal carries the evidence block after the eight lines, which never move the evidence hash', () => {
