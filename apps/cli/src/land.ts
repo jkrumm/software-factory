@@ -410,8 +410,10 @@ class Lander {
       const stopped = this.stopped()
       if (stopped !== null) return stopped
       // the verb's first read already told a wrong account from a missing pull request; a later failure is a blip, so poll again
+      let blip = false
       const view = await pullRequest(this.sh, String(pr.number)).catch((error: unknown) => {
         if (!(error instanceof Refused)) throw error
+        blip = true
         if (error.why !== unread) this.out(`${error.why}; ${error.next}; polling again`)
         unread = error.why
         return null
@@ -453,7 +455,8 @@ class Lander {
         }
       }
       const waited = Date.now() - started
-      if (!anyCheck && waited >= this.noRunMs)
+      // a poll that could not read says nothing about whether a check ever started
+      if (!anyCheck && !blip && waited >= this.noRunMs)
         throw new Refused(
           'ci',
           `no CI check on ${short(head)} after ${Math.round(waited / 1000)}s`,

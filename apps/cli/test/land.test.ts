@@ -408,6 +408,13 @@ describe('factory land', () => {
     expect(await calls()).toContain('gh pr merge 7')
   })
 
+  test('a gh failure past the no-check bound is not read as "no CI check": the poll goes on', async () => {
+    await writeFile(join(state, 'blip'), '')
+    const result = await land([], { FACTORY_LAND_NO_RUN_MS: '0' }).done
+    expect(result.err).not.toContain('no CI check')
+    expect(result.code).toBe(0)
+  })
+
   test('a repo that ships by push lands by pushing to the default branch, with no CI wait and no merge', async () => {
     await writeFile(join(work, 'project.yaml'), 'name: app\nship:\n  - { via: push }\n')
     await git(work, 'commit', '--quiet', '-am', 'chore: ship by push')
