@@ -1,11 +1,11 @@
 import type { Id } from '../../kernel/ids.ts'
-import { type Host, HOSTS } from '../../kernel/hands.ts'
+import { type Host, HOSTS, hostOf } from '../../kernel/hands.ts'
 import { err, ok, type Result } from '../../kernel/result.ts'
 import { WORKFLOWS } from '../../kernel/workflows.ts'
-import type { ErrandScreenAnswer } from '@software-factory/contract'
+import type { ErrandScreenAnswer, ErrandScreenRequest } from '@software-factory/contract'
 import type { MissingFields } from './decision.ts'
 import { NEED_KEY_RE } from './match.ts'
-import { type Need, needByRule } from './need.ts'
+import { namesPhysical, namesSecret, type Need, needByRule } from './need.ts'
 import { STATED_NEEDS, type StatedNeed } from './triage.ts'
 
 export type ErrandId = Id<'errand'>
@@ -238,53 +238,14 @@ const COMMAND_WORDS: readonly string[] = [
   'systemctl',
 ]
 
-/** Words that name a person's hands: a device, a portal, a physical step, a biometric. Any one keeps the Errand. */
-const HANDS_WORDS: readonly string[] = [
-  'device',
-  'phone',
-  'iphone',
-  'ipad',
-  'watch',
-  'macbook',
-  'laptop',
-  'tap',
-  'click',
-  'press',
-  'button',
-  'portal',
-  'dashboard',
-  'browser',
-  'sign in',
-  'log in',
-  'login',
-  'biometric',
-  'touch id',
-  'face id',
-  '2fa',
-  'otp',
-  'captcha',
-  'qr',
-  'approve',
-  'dialog',
-  'plug',
-  'cable',
-  'hardware',
-  'physical',
-  'router',
-  'keychain',
-  'app store',
-  'testflight',
-  'sim',
-  '1password',
-  'permission prompt',
-  'sudo',
-]
+/**
+ * Words that ask for his click, his answer or his eyes without naming a device or a portal. They only keep an Errand from this
+ * rule: a need is never read from them (`needByRule` reads `namesPhysical`), so the need routing stays as it was.
+ */
+const ASKS_HIM = /\b(?:press|dialog|permission prompt|approve|watch|laptop|sim)\b/
 
 const TURN_AWAY_BY_RULE =
   "That is a command a token can run: run it yourself (secrets-run for credentials, gh for GitHub), and raise an Errand only for a person's hands. Never the mini's sudo password: it is MacBook-only, so a root step is an Errand with --cmd and --host macbook."
-
-const escaped = (word: string): string => word.replace(/[.*+?^${}()|[\]\\-]/g, '\\$&')
-const handsWord = new RegExp(`(?<![a-z0-9])(?:${HANDS_WORDS.map(escaped).join('|')})(?![a-z0-9])`)
 
 /** The command lines of the text: inline-code spans, fenced-block lines and `$ ` lines, each trimmed. */
 function commandLines(text: string): string[] {
@@ -305,11 +266,12 @@ function commandLines(text: string): string[] {
 
 /**
  * The deterministic first look: an Errand that is only a command a token can run is turned away before any model is
- * asked. Conservative on purpose: any hands word keeps it, and a false positive only bounces a note to the lead.
+ * asked. Conservative on purpose: a word that names a person's hands (`namesPhysical`), a secret only he has or a place for
+ * his hands (`hostOf`) keeps it, and a false positive only bounces a note to the lead.
  */
 export function screenByRule(input: ErrandInput): { verdict: 'turn_away'; reason: string } | null {
   const text = `${input.summary}\n${input.detail ?? ''}`.toLowerCase()
-  if (handsWord.test(text)) return null
+  if (namesPhysical(text) || namesSecret(text) || hostOf(text) !== 'any' || ASKS_HIM.test(text)) return null
   const named = commandLines(text).some((line) => {
     const first = line.split(/\s+/)[0] ?? ''
     return COMMAND_WORDS.includes(first)
@@ -367,52 +329,34 @@ export function screenByReview(input: ErrandInput): { review: string; reason: st
   }
 }
 
-/** The screen request's `detail` holds this many characters (`ErrandScreenRequest`). */
-const SCREEN_DETAIL_MAX = 4000
-
 /**
- * What the screen is told about where a MacBook command runs: the mini has no way onto the MacBook (its ssh takes a fixed verb
- * list only), so "run it yourself over ssh" is no route. The screen turned a MacBook-only `make deploy` away with exactly that.
+ * The Errand as the screen is shown it: its own words, and the command, the machine and the need as fields of their own
+ * (`ErrandScreenRequest`). `detail` is the Errand's own unless a recheck puts its events beside it. Only the MacBook is a
+ * machine the screen is told of: the mini has no way onto it, which the screen's instructions say (agw's `factory-errand`).
  */
-export const MACBOOK_FACT =
-  "This command runs on the owner's MacBook. The mini has no shell on it (ssh to the MacBook serves three fixed verbs only: a dotfiles sync, one read-only report and a git pull of one checkout, never an arbitrary command), so an agent cannot run it from the mini: turn it away only if the same command would run on the mini itself, with the repo, tool and credentials it needs there."
-
-/** The newer events a recheck adds to the screen request, with the sentence that introduces them. */
-export interface ScreenEvents {
-  preface: string
-  events: string
-}
-
-/**
- * The one builder of the screen request's `detail`, for the first screen, the desk's rescreen and the recheck: the lead's
- * words, the command to run with its host, the events a recheck adds, and for a MacBook command the fact that the mini cannot
- * run it. The fact is reserved first, so a long detail, command or event list is cut for it and never pushes it out; the whole
- * stays within `SCREEN_DETAIL_MAX`. An Errand with no command and no events is its detail, unchanged.
- */
-export function errandScreenDetail(
-  errand: { detail: string | null; command: string | null; host: Host | null },
-  recheck?: ScreenEvents & { scrubbed: string },
-): string | null {
-  if (errand.command === null && !recheck) return errand.detail
-  const macbook = errand.command !== null && errand.host === 'macbook'
-  const room = macbook ? SCREEN_DETAIL_MAX - MACBOOK_FACT.length - 1 : SCREEN_DETAIL_MAX
-  const command =
-    errand.command === null ? '' : `Command to run${errand.host ? ` (${errand.host})` : ''}: ${errand.command}`
-  const body = recheck ? [recheck.scrubbed.slice(0, 600), command.slice(0, 800)] : [errand.detail ?? '', command]
-  const lead = body.join('\n').trim()
-  let asked: string
-  if (recheck) {
-    // the newest events are the last lines: when they do not fit, the oldest go
-    const left = Math.max(0, room - lead.length - 2 - recheck.preface.length)
-    const events = left === 0 ? '' : recheck.events.slice(-left)
-    asked = `${lead}\n\n${recheck.preface}${events}`.trim()
-  } else asked = lead
-  asked = asked.slice(0, room)
-  return macbook ? `${asked}\n${MACBOOK_FACT}` : asked
+export function errandScreenFields(
+  errand: {
+    id: string
+    summary: string
+    detail: string | null
+    command: string | null
+    host: Host | null
+    need: Need | null
+  },
+  detail: string | null = errand.detail,
+): ErrandScreenRequest['errand'] {
+  return {
+    id: errand.id,
+    summary: errand.summary,
+    detail,
+    command: errand.command,
+    host: errand.host === 'macbook' ? 'macbook' : null,
+    need: errand.need,
+  }
 }
 
 export type ErrandScreenChecked =
-  | { action: 'pass'; note: string; need: Need | null }
+  | { action: 'pass'; note: string }
   | { action: 'turn_away'; reason: string }
   /** an answer that cannot be acted on: counted as a failed call */
   | { action: 'refused'; why: string }
@@ -420,7 +364,7 @@ export type ErrandScreenChecked =
 /** The answer is held to its shape before anything is done: a turn-away needs a reason the lead can act on. */
 export function checkErrandScreen(answer: ErrandScreenAnswer): ErrandScreenChecked {
   const reason = answer.reason.trim().slice(0, REASON_MAX)
-  if (answer.verdict === 'pass') return { action: 'pass', note: reason, need: answer.need ?? null }
+  if (answer.verdict === 'pass') return { action: 'pass', note: reason }
   if (answer.verdict === 'turn_away' && reason !== '') return { action: 'turn_away', reason }
   return { action: 'refused', why: 'a turn-away without a reason' }
 }

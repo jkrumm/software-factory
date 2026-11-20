@@ -4,7 +4,7 @@ import {
   ERRAND_SCREEN_BACKOFF_MS,
   ERRAND_SCREEN_MAX_TRIES,
   type ErrandId,
-  errandScreenDetail,
+  errandScreenFields,
   screenByReview,
   screenByNeed,
   screenByRule,
@@ -47,7 +47,7 @@ type Step<T> = Promise<Result<T, CheckpointError | PortError>>
 
 type Verdict =
   | { kind: 'turn_away'; by: 'rule' | 'judge'; reason: string; awaits?: string }
-  | { kind: 'reach'; by: 'rule' | 'judge' | 'failed'; note: string; need: Need | null }
+  | { kind: 'reach'; by: 'rule' | 'judge' | 'failed'; note: string; need?: Need }
   | { kind: 'failed'; why: string }
 
 /** What the screen is told of a request no Issue raised: who asked stands for the repo, and there is no Issue. */
@@ -97,8 +97,8 @@ async function reachOwner(
   found: { errand: ErrandRecord; issueId: IssueId | null; repo: string },
   by: 'rule' | 'judge' | 'failed',
   note: string,
-  /** what the screen found it needs; null: the rule over its shape, else `hands` */
-  need: Need | null,
+  /** what a rule or a failed verb settles it needs; absent: the one the lead stated (`needOf`) */
+  need?: Need,
 ): Promise<void> {
   const at = deps.clock.now()
   const { errand } = found
@@ -107,7 +107,7 @@ async function reachOwner(
     by,
     note,
     tries: errand.screenTries,
-    need: needOf(errand, need),
+    need: needOf(errand, need ?? errand.need),
   })
   // a request no Issue raised is on the owner's list through its row; only an Issue's Errand is paged
   if (!found.issueId) return
@@ -188,7 +188,6 @@ function record(deps: SettleDeps, id: ErrandId, verdict: Verdict, reached = fals
       { ...found, errand: { ...errand, screenTries: tries } },
       'failed',
       `the screen could not be reached after ${ERRAND_SCREEN_MAX_TRIES} tries: ${verdict.why}`,
-      null,
     )
     return ok('reached_owner')
   })
@@ -225,7 +224,7 @@ async function screenErrand(deps: SettleDeps, id: ErrandId): Step<ErrandScreened
     return ok({
       errand,
       request: {
-        errand: { id: errand.id, summary: errand.summary, detail: errandScreenDetail(errand) },
+        errand: errandScreenFields(errand),
         issue: { id: found.issueId ?? errand.id, repo: found.repo, title: found.title, kind: found.kind },
       },
     })
@@ -258,7 +257,7 @@ async function screenErrand(deps: SettleDeps, id: ErrandId): Step<ErrandScreened
   else {
     const checked = checkErrandScreen(answer.value)
     if (checked.action === 'refused') verdict = { kind: 'failed', why: checked.why }
-    else if (checked.action === 'pass') verdict = { kind: 'reach', by: 'judge', note: checked.note, need: checked.need }
+    else if (checked.action === 'pass') verdict = { kind: 'reach', by: 'judge', note: checked.note }
     else verdict = { kind: 'turn_away', by: 'judge', reason: checked.reason }
   }
   const done = await record(deps, id, verdict)
@@ -381,7 +380,7 @@ export async function rescreenErrand(deps: SettleDeps, id: ErrandId): Step<Rescr
     if (turned) return ok({ rule: turned.reason })
     return ok({
       request: {
-        errand: { id: errand.id, summary: errand.summary, detail: errandScreenDetail(errand) },
+        errand: errandScreenFields(errand),
         issue: {
           id: errand.issueId ?? errand.id,
           repo: issue?.repo ?? errand.source ?? 'unknown',

@@ -38,7 +38,7 @@ const SECRET = new RegExp(
 /** Whether the text names a secret only he has (1Password, a biometric, sudo, a password or passphrase, the reseal). */
 export const namesSecret = (text: string): boolean => SECRET.test(text)
 
-/** A physical step or a visual look: a device, hardware, a portal, a click in a page. */
+/** A physical step or a visual look: a device, hardware, a portal, a click in a page. The one list of the words that decide a need (`needByRule`) and that keep an Errand from the rule screen (`screenByRule`). */
 const PHYSICAL =
   /\b(?:device|phone|iphone|ipad|tap|click|portal|dashboard|browser|sign in|log in|login|captcha|2fa|otp|qr|plug|cable|hardware|physical|router|bulb|light|button|app store|testflight|visual)\b/i
 
@@ -63,7 +63,7 @@ export function isApprovalCommand(command: string): boolean {
 }
 
 /**
- * The need an Errand's shape settles, or null when only its words can say (the screen model decides then, and `hands`
+ * The need an Errand's shape settles, or null when only its words can say (the need the lead stated decides then, and `hands`
  * is the default). A command decides first: a secret word anywhere keeps it his (`secret`), a command addressed to the
  * mini or the gate's release is an `approval`, any other command for the MacBook that names no physical step is `place`.
  */
@@ -82,14 +82,14 @@ export function needByRule(input: NeedInput): Need | null {
 }
 
 /**
- * The need to store: the rule's, else the one the screen model named, else `hands`. Only the rule makes an `approval` (the
- * server runs what it vouches for: a model's word is not enough), and a model's `place` needs a command to place.
+ * The need to store: the rule's, else the one the lead stated, else `hands`. Only the rule makes an `approval` (the server
+ * runs what it vouches for: a lead's word is not enough), and a stated `place` needs a command to place.
  */
-export function needOf(input: NeedInput, modelNeed?: Need | null): Need {
+export function needOf(input: NeedInput, stated?: Need | null): Need {
   const byRule = needByRule(input)
   if (byRule !== null) return byRule
-  if (modelNeed === 'secret' || modelNeed === 'hands') return modelNeed
-  if (modelNeed === 'place' && input.command !== null) return 'place'
+  if (stated === 'secret' || stated === 'hands') return stated
+  if (stated === 'place' && input.command !== null) return 'place'
   return 'hands'
 }
 

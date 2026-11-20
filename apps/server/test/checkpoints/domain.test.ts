@@ -648,17 +648,23 @@ describe('the Errand screen', () => {
     ).toBeNull()
     expect(screenByRule({ summary: 'Call the bank to lift the card block', detail: null })).toBeNull()
     expect(screenByRule({ summary: 'Run the deploy', detail: null })).toBeNull()
+    expect(screenByRule({ summary: 'Deploy it', detail: 'Run `make deploy` on the MacBook' })).toBeNull()
+    for (const words of [
+      'Approve the prompt',
+      'Press OK',
+      'Answer the dialog',
+      'Watch the screen',
+      'On the laptop',
+      'The sim card',
+      'Grant the permission prompt',
+    ])
+      expect(screenByRule({ summary: words, detail: 'then run `make deploy`' })).toBeNull()
     expect(screenByRule({ summary: 'Approve the App Store build', detail: null })).toBeNull()
     expect(screenByRule({ summary: 'Plug in the phone', detail: 'It is on the desk' })).toBeNull()
   })
 
   test('an answer is held to its shape', () => {
-    expect(checkErrandScreen({ verdict: 'pass', reason: ' a person ' })).toEqual({
-      action: 'pass',
-      note: 'a person',
-      need: null,
-    })
-    expect(checkErrandScreen({ verdict: 'pass', reason: 'a device', need: 'hands' })).toMatchObject({ need: 'hands' })
+    expect(checkErrandScreen({ verdict: 'pass', reason: ' a person ' })).toEqual({ action: 'pass', note: 'a person' })
     expect(checkErrandScreen({ verdict: 'turn_away', reason: ` ${'x'.repeat(400)} ` })).toEqual({
       action: 'turn_away',
       reason: 'x'.repeat(300),

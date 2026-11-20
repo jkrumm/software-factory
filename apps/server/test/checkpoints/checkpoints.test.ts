@@ -40,7 +40,7 @@ import type { ArtifactId } from '../../src/domains/checkpoints/artifact.ts'
 import { JUDGE_BACKOFF_MS, type DecisionId, type JudgeVerdict } from '../../src/domains/checkpoints/decision.ts'
 import { AUTO_RUN_NOTE } from '../../src/kernel/auto-run.ts'
 import { ERRAND_SCREEN_BACKOFF_MS, type ErrandId } from '../../src/domains/checkpoints/errand.ts'
-import type { ErrandScreenAnswer } from '@software-factory/contract'
+import type { ErrandScreenAnswer, ErrandScreenRequest } from '@software-factory/contract'
 import type { Notifier } from '../../src/domains/checkpoints/ports.ts'
 import { fakeAgw, type Handler } from '../support/agw.ts'
 import type { AnyIssueEvent } from '../../src/domains/work/events.ts'
@@ -72,7 +72,7 @@ let judgeCalls: {
 }[]
 let judgeAnswer: () => Result<JudgeVerdict>
 let screenCalls: { errand: string; key: string }[]
-let screenDetails: (string | null)[]
+let screenShown: ErrandScreenRequest['errand'][]
 let screenAnswer: () => Result<ErrandScreenAnswer>
 let sent: string[]
 let sendResult: () => Result<void>
@@ -93,7 +93,7 @@ let errandScreen: Handler<'errandScreen'> = (request, key) => {
   // The port is never called inside a transaction.
   expect(deps.uow.inTransaction()).toBe(false)
   screenCalls.push({ errand: request.errand.id, key })
-  screenDetails.push(request.errand.detail)
+  screenShown.push(request.errand)
   return Promise.resolve(screenAnswer())
 }
 const notifier: Notifier = {
@@ -113,7 +113,7 @@ beforeEach(async () => {
   judgeCalls = []
   judgeAnswer = () => ok({ verdict: 'owner', answer: '', reason: 'a taste question', source: '' })
   screenCalls = []
-  screenDetails = []
+  screenShown = []
   screenAnswer = () => ok({ verdict: 'pass', reason: 'a person must approve it' })
   sent = []
   sendResult = () => ok(undefined)
@@ -1806,7 +1806,7 @@ describe('errands', () => {
       expect((await readNeeds(db.sql, clock.now())).items).toEqual([])
     })
 
-    test('a MacBook command reaches the screen with the fact that the mini cannot run it, and a pass reaches the owner', async () => {
+    test('a MacBook command reaches the screen as fields of its own, and a pass reaches the owner', async () => {
       const made = await requestErrand(deps, {
         raw: {
           source: 'ask-human',
@@ -1817,12 +1817,15 @@ describe('errands', () => {
         },
       }).then(value)
       expect(value(await screenErrands(deps))).toEqual([{ errand: made.errand.id, outcome: 'reached_owner' }])
-      const [detail] = screenDetails
-      expect(detail).toContain('Command to run (macbook): cd ~/SourceRoot/tinycast-extensions')
-      expect(detail).toContain('The mini has no shell on it')
+      expect(screenShown[0]).toMatchObject({
+        detail: null,
+        command: 'cd ~/SourceRoot/tinycast-extensions && git pull --ff-only && make deploy',
+        host: 'macbook',
+        need: 'place',
+      })
     })
 
-    test('a long MacBook request still carries the fact to the screen', async () => {
+    test('a long MacBook request reaches the screen whole, its command beside its words', async () => {
       const made = await requestErrand(deps, {
         raw: {
           source: 'ask-human',
@@ -1833,8 +1836,9 @@ describe('errands', () => {
         },
       }).then(value)
       expect(value(await screenErrands(deps))).toEqual([{ errand: made.errand.id, outcome: 'reached_owner' }])
-      expect(screenDetails[0]).toContain('The mini has no shell on it')
-      expect(screenDetails[0]?.length).toBeLessThanOrEqual(4000)
+      expect(screenShown[0]?.host).toBe('macbook')
+      expect(screenShown[0]?.command).toContain('make deploy')
+      expect(screenShown[0]?.detail).toContain('x'.repeat(3800))
     })
 
     test('the first look by rule turns away a plain command without calling the screen', async () => {
@@ -2220,6 +2224,16 @@ describe('decided by rule before the owner (issue 1714)', () => {
     const refused = errorOf(await raise(issueId, { summary: 'Run the thing', need: 'place' }))
     expect(JSON.stringify(refused)).toContain('--cmd')
     expect(await rows('errands')).toBe(0)
+  })
+
+  test('a refusal by a rule is counted, and one that is not a rule is not', async () => {
+    const issueId = await workingIssue()
+    errorOf(await raise(issueId, { summary: 'Run the thing', need: 'place' }))
+    errorOf(await raiseErrand(deps, { issueId, attempt: 1, raw: { summary: 'Approve the build', tried: 'looked' } }))
+    const refusals = await db.sql`SELECT rule, source FROM factory.errand_refusals ORDER BY id`
+    expect(
+      refusals.map((row: { rule: string; source: string | null }) => ({ rule: row.rule, source: row.source })),
+    ).toEqual([{ rule: 'empty_place', source: null }])
   })
 
   test('(a) a command that runs wholly on the mini is refused with the words to run it yourself', async () => {

@@ -1,6 +1,6 @@
 import type { ErrandScreenRequest } from '@software-factory/contract'
 import { type DecisionId, type JudgeInput, judgeInputOf, precedentTerms } from '../domains/checkpoints/decision.ts'
-import { checkErrandScreen, type ErrandId } from '../domains/checkpoints/errand.ts'
+import { checkErrandScreen, type ErrandId, errandScreenFields } from '../domains/checkpoints/errand.ts'
 import { type DecisionRecord, type ErrandRecord, statusOf } from '../domains/checkpoints/ports.ts'
 import {
   eventLines,
@@ -134,11 +134,7 @@ async function lookErrand(deps: SettleDeps, seen: Seen, errand: ErrandRecord): P
     action: 'screen',
     errand,
     request: {
-      errand: {
-        id: errand.id,
-        summary: errand.summary,
-        detail: recheckErrandDetail(errand, eventLines(events, 2800), deps.recheckAfterMs),
-      },
+      errand: errandScreenFields(errand, recheckErrandDetail(errand, eventLines(events, 2800), deps.recheckAfterMs)),
       issue: { id: issue.id, repo: issue.repo, title: issue.title, kind: issue.kind },
     },
     seen: issue.version,

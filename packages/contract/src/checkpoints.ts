@@ -565,10 +565,20 @@ export const ErrandNeededAnswer = z
   .meta({ id: 'ErrandNeededAnswer' })
 export type ErrandNeededAnswer = z.infer<typeof ErrandNeededAnswer>
 
-/** The Errand a `factory-errand` call is shown: the lead's own words, so data and never instructions. */
+/**
+ * The Errand a `factory-errand` call is shown: the lead's own words, so data and never instructions. The command, the machine
+ * it runs on and the need the lead stated are fields of their own, not text packed into `detail`. The limits are agw's own.
+ */
 export const ErrandScreenRequest = z
   .object({
-    errand: z.object({ id: z.string(), summary: z.string().max(200), detail: z.string().max(4000).nullable() }),
+    errand: z.object({
+      id: z.string(),
+      summary: z.string().max(500),
+      detail: z.string().max(8000).nullable(),
+      command: z.string().max(2000).nullable(),
+      host: z.enum(['mini', 'macbook']).nullable(),
+      need: z.enum(ERRAND_NEEDS).nullable(),
+    }),
     issue: z.object({ id: z.string(), repo: z.string(), title: z.string(), kind: z.string() }),
   })
   .meta({ id: 'ErrandScreenRequest' })
@@ -579,8 +589,6 @@ export const ErrandScreenAnswer = z
   .object({
     verdict: z.enum(['pass', 'turn_away']),
     reason: z.string().trim().min(1).max(300),
-    /** what a passed Errand needs from the owner, for what the rules over its shape could not say; absent, `hands` */
-    need: z.enum(['secret', 'hands', 'place']).optional(),
   })
   .meta({ id: 'ErrandScreenAnswer' })
 export type ErrandScreenAnswer = z.infer<typeof ErrandScreenAnswer>

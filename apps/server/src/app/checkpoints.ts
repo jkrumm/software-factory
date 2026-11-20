@@ -201,7 +201,7 @@ export function applied(recorded: Result<Recorded, IssueWriteError>, what: strin
 const notFound = (what: string, id: string): CheckpointError => ({ kind: 'not_found', what, id })
 
 /** A Decision's artifact has the Decision's id: one record to link to. */
-export const artifactOfDecision = (id: DecisionId): ArtifactId => id as string as ArtifactId
+const artifactOfDecision = (id: DecisionId): ArtifactId => id as string as ArtifactId
 
 // ---------------------------------------------------------------------------------------------------------------------
 // Decisions
@@ -1152,6 +1152,42 @@ export function listArtifacts(
 // ---------------------------------------------------------------------------------------------------------------------
 // Errands
 
+/** The rule behind each refusal of an Errand's raise or request, kept beside the error so its shape stays the one every caller reads. */
+const refusedBy = new WeakMap<object, string>()
+
+/** A refusal made by a rule of an Errand's shape: the same `invalid` error, and the rule's name for the count. */
+function refusal(rule: string, detail: string) {
+  const error = { kind: 'invalid' as const, detail }
+  refusedBy.set(error, rule)
+  return err(error)
+}
+
+/** A refusal with the name of the rule that made it; null when the rule did not refuse. */
+const ruled = (rule: string, detail: string | null): { detail: string; rule: string } | null =>
+  detail === null ? null : { detail, rule }
+
+/**
+ * Counts an Errand a rule refused when it was raised or requested, after its transaction ended (a refusal inside it rolls
+ * back with it): the share the rules turn away is a part of the Errand KPI (`errands_refused_by_rule_share`). The answer is unchanged.
+ */
+async function countRefusal<T>(
+  deps: CheckpointDeps,
+  result: CheckpointResult<T>,
+  source: string | null,
+): Promise<CheckpointResult<T>> {
+  if (result.ok) return result
+  const rule = refusedBy.get(result.error)
+  if (rule === undefined) return result
+  // the count is a figure, not the answer: a database error here must not hide the refusal from the one asked
+  await deps.uow
+    .run(async ({ checkpoints }) => {
+      await checkpoints.insertErrandRefusal({ at: deps.clock.now(), rule, source })
+      return ok(null)
+    })
+    .catch(() => null)
+  return result
+}
+
 /** The refusal of a need the owner turned back within the hold, or null. */
 async function declinedRefusal(
   checkpoints: Pick<CheckpointStores['checkpoints'], 'declinedMatch'>,
@@ -1171,21 +1207,28 @@ export interface ErrandWritten {
 }
 
 /** `factory errand raise`: the lead needs the owner's hands. The Issue waits; the screen (`checkpoints-errands.ts`) decides whether it reaches the owner. */
-export function raiseErrand(
+export async function raiseErrand(
+  deps: CheckpointDeps,
+  input: { issueId: IssueId; attempt: number; raw: unknown; call?: string },
+): Promise<CheckpointResult<ErrandWritten>> {
+  return countRefusal(deps, await raisedErrand(deps, input), null)
+}
+
+function raisedErrand(
   deps: CheckpointDeps,
   input: { issueId: IssueId; attempt: number; raw: unknown; call?: string },
 ): Promise<CheckpointResult<ErrandWritten>> {
   const read = readErrand(input.raw)
   if (!read.ok) return Promise.resolve(read)
   // `tried` is the gate's, never stored: the rule screen reads the stored detail as the ask, and what was run first is not.
-  const hostDoes = refuseHostClass(read.value)
-  if (hostDoes) return Promise.resolve(err({ kind: 'invalid', detail: hostDoes }))
-  const undialogable = refuseUndialogable(read.value)
-  if (undialogable) return Promise.resolve(err({ kind: 'invalid', detail: undialogable }))
   // the host's own work and an empty place are refused before an Issue waits (`domains/checkpoints/triage.ts`)
-  const byRule =
-    refuseKeyless(read.value) ?? refuseOffMacbook(read.value) ?? refuseEmptyPlace(read.value, read.value.need)
-  if (byRule) return Promise.resolve(err({ kind: 'invalid', detail: byRule }))
+  const refused =
+    ruled('host_class', refuseHostClass(read.value)) ??
+    ruled('undialogable', refuseUndialogable(read.value)) ??
+    ruled('keyless', refuseKeyless(read.value)) ??
+    ruled('off_macbook', refuseOffMacbook(read.value)) ??
+    ruled('empty_place', refuseEmptyPlace(read.value, read.value.need))
+  if (refused) return Promise.resolve(refusal(refused.rule, refused.detail))
   return raiseChecked(deps, input, read.value)
 }
 
@@ -1197,7 +1240,7 @@ async function raiseChecked(
   const { summary, detail } = read
   if (read.command === null && deps.queuedAsks) {
     const queued = await deps.queuedAsks(issueNumber(input.issueId))
-    if (queued.length > 0) return err({ kind: 'invalid', detail: refuseQueuedAsk(queued) })
+    if (queued.length > 0) return refusal('queued_ask', refuseQueuedAsk(queued))
   }
   return deps.uow.run(async ({ work, checkpoints }) => {
     const issue = await issueOf(work, input.issueId)
@@ -1246,7 +1289,7 @@ async function raiseChecked(
 
     // the owner turned this need back not long ago: his note is the answer, nothing is raised
     const held = await declinedRefusal(checkpoints, matchKey, deps.clock.now())
-    if (held) return err({ kind: 'invalid', detail: held })
+    if (held) return refusal('declined', held)
 
     const id = deps.ids.next('errand')
     const recorded = applied(
@@ -1298,7 +1341,8 @@ async function raiseChecked(
       runHead: null,
       runTail: null,
       pushedAt: null,
-      need: null,
+      // what the lead stated it needs, the rules' word first (an `approval` stays one whatever it states): the screen is told it
+      need: needOf(read, read.need),
       approvedAt: null,
       matchKey,
     })
@@ -1597,22 +1641,27 @@ export interface ErrandRequested {
  * lead to tell, and the asker has already decided it needs a person. A request with a key that an
  * open one holds replaces it; the same request again (same key and text) is a replay and changes nothing.
  */
-export function requestErrand(
+export async function requestErrand(
   deps: CheckpointDeps,
   input: { raw: unknown },
 ): Promise<CheckpointResult<ErrandRequested>> {
+  const source = (input.raw as { source?: unknown } | null)?.source
+  return countRefusal(deps, await requestedErrand(deps, input), typeof source === 'string' ? source : null)
+}
+
+function requestedErrand(deps: CheckpointDeps, input: { raw: unknown }): Promise<CheckpointResult<ErrandRequested>> {
   const at = deps.clock.now()
   const read = readRequest(input.raw, at)
   if (!read.ok) return Promise.resolve(read)
   const request = read.value
   // a bot check, the host's own work and a request that says nothing about its need are refused before anything is stored
-  const byRule =
-    refuseBotCheck(request) ??
-    refuseKeyless(request) ??
-    refuseOffMacbook(request) ??
-    refuseEmptyPlace(request, request.need) ??
-    refuseUnroutable(request, request.need)
-  if (byRule) return Promise.resolve(err({ kind: 'invalid', detail: byRule }))
+  const refused =
+    ruled('bot_check', refuseBotCheck(request)) ??
+    ruled('keyless', refuseKeyless(request)) ??
+    ruled('off_macbook', refuseOffMacbook(request)) ??
+    ruled('empty_place', refuseEmptyPlace(request, request.need)) ??
+    ruled('unroutable', refuseUnroutable(request, request.need))
+  if (refused) return Promise.resolve(refusal(refused.rule, refused.detail))
   return deps.uow.run(async ({ work, checkpoints }) => {
     // the expiry is relative to now, so it is not part of what makes a request the same one
     const same = digest(
@@ -1640,7 +1689,7 @@ export function requestErrand(
         (request.command === null && (open.detail !== request.detail || open.checkCommand !== request.check)))
     if (open && !corrected) return ok<ErrandRequested>({ result: 'joined', errand: open, superseded: [] })
     const held = await declinedRefusal(checkpoints, matchKey, at)
-    if (held) return err({ kind: 'invalid', detail: held })
+    if (held) return refusal('declined', held)
     const id = deps.ids.next('errand')
     // asked again after the first was closed: a new Errand, under a key of its own
     const errandKey = existing ? key('errand_request', id) : sameKey
@@ -1692,10 +1741,14 @@ export function requestErrand(
       runHead: null,
       runTail: null,
       pushedAt: null,
-      // a request the screen reads gets its need when it reaches the owner; the rest reach him now
-      need: SCREENED_SOURCES.includes(request.source)
-        ? null
-        : needOf({ summary: request.summary, detail: request.detail, command: request.command, host: request.host }),
+      // a request the screen reads keeps the need its asker stated until it reaches the owner; the rest reach him now
+      need:
+        SCREENED_SOURCES.includes(request.source) && request.need === null
+          ? null
+          : needOf(
+              { summary: request.summary, detail: request.detail, command: request.command, host: request.host },
+              request.need,
+            ),
       approvedAt: null,
       matchKey,
     })
