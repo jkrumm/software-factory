@@ -360,7 +360,7 @@ const Claude = z.object({ issue_id: z.string(), attempt: z.coerce.number().int()
 const Session = z.object({ id: z.union([z.string(), z.number(), z.bigint()]), claude: z.string() })
 const Spend = z.object({ id: z.coerce.string(), cost: z.coerce.number() })
 
-export const keyOf = (issue: string, attempt: number): string => `${issue}#${attempt}`
+const keyOf = (issue: string, attempt: number): string => `${issue}#${attempt}`
 
 /**
  * Dollars per attempt, by the Claude sessions its hooks reported (with their subagents, `<session>:<agent>`), priced from
@@ -368,7 +368,7 @@ export const keyOf = (issue: string, attempt: number): string => `${issue}#${att
  * ever reported belongs to no attempt and is not counted here. Null (never zero) when the schema cannot be read, the role
  * may not read it or a statement ran past the timeout.
  */
-export async function costOfAttempts(
+async function costOfAttempts(
   sql: SQL,
   attempts: readonly { issue_id: string; attempt: number }[],
   timeoutMs: number,
