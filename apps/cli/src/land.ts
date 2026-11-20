@@ -466,6 +466,8 @@ class Lander {
             .filter((c) => c.bucket !== 'pass' && c.bucket !== 'skipping')
             .map((c) => c.name)
             .join(', ')}`
+        } else if ('blip' in read) {
+          state = `the checks on ${short(head)} are not read yet`
         } else {
           state = checks.length > 0 ? 'only skipped checks so far' : 'no check yet'
         }
