@@ -43,6 +43,7 @@ case "$1 $2" in
   "pr view")
     [ -f "$S/no-pr" ] && { echo "no pull requests found" >&2; exit 1; }
     [ -f "$S/blip" ] && [ "$(grep -c '^gh pr view' "$S/calls")" = 2 ] && { echo "dial tcp: i/o timeout" >&2; exit 1; }
+    [ -f "$S/blip-twice" ] && case "$(grep -c '^gh pr view' "$S/calls")" in 2|4) echo "dial tcp: i/o timeout" >&2; exit 1 ;; esac
     [ -f "$S/gh-fail" ] && { echo "GraphQL: Could not resolve to a Repository with the name 'o/app'." >&2; exit 1; }
     head=$(git --git-dir="$LAND_ORIGIN" rev-parse "refs/heads/$LAND_BRANCH" 2>/dev/null)
     if [ -f "$S/merged" ]; then
@@ -413,6 +414,14 @@ describe('factory land', () => {
     const result = await land([], { FACTORY_LAND_NO_RUN_MS: '0' }).done
     expect(result.err).not.toContain('no CI check')
     expect(result.code).toBe(0)
+  })
+
+  test('a blip that comes back after a good read is named again, cause and "polling again" included', async () => {
+    await writeFile(join(state, 'blip-twice'), '')
+    const result = await land().done
+    expect(result.code).toBe(0)
+    expect(result.err.split('dial tcp: i/o timeout; polling again').length - 1).toBe(2)
+    expect(await calls()).toContain('gh pr merge 7')
   })
 
   test('a failed checks read with no JSON is named and polled again, not read as no CI check', async () => {

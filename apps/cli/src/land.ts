@@ -263,8 +263,8 @@ async function pullRequest(sh: Shell, ref: string): Promise<PullRequest | null> 
 async function checksOf(sh: Shell, ref: string, head: string): Promise<{ checks: Check[] } | { blip: string }> {
   const ran = await sh.run(['gh', 'pr', 'checks', ref, '--json', 'name,bucket,link'])
   const checks = json<Check[]>(ran.out)
-  if (checks !== null || ran.code === 0 || NO_CHECKS.test(ran.err)) return { checks: checks ?? [] }
   const said = ran.err.trim() || ran.out.trim()
+  if (checks !== null || ran.code === 0 || NO_CHECKS.test(said)) return { checks: checks ?? [] }
   return {
     blip: `gh could not read the checks on ${short(head)}: ${lastLines(said) || `gh exited ${ran.code} with no output`}`,
   }
@@ -472,6 +472,7 @@ class Lander {
           state = checks.length > 0 ? 'only skipped checks so far' : 'no check yet'
         }
       }
+      if (!blip) unread = ''
       const waited = Date.now() - started
       // a poll that could not read says nothing about whether a check ever started
       if (!anyCheck && !blip && waited >= this.noRunMs)
