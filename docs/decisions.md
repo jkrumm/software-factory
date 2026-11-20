@@ -529,7 +529,7 @@ Report `docs/strategy/2026-11-next/report.html`, definition `docs/strategy/2026-
   pressure cost 1.1. Every margin in that sum was conservative and none was ever checked against what the host felt, so the sum
   could only refuse; it was never wrong in the direction that shows up as a cost. Two controllers also governed one resource:
   the test slots by AIMD on the pressure level, the leads by the open-loop sum. Now one verdict of the host (pressure level, swap
-  growth, swapouts, the load tripwire) moves both counts, and the sum is a guard. **Lead admission** (`FACTORY_SLOT_AIM=on`): no
+  growth, swapouts, the load tripwire) moves both counts, and the sum is a guard. **Lead admission**: no
   lead beyond the count the aim holds; the count adds one per two quiet minutes while it binds and halves what runs on a warning,
   swap growth or swapouts. The learned-peak fit refuses only a lead that cannot fit the free memory less what young leads still
   take; headroom is not taken off, since the pressure level is the margin. A missing pressure reading admits nothing beyond what

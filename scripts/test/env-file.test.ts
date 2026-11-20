@@ -1,5 +1,6 @@
 import { expect, test } from 'bun:test'
-import { readdir, readFile } from 'node:fs/promises'
+import { chmod, mkdtemp, readdir, readFile, writeFile } from 'node:fs/promises'
+import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 
 const ROOT = join(import.meta.dir, '..', '..')
@@ -74,4 +75,22 @@ test('the allow-list is sorted words of FACTORY_ names, each once', async () => 
   const list = await allowed()
   expect(new Set(list).size).toBe(list.length)
   expect(list.every((name) => /^FACTORY_[A-Z0-9_]+$/.test(name))).toBe(true)
+})
+
+test('a file that still sets a retired setting is accepted: the line is dropped with a warning and the rest is exported', async () => {
+  const dir = await mkdtemp(join(tmpdir(), 'env-file-'))
+  const path = join(dir, 'env')
+  await writeFile(path, 'FACTORY_LOAD_RULE=on\nFACTORY_SLOT_AIM=on\nFACTORY_LOAD_CEILING=36\nFACTORY_SLOTS=3\n')
+  await chmod(path, 0o600)
+  const proc = Bun.spawn(
+    [
+      'bash',
+      '-c',
+      `source ${join(ROOT, 'scripts', 'env-file.sh')} && load_env_file ${path}; echo "rc=$? slots=$FACTORY_SLOTS rule=\${FACTORY_LOAD_RULE-unset} aim=\${FACTORY_SLOT_AIM-unset} ceiling=\${FACTORY_LOAD_CEILING-unset}"`,
+    ],
+    { stdout: 'pipe', stderr: 'pipe' },
+  )
+  const [out, err] = await Promise.all([new Response(proc.stdout).text(), new Response(proc.stderr).text()])
+  expect(out.trim()).toBe('rc=0 slots=3 rule=unset aim=unset ceiling=unset')
+  expect(err.match(/is retired and ignored/g)?.length).toBe(3)
 })

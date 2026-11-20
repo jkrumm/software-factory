@@ -84,7 +84,6 @@ export function composePlanning(input: {
     ...hostRule(settings),
     memoryCeilings: settings.memoryCeilings,
     seatsMaxBonus: settings.seatsMaxBonus,
-    slotAim: settings.slotAim,
   }
   const desk = packageAccountDesk()
   const host = hostReader({ sysctlBin: settings.sysctlBin, minSampleMs: settings.memorySampleMs })
@@ -103,7 +102,6 @@ export function composePlanning(input: {
     slotExtraLoad: settings.slotExtraLoad,
     slotPassMs: settings.slotPassMs,
     swapoutCeilingMb: settings.memoryCeilings.swapoutMbPer300s,
-    slotAim: settings.slotAim,
     cores: settings.cores,
     loadCeiling: limits.loadCeiling,
     host,

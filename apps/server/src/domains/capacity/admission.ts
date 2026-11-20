@@ -23,7 +23,7 @@ import type { QueueState } from './queue-state.ts'
  * Why a queued Issue that the chain lets through still stays queued, in the order the rules are looked at (the first
  * that says no wins). "Hold" is retired: an Issue is not waiting, it stays queued, and this names why.
  */
-export const REFUSALS = [
+const REFUSALS = [
   'drain',
   'doctor',
   'boot',
@@ -109,8 +109,8 @@ export interface AdmissionInputs {
   /** the learned worktree footprint of the candidate's repo against the free disk (`disk.ts`); null or absent: nothing learned or no reading, and disk keeps nobody out */
   diskFit?: DiskFit | null
   /**
-   * The lead aim (`FACTORY_SLOT_AIM=on`): the count of leads the host takes at its pressure now, and the leads running. Then the
-   * memory fit above is only the guard of what cannot fit at all, and this count is the gate. Null or absent: no aim, the fit
+   * The lead aim: the count of leads the host takes at its pressure now, and the leads running. Then the
+   * memory fit above is only the guard of what cannot fit at all, and this count is the gate. Null or absent (an unread host): no aim, the fit
    * decides alone.
    */
   leadAim?: LeadAimGate | null

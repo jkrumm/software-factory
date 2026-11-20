@@ -156,7 +156,7 @@ export interface CapacityMinute {
 export interface SlotMinute {
   at: Date
   liveSlots: number
-  /** the aim's target that minute (`FACTORY_SLOT_AIM`); it is the base callers were granted against only under `on` */
+  /** the aim's target that minute: the base callers were granted against when it is below `liveSlots` */
   aimSlots: number
   holders: number
   waiters: number

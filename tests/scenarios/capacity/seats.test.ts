@@ -41,8 +41,8 @@ const hostSamples = async (rows: { load: number }[]) => {
   for (const [index, row] of rows.entries()) {
     const ago = rows.length - 1 - index
     await sql()`
-      INSERT INTO factory.host_samples (at, load, memory_used_pct, swap_used_pct, swapout_mb_per_300s)
-      VALUES (now() - ${ago} * interval '1 minute', ${row.load}, 20, 10, 0)`
+      INSERT INTO factory.host_samples (at, load, memory_used_pct, swap_used_pct, swapout_mb_per_300s, pressure_level)
+      VALUES (now() - ${ago} * interval '1 minute', ${row.load}, 20, 10, 0, 1)`
   }
 }
 

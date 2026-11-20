@@ -58,6 +58,7 @@ describe('queue intervals', () => {
 
     world.clock.advance(20 * MIN)
     world.host.memoryValue = ok({ swapoutMbPer300s: 0, swapUsedPct: 10 })
+    await world.calm()
     const opened = world.clock.now()
     const admitted = value(await admissionPass(world.deps))
     expect(admitted.admitted.map((a) => a.issue)).toEqual([first])
@@ -67,6 +68,7 @@ describe('queue intervals', () => {
     await world.send(first, 'lead_started', 'lead_started', { attempt: 1, terminal: 't1' })
     await world.send(first, 'closed', 'closed', { attempt: 1, outcome: 'done', reason: 'done' }, 'lead')
     const closed = world.clock.now()
+    await world.calm()
     const last = value(await admissionPass(world.deps))
     expect(last.admitted.map((a) => a.issue)).toEqual([second])
 

@@ -89,8 +89,31 @@ export async function settle(flow: Flow, issue: string, after: string[] = []): P
   await must(flow, ['planning', 'settle', '--body', JSON.stringify({ issue, after })])
 }
 
+/** A roomy slot count and lead count, also over what the server's own host loop seeded (it seeds the lead count at the leads running). */
+export async function calmAim(world: World): Promise<void> {
+  await world.db.sql`
+    INSERT INTO factory.slot_aim (id, target, quiet_since, changed_at, lead_target)
+    VALUES (1, 64, NULL, now(), 64)
+    ON CONFLICT (id) DO UPDATE SET target = greatest(factory.slot_aim.target, 64), lead_target = greatest(factory.slot_aim.lead_target, 64)`
+}
+
+/**
+ * The lead aim gates every admission (it is always on) and a scenario's host samples carry no pressure level unless it seeds
+ * them so: a roomy count, and a pressure level read now unless a sample with one is fresh already, so the rules a scenario is
+ * about decide.
+ */
+export async function calmHost(world: World): Promise<void> {
+  await calmAim(world)
+  await world.db.sql`
+    INSERT INTO factory.host_samples (at, pressure_level)
+    SELECT now(), 1
+    WHERE NOT EXISTS (SELECT 1 FROM factory.host_samples WHERE at > now() - interval '4 minutes' AND pressure_level IS NOT NULL)
+    ON CONFLICT (at) DO NOTHING`
+}
+
 /** The picker is polled once a minute and an account takes one new lead per sample: every pass follows a poll. */
 export async function admit(flow: Flow): Promise<AdmitAnswer> {
+  await calmHost(flow.world)
   await must(flow, ['capacity', 'refresh'])
   return AdmitAnswer.parse((await must(flow, ['capacity', 'admit'])).json)
 }

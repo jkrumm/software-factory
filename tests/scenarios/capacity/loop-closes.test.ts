@@ -58,8 +58,8 @@ test('lead samples written by the host loop, under the project name, are what ad
   await setProcesses(lab.world.bin, [])
   await sql()`DELETE FROM factory.host_samples`
   await sql()`
-    INSERT INTO factory.host_samples (at, load, memory_used_pct, swap_used_pct, swapout_mb_per_300s)
-    VALUES (now(), 1, 50, 10, 0)`
+    INSERT INTO factory.host_samples (at, load, memory_used_pct, swap_used_pct, swapout_mb_per_300s, pressure_level)
+    VALUES (now(), 1, 50, 10, 0, 1)`
 
   const file = async (title: string) => {
     const issue = await lab.file('heavy', title)

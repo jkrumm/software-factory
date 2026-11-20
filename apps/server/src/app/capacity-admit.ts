@@ -1,12 +1,6 @@
 import { type AccountReading, pickAccount, POLL_EVERY_MS } from '../domains/capacity/accounts.ts'
 import type { BootSample } from '../domains/capacity/boot.ts'
-import {
-  checkAdmission,
-  type LeadFit,
-  type RefusalKind,
-  REFUSALS,
-  type TestLine,
-} from '../domains/capacity/admission.ts'
+import { checkAdmission, type LeadFit, type RefusalKind, type TestLine } from '../domains/capacity/admission.ts'
 import { freeMibOf, headroomMib, SAMPLE_MAX_AGE_MS } from '../domains/capacity/costs.ts'
 import { type DoctorReader, doctorMessage } from '../domains/capacity/doctor.ts'
 import { DEFAULT_TYPICAL_LEAD_MIB, SEAT_SAMPLE_MAX_AGE_MS, SEAT_SAMPLES, seatBonus } from '../domains/capacity/seats.ts'
@@ -22,9 +16,8 @@ import {
   sustainedSwapoutMb,
 } from '../domains/capacity/host.ts'
 import { testLineOf } from '../domains/capacity/slots.ts'
-import type { AimMode } from '../domains/capacity/slot-aim.ts'
 import { type LaneInput, laneRoom } from '../domains/capacity/lanes.ts'
-import type { AccountDesk, AccountSource, Assignment, HostReader, ShadowDecision } from '../domains/capacity/ports.ts'
+import type { AccountDesk, AccountSource, Assignment, HostReader } from '../domains/capacity/ports.ts'
 import { effectiveState, type QueueStates } from '../domains/capacity/queue-state.ts'
 import { type Claim, type Claimant, claimRoom, holdsClaim } from '../domains/capacity/claims.ts'
 import { planWaits, type SeenWait, waitKindOf } from '../domains/capacity/waits.ts'
@@ -47,18 +40,11 @@ export interface CapacityLimits {
   /** each named account's own cap (`FACTORY_ACCOUNT_LEADS`) */
   accountLeads?: ReadonlyMap<string, number>
   loadCeiling: number
-  /** no new lead above this many processes (the throughput rule once switched on); null or absent: no cap */
+  /** no new lead above this many processes; null or absent: no cap */
   processCap?: number | null
-  /** the throughput rule run beside the live one and recorded per minute (`admission_shadow`); null or absent: none */
-  shadow?: { loadCeiling: number; processCap: number } | null
   memoryCeilings: MemoryCeilings
   /** `FACTORY_SEATS_MAX_BONUS`: the most extra leads per account while the host idles; absent or 0: off */
   seatsMaxBonus?: number
-  /**
-   * `FACTORY_SLOT_AIM`: with `on`, the lead aim (the count of leads the host takes at its pressure, `domains/capacity/slot-aim.ts`)
-   * is the gate and the memory fit only the guard of what cannot fit at all. Absent or other: the fit decides alone.
-   */
-  slotAim?: AimMode
 }
 
 export interface CapacityDeps extends PlanningDeps {
@@ -105,8 +91,8 @@ export interface HostInputs {
   /** per project name: why its doctor says this host cannot run it; a project whose doctor is green, or has none, is absent */
   doctors: ReadonlyMap<string, string>
   /**
-   * the lead aim under `FACTORY_SLOT_AIM=on`: its count (0 before its first minute) and whether the newest minute sample, not
-   * older than five minutes, read the pressure level; absent or null: no aim, the memory fit decides alone
+   * the lead aim (`domains/capacity/slot-aim.ts`): its count (0 before its first minute) and whether the newest minute sample,
+   * not older than five minutes, read the pressure level; absent or null (an unread host): no aim, the memory fit decides alone
    */
   leadAim?: { target: number; pressureRead: boolean } | null
   /** the load tripwire over the minute samples; absent or null: too few fresh samples, the instant reading decides */
@@ -212,7 +198,7 @@ export async function readHost(deps: CapacityDeps): Promise<HostInputs> {
       sizes: await capacity.worktreeSizes(),
       relearns: await capacity.relearns(),
       rss: await capacity.leadRssSince(new Date(now.getTime() - RSS_MAX_AGE_MS)),
-      leadAim: deps.limits.slotAim === 'on' ? ((await capacity.leadAim())?.target ?? 0) : null,
+      leadAim: (await capacity.leadAim())?.target ?? 0,
     }),
   )
   if (!facts.ok)
@@ -277,16 +263,15 @@ export async function readHost(deps: CapacityDeps): Promise<HostInputs> {
         ? facts.value.recent.slice(0, SEAT_SAMPLES).map((s) => ({ load: s.load, swapUsedPct: s.swapUsedPct }))
         : [],
     doctors,
-    leadAim:
-      facts.ok && facts.value.leadAim !== null
-        ? {
-            target: facts.value.leadAim,
-            pressureRead:
-              newest !== undefined &&
-              now.getTime() - newest.at.getTime() <= SAMPLE_MAX_AGE_MS &&
-              newest.pressureLevel !== null,
-          }
-        : null,
+    leadAim: facts.ok
+      ? {
+          target: facts.value.leadAim,
+          pressureRead:
+            newest !== undefined &&
+            now.getTime() - newest.at.getTime() <= SAMPLE_MAX_AGE_MS &&
+            newest.pressureLevel !== null,
+        }
+      : null,
     loadTrip: facts.ok ? loadTrip(facts.value.recent, deps.limits.loadCeiling, now, load.ok ? load.value : null) : null,
     tests: facts.ok ? { ...testLineOf(facts.value.slots, now), stepMs: facts.value.stepMs } : null,
     notes,
@@ -734,68 +719,6 @@ async function admitOne(
   })
 }
 
-const REFUSAL_KINDS: ReadonlySet<string> = new Set(REFUSALS)
-
-/**
- * What the shadow rule would have decided beside the live one, for the look `snap` and `host` give: the Issues each rule
- * would admit this look and the refusal of the first Issue that nothing in the chain keeps out. Null when no rule is
- * shadowed or nothing is queued for the host's rules.
- */
-function shadowDecision(snap: Snapshot, host: HostInputs, limits: CapacityLimits): Omit<ShadowDecision, 'at'> | null {
-  const { shadow } = limits
-  if (!shadow) return null
-  const live = evaluateQueue(snap, host, limits)
-  const candidates = live.filter((entry) => entry.reason === null || REFUSAL_KINDS.has(entry.reason.kind))
-  if (candidates.length === 0) return null
-  const rule: CapacityLimits = {
-    ...limits,
-    loadCeiling: shadow.loadCeiling,
-    processCap: shadow.processCap,
-    shadow: null,
-  }
-  const shadowed = evaluateQueue(snap, host, rule)
-  const admits = (queue: readonly QueueEntry[]) => queue.filter((e) => e.reason === null && e.account !== null).length
-  // Both looks order the queue alike: the refusals named are those of the first Issue the two rules decide differently,
-  // else of the first one nothing in the chain keeps out.
-  const differing = live.findIndex((entry, i) => (entry.reason === null) !== (shadowed[i]?.reason === null))
-  const first = differing >= 0 ? differing : live.indexOf(candidates[0] as QueueEntry)
-  const shadowHead = shadowed[first]?.reason ?? null
-  return {
-    candidates: candidates.length,
-    liveAdmits: admits(live),
-    shadowAdmits: admits(shadowed),
-    liveRefusal: live[first]?.reason?.kind ?? null,
-    shadowRefusal: shadowHead?.kind ?? null,
-    shadowMessage: shadowHead?.message ?? null,
-    load: host.load,
-    loadCeiling: limits.loadCeiling,
-    shadowLoadCeiling: shadow.loadCeiling,
-    processes: host.processes,
-    processCap: shadow.processCap,
-  }
-}
-
-/** Stores the minute's shadow decision (one row per minute, the first look of it); a failure is a note, never the pass's. */
-async function recordShadow(deps: CapacityDeps, host: HostInputs, notes: string[]): Promise<void> {
-  if (!deps.limits.shadow) return
-  const now = deps.clock.now()
-  const stored = await deps.uow.run(async (stores) => {
-    const snap = await snapshotOf(stores, now)
-    const decision = shadowDecision(snap, host, deps.limits)
-    if (decision) {
-      await stores.capacity.recordShadow(
-        { at: new Date(Math.floor(now.getTime() / 60_000) * 60_000), ...decision },
-        new Date(now.getTime() - SHADOW_KEEP_MS),
-      )
-    }
-    return ok(undefined)
-  })
-  if (!stored.ok) notes.push(`the shadow decision could not be stored (${stored.error.detail})`)
-}
-
-/** The shadow decisions are kept two weeks, as the host samples they are read against. */
-const SHADOW_KEEP_MS = 14 * 86_400_000
-
 /** The queue intervals are kept 400 days, as the hourly class rollups (a few rows per Issue). */
 const WAITS_KEEP_MS = 400 * 86_400_000
 
@@ -870,13 +793,12 @@ export async function admissionPass(
   const notes = await pollIfDue(deps)
   const first = await readHost(deps)
   notes.push(...first.notes)
-  await recordShadow(deps, first, notes)
   let host = first
   const admitted: Admitted[] = []
   const skip = new Set<IssueId>()
   let queue: QueueEntry[] = []
   for (let i = 0; i < (options.limit ?? PASS_LIMIT); i++) {
-    // The load is read again before every admission, not once for the pass: the doctors, the shadow decision and the
+    // The load is read again before every admission, not once for the pass: the doctors and the
     // admissions before this one all take time, and the 1-minute load moves by tens in a minute on a busy host (Issue 1742:
     // a lead admitted with the load over its ceiling on the samples either side).
     host = await withFreshLoad(deps, host)

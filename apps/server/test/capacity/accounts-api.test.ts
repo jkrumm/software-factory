@@ -23,6 +23,7 @@ beforeAll(async () => {
   await world.reset()
   paths = accountsFixture({ a: { w: 20 }, b: { w: 40 }, c: { w: 60 }, d: { w: 10 } })
   world.clock.set(NOW)
+  await world.calm()
   world.source.add('solo', {
     project: { state: 'text' as const, sha: 'sha-solo', value: { apiVersion: 'factory/v2', name: 'solo', leads: 1 } },
   })

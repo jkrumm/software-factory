@@ -61,6 +61,7 @@ describe('the queue order within a priority', () => {
   test('a large Issue that waited 12 hours is not starved by a fresh small one', async () => {
     const large = await sized('large')
     world.clock.set(new Date(world.clock.now().getTime() + 12 * HOUR))
+    await world.calm()
     const small = await sized('small')
     expect(await admitted()).toEqual([large])
     expect(small).not.toBe(large)

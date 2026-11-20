@@ -54,6 +54,7 @@ describe('whether an edge held an Issue behind free capacity', () => {
 
     // a later look keeps the first time
     world.clock.advance(10 * MIN)
+    await world.calm()
     value(await admissionPass(world.deps))
     expect((await edgeOf(second)).ready_since).toEqual(seen)
 
@@ -62,6 +63,7 @@ describe('whether an edge held an Issue behind free capacity', () => {
     world.clock.advance(5 * MIN)
     // the edge is satisfied by the first pass that sees its blocker closed
     const satisfied = world.clock.now()
+    await world.calm()
     expect(value(await admissionPass(world.deps)).admitted.map((a) => a.issue)).toEqual([second])
     expect(await edgeOf(second)).toEqual({
       ready_since: seen,

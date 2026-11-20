@@ -172,6 +172,12 @@ export interface World {
   accounts: FakeAccounts
   deps: CapacityDeps & SyncDeps
   reset(): Promise<void>
+  /**
+   * The lead aim gates every admission (it is always on): a roomy count and a pressure level read one second before the
+   * clock, so the rules a test is about decide. A reset does it; call it again after the clock moved five minutes on. The
+   * aim's own tests replace both rows.
+   */
+  calm(): Promise<void>
   stop(): Promise<void>
   file(input: {
     repo: string
@@ -231,8 +237,17 @@ export async function startWorld(): Promise<World> {
       accounts.reads = 0
       clock.set(new Date('2026-11-07T12:00:00Z'))
       world.deps.ids = sequentialIds()
+      await world.calm()
     },
     stop: () => db.stop(),
+    async calm() {
+      await db.sql`
+        INSERT INTO factory.slot_aim (id, target, quiet_since, changed_at, lead_target)
+        VALUES (1, 64, NULL, ${clock.now()}, 64) ON CONFLICT (id) DO NOTHING`
+      await db.sql`
+        INSERT INTO factory.host_samples (at, pressure_level)
+        VALUES (${new Date(clock.now().getTime() - 1000)}, 1) ON CONFLICT (at) DO NOTHING`
+    },
     async file(input) {
       const n = world.deps.ids.next('signal')
       const result = value(

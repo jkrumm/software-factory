@@ -529,7 +529,9 @@ test('process_growth, swap_growth, process_storm: a drill process, a swap rise a
     INSERT INTO factory.host_process_samples (at, pid, ppid, name, class, footprint_mib, why)
     SELECT date_trunc('minute', now()) - (m || ' minutes')::interval, 4242, 1, 'drilld', 'system', 1000 + (60 - m) * 20, 'growth'
     FROM generate_series(0, 60, 5) AS m`
-  // swap use rising over the last 16 minutes, and a process count over the cap for the last 3 minutes
+  // swap use rising over the last 16 minutes, and a process count over the cap for the last 3 minutes (the calm sample an admission
+  // of an earlier test left is no part of that run)
+  await db`DELETE FROM factory.host_samples`
   await db`
     INSERT INTO factory.host_samples (at, swap_used_pct, processes)
     SELECT date_trunc('minute', now()) - (m || ' minutes')::interval, 30 + (15 - m) * 0.5, CASE WHEN m < 3 THEN 9000 ELSE 800 END
@@ -623,6 +625,7 @@ test('slot_line and gates_passed: the stored slot minutes and capacity facts fil
     SELECT date_trunc('minute', now()) - (m || ' minutes')::interval, 2, 4, 2, 2, 12, false, 'drill' FROM generate_series(0, 14) AS m`
   // a lead admitted (a real `admitted` event) between two samples that both read the load over the ceiling
   const admittedIssue = await working(lab, REPO, 'admitted while the host is over its load ceiling')
+  await db`DELETE FROM factory.host_samples`
   await db`
     INSERT INTO factory.host_samples (at, load, load_ceiling, leads, seats)
     SELECT a.at + o.shift, 150, 60, 4, 12

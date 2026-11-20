@@ -28,11 +28,9 @@ const constants = {
   reaperGraceMs: 300_000,
   swapoutCeilingMb: 2048,
   swapCeilingPct: 80,
-  loadRule: 'shadow' as const,
   loadPerCore: 3,
   processCap: 1800,
   cores: 12,
-  slotAim: 'shadow' as const,
 }
 
 beforeAll(async () => {

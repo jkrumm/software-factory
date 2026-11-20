@@ -49,13 +49,13 @@ const hostSamples = async (rows: { load: number; used: number; swap?: number }[]
   for (const [index, row] of rows.entries()) {
     const ago = rows.length - 1 - index
     await sql()`
-      INSERT INTO factory.host_samples (at, load, memory_used_pct, swap_used_pct, swapout_mb_per_300s)
-      VALUES (now() - ${ago} * interval '1 minute', ${row.load}, ${row.used}, ${row.swap ?? 10}, 0)`
+      INSERT INTO factory.host_samples (at, load, memory_used_pct, swap_used_pct, swapout_mb_per_300s, pressure_level)
+      VALUES (now() - ${ago} * interval '1 minute', ${row.load}, ${row.used}, ${row.swap ?? 10}, 0, 1)`
   }
 }
 
 test('a heavy repo whose second lead would not fit stays queued with the numbers, a small repo is admitted', async () => {
-  // seven past attempts of the heavy repo, peaks 14000, 15000, 16000, then four of 18000 MiB (median 18000; the newest three, 14000..16000, all below it: the figure falls to 16000), three of the small one at 400 MiB
+  // seven past attempts of the heavy repo, peaks 14000, 15000, 16000, then four of 18000 MiB (median 18000; the newest three, 14000..16000, all below it: the figure falls to 16000), three of the small one at 500 MiB
   for (const [index, peak] of [14_000, 15_000, 16_000, 18_000, 18_000, 18_000, 18_000].entries()) {
     await sql()`
       INSERT INTO factory.lead_samples (at, worktree, repo, issue, attempt, rss_mib, procs)
@@ -64,10 +64,10 @@ test('a heavy repo whose second lead would not fit stays queued with the numbers
   for (const index of [0, 1, 2]) {
     await sql()`
       INSERT INTO factory.lead_samples (at, worktree, repo, issue, attempt, rss_mib, procs)
-      VALUES (now() - ${index + 1} * interval '1 day', ${`/wt/small-${index}`}, ${'small'}, ${9100 + index}, 1, 400, 2)`
+      VALUES (now() - ${index + 1} * interval '1 day', ${`/wt/small-${index}`}, ${'small'}, ${9100 + index}, 1, 500, 2)`
   }
-  // 32 GiB, 50 % in use
-  await hostSamples([{ load: 1, used: 50 }])
+  // 32 GiB, 55 % in use: 14.4 GiB free, and the lead aim keeps no headroom
+  await hostSamples([{ load: 1, used: 55 }])
 
   const first = await queued('heavy', 'the lone heavy lead')
   expect((await admit()).admitted.map((a) => a.issue)).toEqual([first])
@@ -79,7 +79,7 @@ test('a heavy repo whose second lead would not fit stays queued with the numbers
   expect(early.admitted).toEqual([])
   expect(reasonOf(early, light)).toMatchObject({
     kind: 'memory',
-    message: expect.stringContaining('the host has 16 GiB free, of which 1 young lead still takes 15.6 GiB more'),
+    message: expect.stringContaining('the host has 14.4 GiB free, of which 1 young lead still takes 15.6 GiB more'),
   })
   // past 30 minutes its figure counts as settled: the sample is believed
   await sql()`UPDATE factory.capacity_claims SET taken_at = now() - interval '40 minutes'`
@@ -88,9 +88,9 @@ test('a heavy repo whose second lead would not fit stays queued with the numbers
   expect(reasonOf(answer, second)).toMatchObject({
     kind: 'memory',
     message:
-      `memory: a lead of heavy takes ~15.6 GiB outside test slots (the largest of the newest 3 settled leads, all below the median of 17.6 GiB), the host has 16 GiB free, ` +
-      // the small lead admitted in this pass is young and takes its 400 MiB before the sample shows it
-      'of which 1 young lead still takes 0.4 GiB more, headroom 2.6 GiB',
+      `memory: a lead of heavy takes ~15.6 GiB outside test slots (the largest of the newest 3 settled leads, all below the median of 17.6 GiB), the host has 14.4 GiB free, ` +
+      // the small lead admitted in this pass is young and takes its 500 MiB before the sample shows it; the lead aim keeps no headroom
+      'of which 1 young lead still takes 0.5 GiB more',
   })
 }, 60_000)
 

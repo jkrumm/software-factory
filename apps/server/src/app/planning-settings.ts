@@ -2,7 +2,6 @@ import { availableParallelism } from 'node:os'
 import { isAbsolute } from 'node:path'
 import * as z from 'zod'
 import {
-  DEFAULT_LOAD_CEILING,
   DEFAULT_LOAD_PER_CORE,
   DEFAULT_PROCESS_CAP,
   loadCeilingOf,
@@ -11,7 +10,6 @@ import {
   type MemoryCeilings,
 } from '../domains/capacity/host.ts'
 import { DEFAULT_TENANT_BUDGET_MIB, DEFAULT_TENANT_PROJECT } from '../kernel/throughput-limits.ts'
-import type { AimMode } from '../domains/capacity/slot-aim.ts'
 
 const whole = (min: number, max: number) => z.coerce.number().int().min(min).max(max)
 
@@ -24,12 +22,9 @@ const Env = z.object({
   FACTORY_LEADS_PER_ACCOUNT: whole(1, 64).optional(),
   /** an account's own cap: `iu=20,me=10,me2=10` */
   FACTORY_ACCOUNT_LEADS: z.string().optional(),
-  FACTORY_LOAD_CEILING: whole(1, 100_000).optional(),
-  /** `shadow` (default): the fixed ceiling is live and the throughput rule is only recorded; `on`: the throughput rule is live */
-  FACTORY_LOAD_RULE: z.enum(['shadow', 'on']).optional(),
-  /** the throughput rule's load ceiling in multiples of the host's cores */
+  /** the load ceiling in multiples of the host's cores */
   FACTORY_LOAD_PER_CORE: whole(1, 1000).optional(),
-  /** the throughput rule's cap on the host's process count */
+  /** the cap on the host's process count */
   FACTORY_PROCESS_CAP: whole(100, 1_000_000).optional(),
   FACTORY_SWAPOUT_CEILING_MB: whole(1, 10_000_000).optional(),
   FACTORY_SWAP_CEILING_PCT: whole(1, 1000).optional(),
@@ -42,8 +37,6 @@ const Env = z.object({
   FACTORY_SLOT_EXTRA_LOAD: whole(1, 100_000).optional(),
   /** the minutes a waiter in the test-slot line may be passed by smaller steps before its memory is reserved for it */
   FACTORY_SLOT_PASS_MIN: whole(1, 1440).optional(),
-  /** the slot count that follows memory pressure: `off`, `shadow` (record beside the live rule, the default) or `on` */
-  FACTORY_SLOT_AIM: z.enum(['off', 'shadow', 'on']).optional(),
   /** the ssh target of the VPS that runs steps off the mini (an alias of the owner's ssh config); unset: every step runs on the mini */
   FACTORY_STEP_REMOTE_TARGET: z
     .string()
@@ -70,12 +63,9 @@ export interface PlanningSettings {
   leadsPerAccount: number
   /** each named account's own cap (`FACTORY_ACCOUNT_LEADS`); an account not in it takes `leadsPerAccount` */
   accountLeads: Map<string, number>
-  /** the fixed load ceiling (`FACTORY_LOAD_CEILING`); live while the throughput rule is in shadow */
-  loadCeiling: number
-  loadRule: 'shadow' | 'on'
   loadPerCore: number
   processCap: number
-  /** the host's cores: the throughput rule's load ceiling is a multiple of them, and the slot aim adds no slot above twice them in load */
+  /** the host's cores: the load ceiling is a multiple of them, and the slot aim adds no slot above twice them in load */
   cores: number
   memoryCeilings: MemoryCeilings
   seatsMaxBonus: number
@@ -83,7 +73,6 @@ export interface PlanningSettings {
   slotsMax: number
   slotExtraLoad: number
   slotPassMs: number
-  slotAim: AimMode
   /** the VPS that runs steps off the mini and the projects admitted to it; null: every step runs on the mini */
   stepRemote: { target: string; projects: readonly string[] } | null
   /** the tenant class's budget (launchd jobs and VMs), MiB; over it, the daily ranking files a finding */
@@ -143,8 +132,6 @@ export function planningSettings(
     memorySampleMs: e.FACTORY_MEMORY_SAMPLE_MS ?? 30_000,
     leadsPerAccount: e.FACTORY_LEADS_PER_ACCOUNT ?? 2,
     accountLeads: accountLeadsOf(e.FACTORY_ACCOUNT_LEADS),
-    loadCeiling: e.FACTORY_LOAD_CEILING ?? DEFAULT_LOAD_CEILING,
-    loadRule: e.FACTORY_LOAD_RULE ?? 'shadow',
     loadPerCore: e.FACTORY_LOAD_PER_CORE ?? DEFAULT_LOAD_PER_CORE,
     processCap: e.FACTORY_PROCESS_CAP ?? DEFAULT_PROCESS_CAP,
     cores: options.cores ?? availableParallelism(),
@@ -157,7 +144,6 @@ export function planningSettings(
     slotsMax: Math.max(e.FACTORY_SLOTS ?? 2, e.FACTORY_SLOTS_MAX ?? 6),
     slotExtraLoad: e.FACTORY_SLOT_EXTRA_LOAD ?? 12,
     slotPassMs: (e.FACTORY_SLOT_PASS_MIN ?? 10) * 60_000,
-    slotAim: e.FACTORY_SLOT_AIM ?? 'shadow',
     stepRemote:
       e.FACTORY_STEP_REMOTE_TARGET === undefined
         ? null
@@ -170,19 +156,7 @@ export function planningSettings(
   }
 }
 
-/**
- * The load ceiling and process cap in force, and the rule shadowed beside them. In `shadow` the fixed ceiling is live, no
- * process cap applies, and the throughput rule (multiples of the cores, the cap) is recorded per minute; in `on` the
- * throughput rule is live and nothing is shadowed.
- */
-export function hostRule(
-  settings: Pick<PlanningSettings, 'loadCeiling' | 'loadRule' | 'loadPerCore' | 'processCap' | 'cores'>,
-) {
-  const throughput = {
-    loadCeiling: loadCeilingOf(settings.cores, settings.loadPerCore),
-    processCap: settings.processCap,
-  }
-  return settings.loadRule === 'on'
-    ? { loadCeiling: throughput.loadCeiling, processCap: throughput.processCap as number | null, shadow: null }
-    : { loadCeiling: settings.loadCeiling, processCap: null as number | null, shadow: throughput }
+/** The load ceiling (the cores times `FACTORY_LOAD_PER_CORE`) and the cap on the host's process count that admission holds. */
+export function hostRule(settings: Pick<PlanningSettings, 'loadPerCore' | 'processCap' | 'cores'>) {
+  return { loadCeiling: loadCeilingOf(settings.cores, settings.loadPerCore), processCap: settings.processCap }
 }

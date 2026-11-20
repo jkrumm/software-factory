@@ -1,15 +1,14 @@
 import { SAMPLE_MAX_AGE_MS } from '../domains/capacity/costs.ts'
 import { loadTrip, SUSTAINED_LOAD_SAMPLES, sustainedSwapoutMb } from '../domains/capacity/host.ts'
-import { type AimMode, type AimState, aimStep, leadAimStep, swapGrowing } from '../domains/capacity/slot-aim.ts'
+import { type AimState, aimStep, leadAimStep, swapGrowing } from '../domains/capacity/slot-aim.ts'
 import { slotCounts } from '../domains/capacity/slots.ts'
 import { ok, type PortError, type Result } from '../kernel/result.ts'
 import type { PlanningDeps } from './planning-deps.ts'
 
-/** Shadow rows are kept as long as the host samples they sit beside. */
+/** The minute rows are kept as long as the host samples they sit beside. */
 const SLOT_SHADOW_KEEP_MS = 14 * 86_400_000
 
 export interface SlotAimDeps extends PlanningDeps {
-  mode: AimMode
   /** `FACTORY_SLOTS`: the live rule's base slots, and where the aim starts */
   slots: number
   /** `FACTORY_SLOTS_MAX`: the ceiling of the aim */
@@ -24,12 +23,11 @@ export interface SlotAimDeps extends PlanningDeps {
 
 /**
  * One minute of the slot aim, run by the host loop after it stored the sample: the aim moves by `aimStep` on the newest
- * host samples, and the minute's decision is stored beside the live rule's slots (the shadow table the switch-on is
- * judged by). Under `off` nothing moves and nothing is stored. The count only governs grants under `on`
- * (`app/capacity-slots.ts`); a step already running is never touched.
+ * host samples, and the minute's decision is stored beside the base slots (`slot_shadow`, which the self-watch's
+ * `slot_line` and the capacity loop read). The count governs the grants of `app/capacity-slots.ts`; a step already running is
+ * never touched.
  */
 export async function slotAimPass(deps: SlotAimDeps): Promise<Result<string, PortError>> {
-  if (deps.mode === 'off') return ok('slot aim is off')
   // read outside the transaction: it is a look at the queue, which opens its own
   const leadWaiting = (await deps.leadWaiters?.().catch(() => null)) ?? null
   return deps.uow.run(async ({ capacity }) => {
@@ -61,9 +59,7 @@ export async function slotAimPass(deps: SlotAimDeps): Promise<Result<string, Por
     await capacity.saveSlotAim(step.state, now)
     // The lead aim moves on the same signals: one verdict of the host, two counts it governs.
     const running = (await capacity.claims()).length
-    // Only under `on` does the count carry from minute to minute: under `shadow` nothing is refused by it, so no lead ever waits for it
-    // and it could not grow; it is re-seeded at the leads running each minute, so the switch to `on` starts from what the host takes.
-    const lead = leadAimStep(deps.mode === 'on' ? await capacity.leadAim() : null, {
+    const lead = leadAimStep(await capacity.leadAim(), {
       at: now,
       pressureLevel: fresh ? newest.pressureLevel : null,
       swapGrowing: growing,
@@ -93,7 +89,7 @@ export async function slotAimPass(deps: SlotAimDeps): Promise<Result<string, Por
     })
     await capacity.pruneSlotShadow(new Date(now.getTime() - SLOT_SHADOW_KEEP_MS))
     return ok(
-      `slot aim ${before.target} to ${step.state.target} (${deps.mode}): ${step.reason}; lead aim ${lead.state.target} for ${running} running: ${lead.reason}`,
+      `slot aim ${before.target} to ${step.state.target}: ${step.reason}; lead aim ${lead.state.target} for ${running} running: ${lead.reason}`,
     )
   })
 }

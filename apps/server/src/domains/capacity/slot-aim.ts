@@ -1,8 +1,5 @@
 import { describeTrip, type LoadTrip } from './host.ts'
 
-/** `FACTORY_SLOT_AIM`: `off` leaves the live rule alone, `shadow` records what the aim would do beside it, `on` grants by the aim. */
-export type AimMode = 'off' | 'shadow' | 'on'
-
 /** How long the host stays at pressure level 1 with swap steady before the aim adds a slot. */
 export const AIM_QUIET_MS = 5 * 60_000
 /** Samples (one a minute, newest first) the swap in use is judged over. */
