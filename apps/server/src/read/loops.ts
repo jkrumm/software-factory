@@ -514,16 +514,23 @@ export function loopReads(tx: SQL): LoopReads {
     },
 
     async classCpu(since) {
+      // one minute set for the groups, the divisor and the host split: the minutes with a class CPU figure (none at the first
+      // snapshot after a restart) and a parsed `top` header, so the CPU accounting nets one against the other over the same minutes
       const rows: unknown[] = await tx`
-        SELECT class, repo, sum(cpu_ms) AS cpu_ms, (SELECT count(DISTINCT at) FROM factory.host_class_samples WHERE at >= ${since} AND cpu_ms IS NOT NULL) AS minutes
-        FROM factory.host_class_samples WHERE at >= ${since} AND cpu_ms IS NOT NULL
-        GROUP BY class, repo ORDER BY sum(cpu_ms) DESC`
+        WITH covered AS (
+          SELECT h.at, h.cpu_idle_pct, h.cpu_user_pct, h.cpu_sys_pct FROM factory.host_samples h
+          WHERE h.at >= ${since} AND h.cpu_idle_pct IS NOT NULL AND h.cpu_user_pct IS NOT NULL AND h.cpu_sys_pct IS NOT NULL
+            AND EXISTS (SELECT 1 FROM factory.host_class_samples c WHERE c.at = h.at AND c.cpu_ms IS NOT NULL)
+        )
+        SELECT c.class, c.repo, sum(c.cpu_ms) AS cpu_ms, (SELECT count(*) FROM covered) AS minutes
+        FROM factory.host_class_samples c WHERE c.at IN (SELECT at FROM covered) AND c.cpu_ms IS NOT NULL
+        GROUP BY c.class, c.repo ORDER BY sum(c.cpu_ms) DESC`
       const parsed = rows.map((raw) => ClassCpuRow.parse(raw))
       const split: unknown[] = await tx`
-        SELECT count(*) AS samples, avg(cpu_idle_pct) AS idle, avg(cpu_user_pct) AS usr, avg(cpu_sys_pct) AS sys
-        FROM factory.host_samples
-        WHERE at >= ${since} AND cpu_idle_pct IS NOT NULL AND cpu_user_pct IS NOT NULL AND cpu_sys_pct IS NOT NULL
-          AND at IN (SELECT at FROM factory.host_class_samples WHERE at >= ${since} AND cpu_ms IS NOT NULL)`
+        SELECT count(*) AS samples, avg(h.cpu_idle_pct) AS idle, avg(h.cpu_user_pct) AS usr, avg(h.cpu_sys_pct) AS sys
+        FROM factory.host_samples h
+        WHERE h.at >= ${since} AND h.cpu_idle_pct IS NOT NULL AND h.cpu_user_pct IS NOT NULL AND h.cpu_sys_pct IS NOT NULL
+          AND EXISTS (SELECT 1 FROM factory.host_class_samples c WHERE c.at = h.at AND c.cpu_ms IS NOT NULL)`
       const header = HostCpuSplitRow.parse(split[0])
       return {
         minutes: parsed[0]?.minutes ?? 0,

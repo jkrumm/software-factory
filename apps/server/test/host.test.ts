@@ -607,6 +607,8 @@ test('classCpu: the CPU of each class and repo over the window, ranked, with the
   await hostRow(7, null, 1, 1) // no split read: not averaged
   await hostRow(8, 50, 25, 25) // no class rows that minute: the split covers the minutes the groups do
   await hostRow(9, 40, 30, 30) // class rows without CPU that minute: not covered either
+  await row(10, 'lead', 'app', 600_000) // class CPU at a minute whose top header was not parsed: not covered
+  await hostRow(10, null, 0, 0)
   const window = await loopReads(db.sql).classCpu(at(1))
   expect(window.minutes).toBe(2)
   expect(window.host).toEqual({ samples: 2, idlePct: 5, userPct: 65, sysPct: 30 })
