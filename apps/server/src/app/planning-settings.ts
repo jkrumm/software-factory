@@ -1,6 +1,7 @@
 import { availableParallelism } from 'node:os'
 import { isAbsolute } from 'node:path'
 import * as z from 'zod'
+import { parseEnv, type Environment } from '../kernel/env.ts'
 import {
   DEFAULT_LOAD_PER_CORE,
   DEFAULT_PROCESS_CAP,
@@ -26,8 +27,6 @@ const Env = z.object({
   FACTORY_LOAD_PER_CORE: whole(1, 1000).optional(),
   /** the cap on the host's process count */
   FACTORY_PROCESS_CAP: whole(100, 1_000_000).optional(),
-  FACTORY_SWAPOUT_CEILING_MB: whole(1, 10_000_000).optional(),
-  FACTORY_SWAP_CEILING_PCT: whole(1, 1000).optional(),
   /** the most extra leads per account while the host idles with work queued; 0 turns it off */
   FACTORY_SEATS_MAX_BONUS: whole(0, 4).optional(),
   FACTORY_SLOTS: whole(1, 64).optional(),
@@ -35,8 +34,6 @@ const Env = z.object({
   FACTORY_SLOTS_MAX: whole(1, 64).optional(),
   /** the host load up to which a step beyond the base slots is granted */
   FACTORY_SLOT_EXTRA_LOAD: whole(1, 100_000).optional(),
-  /** the minutes a waiter in the test-slot line may be passed by smaller steps before its memory is reserved for it */
-  FACTORY_SLOT_PASS_MIN: whole(1, 1440).optional(),
   /** the ssh target of the VPS that runs steps off the mini (an alias of the owner's ssh config); unset: every step runs on the mini */
   FACTORY_STEP_REMOTE_TARGET: z
     .string()
@@ -44,14 +41,17 @@ const Env = z.object({
     .optional(),
   /** the projects whose declared steps may run off the mini, space- or comma-separated (the owner's admission) */
   FACTORY_STEP_REMOTE_PROJECTS: z.string().optional(),
-  /** the tenant class's budget in MiB: the daily throughput ranking files the class's average footprint above it */
-  FACTORY_TENANT_BUDGET_MIB: whole(1, 10_000_000).optional(),
-  /** the repo that owns the host's configuration, where tenant findings are filed */
-  FACTORY_TENANT_PROJECT: z.string().min(1).optional(),
+  /** the host tools the host loop, the reaper and the capacity reads run (a scenario points them at fakes) */
   FACTORY_SYSCTL_BIN: z.string().min(1).optional(),
+  FACTORY_LSOF_BIN: z.string().min(1).optional(),
+  FACTORY_PS_BIN: z.string().min(1).optional(),
+  FACTORY_TOP_BIN: z.string().min(1).optional(),
+  FACTORY_VM_STAT_BIN: z.string().min(1).optional(),
+  FACTORY_LAUNCHCTL_BIN: z.string().min(1).optional(),
+  /** the volume whose use is the host's swap */
+  FACTORY_VM_VOLUME: z.string().min(1).optional(),
   /** a swapout rate is the delta between two readings; readings closer than this return the last one */
   FACTORY_MEMORY_SAMPLE_MS: whole(0, 3_600_000).optional(),
-  FACTORY_GIT_TIMEOUT_MS: whole(1000, 600_000).optional(),
 })
 
 export interface PlanningSettings {
@@ -59,6 +59,12 @@ export interface PlanningSettings {
   repoAllow: string[]
   gitTimeoutMs: number
   sysctlBin: string
+  lsofBin: string
+  psBin: string
+  topBin: string
+  vmStatBin: string | undefined
+  launchctlBin: string
+  vmVolume: string
   memorySampleMs: number
   leadsPerAccount: number
   /** each named account's own cap (`FACTORY_ACCOUNT_LEADS`); an account not in it takes `leadsPerAccount` */
@@ -101,14 +107,10 @@ function accountLeadsOf(text: string | undefined): Map<string, number> {
 
 /** The planning and capacity settings from the environment; throws one message naming every bad key. */
 export function planningSettings(
-  env: Record<string, string | undefined>,
+  env: Environment,
   options: { repoRoots?: readonly string[]; repoAllow?: readonly string[]; cores?: number } = {},
 ): PlanningSettings {
-  const parsed = Env.safeParse(env)
-  if (!parsed.success) {
-    throw new Error(parsed.error.issues.map((issue) => `${issue.path.join('.')}: ${issue.message}`).join('; '))
-  }
-  const e = parsed.data
+  const e = parseEnv(Env, env)
   // One setting, one meaning: the leads read FACTORY_REPO_ROOTS too, and their default stands when it is not set.
   const repoRoots = e.FACTORY_REPO_ROOTS
     ? e.FACTORY_REPO_ROOTS.split(':')
@@ -127,8 +129,14 @@ export function planningSettings(
   return {
     repoRoots,
     repoAllow,
-    gitTimeoutMs: e.FACTORY_GIT_TIMEOUT_MS ?? 20_000,
+    gitTimeoutMs: 20_000,
     sysctlBin: e.FACTORY_SYSCTL_BIN ?? '/usr/sbin/sysctl',
+    lsofBin: e.FACTORY_LSOF_BIN ?? '/usr/sbin/lsof',
+    psBin: e.FACTORY_PS_BIN ?? '/bin/ps',
+    topBin: e.FACTORY_TOP_BIN ?? '/usr/bin/top',
+    vmStatBin: e.FACTORY_VM_STAT_BIN,
+    launchctlBin: e.FACTORY_LAUNCHCTL_BIN ?? '/bin/launchctl',
+    vmVolume: e.FACTORY_VM_VOLUME ?? '/System/Volumes/VM',
     memorySampleMs: e.FACTORY_MEMORY_SAMPLE_MS ?? 30_000,
     leadsPerAccount: e.FACTORY_LEADS_PER_ACCOUNT ?? 2,
     accountLeads: accountLeadsOf(e.FACTORY_ACCOUNT_LEADS),
@@ -136,14 +144,14 @@ export function planningSettings(
     processCap: e.FACTORY_PROCESS_CAP ?? DEFAULT_PROCESS_CAP,
     cores: options.cores ?? availableParallelism(),
     memoryCeilings: {
-      swapoutMbPer300s: e.FACTORY_SWAPOUT_CEILING_MB ?? DEFAULT_SWAPOUT_CEILING_MB,
-      swapUsedPct: e.FACTORY_SWAP_CEILING_PCT ?? DEFAULT_SWAP_CEILING_PCT,
+      swapoutMbPer300s: DEFAULT_SWAPOUT_CEILING_MB,
+      swapUsedPct: DEFAULT_SWAP_CEILING_PCT,
     },
     seatsMaxBonus: e.FACTORY_SEATS_MAX_BONUS ?? 2,
     slots: e.FACTORY_SLOTS ?? 2,
     slotsMax: Math.max(e.FACTORY_SLOTS ?? 2, e.FACTORY_SLOTS_MAX ?? 6),
     slotExtraLoad: e.FACTORY_SLOT_EXTRA_LOAD ?? 12,
-    slotPassMs: (e.FACTORY_SLOT_PASS_MIN ?? 10) * 60_000,
+    slotPassMs: 10 * 60_000,
     stepRemote:
       e.FACTORY_STEP_REMOTE_TARGET === undefined
         ? null
@@ -151,8 +159,8 @@ export function planningSettings(
             target: e.FACTORY_STEP_REMOTE_TARGET,
             projects: (e.FACTORY_STEP_REMOTE_PROJECTS ?? '').split(/[\s,]+/).filter((p) => p !== ''),
           },
-    tenantBudgetMib: e.FACTORY_TENANT_BUDGET_MIB ?? DEFAULT_TENANT_BUDGET_MIB,
-    tenantProject: e.FACTORY_TENANT_PROJECT ?? DEFAULT_TENANT_PROJECT,
+    tenantBudgetMib: DEFAULT_TENANT_BUDGET_MIB,
+    tenantProject: DEFAULT_TENANT_PROJECT,
   }
 }
 

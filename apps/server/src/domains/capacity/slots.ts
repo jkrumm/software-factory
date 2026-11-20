@@ -65,7 +65,7 @@ export function stepClassOf(name: string): string | null {
 export const DEFAULT_STEP_CORES = 1
 
 /**
- * How long a waiter may be passed by smaller steps before its memory is reserved (`FACTORY_SLOT_PASS_MIN`): from then on a
+ * How long a waiter may be passed by smaller steps before its memory is reserved: from then on a
  * step passes it only when it fits now and is learned to end before the reserved start (`reservedStartMs`).
  */
 export const DEFAULT_PASS_AFTER_MS = 10 * 60_000

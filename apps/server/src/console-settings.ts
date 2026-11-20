@@ -1,5 +1,6 @@
 import { join } from 'node:path'
 import * as z from 'zod'
+import { parseEnv, type Environment } from './kernel/env.ts'
 
 const Env = z.object({
   FACTORY_CONSOLE_PORT: z.coerce.number().int().min(1).max(65535).default(7795),
@@ -26,12 +27,9 @@ export interface ConsoleSettings {
 const DEFAULT_DIR = join(import.meta.dir, '..', '..', '..', 'apps', 'console', 'dist')
 
 /** The Console listener's settings from the environment. */
-export function loadConsoleSettings(env: Record<string, string | undefined>): ConsoleSettings {
-  const parsed = Env.safeParse(env)
-  if (!parsed.success) {
-    throw new Error(parsed.error.issues.map((issue) => `${issue.path.join('.')}: ${issue.message}`).join('; '))
-  }
-  const imageHosts = (parsed.data.FACTORY_CONSOLE_IMAGE_HOSTS ?? '')
+export function loadConsoleSettings(env: Environment): ConsoleSettings {
+  const e = parseEnv(Env, env)
+  const imageHosts = (e.FACTORY_CONSOLE_IMAGE_HOSTS ?? '')
     .split(',')
     .map((host) => host.trim().toLowerCase())
     .filter((host) => host !== '')
@@ -40,8 +38,8 @@ export function loadConsoleSettings(env: Record<string, string | undefined>): Co
     throw new Error(`FACTORY_CONSOLE_IMAGE_HOSTS: "${bad}" is not a host (use images.example.com or *.example.com)`)
   }
   return {
-    port: parsed.data.FACTORY_CONSOLE_PORT,
-    dir: parsed.data.FACTORY_CONSOLE_DIR ?? DEFAULT_DIR,
+    port: e.FACTORY_CONSOLE_PORT,
+    dir: e.FACTORY_CONSOLE_DIR ?? DEFAULT_DIR,
     imageHosts,
   }
 }

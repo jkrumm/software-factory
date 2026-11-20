@@ -1,15 +1,18 @@
 import { describe, expect, test } from 'bun:test'
+import * as z from 'zod'
+import { loadLoopSettings } from '../src/app/loops/settings.ts'
+import { planningSettings } from '../src/app/planning-settings.ts'
+import { parseEnv } from '../src/kernel/env.ts'
 import { loadSettings } from '../src/settings.ts'
 
 const base = { FACTORY_TOKEN: 'owner-token-0123456789', DATABASE_URL: 'x', PORT: '1' }
 
-test('the defaults: version dev, the 45 s lock wait, the 30 s shutdown deadline, no clock offset', () => {
+test('the defaults: version dev, the 45 s lock wait, no clock offset', () => {
   expect(loadSettings({ ...base, DATABASE_URL: 'postgres://x', PORT: '7793' })).toMatchObject({
     databaseUrl: 'postgres://x',
     port: 7793,
     version: 'dev',
     lockWaitMs: 45_000,
-    shutdownDeadlineMs: 30_000,
     clockOffsetMs: 0,
   })
 })
@@ -76,4 +79,44 @@ describe('the tokens', () => {
       /FACTORY_AGENT_TOKEN and FACTORY_DOOR_TOKEN/,
     )
   })
+})
+
+describe('parseEnv', () => {
+  test('returns the parsed values, and names every bad key in one message', () => {
+    const schema = z.object({ A: z.coerce.number().int(), B: z.string().min(2).optional() })
+    expect(parseEnv(schema, { A: '3' })).toEqual({ A: 3 })
+    expect(() => parseEnv(schema, { A: 'x', B: '1' })).toThrow(/^A: .*; B: /)
+  })
+})
+
+describe('the loops intervals', () => {
+  const every = (env: Record<string, string>) => loadLoopSettings(env).intervalMs
+  test('a loop with no setting runs on the tick, a swept one never faster than its floor, a fixed one on its own cadence', () => {
+    expect(every({ FACTORY_TICK_MS: '2000' })).toMatchObject({
+      leads: 2000,
+      friction: 2000,
+      hygiene: 15 * 60_000,
+      screen: 10 * 60_000,
+      selfwatch: 5 * 60_000,
+      host: 60_000,
+      reaper: 5 * 60_000,
+      desk: 15 * 60_000,
+    })
+    expect(every({ FACTORY_TICK_MS: '20000000' })).toMatchObject({ hygiene: 20_000_000, screen: 20_000_000 })
+  })
+
+  test('a tick of 0 turns every loop off, and a loop with its own setting keeps it', () => {
+    expect(Object.values(every({ FACTORY_TICK_MS: '0' })).every((interval) => interval === 0)).toBe(true)
+    expect(every({ FACTORY_TICK_MS: '0', FACTORY_LOOP_LEADS_MS: '50' }).leads).toBe(50)
+    expect(every({ FACTORY_LOOP_HYGIENE_MS: '10' }).hygiene).toBe(10)
+  })
+})
+
+test('the host tools default to the system ones, and a scenario points them elsewhere', () => {
+  expect(planningSettings({}, { cores: 8 })).toMatchObject({
+    psBin: '/bin/ps',
+    lsofBin: '/usr/sbin/lsof',
+    vmVolume: '/System/Volumes/VM',
+  })
+  expect(planningSettings({ FACTORY_PS_BIN: '/x/ps' }, { cores: 8 }).psBin).toBe('/x/ps')
 })

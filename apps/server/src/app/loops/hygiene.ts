@@ -67,7 +67,7 @@ export interface HygieneDeps {
   dailyMs?: number
   /** writes one lifecycle step to its Issue; absent, the machine's events (`applyStep`). A seam for tests of the decisions. */
   apply?: (step: LifecycleStep, now: Date, reopens: number) => Promise<HygienePassRecord['lifecycle'][number] | null>
-  /** the scripted fixes run (`FACTORY_HYGIENE_FIX`); absent or false: every finding is filed as before */
+  /** the scripted fixes run (main.ts turns them on); absent or false: every finding is filed as before */
   fixes?: boolean
   /** a failed judgment is asked again this long on */
   retryMs: number

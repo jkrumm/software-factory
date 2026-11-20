@@ -38,7 +38,7 @@
   <key>ThrottleInterval</key>
   <integer>30</integer>
   <!-- launchd sends SIGTERM, then SIGKILL after ExitTimeOut. The new core ends itself within its own 30 s shutdown deadline
-       (apps/server/src/shutdown.ts, FACTORY_SHUTDOWN_DEADLINE_MS): draining aborts a lead start in flight instead of waiting for
+       (apps/server/src/shutdown.ts, SHUTDOWN_DEADLINE_MS): draining aborts a lead start in flight instead of waiting for
        it, the steps run in order, and the deadline exits 1 wherever the stop is stuck. 240 s stays as the outer bound, for a process
        that outlives its own deadline (a bug): the runbook then reads the PID before the stop and kills that PID, never a pattern. -->
   <key>ExitTimeOut</key>

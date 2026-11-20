@@ -440,7 +440,6 @@ describe('names and settings', () => {
   test('the defaults come from HOME; relative roots refuse the start', () => {
     const settings = loadLeadSettings({ HOME: '/home/x' })
     expect(settings).toMatchObject({
-      tickMs: 10_000,
       repoRoots: ['/home/x/SourceRoot'],
       repoAllow: [],
       socket: '/home/x/.local/share/factory/hook.sock',
@@ -448,6 +447,8 @@ describe('names and settings', () => {
       startBudgetMs: 1_800_000,
     })
     expect(() => loadLeadSettings({ HOME: '/home/x', FACTORY_REPO_ROOTS: 'relative' })).toThrow(/absolute/)
-    expect(() => loadLeadSettings({ HOME: '/home/x', FACTORY_TICK_MS: 'soon' })).toThrow(/FACTORY_TICK_MS/)
+    expect(() => loadLeadSettings({ HOME: '/home/x', FACTORY_QUIESCE_AFTER_MS: 'soon' })).toThrow(
+      /FACTORY_QUIESCE_AFTER_MS/,
+    )
   })
 })

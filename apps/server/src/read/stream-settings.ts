@@ -1,4 +1,5 @@
 import * as z from 'zod'
+import { parseEnv, type Environment } from '../kernel/env.ts'
 
 const DEFAULT_POLL_MS = 1000
 
@@ -12,10 +13,7 @@ export interface StreamSettings {
 }
 
 /** The change stream's settings from the environment; throws one message when `FACTORY_STREAM_POLL_MS` is not a whole number of 10 to 60000. */
-export function loadStreamSettings(env: Record<string, string | undefined>): StreamSettings {
-  const parsed = Env.safeParse({ FACTORY_STREAM_POLL_MS: env.FACTORY_STREAM_POLL_MS || undefined })
-  if (!parsed.success) {
-    throw new Error(parsed.error.issues.map((issue) => `${issue.path.join('.')}: ${issue.message}`).join('; '))
-  }
-  return { pollMs: parsed.data.FACTORY_STREAM_POLL_MS }
+export function loadStreamSettings(env: Environment): StreamSettings {
+  const e = parseEnv(Env, { FACTORY_STREAM_POLL_MS: env.FACTORY_STREAM_POLL_MS || undefined })
+  return { pollMs: e.FACTORY_STREAM_POLL_MS }
 }

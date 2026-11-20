@@ -116,16 +116,12 @@ export function composeLeads(input: {
     // The tripwire over the last days is a heavy read (it prices attempts): one answer serves every start of the next minutes.
     // The same reading gives the bound a hygiene class stays under to start light.
     ...lightReaders(input.sql, input.clock),
-    ...(s.quiesceAfterMs === null
-      ? {}
-      : {
-          quiesce: {
-            afterMs: s.quiesceAfterMs,
-            maxReviveTries: s.maxReviveTries,
-            processes: input.host.processes,
-            slotCwds: input.host.slotCwds,
-          },
-        }),
+    quiesce: {
+      afterMs: s.quiesceAfterMs,
+      maxReviveTries: s.maxReviveTries,
+      processes: input.host.processes,
+      slotCwds: input.host.slotCwds,
+    },
     apiErrors: apiErrorPorts({
       tails: fileTranscriptTails({
         projectsDirs: () => claudeProjectsDirs({ accountsFile: s.accountsFile, home: s.home }),

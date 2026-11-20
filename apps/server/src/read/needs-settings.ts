@@ -1,4 +1,5 @@
 import * as z from 'zod'
+import { parseEnv, type Environment } from '../kernel/env.ts'
 
 export const DEFAULT_LONG_WAIT_MS = 3_600_000
 
@@ -12,10 +13,7 @@ export interface NeedsSettings {
 }
 
 /** Needs you's settings from the environment; throws one message when `FACTORY_LONG_WAIT_MS` is not a whole number of at least 60000. */
-export function loadNeedsSettings(env: Record<string, string | undefined>): NeedsSettings {
-  const parsed = Env.safeParse({ FACTORY_LONG_WAIT_MS: env.FACTORY_LONG_WAIT_MS || undefined })
-  if (!parsed.success) {
-    throw new Error(parsed.error.issues.map((issue) => `${issue.path.join('.')}: ${issue.message}`).join('; '))
-  }
-  return { longWaitMs: parsed.data.FACTORY_LONG_WAIT_MS }
+export function loadNeedsSettings(env: Environment): NeedsSettings {
+  const e = parseEnv(Env, { FACTORY_LONG_WAIT_MS: env.FACTORY_LONG_WAIT_MS || undefined })
+  return { longWaitMs: e.FACTORY_LONG_WAIT_MS }
 }
