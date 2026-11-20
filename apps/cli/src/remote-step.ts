@@ -1,5 +1,5 @@
 import { createHash } from 'node:crypto'
-import { existsSync, readFileSync } from 'node:fs'
+import { existsSync, readFileSync, statSync, utimesSync } from 'node:fs'
 import { rm } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import { join, resolve } from 'node:path'
@@ -274,8 +274,13 @@ export async function snapshot(input: {
     // relative to the root, or absolute (a linked worktree's index lives in the main repository's `.git/worktrees`)
     const realIndex = real.stdout.trim() === '' ? '' : resolve(input.root, real.stdout.trim())
     const seeded = real.code === 0 && realIndex !== '' && existsSync(realIndex)
-    if (seeded) await Bun.write(index, Bun.file(realIndex))
-    else if ((await git(['read-tree', 'HEAD'])).code !== 0) return { failed: 'the worktree has no HEAD' }
+    if (seeded) {
+      await Bun.write(index, Bun.file(realIndex))
+      // git trusts an entry's stat unless it is not older than its index file ("racy git"); a copy stamped now would make
+      // an edit of the same size within one clock tick of the last `git add` (a coarse CI clock) read as unchanged
+      const stamp = statSync(realIndex)
+      utimesSync(index, stamp.atime, stamp.mtime)
+    } else if ((await git(['read-tree', 'HEAD'])).code !== 0) return { failed: 'the worktree has no HEAD' }
     const added = await git(['add', '-A'])
     if (added.code !== 0) return { failed: `git add failed: ${lastLine(added.stderr)}` }
     const carried = input.carry.filter((path) => existsSync(join(input.root, path)))
