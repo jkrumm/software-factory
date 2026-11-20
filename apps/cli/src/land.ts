@@ -448,8 +448,8 @@ class Lander {
 
   /**
    * Whether the repo's Makefile has a `merge-guard` rule, read from the file as the server reads it for the brief
-   * (`adapters/git/merge-guard.ts`): make's error wording does not tell a missing target from a broken one. A Makefile
-   * that includes another file and shows no such rule itself asks `make -n merge-guard`.
+   * (`adapters/git/merge-guard.ts`). A Makefile that includes another file and shows no such rule itself asks
+   * `make -n merge-guard` under `LC_ALL=C`, and only make's message for the absent target itself reads as none.
    */
   private async hasGuard(): Promise<boolean> {
     // `Makefile` alone, as the server reads it for the brief (adapters/git/merge-guard.ts), so the two never disagree

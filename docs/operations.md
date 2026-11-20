@@ -125,10 +125,10 @@ The verb reads the ship mode from `project.yaml` (`ship:` with any `via: pr` lan
 | rebase | `git fetch`, `git rebase origin/<default>` with the plan merge driver, `factory plan check` where `.gitattributes` declares `merge=plan`; a conflict aborts the rebase and refuses | same |
 | review | `agw review covered` on the range: a commit uncovered at standard or deep refuses with the `/review` command | same |
 | push | `git push --force-with-lease` (skipped when origin has the head); no open pull request refuses before the lock | `git push origin HEAD:<default>` |
-| ci | the pull request shows the head, then every check's bucket is `pass` or `skipping`; a `fail` or `cancel` refuses with the checks, no check after 3 min refuses (`--no-ci` for a head every workflow's path filter skips: `make check` on the rebased head before the push, no CI wait, no guard), 45 min refuses | none |
-| guard | `make merge-guard` where the Makefile has it; else the same rule: the head contains the default branch, which is not red | none |
+| ci | the pull request shows the head, then every check's bucket is `pass` or `skipping` with at least one `pass`, read green twice in a row (an all-skipped set is no CI); a `fail` or `cancel` refuses with the checks, no check after 3 min refuses (`--no-ci` for a head every workflow's path filter skips: `make check` on the rebased head before the push, no CI wait, no guard), 45 min refuses | none |
+| guard | `make merge-guard` where the `Makefile` has the rule (read from the file, as the brief reads it; one that only includes another file asks `LC_ALL=C make -n merge-guard`, and a failure other than the absent target refuses); else the same rule: the head contains the default branch, which is not red | none |
 | merge | `gh pr merge --<method> --match-head-commit <head>` by the method GitHub allows (squash, then rebase, then merge; `--method` overrides), never `--admin` | none |
-| report | the landed commits, and a squash commit `agw review covered` lists stale with the `/review` command for it | the landed commits |
+| report | the landed commits on stdout, and a squash commit `agw review covered` lists stale with the `/review` command for it; a failed fetch after the merge is a warning, never exit 1 | the landed commits |
 
 A refusal is exit 1 with `land: <step>: refused: <why>` and `land: next: <command>`, the lock released and nothing
 merged. Every step is safe to repeat, so a second run resumes (a rebased branch is not rebased again, a pushed head is not
