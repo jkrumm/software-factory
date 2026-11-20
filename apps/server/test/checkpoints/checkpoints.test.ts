@@ -1703,6 +1703,20 @@ describe('errands', () => {
       expect(detail).toContain('The mini has no shell on it')
     })
 
+    test('a long MacBook request still carries the fact to the screen', async () => {
+      const made = await requestErrand(deps, {
+        raw: {
+          source: 'ask-human',
+          need: 'hands',
+          text: `Deploy it\n${'x'.repeat(3800)}`,
+          command: `make deploy # ${'y'.repeat(1500)}`,
+          where: 'macbook',
+        },
+      }).then(value)
+      expect(value(await screenErrands(deps))).toEqual([{ errand: made.errand.id, outcome: 'reached_owner' }])
+      expect(screenDetails[0]).toContain('The mini has no shell on it')
+    })
+
     test('the first look by rule turns away a plain command without calling the screen', async () => {
       const made = await ask('Run `make deploy` on the host')
       expect(value(await screenErrands(deps))).toEqual([{ errand: made.errand.id, outcome: 'turned_away' }])
