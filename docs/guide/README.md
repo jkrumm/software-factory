@@ -63,11 +63,11 @@ Six nouns carry the design. Every chapter is about one of them.
 
 | Phase | Events | Sent by |
 |-|-|-|
-| Arrive | `filed`, `settled` | the factory; the owner can file directly |
-| Start | `admitted`, `lead_started`, `seated`, `moved_up`, `lead_gone` | the factory; the owner sets a seat |
-| Work | `noted`, `deferred`, `stalled`, `woken` | the lead, the steward, the owner |
-| Ask a person | `asked`, `answered`, `submitted`, `verdict_given`, `errand_raised`, `errand_done`, `errand_turned_back` | the lead asks; the Judge, a default or the owner answers |
-| Finish | `shipped`, `watch_passed`, `regressed`, `closed`, `reopened`, `cancelled` | the lead ships, the factory watches, the owner reopens or cancels |
+| Arrive | `filed`, `settled` | the factory; the owner or his delegate can file directly |
+| Start | `admitted`, `lead_started`, `seated`, `moved_up`, `lead_gone` | the factory; the owner or his delegate sets a seat |
+| Work | `noted`, `deferred`, `stalled`, `woken` | the lead defers or reports a stall; the owner, the steward, the Judge and the factory note and wake |
+| Ask a person | `asked`, `answered`, `submitted`, `verdict_given`, `errand_raised`, `errand_done`, `errand_turned_back` | the lead asks, or the steward for it; the Judge, a default or the owner answers |
+| Finish | `shipped`, `watch_passed`, `regressed`, `closed`, `reopened`, `cancelled` | the lead ships or closes, the factory watches, the owner or the factory reopens or cancels |
 
 **A wait names its exit.** A waiting Issue says why it waits and what ends the wait ([`WAITS`](https://github.com/jkrumm/software-factory/blob/d83ba1e8040a4d8aa3c0639bf659f773f09b67b8/apps/server/src/domains/work/issue.ts)). Eight of the eleven waits end by a machine: a timer, a dependency, an outside review, and the five stalls the steward ends. Three need a person: a Decision, a review, an Errand.
 

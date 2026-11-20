@@ -266,7 +266,7 @@ A lead is an interactive Claude Code session in a terminal the server started. I
 
 - The lead owns the Issue **end to end**: root cause, build, its own review, landing, deploy, and stating each acceptance line met or not met.
 - The factory **supervises through hooks and never redoes the work**. It reads what the session reports (a turn ended, a tool ran) and derives the session's state from those events.
-- The brief is **byte-identical** for the same input, and every prompt the server types has a key, so a replayed pass types nothing twice.
+- The brief is a **pure function of its input**: no clock, no randomness, and standing orders that are byte-identical for every lead. Every prompt the server types has a key, so a replayed pass types nothing twice.
 - Never headless: a lead is a session a person could attach to and read.
 
 **Why.** Splitting an Issue across a planner, a coder and a reviewer agent moves the context loss to the handoffs. One session that owns the outcome asks fewer questions and can be held to its own acceptance lines.
@@ -363,8 +363,8 @@ export function key(...parts: readonly (string | number)[]): Key
 Who may call what is one table. A caller is decided by its bearer token alone, and a route with no row is refused for everyone.
 
 - Tokens decide the caller (`owner`, `orchestrator`, `agent`, `machine`, `signal`, `read`).
-- A lead's session holds the agent token: it can ship, ask and file a signal on its own Issue, and it cannot file an Issue, cancel one or answer a Decision.
-- The API binds to loopback. The Console listener is a second loopback port that holds the owner's token on the server and forwards fifteen write verbs and nothing else; it can never start a session.
+- A lead's session holds the agent token: it can ship, ask and file a signal on its own Issue. It cannot file an Issue or cancel one, and on its own Decision it can only take the default it declared.
+- The API binds to loopback. The Console listener is a second loopback port that holds the owner's token on the server. Beside the reads it forwards fifteen write verbs and nothing else; it can never start a session.
 
 ```ts
 export const POLICY: readonly Rule[] = [
@@ -382,9 +382,9 @@ export const POLICY: readonly Rule[] = [
 
 ### Hooks never speak
 
-The factory hears a lead through Claude Code hooks. A hook appends to a spool first, then posts to a unix socket, and exits 0 whatever happens.
+The factory hears a lead through Claude Code hooks. A hook appends to a spool first, then posts to a unix socket, and exits 0 whatever happens. The one exception is a Stop the server sends back, which exits 2.
 
-- A hook's **stdout stays empty**, because Claude Code injects a hook's stdout into the session: a chatty hook is the factory talking into its own agent's context.
+- A hook's **stdout stays empty**, because Claude Code injects a hook's stdout into the session: a chatty hook is the factory talking into its own agent's context. One event prints one line on purpose: after a compaction, a lead's session start tells it what to read again.
 - The server reads the spool on every pass, so an event the socket missed is not lost.
 - A hook does nothing in a session the factory did not start.
 
@@ -430,7 +430,7 @@ An audit of 2026-11-20 ([`docs/research/2026-11-maturation`](docs/research/2026-
 
 ## Architecture
 
-**A modular monolith on Bun:** TypeScript and zod, Postgres as the only store, domains with no I/O behind ports, Elysia at the edge, a generated CLI. One process, one schema, one contract. The reasons are in [`docs/decisions.md`](docs/decisions.md).
+**A modular monolith on Bun:** TypeScript and zod, Postgres as the store (the bodies of artifact revisions are files beside it), domains with no I/O behind ports, Elysia at the edge, a generated CLI. One process, one schema, one contract. The reasons are in [`docs/decisions.md`](docs/decisions.md).
 
 ```mermaid
 flowchart LR
@@ -451,7 +451,7 @@ flowchart LR
     agw[agw]
     other[git, gh, ntfy, filesystem]
   end
-  read[read: SQL views]
+  read[read: read models]
   spa[Console: React PWA] --> console
   console -->|reads, and 15 write verbs| api
   cli --> api
