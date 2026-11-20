@@ -381,9 +381,8 @@ async function sweepPass(
     const deferred = new Set(fixes.filter((entry) => entry.outcome === 'deferred').map((entry) => entry.key))
     // what the Issues of earlier findings of this repo did: a key a run judged and did not raise is at 0. An Issue the lifecycle
     // reopens below is not judged: it is open again, and its verdict is the one of the close that ends it
-    const reopened = new Set(
-      plan.steps.filter((step) => step.action === 'reopened' && !deferred.has(step.key)).map((step) => step.key),
-    )
+    // (one whose fix is deferred is reopened or healed on a later pass: no verdict yet either)
+    const reopened = new Set(plan.steps.filter((step) => step.action === 'reopened').map((step) => step.key))
     const settled = await settleClosed(deps, {
       loop: 'hygiene',
       repo: target.repoText,

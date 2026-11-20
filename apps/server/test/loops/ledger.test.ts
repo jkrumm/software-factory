@@ -29,6 +29,9 @@ test('a count is exact: any fall moved; a measured figure keeps its band', () =>
   expect(movedDown(0, 0)).toBe('flat')
   expect(movedDown(100, 95, 0.1)).toBe('flat')
   expect(movedDown(100, 80, 0.1)).toBe('moved')
+  // the band's edge is a move, as the throughput ledger always read it
+  expect(movedDown(100, 90, 0.1)).toBe('moved')
+  expect(movedDown(100, 110, 0.1)).toBe('worse')
 })
 
 test('judgeClosed: noise and a finding with no figure are unmeasured, a source that cannot be read waits, a verdict is kept', () => {

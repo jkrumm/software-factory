@@ -859,6 +859,28 @@ test('a deferred fix does not reopen the closed Issue of its key', async () => {
   expect(w.filedBodies).toEqual([])
 })
 
+test('the Issue of a deferred fix is not judged either: it is reopened or healed later, and its verdict is the close that follows', async () => {
+  const closed: FindingIssue = {
+    key: 'stale:branches',
+    issue: 'issue_9',
+    state: 'closed',
+    outcome: 'done',
+    closedAt: new Date(now.getTime() - 3 * DAY),
+    reopens: 0,
+  }
+  const w = world(['a'], new Set(), undefined, {
+    findings: [stale],
+    issues: [closed],
+    closedFindings: [closedFinding({ issue: 'issue_9', key: 'stale:branches', repo: 'a' })],
+    fix: async (_co, report) => ({
+      report,
+      fixes: [{ key: 'stale:branches', outcome: 'deferred', detail: 'no test slot came in time' }],
+    }),
+  })
+  await hygienePass({ ...w.deps, fixes: true })
+  expect(w.verdicts).toEqual([])
+})
+
 // ---- read again before filing ----------------------------------------------------------------------------------------------
 
 const imports = finding('agentsmd', 'agentsmd:imports', 1)

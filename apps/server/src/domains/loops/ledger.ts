@@ -18,7 +18,7 @@ export type Verdict = 'moved' | 'flat' | 'worse' | 'unmeasured'
  */
 export function movedDown(before: number, after: number, share = 0): 'moved' | 'flat' | 'worse' {
   const change = before === 0 ? (after === 0 ? 0 : 1) : (after - before) / Math.abs(before)
-  if (Math.abs(change) <= share) return 'flat'
+  if (change === 0 || Math.abs(change) < share) return 'flat'
   return change < 0 ? 'moved' : 'worse'
 }
 
