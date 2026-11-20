@@ -43,6 +43,7 @@ case "$1 $2" in
   "pr view")
     [ -f "$S/no-pr" ] && { echo "no pull requests found" >&2; exit 1; }
     [ -f "$S/blip" ] && [ "$(grep -c '^gh pr view' "$S/calls")" = 2 ] && { echo "dial tcp: i/o timeout" >&2; exit 1; }
+    [ -f "$S/blip-twice" ] && case "$(grep -c '^gh pr view' "$S/calls")" in 2|4) echo "dial tcp: i/o timeout" >&2; exit 1 ;; esac
     [ -f "$S/gh-fail" ] && { echo "GraphQL: Could not resolve to a Repository with the name 'o/app'." >&2; exit 1; }
     head=$(git --git-dir="$LAND_ORIGIN" rev-parse "refs/heads/$LAND_BRANCH" 2>/dev/null)
     if [ -f "$S/merged" ]; then
@@ -50,7 +51,7 @@ case "$1 $2" in
     else
       printf '{"number":7,"state":"OPEN","url":"https://github.com/o/app/pull/7","headRefOid":"%s","mergeCommit":null}' "$head"
     fi ;;
-  "pr checks") [ -f "$S/checks-none" ] && { echo "no checks reported on the 'factory/7-1' branch" >&2; exit 1; }; [ -f "$S/checks-blip" ] && [ "$(grep -c '^gh pr checks' "$S/calls")" = 2 ] && { echo "dial tcp: i/o timeout" >&2; exit 1; }; cat "$S/checks" ;;
+  "pr checks") [ -f "$S/checks-none" ] && { echo "no checks reported on the 'factory/7-1' branch" >&2; exit 1; }; [ -f "$S/checks-none-out" ] && { echo "no checks reported on the 'factory/7-1' branch"; exit 1; }; [ -f "$S/checks-blip" ] && [ "$(grep -c '^gh pr checks' "$S/calls")" = 2 ] && { echo "dial tcp: i/o timeout" >&2; exit 1; }; cat "$S/checks" ;;
   "pr merge")
     sha=""; prev=""
     for a in "$@"; do [ "$prev" = "--match-head-commit" ] && sha="$a"; prev="$a"; done
@@ -415,6 +416,14 @@ describe('factory land', () => {
     expect(result.code).toBe(0)
   })
 
+  test('a blip that comes back after a good read is named again, cause and "polling again" included', async () => {
+    await writeFile(join(state, 'blip-twice'), '')
+    const result = await land().done
+    expect(result.code).toBe(0)
+    expect(result.err.split('dial tcp: i/o timeout; polling again').length - 1).toBe(2)
+    expect(await calls()).toContain('gh pr merge 7')
+  })
+
   test('a failed checks read with no JSON is named and polled again, not read as no CI check', async () => {
     await writeFile(join(state, 'checks-blip'), '')
     const result = await land([], { FACTORY_LAND_NO_RUN_MS: '0' }).done
@@ -430,6 +439,14 @@ describe('factory land', () => {
 
   test('gh saying no checks reported is no CI check, not a blip: refused once the bound passes', async () => {
     await writeFile(join(state, 'checks-none'), '')
+    const result = await land([], { FACTORY_LAND_NO_RUN_MS: '200' }).done
+    expect(result.code).toBe(1)
+    expect(result.err).toContain('land: ci: refused: no CI check on')
+    expect(result.err).not.toContain('could not read the checks')
+  })
+
+  test('gh printing no checks reported on stdout is no CI check too', async () => {
+    await writeFile(join(state, 'checks-none-out'), '')
     const result = await land([], { FACTORY_LAND_NO_RUN_MS: '200' }).done
     expect(result.code).toBe(1)
     expect(result.err).toContain('land: ci: refused: no CI check on')
