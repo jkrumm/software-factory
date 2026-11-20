@@ -234,7 +234,7 @@ function headFitsBeside(
 
 **Example files:**
 
-- [`slots.ts` L233-L303](https://github.com/jkrumm/software-factory/blob/master/apps/server/src/domains/capacity/slots.ts#L233-L303): `headFitsBeside`.
+- [`slots.ts` L233-L258](https://github.com/jkrumm/software-factory/blob/master/apps/server/src/domains/capacity/slots.ts#L233-L258): `headFitsBeside`.
 - [`slots.ts` L440-L445](https://github.com/jkrumm/software-factory/blob/master/apps/server/src/domains/capacity/slots.ts#L440-L445): where the freeze consults it.
 
 ## Learned cost
