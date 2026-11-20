@@ -94,6 +94,7 @@ const REAPER_GRACE_MS = 5 * 60_000
  */
 const CADENCE: Partial<Record<LoopName, readonly [fixed: number | null, least: number]>> = {
   hygiene: [null, 15 * 60_000],
+  friction: [15 * 60_000, 0],
   screen: [null, 10 * 60_000],
   selfwatch: [null, 5 * 60_000],
   'fix-classes': [6 * 3_600_000, 0],

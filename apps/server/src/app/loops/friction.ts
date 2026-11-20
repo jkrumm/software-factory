@@ -1,10 +1,17 @@
 import type { FrictionModel, SignalRequest } from '@software-factory/contract'
-import { RETRO_TITLE, RETRO_WINDOW_DAYS, type RetroOutcomes, retroText } from '../../domains/loops/retro.ts'
+import {
+  RETRO_EVERY_MS,
+  RETRO_TITLE,
+  RETRO_WINDOW_DAYS,
+  type RetroOutcomes,
+  retroText,
+} from '../../domains/loops/retro.ts'
 import {
   clockTrigger,
   FRICTION_WINDOW_DAYS,
   hasIssueRefs,
   named,
+  PATTERN_REPEAT_MS,
   type Pattern,
   type PassTrigger,
   patternsOver,
@@ -20,12 +27,17 @@ import type { IdSource } from '../../kernel/ids.ts'
 import { err, ok, portError, type PortError, type Result } from '../../kernel/result.ts'
 import type { IntakeError } from '../intake.ts'
 import type { UnitOfWork } from '../unit-of-work.ts'
+import { findingKeyOf } from '../../domains/intake/rules.ts'
 import { classOf } from '../../domains/loops/classes.ts'
 import { readGate, type ClassGate } from './gate.ts'
 
 /** The repo that carries the factory's own findings, and who files them. */
 const FRICTION_REPO = 'software-factory'
 const FRICTION_SOURCE = `agent:${FRICTION_REPO}`
+const RETRO_FINDING: LoopFinding = { loop: 'friction', class: 'retro', subject: 'retro' }
+
+/** Where intake records the retro signal's Issue (its source and finding key): what `FrictionDeps.retroFiledAt` reads. */
+export const RETRO_SUBJECT = { source: FRICTION_SOURCE, subject: findingKeyOf(RETRO_FINDING, FRICTION_REPO) }
 
 export interface FrictionDeps {
   uow: UnitOfWork<{ loops: LoopStore; loopReads: LoopReads }>
@@ -37,6 +49,8 @@ export interface FrictionDeps {
   evidence(now: Date, keys: string[]): Promise<Record<string, string[]>>
   /** Issues closed from `since` to `now`: what the volume trigger counts */
   closedSince(since: Date, now: Date): Promise<number>
+  /** when the retro signal was last filed as a new Issue (`read/retro-outcomes.ts`), null when never */
+  retroFiledAt(): Promise<Date | null>
   /** what the retro signals of the last `days` days led to (`read/retro-outcomes.ts`) */
   retroOutcomes(now: Date, days: number): Promise<RetroOutcomes>
   /** intake's entry for a loop (`intake.api.file` with the finding): the finding's key decides a repeat, never its words */
@@ -54,8 +68,9 @@ const reasonOf = (error: IntakeError): string => ('detail' in error ? `${error.k
  * One tick of the friction loop (no model): when no pass was recorded in the last day, or 200 Issues closed since the last
  * one (whichever comes first), count the last week's waste, file one
  * signal for each pattern over its threshold (at most `MAX_SIGNALS_PER_PASS`, the rest are named in the record) and
- * record the pass. A crash between filing and recording replays safely: intake's finding key turns a repeat into a note
- * on the open Issue, or drops it when that Issue closed lately.
+ * record the pass. A pattern is filed again only once a week has passed since its last Issue closed: intake's finding key
+ * turns a repeat into a note on the open Issue, or drops it inside that week, which also makes a crash between filing
+ * and recording replay safely.
  */
 export async function frictionPass(deps: FrictionDeps): Promise<Result<FrictionPass, PortError>> {
   const now = deps.clock.now()
@@ -129,6 +144,14 @@ export async function frictionPass(deps: FrictionDeps): Promise<Result<FrictionP
  * finding key: an amend of the open retro Issue, or a drop while one closed lately.
  */
 async function fileRetro(deps: FrictionDeps, to: string, now: Date): Promise<string> {
+  let lastFiled: Date | null
+  try {
+    lastFiled = await deps.retroFiledAt()
+  } catch (error) {
+    return `not filed: the last retro could not be read: ${String(error).slice(0, 200)}`
+  }
+  if (lastFiled && now.getTime() - lastFiled.getTime() < RETRO_EVERY_MS)
+    return `not due (filed ${lastFiled.toISOString()})`
   let previous: RetroOutcomes | null = null
   try {
     previous = await deps.retroOutcomes(now, RETRO_WINDOW_DAYS)
@@ -144,7 +167,7 @@ async function fileRetro(deps: FrictionDeps, to: string, now: Date): Promise<str
       repo: FRICTION_REPO,
       probe: false,
     },
-    { loop: 'friction', class: 'retro', subject: 'retro' },
+    RETRO_FINDING,
   )
   if (!filed.ok) return `not filed: ${reasonOf(filed.error).slice(0, 200)}`
   return `${filed.value.outcome} (${filed.value.detail})`
@@ -168,7 +191,12 @@ async function fileOne(
       repo: FRICTION_REPO,
       probe: false,
     },
-    { loop: 'friction', class: classOf('friction', pattern.key), subject: pattern.key },
+    {
+      loop: 'friction',
+      class: classOf('friction', pattern.key),
+      subject: pattern.key,
+      repeatWindowMs: PATTERN_REPEAT_MS,
+    },
   )
   if (!filed.ok) {
     record.failed.push({ key: pattern.key, reason: reasonOf(filed.error).slice(0, 300) })

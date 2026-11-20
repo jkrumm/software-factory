@@ -94,7 +94,7 @@ describe('the loops intervals', () => {
   test('a loop with no setting runs on the tick, a swept one never faster than its floor, a fixed one on its own cadence', () => {
     expect(every({ FACTORY_TICK_MS: '2000' })).toMatchObject({
       leads: 2000,
-      friction: 2000,
+      friction: 15 * 60_000,
       hygiene: 15 * 60_000,
       screen: 10 * 60_000,
       selfwatch: 5 * 60_000,

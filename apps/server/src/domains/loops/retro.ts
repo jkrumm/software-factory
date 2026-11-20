@@ -1,10 +1,13 @@
-/** The retro: a signal filed by every friction pass (a day or 200 closed Issues; intake's finding key folds a repeat into the open one), whose lead writes the review as a Report. */
+/** The retro: a signal filed by the friction pass when none was filed in the last 7 days (intake's finding key folds a repeat into the open one), whose lead writes the review as a Report. */
 
 /** Stable for the reader; intake matches a repeat by the finding key `retro`, never by this title. */
 export const RETRO_TITLE =
   'Weekly retro: the numbers, the transcripts, and whether last week’s changes moved their number'
 
 export const RETRO_WINDOW_DAYS = 7
+
+/** The retro is filed when none was filed in this long. */
+export const RETRO_EVERY_MS = RETRO_WINDOW_DAYS * 24 * 3_600_000
 
 /** What the signals of the retros of the last `days` days led to, counted when this retro is filed. */
 export interface RetroOutcomes {

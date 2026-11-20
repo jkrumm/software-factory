@@ -42,7 +42,7 @@ The rules of each loop live in `domains/loops/` as pure functions over counts an
 
 ## Friction
 
-Friction is any counted waste: an avoidable touch, a refusal, an undelivered note. The friction loop counts the lead events of the last 7 days and files a signal for each pattern over its rule. Each pass also files one signal for the retro (see The retro).
+Friction is any counted waste: an avoidable touch, a refusal, an undelivered note. The friction loop counts the lead events of the last 7 days and files a signal for each pattern over its rule; a pattern whose Issue closed less than 7 days ago is not filed again. A pass also files one signal for the retro when none was filed in the last 7 days (see The retro).
 
 - **A count or a rate.** A serious pattern (a lead that stopped reporting, a lost lead, an undelivered note) files on a bare count. The others need a share of the Issues closed in the window, and only once 10 have closed. Two stalls the steward ends by itself, a lead's block and a full account window, are judged by rate too (3 and one in twenty).
 - **Pace:** one pass a day, or sooner when 200 Issues have closed since the last. At 126 to 166 closed a day, a weekly pace would have looked at about a thousand Issues per pass.
@@ -176,7 +176,7 @@ export const QUICK_REBLOCK_MS = 10 * 60_000
 
 ## The retro
 
-The retro is a weekly review written by a lead. Each friction pass files one retro signal. The retro's lead reads the numbers and the lead transcripts, and writes a Report.
+The retro is a weekly review written by a lead. The friction pass files one retro signal when none was filed in the last 7 days. The retro's lead reads the numbers and the lead transcripts, and writes a Report.
 
 - **`factory retro` holds every number.** The lead reads and judges, it does not recount: `factory retro --days 7 --format json` is the bundle (no model), and the figures are the same ones the Console shows.
 - **A recommendation is a signal** with a marker (`Retro: <date> kpi=<key> before=<value> direction=<up|down>`), so the next retro finds it.
