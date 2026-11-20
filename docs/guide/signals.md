@@ -114,7 +114,7 @@ The factory itself calls no model. Every judgment goes through an adapter in `ap
 
 **Example files:**
 
-- [`app/intake.ts`](https://github.com/jkrumm/software-factory/blob/master/apps/server/src/app/intake.ts#L826-L914): `receive`, the whole decision in order
+- [`app/intake-receive.ts`](https://github.com/jkrumm/software-factory/blob/master/apps/server/src/app/intake-receive.ts#L103-L196): `receive`, the whole decision in order
 - [`domains/intake/rules.ts`](https://github.com/jkrumm/software-factory/blob/master/apps/server/src/domains/intake/rules.ts#L47-L62): `gate`, who may put work in which repo
 - [`adapters/agw/amend.ts`](https://github.com/jkrumm/software-factory/blob/master/apps/server/src/adapters/agw/amend.ts#L17-L70): the `factory-triage` call in amend mode and its checks
 - [`domains/loops/settle.ts`](https://github.com/jkrumm/software-factory/blob/master/apps/server/src/domains/loops/settle.ts#L39-L54): `settleRule`, deterministic first
@@ -157,8 +157,8 @@ The second and third did not open Issues. They reached the lead of `issue_1818` 
 **Example files:**
 
 - [`domains/intake/rules.ts`](https://github.com/jkrumm/software-factory/blob/master/apps/server/src/domains/intake/rules.ts#L5-L8): the sources that correlate into an incident
-- [`app/intake.ts`](https://github.com/jkrumm/software-factory/blob/master/apps/server/src/app/intake.ts#L536-L578): `repeatIn` and `eventIn`, a repeat or a one-off event of a subject that already has an Issue
-- [`app/intake.ts`](https://github.com/jkrumm/software-factory/blob/master/apps/server/src/app/intake.ts#L580-L689): `humanIn`, a person's or an agent's signal filed or amended
+- [`app/intake-signals.ts`](https://github.com/jkrumm/software-factory/blob/master/apps/server/src/app/intake-signals.ts#L29-L72): `repeatIn` and `eventIn`, a repeat or a one-off event of a subject that already has an Issue
+- [`app/intake-signals.ts`](https://github.com/jkrumm/software-factory/blob/master/apps/server/src/app/intake-signals.ts#L74-L108): `humanIn`, a person's or an agent's signal filed or amended
 
 ## Held signals and the screen
 
@@ -180,7 +180,7 @@ export const SCREEN_BATCH = 10
 
 **Example files:**
 
-- [`app/intake.ts`](https://github.com/jkrumm/software-factory/blob/master/apps/server/src/app/intake.ts#L700-L751): `hold` and `outsideIn`, the quarantine and its one exception
+- [`app/intake-quarantine.ts`](https://github.com/jkrumm/software-factory/blob/master/apps/server/src/app/intake-quarantine.ts#L33-L84): `hold` and `outsideIn`, the quarantine and its one exception
 - [`domains/intake/screen.ts`](https://github.com/jkrumm/software-factory/blob/master/apps/server/src/domains/intake/screen.ts#L1-L61): the screen's limits, the backoff, the request the workflow sees
 - [`kernel/workflows.ts`](https://github.com/jkrumm/software-factory/blob/master/apps/server/src/kernel/workflows.ts#L158-L167): the `screen` entry, `factory-screen` through the agw port
 
@@ -204,7 +204,7 @@ export const AlertRequest = z
   .strictObject({
 ```
 
-<!-- snippet: apps/server/src/app/intake.ts alert -->
+<!-- snippet: apps/server/src/app/intake-entry.ts alert -->
 ```ts
     if (!routed.value) return ok(dropped('unrouted', `no route for ${input.source} ${input.monitor}: counted`))
 ```
@@ -213,7 +213,7 @@ export const AlertRequest = z
 
 - [`apps/door`](https://github.com/jkrumm/software-factory/tree/master/apps/door): the whole door, small enough to read in one sitting
 - [`packages/contract/src/intake.ts`](https://github.com/jkrumm/software-factory/blob/master/packages/contract/src/intake.ts#L156-L171): `AlertRequest`, the strict body
-- [`app/intake.ts`](https://github.com/jkrumm/software-factory/blob/master/apps/server/src/app/intake.ts#L1089-L1144): `alert`, the route lookup and the envelope the server builds
+- [`app/intake-entry.ts`](https://github.com/jkrumm/software-factory/blob/master/apps/server/src/app/intake-entry.ts#L93-L149): `alert`, the route lookup and the envelope the server builds
 
 ## Work repos
 
@@ -223,7 +223,7 @@ A work repo is a repo no `project.yaml` describes, or one whose `project.yaml` s
 - **One exception.** A lead's signal for a work repo, when its own Issue the owner filed, is held instead: the owner can promote work it owes there. The screen never reads it.
 - **Outside text is dropped before it is stored** (`work_repo`), and the read token never sees a work repo's words, only shape, ids, states and counts.
 
-<!-- snippet: apps/server/src/app/intake.ts receive -->
+<!-- snippet: apps/server/src/app/intake-receive.ts receive -->
 ```ts
     if (signal.trust === 'outside') {
       const where = signal.repo ? await deps.projects.find(signal.repo) : ok(null)
@@ -234,7 +234,7 @@ A work repo is a repo no `project.yaml` describes, or one whose `project.yaml` s
 **Example files:**
 
 - [`domains/intake/rules.ts`](https://github.com/jkrumm/software-factory/blob/master/apps/server/src/domains/intake/rules.ts#L43-L62): `gate`, work repo before any other rule
-- [`app/intake.ts`](https://github.com/jkrumm/software-factory/blob/master/apps/server/src/app/intake.ts#L826-L852): `receive`, where the exception for an owner-filed lead sits
+- [`app/intake-receive.ts`](https://github.com/jkrumm/software-factory/blob/master/apps/server/src/app/intake-receive.ts#L103-L129): `receive`, where the exception for an owner-filed lead sits
 
 **Read more:**
 
