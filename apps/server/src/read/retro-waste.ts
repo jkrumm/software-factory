@@ -2,6 +2,7 @@ import type { SQL } from 'bun'
 import * as z from 'zod'
 import type { RetroWasteSource } from '@software-factory/contract'
 import type { Window } from './kpis.ts'
+import { queuedHours } from './queue-time.ts'
 
 const HOUR_MS = 3_600_000
 
@@ -46,11 +47,12 @@ async function waitsBy(sql: SQL, w: Window, reasons: readonly string[]): Promise
  * they are Issue-hours, and parallel waits add up. Read-only SQL, no model.
  */
 export async function readWaste(sql: SQL, w: Window): Promise<RetroWasteSource[]> {
-  const queue: unknown[] = await sql`
-    SELECT kind AS part, sum(extract(epoch FROM (least(coalesce(to_at, ${w.to}::timestamptz), ${w.to}::timestamptz) - greatest(from_at, ${w.from}::timestamptz)))) / 3600 AS hours, count(*) AS events
-    FROM factory.queue_intervals
-    WHERE from_at < ${w.to} AND coalesce(to_at, ${w.to}::timestamptz) > ${w.from}
-    GROUP BY kind`
+  // the parts are the queued hours by reason; an event is one queue interval
+  const queue: Part[] = [...Map.groupBy(await queuedHours(sql, w), (s) => s.kind)].map(([part, spans]) => ({
+    part,
+    hours: spans.reduce((sum, s) => sum + s.hours, 0),
+    events: spans.reduce((sum, s) => sum + s.intervals, 0),
+  }))
   const slot: unknown[] = await sql`
     SELECT r.key AS part, sum(r.value::float8) / ${HOUR_MS} AS hours, count(DISTINCT s.id) AS events
     FROM factory.slot_waits s, jsonb_each_text(s.split) r
@@ -64,10 +66,7 @@ export async function readWaste(sql: SQL, w: Window): Promise<RetroWasteSource[]
     ) q
     WHERE result = 'refused' AND at >= ${w.from} AND at < ${w.to}`
   const sources = [
-    wasteOf(
-      'queue',
-      queue.map((raw) => Part.parse(raw)),
-    ),
+    wasteOf('queue', queue),
     wasteOf(
       'slot_wait',
       slot.map((raw) => Part.parse(raw)),
