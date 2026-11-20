@@ -1,3 +1,5 @@
+<img src="docs/brand/master-1024.png" width="96" height="96" alt="">
+
 # software-factory
 
 **A closed loop that turns signals into verified production changes. Agents do the work, code supervises them, and
