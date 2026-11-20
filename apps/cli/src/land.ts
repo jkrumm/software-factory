@@ -19,7 +19,9 @@ const DEFAULT_CI_MINUTES = 45
 /** A Makefile rule named `merge-guard`, alone or among others (`a merge-guard: b`). */
 const GUARD_RULE = /^(?:[\w.-]+\s+)*merge-guard(?:\s+[\w.-]+)*\s*:(?!=)/m
 /** An `include` can define the rule in a file this read does not see. */
-const INCLUDE = /^-?include\s/m
+const INCLUDE = /^-?s?include\s/m
+/** make's message when no rule makes `merge-guard` itself (GNU make 3.81 opens the quote with a backtick). */
+const ABSENT_GUARD = /No rule to make target [`']merge-guard'\.\s+Stop\./
 
 interface Options {
   pr?: string
@@ -450,12 +452,22 @@ class Lander {
    * that includes another file and shows no such rule itself asks `make -n merge-guard`.
    */
   private async hasGuard(): Promise<boolean> {
+    // `Makefile` alone, as the server reads it for the brief (adapters/git/merge-guard.ts), so the two never disagree
     const path = join(this.repo.root, 'Makefile')
     if (!existsSync(path)) return false
     const text = readFileSync(path, 'utf8')
     if (GUARD_RULE.test(text)) return true
     if (!INCLUDE.test(text)) return false
-    return (await this.sh.run(['make', '-C', this.repo.root, '-n', 'merge-guard'])).code === 0
+    // make's English message is what ABSENT_GUARD reads
+    const probe = await this.sh.run(['make', '-C', this.repo.root, '-n', 'merge-guard'], { env: { LC_ALL: 'C' } })
+    if (probe.code === 0) return true
+    // only make's message for the absent target itself means none: a missing include or prerequisite is a broken guard
+    if (ABSENT_GUARD.test(probe.err + probe.out)) return false
+    throw new Refused(
+      'guard',
+      `make -n merge-guard failed, so whether the repo has a merge guard is unknown: ${lastLines(probe.err || probe.out)}`,
+      'fix the Makefile, commit, then factory land again',
+    )
   }
 
   /** Step 6: the repo's `make merge-guard`, or the same rule held here when it has none. */
@@ -546,9 +558,21 @@ class Lander {
     this.out(`merge: #${pr.number} by ${method}`)
   }
 
+  /** origin's default branch after the merge, or null with a warning: the merge is done, so a failed read never refuses. */
+  private async fetchAfterMerge(): Promise<string | null> {
+    try {
+      return await this.fetch('report')
+    } catch (error) {
+      if (!(error instanceof Refused)) throw error
+      this.out(`report: landed, but the landed commits cannot be read: ${error.why}`)
+      return null
+    }
+  }
+
   /** The landed commits, and a squash or merge commit whose review no longer matches (agw matches by patch). */
   private async report(before: string): Promise<void> {
-    const after = await this.fetch('report')
+    const after = await this.fetchAfterMerge()
+    if (after === null) return
     const log = (await this.sh.read(['git', 'log', '--oneline', `${before}..${after}`])) ?? ''
     this.out(`landed on ${this.repo.base}:`)
     for (const line of log.split('\n').filter(Boolean)) this.sh.io.out(`  ${line}\n`)
@@ -604,8 +628,7 @@ class Lander {
   async alreadyMerged(pr: PullRequest): Promise<number> {
     this.out(`pr: #${pr.number} is already merged`)
     const oid = pr.mergeCommit?.oid
-    if (oid) {
-      await this.fetch('report')
+    if (oid && (await this.fetchAfterMerge()) !== null) {
       const line = await this.sh.read(['git', 'log', '--oneline', '-1', oid])
       if (line) this.sh.io.out(`  ${line}\n`)
     }
