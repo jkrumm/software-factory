@@ -5,7 +5,8 @@ const DAY = 24 * HOUR
 
 /**
  * Earlier work for Improve's history: closed Issues of one repo, filed, admitted and closed on days well before the current
- * window (ids from 9001, outside the sequence the other seeds use), so the KPIs have readings in the windows before. A
+ * window (ids from 9001, outside the sequence the other seeds use), so the KPIs have readings in the windows before (the
+ * suite's counting epoch, ten days back, keeps only the window it cuts in the KPI history; the 30-day reads have none). A
  * 7-day window with no day in it stays empty (the line breaks there); the 30-day windows get the same Issues, wider.
  * Each Issue was filed, waited a while for a lead (the queue wait), then closed (the cycle); some had an owner note (an
  * avoidable touch) and some a refused event (a refusal). They closed days ago, so Flow's "closed in the last day" is

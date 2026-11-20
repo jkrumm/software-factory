@@ -1,5 +1,5 @@
 import { afterAll, beforeAll, expect, test } from 'bun:test'
-import { ChainModel, FlowModel, MachineModel, NeedsModel } from '@software-factory/contract'
+import { ChainModel, FlowModel, MachineModel, NeedsModel, SeatsModel } from '@software-factory/contract'
 import { startTestCluster, type TestCluster } from '@software-factory/tests/pg'
 import { createApp } from '../../src/api/app.ts'
 import { loadMigrations, migrate } from '../../src/adapters/postgres/migrate.ts'
@@ -53,7 +53,7 @@ beforeAll(async () => {
 afterAll(() => db.stop())
 
 test('every model answers the owner, the agent and the read token; nothing without a token', async () => {
-  for (const path of ['/v1/needs', '/v1/flow', '/v1/chain', '/v1/kpis', '/v1/friction']) {
+  for (const path of ['/v1/needs', '/v1/flow', '/v1/chain', '/v1/kpis', '/v1/seats', '/v1/friction']) {
     expect((await get(app, path)).status).toBe(401)
     for (const token of [TOKENS.owner, TOKENS.agent, TOKENS.read])
       expect((await get(app, path, token)).status).toBe(200)
@@ -73,6 +73,8 @@ test('needs: the owner reads the words of a work repo, the read token does not',
 test('days: 1 to 90, default 7; anything else is a 422 with an ErrorBody', async () => {
   const seven = (await (await get(app, '/v1/kpis', TOKENS.owner)).json()) as { days: number }
   expect(seven.days).toBe(7)
+  const seats = SeatsModel.parse(await (await get(app, '/v1/seats?days=3', TOKENS.owner)).json())
+  expect(seats.days).toBe(3)
   const ninety = (await (await get(app, '/v1/friction?days=90', TOKENS.owner)).json()) as { days: number }
   expect(ninety.days).toBe(90)
   for (const days of ['0', '91', 'x', '-1', '7.5']) {

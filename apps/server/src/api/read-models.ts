@@ -17,6 +17,7 @@ import {
   HostHistoryModel,
   HoursQuery,
   KpiModel,
+  SeatsModel,
   MachineModel,
   RetroModel,
   ThroughputModel,
@@ -55,6 +56,7 @@ import { readFixCommits } from '../read/fix-commits.ts'
 import { readFriction } from '../read/friction.ts'
 import { readHostSamples } from '../read/host.ts'
 import { costOfIssues, type QuotaAtResetReader, readKpis } from '../read/kpis.ts'
+import { readSeats } from '../read/seats-model.ts'
 import { readRetro } from '../read/retro.ts'
 import { readThroughput } from '../read/throughput.ts'
 import { redactCapacityLoop, redactThroughput } from '../read/throughput-redact.ts'
@@ -423,7 +425,7 @@ export const readModelRoutes = (deps: ReadModelDeps | undefined, caller: (reques
             await readKpis(deps.sql, {
               now: now(),
               days: days(query),
-              reviewerRows: await deps.reviewerRows?.().catch(() => null),
+              epoch: deps.epoch ?? null,
               ...(deps.quotaAtReset ? { quotaAtReset: deps.quotaAtReset } : {}),
             }),
           ),
@@ -435,7 +437,31 @@ export const readModelRoutes = (deps: ReadModelDeps | undefined, caller: (reques
         detail: {
           operationId: 'read.kpis',
           summary:
-            'the KPI table over the last days (1 to 90, default 7), each with its value, sample size, target, whether it is measured, and what exactly was counted',
+            'the seven KPIs over the last days (1 to 90, default 7), each with its value, sample size, target or why it has none yet, its parts and the figures beside it, and its history since the counting epoch',
+        },
+      },
+    )
+    .get(
+      '/seats',
+      async ({ query }) => {
+        if (!deps) return unavailable
+        return Response.json(
+          SeatsModel.parse(
+            await readSeats(deps.sql, {
+              now: now(),
+              days: days(query),
+              reviewerRows: await deps.reviewerRows?.().catch(() => null),
+            }),
+          ),
+        )
+      },
+      {
+        query: DaysQuery,
+        response: { 200: SeatsModel, ...errorResponses(400, 422, 503) },
+        detail: {
+          operationId: 'read.seats',
+          summary:
+            'the light-seat and cheap-reviewer gates over the last days (1 to 90, default 7): Issues by the seat their first lead ran on, the reviewer seats side by side, and the two tripwires that decide on them',
         },
       },
     )

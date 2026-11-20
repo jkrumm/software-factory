@@ -1,7 +1,7 @@
 import { describe, expect, test } from 'bun:test'
 import { readFile } from 'node:fs/promises'
 import { join } from 'node:path'
-import { KPI_CATALOG, KPI_KEYS, KPI_TABLE_END, KPI_TABLE_START, renderKpiTable } from '../src/index.ts'
+import { KPI_CATALOG, KPI_KEYS, KPI_TABLE_END, KPI_TABLE_START, renderKpiTable, THRESHOLDS } from '../src/index.ts'
 
 describe('the KPI catalog', () => {
   test('docs/product.md carries the table the catalog renders', async () => {
@@ -16,6 +16,10 @@ describe('the KPI catalog', () => {
 
   test('every KPI key has a row, and nothing else has', () => {
     expect(Object.keys(KPI_CATALOG).toSorted()).toEqual([...KPI_KEYS].toSorted())
+  })
+
+  test('each target is the one of the threshold table', () => {
+    for (const key of KPI_KEYS) expect(KPI_CATALOG[key].target, key).toEqual(THRESHOLDS.kpis[key])
   })
 
   test('every KPI names what it counts, over what, its target source and the decision it drives', () => {
@@ -35,9 +39,9 @@ describe('the KPI catalog', () => {
         expect(max, key).toBeNull()
         expect(min, key).not.toBeNull()
       } else {
-        // no number: a trend, and the source says why
+        // no number yet: a trend, and the source says why and when one is due
         expect(kind, `${key} has direction ${spec.direction} and target ${kind}`).toBe('trend')
-        expect(spec.targetSource, key).toMatch(/^Watch only/)
+        expect(spec.targetSource, key).toMatch(/^No target yet/)
       }
     }
   })

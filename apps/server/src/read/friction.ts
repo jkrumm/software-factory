@@ -2,7 +2,7 @@ import type { SQL } from 'bun'
 import * as z from 'zod'
 import type { FrictionCount, FrictionModel, SpecSource } from '@software-factory/contract'
 import { readEdgeIncidents } from './api-errors.ts'
-import { avoidableTouches, issuesFiled, orchestratorSteering, ownerVerdict, type Window } from './kpis.ts'
+import { avoidableTouches, issuesFiled, orchestratorSteering, ownerVerdict, TOUCH_LABELS, type Window } from './kpis.ts'
 import { specSourceSql } from './spec-screen.ts'
 import { per, windowOf } from './stats.ts'
 import { refusalClass } from './refusal-class.ts'
@@ -18,14 +18,6 @@ const STALLS: Record<string, string> = {
   blocked: 'Stalled because something blocked the lead',
   lead_gone: 'Stalled because the lead was gone',
   regressed: 'Stalled because a shipped change regressed',
-}
-
-const TOUCHES: Record<string, string> = {
-  decision_answered: 'Decisions the owner answered that were not worth asking',
-  noted: 'Notes the owner sent to a lead',
-  woken: 'Waits the owner woke by hand',
-  cancelled: 'Issues the owner cancelled',
-  reopened: 'Issues the owner reopened',
 }
 
 const STEERS: Record<string, string> = {
@@ -106,7 +98,7 @@ async function countsOf(
     counts.push({ key, group, label, count, perIssue: per(count, closed) })
 
   const touches = await avoidableTouches(sql, w)
-  for (const [kind, label] of Object.entries(TOUCHES))
+  for (const [kind, label] of Object.entries(TOUCH_LABELS))
     add('avoidable_touch', `touch:${kind}`, label, touches[kind] ?? 0)
 
   const steers = await orchestratorSteering(sql, w)

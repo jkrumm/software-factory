@@ -19,3 +19,12 @@ export function windowOf(now: Date, days: number): { from: Date; to: Date } {
 
 /** `count` per `n`; null when there is nothing to divide by. */
 export const per = (count: number, n: number): number | null => (n === 0 ? null : count / n)
+
+/**
+ * Fewer samples than this under a share or a duration is noise, not a reading: one verdict is 0 % or 100 %, two watches are a
+ * coin. A KPI under it has no figure, and a share or a median beside one is not shown.
+ */
+export const MIN_SAMPLES = 3
+
+/** `count / n` as a reading: null under `MIN_SAMPLES`. */
+export const shareOf = (count: number, n: number): number | null => (n < MIN_SAMPLES ? null : count / n)

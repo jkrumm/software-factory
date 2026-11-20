@@ -6,6 +6,7 @@ import { createFixCommitReader } from './adapters/hygiene/fix-commits.ts'
 import { createHygieneChecker } from './adapters/hygiene/index.ts'
 import type { LeadSettings } from './adapters/leads/settings.ts'
 import { SHARED_NUMBERS } from './adapters/postgres/migrate.ts'
+import { ledgerQuotaReader } from './adapters/planning/accounts-source.ts'
 import { readCapComment } from './adapters/planning/cap-comments.ts'
 import { duSizer } from './adapters/planning/worktree-sizer.ts'
 import { hostReader } from './adapters/planning/host.ts'
@@ -73,6 +74,7 @@ import type { IdSource } from './kernel/ids.ts'
 import { err, ok, portError } from './kernel/result.ts'
 import { readCapFacts } from './read/cap-facts.ts'
 import { readFriction } from './read/friction.ts'
+import { kpisOfWindow } from './read/kpis.ts'
 import { readFrictionEvidence } from './read/friction-evidence.ts'
 import { postgresOpenIssues } from './read/open-issues.ts'
 import { readClosedSince, readLastFiled, readRetroOutcomes } from './read/retro-outcomes.ts'
@@ -132,6 +134,7 @@ export function composeLoops(ctx: LoopContext) {
     ctx
   const { repos, projects, checkout, ci, settings } = ctx
   const writes = { uow, clock: ctx.clock, ids: ctx.ids }
+  const quotaAtReset = ledgerQuotaReader()
   const said = createSaid()
   const wiring = (name: keyof LoopSettings['intervalMs']): LoopWiring => ({
     intervalMs: loopSettings.intervalMs[name],
@@ -276,6 +279,8 @@ export function composeLoops(ctx: LoopContext) {
     frictionLoop(wiring('friction'), {
       ...writes,
       friction: (now) => readFriction(sql, { now, days: FRICTION_WINDOW_DAYS, epoch: ctx.epoch }),
+      // the seven KPIs over the pass's window, judged against their targets; the accounts' reset ledger gives quota_at_reset
+      kpis: (window) => kpisOfWindow(sql, window, { now: window.to, quotaAtReset }),
       evidence: (now, keys) => readFrictionEvidence(sql, { now, days: FRICTION_WINDOW_DAYS, epoch: ctx.epoch }, keys),
       closedSince: (since, now) => readClosedSince(sql, { since, now }),
       retroFiledAt: () => readLastFiled(sql, RETRO_SUBJECT),

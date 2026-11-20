@@ -30,6 +30,7 @@ import {
   ProjectPlanModel,
   ProjectSetupModel,
   KpiModel,
+  SeatsModel,
   MachineModel,
   NeedsModel,
   ReadIssueCards,
@@ -158,6 +159,7 @@ export const fetchFlowTrend = (
   signal?: AbortSignal,
 ) => getJson(`/v1/flow/trend?window=${window}&bucket=${bucket}`, FlowTrendSeries, signal)
 export const fetchKpis = (days: number, signal?: AbortSignal) => getJson(`/v1/kpis?days=${days}`, KpiModel, signal)
+export const fetchSeats = (days: number, signal?: AbortSignal) => getJson(`/v1/seats?days=${days}`, SeatsModel, signal)
 export const fetchCapacityLoop = (days: number, signal?: AbortSignal) =>
   getJson(`/v1/capacity-loop?days=${days}`, CapacityLoopModel, signal)
 /** Where the host's memory and CPU and the leads' hours went over the last `hours` hours. */

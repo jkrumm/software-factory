@@ -9,6 +9,7 @@ import {
   closeWords,
   yieldWords,
   comparisonWords,
+  besideWords,
   distanceWords,
   fixCard,
   fixClassRows,
@@ -29,6 +30,7 @@ import {
   MEANING,
   partRows,
   sampleWords,
+  subWords,
   targetStatus,
   targetTally,
   targetWords,
@@ -50,13 +52,11 @@ const kpi = (over: Partial<Kpi>): Kpi => ({
   target: { kind: 'between', min: 0.05, max: 0.07 },
   direction: 'lower',
   targetSource: '',
-  numerator: '',
-  denominator: '',
-  decision: '',
   measured: true,
   reason: null,
   definition: '',
   parts: [],
+  beside: [],
   history: history(0.3, 0.28, 0.4, 0.22, 0.2, 0.25),
   ...over,
 })
@@ -90,10 +90,11 @@ test('formatKpi by unit, and why a value is missing', () => {
   expect(formatKpi(kpi({ value: null, measured: false }))).toBe('Not measured')
 })
 
-test('a card says which way is good the way the catalog does, and only for a KPI that has a side', () => {
+test('a card says which way is good the way the catalog does', () => {
   for (const key of KPI_KEYS) {
-    const neither = /neither direction/i.test(MEANING[key])
-    expect(neither, key).toBe(KPI_CATALOG[key].direction === 'watch')
+    const sentence = MEANING[key]
+    const higher = /Higher (is better|means)/.test(sentence)
+    expect(higher, key).toBe(KPI_CATALOG[key].direction === 'higher')
   }
 })
 
@@ -101,7 +102,7 @@ test('targetWords and targetStatus are literal', () => {
   expect(targetWords(kpi({}))).toBe('0.05 to 0.07')
   expect(targetWords(kpi({ target: { kind: 'at_most', min: null, max: 0.25 } }))).toBe('at most 0.25')
   expect(targetWords(kpi({ unit: 'share', target: { kind: 'at_least', min: 0.9, max: null } }))).toBe('at least 90%')
-  expect(targetWords(kpi({ target: { kind: 'trend', min: null, max: null } }))).toBe('Trend only')
+  expect(targetWords(kpi({ target: { kind: 'trend', min: null, max: null } }))).toBe('None yet')
   expect(targetWords(kpi({ target: { kind: 'unset', min: null, max: null } }))).toBe('No target')
 
   expect(targetStatus(kpi({ value: 0.06 }))).toBe('met')
@@ -116,8 +117,8 @@ test('targetWords and targetStatus are literal', () => {
 })
 
 test('sampleWords and windowWords', () => {
-  expect(sampleWords({ key: 'asks', n: 13 })).toBe('13 Issues')
-  expect(sampleWords({ key: 'recommendation_taken', n: 1 })).toBe('1 Decision')
+  expect(sampleWords({ key: 'avoidable_touches', n: 13 })).toBe('13 Issues')
+  expect(sampleWords({ key: 'quota_at_reset', n: 1 })).toBe('1 reset')
   expect(sampleWords({ key: 'queue_wait_p90', n: 0 })).toBe('0 samples')
   expect(windowWords({ from: '2026-11-01T00:00:00Z', to: '2026-11-08T10:00:00Z' })).toBe('2026-11-01 to 2026-11-08')
 })
@@ -257,16 +258,21 @@ test('history labels, x labels, subtitle and footer', () => {
     { from: '2026-10-26T00:00:00.000Z', to: '2026-11-02T00:00:00.000Z' },
     { from: '2026-11-02T00:00:00.000Z', to: '2026-11-09T00:00:00.000Z' },
   ]
-  const labels = historyLabels(kpi({ key: 'asks', history: [point(1, 1), point(null, 0)] }), windows)
+  const labels = historyLabels(kpi({ key: 'avoidable_touches', history: [point(1, 1), point(null, 0)] }), windows)
   expect(labels).toEqual(['Oct 5 to Oct 12, 1 Issue', 'Oct 12 to Oct 19, 0 Issues'])
   expect(historyXLabels(7, windows)).toEqual(['Oct 5', '7-day windows', 'Nov 9'])
   expect(historyXLabels(7, [])).toEqual(['', '7-day windows', ''])
   expect(comparisonWords(30)).toBe('Last 30 days against the 30 before')
+  // a rate says its absolute count first, beside the Issues it stands on
   expect(kpiFooter(kpi({ n: 4 }))).toEqual([
     { label: 'Target', value: '0.05 to 0.07' },
-    { label: 'Counted', value: '4 Issues' },
+    { label: 'Counted', value: '1 over 4 Issues' },
   ])
-  expect(kpiFooter(kpi({ measured: false, n: 2 }))[1]).toEqual({ label: 'Counted', value: '2 Issues' })
+  expect(kpiFooter(kpi({ measured: false, n: 2, count: null }))[1]).toEqual({ label: 'Counted', value: '2 Issues' })
+  expect(kpiFooter(kpi({ key: 'cycle_p50', unit: 'ms', n: 5, count: null }))[1]).toEqual({
+    label: 'Counted',
+    value: '5 samples',
+  })
 })
 
 test('fixCard: the newest week against the one before, fewer is better, classes keep their slot', () => {
@@ -320,9 +326,20 @@ test('every KPI carries a defined InfoHint word', () => {
 
 test('the footer hints the watches of the first verification passes, and no other sample', () => {
   const footer = (key: Kpi['key']) =>
-    kpiFooter({ key, n: 3, measured: true, target: { kind: 'trend', min: null, max: null }, unit: 'share' })
+    kpiFooter({ key, n: 3, count: 2, measured: true, target: { kind: 'trend', min: null, max: null }, unit: 'share' })
   expect(footer('first_verification_passes')[1]).toMatchObject({ value: '3 watches', hint: 'watch' })
-  expect(footer('asks')[1].hint).toBeUndefined()
+  expect(footer('specs_not_needed')[1].hint).toBeUndefined()
+})
+
+test('a KPI with no target yet says why on its card, one with a target how far it is', () => {
+  const none = { kind: 'trend', min: null, max: null } as const
+  expect(subWords(kpi({ target: none, targetSource: 'No target yet: three full weeks first' }))).toBe(
+    'No target yet: three full weeks first',
+  )
+  expect(subWords(kpi({ value: 0.06 }))).toBe('Met: 0.05 to 0.07')
+  expect(subWords(kpi({ measured: false, reason: 'Nothing was counted in the window' }))).toBe(
+    'Nothing was counted in the window',
+  )
 })
 
 test('targetTally counts the met targets of those judged; trends, unset targets and gaps are not judged', () => {
@@ -337,7 +354,7 @@ test('targetTally counts the met targets of those judged; trends, unset targets 
 
 test('the parts of a breakdown KPI are listed in its own unit', () => {
   const queued = kpi({
-    key: 'queue_capacity_share',
+    key: 'queue_wait_p90',
     unit: 'ms',
     parts: [
       { key: 'chain', label: 'Held by an after edge', value: 5 * 3_600_000, unit: 'ms' },
@@ -346,6 +363,9 @@ test('the parts of a breakdown KPI are listed in its own unit', () => {
   })
   expect(partWords(queued)).toEqual(['Held by an after edge: 5.0 h', 'Capacity: 2 min'])
   expect(partWords(kpi({}))).toEqual([])
+  expect(
+    besideWords(kpi({ beside: [{ key: 'asks', label: 'Asks per Issue', value: 0.04, unit: 'per_issue' }] })),
+  ).toEqual(['Asks per Issue: 0.04'])
 })
 
 test('every KPI has one plain sentence that says which way is good, and the card order lists each card KPI once', () => {
@@ -355,21 +375,21 @@ test('every KPI has one plain sentence that says which way is good, and the card
     expect(sentence.split('. ').length, key).toBeLessThanOrEqual(3)
   }
   expect(new Set(KPI_ORDER).size).toBe(KPI_ORDER.length)
-  expect(KPI_ORDER).not.toContain('fix_commits')
+  expect([...KPI_ORDER].toSorted()).toEqual([...KPI_KEYS].toSorted())
 })
 
 test('groupKpis puts what is off target first, then what has no figure, what is met, and what no target judges', () => {
   const none = { kind: 'unset', min: null, max: null } as const
   const groups = groupKpis([
-    kpi({ key: 'asks', value: 0.06 }),
+    kpi({ key: 'specs_not_needed', value: 0.06 }),
     kpi({ key: 'avoidable_touches', value: 0.9 }),
-    kpi({ key: 'cost', value: null, measured: false, target: none }),
+    kpi({ key: 'quota_at_reset', value: null, measured: false, target: none }),
     kpi({ key: 'cycle_p50', value: 5, target: none }),
-    kpi({ key: 'refusals', value: null, measured: true, target: { kind: 'at_most', min: null, max: 0.25 } }),
+    kpi({ key: 'queue_wait_p90', value: null, measured: true, target: { kind: 'at_most', min: null, max: 0.25 } }),
   ])
   expect(groups.off.map((k) => k.key)).toEqual(['avoidable_touches'])
-  expect(groups.met.map((k) => k.key)).toEqual(['asks'])
-  expect(groups.unmeasured.map((k) => k.key)).toEqual(['refusals', 'cost'])
+  expect(groups.met.map((k) => k.key)).toEqual(['specs_not_needed'])
+  expect(groups.unmeasured.map((k) => k.key)).toEqual(['queue_wait_p90', 'quota_at_reset'])
   expect(groups.trend.map((k) => k.key)).toEqual(['cycle_p50'])
 })
 

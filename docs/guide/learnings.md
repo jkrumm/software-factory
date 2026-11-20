@@ -39,7 +39,7 @@ export function decideStop(facts: StopFacts): StopDecision {
 - **What changed.** The lead reviews before it takes the merge window, treats a held review as a deferral and never as a ship without one, and checks the landed squash commit. The factory still never refuses a ship for a missing review (NL23). It counts them: unreviewed ships on one in four closed Issues, with at least 3 (`min: 3`), file a friction signal.
 - **What stayed open.** The covered check belongs to another repo, so Issue 1807 filed it there with the reproduction. The stale ships of multi-round squashes stay counted until it lands.
 
-<!-- snippet: apps/server/src/domains/loops/friction.ts unreviewed_ship -->
+<!-- snippet: packages/contract/src/thresholds.ts unreviewed_ship -->
 ```ts
   unreviewed_ship: {
     min: 3,
@@ -50,7 +50,7 @@ export function decideStop(facts: StopFacts): StopDecision {
 
 **Example files:**
 
-- [`friction.ts`](https://github.com/jkrumm/software-factory/blob/master/apps/server/src/domains/loops/friction.ts#L54-L58): the rule that counts it.
+- [`thresholds.ts`](https://github.com/jkrumm/software-factory/blob/master/packages/contract/src/thresholds.ts#L64-L68): the rule that counts it.
 - [`brief.ts`](https://github.com/jkrumm/software-factory/blob/master/apps/server/src/domains/leads/brief.ts#L18): lead order 6, as Issue 1807 rewrote it.
 - [`decisions.md`](https://github.com/jkrumm/software-factory/blob/master/docs/decisions.md#L34): NL23, why a missing review is counted and never refused.
 
@@ -131,7 +131,7 @@ Issue 67 closed `done` on 2026-11-05 without the one thing it asked for. Closing
 - **What broke.** Issue 67 closed `done` on `make verify`. Its own acceptance, one real deep review through the hidden transport, had not happened: the only hidden review since the fix was light. The ship gate checked the deploy and the verify, not the Issue's stated proof.
 - **What changed.** A ship states every acceptance line as met, or not met with the reason. A `not met` is allowed and honest, and a ship that states nothing counts as friction. Issue 1809 shipped with one line met and two not, each with its reason, and the watch still passed.
 
-<!-- snippet: apps/server/src/domains/loops/friction.ts unstated_acceptance -->
+<!-- snippet: packages/contract/src/thresholds.ts unstated_acceptance -->
 ```ts
   unstated_acceptance: {
     min: 3,
@@ -142,7 +142,7 @@ Issue 67 closed `done` on 2026-11-05 without the one thing it asked for. Closing
 
 **Example files:**
 
-- [`friction.ts`](https://github.com/jkrumm/software-factory/blob/master/apps/server/src/domains/loops/friction.ts#L59-L63): the rule that counts a ship that stated nothing.
+- [`thresholds.ts`](https://github.com/jkrumm/software-factory/blob/master/packages/contract/src/thresholds.ts#L69-L73): the rule that counts a ship that stated nothing.
 - [`brief.ts`](https://github.com/jkrumm/software-factory/blob/master/apps/server/src/domains/leads/brief.ts#L18): the last sentence of order 6 states the acceptance duty.
 
 ## Research claims in a brief

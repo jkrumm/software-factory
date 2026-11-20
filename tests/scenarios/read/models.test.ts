@@ -102,9 +102,9 @@ test('kpis and friction count the two Issues; the read token may read them; a ba
   expect(kpis.days).toBe(7)
   const touches = kpis.kpis.find((k) => k.key === 'avoidable_touches')
   expect(touches).toMatchObject({ n: 2, count: 0, value: 0, measured: true })
-  expect(kpis.kpis.find((k) => k.key === 'asks')).toMatchObject({ n: 2, count: 1, value: 0.5 })
-  // no usage schema in this database: cost is unmeasured, not an error
-  expect(kpis.kpis.find((k) => k.key === 'cost')).toMatchObject({ measured: false, value: null })
+  expect(touches?.beside.find((p) => p.key === 'asks')).toMatchObject({ value: 0.5, unit: 'per_issue' })
+  // no usage schema in this database: no dollars beside the quota, not an error
+  expect(kpis.kpis.find((k) => k.key === 'quota_at_reset')?.beside).toEqual([])
 
   const friction = await read('/v1/friction', (json) => FrictionModel.parse(json), 'read')
   expect(friction.issues).toBe(2)

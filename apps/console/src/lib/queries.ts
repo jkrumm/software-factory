@@ -22,6 +22,7 @@ import {
   fetchIssue,
   fetchIssueCards,
   fetchKpis,
+  fetchSeats,
   fetchMachine,
   fetchNeeds,
   fetchProjectDigests,
@@ -245,6 +246,16 @@ export function useKpis(days: number) {
   return useQuery({
     queryKey: ['kpis', days],
     queryFn: ({ signal }) => fetchKpis(days, signal),
+    refetchInterval: pollEvery(live),
+  })
+}
+
+/** The light-seat and cheap-reviewer gates' figures over the last `days` days. */
+export function useSeats(days: number) {
+  const live = useLive()
+  return useQuery({
+    queryKey: ['seats', days],
+    queryFn: ({ signal }) => fetchSeats(days, signal),
     refetchInterval: pollEvery(live),
   })
 }

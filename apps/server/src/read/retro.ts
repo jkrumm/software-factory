@@ -148,13 +148,18 @@ export const FRICTION_MARKER_KEYS: Readonly<Record<string, string>> = {
   regression_cause: 'regression',
 }
 
-/** The figure a marker's `kpi=` key reads now: a KPI, a capacity figure, or a friction count per closed Issue; null when none holds it. */
+/**
+ * The figure a marker's `kpi=` key reads now: a KPI, a part of one or a figure beside one (a figure that was a KPI of its own
+ * keeps its key there), a capacity figure, or a friction count per closed Issue; null when none holds it.
+ */
 export function figureOf(
   key: string,
   sources: { kpis: KpiModel; capacity?: readonly RetroCapacityFigure[]; friction?: FrictionModel | null },
 ): number | null {
   const kpi = sources.kpis.kpis.find((k) => k.key === key)?.value
   if (kpi !== undefined && kpi !== null) return kpi
+  const part = sources.kpis.kpis.flatMap((k) => [...k.parts, ...k.beside]).find((p) => p.key === key)?.value
+  if (part !== undefined) return part
   const figure = sources.capacity?.find((f) => f.key === key)?.value
   if (figure !== undefined && figure !== null) return figure
   const counted = FRICTION_MARKER_KEYS[key]
@@ -309,7 +314,7 @@ export async function readRetro(
 ): Promise<RetroModel> {
   const { now, days } = options
   const w = windowOf(now, days)
-  const kpis = await readKpis(sql, { now, days })
+  const kpis = await readKpis(sql, { now, days, epoch: options.epoch ?? null })
   const friction: FrictionModel = await readFriction(sql, { now, days, epoch: options.epoch ?? null })
   const sessions = await sessionsOf(sql, w)
   const build = await readRetroBuild(sql, {
