@@ -5,7 +5,8 @@
  *
  * The class is read from the stored text, which is the only record there is (`issue_events.detail`,
  * `quality_ships.detail`): a rule here is the one place that ties a producer's wording to its class, and
- * `refusal-class.test.ts` builds the texts from the producers that export them, so a reworded refusal fails there.
+ * `refusal-class.test.ts` holds a week's texts as a hand-kept copy and builds the ones whose producers export them, so
+ * a reworded exported refusal fails there; a reworded work-table or git text falls to an `other:` class until the copy is updated.
  * Pure.
  */
 

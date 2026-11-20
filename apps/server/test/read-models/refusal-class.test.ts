@@ -29,7 +29,7 @@ const WEEK: { detail: string; class: string }[] = [
   })),
   {
     detail:
-      'ship refused: commit ac1670d94fabcdef0123456789abcdef01234567 is not in /Users/someone/SourceRoot/basalt-ui: push it first',
+      'ship refused: commit ac1670d94fabcdef0123456789abcdef01234567 is not in /srv/work/basalt-ui: push it first',
     class: 'commit_not_pushed',
   },
   {
@@ -95,8 +95,8 @@ test('the texts the producers export keep their class', () => {
 })
 
 test('a text no rule knows is a class by its wording, never by the shas, paths and numbers it names', () => {
-  const a = refusalClass('something new about commit 0123456789abcdef in /Users/x/y after 12 tries')
-  const b = refusalClass('something new about commit fedcba98765432 in /Users/z/w after 7 tries')
+  const a = refusalClass('something new about commit 0123456789abcdef in /srv/x/y after 12 tries')
+  const b = refusalClass('something new about commit fedcba98765432 in /srv/z/w after 7 tries')
   expect(a.id).toBe(b.id)
   expect(a.id).not.toMatch(HEX_RUN)
   expect(refusalClass(null).id).toBe('no_reason_given')
