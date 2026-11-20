@@ -45,8 +45,8 @@ export const MIN_CLOSED = 10
 export const THRESHOLDS: Record<Judged, Rule> = {
   refusal: {
     min: 3,
-    rate: 0.1,
-    why: 'the same refusal on one in ten closed Issues is a rule or a prompt that is wrong',
+    rate: 0.05,
+    why: 'the same class of refusal on one in twenty closed Issues is a rule or a prompt that is wrong (a class sums every sha and branch it named: 60 of 1,000 is a finding)',
   },
   stall: { min: 2, rate: null, why: 'a stall twice in a week is a cause, not weather' },
   lead_gone: { min: 2, rate: null, why: 'a lead lost twice in a week points at the host or the harness' },
@@ -123,7 +123,7 @@ const BY_KEY: Record<string, Rule> = {
 }
 
 /** Patterns whose mechanism is gone: the review gate that refused a ship (NL23). Never a finding. */
-const RETIRED: readonly RegExp[] = [/^ship_refused:ship refused, review /]
+const RETIRED: readonly RegExp[] = [/^ship_refused:review_gate_retired$/]
 
 export const isRetired = (key: string): boolean => RETIRED.some((pattern) => pattern.test(key))
 
