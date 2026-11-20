@@ -152,7 +152,7 @@ test('shipping: the accepted ship with its commits, review, and the watch that p
   expect(shipping.map((s) => s.result)).toEqual(['refused', 'accepted'])
   // the refused call shares its call id with the accepted one: it keeps what it reported and none of the other's evidence
   expect(shipping[0]).toMatchObject({
-    detail: expect.stringContaining('older than this attempt'),
+    detail: expect.stringContaining('older than this Issue'),
     commits: [old],
     review: { present: false, note: null },
     acceptance: null,

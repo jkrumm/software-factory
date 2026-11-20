@@ -488,8 +488,13 @@ production stalls, a result cache keyed by the tree, a browser in the factory's 
 
 ## Quality
 
-- **Ship** (`app/quality-ship.ts`, `domains/quality/gate.ts`): the lead names merged commits; git must find them on the
-  default branch, read by the factory, never taken from the lead. Without that the ship is refused with the error named and
+- **Ship** (`app/quality-ship.ts`, `domains/quality/gate.ts`): the lead names merged commits, or none: then the factory
+  finds what the Issue's branches landed (`Commits.landed`: each attempt's branch, newest first; by content: the first
+  default-branch commit that holds every file the branch changed since it forked as the branch has it, a squash or a
+  rebase; or, for a branch the default branch holds and the lead made a commit on, the first-parent commit that brought
+  it in, a merge or its tip). Either way git must find them on the default branch and
+  newer than the Issue's cut (its first attempt's, so a later attempt ships what an earlier one landed), read by the
+  factory, never taken from the lead. Without that the ship is refused with the error named and
   counted as friction; so is the ship of an Issue flagged `checkpoint: spec` with no Spec submitted ("The Spec checkpoint", under Checkpoints). A review is recorded as evidence when agw's ledger covers the range, and its absence is recorded
   with its reason; it never refuses a ship (NL23). A commit agw routes to light is no absence (NL12: a review is owed at standard or deep), so a range whose only uncovered commits are light is recorded `not_required` and the friction loop does not count it; the brief has the lead read `agw review covered` before the merge. Whether a rebased, squash-merged change still counts as reviewed is
   agw's judgment (`covered`), not the factory's; `factory issue ship` prints one stderr line naming the range to `/review`

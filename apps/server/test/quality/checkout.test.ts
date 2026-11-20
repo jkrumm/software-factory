@@ -30,7 +30,7 @@ test('quality reads where an attempt worked from the leads store: its directory,
   // The attempt is known before its worktree is: the branch only.
   expect(await checkout.of(issue, 1)).toEqual({
     ok: true,
-    value: { repo: null, branch: 'factory/issue_7-1', cut: null },
+    value: { repo: null, branch: 'factory/issue_7-1', cut: null, issueCut: null, branches: [] },
   })
 
   await uow.run(async ({ leads }) => {
@@ -42,9 +42,42 @@ test('quality reads where an attempt worked from the leads store: its directory,
     })
     return ok(undefined)
   })
+  const first = { branch: 'factory/issue_7-1', cut: 'c'.repeat(40) }
   expect(await checkout.of(issue, 1)).toEqual({
     ok: true,
-    value: { repo: '/roots/example', branch: 'factory/issue_7-1', cut: 'c'.repeat(40) },
+    value: { repo: '/roots/example', ...first, issueCut: 'c'.repeat(40), branches: [first] },
   })
   expect(await checkout.of(issue, 2)).toEqual({ ok: true, value: null })
+
+  // A later attempt before its worktree is made works in the same repo, with the Issue's cut and the earlier branch.
+  await uow.run(async ({ leads }) => {
+    await leads.tried(issue, 2, 'factory/issue_7-2', at)
+    return ok(undefined)
+  })
+  expect(await checkout.of(issue, 2)).toEqual({
+    ok: true,
+    value: {
+      repo: '/roots/example',
+      branch: 'factory/issue_7-2',
+      cut: null,
+      issueCut: 'c'.repeat(40),
+      branches: [first],
+    },
+  })
+
+  // A later attempt keeps its own branch and cut; the Issue's cut stays the first attempt's, and every branch is known.
+  await uow.run(async ({ leads }) => {
+    await leads.saveWorktree(issue, 2, {
+      account: 'me',
+      repoPath: '/roots/example',
+      worktreePath: '/roots/example/.worktrees/issue_7-2',
+      baseSha: 'd'.repeat(40),
+    })
+    return ok(undefined)
+  })
+  const second = { branch: 'factory/issue_7-2', cut: 'd'.repeat(40) }
+  expect(await checkout.of(issue, 2)).toEqual({
+    ok: true,
+    value: { repo: '/roots/example', ...second, issueCut: 'c'.repeat(40), branches: [second, first] },
+  })
 })

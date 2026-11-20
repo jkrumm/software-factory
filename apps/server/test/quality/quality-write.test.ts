@@ -16,6 +16,7 @@ import type {
   AttemptCheckout,
   Ci,
   Commits,
+  LandedRead,
   LeadCheckout,
   Projects,
   Proof,
@@ -49,6 +50,8 @@ let commitReads: number
 let commitAnswer: Result<CommitRead>
 let reviewAnswer: Result<ReviewRead>
 let checkoutAnswer: Result<AttemptCheckout | null>
+let landedAnswer: Result<LandedRead>
+let landedAsked: Parameters<Commits['landed']>[0][]
 let projectsSeen: string[]
 let commitRepos: string[]
 let proofAnswer: () => Result<Check[]>
@@ -80,6 +83,11 @@ const commits: Commits = {
     commitRepos.push(input.repo)
     if (uow.inTransaction()) inside.push('commits')
     return commitAnswer
+  },
+  landed: async (input) => {
+    landedAsked.push(input)
+    if (uow.inTransaction()) inside.push('landed')
+    return landedAnswer
   },
 }
 let threadsAnswer: Awaited<ReturnType<NonNullable<Review['threads']>>> = ok([])
@@ -156,6 +164,8 @@ beforeEach(async () => {
   commitAnswer = ok(landed())
   reviewAnswer = ok({ tier: 'standard', covered: true, uncovered: [] })
   checkoutAnswer = ok(null)
+  landedAnswer = ok({ commits: [], held: false, base: 'origin/master' })
+  landedAsked = []
   projectsSeen = []
   commitRepos = []
   proofAnswer = () => ok([{ name: 'make verify', ok: true, detail: 'exit 0' }])
@@ -473,17 +483,57 @@ describe('the ship gate', () => {
     expect(silent.evidence[2]).toMatchObject({ kind: 'acceptance', payload: { statements: [] } })
   })
 
-  test('a ship that names no commit is refused with its error named, and the refusal is stored', async () => {
+  test('a ship that names no commit and has no branch on record is refused with its error named, and the refusal is stored', async () => {
     const issueId = await working()
     const refused = value(await ship(issueId, 'call-1', 1, []))
-    expect(refused).toMatchObject({ result: 'refused', detail: 'ship refused: ship names no merged commit' })
+    const none = "ship refused: ship names no merged commit and the lead's branch holds none since its cut"
+    expect(refused.result).toBe('refused')
+    expect(refused.detail).toStartWith(none)
     expect(commitReads).toBe(0)
+    expect(landedAsked).toEqual([])
     expect((await stateOf(issueId)).state).toBe('working')
     const view = value(await showQuality({ uow }, issueId))
-    expect(view.ships).toMatchObject([
-      { result: 'refused', detail: 'ship refused: ship names no merged commit', evidence: [] },
-    ])
+    expect(view.ships).toMatchObject([{ result: 'refused', evidence: [] }])
+    expect(view.ships[0]?.detail).toStartWith(none)
     expect(await db.sql`SELECT 1 FROM factory.issue_events WHERE kind = 'shipped'`).toHaveLength(0)
+  })
+
+  test('a ship that names no commit ships what git finds landed of the Issue’s branches, and records those commits', async () => {
+    const issueId = await working()
+    const branches = [
+      { branch: 'factory/issue_1-2', cut: 'd'.repeat(40) },
+      { branch: 'factory/issue_1-1', cut: 'c'.repeat(40) },
+    ]
+    checkoutAnswer = ok({
+      repo: '/roots/example',
+      branch: 'factory/issue_1-2',
+      cut: 'd'.repeat(40),
+      issueCut: 'c'.repeat(40),
+      branches,
+    })
+    landedAnswer = ok({ commits: [SHA], held: true, base: 'origin/master' })
+    const shipped = value(await ship(issueId, 'call-1', 1, []))
+    expect(shipped.result).toBe('applied')
+    expect(landedAsked).toEqual([{ repo: '/roots/example', branches }])
+    const view = value(await showQuality({ uow }, issueId))
+    expect(view.ships).toMatchObject([{ result: 'accepted', reported: [SHA] }])
+  })
+
+  test('a ship that names no commit while its branch has not landed is refused with the merge window to take next', async () => {
+    const issueId = await working()
+    checkoutAnswer = ok({
+      repo: '/roots/example',
+      branch: 'factory/issue_1-1',
+      cut: 'c'.repeat(40),
+      issueCut: 'c'.repeat(40),
+      branches: [{ branch: 'factory/issue_1-1', cut: 'c'.repeat(40) }],
+    })
+    landedAnswer = ok({ commits: [], held: true, base: 'origin/master' })
+    const refused = value(await ship(issueId, 'call-1', 1, []))
+    expect(refused.result).toBe('refused')
+    expect(refused.detail).toStartWith('ship refused: nothing of factory/issue_1-1 is on origin/master yet')
+    expect(refused.detail).toContain('factory merge-lock --project example --')
+    expect(commitReads).toBe(0)
   })
 
   test('commits git refuses are refused with git’s reason, and the same call may try again', async () => {
@@ -568,9 +618,16 @@ describe('the ship gate', () => {
 
   test('the lead’s checkout says where the work is: the directory, not the Issue’s repo name; the cut and branch go to git', async () => {
     const issueId = await working()
-    checkoutAnswer = ok({ repo: '/roots/example', branch: 'factory/issue_1-1', cut: 'c'.repeat(40) })
+    checkoutAnswer = ok({
+      repo: '/roots/example',
+      branch: 'factory/issue_1-2',
+      cut: 'c'.repeat(40),
+      issueCut: 'b'.repeat(40),
+      branches: [],
+    })
     const seen: unknown[] = []
     const spy: Commits = {
+      ...commits,
       read: async (input) => {
         seen.push(input)
         return commitAnswer
@@ -583,7 +640,13 @@ describe('the ship gate', () => {
       ),
     )
     expect(seen).toEqual([
-      { repo: '/roots/example', branch: 'factory/issue_1-1', cut: 'c'.repeat(40), reported: [SHA] },
+      {
+        repo: '/roots/example',
+        branch: 'factory/issue_1-2',
+        cut: 'c'.repeat(40),
+        since: 'b'.repeat(40),
+        reported: [SHA],
+      },
     ])
     // The watch runs in that directory too.
     await runEffects()

@@ -442,7 +442,7 @@ describe('the brief', () => {
     expect(STANDING_ORDERS).toContain("the repo's guard has `--wait`")
     expect(STANDING_ORDERS).toContain('a head with no finished green CI run')
     expect(STANDING_ORDERS).toContain('gh pr checks <n>')
-    expect(STANDING_ORDERS).toContain('every workflow is path-filtered; make check rc=0 on <sha>')
+    expect(STANDING_ORDERS).toContain('every workflow is path-filtered; make check rc=0 on the pushed head')
     expect(STANDING_ORDERS).toContain('never merge on it')
   })
 
@@ -467,7 +467,7 @@ describe('the brief', () => {
       '--after issue_5',
       'factory issue block <id> --attempt <n>',
       'factory issue ship <id> --attempt <n>',
-      '--commit <sha>',
+      'you type no commit',
       'factory issue ask <id> --attempt <n>',
       'factory artifact submit <id> --attempt <n>',
       'factory artifact revise <artifact-id> --content @file.md',
@@ -479,6 +479,11 @@ describe('the brief', () => {
       expect(STANDING_ORDERS).toContain(form)
     }
     expect(STANDING_ORDERS).not.toContain('<id> --body')
+    // The factory finds the landed commits: the ship order names no sha.
+    const shipOrder = STANDING_ORDERS.split('\n').find((line) => line.startsWith('- Ship, '))
+    expect(shipOrder).toContain('factory issue ship <id>')
+    expect(shipOrder).not.toContain('--commit')
+    expect(shipOrder).not.toContain('<sha>')
     expect(STANDING_ORDERS).toMatch(/arrive as notes typed into your session/)
     expect(STANDING_ORDERS).toMatch(/verdict of changes/)
     expect(STANDING_ORDERS).toContain('"a note from the owner"')

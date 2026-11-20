@@ -100,6 +100,35 @@ export async function commit(lw: LeadsWorld, file: string, text: string, message
   return git(lw.repo, 'rev-parse', 'HEAD')
 }
 
+/** The directory of the worktree that has `branch` checked out. */
+export async function worktreeOf(lw: LeadsWorld, branch: string): Promise<string> {
+  const listing = await gitIn(lw, 'worktree', 'list', '--porcelain')
+  for (const block of listing.split('\n\n')) {
+    const lines = block.split('\n')
+    if (lines.includes(`branch refs/heads/${branch}`)) return lines[0]?.slice('worktree '.length) ?? ''
+  }
+  throw new Error(`no worktree has ${branch}`)
+}
+
+/** The lead's own work: a file committed on its branch in its worktree and pushed, as for a pull request; returns the commit. */
+export async function leadCommits(lw: LeadsWorld, branch: string, file: string, text: string): Promise<string> {
+  const tree = await worktreeOf(lw, branch)
+  await mkdir(dirname(join(tree, file)), { recursive: true })
+  await writeFile(join(tree, file), text)
+  await git(tree, 'add', '-A')
+  await git(tree, 'commit', '-q', '-m', `feat: ${file}`)
+  await git(tree, 'push', '-q', 'origin', branch)
+  return git(tree, 'rev-parse', 'HEAD')
+}
+
+/** The pull request merged with `--squash`: the branch as one new commit on `master`, pushed; returns it. */
+export async function squashMerge(lw: LeadsWorld, branch: string): Promise<string> {
+  await git(lw.repo, 'merge', '-q', '--squash', branch)
+  await git(lw.repo, 'commit', '-q', '-m', `feat: ${branch} (squashed)`)
+  await git(lw.repo, 'push', '-q', 'origin', 'master')
+  return git(lw.repo, 'rev-parse', 'HEAD')
+}
+
 /** Where the Issue stands as `state[:wait][:outcome]`, read-only. */
 export async function stateOf(world: World, id: string): Promise<string> {
   const { state, wait, outcome } = await issueState(world, id)
@@ -128,7 +157,8 @@ export async function ship(
   world: World,
   server: ServerProcess,
   id: string,
-  body: { attempt?: number; call: string; commits: string[]; acceptance?: string[] },
+  /** no `commits`: the server finds what the Issue's branches landed */
+  body: { attempt?: number; call: string; commits?: string[]; acceptance?: string[] },
 ): Promise<Answer<ShipAnswer>> {
   const raw = await factory(
     world,

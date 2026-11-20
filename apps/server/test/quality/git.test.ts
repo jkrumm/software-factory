@@ -16,10 +16,39 @@ const fresh = async () => {
   return repo
 }
 
-const read = (repo: GitRepo, reported: string[], extra: { branch?: string; cut?: string } = {}) =>
-  new GitCommits().read({ repo: repo.path, branch: extra.branch ?? null, cut: extra.cut ?? null, reported })
+const read = (repo: GitRepo, reported: string[], extra: { branch?: string; cut?: string; since?: string } = {}) =>
+  new GitCommits().read({
+    repo: repo.path,
+    branch: extra.branch ?? null,
+    cut: extra.cut ?? null,
+    since: extra.since ?? null,
+    reported,
+  })
 
-function value(result: Result<CommitRead>): CommitRead {
+const landed = (repo: GitRepo, branches: { branch: string; cut: string }[]) =>
+  new GitCommits().landed({ repo: repo.path, branches })
+
+/** A branch cut from master's tip with one commit of `file`; master stays checked out. Returns the cut and the commit. */
+async function branchWith(repo: GitRepo, branch: string, file: string): Promise<{ cut: string; sha: string }> {
+  const cut = await repo.git('rev-parse', 'HEAD')
+  await repo.git('checkout', '-q', '-b', branch)
+  await Bun.write(`${repo.path}/${file}`, `${file}\n`)
+  await repo.git('add', '-A')
+  await repo.git('commit', '-q', '-m', `wip ${file}`)
+  const sha = await repo.git('rev-parse', 'HEAD')
+  await repo.git('checkout', '-q', 'master')
+  return { cut, sha }
+}
+
+/** Squash-merges `branch` into master and pushes it, as a pull request merged with `--squash` does; returns the squash. */
+async function squash(repo: GitRepo, branch: string): Promise<string> {
+  await repo.git('merge', '-q', '--squash', branch)
+  await repo.git('commit', '-q', '-m', `feat: ${branch}`)
+  await repo.git('push', '-q', 'origin', 'master')
+  return repo.git('rev-parse', 'HEAD')
+}
+
+function value<T = CommitRead>(result: Result<T>): T {
   if (!result.ok) throw new Error(`expected ok, got ${JSON.stringify(result.error)}`)
   return result.value
 }
@@ -117,15 +146,157 @@ test('a commit merged elsewhere is found after a fetch (a pull request merged on
   expect(value(await read(repo, [sha])).commits).toEqual([sha])
 })
 
-test('a commit from before the attempt’s cut proves nothing about it', async () => {
+test('a commit from before the Issue’s cut proves nothing about it', async () => {
   const repo = await fresh()
   const old = await repo.commit('old.ts', 'o\n')
   const cut = await repo.commit('cut.ts', 'c\n')
   const got = await read(repo, [old], { cut })
   expect(got).toEqual({
     ok: false,
-    error: { kind: 'refused', detail: expect.stringContaining('is older than this attempt') },
+    error: { kind: 'refused', detail: expect.stringContaining('is older than this Issue') },
   })
+})
+
+test('the cut is the Issue’s: what an earlier attempt landed before this attempt was cut still counts', async () => {
+  const repo = await fresh()
+  const first = await repo.git('rev-parse', 'HEAD')
+  const earlier = await repo.commit('earlier.ts', 'e\n', 'feat: earlier attempt')
+  const second = await repo.commit('other.ts', 'o\n', 'feat: someone else')
+  expect(value(await read(repo, [earlier], { cut: second, since: first })).commits).toEqual([earlier])
+  const older = await read(repo, [first], { cut: second, since: first })
+  expect(older).toEqual({
+    ok: false,
+    error: { kind: 'refused', detail: expect.stringContaining('is older than this Issue') },
+  })
+})
+
+test('landed: a branch merged with a merge commit is that merge; one fast-forwarded is its tip', async () => {
+  const repo = await fresh()
+  const { cut, sha } = await branchWith(repo, 'factory/1-1', 'm.ts')
+  await repo.git('merge', '-q', '--no-ff', '-m', 'Merge', 'factory/1-1')
+  await repo.git('push', '-q', 'origin', 'master')
+  const merge = await repo.git('rev-parse', 'HEAD')
+  expect(value(await landed(repo, [{ branch: 'factory/1-1', cut }]))).toEqual({
+    commits: [merge],
+    held: true,
+    base: 'origin/master',
+  })
+  expect(value(await read(repo, [merge], { branch: 'factory/1-1', cut })).commits).toEqual([merge, sha])
+
+  const next = await branchWith(repo, 'factory/2-1', 'f.ts')
+  await repo.git('merge', '-q', '--ff-only', 'factory/2-1')
+  await repo.git('push', '-q', 'origin', 'master')
+  expect(value(await landed(repo, [{ branch: 'factory/2-1', cut: next.cut }])).commits).toEqual([next.sha])
+})
+
+test('landed: a branch rebased, then merging the moved default branch in, and squashed is the squash', async () => {
+  const repo = await fresh()
+  const { cut } = await branchWith(repo, 'factory/1-1', 'mine.ts')
+  const other = await repo.other()
+  await other.commit('x.ts', 'x\n', 'feat: x')
+  await repo.git('pull', '-q', '--ff-only', 'origin', 'master')
+  await repo.git('checkout', '-q', 'factory/1-1')
+  await repo.git('rebase', '-q', 'master')
+  await other.commit('y.ts', 'y\n', 'feat: y')
+  await repo.git('checkout', '-q', 'master')
+  await repo.git('pull', '-q', '--ff-only', 'origin', 'master')
+  await repo.git('checkout', '-q', 'factory/1-1')
+  await repo.git('merge', '-q', '--no-edit', 'master')
+  await repo.git('checkout', '-q', 'master')
+  const squashed = await squash(repo, 'factory/1-1')
+  expect(value(await landed(repo, [{ branch: 'factory/1-1', cut }])).commits).toEqual([squashed])
+})
+
+test('landed: a squashed branch is the squash commit, found by content past later commits of others', async () => {
+  const repo = await fresh()
+  const { cut } = await branchWith(repo, 'factory/1-1', 's.ts')
+  const squashed = await squash(repo, 'factory/1-1')
+  await (await repo.other()).commit('theirs.ts', 'x\n')
+  const found = value(await landed(repo, [{ branch: 'factory/1-1', cut }]))
+  expect(found.commits).toEqual([squashed])
+  // what was found is what the gate then accepts
+  expect(value(await read(repo, found.commits, { branch: 'factory/1-1', cut })).commits).toContain(squashed)
+})
+
+test('landed: a branch that merged the default branch in and was squashed is the squash, never the merged-in commits', async () => {
+  const repo = await fresh()
+  const { cut } = await branchWith(repo, 'factory/1-1', 'mine.ts')
+  await (await repo.other()).commit('theirs.ts', 'x\n', 'feat: theirs')
+  await repo.git('pull', '-q', '--ff-only', 'origin', 'master')
+  await repo.git('checkout', '-q', 'factory/1-1')
+  await repo.git('merge', '-q', '--no-edit', 'master')
+  await repo.git('checkout', '-q', 'master')
+  const squashed = await squash(repo, 'factory/1-1')
+  expect(value(await landed(repo, [{ branch: 'factory/1-1', cut }])).commits).toEqual([squashed])
+})
+
+test('landed: the default branch fast-forwarded into the branch is not the lead’s; its own commit squashed is the squash', async () => {
+  const repo = await fresh()
+  const cut = await repo.git('rev-parse', 'HEAD')
+  await repo.git('branch', '-q', 'factory/1-1')
+  await (await repo.other()).commit('theirs.ts', 'x\n', 'feat: theirs')
+  await repo.git('pull', '-q', '--ff-only', 'origin', 'master')
+  await repo.git('checkout', '-q', 'factory/1-1')
+  await repo.git('merge', '-q', '--ff-only', 'master')
+  const branches = [{ branch: 'factory/1-1', cut }]
+  // Only someone else's work so far: nothing of the lead's, so nothing is held and nothing landed.
+  expect(value(await landed(repo, branches))).toEqual({ commits: [], held: false, base: 'origin/master' })
+  await Bun.write(`${repo.path}/mine.ts`, 'm\n')
+  await repo.git('add', '-A')
+  await repo.git('commit', '-q', '-m', 'wip mine')
+  await repo.git('checkout', '-q', 'master')
+  const squashed = await squash(repo, 'factory/1-1')
+  expect(value(await landed(repo, branches)).commits).toEqual([squashed])
+})
+
+test('landed: what every attempt landed counts, the newest attempt first', async () => {
+  const repo = await fresh()
+  const first = await branchWith(repo, 'factory/1-1', 'one.ts')
+  const s1 = await squash(repo, 'factory/1-1')
+  const second = await branchWith(repo, 'factory/1-2', 'two.ts')
+  const s2 = await squash(repo, 'factory/1-2')
+  const branches = [
+    { branch: 'factory/1-2', cut: second.cut },
+    { branch: 'factory/1-1', cut: first.cut },
+  ]
+  expect(value(await landed(repo, branches)).commits).toEqual([s2, s1])
+  expect(value(await read(repo, [s2, s1], { branch: 'factory/1-2', cut: second.cut, since: first.cut })).paths).toEqual(
+    ['one.ts', 'two.ts'],
+  )
+})
+
+test('landed: a branch that has not landed is held work and no commit; a branch with nothing is neither', async () => {
+  const repo = await fresh()
+  const { cut } = await branchWith(repo, 'factory/1-1', 'u.ts')
+  expect(value(await landed(repo, [{ branch: 'factory/1-1', cut }]))).toEqual({
+    commits: [],
+    held: true,
+    base: 'origin/master',
+  })
+  await repo.git('branch', '-q', 'factory/2-1')
+  expect(value(await landed(repo, [{ branch: 'factory/2-1', cut: await repo.git('rev-parse', 'HEAD') }]))).toEqual({
+    commits: [],
+    held: false,
+    base: 'origin/master',
+  })
+})
+
+test('landed: an earlier attempt’s squashed branch, whose local ref is gone, is read from the remote’s copy', async () => {
+  const repo = await fresh()
+  const { cut: first } = await branchWith(repo, 'factory/1-1', 'a1.ts')
+  await repo.git('push', '-q', 'origin', 'factory/1-1')
+  const squashed = await squash(repo, 'factory/1-1')
+  await repo.git('branch', '-q', '-D', 'factory/1-1')
+  await repo.git('branch', '-q', 'factory/1-2')
+  const second = await repo.git('rev-parse', 'HEAD')
+  const branches = [
+    { branch: 'factory/1-2', cut: second },
+    { branch: 'factory/1-1', cut: first },
+  ]
+  expect(value(await landed(repo, branches)).commits).toEqual([squashed])
+  expect(value(await read(repo, [squashed], { branch: 'factory/1-2', cut: second, since: first })).commits).toEqual([
+    squashed,
+  ])
 })
 
 test('the lead’s branch counts too: work on it that is not on the base is refused', async () => {
