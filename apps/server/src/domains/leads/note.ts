@@ -45,7 +45,7 @@ function item(record: HistoryRecord): string | null {
     case 'paused': {
       const until = field(record, 'until')
       const ends = typeof until === 'string' ? `, or at ${until}` : ''
-      return `the owner paused this Issue: ${oneLine(field(record, 'reason'))}. A paused Issue takes none of your verbs and a block is refused: end your turn; only his word${ends} ends the pause, and you hear when it does`
+      return `the owner paused this Issue: ${oneLine(field(record, 'reason'))}. A paused Issue takes none of your verbs and a block is refused: end your turn; only his word${ends} ends the pause`
     }
     case 'woken':
       return `your wait is over: ${oneLine(field(record, 'detail'))}`
@@ -64,9 +64,15 @@ function item(record: HistoryRecord): string | null {
  */
 export function noteText(issue: IssueId, records: readonly HistoryRecord[]): string {
   const head = `Factory, Issue ${issueNumber(issue)}:`
-  // A pause the same note ends (a resume) is no news to a lead that is waking: the wake says it.
-  const ended = records.some((record) => record.kind === 'woken')
-  const items = records.flatMap((record) => (ended && record.kind === 'paused' ? [] : (item(record) ?? [])))
+  // A pause the same note ends (a resume) is no news to a lead that is waking: the wake says it. A wake ends the wait that
+  // began at its `since`, so it ends a pause recorded from that version on and before the wake itself.
+  const wakes = records.flatMap((record) => {
+    const since = record.kind === 'woken' ? field(record, 'since') : undefined
+    return typeof since === 'number' ? [{ since, version: record.version }] : []
+  })
+  const endedPause = (record: HistoryRecord) =>
+    record.kind === 'paused' && wakes.some((wake) => wake.since <= record.version && record.version < wake.version)
+  const items = records.flatMap((record) => (endedPause(record) ? [] : (item(record) ?? [])))
   const body = items.length > 0 ? items.join(' | ') : `there is news; read it with \`factory issue show ${issue}\``
   const text = `${head} ${body}`
   return text.length > MAX_NOTE_CHARS ? `${text.slice(0, MAX_NOTE_CHARS - 1)}…` : text

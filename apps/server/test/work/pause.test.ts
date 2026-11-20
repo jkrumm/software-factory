@@ -160,4 +160,7 @@ test('the lead is told of a pause when it runs, and not again in the note that e
   const resume = noteText(id, [paused, woken])
   expect(resume).not.toContain('paused')
   expect(resume).toContain('your wait is over')
+  // a wake of an earlier wait does not end a pause recorded after it
+  const late = record('paused', { reason: 'a later hold' }, 8)
+  expect(noteText(id, [woken, late])).toContain('a later hold')
 })
