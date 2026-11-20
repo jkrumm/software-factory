@@ -24,7 +24,7 @@ export const LANGUAGE = {
   'cache read share':
     'The share of prompt tokens a lead read from the cache instead of fresh. What to do: higher is cheaper; a low share on a long attempt means the context was rebuilt, so look in Activity for a restart or a compaction',
   caller:
-    "Who a request comes from, decided by its token: owner, orchestrator (the owner's delegate agent: the owner's rights bar nine routes, its own actor in the log), agent (a lead session), machine (the alert door), signal (Hermes, which files the owner's words), read (the surfaces)",
+    "Who a request comes from, decided by its token: owner, orchestrator (the owner's delegate agent: the owner's rights bar eight routes, its own actor in the log), agent (a lead session), machine (the alert door), signal (Hermes, which files the owner's words), read (the surfaces)",
   cancelled:
     "Outcome: the owner's stop, or a filer's withdrawal of the Issue its own signal made before a lead took it",
   chain: 'The dependency graph of Issues and plan rows, across projects. What decides what can run at once',
@@ -213,7 +213,7 @@ export const LANGUAGE = {
   turns:
     'How many times a lead was prompted and worked until it stopped: the brief, each note, each wake. What to do: many turns on a small Issue means the lead was steered a lot; read the notes in Activity',
   verdict:
-    'The answer on an artifact: Looks good, With notes, Changes, No longer applies. Every verdict says who gave it (by): the owner, or the factory for him (the default after 24 hours, a Spec screen settle, a withdrawal), which is never read as his',
+    'The answer on an artifact: Looks good, With notes, Changes, No longer applies. Every verdict says who gave it (by): the owner; the factory for him (the default after 24 hours, a Spec screen settle, a withdrawal); or the orchestrator, his delegate, on a Spec that is no owner gate, which he reopens with his own verdict. The last two are never read as his',
   verified:
     'A shipped change whose watch passed: it is live and Verify and the probes found nothing broken. The "Since you were here" band counts these as Shipped and verified, one per Issue',
   verify: 'The check that ends the watch: make verify, probes',
