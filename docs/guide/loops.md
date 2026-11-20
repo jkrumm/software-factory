@@ -176,7 +176,7 @@ export const QUICK_REBLOCK_MS = 10 * 60_000
 
 **Example files:**
 
-- [`stall.ts`](https://github.com/jkrumm/software-factory/blob/master/apps/server/src/domains/loops/stall.ts#L91-L126): `decideStall`, the rules in order, ending in `ask`.
+- [`stall.ts`](https://github.com/jkrumm/software-factory/blob/master/apps/server/src/domains/loops/stall.ts#L86-L126): `decideStall`, the rules in order, ending in `ask`.
 - [`stall.ts`](https://github.com/jkrumm/software-factory/blob/master/apps/server/src/domains/loops/stall.ts#L63-L70): the default thresholds in one table.
 
 ## The retro

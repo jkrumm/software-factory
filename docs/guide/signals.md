@@ -225,7 +225,7 @@ export const AlertRequest = z
 **Example files:**
 
 - [`apps/door`](https://github.com/jkrumm/software-factory/tree/master/apps/door): the whole door, small enough to read in one sitting
-- [`packages/contract/src/intake.ts`](https://github.com/jkrumm/software-factory/blob/master/packages/contract/src/intake.ts#L157-L173): `AlertRequest`, the strict body
+- [`packages/contract/src/intake.ts`](https://github.com/jkrumm/software-factory/blob/master/packages/contract/src/intake.ts#L156-L171): `AlertRequest`, the strict body
 - [`app/intake.ts`](https://github.com/jkrumm/software-factory/blob/master/apps/server/src/app/intake.ts#L1089-L1144): `alert`, the route lookup and the envelope the server builds
 
 ## Work repos

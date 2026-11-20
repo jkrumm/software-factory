@@ -239,7 +239,7 @@ The same ship stated one acceptance line as not met: `stall:unreported` (37) and
 **Example files:**
 
 - [`steward.ts`, `repeatedStall`](https://github.com/jkrumm/software-factory/blob/master/apps/server/src/app/loops/steward.ts#L135-L196): the same stall as a Decision already answered
-- [`stall.ts`, `decideStall`](https://github.com/jkrumm/software-factory/blob/master/apps/server/src/domains/loops/stall.ts#L91-L127): wake, hold, wait or ask, in that order
+- [`stall.ts`, `decideStall`](https://github.com/jkrumm/software-factory/blob/master/apps/server/src/domains/loops/stall.ts#L86-L126): wake, hold, wait or ask, in that order
 - [`stop.ts`](https://github.com/jkrumm/software-factory/blob/master/apps/server/src/domains/leads/stop.ts#L34-L47): the send-back, once per turn
 
 **Read more:**

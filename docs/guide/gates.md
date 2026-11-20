@@ -182,8 +182,8 @@ The first check came 1 minute 32 seconds after the ship. It found CI still runni
 
 **Example files:**
 
-- [`watch.ts`, `ciCheck`](https://github.com/jkrumm/software-factory/blob/master/apps/server/src/domains/quality/watch.ts#L70-L135): CI of the landed commit as a check
-- [`watch.ts`, `stepOf`](https://github.com/jkrumm/software-factory/blob/master/apps/server/src/domains/quality/watch.ts#L266-L291): pass, again or regress
+- [`watch.ts`, `ciCheck`](https://github.com/jkrumm/software-factory/blob/master/apps/server/src/domains/quality/watch.ts#L83-L126): CI of the landed commit as a check
+- [`watch.ts`, `stepOf`](https://github.com/jkrumm/software-factory/blob/master/apps/server/src/domains/quality/watch.ts#L267-L274): pass, again or regress
 
 **Read more:**
 
