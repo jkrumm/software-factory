@@ -292,7 +292,7 @@ it expires. Upgrade `me` to 20x if its weekly stays > 80% two weeks running.
 
 ## Modes
 
-Each account is in one mode (registry v2, rule v1.10; Spec of `docs/plan.yaml` row `subs-model-v2`). The mode in force is the live
+Each account is in one mode (registry v2, rule v1.10; Spec of the `subs-model-v2` row, kept in the history of `docs/plan.yaml`). The mode in force is the live
 override (§Overrides), else the account's registry `mode`, else the v1 keys (`drain: [<id>]` reads as drain, `fable: <id>` as
 reserve for fable), else normal. `modeOf` (`policy.ts`) is the one place that answers it; `resolveModes` (`modes.ts`) adds the
 override and its source, and `applyModes` hands the rule a registry with the live overrides in place.
