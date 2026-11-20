@@ -1,5 +1,6 @@
 import { RETRO_MARKER, type Signal } from '@software-factory/contract'
-import type { OpenIssue, Received, RepoSignals } from './model.ts'
+import { key, type Key } from '../../kernel/keys.ts'
+import type { LoopFinding, OpenIssue, Received, RepoSignals } from './model.ts'
 
 /** The sources whose alerts come through the door; a route in the registry is the owner's act of listening. */
 const DOOR_SOURCES: readonly string[] = ['kuma', 'hyperdx']
@@ -109,6 +110,13 @@ export function matchOpen(title: string, open: readonly OpenIssue[]): Match {
 export function isRetroSignal(text: string): boolean {
   return RETRO_MARKER.test(text)
 }
+
+/** Every subject row a loop's finding keeps starts with this: an Issue with one answers its key alone. */
+export const FINDING_PREFIX = 'finding:'
+
+/** A loop's finding as one subject: the loop, the class, the repo and the subject, never the words. */
+export const findingKeyOf = (finding: LoopFinding, repo: string | null): Key =>
+  key('finding', finding.loop, finding.class, repo ?? '-', finding.subject)
 
 /** The same ask under another day's words: the repo and the title lower-cased, digits and punctuation out. */
 export function fingerprintOf(repo: string | null, title: string): string {

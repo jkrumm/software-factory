@@ -24,7 +24,7 @@ export interface Finding {
   subject: string
   /** the repo the signal is filed on when it is not the watched one (a project's budget breach) */
   repo?: string
-  /** carries the subject in words: intake fingerprints the title without digits and punctuation */
+  /** carries the subject in words for the lead; intake matches it by the kind and subject, never by the title */
   title: string
   /** the evidence that identifies the condition: hashed, so it must not hold a clock */
   facts: string[]

@@ -22,6 +22,18 @@ export interface Received {
 }
 
 /** What `receive` answered, `docs/language.md` Triage. `detail` says why. */
+/**
+ * What a loop (friction, hygiene, selfwatch, throughput) says its finding is about. With the signal's repo it is the
+ * finding's key: intake matches a loop's signal by that key alone, never by its words or the triage workflow.
+ */
+export interface LoopFinding {
+  loop: 'friction' | 'hygiene' | 'selfwatch' | 'throughput'
+  /** the kind of finding (a pattern group, a probe, a selfwatch kind, a KPI) */
+  class: string
+  /** what it is about inside its class (a pattern key, a probe key, a subject) */
+  subject: string
+}
+
 export interface Triaged {
   outcome: SignalAck['outcome']
   detail: SignalAck['detail']
