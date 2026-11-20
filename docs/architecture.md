@@ -425,14 +425,17 @@ owner's setting, `FACTORY_STEP_REMOTE_TARGET` (an ssh alias; unset, every step r
 `FACTORY_STEP_REMOTE_PROJECTS` (the projects admitted to it). One line, two hosts:
 
 - **Placement** (`app/capacity-slots.ts` `touchSlot`, `domains/capacity/remote.ts`). The mini's rule is as before over the
-  rows that are not the VPS's (`capacity_slots.host`). When it makes a caller wait, the caller can run off the mini (the
-  CLI sends `remote`), its project is admitted, its step is declared `remote: true` and needs nothing only the mini has
+  rows that are not the VPS's (`capacity_slots.host`). When it makes a caller wait, or has a slot free but the VPS is learned
+  to run the step in less time (issue 2668: basalt-ui's unit step, 187 s on the host against 401 s serial on the mini), the
+  caller can run off the mini (the CLI sends `remote`), its project is admitted, its step is declared `remote: true` and needs nothing only the mini has
   (`mac`, `apple`, `secrets`, `services`; a step of the host-wide class `apple` never, whatever a file says), the VPS gets
   it when `decideRemote` finds room and `finishesSooner` holds. Room: a probe at most 90 s old, production's own pressure
   stall (`system.slice` memory and io `some avg10`) not over the pressure line (below), the disk under the 85 % its alert pages on with a new copy
   counted, the step's peak beside the running steps' peaks and the mini's headroom rule in `MemAvailable`, its cores in the
   idle ones. Sooner: its learned VPS run (unknown: 1.7 times the mini's, as measured) against the expected mini wait (the
-  holder that frees its slot) plus its mini run. There is no fixed share of the VPS.
+  holder that frees its slot; zero when a slot is free now) plus its mini run, so a step never run on the VPS goes there
+  only when the mini makes it wait, and one learned faster there goes with a mini slot free. A step the VPS would have
+  taken but has no room for is placed `no_room`, not `free`. There is no fixed share of the VPS.
 - **The pressure line** (`kernel/remote-pressure.ts`). Each probe reading is stored once (`remote_samples`: memory and io
   pressure, and how many step containers ran). The samples taken with none running over the last 3 days are the baseline;
   with a day of them (at least 24 h between the first and the newest, 200 samples) the line is just above each pressure's

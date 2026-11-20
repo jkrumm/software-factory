@@ -1,6 +1,7 @@
 /**
  * Steps off the mini (issue 1793, docs/architecture.md "Steps off the mini"). A step its project declares for the VPS goes
- * there when the mini cannot grant it now, the VPS has room for it now, and the VPS finishes it sooner. There is no fixed
+ * there when the VPS has room for it now and finishes it sooner than the mini (its wait plus its run; no wait when a mini
+ * slot is free now, so a step learned faster on the VPS goes there too). There is no fixed
  * share of the VPS: a step takes what its live reading shows free, and production wins by priority (the container's lowest
  * CPU weight and its first place for the OOM killer, `apps/cli/src/remote-step.ts`), so the reading only has to keep the
  * VPS out of swap and its disk under the infra alert's line.

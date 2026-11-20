@@ -108,6 +108,45 @@ describe('a declared step runs off the mini when the mini makes it wait', () => 
     expect(granted).toMatchObject({ granted: true, host: 'mini', remote: null })
   })
 
+  describe('a mini slot free now', () => {
+    const learn = (miniMs: number, vpsMs: number) =>
+      world.db.sql`
+        INSERT INTO factory.step_costs (at, name, repo, peak_rss_mib, cpu_seconds, duration_ms, wait_ms, exit_code, host)
+        VALUES (${new Date(AT.getTime() - 3_600_000)}, 'p unit', '/src/p', 900, 1, ${miniMs}, 0, 0, 'mini'),
+               (${new Date(AT.getTime() - 3_600_000)}, 'p unit', '/src/p', 900, 1, ${vpsMs}, 0, 0, 'vps')`
+    const placed = async () =>
+      (await world.db.sql`SELECT host, reason FROM factory.step_placements ORDER BY id`).map(
+        (r: { host: string; reason: string }) => `${r.host}:${r.reason}`,
+      )
+
+    test('a step learned faster on the VPS goes there although the mini is free', async () => {
+      await learn(400_000, 190_000)
+      const granted = value(await step('p unit'))
+      expect(granted).toMatchObject({ granted: true, host: 'vps' })
+      expect(granted.remote).not.toBeNull()
+      expect(await placed()).toEqual(['vps:vps'])
+    })
+
+    test('a step learned no faster on the VPS stays on the mini', async () => {
+      await learn(100_000, 190_000)
+      expect(value(await step('p unit'))).toMatchObject({ granted: true, host: 'mini', remote: null })
+      expect(await placed()).toEqual(['mini:free'])
+    })
+
+    test('the VPS without room keeps the faster-there step on the free mini, placed as no_room', async () => {
+      await learn(400_000, 190_000)
+      probed = answer({ at: new Date(AT.getTime() - 5 * 60_000) })
+      expect(value(await step('p unit')).host).toBe('mini')
+      expect(await placed()).toEqual(['mini:no_room'])
+    })
+
+    test('a renewal of a step holding the mini stays there', async () => {
+      expect(value(await step('p unit')).host).toBe('mini')
+      await learn(400_000, 190_000)
+      expect(value(await step('p unit', { holding: true }))).toMatchObject({ granted: true, host: 'mini' })
+    })
+  })
+
   test('an apple step is never placed off the mini, not even pinned there', async () => {
     await fillMini()
     const apple = value(await step('p sim'))

@@ -82,7 +82,8 @@ factory never edits another repo's file. The server also serves the schema it pa
   run as the work account; a `GH_CONFIG_DIR` of the project's own `env` wins.
 - **`steps`**: one entry per step the Makefile runs through `factory slot run --name "<project> <step>"`, keyed by
   `<step>`: `{ make: test, needs: [git], remote: true, carry: [packages/x/dist] }`. `remote: true` lets the factory run
-  the step on its Linux step host when the mini's line would make it wait longer than that host takes. Set it only for a
+  the step on its Linux step host when the mini's line would make it wait longer than that host takes, or when its learned
+  run there is shorter than on the mini even with a mini slot free. Set it only for a
   step that passes in the step image: Ubuntu 24.04 with git, jq, make, shellcheck, the bun of `packageManager` and the PostgreSQL 16 server
   binaries (`initdb` and `pg_ctl` on `PATH`, `PG_BIN_DIR` set, so a step starts a private cluster in its container as it
   does on the mini; no cluster runs and no `needs` word is declared for it), the install with the network and the step
