@@ -198,10 +198,6 @@ list's entry, `<name>` a map's key.
 | `heal[].grace` | duration | required | intake (apps/server/src/app/intake.ts) | how long the `down` waits for its `up` before it is filed (at most 1d) |
 | `heal[].runbook` | `make restart` | — | intake (apps/server/src/app/intake.ts) | run first, before the grace starts |
 | `heal[].max` | integer 1–5 | `1` | intake (apps/server/src/app/intake.ts) | how many heals in a row before it is filed anyway |
-| `policy` | list of object | `[]` | Decision policies (apps/server/src/app/planning-policies.ts) | standing answers: the first rule whose phrase the question contains and whose answer is one of its options settles a Decision |
-| `policy[].when` | string | required | Decision policies (apps/server/src/app/planning-policies.ts) | a phrase the Decision's question contains |
-| `policy[].answer` | string | required | Decision policies (apps/server/src/app/planning-policies.ts) | the option label the rule takes; it must be one of the options |
-| `policy[].reason` | string | required | Decision policies (apps/server/src/app/planning-policies.ts) | why, recorded with the answer |
 
 Retired keys: accepted and dropped so an older file still parses, read by nothing; `factory project check` warns on each.
 
@@ -209,6 +205,7 @@ Retired keys: accepted and dropped so an older file still parses, read by nothin
 |-|-|-|-|-|
 | `deploy.migrations` | list of string | — | nothing (retired) | Retired: read by nothing; no gate or brief ever used it. Where migrations live and how they run belongs in the repo's AGENTS.md. Remove it. |
 | `ship[].paths` | list of string | — | nothing (retired) | Retired: read by nothing; no code ever matched a change against these globs. The factory reads only whether any rule ships `via: pr`. Remove it. |
+| `policy` | any | — | nothing (retired) | Retired: a Decision goes to the Judge, then its default, then the owner. Accepted and dropped. Remove it. |
 | `jobs` | any | — | nothing (retired) | Retired with the old core; accepted and dropped. Remove it. |
 | `ticktick` | any | — | nothing (retired) | Retired with the old core; accepted and dropped. Remove it. |
 

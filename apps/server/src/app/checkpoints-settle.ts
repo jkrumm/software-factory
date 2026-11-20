@@ -5,7 +5,6 @@ import {
   guardVerdict,
   JUDGE_MAX_TRIES,
   judgeInputOf,
-  matchPolicy,
   precedentTerms,
   type Settler,
 } from '../domains/checkpoints/decision.ts'
@@ -18,7 +17,6 @@ import {
   type JudgePort,
   type DecisionRecord,
   type DecisionStatus,
-  type StandingPolicies,
   type StepClaim,
   statusOf,
 } from '../domains/checkpoints/ports.ts'
@@ -35,7 +33,6 @@ import {
 } from './checkpoints.ts'
 
 export interface SettleDeps extends CheckpointDeps {
-  policies: StandingPolicies
   judge: JudgePort
   errandScreen: ErrandScreenPort
   /** the MacBook's fixed verbs, which run a report or a pull for an Errand with no dialog; absent: every such Errand reaches the owner as before */
@@ -72,7 +69,7 @@ type Step<T> = Promise<Result<T, CheckpointError | PortError>>
 const lostRace = (error: CheckpointError | PortError): boolean => error.kind === 'already_answered'
 
 /**
- * Settles one Decision as far as it can go now, in turn: standing policy, then the Judge, then the default when its wait
+ * Settles one Decision as far as it can go now, in turn: the Judge, then the default when its wait
  * has run out and its option is reversible, then the owner. Each step records who settled it. A step with a call
  * claims and commits, calls its port with no transaction open, and records the result in a new transaction; every call
  * has a deterministic key, so a replayed pass answers nothing twice. A Decision with a default that is not due yet is
@@ -99,7 +96,7 @@ export async function settleDecision(deps: SettleDeps, id: DecisionId): Step<Set
   const { title } = first.value
 
   let judging = false
-  for (const step of [policyStep, judgeStep, defaultStep]) {
+  for (const step of [judgeStep, defaultStep]) {
     const stepped = await step(deps, first.value.decision, title)
     if (!stepped.ok) return lostRace(stepped.error) ? current(deps, id) : stepped
     // A call of another pass is in flight: leave the Decision as it is. Going on to the owner now would page him for work
@@ -150,47 +147,6 @@ async function unchanged(
 
 const answered = (outcome: Awaited<ReturnType<typeof answerIn>>): Result<DecisionRecord, CheckpointError> =>
   outcome.ok ? ok(outcome.value.decision) : outcome
-
-/** Standing policy: the project's rules, read through a port. */
-async function policyStep(deps: SettleDeps, decision: DecisionRecord): StepResult {
-  const now = deps.clock.now()
-  const claimed = await deps.uow.run(async ({ checkpoints }) =>
-    ok(await checkpoints.claimStep(decision.id, 'policy', now, new Date(now.getTime() + STEP_LEASE_MS))),
-  )
-  if (!claimed.ok) return claimed
-  if (claimed.value === 'in_flight') return ok(BUSY)
-  if (claimed.value !== 'claimed') return ok(null)
-
-  const rules = await deps.policies.rulesFor(decision.repo)
-  const recorded = await deps.uow.run<Stepped, CheckpointError>(async (stores) => {
-    const at = deps.clock.now()
-    const { checkpoints } = stores
-    if (!(await unchanged(checkpoints, decision.id, decision.form))) return ok(BUSY)
-    if (!rules.ok) {
-      await checkpoints.finishStep(decision.id, 'policy', {
-        outcome: 'failed',
-        detail: `${rules.error.kind}: ${rules.error.detail}`,
-        at,
-      })
-      return ok(null)
-    }
-    const match = matchPolicy(rules.value, decision.form)
-    if (!match) {
-      await checkpoints.finishStep(decision.id, 'policy', { outcome: 'passed', detail: 'no rule matches', at })
-      return ok(null)
-    }
-    await checkpoints.finishStep(decision.id, 'policy', { outcome: 'answered', detail: match.rule.when, at })
-    const outcome = await answerIn(stores, deps, {
-      decision,
-      text: match.answer,
-      by: 'policy',
-      source: match.rule.reason,
-      note: `Answered by the project's standing policy (${match.rule.reason}): ${match.answer}. The owner can overrule it with a note.`,
-    })
-    return outcome.ok && outcome.value.status === 'answered' ? answered(outcome) : outcome.ok ? ok(null) : outcome
-  })
-  return releaseOnError(deps, decision, 'policy', recorded)
-}
 
 /** The Judge: precedent from the ledger, then the `factory-ask` workflow through its port. */
 async function judgeStep(deps: SettleDeps, decision: DecisionRecord, title: string): StepResult {
@@ -269,7 +225,7 @@ async function judgeStep(deps: SettleDeps, decision: DecisionRecord, title: stri
 async function releaseOnError(
   deps: SettleDeps,
   decision: DecisionRecord,
-  step: 'policy' | 'judge',
+  step: 'judge',
   recorded: Awaited<StepResult>,
 ): StepResult {
   if (recorded.ok || lostRace(recorded.error)) return recorded

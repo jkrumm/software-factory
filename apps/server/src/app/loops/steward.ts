@@ -280,7 +280,7 @@ async function wake(deps: StewardDeps, facts: StallFacts, detail: string, note: 
   return done
 }
 
-/** The Decision goes the whole way: the checkpoints' own use case, so policy, the Judge, the default and the owner follow. */
+/** The Decision goes the whole way: the checkpoints' own use case, so the Judge, the default and the owner follow. */
 async function raise(deps: StewardDeps, facts: StallFacts, form: unknown): Out<boolean> {
   const asked = await askDecision(deps.checkpoints, {
     issueId: facts.issue,

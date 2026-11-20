@@ -52,7 +52,7 @@ const WEEK: { detail: string; class: string }[] = [
   },
   {
     detail:
-      'it waits for the answer to a Decision (decision_01j9abc: answered by standing policy), so `ship` is not taken now',
+      'it waits for the answer to a Decision (decision_01j9abc: answered by the Judge), so `ship` is not taken now',
     class: 'waits_for_decision',
   },
   {

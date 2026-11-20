@@ -131,7 +131,6 @@ beforeEach(async () => {
         return Promise.resolve(commandRuns[command] ?? commandExit)
       },
     },
-    policies: { rulesFor: () => Promise.resolve(ok([])) },
     judge: { judge: () => Promise.resolve(err(portError('gone', 'no judge'))) },
     errandScreen: {
       screen: (request) => {

@@ -652,21 +652,6 @@ const HealRule = z.strictObject({
     .meta(about('how many heals in a row before it is filed anyway', 'intake (apps/server/src/app/intake.ts)')),
 })
 
-const POLICIES = 'Decision policies (apps/server/src/app/planning-policies.ts)'
-
-/** A rule that settles a recurring Decision once and for all: a phrase of the question and the option label it takes. */
-const PolicyRule = z.strictObject({
-  when: z.string().trim().min(1).max(300).meta(about("a phrase the Decision's question contains", POLICIES)),
-  answer: z
-    .string()
-    .trim()
-    .min(1)
-    .max(200)
-    .meta(about('the option label the rule takes; it must be one of the options', POLICIES)),
-  reason: z.string().trim().min(1).max(500).meta(about('why, recorded with the answer', POLICIES)),
-})
-export type PolicyRule = z.output<typeof PolicyRule>
-
 type LaneSchema = typeof AuthoredLane | z.ZodUnion<[typeof AuthoredLane, typeof StoredLane]>
 
 /** The file's keys, with `lane` the form a lane takes: as written (the file) or also as stored (a stored row read back). */
@@ -802,13 +787,11 @@ const projectObject = <L extends LaneSchema>(lane: L) =>
           ),
         ),
       policy: z
-        .array(PolicyRule)
-        .max(64)
-        .default([])
+        .unknown()
+        .optional()
         .meta(
-          about(
-            'standing answers: the first rule whose phrase the question contains and whose answer is one of its options settles a Decision',
-            POLICIES,
+          retired(
+            'Retired: a Decision goes to the Judge, then its default, then the owner. Accepted and dropped. Remove it.',
           ),
         ),
       jobs: z.unknown().optional().meta(retired('Retired with the old core; accepted and dropped. Remove it.')),

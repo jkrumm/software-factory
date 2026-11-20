@@ -41,7 +41,6 @@
   ],
   "mainPath": [
     "ask",
-    "policy",
     "judge",
     "owner-d",
     "default-d"
@@ -56,17 +55,9 @@
       "sublabel": "a form, all fields"
     },
     {
-      "id": "policy",
-      "lane": "decision",
-      "col": 1,
-      "type": "backend",
-      "label": "Standing policy",
-      "sublabel": "project.yaml"
-    },
-    {
       "id": "judge",
       "lane": "decision",
-      "col": 2,
+      "col": 1,
       "type": "backend",
       "label": "The Judge",
       "sublabel": "answers or hands on"
@@ -154,16 +145,9 @@
   ],
   "edges": [
     {
-      "id": "ask-policy",
+      "id": "ask-judge",
       "from": "ask",
-      "to": "policy",
-      "variant": "emphasis"
-    },
-    {
-      "id": "policy-judge",
-      "from": "policy",
       "to": "judge",
-      "label": "no rule",
       "variant": "emphasis"
     },
     {

@@ -230,7 +230,7 @@ export interface Asked {
  * then one transaction records `asked`, which makes the Issue wait, and the Decision. The same ask again is the same
  * Decision. A different form from the same asker while the Issue still waits on its open Decision amends that one
  * instead of raising another: the form is replaced, the new rendering is the artifact's next revision, and the steps and
- * unsent pages are cleared so the amended form is settled afresh. Settling it (policy, the Judge, the default, the owner)
+ * unsent pages are cleared so the amended form is settled afresh. Settling it (the Judge, the default, the owner)
  * is the pass's, not this call's.
  */
 export async function askDecision(
@@ -523,7 +523,7 @@ export function takeDefault(
   })
 }
 
-/** The owner's flag on an answered Decision: it feeds the ledger and the Judge's precedent. */
+/** The owner's flag on an answered Decision: it feeds the ledger. */
 export function markWorthAsking(
   deps: CheckpointDeps,
   input: { decisionId: DecisionId; worth: boolean },

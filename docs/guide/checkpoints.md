@@ -2,7 +2,7 @@
 
 A checkpoint is where the factory stops for a person. Each kind has a contract the code enforces. A Decision goes to the Judge first. A Spec waits 24 hours and then proceeds on its defaults. An Errand is only for a person's hands. Screens (last section) decide what reaches the owner, and whatever reaches the owner and did not need to is counted as an avoidable touch.
 
-![Checkpoint routes: a Decision passes standing policy, then the Judge, then the owner, and takes its default when no answer comes; a Spec reaches the owner and goes ahead on its defaults after 24 hours; an Errand is turned back unless it needs hands, and a check can close it.](./diagrams/checkpoint-routes.svg)
+![Checkpoint routes: a Decision passes the Judge, then the owner, and takes its default when no answer comes; a Spec reaches the owner and goes ahead on its defaults after 24 hours; an Errand is turned back unless it needs hands, and a check can close it.](./diagrams/checkpoint-routes.svg)
 
 ## Decisions
 
@@ -12,7 +12,7 @@ A Decision is one question as a form. The lead raises it with `factory issue ask
 - **A recommendation is an option.** It must be the label of one of the options.
 - **A default is reversible.** `noAnswer.default` names a reversible option and comes with `waitMinutes` (1 to 10080). Both are given or neither is. When the wait runs out, the default is taken; a lead that already went on with it takes it sooner with `factory decision take-default <id> --attempt <n>`.
 - **Waiting is not a choice.** A recommendation or default of "Keep waiting", "Wait for review", "Do nothing" or "Hold" is refused. What it waits for is a person's chore, and a chore is an Errand. The steward's own asks are exempt: a hold is a real answer to a stall.
-- **Four steps, in order.** Standing policy from `project.yaml`, the Judge (next section), the default after its wait (or taken by the lead), the owner. The Decision records who settled it: `policy`, `judge`, `default`, `owner`, or `orchestrator` when it answers for the owner.
+- **Three steps, in order.** The Judge (next section), the default after its wait (or taken by the lead), the owner. The Decision records who settled it: `judge`, `default`, `owner`, or `orchestrator` when it answers for the owner. (Rows from before 2026-11-20 may also say `policy`: that step is gone, and `project.yaml`'s `policy:` key is accepted and dropped.)
 
 ```ts
 const NO_OP_LABELS: readonly RegExp[] = [
@@ -50,10 +50,10 @@ The wait was 24 hours. The default is not the recommendation: the lead recommend
 The Judge is the agw workflow `factory-ask` that tries to settle a Decision before the owner sees it.
 
 - **Every Decision, first.** The Judge sees a Decision before the owner does. A failed call is retried after 5 minutes, three tries in all. After the third the Decision goes to the owner unjudged.
-- **It reads what a lead would.** The plan, the docs and the precedents: Decisions answered before, with the owner's `worth asking` flag where the owner set one.
+- **It reads what a lead would.** The plan, the docs and the precedents: Decisions the owner answered before. An answer the Judge, a default or the orchestrator gave is never one.
 - **It sees scrubbed text.** Every field is scrubbed and cut at 2000 characters, and the repo is passed as its name, never a path.
 - **It answers or hands on.** The verdict is `answer` or `owner`. The factory checks an answer before acting on it.
-- **Never irreversible.** The answer must be exactly one of the options, must name a source, and must not be an option that cannot be taken back. An irreversible option is the owner's, or a standing policy's.
+- **Never irreversible.** The answer must be exactly one of the options, must name a source, and must not be an option that cannot be taken back. An irreversible option is the owner's.
 
 ```ts
 export function guardVerdict(form: DecisionForm, verdict: JudgeVerdict): Guarded {

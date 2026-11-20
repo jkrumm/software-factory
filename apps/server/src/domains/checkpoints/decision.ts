@@ -6,7 +6,10 @@ export { scrub }
 
 export type DecisionId = Id<'decision'>
 
-/** The steps of settling a Decision, in the order they are tried (`docs/architecture.md` §Loops and agw). */
+/**
+ * The steps of settling a Decision, in the order they are tried (`docs/architecture.md` §Loops and agw). `policy` is
+ * history: no step of that name runs any more, but stored rows (and the database constraints) still hold it.
+ */
 export const STEPS = ['policy', 'judge', 'default', 'owner'] as const
 export type StepName = (typeof STEPS)[number]
 
@@ -174,32 +177,6 @@ function optionOf(form: Pick<DecisionForm, 'options'>, answer: string): string |
   return form.options.find((option) => option.label.toLowerCase() === wanted)?.label ?? null
 }
 
-/** A rule in a project's `project.yaml` that settles a recurring Decision: a phrase of the question and the option it takes. */
-export interface PolicyRule {
-  /** matched against the question, ignoring case */
-  when: string
-  /** the label of the option to take */
-  answer: string
-  /** why the owner decided this once and for all */
-  reason: string
-}
-
-export interface PolicyMatch {
-  answer: string
-  rule: PolicyRule
-}
-
-/** The first rule whose phrase the question contains and whose answer is one of the options; the rest are skipped. */
-export function matchPolicy(rules: readonly PolicyRule[], form: DecisionForm): PolicyMatch | null {
-  const question = form.question.toLowerCase()
-  for (const rule of rules) {
-    if (rule.when.trim() === '' || !question.includes(rule.when.trim().toLowerCase())) continue
-    const answer = optionOf(form, rule.answer)
-    if (answer) return { answer, rule }
-  }
-  return null
-}
-
 /** The option taken when the wait has run out with no answer; null while it runs, and for a Decision with no default. */
 export function defaultDue(form: Pick<DecisionForm, 'noAnswer'>, askedAt: Date, now: Date): string | null {
   const { default: label, waitMinutes } = form.noAnswer
@@ -225,8 +202,7 @@ export type Guarded = { ok: true; answer: string; source: string } | { ok: false
 
 /**
  * The factory's checks on a Judge `answer`, after the workflow: the answer is exactly one of the options, it names a
- * source, and it is not an option that cannot be taken back (an irreversible option is the owner's, or a standing
- * policy's, never the Judge's).
+ * source, and it is not an option that cannot be taken back (an irreversible option is the owner's, never the Judge's).
  */
 export function guardVerdict(form: DecisionForm, verdict: JudgeVerdict): Guarded {
   const source = verdict.source.trim()
@@ -240,12 +216,11 @@ export function guardVerdict(form: DecisionForm, verdict: JudgeVerdict): Guarded
   return { ok: true, answer: label, source }
 }
 
-/** A Decision answered before, shown to the Judge as precedent. `worthAsking` is the owner's flag, null while unset. */
+/** A Decision the owner answered before, shown to the Judge as precedent: never one the Judge, a default or the orchestrator settled. */
 export interface Precedent {
   question: string
   answer: string
-  settledBy: Settler
-  worthAsking: boolean | null
+  settledBy: 'owner'
   repo: string
 }
 
@@ -259,7 +234,7 @@ export interface JudgeInput {
   checked: string
   options: DecisionOption[]
   noAnswer: NoAnswer
-  precedents: Precedent[]
+  precedents: (Precedent & { worthAsking: null })[]
 }
 
 const MAX_JUDGE_TEXT = 2000
@@ -286,8 +261,10 @@ export function judgeInputOf(input: {
     checked: cut(form.checked),
     options: form.options.map((option) => ({ ...option, label: cut(option.label), cost: cut(option.cost) })),
     noAnswer: { ...form.noAnswer, consequence: cut(form.noAnswer.consequence) },
+    // agw's `factory-ask` still requires the field; no precedent carries a mark any more (drop it there, then here)
     precedents: input.precedents.map((p) => ({
       ...p,
+      worthAsking: null,
       repo: repoName(p.repo),
       question: cut(p.question),
       answer: cut(p.answer),

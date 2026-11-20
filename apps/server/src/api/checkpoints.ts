@@ -906,8 +906,7 @@ export const checkpointRoutes = (uses: CheckpointUses) =>
         response: RESPONSES(PassReply, 503),
         detail: {
           operationId: 'checkpoint.pass',
-          summary:
-            'one pass now: settle the open Decisions (policy, Judge, default, owner), then send the pages that planned',
+          summary: 'one pass now: settle the open Decisions (Judge, default, owner), then send the pages that planned',
         },
       },
     )

@@ -1,5 +1,5 @@
 <?xml version="1.0" encoding="UTF-8"?>
-<svg viewBox="0 0 975 528" data-layout-contract="readable-v2" role="img" lang="en" aria-labelledby="archify-diagram-title archify-diagram-description" data-animation="trace" data-preset="basalt" data-quality-profile="showcase" data-node-ui="" style="--flow-cycle: 4.284s; width: 975px; height: 528px; min-width: 0px;" width="975" height="528" xmlns="http://www.w3.org/2000/svg"><style>
+<svg viewBox="0 0 921 528" data-layout-contract="readable-v2" role="img" lang="en" aria-labelledby="archify-diagram-title archify-diagram-description" data-animation="trace" data-preset="basalt" data-quality-profile="showcase" data-node-ui="" style="--flow-cycle: 3.880s; width: 921px; height: 528px; min-width: 0px;" width="921" height="528" xmlns="http://www.w3.org/2000/svg"><style>
 /*
 JetBrains Mono variable WOFF2 subsets from Google Fonts service revision v24.
 These fixed bytes are shared by the viewer and its SVG/raster exports.
@@ -403,206 +403,189 @@ svg[data-preset="editorial"] { --flow-halo-peak: 0.07; --flow-glow-peak: 0.28; -
 :root, [data-density="dense"] { --basalt-ctl-h: 1.75rem; --basalt-row-h: 2rem; }
 @keyframes archify-relay-ripple { 
   0% { r: 2px; opacity: var(--flow-peak, 0.6); }
-  17.506%, 100% { r: 20px; opacity: 0; }
+  19.33%, 100% { r: 20px; opacity: 0; }
 }
 @keyframes archify-relay-comet-0 { 
   0% { stroke-dashoffset: calc(var(--flow-len, 0px) + var(--flow-shift, 0px)); opacity: 0; animation-timing-function: cubic-bezier(0.45, 0.05, 0.35, 1); }
-  1.981% { opacity: var(--flow-peak, 0.9); }
-  9.903% { stroke-dashoffset: var(--flow-shift, 0px); opacity: var(--flow-peak, 0.9); }
-  13.638%, 100% { stroke-dashoffset: var(--flow-shift, 0px); opacity: 0; }
+  2.224% { opacity: var(--flow-peak, 0.9); }
+  11.119% { stroke-dashoffset: var(--flow-shift, 0px); opacity: var(--flow-peak, 0.9); }
+  15.243%, 100% { stroke-dashoffset: var(--flow-shift, 0px); opacity: 0; }
 }
 @keyframes archify-relay-wake-0 { 
   0% { stroke-dashoffset: var(--flow-len, 0px); opacity: var(--flow-peak, 0.3); animation-timing-function: cubic-bezier(0.45, 0.05, 0.35, 1); }
-  9.903% { stroke-dashoffset: 0px; opacity: var(--flow-peak, 0.3); }
-  30.91%, 100% { stroke-dashoffset: 0px; opacity: 0; }
+  11.119% { stroke-dashoffset: 0px; opacity: var(--flow-peak, 0.3); }
+  34.315%, 100% { stroke-dashoffset: 0px; opacity: 0; }
 }
 @keyframes archify-relay-comet-1 { 
   0% { stroke-dashoffset: calc(var(--flow-len, 0px) + var(--flow-shift, 0px)); opacity: 0; animation-timing-function: cubic-bezier(0.45, 0.05, 0.35, 1); }
-  1.961% { opacity: var(--flow-peak, 0.9); }
-  9.803% { stroke-dashoffset: var(--flow-shift, 0px); opacity: var(--flow-peak, 0.9); }
-  13.538%, 100% { stroke-dashoffset: var(--flow-shift, 0px); opacity: 0; }
+  2.725% { opacity: var(--flow-peak, 0.9); }
+  13.623% { stroke-dashoffset: var(--flow-shift, 0px); opacity: var(--flow-peak, 0.9); }
+  17.747%, 100% { stroke-dashoffset: var(--flow-shift, 0px); opacity: 0; }
 }
 @keyframes archify-relay-wake-1 { 
   0% { stroke-dashoffset: var(--flow-len, 0px); opacity: var(--flow-peak, 0.3); animation-timing-function: cubic-bezier(0.45, 0.05, 0.35, 1); }
-  9.803% { stroke-dashoffset: 0px; opacity: var(--flow-peak, 0.3); }
-  30.81%, 100% { stroke-dashoffset: 0px; opacity: 0; }
+  13.623% { stroke-dashoffset: 0px; opacity: var(--flow-peak, 0.3); }
+  36.819%, 100% { stroke-dashoffset: 0px; opacity: 0; }
 }
 @keyframes archify-relay-comet-2 { 
   0% { stroke-dashoffset: calc(var(--flow-len, 0px) + var(--flow-shift, 0px)); opacity: 0; animation-timing-function: cubic-bezier(0.45, 0.05, 0.35, 1); }
-  1.961% { opacity: var(--flow-peak, 0.9); }
-  9.803% { stroke-dashoffset: var(--flow-shift, 0px); opacity: var(--flow-peak, 0.9); }
-  13.538%, 100% { stroke-dashoffset: var(--flow-shift, 0px); opacity: 0; }
+  2.165% { opacity: var(--flow-peak, 0.9); }
+  10.825% { stroke-dashoffset: var(--flow-shift, 0px); opacity: var(--flow-peak, 0.9); }
+  14.948%, 100% { stroke-dashoffset: var(--flow-shift, 0px); opacity: 0; }
 }
 @keyframes archify-relay-wake-2 { 
-  0%, 2.941% { opacity: 0; }
-  9.803% { opacity: var(--flow-peak, 0.3); }
-  30.81%, 100% { stroke-dashoffset: 0px; opacity: 0; }
+  0%, 3.247% { opacity: 0; }
+  10.825% { opacity: var(--flow-peak, 0.3); }
+  34.021%, 100% { stroke-dashoffset: 0px; opacity: 0; }
 }
 @keyframes archify-relay-comet-3 { 
   0% { stroke-dashoffset: calc(var(--flow-len, 0px) + var(--flow-shift, 0px)); opacity: 0; animation-timing-function: cubic-bezier(0.45, 0.05, 0.35, 1); }
-  1.961% { opacity: var(--flow-peak, 0.9); }
-  9.803% { stroke-dashoffset: var(--flow-shift, 0px); opacity: var(--flow-peak, 0.9); }
-  13.538%, 100% { stroke-dashoffset: var(--flow-shift, 0px); opacity: 0; }
+  2.165% { opacity: var(--flow-peak, 0.9); }
+  10.825% { stroke-dashoffset: var(--flow-shift, 0px); opacity: var(--flow-peak, 0.9); }
+  14.948%, 100% { stroke-dashoffset: var(--flow-shift, 0px); opacity: 0; }
 }
 @keyframes archify-relay-wake-3 { 
-  0%, 2.941% { opacity: 0; }
-  9.803% { opacity: var(--flow-peak, 0.3); }
-  30.81%, 100% { stroke-dashoffset: 0px; opacity: 0; }
+  0%, 3.247% { opacity: 0; }
+  10.825% { opacity: var(--flow-peak, 0.3); }
+  34.021%, 100% { stroke-dashoffset: 0px; opacity: 0; }
 }
 @keyframes archify-relay-comet-4 { 
   0% { stroke-dashoffset: calc(var(--flow-len, 0px) + var(--flow-shift, 0px)); opacity: 0; animation-timing-function: cubic-bezier(0.45, 0.05, 0.35, 1); }
-  1.961% { opacity: var(--flow-peak, 0.9); }
-  9.803% { stroke-dashoffset: var(--flow-shift, 0px); opacity: var(--flow-peak, 0.9); }
-  13.538%, 100% { stroke-dashoffset: var(--flow-shift, 0px); opacity: 0; }
+  2.165% { opacity: var(--flow-peak, 0.9); }
+  10.825% { stroke-dashoffset: var(--flow-shift, 0px); opacity: var(--flow-peak, 0.9); }
+  14.948%, 100% { stroke-dashoffset: var(--flow-shift, 0px); opacity: 0; }
 }
 @keyframes archify-relay-wake-4 { 
-  0%, 2.941% { opacity: 0; }
-  9.803% { opacity: var(--flow-peak, 0.3); }
-  30.81%, 100% { stroke-dashoffset: 0px; opacity: 0; }
+  0%, 3.247% { opacity: 0; }
+  10.825% { opacity: var(--flow-peak, 0.3); }
+  34.021%, 100% { stroke-dashoffset: 0px; opacity: 0; }
 }
 @keyframes archify-relay-comet-5 { 
   0% { stroke-dashoffset: calc(var(--flow-len, 0px) + var(--flow-shift, 0px)); opacity: 0; animation-timing-function: cubic-bezier(0.45, 0.05, 0.35, 1); }
-  1.961% { opacity: var(--flow-peak, 0.9); }
-  9.803% { stroke-dashoffset: var(--flow-shift, 0px); opacity: var(--flow-peak, 0.9); }
-  13.538%, 100% { stroke-dashoffset: var(--flow-shift, 0px); opacity: 0; }
+  2.165% { opacity: var(--flow-peak, 0.9); }
+  10.825% { stroke-dashoffset: var(--flow-shift, 0px); opacity: var(--flow-peak, 0.9); }
+  14.948%, 100% { stroke-dashoffset: var(--flow-shift, 0px); opacity: 0; }
 }
 @keyframes archify-relay-wake-5 { 
   0% { stroke-dashoffset: var(--flow-len, 0px); opacity: var(--flow-peak, 0.3); animation-timing-function: cubic-bezier(0.45, 0.05, 0.35, 1); }
-  9.803% { stroke-dashoffset: 0px; opacity: var(--flow-peak, 0.3); }
-  30.81%, 100% { stroke-dashoffset: 0px; opacity: 0; }
+  10.825% { stroke-dashoffset: 0px; opacity: var(--flow-peak, 0.3); }
+  34.021%, 100% { stroke-dashoffset: 0px; opacity: 0; }
 }
 @keyframes archify-relay-comet-6 { 
   0% { stroke-dashoffset: calc(var(--flow-len, 0px) + var(--flow-shift, 0px)); opacity: 0; animation-timing-function: cubic-bezier(0.45, 0.05, 0.35, 1); }
-  1.961% { opacity: var(--flow-peak, 0.9); }
-  9.803% { stroke-dashoffset: var(--flow-shift, 0px); opacity: var(--flow-peak, 0.9); }
-  13.538%, 100% { stroke-dashoffset: var(--flow-shift, 0px); opacity: 0; }
+  2.725% { opacity: var(--flow-peak, 0.9); }
+  13.623% { stroke-dashoffset: var(--flow-shift, 0px); opacity: var(--flow-peak, 0.9); }
+  17.747%, 100% { stroke-dashoffset: var(--flow-shift, 0px); opacity: 0; }
 }
 @keyframes archify-relay-wake-6 { 
   0% { stroke-dashoffset: var(--flow-len, 0px); opacity: var(--flow-peak, 0.3); animation-timing-function: cubic-bezier(0.45, 0.05, 0.35, 1); }
-  9.803% { stroke-dashoffset: 0px; opacity: var(--flow-peak, 0.3); }
-  30.81%, 100% { stroke-dashoffset: 0px; opacity: 0; }
+  13.623% { stroke-dashoffset: 0px; opacity: var(--flow-peak, 0.3); }
+  36.819%, 100% { stroke-dashoffset: 0px; opacity: 0; }
 }
 @keyframes archify-relay-comet-7 { 
   0% { stroke-dashoffset: calc(var(--flow-len, 0px) + var(--flow-shift, 0px)); opacity: 0; animation-timing-function: cubic-bezier(0.45, 0.05, 0.35, 1); }
-  2.801% { opacity: var(--flow-peak, 0.9); }
-  16.839% { stroke-dashoffset: var(--flow-shift, 0px); opacity: var(--flow-peak, 0.9); }
-  20.574%, 100% { stroke-dashoffset: var(--flow-shift, 0px); opacity: 0; }
+  2.209% { opacity: var(--flow-peak, 0.9); }
+  11.046% { stroke-dashoffset: var(--flow-shift, 0px); opacity: var(--flow-peak, 0.9); }
+  15.169%, 100% { stroke-dashoffset: var(--flow-shift, 0px); opacity: 0; }
 }
 @keyframes archify-relay-wake-7 { 
   0% { stroke-dashoffset: var(--flow-len, 0px); opacity: var(--flow-peak, 0.3); animation-timing-function: cubic-bezier(0.45, 0.05, 0.35, 1); }
-  16.839% { stroke-dashoffset: 0px; opacity: var(--flow-peak, 0.3); }
-  37.846%, 100% { stroke-dashoffset: 0px; opacity: 0; }
+  11.046% { stroke-dashoffset: 0px; opacity: var(--flow-peak, 0.3); }
+  34.242%, 100% { stroke-dashoffset: 0px; opacity: 0; }
 }
 @keyframes archify-relay-comet-8 { 
   0% { stroke-dashoffset: calc(var(--flow-len, 0px) + var(--flow-shift, 0px)); opacity: 0; animation-timing-function: cubic-bezier(0.45, 0.05, 0.35, 1); }
-  2.801% { opacity: var(--flow-peak, 0.9); }
-  14.505% { stroke-dashoffset: var(--flow-shift, 0px); opacity: var(--flow-peak, 0.9); }
-  18.239%, 100% { stroke-dashoffset: var(--flow-shift, 0px); opacity: 0; }
+  3.093% { opacity: var(--flow-peak, 0.9); }
+  21.978% { stroke-dashoffset: var(--flow-shift, 0px); opacity: var(--flow-peak, 0.9); }
+  26.102%, 100% { stroke-dashoffset: var(--flow-shift, 0px); opacity: 0; }
 }
 @keyframes archify-relay-wake-8 { 
-  0% { stroke-dashoffset: var(--flow-len, 0px); opacity: var(--flow-peak, 0.3); animation-timing-function: cubic-bezier(0.45, 0.05, 0.35, 1); }
-  14.505% { stroke-dashoffset: 0px; opacity: var(--flow-peak, 0.3); }
-  35.512%, 100% { stroke-dashoffset: 0px; opacity: 0; }
+  0%, 6.593% { opacity: 0; }
+  21.978% { opacity: var(--flow-peak, 0.3); }
+  45.174%, 100% { stroke-dashoffset: 0px; opacity: 0; }
 }
 @keyframes archify-relay-comet-9 { 
   0% { stroke-dashoffset: calc(var(--flow-len, 0px) + var(--flow-shift, 0px)); opacity: 0; animation-timing-function: cubic-bezier(0.45, 0.05, 0.35, 1); }
-  2.801% { opacity: var(--flow-peak, 0.9); }
-  19.904% { stroke-dashoffset: var(--flow-shift, 0px); opacity: var(--flow-peak, 0.9); }
-  23.639%, 100% { stroke-dashoffset: var(--flow-shift, 0px); opacity: 0; }
+  2.187% { opacity: var(--flow-peak, 0.9); }
+  10.935% { stroke-dashoffset: var(--flow-shift, 0px); opacity: var(--flow-peak, 0.9); }
+  15.059%, 100% { stroke-dashoffset: var(--flow-shift, 0px); opacity: 0; }
 }
 @keyframes archify-relay-wake-9 { 
-  0%, 5.971% { opacity: 0; }
-  19.904% { opacity: var(--flow-peak, 0.3); }
-  40.911%, 100% { stroke-dashoffset: 0px; opacity: 0; }
-}
-@keyframes archify-relay-comet-10 { 
-  0% { stroke-dashoffset: calc(var(--flow-len, 0px) + var(--flow-shift, 0px)); opacity: 0; animation-timing-function: cubic-bezier(0.45, 0.05, 0.35, 1); }
-  1.981% { opacity: var(--flow-peak, 0.9); }
-  9.903% { stroke-dashoffset: var(--flow-shift, 0px); opacity: var(--flow-peak, 0.9); }
-  13.638%, 100% { stroke-dashoffset: var(--flow-shift, 0px); opacity: 0; }
-}
-@keyframes archify-relay-wake-10 { 
   0% { stroke-dashoffset: var(--flow-len, 0px); opacity: var(--flow-peak, 0.3); animation-timing-function: cubic-bezier(0.45, 0.05, 0.35, 1); }
-  9.903% { stroke-dashoffset: 0px; opacity: var(--flow-peak, 0.3); }
-  30.91%, 100% { stroke-dashoffset: 0px; opacity: 0; }
+  10.935% { stroke-dashoffset: 0px; opacity: var(--flow-peak, 0.3); }
+  34.131%, 100% { stroke-dashoffset: 0px; opacity: 0; }
 }
 @keyframes archify-relay-node-0 { 
   0%, 100% { filter: var(--ambient-node-base-filter, none); }
   0% { filter: var(--ambient-node-base-filter, none); }
-  2.801%, 9.803% { filter: var(--ambient-node-base-filter,) drop-shadow(0 0 10px var(--arrow-emphasis)); }
-  28.009% { filter: var(--ambient-node-base-filter, none); }
+  3.093%, 10.825% { filter: var(--ambient-node-base-filter,) drop-shadow(0 0 10px var(--arrow-emphasis)); }
+  30.928% { filter: var(--ambient-node-base-filter, none); }
 }
 @keyframes archify-relay-node-1 { 
   0%, 100% { filter: var(--ambient-node-base-filter, none); }
   0% { filter: var(--ambient-node-base-filter, none); }
-  2.801%, 9.803% { filter: var(--ambient-node-base-filter,) drop-shadow(0 0 10px var(--arrow-emphasis)); }
-  28.009% { filter: var(--ambient-node-base-filter, none); }
+  3.093%, 10.825% { filter: var(--ambient-node-base-filter,) drop-shadow(0 0 10px var(--arrow-emphasis)); }
+  30.928% { filter: var(--ambient-node-base-filter, none); }
 }
 @keyframes archify-relay-node-2 { 
   0%, 100% { filter: var(--ambient-node-base-filter, none); }
-  9.903% { filter: var(--ambient-node-base-filter, none); }
-  12.704%, 19.707% { filter: var(--ambient-node-base-filter,) drop-shadow(0 0 10px var(--arrow-emphasis)); }
-  37.913% { filter: var(--ambient-node-base-filter, none); }
+  11.119% { filter: var(--ambient-node-base-filter, none); }
+  14.212%, 21.944% { filter: var(--ambient-node-base-filter,) drop-shadow(0 0 10px var(--arrow-emphasis)); }
+  42.047% { filter: var(--ambient-node-base-filter, none); }
 }
 @keyframes archify-relay-node-3 { 
   0%, 100% { filter: var(--ambient-node-base-filter, none); }
-  9.903% { filter: var(--ambient-node-base-filter, none); }
-  12.704%, 19.707% { filter: var(--ambient-node-base-filter,) drop-shadow(0 0 10px var(--arrow-emphasis)); }
-  37.913% { filter: var(--ambient-node-base-filter, none); }
+  10.935% { filter: var(--ambient-node-base-filter, none); }
+  14.028%, 21.76% { filter: var(--ambient-node-base-filter,) drop-shadow(0 0 10px var(--arrow-emphasis)); }
+  41.863% { filter: var(--ambient-node-base-filter, none); }
 }
 @keyframes archify-relay-node-4 { 
   0%, 100% { filter: var(--ambient-node-base-filter, none); }
-  22.041% { filter: var(--ambient-node-base-filter, none); }
-  24.842%, 31.844% { filter: var(--ambient-node-base-filter,) drop-shadow(0 0 10px var(--arrow-emphasis)); }
-  50.05% { filter: var(--ambient-node-base-filter, none); }
+  27.135% { filter: var(--ambient-node-base-filter, none); }
+  30.228%, 37.96% { filter: var(--ambient-node-base-filter,) drop-shadow(0 0 10px var(--arrow-emphasis)); }
+  58.063% { filter: var(--ambient-node-base-filter, none); }
 }
 @keyframes archify-relay-node-5 { 
   0%, 100% { filter: var(--ambient-node-base-filter, none); }
-  29.076% { filter: var(--ambient-node-base-filter, none); }
-  31.877%, 38.88% { filter: var(--ambient-node-base-filter,) drop-shadow(0 0 10px var(--arrow-emphasis)); }
-  57.086% { filter: var(--ambient-node-base-filter, none); }
+  27.32% { filter: var(--ambient-node-base-filter, none); }
+  30.412%, 38.144% { filter: var(--ambient-node-base-filter,) drop-shadow(0 0 10px var(--arrow-emphasis)); }
+  58.247% { filter: var(--ambient-node-base-filter, none); }
 }
 @keyframes archify-relay-node-6 { 
   0%, 100% { filter: var(--ambient-node-base-filter, none); }
-  34.178% { filter: var(--ambient-node-base-filter, none); }
-  36.979%, 43.981% { filter: var(--ambient-node-base-filter,) drop-shadow(0 0 10px var(--arrow-emphasis)); }
-  62.187% { filter: var(--ambient-node-base-filter, none); }
+  40.538% { filter: var(--ambient-node-base-filter, none); }
+  43.63%, 51.362% { filter: var(--ambient-node-base-filter,) drop-shadow(0 0 10px var(--arrow-emphasis)); }
+  71.465% { filter: var(--ambient-node-base-filter, none); }
 }
 @keyframes archify-relay-node-7 { 
   0%, 100% { filter: var(--ambient-node-base-filter, none); }
-  41.214% { filter: var(--ambient-node-base-filter, none); }
-  44.015%, 51.017% { filter: var(--ambient-node-base-filter,) drop-shadow(0 0 10px var(--arrow-emphasis)); }
-  69.223% { filter: var(--ambient-node-base-filter, none); }
+  40.722% { filter: var(--ambient-node-base-filter, none); }
+  43.814%, 51.546% { filter: var(--ambient-node-base-filter,) drop-shadow(0 0 10px var(--arrow-emphasis)); }
+  71.649% { filter: var(--ambient-node-base-filter, none); }
 }
 @keyframes archify-relay-node-8 { 
   0%, 100% { filter: var(--ambient-node-base-filter, none); }
-  46.315% { filter: var(--ambient-node-base-filter, none); }
-  49.116%, 56.119% { filter: var(--ambient-node-base-filter,) drop-shadow(0 0 10px var(--arrow-emphasis)); }
-  74.325% { filter: var(--ambient-node-base-filter, none); }
+  0% { filter: var(--ambient-node-base-filter, none); }
+  3.093%, 10.825% { filter: var(--ambient-node-base-filter,) drop-shadow(0 0 10px var(--arrow-emphasis)); }
+  30.928% { filter: var(--ambient-node-base-filter, none); }
 }
 @keyframes archify-relay-node-9 { 
   0%, 100% { filter: var(--ambient-node-base-filter, none); }
-  0% { filter: var(--ambient-node-base-filter, none); }
-  2.801%, 9.803% { filter: var(--ambient-node-base-filter,) drop-shadow(0 0 10px var(--arrow-emphasis)); }
-  28.009% { filter: var(--ambient-node-base-filter, none); }
+  10.825% { filter: var(--ambient-node-base-filter, none); }
+  13.918%, 21.649% { filter: var(--ambient-node-base-filter,) drop-shadow(0 0 10px var(--arrow-emphasis)); }
+  41.753% { filter: var(--ambient-node-base-filter, none); }
 }
 @keyframes archify-relay-node-10 { 
   0%, 100% { filter: var(--ambient-node-base-filter, none); }
-  9.803% { filter: var(--ambient-node-base-filter, none); }
-  12.604%, 19.607% { filter: var(--ambient-node-base-filter,) drop-shadow(0 0 10px var(--arrow-emphasis)); }
-  37.813% { filter: var(--ambient-node-base-filter, none); }
+  0% { filter: var(--ambient-node-base-filter, none); }
+  3.093%, 10.825% { filter: var(--ambient-node-base-filter,) drop-shadow(0 0 10px var(--arrow-emphasis)); }
+  30.928% { filter: var(--ambient-node-base-filter, none); }
 }
 @keyframes archify-relay-node-11 { 
   0%, 100% { filter: var(--ambient-node-base-filter, none); }
-  0% { filter: var(--ambient-node-base-filter, none); }
-  2.801%, 9.803% { filter: var(--ambient-node-base-filter,) drop-shadow(0 0 10px var(--arrow-emphasis)); }
-  28.009% { filter: var(--ambient-node-base-filter, none); }
-}
-@keyframes archify-relay-node-12 { 
-  0%, 100% { filter: var(--ambient-node-base-filter, none); }
-  9.803% { filter: var(--ambient-node-base-filter, none); }
-  12.604%, 19.607% { filter: var(--ambient-node-base-filter,) drop-shadow(0 0 10px var(--arrow-emphasis)); }
-  37.813% { filter: var(--ambient-node-base-filter, none); }
+  10.825% { filter: var(--ambient-node-base-filter, none); }
+  13.918%, 21.649% { filter: var(--ambient-node-base-filter,) drop-shadow(0 0 10px var(--arrow-emphasis)); }
+  41.753% { filter: var(--ambient-node-base-filter, none); }
 }
 :root, :root[data-theme="light"] { color-scheme: light; --basalt-canvas: #f2f2f5; --basalt-inset: #ffffff; --basalt-card: #fafafd; --basalt-raised: #ffffff; --basalt-hover: color-mix(in srgb, var(--basalt-ink) 5%, transparent); --basalt-selected: color-mix(in srgb, var(--basalt-ink) 7.5%, transparent); --basalt-scrim: color-mix(in srgb, var(--basalt-ink) 45%, transparent); --basalt-hairline: color-mix(in srgb, var(--basalt-ink) 9%, transparent); --basalt-input: color-mix(in srgb, var(--basalt-ink) 52%, transparent); --basalt-ink: #262629; --basalt-ink-muted: #525255; --basalt-ink-faint: #69696c; --basalt-brand: #4071a4; --basalt-brand-fill: #4374a6; --basalt-on-brand: #ffffff; --basalt-good: #297146; --basalt-warn: #8c5900; --basalt-bad: #af3b39; --basalt-info: #2c6192; --basalt-tint-pct: 12%; --basalt-line: #77777a; --basalt-dim-bar: #a5a5a9; --basalt-grid: color-mix(in srgb, var(--basalt-ink) 10%, transparent); --basalt-crosshair: color-mix(in srgb, var(--basalt-ink) 40%, transparent); --basalt-chart-1: #4374a6; --basalt-chart-2: #9a6632; --basalt-chart-3: #3a7c74; --basalt-chart-4: #7e397d; --basalt-chart-5: #1c5b1f; --basalt-seq-1: #d8e3f4; --basalt-seq-2: #b0c2de; --basalt-seq-3: #87a3c8; --basalt-seq-4: #5f84b0; --basalt-seq-5: #326697; --basalt-shadow-card: 0 1px 2px color-mix(in srgb, var(--basalt-ink) 5%, transparent); --basalt-shadow-raised: 0 1px 2px rgba(28, 25, 23, 0.1); --basalt-shadow-overlay: 0 8px 24px rgba(28, 25, 23, 0.1); }
 :root { --basalt-surface: var(--basalt-canvas); --basalt-radius-card: 14px; --basalt-radius-inset: 10px; --basalt-radius-ctrl: 8px; --basalt-radius-chip: 5px; --basalt-icon: 1rem; --basalt-font-sans: 'Nunito Sans Variable', ui-sans-serif, system-ui, -apple-system, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif; --basalt-font-head: 'Head Digits', 'Hubot Sans Variable', ui-sans-serif, system-ui, -apple-system, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif; --basalt-font-mono: 'JetBrains Mono Variable', ui-monospace, 'SF Mono', Menlo, monospace; --basalt-font-head-stretch: 88%; --basalt-weight-body: 400; --basalt-weight-medium: 500; --basalt-weight-strong: 600; --basalt-text-micro: 0.6875rem; --basalt-text-micro-lh: 1rem; --basalt-text-xs: 0.75rem; --basalt-text-xs-lh: 1rem; --basalt-text-sm: 0.8125rem; --basalt-text-sm-lh: 1.25rem; --basalt-text-md: 0.9375rem; --basalt-text-md-lh: 1.25rem; --basalt-text-base: 1rem; --basalt-text-base-lh: 1.5rem; --basalt-text-lg: 1.125rem; --basalt-text-lg-lh: 1.5rem; --basalt-text-display: 1.875rem; --basalt-text-display-lh: 1; --basalt-dur-fast: 150ms; --basalt-dur-base: 250ms; --basalt-ease: cubic-bezier(0.4, 0, 0.2, 1); --basalt-measure: 72ch; --basalt-rhythm-1: 0.75em; --basalt-rhythm-2: 1.25em; --basalt-rhythm-3: 2em; --basalt-contract: 3; --basalt-hit: 1.5rem; }
@@ -626,12 +609,12 @@ svg[data-node-ui] .phase-chip { stroke: var(--lane-stroke); stroke-width: 0.75px
 svg[data-node-ui] g[data-edge-from] &gt; rect.c-mask { rx: 7px; stroke: var(--lane-stroke); stroke-width: 0.75px; }
 svg[data-node-ui][data-preset="blueprint"] :is([data-graph-role="structural-frame-label-mask"], g[data-edge-from] &gt; rect.c-mask, .phase-chip) { rx: 2px; }
 svg[data-node-ui][data-preset="editorial"] :is([data-graph-role="structural-frame-label-mask"], g[data-edge-from] &gt; rect.c-mask, .phase-chip) { rx: 3px; }
-:root, svg { --bg: #27272a; --grid: color-mix(in srgb, #e5e5e9 10%, transparent); --canvas-dot: rgba(148, 163, 184, 0.16); --text: #e5e5e9; --text-muted: #d4d4d8; --text-dim: #59595c; --text-faint: #a7a7aa; --panel: #323235; --panel-border: color-mix(in srgb, #e5e5e9 9%, transparent); --lane-fill: color-mix(in srgb, #e5e5e9 4%, transparent); --lane-stroke: #969699; --arrow: #969699; --arrow-emphasis: #a2c3f0; --mask: #323235; --frontend-fill: color-mix(in srgb, #a2c3f0 16%, transparent); --frontend-stroke: #a2c3f0; --backend-fill: color-mix(in srgb, #65d38d 16%, transparent); --backend-stroke: #65d38d; --database-fill: color-mix(in srgb, #c57bc2 16%, transparent); --database-stroke: #c57bc2; --cloud-fill: color-mix(in srgb, #f3b148 16%, transparent); --cloud-stroke: #f3b148; --security-fill: color-mix(in srgb, #ffa59c 16%, transparent); --security-stroke: #ffa59c; --messagebus-fill: color-mix(in srgb, #9a6632 16%, transparent); --messagebus-stroke: #9a6632; --external-fill: color-mix(in srgb, #a7a7aa 16%, transparent); --external-stroke: #a7a7aa; --toolbar-bg: #38383b; --toolbar-border: color-mix(in srgb, #e5e5e9 9%, transparent); --toolbar-text: #e5e5e9; --toolbar-hover: color-mix(in srgb, #e5e5e9 7%, transparent); --toolbar-menu-bg: #38383b; --flow-cycle: ; --flow-halo-peak: ; --flow-glow-peak: ; --flow-tail-peak: ; --flow-head-peak: ; --flow-wake-peak: ; --flow-ripple-peak: ; --flow-peak: ; --basalt-canvas: #27272a; --basalt-inset: #27272a; --basalt-card: #323235; --basalt-raised: #38383b; --basalt-hover: color-mix(in srgb, #e5e5e9 7%, transparent); --basalt-selected: color-mix(in srgb, #e5e5e9 9%, transparent); --basalt-scrim: color-mix(in srgb, #000000 60%, transparent); --basalt-hairline: color-mix(in srgb, #e5e5e9 9%, transparent); --basalt-input: color-mix(in srgb, #e5e5e9 44%, transparent); --basalt-ink: #e5e5e9; --basalt-ink-muted: #d4d4d8; --basalt-ink-faint: #a7a7aa; --basalt-brand: #a2c3f0; --basalt-brand-fill: #4374a6; --basalt-on-brand: #ffffff; --basalt-good: #65d38d; --basalt-warn: #f3b148; --basalt-bad: #ffa59c; --basalt-info: #a2c3f0; --basalt-tint-pct: 16%; --basalt-line: #969699; --basalt-dim-bar: #59595c; --basalt-grid: color-mix(in srgb, #e5e5e9 10%, transparent); --basalt-crosshair: color-mix(in srgb, #e5e5e9 40%, transparent); --basalt-chart-1: #4374a6; --basalt-chart-2: #9a6632; --basalt-chart-3: #3a7c74; --basalt-chart-4: #c57bc2; --basalt-chart-5: #619e5c; --basalt-seq-1: #394351; --basalt-seq-2: #485b73; --basalt-seq-3: #5d799d; --basalt-seq-4: #7a9ecb; --basalt-seq-5: #98c4fc; --basalt-shadow-card: none; --basalt-shadow-raised: 0 1px 2px rgba(0, 0, 0, 0.35), inset 0 0 0 1px color-mix(in srgb, #ffffff 8%, transparent); --basalt-shadow-overlay: 0 8px 24px rgba(0, 0, 0, 0.5); --basalt-surface: #f2f2f5; --basalt-radius-card: 14px; --basalt-radius-inset: 10px; --basalt-radius-ctrl: 8px; --basalt-radius-chip: 5px; --basalt-icon: 1rem; --basalt-font-sans: 'Nunito Sans Variable', ui-sans-serif, system-ui, -apple-system, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif; --basalt-font-head: 'Head Digits', 'Hubot Sans Variable', ui-sans-serif, system-ui, -apple-system, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif; --basalt-font-mono: 'JetBrains Mono Variable', ui-monospace, 'SF Mono', Menlo, monospace; --basalt-font-head-stretch: 88%; --basalt-weight-body: 400; --basalt-weight-medium: 500; --basalt-weight-strong: 600; --basalt-text-micro: 0.6875rem; --basalt-text-micro-lh: 1rem; --basalt-text-xs: 0.75rem; --basalt-text-xs-lh: 1rem; --basalt-text-sm: 0.8125rem; --basalt-text-sm-lh: 1.25rem; --basalt-text-md: 0.9375rem; --basalt-text-md-lh: 1.25rem; --basalt-text-base: 1rem; --basalt-text-base-lh: 1.5rem; --basalt-text-lg: 1.125rem; --basalt-text-lg-lh: 1.5rem; --basalt-text-display: 1.875rem; --basalt-text-display-lh: 1; --basalt-dur-fast: 150ms; --basalt-dur-base: 250ms; --basalt-ease: cubic-bezier(0.4, 0, 0.2, 1); --basalt-measure: 72ch; --basalt-rhythm-1: 0.75em; --basalt-rhythm-2: 1.25em; --basalt-rhythm-3: 2em; --basalt-contract: 3; --basalt-hit: 1.5rem; --basalt-ctl-h: 1.75rem; --basalt-row-h: 2rem; }
+:root, svg { --bg: #27272a; --grid: color-mix(in srgb, #e5e5e9 10%, transparent); --canvas-dot: rgba(148, 163, 184, 0.16); --text: #e5e5e9; --text-muted: #d4d4d8; --text-dim: #59595c; --text-faint: #a7a7aa; --panel: #323235; --panel-border: color-mix(in srgb, #e5e5e9 9%, transparent); --lane-fill: color-mix(in srgb, #e5e5e9 4%, transparent); --lane-stroke: #969699; --arrow: #969699; --arrow-emphasis: #a2c3f0; --mask: #323235; --frontend-fill: color-mix(in srgb, #a2c3f0 16%, transparent); --frontend-stroke: #a2c3f0; --backend-fill: color-mix(in srgb, #65d38d 16%, transparent); --backend-stroke: #65d38d; --database-fill: color-mix(in srgb, #c57bc2 16%, transparent); --database-stroke: #c57bc2; --cloud-fill: color-mix(in srgb, #f3b148 16%, transparent); --cloud-stroke: #f3b148; --security-fill: color-mix(in srgb, #ffa59c 16%, transparent); --security-stroke: #ffa59c; --messagebus-fill: color-mix(in srgb, #9a6632 16%, transparent); --messagebus-stroke: #9a6632; --external-fill: color-mix(in srgb, #a7a7aa 16%, transparent); --external-stroke: #a7a7aa; --toolbar-bg: #38383b; --toolbar-border: color-mix(in srgb, #e5e5e9 9%, transparent); --toolbar-text: #e5e5e9; --toolbar-hover: color-mix(in srgb, #e5e5e9 7%, transparent); --toolbar-menu-bg: #38383b; --flow-cycle: ; --flow-halo-peak: ; --flow-glow-peak: ; --flow-tail-peak: ; --flow-head-peak: ; --flow-wake-peak: ; --flow-ripple-peak: ; --flow-peak: ; --basalt-canvas: #27272a; --basalt-inset: #27272a; --basalt-card: #323235; --basalt-raised: #38383b; --basalt-hover: color-mix(in srgb, #e5e5e9 7%, transparent); --basalt-selected: color-mix(in srgb, #e5e5e9 9%, transparent); --basalt-scrim: color-mix(in srgb, #000000 60%, transparent); --basalt-hairline: color-mix(in srgb, #e5e5e9 9%, transparent); --basalt-input: color-mix(in srgb, #e5e5e9 44%, transparent); --basalt-ink: #e5e5e9; --basalt-ink-muted: #d4d4d8; --basalt-ink-faint: #a7a7aa; --basalt-brand: #a2c3f0; --basalt-brand-fill: #4374a6; --basalt-on-brand: #ffffff; --basalt-good: #65d38d; --basalt-warn: #f3b148; --basalt-bad: #ffa59c; --basalt-info: #a2c3f0; --basalt-tint-pct: 16%; --basalt-line: #969699; --basalt-dim-bar: #59595c; --basalt-grid: color-mix(in srgb, #e5e5e9 10%, transparent); --basalt-crosshair: color-mix(in srgb, #e5e5e9 40%, transparent); --basalt-chart-1: #4374a6; --basalt-chart-2: #9a6632; --basalt-chart-3: #3a7c74; --basalt-chart-4: #c57bc2; --basalt-chart-5: #619e5c; --basalt-seq-1: #394351; --basalt-seq-2: #485b73; --basalt-seq-3: #5d799d; --basalt-seq-4: #7a9ecb; --basalt-seq-5: #98c4fc; --basalt-shadow-card: none; --basalt-shadow-raised: 0 1px 2px rgba(0, 0, 0, 0.35), inset 0 0 0 1px color-mix(in srgb, #ffffff 8%, transparent); --basalt-shadow-overlay: 0 8px 24px rgba(0, 0, 0, 0.5); --basalt-surface: #27272a; --basalt-radius-card: 14px; --basalt-radius-inset: 10px; --basalt-radius-ctrl: 8px; --basalt-radius-chip: 5px; --basalt-icon: 1rem; --basalt-font-sans: 'Nunito Sans Variable', ui-sans-serif, system-ui, -apple-system, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif; --basalt-font-head: 'Head Digits', 'Hubot Sans Variable', ui-sans-serif, system-ui, -apple-system, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif; --basalt-font-mono: 'JetBrains Mono Variable', ui-monospace, 'SF Mono', Menlo, monospace; --basalt-font-head-stretch: 88%; --basalt-weight-body: 400; --basalt-weight-medium: 500; --basalt-weight-strong: 600; --basalt-text-micro: 0.6875rem; --basalt-text-micro-lh: 1rem; --basalt-text-xs: 0.75rem; --basalt-text-xs-lh: 1rem; --basalt-text-sm: 0.8125rem; --basalt-text-sm-lh: 1.25rem; --basalt-text-md: 0.9375rem; --basalt-text-md-lh: 1.25rem; --basalt-text-base: 1rem; --basalt-text-base-lh: 1.5rem; --basalt-text-lg: 1.125rem; --basalt-text-lg-lh: 1.5rem; --basalt-text-display: 1.875rem; --basalt-text-display-lh: 1; --basalt-dur-fast: 150ms; --basalt-dur-base: 250ms; --basalt-ease: cubic-bezier(0.4, 0, 0.2, 1); --basalt-measure: 72ch; --basalt-rhythm-1: 0.75em; --basalt-rhythm-2: 1.25em; --basalt-rhythm-3: 2em; --basalt-contract: 3; --basalt-hit: 1.5rem; --basalt-ctl-h: 1.75rem; --basalt-row-h: 2rem; }
 @media (prefers-color-scheme: light) { :root, svg { --bg: #f2f2f5; --grid: color-mix(in srgb, #262629 10%, transparent); --canvas-dot: #e2e7ec; --text: #262629; --text-muted: #525255; --text-dim: #a5a5a9; --text-faint: #69696c; --panel: #fafafd; --panel-border: color-mix(in srgb, #262629 9%, transparent); --lane-fill: color-mix(in srgb, #262629 4%, transparent); --lane-stroke: #77777a; --arrow: #77777a; --arrow-emphasis: #2c6192; --mask: #fafafd; --frontend-fill: color-mix(in srgb, #4071a4 12%, transparent); --frontend-stroke: #4071a4; --backend-fill: color-mix(in srgb, #297146 12%, transparent); --backend-stroke: #297146; --database-fill: color-mix(in srgb, #7e397d 12%, transparent); --database-stroke: #7e397d; --cloud-fill: color-mix(in srgb, #8c5900 12%, transparent); --cloud-stroke: #8c5900; --security-fill: color-mix(in srgb, #af3b39 12%, transparent); --security-stroke: #af3b39; --messagebus-fill: color-mix(in srgb, #9a6632 12%, transparent); --messagebus-stroke: #9a6632; --external-fill: color-mix(in srgb, #69696c 12%, transparent); --external-stroke: #69696c; --toolbar-bg: #ffffff; --toolbar-border: color-mix(in srgb, #262629 9%, transparent); --toolbar-text: #262629; --toolbar-hover: color-mix(in srgb, #262629 5%, transparent); --toolbar-menu-bg: #ffffff; --flow-cycle: ; --flow-halo-peak: ; --flow-glow-peak: ; --flow-tail-peak: ; --flow-head-peak: ; --flow-wake-peak: ; --flow-ripple-peak: ; --flow-peak: ; --basalt-canvas: #f2f2f5; --basalt-inset: #ffffff; --basalt-card: #fafafd; --basalt-raised: #ffffff; --basalt-hover: color-mix(in srgb, #262629 5%, transparent); --basalt-selected: color-mix(in srgb, #262629 7.5%, transparent); --basalt-scrim: color-mix(in srgb, #262629 45%, transparent); --basalt-hairline: color-mix(in srgb, #262629 9%, transparent); --basalt-input: color-mix(in srgb, #262629 52%, transparent); --basalt-ink: #262629; --basalt-ink-muted: #525255; --basalt-ink-faint: #69696c; --basalt-brand: #4071a4; --basalt-brand-fill: #4374a6; --basalt-on-brand: #ffffff; --basalt-good: #297146; --basalt-warn: #8c5900; --basalt-bad: #af3b39; --basalt-info: #2c6192; --basalt-tint-pct: 12%; --basalt-line: #77777a; --basalt-dim-bar: #a5a5a9; --basalt-grid: color-mix(in srgb, #262629 10%, transparent); --basalt-crosshair: color-mix(in srgb, #262629 40%, transparent); --basalt-chart-1: #4374a6; --basalt-chart-2: #9a6632; --basalt-chart-3: #3a7c74; --basalt-chart-4: #7e397d; --basalt-chart-5: #1c5b1f; --basalt-seq-1: #d8e3f4; --basalt-seq-2: #b0c2de; --basalt-seq-3: #87a3c8; --basalt-seq-4: #5f84b0; --basalt-seq-5: #326697; --basalt-shadow-card: 0 1px 2px color-mix(in srgb, #262629 5%, transparent); --basalt-shadow-raised: 0 1px 2px rgba(28, 25, 23, 0.1); --basalt-shadow-overlay: 0 8px 24px rgba(28, 25, 23, 0.1); --basalt-surface: #f2f2f5; --basalt-radius-card: 14px; --basalt-radius-inset: 10px; --basalt-radius-ctrl: 8px; --basalt-radius-chip: 5px; --basalt-icon: 1rem; --basalt-font-sans: 'Nunito Sans Variable', ui-sans-serif, system-ui, -apple-system, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif; --basalt-font-head: 'Head Digits', 'Hubot Sans Variable', ui-sans-serif, system-ui, -apple-system, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif; --basalt-font-mono: 'JetBrains Mono Variable', ui-monospace, 'SF Mono', Menlo, monospace; --basalt-font-head-stretch: 88%; --basalt-weight-body: 400; --basalt-weight-medium: 500; --basalt-weight-strong: 600; --basalt-text-micro: 0.6875rem; --basalt-text-micro-lh: 1rem; --basalt-text-xs: 0.75rem; --basalt-text-xs-lh: 1rem; --basalt-text-sm: 0.8125rem; --basalt-text-sm-lh: 1.25rem; --basalt-text-md: 0.9375rem; --basalt-text-md-lh: 1.25rem; --basalt-text-base: 1rem; --basalt-text-base-lh: 1.5rem; --basalt-text-lg: 1.125rem; --basalt-text-lg-lh: 1.5rem; --basalt-text-display: 1.875rem; --basalt-text-display-lh: 1; --basalt-dur-fast: 150ms; --basalt-dur-base: 250ms; --basalt-ease: cubic-bezier(0.4, 0, 0.2, 1); --basalt-measure: 72ch; --basalt-rhythm-1: 0.75em; --basalt-rhythm-2: 1.25em; --basalt-rhythm-3: 2em; --basalt-contract: 3; --basalt-hit: 1.5rem; --basalt-ctl-h: 1.75rem; --basalt-row-h: 2rem; } }
 svg[data-theme="light"] { --bg: #f2f2f5; --grid: color-mix(in srgb, #262629 10%, transparent); --canvas-dot: #e2e7ec; --text: #262629; --text-muted: #525255; --text-dim: #a5a5a9; --text-faint: #69696c; --panel: #fafafd; --panel-border: color-mix(in srgb, #262629 9%, transparent); --lane-fill: color-mix(in srgb, #262629 4%, transparent); --lane-stroke: #77777a; --arrow: #77777a; --arrow-emphasis: #2c6192; --mask: #fafafd; --frontend-fill: color-mix(in srgb, #4071a4 12%, transparent); --frontend-stroke: #4071a4; --backend-fill: color-mix(in srgb, #297146 12%, transparent); --backend-stroke: #297146; --database-fill: color-mix(in srgb, #7e397d 12%, transparent); --database-stroke: #7e397d; --cloud-fill: color-mix(in srgb, #8c5900 12%, transparent); --cloud-stroke: #8c5900; --security-fill: color-mix(in srgb, #af3b39 12%, transparent); --security-stroke: #af3b39; --messagebus-fill: color-mix(in srgb, #9a6632 12%, transparent); --messagebus-stroke: #9a6632; --external-fill: color-mix(in srgb, #69696c 12%, transparent); --external-stroke: #69696c; --toolbar-bg: #ffffff; --toolbar-border: color-mix(in srgb, #262629 9%, transparent); --toolbar-text: #262629; --toolbar-hover: color-mix(in srgb, #262629 5%, transparent); --toolbar-menu-bg: #ffffff; --flow-cycle: ; --flow-halo-peak: ; --flow-glow-peak: ; --flow-tail-peak: ; --flow-head-peak: ; --flow-wake-peak: ; --flow-ripple-peak: ; --flow-peak: ; --basalt-canvas: #f2f2f5; --basalt-inset: #ffffff; --basalt-card: #fafafd; --basalt-raised: #ffffff; --basalt-hover: color-mix(in srgb, #262629 5%, transparent); --basalt-selected: color-mix(in srgb, #262629 7.5%, transparent); --basalt-scrim: color-mix(in srgb, #262629 45%, transparent); --basalt-hairline: color-mix(in srgb, #262629 9%, transparent); --basalt-input: color-mix(in srgb, #262629 52%, transparent); --basalt-ink: #262629; --basalt-ink-muted: #525255; --basalt-ink-faint: #69696c; --basalt-brand: #4071a4; --basalt-brand-fill: #4374a6; --basalt-on-brand: #ffffff; --basalt-good: #297146; --basalt-warn: #8c5900; --basalt-bad: #af3b39; --basalt-info: #2c6192; --basalt-tint-pct: 12%; --basalt-line: #77777a; --basalt-dim-bar: #a5a5a9; --basalt-grid: color-mix(in srgb, #262629 10%, transparent); --basalt-crosshair: color-mix(in srgb, #262629 40%, transparent); --basalt-chart-1: #4374a6; --basalt-chart-2: #9a6632; --basalt-chart-3: #3a7c74; --basalt-chart-4: #7e397d; --basalt-chart-5: #1c5b1f; --basalt-seq-1: #d8e3f4; --basalt-seq-2: #b0c2de; --basalt-seq-3: #87a3c8; --basalt-seq-4: #5f84b0; --basalt-seq-5: #326697; --basalt-shadow-card: 0 1px 2px color-mix(in srgb, #262629 5%, transparent); --basalt-shadow-raised: 0 1px 2px rgba(28, 25, 23, 0.1); --basalt-shadow-overlay: 0 8px 24px rgba(28, 25, 23, 0.1); --basalt-surface: #f2f2f5; --basalt-radius-card: 14px; --basalt-radius-inset: 10px; --basalt-radius-ctrl: 8px; --basalt-radius-chip: 5px; --basalt-icon: 1rem; --basalt-font-sans: 'Nunito Sans Variable', ui-sans-serif, system-ui, -apple-system, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif; --basalt-font-head: 'Head Digits', 'Hubot Sans Variable', ui-sans-serif, system-ui, -apple-system, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif; --basalt-font-mono: 'JetBrains Mono Variable', ui-monospace, 'SF Mono', Menlo, monospace; --basalt-font-head-stretch: 88%; --basalt-weight-body: 400; --basalt-weight-medium: 500; --basalt-weight-strong: 600; --basalt-text-micro: 0.6875rem; --basalt-text-micro-lh: 1rem; --basalt-text-xs: 0.75rem; --basalt-text-xs-lh: 1rem; --basalt-text-sm: 0.8125rem; --basalt-text-sm-lh: 1.25rem; --basalt-text-md: 0.9375rem; --basalt-text-md-lh: 1.25rem; --basalt-text-base: 1rem; --basalt-text-base-lh: 1.5rem; --basalt-text-lg: 1.125rem; --basalt-text-lg-lh: 1.5rem; --basalt-text-display: 1.875rem; --basalt-text-display-lh: 1; --basalt-dur-fast: 150ms; --basalt-dur-base: 250ms; --basalt-ease: cubic-bezier(0.4, 0, 0.2, 1); --basalt-measure: 72ch; --basalt-rhythm-1: 0.75em; --basalt-rhythm-2: 1.25em; --basalt-rhythm-3: 2em; --basalt-contract: 3; --basalt-hit: 1.5rem; --basalt-ctl-h: 1.75rem; --basalt-row-h: 2rem; }
-svg[data-theme="dark"] { --bg: #27272a; --grid: color-mix(in srgb, #e5e5e9 10%, transparent); --canvas-dot: rgba(148, 163, 184, 0.16); --text: #e5e5e9; --text-muted: #d4d4d8; --text-dim: #59595c; --text-faint: #a7a7aa; --panel: #323235; --panel-border: color-mix(in srgb, #e5e5e9 9%, transparent); --lane-fill: color-mix(in srgb, #e5e5e9 4%, transparent); --lane-stroke: #969699; --arrow: #969699; --arrow-emphasis: #a2c3f0; --mask: #323235; --frontend-fill: color-mix(in srgb, #a2c3f0 16%, transparent); --frontend-stroke: #a2c3f0; --backend-fill: color-mix(in srgb, #65d38d 16%, transparent); --backend-stroke: #65d38d; --database-fill: color-mix(in srgb, #c57bc2 16%, transparent); --database-stroke: #c57bc2; --cloud-fill: color-mix(in srgb, #f3b148 16%, transparent); --cloud-stroke: #f3b148; --security-fill: color-mix(in srgb, #ffa59c 16%, transparent); --security-stroke: #ffa59c; --messagebus-fill: color-mix(in srgb, #9a6632 16%, transparent); --messagebus-stroke: #9a6632; --external-fill: color-mix(in srgb, #a7a7aa 16%, transparent); --external-stroke: #a7a7aa; --toolbar-bg: #38383b; --toolbar-border: color-mix(in srgb, #e5e5e9 9%, transparent); --toolbar-text: #e5e5e9; --toolbar-hover: color-mix(in srgb, #e5e5e9 7%, transparent); --toolbar-menu-bg: #38383b; --flow-cycle: ; --flow-halo-peak: ; --flow-glow-peak: ; --flow-tail-peak: ; --flow-head-peak: ; --flow-wake-peak: ; --flow-ripple-peak: ; --flow-peak: ; --basalt-canvas: #27272a; --basalt-inset: #27272a; --basalt-card: #323235; --basalt-raised: #38383b; --basalt-hover: color-mix(in srgb, #e5e5e9 7%, transparent); --basalt-selected: color-mix(in srgb, #e5e5e9 9%, transparent); --basalt-scrim: color-mix(in srgb, #000000 60%, transparent); --basalt-hairline: color-mix(in srgb, #e5e5e9 9%, transparent); --basalt-input: color-mix(in srgb, #e5e5e9 44%, transparent); --basalt-ink: #e5e5e9; --basalt-ink-muted: #d4d4d8; --basalt-ink-faint: #a7a7aa; --basalt-brand: #a2c3f0; --basalt-brand-fill: #4374a6; --basalt-on-brand: #ffffff; --basalt-good: #65d38d; --basalt-warn: #f3b148; --basalt-bad: #ffa59c; --basalt-info: #a2c3f0; --basalt-tint-pct: 16%; --basalt-line: #969699; --basalt-dim-bar: #59595c; --basalt-grid: color-mix(in srgb, #e5e5e9 10%, transparent); --basalt-crosshair: color-mix(in srgb, #e5e5e9 40%, transparent); --basalt-chart-1: #4374a6; --basalt-chart-2: #9a6632; --basalt-chart-3: #3a7c74; --basalt-chart-4: #c57bc2; --basalt-chart-5: #619e5c; --basalt-seq-1: #394351; --basalt-seq-2: #485b73; --basalt-seq-3: #5d799d; --basalt-seq-4: #7a9ecb; --basalt-seq-5: #98c4fc; --basalt-shadow-card: none; --basalt-shadow-raised: 0 1px 2px rgba(0, 0, 0, 0.35), inset 0 0 0 1px color-mix(in srgb, #ffffff 8%, transparent); --basalt-shadow-overlay: 0 8px 24px rgba(0, 0, 0, 0.5); --basalt-surface: #f2f2f5; --basalt-radius-card: 14px; --basalt-radius-inset: 10px; --basalt-radius-ctrl: 8px; --basalt-radius-chip: 5px; --basalt-icon: 1rem; --basalt-font-sans: 'Nunito Sans Variable', ui-sans-serif, system-ui, -apple-system, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif; --basalt-font-head: 'Head Digits', 'Hubot Sans Variable', ui-sans-serif, system-ui, -apple-system, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif; --basalt-font-mono: 'JetBrains Mono Variable', ui-monospace, 'SF Mono', Menlo, monospace; --basalt-font-head-stretch: 88%; --basalt-weight-body: 400; --basalt-weight-medium: 500; --basalt-weight-strong: 600; --basalt-text-micro: 0.6875rem; --basalt-text-micro-lh: 1rem; --basalt-text-xs: 0.75rem; --basalt-text-xs-lh: 1rem; --basalt-text-sm: 0.8125rem; --basalt-text-sm-lh: 1.25rem; --basalt-text-md: 0.9375rem; --basalt-text-md-lh: 1.25rem; --basalt-text-base: 1rem; --basalt-text-base-lh: 1.5rem; --basalt-text-lg: 1.125rem; --basalt-text-lg-lh: 1.5rem; --basalt-text-display: 1.875rem; --basalt-text-display-lh: 1; --basalt-dur-fast: 150ms; --basalt-dur-base: 250ms; --basalt-ease: cubic-bezier(0.4, 0, 0.2, 1); --basalt-measure: 72ch; --basalt-rhythm-1: 0.75em; --basalt-rhythm-2: 1.25em; --basalt-rhythm-3: 2em; --basalt-contract: 3; --basalt-hit: 1.5rem; --basalt-ctl-h: 1.75rem; --basalt-row-h: 2rem; }
+svg[data-theme="dark"] { --bg: #27272a; --grid: color-mix(in srgb, #e5e5e9 10%, transparent); --canvas-dot: rgba(148, 163, 184, 0.16); --text: #e5e5e9; --text-muted: #d4d4d8; --text-dim: #59595c; --text-faint: #a7a7aa; --panel: #323235; --panel-border: color-mix(in srgb, #e5e5e9 9%, transparent); --lane-fill: color-mix(in srgb, #e5e5e9 4%, transparent); --lane-stroke: #969699; --arrow: #969699; --arrow-emphasis: #a2c3f0; --mask: #323235; --frontend-fill: color-mix(in srgb, #a2c3f0 16%, transparent); --frontend-stroke: #a2c3f0; --backend-fill: color-mix(in srgb, #65d38d 16%, transparent); --backend-stroke: #65d38d; --database-fill: color-mix(in srgb, #c57bc2 16%, transparent); --database-stroke: #c57bc2; --cloud-fill: color-mix(in srgb, #f3b148 16%, transparent); --cloud-stroke: #f3b148; --security-fill: color-mix(in srgb, #ffa59c 16%, transparent); --security-stroke: #ffa59c; --messagebus-fill: color-mix(in srgb, #9a6632 16%, transparent); --messagebus-stroke: #9a6632; --external-fill: color-mix(in srgb, #a7a7aa 16%, transparent); --external-stroke: #a7a7aa; --toolbar-bg: #38383b; --toolbar-border: color-mix(in srgb, #e5e5e9 9%, transparent); --toolbar-text: #e5e5e9; --toolbar-hover: color-mix(in srgb, #e5e5e9 7%, transparent); --toolbar-menu-bg: #38383b; --flow-cycle: ; --flow-halo-peak: ; --flow-glow-peak: ; --flow-tail-peak: ; --flow-head-peak: ; --flow-wake-peak: ; --flow-ripple-peak: ; --flow-peak: ; --basalt-canvas: #27272a; --basalt-inset: #27272a; --basalt-card: #323235; --basalt-raised: #38383b; --basalt-hover: color-mix(in srgb, #e5e5e9 7%, transparent); --basalt-selected: color-mix(in srgb, #e5e5e9 9%, transparent); --basalt-scrim: color-mix(in srgb, #000000 60%, transparent); --basalt-hairline: color-mix(in srgb, #e5e5e9 9%, transparent); --basalt-input: color-mix(in srgb, #e5e5e9 44%, transparent); --basalt-ink: #e5e5e9; --basalt-ink-muted: #d4d4d8; --basalt-ink-faint: #a7a7aa; --basalt-brand: #a2c3f0; --basalt-brand-fill: #4374a6; --basalt-on-brand: #ffffff; --basalt-good: #65d38d; --basalt-warn: #f3b148; --basalt-bad: #ffa59c; --basalt-info: #a2c3f0; --basalt-tint-pct: 16%; --basalt-line: #969699; --basalt-dim-bar: #59595c; --basalt-grid: color-mix(in srgb, #e5e5e9 10%, transparent); --basalt-crosshair: color-mix(in srgb, #e5e5e9 40%, transparent); --basalt-chart-1: #4374a6; --basalt-chart-2: #9a6632; --basalt-chart-3: #3a7c74; --basalt-chart-4: #c57bc2; --basalt-chart-5: #619e5c; --basalt-seq-1: #394351; --basalt-seq-2: #485b73; --basalt-seq-3: #5d799d; --basalt-seq-4: #7a9ecb; --basalt-seq-5: #98c4fc; --basalt-shadow-card: none; --basalt-shadow-raised: 0 1px 2px rgba(0, 0, 0, 0.35), inset 0 0 0 1px color-mix(in srgb, #ffffff 8%, transparent); --basalt-shadow-overlay: 0 8px 24px rgba(0, 0, 0, 0.5); --basalt-surface: #27272a; --basalt-radius-card: 14px; --basalt-radius-inset: 10px; --basalt-radius-ctrl: 8px; --basalt-radius-chip: 5px; --basalt-icon: 1rem; --basalt-font-sans: 'Nunito Sans Variable', ui-sans-serif, system-ui, -apple-system, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif; --basalt-font-head: 'Head Digits', 'Hubot Sans Variable', ui-sans-serif, system-ui, -apple-system, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif; --basalt-font-mono: 'JetBrains Mono Variable', ui-monospace, 'SF Mono', Menlo, monospace; --basalt-font-head-stretch: 88%; --basalt-weight-body: 400; --basalt-weight-medium: 500; --basalt-weight-strong: 600; --basalt-text-micro: 0.6875rem; --basalt-text-micro-lh: 1rem; --basalt-text-xs: 0.75rem; --basalt-text-xs-lh: 1rem; --basalt-text-sm: 0.8125rem; --basalt-text-sm-lh: 1.25rem; --basalt-text-md: 0.9375rem; --basalt-text-md-lh: 1.25rem; --basalt-text-base: 1rem; --basalt-text-base-lh: 1.5rem; --basalt-text-lg: 1.125rem; --basalt-text-lg-lh: 1.5rem; --basalt-text-display: 1.875rem; --basalt-text-display-lh: 1; --basalt-dur-fast: 150ms; --basalt-dur-base: 250ms; --basalt-ease: cubic-bezier(0.4, 0, 0.2, 1); --basalt-measure: 72ch; --basalt-rhythm-1: 0.75em; --basalt-rhythm-2: 1.25em; --basalt-rhythm-3: 2em; --basalt-contract: 3; --basalt-hit: 1.5rem; --basalt-ctl-h: 1.75rem; --basalt-row-h: 2rem; }
 rect.c-bg-rect { fill: var(--bg); }
-</style><rect x="0" y="0" width="975" height="528" class="c-bg-rect"/>
+</style><rect x="0" y="0" width="921" height="528" class="c-bg-rect"/>
         <title id="archify-diagram-title">Checkpoints: what reaches the owner</title>
         <desc id="archify-diagram-description">A workflow diagram generated by Archify.</desc>
         <!-- Definitions -->
@@ -678,13 +661,13 @@ rect.c-bg-rect { fill: var(--bg); }
         <rect width="100%" height="100%" fill="url(#grid)"/>
 
         <!-- Swimlanes -->
-        <rect data-graph-role="structural-frame" data-composition-frame-kind="lane" data-composition-frame-id="lane-0" x="40" y="52" width="919" height="104" rx="10" class="c-lane" stroke-width="1"/>
+        <rect data-graph-role="structural-frame" data-composition-frame-kind="lane" data-composition-frame-id="lane-0" x="40" y="52" width="865" height="104" rx="10" class="c-lane" stroke-width="1"/>
         <text x="54" y="74" class="t-muted" font-size="10" font-weight="600">01 / Decision</text>
 
-        <rect data-graph-role="structural-frame" data-composition-frame-kind="lane" data-composition-frame-id="lane-1" x="40" y="176" width="919" height="104" rx="10" class="c-lane" stroke-width="1"/>
+        <rect data-graph-role="structural-frame" data-composition-frame-kind="lane" data-composition-frame-id="lane-1" x="40" y="176" width="865" height="104" rx="10" class="c-lane" stroke-width="1"/>
         <text x="54" y="198" class="t-muted" font-size="10" font-weight="600">02 / Spec</text>
 
-        <rect data-graph-role="structural-frame" data-composition-frame-kind="lane" data-composition-frame-id="lane-2" x="40" y="300" width="919" height="104" rx="10" class="c-lane" stroke-width="1"/>
+        <rect data-graph-role="structural-frame" data-composition-frame-kind="lane" data-composition-frame-id="lane-2" x="40" y="300" width="865" height="104" rx="10" class="c-lane" stroke-width="1"/>
         <text x="54" y="322" class="t-muted" font-size="10" font-weight="600">03 / Errand</text>
 
         <!-- Phase headers -->
@@ -694,17 +677,16 @@ rect.c-bg-rect { fill: var(--bg); }
 
 
         <!-- Edge paths -->
-        <path data-edge-from="ask" data-edge-to="policy" data-edge-key="0" data-edge-id="ask-policy" data-composition-routing="workflow-v2-auto" data-edge-role="" data-composition-points="162,119;280.8,119" d="M 162 119 L 280.8 119" class="a-emphasis" data-animate="edge" style="--step: 0;" stroke-width="1.8" marker-end="url(#arrowhead-emphasis)"/>
-        <path data-edge-from="judge" data-edge-to="owner-d" data-edge-label="hands on" data-edge-key="1" data-edge-id="judge-owner" data-composition-routing="workflow-v2-auto" data-edge-role="" data-composition-points="520.4,119;576.8,119" d="M 520.4 119 L 576.8 119" class="a-emphasis" data-animate="edge" style="--step: 2;" stroke-width="1.8" marker-end="url(#arrowhead-emphasis)"/>
-        <path data-edge-from="owner-e" data-edge-to="checked" data-edge-label="not needed" data-edge-key="2" data-edge-id="owner-checked" data-composition-routing="workflow-v2-auto" data-edge-role="" data-composition-points="668.8,367;734.8,367" d="M 668.8 367 L 734.8 367" class="a-dashed" data-animate="edge" style="--step: 7;" stroke-width="1.4" marker-end="url(#arrowhead-dashed)"/>
-        <path data-edge-from="owner-d" data-edge-to="default-d" data-edge-label="no answer" data-edge-key="3" data-edge-id="owner-default" data-composition-routing="workflow-v2-auto" data-edge-role="" data-composition-points="668.8,119;734.8,119" d="M 668.8 119 L 734.8 119" class="a-dashed" data-animate="edge" style="--step: 3;" stroke-width="1.4" marker-end="url(#arrowhead-dashed)"/>
-        <path data-edge-from="owner-s" data-edge-to="default-s" data-edge-label="24 hours" data-edge-key="4" data-edge-id="owner-s-default" data-composition-routing="workflow-v2-auto" data-edge-role="" data-composition-points="668.8,243;734.8,243" d="M 668.8 243 L 734.8 243" class="a-dashed" data-animate="edge" style="--step: 9;" stroke-width="1.4" marker-end="url(#arrowhead-dashed)"/>
-        <path data-edge-from="policy" data-edge-to="judge" data-edge-label="no rule" data-edge-key="5" data-edge-id="policy-judge" data-composition-routing="workflow-v2-auto" data-edge-role="" data-composition-points="376.8,119;428.4,119" d="M 376.8 119 L 428.4 119" class="a-emphasis" data-animate="edge" style="--step: 1;" stroke-width="1.8" marker-end="url(#arrowhead-emphasis)"/>
-        <path data-edge-from="raise" data-edge-to="screen-e" data-edge-key="6" data-edge-id="raise-screen" data-composition-routing="workflow-v2-auto" data-edge-role="" data-composition-points="184,367;254.8,367" d="M 184 367 L 254.8 367" class="a-emphasis" data-animate="edge" style="--step: 11;" stroke-width="1.8" marker-end="url(#arrowhead-emphasis)"/>
-        <path data-edge-from="screen-s" data-edge-to="owner-s" data-edge-label="reaches him" data-edge-key="7" data-edge-id="screen-owner" data-composition-routing="workflow-v2-auto" data-edge-role="" data-composition-points="374.8,243;576.8,243" d="M 374.8 243 L 576.8 243" class="a-emphasis" data-animate="edge" style="--step: 12;" stroke-width="1.8" marker-end="url(#arrowhead-emphasis)"/>
-        <path data-edge-from="screen-e" data-edge-to="owner-e" data-edge-label="needs hands" data-edge-key="8" data-edge-id="screen-owner-e" data-composition-routing="workflow-v2-auto" data-edge-role="" data-composition-points="402.8,367;576.8,367" d="M 402.8 367 L 576.8 367" class="a-emphasis" data-animate="edge" style="--step: 12;" stroke-width="1.8" marker-end="url(#arrowhead-emphasis)"/>
-        <path data-edge-from="screen-e" data-edge-to="raise" data-edge-label="turned away" data-edge-key="9" data-edge-id="screen-raise" data-composition-routing="workflow-v2-auto" data-edge-role="return" data-composition-points="328.8,393;328.8,409;116,409;116,393" d="M 328.8 393 L 328.8 401 Q 328.8 409 320.8 409 L 124 409 Q 116 409 116 401 L 116 393" class="a-security" data-animate="edge" style="--step: 12;" stroke-width="1.4" marker-end="url(#arrowhead-security)"/>
-        <path data-edge-from="submit" data-edge-to="screen-s" data-edge-key="10" data-edge-id="submit-screen" data-composition-routing="workflow-v2-auto" data-edge-role="" data-composition-points="164,243;282.8,243" d="M 164 243 L 282.8 243" class="a-emphasis" data-animate="edge" style="--step: 12;" stroke-width="1.8" marker-end="url(#arrowhead-emphasis)"/>
+        <path data-edge-from="ask" data-edge-to="judge" data-edge-key="0" data-edge-id="ask-judge" data-composition-routing="workflow-v2-auto" data-edge-role="" data-composition-points="162,119;282.8,119" d="M 162 119 L 282.8 119" class="a-emphasis" data-animate="edge" style="--step: 0;" stroke-width="1.8" marker-end="url(#arrowhead-emphasis)"/>
+        <path data-edge-from="judge" data-edge-to="owner-d" data-edge-label="hands on" data-edge-key="1" data-edge-id="judge-owner" data-composition-routing="workflow-v2-auto" data-edge-role="" data-composition-points="374.8,119;522.8,119" d="M 374.8 119 L 522.8 119" class="a-emphasis" data-animate="edge" style="--step: 1;" stroke-width="1.8" marker-end="url(#arrowhead-emphasis)"/>
+        <path data-edge-from="owner-e" data-edge-to="checked" data-edge-label="not needed" data-edge-key="2" data-edge-id="owner-checked" data-composition-routing="workflow-v2-auto" data-edge-role="" data-composition-points="614.8,367;680.8,367" d="M 614.8 367 L 680.8 367" class="a-dashed" data-animate="edge" style="--step: 6;" stroke-width="1.4" marker-end="url(#arrowhead-dashed)"/>
+        <path data-edge-from="owner-d" data-edge-to="default-d" data-edge-label="no answer" data-edge-key="3" data-edge-id="owner-default" data-composition-routing="workflow-v2-auto" data-edge-role="" data-composition-points="614.8,119;680.8,119" d="M 614.8 119 L 680.8 119" class="a-dashed" data-animate="edge" style="--step: 2;" stroke-width="1.4" marker-end="url(#arrowhead-dashed)"/>
+        <path data-edge-from="owner-s" data-edge-to="default-s" data-edge-label="24 hours" data-edge-key="4" data-edge-id="owner-s-default" data-composition-routing="workflow-v2-auto" data-edge-role="" data-composition-points="614.8,243;680.8,243" d="M 614.8 243 L 680.8 243" class="a-dashed" data-animate="edge" style="--step: 8;" stroke-width="1.4" marker-end="url(#arrowhead-dashed)"/>
+        <path data-edge-from="raise" data-edge-to="screen-e" data-edge-key="5" data-edge-id="raise-screen" data-composition-routing="workflow-v2-auto" data-edge-role="" data-composition-points="184,367;254.8,367" d="M 184 367 L 254.8 367" class="a-emphasis" data-animate="edge" style="--step: 9;" stroke-width="1.8" marker-end="url(#arrowhead-emphasis)"/>
+        <path data-edge-from="screen-s" data-edge-to="owner-s" data-edge-label="reaches him" data-edge-key="6" data-edge-id="screen-owner" data-composition-routing="workflow-v2-auto" data-edge-role="" data-composition-points="374.8,243;522.8,243" d="M 374.8 243 L 522.8 243" class="a-emphasis" data-animate="edge" style="--step: 10;" stroke-width="1.8" marker-end="url(#arrowhead-emphasis)"/>
+        <path data-edge-from="screen-e" data-edge-to="owner-e" data-edge-label="needs hands" data-edge-key="7" data-edge-id="screen-owner-e" data-composition-routing="workflow-v2-auto" data-edge-role="" data-composition-points="402.8,367;522.8,367" d="M 402.8 367 L 522.8 367" class="a-emphasis" data-animate="edge" style="--step: 11;" stroke-width="1.8" marker-end="url(#arrowhead-emphasis)"/>
+        <path data-edge-from="screen-e" data-edge-to="raise" data-edge-label="turned away" data-edge-key="8" data-edge-id="screen-raise" data-composition-routing="workflow-v2-auto" data-edge-role="return" data-composition-points="328.8,393;328.8,409;116,409;116,393" d="M 328.8 393 L 328.8 401 Q 328.8 409 320.8 409 L 124 409 Q 116 409 116 401 L 116 393" class="a-security" data-animate="edge" style="--step: 12;" stroke-width="1.4" marker-end="url(#arrowhead-security)"/>
+        <path data-edge-from="submit" data-edge-to="screen-s" data-edge-key="9" data-edge-id="submit-screen" data-composition-routing="workflow-v2-auto" data-edge-role="" data-composition-points="164,243;282.8,243" d="M 164 243 L 282.8 243" class="a-emphasis" data-animate="edge" style="--step: 12;" stroke-width="1.8" marker-end="url(#arrowhead-emphasis)"/>
 
         <!-- Nodes -->
         <g id="node-ask" data-node-id="ask" data-node-label="issue ask" tabindex="0" role="button" aria-label="Focus issue ask, a form, all fields, Decision" aria-pressed="false" data-node-kind="frontend" data-node-sublabel="a form, all fields" data-node-context="Decision">
@@ -721,56 +703,45 @@ rect.c-bg-rect { fill: var(--bg); }
           <text x="116" y="131" class="t-muted" font-size="7.7" text-anchor="middle">a form, all fields</text>
         </g>
 
-        <g id="node-policy" data-node-id="policy" data-node-label="Standing policy" tabindex="0" role="button" aria-label="Focus Standing policy, project.yaml, Decision" aria-pressed="false" data-node-kind="backend" data-node-sublabel="project.yaml" data-node-context="Decision">
-          <title>Standing policy · project.yaml · Decision</title>
-          <rect x="280.8" y="93" width="96" height="52" rx="8" class="c-mask"/>
-          <rect x="280.8" y="93" width="96" height="52" rx="8" class="c-backend" data-animate="node" style="--step: 1; --flow-node-name: archify-relay-node-2;" stroke-width="1.5"/>
-          <g aria-hidden="true" data-semantic-sigil="backend" class="semantic-sigil s-backend" transform="translate(286.8 99) scale(0.6875)">
-            <path d="M6 3 3 8l3 5M10 3l3 5-3 5"/>
-          </g>
-          <text data-node-label="" x="328.8" y="123.7" class="t-primary" font-size="9.7" font-weight="600" text-anchor="middle">Standing policy</text>
-          <text x="328.8" y="138.3" class="t-muted" font-size="8" text-anchor="middle">project.yaml</text>
-        </g>
-
         <g id="node-judge" data-node-id="judge" data-node-label="The Judge" tabindex="0" role="button" aria-label="Focus The Judge, answers or hands on, Decision" aria-pressed="false" data-node-kind="backend" data-node-sublabel="answers or hands on" data-node-context="Decision">
           <title>The Judge · answers or hands on · Decision</title>
-          <rect x="428.4" y="93" width="92" height="52" rx="8" class="c-mask"/>
-          <rect x="428.4" y="93" width="92" height="52" rx="8" class="c-backend" data-animate="node" style="--step: 2; --flow-node-name: archify-relay-node-4;" stroke-width="1.5"/>
-          <g aria-hidden="true" data-semantic-sigil="backend" class="semantic-sigil s-backend" transform="translate(434.4 99) scale(0.6875)">
+          <rect x="282.8" y="93" width="92" height="52" rx="8" class="c-mask"/>
+          <rect x="282.8" y="93" width="92" height="52" rx="8" class="c-backend" data-animate="node" style="--step: 1; --flow-node-name: archify-relay-node-2;" stroke-width="1.5"/>
+          <g aria-hidden="true" data-semantic-sigil="backend" class="semantic-sigil s-backend" transform="translate(288.8 99) scale(0.6875)">
             <path d="M6 3 3 8l3 5M10 3l3 5-3 5"/>
           </g>
-          <text data-node-label="" x="477.09999999999997" y="114" class="t-primary" font-size="11" font-weight="600" text-anchor="middle">The Judge</text>
-          <text x="474.4" y="131" class="t-muted" font-size="7.3" text-anchor="middle">answers or hands on</text>
+          <text data-node-label="" x="331.5" y="114" class="t-primary" font-size="11" font-weight="600" text-anchor="middle">The Judge</text>
+          <text x="328.8" y="131" class="t-muted" font-size="7.3" text-anchor="middle">answers or hands on</text>
         </g>
 
         <g id="node-owner-d" data-node-id="owner-d" data-node-label="Owner" tabindex="0" role="button" aria-label="Focus Owner, a question, Decision" aria-pressed="false" data-node-kind="external" data-node-sublabel="a question" data-node-context="Decision">
           <title>Owner · a question · Decision</title>
-          <rect x="576.8" y="93" width="92" height="52" rx="8" class="c-mask"/>
-          <rect x="576.8" y="93" width="92" height="52" rx="8" class="c-external" data-animate="node" style="--step: 3; --flow-node-name: archify-relay-node-6;" stroke-width="1.5"/>
-          <g aria-hidden="true" data-semantic-sigil="external" class="semantic-sigil s-external" transform="translate(582.8 99) scale(0.6875)">
+          <rect x="522.8" y="93" width="92" height="52" rx="8" class="c-mask"/>
+          <rect x="522.8" y="93" width="92" height="52" rx="8" class="c-external" data-animate="node" style="--step: 2; --flow-node-name: archify-relay-node-5;" stroke-width="1.5"/>
+          <g aria-hidden="true" data-semantic-sigil="external" class="semantic-sigil s-external" transform="translate(528.8 99) scale(0.6875)">
             <rect x="2.5" y="5" width="8.5" height="8" rx="1.5"/>
             <path d="M8 2.5h5.5V8M13.5 2.5 7.5 8.5"/>
           </g>
-          <text data-node-label="" x="622.8" y="114" class="t-primary" font-size="11" font-weight="600" text-anchor="middle">Owner</text>
-          <text x="622.8" y="131" class="t-muted" font-size="8" text-anchor="middle">a question</text>
+          <text data-node-label="" x="568.8" y="114" class="t-primary" font-size="11" font-weight="600" text-anchor="middle">Owner</text>
+          <text x="568.8" y="131" class="t-muted" font-size="8" text-anchor="middle">a question</text>
         </g>
 
         <g id="node-default-d" data-node-id="default-d" data-node-label="Default" tabindex="0" role="button" aria-label="Focus Default, after its wait, Decision" aria-pressed="false" data-node-kind="database" data-node-sublabel="after its wait" data-node-context="Decision">
           <title>Default · after its wait · Decision</title>
-          <rect x="734.8" y="93" width="92" height="52" rx="8" class="c-mask"/>
-          <rect x="734.8" y="93" width="92" height="52" rx="8" class="c-database" data-animate="node" style="--step: 4; --flow-node-name: archify-relay-node-8;" stroke-width="1.5"/>
-          <g aria-hidden="true" data-semantic-sigil="database" class="semantic-sigil s-database" transform="translate(740.8 99) scale(0.6875)">
+          <rect x="680.8" y="93" width="92" height="52" rx="8" class="c-mask"/>
+          <rect x="680.8" y="93" width="92" height="52" rx="8" class="c-database" data-animate="node" style="--step: 3; --flow-node-name: archify-relay-node-7;" stroke-width="1.5"/>
+          <g aria-hidden="true" data-semantic-sigil="database" class="semantic-sigil s-database" transform="translate(686.8 99) scale(0.6875)">
             <ellipse cx="8" cy="4" rx="5" ry="2"/>
             <path d="M3 4v8c0 1.1 2.2 2 5 2s5-.9 5-2V4M3 8c0 1.1 2.2 2 5 2s5-.9 5-2"/>
           </g>
-          <text data-node-label="" x="780.8" y="114" class="t-primary" font-size="11" font-weight="600" text-anchor="middle">Default</text>
-          <text x="780.8" y="131" class="t-muted" font-size="8" text-anchor="middle">after its wait</text>
+          <text data-node-label="" x="726.8" y="114" class="t-primary" font-size="11" font-weight="600" text-anchor="middle">Default</text>
+          <text x="726.8" y="131" class="t-muted" font-size="8" text-anchor="middle">after its wait</text>
         </g>
 
         <g id="node-submit" data-node-id="submit" data-node-label="artifact submit" tabindex="0" role="button" aria-label="Focus artifact submit, a Spec, before building, Spec" aria-pressed="false" data-node-kind="frontend" data-node-sublabel="a Spec, before building" data-node-context="Spec">
           <title>artifact submit · a Spec, before building · Spec</title>
           <rect x="68" y="217" width="96" height="52" rx="8" class="c-mask"/>
-          <rect x="68" y="217" width="96" height="52" rx="8" class="c-frontend" data-animate="node" style="--step: 10; --flow-node-name: archify-relay-node-1;" stroke-width="1.5"/>
+          <rect x="68" y="217" width="96" height="52" rx="8" class="c-frontend" data-animate="node" style="--step: 8; --flow-node-name: archify-relay-node-1;" stroke-width="1.5"/>
           <g aria-hidden="true" data-semantic-sigil="frontend" class="semantic-sigil s-frontend" transform="translate(74 223) scale(0.6875)">
             <rect x="2" y="3" width="12" height="10" rx="2"/>
             <path d="M2 6.5h12"/>
@@ -784,7 +755,7 @@ rect.c-bg-rect { fill: var(--bg); }
         <g id="node-screen-s" data-node-id="screen-s" data-node-label="Spec screen" tabindex="0" role="button" aria-label="Focus Spec screen, a rule passes or holds, Spec" aria-pressed="false" data-node-kind="backend" data-node-sublabel="a rule passes or holds" data-node-context="Spec">
           <title>Spec screen · a rule passes or holds · Spec</title>
           <rect x="282.8" y="217" width="92" height="52" rx="8" class="c-mask"/>
-          <rect x="282.8" y="217" width="92" height="52" rx="8" class="c-backend" data-animate="node" style="--step: 11; --flow-node-name: archify-relay-node-3;" stroke-width="1.5"/>
+          <rect x="282.8" y="217" width="92" height="52" rx="8" class="c-backend" data-animate="node" style="--step: 9; --flow-node-name: archify-relay-node-3;" stroke-width="1.5"/>
           <g aria-hidden="true" data-semantic-sigil="backend" class="semantic-sigil s-backend" transform="translate(288.8 223) scale(0.6875)">
             <path d="M6 3 3 8l3 5M10 3l3 5-3 5"/>
           </g>
@@ -794,32 +765,32 @@ rect.c-bg-rect { fill: var(--bg); }
 
         <g id="node-owner-s" data-node-id="owner-s" data-node-label="Owner" tabindex="0" role="button" aria-label="Focus Owner, a verdict, Spec" aria-pressed="false" data-node-kind="external" data-node-sublabel="a verdict" data-node-context="Spec">
           <title>Owner · a verdict · Spec</title>
-          <rect x="576.8" y="217" width="92" height="52" rx="8" class="c-mask"/>
-          <rect x="576.8" y="217" width="92" height="52" rx="8" class="c-external" data-animate="node" style="--step: 12; --flow-node-name: archify-relay-node-5;" stroke-width="1.5"/>
-          <g aria-hidden="true" data-semantic-sigil="external" class="semantic-sigil s-external" transform="translate(582.8 223) scale(0.6875)">
+          <rect x="522.8" y="217" width="92" height="52" rx="8" class="c-mask"/>
+          <rect x="522.8" y="217" width="92" height="52" rx="8" class="c-external" data-animate="node" style="--step: 10; --flow-node-name: archify-relay-node-4;" stroke-width="1.5"/>
+          <g aria-hidden="true" data-semantic-sigil="external" class="semantic-sigil s-external" transform="translate(528.8 223) scale(0.6875)">
             <rect x="2.5" y="5" width="8.5" height="8" rx="1.5"/>
             <path d="M8 2.5h5.5V8M13.5 2.5 7.5 8.5"/>
           </g>
-          <text data-node-label="" x="622.8" y="238" class="t-primary" font-size="11" font-weight="600" text-anchor="middle">Owner</text>
-          <text x="622.8" y="255" class="t-muted" font-size="8" text-anchor="middle">a verdict</text>
+          <text data-node-label="" x="568.8" y="238" class="t-primary" font-size="11" font-weight="600" text-anchor="middle">Owner</text>
+          <text x="568.8" y="255" class="t-muted" font-size="8" text-anchor="middle">a verdict</text>
         </g>
 
         <g id="node-default-s" data-node-id="default-s" data-node-label="Looks good" tabindex="0" role="button" aria-label="Focus Looks good, no verdict in 24 hours, Spec" aria-pressed="false" data-node-kind="database" data-node-sublabel="no verdict in 24 hours" data-node-context="Spec">
           <title>Looks good · no verdict in 24 hours · Spec</title>
-          <rect x="734.8" y="217" width="92" height="52" rx="8" class="c-mask"/>
-          <rect x="734.8" y="217" width="92" height="52" rx="8" class="c-database" data-animate="node" style="--step: 12; --flow-node-name: archify-relay-node-7;" stroke-width="1.5"/>
-          <g aria-hidden="true" data-semantic-sigil="database" class="semantic-sigil s-database" transform="translate(740.8 223) scale(0.6875)">
+          <rect x="680.8" y="217" width="92" height="52" rx="8" class="c-mask"/>
+          <rect x="680.8" y="217" width="92" height="52" rx="8" class="c-database" data-animate="node" style="--step: 11; --flow-node-name: archify-relay-node-6;" stroke-width="1.5"/>
+          <g aria-hidden="true" data-semantic-sigil="database" class="semantic-sigil s-database" transform="translate(686.8 223) scale(0.6875)">
             <ellipse cx="8" cy="4" rx="5" ry="2"/>
             <path d="M3 4v8c0 1.1 2.2 2 5 2s5-.9 5-2V4M3 8c0 1.1 2.2 2 5 2s5-.9 5-2"/>
           </g>
-          <text data-node-label="" x="786.8" y="238" class="t-primary" font-size="11" font-weight="600" text-anchor="middle">Looks good</text>
-          <text x="780.8" y="255" class="t-muted" font-size="6.3" text-anchor="middle">no verdict in 24 hours</text>
+          <text data-node-label="" x="732.8" y="238" class="t-primary" font-size="11" font-weight="600" text-anchor="middle">Looks good</text>
+          <text x="726.8" y="255" class="t-muted" font-size="6.3" text-anchor="middle">no verdict in 24 hours</text>
         </g>
 
         <g id="node-raise" data-node-id="raise" data-node-label="errand raise" tabindex="0" role="button" aria-label="Focus errand raise, a need, and what was tried, Errand" aria-pressed="false" data-node-kind="frontend" data-node-sublabel="a need, and what was tried" data-node-context="Errand">
           <title>errand raise · a need, and what was tried · Errand</title>
           <rect x="48" y="341" width="136" height="52" rx="8" class="c-mask"/>
-          <rect x="48" y="341" width="136" height="52" rx="8" class="c-frontend" data-animate="node" style="--step: 12; --flow-node-name: archify-relay-node-11;" stroke-width="1.5"/>
+          <rect x="48" y="341" width="136" height="52" rx="8" class="c-frontend" data-animate="node" style="--step: 12; --flow-node-name: archify-relay-node-10;" stroke-width="1.5"/>
           <g aria-hidden="true" data-semantic-sigil="frontend" class="semantic-sigil s-frontend" transform="translate(54 347) scale(0.6875)">
             <rect x="2" y="3" width="12" height="10" rx="2"/>
             <path d="M2 6.5h12"/>
@@ -833,7 +804,7 @@ rect.c-bg-rect { fill: var(--bg); }
         <g id="node-screen-e" data-node-id="screen-e" data-node-label="Errand rules" tabindex="0" role="button" aria-label="Focus Errand rules, turns away what the host does, Errand" aria-pressed="false" data-node-kind="backend" data-node-sublabel="turns away what the host does" data-node-context="Errand">
           <title>Errand rules · turns away what the host does · Errand</title>
           <rect x="254.8" y="341" width="148" height="52" rx="8" class="c-mask"/>
-          <rect x="254.8" y="341" width="148" height="52" rx="8" class="c-backend" data-animate="node" style="--step: 12; --flow-node-name: archify-relay-node-12;" stroke-width="1.5"/>
+          <rect x="254.8" y="341" width="148" height="52" rx="8" class="c-backend" data-animate="node" style="--step: 12; --flow-node-name: archify-relay-node-11;" stroke-width="1.5"/>
           <g aria-hidden="true" data-semantic-sigil="backend" class="semantic-sigil s-backend" transform="translate(260.8 347) scale(0.6875)">
             <path d="M6 3 3 8l3 5M10 3l3 5-3 5"/>
           </g>
@@ -843,60 +814,56 @@ rect.c-bg-rect { fill: var(--bg); }
 
         <g id="node-owner-e" data-node-id="owner-e" data-node-label="Owner" tabindex="0" role="button" aria-label="Focus Owner, a person's hands, Errand" aria-pressed="false" data-node-kind="external" data-node-sublabel="a person's hands" data-node-context="Errand">
           <title>Owner · a person's hands · Errand</title>
-          <rect x="576.8" y="341" width="92" height="52" rx="8" class="c-mask"/>
-          <rect x="576.8" y="341" width="92" height="52" rx="8" class="c-external" data-animate="node" style="--step: 12; --flow-node-name: archify-relay-node-9;" stroke-width="1.5"/>
-          <g aria-hidden="true" data-semantic-sigil="external" class="semantic-sigil s-external" transform="translate(582.8 347) scale(0.6875)">
+          <rect x="522.8" y="341" width="92" height="52" rx="8" class="c-mask"/>
+          <rect x="522.8" y="341" width="92" height="52" rx="8" class="c-external" data-animate="node" style="--step: 12; --flow-node-name: archify-relay-node-8;" stroke-width="1.5"/>
+          <g aria-hidden="true" data-semantic-sigil="external" class="semantic-sigil s-external" transform="translate(528.8 347) scale(0.6875)">
             <rect x="2.5" y="5" width="8.5" height="8" rx="1.5"/>
             <path d="M8 2.5h5.5V8M13.5 2.5 7.5 8.5"/>
           </g>
-          <text data-node-label="" x="622.8" y="362" class="t-primary" font-size="11" font-weight="600" text-anchor="middle">Owner</text>
-          <text x="622.8" y="379" class="t-muted" font-size="8" text-anchor="middle">a person's hands</text>
+          <text data-node-label="" x="568.8" y="362" class="t-primary" font-size="11" font-weight="600" text-anchor="middle">Owner</text>
+          <text x="568.8" y="379" class="t-muted" font-size="8" text-anchor="middle">a person's hands</text>
         </g>
 
         <g id="node-checked" data-node-id="checked" data-node-label="Closed" tabindex="0" role="button" aria-label="Focus Closed, check exits 1 to 125, Errand" aria-pressed="false" data-node-kind="database" data-node-sublabel="check exits 1 to 125" data-node-context="Errand">
           <title>Closed · check exits 1 to 125 · Errand</title>
-          <rect x="734.8" y="341" width="92" height="52" rx="8" class="c-mask"/>
-          <rect x="734.8" y="341" width="92" height="52" rx="8" class="c-database" data-animate="node" style="--step: 12; --flow-node-name: archify-relay-node-10;" stroke-width="1.5"/>
-          <g aria-hidden="true" data-semantic-sigil="database" class="semantic-sigil s-database" transform="translate(740.8 347) scale(0.6875)">
+          <rect x="680.8" y="341" width="92" height="52" rx="8" class="c-mask"/>
+          <rect x="680.8" y="341" width="92" height="52" rx="8" class="c-database" data-animate="node" style="--step: 12; --flow-node-name: archify-relay-node-9;" stroke-width="1.5"/>
+          <g aria-hidden="true" data-semantic-sigil="database" class="semantic-sigil s-database" transform="translate(686.8 347) scale(0.6875)">
             <ellipse cx="8" cy="4" rx="5" ry="2"/>
             <path d="M3 4v8c0 1.1 2.2 2 5 2s5-.9 5-2V4M3 8c0 1.1 2.2 2 5 2s5-.9 5-2"/>
           </g>
-          <text data-node-label="" x="780.8" y="362" class="t-primary" font-size="11" font-weight="600" text-anchor="middle">Closed</text>
-          <text x="780.8" y="379" class="t-muted" font-size="7" text-anchor="middle">check exits 1 to 125</text>
+          <text data-node-label="" x="726.8" y="362" class="t-primary" font-size="11" font-weight="600" text-anchor="middle">Closed</text>
+          <text x="726.8" y="379" class="t-muted" font-size="7" text-anchor="middle">check exits 1 to 125</text>
         </g>
 
         <!-- Edge labels -->
 
         <g data-edge-from="judge" data-edge-to="owner-d" data-edge-label="hands on" data-edge-key="1" data-edge-id="judge-owner">
-          <rect x="524.3999999999999" y="99" width="48.4" height="14" rx="3" class="c-mask"/>
-          <text x="548.5999999999999" y="109" class="t-edge-emphasis" font-size="8" text-anchor="middle">hands on</text>
+          <rect x="424.59999999999997" y="99" width="48.4" height="14" rx="3" class="c-mask"/>
+          <text x="448.79999999999995" y="109" class="t-edge-emphasis" font-size="8" text-anchor="middle">hands on</text>
         </g>
         <g data-edge-from="owner-e" data-edge-to="checked" data-edge-label="not needed" data-edge-key="2" data-edge-id="owner-checked">
-          <rect x="672.8" y="347" width="58" height="14" rx="3" class="c-mask"/>
-          <text x="701.8" y="357" class="t-edge-dashed" font-size="8" text-anchor="middle">not needed</text>
+          <rect x="618.8" y="347" width="58" height="14" rx="3" class="c-mask"/>
+          <text x="647.8" y="357" class="t-edge-dashed" font-size="8" text-anchor="middle">not needed</text>
         </g>
         <g data-edge-from="owner-d" data-edge-to="default-d" data-edge-label="no answer" data-edge-key="3" data-edge-id="owner-default">
-          <rect x="675.1999999999999" y="99" width="53.199999999999996" height="14" rx="3" class="c-mask"/>
-          <text x="701.8" y="109" class="t-edge-dashed" font-size="8" text-anchor="middle">no answer</text>
+          <rect x="621.1999999999999" y="99" width="53.199999999999996" height="14" rx="3" class="c-mask"/>
+          <text x="647.8" y="109" class="t-edge-dashed" font-size="8" text-anchor="middle">no answer</text>
         </g>
         <g data-edge-from="owner-s" data-edge-to="default-s" data-edge-label="24 hours" data-edge-key="4" data-edge-id="owner-s-default">
-          <rect x="677.5999999999999" y="223" width="48.4" height="14" rx="3" class="c-mask"/>
-          <text x="701.8" y="233" class="t-edge-dashed" font-size="8" text-anchor="middle">24 hours</text>
-        </g>
-        <g data-edge-from="policy" data-edge-to="judge" data-edge-label="no rule" data-edge-key="5" data-edge-id="policy-judge">
-          <rect x="380.8" y="99" width="43.6" height="14" rx="3" class="c-mask"/>
-          <text x="402.6" y="109" class="t-edge-emphasis" font-size="8" text-anchor="middle">no rule</text>
+          <rect x="623.5999999999999" y="223" width="48.4" height="14" rx="3" class="c-mask"/>
+          <text x="647.8" y="233" class="t-edge-dashed" font-size="8" text-anchor="middle">24 hours</text>
         </g>
 
-        <g data-edge-from="screen-s" data-edge-to="owner-s" data-edge-label="reaches him" data-edge-key="7" data-edge-id="screen-owner">
-          <rect x="444.4" y="223" width="62.8" height="14" rx="3" class="c-mask"/>
-          <text x="475.79999999999995" y="233" class="t-edge-emphasis" font-size="8" text-anchor="middle">reaches him</text>
+        <g data-edge-from="screen-s" data-edge-to="owner-s" data-edge-label="reaches him" data-edge-key="6" data-edge-id="screen-owner">
+          <rect x="417.4" y="223" width="62.8" height="14" rx="3" class="c-mask"/>
+          <text x="448.79999999999995" y="233" class="t-edge-emphasis" font-size="8" text-anchor="middle">reaches him</text>
         </g>
-        <g data-edge-from="screen-e" data-edge-to="owner-e" data-edge-label="needs hands" data-edge-key="8" data-edge-id="screen-owner-e">
-          <rect x="458.4" y="347" width="62.8" height="14" rx="3" class="c-mask"/>
-          <text x="489.79999999999995" y="357" class="t-edge-emphasis" font-size="8" text-anchor="middle">needs hands</text>
+        <g data-edge-from="screen-e" data-edge-to="owner-e" data-edge-label="needs hands" data-edge-key="7" data-edge-id="screen-owner-e">
+          <rect x="431.4" y="347" width="62.8" height="14" rx="3" class="c-mask"/>
+          <text x="462.79999999999995" y="357" class="t-edge-emphasis" font-size="8" text-anchor="middle">needs hands</text>
         </g>
-        <g data-edge-from="screen-e" data-edge-to="raise" data-edge-label="turned away" data-edge-key="9" data-edge-id="screen-raise">
+        <g data-edge-from="screen-e" data-edge-to="raise" data-edge-label="turned away" data-edge-key="8" data-edge-id="screen-raise">
           <rect x="191" y="389" width="62.8" height="14" rx="3" class="c-mask"/>
           <text x="222.4" y="399" class="t-edge-security" font-size="8" text-anchor="middle">turned away</text>
         </g>

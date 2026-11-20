@@ -23,7 +23,6 @@ import { addAfter, removeAfter, settleIssue, setPrio } from './app/planning-chai
 import type { PlanningDeps } from './app/planning-deps.ts'
 import { planningPass } from './app/planning-pass.ts'
 import type { SeatRoles } from './app/seat.ts'
-import { standingPolicies } from './app/planning-policies.ts'
 import { hostRule, type PlanningSettings } from './app/planning-settings.ts'
 import { projectSignals } from './app/planning-signals.ts'
 import { syncProjects } from './app/planning-sync.ts'
@@ -50,8 +49,6 @@ export interface PlanningComposition {
   claimStalled: (issues: readonly IssueId[]) => ReturnType<typeof claimStalled>
   /** planning's side of intake's `ProjectSignals` */
   signals: ReturnType<typeof projectSignals>
-  /** the checkpoints' `StandingPolicies`, read from each project's `project.yaml` */
-  policies: ReturnType<typeof standingPolicies>
   /** One pass of the planning loop: the planning pass, then admission. The loop runner schedules it. Answers what stands in the way. */
   pass(): Promise<string[]>
 }
@@ -209,7 +206,6 @@ export function composePlanning(input: {
     claimQueued: () => claimQueued(capacity),
     claimStalled: (issues) => claimStalled(capacity, issues),
     signals: projectSignals(writes),
-    policies: standingPolicies(writes),
     pass,
   }
 }

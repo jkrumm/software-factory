@@ -37,16 +37,11 @@ import { fileIssue, recordIssueEvent } from '../../src/app/issues.ts'
 import { readNeeds } from '../../src/read/needs.ts'
 import { readSince } from '../../src/read/since.ts'
 import type { ArtifactId } from '../../src/domains/checkpoints/artifact.ts'
-import {
-  JUDGE_BACKOFF_MS,
-  type DecisionId,
-  type JudgeVerdict,
-  type PolicyRule,
-} from '../../src/domains/checkpoints/decision.ts'
+import { JUDGE_BACKOFF_MS, type DecisionId, type JudgeVerdict } from '../../src/domains/checkpoints/decision.ts'
 import { AUTO_RUN_NOTE } from '../../src/kernel/auto-run.ts'
 import { ERRAND_SCREEN_BACKOFF_MS, type ErrandId } from '../../src/domains/checkpoints/errand.ts'
 import type { ErrandScreenAnswer } from '@software-factory/contract'
-import type { ErrandScreenPort, Notifier, JudgePort, StandingPolicies } from '../../src/domains/checkpoints/ports.ts'
+import type { ErrandScreenPort, Notifier, JudgePort } from '../../src/domains/checkpoints/ports.ts'
 import type { AnyIssueEvent } from '../../src/domains/work/events.ts'
 import { type FixedClock, fixedClock } from '../../src/kernel/clock.ts'
 import { type IssueId, sequentialIds } from '../../src/kernel/ids.ts'
@@ -68,8 +63,12 @@ afterAll(async () => {
 
 const clock: FixedClock = fixedClock('2026-03-01T12:00:00Z')
 let deps: SettleDeps & PageDeps
-let rules: PolicyRule[]
-let judgeCalls: { question: string; precedents: number; key: string }[]
+let judgeCalls: {
+  question: string
+  precedents: number
+  given: { question: string; answer: string; settledBy: string; worthAsking: null; repo: string }[]
+  key: string
+}[]
 let judgeAnswer: () => Result<JudgeVerdict>
 let screenCalls: { errand: string; key: string }[]
 let screenDetails: (string | null)[]
@@ -79,10 +78,9 @@ let sendResult: () => Result<void>
 /** what happens while a Judge call is out: the world moves on under it */
 let duringJudge: (() => Promise<unknown>) | null
 
-const policies: StandingPolicies = { rulesFor: () => Promise.resolve(ok(rules)) }
 const judge: JudgePort = {
   judge: async (input, key) => {
-    judgeCalls.push({ question: input.question, precedents: input.precedents.length, key })
+    judgeCalls.push({ question: input.question, precedents: input.precedents.length, given: input.precedents, key })
     await duringJudge?.()
     return judgeAnswer()
   },
@@ -110,7 +108,6 @@ beforeEach(async () => {
   await db.sql`DROP SCHEMA IF EXISTS factory CASCADE`
   await migrate(db.sql, await loadMigrations())
   clock.set(new Date('2026-03-01T12:00:00Z'))
-  rules = []
   judgeCalls = []
   judgeAnswer = () => ok({ verdict: 'owner', answer: '', reason: 'a taste question', source: '' })
   screenCalls = []
@@ -130,7 +127,6 @@ beforeEach(async () => {
     blobs: fileBlobStore(blobDir),
     consoleUrl: 'https://console.example.test',
     checks: { run: async () => ({ exit: 0, timedOut: false, output: '' }) },
-    policies,
     judge,
     errandScreen,
     specScreen: { screen: () => Promise.resolve(ok({ verdict: 'pass', reason: "the owner's to read" })) },
@@ -367,31 +363,7 @@ describe('amending', () => {
 })
 
 describe('settling, in turn', () => {
-  test('standing policy settles it first; the Judge is never called', async () => {
-    const issueId = await workingIssue()
-    rules = [{ when: 'logging library', answer: 'winston', reason: 'the owner standardised on it' }]
-    const { decision } = await ask(issueId)
-    const settled = value(await settleDecision(deps, decision.id))
-    expect(settled).toMatchObject({ status: 'answered', settledBy: 'policy' })
-    expect(judgeCalls).toEqual([])
-    const shown = value(await showDecision(deps, decision.id))
-    expect(shown).toMatchObject({ answer: 'winston', source: 'the owner standardised on it' })
-    expect(shown.steps.map((s) => [s.step, s.outcome])).toEqual([['policy', 'answered']])
-    // The lead hears it as one note and the answer, ending the wait.
-    expect(await eventsOf(issueId)).toEqual([
-      'filed',
-      'settled',
-      'admitted',
-      'lead_started',
-      'asked',
-      'noted',
-      'answered',
-    ])
-    expect(await effectsOf(issueId, 'note_lead')).toBe(1)
-    expect(await rows('checkpoint_pages')).toBe(0)
-  })
-
-  test("the Judge settles what policy does not, with the owner's earlier answers as precedent", async () => {
+  test("the Judge settles it, with the owner's earlier answers as precedent", async () => {
     const first = await workingIssue()
     const earlier = await ask(first, {
       question: 'Which retention for the audit log rows?',
@@ -408,11 +380,44 @@ describe('settling, in turn', () => {
     expect(judgeCalls).toMatchObject([{ question: 'Which retention for the access log rows?', precedents: 1 }])
     const shown = value(await showDecision(deps, decision.id))
     expect(shown.source).toBe('plan: docs/decisions.md')
-    expect(shown.steps.map((s) => [s.step, s.outcome])).toEqual([
-      ['policy', 'passed'],
-      ['judge', 'answered'],
-    ])
+    expect(shown.steps.map((s) => [s.step, s.outcome])).toEqual([['judge', 'answered']])
     expect(await rows('checkpoint_pages')).toBe(0)
+  })
+
+  test("the precedents handed to the Judge are the owner's own answers: never the Judge's, a default's or the orchestrator's", async () => {
+    const owners = await workingIssue()
+    const ownerAsk = await ask(owners, {
+      question: 'Which retention for the audit log rows?',
+      noAnswer: { consequence: 'Waits.' },
+    })
+    value(await answerDecision(deps, { decisionId: ownerAsk.decision.id, answer: 'pino' }))
+
+    judgeAnswer = () => ok({ verdict: 'answer', answer: 'winston', reason: 'r', source: 'plan: docs/decisions.md' })
+    const judged = await ask(await workingIssue(), { question: 'Which retention for the session log rows?' })
+    expect(value(await settleDecision(deps, judged.decision.id))).toMatchObject({ settledBy: 'judge' })
+
+    judgeAnswer = () => ok({ verdict: 'owner', answer: '', reason: 'a taste question', source: '' })
+    const defaulted = await ask(await workingIssue(), {
+      question: 'Which retention for the job log rows?',
+      noAnswer: { consequence: 'Pino stays.', default: 'pino', waitMinutes: 30 },
+    })
+    value(await settleDecision(deps, defaulted.decision.id))
+    clock.advance(31 * 60_000)
+    expect(value(await settleDecision(deps, defaulted.decision.id))).toMatchObject({ settledBy: 'default' })
+
+    judgeCalls = []
+    const latest = await ask(await workingIssue(), { question: 'Which retention for the access log rows?' })
+    value(await settleDecision(deps, latest.decision.id))
+    expect(judgeCalls).toHaveLength(1)
+    expect(judgeCalls[0]?.given).toEqual([
+      {
+        question: 'Which retention for the audit log rows?',
+        answer: 'pino',
+        settledBy: 'owner',
+        worthAsking: null,
+        repo: 'example',
+      },
+    ])
   })
 
   test('a Judge answer the guards reject, an irreversible option included, goes on to the owner', async () => {
@@ -422,11 +427,10 @@ describe('settling, in turn', () => {
     expect(value(await settleDecision(deps, decision.id))).toMatchObject({ status: 'open', settledBy: null })
     const shown = value(await showDecision(deps, decision.id))
     expect(shown.steps.map((s) => [s.step, s.outcome])).toEqual([
-      ['policy', 'passed'],
       ['judge', 'rejected'],
       ['owner', 'open'],
     ])
-    expect(shown.steps[1]?.detail).toContain('cannot be taken back')
+    expect(shown.steps[0]?.detail).toContain('cannot be taken back')
   })
 
   test('a Judge that fails is tried again after the backoff; the owner is reached only after the third failure, with the failure recorded', async () => {
@@ -437,10 +441,7 @@ describe('settling, in turn', () => {
       value(await showDecision(deps, decision.id)).steps.map((s) => [s.step, s.outcome, s.tries])
 
     value(await settleDecision(deps, decision.id))
-    expect(await stepsOf()).toEqual([
-      ['policy', 'passed', 1],
-      ['judge', 'failed', 1],
-    ])
+    expect(await stepsOf()).toEqual([['judge', 'failed', 1]])
     expect(await rows('checkpoint_pages')).toBe(0)
     expect((await readNeeds(db.sql, clock.now())).items).toEqual([])
 
@@ -462,11 +463,10 @@ describe('settling, in turn', () => {
     expect(new Set(judgeCalls.map((call) => call.key)).size).toBe(3)
     const shown = value(await showDecision(deps, decision.id))
     expect(shown.steps.map((s) => [s.step, s.outcome, s.tries])).toEqual([
-      ['policy', 'passed', 1],
       ['judge', 'failed', 3],
       ['owner', 'open', 1],
     ])
-    expect(shown.steps[1]?.detail).toBe('the Judge could not be reached after 3 tries: timeout: agw did not answer')
+    expect(shown.steps[0]?.detail).toBe('the Judge could not be reached after 3 tries: timeout: agw did not answer')
     expect(await rows('checkpoint_pages')).toBe(1)
     const needs = await readNeeds(db.sql, clock.now())
     expect(needs.items).toHaveLength(1)
@@ -517,7 +517,6 @@ describe('settling, in turn', () => {
     expect(value(await settleDecision(deps, decision.id))).toMatchObject({ status: 'answered', settledBy: 'default' })
     const shown = value(await showDecision(deps, decision.id))
     expect(shown.steps.map((s) => [s.step, s.outcome])).toEqual([
-      ['policy', 'passed'],
       ['judge', 'passed'],
       ['default', 'answered'],
     ])
@@ -744,22 +743,22 @@ describe('settling, in turn', () => {
   test('a pass over the open Decisions settles each, oldest first', async () => {
     const one = await workingIssue()
     const two = await workingIssue()
-    rules = [{ when: 'logging', answer: 'pino', reason: 'standing' }]
+    judgeAnswer = () => ok({ verdict: 'answer', answer: 'pino', reason: 'r', source: 'plan: docs/decisions.md' })
     await ask(one)
     clock.advance(1000)
     await ask(two)
     const settled = value(await settleOpen(deps))
-    expect(settled.map((s) => s.settledBy)).toEqual(['policy', 'policy'])
+    expect(settled.map((s) => s.settledBy)).toEqual(['judge', 'judge'])
     expect(value(await settleOpen(deps))).toEqual([])
   })
 
   test('a step claimed by a call in flight leaves the Decision alone: no Judge, no owner step, no page', async () => {
     const issueId = await workingIssue()
     const { decision } = await ask(issueId)
-    await db.sql`INSERT INTO factory.decision_steps (decision_id, step, claimed_until) VALUES (${decision.id}, 'policy', ${new Date('2026-03-01T12:30:00Z')})`
+    await db.sql`INSERT INTO factory.decision_steps (decision_id, step, claimed_until) VALUES (${decision.id}, 'judge', ${new Date('2026-03-01T12:30:00Z')})`
     expect(value(await settleDecision(deps, decision.id))).toMatchObject({ status: 'open', settledBy: null })
     const shown = value(await showDecision(deps, decision.id))
-    expect(shown.steps).toEqual([{ step: 'policy', outcome: null, at: null, detail: null, tries: 1 }])
+    expect(shown.steps).toEqual([{ step: 'judge', outcome: null, at: null, detail: null, tries: 1 }])
     expect(judgeCalls).toEqual([])
     expect(await rows('checkpoint_pages')).toBe(0)
 
@@ -773,13 +772,12 @@ describe('settling, in turn', () => {
   test('a Judge call in flight in another pass keeps the owner from being paged for what it may settle', async () => {
     const issueId = await workingIssue()
     const { decision } = await ask(issueId)
-    await db.sql`INSERT INTO factory.decision_steps (decision_id, step, outcome, detail, at) VALUES (${decision.id}, 'policy', 'passed', 'no rule matches', ${clock.now()})`
     await db.sql`INSERT INTO factory.decision_steps (decision_id, step, claimed_until) VALUES (${decision.id}, 'judge', ${new Date('2026-03-01T12:30:00Z')})`
     value(await settleDecision(deps, decision.id))
     value(await settleDecision(deps, decision.id))
     expect(judgeCalls).toEqual([])
     expect(await rows('checkpoint_pages')).toBe(0)
-    expect(value(await showDecision(deps, decision.id)).steps.map((s) => s.step)).toEqual(['policy', 'judge'])
+    expect(value(await showDecision(deps, decision.id)).steps.map((s) => s.step)).toEqual(['judge'])
   })
 })
 

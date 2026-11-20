@@ -107,7 +107,7 @@ Every judgment in the factory has three rungs, tried in this order:
 |-|-|-|-|
 | What a signal becomes | fingerprint, routes, correlation window | kind, origin, amend or new | whether held outside text becomes work |
 | What a stalled Issue needs | wake, re-check, requeue, deliver, break a claim deadlock | what to do when the rules do not say | nothing, unless it becomes a Decision |
-| Whether a question is the owner's | standing policy, the agent's declared default | whether a person is needed at all, given precedent | product direction, spend, data loss, other people, security policy, taste |
+| Whether a question is the owner's | the agent's declared default | whether a person is needed at all, given precedent | product direction, spend, data loss, other people, security policy, taste |
 
 The lifecycle server itself calls no model. Model judgment lives in workflows outside it, behind a port, so every such call is visible, keyed and replaceable.
 
@@ -428,7 +428,7 @@ A checkpoint is where the factory stops for a person. There are three, and a mer
 
 | Checkpoint | What the lead hands over | Settled before the owner by |
 |-|-|-|
-| **Decision** | a question, its options and the lead's own recommendation | standing policy, the Judge workflow (which reads precedent), then the lead's declared default |
+| **Decision** | a question, its options and the lead's own recommendation | the Judge workflow (which reads the owner's earlier answers), then the lead's declared default |
 | **Concept or Spec** | one page before it builds a new surface, data model or screen | a screening workflow that passes the ones that are not the owner's to read |
 | **Errand** | something only the owner's hands can do: a secret, a device, a portal | rules that turn away what a command or a token could do |
 
@@ -437,7 +437,7 @@ A checkpoint is where the factory stops for a person. There are three, and a mer
 - A Decision passes the steps in order and stops at the first that settles it:
 
   ```ts
-  export const STEPS = ['policy', 'judge', 'default', 'owner'] as const
+  export const STEPS = ['judge', 'default', 'owner'] as const
   ```
 
 - What the owner answers becomes **precedent** the Judge reads the next time the question comes up.

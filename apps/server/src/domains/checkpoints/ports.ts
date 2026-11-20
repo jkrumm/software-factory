@@ -14,16 +14,7 @@ import type { IssueId } from '../../kernel/ids.ts'
 import type { Key } from '../../kernel/keys.ts'
 import type { PortError, Result } from '../../kernel/result.ts'
 import type { ArtifactId, ArtifactKind, CollectionId, Disposition, Format, Verdict } from './artifact.ts'
-import type {
-  DecisionForm,
-  DecisionId,
-  JudgeInput,
-  JudgeVerdict,
-  PolicyRule,
-  Precedent,
-  Settler,
-  StepName,
-} from './decision.ts'
+import type { DecisionForm, DecisionId, JudgeInput, JudgeVerdict, Precedent, Settler, StepName } from './decision.ts'
 import type { ErrandId } from './errand.ts'
 import type { Need } from './need.ts'
 import type { RunStatus } from '../../kernel/run.ts'
@@ -67,7 +58,7 @@ export interface DecisionRecord {
   artifactId: ArtifactId | null
   answer: string | null
   settledBy: Settler | null
-  /** what backs the answer: the policy rule's reason, the Judge's source, the default, "the owner" */
+  /** what backs the answer: the Judge's source, the default, "the owner" */
   source: string | null
   answeredAt: Date | null
   /** set when the Issue no longer waits for it (closed, cancelled): it leaves every list of open work */
@@ -476,11 +467,6 @@ export interface CheckpointStore {
 export interface BlobStore {
   put(content: string): Promise<Result<{ path: string; sha256: string; bytes: number }>>
   get(path: string): Promise<Result<string>>
-}
-
-/** A project's standing policy: the rules its `project.yaml` holds. Package 3 owns the project; `main.ts` brings its adapter. */
-export interface StandingPolicies {
-  rulesFor(repo: string): Promise<Result<PolicyRule[]>>
 }
 
 /** The Judge: the `factory-ask` agw workflow, package 7's. The key is the Decision's, so a call asked again finds its run. */

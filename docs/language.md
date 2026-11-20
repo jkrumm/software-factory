@@ -99,12 +99,12 @@ Five words and a sixth for what is not an Issue yet, defined once here and used 
 | **Verdict** | The answer on an artifact: Looks good, With notes, Changes, No longer applies. Every verdict says who gave it (`by`): the `owner`, or the `factory` for him (the default after 24 hours, a Spec screen settle, a withdrawal), which is never read as his | |
 | **Owner gate** | An Issue filed with the checkpoint `gate`: it owes the same Spec as `spec`, but only the owner's own verdict ends its wait. No default after 24 hours, no Spec screen settle, so what is `after` it is released by him alone. Only a filer sets it, never triage | |
 | **Taste pass** | The weekly retro's reading of the owner's verdict notes and comments: a preference seen twice becomes a rule in the repo's `AGENTS.md` or `DESIGN.md` | |
-| **Worth asking** | The owner's flag on an answered Decision. Feeds the ledger and the Judge's precedent | |
+| **Worth asking** | The owner's flag on an answered Decision. Feeds the ledger; the Judge's precedent does not read it | |
 | **Spec screen** | The look a Spec revision passes before it reaches the owner: rules, then `factory-spec-screen` with the owner's newest needed-me marks as precedents. It passes what is his (a screen or look he has not seen, product direction, spend, security policy, other people or company data, a change that cannot be undone, defaults that lead to materially different work) and settles the rest with the factory's looks_good and its reason, so the lead builds at once | |
 | **Needed me** | The owner's one-click mark on a verdict of a Spec or Report: did it need him. The newest marks teach the Spec screen and triage the next time; "Specs at the owner not needed" counts the no's | |
 | **Ask** | The lead's verb that raises a Decision (`factory issue ask`) | |
 | **Take the default** | The lead's verb that settles its own open Decision with the default it named, once it went on with that option (`factory decision take-default <id> --attempt <n>`). Recorded as settled by `default`, the source saying the lead took it; the Decision no longer holds the Issue, so a ship is not refused for the rest of its wait (a review wait or another open Decision still holds it) | |
-| **Settler** | Who settled a Decision, in the order tried: `policy`, `judge`, `default`, `owner`; or `orchestrator`, answering for the owner | |
+| **Settler** | Who settled a Decision, in the order tried: `judge`, `default`, `owner`; or `orchestrator`, answering for the owner | |
 | **Decision status** | `open`, `answered`, or `withdrawn` (the Issue no longer waits for it: it closed or was cancelled) | |
 | **Revision** | One version of an artifact's content. A Decision has one; a Concept or Spec gains one with each `revise` | |
 | **Annotation** | A comment anchored by a quote and a path on one revision. If the quote is gone from a later revision it sits in "Unanchored" | |
@@ -268,7 +268,7 @@ stateDiagram-v2
 | `blocked` | no person | yes | woken by the steward after it re-checks the cause |
 | `lead_gone` | no person | yes | woken by the steward: a new attempt |
 | `regressed` | no person | yes | woken by the steward, or turned into a Decision |
-| `decision` | a person | no | answered by standing policy, the Judge, a default, or the owner |
+| `decision` | a person | no | answered by the Judge, a default, or the owner |
 | `review` | a person | no | verdict given on the Concept or Spec by the owner, and every Decision the lead raised about it answered |
 | `errand` | a person | no | errand done by the owner's hands (or the orchestrator's, with evidence), or turned back with a note |
 | `external` | no person | no | woken by the review poll when the pull request is approved, gets changes requested or a new review comment, merges or closes |

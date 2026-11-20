@@ -9,7 +9,6 @@ import {
   resumeClaim,
 } from '../../src/app/capacity-admit.ts'
 import { capacityForLeads } from '../../src/app/capacity-leads.ts'
-import { standingPolicies } from '../../src/app/planning-policies.ts'
 import { loopReads } from '../../src/read/loops.ts'
 import { queueMovedAt } from '../../src/read/queue.ts'
 import { setQueueState, setRelearn } from '../../src/app/capacity-queue.ts'
@@ -906,27 +905,6 @@ describe('the ports other packages take', () => {
     })
     expect(value(await port.windows.wall('open', hit))).toEqual({ resetAt: null })
     expect(value(await port.windows.wall('nobody'))).toEqual({ resetAt: null })
-  })
-
-  test("the checkpoints' standing policy is the project's policy: rules, none for a repo that is no project", async () => {
-    world.source.add('policed', {
-      project: {
-        state: 'text',
-        sha: 'p',
-        value: {
-          apiVersion: 'factory/v2',
-          name: 'policed',
-          policy: [{ when: 'which database', answer: 'postgres', reason: 'decided once' }],
-        },
-      },
-    })
-    value(await syncProjects(world.deps, { fetch: false }))
-    const policies = standingPolicies(world.deps)
-    expect(value(await policies.rulesFor('policed'))).toEqual([
-      { when: 'which database', answer: 'postgres', reason: 'decided once' },
-    ])
-    expect(value(await policies.rulesFor('app'))).toEqual([])
-    expect(value(await policies.rulesFor('unknown'))).toEqual([])
   })
 
   test('the queue last moved when its newest event happened: none before there is one', async () => {
