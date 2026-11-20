@@ -187,7 +187,7 @@ export interface PassFacts {
   from: string
   to: string
   days: number
-  /** the import marker the window was cut at, when it was */
+  /** the counting epoch the window was cut at, when it was cut */
   since: string | null
   issues: number
   closed: number

@@ -825,7 +825,7 @@ export const FrictionModel = z
     days: z.number().int(),
     /** `from` is the later of `days` ago and `since`: nothing older is counted */
     window: z.strictObject({ from: at, to: at }),
-    /** the import marker: the old core's history ends here and only the new core's own events count; null when nothing was imported */
+    /** the counting epoch, when it cuts the window: nothing older is counted; null when the window is whole */
     since: at.nullable(),
     /** Issues filed in the window */
     issues: z.number().int(),
