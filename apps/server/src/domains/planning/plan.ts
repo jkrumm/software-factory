@@ -173,11 +173,31 @@ export function rowStatuses(facts: PlanFacts): RowStatus[] {
 /** The rows a pass files, in plan order. */
 export const filable = (statuses: readonly RowStatus[]): RowStatus[] => statuses.filter((s) => s.state === 'filable')
 
+const factLines = (row: PlanRow): { name: string; line: string }[] =>
+  Object.entries(row.facts ?? {}).map(([name, value]) => {
+    const text = typeof value === 'string' ? value : JSON.stringify(value)
+    return { name, line: `${name}: ${text}` }
+  })
+
+/** The first line of the note that carries a row's facts at filing; `factsChangeHead` is that of a later one. */
+export const factsHead = (row: string): string => `Plan row ${row}.`
+export const factsChangeHead = (row: string): string => `Plan row ${row} changed.`
+
 /** `why: …` lines, the Issue's facts rendered as the note its lead reads first. */
 export function factsNote(row: PlanRow): string {
-  const lines = Object.entries(row.facts ?? {}).map(([name, value]) => {
-    const text = typeof value === 'string' ? value : JSON.stringify(value)
-    return `${name}: ${text}`
+  return [factsHead(row.key), ...factLines(row).map((fact) => fact.line)].join('\n')
+}
+
+/**
+ * The note that tells a lead which facts of its row changed since the notes it already holds (`sent`: the texts of the
+ * row's facts notes, oldest first), or null when none did. A fact counts as changed when the latest note that named it
+ * does not carry its current line, so a value changed back is sent again; a fact the row dropped is not mentioned.
+ */
+export function changedFactsNote(row: PlanRow, sent: readonly string[]): string | null {
+  const changed = factLines(row).filter(({ name, line }) => {
+    const last = sent.findLast((text) => text.includes(`\n${name}: `))
+    return last === undefined || !`${last}\n`.includes(`\n${line}\n`)
   })
-  return [`Plan row ${row.key}.`, ...lines].join('\n')
+  if (changed.length === 0) return null
+  return [factsChangeHead(row.key), ...changed.map((fact) => fact.line)].join('\n')
 }
