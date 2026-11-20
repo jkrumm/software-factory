@@ -83,10 +83,10 @@ test('ci_red: a workflow is judged on its own runs', () => {
   expect(ciFindings(runs, 'master').map((f) => f.subject)).toEqual(['CI'])
 })
 
-test('migration_clash: one number on two names, from the base and from any ref, except the shared numbers', () => {
+test('migration_clash: one number on two names with one on the base, from the base and from any ref, except the shared numbers', () => {
   const found = migrationFindings(
     {
-      base: ['0001_a.sql', '0993_x.sql', '0993_y.sql'],
+      base: ['0001_a.sql', '0993_x.sql', '0993_y.sql', '0997_base.sql'],
       refs: [
         { ref: 'factory/1-1', added: ['0997_one.sql'] },
         { ref: 'origin/factory/2-1', added: ['0997_two.sql', '0001_a.sql'] },
@@ -99,7 +99,29 @@ test('migration_clash: one number on two names, from the base and from any ref, 
   expect(found.map((f) => f.subject)).toEqual(['0997'])
   expect(found[0]?.facts.join('\n')).toContain('0997_one.sql on factory/1-1, factory/3-1')
   expect(found[0]?.facts.join('\n')).toContain('0997_two.sql on origin/factory/2-1')
-  expect(found[0]?.title).toContain('0997_one.sql and 0997_two.sql')
+  expect(found[0]?.facts.join('\n')).toContain('0997_base.sql on origin/master')
+  expect(found[0]?.title).toContain('0997_base.sql and 0997_one.sql and 0997_two.sql')
+})
+
+test('migration_clash: a number repeated on the base alone still files', () => {
+  const found = migrationFindings({ base: ['0996_a.sql', '0996_b.sql'], refs: [], unchecked: [] }, new Set())
+  expect(found.map((f) => f.subject)).toEqual(['0996'])
+})
+
+test('migration_clash: two open refs that take one number with a clean base file nothing', () => {
+  expect(
+    migrationFindings(
+      {
+        base: ['0996_last.sql'],
+        refs: [
+          { ref: 'factory/1-1', added: ['0997_one.sql'] },
+          { ref: 'origin/factory/2-1', added: ['0997_two.sql'] },
+        ],
+        unchecked: [],
+      },
+      new Set(),
+    ),
+  ).toEqual([])
 })
 
 test('migration_clash: the same file on many refs is no clash', () => {
@@ -360,8 +382,8 @@ test('titles of different subjects have different fingerprints, and one subject 
     ),
     ...migrationFindings(
       {
-        base: [],
-        refs: [{ ref: 'a', added: ['0997_alpha.sql', '0997_beta.sql', '0998_gamma.sql', '0998_delta.sql'] }],
+        base: ['0997_alpha.sql', '0998_gamma.sql'],
+        refs: [{ ref: 'a', added: ['0997_beta.sql', '0998_delta.sql'] }],
         unchecked: [],
       },
       new Set(),

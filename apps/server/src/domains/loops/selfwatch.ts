@@ -69,8 +69,13 @@ export function ciFindings(runs: readonly CiRun[], branch: string): Finding[] {
 // ---- 2. migration_clash ---------------------------------------------------------------------------------------------------
 
 const MIGRATION_NUMBER = /^(\d{4})_/
+const BASE_REF = 'origin/master'
 
-/** A number carried by two or more distinct file names, on the default branch or on any ref; `shared` numbers are applied twins and are left. */
+/**
+ * A number carried by two or more distinct file names, at least one of them on the default branch; `shared` numbers are applied
+ * twins and are left. Two open refs that take the same number with each other are no finding: they are not on the default
+ * branch, and `scripts/merge-guard.ts` refuses the second at its merge, so a finding only files work that is already dropped.
+ */
 export function migrationFindings(snapshot: MigrationSnapshot, shared: ReadonlySet<string>): Finding[] {
   const carriers = new Map<string, Map<string, Set<string>>>()
   const add = (name: string, ref: string) => {
@@ -80,12 +85,12 @@ export function migrationFindings(snapshot: MigrationSnapshot, shared: ReadonlyS
     names.set(name, (names.get(name) ?? new Set()).add(ref))
     carriers.set(number, names)
   }
-  for (const name of snapshot.base) add(name, 'origin/master')
+  for (const name of snapshot.base) add(name, BASE_REF)
   for (const { ref, added } of snapshot.refs) for (const name of added) add(name, ref)
 
   const found: Finding[] = []
   for (const [number, names] of [...carriers].sort(([a], [b]) => byText(a, b))) {
-    if (names.size < 2) continue
+    if (names.size < 2 || ![...names.values()].some((refs) => refs.has(BASE_REF))) continue
     const files = [...names.keys()].sort(byText)
     found.push({
       kind: 'migration_clash',
