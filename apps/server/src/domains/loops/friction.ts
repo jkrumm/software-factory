@@ -4,6 +4,9 @@ import { MAX_SIGNALS_PER_PASS } from './budget.ts'
 /** A pass reads this many days of counts: the thresholds below are a week's. */
 export const FRICTION_WINDOW_DAYS = 7
 
+/** A pattern whose Issue closed less than this long ago is not filed again: the window the counts are read over. */
+export const PATTERN_REPEAT_MS = FRICTION_WINDOW_DAYS * 24 * 3_600_000
+
 /** A pass is due when no pass was recorded within this long... */
 const FRICTION_PASS_EVERY_MS = 24 * 3_600_000
 

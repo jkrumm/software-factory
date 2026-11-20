@@ -1421,6 +1421,24 @@ describe("a loop's finding is matched by its key alone", () => {
     })
   })
 
+  test('a finding with its own window counts it from the close: dropped a day on, filed anew a week after the close', async () => {
+    const DAY = 24 * 60 * 60_000
+    const key = { ...hygiene('files:src'), repeatWindowMs: 7 * DAY }
+    done(await intake.file(finding('Hygiene: unused files in src', 'files:src'), 'agent', key))
+    clock.advance(3 * DAY)
+    await send('issue_1' as IssueId, 'cancel', { kind: 'cancelled', payload: { reason: 'x' }, actor: 'owner' })
+    clock.advance(6 * DAY)
+    expect(done(await intake.file(finding('Hygiene: unused files', 'files:src'), 'agent', key))).toMatchObject({
+      outcome: 'dropped',
+      detail: 'repeat',
+    })
+    clock.advance(DAY + 1_000)
+    expect(done(await intake.file(finding('Hygiene: unused files', 'files:src'), 'agent', key))).toMatchObject({
+      outcome: 'filed',
+      issue: 'issue_2',
+    })
+  })
+
   test('an open Issue a loop filed before its key existed is taken over once by its fingerprint, then by the key', async () => {
     const title = 'Friction: leads stopped reporting before they ended'
     done(await intake.file(finding(title, 's'), 'agent'))

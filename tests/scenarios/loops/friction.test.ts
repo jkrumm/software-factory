@@ -194,9 +194,9 @@ test('a pass a day later amends the open Issue of a pattern with what it counted
   expect(ran.error).toBeNull()
   expect(ran.summary).toContain('filed 2 signal(s)')
   expect(await passes()).toHaveLength(2)
-  // the retro signal amends last week's still-open retro Issue
+  // the retro was filed in the first pass: a day later none is due, so it neither files nor amends
   expect(await frictionIssues()).toBe(3)
-  expect(ran.summary).toContain('retro amended (repeat)')
+  expect(ran.summary).toContain('retro not due (filed ')
 
   const notes = await notesOn(first.issue_id)
   expect(notes).toHaveLength(1)

@@ -57,7 +57,7 @@ import { checkpointUses } from './app/checkpoints-uses.ts'
 import { createLoopRunner, type LoopRunner, type LoopSpec } from './app/loops/runner.ts'
 import { projectFileProjects } from './app/quality-projects.ts'
 import { loadLoopSettings } from './app/loops/settings.ts'
-import { frictionPass, frictionSummary } from './app/loops/friction.ts'
+import { frictionPass, frictionSummary, RETRO_SUBJECT } from './app/loops/friction.ts'
 import { fixClassesPass, fixClassesSummary } from './app/loops/fix-classes.ts'
 import { slotAimPass } from './app/capacity-aim.ts'
 import { freshHostMemory, hostPass, hostSummary } from './app/loops/host.ts'
@@ -130,7 +130,7 @@ import { readBudgetFacts, readIssueFates, readWindowFacts } from './read/through
 import { loadEpoch } from './adapters/throughput-epoch.ts'
 import { projectBudgets as readProjectBudgets, throughputPass, throughputSummary } from './app/loops/throughput.ts'
 import { readFrictionEvidence } from './read/friction-evidence.ts'
-import { readClosedSince, readRetroOutcomes } from './read/retro-outcomes.ts'
+import { readClosedSince, readLastFiled, readRetroOutcomes } from './read/retro-outcomes.ts'
 import { loopReads } from './read/loops.ts'
 import { readIssues } from './read/planning.ts'
 import { loadSettings } from './settings.ts'
@@ -555,7 +555,7 @@ async function main(env: Environment): Promise<void> {
       },
     },
     {
-      // Deterministic: the week's counts, one signal per pattern over its threshold. Due once a day or after 200 closed Issues, read from the table.
+      // Deterministic: the week's counts, one signal per pattern over its threshold. Due once a day or after 200 closed Issues, read from the table; asked every 15 minutes. A pattern whose Issue closed within the week is not filed again, the retro is filed once a week.
       name: 'friction',
       intervalMs: loopSettings.intervalMs.friction,
       onChange: false,
@@ -567,6 +567,7 @@ async function main(env: Environment): Promise<void> {
           friction: (now) => readFriction(sql, { now, days: FRICTION_WINDOW_DAYS, epoch }),
           evidence: (now, keys) => readFrictionEvidence(sql, { now, days: FRICTION_WINDOW_DAYS, epoch }, keys),
           closedSince: (since, now) => readClosedSince(sql, { since, now }),
+          retroFiledAt: () => readLastFiled(sql, RETRO_SUBJECT),
           retroOutcomes: (now, days) => readRetroOutcomes(sql, { now, days }),
           file: (body, finding) => intake.api.file(body, 'agent', finding),
         })

@@ -13,6 +13,14 @@ export async function readClosedSince(sql: SQL, options: { since: Date; now: Dat
   return Count.parse(row).n
 }
 
+/** When the subject last had an Issue filed for it, null when never: what the friction loop reads to file the retro once a week. */
+export async function readLastFiled(sql: SQL, options: { source: string; subject: string }): Promise<Date | null> {
+  const [row] = await sql`
+    SELECT max(filed_at) AS at FROM factory.intake_subjects
+    WHERE source = ${options.source} AND subject = ${options.subject}`
+  return z.object({ at: z.date().nullable() }).parse(row).at
+}
+
 const Row = z.object({
   signals: z.coerce.number().int(),
   shipped: z.coerce.number().int(),

@@ -437,7 +437,7 @@ test('planHygiene treats a no-checkout row as due after the retry gap, not after
 
 test('the loop ticks every 15 minutes at most, is off with the tick, and a setting wins', () => {
   expect(loadLoopSettings({}).intervalMs.hygiene).toBe(15 * 60_000)
-  expect(loadLoopSettings({}).intervalMs.friction).toBe(10_000)
+  expect(loadLoopSettings({}).intervalMs.friction).toBe(15 * 60_000)
   expect(loadLoopSettings({ FACTORY_TICK_MS: '0' }).intervalMs.hygiene).toBe(0)
   expect(loadLoopSettings({ FACTORY_TICK_MS: '3600000' }).intervalMs.hygiene).toBe(3_600_000)
   expect(loadLoopSettings({ FACTORY_LOOP_HYGIENE_MS: '60000' }).intervalMs.hygiene).toBe(60_000)

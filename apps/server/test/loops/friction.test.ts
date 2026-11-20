@@ -11,6 +11,7 @@ import {
   THRESHOLDS,
   withinBudget,
 } from '../../src/domains/loops/friction.ts'
+import type { LoopFinding } from '../../src/domains/intake/model.ts'
 import type { ClassIssue } from '../../src/domains/loops/classes.ts'
 import type { FrictionPassRecord, LoopReads, LoopStore } from '../../src/domains/loops/ports.ts'
 import { frictionPass, frictionSummary, type FrictionDeps } from '../../src/app/loops/friction.ts'
@@ -203,7 +204,7 @@ const passNow = new Date('2026-11-20T12:00:00Z')
 function frictionWorld(
   classes: Record<string, ClassIssue[]>,
   failRetro = false,
-  extra: { last?: Date | null; closed?: number; outcomes?: RetroOutcomes } = {},
+  extra: { last?: Date | null; closed?: number; outcomes?: RetroOutcomes; retroFiled?: Date | null } = {},
 ) {
   const recorded: { issue: string; class: string; key: string }[] = []
   const records: FrictionPassRecord[] = []
@@ -217,6 +218,7 @@ function frictionWorld(
   const loopReads = { classIssues: async () => classes } as unknown as LoopReads
   let filed = 0
   const bodies: SignalRequest[] = []
+  const finds: LoopFinding[] = []
   const deps: FrictionDeps = {
     uow: { run: async (work) => work({ loops, loopReads }), inTransaction: () => false },
     clock: { now: () => passNow },
@@ -232,14 +234,16 @@ function frictionWorld(
     }),
     evidence: async () => ({}),
     closedSince: async () => extra.closed ?? 0,
+    retroFiledAt: async () => extra.retroFiled ?? null,
     retroOutcomes: async () => extra.outcomes ?? { days: 7, signals: 0, shipped: 0, done: 0, dropped: 0, open: 0 },
-    file: async (body) => {
+    file: async (body, finding) => {
       bodies.push(body)
+      finds.push(finding)
       if (failRetro && body.title === RETRO_TITLE) return err({ kind: 'unreadable', detail: 'intake is down' }) as never
       return ok({ outcome: 'filed', detail: 'new', issue: `issue_${++filed}`, signal: null, reason: null }) as never
     },
   }
-  return { deps, recorded, records, bodies }
+  return { deps, recorded, records, bodies, finds }
 }
 
 const noisyFriction = (): ClassIssue[] =>
@@ -340,4 +344,39 @@ test('the retro asks the Report to open with the three largest sources of waste,
   const text = w.bodies.find((b) => b.title === RETRO_TITLE)?.text ?? ''
   expect(text).toContain('0. The three largest sources of waste')
   expect(text.indexOf('0. The three')).toBeLessThan(text.indexOf('1. The numbers'))
+})
+
+// ---- the week: a pattern and the retro are filed once per window ------------------------------------------------------------
+
+test('every pattern asks intake for a week counted from its Issue closing; the retro asks for none', async () => {
+  const w = frictionWorld({})
+  await frictionPass(w.deps)
+  expect(w.finds).toHaveLength(3)
+  expect(w.finds.filter((f) => f.class !== 'retro').map((f) => f.repeatWindowMs)).toEqual([7 * DAY, 7 * DAY])
+  expect(w.finds.find((f) => f.class === 'retro')?.repeatWindowMs).toBeUndefined()
+})
+
+test('the retro is filed when none was filed in the last 7 days, and not before', async () => {
+  const recent = frictionWorld({}, false, { retroFiled: new Date(passNow.getTime() - 6 * DAY) })
+  const pass = await frictionPass(recent.deps)
+  expect(recent.bodies.filter((b) => b.title === RETRO_TITLE)).toHaveLength(0)
+  expect(recent.records[0]?.filed).toHaveLength(2)
+  expect(pass.ok && pass.value.due && frictionSummary(pass.value)).toContain('retro not due (filed 2026-11-14')
+
+  const old = frictionWorld({}, false, { retroFiled: new Date(passNow.getTime() - 7 * DAY) })
+  await frictionPass(old.deps)
+  expect(old.bodies.filter((b) => b.title === RETRO_TITLE)).toHaveLength(1)
+})
+
+test('a retro whose last filing cannot be read is named and not filed, and the pass goes on', async () => {
+  const w = frictionWorld({})
+  w.deps.retroFiledAt = async () => {
+    throw new Error('no table')
+  }
+  const pass = await frictionPass(w.deps)
+  expect(w.bodies.filter((b) => b.title === RETRO_TITLE)).toHaveLength(0)
+  expect(w.records).toHaveLength(1)
+  expect(pass.ok && pass.value.due && frictionSummary(pass.value)).toContain(
+    'retro not filed: the last retro could not be read',
+  )
 })

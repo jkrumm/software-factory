@@ -638,7 +638,7 @@ export function createIntake(deps: IntakeDeps) {
    * and closed counts it as a repeat, else it is a new Issue. No text match and no workflow: the key alone decides, so a
    * finding is never folded into an Issue of another subject. A replay finds the amend it made by its key.
    */
-  async function findingIn(s: Stores, r: Received, findingKey: Key): Out<Triaged> {
+  async function findingIn(s: Stores, r: Received, findingKey: Key, repeatWindowMs?: number): Out<Triaged> {
     const { signal } = r
     const now = clock.now()
     const keyed = await s.intake.latestSubject(signal.source, findingKey)
@@ -663,7 +663,10 @@ export function createIntake(deps: IntakeDeps) {
       const stored = await store(s, r, amendKey, 'amended', issue.id)
       return ok(triaged('amended', 'repeat', issue.id, stored))
     }
-    if (match && issue && now.getTime() - match.filedAt.getTime() < settings.fingerprintWindowMs) {
+    // A finding that names its own window counts it from the close; otherwise it is intake's, from the filing.
+    const windowMs = repeatWindowMs ?? settings.fingerprintWindowMs
+    const since = repeatWindowMs === undefined ? match?.filedAt : (issue?.closedAt ?? match?.filedAt)
+    if (match && issue && since && now.getTime() - since.getTime() < windowMs) {
       await s.intake.touchSubject(match.id, { at: now, upAt: match.upAt, repeat: true })
       return ok(dropped('repeat', `it repeats ${match.issueId}, closed within the window`))
     }
@@ -823,7 +826,12 @@ export function createIntake(deps: IntakeDeps) {
     return issue.value.origin === 'you' && signal.source === `agent:${issue.value.repo}`
   }
 
-  async function receive(r: Received, filer: IssueId | null = null, findingKey: Key | null = null): Out<Triaged> {
+  async function receive(
+    r: Received,
+    filer: IssueId | null = null,
+    findingKey: Key | null = null,
+    repeatWindowMs?: number,
+  ): Out<Triaged> {
     const { signal, alert } = r
     // The loop guard: a change a loop made never fires an automatic sender again.
     if (signal.madeBy !== null && (signal.trust === 'machine' || signal.trust === 'agent')) {
@@ -854,7 +862,7 @@ export function createIntake(deps: IntakeDeps) {
     if (findingKey && !alert) {
       return uow.run(async (s) => {
         await s.intake.lock(findingKey)
-        return findingIn(s, r, findingKey)
+        return findingIn(s, r, findingKey, repeatWindowMs)
       })
     }
     const info = found.value as RepoSignals
@@ -957,6 +965,7 @@ export function createIntake(deps: IntakeDeps) {
       { signal: signal.value, alert: null },
       body.filer ? issueIdOf(body.filer.replace(/^(\d)/, 'issue_$1')) : null,
       finding ? findingKeyOf(finding, signal.value.repo) : null,
+      finding?.repeatWindowMs,
     )
   }
 

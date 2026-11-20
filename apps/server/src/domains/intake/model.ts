@@ -32,6 +32,11 @@ export interface LoopFinding {
   class: string
   /** what it is about inside its class (a pattern key, a probe key, a subject) */
   subject: string
+  /**
+   * How long after its Issue closed a repeat of this finding is dropped instead of filed anew. Absent: intake's
+   * fingerprint window, counted from when the Issue was filed.
+   */
+  repeatWindowMs?: number
 }
 
 export interface Triaged {
