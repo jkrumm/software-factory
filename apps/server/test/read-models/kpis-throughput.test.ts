@@ -41,6 +41,20 @@ test('the recommendation taken is the answers that name the recommended option, 
   expect(touches).toMatchObject({ count: 3, n: 0, value: null, measured: false, parts: [] })
 })
 
+test('an Issue a loop filed (its intake subject a finding key) is left out of the touch rate and counted beside it', async () => {
+  for (const id of ['issue_20', 'issue_21']) {
+    await sql`INSERT INTO factory.issues (id, repo, state, version) VALUES (${id}, 'app', 'queued', 1)`
+    await sql`INSERT INTO factory.issue_events (id, issue_id, key, kind, payload, actor, at, result, version, to_state)
+      VALUES (${`event_filed_${id}`}, ${id}, ${`filed:${id}`}, 'filed', '{}'::jsonb, 'factory', ${ago(3)}, 'applied', 1, 'settling')`
+  }
+  // issue_21 is the weekly retro: the friction loop filed it through intake with its finding
+  await sql`INSERT INTO factory.intake_subjects (source, subject, issue_id, filed_at, last_seen)
+    VALUES ('agent:software-factory', 'finding:friction:retro:software-factory:retro', 'issue_21', ${ago(3)}, ${ago(3)})`
+  const touches = (await read()).kpis.find((k) => k.key === 'avoidable_touches')
+  expect(touches).toMatchObject({ n: 1, count: 3 })
+  expect(touches?.beside.find((p) => p.key === 'loop_filed')?.value).toBe(1)
+})
+
 test('every KPI carries its label, direction, target and target source from the catalog, and nothing the screen does not show', async () => {
   for (const k of (await read()).kpis) {
     expect(k).toMatchObject({

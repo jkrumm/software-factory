@@ -109,15 +109,18 @@ export const issuesFiled = (sql: SQL, w: Window): Promise<number> =>
   )
 
 /**
- * Issues filed in the window that no loop of the factory filed (`loop_findings` holds every Issue the friction, hygiene,
- * selfwatch and throughput loops opened): what a person, an agent or an alert asked for. The owner-touch rate divides by
- * these, so a week the loops file hundreds of hygiene Issues does not make the owner's touches look rarer.
+ * Issues filed in the window that no loop of the factory filed: what a person, an agent or an alert asked for. A loop files
+ * through intake with a finding, so its Issue's intake subject is a finding key (`finding:<loop>:...`, `findingKeyOf`): the
+ * friction patterns and the weekly retro, hygiene, selfwatch and throughput alike; `loop_findings` holds the rows the ledger
+ * imported from before. The owner-touch rate divides by these, so a week the loops file hundreds of hygiene Issues does not
+ * make the owner's touches look rarer.
  */
 const issuesFiledOutsideLoops = (sql: SQL, w: Window): Promise<number> =>
   one(sql`
     SELECT count(*) AS n FROM factory.issue_events e
     WHERE e.kind = 'filed' AND e.result = 'applied' AND e.at >= ${w.from} AND e.at < ${w.to}
-      AND NOT EXISTS (SELECT 1 FROM factory.loop_findings lf WHERE lf.issue_id = e.issue_id)`)
+      AND NOT EXISTS (SELECT 1 FROM factory.loop_findings lf WHERE lf.issue_id = e.issue_id)
+      AND NOT EXISTS (SELECT 1 FROM factory.intake_subjects s WHERE s.issue_id = e.issue_id AND s.subject LIKE 'finding:%')`)
 
 /** Owner touches of one kind this close together are one action: a person sending the same steer to a dozen Issues, or an owner script cancelling a re-planned batch. */
 const TOUCH_BURST_MS = 60_000

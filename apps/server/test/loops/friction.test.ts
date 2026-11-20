@@ -490,6 +490,8 @@ test('a KPI on its target, unmeasured, with no number yet, or over a window the 
   expect(kpisOffTarget([touchesOver(target)], { whole: true })).toEqual([])
   expect(kpisOffTarget([{ ...touchesOver(), measured: false, value: null }], { whole: true })).toEqual([])
   expect(kpisOffTarget([touchesOver()], { whole: false })).toEqual([])
+  // three Issues are no sample for a rate: no friction rate is judged under ten either
+  expect(kpisOffTarget([{ ...touchesOver(), n: 3 }], { whole: true })).toEqual([])
   const errands: KpiReading = {
     key: 'errands_reached_per_100',
     label: 'Errands that reached the owner per 100 Issues',
@@ -551,6 +553,30 @@ test('a window the epoch cut judges no KPI, and a failed KPI read is named while
   expect(failing.records[0]?.failed).toEqual([
     { key: 'kpi', reason: 'the KPIs could not be read: Error: statement timeout' },
   ])
+})
+
+test('a closed KPI finding waits for the next pass when the KPIs could not be read', async () => {
+  const w = frictionWorld({}, false, {
+    counts: [],
+    kpis: async () => {
+      throw new Error('statement timeout')
+    },
+    closedFindings: [
+      {
+        issue: 'issue_7',
+        loop: 'friction',
+        repo: 'software-factory',
+        key: 'kpi:avoidable_touches',
+        figure: 0.12,
+        verdict: null,
+        outcome: 'done',
+        filedAt: new Date(passNow.getTime() - 9 * DAY),
+        closedAt: new Date(passNow.getTime() - 2 * DAY),
+      },
+    ],
+  })
+  await frictionPass(w.deps)
+  expect(w.verdicts).toEqual([])
 })
 
 test('a closed KPI finding is judged against the KPI now, and one with no figure now is unmeasured', async () => {

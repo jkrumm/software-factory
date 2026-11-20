@@ -117,16 +117,21 @@ export type KpiReading = Pick<Kpi, 'key' | 'label' | 'value' | 'unit' | 'n' | 'c
 export const kpiFigure = (target: KpiTargetValue, value: number): number =>
   target.kind === 'at_least' ? 1 - value : value
 
+/** The units of a KPI that is a rate over Issues: judged only from `MIN_CLOSED` Issues, like a friction rate. */
+const OVER_ISSUES: ReadonlySet<Kpi['unit']> = new Set(['per_issue', 'per_100_issues'])
+
 /**
  * The KPIs off their target (`THRESHOLDS.kpis`) over a whole window, as patterns keyed `kpi:<key>`, each naming its largest
  * part: for avoidable touches, the touch kind to remove first. A window the counting epoch cut is not whole and judges none; a
- * KPI with no figure, or no number for a target yet, is never a finding.
+ * KPI with no figure, a rate over fewer than `MIN_CLOSED` Issues, or no number for a target yet, is never a finding.
  */
 export function kpisOffTarget(readings: readonly KpiReading[], window: { whole: boolean }): Pattern[] {
   if (!window.whole) return []
   const over: Pattern[] = []
   for (const reading of readings) {
     if (!reading.measured || reading.value === null) continue
+    // a rate over Issues stands on as many as a friction rate does; a share or a median has its own floor in the read
+    if (OVER_ISSUES.has(reading.unit) && reading.n < MIN_CLOSED) continue
     if (meetsTarget(reading.target, reading.value) !== false) continue
     const largest = reading.parts.toSorted((a, b) => b.value - a.value)[0] ?? null
     over.push({

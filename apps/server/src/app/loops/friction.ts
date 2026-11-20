@@ -134,15 +134,18 @@ export async function frictionPass(deps: FrictionDeps): Promise<Result<FrictionP
     issues: model.issues,
     closed: model.closed,
   }
-  // what the Issues of earlier findings did: a pattern no longer counted is at 0, a KPI with no figure now is unmeasured
+  // what the Issues of earlier findings did: a pattern no longer counted is at 0, a KPI with no figure now is unmeasured,
+  // and a KPI finding waits for the next pass when the KPIs could not be read (undefined)
   const counted = new Map(model.counts.map((count) => [count.key, count.count]))
   for (const kpi of kpis)
     if (kpi.measured && kpi.value !== null) counted.set(`kpi:${kpi.key}`, kpiFigure(kpi.target, kpi.value))
-  const settled = await settleClosed(deps, {
-    loop: 'friction',
-    now,
-    read: (row) => counted.get(row.key) ?? (row.key.startsWith('kpi:') ? null : 0),
-  })
+  const readNow = (key: string): number | null | undefined => {
+    const figure = counted.get(key)
+    if (figure !== undefined) return figure
+    if (!key.startsWith('kpi:')) return 0
+    return kpiFailure === null ? null : undefined
+  }
+  const settled = await settleClosed(deps, { loop: 'friction', now, read: (row) => readNow(row.key) })
   if (!settled.ok) return settled
   const ledger = settled.value
   const record: FrictionPassRecord = {
