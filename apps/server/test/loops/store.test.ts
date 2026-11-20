@@ -25,7 +25,7 @@ test('a claimed call is in flight; after a restart (lapseOpen) it is retaken und
   const loops = postgresLoopStore(db.sql)
   const now = new Date()
   const ask = (at: Date) =>
-    claimRound({ loops }, { loop: 'steward', issue, subject: 'wait:9', now: at, policy, keyFor })
+    claimRound({ loops }, { loop: 'steward', scope: issue, subject: 'wait:9', now: at, policy, keyFor })
 
   expect(await ask(now)).toEqual({ kind: 'claimed', round: 1, key: keyFor(1) })
   // another pass inside the lease leaves it alone

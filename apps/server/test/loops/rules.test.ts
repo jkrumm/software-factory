@@ -150,7 +150,7 @@ const policy: CallPolicy = { maxRounds: 3, retryMs: 10 * 60_000, leaseMs: 35 * 6
 const row = (round: number, over: Partial<CallRow> = {}): CallRow => ({
   key: `steward:issue_12:9:${round}`,
   loop: 'steward',
-  issueId: id(12),
+  scope: id(12),
   subject: 'wait:9',
   round,
   claimedAt: new Date(NOW.getTime() - 60 * 60_000),
@@ -159,6 +159,7 @@ const row = (round: number, over: Partial<CallRow> = {}): CallRow => ({
   answer: null,
   detail: 'gone',
   finishedAt: new Date(NOW.getTime() - 59 * 60_000),
+  applied: null,
   ...over,
 })
 

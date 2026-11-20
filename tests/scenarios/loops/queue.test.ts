@@ -63,6 +63,12 @@ const edgesOf = async (repo: string): Promise<string[]> =>
 
 const json = <T>(value: unknown): T => (typeof value === 'string' ? (JSON.parse(value) as T) : (value as T))
 
+interface Applied {
+  applied: { issue: string; after: string }[]
+  refused: { issue: string; after: string; why: string }[]
+  afterShape: string
+}
+
 interface Ask {
   key: string
   outcome: string | null
@@ -74,14 +80,14 @@ interface Ask {
 
 const asksRecorded = async (repo: string): Promise<Ask[]> => {
   const rows: Record<string, unknown>[] =
-    await sql()`SELECT * FROM factory.queue_asks WHERE repo = ${repo} ORDER BY round`
+    await sql()`SELECT * FROM factory.loop_calls WHERE loop = 'queue' AND repo = ${repo} ORDER BY round`
   return rows.map((row) => ({
     key: row.key as string,
     outcome: row.outcome as string | null,
     answer: json(row.answer),
-    applied: json(row.applied),
-    refused: json(row.refused),
-    after_shape: row.after_shape as string | null,
+    applied: json<Applied | null>(row.applied)?.applied ?? null,
+    refused: json<Applied | null>(row.applied)?.refused ?? null,
+    after_shape: json<Applied | null>(row.applied)?.afterShape ?? null,
   }))
 }
 
@@ -189,7 +195,7 @@ test('budget: a changed shape inside the gap is not asked, after the gap it is',
   expect(early.summary).toContain('skipped for budget 1')
   expect(await asksFor('q6')).toHaveLength(1)
 
-  await sql()`UPDATE factory.queue_asks SET claimed_at = claimed_at - interval '2 hours' WHERE repo = 'q6'`
+  await sql()`UPDATE factory.loop_calls SET claimed_at = claimed_at - interval '2 hours' WHERE loop = 'queue' AND repo = 'q6'`
   expect((await runLoop(lab, 'queue')).summary).toContain('asked 1')
   expect(await asksFor('q6')).toHaveLength(2)
 })
@@ -208,10 +214,10 @@ test('an agw answer that does not parse is recorded as failed and retried only a
   expect(await asksFor('q7')).toHaveLength(1)
 
   await answers('q7', [[b, a]])
-  await sql()`UPDATE factory.queue_asks
+  await sql()`UPDATE factory.loop_calls
     SET claimed_at = claimed_at - interval '20 minutes', lease_until = lease_until - interval '20 minutes',
         finished_at = finished_at - interval '20 minutes'
-    WHERE repo = 'q7'`
+    WHERE loop = 'queue' AND repo = 'q7'`
   const retried = await runLoop(lab, 'queue')
   expect(retried.summary).toContain('applied 1 edge(s)')
   expect(await asksFor('q7')).toHaveLength(2)
@@ -222,10 +228,10 @@ test('an agw answer that does not parse is recorded as failed and retried only a
 test('a queue ask that fails or answers unavailable is not an asked shape: the shape is asked again once the retry window has passed', async () => {
   const a = await queued('q16', 'Unavailable first')
   const b = await queued('q16', 'Unavailable second')
-  const aged = () => sql()`UPDATE factory.queue_asks
+  const aged = () => sql()`UPDATE factory.loop_calls
     SET claimed_at = claimed_at - interval '20 minutes', lease_until = lease_until - interval '20 minutes',
         finished_at = finished_at - interval '20 minutes'
-    WHERE repo = 'q16'`
+    WHERE loop = 'queue' AND repo = 'q16'`
 
   await script(queueScript, [{ match: '"repo":"q16"', fail: true }])
   expect((await runLoop(lab, 'queue')).summary).toContain('asked 1')
@@ -259,7 +265,7 @@ test('an answer stored but not applied (a crash in between) is applied on the ne
   expect(await edgesOf('q8')).toEqual([`${b}>${a}`])
 
   await sql()`DELETE FROM factory.planning_edges WHERE issue_id = ${b}`
-  await sql()`UPDATE factory.queue_asks SET applied = NULL, refused = NULL, after_shape = NULL WHERE repo = 'q8'`
+  await sql()`UPDATE factory.loop_calls SET applied = NULL WHERE loop = 'queue' AND repo = 'q8'`
   const ran = await runLoop(lab, 'queue')
   expect(ran.summary).toContain('asked 0, applied 1 edge(s)')
   expect(await edgesOf('q8')).toEqual([`${b}>${a}`])

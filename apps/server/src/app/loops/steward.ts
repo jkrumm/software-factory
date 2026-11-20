@@ -364,7 +364,7 @@ async function ask(deps: StewardDeps, facts: StallFacts): Out<Asking> {
     ok(
       await claimRound(stores, {
         loop: 'steward',
-        issue: facts.issue,
+        scope: facts.issue,
         subject,
         now,
         policy,

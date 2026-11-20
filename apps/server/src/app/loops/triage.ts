@@ -150,7 +150,7 @@ async function askTriage(deps: TriageDeps, row: SettlingRow, pass: TriagePass): 
     ok(
       await claimRound(stores, {
         loop: 'triage',
-        issue: row.issue,
+        scope: row.issue,
         subject: 'settle',
         now,
         policy,

@@ -81,8 +81,8 @@ describe('the queue order within a priority', () => {
     const big = await sized('large')
     const little = await sized('small')
     await world.db.sql`
-      INSERT INTO factory.queue_asks (key, repo, shape, round, claimed_at, lease_until, outcome, answer, finished_at)
-      VALUES ('queue:solo:1', 'solo', 'shape', 1, ${world.clock.now()}, ${world.clock.now()}, 'answered',
+      INSERT INTO factory.loop_calls (key, loop, repo, subject, round, claimed_at, lease_until, outcome, answer, finished_at)
+      VALUES ('queue:solo:1', 'queue', 'solo', 'shape', 1, ${world.clock.now()}, ${world.clock.now()}, 'answered',
         ${JSON.stringify({ edges: [], order: [big, b, a, little], reason: 'r' })}::jsonb, ${world.clock.now()})`
     const queue = await orderOf()
     expect(queue.slice(0, 4)).toEqual([little, b, a, big])

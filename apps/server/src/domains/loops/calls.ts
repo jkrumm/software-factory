@@ -1,6 +1,4 @@
-import type { IssueId } from '../../kernel/ids.ts'
-
-export type CallLoop = 'steward' | 'triage'
+export type CallLoop = 'steward' | 'triage' | 'queue'
 export type CallOutcome = 'answered' | 'rejected' | 'failed'
 
 /** One ask of an agw workflow about one subject, as stored: the claim, then how it ended. A round is the nth try. */
@@ -8,8 +6,9 @@ export interface CallRow {
   /** the idempotency key of the agw run */
   key: string
   loop: CallLoop
-  issueId: IssueId
-  /** what it is about: `wait:<version>` for a stall, `settle` for an Issue settling */
+  /** what the loop asks about: an Issue id (steward, triage) or a repo (queue) */
+  scope: string
+  /** what it is about: `wait:<version>` for a stall, `settle` for an Issue settling, the queue's shape for the queue loop */
   subject: string
   round: number
   claimedAt: Date
@@ -19,6 +18,8 @@ export interface CallRow {
   answer: unknown
   detail: string | null
   finishedAt: Date | null
+  /** what was done with the answer (the queue loop's edges); null until then, and for loops that need no second step */
+  applied: unknown
 }
 
 export interface CallPolicy {
