@@ -33,7 +33,7 @@ const Env = z.object({
   FACTORY_SLOTS: whole(1, 64).optional(),
   /** the most test steps at once when memory and load allow; below FACTORY_SLOTS it is FACTORY_SLOTS */
   FACTORY_SLOTS_MAX: whole(1, 64).optional(),
-  /** the host load up to which a step beyond the base slots is granted */
+  /** accepted for compatibility and no longer read: the load tripwire decides whether a step beyond the base slots runs */
   FACTORY_SLOT_EXTRA_LOAD: whole(1, 100_000).optional(),
   /** the ssh target of the VPS that runs steps off the mini (an alias of the owner's ssh config); unset: every step runs on the mini */
   FACTORY_STEP_REMOTE_TARGET: z

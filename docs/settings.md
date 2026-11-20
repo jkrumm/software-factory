@@ -76,7 +76,7 @@ Every name a settings loader reads from the environment: its default in the code
 | `FACTORY_SETTLE_POLL` | `10s` | how often the intake's settle pass runs; off disables it | `apps/server/src/adapters/intake/settings.ts` |
 | `FACTORY_SETTLE_TIMEOUT_MS` | `15 * 60_000` | an Issue still settling this long after it was filed is settled with no edges by the steward | `apps/server/src/app/loops/settings.ts` |
 | `FACTORY_SIGNAL_TOKEN` | unset | the token signals are filed with | `apps/server/src/settings.ts` |
-| `FACTORY_SLOT_EXTRA_LOAD` | `12` | the host load up to which a step beyond the base slots is granted | `apps/server/src/app/planning-settings.ts` |
+| `FACTORY_SLOT_EXTRA_LOAD` | `12` | accepted for compatibility and no longer read: the load tripwire decides whether a step beyond the base slots runs | `apps/server/src/app/planning-settings.ts` |
 | `FACTORY_SLOTS` | `2` | the base count of test slots the host runs at once | `apps/server/src/app/planning-settings.ts` |
 | `FACTORY_SLOTS_MAX` | `6` | the most test steps at once when memory and load allow; below FACTORY_SLOTS it is FACTORY_SLOTS | `apps/server/src/app/planning-settings.ts` |
 | `FACTORY_SOCKET` | `$HOME/.local/share/factory/hook.sock` | the unix socket factory hook posts events to | `apps/server/src/adapters/leads/settings.ts` |
