@@ -158,7 +158,8 @@ test('the lead is told of a pause when it runs, and not again in the note that e
   const woken = record('woken', { since: 5, detail: 'the owner said go' }, 6)
   expect(noteText(id, [paused])).toContain('the owner paused this Issue')
   const resume = noteText(id, [paused, woken])
-  expect(resume).not.toContain('paused')
+  expect(resume).toContain('the owner had paused this Issue: "hold for the release"')
+  expect(resume).not.toContain('takes none of your verbs')
   expect(resume).toContain('your wait is over')
   // a wake of an earlier wait does not end a pause recorded after it
   const late = record('paused', { reason: 'a later hold' }, 8)

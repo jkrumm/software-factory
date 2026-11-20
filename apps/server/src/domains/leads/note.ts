@@ -64,15 +64,19 @@ function item(record: HistoryRecord): string | null {
  */
 export function noteText(issue: IssueId, records: readonly HistoryRecord[]): string {
   const head = `Factory, Issue ${issueNumber(issue)}:`
-  // A pause the same note ends (a resume) is no news to a lead that is waking: the wake says it. A wake ends the wait that
-  // began at its `since`, so it ends a pause recorded from that version on and before the wake itself.
+  // A pause the same note ends (the lead is only now hearing of it, with the resume) is told in the past: the wake says the rest.
+  // A wake ends the wait that began at its `since`, so it ends a pause recorded from that version on and before the wake itself.
   const wakes = records.flatMap((record) => {
     const since = record.kind === 'woken' ? field(record, 'since') : undefined
     return typeof since === 'number' ? [{ since, version: record.version }] : []
   })
   const endedPause = (record: HistoryRecord) =>
     record.kind === 'paused' && wakes.some((wake) => wake.since <= record.version && record.version < wake.version)
-  const items = records.flatMap((record) => (endedPause(record) ? [] : (item(record) ?? [])))
+  const items = records.flatMap((record) =>
+    endedPause(record)
+      ? [`the owner had paused this Issue: ${oneLine(field(record, 'reason'))}`]
+      : (item(record) ?? []),
+  )
   const body = items.length > 0 ? items.join(' | ') : `there is news; read it with \`factory issue show ${issue}\``
   const text = `${head} ${body}`
   return text.length > MAX_NOTE_CHARS ? `${text.slice(0, MAX_NOTE_CHARS - 1)}…` : text

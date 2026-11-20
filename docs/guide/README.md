@@ -65,7 +65,7 @@ Six nouns carry the design. Every chapter is about one of them.
 |-|-|-|
 | Arrive | `filed`, `settled` | the factory; the owner or his delegate can file directly |
 | Start | `admitted`, `lead_started`, `seated`, `moved_up`, `lead_gone` | the factory; the owner or his delegate sets a seat |
-| Work | `noted`, `paused`, `deferred`, `stalled`, `woken` | the lead defers or reports a stall; the owner pauses; the owner, the steward, the Judge and the factory note and wake |
+| Work | `noted`, `paused`, `deferred`, `stalled`, `woken` | the lead defers or reports a stall; the owner or his delegate pauses; the owner, the steward, the Judge and the factory note and wake |
 | Ask a person | `asked`, `answered`, `submitted`, `verdict_given`, `errand_raised`, `errand_done`, `errand_turned_back` | the lead asks, or the steward for it; the Judge, a default or the owner answers |
 | Finish | `shipped`, `watch_passed`, `regressed`, `closed`, `reopened`, `cancelled` | the lead ships or closes, the factory watches, the owner or the factory reopens or cancels |
 
