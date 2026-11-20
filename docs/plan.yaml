@@ -630,3 +630,861 @@ rows:
         Delete the files and the rollback target; cut docs/claude-accounts.md to what stays in dotfiles (the owner's registry data and the host adapters: relogin, peer import, keepalive, heartbeat, statusline record) and link the package docs for the rule; update every reference.
       acceptance: |-
         rg finds no reference to the deleted files outside the archive; make check and make doctor pass; claude-account works on both machines and names the package in --version.
+
+  # The maturation cycle of 2026-11-20 (docs/research/2026-11-maturation/README.md): remove mechanisms, add none. Each row is one pull
+  # request; a row waits for another only where it needs what that row shipped.
+  - key: mat-ship-proves-itself
+    seat: { tier: opus, effort: high }
+    prio: 30
+    title: "Ship without a typed sha: the server derives the merged commits, and the cut is the Issue's"
+    facts:
+      why: |-
+        The gate refused 101 ships in the 7 days to 2026-11-20 (1,545 Issues filed). About 70 were a sha typed wrong, taken from an earlier attempt or not merged yet ("commit X is not on origin/master: merge it first"), and 13 were "older than this attempt". One Issue retried the same sha four times with one digit wrong. The server already holds the Issue's branch and the cut it was started from, so the lead types what the server knows. The retro counts 49.8 lead-hours a week behind refused ships.
+      what: |-
+        apps/server/src/app/quality-ship.ts and quality-checkout.ts, apps/server/src/adapters/quality/git.ts (the commit checks, about lines 185 to 220), the ship operation in packages/contract and the generated CLI verb, the lines of apps/server/src/domains/leads/brief.ts that tell a lead to pass commits, and their tests and scenarios.
+      change: |-
+        `factory issue ship <id>` with no commits derives them: the commits of the Issue's branch since the Issue's cut that are on the origin default branch. Commits passed by hand stay accepted. The cut is the Issue's (the first attempt's), so a later attempt can ship what an earlier attempt landed. When nothing of the branch is on the default branch, the refusal names the one command to run next. The brief stops asking for a sha.
+      acceptance: |-
+        Scenarios: a ship with no commits after a merge is accepted and stores the merged commits as evidence; attempt 2 ships work attempt 1 landed; a ship of an unmerged branch is refused and the message names the next command; a ship with commits passed by hand behaves as today. make check-fast passes. The brief's ship order names no sha.
+      evidence: |-
+        docs/research/2026-11-maturation/audit-agents.md, findings F1 and F2.
+      cycle: |-
+        Maturation cycle 2026-11-20 (docs/research/2026-11-maturation/README.md): remove mechanisms, add none. The finding named under evidence was taken at commit 8fa0a18c: read it first and re-check each file and line before acting. Behaviour outside the stated change stays as it is.
+  - key: mat-lead-cli
+    prio: 20
+    title: "The lead's CLI fills the attempt from its session and shows only the verbs a lead may call"
+    facts:
+      why: |-
+        Seven lead verbs require --attempt although FACTORY_SESSION (lead-<issue>-<attempt>) already says it; the brief repeats the flag 20 times. factory --help is 24.9 KB, flat and unsorted: about 100 verbs, of which a lead may call 38 and gets a 403 on about 39, and the brief spends a sentence warning about them.
+      what: |-
+        apps/cli/src/operation.ts (line 258 already parses FACTORY_SESSION, for signal file and the door routes only), the CLI generator (apps/cli/scripts/generate.ts) and apps/cli/src/generated/operations.ts (generated, never edited by hand), apps/server/src/api/policy.ts as the source of who may call what, the help printer, tests.
+      change: |-
+        (1) For every operation with an attempt field, the CLI fills it from FACTORY_SESSION when the flag is absent; a flag given wins. (2) The generator tags each operation with the callers policy.ts allows. With FACTORY_SESSION set, `factory --help` prints the verbs the agent caller may call, grouped by noun; `--all` prints every verb. Without the variable the full list prints, grouped the same way. The output contract (--format, exit codes) is unchanged.
+      acceptance: |-
+        With FACTORY_SESSION=lead-12-1: factory --help lists no verb policy.ts refuses the agent caller and is under 6 KB; the lead verbs run without --attempt and send attempt 1 (tests on the request built). Without the variable every verb is still listed. make check passes with the regenerated operations file.
+      evidence: |-
+        docs/research/2026-11-maturation/audit-agents.md, findings F3, F4 and F11.
+      cycle: |-
+        Maturation cycle 2026-11-20 (docs/research/2026-11-maturation/README.md): remove mechanisms, add none. The finding named under evidence was taken at commit 8fa0a18c: read it first and re-check each file and line before acting. Behaviour outside the stated change stays as it is.
+  - key: mat-refusal-next-step
+    kind: bug
+    title: "A refusal names the next command; a held Spec can be revised by its filer"
+    facts:
+      why: |-
+        15 note events a week are refused with "it is closed: reopen it first" and name no command; "the watch is on, and verify ends it" names none either. A Spec held at an owner gate cannot be revised by the session that filed it: one Issue took 5 notes to get around that.
+      what: |-
+        apps/server/src/domains/work/table.ts (the refusal texts, about lines 121 and 122, and every refusal that names no command), the artifact revise route and its policy row, tests.
+      change: |-
+        Every refusal text of the transition table ends with the command that gets the caller further (for a closed Issue: `factory issue reopen <id>` for the owner, `factory signal file` for a lead). The filer of a Spec handed over with an Issue may revise it while it is held.
+      acceptance: |-
+        A test walks every refuse cell of the table and fails on a text with no backticked command. A scenario: the filer revises a held Spec and the owner sees the new revision. make check-fast passes; the generated state diagram is unchanged or regenerated.
+      evidence: |-
+        docs/research/2026-11-maturation/audit-agents.md, finding F9.
+      cycle: |-
+        Maturation cycle 2026-11-20 (docs/research/2026-11-maturation/README.md): remove mechanisms, add none. The finding named under evidence was taken at commit 8fa0a18c: read it first and re-check each file and line before acting. Behaviour outside the stated change stays as it is.
+  - key: mat-plan-facts-resend
+    title: "A plan row whose facts change after filing reaches its open Issue's lead as one note"
+    facts:
+      why: |-
+        A plan row revised after its Issue was filed never reaches the lead: the facts are noted once, at filing (apps/server/src/app/planning-pass.ts, about line 134). In a sample of 41 of the week's 138 hand-sent notes, about 9 were such corrections.
+      what: |-
+        apps/server/src/app/planning-pass.ts and planning-sync.ts, the note delivery keys in apps/server/src/kernel/keys.ts, scenarios.
+      change: |-
+        When the planning pass reads a row whose facts differ from the facts its open Issue was filed with, it sends the lead one note naming the changed keys with their new text, keyed by row and content so a replayed pass sends nothing twice. A closed Issue gets nothing.
+      acceptance: |-
+        Scenario: edit a filed row's acceptance, run the planning pass twice: the lead has exactly one note with the new acceptance; an unchanged row sends none; a row whose Issue closed sends none. make check-fast passes.
+      evidence: |-
+        docs/research/2026-11-maturation/audit-agents.md, finding F7.
+      cycle: |-
+        Maturation cycle 2026-11-20 (docs/research/2026-11-maturation/README.md): remove mechanisms, add none. The finding named under evidence was taken at commit 8fa0a18c: read it first and re-check each file and line before acting. Behaviour outside the stated change stays as it is.
+  - key: mat-workflow-failure
+    kind: bug
+    prio: 10
+    title: "A failed or unavailable workflow run is retried, never read as an answer"
+    facts:
+      why: |-
+        Five agw workflows (factory-ask, factory-triage, factory-steward, factory-queue, factory-hygiene) catch a model failure and return a valid neutral answer with a reason that says unavailable. The factory never reads that reason, so its retries (JUDGE_MAX_TRIES, apps/server/src/app/checkpoints-settle.ts about line 241) do not run: an outage pages the owner at once, marks a queue shape as asked for good and settles triage with no edges. The row mat-agw-failures removes the catch in agw once this row has shipped.
+      what: |-
+        apps/server/src/adapters/agw/*, the callers in apps/server/src/app/checkpoints-settle.ts and apps/server/src/app/loops/{triage,steward,queue,hygiene}.ts, the fake agw of tests/scenarios.
+      change: |-
+        For those five calls: a run that failed, and (until agw changes) an answer whose reason marks it unavailable, count as a failed try. Each call uses the retry it already has; where a call has none, it leaves the row unclaimed for the next pass. Nothing is recorded as asked, settled or paged on a failed try.
+      acceptance: |-
+        Scenarios with the fake agw failing and with it answering unavailable: a Decision is not sent to the owner before its tries run out; triage does not settle an Issue with no edges; a queue shape is asked again on the next pass. make check-fast passes.
+      evidence: |-
+        docs/research/2026-11-maturation/audit-agw.md, finding F1.
+      cycle: |-
+        Maturation cycle 2026-11-20 (docs/research/2026-11-maturation/README.md): remove mechanisms, add none. The finding named under evidence was taken at commit 8fa0a18c: read it first and re-check each file and line before acting. Behaviour outside the stated change stays as it is.
+  - key: mat-screen-key
+    kind: bug
+    title: "The Errand screen's final look has its own idempotency key"
+    facts:
+      why: |-
+        apps/server/src/app/loops/screen.ts (about line 97) keys the screen call on ('screen', id, attempt). The final look after 72 hours sends different input under the same key, which agw refuses as an idempotency conflict (agent-workflows packages/runtime/src/runtime.ts, about line 303). Not confirmed against a live run: reproduce it in a test first.
+      what: |-
+        apps/server/src/app/loops/screen.ts, apps/server/src/kernel/keys.ts, tests.
+      change: |-
+        The key of the final look carries a marker the first look's key lacks.
+      acceptance: |-
+        A test shows the first and the final look of one Errand attempt use different keys and a replayed final look the same key. make check-fast passes.
+      evidence: |-
+        docs/research/2026-11-maturation/audit-agw.md, finding F2.
+      cycle: |-
+        Maturation cycle 2026-11-20 (docs/research/2026-11-maturation/README.md): remove mechanisms, add none. The finding named under evidence was taken at commit 8fa0a18c: read it first and re-check each file and line before acting. Behaviour outside the stated change stays as it is.
+  - key: mat-friction-keys
+    kind: bug
+    prio: 30
+    title: "Friction counts a refusal by its kind, not by its commit: normalise the keys and sum the rows"
+    facts:
+      why: |-
+        apps/server/src/read/friction.ts (about lines 110 to 132) keys a refused ship and a refused event on the raw reason. 72 of 90 ship-refusal keys in the week to 2026-11-20 embed a sha, so "commit X is not on origin/master: merge it first" is about 50 keys of count 1. The text is cut to 80 characters after the SQL GROUP BY, so seven keys appear two to four times and never add up. The friction loop's refusal rule (apps/server/src/domains/loops/friction.ts, THRESHOLDS.refusal: at least 3 and 10 % of closed Issues) therefore cannot fire: 101 refused ships a week are invisible to it.
+      what: |-
+        apps/server/src/read/friction.ts, apps/server/src/domains/loops/friction.ts, apps/server/src/adapters/quality/git.ts and apps/server/src/domains/work/table.ts as the sources of the reason texts, tests. Look for the same pattern in the stall reasons and the signal lines of the same read.
+      change: |-
+        A refusal has a stable class beside its text: the gate and the table return it (commit_not_on_base, commit_older_than_cut, deployed_lacks_commit, waits_for_decision, waits_for_errand, closed and so on), it is stored with the refused ship or event where a column exists for it, and friction groups by it. For rows stored before the change the read derives the class from the text (shas, branch names and counts replaced). Rows of one class are summed.
+      acceptance: |-
+        A test over a fixture of this week's refusal texts yields one key per class with the summed count and no key containing a hex run of 7 or more characters. With 60 ship refusals of one class among 1,000 closed Issues the refusal rule yields a finding. factory read friction prints at most 15 refusal lines for the fixture. make check-fast passes.
+      evidence: |-
+        docs/research/2026-11-maturation/audit-selfimprove.md, Q2 and finding 1.
+      cycle: |-
+        Maturation cycle 2026-11-20 (docs/research/2026-11-maturation/README.md): remove mechanisms, add none. The finding named under evidence was taken at commit 8fa0a18c: read it first and re-check each file and line before acting. Behaviour outside the stated change stays as it is.
+  - key: mat-friction-cooldown
+    kind: bug
+    after: [mat-friction-keys]
+    title: "Friction files one Issue per pattern per week, and the weekly retro once a week"
+    facts:
+      why: |-
+        The friction pass became daily on 2026-11-17 while its window stayed a rolling 7 days and the signal fingerprint window 24 hours (apps/server/src/app/intake.ts, about line 107): one pattern was filed as a second Issue a day after the first, and the retro Issue is filed on every pass (two retro Issues 24 hours apart). The loop also ticks every 10 seconds only to answer "not due".
+      what: |-
+        apps/server/src/app/loops/friction.ts, apps/server/src/domains/loops/friction.ts and retro.ts, the friction LoopSpec in apps/server/src/main.ts, tests.
+      change: |-
+        A pattern that already has an Issue filed inside the window, open or closed, is not filed again until the window has passed since that Issue closed. The retro is filed when none was filed in the last 7 days. The loop runs on an interval of its own (15 minutes or more) so it no longer rides the 10-second tick.
+      acceptance: |-
+        Scenario: two passes a day apart over the same counts file one Issue; a pass 8 days after its close files again; the retro is filed once in 7 daily passes. factory loop list shows friction with its own interval. make check-fast passes.
+      evidence: |-
+        docs/research/2026-11-maturation/audit-selfimprove.md, finding 2; docs/research/2026-11-maturation/audit-app.md, finding F8.
+      cycle: |-
+        Maturation cycle 2026-11-20 (docs/research/2026-11-maturation/README.md): remove mechanisms, add none. The finding named under evidence was taken at commit 8fa0a18c: read it first and re-check each file and line before acting. Behaviour outside the stated change stays as it is.
+  - key: mat-finding-key
+    seat: { tier: opus, effort: high }
+    title: "A loop's finding is deduplicated by its key, not by the text match and the triage model"
+    facts:
+      why: |-
+        Friction, hygiene, selfwatch and throughput file through the path built for a person's words (intake.api.file(..., 'agent')): the finding is matched against open Issues by text (matchOpen) and then sent to the triage workflow, about 300 calls a week. In the newest 200 signals four were folded into an Issue of another subject (a friction "stopped reporting" finding, a hygiene "unused files" finding into "unused exports"). The amend path (apps/server/src/app/intake.ts, about lines 591 to 604) writes no fingerprint row, which let one finding be filed twice. An agent's own friction report can be amended into an unrelated Issue the same way (audit-agents.md F12).
+      what: |-
+        apps/server/src/app/intake.ts, apps/server/src/domains/intake, apps/server/src/app/loops/{friction,hygiene,selfwatch,throughput}.ts where they file, tests and scenarios.
+      change: |-
+        A signal filed by a loop carries a finding key (loop, class, repo, subject). For such a signal intake skips the text match and the triage call: an open Issue with the same key takes it as a note, otherwise it is a new Issue. The amend path writes the fingerprint row. A signal from an agent that names another Issue's subject is never amended into an Issue whose key or repo differs.
+      acceptance: |-
+        Scenarios: two findings with the same key make one Issue and one note; two findings with similar titles and different keys make two Issues; no triage workflow call is recorded for a loop's signal; a replay after an amend files nothing twice. make check-fast passes.
+      evidence: |-
+        docs/research/2026-11-maturation/audit-selfimprove.md, Q1 and finding 3; docs/research/2026-11-maturation/audit-agents.md, finding F12.
+      cycle: |-
+        Maturation cycle 2026-11-20 (docs/research/2026-11-maturation/README.md): remove mechanisms, add none. The finding named under evidence was taken at commit 8fa0a18c: read it first and re-check each file and line before acting. Behaviour outside the stated change stays as it is.
+  - key: mat-loop-ledger
+    after: [mat-finding-key]
+    title: "One ledger for what a loop filed, with the figure it was filed against"
+    facts:
+      why: |-
+        Four stores answer "which Issue did this loop's finding open": loop_findings, selfwatch_findings, throughput_findings and a marker regex over retro Issues; apps/server/src/read/loop-yield.ts (about lines 75 to 90) unions them. Only throughput checks its own effect (three days after the ship: moved, flat or worse). Friction, selfwatch and hygiene close an Issue when a lead says done: 202 of 212 hygiene Issues and 21 of 21 friction Issues closed done last week, which says a lead closed them, not that a number moved. Selfwatch is not on the class gate that stops a mostly-noise class from filing.
+      what: |-
+        apps/server/migrations (a new migration, the next free number), apps/server/src/adapters/postgres/loop-store.ts, apps/server/src/domains/loops/ports.ts, the four loops under apps/server/src/app/loops, apps/server/src/read/loop-yield.ts, tests.
+      change: |-
+        loop_findings takes selfwatch's and throughput's rows and gains a figure (the number the finding was filed against) and a verdict (moved, flat, worse, unmeasured). When a loop files again on a key it has filed before, the signal says "last time: Issue N at figure X, now Y". Selfwatch files through the class gate. The loop-yield read uses the one table and reports, per loop, the share of done Issues whose figure moved. The old tables are no longer written; dropping them is the row mat-contract-drops.
+      acceptance: |-
+        Scenario: friction files on a count of 12, the Issue closes, the next pass at 11 records moved and says so in its signal. factory read loop-yield reports a moved share per loop. No code writes selfwatch_findings or throughput_findings. make check-fast passes.
+      evidence: |-
+        docs/research/2026-11-maturation/audit-selfimprove.md, Q6 and findings 6 and 9.
+      cycle: |-
+        Maturation cycle 2026-11-20 (docs/research/2026-11-maturation/README.md): remove mechanisms, add none. The finding named under evidence was taken at commit 8fa0a18c: read it first and re-check each file and line before acting. Behaviour outside the stated change stays as it is.
+  - key: mat-hygiene-batch
+    after: [mat-loop-ledger]
+    title: "Hygiene files one Issue per repo and pass, and the probes that only made noise leave"
+    facts:
+      why: |-
+        Hygiene filed 212 of the week's 1,545 Issues, one per finding: 7 "leftover worktrees" Issues in 7 repos in two days, 52 judgment:stale Issues in 30 days with no lifecycle. The cochange probe filed 11 Issues, 10 of them noise; browser and ci filed 2 each in 30 days; the per-class light-seat judge fires only above 94 % move-ups and the one class it took out is folded into deps. The check probe runs make check outside a test slot (apps/server/src/adapters/hygiene/probes/check.ts, about line 36). routes_slow was filed three times from two detectors, and four detectors watch a red default branch.
+      what: |-
+        apps/server/src/app/loops/hygiene.ts, apps/server/src/domains/loops/hygiene*.ts, apps/server/src/adapters/hygiene/probes, packages/contract/src/hygiene-catalogue.ts (docs/hygiene.md is generated from it), apps/server/src/domains/loops/selfwatch.ts for the duplicate detectors, tests.
+      change: |-
+        One pass of one repo files at most one Issue per seat class: its findings are sections of one Issue, each with its key, so each still heals or reopens by itself. The cochange probe and the per-class seat judge are deleted; browser and ci stay only if their finding is one no other detector raises (say which in the pull request). The check probe runs inside a test slot. One detector owns routes_slow and one a red default branch; the others stop filing it.
+      acceptance: |-
+        Scenario: a pass with five findings in one repo files one Issue with five keyed sections; fixing three heals three keys. The catalogue, docs/hygiene.md and the README's counts agree (make docs-check). No two detectors file on the same fact in the fixture. make check-fast passes.
+      evidence: |-
+        docs/research/2026-11-maturation/audit-selfimprove.md, Q4 and findings 5, 7 and 8.
+      cycle: |-
+        Maturation cycle 2026-11-20 (docs/research/2026-11-maturation/README.md): remove mechanisms, add none. The finding named under evidence was taken at commit 8fa0a18c: read it first and re-check each file and line before acting. Behaviour outside the stated change stays as it is.
+  - key: mat-ci-ledger
+    kind: bug
+    title: "The CI ledger reads only repos it can read, on its own interval"
+    facts:
+      why: |-
+        The CI ledger rides selfwatch's 5-minute tick (apps/server/src/main.ts, about lines 658 to 690) and follows every repo that had an Issue event: 15 of 22 fail on every pass (scratch repos outside the allowed roots, repos with no GitHub origin, work repos answering 404, five answering 403, software-factory among them). The loop's summary is those errors, every pass.
+      what: |-
+        apps/server/src/app/loops/ci-ledger.ts, apps/server/src/adapters/selfwatch, the selfwatch LoopSpec in apps/server/src/main.ts, tests. Find why this repo answers 403 before changing anything else.
+      change: |-
+        The ledger follows projects the factory has read that have a GitHub origin and are inside the allowed roots. A repo that answers 403 or 404 is recorded once and asked again after a day, not every pass. The 403 of the owner's own repos is fixed at its cause (the token or the request). The ledger has its own LoopSpec and interval.
+      acceptance: |-
+        With the fixture of 22 repos the pass summary names no repo outside the roots and no repeated permanent failure; factory loop list shows the ledger's own line with no error for this repo. make check-fast passes.
+      evidence: |-
+        docs/research/2026-11-maturation/audit-selfimprove.md, finding 4.
+      cycle: |-
+        Maturation cycle 2026-11-20 (docs/research/2026-11-maturation/README.md): remove mechanisms, add none. The finding named under evidence was taken at commit 8fa0a18c: read it first and re-check each file and line before acting. Behaviour outside the stated change stays as it is.
+  - key: mat-display-loops
+    kind: chore
+    title: "The fix-classes loop and the digest stop calling a model for what a count already says"
+    facts:
+      why: |-
+        The fix-classes loop files nothing: only one KPI and one Console band read it. The project digest asks a workflow for bullets whose own eval scores faithfulness 0.22, while the counts under them are already computed in code.
+      what: |-
+        apps/server/src/app/loops/{fix-classes,digest}.ts, apps/server/src/domains/loops/{fix-classes,digest}.ts, apps/server/src/adapters/hygiene/fix-commits.ts, apps/server/src/read/{fix-commits,digests}.ts, the Console components that render them, tests.
+      change: |-
+        The digest's headline and bullets are built in code from the Issues' titles and outcomes (shipped, next, risks), with no workflow call. Fix classes are assigned by rule alone; a commit no rule classes is "other". The digest and fix-classes workflow ports and adapters are deleted. The row mat-agw-digest-leaves removes the workflow in agw afterwards.
+      acceptance: |-
+        No call to a digest or fix-class workflow remains (rg). The project page shows a digest for a seeded project in the e2e suite. factory read project-digests and read fix-commits answer with the same shape. make check-fast passes.
+      evidence: |-
+        docs/research/2026-11-maturation/audit-selfimprove.md, finding 10; docs/research/2026-11-maturation/audit-agw.md, finding F7.
+      cycle: |-
+        Maturation cycle 2026-11-20 (docs/research/2026-11-maturation/README.md): remove mechanisms, add none. The finding named under evidence was taken at commit 8fa0a18c: read it first and re-check each file and line before acting. Behaviour outside the stated change stays as it is.
+  - key: mat-reads-unused
+    kind: chore
+    title: "Delete the reads nothing consumes"
+    facts:
+      why: |-
+        /v1/asks and /v1/changes appear only in tests, /v1/waits is cited once in a document. The edges block and attemptSeats of /v1/kpis have no reader that acts: attemptSeats is a third seat breakdown beside cost.parts and seats.rows.
+      what: |-
+        apps/server/src/read/{asks,wait-census,kpis-attempts}.ts and what only they use, apps/server/src/api/read-models.ts, apps/server/src/api/policy.ts, packages/contract/src/read-models.ts and read.ts, the generated CLI, the Console where it renders edges, tests. Before deleting a route, search the sibling repos that read /v1 (iris, argo, dotfiles, hermes-agent) and integrations/ for it.
+      change: |-
+        Delete /v1/asks and /v1/waits with their CLI verbs and schemas. Delete /v1/changes if no sibling repo calls it; otherwise keep it and say who does. Delete the edges block and attemptSeats from /v1/kpis and the Console code that shows them.
+      acceptance: |-
+        rg finds no reference to the deleted routes in this repo or the four sibling repos. make check passes with the regenerated operations file and the README's counts (make docs-check). The pull request states the lines removed.
+      evidence: |-
+        docs/research/2026-11-maturation/audit-read.md, section 1 and proposals P1 and P2.
+      cycle: |-
+        Maturation cycle 2026-11-20 (docs/research/2026-11-maturation/README.md): remove mechanisms, add none. The finding named under evidence was taken at commit 8fa0a18c: read it first and re-check each file and line before acting. Behaviour outside the stated change stays as it is.
+  - key: mat-kpi-seven
+    seat: { tier: opus, effort: high }
+    checkpoint: spec
+    after: [mat-friction-keys, mat-reads-unused]
+    title: "Seven KPIs with targets that something acts on; the other 21 become their parts"
+    facts:
+      why: |-
+        The KPI table has 28 rows; 5 have a target and 23 say "watch only, no basis". No code reads a KPI: the only server reader of KPI_CATALOG copies its prose into the response (apps/server/src/read/kpi-fields.ts), and the target check lives in the Console (apps/console/src/lib/improve.ts, about lines 75 to 98). The friction loop acts on thresholds of its own with another denominator (an owner touch at 0.15 per Issue closed against the KPI's 0.07 per Issue filed; refusals 0.1 against 0.25). The headline trend is a denominator effect: avoidable touches went 0.23, 0.10, 0.04 while the touch counts went 29, 83, 58 and the Issues filed 127, 822, 1,545, of which the factory's own loops filed 282 last week. Four KPIs count the same five events, five count Errands, and each KPI's prose exists five times while the Console renders none of decision, numerator, denominator or targetSource.
+      what: |-
+        packages/contract/src/kpi-catalog.ts, apps/server/src/read/kpis*.ts and kpi-fields.ts, apps/server/src/domains/loops/friction.ts (THRESHOLDS), scripts/kpi-table.ts, docs/product.md (the KPI table), apps/console/src/routes/improve.tsx and apps/console/src/lib/improve.ts, apps/console/DESIGN.md for the screen, tests.
+      change: |-
+        The table holds seven: avoidable_touches (at most 0.07 per Issue that a person, an agent or an alert filed, the factory's own loops left out of the denominator, the absolute count beside it), first_verification_passes (at least 0.9), specs_not_needed (at most 0.2), errands_reached_per_100 (no target until three full weeks exist), cycle_p50 (at most 3 h, proposed), queue_wait_p90 (at most 8 h, proposed), quota_at_reset (at least 0.9, proposed). The other 21 become parts of the KPI they explain or stay on the page that already shows them; docs/research/2026-11-maturation/audit-read.md "What each demotion loses" says which. One threshold table in packages/contract serves the catalogue and the friction loop, so a KPI off its target for a full window is a friction finding. The seats and reviewers blocks leave /v1/kpis for a read of their own (their tripwires stay as they are). Prose the Console does not render is not served. Three of the six history windows predate the launch: history starts at the counting epoch. The Spec names the seven with their targets, and has the three proposed numbers and the denominator as its open choices.
+      acceptance: |-
+        factory read kpis lists seven KPIs, each with a target or the stated reason it has none yet, and parts. A test: with avoidable_touches above its target for a full window the friction pass yields a finding that names the largest touch kind. The friction thresholds and the KPI targets come from one exported table (no second number in domains/loops/friction.ts). docs/product.md's table is regenerated; make docs-check and make check pass; the Improve screen in the e2e suite shows the seven.
+      evidence: |-
+        docs/research/2026-11-maturation/audit-read.md, sections 2 to 4 and proposals P3, P4 and P7.
+      cycle: |-
+        Maturation cycle 2026-11-20 (docs/research/2026-11-maturation/README.md): remove mechanisms, add none. The finding named under evidence was taken at commit 8fa0a18c: read it first and re-check each file and line before acting. Behaviour outside the stated change stays as it is.
+  - key: mat-queue-time-one
+    kind: chore
+    after: [mat-kpi-seven]
+    title: "One definition of queue time, one copy of its SQL"
+    facts:
+      why: |-
+        The Improve page answers one question twice: queue_capacity_share says capacity holds 0.785 of the queue time, the parts of queue_wait_p90 imply 0.66. Queue time is defined five ways and the queue_intervals clip SQL is copied four times (apps/server/src/read/kpis.ts about line 483, retro-waste.ts about line 50, capacity-loop.ts about lines 119 and 124). closed_per_day is counted with and without the epoch cut.
+      what: |-
+        apps/server/src/read/{kpis,retro-waste,capacity-loop,capacity-tuning,throughput*}.ts, tests.
+      change: |-
+        One function yields the queued intervals of a window, clipped and split by what held them; every read that needs queue time calls it. closed_per_day has one definition, with the epoch cut.
+      acceptance: |-
+        rg finds the clip SQL once. A test asserts that the share held by capacity is the same number in the KPI part and in the capacity-loop read for one fixture. make check-fast passes.
+      evidence: |-
+        docs/research/2026-11-maturation/audit-read.md, section 5 and proposal P5.
+      cycle: |-
+        Maturation cycle 2026-11-20 (docs/research/2026-11-maturation/README.md): remove mechanisms, add none. The finding named under evidence was taken at commit 8fa0a18c: read it first and re-check each file and line before acting. Behaviour outside the stated change stays as it is.
+  - key: mat-capacity-page
+    after: [mat-kpi-seven]
+    title: "The Console shows capacity once: Improve keeps the seven KPIs, Throughput the host and the queue"
+    facts:
+      why: |-
+        The capacity section of the Improve route (apps/console/src/routes/improve.tsx, about lines 656 to 1057) repeats Throughput's queue-by-reason and memory tables; about 15 % of Improve's panels serve the KPI set. Of ThroughputModel's 168 fields 47 are not rendered, of CapacityLoopModel's 63, 17 (by field name; a loop may still read them).
+      what: |-
+        apps/console/src/routes/{improve,throughput}.tsx, apps/console/src/lib/improve.ts, apps/console/DESIGN.md, the e2e suite and docs/demo screenshots, the read models' fields no screen and no loop reads.
+      change: |-
+        Improve shows the seven KPIs with their parts and the loops' yield. Its capacity section moves into Throughput where it is not already there, and is deleted where it is. A field of the two models that neither a screen nor server code reads is removed from the model.
+      acceptance: |-
+        The e2e suite passes with new screenshots of both screens at 1800 by 1200 in docs/demo; no table appears on both screens; apps/console/src/routes/improve.tsx is under 700 lines. make check passes.
+      evidence: |-
+        docs/research/2026-11-maturation/audit-read.md, section 6 and proposal P6.
+      cycle: |-
+        Maturation cycle 2026-11-20 (docs/research/2026-11-maturation/README.md): remove mechanisms, add none. The finding named under evidence was taken at commit 8fa0a18c: read it first and re-check each file and line before acting. Behaviour outside the stated change stays as it is.
+  - key: mat-importer-leaves
+    kind: chore
+    title: "The cutover importer leaves the repo"
+    facts:
+      why: |-
+        The importer that moved the old core's Issues over on 2026-11-08 still ships: apps/server/scripts/import and import-legacy.ts, their tests and scripts/import.sh, 2,131 lines. Nothing in the server writes import_issues or import_events. The one live read is the window cut in apps/server/src/read/friction.ts (about line 71, max(imported_at)), which no 7-day window can reach after 2026-11-13.
+      what: |-
+        apps/server/scripts/import*, apps/server/test/import, scripts/import.sh, apps/server/src/read/friction.ts, the Makefile and docs that name the import, config/throughput.json as the epoch the friction read can use instead.
+      change: |-
+        The friction read takes its earliest instant from the counting epoch (config/throughput.json), not from import_issues. Delete the importer, its tests, the script and the Makefile target. The two tables are no longer read; dropping them is the row mat-contract-drops.
+      acceptance: |-
+        rg finds no reference to import_issues or import_events under apps/server/src and no importer file. factory read friction answers as before for a 7-day window (a test on a fixture). make check passes.
+      evidence: |-
+        docs/research/2026-11-maturation/audit-domain.md, finding F1; docs/research/2026-11-maturation/audit-app.md, finding F2.
+      cycle: |-
+        Maturation cycle 2026-11-20 (docs/research/2026-11-maturation/README.md): remove mechanisms, add none. The finding named under evidence was taken at commit 8fa0a18c: read it first and re-check each file and line before acting. Behaviour outside the stated change stays as it is.
+  - key: mat-shadow-leaves
+    kind: chore
+    title: "The load rule and the slot aim are on: their shadow modes leave"
+    facts:
+      why: |-
+        The load rule and the slot aim were rolled out behind a shadow mode. Production runs both on (check the allow-listed env file of the deployed release before acting; if either is not on, stop and say so in the pull request), while the code's default is still shadow (apps/server/src/app/planning-settings.ts, about lines 147 and 160). The apparatus stays: the table admission_shadow, shadowDecision in apps/server/src/app/capacity-admit.ts (about lines 740 to 796), FACTORY_LOAD_CEILING, and the shadow figures in apps/server/src/read/capacity-loop.ts (about lines 283 to 297).
+      what: |-
+        apps/server/src/app/{planning-settings,capacity-admit}.ts, apps/server/src/read/capacity-loop.ts, scripts/env-file.sh (the allow-list), the Console where it shows shadow figures, docs/architecture.md and docs/operations.md where they name the settings, tests. slot_shadow stays: selfwatch's slot_line reads it.
+      change: |-
+        Both rules are always on; FACTORY_LOAD_RULE, FACTORY_SLOT_AIM and FACTORY_LOAD_CEILING are removed from the code and the allow-list (an env file that still sets one must not stop the start: accept and ignore the three names for one release, with a warning). shadowDecision and the shadow figures are deleted. admission_shadow is no longer written; dropping it is the row mat-contract-drops.
+      acceptance: |-
+        rg finds none of the three names outside the one-release ignore list. The admission scenarios pass with the rules on and no setting. The server starts with an env file that still sets the three. make check passes.
+      evidence: |-
+        docs/research/2026-11-maturation/audit-domain.md, finding F2.
+      cycle: |-
+        Maturation cycle 2026-11-20 (docs/research/2026-11-maturation/README.md): remove mechanisms, add none. The finding named under evidence was taken at commit 8fa0a18c: read it first and re-check each file and line before acting. Behaviour outside the stated change stays as it is.
+  - key: mat-settings-prune
+    kind: chore
+    title: "Settings nobody sets leave; the loaders share one parser"
+    facts:
+      why: |-
+        175 distinct FACTORY_* names appear in the tree, 122 on the allow-list of scripts/env-file.sh. 37 allow-listed names appear in no test and in at most 3 documents. Finished-rollout switches stay (FACTORY_REAPER_DRY, FACTORY_HYGIENE_FIX=0, FACTORY_QUIESCE=off), LeadSettings.tickMs is read by nothing (apps/server/src/adapters/leads/settings.ts), apps/server/src/main.ts reads 11 names raw from process.env (PS_BIN four times), and 12 settings loaders repeat one safeParse-and-throw block. A legacy step-name SQL branch sits in apps/server/src/adapters/postgres/capacity-store.ts (about lines 371 to 383) and a pre-structured run-note regex in apps/server/src/kernel/run.ts (about line 94).
+      what: |-
+        Every *settings.ts under apps/server/src, apps/server/src/main.ts, scripts/env-file.sh, .env*.tpl, docs/operations.md and docs/architecture.md where they list settings. The list of 37 is in the finding. Read the non-secret env file of the deployed release to see which names production sets; read no secret.
+      change: |-
+        Delete a setting when production does not set it, no document promises it and its default is the only value in use; its default becomes a constant. Delete the three rollout switches if production runs their finished state, and the two legacy branches if no stored row still needs them (count first). One parseEnv helper replaces the twelve copies; main.ts reads the environment through settings loaders only. A name production still sets but the code no longer reads is accepted and ignored for one release.
+      acceptance: |-
+        The pull request lists each deleted name with the reason. The allow-list has at most 90 names. rg finds no process.env read in apps/server/src/main.ts. The server starts with the deployed env file (make deploy DRY_RUN=1 prints no refusal). make check passes.
+      evidence: |-
+        docs/research/2026-11-maturation/audit-app.md, findings F1, F6, F7 and F12.
+      cycle: |-
+        Maturation cycle 2026-11-20 (docs/research/2026-11-maturation/README.md): remove mechanisms, add none. The finding named under evidence was taken at commit 8fa0a18c: read it first and re-check each file and line before acting. Behaviour outside the stated change stays as it is.
+  - key: mat-decision-path
+    kind: chore
+    title: "A Decision goes Judge, default, owner: standing policy, which settled none, leaves"
+    facts:
+      why: |-
+        Standing policy is documented as the first step of every Decision and settled 0 of the week's 58 (Judge 45, default 7, owner 5, orchestrator 1). No project.yaml defines a rule and nothing writes one; the file adapter (apps/server/src/adapters/checkpoints/policies.ts, FACTORY_CHECKPOINT_POLICY_FILE, "stand-in until package 3") is used by one scenario test. The Judge's precedents include the Judge's own earlier answers (apps/server/src/adapters/postgres/checkpoint-store.ts, about line 534), and worthAsking is a precedent channel the owner never fed.
+      what: |-
+        apps/server/src/adapters/checkpoints/policies.ts, policyStep and its callers in apps/server/src/app/checkpoints-settle.ts and apps/server/src/domains/loops/settle.ts, the precedent query in checkpoint-store.ts, the friction count decision_settled:policy, README.md, docs/language.md, docs/guide/checkpoints.md and docs/architecture.md where they describe the path, tests.
+      change: |-
+        Delete the policy adapter, its setting and policyStep. The Judge's precedents are the owner's own answers only. worthAsking leaves the precedent query (the stored column stays). The documents say Judge, then a default, then the owner.
+      acceptance: |-
+        rg finds no policyStep and no FACTORY_CHECKPOINT_POLICY_FILE. A test: the precedents handed to the Judge contain no answer the Judge gave. The Decision scenarios pass. make docs-check and make check pass.
+      evidence: |-
+        docs/research/2026-11-maturation/audit-agw.md, findings F4 and F10.
+      cycle: |-
+        Maturation cycle 2026-11-20 (docs/research/2026-11-maturation/README.md): remove mechanisms, add none. The finding named under evidence was taken at commit 8fa0a18c: read it first and re-check each file and line before acting. Behaviour outside the stated change stays as it is.
+  - key: mat-fallow-gate
+    kind: chore
+    title: "fallow reads the whole repo, and a change that adds dead code fails the check"
+    facts:
+      why: |-
+        fallow 3.38.1 with the repo's .fallowrc.json: its entry globs scripts/*.ts (18 files) and apps/server/scripts/*.ts no longer match as written, and packages/* matches three directories with no package.json. With test files left out it reports 300 unused exports, 145 unused types, one unused file (apps/cli/scripts/generate.ts, an entry point it does not know) and two unused dependencies; most of the exports are used by tests only, and 15 spot-checked contract exports were all in use. The hygiene loop files dead code after the fact (34 Issues in 30 days); nothing stops it arriving.
+      what: |-
+        .fallowrc.json, the Makefile (check-static), project.yaml if a step is named, the exports fallow reports once the config is right.
+      change: |-
+        Fix the entry points so fallow's full run reports no unresolved entry. Add fallow's audit against the merge base to check-static: it fails only on a finding the change introduces. Delete the exports and types that neither production code nor a test imports, and the two dependencies if nothing needs them; leave test-only exports alone.
+      acceptance: |-
+        fallow dead-code exits 0 or lists only findings named in .fallowrc.json with a reason. A branch that adds an unused export fails make check-fast and one that adds a used one passes (shown in the pull request). make check passes.
+      evidence: |-
+        docs/research/2026-11-maturation/README.md "Where it stands"; docs/research/2026-11-maturation/research-cleanup-procedures.md, section 1.4.
+      cycle: |-
+        Maturation cycle 2026-11-20 (docs/research/2026-11-maturation/README.md): remove mechanisms, add none. The finding named under evidence was taken at commit 8fa0a18c: read it first and re-check each file and line before acting. Behaviour outside the stated change stays as it is.
+  - key: mat-contract-drops
+    kind: chore
+    after: [mat-importer-leaves, mat-shadow-leaves, mat-loop-ledger, mat-call-ledger]
+    after_needs: shipped
+    after_days: 3
+    title: "Drop the tables and the column the cycle stopped using"
+    facts:
+      why: |-
+        The schema has 86 tables and no migration has ever dropped a column or a table: every expand stayed. Four rows of this cycle stop using import_issues, import_events, admission_shadow, selfwatch_findings, throughput_findings and queue_asks. host_samples.memory_used_pct is derivable and its coalesce fallback is dead after 2026-11-30.
+      what: |-
+        apps/server/migrations (one new migration, the next free number), the readers named in docs/research/2026-11-maturation/audit-domain.md section 4.
+      change: |-
+        One migration drops the tables no code reads and the column, after rg confirms no reader and three days on the releases that stopped using them. Anything section 4 of the audit lists as never read or written joins it once confirmed.
+      acceptance: |-
+        The migration applies on a copy of the schema in the test cluster; make verify passes after the deploy; the pull request lists each dropped name with the commit that removed its last reader.
+      evidence: |-
+        docs/research/2026-11-maturation/audit-domain.md, section 4 and finding F14.
+      cycle: |-
+        Maturation cycle 2026-11-20 (docs/research/2026-11-maturation/README.md): remove mechanisms, add none. The finding named under evidence was taken at commit 8fa0a18c: read it first and re-check each file and line before acting. Behaviour outside the stated change stays as it is.
+  - key: mat-process-one
+    kind: chore
+    title: "One process runner for every adapter"
+    facts:
+      why: |-
+        runProcess exists four times (apps/server/src/adapters/quality/process.ts about line 57, planning/process.ts about line 68, hc/process.ts, intake/process.ts about line 24) plus the spawn in adapters/agw/port.ts (about line 47), with three copies of killGroup, three of childEnv and four git wrappers. fallow reports agw/port.ts lines 11 to 32 and planning/process.ts lines 26 to 59 as clones.
+      what: |-
+        apps/server/src/adapters/{quality,planning,hc,intake,agw,git,hygiene}, their tests.
+      change: |-
+        One module under apps/server/src/adapters holds runProcess (with the process timeout every port call must have), killGroup, childEnv and one git wrapper; the adapters import it and their copies are deleted. Timeouts, environment and kill behaviour of each caller stay what they are today: where two copies differ, the difference becomes an option, named.
+      acceptance: |-
+        rg finds one definition each of runProcess, killGroup and childEnv under apps/server/src. make check passes (the scenarios cover the callers).
+      evidence: |-
+        docs/research/2026-11-maturation/audit-app.md, finding F3.
+      cycle: |-
+        Maturation cycle 2026-11-20 (docs/research/2026-11-maturation/README.md): remove mechanisms, add none. The finding named under evidence was taken at commit 8fa0a18c: read it first and re-check each file and line before acting. Behaviour outside the stated change stays as it is.
+  - key: mat-github-one
+    kind: chore
+    title: "One GitHub REST reader"
+    facts:
+      why: |-
+        apps/server/src/adapters/selfwatch/github.ts (about lines 40 to 80) re-implements githubGet (adapters/github/checks.ts about line 33) and slugOf, which also exists in adapters/quality/ci.ts (about line 56); adapters/git/branches.ts (about line 72) and adapters/hygiene/probes/ci.ts (about line 46) build GitHub requests by hand.
+      what: |-
+        apps/server/src/adapters/{github,selfwatch,quality,git,hygiene/probes}, tests.
+      change: |-
+        adapters/github holds the one reader (token, timeout, error mapping to a PortError) and slugOf; the other four call it.
+      acceptance: |-
+        rg finds api.github.com in one file under apps/server/src and one slugOf. make check-fast passes.
+      evidence: |-
+        docs/research/2026-11-maturation/audit-app.md, finding F4.
+      cycle: |-
+        Maturation cycle 2026-11-20 (docs/research/2026-11-maturation/README.md): remove mechanisms, add none. The finding named under evidence was taken at commit 8fa0a18c: read it first and re-check each file and line before acting. Behaviour outside the stated change stays as it is.
+  - key: mat-loop-specs
+    kind: chore
+    after: [mat-friction-cooldown, mat-ci-ledger]
+    title: "Each loop's spec sits beside its pass, and the intervals are one table"
+    facts:
+      why: |-
+        main() in apps/server/src/main.ts is 1,002 lines; 20 LoopSpec literals sit at about lines 402 to 915 and 15 repeat the same four-line pass, said, summary block. apps/server/src/app/loops/settings.ts has 21 FACTORY_LOOP_*_MS names, a 12-level nested ternary and 11 near-identical helper functions. Three schedulers exist: the LoopRunner, selfPaced (GitHub and launchd intake, uptime, otel) and a health-probe timer.
+      what: |-
+        apps/server/src/main.ts, apps/server/src/app/loops/*.ts, apps/server/src/app/loops/settings.ts and runner.ts, scripts/env-file.sh, tests. The heartbeat names of GET /health do not change.
+      change: |-
+        Each loop module exports its LoopSpec (name, interval, onChange, pass, summary); main.ts registers the list. The intervals are one table of name, default and floor, read through one function; the FACTORY_LOOP_*_MS names production sets keep working. The selfPaced intakes and the health probe become LoopSpecs where that changes no timing; where it would, they stay and the pull request says why.
+      acceptance: |-
+        apps/server/src/main.ts is under 700 lines. factory loop list prints the same loops with the same intervals as before the change (compare in the pull request). make check passes.
+      evidence: |-
+        docs/research/2026-11-maturation/audit-app.md, findings F5, F7 and F8.
+      cycle: |-
+        Maturation cycle 2026-11-20 (docs/research/2026-11-maturation/README.md): remove mechanisms, add none. The finding named under evidence was taken at commit 8fa0a18c: read it first and re-check each file and line before acting. Behaviour outside the stated change stays as it is.
+  - key: mat-workflow-table
+    kind: chore
+    after: [mat-workflow-failure, mat-display-loops]
+    title: "The workflows the factory calls are one table, not twelve ports and ten adapters"
+    facts:
+      why: |-
+        Twelve one-method workflow ports in domains/loops, domains/checkpoints and domains/intake each wrap AgwPort.run through ten adapter files of about ten lines (apps/server/src/adapters/agw). Six retry schemes sit around them. The two fixture copies of the workflow schemas already differ between the repos, and three workflows have no shared example.
+      what: |-
+        apps/server/src/adapters/agw, the workflow ports in apps/server/src/domains/{loops,checkpoints,intake}/ports.ts, their fakes in tests and tests/scenarios, packages/contract where the request and answer schemas live.
+      change: |-
+        One table names each workflow with its request schema, answer schema, key function and retry rule; one typed call function runs an entry (the adapter stays the only place that knows agw). The ports that only forwarded are deleted and the fake becomes one fake keyed by workflow name. The retry is one policy with per-entry numbers. Each entry has an example request and answer that a test parses, and the test names the agw file it must match.
+      acceptance: |-
+        apps/server/src/adapters/agw has at most three files. rg finds no single-method workflow port. The scenarios pass with the one fake. make check passes.
+      evidence: |-
+        docs/research/2026-11-maturation/audit-domain.md, finding F6; docs/research/2026-11-maturation/audit-agw.md, findings F6 and F11.
+      cycle: |-
+        Maturation cycle 2026-11-20 (docs/research/2026-11-maturation/README.md): remove mechanisms, add none. The finding named under evidence was taken at commit 8fa0a18c: read it first and re-check each file and line before acting. Behaviour outside the stated change stays as it is.
+  - key: mat-call-ledger
+    kind: chore
+    after: [mat-workflow-table]
+    title: "One ledger for workflow calls: queue_asks folds into loop_calls"
+    facts:
+      why: |-
+        loop_calls (migration 0700) and queue_asks (migration 0960) share 8 columns, and LoopStore carries two sets of claim, retake and finish methods for them. The same bookkeeping is repeated on errands, spec_screens and intake_signals.
+      what: |-
+        apps/server/migrations (a new migration, the next free number), apps/server/src/adapters/postgres/loop-store.ts, apps/server/src/domains/loops/ports.ts, apps/server/src/app/loops/queue.ts, tests.
+      change: |-
+        Queue asks are rows of loop_calls (a kind column or the existing key says which); the queue_asks methods of LoopStore are deleted. The migration copies the open rows. queue_asks is no longer written; dropping it is the row mat-contract-drops. LoopStore.lastHygienePass, which has no caller, is deleted.
+      acceptance: |-
+        rg finds no write to queue_asks. The queue scenarios pass. LoopStore has at least 7 fewer methods. make check passes.
+      evidence: |-
+        docs/research/2026-11-maturation/audit-domain.md, findings F5 and F10.
+      cycle: |-
+        Maturation cycle 2026-11-20 (docs/research/2026-11-maturation/README.md): remove mechanisms, add none. The finding named under evidence was taken at commit 8fa0a18c: read it first and re-check each file and line before acting. Behaviour outside the stated change stays as it is.
+  - key: mat-intake-split
+    kind: chore
+    after: [mat-finding-key]
+    title: "createIntake becomes three files behind the same facade"
+    facts:
+      why: |-
+        createIntake in apps/server/src/app/intake.ts (from about line 237) is one closure of 1,278 lines with 36 inner functions: the file is the second largest of the server.
+      what: |-
+        apps/server/src/app/intake.ts and new files beside it, nothing outside app/.
+      change: |-
+        Split along what the closure already does (taking a signal in, deciding amend or new, the held and promote path), each part a module that takes its dependencies as one object; createIntake stays the one export other code calls and its interface does not change. A move, no behaviour change.
+      acceptance: |-
+        No file of the intake use cases is over 600 lines. No file outside apps/server/src/app changes except tests' imports. make check passes.
+      evidence: |-
+        docs/research/2026-11-maturation/audit-app.md, finding F11.
+      cycle: |-
+        Maturation cycle 2026-11-20 (docs/research/2026-11-maturation/README.md): remove mechanisms, add none. The finding named under evidence was taken at commit 8fa0a18c: read it first and re-check each file and line before acting. Behaviour outside the stated change stays as it is.
+  - key: mat-agw-failures
+    repo: agent-workflows
+    kind: bug
+    after: [mat-workflow-failure]
+    after_needs: shipped
+    title: "The factory workflows fail when the model fails: remove the neutral answer"
+    facts:
+      why: |-
+        factory-ask, factory-triage, factory-steward, factory-queue and factory-hygiene catch a model failure and return a valid neutral answer (packages/host/src/workflows/factory-ask/index.ts about line 49: return unavailable(...); the same catch in the other four index.ts). The four other factory workflows fail the run. The software-factory server could not tell an outage from a verdict; since its change "A failed or unavailable workflow run is retried" shipped, it retries a failed run, so the neutral answer has no reader left.
+      what: |-
+        packages/host/src/workflows/factory-{ask,triage,steward,queue,hygiene}/index.ts and their tests and evals. Read AGENTS.md first.
+      change: |-
+        Remove the catch that turns a failure into an answer in the five workflows: a step that fails after its retries fails the run. Cancel, shutdown and infrastructure errors propagate as today. The unavailable helper is deleted when nothing uses it.
+      acceptance: |-
+        A test per workflow: a failing model step yields a failed run, not an output. rg finds no unavailable( in the five workflows. make check passes.
+      evidence: |-
+        software-factory docs/research/2026-11-maturation/audit-agw.md, finding F1.
+      cycle: |-
+        Maturation cycle 2026-11-20 (docs/research/2026-11-maturation/README.md): remove mechanisms, add none. The finding named under evidence was taken at commit 8fa0a18c: read it first and re-check each file and line before acting. Behaviour outside the stated change stays as it is.
+  - key: mat-agw-answers
+    repo: agent-workflows
+    kind: chore
+    title: "The factory workflows clip a long reason in code, and answers nobody reads leave"
+    facts:
+      why: |-
+        Five factory workflows still validate reason with a strict max(300), which triggers a billed re-ask when the model writes 301 characters; five others use the shared clip-in-code helper. factory-queue's answer carries drop, a field the factory's QueueAnswer does not have (the factory takes edges back by a deterministic sweep). The legacy input shape of factory-ask is still accepted.
+      what: |-
+        packages/host/src/workflows/factory-*/ (schemas and index.ts), the shared clip helper, tests and evals.
+      change: |-
+        All factory workflows clip reason with the shared helper. drop leaves factory-queue's answer and prompt. The legacy factory-ask input shape is removed after checking that software-factory (apps/server/src/adapters/agw and the request builders) sends only the current one; if it still sends the old shape somewhere, leave the shape and file that as a signal for software-factory.
+      acceptance: |-
+        rg finds no max(300) on a reason in the factory workflows and no drop in factory-queue. The evals of the touched workflows pass. make check passes.
+      evidence: |-
+        software-factory docs/research/2026-11-maturation/audit-agw.md, findings F5, F8 and F13.
+      cycle: |-
+        Maturation cycle 2026-11-20 (docs/research/2026-11-maturation/README.md): remove mechanisms, add none. The finding named under evidence was taken at commit 8fa0a18c: read it first and re-check each file and line before acting. Behaviour outside the stated change stays as it is.
+  - key: mat-agw-errand-fields
+    repo: agent-workflows
+    title: "The Errand screen workflow takes the command, the host and the need as typed fields"
+    facts:
+      why: |-
+        The factory packs an Errand's facts into one prose field capped at 4,000 characters (agw accepts 8,000) and was patched three times in two days to fit the cap (software-factory commits 06bcc71b, f5dbe639, 9ba3034a). The rule "a MacBook command cannot be run from the mini" travels inside the fenced, untrusted text, where the model must not take instructions from.
+      what: |-
+        The factory-screen and factory-errand workflows under packages/host/src/workflows (input schema, prompt, evals).
+      change: |-
+        The input accepts optional typed fields: command, host (mini or macbook) and need (secret, hands, place, approval). The MacBook rule moves into the prompt, keyed on host. The prose field stays accepted, so the factory can switch afterwards (its row mat-errand-screen-typed).
+      acceptance: |-
+        Eval cases with typed fields give the same verdicts as their prose twins; an input without the new fields behaves as today. make check passes.
+      evidence: |-
+        software-factory docs/research/2026-11-maturation/audit-agw.md, finding F3.
+      cycle: |-
+        Maturation cycle 2026-11-20 (docs/research/2026-11-maturation/README.md): remove mechanisms, add none. The finding named under evidence was taken at commit 8fa0a18c: read it first and re-check each file and line before acting. Behaviour outside the stated change stays as it is.
+  - key: mat-errand-screen-typed
+    kind: chore
+    after: [mat-agw-errand-fields]
+    after_needs: shipped
+    title: "The Errand screen request sends typed facts; the packed prose and its cap leave"
+    facts:
+      why: |-
+        Three fixes in two days (06bcc71b, f5dbe639, 9ba3034a) fitted the screen request into a 4,000-character prose field (packages/contract/src/checkpoints.ts, about line 578). command and host had no typed field and need was never sent. agw's screen workflows accept command, host and need as typed fields since the row mat-agw-errand-fields shipped. Two keyword lists decide "hands" (apps/server/src/domains/checkpoints/errand.ts about line 241, need.ts about line 42).
+      what: |-
+        apps/server/src/app/loops/screen.ts, apps/server/src/domains/checkpoints/{errand,need,recheck}.ts, packages/contract/src/checkpoints.ts, scripts/errand-replay.ts, tests.
+      change: |-
+        The screen and recheck requests send command, host and need as fields; the fact about the MacBook is no longer written into the text; errandScreenDetail is deleted. One keyword list decides need. The Errand KPI counts an Errand a rule refused at raise time, so the share turned away by rule is visible.
+      acceptance: |-
+        rg finds no errandScreenDetail. scripts/errand-replay.ts over the stored Errands gives the same rule verdicts as before the change. A request for an Errand with a 6,000-character body parses. make check passes.
+      evidence: |-
+        docs/research/2026-11-maturation/audit-agw.md, findings F3, F9 and F12.
+      cycle: |-
+        Maturation cycle 2026-11-20 (docs/research/2026-11-maturation/README.md): remove mechanisms, add none. The finding named under evidence was taken at commit 8fa0a18c: read it first and re-check each file and line before acting. Behaviour outside the stated change stays as it is.
+  - key: mat-agw-digest-leaves
+    repo: agent-workflows
+    kind: chore
+    after: [mat-display-loops]
+    after_needs: shipped
+    title: "The factory digest workflow leaves"
+    facts:
+      why: |-
+        software-factory builds a project's digest in code since its row mat-display-loops shipped. The workflow's own eval scored faithfulness 0.22.
+      what: |-
+        The factory digest workflow under packages/host/src/workflows, its route, eval and docs.
+      change: |-
+        Delete the workflow, its eval cases and its route row. Check first that software-factory's master no longer calls it (rg in its apps/server/src).
+      acceptance: |-
+        rg finds no factory digest workflow; agw routes lists no route for it; make check passes.
+      evidence: |-
+        software-factory docs/research/2026-11-maturation/audit-agw.md, finding F7.
+      cycle: |-
+        Maturation cycle 2026-11-20 (docs/research/2026-11-maturation/README.md): remove mechanisms, add none. The finding named under evidence was taken at commit 8fa0a18c: read it first and re-check each file and line before acting. Behaviour outside the stated change stays as it is.
+  - key: mat-domains-loops
+    kind: chore
+    seat: { tier: opus, effort: high }
+    after: [mat-hygiene-batch, mat-call-ledger, mat-intake-split, mat-loop-specs]
+    title: "domains/loops dissolves: hygiene and improve become domains, the rest goes to its owner"
+    facts:
+      why: |-
+        domains/loops is the largest domain (26 files, 5,356 lines) and a bag: 15 of its files import no sibling, and its one coupling is ports.ts (527 lines), which imports 12 of them. It holds three things: hygiene (probes, findings, lifecycle, dependency refresh), the factory watching itself (selfwatch, overload, throughput, friction, retro, digest), and rules about Issues and leads (stall, settle, queue, reaper) that belong to planning and leads. Domain code also parses macOS tool output (parsePs in loops/overload.ts about line 275, SnapshotProc in capacity/classes.ts lines 8 to 32).
+      what: |-
+        apps/server/src/domains/loops and its importers, apps/server/src/app/loops, scripts/boundaries.ts, README.md (the domain table and its count, held by make docs-check), docs/architecture.md and AGENTS.md where they name the domains.
+      change: |-
+        Moves only. domains/hygiene and domains/improve are created with their files and their own ports.ts; the stall, settle, queue and reaper rules move to planning or leads, whichever owns the tables they decide about (section 9 of the audit proposes the map). domains/loops is deleted. The parsers of ps and vm_stat output move to the adapter that runs the tool. scripts/boundaries.ts and the documents follow in the same pull request.
+      acceptance: |-
+        apps/server/src/domains/loops does not exist. No function body changes (the pull request says so and the diff is renames, import lines and split ports files). scripts/boundaries.ts passes; make docs-check and make check pass.
+      evidence: |-
+        docs/research/2026-11-maturation/audit-domain.md, section 2, finding F3 and section 9.
+      cycle: |-
+        Maturation cycle 2026-11-20 (docs/research/2026-11-maturation/README.md): remove mechanisms, add none. The finding named under evidence was taken at commit 8fa0a18c: read it first and re-check each file and line before acting. Behaviour outside the stated change stays as it is.
+  - key: mat-domains-errands
+    kind: chore
+    after: [mat-errand-screen-typed]
+    title: "Errands become their own domain, out of checkpoints"
+    facts:
+      why: |-
+        domains/checkpoints holds three things: Decisions, artifacts with their verdicts, and Errands with requests and the desk. CheckpointStore has 82 methods with one implementation, and the Errand family is 17 words and 37 columns on one table.
+      what: |-
+        apps/server/src/domains/checkpoints/{errand,need,recheck,request,desk,match}.ts and what imports them, apps/server/src/app/checkpoints-errands.ts and login-errands.ts, apps/server/src/adapters/postgres/checkpoint-store.ts, scripts/boundaries.ts, README.md's domain table, docs.
+      change: |-
+        Moves only. domains/errands takes the Errand files and an ErrandStore port split out of CheckpointStore (the Postgres adapter may stay one file or split along the same line); app files follow. No table, event or wire shape changes.
+      acceptance: |-
+        CheckpointStore has under 55 methods. No function body changes. scripts/boundaries.ts, make docs-check and make check pass.
+      evidence: |-
+        docs/research/2026-11-maturation/audit-domain.md, section 2 and finding F10.
+      cycle: |-
+        Maturation cycle 2026-11-20 (docs/research/2026-11-maturation/README.md): remove mechanisms, add none. The finding named under evidence was taken at commit 8fa0a18c: read it first and re-check each file and line before acting. Behaviour outside the stated change stays as it is.
+  - key: mat-language-round
+    seat: { tier: opus, effort: high }
+    checkpoint: spec
+    after: [mat-domains-loops, mat-domains-errands]
+    title: "One word per thing: seat, hold, settle and class each keep one meaning"
+    facts:
+      why: |-
+        The repo's rule is one word per thing, and a retired word fails the build. Four words break it: seat is the account's allowance of leads (domains/capacity/seats.ts) and a lead's tier, effort and role (packages/contract/src/seat.ts); hold has four senses (kernel/hold.ts, kernel/remote-hold.ts, holds in a WaitSpec, the Held signal); settle has seven, among them a loop named settle that settles Decisions, not Issues (apps/server/src/main.ts about line 496); class has about nine. docs/language.md lists 127 terms with no tier, and the README repeats 12 of them in a table of its own.
+      what: |-
+        docs/language.md, scripts/retired-words.ts (its lines come from the Retires cells of language.md), the code, CLI verbs, events and screens that use the four words, README.md, docs/guide.
+      change: |-
+        The Spec is one table: each sense of the four words, the word it keeps or gets, where it appears (code, CLI, stored data, screen), and what a rename costs. Defaults: the word stays with the sense a caller types or reads on a screen; the internal senses get the new word; a stored value or a public CLI verb is not renamed unless the Spec says so and names the migration and the alias. After the verdict: rename in code, add each dropped sense to the Retires column so the build holds it, and put a core tier of about 15 words at the top of language.md, which the README links instead of repeating.
+      acceptance: |-
+        scripts/retired-words.ts fails on the old sense of each word (a test). language.md opens with the core tier. make docs-check and make check pass; the generated state diagram is current.
+      evidence: |-
+        docs/research/2026-11-maturation/audit-domain.md, section 1 "Collisions" and finding F4; docs/research/2026-11-maturation/audit-docs.md, finding F10.
+      cycle: |-
+        Maturation cycle 2026-11-20 (docs/research/2026-11-maturation/README.md): remove mechanisms, add none. The finding named under evidence was taken at commit 8fa0a18c: read it first and re-check each file and line before acting. Behaviour outside the stated change stays as it is.
+  - key: mat-enums-once
+    kind: chore
+    after: [mat-language-round]
+    title: "Each vocabulary exists once: states, kinds, sizes, outcomes, origins"
+    facts:
+      why: |-
+        The lists of states, kinds, sizes, outcomes and origins are written out in about 25 places across packages/contract, domains, read and kernel. A new value must be added in each, and tsc catches only some. One-constant files sit in kernel, and packages/contract/src/lane.ts holds CheckpointName.
+      what: |-
+        packages/contract/src, apps/server/src/{domains,read,kernel}, apps/console/src where it repeats a list.
+      change: |-
+        Each list is one exported tuple with its type in packages/contract; every other place derives from it (a zod enum, a SQL IN list built from it, a Record keyed by it so a missing key fails tsc). kernel keeps only what no domain owns.
+      acceptance: |-
+        rg for the literal list of the six states finds one definition outside tests and docs. Adding a value to a list in a scratch branch fails tsc in every place that must handle it (described in the pull request). make check passes.
+      evidence: |-
+        docs/research/2026-11-maturation/audit-domain.md, findings F11, F12 and F13.
+      cycle: |-
+        Maturation cycle 2026-11-20 (docs/research/2026-11-maturation/README.md): remove mechanisms, add none. The finding named under evidence was taken at commit 8fa0a18c: read it first and re-check each file and line before acting. Behaviour outside the stated change stays as it is.
+  - key: mat-land-verb
+    seat: { tier: opus, effort: high }
+    checkpoint: spec
+    after: [mat-ship-proves-itself]
+    title: "factory land: one verb for the merge window, with the review check inside"
+    facts:
+      why: |-
+        The brief's order for landing a change is 5.3 KB of shell recipe in prose (merge lock, rebase, push, wait for CI, merge guard, merge); its CI-wait part was patched three times in two days (3f1db1ac, 1ca7ba2d, cc996235). The check that the change was reviewed (agw review covered) is left to the lead to remember: 183 ships in 7 days had no review of the change.
+      what: |-
+        apps/cli/src (hand-written verbs: merge-lock, slot), scripts/merge-guard.ts, apps/server/src/domains/leads/brief.ts (order 6 and 7), docs/operations.md "Merging", project.yaml ship: as the source of how a repo lands (pull request or push), tests.
+      change: |-
+        `factory land` in a lead's worktree does what the recipe says, for the repo's ship mode: takes the merge lock, rebases on the origin default branch, pushes, waits for the head's CI where the repo has one, runs the repo's merge guard where it has one, checks that the range is covered by a review and refuses with the command to run when it is not, merges, and prints the merged commits. Every step that refuses says which step and the next command; the verb is safe to run again. It does not deploy and does not ship. The Spec names the steps per ship mode and what the verb does when CI is red.
+      acceptance: |-
+        Tests with a scratch repo and fake gh: a green run lands and prints the commits; an unreviewed range is refused and nothing is merged; a second run after a failed push resumes; a held lock waits. The brief's landing order is under 600 characters and names the verb. make check passes.
+      evidence: |-
+        docs/research/2026-11-maturation/audit-agents.md, finding F5.
+      cycle: |-
+        Maturation cycle 2026-11-20 (docs/research/2026-11-maturation/README.md): remove mechanisms, add none. The finding named under evidence was taken at commit 8fa0a18c: read it first and re-check each file and line before acting. Behaviour outside the stated change stays as it is.
+  - key: mat-owner-pause
+    checkpoint: spec
+    title: "The owner pauses an Issue with a wait, not with a note"
+    facts:
+      why: |-
+        A pause sent as a note left two Issues stalling four to eight times each while the Judge answered "keep paused" again and again: the machine had no fact that says the owner wants this to wait, so the steward kept trying to end the stall.
+      what: |-
+        apps/server/src/domains/work/table.ts and events (the table is total: every cell is filled), apps/server/src/domains/loops/stall.ts or where it has moved, the CLI verb the owner uses, the Console's Issue page (one of the listener's write verbs already wakes or notes; a new write goes through the Issue, see AGENTS.md), docs/language.md.
+      change: |-
+        The owner (or the orchestrator) puts an open Issue into a wait with the reason paused, with an optional time it ends by itself; only the owner or that time ends it; the steward leaves it alone and the lead is told once. No new state: it is a wait with a named exit. The Spec gives the cells of the table, the verb, and what a paused Issue shows on a screen (a word from the screen vocabulary).
+      acceptance: |-
+        Scenario: a paused Issue is not woken, nudged or sent to the Judge for 24 hours of simulated passes, and resumes on the owner's word or at its time. The table's totality test and the generated diagram pass. make check passes.
+      evidence: |-
+        docs/research/2026-11-maturation/audit-agents.md, finding F8.
+      cycle: |-
+        Maturation cycle 2026-11-20 (docs/research/2026-11-maturation/README.md): remove mechanisms, add none. The finding named under evidence was taken at commit 8fa0a18c: read it first and re-check each file and line before acting. Behaviour outside the stated change stays as it is.
+  - key: mat-brief-short
+    seat: { tier: opus, effort: high }
+    after: [mat-land-verb, mat-lead-cli, mat-refusal-next-step]
+    title: "The lead's brief at 12 KB: what a verb can say leaves the brief"
+    facts:
+      why: |-
+        A typical brief is 27.7 KB, 26.6 KB of it constant orders. apps/server/test/leads/domain.test.ts (about lines 326 to 410) pins about 40 phrases, so the text only grows. Its Waiting section (1.8 KB) repeats the global instructions every account directory already loads. The rules for a Spec, a Decision and an Errand can be the --help of the verbs that file them; the landing recipe is `factory land`; the attempt flag and the list of forbidden verbs are gone since the rows mat-lead-cli and mat-land-verb.
+      what: |-
+        apps/server/src/domains/leads/brief.ts (38.7 KB of source), apps/server/test/leads, the --help texts of artifact submit, issue ask and errand raise in packages/contract (the CLI is generated from the OpenAPI document), tests. The brief stays byte-identical for the same input.
+      change: |-
+        The brief keeps what every lead needs before its first edit: the Issue, its facts and notes, the orders in the sequence a lead runs them with one line each, and the commands. A rule about one verb moves into that verb's help. The Waiting section is deleted. The test pins structure (sections, their order, the commands named, the size) and not phrases.
+      acceptance: |-
+        buildBrief for a typical Issue is at most 12,000 bytes (a test). No test asserts a prose phrase of the brief. Each moved rule is findable in the help of its verb (listed in the pull request). make check passes.
+      evidence: |-
+        docs/research/2026-11-maturation/audit-agents.md, section 1 and finding F6.
+      cycle: |-
+        Maturation cycle 2026-11-20 (docs/research/2026-11-maturation/README.md): remove mechanisms, add none. The finding named under evidence was taken at commit 8fa0a18c: read it first and re-check each file and line before acting. Behaviour outside the stated change stays as it is.
+  - key: mat-docs-archive
+    kind: docs
+    title: "The archive leaves the reading path: 44 MB of evidence, the wave and rewrite logs, two stale pages"
+    facts:
+      why: |-
+        docs/ holds 611 KB of living Markdown and about 44 MB of history: docs/evidence is 41 MB in 601 files (33.9 MB of it Console design-round screenshots), docs/waves 364 KB, docs/rewrite 400 KB. docs/program.md calls itself the current state, is dated 2026-11-08 and lists other repos' tracks; docs/rewrite.md describes an orchestrator that no longer exists; AGENTS.md points at both. docs/accounts.md (54.5 KB) documents a package that is independent of the server. The first 148 lines of docs/decisions.md (about 21 KB) describe the retired fleet world.
+      what: |-
+        docs/{evidence,waves,rewrite,strategy,research,spikes,design}, docs/program.md, docs/rewrite.md, docs/accounts.md, docs/decisions.md, AGENTS.md and every file that links one of them, scripts/gameday/lib.sh (about line 10) and scripts/evidence-console-needs-you.sh, which write into docs/evidence. This cycle's own folder docs/research/2026-11-maturation stays until the row mat-review.
+      change: |-
+        Delete docs/evidence (git keeps it; first repoint the two scripts to a directory outside the tree or delete them if nothing runs them, and keep any file code or a test reads by moving it beside that code), docs/waves, docs/rewrite except learnings.md, docs/program.md and docs/rewrite.md. Move docs/strategy, docs/spikes, docs/design and the research pages no living document cites to docs/archive. Move docs/accounts.md to packages/accounts/docs/. Move the first 148 lines of decisions.md to docs/archive. Fix every link and AGENTS.md's Start here and Where to look.
+      acceptance: |-
+        du -sh docs is under 6 MB. scripts/guide-links.ts and the hygiene links probe find no broken relative link. rg finds no reference to a deleted path outside docs/archive. make docs-check and make check pass.
+      evidence: |-
+        docs/research/2026-11-maturation/audit-docs.md, sections 2 and 3, findings F1, F5, F8 and F9, and list (d).
+      cycle: |-
+        Maturation cycle 2026-11-20 (docs/research/2026-11-maturation/README.md): remove mechanisms, add none. The finding named under evidence was taken at commit 8fa0a18c: read it first and re-check each file and line before acting. Behaviour outside the stated change stays as it is.
+  - key: mat-plan-prune
+    kind: chore
+    title: "docs/plan.yaml holds open rows only"
+    facts:
+      why: |-
+        70 of the plan's 71 rows were done on 2026-11-20 and the file was 92 KB: every planning pass and every reader parses the history.
+      what: |-
+        docs/plan.yaml, apps/server/src/app/planning-sync.ts and planning-pass.ts to confirm what removing a done row does (a row is filed once and its Issue remembered by project and key), docs/plan.md if it needs a sentence on pruning.
+      change: |-
+        Remove the rows whose Issue is closed and that no open or waiting row names in after. Confirm in the code, then on a copy with factory plan check, that a removed done row files nothing again and cancels nothing. Keep the file's header comment current.
+      acceptance: |-
+        factory plan check docs/plan.yaml passes; after factory project sync, factory project show software-factory lists no done row and files no new Issue for a removed key. The file is under 60 KB while the mat rows are open.
+      evidence: |-
+        docs/research/2026-11-maturation/audit-docs.md, finding F6.
+      cycle: |-
+        Maturation cycle 2026-11-20 (docs/research/2026-11-maturation/README.md): remove mechanisms, add none. The finding named under evidence was taken at commit 8fa0a18c: read it first and re-check each file and line before acting. Behaviour outside the stated change stays as it is.
+  - key: mat-guide-snippets
+    kind: docs
+    title: "The guide quotes code that is checked against HEAD, not a commit 147 commits back"
+    facts:
+      why: |-
+        The guide's 198 permalinks all pin one commit, 147 commits behind master on 2026-11-20. docs/guide/capacity.md quotes 10 REFUSALS where apps/server/src/domains/capacity/admission.ts has 11. scripts/guide-links.ts checks that a link resolves, not that the quoted text is still true.
+      what: |-
+        docs/guide/*.md, scripts/guide-links.ts, the Makefile's guide-check.
+      change: |-
+        A quoted snippet names its file and symbol; the check fails when the snippet no longer equals the code at HEAD. The links point at master and the check holds what a pinned commit was meant to hold. Bring every snippet and quoted count up to date.
+      acceptance: |-
+        make guide-check fails on a snippet edited to differ from the code and passes on the tree. No guide page links the old commit. make check passes.
+      evidence: |-
+        docs/research/2026-11-maturation/audit-docs.md, finding F3.
+      cycle: |-
+        Maturation cycle 2026-11-20 (docs/research/2026-11-maturation/README.md): remove mechanisms, add none. The finding named under evidence was taken at commit 8fa0a18c: read it first and re-check each file and line before acting. Behaviour outside the stated change stays as it is.
+  - key: mat-arch-checkpoints
+    kind: docs
+    after: [mat-domains-errands, mat-decision-path]
+    title: "architecture.md: Checkpoints and Data say what is where; the change log leaves"
+    facts:
+      why: |-
+        docs/architecture.md is 201 KB in 953 very long lines. Four sections hold 79 % of it: Capacity and leads 54.5 KB, Checkpoints 40.8 KB, Loops and agw 38.3 KB, Data 26.3 KB. They are written as change logs ("since Issue N"), restate rules that sit in docblocks, and carry 89 FACTORY_* names. An agent told to read the document cannot.
+      what: |-
+        docs/architecture.md, sections Checkpoints and Data; the docblocks of the code they describe; docs/guide/checkpoints.md as the teaching text.
+      change: |-
+        Each section becomes: what the mechanism is, which module owns it, the tables, the rules in one line each with the symbol that holds them, and what is not built. A rule's reasoning lives in the docblock of its symbol or in docs/decisions.md, linked. History ("since Issue N") is deleted. Nothing true is lost: where a paragraph has no home in code or decisions, say so in the pull request.
+      acceptance: |-
+        The two sections together are under 14 KB. Every code path they name exists (a script or rg in the pull request). make docs-check passes.
+      evidence: |-
+        docs/research/2026-11-maturation/audit-docs.md, section 4 and finding F2.
+      cycle: |-
+        Maturation cycle 2026-11-20 (docs/research/2026-11-maturation/README.md): remove mechanisms, add none. The finding named under evidence was taken at commit 8fa0a18c: read it first and re-check each file and line before acting. Behaviour outside the stated change stays as it is.
+  - key: mat-arch-capacity
+    kind: docs
+    after: [mat-shadow-leaves, mat-settings-prune, mat-arch-checkpoints]
+    title: "architecture.md: Capacity and leads says what is where; the settings are a generated table"
+    facts:
+      why: |-
+        Capacity and leads is 54.5 KB of docs/architecture.md, the largest section, with most of the document's 89 FACTORY_* names written into prose that goes stale with every change.
+      what: |-
+        docs/architecture.md, section Capacity and leads with Steps off the mini; docs/operations.md; the settings loaders as the source of names, defaults and meanings; scripts/ (a generator like scripts/hygiene-doc.ts).
+      change: |-
+        The section is rewritten as in the row mat-arch-checkpoints. The settings become one generated table (name, default, what it tunes) in docs/operations.md or a file of its own, built from the loaders and held by make docs-check; prose names a setting only by linking the table.
+      acceptance: |-
+        The section is under 14 KB. The settings table is generated and make docs-check fails when a loader gains a name the table lacks. make check passes.
+      evidence: |-
+        docs/research/2026-11-maturation/audit-docs.md, section 4 and findings F2 and F12.
+      cycle: |-
+        Maturation cycle 2026-11-20 (docs/research/2026-11-maturation/README.md): remove mechanisms, add none. The finding named under evidence was taken at commit 8fa0a18c: read it first and re-check each file and line before acting. Behaviour outside the stated change stays as it is.
+  - key: mat-arch-loops
+    kind: docs
+    after: [mat-domains-loops, mat-workflow-table, mat-arch-capacity]
+    title: "architecture.md: Loops and agw says what is where, after the loops moved"
+    facts:
+      why: |-
+        Loops and agw is 38.3 KB of docs/architecture.md and describes the folder the row mat-domains-loops dissolved and the ports the row mat-workflow-table replaced.
+      what: |-
+        docs/architecture.md, section Loops and agw and the remaining sections; docs/guide/loops.md.
+      change: |-
+        The section is rewritten as in the row mat-arch-checkpoints: one table of loops (name, interval, what it decides in code, which workflow it asks, what it files) generated from the LoopSpecs and the workflow table where possible. Then the rest of the document is brought to the same form.
+      acceptance: |-
+        docs/architecture.md is under 60 KB in lines of at most 120 characters. Every path it names exists. make docs-check and make check pass.
+      evidence: |-
+        docs/research/2026-11-maturation/audit-docs.md, section 4 and finding F2.
+      cycle: |-
+        Maturation cycle 2026-11-20 (docs/research/2026-11-maturation/README.md): remove mechanisms, add none. The finding named under evidence was taken at commit 8fa0a18c: read it first and re-check each file and line before acting. Behaviour outside the stated change stays as it is.
+  - key: mat-agents-md
+    kind: docs
+    after: [mat-arch-loops, mat-language-round]
+    title: "AGENTS.md at 8 KB: a rule a script teaches is one line"
+    facts:
+      why: |-
+        AGENTS.md sits at 11,997 of its 12,000 bytes and 152 commits touched it since 2026-11-01. About 4 to 5 KB is rules a script already enforces and explains when it fails (the Console listener's verbs, the CLI contract, the README's counts, the throughput epoch) or that REVIEW.md repeats. docs/plan.md carries 7 KB of project.yaml material, the generated key reference of docs/project.md has a 4.4 KB column of internal paths, four retired keys are still parsed, and integrations/hermes/fleet/SKILL.md (about line 76) runs `factory read accounts`, which is not a verb (it is `accounts status`).
+      what: |-
+        AGENTS.md, REVIEW.md, docs/plan.md, docs/project.md and its generator scripts/project-schema.ts, packages/contract/src/project-file.ts (the retired keys), integrations/.
+      change: |-
+        A rule held by a script becomes one line naming the script; the script's failure message carries the detail (extend the message where it does not). REVIEW.md keeps what only a reviewer needs. plan.md keeps the plan format; the lanes and check tiers move to project.md. The key reference loses its Read by column. A retired key no project.yaml of the known projects still uses is no longer parsed. The Hermes skill names the real verb.
+      acceptance: |-
+        AGENTS.md is at most 8,000 bytes and every rule it lost is in a script's message or a linked document (listed in the pull request). factory plan schema prints under 16 KB. make check passes.
+      evidence: |-
+        docs/research/2026-11-maturation/audit-docs.md, section 7 and finding F11; docs/research/2026-11-maturation/audit-agents.md, section 6 and findings F10 and F11.
+      cycle: |-
+        Maturation cycle 2026-11-20 (docs/research/2026-11-maturation/README.md): remove mechanisms, add none. The finding named under evidence was taken at commit 8fa0a18c: read it first and re-check each file and line before acting. Behaviour outside the stated change stays as it is.
+  - key: mat-docs-truth
+    kind: docs
+    after: [mat-agents-md, mat-enums-once, mat-brief-short, mat-queue-time-one, mat-capacity-page, mat-owner-pause, mat-guide-snippets, mat-docs-archive, mat-plan-prune]
+    title: "README, guide, language and product say what the factory is after the cycle"
+    facts:
+      why: |-
+        The README and the guide's start page were rewritten at the start of this cycle to teach the idea: the problem, the result with numbers, the domain, one Issue's life, then one section per pattern with its rule, its reason and its code. The rows since then changed domains, words, KPIs, verbs and the Decision path. Position and the loop are stated in three documents (README.md, docs/product.md, docs/guide/README.md).
+      what: |-
+        README.md, docs/guide/README.md and the chapters, docs/guide/concepts.md if it exists, docs/product.md, docs/language.md, scripts/readme-check.ts.
+      change: |-
+        Every statement, count, path, verb and number in these documents is checked against the code and the factory's reads and corrected. Position is stated in the README and linked from the others. The result numbers in the README and the guide are generated from factory read kpis with their date, and scripts/readme-check.ts holds them like the other counts. Run the finished pages through the prose check where agw runs.
+      acceptance: |-
+        make docs-check, make guide-check and make check pass. Every code link in README.md resolves at HEAD. The pull request lists what was wrong and is now right.
+      evidence: |-
+        docs/research/2026-11-maturation/audit-docs.md, sections 5 and 6, findings F4 and F7, outlines (b) and (c).
+      cycle: |-
+        Maturation cycle 2026-11-20 (docs/research/2026-11-maturation/README.md): remove mechanisms, add none. The finding named under evidence was taken at commit 8fa0a18c: read it first and re-check each file and line before acting. Behaviour outside the stated change stays as it is.
+  - key: mat-review
+    kind: chore
+    after: [mat-docs-truth, mat-contract-drops, mat-agw-failures, mat-agw-answers, mat-agw-digest-leaves, mat-plan-facts-resend, mat-screen-key, mat-fallow-gate, mat-process-one, mat-github-one]
+    after_days: 7
+    title: "Review the maturation cycle: the same numbers, measured again"
+    facts:
+      why: |-
+        The cycle of 2026-11-20 set out to remove mechanisms and stated where it stood in a table (docs/research/2026-11-maturation/README.md, "Where it stands"). A cycle that does not measure itself is the fault it found in the friction loop.
+      what: |-
+        docs/research/2026-11-maturation/README.md and the audits, factory read kpis, friction, loop-yield and retro, fallow, wc and du over the tree, the Issues of the mat rows.
+      change: |-
+        Measure every row of "Where it stands" again and write the review: the table with before, target and now; what each loop's figure did since mat-loop-ledger; which rows were dropped or changed and why; what "Left for a second round" should now be filed, as plan rows with facts; and what the procedure ("How the cycle ran") should change. File it as a Report (factory artifact new) linked to the mat Issues, and commit it as docs/research/2026-11-maturation/review.md. Then move the folder to docs/archive.
+      acceptance: |-
+        The review states every number with the command that produced it. The second-round rows are in docs/plan.yaml and pass factory plan check. The Report is on the Artifacts screen.
+      evidence: |-
+        docs/research/2026-11-maturation/README.md.
+      cycle: |-
+        Maturation cycle 2026-11-20 (docs/research/2026-11-maturation/README.md): remove mechanisms, add none. The finding named under evidence was taken at commit 8fa0a18c: read it first and re-check each file and line before acting. Behaviour outside the stated change stays as it is.
+  - key: mat-skill
+    repo: dotfiles
+    after: [mat-review]
+    title: "A global skill for an improvement cycle of a codebase, from the software-factory cycle"
+    facts:
+      why: |-
+        The owner asked on 2026-11-20 that what the software-factory maturation cycle learned become a global skill for the same cycle in other projects. The cycle ran as: measure before reading; run the deterministic analyser (fallow) and treat findings as leads; research published procedures once; audit by area in parallel and read-only with one contract (evidence with file and line, deletions and merges only, one pull request each, the owner's doubts verbatim, live numbers as files); verify the claims that carry the plan; synthesise into a target (KPI set, domain map, agent surface, document set), not a list; file the work as plan rows with friction removals first, moves after the files settled and documents last; measure again after a week. Its review (software-factory docs/research/2026-11-maturation/review.md, or docs/archive after the move) says what worked and what the procedure should change.
+      what: |-
+        A new skill directory beside the existing skills of this repo (analyze, factory, review are the models), the skill index or CLAUDE.md route table if skills are listed there, rules/writing-for-agents.md as the standard for the text.
+      change: |-
+        Write the skill: when to use it (the owner's explicit ask for a cycle; it costs millions of tokens), the phases with what each produces, the audit brief as a template with its contract, the area list to adapt (domain model, wiring, reads and KPIs, self-improvement loops, agent surface, delegated judgment, documents), the rules for rows, and the review. Take the corrections from the review, not only the plan. Keep it to what a session cannot look up.
+      acceptance: |-
+        The skill loads in a session of another repo and its first phase runs there to a baseline table (shown in the pull request for one repo). make check passes.
+      evidence: |-
+        software-factory docs/research/2026-11-maturation/README.md "How the cycle ran", docs/research/2026-11-maturation/research-cleanup-procedures.md section 2, and the review.
+      cycle: |-
+        Maturation cycle 2026-11-20 (docs/research/2026-11-maturation/README.md): remove mechanisms, add none. The finding named under evidence was taken at commit 8fa0a18c: read it first and re-check each file and line before acting. Behaviour outside the stated change stays as it is.
