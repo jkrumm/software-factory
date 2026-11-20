@@ -104,7 +104,7 @@ export interface ReadModelDeps {
   dataDir?: string
   /** the owner's Herdr groups file the Projects table groups by; absent or unreadable, every project is in Other */
   projectGroupsFile?: string
-  /** the counting epoch (`config/throughput.json`): the throughput, capacity-loop and retro reads count nothing before it; absent, everything counts */
+  /** the counting epoch (`config/throughput.json`): the throughput, capacity-loop, friction and retro reads count nothing before it; absent, everything counts */
   epoch?: Date | null
   /** the tenant class's budget and the repo its findings are filed on; absent, the defaults */
   tenantBudget?: { project: string; budgetMib: number }

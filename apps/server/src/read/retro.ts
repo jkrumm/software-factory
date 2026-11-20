@@ -301,7 +301,7 @@ export async function readRetro(
     ciTimes?: CiTimes
     /** the statement timeout of the build's check reads, 10 s when absent */
     checkReadTimeoutMs?: number
-    /** the counting epoch: the throughput and capacity parts count nothing before it */
+    /** the counting epoch: the throughput, capacity and friction parts count nothing before it */
     epoch?: Date | null
     /** why each queued Issue stays queued now */
     queue?: QueueReasons | null
