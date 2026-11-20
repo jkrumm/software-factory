@@ -180,13 +180,30 @@ describe('the plan files its rows', () => {
       'Plan row first changed.\nacceptance: it works twice',
     ])
 
+    // a value that goes back and then changes again is told again
+    for (const [sha, acceptance] of [
+      ['p2b', 'it works'],
+      ['p2c', 'it works twice'],
+    ] as const) {
+      world.source.set('app', {
+        plan: plan(sha, [row('first', { facts: { why: 'because', acceptance } }), row('second', { after: ['first'] })]),
+      })
+      value(await planningPass(world.deps))
+    }
+    expect(await texts('issue_1')).toEqual([
+      'Plan row first.\nwhy: because\nacceptance: it works',
+      'Plan row first changed.\nacceptance: it works twice',
+      'Plan row first changed.\nacceptance: it works',
+      'Plan row first changed.\nacceptance: it works twice',
+    ])
+
     // a closed Issue hears nothing of a later change
     await world.send(issueId(1), 'cancelled', 'cancelled', { reason: 'not needed' }, 'owner')
     world.source.set('app', {
       plan: plan('p3', [row('first', { facts: { why: 'changed again' } }), row('second', { after: ['first'] })]),
     })
     value(await planningPass(world.deps))
-    expect(await texts('issue_1')).toHaveLength(2)
+    expect(await texts('issue_1')).toHaveLength(4)
   })
 
   test('a row with a seat files an Issue that carries it: tier and effort as given, a role resolved from the table', async () => {

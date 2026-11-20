@@ -184,7 +184,8 @@ async function resendFacts(stores: PlanningStores, deps: PlanningDeps): Promise<
       if (!texts.some((text) => text.split('\n', 1)[0] === factsHead(row.key))) continue
       const text = changedFactsNote(row, texts)
       if (text === null) continue
-      const digest = new Bun.CryptoHasher('sha256').update(text).digest('hex').slice(0, 12)
+      // the count of notes held is part of the content: a value that returns to an earlier one is a new change
+      const digest = new Bun.CryptoHasher('sha256').update(`${texts.length}\n${text}`).digest('hex').slice(0, 12)
       const noted = await recordIn(stores.work, deps, {
         issueId: status.issue,
         key: key('plan', status.project, row.key, 'facts', digest),
