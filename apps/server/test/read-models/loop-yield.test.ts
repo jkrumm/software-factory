@@ -68,7 +68,11 @@ beforeAll(async () => {
   await db.sql`INSERT INTO factory.hygiene_passes (id, repo, at, ref, report, judgment, filed, over_budget, failed)
     VALUES ('hp1', 'app', ${ago(48)}, 'abc', '{}', '{}', '[{"key":"links:a","title":"t"}]', '[]', '[]')`
   // selfwatch: one Issue, done, its figure not moved
-  await finding(await issue(10, 3, 'done'), 'selfwatch', 'ci_red', { figure: 3, verdict: 'flat', filedAgo: 10 })
+  await finding(await issue(10, 3, 'done'), 'selfwatch', 'migration_clash', {
+    figure: 3,
+    verdict: 'flat',
+    filedAgo: 10,
+  })
   // throughput: one finding whose Issue is open
   const th = await issue(20, null)
   await seedFinding(db.sql, {
@@ -132,7 +136,7 @@ test('hygiene counts a healed Issue; selfwatch and throughput read the same ledg
     done: 1,
     moved: 0,
     movedShare: 0,
-    classes: [{ class: 'ci_red', issues: 1, noise: 0 }],
+    classes: [{ class: 'migration_clash', issues: 1, noise: 0 }],
   })
   expect(byLoop(model, 'throughput')?.[0]).toMatchObject({
     passes: null,

@@ -78,13 +78,16 @@ page's Hygiene tab and \`factory read project-hygiene <name>\` render that one l
   the red findings of the probes that only read tracked files (cost \`file\`, \`agentsmd\` among them) are read again at the new
   head and only what it still raises is filed; a finding it no longer raises reads green, and the run says at which commit.
 - **One project per tick.** Full passes come before daily ones, never-swept projects first, then the oldest.
-- **Budget.** At most 3 probe findings and 5 signals in all per pass, probes ranked in the catalogue's order; the rest are
+- **One Issue per pass.** A pass of one repo files its findings as one signal and one Issue: a section per finding, each headed
+  by its key, so each key still heals, reopens and is judged by itself (\`loop_findings\` keeps a row per key). The Issue is
+  closed as healed only when every key in it is green; while one is still red it is told which keys are.
+- **Budget.** At most 3 probe findings and 5 sections in all per pass, probes ranked in the catalogue's order; the rest are
   named in the pass record, never dropped. A finding class that mostly ends dropped or cancelled stops filing for 14 days.
 - **Settings.** \`FACTORY_HYGIENE_EVERY_MS\` (the week) and \`FACTORY_HYGIENE_RETRY_MS\` (\`apps/server/src/app/loops/settings.ts\`, set in the env file); the daily pass is once a day.
 - **The seat.** Every signal carries a \`Seat:\` line. A finding's Issue starts on the light seat whatever its size: the probe that
-  found it turning green proves the fix, and a light lead that struggles is moved up once. A class whose Issues keep moving up
-  (its move-up share over its last 20 Issues above the bound the cost of a move-up sets) starts on the standard lead until the
-  share drops under it; \`factory read finding-classes\` shows each class's starts, move-ups and pass rate, and which are out.
+  found it turning green proves the fix, and a light lead that struggles is moved up once.
+- **One detector per fact.** A red default branch is filed by the intake's \`signals.github.checks\` where a project turns it on; the
+  \`check\` probe runs (in a test slot) only for a project without it. A slow route answer is filed by the Kuma monitor alone.
 
 ## The dependency refresh
 
@@ -110,12 +113,13 @@ those Issues and from the next pass's verdict, never stored.
 
 | The probe says | The newest Issue of the key is | The pass does |
 |-|-|-|
-| red | none, or closed healed, dropped or cancelled | files a signal (a new Issue) |
+| red | none, or closed healed, dropped or cancelled | files a section of the pass's Issue (a new Issue when none is open) |
 | red | open | nothing: the Issue is the finding's life |
-| red | closed done, within 29 days | reopens that Issue with the evidence; no second Issue |
+| red | closed done, within 29 days | reopens that Issue with the evidence of its red keys; no second Issue |
 | red | closed done and already reopened twice | leaves it to a person, and says so on the Hygiene tab |
-| green (ran, did not raise the key) | queued or settling: no lead has started | closes it as healed, with the probe's run as the reason |
-| green | a lead is working or waiting | tells the lead once; the lead decides |
+| green (ran, did not raise the key), every key of the Issue | queued or settling: no lead has started | closes it as healed, with the probe's run as the reason |
+| green, every key of the Issue | a lead is working or waiting | tells the lead once; the lead decides |
+| green, some keys; others still red | open | tells the Issue which keys are green and which are not; it stays open |
 | green | in its Watch, or closed | nothing |
 
 **A scripted fix comes first.** A probe whose catalogue entry has a \`fix\` (below) is fixed by script before anything is filed: the

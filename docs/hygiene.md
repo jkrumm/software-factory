@@ -24,13 +24,16 @@ page's Hygiene tab and `factory read project-hygiene <name>` render that one lis
   the red findings of the probes that only read tracked files (cost `file`, `agentsmd` among them) are read again at the new
   head and only what it still raises is filed; a finding it no longer raises reads green, and the run says at which commit.
 - **One project per tick.** Full passes come before daily ones, never-swept projects first, then the oldest.
-- **Budget.** At most 3 probe findings and 5 signals in all per pass, probes ranked in the catalogue's order; the rest are
+- **One Issue per pass.** A pass of one repo files its findings as one signal and one Issue: a section per finding, each headed
+  by its key, so each key still heals, reopens and is judged by itself (`loop_findings` keeps a row per key). The Issue is
+  closed as healed only when every key in it is green; while one is still red it is told which keys are.
+- **Budget.** At most 3 probe findings and 5 sections in all per pass, probes ranked in the catalogue's order; the rest are
   named in the pass record, never dropped. A finding class that mostly ends dropped or cancelled stops filing for 14 days.
 - **Settings.** `FACTORY_HYGIENE_EVERY_MS` (the week) and `FACTORY_HYGIENE_RETRY_MS` (`apps/server/src/app/loops/settings.ts`, set in the env file); the daily pass is once a day.
 - **The seat.** Every signal carries a `Seat:` line. A finding's Issue starts on the light seat whatever its size: the probe that
-  found it turning green proves the fix, and a light lead that struggles is moved up once. A class whose Issues keep moving up
-  (its move-up share over its last 20 Issues above the bound the cost of a move-up sets) starts on the standard lead until the
-  share drops under it; `factory read finding-classes` shows each class's starts, move-ups and pass rate, and which are out.
+  found it turning green proves the fix, and a light lead that struggles is moved up once.
+- **One detector per fact.** A red default branch is filed by the intake's `signals.github.checks` where a project turns it on; the
+  `check` probe runs (in a test slot) only for a project without it. A slow route answer is filed by the Kuma monitor alone.
 
 ## The dependency refresh
 
@@ -56,12 +59,13 @@ those Issues and from the next pass's verdict, never stored.
 
 | The probe says | The newest Issue of the key is | The pass does |
 |-|-|-|
-| red | none, or closed healed, dropped or cancelled | files a signal (a new Issue) |
+| red | none, or closed healed, dropped or cancelled | files a section of the pass's Issue (a new Issue when none is open) |
 | red | open | nothing: the Issue is the finding's life |
-| red | closed done, within 29 days | reopens that Issue with the evidence; no second Issue |
+| red | closed done, within 29 days | reopens that Issue with the evidence of its red keys; no second Issue |
 | red | closed done and already reopened twice | leaves it to a person, and says so on the Hygiene tab |
-| green (ran, did not raise the key) | queued or settling: no lead has started | closes it as healed, with the probe's run as the reason |
-| green | a lead is working or waiting | tells the lead once; the lead decides |
+| green (ran, did not raise the key), every key of the Issue | queued or settling: no lead has started | closes it as healed, with the probe's run as the reason |
+| green, every key of the Issue | a lead is working or waiting | tells the lead once; the lead decides |
+| green, some keys; others still red | open | tells the Issue which keys are green and which are not; it stays open |
 | green | in its Watch, or closed | nothing |
 
 **A scripted fix comes first.** A probe whose catalogue entry has a `fix` (below) is fixed by script before anything is filed: the
@@ -88,7 +92,6 @@ few documents, and absence proves nothing. Every action is recorded on the pass 
 | [`readme`](#readme) | auto | daily | file |
 | [`stale`](#stale) | on | daily | file |
 | [`deadcode`](#deadcode) | auto | weekly | tool |
-| [`cochange`](#cochange) | on | weekly | file |
 | [`runrules`](#runrules) | auto | daily | file |
 | [`browser`](#browser) | on | daily | file |
 | [`context`](#context) | auto | daily | file |
@@ -97,7 +100,7 @@ few documents, and absence proves nothing. Every action is recorded on the pass 
 
 ### check
 
-`make check` on the default branch in a throwaway checkout; red is one finding with the tail of the output, confirmed in the project's own checkout when that is clean at the same commit.
+`make check` on the default branch in a throwaway checkout, inside a test slot; red is one finding with the tail of the output, confirmed in the project's own checkout when that is clean at the same commit. A project whose `signals.github.checks` is on has its red default branch filed by the intake and skips this probe, so the one fact has one detector.
 
 - **Default:** on for every project.
 - **Runs:** in the weekly pass; runs the project's own make target.
@@ -185,14 +188,6 @@ Unused files, exports and dependencies of a JavaScript or TypeScript repo (fallo
 - **Runs:** in the weekly pass; runs an analyzer or asks a registry.
 - **Silence it:** Name it under `hygiene.skip` in `project.yaml` with a reason; the pass shows the reason.
 
-### cochange
-
-Two files that moved together in nearly every one of the last 300 commits: a coupling worth a shared module or a note.
-
-- **Default:** on for every project.
-- **Runs:** in the weekly pass; reads tracked files.
-- **Silence it:** Name it under `hygiene.skip` in `project.yaml` with a reason; the pass shows the reason.
-
 ### runrules
 
 The owner's rules for what runs on the Mac mini (restart policy, memory limit, port binding, healthcheck, registered jobs), read from the files before a change reaches the host.
@@ -231,7 +226,7 @@ One agent reads the living documents whose code moved on since they were last ed
 
 - **Default:** on for every project.
 - **Runs:** in the weekly pass, and only monthly on an idle repo; one model call on the cheap seat.
-- **Silence it:** Not switchable: it takes at most two signals of a pass and a held class stops it.
+- **Silence it:** Not switchable: it takes at most two sections of a pass and a held class stops it.
 
 ## For a repo author
 

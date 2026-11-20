@@ -127,7 +127,7 @@ async function main(env: Environment): Promise<void> {
   if (lapsed.ok && lapsed.value > 0)
     console.log(`loops: ${lapsed.value} agw call(s) of an earlier process will be taken up again`)
   const startedAt = new Date()
-  /** Times the server's own routes: the self-watch's `routes_slow` and the heartbeat's `routeP95Ms` read the same figure. */
+  /** Times the server's own routes: the heartbeat's `routeP95Ms` reads the figure. */
   const routes = routeTimer()
   const leadSettings = loadLeadSettings(env)
   const loopSettings = loadLoopSettings(env)
@@ -289,7 +289,6 @@ async function main(env: Environment): Promise<void> {
     epoch,
     doctor,
     mainCheckoutLines,
-    routes,
     dataDir,
     startedAt,
     reaperProcesses: reaperProcessTable,
@@ -298,7 +297,7 @@ async function main(env: Environment): Promise<void> {
   const leadsTick = loopSettings.intervalMs.leads
 
   // Every read route asks for this, and the view behind it spawns `sysctl` a few times and may poll the account picker:
-  // on a loaded host that made `/v1/projects` and its siblings answer in seconds (self-watch routes_slow, 2026-11-17).
+  // on a loaded host that made `/v1/projects` and its siblings answer in seconds (2026-11-17).
   // A few seconds old is fresh enough for the word on a queued Issue; concurrent requests share one run.
   const queueReasons = freshFor(QUEUE_REASONS_FRESH_MS, async () => {
     const view = await planning.capacity.queue()

@@ -21,8 +21,6 @@ export interface LightFacts {
   spec: boolean
   /** the key of the hygiene finding that filed it (`links:docs/x.md`, `judgment:stale:docs/y.md`, `probe:readme`), if one did */
   hygieneKey: string | null
-  /** the hygiene finding's class is out of the light seat: its move-up share over its last 20 Issues is above the bound (`judgeClassSeat`) */
-  hygieneOut: boolean
   /** a monitor alerted with no door route and the factory filed it home: its fix is a route */
   unroutedMonitor: boolean
   /** a light lead was moved up on it before: never light again */
@@ -49,8 +47,8 @@ export const outOfScope = (text: string): boolean => OUT_OF_SCOPE.test(text)
 export function lightRule(facts: LightFacts): string | null {
   if (facts.movedUp > 0) return null
   // A hygiene finding comes from a probe, and the same probe turning green proves the fix: it starts light whatever size
-  // triage gave it, unless its class keeps moving up. A class that is out never falls through to a size rule below.
-  if (facts.hygieneKey !== null) return facts.hygieneOut ? null : `hygiene:${hygieneClass(facts.hygieneKey)}`
+  // triage gave it.
+  if (facts.hygieneKey !== null) return `hygiene:${hygieneClass(facts.hygieneKey)}`
   if (facts.kind === 'docs') return 'kind:docs'
   if (facts.unroutedMonitor) return 'alert:route'
   if (facts.triageSmall && facts.size === 'small' && !facts.spec && !outOfScope(facts.text)) {

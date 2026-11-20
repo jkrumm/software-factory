@@ -1,6 +1,6 @@
 import { afterAll, beforeAll, expect, test } from 'bun:test'
 import { existsSync, readFileSync } from 'node:fs'
-import { mkdtemp, rm } from 'node:fs/promises'
+import { chmod, mkdtemp, rm, writeFile } from 'node:fs/promises'
 import { join } from 'node:path'
 import { type Lab, startLab } from '../planning/lab.ts'
 import { admitted, must, tick } from '../flow.ts'
@@ -53,6 +53,10 @@ beforeAll(async () => {
       FACTORY_HYGIENE_RETRY_MS: String(FAKE_RETRY_MS),
     },
   })
+  // the check probe runs the gate in a test slot (`factory slot run … -- <command>`): here the slot is the command itself
+  const slot = join(lab.world.bin, 'factory')
+  await writeFile(slot, '#!/bin/sh\nwhile [ "$1" != "--" ]; do shift; done\nshift\nexec "$@"\n')
+  await chmod(slot, 0o755)
   for (const name of [...PROJECTS, 'work']) await lab.commit(name, { Makefile: makefile(name) })
   await lab.commit('h1', { 'docs/guide.md': doc(1) })
   await lab.commit('h2', Object.fromEntries([1, 2, 3, 4, 5].map((n) => [`docs/d${n}.md`, doc(n)])))
@@ -171,24 +175,22 @@ test('a due project is swept: red check and a broken link are filed, the answer 
   expect(ran.error).toBeNull()
   expect(ran.summary).toMatch(/^swept h1 @[0-9a-f]{7}: filed 3 signal\(s\), 0 over budget; judgment answered$/)
 
+  // the pass's findings are one signal and one Issue: a section per key, under the key
   const signals = await signalsFrom('h1')
-  expect(signals.map((s) => s.title)).toEqual(
-    [
-      'Hygiene: broken links in docs/guide.md',
-      'Hygiene: make check is red on the default branch',
-      'Hygiene: slop document docs/guide.md',
-    ].sort(),
-  )
-  expect(signals.every((s) => s.repo === 'h1')).toBe(true)
-  const check = signals.find((s) => s.title.includes('make check'))
-  expect(check?.text).toContain('Swept: h1 @ ')
-  expect(check?.text).toContain('the gate is red')
-  expect(check?.text).toContain('Reproduce: make check')
-  expect(signals.find((s) => s.title.includes('broken links'))?.text).toContain('missing-0.md')
-  const judged = signals.find((s) => s.title.includes('slop document'))
-  expect(judged?.text).toContain('Finding: The guide repeats itself')
-  expect(judged?.text).toContain('Fix: Cut the repeated lines.')
-  expect(judged?.text).toContain('Evidence: docs/guide.md repeats itself')
+  expect(signals).toHaveLength(1)
+  const [batch] = signals
+  expect(batch?.title).toBe('Hygiene: check, links, slop (h1)')
+  expect(batch?.repo).toBe('h1')
+  const text = batch?.text ?? ''
+  expect(text.match(/^Swept: h1 @ /gm)).toHaveLength(1)
+  for (const heading of ['check', 'links:docs/guide.md', 'judgment:slop:docs/guide.md'])
+    expect(text).toContain(`: ${heading}`)
+  expect(text).toContain('the gate is red')
+  expect(text).toContain('Reproduce: make check')
+  expect(text).toContain('missing-0.md')
+  expect(text).toContain('Finding: The guide repeats itself')
+  expect(text).toContain('Fix: Cut the repeated lines.')
+  expect(text).toContain('Evidence: docs/guide.md repeats itself')
 
   const [ask, ...more] = await asksFor('h1')
   expect(more).toEqual([])
@@ -206,7 +208,13 @@ test('a due project is swept: red check and a broken link are filed, the answer 
   expect(pass?.judgment.findings.map((f) => f.path)).toEqual(['docs/guide.md'])
   expect(pass?.report.runs.find((r) => r.probe === 'check')?.outcome).toBe('found')
   expect(pass?.ref).toBe(String(ask?.input.ref))
-  expect(await issuesOf('h1')).toBe(3)
+  expect(await issuesOf('h1')).toBe(1)
+  // and the ledger has a row per key on that one Issue
+  expect(
+    (await sql()`SELECT key FROM factory.loop_findings WHERE repo = 'h1' ORDER BY key`).map(
+      (r: { key: string }) => r.key,
+    ),
+  ).toEqual(['check', 'judgment:slop:docs/guide.md', 'links:docs/guide.md'])
 
   expect(existsSync(String(ask?.input.cwd))).toBe(false)
   expect(await worktrees('h1')).toEqual([`worktree ${join(lab.root, 'h1')}`])
@@ -216,16 +224,16 @@ test('a due project is swept: red check and a broken link are filed, the answer 
 test('not due again in the window; a week on it is swept again and nothing is filed for what an open Issue holds', async () => {
   const again = await sweep('h1')
   expect(again.summary).toBe('not due')
-  expect(await signalsFrom('h1')).toHaveLength(3)
+  expect(await signalsFrom('h1')).toHaveLength(1)
   expect(await passes('h1')).toHaveLength(1)
 
   await sql()`UPDATE factory.hygiene_passes SET at = at - interval '8 days' WHERE repo = 'h1'`
   const later = await sweep('h1')
   expect(later.error).toBeNull()
-  // the check and the links are open Issues: the pass files nothing for them; the judgment finding is the one intake dedups
-  expect(later.summary).toMatch(/^swept h1 @[0-9a-f]{7}: filed 1 signal\(s\), 0 over budget; judgment answered$/)
+  // every key is on the one open Issue: the pass files nothing, the judgment finding included
+  expect(later.summary).toMatch(/^swept h1 @[0-9a-f]{7}: filed 0 signal\(s\), 0 over budget; judgment answered$/)
   expect(await passes('h1')).toHaveLength(2)
-  expect(await issuesOf('h1')).toBe(3)
+  expect(await issuesOf('h1')).toBe(1)
   expect(sweepsOf('h1')).toBe(2)
 })
 
@@ -252,7 +260,11 @@ test('more findings than the budget: five are filed, the rest are named in the r
     'judgment:slop:docs/d4.md',
   ])
   expect((await asksFor('h2'))[0]?.input.max).toBe(2)
-  expect(await signalsFrom('h2')).toHaveLength(5)
+  // five findings, one Issue with five sections
+  const [batch2, ...rest] = await signalsFrom('h2')
+  expect(rest).toEqual([])
+  for (const key of pass?.filed.map((f) => f.key) ?? []) expect(batch2?.text).toContain(`: ${key}`)
+  expect(await issuesOf('h2')).toBe(1)
 })
 
 test('a failed judgment keeps the deterministic signals and is retried at the stored commit, with no new sweep', async () => {

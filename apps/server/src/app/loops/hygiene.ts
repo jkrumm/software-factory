@@ -1,20 +1,29 @@
 import { type DepsThresholds, HYGIENE_DEFAULTS, type SignalRequest } from '@software-factory/contract'
-import { figureNow, isBusy, type LifecycleStep, planLifecycle } from '../../domains/loops/hygiene-lifecycle.ts'
 import {
+  figureNow,
+  heldJudgments,
+  isBusy,
+  type LifecycleStep,
+  planLifecycle,
+} from '../../domains/loops/hygiene-lifecycle.ts'
+import {
+  batchSignalText,
+  batchSubject,
+  batchTitle,
   checkAnswer,
   judgmentBudget,
   judgmentKey,
-  judgmentSignalText,
-  judgmentTitle,
+  judgmentSection,
   nothingToRead,
   planHygiene,
   probeBudget,
   probeFiledCount,
-  probeSignalText,
+  probeSection,
   rankProbeFindings,
   requestOf,
   skipped,
   NO_REF,
+  type Section,
   type Swept,
 } from '../../domains/loops/hygiene.ts'
 import { applyFixes } from '../../domains/loops/hygiene-fixes.ts'
@@ -44,7 +53,6 @@ import { err, ok, portError, type PortError, type Result } from '../../kernel/re
 import { recordIn } from '../issues.ts'
 import type { IntakeError } from '../intake.ts'
 import type { UnitOfWork } from '../unit-of-work.ts'
-import { classOf } from '../../domains/loops/classes.ts'
 import { readGate, type ClassGate } from './gate.ts'
 import { settleClosed } from './ledger.ts'
 import { passLoop, type LoopSpec, type LoopWiring } from './runner.ts'
@@ -83,6 +91,10 @@ export type HygienePass =
       overNow: number
     }
 
+/** Why the `check` probe is skipped where the project's own `signals.github.checks` files a red default branch. */
+const CHECKS_OWN_RED =
+  "its red default branch is filed by the intake's `signals.github.checks` (an incident, healed when green)"
+
 const reasonOf = (error: IntakeError): string => ('detail' in error ? `${error.kind}: ${error.detail}` : error.kind)
 
 /** What one tick adds to a record. */
@@ -113,9 +125,14 @@ async function applyStep(
     why,
     at: now,
   })
+  // the keys are part of a note's identity: the keys that turn green on a later pass are a note of their own
   const record = (eventKey: string, event: Parameters<typeof recordIn>[2]['event']) =>
     deps.uow.run(({ work }) =>
-      recordIn(work, deps, { issueId, key: key('hygiene', eventKey, step.issue, reopens), event }),
+      recordIn(work, deps, {
+        issueId,
+        key: key('hygiene', eventKey, step.issue, reopens, ...(eventKey === 'green' ? [step.keys.join(',')] : [])),
+        event,
+      }),
     )
   if (step.action === 'kept') return done('kept', step.why)
   if (step.action === 'reopened') {
@@ -153,39 +170,53 @@ async function applyStep(
   return healed.value.event.result === 'applied' ? done('healed', step.why) : note()
 }
 
-/** File one signal. A filed, amended or repeat-dropped outcome stands (an Issue carries it); any other drop is a failure. */
-async function fileOne(
+/**
+ * File a pass's findings of one repo as one signal, one Issue, a section per finding. A filed, amended or repeat-dropped
+ * outcome stands (an Issue carries it); any other drop is a failure of every key in it. Each key gets its own ledger row
+ * (its class, its figure), so each is judged, healed and reopened by itself.
+ */
+async function fileBatch(
   deps: HygieneDeps,
   gate: ClassGate,
-  input: { repoText: string; name: string; id: string; title: string; text: string; figure: number | null },
+  input: { repoText: string; name: string; ref: string; sections: readonly Section[] },
   added: Added,
 ): Promise<void> {
+  const { sections } = input
+  if (sections.length === 0) return
+  const swept: Swept = { repo: input.name, ref: input.ref }
+  const title = batchTitle(sections, swept)
   const filed = await deps.file(
     {
       from: `agent:${input.name}`,
       kind: 'request',
-      title: input.title,
-      text: input.text,
+      title,
+      text: batchSignalText(sections, swept),
       repo: input.repoText,
       probe: false,
     },
-    { loop: 'hygiene', class: classOf('hygiene', input.id), subject: input.id },
+    { loop: 'hygiene', class: 'batch', subject: batchSubject(sections) },
   )
   if (!filed.ok) {
-    added.failed.push({ key: input.id, reason: reasonOf(filed.error).slice(0, 300) })
+    const reason = reasonOf(filed.error).slice(0, 300)
+    for (const section of sections) added.failed.push({ key: section.key, reason })
     return
   }
   const { outcome, detail } = filed.value
   const stands = outcome === 'filed' || outcome === 'amended' || (outcome === 'dropped' && detail === 'repeat')
-  if (stands) {
-    added.filed.push({ key: input.id, title: input.title })
-    const lost = await gate.record(filed.value.issue, input.id, input.repoText, {
-      figure: input.figure,
+  if (!stands) {
+    const reason = `${outcome}: ${detail}`.slice(0, 300)
+    for (const section of sections) added.failed.push({ key: section.key, reason })
+    return
+  }
+  for (const section of sections) {
+    added.filed.push({ key: section.key, title: section.title })
+    const lost = await gate.record(filed.value.issue, section.key, input.repoText, {
+      figure: section.figure,
       signal: filed.value.signal,
       at: deps.clock.now(),
     })
-    if (lost) added.failed.push({ key: input.id, reason: `finding class not recorded: ${lost}`.slice(0, 300) })
-  } else added.failed.push({ key: input.id, reason: `${outcome}: ${detail}`.slice(0, 300) })
+    if (lost) added.failed.push({ key: section.key, reason: `finding class not recorded: ${lost}`.slice(0, 300) })
+  }
 }
 
 interface Target {
@@ -209,8 +240,8 @@ interface Target {
 
 /**
  * The judgment over one checkout: asks `factory-hygiene` for the candidates the report names (none, or no budget left, is
- * `skipped`, final), checks the answer again and files the findings that stand. Runs inside the checkout and never inside
- * a transaction.
+ * `skipped`, final), checks the answer again and returns the findings that stand as sections for the pass's one Issue
+ * (`sections`). Runs inside the checkout and never inside a transaction.
  */
 async function judge(
   deps: HygieneDeps,
@@ -218,8 +249,9 @@ async function judge(
   target: Target,
   checkout: Checkout,
   report: SweepReport,
-  input: { probeFiled: number; attempt: number },
+  input: { probeFiled: number; attempt: number; held: ReadonlySet<string> },
   added: Added,
+  sections: Section[],
 ): Promise<HygieneJudgment> {
   const request = requestOf({
     repo: target.repoText,
@@ -248,23 +280,14 @@ async function judge(
   const checked = checkAnswer(asked.value, request)
   const swept: Swept = { repo: target.name, ref: checkout.ref }
   for (const finding of checked.findings) {
+    // A document whose finding is an open Issue (or closed lately) is that Issue's life: not filed again.
+    if (input.held.has(judgmentKey(finding))) continue
     // The model was asked already; a finding of a held class is named, not filed.
     if (!gate.allows(judgmentKey(finding))) {
       added.overBudget.push({ key: judgmentKey(finding), title: finding.title })
       continue
     }
-    await fileOne(
-      deps,
-      gate,
-      {
-        ...target,
-        id: judgmentKey(finding),
-        title: judgmentTitle(finding),
-        text: judgmentSignalText(finding, swept),
-        figure: null,
-      },
-      added,
-    )
+    sections.push(judgmentSection(finding, swept))
   }
   for (const finding of checked.overBudget) added.overBudget.push({ key: judgmentKey(finding), title: finding.title })
   for (const dropped of checked.rejected) {
@@ -380,10 +403,11 @@ async function sweepPass(
     // A fix that could not start now (no test slot in time) holds its finding back one pass: the next pass asks again. Its key
     // stays red for the lifecycle (green would heal its Issue), but a closed Issue is not reopened for a lead meanwhile.
     const deferred = new Set(fixes.filter((entry) => entry.outcome === 'deferred').map((entry) => entry.key))
+    const isDeferred = (step: LifecycleStep): boolean => step.keys.some((stepKey) => deferred.has(stepKey))
     // what the Issues of earlier findings of this repo did: a key a run judged and did not raise is at 0. An Issue the lifecycle
     // reopens below is not judged: it is open again, and its verdict is the one of the close that ends it
     // (one whose fix is deferred is reopened or healed on a later pass: no verdict yet either)
-    const reopened = new Set(plan.steps.filter((step) => step.action === 'reopened').map((step) => step.key))
+    const reopened = new Set(plan.steps.filter((step) => step.action === 'reopened').flatMap((step) => step.keys))
     const settled = await settleClosed(deps, {
       loop: 'hygiene',
       repo: target.repoText,
@@ -395,10 +419,11 @@ async function sweepPass(
       added.failed.push({ key: 'ledger', reason: `${settled.error.kind}: ${settled.error.detail}`.slice(0, 300) })
     const lastTime = (key: string, figure: number): string | null =>
       settled.ok ? settled.value.lastTime(key, figure) : null
-    for (const step of plan.steps.filter((entry) => !deferred.has(entry.key))) {
+    for (const step of plan.steps.filter((entry) => !isDeferred(entry))) {
       const reopens = known.value.find((entry) => entry.key === step.key)?.reopens ?? 0
       const applied = await (deps.apply ?? ((s, n, r) => applyStep(deps, s, n, r)))(step, now, reopens)
-      if (applied) lifecycle.push(applied)
+      // one Issue, one step: the record keeps a row per key, as the project page reads it
+      if (applied) lifecycle.push(...step.keys.map((stepKey) => ({ ...applied, key: stepKey })))
     }
     // A held class is named before the budget counts: it does not use up a slot.
     const ranked = rankProbeFindings(
@@ -406,28 +431,26 @@ async function sweepPass(
     )
     const allowed = ranked.filter((finding) => gate.allows(finding.key))
     const { file } = probeBudget(allowed)
-    for (const finding of file) {
-      await fileOne(
-        deps,
-        gate,
-        {
-          ...target,
-          id: finding.key,
-          title: finding.title,
-          text: probeSignalText(finding, { repo: target.name, ref: report.ref }, lastTime(finding.key, finding.count)),
-          figure: finding.count,
-        },
-        added,
-      )
-    }
+    const sections = file.map((finding) => probeSection(finding, lastTime(finding.key, finding.count)))
     for (const finding of ranked) {
       if (!file.includes(finding)) added.overBudget.push({ key: finding.key, title: finding.title })
     }
     // the sweep promotes a steady pass to a full one when the repo has a fresh commit: what ran is what it recorded
     const judgment =
       (report.scope ?? scope) === 'full'
-        ? await judge(deps, gate, target, checkout, report, { probeFiled: added.filed.length, attempt: 1 }, added)
+        ? await judge(
+            deps,
+            gate,
+            target,
+            checkout,
+            report,
+            { probeFiled: file.length, attempt: 1, held: plan.suppress },
+            added,
+            sections,
+          )
         : skipped(`a ${report.scope ?? scope} pass: the document judgment runs in the full pass`)
+    // every finding of the pass, probe and judgment, is one signal and one Issue
+    await fileBatch(deps, gate, { ...target, ref: report.ref, sections }, added)
     return { report, judgment }
   })
   // A checkout that cannot be made is recorded as a sweep that ran nothing: the project is asked again after `retryMs`, and
@@ -474,8 +497,12 @@ async function retryPass(
   const gated = await readGate(deps, { loop: 'hygiene', now: deps.clock.now() })
   if (!gated.ok) return gated
   const gate = gated.value
+  const known = await deps.uow.run(async ({ loopReads }) => ok(await loopReads.findingIssues(target.repoText)))
+  if (!known.ok) return known
+  const held = heldJudgments(known.value, deps.clock.now())
   const added = nothingAdded()
   const attempt = row.judgment.attempts + 1
+  const sections: Section[] = []
   const probeFiled = probeFiledCount(row)
   const noRequest = !requestOf({
     repo: target.repoText,
@@ -490,7 +517,7 @@ async function retryPass(
     judgment = skipped(nothingToRead(row.report))
   } else {
     const retried = await deps.checker.withCheckout(target.repoText, row.report.ref, (checkout) =>
-      judge(deps, gate, target, checkout, row.report, { probeFiled, attempt }, added),
+      judge(deps, gate, target, checkout, row.report, { probeFiled, attempt, held }, added, sections),
     )
     // A checkout that cannot be made counts as an attempt, or the same project would be retried every tick.
     judgment = retried.ok
@@ -502,6 +529,8 @@ async function retryPass(
           reason: `${retried.error.kind}: ${retried.error.detail}`.slice(0, 300),
           findings: [],
         }
+    // the retry's findings are one Issue of their own
+    await fileBatch(deps, gate, { ...target, ref: row.report.ref, sections }, added)
   }
   const record: HygienePassRecord = {
     ...row,
@@ -562,7 +591,12 @@ export async function hygienePass(deps: HygieneDeps): Promise<Result<HygienePass
     return retryPass(deps, { repoText: work.repo, name: project.name, passId: work.row.id }, work.row)
   }
   const { hygiene } = project.project
-  const skipCheck = hygiene.check ? await redDoctor(deps, project) : hygiene.reason
+  // A red default branch is filed by one detector: the intake's `signals.github.checks` where the project has it, this probe where it has not.
+  const skipCheck = !hygiene.check
+    ? hygiene.reason
+    : project.project.signals.github?.checks
+      ? CHECKS_OWN_RED
+      : await redDoctor(deps, project)
   return sweepPass(
     deps,
     {

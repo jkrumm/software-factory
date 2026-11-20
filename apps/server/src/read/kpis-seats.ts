@@ -4,7 +4,6 @@ import {
   judgeLightGate,
   KPI_SEATS,
   regressionGap,
-  classMoveUpBound,
   type MoveUpBound,
   moveUpBound,
   moveUpTimeBound,
@@ -203,8 +202,7 @@ function deliveryOf(
  * dollars of the same Issues (`moveUpBound`): light attempts, the lead row's attempts on Issues that started there, and
  * the lead attempts that followed a move-up. A cost the usage schema cannot give leaves the figure and the bound null.
  * The same break-even in minutes (`moveUpTimeBound`) reads three medians: the working ms of light Issues that did not move up,
- * the ms the moved-up attempts ran before they moved, and the lead row's working ms per Issue; the hygiene classes are
- * judged against the lower of the two (`classShare`).
+ * the ms the moved-up attempts ran before they moved, and the lead row's working ms per Issue.
  */
 async function readDelivery(
   sql: SQL,
@@ -263,7 +261,6 @@ async function readDelivery(
           followUpAttempt,
           share,
           time,
-          classShare: classMoveUpBound({ dollars: share, time: timeShare }) ?? share,
         }
   const priced = async (list: readonly Fact[]) =>
     options.cost ? options.cost(list.map((fact) => fact.issue_id)) : null
@@ -314,7 +311,7 @@ async function tripwireOf(
 
 /**
  * The tripwire over its window (`TRIPWIRE_DAYS`, longer until light has `TRIPWIRE_TARGET_WATCHES` finished first watches), read for the starts: `met` says whether triage's `small` starts on the
- * light seat now (only a measured pass opens it), `bound.share` is the dollar break-even of a move-up and `bound.classShare` (the lower of it and the minute break-even) the move-up share a hygiene class stays under.
+ * light seat now (only a measured pass opens it), `bound.share` is the dollar break-even of a move-up.
  */
 export async function readTripwire(
   sql: SQL,

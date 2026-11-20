@@ -107,7 +107,6 @@ const table = (gate: boolean): SeatTable => ({
     rule: lightRule,
     row: async () => ({ tier: 'haiku', effort: 'high' }),
     gate: async () => gate,
-    classesOut: async () => new Set<string>(),
   },
 })
 

@@ -459,9 +459,7 @@ function FindingClassesSection({ model }: { model: FindingClassesModel | undefin
               <li key={`${c.loop}/${c.class}`} className="flex flex-col gap-0.5 py-2">
                 <span>
                   {c.loop} · {c.class}{' '}
-                  <span className="text-muted-foreground">
-                    {c.status === 'held' ? 'held' : c.status === 'probation' ? 'on probation' : 'on the standard lead'}
-                  </span>
+                  <span className="text-muted-foreground">{c.status === 'held' ? 'held' : 'on probation'}</span>
                 </span>
                 <span className="text-muted-foreground">{classWords(c)}</span>
               </li>

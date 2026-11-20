@@ -104,7 +104,7 @@ weights are refreshed from a CI log now and then. A screenshot variant is its ow
 
 The run is green only when every job is, which is all `merge-guard` reads. The jobs are one matrix with `fail-fast`, so the
 first red job (`static` is known minutes before the tests end) cancels the rest and the run ends `failure`. A `gh run
-cancel` from a step would end it `cancelled`, which `merge-guard` and `ci_red` skip as superseded and so hide a red head or
+cancel` from a step would end it `cancelled`, which `merge-guard` skips as superseded and so hides a red head or
 master (measured 2026-11-15). `make check` stays the whole gate locally (a change to the test layout, the Makefile or CI
 runs it); to reproduce one CI failure, run that suite alone inside a slot.
 

@@ -4,7 +4,6 @@ import * as z from 'zod'
 import type { CallLoop, CallRow } from '../../domains/loops/calls.ts'
 import type { HygienePassRecord, LoopStore } from '../../domains/loops/ports.ts'
 import type { DigestAnswer } from '@software-factory/contract'
-import { FINDING_KINDS } from '../../domains/loops/selfwatch-model.ts'
 import { THROUGHPUT_KPIS, type FindingRow } from '../../domains/loops/throughput.ts'
 
 const Row = z.object({
@@ -64,7 +63,8 @@ const SelfwatchRowSchema = z.object({
   issue_id: z.string(),
   repo: z.string(),
   key: z.string(),
-  class: z.enum(FINDING_KINDS),
+  // a kind no longer filed is still a row until its subject clears: a string, never the enum
+  class: z.string(),
   figure: z.coerce.number().nullable(),
   first_seen_at: z.date(),
   last_seen_at: z.date(),
@@ -463,14 +463,14 @@ export function postgresLoopStore(tx: SQL): LoopStore {
       await tx`
         INSERT INTO factory.loop_findings (issue_id, loop, repo, class, key, filed_at, signal_id, figure)
         VALUES (${row.issue}, ${row.loop}, ${row.repo}, ${row.class}, ${row.key}, ${row.filedAt}, ${row.signal}, ${row.figure})
-        ON CONFLICT (issue_id) DO NOTHING`
+        ON CONFLICT (issue_id, key) DO NOTHING`
     },
 
     async recordVerdicts(rows, at) {
       for (const row of rows) {
         await tx`
           UPDATE factory.loop_findings SET verdict = ${row.verdict}, measured = ${row.measured}, measured_at = ${at}
-          WHERE issue_id = ${row.issue} AND verdict IS NULL`
+          WHERE issue_id = ${row.issue} AND key = ${row.key} AND verdict IS NULL`
       }
     },
 
@@ -520,7 +520,7 @@ export function postgresLoopStore(tx: SQL): LoopStore {
         INSERT INTO factory.loop_findings
           (issue_id, loop, repo, class, key, filed_at, signal_id, figure, target, direction, unit, cost_minutes, reopens)
         VALUES (${row.issueId}, 'throughput', ${row.project}, ${row.kpi}, ${`${row.kpi}:${row.subject}`}, ${row.filedAt}, ${row.signalId}, ${row.before}, ${row.target}, ${row.direction}, ${row.unit}, ${row.costMinutes}, ${row.reopens})
-        ON CONFLICT (issue_id) DO NOTHING`
+        ON CONFLICT (issue_id, key) DO NOTHING`
     },
 
     async applyThroughputLedger(changes) {
@@ -574,7 +574,7 @@ export function postgresLoopStore(tx: SQL): LoopStore {
           INSERT INTO factory.loop_findings
             (issue_id, loop, repo, class, key, filed_at, signal_id, figure, evidence_hash, first_seen_at, last_seen_at, cleared_at)
           VALUES (${row.issueId}, 'selfwatch', ${row.repo}, ${row.kind}, ${row.subjectKey}, ${row.lastFiledAt}, ${row.signalId}, ${row.figure}, ${row.evidenceHash}, ${row.firstSeenAt}, ${row.lastSeenAt}, NULL)
-          ON CONFLICT (issue_id) DO UPDATE SET
+          ON CONFLICT (issue_id, key) DO UPDATE SET
             first_seen_at = EXCLUDED.first_seen_at, last_seen_at = EXCLUDED.last_seen_at,
             evidence_hash = EXCLUDED.evidence_hash, filed_at = EXCLUDED.filed_at,
             signal_id = EXCLUDED.signal_id, cleared_at = NULL`

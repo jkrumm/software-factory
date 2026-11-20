@@ -1,6 +1,5 @@
-/** The fourteen conditions the self-watch loop looks for; the kind is the first half of a finding's stable key. */
+/** The twelve conditions the self-watch loop looks for; the kind is the first half of a finding's stable key. */
 export const FINDING_KINDS = [
-  'ci_red',
   'migration_clash',
   'wait_overdue',
   'lead_idle',
@@ -13,7 +12,6 @@ export const FINDING_KINDS = [
   'load_over_ceiling',
   'slot_line',
   'gates_passed',
-  'routes_slow',
 ] as const
 export type FindingKind = (typeof FINDING_KINDS)[number]
 
@@ -46,7 +44,8 @@ export interface SelfwatchRow {
   repo: string
   figure: number | null
   subjectKey: string
-  kind: FindingKind
+  /** a kind this build no longer files stays a string, so its row is read and cleared, never a failed parse */
+  kind: string
   firstSeenAt: Date
   lastSeenAt: Date
   evidenceHash: string
@@ -61,17 +60,6 @@ export interface SelfwatchChange {
   touched: string[]
   cleared: string[]
   at: Date
-}
-
-/** One completed workflow run on the watched branch. */
-export interface CiRun {
-  id: string
-  workflow: string
-  sha: string
-  conclusion: string
-  url: string
-  /** ISO */
-  at: string
 }
 
 /** The migration files of a repo: what the default branch holds and what each ref adds to it. */

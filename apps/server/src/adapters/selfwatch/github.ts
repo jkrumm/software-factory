@@ -1,5 +1,5 @@
 import * as z from 'zod'
-import type { CiLedgerRun, CiLedgerRuns, CiLive, CiRuns, CiRunTime, CiTimes } from '../../domains/loops/ports.ts'
+import type { CiLedgerRun, CiLedgerRuns, CiLive, CiRunTime, CiTimes } from '../../domains/loops/ports.ts'
 import { ok } from '../../kernel/result.ts'
 import { githubReader, type GithubReaderOptions } from '../github/reader.ts'
 
@@ -24,57 +24,12 @@ const WorkflowRuns = z.looseObject({
 /** The reader's options: `locate` names the repo's main checkout, inside the allowed roots. */
 export type GithubCiOptions = GithubReaderOptions & Required<Pick<GithubReaderOptions, 'locate'>>
 
-/**
- * The newest completed workflow runs of a branch of the repo's GitHub origin. Reads only; a missing token, an origin
- * that is not github.com, a status other than 200 or a body that does not parse is an error naming it, never a body.
- */
-export function githubCiRuns(options: GithubCiOptions): CiRuns {
-  const { api, read, slugOf } = githubReader(options)
-
-  return {
-    async latest(repo, branch) {
-      const found = await slugOf(repo)
-      if (!found.ok) return found
-      const slug = found.value
-
-      let ref = branch
-      if (!ref) {
-        const info = await read(`${api}/repos/${slug}`, GithubRepo)
-        if (!info.ok) return info
-        ref = info.value.default_branch
-      }
-      const runs = await read(
-        `${api}/repos/${slug}/actions/runs?branch=${encodeURIComponent(ref)}&status=completed&per_page=${RUNS_PAGE_SIZE}`,
-        WorkflowRuns,
-      )
-      if (!runs.ok) return runs
-      return ok({
-        branch: ref,
-        runs: runs.value.workflow_runs.flatMap((run) =>
-          run.conclusion
-            ? [
-                {
-                  id: String(run.id),
-                  workflow: run.name?.trim() || 'workflow',
-                  sha: run.head_sha,
-                  conclusion: run.conclusion,
-                  url: run.html_url,
-                  at: run.created_at,
-                },
-              ]
-            : [],
-        ),
-      })
-    },
-  }
-}
-
 /** A workflow run in one of these statuses is not finished: GitHub's `completed` is the only end. */
 const FINISHED = 'completed'
 
 /**
  * Whether any workflow run of a branch is queued or in progress (the newest page of runs, any status). Reads only; the
- * errors are `githubCiRuns`'s, and a branch with no run is a plain no.
+ * errors are `githubReader`'s, and a branch with no run is a plain no.
  */
 export function githubCiLive(options: GithubCiOptions): CiLive {
   const { api, read, slugOf } = githubReader(options)
@@ -114,7 +69,7 @@ const TimedRuns = z.looseObject({
 /**
  * How long the repo's finished CI runs took since a date: pushes to the default branch and pull request runs, ended
  * green or red (a cancelled or skipped run says nothing about the duration). A run is `flaky` when it ended green on a
- * rerun. Reads only, newest first, at most three pages; errors are `githubCiRuns`'s.
+ * rerun. Reads only, newest first, at most three pages; errors are `githubReader`'s.
  */
 export function githubCiTimes(options: GithubCiOptions): CiTimes {
   const { api, read, slugOf } = githubReader(options)
@@ -178,7 +133,7 @@ const LedgerRuns = z.looseObject({
  * The finished workflow runs of the repo created since a date, newest first, at most three pages (300 runs), for the CI
  * ledger: every conclusion (a cancelled run held its head's pull request waiting too), with when it was queued, started
  * and finished. A rerun is queued at its latest attempt's start, not at the first attempt's creation. Reads only; errors
- * are `githubCiRuns`'s.
+ * are `githubReader`'s.
  */
 export function githubCiLedger(options: GithubCiOptions): CiLedgerRuns {
   const { api, read, slugOf } = githubReader(options)

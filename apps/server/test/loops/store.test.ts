@@ -65,7 +65,7 @@ test('recordPass keeps the newest time of each loop and never moves it backwards
 
 // ---- finding classes ------------------------------------------------------------------------------------------------------
 
-test('recordFinding stores the class once; classIssues reads filed time, closure and outcome', async () => {
+test('recordFinding stores a row per key of an Issue and a repeat of a key once; classIssues reads filed time, closure and outcome, an Issue once per class', async () => {
   const loops = postgresLoopStore(db.sql)
   const reads = loopReads(db.sql)
   const at = (day: number) => new Date(Date.UTC(2026, 9, day))
@@ -121,15 +121,44 @@ test('recordFinding stores the class once; classIssues reads filed time, closure
     figure: null,
   })
 
+  // a repeat of a key is a no-op, another key of the same Issue is a row of its own
+  await loops.recordFinding({
+    issue: 'issue_20',
+    loop: 'hygiene',
+    repo: 'app',
+    class: 'links',
+    key: 'links:a.md',
+    signal: null,
+    filedAt: at(2),
+    figure: 5,
+  })
+  expect((await db.sql`SELECT count(*)::int AS n FROM factory.loop_findings WHERE issue_id = 'issue_20'`)[0]?.n).toBe(2)
+  await loops.recordFinding({
+    issue: 'issue_20',
+    loop: 'hygiene',
+    repo: 'app',
+    class: 'links',
+    key: 'links:c.md',
+    signal: null,
+    filedAt: at(1),
+    figure: null,
+  })
+
+  // two links keys on issue_20 are still one Issue of the class
   expect(await reads.classIssues('hygiene')).toEqual({
     links: [
       { issue: 'issue_20', filedAt: at(1), closedAt: at(5), outcome: 'dropped' },
       { issue: 'issue_21', filedAt: at(1), closedAt: null, outcome: null },
     ],
+    other: [{ issue: 'issue_20', filedAt: at(1), closedAt: at(5), outcome: 'dropped' }],
   })
-  expect(await reads.classIssues('friction')).toEqual({})
+  expect(await reads.classIssues('friction')).toEqual({
+    x: [{ issue: 'issue_21', filedAt: at(1), closedAt: null, outcome: null }],
+  })
   expect((await reads.allClassIssues()).map((g) => [g.loop, g.class, g.issues.length])).toEqual([
+    ['friction', 'x', 1],
     ['hygiene', 'links', 2],
+    ['hygiene', 'other', 1],
   ])
 })
 

@@ -16,7 +16,7 @@ import { processTable, sharedCwds } from './adapters/planning/processes.ts'
 import { processKiller, type reaperProcesses } from './adapters/planning/reaper-processes.ts'
 import { hostSnapshot } from './adapters/planning/snapshot.ts'
 import { prReview } from './adapters/reviews/pr.ts'
-import { githubCiLedger, githubCiLive, githubCiRuns } from './adapters/selfwatch/github.ts'
+import { githubCiLedger, githubCiLive } from './adapters/selfwatch/github.ts'
 import { gitMigrationFiles } from './adapters/selfwatch/git.ts'
 import { hostOverload } from './adapters/selfwatch/overload.ts'
 import { shellCheckRunner } from './adapters/shell/check-runner.ts'
@@ -25,7 +25,6 @@ import type { githubCi } from './adapters/quality/ci.ts'
 import { gitMainCheckouts } from './adapters/quality/main-checkouts.ts'
 import { MakeAndProbes } from './adapters/quality/proof.ts'
 import type { loadEpoch } from './adapters/throughput-epoch.ts'
-import type { routeTimer } from './api/route-timer.ts'
 import { slotAimPass } from './app/capacity-aim.ts'
 import { endRequest, tellCheckBroken } from './app/checkpoints-errands.ts'
 import type { SettleDeps } from './app/checkpoints-settle.ts'
@@ -112,7 +111,6 @@ export interface LoopContext {
   epoch: ReturnType<typeof loadEpoch>
   doctor: ReturnType<typeof createDoctorReader>
   mainCheckoutLines: MainCheckoutLines
-  routes: ReturnType<typeof routeTimer>
   dataDir: string
   startedAt: Date
   reaperProcesses: ReturnType<typeof reaperProcesses>
@@ -302,21 +300,18 @@ export function composeLoops(ctx: LoopContext) {
     selfwatchLoop(wiring('selfwatch'), {
       ...writes,
       repo: SELFWATCH_REPO,
-      branch: loopSettings.selfwatchBranch,
       graceMs: loopSettings.selfwatchGraceMs,
       idleLeadMs: loopSettings.idleLeadMs,
       idleBackgroundMs: loopSettings.idleBackgroundMs,
       slots,
       resume: resumeRules,
       ciLive,
-      ci: githubCiRuns({ locate, ...github }),
       migrations: gitMigrationFiles(repos),
       sharedNumbers: SHARED_NUMBERS,
       processCap: DEFAULT_PROCESS_CAP,
       memoryCeilings: planningEnv.memoryCeilings,
       serverPid: process.pid,
       cores: planningEnv.cores,
-      routes: () => ctx.routes.snapshot(),
       overload: hostOverload({ dataDir: ctx.dataDir }),
       budgets: async (now) => readBudgetFacts(sql, { now, budgets: await projectBudgets(), epoch: ctx.epoch }),
       heartbeat: () => confirmedHeartbeat(ctx.heartbeat, (ms) => Bun.sleep(ms)),

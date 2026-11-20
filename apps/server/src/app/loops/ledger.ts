@@ -22,8 +22,10 @@ export async function settleClosed(
     const rows = await loopReads.closedFindings(input.loop, input.repo)
     const judged = judgeClosed(rows, input.read)
     if (judged.length > 0) await loops.recordVerdicts(judged, input.now)
-    const verdicts = new Map(judged.map((entry) => [entry.issue, entry.verdict]))
-    const newest = newestByKey(rows.map((row) => ({ ...row, verdict: verdicts.get(row.issue) ?? row.verdict })))
+    const verdicts = new Map(judged.map((entry) => [`${entry.issue}\n${entry.key}`, entry.verdict]))
+    const newest = newestByKey(
+      rows.map((row) => ({ ...row, verdict: verdicts.get(`${row.issue}\n${row.key}`) ?? row.verdict })),
+    )
     return ok({ lastTime: (key, now) => lastTime(newest.get(key), now) } satisfies Ledger)
   })
 }

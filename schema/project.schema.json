@@ -474,9 +474,9 @@
         },
         "skip": {
           "default": [],
-          "description": "built-in probes the repo opts out of, each with its reason (advisories, links, retired, project, deps, ci, agentsmd, readme, stale, deadcode, cochange, runrules, browser, context)",
+          "description": "built-in probes the repo opts out of, each with its reason (advisories, links, retired, project, deps, ci, agentsmd, readme, stale, deadcode, runrules, browser, context)",
           "consumer": "the hygiene loop (apps/server/src/app/loops/hygiene.ts)",
-          "maxItems": 14,
+          "maxItems": 13,
           "type": "array",
           "items": {
             "type": "object",
@@ -494,7 +494,6 @@
                   "readme",
                   "stale",
                   "deadcode",
-                  "cochange",
                   "runrules",
                   "browser",
                   "context"

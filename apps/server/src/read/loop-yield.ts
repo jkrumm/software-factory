@@ -33,10 +33,12 @@ function yieldWindow(
   record: YieldRecord,
   window: { days: number; from: Date; to: Date },
 ): LoopYieldWindow {
-  const inWindow = issues.filter((i) => i.filedAt >= window.from && i.filedAt < window.to)
+  const rows = issues.filter((i) => i.filedAt >= window.from && i.filedAt < window.to)
+  // an Issue may carry findings of several classes (a hygiene batch): it counts once in the totals and once in each class
+  const inWindow = [...new Map(rows.map((i) => [i.issue, i])).values()]
   const closes = inWindow.flatMap((i) => (i.closedAt ? [(i.closedAt.getTime() - i.filedAt.getTime()) / 1000] : []))
   const classes = new Map<string, { issues: number; noise: number }>()
-  for (const i of inWindow) {
+  for (const i of rows) {
     const row = classes.get(i.class) ?? { issues: 0, noise: 0 }
     row.issues += 1
     if (i.outcome === 'dropped' || i.outcome === 'cancelled') row.noise += 1
@@ -86,7 +88,7 @@ export async function readLoopYield(sql: SQL, options: { now: Date }): Promise<L
   const { now } = options
   const widest = windowOf(now, Math.max(...YIELD_DAYS))
   const rows: unknown[] = await sql`
-    SELECT lf.loop, lf.class, i.id AS issue, f.at AS filed_at, i.outcome, lf.verdict,
+    SELECT DISTINCT ON (lf.loop, lf.class, i.id) lf.loop, lf.class, i.id AS issue, f.at AS filed_at, i.outcome, lf.verdict,
       (SELECT c.at FROM factory.issue_events c WHERE c.issue_id = i.id AND c.result = 'applied' AND c.to_state = 'closed'
         ORDER BY c.version DESC LIMIT 1) AS closed_at
     FROM factory.loop_findings lf

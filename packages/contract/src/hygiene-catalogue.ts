@@ -68,7 +68,7 @@ export const HYGIENE_CATALOGUE = [
   {
     name: 'check',
     summary:
-      "`make check` on the default branch in a throwaway checkout; red is one finding with the tail of the output, confirmed in the project's own checkout when that is clean at the same commit.",
+      "`make check` on the default branch in a throwaway checkout, inside a test slot; red is one finding with the tail of the output, confirmed in the project's own checkout when that is clean at the same commit. A project whose `signals.github.checks` is on has its red default branch filed by the intake and skips this probe, so the one fact has one detector.",
     enabled: 'on',
     detect: null,
     cost: 'make',
@@ -200,17 +200,6 @@ export const HYGIENE_CATALOGUE = [
     silence: SKIP,
   },
   {
-    name: 'cochange',
-    summary:
-      'Two files that moved together in nearly every one of the last 300 commits: a coupling worth a shared module or a note.',
-    enabled: 'on',
-    detect: null,
-    cost: 'file',
-    cadence: 'weekly',
-    skippable: true,
-    silence: SKIP,
-  },
-  {
     name: 'runrules',
     summary:
       "The owner's rules for what runs on the Mac mini (restart policy, memory limit, port binding, healthcheck, registered jobs), read from the files before a change reaches the host.",
@@ -264,7 +253,7 @@ export const HYGIENE_CATALOGUE = [
     cadence: 'weekly',
     idle: 'monthly',
     skippable: false,
-    silence: 'Not switchable: it takes at most two signals of a pass and a held class stops it.',
+    silence: 'Not switchable: it takes at most two sections of a pass and a held class stops it.',
   },
 ] as const satisfies readonly HygieneCatalogueEntry[]
 

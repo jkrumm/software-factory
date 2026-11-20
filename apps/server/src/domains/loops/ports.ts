@@ -14,7 +14,6 @@ import type { FindingIssue, LifecycleAction } from './hygiene-lifecycle.ts'
 import type { FixEntry, SweepReport } from './hygiene-model.ts'
 import type {
   CapacityMinute,
-  CiRun,
   HostMinute,
   MigrationSnapshot,
   ProcessMinute,
@@ -417,11 +416,6 @@ export interface OverloadHost {
   processes(): Promise<Result<string, PortError>>
   /** the last `count` lines of `deploys.log`; none when it cannot be read */
   deployLines(count: number): Promise<string[]>
-}
-
-/** The newest completed workflow runs of a repo's branch (called outside any transaction). `branch` null is the repo's default branch. */
-export interface CiRuns {
-  latest(repo: string, branch: string | null): Promise<Result<{ branch: string; runs: CiRun[] }, PortError>>
 }
 
 /** One finished CI run: how long it took, where it ran, how it ended and whether it passed only on a rerun. */

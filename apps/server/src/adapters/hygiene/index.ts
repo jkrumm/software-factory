@@ -22,7 +22,6 @@ import { agentsmdProbe } from './probes/agentsmd.ts'
 import { browserProbe } from './probes/browser.ts'
 import { checkProbe } from './probes/check.ts'
 import { ciProbe } from './probes/ci.ts'
-import { cochangeProbe } from './probes/cochange.ts'
 import { contextProbe } from './probes/context.ts'
 import { deadcodeProbe } from './probes/deadcode.ts'
 import { declaredProbe } from './probes/declared.ts'
@@ -108,7 +107,6 @@ export function createHygieneChecker(options: HygieneCheckerOptions): HygieneChe
       agentsmd: () => agentsmdProbe(tools, path),
       readme: () => readmeProbe(tools, path),
       stale: () => staleProbe(tools, path),
-      cochange: () => cochangeProbe(tools, path),
       runrules: () => runrulesProbe(tools, path),
       browser: () => browserProbe(tools, path),
       context: () => contextProbe(tools, path),
@@ -159,7 +157,7 @@ export function createHygieneChecker(options: HygieneCheckerOptions): HygieneChe
       outcomes.set(
         'check',
         options.skipCheck !== undefined
-          ? skipped(`make check not run, this host cannot run the project's check: ${options.skipCheck}`)
+          ? skipped(`make check not run: ${options.skipCheck}`)
           : installFailure !== undefined
             ? failed(`not run: ${installFailure}`)
             : (deps?.outcome === 'failed' || deps?.unjudged?.includes('deps')) && deps.detail.startsWith('bun install')

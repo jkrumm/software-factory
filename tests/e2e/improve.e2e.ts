@@ -278,11 +278,10 @@ test('held finding classes read what the API says: a line when none is held, els
       status: string
       decided: number
       noise: number
-      seat: { out: boolean } | null
     }[]
   }>(apiUrl, '/v1/finding-classes')
   await page.goto('/improve')
-  const quiet = model.classes.filter((c) => c.status !== 'open' || c.seat?.out === true)
+  const quiet = model.classes.filter((c) => c.status !== 'open')
   if (quiet.length === 0) {
     await expect(page.getByText('No finding class is held.', { exact: true })).toBeVisible()
     return

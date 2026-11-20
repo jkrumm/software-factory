@@ -10,8 +10,6 @@ import {
   cpuAccountingLine,
   parsePs,
   priorityLine,
-  ROUTE_MIN_SAMPLES,
-  routesSlowFindings,
   SLOT_EMPTY_MINUTES,
   SLOT_WAIT_MINUTES,
   SLOT_WAITERS,
@@ -246,32 +244,6 @@ test('gates_passed: the memory rule is its own fact of the one signal, and it cl
   expect(gatesPassedFindings([], [admit(1)], RULES, NOW)).toEqual([])
 })
 
-// ---- routes_slow ------------------------------------------------------------------------------------------------------------
-
-test('routes_slow: a p95 over two seconds with enough requests fires, a quiet or fast server clears it', () => {
-  const window = 300_000
-  const found = routesSlowFindings({ p95Ms: 2500, samples: 40, windowMs: window }, NOW)
-  expect(found).toHaveLength(1)
-  expect(found[0]?.subject).toBe('routes')
-  expect(found[0]?.context[0]).toContain('p95 2500 ms over 40 requests')
-  expect(routesSlowFindings({ p95Ms: 2000, samples: 40, windowMs: window }, NOW)).toEqual([])
-  expect(routesSlowFindings({ p95Ms: 900, samples: 400, windowMs: window }, NOW)).toEqual([])
-  // a few answers after a restart are not a p95: below 20 the nearest-rank p95 is the one slowest answer
-  expect(ROUTE_MIN_SAMPLES).toBe(20)
-  expect(routesSlowFindings({ p95Ms: 9000, samples: ROUTE_MIN_SAMPLES - 1, windowMs: window }, NOW)).toEqual([])
-  // the slowest routes are named in the finding
-  const named = routesSlowFindings(
-    { p95Ms: 2500, samples: 40, windowMs: window, slowest: [{ route: 'GET /v1/issues', ms: 4100.4 }] },
-    NOW,
-  )[0] as Finding
-  expect(named.context).toContain('Slowest: GET /v1/issues 4100 ms')
-  expect(routesSlowFindings({ p95Ms: null, samples: 0, windowMs: window }, NOW)).toEqual([])
-  // the figure moves, the evidence does not: one signal until it clears
-  const a = routesSlowFindings({ p95Ms: 2500, samples: 40, windowMs: window }, NOW)[0] as Finding
-  const b = routesSlowFindings({ p95Ms: 31_000, samples: 90, windowMs: window }, NOW)[0] as Finding
-  expect(evidenceHash(a)).toBe(evidenceHash(b))
-})
-
 // ---- the evidence block ----------------------------------------------------------------------------------------------------
 
 const PS = [
@@ -416,7 +388,7 @@ test('a signal carries the evidence block after the eight lines, which never mov
   expect(text.indexOf('Reproduce:')).toBeLessThan(text.indexOf('Evidence at the time of filing:'))
   expect(signalText(finding, 'software-factory')).not.toContain('Evidence at the time')
   expect(OVERLOAD_KINDS.has(finding.kind)).toBe(true)
-  expect(OVERLOAD_KINDS.has('ci_red')).toBe(false)
+  expect([...OVERLOAD_KINDS].sort()).toEqual(['gates_passed', 'load_over_ceiling', 'slot_line'])
 })
 
 test('overloadEvidence: a credential in a command line or a log line never reaches the signal text', () => {

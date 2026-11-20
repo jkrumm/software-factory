@@ -41,8 +41,6 @@ import { PROJECT_SCHEMA } from '../app/project-schema.ts'
 import { registerVisit, type VisitStore } from '../app/visit.ts'
 import type { CiTimes } from '../domains/loops/ports.ts'
 import { findingClasses } from '../app/loops/finding-classes.ts'
-import { readClassSeats } from '../read/finding-seats.ts'
-import { readTripwire } from '../read/kpis-seats.ts'
 import { type CapacityConstants, readCapacityLoop } from '../read/capacity-loop.ts'
 import { readChain } from '../read/chain.ts'
 import { readProjectDigests } from '../read/digests.ts'
@@ -575,13 +573,7 @@ export const readModelRoutes = (deps: ReadModelDeps | undefined, caller: (reques
       async () => {
         if (!deps) return unavailable
         const at = now()
-        const bound =
-          (await readTripwire(deps.sql, { now: at, cost: (issues) => costOfIssues(deps.sql, issues) })).bound
-            ?.classShare ?? null
-        const byClass = await readClassSeats(deps.sql, bound)
-        return Response.json(
-          FindingClassesModel.parse(await findingClasses(loopReads(deps.sql), at, { bound, byClass })),
-        )
+        return Response.json(FindingClassesModel.parse(await findingClasses(loopReads(deps.sql), at)))
       },
       {
         response: { 200: FindingClassesModel, ...errorResponses(503) },
