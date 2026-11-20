@@ -188,6 +188,24 @@ test('gates_passed: the load rule is the tripwire: a lead admitted under a short
   expect(gatesPassedFindings(gap, [admit(2)], RULES, NOW)).toHaveLength(1)
 })
 
+test('gates_passed: the reading admission recorded decides, a live reading under the ceiling clears a tripped tripwire (issue 2626)', () => {
+  // five samples over the ceiling in a row, and 49.2 in the sample after: by the samples alone the rule refused
+  const sustained = loads([10, 50, 50, 50, 50, 50, 49.2, 49.2], 36)
+  expect(gatesPassedFindings(sustained, [admit(2)], RULES, NOW)).toHaveLength(1)
+  // admission read 35.1 live (the sample before was 36.1) and cleared the trip, as designed: the load of the next minute is not its reading
+  expect(gatesPassedFindings(sustained, [{ ...admit(2), load: 35.1 }], RULES, NOW)).toEqual([])
+  // admission read the load over the ceiling and let the lead in: a passed gate
+  const read = gatesPassedFindings(sustained, [{ ...admit(2), load: 49 }], RULES, NOW)
+  expect(read).toHaveLength(1)
+  expect(read[0]?.context.join('\n')).toContain('load 49.0 at admission')
+  // no reading recorded (null): the sample after stands in
+  expect(gatesPassedFindings(sustained, [{ ...admit(2), load: null }], RULES, NOW)).toHaveLength(1)
+  // the tripwire not tripped (a short peak): the rule admits whatever the reading
+  expect(
+    gatesPassedFindings(loads([10, 10, 10, 10, 10, 51.6, 51.6, 51.6], 36), [{ ...admit(2), load: 51 }], RULES, NOW),
+  ).toEqual([])
+})
+
 test('gates_passed: the memory rule is its own fact of the one signal, and it clears when the window passes', () => {
   const swap = [
     minute({ at: ago(2), swapUsedPct: 80, leads: 2 }),

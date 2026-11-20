@@ -106,7 +106,7 @@ const CapacityMinuteRow = z.object({
   pressure_level: z.number().int().nullable(),
 })
 
-const AdmissionRow = z.object({ at: z.date(), issue_id: z.string() })
+const AdmissionRow = z.object({ at: z.date(), issue_id: z.string(), load: z.coerce.number().nullable() })
 
 const SlotMinuteRow = z.object({
   at: z.date(),
@@ -477,10 +477,10 @@ export function loopReads(tx: SQL): LoopReads {
 
     async admissions(since) {
       const rows: unknown[] = await tx`
-        SELECT at, issue_id FROM factory.issue_events WHERE kind = 'admitted' AND result = 'applied' AND at >= ${since} ORDER BY at`
+        SELECT at, issue_id, payload->>'load' AS load FROM factory.issue_events WHERE kind = 'admitted' AND result = 'applied' AND at >= ${since} ORDER BY at`
       return rows.map((raw) => {
         const row = AdmissionRow.parse(raw)
-        return { at: row.at, issue: row.issue_id }
+        return { at: row.at, issue: row.issue_id, load: row.load }
       })
     },
 

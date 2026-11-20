@@ -390,7 +390,7 @@ export interface LoopReads {
   /** the host's minute samples with their capacity facts since `since`, oldest first (self-watch: load, gates passed) */
   capacityMinutes(since: Date): Promise<CapacityMinute[]>
   /** the leads admitted since `since` (an Issue's applied `admitted` events), oldest first (self-watch: gates passed) */
-  admissions(since: Date): Promise<{ at: Date; issue: string }[]>
+  admissions(since: Date): Promise<{ at: Date; issue: string; load: number | null }[]>
   /** the test slots' minutes since `since`, oldest first (self-watch: the slot line) */
   slotMinutes(since: Date): Promise<SlotMinute[]>
   /** the queued Issues by the reason they stay queued, from the open queue intervals (the incident's evidence) */
