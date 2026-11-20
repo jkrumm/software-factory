@@ -88,6 +88,18 @@ async function errandsReached(sql: SQL, w: Window) {
 }
 
 /**
+ * Errands and requests a rule refused at the raise in the window (`errand_refusals`: nothing else of them is stored), and
+ * those raised (the rows of `errands`): the share the rules turn away before the owner or an Issue waits on it.
+ */
+async function errandRaises(sql: SQL, w: Window) {
+  const [row] = await sql`
+    SELECT
+      (SELECT count(*) FROM factory.errand_refusals WHERE at >= ${w.from} AND at < ${w.to}) AS refused,
+      (SELECT count(*) FROM factory.errands WHERE raised_at >= ${w.from} AND raised_at < ${w.to}) AS raised`
+  return z.object({ refused: z.coerce.number().int(), raised: z.coerce.number().int() }).parse(row)
+}
+
+/**
  * The Errands that reached the owner in the window or that his MacBook ran by itself in it, and how many of those ran by
  * themselves. An `ask-human` request is pushed at once and can close before the screen has reached it, so the run is counted
  * by its close and not only by a reach.
@@ -564,7 +576,7 @@ async function kpisOf(
       count: reached.n,
       measured: true,
       definition:
-        "Errands, an Issue's and a request's, that the screen let through to the owner in the window (the rules of their shape, the fixed MacBook verbs and the screen model keep the rest away from him), per 100 Issues filed in the window. The parts are the share of those that needs a secret (1Password, a biometric, a password), hands (a device, a portal, a physical step), a place on his MacBook or only his yes on the mini. Beside it: the share that needed neither a secret nor hands, the share his MacBook ran by itself, and the share of raised Errands the screen turned away.",
+        "Errands, an Issue's and a request's, that the screen let through to the owner in the window (the rules of their shape, the fixed MacBook verbs and the screen model keep the rest away from him), per 100 Issues filed in the window. The parts are the share of those that needs a secret (1Password, a biometric, a password), hands (a device, a portal, a physical step), a place on his MacBook or only his yes on the mini. Beside it: the share that needed neither a secret nor hands, the share his MacBook ran by itself, the share of raised Errands the screen turned away, and the share of Errands and requests a rule refused when they were raised.",
       parts: side?.errandParts ?? [],
       beside: side?.errandBeside ?? [],
     }),
@@ -638,6 +650,7 @@ async function detailOf(
   const specs = await one(sql`
     SELECT count(*) AS n FROM factory.artifacts WHERE kind = 'spec' AND created_at >= ${w.from} AND created_at < ${w.to}`)
   const autoRun = await errandsAutoRun(sql, w)
+  const raises = await errandRaises(sql, w)
   const usage = options.usage
     ? await usageOf(sql, w, {
         now: options.now,
@@ -726,6 +739,12 @@ async function detailOf(
         'share',
       ),
       ...partOf('errands_auto_run_share', 'Run by his MacBook by itself', shareOf(autoRun.auto, autoRun.n), 'share'),
+      ...partOf(
+        'errands_refused_by_rule_share',
+        'Refused by a rule when raised, of those asked for',
+        shareOf(raises.refused, raises.refused + raises.raised),
+        'share',
+      ),
       ...flow.errandsBeside,
     ],
     quotaBeside: [

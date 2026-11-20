@@ -167,6 +167,9 @@ describe('what an Errand needs, by its shape', () => {
       needByRule({ summary: 'Install the app', detail: null, command: 'brew install --cask x', host: 'macbook' }),
     ).toBe('place')
     expect(needByRule({ summary: 'Something', detail: null, command: null, host: null })).toBeNull()
+    // the words that only keep an Errand from the rule screen decide no need
+    for (const summary of ['Approve it', 'Press OK', 'Answer the dialog', 'Watch the deploy'])
+      expect(needByRule({ summary, detail: null, command: 'make deploy', host: 'macbook' })).toBe('place')
     expect(needOf({ summary: 'Something', detail: null, command: null, host: null })).toBe('hands')
     // the model may say secret or hands; it never makes an approval, and a place needs a command
     expect(needOf({ summary: 'Something', detail: null, command: null, host: null }, 'approval')).toBe('hands')

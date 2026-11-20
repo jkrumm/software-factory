@@ -445,6 +445,8 @@ export interface CheckpointStore {
   staleReviews(input: { before: Date; limit: number }): Promise<ReviewWait[]>
   /** false when the checkpoint has a recheck at that version already */
   insertRecheck(recheck: Recheck): Promise<boolean>
+  /** an Errand a rule refused when it was raised or requested: only counted (the part `errands_refused_by_rule_share` of the Errand KPI) */
+  insertErrandRefusal(refusal: { at: Date; rule: string; source: string | null }): Promise<void>
 
   /** false when the page's key is stored already */
   planPage(page: Page, at: Date): Promise<boolean>

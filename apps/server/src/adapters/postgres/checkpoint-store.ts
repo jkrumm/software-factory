@@ -1190,6 +1190,11 @@ export function postgresCheckpointStore(tx: SQL): CheckpointStore {
       })
     },
 
+    async insertErrandRefusal(refusal) {
+      await tx`
+        INSERT INTO factory.errand_refusals (at, rule, source) VALUES (${refusal.at}, ${refusal.rule}, ${refusal.source})`
+    },
+
     async insertRecheck(recheck) {
       const rows: unknown[] = await tx`
         INSERT INTO factory.checkpoint_rechecks
