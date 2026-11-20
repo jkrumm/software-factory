@@ -659,7 +659,7 @@ every such open Errand. Exit 0 goes through the owner's done (`finishErrand`: th
 any other answer (1 refused or a target failed, 126 the MacBook's gate predates the verb, 255 unreachable) changes nothing: it
 stays on Needs you with its command and the loop names the exit. It records no failed run, so a dirty MacBook tree never retires
 the Errand. Any other place command is the owner's.
-**Auto-run** (dotfiles Issue 2393, this repo's Issue 2388). `ask-human.sh push` sends a command to the MacBook gate's `auto-run` verb before it opens a dialog: a command that is byte-equal to a catalogue class the owner granted once (a local consent file the mini cannot write) runs with no click, with the screen unlocked where the class needs the 1Password prompt; 77 (no class, not granted, kill switch) falls back to the dialog, 75 (locked screen, biometric class) leaves the request pending for the next pass. The factory server does not know the classes: the run comes back as the orchestrator's done with the evidence `ask-human: auto-run class <class>, ...` (`kernel/auto-run.ts`, the one contract between the repos), stored as `closed_by orchestrator` with the note prefix `confirmed by ask-human: auto-run class `. From that the lead hears "ran by itself on the owner's MacBook (auto-run class X), with no dialog and no owner" (`finishErrand`), the KPI `errands_auto_run_share` counts it (of the Errands that reached the owner in the window, plus those that ran by themselves before the screen reached them: a request is pushed at once and can close first), and a request so closed is in the since read's "Errands closed without you" band. Not built: a Needs-you label for what an Errand waits on; any Errand still open is one the gate declined, and the owner's consent (`consent grant|revoke|list|off|on` of the MacBook's `human-queue.sh`) is MacBook-side only.
+**Auto-run** (dotfiles Issue 2393, this repo's Issue 2388). `ask-human.sh push` sends a command to the MacBook gate's `auto-run` verb before it opens a dialog: a command that is byte-equal to a catalogue class the owner granted once (a local consent file the mini cannot write) runs with no click, with the screen unlocked where the class needs the 1Password prompt; 77 (no class, not granted, kill switch) falls back to the dialog, 75 (locked screen, biometric class) leaves the request pending for the next pass. The factory server does not know the classes: the run comes back as the orchestrator's done with the evidence `ask-human: auto-run class <class>, ...` (`kernel/auto-run.ts`, the one contract between the repos), stored as `closed_by orchestrator` with the note prefix `confirmed by ask-human: auto-run class `. From that the lead hears "ran by itself on the owner's MacBook (auto-run class X), with no dialog and no owner" (`finishErrand`), the figure `errands_auto_run_share` beside the KPI `errands_reached_per_100` counts it (of the Errands that reached the owner in the window, plus those that ran by themselves before the screen reached them: a request is pushed at once and can close first), and a request so closed is in the since read's "Errands closed without you" band. Not built: a Needs-you label for what an Errand waits on; any Errand still open is one the gate declined, and the owner's consent (`consent grant|revoke|list|off|on` of the MacBook's `human-queue.sh`) is MacBook-side only.
 **Approve** (`POST /v1/errands/:id/approve`, `factory errand approve <id>`, the Console's button; owner only, the orchestrator is
 refused). On an `approval` Errand that reached him, the server runs the command on the mini (`app/checkpoints-approve.ts`:
 `ssh <alias> '<x>'` is run as `<x>` here, the server's secrets left out, a 30-minute hang guard), answers at once, and records what it
@@ -770,7 +770,7 @@ brief test pins the wording). Three parts:
 - *Taste.* The owner's verdict notes and annotations are the one signal of what he likes. `factory retro` carries them as
   `taste` (`read/retro-taste.ts`: his own verdicts with a note or a `with_notes`/`changes`, never the factory's defaults, and
   his annotations, each with artifact, repo and Issue; words dropped for the read token), and `verdict_changes_share` (his
-  `with_notes` and `changes` over all his verdicts of the window, lower is better) is a KPI. Part 2d of the retro text
+  `with_notes` and `changes` over all his verdicts of the window, lower is better) stands beside the KPI `specs_not_needed`. Part 2d of the retro text
   (`domains/loops/retro.ts`) groups them into recurring preferences and files a signal per preference seen twice or more, to
   write it into the repo's `AGENTS.md`, `apps/console/DESIGN.md` or the lead brief, with that KPI as the marker.
 
@@ -785,7 +785,7 @@ Issue is settling or queued) records only its note (`giveVerdict`, `noted`), sin
 then admitted and the lead's brief has a Checkpoint section naming the artifact and its verdict instead of the order to
 submit one. The ship gate counts it like any Spec. A lead that finds it wrong revises it (`artifact revise`).
 
-Improve counts `specs_per_100` and `owner_decisions_per_100` (trend only), so a silent path shows as two near-zero lines.
+`specs_per_100` beside `specs_not_needed` and `owner_decisions_per_100` beside `avoidable_touches` (figures, no target) show a silent path as two near-zero numbers.
 
 ## Loops and agw
 
