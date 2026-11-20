@@ -210,7 +210,7 @@ export function signalText(pattern: Pattern, facts: PassFacts, refs: readonly st
       : `Evidence (the most recent Issues, up to ${MAX_EVIDENCE}): ${refs.slice(0, MAX_EVIDENCE).join(', ')}`
   return [
     `Pattern: ${pattern.label} (${pattern.key})`,
-    `Window: ${facts.from} to ${facts.to} (${facts.days} days${facts.since ? `, cut at the import ${facts.since}` : ''})`,
+    `Window: ${facts.from} to ${facts.to} (${facts.days} days${facts.since ? `, cut at the counting epoch ${facts.since}` : ''})`,
     `Count: ${pattern.count} (${rate(pattern)}); Issues filed in the window: ${facts.issues}, closed: ${facts.closed}`,
     `Threshold: ${thresholdOf(pattern)}. ${pattern.why}.`,
     evidence,

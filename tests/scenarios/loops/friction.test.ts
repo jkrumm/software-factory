@@ -1,4 +1,7 @@
 import { afterAll, beforeAll, expect, test } from 'bun:test'
+import { mkdtempSync, writeFileSync } from 'node:fs'
+import { tmpdir } from 'node:os'
+import { join } from 'node:path'
 import { fileIssue } from '../flow.ts'
 import { RETRO_TITLE } from '../../../apps/server/src/domains/loops/retro.ts'
 import { type Lab, startLab } from '../planning/lab.ts'
@@ -8,8 +11,8 @@ import { runLoop } from './support.ts'
  * The friction loop against the real server and Postgres: the counts are seeded with SQL, and every pass is driven through
  * `factory loop run friction` (the intervals are off). No agw is involved; the signals go through intake's rules.
  *
- * The seeded history has two halves. What was recorded a day ago is the old core's, imported (the import marker sits twelve
- * hours ago); what was recorded an hour ago is the new core's own. Only the second half may count.
+ * The seeded history has two halves. What was recorded a day ago is before the counting epoch (which sits twelve hours
+ * ago); what was recorded an hour ago is after it. Only the second half may count.
  */
 let lab: Lab
 let seeded = 0
@@ -18,8 +21,11 @@ const OLD = '1 day'
 const NEW = '1 hour'
 
 beforeAll(async () => {
+  const epochFile = join(mkdtempSync(join(tmpdir(), 'friction-epoch-')), 'throughput.json')
+  writeFileSync(epochFile, JSON.stringify({ epoch: new Date(Date.now() - 12 * 3_600_000).toISOString() }))
   lab = await startLab({
     leads: true,
+    env: { FACTORY_THROUGHPUT_FILE: epochFile },
     repos: {
       app: { project: 'apiVersion: factory/v2\nname: app\nleads: 8\n' },
       'software-factory': { project: 'apiVersion: factory/v2\nname: software-factory\nleads: 2\n' },
@@ -121,9 +127,7 @@ let issue: string
 
 test('the first pass counts only the new core, files each pattern over its rate and none under it, with the evidence', async () => {
   issue = await fileIssue(lab, { repo: 'app', title: 'a change that was refused' })
-  // the old core's history, imported: a day ago, before the marker. Every pattern here is far over any threshold.
-  await sql()`INSERT INTO factory.import_issues (issue_id, legacy_id, imported_at, last_event, carried_version)
-    VALUES (${issue}, 1, now() - interval '12 hours', 1, 1)`
+  // history from before the epoch: a day ago. Every pattern here is far over any threshold.
   await close(issue, 30, OLD)
   await refuse(issue, 'noted', 'an old reason', 20, OLD)
   await regress(issue, OLD)
@@ -153,7 +157,7 @@ test('the first pass counts only the new core, files each pattern over its rate 
   expect(refusal.text).toContain('Count: 5 (0.13 per Issue closed)')
   expect(refusal.text).toContain('closed: 40')
   expect(refusal.text).toContain('Threshold: 3 in the window and 0.05 per Issue closed (judged from 10 closed)')
-  expect(refusal.text).toContain('cut at the import')
+  expect(refusal.text).toContain('cut at the counting epoch')
   expect(refusal.text).toContain(`Evidence (the most recent Issues, up to 5): ${issue}`)
   expect(refusal.text).toContain('factory read friction --days 7')
   // nothing of the old core got through

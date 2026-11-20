@@ -23,10 +23,10 @@ const issueIds = async (rows: Promise<unknown[]>): Promise<string[]> =>
  */
 export async function readFrictionEvidence(
   sql: SQL,
-  options: { now: Date; days: number },
+  options: { now: Date; days: number; epoch?: Date | null },
   keys: readonly string[],
 ): Promise<Record<string, string[]>> {
-  const { w } = await frictionWindow(sql, options)
+  const { w } = frictionWindow(options)
   const out: Record<string, string[]> = {}
   for (const key of keys) {
     const refs = await refsOf(sql, w, key)
