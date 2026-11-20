@@ -13,6 +13,7 @@ Admission is the pure function that answers, for one Issue the chain lets throug
 
 ![Admission as a data flow: the chain, the host and test line, and the repo and accounts feed checkAdmission, whose first refusal becomes a queue reason and whose clear answer starts a lead.](./diagrams/admission-dataflow.svg)
 
+<!-- snippet: apps/server/src/domains/capacity/admission.ts REFUSALS -->
 ```ts
 export const REFUSALS = [
   'drain',
@@ -20,6 +21,7 @@ export const REFUSALS = [
   'boot',
   'load',
   'memory',
+  'disk',
   'tests',
   'lane',
   'claim',
@@ -30,14 +32,14 @@ export const REFUSALS = [
 
 **Example files:**
 
-- [`admission.ts` L25-L36](https://github.com/jkrumm/software-factory/blob/2511836af2e3c6f09eb0f76ded4d5e49b47003ab/apps/server/src/domains/capacity/admission.ts#L25-L36): the refusals in the order they are looked at.
-- [`admission.ts` L141-L189](https://github.com/jkrumm/software-factory/blob/2511836af2e3c6f09eb0f76ded4d5e49b47003ab/apps/server/src/domains/capacity/admission.ts#L141-L189): `checkAdmission`, one `if` per refusal, then the account pick.
+- [`admission.ts` L26-L38](https://github.com/jkrumm/software-factory/blob/master/apps/server/src/domains/capacity/admission.ts#L26-L38): the refusals in the order they are looked at.
+- [`admission.ts` L154-L206](https://github.com/jkrumm/software-factory/blob/master/apps/server/src/domains/capacity/admission.ts#L154-L206): `checkAdmission`, one `if` per refusal, then the account pick.
 
 ## Queue reasons
 
 A queue reason is the one plain sentence that says why a Ready Issue has no lead yet, with the numbers of the reading that refused it.
 
-Two groups share the field. The chain answers first with `chain`, `line`, `finalizing`, `spec` and `unknown_project`: the Issue is Held, whatever the host has free. The ten refusals above are the second group: the Issue is Ready and capacity alone keeps it out.
+Two groups share the field. The chain answers first with `chain`, `line`, `finalizing`, `spec` and `unknown_project`: the Issue is Held, whatever the host has free. The eleven refusals above are the second group: the Issue is Ready and capacity alone keeps it out.
 
 | Kind | The sentence says |
 |-|-|
@@ -46,6 +48,7 @@ Two groups share the field. The chain answers first with `chain`, `line`, `final
 | `boot` | the host booted recently and has not yet been calm for five minutes |
 | `load` | load over the ceiling in each of the last 5 minutes, or too many processes |
 | `memory` | swapouts or swap over their ceilings, the repo's learned lead cannot fit the free memory at all, or as many leads run as the lead aim allows at the host's pressure now |
+| `disk` | a worktree of the repo, with its build output, does not fit the free disk beside the leads still growing, and a lead already runs |
 | `tests` | more steps wait for a test slot than run, for longer than a step takes |
 | `lane` | the repo's cap on a resource class is full |
 | `claim` | the repo runs `leads` leads already |
@@ -54,6 +57,7 @@ Two groups share the field. The chain answers first with `chain`, `line`, `final
 
 Each sentence names the figures it compared where there are any. The `tests` sentence is built from two measured sides, the line now and the median step of the last day:
 
+<!-- snippet: apps/server/src/domains/capacity/admission.ts lineRefusal -->
 ```ts
   return (
     `the test line is long: ${line.waiters} steps wait for a slot beside ${line.holders} running, half of them for over ` +
@@ -63,8 +67,8 @@ Each sentence names the figures it compared where there are any. The `tests` sen
 
 **Example files:**
 
-- [`admission.ts` L216-L222](https://github.com/jkrumm/software-factory/blob/2511836af2e3c6f09eb0f76ded4d5e49b47003ab/apps/server/src/domains/capacity/admission.ts#L216-L222): `lineRefusal`, the `tests` reason.
-- [`queue-state.ts`](https://github.com/jkrumm/software-factory/blob/2511836af2e3c6f09eb0f76ded4d5e49b47003ab/apps/server/src/domains/capacity/queue-state.ts): the three queue states, `run`, `pace` and `drain`.
+- [`admission.ts` L233-L239](https://github.com/jkrumm/software-factory/blob/master/apps/server/src/domains/capacity/admission.ts#L233-L239): `lineRefusal`, the `tests` reason.
+- [`queue-state.ts`](https://github.com/jkrumm/software-factory/blob/master/apps/server/src/domains/capacity/queue-state.ts): the three queue states, `run`, `pace` and `drain`.
 
 ## Host
 
@@ -73,6 +77,7 @@ The host is the machine the leads run on, read once a minute: swapouts, swap in 
 - **Memory is two numbers.** `memory_pressure` and the free-page share mislead (65 % free with swap nearly full). Admission reads the swapout rate over 300 seconds (ceiling 2048 MiB) and swap in use as a share of RAM (ceiling 75 %). The reserved memory of a heavy lane counts as swap already in use.
 - **Load is a tripwire.** The ceiling is 3 per core. A lead is refused only when the load is over the ceiling now and was over it in each of the last five minute samples. On 2026-11-14 to 16, against a ceiling of 36 on 12 cores, the load went over it for one minute 174 times, for two minutes 27 times, for five minutes never.
 
+<!-- snippet: apps/server/src/domains/capacity/host.ts SUSTAINED_LOAD_SAMPLES -->
 ```ts
 export const SUSTAINED_LOAD_SAMPLES = 5
 ```
@@ -96,9 +101,9 @@ A load of 61.6 against a ceiling of 36 refuses nothing by itself. A reading back
 
 **Example files:**
 
-- [`host.ts` L41-L60](https://github.com/jkrumm/software-factory/blob/2511836af2e3c6f09eb0f76ded4d5e49b47003ab/apps/server/src/domains/capacity/host.ts#L41-L60): `overMemory` and the measured basis of the tripwire.
-- [`host.ts` L72-L86](https://github.com/jkrumm/software-factory/blob/2511836af2e3c6f09eb0f76ded4d5e49b47003ab/apps/server/src/domains/capacity/host.ts#L72-L86): `loadTrip`.
-- [`host.ts` L92-L98](https://github.com/jkrumm/software-factory/blob/2511836af2e3c6f09eb0f76ded4d5e49b47003ab/apps/server/src/domains/capacity/host.ts#L92-L98): the per-core ceiling and the process cap.
+- [`host.ts` L41-L60](https://github.com/jkrumm/software-factory/blob/master/apps/server/src/domains/capacity/host.ts#L41-L60): `overMemory` and the measured basis of the tripwire.
+- [`host.ts` L72-L86](https://github.com/jkrumm/software-factory/blob/master/apps/server/src/domains/capacity/host.ts#L72-L86): `loadTrip`.
+- [`host.ts` L92-L98](https://github.com/jkrumm/software-factory/blob/master/apps/server/src/domains/capacity/host.ts#L92-L98): the per-core ceiling and the process cap.
 
 ## Seats and accounts
 
@@ -121,9 +126,8 @@ The same reading, accounts only (account names changed):
 
 **Example files:**
 
-- [`accounts.ts` L125-L168](https://github.com/jkrumm/software-factory/blob/2511836af2e3c6f09eb0f76ded4d5e49b47003ab/apps/server/src/domains/capacity/accounts.ts#L125-L168): `standing`, why an account is closed and until when.
-- [`accounts.ts` L190-L235](https://github.com/jkrumm/software-factory/blob/2511836af2e3c6f09eb0f76ded4d5e49b47003ab/apps/server/src/domains/capacity/accounts.ts#L190-L235): `pickAccount`.
-- [`seats.ts` L21-L39](https://github.com/jkrumm/software-factory/blob/2511836af2e3c6f09eb0f76ded4d5e49b47003ab/apps/server/src/domains/capacity/seats.ts#L21-L39): `seatBonus`, the idle host's raise.
+- [`accounts.ts` L77-L107](https://github.com/jkrumm/software-factory/blob/master/apps/server/src/domains/capacity/accounts.ts#L77-L107): `pickAccount`.
+- [`seats.ts` L21-L39](https://github.com/jkrumm/software-factory/blob/master/apps/server/src/domains/capacity/seats.ts#L21-L39): `seatBonus`, the idle host's raise.
 
 ## Claims and lanes
 
@@ -134,6 +138,7 @@ A claim is a lead's place in its repo. A lane is a resource class inside a repo 
 - **A stall keeps the claim.** A wall, an unreported stop or a block leaves the lead alive, so it keeps its place and the steward ends the stall.
 - **Lanes cap a class.** `lanes: {apple: 1}` lets one Apple lead run in the repo at once, within `leads`. An undeclared lane is unlimited.
 
+<!-- snippet: apps/server/src/domains/capacity/claims.ts CLAIM_FREEING_WAITS -->
 ```ts
 const CLAIM_FREEING_WAITS: ReadonlySet<string> = new Set([
   'timer',
@@ -148,9 +153,9 @@ const CLAIM_FREEING_WAITS: ReadonlySet<string> = new Set([
 
 **Example files:**
 
-- [`claims.ts` L22-L75](https://github.com/jkrumm/software-factory/blob/2511836af2e3c6f09eb0f76ded4d5e49b47003ab/apps/server/src/domains/capacity/claims.ts#L22-L75): `claimOrder` and `claimRoom`, the total order and the room.
-- [`claims.ts` L76-L95](https://github.com/jkrumm/software-factory/blob/2511836af2e3c6f09eb0f76ded4d5e49b47003ab/apps/server/src/domains/capacity/claims.ts#L76-L95): which waits free a claim.
-- [`lanes.ts` L12-L26](https://github.com/jkrumm/software-factory/blob/2511836af2e3c6f09eb0f76ded4d5e49b47003ab/apps/server/src/domains/capacity/lanes.ts#L12-L26): `laneRoom`.
+- [`claims.ts` L22-L75](https://github.com/jkrumm/software-factory/blob/master/apps/server/src/domains/capacity/claims.ts#L22-L75): `claimOrder` and `claimRoom`, the total order and the room.
+- [`claims.ts` L76-L95](https://github.com/jkrumm/software-factory/blob/master/apps/server/src/domains/capacity/claims.ts#L76-L95): which waits free a claim.
+- [`lanes.ts` L12-L26](https://github.com/jkrumm/software-factory/blob/master/apps/server/src/domains/capacity/lanes.ts#L12-L26): `laneRoom`.
 
 ## Test slots
 
@@ -161,10 +166,12 @@ A test slot is a lease on the host's test capacity that `factory slot run` takes
 - **A step is sized by its past.** The grant reads the learned peak of the step by name. A step with none gets a guess from the same project, and says so in its wait line.
 - **The line is not first come, first served.** Slots go in the order of asking plus the step's learned run time, so a short step passes a long one. A waiter passed for ten minutes has its memory reserved: a step passes it only when it fits now and is learned to end before the memory is free for the waiter (the running steps' learned remaining runtime), or when the head still fits beside the step (see "A capacity Issue").
 
-Every step named `<repo>-apple` takes one slot at a time across all repos, because the simulators and the signing keychain belong to the host. The wait reasons are `slots`, `memory`, `swap`, `load`, `unsized`, `line`, `cores` and `class`. A memory refusal is arithmetic:
+Every step named `<repo>-apple` takes one slot at a time across all repos, because the simulators and the signing keychain belong to the host. The wait reasons are `slots`, `memory`, `swap`, `load`, `unsized`, `line`, `cores` and `class`. A memory refusal is arithmetic. A base slot keeps no headroom, a slot beyond the base keeps `headroomMib` free:
 
+<!-- snippet: apps/server/src/domains/capacity/slots.ts decide -->
 ```ts
-  const fits = known && peakMib + fit.growthMib <= freeMib - fit.headroomMib
+  const room = holders < base ? 0 : fit.headroomMib
+  const fits = known && peakMib + fit.growthMib <= freeMib - room
 ```
 
 From the same reading as above, 2026-11-17 (other repos renamed):
@@ -177,9 +184,9 @@ The step needs 4.9 GiB and 2.4 GiB are free after headroom, so it waits. The pas
 
 **Example files:**
 
-- [`slots.ts` L153-L211](https://github.com/jkrumm/software-factory/blob/2511836af2e3c6f09eb0f76ded4d5e49b47003ab/apps/server/src/domains/capacity/slots.ts#L153-L211): `decide`, the grant rules for one step.
-- [`slots.ts` L353-L377](https://github.com/jkrumm/software-factory/blob/2511836af2e3c6f09eb0f76ded4d5e49b47003ab/apps/server/src/domains/capacity/slots.ts#L353-L377): the line: who passes whom, and the freeze.
-- [`slot-aim.ts`](https://github.com/jkrumm/software-factory/blob/2511836af2e3c6f09eb0f76ded4d5e49b47003ab/apps/server/src/domains/capacity/slot-aim.ts): the aim that adds a slot when the host has been quiet for five minutes.
+- [`slots.ts` L170-L231](https://github.com/jkrumm/software-factory/blob/master/apps/server/src/domains/capacity/slots.ts#L170-L231): `decide`, the grant rules for one step.
+- [`slots.ts` L426-L457](https://github.com/jkrumm/software-factory/blob/master/apps/server/src/domains/capacity/slots.ts#L426-L457): the line: who passes whom, and the freeze.
+- [`slot-aim.ts`](https://github.com/jkrumm/software-factory/blob/master/apps/server/src/domains/capacity/slot-aim.ts): the aim that adds a slot when the host has been quiet for five minutes.
 
 ### A capacity Issue
 
@@ -195,8 +202,15 @@ The head had been passed for ten minutes, so nothing passed it. The freeze exist
 
 The fix, `headFitsBeside`, computes it: a frozen head is passed anyway when the head and the step still fit together once the earlier holders have released their memory.
 
+<!-- snippet: apps/server/src/domains/capacity/slots.ts headFitsBeside -->
 ```ts
-function headFitsBeside(head: SlotRow, step: SlotRow, held: readonly SlotRow[], fit: SlotFit): boolean {
+function headFitsBeside(
+  head: SlotRow,
+  step: SlotRow,
+  held: readonly SlotRow[],
+  fit: SlotFit,
+  headroomMib: number,
+): boolean {
   const headMib = fit.peaksByName?.get(head.name) ?? null
   const stepMib = fit.peaksByName?.get(step.name) ?? fit.peakMib
   if (headMib === null || stepMib === null || fit.freeMib === null || head.passedAt === null) return false
@@ -207,7 +221,7 @@ function headFitsBeside(head: SlotRow, step: SlotRow, held: readonly SlotRow[], 
   const staying = held
     .filter((row) => !before(row))
     .reduce((sum, row) => sum + Math.max(0, (fit.heldPeakById?.get(row.id) ?? 0) - (row.rssMib ?? 0)), 0)
-  return headMib + stepMib + staying + fit.headroomMib <= fit.freeMib + released
+  return headMib + stepMib + staying + headroomMib <= fit.freeMib + released
 }
 ```
 
@@ -220,8 +234,8 @@ function headFitsBeside(head: SlotRow, step: SlotRow, held: readonly SlotRow[], 
 
 **Example files:**
 
-- [`slots.ts` L213-L232](https://github.com/jkrumm/software-factory/blob/2511836af2e3c6f09eb0f76ded4d5e49b47003ab/apps/server/src/domains/capacity/slots.ts#L213-L232): `headFitsBeside`.
-- [`slots.ts` L366-L371](https://github.com/jkrumm/software-factory/blob/2511836af2e3c6f09eb0f76ded4d5e49b47003ab/apps/server/src/domains/capacity/slots.ts#L366-L371): where the freeze consults it.
+- [`slots.ts` L233-L303](https://github.com/jkrumm/software-factory/blob/master/apps/server/src/domains/capacity/slots.ts#L233-L303): `headFitsBeside`.
+- [`slots.ts` L440-L445](https://github.com/jkrumm/software-factory/blob/master/apps/server/src/domains/capacity/slots.ts#L440-L445): where the freeze consults it.
 
 ## Learned cost
 
@@ -232,6 +246,7 @@ A learned cost is what a repo's lead takes in memory outside test slots, read fr
 - **A falling peak is trusted sooner.** When the newest three settled attempts all peak below the median, the largest of them is the cost. Admitting too early is caught by the swap ceilings and the slot grant; admitting too late idles seats.
 - **Young leads still grow.** A lead younger than two minutes counts at its repo's learned size less what it holds, so one pass cannot admit several leads against one reading.
 
+<!-- snippet: apps/server/src/domains/capacity/leadcost.ts learnedLeadMib -->
 ```ts
 export function learnedLeadMib(attemptPeaks: readonly number[]): number | null {
   const newest = attemptPeaks.slice(0, PEAKS_KEPT)
@@ -243,14 +258,14 @@ export function learnedLeadMib(attemptPeaks: readonly number[]): number | null {
 
 **Example files:**
 
-- [`leadcost.ts` L142-L177](https://github.com/jkrumm/software-factory/blob/2511836af2e3c6f09eb0f76ded4d5e49b47003ab/apps/server/src/domains/capacity/leadcost.ts#L142-L177): the share, the median and the falling rule.
-- [`leadcost.ts` L194-L210](https://github.com/jkrumm/software-factory/blob/2511836af2e3c6f09eb0f76ded4d5e49b47003ab/apps/server/src/domains/capacity/leadcost.ts#L194-L210): `leadGrowth`.
-- [`admission.ts` L224-L243](https://github.com/jkrumm/software-factory/blob/2511836af2e3c6f09eb0f76ded4d5e49b47003ab/apps/server/src/domains/capacity/admission.ts#L224-L243): `fitRefusal`, the learned cost against the free memory.
+- [`leadcost.ts` L142-L177](https://github.com/jkrumm/software-factory/blob/master/apps/server/src/domains/capacity/leadcost.ts#L142-L177): the share, the median and the falling rule.
+- [`leadcost.ts` L194-L210](https://github.com/jkrumm/software-factory/blob/master/apps/server/src/domains/capacity/leadcost.ts#L194-L210): `leadGrowth`.
+- [`admission.ts` L251-L270](https://github.com/jkrumm/software-factory/blob/master/apps/server/src/domains/capacity/admission.ts#L251-L270): `fitRefusal`, the learned cost against the free memory.
 
 **Read more:**
 
-- [Capacity and leads](https://github.com/jkrumm/software-factory/blob/2511836af2e3c6f09eb0f76ded4d5e49b47003ab/docs/architecture.md#L142-L396) in `docs/architecture.md`.
-- [Work](https://github.com/jkrumm/software-factory/blob/2511836af2e3c6f09eb0f76ded4d5e49b47003ab/docs/language.md#L7-L44) and [The host](https://github.com/jkrumm/software-factory/blob/2511836af2e3c6f09eb0f76ded4d5e49b47003ab/docs/language.md#L145-L156) in `docs/language.md`.
-- [Lanes](https://github.com/jkrumm/software-factory/blob/2511836af2e3c6f09eb0f76ded4d5e49b47003ab/docs/plan.md#L112-L155) in `docs/plan.md`.
+- [Capacity and leads](https://github.com/jkrumm/software-factory/blob/master/docs/architecture.md#L149-L418) in `docs/architecture.md`.
+- [Work](https://github.com/jkrumm/software-factory/blob/master/docs/language.md#L7-L46) and [The host](https://github.com/jkrumm/software-factory/blob/master/docs/language.md#L150-L161) in `docs/language.md`.
+- [Lanes](https://github.com/jkrumm/software-factory/blob/master/docs/plan.md#L112-L155) in `docs/plan.md`.
 
 Next: [Chains and Plans](./chains.md)

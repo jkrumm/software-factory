@@ -19,6 +19,7 @@ A loop is a named recurring job with a trigger, a budget and one way to act. A p
 - **The factory never calls a model.** A loop's judgment, where it has one, is an agw workflow called through a port. The counting comes first and is deterministic.
 - **Loop guard:** a change a loop made never kicks that loop again.
 
+<!-- snippet: apps/server/src/app/loops/runner.ts LoopSpec -->
 ```ts
 export interface LoopSpec {
   name: LoopName
@@ -36,9 +37,9 @@ The rules of each loop live in `domains/loops/` as pure functions over counts an
 
 **Example files:**
 
-- [`runner.ts`](https://github.com/jkrumm/software-factory/blob/2511836af2e3c6f09eb0f76ded4d5e49b47003ab/apps/server/src/app/loops/runner.ts#L5-L18): the loop contract, one `run` per pass.
-- [`budget.ts`](https://github.com/jkrumm/software-factory/blob/2511836af2e3c6f09eb0f76ded4d5e49b47003ab/apps/server/src/domains/loops/budget.ts#L1-L5): the 5-signal budget every filing loop shares; what is left out is named in the pass record.
-- [`loops/`](https://github.com/jkrumm/software-factory/tree/2511836af2e3c6f09eb0f76ded4d5e49b47003ab/apps/server/src/domains/loops): the rules, one file per loop.
+- [`runner.ts`](https://github.com/jkrumm/software-factory/blob/master/apps/server/src/app/loops/runner.ts#L5-L18): the loop contract, one `run` per pass.
+- [`budget.ts`](https://github.com/jkrumm/software-factory/blob/master/apps/server/src/domains/loops/budget.ts#L1-L5): the 5-signal budget every filing loop shares; what is left out is named in the pass record.
+- [`loops/`](https://github.com/jkrumm/software-factory/tree/master/apps/server/src/domains/loops): the rules, one file per loop.
 
 ## Friction
 
@@ -50,6 +51,7 @@ Friction is any counted waste: an avoidable touch, a refusal, an undelivered not
 - **One signal per pattern,** with the evidence Issues (five at most) and the command that shows the count again. An open Issue of the same pattern is amended, not doubled.
 - **Retired mechanisms are never judged.** The review gate is gone, so its refusals do not count.
 
+<!-- snippet: apps/server/src/domains/loops/friction.ts THRESHOLDS -->
 ```ts
 export const THRESHOLDS: Record<Judged, Rule> = {
   refusal: {
@@ -74,9 +76,9 @@ The lead traced the 77. 47 were one Issue looping: it asked, the Judge answered,
 
 **Example files:**
 
-- [`friction.ts`](https://github.com/jkrumm/software-factory/blob/2511836af2e3c6f09eb0f76ded4d5e49b47003ab/apps/server/src/domains/loops/friction.ts#L45-L90): every rule with its minimum, its rate and the reason in one line.
-- [`friction.ts`](https://github.com/jkrumm/software-factory/blob/2511836af2e3c6f09eb0f76ded4d5e49b47003ab/apps/server/src/domains/loops/friction.ts#L131-L155): `patternsOver`, the counts over their rule, most frequent first.
-- [`friction.ts`](https://github.com/jkrumm/software-factory/blob/2511836af2e3c6f09eb0f76ded4d5e49b47003ab/apps/server/src/domains/loops/friction.ts#L186-L200): the signal text, which names the window, the count, the threshold and how to look again.
+- [`friction.ts`](https://github.com/jkrumm/software-factory/blob/master/apps/server/src/domains/loops/friction.ts#L45-L94): every rule with its minimum, its rate and the reason in one line.
+- [`friction.ts`](https://github.com/jkrumm/software-factory/blob/master/apps/server/src/domains/loops/friction.ts#L150-L174): `patternsOver`, the counts over their rule, most frequent first.
+- [`friction.ts`](https://github.com/jkrumm/software-factory/blob/master/apps/server/src/domains/loops/friction.ts#L205-L219): the signal text, which names the window, the count, the threshold and how to look again.
 
 ## Selfwatch
 
@@ -96,6 +98,7 @@ Selfwatch looks at the factory itself every 5 minutes and files a signal for a c
 - **A run of samples, not one.** A slot line is a count over consecutive minute samples, so one busy minute files nothing.
 - **A signal's facts are hashed, its context is not.** The clock and counts go in the context, so the fingerprint stays the same while the condition does.
 
+<!-- snippet: apps/server/src/domains/loops/overload.ts SLOT_WAITERS -->
 ```ts
 /** More callers than this waiting for a test slot... */
 export const SLOT_WAITERS = 8
@@ -115,9 +118,9 @@ A lead on sonnet at high effort shipped three commits at 03:04. Of three accepta
 
 **Example files:**
 
-- [`selfwatch-model.ts`](https://github.com/jkrumm/software-factory/blob/2511836af2e3c6f09eb0f76ded4d5e49b47003ab/apps/server/src/domains/loops/selfwatch-model.ts#L1-L18): the 14 kinds.
-- [`overload.ts`](https://github.com/jkrumm/software-factory/blob/2511836af2e3c6f09eb0f76ded4d5e49b47003ab/apps/server/src/domains/loops/overload.ts#L68-L118): `slot_line`, with its two thresholds and its title.
-- [`selfwatch.ts`](https://github.com/jkrumm/software-factory/blob/2511836af2e3c6f09eb0f76ded4d5e49b47003ab/apps/server/src/domains/loops/selfwatch.ts#L41-L60): `ci_red`, the first condition, as pure code over run facts.
+- [`selfwatch-model.ts`](https://github.com/jkrumm/software-factory/blob/master/apps/server/src/domains/loops/selfwatch-model.ts#L1-L18): the 14 kinds.
+- [`overload.ts`](https://github.com/jkrumm/software-factory/blob/master/apps/server/src/domains/loops/overload.ts#L76-L126): `slot_line`, with its two thresholds and its title.
+- [`selfwatch.ts`](https://github.com/jkrumm/software-factory/blob/master/apps/server/src/domains/loops/selfwatch.ts#L41-L60): `ci_red`, the first condition, as pure code over run facts.
 
 ## Hygiene
 
@@ -129,6 +132,7 @@ Hygiene is the standing check on a project's health: per-repo probes read a thro
 - **Skips state a reason.** A project skips a probe by name with a reason, and the pass shows it.
 - **Budget:** of the 5 signals per pass, the judgment keeps 2, so probes file at most 3.
 
+<!-- snippet: apps/server/src/domains/loops/hygiene.ts JUDGMENT_RESERVE -->
 ```ts
 /** Slots the judgment keeps: the deterministic findings may take `MAX_SIGNALS_PER_PASS - JUDGMENT_RESERVE`. */
 const JUDGMENT_RESERVE = 2
@@ -145,9 +149,9 @@ A finding has a stable key per subject (`links:docs/a.md`), so the same finding 
 
 **Example files:**
 
-- [`hygiene-catalogue.ts`](https://github.com/jkrumm/software-factory/blob/2511836af2e3c6f09eb0f76ded4d5e49b47003ab/packages/contract/src/hygiene-catalogue.ts#L42-L50): the catalogue, one entry per probe with its cadence.
-- [`hygiene-model.ts`](https://github.com/jkrumm/software-factory/blob/2511836af2e3c6f09eb0f76ded4d5e49b47003ab/apps/server/src/domains/loops/hygiene-model.ts#L12-L29): the probe order and which probes a daily pass runs.
-- [`hygiene.ts`](https://github.com/jkrumm/software-factory/blob/2511836af2e3c6f09eb0f76ded4d5e49b47003ab/apps/server/src/domains/loops/hygiene.ts#L12-L38): the budget split between probes and judgment.
+- [`hygiene-catalogue.ts`](https://github.com/jkrumm/software-factory/blob/master/packages/contract/src/hygiene-catalogue.ts#L67-L75): the catalogue, one entry per probe with its cadence.
+- [`hygiene-model.ts`](https://github.com/jkrumm/software-factory/blob/master/apps/server/src/domains/loops/hygiene-model.ts#L19-L61): the probe order and which probes a daily pass runs.
+- [`hygiene.ts`](https://github.com/jkrumm/software-factory/blob/master/apps/server/src/domains/loops/hygiene.ts#L12-L38): the budget split between probes and judgment.
 
 ## The steward and stalls
 
@@ -160,6 +164,7 @@ A stall is a wait with a machine cause, the steward's to end. The steward is the
 
 `issue_1818` shows the rule's edge. A lead woken by an answer blocked again, worded differently, and the word-overlap test read 0.10 to 0.42 against its 0.5 threshold. The steward asked again, 3 times in 8 minutes on one Issue. The fix: a block within 10 minutes of an answer, with no report between, is the same stall.
 
+<!-- snippet: apps/server/src/domains/loops/stall.ts QUICK_REBLOCK_MS -->
 ```ts
 /**
  * A lead woken by a Decision's answer that blocks again this soon, having reported nothing else, did no new work: its block
@@ -171,8 +176,8 @@ export const QUICK_REBLOCK_MS = 10 * 60_000
 
 **Example files:**
 
-- [`stall.ts`](https://github.com/jkrumm/software-factory/blob/2511836af2e3c6f09eb0f76ded4d5e49b47003ab/apps/server/src/domains/loops/stall.ts#L91-L126): `decideStall`, the rules in order, ending in `ask`.
-- [`stall.ts`](https://github.com/jkrumm/software-factory/blob/2511836af2e3c6f09eb0f76ded4d5e49b47003ab/apps/server/src/domains/loops/stall.ts#L63-L70): the default thresholds in one table.
+- [`stall.ts`](https://github.com/jkrumm/software-factory/blob/master/apps/server/src/domains/loops/stall.ts#L91-L126): `decideStall`, the rules in order, ending in `ask`.
+- [`stall.ts`](https://github.com/jkrumm/software-factory/blob/master/apps/server/src/domains/loops/stall.ts#L63-L70): the default thresholds in one table.
 
 ## The retro
 
@@ -184,6 +189,7 @@ The retro is a weekly review written by a lead. The friction pass files one retr
 - **A pattern needs a line.** A pattern the lead names without a cited transcript line is not in the Report.
 - **A repeated preference becomes a rule.** A preference the owner showed twice in the owner's verdict notes is written into the repo's `AGENTS.md` or `DESIGN.md`.
 
+<!-- snippet: apps/server/src/domains/loops/retro.ts outcomesLine -->
 ```ts
 /** The previous retros' yield in a line for the signal's facts; null when no retro signal was filed in the window. */
 function outcomesLine(outcomes: RetroOutcomes | null): string | null {
@@ -199,8 +205,8 @@ function outcomesLine(outcomes: RetroOutcomes | null): string | null {
 
 **Example files:**
 
-- [`retro.ts`](https://github.com/jkrumm/software-factory/blob/2511836af2e3c6f09eb0f76ded4d5e49b47003ab/apps/server/src/domains/loops/retro.ts#L22-L33): the previous retros' yield, put in the next signal's facts.
-- [`retro.ts`](https://github.com/jkrumm/software-factory/blob/2511836af2e3c6f09eb0f76ded4d5e49b47003ab/apps/server/src/domains/loops/retro.ts#L39-L60): the signal's text, the brief a retro lead builds from.
+- [`retro.ts`](https://github.com/jkrumm/software-factory/blob/master/apps/server/src/domains/loops/retro.ts#L22-L33): the previous retros' yield, put in the next signal's facts.
+- [`retro.ts`](https://github.com/jkrumm/software-factory/blob/master/apps/server/src/domains/loops/retro.ts#L39-L60): the signal's text, the brief a retro lead builds from.
 
 ## Yield and pace
 
@@ -221,14 +227,14 @@ A loop's yield is what its signals became: the passes it ran, the signals it fil
 
 **Example files:**
 
-- [`architecture.md`](https://github.com/jkrumm/software-factory/blob/2511836af2e3c6f09eb0f76ded4d5e49b47003ab/docs/architecture.md#L677-L701): the loops and what each does deterministically and what it asks agw.
-- [`architecture.md`](https://github.com/jkrumm/software-factory/blob/2511836af2e3c6f09eb0f76ded4d5e49b47003ab/docs/architecture.md#L724): "What each loop yields", the read model.
-- [`loop-yield.test.ts`](https://github.com/jkrumm/software-factory/blob/2511836af2e3c6f09eb0f76ded4d5e49b47003ab/apps/server/test/read-models/loop-yield.test.ts): every figure restated in plain rows.
+- [`architecture.md`](https://github.com/jkrumm/software-factory/blob/master/docs/architecture.md#L788-L817): the loops and what each does deterministically and what it asks agw.
+- [`architecture.md`](https://github.com/jkrumm/software-factory/blob/master/docs/architecture.md#L841): "What each loop yields", the read model.
+- [`loop-yield.test.ts`](https://github.com/jkrumm/software-factory/blob/master/apps/server/test/read-models/loop-yield.test.ts): every figure restated in plain rows.
 
 **Read more:**
 
-- [Loops and agw](https://github.com/jkrumm/software-factory/blob/2511836af2e3c6f09eb0f76ded4d5e49b47003ab/docs/architecture.md#L677-L690): the runner, the clock, the call record.
-- [The words Loop and Pass](https://github.com/jkrumm/software-factory/blob/2511836af2e3c6f09eb0f76ded4d5e49b47003ab/docs/language.md#L72-L73): what the factory means by them.
-- [Hygiene catalogue](https://github.com/jkrumm/software-factory/blob/2511836af2e3c6f09eb0f76ded4d5e49b47003ab/docs/hygiene.md): every probe, its cost and how to silence it.
+- [Loops and agw](https://github.com/jkrumm/software-factory/blob/master/docs/architecture.md#L788-L806): the runner, the clock, the call record.
+- [The words Loop and Pass](https://github.com/jkrumm/software-factory/blob/master/docs/language.md#L74-L75): what the factory means by them.
+- [Hygiene catalogue](https://github.com/jkrumm/software-factory/blob/master/docs/hygiene.md): every probe, its cost and how to silence it.
 
 Next: [Learnings](./learnings.md)

@@ -29,9 +29,9 @@ The `…` and `<owner-token>` are placeholders: substitute your own values. The 
 
 **Example files:**
 
-- [`README.md`](https://github.com/jkrumm/software-factory/blob/2511836af2e3c6f09eb0f76ded4d5e49b47003ab/README.md#L231-L260): "Run it", the minimum to start a server.
-- [`AGENTS.md`](https://github.com/jkrumm/software-factory/blob/2511836af2e3c6f09eb0f76ded4d5e49b47003ab/AGENTS.md#L17): the rule that the factory never calls a model.
-- [`AGENTS.md`](https://github.com/jkrumm/software-factory/blob/2511836af2e3c6f09eb0f76ded4d5e49b47003ab/AGENTS.md#L39): interactive Claude Code in herdr-core only.
+- [`README.md`](https://github.com/jkrumm/software-factory/blob/master/README.md#L749-L772): "Run it", the minimum to start a server.
+- [`AGENTS.md`](https://github.com/jkrumm/software-factory/blob/master/AGENTS.md#L17): the rule that the factory never calls a model.
+- [`AGENTS.md`](https://github.com/jkrumm/software-factory/blob/master/AGENTS.md#L39): interactive Claude Code in herdr-core only.
 
 ## Settings
 
@@ -50,9 +50,9 @@ A setting is either a secret or not, and the two live in different places.
 
 **Example files:**
 
-- [`.env.tpl`](https://github.com/jkrumm/software-factory/blob/2511836af2e3c6f09eb0f76ded4d5e49b47003ab/.env.tpl#L1-L15): the secret refs, with the rule that each token differs from every other.
-- [`env-file.sh`](https://github.com/jkrumm/software-factory/blob/2511836af2e3c6f09eb0f76ded4d5e49b47003ab/scripts/env-file.sh#L1-L28): the allow-list and why a key is excluded on purpose.
-- [`launch.sh`](https://github.com/jkrumm/software-factory/blob/2511836af2e3c6f09eb0f76ded4d5e49b47003ab/scripts/launch.sh#L1-L25): the launcher, which refuses to start on an unresolved ref.
+- [`.env.tpl`](https://github.com/jkrumm/software-factory/blob/master/.env.tpl#L1-L12): the secret refs, with the rule that each token differs from every other.
+- [`env-file.sh`](https://github.com/jkrumm/software-factory/blob/master/scripts/env-file.sh#L1-L28): the allow-list and why a key is excluded on purpose.
+- [`launch.sh`](https://github.com/jkrumm/software-factory/blob/master/scripts/launch.sh#L1-L25): the launcher, which refuses to start on an unresolved ref.
 
 ## Deploy and rollback
 
@@ -74,8 +74,8 @@ A deploy exports one immutable release of a commit and switches the service to i
 
 **Example files:**
 
-- [`deploy.sh`](https://github.com/jkrumm/software-factory/blob/2511836af2e3c6f09eb0f76ded4d5e49b47003ab/scripts/deploy.sh#L1-L22): the release layout, the rollback and `DRY_RUN`.
-- [`operations.md`](https://github.com/jkrumm/software-factory/blob/2511836af2e3c6f09eb0f76ded4d5e49b47003ab/docs/operations.md#L122-L141): the deploy's variables, retries and timings.
+- [`deploy.sh`](https://github.com/jkrumm/software-factory/blob/master/scripts/deploy.sh#L1-L22): the release layout, the rollback and `DRY_RUN`.
+- [`operations.md`](https://github.com/jkrumm/software-factory/blob/master/docs/operations.md#L131-L150): the deploy's variables, retries and timings.
 
 ## The CLI
 
@@ -94,6 +94,7 @@ The CLI is `factory`: one vocabulary for the owner, the orchestrator and every l
 {"role":"lead","tier":"sonnet","effort":"high"}
 ```
 
+<!-- snippet: apps/cli/src/exit.ts EXIT -->
 ```ts
 export const EXIT = {
   ok: 0,
@@ -112,8 +113,8 @@ export const EXIT = {
 
 **Example files:**
 
-- [`exit.ts`](https://github.com/jkrumm/software-factory/blob/2511836af2e3c6f09eb0f76ded4d5e49b47003ab/apps/cli/src/exit.ts#L5-L17): the exit codes every caller branches on.
-- [`operations.md`](https://github.com/jkrumm/software-factory/blob/2511836af2e3c6f09eb0f76ded4d5e49b47003ab/docs/operations.md#L44-L62): "The CLI", the hand-written verbs and the credential rules.
+- [`exit.ts`](https://github.com/jkrumm/software-factory/blob/master/apps/cli/src/exit.ts#L5-L17): the exit codes every caller branches on.
+- [`operations.md`](https://github.com/jkrumm/software-factory/blob/master/docs/operations.md#L47-L69): "The CLI", the hand-written verbs and the credential rules.
 
 ## Callers and tokens
 
@@ -133,13 +134,14 @@ A caller is decided by its bearer token alone. `apps/server/src/api/policy.ts` h
 - **No token or an unknown one is 401.** A known caller that the route's row does not list is also 403.
 - **Only `GET /health` is public.** When in doubt, the owner alone.
 
+<!-- snippet: apps/server/src/api/policy.ts CALLERS -->
 ```ts
 export const CALLERS = ['owner', 'orchestrator', 'agent', 'machine', 'signal', 'read'] as const
 ```
 
 **Example files:**
 
-- [`policy.ts`](https://github.com/jkrumm/software-factory/blob/2511836af2e3c6f09eb0f76ded4d5e49b47003ab/apps/server/src/api/policy.ts#L1-L35): the classes, the fail-closed rule and the caller list.
+- [`policy.ts`](https://github.com/jkrumm/software-factory/blob/master/apps/server/src/api/policy.ts#L1-L37): the classes, the fail-closed rule and the caller list.
 
 ## The trust boundary
 
@@ -150,6 +152,7 @@ The owner's and the orchestrator's tokens can start Claude Code with `--dangerou
 - **The API is loopback only.** The Console listener is a second loopback port. It answers `GET` and `HEAD`, and 405 to every other method except its 15 write verbs. It holds the owner token in its closure.
 - **Work repos hear only the owner.** The read token sees none of their text.
 
+<!-- snippet: apps/server/src/adapters/git/repos.ts rootedRepos -->
 ```ts
  * `allow` admits single repos outside the roots (`FACTORY_REPO_ALLOW`): each entry is one repo's directory, matched by
  * `realpath` like a root, so the repo itself and its worktrees are in and its siblings are not. A bare name matches an
@@ -158,8 +161,8 @@ The owner's and the orchestrator's tokens can start Claude Code with `--dangerou
 
 **Example files:**
 
-- [`repos.ts`](https://github.com/jkrumm/software-factory/blob/2511836af2e3c6f09eb0f76ded4d5e49b47003ab/apps/server/src/adapters/git/repos.ts#L17-L47): `rootedRepos`, the check every spawn passes.
-- [`AGENTS.md`](https://github.com/jkrumm/software-factory/blob/2511836af2e3c6f09eb0f76ded4d5e49b47003ab/AGENTS.md#L52): the rule, with the Console listener's limits beside it.
+- [`repos.ts`](https://github.com/jkrumm/software-factory/blob/master/apps/server/src/adapters/git/repos.ts#L17-L47): `rootedRepos`, the check every spawn passes.
+- [`AGENTS.md`](https://github.com/jkrumm/software-factory/blob/master/AGENTS.md#L52): the rule, with the Console listener's limits beside it.
 
 ## What is specific to this host
 
@@ -174,6 +177,6 @@ Each of these is one wiring of a part you can replace.
 
 **Read more:**
 
-- [`docs/operations.md`](https://github.com/jkrumm/software-factory/blob/2511836af2e3c6f09eb0f76ded4d5e49b47003ab/docs/operations.md#L1-L6): the listener, the CLI, the gate, the merge window and the deploy.
-- [`docs/architecture.md`](https://github.com/jkrumm/software-factory/blob/2511836af2e3c6f09eb0f76ded4d5e49b47003ab/docs/architecture.md#L677-L690): loops and agw, the clock and the call record.
-- [`README.md`](https://github.com/jkrumm/software-factory/blob/2511836af2e3c6f09eb0f76ded4d5e49b47003ab/README.md#L231-L260): the minimum to run a server.
+- [`docs/operations.md`](https://github.com/jkrumm/software-factory/blob/master/docs/operations.md#L1-L6): the listener, the CLI, the gate, the merge window and the deploy.
+- [`docs/architecture.md`](https://github.com/jkrumm/software-factory/blob/master/docs/architecture.md#L788-L806): loops and agw, the clock and the call record.
+- [`README.md`](https://github.com/jkrumm/software-factory/blob/master/README.md#L749-L772): the minimum to run a server.

@@ -1,14 +1,17 @@
 #!/usr/bin/env bun
 /**
- * The guide (`docs/guide/`) is one Markdown source for two renderings, github.com and the VitePress site, and its code
- * links are permalinks that must hold at the commit they were written against. This check holds both, offline:
+ * The guide (`docs/guide/`) is one Markdown source for two renderings, github.com and the VitePress site. It quotes
+ * code, so this check holds that what it quotes is still the code, offline, against the tree it runs in (HEAD in CI):
  *
  * - every page opens with its `# H1` and uses no frontmatter, no `:::` container and no component tag (GitHub shows
  *   them as raw text);
  * - a relative link or image resolves to a file inside `docs/guide/`; a root-absolute link (`/x`) is refused, it
  *   breaks on GitHub;
- * - a link into this repo on GitHub (`blob/` or `tree/`) names a full commit sha, never a branch; the commit is on
- *   master (`origin/master`, else `HEAD`), holds the path, and holds every line a `#Lx-Ly` anchor names.
+ * - a link into this repo on GitHub (`blob/` or `tree/`) points at `master`, never a commit, and the path exists and
+ *   holds every line a `#Lx-Ly` anchor names;
+ * - a `ts` block quotes code, and the line above it names where: `<!-- snippet: <path> <symbol> -->`. The block must
+ *   equal the code of that symbol in that file, line for line (indentation aside); a line `// …` stands for code left
+ *   out between two parts. A quoted line that changed in the code fails the check, so the page is edited with it.
  *
  * Run by `make check` and the guide workflow; exits 1 on a finding.
  */
@@ -25,46 +28,150 @@ export interface Finding {
   message: string
 }
 
-/** A link into this repo pinned to a commit: `blob/<sha>/<path>#L3-L9` or `tree/<sha>/<path>`. */
+/** A link into this repo at master: `blob/master/<path>#L3-L9` or `tree/master/<path>`. */
 export interface Permalink {
-  sha: string
   path: string
   from?: number
   to?: number
 }
 
-/** What the git side answers; the real one reads the repo, tests pass a fake. */
-export interface Git {
-  /** the commit exists and is an ancestor of master */
-  onMaster(sha: string): boolean
-  /** the path's line count at the commit (a directory: 0), or null when the commit does not hold it */
-  lines(sha: string, path: string): number | null
+/** What the checkout answers; the real one reads the files, tests pass a fake. */
+export interface Tree {
+  /** the path's line count (a directory: 0), or null when the tree does not hold it */
+  lines(path: string): number | null
+  /** the file's text, or null when it is not a file */
+  text(path: string): string | null
 }
 
 const LINK = /(!?)\[[^\]]*\]\(\s*<?([^)\s>]+)>?(?:\s+"[^"]*")?\s*\)/g
+const SNIPPET = /^<!--\s*snippet:\s*(\S+)\s+(\S+)\s*-->$/
+const ELISION = /^\s*\/\/\s*(…|\.\.\.)\s*$/
 
 /** The text of a line outside inline code spans, so a link written as code is not a link. */
 function stripInlineCode(line: string): string {
   return line.replace(/(`+)[\s\S]*?\1/g, '')
 }
 
-/** Parses a GitHub URL into this repo; null when it is not one, 'unpinned' when it names a branch. */
+/** Parses a GitHub URL into this repo; null when it is not one, 'unpinned' when it names a ref other than master. */
 export function parsePermalink(url: string): Permalink | 'unpinned' | null {
   if (!url.startsWith(`${REPO_URL}/blob/`) && !url.startsWith(`${REPO_URL}/tree/`)) return null
   const rest = url.slice(REPO_URL.length + '/blob/'.length)
   const [pathPart = '', anchor] = rest.split('#')
   const slash = pathPart.indexOf('/')
   const ref = slash === -1 ? pathPart : pathPart.slice(0, slash)
-  if (!/^[0-9a-f]{40}$/.test(ref)) return 'unpinned'
+  if (ref !== 'master') return 'unpinned'
   const path = slash === -1 ? '' : decodeURIComponent(pathPart.slice(slash + 1))
   const range = anchor?.match(/^L(\d+)(?:-L(\d+))?$/)
-  if (!range) return { sha: ref, path }
+  if (!range) return { path }
   const from = Number(range[1])
-  return { sha: ref, path, from, to: range[2] ? Number(range[2]) : from }
+  return { path, from, to: range[2] ? Number(range[2]) : from }
+}
+
+const indentOf = (line: string): number => line.length - line.trimStart().length
+
+/** The lines without their common indentation and trailing space, so a block quoted from a nested place compares. */
+function dedent(lines: string[]): string[] {
+  const filled = lines.filter((l) => l.trim() !== '')
+  const common = filled.length === 0 ? 0 : Math.min(...filled.map(indentOf))
+  return lines.map((l) => l.slice(Math.min(common, indentOf(l))).trimEnd())
+}
+
+const isComment = (line: string): boolean => /^\s*(\/\*\*?|\*|\/\/)/.test(line)
+
+/**
+ * The lines a symbol covers, from one that names it: the comment block above it, then down to the line that closes it
+ * (the first later line at its indentation or less; a closing bracket line belongs to it unless it opens a new block).
+ */
+function symbolSpans(code: string[], symbol: string): { start: number; end: number }[] {
+  const word = new RegExp(`(^|[^\\w$])${symbol.replace(/[$]/g, '\\$&')}($|[^\\w$])`)
+  const spans: { start: number; end: number }[] = []
+  code.forEach((line, at) => {
+    if (!word.test(line)) return
+    let start = at
+    while (start > 0 && isComment(code[start - 1] ?? '')) start -= 1
+    let end = at
+    const base = indentOf(line)
+    for (let i = at + 1; i < code.length; i++) {
+      const next = code[i] ?? ''
+      if (next.trim() === '') continue
+      if (indentOf(next) > base) {
+        end = i
+        continue
+      }
+      const closer = /^\s*[})\]>]/.test(next)
+      if (closer) end = i
+      if (closer && /[{([]$/.test(next.trimEnd())) continue // `): T {` closes the parameters and opens the body
+      break
+    }
+    spans.push({ start, end })
+  })
+  return spans
+}
+
+/** Splits a quoted block at its `// …` lines into the parts that must each appear in the code, in order. */
+function parts(block: string[]): string[][] {
+  const out: string[][] = [[]]
+  for (const line of block) {
+    if (ELISION.test(line)) out.push([])
+    else out[out.length - 1]?.push(line)
+  }
+  return out.map((part) => dedent(part)).filter((part) => part.length > 0)
+}
+
+/** Where `part` stands in `code` at or after `from`, within [start, end]; the lines of the closest miss otherwise. */
+function locate(
+  code: string[],
+  part: string[],
+  from: number,
+  end: number,
+): { at: number } | { miss: string; score: number } {
+  let best = { matched: -1, text: '' }
+  for (let at = from; at <= end; at++) {
+    const window = dedent(code.slice(at, at + part.length))
+    const matched = part.findIndex((line, k) => window[k] !== line)
+    if (matched === -1 && window.length === part.length) return { at }
+    const k = matched === -1 ? window.length : matched
+    if (k > best.matched)
+      best = {
+        matched: k,
+        text: `line ${k + 1} of the block, \`${(part[k] ?? '').trim()}\`, is \`${(window[k] ?? '').trim()}\``,
+      }
+  }
+  return {
+    miss: best.matched <= 0 ? `its first line, \`${(part[0] ?? '').trim()}\`, is not there` : best.text,
+    score: best.matched,
+  }
+}
+
+/** The finding for one quoted block, or null when it equals the code of the symbol. */
+export function checkSnippet(tree: Tree, path: string, symbol: string, block: string[]): string | null {
+  const source = tree.text(path)
+  if (source === null) return `${path} is not a file`
+  const code = source.split('\n')
+  const spans = symbolSpans(code, symbol)
+  if (spans.length === 0) return `${symbol} does not appear in ${path}`
+  const wanted = parts(block)
+  if (wanted.length === 0) return 'the block is empty'
+  let closest = { score: -2, miss: '' }
+  for (const span of spans) {
+    let from = span.start
+    let ok = true
+    for (const [i, part] of wanted.entries()) {
+      const found = locate(code, part, from, i === 0 ? span.end : code.length)
+      if ('miss' in found) {
+        if (found.score > closest.score) closest = found
+        ok = false
+        break
+      }
+      from = found.at + part.length
+    }
+    if (ok) return null
+  }
+  return `the block is not the code of ${symbol} in ${path}: ${closest.miss}`
 }
 
 /** Every finding of one page. `file` is relative to the repo root; `exists` answers for a path relative to it. */
-export function checkPage(file: string, text: string, git: Git, exists: (path: string) => boolean): Finding[] {
+export function checkPage(file: string, text: string, tree: Tree, exists: (path: string) => boolean): Finding[] {
   const findings: Finding[] = []
   const add = (line: number, message: string): void => {
     findings.push({ file, line, message })
@@ -75,16 +182,22 @@ export function checkPage(file: string, text: string, git: Git, exists: (path: s
   const first = lines.findIndex((l) => l.trim() !== '')
   if (first === -1 || !lines[first]?.startsWith('# ')) add(first + 1, 'the page must open with its # H1')
 
-  let fence: string | null = null
+  let fence: { mark: string; lang: string; start: number; body: string[] } | null = null
   lines.forEach((raw, i) => {
     const n = i + 1
-    const opener = raw.match(/^\s*(```+|~~~+)/)
+    const opener = raw.match(/^\s*(```+|~~~+)(\S*)/)
     if (opener?.[1]) {
-      if (fence === null) fence = opener[1]
-      else if (opener[1].startsWith(fence)) fence = null
+      if (fence === null) fence = { mark: opener[1], lang: opener[2] ?? '', start: n, body: [] }
+      else if (opener[1].startsWith(fence.mark)) {
+        checkBlock(fence, lines[fence.start - 2] ?? '')
+        fence = null
+      }
       return
     }
-    if (fence !== null) return
+    if (fence !== null) {
+      fence.body.push(raw)
+      return
+    }
     if (/^\s*:::/.test(raw)) add(n, '`:::` container: GitHub shows it as text; use a GitHub alert (> [!NOTE])')
     if (/^\s*<[A-Z][\w.]*[\s/>]/.test(raw) || /^\s*<script\b/.test(raw))
       add(n, 'component tag: GitHub shows it as text')
@@ -101,24 +214,31 @@ export function checkPage(file: string, text: string, git: Git, exists: (path: s
         continue
       }
       const path = relative('.', resolve(dirname(file), decodeURIComponent(target.split('#')[0] ?? '')))
-      if (!path.startsWith(`${GUIDE}/`)) add(n, `${target}: leaves ${GUIDE}/; link code with a permalink to a commit`)
+      if (!path.startsWith(`${GUIDE}/`)) add(n, `${target}: leaves ${GUIDE}/; link code with a link into master`)
       else if (!exists(path)) add(n, `${target}: no such file (${path})`)
     }
   })
   return findings
 
+  function checkBlock(block: { lang: string; start: number; body: string[] }, above: string): void {
+    const marker = above.trim().match(SNIPPET)
+    if (!marker) {
+      if (block.lang === 'ts')
+        add(block.start, 'a ts block quotes code: name it on the line above, <!-- snippet: <path> <symbol> -->')
+      return
+    }
+    const problem = checkSnippet(tree, marker[1] ?? '', marker[2] ?? '', block.body)
+    if (problem) add(block.start, problem)
+  }
+
   function checkPermalink(url: string, n: number): void {
     const link = parsePermalink(url)
     if (link === null) return
-    if (link === 'unpinned') return add(n, `${url}: pin it to a full commit sha, a branch moves`)
-    if (!git.onMaster(link.sha)) return add(n, `${url}: commit ${link.sha.slice(0, 12)} is not on master`)
-    const count = git.lines(link.sha, link.path)
-    if (count === null) return add(n, `${url}: ${link.path} does not exist at ${link.sha.slice(0, 12)}`)
+    if (link === 'unpinned') return add(n, `${url}: link master, a commit goes stale`)
+    const count = tree.lines(link.path)
+    if (count === null) return add(n, `${url}: ${link.path} does not exist`)
     if (link.to !== undefined && (link.to > count || (link.from ?? 1) > link.to))
-      add(
-        n,
-        `${url}: lines ${link.from}-${link.to} are outside ${link.path} (${count} lines) at ${link.sha.slice(0, 12)}`,
-      )
+      add(n, `${url}: lines ${link.from}-${link.to} are outside ${link.path} (${count} lines)`)
   }
 }
 
@@ -127,24 +247,19 @@ function git(args: string[]): { ok: boolean; out: string } {
   return { ok: proc.exitCode === 0, out: proc.stdout.toString() }
 }
 
-function repoGit(): Git {
-  const master = git(['rev-parse', '--verify', '--quiet', 'origin/master']).ok ? 'origin/master' : 'HEAD'
-  const onMaster = new Map<string, boolean>()
-  const lines = new Map<string, number | null>()
+function checkout(): Tree {
+  const texts = new Map<string, string | null>()
+  const text = (path: string): string | null => {
+    if (!texts.has(path))
+      texts.set(path, existsSync(path) && statSync(path).isFile() ? readFileSync(path, 'utf8') : null)
+    return texts.get(path) ?? null
+  }
   return {
-    onMaster(sha) {
-      if (!onMaster.has(sha)) onMaster.set(sha, git(['merge-base', '--is-ancestor', sha, master]).ok)
-      return onMaster.get(sha) ?? false
-    },
-    lines(sha, path) {
-      const key = `${sha}:${path}`
-      if (!lines.has(key)) {
-        const type = git(['cat-file', '-t', key])
-        if (!type.ok) lines.set(key, null)
-        else if (type.out.trim() !== 'blob') lines.set(key, 0)
-        else lines.set(key, git(['cat-file', '-p', key]).out.split('\n').length - 1)
-      }
-      return lines.get(key) ?? null
+    text,
+    lines(path) {
+      if (!existsSync(path)) return null
+      const body = text(path)
+      return body === null ? 0 : body.split('\n').length - 1
     },
   }
 }
@@ -160,9 +275,9 @@ function pages(dir: string): string[] {
 if (import.meta.main) {
   const root = git(['rev-parse', '--show-toplevel']).out.trim()
   process.chdir(root)
-  const repo = repoGit()
+  const tree = checkout()
   const files = pages(GUIDE)
-  const findings = files.flatMap((f) => checkPage(f, readFileSync(f, 'utf8'), repo, (p) => existsSync(p)))
+  const findings = files.flatMap((f) => checkPage(f, readFileSync(f, 'utf8'), tree, (p) => existsSync(p)))
   for (const f of findings) console.error(`${f.file}:${f.line}: ${f.message}`)
   if (findings.length > 0) {
     console.error(`guide-links: ${findings.length} finding(s) in ${files.length} page(s)`)

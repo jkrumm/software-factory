@@ -31,11 +31,11 @@ jobs:
         include:
           # What a lead runs locally (project.yaml `checks.fast`): format, lint, types, boundaries, scans, every unit test.
           # The unit tests are half of it (203 s of a 234 s job): `static` runs the first of two shards beside the checks.
-          # `history` fetches every commit: scripts/guide-links.ts proves each permalink of the guide is on master.
+          # `history` fetches every commit: UNIT_BASE (the merge base with origin/master) is the base of the dead-code audit.
           - { name: static, make: check-fast CHECK_FAST_ALL=1 UNIT_SHARD=1/2, history: 'true' }
           - { name: unit (2/2), make: test-unit UNIT_SHARD=2/2 }
           # The guide (docs/guide): its own install, Basalt tokens current, the VitePress build. pages.yml deploys it.
-          - { name: guide, make: guide-check, history: 'true' }
+          - { name: guide, make: guide-check }
           # The files of a scenarios or e2e shard are planned by seconds (scripts/shard.ts, shard-weights.json beside the
           # tests): bun and Playwright cut by count, and one scenarios shard of three ran 265 s against 167 and 191.
           - { name: scenarios (1/3), make: test-scenarios SHARD=1/3 }

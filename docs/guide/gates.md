@@ -15,6 +15,7 @@ A review is the lead's own check of its change, run once per ship range through 
 > [!NOTE]
 > No gate refuses an unreviewed ship. `judgeShip` records the review as evidence and never refuses on it (NL23). The review-related refusals are `ship names no merged commit` and commits git cannot find on the default branch.
 
+<!-- snippet: apps/server/src/domains/quality/gate.ts judgeShip -->
 ```ts
 export function judgeShip(input: {
   reported: readonly string[]
@@ -34,9 +35,9 @@ The stale answer is agw's judgment, not the factory's. The Issue filed it there 
 
 **Example files:**
 
-- [`brief.ts`, order 6](https://github.com/jkrumm/software-factory/blob/2511836af2e3c6f09eb0f76ded4d5e49b47003ab/apps/server/src/domains/leads/brief.ts#L18): review once per range; a held review is a wait
-- [`gate.ts`](https://github.com/jkrumm/software-factory/blob/2511836af2e3c6f09eb0f76ded4d5e49b47003ab/apps/server/src/domains/quality/gate.ts#L39-L76): the ship gate; a review is evidence, never a refusal
-- [`quality-ship.ts`](https://github.com/jkrumm/software-factory/blob/2511836af2e3c6f09eb0f76ded4d5e49b47003ab/apps/server/src/app/quality-ship.ts#L53-L64): the other refusals, a Spec owed and annotations unanswered
+- [`brief.ts`, order 6](https://github.com/jkrumm/software-factory/blob/master/apps/server/src/domains/leads/brief.ts#L18): review once per range; a held review is a wait
+- [`gate.ts`](https://github.com/jkrumm/software-factory/blob/master/apps/server/src/domains/quality/gate.ts#L39-L77): the ship gate; a review is evidence, never a refusal
+- [`quality-ship.ts`](https://github.com/jkrumm/software-factory/blob/master/apps/server/src/app/quality-ship.ts#L74-L90): the other refusals, a Spec owed and annotations unanswered
 
 ## The merge window
 
@@ -48,6 +49,7 @@ The merge window is the one stretch per repo in which a lead rebases, pushes, wa
 - **A conflict ends the window.** The lead resolves it outside, runs `make check`, and takes the window again.
 - **A finished call is reported** to the server (`POST /merge-windows`) after the release, best effort. It changes neither the lock nor the exit code.
 
+<!-- snippet: apps/cli/src/deploy-lock.ts DEFAULT_MERGE_WAIT_MS -->
 ```ts
 /** A merge lock is held across a CI run (~17 min), so a queue of leads waits longer (`FACTORY_MERGE_LOCK_WAIT_MS`). */
 const DEFAULT_MERGE_WAIT_MS = 90 * 60_000
@@ -55,8 +57,8 @@ const DEFAULT_MERGE_WAIT_MS = 90 * 60_000
 
 **Example files:**
 
-- [`deploy-lock.ts`, `deployLock`](https://github.com/jkrumm/software-factory/blob/2511836af2e3c6f09eb0f76ded4d5e49b47003ab/apps/cli/src/deploy-lock.ts#L31-L60): one lock mechanism, two kinds, `deploy` and `merge`
-- [`brief.ts`, order 7](https://github.com/jkrumm/software-factory/blob/2511836af2e3c6f09eb0f76ded4d5e49b47003ab/apps/server/src/domains/leads/brief.ts#L19): the exact command a lead runs inside the window
+- [`deploy-lock.ts`, `deployLock`](https://github.com/jkrumm/software-factory/blob/master/apps/cli/src/deploy-lock.ts#L31-L57): one lock mechanism, two kinds, `deploy` and `merge`
+- [`brief.ts`, order 7](https://github.com/jkrumm/software-factory/blob/master/apps/server/src/domains/leads/brief.ts#L19): the exact command a lead runs inside the window
 
 ## The merge guard
 
@@ -71,24 +73,32 @@ The merge guard is `make merge-guard`, the script a lead runs just before it mer
 
 The reasons, as the code words them:
 
+<!-- snippet: scripts/merge-guard.ts headRed -->
 ```ts
-`CI has not run on ${sha.slice(0, 7)}: push the branch (the head you tested), wait for CI (make merge-guard with MERGE_GUARD_ARGS=--wait waits)`
-`CI on ${sha.slice(0, 7)} is still running (${last.url}): wait for it (MERGE_GUARD_ARGS=--wait waits)`
-`CI on ${sha.slice(0, 7)} finished ${last.conclusion} (${last.url}): fix it and push, a merge needs green CI on the exact head`
+  if (!last)
+    return `CI has not run on ${sha.slice(0, 7)}: push the branch (the head you tested), wait for CI (make merge-guard with MERGE_GUARD_ARGS=--wait waits)`
+  if (last.status !== 'completed')
+    return `CI on ${sha.slice(0, 7)} is still running (${last.url}): wait for it (MERGE_GUARD_ARGS=--wait waits)`
+  if (last.conclusion !== 'success')
+    return `CI on ${sha.slice(0, 7)} finished ${last.conclusion} (${last.url}): fix it and push, a merge needs green CI on the exact head`
 ```
 
+<!-- snippet: scripts/merge-guard.ts evaluate -->
 ```ts
-'master moved: this branch does not contain origin/master. git fetch origin master && git rebase origin/master, then make check again'
-`migration ${name} takes ${n}, which master already uses: rename it to ${next}_<words>.sql`
+    refusals.push(
+      'master moved: this branch does not contain origin/master. git fetch origin master && git rebase origin/master, then make check again',
+    )
+// …
+        refusals.push(`migration ${name} takes ${n}, which master already uses: rename it to ${next}_<words>.sql`)
 ```
 
 A master run still running is not a refusal: the head contains `origin/master`, and its green CI proved that exact combination. A refusal prints as `merge-guard: refused: <reason>`.
 
 **Example files:**
 
-- [`merge-guard.ts`, header](https://github.com/jkrumm/software-factory/blob/2511836af2e3c6f09eb0f76ded4d5e49b47003ab/scripts/merge-guard.ts#L1-L16): what it refuses and the exit codes
-- [`merge-guard.ts`, `headRed`](https://github.com/jkrumm/software-factory/blob/2511836af2e3c6f09eb0f76ded4d5e49b47003ab/scripts/merge-guard.ts#L75-L87): the head's CI verdict, four cases
-- [`merge-guard.ts`, `evaluate`](https://github.com/jkrumm/software-factory/blob/2511836af2e3c6f09eb0f76ded4d5e49b47003ab/scripts/merge-guard.ts#L117-L159): every refusal in order
+- [`merge-guard.ts`, header](https://github.com/jkrumm/software-factory/blob/master/scripts/merge-guard.ts#L1-L16): what it refuses and the exit codes
+- [`merge-guard.ts`, `headRed`](https://github.com/jkrumm/software-factory/blob/master/scripts/merge-guard.ts#L75-L87): the head's CI verdict, four cases
+- [`merge-guard.ts`, `evaluate`](https://github.com/jkrumm/software-factory/blob/master/scripts/merge-guard.ts#L117-L159): every refusal in order
 
 ## Ship
 
@@ -124,8 +134,8 @@ The second line states what production has not yet shown.
 
 **Example files:**
 
-- [`gate.ts`](https://github.com/jkrumm/software-factory/blob/2511836af2e3c6f09eb0f76ded4d5e49b47003ab/apps/server/src/domains/quality/gate.ts#L44-L76): `judgeShip`, pure: the same answers give the same verdict
-- [`brief.ts`, the ship verb](https://github.com/jkrumm/software-factory/blob/2511836af2e3c6f09eb0f76ded4d5e49b47003ab/apps/server/src/domains/leads/brief.ts#L62): the `--acceptance` form and its refusal
+- [`gate.ts`](https://github.com/jkrumm/software-factory/blob/master/apps/server/src/domains/quality/gate.ts#L44-L77): `judgeShip`, pure: the same answers give the same verdict
+- [`brief.ts`, the ship verb](https://github.com/jkrumm/software-factory/blob/master/apps/server/src/domains/leads/brief.ts#L62): the `--acceptance` form and its refusal
 
 ## The deploy lock
 
@@ -137,6 +147,7 @@ The deploy lock is the host-local lock two leads of one project take so they nev
 - **It waits 30 minutes** by default for a live holder, set by `FACTORY_DEPLOY_LOCK_WAIT_MS`, polled every 2 s.
 - **The exit code is the command's.** The lock runs the command with the caller's own stdin, stdout and stderr.
 
+<!-- snippet: apps/cli/src/deploy-lock.ts holdAndRun -->
 ```ts
 if ('failed' in outcome) {
   io.err(`factory: ${kind} lock for ${input.project}: ${outcome.failed}; not running\n`)
@@ -148,8 +159,8 @@ The brief wraps the deploy as `factory deploy-lock --project <repo> -- make depl
 
 **Example files:**
 
-- [`pid-lock.ts`, `tryTake`](https://github.com/jkrumm/software-factory/blob/2511836af2e3c6f09eb0f76ded4d5e49b47003ab/apps/cli/src/pid-lock.ts#L61-L111): take, hold, retry or fail; reclaim a dead holder only
-- [`deploy-lock.ts`, `holdAndRun`](https://github.com/jkrumm/software-factory/blob/2511836af2e3c6f09eb0f76ded4d5e49b47003ab/apps/cli/src/deploy-lock.ts#L97-L156): the wait loop and its refusals
+- [`pid-lock.ts`, `tryTake`](https://github.com/jkrumm/software-factory/blob/master/apps/cli/src/pid-lock.ts#L61-L111): take, hold, retry or fail; reclaim a dead holder only
+- [`deploy-lock.ts`, `holdAndRun`](https://github.com/jkrumm/software-factory/blob/master/apps/cli/src/deploy-lock.ts#L94-L153): the wait loop and its refusals
 
 ## Verify and the watch
 
@@ -171,13 +182,13 @@ The first check came 1 minute 32 seconds after the ship. It found CI still runni
 
 **Example files:**
 
-- [`watch.ts`, `ciCheck`](https://github.com/jkrumm/software-factory/blob/2511836af2e3c6f09eb0f76ded4d5e49b47003ab/apps/server/src/domains/quality/watch.ts#L63-L97): CI of the landed commit as a check
-- [`watch.ts`, `stepOf`](https://github.com/jkrumm/software-factory/blob/2511836af2e3c6f09eb0f76ded4d5e49b47003ab/apps/server/src/domains/quality/watch.ts#L170-L195): pass, again or regress
+- [`watch.ts`, `ciCheck`](https://github.com/jkrumm/software-factory/blob/master/apps/server/src/domains/quality/watch.ts#L70-L135): CI of the landed commit as a check
+- [`watch.ts`, `stepOf`](https://github.com/jkrumm/software-factory/blob/master/apps/server/src/domains/quality/watch.ts#L266-L291): pass, again or regress
 
 **Read more:**
 
-- [Quality](https://github.com/jkrumm/software-factory/blob/2511836af2e3c6f09eb0f76ded4d5e49b47003ab/docs/architecture.md#L397-L428): ship, review evidence, watch and verify
-- [Merging](https://github.com/jkrumm/software-factory/blob/2511836af2e3c6f09eb0f76ded4d5e49b47003ab/docs/operations.md#L102-L120): the window, the guard and the merge method
-- [Shipping](https://github.com/jkrumm/software-factory/blob/2511836af2e3c6f09eb0f76ded4d5e49b47003ab/docs/language.md#L109-L144): Gate, Ship, Watch, Verify, Regressed, Friction
+- [Quality](https://github.com/jkrumm/software-factory/blob/master/docs/architecture.md#L495-L532): ship, review evidence, watch and verify
+- [Merging](https://github.com/jkrumm/software-factory/blob/master/docs/operations.md#L111-L129): the window, the guard and the merge method
+- [Shipping](https://github.com/jkrumm/software-factory/blob/master/docs/language.md#L114-L149): Gate, Ship, Watch, Verify, Regressed, Friction
 
 Next: [Capacity](./capacity.md)

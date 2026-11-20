@@ -13,6 +13,7 @@ A lead is the Claude Code session that owns one attempt of one Issue.
 - **Session state is derived.** `starting`, `working`, `idle`, `compacted`, `walled` and `gone` come from hook events when read, never from a stored column.
 - **The factory calls no model.** A lead is the one place model judgment enters a change. Every other judgment is an agw workflow.
 
+<!-- snippet: apps/server/src/domains/leads/names.ts leadKey -->
 ```ts
 export const leadKey = (issue: IssueId, attempt: number): string => `lead-${issueNumber(issue)}-${attempt}`
 // …
@@ -34,8 +35,8 @@ The drawing follows one attempt in order, as issue_1809 took it, plus the note a
 
 **Example files:**
 
-- [`names.ts`](https://github.com/jkrumm/software-factory/blob/2511836af2e3c6f09eb0f76ded4d5e49b47003ab/apps/server/src/domains/leads/names.ts#L3-L19): the session key and the branch name, one per attempt
-- [`docs/language.md`](https://github.com/jkrumm/software-factory/blob/2511836af2e3c6f09eb0f76ded4d5e49b47003ab/docs/language.md#L61-L75): Lead, Attempt, Session state and Delivery as the factory defines them
+- [`names.ts`](https://github.com/jkrumm/software-factory/blob/master/apps/server/src/domains/leads/names.ts#L3-L19): the session key and the branch name, one per attempt
+- [`docs/language.md`](https://github.com/jkrumm/software-factory/blob/master/docs/language.md#L63-L77): Lead, Attempt, Session state and Delivery as the factory defines them
 
 ## The brief
 
@@ -67,8 +68,8 @@ The brief changes when a failure repeats. issue_1807 counted 12 of Issues 1640 t
 
 **Example files:**
 
-- [`brief.ts`, the standing orders](https://github.com/jkrumm/software-factory/blob/2511836af2e3c6f09eb0f76ded4d5e49b47003ab/apps/server/src/domains/leads/brief.ts#L9-L26): the contract every lead gets, orders 1 to 9 and the "Also" rules
-- [`brief.ts`, orders 6 and 7](https://github.com/jkrumm/software-factory/blob/2511836af2e3c6f09eb0f76ded4d5e49b47003ab/apps/server/src/domains/leads/brief.ts#L18-L19): review once per range, and the merge window
+- [`brief.ts`, the standing orders](https://github.com/jkrumm/software-factory/blob/master/apps/server/src/domains/leads/brief.ts#L9-L26): the contract every lead gets, orders 1 to 9 and the "Also" rules
+- [`brief.ts`, orders 6 and 7](https://github.com/jkrumm/software-factory/blob/master/apps/server/src/domains/leads/brief.ts#L18-L19): review once per range, and the merge window
 
 ## Seats
 
@@ -90,6 +91,7 @@ An excerpt of `config/roles.json`, cut off before the end of the file:
     "light": { "tier": "haiku", "effort": "high" },
 ```
 
+<!-- snippet: apps/server/src/domains/leads/light.ts MOVE_UP_AFTER -->
 ```ts
 /** A light lead's second stall, or its second refused ship, moves it up. */
 const MOVE_UP_AFTER = 2
@@ -100,9 +102,9 @@ const MOVE_UP_AFTER = 2
 
 **Example files:**
 
-- [`roles.json`](https://github.com/jkrumm/software-factory/blob/2511836af2e3c6f09eb0f76ded4d5e49b47003ab/config/roles.json#L1-L9): the role table, one tier and effort per role
-- [`light.ts`](https://github.com/jkrumm/software-factory/blob/2511836af2e3c6f09eb0f76ded4d5e49b47003ab/apps/server/src/domains/leads/light.ts#L31-L69): `lightRule` picks the seat, `moveUpWhy` moves a struggling light lead up
-- [`seats.ts`](https://github.com/jkrumm/software-factory/blob/2511836af2e3c6f09eb0f76ded4d5e49b47003ab/apps/server/src/domains/capacity/seats.ts#L21-L39): the extra leads an idle host can take
+- [`roles.json`](https://github.com/jkrumm/software-factory/blob/master/config/roles.json#L1-L10): the role table, one tier and effort per role
+- [`light.ts`](https://github.com/jkrumm/software-factory/blob/master/apps/server/src/domains/leads/light.ts#L48-L87): `lightRule` picks the seat, `moveUpWhy` moves a struggling light lead up
+- [`seats.ts`](https://github.com/jkrumm/software-factory/blob/master/apps/server/src/domains/capacity/seats.ts#L21-L39): the extra leads an idle host can take
 
 ## Verbs
 
@@ -122,6 +124,7 @@ A verb is a plain `factory` command that reports one outcome of an attempt.
 - **Exit codes are a table.** A caller branches on them. A code is never added or changed in this repo alone.
 - **A value of `-` reads stdin**, one starting with `@` reads the file it names.
 
+<!-- snippet: apps/cli/src/exit.ts EXIT -->
 ```ts
 export const EXIT = {
   ok: 0,
@@ -142,8 +145,8 @@ A lead's token is the `agent` caller, which cannot read some owner routes (`fact
 
 **Example files:**
 
-- [`brief.ts`, the verb list](https://github.com/jkrumm/software-factory/blob/2511836af2e3c6f09eb0f76ded4d5e49b47003ab/apps/server/src/domains/leads/brief.ts#L53-L72): each verb with its flags
-- [`exit.ts`](https://github.com/jkrumm/software-factory/blob/2511836af2e3c6f09eb0f76ded4d5e49b47003ab/apps/cli/src/exit.ts#L5-L17): the exit-code table every caller branches on
+- [`brief.ts`, the verb list](https://github.com/jkrumm/software-factory/blob/master/apps/server/src/domains/leads/brief.ts#L53-L72): each verb with its flags
+- [`exit.ts`](https://github.com/jkrumm/software-factory/blob/master/apps/cli/src/exit.ts#L5-L17): the exit-code table every caller branches on
 
 ## Hooks
 
@@ -155,6 +158,7 @@ A hook is the Claude Code event handler `factory hook <event>` that tells the fa
 - **One exit-2 path.** A Stop with nothing reported is sent back to the lead once, on stderr, exit 2.
 - **It imports only `node:fs`** and the spool half of the contract, so it starts fast.
 
+<!-- snippet: apps/cli/src/hook.ts LOCK_BUDGET_MS -->
 ```ts
 /** How long a hook waits for another hook of its session before it writes a key that cannot collide. */
 const LOCK_BUDGET_MS = 200
@@ -168,8 +172,9 @@ const POST_TIMEOUT_MS = 300
 
 **Example files:**
 
-- [`hook.ts`, the events and budgets](https://github.com/jkrumm/software-factory/blob/2511836af2e3c6f09eb0f76ded4d5e49b47003ab/apps/cli/src/hook.ts#L21-L34): the six events, the 200 ms lock and the 300 ms post
-- [`hook.ts`, `runHook`](https://github.com/jkrumm/software-factory/blob/2511836af2e3c6f09eb0f76ded4d5e49b47003ab/apps/cli/src/hook.ts#L258-L310): stop check, spool, then post
+- [`hook.ts`, the budgets](https://github.com/jkrumm/software-factory/blob/master/apps/cli/src/hook.ts#L21-L25): the 200 ms lock and the 300 ms post
+- [`hook.ts`, `toEvent`](https://github.com/jkrumm/software-factory/blob/master/apps/cli/src/hook.ts#L64-L119): the six hook events and the factory event each one stands for
+- [`hook.ts`, `runHook`](https://github.com/jkrumm/software-factory/blob/master/apps/cli/src/hook.ts#L249-L301): stop check, spool, then post
 
 ## Deliveries and notes
 
@@ -182,6 +187,7 @@ A delivery is what was typed into a lead: its brief, or a note.
 
 Every effect has a key built from its parts, so a replay finds the earlier claim instead of typing blind:
 
+<!-- snippet: apps/server/src/kernel/keys.ts escapePart -->
 ```ts
 /** `%` and `:` inside a part are escaped, so two different part lists never make the same key. */
 const escapePart = (part: string): string => part.replaceAll('%', '%25').replaceAll(':', '%3A')
@@ -189,9 +195,9 @@ const escapePart = (part: string): string => part.replaceAll('%', '%25').replace
 
 **Example files:**
 
-- [`leads-note.ts`](https://github.com/jkrumm/software-factory/blob/2511836af2e3c6f09eb0f76ded4d5e49b47003ab/apps/server/src/app/leads-note.ts#L44-L93): the delivery key is claimed before the typing
-- [`note.ts`](https://github.com/jkrumm/software-factory/blob/2511836af2e3c6f09eb0f76ded4d5e49b47003ab/apps/server/src/domains/leads/note.ts#L10-L20): which notes a lead treats as the owner's word
-- [`keys.ts`](https://github.com/jkrumm/software-factory/blob/2511836af2e3c6f09eb0f76ded4d5e49b47003ab/apps/server/src/kernel/keys.ts#L3-L23): the one way to build a deterministic key
+- [`leads-note.ts`](https://github.com/jkrumm/software-factory/blob/master/apps/server/src/app/leads-note.ts#L50-L99): the delivery key is claimed before the typing
+- [`note.ts`](https://github.com/jkrumm/software-factory/blob/master/apps/server/src/domains/leads/note.ts#L10-L20): which notes a lead treats as the owner's word
+- [`keys.ts`](https://github.com/jkrumm/software-factory/blob/master/apps/server/src/kernel/keys.ts#L3-L23): the one way to build a deterministic key
 
 ## The steward
 
@@ -202,6 +208,7 @@ The steward is the supervisor loop over stalled Issues. It acts deterministicall
 - **An `unreported` stall is woken** up to `maxWakes` times per attempt before the steward asks.
 - **A repeated stall is not asked twice.** If a Decision of the steward already answered the same stall, nothing has changed, and no person has written since, the Issue stays stalled or is held until a time.
 
+<!-- snippet: apps/server/src/domains/leads/stop.ts decideStop -->
 ```ts
 export function decideStop(facts: StopFacts): StopDecision {
   if (facts.backgroundTasks || !facts.working || !facts.factoryTurn || facts.reported) return 'let_through'
@@ -219,6 +226,7 @@ met: the residual cause is fixed: the lead's first re-block after an answer scor
 
 The excerpt of the rule itself:
 
+<!-- snippet: apps/server/src/app/loops/steward.ts straightAfter -->
 ```ts
 const straightAfter =
   cause === 'blocked' &&
@@ -230,14 +238,14 @@ The same ship stated one acceptance line as not met: `stall:unreported` (37) and
 
 **Example files:**
 
-- [`steward.ts`, `repeatedStall`](https://github.com/jkrumm/software-factory/blob/2511836af2e3c6f09eb0f76ded4d5e49b47003ab/apps/server/src/app/loops/steward.ts#L135-L196): the same stall as a Decision already answered
-- [`stall.ts`, `decideStall`](https://github.com/jkrumm/software-factory/blob/2511836af2e3c6f09eb0f76ded4d5e49b47003ab/apps/server/src/domains/loops/stall.ts#L91-L127): wake, hold, wait or ask, in that order
-- [`stop.ts`](https://github.com/jkrumm/software-factory/blob/2511836af2e3c6f09eb0f76ded4d5e49b47003ab/apps/server/src/domains/leads/stop.ts#L34-L47): the send-back, once per turn
+- [`steward.ts`, `repeatedStall`](https://github.com/jkrumm/software-factory/blob/master/apps/server/src/app/loops/steward.ts#L135-L196): the same stall as a Decision already answered
+- [`stall.ts`, `decideStall`](https://github.com/jkrumm/software-factory/blob/master/apps/server/src/domains/loops/stall.ts#L91-L127): wake, hold, wait or ask, in that order
+- [`stop.ts`](https://github.com/jkrumm/software-factory/blob/master/apps/server/src/domains/leads/stop.ts#L34-L47): the send-back, once per turn
 
 **Read more:**
 
-- [Who works](https://github.com/jkrumm/software-factory/blob/2511836af2e3c6f09eb0f76ded4d5e49b47003ab/docs/language.md#L61-L75): Lead, Attempt, Delivery, Defer, Steward, Judge
-- [Capacity and leads](https://github.com/jkrumm/software-factory/blob/2511836af2e3c6f09eb0f76ded4d5e49b47003ab/docs/architecture.md#L142-L170): how a lead starts, its terminal and its account
-- [Hooks and notes](https://github.com/jkrumm/software-factory/blob/2511836af2e3c6f09eb0f76ded4d5e49b47003ab/docs/architecture.md#L292-L296): the spool, the socket and the delivery key
+- [Who works](https://github.com/jkrumm/software-factory/blob/master/docs/language.md#L63-L77): Lead, Attempt, Delivery, Defer, Steward, Judge
+- [Capacity and leads](https://github.com/jkrumm/software-factory/blob/master/docs/architecture.md#L149-L177): how a lead starts, its terminal and its account
+- [Hooks and notes](https://github.com/jkrumm/software-factory/blob/master/docs/architecture.md#L299-L303): the spool, the socket and the delivery key
 
 Next: [Gates](./gates.md)
