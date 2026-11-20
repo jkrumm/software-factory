@@ -625,6 +625,11 @@ test('slot_line and gates_passed: the stored slot minutes and capacity facts fil
     SELECT date_trunc('minute', now()) - (m || ' minutes')::interval, 2, 4, 2, 2, 12, false, 'drill' FROM generate_series(0, 14) AS m`
   // a lead admitted (a real `admitted` event) between two samples that both read the load over the ceiling
   const admittedIssue = await working(lab, REPO, 'admitted while the host is over its load ceiling')
+  // admission records the reading it decided with in its event; the lab's host reads a quiet load, so the drill sets one over the ceiling
+  const [recorded] =
+    await db`SELECT payload ? 'load' AS has FROM factory.issue_events WHERE issue_id = ${admittedIssue} AND kind = 'admitted' AND result = 'applied'`
+  expect(recorded?.has).toBe(true)
+  await db`UPDATE factory.issue_events SET payload = jsonb_set(payload, '{load}', '150') WHERE issue_id = ${admittedIssue} AND kind = 'admitted' AND result = 'applied'`
   await db`DELETE FROM factory.host_samples`
   await db`
     INSERT INTO factory.host_samples (at, load, load_ceiling, leads, seats)

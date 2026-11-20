@@ -691,7 +691,7 @@ async function admitOne(
     const recorded = await recordIn(stores.work, deps, {
       issueId: next.issue,
       key: key('admit', next.issue, attempt),
-      event: { kind: 'admitted', payload: {}, actor: 'factory' },
+      event: { kind: 'admitted', payload: { load: host.load }, actor: 'factory' },
     })
     if (!recorded.ok) return err(portError('refused', JSON.stringify(recorded.error)))
     // The machine said no (the Issue moved since the look): nothing is kept, the next look finds it as it is.

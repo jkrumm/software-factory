@@ -41,8 +41,12 @@ export const PAYLOADS = {
     /** triage's judgment of the work's size, kept as it answered it (old events and a rule settle carry none) */
     size: z.enum(SIZES).optional(),
   }),
-  /** capacity lets a lead start: the next attempt */
-  admitted: z.object({}),
+  /**
+   * capacity lets a lead start: the next attempt. `load` is the reading admission decided with (null: none was read); a
+   * tripped load rule is cleared by a live reading under the ceiling, which no minute sample shows, so the self-watch
+   * judges a passed gate by this one (old events carry none).
+   */
+  admitted: z.object({ load: z.number().nullable().optional() }),
   /** the attempt's lead runs in its terminal */
   lead_started: z.object({
     attempt,
