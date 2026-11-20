@@ -123,7 +123,7 @@ test('the project filter is in the URL and narrows the nodes to the project and 
   await expect(node(page, 'Draft the export schema')).toHaveCount(0)
 })
 
-test('an Issue node links to its page; a plan row does not link', async ({ page }) => {
+test('an Issue node links to its page; a plan row links only to its project', async ({ page }) => {
   await page.goto('/chain')
   // a plan row has no Issue to link to; its project chip is the card's one link, to the project's page
   const row = node(page, 'Draft the export schema')
