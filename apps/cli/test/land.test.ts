@@ -325,6 +325,17 @@ describe('factory land', () => {
     expect(await calls()).not.toContain('gh pr merge')
   })
 
+  test('a merge-guard from an sinclude file runs', async () => {
+    await writeFile(join(work, 'Makefile'), 'sinclude ci.mk\n')
+    await writeFile(join(work, 'ci.mk'), 'merge-guard:\n\t@echo guard-clear\n')
+    await git(work, 'add', 'Makefile', 'ci.mk')
+    await git(work, 'commit', '--quiet', '-m', 'chore: an sincluded guard')
+    const result = await land().done
+    expect(result.code).toBe(0)
+    expect(result.err).toContain('guard-clear')
+    expect(result.err).toContain('land: guard: make merge-guard is clear')
+  })
+
   test('an included Makefile that defines no merge-guard falls back to the rule held here', async () => {
     await writeFile(join(work, 'Makefile'), 'include ci.mk\n')
     await writeFile(join(work, 'ci.mk'), 'check:\n\t@true\n')
