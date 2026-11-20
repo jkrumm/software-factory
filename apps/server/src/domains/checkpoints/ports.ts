@@ -58,7 +58,7 @@ export interface DecisionRecord {
   artifactId: ArtifactId | null
   answer: string | null
   settledBy: Settler | null
-  /** what backs the answer: the policy rule's reason, the Judge's source, the default, "the owner" */
+  /** what backs the answer: the Judge's source, the default, "the owner" */
   source: string | null
   answeredAt: Date | null
   /** set when the Issue no longer waits for it (closed, cancelled): it leaves every list of open work */
