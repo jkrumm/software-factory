@@ -69,6 +69,7 @@ script runs in the pass's throwaway checkout, then the same probe runs again. Wh
 Issue of that key that no lead has started is closed as healed by the table above. A fix that failed, or left something red,
 leaves the finding as it was with the script's output on it, and the Issue goes to a light lead as always. Every attempt is
 listed on the Hygiene tab (`fixes` of `factory read project-hygiene <name>`).
+
 A run that was skipped or failed says nothing about a key, so it never heals. The document judgment never heals: it reads a
 few documents, and absence proves nothing. Every action is recorded on the pass and listed on the Hygiene tab.
 
