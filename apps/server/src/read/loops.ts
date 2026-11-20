@@ -521,7 +521,9 @@ export function loopReads(tx: SQL): LoopReads {
       const parsed = rows.map((raw) => ClassCpuRow.parse(raw))
       const split: unknown[] = await tx`
         SELECT count(*) AS samples, avg(cpu_idle_pct) AS idle, avg(cpu_user_pct) AS usr, avg(cpu_sys_pct) AS sys
-        FROM factory.host_samples WHERE at >= ${since} AND cpu_idle_pct IS NOT NULL AND cpu_user_pct IS NOT NULL AND cpu_sys_pct IS NOT NULL`
+        FROM factory.host_samples
+        WHERE at >= ${since} AND cpu_idle_pct IS NOT NULL AND cpu_user_pct IS NOT NULL AND cpu_sys_pct IS NOT NULL
+          AND at IN (SELECT at FROM factory.host_class_samples WHERE at >= ${since})`
       const header = HostCpuSplitRow.parse(split[0])
       return {
         minutes: parsed[0]?.minutes ?? 0,

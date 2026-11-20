@@ -361,14 +361,15 @@ function cpuLine(window: ClassCpuWindow | null): string {
 }
 
 /**
- * The host's busy CPU against what the per-process groups account for: busy cores from the `top` header (100 minus idle,
+ * The host's busy CPU against what the per-process groups account for, over the minutes that carry both: busy cores from the `top` header (100 minus idle,
  * of all cores), the user and system split, the cores the sampled processes took, and the remainder. The remainder is what
  * a once-a-minute sample cannot name (processes that start and exit inside a minute, such as a test run's children,
  * linters and compilers, and kernel time); a system share that dominates it points at the kernel, a user share at churn.
  */
 export function cpuAccountingLine(window: ClassCpuWindow | null, cores: number | undefined): string {
   const host = window?.host
-  if (!window || !host) return '- CPU accounting: no host CPU split read'
+  // the split and the groups are read over the same host minutes; a window with no class minutes has no groups to net against
+  if (!window || !host || window.minutes === 0) return '- CPU accounting: no host CPU split read'
   const busyPct = Math.max(0, 100 - host.idlePct)
   const split = `host ${Math.round(busyPct)}% busy (user ${Math.round(host.userPct)}%, system ${Math.round(host.sysPct)}%, idle ${Math.round(host.idlePct)}%) over ${host.samples} host minutes`
   if (cores === undefined || cores <= 0)
