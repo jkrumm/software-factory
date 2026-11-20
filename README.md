@@ -1,104 +1,148 @@
 <img src="docs/brand/master-1024.png" width="96" height="96" alt="">
 
-# software-factory
+# Software Factory
 
-**A closed loop that turns signals into verified production changes. Agents do the work, code supervises them, and one person decides only what a person must.**
+**The design of a closed loop that turns signals into verified production changes. Agents do the work, code supervises them, and one person decides only what a person must.**
 
-This repo is one implementation of that loop: a lifecycle server on Bun and Postgres. One developer built it and runs it, on one always-on machine against a few Claude Code subscriptions. It builds itself; its changes go through its own Issues.
+This README explains the concept: what a software factory is, its mental model, its domain model and the rules that hold it together. The code in this repo is one working implementation. It is the example throughout, and the last part of this page describes it. In the week to 2026-11-20 it closed 1,604 Issues across one developer's repos ([the evidence](#the-evidence)).
 
-This page explains the design pattern by pattern, each with its rule, the reason for it and the code that holds it.
-
-It is a reference, not a product. Every factory is set up for its place. Read it, fork it, take the parts you want ([MIT](LICENSE)).
-
-**The guide** tells the same story chapter by chapter with one Issue followed through all of them: [software-factory.jkrumm.com](https://software-factory.jkrumm.com), or [`docs/guide/`](docs/guide/README.md) on GitHub.
+Everything here is a recommendation drawn from one implementation, not a standard. Every factory is set up for its place: take the parts that fit ([MIT](LICENSE)). The [guide](docs/guide/README.md) ([software-factory.jkrumm.com](https://software-factory.jkrumm.com)) goes through the implementation chapter by chapter.
 
 ## Contents
 
-- [The problem](#the-problem)
-- [The idea](#the-idea)
-- [The result](#the-result)
-- [What it costs](#what-it-costs)
-- [The language](#the-language)
-- [One Issue's life](#one-issues-life)
-- [The patterns](#the-patterns)
-  - [Everything enters as a signal](#everything-enters-as-a-signal)
-  - [Facts are stored, state is derived](#facts-are-stored-state-is-derived)
-  - [The transition table is total](#the-transition-table-is-total)
-  - [A wait names its exit](#a-wait-names-its-exit)
-  - [Admission is a decision with numbers](#admission-is-a-decision-with-numbers)
-  - [One Issue, one lead](#one-issue-one-lead)
-  - [Gates are code](#gates-are-code)
-  - [Ship means land and deploy, and a watch ends it](#ship-means-land-and-deploy-and-a-watch-ends-it)
-  - [Deterministic first, then a workflow, then the owner](#deterministic-first-then-a-workflow-then-the-owner)
-  - [Claim, commit, call, record](#claim-commit-call-record)
-  - [Every effect has a key](#every-effect-has-a-key)
-  - [A caller is its token](#a-caller-is-its-token)
-  - [Hooks never speak](#hooks-never-speak)
-  - [The factory files against itself](#the-factory-files-against-itself)
-  - [The build holds the words](#the-build-holds-the-words)
-- [Where it falls short](#where-it-falls-short)
-- [Architecture](#architecture)
-- [The Console](#the-console)
-- [Layout](#layout)
-- [Run it](#run-it)
-- [Read next](#read-next)
+Short on time: [the loop](#the-loop), then [one Issue's life](#one-issues-life) and [the evidence](#the-evidence).
+
+- **[The idea](#the-idea):** [the problem](#the-problem) · [what a software factory is](#what-a-software-factory-is) · [dark for code, lit for decisions](#dark-for-code-lit-for-decisions) · [what it gives and what it costs](#what-it-gives-and-what-it-costs)
+- **[The mental model](#the-mental-model):** [the loop](#the-loop) · [four questions](#four-questions) · [the ladder of judgment](#the-ladder-of-judgment) · [attention is the budget](#attention-is-the-budget)
+- **[The domain model](#the-domain-model):** [the language](#the-language) · [Signal](#signal) · [Triage and incidents](#triage-and-incidents) · [Issue](#issue) · [Event](#event) · [State and the transition table](#state-and-the-transition-table) · [Wait and stall](#wait-and-stall) · [Admission](#admission) · [Chain and plan](#chain-and-plan) · [Lead and attempt](#lead-and-attempt) · [Gate](#gate) · [Ship, watch and verify](#ship-watch-and-verify) · [Checkpoint](#checkpoint) · [Loop](#loop) · [Friction](#friction)
+- **[Design principles](#design-principles):** [claim, commit, call, record](#claim-commit-call-record) · [every effect has a key](#every-effect-has-a-key) · [a caller is its token](#a-caller-is-its-token) · [supervision never speaks](#supervision-never-speaks) · [rules are pure, I/O sits behind ports](#rules-are-pure-io-sits-behind-ports) · [the build holds the words](#the-build-holds-the-words)
+- **[The example implementation](#the-example-implementation):** [architecture](#architecture) · [one Issue's life](#one-issues-life) · [the evidence](#the-evidence) · [where it falls short](#where-it-falls-short) · [the Console](#the-console) · [layout](#layout) · [run it](#run-it)
+- **[Further reading](#further-reading)**
+
+# The idea
 
 ## The problem
 
 A coding agent writes a change faster than a person can supervise it. Put a person at the spec, at every question and at the merge, and the person is the queue: ten agents wait on one inbox. Take the person out without replacing what they did, and nothing checks the work.
 
-The scarce resource is the owner's attention. A factory is the machinery that spends none of it on what a machine can settle, and knows exactly what it cannot settle.
+Better models do not solve this. The limit is not how well one agent codes. It is everything around the agent: what it should work on, whether it may start, what proves it is done, and who decides when it cannot.
 
-## The idea
+## What a software factory is
 
-**Dark for code, lit for decisions.**
+A software factory is the system around the agents. It takes in everything that might be work and decides what is. It gives each piece to one agent, which owns it until it is verified in production. It escalates to a person only what no machine may decide.
 
-- **Dark for code.** No person reviews a change before production. The lead's own review, gates, a watch window and probes do that job. [Warp](https://www.warp.dev) keeps a person at spec, question and merge and calls dark factories "not realistic right now"; this repo exists to show how far past that one person can go.
-- **Lit for decisions.** What reaches the owner is product direction, spend, irreversible data loss, other people, security policy, rare big architecture and taste. The factory settles everything else, and counts a touch it should have avoided as friction.
+It is not one of these, though it uses all three:
+
+| Thing | What it does | What it leaves open |
+|-|-|-|
+| A coding agent | carries out one task in one session | which task, when, and whether the result holds |
+| An orchestrator of agents | splits one task across several sessions | the same, plus the handoffs between them |
+| CI/CD | moves a finished change to production | where the change came from and whether it did what was asked |
+
+A factory owns the whole lifecycle: intake, admission, supervision, gates, verification, escalation, and the measurement of its own waste.
+
+## Dark for code, lit for decisions
+
+The position this design takes:
+
+- **Dark for code.** No person reviews a change before production. The agent's own review, gates, a watch window and probes do that job. [Warp](https://www.warp.dev/blog/adapting-for-a-world-of-software-factories) keeps a person at spec, question and merge and calls dark factories "not realistic right now"; this repo exists to show how far past that one person can go.
+- **Lit for decisions.** What reaches the owner is product direction, spend, irreversible data loss, other people, security policy, rare big architecture and taste. The factory settles everything else, and counts a touch it should have avoided as waste.
+
+The two halves depend on each other. Taking the person out of the merge rests on the other half: the stops that remain have to be explicit, rare and counted.
+
+## What it gives and what it costs
+
+**What it gives:**
+
+- Throughput is no longer bounded by one person's review time.
+- Every stop for a person is a named thing with a contract, visible on one screen.
+- Every change has a record by construction: where it came from, who built it, what proved it, what it could not prove.
+- Alerts, bugs, feature requests and the system's own findings go through one path.
+- Waste is counted, so the factory can be pointed at itself.
+
+**What it costs:**
+
+- **A contract per repo.** Each repo must check itself, deploy and prove it is live by a command. A repo that cannot prove a change by a command cannot be dark.
+- **An always-on machine,** a database, and model subscriptions the factory fills.
+- **The first weeks** go into the factory, not into the products.
+- **A wrong gate is wrong at scale.** A check that passes bad changes passes two hundred a day.
+- **One person stays on call** for the decisions that are theirs.
+
+Do not build one for work a command cannot verify, or for a team whose process requires a person's review of every change.
+
+# The mental model
+
+## The loop
 
 ![The loop: a signal is triaged into an Issue, admitted, built by a lead, gated, shipped and deployed, then verified and watched; a regression returns to the lead, and loops beside the path file signals.](docs/guide/diagrams/loop.svg)
 
-1. **Everything enters as a signal:** a failing monitor, an alert, a GitHub issue, a voice note, a finding of the factory itself. Triage decides what it becomes.
-2. **Capacity admits it.** Subscriptions, their 5-hour and weekly windows, memory, load and per-repo claims decide when a lead may start.
-3. **One lead per Issue.** A lead is an interactive Claude Code session in a terminal. It owns the Issue from root cause through build, its own review, ship and verification.
-4. **Ship means land and deploy,** and a watch window checks the change in production.
-5. **Checkpoints are rare.** A lead that needs a person raises a Decision, a Spec or an Errand. Most are settled before a person sees them, and none is a merge.
+1. **Work arrives as signals.** A failing monitor, a GitHub issue, a voice note and a finding of the factory itself all arrive the same way, and triage decides what each becomes.
+2. **Capacity admits work.** An Issue starts when the machine, the subscriptions and the repo can take it, and one that waits says why.
+3. **One lead owns one Issue,** from root cause to verification.
+4. **A ship is a change landed and deployed,** and a watch window checks it in production.
+5. **A lead that needs a person raises a checkpoint.** Most are settled before a person sees them, and none is a merge.
 
-The server itself never calls a model. Every judgment goes deterministic code first, then an [agent-workflows](https://github.com/jkrumm/agent-workflows) workflow, then the owner. Every change to a repo is made by Claude Code.
+The loop is closed twice. A regression goes back to the lead that shipped it. And the factory's own waste comes back in as signals.
 
-## The result
+## Four questions
 
-The 7 days from 2026-11-13 09:38 UTC to 2026-11-20 09:38 UTC, all projects, from `factory read kpis` and `factory read friction`:
+Every factory, whatever it is built from, answers four questions. The domain model below is this design's answers.
 
-| What | Count |
-|-|-|
-| Issues filed | 1,545, of which the factory's own loops filed 282 |
-| Issues closed | 1,604, or 229 a day |
-| Median time from filed to closed | 85 minutes |
-| First verifications that passed | 1,290 of 1,338 (96.4 %; the target is 90 %) |
-| Decisions leads raised | 58: the Judge settled 45, a default 7, the owner 5, his delegate 1 |
-| Specs, Concepts and Reports the owner judged | 95 |
-| Errands that reached the owner's hands | 77 |
-| Times the owner stepped in where the factory should have settled it | 58, mostly notes to a lead (0.038 per Issue; the target is at most 0.07) |
+| Question | Answered by | The rule |
+|-|-|-|
+| What becomes work? | [Signal](#signal), [Triage](#triage-and-incidents) | Nobody files around the state machine |
+| Who may start, and when? | [Admission](#admission), [Chain](#chain-and-plan) | A waiting Issue names what keeps it out, with numbers |
+| What proves it is done? | [Gate](#gate), [Watch](#ship-watch-and-verify) | A ship holds on facts a command produced. What the agent claims is recorded beside them, never taken as proof |
+| Who decides when a machine cannot? | [Checkpoint](#checkpoint) | Code first, then a workflow, then the owner |
 
-No person read a diff. What the owner did that week: judge 95 handed-over pages, answer 5 questions, and do 77 things only hands can do, such as a biometric prompt.
+## The ladder of judgment
 
-## What it costs
+Every judgment in the factory has three rungs, tried in this order:
 
-- **One always-on machine,** a Postgres database, a terminal multiplexer for the leads ([herdr-core](integrations/README.md)) and the workflow runner (agw).
-- **Claude Code subscriptions.** The factory fills their windows; in the week above the accounts stood at 97 % of their weekly quota at reset.
-- **A contract per repo.** A `project.yaml` names how the repo checks itself, deploys and proves it is live (`make check`, a deploy command, `make verify`). A repo that cannot prove a change by a command cannot be dark.
-- **Discipline about what the owner is asked.** Every ask is counted, and a recurring one becomes a rule.
+1. **Deterministic code.** A rule costs nothing to run and can be tested.
+2. **A model workflow.** Cheap, and wrong sometimes, so it runs behind a typed question with an idempotency key, and only where the rules run out.
+3. **The owner.** Neither cheap nor always there.
 
-Do not build this:
+| Judgment | Code decides | A workflow decides | The owner decides |
+|-|-|-|-|
+| What a signal becomes | fingerprint, routes, correlation window | kind, origin, amend or new | whether held outside text becomes work |
+| What a stalled Issue needs | wake, re-check, requeue, deliver, break a claim deadlock | what to do when the rules do not say | nothing, unless it becomes a Decision |
+| Whether a question is the owner's | standing policy, the agent's declared default | whether a person is needed at all, given precedent | product direction, spend, data loss, other people, security policy, taste |
 
-- for work a command cannot verify,
-- for a team whose process requires a person's review,
-- to save effort this month. The first weeks go into the factory, not into the products.
+The lifecycle server itself calls no model. Model judgment lives in workflows outside it, behind a port, so every such call is visible, keyed and replaceable.
+
+## Attention is the budget
+
+The scarce resource is the owner's attention, so the factory measures its spending.
+
+- A **touch** is the owner acting on an Issue. A touch the factory should have settled is **friction**.
+- A touch that repeats becomes a rule, a default or a change to what agents are told.
+- A stop the owner wanted (a Spec for a new screen, an Errand only hands can do) is not friction. It is the product working.
+
+# The domain model
+
+```mermaid
+flowchart LR
+  signal([Signal]) -->|triage| issue[Issue]
+  plan[Plan row] -->|filed when its chain is done| issue
+  issue -->|is a log of| event[Events]
+  issue -->|waits after| issue
+  capacity{{Admission}} -->|admits| issue
+  issue -->|one per attempt| lead[Lead]
+  lead -->|ships through| gate{{Gate}}
+  gate --> watch[Watch]
+  watch -->|passed: closes| issue
+  watch -->|regressed| lead
+  lead -->|raises| checkpoint[Checkpoint]
+  checkpoint -->|code, then a workflow| settled((settled))
+  checkpoint -->|only then| owner((Owner))
+  loops[Loops] -->|file what they find| signal
+  loops -->|end stalls| issue
+```
 
 ## The language
 
-One word per thing, in code, CLI, events, screens and docs. A retired word in the source fails the build. The full table, with what each word retires, is [`docs/language.md`](docs/language.md).
+One word per thing, in code, CLI, events, screens and docs. This is the ubiquitous language of domain-driven design taken literally: a retired word in the source fails the build. The full table, with what each word retires, is [`docs/language.md`](docs/language.md).
 
 | Word | Means |
 |-|-|
@@ -106,7 +150,7 @@ One word per thing, in code, CLI, events, screens and docs. A retired word in th
 | **Issue** | One unit of work: one repo, one branch, one ship |
 | **State** | `settling`, `queued`, `working`, `waiting`, `watching`, `closed`. Only an event moves it. Screens say Running, Paused, Ready, Held, Checking and Planned instead |
 | **Event** | A fact recorded on an Issue. **24 kinds**, among them `filed`, `admitted`, `shipped`, `watch_passed` |
-| **Lead / Attempt** | The Claude Code session that owns an Issue, and its *n*th try |
+| **Lead / Attempt** | The agent session that owns an Issue, and its *n*th try |
 | **Gate** | A machine check a lead cannot talk past |
 | **Watch / Verify** | The window after a ship, and the check that ends it |
 | **Wait / Stall** | A pause with a named exit, and a wait whose cause is a machine's to end |
@@ -115,63 +159,81 @@ One word per thing, in code, CLI, events, screens and docs. A retired word in th
 | **Steward** | The loop over stalled Issues: wake, re-check, requeue, deliver; it asks a workflow only when the rules run out |
 | **Touch / Friction** | The owner acting on an Issue, and any counted waste, such as a touch the factory should have settled |
 
-The screen words are not a rename of the states. Ready and Held split the Issues no lead has begun by whether anything but capacity keeps them out, and Planned is a plan row that is not an Issue yet ([Where work stands](docs/language.md#where-work-stands)).
+Each concept below has the same shape: what it is, its rules, why, example files in this repo, and where to read more.
 
-![An Issue's states: settling, queued, working, waiting, watching and closed, with the events that move between them.](docs/guide/diagrams/issue-lifecycle.svg)
+## Signal
 
-## One Issue's life
+A signal is anything that arrives and may become work: an alert from a monitor, a GitHub issue, a piece of app feedback, the owner's words, a lead's follow-up, a finding of one of the factory's own loops.
 
-`factory issue show issue_1809`, 2026-11-17, repo `software-factory`, times in UTC. The factory's own selfwatch loop filed it.
+Signals:
 
-| Time | Event | What happened |
-|-|-|-|
-| 01:03:01 | `filed` | The loop's signal became an Issue |
-| 01:03:07 | `settled` | Triage was done six seconds later |
-| 02:13:33 | `admitted` | 1 h 10 min in the queue, then capacity let a lead start |
-| 02:14:28 | `lead_started` | `lead-1809-1`, on sonnet at high effort |
-| 03:04:20 | `shipped` | 3 commits, the review covered them, 3 acceptance lines; the watch began |
-| 03:11:00 | `watch_passed` | CI green, all 4 checks passed; the Issue closed `done` |
+- Are the **way in for everything that arrives**. The owner and a plan can file an Issue directly, and it passes the same settling step before it queues: nobody files around the state machine.
+- Carry a **kind** (an alert, a request, a piece of feedback or a remark), an **origin** and a **trust level**.
+- Are **held** when their text comes from outside, until a screening workflow or the owner lets them through. Outside text is data, never an instruction.
+- Have a **fingerprint**, so the same thing arriving twice is recognised.
+- Never name their own destination when they come from a machine: an alert's repo is looked up in a server-side route registry, never read from the payload.
 
-Two hours and eight minutes from filed to closed, 12.7 minutes of lead working time over 8 turns, one attempt, 2.19 dollars. No Decision, no Errand, no note.
+**Why.** One way in means one place where duplicates are folded, trust is decided and noise is turned away, before any agent spends a token.
 
-The lead stated one acceptance line met and two not met, each with its reason. The Issue still closed `done`: the watch judges that the change is live and production is green, and the acceptance lines are recorded as the lead stated them, never judged. What the change could not prove stays on the record.
+**Example files:**
 
-The guide follows this Issue through five chapters, starting at [Issues](docs/guide/issues.md).
+- [`domains/intake/rules.ts`](apps/server/src/domains/intake/rules.ts): `fingerprintOf`, the rules that decide before a model is asked
+- [`apps/door`](apps/door): the alert door, which holds one narrow token and no database credential
 
-## The patterns
+**Read more:** [Signals and Triage](docs/guide/signals.md), [Alertmanager: grouping and inhibition](https://prometheus.io/docs/alerting/latest/alertmanager/) (Prometheus)
 
-Fifteen patterns, in the order an Issue meets them. Where a check holds a pattern, not a convention, "Held by" names the check.
+## Triage and incidents
 
-| If you want | Read |
+Triage decides what a signal becomes. It has five outcomes and no others:
+
+| Outcome | Means |
 |-|-|
-| the model | signals, stored facts, the total table, waits |
-| how work runs | admission, one lead, gates, ship and watch |
-| who decides | deterministic first, then a workflow, then the owner |
-| what keeps it safe to replay | claim-commit-call-record, keys, tokens, hooks |
-| how it stays true | the loops, the build that holds the words |
+| A new Issue | Nothing open covers it |
+| An amendment | It is a note on an Issue that is already open |
+| Part of an incident | One root cause seen through many alerts: they join one Issue |
+| Held | Its text is from outside and waits for the screening workflow or the owner |
+| Dropped | It is noise, a probe, or work the factory does not hear |
 
-### Everything enters as a signal
+- Rules decide first: the fingerprint, the route registry, a correlation window. A workflow is asked only where the rules are unsure.
+- An incident is correlated by host and time: alerts from one host inside a 30-minute window join one Issue, so twelve alerts from a dead database host get one lead.
 
-A signal is anything that may become work. An alert from a monitor is one, and so is a GitHub issue, a piece of app feedback, the owner's words, a lead's follow-up or a finding of the factory's own loops. Nobody files around the state machine.
+**Why.** An agent started for a duplicate is the most expensive kind of waste: it costs a session, a slot and usually a conflict.
 
-- A signal carries a **kind**, an **origin** and a **trust level**. Text from outside is held until a screen or the owner lets it through.
-- Triage has **five outcomes**: a new Issue, a note on an open one, part of an incident (one root cause seen through many alerts), held, or dropped.
-- Rules decide first: a fingerprint over repo and title, the route registry, a correlation window. A workflow decides only where the rules are unsure.
-- The alert door takes the repo from a server-side route registry, never from the payload.
+**Example files:**
 
-**Why.** Triage folds a repeat into the Issue it repeats before a lead spends a token. Twelve alerts about one dead database become one incident with one lead.
+- [`app/intake.ts`](apps/server/src/app/intake.ts): the path from a signal to one of the five outcomes
 
-**In the code.** [`domains/intake/rules.ts`](apps/server/src/domains/intake/rules.ts) (`fingerprintOf`), [`app/intake.ts`](apps/server/src/app/intake.ts), [`apps/door`](apps/door).
-**Read more.** [Signals and Triage](docs/guide/signals.md).
+**Read more:** [Signals and Triage](docs/guide/signals.md)
 
-### Facts are stored, state is derived
+## Issue
 
-An Issue is a log of events. Its state is what its applied events made it, kept on the row only because the row's `version` guards the next write.
+An Issue is one unit of work: one repo, one branch, one ship. It is the factory's aggregate: everything else (a lead, a wait, a Decision, a ship) hangs off an Issue.
 
-- `apply(issue, event)` is **pure**: the same Issue, event and time give the same answer, which is the next state and its effects, a refusal with a reason, or an ignore with a reason.
-- `app/` stores the event, the new state and the effects in one transaction, then runs the effects.
-- A count or a timer the event log can answer is **never a column**.
-- `replay` rebuilds an Issue from its stored transitions and decides nothing new.
+Issues:
+
+- Have **facts** written by whoever filed them: why, what is in scope, the change, and the acceptance (the checks that prove it). The agent cannot see the session that filed the Issue, so the facts carry everything.
+- Are **one repo each**. Work for two repos is two Issues with an edge between them.
+- End with an **outcome**: done, dropped, healed (an incident that went away before anyone started) or cancelled.
+- Can be reopened within 30 days, by the owner or the factory.
+
+**Why.** One repo, one branch and one ship is the largest unit that can be verified, reverted and reasoned about alone. Anything bigger is a plan of several Issues.
+
+**Example files:**
+
+- [`domains/work/issue.ts`](apps/server/src/domains/work/issue.ts): the states, kinds, outcomes and waits
+
+**Read more:** [Issues](docs/guide/issues.md)
+
+## Event
+
+An event is a fact recorded on an Issue. The log of events is the truth; the Issue's state is what its applied events made it.
+
+Events:
+
+- Are **stored, never derived**. A count or a timer the log can answer is never a column.
+- Have a fixed list of **senders**. A lead may send `shipped`; only the factory may send `watch_passed`.
+- Are applied by one **pure function**: the same Issue, event and time give the same answer, which is a move with its effects, a refusal with a reason, or an ignore with a reason.
+- Are written with an **optimistic version guard**: a writer that lost a race is refused, not merged.
 
 ```ts
 export function apply(issue: Issue, event: AnyIssueEvent, ctx: { now: Date }): Decided {
@@ -186,15 +248,20 @@ export function apply(issue: Issue, event: AnyIssueEvent, ctx: { now: Date }): D
 }
 ```
 
-**Why.** Twenty leads, twenty loops and the owner write to the same Issues. A stored event stays what it was; a derived column has to be kept right by every writer. Every question about an Issue ("why did it wait?", "who answered?") is a read of its log.
+**Why.** Twenty agents, twenty loops and the owner write to the same Issues. A stored event stays what it was; a derived column has to be kept right by every writer. And every question about an Issue ("why did it wait?", "who answered?") is a read of its log.
 
-**In the code.** [`domains/work/machine.ts`](apps/server/src/domains/work/machine.ts) (`apply`, `replay`), [`domains/work/events.ts`](apps/server/src/domains/work/events.ts) (`PAYLOADS`, and `SENDERS`: who may send which event).
-**Held by.** The optimistic `version` guard on every write; no XState, no workflow engine.
-**Read more.** [Issues](docs/guide/issues.md).
+**Note:** this is event sourcing kept small. There is no event bus and no projection framework: one table of events, one function, and the current state kept on the row because its version guards the next write.
 
-### The transition table is total
+**Example files:**
 
-Every `(state, event)` pair has a cell, and a cell is one of three things: a move, a refusal with its reason, or an ignore with its reason.
+- [`domains/work/machine.ts`](apps/server/src/domains/work/machine.ts): `apply`, and `replay`, which rebuilds an Issue from its stored transitions and decides nothing new
+- [`domains/work/events.ts`](apps/server/src/domains/work/events.ts): the payload of every kind, and `SENDERS`
+
+**Read more:** [Issues](docs/guide/issues.md), [Event Sourcing](https://martinfowler.com/eaaDev/EventSourcing.html) (Martin Fowler), [Optimistic Offline Lock](https://martinfowler.com/eaaCatalog/optimisticOfflineLock.html) (Martin Fowler)
+
+## State and the transition table
+
+An Issue has six states. Every `(state, event)` pair has a cell, and a cell is one of three things: a move, a refusal with its reason, or an ignore with its reason.
 
 ```ts
 export type Cell =
@@ -208,42 +275,53 @@ export type Cell =
 export type Table = { [S in State]: { [E in EventKind]: (ctx: Ctx<E>) => Cell } }
 ```
 
-- A new state or a new event **fills every cell** before the build passes: 6 states by 24 events.
-- A refusal is an answer the caller reads, so it says why: `admitted` on a settling Issue answers "triage is not done: it is not queued".
+- The table is **total**: a new state or a new event fills every cell before the build passes.
+- A **refusal is an answer** the caller reads, so it says why: `admitted` on a settling Issue answers "triage is not done: it is not queued".
 - The state diagram in the docs is **generated from the table**; a stale diagram fails the build.
+- The stored states are for machines. A screen shows where work stands in six other words (Running, Paused, Ready, Held, Checking, Planned), because "queued" does not tell a person whether anything is wrong. They are not a rename: Ready and Held split the Issues no lead has begun by whether anything but capacity keeps them out, and Planned is a plan row that is not an Issue yet.
 
-**Why.** The bugs of a lifecycle server live in the pairs nobody thought about: a ship that arrives after a cancel, an answer to a Decision that a default already settled. A total table turns a pair nobody wrote a cell for into a compile error.
+![An Issue's states: settling, queued, working, waiting, watching and closed, with the events that move between them.](docs/guide/diagrams/issue-lifecycle.svg)
 
-**In the code.** [`domains/work/table.ts`](apps/server/src/domains/work/table.ts) (`TABLE`), [`domains/work/diagram.ts`](apps/server/src/domains/work/diagram.ts).
-**Held by.** `tsc`; a seeded model test that plays random event sequences; `make check` regenerates the diagram.
-**Read more.** [The Issue, as the code has it](docs/language.md#the-issue-as-the-code-has-it).
+**Why.** The bugs of a lifecycle system live in the pairs nobody thought about: a ship that arrives after a cancel, an answer to a question a default already settled. A total table turns a pair nobody wrote a cell for into a compile error.
 
-### A wait names its exit
+**Note:** no state-machine library and no workflow engine. A typed record of functions is the whole mechanism, and the type checker is the tool that holds it.
 
-A waiting Issue always says why it waits and what ends the wait. A **stall** is a wait whose cause is a machine's to end, and the steward ends it.
+**Example files:**
+
+- [`domains/work/table.ts`](apps/server/src/domains/work/table.ts): `TABLE`, 6 states by 24 events
+- [`domains/work/diagram.ts`](apps/server/src/domains/work/diagram.ts): the diagram, generated
+
+**Read more:** [The Issue, as the code has it](docs/language.md#the-issue-as-the-code-has-it), [Where work stands](docs/language.md#where-work-stands), [Effective ML Revisited](https://blog.janestreet.com/effective-ml-revisited/) (Yaron Minsky: make illegal states unrepresentable), [Parse, don't validate](https://lexi-lambda.github.io/blog/2019/11/05/parse-don-t-validate/) (Alexis King)
+
+## Wait and stall
+
+A wait is a pause with a named exit. A waiting Issue always says why it waits and what ends the wait. A **stall** is a wait nobody asked for: a full usage window, an agent that went silent or was lost, a block, a regression. A machine caused it and a machine, the steward, ends it.
 
 | Wait | Ends when | Exit |
 |-|-|-|
 | timer | the clock reaches the time the lead deferred to | machine |
 | dependency | every Issue it is after has closed | machine |
 | external | the pull request it waits on is approved, commented, merged or closed | machine |
-| wall | the account's window opens again | machine, a stall |
+| wall | the subscription's usage window opens again | machine, a stall |
 | unreported | the lead's next turn, or the steward | machine, a stall |
 | blocked | the steward re-checks the cause | machine, a stall |
 | lead gone | the steward starts a new attempt | machine, a stall |
 | regressed | the steward wakes it, or turns it into a Decision | machine, a stall |
 | decision | the question is answered | person |
 | review | the verdict on the Concept or Spec is given | person |
-| errand | the hands' work is done, or turned back with a note | person |
+| errand | the owner has done it by hand, or turned it back with a note | person |
 
 **Why.** "Stuck" is not a state. If the exit is a machine's, a loop owns it and a person never hears of it. If the exit is a person's, it is on one screen with what it holds back.
 
-**In the code.** [`domains/work/issue.ts`](apps/server/src/domains/work/issue.ts) (`WAITS`).
-**Read more.** [Where work stands](docs/language.md#where-work-stands).
+**Example files:**
 
-### Admission is a decision with numbers
+- [`domains/work/issue.ts`](apps/server/src/domains/work/issue.ts): `WAITS`, each wait with its exit and whether it is a stall
 
-A queued Issue does not "wait for capacity". A rule keeps it out, the first rule that says no names itself, and the answer carries its numbers.
+**Read more:** [Loops](docs/guide/loops.md)
+
+## Admission
+
+Admission decides when a queued Issue may start. A queued Issue does not "wait for capacity": a rule keeps it out, the first rule that says no names itself, and the answer carries its numbers.
 
 ```ts
 export const REFUSALS = [
@@ -251,120 +329,205 @@ export const REFUSALS = [
 ] as const
 ```
 
-- Admission is **decided again at every claim**, from measured samples: the accounts' 5-hour and weekly windows, the host's memory and load, the repo's claims and lanes, the test slots.
-- `factory queue order` prints every queued Issue with the one sentence that keeps it queued.
-- An edge to another Issue (an `after`) holds an Issue before capacity is asked at all; a plan is rows not yet filed.
+- Admission is **decided again at every claim**, from measured samples: the subscriptions' usage windows, the host's memory and load, the repo's claims, the test slots.
+- The queue can always **explain itself**: one sentence per queued Issue, with the number that binds.
+- Limits should be **measured resources**. A cap that measures nothing is a guess that idles a paid-for agent.
 
-**Why.** The owner's most frequent question is "why does nothing move?". A queue that answers it in one sentence with numbers needs no person to investigate, and its answers are data the factory tunes itself from.
+**Why.** The owner's most frequent question is "why does nothing move?". A queue that answers it in one sentence needs no person to investigate, and its answers are data the factory tunes itself from.
 
-**In the code.** [`domains/capacity/admission.ts`](apps/server/src/domains/capacity/admission.ts), [`packages/accounts`](packages/accounts) (the picker for N subscriptions).
-**Read more.** [Capacity](docs/guide/capacity.md), [Chains and Plans](docs/guide/chains.md).
+**Example files:**
 
-### One Issue, one lead
+- [`domains/capacity/admission.ts`](apps/server/src/domains/capacity/admission.ts): the rules in the order they are asked
+- [`packages/accounts`](packages/accounts): the picker that spreads agents over N subscriptions
 
-A lead is an interactive Claude Code session in a terminal the server started. It owns one attempt of one Issue and works from a brief that is a contract.
+**Read more:** [Capacity](docs/guide/capacity.md)
 
-- The lead owns the Issue **end to end**: root cause, build, its own review, landing, deploy, and stating each acceptance line met or not met.
-- The factory **supervises through hooks and never redoes the work**. It reads what the session reports (a turn ended, a tool ran) and derives the session's state from those events.
-- The brief is a **pure function of its input**: no clock, no randomness, and standing orders that are byte-identical for every lead. Every prompt the server types has a key, so a replayed pass types nothing twice.
-- Never headless: a lead is a session a person could attach to and read.
+## Chain and plan
 
-**Why.** Splitting an Issue across a planner, a coder and a reviewer agent moves the context loss to the handoffs. One session that owns the outcome asks fewer questions and can be held to its own acceptance lines.
+A chain is what waits on what. An Issue can be **after** other Issues, in its own repo or another, and is held until they close. A **plan** is rows not yet filed: the factory files each row as an Issue when the rows it is after are done.
 
-**In the code.** [`domains/leads/brief.ts`](apps/server/src/domains/leads/brief.ts) (`buildBrief`), [`adapters/hc`](apps/server/src/adapters/hc) (the terminals), [`apps/cli/src/hook.ts`](apps/cli/src/hook.ts).
-**Read more.** [Leads](docs/guide/leads.md).
+- Edges are **stated by whoever files**, and a stated edge is final. Where none is stated, triage may add one, by rule first.
+- An edge exists **only where one Issue needs what another shipped**. Independent work runs side by side.
+- A cycle is refused when it is written, not found when nothing moves.
 
-### Gates are code
+**Why.** Without edges, parallel agents rebase against each other and build on things that do not exist yet. With edges used as a queue, the factory runs one thing at a time and the subscriptions idle.
 
-What an agent is told does not change what it can do. A gate is a machine check a lead cannot talk past.
+**Example files:**
 
-- **The ship gate** accepts a ship only when git finds its commits on the default branch. The review and the CI result are recorded as evidence, with the reason when one is missing.
+- [`docs/plan.yaml`](docs/plan.yaml): this repo's own plan, and [`docs/plan.md`](docs/plan.md), its format
 
-  ```ts
-  const refuse = (why: string): ShipVerdict => ({ accepted: false, error: `ship refused: ${why}` })
-  if (input.reported.length === 0) return refuse('ship names no merged commit')
-  ```
+**Read more:** [Chains and Plans](docs/guide/chains.md)
 
-- **A review is evidence and never refuses a ship.** A gate that an agent's opinion can close is a negotiation.
-- **The merge guard** refuses a branch that lacks the default branch's head, a head with no green CI run on its exact sha, and a red default branch.
-- **Deploy locks fail closed.** A lock that cannot be read refuses the deploy; only a dead holder is reclaimed.
+## Lead and attempt
 
-**Why.** An agent under pressure to finish will argue. The gate's inputs are facts a command produced (a merge base, a CI run, a probe), so there is nothing to argue with.
+A lead is the agent session that owns an Issue. An attempt is its *n*th try. In this implementation a lead is an interactive Claude Code session in a terminal the server started.
 
-**In the code.** [`domains/quality/gate.ts`](apps/server/src/domains/quality/gate.ts) (`judgeShip`, pure), [`scripts/merge-guard.ts`](scripts/merge-guard.ts), [`apps/cli/src/deploy-lock.ts`](apps/cli/src/deploy-lock.ts).
-**Read more.** [Gates](docs/guide/gates.md).
+Leads:
 
-### Ship means land and deploy, and a watch ends it
+- Own the Issue **end to end**: root cause, build, their own review, landing, deploy, and stating each acceptance line met or not met.
+- Are **one per Issue**. There is no planner agent, coder agent and reviewer agent passing an Issue along.
+- Work from a **brief**: the Issue's facts and the standing orders, built by a pure function of its input.
+- Are **supervised, never redone**. The factory reads what the session reports and derives its state; it does not repeat the lead's work or second-guess its diff.
+- Are **interactive, never headless**: a session a person could attach to and read.
 
-A ship is not a pull request. It is merged commits on the default branch and a deploy. After it the Issue is `watching`: the project's verify and its probes answer, and only `watch_passed` closes the Issue as done.
+**Why.** Splitting an Issue across specialised agents moves the context loss to the handoffs. One session that owns the outcome holds the whole context and can be held to its own acceptance lines.
+
+**Example files:**
+
+- [`domains/leads/brief.ts`](apps/server/src/domains/leads/brief.ts): `buildBrief`
+- [`adapters/hc`](apps/server/src/adapters/hc): the terminals the leads run in
+
+**Read more:** [Leads](docs/guide/leads.md), [Building effective agents](https://www.anthropic.com/research/building-effective-agents) (Anthropic), [Harness engineering](https://openai.com/index/harness-engineering/) (OpenAI)
+
+## Gate
+
+A gate is a machine check a lead cannot talk past. What an agent is told does not change what it can do.
+
+Gates:
+
+- Take **facts a command produced** as input: a merge base, a CI run, a probe. Never an agent's statement.
+- **Refuse with the reason and the next step.** A refusal is the most-read message in the factory.
+- **Fail closed.** A lock that cannot be read refuses the deploy; a route with no rule refuses everyone.
+- Treat a **review as evidence, never as a gate**. If an agent's opinion could refuse a ship, the gate would be a negotiation between two agents.
+
+```ts
+const refuse = (why: string): ShipVerdict => ({ accepted: false, error: `ship refused: ${why}` })
+if (input.reported.length === 0) return refuse('ship names no merged commit')
+```
+
+**Why.** An agent under pressure to finish will argue, and it argues well. A gate whose inputs are facts leaves nothing to argue with.
+
+**Example files:**
+
+- [`domains/quality/gate.ts`](apps/server/src/domains/quality/gate.ts): `judgeShip`, pure
+- [`scripts/merge-guard.ts`](scripts/merge-guard.ts): refuses a head without green CI on its exact sha, and a red default branch
+- [`apps/cli/src/deploy-lock.ts`](apps/cli/src/deploy-lock.ts): the deploy lock that fails closed
+
+**Read more:** [Gates](docs/guide/gates.md)
+
+## Ship, watch and verify
+
+A ship is not a pull request. It is merged commits on the default branch and a deploy. After it the Issue is watching: the project's verify command and its probes answer, and only a passed watch closes the Issue as done.
 
 - A watch is **pass or fail, never averaged**.
-- A regression goes **back to the same lead** as a note with what failed.
+- A regression goes **back to the lead that shipped it**, as a note with what failed.
 - **Fix forward:** a bad change gets a new change, not a revert by reflex.
+- The lead's acceptance lines are **recorded as stated**, met or not met, each with its reason. What a change could not prove stays on the record.
 
-**Why.** "Merged" proves that a diff was accepted. "Live and green in production" proves that the change runs and broke nothing a probe sees. In the week above 48 first watches caught a change that was merged and wrong: red CI on the default branch, a red verify, a deploy that lacked the commit.
+**Why.** "Merged" proves that a diff was accepted. "Live and green in production" proves that the change runs and broke nothing a probe sees. Without a person at the merge, the second is the only one that counts.
 
-**In the code.** [`domains/quality/watch.ts`](apps/server/src/domains/quality/watch.ts), [`app/quality-watch.ts`](apps/server/src/app/quality-watch.ts).
-**Read more.** [Gates](docs/guide/gates.md).
+**Example files:**
 
-### Deterministic first, then a workflow, then the owner
+- [`domains/quality/watch.ts`](apps/server/src/domains/quality/watch.ts) and [`app/quality-watch.ts`](apps/server/src/app/quality-watch.ts)
 
-Every judgment has three tiers, in this order, and the server holds no model SDK.
+**Read more:** [Gates](docs/guide/gates.md), [Canarying Releases](https://sre.google/workbook/canarying-releases/) (Google SRE Workbook)
 
-| Loop | Code decides | A workflow decides | The owner decides |
-|-|-|-|-|
-| Triage | fingerprint, routes, correlation window | kind, origin, amend or new | whether held outside text becomes work |
-| Steward | wake, re-check, requeue, deliver, break a claim deadlock | what a stalled Issue needs when the rules do not say | nothing, unless it becomes a Decision |
-| Judge | standing policy, precedent lookup, the lead's declared default | whether a Decision is the owner's at all | product direction, spend, data loss, other people, security policy, taste |
+## Checkpoint
 
-- A lead that needs a person raises a **checkpoint**: a **Decision** (a question with options and its own recommendation), a **Concept or Spec** (one page before it builds a new surface), or an **Errand** (something only the owner's hands can do).
-- A Decision passes the steps the code names and stops at the first that settles it:
+A checkpoint is where the factory stops for a person. There are three, and a merge is not one of them.
+
+| Checkpoint | What the lead hands over | Settled before the owner by |
+|-|-|-|
+| **Decision** | a question, its options and the lead's own recommendation | standing policy, the Judge workflow (which reads precedent), then the lead's declared default |
+| **Concept or Spec** | one page before it builds a new surface, data model or screen | a screening workflow that passes the ones that are not the owner's to read |
+| **Errand** | something only the owner's hands can do: a secret, a device, a portal | rules that turn away what a command or a token could do |
+
+- A checkpoint is a **contract**: at most a few open choices, each with a default, and what changing it later costs.
+- **The queue never waits on the owner by accident.** A Spec without a verdict in 24 hours goes ahead on the defaults it named.
+- A Decision passes the steps in order and stops at the first that settles it:
 
   ```ts
   export const STEPS = ['policy', 'judge', 'default', 'owner'] as const
   ```
 
-- A Spec first goes to the Spec screen, a workflow that gives the factory's own `looks_good` to a Spec that is not the owner's to read. Without a verdict in 24 hours the lead goes on with the defaults it named.
-- A workflow is called through a port with an idempotency key and an idle watchdog, never a wall-clock limit.
+- What the owner answers becomes **precedent** the Judge reads the next time the question comes up.
 
-**Why.** A rule is free, instant and testable. A model call is cheap and wrong sometimes. The owner is neither cheap nor always there. Spending them in that order is the whole economy of the factory: of 58 Decisions in the week above, 5 reached him.
+**Why.** This is the ladder of judgment applied to the scarce resource. Of 58 Decisions leads raised in the week measured below, 5 reached the owner.
 
-**In the code.** [`domains/checkpoints/decision.ts`](apps/server/src/domains/checkpoints/decision.ts) (`STEPS`), [`adapters/agw`](apps/server/src/adapters/agw), [`app/loops`](apps/server/src/app/loops).
-**Read more.** [Checkpoints](docs/guide/checkpoints.md), [Loops](docs/guide/loops.md).
+**Example files:**
 
-### Claim, commit, call, record
+- [`domains/checkpoints/decision.ts`](apps/server/src/domains/checkpoints/decision.ts): the steps of a Decision
+- [`adapters/agw`](apps/server/src/adapters/agw): the one place that calls a workflow
 
-A port is never called inside a transaction. A pass claims a row and commits, calls the port, and records the outcome in a new transaction.
+**Read more:** [Checkpoints](docs/guide/checkpoints.md)
 
-- Every port call has a **process timeout** and returns a `Result`.
-- `git`, the terminal runner and `make verify` **never run while a row is locked**.
-- Three files may open a transaction: the unit of work, the migration runner and the read models' bounded read.
+## Loop
 
-**Why.** A shell command that hangs inside a transaction holds locks for as long as it hangs, and with twenty leads that is the whole queue. A claim that is committed first can be retaken when the process dies between the call and the record.
+A loop is a named recurring pass with one way to act. The main path (triage, admission, leads, watch) is loops; so is everything that keeps it honest.
 
-**In the code.** [`adapters/postgres/unit-of-work.ts`](apps/server/src/adapters/postgres/unit-of-work.ts).
-**Held by.** [`scripts/boundaries.ts`](scripts/boundaries.ts), which reads the import graph and the SQL in `make check`.
+- **The steward** ends stalls: it wakes, re-checks, requeues and delivers, and asks a workflow only when its rules run out.
+- **The Judge** tries to settle a Decision before the owner sees it.
+- **Hygiene** runs probes over every project (the repo's own check, advisories, dead code, stale documents) and files what is red.
+- **Selfwatch and throughput** watch the host and the queue: a loop that stopped, a process that grows, a step that outgrew its budget.
 
-### Every effect has a key
+Every loop obeys the same rules: it claims a row and commits before it acts, its effects carry keys, and a replayed pass acts once ([Design principles](#design-principles)).
 
-Terminal labels, prompt ids, comment markers, signal fingerprints: every effect the factory has on the world is named by a deterministic key, and the runner looks before it acts.
+**Example files:**
+
+- [`app/loops`](apps/server/src/app/loops): the passes of the loops
+
+**Read more:** [Loops](docs/guide/loops.md)
+
+## Friction
+
+Friction is counted waste: a refusal, a stall, a lost lead, a ship with no review, a touch of the owner the factory should have settled. A loop counts it over a window and files the pattern that repeats, as a signal, through the same triage as everything else.
+
+- A finding class that is mostly dropped or cancelled **stops filing** until it is asked again.
+- The counted waste is the backlog of the factory's own improvement.
+
+**Why.** A factory that closes 200 Issues a day drifts faster than a person can notice. The only reviewer with enough attention for it is the factory.
+
+**Example files:**
+
+- [`packages/contract/src/hygiene-catalogue.ts`](packages/contract/src/hygiene-catalogue.ts): every probe, with its cadence and how to silence it
+
+**Read more:** [Learnings](docs/guide/learnings.md), [DORA's software delivery metrics](https://dora.dev/guides/dora-metrics/) (DORA)
+
+# Design principles
+
+The domain model says what the factory does. These six rules say how it stays correct while twenty agents and twenty loops run at once and any of them can die mid-step. None is specific to agents.
+
+## Claim, commit, call, record
+
+An external call is never made inside a database transaction. A pass claims a row and commits, makes the call, and records the outcome in a new transaction.
+
+- Every call to the outside has a **process timeout** and returns a `Result`.
+- `git`, the terminal runner and a verify command **never run while a row is locked**.
+- Only three files may open a transaction at all.
+
+**Why.** A shell command that hangs inside a transaction holds its locks for as long as it hangs, and with twenty agents that is the whole queue. A claim that is committed first can be retaken when the process dies between the call and the record.
+
+**Example files:**
+
+- [`adapters/postgres/unit-of-work.ts`](apps/server/src/adapters/postgres/unit-of-work.ts)
+- [`scripts/boundaries.ts`](scripts/boundaries.ts): reads the import graph and the SQL and fails the build on a violation
+
+**Read more:** [Pattern: Transactional outbox](https://microservices.io/patterns/data/transactional-outbox.html) (Chris Richardson), the neighbouring answer to the same problem
+
+## Every effect has a key
+
+Every effect the factory has on the world carries a deterministic key: a terminal's label, a prompt's id, a comment's marker, a signal's fingerprint. Before an effect runs, the runner looks for its key. A terminal with that label, or a comment with that marker, means the effect already happened.
 
 ```ts
 /** The one way to build a key: its parts joined by `:`. A part is a non-empty string or a whole number. */
 export function key(...parts: readonly (string | number)[]): Key
 ```
 
-**Why.** Claim, commit, call, record means a pass can die after the call and before the record. The next pass repeats the call. With a key, the repeat finds the terminal that already runs, the prompt that was already typed, the comment that is already posted, and does nothing.
+**Why.** Claim, commit, call, record means a pass can die after the call and before the record, and the next pass repeats the call. With a key, the repeat finds the terminal that already runs, the prompt that was already typed, the comment that is already posted, and does nothing.
 
-**In the code.** [`kernel/keys.ts`](apps/server/src/kernel/keys.ts).
+**Example files:**
 
-### A caller is its token
+- [`kernel/keys.ts`](apps/server/src/kernel/keys.ts)
+
+**Read more:** [Designing robust and predictable APIs with idempotency](https://stripe.com/blog/idempotency) (Brandur Leach, Stripe)
+
+## A caller is its token
 
 Who may call what is one table. A caller is decided by its bearer token alone, and a route with no row is refused for everyone.
 
 - Tokens decide the caller (`owner`, `orchestrator`, `agent`, `machine`, `signal`, `read`).
-- A lead's session holds the agent token: it can ship, ask and file a signal on its own Issue. It cannot file an Issue or cancel one, and on its own Decision it can only take the default it declared.
-- The API binds to loopback. The Console listener is a second loopback port that holds the owner's token on the server. Beside the reads it forwards fifteen write verbs and nothing else; it can never start a session.
+- An agent's token lets it ship, ask and file a signal on its own Issue. It cannot file an Issue or cancel one, and on its own Decision it can only take the default it declared.
+- The surface a browser reaches holds the owner's token on the server and forwards a fixed list of writes; it can never start a session.
 
 ```ts
 export const POLICY: readonly Rule[] = [
@@ -375,62 +538,69 @@ export const POLICY: readonly Rule[] = [
 ]
 ```
 
-**Why.** The owner's token can start an agent with full permissions on the machine. Fail-closed by table means a new route is shut until someone decides who may call it.
+**Why.** The owner's token can start an agent with full permissions on the machine. Deny by default, in one table, means a new route is shut until someone decides who may call it.
 
-**In the code.** [`api/policy.ts`](apps/server/src/api/policy.ts) (`POLICY`), [`api/console.ts`](apps/server/src/api/console.ts).
-**Held by.** A test that walks the OpenAPI document and fails on a route without a row.
+**Example files:**
 
-### Hooks never speak
+- [`api/policy.ts`](apps/server/src/api/policy.ts), held by a test that walks the OpenAPI document and fails on a route without a row
 
-The factory hears a lead through Claude Code hooks. A hook appends to a spool first, then posts to a unix socket, and exits 0 whatever happens. The one exception is a Stop the server sends back, which exits 2.
+**Read more:** [Authorization Cheat Sheet](https://cheatsheetseries.owasp.org/cheatsheets/Authorization_Cheat_Sheet.html) (OWASP: deny by default)
 
-- A hook's **stdout stays empty**, because Claude Code injects a hook's stdout into the session: a chatty hook is the factory talking into its own agent's context. One event prints one line on purpose: after a compaction, a lead's session start tells it what to read again.
+## Supervision never speaks
+
+The factory hears an agent through hooks: small programs the agent's harness runs when a turn ends or a tool runs. A hook appends to a spool first, then posts to a socket, and exits 0 whatever happens. The one exception is a Stop the server sends back, which exits 2.
+
+- A hook's **output stays empty**, because the harness injects a hook's output into the session: a chatty hook is the factory talking into its own agent's context. One event prints one line on purpose: after a compaction, a lead's session start tells it what to read again.
 - The server reads the spool on every pass, so an event the socket missed is not lost.
 - A hook does nothing in a session the factory did not start.
 
 **Why.** Supervision must not change what it supervises, and it must not be able to break it: a hook that fails the session turns an observability bug into lost work.
 
-**In the code.** [`apps/cli/src/hook.ts`](apps/cli/src/hook.ts), which imports `node:fs` and the spool contract and nothing else; [`integrations/claude-code`](integrations/claude-code).
+**Example files:**
 
-### The factory files against itself
+- [`apps/cli/src/hook.ts`](apps/cli/src/hook.ts), which imports `node:fs` and the spool contract and nothing else
+- [`integrations/claude-code`](integrations/claude-code): the hook entries a machine installs
 
-Loops beside the main path watch the factory and file what they find as signals, through the same triage as everything else.
+**Read more:** [Hooks reference](https://code.claude.com/docs/en/hooks) (Claude Code docs)
 
-- **Friction** counts waste over a window (refusals, stalls, lost leads, owner touches) and files the pattern that repeats.
-- **Hygiene** runs probes over every project (the repo's own check, advisories, dead code, stale documents, broken links) and files what is red.
-- **Selfwatch** and **throughput** watch the host and the queue: a loop that stopped, a process that grows, a step that outgrew its budget.
-- A finding class that is mostly dropped or cancelled **stops filing** until it is asked again.
+## Rules are pure, I/O sits behind ports
 
-**Why.** A factory that closes 200 Issues a day drifts faster than a person can notice. The counted waste is the backlog of the factory's own improvement.
+The rules of each domain are functions with no I/O.
 
-**In the code.** [`app/loops`](apps/server/src/app/loops), [`packages/contract/src/hygiene-catalogue.ts`](packages/contract/src/hygiene-catalogue.ts).
-**Read more.** [Loops](docs/guide/loops.md), [Learnings](docs/guide/learnings.md).
+- A domain imports only the shared kernel and itself.
+- It reaches the database, git, the terminal runner and the workflows through **ports it owns**.
+- When one domain needs another, a **use-case layer** coordinates them in one transaction.
 
-### The build holds the words
+**Why.** A rule that does no I/O is tested by calling it: the state machine, the gate and admission need no database and no agent. A fake runner and a fake workflow port let the whole lifecycle run end to end in a test.
 
-Documentation that a build does not check is a second system that drifts from the first.
+**Example files:**
+
+- [`scripts/boundaries.ts`](scripts/boundaries.ts): a domain that imports a SQL client, `node:fs` or the web framework fails the build
+- [`tests/scenarios`](tests/scenarios): the use cases against a real server and Postgres with a fake runner and fake workflows
+
+**Read more:** [Hexagonal architecture](https://alistair.cockburn.us/hexagonal-architecture/) (Alistair Cockburn), [A Philosophy of Software Design](https://web.stanford.edu/~ouster/cgi-bin/aposd.php) (John Ousterhout: deep modules)
+
+## The build holds the words
+
+Documentation the build does not check is a second system that drifts from the first.
 
 | Claim | Held by |
 |-|-|
 | One word per thing; a retired word fails the build | [`scripts/retired-words.ts`](scripts/retired-words.ts) |
 | A stored state word never appears on a screen | [`scripts/vocabulary.ts`](scripts/vocabulary.ts) |
-| This README's counts and lists are the code's | [`scripts/readme-check.ts`](scripts/readme-check.ts) (`make docs-check`) |
+| This README's counts and lists are the code's | [`scripts/readme-check.ts`](scripts/readme-check.ts) |
 | No private data in a public repo | [`scripts/public-scan.ts`](scripts/public-scan.ts) |
-| Domains do no I/O; `read/` writes nothing | [`scripts/boundaries.ts`](scripts/boundaries.ts) |
-| The CLI is the API | generated from the OpenAPI document; a stale file fails `make check` |
+| The CLI is the API | generated from the OpenAPI document; a stale file fails the build |
 
-## Where it falls short
+**Read more:** [Ubiquitous Language](https://martinfowler.com/bliki/UbiquitousLanguage.html) (Martin Fowler)
 
-An audit of 2026-11-20 ([`docs/research/2026-11-maturation`](docs/research/2026-11-maturation/README.md)) found the core sound and four weaknesses around it. They are the open rows of [`docs/plan.yaml`](docs/plan.yaml).
+# The example implementation
 
-- **It measures more than it acts on.** 28 KPIs, 5 with a target, and no code acts on one; the friction loop has thresholds of its own.
-- **Most loops do not check their own effect.** They file 18 % of all Issues, and only throughput looks again after the ship to see whether its number moved.
-- **A lead pays for what the server knows.** The gate refused 101 ships that week, about 70 for a commit sha typed by hand.
-- **The reference documents are too long.** `docs/architecture.md` is 200 KB; this page and the guide are the way in.
+Everything above is the design. This part is the code in this repo: a lifecycle server on Bun and Postgres, built and run by one developer on one always-on machine against a few Claude Code subscriptions. It builds itself; its changes go through its own Issues.
 
 ## Architecture
 
-**A modular monolith on Bun:** TypeScript and zod, Postgres as the store (the bodies of artifact revisions are files beside it), domains with no I/O behind ports, Elysia at the edge, a generated CLI. One process, one schema, one contract. The reasons are in [`docs/decisions.md`](docs/decisions.md).
+**A modular monolith:** TypeScript and zod, Postgres as the store (the bodies of artifact revisions are files beside it), domains with no I/O behind ports, Elysia at the edge, a generated CLI. One process, one schema, one contract. The reasons are in [`docs/decisions.md`](docs/decisions.md).
 
 ```mermaid
 flowchart LR
@@ -477,9 +647,61 @@ Eight domains, each owning its tables. A domain imports only the kernel and itse
 | `checkpoints` | Decisions, artifacts and revisions, annotations, verdicts, Errands |
 | `loops` | the steward's stall rules, settling a Decision, the self-improvement loops, the ports to the workflows |
 
-**One process.** A session-level Postgres advisory lock is taken first; a second copy waits, then exits. **One contract.** Request, response and event shapes are zod schemas in `packages/contract`; the server builds every body through its schema and the CLI parses with the same one. **One schema** in the database, with migrations that expand, then contract, and are never edited once applied.
+- **A lead** is an interactive Claude Code session in a [herdr-core](integrations/README.md) terminal.
+- **A workflow** is an [agent-workflows](https://github.com/jkrumm/agent-workflows) (`agw`) run. The server holds no model SDK.
+- **The Console listener** is a second loopback port. It holds the owner's token on the server. Beside the reads it forwards fifteen write verbs and nothing else.
+- **One process.** A session-level Postgres advisory lock is taken first; a second copy waits, then exits.
+- **One contract.** Request, response and event shapes are zod schemas in `packages/contract`; the server builds every body through its schema and the CLI parses with the same one.
 
 What is where, mechanism by mechanism: [`docs/architecture.md`](docs/architecture.md).
+
+## One Issue's life
+
+`factory issue show issue_1809`, 2026-11-17, repo `software-factory`, times in UTC. The factory's own selfwatch loop filed it.
+
+| Time | Event | What happened |
+|-|-|-|
+| 01:03:01 | `filed` | The loop's signal became an Issue |
+| 01:03:07 | `settled` | Triage was done six seconds later |
+| 02:13:33 | `admitted` | 1 h 10 min in the queue, then capacity let a lead start |
+| 02:14:28 | `lead_started` | `lead-1809-1`, on sonnet at high effort |
+| 03:04:20 | `shipped` | 3 commits, the review covered them, 3 acceptance lines; the watch began |
+| 03:11:00 | `watch_passed` | CI green, all 4 checks passed; the Issue closed `done` |
+
+Two hours and eight minutes from filed to closed, 12.7 minutes of lead working time over 8 turns, one attempt, 2.19 dollars. No Decision, no Errand, no note.
+
+The lead stated one acceptance line met and two not met, each with its reason. The Issue still closed `done`: the watch judges that the change is live and production is green, and the acceptance lines are recorded as the lead stated them, never judged. What the change could not prove stays on the record.
+
+The guide follows this Issue through five chapters, starting at [Issues](docs/guide/issues.md).
+
+
+## The evidence
+
+The 7 days from 2026-11-13 09:38 UTC to 2026-11-20 09:38 UTC, all projects, from `factory read kpis` and `factory read friction`:
+
+| What | Count |
+|-|-|
+| Issues filed | 1,545, of which the factory's own loops filed 282 |
+| Issues closed | 1,604, or 229 a day |
+| Median time from filed to closed | 85 minutes |
+| First verifications that passed | 1,290 of 1,338 (96.4 %; the target is 90 %) |
+| Decisions leads raised | 58: the Judge settled 45, a default 7, the owner 5, his delegate 1 |
+| Specs, Concepts and Reports the owner judged | 95 |
+| Errands that reached the owner's hands | 77 |
+| Times the owner stepped in where the factory should have settled it | 58, mostly notes to a lead (0.038 per Issue filed; the target is at most 0.07) |
+
+No person reviewed a change before it reached production. What the owner did that week: judge 95 handed-over pages, answer 5 questions, and do 77 things only hands can do, such as a biometric prompt.
+
+
+## Where it falls short
+
+An audit of 2026-11-20 ([`docs/research/2026-11-maturation`](docs/research/2026-11-maturation/README.md)) found the core sound and four weaknesses around it. They are the open rows of [`docs/plan.yaml`](docs/plan.yaml).
+
+- **It measures more than it acts on.** 28 KPIs, 5 with a target, and no code acts on one; the friction loop has thresholds of its own.
+- **Most loops do not check their own effect.** They file 18 % of all Issues, and only throughput looks again after the ship to see whether its number moved.
+- **A lead pays for what the server knows.** The gate refused 101 ships that week, about 70 for a commit sha typed by hand.
+- **The reference documents are too long.** `docs/architecture.md` is 200 KB; this page and the guide are the way in.
+
 
 ## The Console
 
@@ -505,6 +727,7 @@ The Console is the owner's window: a React PWA the server itself serves. Every s
 
 More screens: [a project page](docs/demo/project.png), [an artifact](docs/demo/artifact.png), [Throughput](docs/demo/throughput.png), and the same on a phone ([Needs you](docs/demo/phone-needs-you.png), [Overview](docs/demo/phone-overview.png)).
 
+
 ## Layout
 
 | Path | What |
@@ -521,6 +744,7 @@ More screens: [a project page](docs/demo/project.png), [an artifact](docs/demo/a
 | `integrations/` | the client pieces other machines install: the Claude Code hooks, a Herdr mod, `rd`, a Hermes skill |
 | `scripts/`, `deploy/` | release-directory deploy, verify, launchers, and the checks of the build |
 | `docs/` | the guide, product, language, architecture, operations, decisions |
+
 
 ## Run it
 
@@ -547,13 +771,33 @@ Past that you wire it to your own machine: Claude Code subscriptions, herdr-core
 
 To refresh the demo screenshots: `make e2e`, then copy the `desktop-xl-dark-*` files you need from `tests/e2e/out/screenshots` into `docs/demo`.
 
-## Read next
 
-- [The guide](docs/guide/README.md): the story, chapter by chapter, with one Issue followed through.
+# Further reading
+
+**In this repo:**
+
+- [The guide](docs/guide/README.md): the implementation chapter by chapter, with one Issue followed through.
 - [`docs/product.md`](docs/product.md): what it is, for whom, and how we know it works.
 - [`docs/language.md`](docs/language.md): every word, and what it retires.
 - [`docs/architecture.md`](docs/architecture.md) and [`docs/decisions.md`](docs/decisions.md): what is where, and why.
 - [`AGENTS.md`](AGENTS.md): the rules a contributing agent follows.
+
+**On software factories:**
+
+- [Software Factories And The Agentic Moment](https://factory.strongdm.ai/) (StrongDM): code neither written nor reviewed by people, validated by scenarios held outside the codebase.
+- [The Five Levels: from Spicy Autocomplete to the Dark Factory](https://simonwillison.net/2026/jan/28/the-five-levels/) (Simon Willison, on Dan Shapiro's levels).
+- [Adapting for a world of software factories](https://www.warp.dev/blog/adapting-for-a-world-of-software-factories) (Warp): the case for keeping a person in the loop, and the source of the quote above.
+- [Harness engineering](https://openai.com/index/harness-engineering/) (OpenAI): a product built with no hand-written code, held by linters and structural tests.
+- [Building effective agents](https://www.anthropic.com/research/building-effective-agents) (Anthropic): workflows against agents, and starting with the simplest thing.
+
+**On the patterns underneath:**
+
+- [Event Sourcing](https://martinfowler.com/eaaDev/EventSourcing.html) and [Optimistic Offline Lock](https://martinfowler.com/eaaCatalog/optimisticOfflineLock.html) (Martin Fowler).
+- [Hexagonal architecture](https://alistair.cockburn.us/hexagonal-architecture/) (Alistair Cockburn).
+- [Designing robust and predictable APIs with idempotency](https://stripe.com/blog/idempotency) (Stripe).
+- [Canarying Releases](https://sre.google/workbook/canarying-releases/) (Google SRE Workbook) and [DORA's software delivery metrics](https://dora.dev/guides/dora-metrics/).
+- [Domain-Driven Hexagon](https://github.com/Sairyss/domain-driven-hexagon) (Sairyss): the README whose way of teaching a design this page follows.
+
 
 ## Licence
 

@@ -1442,7 +1442,7 @@ rows:
     title: "README, guide, language and product say what the factory is after the cycle"
     facts:
       why: |-
-        The README and the guide's start page were rewritten at the start of this cycle to teach the idea: the problem, the result with numbers, the domain, one Issue's life, then one section per pattern with its rule, its reason and its code. The rows since then changed domains, words, KPIs, verbs and the Decision path. Position and the loop are stated in three documents (README.md, docs/product.md, docs/guide/README.md).
+        The README was rewritten at the start of this cycle to teach the concept of a software factory the way the domain-driven-hexagon README teaches its design (the owner's ask, 2026-11-20): the idea, the mental model, the domain model concept by concept (definition, rules, why, example files, read more), the design principles, and only then this implementation (architecture, one Issue's life, the evidence, the Console, run it). Keep that order: the concept first, this repo as the example, the implementation last. The guide's start page carries the concepts on one page and the paths through the chapters. The rows since then changed domains, words, KPIs, verbs and the Decision path. Position and the loop are stated in three documents (README.md, docs/product.md, docs/guide/README.md).
       what: |-
         README.md, docs/guide/README.md and the chapters, docs/guide/concepts.md if it exists, docs/product.md, docs/language.md, scripts/readme-check.ts.
       change: |-
