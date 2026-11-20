@@ -5,7 +5,7 @@ import type { MergeGuard } from '../../domains/leads/ports.ts'
 const TARGET = /^(?:[\w.-]+\s+)*merge-guard(?:\s+[\w.-]+)*\s*:(?!=)/m
 
 /** An `include` can define the target in a file this scan does not read. */
-const INCLUDE = /^-?include\s/m
+const INCLUDE = /^-?s?include\s/m
 
 /**
  * Whether the worktree's `Makefile` defines a `merge-guard` target; no Makefile is a repo without one, an unreadable one

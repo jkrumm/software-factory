@@ -53,7 +53,9 @@ case "$1 $2" in
     sha=""; prev=""
     for a in "$@"; do [ "$prev" = "--match-head-commit" ] && sha="$a"; prev="$a"; done
     git --git-dir="$LAND_ORIGIN" update-ref refs/heads/master "$sha" || exit 1
-    echo "$sha" > "$S/merged" ;;
+    echo "$sha" > "$S/merged"
+    [ -f "$S/break-origin" ] && mv "$LAND_ORIGIN" "$LAND_ORIGIN.gone"
+    exit 0 ;;
   "repo view") echo '{"squashMergeAllowed":true,"rebaseMergeAllowed":false,"mergeCommitAllowed":false}' ;;
   "run list") cat "$S/master-runs" ;;
   *) echo "fake gh: $*" >&2; exit 1 ;;
@@ -331,6 +333,17 @@ describe('factory land', () => {
     const result = await land().done
     expect(result.code).toBe(0)
     expect(result.err).toContain('land: guard: contains the default branch')
+  })
+
+  test('a fetch that fails after the merge is a warning: exit 0, and a rerun says merged', async () => {
+    await writeFile(join(state, 'break-origin'), '')
+    const result = await land().done
+    expect(result.code).toBe(0)
+    expect(result.err).toContain('land: merge: #7 by squash')
+    expect(result.err).toContain('land: report: landed, but the landed commits cannot be read')
+    const again = await land().done
+    expect(again.code).toBe(0)
+    expect(again.err).toContain('land: pr: #7 is already merged')
   })
 
   test('a red master is refused by the guard unless --allow-red', async () => {
