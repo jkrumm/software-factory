@@ -343,8 +343,10 @@ const CPU_GROUPS = 6
 /**
  * Whose work the load is: the CPU of each class and repo over the host minutes of the window, as cores (CPU time over the
  * window). One parallel build is a dozen rows in the busiest-processes list but one group here, and a `lead` group is work
- * no test slot saw, a `step` group is one a slot admitted. The host loop samples once a minute, so a process shorter than that
- * is under-counted: read it as a ranking, not a total.
+ * no test slot saw, a `step` group is one a slot admitted. The host loop samples once a minute and counts each process's CPU since
+ * the previous sample (its whole time when first seen), so a process that starts and exits between two samples never shows, and
+ * the kernel's time shows only as far as `top` prints a TIME for `kernel_task` (the system group): read the groups as a ranking,
+ * not a total, and the second line (`cpuAccountingLine`) for how much of the load they leave out.
  */
 function cpuLine(window: ClassCpuWindow | null): string {
   if (!window || window.minutes === 0 || window.rows.length === 0)
@@ -358,6 +360,29 @@ function cpuLine(window: ClassCpuWindow | null): string {
     )
   return `- CPU by class and repo over the last ${window.minutes} host minutes (sampled once a minute, a ranking): ${groups.join(', ')}`
 }
+
+/**
+ * The host's busy CPU against what the per-process groups account for, over the minutes that carry both: busy cores from the `top` header (100 minus idle,
+ * of all cores), the user and system split, the cores the sampled processes took, and the remainder. The remainder is what
+ * a once-a-minute sample cannot name (processes that start and exit inside a minute, such as a test run's children,
+ * linters and compilers, and kernel time); a system share that dominates it points at the kernel, a user share at churn.
+ */
+export function cpuAccountingLine(window: ClassCpuWindow | null, cores: number | undefined): string {
+  const host = window?.host
+  // the split and the groups are read over the same host minutes; a window with no class CPU has no groups to net against (the first snapshot after a restart has none)
+  if (!window || !host || window.minutes === 0 || window.rows.length === 0)
+    return '- CPU accounting: no host CPU split read'
+  const busyPct = Math.max(0, 100 - host.idlePct)
+  const split = `host ${Math.round(busyPct)}% busy (user ${Math.round(host.userPct)}%, system ${Math.round(host.sysPct)}%, idle ${Math.round(host.idlePct)}%) over ${host.samples} host minutes`
+  if (cores === undefined || cores <= 0)
+    return `- CPU accounting: ${split}; the core count is unknown, so the remainder is not computed`
+  const attributed = window.rows.reduce((sum, row) => sum + row.cpuMs, 0) / (Math.max(window.minutes, 1) * 60_000)
+  const busy = (busyPct / 100) * cores
+  const remainder = Math.max(0, busy - attributed)
+  const share = busy > 0 ? Math.round((remainder / busy) * 100) : 0
+  return `- CPU accounting: ${split} = ${Math.round(busy * 10) / 10} of ${cores} cores; the sampled processes account for ${Math.round(attributed * 10) / 10} cores, ${Math.round(remainder * 10) / 10} cores (${share}%) are unattributed (processes that start and exit within a minute, kernel time)`
+}
+
 const SLOT_LINES_LISTED = 12
 
 export interface EvidenceInputs {
@@ -369,6 +394,8 @@ export interface EvidenceInputs {
   cpu: ClassCpuWindow | null
   /** the newest host sample with its capacity facts; null: none */
   host: CapacityMinute | null
+  /** the host's cores, for the CPU accounting; absent: the remainder is not computed */
+  cores?: number
   /** `ps`'s output, or why it was not read */
   ps: { output: string } | { failure: string }
   serverPid: number
@@ -409,7 +436,7 @@ export function overloadEvidence(input: EvidenceInputs): string[] {
       : '- Host: no sample',
   )
 
-  lines.push(cpuLine(input.cpu))
+  lines.push(cpuLine(input.cpu), cpuAccountingLine(input.cpu, input.cores))
 
   if ('failure' in input.ps) {
     lines.push(`- Processes: not read: ${oneLine(input.ps.failure)}`)

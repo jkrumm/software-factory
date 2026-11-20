@@ -7,6 +7,7 @@ import {
   loadOverCeilingFindings,
   OVERLOAD_KINDS,
   overloadEvidence,
+  cpuAccountingLine,
   parsePs,
   priorityLine,
   ROUTE_MIN_SAMPLES,
@@ -324,7 +325,9 @@ test('overloadEvidence: slot lines with reasons, queue by reason, host memory, t
         { class: 'lead', repo: 'shutterflow', cpuMs: 3_000_000 },
         { class: 'system', repo: null, cpuMs: 1_200_000 },
       ],
+      host: { samples: 10, idlePct: 5, userPct: 80, sysPct: 15 },
     },
+    cores: 12,
     host: minute({
       at: ago(1),
       load: 187.5,
@@ -348,6 +351,10 @@ test('overloadEvidence: slot lines with reasons, queue by reason, host memory, t
   // the groups ranked by CPU, as cores over the window: 3 000 000 ms over 10 minutes is 5 cores
   expect(text).toContain('over the last 10 host minutes')
   expect(text).toContain('lead shutterflow 5 cores, system 2 cores, step shutterflow 1 cores')
+  // busy 95 % of 12 cores is 11.4; the groups account for 8 (4 800 000 ms over 10 minutes); the 3.4 left are unattributed
+  expect(text).toContain(
+    'CPU accounting: host 95% busy (user 80%, system 15%, idle 5%) over 10 host minutes = 11.4 of 12 cores; the sampled processes account for 8 cores, 3.4 cores (30%) are unattributed',
+  )
   expect(text).toContain('The 7 busiest processes of 7')
   expect(text).toContain('Scheduling priority (ps -o pri')
   expect(text).toContain('unreachable_s=40')
@@ -380,6 +387,23 @@ test('overloadEvidence: slot lines with reasons, queue by reason, host memory, t
   expect(failed.join('\n')).toContain('Queue by reason: nothing queued')
   expect(failed.join('\n')).toContain('Host: no sample')
   expect(failed.join('\n')).toContain('CPU by class and repo: no host minutes read')
+  expect(failed.join('\n')).toContain('CPU accounting: no host CPU split read')
+})
+
+test('cpuAccountingLine: the remainder never goes negative, and an unknown core count is said', () => {
+  const window = {
+    minutes: 2,
+    rows: [{ class: 'lead', repo: 'app', cpuMs: 600_000 }],
+    host: { samples: 2, idlePct: 90, userPct: 8, sysPct: 2 },
+  }
+  // 10 % of 4 cores is 0.4 busy against 5 attributed: 0 unattributed
+  expect(cpuAccountingLine(window, 4)).toContain('0 cores (0%) are unattributed')
+  expect(cpuAccountingLine(window, undefined)).toContain('the core count is unknown')
+  expect(cpuAccountingLine({ ...window, host: null }, 4)).toBe('- CPU accounting: no host CPU split read')
+  // no class minute in the window: nothing to net the host's busy CPU against, never "everything unattributed"
+  expect(cpuAccountingLine({ ...window, minutes: 0, rows: [] }, 4)).toBe('- CPU accounting: no host CPU split read')
+  // class minutes whose rows carry no CPU (the first snapshot after a restart): the same
+  expect(cpuAccountingLine({ ...window, minutes: 1, rows: [] }, 4)).toBe('- CPU accounting: no host CPU split read')
 })
 
 test('a signal carries the evidence block after the eight lines, which never move the evidence hash', () => {
