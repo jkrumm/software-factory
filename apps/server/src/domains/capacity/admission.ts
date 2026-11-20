@@ -23,7 +23,7 @@ import type { QueueState } from './queue-state.ts'
  * Why a queued Issue that the chain lets through still stays queued, in the order the rules are looked at (the first
  * that says no wins). "Hold" is retired: an Issue is not waiting, it stays queued, and this names why.
  */
-export const REFUSALS = [
+const REFUSALS = [
   'drain',
   'doctor',
   'boot',
