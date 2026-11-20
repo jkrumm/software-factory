@@ -643,9 +643,12 @@ export function createIntake(deps: IntakeDeps) {
     const now = clock.now()
     const keyed = await s.intake.latestSubject(signal.source, findingKey)
     // An Issue a loop filed before its findings carried a key has only its title's fingerprint row: while it is open it
-    // is taken over once under the key, so the first pass after the change notes it instead of filing it twice.
+    // is taken over once under the key (never one that already carries a key), so the first pass after the change notes it
+    // instead of filing it twice.
     const adopted = keyed ? null : await s.intake.latestByFingerprint(signal.source, signal.fingerprint)
-    const adoptable = adopted ? await loadIssue(s.work, adopted.issueId) : null
+    const taken =
+      adopted && (await s.intake.subjectsOfIssue(adopted.issueId)).some((row) => row.subject.startsWith(FINDING_PREFIX))
+    const adoptable = adopted && !taken ? await loadIssue(s.work, adopted.issueId) : null
     if (adopted && isOpen(adoptable)) await keepFingerprint(s, signal, adoptable.id, findingKey)
     const match = keyed ?? (isOpen(adoptable) ? adopted : null)
     const issue = keyed ? await loadIssue(s.work, keyed.issueId) : adoptable

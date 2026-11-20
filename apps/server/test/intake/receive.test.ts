@@ -1431,7 +1431,12 @@ describe("a loop's finding is matched by its key alone", () => {
     })
     const renamed = finding('Friction: leads end their turn silently', 's', 'a pass after that')
     expect(done(await intake.file(renamed, 'agent', key))).toMatchObject({ outcome: 'amended', issue: 'issue_1' })
-    expect(await issues()).toHaveLength(1)
+    const other = { ...key, subject: 'stall:regressed' }
+    expect(done(await intake.file(finding(title, 's'), 'agent', other))).toMatchObject({
+      outcome: 'filed',
+      issue: 'issue_2',
+    })
+    expect(await issues()).toHaveLength(2)
     expect(triageCalls).toBe(0)
   })
 
