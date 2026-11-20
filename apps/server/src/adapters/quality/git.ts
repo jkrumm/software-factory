@@ -540,8 +540,8 @@ export class GitCommits implements Commits {
   /**
    * The lead's own commits on its branch since its worktree was cut. A branch rebased over what others landed holds
    * their commits too; its reflog says what it was rebased onto, and what that holds is theirs, except what sat on top
-   * of an earlier onto and what was made on the branch. A reflog that cannot be read, or no rebase in it, leaves the
-   * whole range.
+   * of an earlier onto and what was made on the branch. A merge of the default branch into the branch, and what it
+   * brought in, is theirs too. A reflog that cannot be read, or no rebase in it, leaves the whole range.
    */
   private async branchCommits(repo: string, branch: string, cut: string): Promise<string[]> {
     const ref = `refs/heads/${branch}`
