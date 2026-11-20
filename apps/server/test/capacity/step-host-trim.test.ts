@@ -130,9 +130,19 @@ describe('the step host trim', () => {
 
   test('the exp part runs without a step directory, while a step runs and when docker does not answer', () => {
     rmSync(join(home, 'factory-steps'), { recursive: true, force: true })
-    expect(existsSync(exp('exp1', 9))).toBe(true)
-    expect(run('exit 1').code).toBe(0)
-    expect(existsSync(join(home, 'exp1'))).toBe(false)
+    const none = exp('exp1', 9)
+    expect(existsSync(none)).toBe(true)
+    run('exit 0')
+    expect(existsSync(none)).toBe(false)
+
+    mkdirSync(join(home, 'factory-steps'), { recursive: true })
+    const running = exp('exp2', 9)
+    expect(run('echo abc123').out).toContain('a step is running')
+    expect(existsSync(running)).toBe(false)
+
+    const silent = exp('exp3', 9)
+    expect(run('exit 1').out).toContain('docker did not answer')
+    expect(existsSync(silent)).toBe(false)
   })
 
   test('a host with no step directory is left alone', () => {

@@ -19,7 +19,7 @@ import { CACHE_CAP_GIB, CACHE_IDLE_DAYS, COPY_IDLE_DAYS, EXP_IDLE_DAYS } from '.
 
 const KIB_PER_GIB = 1024 * 1024
 
-/** The shell script the step host runs (POSIX sh, run from the remote user's home); its last line says what it did. */
+/** The shell script the step host runs (POSIX sh, run from the remote user's home); it prints a `trim:` line per kind of removal, and the probe logs each one. */
 export function trimScript(input: {
   /** the label every step container carries: one running means nothing is removed */
   stepLabel: string
