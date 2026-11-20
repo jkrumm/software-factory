@@ -1,6 +1,6 @@
-import { miniShellLine, needOf } from '../domains/checkpoints/need.ts'
-import type { ErrandRecord } from '../domains/checkpoints/ports.ts'
-import type { ErrandId } from '../domains/checkpoints/errand.ts'
+import { miniShellLine, needOf } from '../domains/errands/need.ts'
+import type { ErrandRecord } from '../domains/errands/ports.ts'
+import type { ErrandId } from '../domains/errands/errand.ts'
 import { err, ok, portError } from '../kernel/result.ts'
 import { outputNote } from '../kernel/run.ts'
 import { err as fail, type Result } from '../kernel/result.ts'
@@ -39,17 +39,17 @@ export async function approveErrand(
 ): Promise<CheckpointResult<ErrandApproved>> {
   const { commands } = deps
   if (!commands) return err(portError('gone', 'this process has no runner for an approved command'))
-  const started = await deps.uow.run<ErrandRecord, CheckpointError>(async ({ checkpoints }) => {
-    const errand = await checkpoints.lockErrand(input.errandId)
+  const started = await deps.uow.run<ErrandRecord, CheckpointError>(async ({ errands }) => {
+    const errand = await errands.lockErrand(input.errandId)
     if (!errand) return err({ kind: 'not_found', what: 'Errand', id: input.errandId })
     if (errand.doneAt) return refused(`${errand.id} is closed already`)
     if (errand.reachedOwnerAt === null) return refused(`${errand.id} has not reached the owner yet`)
     if (errand.command === null || (errand.need ?? needOf(errand)) !== 'approval')
       return refused(`${errand.id} is not an approval: it needs ${errand.need ?? needOf(errand)}, not his yes alone`)
     const at = deps.clock.now()
-    const begun = await checkpoints.startApprovedRun(errand.id, at, new Date(at.getTime() - APPROVED_RUN_STALE_MS))
+    const begun = await errands.startApprovedRun(errand.id, at, new Date(at.getTime() - APPROVED_RUN_STALE_MS))
     if (!begun) return refused(`${errand.id} is closed or its command is running already`)
-    const now = await checkpoints.errand(errand.id)
+    const now = await errands.errand(errand.id)
     if (!now) throw new Error(`errand ${errand.id} vanished inside its own transaction`)
     return ok(now)
   })
@@ -80,7 +80,7 @@ async function runApproved(deps: CheckpointDeps, errand: ErrandRecord): Promise<
     }
     // it succeeded and its check still says it is needed: the Errand stays, without a run still marked as going
     if (status === 'done' && result.value.errand.doneAt === null) {
-      await deps.uow.run(async ({ checkpoints }) => ok(await checkpoints.clearRun(errand.id)))
+      await deps.uow.run(async ({ errands }) => ok(await errands.clearRun(errand.id)))
     }
   } catch (cause) {
     console.error(`checkpoints: the approved run of ${errand.id} failed: ${String(cause).slice(0, 300)}`)

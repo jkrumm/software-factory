@@ -218,7 +218,7 @@ export function composeLoops(ctx: LoopContext) {
       run: async () => {
         const settled = await passOf(() => checkpoints.settle(), 'the settle pass')
         // an Errand this pass let through to the owner has its dialog pushed now: the desk pass is due for a command never pushed
-        const open = await uow.run(async ({ checkpoints: store }) => ok(await store.openErrands(500)))
+        const open = await uow.run(async ({ errands: store }) => ok(await store.openErrands(500)))
         if (open.ok && hasUnpushed(open.value)) deskOnReturn()
         return settled
       },

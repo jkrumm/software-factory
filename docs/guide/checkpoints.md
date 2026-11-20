@@ -158,7 +158,7 @@ An Errand is something only the owner's hands can do: a portal step, a device ru
 - **Turned away.** An Errand that asks a person for what the host does for the lead never reaches the owner. A refusal at raise costs the lead one refused call, and one at the screen costs the Issue its wait. The rules look first, then the `factory-errand` workflow.
 - **Never a review.** A request to approve one's own pull request is no Errand. The lead defers on the review instead.
 
-<!-- snippet: apps/server/src/domains/checkpoints/errand.ts refuseHostClass -->
+<!-- snippet: apps/server/src/domains/errands/errand.ts refuseHostClass -->
 ```ts
 export function refuseHostClass(input: ErrandRaised): string | null {
   const text = `${input.summary}\n${input.detail ?? ''}`.toLowerCase()
@@ -177,9 +177,9 @@ issue_1714 closed that gap by rule. It was filed on 2026-11-16 at 20:42 as "An E
 
 **Example files:**
 
-- [`errand.ts` L37-L78](https://github.com/jkrumm/software-factory/blob/master/apps/server/src/domains/checkpoints/errand.ts#L37-L78): `readErrand`, the need and `tried` it requires.
-- [`errand.ts` L92-L137](https://github.com/jkrumm/software-factory/blob/master/apps/server/src/domains/checkpoints/errand.ts#L92-L137): the classes of work the host does, and the refusal.
-- [`need.ts` L3-L14](https://github.com/jkrumm/software-factory/blob/master/apps/server/src/domains/checkpoints/need.ts#L3-L14): the four needs and where each shows.
+- [`errand.ts` L37-L78](https://github.com/jkrumm/software-factory/blob/master/apps/server/src/domains/errands/errand.ts#L37-L78): `readErrand`, the need and `tried` it requires.
+- [`errand.ts` L92-L137](https://github.com/jkrumm/software-factory/blob/master/apps/server/src/domains/errands/errand.ts#L92-L137): the classes of work the host does, and the refusal.
+- [`need.ts` L3-L14](https://github.com/jkrumm/software-factory/blob/master/apps/server/src/domains/errands/need.ts#L3-L14): the four needs and where each shows.
 
 ## Screens
 

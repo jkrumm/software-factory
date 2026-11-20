@@ -3,6 +3,7 @@ import type { ErrandScreenAnswer } from '@software-factory/contract'
 import { startTestCluster, type TestCluster } from '@software-factory/tests/pg'
 import { fakeAgw } from '../support/agw.ts'
 import { postgresCheckpointStore } from '../../src/adapters/postgres/checkpoint-store.ts'
+import { postgresErrandStore } from '../../src/adapters/postgres/errand-store.ts'
 import { postgresDeskStore } from '../../src/adapters/postgres/desk-store.ts'
 import { loadMigrations, migrate } from '../../src/adapters/postgres/migrate.ts'
 import { postgresPlanningStore } from '../../src/adapters/postgres/planning-store.ts'
@@ -23,8 +24,8 @@ import { errandsPass } from '../../src/app/loops/errands.ts'
 import { endRequest } from '../../src/app/checkpoints-errands.ts'
 import { reviewsPass } from '../../src/app/loops/reviews.ts'
 import { registerVisit } from '../../src/app/visit.ts'
-import type { PushPort, SyncPort } from '../../src/domains/checkpoints/ports.ts'
-import type { CheckRun } from '../../src/domains/checkpoints/request.ts'
+import type { PushPort, SyncPort } from '../../src/domains/errands/ports.ts'
+import type { CheckRun } from '../../src/domains/errands/request.ts'
 import type { ReviewPort } from '../../src/domains/loops/reviews.ts'
 import type { AnyIssueEvent } from '../../src/domains/work/events.ts'
 import { type FixedClock, fixedClock } from '../../src/kernel/clock.ts'
@@ -83,6 +84,7 @@ afterAll(() => db.stop())
 const stores = (tx: Parameters<Parameters<typeof postgresUnitOfWork>[1]>[0]) => ({
   work: postgresWorkStore(tx),
   checkpoints: postgresCheckpointStore(tx),
+  errands: postgresErrandStore(tx),
   planning: postgresPlanningStore(tx),
   reviews: postgresReviewStore(tx),
   desk: postgresDeskStore(tx),

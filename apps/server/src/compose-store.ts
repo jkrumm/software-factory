@@ -1,7 +1,9 @@
 import type { SQL } from 'bun'
 import { postgresCheckpointStore } from './adapters/postgres/checkpoint-store.ts'
+import { postgresCollectionStore } from './adapters/postgres/collection-store.ts'
 import { postgresCapacityStore } from './adapters/postgres/capacity-store.ts'
 import { postgresDeskStore } from './adapters/postgres/desk-store.ts'
+import { postgresErrandStore } from './adapters/postgres/errand-store.ts'
 import { postgresLoopStore } from './adapters/postgres/loop-store.ts'
 import { postgresPlanningStore } from './adapters/postgres/planning-store.ts'
 import { postgresReviewStore } from './adapters/postgres/review-store.ts'
@@ -22,6 +24,8 @@ export const composeUow = (sql: SQL) =>
     capacity: postgresCapacityStore(tx),
     reads: readIssues(tx),
     checkpoints: postgresCheckpointStore(tx),
+    collections: postgresCollectionStore(tx),
+    errands: postgresErrandStore(tx),
     leads: postgresLeadStore(tx),
     quality: postgresQualityStore(tx),
     intake: postgresIntakeStore(tx),

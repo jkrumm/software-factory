@@ -4,6 +4,7 @@ import type {
   CheckpointStore,
   CollectionRecord,
   CollectionStats,
+  CollectionStore,
 } from '../domains/checkpoints/ports.ts'
 import { projectOf, repoNameOf, repoTextOf } from '../domains/planning/sync.ts'
 import { key } from '../kernel/keys.ts'
@@ -24,27 +25,27 @@ type CollectionResult = Result<Collection, StandaloneArtifactError | PortError>
 
 const EMPTY: CollectionStats = { members: [], lastChange: null, openComments: 0 }
 
-const read = async (checkpoints: CheckpointStore, collection: CollectionRecord) =>
-  (await checkpoints.collectionStats([collection.id])).get(collection.id) ?? EMPTY
+const read = async (collections: CollectionStore, collection: CollectionRecord) =>
+  (await collections.collectionStats([collection.id])).get(collection.id) ?? EMPTY
 
 const finish = async (
-  checkpoints: CheckpointStore,
+  collections: CollectionStore,
   id: CollectionId,
   result: Collection['result'],
 ): Promise<Collection> => {
-  const collection = await checkpoints.collection(id)
+  const collection = await collections.collection(id)
   if (!collection) throw new Error(`collection ${id} vanished inside its own transaction`)
-  return { result, collection, stats: await read(checkpoints, collection) }
+  return { result, collection, stats: await read(collections, collection) }
 }
 
 /** Every collection, pinned first, each with what its card shows. */
 export function listCollections(
   deps: Pick<CollectionDeps, 'uow'>,
 ): Promise<Result<{ collection: CollectionRecord; stats: CollectionStats }[], PortError>> {
-  return deps.uow.run(async ({ checkpoints }) => {
-    const collections = await checkpoints.collections()
-    const stats = await checkpoints.collectionStats(collections.map((c) => c.id))
-    return ok(collections.map((collection) => ({ collection, stats: stats.get(collection.id) ?? EMPTY })))
+  return deps.uow.run(async ({ collections }) => {
+    const all = await collections.collections()
+    const stats = await collections.collectionStats(all.map((c) => c.id))
+    return ok(all.map((collection) => ({ collection, stats: stats.get(collection.id) ?? EMPTY })))
   })
 }
 
@@ -52,9 +53,9 @@ export function showCollection(
   deps: Pick<CollectionDeps, 'uow'>,
   id: CollectionId,
 ): Promise<Result<Collection, StandaloneArtifactError | PortError>> {
-  return deps.uow.run<Collection, StandaloneArtifactError>(async ({ checkpoints }) => {
-    const found = await checkpoints.collection(id)
-    return found ? ok(await finish(checkpoints, id, 'replayed')) : err({ kind: 'not_found', what: 'collection', id })
+  return deps.uow.run<Collection, StandaloneArtifactError>(async ({ collections }) => {
+    const found = await collections.collection(id)
+    return found ? ok(await finish(collections, id, 'replayed')) : err({ kind: 'not_found', what: 'collection', id })
   })
 }
 
@@ -74,6 +75,7 @@ async function projectOfArtifact(
  */
 async function take(
   checkpoints: CheckpointStore,
+  collections: CollectionStore,
   collection: CollectionRecord,
   ids: readonly string[],
 ): Promise<Result<number, StandaloneArtifactError>> {
@@ -83,13 +85,13 @@ async function take(
     if (!artifact) return err({ kind: 'not_found', what: 'artifact', id: text })
     if (artifact.collectionId === collection.id) continue
     if (artifact.collectionId) {
-      const other = await checkpoints.collection(artifact.collectionId)
+      const other = await collections.collection(artifact.collectionId)
       return err({
         kind: 'machine_refused',
         detail: `${artifact.id} is in the collection "${other?.title ?? artifact.collectionId}": take it out first (artifact collection edit ${artifact.collectionId} --remove ${artifact.id})`,
       })
     }
-    if (await checkpoints.setArtifactCollection(artifact.id, collection.id, null)) moved += 1
+    if (await collections.setArtifactCollection(artifact.id, collection.id, null)) moved += 1
   }
   return ok(moved)
 }
@@ -126,9 +128,9 @@ export async function newCollection(
     input.key ?? digest(`${repo ?? ''}\n${title}\n${[...members].sort().join(',')}`),
   )
   return deps.uow.run<Collection, StandaloneArtifactError>(async (stores) => {
-    const { checkpoints } = stores
-    const existing = await checkpoints.collectionByKey(filed)
-    if (existing) return ok(await finish(checkpoints, existing.id, 'replayed'))
+    const { checkpoints, collections } = stores
+    const existing = await collections.collectionByKey(filed)
+    if (existing) return ok(await finish(collections, existing.id, 'replayed'))
 
     let project: string | null = null
     if (repo !== null) {
@@ -151,7 +153,7 @@ export async function newCollection(
     }
     const id = deps.ids.next('collection')
     const at = deps.clock.now()
-    const stored = await checkpoints.insertCollection({
+    const stored = await collections.insertCollection({
       id,
       key: filed,
       title,
@@ -161,12 +163,12 @@ export async function newCollection(
       createdAt: at,
     })
     if (!stored) return err({ kind: 'invalid', detail: `the key ${filed} was filed by a concurrent request` })
-    const collection = await checkpoints.collection(id)
+    const collection = await collections.collection(id)
     if (!collection) throw new Error(`collection ${id} vanished inside its own transaction`)
-    const taken = await take(checkpoints, collection, members)
+    const taken = await take(checkpoints, collections, collection, members)
     if (!taken.ok) return taken
-    if (input.lead) await checkpoints.updateCollection(id, { leadArtifactId: input.lead as ArtifactId })
-    return ok(await finish(checkpoints, id, 'applied'))
+    if (input.lead) await collections.updateCollection(id, { leadArtifactId: input.lead as ArtifactId })
+    return ok(await finish(collections, id, 'applied'))
   })
 }
 
@@ -181,36 +183,36 @@ export function editCollection(
     remove: readonly string[]
   },
 ): Promise<CollectionResult> {
-  return deps.uow.run<Collection, StandaloneArtifactError>(async ({ checkpoints }) => {
-    const collection = await checkpoints.collection(input.id)
+  return deps.uow.run<Collection, StandaloneArtifactError>(async ({ checkpoints, collections }) => {
+    const collection = await collections.collection(input.id)
     if (!collection) return err({ kind: 'not_found', what: 'collection', id: input.id })
     const title = input.title?.trim()
     if (input.title !== undefined && title === '') {
       return err({ kind: 'invalid', detail: 'title: a collection needs a title' })
     }
     let changed = false
-    const taken = await take(checkpoints, collection, [...(input.lead ? [input.lead] : []), ...input.add])
+    const taken = await take(checkpoints, collections, collection, [...(input.lead ? [input.lead] : []), ...input.add])
     if (!taken.ok) return taken
     changed ||= taken.value > 0
     for (const text of input.remove) {
       const artifact = await checkpoints.artifact(text as ArtifactId)
       if (!artifact) return err({ kind: 'not_found', what: 'artifact', id: text })
       if (artifact.collectionId !== collection.id) continue
-      await checkpoints.setArtifactCollection(artifact.id, null, collection.id)
+      await collections.setArtifactCollection(artifact.id, null, collection.id)
       changed = true
       if (collection.leadArtifactId === artifact.id) {
-        await checkpoints.updateCollection(collection.id, { leadArtifactId: null })
+        await collections.updateCollection(collection.id, { leadArtifactId: null })
       }
     }
     if (title !== undefined && title !== collection.title) {
-      await checkpoints.updateCollection(collection.id, { title })
+      await collections.updateCollection(collection.id, { title })
       changed = true
     }
     if (input.lead && input.lead !== collection.leadArtifactId) {
-      await checkpoints.updateCollection(collection.id, { leadArtifactId: input.lead as ArtifactId })
+      await collections.updateCollection(collection.id, { leadArtifactId: input.lead as ArtifactId })
       changed = true
     }
-    return ok(await finish(checkpoints, collection.id, changed ? 'applied' : 'replayed'))
+    return ok(await finish(collections, collection.id, changed ? 'applied' : 'replayed'))
   })
 }
 
@@ -219,10 +221,10 @@ export function pinCollection(
   deps: Pick<CollectionDeps, 'uow' | 'clock'>,
   input: { id: CollectionId; pinned: boolean },
 ): Promise<CollectionResult> {
-  return deps.uow.run<Collection, StandaloneArtifactError>(async ({ checkpoints }) => {
-    const collection = await checkpoints.collection(input.id)
+  return deps.uow.run<Collection, StandaloneArtifactError>(async ({ collections }) => {
+    const collection = await collections.collection(input.id)
     if (!collection) return err({ kind: 'not_found', what: 'collection', id: input.id })
-    const changed = await checkpoints.setCollectionPin(collection.id, input.pinned ? deps.clock.now() : null)
-    return ok(await finish(checkpoints, collection.id, changed ? 'applied' : 'replayed'))
+    const changed = await collections.setCollectionPin(collection.id, input.pinned ? deps.clock.now() : null)
+    return ok(await finish(collections, collection.id, changed ? 'applied' : 'replayed'))
   })
 }

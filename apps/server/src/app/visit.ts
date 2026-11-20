@@ -1,4 +1,4 @@
-import { cameBack } from '../domains/checkpoints/desk.ts'
+import { cameBack } from '../domains/errands/desk.ts'
 import { FIRST_WINDOW_MS, VISIT_GAP_MS } from '../kernel/visit.ts'
 import { ok, type PortError, type Result } from '../kernel/result.ts'
 import type { UnitOfWork } from './unit-of-work.ts'

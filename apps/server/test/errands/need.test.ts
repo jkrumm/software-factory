@@ -6,9 +6,9 @@ import {
   miniShellLine,
   needByRule,
   needOf,
-} from '../../src/domains/checkpoints/need.ts'
-import { pushQueue } from '../../src/domains/checkpoints/desk.ts'
-import type { ErrandRecord } from '../../src/domains/checkpoints/ports.ts'
+} from '../../src/domains/errands/need.ts'
+import { pushQueue } from '../../src/domains/errands/desk.ts'
+import type { ErrandRecord } from '../../src/domains/errands/ports.ts'
 
 /**
  * The seven days before 2026-11-14: the 15 Errands that carried a MacBook command and reached the owner, as the filing of this

@@ -39,7 +39,8 @@ apps/server/src/
     work/          the Issue: events, the total transition table, effects, the generated diagram
     leads/         attempts, the brief, notes, session state derived from hook events, the stop rule
     quality/       the ship gate, evidence, the watch and verify
-    checkpoints/   Decisions, artifacts and revisions, errands, the owner's pages
+    checkpoints/   Decisions, artifacts and revisions, collections, the owner's pages, rechecks
+    errands/       Errands and requests, need, triage by rule, match keys, the desk, the Errand store and its ports
     loops/         what the steward and triage decide: stall rules, settling
   app/           use cases: one transaction to claim, the port call outside it, one to record
     loops/         the loop runner (`passLoop`, `createSaid`) and each loop's pass with its LoopSpec (`xLoop`)
@@ -586,7 +587,7 @@ orchestrator). The Errand is not done: `errand_turned_back` ends the Issue's err
 closes `turned_back` by `owner` or `orchestrator`. It is not the only way: the orchestrator also closes an Errand its operator confirmed (below), and `not_needed` stays the owner's.
 **The orchestrator's done** (`POST /v1/errands/:id/done` with `confirmedBy`, Issue 2302). The route is an owner row: the orchestrator may close an Errand as `done` only, and only with `confirmedBy` (who confirmed the work and how; 422 without it, and for `not_needed`). It is stored `closed_by orchestrator`, the Issue's `errand_done` and its note carry the actor `orchestrator`, and the lead reads "the owner's delegate closed it on <evidence>". `finishErrand` is the same code: a failed run keeps the Errand open and a check that still says needed reopens it, so the delegate cannot overrule a check. An `approval` Errand (stored or by rule) stays the owner's yes: 422. Before this, the row was the owner's alone and the orchestrator's only way was `FACTORY_TOKEN= factory errand done`, which resolves the owner token and is recorded as `owner`.
 
-**The desk pass** (`desk` loop, every 15 minutes it asks whether it is due; `app/loops/desk.ts`, `domains/checkpoints/desk.ts`). The owner's return is an
+**The desk pass** (`desk` loop, every 15 minutes it asks whether it is due; `app/loops/desk.ts`, `domains/errands/desk.ts`). The owner's return is an
 event: the `GET /v1/since` read that starts a new visit (two hours or more after the last, `console_visit.returned_at`) starts the pass at once (`ReadModelDeps.onReturn`),
 and so does the MacBook answering the ask-human ssh probe (the reachability verb of the mini's MacBook key; its ssh alias is `FACTORY_ASK_HUMAN_HOST`, unset: no probe, and `read health` carries a `macbook-probe` line while an open Errand has a MacBook command: the host needs that one `FACTORY_ASK_HUMAN_HOST=<the MacBook's ssh alias, as in the mini's ssh config>` line in `~/.config/factory/env`, then `FACTORY_DEPLOY_FORCE=1 make deploy`, since a settings change needs a restart; the alias is a private value and never in a tracked file) after a push found it unreachable (`desk_presence`: the push's exit 69 marks it down, the tick's probe
 marks it back, which counts as a return) and the Console's button "Push what waits to my MacBook" (`POST /v1/desk/push`, `factory desk push`, owner and orchestrator; it answers at once and
@@ -600,7 +601,7 @@ stores the check on its Errand, so anything a machine can observe closes itself 
 "approve the queued dialog" pushable. An Errand raised with no command while the same lead (`FACTORY_SESSION` `lead-<issue>-<attempt>`) has an unanswered `ask-human.sh` queue file (`adapters/checkpoints/queued-asks.ts`, in the queue directory under `$XDG_STATE_HOME`)
 is refused with the verb to use, so the factory holds the one list; `factory errand raise --help` says the same.
 
-**A request is an Errand no Issue raised** (`app/checkpoints.ts` `requestErrand`, `domains/checkpoints/request.ts`, `POST /v1/errands/requests`,
+**A request is an Errand no Issue raised** (`app/checkpoints.ts` `requestErrand`, `domains/errands/request.ts`, `POST /v1/errands/requests`,
 `factory errand request`; callers owner, orchestrator and agent). `errands.issue_id` is null, there is no `errand_raised`
 event, no lead and no page: it reaches the owner at intake (`reached_owner_at = raised_at`; an owner already told
 by the asker's own dialog needs no second push), except a request from a screened source (`SCREENED_SOURCES`: `ask-human`),
@@ -623,7 +624,7 @@ and failed (exit N)`, count too) leaves the Errand open and records the run (`ru
 shows `tried, failed: <first error line>` (`tried`) and the Console its output. A done on an Errand with a `check` runs the check at
 once, outside any transaction: exit 0 reopens it with `check_note` `marked done but the check says still needed` (the hourly pass
 keeps that note), exit 1..125 closes it with the check's output in the note, a check that could not answer closes it as before. A pushed run that exited 0 (`run.status` `done`, or the words `answered on the MacBook (exit 0)`) with a check that still exits 0 is stored as `run_status` `done`, which `run_attempts` does not count; the desk pass never pushes that Errand again, and turns it back to its lead once, with the check's output, when the check it runs in that pass still exits 0.
-**What an Errand needs** (`errands.need`: `secret`, `hands`, `approval`, `place`; `domains/checkpoints/need.ts`). Stored at the
+**What an Errand needs** (`errands.need`: `secret`, `hands`, `approval`, `place`; `domains/errands/need.ts`). Stored at the
 raise (an Errand that was open before the column existed gets it from `assignNeeds` in the `settle` pass), sent to the screen as a
 field of its request and shown on Needs you once the screen lets it through. The rule over the Errand's shape decides first,
 and the need the lead or the asker stated (`--need`, never `approval`) only the rest, `hands` by default; the screen's answer carries none. A secret word (1Password, a biometric, sudo, the secrets reseal) is `secret`.
@@ -632,7 +633,7 @@ no secret is `approval`, and with a command it reaches the owner by rule (`scree
 MacBook with no physical step is `place`; a device, hardware, a portal or a visual check is `hands`. The desk pass pushes a MacBook
 dialog (`pushQueue`) only for `secret` and `hands`: a `place` waits on Needs you with its command to copy (his "Push what waits"
 button still pushes it), an `approval` never goes to the MacBook.
-**Decided by rule before the owner** (issue 1714, `domains/checkpoints/triage.ts`, replayed by `scripts/errand-replay.ts`): a request or a lead's Errand is read by its shape
+**Decided by rule before the owner** (issue 1714, `domains/errands/triage.ts`, replayed by `scripts/errand-replay.ts`): a request or a lead's Errand is read by its shape
 before it can reach him, and a secret, sudo, passphrase or hands Errand can only get `reach`. (a) A command that runs wholly on the mini or
 over keyless ssh (an ssh to the mini or a server, `hc ... --on mini`) with no secret word, no physical word and none of his yes (a restart or
 power-off, `hc server`/`hc update`, the gate's release, a recursive delete, a service boot-out) is refused at the raise
@@ -673,7 +674,7 @@ gives an agent nothing it lacks: the command runs as the user the agent already 
 not is a click on another machine; the Decision on this Issue (decision_01a1d9e5) put that trade to the owner, and reverting is one
 condition in `pushQueue` plus the route.
 **Repeats join.** A lead's Errand, or a request, that is the same need as an open Errand does not raise another. The same need is
-the same exact command or check, or the same `match_key` (`domains/checkpoints/match.ts`, stored when it is raised): the lead's
+the same exact command or check, or the same `match_key` (`domains/errands/match.ts`, stored when it is raised): the lead's
 own `needKey` in the repo (`--body '{"needKey":"census-ua-contact",...}'`), else the command with its whitespace and a trailing
 `;` normalised (the same wherever it is raised), else the one-line summary lowercased and stripped of punctuation, in the same
 repo (a request's repo is its asker). Errands raised before the column existed carry none and join by exact command or check

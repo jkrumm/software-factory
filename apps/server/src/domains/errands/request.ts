@@ -1,6 +1,6 @@
 import { err, ok, type Result } from '../../kernel/result.ts'
 import { type Host, HOSTS, hostOf } from '../../kernel/hands.ts'
-import type { MissingFields } from './decision.ts'
+import type { MissingFields } from '../../kernel/missing-fields.ts'
 import { STATED_NEEDS, type StatedNeed } from './triage.ts'
 
 export { CHECK_BROKEN_NOTE } from '../../kernel/run.ts'

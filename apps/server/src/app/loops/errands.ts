@@ -1,5 +1,5 @@
 import type { ErrandNeededAnswer } from '@software-factory/contract'
-import type { CheckRunner, CheckpointStore, ErrandRecord } from '../../domains/checkpoints/ports.ts'
+import type { CheckRunner, ErrandRecord, ErrandStore } from '../../domains/errands/ports.ts'
 import {
   brokenLine,
   CHECK_BROKEN_NOTE,
@@ -12,7 +12,7 @@ import {
   evidenceLines,
   NEEDED_AFTER_MS,
   NEEDED_PER_PASS,
-} from '../../domains/checkpoints/request.ts'
+} from '../../domains/errands/request.ts'
 import { exitedNote, STILL_NEEDED_NOTE } from '../../kernel/run.ts'
 import type { Clock } from '../../kernel/clock.ts'
 import type { AgwPort } from '../../kernel/agw.ts'
@@ -24,7 +24,7 @@ import { passLoop, type LoopSpec, type LoopWiring } from './runner.ts'
 
 /** What running one Errand's check needs; the desk pass shares it. */
 export interface CheckDeps {
-  uow: UnitOfWork<{ checkpoints: CheckpointStore }>
+  uow: UnitOfWork<{ errands: ErrandStore }>
   clock: Clock
   checks: CheckRunner
   /** ends an Errand whose check says it is no longer needed; default: close the request (no Issue to tell) */
@@ -79,15 +79,15 @@ async function close(
   why: string,
 ): Promise<boolean> {
   if (deps.end) return deps.end(errand, { kind, by, why })
-  const done = await deps.uow.run(async ({ checkpoints }) =>
-    ok(await checkpoints.finishErrand(errand.id, deps.clock.now(), closedNote(kind, why), { kind, by })),
+  const done = await deps.uow.run(async ({ errands }) =>
+    ok(await errands.finishErrand(errand.id, deps.clock.now(), closedNote(kind, why), { kind, by })),
   )
   return done.ok && done.value
 }
 
 async function noteCheck(deps: CheckDeps, errand: ErrandRecord, note: string, fails: number): Promise<void> {
-  await deps.uow.run(async ({ checkpoints }) =>
-    ok(await checkpoints.recordCheck(errand.id, { at: deps.clock.now(), note, fails })),
+  await deps.uow.run(async ({ errands }) =>
+    ok(await errands.recordCheck(errand.id, { at: deps.clock.now(), note, fails })),
   )
 }
 
@@ -182,9 +182,9 @@ async function lookAt(
   if (!answered.ok) {
     pass.problems.push(`${errand.id}: ${answered.error.kind}: ${answered.error.detail}`.slice(0, 300))
     // the look counts as made, early enough that the next one comes in hours, not a day
-    await deps.uow.run(async ({ checkpoints }) =>
+    await deps.uow.run(async ({ errands }) =>
       ok(
-        await checkpoints.recordNeeded(errand.id, {
+        await errands.recordNeeded(errand.id, {
           at: new Date(now.getTime() - NEEDED_AFTER_MS + NEEDED_RETRY_MS),
           note: 'the still-needed look could not be made',
         }),
@@ -197,8 +197,8 @@ async function lookAt(
     if (await close(deps, errand, 'not_needed', 'judge', cut(answer.reason))) pass.judgedOut++
     return
   }
-  await deps.uow.run(async ({ checkpoints }) =>
-    ok(await checkpoints.recordNeeded(errand.id, { at: now, note: cut(answer.reason) })),
+  await deps.uow.run(async ({ errands }) =>
+    ok(await errands.recordNeeded(errand.id, { at: now, note: cut(answer.reason) })),
   )
 }
 
@@ -217,9 +217,9 @@ async function lookAt(
  */
 export async function errandsPass(deps: ErrandsDeps): Out<ErrandsPass> {
   const now = deps.clock.now()
-  const read = await deps.uow.run(async ({ checkpoints }) =>
+  const read = await deps.uow.run(async ({ errands }) =>
     ok(
-      await checkpoints.requests({
+      await errands.requests({
         closedSince: new Date(now.getTime() - EVIDENCE_DAYS * 86_400_000),
         limit: READ_LIMIT,
       }),

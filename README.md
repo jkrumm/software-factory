@@ -634,7 +634,7 @@ flowchart LR
   read --> pg
 ```
 
-Eight domains, each owning its tables. A domain imports only the kernel and itself. When one needs another, `app/` coordinates them in one transaction.
+Nine domains, each owning its tables. A domain imports only the kernel and itself. When one needs another, `app/` coordinates them in one transaction.
 
 | Domain | Owns |
 |-|-|
@@ -644,7 +644,8 @@ Eight domains, each owning its tables. A domain imports only the kernel and itse
 | `work` | the Issue: a total state machine and its events |
 | `leads` | attempts, briefs, notes, session state derived from hook events |
 | `quality` | gates, evidence, watch, verify |
-| `checkpoints` | Decisions, artifacts and revisions, annotations, verdicts, Errands |
+| `checkpoints` | Decisions, artifacts and revisions, annotations, verdicts, collections |
+| `errands` | Errands and requests, what an Errand needs, the screen's rules, matching, the desk |
 | `loops` | the steward's stall rules, settling a Decision, the self-improvement loops, the ports to the workflows |
 
 - **A lead** is an interactive Claude Code session in a [herdr-core](integrations/README.md) terminal.

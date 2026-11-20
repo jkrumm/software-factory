@@ -1,4 +1,5 @@
 import type { Id } from '../../kernel/ids.ts'
+import type { MissingFields } from '../../kernel/missing-fields.ts'
 import { err, ok, type Result } from '../../kernel/result.ts'
 import { scrub } from '../../kernel/scrub.ts'
 import { WORKFLOWS } from '../../kernel/workflows.ts'
@@ -48,13 +49,6 @@ export const JUDGE_BACKOFF_MS = WORKFLOWS.judge.retry.backoffMs
 const MAX_OPTIONS = 10
 const MAX_TEXT = 4000
 const MAX_WAIT_MINUTES = 7 * 24 * 60
-
-/** A form that is not complete: the fields that are missing or wrong, each named as the lead wrote it. */
-export interface MissingFields {
-  kind: 'missing_field'
-  fields: string[]
-  detail: string
-}
 
 const isRecord = (value: unknown): value is Record<string, unknown> =>
   typeof value === 'object' && value !== null && !Array.isArray(value)

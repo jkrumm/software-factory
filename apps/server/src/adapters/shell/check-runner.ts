@@ -1,5 +1,5 @@
-import { CHECK_OUTPUT_MAX, CHECK_TIMEOUT_MS, type CheckRun } from '../../domains/checkpoints/request.ts'
-import type { CheckRunner } from '../../domains/checkpoints/ports.ts'
+import { CHECK_OUTPUT_MAX, CHECK_TIMEOUT_MS, type CheckRun } from '../../domains/errands/request.ts'
+import type { CheckRunner } from '../../domains/errands/ports.ts'
 import { CannotExecute, childEnv, EXIT_STOPPED, EXIT_TIMEOUT, type Run, runProcess } from '../process.ts'
 
 /** A very long output keeps its two ends; the reader (`run.ts`) cuts it to its first and last lines. */

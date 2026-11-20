@@ -10,13 +10,8 @@ import {
 } from '../domains/checkpoints/decision.ts'
 import type { Precedent } from '../domains/checkpoints/decision.ts'
 import { decisionPage, deepLink } from '../domains/checkpoints/page.ts'
-import {
-  type MacbookVerbPort,
-  type DecisionRecord,
-  type DecisionStatus,
-  type StepClaim,
-  statusOf,
-} from '../domains/checkpoints/ports.ts'
+import { type DecisionRecord, type DecisionStatus, type StepClaim, statusOf } from '../domains/checkpoints/ports.ts'
+import { type MacbookVerbPort } from '../domains/errands/ports.ts'
 import type { AgwPort } from '../kernel/agw.ts'
 import { WORKFLOWS } from '../kernel/workflows.ts'
 import { err, ok, type PortError, type Result } from '../kernel/result.ts'

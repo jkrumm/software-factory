@@ -1,5 +1,5 @@
 import { describe, expect, test } from 'bun:test'
-import { replayErrands, type ReplayRow, summarize, wronglyRun } from '../../src/domains/checkpoints/triage-replay.ts'
+import { replayErrands, type ReplayRow, summarize, wronglyRun } from '../../src/domains/errands/triage-replay.ts'
 import {
   DECLINE_HOLD_MS,
   macbookVerbOf,
@@ -15,7 +15,7 @@ import {
   type TriageInput,
   verbFor,
   verbWords,
-} from '../../src/domains/checkpoints/triage.ts'
+} from '../../src/domains/errands/triage.ts'
 
 const NOW = new Date('2026-11-16T12:00:00Z')
 

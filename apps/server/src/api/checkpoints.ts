@@ -35,7 +35,7 @@ import {
 } from '@software-factory/contract'
 import { Elysia } from 'elysia'
 import * as z from 'zod'
-import type { CheckpointError } from '../app/checkpoints.ts'
+import type { CheckpointError, ErrandWritten } from '../app/checkpoints.ts'
 import type { CheckpointUses } from '../app/checkpoints-uses.ts'
 import { specScreenView } from '../app/checkpoints-specs.ts'
 import { ARTIFACT_KINDS, type ArtifactId } from '../domains/checkpoints/artifact.ts'
@@ -44,7 +44,6 @@ import {
   type AnnotationRecord,
   type ArtifactRecord,
   type DecisionRecord,
-  type ErrandRecord,
   type PageRecord,
   type RevisionRecord,
   statusOf,
@@ -141,7 +140,7 @@ const annotationView = (a: AnnotationRecord) => ({
       : null,
 })
 
-const errandView = (e: ErrandRecord) => ({
+const errandView = (e: ErrandWritten['errand']) => ({
   id: e.id,
   issueId: e.issueId,
   attempt: e.attempt,

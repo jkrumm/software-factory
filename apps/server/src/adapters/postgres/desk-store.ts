@@ -1,6 +1,6 @@
 import type { SQL } from 'bun'
 import * as z from 'zod'
-import type { DeskStore } from '../../domains/checkpoints/ports.ts'
+import type { DeskStore } from '../../domains/errands/ports.ts'
 
 const At = z.object({ at: z.date() })
 const Returned = z.object({ returned_at: z.date().nullable() })

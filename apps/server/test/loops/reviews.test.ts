@@ -1,8 +1,8 @@
 import { describe, expect, test } from 'bun:test'
 import { prReview } from '../../src/adapters/reviews/pr.ts'
-import { screenByReview } from '../../src/domains/checkpoints/errand.ts'
-import { deskDue, pushQueue } from '../../src/domains/checkpoints/desk.ts'
-import type { ErrandRecord } from '../../src/domains/checkpoints/ports.ts'
+import { screenByReview } from '../../src/domains/errands/errand.ts'
+import { deskDue, pushQueue } from '../../src/domains/errands/desk.ts'
+import type { ErrandRecord } from '../../src/domains/errands/ports.ts'
 import { wakeReason } from '../../src/domains/loops/reviews.ts'
 import type { Run } from '../../src/adapters/process.ts'
 

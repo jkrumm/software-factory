@@ -8,7 +8,8 @@ import {
 } from '@software-factory/contract'
 import type { Id } from '../../kernel/ids.ts'
 import { err, ok, type Result } from '../../kernel/result.ts'
-import type { DecisionForm, MissingFields } from './decision.ts'
+import type { MissingFields } from '../../kernel/missing-fields.ts'
+import type { DecisionForm } from './decision.ts'
 
 export type ArtifactId = Id<'artifact'>
 /** `collection_<id>`: a named set of artifacts with one lead page (`artifact collection`). */
