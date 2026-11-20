@@ -7,13 +7,13 @@ import { fingerprintOf } from '../../domains/intake/rules.ts'
 import type { Clock } from '../../kernel/clock.ts'
 import { conclusionVerdict, statusVerdict } from '../../kernel/checks.ts'
 import { CheckRuns, CommitStatus, githubGet, githubHeaders } from '../github/checks.ts'
+import { GITHUB_API, parseRemote, plainName } from '../github/reader.ts'
 import { helperEnv, runHelper, type RunProcess } from './process.ts'
 
 const REMOTE_TIMEOUT_MS = 10_000
 const HTTP_TIMEOUT_MS = 15_000
 const MAX_BODY_CHARS = 4000
 const PAGE_SIZE = 50
-const NAME = /^[A-Za-z0-9._-]+$/
 const MAX_WRITEBACKS = 20
 const MAX_SUMMARY_CHARS = 300
 const BACKLOG_PAGE_SIZE = 100
@@ -86,21 +86,6 @@ interface Check {
 }
 
 const markerOf = (issueId: string): string => `<!-- factory-issue:${issueId} -->`
-
-const plainName = (name: string): boolean => NAME.test(name) && !/^\.+$/.test(name)
-
-/**
- * `owner/name` of an `origin` that is github.com over https (a `user@` or `user:token@` part is allowed and dropped) or
- * ssh; anything else is not ours to poll.
- */
-export function parseRemote(url: string): { owner: string; name: string } | undefined {
-  const found =
-    /^https:\/\/(?:[^/@\s]+@)?github\.com\/([^/]+)\/([^/]+?)(?:\.git)?$/.exec(url) ??
-    /^git@github\.com:([^/]+)\/([^/]+?)(?:\.git)?$/.exec(url)
-  const [, owner, name] = found ?? []
-  if (!owner || !name || !plainName(owner) || !plainName(name)) return undefined
-  return { owner, name }
-}
 
 /** A check's name is a third party's text: cleaned and clipped, and the same everywhere it is used as a key. */
 const checkName = (name: string): string => cleanText(name.slice(0, MAX_CHECK_NAME_CHARS)) || 'unnamed'
@@ -204,7 +189,7 @@ export function githubPoller(deps: GithubPollerDeps): { enabled: boolean; pass()
   const log = deps.log ?? ((line: string) => console.error(line))
   const enabled = Boolean(deps.token)
   if (!enabled) log('github intake is off: FACTORY_GITHUB_TOKEN not set')
-  const api = (deps.apiUrl ?? 'https://api.github.com').replace(/\/+$/, '')
+  const api = (deps.apiUrl ?? GITHUB_API).replace(/\/+$/, '')
   const doFetch = deps.fetch ?? fetch
   const run = deps.run ?? runHelper
 

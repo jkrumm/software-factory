@@ -1,6 +1,9 @@
 import { readFileSync } from 'node:fs'
 import { join } from 'node:path'
 import { parse } from 'yaml'
+import * as z from 'zod'
+import { githubGet } from '../../github/checks.ts'
+import { GITHUB_API } from '../../github/reader.ts'
 import { exec, gitOut, type Tools } from '../git.ts'
 import { type Outcome, clean, finding, found, skipped, unjudging } from './finding.ts'
 
@@ -43,12 +46,9 @@ const githubPrivacy: PrivacyLookup = async ({ tools, path, repo }) => {
       // not JSON: fall through to the API
     }
   }
-  const response = await fetch(`https://api.github.com/repos/${slug}`, {
-    headers: { 'user-agent': 'software-factory-hygiene', accept: 'application/vnd.github+json' },
-    signal: AbortSignal.timeout(LOOKUP_TIMEOUT_MS),
-  }).catch(() => undefined)
-  if (response?.status === 200) return false
-  if (response?.status !== 404) return undefined
+  const answer = await githubGet(fetch, null, `${GITHUB_API}/repos/${slug}`, z.looseObject({}), LOOKUP_TIMEOUT_MS)
+  if (answer.ok) return false
+  if (answer.failure !== 404) return undefined
   const reach = await exec([tools.git, 'ls-remote', '--exit-code', 'origin', 'HEAD'], LOOKUP_TIMEOUT_MS, path).catch(
     () => undefined,
   )

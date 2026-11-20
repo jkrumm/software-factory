@@ -1,5 +1,6 @@
 import { join } from 'node:path'
 import * as z from 'zod'
+import { GITHUB_API } from '../github/reader.ts'
 
 /** `30s`, `5m`, `2h`, `off`: how often a poller or the settle pass runs; null is off. */
 export function everyMs(text: string): number | null | undefined {
@@ -29,7 +30,7 @@ const Env = z.object({
   FACTORY_INCIDENT_WINDOW_MIN: z.coerce.number().int().min(1).default(30),
   FACTORY_FINGERPRINT_WINDOW_MIN: z.coerce.number().int().min(1).default(1440),
   FACTORY_GITHUB_TOKEN: z.string().min(1).optional(),
-  FACTORY_GITHUB_API_URL: z.string().min(1).default('https://api.github.com'),
+  FACTORY_GITHUB_API_URL: z.string().min(1).default(GITHUB_API),
   FACTORY_GITHUB_POLL: Every('5m'),
   FACTORY_GITHUB_BACKLOG: z.enum(['0', '1']).default('0'),
   FACTORY_LAUNCHD_POLL: Every('5m'),

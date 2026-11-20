@@ -125,7 +125,7 @@ describe('lead branches', () => {
     await branch(work, 'factory/11-1')
     await squash(work, 'factory/11-1')
     const run: Run = (cmd, timeoutMs, options) =>
-      cmd.includes('get-url')
+      cmd.includes('remote.origin.url')
         ? Promise.resolve({ exitCode: 0, stdout: 'https://github.com/o/r.git\n' })
         : runProcess(cmd, timeoutMs, options)
     const asked: string[] = []

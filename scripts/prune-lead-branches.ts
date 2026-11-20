@@ -13,6 +13,7 @@
 import { realpathSync } from 'node:fs'
 import { dirname, resolve } from 'node:path'
 import { gitBranches } from '../apps/server/src/adapters/git/branches.ts'
+import { GITHUB_API } from '../apps/server/src/adapters/github/reader.ts'
 import { runProcess, type Run } from '../apps/server/src/adapters/process.ts'
 import type { BranchClosure } from '../apps/server/src/domains/leads/ports.ts'
 
@@ -83,7 +84,7 @@ const numbers = [...new Set(refs.split('\n').flatMap((ref) => /\/factory\/(\d+)-
 
 const branches = gitBranches({
   token: await githubToken(),
-  apiUrl: process.env.FACTORY_GITHUB_API_URL ?? 'https://api.github.com',
+  apiUrl: process.env.FACTORY_GITHUB_API_URL ?? GITHUB_API,
   ...(apply ? {} : { run: dryRun }),
 })
 
