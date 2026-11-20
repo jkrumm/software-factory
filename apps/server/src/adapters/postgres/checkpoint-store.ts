@@ -148,7 +148,7 @@ const VerdictRow = z.object({
   verdict: z.enum(VERDICTS),
   note: z.string().nullable(),
   at: z.date(),
-  by: z.enum(['owner', 'factory']),
+  by: z.enum(['owner', 'factory', 'orchestrator']),
   needed_me: z.boolean().nullable().optional(),
 })
 
@@ -792,6 +792,15 @@ export function postgresCheckpointStore(tx: SQL): CheckpointStore {
         ON CONFLICT DO NOTHING
         RETURNING revision`
       return rows.length === 1
+    },
+
+    async replaceDelegatedVerdict(v) {
+      const [row] = await tx`
+        UPDATE factory.verdicts
+        SET verdict = ${v.verdict}, note = ${v.note}, at = ${v.at}, by = ${v.by}, needed_me = NULL, needed_at = NULL
+        WHERE artifact_id = ${v.artifactId} AND revision = ${v.revision} AND by = 'orchestrator'
+        RETURNING *`
+      return row ? verdictOf(row) : null
     },
 
     async verdictByKey(key) {

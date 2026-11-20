@@ -158,7 +158,7 @@ export const SENDERS: { [K in EventKind]: readonly Actor[] } = {
   asked: ['lead', 'steward'],
   answered: ['owner', 'orchestrator', 'judge', 'factory'],
   submitted: ['lead'],
-  verdict_given: ['owner', 'factory'],
+  verdict_given: ['owner', 'orchestrator', 'factory'],
   errand_raised: ['lead'],
   errand_done: ['owner', 'orchestrator', 'judge', 'factory'],
   errand_turned_back: ['owner', 'orchestrator'],

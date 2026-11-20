@@ -156,6 +156,9 @@ const VERDICT_TONE: Record<keyof typeof VERDICT_WORDS, Tone> = {
   no_longer_applies: 'neutral',
 }
 
+const verdictOwnerWords = (by: 'owner' | 'factory' | 'orchestrator'): string =>
+  by === 'factory' ? "The factory's verdict" : by === 'orchestrator' ? "Your delegate's verdict" : 'Your verdict'
+
 /**
  * The owner's verdict on the revision shown, in the page header: the four words and an optional note behind one button;
  * once given, the verdict as a Lozenge with its note and time behind it.
@@ -176,64 +179,9 @@ export function VerdictControl({ detail, now }: { detail: ArtifactDetail; now: n
     postNeeded(detail.artifact.id, { needed, revision: detail.revision }),
   )
 
-  if (given) {
-    return (
-      <div className="inline-flex flex-wrap items-center gap-3">
-        <Popover>
-          <PopoverTrigger
-            aria-label={given.by === 'factory' ? "The factory's verdict" : 'Your verdict'}
-            className="inline-flex cursor-pointer items-center gap-2 rounded-md text-xs text-muted-foreground outline-none focus-visible:ring-3 focus-visible:ring-ring/50"
-          >
-            <Lozenge tone={VERDICT_TONE[given.verdict]}>{VERDICT_WORDS[given.verdict]}</Lozenge>
-            {given.by === 'factory' ? <Lozenge tone="neutral">By the factory</Lozenge> : null}
-            <Ago iso={given.at} now={now} className="font-mono" />
-          </PopoverTrigger>
-          <PopoverContent align="end" className="flex flex-col gap-1">
-            <p className="font-heading font-semibold">
-              {given.by === 'factory' ? "The factory's verdict" : 'Your verdict'}
-            </p>
-            <p>{VERDICT_WORDS[given.verdict]}</p>
-            {given.by === 'factory' ? (
-              <p className="text-xs text-muted-foreground">
-                The factory gave this for you (no answer in time, a screen settle or a withdrawal). It is not your
-                verdict.
-              </p>
-            ) : null}
-            <p className="text-xs text-muted-foreground">{VERDICT_CONSEQUENCES[given.verdict]}</p>
-            <p className="text-muted-foreground">{given.note ?? 'No note.'}</p>
-          </PopoverContent>
-        </Popover>
-        <div
-          role="group"
-          aria-label="Needed me"
-          className="inline-flex items-center gap-1 text-xs text-muted-foreground"
-        >
-          <span>Needed me</span>
-          {([true, false] as const).map((needed) => (
-            <Button
-              key={String(needed)}
-              type="button"
-              size="xs"
-              variant={given.neededMe === needed ? 'default' : 'outline'}
-              aria-pressed={given.neededMe === needed}
-              disabled={marking.isPending}
-              onClick={() => given.neededMe !== needed && marking.mutate(needed)}
-            >
-              {needed ? 'Yes' : 'No'}
-            </Button>
-          ))}
-        </div>
-        <Failure error={marking.error} what="mark" />
-      </div>
-    )
-  }
-  const latest = detail.artifact.revisions.at(-1)?.n
-  if (latest !== undefined && detail.revision !== latest) {
-    return <span className="text-xs text-muted-foreground">A verdict is given on the latest revision ({latest}).</span>
-  }
-  return (
+  const verdictForm = (label: string) => (
     <Popover>
-      <PopoverTrigger render={<Button type="button" size="sm" />}>Give your verdict</PopoverTrigger>
+      <PopoverTrigger render={<Button type="button" size="sm" />}>{label}</PopoverTrigger>
       <PopoverContent align="end" className="flex w-96 flex-col gap-3">
         <div role="group" aria-label="Verdict" className="flex flex-col gap-2.5">
           {(Object.keys(VERDICT_WORDS) as Array<keyof typeof VERDICT_WORDS>).map((verdict) => (
@@ -277,4 +225,66 @@ export function VerdictControl({ detail, now }: { detail: ArtifactDetail; now: n
       </PopoverContent>
     </Popover>
   )
+
+  if (given) {
+    return (
+      <div className="inline-flex flex-wrap items-center gap-3">
+        <Popover>
+          <PopoverTrigger
+            aria-label={verdictOwnerWords(given.by)}
+            className="inline-flex cursor-pointer items-center gap-2 rounded-md text-xs text-muted-foreground outline-none focus-visible:ring-3 focus-visible:ring-ring/50"
+          >
+            <Lozenge tone={VERDICT_TONE[given.verdict]}>{VERDICT_WORDS[given.verdict]}</Lozenge>
+            {given.by === 'factory' ? <Lozenge tone="neutral">By the factory</Lozenge> : null}
+            {given.by === 'orchestrator' ? <Lozenge tone="neutral">By your delegate</Lozenge> : null}
+            <Ago iso={given.at} now={now} className="font-mono" />
+          </PopoverTrigger>
+          <PopoverContent align="end" className="flex flex-col gap-1">
+            <p className="font-heading font-semibold">{verdictOwnerWords(given.by)}</p>
+            <p>{VERDICT_WORDS[given.verdict]}</p>
+            {given.by === 'factory' ? (
+              <p className="text-xs text-muted-foreground">
+                The factory gave this for you (no answer in time, a screen settle or a withdrawal). It is not your
+                verdict.
+              </p>
+            ) : null}
+            {given.by === 'orchestrator' ? (
+              <p className="text-xs text-muted-foreground">
+                Your delegate gave this for you. Reopen it with your own verdict, and the lead hears so.
+              </p>
+            ) : null}
+            <p className="text-xs text-muted-foreground">{VERDICT_CONSEQUENCES[given.verdict]}</p>
+            <p className="text-muted-foreground">{given.note ?? 'No note.'}</p>
+          </PopoverContent>
+        </Popover>
+        {given.by === 'orchestrator' ? verdictForm('Reopen') : null}
+        <div
+          role="group"
+          aria-label="Needed me"
+          className="inline-flex items-center gap-1 text-xs text-muted-foreground"
+        >
+          <span>Needed me</span>
+          {([true, false] as const).map((needed) => (
+            <Button
+              key={String(needed)}
+              type="button"
+              size="xs"
+              variant={given.neededMe === needed ? 'default' : 'outline'}
+              aria-pressed={given.neededMe === needed}
+              disabled={marking.isPending}
+              onClick={() => given.neededMe !== needed && marking.mutate(needed)}
+            >
+              {needed ? 'Yes' : 'No'}
+            </Button>
+          ))}
+        </div>
+        <Failure error={marking.error} what="mark" />
+      </div>
+    )
+  }
+  const latest = detail.artifact.revisions.at(-1)?.n
+  if (latest !== undefined && detail.revision !== latest) {
+    return <span className="text-xs text-muted-foreground">A verdict is given on the latest revision ({latest}).</span>
+  }
+  return verdictForm('Give your verdict')
 }

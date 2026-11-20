@@ -34,8 +34,11 @@ const SETTLERS = [...STEPS, 'orchestrator'] as const
 const ARTIFACT_KINDS = ['concept', 'spec', 'decision', 'report'] as const
 export const VERDICTS = ['looks_good', 'with_notes', 'changes', 'no_longer_applies'] as const
 
-/** Who a verdict came from: the owner, or the factory for him (a default after the wait, a Spec screen settle, a withdrawal). */
-const VERDICT_GIVERS = ['owner', 'factory'] as const
+/**
+ * Who a verdict came from: the owner, the factory for him (a default after the wait, a Spec screen settle, a withdrawal), or his
+ * delegate, the orchestrator, on a Spec that is no owner gate (he can reopen it with a verdict of his own).
+ */
+const VERDICT_GIVERS = ['owner', 'factory', 'orchestrator'] as const
 
 /** Where the Issue stands after the write, and the effects it planned (a `note_lead` among them). */
 const IssueMove = z.object({
@@ -234,7 +237,7 @@ export const VerdictView = z
     verdict: z.enum(VERDICTS),
     note: z.string().nullable(),
     at: iso,
-    /** who gave it: `owner`, or `factory` (the default after `SPEC_WAIT_HOURS`, the Spec screen's settle, a withdrawal); the orchestrator counts as `owner` */
+    /** who gave it: `owner`; `factory` (the default after `SPEC_WAIT_HOURS`, the Spec screen's settle, a withdrawal); or `orchestrator`, his delegate, until he gives his own */
     by: z.enum(VERDICT_GIVERS).default('owner'),
     /** the owner's mark: did this Spec or Report need him; null while unmarked */
     neededMe: z.boolean().nullable().default(null),

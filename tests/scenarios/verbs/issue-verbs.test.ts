@@ -377,11 +377,7 @@ test('the orchestrator token files, notes, cancels and answers under its own nam
   const answeredEvents = await v.events(first, 'answered')
   expect(answeredEvents.at(-1)?.actor).toBe('orchestrator')
 
-  for (const path of [
-    '/v1/decisions/decision_1/worth-asking',
-    '/v1/artifacts/artifact_1/verdict',
-    '/v1/errands/errand_1/approve',
-  ]) {
+  for (const path of ['/v1/decisions/decision_1/worth-asking', '/v1/errands/errand_1/approve']) {
     const refused = await fetch(`${v.w.server.url}${path}`, {
       method: 'POST',
       headers: { 'content-type': 'application/json', ...bearer('orchestrator') },
@@ -389,6 +385,13 @@ test('the orchestrator token files, notes, cancels and answers under its own nam
     })
     expect(refused.status).toBe(403)
   }
+  // a verdict is the owner's delegate's too: on an artifact that is not there it answers 404, never 403
+  const verdict = await fetch(`${v.w.server.url}/v1/artifacts/artifact_1/verdict`, {
+    method: 'POST',
+    headers: { 'content-type': 'application/json', ...bearer('orchestrator') },
+    body: JSON.stringify({ verdict: 'looks_good' }),
+  })
+  expect(verdict.status).toBe(404)
   // an Errand's done is the orchestrator's with evidence: without it the server says so (422), never 403
   const bare = await fetch(`${v.w.server.url}/v1/errands/errand_1/done`, {
     method: 'POST',

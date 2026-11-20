@@ -630,7 +630,7 @@ export const checkpointRoutes = (uses: CheckpointUses) =>
     )
     .post(
       '/artifacts/:id/verdict',
-      async ({ params, body }) => {
+      async ({ params, body, request }) => {
         const id = idOf('artifact', params.id)
         if (!id) return unknownId('artifact', params.id)
         const result = await uses.verdict({
@@ -638,6 +638,7 @@ export const checkpointRoutes = (uses: CheckpointUses) =>
           verdict: body.verdict,
           note: body.note ?? null,
           revision: body.revision ?? null,
+          by: ownerActorOf(request),
         })
         if (!result.ok) return failed(result.error)
         const { artifact, revisions, issue, verdict } = result.value
@@ -657,7 +658,7 @@ export const checkpointRoutes = (uses: CheckpointUses) =>
         detail: {
           operationId: 'artifact.verdict',
           summary:
-            "the owner's verdict: looks_good, with_notes, changes or no_longer_applies; it reaches the lead as its next turn",
+            "the owner's verdict: looks_good, with_notes, changes or no_longer_applies; it reaches the lead as its next turn. The orchestrator may give it for him on a Spec that is no owner gate (recorded as its own; his verdict on the same revision replaces it)",
         },
       },
     )

@@ -834,6 +834,117 @@ describe('artifacts', () => {
     ])
   })
 
+  test("the owner's delegate gives a Spec's verdict for him; his own verdict replaces it and the lead hears so", async () => {
+    const issueId = await workingIssue()
+    const { artifact } = value(await submitArtifact(deps, { issueId, attempt: 1, raw: SPEC }))
+    const given = value(
+      await giveVerdict(deps, {
+        artifactId: artifact.id,
+        verdict: 'looks_good',
+        note: 'technical',
+        revision: null,
+        by: 'orchestrator',
+      }),
+    )
+    expect(given).toMatchObject({ result: 'applied', issue: { state: 'working' }, verdict: { by: 'orchestrator' } })
+    expect(await eventsOf(issueId)).toContain('verdict_given')
+    const [sent] =
+      await db.sql`SELECT payload->>'text' AS text, actor FROM factory.issue_events WHERE issue_id = ${issueId} AND kind = 'noted'`
+    expect(sent).toMatchObject({ actor: 'orchestrator' })
+    expect(sent?.text).toContain("The owner's delegate (the orchestrator) gave this verdict on his behalf")
+
+    // a repeat of the delegate's, or its own change of mind, is a replay: the first stands
+    const again = value(
+      await giveVerdict(deps, {
+        artifactId: artifact.id,
+        verdict: 'changes',
+        note: null,
+        revision: null,
+        by: 'orchestrator',
+      }),
+    )
+    expect(again).toMatchObject({ result: 'replayed', verdict: { verdict: 'looks_good', by: 'orchestrator' } })
+
+    // the owner reopens it: his verdict replaces the delegate's, and the lead hears one more note
+    const reopened = value(
+      await giveVerdict(deps, { artifactId: artifact.id, verdict: 'changes', note: 'Name the lock.', revision: null }),
+    )
+    expect(reopened).toMatchObject({ result: 'applied', verdict: { verdict: 'changes', by: 'owner', neededMe: null } })
+    const notes =
+      await db.sql`SELECT payload->>'text' AS text FROM factory.issue_events WHERE issue_id = ${issueId} AND kind = 'noted' AND result = 'applied' ORDER BY version`
+    expect(notes).toHaveLength(2)
+    expect(notes[1]?.text).toContain("The owner reopened his delegate's verdict with his own")
+    expect(await effectsOf(issueId, 'note_lead')).toBe(2)
+
+    // his verdict stands against the delegate's, and against his own again
+    const last = value(
+      await giveVerdict(deps, {
+        artifactId: artifact.id,
+        verdict: 'looks_good',
+        note: null,
+        revision: null,
+        by: 'orchestrator',
+      }),
+    )
+    expect(last).toMatchObject({ result: 'replayed', verdict: { verdict: 'changes', by: 'owner' } })
+  })
+
+  test("the owner reopens his delegate's verdict after the Issue closed: the verdict is replaced, and no lead is told", async () => {
+    const issueId = await workingIssue()
+    const { artifact } = value(await submitArtifact(deps, { issueId, attempt: 1, raw: SPEC }))
+    value(
+      await giveVerdict(deps, {
+        artifactId: artifact.id,
+        verdict: 'looks_good',
+        note: null,
+        revision: null,
+        by: 'orchestrator',
+      }),
+    )
+    await record(issueId, 'cancelled', { kind: 'cancelled', payload: { reason: 'not needed' }, actor: 'owner' })
+    const reopened = value(
+      await giveVerdict(deps, { artifactId: artifact.id, verdict: 'changes', note: 'No.', revision: null }),
+    )
+    expect(reopened).toMatchObject({ result: 'applied', verdict: { verdict: 'changes', by: 'owner' } })
+    const [row] = await db.sql`SELECT verdict, by FROM factory.verdicts WHERE artifact_id = ${artifact.id}`
+    expect(row).toMatchObject({ verdict: 'changes', by: 'owner' })
+  })
+
+  test('the delegate gives no verdict on an owner gate, a Concept or a Report', async () => {
+    const gated = await workingIssue('example', { checkpoint: 'gate' })
+    const gate = value(await submitArtifact(deps, { issueId: gated, attempt: 1, raw: SPEC }))
+    expect(
+      errorOf(
+        await giveVerdict(deps, {
+          artifactId: gate.artifact.id,
+          verdict: 'looks_good',
+          note: null,
+          revision: null,
+          by: 'orchestrator',
+        }),
+      ),
+    ).toMatchObject({ kind: 'invalid', detail: expect.stringContaining('owner gate') })
+
+    const issueId = await workingIssue()
+    const concept = value(
+      await submitArtifact(deps, { issueId, attempt: 1, raw: { kind: 'concept', title: 'A concept', content: '# C' } }),
+    )
+    expect(
+      errorOf(
+        await giveVerdict(deps, {
+          artifactId: concept.artifact.id,
+          verdict: 'looks_good',
+          note: null,
+          revision: null,
+          by: 'orchestrator',
+        }),
+      ),
+    ).toMatchObject({ kind: 'invalid', detail: expect.stringContaining('Spec only') })
+    const [given] =
+      await db.sql`SELECT count(*)::int AS n FROM factory.verdicts WHERE artifact_id IN (${gate.artifact.id}, ${concept.artifact.id})`
+    expect(given).toMatchObject({ n: 0 })
+  })
+
   test('a revision after Changes waits again and pages for the new revision; a stale verdict is refused', async () => {
     const issueId = await workingIssue()
     const { artifact } = value(await submitArtifact(deps, { issueId, attempt: 1, raw: SPEC }))

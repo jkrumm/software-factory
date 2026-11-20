@@ -56,11 +56,15 @@ export const settledByWords = (by: string | null): string => (by === null ? '' :
 
 /**
  * A latest verdict, in the artifact page's words; "No verdict yet" while none. One the factory gave (the default after the
- * wait, a screen settle, a withdrawal) says so: it is never read as the owner's.
+ * wait, a screen settle, a withdrawal) or his delegate gave says so: it is never read as the owner's.
  */
-export const verdictWords = (verdict: string | null, by: 'owner' | 'factory' | null = null): string => {
+export const verdictWords = (
+  verdict: string | null,
+  by: 'owner' | 'factory' | 'orchestrator' | null = null,
+): string => {
   if (verdict === null) return 'No verdict yet'
   const words = VERDICT_WORDS[verdict as keyof typeof VERDICT_WORDS] ?? verdict.replaceAll('_', ' ')
+  if (by === 'orchestrator') return `${words}, by your delegate`
   return by === 'factory' ? `${words}, by the factory` : words
 }
 
