@@ -178,5 +178,5 @@ Each of these is one wiring of a part you can replace.
 **Read more:**
 
 - [`docs/operations.md`](https://github.com/jkrumm/software-factory/blob/master/docs/operations.md#L1-L6): the listener, the CLI, the gate, the merge window and the deploy.
-- [`docs/architecture.md`](https://github.com/jkrumm/software-factory/blob/master/docs/architecture.md#L788-L806): loops and agw, the clock and the call record.
+- [`docs/architecture.md`](https://github.com/jkrumm/software-factory/blob/master/docs/architecture.md#loops-and-agw): loops and agw, the clock and the call record.
 - [`README.md`](https://github.com/jkrumm/software-factory/blob/master/README.md#L749-L772): the minimum to run a server.
