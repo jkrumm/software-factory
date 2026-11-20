@@ -1,28 +1,30 @@
 import { QueueAnswer } from '@software-factory/contract'
-import { type CallPlan, type CallPolicy, planCall } from '../../domains/loops/calls.ts'
+import type { CallPolicy, CallRow } from '../../domains/loops/calls.ts'
 import type { LoopReads, LoopStore } from '../../domains/loops/ports.ts'
 import {
   byRepo,
   candidatesOf,
   checkQueue,
   cycleIn,
-  type QueueAskRow,
+  lastAskAt,
   type QueueEdge,
   pairKey,
   type QueueIssue,
   type RefusedEdge,
   requestOf,
+  shapeAsked,
   shapeOf,
+  unappliedAnswer,
 } from '../../domains/loops/queue.ts'
 import { sweepEdges } from '../../domains/loops/edge-need.ts'
 import { EDGE_NEED_DAYS, type EdgeNeed, stopReason, stopsEdges } from '../../kernel/edge-need.ts'
 import { AGW_CALL_LEASE_MS } from '../../kernel/agw.ts'
 import type { Clock } from '../../kernel/clock.ts'
-import type { Key } from '../../kernel/keys.ts'
 import type { AgwPort } from '../../kernel/agw.ts'
 import { WORKFLOWS } from '../../kernel/workflows.ts'
 import { ok, type PortError, type Result } from '../../kernel/result.ts'
 import { scrub } from '../../kernel/scrub.ts'
+import { type Claimed, claimRound } from './claim.ts'
 import { addAfter, removeInferredEdge } from '../planning-chain.ts'
 import type { PlanningDeps } from '../planning-deps.ts'
 import type { UnitOfWork } from '../unit-of-work.ts'
@@ -76,39 +78,11 @@ const policyOf = (deps: QueueDeps): CallPolicy => ({
   leaseMs: AGW_CALL_LEASE_MS,
 })
 
-/** What the loop does about one shape: the stored ask, a wait, or a call this pass now owns (`claimed`, a retaken one included). */
-type QueueClaim = Exclude<CallPlan<QueueAskRow>, { kind: 'claim' | 'retake' }> | { kind: 'claimed'; key: Key }
-
-/** Claim and commit, as `claimRound` does for an Issue: the call itself is made by the caller with no transaction open. */
-async function claimQueueRound(
-  stores: { loops: LoopStore },
-  input: { repo: string; shape: string; now: Date; policy: CallPolicy },
-): Promise<QueueClaim> {
-  const { loops } = stores
-  const plan = planCall(await loops.queueAsks(input.repo, input.shape), input.now, input.policy)
-  const leaseUntil = new Date(input.now.getTime() + input.policy.leaseMs)
-  if (plan.kind === 'retake') {
-    const taken = await loops.retakeQueueAsk(plan.row.key, input.now, leaseUntil)
-    return taken ? { kind: 'claimed', key: plan.row.key as Key } : { kind: 'in_flight' }
-  }
-  if (plan.kind !== 'claim') return plan
-  const claimKey = WORKFLOWS.queue.key(input.repo, input.shape, plan.round)
-  const won = await loops.claimQueueAsk({
-    key: claimKey,
-    repo: input.repo,
-    shape: input.shape,
-    round: plan.round,
-    claimedAt: input.now,
-    leaseUntil,
-  })
-  return won ? { kind: 'claimed', key: claimKey } : { kind: 'in_flight' }
-}
-
 type Decision =
-  | { kind: 'apply'; row: QueueAskRow }
+  | { kind: 'apply'; row: CallRow }
   | { kind: 'skip' }
   | { kind: 'budget' }
-  | { kind: 'ask'; claim: QueueClaim }
+  | { kind: 'ask'; claim: Claimed }
 
 /**
  * Applies an answer: the accepted edges one by one through planning, which checks the blocker and the cycle again. A
@@ -171,17 +145,27 @@ async function queueRepo(
   const shape = shapeOf(rows)
   const now = deps.clock.now()
   const decided = await deps.uow.run<Decision, never>(async ({ loops }) => {
-    const rounds = await loops.queueAsks(repo, shape)
-    // A crash between the answer and its application: the stored answer is applied, with no second call.
-    const pending = rounds.find((row) => row.outcome === 'answered' && row.applied === null)
+    const asks = await loops.calls('queue', repo)
+    const pending = unappliedAnswer(asks.filter((row) => row.subject === shape))
     if (pending) return ok({ kind: 'apply', row: pending })
-    if (await loops.shapeAsked(repo, shape)) return ok({ kind: 'skip' })
-    if (rounds.length === 0) {
-      const last = await loops.lastQueueAskAt(repo)
+    if (shapeAsked(asks, shape)) return ok({ kind: 'skip' })
+    if (!asks.some((row) => row.subject === shape)) {
+      const last = lastAskAt(asks)
       if (last && now.getTime() < last.getTime() + deps.minGapMs) return ok({ kind: 'budget' })
     }
     if (pass.asked >= ASK_LIMIT) return ok({ kind: 'budget' })
-    return ok({ kind: 'ask', claim: await claimQueueRound({ loops }, { repo, shape, now, policy: policyOf(deps) }) })
+    const claim = await claimRound(
+      { loops },
+      {
+        loop: 'queue',
+        scope: repo,
+        subject: shape,
+        now,
+        policy: policyOf(deps),
+        keyFor: (round) => WORKFLOWS.queue.key(repo, shape, round),
+      },
+    )
+    return ok({ kind: 'ask', claim })
   })
   if (!decided.ok) {
     pass.problems.push(`${repo}: ${decided.error.detail}`)
@@ -213,14 +197,14 @@ async function queueRepo(
   const recorded = await deps.uow.run(async ({ loops }) => {
     const at = deps.clock.now()
     if (answered.ok) {
-      await loops.finishQueueAsk(claimKey, {
+      await loops.finishCall(claimKey, {
         outcome: 'answered',
         answer: answered.value,
         detail: answered.value.reason,
         at,
       })
     } else {
-      await loops.finishQueueAsk(claimKey, {
+      await loops.finishCall(claimKey, {
         outcome: 'failed',
         answer: null,
         detail: `${answered.error.kind}: ${answered.error.detail}`.slice(0, 500),

@@ -1,6 +1,5 @@
 import { type CallLoop, type CallPlan, type CallPolicy, planCall } from '../../domains/loops/calls.ts'
 import type { LoopStore } from '../../domains/loops/ports.ts'
-import type { IssueId } from '../../kernel/ids.ts'
 import type { Key } from '../../kernel/keys.ts'
 
 /** What a loop does about one subject: the stored answer, a wait, or a call this pass now owns (`claimed`, a retaken one included). */
@@ -14,14 +13,15 @@ export async function claimRound(
   stores: { loops: LoopStore },
   input: {
     loop: CallLoop
-    issue: IssueId
+    /** the Issue (steward, triage) or the repo (queue) the call is about */
+    scope: string
     subject: string
     now: Date
     policy: CallPolicy
     keyFor(round: number): Key
   },
 ): Promise<Claimed> {
-  const plan = planCall(await stores.loops.calls(input.loop, input.issue, input.subject), input.now, input.policy)
+  const plan = planCall(await stores.loops.calls(input.loop, input.scope, input.subject), input.now, input.policy)
   if (plan.kind === 'retake') {
     const taken = await stores.loops.retakeCall(
       plan.row.key,
@@ -35,7 +35,7 @@ export async function claimRound(
   const won = await stores.loops.claimCall({
     key,
     loop: input.loop,
-    issueId: input.issue,
+    scope: input.scope,
     subject: input.subject,
     round: plan.round,
     claimedAt: input.now,

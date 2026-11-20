@@ -26,7 +26,7 @@ import type {
   WaitFact,
 } from './selfwatch-model.ts'
 import type { FindingRow, LedgerChange } from './throughput.ts'
-import type { QueueAskRow, QueueEdge, RefusedEdge, QueueIssue } from './queue.ts'
+import type { QueueApplied, QueueIssue } from './queue.ts'
 
 /** One friction pass (a day or 200 closed Issues) as recorded (`migrations/0950_friction.sql`). */
 export interface FrictionPassRecord {
@@ -241,11 +241,11 @@ export interface LoopStore {
   pruneCiRuns(before: Date): Promise<number>
   /** the worktrees of the attempts that are live or ended since `since` */
   attemptWorktrees(since: Date): Promise<AttemptWorktree[]>
-  /** the rounds of one subject, oldest first */
-  calls(loop: CallLoop, issue: IssueId, subject: string): Promise<CallRow[]>
+  /** the rounds of one subject of a scope (an Issue, or a repo for the queue loop), oldest first; every subject's rounds when `subject` is left out */
+  calls(loop: CallLoop, scope: string, subject?: string): Promise<CallRow[]>
   /** false when the round is claimed already (another pass came first) */
   claimCall(
-    row: Pick<CallRow, 'key' | 'loop' | 'issueId' | 'subject' | 'round' | 'claimedAt' | 'leaseUntil'>,
+    row: Pick<CallRow, 'key' | 'loop' | 'scope' | 'subject' | 'round' | 'claimedAt' | 'leaseUntil'>,
   ): Promise<boolean>
   /** takes a call whose lease lapsed back for this pass; false when another pass did first */
   retakeCall(key: string, claimedAt: Date, leaseUntil: Date): Promise<boolean>
@@ -255,27 +255,8 @@ export interface LoopStore {
     key: string,
     result: { outcome: CallOutcome; answer: unknown; detail: string | null; at: Date },
   ): Promise<void>
-  /** the asks of `factory-queue` about one shape of a repo's queue, oldest first */
-  queueAsks(repo: string, shape: string): Promise<QueueAskRow[]>
-  /** false when the round is claimed already (another pass came first) */
-  claimQueueAsk(
-    row: Pick<QueueAskRow, 'key' | 'repo' | 'shape' | 'round' | 'claimedAt' | 'leaseUntil'>,
-  ): Promise<boolean>
-  /** takes an ask whose lease lapsed back for this pass; false when another pass did first */
-  retakeQueueAsk(key: string, claimedAt: Date, leaseUntil: Date): Promise<boolean>
-  finishQueueAsk(
-    key: string,
-    result: { outcome: CallOutcome; answer: unknown; detail: string | null; at: Date },
-  ): Promise<void>
-  /** what was done with an answer: the edges applied and refused, and the queue's shape after them */
-  recordQueueApplied(
-    key: string,
-    result: { applied: QueueEdge[]; refused: RefusedEdge[]; afterShape: string },
-  ): Promise<void>
-  /** an answered ask has this shape, or left the queue in it: asking again would be the same question */
-  shapeAsked(repo: string, shape: string): Promise<boolean>
-  /** when the repo was last asked (claimed, a failed ask included); null before the first */
-  lastQueueAskAt(repo: string): Promise<Date | null>
+  /** what was done with a queue call's answer: the edges applied and refused, and the queue's shape after them */
+  recordQueueApplied(key: string, result: QueueApplied): Promise<void>
   /** when the newest friction pass ran; null before the first */
   lastFrictionPassAt(): Promise<Date | null>
   recordFrictionPass(pass: FrictionPassRecord): Promise<void>
@@ -285,8 +266,6 @@ export interface LoopStore {
   recordPass(name: LoopName, at: Date): Promise<void>
   /** the newest hygiene pass of each repo */
   hygienePasses(): Promise<HygienePassRecord[]>
-  /** the newest hygiene pass of one repo; null before the first */
-  lastHygienePass(repo: string): Promise<HygienePassRecord | null>
   recordHygienePass(pass: HygienePassRecord): Promise<void>
   /** a judgment retry: the pass's judgment and the lists it extended, as the whole new values */
   updateHygieneJudgment(

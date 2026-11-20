@@ -1,6 +1,6 @@
 import type { QueueAnswer, QueueRequest } from '@software-factory/contract'
 import { type IssueId, issueNumber } from '../../kernel/ids.ts'
-import type { CallOutcome } from './calls.ts'
+import type { CallRow } from './calls.ts'
 
 /** One open Issue of a repo as the queue loop sees it. */
 export interface QueueIssue {
@@ -33,24 +33,29 @@ export interface RefusedEdge {
   why: string
 }
 
-/** One ask of `factory-queue` as stored (`migrations/0960_queue_asks.sql`). */
-export interface QueueAskRow {
-  key: string
-  repo: string
-  shape: string
-  round: number
-  claimedAt: Date
-  leaseUntil: Date
-  outcome: CallOutcome | null
-  answer: unknown
-  /** the edges applied; null until the answer was applied (a crash between the two leaves it null) */
-  applied: QueueEdge[] | null
-  refused: RefusedEdge[] | null
+/** What was done with an answer of `factory-queue`: stored as the `applied` of its call (`migrations/1062_call_ledger.sql`). */
+export interface QueueApplied {
+  applied: QueueEdge[]
+  refused: RefusedEdge[]
   /** the shape of the repo's queue after the edges were applied */
-  afterShape: string | null
-  detail: string | null
-  finishedAt: Date | null
+  afterShape: string
 }
+
+/** The stored answer is applied, with no second call, when a crash came between the answer and its application. */
+export const unappliedAnswer = (rounds: readonly CallRow[]): CallRow | undefined =>
+  rounds.find((row) => row.outcome === 'answered' && row.applied === null)
+
+/** An answered ask has this shape, or left the queue in it: asking again would be the same question. */
+export const shapeAsked = (asks: readonly CallRow[], shape: string): boolean =>
+  asks.some(
+    (row) =>
+      row.outcome === 'answered' &&
+      (row.subject === shape || (row.applied as QueueApplied | null)?.afterShape === shape),
+  )
+
+/** When the repo was last asked (claimed, a failed ask included); null before the first. */
+export const lastAskAt = (asks: readonly CallRow[]): Date | null =>
+  asks.reduce<Date | null>((at, row) => (at === null || row.claimedAt > at ? row.claimedAt : at), null)
 
 /** Issues shown to the workflow at most. */
 const MAX_SHOWN = 40

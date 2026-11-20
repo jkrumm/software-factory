@@ -164,11 +164,11 @@ export function postgresPlanningStore(tx: SQL): PlanningStore {
     },
 
     async queueOrder() {
-      // An answer is stored as the JSON text of its object (`finishQueueAsk`'s `::jsonb` over a text parameter makes a jsonb
+      // An answer is stored as the JSON text of its object (`finishCall`'s `::jsonb` over a text parameter makes a jsonb
       // string): read either form.
       const rows: unknown[] = await tx`
         SELECT DISTINCT ON (repo) (CASE WHEN jsonb_typeof(answer) = 'string' THEN (answer #>> '{}')::jsonb ELSE answer END)->'order' AS "order"
-        FROM factory.queue_asks WHERE outcome = 'answered' AND answer IS NOT NULL
+        FROM factory.loop_calls WHERE loop = 'queue' AND outcome = 'answered' AND answer IS NOT NULL
         ORDER BY repo, finished_at DESC, key`
       const order = new Map<IssueId, number>()
       for (const raw of rows) {
