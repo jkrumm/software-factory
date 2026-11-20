@@ -1,8 +1,7 @@
 # Architecture: what is built
 
 **A modular monolith on Bun: plain TypeScript and zod, Postgres as the only store, domains with no I/O behind ports,
-Elysia at the edge, and a generated CLI.** It has been the running factory since the cutover of 2026-11-08
-(`docs/rewrite/state.md` is the log of how it got here). Words follow `docs/language.md`; the rules a change must keep
+Elysia at the edge, and a generated CLI.** It has been the running factory since the cutover of 2026-11-08. Words follow `docs/language.md`; the rules a change must keep
 are in `AGENTS.md`; why something is as it is, in `docs/decisions.md`. This page says where things are and how they fit.
 What is not built is the last section.
 
@@ -17,7 +16,7 @@ apps/
 packages/
   contract/   zod schemas: every request, response and event; the OpenAPI source; the spool format the hook shares
   client/     typed client (Eden) and the CLI's transport, including the change-stream follower
-  accounts/   the Claude Code subscription picker and the `claude-account` CLI (`docs/accounts.md`): a pure rule over ports, no server or database (the server reads it in-process: `adapters/planning/accounts-source.ts`), one file buildable for a machine without a checkout
+  accounts/   the Claude Code subscription picker and the `claude-account` CLI (`packages/accounts/docs/accounts.md`): a pure rule over ports, no server or database (the server reads it in-process: `adapters/planning/accounts-source.ts`), one file buildable for a machine without a checkout
 tests/
   scenarios/  use cases run against a real server and Postgres with fake hc and agw: the acceptance suite
   e2e/        Playwright against a seeded server: every Console screen, and the source of the README's screenshots
@@ -906,8 +905,7 @@ served under its own CSP (scripts, no network, sandboxed), not the page's, whose
 ## Data
 
 One database, schema `factory`; migrations apply under an advisory lock and a checksum. The cutover imported Issues,
-events, decisions and evidence from the old schema (`docs/rewrite/cutover-runbook.md`; the importer is gone, `git log`
-keeps it), so the KPIs keep their history. Usage and cost come from the `usage` schema by join, never copied.
+events, decisions and evidence from the old schema (the importer is gone, `git log` keeps it), so the KPIs keep their history. Usage and cost come from the `usage` schema by join, never copied.
 `GET /v1/kpis?days=N` also returns each KPI's `history` (six consecutive windows of N days, oldest first, the last the current one; usage KPIs only for the last two) and the `windows` behind it.
 
 An Issue's and a session's `insights` join the usage schema at read (`read/usage.ts`, never copied; Issue 1790): tokens, cost, models and subagent sessions of the Claude sessions a lead's hooks reported (`payload.claudeSessionId`, with their `<session>:<agent>` subagents) per attempt, and for the Issue those plus any session the usage side tagged with its number, each counted once; from `usage.sessions` and `usage.records_unique`, the two relations the `factory` role may read. `partial` is true while a lead is alive, a lead that took turns has no usage row yet, or the schema cannot be read (then cost is null and tokens stay zero, which the Console shows as dashes). `windowPoints` comes only with one Issue's read (the window-share view is slower); `toolCalls` is null until the usage side counts them (signal to usage-tracker). The `cost` KPI's `parts` are the same dollars per Issue by seat: the tool (lead, worker, reviewer, a subagent type), model and effort, the twelve biggest and the rest as `other`.

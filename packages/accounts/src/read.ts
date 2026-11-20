@@ -1,6 +1,6 @@
 // The library face of the accounts: what a process that is not the CLI (the factory server) calls to read the one model and to
 // set or clear a mode override. The CLI's reading verbs run on the same functions, so the picker, `claude-account status` and
-// the server cannot disagree (docs/accounts.md §status). Every location defaults to the CLI's (paths.ts); a caller may hand
+// the server cannot disagree (packages/accounts/docs/accounts.md §status). Every location defaults to the CLI's (paths.ts); a caller may hand
 // others in (a test does).
 import {
   type Cache,
@@ -79,7 +79,7 @@ export interface ModeRequest {
 }
 
 /**
- * Sets the mode override of one account (docs/accounts.md §Modes) and returns the record written. `drain` without an `until`
+ * Sets the mode override of one account (packages/accounts/docs/accounts.md §Modes) and returns the record written. `drain` without an `until`
  * lasts to the account's weekly reset. Throws an Error that says what is wrong with the request.
  */
 export function setModeOverride(

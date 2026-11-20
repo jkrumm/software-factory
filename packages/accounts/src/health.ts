@@ -1,4 +1,4 @@
-// Cross-machine session health for the wake check (docs/accounts.md §Health).
+// Cross-machine session health for the wake check (packages/accounts/docs/accounts.md §Health).
 // Pure grading: callers pass the parsed `usage --json` / `expiry --json` of one machine plus its pending re-login asks.
 
 export type HealthState = 'ok' | 'warn' | 'fail'

@@ -31,7 +31,7 @@ const atMost = (max: number): KpiTargetValue => ({ kind: 'at_most', min: null, m
 const atLeast = (min: number): KpiTargetValue => ({ kind: 'at_least', min, max: null })
 
 const OWNER_TOUCH_TARGET =
-  'The owner, 2026-11-07, "Maybe 5% is a good KPI, 7% or so": signed as "at most 0.05 to 0.07" (docs/strategy/2026-11-next/definition.html). Read as at most 0.07: below it is better, never off target'
+  'The owner, 2026-11-07, "Maybe 5% is a good KPI, 7% or so": signed as "at most 0.05 to 0.07" (docs/archive/strategy/2026-11-next/definition.html). Read as at most 0.07: below it is better, never off target'
 
 export const KPI_CATALOG: Record<KpiKey, KpiSpec> = {
   avoidable_touches: {
@@ -155,7 +155,8 @@ export const KPI_CATALOG: Record<KpiKey, KpiSpec> = {
     label: 'Refusals per Issue',
     direction: 'lower',
     target: atMost(0.25),
-    targetSource: 'The owner’s signed table, 2026-11-07 (docs/strategy/2026-11-next/definition.html): at most 0.25',
+    targetSource:
+      'The owner’s signed table, 2026-11-07 (docs/archive/strategy/2026-11-next/definition.html): at most 0.25',
     numerator: 'Issue events the state machine refused, plus ships the gate refused',
     denominator: 'Issues filed in the window',
     decision: 'Which refusal repeats: a rule or a prompt that is wrong, so the friction loop files it',
@@ -284,12 +285,12 @@ export const KPI_CATALOG: Record<KpiKey, KpiSpec> = {
     direction: 'higher',
     target: WATCH,
     targetSource:
-      'Watch only: demand sets the ceiling, not a goal (docs/accounts.md, the v1.9 simulation: at a demand below the pool slack is unavoidable, at or above it every window fills to 91-100 %); read it beside how many Issues waited',
+      'Watch only: demand sets the ceiling, not a goal (packages/accounts/docs/accounts.md, the v1.9 simulation: at a demand below the pool slack is unavoidable, at or above it every window fills to 91-100 %); read it beside how many Issues waited',
     numerator:
       'The weekly percent each account stood at when its weekly window reset, weighted by the account’s weekly capacity (the reset ledger of packages/accounts)',
     denominator: 'Account resets in the window, weighted by capacity',
     decision:
-      'Whether the subscriptions are used: a low figure with Issues waiting means the rule leaves quota unspent (docs/accounts.md §The picker); a high one with a long queue means a subscription is missing',
+      'Whether the subscriptions are used: a low figure with Issues waiting means the rule leaves quota unspent (packages/accounts/docs/accounts.md §The picker); a high one with a long queue means a subscription is missing',
   },
   issues_closed_per_day: {
     label: 'Issues closed per day',

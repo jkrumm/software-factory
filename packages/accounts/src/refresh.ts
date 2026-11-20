@@ -49,7 +49,7 @@ export interface RefreshDeps extends KeychainDeps {
   modesPath?: string
   /** This machine's name for the audit line of an adopted override. */
   machine?: string
-  /** Where the sample log and the reset ledger are written (docs/accounts.md §History); absent = no history. */
+  /** Where the sample log and the reset ledger are written (packages/accounts/docs/accounts.md §History); absent = no history. */
   history?: HistoryTarget
 }
 

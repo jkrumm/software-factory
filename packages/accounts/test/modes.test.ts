@@ -1,4 +1,4 @@
-// Registry v2 (docs/accounts.md §Modes): modes with an expiry, overrides that reach the other machine, the reserve budget.
+// Registry v2 (packages/accounts/docs/accounts.md §Modes): modes with an expiry, overrides that reach the other machine, the reserve budget.
 import { describe, expect, test } from 'bun:test'
 import { mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'

@@ -2,7 +2,7 @@
 
 The picker for N Claude Code subscriptions: a registry of accounts, a per-account quota cache, the rule that says which account a new
 session starts on, and the `claude-account` CLI around them. It needs bun, the `claude` binary and macOS (the logins live in the Keychain). It does not need the
-factory server, a database or a second machine. The design, the rule and every file location are in [`docs/accounts.md`](../../docs/accounts.md).
+factory server, a database or a second machine. The design, the rule and every file location are in [`docs/accounts.md`](docs/accounts.md).
 
 ## From nothing to a first pick with two accounts
 
@@ -60,7 +60,7 @@ $ claude-account usage                                      # 5 h and weekly per
 ## Two machines, a re-login dialog
 
 All of that works with no `host` block. A second machine that shares quota, a re-login ask (a dialog, a message) and a setup command run after `add` are the optional
-`host` block of the registry: [`docs/accounts.md` §The host block](../../docs/accounts.md).
+`host` block of the registry: [`docs/accounts.md` §The host block](docs/accounts.md).
 
 ## Tests
 

@@ -1,4 +1,4 @@
-// The per-account cache files under cacheDir() (docs/accounts.md §Files) and the claim and stamp files beside them.
+// The per-account cache files under cacheDir() (packages/accounts/docs/accounts.md §Files) and the claim and stamp files beside them.
 import {
   appendFileSync,
   closeSync,
@@ -118,7 +118,7 @@ export function saveSample(
       // the history is a record, never a gate
     }
   }
-  // the latest observed weekly reset: what ends an override `until: reset` (docs/accounts.md §Expiry)
+  // the latest observed weekly reset: what ends an override `until: reset` (packages/accounts/docs/accounts.md §Expiry)
   if (isSample(prev) && observedReset(prev, merged)) {
     const r: ObservedReset = {
       at: nowMs,
@@ -130,7 +130,7 @@ export function saveSample(
   }
 }
 
-// ── Mode overrides (docs/accounts.md §Modes) ─────────────────────────────────────────────────────────────────────
+// ── Mode overrides (packages/accounts/docs/accounts.md §Modes) ─────────────────────────────────────────────────────────────────────
 
 /** The override state; a missing or unreadable file is an empty state. */
 export const loadOverrides = (path = modesPath()): OverrideState => parseOverrides(readJson(path))

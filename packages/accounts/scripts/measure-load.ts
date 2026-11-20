@@ -1,5 +1,5 @@
 #!/usr/bin/env bun
-// Measures the simulation's load model from this machine's records and writes src/load-model.json (docs/accounts.md
+// Measures the simulation's load model from this machine's records and writes src/load-model.json (packages/accounts/docs/accounts.md
 // §The policy lab): the sample log and the pick log under $CLAUDE_ACCOUNTS_HISTORY / $CLAUDE_ACCOUNTS_PICKS, and every
 // session transcript under the accounts' projects directories (first write = birth time, last write = mtime).
 //   bun packages/accounts/scripts/measure-load.ts [--from <iso>] [--to <iso>] [--out <file>]

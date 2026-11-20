@@ -45,7 +45,7 @@ describe('agentsImports', () => {
   test('finds @path imports, ignores scopes, e-mail, code spans and fences', () => {
     const text = [
       '# Rules',
-      '@docs/design.md',
+      '@docs/x.md',
       'See @./notes.md for more.',
       'Install `@docs/in-code.md` and @types/node, mail me@example.com.',
       '```',
@@ -54,7 +54,7 @@ describe('agentsImports', () => {
       'The package @scope/pkg is fine.',
     ].join('\n')
     expect(agentsImports(text)).toEqual([
-      { line: 2, target: 'docs/design.md' },
+      { line: 2, target: 'docs/x.md' },
       { line: 3, target: './notes.md' },
     ])
   })
@@ -92,7 +92,7 @@ describe('askRules', () => {
 describe('agentsmdProbe', () => {
   test('red: CLAUDE.md, imports and ask rules are one finding each', async () => {
     const dir = repo({
-      'AGENTS.md': '# A\n@docs/design.md\n',
+      'AGENTS.md': '# A\n@docs/x.md\n',
       'sub/CLAUDE.md': '@AGENTS.md\n',
       '.claude/settings.json': '{"permissions":{"ask":["Bash(git push:*)"]}}',
     })
@@ -103,7 +103,7 @@ describe('agentsmdProbe', () => {
       ['agentsmd:imports', 'Hygiene: @imports in AGENTS.md'],
       ['agentsmd:ask-rules', 'Hygiene: ask rules in .claude/settings.json'],
     ])
-    expect(out.findings[1]?.lines).toEqual(['AGENTS.md:2: @docs/design.md'])
+    expect(out.findings[1]?.lines).toEqual(['AGENTS.md:2: @docs/x.md'])
   })
 
   test('green: a plain AGENTS.md and a settings file without ask rules', async () => {

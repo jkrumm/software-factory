@@ -461,13 +461,13 @@ describe('browser probe', () => {
     expect(one?.lines[0]).toContain(`never \`${HEADED}\` in a suite`)
   })
 
-  test('files outside tests are not judged: scripts, product code, evidence, spikes', async () => {
+  test('files outside tests are not judged: scripts, product code, the archive, spikes', async () => {
     const shot = `const b = await chromium.launch({ ${CHANNEL}, ${HEADED} })\n`
     const report = await sweep(
       makeRepo({
         'scripts/shot.ts': shot,
         'src/browser.ts': shot,
-        'docs/evidence/run/probe.test.ts': shot,
+        'docs/archive/run/probe.test.ts': shot,
         'tools/spikes/chrome/launch.spec.ts': shot,
         'node_modules/x/tests/a.ts': shot,
         'tests/notes.md': `${CHANNEL}\n`,
@@ -704,7 +704,6 @@ describe('retired probe', () => {
         'docs/a.md',
         'docs/language.md',
         'docs/decisions.md',
-        'docs/program.md',
         'docs/deep/b.md',
         'packages/x/README.md',
       ]),

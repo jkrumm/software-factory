@@ -36,7 +36,7 @@ import {
   verdicts,
 } from '../src/index.ts'
 
-// The policy lab (docs/accounts.md §The policy lab): the measured load model, the named policies, the laxity candidate,
+// The policy lab (packages/accounts/docs/accounts.md §The policy lab): the measured load model, the named policies, the laxity candidate,
 // the simulation and the verdict, the shadow log and the live ledger rows. Nothing here asserts a candidate's result:
 // on the measured model none beats v1.9 (the docs record the run), so v1.9 stays the default and no test claims a win.
 

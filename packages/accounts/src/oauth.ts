@@ -1,4 +1,4 @@
-// The usage endpoint adapter: one read-only GET with the account's own token (docs/accounts.md §Sources of a sample).
+// The usage endpoint adapter: one read-only GET with the account's own token (packages/accounts/docs/accounts.md §Sources of a sample).
 import { type Sample, sampleFromClaudeJson } from './policy.ts'
 import type { HttpGet } from './ports.ts'
 

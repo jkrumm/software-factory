@@ -1,4 +1,4 @@
-// The host block of the registry (docs/accounts.md §The host block): which machine this is, who its peer is, and the commands
+// The host block of the registry (packages/accounts/docs/accounts.md §The host block): which machine this is, who its peer is, and the commands
 // that stand in for what only one person's machines have. No block = one machine with plain logins; nothing below runs.
 import { hostname } from 'node:os'
 import type { HostConfig, HostMachine, HostPeer, HostWake } from './policy.ts'

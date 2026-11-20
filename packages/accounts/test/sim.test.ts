@@ -11,7 +11,7 @@ import {
 
 // The three-week simulation (src/sim.ts) on the load model guessed before it was measured: sticky 2 h sessions, a
 // day/night curve, three lanes, staggered weekly resets and Max 5h windows. These assertions are v1.9's findings on that
-// model (docs/accounts.md §Why v1.9); the measured model and the candidates are test/lab.test.ts.
+// model (packages/accounts/docs/accounts.md §Why v1.9); the measured model and the candidates are test/lab.test.ts.
 
 /** The guessed model: a Max 5h window holds 1/8 of its week, a session burns 0.002 Max-weeks per 15 min for 2 h, day 08-23 UTC at 1.4, night at 0.35. */
 export const GUESSED: LoadModel = {

@@ -1,4 +1,4 @@
-// `claude-account status` (docs/accounts.md §status): the one read model of the accounts. Pure over a snapshot of the registry,
+// `claude-account status` (packages/accounts/docs/accounts.md §status): the one read model of the accounts. Pure over a snapshot of the registry,
 // the cache, the modes in force, the history and the clock; the CLI hands the snapshot in and prints the result.
 import {
   type Cache,
@@ -70,7 +70,7 @@ export interface LaneStatus {
 
 const pct = (n: number | null) => (n === null ? '?' : `${Math.round(n * 10) / 10}`)
 
-/** The plain-words reason of a closure (docs/accounts.md §status). */
+/** The plain-words reason of a closure (packages/accounts/docs/accounts.md §status). */
 function closedWhy(
   code: (typeof CLOSED_CODES)[number],
   x: Sample | undefined,

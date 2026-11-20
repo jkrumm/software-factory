@@ -1,4 +1,4 @@
-// The picker's rule (docs/accounts.md §The picker, rule v1.9) as pure functions over a snapshot of the registry, the
+// The picker's rule (packages/accounts/docs/accounts.md §The picker, rule v1.9) as pure functions over a snapshot of the registry, the
 // quota samples, the marks and the clock. No file, process, network or clock access lives here: the adapters sit behind
 // the ports in ports.ts and the files in registry.ts and store.ts, so a test (or a simulation) hands in the snapshot.
 import { laxityHours } from './laxity.ts'
@@ -9,7 +9,7 @@ import { required, requiredAt } from './required.ts'
 export const DEFAULT_ACCOUNT_ID = 'iu'
 /** pick() result when no account is usable: the caller spills to its IU path (not an account id). */
 export const SPILL = 'spill'
-/** The rule's name as the ledger and `status` carry it: v1.9 plus the modes of registry v2 (docs/accounts.md §Modes). */
+/** The rule's name as the ledger and `status` carry it: v1.9 plus the modes of registry v2 (packages/accounts/docs/accounts.md §Modes). */
 export const RULE_VERSION = 'v1.10'
 export const SESSION_MAX = 90
 /** 5h% from which an account only takes work when nothing cooler is eligible (SESSION_MAX stays the hard stop). */
@@ -43,7 +43,7 @@ export const URGENCY_EXP = 1.5
 export const HOLDS = ['account', 'allowance'] as const
 export type Hold = (typeof HOLDS)[number]
 
-/** The four modes of an account (docs/accounts.md §Modes). */
+/** The four modes of an account (packages/accounts/docs/accounts.md §Modes). */
 export const MODE_KINDS = ['normal', 'drain', 'reserve', 'paused'] as const
 export type ModeKind = (typeof MODE_KINDS)[number]
 /**
@@ -120,7 +120,7 @@ export interface Registry {
   fable?: string | null
   /** v1 drain mode: reads as mode drain on these accounts (modeOf). Absent or empty = off. Never the fable account. */
   drain?: string[] | null
-  /** The live picking policy, a key of POLICIES (docs/accounts.md §The policy lab). Absent = DEFAULT_POLICY. */
+  /** The live picking policy, a key of POLICIES (packages/accounts/docs/accounts.md §The policy lab). Absent = DEFAULT_POLICY. */
   policy?: string
 }
 
@@ -270,7 +270,7 @@ export const RESET_JUMP_S = 24 * 3600
 /** Or its percent fell by at least this many points (a manual reset can keep the old time for a moment). */
 export const RESET_DROP = 50
 
-/** True when `next` shows a weekly reset against `prev` (docs/accounts.md §Expiry). */
+/** True when `next` shows a weekly reset against `prev` (packages/accounts/docs/accounts.md §Expiry). */
 export function observedReset(prev: Sample | null, next: Sample): boolean {
   if (!prev) return false
   const moved = prev.w_reset !== null && next.w_reset !== null && next.w_reset - prev.w_reset > RESET_JUMP_S
@@ -285,7 +285,7 @@ export const RESET_SLACK_S = 3600
  * True when `inc` is the weekly window a recorded reset already closed, read late: its reset time is still the closed
  * window's (or earlier) and its percent sits at least RESET_DROP above what the cache holds now. Such a sample (a delayed
  * endpoint answer, a peer's old row, a session that has not refreshed its numbers) must never replace the post-reset one:
- * it would show the next fresh sample as a second reset (docs/accounts.md §Expiry).
+ * it would show the next fresh sample as a second reset (packages/accounts/docs/accounts.md §Expiry).
  */
 export function staleAfterReset(stored: Sample | null, inc: Sample, seen: ObservedReset | undefined): boolean {
   if (seen?.w_reset_before == null || inc.w === null || inc.w_reset === null) return false
@@ -502,7 +502,7 @@ export function scopedLimit(x: Sample | undefined, model: string): Scoped | null
   }
 }
 
-/** A reserve account's budget for other work (docs/accounts.md §Reserve). `known` false: no fresh scoped sample. */
+/** A reserve account's budget for other work (packages/accounts/docs/accounts.md §Reserve). `known` false: no fresh scoped sample. */
 export interface ReserveBudget {
   for: string
   known: boolean
@@ -590,7 +590,7 @@ export function eligible(reg: Registry, cache: Cache, id: string, nowMs: number)
   return true
 }
 
-/** Why an account takes no work now (docs/accounts.md §status). The codes are `status --json`'s `closed`. */
+/** Why an account takes no work now (packages/accounts/docs/accounts.md §status). The codes are `status --json`'s `closed`. */
 export const CLOSED_CODES = [
   'disabled',
   'paused',
@@ -672,7 +672,7 @@ export function overPace(reg: Registry, cache: Cache, id: string, nowMs: number)
 }
 
 /**
- * A picking policy (docs/accounts.md §The policy lab): the rule's steps with the expiring-capacity step varied. `due`
+ * A picking policy (packages/accounts/docs/accounts.md §The policy lab): the rule's steps with the expiring-capacity step varied. `due`
  * adds a step before it in the bulk lanes: the due account (laxity: no more hours to its reset than it needs to fill
  * its week at the rate it can absorb) with the least slack. `expiringS`: the horizon of the earliest-reset-first step,
  * null for none.

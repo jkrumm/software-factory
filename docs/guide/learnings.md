@@ -1,6 +1,6 @@
 # Learnings
 
-Each section below pairs a failure, with its numbers, with the rule or code it produced. The records are `docs/strategy/2026-11-reset/learnings.md`, `docs/rewrite/learnings.md` and `docs/decisions.md`.
+Each section below pairs a failure, with its numbers, with the rule or code it produced. The records are `docs/archive/strategy/2026-11-reset/learnings.md`, `docs/archive/rewrite-learnings.md` and `docs/decisions.md`.
 
 ## Background work at a turn's end
 
