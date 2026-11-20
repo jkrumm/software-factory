@@ -9,7 +9,7 @@ import { join, relative } from 'node:path'
 
 const ROOT = join(import.meta.dir, '..')
 const TABLE = join(ROOT, 'docs', 'settings.md')
-const LOADERS = new Bun.Glob('apps/*/src/**/*settings.ts')
+const LOADERS = new Bun.Glob('apps/*/src/**/*.ts')
 const BT = String.fromCharCode(96)
 const KEY = /^(\s+)([A-Z][A-Z0-9_]*):\s/
 
@@ -90,10 +90,17 @@ export function settingsOf(src: string, loader: string): Setting[] {
   return found
 }
 
-/** Every setting of every settings loader under apps/<app>/src, sorted by name. */
+/** A loader is a file that parses the environment with parseEnv (its definition in kernel/env.ts does not count). */
+export function isLoader(src: string): boolean {
+  return /(?<!function )parseEnv\(/.test(src)
+}
+
+/** Every setting of every loader under apps/<app>/src, sorted by name. */
 export async function collect(): Promise<Setting[]> {
   const files: string[] = []
-  for await (const path of LOADERS.scan({ cwd: ROOT })) files.push(path)
+  for await (const path of LOADERS.scan({ cwd: ROOT })) {
+    if (isLoader(readFileSync(join(ROOT, path), 'utf8'))) files.push(path)
+  }
   const all: Setting[] = []
   for (const path of files.sort()) {
     all.push(...settingsOf(readFileSync(join(ROOT, path), 'utf8'), path))

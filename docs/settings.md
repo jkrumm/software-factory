@@ -6,7 +6,7 @@ Every name a settings loader reads from the environment: its default in the code
 |-|-|-|-|
 | `DATABASE_URL` | required | the Postgres database the server stores into (secrets-run supplies it) | `apps/server/src/settings.ts` |
 | `FACTORY_ACCOUNT_LEADS` | unset | an account's own cap: `iu=20,me=10,me2=10` | `apps/server/src/app/planning-settings.ts` |
-| `FACTORY_AGENT_TOKEN` | unset | the agent token (`settings.ts`) and the API port: what a lead's `factory` calls the API with | `apps/server/src/adapters/leads/settings.ts` |
+| `FACTORY_AGENT_TOKEN` | unset | the token a lead's `factory` calls the API with (`settings.ts`) | `apps/server/src/adapters/leads/settings.ts` |
 | `FACTORY_AGENT_TOKEN` | unset | the token a lead's terminal calls the API with, never the owner's | `apps/server/src/settings.ts` |
 | `FACTORY_AGW_BIN` | `'agw'` | the agw binary the server calls for agent work | `apps/server/src/settings.ts` |
 | `FACTORY_API_DETECT_MS` | `45_000` | a turn open and silent this long has its transcript read for an API error | `apps/server/src/adapters/leads/settings.ts` |
@@ -20,6 +20,7 @@ Every name a settings loader reads from the environment: its default in the code
 | `FACTORY_CONSOLE_DIR` | `DEFAULT_DIR` | the Console build; a release has the same layout as the repo | `apps/server/src/console-settings.ts` |
 | `FACTORY_CONSOLE_IMAGE_HOSTS` | `''` | Hosts the Console page may load images from (the page's `img-src`), comma-separated: `images.example.com` or `*.example.com`, no scheme, port or path. | `apps/server/src/console-settings.ts` |
 | `FACTORY_CONSOLE_PORT` | `7795` | the port the Console listens on | `apps/server/src/console-settings.ts` |
+| `FACTORY_CONSOLE_URL` | `'http://127.0.0.1:7793/console'` | where a checkpoint is answered; a placeholder until the Console exists | `apps/server/src/adapters/ntfy/ntfy.ts` |
 | `FACTORY_DATA_DIR` | `join(e.HOME ?? '/tmp', '.software-factory', 'data')` | the factory's data directory; artifact revisions are blobs under `<dir>/blobs`, never in git | `apps/server/src/checkpoint-settings.ts` |
 | `FACTORY_DOOR_TOKEN` | unset | the token a door (a machine) calls the API with | `apps/server/src/settings.ts` |
 | `FACTORY_FORCE_NOTE_MS` | `5 * 60_000` | how long a lead's turn may read as ended before a note is typed into it anyway | `apps/server/src/adapters/leads/settings.ts` |
@@ -54,6 +55,8 @@ Every name a settings loader reads from the environment: its default in the code
 | `FACTORY_LOOP_TRIAGE_MS` | unset | how often the triage loop runs | `apps/server/src/app/loops/settings.ts` |
 | `FACTORY_LSOF_BIN` | `'/usr/sbin/lsof'` | the lsof binary the host probe calls | `apps/server/src/app/planning-settings.ts` |
 | `FACTORY_MEMORY_SAMPLE_MS` | `30_000` | a swapout rate is the delta between two readings; readings closer than this return the last one | `apps/server/src/app/planning-settings.ts` |
+| `FACTORY_NTFY_TOPIC` | `'factory'` | the ntfy topic the owner's line posts to (letters, digits, - and _) | `apps/server/src/adapters/ntfy/ntfy.ts` |
+| `FACTORY_NTFY_URL` | unset | the ntfy server the owner's line posts to; unset, nothing is pushed | `apps/server/src/adapters/ntfy/ntfy.ts` |
 | `FACTORY_ORCHESTRATOR_TOKEN` | unset | the token the orchestrator calls the API with | `apps/server/src/settings.ts` |
 | `FACTORY_OTEL_ENDPOINT` | unset | a ref of `.env.server.tpl`: the ClickStack ingest URL; unset, the export is off | `apps/server/src/adapters/otel/settings.ts` |
 | `FACTORY_OTEL_EVERY_MS` | `60_000` | how often the metrics export runs, at least 5 s | `apps/server/src/adapters/otel/settings.ts` |
@@ -83,7 +86,7 @@ Every name a settings loader reads from the environment: its default in the code
 | `FACTORY_SPOOL_DIR` | `$HOME/.local/share/factory/spool` | where factory hook spools events until the server reads them | `apps/server/src/adapters/leads/settings.ts` |
 | `FACTORY_STEP_REMOTE_PROJECTS` | `''` | the projects whose declared steps may run off the mini, space- or comma-separated (the owner's admission) | `apps/server/src/app/planning-settings.ts` |
 | `FACTORY_STEP_REMOTE_TARGET` | unset | the ssh target of the VPS that runs steps off the mini (an alias of the owner's ssh config); unset: every step runs on the mini | `apps/server/src/app/planning-settings.ts` |
-| `FACTORY_STEWARD_IDLE_BACKGROUND_MS` | `DEFAULT_STEWARD_RULES.idleBackgroundMs` | the same, for a lead whose last turn ended with background work in flight (a subagent, a check): it waits, so it is nudged much later | `apps/server/src/app/loops/settings.ts` |
+| `FACTORY_STEWARD_IDLE_BACKGROUND_MS` | `DEFAULT_STEWARD_RULES.idleBackgroundMs` | a working Issue whose lead ended its last turn with background work in flight (a subagent, a check) is nudged after this long: it waits, so this is later than the plain idle threshold | `apps/server/src/app/loops/settings.ts` |
 | `FACTORY_STEWARD_IDLE_MS` | `DEFAULT_STEWARD_RULES.idleLeadMs` | a working Issue whose lead session has been quiet this long with nothing reported is nudged by the steward | `apps/server/src/app/loops/settings.ts` |
 | `FACTORY_STEWARD_MIN_STALL_MS` | `2 * 60_000` | a stall younger than this is left to end by itself | `apps/server/src/app/loops/settings.ts` |
 | `FACTORY_STREAM_POLL_MS` | `DEFAULT_POLL_MS` | how often the change stream polls, 10 to 60000 ms | `apps/server/src/read/stream-settings.ts` |
@@ -109,5 +112,6 @@ Every name a settings loader reads from the environment: its default in the code
 | `HC_SESSION` | unset | another herdr-core session than the default one (tests) | `apps/server/src/adapters/leads/settings.ts` |
 | `HOME` | required | the home directory the defaults are built from | `apps/server/src/adapters/leads/settings.ts` |
 | `HOME` | `'/tmp'` | the home directory the defaults are built from | `apps/server/src/checkpoint-settings.ts` |
+| `NTFY_TOKEN` | unset | the bearer token for the ntfy server, when it needs one | `apps/server/src/adapters/ntfy/ntfy.ts` |
 | `PORT` | unset | the port the API listens on, on loopback | `apps/server/src/adapters/leads/settings.ts` |
 | `PORT` | required | the port the API listens on, on loopback | `apps/server/src/settings.ts` |

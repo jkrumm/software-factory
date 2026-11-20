@@ -47,7 +47,7 @@ const Env = z.object({
   FACTORY_API_PROBE_MS: z.coerce.number().int().min(0).optional(),
   /** a waiting lead is dormant (its `claude` ended) after this long */
   FACTORY_QUIESCE_AFTER_MS: z.coerce.number().int().min(0).optional(),
-  /** the agent token (`settings.ts`) and the API port: what a lead's `factory` calls the API with */
+  /** the token a lead's `factory` calls the API with (`settings.ts`) */
   FACTORY_AGENT_TOKEN: z.string().min(1).optional(),
   /** the port the API listens on, on loopback */
   PORT: z.coerce.number().int().min(1).max(65_535).optional(),

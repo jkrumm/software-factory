@@ -52,7 +52,7 @@ const Env = z.object({
   FACTORY_STEWARD_MIN_STALL_MS: ms.optional(),
   /** a working Issue whose lead session has been quiet this long with nothing reported is nudged by the steward */
   FACTORY_STEWARD_IDLE_MS: ms.optional(),
-  /** the same, for a lead whose last turn ended with background work in flight (a subagent, a check): it waits, so it is nudged much later */
+  /** a working Issue whose lead ended its last turn with background work in flight (a subagent, a check) is nudged after this long: it waits, so this is later than the plain idle threshold */
   FACTORY_STEWARD_IDLE_BACKGROUND_MS: ms.optional(),
   /** an Issue still settling this long after it was filed is settled with no edges by the steward */
   FACTORY_SETTLE_TIMEOUT_MS: ms.optional(),

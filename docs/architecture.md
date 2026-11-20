@@ -151,7 +151,7 @@ through `receive` in `app/intake.ts`; the answer is a triage outcome (`docs/lang
 
 ## Capacity and leads
 
-What runs on this host, and why an Issue waits. The reasons are in [the capacity guide](guide/capacity.md) and [the leads guide](guide/leads.md). Every setting a settings loader reads, with its default and what it tunes, is in [settings](settings.md), generated from the loaders; the few the CLI reads are named where they apply. Each rule names the symbol that holds it.
+What runs on this host, and why an Issue waits. The reasons are in [the capacity guide](guide/capacity.md) and [the leads guide](guide/leads.md). Every setting a settings loader reads, with its default and what it tunes, is in [settings](settings.md), generated from the loaders. The CLI reads a few knobs of its own, which the table does not list; the two that pin a step are named under Steps off the mini. Each rule names the symbol that holds it.
 
 **Admission** (`domains/capacity/admission.ts`) is pure and decided again at every claim, in this order:
 
