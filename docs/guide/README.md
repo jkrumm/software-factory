@@ -2,24 +2,30 @@
 
 Signals become Issues. A lead, an interactive Claude Code session, owns each Issue from root cause to verified production. One person decides only what a person must.
 
-This guide explains one implementation of that loop through its own code and its own Issues. It is a lifecycle server on Bun and Postgres, built and run by one developer on one always-on machine.
+A coding agent writes a change faster than a person can supervise it. Keep a person at the spec, at every question and at the merge, and ten agents wait on one inbox. Take the person out without replacing what they did, and nothing checks the work. This guide explains one implementation that replaces it: a lifecycle server on Bun and Postgres, built and run by one developer on one always-on machine, shown through its own code and its own Issues.
+
+## The result
+
+The scarce resource is the owner's attention, so the factory counts it. `factory read kpis` and `factory read friction`, the 7 days to 2026-11-20 09:38 UTC, all projects:
+
+| What | Count |
+|-|-|
+| Issues filed | 1,545, of which the factory's own loops filed 282 |
+| Issues closed | 1,604, or 229 a day |
+| Median time from filed to closed | 85 minutes |
+| First verifications that passed | 1,290 of 1,338 (96.4 %; the target is 90 %) |
+| Decisions leads raised | 58: the Judge settled 45, a default 7, the owner 5, his delegate 1 |
+| Specs, Concepts and Reports the owner judged | 95 |
+| Errands that reached the owner's hands | 77 |
+| Times the owner stepped in where the factory should have settled it | 58, mostly notes to a lead (0.038 per Issue; the target is at most 0.07) |
+
+No person read a diff. A touch pattern that repeats becomes an Issue the friction loop files.
 
 ## Position
 
 **Dark for code, lit for decisions.** No person reviews a change before production. The lead's own review, the gates, a watch window and probes do that job.
 
 What reaches the owner: product direction, spend, irreversible data loss, other people, security policy, rare big architecture and taste. The factory settles everything else. A touch of the owner that the factory should have avoided counts as friction.
-
-The owner's attention is the scarce resource, and the factory measures it. `factory read friction` and `factory read kpis`, 2026-11-17, window of 7 days, all projects:
-
-| Count | Value |
-|-|-|
-| Issues filed | 1,249 |
-| Issues closed | 1,246 |
-| Decisions the owner settled | 5 (0.4 per 100 Issues) |
-| Avoidable touches | 76 (0.061 per Issue; the target is at most 0.07) |
-
-The 76 touches are mostly notes (58) and cancels (11). A touch pattern that repeats becomes an Issue the friction loop files.
 
 ## The loop
 
@@ -35,6 +41,52 @@ The 76 touches are mostly notes (58) and cancels (11). A touch pattern that repe
 8. **Verify and watch.** `make verify` and the probes end the watch. A change that breaks something goes back to its lead ([Gates](./gates.md)).
 
 Loops run beside this path: friction, hygiene, selfwatch and the steward file signals and end stalls ([Loops](./loops.md)).
+
+## The concepts on one page
+
+Six nouns carry the design. Every chapter is about one of them.
+
+| Noun | What it is | The rule that makes it work |
+|-|-|-|
+| **Signal** | Anything that arrives and may become work | Nobody files around triage; text from outside is held until it is let through |
+| **Issue** | One unit of work: one repo, one branch, one ship | Its state is derived from its stored events, by one total table |
+| **Event** | A fact recorded on an Issue, one of 24 kinds | Only an event moves a state, and each kind has a list of who may send it |
+| **Lead** | The Claude Code session that owns an Issue; an attempt is its *n*th try | One Issue, one lead, from root cause to verified production |
+| **Checkpoint** | Where the factory stops for a person: a Decision, a Concept or Spec, an Errand | Code decides first, then a workflow, then the owner. Never a merge |
+| **Loop** | A named recurring pass with one way to act | Claim, commit, call, record: a replayed pass acts once |
+
+**The six states.** An Issue is settling (triage is not done), queued, working, waiting, watching (shipped, the watch is on) or closed. A screen never shows these words: it says Running, Paused, Ready, Held or Checking, and Planned for a plan row that is not an Issue yet.
+
+![An Issue's states and the events that move between them.](./diagrams/issue-lifecycle.svg)
+
+**The 24 events,** by where in an Issue's life they fall ([`events.ts`](https://github.com/jkrumm/software-factory/blob/d83ba1e8040a4d8aa3c0639bf659f773f09b67b8/apps/server/src/domains/work/events.ts) holds the kinds and `SENDERS`, who may send each):
+
+| Phase | Events | Sent by |
+|-|-|-|
+| Arrive | `filed`, `settled` | the factory; the owner can file directly |
+| Start | `admitted`, `lead_started`, `seated`, `moved_up`, `lead_gone` | the factory; the owner sets a seat |
+| Work | `noted`, `deferred`, `stalled`, `woken` | the lead, the steward, the owner |
+| Ask a person | `asked`, `answered`, `submitted`, `verdict_given`, `errand_raised`, `errand_done`, `errand_turned_back` | the lead asks; the Judge, a default or the owner answers |
+| Finish | `shipped`, `watch_passed`, `regressed`, `closed`, `reopened`, `cancelled` | the lead ships, the factory watches, the owner reopens or cancels |
+
+**A wait names its exit.** A waiting Issue says why it waits and what ends the wait ([`WAITS`](https://github.com/jkrumm/software-factory/blob/d83ba1e8040a4d8aa3c0639bf659f773f09b67b8/apps/server/src/domains/work/issue.ts)). Eight of the eleven waits end by a machine: a timer, a dependency, an outside review, and the five stalls the steward ends. Three need a person: a Decision, a review, an Errand.
+
+**The three checkpoints,** and who settles each before the owner is asked:
+
+![The routes of a Decision, a Spec and an Errand to whoever settles them.](./diagrams/checkpoint-routes.svg)
+
+## How to read this guide
+
+| If you want | Read |
+|-|-|
+| the idea in an hour | [Issues](./issues.md), [Leads](./leads.md), [Checkpoints](./checkpoints.md) |
+| why it is safe without a person at the merge | [Gates](./gates.md), [Signals and Triage](./signals.md), [Capacity](./capacity.md) |
+| how it runs many Issues across repos | [Capacity](./capacity.md), [Chains and Plans](./chains.md), [Loops](./loops.md) |
+| to build your own | [Running a Factory](./running.md), then [Learnings](./learnings.md) |
+
+## One Issue through the chapters
+
+`issue_1809` runs through five chapters. The factory's own selfwatch loop filed it at 01:03:01 UTC on 2026-11-17 and triage settled it six seconds later ([Signals and Triage](./signals.md)). It stood 1 h 10 min in the queue ([Capacity](./capacity.md)), then `lead-1809-1` worked 12.7 minutes over 8 turns ([Leads](./leads.md)). The lead shipped 3 commits with a review that covered them, and the watch passed at 03:11:00 ([Gates](./gates.md)). Two hours and eight minutes, 2.19 dollars, no Decision, no Errand, no note. Its events are in [Issues](./issues.md#issue_1809-end-to-end).
 
 ## Chapters
 
