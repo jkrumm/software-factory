@@ -1,4 +1,5 @@
 import { describe, expect, test } from 'bun:test'
+import { REVIEWER_CHEAP_ROLE } from '@software-factory/contract'
 import type { EventKind } from '@software-factory/contract/spool'
 import {
   buildBrief,
@@ -8,6 +9,7 @@ import {
   MAX_SIGNAL_TEXT_CHARS,
   STANDING_ORDERS,
 } from '../../src/domains/leads/brief.ts'
+import { reviewerBrief } from '../../src/domains/leads/reviewer.ts'
 import type { HistoryRecord } from '../../src/domains/leads/history.ts'
 import { leadBranch, leadKey, parseLeadKey } from '../../src/domains/leads/names.ts'
 import { MAX_NOTE_CHARS, noteText } from '../../src/domains/leads/note.ts'
@@ -328,150 +330,139 @@ describe('the brief', () => {
     expect(STANDING_ORDERS).not.toContain('${')
   })
 
-  test('the standing orders carry the HerdrCore constraint', () => {
-    expect(STANDING_ORDERS).toContain('dotfiles/docs/incident-2026-11-13-mini-panic.md')
-    expect(STANDING_ORDERS).toMatch(/never restart, stop, update or start the core/)
-    expect(STANDING_ORDERS).toContain('never reboot the host, kill a process or restart the core to prove a change')
-    expect(STANDING_ORDERS).toContain("the owner's `make herdr-core-update`")
-    expect(STANDING_ORDERS).toContain('states a one-line rollback')
+  const headings = (text: string) => text.split('\n').filter((line) => /^#{1,2} /.test(line))
+
+  test('the standing orders are two sections: the contract with orders 1 to 9 in sequence, then the verbs', () => {
+    expect(headings(STANDING_ORDERS)).toEqual(['# Operating contract', '# Verbs'])
+    const orders = STANDING_ORDERS.split('\n').filter((line) => /^\d+\. /.test(line))
+    expect(orders.map((line) => Number.parseInt(line, 10))).toEqual([1, 2, 3, 4, 5, 6, 7, 8, 9])
+    // One line each: a rule that needs more belongs in the help of the verb it is about.
+    for (const order of orders) expect(Buffer.byteLength(order)).toBeLessThanOrEqual(1_200)
   })
 
-  test('the standing orders teach how to wait and the host traps, and what an implementer is for', () => {
-    expect(STANDING_ORDERS).toContain("# Waiting, and the host's shell")
-    expect(STANDING_ORDERS).toMatch(/Never sleep-poll/)
-    expect(STANDING_ORDERS).toContain('echo rc=$?')
-    expect(STANDING_ORDERS).toMatch(/Never pipe a waited command into `tail` or `head`/)
-    expect(STANDING_ORDERS).toMatch(/One check per worktree/)
-    expect(STANDING_ORDERS).toMatch(/Kill by pid/)
-    expect(STANDING_ORDERS).toContain('--thread factory-<issue number>')
-    expect(STANDING_ORDERS).toContain('the printed thread then ends in `-rebase`')
-    expect(STANDING_ORDERS).toMatch(/no Grep or Glob tool/i)
-    expect(STANDING_ORDERS).toMatch(/Write a change that fits a few files yourself/)
-    expect(STANDING_ORDERS).toMatch(
-      /before any probe or build step that runs longer than two minutes, re-check the finding on origin\/master/,
-    )
-    expect(STANDING_ORDERS).toMatch(/about 30 minutes/)
-    expect(STANDING_ORDERS).toMatch(/"waiting on its own background work" is not done/)
-  })
-
-  test('architecture and taste are a Spec, not a Decision, and the Spec rule says when one is due', () => {
-    expect(STANDING_ORDERS).toMatch(
-      /an architecture or look-and-feel choice that later Issues will build on is a Spec \(order 3\), never a Decision/,
-    )
-    expect(STANDING_ORDERS).toContain('3. A Spec is due before you build when the Issue carries the checkpoint `spec`')
-    for (const trigger of [
-      'a new public surface',
-      'a new data model or a migration that changes meaning',
-      'a new dependency of weight',
-      'a UI screen the owner has not seen',
+  test('the standing orders name the commands a lead runs, and none that are gone', () => {
+    for (const command of [
+      'factory issue show <id>',
+      'factory issue close <id>',
+      'factory issue defer <id>',
+      'factory issue block <id>',
+      'factory issue ship <id>',
+      'factory issue ask <id>',
+      'factory decision take-default <decision id>',
+      'factory artifact submit <id>',
+      'factory artifact show <artifact-id>',
+      'factory artifact revise <artifact-id>',
+      'factory artifact annotation-reply <artifact-id> <annotation-id>',
+      'factory errand raise <id>',
+      'factory door route-set',
+      'factory signal file --from agent:<repo>',
+      '--repo software-factory',
+      '/review <merge-base>..HEAD --thread factory-<issue number>',
+      'factory land',
+      'factory deploy-lock --project <repo> -- make deploy',
+      'make check',
+      // The HerdrCore constraint: its source and the commands it forbids or reserves.
+      'dotfiles/docs/incident-2026-11-13-mini-panic.md',
+      'hc server restart',
+      'hc server stop',
+      'hc update',
+      'make herdr-core-update',
     ]) {
-      expect(STANDING_ORDERS).toContain(trigger)
+      expect(STANDING_ORDERS).toContain(command)
     }
-    expect(STANDING_ORDERS).toMatch(
-      /one page: what you will build, then at most three open choices, each with your default/,
-    )
-    expect(STANDING_ORDERS).toContain('with no verdict in 24 hours you go on with your defaults')
-    expect(STANDING_ORDERS).toMatch(/Most Issues need none/)
-    expect(STANDING_ORDERS).toContain(
-      'When the Spec proposes a mechanism of its own (an updater, a release feed, a pipeline, a docs framework), it first names what the field standard tools do, from research and not memory, and why they do not fit, measured where it can be.',
-    )
+    for (const gone of ['factory merge-lock', '--attempt <n>', '--commit', '<id> --body']) {
+      expect(STANDING_ORDERS).not.toContain(gone)
+    }
   })
 
-  test('a flagged Issue says so under Checkpoint, and an unflagged one does not', () => {
-    const flagged = buildBrief({ ...input, issue: { ...input.issue, checkpoint: 'spec' } })
-    expect(flagged).toContain('## Checkpoint')
-    expect(flagged).toContain('carries the checkpoint `spec`')
-    expect(flagged).toContain('`factory issue ship` is refused until a Spec is submitted')
-    expect(flagged.indexOf('## Checkpoint')).toBeGreaterThan(flagged.indexOf('## As filed'))
-    expect(buildBrief(input)).not.toContain('## Checkpoint')
+  test('a typical brief is at most 12,000 bytes', () => {
+    const typical = {
+      ...input,
+      checks: { fast: 'make check-fast', full: 'make check', ci: true },
+      mergeGuard: true,
+      reviewer: reviewerBrief(REVIEWER_CHEAP_ROLE, { tier: 'haiku', effort: 'high' }),
+      notes: [{ at: new Date(T0), text: 'x'.repeat(2_000) }],
+      notesMore: 0,
+    }
+    expect(Buffer.byteLength(buildBrief(typical))).toBeLessThanOrEqual(12_000)
   })
 
-  test('an owner gate says the default does not apply, and a plain Spec does not mention a gate', () => {
+  test('a brief with every per-Issue part keeps its sections in this order, after the standing orders', () => {
+    const brief = buildBrief({
+      ...input,
+      issue: { ...input.issue, checkpoint: 'spec' },
+      checks: { fast: 'make check-fast', full: 'make check', ci: true },
+      mergeGuard: true,
+      signals: [{ source: 'kuma', title: 'API down', text: 'down', facts: { monitor: 'api' }, at: new Date(T0) }],
+      light: 'mechanical',
+      reviewer: reviewerBrief(REVIEWER_CHEAP_ROLE, { tier: 'haiku', effort: 'high' }),
+      movedUp: { attempt: 1, why: 'two stalls', lastWords: null },
+      previous: { attempt: 1, branch: 'factory/7-1', worktree: '/w/factory-7-1', why: 'kept', ended: null },
+      notes: [
+        { at: new Date(T0), text: 'fix the rule', fromOwner: true },
+        { at: new Date(T0), text: 'the steward says so' },
+      ],
+    })
+    expect(brief.startsWith(STANDING_ORDERS)).toBe(true)
+    expect(headings(brief)).toEqual([
+      '# Operating contract',
+      '# Verbs',
+      '# This Issue',
+      '## As filed',
+      '## Checkpoint',
+      '## Checks in this repo',
+      '## Merge guard in this repo',
+      '## The signals it was filed from',
+      '## Your seat',
+      '## Your reviewer seat',
+      '## Moved up from the light seat',
+      '## The previous attempt',
+      '## Notes from the owner, recorded before you started',
+      '## Notes recorded before you started',
+    ])
+    expect(headings(buildBrief(input))).toEqual([
+      '# Operating contract',
+      '# Verbs',
+      '# This Issue',
+      '## As filed',
+      '## Notes recorded before you started',
+    ])
+  })
+
+  test('the Checkpoint section names the checkpoint, a filed Spec names its artifact, and an unflagged Issue has none', () => {
+    const spec = buildBrief({ ...input, issue: { ...input.issue, checkpoint: 'spec' } })
     const gate = buildBrief({ ...input, issue: { ...input.issue, checkpoint: 'gate' } })
-    expect(gate).toContain('## Checkpoint')
-    expect(gate).toContain('owner gate')
-    expect(gate).toContain('The 24 hour default does not apply')
-    expect(gate).toContain('`factory issue ship` is refused until a Spec is submitted')
-    expect(buildBrief({ ...input, issue: { ...input.issue, checkpoint: 'spec' } })).not.toContain('owner gate')
+    expect(spec).toContain('`spec`')
+    expect(gate).toContain('`gate`')
+    expect(spec).not.toContain('`gate`')
+    const filed = buildBrief({ ...input, filedSpec: { artifact: 'art_9', title: 'the plan', verdict: null } })
+    expect(headings(filed)).toContain('## Checkpoint')
+    expect(filed).toContain('factory artifact show art_9')
+    expect(headings(buildBrief(input))).not.toContain('## Checkpoint')
   })
 
-  test('a project with check tiers gets a section that says fast locally and full in CI; one without gets none', () => {
+  test('the check tiers name their commands; CI or not changes the section; none, none', () => {
     const sharded = buildBrief({ ...input, checks: { fast: 'make check-fast', full: 'make check', ci: true } })
-    expect(sharded).toContain('## Checks in this repo')
-    expect(sharded).toContain('run `make check-fast` before the first push and after every change you author')
-    expect(sharded).toContain('The complete gate (`make check`) runs in CI on the pull request head')
-    expect(sharded).toContain('`make merge-guard` still demands a finished green CI run on the exact head')
-    expect(sharded).toContain('that one suite, inside a slot')
-    expect(sharded.indexOf('## Checks in this repo')).toBeGreaterThan(sharded.indexOf('## As filed'))
-    expect(sharded.startsWith(STANDING_ORDERS)).toBe(true)
+    expect(sharded).toContain('`make check-fast`')
+    expect(sharded).toContain('`make merge-guard`')
+    expect(sharded).toContain('`factory slot run -- <command>`')
     const local = buildBrief({ ...input, checks: { fast: 'make quick', full: 'make check', ci: false } })
-    expect(local).toContain('CI does not run `make check` for this repo')
-    expect(buildBrief(input)).not.toContain('## Checks in this repo')
+    expect(local).toContain('`make quick`')
+    expect(local).not.toContain('`make merge-guard`')
     expect(buildBrief({ ...input, checks: null })).toBe(buildBrief(input))
   })
 
-  test('the brief says whether the repo has make merge-guard; unknown says nothing', () => {
+  test('the merge guard section differs by whether the target exists; unknown says nothing', () => {
     const without = buildBrief({ ...input, mergeGuard: false })
-    expect(without).toContain('## Merge guard in this repo')
-    expect(without).toContain('has no `make merge-guard` target')
-    expect(without).toContain('do not look for one')
-    expect(without).toContain('`factory land` holds the same rule itself')
-    expect(without.startsWith(STANDING_ORDERS)).toBe(true)
-    expect(buildBrief({ ...input, mergeGuard: true })).toContain('has a `make merge-guard` target')
+    const withIt = buildBrief({ ...input, mergeGuard: true })
+    expect(headings(without)).toContain('## Merge guard in this repo')
+    expect(headings(withIt)).toContain('## Merge guard in this repo')
+    expect(without).not.toBe(withIt)
+    expect(without).toContain('`factory land`')
     expect(buildBrief({ ...input, mergeGuard: null })).toBe(buildBrief(input))
   })
 
-  test('the standing orders carry the ship grammar, the reads a lead cannot make and the stopped background command', () => {
-    expect(STANDING_ORDERS).toContain('each starting `met: ` or `not met: `, over 500 characters is cut')
-    expect(STANDING_ORDERS).toContain('Reads your token cannot make (403)')
-    expect(STANDING_ORDERS).toContain('`factory project plan <name>`')
-    expect(STANDING_ORDERS).toContain('if its log has no `rc=` line, run it again at once')
-  })
-
-  test('the standing orders name the friction route: a signal on software-factory, never a self-filed Issue', () => {
-    expect(STANDING_ORDERS).toContain('factory signal file --from agent:<repo> --repo software-factory')
-    expect(STANDING_ORDERS).toContain('never file that Issue yourself')
-  })
-
-  test('the landing order names factory land and stays under 600 characters', () => {
-    const order = STANDING_ORDERS.split('\n').find((line) => line.startsWith('7. Ship means land and deploy.')) ?? ''
-    expect(order).toContain('`factory land`')
-    expect(order.length).toBeLessThan(600)
-    expect(STANDING_ORDERS).not.toContain('factory merge-lock')
-    expect(STANDING_ORDERS).toContain('`factory land` refuses a range with a commit uncovered at standard or deep')
-  })
-
-  test('the standing orders list every verb in its plain flag form and say how news arrives', () => {
-    for (const form of [
-      'factory issue show <id>',
-      'factory issue close <id> --attempt <n>',
-      'factory issue defer <id> --attempt <n> --until',
-      '--after issue_5',
-      'factory issue block <id> --attempt <n>',
-      'factory issue ship <id> --attempt <n>',
-      'you type no commit',
-      'factory issue ask <id> --attempt <n>',
-      'factory artifact submit <id> --attempt <n>',
-      'factory artifact revise <artifact-id> --content @file.md',
-      'factory artifact show <artifact-id>',
-      'factory artifact annotation-reply <artifact-id> <annotation-id> --attempt <n> --disposition applied|deferred|declined --note <text>',
-      'factory errand raise <id> --attempt <n>',
-      'factory signal file --from agent:<repo>',
-    ]) {
-      expect(STANDING_ORDERS).toContain(form)
-    }
-    expect(STANDING_ORDERS).not.toContain('<id> --body')
-    // The factory finds the landed commits: the ship order names no sha.
-    const shipOrder = STANDING_ORDERS.split('\n').find((line) => line.startsWith('- Ship, '))
-    expect(shipOrder).toContain('factory issue ship <id>')
-    expect(shipOrder).not.toContain('--commit')
-    expect(shipOrder).not.toContain('<sha>')
-    expect(STANDING_ORDERS).toMatch(/arrive as notes typed into your session/)
-    expect(STANDING_ORDERS).toMatch(/verdict of changes/)
-    expect(STANDING_ORDERS).toContain('"a note from the owner"')
-  })
-
-  test("the owner's earlier notes are his word in their own section; the rest stay fenced data", () => {
+  test("the owner's earlier notes are in their own section; the rest stay in theirs", () => {
     const brief = buildBrief({
       ...input,
       notes: [
@@ -486,7 +477,7 @@ describe('the brief', () => {
     expect(data).toBeGreaterThan(owner)
     expect(brief.slice(owner, data)).toContain('fix the rule')
     expect(brief.slice(owner, data)).not.toContain('the steward says so')
-    expect(brief.slice(data)).toContain('as data')
+    expect(brief.slice(data)).toContain('the steward says so')
   })
 
   test('the signals an Issue was filed from are data in a fence, clipped', () => {
@@ -502,29 +493,19 @@ describe('the brief', () => {
         },
       ],
     })
-    expect(brief).toContain('## The signals it was filed from')
+    expect(headings(brief)).toContain('## The signals it was filed from')
     expect(brief).toContain('title: "API down"')
     expect(brief).toContain('facts: {"monitor":"api","msg":"a ``` break"}')
     expect(brief).toContain('x'.repeat(MAX_SIGNAL_TEXT_CHARS))
     expect(brief).not.toContain('x'.repeat(MAX_SIGNAL_TEXT_CHARS + 1))
     expect(brief).toContain('````\nsource: kuma')
-    expect(buildBrief(input)).not.toContain('The signals it was filed from')
-  })
-
-  test('uses the language, never the retired words, and names the review rule', () => {
-    expect(STANDING_ORDERS).toMatch(/Decision/)
-    expect(STANDING_ORDERS).toMatch(/Errand/)
-    expect(STANDING_ORDERS).toMatch(/recommendation or default is to keep waiting is refused/)
-    expect(STANDING_ORDERS).toMatch(/Watch/)
-    expect(STANDING_ORDERS).toMatch(/once per ship range, standard or deep/)
-    expect(STANDING_ORDERS).toMatch(/never refuses a ship/)
-    expect(STANDING_ORDERS).toMatch(/`factory land` refuses a range with a commit uncovered/)
+    expect(headings(buildBrief(input))).not.toContain('## The signals it was filed from')
   })
 
   test('outside text is data in a fence longer than any backtick run inside', () => {
     const brief = buildBrief(input)
     expect(brief).toContain(`attempt 2 of Issue 7`)
-    expect(brief).toContain('3 more')
+    expect(brief).toContain('`factory issue show issue_7`')
     // The title holds a run of three backticks, the note a run of four: each fence is one longer than its text's longest run.
     expect(brief).toContain('````\ntitle: ')
     expect(brief).toContain('`````\n- 2026-11-07T10:00:00.000Z: ')
@@ -533,7 +514,7 @@ describe('the brief', () => {
   })
 
   test('the previous attempt appears only when it left work behind', () => {
-    expect(buildBrief(input)).not.toContain('previous attempt')
+    expect(buildBrief(input)).not.toContain('## The previous attempt')
     const brief = buildBrief({
       ...input,
       previous: {
@@ -544,7 +525,7 @@ describe('the brief', () => {
         ended: 'its terminal was lost',
       },
     })
-    expect(brief).toContain('The previous attempt')
+    expect(brief).toContain('## The previous attempt')
     expect(brief).toContain('"/w/factory-7-1"')
   })
 

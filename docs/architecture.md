@@ -599,7 +599,7 @@ pushed run is not still going in a MacBook terminal and did not already exit 0 (
 ends the run); while he is away it is one, never pushed first, else pushed longest ago, none within 6 hours. A lead's `errand raise --check <cmd>`
 stores the check on its Errand, so anything a machine can observe closes itself (the lead runs it now with `factory errand check <id>`, `POST /v1/errands/:id/check`: `app/checkpoints-check.ts`, the same `runCheck` and `resolveErrand` as the pass; `factory issue show` lists the Issue's Errands with `lastCheckedAt`, `checkNote` and `nextCheckAt`, six hours after the last pass at the latest), and `--cmd <command> --host macbook` (the MacBook when a command is given alone) stores what the owner runs, which is what makes
 "approve the queued dialog" pushable. An Errand raised with no command while the same lead (`FACTORY_SESSION` `lead-<issue>-<attempt>`) has an unanswered `ask-human.sh` queue file (`adapters/checkpoints/queued-asks.ts`, in the queue directory under `$XDG_STATE_HOME`)
-is refused with the verb to use, so the factory holds the one list; the brief says the same.
+is refused with the verb to use, so the factory holds the one list; `factory errand raise --help` says the same.
 
 **A request is an Errand no Issue raised** (`app/checkpoints.ts` `requestErrand`, `domains/checkpoints/request.ts`, `POST /v1/errands/requests`,
 `factory errand request`; callers owner, orchestrator and agent). `errands.issue_id` is null, there is no `errand_raised`
@@ -740,7 +740,7 @@ back, and the page believes only its own frame's well-formed messages. Templates
 **The Spec checkpoint** (issue 725). The owner wants few asks and the essential ones: an architecture or look-and-feel choice that
 later Issues build on, a new public surface, a data model or migration of meaning, a dependency of weight, a UI screen he has
 not seen. Those are a one-page Spec, never a Decision (order 2 and 3 of the standing orders, `domains/leads/brief.ts`; the
-brief test pins the wording). Three parts:
+full rules are the help of `factory artifact submit` and `factory issue ask`, `apps/cli/src/filing.ts`). Three parts:
 
 - *The flag.* `checkpoint: spec` on a plan row, `factory issue new --checkpoint spec` or the `filed` event (`filed.checkpoint`,
   kept on the Issue as `checkpoint`; old events carry none). The filer sets it, and so may triage: a settle answer's optional
@@ -766,7 +766,7 @@ brief test pins the wording). Three parts:
   (`refuseNoOpDefault`, `domains/checkpoints/decision.ts`: "Keep waiting", "Wait for review", "Do nothing", "Hold") with
   422 `invalid_request` naming `factory errand raise`: what it waits for is a person's chore (approve a PR, rotate a key,
   click in a UI), and a chore is an Errand. The steward's asks are exempt: a hold is a real answer to a stall. Order 2 of the
-  brief says the same.
+  brief and `factory issue ask --help` say the same.
 - *Taste.* The owner's verdict notes and annotations are the one signal of what he likes. `factory retro` carries them as
   `taste` (`read/retro-taste.ts`: his own verdicts with a note or a `with_notes`/`changes`, never the factory's defaults, and
   his annotations, each with artifact, repo and Issue; words dropped for the read token), and `verdict_changes_share` (his

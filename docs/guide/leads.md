@@ -43,22 +43,21 @@ The drawing follows one attempt in order, as issue_1809 took it, plus the note a
 The brief is what the factory types into a lead first: the operating contract, then the Issue as filed.
 
 - **The contract is one constant.** `STANDING_ORDERS` is byte-identical in every brief, so the prompt cache can serve it. A test pins that every brief starts with it. Nothing in it names an Issue, a project or a path.
-- **Nine orders, then verbs.** The orders say who owns what and when to stop. A verb list gives the exact command for each report.
+- **Nine orders, then verbs.** The orders say who owns what and when to stop, one line each. A verb list gives the command for each report, one line each.
+- **A rule about one verb lives in that verb's help.** What a Spec page holds, how a Decision is built and settled, what an Errand may ask for, how a verdict and its annotations are answered, how `--review` waits and how a ship states its acceptance: `factory artifact submit|revise|annotation-reply --help`, `factory issue ask|defer|ship --help`, `factory decision take-default --help`, `factory errand raise --help` (`apps/cli/src/filing.ts`). The brief points there; how to wait and the host's shell traps are in the global CLAUDE.md every account loads. A test holds a typical brief at 12,000 bytes and pins its sections and commands, not its phrases.
 - **Notes are data.** Only a note introduced as "a note from the owner" is an instruction. Alert text, logs and history never are.
 - **Every stop reports.** A lead ends a turn with a verb or keeps working.
 
 Two orders carry the shipping rules. Order 6 on review, as the lead reads it:
 
 ```text
-Review your own change once per ship range, standard or deep, with /review, before you land it: `/review <merge-base>..HEAD --thread factory-<issue number>` …
-`factory land` refuses a range with a commit uncovered at standard or deep and prints the /review command to run …
-The factory never runs or repeats a review and never refuses a ship for one; ships without a review are counted as friction.
+Review your own change once per ship range, standard or deep, before you land it: `/review <merge-base>..HEAD --thread factory-<issue number>`. `factory land` refuses a range with a commit uncovered at standard or deep and prints the /review command to run …
 ```
 
 Order 7 on shipping:
 
 ```text
-Ship means land and deploy. … Then run `factory land` in the background with its exit code written out, and end the turn: it takes the merge window, rebases, checks the review, pushes, waits for CI, runs the merge guard and merges. A refusal names the step and the next command; running it again resumes. …
+Ship means land and deploy. … Then run `factory land` in the background with its exit code written out (`; echo rc=$?`) and end the turn: it takes the merge window, rebases, checks the review, pushes, waits for CI, runs the merge guard and merges. A refusal names the step and the next command …
 ```
 
 The steps of `factory land` per ship mode, and what it refuses: `factory land --help` and `docs/operations.md`, section Merging.
@@ -69,7 +68,7 @@ The brief changes when a failure repeats. issue_1807 counted 12 of Issues 1640 t
 
 **Example files:**
 
-- [`brief.ts`, the standing orders](https://github.com/jkrumm/software-factory/blob/master/apps/server/src/domains/leads/brief.ts#L9-L26): the contract every lead gets, orders 1 to 9 and the "Also" rules
+- [`brief.ts`, the standing orders](https://github.com/jkrumm/software-factory/blob/master/apps/server/src/domains/leads/brief.ts#L9-L29): the contract every lead gets, orders 1 to 9 and the "Also" rules
 - [`brief.ts`, orders 6 and 7](https://github.com/jkrumm/software-factory/blob/master/apps/server/src/domains/leads/brief.ts#L18-L19): review once per range, and the merge window
 
 ## Seats
@@ -142,11 +141,11 @@ export const EXIT = {
 } as const
 ```
 
-A lead's token is the `agent` caller, which cannot read some owner routes (`factory project list`, `queue get`, `errand list`). The brief lists the replacements, such as `factory read overview`.
+A lead's token is the `agent` caller, which cannot read some owner routes (`factory project list`, `queue get`, `errand list`). With `FACTORY_SESSION` set, `factory --help` lists only the verbs it may call, such as `factory read overview`.
 
 **Example files:**
 
-- [`brief.ts`, the verb list](https://github.com/jkrumm/software-factory/blob/master/apps/server/src/domains/leads/brief.ts#L53-L72): each verb with its flags
+- [`brief.ts`, the verb list](https://github.com/jkrumm/software-factory/blob/master/apps/server/src/domains/leads/brief.ts#L31-L47): one line per verb; the flags and rules are in each verb's `--help`
 - [`exit.ts`](https://github.com/jkrumm/software-factory/blob/master/apps/cli/src/exit.ts#L5-L17): the exit-code table every caller branches on
 
 ## Hooks

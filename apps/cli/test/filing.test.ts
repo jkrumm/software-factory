@@ -200,6 +200,26 @@ describe('the filing contract', () => {
     for (const word of ['--tried', 'factory door token new', 'secrets-run']) expect(errand).toContain(word)
   })
 
+  test("the rules a lead's brief left to its verbs are in the help of each verb", async () => {
+    const help = async (...words: string[]) => (await cli([...words, '--help'])).out
+    for (const word of [
+      'one page',
+      'at most three open choices',
+      'field standard tools',
+      'hours you go on with your defaults',
+    ])
+      expect(await help('artifact', 'submit')).toContain(word)
+    for (const word of ['product direction', 'is a Spec', 'amends the open Decision', 'factory decision take-default'])
+      expect(await help('issue', 'ask')).toContain(word)
+    for (const word of ['approve or merge a pull request', 'never `op`', 'make -C <worktree> <target>'])
+      expect(await help('errand', 'raise')).toContain(word)
+    expect(await help('artifact', 'revise')).toContain('(409)')
+    expect(await help('artifact', 'annotation-reply')).toContain('refused while one is unanswered')
+    expect(await help('issue', 'defer')).toContain('every 15 minutes')
+    expect(await help('issue', 'ship')).toContain('`met: ` or `not met: `')
+    expect(await help('decision', 'take-default')).toContain('default taken')
+  })
+
   test('a 422 on issue new points to issue schema', async () => {
     answer = { status: 422, body: { error: 'facts must be an object', code: 'invalid_body' } }
     const result = await cli(['issue', 'new', '--repo', 'r', '--title', 't'])

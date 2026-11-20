@@ -57,9 +57,9 @@ test("an alert Issue's brief carries the alert's title and facts as data, and ev
 
   for (const form of [
     'factory issue show <id>',
-    'factory issue ship <id> --attempt <n>',
-    'factory artifact submit <id> --attempt <n>',
-    'factory errand raise <id> --attempt <n>',
+    'factory issue ship <id>',
+    'factory artifact submit <id>',
+    'factory errand raise <id>',
     'factory signal file --from agent:<repo>',
   ]) {
     expect(brief).toContain(form)
