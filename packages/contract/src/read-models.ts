@@ -1167,36 +1167,8 @@ export const CapacityLeadCost = z
     repo: z.string(),
     attempts: z.number().int(),
     peakMibP80: z.number().int(),
-    lastPeakMib: z.number().int(),
-    /** attempts with a physical footprint recorded (`top` answered); 0 until the first one */
-    footprintAttempts: z.number().int(),
-    /** the same figures as the RSS ones, from the summed physical footprint of the attempts that have one; null with none */
-    footprintMibP80: z.number().int().nullable(),
-    lastFootprintMib: z.number().int().nullable(),
-    /** median over those attempts of (footprint peak / RSS peak), two decimals: how much of summed RSS is not private memory */
-    footprintToRss: z.number().nullable(),
-    /**
-     * what a lead of the repo holds at rest: the median physical footprint of its process tree over the minutes of the
-     * class rows (`host_class_samples`) where no test step of that Issue ran; null with none. Read beside the learned peak.
-     */
-    restMibP50: z.number().int().nullable(),
-    /** the minutes of lead rows at rest that the median is taken over */
-    restMinutes: z.number().int(),
   })
   .meta({ id: 'CapacityLeadCost' })
-
-/** The host's readings over the shadow minutes of one kind (the aim above the live rule's slots, or not). */
-export const SlotAimMinutes = z
-  .strictObject({
-    minutes: z.number().int(),
-    /** mean swapouts, MiB per 300 s, over the minutes with a reading; null with none */
-    swapoutMbMean: z.number().nullable(),
-    /** share of the minutes with a pressure reading that were above level 1; null with none */
-    pressureAboveNormal: z.number().nullable(),
-    /** minutes at pressure level 4 */
-    critical: z.number().int(),
-  })
-  .meta({ id: 'SlotAimMinutes' })
 
 /** One repo's share of a reason kind's queued hours: the project name its Issues are stored under. */
 export const CapacityReasonRepo = z
@@ -1298,30 +1270,12 @@ export const CapacityLoopModel = z
       p50Ms: z.number().nullable(),
       p90Ms: z.number().nullable(),
       perDayP50: z.array(CapacityDay),
-      /** the 90th percentile of the day's waits: the tail the lead admission's test line steers on */
-      perDayP90: z.array(CapacityDay),
       /** the waits that were granted or given up (`factory.slot_waits`; only those after the table existed), split by what each waited for: largest total first */
       byReason: z.array(SlotWaitReason),
       byRepo: z.array(SlotWaitRepo),
     }),
-    /** MiB swapped out per day: the minute samples' swapouts (each scaled to 300 s) over five */
-    swapoutMib: CapacityTotal,
-    /** host minutes at memory pressure level 2 (warning) or 4 (critical) */
-    minutesUnderPressure: CapacityTotal,
-    /**
-     * the slot aim of `read/capacity-loop.ts` (`domains/capacity/slot-aim.ts`): the count it allows now (null before its
-     * first minute) and, over the window's `slot_shadow` minutes, the host's readings in the minutes it allowed more slots than
-     * the base against the others
-     */
-    slotAim: z.strictObject({
-      target: z.number().int().nullable(),
-      minutes: z.number().int(),
-      /** minutes the aim allowed more than the live base slots, and the minutes a caller waited in them */
-      moreSlots: SlotAimMinutes,
-      otherwise: SlotAimMinutes,
-      /** the minutes of `moreSlots` with a waiter in line: the minutes it would have helped */
-      moreSlotsWithWaiter: z.number().int(),
-    }),
+    /** the slot aim of `domains/capacity/slot-aim.ts`: the count it allows now (null before its first minute) */
+    slotAim: z.strictObject({ target: z.number().int().nullable() }),
     /** the 8 steps with the largest peak memory */
     topSteps: z.array(CapacityStep),
     /** the 8 repos whose leads take most memory (80th percentile of the newest attempts' peaks) */
@@ -1436,9 +1390,6 @@ export const LeadSplit = z.strictObject({
 })
 export type LeadSplit = z.infer<typeof LeadSplit>
 
-/** The oldest and newest row of one stored source. */
-export const ThroughputStoredSpan = z.strictObject({ from: at, to: at }).meta({ id: 'ThroughputStoredSpan' })
-
 /** One instant of the series: the leads running and the Issues queued, with the queue by reason and by repo. */
 export const ThroughputSeriesPoint = z
   .strictObject({
@@ -1459,7 +1410,7 @@ export const ThroughputSeriesPoint = z
 
 /**
  * Leads running and Issues queued over the window, a point per bucket, from the events the factory already stores: no counter
- * of its own. `queuedByReason` and `queuedByRepo` start where `queue_intervals` starts (`stored.queueIntervals`); before it
+ * of its own. `queuedByReason` and `queuedByRepo` start where `queue_intervals` starts; before it
  * only `peakQueued` (the host's minute samples) tells.
  */
 export const ThroughputSeries = z
@@ -1485,19 +1436,6 @@ export const ThroughputModel = z
     /** the counting epoch; null where none is configured */
     epoch: ThroughputEpoch.nullable(),
     answers: ThroughputAnswers,
-    /**
-     * What is stored, whatever the window or the epoch: the oldest and newest row of each source the reads draw on, so a
-     * window cut short by the epoch can say which earlier data still exists (rows before the epoch stay until retention
-     * removes them). A source with no row is null.
-     */
-    stored: z.strictObject({
-      hostSamples: ThroughputStoredSpan.nullable(),
-      hostClassSamples: ThroughputStoredSpan.nullable(),
-      queueIntervals: ThroughputStoredSpan.nullable(),
-      leadAttempts: ThroughputStoredSpan.nullable(),
-      stepCosts: ThroughputStoredSpan.nullable(),
-      mergeWindows: ThroughputStoredSpan.nullable(),
-    }),
     series: ThroughputSeries,
     host: z.strictObject({
       /** snapshot minutes in the window: the distinct minutes with class rows; the divisor of every mean below */

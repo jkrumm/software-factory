@@ -186,10 +186,6 @@ export async function readCapacityLoop(
       SELECT to_char(at AT TIME ZONE 'UTC', 'YYYY-MM-DD') AS day,
         percentile_cont(0.5) WITHIN GROUP (ORDER BY wait_ms)::float8 AS v
       FROM factory.step_costs WHERE at >= ${w.from} AND at < ${w.to} GROUP BY 1`
-    const waitDayP90: unknown[] = await tx`
-      SELECT to_char(at AT TIME ZONE 'UTC', 'YYYY-MM-DD') AS day,
-        percentile_cont(0.9) WITHIN GROUP (ORDER BY wait_ms)::float8 AS v
-      FROM factory.step_costs WHERE at >= ${w.from} AND at < ${w.to} GROUP BY 1`
     const leadsDay: unknown[] = await tx`
       SELECT to_char(at AT TIME ZONE 'UTC', 'YYYY-MM-DD') AS day, avg(leads)::float8 AS v
       FROM factory.host_samples WHERE leads IS NOT NULL AND at >= ${w.from} AND at < ${w.to} GROUP BY 1`
@@ -257,18 +253,8 @@ export async function readCapacityLoop(
         .map((r) => ({ repo: r.repo, ...statsOf(r), byReason: byTotal(reasonsByRepo.get(r.repo) ?? []) })),
     )
 
-    // MiB per minute: a sample's figure is that minute's delta scaled to 300 s
-    const swapDay: unknown[] = await tx`
-      SELECT to_char(at AT TIME ZONE 'UTC', 'YYYY-MM-DD') AS day, sum(swapout_mb_per_300s)::float8 / 5 AS v
-      FROM factory.host_samples WHERE at >= ${w.from} AND at < ${w.to} GROUP BY 1`
-    const swap = await total(tx`
-      SELECT sum(swapout_mb_per_300s)::float8 / 5 AS v FROM factory.host_samples WHERE at >= ${w.from} AND at < ${w.to}`)
-    const pressureDay: unknown[] = await tx`
-      SELECT to_char(at AT TIME ZONE 'UTC', 'YYYY-MM-DD') AS day, count(*) AS v
-      FROM factory.host_samples WHERE pressure_level >= 2 AND at >= ${w.from} AND at < ${w.to} GROUP BY 1`
-    const pressured = await total(tx`
-      SELECT count(*) AS v FROM factory.host_samples
-      WHERE pressure_level >= 2 AND at >= ${w.from} AND at < ${w.to}`)
+    const [aimNow] = await tx`SELECT target FROM factory.slot_aim WHERE id = 1`
+    const slotAim = { target: aimNow ? z.object({ target: z.coerce.number().int() }).parse(aimNow).target : null }
 
     const steps: unknown[] = await tx`
       SELECT name, count(*) AS runs, max(peak_rss_mib) AS max_peak,
@@ -289,37 +275,6 @@ export async function readCapacityLoop(
       SELECT comm, session, reason, at FROM factory.reaped_processes
       WHERE signal IN ('SIGTERM', 'SIGKILL') AND at >= ${w.from} AND at < ${w.to}
       ORDER BY at DESC, pid DESC LIMIT ${NEWEST_REAPED}`
-
-    const aimMinutes = (row: Record<string, unknown>, prefix: string) => ({
-      minutes: Number(row[`${prefix}_minutes`] ?? 0),
-      swapoutMbMean: row[`${prefix}_swapout`] === null ? null : Number(row[`${prefix}_swapout`]),
-      pressureAboveNormal: row[`${prefix}_pressure`] === null ? null : Number(row[`${prefix}_pressure`]),
-      critical: Number(row[`${prefix}_critical`] ?? 0),
-    })
-    const [aimRow] = await tx`
-      SELECT
-        count(*) AS minutes,
-        count(*) FILTER (WHERE aim_slots > live_slots AND waiters > 0) AS more_waiting,
-        count(*) FILTER (WHERE aim_slots > live_slots) AS more_minutes,
-        avg(swapout_mb_per_300s) FILTER (WHERE aim_slots > live_slots)::float8 AS more_swapout,
-        (count(*) FILTER (WHERE aim_slots > live_slots AND pressure_level > 1))::float8
-          / nullif(count(*) FILTER (WHERE aim_slots > live_slots AND pressure_level IS NOT NULL), 0) AS more_pressure,
-        count(*) FILTER (WHERE aim_slots > live_slots AND pressure_level = 4) AS more_critical,
-        count(*) FILTER (WHERE aim_slots <= live_slots) AS other_minutes,
-        avg(swapout_mb_per_300s) FILTER (WHERE aim_slots <= live_slots)::float8 AS other_swapout,
-        (count(*) FILTER (WHERE aim_slots <= live_slots AND pressure_level > 1))::float8
-          / nullif(count(*) FILTER (WHERE aim_slots <= live_slots AND pressure_level IS NOT NULL), 0) AS other_pressure,
-        count(*) FILTER (WHERE aim_slots <= live_slots AND pressure_level = 4) AS other_critical
-      FROM factory.slot_shadow WHERE at >= ${w.from} AND at < ${w.to}`
-    const [aimNow] = await tx`SELECT target FROM factory.slot_aim WHERE id = 1`
-    const aim = (aimRow ?? {}) as Record<string, unknown>
-    const slotAim = {
-      target: aimNow ? z.object({ target: z.coerce.number().int() }).parse(aimNow).target : null,
-      minutes: Number(aim.minutes ?? 0),
-      moreSlots: aimMinutes(aim, 'more'),
-      otherwise: aimMinutes(aim, 'other'),
-      moreSlotsWithWaiter: Number(aim.more_waiting ?? 0),
-    }
 
     const Step = z.object({
       name: z.string(),
@@ -350,12 +305,9 @@ export async function readCapacityLoop(
         p50Ms: waitRow.p50,
         p90Ms: waitRow.p90,
         perDayP50: perDay(waitDay, null),
-        perDayP90: perDay(waitDayP90, null),
         byReason: byReasonAll,
         byRepo: byRepoAll,
       },
-      swapoutMib: { total: swap, perDay: perDay(swapDay, 0) },
-      minutesUnderPressure: { total: pressured, perDay: perDay(pressureDay, 0) },
       topSteps: steps.map((raw) => {
         const s = Step.parse(raw)
         return {

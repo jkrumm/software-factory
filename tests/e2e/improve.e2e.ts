@@ -1,28 +1,18 @@
 import {
-  CAPACITY_HINT,
   comparisonWords,
-  constantRows,
   drawsHistory,
   FIX_HINT,
   fixCard,
-  fixClassRows,
-  fixWeeksOldestFirst,
-  fixWeekTotals,
   formatKpi,
   frictionRanking,
   groupKpis,
   historyLabels,
-  hoursWords,
   kpiChange,
   KPI_HINT,
   kpiFooter,
   MEANING,
-  mibWords,
-  msWords,
   partRows,
-  perDayWords,
   SEAT_LABEL,
-  shortDate,
   subWords,
   targetTally,
   tripwireWords,
@@ -31,7 +21,7 @@ import {
   deliveryRows,
   windowWords,
 } from '../../apps/console/src/lib/improve.ts'
-import type { CapacityLoopModel, Kpi, KpiModel, SeatsModel } from '@software-factory/contract'
+import type { FixCommitsModel, Kpi, KpiModel, SeatsModel } from '@software-factory/contract'
 import type { Locator, Page } from '@playwright/test'
 import { expect, test } from './fixtures.ts'
 import { expectHint } from './hints.ts'
@@ -41,7 +31,6 @@ interface FrictionModel {
   days: number
   counts: { key: string; label: string; count: number; perIssue: number | null; previous: number | null }[]
 }
-type FixModel = Parameters<typeof fixClassRows>[0] & { measured: boolean }
 
 /** The seven KPIs; the fix-commit card follows them. */
 const CARD_ORDER = [
@@ -309,7 +298,7 @@ test('the fix-commit card reads the API: the newest week, the change, the legend
   page,
   apiUrl,
 }) => {
-  const model = await api<FixModel>(apiUrl, '/v1/fix-commits')
+  const model = await api<FixCommitsModel>(apiUrl, '/v1/fix-commits')
   expect(model.measured).toBe(true)
   const card = fixCard(model)
   await page.goto('/improve')
@@ -333,97 +322,6 @@ test('the fix-commit card reads the API: the newest week, the change, the legend
   await chart.focus()
   const newest = card.weeks.at(-1)
   await expect(chart.getByRole('status')).toContainText(`Week to ${newest?.label}`)
-})
-
-test('fix commits by class read what the API says, the weeks oldest first, with a total row', async ({
-  page,
-  apiUrl,
-}) => {
-  const model = await api<FixModel>(apiUrl, '/v1/fix-commits')
-  expect(model.measured).toBe(true)
-  await page.goto('/improve')
-  const region = page.getByRole('region', { name: 'Fix commits by class' })
-  await expect(region.getByRole('heading', { name: /^Fix commits by class/, level: 3 })).toBeVisible()
-  const table = region.getByRole('table')
-  const head = table.getByRole('columnheader')
-  await expect(head).toHaveText(['Class', ...fixWeeksOldestFirst(model).map((week) => shortDate(week.to))])
-  for (const row of fixClassRows(model)) {
-    const line = table.getByRole('row').filter({ has: page.getByRole('rowheader', { name: row.key, exact: true }) })
-    await expect(line.getByRole('cell')).toHaveText(row.counts.map(String))
-  }
-  const total = table.getByRole('row').filter({ has: page.getByRole('rowheader', { name: 'Total' }) })
-  await expect(total.getByRole('cell')).toHaveText(fixWeekTotals(model).map(String))
-})
-
-test('the capacity section reads what the API computed: cards, steps, lead costs, the reaper and the settings', async ({
-  page,
-  apiUrl,
-}) => {
-  const model = await api<CapacityLoopModel>(apiUrl, '/v1/capacity-loop?days=7')
-  // the seed's figures, so a read that drifted from the rows fails here and not only against itself
-  expect(model.minutesOverCeiling.total).toBe(2)
-  expect(model.idleSeatHours.total).toBeCloseTo(2, 9)
-  expect(model.slotWait.n).toBe(6)
-  expect(model.slotWait.p50Ms).toBeCloseTo(2000, 6)
-  expect(model.slotWait.p90Ms).toBeCloseTo(55_000, 6)
-  expect(model.reaped.total).toBe(3)
-  expect(model.topSteps.map((s) => s.name)).toEqual([
-    'software-factory check',
-    'software-factory e2e',
-    'software-factory test',
-  ])
-  expect(model.leadCosts.map((l) => [l.repo, l.attempts, l.peakMibP80])).toEqual([
-    ['argo', 3, 2200],
-    ['zeta', 2, 900],
-  ])
-
-  await page.goto('/improve')
-  const section = page.getByRole('region', { name: 'Capacity' })
-  await expect(section).toBeVisible()
-  const cards = section.getByRole('group', { name: 'Capacity figures' })
-  await expect(cards.getByRole('heading')).toHaveText([
-    'Issues closed',
-    'Idle seat-hours with work ready',
-    'Minutes over the load ceiling',
-    'Test slot wait',
-  ])
-  await expect(cardOf(page, 'Issues closed').getByText(perDayWords(model.throughput.total, model.days))).toBeVisible()
-  await expect(
-    cardOf(page, 'Idle seat-hours with work ready').getByText(hoursWords(2), { exact: true }).first(),
-  ).toBeVisible()
-  await expect(cardOf(page, 'Minutes over the load ceiling').getByText('2', { exact: true }).first()).toBeVisible()
-  const wait = cardOf(page, 'Test slot wait')
-  await expect(wait.getByText(msWords(2000), { exact: true }).first()).toBeVisible()
-  await expect(wait.getByText(`Median; 90th percentile ${msWords(55_000)}`, { exact: true })).toBeVisible()
-  await expectHint(cardOf(page, 'Idle seat-hours with work ready'), CAPACITY_HINT.idle)
-  await expectHint(cardOf(page, 'Test slot wait'), CAPACITY_HINT.wait)
-
-  const steps = section.getByRole('table', { name: /Test-slot steps/ })
-  const check = steps
-    .getByRole('row')
-    .filter({ has: page.getByRole('rowheader', { name: 'software-factory check', exact: true }) })
-  const top = model.topSteps[0]
-  if (!top) throw new Error('no step in the API answer')
-  await expect(check.getByRole('cell')).toHaveText([
-    String(top.runs),
-    mibWords(top.maxPeakMib),
-    mibWords(top.p80PeakMib),
-    msWords(top.medianDurationMs),
-    msWords(top.medianWaitMs),
-  ])
-  const costs = section.getByRole('table', { name: /Memory a lead takes/ })
-  const argo = costs.getByRole('row').filter({ has: page.getByRole('rowheader', { name: 'argo', exact: true }) })
-  // argo's footprints are 60 % of its RSS; zeta has none recorded yet
-  await expect(argo.getByRole('cell')).toHaveText(['3', mibWords(2200), mibWords(1800), mibWords(1320), '60 %'])
-  const zeta = costs.getByRole('row').filter({ has: page.getByRole('rowheader', { name: 'zeta', exact: true }) })
-  await expect(zeta.getByRole('cell')).toHaveText(['2', mibWords(900), mibWords(900), 'none yet', 'none yet'])
-
-  await expect(section.getByText(/^3 processes of closed attempts ended by the/)).toBeVisible()
-  await expectHint(section, CAPACITY_HINT.reaped)
-  const settings = section.getByLabel('Settings in force')
-  const rows = constantRows(model.constants)
-  await expect(settings.locator('dt')).toHaveText(rows.map((r) => r.label))
-  await expect(settings.locator('dd')).toHaveText(rows.map((r) => r.value))
 })
 
 test('the queue wait card names what the wait is made of, largest first, from the same figures the API gives', async ({

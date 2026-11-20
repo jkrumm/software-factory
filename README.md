@@ -725,7 +725,7 @@ The Console is the owner's window: a React PWA the server itself serves. Every s
 
 **Improve** holds the KPIs against their targets in 7-day windows. **Throughput** shows where the host's memory and the leads' hours go. **Accounts** answers, per Claude Code subscription, whether it will be full at its reset, and sets a mode with its expiry.
 
-More screens: [a project page](docs/demo/project.png), [an artifact](docs/demo/artifact.png), [Throughput](docs/demo/throughput.png), and the same on a phone ([Needs you](docs/demo/phone-needs-you.png), [Overview](docs/demo/phone-overview.png)).
+More screens: [a project page](docs/demo/project.png), [an artifact](docs/demo/artifact.png), [Improve](docs/demo/improve.png), [Throughput](docs/demo/throughput.png), and the same on a phone ([Needs you](docs/demo/phone-needs-you.png), [Overview](docs/demo/phone-overview.png)).
 
 
 ## Layout

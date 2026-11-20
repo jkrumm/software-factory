@@ -384,9 +384,7 @@ describe('GET /v1/capacity-loop figures', () => {
          (SELECT count(DISTINCT worktree) FROM factory.lead_samples WHERE repo = r.repo) AS attempts,
          (SELECT array_agg(p ORDER BY p) FROM (
             SELECT max(rss_mib) AS p FROM factory.lead_samples WHERE repo = r.repo
-            GROUP BY worktree ORDER BY max(at) DESC, worktree LIMIT 10) k) AS sorted,
-         (SELECT max(rss_mib) FROM factory.lead_samples WHERE repo = r.repo
-            AND worktree = (SELECT worktree FROM factory.lead_samples WHERE repo = r.repo ORDER BY at DESC, worktree LIMIT 1)) AS last_peak
+            GROUP BY worktree ORDER BY max(at) DESC, worktree LIMIT 10) k) AS sorted
        FROM (SELECT DISTINCT repo FROM factory.lead_samples) r`,
     )
     const expectedLeads = leadRows
@@ -396,13 +394,6 @@ describe('GET /v1/capacity-loop figures', () => {
           repo: String(r.repo),
           attempts: Number(r.attempts),
           peakMibP80: sorted[Math.ceil(0.8 * sorted.length) - 1] ?? Number.NaN,
-          lastPeakMib: Number(r.last_peak),
-          footprintAttempts: 0,
-          footprintMibP80: null,
-          lastFootprintMib: null,
-          footprintToRss: null,
-          restMibP50: null,
-          restMinutes: 0,
         }
       })
       .sort((a, b) => b.peakMibP80 - a.peakMibP80 || a.repo.localeCompare(b.repo))

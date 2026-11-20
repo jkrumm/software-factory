@@ -12,10 +12,8 @@ import {
   besideWords,
   distanceWords,
   fixCard,
-  fixClassRows,
   fixWeekLabel,
   fixWeeksOldestFirst,
-  fixWeekTotals,
   formatKpi,
   historyLabels,
   historyXLabels,
@@ -165,11 +163,6 @@ test('fix commit weeks read oldest first, empty classes are left out and the tot
     ],
   }
   expect(fixWeeksOldestFirst(model).map(fixWeekLabel)).toEqual(['2026-10-18', '2026-10-25', '2026-11-01', '2026-11-08'])
-  expect(fixClassRows(model)).toEqual([
-    { key: 'tests', meaning: 'a', counts: [0, 0, 0, 1], total: 1 },
-    { key: 'logic', meaning: 'b', counts: [0, 1, 0, 2], total: 3 },
-  ])
-  expect(fixWeekTotals(model)).toEqual([0, 1, 0, 3])
 })
 
 const AT_LEAST: Kpi['target'] = { kind: 'at_least', min: 0.9, max: null }

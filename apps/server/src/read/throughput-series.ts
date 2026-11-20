@@ -10,7 +10,6 @@ const PeakRow = z.object({
   running: z.coerce.number().nullable(),
   queued: z.coerce.number().nullable(),
 })
-const SpanRow = z.object({ from: z.coerce.date().nullable(), to: z.coerce.date().nullable() })
 
 type Series = ThroughputModel['series']
 type Point = Series['points'][number]
@@ -106,27 +105,4 @@ export async function readSeries(tx: SQL, window: { from: Date; to: Date; bucket
     point.peakQueued = row.queued
   }
   return { bucketMinutes, points: [...points.values()] }
-}
-
-/** The oldest and newest row of each source the throughput reads draw on, whatever the window or the epoch. */
-export async function readStored(tx: SQL): Promise<ThroughputModel['stored']> {
-  const span = async (rows: Promise<unknown[]>) => {
-    const [row] = await rows
-    const parsed = SpanRow.parse(row)
-    return parsed.from && parsed.to ? { from: parsed.from.toISOString(), to: parsed.to.toISOString() } : null
-  }
-  return {
-    hostSamples: await span(tx`SELECT min(at) AS "from", max(at) AS "to" FROM factory.host_samples`),
-    hostClassSamples: await span(tx`SELECT min(at) AS "from", max(at) AS "to" FROM factory.host_class_samples`),
-    queueIntervals: await span(
-      tx`SELECT min(from_at) AS "from", max(coalesce(to_at, from_at)) AS "to" FROM factory.queue_intervals`,
-    ),
-    leadAttempts: await span(
-      tx`SELECT min(first_try_at) AS "from", max(first_try_at) AS "to" FROM factory.lead_attempts`,
-    ),
-    stepCosts: await span(tx`SELECT min(at) AS "from", max(at) AS "to" FROM factory.step_costs`),
-    mergeWindows: await span(
-      tx`SELECT min(requested_at) AS "from", max(requested_at) AS "to" FROM factory.merge_windows`,
-    ),
-  }
 }

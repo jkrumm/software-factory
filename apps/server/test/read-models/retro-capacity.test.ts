@@ -145,7 +145,6 @@ describe('the fixed tuning rules', () => {
         p50Ms: p90,
         p90Ms: p90,
         perDayP50: [],
-        perDayP90: [],
         byReason: [],
         byRepo: [],
       },

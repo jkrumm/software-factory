@@ -1,5 +1,4 @@
 import {
-  type CapacityLoopModel,
   type FindingClass,
   type FixCommitsModel,
   type FrictionCount,
@@ -249,29 +248,6 @@ export const fixWeeksOldestFirst = (model: Pick<FixCommitsModel, 'weeks'>): FixC
 
 /** A week's column heading: the day its window ends. */
 export const fixWeekLabel = (week: Pick<FixCommitsModel['weeks'][number], 'to'>): string => week.to.slice(0, 10)
-
-export interface FixClassRow {
-  key: string
-  meaning: string
-  /** per week, the oldest first */
-  counts: number[]
-  total: number
-}
-
-/** One row per class with a fix commit in any of the weeks, in the API's class order; a class with none is left out. */
-export function fixClassRows(model: Pick<FixCommitsModel, 'classes' | 'weeks'>): FixClassRow[] {
-  const weeks = [...model.weeks].reverse()
-  return model.classes
-    .map((c) => {
-      const counts = weeks.map((w) => w.byClass[c.key] ?? 0)
-      return { key: c.key, meaning: c.meaning, counts, total: counts.reduce((a, b) => a + b, 0) }
-    })
-    .filter((row) => row.total > 0)
-}
-
-/** The total row: fix commits per week, the oldest first. */
-export const fixWeekTotals = (model: Pick<FixCommitsModel, 'weeks'>): number[] =>
-  [...model.weeks].reverse().map((w) => w.total)
 
 // ---- the KPI cards: distance to the target, change against the window before, the history as a chart ---------------------
 
@@ -574,26 +550,11 @@ export function fixCard(model: Pick<FixCommitsModel, 'classes' | 'weeks'>): FixC
   }
 }
 
-// ---- the capacity section: what the capacity loop did, all figures computed by the API -------------------------------------
-
-/** The domain word each capacity card's title carries an InfoHint for. */
-export const CAPACITY_HINT = {
-  throughput: 'issue',
-  idle: 'seat',
-  wait: 'test slot',
-  reaped: 'reaper',
-} as const satisfies Record<string, InfoWord>
+// ---- words the seat tables and the Overview share ------------------------------------------------------------
 
 /** A wait or duration: milliseconds under a second, else the KPI duration words. */
-export const msWords = (ms: number | null): string =>
+const msWords = (ms: number | null): string =>
   ms === null ? '–' : ms < 1000 ? `${Math.round(ms)} ms` : formatValue('ms', ms)
-
-/** Memory: MiB under a GiB, else GiB with one decimal. */
-export const mibWords = (mib: number): string =>
-  mib < 1024 ? `${Math.round(mib)} MiB` : `${(mib / 1024).toFixed(1)} GiB`
-
-/** Hours with one decimal. */
-export const hoursWords = (hours: number): string => `${hours.toFixed(1)} h`
 
 const QUEUE_REASON_WORDS: Record<string, string> = {
   memory: 'Host memory',
@@ -617,54 +578,6 @@ const QUEUE_REASON_WORDS: Record<string, string> = {
 
 /** A queue reason kind in words; a kind the Console does not know reads as itself. */
 export const queueReasonWords = (kind: string): string => QUEUE_REASON_WORDS[kind] ?? kind
-
-const EDGE_SOURCE_WORDS: Record<string, string> = { triage: 'Triage', queue: 'Queue loop' }
-
-/** Who added an `after` edge, in words; a source the Console does not know reads as itself. */
-export const edgeSourceWords = (source: string): string => EDGE_SOURCE_WORDS[source] ?? source
-
-/** Per-day points as a chart reads them: the values (a null is a gap) and the tooltip lines. */
-export const dayValues = (points: CapacityLoopModel['throughput']['perDay']): (number | null)[] =>
-  points.map((p) => p.value)
-export const dayLabels = (points: CapacityLoopModel['throughput']['perDay']): string[] =>
-  points.map((p) => shortDate(p.day))
-
-/** Start, what a point is, end: the three x labels of a per-day chart. */
-export function dayXLabels(points: CapacityLoopModel['throughput']['perDay']): [string, string, string] {
-  const first = points[0]
-  const last = points.at(-1)
-  return [first ? shortDate(first.day) : '', 'UTC days', last ? shortDate(last.day) : '']
-}
-
-/** Issues closed per day over the window, one decimal. */
-export const perDayWords = (total: number, days: number): string => `${(total / days).toFixed(1)} per day`
-
-/** "2026-11-05 09:01" from an ISO time (UTC, as the API says it). */
-export const stampWords = (iso: string): string => iso.slice(0, 16).replace('T', ' ')
-
-/** "2, iu 20, me 10": the cap of an account that has no cap of its own, then each one that has. */
-export const leadsWords = (constants: CapacityLoopModel['constants']): string =>
-  [
-    String(constants.leadsPerAccount),
-    ...Object.entries(constants.accountLeads).map(([name, cap]) => `${name} ${cap}`),
-  ].join(', ')
-
-/** The settings in force, in the order the retro reads them, each with its words. */
-export function constantRows(
-  constants: CapacityLoopModel['constants'],
-): { key: string; label: string; value: string }[] {
-  return [
-    { key: 'leadsPerAccount', label: 'Leads per account', value: leadsWords(constants) },
-    { key: 'seatsMaxBonus', label: 'Seat bonus at most', value: String(constants.seatsMaxBonus) },
-    { key: 'loadCeiling', label: 'Load ceiling', value: String(constants.loadCeiling) },
-    { key: 'slots', label: 'Test slots', value: String(constants.slots) },
-    { key: 'slotsMax', label: 'Test slots at most', value: String(constants.slotsMax) },
-    { key: 'slotExtraLoad', label: 'Extra slot below load', value: String(constants.slotExtraLoad) },
-    { key: 'swapoutCeilingMb', label: 'Swapout ceiling', value: `${constants.swapoutCeilingMb} MiB per 5 min` },
-    { key: 'swapCeilingPct', label: 'Swap in use ceiling', value: `${constants.swapCeilingPct} % of RAM` },
-    { key: 'reaperGraceMs', label: 'Reaper grace', value: msWords(constants.reaperGraceMs) },
-  ]
-}
 
 /** The seat rows of the "By seat" table, in the words the Console shows. */
 export const SEAT_LABEL: Record<SeatKpiRow['seat'], string> = { light: 'Light', lead: 'Lead', filed: 'Filed seat' }
