@@ -489,8 +489,8 @@ production stalls, a result cache keyed by the tree, a browser in the factory's 
 ## Quality
 
 - **Ship** (`app/quality-ship.ts`, `domains/quality/gate.ts`): the lead names merged commits, or none: then the factory
-  finds what the Issue's branches landed (`Commits.landed`: each attempt's branch, newest first, its own first-parent
-  commits since its cut that are on the default branch, else the first default-branch commit that holds every file the
+  finds what the Issue's branches landed (`Commits.landed`: each attempt's branch, newest first, the commits its reflog
+  shows were made on it since its cut that are on the default branch, else the first default-branch commit that holds every file the
   branch changed as the branch has it, a squash or a rebase). Either way git must find them on the default branch and
   newer than the Issue's cut (its first attempt's, so a later attempt ships what an earlier one landed), read by the
   factory, never taken from the lead. Without that the ship is refused with the error named and

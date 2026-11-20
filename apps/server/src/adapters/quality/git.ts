@@ -176,7 +176,8 @@ export class GitCommits implements Commits {
    * has. A branch's own commits since its cut that are on the base count as they are (a merge or a fast-forward kept
    * them); where none is, the first commit of the base's first-parent line since the branch forked that holds every file
    * the branch changed as the branch has it (a squash or a rebase rewrote them). A branch whose local ref is gone is read
-   * from the remote's copy, by content only: without its reflog its own commits cannot be told from what it was rebased onto.
+   * from the remote's copy, by content only and only where the base does not hold it: without its reflog its own commits
+   * cannot be told from what it was rebased onto or took in.
    */
   async landed(input: Parameters<Commits['landed']>[0]): Promise<Result<LandedRead>> {
     try {
@@ -207,12 +208,10 @@ export class GitCommits implements Commits {
       const isLocal = (await git(['rev-parse', '-q', '--verify', local])).exitCode === 0
       const ref = isLocal ? local : (await git(['rev-parse', '-q', '--verify', remote])).exitCode === 0 ? remote : null
       if (!ref) continue
-      if (isLocal) {
-        // A default branch merged into the branch hangs off its second parents: those commits are on the base and not the lead's.
-        const line = await git(['rev-list', '--first-parent', `${cut}..${local}`])
-        if (line.exitCode !== 0) throw new Error(`git rev-list failed (exit ${line.exitCode})`)
-        const firstParent = new Set(lines(line.stdout))
-        const own = (await this.branchCommits(repo, branch, cut)).filter((sha) => firstParent.has(sha))
+      // Only what the branch's reflog shows was made on it is the lead's: a default branch merged, pulled or
+      // fast-forwarded into the branch is on the base and someone else's. A reflog that cannot say leaves content only.
+      const own = isLocal ? await this.madeOn(repo, local, cut) : undefined
+      if (own) {
         if (own.length === 0) continue
         held = true
         const onBase: string[] = []
@@ -221,11 +220,14 @@ export class GitCommits implements Commits {
         }
         if (onBase.length > 0) return { commits: onBase.reverse(), held, base }
       } else {
+        // Without the reflog, a copy the base already holds cannot tell the lead's commits from a default branch it
+        // took in: it is left to a ship that names them.
+        if ((await git(['merge-base', '--is-ancestor', ref, base])).exitCode === 0) continue
         const ahead = await git(['rev-list', '--count', ref, '--not', cut])
         if (ahead.exitCode !== 0 || ahead.stdout.trim() === '0') continue
         held = true
       }
-      const holder = await this.holderOf(repo, ref, base, cut)
+      const holder = await this.holderOf(repo, ref, base)
       if (holder) return { commits: [holder], held, base }
     }
     return { commits: [], held, base }
@@ -235,10 +237,10 @@ export class GitCommits implements Commits {
    * The first commit of `base`'s first-parent line since `ref` forked from it at which every file `ref` changed is as
    * `ref` has it: where a squash or a rebase of the branch landed. Null where none is, or the branch changes nothing.
    */
-  private async holderOf(repo: string, ref: string, base: string, cut: string): Promise<string | null> {
+  private async holderOf(repo: string, ref: string, base: string): Promise<string | null> {
     const git = (args: string[]) => gitIn(repo, ['--literal-pathspecs', ...args], this.options)
-    const merged = (await git(['merge-base', '--is-ancestor', ref, base])).exitCode === 0
-    const fork = merged ? cut : (await git(['merge-base', base, ref])).stdout.trim()
+    // Called only for a branch the base does not hold: what it changed since the fork is its own.
+    const fork = (await git(['merge-base', base, ref])).stdout.trim()
     if (!fork) return null
     const changed = await git(['-c', 'core.quotePath=false', 'diff', '--no-renames', '--name-only', '-z', fork, ref])
     if (changed.exitCode !== 0) throw new Error(`git diff failed (exit ${changed.exitCode})`)
@@ -528,11 +530,27 @@ export class GitCommits implements Commits {
     return own ? all.filter((sha) => own.has(sha)) : all
   }
 
+  /**
+   * The commits of `cut..ref` its reflog shows were made on the branch (a commit, a merge, a cherry-pick; never a
+   * fast-forward), with what a rebase carried over; undefined where the reflog cannot be read. Narrower than
+   * `branchCommits`: what it cannot tell is left out, so a ship that names no commit never takes someone else's.
+   */
+  private async madeOn(repo: string, ref: string, cut: string): Promise<string[] | undefined> {
+    const listed = await gitIn(repo, ['rev-list', `${cut}..${ref}`], this.options)
+    if (listed.exitCode !== 0) throw new Error(`git rev-list failed (exit ${listed.exitCode})`)
+    const all = lines(listed.stdout)
+    if (all.length === 0) return all
+    const own = await this.ownByReflog(repo, ref, cut, all, 'made')
+    return own ? all.filter((sha) => own.has(sha)) : undefined
+  }
+
+  /** `unknown`: what a reflog with no rebase in it gives, the whole range (`all`, undefined) or what it made (`made`). */
   private async ownByReflog(
     repo: string,
     ref: string,
     cut: string,
     all: readonly string[],
+    unknown: 'all' | 'made' = 'all',
   ): Promise<Set<string> | undefined> {
     const reflog = await gitIn(repo, ['reflog', 'show', '--format=%H %gs', ref], this.options)
     if (reflog.exitCode !== 0) return undefined
@@ -546,7 +564,7 @@ export class GitCommits implements Commits {
       const onto = /\(finish\): \S+ onto ([0-9a-f]{40})\b/.exec(message)?.[1]
       if (tip && onto) rebased.push({ onto, tip })
     }
-    if (rebased.length === 0) return undefined
+    if (rebased.length === 0) return unknown === 'made' ? new Set(all.filter((sha) => made.has(sha))) : undefined
     const theirs = await gitIn(
       repo,
       ['rev-list', `${cut}..${ref}`, '--not', ...rebased.map((step) => step.onto)],

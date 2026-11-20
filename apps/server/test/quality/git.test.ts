@@ -205,6 +205,25 @@ test('landed: a branch that merged the default branch in and was squashed is the
   expect(value(await landed(repo, [{ branch: 'factory/1-1', cut }])).commits).toEqual([squashed])
 })
 
+test('landed: the default branch fast-forwarded into the branch is not the lead’s; its own commit squashed is the squash', async () => {
+  const repo = await fresh()
+  const cut = await repo.git('rev-parse', 'HEAD')
+  await repo.git('branch', '-q', 'factory/1-1')
+  await (await repo.other()).commit('theirs.ts', 'x\n', 'feat: theirs')
+  await repo.git('pull', '-q', '--ff-only', 'origin', 'master')
+  await repo.git('checkout', '-q', 'factory/1-1')
+  await repo.git('merge', '-q', '--ff-only', 'master')
+  const branches = [{ branch: 'factory/1-1', cut }]
+  // Only someone else's work so far: nothing of the lead's, so nothing is held and nothing landed.
+  expect(value(await landed(repo, branches))).toEqual({ commits: [], held: false, base: 'origin/master' })
+  await Bun.write(`${repo.path}/mine.ts`, 'm\n')
+  await repo.git('add', '-A')
+  await repo.git('commit', '-q', '-m', 'wip mine')
+  await repo.git('checkout', '-q', 'master')
+  const squashed = await squash(repo, 'factory/1-1')
+  expect(value(await landed(repo, branches)).commits).toEqual([squashed])
+})
+
 test('landed: a branch that has not landed is held work and no commit; a branch with nothing is neither', async () => {
   const repo = await fresh()
   const { cut } = await branchWith(repo, 'factory/1-1', 'u.ts')
