@@ -98,11 +98,14 @@ const MACBOOK_FACT =
 /** A request carries the command to run too; the screen sees it, the first look by rule reads the words only. */
 const screenedDetail = (errand: ErrandRecord): string | null => {
   if (errand.command === null) return errand.detail
+  const macbook = errand.host === 'macbook'
+  // the screen request holds 4000 characters (`ErrandScreenRequest`): the fact is reserved, so a long detail and command are
+  // cut for it and never push it out
+  const room = macbook ? 4000 - MACBOOK_FACT.length - 1 : 4000
   const asked = `${errand.detail ?? ''}\nCommand to run${errand.host ? ` (${errand.host})` : ''}: ${errand.command}`
     .trim()
-    .slice(0, 4000)
-  // after the cut: a long detail and command must never push the fact out of what the screen reads
-  return errand.host === 'macbook' ? `${asked}\n${MACBOOK_FACT}` : asked
+    .slice(0, room)
+  return macbook ? `${asked}\n${MACBOOK_FACT}` : asked
 }
 
 /** The Errand reaches the owner: recorded and paged (the page's key is the Errand's) in one transaction. */
