@@ -2,7 +2,7 @@
 .PHONY: help docs-check check check-fast check-steps check-fast-steps check-static guide-check accounts-bundle test test-unit test-unit-changed test-scenarios merge-guard e2e fmt deploy rollback verify version hygiene-tools
 
 help:
-	@echo "make check   install, format, lint, shellcheck, tsc, Console tsc, tokens, artifact templates and InfoHint definitions, e2e tsc, boundaries, retired words, state words on screens, public scan, Issue diagram, generated CLI, tests, scenarios, Console build and Playwright (the merge gate)"
+	@echo "make check   install, format, lint, shellcheck, tsc, Console tsc, tokens, artifact templates and InfoHint definitions, e2e tsc, dead code the change introduces (fallow audit), boundaries, retired words, state words on screens, public scan, Issue diagram, generated CLI, tests, scenarios, Console build and Playwright (the merge gate)"
 	@echo "make check-fast  the lead's local check (project.yaml checks.fast): everything of make check up to the tests, then the unit tests of the files the branch changed (CHECK_FAST_ALL=1: all of them); CI runs the full gate sharded"
 	@echo "make merge-guard  run right before merging a PR: refuses unless the branch contains origin/master, its migration numbers are free, the head's CI finished green and master's last finished CI run is not red (MERGE_GUARD_ARGS=--wait waits for the head's CI; --allow-red only for the change that fixes a red master)"
 	@echo "make docs-check  the README's counts and lists (event kinds, callers, tokens, screens, domains, states, Console port and writes) against the code; also this repo's hygiene probe \`readme\`"
@@ -74,6 +74,8 @@ check-static:
 	@bunx --no-install tsc -p tests/e2e/tsconfig.json --noEmit
 	@echo "==> shard weights name no missing test file (scripts/shard.ts --check)"
 	@bun scripts/shard.ts --check
+	@echo "==> dead code the change introduces (fallow audit, against the merge base; .fallowrc.json)"
+	@bunx --no-install fallow audit $(if $(UNIT_BASE),--base $(UNIT_BASE)) --quiet
 	@echo "==> boundaries (scripts/boundaries.ts)"
 	@bun scripts/boundaries.ts
 	@echo "==> retired words (scripts/retired-words.ts)"

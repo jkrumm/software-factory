@@ -15,7 +15,7 @@ import type { ProbeFinding } from '../../../domains/loops/hygiene-model.ts'
 const SERVICES_FILE = 'mini-services.yaml'
 
 /** The rule names of the registry (`debt: { <rule>: … }`, `exception: { <rule>: … }`); `no-healthcheck` is this probe's own. */
-export type Rule =
+type Rule =
   | 'restart-policy'
   | 'no-memory-limit'
   | 'port-binding'
@@ -26,7 +26,7 @@ export type Rule =
   | 'keepalive-poll'
 
 /** One thing a file breaks: the rule, where, the service it is about and why. */
-export interface Breach {
+interface Breach {
   rule: Rule
   file: string
   line: number
@@ -35,7 +35,7 @@ export interface Breach {
 }
 
 /** One entry of a services file: only what the rules read. */
-export interface Entry {
+interface Entry {
   name: string
   line: number
   kind: string

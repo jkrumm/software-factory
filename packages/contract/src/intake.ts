@@ -47,7 +47,6 @@ const Facts = z.unknown().default({}).refine(fitsFacts, `facts are larger than $
 
 /** The name of an automatic source: the path segment of the door's token and the key of its routes. */
 export const DoorSource = z.string().regex(/^[a-z][a-z0-9-]{0,31}$/, 'not a source name')
-export type DoorSource = z.infer<typeof DoorSource>
 
 export const SIGNAL_STATES = ['held', 'filed', 'amended', 'incident', 'promoted', 'dismissed'] as const
 export const DISMISSERS = ['owner', 'judge', 'probe'] as const
@@ -83,7 +82,6 @@ export type Signal = z.infer<typeof Signal>
 /** What receive answers (`docs/language.md`, Triage). */
 export const TRIAGE_OUTCOMES = ['filed', 'amended', 'incident', 'held', 'dropped'] as const
 export const TriageOutcome = z.enum(TRIAGE_OUTCOMES)
-export type TriageOutcome = z.infer<typeof TriageOutcome>
 
 /** Why it went that way, for the sender and the log. */
 export const TRIAGE_DETAILS = [
@@ -229,7 +227,6 @@ export const StoredSignal = z
 export type StoredSignal = z.infer<typeof StoredSignal>
 
 export const SignalList = z.object({ signals: z.array(StoredSignal) }).meta({ id: 'SignalList' })
-export type SignalList = z.infer<typeof SignalList>
 
 /** `POST /signals/{id}/promote`: the owner (or the Judge) lets a held signal become work. */
 export const PromoteRequest = z
@@ -282,7 +279,6 @@ export const DoorRouteInput = z
       }),
   })
   .meta({ id: 'DoorRouteInput' })
-export type DoorRouteInput = z.output<typeof DoorRouteInput>
 
 /** The key of a door route: what `POST /door/routes/remove` names. */
 export const DoorRouteKey = z
@@ -311,7 +307,6 @@ export const DoorRouteList = z
     ),
   })
   .meta({ id: 'DoorRouteList' })
-export type DoorRouteList = z.infer<typeof DoorRouteList>
 
 /** `POST /signals/door-reports`: what the door says about its sources, best effort. */
 export const DoorReport = z

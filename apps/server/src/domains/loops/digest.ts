@@ -8,7 +8,7 @@ import { type IssueId, issueNumber } from '../../kernel/ids.ts'
  */
 
 export { countsOf, DIGEST_WINDOW_MS, groupByProject } from '../../kernel/digest-scope.ts'
-export type { DigestCounts, DigestIssue, DigestProject, DigestState } from '../../kernel/digest-scope.ts'
+export type { DigestIssue, DigestProject } from '../../kernel/digest-scope.ts'
 
 /** The agw route the digest is made on, stored with each digest (`agw routes` maps it to a model). */
 export const DIGEST_ROUTE = 'factory.digest'

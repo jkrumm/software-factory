@@ -23,7 +23,6 @@ export const Heartbeat = z
     routeSamples: z.number().int().min(0).optional(),
   })
   .meta({ id: 'Heartbeat' })
-export type Heartbeat = z.infer<typeof Heartbeat>
 
 /** One of the door's health lines: what needs a look and is no question for the owner. They inform; they never fail the heartbeat. */
 export const HealthLine = z

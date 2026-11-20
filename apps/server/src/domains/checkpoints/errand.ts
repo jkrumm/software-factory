@@ -367,7 +367,7 @@ export function screenByReview(input: ErrandInput): { review: string; reason: st
 }
 
 /** The screen request's `detail` holds this many characters (`ErrandScreenRequest`). */
-export const SCREEN_DETAIL_MAX = 4000
+const SCREEN_DETAIL_MAX = 4000
 
 /**
  * What the screen is told about where a MacBook command runs: the mini has no way onto the MacBook (its ssh takes a fixed verb

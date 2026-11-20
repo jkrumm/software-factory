@@ -97,12 +97,10 @@ export const AskBody = z
     call: z.string().trim().min(1).max(128).optional(),
   })
   .meta({ id: 'AskBody' })
-export type AskBody = z.infer<typeof AskBody>
 
 export const AskReply = z
   .object({ result: z.enum(['applied', 'replayed', 'amended']), decision: DecisionView, issue: IssueMove })
   .meta({ id: 'AskReply' })
-export type AskReply = z.infer<typeof AskReply>
 
 export const AnswerBody = z.object({ answer: z.string().optional() }).meta({ id: 'AnswerBody' })
 
@@ -110,7 +108,6 @@ export const AnswerBody = z.object({ answer: z.string().optional() }).meta({ id:
 export const DecisionReply = z
   .object({ decision: DecisionView, issue: IssueMove.nullable() })
   .meta({ id: 'DecisionReply' })
-export type DecisionReply = z.infer<typeof DecisionReply>
 
 /** `decision take-default`: the lead settles its own open Decision with the default it named, once it built on it. */
 export const TakeDefaultBody = z.object({ attempt: z.number().int().min(1) }).meta({ id: 'TakeDefaultBody' })
@@ -118,7 +115,6 @@ export const TakeDefaultBody = z.object({ attempt: z.number().int().min(1) }).me
 export const WorthBody = z.object({ worth: z.boolean() }).meta({ id: 'WorthBody' })
 
 export const DecisionList = z.object({ decisions: z.array(DecisionView) }).meta({ id: 'DecisionList' })
-export type DecisionList = z.infer<typeof DecisionList>
 
 // -- Artifacts --------------------------------------------------------------------------------------------------------
 
@@ -268,7 +264,6 @@ export const SpecScreenView = z.object({
   tries: z.number().int(),
   at: iso,
 })
-export type SpecScreenView = z.infer<typeof SpecScreenView>
 
 /** A write on an artifact; `issue` is null when no event touched the Issue (a Report, an annotation). */
 export const ArtifactReply = z
@@ -279,7 +274,6 @@ export const ArtifactReply = z
     issue: IssueMove.nullable(),
   })
   .meta({ id: 'ArtifactReply' })
-export type ArtifactReply = z.infer<typeof ArtifactReply>
 
 const AnnotationDisposition = z.object({
   disposition: z.enum(DISPOSITIONS),
@@ -344,7 +338,6 @@ export const CollectionView = z
     openComments: z.number().int(),
   })
   .meta({ id: 'CollectionView' })
-export type CollectionView = z.infer<typeof CollectionView>
 
 export const CollectionList = z.object({ collections: z.array(CollectionView) }).meta({ id: 'CollectionList' })
 export type CollectionList = z.infer<typeof CollectionList>
@@ -353,7 +346,6 @@ export type CollectionList = z.infer<typeof CollectionList>
 export const CollectionReply = z
   .object({ result: z.enum(['applied', 'replayed']), collection: CollectionView })
   .meta({ id: 'CollectionReply' })
-export type CollectionReply = z.infer<typeof CollectionReply>
 
 /**
  * `artifact collection new`: a title, the artifacts it holds (`add`), the page that leads it (`lead`, added too) and
@@ -451,7 +443,6 @@ export const ErrandDoneBody = z
 export const ErrandTurnBackBody = z
   .object({ note: z.string().trim().min(1).max(2000) })
   .meta({ id: 'ErrandTurnBackBody' })
-export type ErrandTurnBackBody = z.infer<typeof ErrandTurnBackBody>
 
 export const ERRAND_HOSTS = ['macbook', 'iphone', 'portal', 'any'] as const
 /**
@@ -545,7 +536,6 @@ export const ErrandRequestReply = z
     superseded: z.array(z.string()),
   })
   .meta({ id: 'ErrandRequestReply' })
-export type ErrandRequestReply = z.infer<typeof ErrandRequestReply>
 
 /** What the still-needed workflow is shown: a request nobody has checked, and the facts the factory holds about it (data, never instructions). */
 export const ErrandNeededRequest = z
@@ -681,7 +671,6 @@ export type ErrandCheckReply = z.infer<typeof ErrandCheckReply>
 export const ErrandApproveReply = z
   .object({ errand: ErrandView, started: z.literal(true) })
   .meta({ id: 'ErrandApproveReply' })
-export type ErrandApproveReply = z.infer<typeof ErrandApproveReply>
 
 export const ErrandList = z.object({ errands: z.array(ErrandView) }).meta({ id: 'ErrandList' })
 export type ErrandList = z.infer<typeof ErrandList>
@@ -704,7 +693,6 @@ const PageView = z.object({
 })
 
 export const PageList = z.object({ pages: z.array(PageView) }).meta({ id: 'PageList' })
-export type PageList = z.infer<typeof PageList>
 
 /** One settle-and-page pass: what it looked at and what it sent. */
 export const PassReply = z
@@ -744,4 +732,3 @@ export const PassReply = z
     }),
   })
   .meta({ id: 'PassReply' })
-export type PassReply = z.infer<typeof PassReply>

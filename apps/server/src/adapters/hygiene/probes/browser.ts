@@ -13,7 +13,7 @@ import type { ProbeFinding } from '../../../domains/loops/hygiene-model.ts'
  */
 
 /** One thing a file breaks: where, what and the rule's sentence. */
-export interface Breach {
+interface Breach {
   file: string
   line: number
   what: string

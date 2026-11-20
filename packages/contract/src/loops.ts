@@ -36,7 +36,6 @@ export const JudgeInputWire = z.object({
     }),
   ),
 })
-export type JudgeInputWire = z.infer<typeof JudgeInputWire>
 
 export const JudgeVerdictWire = z.object({
   verdict: z.enum(['answer', 'owner']),
@@ -44,7 +43,6 @@ export const JudgeVerdictWire = z.object({
   reason: z.string(),
   source: z.string(),
 })
-export type JudgeVerdictWire = z.infer<typeof JudgeVerdictWire>
 
 // ---- factory-steward -----------------------------------------------------------------------------------------------------
 
@@ -84,7 +82,6 @@ export const StewardDecision = z.object({
     waitMinutes: z.number().int().min(1).max(10_080).nullable(),
   }),
 })
-export type StewardDecision = z.infer<typeof StewardDecision>
 
 export const StewardAnswer = z.object({
   action: z.enum(STEWARD_ACTIONS),
@@ -178,7 +175,6 @@ export const QueueIssue = z.object({
   /** the Issue's open blockers; may name an Issue that is not shown */
   after: z.array(IssueId).max(20),
 })
-export type QueueIssue = z.infer<typeof QueueIssue>
 
 export const QueueRequest = z.object({
   repo: z
@@ -350,7 +346,6 @@ export const LoopView = z
 export type LoopView = z.infer<typeof LoopView>
 
 export const LoopList = z.object({ loops: z.array(LoopView) }).meta({ id: 'LoopList' })
-export type LoopList = z.infer<typeof LoopList>
 
 export const LoopRunReply = z
   .object({
@@ -405,7 +400,6 @@ export type DigestRequest = z.infer<typeof DigestRequest>
 
 /** A digest line and the Issues it is about. */
 export const DigestBullet = z.strictObject({ text: Line, ids: z.array(IssueId).min(1).max(20) })
-export type DigestBullet = z.infer<typeof DigestBullet>
 
 /** The digest `agw factory digest` answers (its own schema is strict too; the factory checks the ids against what it sent). */
 export const DigestAnswer = z.strictObject({

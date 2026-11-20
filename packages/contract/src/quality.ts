@@ -11,7 +11,6 @@ export const QualityIssue = z
     version: z.number().int(),
   })
   .meta({ id: 'QualityIssue' })
-export type QualityIssue = z.infer<typeof QualityIssue>
 
 const Range = z.object({ base: z.string(), head: z.string() })
 
@@ -93,7 +92,6 @@ const CiEvidence = z.object({
 export const QualityEvidence = z
   .discriminatedUnion('kind', [CommitsEvidence, ReviewEvidence, AcceptanceEvidence, CiEvidence])
   .meta({ id: 'QualityEvidence' })
-export type QualityEvidence = z.infer<typeof QualityEvidence>
 
 /** `ship`: the lead lands and deploys, then ships; the server finds the merged commits unless the lead names them. The same `call` twice is one ship. */
 export const ShipBody = z
@@ -108,7 +106,6 @@ export const ShipBody = z
     acceptance: z.array(z.string().min(1).max(4000)).max(20).optional(),
   })
   .meta({ id: 'ShipBody' })
-export type ShipBody = z.infer<typeof ShipBody>
 
 export const ShipAnswer = z
   .object({
@@ -121,7 +118,6 @@ export type ShipAnswer = z.infer<typeof ShipAnswer>
 
 /** `reopen`: the owner's verb, the only way out of `closed`, within 30 days of the close. */
 export const ReopenBody = z.object({ call: z.string().min(1), reason: z.string().min(1) }).meta({ id: 'ReopenBody' })
-export type ReopenBody = z.infer<typeof ReopenBody>
 
 export const ReopenAnswer = z
   .object({ result: z.enum(['applied', 'replayed']), issue: QualityIssue })

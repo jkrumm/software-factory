@@ -221,7 +221,7 @@ function cardOf(input: {
   }
 }
 
-export interface Cards {
+interface Cards {
   cards: ReadIssueCard[]
   /** the derived attempts per Issue id, oldest first */
   leads: Map<string, LeadSession[]>

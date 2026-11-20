@@ -9,7 +9,7 @@ const YIELD_DAYS = [7, 30] as const
 type YieldLoop = (typeof YIELD_LOOPS)[number]
 
 /** One Issue a loop's signal opened or reached, with how it ended; `closedAt` and `outcome` are null while it is open. */
-export interface YieldIssue {
+interface YieldIssue {
   loop: YieldLoop
   class: string
   issue: string
@@ -19,7 +19,7 @@ export interface YieldIssue {
 }
 
 /** What a loop recorded over a window besides its Issues. `passes` is null for a loop that keeps no record of its passes. */
-export interface YieldRecord {
+interface YieldRecord {
   passes: number | null
   signals: number
 }

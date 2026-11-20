@@ -26,7 +26,6 @@ export const PlanRowStatus = z
     target: z.string().nullable(),
   })
   .meta({ id: 'PlanRowStatus' })
-export type PlanRowStatus = z.infer<typeof PlanRowStatus>
 
 /** One row of a project's plan as a lead reads it: its derived state and the words that say what the row owns. */
 export const PlanRowView = z
@@ -66,7 +65,6 @@ const FileError = z.object({ message: z.string(), sha: z.string().nullable() })
 
 /** The JSON Schema of `project.yaml` (draft-07), generated from `project-file.ts`'s schema: `GET /v1/schema/project`. */
 export const ProjectJsonSchema = z.record(z.string(), z.unknown()).meta({ id: 'ProjectJsonSchema' })
-export type ProjectJsonSchema = z.infer<typeof ProjectJsonSchema>
 
 /** A project the factory has read: its `project.yaml` in force and its plan. */
 export const ProjectView = z
@@ -102,7 +100,6 @@ export const ProjectView = z
 export type ProjectView = z.infer<typeof ProjectView>
 
 export const ProjectList = z.object({ projects: z.array(ProjectView) }).meta({ id: 'ProjectList' })
-export type ProjectList = z.infer<typeof ProjectList>
 
 export const BrokenFile = z.object({
   project: z.string(),
@@ -114,7 +111,6 @@ export const BrokenFile = z.object({
 
 /** `--fetch true` asks the remote for new commits first; absent, the default branch is read as last fetched. */
 export const FetchQuery = z.object({ fetch: z.enum(['true', 'false']).optional() })
-export type FetchQuery = z.infer<typeof FetchQuery>
 
 export const ProjectSyncAnswer = z
   .object({
@@ -140,7 +136,6 @@ export const PlanningPassAnswer = z
     errors: z.array(z.string()),
   })
   .meta({ id: 'PlanningPassAnswer' })
-export type PlanningPassAnswer = z.infer<typeof PlanningPassAnswer>
 
 export const SettleBody = z
   .object({
@@ -149,7 +144,6 @@ export const SettleBody = z
     after: z.array(IssueRef).max(MAX_AFTER_IDS).default([]),
   })
   .meta({ id: 'SettleBody' })
-export type SettleBody = z.infer<typeof SettleBody>
 
 export const SettleAnswer = z
   .object({
@@ -160,23 +154,18 @@ export const SettleAnswer = z
     state: z.string(),
   })
   .meta({ id: 'SettleAnswer' })
-export type SettleAnswer = z.infer<typeof SettleAnswer>
 
 export const AfterBody = z
   .object({ issue: IssueRef, after: z.array(IssueRef).min(1).max(MAX_AFTER_IDS) })
   .meta({ id: 'AfterBody' })
-export type AfterBody = z.infer<typeof AfterBody>
 
 export const AfterAnswer = z.object({ issue: IssueRef, edges: z.number().int() }).meta({ id: 'AfterAnswer' })
-export type AfterAnswer = z.infer<typeof AfterAnswer>
 
 export const UnafterBody = z
   .object({ issue: IssueRef, after: z.array(IssueRef).min(1).max(MAX_AFTER_IDS) })
   .meta({ id: 'UnafterBody' })
-export type UnafterBody = z.infer<typeof UnafterBody>
 
 export const UnafterAnswer = z.object({ issue: IssueRef, removed: z.number().int() }).meta({ id: 'UnafterAnswer' })
-export type UnafterAnswer = z.infer<typeof UnafterAnswer>
 
 export const PrioBody = z
   .strictObject({
@@ -185,12 +174,10 @@ export const PrioBody = z
     key: z.string().min(1).max(200).optional(),
   })
   .meta({ id: 'PrioBody' })
-export type PrioBody = z.infer<typeof PrioBody>
 
 export const PrioAnswer = z
   .object({ issue: IssueRef, value: z.number().int(), recorded: z.boolean() })
   .meta({ id: 'PrioAnswer' })
-export type PrioAnswer = z.infer<typeof PrioAnswer>
 
 export const ReplanBody = z
   .strictObject({
@@ -199,12 +186,10 @@ export const ReplanBody = z
     ask: z.string().max(2000).optional(),
   })
   .meta({ id: 'ReplanBody' })
-export type ReplanBody = z.infer<typeof ReplanBody>
 
 export const ReplanAnswer = z
   .object({ issue: IssueRef, filed: z.boolean(), existing: z.boolean() })
   .meta({ id: 'ReplanAnswer' })
-export type ReplanAnswer = z.infer<typeof ReplanAnswer>
 
 const ReplanEdgeOp = z.strictObject({
   issue: IssueRef,
@@ -235,7 +220,6 @@ export const ReplanApplyBody = z
     'give at least one of edges.add, edges.remove or cancel',
   )
   .meta({ id: 'ReplanApplyBody' })
-export type ReplanApplyBody = z.infer<typeof ReplanApplyBody>
 
 export const ReplanApplyAnswer = z
   .object({
@@ -249,4 +233,3 @@ export const ReplanApplyAnswer = z
     ),
   })
   .meta({ id: 'ReplanApplyAnswer' })
-export type ReplanApplyAnswer = z.infer<typeof ReplanApplyAnswer>

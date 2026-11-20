@@ -39,7 +39,7 @@ const Review = z.object({
   applied: z.coerce.number().int(),
   declined: z.coerce.number().int(),
 })
-export type Review = z.infer<typeof Review>
+type Review = z.infer<typeof Review>
 
 /** What became of an Issue whose ship carried recorded reviews. */
 const Outcome = z.object({
@@ -50,7 +50,7 @@ const Outcome = z.object({
   first_watch: z.string().nullable(),
   regressed: z.boolean(),
 })
-export type Outcome = z.infer<typeof Outcome>
+type Outcome = z.infer<typeof Outcome>
 
 /**
  * The reviews and the Issues of the first accepted ship of each Issue whose evidence names the reviewer seat: the review
