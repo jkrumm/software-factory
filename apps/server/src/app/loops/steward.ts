@@ -2,10 +2,13 @@ import type { StewardAnswer } from '@software-factory/contract'
 import type { Clock } from '../../kernel/clock.ts'
 import { scrub } from '../../kernel/scrub.ts'
 import { readDecisionForm } from '../../domains/checkpoints/decision.ts'
-import type { CallPolicy } from '../../domains/loops/calls.ts'
-import { checkoutOwner, judgeMainCheckout, type MainCheckoutLine } from '../../domains/loops/checkout.ts'
+import type { CallPolicy } from '../../domains/planning/calls.ts'
+import { checkoutOwner, judgeMainCheckout, type MainCheckoutLine } from '../../domains/leads/checkout.ts'
 import { type SlotRow, slotLiveIn } from '../../domains/capacity/slots.ts'
-import type { CiLive, ClaimHolder, LoopReads, LoopStore, MainCheckouts } from '../../domains/loops/ports.ts'
+import type { CiLive } from '../../domains/improve/ports.ts'
+import type { ClaimHolder } from '../../domains/planning/ports.ts'
+import type { LoopReads, LoopStore } from './stores.ts'
+import type { MainCheckouts } from '../../domains/leads/ports.ts'
 import {
   checkAnswer,
   type Checked,
@@ -27,7 +30,7 @@ import {
   type StallFacts,
   stallRequest,
   type StewardRules,
-} from '../../domains/loops/stall.ts'
+} from '../../domains/planning/stall.ts'
 import { DEFAULT_RESUME_RULES, type ResumeRules, resumePrefix, spent } from '../../domains/leads/apierror.ts'
 import { leadKey } from '../../domains/leads/names.ts'
 import type { LeadStore, Seats, Windows } from '../../domains/leads/ports.ts'

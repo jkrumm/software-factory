@@ -19,7 +19,7 @@ import { brokenLinks } from '../../src/adapters/hygiene/probes/links.ts'
 import { sections } from '../../src/adapters/hygiene/probes/context.ts'
 import { type Released, parseOutdated, severity } from '../../src/adapters/hygiene/probes/deps.ts'
 import { MAX_SIGNAL_TEXT_CHARS, signalLines } from '../../src/domains/leads/brief.ts'
-import { batchSignalText, probeSection } from '../../src/domains/loops/hygiene.ts'
+import { batchSignalText, probeSection } from '../../src/domains/hygiene/hygiene.ts'
 import { retiredScope } from '../../src/adapters/hygiene/probes/retired.ts'
 import { publishedHost } from '../../src/adapters/hygiene/probes/runrules.ts'
 import {
@@ -27,7 +27,7 @@ import {
   PROBES,
   type SkippedProbe,
   type SweepReport,
-} from '../../src/domains/loops/hygiene-model.ts'
+} from '../../src/domains/hygiene/hygiene-model.ts'
 
 const REPO_ROOT = join(import.meta.dir, '..', '..', '..', '..')
 const ID = {

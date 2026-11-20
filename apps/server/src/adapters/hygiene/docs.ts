@@ -1,4 +1,4 @@
-import { ARCHIVE_DIRS } from '../../domains/loops/hygiene-model.ts'
+import { ARCHIVE_DIRS } from '../../domains/hygiene/hygiene-model.ts'
 import { gitOut, type Tools } from './git.ts'
 
 /** Every tracked markdown file, relative to the checkout, forward slashes. */

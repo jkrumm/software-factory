@@ -33,13 +33,13 @@ export interface LoopSpec {
 }
 ```
 
-The rules of each loop live in `domains/loops/` as pure functions over counts and facts. The I/O sits in `app/loops/` and `adapters/`.
+The rules of each loop live in the domain that owns what it decides, as pure functions over counts and facts: `domains/hygiene/` (probes, findings, lifecycle, fixes, dependency refresh), `domains/improve/` (the loops that watch the factory itself), `domains/planning/` (stall, settle, the queue's edges) and `domains/leads/` (the reaper, the main checkout). The I/O sits in `app/loops/` and `adapters/`.
 
 **Example files:**
 
 - [`runner.ts`](https://github.com/jkrumm/software-factory/blob/master/apps/server/src/app/loops/runner.ts#L5-L18): the loop contract, one `run` per pass.
-- [`budget.ts`](https://github.com/jkrumm/software-factory/blob/master/apps/server/src/domains/loops/budget.ts#L1-L5): the 5-signal budget every filing loop shares; what is left out is named in the pass record.
-- [`loops/`](https://github.com/jkrumm/software-factory/tree/master/apps/server/src/domains/loops): the rules, one file per loop.
+- [`signal-budget.ts`](https://github.com/jkrumm/software-factory/blob/master/apps/server/src/kernel/signal-budget.ts#L1-L5): the 5-signal budget every filing loop shares; what is left out is named in the pass record.
+- [`hygiene/`](https://github.com/jkrumm/software-factory/tree/master/apps/server/src/domains/hygiene) and [`improve/`](https://github.com/jkrumm/software-factory/tree/master/apps/server/src/domains/improve): the rules of the filing loops, one file per loop.
 
 ## Friction
 
@@ -93,9 +93,9 @@ The lead traced the 77. 47 were one Issue looping: it asked, the Judge answered,
 **Example files:**
 
 - [`thresholds.ts`](https://github.com/jkrumm/software-factory/blob/master/packages/contract/src/thresholds.ts#L40-L121): the KPI targets and every friction rule with its minimum, its rate and the reason in one line.
-- [`friction.ts`](https://github.com/jkrumm/software-factory/blob/master/apps/server/src/domains/loops/friction.ts#L88-L108): `patternsOver`, the counts over their rule, most frequent first.
-- [`friction.ts`](https://github.com/jkrumm/software-factory/blob/master/apps/server/src/domains/loops/friction.ts#L125-L145): `kpisOffTarget`, the KPIs off their target over a whole window, each with its largest part.
-- [`friction.ts`](https://github.com/jkrumm/software-factory/blob/master/apps/server/src/domains/loops/friction.ts#L184-L205): the signal text, which names the window, the count, the threshold and how to look again.
+- [`friction.ts`](https://github.com/jkrumm/software-factory/blob/master/apps/server/src/domains/improve/friction.ts#L88-L108): `patternsOver`, the counts over their rule, most frequent first.
+- [`friction.ts`](https://github.com/jkrumm/software-factory/blob/master/apps/server/src/domains/improve/friction.ts#L125-L145): `kpisOffTarget`, the KPIs off their target over a whole window, each with its largest part.
+- [`friction.ts`](https://github.com/jkrumm/software-factory/blob/master/apps/server/src/domains/improve/friction.ts#L184-L205): the signal text, which names the window, the count, the threshold and how to look again.
 
 ## Selfwatch
 
@@ -114,7 +114,7 @@ Selfwatch looks at the factory itself every 5 minutes and files a signal for a c
 - **A run of samples, not one.** A slot line is a count over consecutive minute samples, so one busy minute files nothing.
 - **A signal's facts are hashed, its context is not.** The clock and counts go in the context, so the fingerprint stays the same while the condition does.
 
-<!-- snippet: apps/server/src/domains/loops/overload.ts SLOT_WAITERS -->
+<!-- snippet: apps/server/src/domains/improve/overload.ts SLOT_WAITERS -->
 ```ts
 /** More callers than this waiting for a test slot... */
 export const SLOT_WAITERS = 8
@@ -134,8 +134,8 @@ A lead on sonnet at high effort shipped three commits at 03:04. Of three accepta
 
 **Example files:**
 
-- [`selfwatch-model.ts`](https://github.com/jkrumm/software-factory/blob/master/apps/server/src/domains/loops/selfwatch-model.ts#L1-L16): the 12 kinds.
-- [`overload.ts`](https://github.com/jkrumm/software-factory/blob/master/apps/server/src/domains/loops/overload.ts#L69-L118): `slot_line`, with its two thresholds and its title.
+- [`selfwatch-model.ts`](https://github.com/jkrumm/software-factory/blob/master/apps/server/src/domains/improve/selfwatch-model.ts#L1-L16): the 12 kinds.
+- [`overload.ts`](https://github.com/jkrumm/software-factory/blob/master/apps/server/src/domains/improve/overload.ts#L69-L118): `slot_line`, with its two thresholds and its title.
 
 ## Hygiene
 
@@ -147,7 +147,7 @@ Hygiene is the standing check on a project's health: per-repo probes read a thro
 - **Skips state a reason.** A project skips a probe by name with a reason, and the pass shows it.
 - **Budget:** a pass files its findings as one Issue with a section each; of its 5 sections the judgment keeps 2, so probes fill at most 3.
 
-<!-- snippet: apps/server/src/domains/loops/hygiene.ts JUDGMENT_RESERVE -->
+<!-- snippet: apps/server/src/domains/hygiene/hygiene.ts JUDGMENT_RESERVE -->
 ```ts
 /** Slots the judgment keeps: the deterministic findings may take `MAX_SIGNALS_PER_PASS - JUDGMENT_RESERVE`. */
 const JUDGMENT_RESERVE = 2
@@ -165,8 +165,8 @@ A finding has a stable key per subject (`links:docs/a.md`), so the same finding 
 **Example files:**
 
 - [`hygiene-catalogue.ts`](https://github.com/jkrumm/software-factory/blob/master/packages/contract/src/hygiene-catalogue.ts#L67-L75): the catalogue, one entry per probe with its cadence.
-- [`hygiene-model.ts`](https://github.com/jkrumm/software-factory/blob/master/apps/server/src/domains/loops/hygiene-model.ts#L19-L61): the probe order and which probes a daily pass runs.
-- [`hygiene.ts`](https://github.com/jkrumm/software-factory/blob/master/apps/server/src/domains/loops/hygiene.ts#L12-L38): the budget split between probes and judgment.
+- [`hygiene-model.ts`](https://github.com/jkrumm/software-factory/blob/master/apps/server/src/domains/hygiene/hygiene-model.ts#L19-L61): the probe order and which probes a daily pass runs.
+- [`hygiene.ts`](https://github.com/jkrumm/software-factory/blob/master/apps/server/src/domains/hygiene/hygiene.ts#L12-L38): the budget split between probes and judgment.
 
 ## The steward and stalls
 
@@ -179,7 +179,7 @@ A stall is a wait with a machine cause, the steward's to end. The steward is the
 
 `issue_1818` shows the rule's edge. A lead woken by an answer blocked again, worded differently, and the word-overlap test read 0.10 to 0.42 against its 0.5 threshold. The steward asked again, 3 times in 8 minutes on one Issue. The fix: a block within 10 minutes of an answer, with no report between, is the same stall.
 
-<!-- snippet: apps/server/src/domains/loops/stall.ts QUICK_REBLOCK_MS -->
+<!-- snippet: apps/server/src/domains/planning/stall.ts QUICK_REBLOCK_MS -->
 ```ts
 /**
  * A lead woken by a Decision's answer that blocks again this soon, having reported nothing else, did no new work: its block
@@ -191,8 +191,8 @@ export const QUICK_REBLOCK_MS = 10 * 60_000
 
 **Example files:**
 
-- [`stall.ts`](https://github.com/jkrumm/software-factory/blob/master/apps/server/src/domains/loops/stall.ts#L86-L126): `decideStall`, the rules in order, ending in `ask`.
-- [`stall.ts`](https://github.com/jkrumm/software-factory/blob/master/apps/server/src/domains/loops/stall.ts#L63-L70): the default thresholds in one table.
+- [`stall.ts`](https://github.com/jkrumm/software-factory/blob/master/apps/server/src/domains/planning/stall.ts#L86-L126): `decideStall`, the rules in order, ending in `ask`.
+- [`stall.ts`](https://github.com/jkrumm/software-factory/blob/master/apps/server/src/domains/planning/stall.ts#L63-L70): the default thresholds in one table.
 
 ## The retro
 
@@ -204,7 +204,7 @@ The retro is a weekly review written by a lead. The friction pass files one retr
 - **A pattern needs a line.** A pattern the lead names without a cited transcript line is not in the Report.
 - **A repeated preference becomes a rule.** A preference the owner showed twice in the owner's verdict notes is written into the repo's `AGENTS.md` or `DESIGN.md`.
 
-<!-- snippet: apps/server/src/domains/loops/retro.ts outcomesLine -->
+<!-- snippet: apps/server/src/domains/improve/retro.ts outcomesLine -->
 ```ts
 /** The previous retros' yield in a line for the signal's facts; null when no retro signal was filed in the window. */
 function outcomesLine(outcomes: RetroOutcomes | null): string | null {
@@ -220,8 +220,8 @@ function outcomesLine(outcomes: RetroOutcomes | null): string | null {
 
 **Example files:**
 
-- [`retro.ts`](https://github.com/jkrumm/software-factory/blob/master/apps/server/src/domains/loops/retro.ts#L22-L33): the previous retros' yield, put in the next signal's facts.
-- [`retro.ts`](https://github.com/jkrumm/software-factory/blob/master/apps/server/src/domains/loops/retro.ts#L39-L60): the signal's text, the brief a retro lead builds from.
+- [`retro.ts`](https://github.com/jkrumm/software-factory/blob/master/apps/server/src/domains/improve/retro.ts#L22-L33): the previous retros' yield, put in the next signal's facts.
+- [`retro.ts`](https://github.com/jkrumm/software-factory/blob/master/apps/server/src/domains/improve/retro.ts#L39-L60): the signal's text, the brief a retro lead builds from.
 
 ## Yield and pace
 

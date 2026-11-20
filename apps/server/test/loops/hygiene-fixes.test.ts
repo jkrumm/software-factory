@@ -1,6 +1,6 @@
 import { expect, test } from 'bun:test'
-import { applyFixes, fixable, probesOf } from '../../src/domains/loops/hygiene-fixes.ts'
-import type { FixEntry, Probe, ProbeFinding, ProbeRun, SweepReport } from '../../src/domains/loops/hygiene-model.ts'
+import { applyFixes, fixable, probesOf } from '../../src/domains/hygiene/hygiene-fixes.ts'
+import type { FixEntry, Probe, ProbeFinding, ProbeRun, SweepReport } from '../../src/domains/hygiene/hygiene-model.ts'
 
 const finding = (probe: Probe, key: string, extra: Partial<ProbeFinding> = {}): ProbeFinding => ({
   probe,

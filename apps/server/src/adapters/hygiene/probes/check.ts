@@ -2,7 +2,7 @@ import { EXIT_TIMEOUT } from '../../process.ts'
 import { exec, gitTry, type Tools, withStderr } from '../git.ts'
 import { installed } from './toolrun.ts'
 import { type Outcome, clean, failed, finding, found, skipped } from './finding.ts'
-import { type Checkout, MAX_EVIDENCE_LINES } from '../../../domains/loops/hygiene-model.ts'
+import { type Checkout, MAX_EVIDENCE_LINES } from '../../../domains/hygiene/hygiene-model.ts'
 
 /** A CLI helper's limit, not an agent's: the repo's whole gate can be slow. */
 export const CHECK_TIMEOUT_MS = 45 * 60_000

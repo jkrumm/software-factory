@@ -1,4 +1,4 @@
-// What the edges the factory added came to, and the rule that stops a kind of edge. Pure; the sweep and the loops (`domains/loops`)
+// What the edges the factory added came to, and the rule that stops a kind of edge. Pure; the sweep and the queue loop (`domains/planning`)
 // and the capacity read (`read/`) share it.
 
 /**

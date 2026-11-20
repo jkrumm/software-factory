@@ -1,5 +1,5 @@
 import { HYGIENE_DEFAULTS } from '@software-factory/contract'
-import { foldDependencies } from '../../domains/loops/dependency-refresh.ts'
+import { foldDependencies } from '../../domains/hygiene/dependency-refresh.ts'
 import {
   type Checkout,
   type HygieneChecker,
@@ -11,7 +11,7 @@ import {
   runsIn,
   type SweepOptions,
   type SweepReport,
-} from '../../domains/loops/hygiene-model.ts'
+} from '../../domains/hygiene/hygiene-model.ts'
 import { type RepoLocator, withCheckout } from './checkout.ts'
 import { runFixes } from './fixes/index.ts'
 import { livingDocs, trackedMarkdown } from './docs.ts'
@@ -62,7 +62,7 @@ async function guarded(run: () => Promise<Outcome>): Promise<Outcome> {
 }
 
 /**
- * The I/O of the hygiene pass (`domains/loops/hygiene-model.ts`): a throwaway checkout of the default branch and the
+ * The I/O of the hygiene pass (`domains/hygiene/hygiene-model.ts`): a throwaway checkout of the default branch and the
  * deterministic probes over it. Nothing is edited, nothing leaves the machine except what `git fetch`, `bun outdated`,
  * `bun audit` and the version look-ups of the `deps` probe ask.
  */

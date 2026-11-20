@@ -8,15 +8,15 @@ import {
   OVERLOAD_KINDS,
   overloadEvidence,
   cpuAccountingLine,
-  parsePs,
   priorityLine,
   SLOT_EMPTY_MINUTES,
   SLOT_WAIT_MINUTES,
   SLOT_WAITERS,
   slotLineFindings,
-} from '../../src/domains/loops/overload.ts'
-import { evidenceHash, signalText } from '../../src/domains/loops/selfwatch.ts'
-import type { CapacityMinute, Finding, SlotMinute } from '../../src/domains/loops/selfwatch-model.ts'
+} from '../../src/domains/improve/overload.ts'
+import { evidenceHash, signalText } from '../../src/domains/improve/selfwatch.ts'
+import { parsePs } from '../../src/adapters/selfwatch/overload.ts'
+import type { CapacityMinute, Finding, SlotMinute } from '../../src/domains/improve/selfwatch-model.ts'
 
 const NOW = new Date('2026-11-14T20:00:00Z')
 const ago = (n: number) => new Date(NOW.getTime() - n * 60_000)
@@ -308,7 +308,7 @@ test('overloadEvidence: slot lines with reasons, queue by reason, host memory, t
       swapUsedPct: 62,
       swapoutMbPer300s: 3100,
     }),
-    ps: { output: PS },
+    ps: { rows: parsePs(PS) },
     serverPid: 777,
     deployLines: ['2026-11-14T19:00:00Z start pid=1', '2026-11-14T19:03:00Z end pid=1 rc=0 unreachable_s=40'],
   })
@@ -340,7 +340,7 @@ test('overloadEvidence: slot lines with reasons, queue by reason, host memory, t
     queue: [],
     cpu: null,
     host: null,
-    ps: { output: many },
+    ps: { rows: parsePs(many) },
     serverPid: 1,
     deployLines: [],
   })
@@ -399,8 +399,9 @@ test('overloadEvidence: a credential in a command line or a log line never reach
     cpu: null,
     host: null,
     ps: {
-      output:
+      rows: parsePs(
         ' 900 31 5.0 1024 curl -H Authorization: Bearer abcdef0123456789abcdef --token=hunter2hunter2 https://u:pw@example.com',
+      ),
     },
     serverPid: 1,
     deployLines: ['2026-11-14T19:00:00Z start pid=1 API_KEY=sk-abcdefghijklmnop'],

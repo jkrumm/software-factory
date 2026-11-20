@@ -9,7 +9,7 @@ import {
   targetPhrase,
   THRESHOLDS,
 } from '@software-factory/contract'
-import { MAX_SIGNALS_PER_PASS } from './budget.ts'
+import { MAX_SIGNALS_PER_PASS } from '../../kernel/signal-budget.ts'
 
 /** A pass reads this many days of counts: the thresholds below are a week's. */
 export const FRICTION_WINDOW_DAYS = 7

@@ -8,7 +8,7 @@ import type {
   TenantFacts,
   WaitFact,
   WindowFacts,
-} from '../domains/loops/throughput.ts'
+} from '../domains/improve/throughput.ts'
 import { countedFrom, isCut, MIN_CUT_BASELINE_DAYS } from '../kernel/epoch.ts'
 import {
   BASELINE_DAYS,

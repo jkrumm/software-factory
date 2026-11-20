@@ -8,7 +8,7 @@ import {
   verdictOf,
   type ClassIssue,
   type ClassOutcome,
-} from '../../src/domains/loops/classes.ts'
+} from '../../src/domains/improve/classes.ts'
 
 const DAY = 86_400_000
 const t0 = new Date('2026-10-01T00:00:00Z').getTime()

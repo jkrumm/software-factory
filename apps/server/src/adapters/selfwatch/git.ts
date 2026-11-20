@@ -1,4 +1,4 @@
-import type { MigrationFiles } from '../../domains/loops/ports.ts'
+import type { MigrationFiles } from '../../domains/improve/ports.ts'
 import { leadBranchIssue } from '../../kernel/ids.ts'
 import { err, ok, portError, type Result } from '../../kernel/result.ts'
 import { CannotExecute, GitTimeout, gitIn, type Run } from '../process.ts'

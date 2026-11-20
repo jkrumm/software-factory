@@ -249,7 +249,7 @@ export type HygieneAnswer = z.infer<typeof HygieneAnswer>
 
 // ---- fix classes -------------------------------------------------------------------------------------------------
 
-/** The classes a fix commit is sorted into (`docs/product.md` "Fix classes"); the rules of `domains/loops/fix-classes.ts` give one of the keys. */
+/** The classes a fix commit is sorted into (`docs/product.md` "Fix classes"); the rules of `domains/hygiene/fix-classes.ts` give one of the keys. */
 export const FIX_CLASSES = [
   { key: 'tests', meaning: 'the fix is in tests, scenarios or e2e only' },
   { key: 'docs', meaning: 'the fix is in documentation only' },
@@ -344,7 +344,7 @@ export type DeskPushReply = z.infer<typeof DeskPushReply>
 /** A digest line and the Issues it is about. */
 export const DigestBullet = z.strictObject({ text: Line, ids: z.array(IssueId).min(1).max(20) })
 
-/** A project's digest as stored: built in code from its Issues (`domains/loops/digest.ts`). */
+/** A project's digest as stored: built in code from its Issues (`domains/improve/digest.ts`). */
 export const DigestAnswer = z.strictObject({
   headline: z.string().min(1).max(140),
   shipped: z.array(DigestBullet).max(5),

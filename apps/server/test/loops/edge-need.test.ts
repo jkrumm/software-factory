@@ -1,8 +1,8 @@
 import { expect, test } from 'bun:test'
 import type { QueueAnswer } from '@software-factory/contract'
-import { type HeldEdge, OWNER_WAIT_MS, sweepEdges } from '../../src/domains/loops/edge-need.ts'
+import { type HeldEdge, OWNER_WAIT_MS, sweepEdges } from '../../src/domains/planning/edge-need.ts'
 import { EDGE_STOP_MIN, type EdgeNeed, notNeededShare, stopsEdges } from '../../src/kernel/edge-need.ts'
-import { checkQueue, pairKey, type QueueIssue } from '../../src/domains/loops/queue.ts'
+import { checkQueue, pairKey, type QueueIssue } from '../../src/domains/planning/queue-edges.ts'
 import type { IssueId } from '../../src/kernel/ids.ts'
 
 const id = (n: number) => `issue_${n}` as IssueId

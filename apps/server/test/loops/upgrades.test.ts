@@ -1,5 +1,5 @@
 import { expect, test } from 'bun:test'
-import { cooldownEnd, groupOf, planLines, planUpgrades, type UpgradeRow } from '../../src/domains/loops/upgrades.ts'
+import { cooldownEnd, groupOf, planLines, planUpgrades, type UpgradeRow } from '../../src/domains/hygiene/upgrades.ts'
 
 const now = new Date('2026-11-17T12:00:00Z')
 const daysAgo = (n: number) => new Date(now.getTime() - n * 86_400_000)

@@ -25,7 +25,7 @@ export function decideStop(facts: StopFacts): StopDecision {
 
 - [`stop.ts`](https://github.com/jkrumm/software-factory/blob/master/apps/server/src/domains/leads/stop.ts#L34-L43): the send-back decision; background work lets the stop through.
 - [`quiesce.ts`](https://github.com/jkrumm/software-factory/blob/master/apps/server/src/domains/leads/quiesce.ts#L56): a session with background work in flight is never quiesced.
-- [`stall.ts`](https://github.com/jkrumm/software-factory/blob/master/apps/server/src/domains/loops/stall.ts#L52-L56): the longer idle threshold for a lead waiting on background work.
+- [`stall.ts`](https://github.com/jkrumm/software-factory/blob/master/apps/server/src/domains/planning/stall.ts#L52-L56): the longer idle threshold for a lead waiting on background work.
 
 ## Unreviewed ships
 
@@ -96,7 +96,7 @@ The lead's brief carries the two measurements, in these two lines (the source es
 
 - [`brief.ts`](https://github.com/jkrumm/software-factory/blob/master/apps/server/src/domains/leads/brief.ts#L28): the `find` rule, with its number.
 - [`brief.ts`](https://github.com/jkrumm/software-factory/blob/master/apps/server/src/domains/leads/brief.ts#L38): one check per worktree.
-- [`overload.ts`](https://github.com/jkrumm/software-factory/blob/master/apps/server/src/domains/loops/overload.ts#L35-L67): `load_over_ceiling`, the host's alarm.
+- [`overload.ts`](https://github.com/jkrumm/software-factory/blob/master/apps/server/src/domains/improve/overload.ts#L35-L67): `load_over_ceiling`, the host's alarm.
 
 ## Waits with no exit
 

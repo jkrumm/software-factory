@@ -1,5 +1,5 @@
-import { type CallLoop, type CallPlan, type CallPolicy, planCall } from '../../domains/loops/calls.ts'
-import type { LoopStore } from '../../domains/loops/ports.ts'
+import { type CallLoop, type CallPlan, type CallPolicy, planCall } from '../../domains/planning/calls.ts'
+import type { LoopStore } from './stores.ts'
 import type { Key } from '../../kernel/keys.ts'
 
 /** What a loop does about one subject: the stored answer, a wait, or a call this pass now owns (`claimed`, a retaken one included). */

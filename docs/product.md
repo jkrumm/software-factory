@@ -86,7 +86,7 @@ Each is a count over the window that SQL can repeat (`read/kpis.ts`, `read/kpis-
 a breakdown (touches by kind, queued time by reason, why first watches regressed) is the KPI's `parts`, and the figures
 that explain it without adding up to it (the asks, the Spec rate, the working share, the dollars per Issue) are `beside`
 it. Its history starts at the counting epoch. The friction counts (`factory read friction`) are not KPIs: each is a count
-of waste with a rule from the same threshold table that files a signal (`domains/loops/friction.ts`). The light-seat and
+of waste with a rule from the same threshold table that files a signal (`domains/improve/friction.ts`). The light-seat and
 cheap-reviewer gates read their own figures (`factory read seats`). What no table holds (seconds by tool category, idle gaps, tool errors, `make check` runs)
 is the transcript pass of `factory retro`. The friction loop's weekly pass files one Issue whose lead reads that bundle,
 writes a Report (the numbers against last week, the patterns in a sample of transcripts, the ledger of earlier retro

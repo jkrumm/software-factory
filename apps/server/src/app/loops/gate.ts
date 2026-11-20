@@ -1,5 +1,5 @@
-import { classOf, mayFile, verdictOf, type ClassVerdict, type FindingLoop } from '../../domains/loops/classes.ts'
-import type { LoopReads, LoopStore } from '../../domains/loops/ports.ts'
+import { classOf, mayFile, verdictOf, type ClassVerdict, type FindingLoop } from '../../domains/improve/classes.ts'
+import type { LoopReads, LoopStore } from './stores.ts'
 import { ok, type PortError, type Result } from '../../kernel/result.ts'
 import type { UnitOfWork } from '../unit-of-work.ts'
 

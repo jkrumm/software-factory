@@ -1,10 +1,10 @@
 import type { SignalRequest } from '@software-factory/contract'
 import type { LoopFinding, Triaged } from '../../domains/intake/model.ts'
-import { MAX_SIGNALS_PER_PASS } from '../../domains/loops/budget.ts'
-import type { LoopStore } from '../../domains/loops/ports.ts'
+import { MAX_SIGNALS_PER_PASS } from '../../kernel/signal-budget.ts'
+import type { LoopStore } from './stores.ts'
 import type { PlanningStore } from '../../domains/planning/ports.ts'
 import { budgetsOf } from '@software-factory/contract/project'
-import { bindingCaps, type CapFact, capName, capText, capTitle } from '../../domains/loops/caps.ts'
+import { bindingCaps, type CapFact, capName, capText, capTitle } from '../../domains/improve/caps.ts'
 import { repoTextOf } from '../../domains/planning/sync.ts'
 import {
   type Candidate,
@@ -26,7 +26,7 @@ import {
   reopenedFrom,
   subjectKey,
   type WindowFacts,
-} from '../../domains/loops/throughput.ts'
+} from '../../domains/improve/throughput.ts'
 import type { Clock } from '../../kernel/clock.ts'
 import { key } from '../../kernel/keys.ts'
 import { ok, type PortError, type Result } from '../../kernel/result.ts'

@@ -3,7 +3,7 @@ import type { FrictionCount, KpiKey, KpiTargetValue } from './read-models.ts'
 /**
  * Every number the factory acts on when it judges its own figures, in one table: the targets of the seven KPIs and the rules
  * of the friction loop. The KPI catalog (`kpi-catalog.ts`) and `docs/product.md` read the targets from here, and the friction
- * pass (`apps/server/src/domains/loops/friction.ts`) reads both halves: a KPI off its target over a whole window is a friction
+ * pass (`apps/server/src/domains/improve/friction.ts`) reads both halves: a KPI off its target over a whole window is a friction
  * finding, the same as a count over its rule. Neither keeps a number of its own.
  */
 

@@ -2,7 +2,7 @@ import { EXIT_TIMEOUT } from '../../process.ts'
 import type { Tools } from '../git.ts'
 import { CHECK_TIMEOUT_MS, makeTarget } from './check.ts'
 import { type Outcome, failed, finding, found, clean, skipped } from './finding.ts'
-import type { DeclaredProbe, Checkout } from '../../../domains/loops/hygiene-model.ts'
+import type { DeclaredProbe, Checkout } from '../../../domains/hygiene/hygiene-model.ts'
 
 /** Whether a Makefile defines `target` as a rule (alone or among several targets of one line). `target` is `[a-z0-9-]+`. */
 const definesTarget = (makefile: string, target: string): boolean =>

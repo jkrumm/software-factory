@@ -1,6 +1,6 @@
 import { QueueAnswer } from '@software-factory/contract'
-import type { CallPolicy, CallRow } from '../../domains/loops/calls.ts'
-import type { LoopReads, LoopStore } from '../../domains/loops/ports.ts'
+import type { CallPolicy, CallRow } from '../../domains/planning/calls.ts'
+import type { LoopReads, LoopStore } from './stores.ts'
 import {
   byRepo,
   candidatesOf,
@@ -15,8 +15,8 @@ import {
   shapeAsked,
   shapeOf,
   unappliedAnswer,
-} from '../../domains/loops/queue.ts'
-import { sweepEdges } from '../../domains/loops/edge-need.ts'
+} from '../../domains/planning/queue-edges.ts'
+import { sweepEdges } from '../../domains/planning/edge-need.ts'
 import { EDGE_NEED_DAYS, type EdgeNeed, stopReason, stopsEdges } from '../../kernel/edge-need.ts'
 import { AGW_CALL_LEASE_MS } from '../../kernel/agw.ts'
 import type { Clock } from '../../kernel/clock.ts'

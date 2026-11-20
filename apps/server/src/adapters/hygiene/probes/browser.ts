@@ -2,7 +2,7 @@ import { readFileSync } from 'node:fs'
 import { basename, join } from 'node:path'
 import { gitOut, type Tools } from '../git.ts'
 import { type Outcome, clean, finding, found } from './finding.ts'
-import type { ProbeFinding } from '../../../domains/loops/hygiene-model.ts'
+import type { ProbeFinding } from '../../../domains/hygiene/hygiene-model.ts'
 
 /**
  * The owner's rule for which browser a suite gets and which agent tooling a repo checks in (dotfiles `rules/browser.md`), read

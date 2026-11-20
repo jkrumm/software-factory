@@ -1,5 +1,5 @@
 import { expect, test } from 'bun:test'
-import { judgeMainCheckout } from '../../src/domains/loops/checkout.ts'
+import { judgeMainCheckout } from '../../src/domains/leads/checkout.ts'
 
 test('a clean checkout on the default branch is no finding', () => {
   expect(judgeMainCheckout({ branch: 'main', defaultBranch: 'main', dirty: [] })).toBeNull()

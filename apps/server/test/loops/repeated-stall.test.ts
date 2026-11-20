@@ -1,6 +1,6 @@
 import { expect, test } from 'bun:test'
 import { repeatedStall } from '../../src/app/loops/steward.ts'
-import { QUICK_REBLOCK_MS, SAME_STALL, sameWords } from '../../src/domains/loops/stall.ts'
+import { QUICK_REBLOCK_MS, SAME_STALL, sameWords } from '../../src/domains/planning/stall.ts'
 import type { IssueId } from '../../src/kernel/ids.ts'
 import type { AnyIssueEvent } from '../../src/domains/work/events.ts'
 import { filedIssue } from '../../src/domains/work/explore.ts'

@@ -1,5 +1,5 @@
 import { expect, test } from 'bun:test'
-import { classOf, parseFixSubject, type FixCommit } from '../../src/domains/loops/fix-classes.ts'
+import { classOf, parseFixSubject, type FixCommit } from '../../src/domains/hygiene/fix-classes.ts'
 
 const commit = (sha: string, subject: string): FixCommit => ({
   sha,

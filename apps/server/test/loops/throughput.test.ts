@@ -5,17 +5,17 @@ import { loadMigrations, migrate } from '../../src/adapters/postgres/migrate.ts'
 import { postgresLoopStore } from '../../src/adapters/postgres/loop-store.ts'
 import { throughputPass, throughputSummary } from '../../src/app/loops/throughput.ts'
 import type { UnitOfWork } from '../../src/app/unit-of-work.ts'
-import type { LoopStore } from '../../src/domains/loops/ports.ts'
+import type { LoopStore } from '../../src/app/loops/stores.ts'
 import { loadLoopSettings } from '../../src/app/loops/settings.ts'
-import { planSelfwatch } from '../../src/domains/loops/selfwatch.ts'
-import { subjectKeyOf } from '../../src/domains/loops/selfwatch-model.ts'
+import { planSelfwatch } from '../../src/domains/improve/selfwatch.ts'
+import { subjectKeyOf } from '../../src/domains/improve/selfwatch-model.ts'
 import {
   budgetFindings,
   figureOf,
   movedDown,
   rankCandidates,
   type WindowFacts,
-} from '../../src/domains/loops/throughput.ts'
+} from '../../src/domains/improve/throughput.ts'
 import { budgetsOf, parseProject } from '@software-factory/contract/project'
 import { ok } from '../../src/kernel/result.ts'
 import { readBudgetFacts, readIssueFates, readWindowFacts } from '../../src/read/throughput-loop.ts'

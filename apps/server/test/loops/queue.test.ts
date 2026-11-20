@@ -9,7 +9,7 @@ import {
   type QueueIssue,
   requestOf,
   shapeOf,
-} from '../../src/domains/loops/queue.ts'
+} from '../../src/domains/planning/queue-edges.ts'
 import type { IssueId } from '../../src/kernel/ids.ts'
 
 const id = (n: number) => `issue_${n}` as IssueId

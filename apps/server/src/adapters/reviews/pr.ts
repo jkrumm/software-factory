@@ -1,5 +1,5 @@
 import * as z from 'zod'
-import { type PrLook, prNumber, type ReviewPort } from '../../domains/loops/reviews.ts'
+import { type PrLook, prNumber, type ReviewPort } from '../../domains/work/reviews.ts'
 import { err, ok, portError, type PortError, type Result } from '../../kernel/result.ts'
 import { childEnv, type Run, runProcess } from '../process.ts'
 

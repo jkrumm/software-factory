@@ -19,7 +19,7 @@ describe('the README of this checkout', () => {
     expect(facts.callers).toContain('signal')
     expect(facts.tokens).toContain('FACTORY_SIGNAL_TOKEN')
     expect(facts.screens).toContain('Needs you')
-    expect(facts.domains.length).toBe(9)
+    expect(facts.domains.length).toBe(10)
     expect(facts.consolePort).toBe(7795)
     expect(facts.consoleWrites).toBe(15)
   })
@@ -50,7 +50,7 @@ describe('drift the check catches', () => {
 
   test('a domain, the port and the writes', () => {
     expect(checkReadme(README, withFacts({ domains: [...facts.domains, 'billing'] }), exists).join('\n')).toContain(
-      'the domains says 9, the code has 10',
+      'the domains says 10, the code has 11',
     )
     expect(checkReadme(README, withFacts({ consolePort: 7801 }), exists).join('\n')).toContain('the code has 7801')
     expect(checkReadme(README, withFacts({ consoleWrites: 16 }), exists).join('\n')).toContain(

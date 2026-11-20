@@ -3,7 +3,7 @@ import { basename, join } from 'node:path'
 import { isMap, isScalar, isSeq, LineCounter, parse, parseDocument, type Node } from 'yaml'
 import { gitOut, type Tools } from '../git.ts'
 import { type Outcome, clean, finding, found, skipped } from './finding.ts'
-import type { ProbeFinding } from '../../../domains/loops/hygiene-model.ts'
+import type { ProbeFinding } from '../../../domains/hygiene/hygiene-model.ts'
 
 /**
  * The owner's rules for what runs on the Mac mini (dotfiles `rules/run-on-mini.md`), read from a repo before its change reaches the

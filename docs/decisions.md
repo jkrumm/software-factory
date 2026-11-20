@@ -257,7 +257,7 @@ Report `docs/archive/strategy/2026-11-next/report.html`, definition `docs/archiv
   window and 0.05 per Issue closed for these two keys (NL37's level): the week of the 47-stall loop was 0.07, this week 0.033
   and 0.015. Cost: a block loop under about 70 stalls a week on 1400 closed Issues no longer files by itself; `unreported` and
   `regressed` stay on the bare count. Revert: set `STALL_BY_RATE` back to `{ min: 2, rate: null }`, or delete the two `BY_KEY`
-  lines in `domains/loops/friction.ts`. Not changed: the steward's 2 min before it moves a lead (`minStallMs`), which is the
+  lines in `domains/improve/friction.ts`. Not changed: the steward's 2 min before it moves a lead (`minStallMs`), which is the
   whole of a wall stall's cost, 6300 s a week.
 - **NL42 A ship into a red CI that the last Watch regressed on is refused (Issue 2190, 2026-11-18).** `stall:regressed` filed at 5 in
   7 days. Three Issues were read: 1346 (a dependency bump) shipped the same commits three times into a SonarCloud failure of
@@ -276,7 +276,7 @@ Report `docs/archive/strategy/2026-11-next/report.html`, definition `docs/archiv
   last 7 days hygiene filed 164 of 1439 Issues (11 %); the cost was seats, test slots, CI runs, merge windows and deploys, not
   tokens, and test slots bind. The dependency probes filed up to five Issues per repo (basalt-ui: npm, Docker, Actions,
   advisories in two days), each on the day its pass came. Now the `deps` and `advisories` probes hand their rows to one fold
-  (`domains/loops/dependency-refresh.ts`): one finding `deps` per repo, a section and a plan per ecosystem, filed only when it
+  (`domains/hygiene/dependency-refresh.ts`): one finding `deps` per repo, a section and a plan per ecosystem, filed only when it
   clears a bar (`HYGIENE_DEFAULTS`): a high or critical advisory with a fixed version; a runtime major (non-dev npm, Cargo,
   Python, Swift, a Docker base image; dev tools and Actions do not file alone); a runtime minor whose latest is 30 days old; or 10
   rows behind in all. Rows inside their cooldown never count. Below the bar nothing is filed and the `deps` run's detail on the
@@ -296,7 +296,7 @@ Report `docs/archive/strategy/2026-11-next/report.html`, definition `docs/archiv
   Hygiene filed 164 of 1439 Issues in 7 days (11 %) at $89 and 20 lead-hours; the cost that mattered was not tokens but the
   seat, test slot, CI run, merge window and deploy each Issue takes, and the test slots were what held 31 of 51 queued Issues
   on 2026-11-17. The probe that finds a thing already proves its fix, so the pass now runs the catalogue's optional `fix`
-  (`domains/loops/hygiene-fixes.ts`, scripts in `adapters/hygiene/fixes/`) before it files: the script runs in the sweep's
+  (`domains/hygiene/hygiene-fixes.ts`, scripts in `adapters/hygiene/fixes/`) before it files: the script runs in the sweep's
   throwaway checkout, then the same probe runs again and what it no longer raises files nothing (an unstarted Issue of that
   key is closed as healed by the lifecycle that was there). Two scripts: `stale` deletes the branches the probe calls merged
   and removes merged idle or prunable worktrees (never `--force`; untouched-only branches and worktrees stay a finding);
@@ -412,7 +412,7 @@ Report `docs/archive/strategy/2026-11-next/report.html`, definition `docs/archiv
   challenge. Now: (1) **a binding cap is a finding.** When `claim` (a repo's `leads`) or `lane` is the reason an Issue of a repo
   stays queued, and an account seat is idle in the same minute (`host_samples.seats` over `leads`), for 60 minutes or more of
   the last 24 hours (the pass is daily), the throughput pass files one signal on the repo while the cap is still set
-  (`domains/loops/caps.ts`, `read/cap-facts.ts`): the cap, the comment beside it in the default branch's `project.yaml`, and the
+  (`domains/improve/caps.ts`, `read/cap-facts.ts`): the cap, the comment beside it in the default branch's `project.yaml`, and the
   measured figures for the resource that comment names (worktree size and free disk, a lead's memory, the merge windows of the
   last 7 days). The title (the cap and the repo) is the fingerprint, so there is no repeat while it is open; the generic
   `queued_minutes` finding for the same claim or lane wait is not filed beside it. Default fix: remove the cap, or raise it to what

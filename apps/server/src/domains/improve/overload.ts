@@ -239,26 +239,6 @@ export const OVERLOAD_KINDS: ReadonlySet<string> = new Set(['load_over_ceiling',
 
 // ---- the evidence -----------------------------------------------------------------------------------------------------------
 
-/** `ps -axo pid=,pri=,pcpu=,rss=,command=`: pid, scheduling priority, CPU share, resident KiB, then the command. */
-const PS_LINE = /^\s*(\d+)\s+(-?\d+)\s+([\d.]+)\s+(\d+)\s+(.*)$/
-
-export function parsePs(output: string): PsRow[] {
-  const rows: PsRow[] = []
-  for (const line of output.split('\n')) {
-    const match = PS_LINE.exec(line)
-    if (!match) continue
-    const [, pid = '', pri = '', pcpu = '', rss = '', command = ''] = match
-    rows.push({
-      pid: Number(pid),
-      pri: Number(pri),
-      pcpu: Number(pcpu),
-      rssMib: Math.round(Number(rss) / 1024),
-      command,
-    })
-  }
-  return rows
-}
-
 /** The program of a command line; a postgres backend retitles itself `postgres: <role> <db> …`, so a trailing colon goes. */
 const program = (command: string): string => ((command.split(/\s+/)[0] ?? '').split('/').pop() ?? '').replace(/:$/, '')
 
@@ -352,7 +332,7 @@ export interface EvidenceInputs {
   /** the host's cores, for the CPU accounting; absent: the remainder is not computed */
   cores?: number
   /** `ps`'s output, or why it was not read */
-  ps: { output: string } | { failure: string }
+  ps: { rows: PsRow[] } | { failure: string }
   serverPid: number
   deployLines: readonly string[]
 }
@@ -396,7 +376,7 @@ export function overloadEvidence(input: EvidenceInputs): string[] {
   if ('failure' in input.ps) {
     lines.push(`- Processes: not read: ${oneLine(input.ps.failure)}`)
   } else {
-    const rows = parsePs(input.ps.output)
+    const rows = input.ps.rows
     const busiest = [...rows].sort((a, b) => b.pcpu - a.pcpu || a.pid - b.pid).slice(0, BUSIEST)
     lines.push(`- The ${busiest.length} busiest processes of ${rows.length} by CPU:`)
     for (const row of busiest)

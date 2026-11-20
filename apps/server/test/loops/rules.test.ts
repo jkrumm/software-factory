@@ -2,8 +2,8 @@ import { expect, test } from 'bun:test'
 import type { StewardAnswer, TriageAnswer } from '@software-factory/contract'
 import { cycleThrough } from '../../src/domains/planning/chain.ts'
 import { readDecisionForm } from '../../src/domains/checkpoints/decision.ts'
-import { type CallPolicy, type CallRow, planCall } from '../../src/domains/loops/calls.ts'
-import { checkSettle, settleRequest, settleRule, type SettlingFacts } from '../../src/domains/loops/settle.ts'
+import { type CallPolicy, type CallRow, planCall } from '../../src/domains/planning/calls.ts'
+import { checkSettle, settleRequest, settleRule, type SettlingFacts } from '../../src/domains/planning/settle.ts'
 import {
   checkAnswer,
   decideStall,
@@ -19,7 +19,7 @@ import {
   sameWords,
   type StallFacts,
   stallRequest,
-} from '../../src/domains/loops/stall.ts'
+} from '../../src/domains/planning/stall.ts'
 import type { IssueId } from '../../src/kernel/ids.ts'
 
 const NOW = new Date('2026-11-07T12:00:00Z')

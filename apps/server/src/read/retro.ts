@@ -12,7 +12,7 @@ import {
   type RetroSession,
   type RetroThroughput,
 } from '@software-factory/contract'
-import type { CiTimes } from '../domains/loops/ports.ts'
+import type { CiTimes } from '../domains/improve/ports.ts'
 import { apiBlockedMinutes } from './api-errors.ts'
 import { capacityFigures, tuneConstant } from './capacity-tuning.ts'
 import { type CapacityConstants, readCapacityLoop } from './capacity-loop.ts'

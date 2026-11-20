@@ -1,5 +1,5 @@
 import { expect, test } from 'bun:test'
-import { MAX_SIGNALS_PER_PASS } from '../../src/domains/loops/budget.ts'
+import { MAX_SIGNALS_PER_PASS } from '../../src/kernel/signal-budget.ts'
 import { type FrictionCount, type SignalRequest, THRESHOLDS } from '@software-factory/contract'
 import {
   isRetired,
@@ -11,13 +11,14 @@ import {
   signalText,
   signalTitle,
   withinBudget,
-} from '../../src/domains/loops/friction.ts'
+} from '../../src/domains/improve/friction.ts'
 import type { LoopFinding } from '../../src/domains/intake/model.ts'
-import type { ClassIssue } from '../../src/domains/loops/classes.ts'
-import type { ClosedFinding, Judged } from '../../src/domains/loops/ledger.ts'
-import type { FrictionPassRecord, LoopReads, LoopStore } from '../../src/domains/loops/ports.ts'
+import type { ClassIssue } from '../../src/domains/improve/classes.ts'
+import type { ClosedFinding, Judged } from '../../src/domains/improve/ledger.ts'
+import type { FrictionPassRecord } from '../../src/domains/improve/ports.ts'
+import type { LoopReads, LoopStore } from '../../src/app/loops/stores.ts'
 import { frictionPass, frictionSummary, type FrictionDeps } from '../../src/app/loops/friction.ts'
-import { RETRO_TITLE, type RetroOutcomes } from '../../src/domains/loops/retro.ts'
+import { RETRO_TITLE, type RetroOutcomes } from '../../src/domains/improve/retro.ts'
 import { sequentialIds } from '../../src/kernel/ids.ts'
 import { err, ok } from '../../src/kernel/result.ts'
 

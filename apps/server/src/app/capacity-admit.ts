@@ -22,7 +22,7 @@ import { effectiveState, type QueueStates } from '../domains/capacity/queue-stat
 import { type Claim, type Claimant, claimRoom, holdsClaim } from '../domains/capacity/claims.ts'
 import { planWaits, type SeenWait, waitKindOf } from '../domains/capacity/waits.ts'
 import type { Edge } from '../domains/planning/chain.ts'
-import type { CapacityFacts } from '../domains/loops/ports.ts'
+import type { CapacityFacts } from '../domains/improve/ports.ts'
 import type { OpenIssueRow } from '../domains/planning/ports.ts'
 import { type ChainReason, type OpenIssue, orderQueue } from '../domains/planning/queue.ts'
 import { projectOf, type StoredProject } from '../domains/planning/sync.ts'

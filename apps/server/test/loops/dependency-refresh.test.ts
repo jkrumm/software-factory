@@ -1,7 +1,7 @@
 import { expect, test } from 'bun:test'
 import { HYGIENE_DEFAULTS } from '@software-factory/contract'
-import { foldDependencies, judgeRefresh } from '../../src/domains/loops/dependency-refresh.ts'
-import type { AdvisoryRow, DependencyRow, ProbeFinding, ProbeRun } from '../../src/domains/loops/hygiene-model.ts'
+import { foldDependencies, judgeRefresh } from '../../src/domains/hygiene/dependency-refresh.ts'
+import type { AdvisoryRow, DependencyRow, ProbeFinding, ProbeRun } from '../../src/domains/hygiene/hygiene-model.ts'
 
 const DAY = 86_400_000
 const now = new Date('2026-11-18T12:00:00Z')

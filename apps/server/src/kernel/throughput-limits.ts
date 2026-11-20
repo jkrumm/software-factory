@@ -1,4 +1,4 @@
-/** The figures the throughput loop's reads and rules share (`domains/loops/throughput.ts`, `read/throughput-loop.ts`). */
+/** The figures the throughput loop's reads and rules share (`domains/improve/throughput.ts`, `read/throughput-loop.ts`). */
 
 /** The days before a ranking window a project's slot-minutes per closed Issue are compared with. */
 export const BASELINE_DAYS = 14

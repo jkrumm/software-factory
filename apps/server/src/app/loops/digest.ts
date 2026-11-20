@@ -1,5 +1,5 @@
-import { DIGEST_ROUTE, DIGEST_WINDOW_MS, digestSummary, planDigests } from '../../domains/loops/digest.ts'
-import type { LoopReads, LoopStore } from '../../domains/loops/ports.ts'
+import { DIGEST_ROUTE, DIGEST_WINDOW_MS, digestSummary, planDigests } from '../../domains/improve/digest.ts'
+import type { LoopReads, LoopStore } from './stores.ts'
 import type { PlanningStore } from '../../domains/planning/ports.ts'
 import type { Clock } from '../../kernel/clock.ts'
 import { ok, type PortError, type Result } from '../../kernel/result.ts'
