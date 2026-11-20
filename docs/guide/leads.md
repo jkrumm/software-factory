@@ -78,7 +78,7 @@ A seat is the tier and effort a lead starts on, read from the role table.
 - **Roles, not model ids.** `config/roles.json` names a tier (`haiku`, `sonnet`, `opus`) and an effort per role. A change to it needs measured data.
 - **The lead row** is sonnet at high effort. issue_1809's lead ran there.
 - **The light row** is haiku at high effort, a fifth of the cost. It starts mechanical, well-specified work that a check proves.
-- **A rule names the light start.** `lightRule` returns why an Issue starts light (`hygiene:<class>`, `kind:docs`, `alert:route`, `triage:small`) or null. An Issue with a design choice (`checkpoint: spec`) never starts light on size alone. A hygiene finding starts light whatever its size, unless its class is out (its move-up share over its last 20 Issues is above the class bound, the lower of the cost of a move-up in dollars and in minutes, `bound.classShare`; `factory read finding-classes`).
+- **A rule names the light start.** `lightRule` returns why an Issue starts light (`hygiene:<class>`, `kind:docs`, `alert:route`, `triage:small`) or null. An Issue with a design choice (`checkpoint: spec`) never starts light on size alone. A hygiene finding starts light whatever its size.
 - **Stated edges do not cost the size.** An Issue filed with `--after`, `--alone` or as a plan row has its edges final, but triage is still asked for its size and kind (with no Issue to wait for, so it names no edge). Before the planned lead starts, `factory issue show` reports the seat the rule gives it now, with the rule's name, or says the size is not known yet.
 - **A struggling light lead moves up once.** Its second stall or second refused ship, an out-of-depth block, or a regression on its first watch gives the next lead the lead row. After that, never light again.
 
@@ -103,7 +103,7 @@ const MOVE_UP_AFTER = 2
 **Example files:**
 
 - [`roles.json`](https://github.com/jkrumm/software-factory/blob/master/config/roles.json#L1-L10): the role table, one tier and effort per role
-- [`light.ts`](https://github.com/jkrumm/software-factory/blob/master/apps/server/src/domains/leads/light.ts#L48-L87): `lightRule` picks the seat, `moveUpWhy` moves a struggling light lead up
+- [`light.ts`](https://github.com/jkrumm/software-factory/blob/master/apps/server/src/domains/leads/light.ts#L47-L85): `lightRule` picks the seat, `moveUpWhy` moves a struggling light lead up
 - [`seats.ts`](https://github.com/jkrumm/software-factory/blob/master/apps/server/src/domains/capacity/seats.ts#L21-L39): the extra leads an idle host can take
 
 ## Verbs

@@ -1,9 +1,6 @@
 import { describe, expect, test } from 'bun:test'
 import {
-  type ClassStart,
-  judgeClassSeat,
   judgeLightGate,
-  classMoveUpBound,
   moveUpBound,
   moveUpTimeBound,
   regressionGap,
@@ -26,7 +23,6 @@ const facts = (over: Partial<LightFacts> = {}): LightFacts => ({
   size: null,
   spec: false,
   hygieneKey: null,
-  hygieneOut: false,
   unroutedMonitor: false,
   movedUp: 0,
   text: 'tidy a log line',
@@ -45,13 +41,6 @@ describe('lightRule', () => {
     expect(lightRule(facts({ hygieneKey: 'advisories', size: 'medium' }))).toBe('hygiene:advisories')
     expect(lightRule(facts({ hygieneKey: 'unused:exports', size: null }))).toBe('hygiene:unused')
     expect(lightRule(facts({ hygieneKey: 'judgment:slop:docs/x.md', size: 'large' }))).toBe('hygiene:slop')
-  })
-
-  test('a hygiene class that is out starts on the lead row, and no size rule brings it back', () => {
-    expect(lightRule(facts({ hygieneKey: 'links:docs/guide.md', hygieneOut: true }))).toBeNull()
-    expect(
-      lightRule(facts({ hygieneKey: 'links:docs/guide.md', hygieneOut: true, size: 'small', triageSmall: true })),
-    ).toBeNull()
   })
 
   test('kind docs and a monitor with no route start light', () => {
@@ -140,7 +129,7 @@ describe('the light gate', () => {
     expect(moveUpBound({ lightAttempt: 0.15, leadAttempt: 2.7, followUpAttempt: 0 })).toBeNull()
   })
 
-  test('the time bound is the same break-even in minutes, and the class bound is the lower of the two', () => {
+  test('the time bound is the same break-even in minutes', () => {
     const MIN = 60_000
     // a light attempt that finishes takes 9 min against the lead row's 35, one that moves up spent 19 before the lead took
     // over: 26 min saved against 19 wasted, even at share 26 / 45
@@ -150,11 +139,6 @@ describe('the light gate', () => {
     // light no faster than the lead row: no share saves; a move-up that wastes nothing: any share does
     expect(moveUpTimeBound({ lightFinishMs: 40 * MIN, movedMs: 19 * MIN, leadMs: 35 * MIN })).toBe(0)
     expect(moveUpTimeBound({ lightFinishMs: 9 * MIN, movedMs: 0, leadMs: 35 * MIN })).toBe(1)
-    // dollars allow every share (bound 1), minutes do not
-    expect(classMoveUpBound({ dollars: 1, time })).toBeCloseTo(0.5778, 3)
-    expect(classMoveUpBound({ dollars: 0.3, time })).toBe(0.3)
-    expect(classMoveUpBound({ dollars: 1, time: null })).toBe(1)
-    expect(classMoveUpBound({ dollars: null, time })).toBeNull()
   })
 
   test("opens on today's figures: a 3.06 point gap on 75 watches is not shown", () => {
@@ -246,49 +230,5 @@ describe('tripwireFrom', () => {
     expect(tripwireFrom({ now, watchAts: [...at(1, 75), ...at(20, 40)] })).toEqual(daysAgo(14))
     expect(tripwireFrom({ now, watchAts: at(1, 5) })).toEqual(daysAgo(14))
     expect(tripwireFrom({ now, watchAts: [] })).toEqual(daysAgo(14))
-  })
-})
-
-describe('judgeClassSeat', () => {
-  const start = (movedUp: boolean, light = true): ClassStart => ({ light, movedUp })
-  const run = (moved: number, kept: number) => [
-    ...Array.from({ length: moved }, () => start(true)),
-    ...Array.from({ length: kept }, () => start(false)),
-  ]
-
-  test('a class is out when its move-up share over the window is above the bound, with the reason', () => {
-    const verdict = judgeClassSeat(run(5, 5), 0.4)
-    expect(verdict).toMatchObject({ starts: 10, movedUp: 5, share: 0.5, out: true })
-    expect(verdict.why).toBe('5 of its last 10 light starts moved up (50 %), above the bound 40 %')
-    // at the bound is still in
-    expect(judgeClassSeat(run(4, 6), 0.4).out).toBe(false)
-  })
-
-  test("a class that moves up every time is out of the light seat on today's figures, one at a quarter is not", () => {
-    const MIN = 60_000
-    const bound = classMoveUpBound({
-      dollars: 1,
-      time: moveUpTimeBound({ lightFinishMs: 9 * MIN, movedMs: 19 * MIN, leadMs: 35 * MIN }),
-    })
-    // advisories: 4 of 4 moved up (share 1, which dollars alone never put above their bound of 1)
-    expect(judgeClassSeat(run(4, 0), 1)).toMatchObject({ share: 1, out: false })
-    expect(judgeClassSeat(run(4, 0), bound)).toMatchObject({ share: 1, out: true })
-    // agentsmd: 2 of 3
-    expect(judgeClassSeat(run(2, 1), bound).out).toBe(true)
-    // deps: 2 of 8
-    expect(judgeClassSeat(run(2, 6), bound).out).toBe(false)
-  })
-
-  test('under three light starts, or with no bound measured, nothing is out', () => {
-    expect(judgeClassSeat(run(2, 0), 0.1)).toMatchObject({ starts: 2, share: null, out: false })
-    expect(judgeClassSeat(run(8, 2), null)).toMatchObject({ share: 0.8, out: false, why: null })
-  })
-
-  test('only the newest 20 Issues count, and Issues that started on the lead row do not', () => {
-    // the 20 newest moved up less than the bound; older move-ups are outside the window
-    expect(judgeClassSeat([...run(1, 19), ...run(20, 0)], 0.4).out).toBe(false)
-    // a class that is out starts on the lead row: those starts age the light ones out until too few stand, and it is back
-    const newestFirst = [...Array.from({ length: 18 }, () => start(false, false)), ...run(3, 0)]
-    expect(judgeClassSeat(newestFirst, 0.4)).toMatchObject({ starts: 2, share: null, out: false })
   })
 })

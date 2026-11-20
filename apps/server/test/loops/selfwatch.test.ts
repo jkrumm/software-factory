@@ -2,7 +2,6 @@ import { expect, test } from 'bun:test'
 import { loadLoopSettings } from '../../src/app/loops/settings.ts'
 import { fingerprintOf } from '../../src/domains/intake/rules.ts'
 import {
-  ciFindings,
   confirmedHeartbeat,
   DATABASE_RECHECK_GAP_MS,
   DATABASE_RECHECKS,
@@ -19,8 +18,8 @@ import {
   swapGrowthFindings,
   waitFindings,
 } from '../../src/domains/loops/selfwatch.ts'
+import { FINDING_KINDS } from '../../src/domains/loops/selfwatch-model.ts'
 import type {
-  CiRun,
   Finding,
   HeartbeatFact,
   HostMinute,
@@ -32,55 +31,10 @@ import { isBuiltinInert } from '../../src/domains/quality/evidence.ts'
 const NOW = new Date('2026-11-08T12:00:00Z')
 const minutes = (n: number) => new Date(NOW.getTime() - n * 60_000)
 
-const run = (id: string, conclusion: string, at: string, workflow = 'CI'): CiRun => ({
-  id,
-  workflow,
-  sha: `${id}${'a'.repeat(40)}`,
-  conclusion,
-  url: `https://example.com/runs/${id}`,
-  at,
-})
-
-test('ci_red: the two newest runs that said something are both red', () => {
-  const found = ciFindings(
-    [
-      run('3', 'failure', '2026-11-08T10:00:00Z'),
-      run('2', 'timed_out', '2026-11-08T09:00:00Z'),
-      run('1', 'success', '2026-11-08T08:00:00Z'),
-    ],
-    'master',
-  )
-  expect(found).toHaveLength(1)
-  expect(found[0]?.subject).toBe('CI')
-  expect(found[0]?.facts).toHaveLength(2)
-  expect(found[0]?.facts[0]).toContain('run 3')
-})
-
-test('ci_red: a cancelled or skipped run neither breaks nor extends the streak', () => {
-  const runs = [
-    run('4', 'failure', '2026-11-08T11:00:00Z'),
-    run('3', 'cancelled', '2026-11-08T10:00:00Z'),
-    run('2', 'failure', '2026-11-08T09:00:00Z'),
-    run('1', 'success', '2026-11-08T08:00:00Z'),
-  ]
-  expect(ciFindings(runs, 'master')).toHaveLength(1)
-  // one red between a success and a skipped run is not two in a row
-  expect(
-    ciFindings([run('2', 'failure', '2026-11-08T11:00:00Z'), run('1', 'success', '2026-11-08T08:00:00Z')], 'master'),
-  ).toEqual([])
-  expect(
-    ciFindings([run('2', 'skipped', '2026-11-08T11:00:00Z'), run('1', 'failure', '2026-11-08T08:00:00Z')], 'master'),
-  ).toEqual([])
-})
-
-test('ci_red: a workflow is judged on its own runs', () => {
-  const runs = [
-    run('4', 'failure', '2026-11-08T11:00:00Z', 'CI'),
-    run('3', 'failure', '2026-11-08T10:00:00Z', 'CI'),
-    run('2', 'failure', '2026-11-08T11:00:00Z', 'Docs'),
-    run('1', 'success', '2026-11-08T10:00:00Z', 'Docs'),
-  ]
-  expect(ciFindings(runs, 'master').map((f) => f.subject)).toEqual(['CI'])
+test('the kinds: twelve conditions, and neither ci_red nor routes_slow, which the factory no longer files', () => {
+  expect(FINDING_KINDS).toHaveLength(12)
+  expect(FINDING_KINDS).not.toContain('ci_red')
+  expect(FINDING_KINDS).not.toContain('routes_slow')
 })
 
 test('migration_clash: one number on two names with one on the base, from the base and from any ref, except the shared numbers', () => {
@@ -306,9 +260,9 @@ test('a signal text is at most eight lines', () => {
 })
 
 const finding = (subject: string, facts: string[]): Finding => ({
-  kind: 'ci_red',
+  kind: 'lead_idle',
   subject,
-  title: `Self-watch: CI is red for ${subject}`,
+  title: `Self-watch: a fixture for ${subject}`,
   facts,
   context: [],
   reproduce: 'make check',
@@ -341,7 +295,7 @@ test('plan: an open subject with the same evidence is only seen again', () => {
   const f = finding('CI', ['run 1'])
   const plan = planSelfwatch([f], [rowOf(f)], NOW)
   expect(plan.file).toEqual([])
-  expect(plan.touch).toEqual(['ci_red:CI'])
+  expect(plan.touch).toEqual(['lead_idle:CI'])
 })
 
 test('plan: changed evidence files again under the same title and keeps the episode start', () => {
@@ -357,7 +311,7 @@ test('plan: changed evidence files again under the same title and keeps the epis
 test('plan: an absent subject is cleared once, and files anew when it reappears', () => {
   const f = finding('CI', ['run 1'])
   const gone = planSelfwatch([], [rowOf(f)], NOW)
-  expect(gone.clear).toEqual(['ci_red:CI'])
+  expect(gone.clear).toEqual(['lead_idle:CI'])
   expect(planSelfwatch([], [rowOf(f, { clearedAt: minutes(1) })], NOW).clear).toEqual([])
   const back = planSelfwatch([f], [rowOf(f, { clearedAt: minutes(1) })], NOW)
   expect(back.file.map((a) => a.why)).toEqual(['reappeared'])
@@ -366,20 +320,11 @@ test('plan: an absent subject is cleared once, and files anew when it reappears'
 
 test('plan: a source that was not read clears nothing', () => {
   const f = finding('CI', ['run 1'])
-  expect(planSelfwatch([], [rowOf(f)], NOW, new Set(['ci_red'])).clear).toEqual([])
+  expect(planSelfwatch([], [rowOf(f)], NOW, new Set(['lead_idle'])).clear).toEqual([])
 })
 
 test('titles of different subjects have different fingerprints, and one subject keeps its own', () => {
   const titles = [
-    ...ciFindings(
-      [
-        run('2', 'failure', '2026-11-08T11:00:00Z', 'CI'),
-        run('1', 'failure', '2026-11-08T10:00:00Z', 'CI'),
-        run('4', 'failure', '2026-11-08T11:00:00Z', 'Deploy'),
-        run('3', 'failure', '2026-11-08T10:00:00Z', 'Deploy'),
-      ],
-      'master',
-    ),
     ...migrationFindings(
       {
         base: ['0997_alpha.sql', '0998_gamma.sql'],
@@ -421,11 +366,9 @@ test('settings: the loop is every five minutes at least, off when the tick is of
   const set = loadLoopSettings({
     FACTORY_LOOP_SELFWATCH_MS: '1000',
     FACTORY_SELFWATCH_GRACE_MS: '5000',
-    FACTORY_SELFWATCH_BRANCH: 'scratch',
   })
   expect(set.intervalMs.selfwatch).toBe(1000)
   expect(set.selfwatchGraceMs).toBe(5000)
-  expect(set.selfwatchBranch).toBe('scratch')
   expect(loadLoopSettings({}).selfwatchGraceMs).toBe(10 * 60_000)
 })
 

@@ -240,7 +240,7 @@ export async function startLead(deps: LeadDeps, effect: StartEffect): Promise<Re
 }
 
 /** An Issue no loop or monitor filed, or one whose origin is not at hand: the light rule reads its kind and size alone. */
-export const NO_ORIGIN: SeatOrigin = { hygieneKey: null, hygieneClass: null, unroutedMonitor: false, text: '' }
+export const NO_ORIGIN: SeatOrigin = { hygieneKey: null, unroutedMonitor: false, text: '' }
 
 /** A lead seat: its tier and effort, the role row it came from, and the light rule that chose it. */
 export interface LeadSeat {
@@ -250,10 +250,6 @@ export interface LeadSeat {
   /** the light seat's rule (`domains/leads/light.ts`); null on any other seat */
   rule: string | null
 }
-
-/** The hygiene classes that start on the standard lead now; none when the reader is unset or cannot say. */
-const classesOut = async (deps: LeadDeps): Promise<ReadonlySet<string>> =>
-  (await deps.lightClassesOut?.().catch(() => null)) ?? new Set<string>()
 
 /**
  * The seat the lead starts on: the Issue's seat as filed always wins; with none, the table's `light` row when the light
@@ -266,7 +262,6 @@ export async function seatOf(deps: LeadDeps, issue: Issue, origin: SeatOrigin): 
     size: issue.size ?? null,
     spec: issue.checkpoint !== undefined,
     hygieneKey: origin.hygieneKey,
-    hygieneOut: origin.hygieneClass !== null && (await classesOut(deps)).has(origin.hygieneClass),
     unroutedMonitor: origin.unroutedMonitor,
     movedUp: issue.movedUp,
     text: `${issue.title} ${origin.text}`,

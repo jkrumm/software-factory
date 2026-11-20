@@ -1,7 +1,5 @@
-import { isRedConclusion } from '../../kernel/checks.ts'
 import { isKernelTask, isSharedMemoryProgram, isTransientScanner } from '../../kernel/throughput-limits.ts'
 import {
-  type CiRun,
   type Finding,
   type HeartbeatFact,
   type HostMinute,
@@ -37,34 +35,6 @@ const spelled = (id: string): string =>
     .replace(/\d/g, (digit) => ` ${DIGIT_WORDS[Number(digit)]} `)
     .replace(/\s+/g, ' ')
     .trim()
-
-// ---- 1. ci_red ------------------------------------------------------------------------------------------------------------
-
-/**
- * A workflow whose two newest runs that said something (a success or a red conclusion) are both red. A cancelled, neutral
- * or skipped run is left out: it neither breaks nor extends the streak.
- */
-export function ciFindings(runs: readonly CiRun[], branch: string): Finding[] {
-  const byWorkflow = new Map<string, CiRun[]>()
-  for (const run of runs) {
-    if (run.conclusion !== 'success' && !isRedConclusion(run.conclusion)) continue
-    byWorkflow.set(run.workflow, [...(byWorkflow.get(run.workflow) ?? []), run])
-  }
-  const found: Finding[] = []
-  for (const [workflow, list] of [...byWorkflow].sort(([a], [b]) => byText(a, b))) {
-    const newest = [...list].sort((a, b) => byText(b.at, a.at) || byText(b.id, a.id)).slice(0, 2)
-    if (newest.length < 2 || !newest.every((run) => isRedConclusion(run.conclusion))) continue
-    found.push({
-      kind: 'ci_red',
-      subject: workflow,
-      title: `Self-watch: CI is red on ${branch} for the workflow ${workflow}`,
-      facts: newest.map((run) => `run ${run.id} at ${short(run.sha)} concluded ${run.conclusion}: ${run.url}`),
-      context: [`Branch: ${branch}`, `The two newest completed runs of ${workflow} both failed (newest first).`],
-      reproduce: `make check on ${branch} at ${short(newest[0]?.sha ?? '')}, or open the runs above`,
-    })
-  }
-  return found
-}
 
 // ---- 2. migration_clash ---------------------------------------------------------------------------------------------------
 

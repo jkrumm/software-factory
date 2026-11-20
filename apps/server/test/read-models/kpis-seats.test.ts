@@ -147,11 +147,10 @@ describe('the light seat delivers', () => {
     // (3 - 0.2) / 3: light plus a follow-up costs more than the lead row only above 93.3 % moved up
     expect(kpis.tripwire.bound?.share).toBeCloseTo((3 - 0.2) / 3)
     expect(kpis.tripwire.bound).toMatchObject({ lightAttempt: expect.closeTo(0.2), leadAttempt: 3, followUpAttempt: 3 })
-    // the same break-even in minutes (medians: a light Issue that finished, a move-up's attempt, the lead row's Issue); classes are judged against the lower
+    // the same break-even in minutes (medians: a light Issue that finished, a move-up's attempt, the lead row's Issue)
     const { bound } = kpis.tripwire
     expect(bound?.time).not.toBeNull()
     expect(bound?.time?.movedMs).toBe(60 * MIN)
-    expect(bound?.classShare).toBe(Math.min(bound?.share ?? 1, bound?.time?.share ?? 1))
     expect(kpis.tripwire.met).toBeNull()
     expect(kpis.tripwire.failing.join(' ')).toContain('2 of 10')
     // (d) every session of the light Issues: 0.1 + 0.2 + 1 + 0.3

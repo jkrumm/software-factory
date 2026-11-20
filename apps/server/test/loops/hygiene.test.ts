@@ -4,16 +4,19 @@ import { fakeAgw } from '../support/agw.ts'
 import { loadLoopSettings } from '../../src/app/loops/settings.ts'
 import type { HygieneAnswer, HygieneRequest } from '@software-factory/contract'
 import {
+  batchSignalText,
+  batchSubject,
+  batchTitle,
   checkAnswer,
   judgmentBudget,
   judgmentKey,
-  judgmentSignalText,
+  judgmentSection,
   judgmentTitle,
   MAX_PROBE_SIGNALS,
   NO_REF,
   planHygiene,
   probeBudget,
-  probeSignalText,
+  probeSection,
   rankProbeFindings,
   requestOf,
   skipped,
@@ -47,13 +50,13 @@ const finding = (probe: Probe, key: string, count: number): ProbeFinding => ({
 
 test('probe findings rank in probe order, then count descending, then key', () => {
   const ranked = rankProbeFindings([
-    finding('cochange', 'cochange:a', 9),
+    finding('deadcode', 'deadcode:a', 9),
     finding('links', 'links:b.md', 2),
     finding('links', 'links:a.md', 2),
     finding('links', 'links:c.md', 5),
     finding('check', 'check', 1),
   ])
-  expect(ranked.map((f) => f.key)).toEqual(['check', 'links:c.md', 'links:a.md', 'links:b.md', 'cochange:a'])
+  expect(ranked.map((f) => f.key)).toEqual(['check', 'links:c.md', 'links:a.md', 'links:b.md', 'deadcode:a'])
 })
 
 test('the probes take three slots, the rest is named, and the judgment keeps at least two', () => {
@@ -107,19 +110,44 @@ test('an answer is checked again: unknown paths and repeats are dropped, the exc
   expect(checked.overBudget.map((f) => f.path)).toEqual(['README.md'])
 })
 
-test('signal titles carry no counts and the text names what was swept, the evidence and how to look again', () => {
-  const a = probeSignalText(finding('links', 'links:docs/a.md', 3), { repo: 'app', ref: '0123456789abcdef' })
-  expect(a).toContain('Swept: app @ 0123456')
-  expect(a).toContain('a line')
-  expect(a).toContain('Sweep: factory read loops')
-  expect(probeSignalText(finding('check', 'check', 1), { repo: 'app', ref: '0123456789' })).toContain(
-    'Reproduce: make check',
-  )
+test('a batch is one signal: what was swept once, then a section per finding, each under its key', () => {
+  const swept = { repo: 'app', ref: '0123456789abcdef' }
+  const a = probeSection(finding('links', 'links:docs/a.md', 3))
+  const check = probeSection(finding('check', 'check', 1))
   const f = { kind: 'stale' as const, path: 'docs/a.md', title: 'The doc is behind', evidence: 'ev', fix: 'fx' }
   expect(judgmentTitle(f)).toBe(`Hygiene: ${f.kind} document ${f.path}`)
   expect(judgmentKey(f)).toBe('judgment:stale:docs/a.md')
-  const text = judgmentSignalText(f, { repo: 'app', ref: '0123456789' })
-  for (const part of ['app @ 0123456', 'Evidence: ev', 'Fix: fx', 'Reproduce:']) expect(text).toContain(part)
+  const judged = judgmentSection(f, swept)
+  expect(judged.key).toBe('judgment:stale:docs/a.md')
+
+  const text = batchSignalText([a, check, judged], swept)
+  expect(text.match(/^Swept: /gm)).toHaveLength(1)
+  expect(text).toContain('Swept: app @ 0123456')
+  expect(text).toContain('3 findings, one section each')
+  for (const heading of ['## 1 of 3: links:docs/a.md', '## 2 of 3: check', '## 3 of 3: judgment:stale:docs/a.md']) {
+    expect(text).toContain(heading)
+  }
+  for (const part of ['a line', 'Sweep: factory read loops', 'Reproduce: make check', 'Evidence: ev', 'Fix: fx']) {
+    expect(text).toContain(part)
+  }
+  // one finding keeps its own title; several name the kinds and the repo, with no counts in it
+  expect(batchTitle([a], swept)).toBe(a.title)
+  expect(batchTitle([a, check, judged], swept)).toBe('Hygiene: links, check, stale (app)')
+  // the same findings are one subject, whatever their order
+  expect(batchSubject([a, check])).toBe(batchSubject([check, a]))
+  expect(batchSubject([a, check])).not.toBe(batchSubject([a]))
+})
+
+test('a batch longer than a signal may be is cut per section, never dropping a finding', () => {
+  const big = {
+    ...finding('deps', 'deps', 40),
+    plan: Array.from({ length: 800 }, (_, i) => `plan line ${i} ${'x'.repeat(60)}`),
+  }
+  const sections = [probeSection(big), probeSection(finding('links', 'links:docs/a.md', 1))]
+  const text = batchSignalText(sections, { repo: 'app', ref: '0123456789' })
+  expect(text.length).toBeLessThan(20_000)
+  expect(text).toContain('## 2 of 2: links:docs/a.md')
+  expect(text).toContain('cut here')
 })
 
 const HOUR = 3_600_000
@@ -227,12 +255,13 @@ test('a failed judgment is retried after the gap while attempts remain; a full p
 const project = (
   name: string,
   hygiene: { check: boolean; reason?: string; probes?: { name: string; target: string }[] } = { check: true },
+  signals?: { github?: { checks: boolean } },
 ) =>
   ({
     name,
     repo: `/src/${name}`,
     source: 'file',
-    project: { hygiene, ship: [{ via: 'push' }] },
+    project: { hygiene, ship: [{ via: 'push' }], signals: signals ?? {} },
   }) as unknown as StoredProject
 
 interface Extra {
@@ -250,6 +279,8 @@ interface Extra {
   fix?: HygieneChecker['fix']
   /** the commit each checkout is at, in the order they are made (the last repeats); absent: one commit throughout */
   refs?: string[]
+  /** the documents the sweep offers the judgment */
+  stale?: { path: string; why: string }[]
   /** what a sweep reports once the first has run: the findings and runs of a second reading of `only` probes */
   again?: { findings: ProbeFinding[]; runs: ProbeRun[] }
 }
@@ -277,7 +308,7 @@ function world(
     },
     recordHygienePass: async (r: HygienePassRecord) => void rows.push(r),
     recordFinding: async (f: { issue: string; class: string; key: string; repo: string; figure: number | null }) => {
-      if (!recorded.some((r) => r.issue === f.issue)) recorded.push(f)
+      if (!recorded.some((r) => r.issue === f.issue && r.key === f.key)) recorded.push(f)
     },
     recordVerdicts: async (rows: readonly Judged[]) => void verdicts.push(...rows),
   } as unknown as LoopStore
@@ -311,7 +342,7 @@ function world(
         scope: options?.scope ?? 'full',
         runs: (second ? extra.again?.runs : extra.runs) ?? [],
         findings: (second ? extra.again?.findings : extra.findings) ?? [],
-        stale: [],
+        stale: extra.stale ?? [],
         slop: [],
       }
     },
@@ -395,7 +426,7 @@ test("a red doctor skips the project's check with its lines, so hygiene.check ne
   const withDoctor = (name: string) =>
     ({
       ...project(name),
-      project: { hygiene: { check: true }, doctor: 'make doctor', ship: [{ via: 'push' }] },
+      project: { hygiene: { check: true }, doctor: 'make doctor', ship: [{ via: 'push' }], signals: {} },
     }) as unknown as StoredProject
   const w = world([], new Set(), [
     withDoctor('a-red'),
@@ -466,21 +497,22 @@ const noisy = (n: number): ClassIssue[] =>
 
 test('a held class files nothing and is named; the rest of the budget is still used; filed findings are recorded once', async () => {
   const findings = [
-    finding('cochange', 'cochange:a|b', 9),
-    finding('cochange', 'cochange:c|d', 8),
+    finding('deadcode', 'deadcode:a|b', 9),
+    finding('deadcode', 'deadcode:c|d', 8),
     finding('links', 'links:x.md', 1),
     finding('links', 'links:y.md', 1),
     finding('links', 'links:z.md', 1),
   ]
   // the class was held 2 days ago: its newest Issue closed lately
   const held = noisy(5).map((i, n) => ({ ...i, closedAt: ago(DAY + n * HOUR) }))
-  const w = world(['a'], new Set(), undefined, { findings, classes: { cochange: held } })
+  const w = world(['a'], new Set(), undefined, { findings, classes: { deadcode: held } })
   const pass = await hygienePass(w.deps)
   expect(pass.ok).toBe(true)
   // the three links fill the three probe slots; the held class does not take one
-  expect(w.filedBodies).toHaveLength(3)
+  // and they are one signal: one Issue, a section each
+  expect(w.filedBodies).toHaveLength(1)
   expect(w.rows[0]?.filed.map((f) => f.key)).toEqual(['links:x.md', 'links:y.md', 'links:z.md'])
-  expect(w.rows[0]?.overBudget.map((f) => f.key).sort()).toEqual(['cochange:a|b', 'cochange:c|d'])
+  expect(w.rows[0]?.overBudget.map((f) => f.key).sort()).toEqual(['deadcode:a|b', 'deadcode:c|d'])
   expect(w.recorded.map((r) => [r.class, r.key])).toEqual([
     ['links', 'links:x.md'],
     ['links', 'links:y.md'],
@@ -489,21 +521,21 @@ test('a held class files nothing and is named; the rest of the budget is still u
 })
 
 test('a class on probation files one finding in the pass', async () => {
-  const findings = [finding('cochange', 'cochange:a|b', 9), finding('cochange', 'cochange:c|d', 8)]
-  const w = world(['a'], new Set(), undefined, { findings, classes: { cochange: noisy(5) } })
+  const findings = [finding('deadcode', 'deadcode:a|b', 9), finding('deadcode', 'deadcode:c|d', 8)]
+  const w = world(['a'], new Set(), undefined, { findings, classes: { deadcode: noisy(5) } })
   await hygienePass(w.deps)
-  expect(w.rows[0]?.filed.map((f) => f.key)).toEqual(['cochange:a|b'])
-  expect(w.rows[0]?.overBudget.map((f) => f.key)).toEqual(['cochange:c|d'])
+  expect(w.rows[0]?.filed.map((f) => f.key)).toEqual(['deadcode:a|b'])
+  expect(w.rows[0]?.overBudget.map((f) => f.key)).toEqual(['deadcode:c|d'])
 })
 
 test('a class held by noise from other repos holds in this repo too; its repo is still stored', async () => {
-  const findings = [finding('cochange', 'cochange:a|b', 9), finding('links', 'links:x.md', 1)]
+  const findings = [finding('deadcode', 'deadcode:a|b', 9), finding('links', 'links:x.md', 1)]
   // four noise Issues, filed two each by the sweeps of two other repos: the class is judged across all of them
   const held = noisy(4).map((i, n) => ({ ...i, closedAt: ago(DAY + n * HOUR) }))
-  const w = world(['third'], new Set(), undefined, { findings, classes: { cochange: held } })
+  const w = world(['third'], new Set(), undefined, { findings, classes: { deadcode: held } })
   await hygienePass(w.deps)
   expect(w.rows[0]?.filed.map((f) => f.key)).toEqual(['links:x.md'])
-  expect(w.rows[0]?.overBudget.map((f) => f.key)).toEqual(['cochange:a|b'])
+  expect(w.rows[0]?.overBudget.map((f) => f.key)).toEqual(['deadcode:a|b'])
   expect(w.recorded.map((r) => [r.class, r.repo])).toEqual([['links', w.rows[0]?.repo ?? '']])
 })
 
@@ -511,9 +543,10 @@ test('a class held by noise from other repos holds in this repo too; its repo is
 
 const issueOf = (key: string, over: Partial<FindingIssue> = {}): FindingIssue => ({
   key,
-  issue: `issue_${key.length}`,
+  issue: `issue_${key}`,
   state: 'queued',
   outcome: null,
+  filedAt: ago(10 * DAY),
   closedAt: null,
   reopens: 0,
   ...over,
@@ -638,7 +671,7 @@ test('an Issue the lifecycle reopens is not judged: its verdict is the one of th
   await hygienePass(w.deps)
   expect(w.steps.map((s) => [s.issue, s.action])).toEqual([['issue_9', 'reopened']])
   // issue_8's key was not raised and links ran clean: judged; issue_9 stays open to a verdict
-  expect(w.verdicts).toEqual([{ issue: 'issue_8', verdict: 'moved', measured: 0 }])
+  expect(w.verdicts).toEqual([{ issue: 'issue_8', key: 'links:b.md', verdict: 'moved', measured: 0 }])
 })
 
 test('a pass heals the finding whose probe ran green and files nothing', async () => {
@@ -674,7 +707,7 @@ test('a probe finding is filed against its count; a closed Issue of the key is j
   })
   expect((await hygienePass(w.deps)).ok).toBe(true)
   expect(w.recorded.map((r) => [r.key, r.figure])).toEqual([['links:x.md', 1]])
-  expect(w.verdicts).toEqual([{ issue: 'issue_7', verdict: 'moved', measured: 1 }])
+  expect(w.verdicts).toEqual([{ issue: 'issue_7', key: 'links:x.md', verdict: 'moved', measured: 1 }])
   expect(w.filedTexts[0]).toContain('Last time: Issue issue_7 at figure 3, now 1 (moved).')
 })
 
@@ -684,14 +717,14 @@ test('a key a run judged and did not raise is at 0; one no run spoke for waits; 
     runs: [run('links')],
     closedFindings: [
       closedFinding({ issue: 'issue_1' }),
-      closedFinding({ issue: 'issue_2', key: 'cochange:a|b' }),
+      closedFinding({ issue: 'issue_2', key: 'deadcode:a|b' }),
       closedFinding({ issue: 'issue_3', key: 'judgment:stale:docs/x.md', figure: null }),
     ],
   })
   expect((await hygienePass(w.deps)).ok).toBe(true)
   expect(w.verdicts).toEqual([
-    { issue: 'issue_1', verdict: 'moved', measured: 0 },
-    { issue: 'issue_3', verdict: 'unmeasured', measured: null },
+    { issue: 'issue_1', key: 'links:x.md', verdict: 'moved', measured: 0 },
+    { issue: 'issue_3', key: 'judgment:stale:docs/x.md', verdict: 'unmeasured', measured: null },
   ])
 })
 
@@ -824,7 +857,7 @@ test('no fix runs when the switch is off, and a repo that ships by pull request 
   const landings: string[] = []
   const viaPr = {
     ...project('pr'),
-    project: { hygiene: { check: true }, ship: [{ via: 'push' }, { via: 'pr' }] },
+    project: { hygiene: { check: true }, ship: [{ via: 'push' }, { via: 'pr' }], signals: {} },
   } as unknown as StoredProject
   const pr = world([], new Set(), [viaPr], {
     findings: [stale],
@@ -843,6 +876,7 @@ test('a deferred fix does not reopen the closed Issue of its key', async () => {
     issue: 'issue_9',
     state: 'closed',
     outcome: 'done',
+    filedAt: new Date(now.getTime() - 10 * DAY),
     closedAt: new Date(now.getTime() - 3 * DAY),
     reopens: 0,
   }
@@ -865,6 +899,7 @@ test('the Issue of a deferred fix is not judged either: it is reopened or healed
     issue: 'issue_9',
     state: 'closed',
     outcome: 'done',
+    filedAt: new Date(now.getTime() - 10 * DAY),
     closedAt: new Date(now.getTime() - 3 * DAY),
     reopens: 0,
   }
@@ -959,5 +994,118 @@ test('only the probes that read files are read again: a red check or a deps refr
   })
   await hygienePass(w.deps)
   expect(w.onlys).toEqual([undefined])
-  expect(w.filedBodies).toHaveLength(2)
+  expect(w.rows[0]?.filed.map((f) => f.key)).toEqual(['check', 'deps'])
+  expect(w.filedBodies).toHaveLength(1)
+})
+
+// ---- one Issue per pass: five findings are five keyed sections, and each key heals by itself -----------------------------------
+
+const FIVE = ['links:a.md', 'links:b.md', 'links:c.md']
+
+test('a pass with five findings in one repo files one Issue with five keyed sections', async () => {
+  const w = world(['a'], new Set(), undefined, {
+    findings: FIVE.map((key) => finding('links', key, 1)),
+    stale: [
+      { path: 'docs/x.md', why: 'behind' },
+      { path: 'docs/y.md', why: 'behind' },
+    ],
+  })
+  w.deps.agw = fakeAgw({
+    hygiene: async () =>
+      ok({
+        read: 2,
+        reason: 'read both',
+        findings: ['docs/x.md', 'docs/y.md'].map((path) => ({
+          kind: 'stale' as const,
+          path,
+          title: 'behind',
+          evidence: 'ev',
+          fix: 'fx',
+        })),
+      }),
+  })
+  expect((await hygienePass(w.deps)).ok).toBe(true)
+  expect(w.filedTexts).toHaveLength(1)
+  const text = w.filedTexts[0] ?? ''
+  for (const key of [...FIVE, 'judgment:stale:docs/x.md', 'judgment:stale:docs/y.md']) {
+    expect(text).toContain(`: ${key}\n`)
+  }
+  expect(text).toContain('5 findings, one section each')
+  expect(text.match(/^Swept: /gm)).toHaveLength(1)
+  // every key has its own ledger row on the one Issue
+  expect(new Set(w.recorded.map((r) => r.issue))).toEqual(new Set(['issue_1']))
+  expect(w.recorded.map((r) => r.key).sort()).toEqual(
+    [...FIVE, 'judgment:stale:docs/x.md', 'judgment:stale:docs/y.md'].sort(),
+  )
+  expect(w.rows[0]?.filed).toHaveLength(5)
+})
+
+const KEYS = ['links:a.md', 'links:b.md', 'links:c.md', 'links:d.md', 'links:e.md']
+const batchOf = (over: Partial<FindingIssue> = {}): FindingIssue[] =>
+  KEYS.map((key) => ({ ...issueOf(key, { issue: 'issue_5', ...over }) }))
+const link = (key: string) => finding('links', key, 1)
+
+test('fixing three of five keys heals three keys: the Issue stays open and is told; the last two close it', () => {
+  const still = KEYS.slice(3).map(link)
+  const partial = planLifecycle({
+    red: still,
+    runs: [run('links')],
+    issues: batchOf(),
+    now,
+    swept: 'app @ abc1234',
+  })
+  // the two red keys keep the Issue; the three green ones are one note naming them
+  expect([...partial.suppress].sort()).toEqual(['links:d.md', 'links:e.md'])
+  expect(partial.steps).toHaveLength(1)
+  expect(partial.steps[0]).toMatchObject({
+    action: 'noted',
+    issue: 'issue_5',
+    keys: ['links:a.md', 'links:b.md', 'links:c.md'],
+  })
+  expect(partial.steps[0]?.why).toContain('links:d.md, links:e.md not green yet')
+
+  const all = planLifecycle({ red: [], runs: [run('links')], issues: batchOf(), now, swept: 'app @ abc1234' })
+  expect(all.steps).toHaveLength(1)
+  expect(all.steps[0]).toMatchObject({ action: 'healed', issue: 'issue_5', keys: KEYS })
+})
+
+test('a lead at work on a batch is told which keys healed; a key no run spoke for keeps the Issue open', () => {
+  const working = planLifecycle({
+    red: [],
+    runs: [run('links')],
+    issues: batchOf({ state: 'working' }),
+    now,
+    swept: 'app @ abc1234',
+  })
+  expect(working.steps.map((s) => s.action)).toEqual(['noted'])
+  // a deps key the probe did not run for is neither green nor red: the other keys cannot close the Issue
+  const mixed = planLifecycle({
+    red: [],
+    runs: [run('links')],
+    issues: [...batchOf().slice(0, 2), issueOf('deps', { issue: 'issue_5' })],
+    now,
+    swept: 'app @ abc1234',
+  })
+  expect(mixed.steps.map((s) => s.action)).toEqual(['noted'])
+})
+
+test('a batch closed done and red again in two keys is reopened once, with both keys named', () => {
+  const closed = batchOf({ state: 'closed', outcome: 'done', closedAt: ago(2 * DAY), filedAt: ago(10 * DAY) })
+  const plan = planLifecycle({
+    red: [link('links:a.md'), link('links:c.md')],
+    runs: [run('links')],
+    issues: closed,
+    now,
+    swept: 'x',
+  })
+  expect(plan.steps).toHaveLength(1)
+  expect(plan.steps[0]).toMatchObject({ action: 'reopened', issue: 'issue_5', keys: ['links:a.md', 'links:c.md'] })
+  expect([...plan.suppress].sort()).toEqual(['links:a.md', 'links:c.md'])
+})
+
+test('a key whose Issue was filed and closed within a day is a repeat: not filed again', () => {
+  const lately = batchOf({ state: 'closed', outcome: 'dropped', closedAt: ago(HOUR), filedAt: ago(3 * HOUR) })
+  const plan = planLifecycle({ red: [link('links:a.md')], runs: [run('links')], issues: lately, now, swept: 'x' })
+  expect(plan.steps).toEqual([])
+  expect([...plan.suppress]).toEqual(['links:a.md'])
 })

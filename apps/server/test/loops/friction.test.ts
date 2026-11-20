@@ -434,7 +434,7 @@ test('a pattern is filed against its count; the next pass at 11 after a count of
     closedFindings: [closedFinding()],
   })
   expect((await frictionPass(next.deps)).ok).toBe(true)
-  expect(next.verdicts).toEqual([{ issue: 'issue_7', verdict: 'moved', measured: 11 }])
+  expect(next.verdicts).toEqual([{ issue: 'issue_7', key: 'regression', verdict: 'moved', measured: 11 }])
   const text = next.bodies.find((b) => b.text.includes('(regression)'))?.text
   expect(text).toContain('Last time: Issue issue_7 at figure 12, now 11 (moved).')
 })
@@ -452,10 +452,10 @@ test('a pattern no longer counted is at 0, a count that did not fall is flat or 
   })
   expect((await frictionPass(w.deps)).ok).toBe(true)
   expect(w.verdicts).toEqual([
-    { issue: 'issue_1', verdict: 'moved', measured: 0 },
-    { issue: 'issue_2', verdict: 'flat', measured: 9 },
-    { issue: 'issue_3', verdict: 'moved', measured: 0 },
-    { issue: 'issue_4', verdict: 'unmeasured', measured: null },
+    { issue: 'issue_1', key: 'gone', verdict: 'moved', measured: 0 },
+    { issue: 'issue_2', key: 'regression', verdict: 'flat', measured: 9 },
+    { issue: 'issue_3', key: 'worse', verdict: 'moved', measured: 0 },
+    { issue: 'issue_4', key: 'noise', verdict: 'unmeasured', measured: null },
   ])
   expect(w.bodies.find((b) => b.text.includes('(regression)'))?.text).toContain(
     'Last time: Issue issue_2 at figure 9, now 9 (flat).',
@@ -608,7 +608,7 @@ test('a closed KPI finding is judged against the KPI now, and one with no figure
   })
   await frictionPass(w.deps)
   expect(w.verdicts).toEqual([
-    { issue: 'issue_7', verdict: 'moved', measured: 0.05 },
-    { issue: 'issue_8', verdict: 'unmeasured', measured: null },
+    { issue: 'issue_7', key: 'kpi:avoidable_touches', verdict: 'moved', measured: 0.05 },
+    { issue: 'issue_8', key: 'kpi:cycle_p50', verdict: 'unmeasured', measured: null },
   ])
 })

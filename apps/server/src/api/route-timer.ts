@@ -1,7 +1,7 @@
 import { Elysia } from 'elysia'
 import type { RouteLatency } from '../domains/loops/selfwatch-model.ts'
 
-/** The window the p95 is read over: the self-watch's `routes_slow` and `GET /health`'s `routeP95Ms`. */
+/** The window the p95 is read over: `GET /health`'s `routeP95Ms`. */
 export const ROUTE_WINDOW_MS = 5 * 60_000
 
 /**

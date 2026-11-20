@@ -31,8 +31,6 @@ const Env = z.object({
   FACTORY_SELFWATCH_GRACE_MS: ms.optional(),
   /** the age that makes the leads tick stale, in place of three intervals and a minute: a scenario's way to a stale heartbeat */
   FACTORY_HEARTBEAT_STALE_MS: ms.optional(),
-  /** the branch whose CI the self-watch reads; unset is the repo's default branch */
-  FACTORY_SELFWATCH_BRANCH: z.string().trim().min(1).optional(),
   /** a project is swept again after this long */
   FACTORY_HYGIENE_EVERY_MS: ms.optional(),
   /** a failed hygiene judgment is asked again after this long */
@@ -73,7 +71,6 @@ export interface LoopSettings {
   hygieneDailyMs: number
   hygieneRetryMs: number
   selfwatchGraceMs: number
-  selfwatchBranch: string | null
   heartbeatStaleMs: number | null
   reaperGraceMs: number
   /** the `gh` config directory for work repos, null when none is set */
@@ -152,7 +149,6 @@ export function loadLoopSettings(env: Environment): LoopSettings {
     hygieneDailyMs: 24 * 3_600_000,
     hygieneRetryMs: e.FACTORY_HYGIENE_RETRY_MS ?? WORKFLOWS.hygiene.retry.backoffMs,
     selfwatchGraceMs: e.FACTORY_SELFWATCH_GRACE_MS ?? DEFAULT_WAIT_GRACE_MS,
-    selfwatchBranch: e.FACTORY_SELFWATCH_BRANCH ?? null,
     heartbeatStaleMs: e.FACTORY_HEARTBEAT_STALE_MS ?? null,
     reaperGraceMs: REAPER_GRACE_MS,
     ghConfigDirWork: e.FACTORY_GH_CONFIG_DIR_WORK ?? null,

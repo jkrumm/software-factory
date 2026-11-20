@@ -38,6 +38,8 @@ export interface ClosedFinding {
 /** A verdict to store: the figure read again (null: none was read) and the verdict it gives. */
 export interface Judged {
   issue: string
+  /** the finding's key: an Issue may carry several findings, each judged on its own */
+  key: string
   verdict: Verdict
   measured: number | null
 }
@@ -56,15 +58,15 @@ export function judgeClosed(
   for (const row of rows) {
     if (row.verdict !== null) continue
     if (row.outcome === 'dropped' || row.outcome === 'cancelled' || row.figure === null) {
-      judged.push({ issue: row.issue, verdict: 'unmeasured', measured: null })
+      judged.push({ issue: row.issue, key: row.key, verdict: 'unmeasured', measured: null })
       continue
     }
     const now = read(row)
     if (now === undefined) continue
     judged.push(
       now === null
-        ? { issue: row.issue, verdict: 'unmeasured', measured: null }
-        : { issue: row.issue, verdict: movedDown(row.figure, now), measured: now },
+        ? { issue: row.issue, key: row.key, verdict: 'unmeasured', measured: null }
+        : { issue: row.issue, key: row.key, verdict: movedDown(row.figure, now), measured: now },
     )
   }
   return judged

@@ -26,7 +26,7 @@ export interface ApiDeps {
   /** serves the OpenAPI document and its page, public; off by default and in production (the CLI generator turns it on and reads it in-process) */
   docs?: boolean
   health: HealthSource
-  /** times every route but `/health` and the stream, for `heartbeat.routeP95Ms` and the self-watch's `routes_slow`; absent, nothing is timed */
+  /** times every route but `/health` and the stream, for `heartbeat.routeP95Ms`; absent, nothing is timed */
   routes?: RouteTimer
   /** the checkpoints use cases; absent (the CLI generator reads the document only), the routes exist and answer nothing */
   checkpoints?: CheckpointUses

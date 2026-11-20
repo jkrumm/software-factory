@@ -4,6 +4,7 @@ import { loadMigrations, migrate } from '../../src/adapters/postgres/migrate.ts'
 import { postgresLoopStore } from '../../src/adapters/postgres/loop-store.ts'
 import { settleClosed } from '../../src/app/loops/ledger.ts'
 import { judgeClosed, lastTime, movedDown, newestByKey, type ClosedFinding } from '../../src/domains/loops/ledger.ts'
+import { planSelfwatch } from '../../src/domains/loops/selfwatch.ts'
 import { readGate } from '../../src/app/loops/gate.ts'
 import { loopReads } from '../../src/read/loops.ts'
 import { ok } from '../../src/kernel/result.ts'
@@ -44,10 +45,10 @@ test('judgeClosed: noise and a finding with no figure are unmeasured, a source t
     closed({ issue: 'issue_6', key: 'none' }),
   ]
   expect(judgeClosed(rows, (row) => (row.issue === 'issue_4' ? undefined : row.key === 'none' ? null : 7))).toEqual([
-    { issue: 'issue_1', verdict: 'moved', measured: 7 },
-    { issue: 'issue_2', verdict: 'unmeasured', measured: null },
-    { issue: 'issue_3', verdict: 'unmeasured', measured: null },
-    { issue: 'issue_6', verdict: 'unmeasured', measured: null },
+    { issue: 'issue_1', key: 'stall:wall', verdict: 'moved', measured: 7 },
+    { issue: 'issue_2', key: 'stall:wall', verdict: 'unmeasured', measured: null },
+    { issue: 'issue_3', key: 'stall:wall', verdict: 'unmeasured', measured: null },
+    { issue: 'issue_6', key: 'none', verdict: 'unmeasured', measured: null },
   ])
 })
 
@@ -136,6 +137,59 @@ test('the ledger on Postgres: a figure is stored once, a closed Issue is judged 
   void ok
 })
 
+test('one Issue may carry several findings: a row and a verdict per key, the class read once per Issue, the newest Issue per key', async () => {
+  const loops = postgresLoopStore(db.sql)
+  const reads = loopReads(db.sql)
+  const uow = {
+    run: async (work: (s: never) => Promise<unknown>) => work({ loops, loopReads: reads } as never),
+    inTransaction: () => false,
+  }
+  await issue(60, 'closed', 'done')
+  const record = (key: string, figure: number) =>
+    loops.recordFinding({
+      issue: 'issue_60',
+      loop: 'hygiene',
+      repo: 'batch-app',
+      class: key.split(':')[0] ?? key,
+      key,
+      signal: null,
+      filedAt: at(1),
+      figure,
+    })
+  await record('links:a.md', 3)
+  await record('links:b.md', 2)
+  await record('deadcode', 8)
+  // a repeat of a key on the same Issue is a no-op
+  await record('links:a.md', 99)
+  expect((await db.sql`SELECT count(*)::int AS n FROM factory.loop_findings WHERE issue_id = 'issue_60'`)[0]?.n).toBe(3)
+
+  // the Issue is one Issue of the links class, not two
+  const classes = await reads.classIssues('hygiene')
+  expect(Object.keys(classes).sort()).toEqual(['deadcode', 'links'])
+  expect(classes.links?.map((i) => i.issue)).toEqual(['issue_60'])
+
+  // each key is judged by itself, against its own figure
+  const settled = await settleClosed(
+    { uow: uow as never },
+    { loop: 'hygiene', repo: 'batch-app', now: at(5), read: (row) => (row.key === 'links:a.md' ? 0 : row.figure) },
+  )
+  expect(settled.ok).toBe(true)
+  const rows = await db.sql`SELECT key, verdict FROM factory.loop_findings WHERE issue_id = 'issue_60' ORDER BY key`
+  expect(rows.map((r: { key: string; verdict: string | null }) => [r.key, r.verdict])).toEqual([
+    ['deadcode', 'flat'],
+    ['links:a.md', 'moved'],
+    ['links:b.md', 'flat'],
+  ])
+
+  // the lifecycle reads the newest Issue of each key: all three keys point at the one Issue
+  const issues = await reads.findingIssues('batch-app')
+  expect(issues.map((i) => [i.key, i.issue, i.state])).toEqual([
+    ['deadcode', 'issue_60', 'closed'],
+    ['links:a.md', 'issue_60', 'closed'],
+    ['links:b.md', 'issue_60', 'closed'],
+  ])
+})
+
 test('the self-watch memory is the newest row of a subject; a refile of the same Issue updates it, a new Issue supersedes it, a repeat of a closed one teaches the old row', async () => {
   const loops = postgresLoopStore(db.sql)
   const row = (over: Record<string, unknown> = {}) => ({
@@ -192,6 +246,38 @@ test('the self-watch memory is the newest row of a subject; a refile of the same
   ).toEqual(at(6))
 })
 
+test('a row of a kind no longer filed is read as it stands, and cleared when its subject is absent, never a failed parse', async () => {
+  const loops = postgresLoopStore(db.sql)
+  await issue(40, 'queued')
+  await loops.applySelfwatch({
+    filed: [
+      {
+        issueId: 'issue_40',
+        repo: 'software-factory',
+        figure: 2500,
+        subjectKey: 'routes_slow:routes',
+        kind: 'routes_slow',
+        firstSeenAt: at(1),
+        lastSeenAt: at(1),
+        evidenceHash: 'h1',
+        lastFiledAt: at(1),
+        signalId: null,
+        clearedAt: null,
+      },
+    ],
+    touched: [],
+    cleared: [],
+    at: at(1),
+  })
+  const rows = await loops.selfwatchRows()
+  expect(rows.find((r) => r.subjectKey === 'routes_slow:routes')).toMatchObject({
+    kind: 'routes_slow',
+    issueId: 'issue_40',
+    clearedAt: null,
+  })
+  expect(planSelfwatch([], rows, at(2)).clear).toContain('routes_slow:routes')
+})
+
 test('the migration copies the two old ledgers into loop_findings: the status becomes verdict and ship, the Issue the signal reached keeps the memory', async () => {
   const cluster = await startTestCluster()
   try {
@@ -205,7 +291,7 @@ test('the migration copies the two old ledgers into loop_findings: the status be
     await cluster.sql`INSERT INTO factory.intake_signals (id, source, kind, origin, trust, repo, fingerprint, title, text, received_at, state, issue_id)
       VALUES ('signal_1', 'agent:app', 'request', 'factory', 'agent', 'app', 'fp1', 't', 'x', now(), 'filed', 'issue_1')`
     await cluster.sql`INSERT INTO factory.selfwatch_findings (subject_key, kind, first_seen_at, last_seen_at, evidence_hash, last_filed_at, signal_id, cleared_at)
-      VALUES ('ci_red:wf', 'ci_red', ${at(1)}, ${at(2)}, 'h', ${at(2)}, 'signal_1', ${at(3)}), ('ci_red:none', 'ci_red', ${at(1)}, ${at(2)}, 'h', ${at(2)}, NULL, NULL)`
+      VALUES ('lead_idle:wf', 'lead_idle', ${at(1)}, ${at(2)}, 'h', ${at(2)}, 'signal_1', ${at(3)}), ('lead_idle:none', 'lead_idle', ${at(1)}, ${at(2)}, 'h', ${at(2)}, NULL, NULL)`
     const finding = (
       id: string,
       status: string,
@@ -226,7 +312,7 @@ test('the migration copies the two old ledgers into loop_findings: the status be
     expect(
       rows.map((r) => [r.issue_id, r.loop, r.class, r.key, r.figure, r.verdict, r.shipped_at, r.measured, r.reopens]),
     ).toEqual([
-      ['issue_1', 'selfwatch', 'ci_red', 'ci_red:wf', null, null, null, null, null],
+      ['issue_1', 'selfwatch', 'lead_idle', 'lead_idle:wf', null, null, null, null, null],
       ['issue_2', 'throughput', 'step_peak_mib', 'step_peak_mib:full', 4096, 'flat', at(2), 4000, null],
       ['issue_3', 'throughput', 'step_peak_mib', 'step_peak_mib:full', 4096, null, null, null, 'issue_2'],
       ['issue_4', 'throughput', 'step_peak_mib', 'step_peak_mib:full', 4096, 'unmeasured', null, null, null],
@@ -259,5 +345,5 @@ test('the self-watch loop is on the class gate: a kind whose Issues were mostly 
   }
   const gate = await readGate({ uow: uow as never }, { loop: 'selfwatch', now: at(5) })
   expect(gate.ok && gate.value.allows('lead_idle:issue_99')).toBe(false)
-  expect(gate.ok && gate.value.allows('ci_red:wf')).toBe(true)
+  expect(gate.ok && gate.value.allows('migration_clash:wf')).toBe(true)
 })

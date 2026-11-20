@@ -1,4 +1,6 @@
 import {
+  hygieneClass,
+  MAX_TEXT_CHARS,
   type HygieneAnswer,
   type HygieneCandidate,
   type HygieneFinding,
@@ -124,38 +126,92 @@ export interface Swept {
 const shortRef = (ref: string): string => ref.slice(0, 7)
 
 /** The seat the finding's Issue starts on: every hygiene finding is a probe's, and the probe turning green proves the fix. */
-const seatLine = (): string =>
-  'Seat: light (the probe turning green proves the fix; a class whose Issues keep moving up starts on the standard lead)'
+const seatLine = (): string => 'Seat: light (the probe turning green proves the fix)'
 
-/** A probe finding as a signal: the stable title, what was swept, the evidence lines and how to look again. */
-export function probeSignalText(finding: ProbeFinding, swept: Swept, last: string | null = null): string {
+const sweptLine = (swept: Swept): string => `Swept: ${swept.repo} @ ${shortRef(swept.ref)}`
+
+/** One finding of a batch: its key, its own title, the lines its section carries and the figure it is filed against (null: none). */
+export interface Section {
+  key: string
+  title: string
+  lines: string[]
+  figure: number | null
+}
+
+/** A probe finding's section: the probe and key, what the last Issue of the key did, the evidence lines and how to look again. */
+export function probeSection(finding: ProbeFinding, last: string | null = null): Section {
+  return {
+    key: finding.key,
+    title: finding.title,
+    figure: finding.count,
+    lines: [
+      `Probe: ${finding.probe} (${finding.key})`,
+      ...(last === null ? [] : [last]),
+      `Evidence (${finding.count} item(s), up to the first ${finding.lines.length} lines):`,
+      ...finding.lines,
+      ...(finding.plan ?? []),
+      finding.reproduce !== undefined
+        ? `Reproduce: ${finding.reproduce}`
+        : finding.probe === 'check'
+          ? 'Reproduce: make check'
+          : 'Sweep: factory read loops',
+    ],
+  }
+}
+
+/** A judgment finding's section: where it was read, the evidence, the fix. */
+export function judgmentSection(finding: HygieneFinding, swept: Swept): Section {
+  return {
+    key: judgmentKey(finding),
+    title: judgmentTitle(finding),
+    figure: null,
+    lines: [
+      `Judgment: ${finding.kind} document ${finding.path}`,
+      `Finding: ${finding.title}`,
+      `Evidence: ${finding.evidence}`,
+      `Fix: ${finding.fix}`,
+      `Reproduce: read ${finding.path} at ${shortRef(swept.ref)} against the code it describes`,
+    ],
+  }
+}
+
+/** Headroom under `MAX_TEXT_CHARS` for the header and the cut markers. */
+const TEXT_BUDGET = MAX_TEXT_CHARS - 1_000
+
+/**
+ * One pass's findings of one repo as one signal: what was swept and the seat once, then a section per finding, each headed by
+ * its key (a key heals or reopens by itself). A text over the signal's limit is shared out evenly: a section over its share
+ * is cut and says so, so one long upgrade plan cannot push a finding out of the Issue.
+ */
+export function batchSignalText(sections: readonly Section[], swept: Swept): string {
+  const share = Math.floor(TEXT_BUDGET / Math.max(sections.length, 1))
+  const bodies = sections.map((section, index) => {
+    const text = [`## ${index + 1} of ${sections.length}: ${section.key}`, ...section.lines].join('\n')
+    return text.length > share ? `${text.slice(0, share)}\n… (cut here: the pass record keeps the rest)` : text
+  })
   return [
-    `Swept: ${swept.repo} @ ${shortRef(swept.ref)}`,
-    `Probe: ${finding.probe} (${finding.key})`,
+    sweptLine(swept),
     seatLine(),
-    ...(last === null ? [] : [last]),
-    `Evidence (${finding.count} item(s), up to the first ${finding.lines.length} lines):`,
-    ...finding.lines,
-    ...(finding.plan ?? []),
-    finding.reproduce !== undefined
-      ? `Reproduce: ${finding.reproduce}`
-      : finding.probe === 'check'
-        ? 'Reproduce: make check'
-        : 'Sweep: factory read loops',
+    sections.length === 1
+      ? 'One finding.'
+      : `${sections.length} findings, one section each; a key heals or reopens by itself.`,
+    '',
+    bodies.join('\n\n'),
   ].join('\n')
 }
 
-/** A judgment finding as a signal: where it was read, the evidence, the fix. */
-export function judgmentSignalText(finding: HygieneFinding, swept: Swept): string {
-  return [
-    `Swept: ${swept.repo} @ ${shortRef(swept.ref)}`,
-    `Judgment: ${finding.kind} document ${finding.path}`,
-    seatLine(),
-    `Finding: ${finding.title}`,
-    `Evidence: ${finding.evidence}`,
-    `Fix: ${finding.fix}`,
-    `Reproduce: read ${finding.path} at ${shortRef(swept.ref)} against the code it describes`,
-  ].join('\n')
+/** The Issue's title: the finding's own for one, else the kinds it covers and the repo. Built from keys, never from counts. */
+export function batchTitle(sections: readonly Section[], swept: Swept): string {
+  const [only] = sections
+  if (sections.length === 1 && only) return only.title
+  const kinds = [...new Set(sections.map((section) => hygieneClass(section.key)))]
+  return `Hygiene: ${kinds.join(', ')} (${swept.repo})`.slice(0, 512)
+}
+
+/** What intake matches the batch by: the same findings of one repo are one subject, whatever the pass or the day. */
+export function batchSubject(sections: readonly Section[]): string {
+  const keys = sections.map((section) => section.key).sort()
+  return `batch:${new Bun.CryptoHasher('sha256').update(keys.join('\n')).digest('hex').slice(0, 16)}`
 }
 
 // ---- which work is due ----------------------------------------------------------------------------------------------------

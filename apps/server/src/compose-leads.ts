@@ -23,20 +23,16 @@ import { typePacer } from './app/type-pace.ts'
 import type { Clock } from './kernel/clock.ts'
 import { freshFor } from './kernel/fresh-for.ts'
 import { costOfIssues } from './read/kpis.ts'
-import { readClassesOut } from './read/finding-seats.ts'
 import { readTripwire } from './read/kpis-seats.ts'
 import type { IdSource } from './kernel/ids.ts'
 import type { PortError, Result } from './kernel/result.ts'
 
-/** The light seat's two readers off one tripwire reading: triage's `small` gate and the hygiene classes that are out. */
-export function lightReaders(sql: SQL, clock: Clock): Pick<LeadDeps, 'lightGate' | 'lightClassesOut'> {
+/** The light seat's gate off one tripwire reading: triage's `small` starts light only while it is met. */
+export function lightReaders(sql: SQL, clock: Clock): Pick<LeadDeps, 'lightGate'> {
   const tripwire = freshFor(LIGHT_GATE_FRESH_MS, () =>
     readTripwire(sql, { now: clock.now(), cost: (issues) => costOfIssues(sql, issues) }),
   )
-  const out = freshFor(LIGHT_GATE_FRESH_MS, async () =>
-    readClassesOut(sql, (await tripwire()).bound?.classShare ?? null),
-  )
-  return { lightGate: async () => (await tripwire()).met === true, lightClassesOut: out }
+  return { lightGate: async () => (await tripwire()).met === true }
 }
 
 /** How long one reading of the light seat's tripwire serves the starts. */
@@ -60,8 +56,8 @@ export function composeLeads(input: {
   clock: Clock
   ids: IdSource
   settings: LeadSettings
-  /** the light seat's two readers, one reading shared with the badge's planned seat (`lightReaders`) */
-  light: Pick<LeadDeps, 'lightGate' | 'lightClassesOut'>
+  /** the light seat's gate, one reading shared with the badge's planned seat (`lightReaders`) */
+  light: Pick<LeadDeps, 'lightGate'>
   capacity: Pick<LeadDeps, 'seats' | 'claims' | 'windows'>
   /** the project's check tiers (`project.yaml` `checks:`), read from the stored project */
   checks: LeadDeps['checks']
@@ -116,7 +112,6 @@ export function composeLeads(input: {
     typePace: typePacer({ clock: input.clock, gapMs: s.typeGapMs }),
     processTable: input.host.processTable,
     // The tripwire over the last days is a heavy read (it prices attempts): one answer serves every start of the next minutes.
-    // The same reading gives the bound a hygiene class stays under to start light.
     ...input.light,
     quiesce: {
       afterMs: s.quiesceAfterMs,

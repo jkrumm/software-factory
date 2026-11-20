@@ -151,8 +151,7 @@ export function postgresLeadStore(tx: SQL): LeadStore {
     async originOf(issue) {
       const [raw] = await tx`
         SELECT
-          (SELECT key FROM factory.loop_findings WHERE issue_id = ${issue} AND loop = 'hygiene') AS hygiene_key,
-          (SELECT class FROM factory.loop_findings WHERE issue_id = ${issue} AND loop = 'hygiene') AS hygiene_class,
+          (SELECT key FROM factory.loop_findings WHERE issue_id = ${issue} AND loop = 'hygiene' ORDER BY key LIMIT 1) AS hygiene_key,
           EXISTS (SELECT 1 FROM factory.intake_door_unrouted WHERE filed_issue = ${issue}) AS unrouted,
           concat_ws(' ',
             (SELECT string_agg(s.title || ' ' || s.text, ' ' ORDER BY s.received_at, s.id)
@@ -162,14 +161,12 @@ export function postgresLeadStore(tx: SQL): LeadStore {
       const row = z
         .object({
           hygiene_key: z.string().nullable(),
-          hygiene_class: z.string().nullable(),
           unrouted: z.boolean(),
           text: z.string().nullable(),
         })
         .parse(raw)
       return {
         hygieneKey: row.hygiene_key,
-        hygieneClass: row.hygiene_class,
         unroutedMonitor: row.unrouted,
         text: row.text ?? '',
       }

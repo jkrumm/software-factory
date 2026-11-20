@@ -132,7 +132,6 @@ test('classWords: a held class says when it is asked again, a probation class ho
     share: 0.75,
     open: 0,
     heldUntil: '2026-11-15T10:00:00.000Z',
-    seat: null,
   }
   expect(classWords(cls)).toBe('3 of 4 dropped or cancelled, asked again 2026-11-15')
   expect(classWords({ ...cls, status: 'probation' })).toBe(

@@ -16,11 +16,10 @@ import { rootedRepos } from '../../src/adapters/git/repos.ts'
 import { HYGIENE_CATALOGUE } from '@software-factory/contract'
 import { createHygieneChecker } from '../../src/adapters/hygiene/index.ts'
 import { brokenLinks } from '../../src/adapters/hygiene/probes/links.ts'
-import { allCoChanged, coChanged, parseLog } from '../../src/adapters/hygiene/probes/cochange.ts'
 import { sections } from '../../src/adapters/hygiene/probes/context.ts'
 import { type Released, parseOutdated, severity } from '../../src/adapters/hygiene/probes/deps.ts'
 import { MAX_SIGNAL_TEXT_CHARS, signalLines } from '../../src/domains/leads/brief.ts'
-import { probeSignalText } from '../../src/domains/loops/hygiene.ts'
+import { batchSignalText, probeSection } from '../../src/domains/loops/hygiene.ts'
 import { retiredScope } from '../../src/adapters/hygiene/probes/retired.ts'
 import { publishedHost } from '../../src/adapters/hygiene/probes/runrules.ts'
 import {
@@ -93,8 +92,10 @@ function fakeBun(table: string, installExit = 0, audit = '{}'): string {
   return script
 }
 
-const checker = (options: { make?: string; bun?: string; released?: Released } = {}) =>
+const checker = (options: { make?: string; bun?: string; released?: Released; slot?: string[] } = {}) =>
   createHygieneChecker({
+    // the probe runs the gate in a test slot: `env` stands for the host's `factory slot run` and runs what follows
+    slot: ['env'],
     repos: rootedRepos([join(base, 'repos')]),
     workDir: join(base, 'data'),
     bun: fakeBun(''),
@@ -107,6 +108,7 @@ async function sweep(
   options: {
     make?: string
     bun?: string
+    slot?: string[]
     released?: Released
     skipCheck?: string
     probes?: DeclaredProbe[]
@@ -243,6 +245,30 @@ describe('check probe', () => {
     const on = await sweep(makeRepo({ Makefile: makefile }).name)
     expect(run(on, 'check')?.outcome).toBe('found')
     expect(findings(on, 'check')).toHaveLength(1)
+  })
+
+  test('the gate runs inside a test slot: the slot command wraps make, and no slot or no slot in time is failed, never a finding', async () => {
+    const marker = join(base, `slot-ran-${++counter}`)
+    const slot = join(fake, `slot-ok-${counter}`)
+    writeFileSync(slot, `#!/bin/sh\necho "$@" >> "${marker}"\nexec "$@"\n`)
+    chmodSync(slot, 0o755)
+    const red = await sweep(makeRepo({ Makefile: 'check:\n\t@exit 1\n' }).name, { slot: [slot] })
+    expect(run(red, 'check')?.outcome).toBe('found')
+    // the throwaway checkout and the confirmation in the project's own checkout both ran in a slot
+    expect(readFileSync(marker, 'utf8').trim().split('\n')).toEqual(['make check', 'make check'])
+
+    const none = await sweep(makeRepo({ Makefile: 'check:\n\t@exit 1\n' }).name, { slot: ['/nonexistent/slot'] })
+    expect(run(none, 'check')?.outcome).toBe('failed')
+    expect(run(none, 'check')?.detail).toContain('needs a test slot')
+    expect(findings(none, 'check')).toEqual([])
+
+    const full = join(fake, `slot-full-${counter}`)
+    writeFileSync(full, '#!/bin/sh\nexit 75\n')
+    chmodSync(full, 0o755)
+    const late = await sweep(makeRepo({ Makefile: 'check:\n\t@exit 1\n' }).name, { slot: [full] })
+    expect(run(late, 'check')?.outcome).toBe('failed')
+    expect(run(late, 'check')?.detail).toContain('no test slot came in time')
+    expect(findings(late, 'check')).toEqual([])
   })
 
   test('clean, found with the tail of the output, skipped, failed', async () => {
@@ -973,7 +999,7 @@ describe('deps probe: the Issue carries the upgrade procedure', () => {
     const report = await sweep(makeRepo({ 'package.json': '{}' }).name, { bun: fakeBun(OUTDATED), released })
     const f = findings(report, 'deps')[0]
     if (!f) throw new Error('no deps finding')
-    const text = probeSignalText(f, { repo: 'app', ref: '0123456789' })
+    const text = batchSignalText([probeSection(f)], { repo: 'app', ref: '0123456789' })
     expect(text.indexOf('Evidence (')).toBeLessThan(text.indexOf('Upgrade plan as of'))
     expect(text).toContain('Procedure (light seat')
     expect(text).toContain('Seat: light')
@@ -982,76 +1008,6 @@ describe('deps probe: the Issue carries the upgrade procedure', () => {
     const quoted = signalLines({ source: 'agent:app', at: new Date(), title: f.title, text, facts: null })
     expect(quoted).toContain('7. Report')
     expect(quoted).toContain('Held back, do not upgrade yet:')
-  })
-})
-
-describe('cochange probe', () => {
-  const commits = (n: number, files: string[]) => Array.from({ length: n }, () => files)
-
-  test('only the strongest pair is raised; the others that qualify are named, so the lifecycle never heals them', () => {
-    const history = [...commits(20, ['src/a/x.ts', 'lib/y.ts']), ...commits(16, ['src/b/p.ts', 'lib/q.ts'])]
-    expect(coChanged(history).map((p) => `${p.a}|${p.b}`)).toEqual(['lib/y.ts|src/a/x.ts'])
-    expect(allCoChanged(history).map((p) => `${p.a}|${p.b}`)).toEqual(['lib/y.ts|src/a/x.ts', 'lib/q.ts|src/b/p.ts'])
-  })
-
-  test('a pair in different directories that moves together is a finding; filters hold', () => {
-    const pairs = coChanged([
-      ...commits(16, ['src/a/x.ts', 'lib/y.ts']),
-      ...commits(17, ['src/a/gen.ts', 'src/b/gen.sql']), // same stem
-      ...commits(17, ['src/c/one.ts', 'src/c/two.ts']), // same directory
-      ...commits(14, ['src/d/p.ts', 'src/e/q.ts']), // too few
-      ...commits(15, ['src/f/m.ts', 'src/g/n.ts']), // 15 of n's 30 commits: 0.5 < 0.85
-      ...commits(15, ['src/f/m.ts', 'src/h/o.ts']),
-      ...commits(15, ['src/g/n.ts']),
-      ...commits(15, ['src/h/o.ts']),
-      ...commits(
-        7,
-        Array.from({ length: 30 }, (_, i) => `big/d${i}/f${i}.ts`),
-      ), // too many files
-    ])
-    expect(pairs.map((p) => `${p.a}|${p.b}`)).toEqual(['lib/y.ts|src/a/x.ts'])
-    expect(pairs[0]).toMatchObject({ together: 16, inA: 16, inB: 16 })
-    expect(coChanged(commits(16, ['src/a/x.ts', 'lib/y.ts']), (file) => file !== 'lib/y.ts')).toEqual([])
-  })
-
-  test('ignores lockfiles, docs, generated, fixtures and tests', () => {
-    const log = `\0${'a'.repeat(40)}\n\nbun.lock\nREADME.md\ndocs/x.ts\nsrc/generated/g.ts\nsrc/a.test.ts\ntest/t.ts\npackage.json\napps/x/manifest.json\nMakefile\nsrc/real.ts\n`
-    expect(parseLog(log)).toEqual([['src/real.ts']])
-  })
-
-  test('ignores generated files: drizzle meta, lockfiles, codegen, snapshots', () => {
-    const files = [
-      'drizzle/meta/_journal.json',
-      'drizzle/meta/0001_snapshot.json',
-      'yarn/x.lock',
-      'uv.lock',
-      'go.sum',
-      'src/api.gen.ts',
-      'src/routeTree.gen.tsx',
-      'src/__generated__/x.ts',
-      'foo.generated.ts',
-      'src/a.snap',
-    ]
-    const log = `\0${'a'.repeat(40)}\n\n${files.join('\n')}\nsrc/real.ts\n`
-    expect(parseLog(log)).toEqual([['src/real.ts']])
-    const generatedPair = Array.from({ length: 20 }, (_, i) =>
-      parseLog(`\0${String(i).padStart(40, '0')}\n\nlib/api.gen.ts\ndrizzle/meta/_journal.json\n`),
-    ).flat()
-    expect(coChanged(generatedPair)).toEqual([])
-  })
-
-  test('over a real history', async () => {
-    const { name, work } = makeRepo({ 'src/a/x.ts': '0', 'lib/y.ts': '0' })
-    for (let i = 1; i <= 15; i++) commit(work, { 'src/a/x.ts': `${i}`, 'lib/y.ts': `${i}` })
-    push(work)
-    const report = await sweep(name)
-    expect(run(report, 'cochange')?.outcome).toBe('found')
-    expect(findings(report, 'cochange')[0]).toMatchObject({
-      key: 'cochange:lib/y.ts|src/a/x.ts',
-      title: 'Hygiene: lib/y.ts and src/a/x.ts change together',
-      lines: ['changed together in 16 of the last 300 commits (lib/y.ts: 16, src/a/x.ts: 16)'],
-      count: 16,
-    })
   })
 })
 

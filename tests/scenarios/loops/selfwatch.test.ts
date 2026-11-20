@@ -21,51 +21,23 @@ let lab: Lab
 let beat: Lab
 let github: FakeCi
 
-interface Run {
-  id: number
-  name: string
-  conclusion: string | null
-  head_sha: string
-  created_at: string
-}
-
 interface FakeCi {
   url: string
-  runs: Run[]
-  requests: string[]
   stop(): void
 }
 
-/** The two routes the CI reader calls: the repository (its default branch) and the completed workflow runs of a branch. */
+/** The GitHub the lab's live-work reader asks: no workflow run is in flight. */
 function fakeCi(): FakeCi {
-  const state: FakeCi = { url: '', runs: [], requests: [], stop: () => undefined }
   const server = Bun.serve({
     hostname: '127.0.0.1',
     port: 0,
     fetch(req) {
-      const url = new URL(req.url)
-      state.requests.push(`${url.pathname}${url.search}`)
-      if (url.pathname === `/repos/o/${REPO}`) return Response.json({ default_branch: 'master' })
-      if (url.pathname === `/repos/o/${REPO}/actions/runs`)
-        return Response.json({ workflow_runs: state.runs.map(shape) })
+      if (new URL(req.url).pathname === `/repos/o/${REPO}/actions/runs`) return Response.json({ workflow_runs: [] })
       return new Response('not found', { status: 404 })
     },
   })
-  state.url = `http://127.0.0.1:${server.port}`
-  state.stop = () => void server.stop(true)
-  return state
+  return { url: `http://127.0.0.1:${server.port}`, stop: () => void server.stop(true) }
 }
-
-const shape = (run: Run) => ({ ...run, html_url: `https://example.com/runs/${run.id}` })
-
-let runs = 0
-const ci = (name: string, conclusion: string, minutesAgo: number, id = 1000 + ++runs): Run => ({
-  id,
-  name,
-  conclusion,
-  head_sha: `${id}`.padEnd(40, 'a'),
-  created_at: new Date(Date.now() - minutesAgo * 60_000).toISOString(),
-})
 
 const git = async (cwd: string, ...args: string[]): Promise<string> => {
   const proc = Bun.spawn(['git', '-C', cwd, '-c', 'user.name=t', '-c', 'user.email=t@example.com', ...args], {
@@ -142,111 +114,11 @@ const rowOf = async (key: string) =>
     }[]
   )[0]
 
-const notesOf = async (issue: string): Promise<number> =>
-  Number(
-    (
-      await sql()`SELECT count(*) AS n FROM factory.issue_events WHERE issue_id = ${issue} AND kind = 'noted' AND result = 'applied'`
-    )[0].n,
-  )
-
 const pass = async (on: Lab = lab) => {
   const ran = await runLoop(on, 'selfwatch')
   expect(ran.error).toBeNull()
   return ran.summary ?? ''
 }
-
-/** The repo's origin is a github.com address while `fn` runs (the CI reader names the repository by it), the bare repo after. */
-async function onGithub<T>(fn: () => Promise<T>): Promise<T> {
-  const bare = await git(checkout(), 'remote', 'get-url', 'origin')
-  await git(checkout(), 'remote', 'set-url', 'origin', `https://github.com/o/${REPO}.git`)
-  try {
-    return await fn()
-  } finally {
-    await git(checkout(), 'remote', 'set-url', 'origin', bare)
-  }
-}
-
-const passOnGithub = () => onGithub(() => pass())
-
-test('ci_red: two red runs file one signal naming the workflow and both runs; red then green, one red, and a cancelled run in between', async () => {
-  // one red run, or red then green: nothing
-  github.runs = [ci('Deploy', 'failure', 10, 2001)]
-  await passOnGithub()
-  expect(await signalsOf('ci_red')).toEqual([])
-  github.runs = [
-    ci('Deploy', 'failure', 10, 2002),
-    ci('Deploy', 'success', 20, 2003),
-    ci('Deploy', 'failure', 30, 2004),
-  ]
-  await passOnGithub()
-  expect(await signalsOf('ci_red')).toEqual([])
-  // the default branch is asked for, then that branch's runs
-  expect(github.requests.some((r) => r.includes('branch=master'))).toBe(true)
-
-  // two red runs with a cancelled one between them
-  github.runs = [
-    ci('Deploy', 'failure', 10, 2011),
-    ci('Deploy', 'cancelled', 20, 2012),
-    ci('Deploy', 'timed_out', 30, 2013),
-  ]
-  await passOnGithub()
-  const [filed, ...more] = await signalsOf('ci_red')
-  expect(more).toEqual([])
-  expect(filed?.repo).toBe(REPO)
-  expect(filed?.title).toContain('CI is red')
-  expect(filed?.title).toContain('Deploy')
-  expect(filed?.text).toContain('run 2011')
-  expect(filed?.text).toContain('run 2013')
-  expect(filed?.text).not.toContain('run 2012')
-  expect(filed?.text).toContain('Reproduce:')
-  expect(filed?.issue_id).toMatch(/^issue_/)
-})
-
-test('once per subject: the same evidence files nothing, a third red run amends the open Issue, a cleared condition that returns is filed anew', async () => {
-  const [first] = await signalsOf('ci_red')
-  const issue = first?.issue_id as string
-  const before = await signalsOf('ci_red')
-  const notes = await notesOf(issue)
-  const issues = Number((await sql()`SELECT count(*) AS n FROM factory.issues WHERE repo = ${REPO}`)[0].n)
-
-  // an unchanged condition: nothing more
-  expect(await passOnGithub()).toContain('filed 0')
-  expect(await signalsOf('ci_red')).toHaveLength(before.length)
-  expect(await notesOf(issue)).toBe(notes)
-
-  // a newer red run changes the evidence: filed again under the same title, intake amends the open Issue
-  github.runs = [ci('Deploy', 'failure', 1, 2021), ...github.runs]
-  expect(await passOnGithub()).toContain('filed 1')
-  const after = await signalsOf('ci_red')
-  const amended = after.at(-1)
-  expect(amended?.text).toContain('run 2021')
-  expect(amended?.title).toBe(first?.title)
-  expect(Number((await sql()`SELECT count(*) AS n FROM factory.issues WHERE repo = ${REPO}`)[0].n)).toBe(issues)
-  const amendedIssue = amended?.issue_id ?? issue
-  expect(amendedIssue).toBe(issue)
-  expect(await notesOf(issue)).toBeGreaterThan(notes)
-
-  // the workflow goes green: the row is cleared, nothing is filed
-  const open = await rowOf('ci_red:Deploy')
-  expect(open?.cleared_at).toBeNull()
-  github.runs = [ci('Deploy', 'success', 1, 2031), ...github.runs]
-  expect(await passOnGithub()).toContain('cleared 1')
-  expect((await rowOf('ci_red:Deploy'))?.cleared_at).not.toBeNull()
-  expect(await signalsOf('ci_red')).toHaveLength(after.length)
-
-  // two red runs again: the subject is filed anew (the first Issue is still open, so intake takes it as a repeat of it)
-  github.runs = [ci('Deploy', 'failure', 0, 2041), ci('Deploy', 'failure', 1, 2042), ...github.runs]
-  expect(await passOnGithub()).toContain('filed 1')
-  const again = await rowOf('ci_red:Deploy')
-  expect(again?.cleared_at).toBeNull()
-  expect(again?.first_seen_at.getTime() ?? 0).toBeGreaterThan(open?.first_seen_at.getTime() ?? Number.POSITIVE_INFINITY)
-  expect((await signalsOf('ci_red')).at(-1)?.text).toContain('run 2041')
-
-  // the CI is green: the subject is gone
-  github.runs = [ci('Deploy', 'success', 0, 2051), ci('Deploy', 'success', 1, 2052)]
-  await passOnGithub()
-  expect((await rowOf('ci_red:Deploy'))?.cleared_at).not.toBeNull()
-})
 
 const withBranch = async (name: string, files: Record<string, string>): Promise<void> => {
   await git(checkout(), 'checkout', '-q', '-b', name, 'refs/remotes/origin/master')

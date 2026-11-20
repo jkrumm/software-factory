@@ -10,14 +10,13 @@ import {
   SUSTAINED_SPAN_MS,
 } from '../../domains/capacity/host.ts'
 import { slotLines } from '../../domains/capacity/slots.ts'
-import type { CiRuns, LoopReads, LoopStore, MigrationFiles, OverloadHost } from '../../domains/loops/ports.ts'
+import type { LoopReads, LoopStore, MigrationFiles, OverloadHost } from '../../domains/loops/ports.ts'
 import {
   type AdmissionRules,
   gatesPassedFindings,
   loadOverCeilingFindings,
   OVERLOAD_KINDS,
   overloadEvidence,
-  routesSlowFindings,
   slotLineFindings,
 } from '../../domains/loops/overload.ts'
 import { MAX_SIGNALS_PER_PASS } from '../../domains/loops/budget.ts'
@@ -25,7 +24,6 @@ import { readGate } from './gate.ts'
 import { settleClosed } from './ledger.ts'
 import { DEFAULT_STEWARD_RULES, idleClockStart } from '../../domains/loops/stall.ts'
 import {
-  ciFindings,
   heartbeatFindings,
   idleFindings,
   inertRegressionFindings,
@@ -45,7 +43,6 @@ import {
   type HeartbeatFact,
   type IdleLead,
   type RegressionFact,
-  type RouteLatency,
   type SelfwatchChange,
   type SelfwatchRow,
   subjectKeyOf,
@@ -82,15 +79,12 @@ export interface SelfwatchDeps {
   resume?: ResumeRules
   /** the one repo watched, as intake and the Issues know it */
   repo: string
-  /** the branch whose CI is read; null is the repo's default branch */
-  branch: string | null
   /** a wait is overdue this long after its exit */
   graceMs: number
   /** the steward's threshold for a quiet lead */
   idleLeadMs: number
   /** the same for a lead whose last turn ended with background work in flight */
   idleBackgroundMs: number
-  ci: CiRuns
   /** the lead's live work, as the steward counts it (`countLiveWork`) */
   slots: LiveWorkDeps['slots']
   ciLive: LiveWorkDeps['ciLive']
@@ -105,8 +99,6 @@ export interface SelfwatchDeps {
   memoryCeilings: MemoryCeilings
   /** this process's pid: the server in the evidence's priority line */
   serverPid: number
-  /** the server's own routes over the last five minutes, timed in the process; absent, `routes_slow` is not judged */
-  routes?: () => RouteLatency
   /** the host's cores: the CPU accounting of the evidence names what the sampled processes leave unattributed against them */
   cores?: number
   /** the process list and `deploys.log` for the evidence block; absent, a capacity signal carries none */
@@ -232,13 +224,6 @@ interface Gathered {
 async function gather(deps: SelfwatchDeps, now: Date): Out<Gathered> {
   const gathered: Gathered = { findings: [], unread: new Set(), notes: [] }
 
-  const ci = await deps.ci.latest(deps.repo, deps.branch)
-  if (ci.ok) gathered.findings.push(...ciFindings(ci.value.runs, ci.value.branch))
-  else {
-    gathered.unread.add('ci_red')
-    gathered.notes.push(`ci not read: ${ci.error.detail}`)
-  }
-
   const open = await deps.uow.run(async ({ loopReads }) => ok(await loopReads.openIssueIds(deps.repo)))
   if (!open.ok) return open
   const files = await deps.migrations.read(deps.repo, { openIssues: open.value.map(issueNumber) })
@@ -283,7 +268,7 @@ async function gather(deps: SelfwatchDeps, now: Date): Out<Gathered> {
     gathered.notes.push('host samples not fresh: process growth, swap and process count not judged')
   }
 
-  // the factory's own capacity: the host minutes with their capacity facts, the slot minutes and the server's own routes
+  // the factory's own capacity: the host minutes with their capacity facts, the slot minutes and the admissions
   const capacity = await deps.uow.run(async ({ loopReads }) =>
     ok({
       minutes: await loopReads.capacityMinutes(new Date(now.getTime() - OVERLOAD_LOOKBACK_MS)),
@@ -311,8 +296,6 @@ async function gather(deps: SelfwatchDeps, now: Date): Out<Gathered> {
     gathered.unread.add('slot_line')
     gathered.notes.push('slot minutes not fresh (the host loop stopped): the slot line not judged')
   }
-  if (deps.routes) gathered.findings.push(...routesSlowFindings(deps.routes(), now))
-  else gathered.unread.add('routes_slow')
   if (deps.budgets) {
     try {
       gathered.findings.push(...budgetFindings(await deps.budgets(now)))
@@ -325,7 +308,7 @@ async function gather(deps: SelfwatchDeps, now: Date): Out<Gathered> {
 }
 
 /**
- * One tick of the self-watch loop: fourteen deterministic conditions (CI, migrations, waits, leads, regressions, the heartbeat, the host process growth, swap and process count, a project `budgets:` breached over the last day, and the factory own capacity: load over the ceiling, the slot line, gates passed, slow routes), filed through intake as signals on
+ * One tick of the self-watch loop: twelve deterministic conditions (migrations, waits, leads, regressions, the heartbeat, the host process growth, swap and process count, a project `budgets:` breached over the last day, and the factory own capacity: load over the ceiling, the slot line, gates passed), filed through intake as signals on
  * the watched repo. A subject is filed once; while it stays open and its evidence is the same nothing is filed, a changed
  * evidence is filed again under the same key (intake amends the open Issue), and a subject that no longer holds is
  * cleared. At most `MAX_SIGNALS_PER_PASS` a pass, the rest on the next. A row is written only after intake took the signal, so a
@@ -443,8 +426,8 @@ const selfwatchSummary = (pass: SelfwatchPass): string =>
     .join('; ')
 
 /**
- * Fourteen deterministic conditions (a project `budgets:` breach among them, filed on that project repo, and four of the
- * factory's own capacity: load over the ceiling, the slot line, gates passed, slow routes), filed once per subject as signals on
+ * Twelve deterministic conditions (a project `budgets:` breach among them, filed on that project repo, and three of the
+ * factory's own capacity: load over the ceiling, the slot line, gates passed), filed once per subject as signals on
  * the factory's own repo.
  */
 export const selfwatchLoop = (wiring: LoopWiring, deps: SelfwatchDeps): LoopSpec =>

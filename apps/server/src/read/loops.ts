@@ -161,6 +161,7 @@ const FindingIssueRow = z.object({
   issue: z.string(),
   state: z.enum(['settling', 'queued', 'working', 'waiting', 'watching', 'closed']),
   outcome: z.enum(['done', 'healed', 'dropped', 'cancelled']).nullable(),
+  filed_at: z.date(),
   closed_at: z.date().nullable(),
   reopens: z.number().int(),
 })
@@ -185,7 +186,7 @@ export function loopReads(tx: SQL): LoopReads {
   // A finding's Issues: filed at its `filed` event, closed at the applied event that moved it to `closed`.
   const classes = async (filter: { loop: string } | null) => {
     const rows: unknown[] = await tx`
-      SELECT lf.loop, lf.repo, lf.class, i.id AS issue, f.at AS filed_at, i.outcome,
+      SELECT DISTINCT lf.loop, lf.repo, lf.class, i.id AS issue, f.at AS filed_at, i.outcome,
         (SELECT c.at FROM factory.issue_events c WHERE c.issue_id = i.id AND c.result = 'applied' AND c.to_state = 'closed' ORDER BY c.version DESC LIMIT 1) AS closed_at
       FROM factory.loop_findings lf
       JOIN factory.issues i ON i.id = lf.issue_id
@@ -547,7 +548,7 @@ export function loopReads(tx: SQL): LoopReads {
     async findingIssues(repo) {
       // the newest Issue of each key (by when it was filed), its state, how it closed and how often it was reopened
       const rows: unknown[] = await tx`
-        SELECT DISTINCT ON (lf.key) lf.key, i.id AS issue, i.state, i.outcome,
+        SELECT DISTINCT ON (lf.key) lf.key, i.id AS issue, i.state, i.outcome, f.at AS filed_at,
           (SELECT c.at FROM factory.issue_events c WHERE c.issue_id = i.id AND c.result = 'applied' AND c.to_state = 'closed' ORDER BY c.version DESC LIMIT 1) AS closed_at,
           (SELECT count(*) FROM factory.issue_events r WHERE r.issue_id = i.id AND r.result = 'applied' AND r.kind = 'reopened')::int AS reopens
         FROM factory.loop_findings lf
@@ -562,6 +563,7 @@ export function loopReads(tx: SQL): LoopReads {
           issue: row.issue,
           state: row.state,
           outcome: row.outcome,
+          filedAt: row.filed_at,
           closedAt: row.state === 'closed' ? row.closed_at : null,
           reopens: row.reopens,
         }

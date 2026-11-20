@@ -8,7 +8,7 @@ export type TableRow = () => Promise<{ tier: Tier; effort: Effort } | null>
 /**
  * What the planned seat is read from: the role table's `lead` row, and, to say what the light rule names for an Issue
  * as it is now (the same rule the lead's start applies), the `light` row, the tripwire that lets triage's `small` start
- * light and the hygiene classes that are out. Without `light` every planned seat is the `lead` row.
+ * light. Without `light` every planned seat is the `lead` row.
  */
 export interface SeatTable {
   lead: TableRow
@@ -17,7 +17,6 @@ export interface SeatTable {
     role: string
     row: TableRow
     gate: () => Promise<boolean>
-    classesOut: () => Promise<ReadonlySet<string>>
     /** `lightRule` (`domains/leads/light.ts`): the one rule the lead's start applies; read/ takes it, it does not import it */
     rule: (facts: LightFacts) => string | null
   }
@@ -54,7 +53,6 @@ interface PlanRow {
   settled_spec: boolean
   moved_up: number
   hygiene_key: string | null
-  hygiene_class: string | null
   unrouted: boolean
   text: string | null
 }
@@ -67,8 +65,7 @@ async function planFacts(sql: SQL, ids: readonly string[]): Promise<Map<string, 
       (SELECT s.payload->>'size' FROM factory.issue_events s WHERE s.issue_id = i.id AND s.kind = 'settled' AND s.result = 'applied' AND s.payload->>'size' IS NOT NULL ORDER BY s.version DESC LIMIT 1) AS settled_size,
       EXISTS (SELECT 1 FROM factory.issue_events s WHERE s.issue_id = i.id AND s.kind = 'settled' AND s.result = 'applied' AND s.payload->>'checkpoint' IS NOT NULL) AS settled_spec,
       (SELECT count(*)::int FROM factory.issue_events m WHERE m.issue_id = i.id AND m.kind = 'moved_up' AND m.result = 'applied') AS moved_up,
-      (SELECT key FROM factory.loop_findings WHERE issue_id = i.id AND loop = 'hygiene') AS hygiene_key,
-      (SELECT class FROM factory.loop_findings WHERE issue_id = i.id AND loop = 'hygiene') AS hygiene_class,
+      (SELECT key FROM factory.loop_findings WHERE issue_id = i.id AND loop = 'hygiene' ORDER BY key LIMIT 1) AS hygiene_key,
       EXISTS (SELECT 1 FROM factory.intake_door_unrouted WHERE filed_issue = i.id) AS unrouted,
       concat_ws(' ',
         (SELECT string_agg(s.title || ' ' || s.text, ' ' ORDER BY s.received_at, s.id) FROM factory.intake_signals s WHERE s.issue_id = i.id),
@@ -126,7 +123,6 @@ export async function readLeadSeats(
   const facts = light ? await planFacts(sql, unstarted) : new Map<string, PlanRow>()
   const lightRow = light ? await light.row().catch(() => null) : null
   const gate = light ? await light.gate().catch(() => false) : false
-  const out = light ? await light.classesOut().catch(() => new Set<string>()) : new Set<string>()
   for (const id of unstarted) {
     const row = facts.get(id)
     const filed = byIssue.get(id)?.get('filed')?.payload
@@ -139,7 +135,6 @@ export async function readLeadSeats(
             size,
             spec: fields.checkpoint !== undefined || row.settled_spec,
             hygieneKey: row.hygiene_key,
-            hygieneOut: row.hygiene_class !== null && out.has(row.hygiene_class),
             unroutedMonitor: row.unrouted,
             movedUp: row.moved_up,
             text: `${typeof fields.title === 'string' ? fields.title : ''} ${row.text ?? ''}`,
