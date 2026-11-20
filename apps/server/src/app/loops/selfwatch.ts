@@ -64,6 +64,7 @@ import { ok, type PortError, type Result } from '../../kernel/result.ts'
 import type { IntakeError } from '../intake.ts'
 import type { UnitOfWork } from '../unit-of-work.ts'
 import { countLiveWork, type LiveWorkDeps, loadIdle } from './steward.ts'
+import { passLoop, type LoopSpec, type LoopWiring } from './runner.ts'
 
 export type SelfwatchStores = {
   work: WorkStore
@@ -114,7 +115,7 @@ export interface SelfwatchDeps {
   file(body: SignalRequest, finding: LoopFinding): Promise<Result<Triaged, IntakeError>>
 }
 
-export interface SelfwatchPass {
+interface SelfwatchPass {
   /** conditions seen this pass */
   seen: number
   filed: { key: string; title: string; why: string }[]
@@ -327,7 +328,7 @@ async function gather(deps: SelfwatchDeps, now: Date): Out<Gathered> {
  * cleared. At most `MAX_SIGNALS_PER_PASS` a pass, the rest on the next. A row is written only after intake took the signal, so a
  * failed filing is tried again; a crash between the two replays safely, since intake's finding key turns a repeat into a note.
  */
-export async function selfwatchPass(deps: SelfwatchDeps): Promise<Result<SelfwatchPass, PortError>> {
+async function selfwatchPass(deps: SelfwatchDeps): Promise<Result<SelfwatchPass, PortError>> {
   const now = deps.clock.now()
   const read = await deps.uow.run(async ({ loops }) => ok(await loops.selfwatchRows()))
   if (!read.ok) return read
@@ -426,7 +427,7 @@ export async function selfwatchPass(deps: SelfwatchDeps): Promise<Result<Selfwat
   return ok(pass)
 }
 
-export const selfwatchSummary = (pass: SelfwatchPass): string =>
+const selfwatchSummary = (pass: SelfwatchPass): string =>
   [
     `saw ${pass.seen} condition(s): filed ${pass.filed.length}`,
     pass.deferred > 0 ? `${pass.deferred} left for the next tick` : null,
@@ -437,3 +438,16 @@ export const selfwatchSummary = (pass: SelfwatchPass): string =>
   ]
     .filter(Boolean)
     .join('; ')
+
+/**
+ * Fourteen deterministic conditions (a project `budgets:` breach among them, filed on that project repo, and four of the
+ * factory's own capacity: load over the ceiling, the slot line, gates passed, slow routes), filed once per subject as signals on
+ * the factory's own repo.
+ */
+export const selfwatchLoop = (wiring: LoopWiring, deps: SelfwatchDeps): LoopSpec =>
+  passLoop(wiring, {
+    name: 'selfwatch',
+    pass: () => selfwatchPass(deps),
+    problems: (pass) => [...pass.notes, ...pass.failed.map((f) => `${f.key}: ${f.reason}`)],
+    summary: selfwatchSummary,
+  })

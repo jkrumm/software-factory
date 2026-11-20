@@ -31,6 +31,7 @@ import { findingKeyOf } from '../../domains/intake/rules.ts'
 import { classOf } from '../../domains/loops/classes.ts'
 import { readGate, type ClassGate } from './gate.ts'
 import { settleClosed, type Ledger } from './ledger.ts'
+import { passLoop, type LoopSpec, type LoopWiring } from './runner.ts'
 
 /** The repo that carries the factory's own findings, and who files them. */
 const FRICTION_REPO = 'software-factory'
@@ -234,3 +235,16 @@ export const frictionSummary = (pass: FrictionPass): string => {
   }
   return parts.join('; ')
 }
+
+/**
+ * Deterministic: the week's counts, one signal per pattern over its threshold. Due once a day or after 200 closed Issues,
+ * read from the table; asked every 15 minutes. A pattern whose Issue closed within the week is not filed again, the retro is
+ * filed once a week.
+ */
+export const frictionLoop = (wiring: LoopWiring, deps: FrictionDeps): LoopSpec =>
+  passLoop(wiring, {
+    name: 'friction',
+    pass: () => frictionPass(deps),
+    problems: (pass) => (pass.due ? pass.record.failed.map((f) => `${f.key}: ${f.reason}`) : null),
+    summary: frictionSummary,
+  })

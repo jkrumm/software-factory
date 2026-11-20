@@ -51,6 +51,7 @@ import { recordIn, type WriteDeps } from '../issues.ts'
 import type { PlanningDeps } from '../planning-deps.ts'
 import { settleIssue } from '../planning-chain.ts'
 import type { UnitOfWork } from '../unit-of-work.ts'
+import { passLoop, type LoopSpec, type LoopWiring } from './runner.ts'
 
 export type StewardStores = { work: WorkStore; loops: LoopStore; loopReads: LoopReads; leads: LeadStore }
 
@@ -90,7 +91,7 @@ export interface StewardDeps extends WriteDeps {
   changed(): void
 }
 
-export interface StewardPass {
+interface StewardPass {
   looked: number
   /** working Issues whose lead session was quiet */
   quiet: number
@@ -909,7 +910,7 @@ async function settleOverdue(deps: StewardDeps, pass: StewardPass): Promise<void
  * One pass of the steward over the stalled Issues, the Issues settling too long, the checkouts blocked too long and the
  * main checkouts of repos with a live lead.
  */
-export async function stewardPass(deps: StewardDeps): Out<StewardPass> {
+async function stewardPass(deps: StewardDeps): Out<StewardPass> {
   const pass: StewardPass = {
     looked: 0,
     quiet: 0,
@@ -938,5 +939,15 @@ export async function stewardPass(deps: StewardDeps): Out<StewardPass> {
   return ok(pass)
 }
 
-export const stewardSummary = (pass: StewardPass): string =>
+const stewardSummary = (pass: StewardPass): string =>
   `looked at ${pass.looked} stalled and ${pass.quiet} quiet; woken ${pass.woken}, requeued ${pass.requeued}, asked ${pass.asked}, Decisions ${pass.decisions}, settled ${pass.settled}, noted ${pass.noted}, deferred ${pass.deferred}, claim stalls ${pass.claimStalls}${pass.problems.length ? `; ${pass.problems.length} problem(s): ${pass.problems.slice(0, 3).join(' | ')}` : ''}`
+
+/** The steward: stalled and idle leads, waits, the Judge's decisions. Kicked by a change; the loop guard keeps its own change from firing it again. */
+export const stewardLoop = (wiring: LoopWiring, deps: StewardDeps): LoopSpec =>
+  passLoop(wiring, {
+    name: 'steward',
+    onChange: true,
+    pass: () => stewardPass(deps),
+    problems: (pass) => pass.problems,
+    summary: stewardSummary,
+  })

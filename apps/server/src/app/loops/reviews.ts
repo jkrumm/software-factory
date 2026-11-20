@@ -8,6 +8,7 @@ import { key } from '../../kernel/keys.ts'
 import { ok, type PortError, type Result } from '../../kernel/result.ts'
 import { recordIn } from '../issues.ts'
 import type { UnitOfWork } from '../unit-of-work.ts'
+import { passLoop, type LoopSpec, type LoopWiring } from './runner.ts'
 
 /** The review poll's own table: what the first look of each wait saw. */
 export interface ReviewStore {
@@ -88,7 +89,19 @@ export async function reviewsPass(deps: ReviewsDeps): Out<ReviewsPass> {
   return ok(pass)
 }
 
-export const reviewsSummary = (pass: ReviewsPass): string =>
+const reviewsSummary = (pass: ReviewsPass): string =>
   `${pass.looked} review waits looked at, ${pass.woken.length} woken${
     pass.problems.length ? `: ${pass.problems.slice(0, 3).join(' | ')}` : ''
   }`
+
+/**
+ * The Issues that wait on someone else's review of a pull request: each pull request is read through gh or glab, and an
+ * approval, a request for changes, a new review comment, a merge or a close wakes the lead.
+ */
+export const reviewsLoop = (wiring: LoopWiring, deps: ReviewsDeps): LoopSpec =>
+  passLoop(wiring, {
+    name: 'reviews',
+    pass: () => reviewsPass(deps),
+    problems: (pass) => pass.problems,
+    summary: reviewsSummary,
+  })

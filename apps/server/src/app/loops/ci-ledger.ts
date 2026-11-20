@@ -2,6 +2,7 @@ import type { CiLedgerRuns, LoopStore } from '../../domains/loops/ports.ts'
 import type { Clock } from '../../kernel/clock.ts'
 import { ok, type PortError, type Result } from '../../kernel/result.ts'
 import type { UnitOfWork } from '../unit-of-work.ts'
+import { passLoop, type LoopSpec, type LoopWiring } from './runner.ts'
 
 const DAY_MS = 24 * 3_600_000
 /** A repo with no run in the ledger is read this far back; one with runs is read from the day before its newest. */
@@ -24,7 +25,7 @@ export interface CiLedgerDeps {
   refused: Map<string, number>
 }
 
-export const ciLedgerSummary = (pass: CiLedgerPass): string =>
+const ciLedgerSummary = (pass: CiLedgerPass): string =>
   [`ci ledger ${pass.runs} run(s) of ${pass.repos} repo(s)`, ...pass.notes].join('; ')
 
 export interface CiLedgerPass {
@@ -73,3 +74,12 @@ export async function ciLedgerPass(deps: CiLedgerDeps): Promise<Result<CiLedgerP
   pass.pruned = pruned.value
   return ok(pass)
 }
+
+/** The finished CI runs of every stored project and of the factory's own repo, kept per head for `read throughput`. A repo GitHub or the checkout refuses is told once and left alone for a day. */
+export const ciLedgerLoop = (wiring: LoopWiring, deps: CiLedgerDeps): LoopSpec =>
+  passLoop(wiring, {
+    name: 'ci-ledger',
+    pass: () => ciLedgerPass(deps),
+    problems: (pass) => pass.notes,
+    summary: ciLedgerSummary,
+  })

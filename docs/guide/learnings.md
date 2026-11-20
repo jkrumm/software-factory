@@ -184,7 +184,7 @@ The server never exited on SIGTERM, twice, in the first live window on 2026-11-0
 **Example files:**
 
 - [`shutdown.ts`](https://github.com/jkrumm/software-factory/blob/master/apps/server/src/shutdown.ts#L27-L47): the steps and the deadline.
-- [`main.ts`](https://github.com/jkrumm/software-factory/blob/master/apps/server/src/main.ts#L1114-L1123): the wiring, with `stop(true)` and why.
+- [`main.ts`](https://github.com/jkrumm/software-factory/blob/master/apps/server/src/main.ts#L491-L500): the wiring, with `stop(true)` and why.
 
 **Read more:**
 

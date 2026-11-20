@@ -5,6 +5,7 @@ import { repoTextOf } from '../../domains/planning/sync.ts'
 import type { Clock } from '../../kernel/clock.ts'
 import { ok, type PortError, type Result } from '../../kernel/result.ts'
 import type { UnitOfWork } from '../unit-of-work.ts'
+import { passLoop, type LoopSpec, type LoopWiring } from './runner.ts'
 
 export interface FixClassesDeps {
   uow: UnitOfWork<{ loops: LoopStore; planning: PlanningStore }>
@@ -14,7 +15,7 @@ export interface FixClassesDeps {
   repos: readonly string[] | null
 }
 
-export interface FixClassesPass {
+interface FixClassesPass {
   repos: number
   /** fix commits stored this pass */
   stored: number
@@ -29,7 +30,7 @@ const DAY_MS = 86_400_000
  * yet classed by the rules (`classOf`; no rule means `other`) and stored. A repo that cannot be read is named and read
  * again next pass.
  */
-export async function fixClassesPass(deps: FixClassesDeps): Promise<Result<FixClassesPass, PortError>> {
+async function fixClassesPass(deps: FixClassesDeps): Promise<Result<FixClassesPass, PortError>> {
   const now = deps.clock.now()
   const since = new Date(now.getTime() - FIX_WINDOW_DAYS * DAY_MS)
   const read = await deps.uow.run(async ({ planning }) => ok(await planning.projects()))
@@ -78,5 +79,14 @@ const rowOf = (repo: string, commit: FixCommit): FixCommitRow => {
   }
 }
 
-export const fixClassesSummary = (pass: FixClassesPass): string =>
+const fixClassesSummary = (pass: FixClassesPass): string =>
   `${pass.repos} repo(s): ${pass.stored} fix commit(s) classed by rule`
+
+/** Fix commits of every project's default branch, classed by rule, stored for the Improve screen. */
+export const fixClassesLoop = (wiring: LoopWiring, deps: FixClassesDeps): LoopSpec =>
+  passLoop(wiring, {
+    name: 'fix-classes',
+    pass: () => fixClassesPass(deps),
+    problems: (pass) => pass.problems,
+    summary: fixClassesSummary,
+  })

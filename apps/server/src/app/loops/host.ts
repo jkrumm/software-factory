@@ -23,6 +23,7 @@ import type {
 import type { Clock } from '../../kernel/clock.ts'
 import { ok, type PortError, type Result } from '../../kernel/result.ts'
 import type { UnitOfWork } from '../unit-of-work.ts'
+import { passLoop, type LoopSpec, type LoopWiring } from './runner.ts'
 
 export interface HostPassDeps {
   uow: UnitOfWork<{ loops: LoopStore }>
@@ -208,7 +209,7 @@ async function measureWorktrees(
   return rows
 }
 
-export const hostSummary = (pass: HostPass): string =>
+const hostSummary = (pass: HostPass): string =>
   [
     `sampled the host, pruned ${pass.pruned}`,
     pass.leadRows === null
@@ -218,3 +219,27 @@ export const hostSummary = (pass: HostPass): string =>
       ? 'no class snapshot (top, ps, launchctl or lsof could not be read)'
       : `${pass.classRows} class row(s)`,
   ].join(', ')
+
+/**
+ * One reading of the host a minute with its class snapshot, kept 14 days: the Live popover and `read throughput` draw it.
+ * `aim` moves the slot aim on the sample just stored; its failure is said in the line, never a failed host pass.
+ */
+export const hostLoop = (
+  wiring: LoopWiring,
+  deps: HostPassDeps,
+  aim: () => Promise<Result<string, PortError>>,
+): LoopSpec =>
+  passLoop(wiring, {
+    name: 'host',
+    pass: async () => {
+      const pass = await hostPass(deps)
+      if (!pass.ok) return pass
+      const moved = await aim()
+      return ok(
+        moved.ok
+          ? `${hostSummary(pass.value)}; ${moved.value}`
+          : `${hostSummary(pass.value)}; slot aim: ${moved.error.detail}`,
+      )
+    },
+    summary: (line) => line,
+  })

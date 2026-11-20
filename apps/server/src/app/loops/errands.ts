@@ -20,6 +20,7 @@ import { WORKFLOWS } from '../../kernel/workflows.ts'
 import { ok, type PortError, type Result } from '../../kernel/result.ts'
 import { scrub } from '../../kernel/scrub.ts'
 import type { UnitOfWork } from '../unit-of-work.ts'
+import { passLoop, type LoopSpec, type LoopWiring } from './runner.ts'
 
 /** What running one Errand's check needs; the desk pass shares it. */
 export interface CheckDeps {
@@ -274,3 +275,15 @@ export const errandsSummary = (pass: ErrandsPass): string =>
   `${pass.looked} open requests: ${pass.expired} expired, ${pass.checkedOut} closed by their check, ${pass.judgedOut} by the still-needed look, ${pass.kept} kept by a check, ${pass.unrunnable} checks could not run${
     pass.problems.length ? `: ${pass.problems.slice(0, 3).join(' | ')}` : ''
   }`
+
+/**
+ * The open requests for the owner's hands (no Issue): each one's check runs, the expired close, and one with no check is read
+ * once a day by `factory-errand-needed`. Interval only: a new request waits for the next pass.
+ */
+export const errandsLoop = (wiring: LoopWiring, deps: ErrandsDeps): LoopSpec =>
+  passLoop(wiring, {
+    name: 'errands',
+    pass: () => errandsPass(deps),
+    problems: (pass) => pass.problems,
+    summary: errandsSummary,
+  })
