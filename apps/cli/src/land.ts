@@ -243,6 +243,7 @@ async function readRepo(sh: Shell, options: Options): Promise<Repo> {
 
 /** What gh prints when the repo was read and holds no such pull request (by branch, or by number). */
 const NO_PULL_REQUEST = /no pull requests? found|could not resolve to a pullrequest/i
+const NO_CHECKS = /no checks reported/i
 
 /** The pull request, or null when gh read the repo and found none; any other gh failure refuses with gh's own words. */
 async function pullRequest(sh: Shell, ref: string): Promise<PullRequest | null> {
@@ -256,6 +257,17 @@ async function pullRequest(sh: Shell, ref: string): Promise<PullRequest | null> 
     `gh could not read the pull request for ${/^\d+$/.test(ref) ? `#${ref}` : ref}: ${lastLines(said) || `gh exited ${ran.code} with no output`}`,
     `check the gh account first (gh auth status; GH_CONFIG_DIR is ${config ? config : 'unset'}), then factory land again`,
   )
+}
+
+/** The checks of the head; a failed read with no JSON is a blip, unless gh says there are no checks. */
+async function checksOf(sh: Shell, ref: string, head: string): Promise<{ checks: Check[] } | { blip: string }> {
+  const ran = await sh.run(['gh', 'pr', 'checks', ref, '--json', 'name,bucket,link'])
+  const checks = json<Check[]>(ran.out)
+  if (checks !== null || ran.code === 0 || NO_CHECKS.test(ran.err)) return { checks: checks ?? [] }
+  const said = ran.err.trim() || ran.out.trim()
+  return {
+    blip: `gh could not read the checks on ${short(head)}: ${lastLines(said) || `gh exited ${ran.code} with no output`}`,
+  }
 }
 
 class Lander {
@@ -411,11 +423,14 @@ class Lander {
       if (stopped !== null) return stopped
       // the verb's first read already told a wrong account from a missing pull request; a later failure is a blip, so poll again
       let blip = false
+      const blipped = (why: string) => {
+        blip = true
+        if (why !== unread) this.out(`${why}; polling again`)
+        unread = why
+      }
       const view = await pullRequest(this.sh, String(pr.number)).catch((error: unknown) => {
         if (!(error instanceof Refused)) throw error
-        blip = true
-        if (error.why !== unread) this.out(`${error.why}; ${error.next}; polling again`)
-        unread = error.why
+        blipped(error.why)
         return null
       })
       let state: string
@@ -424,8 +439,9 @@ class Lander {
         greens = 0
         state = `the pull request does not show ${short(head)} yet`
       } else {
-        const ran = await this.sh.run(['gh', 'pr', 'checks', String(pr.number), '--json', 'name,bucket,link'])
-        const checks = json<Check[]>(ran.out) ?? []
+        const read = await checksOf(this.sh, String(pr.number), head)
+        if ('blip' in read) blipped(read.blip)
+        const checks = 'checks' in read ? read.checks : []
         const reading = readChecks(checks)
         if (reading.state === 'red')
           throw new Refused(
