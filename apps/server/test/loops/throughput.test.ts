@@ -183,6 +183,9 @@ describe('a seeded budget breach', () => {
     const hash = first.file[0]?.hash ?? ''
     expect(first.file.map((a) => a.finding.subject)).toEqual(['shop:fast'])
     const row = (cleared: Date | null) => ({
+      issueId: 'issue_1',
+      repo: 'app',
+      figure: null,
       subjectKey: subjectKeyOf(breach),
       kind: 'budget_breach' as const,
       firstSeenAt: T0,
@@ -357,22 +360,23 @@ describe('the daily pass', () => {
     ])
     expect(throughputSummary(pass.value)).toContain('filed 3')
     const rows =
-      await db.sql`SELECT project, kpi, subject, before::float8, target::float8, status, issue_id, query FROM factory.throughput_findings ORDER BY project`
+      await db.sql`SELECT repo AS project, class AS kpi, figure::float8 AS before, target::float8, verdict, shipped_at, issue_id, unit
+        FROM factory.loop_findings WHERE loop = 'throughput' ORDER BY repo`
     expect(
-      rows.map((r: { project: string; before: number; target: number; status: string }) => [
+      rows.map((r: { project: string; before: number; target: number; verdict: string | null }) => [
         r.project,
         r.before,
         r.target,
-        r.status,
+        r.verdict,
       ]),
     ).toEqual([
-      ['alpha', 11.4, 5.7, 'open'],
-      ['beta', 4096, 2048, 'open'],
-      ['software-factory', 25.7, 12.9, 'open'],
+      ['alpha', 11.4, 5.7, null],
+      ['beta', 4096, 2048, null],
+      ['software-factory', 25.7, 12.9, null],
     ])
-    expect(
-      rows.every((r: { issue_id: string | null; query: string }) => r.issue_id !== null && r.query.length > 10),
-    ).toBe(true)
+    expect(rows.every((r: { issue_id: string | null; unit: string }) => r.issue_id !== null && r.unit.length > 0)).toBe(
+      true,
+    )
     const alpha = filedBodies.find((b) => b.repo === 'alpha')
     expect(alpha?.text).toContain('Measured before: 11.4 slot-minutes/day')
     expect(alpha?.text).toContain('Target: 5.7 slot-minutes/day')
@@ -383,7 +387,8 @@ describe('the daily pass', () => {
   })
 
   test('a cost the newest days already left behind is not filed, though it sits in the 7-day total', async () => {
-    const [row] = await db.sql`SELECT count(*)::int AS n FROM factory.throughput_findings WHERE project = 'delta'`
+    const [row] =
+      await db.sql`SELECT count(*)::int AS n FROM factory.loop_findings WHERE loop = 'throughput' AND repo = 'delta'`
     expect(row?.n).toBe(0)
     expect(
       rankCandidates(
@@ -401,7 +406,7 @@ describe('the daily pass', () => {
   })
 
   test('the ledger marks a ship, and reads the after three days past it: moved, or flat and filed again', async () => {
-    const rows = await db.sql`SELECT project, issue_id FROM factory.throughput_findings`
+    const rows = await db.sql`SELECT repo AS project, issue_id FROM factory.loop_findings WHERE loop = 'throughput'`
     const issueOf = (project: string): string => rows.find((r: { project: string }) => r.project === project).issue_id
     const shipAt = new Date(T0.getTime() + HOUR)
     let version = 10
@@ -443,10 +448,10 @@ describe('the daily pass', () => {
       ['beta', 'flat', 4096, 4096],
     ])
     const stored =
-      await db.sql`SELECT project, status, after::float8, after_at, shipped_at FROM factory.throughput_findings WHERE status IN ('moved', 'flat') ORDER BY project`
+      await db.sql`SELECT repo AS project, verdict, measured::float8, measured_at, shipped_at FROM factory.loop_findings WHERE loop = 'throughput' AND verdict IN ('moved', 'flat') ORDER BY repo`
     expect(
       stored.every(
-        (r: { after_at: Date | null; shipped_at: Date | null }) => r.after_at !== null && r.shipped_at !== null,
+        (r: { measured_at: Date | null; shipped_at: Date | null }) => r.measured_at !== null && r.shipped_at !== null,
       ),
     ).toBe(true)
 
@@ -457,8 +462,8 @@ describe('the daily pass', () => {
     expect(again?.text).toContain('Comes back: an earlier improvement')
     expect(again?.text).toContain('did not move from 4096')
     const [reopened] =
-      await db.sql`SELECT reopens FROM factory.throughput_findings WHERE project = 'beta' AND status = 'open'`
-    expect(reopened?.reopens).toMatch(/^throughput:beta:step_peak_mib/)
+      await db.sql`SELECT reopens FROM factory.loop_findings WHERE loop = 'throughput' AND repo = 'beta' AND verdict IS NULL AND shipped_at IS NULL`
+    expect(reopened?.reopens).toBe(issueOf('beta'))
   })
 
   test('the weekly retro’s ledger carries the loop’s own after as a clean window', async () => {

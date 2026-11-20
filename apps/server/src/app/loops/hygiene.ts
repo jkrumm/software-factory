@@ -1,5 +1,5 @@
 import { type DepsThresholds, HYGIENE_DEFAULTS, type SignalRequest } from '@software-factory/contract'
-import { isBusy, type LifecycleStep, planLifecycle } from '../../domains/loops/hygiene-lifecycle.ts'
+import { figureNow, isBusy, type LifecycleStep, planLifecycle } from '../../domains/loops/hygiene-lifecycle.ts'
 import {
   checkAnswer,
   judgmentBudget,
@@ -46,6 +46,7 @@ import type { IntakeError } from '../intake.ts'
 import type { UnitOfWork } from '../unit-of-work.ts'
 import { classOf } from '../../domains/loops/classes.ts'
 import { readGate, type ClassGate } from './gate.ts'
+import { settleClosed } from './ledger.ts'
 
 export interface HygieneDeps {
   uow: UnitOfWork<{ loops: LoopStore; loopReads: LoopReads; planning: PlanningStore; work: WorkStore }>
@@ -155,7 +156,7 @@ async function applyStep(
 async function fileOne(
   deps: HygieneDeps,
   gate: ClassGate,
-  input: { repoText: string; name: string; id: string; title: string; text: string },
+  input: { repoText: string; name: string; id: string; title: string; text: string; figure: number | null },
   added: Added,
 ): Promise<void> {
   const filed = await deps.file(
@@ -177,7 +178,11 @@ async function fileOne(
   const stands = outcome === 'filed' || outcome === 'amended' || (outcome === 'dropped' && detail === 'repeat')
   if (stands) {
     added.filed.push({ key: input.id, title: input.title })
-    const lost = await gate.record(filed.value.issue, input.id, input.repoText)
+    const lost = await gate.record(filed.value.issue, input.id, input.repoText, {
+      figure: input.figure,
+      signal: filed.value.signal,
+      at: deps.clock.now(),
+    })
     if (lost) added.failed.push({ key: input.id, reason: `finding class not recorded: ${lost}`.slice(0, 300) })
   } else added.failed.push({ key: input.id, reason: `${outcome}: ${detail}`.slice(0, 300) })
 }
@@ -255,6 +260,7 @@ async function judge(
         id: judgmentKey(finding),
         title: judgmentTitle(finding),
         text: judgmentSignalText(finding, swept),
+        figure: null,
       },
       added,
     )
@@ -363,6 +369,18 @@ async function sweepPass(
       fixes.push(...fixed.fixes.map((entry) => ({ ...entry, at: now })))
     }
     report = await readAgain(deps, target, sweepOptions, checkout, report)
+    // what the Issues of earlier findings of this repo did: a key a run judged and did not raise is at 0
+    const settled = await settleClosed(deps, {
+      loop: 'hygiene',
+      repo: target.repoText,
+      now,
+      read: (row) => figureNow(report, row.key),
+    })
+    // a ledger that could not be read costs the "last time" line and the verdicts of this pass, never the filing
+    if (!settled.ok)
+      added.failed.push({ key: 'ledger', reason: `${settled.error.kind}: ${settled.error.detail}`.slice(0, 300) })
+    const lastTime = (key: string, figure: number): string | null =>
+      settled.ok ? settled.value.lastTime(key, figure) : null
     const plan = planLifecycle({
       red: report.findings,
       runs: report.runs,
@@ -392,7 +410,8 @@ async function sweepPass(
           ...target,
           id: finding.key,
           title: finding.title,
-          text: probeSignalText(finding, { repo: target.name, ref: report.ref }),
+          text: probeSignalText(finding, { repo: target.name, ref: report.ref }, lastTime(finding.key, finding.count)),
+          figure: finding.count,
         },
         added,
       )

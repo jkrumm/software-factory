@@ -205,7 +205,12 @@ const thresholdOf = (pattern: Pattern): string =>
     : `${pattern.threshold} in the window and ${pattern.rate.toFixed(2)} per Issue closed (judged from ${MIN_CLOSED} closed)`
 
 /** The signal's text: what was counted, over what, against which threshold, which Issues show it, and how to look again. */
-export function signalText(pattern: Pattern, facts: PassFacts, refs: readonly string[]): string {
+export function signalText(
+  pattern: Pattern,
+  facts: PassFacts,
+  refs: readonly string[],
+  last: string | null = null,
+): string {
   const evidence = !hasIssueRefs(pattern)
     ? 'Evidence: this count has no Issue behind it (it counts notes or held signals, not Issue events), so there are no refs.'
     : refs.length === 0
@@ -215,6 +220,7 @@ export function signalText(pattern: Pattern, facts: PassFacts, refs: readonly st
     `Pattern: ${pattern.label} (${pattern.key})`,
     `Window: ${facts.from} to ${facts.to} (${facts.days} days${facts.since ? `, cut at the counting epoch ${facts.since}` : ''})`,
     `Count: ${pattern.count} (${rate(pattern)}); Issues filed in the window: ${facts.issues}, closed: ${facts.closed}`,
+    ...(last === null ? [] : [last]),
     `Threshold: ${thresholdOf(pattern)}. ${pattern.why}.`,
     evidence,
     `Reproduce: factory read friction --days ${facts.days}`,

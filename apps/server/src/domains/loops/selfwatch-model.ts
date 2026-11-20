@@ -33,12 +33,18 @@ export interface Finding {
   reproduce: string
   /** the evidence block of a capacity finding (`overloadEvidence`): read when it is filed, never hashed */
   evidence?: string[]
+  /** the number the condition is filed against, when it has one (MiB, percent, milliseconds): never hashed, read again once the Issue closed */
+  figure?: number
 }
 
 export const subjectKeyOf = (finding: Pick<Finding, 'kind' | 'subject'>): string => `${finding.kind}:${finding.subject}`
 
-/** One subject as the loop remembers it (`migrations/0998_selfwatch.sql`). */
+/** One subject as the loop remembers it: the newest row of its key in `loop_findings`. */
 export interface SelfwatchRow {
+  /** the Issue the signal opened or reached; null when intake took it as a repeat of an Issue closed lately (no Issue carries it) */
+  issueId: string | null
+  repo: string
+  figure: number | null
   subjectKey: string
   kind: FindingKind
   firstSeenAt: Date

@@ -339,6 +339,7 @@ export function processGrowthFindings(samples: readonly ProcessMinute[], now: Da
     found.push({
       kind: 'process_growth',
       subject,
+      figure: Math.round(grown),
       ...(owner ? { repo: owner } : {}),
       title: `Self-watch: process ${oneLine(first.name, 60)} grew by more than one GiB in an hour`,
       facts: [
@@ -390,6 +391,7 @@ export function swapGrowthFindings(minutes: readonly HostMinute[], now: Date): F
     {
       kind: 'swap_growth',
       subject: 'host',
+      figure: Number(last.pct.toFixed(1)),
       title: 'Self-watch: swap use of the host has grown for fifteen minutes in a row',
       facts: [`swap use never fell and rose over ${SWAP_RISE_MINUTES} minute samples in a row`],
       context: [
@@ -412,6 +414,7 @@ export function processStormFindings(minutes: readonly HostMinute[], cap: number
     {
       kind: 'process_storm',
       subject: 'host',
+      figure: last.processes ?? undefined,
       title: 'Self-watch: the process count of the host is over its cap',
       facts: [`the process count stayed over the cap of ${cap} for ${STORM_SAMPLES} samples in a row`],
       context: [`Now ${last.processes} processes at ${iso(last.at)}`, `Now: ${iso(now)}`],
@@ -434,9 +437,10 @@ const MAX_EVIDENCE_LINES = 60
  * A finding as a signal's text: what was seen, where, how to look again; at most `MAX_LINES` lines, and after them the
  * finding's evidence block when it has one (a capacity finding: the lead who takes the Issue has the host's state as it was).
  */
-export function signalText(finding: Finding, repo: string): string {
+export function signalText(finding: Finding, repo: string, last: string | null = null): string {
   return [
     `Self-watch ${finding.kind} (${finding.subject}) on ${repo}`,
+    ...(last === null ? [] : [last]),
     ...[...finding.facts, ...finding.context].slice(0, MAX_LINES - 2),
     `Reproduce: ${finding.reproduce}`,
     ...(finding.evidence ?? []).slice(0, MAX_EVIDENCE_LINES),

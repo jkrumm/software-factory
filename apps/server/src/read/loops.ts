@@ -1,6 +1,7 @@
 import type { SQL } from 'bun'
 import * as z from 'zod'
-import type { ClassIssue } from '../domains/loops/classes.ts'
+import type { ClassIssue, FindingLoop } from '../domains/loops/classes.ts'
+import { LEDGER_LOOPS, type ClosedFinding } from '../domains/loops/ledger.ts'
 import type { DigestIssue } from '../kernel/digest-scope.ts'
 import type { FindingIssue } from '../domains/loops/hygiene-lifecycle.ts'
 import type { LoopReads } from '../domains/loops/ports.ts'
@@ -67,7 +68,7 @@ const Blocked = z.object({
 })
 
 const ClassRow = z.object({
-  loop: z.enum(['friction', 'hygiene']),
+  loop: z.enum(['friction', 'hygiene', 'selfwatch']),
   repo: z.string(),
   class: z.string(),
   issue: z.string(),
@@ -136,6 +137,18 @@ const WaitRowSchema = z.object({
   since_at: z.date().nullable(),
 })
 
+const ClosedRow = z.object({
+  issue: z.string(),
+  loop: z.enum(LEDGER_LOOPS),
+  repo: z.string(),
+  key: z.string(),
+  figure: z.coerce.number().nullable(),
+  verdict: z.enum(['moved', 'flat', 'worse', 'unmeasured']).nullable(),
+  outcome: z.enum(['done', 'healed', 'dropped', 'cancelled']),
+  filed_at: z.date(),
+  closed_at: z.date(),
+})
+
 const FindingIssueRow = z.object({
   key: z.string(),
   issue: z.string(),
@@ -170,7 +183,7 @@ export function loopReads(tx: SQL): LoopReads {
       FROM factory.loop_findings lf
       JOIN factory.issues i ON i.id = lf.issue_id
       JOIN factory.issue_events f ON f.issue_id = i.id AND f.kind = 'filed' AND f.version = 1
-      WHERE ${filter === null ? tx`TRUE` : tx`lf.loop = ${filter.loop}`}
+      WHERE ${filter === null ? tx`lf.loop IN ('friction', 'hygiene', 'selfwatch')` : tx`lf.loop = ${filter.loop}`}
       ORDER BY lf.loop, lf.class, i.id`
     return classRows(rows)
   }
@@ -531,6 +544,35 @@ export function loopReads(tx: SQL): LoopReads {
       })
     },
 
+    async closedFindings(loop, repo) {
+      // a closed Issue's closing is its applied event into `closed`; the newest closed Issue of each key is what a signal says "last time" of
+      const rows: unknown[] = await tx`
+        WITH closed AS (
+          SELECT lf.issue_id AS issue, lf.loop, lf.repo, lf.key, lf.figure, lf.verdict, i.outcome, lf.filed_at,
+            (SELECT c.at FROM factory.issue_events c WHERE c.issue_id = i.id AND c.result = 'applied' AND c.to_state = 'closed'
+              ORDER BY c.version DESC LIMIT 1) AS closed_at
+          FROM factory.loop_findings lf JOIN factory.issues i ON i.id = lf.issue_id
+          WHERE lf.loop = ${loop} AND i.state = 'closed' AND (${repo ?? null}::text IS NULL OR lf.repo = ${repo ?? null}))
+        SELECT * FROM closed
+        WHERE closed_at IS NOT NULL AND (verdict IS NULL OR issue IN (
+          SELECT DISTINCT ON (key) issue FROM closed ORDER BY key, filed_at DESC, issue DESC))
+        ORDER BY filed_at, issue`
+      return rows.map((raw): ClosedFinding => {
+        const row = ClosedRow.parse(raw)
+        return {
+          issue: row.issue,
+          loop: row.loop,
+          repo: row.repo,
+          key: row.key,
+          figure: row.figure,
+          verdict: row.verdict,
+          outcome: row.outcome,
+          filedAt: row.filed_at,
+          closedAt: row.closed_at,
+        }
+      })
+    },
+
     async classIssues(loop) {
       const out: Record<string, ClassIssue[]> = {}
       for (const row of await classes({ loop })) (out[row.class] ??= []).push(row.issue)
@@ -538,7 +580,7 @@ export function loopReads(tx: SQL): LoopReads {
     },
 
     async allClassIssues() {
-      const groups = new Map<string, { loop: 'friction' | 'hygiene'; class: string; issues: ClassIssue[] }>()
+      const groups = new Map<string, { loop: FindingLoop; class: string; issues: ClassIssue[] }>()
       for (const row of await classes(null)) {
         const id = `${row.loop}\u0000${row.class}`
         const group = groups.get(id) ?? { loop: row.loop, class: row.class, issues: [] }

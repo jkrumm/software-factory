@@ -47,7 +47,7 @@ export async function readRetroOutcomes(sql: SQL, options: { now: Date; days: nu
       SELECT i.state, i.outcome, EXISTS (
         SELECT 1 FROM factory.issue_events e WHERE e.issue_id = s.issue_id AND e.kind = 'shipped' AND e.result = 'applied') AS shipped
       FROM factory.intake_signals s LEFT JOIN factory.issues i ON i.id = s.issue_id
-      WHERE NOT EXISTS (SELECT 1 FROM factory.throughput_findings t WHERE t.signal_id = s.id)
+      WHERE NOT EXISTS (SELECT 1 FROM factory.loop_findings t WHERE t.loop = 'throughput' AND t.signal_id = s.id)
         AND s.text ~ 'Retro: [0-9]{4}-[0-9]{2}-[0-9]{2} kpi=[a-z0-9_]+ before=' AND s.received_at >= ${w.from} AND s.received_at < ${w.to}
     ) r`
   return { days: options.days, ...Row.parse(row) }

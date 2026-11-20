@@ -8,6 +8,7 @@ import type { DigestIssue, DigestRecord, LatestDigest } from './digest.ts'
 import type { ReaperAttempt, ReaperProc } from './reaper.ts'
 import type { CallLoop, CallOutcome, CallRow } from './calls.ts'
 import type { ClassIssue, FindingLoop } from './classes.ts'
+import type { ClosedFinding, Judged, LedgerLoop } from './ledger.ts'
 import type { FixCommit, FixCommitRow } from './fix-classes.ts'
 import type { FindingIssue, LifecycleAction } from './hygiene-lifecycle.ts'
 import type { FixEntry, SweepReport } from './hygiene-model.ts'
@@ -292,17 +293,28 @@ export interface LoopStore {
     id: string,
     next: Pick<HygienePassRecord, 'judgment' | 'filed' | 'overBudget' | 'failed'>,
   ): Promise<void>
-  /** the class of finding an Issue was filed for (`migrations/0993_finding_classes.sql`); a repeat is a no-op */
-  recordFinding(row: { issue: string; loop: FindingLoop; repo: string; class: string; key: string }): Promise<void>
+  /** the Issue a loop's finding opened, with the figure it was filed against (`migrations/0993_finding_classes.sql`, `1061_loop_ledger.sql`); a repeat is a no-op */
+  recordFinding(row: {
+    issue: string
+    loop: LedgerLoop
+    repo: string
+    class: string
+    key: string
+    signal: string | null
+    filedAt: Date
+    figure: number | null
+  }): Promise<void>
+  /** the verdicts of closed findings: the figure read again and what it did; an Issue that has one is left */
+  recordVerdicts(rows: readonly Judged[], at: Date): Promise<void>
   /** the shas of one repo's fix commits stored already (`migrations/0997_fix_commits.sql`) */
   storedFixShas(repo: string): Promise<Set<string>>
   /** a repeat is a no-op */
   recordFixCommits(rows: readonly FixCommitRow[]): Promise<void>
-  /** every subject the self-watch loop remembers (`migrations/0998_selfwatch.sql`) */
+  /** every subject the self-watch loop remembers: its newest row of `loop_findings` */
   selfwatchRows(): Promise<SelfwatchRow[]>
   /** the pass's changes in one transaction: filed rows upserted whole, seen rows touched, absent rows cleared */
   applySelfwatch(change: SelfwatchChange): Promise<void>
-  /** the throughput loop's findings, oldest first (`migrations/1027_throughput_findings.sql`) */
+  /** the throughput loop's findings, oldest first (`loop_findings`, `migrations/1061_loop_ledger.sql`) */
   throughputFindings(): Promise<FindingRow[]>
   recordThroughputFinding(row: FindingRow): Promise<void>
   applyThroughputLedger(changes: readonly LedgerChange[]): Promise<void>
@@ -384,8 +396,10 @@ export interface LoopReads {
   findingIssues(repo: string): Promise<FindingIssue[]>
   /** the Issues each finding class of one loop filed (in every repo), with their closure and outcome, by class */
   classIssues(loop: FindingLoop): Promise<Record<string, ClassIssue[]>>
-  /** the same for every loop and class */
+  /** the Issues each Issue-opening loop's class filed (not the throughput loop's, which ranks by cost) */
   allClassIssues(): Promise<{ loop: FindingLoop; class: string; issues: ClassIssue[] }[]>
+  /** the loop's findings whose Issue closed that have no verdict yet, and the newest closed one of each key; `repo` narrows to one repo */
+  closedFindings(loop: LedgerLoop, repo?: string): Promise<ClosedFinding[]>
   /** the repos with a live lead (Issues `working` or `watching`) and those Issues, ordered by repo and id */
   liveRepos(limit: number): Promise<{ repo: string; issues: IssueId[] }[]>
   /** the timer and dependency waits of the repo's Issues, with the times their exit is judged from (self-watch) */

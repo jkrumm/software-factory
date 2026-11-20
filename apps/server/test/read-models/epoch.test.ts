@@ -1,5 +1,6 @@
 import { afterAll, beforeAll, describe, expect, test } from 'bun:test'
 import { CapacityLoopModel, ThroughputModel } from '@software-factory/contract'
+import { seedFinding } from '../seed-ledger.ts'
 import { startTestCluster, type TestCluster } from '@software-factory/tests/pg'
 import { loadMigrations, migrate } from '../../src/adapters/postgres/migrate.ts'
 import { postgresLoopStore } from '../../src/adapters/postgres/loop-store.ts'
@@ -100,8 +101,17 @@ beforeAll(async () => {
     ['finding_old', 'app', '2026-11-10T08:00:00Z'],
     ['finding_new', 'lib', '2026-11-13T08:00:00Z'],
   ] as const)
-    await sql`INSERT INTO factory.throughput_findings (id, project, kpi, subject, before, target, direction, unit, cost_minutes, query, filed_at, status)
-      VALUES (${id}, ${project}, 'failed_run_minutes', '*', 60, 30, 'down', 'minutes', ${id === 'finding_old' ? 500 : 80}, 'q', ${new Date(filed)}, 'open')`
+    await seedFinding(sql, {
+      id,
+      project,
+      kpi: 'failed_run_minutes',
+      before: 60,
+      target: 30,
+      unit: 'minutes',
+      costMinutes: id === 'finding_old' ? 500 : 80,
+      filedAt: new Date(filed),
+      status: 'open',
+    })
 
   // closed Issues and steps per day, for the capacity read and the median per Issue: 100 slot-minutes before the epoch
   // 11-10, 10 after (days 11-12 and 11-13), one Issue a day
@@ -291,7 +301,6 @@ describe('what the epoch leaves to the ledger and to a lead', () => {
     direction: 'down',
     unit: 'minutes',
     costMinutes: 90,
-    query: 'q',
     signalId: null,
     issueId: 'issue_1',
     filedAt,

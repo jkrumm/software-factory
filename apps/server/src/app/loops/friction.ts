@@ -30,6 +30,7 @@ import type { UnitOfWork } from '../unit-of-work.ts'
 import { findingKeyOf } from '../../domains/intake/rules.ts'
 import { classOf } from '../../domains/loops/classes.ts'
 import { readGate, type ClassGate } from './gate.ts'
+import { settleClosed, type Ledger } from './ledger.ts'
 
 /** The repo that carries the factory's own findings, and who files them. */
 const FRICTION_REPO = 'software-factory'
@@ -117,6 +118,11 @@ export async function frictionPass(deps: FrictionDeps): Promise<Result<FrictionP
     issues: model.issues,
     closed: model.closed,
   }
+  // what the Issues of earlier findings did: a pattern no longer counted is at 0
+  const counted = new Map(model.counts.map((count) => [count.key, count.count]))
+  const settled = await settleClosed(deps, { loop: 'friction', now, read: (row) => counted.get(row.key) ?? 0 })
+  if (!settled.ok) return settled
+  const ledger = settled.value
   const record: FrictionPassRecord = {
     id: deps.ids.next('friction'),
     at: now,
@@ -127,7 +133,8 @@ export async function frictionPass(deps: FrictionDeps): Promise<Result<FrictionP
     overBudget: [...over.overBudget, ...held].map(({ key, count }) => ({ key, count })),
     failed: [],
   }
-  for (const pattern of over.file) await fileOne(deps, gate, pattern, facts, evidence[pattern.key] ?? [], record)
+  for (const pattern of over.file)
+    await fileOne(deps, { gate, ledger, now }, pattern, facts, evidence[pattern.key] ?? [], record)
   const retro = await fileRetro(deps, model.window.to, now)
 
   const recorded = await deps.uow.run(async ({ loops }) => {
@@ -175,7 +182,7 @@ async function fileRetro(deps: FrictionDeps, to: string, now: Date): Promise<str
 
 async function fileOne(
   deps: FrictionDeps,
-  gate: ClassGate,
+  { gate, ledger, now }: { gate: ClassGate; ledger: Ledger; now: Date },
   pattern: Pattern,
   facts: Parameters<typeof signalText>[1],
   refs: string[],
@@ -187,7 +194,7 @@ async function fileOne(
       from: FRICTION_SOURCE,
       kind: 'request',
       title,
-      text: signalText(pattern, facts, refs),
+      text: signalText(pattern, facts, refs, ledger.lastTime(pattern.key, pattern.count)),
       repo: FRICTION_REPO,
       probe: false,
     },
@@ -207,7 +214,11 @@ async function fileOne(
   const stands = outcome === 'filed' || outcome === 'amended' || (outcome === 'dropped' && detail === 'repeat')
   if (stands) {
     record.filed.push({ key: pattern.key, count: pattern.count, title })
-    const lost = await gate.record(filed.value.issue, pattern.key, FRICTION_REPO)
+    const lost = await gate.record(filed.value.issue, pattern.key, FRICTION_REPO, {
+      figure: pattern.count,
+      signal: filed.value.signal,
+      at: now,
+    })
     if (lost) record.failed.push({ key: pattern.key, reason: `finding class not recorded: ${lost}`.slice(0, 300) })
   } else record.failed.push({ key: pattern.key, reason: `${outcome}: ${detail}`.slice(0, 300) })
 }
