@@ -487,6 +487,9 @@ test('swap_growth: 15 minutes in a row that never fell and ended higher', () => 
   // one burst is a step, not fifteen minutes of growth (3.4% to 6.1% in one minute, flat after, 2026-11-18)
   const burst = Array.from({ length: 16 }, (_, i) => (i < 12 ? 3.4 : 6.1))
   expect(swapGrowthFindings(swap(burst), NOW)).toEqual([])
+  // two or three minutes of burst, then flat or falling (5.8% to 9.8% to 15.1%, 2026-11-20), is a step too
+  const twoMinuteBurst = Array.from({ length: 16 }, (_, i) => (i < 13 ? 5.8 : i === 13 ? 9.8 : 15.1))
+  expect(swapGrowthFindings(swap(twoMinuteBurst), NOW)).toEqual([])
   // a burst inside a rise that goes on is judged on the rest of it
   const burstThenGrowing = Array.from({ length: 16 }, (_, i) => 3.4 + (i >= 4 ? 2.7 : 0) + i * 0.1)
   expect(swapGrowthFindings(swap(burstThenGrowing), NOW)).toHaveLength(1)
