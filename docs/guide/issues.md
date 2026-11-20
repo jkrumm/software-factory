@@ -60,8 +60,8 @@ export const SENDERS: { [K in EventKind]: readonly Actor[] } = {
 
 **Example files:**
 
-- [`domains/work/events.ts`](https://github.com/jkrumm/software-factory/blob/master/apps/server/src/domains/work/events.ts#L21-L133): `PAYLOADS`, every event with its payload
-- [`domains/work/events.ts`](https://github.com/jkrumm/software-factory/blob/master/apps/server/src/domains/work/events.ts#L149-L175): `SENDERS`, who may send each
+- [`domains/work/events.ts`](https://github.com/jkrumm/software-factory/blob/master/apps/server/src/domains/work/events.ts#L21-L135): `PAYLOADS`, every event with its payload
+- [`domains/work/events.ts`](https://github.com/jkrumm/software-factory/blob/master/apps/server/src/domains/work/events.ts#L151-L178): `SENDERS`, who may send each
 
 ## The transition table
 
@@ -79,7 +79,7 @@ The drawing shows the main path and the moves that change it: a wait, a lead tha
 <!-- snippet: apps/server/src/domains/work/table.ts Cell -->
 ```ts
 export type Cell =
-  | { to: 'waiting'; wait?: WaitSpec; update?: WaitSpec; effects: Effect[] }
+  | { to: 'waiting'; wait?: WaitSpec; update?: WaitSpec; heard?: true; effects: Effect[] }
   | { to: 'closed'; outcome: Outcome; effects: Effect[] }
   | { to: 'settling' | 'queued' | 'working' | 'watching'; effects: Effect[] }
   | { refuse: string }
@@ -103,8 +103,8 @@ Six states times 25 events is 150 cells. A queued Issue shows what most of them 
 
 **Example files:**
 
-- [`domains/work/table.ts`](https://github.com/jkrumm/software-factory/blob/master/apps/server/src/domains/work/table.ts#L30-L38): `Cell` and `Table`, the type that makes it total
-- [`domains/work/table.ts`](https://github.com/jkrumm/software-factory/blob/master/apps/server/src/domains/work/table.ts#L493-L545): `settling` and `queued`, every event of two states
+- [`domains/work/table.ts`](https://github.com/jkrumm/software-factory/blob/master/apps/server/src/domains/work/table.ts#L31-L39): `Cell` and `Table`, the type that makes it total
+- [`domains/work/table.ts`](https://github.com/jkrumm/software-factory/blob/master/apps/server/src/domains/work/table.ts#L570-L624): `settling` and `queued`, every event of two states
 - [`domains/work/machine.ts`](https://github.com/jkrumm/software-factory/blob/master/apps/server/src/domains/work/machine.ts#L126-L145): `apply`, the one decision
 
 ## States and where work stands
@@ -133,7 +133,7 @@ export const WORK_WORDS = ['running', 'paused', 'ready', 'held', 'checking'] as 
 
 **Example files:**
 
-- [`contract/src/work-words.ts`](https://github.com/jkrumm/software-factory/blob/master/packages/contract/src/work-words.ts#L78-L99): `workOf`, a stored state to one of the five words
+- [`contract/src/work-words.ts`](https://github.com/jkrumm/software-factory/blob/master/packages/contract/src/work-words.ts#L79-L100): `workOf`, a stored state to one of the five words
 - [`domains/work/issue.ts`](https://github.com/jkrumm/software-factory/blob/master/apps/server/src/domains/work/issue.ts#L34-L64): `WAITS`, each wait with its exit and how it ends
 
 ## Outcomes
@@ -250,12 +250,12 @@ The Issue's insights, from the same read: 2 h 8 min from filed to closed, 12.7 m
 
 **Example files:**
 
-- [`domains/work/table.ts`](https://github.com/jkrumm/software-factory/blob/master/apps/server/src/domains/work/table.ts#L493-L652): `TABLE`, the cells this timeline walked through
+- [`domains/work/table.ts`](https://github.com/jkrumm/software-factory/blob/master/apps/server/src/domains/work/table.ts#L570-L735): `TABLE`, the cells this timeline walked through
 
 **Read more:**
 
-- [`docs/architecture.md` The Issue machine](https://github.com/jkrumm/software-factory/blob/master/docs/architecture.md#L65-L84): one writer, the review wait, the model test
-- [`docs/language.md` Events](https://github.com/jkrumm/software-factory/blob/master/docs/language.md#L179-L210): every event, what it means and who sends it
+- [`docs/architecture.md` The Issue machine](https://github.com/jkrumm/software-factory/blob/master/docs/architecture.md#L64-L85): one writer, the review wait, the model test
+- [`docs/language.md` Events](https://github.com/jkrumm/software-factory/blob/master/docs/language.md#L180-L211): every event, what it means and who sends it
 - [`docs/language.md` Where work stands](https://github.com/jkrumm/software-factory/blob/master/docs/language.md#L48-L62): the five words and Planned
 
 Next: [Leads](./leads.md)

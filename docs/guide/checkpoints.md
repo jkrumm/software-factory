@@ -225,7 +225,7 @@ An avoidable touch is a touch the factory should have settled. A verdict on a Co
 
 **Read more:**
 
-- [Checkpoints](https://github.com/jkrumm/software-factory/blob/master/docs/architecture.md#L532-L539), [the review timeout](https://github.com/jkrumm/software-factory/blob/master/docs/architecture.md#L753-L761) and [a Decision is a choice](https://github.com/jkrumm/software-factory/blob/master/docs/architecture.md#L762-L765) in `docs/architecture.md`.
+- [Checkpoints](https://github.com/jkrumm/software-factory/blob/master/docs/architecture.md#L533-L540), [the review timeout](https://github.com/jkrumm/software-factory/blob/master/docs/architecture.md#L754-L762) and [a Decision is a choice](https://github.com/jkrumm/software-factory/blob/master/docs/architecture.md#L763-L766) in `docs/architecture.md`.
 - [Where the owner comes in](https://github.com/jkrumm/software-factory/blob/master/docs/language.md#L79-L112) in `docs/language.md`.
 
 Next: [Loops](./loops.md)

@@ -154,7 +154,7 @@ const CLAIM_FREEING_WAITS: ReadonlySet<string> = new Set([
 **Example files:**
 
 - [`claims.ts` L22-L75](https://github.com/jkrumm/software-factory/blob/master/apps/server/src/domains/capacity/claims.ts#L22-L75): `claimOrder` and `claimRoom`, the total order and the room.
-- [`claims.ts` L76-L95](https://github.com/jkrumm/software-factory/blob/master/apps/server/src/domains/capacity/claims.ts#L76-L95): which waits free a claim.
+- [`claims.ts` L76-L96](https://github.com/jkrumm/software-factory/blob/master/apps/server/src/domains/capacity/claims.ts#L76-L96): which waits free a claim.
 - [`lanes.ts` L12-L26](https://github.com/jkrumm/software-factory/blob/master/apps/server/src/domains/capacity/lanes.ts#L12-L26): `laneRoom`.
 
 ## Test slots
@@ -264,8 +264,8 @@ export function learnedLeadMib(attemptPeaks: readonly number[]): number | null {
 
 **Read more:**
 
-- [Capacity and leads](https://github.com/jkrumm/software-factory/blob/master/docs/architecture.md#L149-L417) in `docs/architecture.md`.
-- [Work](https://github.com/jkrumm/software-factory/blob/master/docs/language.md#L7-L46) and [The host](https://github.com/jkrumm/software-factory/blob/master/docs/language.md#L150-L161) in `docs/language.md`.
+- [Capacity and leads](https://github.com/jkrumm/software-factory/blob/master/docs/architecture.md#L150-L418) in `docs/architecture.md`.
+- [Work](https://github.com/jkrumm/software-factory/blob/master/docs/language.md#L7-L46) and [The host](https://github.com/jkrumm/software-factory/blob/master/docs/language.md#L151-L162) in `docs/language.md`.
 - [Lanes](https://github.com/jkrumm/software-factory/blob/master/docs/plan.md#L121-L164) in `docs/plan.md`.
 
 Next: [Chains and Plans](./chains.md)

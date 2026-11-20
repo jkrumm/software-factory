@@ -52,7 +52,7 @@ export function decideStop(facts: StopFacts): StopDecision {
 
 - [`friction.ts`](https://github.com/jkrumm/software-factory/blob/master/apps/server/src/domains/loops/friction.ts#L54-L58): the rule that counts it.
 - [`brief.ts`](https://github.com/jkrumm/software-factory/blob/master/apps/server/src/domains/leads/brief.ts#L18): lead order 6, as Issue 1807 rewrote it.
-- [`decisions.md`](https://github.com/jkrumm/software-factory/blob/master/docs/decisions.md#L178): NL23, why a missing review is counted and never refused.
+- [`decisions.md`](https://github.com/jkrumm/software-factory/blob/master/docs/decisions.md#L34): NL23, why a missing review is counted and never refused.
 
 ## Caps that held work back
 
@@ -74,7 +74,7 @@ export const DEFAULT_LEADS = MAX_LEADS
 **Example files:**
 
 - [`project-file.ts`](https://github.com/jkrumm/software-factory/blob/master/packages/contract/src/project-file.ts#L476-L483): the maximum and the default, one constant each.
-- [`decisions.md`](https://github.com/jkrumm/software-factory/blob/master/docs/decisions.md#L267-L276): NL32 with the measured window.
+- [`decisions.md`](https://github.com/jkrumm/software-factory/blob/master/docs/decisions.md#L123-L132): NL32 with the measured window.
 
 ## Parallel checks in one tree
 
@@ -122,7 +122,7 @@ Issue 82 held Issues 83 to 85 for 6 hours on the evening of 2026-11-05, because 
 **Example files:**
 
 - [`issue.ts`](https://github.com/jkrumm/software-factory/blob/master/apps/server/src/domains/work/issue.ts#L38): the `WAITS` table, with each wait's exit kind.
-- [`model.test.ts`](https://github.com/jkrumm/software-factory/blob/master/apps/server/test/work/model.test.ts#L144-L176): the invariants checked over random event sequences.
+- [`model.test.ts`](https://github.com/jkrumm/software-factory/blob/master/apps/server/test/work/model.test.ts#L144-L184): the invariants checked over random event sequences.
 
 ## A green Issue without its proof
 
@@ -162,7 +162,7 @@ const get = (app: { handle(request: Request): Promise<Response> }, path: string)
 **Example files:**
 
 - [`api.test.ts`](https://github.com/jkrumm/software-factory/blob/master/apps/server/test/api.test.ts#L17-L19): the request helper and why it uses `localhost`.
-- [`rewrite/learnings.md`](https://github.com/jkrumm/software-factory/blob/master/docs/rewrite/learnings.md#L19-L22): the entry that recorded it.
+- [`rewrite/learnings.md`](https://github.com/jkrumm/software-factory/blob/master/docs/archive/rewrite-learnings.md#L19-L22): the entry that recorded it.
 
 ## A restart that hangs
 
@@ -184,12 +184,12 @@ The server never exited on SIGTERM, twice, in the first live window on 2026-11-0
 **Example files:**
 
 - [`shutdown.ts`](https://github.com/jkrumm/software-factory/blob/master/apps/server/src/shutdown.ts#L27-L47): the steps and the deadline.
-- [`main.ts`](https://github.com/jkrumm/software-factory/blob/master/apps/server/src/main.ts#L1117-L1126): the wiring, with `stop(true)` and why.
+- [`main.ts`](https://github.com/jkrumm/software-factory/blob/master/apps/server/src/main.ts#L1114-L1123): the wiring, with `stop(true)` and why.
 
 **Read more:**
 
-- [Learnings of the reset](https://github.com/jkrumm/software-factory/blob/master/docs/strategy/2026-11-reset/learnings.md): the dated record of 2026-11-04 to 2026-11-05.
-- [Rewrite learnings](https://github.com/jkrumm/software-factory/blob/master/docs/rewrite/learnings.md): the calls and surprises of the rewrite, 2026-11-07 to 2026-11-08.
+- [Learnings of the reset](https://github.com/jkrumm/software-factory/blob/master/docs/archive/strategy/2026-11-reset/learnings.md): the dated record of 2026-11-04 to 2026-11-05.
+- [Rewrite learnings](https://github.com/jkrumm/software-factory/blob/master/docs/archive/rewrite-learnings.md): the calls and surprises of the rewrite, 2026-11-07 to 2026-11-08.
 - [Decisions](https://github.com/jkrumm/software-factory/blob/master/docs/decisions.md): every owner decision with its measurements, NL1 onward.
 
 Next: [Running a Factory](./running.md)

@@ -227,13 +227,13 @@ A loop's yield is what its signals became: the passes it ran, the signals it fil
 
 **Example files:**
 
-- [`architecture.md`](https://github.com/jkrumm/software-factory/blob/master/docs/architecture.md#L787-L816): the loops and what each does deterministically and what it asks agw.
-- [`architecture.md`](https://github.com/jkrumm/software-factory/blob/master/docs/architecture.md#L840): "What each loop yields", the read model.
+- [`architecture.md`](https://github.com/jkrumm/software-factory/blob/master/docs/architecture.md#L788-L817): the loops and what each does deterministically and what it asks agw.
+- [`architecture.md`](https://github.com/jkrumm/software-factory/blob/master/docs/architecture.md#L841): "What each loop yields", the read model.
 - [`loop-yield.test.ts`](https://github.com/jkrumm/software-factory/blob/master/apps/server/test/read-models/loop-yield.test.ts): every figure restated in plain rows.
 
 **Read more:**
 
-- [Loops and agw](https://github.com/jkrumm/software-factory/blob/master/docs/architecture.md#L787-L805): the runner, the clock, the call record.
+- [Loops and agw](https://github.com/jkrumm/software-factory/blob/master/docs/architecture.md#L788-L806): the runner, the clock, the call record.
 - [The words Loop and Pass](https://github.com/jkrumm/software-factory/blob/master/docs/language.md#L74-L75): what the factory means by them.
 - [Hygiene catalogue](https://github.com/jkrumm/software-factory/blob/master/docs/hygiene.md): every probe, its cost and how to silence it.
 
