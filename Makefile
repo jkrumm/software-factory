@@ -80,6 +80,8 @@ check-static:
 	@bun scripts/boundaries.ts
 	@echo "==> retired words (scripts/retired-words.ts)"
 	@bun scripts/retired-words.ts
+	@echo "==> retired words in README.md (every visitor reads it; CI's unit shard checks it too)"
+	@bun scripts/retired-words.ts --files README.md
 	@echo "==> README agrees with the code (make docs-check)"
 	@$(MAKE) --no-print-directory docs-check
 	@echo "==> state words on screens (scripts/vocabulary.ts)"
