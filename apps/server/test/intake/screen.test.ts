@@ -1,6 +1,6 @@
 import { expect, test } from 'bun:test'
 import type { ScreenAnswer } from '@software-factory/contract'
-import { screenPass, screenSummary, type ScreenPass } from '../../src/app/loops/screen.ts'
+import { screenKey, screenPass, screenSummary, type ScreenPass } from '../../src/app/loops/screen.ts'
 import type { IntakeStore, SignalRow } from '../../src/domains/intake/ports.ts'
 import {
   checkScreen,
@@ -242,4 +242,40 @@ test('a held signal older than 72 h is screened again with final, a leave is pro
   expect(asked).toEqual([true])
   expect(promoted).toEqual([{ id: 'signal_1', body: { repo: 'app' }, by: 'judge', steer: FINAL_STEER }])
   expect(held).toBe(false)
+})
+
+test('the first and the last look of one attempt use different keys, a replayed last look the same one', async () => {
+  const keys: string[] = []
+  const lookAt = async (now: string) => {
+    const store = {
+      screenable: async () => [
+        row({
+          receivedAt: new Date('2026-11-05T10:00:00Z'),
+          screening: { ...NOT_SCREENED, attempts: 1 },
+        }),
+      ],
+      setScreening: async () => true,
+    }
+    await screenPass({
+      uow: { run: async (fn) => fn({ intake: store as unknown as IntakeStore }), inTransaction: () => false },
+      clock: { now: () => new Date(now) },
+      workflow: {
+        screen: async (_request, key) => {
+          keys.push(key)
+          return ok(answer({ verdict: 'leave' }))
+        },
+      },
+      openIssues: { inRepo: async () => ok([]), closedSince: async () => ok([]) },
+      projects: { find: async () => ok({ work: false }), names: async () => ok(['app']) },
+      promote: async () => err({ kind: 'not_held', detail: 'x' }),
+      dismiss: async () => err({ kind: 'not_held', detail: 'x' }),
+    })
+  }
+  await lookAt('2026-11-05T11:00:00Z') // first look, 1 h old
+  await lookAt('2026-11-13T08:00:00Z') // last look, over 72 h old, same attempt
+  await lookAt('2026-11-13T08:05:00Z') // the last look replayed
+  expect(keys).toEqual(['screen:signal_1:1', 'screen:signal_1:1:final', 'screen:signal_1:1:final'])
+  expect(keys[0]).not.toBe(keys[1])
+  expect(screenKey('signal_1', 1, false)).toBe(keys[0] as never)
+  expect(screenKey('signal_1', 1, true)).toBe(keys[1] as never)
 })
