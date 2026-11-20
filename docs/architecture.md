@@ -783,6 +783,11 @@ recorded in `loop_calls` under its key, so the next boot takes it up again. The 
 boot (`loop_passes`, written at the end of every pass): the first pass after a restart comes when the interval since the
 last one is up, at once if it never ran, so a 6-hour loop still passes on a server that restarts on every deploy.
 
+Five workflows (`factory-ask`, `-triage`, `-steward`, `-queue`, `-hygiene`) catch a model failure inside agw and answer with a neutral
+result whose reason starts "<name> unavailable:". The adapters of those five (`adapters/agw/unavailable.ts`) read that reason: such an
+answer is a failed call (`gone`), so the Judge's tries, the loops' rounds and retry windows run and nothing is recorded as asked,
+settled or paged on it. Until agw lets those runs fail, the reason is the only mark.
+
 | Loop | Deterministic | agw workflow |
 |-|-|-|
 | `leads` | spool replay, start, notes, finalize, the outbox | none |

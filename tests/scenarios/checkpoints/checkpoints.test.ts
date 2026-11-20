@@ -15,6 +15,7 @@ import {
   PassReply,
 } from '@software-factory/contract'
 import { admitted, fileIssue, tick } from '../flow.ts'
+import { JUDGE_MAX_TRIES } from '../../../apps/server/src/kernel/judge-tries.ts'
 import { factory, type ServerProcess, type World } from '../harness.ts'
 import { type Lab, startLab } from '../planning/lab.ts'
 
@@ -29,7 +30,7 @@ let server: ServerProcess
 let dir: string
 let issues = 0
 
-const PROJECTS = ['spec', 'policy', 'owner', 'judge', 'default', 'refused', 'amend', 'errand', 'annotate'].map(
+const PROJECTS = ['spec', 'policy', 'owner', 'judge', 'default', 'refused', 'amend', 'errand', 'annotate', 'down'].map(
   (name) => `example-${name}`,
 )
 
@@ -71,6 +72,12 @@ beforeAll(async () => {
       {
         match: 'access log',
         verdict: { verdict: 'answer', answer: 'pino', reason: 'the plan decided', source: 'plan: docs/decisions.md' },
+      },
+      { match: 'build cache', fail: true },
+      {
+        match: 'artifact mirror',
+        // what agw answers when its model failed: a valid verdict that hands the ask to the owner
+        verdict: { verdict: 'owner', answer: '', reason: 'judge unavailable: timeout', source: '' },
       },
     ]),
   )
@@ -582,3 +589,42 @@ test('only the Spec screen, the Judge and the Errand screen called agw', async (
     'factory-ask',
   ])
 })
+
+/** A Decision whose Judge run failed, or answered that it is unavailable, is a failed try: the owner is paged after the last one only. */
+for (const [how, question] of [
+  ['the run fails', 'Which build cache layout for the runners?'],
+  ['the answer says unavailable', 'Which artifact mirror for the runners?'],
+] as const) {
+  test(`a Decision whose Judge call fails (${how}) is tried ${JUDGE_MAX_TRIES} times before the owner is paged`, async () => {
+    const issueId = await workingIssue('example-down')
+    await pass()
+    const before = (await askCalls()).length
+    const asked = await ok((json) => AskReply.parse(json), 'issue', 'ask', issueId, ...body(FORM(question)))
+    const id = asked.decision.id
+    const pagesOf = (decision: string) => decisionPages().filter((p) => p.click?.endsWith(decision))
+    const needs = async () =>
+      (await ok((json) => NeedsModel.parse(json), 'read', 'needs')).items.filter((i) => i.id === id)
+    const judgeStep = () =>
+      world.db.sql`SELECT outcome, tries FROM factory.decision_steps WHERE decision_id = ${id} AND step = 'judge'`
+    const ownerSteps = () =>
+      world.db.sql`SELECT 1 FROM factory.decision_steps WHERE decision_id = ${id} AND step = 'owner'`
+
+    for (let tries = 1; tries < JUDGE_MAX_TRIES; tries++) {
+      await pass()
+      expect(await judgeStep()).toEqual([{ outcome: 'failed', tries }])
+      expect(pagesOf(id)).toHaveLength(0)
+      expect(await ownerSteps()).toHaveLength(0)
+      expect(await needs()).toEqual([])
+      // inside the backoff the Judge is not called again
+      await pass()
+      expect(await askCalls()).toHaveLength(before + tries)
+      await world.db.sql`UPDATE factory.decision_steps SET at = at - interval '10 minutes' WHERE decision_id = ${id}`
+    }
+    await pass()
+    expect(await askCalls()).toHaveLength(before + JUDGE_MAX_TRIES)
+    expect(await judgeStep()).toEqual([{ outcome: 'failed', tries: JUDGE_MAX_TRIES }])
+    expect(pagesOf(id)).toHaveLength(1)
+    expect(await ownerSteps()).toHaveLength(1)
+    expect(await needs()).toHaveLength(1)
+  }, 60_000)
+}

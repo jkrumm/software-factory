@@ -52,6 +52,10 @@ export async function loopsFake(args: string[]): Promise<number> {
   }
   if (args[0] === 'factory-steward') {
     const scripted = scriptOf('FACTORY_FAKE_STEWARD_SCRIPT').find((entry) => words.includes(entry.match.toLowerCase()))
+    if (scripted?.fail) {
+      process.stderr.write('fake agw: factory-steward scripted to fail\n')
+      return 1
+    }
     return done(
       'factory-steward',
       args,
@@ -60,6 +64,10 @@ export async function loopsFake(args: string[]): Promise<number> {
   }
   if (args[0] === 'factory-queue') {
     const scripted = scriptOf('FACTORY_FAKE_QUEUE_SCRIPT').find((entry) => words.includes(entry.match.toLowerCase()))
+    if (scripted?.fail) {
+      process.stderr.write('fake agw: factory-queue scripted to fail\n')
+      return 1
+    }
     return done('factory-queue', args, scripted?.answer ?? { edges: [], order: [], reason: 'nothing scripted' })
   }
   if (args[0] === 'factory-screen') {
@@ -132,6 +140,10 @@ export async function loopsFake(args: string[]): Promise<number> {
     return done('factory-hygiene', args, scripted?.answer ?? { findings: [], read: 0, reason: 'nothing scripted' })
   }
   const scripted = scriptOf('FACTORY_FAKE_TRIAGE_SCRIPT').find((entry) => words.includes(entry.match.toLowerCase()))
+  if (scripted?.fail) {
+    process.stderr.write('fake agw: factory-triage scripted to fail\n')
+    return 1
+  }
   return done(
     'factory-triage',
     args,

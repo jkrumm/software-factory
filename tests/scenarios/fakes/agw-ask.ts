@@ -4,7 +4,8 @@ import { done } from './agw-envelope.ts'
 /**
  * `agw factory-ask --format json --idempotency-key <key>`, input on stdin. A scenario scripts it with a JSON file
  * (`FACTORY_FAKE_ASK_SCRIPT`): `[{ "match": "<phrase of the question>", "verdict": { verdict, answer, reason, source } }]`.
- * A question nothing matches is passed to the owner. Every call is logged with its stdin, so a scenario can read what
+ * An entry with `"fail": true` makes the run fail (exit 1); an entry whose reason is `judge unavailable: …` is what agw answers when its model
+ * failed. A question nothing matches is passed to the owner. Every call is logged with its stdin, so a scenario can read what
  * the Judge was given (the precedents among it). The answer is the run envelope the real agw prints.
  */
 export async function askFake(args: string[]): Promise<number> {
@@ -16,9 +17,13 @@ export async function askFake(args: string[]): Promise<number> {
   const question = (input.question ?? '').toLowerCase()
   const path = process.env.FACTORY_FAKE_ASK_SCRIPT
   const script = path
-    ? (JSON.parse(readFileSync(path, 'utf8')) as { match: string; verdict: Record<string, string> }[])
+    ? (JSON.parse(readFileSync(path, 'utf8')) as { match: string; verdict: Record<string, string>; fail?: boolean }[])
     : []
   const scripted = script.find((entry) => question.includes(entry.match.toLowerCase()))
+  if (scripted?.fail) {
+    process.stderr.write('fake agw: factory-ask scripted to fail\n')
+    return 1
+  }
   const verdict = scripted?.verdict ?? {
     verdict: 'owner',
     answer: '',
