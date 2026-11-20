@@ -14,6 +14,7 @@ A Decision is one question as a form. The lead raises it with `factory issue ask
 - **Waiting is not a choice.** A recommendation or default of "Keep waiting", "Wait for review", "Do nothing" or "Hold" is refused. What it waits for is a person's chore, and a chore is an Errand. The steward's own asks are exempt: a hold is a real answer to a stall.
 - **Three steps, in order.** The Judge (next section), the default after its wait (or taken by the lead), the owner. The Decision records who settled it: `judge`, `default`, `owner`, or `orchestrator` when it answers for the owner. (Rows from before 2026-11-20 may also say `policy`: that step is gone, and `project.yaml`'s `policy:` key is accepted and dropped.)
 
+<!-- snippet: apps/server/src/domains/checkpoints/decision.ts NO_OP_LABELS -->
 ```ts
 const NO_OP_LABELS: readonly RegExp[] = [
   /^(?:keep|continue|stay|remain|just|simply)\b.{0,12}\b(?:waiting|wait|blocked|paused)\b/i,
@@ -41,9 +42,9 @@ The wait was 24 hours. The default is not the recommendation: the lead recommend
 
 **Example files:**
 
-- [`decision.ts` L61-L143](https://github.com/jkrumm/software-factory/blob/2511836af2e3c6f09eb0f76ded4d5e49b47003ab/apps/server/src/domains/checkpoints/decision.ts#L61-L143): `readDecisionForm`, every required field and the reversible default.
-- [`decision.ts` L145-L164](https://github.com/jkrumm/software-factory/blob/2511836af2e3c6f09eb0f76ded4d5e49b47003ab/apps/server/src/domains/checkpoints/decision.ts#L145-L164): the labels that are no choice, and the refusal that points to an Errand.
-- [`decision.ts` L198-L209](https://github.com/jkrumm/software-factory/blob/2511836af2e3c6f09eb0f76ded4d5e49b47003ab/apps/server/src/domains/checkpoints/decision.ts#L198-L209): when the default is due.
+- [`decision.ts` L63-L151](https://github.com/jkrumm/software-factory/blob/master/apps/server/src/domains/checkpoints/decision.ts#L63-L151): `readDecisionForm`, every required field and the reversible default.
+- [`decision.ts` L153-L172](https://github.com/jkrumm/software-factory/blob/master/apps/server/src/domains/checkpoints/decision.ts#L153-L172): the labels that are no choice, and the refusal that points to an Errand.
+- [`decision.ts` L180-L191](https://github.com/jkrumm/software-factory/blob/master/apps/server/src/domains/checkpoints/decision.ts#L180-L191): when the default is due.
 
 ## The Judge
 
@@ -55,6 +56,7 @@ The Judge is the agw workflow `factory-ask` that tries to settle a Decision befo
 - **It answers or hands on.** The verdict is `answer` or `owner`. The factory checks an answer before acting on it.
 - **Never irreversible.** The answer must be exactly one of the options, must name a source, and must not be an option that cannot be taken back. An irreversible option is the owner's.
 
+<!-- snippet: apps/server/src/domains/checkpoints/decision.ts guardVerdict -->
 ```ts
 export function guardVerdict(form: DecisionForm, verdict: JudgeVerdict): Guarded {
   const source = verdict.source.trim()
@@ -86,9 +88,9 @@ Across the 300 newest closed Issues of this repo (2026-11-17), 24 Decisions were
 
 **Example files:**
 
-- [`decision.ts` L9-L14](https://github.com/jkrumm/software-factory/blob/2511836af2e3c6f09eb0f76ded4d5e49b47003ab/apps/server/src/domains/checkpoints/decision.ts#L9-L14): the four steps and who may settle.
-- [`decision.ts` L221-L236](https://github.com/jkrumm/software-factory/blob/2511836af2e3c6f09eb0f76ded4d5e49b47003ab/apps/server/src/domains/checkpoints/decision.ts#L221-L236): `guardVerdict`, the factory's checks on an answer.
-- [`decision.ts` L247-L291](https://github.com/jkrumm/software-factory/blob/2511836af2e3c6f09eb0f76ded4d5e49b47003ab/apps/server/src/domains/checkpoints/decision.ts#L247-L291): `JudgeInput`, what the workflow is given.
+- [`decision.ts` L9-L17](https://github.com/jkrumm/software-factory/blob/master/apps/server/src/domains/checkpoints/decision.ts#L9-L17): the four steps and who may settle.
+- [`decision.ts` L203-L217](https://github.com/jkrumm/software-factory/blob/master/apps/server/src/domains/checkpoints/decision.ts#L203-L217): `guardVerdict`, the factory's checks on an answer.
+- [`decision.ts` L227-L273](https://github.com/jkrumm/software-factory/blob/master/apps/server/src/domains/checkpoints/decision.ts#L227-L273): `JudgeInput`, what the workflow is given.
 
 ## Specs and artifacts
 
@@ -101,6 +103,7 @@ An artifact is what a lead hands to a person. A Concept and a Spec wait for a ve
 - **A revision after Changes always reaches the owner.** The owner asked for it.
 - **24 hours, then the defaults.** A Spec or Concept with no verdict after 24 hours gets a verdict of Looks good from the factory, with a note. The lead goes on with the defaults it named, and the owner can still overrule them with a note. A Spec whose Issue closed or moved on is withdrawn instead. No second push is sent, because it would fall on the same hour as the default.
 
+<!-- snippet: apps/server/src/app/checkpoints-reviews.ts lookAtReview -->
 ```ts
 export function lookAtReview(input: { wait: ReviewWait; closed: boolean; waiting: boolean }): Look {
   const { wait, closed, waiting } = input
@@ -141,9 +144,9 @@ The other two were the address, applied, and Markdown that renders the same on G
 
 **Example files:**
 
-- [`artifact.ts` L20-L25](https://github.com/jkrumm/software-factory/blob/2511836af2e3c6f09eb0f76ded4d5e49b47003ab/apps/server/src/domains/checkpoints/artifact.ts#L20-L25): the verdicts, and which kinds wait for review.
-- [`artifact.ts` L84-L107](https://github.com/jkrumm/software-factory/blob/2511836af2e3c6f09eb0f76ded4d5e49b47003ab/apps/server/src/domains/checkpoints/artifact.ts#L84-L107): the three dispositions and the note a deferral or a decline cannot go without.
-- [`checkpoints-reviews.ts` L26-L44](https://github.com/jkrumm/software-factory/blob/2511836af2e3c6f09eb0f76ded4d5e49b47003ab/apps/server/src/app/checkpoints-reviews.ts#L26-L44): what a Spec that waited its 24 hours becomes.
+- [`artifact.ts` L28-L33](https://github.com/jkrumm/software-factory/blob/master/apps/server/src/domains/checkpoints/artifact.ts#L28-L33): the verdicts, and which kinds wait for review.
+- [`artifact.ts` L102-L125](https://github.com/jkrumm/software-factory/blob/master/apps/server/src/domains/checkpoints/artifact.ts#L102-L125): the three dispositions and the note a deferral or a decline cannot go without.
+- [`checkpoints-reviews.ts` L23-L41](https://github.com/jkrumm/software-factory/blob/master/apps/server/src/app/checkpoints-reviews.ts#L23-L41): what a Spec that waited its 24 hours becomes.
 
 ## Errands
 
@@ -155,6 +158,7 @@ An Errand is something only the owner's hands can do: a portal step, a device ru
 - **Turned away.** An Errand that asks a person for what the host does for the lead never reaches the owner. A refusal at raise costs the lead one refused call, and one at the screen costs the Issue its wait. The rules look first, then the `factory-errand` workflow.
 - **Never a review.** A request to approve one's own pull request is no Errand. The lead defers on the review instead.
 
+<!-- snippet: apps/server/src/domains/checkpoints/errand.ts refuseHostClass -->
 ```ts
 export function refuseHostClass(input: ErrandRaised): string | null {
   const text = `${input.summary}\n${input.detail ?? ''}`.toLowerCase()
@@ -173,9 +177,9 @@ issue_1714 closed that gap by rule. It was filed on 2026-11-16 at 20:42 as "An E
 
 **Example files:**
 
-- [`errand.ts` L37-L78](https://github.com/jkrumm/software-factory/blob/2511836af2e3c6f09eb0f76ded4d5e49b47003ab/apps/server/src/domains/checkpoints/errand.ts#L37-L78): `readErrand`, the need and `tried` it requires.
-- [`errand.ts` L92-L137](https://github.com/jkrumm/software-factory/blob/2511836af2e3c6f09eb0f76ded4d5e49b47003ab/apps/server/src/domains/checkpoints/errand.ts#L92-L137): the classes of work the host does, and the refusal.
-- [`need.ts` L3-L14](https://github.com/jkrumm/software-factory/blob/2511836af2e3c6f09eb0f76ded4d5e49b47003ab/apps/server/src/domains/checkpoints/need.ts#L3-L14): the four needs and where each shows.
+- [`errand.ts` L37-L78](https://github.com/jkrumm/software-factory/blob/master/apps/server/src/domains/checkpoints/errand.ts#L37-L78): `readErrand`, the need and `tried` it requires.
+- [`errand.ts` L92-L137](https://github.com/jkrumm/software-factory/blob/master/apps/server/src/domains/checkpoints/errand.ts#L92-L137): the classes of work the host does, and the refusal.
+- [`need.ts` L3-L14](https://github.com/jkrumm/software-factory/blob/master/apps/server/src/domains/checkpoints/need.ts#L3-L14): the four needs and where each shows.
 
 ## Screens
 
@@ -187,10 +191,14 @@ A screen is the check a checkpoint passes before it reaches the owner. Rules go 
 - **The held-signal screen.** The Judge looks at a held signal, outside text the factory did not trust enough to turn into work, and promotes it, dismisses it with a reason, or leaves it held with a recommendation. A signal is screened once, and a failed call is retried five times at most.
 - **The Errand screen.** The rules and workflow under Errands.
 
+<!-- snippet: apps/server/src/domains/checkpoints/spec-screen.ts screenSpecByRule -->
 ```ts
 export function screenSpecByRule(input: RuleInput): RuleOutcome | null {
   if (input.revision > 1 && input.earlier.includes('changes')) {
     return { outcome: 'passed', reason: 'a revision the owner asked for with his verdict of changes' }
+  }
+  if (input.origin.gate) {
+    return { outcome: 'passed', reason: 'an owner gate: only the owner gives its verdict' }
   }
   if (input.origin.filedSpec) {
     return { outcome: 'passed', reason: 'its filer attached it with the Issue for the owner to review' }
@@ -211,13 +219,13 @@ An avoidable touch is a touch the factory should have settled. A verdict on a Co
 
 **Example files:**
 
-- [`spec-screen.ts` L13-L24](https://github.com/jkrumm/software-factory/blob/2511836af2e3c6f09eb0f76ded4d5e49b47003ab/apps/server/src/domains/checkpoints/spec-screen.ts#L13-L24): why the screen exists, and its failure mode.
-- [`spec-screen.ts` L86-L114](https://github.com/jkrumm/software-factory/blob/2511836af2e3c6f09eb0f76ded4d5e49b47003ab/apps/server/src/domains/checkpoints/spec-screen.ts#L86-L114): `screenSpecByRule`, the deterministic first look.
-- [`spec-screen.ts` L116-L135](https://github.com/jkrumm/software-factory/blob/2511836af2e3c6f09eb0f76ded4d5e49b47003ab/apps/server/src/domains/checkpoints/spec-screen.ts#L116-L135): the checks on the workflow's answer, and the scrubbed content it reads.
+- [`spec-screen.ts` L13-L24](https://github.com/jkrumm/software-factory/blob/master/apps/server/src/domains/checkpoints/spec-screen.ts#L13-L24): why the screen exists, and its failure mode.
+- [`spec-screen.ts` L88-L120](https://github.com/jkrumm/software-factory/blob/master/apps/server/src/domains/checkpoints/spec-screen.ts#L88-L120): `screenSpecByRule`, the deterministic first look.
+- [`spec-screen.ts` L122-L141](https://github.com/jkrumm/software-factory/blob/master/apps/server/src/domains/checkpoints/spec-screen.ts#L122-L141): the checks on the workflow's answer, and the scrubbed content it reads.
 
 **Read more:**
 
-- [Checkpoints](https://github.com/jkrumm/software-factory/blob/2511836af2e3c6f09eb0f76ded4d5e49b47003ab/docs/architecture.md#L429-L436), [the review timeout](https://github.com/jkrumm/software-factory/blob/2511836af2e3c6f09eb0f76ded4d5e49b47003ab/docs/architecture.md#L643-L651) and [a Decision is a choice](https://github.com/jkrumm/software-factory/blob/2511836af2e3c6f09eb0f76ded4d5e49b47003ab/docs/architecture.md#L652-L655) in `docs/architecture.md`.
-- [Where the owner comes in](https://github.com/jkrumm/software-factory/blob/2511836af2e3c6f09eb0f76ded4d5e49b47003ab/docs/language.md#L77-L107) in `docs/language.md`.
+- [Checkpoints](https://github.com/jkrumm/software-factory/blob/master/docs/architecture.md#L533-L540), [the review timeout](https://github.com/jkrumm/software-factory/blob/master/docs/architecture.md#L754-L762) and [a Decision is a choice](https://github.com/jkrumm/software-factory/blob/master/docs/architecture.md#L763-L766) in `docs/architecture.md`.
+- [Where the owner comes in](https://github.com/jkrumm/software-factory/blob/master/docs/language.md#L79-L112) in `docs/language.md`.
 
 Next: [Loops](./loops.md)

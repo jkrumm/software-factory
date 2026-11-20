@@ -8,7 +8,7 @@ help:
 	@echo "make docs-check  the README's counts and lists (event kinds, callers, tokens, screens, domains, states, Console port and writes) against the code; also this repo's hygiene probe \`readme\`"
 	@echo "make hygiene-tools  install the host tools of the hygiene probes that Homebrew provides (osv-scanner, for the advisories probe)"
 	@echo "make accounts-bundle  build packages/accounts into one file (packages/accounts/dist/claude-account, ACCOUNTS_OUT=<path>) that runs with bun alone: the claude-account for a machine without the factory"
-	@echo "make guide-check  the guide (docs/guide): its own install, Basalt tokens current, pages and permalinks (scripts/guide-links.ts), the VitePress build"
+	@echo "make guide-check  the guide (docs/guide): its own install, Basalt tokens current, pages, links into master and the code the pages quote (scripts/guide-links.ts), the VitePress build"
 	@echo "make test    the unit tests and the scenarios"
 	@echo "make e2e     build the Console and run its Playwright suite against a seeded server (tests/e2e; screenshots land in tests/e2e/out/screenshots)"
 	@echo "make fmt     apply formatting"
@@ -88,7 +88,7 @@ check-static:
 	@bun scripts/vocabulary.ts
 	@echo "==> public hygiene (scripts/public-scan.ts)"
 	@bun scripts/public-scan.ts
-	@echo "==> guide pages and permalinks (scripts/guide-links.ts)"
+	@echo "==> guide pages, links into master and quoted code (scripts/guide-links.ts)"
 	@bun scripts/guide-links.ts
 	@echo "==> Issue diagram is current (apps/server/scripts/issue-diagram.ts --check)"
 	@bun apps/server/scripts/issue-diagram.ts --check
@@ -112,7 +112,7 @@ guide-check:
 	@bun install --cwd docs/guide --frozen-lockfile
 	@echo "==> guide tokens are current (basalt-ui tokens:check)"
 	@bun run --cwd docs/guide tokens:check
-	@echo "==> guide pages and permalinks (scripts/guide-links.ts)"
+	@echo "==> guide pages, links into master and quoted code (scripts/guide-links.ts)"
 	@bun scripts/guide-links.ts
 	@echo "==> guide build (vitepress build)"
 	@bun run --cwd docs/guide build

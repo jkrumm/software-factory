@@ -14,14 +14,15 @@ An Issue is one unit of work: one repo, one branch, one ship.
 
 The row holds the state, the wait reason, the outcome and a version. Everything else is read from the events.
 
+<!-- snippet: apps/server/src/domains/work/issue.ts STATES -->
 ```ts
 export const STATES = ['settling', 'queued', 'working', 'waiting', 'watching', 'closed'] as const
 ```
 
 **Example files:**
 
-- [`domains/work/issue.ts`](https://github.com/jkrumm/software-factory/blob/2511836af2e3c6f09eb0f76ded4d5e49b47003ab/apps/server/src/domains/work/issue.ts#L4-L25): states, kinds, origins, sizes and outcomes
-- [`domains/leads/names.ts`](https://github.com/jkrumm/software-factory/blob/2511836af2e3c6f09eb0f76ded4d5e49b47003ab/apps/server/src/domains/leads/names.ts#L18-L19): `leadBranch`, the branch of one attempt
+- [`domains/work/issue.ts`](https://github.com/jkrumm/software-factory/blob/master/apps/server/src/domains/work/issue.ts#L4-L25): states, kinds, origins, sizes and outcomes
+- [`domains/leads/names.ts`](https://github.com/jkrumm/software-factory/blob/master/apps/server/src/domains/leads/names.ts#L18-L19): `leadBranch`, the branch of one attempt
 
 ## Events
 
@@ -45,6 +46,7 @@ The senders are `factory`, `owner`, `orchestrator`, `lead`, `steward` and `judge
 
 The excerpt below is the start of `SENDERS`, not the whole map.
 
+<!-- snippet: apps/server/src/domains/work/events.ts SENDERS -->
 ```ts
 export const SENDERS: { [K in EventKind]: readonly Actor[] } = {
   filed: ['factory', 'owner', 'orchestrator'],
@@ -58,8 +60,8 @@ export const SENDERS: { [K in EventKind]: readonly Actor[] } = {
 
 **Example files:**
 
-- [`domains/work/events.ts`](https://github.com/jkrumm/software-factory/blob/2511836af2e3c6f09eb0f76ded4d5e49b47003ab/apps/server/src/domains/work/events.ts#L21-L131): `PAYLOADS`, every event with its payload
-- [`domains/work/events.ts`](https://github.com/jkrumm/software-factory/blob/2511836af2e3c6f09eb0f76ded4d5e49b47003ab/apps/server/src/domains/work/events.ts#L147-L173): `SENDERS`, who may send each
+- [`domains/work/events.ts`](https://github.com/jkrumm/software-factory/blob/master/apps/server/src/domains/work/events.ts#L21-L135): `PAYLOADS`, every event with its payload
+- [`domains/work/events.ts`](https://github.com/jkrumm/software-factory/blob/master/apps/server/src/domains/work/events.ts#L151-L178): `SENDERS`, who may send each
 
 ## The transition table
 
@@ -74,9 +76,10 @@ The transition table answers one question for every pair: what does this state d
 
 The drawing shows the main path and the moves that change it: a wait, a lead that is gone, a regression and a reopen. Arrow labels name the events, some shortened. The generated diagram in `docs/language.md` has every move.
 
+<!-- snippet: apps/server/src/domains/work/table.ts Cell -->
 ```ts
 export type Cell =
-  | { to: 'waiting'; wait?: WaitSpec; update?: WaitSpec; effects: Effect[] }
+  | { to: 'waiting'; wait?: WaitSpec; update?: WaitSpec; heard?: true; effects: Effect[] }
   | { to: 'closed'; outcome: Outcome; effects: Effect[] }
   | { to: 'settling' | 'queued' | 'working' | 'watching'; effects: Effect[] }
   | { refuse: string }
@@ -88,6 +91,7 @@ export type Table = { [S in State]: { [E in EventKind]: (ctx: Ctx<E>) => Cell } 
 
 Six states times 25 events is 150 cells. A queued Issue shows what most of them look like: it takes `admitted` and says why it takes almost nothing else. The excerpt below is the start of its row:
 
+<!-- snippet: apps/server/src/domains/work/table.ts queued -->
 ```ts
   queued: {
     filed: said('it is filed already'),
@@ -99,9 +103,9 @@ Six states times 25 events is 150 cells. A queued Issue shows what most of them 
 
 **Example files:**
 
-- [`domains/work/table.ts`](https://github.com/jkrumm/software-factory/blob/2511836af2e3c6f09eb0f76ded4d5e49b47003ab/apps/server/src/domains/work/table.ts#L28-L36): `Cell` and `Table`, the type that makes it total
-- [`domains/work/table.ts`](https://github.com/jkrumm/software-factory/blob/2511836af2e3c6f09eb0f76ded4d5e49b47003ab/apps/server/src/domains/work/table.ts#L396-L448): `settling` and `queued`, every event of two states
-- [`domains/work/machine.ts`](https://github.com/jkrumm/software-factory/blob/2511836af2e3c6f09eb0f76ded4d5e49b47003ab/apps/server/src/domains/work/machine.ts#L125-L144): `apply`, the one decision
+- [`domains/work/table.ts`](https://github.com/jkrumm/software-factory/blob/master/apps/server/src/domains/work/table.ts#L31-L39): `Cell` and `Table`, the type that makes it total
+- [`domains/work/table.ts`](https://github.com/jkrumm/software-factory/blob/master/apps/server/src/domains/work/table.ts#L570-L624): `settling` and `queued`, every event of two states
+- [`domains/work/machine.ts`](https://github.com/jkrumm/software-factory/blob/master/apps/server/src/domains/work/machine.ts#L126-L145): `apply`, the one decision
 
 ## States and where work stands
 
@@ -122,14 +126,15 @@ A plan row not yet filed is Planned. It is never an Issue, so it is never part o
 - **A wait has a reason, and each reason has a named exit.** The reasons are `timer`, `dependency`, `wall`, `unreported`, `blocked`, `lead_gone`, `regressed`, `decision`, `review`, `errand`, `external` and `paused`; `WAITS` holds each exit. A machine wait ends without a person. A stall is a wait with a machine cause, and the steward ends it. `paused` is the owner's own wait (`factory issue pause`): his word or the time he gave ends it, and nothing else does.
 - **Screens do not name states.** `scripts/vocabulary.ts` fails `make check` when a screen's text says `queued` or `working`.
 
+<!-- snippet: packages/contract/src/work-words.ts WORK_WORDS -->
 ```ts
 export const WORK_WORDS = ['running', 'paused', 'ready', 'held', 'checking'] as const
 ```
 
 **Example files:**
 
-- [`contract/src/work-words.ts`](https://github.com/jkrumm/software-factory/blob/2511836af2e3c6f09eb0f76ded4d5e49b47003ab/packages/contract/src/work-words.ts#L78-L99): `workOf`, a stored state to one of the five words
-- [`domains/work/issue.ts`](https://github.com/jkrumm/software-factory/blob/2511836af2e3c6f09eb0f76ded4d5e49b47003ab/apps/server/src/domains/work/issue.ts#L34-L60): `WAITS`, each wait with its exit and how it ends
+- [`contract/src/work-words.ts`](https://github.com/jkrumm/software-factory/blob/master/packages/contract/src/work-words.ts#L79-L100): `workOf`, a stored state to one of the five words
+- [`domains/work/issue.ts`](https://github.com/jkrumm/software-factory/blob/master/apps/server/src/domains/work/issue.ts#L34-L64): `WAITS`, each wait with its exit and how it ends
 
 ## Outcomes
 
@@ -144,13 +149,14 @@ An outcome is how a closed Issue ended.
 
 A closed Issue opens again only by `reopened`, within 30 days.
 
+<!-- snippet: apps/server/src/domains/work/issue.ts OUTCOMES -->
 ```ts
 export const OUTCOMES = ['done', 'dropped', 'healed', 'cancelled'] as const
 ```
 
 **Example files:**
 
-- [`domains/work/issue.ts`](https://github.com/jkrumm/software-factory/blob/2511836af2e3c6f09eb0f76ded4d5e49b47003ab/apps/server/src/domains/work/issue.ts#L20-L25): the four outcomes
+- [`domains/work/issue.ts`](https://github.com/jkrumm/software-factory/blob/master/apps/server/src/domains/work/issue.ts#L20-L25): the four outcomes
 
 ## Deterministic keys
 
@@ -163,6 +169,7 @@ A key is built from the parts of a thing, so the same parts give the same key in
 - **Terminal labels.** A lead's name is `lead-<issue number>-<attempt>`. The terminal's label, the `FACTORY_SESSION` its hooks report under and the spool file all carry it.
 - **Look, then act.** The Runner looks for the effect's result before it calls the port.
 
+<!-- snippet: apps/server/src/domains/work/effects.ts startLead -->
 ```ts
 export const startLead = (issue: IssueId, attempt: number): Effect => ({
   kind: 'start_lead',
@@ -173,10 +180,10 @@ export const startLead = (issue: IssueId, attempt: number): Effect => ({
 
 **Example files:**
 
-- [`kernel/keys.ts`](https://github.com/jkrumm/software-factory/blob/2511836af2e3c6f09eb0f76ded4d5e49b47003ab/apps/server/src/kernel/keys.ts#L1-L26): `Key` and `key`
-- [`domains/work/effects.ts`](https://github.com/jkrumm/software-factory/blob/2511836af2e3c6f09eb0f76ded4d5e49b47003ab/apps/server/src/domains/work/effects.ts#L35-L71): the four effects and their keys
-- [`domains/leads/names.ts`](https://github.com/jkrumm/software-factory/blob/2511836af2e3c6f09eb0f76ded4d5e49b47003ab/apps/server/src/domains/leads/names.ts#L1-L7): `leadKey`, the name that labels a terminal
-- [`adapters/postgres/work-store.ts`](https://github.com/jkrumm/software-factory/blob/2511836af2e3c6f09eb0f76ded4d5e49b47003ab/apps/server/src/adapters/postgres/work-store.ts#L115-L128): `appendEvent`, one row per key
+- [`kernel/keys.ts`](https://github.com/jkrumm/software-factory/blob/master/apps/server/src/kernel/keys.ts#L1-L23): `Key` and `key`
+- [`domains/work/effects.ts`](https://github.com/jkrumm/software-factory/blob/master/apps/server/src/domains/work/effects.ts#L35-L71): the four effects and their keys
+- [`domains/leads/names.ts`](https://github.com/jkrumm/software-factory/blob/master/apps/server/src/domains/leads/names.ts#L1-L7): `leadKey`, the name that labels a terminal
+- [`adapters/postgres/work-store.ts`](https://github.com/jkrumm/software-factory/blob/master/apps/server/src/adapters/postgres/work-store.ts#L115-L128): `appendEvent`, one row per key
 
 ## Facts are stored, state is derived
 
@@ -189,6 +196,7 @@ An Issue's state is the result of its applied events. The row keeps it, because 
 
 The version-guarded update:
 
+<!-- snippet: apps/server/src/adapters/postgres/work-store.ts updateIssue -->
 ```ts
     async updateIssue(issue, expected) {
       const rows: unknown[] = await tx`
@@ -202,8 +210,8 @@ The version-guarded update:
 
 **Example files:**
 
-- [`adapters/postgres/work-store.ts`](https://github.com/jkrumm/software-factory/blob/2511836af2e3c6f09eb0f76ded4d5e49b47003ab/apps/server/src/adapters/postgres/work-store.ts#L106-L113): the version-guarded update
-- [`domains/work/machine.ts`](https://github.com/jkrumm/software-factory/blob/2511836af2e3c6f09eb0f76ded4d5e49b47003ab/apps/server/src/domains/work/machine.ts#L146-L158): `replay`, the Issue from its applied events
+- [`adapters/postgres/work-store.ts`](https://github.com/jkrumm/software-factory/blob/master/apps/server/src/adapters/postgres/work-store.ts#L106-L113): the version-guarded update
+- [`domains/work/machine.ts`](https://github.com/jkrumm/software-factory/blob/master/apps/server/src/domains/work/machine.ts#L147-L159): `replay`, the Issue from its applied events
 
 ## issue_1809, end to end
 
@@ -242,12 +250,12 @@ The Issue's insights, from the same read: 2 h 8 min from filed to closed, 12.7 m
 
 **Example files:**
 
-- [`domains/work/table.ts`](https://github.com/jkrumm/software-factory/blob/2511836af2e3c6f09eb0f76ded4d5e49b47003ab/apps/server/src/domains/work/table.ts#L396-L555): `TABLE`, the cells this timeline walked through
+- [`domains/work/table.ts`](https://github.com/jkrumm/software-factory/blob/master/apps/server/src/domains/work/table.ts#L570-L735): `TABLE`, the cells this timeline walked through
 
 **Read more:**
 
-- [`docs/architecture.md` The Issue machine](https://github.com/jkrumm/software-factory/blob/2511836af2e3c6f09eb0f76ded4d5e49b47003ab/docs/architecture.md#L64-L83): one writer, the review wait, the model test
-- [`docs/language.md` Events](https://github.com/jkrumm/software-factory/blob/2511836af2e3c6f09eb0f76ded4d5e49b47003ab/docs/language.md#L174-L205): every event, what it means and who sends it
-- [`docs/language.md` Where work stands](https://github.com/jkrumm/software-factory/blob/2511836af2e3c6f09eb0f76ded4d5e49b47003ab/docs/language.md#L46-L60): the five words and Planned
+- [`docs/architecture.md` The Issue machine](https://github.com/jkrumm/software-factory/blob/master/docs/architecture.md#L64-L85): one writer, the review wait, the model test
+- [`docs/language.md` Events](https://github.com/jkrumm/software-factory/blob/master/docs/language.md#L180-L211): every event, what it means and who sends it
+- [`docs/language.md` Where work stands](https://github.com/jkrumm/software-factory/blob/master/docs/language.md#L48-L62): the five words and Planned
 
 Next: [Leads](./leads.md)

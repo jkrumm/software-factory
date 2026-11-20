@@ -12,6 +12,7 @@ A signal has a kind, an origin and a trust level. The receiving side sets all th
 - **The fingerprint** is the same ask under another day's words: the repo and the title, lower-cased, digits and punctuation removed, hashed to 16 hex characters. Two reports of one complaint have one fingerprint, so the second finds the first.
 - **One envelope.** A monitor's `down`, a GitHub issue, a voice note and a lead's follow-up all become the same `Signal` before triage reads them.
 
+<!-- snippet: packages/contract/src/intake.ts SIGNAL_STATES -->
 ```ts
 export const SIGNAL_STATES = ['held', 'filed', 'amended', 'incident', 'promoted', 'dismissed'] as const
 export const DISMISSERS = ['owner', 'judge', 'probe'] as const
@@ -22,6 +23,7 @@ export const SIGNAL_TRUSTS = ['owner', 'machine', 'agent', 'outside'] as const
 
 The fingerprint is eleven lines of code:
 
+<!-- snippet: apps/server/src/domains/intake/rules.ts fingerprintOf -->
 ```ts
 export function fingerprintOf(repo: string | null, title: string): string {
   const normalized = title
@@ -51,6 +53,7 @@ The source name decides the origin and, for an alert, which projects listen.
 | `agent:<repo>` | factory | a lead's or a loop's `factory signal file` |
 | `feedback:<app>` | feedback | the door, one route per app |
 
+<!-- snippet: apps/server/src/domains/intake/rules.ts originOf -->
 ```ts
 export function originOf(source: string): OriginName {
   if (source === 'kuma' || source === 'launchd') return 'infrastructure'
@@ -64,10 +67,10 @@ export function originOf(source: string): OriginName {
 
 **Example files:**
 
-- [`contract/src/intake.ts`](https://github.com/jkrumm/software-factory/blob/2511836af2e3c6f09eb0f76ded4d5e49b47003ab/packages/contract/src/intake.ts#L52-L81): the envelope: kinds, origins, trusts, and the fields the receiver sets
-- [`domains/intake/rules.ts`](https://github.com/jkrumm/software-factory/blob/2511836af2e3c6f09eb0f76ded4d5e49b47003ab/apps/server/src/domains/intake/rules.ts#L12-L20): `originOf`, source name to origin
-- [`domains/intake/rules.ts`](https://github.com/jkrumm/software-factory/blob/2511836af2e3c6f09eb0f76ded4d5e49b47003ab/apps/server/src/domains/intake/rules.ts#L104-L115): `fingerprintOf`
-- [`kernel/keys.ts`](https://github.com/jkrumm/software-factory/blob/2511836af2e3c6f09eb0f76ded4d5e49b47003ab/apps/server/src/kernel/keys.ts#L12-L23): `key`, the one way to build a deterministic key
+- [`contract/src/intake.ts`](https://github.com/jkrumm/software-factory/blob/master/packages/contract/src/intake.ts#L51-L80): the envelope: kinds, origins, trusts, and the fields the receiver sets
+- [`domains/intake/rules.ts`](https://github.com/jkrumm/software-factory/blob/master/apps/server/src/domains/intake/rules.ts#L13-L21): `originOf`, source name to origin
+- [`domains/intake/rules.ts`](https://github.com/jkrumm/software-factory/blob/master/apps/server/src/domains/intake/rules.ts#L121-L132): `fingerprintOf`
+- [`kernel/keys.ts`](https://github.com/jkrumm/software-factory/blob/master/apps/server/src/kernel/keys.ts#L12-L23): `key`, the one way to build a deterministic key
 
 ## Triage
 
@@ -91,6 +94,7 @@ The rules decide first and in this order:
 
 Only when the rules cannot say does the factory call a workflow. `agwAmend` hands `factory-triage` the signal, the open Issues of the repo and the ones closed in the last day, and takes an Issue id back. The adapter refuses an id it did not show. The call's key is built from the source, the fingerprint and a digest of the text, so a replayed pass asks nothing twice.
 
+<!-- snippet: apps/server/src/adapters/agw/amend.ts key -->
 ```ts
         key: key(
           'triage',
@@ -109,6 +113,7 @@ An unanswered workflow files a new Issue. A duplicate costs a note; a lost reque
 
 An Issue starts `settling`, and triage is not done until it settles. `settleRule` answers `now`, `size` or `ask`. An incident and an Issue an alert filed settle at once. An Issue whose filer stated its edges (`--after`, `--alone`, a plan row) asks `factory-triage` for its kind and size alone, shown no Issue to wait for, so its edges stay as stated and its size can reach the light seat's rule. A request from a person or an agent asks `factory-triage` again for the Issues it must wait for, its kind, its size and whether the lead owes a Spec first.
 
+<!-- snippet: apps/server/src/domains/loops/settle.ts settleRule -->
 ```ts
 export function settleRule(facts: SettlingFacts, candidates: readonly TriageCandidate[]): 'now' | 'size' | 'ask' {
   if (facts.kind === 'incident' || facts.fromAlert) return 'now'
@@ -122,10 +127,10 @@ The factory itself calls no model. Every judgment goes through an adapter in `ap
 
 **Example files:**
 
-- [`app/intake.ts`](https://github.com/jkrumm/software-factory/blob/2511836af2e3c6f09eb0f76ded4d5e49b47003ab/apps/server/src/app/intake.ts#L764-L840): `receive`, the whole decision in order
-- [`domains/intake/rules.ts`](https://github.com/jkrumm/software-factory/blob/2511836af2e3c6f09eb0f76ded4d5e49b47003ab/apps/server/src/domains/intake/rules.ts#L46-L61): `gate`, who may put work in which repo
-- [`adapters/agw/amend.ts`](https://github.com/jkrumm/software-factory/blob/2511836af2e3c6f09eb0f76ded4d5e49b47003ab/apps/server/src/adapters/agw/amend.ts#L17-L72): the `factory-triage` call in amend mode and its checks
-- [`domains/loops/settle.ts`](https://github.com/jkrumm/software-factory/blob/2511836af2e3c6f09eb0f76ded4d5e49b47003ab/apps/server/src/domains/loops/settle.ts#L39-L54): `settleRule`, deterministic first
+- [`app/intake.ts`](https://github.com/jkrumm/software-factory/blob/master/apps/server/src/app/intake.ts#L826-L914): `receive`, the whole decision in order
+- [`domains/intake/rules.ts`](https://github.com/jkrumm/software-factory/blob/master/apps/server/src/domains/intake/rules.ts#L47-L62): `gate`, who may put work in which repo
+- [`adapters/agw/amend.ts`](https://github.com/jkrumm/software-factory/blob/master/apps/server/src/adapters/agw/amend.ts#L17-L72): the `factory-triage` call in amend mode and its checks
+- [`domains/loops/settle.ts`](https://github.com/jkrumm/software-factory/blob/master/apps/server/src/domains/loops/settle.ts#L39-L54): `settleRule`, deterministic first
 
 ## Incidents and amendments
 
@@ -164,9 +169,9 @@ The second and third did not open Issues. They reached the lead of `issue_1818` 
 
 **Example files:**
 
-- [`domains/intake/rules.ts`](https://github.com/jkrumm/software-factory/blob/2511836af2e3c6f09eb0f76ded4d5e49b47003ab/apps/server/src/domains/intake/rules.ts#L4-L7): the sources that correlate into an incident
-- [`app/intake.ts`](https://github.com/jkrumm/software-factory/blob/2511836af2e3c6f09eb0f76ded4d5e49b47003ab/apps/server/src/app/intake.ts#L533-L575): `repeatIn` and `eventIn`, a repeat or a one-off event of a subject that already has an Issue
-- [`app/intake.ts`](https://github.com/jkrumm/software-factory/blob/2511836af2e3c6f09eb0f76ded4d5e49b47003ab/apps/server/src/app/intake.ts#L577-L627): `humanIn`, a person's or an agent's signal filed or amended
+- [`domains/intake/rules.ts`](https://github.com/jkrumm/software-factory/blob/master/apps/server/src/domains/intake/rules.ts#L5-L8): the sources that correlate into an incident
+- [`app/intake.ts`](https://github.com/jkrumm/software-factory/blob/master/apps/server/src/app/intake.ts#L536-L578): `repeatIn` and `eventIn`, a repeat or a one-off event of a subject that already has an Issue
+- [`app/intake.ts`](https://github.com/jkrumm/software-factory/blob/master/apps/server/src/app/intake.ts#L580-L689): `humanIn`, a person's or an agent's signal filed or amended
 
 ## Held signals and the screen
 
@@ -178,6 +183,7 @@ A held signal is outside text the factory did not trust enough to turn into work
 - **Bounded retries.** A failed call backs off from 10 minutes to 6 hours and gives up after five tries. After 72 hours the signal gets one last look and is filed for a lead to investigate, who drafts any reply as an Errand and posts nothing itself.
 - **A dismissed report is answered.** The next one with the same words is a new report, under the key after it.
 
+<!-- snippet: apps/server/src/domains/intake/screen.ts MAX_SCREEN_ATTEMPTS -->
 ```ts
 /** A held signal whose screening failed this often is left unscreened for good: the owner sees it as it is. */
 export const MAX_SCREEN_ATTEMPTS = 5
@@ -187,9 +193,9 @@ export const SCREEN_BATCH = 10
 
 **Example files:**
 
-- [`app/intake.ts`](https://github.com/jkrumm/software-factory/blob/2511836af2e3c6f09eb0f76ded4d5e49b47003ab/apps/server/src/app/intake.ts#L638-L689): `hold` and `outsideIn`, the quarantine and its one exception
-- [`domains/intake/screen.ts`](https://github.com/jkrumm/software-factory/blob/2511836af2e3c6f09eb0f76ded4d5e49b47003ab/apps/server/src/domains/intake/screen.ts#L1-L61): the screen's limits, the backoff, the request the workflow sees
-- [`adapters/agw/screen.ts`](https://github.com/jkrumm/software-factory/blob/2511836af2e3c6f09eb0f76ded4d5e49b47003ab/apps/server/src/adapters/agw/screen.ts#L1-L10): `factory-screen` through the agw port
+- [`app/intake.ts`](https://github.com/jkrumm/software-factory/blob/master/apps/server/src/app/intake.ts#L700-L751): `hold` and `outsideIn`, the quarantine and its one exception
+- [`domains/intake/screen.ts`](https://github.com/jkrumm/software-factory/blob/master/apps/server/src/domains/intake/screen.ts#L1-L61): the screen's limits, the backoff, the request the workflow sees
+- [`adapters/agw/screen.ts`](https://github.com/jkrumm/software-factory/blob/master/apps/server/src/adapters/agw/screen.ts#L1-L10): `factory-screen` through the agw port
 
 ## The door
 
@@ -201,6 +207,7 @@ The door is a separate process that takes alerts and feedback from outside and h
 - **No database credential.** The door calls the server's API as caller `machine` and nothing else.
 - **A body cap.** 64 KiB, enforced on the bytes as they arrive.
 
+<!-- snippet: packages/contract/src/intake.ts AlertRequest -->
 ```ts
 /**
  * `POST /signals/alerts`: what the door files for one alert. The payload is data: nothing in it picks a repo, a role, a
@@ -210,15 +217,16 @@ export const AlertRequest = z
   .strictObject({
 ```
 
+<!-- snippet: apps/server/src/app/intake.ts alert -->
 ```ts
     if (!routed.value) return ok(dropped('unrouted', `no route for ${input.source} ${input.monitor}: counted`))
 ```
 
 **Example files:**
 
-- [`apps/door`](https://github.com/jkrumm/software-factory/tree/2511836af2e3c6f09eb0f76ded4d5e49b47003ab/apps/door): the whole door, small enough to read in one sitting
-- [`packages/contract/src/intake.ts`](https://github.com/jkrumm/software-factory/blob/2511836af2e3c6f09eb0f76ded4d5e49b47003ab/packages/contract/src/intake.ts#L159-L175): `AlertRequest`, the strict body
-- [`app/intake.ts`](https://github.com/jkrumm/software-factory/blob/2511836af2e3c6f09eb0f76ded4d5e49b47003ab/apps/server/src/app/intake.ts#L1013-L1068): `alert`, the route lookup and the envelope the server builds
+- [`apps/door`](https://github.com/jkrumm/software-factory/tree/master/apps/door): the whole door, small enough to read in one sitting
+- [`packages/contract/src/intake.ts`](https://github.com/jkrumm/software-factory/blob/master/packages/contract/src/intake.ts#L156-L171): `AlertRequest`, the strict body
+- [`app/intake.ts`](https://github.com/jkrumm/software-factory/blob/master/apps/server/src/app/intake.ts#L1089-L1144): `alert`, the route lookup and the envelope the server builds
 
 ## Work repos
 
@@ -228,6 +236,7 @@ A work repo is a repo no `project.yaml` describes, or one whose `project.yaml` s
 - **One exception.** A lead's signal for a work repo, when its own Issue the owner filed, is held instead: the owner can promote work it owes there. The screen never reads it.
 - **Outside text is dropped before it is stored** (`work_repo`), and the read token never sees a work repo's words, only shape, ids, states and counts.
 
+<!-- snippet: apps/server/src/app/intake.ts receive -->
 ```ts
     if (signal.trust === 'outside') {
       const where = signal.repo ? await deps.projects.find(signal.repo) : ok(null)
@@ -237,12 +246,12 @@ A work repo is a repo no `project.yaml` describes, or one whose `project.yaml` s
 
 **Example files:**
 
-- [`domains/intake/rules.ts`](https://github.com/jkrumm/software-factory/blob/2511836af2e3c6f09eb0f76ded4d5e49b47003ab/apps/server/src/domains/intake/rules.ts#L42-L61): `gate`, work repo before any other rule
-- [`app/intake.ts`](https://github.com/jkrumm/software-factory/blob/2511836af2e3c6f09eb0f76ded4d5e49b47003ab/apps/server/src/app/intake.ts#L764-L790): `receive`, where the exception for an owner-filed lead sits
+- [`domains/intake/rules.ts`](https://github.com/jkrumm/software-factory/blob/master/apps/server/src/domains/intake/rules.ts#L43-L62): `gate`, work repo before any other rule
+- [`app/intake.ts`](https://github.com/jkrumm/software-factory/blob/master/apps/server/src/app/intake.ts#L826-L852): `receive`, where the exception for an owner-filed lead sits
 
 **Read more:**
 
-- [`docs/architecture.md` Signals and triage](https://github.com/jkrumm/software-factory/blob/2511836af2e3c6f09eb0f76ded4d5e49b47003ab/docs/architecture.md#L84-L141): quarantine, the screen, the door's registry, healing
-- [`docs/language.md` Work](https://github.com/jkrumm/software-factory/blob/2511836af2e3c6f09eb0f76ded4d5e49b47003ab/docs/language.md#L7-L44): signal, triage outcome, held signal, door route, work repo
+- [`docs/architecture.md` Signals and triage](https://github.com/jkrumm/software-factory/blob/master/docs/architecture.md#L86-L149): quarantine, the screen, the door's registry, healing
+- [`docs/language.md` Work](https://github.com/jkrumm/software-factory/blob/master/docs/language.md#L7-L46): signal, triage outcome, held signal, door route, work repo
 
 Next: [Issues](./issues.md)

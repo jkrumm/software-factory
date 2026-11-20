@@ -13,6 +13,7 @@ Each section below pairs a failure, with its numbers, with the rule or code it p
   - The quiesce check refuses to act on such a session.
   - The steward nudges a lead that is idle with background work only after 90 minutes, against 10 for a lead with none.
 
+<!-- snippet: apps/server/src/domains/leads/stop.ts decideStop -->
 ```ts
 export function decideStop(facts: StopFacts): StopDecision {
   if (facts.backgroundTasks || !facts.working || !facts.factoryTurn || facts.reported) return 'let_through'
@@ -22,9 +23,9 @@ export function decideStop(facts: StopFacts): StopDecision {
 
 **Example files:**
 
-- [`stop.ts`](https://github.com/jkrumm/software-factory/blob/2511836af2e3c6f09eb0f76ded4d5e49b47003ab/apps/server/src/domains/leads/stop.ts#L34-L43): the send-back decision; background work lets the stop through.
-- [`quiesce.ts`](https://github.com/jkrumm/software-factory/blob/2511836af2e3c6f09eb0f76ded4d5e49b47003ab/apps/server/src/domains/leads/quiesce.ts#L43): a session with background work in flight is never quiesced.
-- [`stall.ts`](https://github.com/jkrumm/software-factory/blob/2511836af2e3c6f09eb0f76ded4d5e49b47003ab/apps/server/src/domains/loops/stall.ts#L52-L56): the longer idle threshold for a lead waiting on background work.
+- [`stop.ts`](https://github.com/jkrumm/software-factory/blob/master/apps/server/src/domains/leads/stop.ts#L34-L43): the send-back decision; background work lets the stop through.
+- [`quiesce.ts`](https://github.com/jkrumm/software-factory/blob/master/apps/server/src/domains/leads/quiesce.ts#L56): a session with background work in flight is never quiesced.
+- [`stall.ts`](https://github.com/jkrumm/software-factory/blob/master/apps/server/src/domains/loops/stall.ts#L52-L56): the longer idle threshold for a lead waiting on background work.
 
 ## Unreviewed ships
 
@@ -38,6 +39,7 @@ export function decideStop(facts: StopFacts): StopDecision {
 - **What changed.** The lead reviews before it takes the merge window, treats a held review as a deferral and never as a ship without one, and checks the landed squash commit. The factory still never refuses a ship for a missing review (NL23). It counts them: unreviewed ships on one in four closed Issues, with at least 3 (`min: 3`), file a friction signal.
 - **What stayed open.** The covered check belongs to another repo, so Issue 1807 filed it there with the reproduction. The stale ships of multi-round squashes stay counted until it lands.
 
+<!-- snippet: apps/server/src/domains/loops/friction.ts unreviewed_ship -->
 ```ts
   unreviewed_ship: {
     min: 3,
@@ -48,9 +50,9 @@ export function decideStop(facts: StopFacts): StopDecision {
 
 **Example files:**
 
-- [`friction.ts`](https://github.com/jkrumm/software-factory/blob/2511836af2e3c6f09eb0f76ded4d5e49b47003ab/apps/server/src/domains/loops/friction.ts#L54-L58): the rule that counts it.
-- [`brief.ts`](https://github.com/jkrumm/software-factory/blob/2511836af2e3c6f09eb0f76ded4d5e49b47003ab/apps/server/src/domains/leads/brief.ts#L18): lead order 6, as Issue 1807 rewrote it.
-- [`decisions.md`](https://github.com/jkrumm/software-factory/blob/2511836af2e3c6f09eb0f76ded4d5e49b47003ab/docs/decisions.md#L178): NL23, why a missing review is counted and never refused.
+- [`friction.ts`](https://github.com/jkrumm/software-factory/blob/master/apps/server/src/domains/loops/friction.ts#L54-L58): the rule that counts it.
+- [`brief.ts`](https://github.com/jkrumm/software-factory/blob/master/apps/server/src/domains/leads/brief.ts#L18): lead order 6, as Issue 1807 rewrote it.
+- [`decisions.md`](https://github.com/jkrumm/software-factory/blob/master/docs/decisions.md#L34): NL23, why a missing review is counted and never refused.
 
 ## Caps that held work back
 
@@ -60,6 +62,7 @@ The repo's lead cap left 168.8 of 308.5 idle seat-hours unused with work queued,
 - **What the cap protected.** The merge window (about 10 merges an hour) and rebase conflicts: 98 of 401 sessions rebased twice or more. Lifting the cap costs more rebases per merge, not more waiting past the lock.
 - **What changed (NL32).** A repo that states no `leads` takes the maximum of 64, so memory fit, load and the accounts decide. A stated `leads: N` stays and carries its reason beside it.
 
+<!-- snippet: packages/contract/src/project-file.ts DEFAULT_LEADS -->
 ```ts
 /**
  * The leads of a repo whose `project.yaml` states none (and of a repo with none): no cap beyond the host, whose memory
@@ -70,8 +73,8 @@ export const DEFAULT_LEADS = MAX_LEADS
 
 **Example files:**
 
-- [`project-file.ts`](https://github.com/jkrumm/software-factory/blob/2511836af2e3c6f09eb0f76ded4d5e49b47003ab/packages/contract/src/project-file.ts#L285-L292): the maximum and the default, one constant each.
-- [`decisions.md`](https://github.com/jkrumm/software-factory/blob/2511836af2e3c6f09eb0f76ded4d5e49b47003ab/docs/decisions.md#L266-L275): NL32 with the measured window.
+- [`project-file.ts`](https://github.com/jkrumm/software-factory/blob/master/packages/contract/src/project-file.ts#L476-L483): the maximum and the default, one constant each.
+- [`decisions.md`](https://github.com/jkrumm/software-factory/blob/master/docs/decisions.md#L123-L132): NL32 with the measured window.
 
 ## Parallel checks in one tree
 
@@ -91,9 +94,9 @@ The lead's brief carries the two measurements, in these two lines (the source es
 
 **Example files:**
 
-- [`brief.ts`](https://github.com/jkrumm/software-factory/blob/2511836af2e3c6f09eb0f76ded4d5e49b47003ab/apps/server/src/domains/leads/brief.ts#L28): the `find` rule, with its number.
-- [`brief.ts`](https://github.com/jkrumm/software-factory/blob/2511836af2e3c6f09eb0f76ded4d5e49b47003ab/apps/server/src/domains/leads/brief.ts#L38): one check per worktree.
-- [`overload.ts`](https://github.com/jkrumm/software-factory/blob/2511836af2e3c6f09eb0f76ded4d5e49b47003ab/apps/server/src/domains/loops/overload.ts#L35-L66): `load_over_ceiling`, the host's alarm.
+- [`brief.ts`](https://github.com/jkrumm/software-factory/blob/master/apps/server/src/domains/leads/brief.ts#L28): the `find` rule, with its number.
+- [`brief.ts`](https://github.com/jkrumm/software-factory/blob/master/apps/server/src/domains/leads/brief.ts#L38): one check per worktree.
+- [`overload.ts`](https://github.com/jkrumm/software-factory/blob/master/apps/server/src/domains/loops/overload.ts#L43-L74): `load_over_ceiling`, the host's alarm.
 
 ## Waits with no exit
 
@@ -103,6 +106,7 @@ Issue 82 held Issues 83 to 85 for 6 hours on the evening of 2026-11-05, because 
 - **The earlier rule had said** that every wait can end. Nothing had ever checked it.
 - **What changed.** Every wait needs a way out that is not a drop. Issue 97 added the exit (`note --wake`), and a model test now fails on any wait without one. A wait with a machine exit needs the clock or the steward to end it, and a wait on a person must state which Issues it holds.
 
+<!-- snippet: apps/server/test/work/model.test.ts checkShape -->
 ```ts
   if (WAITS[wait.reason].exit === 'machine') {
     // The lead's own verbs leave a timer wait too, but the lead is not the machine: the clock or the steward must.
@@ -117,8 +121,8 @@ Issue 82 held Issues 83 to 85 for 6 hours on the evening of 2026-11-05, because 
 
 **Example files:**
 
-- [`issue.ts`](https://github.com/jkrumm/software-factory/blob/2511836af2e3c6f09eb0f76ded4d5e49b47003ab/apps/server/src/domains/work/issue.ts#L38): the `WAITS` table, with each wait's exit kind.
-- [`model.test.ts`](https://github.com/jkrumm/software-factory/blob/2511836af2e3c6f09eb0f76ded4d5e49b47003ab/apps/server/test/work/model.test.ts#L144-L176): the invariants checked over random event sequences.
+- [`issue.ts`](https://github.com/jkrumm/software-factory/blob/master/apps/server/src/domains/work/issue.ts#L38): the `WAITS` table, with each wait's exit kind.
+- [`model.test.ts`](https://github.com/jkrumm/software-factory/blob/master/apps/server/test/work/model.test.ts#L144-L184): the invariants checked over random event sequences.
 
 ## A green Issue without its proof
 
@@ -127,6 +131,7 @@ Issue 67 closed `done` on 2026-11-05 without the one thing it asked for. Closing
 - **What broke.** Issue 67 closed `done` on `make verify`. Its own acceptance, one real deep review through the hidden transport, had not happened: the only hidden review since the fix was light. The ship gate checked the deploy and the verify, not the Issue's stated proof.
 - **What changed.** A ship states every acceptance line as met, or not met with the reason. A `not met` is allowed and honest, and a ship that states nothing counts as friction. Issue 1809 shipped with one line met and two not, each with its reason, and the watch still passed.
 
+<!-- snippet: apps/server/src/domains/loops/friction.ts unstated_acceptance -->
 ```ts
   unstated_acceptance: {
     min: 3,
@@ -137,8 +142,8 @@ Issue 67 closed `done` on 2026-11-05 without the one thing it asked for. Closing
 
 **Example files:**
 
-- [`friction.ts`](https://github.com/jkrumm/software-factory/blob/2511836af2e3c6f09eb0f76ded4d5e49b47003ab/apps/server/src/domains/loops/friction.ts#L59-L63): the rule that counts a ship that stated nothing.
-- [`brief.ts`](https://github.com/jkrumm/software-factory/blob/2511836af2e3c6f09eb0f76ded4d5e49b47003ab/apps/server/src/domains/leads/brief.ts#L18): the last sentence of order 6 states the acceptance duty.
+- [`friction.ts`](https://github.com/jkrumm/software-factory/blob/master/apps/server/src/domains/loops/friction.ts#L59-L63): the rule that counts a ship that stated nothing.
+- [`brief.ts`](https://github.com/jkrumm/software-factory/blob/master/apps/server/src/domains/leads/brief.ts#L18): the last sentence of order 6 states the acceptance duty.
 
 ## Research claims in a brief
 
@@ -147,6 +152,7 @@ Every route answered 404 on 2026-11-07 because a brief's researched claim was wr
 - **What broke.** The first package's brief carried a researched form for calling the web framework's handler with a short host (`http://x/…`). Elysia reads the path at a fixed offset, and every route answered 404. The worker found it by running the test.
 - **What changed.** A research claim needs a test before it goes into a brief. The test file keeps the reason beside the fix, so the next reader does not "simplify" it back.
 
+<!-- snippet: apps/server/test/api.test.ts get -->
 ```ts
 // Elysia's router finds the path at a fixed offset: a URL as short as `http://x/…` answers 404 for every route.
 const get = (app: { handle(request: Request): Promise<Response> }, path: string) =>
@@ -155,8 +161,8 @@ const get = (app: { handle(request: Request): Promise<Response> }, path: string)
 
 **Example files:**
 
-- [`api.test.ts`](https://github.com/jkrumm/software-factory/blob/2511836af2e3c6f09eb0f76ded4d5e49b47003ab/apps/server/test/api.test.ts#L17-L19): the request helper and why it uses `localhost`.
-- [`rewrite/learnings.md`](https://github.com/jkrumm/software-factory/blob/2511836af2e3c6f09eb0f76ded4d5e49b47003ab/docs/rewrite/learnings.md#L19-L22): the entry that recorded it.
+- [`api.test.ts`](https://github.com/jkrumm/software-factory/blob/master/apps/server/test/api.test.ts#L17-L19): the request helper and why it uses `localhost`.
+- [`rewrite/learnings.md`](https://github.com/jkrumm/software-factory/blob/master/docs/archive/rewrite-learnings.md#L19-L22): the entry that recorded it.
 
 ## A restart that hangs
 
@@ -166,6 +172,7 @@ The server never exited on SIGTERM, twice, in the first live window on 2026-11-0
 - **Two faults.** `app.stop()` without `true` waits for an open SSE stream forever, and the server had no shutdown deadline at all.
 - **What changed.** The one way the server ends on a signal is `createShutdown`: ordered steps, a step that throws is logged and the rest still run, and a 30 s deadline exits with code 1 from whatever step is stuck. A scenario holds a stream and a kept-alive socket, sends SIGTERM and boots a second server on the lock. In the second window, three deploys and a restart in a row ended on their own, with no lock left behind.
 
+<!-- snippet: apps/server/src/shutdown.ts createShutdown -->
 ```ts
 /**
  * The one way the server ends on a signal: the steps run in order, a step that throws is logged and the rest still run
@@ -176,13 +183,13 @@ The server never exited on SIGTERM, twice, in the first live window on 2026-11-0
 
 **Example files:**
 
-- [`shutdown.ts`](https://github.com/jkrumm/software-factory/blob/2511836af2e3c6f09eb0f76ded4d5e49b47003ab/apps/server/src/shutdown.ts#L27-L47): the steps and the deadline.
-- [`main.ts`](https://github.com/jkrumm/software-factory/blob/2511836af2e3c6f09eb0f76ded4d5e49b47003ab/apps/server/src/main.ts#L1059-L1068): the wiring, with `stop(true)` and why.
+- [`shutdown.ts`](https://github.com/jkrumm/software-factory/blob/master/apps/server/src/shutdown.ts#L27-L47): the steps and the deadline.
+- [`main.ts`](https://github.com/jkrumm/software-factory/blob/master/apps/server/src/main.ts#L1114-L1123): the wiring, with `stop(true)` and why.
 
 **Read more:**
 
-- [Learnings of the reset](https://github.com/jkrumm/software-factory/blob/2511836af2e3c6f09eb0f76ded4d5e49b47003ab/docs/strategy/2026-11-reset/learnings.md): the dated record of 2026-11-04 to 2026-11-05.
-- [Rewrite learnings](https://github.com/jkrumm/software-factory/blob/2511836af2e3c6f09eb0f76ded4d5e49b47003ab/docs/rewrite/learnings.md): the calls and surprises of the rewrite, 2026-11-07 to 2026-11-08.
-- [Decisions](https://github.com/jkrumm/software-factory/blob/2511836af2e3c6f09eb0f76ded4d5e49b47003ab/docs/decisions.md): every owner decision with its measurements, NL1 onward.
+- [Learnings of the reset](https://github.com/jkrumm/software-factory/blob/master/docs/archive/strategy/2026-11-reset/learnings.md): the dated record of 2026-11-04 to 2026-11-05.
+- [Rewrite learnings](https://github.com/jkrumm/software-factory/blob/master/docs/archive/rewrite-learnings.md): the calls and surprises of the rewrite, 2026-11-07 to 2026-11-08.
+- [Decisions](https://github.com/jkrumm/software-factory/blob/master/docs/decisions.md): every owner decision with its measurements, NL1 onward.
 
 Next: [Running a Factory](./running.md)

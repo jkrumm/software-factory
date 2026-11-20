@@ -59,7 +59,7 @@ Six nouns carry the design. Every chapter is about one of them.
 
 ![An Issue's states and the events that move between them.](./diagrams/issue-lifecycle.svg)
 
-**The 25 events,** by where in an Issue's life they fall ([`events.ts`](https://github.com/jkrumm/software-factory/blob/d83ba1e8040a4d8aa3c0639bf659f773f09b67b8/apps/server/src/domains/work/events.ts) holds the kinds and `SENDERS`, who may send each):
+**The 25 events,** by where in an Issue's life they fall ([`events.ts`](https://github.com/jkrumm/software-factory/blob/master/apps/server/src/domains/work/events.ts) holds the kinds and `SENDERS`, who may send each):
 
 | Phase | Events | Sent by |
 |-|-|-|
@@ -69,7 +69,7 @@ Six nouns carry the design. Every chapter is about one of them.
 | Ask a person | `asked`, `answered`, `submitted`, `verdict_given`, `errand_raised`, `errand_done`, `errand_turned_back` | the lead asks, or the steward for it; the Judge, a default or the owner answers |
 | Finish | `shipped`, `watch_passed`, `regressed`, `closed`, `reopened`, `cancelled` | the lead ships or closes, the factory watches, the owner or the factory reopens or cancels |
 
-**A wait names its exit.** A waiting Issue says why it waits and what ends the wait ([`WAITS`](https://github.com/jkrumm/software-factory/blob/d83ba1e8040a4d8aa3c0639bf659f773f09b67b8/apps/server/src/domains/work/issue.ts)). Eight of the twelve waits end by a machine: a timer, a dependency, an outside review, and the five stalls the steward ends. Four need a person: a Decision, a review, an Errand, and the owner's own pause.
+**A wait names its exit.** A waiting Issue says why it waits and what ends the wait ([`WAITS`](https://github.com/jkrumm/software-factory/blob/master/apps/server/src/domains/work/issue.ts)). Eight of the twelve waits end by a machine: a timer, a dependency, an outside review, and the five stalls the steward ends. Four need a person: a Decision, a review, an Errand, and the owner's own pause.
 
 **The three checkpoints,** and who settles each before the owner is asked:
 

@@ -14,6 +14,7 @@ The chain is the dependency graph of Issues and plan rows, across projects. It d
 - **Edges cross repos.** A plan row names a row of another project as `other-project:key`, and an Issue is filed `--after` any Issue.
 - **Independent work has no edge.** The server runs unrelated rows side by side when the repo's `leads` allow it. An `after` is for a row that needs what the first one shipped.
 
+<!-- snippet: apps/server/src/domains/planning/chain.ts Edge -->
 ```ts
 export interface Edge {
   issue: IssueId
@@ -42,9 +43,9 @@ An inferred edge is one the factory added, not the filer.
 
 **Example files:**
 
-- [`chain.ts` L3-L17](https://github.com/jkrumm/software-factory/blob/2511836af2e3c6f09eb0f76ded4d5e49b47003ab/apps/server/src/domains/planning/chain.ts#L3-L17): `Edge`, the one shape of a dependency.
-- [`chain.ts` L19-L42](https://github.com/jkrumm/software-factory/blob/2511836af2e3c6f09eb0f76ded4d5e49b47003ab/apps/server/src/domains/planning/chain.ts#L19-L42): the cycle check and the edges a close satisfies.
-- [`docs/architecture.md` L695-L697](https://github.com/jkrumm/software-factory/blob/2511836af2e3c6f09eb0f76ded4d5e49b47003ab/docs/architecture.md#L695-L697): the evidence rule and the readiness measure.
+- [`chain.ts` L3-L17](https://github.com/jkrumm/software-factory/blob/master/apps/server/src/domains/planning/chain.ts#L3-L17): `Edge`, the one shape of a dependency.
+- [`chain.ts` L19-L42](https://github.com/jkrumm/software-factory/blob/master/apps/server/src/domains/planning/chain.ts#L19-L42): the cycle check and the edges a close satisfies.
+- [`docs/architecture.md` L811-L813](https://github.com/jkrumm/software-factory/blob/master/docs/architecture.md#L811-L813): the evidence rule and the readiness measure.
 
 ## Plans
 
@@ -82,9 +83,9 @@ burn-in-day-7	done	issue_1384	-	Burn-in report, day 7
 
 **Example files:**
 
-- [`plan.yaml` L199-L215](https://github.com/jkrumm/software-factory/blob/2511836af2e3c6f09eb0f76ded4d5e49b47003ab/docs/plan.yaml#L199-L215): the two burn-in rows, one after the other.
-- [`plan.ts` L22-L56](https://github.com/jkrumm/software-factory/blob/2511836af2e3c6f09eb0f76ded4d5e49b47003ab/apps/server/src/domains/planning/plan.ts#L22-L56): the four row states and what a status carries.
-- [`plan.md` L8-L99](https://github.com/jkrumm/software-factory/blob/2511836af2e3c6f09eb0f76ded4d5e49b47003ab/docs/plan.md#L8-L99): the file, a row's keys, and when a row is filed.
+- [`plan.yaml` L201-L217](https://github.com/jkrumm/software-factory/blob/master/docs/plan.yaml#L201-L217): the two burn-in rows, one after the other.
+- [`plan.ts` L10-L43](https://github.com/jkrumm/software-factory/blob/master/apps/server/src/domains/planning/plan.ts#L10-L43): the four row states and what a status carries.
+- [`plan.md` L8-L99](https://github.com/jkrumm/software-factory/blob/master/docs/plan.md#L8-L99): the file, a row's keys, and when a row is filed.
 
 ## The plan merge driver
 
@@ -105,9 +106,9 @@ docs/plan.yaml merge=plan
 
 **Example files:**
 
-- [`.gitattributes`](https://github.com/jkrumm/software-factory/blob/2511836af2e3c6f09eb0f76ded4d5e49b47003ab/.gitattributes#L1-L4): the declaration.
-- [`plan-merge.ts` L14-L24](https://github.com/jkrumm/software-factory/blob/2511836af2e3c6f09eb0f76ded4d5e49b47003ab/apps/cli/src/plan-merge.ts#L14-L24): `mergeAppends`, the whole rule.
-- [`plan-merge.ts` L32-L53](https://github.com/jkrumm/software-factory/blob/2511836af2e3c6f09eb0f76ded4d5e49b47003ab/apps/cli/src/plan-merge.ts#L32-L53): the verb, with the fallback to a line merge.
+- [`.gitattributes`](https://github.com/jkrumm/software-factory/blob/master/.gitattributes#L1-L4): the declaration.
+- [`plan-merge.ts` L14-L24](https://github.com/jkrumm/software-factory/blob/master/apps/cli/src/plan-merge.ts#L14-L24): `mergeAppends`, the whole rule.
+- [`plan-merge.ts` L32-L53](https://github.com/jkrumm/software-factory/blob/master/apps/cli/src/plan-merge.ts#L32-L53): the verb, with the fallback to a line merge.
 
 ## Replan
 
@@ -119,6 +120,7 @@ A Replan is an Issue whose lead rereads a project's plan against its open and re
 - **A verdict allows the edit.** On Looks good or With notes the lead edits `docs/plan.yaml` through the project's ship path and applies edge changes and cancellations with `factory issue replan`.
 - **The server gates that verb.** The Issue must be a Replan its lead works on, its latest Spec must carry one of those verdicts, and every Issue it re-edges or cancels must belong to the Replan's own project. Otherwise nothing is applied.
 
+<!-- snippet: apps/server/src/domains/planning/replan.ts REPLAN_TRIGGERS -->
 ```ts
 export const REPLAN_TRIGGERS = ['owner', 'stalled', 'held'] as const
 ```
@@ -129,8 +131,8 @@ issue_1197, `factory issue show issue_1197`, 2026-11-17: filed on 2026-11-14 at 
 
 **Example files:**
 
-- [`replan.ts` L1-L50](https://github.com/jkrumm/software-factory/blob/2511836af2e3c6f09eb0f76ded4d5e49b47003ab/apps/server/src/domains/planning/replan.ts#L1-L50): triggers, inputs and the lead's playbook.
-- [`spec-screen.ts` L86-L114](https://github.com/jkrumm/software-factory/blob/2511836af2e3c6f09eb0f76ded4d5e49b47003ab/apps/server/src/domains/checkpoints/spec-screen.ts#L86-L114): the rule that settles a Replan which only frees Issues.
+- [`replan.ts` L1-L50](https://github.com/jkrumm/software-factory/blob/master/apps/server/src/domains/planning/replan.ts#L1-L50): triggers, inputs and the lead's playbook.
+- [`spec-screen.ts` L88-L120](https://github.com/jkrumm/software-factory/blob/master/apps/server/src/domains/checkpoints/spec-screen.ts#L88-L120): the rule that settles a Replan which only frees Issues.
 
 ## Defer
 
@@ -151,13 +153,13 @@ This guide's Spec shows a wait behind another repo's Issue. On 2026-11-17 the ow
 
 **Example files:**
 
-- [`language.md` L255-L270](https://github.com/jkrumm/software-factory/blob/2511836af2e3c6f09eb0f76ded4d5e49b47003ab/docs/language.md#L255-L270): every wait, who it needs and what ends it.
-- [`claims.ts` L76-L95](https://github.com/jkrumm/software-factory/blob/2511836af2e3c6f09eb0f76ded4d5e49b47003ab/apps/server/src/domains/capacity/claims.ts#L76-L95): the waits that free a claim.
+- [`language.md` L261-L277](https://github.com/jkrumm/software-factory/blob/master/docs/language.md#L261-L277): every wait, who it needs and what ends it.
+- [`claims.ts` L76-L96](https://github.com/jkrumm/software-factory/blob/master/apps/server/src/domains/capacity/claims.ts#L76-L96): the waits that free a claim.
 
 **Read more:**
 
-- [The plan file](https://github.com/jkrumm/software-factory/blob/2511836af2e3c6f09eb0f76ded4d5e49b47003ab/docs/plan.md#L1-L99), [Changing an edge](https://github.com/jkrumm/software-factory/blob/2511836af2e3c6f09eb0f76ded4d5e49b47003ab/docs/plan.md#L201-L233) and [Replan](https://github.com/jkrumm/software-factory/blob/2511836af2e3c6f09eb0f76ded4d5e49b47003ab/docs/plan.md#L293-L309) in `docs/plan.md`.
-- [Inferred edges and edge readiness](https://github.com/jkrumm/software-factory/blob/2511836af2e3c6f09eb0f76ded4d5e49b47003ab/docs/architecture.md#L695-L697) in `docs/architecture.md`.
-- [Defer](https://github.com/jkrumm/software-factory/blob/2511836af2e3c6f09eb0f76ded4d5e49b47003ab/docs/language.md#L69) in `docs/language.md`.
+- [The plan file](https://github.com/jkrumm/software-factory/blob/master/docs/plan.md#L1-L99), [Changing an edge](https://github.com/jkrumm/software-factory/blob/master/docs/plan.md#L210-L242) and [Replan](https://github.com/jkrumm/software-factory/blob/master/docs/plan.md#L302-L318) in `docs/plan.md`.
+- [Inferred edges and edge readiness](https://github.com/jkrumm/software-factory/blob/master/docs/architecture.md#L811-L813) in `docs/architecture.md`.
+- [Defer](https://github.com/jkrumm/software-factory/blob/master/docs/language.md#L71) in `docs/language.md`.
 
 Next: [Checkpoints](./checkpoints.md)
