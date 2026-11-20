@@ -24,7 +24,8 @@ export function leadCheckoutOf(uow: UnitOfWork<{ leads: LeadStore }>): LeadCheck
           .flatMap((one) => (one.baseSha ? [{ branch: one.branch, cut: one.baseSha }] : []))
           .reverse()
         return ok({
-          repo: row.repoPath,
+          // Every attempt works in the Issue's one repo: one made before this attempt's worktree knows the directory too.
+          repo: row.repoPath ?? rows.findLast((one) => one.repoPath)?.repoPath ?? null,
           branch: row.branch,
           cut: row.baseSha,
           issueCut: branches.at(-1)?.cut ?? null,

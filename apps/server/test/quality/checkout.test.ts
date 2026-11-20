@@ -49,9 +49,24 @@ test('quality reads where an attempt worked from the leads store: its directory,
   })
   expect(await checkout.of(issue, 2)).toEqual({ ok: true, value: null })
 
-  // A later attempt keeps its own branch and cut; the Issue's cut stays the first attempt's, and every branch is known.
+  // A later attempt before its worktree is made works in the same repo, with the Issue's cut and the earlier branch.
   await uow.run(async ({ leads }) => {
     await leads.tried(issue, 2, 'factory/issue_7-2', at)
+    return ok(undefined)
+  })
+  expect(await checkout.of(issue, 2)).toEqual({
+    ok: true,
+    value: {
+      repo: '/roots/example',
+      branch: 'factory/issue_7-2',
+      cut: null,
+      issueCut: 'c'.repeat(40),
+      branches: [first],
+    },
+  })
+
+  // A later attempt keeps its own branch and cut; the Issue's cut stays the first attempt's, and every branch is known.
+  await uow.run(async ({ leads }) => {
     await leads.saveWorktree(issue, 2, {
       account: 'me',
       repoPath: '/roots/example',

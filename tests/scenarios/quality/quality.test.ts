@@ -196,6 +196,10 @@ describe('ship: the server finds the merged commits', () => {
       return (await admit(flow)).admitted.some((a) => a.issue === id && a.attempt === 2)
     })
     await tick(it.lw)
+    const second = `lead-${id.slice('issue_'.length)}-2`
+    await until('the second lead to start', async () =>
+      it.lw.terminals().some((t) => t.labels['factory.key'] === second),
+    )
     await until('the second lead to work', async () => (await stateOf(it.lw.world, id)) === 'working')
 
     const shipped = await ship(it.lw.world, it.lw.server, id, { attempt: 2, call: 'ship-1' })
