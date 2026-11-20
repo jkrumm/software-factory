@@ -1,6 +1,7 @@
 import { afterAll, beforeAll, expect, test } from 'bun:test'
 import { Health } from '@software-factory/contract'
 import { calmHost } from '../flow.ts'
+import { patient } from '../patience.ts'
 import { type Lab, startLab } from '../planning/lab.ts'
 
 /**
@@ -19,7 +20,8 @@ rows:
 beforeAll(async () => {
   lab = await startLab({
     repos: { app: { project: 'apiVersion: factory/v2\nname: app\n', plan: PLAN } },
-    env: { FACTORY_TICK_MS: '200', FACTORY_HEALTH_PROBE_MS: '100' },
+    // the host loop is off: a minute sample the loaded host could not read (no pressure level) would hold every admission
+    env: { FACTORY_TICK_MS: '200', FACTORY_HEALTH_PROBE_MS: '100', FACTORY_LOOP_HOST_MS: '3600000' },
   })
   // nothing calls a verb here, so nothing else reads a pressure level for the lead aim
   await calmHost(lab.world)
@@ -30,12 +32,13 @@ afterAll(async () => {
 })
 
 const until = async <T>(read: () => Promise<T | undefined>, what: string): Promise<T> => {
-  for (let i = 0; i < 100; i++) {
+  const deadline = Date.now() + patient(10_000)
+  while (Date.now() < deadline) {
     const value = await read()
     if (value !== undefined) return value
     await Bun.sleep(100)
   }
-  throw new Error(`the tick did not ${what} within 10 s:\n${lab.server.output()}`)
+  throw new Error(`the tick did not ${what} within the deadline:\n${lab.server.output()}`)
 }
 
 test('the tick reads the project, files the plan row, settles it and admits it, with no verb called', async () => {
