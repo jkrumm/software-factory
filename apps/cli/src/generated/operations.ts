@@ -1706,8 +1706,7 @@ export const OPERATIONS: readonly Operation[] = [
     command: ['checkpoint', 'pass'],
     method: 'POST',
     path: '/v1/checkpoints/pass',
-    summary:
-      'one pass now: settle the open Decisions (policy, Judge, default, owner), then send the pages that planned',
+    summary: 'one pass now: settle the open Decisions (Judge, default, owner), then send the pages that planned',
     pathParams: [],
     queryParams: [],
     body: false,

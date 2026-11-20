@@ -15,7 +15,6 @@ import { agwScreen } from './adapters/agw/screen.ts'
 import { agwSpecScreen } from './adapters/agw/spec-screen.ts'
 import { agwSettle, agwSteward } from './adapters/agw/steward.ts'
 import { fileBlobStore } from './adapters/blobs/filesystem.ts'
-import { fileStandingPolicies } from './adapters/checkpoints/policies.ts'
 import { makeNotifier } from './adapters/ntfy/ntfy.ts'
 import { postgresCheckpointStore } from './adapters/postgres/checkpoint-store.ts'
 import { hostReader } from './adapters/planning/host.ts'
@@ -324,15 +323,13 @@ async function main(): Promise<void> {
     commands: shellCheckRunner(undefined, APPROVED_RUN_HANG_GUARD_MS),
     queuedAsks: queuedAsksIn(askQueueDir(process.env)),
     notifier: makeNotifier(checkpointSettings.line),
-    // The Judge asks `factory-ask` through the agw port. The standing policy is each project's `policy:` in its
-    // `project.yaml`; a JSON file named by the environment overrides it, as an explicit stand-in.
+    // The Judge asks `factory-ask` through the agw port.
     judge: agwJudge(agw),
     errandScreen: agwErrandScreen(agw),
     // an Errand that is exactly a report or a pull of the MacBook's fixed verbs runs through them, with no dialog
     macbook: askHumanVerbs({ host: loopSettings.askHumanHost }),
     specScreen: agwSpecScreen(agw),
     recheckAfterMs: loopSettings.recheckAfterMs,
-    policies: checkpointSettings.policyFile ? fileStandingPolicies(checkpointSettings.policyFile) : planning.policies,
   }
   const checkpoints = checkpointUses(checkpointDeps)
   // One outbox runs every effect: the leads' tick, with quality's port for the Watch.

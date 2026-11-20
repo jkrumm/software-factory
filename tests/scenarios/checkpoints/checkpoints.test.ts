@@ -30,7 +30,7 @@ let server: ServerProcess
 let dir: string
 let issues = 0
 
-const PROJECTS = ['spec', 'policy', 'owner', 'judge', 'default', 'refused', 'amend', 'errand', 'annotate', 'down'].map(
+const PROJECTS = ['spec', 'owner', 'judge', 'default', 'refused', 'amend', 'errand', 'annotate', 'down'].map(
   (name) => `example-${name}`,
 )
 
@@ -61,12 +61,6 @@ beforeAll(async () => {
     },
   })
   await writeFile(
-    join(dir, 'policy.json'),
-    JSON.stringify({
-      'example-policy': [{ when: 'logging library', answer: 'winston', reason: 'the owner standardised on it' }],
-    }),
-  )
-  await writeFile(
     join(dir, 'judge.json'),
     JSON.stringify([
       {
@@ -87,7 +81,6 @@ beforeAll(async () => {
     env: {
       FACTORY_LEADS_PER_ACCOUNT: '16',
       FACTORY_DATA_DIR: join(dir, 'data'),
-      FACTORY_CHECKPOINT_POLICY_FILE: join(dir, 'policy.json'),
       FACTORY_FAKE_ASK_SCRIPT: join(dir, 'judge.json'),
       FACTORY_NTFY_URL: `http://127.0.0.1:${ntfy.port}`,
       FACTORY_NTFY_TOPIC: 'factory',
@@ -202,26 +195,6 @@ test("a verdict on a submitted Spec arrives as the lead's next turn: one note_le
   expect(shown.unanchored).toEqual([])
 })
 
-test('a Decision is settled by standing policy: no Judge call, no page', async () => {
-  const issueId = await workingIssue('example-policy')
-  const asked = await ok(
-    (json) => AskReply.parse(json),
-    'issue',
-    'ask',
-    issueId,
-    ...body(FORM('Which logging library should the server use?')),
-  )
-  expect(asked).toMatchObject({ result: 'applied', issue: { state: 'waiting', waitReason: 'decision' } })
-
-  const passed = await pass()
-  expect(passed.decisions).toEqual([{ decision: asked.decision.id, status: 'answered', settledBy: 'policy' }])
-  const shown = await ok((json) => DecisionView.parse(json), 'decision', 'show', asked.decision.id)
-  expect(shown).toMatchObject({ answer: 'winston', source: 'the owner standardised on it' })
-  expect(shown.path.map((s) => [s.step, s.outcome])).toEqual([['policy', 'answered']])
-  expect(await askCalls()).toEqual([])
-  expect(decisionPages()).toEqual([])
-})
-
 test('a Decision no one settles reaches the owner: paged once, with a deep link, however often the pass runs', async () => {
   const issueId = await workingIssue('example-owner')
   const asked = await ok(
@@ -243,7 +216,7 @@ test('a Decision no one settles reaches the owner: paged once, with a deep link,
     authorization: 'Bearer scenario-token',
   })
   expect(decisionPages()[0]?.body).toBe(
-    'Issue 3 (example-owner) asks: “Which retention for the audit log rows?” Recommended: “pino”',
+    'Issue 2 (example-owner) asks: “Which retention for the audit log rows?” Recommended: “pino”',
   )
   for (let i = 0; i < 3; i++) await pass()
   expect(decisionPages()).toHaveLength(1)
@@ -269,7 +242,6 @@ test('a Decision no one settles reaches the owner: paged once, with a deep link,
   const ledger = await ok((json) => DecisionList.parse(json).decisions, 'decision', 'list', '--worth', 'yes')
   expect(ledger).toHaveLength(1)
   expect(ledger[0]?.path.map((s) => [s.step, s.outcome])).toEqual([
-    ['policy', 'passed'],
     ['judge', 'passed'],
     ['owner', 'open'],
   ])
@@ -293,13 +265,14 @@ test("a Decision is settled by the Judge, who is given the owner's earlier answe
   const given = JSON.parse(calls.at(-1)?.stdin ?? '{}') as {
     precedents: { question: string; answer: string; settledBy: string; worthAsking: boolean | null }[]
   }
-  // The owner's own answer comes first; the policy's, which shares the stemmed word "log", follows.
+  // Only the owner's own answers are precedent.
   expect(given.precedents[0]).toMatchObject({
     question: 'Which retention for the audit log rows?',
     answer: 'winston',
     settledBy: 'owner',
-    worthAsking: true,
+    worthAsking: null,
   })
+  expect(given.precedents.every((p) => p.settledBy === 'owner')).toBe(true)
   expect(decisionPages()).toHaveLength(1)
 })
 
@@ -331,7 +304,6 @@ test('a Decision is settled by its default after the wait, when the option is re
   const shown = await ok((json) => DecisionView.parse(json), 'decision', 'show', id)
   expect(shown).toMatchObject({ answer: 'five minutes', settledBy: 'default' })
   expect(shown.path.map((s) => [s.step, s.outcome])).toEqual([
-    ['policy', 'passed'],
     ['judge', 'passed'],
     ['default', 'answered'],
   ])

@@ -16,7 +16,6 @@ import {
   type DecisionForm,
   guardVerdict,
   judgeInputOf,
-  matchPolicy,
   precedentTerms,
   readDecisionForm,
   refuseNoOpDefault,
@@ -138,18 +137,7 @@ describe('readDecisionForm', () => {
   })
 })
 
-describe('standing policy and the default', () => {
-  test('the first matching rule whose answer is an option settles it', () => {
-    const rules = [
-      { when: 'database', answer: 'postgres', reason: 'one store' },
-      { when: 'LOGGING library', answer: 'unknown', reason: 'not an option' },
-      { when: 'logging library', answer: 'WINSTON', reason: 'owner prefers it' },
-    ]
-    expect(matchPolicy(rules, form())).toMatchObject({ answer: 'winston', rule: { when: 'logging library' } })
-    expect(matchPolicy([{ when: 'cache', answer: 'pino', reason: 'x' }], form())).toBeNull()
-    expect(matchPolicy([{ when: '  ', answer: 'pino', reason: 'x' }], form())).toBeNull()
-  })
-
+describe('the default', () => {
   test('the default is due once the wait has run out, and not before', () => {
     const asked = new Date('2026-03-01T12:00:00Z')
     expect(defaultDue(form(), asked, new Date('2026-03-01T12:29:59Z'))).toBeNull()
@@ -222,7 +210,6 @@ describe('what goes to the Judge', () => {
           question: 'q',
           answer: 'a',
           settledBy: 'owner',
-          worthAsking: true,
           repo: '/Users/someone/SourceRoot/dotfiles',
         },
       ],

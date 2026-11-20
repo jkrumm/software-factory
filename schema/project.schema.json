@@ -648,43 +648,9 @@
       }
     },
     "policy": {
-      "default": [],
-      "description": "standing answers: the first rule whose phrase the question contains and whose answer is one of its options settles a Decision",
-      "consumer": "Decision policies (apps/server/src/app/planning-policies.ts)",
-      "maxItems": 64,
-      "type": "array",
-      "items": {
-        "type": "object",
-        "properties": {
-          "when": {
-            "type": "string",
-            "minLength": 1,
-            "maxLength": 300,
-            "description": "a phrase the Decision's question contains",
-            "consumer": "Decision policies (apps/server/src/app/planning-policies.ts)"
-          },
-          "answer": {
-            "type": "string",
-            "minLength": 1,
-            "maxLength": 200,
-            "description": "the option label the rule takes; it must be one of the options",
-            "consumer": "Decision policies (apps/server/src/app/planning-policies.ts)"
-          },
-          "reason": {
-            "type": "string",
-            "minLength": 1,
-            "maxLength": 500,
-            "description": "why, recorded with the answer",
-            "consumer": "Decision policies (apps/server/src/app/planning-policies.ts)"
-          }
-        },
-        "required": [
-          "when",
-          "answer",
-          "reason"
-        ],
-        "additionalProperties": false
-      }
+      "description": "Retired: a Decision goes to the Judge, then its default, then the owner. Accepted and dropped. Remove it.",
+      "consumer": "nothing (retired)",
+      "deprecated": true
     },
     "jobs": {
       "description": "Retired with the old core; accepted and dropped. Remove it.",

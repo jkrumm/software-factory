@@ -523,7 +523,7 @@ export function takeDefault(
   })
 }
 
-/** The owner's flag on an answered Decision: it feeds the ledger and the Judge's precedent. */
+/** The owner's flag on an answered Decision: it feeds the ledger. */
 export function markWorthAsking(
   deps: CheckpointDeps,
   input: { decisionId: DecisionId; worth: boolean },

@@ -6,13 +6,10 @@ const Env = z.object({
   /** the factory's data directory; artifact revisions are blobs under `<dir>/blobs`, never in git */
   FACTORY_DATA_DIR: z.string().min(1).optional(),
   HOME: z.string().optional(),
-  /** a stand-in for `project.yaml`'s standing policy until package 3: a JSON file of rules per repo */
-  FACTORY_CHECKPOINT_POLICY_FILE: z.string().min(1).optional(),
 })
 
 export interface CheckpointSettings {
   blobDir: string
-  policyFile: string | null
   line: OwnersLine
 }
 
@@ -33,7 +30,6 @@ export function loadCheckpointSettings(env: Record<string, string | undefined>):
   }
   return {
     blobDir: join(factoryDataDir(env), 'blobs'),
-    policyFile: parsed.data.FACTORY_CHECKPOINT_POLICY_FILE ?? null,
     line: loadOwnersLine(env),
   }
 }

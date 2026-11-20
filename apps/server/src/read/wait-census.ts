@@ -46,7 +46,7 @@ const enderOf = (row: z.infer<typeof WaitRow>): Ender => {
 
 /**
  * A wait nobody's hands were needed to end: its exit is a person (a Decision, a review, an Errand) and the Judge, a
- * standing policy, a default verdict, the steward or a check ended it. A lead that had taken the reversible default, built
+ * a default verdict, the steward or a check ended it. A lead that had taken the reversible default, built
  * on the Spec's defaults or filed the follow-up and shipped would not have waited. A wait the owner ended, a timer, a
  * chain and a stall are not marked: the read cannot tell a needed one from one a lead could have skipped, so it counts and
  * sizes them and leaves the judgment to whoever reads the longest.

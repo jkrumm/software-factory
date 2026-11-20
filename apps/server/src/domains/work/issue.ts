@@ -47,7 +47,7 @@ export const WAITS = {
   blocked: { exit: 'machine', stall: true, ends: 'woken by the steward after it re-checks the cause' },
   lead_gone: { exit: 'machine', stall: true, ends: 'woken by the steward: a new attempt' },
   regressed: { exit: 'machine', stall: true, ends: 'woken by the steward, or turned into a Decision' },
-  decision: { exit: 'person', stall: false, ends: 'answered by standing policy, the Judge, a default, or the owner' },
+  decision: { exit: 'person', stall: false, ends: 'answered by the Judge, a default, or the owner' },
   review: {
     exit: 'person',
     stall: false,

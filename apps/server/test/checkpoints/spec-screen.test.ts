@@ -134,7 +134,6 @@ beforeEach(async () => {
     blobs: fileBlobStore(blobDir),
     consoleUrl: 'https://console.example.test',
     checks: { run: async () => ({ exit: 0, timedOut: false, output: '' }) },
-    policies: { rulesFor: () => Promise.resolve(ok([])) },
     judge: { judge: () => Promise.resolve(err(portError('gone', 'no judge'))) },
     errandScreen: { screen: () => Promise.resolve(err(portError('gone', 'no screen'))) },
     specScreen: {

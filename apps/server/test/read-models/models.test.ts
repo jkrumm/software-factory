@@ -778,7 +778,6 @@ describe('the fixture', () => {
     expect(count('regression')?.count).toBe(1)
     expect(count('decision_settled:owner')?.count).toBe(2)
     expect(count('decision_settled:judge')?.count).toBe(1)
-    expect(count('decision_settled:policy')?.count).toBe(0)
     expect(count('signal_held:total')?.count).toBe(2)
     expect(count('signal_held:github')?.count).toBe(1)
     for (const c of model.counts) expect(c.label).not.toMatch(/(issue|decision|errand|signal)_\w+/)

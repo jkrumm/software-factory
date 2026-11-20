@@ -166,7 +166,7 @@ export const LANGUAGE = {
   'session state':
     "What a lead's session is, derived from its hook events: starting (no hook yet), working (a turn is running), idle (its last turn ended), compacted (its context was just compacted, no turn since), walled (its account hit a limit), gone (its session ended or its terminal is gone)",
   settler:
-    'Who settled a Decision, in the order tried: policy, judge, default, owner; or orchestrator, answering for the owner',
+    'Who settled a Decision, in the order tried: judge, default, owner; or orchestrator, answering for the owner',
   settling: 'State: triage is not done; shown as Held',
   ship: 'Land and deploy',
   'ship refused':
@@ -228,5 +228,5 @@ export const LANGUAGE = {
   'work repo':
     'A repo no project.yaml describes, or whose project.yaml says work: true. The read token never sees its words',
   working: 'State: a lead is running now; shown as Running',
-  'worth asking': "The owner's flag on an answered Decision. Feeds the ledger and the Judge's precedent",
+  'worth asking': "The owner's flag on an answered Decision. Feeds the ledger; the Judge's precedent does not read it",
 } as const satisfies Record<string, string>

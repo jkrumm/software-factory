@@ -83,8 +83,6 @@ const StepRow = z.object({
 const PrecedentRow = z.object({
   question: z.string(),
   answer: z.string(),
-  settled_by: z.enum(SETTLERS),
-  worth_asking: z.boolean().nullable(),
   repo: z.string(),
 })
 
@@ -531,11 +529,10 @@ export function postgresCheckpointStore(tx: SQL): CheckpointStore {
 
     async precedents(terms, { excluding, limit }) {
       const rows: unknown[] = await tx`
-        SELECT question, answer, settled_by, worth_asking, repo FROM factory.decisions
-        WHERE answered_at IS NOT NULL AND id <> ${excluding}
+        SELECT question, answer, repo FROM factory.decisions
+        WHERE answered_at IS NOT NULL AND settled_by = 'owner' AND id <> ${excluding}
           AND to_tsvector('english', question) @@ to_tsquery('english', ${terms})
-        ORDER BY (settled_by = 'owner') DESC,
-                 ts_rank(to_tsvector('english', question), to_tsquery('english', ${terms})) DESC,
+        ORDER BY ts_rank(to_tsvector('english', question), to_tsquery('english', ${terms})) DESC,
                  answered_at DESC
         LIMIT ${limit}`
       return rows.map((raw) => {
@@ -543,8 +540,7 @@ export function postgresCheckpointStore(tx: SQL): CheckpointStore {
         return {
           question: row.question,
           answer: row.answer,
-          settledBy: row.settled_by,
-          worthAsking: row.worth_asking,
+          settledBy: 'owner' as const,
           repo: row.repo,
         }
       })

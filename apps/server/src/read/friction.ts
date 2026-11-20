@@ -47,7 +47,6 @@ const SPEC_SOURCES_SAID: Record<SpecSource, string> = {
 const SETTLERS: Record<string, string> = {
   owner: 'Decisions settled by the owner',
   orchestrator: 'Decisions settled by the orchestrator',
-  policy: 'Decisions settled by standing policy',
   judge: 'Decisions settled by the Judge',
   default: 'Decisions settled by their default',
 }

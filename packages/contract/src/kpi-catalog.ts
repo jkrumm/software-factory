@@ -54,7 +54,7 @@ export const KPI_CATALOG: Record<KpiKey, KpiSpec> = {
       'Decisions raised that the factory did not settle itself (the owner or the orchestrator answered them, or they still wait)',
     denominator: 'Issues filed in the window',
     decision:
-      'Whether a recurring Decision should become a standing policy or a Judge precedent; read beside owner Decisions per 100 Issues, since a path that asks nothing is not the goal either',
+      'Whether a recurring Decision should become a Judge precedent; read beside owner Decisions per 100 Issues, since a path that asks nothing is not the goal either',
   },
   recommendation_taken: {
     label: 'Owner answers that took the lead’s recommendation',
@@ -65,7 +65,7 @@ export const KPI_CATALOG: Record<KpiKey, KpiSpec> = {
     numerator: 'Decisions the owner answered with the option the lead recommended',
     denominator: 'Decisions the owner answered in the window',
     decision:
-      'A high share means leads ask what they already know: tighten the rule that decides when a lead may raise a Decision, or add a standing policy for the recurring question',
+      'A high share means leads ask what they already know: tighten the rule that decides when a lead may raise a Decision',
   },
   specs_per_100: {
     label: 'Specs per 100 Issues',

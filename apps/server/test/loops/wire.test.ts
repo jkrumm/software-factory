@@ -84,7 +84,6 @@ test('the Judge’s input as the checkpoints build it is the shape the workflow 
     question: 'q',
     answer: 'a',
     settledBy: 'owner',
-    worthAsking: false,
     repo: '/home/x/src/app',
   }
   const input = judgeInputOf({

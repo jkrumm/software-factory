@@ -66,7 +66,7 @@ describe('project.yaml schema', () => {
 
   test('retired keys are deprecated in the JSON Schema, accepted and dropped by the parse', () => {
     const schema = JSON.stringify(projectJsonSchema())
-    expect(schema.match(/"deprecated":true/g)?.length).toBe(4)
+    expect(schema.match(/"deprecated":true/g)?.length).toBe(5)
     const parsed = ProjectFile.parse({
       apiVersion: 'factory/v2',
       name: 'lab',
