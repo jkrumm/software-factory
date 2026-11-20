@@ -1,14 +1,13 @@
 import { describe, expect, test } from 'bun:test'
-import { openOfWork } from '@software-factory/contract'
+import { DigestAnswer, openOfWork } from '@software-factory/contract'
 import type { IssueId } from '../../src/kernel/ids.ts'
 import {
-  checkDigest,
   countsOf,
   type DigestIssue,
+  digestHash,
+  digestOf,
   groupByProject,
-  inputHash,
   planDigests,
-  requestOf,
 } from '../../src/domains/loops/digest.ts'
 import { projectOf } from '../../src/kernel/project-of.ts'
 
@@ -80,54 +79,67 @@ describe('counts', () => {
   })
 })
 
-describe('the request', () => {
+describe('the digest', () => {
   const issues = [
-    issue(1, { state: 'closed', outcome: 'done', at: hours(5) }),
+    issue(1, { state: 'closed', outcome: 'done', at: hours(5), kind: 'fix' }),
     issue(2, { state: 'closed', outcome: 'dropped', at: hours(30) }),
     issue(3, { state: 'closed', outcome: 'done', at: hours(24 * 9) }),
     issue(4, { state: 'working' }),
     issue(5, { state: 'queued', after: [id(4)] }),
     issue(6, { state: 'waiting', waitReason: 'review' }),
+    issue(7, { state: 'closed', outcome: 'healed', at: hours(2), kind: 'chore' }),
   ]
 
-  test('closed Issues of the window newest first, open ones by what they are doing, edges and reasons carried', () => {
-    const request = requestOf({ project: 'app', issues, now: NOW, previous: { headline: 'Earlier', at: hours(3) } })
-    expect(request.done.map((d) => [d.id, d.outcome])).toEqual([
-      ['issue_1', 'done'],
-      ['issue_2', 'dropped'],
+  test('shipped is done and healed in the window newest first; next is running, then ready; risks are paused and dropped', () => {
+    const digest = digestOf(issues, NOW)
+    expect(digest.shipped).toEqual([
+      { text: 'Issue 7', ids: ['issue_7'] },
+      { text: 'Issue 1', ids: ['issue_1'] },
     ])
-    expect(request.working.map((w) => w.id)).toEqual(['issue_4'])
-    expect(request.queued).toEqual([{ id: 'issue_5', title: 'Issue 5', after: ['issue_4'] }])
-    expect(request.waiting).toEqual([{ id: 'issue_6', title: 'Issue 6', reason: 'review' }])
-    expect(request.previous).toEqual({ headline: 'Earlier', at: hours(3).toISOString() })
-    expect(request.window.to).toBe(NOW.toISOString())
+    expect(digest.next).toEqual([
+      { text: 'Issue 4', ids: ['issue_4'] },
+      { text: 'Issue 5', ids: ['issue_5'] },
+    ])
+    expect(digest.risks).toEqual([
+      { text: 'Issue 6: review', ids: ['issue_6'] },
+      { text: 'Issue 2: dropped', ids: ['issue_2'] },
+    ])
+    expect(digest.headline).toBe('2 shipped, the newest: Issue 7; 3 open')
+    expect(digest.themes).toEqual(['chore', 'fix'])
   })
 
-  test('the lists are cut to the bounds the workflow takes', () => {
-    const many = Array.from({ length: 130 }, (_, i) => issue(i + 1, { state: 'closed', outcome: 'done', at: hours(1) }))
-    const open = Array.from({ length: 80 }, (_, i) => issue(i + 200))
-    const request = requestOf({ project: 'app', issues: [...many, ...open], now: NOW, previous: null })
-    expect([request.done.length, request.queued.length]).toEqual([100, 60])
+  test('with nothing shipped the headline says so', () => {
+    expect(digestOf([issue(1)], NOW).headline).toBe('Nothing shipped in 7 days; 1 open')
   })
 
-  test('the hash ignores the window and the previous headline and follows the Issues', () => {
-    const a = requestOf({ project: 'app', issues, now: NOW, previous: null })
-    const later = requestOf({ project: 'app', issues, now: hours(-1), previous: { headline: 'x', at: NOW } })
-    expect(inputHash(later)).toBe(inputHash(a))
-    const moved = requestOf({ project: 'app', issues: [...issues, issue(7)], now: NOW, previous: null })
-    expect(inputHash(moved)).not.toBe(inputHash(a))
+  test('every list and the headline are cut to what the stored shape takes', () => {
+    const many = Array.from({ length: 30 }, (_, i) => issue(i + 1, { state: 'closed', outcome: 'done', at: hours(1) }))
+    const open = Array.from({ length: 30 }, (_, i) =>
+      issue(i + 100, { state: 'waiting', waitReason: 'x'.repeat(500), title: 'T'.repeat(500) }),
+    )
+    const digest = digestOf([...many, ...open], NOW)
+    expect([digest.shipped.length, digest.next.length, digest.risks.length]).toEqual([5, 0, 3])
+    expect(digest.headline.length).toBeLessThanOrEqual(140)
+    expect(digest.risks[0]?.text.length).toBeLessThanOrEqual(200)
+    expect(DigestAnswer.safeParse(digest).success).toBe(true)
+  })
+
+  test('the hash follows what the digest says', () => {
+    const a = digestOf(issues, NOW)
+    expect(digestHash(digestOf(issues, hours(-1)))).toBe(digestHash(a))
+    expect(digestHash(digestOf([...issues, issue(8)], NOW))).not.toBe(digestHash(a))
   })
 })
 
 describe('the plan', () => {
-  test('a project is called when it has Issues and no digest of them, not when its digest is of the same Issues, never when idle', () => {
+  test('a project is stored when it has Issues and no digest of them, not when its digest is the same, never when idle', () => {
     const issues = [issue(1), issue(2, { repo: 'shop' })]
     const first = planDigests({ projects, issues, latest: new Map(), now: NOW })
-    expect(first.calls.map((c) => c.project)).toEqual(['app', 'shop'])
+    expect(first.stores.map((c) => c.project)).toEqual(['app', 'shop'])
     expect(first.idle).toBe(1)
-    const latest = new Map(first.calls.map((c) => [c.project, { hash: c.hash, at: NOW, headline: 'h' }]))
+    const latest = new Map(first.stores.map((c) => [c.project, { hash: c.hash, at: NOW, headline: 'h' }]))
     const again = planDigests({ projects, issues: [...issues, issue(3, { repo: 'shop' })], latest, now: NOW })
-    expect(again.calls.map((c) => c.project)).toEqual(['shop'])
+    expect(again.stores.map((c) => c.project)).toEqual(['shop'])
     expect(again.unchanged).toEqual(['app'])
   })
 
@@ -138,27 +150,7 @@ describe('the plan', () => {
       latest: new Map(),
       now: NOW,
     })
-    expect(plan.calls).toEqual([])
+    expect(plan.stores).toEqual([])
     expect(plan.idle).toBe(3)
-  })
-})
-
-describe('the check', () => {
-  test('a bullet that cites an Issue the request did not name is dropped', () => {
-    const request = requestOf({ project: 'app', issues: [issue(1)], now: NOW, previous: null })
-    const checked = checkDigest(
-      {
-        headline: 'h',
-        shipped: [],
-        next: [
-          { text: 'real', ids: ['issue_1'] },
-          { text: 'invented', ids: ['issue_1', 'issue_99'] },
-        ],
-        risks: [],
-        themes: [],
-      },
-      request,
-    )
-    expect(checked.next).toEqual([{ text: 'real', ids: ['issue_1'] }])
   })
 })

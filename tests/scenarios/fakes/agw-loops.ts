@@ -15,8 +15,8 @@ const scriptOf = (env: string): Scripted[] => {
 }
 
 /**
- * `agw factory-steward`, `agw factory-triage`, `agw factory-queue`, `agw factory-hygiene`, `agw factory-fix-classes` (nothing scripted: every commit is `other`), `agw factory-screen`, `agw factory-errand` (passes unless `FACTORY_FAKE_ERRAND_SCRIPT` says otherwise) and `agw factory-spec-screen` (passes unless `FACTORY_FAKE_SPEC_SCREEN_SCRIPT` says otherwise), input on stdin. A scenario scripts them with JSON files
- * (`FACTORY_FAKE_STEWARD_SCRIPT`, `FACTORY_FAKE_TRIAGE_SCRIPT`, `FACTORY_FAKE_QUEUE_SCRIPT`, `FACTORY_FAKE_HYGIENE_SCRIPT`, `FACTORY_FAKE_FIX_CLASSES_SCRIPT`, `FACTORY_FAKE_SCREEN_SCRIPT`): `[{ "match": "<phrase>", "answer": {…} }]`, the phrase read
+ * `agw factory-steward`, `agw factory-triage`, `agw factory-queue`, `agw factory-hygiene`, `agw factory-screen`, `agw factory-errand` (passes unless `FACTORY_FAKE_ERRAND_SCRIPT` says otherwise) and `agw factory-spec-screen` (passes unless `FACTORY_FAKE_SPEC_SCREEN_SCRIPT` says otherwise), input on stdin. A scenario scripts them with JSON files
+ * (`FACTORY_FAKE_STEWARD_SCRIPT`, `FACTORY_FAKE_TRIAGE_SCRIPT`, `FACTORY_FAKE_QUEUE_SCRIPT`, `FACTORY_FAKE_HYGIENE_SCRIPT`, `FACTORY_FAKE_SCREEN_SCRIPT`): `[{ "match": "<phrase>", "answer": {…} }]`, the phrase read
  * from the Issue's title, the stall's detail or the signal's words. Nothing scripted answers "I cannot tell" (steward `none`,
  * triage the empty answer). Every call is logged with its stdin.
  */
@@ -27,29 +27,6 @@ export async function loopsFake(args: string[]): Promise<number> {
   const input = JSON.parse(stdin) as Record<string, unknown>
   const words = JSON.stringify(input).toLowerCase()
 
-  if (args[0] === 'factory' && args[1] === 'digest') {
-    // the digest names its project in the request: a script entry matches on it (`"project":"app"`); nothing scripted answers a
-    // digest that cites the first Issue the request names
-    const scripted = scriptOf('FACTORY_FAKE_DIGEST_SCRIPT').find((entry) => words.includes(entry.match.toLowerCase()))
-    if (scripted?.fail) {
-      process.stderr.write('fake agw: factory digest scripted to fail\n')
-      return 1
-    }
-    const listed = (name: string): { id: string }[] =>
-      Array.isArray(input[name]) ? (input[name] as { id: string }[]) : []
-    const first = [...listed('done'), ...listed('working'), ...listed('queued'), ...listed('waiting')]
-    return done(
-      'factory.digest',
-      args,
-      scripted?.answer ?? {
-        headline: `${String(input.project)}: nothing scripted`,
-        shipped: [],
-        next: first[0] ? [{ text: 'the first Issue goes on', ids: [first[0].id] }] : [],
-        risks: [],
-        themes: [],
-      },
-    )
-  }
   if (args[0] === 'factory-steward') {
     const scripted = scriptOf('FACTORY_FAKE_STEWARD_SCRIPT').find((entry) => words.includes(entry.match.toLowerCase()))
     if (scripted?.fail) {
@@ -112,23 +89,6 @@ export async function loopsFake(args: string[]): Promise<number> {
       'factory-spec-screen',
       args,
       scripted?.answer ?? { verdict: 'pass', reason: "nothing scripted: it is the owner's to read" },
-    )
-  }
-  if (args[0] === 'factory-fix-classes') {
-    const scripted = scriptOf('FACTORY_FAKE_FIX_CLASSES_SCRIPT').find((entry) =>
-      words.includes(entry.match.toLowerCase()),
-    )
-    if (scripted?.fail) {
-      process.stderr.write('fake agw: factory-fix-classes scripted to fail\n')
-      return 1
-    }
-    const commits = (input.commits ?? []) as { sha: string }[]
-    return done(
-      'factory-fix-classes',
-      args,
-      scripted?.answer ?? {
-        answers: commits.map((c) => ({ sha: c.sha, class: 'other', reason: 'nothing scripted' })),
-      },
     )
   }
   if (args[0] === 'factory-hygiene') {

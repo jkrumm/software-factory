@@ -8,8 +8,8 @@ interface FlowIssues {
 const DIGESTED = ['argo', 'harbor']
 
 /**
- * A digest for two projects, as the digest loop would store them (the loop's own calls are the scenarios'; the fake agw has
- * nothing worth showing here), citing the Issues the seed filed there, so the strip has words and links to open. The loop
+ * A digest for two projects, as the digest loop would store them (the loop's own passes are the scenarios'; its plain
+ * words are not worth a screen), citing the Issues the seed filed there, so the strip has words and links to open. The loop
  * is off in the e2e world, so these rows are the newest each project has.
  */
 export async function seedDigests(url: string, sql: SQL, now = new Date()): Promise<Record<string, string[]>> {
@@ -30,7 +30,7 @@ export async function seedDigests(url: string, sql: SQL, now = new Date()): Prom
     }
     await sql`
       INSERT INTO factory.project_digests (project, at, input_hash, route, digest)
-      VALUES (${project}, ${new Date(now.getTime() - 95 * 60_000)}, ${`e2e-${project}`}, 'factory.digest', ${JSON.stringify(digest)}::text::jsonb)`
+      VALUES (${project}, ${new Date(now.getTime() - 95 * 60_000)}, ${`e2e-${project}`}, 'code', ${JSON.stringify(digest)}::text::jsonb)`
   }
   return cited
 }

@@ -1,24 +1,30 @@
-import type { DigestAnswer, DigestRequest } from '@software-factory/contract'
-import { DIGEST_WINDOW_MS, type DigestIssue, type DigestProject, groupByProject } from '../../kernel/digest-scope.ts'
+import type { DigestAnswer } from '@software-factory/contract'
+import {
+  DIGEST_WINDOW_MS,
+  type DigestIssue,
+  type DigestProject,
+  groupByProject,
+  shipped,
+} from '../../kernel/digest-scope.ts'
 import { type IssueId, issueNumber } from '../../kernel/ids.ts'
 
 /**
- * The digest loop's rules (`factory digest` summarises one project's Issues): which Issues belong to a project, what is
- * sent, when a project needs a new digest, and what is kept of the answer. Pure; the model is the agw workflow's.
+ * The digest loop's rules: which Issues belong to a project, what its digest says, and when a project needs a new one. The
+ * digest is built from the Issues' titles, states and outcomes, no model. Pure.
  */
 
 export { countsOf, DIGEST_WINDOW_MS, groupByProject } from '../../kernel/digest-scope.ts'
 export type { DigestIssue, DigestProject } from '../../kernel/digest-scope.ts'
 
-/** The agw route the digest is made on, stored with each digest (`agw routes` maps it to a model). */
-export const DIGEST_ROUTE = 'factory.digest'
+/** What a stored digest was made by (the `route` column): the code, not an agw route. */
+export const DIGEST_ROUTE = 'code'
 
-/** The bounds `factory digest` takes. */
-const MAX_DONE = 100
-const MAX_OPEN = 60
-const MAX_AFTER = 10
-const MAX_TITLE = 200
-const MAX_REASON = 300
+const MAX_SHIPPED = 5
+const MAX_NEXT = 4
+const MAX_RISKS = 3
+const MAX_THEMES = 5
+const MAX_HEADLINE = 140
+const MAX_BULLET = 200
 
 /** The newest stored digest of a project, as the loop compares against. */
 export interface LatestDigest {
@@ -27,7 +33,7 @@ export interface LatestDigest {
   headline: string
 }
 
-/** A digest as stored (`migrations/1014_project_digests.sql`): a fact, a new row per call. */
+/** A digest as stored (`migrations/1014_project_digests.sql`): a fact, a new row per change. */
 export interface DigestRecord {
   project: string
   at: Date
@@ -42,95 +48,68 @@ const oneLine = (text: string, max: number): string => {
   return one.length <= max ? one : `${one.slice(0, max - 1).trimEnd()}…`
 }
 
-const byNumber = (a: { id: string }, b: { id: string }): number =>
-  issueNumber(a.id as IssueId) - issueNumber(b.id as IssueId)
+const number = (issue: { id: string }): number => issueNumber(issue.id as IssueId)
+const byNumber = (a: { id: string }, b: { id: string }): number => number(a) - number(b)
+
+const bullet = (text: string, issue: { id: IssueId }): DigestAnswer['shipped'][number] => ({
+  text: oneLine(text, MAX_BULLET),
+  ids: [issue.id],
+})
 
 /**
- * What `factory digest` is sent: the Issues closed in the last 7 days (newest first) and every open one, by what they are
- * doing now. A settling Issue is queued, a watching one is working. Every list is cut to the bound the workflow takes.
+ * What a project's Issues say, in words the Issues already hold. Shipped: the Issues done or healed in the last 7 days,
+ * newest first. Next: what is running, then what is ready, lowest number first. Risks: a paused Issue with its reason, and an
+ * Issue dropped or cancelled in the window with its outcome. The headline counts them and names the newest shipped title;
+ * the themes are the kinds of what shipped.
  */
-export function requestOf(input: {
-  project: string
-  issues: readonly DigestIssue[]
-  now: Date
-  previous: Pick<LatestDigest, 'headline' | 'at'> | null
-}): DigestRequest {
-  const { now } = input
-  const from = new Date(now.getTime() - DIGEST_WINDOW_MS)
-  const done = input.issues
-    .filter((issue) => issue.state === 'closed' && issue.at >= from)
-    .sort((a, b) => b.at.getTime() - a.at.getTime() || byNumber(b, a))
-    .slice(0, MAX_DONE)
-    .map((issue) => ({
-      id: issue.id,
-      title: oneLine(issue.title, MAX_TITLE),
-      kind: issue.kind,
-      closedAt: issue.at.toISOString(),
-      outcome: issue.outcome ?? 'closed',
-    }))
-  const open = input.issues.filter((issue) => issue.state !== 'closed').sort(byNumber)
-  const working = open
-    .filter((issue) => issue.state === 'working' || issue.state === 'watching')
-    .slice(0, MAX_OPEN)
-    .map((issue) => ({
-      id: issue.id,
-      title: oneLine(issue.title, MAX_TITLE),
-      kind: issue.kind,
-      since: issue.at.toISOString(),
-    }))
-  const queued = open
-    .filter((issue) => issue.state === 'queued' || issue.state === 'settling')
-    .slice(0, MAX_OPEN)
-    .map((issue) => ({
-      id: issue.id,
-      title: oneLine(issue.title, MAX_TITLE),
-      ...(issue.after.length > 0 ? { after: [...issue.after].sort().slice(0, MAX_AFTER) } : {}),
-    }))
-  const waiting = open
-    .filter((issue) => issue.state === 'waiting')
-    .slice(0, MAX_OPEN)
-    .map((issue) => ({
-      id: issue.id,
-      title: oneLine(issue.title, MAX_TITLE),
-      reason: oneLine(issue.waitReason ?? 'waiting', MAX_REASON),
-    }))
+export function digestOf(issues: readonly DigestIssue[], now: Date): DigestAnswer {
+  const from = now.getTime() - DIGEST_WINDOW_MS
+  const closed = issues.filter((issue) => issue.state === 'closed' && issue.at.getTime() >= from)
+  const done = closed.filter(shipped).sort((a, b) => b.at.getTime() - a.at.getTime() || number(b) - number(a))
+  const open = issues.filter((issue) => issue.state !== 'closed').sort(byNumber)
+  const running = open.filter((issue) => issue.state === 'working' || issue.state === 'watching')
+  const ready = open.filter((issue) => issue.state === 'queued' || issue.state === 'settling')
+  const paused = open.filter((issue) => issue.state === 'waiting')
+  const ended = closed
+    .filter((issue) => !shipped(issue))
+    .sort((a, b) => b.at.getTime() - a.at.getTime() || number(b) - number(a))
+
+  const newest = done[0]
+  const lead = newest ? `${done.length} shipped, the newest: ${newest.title}` : 'Nothing shipped in 7 days'
+  const rest = open.length > 0 ? `; ${open.length} open` : ''
   return {
-    project: input.project,
-    window: { from: from.toISOString(), to: now.toISOString() },
-    done,
-    working,
-    queued,
-    waiting,
-    ...(input.previous
-      ? { previous: { headline: oneLine(input.previous.headline, 500), at: input.previous.at.toISOString() } }
-      : {}),
+    headline: oneLine(`${lead}${rest}`, MAX_HEADLINE),
+    shipped: done.slice(0, MAX_SHIPPED).map((issue) => bullet(issue.title, issue)),
+    next: [...running, ...ready].slice(0, MAX_NEXT).map((issue) => bullet(issue.title, issue)),
+    risks: [
+      ...paused.map((issue) => bullet(`${issue.title}: ${issue.waitReason ?? 'paused'}`, issue)),
+      ...ended.map((issue) => bullet(`${issue.title}: ${issue.outcome ?? 'closed'}`, issue)),
+    ].slice(0, MAX_RISKS),
+    themes: [...new Set(done.map((issue) => oneLine(issue.kind, 30)))].slice(0, MAX_THEMES),
   }
 }
 
-/** What the Issues say, without the window or the previous headline: equal hashes are an unchanged project. */
-export function inputHash(request: DigestRequest): string {
-  const { done, working, queued, waiting, project } = request
-  return new Bun.CryptoHasher('sha256')
-    .update(JSON.stringify({ project, done, working, queued, waiting }))
-    .digest('hex')
+/** What the digest says: equal hashes are an unchanged project. */
+export function digestHash(digest: DigestAnswer): string {
+  return new Bun.CryptoHasher('sha256').update(JSON.stringify(digest)).digest('hex')
 }
 
-export interface DigestCall {
+export interface DigestStore {
   project: string
-  request: DigestRequest
+  digest: DigestAnswer
   hash: string
 }
 
 export interface DigestPlan {
-  /** one call each: a project whose Issues changed since its newest digest */
-  calls: DigestCall[]
-  /** projects whose Issues are what the newest digest was made from */
+  /** a project whose digest differs from its newest stored one, or has none */
+  stores: DigestStore[]
+  /** projects whose digest is the newest stored one */
   unchanged: string[]
-  /** projects with no Issue open or closed in the window: no call */
+  /** projects with no Issue open or closed in the window: no digest */
   idle: number
 }
 
-/** Which projects need a digest now. A project with nothing open and nothing closed in the window gets no call. */
+/** Which projects get a new digest row now. A project with nothing open and nothing closed in the window gets none. */
 export function planDigests(input: {
   projects: readonly DigestProject[]
   issues: readonly DigestIssue[]
@@ -138,9 +117,9 @@ export function planDigests(input: {
   now: Date
 }): DigestPlan {
   const groups = groupByProject(input.projects, input.issues)
-  const plan: DigestPlan = { calls: [], unchanged: [], idle: 0 }
+  const plan: DigestPlan = { stores: [], unchanged: [], idle: 0 }
+  const since = input.now.getTime() - DIGEST_WINDOW_MS
   for (const project of input.projects) {
-    const since = input.now.getTime() - DIGEST_WINDOW_MS
     const issues = (groups.get(project.name) ?? []).filter(
       (issue) => issue.state !== 'closed' || issue.at.getTime() >= since,
     )
@@ -148,36 +127,14 @@ export function planDigests(input: {
       plan.idle++
       continue
     }
-    const previous = input.latest.get(project.name) ?? null
-    const request = requestOf({ project: project.name, issues, now: input.now, previous })
-    const hash = inputHash(request)
-    if (previous?.hash === hash) plan.unchanged.push(project.name)
-    else plan.calls.push({ project: project.name, request, hash })
+    const digest = digestOf(issues, input.now)
+    const hash = digestHash(digest)
+    if (input.latest.get(project.name)?.hash === hash) plan.unchanged.push(project.name)
+    else plan.stores.push({ project: project.name, digest, hash })
   }
   return plan
 }
 
-/** The ids of every Issue the request names. */
-const idsOf = (request: DigestRequest): Set<string> =>
-  new Set([...request.done, ...request.working, ...request.queued, ...request.waiting].map((issue) => issue.id))
-
-/** The answer without a bullet that cites an Issue the request did not name (the workflow drops them too; checked again here). */
-export function checkDigest(answer: DigestAnswer, request: DigestRequest): DigestAnswer {
-  const known = idsOf(request)
-  const keep = (bullets: DigestAnswer['shipped']): DigestAnswer['shipped'] =>
-    bullets.filter((bullet) => bullet.ids.length > 0 && bullet.ids.every((id) => known.has(id)))
-  return { ...answer, shipped: keep(answer.shipped), next: keep(answer.next), risks: keep(answer.risks) }
-}
-
-export function digestSummary(done: {
-  called: number
-  stored: number
-  failed: number
-  unchanged: number
-  idle: number
-}): string {
-  if (done.called === 0) {
-    return `no call: ${done.unchanged} project(s) unchanged, ${done.idle} idle`
-  }
-  return `${done.stored} digest(s) stored of ${done.called} call(s)${done.failed ? `, ${done.failed} failed` : ''}; ${done.unchanged} unchanged, ${done.idle} idle`
+export function digestSummary(done: { stored: number; unchanged: number; idle: number }): string {
+  return `${done.stored} digest(s) stored; ${done.unchanged} unchanged, ${done.idle} idle`
 }

@@ -2603,7 +2603,7 @@ export const OPERATIONS: readonly Operation[] = [
     method: 'GET',
     path: '/v1/projects/digests',
     summary:
-      "each project's newest digest (headline, shipped, next and risks bullets citing Issues, themes) made every few hours by agw's factory digest, for projects with an Issue open or closed in the last 7 days, with counts (done in 7 days and the five words running, paused, ready, held, checking) read from the Issues now; the read token gets the counts of a work project and no words",
+      "each project's newest digest (headline, shipped, next and risks bullets citing Issues, themes) built in code every few hours from the Issues' titles, states and outcomes, for projects with an Issue open or closed in the last 7 days, with counts (done in 7 days and the five words running, paused, ready, held, checking) read from the Issues now; the read token gets the counts of a work project and no words",
     pathParams: [],
     queryParams: [],
     body: false,

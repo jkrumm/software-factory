@@ -1,4 +1,4 @@
-import { type FixCommit, BODY_CHARS, FILES_MAX, parseFixSubject } from '../../domains/loops/fix-classes.ts'
+import { type FixCommit, parseFixSubject } from '../../domains/loops/fix-classes.ts'
 import type { FixCommitReader } from '../../domains/loops/ports.ts'
 import { err, ok, portError } from '../../kernel/result.ts'
 import { CannotExecute } from '../process.ts'
@@ -8,25 +8,13 @@ import { defaultTools, gitOut, ProcessFailed, type Tools } from './git.ts'
 const FETCH_TIMEOUT_MS = 90_000
 const FIELD = '\u001f'
 
-/** One block of `git log --format=%x00%H<US>%cI<US>%s<US>%b<US> --name-only`: the commit if its subject is a conventional fix. */
+/** One block of `git log --format=%x00%H<US>%cI<US>%s<US>`: the commit if its subject is a conventional fix. */
 function commitOf(block: string): FixCommit | null {
-  const [sha = '', iso = '', subject = '', body = '', ...rest] = block.split(FIELD)
+  const [sha = '', iso = '', subject = ''] = block.split(FIELD)
   const committedAt = new Date(iso)
-  if (!sha || Number.isNaN(committedAt.getTime()) || !parseFixSubject(subject)) return null
-  const files = rest
-    .join(FIELD)
-    .split('\n')
-    .map((line) => line.trim())
-    .filter(Boolean)
-    .slice(0, FILES_MAX)
-  return {
-    sha,
-    committedAt,
-    subject: subject.trim(),
-    scope: parseFixSubject(subject)?.scope ?? null,
-    body: body.trim().slice(0, BODY_CHARS),
-    files,
-  }
+  const parsed = parseFixSubject(subject)
+  if (!sha || Number.isNaN(committedAt.getTime()) || !parsed) return null
+  return { sha, committedAt, subject: subject.trim(), scope: parsed.scope }
 }
 
 /**
@@ -47,16 +35,7 @@ export function createFixCommitReader(options: { repos: RepoLocator; git?: strin
         const out = await gitOut(
           tools,
           dir,
-          [
-            'log',
-            '--no-merges',
-            '--no-renames',
-            `--since=${since.toISOString()}`,
-            `--format=%x00%H%x1f%cI%x1f%s%x1f%b%x1f`,
-            '--name-only',
-            branch,
-            '--',
-          ],
+          ['log', '--no-merges', `--since=${since.toISOString()}`, `--format=%x00%H%x1f%cI%x1f%s%x1f`, branch, '--'],
           FETCH_TIMEOUT_MS,
         )
         const commits: FixCommit[] = []

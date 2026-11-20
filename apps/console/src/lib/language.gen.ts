@@ -71,7 +71,7 @@ export const LANGUAGE = {
   'first verification pass':
     "A first watch (the window after an Issue's first ship) that ended passed, not regressed. The share of those is a KPI",
   'fix commit':
-    'A commit that fixes something that went wrong, sorted by class by the fix-classes loop and counted per week',
+    'A commit that fixes something that went wrong, classed by rule by the fix-classes loop and counted per week',
   flow: 'The read model of Issues by state over time (GET /v1/flow), shown on the Overview; Chain is its graph',
   friction: 'Any counted waste: an avoidable touch, a refusal, an undelivered note',
   gate: 'A machine check a lead cannot talk past. Evidence is what a gate reads',

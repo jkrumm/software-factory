@@ -1,8 +1,4 @@
 import type {
-  DigestAnswer,
-  DigestRequest,
-  FixClassesAnswer,
-  FixClassesRequest,
   HygieneAnswer,
   HygieneFinding,
   HygieneRequest,
@@ -449,16 +445,6 @@ export interface QueueWorkflow {
 /** `factory-hygiene`: the documents a sweep picked, read against the code they describe in a checkout. */
 export interface HygieneWorkflow {
   ask(request: HygieneRequest, key: Key): Promise<Result<HygieneAnswer, PortError>>
-}
-
-/** `factory digest`: one project's recent, running and queued Issues summarised. */
-export interface DigestWorkflow {
-  digest(request: DigestRequest, key: Key): Promise<Result<DigestAnswer, PortError>>
-}
-
-/** `factory-fix-classes`: the class of each fix commit the rules did not settle. */
-export interface FixClassesWorkflow {
-  ask(request: FixClassesRequest, key: Key): Promise<Result<FixClassesAnswer, PortError>>
 }
 
 /** The fix commits of one project's default branch, read from git (called outside any transaction). */
