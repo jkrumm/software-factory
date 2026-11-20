@@ -1,5 +1,6 @@
 import { join } from 'node:path'
 import * as z from 'zod'
+import { parseEnv, type Environment } from '../../kernel/env.ts'
 import { GITHUB_API } from '../github/reader.ts'
 
 /** `30s`, `5m`, `2h`, `off`: how often a poller or the settle pass runs; null is off. */
@@ -28,7 +29,6 @@ const Env = z.object({
   FACTORY_INFRA_FILE: z.string().min(1).optional(),
   FACTORY_HOME_REPO: z.string().min(1).optional(),
   FACTORY_INCIDENT_WINDOW_MIN: z.coerce.number().int().min(1).default(30),
-  FACTORY_FINGERPRINT_WINDOW_MIN: z.coerce.number().int().min(1).default(1440),
   FACTORY_GITHUB_TOKEN: z.string().min(1).optional(),
   FACTORY_GITHUB_API_URL: z.string().min(1).default(GITHUB_API),
   FACTORY_GITHUB_POLL: Every('5m'),
@@ -52,22 +52,21 @@ export interface IntakeEnv {
   settleEveryMs: number | null
 }
 
+/** A signal that repeats within this long is one finding. */
+const FINGERPRINT_WINDOW_MS = 24 * 3_600_000
+
 const SHIPPED_INFRA = join(import.meta.dir, '..', '..', '..', '..', '..', 'config', 'infra.json')
 
 /** The intake's settings from the environment; throws one message naming every bad key. */
-export function loadIntakeEnv(env: Record<string, string | undefined>): IntakeEnv {
-  const parsed = Env.safeParse(env)
-  if (!parsed.success) {
-    throw new Error(parsed.error.issues.map((issue) => `${issue.path.join('.')}: ${issue.message}`).join('; '))
-  }
-  const e = parsed.data
+export function loadIntakeEnv(env: Environment): IntakeEnv {
+  const e = parseEnv(Env, env)
   return {
     sourceRoot: e.FACTORY_SOURCE_ROOT ?? join(env.HOME ?? '/', 'SourceRoot'),
     projectsFile: e.FACTORY_INTAKE_PROJECTS_FILE ?? null,
     infraFile: e.FACTORY_INFRA_FILE ?? SHIPPED_INFRA,
     homeRepo: e.FACTORY_HOME_REPO ?? null,
     incidentWindowMs: e.FACTORY_INCIDENT_WINDOW_MIN * 60_000,
-    fingerprintWindowMs: e.FACTORY_FINGERPRINT_WINDOW_MIN * 60_000,
+    fingerprintWindowMs: FINGERPRINT_WINDOW_MS,
     github: {
       token: e.FACTORY_GITHUB_TOKEN ?? null,
       apiUrl: e.FACTORY_GITHUB_API_URL,

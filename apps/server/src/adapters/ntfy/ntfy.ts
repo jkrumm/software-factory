@@ -1,5 +1,6 @@
 import * as z from 'zod'
 import type { Notifier } from '../../domains/checkpoints/ports.ts'
+import { parseEnv } from '../../kernel/env.ts'
 import { err, ok, portError } from '../../kernel/result.ts'
 
 /** Longest one publish may take before it is abandoned: a plain HTTP request, not an agent run. */
@@ -26,14 +27,13 @@ export interface OwnersLine {
 
 /** The owner's line from the environment; throws one message when a setting is malformed. */
 export function loadOwnersLine(env: Record<string, string | undefined>): OwnersLine {
-  const parsed = Env.safeParse(env)
-  if (!parsed.success) throw new Error(parsed.error.issues.map((i) => `${i.path.join('.')}: ${i.message}`).join('; '))
-  const url = parsed.data.FACTORY_NTFY_URL?.trim().replace(/\/+$/, '') || null
+  const e = parseEnv(Env, env)
+  const url = e.FACTORY_NTFY_URL?.trim().replace(/\/+$/, '') || null
   return {
     url,
-    topic: parsed.data.FACTORY_NTFY_TOPIC,
-    token: parsed.data.NTFY_TOKEN?.trim() || null,
-    consoleUrl: parsed.data.FACTORY_CONSOLE_URL,
+    topic: e.FACTORY_NTFY_TOPIC,
+    token: e.NTFY_TOKEN?.trim() || null,
+    consoleUrl: e.FACTORY_CONSOLE_URL,
   }
 }
 

@@ -1,7 +1,9 @@
+import { homedir } from 'node:os'
+import { join } from 'node:path'
 import * as z from 'zod'
 import { PROCESS_LOCK_WAIT_MS } from './adapters/postgres/process-lock.ts'
 import { DEFAULT_RECHECK_MS, DEFAULT_RETRY_MS } from './domains/quality/watch.ts'
-import { SHUTDOWN_DEADLINE_MS } from './shutdown.ts'
+import { parseEnv, type Environment } from './kernel/env.ts'
 
 const DEFAULT_SETTLE_MS = 2 * 60_000
 
@@ -21,7 +23,10 @@ const Env = z.object({
   FACTORY_LOCK_WAIT_MS: z.coerce.number().int().min(0).optional(),
   /** how long after a read of the database facts `/health` serves from, the next starts; for the scenarios */
   FACTORY_HEALTH_PROBE_MS: z.coerce.number().int().min(50).optional(),
-  FACTORY_SHUTDOWN_DEADLINE_MS: z.coerce.number().int().min(1).optional(),
+  /** the file the counting epoch is read from; unset, `config/throughput.json` */
+  FACTORY_THROUGHPUT_FILE: z.string().optional(),
+  /** the owner's Herdr groups file; unset, the one the Herdr app reads */
+  FACTORY_PROJECT_GROUPS_FILE: z.string().optional(),
   FACTORY_TEST_MODE: z.enum(['0', '1']).optional(),
   FACTORY_AGW_BIN: z.string().min(1).optional(),
   FACTORY_TEST_CLOCK_OFFSET_MS: z.coerce.number().int().optional(),
@@ -51,8 +56,10 @@ export interface Settings {
   /** how long a second copy waits for the process lock before it exits 1; the scenarios shorten it */
   lockWaitMs: number
   healthProbeMs: number
-  /** how long a stop on SIGTERM may take before the process exits 1 anyway */
-  shutdownDeadlineMs: number
+  /** the counting epoch's file; undefined is the tracked one */
+  throughputFile: string | undefined
+  /** the file the Herdr app's project groups are read from */
+  projectGroupsFile: string
   /** the agw binary the review reads go through */
   agwBin: string
   /** moves the server's clock; only ever non-zero in a test (`FACTORY_TEST_MODE=1`), to reach a date a real clock would take 30 days to */
@@ -71,12 +78,8 @@ export interface Settings {
 }
 
 /** The server's settings from its environment; throws one message naming every bad key. */
-export function loadSettings(env: Record<string, string | undefined>): Settings {
-  const parsed = Env.safeParse(env)
-  if (!parsed.success) {
-    throw new Error(parsed.error.issues.map((issue) => `${issue.path.join('.')}: ${issue.message}`).join('; '))
-  }
-  const data = parsed.data
+export function loadSettings(env: Environment): Settings {
+  const data = parseEnv(Env, env)
   if (data.FACTORY_TEST_CLOCK_OFFSET_MS !== undefined && data.FACTORY_TEST_MODE !== '1') {
     throw new Error('FACTORY_TEST_CLOCK_OFFSET_MS is honored only together with FACTORY_TEST_MODE=1: refusing to start')
   }
@@ -105,19 +108,20 @@ export function loadSettings(env: Record<string, string | undefined>): Settings 
       ...(data.FACTORY_ORCHESTRATOR_TOKEN ? { orchestrator: data.FACTORY_ORCHESTRATOR_TOKEN } : {}),
       ...(data.FACTORY_READ_TOKEN ? { read: data.FACTORY_READ_TOKEN } : {}),
     },
-    databaseUrl: parsed.data.DATABASE_URL,
-    port: parsed.data.PORT,
-    version: parsed.data.FACTORY_VERSION ?? 'dev',
-    lockWaitMs: parsed.data.FACTORY_LOCK_WAIT_MS ?? PROCESS_LOCK_WAIT_MS,
-    healthProbeMs: parsed.data.FACTORY_HEALTH_PROBE_MS ?? 10_000,
-    shutdownDeadlineMs: parsed.data.FACTORY_SHUTDOWN_DEADLINE_MS ?? SHUTDOWN_DEADLINE_MS,
-    agwBin: parsed.data.FACTORY_AGW_BIN ?? 'agw',
-    clockOffsetMs: parsed.data.FACTORY_TEST_CLOCK_OFFSET_MS ?? 0,
+    databaseUrl: data.DATABASE_URL,
+    port: data.PORT,
+    version: data.FACTORY_VERSION ?? 'dev',
+    lockWaitMs: data.FACTORY_LOCK_WAIT_MS ?? PROCESS_LOCK_WAIT_MS,
+    healthProbeMs: data.FACTORY_HEALTH_PROBE_MS ?? 10_000,
+    agwBin: data.FACTORY_AGW_BIN ?? 'agw',
+    clockOffsetMs: data.FACTORY_TEST_CLOCK_OFFSET_MS ?? 0,
+    throughputFile: data.FACTORY_THROUGHPUT_FILE || undefined,
+    projectGroupsFile: data.FACTORY_PROJECT_GROUPS_FILE || join(homedir(), '.config', 'herdr-app', 'groups.json'),
     quality: {
-      windowMs: parsed.data.FACTORY_WATCH_WINDOW_MS ?? 0,
-      retryMs: parsed.data.FACTORY_VERIFY_RETRY_MS ?? DEFAULT_RETRY_MS,
-      recheckMs: parsed.data.FACTORY_VERIFY_RECHECK_MS ?? DEFAULT_RECHECK_MS,
-      settleMs: parsed.data.FACTORY_VERIFY_SETTLE_MS ?? DEFAULT_SETTLE_MS,
+      windowMs: data.FACTORY_WATCH_WINDOW_MS ?? 0,
+      retryMs: data.FACTORY_VERIFY_RETRY_MS ?? DEFAULT_RETRY_MS,
+      recheckMs: data.FACTORY_VERIFY_RECHECK_MS ?? DEFAULT_RECHECK_MS,
+      settleMs: data.FACTORY_VERIFY_SETTLE_MS ?? DEFAULT_SETTLE_MS,
     },
   }
 }

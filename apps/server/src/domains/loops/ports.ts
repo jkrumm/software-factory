@@ -189,7 +189,7 @@ export interface HostSampler {
   sample(): Promise<HostReading>
 }
 
-/** A signal the reaper sent (or, `dry`, would have sent) to a process of a closed attempt. */
+/** A signal the reaper sent to a process of a closed attempt (`dry`: the rows of the retired dry-run mode, kept until they age out). */
 export interface ReapedRow {
   at: Date
   pid: number

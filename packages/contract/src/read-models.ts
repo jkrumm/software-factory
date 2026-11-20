@@ -1554,7 +1554,7 @@ export const ThroughputModel = z
         }),
       ),
       /**
-       * the tenant class (launchd jobs and VMs) against its budget (`FACTORY_TENANT_BUDGET_MIB`): the class's `footprintMib` over
+       * the tenant class (launchd jobs and VMs) against its budget (`DEFAULT_TENANT_BUDGET_MIB`): the class's `footprintMib` over
        * the window, whether it is over the budget, and the repo the daily ranking files a finding on when the 7 days are over it
        */
       tenantBudget: z.strictObject({

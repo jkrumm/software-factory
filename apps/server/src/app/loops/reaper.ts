@@ -11,8 +11,6 @@ export interface ReaperPassDeps {
   processes: ReaperProcesses
   killer: ProcessKiller
   graceMs: number
-  /** decide and record with signal `dry`, send nothing */
-  dry: boolean
   /** pids never touched, with their ancestors: pid 1 and this server */
   protect: readonly number[]
 }
@@ -24,13 +22,12 @@ const REAPED_KEEP_MS = 30 * 86_400_000
 const ESCALATE_WITHIN_MS = 6 * 3_600_000
 
 export interface ReaperPass {
-  /** processes signalled (or, dry, decided on) */
+  /** processes signalled */
   reaped: number
   /** the closed attempts they belonged to */
   attempts: number
   /** of those, the ones SIGKILLed after an earlier SIGTERM */
   escalated: number
-  dry: boolean
 }
 
 /**
@@ -64,14 +61,14 @@ export async function reaperPass(deps: ReaperPassDeps): Promise<Result<ReaperPas
   const rows: ReapedRow[] = []
   const send = async (leaks: readonly Leak[], signal: 'SIGTERM' | 'SIGKILL') => {
     for (const leak of leaks) {
-      if (!deps.dry && !(await deps.killer.signal({ pid: leak.pid, ageS: leak.ageS }, signal))) continue
+      if (!(await deps.killer.signal({ pid: leak.pid, ageS: leak.ageS }, signal))) continue
       rows.push({
         at: now,
         pid: leak.pid,
         session: leak.session,
         worktree: leak.worktree,
         comm: leak.comm,
-        signal: deps.dry ? 'dry' : signal,
+        signal,
         reason: leak.reason,
         ageS: leak.ageS,
       })
@@ -91,11 +88,10 @@ export async function reaperPass(deps: ReaperPassDeps): Promise<Result<ReaperPas
     reaped: rows.length,
     attempts: new Set(rows.map((row) => row.session)).size,
     escalated: rows.filter((row) => killed.has(row.pid)).length,
-    dry: deps.dry,
   })
 }
 
 export const reaperSummary = (pass: ReaperPass): string =>
   pass.reaped === 0
     ? 'nothing to reap'
-    : `${pass.dry ? 'would reap' : 'reaped'} ${pass.reaped} process(es) of ${pass.attempts} closed attempt(s), ${pass.escalated} escalated`
+    : `reaped ${pass.reaped} process(es) of ${pass.attempts} closed attempt(s), ${pass.escalated} escalated`

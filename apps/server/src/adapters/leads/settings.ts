@@ -2,13 +2,13 @@ import { existsSync } from 'node:fs'
 import { fileURLToPath } from 'node:url'
 import { registryPath } from '@software-factory/accounts'
 import * as z from 'zod'
+import { parseEnv } from '../../kernel/env.ts'
 import { RESUME_DELAYS_MS, STAGGER_MS } from '../../domains/leads/apierror.ts'
 import { MAX_REVIVE_TRIES, QUIESCE_AFTER_MS } from '../../domains/leads/quiesce.ts'
 import { TYPE_GAP_MS } from '../../domains/leads/type-gap.ts'
 
 const Env = z.object({
   HOME: z.string().min(1),
-  FACTORY_TICK_MS: z.coerce.number().int().min(0).optional(),
   HC_BIN: z.string().min(1).optional(),
   HC_SESSION: z.string().min(1).optional(),
   FACTORY_CLAUDE_BIN: z.string().min(1).optional(),
@@ -19,7 +19,6 @@ const Env = z.object({
   FACTORY_SPOOL_DIR: z.string().min(1).optional(),
   FACTORY_SOCKET: z.string().min(1).optional(),
   FACTORY_ARCHIVE_DIR: z.string().min(1).optional(),
-  FACTORY_START_BUDGET_MS: z.coerce.number().int().min(0).optional(),
   FACTORY_GRACE_MS: z.coerce.number().int().min(0).optional(),
   FACTORY_FORCE_NOTE_MS: z.coerce.number().int().min(0).optional(),
   /** the waits before each `continue` after an API error, comma-separated ms (the length is the number of resumes) */
@@ -27,25 +26,24 @@ const Env = z.object({
     .string()
     .regex(/^\d+(,\d+){0,9}$/)
     .optional(),
-  FACTORY_API_STAGGER_MS: z.coerce.number().int().min(0).optional(),
   /** the gap between two notes or nudges typed into leads in the first minutes after a server start; 0 is off */
   FACTORY_TYPE_GAP_MS: z.coerce.number().int().min(0).optional(),
   FACTORY_API_DETECT_MS: z.coerce.number().int().min(0).optional(),
   FACTORY_API_PROBE_MS: z.coerce.number().int().min(0).optional(),
-  /** a waiting lead is dormant (its `claude` ended) after this long; `FACTORY_QUIESCE=off` never quiesces */
+  /** a waiting lead is dormant (its `claude` ended) after this long */
   FACTORY_QUIESCE_AFTER_MS: z.coerce.number().int().min(0).optional(),
-  FACTORY_QUIESCE: z.enum(['on', 'off']).optional(),
   /** the agent token (`settings.ts`) and the API port: what a lead's `factory` calls the API with */
   FACTORY_AGENT_TOKEN: z.string().min(1).optional(),
   PORT: z.coerce.number().int().min(1).max(65_535).optional(),
 })
 
+/** A lead's start is given up on after this long. */
+const START_BUDGET_MS = 30 * 60_000
+
 /** The tracked table of this checkout or release: `config/roles.json`. */
 const DEFAULT_ROLES_FILE = fileURLToPath(new URL('../../../../../config/roles.json', import.meta.url))
 
 export interface LeadSettings {
-  /** the lead tick's interval; 0 turns the tick off (the scenarios drive it) */
-  tickMs: number
   hcBin: string
   hcSession: string | undefined
   claudeBin: string | undefined
@@ -75,8 +73,8 @@ export interface LeadSettings {
   apiErrorDetectMs: number
   /** a session's transcript is read at most this often */
   apiErrorProbeMs: number
-  /** how long a lead's Issue waits, quiet, before its `claude` is ended; null: leads are never dormant */
-  quiesceAfterMs: number | null
+  /** how long a lead's Issue waits, quiet, before its `claude` is ended */
+  quiesceAfterMs: number
   /** failed resumes of a dormant session after which its lead is called gone */
   maxReviveTries: number
   /** `FACTORY_TOKEN` of a lead's terminal: the agent token, never the owner's; unset, the lead's CLI will answer 401 */
@@ -87,11 +85,7 @@ export interface LeadSettings {
 
 /** The leads' settings from the environment; throws one message naming every bad key. */
 export function loadLeadSettings(env: Record<string, string | undefined>): LeadSettings {
-  const parsed = Env.safeParse(env)
-  if (!parsed.success) {
-    throw new Error(parsed.error.issues.map((issue) => `${issue.path.join('.')}: ${issue.message}`).join('; '))
-  }
-  const e = parsed.data
+  const e = parseEnv(Env, env)
   const roots = (e.FACTORY_REPO_ROOTS ?? `${e.HOME}/SourceRoot`).split(':')
   if (roots.some((root) => !root.startsWith('/'))) {
     throw new Error(`FACTORY_REPO_ROOTS must be colon-separated absolute paths, got: ${e.FACTORY_REPO_ROOTS}`)
@@ -102,7 +96,6 @@ export function loadLeadSettings(env: Record<string, string | undefined>): LeadS
   }
   const pretrust = e.FACTORY_PRETRUST_BIN ?? `${e.HOME}/SourceRoot/dotfiles/scripts/claude-pretrust.sh`
   return {
-    tickMs: e.FACTORY_TICK_MS ?? 10_000,
     hcBin: e.HC_BIN ?? 'hc',
     hcSession: e.HC_SESSION,
     claudeBin: e.FACTORY_CLAUDE_BIN,
@@ -115,15 +108,15 @@ export function loadLeadSettings(env: Record<string, string | undefined>): LeadS
     socket: e.FACTORY_SOCKET ?? `${e.HOME}/.local/share/factory/hook.sock`,
     archiveDir: e.FACTORY_ARCHIVE_DIR ?? `${e.HOME}/.local/share/factory/archive`,
     home: e.HOME,
-    startBudgetMs: e.FACTORY_START_BUDGET_MS ?? 30 * 60_000,
+    startBudgetMs: START_BUDGET_MS,
     graceMs: e.FACTORY_GRACE_MS ?? 120_000,
     forceNoteAfterMs: e.FACTORY_FORCE_NOTE_MS ?? 5 * 60_000,
     resumeDelaysMs: e.FACTORY_API_RESUME_MS ? e.FACTORY_API_RESUME_MS.split(',').map(Number) : [...RESUME_DELAYS_MS],
-    resumeStaggerMs: e.FACTORY_API_STAGGER_MS ?? STAGGER_MS,
+    resumeStaggerMs: STAGGER_MS,
     typeGapMs: e.FACTORY_TYPE_GAP_MS ?? TYPE_GAP_MS,
     apiErrorDetectMs: e.FACTORY_API_DETECT_MS ?? 45_000,
     apiErrorProbeMs: e.FACTORY_API_PROBE_MS ?? 20_000,
-    quiesceAfterMs: e.FACTORY_QUIESCE === 'off' ? null : (e.FACTORY_QUIESCE_AFTER_MS ?? QUIESCE_AFTER_MS),
+    quiesceAfterMs: e.FACTORY_QUIESCE_AFTER_MS ?? QUIESCE_AFTER_MS,
     maxReviveTries: MAX_REVIVE_TRIES,
     agentToken: e.FACTORY_AGENT_TOKEN,
     apiUrl: e.PORT ? `http://127.0.0.1:${e.PORT}` : undefined,

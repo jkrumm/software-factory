@@ -48,7 +48,7 @@ import { createApp } from './api/app.ts'
 import { apiForward, consoleHandler } from './api/console.ts'
 import { loadConsoleSettings } from './console-settings.ts'
 import { loadNeedsSettings } from './read/needs-settings.ts'
-import { availableParallelism, homedir, loadavg } from 'node:os'
+import { availableParallelism, loadavg } from 'node:os'
 import { join } from 'node:path'
 import { APPROVED_RUN_HANG_GUARD_MS } from './app/checkpoints-approve.ts'
 import { endRequest, MAX_RUN_TRIES, tellCheckBroken } from './app/checkpoints-errands.ts'
@@ -114,6 +114,7 @@ import { composeLeads } from './compose-leads.ts'
 import { loginErrands } from './app/login-errands.ts'
 import { resumeRulesOf } from './app/leads-api-errors.ts'
 import { type Clock, systemClock } from './kernel/clock.ts'
+import type { Environment } from './kernel/env.ts'
 import { freshFor } from './kernel/fresh-for.ts'
 import { err, ok, portError } from './kernel/result.ts'
 import { type IssueId, systemIds } from './kernel/ids.ts'
@@ -133,7 +134,7 @@ import { readClosedSince, readRetroOutcomes } from './read/retro-outcomes.ts'
 import { loopReads } from './read/loops.ts'
 import { readIssues } from './read/planning.ts'
 import { loadSettings } from './settings.ts'
-import { createShutdown } from './shutdown.ts'
+import { createShutdown, SHUTDOWN_DEADLINE_MS } from './shutdown.ts'
 
 /** The API and the Console's listener both bind loopback only; dotfiles-private's serve row publishes the Console's. */
 const HOSTNAME = '127.0.0.1'
@@ -155,8 +156,8 @@ const fail = (message: string): never => {
   process.exit(1)
 }
 
-async function main(): Promise<void> {
-  const settings = loadSettings(process.env)
+async function main(env: Environment): Promise<void> {
+  const settings = loadSettings(env)
   const sql = connect(settings.databaseUrl)
 
   // The process lock comes first: nothing, not even a migration, runs beside another server on this database.
@@ -206,26 +207,27 @@ async function main(): Promise<void> {
   const SELFWATCH_REPO = 'software-factory'
   /** Times the server's own routes: the self-watch's `routes_slow` and the heartbeat's `routeP95Ms` read the same figure. */
   const routes = routeTimer()
-  const leadSettings = loadLeadSettings(process.env)
-  const loopSettings = loadLoopSettings(process.env)
+  const leadSettings = loadLeadSettings(env)
+  const loopSettings = loadLoopSettings(env)
   // The one way to ask agw for a judgment: the Judge, the steward and triage all go through it.
   const agw = agwPort({ bin: settings.agwBin })
   // The counting epoch: a missing or bad `config/throughput.json` stops the start, so no read quietly counts everything.
-  const epoch = loadEpoch(process.env.FACTORY_THROUGHPUT_FILE || undefined)
-  const planningEnv = planningSettings(process.env, {
+  const epoch = loadEpoch(settings.throughputFile)
+  const needsSettings = loadNeedsSettings(env)
+  const planningEnv = planningSettings(env, {
     repoRoots: leadSettings.repoRoots,
     repoAllow: leadSettings.repoAllow,
   })
   // Its own reader: the swapout rate of a minute sample counts from the last sample, not from an admission's reading.
   // One metered runner for every helper of the host loop: the CPU they take is the collector's cost, stored each minute.
   const hostRunner = textRunner(5_000)
-  const lsofBin = process.env.FACTORY_LSOF_BIN ?? '/usr/sbin/lsof'
+  const { lsofBin, psBin } = planningEnv
   const hostSamples = hostWatch({
     host: hostReader({ sysctlBin: planningEnv.sysctlBin, minSampleMs: 0 }),
     sysctlBin: planningEnv.sysctlBin,
-    psBin: process.env.FACTORY_PS_BIN ?? '/bin/ps',
-    topBin: process.env.FACTORY_TOP_BIN ?? '/usr/bin/top',
-    vmStatBin: process.env.FACTORY_VM_STAT_BIN,
+    psBin,
+    topBin: planningEnv.topBin,
+    vmStatBin: planningEnv.vmStatBin,
     runner: hostRunner,
   })
   const hostCwds = sharedCwds({ runner: hostRunner, lsofBin })
@@ -239,21 +241,18 @@ async function main(): Promise<void> {
     top: () => hostSamples.topSnapshot(),
     cwds: hostCwds,
     runner: hostRunner,
-    psBin: process.env.FACTORY_PS_BIN ?? '/bin/ps',
-    launchctlBin: process.env.FACTORY_LAUNCHCTL_BIN ?? '/bin/launchctl',
+    psBin,
+    launchctlBin: planningEnv.launchctlBin,
     lsofBin,
     sysctlBin: planningEnv.sysctlBin,
-    vmVolume: process.env.FACTORY_VM_VOLUME ?? '/System/Volumes/VM',
+    vmVolume: planningEnv.vmVolume,
   })
   const diskHost = hostReader({ sysctlBin: planningEnv.sysctlBin, minSampleMs: 0 })
   const hostMemory = freshHostMemory()
   // What each attempt's worktree takes on disk, measured by the host loop; the times it was last measured live here between passes.
   const worktreeSizing = { reader: duSizer(), measuredAt: new Map<string, number>() }
-  const reaperProcessTable = reaperProcesses({
-    psBin: process.env.FACTORY_PS_BIN ?? '/bin/ps',
-    lsofBin: process.env.FACTORY_LSOF_BIN ?? '/usr/sbin/lsof',
-  })
-  const reaperKiller = processKiller({ psBin: process.env.FACTORY_PS_BIN ?? '/bin/ps' })
+  const reaperProcessTable = reaperProcesses({ psBin, lsofBin })
+  const reaperKiller = processKiller({ psBin })
   // Planning and capacity own the projects and the claims; the leads, intake and the checkpoints take their ports.
   const roles = fileRoles(leadSettings.rolesFile)
   // The table's lead row: the seat an Issue with no lead yet will start on, for the Console's seat badge.
@@ -273,26 +272,26 @@ async function main(): Promise<void> {
     writes,
     roles,
     settings: planningEnv,
-    longWaitMs: loadNeedsSettings(process.env).longWaitMs,
+    longWaitMs: needsSettings.longWaitMs,
     doctor,
     signals: disagreementSignals,
   })
   const checkout = leadCheckoutOf(uow)
   const repos = rootedRepos(leadSettings.repoRoots, leadSettings.repoAllow)
   const mainCheckoutLines = new MainCheckoutLines()
-  const hygieneChecker = createHygieneChecker({ repos, workDir: factoryDataDir(process.env) })
+  const hygieneChecker = createHygieneChecker({ repos, workDir: factoryDataDir(env) })
   // the checkouts a killed pass left: no pass of this process exists yet, so they go (in the background)
-  void reapHygieneDir(factoryDataDir(process.env))
+  void reapHygieneDir(factoryDataDir(env))
   const projects = projectFileProjects({
     uow,
     fallback: makefileProjects({ windowMs: settings.quality.windowMs }),
   })
-  const intakeEnv = loadIntakeEnv(process.env)
-  const uptimeEnv = loadUptimeEnv(process.env)
+  const intakeEnv = loadIntakeEnv(env)
+  const uptimeEnv = loadUptimeEnv(env)
   const uptime = uptimePoller({ clock, url: uptimeEnv.url, token: uptimeEnv.token })
   // The capacity figures to ClickStack, beside the host and CI series; off without FACTORY_OTEL_ENDPOINT. Its own pass: a push
   // that fails is one log line and touches no loop.
-  const otelEnv = loadOtelEnv(process.env)
+  const otelEnv = loadOtelEnv(env)
   const otel = otelExporter({
     clock,
     endpoint: otelEnv.endpoint,
@@ -311,7 +310,7 @@ async function main(): Promise<void> {
     triage: agwAmend(agw),
   })
   disagreementSignals.file = (body) => intake.api.file(body, 'agent')
-  const checkpointSettings = loadCheckpointSettings(process.env)
+  const checkpointSettings = loadCheckpointSettings(env)
   const checkpointDeps = {
     ...writes,
     blobs: fileBlobStore(checkpointSettings.blobDir),
@@ -319,7 +318,7 @@ async function main(): Promise<void> {
     checks: shellCheckRunner(),
     // an approved Errand's command runs here, on the mini: a hang guard, never a budget (a release takes minutes)
     commands: shellCheckRunner(undefined, APPROVED_RUN_HANG_GUARD_MS),
-    queuedAsks: queuedAsksIn(askQueueDir(process.env)),
+    queuedAsks: queuedAsksIn(askQueueDir(env)),
     notifier: makeNotifier(checkpointSettings.line),
     // The Judge asks `factory-ask` through the agw port.
     judge: agwJudge(agw),
@@ -346,7 +345,7 @@ async function main(): Promise<void> {
     loginErrands: loginErrands(checkpoints),
     host: {
       // One read answers a minute of passes (never longer than the threshold itself): `ps -E` and a host-wide `lsof` are too much for every tick of a lead that stays a candidate.
-      processes: freshFor(Math.min(60_000, leadSettings.quiesceAfterMs ?? 0), readProcesses),
+      processes: freshFor(Math.min(60_000, leadSettings.quiesceAfterMs), readProcesses),
       // A lead held at the wall is looked at as it is now: a tool started a few seconds ago must show, which a minute-old read would hide.
       processTable: readProcesses,
       slotCwds: async () => {
@@ -596,9 +595,9 @@ async function main(): Promise<void> {
           file: (body, finding) => intake.api.file(body, 'agent', finding),
           everyMs: loopSettings.hygieneEveryMs,
           dailyMs: loopSettings.hygieneDailyMs,
-          fixes: loopSettings.hygieneFix,
+          fixes: true,
           retryMs: loopSettings.hygieneRetryMs,
-          repos: loopSettings.hygieneRepos,
+          repos: null,
         })
         if (!pass.ok) return pass
         if (pass.value.due)
@@ -744,7 +743,7 @@ async function main(): Promise<void> {
           uow,
           clock: writes.clock,
           reader: createFixCommitReader({ repos }),
-          repos: loopSettings.hygieneRepos,
+          repos: null,
         })
         if (!pass.ok) return pass
         said('fix-classes', pass.value.problems)
@@ -863,7 +862,7 @@ async function main(): Promise<void> {
           desk: uow,
           push: askHumanPush({
             bin: loopSettings.askHumanBin,
-            home: process.env.HOME ?? '',
+            home: leadSettings.home,
             host: loopSettings.askHumanHost,
           }),
           force,
@@ -887,7 +886,6 @@ async function main(): Promise<void> {
           processes: reaperProcessTable,
           killer: reaperKiller,
           graceMs: loopSettings.reaperGraceMs,
-          dry: loopSettings.reaperDry,
           protect: [1, process.pid],
         })
         if (!pass.ok) return pass
@@ -953,7 +951,7 @@ async function main(): Promise<void> {
       return { queueMovedAt: (await queueMovedAt(sql))?.toISOString() ?? null, doorLines: door }
     },
   })
-  const dataDir = factoryDataDir(process.env)
+  const dataDir = factoryDataDir(env)
   const readHealth = async () => {
     const tickAt = runner.lastOkAt('leads')
     const probed = healthProbe.snapshot()
@@ -1016,7 +1014,7 @@ async function main(): Promise<void> {
     read: composeRead({
       sql,
       clock,
-      env: process.env,
+      env,
       doorLines: () => intake.doorLines(DOOR_LINES_RECENT_MS),
       loops: () => runner.view(),
       blockedStreak: loopSettings.blockedChecks,
@@ -1032,8 +1030,7 @@ async function main(): Promise<void> {
       dataDir,
       epoch,
       // the owner's Herdr groups, the file the Herdr app reads (`make herdr-app-setup` in dotfiles links it here)
-      projectGroupsFile:
-        process.env.FACTORY_PROJECT_GROUPS_FILE || join(homedir(), '.config', 'herdr-app', 'groups.json'),
+      projectGroupsFile: settings.projectGroupsFile,
       tenantBudget: { project: planningEnv.tenantProject, budgetMib: planningEnv.tenantBudgetMib },
       cores: planningEnv.cores,
       queueReasons,
@@ -1063,7 +1060,7 @@ async function main(): Promise<void> {
       },
       visits: uow,
       onReturn: deskOnReturn,
-      longWaitMs: loadNeedsSettings(process.env).longWaitMs,
+      longWaitMs: needsSettings.longWaitMs,
       host: { version: settings.version, startedAt, top: () => hostSamples.top() },
     },
   }).listen({ hostname: HOSTNAME, port: settings.port, idleTimeout: IDLE_TIMEOUT_S })
@@ -1088,7 +1085,7 @@ async function main(): Promise<void> {
   // tailnet ACL, there is no per-request identity. Only reads and the owner's fifteen verbs (eleven answers, pin and unpin, an account's mode set and clear) (`WRITES` in console.ts) pass,
   // and the owner token is held by this closure alone. It starts whenever the Console is built. It binds before
   // the loops start, so a bad port or a taken one refuses the boot before any pass has run.
-  const consoleSettings = loadConsoleSettings(process.env)
+  const consoleSettings = loadConsoleSettings(env)
   const consoleBuilt = await Bun.file(join(consoleSettings.dir, 'index.html')).exists()
   const consoleServer = consoleBuilt
     ? Bun.serve({
@@ -1119,7 +1116,7 @@ async function main(): Promise<void> {
   // waits for it, so the stop would never return and the process would keep the lock. The deadline ends the process
   // whatever step is stuck; the lock is let go before the pool closes, so a copy waiting for it boots as soon as the work is done.
   const stop = createShutdown({
-    deadlineMs: settings.shutdownDeadlineMs,
+    deadlineMs: SHUTDOWN_DEADLINE_MS,
     steps: [
       { name: 'draining', run: async () => draining.abort() },
       { name: 'console.stop', run: async () => void (await consoleServer?.stop(true)) },
@@ -1153,4 +1150,4 @@ async function main(): Promise<void> {
   if (stopRequested !== null) void stop(stopRequested)
 }
 
-main().catch((error: unknown) => fail(error instanceof Error ? error.message : String(error)))
+main(Bun.env).catch((error: unknown) => fail(error instanceof Error ? error.message : String(error)))

@@ -1,5 +1,6 @@
 import { join } from 'node:path'
 import * as z from 'zod'
+import { parseEnv, type Environment } from './kernel/env.ts'
 import { loadOwnersLine, type OwnersLine } from './adapters/ntfy/ntfy.ts'
 
 const Env = z.object({
@@ -14,20 +15,13 @@ export interface CheckpointSettings {
 }
 
 /** The factory's data directory: `FACTORY_DATA_DIR`, else `$HOME/.software-factory/data`. */
-export function factoryDataDir(env: Record<string, string | undefined>): string {
-  const parsed = Env.safeParse(env)
-  if (!parsed.success) {
-    throw new Error(parsed.error.issues.map((issue) => `${issue.path.join('.')}: ${issue.message}`).join('; '))
-  }
-  return parsed.data.FACTORY_DATA_DIR ?? join(parsed.data.HOME ?? '/tmp', '.software-factory', 'data')
+export function factoryDataDir(env: Environment): string {
+  const e = parseEnv(Env, env)
+  return e.FACTORY_DATA_DIR ?? join(e.HOME ?? '/tmp', '.software-factory', 'data')
 }
 
 /** The checkpoints domain's settings from the environment (`FACTORY_NTFY_URL`, `FACTORY_NTFY_TOPIC`, `NTFY_TOKEN`, `FACTORY_CONSOLE_URL` are the owner's line's). */
-export function loadCheckpointSettings(env: Record<string, string | undefined>): CheckpointSettings {
-  const parsed = Env.safeParse(env)
-  if (!parsed.success) {
-    throw new Error(parsed.error.issues.map((issue) => `${issue.path.join('.')}: ${issue.message}`).join('; '))
-  }
+export function loadCheckpointSettings(env: Environment): CheckpointSettings {
   return {
     blobDir: join(factoryDataDir(env), 'blobs'),
     line: loadOwnersLine(env),
