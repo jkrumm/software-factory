@@ -608,7 +608,7 @@ test('a closed KPI finding is judged against the KPI now, and one with no figure
   })
   await frictionPass(w.deps)
   expect(w.verdicts).toEqual([
-    { issue: 'issue_7', verdict: 'moved', measured: 0.05 },
-    { issue: 'issue_8', verdict: 'unmeasured', measured: null },
+    { issue: 'issue_7', key: 'kpi:avoidable_touches', verdict: 'moved', measured: 0.05 },
+    { issue: 'issue_8', key: 'kpi:cycle_p50', verdict: 'unmeasured', measured: null },
   ])
 })
