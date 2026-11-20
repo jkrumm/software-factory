@@ -4,7 +4,8 @@
   "private": true,
   "type": "module",
   "exports": {
-    "./app": "./src/api/app.ts"
+    "./app": "./src/api/app.ts",
+    "./policy": "./src/api/policy.ts"
   },
   "dependencies": {
     "@elysiajs/openapi": "1.4.17",

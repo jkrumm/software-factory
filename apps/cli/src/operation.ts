@@ -60,6 +60,8 @@ export interface Operation {
   bodySchema?: z.ZodType
   /** the contract schema of every answer it declares, by status */
   responses: Readonly<Record<number, z.ZodType>>
+  /** the agent caller (a lead's session) may call it: `apps/server/src/api/policy.ts` has a row that lists `agent`; absent means it may not */
+  agent?: boolean
 }
 
 /** What one command says beyond its generated contract (the table is `OPERATION_EXTENSIONS`). */
@@ -255,9 +257,13 @@ async function request(op: Operation, invocation: Invocation, ioOf: Io) {
   }
   if (op.body && body === undefined) body = {}
   // A lead's follow-up signal says whose it is: the server never amends the filer's own Issue with it.
-  const lead = /^lead-([1-9][0-9]*)-[1-9][0-9]*$/.exec(io.env.FACTORY_SESSION ?? '')
+  const lead = /^lead-([1-9][0-9]*)-([1-9][0-9]*)$/.exec(io.env.FACTORY_SESSION ?? '')
   if (op.operationId === 'signal.file' && lead && isObject(body) && body.filer === undefined) {
     body = { ...body, filer: `issue_${lead[1]}` }
+  }
+  // A lead's attempt is its session's: the name says which, so a lead need not repeat it with --attempt (a flag wins).
+  if (lead && isObject(body) && body.attempt === undefined && op.bodyFields.some((f) => f.name === 'attempt')) {
+    body = { ...body, attempt: Number(lead[2]) }
   }
   // A lead's door route is its own Issue's: the session says which, so a lead need not repeat it with --issue.
   if (

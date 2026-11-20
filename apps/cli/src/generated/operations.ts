@@ -150,6 +150,7 @@ export const OPERATIONS: readonly Operation[] = [
     queryFlags: [],
     bodyFields: [],
     args: [],
+    agent: true,
     responses: { 200: CapacityView, 401: ErrorBody, 403: ErrorBody, 500: ErrorBody, 503: ErrorBody },
   },
   {
@@ -196,6 +197,7 @@ export const OPERATIONS: readonly Operation[] = [
       { name: 'at', flag: 'at', kind: 'string', repeatable: false, required: false, untyped: false },
     ],
     args: [],
+    agent: true,
     bodySchema: RelearnBody,
     responses: {
       200: RelearnView,
@@ -265,6 +267,7 @@ export const OPERATIONS: readonly Operation[] = [
       { name: 'issue', flag: 'issue', kind: 'string', repeatable: false, required: false, untyped: false },
     ],
     args: [],
+    agent: true,
     bodySchema: DoorRouteInput,
     responses: {
       200: DoorRoute,
@@ -293,6 +296,7 @@ export const OPERATIONS: readonly Operation[] = [
       { name: 'issue', flag: 'issue', kind: 'string', repeatable: false, required: false, untyped: false },
     ],
     args: [],
+    agent: true,
     bodySchema: DoorRouteKey,
     responses: {
       200: DoorRoute,
@@ -317,6 +321,7 @@ export const OPERATIONS: readonly Operation[] = [
     queryFlags: [],
     bodyFields: [],
     args: [],
+    agent: true,
     responses: { 200: Health, 500: ErrorBody, 503: Health },
   },
   {
@@ -432,6 +437,7 @@ export const OPERATIONS: readonly Operation[] = [
       { name: 'via', flag: 'via', kind: 'string', repeatable: false, required: false, untyped: false },
     ],
     args: ['text'],
+    agent: true,
     bodySchema: NoteBody,
     responses: {
       200: NoteAnswer,
@@ -485,6 +491,7 @@ export const OPERATIONS: readonly Operation[] = [
     queryFlags: [],
     bodyFields: [],
     args: [],
+    agent: true,
     responses: {
       200: QualityView,
       401: ErrorBody,
@@ -572,6 +579,7 @@ export const OPERATIONS: readonly Operation[] = [
       { name: 'acceptance', flag: 'acceptance', kind: 'string', repeatable: true, required: false, untyped: false },
     ],
     args: [],
+    agent: true,
     bodySchema: ShipBody,
     responses: {
       200: ShipAnswer,
@@ -602,6 +610,7 @@ export const OPERATIONS: readonly Operation[] = [
       { name: 'call', flag: 'call', kind: 'string', repeatable: false, required: false, untyped: false },
     ],
     args: [],
+    agent: true,
     bodySchema: WithdrawBody,
     responses: {
       200: LeadVerbAnswer,
@@ -883,6 +892,7 @@ export const OPERATIONS: readonly Operation[] = [
       { name: 'filer', flag: 'filer', kind: 'string', repeatable: false, required: false, untyped: false },
     ],
     args: [],
+    agent: true,
     bodySchema: SignalRequest,
     responses: {
       200: SignalAck,
@@ -1024,6 +1034,7 @@ export const OPERATIONS: readonly Operation[] = [
     queryFlags: [],
     bodyFields: [],
     args: [],
+    agent: true,
     responses: { 200: AccountsView, 401: ErrorBody, 403: ErrorBody, 500: ErrorBody, 503: ErrorBody },
   },
   {
@@ -1090,6 +1101,7 @@ export const OPERATIONS: readonly Operation[] = [
     queryFlags: [],
     bodyFields: [],
     args: [],
+    agent: true,
     responses: { 200: CollectionList, 401: ErrorBody, 403: ErrorBody, 500: ErrorBody, 503: ErrorBody },
   },
   {
@@ -1111,6 +1123,7 @@ export const OPERATIONS: readonly Operation[] = [
       { name: 'key', flag: 'key', kind: 'string', repeatable: false, required: false, untyped: false },
     ],
     args: [],
+    agent: true,
     bodySchema: NewCollectionBody,
     responses: {
       200: CollectionReply,
@@ -1136,6 +1149,7 @@ export const OPERATIONS: readonly Operation[] = [
     queryFlags: [],
     bodyFields: [],
     args: [],
+    agent: true,
     responses: { 200: CollectionReply, 401: ErrorBody, 403: ErrorBody, 404: ErrorBody, 500: ErrorBody, 503: ErrorBody },
   },
   {
@@ -1155,6 +1169,7 @@ export const OPERATIONS: readonly Operation[] = [
       { name: 'remove', flag: 'remove', kind: 'string', repeatable: true, required: false, untyped: false },
     ],
     args: [],
+    agent: true,
     bodySchema: EditCollectionBody,
     responses: {
       200: CollectionReply,
@@ -1180,6 +1195,7 @@ export const OPERATIONS: readonly Operation[] = [
     queryFlags: [],
     bodyFields: [],
     args: [],
+    agent: true,
     responses: {
       200: CollectionReply,
       401: ErrorBody,
@@ -1202,6 +1218,7 @@ export const OPERATIONS: readonly Operation[] = [
     queryFlags: [],
     bodyFields: [],
     args: [],
+    agent: true,
     responses: {
       200: CollectionReply,
       401: ErrorBody,
@@ -1225,6 +1242,7 @@ export const OPERATIONS: readonly Operation[] = [
     queryFlags: [],
     bodyFields: [],
     args: [],
+    agent: true,
     responses: {
       200: ArtifactList,
       400: ErrorBody,
@@ -1264,6 +1282,7 @@ export const OPERATIONS: readonly Operation[] = [
       { name: 'key', flag: 'key', kind: 'string', repeatable: false, required: false, untyped: false },
     ],
     args: [],
+    agent: true,
     bodySchema: NewArtifactBody,
     responses: {
       200: ArtifactReply,
@@ -1288,6 +1307,7 @@ export const OPERATIONS: readonly Operation[] = [
     queryFlags: [],
     bodyFields: [],
     args: [],
+    agent: true,
     responses: {
       200: ArtifactDetail,
       400: ErrorBody,
@@ -1400,6 +1420,7 @@ export const OPERATIONS: readonly Operation[] = [
       { name: 'note', flag: 'note', kind: 'string', repeatable: false, required: false, untyped: false },
     ],
     args: [],
+    agent: true,
     bodySchema: AnnotationReplyBody,
     responses: {
       200: ArtifactReply,
@@ -1424,6 +1445,7 @@ export const OPERATIONS: readonly Operation[] = [
     queryFlags: [],
     bodyFields: [{ name: 'issue', flag: 'issue', kind: 'string', repeatable: false, required: false, untyped: false }],
     args: [],
+    agent: true,
     bodySchema: LinkArtifactBody,
     responses: {
       200: ArtifactReply,
@@ -1475,6 +1497,7 @@ export const OPERATIONS: readonly Operation[] = [
     queryFlags: [],
     bodyFields: [],
     args: [],
+    agent: true,
     responses: {
       200: ArtifactReply,
       400: ErrorBody,
@@ -1500,6 +1523,7 @@ export const OPERATIONS: readonly Operation[] = [
     queryFlags: [],
     bodyFields: [],
     args: [],
+    agent: true,
     responses: {
       200: ArtifactReply,
       400: ErrorBody,
@@ -1529,6 +1553,7 @@ export const OPERATIONS: readonly Operation[] = [
       { name: 'note', flag: 'note', kind: 'string', repeatable: false, required: false, untyped: false },
     ],
     args: [],
+    agent: true,
     bodySchema: ReviseBody,
     responses: {
       200: ArtifactReply,
@@ -1608,6 +1633,7 @@ export const OPERATIONS: readonly Operation[] = [
     queryFlags: [],
     bodyFields: [],
     args: [],
+    agent: true,
     responses: { 200: ReadAskList, 401: ErrorBody, 403: ErrorBody, 500: ErrorBody, 503: ErrorBody },
   },
   {
@@ -1623,6 +1649,7 @@ export const OPERATIONS: readonly Operation[] = [
     queryFlags: [],
     bodyFields: [],
     args: [],
+    agent: true,
     responses: {
       200: CapacityLoopModel,
       400: ErrorBody,
@@ -1646,6 +1673,7 @@ export const OPERATIONS: readonly Operation[] = [
     queryFlags: [],
     bodyFields: [],
     args: [],
+    agent: true,
     responses: { 200: ChainModel, 401: ErrorBody, 403: ErrorBody, 500: ErrorBody, 503: ErrorBody },
   },
   {
@@ -1661,6 +1689,7 @@ export const OPERATIONS: readonly Operation[] = [
     queryFlags: [],
     bodyFields: [],
     args: [],
+    agent: true,
     responses: {
       200: ChangeList,
       400: ErrorBody,
@@ -1700,6 +1729,7 @@ export const OPERATIONS: readonly Operation[] = [
     queryFlags: [],
     bodyFields: [],
     args: [],
+    agent: true,
     responses: {
       200: DecisionList,
       400: ErrorBody,
@@ -1723,6 +1753,7 @@ export const OPERATIONS: readonly Operation[] = [
     queryFlags: [],
     bodyFields: [],
     args: [],
+    agent: true,
     responses: { 200: DecisionView, 401: ErrorBody, 403: ErrorBody, 404: ErrorBody, 500: ErrorBody, 503: ErrorBody },
   },
   {
@@ -1767,6 +1798,7 @@ export const OPERATIONS: readonly Operation[] = [
       { name: 'attempt', flag: 'attempt', kind: 'integer', repeatable: false, required: true, untyped: false },
     ],
     args: [],
+    agent: true,
     bodySchema: TakeDefaultBody,
     responses: {
       200: DecisionReply,
@@ -1866,6 +1898,7 @@ export const OPERATIONS: readonly Operation[] = [
       { name: 'need', flag: 'need', kind: 'string', repeatable: false, required: false, untyped: false },
     ],
     args: [],
+    agent: true,
     bodySchema: ErrandRequestBody,
     responses: {
       200: ErrandRequestReply,
@@ -1915,6 +1948,7 @@ export const OPERATIONS: readonly Operation[] = [
     queryFlags: [],
     bodyFields: [],
     args: [],
+    agent: true,
     responses: {
       200: ErrandCheckReply,
       400: ErrorBody,
@@ -1996,6 +2030,7 @@ export const OPERATIONS: readonly Operation[] = [
     queryFlags: [],
     bodyFields: [],
     args: [],
+    agent: true,
     responses: { 200: FindingClassesModel, 401: ErrorBody, 403: ErrorBody, 500: ErrorBody, 503: ErrorBody },
   },
   {
@@ -2011,6 +2046,7 @@ export const OPERATIONS: readonly Operation[] = [
     queryFlags: [],
     bodyFields: [],
     args: [],
+    agent: true,
     responses: { 200: FixCommitsModel, 401: ErrorBody, 403: ErrorBody, 500: ErrorBody, 503: ErrorBody },
   },
   {
@@ -2026,6 +2062,7 @@ export const OPERATIONS: readonly Operation[] = [
     queryFlags: [],
     bodyFields: [],
     args: [],
+    agent: true,
     responses: { 200: FlowModel, 401: ErrorBody, 403: ErrorBody, 500: ErrorBody, 503: ErrorBody },
   },
   {
@@ -2041,6 +2078,7 @@ export const OPERATIONS: readonly Operation[] = [
     queryFlags: [],
     bodyFields: [],
     args: [],
+    agent: true,
     responses: {
       200: FlowTrendSeries,
       400: ErrorBody,
@@ -2064,6 +2102,7 @@ export const OPERATIONS: readonly Operation[] = [
     queryFlags: [],
     bodyFields: [],
     args: [],
+    agent: true,
     responses: {
       200: FrictionModel,
       400: ErrorBody,
@@ -2086,6 +2125,7 @@ export const OPERATIONS: readonly Operation[] = [
     queryFlags: [],
     bodyFields: [],
     args: [],
+    agent: true,
     responses: { 200: ReadHealthList, 401: ErrorBody, 403: ErrorBody, 500: ErrorBody, 503: ErrorBody },
   },
   {
@@ -2101,6 +2141,7 @@ export const OPERATIONS: readonly Operation[] = [
     queryFlags: [],
     bodyFields: [],
     args: [],
+    agent: true,
     responses: { 200: HostHistoryModel, 401: ErrorBody, 403: ErrorBody, 500: ErrorBody, 503: ErrorBody },
   },
   {
@@ -2115,6 +2156,7 @@ export const OPERATIONS: readonly Operation[] = [
     queryFlags: [],
     bodyFields: [],
     args: [],
+    agent: true,
     responses: { 200: ReadIssueCards, 400: ErrorBody, 401: ErrorBody, 403: ErrorBody, 500: ErrorBody, 503: ErrorBody },
   },
   {
@@ -2129,6 +2171,7 @@ export const OPERATIONS: readonly Operation[] = [
     queryFlags: [],
     bodyFields: [],
     args: [],
+    agent: true,
     responses: {
       200: ReadIssueDetail,
       400: ErrorBody,
@@ -2165,6 +2208,7 @@ export const OPERATIONS: readonly Operation[] = [
       { name: 'content', flag: 'content', kind: 'string', repeatable: false, required: false, untyped: false },
     ],
     args: [],
+    agent: true,
     bodySchema: SubmitBody,
     responses: {
       200: ArtifactReply,
@@ -2206,6 +2250,7 @@ export const OPERATIONS: readonly Operation[] = [
       { name: 'call', flag: 'call', kind: 'string', repeatable: false, required: false, untyped: false },
     ],
     args: [],
+    agent: true,
     bodySchema: AskBody,
     responses: {
       200: AskReply,
@@ -2236,6 +2281,7 @@ export const OPERATIONS: readonly Operation[] = [
       { name: 'outOfDepth', flag: 'out-of-depth', kind: 'boolean', repeatable: false, required: false, untyped: false },
     ],
     args: [],
+    agent: true,
     bodySchema: BlockBody,
     responses: {
       200: LeadVerbAnswer,
@@ -2266,6 +2312,7 @@ export const OPERATIONS: readonly Operation[] = [
       { name: 'call', flag: 'call', kind: 'string', repeatable: false, required: false, untyped: false },
     ],
     args: [],
+    agent: true,
     bodySchema: CloseBody,
     responses: {
       200: LeadVerbAnswer,
@@ -2297,6 +2344,7 @@ export const OPERATIONS: readonly Operation[] = [
       { name: 'call', flag: 'call', kind: 'string', repeatable: false, required: false, untyped: false },
     ],
     args: [],
+    agent: true,
     bodySchema: DeferBody,
     responses: {
       200: LeadVerbAnswer,
@@ -2333,6 +2381,7 @@ export const OPERATIONS: readonly Operation[] = [
       { name: 'call', flag: 'call', kind: 'string', repeatable: false, required: false, untyped: false },
     ],
     args: [],
+    agent: true,
     bodySchema: ErrandBody,
     responses: {
       200: ErrandReply,
@@ -2358,6 +2407,7 @@ export const OPERATIONS: readonly Operation[] = [
     queryFlags: [],
     bodyFields: [],
     args: [],
+    agent: true,
     responses: { 200: LeadSession, 401: ErrorBody, 403: ErrorBody, 404: ErrorBody, 500: ErrorBody, 503: ErrorBody },
   },
   {
@@ -2378,6 +2428,7 @@ export const OPERATIONS: readonly Operation[] = [
       { name: 'cancel', flag: 'cancel', kind: 'json', repeatable: false, required: false, untyped: false },
     ],
     args: [],
+    agent: true,
     bodySchema: ReplanApplyBody,
     responses: {
       200: ReplanApplyAnswer,
@@ -2404,6 +2455,7 @@ export const OPERATIONS: readonly Operation[] = [
     queryFlags: [],
     bodyFields: [],
     args: [],
+    agent: true,
     responses: {
       200: KpiModel,
       400: ErrorBody,
@@ -2427,6 +2479,7 @@ export const OPERATIONS: readonly Operation[] = [
     queryFlags: [],
     bodyFields: [],
     args: [],
+    agent: true,
     responses: { 200: LoopYieldModel, 401: ErrorBody, 403: ErrorBody, 500: ErrorBody, 503: ErrorBody },
   },
   {
@@ -2441,6 +2494,7 @@ export const OPERATIONS: readonly Operation[] = [
     queryFlags: [],
     bodyFields: [],
     args: [],
+    agent: true,
     responses: { 200: LoopList, 401: ErrorBody, 403: ErrorBody, 500: ErrorBody, 503: ErrorBody },
   },
   {
@@ -2471,6 +2525,7 @@ export const OPERATIONS: readonly Operation[] = [
     queryFlags: [],
     bodyFields: [],
     args: [],
+    agent: true,
     responses: { 200: MachineModel, 401: ErrorBody, 403: ErrorBody, 500: ErrorBody, 503: ErrorBody },
   },
   {
@@ -2486,6 +2541,7 @@ export const OPERATIONS: readonly Operation[] = [
     queryFlags: [],
     bodyFields: [],
     args: [],
+    agent: true,
     responses: { 200: NeedsModel, 401: ErrorBody, 403: ErrorBody, 500: ErrorBody, 503: ErrorBody },
   },
   {
@@ -2500,6 +2556,7 @@ export const OPERATIONS: readonly Operation[] = [
     queryFlags: [],
     bodyFields: [],
     args: [],
+    agent: true,
     responses: { 200: ReadOverview, 401: ErrorBody, 403: ErrorBody, 500: ErrorBody, 503: ErrorBody },
   },
   {
@@ -2514,6 +2571,7 @@ export const OPERATIONS: readonly Operation[] = [
     queryFlags: [],
     bodyFields: [],
     args: [],
+    agent: true,
     responses: {
       200: PageList,
       400: ErrorBody,
@@ -2537,6 +2595,7 @@ export const OPERATIONS: readonly Operation[] = [
     queryFlags: [],
     bodyFields: [],
     args: [],
+    agent: true,
     responses: { 200: ProjectIndexModel, 401: ErrorBody, 403: ErrorBody, 500: ErrorBody, 503: ErrorBody },
   },
   {
@@ -2552,6 +2611,7 @@ export const OPERATIONS: readonly Operation[] = [
     queryFlags: [],
     bodyFields: [],
     args: [],
+    agent: true,
     responses: { 200: ProjectDigestsModel, 401: ErrorBody, 403: ErrorBody, 500: ErrorBody, 503: ErrorBody },
   },
   {
@@ -2567,6 +2627,7 @@ export const OPERATIONS: readonly Operation[] = [
     queryFlags: [],
     bodyFields: [],
     args: [],
+    agent: true,
     responses: {
       200: ProjectPageModel,
       401: ErrorBody,
@@ -2589,6 +2650,7 @@ export const OPERATIONS: readonly Operation[] = [
     queryFlags: [],
     bodyFields: [],
     args: [],
+    agent: true,
     responses: {
       200: ProjectHygieneModel,
       401: ErrorBody,
@@ -2611,6 +2673,7 @@ export const OPERATIONS: readonly Operation[] = [
     queryFlags: [],
     bodyFields: [],
     args: [],
+    agent: true,
     responses: {
       200: ProjectPlanModel,
       401: ErrorBody,
@@ -2633,6 +2696,7 @@ export const OPERATIONS: readonly Operation[] = [
     queryFlags: [],
     bodyFields: [],
     args: [],
+    agent: true,
     responses: {
       200: ProjectSetupModel,
       401: ErrorBody,
@@ -2655,6 +2719,7 @@ export const OPERATIONS: readonly Operation[] = [
     queryFlags: [],
     bodyFields: [],
     args: [],
+    agent: true,
     responses: {
       200: RetroModel,
       400: ErrorBody,
@@ -2678,6 +2743,7 @@ export const OPERATIONS: readonly Operation[] = [
     queryFlags: [],
     bodyFields: [],
     args: [],
+    agent: true,
     responses: { 200: ProjectJsonSchema },
   },
   {
@@ -2694,6 +2760,7 @@ export const OPERATIONS: readonly Operation[] = [
     queryFlags: [{ name: 'live', boolean: false, value: '1' }],
     bodyFields: [],
     args: [],
+    agent: true,
     responses: {
       200: ReadSessionCards,
       400: ErrorBody,
@@ -2715,6 +2782,7 @@ export const OPERATIONS: readonly Operation[] = [
     queryFlags: [],
     bodyFields: [],
     args: [],
+    agent: true,
     responses: { 200: ReadSessionCard, 401: ErrorBody, 403: ErrorBody, 404: ErrorBody, 500: ErrorBody, 503: ErrorBody },
   },
   {
@@ -2734,6 +2802,7 @@ export const OPERATIONS: readonly Operation[] = [
       { name: 'via', flag: 'via', kind: 'string', repeatable: false, required: false, untyped: false },
     ],
     args: ['text'],
+    agent: true,
     bodySchema: SessionNoteBody,
     responses: {
       200: NoteAnswer,
@@ -2759,6 +2828,7 @@ export const OPERATIONS: readonly Operation[] = [
     queryFlags: [],
     bodyFields: [],
     args: [],
+    agent: true,
     responses: {
       200: SignalList,
       400: ErrorBody,
@@ -2782,6 +2852,7 @@ export const OPERATIONS: readonly Operation[] = [
     queryFlags: [],
     bodyFields: [],
     args: [],
+    agent: true,
     responses: { 200: SinceModel, 401: ErrorBody, 403: ErrorBody, 500: ErrorBody, 503: ErrorBody },
   },
   {
@@ -2797,6 +2868,7 @@ export const OPERATIONS: readonly Operation[] = [
     queryFlags: [],
     bodyFields: [],
     args: [],
+    agent: true,
     responses: {
       200: ThroughputModel,
       400: ErrorBody,
@@ -2820,6 +2892,7 @@ export const OPERATIONS: readonly Operation[] = [
     queryFlags: [],
     bodyFields: [],
     args: [],
+    agent: true,
     responses: {
       200: WaitCensusModel,
       400: ErrorBody,

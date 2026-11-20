@@ -101,25 +101,101 @@ function handWrittenHelp(argv: readonly string[]): string | null {
   return row && row[0] !== 'hook <event>' && row[0] !== 'issue schema' ? `usage: ${BIN} ${row[0]}\n\n${row[1]}\n` : null
 }
 
-const help = (operations: readonly Operation[]): string => {
-  const rows: [string, string][] = [
-    ...HAND_WRITTEN,
-    ...operations.map((op): [string, string] => [usageOf(op), firstSentence(op.summary)]),
-  ]
-  const width = Math.max(24, ...rows.map(([command]) => command.length + 2))
-  const line = ([command, text]: [string, string]) => `  ${command.padEnd(width)}${text}`
+/** One verb as the help lists it: `group` is the noun, `token` what follows it in the list (`close <id>`), `usage` the whole line. */
+interface Entry {
+  group: string
+  token: string
+  usage: string
+  summary: string
+}
+
+/** The hand-written verbs as list entries: the words after the noun up to its first flag or option are its token. */
+const handWrittenEntries = (): Entry[] =>
+  HAND_WRITTEN.map(([usage, summary]) => {
+    const [group = '', ...rest] = usage.split(' ')
+    const stop = rest.findIndex((word) => word.startsWith('[') || word.startsWith('--'))
+    return { group, token: (stop === -1 ? rest : rest.slice(0, stop)).join(' '), usage, summary }
+  })
+
+const generatedEntries = (operations: readonly Operation[]): Entry[] =>
+  operations.map((op) => ({
+    group: op.command[0],
+    token: usageOf(op).slice(op.command[0].length + 1),
+    usage: usageOf(op),
+    summary: firstSentence(op.summary),
+  }))
+
+/** The verbs a help lists: every verb, or only those the agent caller may call (the generated ones carry `agent`). */
+function entriesOf(operations: readonly Operation[], agentOnly: boolean): Entry[] {
+  const generated = generatedEntries(agentOnly ? operations.filter((op) => op.agent === true) : operations)
+  return [...handWrittenEntries(), ...generated]
+}
+
+/** `text` wrapped at `width` columns on its `, ` joints, continuation lines indented by `indent`. */
+function wrapList(items: readonly string[], first: string, indent: number, width = 100): string[] {
+  const lines: string[] = []
+  let line = first
+  items.forEach((item, i) => {
+    const piece = i < items.length - 1 ? `${item}, ` : item
+    if (line.trim() !== '' && line.length + piece.trimEnd().length > width) {
+      lines.push(line.trimEnd())
+      line = ' '.repeat(indent)
+    }
+    line += piece
+  })
+  lines.push(line.trimEnd())
+  return lines
+}
+
+/** The verb list: one row per noun, its verbs after it; the words that stand alone (`version`, `follow`) share the last row. */
+function verbList(entries: readonly Entry[]): string[] {
+  const groups = new Map<string, string[]>()
+  for (const entry of entries) groups.set(entry.group, [...(groups.get(entry.group) ?? []), entry.token])
+  const alone = [...groups].filter(([, tokens]) => tokens.every((token) => token === '')).map(([group]) => group)
+  const nouns = [...groups].filter(([group]) => !alone.includes(group)).sort(([a], [b]) => a.localeCompare(b))
+  const width = Math.max(...nouns.map(([group]) => group.length), 'also'.length) + 2
   return [
+    ...nouns.flatMap(([group, tokens]) =>
+      wrapList(
+        tokens.filter((token) => token !== '').sort((a, b) => a.localeCompare(b)),
+        `  ${group.padEnd(width)}`,
+        2 + width,
+      ),
+    ),
+    ...wrapList(alone.sort(), `  ${'also'.padEnd(width)}`, 2 + width),
+  ]
+}
+
+/** `factory issue --help`: the verbs of one noun with their usage and summary; null when no verb has that noun. */
+function groupHelp(group: string, entries: readonly Entry[]): string | null {
+  const own = entries.filter((entry) => entry.group === group).sort((a, b) => a.usage.localeCompare(b.usage))
+  if (!own.length) return null
+  const width = Math.max(...own.map((entry) => entry.usage.length)) + 2
+  return [
+    `usage: ${BIN} ${group} <verb> [flags]`,
+    '',
+    ...own.map((e) => `  ${e.usage.padEnd(width)}${e.summary}`),
+    '',
+  ].join('\n')
+}
+
+/** Whether this session lists only what the agent caller may call: a lead's session names itself in FACTORY_SESSION. */
+const agentView = (io: Io, all: boolean): boolean => !all && (io.env.FACTORY_SESSION ?? '') !== ''
+
+const help = (operations: readonly Operation[], agentOnly: boolean): string =>
+  [
     `usage: ${BIN} [--format json|plain] <command>`,
     '',
-    'commands:',
-    ...rows.map(line),
+    agentOnly ? 'verbs this session may call (--all lists every verb; the rest answer 403):' : 'verbs:',
+    ...verbList(entriesOf(operations, agentOnly)),
     '',
     'aliases:',
-    ...ALIAS_HELP.map(line),
+    ...ALIAS_HELP.map(([command, text]) => `  ${command.padEnd(24)}${text}`),
     '',
-    `${BIN} <group> <verb> --help lists a command's flags. A request body is one flag per property, or --body '<json>';`,
-    'a body field can be a positional argument after the ids (shown as <text>); a negative number goes after --.',
-    "A string or JSON flag or argument takes '-' for all of stdin and '@path' for a file ('@@x' is the text '@x').",
+    `${BIN} <group> --help lists a group's verbs; ${BIN} <group> <verb> --help lists a verb's flags. A request body is one`,
+    "flag per property, or --body '<json>'; a body field can be a positional argument after the ids (shown as <text>); a",
+    "negative number goes after --. A string or JSON flag or argument takes '-' for all of stdin and '@path' for a file",
+    "('@@x' is the text '@x'). In a lead's session (FACTORY_SESSION=lead-<issue>-<attempt>) --attempt is filled from it.",
     '',
     'environment:',
     '  FACTORY_URL         the server (default http://127.0.0.1:7793)',
@@ -134,7 +210,6 @@ const help = (operations: readonly Operation[]): string => {
     '3 auth, 4 not found, 5 conflict, 7 network, 8 rate limited, 9 contract mismatch).',
     '',
   ].join('\n')
-}
 
 function formatOf(value: string | undefined): Format {
   const format = value ?? 'json'
@@ -168,6 +243,7 @@ async function roleVerb(words: string[], format: Format, io: Io): Promise<void> 
 const FIRST_STAGE = {
   format: { type: 'string' },
   help: { type: 'boolean', short: 'h' },
+  all: { type: 'boolean' },
 } as const satisfies ParseArgsOptionsConfig
 
 const flagHelp = (op: Operation, field: BodyField): string => {
@@ -367,7 +443,9 @@ export async function run(argv: string[], io: Io, operations: readonly Operation
     }
     const words = parsed.positionals
     if (parsed.values.help || !words.length) {
-      io.out(help(operations))
+      const agentOnly = agentView(io, parsed.values.all === true)
+      const group = words.length === 1 ? groupHelp(words[0] ?? '', entriesOf(operations, agentOnly)) : null
+      io.out(group ?? help(operations, agentOnly))
       return EXIT.ok
     }
     const format = formatOf(parsed.values.format)

@@ -115,7 +115,8 @@ A verb is a plain `factory` command that reports one outcome of an attempt.
 | `factory issue close` | No commit needed; outcome `done` or `dropped`, with a reason |
 | `factory issue ask` | A Decision, with a recommendation, what it checked, the cost of each option and the no-answer default |
 
-- **Every verb names its attempt** (`--attempt <n>`). `--call <id>` makes a repeated call one event.
+- **Every verb names its attempt.** The CLI fills `--attempt` from `FACTORY_SESSION` (`lead-<issue>-<attempt>`); a flag given wins. `--call <id>` makes a repeated call one event.
+- **`factory --help` shows a lead's verbs.** With `FACTORY_SESSION` set it lists only the verbs the agent caller may call (`apps/server/src/api/policy.ts` decides), grouped by noun; `--all` lists every verb.
 - **The CLI contract is agw's.** `--format json|plain`, data on stdout, messages on stderr, no prompts.
 - **Exit codes are a table.** A caller branches on them. A code is never added or changed in this repo alone.
 - **A value of `-` reads stdin**, one starting with `@` reads the file it names.
