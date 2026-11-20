@@ -159,7 +159,7 @@ A signal is anything that may become work. An alert from a monitor is one, and s
 - Rules decide first: a fingerprint over repo and title, the route registry, a correlation window. A workflow decides only where the rules are unsure.
 - The alert door takes the repo from a server-side route registry, never from the payload.
 
-**Why.** Dedup and correlation happen before a lead spends a token. Twelve alerts about one dead database become one incident with one lead.
+**Why.** Triage folds a repeat into the Issue it repeats before a lead spends a token. Twelve alerts about one dead database become one incident with one lead.
 
 **In the code.** [`domains/intake/rules.ts`](apps/server/src/domains/intake/rules.ts) (`fingerprintOf`), [`app/intake.ts`](apps/server/src/app/intake.ts), [`apps/door`](apps/door).
 **Read more.** [Signals and Triage](docs/guide/signals.md).
