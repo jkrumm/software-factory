@@ -97,6 +97,15 @@ The planning loop runs on its own; `factory planning pass` runs one now. The Iss
 `facts`, `kind` and `repo`, and the lead sees `Plan row <key>.` before the facts. A row is filed once: its Issue is
 remembered by project and key.
 
+## Pruning
+
+The file holds open rows only. Once a row is `done`, delete it: the filed Issue is remembered in the server's
+`planning_filed_rows` by project and key, and a row that is not in the file is no row, so removing it files nothing and
+cancels nothing (a key written again later is the same filed row, done, not a new Issue). The one exception is a done row
+that an open or waiting row still names in `after`: a ref to a key that is not in the file is `(no such row)` and waits
+for good, so keep that row as a stub (`key` and `issue: <its Issue>`, which adopts the Issue it was filed as) until
+the row that waits for it is done too.
+
 ## Choosing the seat
 
 Every lead starts on the `lead` row of `config/roles.json` (sonnet, high). Name a `seat` when a row is worth a stronger

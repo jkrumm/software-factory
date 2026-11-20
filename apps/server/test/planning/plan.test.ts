@@ -23,8 +23,7 @@ describe('docs/plan.yaml', () => {
     const result = parsed(await Bun.file(join(ROOT, 'docs', 'plan.yaml')).text())
     expect(result.ok).toBe(true)
     if (!result.ok) return
-    expect(result.plan.rows.some((r) => r.issue === 149)).toBe(true)
-    expect(result.plan.rows.some((r) => r.not_before !== undefined)).toBe(true)
+    expect(result.plan.rows.length).toBeGreaterThan(0)
     expect(result.warnings).toEqual([])
   })
 
@@ -179,6 +178,13 @@ describe('row states', () => {
     const done = rowStatuses(facts({ app: p }, { 'app:a': 1 }, [[1, 'closed']]))
     expect(stateOf(done, 'app', 'a')?.state).toBe('done')
     expect(filable(done).map((s) => s.key)).toEqual(['b'])
+  })
+
+  test('a filed row whose key left the plan is no row: it files nothing and stays out of the statuses', () => {
+    const p = plan([row('b')])
+    const statuses = rowStatuses(facts({ app: p }, { 'app:a': 1 }, [[1, 'closed']]))
+    expect(statuses.map((s) => s.key)).toEqual(['b'])
+    expect(filable(statuses).map((s) => s.key)).toEqual(['b'])
   })
 
   test('a waiting row lists every unmet after, in order, and names a ref that is no row', () => {
