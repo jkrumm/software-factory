@@ -148,7 +148,7 @@ export function readIssues(tx: SQL): IssueReads {
           SELECT wait FROM factory.issue_events x
           WHERE x.issue_id = i.id AND x.result = 'applied' ORDER BY x.version DESC LIMIT 1
         ) e ON true
-        WHERE i.state = 'waiting' AND i.wait_reason = 'timer'`
+        WHERE i.state = 'waiting' AND i.wait_reason IN ('timer', 'paused') AND e.wait->>'until' IS NOT NULL`
       return rows.map((raw): TimerWait => {
         const row = TimerRow.parse(raw)
         return { issue: idOf(row.id), since: row.wait.since, until: row.wait.until }

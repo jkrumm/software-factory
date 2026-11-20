@@ -8,6 +8,7 @@ export * from './hygiene-catalogue.ts'
 export * from './work-words.ts'
 export {
   CancelBody,
+  PauseBody,
   IssueAnswerBody,
   ISSUE_ID_META,
   IssueRefInput,

@@ -37,6 +37,25 @@ export function cancelIssue(
   })
 }
 
+/**
+ * The owner pauses a started Issue: the machine records `paused` and the Issue waits until his word or `until`
+ * (`docs/language.md`, Wait). Resuming is `noteIssue` with `wake`. The call id (or one made now) is in the key.
+ */
+export function pauseIssue(
+  deps: Deps,
+  input: { issueId: IssueId; reason: string; until?: string | undefined; actor: OwnerActor; call?: string | undefined },
+): Promise<Result<Recorded, IssueWriteError | PortError>> {
+  return recordIssueEvent(deps, {
+    issueId: input.issueId,
+    key: key('paused', input.issueId, input.call ?? deps.ids.next('call')),
+    event: {
+      kind: 'paused',
+      payload: { reason: input.reason, ...(input.until === undefined ? {} : { until: input.until }) },
+      actor: input.actor,
+    },
+  })
+}
+
 /** The stores a withdrawal reads in one transaction: the Issue's events and the signals it was filed from. */
 export type WithdrawWrites = UnitOfWork<{ work: WorkStore; leads: LeadStore }>
 

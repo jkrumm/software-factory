@@ -6,6 +6,7 @@ const PAUSED_REASON: Record<string, string> = {
   timer: 'Until a set time',
   dependency: 'For another Issue',
   external: "On someone else's review",
+  paused: 'Paused by you',
   wall: 'Stalled: the account hit its limit',
   unreported: 'Stalled: the lead reported nothing',
   blocked: 'Stalled: the lead is blocked',

@@ -153,6 +153,7 @@ describe('the policy table', () => {
       ['GET', '/v1/errands'],
       ['POST', '/issues'],
       ['POST', '/issues/:id/cancel'],
+      ['POST', '/issues/:id/pause'],
       ['POST', '/issues/:id/answer'],
       ['POST', '/issues/:id/prio'],
       ['PUT', '/queue'],

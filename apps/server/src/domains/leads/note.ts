@@ -42,6 +42,11 @@ function item(record: HistoryRecord): string | null {
     }
     case 'errand_turned_back':
       return `the Errand ${oneLine(field(record, 'errand'))} was turned back by the owner, not done: ${oneLine(field(record, 'note'))}. Do what it says instead of waiting for a person`
+    case 'paused': {
+      const until = field(record, 'until')
+      const ends = typeof until === 'string' ? `, or at ${until}` : ''
+      return `the owner paused this Issue: ${oneLine(field(record, 'reason'))}. A paused Issue takes none of your verbs and a block is refused: end your turn; only his word${ends} ends the pause, and you hear when it does`
+    }
     case 'woken':
       return `your wait is over: ${oneLine(field(record, 'detail'))}`
     case 'regressed':

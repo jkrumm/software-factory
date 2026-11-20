@@ -119,7 +119,7 @@ A state is the stored name of where an Issue is. A screen never shows it. It sho
 A plan row not yet filed is Planned. It is never an Issue, so it is never part of the five.
 
 - **A word is a view.** `workOf` reads the stored state, the wait and the queue reason. `Running + Paused + Ready + Held + Checking` is the number of open Issues on every surface.
-- **A wait has a reason, and each reason has a named exit.** The reasons are `timer`, `dependency`, `wall`, `unreported`, `blocked`, `lead_gone`, `regressed`, `decision`, `review`, `errand` and `external`; `WAITS` holds each exit. A machine wait ends without a person. A stall is a wait with a machine cause, and the steward ends it.
+- **A wait has a reason, and each reason has a named exit.** The reasons are `timer`, `dependency`, `wall`, `unreported`, `blocked`, `lead_gone`, `regressed`, `decision`, `review`, `errand`, `external` and `paused`; `WAITS` holds each exit. A machine wait ends without a person. A stall is a wait with a machine cause, and the steward ends it. `paused` is the owner's own wait (`factory issue pause`): his word or the time he gave ends it, and nothing else does.
 - **Screens do not name states.** `scripts/vocabulary.ts` fails `make check` when a screen's text says `queued` or `working`.
 
 ```ts

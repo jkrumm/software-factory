@@ -68,6 +68,8 @@ States (stored; screens show the five words of `docs/language.md` "Where work st
 or a named ignore, and a missing cell fails `tsc`. The diagram and the wait table in `docs/language.md` are generated
 from that table.
 
+**The owner's pause (`paused`).** `factory issue pause <id> --reason "..." [--until <iso>]` (`POST /issues/:id/pause`, owner and orchestrator) records `paused`: from `working` the Issue waits as `paused` and the lead hears it once (`note_lead`, the wait begins told); from a stall (not `lead_gone`, whose new attempt a resume would skip) or a `timer` wait the pause replaces the wait with no effect (the lead has no turn, and hears it with the resume); a second pause updates it in place; a dependency, `external` or person wait, an Issue no lead has started, a watch and a closed Issue refuse. The wait is not a stall, so the steward and the Judge never see it, a lead's `block`, `defer`, `ask`, `ship` and `close` are refused with the pause named, and the repo claim is free. It ends with `woken` from the owner or orchestrator (`factory issue note <id> "..." --wake`) or from the factory once `until` has passed (the planning pass reads `paused` with an `until` beside `timer`); the steward's wake is refused. It is Paused on you (`workOf`), not a need, and the retro's owner waits do not count it.
+
 - **One writer.** `app/` stores the event, the new state (`UPDATE … WHERE id = $1 AND version = $2`) and the effects in an
   outbox in one transaction, then the outbox runs the effects (`app/outbox.ts`): claimed with a lease, retried with a
   doubling delay. A late event that names an old attempt, watch, wait or checkpoint is ignored or refused by the table.

@@ -234,5 +234,8 @@ test('the retro’s outcomes count each signal once; Issues closed since a pass 
 test('the stall and owner reasons the waste read uses are the work domain’s', () => {
   const entries = Object.entries(WAITS)
   expect(STALL_REASONS).toEqual(entries.filter(([, w]) => w.stall).map(([reason]) => reason))
-  expect(OWNER_REASONS).toEqual(entries.filter(([, w]) => w.exit === 'person').map(([reason]) => reason))
+  // a pause is the owner's choice, not waste: it is the one person wait the retro does not count
+  expect(OWNER_REASONS).toEqual(
+    entries.filter(([reason, w]) => w.exit === 'person' && reason !== 'paused').map(([reason]) => reason),
+  )
 })

@@ -59,6 +59,15 @@ export const NewIssueAnswer = z
   .object({ issue: z.string(), id: z.string(), state: z.string(), filed: z.boolean() })
   .meta({ id: 'NewIssueAnswer' })
 
+/** `issue pause`: the owner puts a started Issue into a wait that only his word, or `until`, ends. */
+export const PauseBody = z
+  .strictObject({
+    reason: z.string().trim().min(1).max(4_000),
+    until: z.iso.datetime({ offset: true }).optional(),
+    call: Call.optional(),
+  })
+  .meta({ id: 'PauseBody' })
+
 /** `issue cancel`: the owner ends an Issue; the machine finalizes its lead, worktree and claim. */
 export const CancelBody = z
   .strictObject({ reason: z.string().trim().min(1).max(4_000), call: Call.optional() })

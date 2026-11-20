@@ -123,6 +123,7 @@ Five words and a sixth for what is not an Issue yet, defined once here and used 
 | **Verify** | The check that ends the watch: `make verify`, probes | |
 | **Wait** | A pause with a named exit | |
 | **Stall** | A wait with a machine cause, the steward's to end | Park |
+| **Pause** | The owner's verb for a started Issue that is to wait: the `paused` wait, which only his word (`factory issue note <id> --wake`) or the time he gave (`factory issue pause <id> --reason "..." [--until <iso>]`) ends. The steward, the Judge and the lead leave it alone; the lead hears it once. A stall or a timer is replaced by it; a dependency, a review of its pull request or a person's wait is not, and an Issue no lead has started cannot be paused. Shown as Paused, on you, and not as a need. The event is `paused` | A note that says "keep paused" |
 | **Dormant** | A lead whose Issue waits for a person, a timer or another Issue and whose `claude` the factory **quiesced** (ended); its attempt, worktree and session stay, and the wake **revives** the session. Not a stall: nothing is wrong | |
 | **Touch** | The owner acting on an Issue | Zero-touch |
 | **Avoidable touch** | A touch the factory should have settled: a Decision answered and not marked worth asking, an owner note, wake, cancel or reopen. Not the first note of a filing, a verdict on a Concept or Spec, or a done Errand | |
@@ -245,11 +246,11 @@ stateDiagram-v2
   queued --> working: admitted
   queued --> closed: cancelled, closed
   working --> queued: lead_gone
-  working --> waiting: lead_gone (lead_gone), asked (decision), submitted (review), errand_raised (errand), deferred (timer, dependency, external), stalled (wall, unreported, blocked)
+  working --> waiting: lead_gone (lead_gone), asked (decision), submitted (review), errand_raised (errand), paused (paused), deferred (timer, dependency, external), stalled (wall, unreported, blocked)
   working --> watching: shipped
   working --> closed: cancelled, closed
   waiting --> queued: woken (lead_gone)
-  waiting --> working: answered (decision, review), verdict_given (review), errand_done (errand), errand_turned_back (errand), woken (timer, dependency, wall, unreported, blocked, regressed, external)
+  waiting --> working: answered (decision, review), verdict_given (review), errand_done (errand), errand_turned_back (errand), woken (timer, dependency, wall, unreported, blocked, regressed, external, paused)
   waiting --> watching: woken (dependency), shipped (timer)
   waiting --> closed: cancelled, closed (timer)
   watching --> working: regressed
@@ -272,6 +273,7 @@ stateDiagram-v2
 | `review` | a person | no | verdict given on the Concept or Spec by the owner, and every Decision the lead raised about it answered |
 | `errand` | a person | no | errand done by the owner's hands (or the orchestrator's, with evidence), or turned back with a note |
 | `external` | no person | no | woken by the review poll when the pull request is approved, gets changes requested or a new review comment, merges or closes |
+| `paused` | a person | no | the owner's word (a note with wake), or the time it was paused until; the steward never ends it |
 
 Outcomes of `closed`: `done`, `dropped`, `healed`, `cancelled`.
 

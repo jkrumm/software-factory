@@ -75,7 +75,7 @@ export function claimRoom(input: {
 }
 /**
  * A wait that needs no lead at work gives the claim back: a person's wait (a Decision, a review, an Errand), a timer and
- * a dependency. A dependency matters most: a lead that waits for another Issue of the same repo must not hold the one
+ * a dependency, and the owner's pause. A dependency matters most: a lead that waits for another Issue of the same repo must not hold the one
  * place that Issue needs. A stall (a wall, an unreported stop, a block, a regression) keeps it: the lead is alive and
  * the steward ends the stall.
  */
@@ -86,6 +86,7 @@ const CLAIM_FREEING_WAITS: ReadonlySet<string> = new Set([
   'review',
   'errand',
   'external',
+  'paused',
 ])
 
 /** Whether an Issue in this state is a lead working in its repo, so it holds a claim. */
