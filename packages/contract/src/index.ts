@@ -36,6 +36,7 @@ export {
 } from './image-anchor.ts'
 export * from './seat.ts'
 export * from './light-gate.ts'
+export * from './landing.ts'
 export * from './reviewer.ts'
 export * from './lane.ts'
 export { Health, HealthLine, HealthLoop, Heartbeat } from './health.ts'

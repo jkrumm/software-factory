@@ -1,3 +1,13 @@
+import {
+  GREEN_READS,
+  METHOD_FIELDS,
+  type CiReading,
+  allowedMethod,
+  nextGreens,
+  probeGuard,
+  readChecks,
+  redRun,
+} from '@software-factory/contract'
 import { EXIT_TIMEOUT, childEnv, withStderr } from '../../process.ts'
 import { MAX_EVIDENCE_LINES } from '../../../domains/loops/hygiene-model.ts'
 import { exec, gitTry, type Tools } from '../git.ts'
@@ -10,11 +20,6 @@ const MAKE_TIMEOUT_MS = 10 * 60_000
 /** How long the pass waits for the repo's merge window before it asks again at the next pass (the window's own limit is 90 min). */
 const WINDOW_WAIT_MS = 30 * 60_000
 const WINDOW_GRACE_MS = 60_000
-const METHODS = [
-  ['squashMergeAllowed', '--squash'],
-  ['rebaseMergeAllowed', '--rebase'],
-  ['mergeCommitAllowed', '--merge'],
-] as const
 
 /** How long the pass looks at the pull request's CI: a run that has not started, and one that has not finished. */
 export interface CiWait {
@@ -40,19 +45,17 @@ export type Landed =
   | { kind: 'failed'; detail: string; output?: string[] }
 
 /**
- * The merge method the repo allows, and the one gh would use: squash, else rebase, else merge. Undefined when gh cannot read
- * the repo (not signed in, not a GitHub remote): the caller does not start what it cannot land.
+ * The merge method the repo allows (`allowedMethod`: squash, else rebase, else merge) as the flag gh takes. Undefined when gh
+ * cannot read the repo (not signed in, not a GitHub remote): the caller does not start what it cannot land.
  */
 export async function mergeMethod(tools: Tools, cwd: string): Promise<string | undefined> {
-  const read = await exec(
-    [tools.gh, 'repo', 'view', '--json', METHODS.map(([key]) => key).join(',')],
-    GH_TIMEOUT_MS,
-    cwd,
-  ).catch(() => undefined)
+  const read = await exec([tools.gh, 'repo', 'view', '--json', METHOD_FIELDS], GH_TIMEOUT_MS, cwd).catch(
+    () => undefined,
+  )
   if (read?.exitCode !== 0) return undefined
   try {
-    const allowed = JSON.parse(read.stdout) as Record<string, unknown>
-    return METHODS.find(([key]) => allowed[key] === true)?.[1]
+    const method = allowedMethod(JSON.parse(read.stdout) as Record<string, unknown>)
+    return method && `--${method}`
   } catch {
     return undefined
   }
@@ -107,13 +110,8 @@ async function inWindow<T>(tools: Tools, project: string, cwd: string, use: () =
   }
 }
 
-interface Checks {
-  state: 'none' | 'pending' | 'green' | 'red'
-  failed: string[]
-}
-
 /** `gh pr checks` as one word: its exit code says pending or failing, its JSON says which, so the JSON is what is read. */
-async function checksOf(tools: Tools, cwd: string, number: number): Promise<Checks> {
+async function checksOf(tools: Tools, cwd: string, number: number): Promise<CiReading> {
   const read = await exec(
     [tools.gh, 'pr', 'checks', String(number), '--json', 'name,bucket'],
     GH_TIMEOUT_MS,
@@ -126,24 +124,17 @@ async function checksOf(tools: Tools, cwd: string, number: number): Promise<Chec
   } catch {
     return { state: 'none', failed: [] }
   }
-  if (!rows.length) return { state: 'none', failed: [] }
-  const failed = rows.filter((row) => row.bucket === 'fail' || row.bucket === 'cancel').map((row) => row.name ?? '?')
-  if (failed.length) return { state: 'red', failed }
-  // Green is a check that ran and passed: a set that is all skipped (a path or `if` filter) is no CI at all.
-  const done = rows.every((row) => row.bucket === 'pass' || row.bucket === 'skipping')
-  if (done && !rows.some((row) => row.bucket === 'pass')) return { state: 'none', failed: [] }
-  return { state: done ? 'green' : 'pending', failed: [] }
+  return readChecks(rows)
 }
 
-async function waitForCi(tools: Tools, cwd: string, number: number, wait: CiWait): Promise<Checks | 'timeout'> {
+async function waitForCi(tools: Tools, cwd: string, number: number, wait: CiWait): Promise<CiReading | 'timeout'> {
   const started = Date.now()
   let greens = 0
   for (;;) {
     const checks = await checksOf(tools, cwd, number)
     if (checks.state === 'red') return checks
-    // Green twice in a row: a workflow that registers a moment after the first one must not be merged past.
-    greens = checks.state === 'green' ? greens + 1 : 0
-    if (greens >= 2) return checks
+    greens = nextGreens(greens, checks)
+    if (greens >= GREEN_READS) return checks
     const elapsed = Date.now() - started
     if (checks.state === 'none' && elapsed >= wait.noChecksMs) return { state: 'none', failed: [] }
     if (elapsed >= wait.maxMs) return 'timeout'
@@ -152,28 +143,31 @@ async function waitForCi(tools: Tools, cwd: string, number: number, wait: CiWait
 }
 
 /**
- * The guard of the merge window: the repo's own `make merge-guard` where it has one (`make -n` says so for any way a Makefile
- * declares or includes it), else the branch contains master and master's last finished run is not red.
+ * The guard of the merge window: the repo's own `make merge-guard` where it has one (`make -n` says so for any Makefile name
+ * and any `include`; a Makefile that is broken refuses, never reads as no guard), else the branch contains master and master's
+ * last judged run is not red (the rule `factory land` and `make merge-guard` read).
  */
 async function guard(tools: Tools, cwd: string, base: string): Promise<string[] | undefined> {
-  const declared = await exec([tools.make, '-n', 'merge-guard'], GIT_TIMEOUT_MS, cwd).catch(() => undefined)
-  if (declared?.exitCode === 0) {
+  const probe = await exec(withStderr(['env', 'LC_ALL=C', tools.make, '-n', 'merge-guard']), GIT_TIMEOUT_MS, cwd).catch(
+    () => undefined,
+  )
+  const declared = probe ? probeGuard({ exitCode: probe.exitCode, output: probe.stdout }) : 'broken'
+  if (declared === 'broken') return ['make -n merge-guard failed, so whether the repo has a merge guard is unknown']
+  if (declared === 'has') {
     const run = await exec(withStderr([tools.make, 'merge-guard']), MAKE_TIMEOUT_MS, cwd)
     return run.exitCode === 0 ? undefined : tailOf(run.stdout)
   }
   const contains = await exec([tools.git, 'merge-base', '--is-ancestor', `origin/${base}`, 'HEAD'], GIT_TIMEOUT_MS, cwd)
   if (contains.exitCode !== 0) return [`the branch does not contain origin/${base}`]
   const runs = await exec(
-    [tools.gh, 'run', 'list', '--branch', base, '--limit', '5', '--json', 'status,conclusion'],
+    [tools.gh, 'run', 'list', '--branch', base, '--limit', '10', '--json', 'status,conclusion'],
     GH_TIMEOUT_MS,
     cwd,
   ).catch(() => undefined)
   if (runs?.exitCode !== 0) return [`the runs of ${base} could not be read`]
   try {
-    const rows = JSON.parse(runs.stdout) as { status?: string; conclusion?: string }[]
-    const last = rows.find((row) => row.status === 'completed')
-    if (last && last.conclusion !== 'success' && last.conclusion !== 'skipped')
-      return [`the last finished run of ${base} is ${last.conclusion}`]
+    const red = redRun(JSON.parse(runs.stdout) as { status?: string; conclusion?: string }[])
+    if (red) return [`the last finished run of ${base} is ${red.conclusion}`]
   } catch {
     return [`the runs of ${base} could not be read`]
   }
