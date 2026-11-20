@@ -50,7 +50,7 @@ case "$1 $2" in
     else
       printf '{"number":7,"state":"OPEN","url":"https://github.com/o/app/pull/7","headRefOid":"%s","mergeCommit":null}' "$head"
     fi ;;
-  "pr checks") cat "$S/checks" ;;
+  "pr checks") [ -f "$S/checks-none" ] && { echo "no checks reported on the 'factory/7-1' branch" >&2; exit 1; }; [ -f "$S/checks-blip" ] && [ "$(grep -c '^gh pr checks' "$S/calls")" = 2 ] && { echo "dial tcp: i/o timeout" >&2; exit 1; }; cat "$S/checks" ;;
   "pr merge")
     sha=""; prev=""
     for a in "$@"; do [ "$prev" = "--match-head-commit" ] && sha="$a"; prev="$a"; done
@@ -413,6 +413,27 @@ describe('factory land', () => {
     const result = await land([], { FACTORY_LAND_NO_RUN_MS: '0' }).done
     expect(result.err).not.toContain('no CI check')
     expect(result.code).toBe(0)
+  })
+
+  test('a failed checks read with no JSON is named and polled again, not read as no CI check', async () => {
+    await writeFile(join(state, 'checks-blip'), '')
+    const result = await land([], { FACTORY_LAND_NO_RUN_MS: '0' }).done
+    expect(result.code).toBe(0)
+    expect(result.err).toContain('gh could not read the checks on')
+    expect(result.err).toContain('dial tcp: i/o timeout; polling again')
+    expect(result.err).toContain('the checks on')
+    expect(result.err).toContain('not read yet')
+    expect(result.err).not.toContain('no check yet')
+    expect(result.err).not.toContain('no CI check')
+    expect(await calls()).toContain('gh pr merge 7')
+  })
+
+  test('gh saying no checks reported is no CI check, not a blip: refused once the bound passes', async () => {
+    await writeFile(join(state, 'checks-none'), '')
+    const result = await land([], { FACTORY_LAND_NO_RUN_MS: '200' }).done
+    expect(result.code).toBe(1)
+    expect(result.err).toContain('land: ci: refused: no CI check on')
+    expect(result.err).not.toContain('could not read the checks')
   })
 
   test('a repo that ships by push lands by pushing to the default branch, with no CI wait and no merge', async () => {
