@@ -6,8 +6,8 @@ import { readCapacityLoop } from '../../src/read/capacity-loop.ts'
 import { readLeadCosts } from '../../src/read/lead-costs.ts'
 
 /**
- * The shadow table, the swapout and pressure figures and the lead's cost at rest, over rows seeded in the figures' own
- * minutes (the shadow decisions are stamped at the minute, the host samples some seconds into it).
+ * The swapout and pressure figures and the lead's cost at rest, over rows seeded in the figures' own minutes (the host
+ * samples some seconds into the minute).
  */
 let db: TestCluster
 const NOW = new Date('2026-11-14T12:00:00Z')
@@ -23,11 +23,9 @@ const constants = {
   reaperGraceMs: 300_000,
   swapoutCeilingMb: 2048,
   swapCeilingPct: 75,
-  loadRule: 'shadow' as const,
   loadPerCore: 3,
   processCap: 1800,
   cores: 12,
-  slotAim: 'shadow' as const,
 }
 
 beforeAll(async () => {
@@ -36,40 +34,22 @@ beforeAll(async () => {
 })
 afterAll(() => db.stop())
 
-test('the shadow minutes are counted by whether the shadow rule would admit more or fewer, with the host beside them', async () => {
+test('the swapouts and the minutes under pressure are summed over the host samples of the window', async () => {
   const { sql } = db
-  // minute, live admits, shadow admits, swapouts of the host sample, pressure level
-  const rows: [number, number, number, number, number][] = [
-    [10, 1, 2, 5000, 2],
-    [9, 1, 2, 1000, 1],
-    [8, 1, 1, 0, 1],
-    [7, 2, 0, 600, 1],
-    [6, 0, 0, 20, 4],
+  // minute, swapouts of the host sample, pressure level
+  const rows: [number, number, number][] = [
+    [10, 5000, 2],
+    [9, 1000, 1],
+    [8, 0, 1],
+    [7, 600, 1],
+    [6, 20, 4],
   ]
-  for (const [m, live, shadow, swapout, level] of rows) {
-    await sql`
-      INSERT INTO factory.admission_shadow (at, candidates, live_admits, shadow_admits, load_ceiling, shadow_load_ceiling, process_cap)
-      VALUES (${minute(m)}, 2, ${live}, ${shadow}, 120, 36, 1800)`
+  for (const [m, swapout, level] of rows) {
     await sql`
       INSERT INTO factory.host_samples (at, swapout_mb_per_300s, pressure_level)
       VALUES (${new Date(minute(m).getTime() + 20_000)}, ${swapout}, ${level})`
   }
-  // a shadow row outside the window is not counted
-  await sql`
-    INSERT INTO factory.admission_shadow (at, candidates, live_admits, shadow_admits, load_ceiling, shadow_load_ceiling, process_cap)
-    VALUES (${new Date(NOW.getTime() - 3 * 86_400_000)}, 1, 0, 1, 120, 36, 1800)`
-
   const model = CapacityLoopModel.parse(await readCapacityLoop(db.sql, { now: NOW, days: 1, constants }))
-  expect(model.shadow).toMatchObject({
-    minutes: 5,
-    firstAt: minute(10).toISOString(),
-    lastAt: minute(6).toISOString(),
-    shadowMore: { total: 2 },
-    shadowFewer: { total: 1 },
-    whenMore: { minutes: 2, swapoutMbAvg: 3000, swapoutMbMax: 5000, pressureLevelMax: 2, pressureMinutes: 1 },
-    whenFewer: { minutes: 1, swapoutMbAvg: 600, swapoutMbMax: 600, pressureLevelMax: 1, pressureMinutes: 0 },
-    whenSame: { minutes: 2, swapoutMbAvg: 10, swapoutMbMax: 20, pressureLevelMax: 4, pressureMinutes: 1 },
-  })
   // MiB swapped out: each minute's figure is scaled to 300 s, so a fifth of it is that minute's
   expect(model.swapoutMib.total).toBe((5000 + 1000 + 0 + 600 + 20) / 5)
   expect(model.minutesUnderPressure.total).toBe(2)

@@ -606,16 +606,6 @@ export function postgresCapacityStore(tx: SQL): CapacityStore {
         ON CONFLICT (repo) DO UPDATE SET at = EXCLUDED.at, set_at = EXCLUDED.set_at, set_by = EXCLUDED.set_by`
     },
 
-    async recordShadow(d, keepSince) {
-      await tx`
-        INSERT INTO factory.admission_shadow (at, candidates, live_admits, shadow_admits, live_refusal, shadow_refusal,
-          shadow_message, load, load_ceiling, shadow_load_ceiling, processes, process_cap)
-        VALUES (${d.at}, ${d.candidates}, ${d.liveAdmits}, ${d.shadowAdmits}, ${d.liveRefusal}, ${d.shadowRefusal},
-          ${d.shadowMessage}, ${d.load}, ${d.loadCeiling}, ${d.shadowLoadCeiling}, ${d.processes}, ${d.processCap})
-        ON CONFLICT (at) DO NOTHING`
-      await tx`DELETE FROM factory.admission_shadow WHERE at < ${keepSince}`
-    },
-
     async openWaits() {
       const rows: unknown[] = await tx`SELECT id, issue_id, kind FROM factory.queue_intervals WHERE to_at IS NULL`
       return rows.map((raw) => {

@@ -62,7 +62,6 @@ describe('a declared step runs off the mini when the mini makes it wait', () => 
     slots: 1,
     slotsMax: 1,
     slotExtraLoad: 12,
-    slotAim: 'off' as const,
     cores: 12,
     loadCeiling: 36,
     remote: { target: 'step-host', projects, probe: { latest: () => probed } },

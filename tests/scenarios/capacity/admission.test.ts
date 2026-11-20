@@ -152,8 +152,8 @@ test('swapouts in the last five minute samples keep it out though the counter st
   await sql`DELETE FROM factory.host_samples`
   for (const [ago, mb] of [0, 11349, 0, 1507, 6027].entries()) {
     await sql`
-      INSERT INTO factory.host_samples (at, load, memory_used_pct, swap_used_pct, swapout_mb_per_300s)
-      VALUES (now() - ${ago} * interval '1 minute', 5, 20, 10, ${mb})`
+      INSERT INTO factory.host_samples (at, load, memory_used_pct, swap_used_pct, swapout_mb_per_300s, pressure_level)
+      VALUES (now() - ${ago} * interval '1 minute', 5, 20, 10, ${mb}, 1)`
   }
   const reason = (await order()).find((e) => e.issue === issue)?.reason
   expect(reason?.kind).toBe('memory')
@@ -217,28 +217,20 @@ test('admitting never asked agw', async () => {
   )
 })
 
-test('the throughput rule is shadowed: the live rule admits, the shadow table records that the process cap would not have', async () => {
+test('the process cap is live: a host over it keeps a queued Issue out, with the numbers', async () => {
   const sql = lab.world.db.sql
   await lab.memory({ swapUsedMb: 1024, swapouts: 1_001_000 })
   await sql`DELETE FROM factory.host_samples`
-  await sql`DELETE FROM factory.admission_shadow`
-  // 500 processes by the newest minute sample: over the shadow cap of 100, which is not live while the rule is in shadow
+  // 500 processes by the newest minute sample: over the cap of 100
   await sql`
-    INSERT INTO factory.host_samples (at, load, memory_used_pct, swap_used_pct, swapout_mb_per_300s, processes)
-    VALUES (now(), 5, 20, 10, 0, 500)`
+    INSERT INTO factory.host_samples (at, load, memory_used_pct, swap_used_pct, swapout_mb_per_300s, processes, pressure_level)
+    VALUES (now(), 5, 20, 10, 0, 500, 1)`
   const issue = await lab.file('shade', 'queued while the host runs many processes')
   await settle(issue)
-  expect((await admit()).admitted.map((a) => a.issue)).toContain(issue)
-  const rows = await sql`
-    SELECT live_admits, shadow_admits, live_refusal, shadow_refusal, shadow_message, processes, process_cap
-    FROM factory.admission_shadow`
-  expect(rows).toHaveLength(1)
-  expect(rows[0]).toMatchObject({
-    shadow_admits: 0,
-    shadow_refusal: 'load',
-    shadow_message: 'the machine runs too many processes: 500 processes (cap 100)',
-    processes: 500,
-    process_cap: 100,
+  const held = await admit()
+  expect(held.admitted.map((a) => a.issue)).not.toContain(issue)
+  expect(held.queue.find((e) => e.issue === issue)?.reason).toMatchObject({
+    kind: 'load',
+    message: 'the machine runs too many processes: 500 processes (cap 100)',
   })
-  expect(Number(rows[0]?.live_admits)).toBeGreaterThanOrEqual(1)
 })

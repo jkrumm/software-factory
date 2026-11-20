@@ -56,7 +56,6 @@ describe('a step is sized from its project', () => {
     slots: 2,
     slotsMax: 6,
     slotExtraLoad: 12,
-    slotAim: 'off' as const,
     cores: 12,
     loadCeiling: 36,
   })

@@ -109,8 +109,8 @@ export interface AdmissionInputs {
   /** the learned worktree footprint of the candidate's repo against the free disk (`disk.ts`); null or absent: nothing learned or no reading, and disk keeps nobody out */
   diskFit?: DiskFit | null
   /**
-   * The lead aim (`FACTORY_SLOT_AIM=on`): the count of leads the host takes at its pressure now, and the leads running. Then the
-   * memory fit above is only the guard of what cannot fit at all, and this count is the gate. Null or absent: no aim, the fit
+   * The lead aim: the count of leads the host takes at its pressure now, and the leads running. Then the
+   * memory fit above is only the guard of what cannot fit at all, and this count is the gate. Null or absent (an unread host): no aim, the fit
    * decides alone.
    */
   leadAim?: LeadAimGate | null

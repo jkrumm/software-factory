@@ -1,6 +1,6 @@
 import { mkdir, mkdtemp, realpath, rm, writeFile } from 'node:fs/promises'
 import { join } from 'node:path'
-import { fileIncident, fileIssue } from '../flow.ts'
+import { calmAim, calmHost, fileIncident, fileIssue } from '../flow.ts'
 import { factory, type ServerProcess, startServer, startWorld, type World } from '../harness.ts'
 import { type AccountRow, renewSamples, setAccounts, setMemory } from '../host.ts'
 
@@ -115,6 +115,7 @@ export async function startLab(options: {
   })
 
   const flow = { world, server }
+  await calmAim(world)
 
   return {
     world,
@@ -122,6 +123,7 @@ export async function startLab(options: {
     root,
     cli: async (args, env = {}) => {
       await renewSamples(world.bin)
+      if (args[0] === 'capacity') await calmHost(world)
       const result = await factory(world, args, { FACTORY_URL: server.url, ...env })
       let json: unknown = null
       try {

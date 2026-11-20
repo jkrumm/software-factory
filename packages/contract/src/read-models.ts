@@ -1184,20 +1184,6 @@ export const CapacityLeadCost = z
   })
   .meta({ id: 'CapacityLeadCost' })
 
-/** The host's swapouts and pressure over the minutes of one kind of shadow decision. */
-export const CapacityShadowMinutes = z
-  .strictObject({
-    minutes: z.number().int(),
-    /** mean and largest of the minute samples' swapouts, MiB per 300 s; null with no sample joined */
-    swapoutMbAvg: z.number().nullable(),
-    swapoutMbMax: z.number().nullable(),
-    /** the highest `kern.memorystatus_vm_pressure_level` of those minutes (1, 2 or 4); null with none read */
-    pressureLevelMax: z.number().int().nullable(),
-    /** the minutes at pressure level 2 or 4 */
-    pressureMinutes: z.number().int(),
-  })
-  .meta({ id: 'CapacityShadowMinutes' })
-
 /** The host's readings over the shadow minutes of one kind (the aim above the live rule's slots, or not). */
 export const SlotAimMinutes = z
   .strictObject({
@@ -1322,34 +1308,11 @@ export const CapacityLoopModel = z
     /** host minutes at memory pressure level 2 (warning) or 4 (critical) */
     minutesUnderPressure: CapacityTotal,
     /**
-     * the throughput rule (the load ceiling in multiples of the cores, the process cap) beside the live one, from the
-     * per-minute decisions of `factory.admission_shadow`: minutes with a queued Issue only the host's rules keep out, in
-     * how many of them each rule would admit more, and what the host did in those minutes. Empty once the rule is live.
-     */
-    shadow: z.strictObject({
-      minutes: z.number().int(),
-      firstAt: at.nullable(),
-      lastAt: at.nullable(),
-      /** minutes the shadow rule would have admitted more Issues than the live one, per day */
-      shadowMore: CapacityTotal,
-      /** minutes it would have admitted fewer */
-      shadowFewer: CapacityTotal,
-      /**
-       * the host's swapouts and pressure in the minutes the shadow rule would have admitted more, fewer, or as many; with the
-       * fixed ceiling at or above 3x the cores the shadow is the stricter rule and `whenMore` stays empty, so `whenFewer`
-       * (the minutes the new rule would have held back) is what shows whether holding back mattered
-       */
-      whenMore: CapacityShadowMinutes,
-      whenFewer: CapacityShadowMinutes,
-      whenSame: CapacityShadowMinutes,
-    }),
-    /**
      * the slot aim of `read/capacity-loop.ts` (`domains/capacity/slot-aim.ts`): the count it allows now (null before its
-     * first minute) and, over the window's shadow minutes, the host's readings in the minutes it allowed more slots than
-     * the live rule's base against the others; the switch-on is judged by these two not differing for the worse
+     * first minute) and, over the window's `slot_shadow` minutes, the host's readings in the minutes it allowed more slots than
+     * the base against the others
      */
     slotAim: z.strictObject({
-      mode: z.enum(['off', 'shadow', 'on']),
       target: z.number().int().nullable(),
       minutes: z.number().int(),
       /** minutes the aim allowed more than the live base slots, and the minutes a caller waited in them */
@@ -1378,14 +1341,10 @@ export const CapacityLoopModel = z
       /** the memory gate: swapouts MiB per 300 s, and swap in use as a share of RAM, above which no lead is admitted */
       swapoutCeilingMb: z.number(),
       swapCeilingPct: z.number(),
-      /** `shadow`: the fixed load ceiling is live and the throughput rule is recorded; `on`: the throughput rule is live */
-      loadRule: z.enum(['shadow', 'on']),
-      /** the throughput rule: the load ceiling in multiples of `cores`, and the cap on the host's process count */
+      /** the load ceiling in multiples of `cores`, and the cap on the host's process count */
       loadPerCore: z.number(),
       processCap: z.number(),
       cores: z.number(),
-      /** `FACTORY_SLOT_AIM`: whether the slot count follows memory pressure, only shadows it, or is off */
-      slotAim: z.enum(['off', 'shadow', 'on']),
     }),
   })
   .meta({ id: 'CapacityLoopModel' })

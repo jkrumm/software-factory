@@ -94,11 +94,13 @@ describe('the aim pass and the grant', () => {
   })
   beforeEach(async () => {
     await world.reset()
+    // the world's roomy aim and calm sample (admission's) are replaced by what each test seeds
+    await world.db.sql`DELETE FROM factory.slot_aim`
+    await world.db.sql`DELETE FROM factory.host_samples`
   })
 
-  const aimDeps = (mode: 'off' | 'shadow' | 'on') => ({
+  const aimDeps = () => ({
     ...world.deps,
-    mode,
     slots: 2,
     slotsMax: 6,
     loadCeiling: 36,
@@ -119,18 +121,12 @@ describe('the aim pass and the grant', () => {
       reason: string
     }[]
 
-  test('off stores nothing', async () => {
-    await sample(0)
-    expect(value(await slotAimPass(aimDeps('off')))).toBe('slot aim is off')
-    expect(await shadow()).toEqual([])
-  })
-
   test('six quiet minutes with a waiter in line add a slot, one shadow row a minute beside the live base', async () => {
     for (let m = 0; m <= 6; m++) {
       await sample(m)
       if (m === 0) await waiter('w1')
       else await world.db.sql`UPDATE factory.capacity_slots SET seen_at = ${at(m)}`
-      value(await slotAimPass(aimDeps('shadow')))
+      value(await slotAimPass(aimDeps()))
     }
     const rows = await shadow()
     expect(rows.map((r) => r.aim_slots)).toEqual([2, 2, 2, 2, 2, 3, 3])
@@ -142,16 +138,16 @@ describe('the aim pass and the grant', () => {
 
   test('level 2 halves the aim, and a stale host sample holds it', async () => {
     await sample(0, { level: 2 })
-    value(await slotAimPass(aimDeps('shadow')))
+    value(await slotAimPass(aimDeps()))
     expect((await shadow()).map((r) => r.aim_slots)).toEqual([1])
     world.clock.set(at(30))
-    value(await slotAimPass(aimDeps('shadow')))
+    value(await slotAimPass(aimDeps()))
     expect((await shadow()).map((r) => r.reason)).toEqual(['pressure level 2: halved', 'pressure not read: held'])
   })
 
   test('the lead aim is seeded and stored beside the slot aim, with the leads that waited for it', async () => {
     await sample(0)
-    value(await slotAimPass({ ...aimDeps('shadow'), leadWaiters: async () => 3 }))
+    value(await slotAimPass({ ...aimDeps(), leadWaiters: async () => 3 }))
     const [aim] = await world.db.sql`SELECT lead_target, lead_since FROM factory.slot_aim WHERE id = 1`
     expect(aim?.lead_target).toBe(1)
     const [row] = await world.db.sql`SELECT lead_aim, leads_running FROM factory.slot_shadow`
@@ -164,7 +160,7 @@ describe('the aim pass and the grant', () => {
         INSERT INTO factory.host_samples (at, load, memory_used_pct, swap_used_pct, swapout_mb_per_300s, pressure_level)
         VALUES (${at(m)}, 5, 40, 30, 5000, 1)`
       world.clock.set(at(m))
-      value(await slotAimPass({ ...aimDeps('shadow'), swapoutCeilingMb: 2048 }))
+      value(await slotAimPass({ ...aimDeps(), swapoutCeilingMb: 2048 }))
     }
     expect((await shadow()).map((r) => r.reason)).toContain('swapouts over the ceiling: halved')
   })
@@ -174,30 +170,26 @@ describe('the aim pass and the grant', () => {
       INSERT INTO factory.slot_shadow (at, live_slots, live_max, aim_slots, holders, waiters, swap_growing, reason)
       VALUES (${new Date(AT.getTime() - 15 * 86_400_000)}, 2, 6, 2, 0, 0, false, 'old')`
     await sample(0)
-    value(await slotAimPass(aimDeps('shadow')))
+    value(await slotAimPass(aimDeps()))
     expect((await shadow()).map((r) => r.reason)).not.toContain('old')
   })
 
-  test('only under on does the aimed count govern the grant', async () => {
+  test('the aimed count governs the grant', async () => {
     await sample(0, { level: 2 })
-    value(await slotAimPass(aimDeps('shadow'))) // the aim is now 1
-    const slotDeps = (mode: 'shadow' | 'on') => ({
+    value(await slotAimPass(aimDeps())) // the aim is now 1
+    const slotDeps = {
       ...world.deps,
       slots: 2,
       slotsMax: 6,
       slotExtraLoad: 12,
-      slotAim: mode,
       cores: 12,
       loadCeiling: 36,
-    })
-    const first = value(await touchSlot(slotDeps('on'), { id: 'a', name: 'a' }))
+    }
+    const first = value(await touchSlot(slotDeps, { id: 'a', name: 'a' }))
     expect(first.granted).toBe(true)
-    const second = value(await touchSlot(slotDeps('on'), { id: 'b', name: 'b' }))
+    const second = value(await touchSlot(slotDeps, { id: 'b', name: 'b' }))
     expect(second.granted).toBe(false)
     expect(second.why).toContain('all 1 slots are busy')
-    // the same state under shadow: the live rule grants the second step (no learned peak, so within the base)
-    const live = value(await touchSlot(slotDeps('shadow'), { id: 'b', name: 'b' }))
-    expect(live.granted).toBe(true)
   })
 
   test('while the newest host samples show swap rising, a second step waits; a stale reading is ignored', async () => {
@@ -206,7 +198,6 @@ describe('the aim pass and the grant', () => {
       slots: 2,
       slotsMax: 6,
       slotExtraLoad: 12,
-      slotAim: 'shadow' as const,
       cores: 12,
       loadCeiling: 36,
     }
@@ -227,7 +218,7 @@ describe('the aim pass and the grant', () => {
     expect(value(await touchSlot(deps, { id: 'b', name: 'b' })).granted).toBe(true)
   })
 
-  test('under on a slot beyond the live base still needs a free-memory reading (a step with no peak is sized by a prior)', async () => {
+  test('a slot beyond the base still needs a free-memory reading (a step with no peak is sized by a prior)', async () => {
     await world.db.sql`
       INSERT INTO factory.slot_aim (id, target, quiet_since, changed_at) VALUES (1, 4, NULL, ${AT})`
     const deps = {
@@ -235,7 +226,6 @@ describe('the aim pass and the grant', () => {
       slots: 2,
       slotsMax: 6,
       slotExtraLoad: 12,
-      slotAim: 'on' as const,
       cores: 12,
       loadCeiling: 36,
     }
@@ -246,35 +236,35 @@ describe('the aim pass and the grant', () => {
     expect(third.why).toContain('no recent free-memory reading')
   })
 
-  test('a refusal on load names where its number comes from: the setting without the aim, the tripwire with it', async () => {
-    const slotDeps = (mode: 'shadow' | 'on') => ({
+  test('a refusal on load names where its number comes from: the tripwire, or the load ceiling with too few samples', async () => {
+    const slotDeps = {
       ...world.deps,
       slots: 2,
       slotsMax: 6,
       slotExtraLoad: 12,
-      slotAim: mode,
       cores: 12,
       loadCeiling: 36,
-    })
-    const wait = async (mode: 'shadow' | 'on', load: number, minutes: readonly number[] = []) => {
+    }
+    const wait = async (load: number, minutes: readonly number[] = []) => {
       await world.reset()
+      await world.db.sql`DELETE FROM factory.slot_aim`
+      await world.db.sql`DELETE FROM factory.host_samples`
       for (const [i, sampled] of minutes.entries()) await sample(i - minutes.length + 1, { load: sampled })
       world.clock.set(AT)
       await world.db.sql`
         INSERT INTO factory.slot_aim (id, target, quiet_since, changed_at) VALUES (1, 4, NULL, ${AT})`
       world.host.loadValue = ok(load)
-      for (const id of ['a', 'b']) value(await touchSlot(slotDeps(mode), { id, name: id }))
-      return value(await touchSlot(slotDeps(mode), { id: 'c', name: 'c' }))
+      for (const id of ['a', 'b']) value(await touchSlot(slotDeps, { id, name: id }))
+      return value(await touchSlot(slotDeps, { id: 'c', name: 'c' }))
     }
-    expect((await wait('shadow', 30)).why).toContain('load 30 is over 12 (FACTORY_SLOT_EXTRA_LOAD)')
     // too few minute samples for the tripwire: the instant against the load ceiling
-    expect((await wait('on', 40)).why).toContain('load 40 is over 36 (the load ceiling, too few minute samples')
+    expect((await wait(40)).why).toContain('load 40 is over 36 (the load ceiling, too few minute samples')
     // five minutes on end over the ceiling: the tripwire
-    expect((await wait('on', 40, [41, 40, 39, 38, 37])).why).toContain(
+    expect((await wait(40, [41, 40, 39, 38, 37])).why).toContain(
       'load over 36 in each of the last 5 minutes (37, 38, 39, 40, 41) for a slot beyond the first 2',
     )
     // one peak among quiet minutes trips nothing: the slot beyond the base is held back by something else, not the load
-    const peak = await wait('on', 60, [10, 10, 10, 10, 60])
+    const peak = await wait(60, [10, 10, 10, 10, 60])
     expect(peak.why ?? '').not.toContain('load')
   })
 })

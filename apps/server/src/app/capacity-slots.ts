@@ -1,7 +1,6 @@
 import {
   freeMibOf,
   growthMib,
-  headroomMib,
   LEARNED_RUNS,
   learnedCores,
   learnedPeakMib,
@@ -32,7 +31,7 @@ import {
 } from '../domains/capacity/remote.ts'
 import { type PressureBaseline, pressureThreshold } from '../kernel/remote-pressure.ts'
 import { activeHold, HOLD_LOOKBACK_MS, holdOf, holdWords } from '../kernel/remote-hold.ts'
-import { type AimMode, SWAP_WINDOW, swapGrowing } from '../domains/capacity/slot-aim.ts'
+import { SWAP_WINDOW, swapGrowing } from '../domains/capacity/slot-aim.ts'
 import {
   DEFAULT_PASS_AFTER_MS,
   DEFAULT_STEP_CORES,
@@ -96,17 +95,15 @@ export interface SlotDeps extends PlanningDeps {
   slots: number
   /** `FACTORY_SLOTS_MAX`: the most at once when memory and load allow */
   slotsMax: number
-  /** `FACTORY_SLOT_EXTRA_LOAD`: the load up to which a step beyond the base slots is granted */
+  /** `FACTORY_SLOT_EXTRA_LOAD`: no longer read (the load tripwire at the ceiling grants a step beyond the base slots); the setting is still accepted */
   slotExtraLoad: number
   host: HostReader
   /**
-   * `FACTORY_SLOT_AIM`: with `on`, the aim (1 to `slotsMax`) is the cap, the base stays `slots` (lowered to the aim when
-   * that is less), and a slot beyond the base keeps its learned-peak fit, fits the learned cores of the running steps and
-   * its own into the host's cores, and is held back by the load tripwire (`loadTrip`), not by one peak; the line is
-   * ordered by the learned runs (`lineOrder`)
+   * The slot aim (1 to `slotsMax`, `slot-aim.ts`) is the cap, the base stays `slots` (lowered to the aim when that is
+   * less), and a slot beyond the base keeps its learned-peak fit, fits the learned cores of the running steps and its own
+   * into the host's cores, and is held back by the load tripwire (`loadTrip`), not by one peak; the line is ordered by the
+   * learned runs (`lineOrder`). These are the cores the steps beyond the base share.
    */
-  slotAim: AimMode
-  /** the cores the steps beyond the base share under the aim */
   cores: number
   /** the lead admission's load ceiling: under the aim, the tripwire for a slot beyond the base is set at it */
   loadCeiling: number
@@ -326,10 +323,7 @@ export async function touchSlot(
     // Under the aim a slot beyond the base is held back by the tripwire (minutes on end over the load ceiling), never by
     // one peak; an unknown trip (too few samples) reads the instant against the ceiling.
     const trip = loadTrip(hostSamples, deps.loadCeiling, now, loadNow)
-    const aimed =
-      deps.slotAim === 'on'
-        ? Math.min(deps.slotsMax, Math.max(1, (await capacity.slotAim())?.target ?? deps.slots))
-        : null
+    const aimed = Math.min(deps.slotsMax, Math.max(1, (await capacity.slotAim())?.target ?? deps.slots))
     const owner = ownerIn(projects, input.cwd)
     const stated = remote ? declaredRemoteStep({ owner, key: mine.key, remote, input }) : null
     const eligible = stated !== null && typeof stated !== 'string'
@@ -371,7 +365,7 @@ export async function touchSlot(
           {
             id: input.id,
             name: input.name,
-            slots: aimed === null ? deps.slots : Math.min(deps.slots, aimed),
+            slots: Math.min(deps.slots, aimed),
             runMs,
             cwd: input.cwd,
             rssMib: input.rssMib,
@@ -388,26 +382,20 @@ export async function touchSlot(
               stepRunMs: mine.runMs,
               freeMib,
               growthMib: growth,
-              max: aimed ?? deps.slotsMax,
-              loadOk:
-                aimed === null
-                  ? loadNow !== null && loadNow <= deps.slotExtraLoad
-                  : trip === null
-                    ? loadNow !== null && loadNow <= deps.loadCeiling
-                    : !trip.tripped,
-              ...(aimed !== null && trip?.tripped ? { loadWhy: describeTrip(trip.loads, deps.loadCeiling) } : {}),
-              // under the aim the pressure level is the margin: the fit refuses a step only when its peak and the growth of the running ones exceed the free memory
-              headroomMib: aimed === null ? headroomMib(ramMib) : 0,
+              max: aimed,
+              loadOk: trip === null ? loadNow !== null && loadNow <= deps.loadCeiling : !trip.tripped,
+              ...(trip?.tripped ? { loadWhy: describeTrip(trip.loads, deps.loadCeiling) } : {}),
+              // the pressure level is the margin: the fit refuses a step only when its peak and the growth of the running ones exceed the free memory
+              headroomMib: 0,
               swapGrowing: swapRising,
               load: loadNow === null ? null : Math.round(loadNow * 10) / 10,
-              extraLoad: aimed === null ? deps.slotExtraLoad : deps.loadCeiling,
-              extraLoadFrom:
-                aimed === null
-                  ? 'FACTORY_SLOT_EXTRA_LOAD'
-                  : 'the load ceiling, too few minute samples for the tripwire; FACTORY_SLOT_EXTRA_LOAD is not read',
-              ...(aimed === null
-                ? {}
-                : { cores: deps.cores, stepCores: mine.cores, coresByName, heldCores, runMsByName }),
+              extraLoad: deps.loadCeiling,
+              extraLoadFrom: 'the load ceiling, too few minute samples for the tripwire',
+              cores: deps.cores,
+              stepCores: mine.cores,
+              coresByName,
+              heldCores,
+              runMsByName,
             },
           },
           now,

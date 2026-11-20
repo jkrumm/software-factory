@@ -1,5 +1,6 @@
 import { afterAll, beforeAll, expect, test } from 'bun:test'
 import { Health } from '@software-factory/contract'
+import { calmHost } from '../flow.ts'
 import { type Lab, startLab } from '../planning/lab.ts'
 
 /**
@@ -20,6 +21,8 @@ beforeAll(async () => {
     repos: { app: { project: 'apiVersion: factory/v2\nname: app\n', plan: PLAN } },
     env: { FACTORY_TICK_MS: '200', FACTORY_HEALTH_PROBE_MS: '100' },
   })
+  // nothing calls a verb here, so nothing else reads a pressure level for the lead aim
+  await calmHost(lab.world)
 })
 
 afterAll(async () => {

@@ -166,20 +166,12 @@ describe('the host', () => {
     expect(loadCeilingOf(0, 3)).toBe(1)
   })
 
-  test('the throughput rule is shadowed beside the fixed ceiling until it is switched on', () => {
-    const settings = (env: Record<string, string>) =>
-      planningSettings({ FACTORY_LOAD_CEILING: '120', ...env }, { cores: 12 })
-    expect(hostRule(settings({}))).toEqual({
-      loadCeiling: 120,
-      processCap: null,
-      shadow: { loadCeiling: 36, processCap: 1800 },
-    })
-    expect(
-      hostRule(settings({ FACTORY_LOAD_RULE: 'on', FACTORY_LOAD_PER_CORE: '2', FACTORY_PROCESS_CAP: '1200' })),
-    ).toEqual({
+  test('the host rule: the load ceiling is the cores times the per-core multiple, and the process cap is the setting', () => {
+    const settings = (env: Record<string, string>) => planningSettings(env, { cores: 12 })
+    expect(hostRule(settings({}))).toEqual({ loadCeiling: 36, processCap: 1800 })
+    expect(hostRule(settings({ FACTORY_LOAD_PER_CORE: '2', FACTORY_PROCESS_CAP: '1200' }))).toEqual({
       loadCeiling: 24,
       processCap: 1200,
-      shadow: null,
     })
   })
 

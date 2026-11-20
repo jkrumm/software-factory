@@ -115,8 +115,6 @@ export interface CapacityStore {
   setRelearn(relearn: Relearn): Promise<void>
   /** per Issue number: the MiB its lead's tree held at its newest sample since `since` */
   leadRssSince(since: Date): Promise<Map<number, number>>
-  /** stores the minute's shadow decision (the first of a minute stays) and drops those before `keepSince` */
-  recordShadow(decision: ShadowDecision, keepSince: Date): Promise<void>
   /** the open queue intervals: one per Issue that is queued for a reason as of the last recorded look */
   openWaits(): Promise<OpenWait[]>
   /** closes and opens queue intervals at `at` (`planWaits`), and drops the closed ones that ended before `keepSince` */
@@ -130,29 +128,6 @@ export interface CapacityStore {
   /** one minute of the aim beside the live rule (shadow) */
   recordSlotShadow(row: SlotShadowRow): Promise<void>
   pruneSlotShadow(before: Date): Promise<number>
-}
-
-/**
- * What the throughput rule (the load ceiling in multiples of the cores, the process cap) would have decided in a minute
- * beside the live rule (`factory.admission_shadow`): the Issues each would admit, and the refusal of the first Issue
- * that only the host's rules keep out (null: it is admitted).
- */
-export interface ShadowDecision {
-  /** the minute */
-  at: Date
-  /** the queued Issues that nothing in the chain keeps out */
-  candidates: number
-  liveAdmits: number
-  shadowAdmits: number
-  liveRefusal: string | null
-  shadowRefusal: string | null
-  shadowMessage: string | null
-  load: number | null
-  loadCeiling: number
-  shadowLoadCeiling: number
-  processes: number | null
-  /** the shadow rule's cap */
-  processCap: number
 }
 
 /** One minute of the slot aim beside the live rule: what each allowed, who held and waited, the reading the aim moved on. */

@@ -53,49 +53,45 @@ const state = async (n: number) => {
 const reasons = (result: Awaited<ReturnType<typeof pass>>) =>
   Object.fromEntries(result.queue.map((e) => [e.issue, e.reason?.kind ?? null]))
 
-describe('the lead aim (FACTORY_SLOT_AIM=on)', () => {
-  const aimDeps = () => ({ ...world.deps, limits: { ...world.deps.limits, slotAim: 'on' as const } })
+describe('the lead aim', () => {
   const sample = (level: number | null, ageMs = 0) =>
     world.db.sql`
       INSERT INTO factory.host_samples (at, load, memory_used_pct, kernel_free_pct, swap_used_pct, swapout_mb_per_300s, pressure_level)
       VALUES (${new Date(world.clock.now().getTime() - ageMs)}, 4, 80, 57, 3.5, 0, ${level})`
-  const aim = (target: number) =>
-    world.db.sql`
+  const aim = async (target: number) => {
+    await world.db.sql`DELETE FROM factory.slot_aim`
+    await world.db.sql`
       INSERT INTO factory.slot_aim (id, target, quiet_since, changed_at, lead_target)
       VALUES (1, 2, NULL, ${world.clock.now()}, ${target})`
+  }
 
   test('no stored count, an unread pressure or a count the running leads reach holds a new lead; room and a normal pressure admit it', async () => {
     world.accounts.rows = [account('a')]
     const one = await world.queued({ repo: 'app' })
+    await world.db.sql`DELETE FROM factory.slot_aim`
+    await world.db.sql`DELETE FROM factory.host_samples`
     await sample(1)
-    const start = value(await admissionPass(aimDeps()))
+    const start = value(await admissionPass(world.deps))
     expect(start.admitted).toEqual([])
     expect(start.queue.find((e) => e.issue === one)?.reason).toMatchObject({ kind: 'memory', part: 'aim' })
 
     await aim(1)
     await world.db.sql`DELETE FROM factory.host_samples`
     await sample(null)
-    const unread = value(await admissionPass(aimDeps()))
+    const unread = value(await admissionPass(world.deps))
     expect(unread.queue.find((e) => e.issue === one)?.reason?.message).toContain('pressure is not read')
 
     await world.db.sql`DELETE FROM factory.host_samples`
     await sample(1)
-    const open = value(await admissionPass(aimDeps()))
+    const open = value(await admissionPass(world.deps))
     expect(open.admitted.map((a) => a.issue)).toEqual([one])
     // the claim it took is a lead running: with a count of one a second lead of the repo waits for the aim, not the claim
     const two = await world.queued({ repo: 'app' })
     nextSample()
     await world.db.sql`DELETE FROM factory.host_samples`
     await sample(1)
-    const full = value(await admissionPass(aimDeps()))
+    const full = value(await admissionPass(world.deps))
     expect(full.queue.find((e) => e.issue === two)?.reason).toMatchObject({ kind: 'memory', part: 'aim' })
-  })
-
-  test('without the aim a repo with the same readings is admitted as before', async () => {
-    world.accounts.rows = [account('a')]
-    const one = await world.queued({ repo: 'app' })
-    await sample(1)
-    expect(value(await admissionPass(world.deps)).admitted.map((a) => a.issue)).toEqual([one])
   })
 })
 
@@ -301,12 +297,12 @@ describe('admission', () => {
         INSERT INTO factory.lead_samples (at, worktree, repo, issue, attempt, rss_mib, procs)
         VALUES (${new Date(at().getTime() - n * 3_600_000)}, ${`/wt/wide-${n}`}, 'wide', ${900 + n}, 1, 1600, 3)`
     }
-    // 32 GiB, 76.7 % used: 7 635 MiB free, 5 014 past the 2 621 headroom: room for three leads of 1600 MiB, not four
+    // 32 GiB, 82.9 % used: 5 603 MiB free (the lead aim keeps no headroom: the pressure level is the margin): room for three leads of 1600 MiB, not four
     const sample = (usedPct: number) =>
       world.db.sql`
-        INSERT INTO factory.host_samples (at, load, memory_used_pct, swap_used_pct, swapout_mb_per_300s)
-        VALUES (${at()}, 1, ${usedPct}, 10, 0)`
-    await sample(76.7)
+        INSERT INTO factory.host_samples (at, load, memory_used_pct, swap_used_pct, swapout_mb_per_300s, pressure_level)
+        VALUES (${at()}, 1, ${usedPct}, 10, 0, 1)`
+    await sample(82.9)
     const issues: Awaited<ReturnType<typeof world.queued>>[] = []
     for (let i = 0; i < 6; i++) issues.push(await world.queued({ repo: 'wide' }))
     const first = await pass()

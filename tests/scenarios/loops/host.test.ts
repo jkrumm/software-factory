@@ -1,4 +1,5 @@
 import { afterAll, beforeAll, expect, test } from 'bun:test'
+import { availableParallelism } from 'node:os'
 import { QueueOrder } from '@software-factory/contract'
 import { fileIssue, settle } from '../flow.ts'
 import { setProcesses } from '../host.ts'
@@ -15,7 +16,7 @@ beforeAll(async () => {
   lab = await startLab({
     leads: true,
     repos: { app: { project: 'apiVersion: factory/v2\nname: app\nleads: 8\n' } },
-    env: { FACTORY_LEADS_PER_ACCOUNT: '16', FACTORY_LOAD_CEILING: '7' },
+    env: { FACTORY_LEADS_PER_ACCOUNT: '16', FACTORY_LOAD_PER_CORE: '1' },
   })
   expect((await lab.cli(['project', 'sync'])).code).toBe(0)
 })
@@ -86,7 +87,12 @@ test('a lead is costed by its process tree and the minute carries the capacity f
   expect(queue.length).toBeGreaterThanOrEqual(1)
   const [sample] =
     await sql()`SELECT leads, queued, seats, load_ceiling FROM factory.host_samples ORDER BY at DESC LIMIT 1`
-  expect(sample).toEqual({ leads: claims?.n, queued: queue.length, seats: 16, load_ceiling: 7 })
+  expect(sample).toEqual({
+    leads: claims?.n,
+    queued: queue.length,
+    seats: 16,
+    load_ceiling: Math.max(1, availableParallelism()),
+  })
   expect(claims?.n).toBeGreaterThanOrEqual(1)
 })
 
