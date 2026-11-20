@@ -245,9 +245,9 @@ export const HygieneAnswer = z.object({
 })
 export type HygieneAnswer = z.infer<typeof HygieneAnswer>
 
-// ---- factory-fix-classes -------------------------------------------------------------------------------------------------
+// ---- fix classes -------------------------------------------------------------------------------------------------
 
-/** The classes a fix commit is sorted into (`docs/product.md` "Fix classes"); the workflow answers with one of the keys. */
+/** The classes a fix commit is sorted into (`docs/product.md` "Fix classes"); the rules of `domains/loops/fix-classes.ts` give one of the keys. */
 export const FIX_CLASSES = [
   { key: 'tests', meaning: 'the fix is in tests, scenarios or e2e only' },
   { key: 'docs', meaning: 'the fix is in documentation only' },
@@ -264,35 +264,6 @@ export const FIX_CLASSES = [
 ] as const
 export type FixClassKey = (typeof FIX_CLASSES)[number]['key']
 export const FIX_CLASS_KEYS: readonly FixClassKey[] = FIX_CLASSES.map((c) => c.key)
-
-const Sha = z.string().regex(/^[0-9a-f]{7,64}$/, 'a commit sha in lowercase hex')
-
-export const FixClassesRequest = z.object({
-  repo: z
-    .string()
-    .regex(/^[A-Za-z0-9._/-]+$/)
-    .min(1)
-    .max(200),
-  classes: z.array(z.object({ key: z.string().min(1).max(40), meaning: z.string().min(1).max(300) })).min(1),
-  commits: z
-    .array(
-      z.object({
-        sha: Sha,
-        subject: z.string().min(1).max(500),
-        scope: z.string().min(1).max(100).nullable(),
-        body: z.string().max(800),
-        files: z.array(z.string().min(1).max(300)).max(20),
-      }),
-    )
-    .min(1)
-    .max(40),
-})
-export type FixClassesRequest = z.infer<typeof FixClassesRequest>
-
-export const FixClassesAnswer = z.object({
-  answers: z.array(z.object({ sha: Sha, class: z.string().min(1).max(40), reason: Line })).max(40),
-})
-export type FixClassesAnswer = z.infer<typeof FixClassesAnswer>
 
 // ---- the loops, as the routes show them ----------------------------------------------------------------------------------
 
@@ -366,42 +337,12 @@ export const DeskPushReply = z
   .meta({ id: 'DeskPushReply' })
 export type DeskPushReply = z.infer<typeof DeskPushReply>
 
-// ---- factory digest ------------------------------------------------------------------------------------------------------
-
-const DigestId = z.string().regex(/^[A-Za-z0-9._-]{1,64}$/, 'an identifier')
-const DigestInstant = z.string().regex(/^[0-9TZ:.+-]{1,40}$/, 'an ISO-8601 instant')
-const DigestTitle = z.string().min(1).max(500)
-
-/** What `agw factory digest` is sent for one project: its Issues of the last 7 days, the stdin of the call. */
-export const DigestRequest = z.object({
-  project: z.string().min(1).max(200),
-  window: z.object({ from: DigestInstant, to: DigestInstant }),
-  done: z
-    .array(
-      z.object({
-        id: DigestId,
-        title: DigestTitle,
-        kind: z.string().min(1).max(40),
-        closedAt: DigestInstant,
-        outcome: z.string().min(1).max(40),
-      }),
-    )
-    .max(100),
-  working: z
-    .array(
-      z.object({ id: DigestId, title: DigestTitle, kind: z.string().min(1).max(40), since: DigestInstant.optional() }),
-    )
-    .max(60),
-  queued: z.array(z.object({ id: DigestId, title: DigestTitle, after: z.array(DigestId).max(10).optional() })).max(60),
-  waiting: z.array(z.object({ id: DigestId, title: DigestTitle, reason: z.string().min(1).max(300) })).max(60),
-  previous: z.object({ headline: z.string().max(500), at: DigestInstant }).optional(),
-})
-export type DigestRequest = z.infer<typeof DigestRequest>
+// ---- the project digest ------------------------------------------------------------------------------------------------------
 
 /** A digest line and the Issues it is about. */
 export const DigestBullet = z.strictObject({ text: Line, ids: z.array(IssueId).min(1).max(20) })
 
-/** The digest `agw factory digest` answers (its own schema is strict too; the factory checks the ids against what it sent). */
+/** A project's digest as stored: built in code from its Issues (`domains/loops/digest.ts`). */
 export const DigestAnswer = z.strictObject({
   headline: z.string().min(1).max(140),
   shipped: z.array(DigestBullet).max(5),

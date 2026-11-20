@@ -135,7 +135,7 @@ Five words and a sixth for what is not an Issue yet, defined once here and used 
 | **Closed without you** | An Errand that ended with no action from the owner: its check found it no longer needed, it expired, a newer request replaced it, the factory ran its MacBook command through a fixed verb, or his MacBook ran it by itself from a class he granted (an auto-run). Nothing to do, and its title says which | |
 | **Visit** | The owner's run of Console reads with no gap of 30 minutes. The "Since you were here" band counts what happened since the visit before it ended (the first ever looks back 24 hours), so a page reload inside a visit shows the same band | |
 | **First verification pass** | A first watch (the window after an Issue's first ship) that ended passed, not regressed. The share of those is a KPI | |
-| **Fix commit** | A commit that fixes something that went wrong, sorted by class by the fix-classes loop and counted per week | |
+| **Fix commit** | A commit that fixes something that went wrong, classed by rule by the fix-classes loop and counted per week | |
 | **Cycle** | The time from an Issue filed to closed | |
 | **Queue wait** | The time from an Issue filed or reopened to admitted (a lead started); settling and the chain are part of it | |
 | **Window point** | A point of the five-hour Max window that an Issue's sessions used, per Issue | |

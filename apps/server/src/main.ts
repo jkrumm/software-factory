@@ -4,8 +4,6 @@ import { agwAmend } from './adapters/agw/amend.ts'
 import { agwErrandScreen } from './adapters/agw/errand.ts'
 import { agwJudge } from './adapters/agw/judge.ts'
 import { agwPort } from './adapters/agw/port.ts'
-import { agwFixClasses } from './adapters/agw/fix-classes.ts'
-import { agwDigest } from './adapters/agw/digest.ts'
 import { agwErrandNeeded } from './adapters/agw/errand-needed.ts'
 import { askQueueDir, queuedAsksIn } from './adapters/checkpoints/queued-asks.ts'
 import { shellCheckRunner } from './adapters/shell/check-runner.ts'
@@ -738,7 +736,7 @@ async function main(): Promise<void> {
       },
     },
     {
-      // Fix commits of every project's default branch, sorted by the rules and `factory-fix-classes`, stored for the Improve screen.
+      // Fix commits of every project's default branch, classed by rule, stored for the Improve screen.
       name: 'fix-classes',
       intervalMs: loopSettings.intervalMs['fix-classes'],
       onChange: false,
@@ -747,7 +745,6 @@ async function main(): Promise<void> {
           uow,
           clock: writes.clock,
           reader: createFixCommitReader({ repos }),
-          workflow: agwFixClasses(agw),
           repos: loopSettings.hygieneRepos,
         })
         if (!pass.ok) return pass
@@ -794,14 +791,13 @@ async function main(): Promise<void> {
       },
     },
     {
-      // One `agw factory digest` call per project whose Issues changed: the summary the Console shows on Flow. Interval only.
+      // A digest built in code for each project whose Issues changed: the summary the Console shows on Flow. Interval only.
       name: 'digest',
       intervalMs: loopSettings.intervalMs.digest,
       onChange: false,
       run: async () => {
-        const pass = await digestPass({ uow, clock: writes.clock, workflow: agwDigest(agw) })
+        const pass = await digestPass({ uow, clock: writes.clock })
         if (!pass.ok) return pass
-        said('digest', pass.value.problems)
         return ok(digestPassSummary(pass.value))
       },
     },

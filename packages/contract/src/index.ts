@@ -240,9 +240,7 @@ export {
 export {
   FIX_CLASS_KEYS,
   FIX_CLASSES,
-  FixClassesAnswer,
   type FixClassKey,
-  FixClassesRequest,
   JudgeInputWire,
   JudgeVerdictWire,
   LOOP_NAMES,
@@ -253,7 +251,6 @@ export {
   LoopView,
   DigestAnswer,
   DigestBullet,
-  DigestRequest,
   HYGIENE_KINDS,
   HygieneAnswer,
   HygieneCandidate,

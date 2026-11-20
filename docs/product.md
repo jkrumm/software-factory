@@ -112,7 +112,7 @@ signals with what each number did) and files one marked signal per change (`docs
 ### Fix classes
 
 A fix commit is a commit on a project's default branch whose subject is a conventional `fix`. The `fix-classes` loop sorts
-each into one class: by its scope where that settles it, by a workflow that reads the commit otherwise.
+each into one class by rule: by its scope or its words where they settle it, `other` otherwise.
 
 | Class | A fix for |
 |-|-|
