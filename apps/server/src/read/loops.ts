@@ -1,7 +1,7 @@
 import type { SQL } from 'bun'
 import * as z from 'zod'
 import type { ClassIssue, FindingLoop } from '../domains/loops/classes.ts'
-import { LEDGER_LOOPS, type ClosedFinding } from '../domains/loops/ledger.ts'
+import type { ClosedFinding } from '../domains/loops/ledger.ts'
 import type { DigestIssue } from '../kernel/digest-scope.ts'
 import type { FindingIssue } from '../domains/loops/hygiene-lifecycle.ts'
 import type { LoopReads } from '../domains/loops/ports.ts'
@@ -139,7 +139,7 @@ const WaitRowSchema = z.object({
 
 const ClosedRow = z.object({
   issue: z.string(),
-  loop: z.enum(LEDGER_LOOPS),
+  loop: z.enum(['friction', 'hygiene', 'selfwatch', 'throughput']),
   repo: z.string(),
   key: z.string(),
   figure: z.coerce.number().nullable(),

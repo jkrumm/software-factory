@@ -6,7 +6,7 @@ import type { ClassOutcome } from './classes.ts'
  * pass reads and writes through `LoopStore` and `LoopReads`.
  */
 
-export const LEDGER_LOOPS = ['friction', 'hygiene', 'selfwatch', 'throughput'] as const
+const LEDGER_LOOPS = ['friction', 'hygiene', 'selfwatch', 'throughput'] as const
 export type LedgerLoop = (typeof LEDGER_LOOPS)[number]
 
 /** What the figure did after the Issue closed; a finding with no verdict yet has not been read again. */
