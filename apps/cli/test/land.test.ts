@@ -325,6 +325,17 @@ describe('factory land', () => {
     expect(await calls()).not.toContain('gh pr merge')
   })
 
+  test("a GNUmakefile's merge-guard runs, and it shadows a Makefile without one", async () => {
+    await writeFile(join(work, 'GNUmakefile'), 'merge-guard:\n\t@echo gnu-guard-clear\n')
+    await writeFile(join(work, 'Makefile'), 'check:\n\t@true\n')
+    await git(work, 'add', 'GNUmakefile', 'Makefile')
+    await git(work, 'commit', '--quiet', '-m', 'chore: a GNUmakefile guard')
+    const result = await land().done
+    expect(result.code).toBe(0)
+    expect(result.err).toContain('gnu-guard-clear')
+    expect(result.err).toContain('land: guard: make merge-guard is clear')
+  })
+
   test('a merge-guard from an sinclude file runs', async () => {
     await writeFile(join(work, 'Makefile'), 'sinclude ci.mk\n')
     await writeFile(join(work, 'ci.mk'), 'merge-guard:\n\t@echo guard-clear\n')

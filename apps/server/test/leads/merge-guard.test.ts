@@ -19,6 +19,11 @@ test('a Makefile with a merge-guard rule has one, one without or no Makefile has
     expect(await guard.has(dir)).toBeNull()
     await writeFile(join(dir, 'Makefile'), 'sinclude mk/guard.mk\ncheck:\n\ttrue\n')
     expect(await guard.has(dir)).toBeNull()
+    // make reads GNUmakefile before Makefile
+    await writeFile(join(dir, 'GNUmakefile'), 'merge-guard:\n\t@true\n')
+    expect(await guard.has(dir)).toBe(true)
+    await writeFile(join(dir, 'GNUmakefile'), 'check:\n\ttrue\n')
+    expect(await guard.has(dir)).toBe(false)
   } finally {
     await rm(dir, { recursive: true, force: true })
   }

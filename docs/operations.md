@@ -126,7 +126,7 @@ The verb reads the ship mode from `project.yaml` (`ship:` with any `via: pr` lan
 | review | `agw review covered` on the range: a commit uncovered at standard or deep refuses with the `/review` command | same |
 | push | `git push --force-with-lease` (skipped when origin has the head); no open pull request refuses before the lock | `git push origin HEAD:<default>` |
 | ci | the pull request shows the head, then every check's bucket is `pass` or `skipping` with at least one `pass`, read green twice in a row (an all-skipped set is no CI); a `fail` or `cancel` refuses with the checks, no check after 3 min refuses (`--no-ci` for a head every workflow's path filter skips: `make check` on the rebased head before the push, no CI wait, no guard), 45 min refuses | none |
-| guard | `make merge-guard` where the `Makefile` has the rule (read from the file, as the brief reads it; one that only includes another file asks `LC_ALL=C make -n merge-guard`, and a failure other than the absent target refuses); else the same rule: the head contains the default branch, which is not red | none |
+| guard | `make merge-guard` where the Makefile `make` reads (`GNUmakefile`, else `makefile`, else `Makefile`) has the rule (read from the file, as the brief reads it, by one rule: `packages/contract/src/landing.ts`, which the hygiene pass's landing and `scripts/merge-guard.ts` read too; one that only includes another file asks `LC_ALL=C make -n merge-guard`, and a failure other than the absent target refuses); else the same rule: the head contains the default branch, which is not red | none |
 | merge | `gh pr merge --<method> --match-head-commit <head>` by the method GitHub allows (squash, then rebase, then merge; `--method` overrides), never `--admin` | none |
 | report | the landed commits on stdout, and a squash commit `agw review covered` lists stale with the `/review` command for it; a failed fetch after the merge is a warning, never exit 1 | the landed commits |
 
@@ -144,7 +144,7 @@ outlasts the gap between merges, so unserialised leads rebased against each othe
 
 The guard refuses, with the reason: a branch that does not contain `origin/master`, a new migration whose number master (or
 the branch) already uses, a head with no finished green CI run on its exact sha, and a master whose last finished CI run is
-red (a cancelled run was superseded and is skipped; an unreadable `gh` refuses too; a master run still running is not a
+red (a cancelled run was superseded and a skipped one judged nothing, so both are passed over; the hygiene pass's landing and `factory land` read the same rule from `packages/contract/src/landing.ts`; an unreadable `gh` refuses too; a master run still running is not a
 refusal). `factory land --allow-red` (`MERGE_GUARD_ARGS=--allow-red`) is for the one change that fixes a red master and
 never skips the head's CI.
 

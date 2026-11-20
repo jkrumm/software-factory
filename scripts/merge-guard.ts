@@ -15,6 +15,7 @@
  * Exit 0 when clear, 1 on a refusal (the reasons on stderr), 2 on a usage error.
  */
 import { spawnSync } from 'node:child_process'
+import { redRun } from '../packages/contract/src/landing.ts'
 
 const MIGRATIONS_PATH = 'apps/server/migrations'
 const MIGRATION_FILE = /^(\d{4})_[a-z0-9_]+\.sql$/
@@ -58,14 +59,14 @@ export function nextFree(ports: GuardPorts, ref = 'origin/master'): string {
 }
 
 /**
- * master's latest finished CI run; cancelled runs were superseded and are skipped. A refusal reason, or null when green.
+ * master's latest judged CI run (`redRun`: cancelled runs were superseded and skipped ones judged nothing). A refusal reason, or null when green.
  * A run still running or no finished run is not a refusal: the head's own green CI proved the combination.
  */
 export function masterRed(runs: CiRun[] | null): string | null {
   if (runs === null)
     return "master's CI runs cannot be read (gh failed): refusing, a merge needs to know master is green"
-  const last = runs.find((run) => run.conclusion !== 'cancelled' && run.status === 'completed')
-  if (!last || last.conclusion === 'success') return null
+  const last = redRun(runs)
+  if (!last) return null
   return `master's last CI run is ${last.conclusion} (${last.url}): fix master first, a merge onto red hides the next break (--allow-red only for the change that fixes it)`
 }
 

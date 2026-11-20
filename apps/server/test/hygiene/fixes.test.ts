@@ -391,6 +391,20 @@ describe('fixDeps for a repo that ships by pull request', () => {
     expect(callsOf(dir)).not.toContain('pr merge')
   })
 
+  test('a merge guard declared in a GNUmakefile is run too, and a broken include defers instead of reading as no guard', async () => {
+    const guarded = fixture({ ...files, GNUmakefile: 'include Makefile\nmerge-guard:\n\t@echo red >&2\n\t@exit 1\n' })
+    const first = fakeGh()
+    const [refused] = await fixDeps(byPr(first.gh), guarded.checkout, prInput)
+    expect(refused).toMatchObject({ outcome: 'deferred', detail: expect.stringContaining('merge guard refused') })
+    expect(callsOf(first.dir)).not.toContain('pr merge')
+
+    const broken = fixture({ ...files, GNUmakefile: 'include Makefile\nmerge-guard: missing.stamp\n\t@true\n' })
+    const second = fakeGh()
+    const [deferred] = await fixDeps(byPr(second.gh), broken.checkout, prInput)
+    expect(deferred).toMatchObject({ outcome: 'deferred', detail: expect.stringContaining('merge guard refused') })
+    expect(callsOf(second.dir)).not.toContain('pr merge')
+  })
+
   test('a gh that cannot read the repo skips the fix before any work', async () => {
     const f = fixture(files)
     const { gh } = fakeGh({ repoView: 'exit 1' })

@@ -1,6 +1,19 @@
 import { existsSync, readFileSync } from 'node:fs'
 import { constants } from 'node:os'
 import { basename, join } from 'node:path'
+import {
+  GREEN_READS,
+  MERGE_METHODS,
+  METHOD_FIELDS,
+  type MergeMethod,
+  allowedMethod,
+  makefileIn,
+  nextGreens,
+  probeGuard,
+  readChecks,
+  redRun,
+  scanGuard,
+} from '@software-factory/contract'
 import { parse } from 'yaml'
 import { type Held, withLock } from './deploy-lock.ts'
 import { usage } from './exit.ts'
@@ -8,20 +21,13 @@ import type { Io } from './operation.ts'
 import { exitCodeOf } from './slot.ts'
 
 const USAGE = 'usage: land [--pr <n>] [--method squash|rebase|merge] [--allow-red] [--no-ci] [--project <name>]'
-const METHODS = ['squash', 'rebase', 'merge'] as const
-type Method = (typeof METHODS)[number]
+type Method = MergeMethod
 /** How often the CI wait looks again (`FACTORY_LAND_POLL_MS`). */
 const DEFAULT_POLL_MS = 15_000
 /** A head with no check this long after its push has no CI coming (`FACTORY_LAND_NO_RUN_MS`). */
 const DEFAULT_NO_RUN_MS = 3 * 60_000
 /** The longest CI wait, the merge guard's own bound (`FACTORY_LAND_CI_MINUTES`). */
 const DEFAULT_CI_MINUTES = 45
-/** A Makefile rule named `merge-guard`, alone or among others (`a merge-guard: b`). */
-const GUARD_RULE = /^(?:[\w.-]+\s+)*merge-guard(?:\s+[\w.-]+)*\s*:(?!=)/m
-/** An `include` can define the rule in a file this read does not see. */
-const INCLUDE = /^-?s?include\s/m
-/** make's message when no rule makes `merge-guard` itself (GNU make 3.81 opens the quote with a backtick). */
-const ABSENT_GUARD = /No rule to make target [`']merge-guard'\.\s+Stop\./
 
 interface Options {
   pr?: string
@@ -160,8 +166,8 @@ function parseOptions(words: readonly string[]): Options {
       options.pr = pr
     } else if (flag === '--method') {
       const method = value()
-      if (!(METHODS as readonly string[]).includes(method))
-        throw usage(`land: --method is one of ${METHODS.join(', ')}`, USAGE)
+      if (!(MERGE_METHODS as readonly string[]).includes(method))
+        throw usage(`land: --method is one of ${MERGE_METHODS.join(', ')}`, USAGE)
       options.method = method as Method
     } else if (flag === '--project') options.project = value()
     else throw usage(`land: unknown argument ${word}`, USAGE)
@@ -399,32 +405,32 @@ class Lander {
       } else {
         const ran = await this.sh.run(['gh', 'pr', 'checks', String(pr.number), '--json', 'name,bucket,link'])
         const checks = json<Check[]>(ran.out) ?? []
-        anyCheck = checks.length > 0
-        const red = checks.filter((check) => check.bucket === 'fail' || check.bucket === 'cancel')
-        if (red.length > 0)
+        const reading = readChecks(checks)
+        if (reading.state === 'red')
           throw new Refused(
             'ci',
-            `CI on ${short(head)} is red: ${red.map((c) => `${c.name} ${c.bucket}${c.link ? ` (${c.link})` : ''}`).join('; ')}`,
+            `CI on ${short(head)} is red: ${checks
+              .filter((c) => reading.failed.includes(c.name))
+              .map((c) => `${c.name} ${c.bucket}${c.link ? ` (${c.link})` : ''}`)
+              .join('; ')}`,
             'fix it and commit (a flake: gh run rerun --failed <run id>), then factory land again',
           )
-        const pending = checks.filter((check) => check.bucket !== 'pass' && check.bucket !== 'skipping')
         // a set that is all skipped (a path or `if` filter) is no CI at all, as the hygiene pass reads it
-        anyCheck = checks.some((check) => check.bucket !== 'skipping')
-        if (anyCheck && pending.length === 0) {
-          // green twice in a row: a workflow that registers a moment after the first one must not be merged past
-          greens += 1
-          if (greens >= 2) {
+        anyCheck = reading.state !== 'none'
+        greens = nextGreens(greens, reading)
+        if (reading.state === 'green') {
+          if (greens >= GREEN_READS) {
             this.out(`ci: green on ${short(head)} (${checks.length} checks)`)
             return null
           }
           state = `green on ${short(head)}, reading once more`
+        } else if (reading.state === 'pending') {
+          state = `waiting for ${checks
+            .filter((c) => c.bucket !== 'pass' && c.bucket !== 'skipping')
+            .map((c) => c.name)
+            .join(', ')}`
         } else {
-          greens = 0
-          state = anyCheck
-            ? `waiting for ${pending.map((c) => c.name).join(', ')}`
-            : checks.length > 0
-              ? 'only skipped checks so far'
-              : 'no check yet'
+          state = checks.length > 0 ? 'only skipped checks so far' : 'no check yet'
         }
       }
       const waited = Date.now() - started
@@ -447,22 +453,19 @@ class Lander {
   }
 
   /**
-   * Whether the repo's Makefile has a `merge-guard` rule, read from the file as the server reads it for the brief
-   * (`adapters/git/merge-guard.ts`). A Makefile that includes another file and shows no such rule itself asks
-   * `make -n merge-guard` under `LC_ALL=C`, and only make's message for the absent target itself reads as none.
+   * Whether the repo has a `merge-guard` rule: the Makefile `make` reads (`GNUmakefile`, else `makefile`, else `Makefile`) is
+   * scanned as the server scans it for the brief (`scanGuard`). One that includes another file and shows no such rule itself
+   * asks `make -n merge-guard` under `LC_ALL=C`, and only make's message for the absent target itself reads as none.
    */
   private async hasGuard(): Promise<boolean> {
-    // `Makefile` alone, as the server reads it for the brief (adapters/git/merge-guard.ts), so the two never disagree
-    const path = join(this.repo.root, 'Makefile')
-    if (!existsSync(path)) return false
-    const text = readFileSync(path, 'utf8')
-    if (GUARD_RULE.test(text)) return true
-    if (!INCLUDE.test(text)) return false
-    // make's English message is what ABSENT_GUARD reads
+    const name = makefileIn((candidate) => existsSync(join(this.repo.root, candidate)))
+    if (!name) return false
+    const found = scanGuard(readFileSync(join(this.repo.root, name), 'utf8'))
+    if (found !== 'included') return found === 'rule'
     const probe = await this.sh.run(['make', '-C', this.repo.root, '-n', 'merge-guard'], { env: { LC_ALL: 'C' } })
-    if (probe.code === 0) return true
-    // only make's message for the absent target itself means none: a missing include or prerequisite is a broken guard
-    if (ABSENT_GUARD.test(probe.err + probe.out)) return false
+    const read = probeGuard({ exitCode: probe.code, output: probe.err + probe.out })
+    if (read !== 'broken') return read === 'has'
+    // a missing include or prerequisite is a broken guard
     throw new Refused(
       'guard',
       `make -n merge-guard failed, so whether the repo has a merge guard is unknown: ${lastLines(probe.err || probe.out)}`,
@@ -509,11 +512,11 @@ class Lander {
           `${this.repo.base}'s CI runs cannot be read: ${lastLines(ran.err)}`,
           'factory land again',
         )
-      const last = runs.find((run) => run.status === 'completed' && run.conclusion !== 'cancelled')
-      if (last && last.conclusion !== 'success')
+      const red = redRun(runs)
+      if (red)
         throw new Refused(
           'guard',
-          `${this.repo.base}'s last finished CI run is ${last.conclusion} (${last.url})`,
+          `${this.repo.base}'s last finished CI run is ${red.conclusion} (${red.url})`,
           `fix ${this.repo.base} first; only the change that fixes it lands with factory land --allow-red`,
         )
     }
@@ -522,17 +525,8 @@ class Lander {
 
   private async method(): Promise<Method> {
     if (this.options.method) return this.options.method
-    const ran = await this.sh.run([
-      'gh',
-      'repo',
-      'view',
-      '--json',
-      'squashMergeAllowed,rebaseMergeAllowed,mergeCommitAllowed',
-    ])
-    const allowed = ran.code === 0 ? json<Record<string, boolean>>(ran.out) : null
-    const method = allowed
-      ? METHODS.find((m) => allowed[m === 'merge' ? 'mergeCommitAllowed' : `${m}MergeAllowed`])
-      : undefined
+    const ran = await this.sh.run(['gh', 'repo', 'view', '--json', METHOD_FIELDS])
+    const method = allowedMethod(ran.code === 0 ? json<Record<string, boolean>>(ran.out) : null)
     if (!method)
       throw new Refused(
         'merge',
