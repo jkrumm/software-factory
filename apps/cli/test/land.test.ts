@@ -42,6 +42,8 @@ echo "gh $*" >> "$S/calls"
 case "$1 $2" in
   "pr view")
     [ -f "$S/no-pr" ] && { echo "no pull requests found" >&2; exit 1; }
+    [ -f "$S/blip" ] && [ "$(grep -c '^gh pr view' "$S/calls")" = 2 ] && { echo "dial tcp: i/o timeout" >&2; exit 1; }
+    [ -f "$S/gh-fail" ] && { echo "GraphQL: Could not resolve to a Repository with the name 'o/app'." >&2; exit 1; }
     head=$(git --git-dir="$LAND_ORIGIN" rev-parse "refs/heads/$LAND_BRANCH" 2>/dev/null)
     if [ -f "$S/merged" ]; then
       printf '{"number":7,"state":"MERGED","url":"https://github.com/o/app/pull/7","headRefOid":"%s","mergeCommit":{"oid":"%s"}}' "$head" "$(cat "$S/merged")"
@@ -383,6 +385,34 @@ describe('factory land', () => {
     expect(result.code).toBe(1)
     expect(result.err).toContain('land: pr: refused: no pull request for factory/7-1')
     expect(result.err).toContain('gh pr create --fill --base master')
+  })
+
+  test('a gh failure is not "no pull request": it names gh stderr and GH_CONFIG_DIR first', async () => {
+    await writeFile(join(state, 'gh-fail'), '')
+    const result = await land().done
+    expect(result.code).toBe(1)
+    expect(result.err).toContain(
+      'land: pr: refused: gh could not read the pull request for factory/7-1: GraphQL: Could not resolve to a Repository',
+    )
+    expect(result.err).toContain('check the gh account first')
+    expect(result.err).toContain('GH_CONFIG_DIR')
+    expect(result.err).not.toContain('no pull request for')
+  })
+
+  test('a gh failure while CI is polled is named once, the poll goes on and the land merges', async () => {
+    await writeFile(join(state, 'blip'), '')
+    const result = await land().done
+    expect(result.code).toBe(0)
+    expect(result.err).toContain('gh could not read the pull request for #7: dial tcp: i/o timeout')
+    expect(result.err).toContain('polling again')
+    expect(await calls()).toContain('gh pr merge 7')
+  })
+
+  test('a gh failure past the no-check bound is not read as "no CI check": the poll goes on', async () => {
+    await writeFile(join(state, 'blip'), '')
+    const result = await land([], { FACTORY_LAND_NO_RUN_MS: '0' }).done
+    expect(result.err).not.toContain('no CI check')
+    expect(result.code).toBe(0)
   })
 
   test('a repo that ships by push lands by pushing to the default branch, with no CI wait and no merge', async () => {

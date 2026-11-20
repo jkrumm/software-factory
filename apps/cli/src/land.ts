@@ -241,9 +241,21 @@ async function readRepo(sh: Shell, options: Options): Promise<Repo> {
   }
 }
 
+/** What gh prints when the repo was read and holds no such pull request (by branch, or by number). */
+const NO_PULL_REQUEST = /no pull requests? found|could not resolve to a pullrequest/i
+
+/** The pull request, or null when gh read the repo and found none; any other gh failure refuses with gh's own words. */
 async function pullRequest(sh: Shell, ref: string): Promise<PullRequest | null> {
   const ran = await sh.run(['gh', 'pr', 'view', ref, '--json', 'number,state,url,headRefOid,mergeCommit'])
-  return ran.code === 0 ? json<PullRequest>(ran.out) : null
+  if (ran.code === 0) return json<PullRequest>(ran.out)
+  const said = ran.err.trim() || ran.out.trim()
+  if (NO_PULL_REQUEST.test(said)) return null
+  const config = sh.io.env.GH_CONFIG_DIR
+  throw new Refused(
+    'pr',
+    `gh could not read the pull request for ${/^\d+$/.test(ref) ? `#${ref}` : ref}: ${lastLines(said) || `gh exited ${ran.code} with no output`}`,
+    `check the gh account first (gh auth status; GH_CONFIG_DIR is ${config ? config : 'unset'}), then factory land again`,
+  )
 }
 
 class Lander {
@@ -392,11 +404,20 @@ class Lander {
   private async ci(pr: PullRequest, head: string): Promise<number | null> {
     const started = Date.now()
     let previous = ''
+    let unread = ''
     let greens = 0
     for (;;) {
       const stopped = this.stopped()
       if (stopped !== null) return stopped
-      const view = await pullRequest(this.sh, String(pr.number))
+      // the verb's first read already told a wrong account from a missing pull request; a later failure is a blip, so poll again
+      let blip = false
+      const view = await pullRequest(this.sh, String(pr.number)).catch((error: unknown) => {
+        if (!(error instanceof Refused)) throw error
+        blip = true
+        if (error.why !== unread) this.out(`${error.why}; ${error.next}; polling again`)
+        unread = error.why
+        return null
+      })
       let state: string
       let anyCheck = false
       if (view?.headRefOid !== head) {
@@ -434,7 +455,8 @@ class Lander {
         }
       }
       const waited = Date.now() - started
-      if (!anyCheck && waited >= this.noRunMs)
+      // a poll that could not read says nothing about whether a check ever started
+      if (!anyCheck && !blip && waited >= this.noRunMs)
         throw new Refused(
           'ci',
           `no CI check on ${short(head)} after ${Math.round(waited / 1000)}s`,
