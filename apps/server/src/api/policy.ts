@@ -127,6 +127,7 @@ export const POLICY: readonly Rule[] = [
   rule('POST', '/issues', OWNER),
   rule('POST', '/issues/:id/reopen', OWNER),
   rule('POST', '/issues/:id/cancel', OWNER),
+  rule('POST', '/issues/:id/pause', OWNER),
   rule('POST', '/issues/:id/seat', OWNER),
   rule('POST', '/issues/:id/answer', OWNER),
   rule('POST', '/issues/:id/prio', OWNER),

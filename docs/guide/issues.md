@@ -27,7 +27,7 @@ export const STATES = ['settling', 'queued', 'working', 'waiting', 'watching', '
 
 An event is a fact recorded on an Issue, stored with who sent it and what it did. State is derived from events, never the other way.
 
-- **24 kinds.** Each has a zod payload in `PAYLOADS`; a payload that does not parse is refused.
+- **25 kinds.** Each has a zod payload in `PAYLOADS`; a payload that does not parse is refused.
 - **A sender per kind.** `SENDERS` names who may send each one. The owner is never the only way out of a machine wait.
 - **An attempt, a watch, a wait or a checkpoint.** An event that names one is for that one only. A late event from the factory is ignored; a late one from a lead is refused.
 - **Stored in `issue_events`** with the key, the actor, the result, the version and the transition it caused.
@@ -86,7 +86,7 @@ export type Cell =
 export type Table = { [S in State]: { [E in EventKind]: (ctx: Ctx<E>) => Cell } }
 ```
 
-Six states times 24 events is 144 cells. A queued Issue shows what most of them look like: it takes `admitted` and says why it takes almost nothing else. The excerpt below is the start of its row:
+Six states times 25 events is 150 cells. A queued Issue shows what most of them look like: it takes `admitted` and says why it takes almost nothing else. The excerpt below is the start of its row:
 
 ```ts
   queued: {
@@ -119,7 +119,7 @@ A state is the stored name of where an Issue is. A screen never shows it. It sho
 A plan row not yet filed is Planned. It is never an Issue, so it is never part of the five.
 
 - **A word is a view.** `workOf` reads the stored state, the wait and the queue reason. `Running + Paused + Ready + Held + Checking` is the number of open Issues on every surface.
-- **A wait has a reason, and each reason has a named exit.** The reasons are `timer`, `dependency`, `wall`, `unreported`, `blocked`, `lead_gone`, `regressed`, `decision`, `review`, `errand` and `external`; `WAITS` holds each exit. A machine wait ends without a person. A stall is a wait with a machine cause, and the steward ends it.
+- **A wait has a reason, and each reason has a named exit.** The reasons are `timer`, `dependency`, `wall`, `unreported`, `blocked`, `lead_gone`, `regressed`, `decision`, `review`, `errand`, `external` and `paused`; `WAITS` holds each exit. A machine wait ends without a person. A stall is a wait with a machine cause, and the steward ends it. `paused` is the owner's own wait (`factory issue pause`): his word or the time he gave ends it, and nothing else does.
 - **Screens do not name states.** `scripts/vocabulary.ts` fails `make check` when a screen's text says `queued` or `working`.
 
 ```ts

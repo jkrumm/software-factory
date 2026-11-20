@@ -142,6 +142,7 @@ const CLAIM_FREEING_WAITS: ReadonlySet<string> = new Set([
   'review',
   'errand',
   'external',
+  'paused',
 ])
 ```
 

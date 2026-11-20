@@ -120,6 +120,8 @@ export const LANGUAGE = {
     "An Issue filed with the checkpoint gate: it owes the same Spec as spec, but only the owner's own verdict ends its wait. No default after 24 hours, no Spec screen settle, so what is after it is released by him alone. Only a filer sets it, never triage",
   page: "One message on the owner's line (ntfy). It carries a checkpoint, is never sent twice, and goes on until the checkpoint is settled",
   pass: 'One run of a loop. A pass claims, commits, calls, records: a replayed pass acts on what the first stored',
+  pause:
+    'The owner\'s verb for a started Issue that is to wait: the paused wait, which only his word (factory issue note <id> --wake) or the time he gave (factory issue pause <id> --reason "..." [--until <iso>]) ends. The steward, the Judge and the lead leave it alone; the lead hears it once. A stall or a timer is replaced by it; a dependency, a review of its pull request or a person\'s wait is not, and an Issue no lead has started cannot be paused. Shown as Paused, on you, and not as a need. The event is paused',
   paused:
     "A lead began it and it waits on a named wait, no session running. Its split: on you (a Decision, a review, an Errand), on a timer, on another Issue (a dependency, or someone else's review of its pull request), stalled (the account's window, a lead that stopped without reporting, a block, a lost lead, a regression)",
   plan: "A project's docs/plan.yaml: rows not yet filed (the format: docs/plan.md). A row may target another repo",

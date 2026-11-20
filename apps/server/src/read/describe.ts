@@ -74,6 +74,8 @@ export function describeEvent(kind: string, payload: unknown): string {
     }
     case 'errand_turned_back':
       return `An errand was turned back: ${cut(plainText(field(payload, 'note') ?? ''))}`
+    case 'paused':
+      return after('Paused by the owner', field(payload, 'reason'))
     case 'deferred': {
       const review = field(payload, 'review')
       return review ? `Paused on the review of ${cut(plainText(review))}.` : 'Deferred.'
@@ -171,6 +173,7 @@ const WAIT_SENTENCE: Record<string, string> = {
   review: 'Paused: on the owner to review.',
   errand: "Paused: on the owner's hands.",
   external: "Paused: on someone else's review of its pull request.",
+  paused: 'Paused: you paused it; it resumes on your word, or at the time you gave.',
 }
 
 /** A plain word for what the Issue is doing now. */
@@ -191,7 +194,10 @@ export function phaseOf(input: { state: string; reason: string | null }): string
           ? 'paused on your review'
           : input.reason === 'errand'
             ? 'paused on your hands'
-            : input.reason === 'timer' || input.reason === 'dependency' || input.reason === 'external'
+            : input.reason === 'timer' ||
+                input.reason === 'dependency' ||
+                input.reason === 'external' ||
+                input.reason === 'paused'
               ? 'paused'
               : 'stalled'
     default:

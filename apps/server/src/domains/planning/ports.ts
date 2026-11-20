@@ -104,12 +104,12 @@ export interface DependencyWait {
   after: IssueId[]
 }
 
-/** An Issue that waits for a time, as its events made it. */
+/** An Issue that waits for a time, as its events made it: a lead's deferral, or the owner's pause that gave a time. */
 export interface TimerWait {
   issue: IssueId
   /** the version that began the wait: a wake must name it */
   since: number
-  /** the time the lead deferred to, ISO */
+  /** the time it waits until, ISO */
   until: string
 }
 

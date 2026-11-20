@@ -169,7 +169,15 @@ function checkShape(issue: Issue, now: Date, fail: (what: string) => never): voi
     }
     return
   }
-  if (!('holds' in wait) || !wait.holds.id.trim() || !wait.holds.summary.trim()) {
+  if (wait.reason === 'paused') {
+    // His word ends it, and nobody else's: no lead verb and no steward event leaves it.
+    if (!wait.detail.trim()) fail('a pause does not state why')
+    const left = exits.find(
+      (event) =>
+        event.actor !== 'owner' && event.actor !== 'orchestrator' && event.actor !== 'factory' && leaves(event),
+    )
+    if (left) fail(`a pause was left by the ${left.actor}'s ${left.kind}`)
+  } else if (!('holds' in wait) || !wait.holds.id.trim() || !wait.holds.summary.trim()) {
     fail(`the wait on a person ${wait.reason} does not state what it holds`)
   }
   if (!exits.some(leaves)) fail(`the wait on a person ${wait.reason} has no exit`)

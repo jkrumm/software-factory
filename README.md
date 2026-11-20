@@ -149,7 +149,7 @@ One word per thing, in code, CLI, events, screens and docs. This is the ubiquito
 | **Signal** | Anything that arrives and may become work, with a kind, an origin and a trust level |
 | **Issue** | One unit of work: one repo, one branch, one ship |
 | **State** | `settling`, `queued`, `working`, `waiting`, `watching`, `closed`. Only an event moves it. Screens say Running, Paused, Ready, Held, Checking and Planned instead |
-| **Event** | A fact recorded on an Issue. **24 kinds**, among them `filed`, `admitted`, `shipped`, `watch_passed` |
+| **Event** | A fact recorded on an Issue. **25 kinds**, among them `filed`, `admitted`, `shipped`, `watch_passed` |
 | **Lead / Attempt** | The agent session that owns an Issue, and its *n*th try |
 | **Gate** | A machine check a lead cannot talk past |
 | **Watch / Verify** | The window after a ship, and the check that ends it |
@@ -288,7 +288,7 @@ export type Table = { [S in State]: { [E in EventKind]: (ctx: Ctx<E>) => Cell } 
 
 **Example files:**
 
-- [`domains/work/table.ts`](apps/server/src/domains/work/table.ts): `TABLE`, 6 states by 24 events
+- [`domains/work/table.ts`](apps/server/src/domains/work/table.ts): `TABLE`, 6 states by 25 events
 - [`domains/work/diagram.ts`](apps/server/src/domains/work/diagram.ts): the diagram, generated
 
 **Read more:** [The Issue, as the code has it](docs/language.md#the-issue-as-the-code-has-it), [Where work stands](docs/language.md#where-work-stands), [Effective ML Revisited](https://blog.janestreet.com/effective-ml-revisited/) (Yaron Minsky: make illegal states unrepresentable), [Parse, don't validate](https://lexi-lambda.github.io/blog/2019/11/05/parse-don-t-validate/) (Alexis King)

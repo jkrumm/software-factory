@@ -63,6 +63,11 @@ export const WAITS = {
     stall: false,
     ends: 'woken by the review poll when the pull request is approved, gets changes requested or a new review comment, merges or closes',
   },
+  paused: {
+    exit: 'person',
+    stall: false,
+    ends: "the owner's word (a note with wake), or the time it was paused until; the steward never ends it",
+  },
 } as const satisfies Record<string, { exit: 'machine' | 'person'; stall: boolean; ends: string }>
 
 export type WaitReason = keyof typeof WAITS
@@ -76,7 +81,9 @@ export type WaitSpec =
   /** `watching`: the steward deferred a shipped Issue, so the wake goes back to the watch, not to the lead's work */
   | { reason: 'dependency'; after: IssueId[]; watching?: true }
   | { reason: StallCause; detail: string }
-  | { reason: Exclude<PersonReason, 'review'>; holds: Checkpoint }
+  | { reason: Exclude<PersonReason, 'review' | 'paused'>; holds: Checkpoint }
+  /** the owner paused it (`issue pause`): it ends with his word, or at `until` when he gave one */
+  | { reason: 'paused'; detail: string; until?: string }
   /** a pull request waits on a review by someone else: `holds.id` names it (a URL or `#<number>`), the poll wakes the wait */
   | { reason: 'external'; holds: Checkpoint }
   /**

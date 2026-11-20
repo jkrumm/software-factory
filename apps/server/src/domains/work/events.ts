@@ -92,6 +92,8 @@ export const PAYLOADS = {
     ran: text.optional(),
     awaits: z.object({ review: text }).optional(),
   }),
+  /** the owner pauses a started Issue: a wait that only his word, or `until`, ends (`docs/language.md`, Wait) */
+  paused: z.object({ reason: text, until: z.iso.datetime({ offset: true }).optional() }),
   /** the owner or the orchestrator turned the Errand back: not done, and `note` says what to do instead */
   errand_turned_back: z.object({ errand: text, note: text }),
   /** the lead waits until a time, until other Issues close, or on the review of its pull request (the steward defers a holder behind a queued Issue that needs its claim) */
@@ -162,6 +164,7 @@ export const SENDERS: { [K in EventKind]: readonly Actor[] } = {
   errand_raised: ['lead'],
   errand_done: ['owner', 'orchestrator', 'judge', 'factory'],
   errand_turned_back: ['owner', 'orchestrator'],
+  paused: ['owner', 'orchestrator'],
   deferred: ['lead', 'steward'],
   stalled: ['lead', 'factory'],
   moved_up: ['factory'],

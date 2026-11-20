@@ -31,6 +31,7 @@ const PAUSED_BY_WAIT: Readonly<Record<string, PausedSplit>> = {
   timer: 'timer',
   dependency: 'issue',
   external: 'issue',
+  paused: 'you',
 }
 
 const READY_BY_QUEUE: Readonly<Record<string, ReadyLimit>> = {

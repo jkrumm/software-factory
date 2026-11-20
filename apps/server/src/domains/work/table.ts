@@ -25,10 +25,11 @@ export interface Ctx<K extends EventKind = EventKind> {
 /**
  * One `(state, event)` cell's answer: move (to the same state, too: the event is recorded), refuse (the verb's error,
  * named), or ignore (why this changes nothing). A move to `waiting` names its wait, keeps the current one when the
- * Issue already waits, or `update`s it in place (same `since`, same `told`); a move to `closed` names its outcome.
+ * Issue already waits, or `update`s it in place (same `since`, same `told`), and says `heard` when its own effect
+ * tells the lead the event (so the wait begins told); a move to `closed` names its outcome.
  */
 export type Cell =
-  | { to: 'waiting'; wait?: WaitSpec; update?: WaitSpec; effects: Effect[] }
+  | { to: 'waiting'; wait?: WaitSpec; update?: WaitSpec; heard?: true; effects: Effect[] }
   | { to: 'closed'; outcome: Outcome; effects: Effect[] }
   | { to: 'settling' | 'queued' | 'working' | 'watching'; effects: Effect[] }
   | { refuse: string }
@@ -116,6 +117,8 @@ function waitHint(issue: Issue, event: { kind: EventKind; payload?: unknown }): 
       return ''
     case 'external':
       return `it waits on the review of ${wait.holds.id} (${ends}), so \`${verb}\` is not taken now: end the turn; the poll wakes it with what the reviewer did, ${later}`
+    case 'paused':
+      return `the owner paused it (${wait.detail}), so \`${verb}\` is not taken now: end the turn and do not report a block; the owner's word or its time ends the pause, and you hear then, ${later}`
     default:
       return `it waits (${wait.reason}: ${ends}); \`${verb}\` is taken only from a timed wait or while working: a stall is the steward's to end, so end the turn`
   }
@@ -287,6 +290,64 @@ const deferWatching = (ctx: Ctx<'deferred'>): Cell => {
   return { ...deferred, wait: { ...deferred.wait, watching: true } }
 }
 
+/** The owner's pause as a wait: until his word, or the time he gave, which must still be ahead. */
+function pausedWait(ctx: Ctx<'paused'>): WaitSpec | string {
+  const { reason, until } = ctx.event.payload
+  if (until !== undefined && Date.parse(until) <= ctx.now.getTime()) {
+    return `paused needs a time ahead of now: \`factory issue pause ${ctx.issue.id} --reason "..." --until <a time in the future>\``
+  }
+  return { reason: 'paused', detail: reason, ...(until === undefined ? {} : { until }) }
+}
+
+/** A working lead hears the pause now, once: the wait begins told, so the resume does not repeat it. */
+const pauseWorking = (ctx: Ctx<'paused'>): Cell => {
+  const spec = pausedWait(ctx)
+  if (typeof spec === 'string') return refuse(spec)
+  const { issue } = ctx
+  return {
+    to: 'waiting',
+    wait: spec,
+    heard: true,
+    effects: [noteLead(issue.id, issue.attempt, next(issue), next(issue))],
+  }
+}
+
+/**
+ * A pause replaces a stall or a timer (the lead has no turn to interrupt and hears it with the resume) and updates a pause
+ * in place; every other wait keeps its own exit, since a pause would lose an edge or an answer.
+ */
+const pauseWaiting = (ctx: Ctx<'paused'>): Cell => {
+  const { issue } = ctx
+  const { wait } = issue
+  if (!wait) return refuse(`waiting without a wait: ${show(issue)}`) // unreachable: replay keeps the two together
+  // A lost lead's wait ends in a new attempt, which a resume to `working` would skip: it keeps its own exit.
+  const replaces =
+    (WAITS[wait.reason].stall && wait.reason !== 'lead_gone') || wait.reason === 'timer' || wait.reason === 'paused'
+  if (!replaces) {
+    const how =
+      WAITS[wait.reason].exit === 'person'
+        ? `answer it with ${answerOf(wait)}`
+        : `${show(issue)} says what it waits for`
+    return refuse(
+      `it already waits (${wait.reason}: ${WAITS[wait.reason].ends}), and a pause would lose that exit: ${how}`,
+    )
+  }
+  const spec = pausedWait(ctx)
+  if (typeof spec === 'string') return refuse(spec)
+  return wait.reason === 'paused'
+    ? { to: 'waiting', update: spec, effects: [] }
+    : { to: 'waiting', wait: spec, effects: [] }
+}
+
+const pauseNotStarted = refused(
+  ({ issue }) =>
+    `no lead has started it: it is not paused, it is not started; ${show(issue)} says where it stands, and \`factory issue cancel ${issue.id} --reason "..."\` ends it`,
+)
+const pauseWatching = refused(
+  ({ issue }) =>
+    `it shipped: the watch is on and ends by itself, so it is not paused; ${show(issue)} says where it stands`,
+)
+
 /** A lead reports its own block; a wall and an unreported stop are the factory's to see. */
 const stall = (ctx: Ctx<'stalled'>): Cell => {
   const { cause, attempt, detail } = ctx.event.payload
@@ -420,7 +481,22 @@ const ANSWER_VERBS: Partial<Record<WaitReason, string>> = {
   review: 'factory artifact verdict',
 }
 const answerOf = (wait: Wait): string =>
-  `\`${ANSWER_VERBS[wait.reason] ?? 'factory issue show'} ${'holds' in wait ? wait.holds.id : '<id>'}\``
+  wait.reason === 'paused'
+    ? '`factory issue note <id> "..." --wake`'
+    : `\`${ANSWER_VERBS[wait.reason] ?? 'factory issue show'} ${'holds' in wait ? wait.holds.id : '<id>'}\``
+
+/** A pause ends with the owner's word (or the orchestrator's), or when the factory's clock reaches the time he gave. */
+function endsPause(ctx: Ctx<'woken'>, wait: Wait & { reason: 'paused' }): Cell {
+  const { actor } = ctx.event
+  if (actor === 'owner' || actor === 'orchestrator') return resume(ctx.issue)
+  if (actor === 'factory' && wait.until !== undefined && Date.parse(wait.until) <= ctx.now.getTime()) {
+    return resume(ctx.issue)
+  }
+  const until = wait.until === undefined ? '' : ` or at ${wait.until}`
+  return refuse(
+    `the owner paused it: only his word${until} ends it, not a wake from the ${actor}; ${answerOf(wait)} is his`,
+  )
+}
 
 const wake = (ctx: Ctx<'woken'>): Cell => {
   const { issue } = ctx
@@ -429,6 +505,7 @@ const wake = (ctx: Ctx<'woken'>): Cell => {
   if (ctx.event.payload.since !== wait.since) {
     return ignore(`wakes the wait that began at version ${ctx.event.payload.since}; this one began at ${wait.since}`)
   }
+  if (wait.reason === 'paused') return endsPause(ctx, wait)
   if (WAITS[wait.reason].exit === 'person') {
     return refuse(`a ${wait.reason} wait ends with its answer, not a wake: answer it with ${answerOf(wait)}`)
   }
@@ -506,6 +583,7 @@ export const TABLE: Table = {
     errand_raised: noLeadYet,
     errand_done: said('nothing waits for an errand'),
     errand_turned_back: said('nothing waits for an errand'),
+    paused: pauseNotStarted,
     deferred: noLeadYet,
     stalled: said('settling: no lead is working'),
     moved_up: noLeadYet,
@@ -532,6 +610,7 @@ export const TABLE: Table = {
     errand_raised: noLeadYet,
     errand_done: said('nothing waits for an errand'),
     errand_turned_back: said('nothing waits for an errand'),
+    paused: pauseNotStarted,
     deferred: noLeadYet,
     stalled: said('queued: no lead is working'),
     moved_up: noLeadYet,
@@ -558,6 +637,7 @@ export const TABLE: Table = {
     errand_raised: raiseErrand,
     errand_done: said('nothing waits for an errand'),
     errand_turned_back: said('nothing waits for an errand'),
+    paused: pauseWorking,
     deferred: deferredBy(defer),
     stalled: stall,
     moved_up: moveUp,
@@ -585,6 +665,7 @@ export const TABLE: Table = {
     errand_raised: fromTimer(raiseErrand),
     errand_done: errandEnded,
     errand_turned_back: (ctx) => endsCheckpoint(ctx, 'errand', ctx.event.payload.errand),
+    paused: pauseWaiting,
     deferred: heldOrFromTimer,
     stalled: (ctx) =>
       ctx.event.payload.cause === 'blocked' ? fromTimer(stall)(ctx) : ignore('waiting: no lead turn is running'),
@@ -612,6 +693,7 @@ export const TABLE: Table = {
     errand_raised: watchIsOn,
     errand_done: said('nothing waits for an errand'),
     errand_turned_back: said('nothing waits for an errand'),
+    paused: pauseWatching,
     deferred: deferWatching,
     stalled: (ctx) => (ctx.event.actor === 'lead' ? refuse(watchHint(ctx.issue)) : ignore('watching')),
     moved_up: moveUp,
@@ -638,6 +720,7 @@ export const TABLE: Table = {
     errand_raised: isClosed,
     errand_done: said('it is closed: nothing waits for an errand'),
     errand_turned_back: said('it is closed: nothing waits for an errand'),
+    paused: isClosed,
     deferred: isClosed,
     stalled: said('it is closed'),
     moved_up: said('it is closed'),

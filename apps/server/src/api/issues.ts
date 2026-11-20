@@ -1,6 +1,7 @@
 import {
   ArtifactReply,
   CancelBody,
+  PauseBody,
   DecisionReply,
   IssueAnswerBody,
   LeadVerbAnswer,
@@ -77,6 +78,13 @@ export interface IssueApi {
     pinned: boolean
   }): Promise<Result<Collection, StandaloneArtifactError | PortError>>
   cancel(input: { issueId: IssueId; reason: string; actor: OwnerActor; call?: string | undefined }): Promise<Written>
+  pause(input: {
+    issueId: IssueId
+    reason: string
+    until?: string | undefined
+    actor: OwnerActor
+    call?: string | undefined
+  }): Promise<Written>
   withdraw(input: { issueId: IssueId; from: string; reason: string; call?: string | undefined }): Promise<Written>
   note(input: NoteInput): Promise<Result<NoteOutcome, NoteError>>
   seat(input: {
@@ -114,6 +122,7 @@ const unwired: IssueApi = {
   editCollection: gone,
   pinCollection: gone,
   cancel: gone,
+  pause: gone,
   withdraw: gone,
   note: gone,
   seat: gone,
@@ -363,6 +372,32 @@ export const issueRoutes = (wired: IssueApi | undefined) => {
         detail: {
           operationId: 'issue.cancel',
           summary: 'the owner ends an Issue; its lead, worktree and claim are finalized',
+        },
+      },
+    )
+    .post(
+      '/issues/:id/pause',
+      async ({ params, body, request }) => {
+        const issueId = issueRef(params.id)
+        if (!issueId) return unknownIssue(params.id)
+        return verbResponse(
+          await api.pause({
+            issueId,
+            reason: body.reason,
+            until: body.until,
+            actor: ownerActorOf(request),
+            call: body.call,
+          }),
+        )
+      },
+      {
+        params: Params,
+        body: PauseBody,
+        response: { 200: LeadVerbAnswer, ...errorResponses(400, 404, 409, 422, 503) },
+        detail: {
+          operationId: 'issue.pause',
+          summary:
+            'the owner pauses a started Issue: it waits until his word (`issue note --wake`) or the time given, and the steward and the lead leave it alone; refused for an Issue no lead has started',
         },
       },
     )

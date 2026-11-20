@@ -114,7 +114,7 @@ function transitionOf(
   }
   if (cell.to === 'waiting') {
     // The lead heard its own verb; a wait the factory began (a wall, the third regression) is news to it.
-    const told = issue.wait?.told ?? (event.actor === 'lead' ? version : issue.version)
+    const told = cell.heard ? version : (issue.wait?.told ?? (event.actor === 'lead' ? version : issue.version))
     const wait = cell.wait ? { ...cell.wait, since: version, told } : issue.wait
     if (!wait) throw new Error(`a cell kept the wait of a ${issue.state} Issue, which has none`)
     return { from: issue.state, to: 'waiting', wait, outcome: null }
