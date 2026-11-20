@@ -280,8 +280,8 @@ test('the capacity section reads what the API computed: four cards, then steps, 
   const wait = cardOf('Test slot wait')
   await expect(wait.getByText(msWords(2000), { exact: true }).first()).toBeVisible()
   await expect(wait.getByText(`Median; 90th percentile ${msWords(55_000)}`, { exact: true })).toBeVisible()
-  await expectHint(cardOf('Idle seat-hours with work ready'), CAPACITY_HINT.idle)
-  await expectHint(wait, CAPACITY_HINT.wait)
+  await expectHint(cardOf('Idle seat-hours with work ready'), 'idle seat-hours')
+  await expectHint(wait, 'test slot wait')
 
   await open(page, /^The capacity loop/)
   const steps = table(page, 'Test-slot steps with the largest peak memory in the window')

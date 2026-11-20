@@ -81,9 +81,13 @@ export const LANGUAGE = {
   'held signal':
     "Outside text the factory did not trust enough to turn into work. It waits in Needs you for the owner to promote or dismiss it. Two held signals are not outside text: a lead's follow-up for a work repo, when its own Issue was owner-filed (the Judge never reads it), and a monitor that stayed down with no route and no home repo to place it in: its card says what fired, and promoting it with a repo sets the monitor's route and files the alert there",
   idle: 'Session state: its last turn ended',
+  'idle seat-hours':
+    'The hours a seat stood empty while Issues were queued: per minute the seats less the leads running, counted only where an Issue waited, over 60. The hours behind a drained queue are left out, because the owner stopped admission. What to do: many hours with the load low mean a limit is too tight; Binding reason names which, and the settings in force show its value.',
   incident:
     'One root cause seen through many signals: the VPS is down, so HyperDX and Kuma all fire. Triage groups them under one Issue',
   issue: "One unit of work: one repo, one branch, one ship. Warp's work item",
+  'issues closed':
+    'How many Issues closed in the window, whatever the outcome, as the cycle KPI counts them, with the mean per UTC day. What to do: a fall while Issues are Ready means something holds them; read Idle seat-hours and Binding reason next.',
   'issues per hour':
     'How many Issues of a project shipped in each hour of the last 7 days, against the 7 days before. What to do: a drop while Issues are Ready or Held may mean something holds them; open Work and read the reason on each',
   judge: 'The agw workflow that tries to settle a Decision before the owner sees it',
@@ -199,6 +203,8 @@ export const LANGUAGE = {
     "The weekly retro's reading of the owner's verdict notes and comments: a preference seen twice becomes a rule in the repo's AGENTS.md or DESIGN.md",
   'test slot':
     "A lease on the host's test capacity that factory slot run takes for a make check, test or e2e step; it waits while the host is busy and records what the step cost",
+  'test slot wait':
+    'How long a step waited for a test slot before it ran: the median over the window and its 90th percentile. What to do: a 90th percentile past 10 minutes with the load low means the base slots are too few; raise them in the settings in force.',
   'tokens out':
     "The tokens a lead's sessions wrote, from the usage data, summed over the attempts; the tokens read in and the cache are beneath it. What to do: a high figure on a small Issue is a lead that rewrote a lot; compare the attempts",
   touch: 'The owner acting on an Issue',

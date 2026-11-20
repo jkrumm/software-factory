@@ -349,13 +349,8 @@ export function epochLine(model: ThroughputModel): string | null {
 
 // ---- the capacity section: what the capacity loop did, all figures computed by the API -------------------------------------
 
-/** The domain word each capacity card's title carries an InfoHint for. */
-export const CAPACITY_HINT = {
-  throughput: 'issue',
-  idle: 'seat',
-  wait: 'test slot',
-  reaped: 'reaper',
-} as const satisfies Record<string, keyof typeof LANGUAGE>
+/** The domain word the reaper line carries an InfoHint for. */
+export const CAPACITY_HINT = { reaped: 'reaper' } as const satisfies Record<string, keyof typeof LANGUAGE>
 
 type CapacityDays = CapacityLoopModel['throughput']['perDay']
 

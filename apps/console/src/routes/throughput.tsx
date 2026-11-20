@@ -391,7 +391,7 @@ function CapacityCards({ model }: { model: CapacityLoopModel }) {
         <StatCard
           icon={CheckCircleIcon}
           title={CAPACITY_TITLE.throughput}
-          hint={CAPACITY_HINT.throughput}
+          hint="issues closed"
           subtitle={subtitle}
           value={perDayWords(model.throughput.total, model.days)}
           sub={`${model.throughput.total} closed in the window`}
@@ -405,7 +405,7 @@ function CapacityCards({ model }: { model: CapacityLoopModel }) {
         <StatCard
           icon={ArmchairIcon}
           title={CAPACITY_TITLE.idle}
-          hint={CAPACITY_HINT.idle}
+          hint="idle seat-hours"
           subtitle={subtitle}
           value={hoursWords(Math.max(0, model.idleSeatHours.total - model.idleSeatHoursDrain.total))}
           sub={`Seats no lead held while Issues waited; ${hoursWords(model.idleSeatHoursDrain.total)} behind a drained queue left out`}
@@ -433,7 +433,7 @@ function CapacityCards({ model }: { model: CapacityLoopModel }) {
         <StatCard
           icon={HourglassIcon}
           title={CAPACITY_TITLE.wait}
-          hint={CAPACITY_HINT.wait}
+          hint="test slot wait"
           subtitle={subtitle}
           value={wait.n === 0 ? 'No data' : msWords(wait.p50Ms)}
           sub={wait.n === 0 ? 'No steps recorded yet' : `Median; 90th percentile ${msWords(wait.p90Ms)}`}
