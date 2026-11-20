@@ -95,7 +95,7 @@ export async function seedThroughput(sql: SQL, now = Date.now()): Promise<void> 
 /**
  * The lead time of the Issues the world closed (call it after the world is seeded): each gets one lead attempt that
  * started three hours before its close, a turn of 30 minutes and
- * the rest idle, so the page's lead band has a split to read. No step row is added: Improve's capacity section counts the
+ * the rest idle, so the page's lead band has a split to read. No step row is added: Throughput's capacity cards count the
  * world's steps (`seedCapacity`), and the steps' share of the split is covered by the server's read tests. Returns the Issues it gave a lead.
  */
 export async function seedLeadTime(sql: SQL): Promise<string[]> {
