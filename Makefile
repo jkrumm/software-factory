@@ -75,7 +75,7 @@ check-static:
 	@echo "==> shard weights name no missing test file (scripts/shard.ts --check)"
 	@bun scripts/shard.ts --check
 	@echo "==> dead code the change introduces (fallow audit, against the merge base; .fallowrc.json)"
-	@bunx --no-install fallow audit $(if $(UNIT_BASE),--base $(UNIT_BASE)) --quiet
+	@bunx --no-install fallow audit --only dead-code $(if $(UNIT_BASE),--base $(UNIT_BASE)) --quiet
 	@echo "==> boundaries (scripts/boundaries.ts)"
 	@bun scripts/boundaries.ts
 	@echo "==> retired words (scripts/retired-words.ts)"
