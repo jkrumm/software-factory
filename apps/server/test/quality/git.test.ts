@@ -170,16 +170,41 @@ test('the cut is the Issue’s: what an earlier attempt landed before this attem
   })
 })
 
-test('landed: a branch merged with its own commits is those commits', async () => {
+test('landed: a branch merged with a merge commit is that merge; one fast-forwarded is its tip', async () => {
   const repo = await fresh()
   const { cut, sha } = await branchWith(repo, 'factory/1-1', 'm.ts')
   await repo.git('merge', '-q', '--no-ff', '-m', 'Merge', 'factory/1-1')
   await repo.git('push', '-q', 'origin', 'master')
+  const merge = await repo.git('rev-parse', 'HEAD')
   expect(value(await landed(repo, [{ branch: 'factory/1-1', cut }]))).toEqual({
-    commits: [sha],
+    commits: [merge],
     held: true,
     base: 'origin/master',
   })
+  expect(value(await read(repo, [merge], { branch: 'factory/1-1', cut })).commits).toEqual([merge, sha])
+
+  const next = await branchWith(repo, 'factory/2-1', 'f.ts')
+  await repo.git('merge', '-q', '--ff-only', 'factory/2-1')
+  await repo.git('push', '-q', 'origin', 'master')
+  expect(value(await landed(repo, [{ branch: 'factory/2-1', cut: next.cut }])).commits).toEqual([next.sha])
+})
+
+test('landed: a branch rebased, then merging the moved default branch in, and squashed is the squash', async () => {
+  const repo = await fresh()
+  const { cut } = await branchWith(repo, 'factory/1-1', 'mine.ts')
+  const other = await repo.other()
+  await other.commit('x.ts', 'x\n', 'feat: x')
+  await repo.git('pull', '-q', '--ff-only', 'origin', 'master')
+  await repo.git('checkout', '-q', 'factory/1-1')
+  await repo.git('rebase', '-q', 'master')
+  await other.commit('y.ts', 'y\n', 'feat: y')
+  await repo.git('checkout', '-q', 'master')
+  await repo.git('pull', '-q', '--ff-only', 'origin', 'master')
+  await repo.git('checkout', '-q', 'factory/1-1')
+  await repo.git('merge', '-q', '--no-edit', 'master')
+  await repo.git('checkout', '-q', 'master')
+  const squashed = await squash(repo, 'factory/1-1')
+  expect(value(await landed(repo, [{ branch: 'factory/1-1', cut }])).commits).toEqual([squashed])
 })
 
 test('landed: a squashed branch is the squash commit, found by content past later commits of others', async () => {

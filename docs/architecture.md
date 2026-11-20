@@ -489,9 +489,10 @@ production stalls, a result cache keyed by the tree, a browser in the factory's 
 ## Quality
 
 - **Ship** (`app/quality-ship.ts`, `domains/quality/gate.ts`): the lead names merged commits, or none: then the factory
-  finds what the Issue's branches landed (`Commits.landed`: each attempt's branch, newest first, the commits its reflog
-  shows were made on it since its cut that are on the default branch, else the first default-branch commit that holds every file the
-  branch changed as the branch has it, a squash or a rebase). Either way git must find them on the default branch and
+  finds what the Issue's branches landed (`Commits.landed`: each attempt's branch, newest first; by content: the first
+  default-branch commit that holds every file the branch changed since it forked as the branch has it, a squash or a
+  rebase; or, for a branch the default branch holds and the lead made a commit on, the first-parent commit that brought
+  it in, a merge or its tip). Either way git must find them on the default branch and
   newer than the Issue's cut (its first attempt's, so a later attempt ships what an earlier one landed), read by the
   factory, never taken from the lead. Without that the ship is refused with the error named and
   counted as friction; so is the ship of an Issue flagged `checkpoint: spec` with no Spec submitted ("The Spec checkpoint", under Checkpoints). A review is recorded as evidence when agw's ledger covers the range, and its absence is recorded
