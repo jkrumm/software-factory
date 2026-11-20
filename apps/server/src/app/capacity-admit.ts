@@ -798,7 +798,7 @@ export async function admissionPass(
   const skip = new Set<IssueId>()
   let queue: QueueEntry[] = []
   for (let i = 0; i < (options.limit ?? PASS_LIMIT); i++) {
-    // The load is read again before every admission, not once for the pass: the doctors, the shadow decision and the
+    // The load is read again before every admission, not once for the pass: the doctors and the
     // admissions before this one all take time, and the 1-minute load moves by tens in a minute on a busy host (Issue 1742:
     // a lead admitted with the load over its ceiling on the samples either side).
     host = await withFreshLoad(deps, host)
