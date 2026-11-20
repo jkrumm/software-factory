@@ -496,7 +496,7 @@ export const checkpointRoutes = (uses: CheckpointUses) =>
         detail: {
           operationId: 'artifact.revise',
           summary:
-            'a revision of an artifact: the lead after a verdict of Changes, or whoever filed a standalone Report (no attempt needed)',
+            'a revision of an artifact: the lead after a verdict of Changes, or, with no attempt, whoever filed a standalone Report or the Spec handed over with an Issue no lead works yet',
         },
       },
     )

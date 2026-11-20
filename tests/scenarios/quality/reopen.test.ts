@@ -57,7 +57,7 @@ test('the owner reopens a closed Issue within the window: it is queued again; th
 
   const notClosed = await reopen(lw.world, server, id, { call: 'reopen-2', reason: 'again' })
   expect(notClosed.code).toBe(5)
-  expect(notClosed.refusal).toContain('it is not closed')
+  expect(notClosed.refusal).toContain('it is not closed: nothing to reopen')
 })
 
 test('past 30 days a reopen is refused: file a new Issue; a restarted server does not verify again', async () => {

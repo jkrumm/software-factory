@@ -605,7 +605,10 @@ describe('the ship gate', () => {
     expect(wrong.detail).toContain('attempt 2')
     await record(issueId, 'cancelled', ev('cancelled', { reason: 'no longer wanted' }, 'owner'))
     const closed = value(await ship(issueId, 'call-2'))
-    expect(closed).toMatchObject({ result: 'refused', detail: 'it is closed: reopen it first' })
+    expect(closed).toMatchObject({
+      result: 'refused',
+      detail: expect.stringContaining('it is closed: file the work as a signal with `factory signal file'),
+    })
     const view = value(await showQuality({ uow }, issueId))
     expect(view.ships.map((s) => s.result)).toEqual(['refused', 'refused'])
     expect(view.ships.every((s) => s.evidence.length === 0)).toBe(true)
@@ -1220,12 +1223,15 @@ describe('reopen', () => {
     clock.advance(31 * 24 * 60 * 60_000)
     const got = value(await reopenIssue({ uow, clock, ids }, { issueId, call: 'r1', reason: 'late' }))
     expect(got).toMatchObject({ result: 'refused', issue: { state: 'closed' } })
-    expect(got.event.detail).toBe('closed more than 30 days ago: file a new Issue')
+    expect(got.event.detail).toBe('closed more than 30 days ago: file a new Issue with `factory issue new`')
   })
 
   test('an Issue that is not closed cannot be reopened', async () => {
     const issueId = await working()
     const got = value(await reopenIssue({ uow, clock, ids }, { issueId, call: 'r1', reason: 'x' }))
-    expect(got).toMatchObject({ result: 'refused', event: { detail: 'it is not closed' } })
+    expect(got).toMatchObject({
+      result: 'refused',
+      event: { detail: expect.stringContaining('it is not closed: nothing to reopen') },
+    })
   })
 })
