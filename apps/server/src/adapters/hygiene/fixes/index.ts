@@ -1,4 +1,4 @@
-import { applyFixes, fixable, probesOf } from '../../../domains/loops/hygiene-fixes.ts'
+import { applyFixes, fixable, probesOf } from '../../../domains/hygiene/hygiene-fixes.ts'
 import type {
   Checkout,
   FixedReport,
@@ -6,7 +6,7 @@ import type {
   FixOptions,
   Probe,
   SweepReport,
-} from '../../../domains/loops/hygiene-model.ts'
+} from '../../../domains/hygiene/hygiene-model.ts'
 import type { Tools } from '../git.ts'
 import type { Released } from '../probes/deps.ts'
 import { fixDeps } from './deps.ts'

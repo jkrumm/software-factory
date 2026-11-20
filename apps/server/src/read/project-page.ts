@@ -13,7 +13,7 @@ import {
   type ProjectPageModel,
 } from '@software-factory/contract'
 import type { SQL } from 'bun'
-import type { FindingIssue } from '../domains/loops/hygiene-lifecycle.ts'
+import type { FindingIssue } from '../domains/hygiene/hygiene-lifecycle.ts'
 import * as z from 'zod'
 import { countsOf, DIGEST_WINDOW_MS, groupByProject, shipped, type DigestIssue } from '../kernel/digest-scope.ts'
 import { projectOf } from '../kernel/project-of.ts'
@@ -26,10 +26,10 @@ import { loopReads } from './loops.ts'
  * come from `GET /v1/projects/:name/plan` and the open Issues from `GET /v1/flow`.
  */
 
-/** The built-in probes of the hygiene loop in the catalogue's order (`PROBES` of `domains/loops/hygiene-model.ts` less `probe`; a test holds them equal). */
+/** The built-in probes of the hygiene loop in the catalogue's order (`PROBES` of `domains/hygiene/hygiene-model.ts` less `probe`; a test holds them equal). */
 export const BUILT_IN_PROBES = BUILT_IN_PROBE_NAMES
 
-/** The key prefix of a finding the document judgment filed (`JUDGMENT_PREFIX` of `domains/loops/hygiene.ts`; a test holds them equal). */
+/** The key prefix of a finding the document judgment filed (`JUDGMENT_PREFIX` of `domains/hygiene/hygiene.ts`; a test holds them equal). */
 export const DOCUMENT_PREFIX = 'judgment:'
 
 const DAY_MS = 24 * 3_600_000

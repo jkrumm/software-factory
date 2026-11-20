@@ -5,7 +5,7 @@ import {
   RETRO_WINDOW_DAYS,
   type RetroOutcomes,
   retroText,
-} from '../../domains/loops/retro.ts'
+} from '../../domains/improve/retro.ts'
 import {
   clockTrigger,
   FRICTION_WINDOW_DAYS,
@@ -22,8 +22,9 @@ import {
   signalTitle,
   volumeDue,
   withinBudget,
-} from '../../domains/loops/friction.ts'
-import type { FrictionPassRecord, LoopReads, LoopStore } from '../../domains/loops/ports.ts'
+} from '../../domains/improve/friction.ts'
+import type { FrictionPassRecord } from '../../domains/improve/ports.ts'
+import type { LoopReads, LoopStore } from './stores.ts'
 import type { LoopFinding, Triaged } from '../../domains/intake/model.ts'
 import type { Clock } from '../../kernel/clock.ts'
 import type { IdSource } from '../../kernel/ids.ts'
@@ -31,7 +32,7 @@ import { err, ok, portError, type PortError, type Result } from '../../kernel/re
 import type { IntakeError } from '../intake.ts'
 import type { UnitOfWork } from '../unit-of-work.ts'
 import { findingKeyOf } from '../../domains/intake/rules.ts'
-import { classOf } from '../../domains/loops/classes.ts'
+import { classOf } from '../../domains/improve/classes.ts'
 import { readGate, type ClassGate } from './gate.ts'
 import { settleClosed, type Ledger } from './ledger.ts'
 import { passLoop, type LoopSpec, type LoopWiring } from './runner.ts'
@@ -171,7 +172,7 @@ export async function frictionPass(deps: FrictionDeps): Promise<Result<FrictionP
 }
 
 /**
- * The retro: one signal on this repo whose lead reviews the week (`domains/loops/retro.ts`). Filed after the patterns,
+ * The retro: one signal on this repo whose lead reviews the week (`domains/improve/retro.ts`). Filed after the patterns,
  * so a pattern is never held back by it; a failure is named in the pass line and never stops the pass. A replay is intake's
  * finding key: an amend of the open retro Issue, or a drop while one closed lately.
  */

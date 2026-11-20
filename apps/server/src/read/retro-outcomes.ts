@@ -1,6 +1,6 @@
 import type { SQL } from 'bun'
 import * as z from 'zod'
-import type { RetroOutcomes } from '../domains/loops/retro.ts'
+import type { RetroOutcomes } from '../domains/improve/retro.ts'
 import { windowOf } from './stats.ts'
 
 const Count = z.object({ n: z.coerce.number().int() })

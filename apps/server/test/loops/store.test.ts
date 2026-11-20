@@ -4,7 +4,7 @@ import { loadMigrations, migrate } from '../../src/adapters/postgres/migrate.ts'
 import { postgresLoopStore } from '../../src/adapters/postgres/loop-store.ts'
 import { loopReads } from '../../src/read/loops.ts'
 import { claimRound } from '../../src/app/loops/claim.ts'
-import type { CallPolicy } from '../../src/domains/loops/calls.ts'
+import type { CallPolicy } from '../../src/domains/planning/calls.ts'
 import type { IssueId } from '../../src/kernel/ids.ts'
 import { key } from '../../src/kernel/keys.ts'
 

@@ -4,7 +4,7 @@ import {
   type ReaperAttempt,
   type ReaperProc,
   type ReapingInput,
-} from '../../src/domains/loops/reaper.ts'
+} from '../../src/domains/leads/reaper.ts'
 
 const now = new Date('2026-11-11T12:00:00Z')
 const ago = (ms: number) => new Date(now.getTime() - ms)

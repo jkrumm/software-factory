@@ -5,7 +5,7 @@ import {
   isBusy,
   type LifecycleStep,
   planLifecycle,
-} from '../../domains/loops/hygiene-lifecycle.ts'
+} from '../../domains/hygiene/hygiene-lifecycle.ts'
 import {
   batchSignalText,
   batchSubject,
@@ -25,9 +25,9 @@ import {
   NO_REF,
   type Section,
   type Swept,
-} from '../../domains/loops/hygiene.ts'
-import { applyFixes } from '../../domains/loops/hygiene-fixes.ts'
-import { REREAD_PROBES } from '../../domains/loops/hygiene-model.ts'
+} from '../../domains/hygiene/hygiene.ts'
+import { applyFixes } from '../../domains/hygiene/hygiene-fixes.ts'
+import { REREAD_PROBES } from '../../domains/hygiene/hygiene-model.ts'
 import type {
   Checkout,
   DeclaredProbe,
@@ -37,8 +37,9 @@ import type {
   SkippedProbe,
   SweepOptions,
   SweepReport,
-} from '../../domains/loops/hygiene-model.ts'
-import type { HygieneJudgment, HygienePassRecord, LoopReads, LoopStore } from '../../domains/loops/ports.ts'
+} from '../../domains/hygiene/hygiene-model.ts'
+import type { HygieneJudgment, HygienePassRecord } from '../../domains/hygiene/ports.ts'
+import type { LoopReads, LoopStore } from './stores.ts'
 import type { LoopFinding, Triaged } from '../../domains/intake/model.ts'
 import { type DoctorReader, doctorMessage } from '../../domains/capacity/doctor.ts'
 import type { PlanningStore } from '../../domains/planning/ports.ts'

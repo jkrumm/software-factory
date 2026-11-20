@@ -1,5 +1,5 @@
 import { expect, test } from 'bun:test'
-import { MAX_SIGNALS_PER_PASS } from '../../src/domains/loops/budget.ts'
+import { MAX_SIGNALS_PER_PASS } from '../../src/kernel/signal-budget.ts'
 import { fakeAgw } from '../support/agw.ts'
 import { loadLoopSettings } from '../../src/app/loops/settings.ts'
 import type { HygieneAnswer, HygieneRequest } from '@software-factory/contract'
@@ -20,7 +20,7 @@ import {
   rankProbeFindings,
   requestOf,
   skipped,
-} from '../../src/domains/loops/hygiene.ts'
+} from '../../src/domains/hygiene/hygiene.ts'
 import type {
   FixEntry,
   HygieneChecker,
@@ -28,13 +28,14 @@ import type {
   ProbeFinding,
   ProbeRun,
   Scope,
-} from '../../src/domains/loops/hygiene-model.ts'
-import type { ClassIssue } from '../../src/domains/loops/classes.ts'
-import type { ClosedFinding, Judged } from '../../src/domains/loops/ledger.ts'
-import type { FindingIssue, LifecycleStep } from '../../src/domains/loops/hygiene-lifecycle.ts'
-import type { HygienePassRecord, LoopReads, LoopStore } from '../../src/domains/loops/ports.ts'
+} from '../../src/domains/hygiene/hygiene-model.ts'
+import type { ClassIssue } from '../../src/domains/improve/classes.ts'
+import type { ClosedFinding, Judged } from '../../src/domains/improve/ledger.ts'
+import type { FindingIssue, LifecycleStep } from '../../src/domains/hygiene/hygiene-lifecycle.ts'
+import type { HygienePassRecord } from '../../src/domains/hygiene/ports.ts'
+import type { LoopReads, LoopStore } from '../../src/app/loops/stores.ts'
 import { hygieneSummary, hygienePass, type HygieneDeps } from '../../src/app/loops/hygiene.ts'
-import { planLifecycle, REOPEN_WINDOW_MS } from '../../src/domains/loops/hygiene-lifecycle.ts'
+import { planLifecycle, REOPEN_WINDOW_MS } from '../../src/domains/hygiene/hygiene-lifecycle.ts'
 import { REOPEN_WINDOW_MS as MACHINE_REOPEN_WINDOW_MS } from '../../src/domains/work/issue.ts'
 import type { StoredProject } from '../../src/domains/planning/sync.ts'
 import { sequentialIds } from '../../src/kernel/ids.ts'

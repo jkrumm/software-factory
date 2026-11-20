@@ -3,7 +3,7 @@ import { mkdtempSync, writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { fileIssue } from '../flow.ts'
-import { RETRO_TITLE } from '../../../apps/server/src/domains/loops/retro.ts'
+import { RETRO_TITLE } from '../../../apps/server/src/domains/improve/retro.ts'
 import { type Lab, startLab } from '../planning/lab.ts'
 import { runLoop } from './support.ts'
 

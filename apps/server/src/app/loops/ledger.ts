@@ -1,5 +1,11 @@
-import { judgeClosed, lastTime, newestByKey, type ClosedFinding, type LedgerLoop } from '../../domains/loops/ledger.ts'
-import type { LoopReads, LoopStore } from '../../domains/loops/ports.ts'
+import {
+  judgeClosed,
+  lastTime,
+  newestByKey,
+  type ClosedFinding,
+  type LedgerLoop,
+} from '../../domains/improve/ledger.ts'
+import type { LoopReads, LoopStore } from './stores.ts'
 import { ok, type PortError, type Result } from '../../kernel/result.ts'
 import type { UnitOfWork } from '../unit-of-work.ts'
 

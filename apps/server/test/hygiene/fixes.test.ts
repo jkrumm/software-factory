@@ -6,7 +6,7 @@ import { fixDeps } from '../../src/adapters/hygiene/fixes/deps.ts'
 import { fixStale } from '../../src/adapters/hygiene/fixes/stale.ts'
 import { defaultTools, type Tools } from '../../src/adapters/hygiene/git.ts'
 import type { CiWait } from '../../src/adapters/hygiene/fixes/landing.ts'
-import type { Checkout } from '../../src/domains/loops/hygiene-model.ts'
+import type { Checkout } from '../../src/domains/hygiene/hygiene-model.ts'
 
 const ID = {
   GIT_AUTHOR_NAME: 'T',

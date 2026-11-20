@@ -1,6 +1,6 @@
 import type { FindingClass, FindingClassesModel } from '@software-factory/contract'
-import { verdictOf } from '../../domains/loops/classes.ts'
-import type { LoopReads } from '../../domains/loops/ports.ts'
+import { verdictOf } from '../../domains/improve/classes.ts'
+import type { LoopReads } from './stores.ts'
 
 const ORDER = { held: 0, probation: 1, open: 2 } as const
 const by = (a: string, b: string): number => (a < b ? -1 : a > b ? 1 : 0)

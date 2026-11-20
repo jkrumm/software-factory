@@ -1,6 +1,6 @@
 import { basename } from 'node:path'
-import type { ProcessKiller, ReaperProcesses } from '../../domains/loops/ports.ts'
-import type { ReaperProc } from '../../domains/loops/reaper.ts'
+import type { ProcessKiller, ReaperProcesses } from '../../domains/leads/ports.ts'
+import type { ReaperProc } from '../../domains/leads/reaper.ts'
 import { runProcess } from '../process.ts'
 import { readCwds } from './processes.ts'
 

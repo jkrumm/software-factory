@@ -3,7 +3,7 @@ import { RetroModel } from '@software-factory/contract'
 import { startTestCluster, type TestCluster } from '@software-factory/tests/pg'
 import type { SQL } from 'bun'
 import { loadMigrations, migrate } from '../../src/adapters/postgres/migrate.ts'
-import { retroText } from '../../src/domains/loops/retro.ts'
+import { retroText } from '../../src/domains/improve/retro.ts'
 import { readRetro } from '../../src/read/retro.ts'
 
 /** The retro's taste: the owner's own verdict notes and annotations, never the factory's defaults, and the share of verdicts that asked for more. */

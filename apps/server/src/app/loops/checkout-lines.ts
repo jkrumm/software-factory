@@ -1,4 +1,4 @@
-import type { MainCheckoutLine } from '../../domains/loops/checkout.ts'
+import type { MainCheckoutLine } from '../../domains/leads/checkout.ts'
 
 /**
  * The main-checkout findings of the last steward pass, held in memory for the health lines. `since` is when a repo's

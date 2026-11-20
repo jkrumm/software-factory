@@ -1,9 +1,16 @@
 import { SPEC_SCREEN_PRECEDENTS, type TriageAnswer } from '@software-factory/contract'
-import type { CallPolicy } from '../../domains/loops/calls.ts'
+import type { CallPolicy } from '../../domains/planning/calls.ts'
 import { cycleThrough } from '../../domains/planning/chain.ts'
-import type { LoopReads, LoopStore, SettlingRow } from '../../domains/loops/ports.ts'
+import type { LoopReads, LoopStore } from './stores.ts'
+import type { SettlingRow } from '../../domains/planning/ports.ts'
 import { EDGE_NEED_DAYS, stopReason, stopsEdges } from '../../kernel/edge-need.ts'
-import { checkSettle, MAX_CANDIDATES, type Refinement, settleRequest, settleRule } from '../../domains/loops/settle.ts'
+import {
+  checkSettle,
+  MAX_CANDIDATES,
+  type Refinement,
+  settleRequest,
+  settleRule,
+} from '../../domains/planning/settle.ts'
 import type { WorkStore } from '../../domains/work/ports.ts'
 import { AGW_CALL_LEASE_MS } from '../../kernel/agw.ts'
 import type { IssueId } from '../../kernel/ids.ts'

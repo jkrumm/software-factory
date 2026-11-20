@@ -1,5 +1,5 @@
 import { EXIT_TIMEOUT, withStderr } from '../../process.ts'
-import type { Checkout, FixEntry } from '../../../domains/loops/hygiene-model.ts'
+import type { Checkout, FixEntry } from '../../../domains/hygiene/hygiene-model.ts'
 import { exec, type Tools } from '../git.ts'
 import { scanStale } from '../probes/stale.ts'
 

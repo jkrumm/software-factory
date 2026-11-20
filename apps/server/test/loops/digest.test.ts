@@ -8,7 +8,7 @@ import {
   digestOf,
   groupByProject,
   planDigests,
-} from '../../src/domains/loops/digest.ts'
+} from '../../src/domains/improve/digest.ts'
 import { projectOf } from '../../src/kernel/project-of.ts'
 
 const NOW = new Date('2026-11-12T12:00:00Z')

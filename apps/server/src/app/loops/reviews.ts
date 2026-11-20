@@ -1,4 +1,4 @@
-import { type ExternalWait, type ReviewPort, wakeReason } from '../../domains/loops/reviews.ts'
+import { type ExternalWait, type ReviewPort, wakeReason } from '../../domains/work/reviews.ts'
 import type { PlanningStore } from '../../domains/planning/ports.ts'
 import { projectOf } from '../../domains/planning/sync.ts'
 import type { WorkStore } from '../../domains/work/ports.ts'

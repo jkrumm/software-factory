@@ -3,7 +3,7 @@ import {
   type Probe,
   type ProbeFinding,
   type ProbeRun,
-} from '../../../domains/loops/hygiene-model.ts'
+} from '../../../domains/hygiene/hygiene-model.ts'
 
 const MAX_LINE = 240
 

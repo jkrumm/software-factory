@@ -1,9 +1,9 @@
 import type { SQL } from 'bun'
 import * as z from 'zod'
 import { DEFAULT_LEADS } from '@software-factory/contract/project'
-import type { CapFact, CapFigures } from '../domains/loops/caps.ts'
+import type { CapFact, CapFigures } from '../domains/improve/caps.ts'
 import { CAP_WINDOW_HOURS } from '../kernel/throughput-limits.ts'
-import type { ProjectShape } from '../domains/loops/throughput.ts'
+import type { ProjectShape } from '../domains/improve/throughput.ts'
 import { boundedRead } from './bounded.ts'
 
 const num = z.coerce.number()

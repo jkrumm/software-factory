@@ -1,5 +1,5 @@
 import * as z from 'zod'
-import type { CiLedgerRun, CiLedgerRuns, CiLive, CiRunTime, CiTimes } from '../../domains/loops/ports.ts'
+import type { CiLedgerRun, CiLedgerRuns, CiLive, CiRunTime, CiTimes } from '../../domains/improve/ports.ts'
 import { ok } from '../../kernel/result.ts'
 import { githubReader, type GithubReaderOptions } from '../github/reader.ts'
 

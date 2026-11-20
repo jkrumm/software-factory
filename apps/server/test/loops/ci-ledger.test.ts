@@ -5,7 +5,8 @@ import { loadMigrations, migrate } from '../../src/adapters/postgres/migrate.ts'
 import { postgresLoopStore } from '../../src/adapters/postgres/loop-store.ts'
 import { ciLedgerPass } from '../../src/app/loops/ci-ledger.ts'
 import type { UnitOfWork } from '../../src/app/unit-of-work.ts'
-import type { CiLedgerRuns, LoopStore } from '../../src/domains/loops/ports.ts'
+import type { CiLedgerRuns } from '../../src/domains/improve/ports.ts'
+import type { LoopStore } from '../../src/app/loops/stores.ts'
 import { err, ok, portError } from '../../src/kernel/result.ts'
 
 /** The CI ledger: GitHub's runs as the adapter maps them, and what a pass stores, repeats and prunes, on a real Postgres. */

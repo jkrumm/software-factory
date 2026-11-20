@@ -17,15 +17,15 @@ import {
   signalText,
   swapGrowthFindings,
   waitFindings,
-} from '../../src/domains/loops/selfwatch.ts'
-import { FINDING_KINDS } from '../../src/domains/loops/selfwatch-model.ts'
+} from '../../src/domains/improve/selfwatch.ts'
+import { FINDING_KINDS } from '../../src/domains/improve/selfwatch-model.ts'
 import type {
   Finding,
   HeartbeatFact,
   HostMinute,
   ProcessMinute,
   SelfwatchRow,
-} from '../../src/domains/loops/selfwatch-model.ts'
+} from '../../src/domains/improve/selfwatch-model.ts'
 import { isBuiltinInert } from '../../src/domains/quality/evidence.ts'
 
 const NOW = new Date('2026-11-08T12:00:00Z')

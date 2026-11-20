@@ -9,7 +9,7 @@ import {
 import { HYGIENE_DEFAULTS } from '@software-factory/contract'
 import type { HygieneJudgment, HygienePassRecord } from './ports.ts'
 import { WORKFLOWS } from '../../kernel/workflows.ts'
-import { MAX_SIGNALS_PER_PASS } from './budget.ts'
+import { MAX_SIGNALS_PER_PASS } from '../../kernel/signal-budget.ts'
 import { isIdle, PROBES, type ProbeFinding, type Scope, type SweepReport } from './hygiene-model.ts'
 
 /** Slots the judgment keeps: the deterministic findings may take `MAX_SIGNALS_PER_PASS - JUDGMENT_RESERVE`. */

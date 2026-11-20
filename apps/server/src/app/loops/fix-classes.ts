@@ -1,5 +1,6 @@
-import { classOf, FIX_WINDOW_DAYS, type FixCommit, type FixCommitRow } from '../../domains/loops/fix-classes.ts'
-import type { FixCommitReader, LoopStore } from '../../domains/loops/ports.ts'
+import { classOf, FIX_WINDOW_DAYS, type FixCommit, type FixCommitRow } from '../../domains/hygiene/fix-classes.ts'
+import type { FixCommitReader } from '../../domains/hygiene/ports.ts'
+import type { LoopStore } from './stores.ts'
 import type { PlanningStore } from '../../domains/planning/ports.ts'
 import { repoTextOf } from '../../domains/planning/sync.ts'
 import type { Clock } from '../../kernel/clock.ts'

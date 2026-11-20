@@ -2,8 +2,8 @@ import { existsSync, readFileSync } from 'node:fs'
 import { join } from 'node:path'
 import { EXIT_TIMEOUT } from '../../process.ts'
 import { exec, gitOut, type Tools } from '../git.ts'
-import type { DependencyEcosystem, DependencyRow, ProbeFinding } from '../../../domains/loops/hygiene-model.ts'
-import { type UpgradePlan, type UpgradeRow, planUpgrades } from '../../../domains/loops/upgrades.ts'
+import type { DependencyEcosystem, DependencyRow, ProbeFinding } from '../../../domains/hygiene/hygiene-model.ts'
+import { type UpgradePlan, type UpgradeRow, planUpgrades } from '../../../domains/hygiene/upgrades.ts'
 import { type Outcome, clean, failed, finding, found, skipped, unjudging } from './finding.ts'
 
 const INSTALL_TIMEOUT_MS = 10 * 60_000

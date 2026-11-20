@@ -1,7 +1,7 @@
 import type { SQL } from 'bun'
 import * as z from 'zod'
 import type { RetroBuild, RetroBuildRepo, RetroCapacityFigure } from '@software-factory/contract'
-import type { CiRunTime, CiTimes } from '../domains/loops/ports.ts'
+import type { CiRunTime, CiTimes } from '../domains/improve/ports.ts'
 import { boundedRead } from './bounded.ts'
 import { percentile, windowOf } from './stats.ts'
 

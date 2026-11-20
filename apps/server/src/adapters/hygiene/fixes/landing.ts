@@ -9,7 +9,7 @@ import {
   redRun,
 } from '@software-factory/contract'
 import { EXIT_TIMEOUT, childEnv, withStderr } from '../../process.ts'
-import { MAX_EVIDENCE_LINES } from '../../../domains/loops/hygiene-model.ts'
+import { MAX_EVIDENCE_LINES } from '../../../domains/hygiene/hygiene-model.ts'
 import { exec, gitTry, type Tools } from '../git.ts'
 
 /** The branch every landing bump uses: one name, so a leftover of a pass that was cut short is found and closed by the next. */

@@ -3,7 +3,7 @@ import type { IssueId } from './ids.ts'
 import { projectOf } from './project-of.ts'
 
 /**
- * What the project digests share between the digest loop (`domains/loops/digest.ts`) and the read of them
+ * What the project digests share between the digest loop (`domains/improve/digest.ts`) and the read of them
  * (`read/digests.ts`): which Issues belong to which project and what they count to. Pure.
  */
 

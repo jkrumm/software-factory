@@ -1,4 +1,4 @@
-import type { MainCheckouts } from '../../domains/loops/ports.ts'
+import type { MainCheckouts } from '../../domains/leads/ports.ts'
 import { err, ok, portError, type Result } from '../../kernel/result.ts'
 import { CannotExecute, GitTimeout, type Run } from '../process.ts'
 import { readMainCheckout } from './git.ts'

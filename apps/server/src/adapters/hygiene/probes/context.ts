@@ -2,7 +2,7 @@ import { readFileSync } from 'node:fs'
 import { join } from 'node:path'
 import { gitOut, type Tools } from '../git.ts'
 import { type Outcome, clean, finding, found, skipped } from './finding.ts'
-import type { ProbeFinding } from '../../../domains/loops/hygiene-model.ts'
+import type { ProbeFinding } from '../../../domains/hygiene/hygiene-model.ts'
 
 /**
  * The owner's byte budgets for the files an agent loads on every turn (dotfiles `rules/writing-for-agents.md`, 2026-11-16,

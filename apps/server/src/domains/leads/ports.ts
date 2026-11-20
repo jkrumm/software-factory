@@ -1,8 +1,10 @@
 import type { Effort, Tier } from '@software-factory/contract'
 import type { IssueId } from '../../kernel/ids.ts'
-import type { Result } from '../../kernel/result.ts'
+import type { Result, PortError } from '../../kernel/result.ts'
 import type { ResumeRules } from './apierror.ts'
 import type { HookFact } from './session.ts'
+import type { ReaperAttempt, ReaperProc } from './reaper.ts'
+import type { MainCheckoutLook } from './checkout.ts'
 
 // --- the world, behind ports ------------------------------------------------------------------------------------
 
@@ -451,4 +453,60 @@ export interface LeadStore {
     detail?: { archived?: number; kept?: string | null; path?: string | null },
   ): Promise<void>
   markFinalized(issue: IssueId, attempt: number, at: Date): Promise<void>
+}
+
+/** A signal the reaper sent to a process of a closed attempt (`dry`: the rows of the retired dry-run mode, kept until they age out). */
+export interface ReapedRow {
+  at: Date
+  pid: number
+  session: string
+  worktree: string | null
+  comm: string
+  signal: 'SIGTERM' | 'SIGKILL' | 'dry'
+  reason: 'session' | 'worktree'
+  ageS: number
+}
+
+/** The host's processes with their lead session and directory; null when `ps` or `lsof` could not answer (never an error). */
+export interface ReaperProcesses {
+  read(): Promise<ReaperProc[] | null>
+}
+
+/** Ends a process. False when it was not signalled: gone already, or no longer the process that was decided on. */
+export interface ProcessKiller {
+  signal(target: { pid: number; ageS: number }, signal: 'SIGTERM' | 'SIGKILL'): Promise<boolean>
+}
+
+/** A watch whose last checks were all blocked, the newest with a failing `checkout` check: the checkout could not be moved to the shipped commit. */
+export interface BlockedWatch {
+  issue: IssueId
+  watch: number
+  attempt: number
+  checks: number
+  since: Date
+  detail: string
+}
+
+/** The main checkout of a repo, read now (called outside any transaction). `null`: not locatable, not ours to look at. */
+export interface MainCheckouts {
+  look(repo: string): Promise<Result<MainCheckoutLook | null, PortError>>
+}
+
+/** The reaper's tables: the attempts it weighs and the signals it sent. */
+export interface ReaperStore {
+  /** the attempts the reaper weighs: those not finalized, and those finalized since `since` */
+  reaperAttempts(since: Date): Promise<ReaperAttempt[]>
+  /** the SIGTERMs recorded since `since`, oldest first */
+  termedSince(since: Date): Promise<{ pid: number; ageS: number }[]>
+  recordReaped(rows: readonly ReapedRow[]): Promise<void>
+  /** drops the rows older than `before`; how many */
+  pruneReaped(before: Date): Promise<number>
+}
+
+/** Read-only SQL on other domains' tables for the steward's look at the live leads' repos and their watches (`docs/architecture.md`: cross-domain SQL lives in `read/`). */
+export interface LeadLoopReads {
+  /** watching Issues whose open watch has had at least `streak` checks in a row, all blocked, and whose newest run has a failing `checkout` check */
+  blockedCheckouts(streak: number, limit: number): Promise<BlockedWatch[]>
+  /** the repos with a live lead (Issues `working` or `watching`) and those Issues, ordered by repo and id */
+  liveRepos(limit: number): Promise<{ repo: string; issues: IssueId[] }[]>
 }

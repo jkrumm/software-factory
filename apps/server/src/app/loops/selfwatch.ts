@@ -10,7 +10,8 @@ import {
   SUSTAINED_SPAN_MS,
 } from '../../domains/capacity/host.ts'
 import { slotLines } from '../../domains/capacity/slots.ts'
-import type { LoopReads, LoopStore, MigrationFiles, OverloadHost } from '../../domains/loops/ports.ts'
+import type { LoopReads, LoopStore } from './stores.ts'
+import type { MigrationFiles, OverloadHost } from '../../domains/improve/ports.ts'
 import {
   type AdmissionRules,
   gatesPassedFindings,
@@ -18,11 +19,11 @@ import {
   OVERLOAD_KINDS,
   overloadEvidence,
   slotLineFindings,
-} from '../../domains/loops/overload.ts'
-import { MAX_SIGNALS_PER_PASS } from '../../domains/loops/budget.ts'
+} from '../../domains/improve/overload.ts'
+import { MAX_SIGNALS_PER_PASS } from '../../kernel/signal-budget.ts'
 import { readGate } from './gate.ts'
 import { settleClosed } from './ledger.ts'
-import { DEFAULT_STEWARD_RULES, idleClockStart } from '../../domains/loops/stall.ts'
+import { DEFAULT_STEWARD_RULES, idleClockStart } from '../../domains/planning/stall.ts'
 import {
   heartbeatFindings,
   idleFindings,
@@ -37,7 +38,7 @@ import {
   hostSampleIsFresh,
   SWAP_RISE_MINUTES,
   waitFindings,
-} from '../../domains/loops/selfwatch.ts'
+} from '../../domains/improve/selfwatch.ts'
 import {
   type Finding,
   type HeartbeatFact,
@@ -46,8 +47,8 @@ import {
   type SelfwatchChange,
   type SelfwatchRow,
   subjectKeyOf,
-} from '../../domains/loops/selfwatch-model.ts'
-import { type BudgetFact, budgetFindings } from '../../domains/loops/throughput.ts'
+} from '../../domains/improve/selfwatch-model.ts'
+import { type BudgetFact, budgetFindings } from '../../domains/improve/throughput.ts'
 import { leadKey } from '../../domains/leads/names.ts'
 import type { LeadStore } from '../../domains/leads/ports.ts'
 import { isBuiltinInert } from '../../domains/quality/evidence.ts'
@@ -156,7 +157,7 @@ async function overloadLines(deps: SelfwatchDeps & { overload: OverloadHost }, n
     cpu: stored.ok ? stored.value.cpu : null,
     host: stored.ok ? stored.value.host : null,
     ...(deps.cores === undefined ? {} : { cores: deps.cores }),
-    ps: ps.ok ? { output: ps.value } : { failure: ps.error.detail },
+    ps: ps.ok ? { rows: ps.value } : { failure: ps.error.detail },
     serverPid: deps.serverPid,
     deployLines,
   })

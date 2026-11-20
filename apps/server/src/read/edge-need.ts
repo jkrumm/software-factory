@@ -1,6 +1,6 @@
 import type { SQL } from 'bun'
 import * as z from 'zod'
-import type { HeldEdge } from '../domains/loops/edge-need.ts'
+import type { HeldEdge } from '../domains/planning/edge-need.ts'
 import { EVIDENCE_SAMPLE_CAP, type EdgeNeed, SHARED_PATHS } from '../kernel/edge-need.ts'
 import type { IssueId } from '../kernel/ids.ts'
 

@@ -16,10 +16,10 @@ import type {
   ClassSampleRow,
   HostSampler,
   HostSignals,
-  LoopStore,
   ProcessSampleRow,
   WorktreeSizeRow,
-} from '../../domains/loops/ports.ts'
+} from '../../domains/improve/ports.ts'
+import type { LoopStore } from './stores.ts'
 import type { Clock } from '../../kernel/clock.ts'
 import { ok, type PortError, type Result } from '../../kernel/result.ts'
 import type { UnitOfWork } from '../unit-of-work.ts'

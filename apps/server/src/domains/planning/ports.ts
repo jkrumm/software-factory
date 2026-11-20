@@ -4,6 +4,11 @@ import type { Edge } from './chain.ts'
 import type { OpenIssue } from './queue.ts'
 import type { ReplanTrigger } from './replan.ts'
 import type { RepoRead, StoredProject } from './sync.ts'
+import type { CallLoop, CallOutcome, CallRow } from './calls.ts'
+import type { QueueApplied, QueueIssue } from './queue-edges.ts'
+import type { SpecPrecedent, TriageCandidate } from '@software-factory/contract'
+import type { HeldEdge } from './edge-need.ts'
+import type { EdgeNeed } from '../../kernel/edge-need.ts'
 
 /** A repo the factory may read as a project. */
 export interface RepoRef {
@@ -146,4 +151,86 @@ export interface IssueReads {
   timerWaits(): Promise<TimerWait[]>
   /** the timed waits of at least `thresholdMs` that other open Issues wait behind */
   longWaits(thresholdMs: number): Promise<LongWaitRow[]>
+}
+
+/** An Issue that is still `settling`, with what triage needs to know of it. */
+export interface SettlingRow {
+  issue: IssueId
+  repo: string
+  title: string
+  kind: 'feature' | 'bug' | 'chore' | 'docs' | 'incident'
+  origin: string
+  filedAt: Date
+  fromAlert: boolean
+  /** the filer stated its edges: triage adds none */
+  statedEdges: boolean
+  text: string
+  /** the owner's `prio` of it, 0 when he ranked none */
+  prio: number
+}
+
+/** A working or watching Issue that holds its repo's claim and waits (an open `after` edge) on Issues queued for want of one. */
+export interface ClaimHolder {
+  issue: IssueId
+  state: 'working' | 'watching'
+  /** the queued Issues of its own repo it is after */
+  blockers: IssueId[]
+}
+
+/** A lead whose note is refused again and again because it waits for a claim in its repo. */
+export interface ClaimRefusal {
+  issue: IssueId
+  repo: string
+  /** the first refusal of the claim in the run of refusals the open note has met */
+  since: Date
+  /** how many times the note was refused for the claim */
+  refusals: number
+}
+
+/** The agw calls the steward, triage and queue loops made, inside one transaction, so none is made twice, and what the queue loop did with an answer. */
+export interface CallStore {
+  /** the rounds of one subject of a scope (an Issue, or a repo for the queue loop), oldest first; every subject's rounds when `subject` is left out */
+  calls(loop: CallLoop, scope: string, subject?: string): Promise<CallRow[]>
+  /** false when the round is claimed already (another pass came first) */
+  claimCall(
+    row: Pick<CallRow, 'key' | 'loop' | 'scope' | 'subject' | 'round' | 'claimedAt' | 'leaseUntil'>,
+  ): Promise<boolean>
+  /** takes a call whose lease lapsed back for this pass; false when another pass did first */
+  retakeCall(key: string, claimedAt: Date, leaseUntil: Date): Promise<boolean>
+  /** at boot: no call of an earlier process is still running, so every open call's lease lapses now */
+  lapseOpen(now: Date): Promise<number>
+  finishCall(
+    key: string,
+    result: { outcome: CallOutcome; answer: unknown; detail: string | null; at: Date },
+  ): Promise<void>
+  /** what was done with a queue call's answer: the edges applied and refused, and the queue's shape after them */
+  recordQueueApplied(key: string, result: QueueApplied): Promise<void>
+}
+
+/** Read-only SQL on other domains' tables for the steward, triage and queue loops (`docs/architecture.md`: cross-domain SQL lives in `read/`). */
+export interface PlanningLoopReads {
+  /** open `note_lead` effects whose runs were refused for a claim (`waits for a claim in`), oldest first */
+  claimRefusals(limit: number): Promise<ClaimRefusal[]>
+  /** Issues waiting for a stall (`wall`, `unreported`, `blocked`, `lead_gone`, `regressed`), oldest first */
+  stalled(limit: number): Promise<IssueId[]>
+  /** Issues in `working`, oldest first: the steward reads each lead's session for one gone quiet */
+  working(limit: number): Promise<IssueId[]>
+  /** Issues still settling, oldest first */
+  settling(limit: number): Promise<SettlingRow[]>
+  /** the ids of the repo's Issues that are not closed, oldest first */
+  openIssueIds(repo: string): Promise<IssueId[]>
+  /** the Issues of the repo that are not closed, other than `excluding` */
+  openIssues(repo: string, excluding: IssueId, limit: number): Promise<TriageCandidate[]>
+  /** every open Issue that is not settling, with its priority and open blockers, for the queue loop */
+  queueIssues(): Promise<QueueIssue[]>
+  /** the edges the factory added that still hold a queued Issue behind an open blocker (never a stated edge), for the sweep */
+  heldEdges(): Promise<HeldEdge[]>
+  /** the edges the queue loop took back: pairs it must not add again */
+  removedEdges(): Promise<{ issue: IssueId; after: IssueId }[]>
+  /** whether the edges the factory added were needed, per source, over the edges added in the window */
+  edgeNeed(window: { from: Date; to: Date }): Promise<EdgeNeed[]>
+  /** working or watching Issues with an open edge to one of `queued` (still queued, same repo): the claim deadlock */
+  claimHolders(queued: readonly IssueId[], limit: number): Promise<ClaimHolder[]>
+  /** the owner's newest needed-me marks on Specs, newest first: triage's precedents for the `spec` flag */
+  specPrecedents(limit: number): Promise<SpecPrecedent[]>
 }

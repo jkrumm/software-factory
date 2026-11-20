@@ -2,7 +2,7 @@ import { readFileSync } from 'node:fs'
 import { basename, dirname, join } from 'node:path'
 import { EXIT_TIMEOUT } from '../../process.ts'
 import { gitOut, type Tools } from '../git.ts'
-import type { AdvisoryRow } from '../../../domains/loops/hygiene-model.ts'
+import type { AdvisoryRow } from '../../../domains/hygiene/hygiene-model.ts'
 import { type Outcome, clean, failed, finding, found, skipped, unjudging } from './finding.ts'
 import { execKeepingStderr, firstLine, installed } from './toolrun.ts'
 

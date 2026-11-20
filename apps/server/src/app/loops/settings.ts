@@ -1,10 +1,13 @@
 import * as z from 'zod'
 import { parseEnv, type Environment } from '../../kernel/env.ts'
 import { LOOP_NAMES, type LoopName } from '@software-factory/contract'
-import { REVIEW_POLL_MS } from '../../domains/loops/reviews.ts'
-import { DEFAULT_WAIT_GRACE_MS } from '../../domains/loops/selfwatch.ts'
-import { DEFAULT_STEWARD_RULES } from '../../domains/loops/stall.ts'
+import { REVIEW_POLL_MS } from '../../domains/work/reviews.ts'
+import { DEFAULT_WAIT_GRACE_MS } from '../../domains/improve/selfwatch.ts'
+import { DEFAULT_STEWARD_RULES } from '../../domains/planning/stall.ts'
 import { WORKFLOWS } from '../../kernel/workflows.ts'
+
+/** For the composition root, which reaches into one domain only (`scripts/boundaries.ts`). */
+export { DEFAULT_STEWARD_RULES }
 
 const ms = z.coerce.number().int().min(0)
 
