@@ -55,7 +55,7 @@ laws do not (they are Mantine's; the Console is Base UI and Tailwind on Basalt's
 
 ## The frame
 
-- **Sidebar.** The logo slot is the app icon, the blue tile the PWA shows (`/icons/icon-192.png`), then the wordmark "Factory" at the top. The global nav is compact: icon, label, a count, and the
+- **Sidebar.** The logo slot is the mark on its blue tile (`/icons/mark.svg`, which fills its box; no ring), then the wordmark "Factory" at the top. The global nav is compact: icon, label, a count, and the
   key that reaches it (`g o`, `g n`, …) shown on hover in the count's place, so a label never truncates under both. It
   follows the owner's day: Overview, Needs you, Chain, Projects, Artifacts; then a quieter group under "How it runs"
   (a hairline on the collapsed rail) with Improve, Throughput and Accounts. Overview is active on `/` only; a screen stays active on
