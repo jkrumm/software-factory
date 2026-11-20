@@ -20,7 +20,7 @@ Every name a settings loader reads from the environment: its default in the code
 | `FACTORY_CONSOLE_DIR` | `DEFAULT_DIR` | the Console build; a release has the same layout as the repo | `apps/server/src/console-settings.ts` |
 | `FACTORY_CONSOLE_IMAGE_HOSTS` | `''` | Hosts the Console page may load images from (the page's `img-src`), comma-separated: `images.example.com` or `*.example.com`, no scheme, port or path. | `apps/server/src/console-settings.ts` |
 | `FACTORY_CONSOLE_PORT` | `7795` | the port the Console listens on | `apps/server/src/console-settings.ts` |
-| `FACTORY_CONSOLE_URL` | `'http://127.0.0.1:7793/console'` | where a checkpoint is answered; a placeholder until the Console exists | `apps/server/src/adapters/ntfy/ntfy.ts` |
+| `FACTORY_CONSOLE_URL` | `loopbackUrl(loadConsoleSettings(env).port)` | the Console's base URL, where a checkpoint is answered; unset, it is the Console listener on loopback (FACTORY_CONSOLE_PORT) | `apps/server/src/adapters/ntfy/ntfy.ts` |
 | `FACTORY_DATA_DIR` | `join(e.HOME ?? '/tmp', '.software-factory', 'data')` | the factory's data directory; artifact revisions are blobs under `<dir>/blobs`, never in git | `apps/server/src/checkpoint-settings.ts` |
 | `FACTORY_DOOR_TOKEN` | unset | the token a door (a machine) calls the API with | `apps/server/src/settings.ts` |
 | `FACTORY_FORCE_NOTE_MS` | `5 * 60_000` | how long a lead's turn may read as ended before a note is typed into it anyway | `apps/server/src/adapters/leads/settings.ts` |

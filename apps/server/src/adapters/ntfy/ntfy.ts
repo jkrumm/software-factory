@@ -1,5 +1,6 @@
 import * as z from 'zod'
 import type { Notifier } from '../../domains/checkpoints/ports.ts'
+import { loadConsoleSettings } from '../../console-settings.ts'
 import { parseEnv } from '../../kernel/env.ts'
 import { err, ok, portError } from '../../kernel/result.ts'
 
@@ -17,8 +18,8 @@ const Env = z.object({
   FACTORY_NTFY_TOPIC: z.string().regex(TOPIC).default('factory'),
   /** the bearer token for the ntfy server, when it needs one */
   NTFY_TOKEN: z.string().optional(),
-  /** where a checkpoint is answered; a placeholder until the Console exists */
-  FACTORY_CONSOLE_URL: z.string().min(1).default('http://127.0.0.1:7793/console'),
+  /** the Console's base URL, where a checkpoint is answered; unset, it is the Console listener on loopback (FACTORY_CONSOLE_PORT) */
+  FACTORY_CONSOLE_URL: z.string().min(1).optional(),
 })
 
 export interface OwnersLine {
@@ -28,6 +29,9 @@ export interface OwnersLine {
   consoleUrl: string
 }
 
+/** The Console listener on loopback: where a checkpoint links when FACTORY_CONSOLE_URL is unset. */
+const loopbackUrl = (port: number): string => `http://127.0.0.1:${port}`
+
 /** The owner's line from the environment; throws one message when a setting is malformed. */
 export function loadOwnersLine(env: Record<string, string | undefined>): OwnersLine {
   const e = parseEnv(Env, env)
@@ -36,7 +40,7 @@ export function loadOwnersLine(env: Record<string, string | undefined>): OwnersL
     url,
     topic: e.FACTORY_NTFY_TOPIC,
     token: e.NTFY_TOKEN?.trim() || null,
-    consoleUrl: e.FACTORY_CONSOLE_URL,
+    consoleUrl: e.FACTORY_CONSOLE_URL ?? loopbackUrl(loadConsoleSettings(env).port),
   }
 }
 
