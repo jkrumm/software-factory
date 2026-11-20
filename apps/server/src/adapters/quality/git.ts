@@ -567,9 +567,11 @@ export class GitCommits implements Commits {
     if (reflog.exitCode !== 0) return undefined
     const { made, rebased } = readReflog(reflog.stdout)
     if (rebased.length === 0) return undefined
+    const merged = await this.defaultMergedIn(repo, ref, cut)
+    if (!merged) return undefined
     const theirs = await gitIn(
       repo,
-      ['rev-list', `${cut}..${ref}`, '--not', ...rebased.map((step) => step.onto)],
+      ['rev-list', `${cut}..${ref}`, '--not', ...rebased.map((step) => step.onto), ...merged.tips],
       this.options,
     )
     if (theirs.exitCode !== 0) return undefined
@@ -579,7 +581,41 @@ export class GitCommits implements Commits {
       if (top.exitCode !== 0) return undefined
       for (const sha of lines(top.stdout)) own.add(sha)
     }
+    for (const sha of merged.merges) own.delete(sha)
     return own
+  }
+
+  /**
+   * What the branch took in from the default branch after it was cut: the merge commits whose merged-in parent is on
+   * the remote's default branch, and those parents. Neither is the lead's work, and the commits behind the parents
+   * are not either, though a rebase's `onto` does not reach them. Undefined where git cannot say.
+   */
+  private async defaultMergedIn(
+    repo: string,
+    ref: string,
+    cut: string,
+  ): Promise<{ merges: string[]; tips: string[] } | undefined> {
+    const base = await originDefault(repo, this.options)
+    if (!base) return { merges: [], tips: [] }
+    const listed = await gitIn(repo, ['rev-list', '--merges', '--parents', `${cut}..${ref}`], this.options)
+    if (listed.exitCode !== 0) return undefined
+    const merges: string[] = []
+    const tips: string[] = []
+    for (const line of lines(listed.stdout)) {
+      const [merge, , ...taken] = line.split(' ')
+      if (!merge) continue
+      let fromDefault = false
+      for (const parent of taken) {
+        const onBase = await gitIn(repo, ['merge-base', '--is-ancestor', parent, base], this.options)
+        if (onBase.exitCode > 1) return undefined
+        if (onBase.exitCode === 0) {
+          tips.push(parent)
+          fromDefault = true
+        }
+      }
+      if (fromDefault) merges.push(merge)
+    }
+    return { merges, tips }
   }
 }
 
