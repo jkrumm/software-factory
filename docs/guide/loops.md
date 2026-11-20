@@ -104,7 +104,7 @@ Selfwatch looks at the factory itself every 5 minutes and files a signal for a c
 | Kind | Condition |
 |-|-|
 | `ci_red` | the two newest completed runs of a workflow on the default branch both failed |
-| `migration_clash` | one migration number on two file names across branches |
+| `migration_clash` | one migration number on two file names, one of them on the default branch |
 | `wait_overdue`, `lead_idle` | a wait past its exit; a lead with no report for too long |
 | `heartbeat_stale`, `routes_slow` | the leads tick or the database stopped; the server's routes answer with a p95 over two seconds |
 | `process_growth`, `swap_growth`, `process_storm`, `load_over_ceiling` | a runaway process, rising swap, too many processes, load over its ceiling (`load_over_ceiling`) |
