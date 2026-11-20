@@ -147,7 +147,8 @@ const onVps = (row: SlotRow): boolean => row.host === 'vps'
  *
  * Two hosts (issue 1793): the mini's line is as it was, over the rows that are not the VPS's. A caller that can run off
  * the mini (`remote`), whose project the owner admitted and whose step the project declares for the VPS, is granted a VPS
- * slot when the mini would make it wait, the VPS has room now (`decideRemote`) and finishes it sooner (`finishesSooner`).
+ * slot when the VPS has room now (`decideRemote`) and finishes it sooner (`finishesSooner`): the mini would make it wait, or
+ * its learned run on the VPS is shorter than on the mini even with a mini slot free (issue 2668).
  * A caller the VPS failed (`notOn`) goes back to the mini's line at its old place.
  */
 export async function touchSlot(
@@ -413,7 +414,57 @@ export async function touchSlot(
           host,
         })
     }
-    if (touched && (touched.view.granted || declared === null || typeof declared === 'string')) {
+    // The VPS's side of the placement, read once and only when a branch needs it: room now (`decideRemote`) and whether it
+    // ends the step sooner than the mini would. The mini's wait is zero when its slot is free now, so a step the VPS runs in
+    // less time than the mini does (its learned runs on each host) goes to the VPS even with a mini slot free.
+    let outlook:
+      | { room: ReturnType<typeof decideRemote>; sooner: boolean; slot: number; project: string; dir: string }
+      | undefined
+    const vpsOutlook = async () => {
+      if (outlook) return outlook
+      const vpsSized = await Promise.all(vpsHolders.map((row) => sizeOf(row.name, row.cwd)))
+      const project = owner?.name ?? ''
+      const projectSlots = new Set(
+        vpsHolders.flatMap((row) =>
+          ownerIn(projects, row.cwd ?? undefined)?.name === project && row.slot !== null ? [row.slot] : [],
+        ),
+      )
+      const slot = freeRemoteSlot(projectSlots)
+      const dir = copyDirOf(project, slot)
+      const room = decideRemote({
+        pressure: pressureThreshold(baseline?.value ?? null),
+        reading: probed?.reading ?? null,
+        now,
+        holders: vpsSized.map((size) => ({ peakMib: size.mib, cores: size.cores })),
+        step: { peakMib: mine.mib, cores: mine.cores },
+        copyExists: probed?.copies.includes(dir) ?? false,
+      })
+      const median = medianOf([...runMsByName.values()]) ?? DEFAULT_SLOT_RUN_ESTIMATE_MS
+      const remaining = await Promise.all(
+        holders.map(async (row) => {
+          const ran = now.getTime() - (row.grantedAt?.getTime() ?? now.getTime())
+          return Math.max(0, ((await sizeOf(row.name, row.cwd)).runMs ?? median) - ran)
+        }),
+      )
+      const sooner =
+        pinnedVps ||
+        finishesSooner({
+          miniRunMs: mine.runMs,
+          vpsRunMs: mine.vpsRunMs,
+          expectedWaitMs: touched?.view.granted
+            ? 0
+            : expectedMiniWaitMs({ remainingMs: remaining, ahead: touched?.view.ahead ?? 0, medianRunMs: median }),
+        })
+      outlook = { room, sooner, slot, project, dir }
+      return outlook
+    }
+    const remoteAllowed = declared !== null && typeof declared !== 'string'
+    // the mini has a slot free now: a step the VPS would end sooner still goes there when it has room (an unlearned VPS run
+    // is the mini's times `VPS_SLOWDOWN`, so a step never run on the VPS goes only when the mini makes it wait)
+    const freeOnMini = touched?.view.granted === true && input.holding !== true && remoteAllowed
+    const beatsFreeSlot = freeOnMini ? await vpsOutlook() : null
+    const takeVps = beatsFreeSlot !== null && beatsFreeSlot.sooner && beatsFreeSlot.room.grant
+    if (touched && ((touched.view.granted && !takeVps) || !remoteAllowed)) {
       await capacity.saveSlots([...touched.rows, ...keep])
       await record(touched.waited, 'mini')
       // a step the project declared remote, granted on the mini: said once, at the grant, with why it did not go
@@ -422,7 +473,11 @@ export async function touchSlot(
           at: now,
           name: mine.key,
           host: 'mini',
-          reason: held !== null ? 'held' : (refusedOnVps.get(input.id)?.reason ?? 'free'),
+          reason:
+            held !== null
+              ? 'held'
+              : (refusedOnVps.get(input.id)?.reason ??
+                (beatsFreeSlot?.sooner && !beatsFreeSlot.room.grant ? 'no_room' : 'free')),
         })
         refusedOnVps.delete(input.id)
       }
@@ -433,41 +488,7 @@ export async function touchSlot(
       return ok({ ...touched.view, why, remote: null })
     }
     // The mini makes it wait (or it is pinned to the VPS): the VPS takes it if it has room and finishes it sooner.
-    const vpsSized = await Promise.all(vpsHolders.map((row) => sizeOf(row.name, row.cwd)))
-    const project = owner?.name ?? ''
-    const projectSlots = new Set(
-      vpsHolders.flatMap((row) =>
-        ownerIn(projects, row.cwd ?? undefined)?.name === project && row.slot !== null ? [row.slot] : [],
-      ),
-    )
-    const slot = freeRemoteSlot(projectSlots)
-    const dir = copyDirOf(project, slot)
-    const room = decideRemote({
-      pressure: pressureThreshold(baseline?.value ?? null),
-      reading: probed?.reading ?? null,
-      now,
-      holders: vpsSized.map((size) => ({ peakMib: size.mib, cores: size.cores })),
-      step: { peakMib: mine.mib, cores: mine.cores },
-      copyExists: probed?.copies.includes(dir) ?? false,
-    })
-    const median = medianOf([...runMsByName.values()]) ?? DEFAULT_SLOT_RUN_ESTIMATE_MS
-    const remaining = await Promise.all(
-      holders.map(async (row) => {
-        const ran = now.getTime() - (row.grantedAt?.getTime() ?? now.getTime())
-        return Math.max(0, ((await sizeOf(row.name, row.cwd)).runMs ?? median) - ran)
-      }),
-    )
-    const sooner =
-      pinnedVps ||
-      finishesSooner({
-        miniRunMs: mine.runMs,
-        vpsRunMs: mine.vpsRunMs,
-        expectedWaitMs: expectedMiniWaitMs({
-          remainingMs: remaining,
-          ahead: touched?.view.ahead ?? 0,
-          medianRunMs: median,
-        }),
-      })
+    const { room, sooner, slot, project, dir } = await vpsOutlook()
     const miniRows = touched?.rows ?? rows.filter((row) => row.id !== input.id && alive(row))
     if (!room.grant || !sooner || declared === null || typeof declared === 'string') {
       // the stable words, not the figures (`REMOTE_REFUSAL_WORDS`): the CLI prints a line whenever the reason changes
