@@ -463,8 +463,8 @@ owner's setting, `FACTORY_STEP_REMOTE_TARGET` (an ssh alias; unset, every step r
   partition. A whole no-op step costs 1.9 s.
 - **Retention** (`adapters/remote/trim.ts`, issue 2035; measured 2026-11-17: `factory-steps` 7.2 GB, slot worktrees 1.6 GB
   each with `node_modules`, the bun cache 1.9 GB with no bound). The probe starts one ssh of a shell script at most every
-  6 h (`TRIM_EVERY_MS`), apart from its own call, after a probe that saw no step container; the script itself does nothing
-  while one runs or docker does not answer. It removes a slot copy (`<project>/<n>` and `<n>.run`) whose `.run`
+  6 h (`TRIM_EVERY_MS`), apart from its own call, after a probe that saw no step container; the slot and cache parts of the
+  script do nothing while one runs or docker does not answer. It removes a slot copy (`<project>/<n>` and `<n>.run`) whose `.run`
   directory, rewritten by every step of the slot, is older than 7 days (`COPY_IDLE_DAYS`), prunes the bare repository's
   worktree record and keeps the bare repository; and a whole bun cache entry no install read for 14 days
   (`CACHE_IDLE_DAYS`, by access time: the mount is `relatime`), tightening to 7, 3 and 1 day while the cache is over 3 GiB

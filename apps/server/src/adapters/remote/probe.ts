@@ -98,7 +98,7 @@ export function sshProbe(input: {
   let trimmedAt = 0
   let trimming = false
   // the step host's retention (`trim.ts`), apart from the probe so a long walk never ages the reading past its limit; the
-  // script itself does nothing while a step container runs
+  // slot and cache parts of the script do nothing while a step container runs
   const trim = async (): Promise<void> => {
     const result = await run([...ssh, trimScript({ stepLabel: STEP_LABEL })], TRIM_TIMEOUT_MS, helperEnv())
     // stdout and stderr arrive joined: the script's own lines are the ones that start with `trim:`

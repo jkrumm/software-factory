@@ -12,8 +12,8 @@
  *   one) no install has read for `CACHE_IDLE_DAYS` is removed; while the cache is still over `CACHE_CAP_GIB` the age
  *   tightens to 7, 3 and then 1 day. The mount is `relatime`, so a read marks a file's access time within a day.
  *
- * It does nothing while a step container runs or when docker does not answer, so it never removes what an install is
- * reading. A step that starts mid-trim and meets a removed copy fails as a host failure and runs on the mini.
+ * The slot and cache parts do nothing while a step container runs or when docker does not answer, so they never remove what
+ * an install is reading; the exp part touches neither and runs regardless. A step that starts mid-trim and meets a removed copy fails as a host failure and runs on the mini.
  */
 import { CACHE_CAP_GIB, CACHE_IDLE_DAYS, COPY_IDLE_DAYS, EXP_IDLE_DAYS } from '../../domains/capacity/remote.ts'
 
