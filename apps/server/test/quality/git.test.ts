@@ -229,6 +229,28 @@ test('read: a branch rebased, then merging the moved default branch in, owns onl
   expect(sha).not.toBe(rebased)
 })
 
+test('read: a rebased branch fast-forwarded to the default branch it landed on owns only its own commits', async () => {
+  const repo = await fresh()
+  const { cut } = await branchWith(repo, 'factory/1-1', 'mine.ts')
+  const other = await repo.other()
+  await other.commit('x.ts', 'x\n', 'feat: x')
+  await repo.git('pull', '-q', '--ff-only', 'origin', 'master')
+  await repo.git('checkout', '-q', 'factory/1-1')
+  await repo.git('rebase', '-q', 'master')
+  const rebased = await repo.git('rev-parse', 'HEAD')
+  await repo.git('checkout', '-q', 'master')
+  await repo.git('merge', '-q', '--no-ff', '-m', 'Merge', 'factory/1-1')
+  const merge = await repo.git('rev-parse', 'HEAD')
+  await repo.git('push', '-q', 'origin', 'master')
+  await (await repo.other()).commit('y.ts', 'y\n', 'feat: y')
+  await repo.git('pull', '-q', '--ff-only', 'origin', 'master')
+  await repo.git('checkout', '-q', 'factory/1-1')
+  await repo.git('merge', '-q', '--ff-only', 'master')
+  await repo.git('checkout', '-q', 'master')
+  const got = value(await read(repo, [merge], { branch: 'factory/1-1', cut }))
+  expect(got.commits).toEqual([merge, rebased])
+})
+
 test('landed: a squashed branch is the squash commit, found by content past later commits of others', async () => {
   const repo = await fresh()
   const { cut } = await branchWith(repo, 'factory/1-1', 's.ts')

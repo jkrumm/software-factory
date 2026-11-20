@@ -39,9 +39,14 @@ const lines = (text: string): string[] => text.split('\n').filter(Boolean)
  * A branch's reflog (`reflog show --format='%H %gs'`): the tips the lead made on it (a commit, a merge, a cherry-pick, a
  * revert, an am; never a fast-forward) and each rebase's finish, with what it was rebased onto.
  */
-function readReflog(stdout: string): { made: Set<string>; rebased: { onto: string; tip: string }[] } {
+function readReflog(stdout: string): {
+  made: Set<string>
+  rebased: { onto: string; tip: string }[]
+  forwarded: string[]
+} {
   const made = new Set<string>()
   const rebased: { onto: string; tip: string }[] = []
+  const forwarded: string[] = []
   for (const entry of stdout.split('\n')) {
     const [tip, ...words] = entry.split(' ')
     if (!tip) continue
@@ -50,8 +55,9 @@ function readReflog(stdout: string): { made: Set<string>; rebased: { onto: strin
       made.add(tip)
     const onto = /\(finish\): \S+ onto ([0-9a-f]{40})\b/.exec(message)?.[1]
     if (onto) rebased.push({ onto, tip })
+    if (message.endsWith(': Fast-forward')) forwarded.push(tip)
   }
-  return { made, rebased }
+  return { made, rebased, forwarded }
 }
 
 /**
@@ -565,9 +571,9 @@ export class GitCommits implements Commits {
   ): Promise<Set<string> | undefined> {
     const reflog = await gitIn(repo, ['reflog', 'show', '--format=%H %gs', ref], this.options)
     if (reflog.exitCode !== 0) return undefined
-    const { made, rebased } = readReflog(reflog.stdout)
+    const { made, rebased, forwarded } = readReflog(reflog.stdout)
     if (rebased.length === 0) return undefined
-    const merged = await this.defaultMergedIn(repo, ref, cut)
+    const merged = await this.defaultMergedIn(repo, ref, cut, forwarded)
     if (!merged) return undefined
     const theirs = await gitIn(
       repo,
@@ -587,13 +593,15 @@ export class GitCommits implements Commits {
 
   /**
    * What the branch took in from the default branch after it was cut: the merge commits whose merged-in parent is on
-   * the remote's default branch, and those parents. Neither is the lead's work, and the commits behind the parents
-   * are not either, though a rebase's `onto` does not reach them. Undefined where git cannot say.
+   * the remote's default branch, those parents, and the tips a fast-forward moved the branch to on the default branch.
+   * None of it is the lead's work, nor the commits behind it, though a rebase's `onto` does not reach them. Undefined
+   * where git cannot say.
    */
   private async defaultMergedIn(
     repo: string,
     ref: string,
     cut: string,
+    forwarded: readonly string[],
   ): Promise<{ merges: string[]; tips: string[] } | undefined> {
     const base = await originDefault(repo, this.options)
     if (!base) return { merges: [], tips: [] }
@@ -601,6 +609,11 @@ export class GitCommits implements Commits {
     if (listed.exitCode !== 0) return undefined
     const merges: string[] = []
     const tips: string[] = []
+    for (const tip of forwarded) {
+      const onBase = await gitIn(repo, ['merge-base', '--is-ancestor', tip, base], this.options)
+      if (onBase.exitCode > 1) return undefined
+      if (onBase.exitCode === 0) tips.push(tip)
+    }
     for (const line of lines(listed.stdout)) {
       const [merge, , ...taken] = line.split(' ')
       if (!merge) continue
