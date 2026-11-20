@@ -303,12 +303,12 @@ describe('factory land', () => {
   })
 
   test('a merge-guard whose prerequisite is missing is refused, never skipped', async () => {
-    await writeFile(join(work, 'Makefile'), 'merge-guard: missing.stamp\n\t@echo guard-clear\n')
+    await writeFile(join(work, 'Makefile'), 'merge-guard: merge-guard.stamp\n\t@echo guard-clear\n')
     await git(work, 'add', 'Makefile')
     await git(work, 'commit', '--quiet', '-m', 'chore: a broken guard')
     const result = await land().done
     expect(result.code).toBe(1)
-    expect(result.err).toContain('land: guard: refused: make -n merge-guard failed')
+    expect(result.err).toContain('land: guard: refused: make merge-guard refused')
     expect(await calls()).not.toContain('gh pr merge')
   })
 

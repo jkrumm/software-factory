@@ -16,6 +16,10 @@ const DEFAULT_POLL_MS = 15_000
 const DEFAULT_NO_RUN_MS = 3 * 60_000
 /** The longest CI wait, the merge guard's own bound (`FACTORY_LAND_CI_MINUTES`). */
 const DEFAULT_CI_MINUTES = 45
+/** A Makefile rule named `merge-guard`, alone or among others (`a merge-guard: b`). */
+const GUARD_RULE = /^(?:[\w.-]+\s+)*merge-guard(?:\s+[\w.-]+)*\s*:(?!=)/m
+/** An `include` can define the rule in a file this read does not see. */
+const INCLUDE = /^-?include\s/m
 
 interface Options {
   pr?: string
@@ -440,18 +444,23 @@ class Lander {
     }
   }
 
+  /**
+   * Whether the repo's Makefile has a `merge-guard` rule, read from the file as the server reads it for the brief
+   * (`adapters/git/merge-guard.ts`): make's error wording does not tell a missing target from a broken one. A Makefile
+   * that includes another file and shows no such rule itself asks `make -n merge-guard`.
+   */
+  private async hasGuard(): Promise<boolean> {
+    const path = join(this.repo.root, 'Makefile')
+    if (!existsSync(path)) return false
+    const text = readFileSync(path, 'utf8')
+    if (GUARD_RULE.test(text)) return true
+    if (!INCLUDE.test(text)) return false
+    return (await this.sh.run(['make', '-C', this.repo.root, '-n', 'merge-guard'])).code === 0
+  }
+
   /** Step 6: the repo's `make merge-guard`, or the same rule held here when it has none. */
   private async guard(): Promise<void> {
-    const probe = await this.sh.run(['make', '-C', this.repo.root, '-n', 'merge-guard'])
-    const has = probe.code === 0
-    // only the target itself missing (or no Makefile) means none: a missing prerequisite of merge-guard is a broken guard
-    const none = /no rule to make target [`'"]?merge-guard[`'"]?\.|no targets specified and no makefile found/i
-    if (!has && !none.test(probe.out + probe.err))
-      throw new Refused(
-        'guard',
-        `make -n merge-guard failed, so whether the repo has a merge guard is unknown: ${lastLines(probe.err || probe.out)}`,
-        'fix the Makefile, commit, then factory land again',
-      )
+    const has = await this.hasGuard()
     if (has) {
       const ran = await this.sh.run(['make', '-C', this.repo.root, 'merge-guard'], {
         inherit: true,
