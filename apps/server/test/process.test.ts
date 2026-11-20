@@ -1,5 +1,5 @@
 import { expect, test } from 'bun:test'
-import { mkdtempSync, readFileSync, rmSync } from 'node:fs'
+import { existsSync, mkdtempSync, readFileSync, rmSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { CannotExecute, EXIT_STOPPED, EXIT_TIMEOUT, gitIn, GitTimeout, runProcess } from '../src/adapters/process.ts'
@@ -38,7 +38,14 @@ test('a group kill reaches what the program started', async () => {
   const dir = mkdtempSync(join(tmpdir(), 'process-test-'))
   try {
     const pidFile = join(dir, 'pid')
-    await runProcess(['sh', '-c', `sleep 30 & echo $! > "${pidFile}"; wait`], 300, { group: true })
+    const controller = new AbortController()
+    const pending = runProcess(['sh', '-c', `sleep 30 & echo $! > "${pidFile}"; wait`], 30_000, {
+      group: true,
+      signal: controller.signal,
+    })
+    for (let waited = 0; !existsSync(pidFile) && waited < 5_000; waited += 20) await Bun.sleep(20)
+    controller.abort()
+    await pending
     const grandchild = Number(readFileSync(pidFile, 'utf8').trim())
     await Bun.sleep(100)
     expect(() => process.kill(grandchild, 0)).toThrow()
