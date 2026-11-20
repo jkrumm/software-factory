@@ -84,13 +84,23 @@ export interface Patience {
 
 export const BACKOFF = { firstMs: 500, maxMs: 5_000 }
 
+/** How often and how soon a `version_conflict` is asked again: another writer won one race, rarely a second. */
+const CONFLICT_RETRIES = 3
+const CONFLICT_PAUSE_MS = 100
+
+function versionConflict(answer: Answer): boolean {
+  if (!answer.reached || answer.status !== 409) return false
+  return (answer.json as { code?: unknown } | null)?.code === 'version_conflict'
+}
+
 const READS: ReadonlySet<string> = new Set(['GET', 'HEAD'])
 
 /**
  * `send`, retried while the server is away. A refused connection is retried for every method (nothing reached the
  * server); any other failure to reach it, a timeout included, only for a read, because a write may have been applied
- * before the answer was lost. The last answer comes back once the limit is spent; a server that answered, whatever the
- * status, is never retried.
+ * before the answer was lost. The last answer comes back once the limit is spent. A server that answered is never
+ * retried, but for one answer: a `version_conflict`, the Issue moving between the server's read and its write. The
+ * server rolled that call back and says "try again", so it is asked again a few times, shortly after.
  */
 export async function sendPatient(call: Call, patience: Patience): Promise<Answer> {
   const now = patience.now ?? Date.now
@@ -99,8 +109,14 @@ export async function sendPatient(call: Call, patience: Patience): Promise<Answe
   const started = now()
   let pause = backoff.firstMs
   let waited = false
+  let conflicts = 0
   for (;;) {
     const answer = await send(call)
+    if (versionConflict(answer) && conflicts < CONFLICT_RETRIES) {
+      conflicts++
+      await sleep(CONFLICT_PAUSE_MS * conflicts)
+      continue
+    }
     if (answer.reached) return answer
     const retriable = answer.nothingSent || READS.has(call.method.toUpperCase())
     if (!retriable || now() - started + pause > patience.limitMs()) return answer
