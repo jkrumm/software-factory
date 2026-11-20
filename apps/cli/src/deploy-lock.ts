@@ -42,8 +42,49 @@ const sleep = (ms: number) => new Promise<void>((resolve) => setTimeout(resolve,
  * that cannot be reached changes neither the lock nor the exit code.
  */
 async function deployLock(input: { project: string; command: string[]; kind?: LockKind }, io: Io): Promise<number> {
+  const [program, ...args] = input.command
+  if (!program || !NAME.test(input.project)) throw usage((input.kind ?? 'deploy') === 'merge' ? MERGE_USAGE : USAGE)
+  return withLock({ project: input.project, kind: input.kind ?? 'deploy' }, io, async (held) => {
+    let child: ReturnType<typeof Bun.spawn>
+    try {
+      child = Bun.spawn([program, ...args], {
+        stdin: 'inherit',
+        stdout: 'inherit',
+        stderr: 'inherit',
+        env: io.env,
+        detached: true,
+      })
+    } catch (error) {
+      io.err(`factory: cannot run ${program}: ${reason(error)}\n`)
+      return 127
+    }
+    held.track(child)
+    await child.exited
+    held.track(undefined)
+    return exitCodeOf(child)
+  })
+}
+
+/** What a body run under a lock sees: the signal that asked it to stop, and the child that signal is passed on to. */
+export interface Held {
+  stopped(): NodeJS.Signals | undefined
+  /** the child a SIGINT, SIGTERM or SIGHUP is passed on to (its process group: spawn it `detached`); undefined: none */
+  track(child: { pid: number; kill: (signal: NodeJS.Signals) => void } | undefined): void
+}
+
+/**
+ * Runs `body` while holding the project's lock of `kind` on this host, waiting for a live holder as `deploy-lock` and
+ * `merge-lock` do (exit 75 past the wait or on an unreadable lock, without running the body), and returns its exit code.
+ * A merge window is reported to the server afterwards, best effort, as `merge-lock` reports it.
+ */
+export async function withLock(
+  input: { project: string; kind: LockKind },
+  io: Io,
+  body: (held: Held) => Promise<number>,
+): Promise<number> {
+  if (!NAME.test(input.project)) throw usage(input.kind === 'merge' ? MERGE_USAGE : USAGE)
   const timing: Timing = {}
-  const code = await holdAndRun(input, io, timing)
+  const code = await holdAndRun(input, io, timing, body)
   if ((input.kind ?? 'deploy') === 'merge' && timing.requestedAt) {
     await reportWindow(io, {
       project: input.project,
@@ -92,13 +133,12 @@ async function reportWindow(
 }
 
 async function holdAndRun(
-  input: { project: string; command: string[]; kind?: LockKind },
+  input: { project: string; kind: LockKind },
   io: Io,
   timing: Timing,
+  body: (held: Held) => Promise<number>,
 ): Promise<number> {
-  const kind = input.kind ?? 'deploy'
-  const [program, ...args] = input.command
-  if (!program || !NAME.test(input.project)) throw usage(kind === 'merge' ? MERGE_USAGE : USAGE)
+  const kind = input.kind
 
   const dir = io.env.FACTORY_DEPLOY_LOCK_DIR || join(io.env.HOME || homedir(), '.local/state/factory/deploy-locks')
   const waitMs =
@@ -108,7 +148,7 @@ async function holdAndRun(
   const pollMs = number(io.env.FACTORY_DEPLOY_LOCK_POLL_MS, DEFAULT_POLL_MS)
   const lock = join(dir, kind === 'merge' ? `${input.project}.merge.lock` : `${input.project}.lock`)
 
-  let child: ReturnType<typeof Bun.spawn> | undefined
+  let child: { pid: number; kill: (signal: NodeJS.Signals) => void } | undefined
   let stopped: NodeJS.Signals | undefined
   const onSignal = (signal: NodeJS.Signals) => {
     stopped = signal
@@ -152,21 +192,12 @@ async function holdAndRun(
       await sleep(pollMs)
     }
     if (stopped) return 128 + (constants.signals[stopped] ?? 1)
-
-    try {
-      child = Bun.spawn([program, ...args], {
-        stdin: 'inherit',
-        stdout: 'inherit',
-        stderr: 'inherit',
-        env: io.env,
-        detached: true,
-      })
-    } catch (error) {
-      io.err(`factory: cannot run ${program}: ${reason(error)}\n`)
-      return 127
-    }
-    await child.exited
-    return exitCodeOf(child)
+    return await body({
+      stopped: () => stopped,
+      track: (next) => {
+        child = next
+      },
+    })
   } finally {
     for (const signal of signals) process.off(signal, onSignal)
     if (held) releaseLock(lock)

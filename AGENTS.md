@@ -102,11 +102,9 @@ step host). CI runs the full gate sharded; `make check` stays the whole gate loc
 minutes in a test slot (`factory slot run` wraps it; "queued for a test slot" is a wait, not a hang). Reproduce
 one CI failure by running that suite alone inside a slot. The tests start a private Postgres with `initdb` (`PATH` or `PG_BIN_DIR`). The jobs, shards and slot rules: `docs/operations.md` "Check tiers".
 
-Changes land through a pull request (`project.yaml` `ship:`), conventional commits, no AI attribution. Before merging, a
-lead takes `factory merge-lock --project software-factory -- sh -c '<rebase on origin/master, push, wait for CI, make
-merge-guard, merge>'`, takes the next free migration number if it adds one (`make check` prints it), and merges only when `make
-merge-guard` exits 0 (`MERGE_GUARD_ARGS=--wait` waits for the head's CI). `--allow-red` is for the one change that fixes a
-red master. `make deploy`, `make rollback` and `make verify` act on the mini only (`DRY_RUN=1` prints the plan,
+Changes land through a pull request (`project.yaml` `ship:`), conventional commits, no AI attribution. A lead lands
+with `factory land` (merge lock, rebase, review check, push, CI, `make merge-guard`, merge); a new migration takes the
+next free number (`make check` prints it). `--allow-red` is for the one change that fixes a red master. `make deploy`, `make rollback` and `make verify` act on the mini only (`DRY_RUN=1` prints the plan,
 `FACTORY_REF=<branch>` proves a branch live before it merges). The guard's refusals and the deploy's variables and timings:
 `docs/operations.md` "Merging" and "Deploy".
 

@@ -532,7 +532,7 @@ describe('the ship gate', () => {
     const refused = value(await ship(issueId, 'call-1', 1, []))
     expect(refused.result).toBe('refused')
     expect(refused.detail).toStartWith('ship refused: nothing of factory/issue_1-1 is on origin/master yet')
-    expect(refused.detail).toContain('factory merge-lock --project example --')
+    expect(refused.detail).toContain('land it first with `factory land` in the worktree')
     expect(commitReads).toBe(0)
   })
 

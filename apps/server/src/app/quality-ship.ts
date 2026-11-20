@@ -143,7 +143,7 @@ async function shipCommits(
   if (found.value.commits.length > 0) return ok(found.value.commits)
   if (!found.value.held) return err(none)
   return err(
-    `nothing of ${branch} is on ${found.value.base} yet: land it first inside the merge window, \`factory merge-lock --project ${repoNameOf(issue.repo)} -- sh -c '<rebase, push, wait for CI, make merge-guard, gh pr merge <n>>'\` (order 7 of the brief), then ship again`,
+    `nothing of ${branch} is on ${found.value.base} yet: land it first with \`factory land\` in the worktree (order 7 of the brief), then ship again`,
   )
 }
 
