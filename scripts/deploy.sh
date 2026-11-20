@@ -277,7 +277,7 @@ build_release() { # $1 sha
   git -C "$REPO_DIR" archive --format=tar "$1" | tar -x -C "$dir" || { remove_release "$1"; die "exporting $1 failed"; }
   (cd "$dir" && bun install --frozen-lockfile) || { remove_release "$1"; die "bun install failed; the live release is untouched"; }
   build_console "$1" || { remove_release "$1"; die "the Console build failed; the live release is untouched"; }
-  # The picker as one file beside the CLI entry: a machine with no checkout (the MacBook) pulls it from the live release (docs/accounts.md). Not the service: a failure is a warning.
+  # The picker as one file beside the CLI entry: a machine with no checkout (the MacBook) pulls it from the live release (packages/accounts/docs/accounts.md). Not the service: a failure is a warning.
   (cd "$dir" && BUILD_COMMIT="${1:0:12}" bun packages/accounts/scripts/build.ts "$dir/packages/accounts/dist/claude-account" >/dev/null) || log "WARNING: building the single-file claude-account failed; the release has none"
   chmod +x "$dir"/scripts/*.sh "$dir/$CLI_ENTRY" "$dir/$ACCOUNTS_ENTRY"
   touch "$dir/.complete"

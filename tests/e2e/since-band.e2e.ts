@@ -371,8 +371,7 @@ test.describe('the deep link, with the band above it', () => {
 })
 
 /**
- * Screenshots of Needs you with the band populated, committed under docs/evidence/console-needs-you (scripts/evidence-console-needs-you.sh
- * copies them from tests/e2e/out/screenshots/console-needs-you). Kept to about 14: the primary viewport shows every screen,
+ * Screenshots of Needs you with the band populated, written under tests/e2e/out/screenshots/console-needs-you. Kept to about 14: the primary viewport shows every screen,
  * the others the ones that differ there.
  */
 const SHOTS = [

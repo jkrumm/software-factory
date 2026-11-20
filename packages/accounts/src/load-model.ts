@@ -1,4 +1,4 @@
-// The simulation's load model (docs/accounts.md §The policy lab): what the pool's work looks like, measured from this
+// The simulation's load model (packages/accounts/docs/accounts.md §The policy lab): what the pool's work looks like, measured from this
 // machine's sample log, pick log and session transcripts by scripts/measure-load.ts into load-model.json. Pure: the JSON
 // is bundled, nothing here reads a file or the clock.
 import measured from './load-model.json' with { type: 'json' }

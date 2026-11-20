@@ -1,4 +1,4 @@
-// Onboarding: add, verify and remove an account by command (docs/accounts.md §Onboarding). The registry is edited as the
+// Onboarding: add, verify and remove an account by command (packages/accounts/docs/accounts.md §Onboarding). The registry is edited as the
 // JSON it is (every key the package does not know stays), and written through a symlink, so a registry that lives in a
 // dotfiles checkout stays a link. Nothing here needs a host block.
 import { existsSync, mkdirSync, readFileSync, readdirSync, realpathSync } from 'node:fs'

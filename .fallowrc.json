@@ -11,11 +11,10 @@
     "apps/console/public/frame/*.js",
     "integrations/herdr/jk-glance/main.js",
     "docs/guide/.vitepress/config.ts",
-    "docs/guide/.vitepress/theme/index.ts",
-    "docs/evidence/**/*.mjs"
+    "docs/guide/.vitepress/theme/index.ts"
   ],
   // Provided by the host that loads the file, or by a package this repo already depends on: gpui-kit, gpui-base and herdr
-  // by the Herdr app that runs integrations/herdr/jk-glance, playwright-core by @playwright/test for docs/evidence.
+  // by the Herdr app that runs integrations/herdr/jk-glance, playwright-core by @playwright/test.
   "ignoreDependencies": ["gpui-kit", "gpui-base", "herdr", "playwright-core"],
   "rules": {
     // Domain modules name their own words (Breach, Checked, Entry ...); two modules exporting the same name is not dead code.

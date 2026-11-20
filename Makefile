@@ -102,7 +102,7 @@ check-static:
 	@bun scripts/kpi-table.ts --check
 	@echo "==> next free migration number (scripts/merge-guard.ts): $$(bun scripts/merge-guard.ts --next-migration)"
 
-# The self-contained claude-account for a machine without the factory (docs/accounts.md): one file, runs with bun alone. ACCOUNTS_OUT overrides the path.
+# The self-contained claude-account for a machine without the factory (packages/accounts/docs/accounts.md): one file, runs with bun alone. ACCOUNTS_OUT overrides the path.
 accounts-bundle:
 	@bun packages/accounts/scripts/build.ts $(ACCOUNTS_OUT)
 

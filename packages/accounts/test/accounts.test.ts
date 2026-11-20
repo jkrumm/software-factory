@@ -2312,7 +2312,7 @@ describe('CLI (isolated HOME)', () => {
         'seven_day_age_s',
         'seven_day_resets_at',
         'source',
-        // additive since registry v2 (docs/accounts.md §usage --json)
+        // additive since registry v2 (packages/accounts/docs/accounts.md §usage --json)
         'mode',
         'mode_override',
         'limits',

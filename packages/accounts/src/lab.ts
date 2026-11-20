@@ -1,4 +1,4 @@
-// The policy lab's reports (docs/accounts.md §The policy lab): the shadow log's line and its disagreement rate, the live
+// The policy lab's reports (packages/accounts/docs/accounts.md §The policy lab): the shadow log's line and its disagreement rate, the live
 // result per policy from the reset ledger, and the text of `simulate` and `compare`. Pure: the CLI reads and writes the files.
 import { type ResetEntry } from './history.ts'
 import { type LoadModel } from './load-model.ts'

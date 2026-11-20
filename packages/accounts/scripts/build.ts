@@ -1,6 +1,6 @@
 #!/usr/bin/env bun
 // The self-contained build: one file that runs with bun and nothing else (no node_modules, no checkout), for a machine
-// that has no factory (docs/accounts.md §Installing). `bun packages/accounts/scripts/build.ts [outfile]`, default
+// that has no factory (packages/accounts/docs/accounts.md §Installing). `bun packages/accounts/scripts/build.ts [outfile]`, default
 // packages/accounts/dist/claude-account. The commit it prints for --version is HEAD, or $BUILD_COMMIT.
 import { chmodSync } from 'node:fs'
 import { dirname, join, resolve } from 'node:path'

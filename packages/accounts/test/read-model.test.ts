@@ -1,4 +1,4 @@
-// The read model (docs/accounts.md §History and §status): the sample log and the reset ledger, the forecast, closure against
+// The read model (packages/accounts/docs/accounts.md §History and §status): the sample log and the reset ledger, the forecast, closure against
 // rank, and `status --json` against its schema.
 import { describe, expect, test } from 'bun:test'
 import { existsSync, mkdtempSync, readFileSync, readdirSync, writeFileSync } from 'node:fs'

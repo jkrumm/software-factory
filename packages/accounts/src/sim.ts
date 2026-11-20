@@ -1,4 +1,4 @@
-// The policy lab's simulation (docs/accounts.md §The policy lab): weeks of sticky sessions against staggered weekly
+// The policy lab's simulation (packages/accounts/docs/accounts.md §The policy lab): weeks of sticky sessions against staggered weekly
 // resets and 5 h windows, on a load model (load-model.ts), judged by the weekly percent each account reaches at its reset
 // (unused = lost), the work that found no account (blocked) and the sessions that hit a wall and moved. Pure and seeded:
 // the same scenario gives the same result.
@@ -357,7 +357,7 @@ export function compare(o: {
 /** Blocked shares closer than this are equal (one session-step of a three-week run). */
 const BLOCKED_EPS = 1e-4
 
-/** Each candidate against the default policy, by the acceptance rule of docs/accounts.md §The policy lab. */
+/** Each candidate against the default policy, by the acceptance rule of packages/accounts/docs/accounts.md §The policy lab. */
 export function verdicts(cells: Cell[]): Verdict[] {
   const of = (p: PolicyName) => cells.filter((c) => c.policy === p)
   const used = (cs: Cell[]) => cs.reduce((s, c) => s + c.used, 0) / Math.max(1, cs.length)

@@ -307,7 +307,7 @@ export const run = async (cli: string, c: Case) => {
 
 export type Result = Awaited<ReturnType<typeof run>>
 
-/** The additive fields of registry v2 (docs/accounts.md §usage --json, §Samples): the v1 CLI has none of them. */
+/** The additive fields of registry v2 (packages/accounts/docs/accounts.md §usage --json, §Samples): the v1 CLI has none of them. */
 const ADDITIVE_ROW = ['mode', 'mode_override', 'limits', 'weekly_scoped_shares']
 const ADDITIVE_SAMPLE = ['limits', 'scoped_shares', 'limits_ts']
 const strip = (o: Record<string, unknown>, keys: string[]) => {

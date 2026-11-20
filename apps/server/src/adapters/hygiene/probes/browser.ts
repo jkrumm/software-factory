@@ -31,7 +31,7 @@ const PLAYWRIGHT_CONFIG = /^playwright[^/]*\.config\.[^/]+$/
 const TEST_FILE = /\.(?:e2e|spec|test)\.[^/]+$/
 const TEST_DIRS = new Set(['e2e', 'tests'])
 /** Not suites: the evidence record and the throwaway spikes. */
-const NOT_SUITES = ['docs/evidence/', 'tools/spikes/']
+const NOT_SUITES = ['docs/archive/', 'tools/spikes/']
 
 const CHANNEL_CHROME = /\bchannel\s*:\s*(['"`])chrome\1/
 const EXECUTABLE_CHROME = /\bexecutablePath\b[^\n]*google[ -]chrome/i

@@ -1,4 +1,4 @@
-// The history of an account (docs/accounts.md §History): the sample line, the reset ledger replayed from a series of
+// The history of an account (packages/accounts/docs/accounts.md §History): the sample line, the reset ledger replayed from a series of
 // lines, and the forecast. Pure: no file, process or clock access (test/policy-pure.test.ts holds that); the files are
 // history-store.ts.
 import {

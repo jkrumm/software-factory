@@ -1,4 +1,4 @@
-// The registry file and what is derived from an account's directory. Registry shape: docs/accounts.md §The registry.
+// The registry file and what is derived from an account's directory. Registry shape: packages/accounts/docs/accounts.md §The registry.
 import { readFileSync } from 'node:fs'
 import { homedir } from 'node:os'
 import { join, resolve } from 'node:path'

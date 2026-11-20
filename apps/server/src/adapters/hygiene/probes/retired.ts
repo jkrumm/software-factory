@@ -8,7 +8,7 @@ const RETIRED_TIMEOUT_MS = 120_000
 const SCRIPT = 'scripts/retired-words.ts'
 const ROOT_DOCS = ['AGENTS.md', 'README.md', 'REVIEW.md']
 /** They discuss the retired words and the history on purpose. */
-const EXCLUDED = new Set(['docs/language.md', 'docs/decisions.md', 'docs/program.md'])
+const EXCLUDED = new Set(['docs/language.md', 'docs/decisions.md'])
 
 /** AGENTS.md, README.md, REVIEW.md and the top level of docs/, tracked, minus the ones about the words themselves. */
 export function retiredScope(markdown: string[]): string[] {

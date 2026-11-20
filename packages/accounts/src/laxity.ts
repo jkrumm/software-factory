@@ -1,4 +1,4 @@
-// The laxity of an account (docs/accounts.md §The policy lab): the hours to its weekly reset minus the hours it needs to
+// The laxity of an account (packages/accounts/docs/accounts.md §The policy lab): the hours to its weekly reset minus the hours it needs to
 // fill what is left of its week at the rate it can absorb. Pure: the load model is handed in.
 import { type LoadModel, bulkShare, curveAt } from './load-model.ts'
 

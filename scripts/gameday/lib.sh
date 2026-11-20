@@ -7,7 +7,7 @@ GAMEDAY_DIR=$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)
 ROOT=$(cd "$GAMEDAY_DIR/../.." && pwd)
 SOURCE_ROOT=${GAMEDAY_SOURCE_ROOT:-$HOME/SourceRoot}
 REMOTES=${GAMEDAY_REMOTES:-$HOME/.local/share/factory/gameday-remotes}
-EVIDENCE=${GAMEDAY_EVIDENCE:-$ROOT/docs/evidence/gamedays}
+EVIDENCE=${GAMEDAY_EVIDENCE:-$HOME/.local/share/factory/gameday-evidence}
 REPO_NAME=${GAMEDAY_REPO:-factory-gameday}
 LABEL=com.jkrumm.software-factory
 

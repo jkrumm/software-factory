@@ -1,4 +1,4 @@
-// Where the registry, the cache, the pick log and the keepalive log live (docs/accounts.md §Files). Every location is
+// Where the registry, the cache, the pick log and the keepalive log live (packages/accounts/docs/accounts.md §Files). Every location is
 // part of the CLI contract: other tools (usage tracker, extension, dashboards) read them.
 import { existsSync } from 'node:fs'
 import { homedir } from 'node:os'
@@ -26,16 +26,16 @@ export const cacheDir = () => process.env.CLAUDE_ACCOUNTS_CACHE_DIR ?? join(home
 export const picksPath = () =>
   process.env.CLAUDE_ACCOUNTS_PICKS ?? join(homedir(), '.local', 'share', 'claude-accounts', 'picks.jsonl')
 
-/** The policy lab's shadow log (docs/accounts.md §The policy lab): beside the pick log, whose shape it leaves alone. */
+/** The policy lab's shadow log (packages/accounts/docs/accounts.md §The policy lab): beside the pick log, whose shape it leaves alone. */
 export const shadowPath = () => process.env.CLAUDE_ACCOUNTS_SHADOW ?? join(dirname(picksPath()), 'shadow.jsonl')
 
-/** The mode overrides (docs/accounts.md §Modes): state, not cache, so it sits beside the pick log. */
+/** The mode overrides (packages/accounts/docs/accounts.md §Modes): state, not cache, so it sits beside the pick log. */
 export const modesPath = () =>
   process.env.CLAUDE_ACCOUNTS_MODES ?? join(homedir(), '.local', 'share', 'claude-accounts', 'modes.json')
 /** One audit line per set, clear or adoption, beside the state file. */
 export const modesAuditPath = (statePath = modesPath()) => `${statePath.replace(/\.json$/, '')}.jsonl`
 
-/** The history of a machine's accounts (docs/accounts.md §History): `samples-YYYY-MM.jsonl` and `resets.jsonl`. Data beside the pick log, not cache. */
+/** The history of a machine's accounts (packages/accounts/docs/accounts.md §History): `samples-YYYY-MM.jsonl` and `resets.jsonl`. Data beside the pick log, not cache. */
 export const historyDir = () =>
   process.env.CLAUDE_ACCOUNTS_HISTORY ?? join(homedir(), '.local', 'share', 'claude-accounts')
 

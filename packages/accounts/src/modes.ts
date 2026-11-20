@@ -1,4 +1,4 @@
-// Runtime mode overrides (docs/accounts.md §Modes): the pure half. The state file holds one record per account, newest
+// Runtime mode overrides (packages/accounts/docs/accounts.md §Modes): the pure half. The state file holds one record per account, newest
 // `set_at` wins (a last-writer-wins register per account, ties broken by the machine name), and a clear is a tombstone
 // so it wins on the other machine too. Reading, expiry and the peer merge are here; the file lives in store.ts.
 import {
@@ -165,7 +165,7 @@ export function baselineReset(sample: Sample | undefined, nowMs: number): number
 
 const isoOf = (ms: number | null | undefined) => (ms === null || ms === undefined ? null : new Date(ms).toISOString())
 
-/** The `mode` field of `usage --json`, `mode --json` and `status --json`: the mode in force with its source (docs/accounts.md §usage --json). */
+/** The `mode` field of `usage --json`, `mode --json` and `status --json`: the mode in force with its source (packages/accounts/docs/accounts.md §usage --json). */
 export function modeField(v: ModeView) {
   const live = v.source === 'override' ? v.override : null
   return {

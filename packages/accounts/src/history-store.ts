@@ -1,4 +1,4 @@
-// The history files (docs/accounts.md §History): the sample log `samples-YYYY-MM.jsonl` (append-only, one file a month)
+// The history files (packages/accounts/docs/accounts.md §History): the sample log `samples-YYYY-MM.jsonl` (append-only, one file a month)
 // and the reset ledger `resets.jsonl`, both under historyDir(). The records and the replay are history.ts.
 import { appendFileSync, mkdirSync, readFileSync, readdirSync } from 'node:fs'
 import { join } from 'node:path'

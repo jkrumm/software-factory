@@ -1,5 +1,5 @@
 #!/usr/bin/env bun
-// claude-account — Claude account registry, picker and per-account quota cache (docs/accounts.md).
+// claude-account — Claude account registry, picker and per-account quota cache (packages/accounts/docs/accounts.md).
 //
 // Every verb and flag is in VERBS below; `claude-account --help` prints them, `claude-account <verb> --help` one in full.
 //
@@ -597,7 +597,7 @@ export const VERBS: Verb[] = [
       'plain: `me2 drain until reset · weekly 92 % · full Fri 14:00 · resets Sat 18:00`; a closed account adds why and when it opens',
       '--resets   also the last resets of each account (the ledger)',
       "--json     {schema, at, machine, rule, lanes, accounts:[{limits, mode, reserve, closed, lanes, forecast, resets}]}; every lane's order is `rank`'s",
-      'The forecast is burn-rate-24h-v1: the weekly percent at the reset if the last 24 h of burn goes on (docs/accounts.md §History).',
+      'The forecast is burn-rate-24h-v1: the weekly percent at the reset if the last 24 h of burn goes on (packages/accounts/docs/accounts.md §History).',
       'A file read: no Keychain, no network.',
     ],
   },
@@ -625,7 +625,7 @@ export const VERBS: Verb[] = [
       '--weeks <n>       simulated weeks (default 3; resets of the first week are warm-up)',
       "--seed <n>        the run's random seed (default 7)",
       'The load model (session length, burn, 5 h share of a week, demand curve, lane mix) is packages/accounts/src/load-model.json,',
-      'measured by packages/accounts/scripts/measure-load.ts (docs/accounts.md §The policy lab). A pure computation: no file is read.',
+      'measured by packages/accounts/scripts/measure-load.ts (packages/accounts/docs/accounts.md §The policy lab). A pure computation: no file is read.',
     ],
   },
   {
@@ -777,7 +777,7 @@ export const VERBS: Verb[] = [
     usage: 'exhausted --account <id> --until <epoch>',
     summary: 'mark an account limit-hit, honoured by pick until then',
     detail: ['--account <id>   the account that hit its limit', '--until <epoch>   epoch seconds; required'],
-    caller: 'none yet (reserved for a limit-event hook; docs/accounts.md)',
+    caller: 'none yet (reserved for a limit-event hook; packages/accounts/docs/accounts.md)',
   },
 ]
 
@@ -786,7 +786,7 @@ export function helpText(): string {
   const jobs = VERBS.filter((v) => v.caller)
   const line = (v: Verb) => `  claude-account ${v.usage}\n      ${v.summary}`
   return [
-    'claude-account — Claude account registry, picker and per-account quota cache (docs/accounts.md)',
+    'claude-account — Claude account registry, picker and per-account quota cache (packages/accounts/docs/accounts.md)',
     '',
     'Usage: claude-account <verb> [flags]      claude-account <verb> --help   one verb in full',
     '',
