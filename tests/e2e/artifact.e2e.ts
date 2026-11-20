@@ -163,7 +163,8 @@ test('a Markdown Spec: mark text, comment, see it listed and highlighted, then a
   await expect
     .poll(() => page.evaluate("[...(CSS.highlights.get('annotation') ?? [])].map((range) => range.toString())"))
     .toEqual([SPEC_QUOTE])
-  expect((await detail(apiUrl, spec)).annotations.map((a) => a.quote)).toEqual([SPEC_QUOTE])
+  // the owner's delete shows at once and is sent in the background: wait until the server holds it
+  await expect.poll(async () => (await detail(apiUrl, spec)).annotations.map((a) => a.quote)).toEqual([SPEC_QUOTE])
 
   await page.getByRole('textbox', { name: 'General comment' }).fill('Overall: good direction.')
   await page.getByRole('button', { name: 'Add general comment' }).click()
