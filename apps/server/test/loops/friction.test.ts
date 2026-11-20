@@ -50,7 +50,6 @@ test('aggregate keys and the decision_settled group are never findings', () => {
 test('a serious pattern is a finding by its count alone, at any sample', () => {
   const cases: [string, FrictionCount['group']][] = [
     ['stall:unreported', 'stall'],
-    ['stall:regressed', 'stall'],
     ['lead_gone', 'lead_gone'],
     ['undelivered_note', 'undelivered_note'],
   ]
@@ -95,6 +94,17 @@ test('a rate-judged pattern needs its count, its rate and the minimum sample', (
       key,
     ).toEqual([key])
   }
+})
+
+test('a regressed stall is judged by the regression rule: one Issue in twenty, from 3', () => {
+  const key = 'stall:regressed'
+  // 3 of 1310 closed: the week of 2026-11-20, weather
+  expect(over([count(key, 'stall', 3, key, 1310)], 1310)).toEqual([])
+  // 2 of 40 is under the count, 3 of 40 is over the rate
+  expect(over([count(key, 'stall', 2, key, 40)], 40)).toEqual([])
+  expect(over([count(key, 'stall', 3, key, 40)], 40).map((p) => p.key)).toEqual([key])
+  // the same rule as the regression it is the stall of
+  expect(THRESHOLDS.friction.keys[key]).toBe(THRESHOLDS.friction.groups.regression)
 })
 
 test('a block or a full window the steward ends itself is a finding by rate, not by count', () => {

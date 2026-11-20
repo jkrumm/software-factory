@@ -28,13 +28,25 @@ export type JudgedFrictionGroup = Exclude<FrictionCount['group'], 'decision_sett
  * A full window and a lead's own report that it is blocked are the factory working: the steward moves the lead to an open
  * account or holds it on a timer, 20 of 21 and 33 of 48 ended that way in the week to 2026-11-18 with no person, median 2 min.
  * A week at 0.03 and 0.015 per Issue closed is weather; the week one Issue's block loop made 47 of 77 stalls was 0.07, so one
- * in twenty (the level NL37 chose for a regression) tells the two apart. `unreported` and `regressed` stay at the bare count.
+ * in twenty (the level NL37 chose for a regression) tells the two apart. `unreported` stays at the bare count.
  * A block that moved a light lead up is not counted at all (`readFriction`): 47 of the 85 blocks of the week to 2026-11-19.
  */
 const STALL_BY_RATE: FrictionRule = {
   min: 3,
   rate: 0.05,
   why: 'a block or a full window on one in twenty closed Issues is a loop or a cap that is wrong; fewer are the steward moving or holding a lead',
+}
+
+/**
+ * A Watch that ended in a regression is one event the friction counts twice: as `regression` and as the `regressed` stall
+ * the Issue waits in. The rule is one, so the two cannot disagree: a watch catching a bad change is the factory working, one
+ * closed Issue in twenty ending in one means the changes or the watch are wrong (NL37, NL52). 3 of 1310 closed in the week to
+ * 2026-11-20 (0.002) filed `stall:regressed` on the old bare count of 2 while `regression` stayed quiet.
+ */
+const REGRESSION_RULE: FrictionRule = {
+  min: 3,
+  rate: 0.05,
+  why: 'a watch catching a bad change is the factory working; one closed Issue in twenty ending in a regression means the changes or the watch are wrong',
 }
 
 export const THRESHOLDS = {
@@ -76,11 +88,7 @@ export const THRESHOLDS = {
         rate: 0.25,
         why: 'ships whose pull request CI was red or missing on one in four closed Issues is a lead that lands before CI says so, or a repo with no CI',
       },
-      regression: {
-        min: 3,
-        rate: 0.05,
-        why: 'a watch catching a bad change is the factory working; one closed Issue in twenty ending in a regression means the changes or the watch are wrong',
-      },
+      regression: REGRESSION_RULE,
       avoidable_touch: {
         min: 3,
         rate: 0.15,
@@ -106,6 +114,7 @@ export const THRESHOLDS = {
     keys: {
       'stall:wall': STALL_BY_RATE,
       'stall:blocked': STALL_BY_RATE,
+      'stall:regressed': REGRESSION_RULE,
       'touch:noted': {
         min: 5,
         rate: 0.5,
