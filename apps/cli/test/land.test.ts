@@ -1,4 +1,4 @@
-import { afterEach, beforeEach, describe, expect, test } from 'bun:test'
+import { afterEach, beforeEach, describe, expect, setDefaultTimeout, test } from 'bun:test'
 import { chmod, mkdir, mkdtemp, rm, symlink, writeFile } from 'node:fs/promises'
 import { join } from 'node:path'
 
@@ -148,18 +148,23 @@ const calls = async () => {
   return (await file.exists()) ? await file.text() : ''
 }
 
+/** A land spawns bun, git and the fakes many times: seconds each on a loaded host. */
+setDefaultTimeout(60_000)
+
 describe('factory land', () => {
   test('a green run rebases, pushes, merges and prints the landed commits', async () => {
     const result = await land().done
-    expect(result.err).toBe('')
+    expect(result.err).not.toContain('refused')
     expect(result.code).toBe(0)
     const head = await git(work, 'rev-parse', 'HEAD')
     expect(await masterOf()).toBe(head)
     expect(await git(work, 'log', '-1', '--format=%s', 'HEAD~1')).toBe('chore: someone else')
-    expect(result.out).toContain('land: rebase: onto origin/master')
-    expect(result.out).toContain('land: ci: green')
-    expect(result.out).toContain('land: merge: #7 by squash')
-    expect(result.out).toMatch(/land: landed on master:\n {2}[0-9a-f]+ feat: the feature/)
+    expect(result.err).toContain('land: rebase: onto origin/master')
+    expect(result.err).toContain('land: ci: green')
+    expect(result.err).toContain('land: merge: #7 by squash')
+    expect(result.err).toContain('land: landed on master:')
+    // stdout is data: the landed commits and nothing else
+    expect(result.out).toMatch(/^ {2}[0-9a-f]+ feat: the feature\n$/)
     expect(await calls()).toContain(`gh pr merge 7 --squash --match-head-commit ${head}`)
     expect(await Bun.file(join(locks, 'app.merge.lock')).exists()).toBe(false)
   })
@@ -195,6 +200,22 @@ describe('factory land', () => {
     expect((await land().done).code).toBe(0)
   })
 
+  test('an uncovered commit agw lists without an entry of its own is refused', async () => {
+    await writeFile(join(state, 'covered'), '{"covered":false,"commits":[],"uncovered":["cccccccccc"]}')
+    const result = await land().done
+    expect(result.code).toBe(1)
+    expect(result.err).toContain('land: review: refused: 1 commit(s) need a review: ccccccc (unknown)')
+    expect(await calls()).not.toContain('gh pr merge')
+  })
+
+  test('a check set that is all skipped is no CI: refused, never merged', async () => {
+    await writeFile(join(state, 'checks'), '[{"name":"ci","bucket":"skipping"}]')
+    const result = await land([], { FACTORY_LAND_NO_RUN_MS: '200' }).done
+    expect(result.code).toBe(1)
+    expect(result.err).toContain('land: ci: refused: no CI check on')
+    expect(await calls()).not.toContain('gh pr merge')
+  })
+
   test('a second run after a failed push resumes and lands', async () => {
     const hook = join(origin, 'hooks', 'pre-receive')
     await writeFile(hook, `#!/bin/sh\n[ -f "${join(state, 'reject')}" ] && { echo rejected >&2; exit 1; }\nexit 0\n`)
@@ -211,12 +232,12 @@ describe('factory land', () => {
     await rm(join(state, 'reject'))
     const again = await land().done
     expect(again.code).toBe(0)
-    expect(again.out).toContain('land: rebase: already on origin/master')
+    expect(again.err).toContain('land: rebase: already on origin/master')
     expect(await masterOf()).toBe(await git(work, 'rev-parse', 'HEAD'))
 
     const third = await land().done
-    expect(third.code).toBe(0)
-    expect(third.out).toContain('land: pr: #7 is already merged')
+    expect({ code: third.code, err: third.err }).toMatchObject({ code: 0 })
+    expect(third.err).toContain('land: pr: #7 is already merged')
   })
 
   test('a held merge lock is waited for, then the land goes on', async () => {
@@ -292,7 +313,7 @@ describe('factory land', () => {
     const result = await land().done
     expect(result.code).toBe(0)
     expect(await masterOf()).toBe(await git(work, 'rev-parse', 'HEAD'))
-    expect(result.out).toContain('land: push:')
+    expect(result.err).toContain('land: push:')
     expect(await calls()).not.toContain('gh pr')
   })
 })

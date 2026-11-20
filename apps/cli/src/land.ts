@@ -1,4 +1,5 @@
 import { existsSync, readFileSync } from 'node:fs'
+import { constants } from 'node:os'
 import { basename, join } from 'node:path'
 import { parse } from 'yaml'
 import { type Held, withLock } from './deploy-lock.ts'
@@ -244,7 +245,7 @@ class Lander {
     private readonly repo: Repo,
     private readonly options: Options,
   ) {
-    this.out = (line) => sh.io.out(`land: ${line}\n`)
+    this.out = (line) => sh.io.err(`land: ${line}\n`)
     this.pollMs = number(sh.io.env.FACTORY_LAND_POLL_MS, DEFAULT_POLL_MS)
     this.noRunMs = number(sh.io.env.FACTORY_LAND_NO_RUN_MS, DEFAULT_NO_RUN_MS)
     this.ciMs = number(sh.io.env.FACTORY_LAND_CI_MINUTES, DEFAULT_CI_MINUTES) * 60_000
@@ -333,10 +334,11 @@ class Lander {
         `agw review covered failed: ${lastLines(ran.err || ran.out) || `exit ${ran.code}`}`,
         `${cmd.join(' ')}, fix what it says, then factory land again`,
       )
-    const missing = new Set(answer.uncovered)
-    return (answer.commits ?? []).filter(
-      (commit) => missing.has(commit.sha) && (commit.required === 'standard' || commit.required === 'deep'),
-    )
+    // an uncovered sha with no entry of its own is not known to be light: it blocks
+    const bySha = new Map((answer.commits ?? []).map((commit) => [commit.sha, commit]))
+    return answer.uncovered
+      .map((sha) => bySha.get(sha) ?? { sha, required: 'unknown' })
+      .filter((commit) => commit.required !== 'light' && commit.required !== 'none')
   }
 
   /** `--no-ci`: the repo's full gate on the rebased head, before it is pushed. */
@@ -378,14 +380,17 @@ class Lander {
   private async ci(pr: PullRequest, head: string): Promise<number | null> {
     const started = Date.now()
     let previous = ''
+    let greens = 0
     for (;;) {
       const stopped = this.stopped()
       if (stopped !== null) return stopped
       const view = await pullRequest(this.sh, String(pr.number))
       let state: string
       let anyCheck = false
-      if (view?.headRefOid !== head) state = `the pull request does not show ${short(head)} yet`
-      else {
+      if (view?.headRefOid !== head) {
+        greens = 0
+        state = `the pull request does not show ${short(head)} yet`
+      } else {
         const ran = await this.sh.run(['gh', 'pr', 'checks', String(pr.number), '--json', 'name,bucket,link'])
         const checks = json<Check[]>(ran.out) ?? []
         anyCheck = checks.length > 0
@@ -397,11 +402,24 @@ class Lander {
             'fix it and commit (a flake: gh run rerun --failed <run id>), then factory land again',
           )
         const pending = checks.filter((check) => check.bucket !== 'pass' && check.bucket !== 'skipping')
+        // a set that is all skipped (a path or `if` filter) is no CI at all, as the hygiene pass reads it
+        anyCheck = checks.some((check) => check.bucket !== 'skipping')
         if (anyCheck && pending.length === 0) {
-          this.out(`ci: green on ${short(head)} (${checks.length} checks)`)
-          return null
+          // green twice in a row: a workflow that registers a moment after the first one must not be merged past
+          greens += 1
+          if (greens >= 2) {
+            this.out(`ci: green on ${short(head)} (${checks.length} checks)`)
+            return null
+          }
+          state = `green on ${short(head)}, reading once more`
+        } else {
+          greens = 0
+          state = anyCheck
+            ? `waiting for ${pending.map((c) => c.name).join(', ')}`
+            : checks.length > 0
+              ? 'only skipped checks so far'
+              : 'no check yet'
         }
-        state = anyCheck ? `waiting for ${pending.map((c) => c.name).join(', ')}` : 'no check yet'
       }
       const waited = Date.now() - started
       if (!anyCheck && waited >= this.noRunMs)
@@ -424,7 +442,14 @@ class Lander {
 
   /** Step 6: the repo's `make merge-guard`, or the same rule held here when it has none. */
   private async guard(): Promise<void> {
-    const has = (await this.sh.run(['make', '-C', this.repo.root, '-n', 'merge-guard'])).code === 0
+    const probe = await this.sh.run(['make', '-C', this.repo.root, '-n', 'merge-guard'])
+    const has = probe.code === 0
+    if (!has && !/no rule to make target|no targets specified/i.test(probe.out + probe.err))
+      throw new Refused(
+        'guard',
+        `make -n merge-guard failed, so whether the repo has a merge guard is unknown: ${lastLines(probe.err || probe.out)}`,
+        'fix the Makefile, commit, then factory land again',
+      )
     if (has) {
       const ran = await this.sh.run(['make', '-C', this.repo.root, 'merge-guard'], {
         inherit: true,
@@ -530,7 +555,7 @@ class Lander {
 
   private stopped(): number | null {
     const signal = this.sh.held?.stopped()
-    return signal ? 128 + ({ SIGHUP: 1, SIGINT: 2, SIGTERM: 15 } as Record<string, number>)[signal]! : null
+    return signal ? 128 + (constants.signals[signal] ?? 1) : null
   }
 
   /** The window: rebase, review, (check), push, CI, guard, merge, report. */

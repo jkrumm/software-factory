@@ -50,17 +50,18 @@ The brief is what the factory types into a lead first: the operating contract, t
 Two orders carry the shipping rules. Order 6 on review, as the lead reads it:
 
 ```text
-Review your own change once per ship range, standard or deep, with /review, before you ship. …
-A review that agw answers `held` (the deep cap) is a wait, never a downgrade and never a ship without it: `factory issue defer <id> --attempt <n> --until <the reset time it prints>` and review then. …
+Review your own change once per ship range, standard or deep, with /review, before you land it: `/review <merge-base>..HEAD --thread factory-<issue number>` …
+`factory land` refuses a range with a commit uncovered at standard or deep and prints the /review command to run …
 The factory never runs or repeats a review and never refuses a ship for one; ships without a review are counted as friction.
 ```
 
-Order 7 on shipping. The `<…>` parts of the command are placeholders, not a command to run as written:
+Order 7 on shipping:
 
 ```text
-Ship means land and deploy. … Then land the pull request inside the repo's merge window, one lead at a time, because master moves faster than a CI run and a head that does not contain master is refused: `factory merge-lock --project <repo> -- sh -c 'git fetch origin master && git rebase origin/master && git push --force-with-lease && <wait for CI on the pushed head> && make merge-guard && gh pr merge <n> <the repo's merge method>'`. …
-Never merge a head CI did not finish green on, and never push after the green and merge.
+Ship means land and deploy. … Then run `factory land` in the background with its exit code written out, and end the turn: it takes the merge window, rebases, checks the review, pushes, waits for CI, runs the merge guard and merges. A refusal names the step and the next command; running it again resumes. …
 ```
+
+The steps of `factory land` per ship mode, and what it refuses: `factory land --help` and `docs/operations.md`, section Merging.
 
 Order 4 draws the line for stopping: "Stop by impact, not effort. A broken caller contract or a needed redesign is `factory issue block`, with a draft branch pushed first; many files or red tests are not a block."
 
