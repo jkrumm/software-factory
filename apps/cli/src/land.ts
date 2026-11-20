@@ -99,15 +99,15 @@ class Shell {
   ) {}
 
   async run(cmd: string[], options: { env?: Record<string, string>; inherit?: boolean } = {}): Promise<Ran> {
-    const output = options.inherit ? 'inherit' : 'pipe'
     let child: ReturnType<typeof Bun.spawn>
     try {
       child = Bun.spawn(cmd, {
         cwd: this.cwd,
         env: { ...this.io.env, ...options.env },
         stdin: 'ignore',
-        stdout: output,
-        stderr: output,
+        // a command whose output is shown (make) writes it to stderr: stdout carries the landed commits alone
+        stdout: options.inherit ? 2 : 'pipe',
+        stderr: options.inherit ? 'inherit' : 'pipe',
         detached: true,
       })
     } catch (error) {
@@ -444,7 +444,9 @@ class Lander {
   private async guard(): Promise<void> {
     const probe = await this.sh.run(['make', '-C', this.repo.root, '-n', 'merge-guard'])
     const has = probe.code === 0
-    if (!has && !/no rule to make target|no targets specified/i.test(probe.out + probe.err))
+    // only the target itself missing (or no Makefile) means none: a missing prerequisite of merge-guard is a broken guard
+    const none = /no rule to make target [`'"]?merge-guard[`'"]?\.|no targets specified and no makefile found/i
+    if (!has && !none.test(probe.out + probe.err))
       throw new Refused(
         'guard',
         `make -n merge-guard failed, so whether the repo has a merge guard is unknown: ${lastLines(probe.err || probe.out)}`,

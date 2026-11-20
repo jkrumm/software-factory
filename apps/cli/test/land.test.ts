@@ -290,6 +290,28 @@ describe('factory land', () => {
     expect(await calls()).not.toContain('gh pr merge')
   })
 
+  test("the repo's make merge-guard runs, its output goes to stderr and stdout keeps the landed commits alone", async () => {
+    await writeFile(join(work, 'Makefile'), 'merge-guard:\n\t@echo guard-clear\n')
+    await git(work, 'add', 'Makefile')
+    await git(work, 'commit', '--quiet', '-m', 'chore: a guard')
+    const result = await land().done
+    expect(result.code).toBe(0)
+    expect(result.err).toContain('guard-clear')
+    expect(result.err).toContain('land: guard: make merge-guard is clear')
+    expect(result.out).not.toContain('guard-clear')
+    expect(result.out).toMatch(/^( {2}[0-9a-f]+ [^\n]+\n)+$/)
+  })
+
+  test('a merge-guard whose prerequisite is missing is refused, never skipped', async () => {
+    await writeFile(join(work, 'Makefile'), 'merge-guard: missing.stamp\n\t@echo guard-clear\n')
+    await git(work, 'add', 'Makefile')
+    await git(work, 'commit', '--quiet', '-m', 'chore: a broken guard')
+    const result = await land().done
+    expect(result.code).toBe(1)
+    expect(result.err).toContain('land: guard: refused: make -n merge-guard failed')
+    expect(await calls()).not.toContain('gh pr merge')
+  })
+
   test('a red master is refused by the guard unless --allow-red', async () => {
     await writeFile(join(state, 'master-runs'), '[{"status":"completed","conclusion":"failure","url":"https://ci/m"}]')
     const refused = await land().done
