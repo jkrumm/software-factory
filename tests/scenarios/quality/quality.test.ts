@@ -213,7 +213,7 @@ describe('ship: after an Errand', () => {
       ],
       env,
     )
-    expect(raised.code).toBe(0)
+    expect(raised.code, `${raised.out} ${raised.err}`).toBe(0)
     const errand = String((JSON.parse(raised.out) as { errand: { id: string } }).errand.id)
 
     const waiting = await ship(it.lw.world, it.lw.server, id, { call: 'ship-1', commits: [sha] })

@@ -171,4 +171,45 @@ describe('sendPatient', () => {
     expect(answer).toMatchObject({ reached: true, status: 503 })
     expect(calls).toBe(1)
   })
+
+  test('a version_conflict is asked again, a write included, and the answer that follows comes back', async () => {
+    let calls = 0
+    const racing = Bun.serve({
+      hostname: '127.0.0.1',
+      port: 0,
+      fetch: () => {
+        calls++
+        if (calls < 3) return Response.json({ error: 'moved; try again', code: 'version_conflict' }, { status: 409 })
+        return Response.json({ ok: true })
+      },
+    })
+    const answer = await sendPatient(
+      { base: racing.url.href, method: 'POST', path: '/x', body: {} },
+      { limitMs: () => 60_000, ...virtualClock() },
+    )
+    await racing.stop(true)
+    expect(answer).toMatchObject({ reached: true, status: 200, json: { ok: true } })
+    expect(calls).toBe(3)
+  })
+
+  test('a version_conflict that keeps coming ends after a few asks, and another 409 is not asked again', async () => {
+    const counts = { conflict: 0, other: 0 }
+    const racing = Bun.serve({
+      hostname: '127.0.0.1',
+      port: 0,
+      fetch: (request) => {
+        const code = new URL(request.url).pathname === '/conflict' ? 'version_conflict' : 'refused'
+        counts[code === 'refused' ? 'other' : 'conflict']++
+        return Response.json({ error: 'no', code }, { status: 409 })
+      },
+    })
+    const patience = { limitMs: () => 60_000, ...virtualClock() }
+    const stuck = await sendPatient({ base: racing.url.href, method: 'POST', path: '/conflict', body: {} }, patience)
+    const refused = await sendPatient({ base: racing.url.href, method: 'POST', path: '/other', body: {} }, patience)
+    await racing.stop(true)
+    expect(stuck).toMatchObject({ reached: true, status: 409, json: { code: 'version_conflict' } })
+    expect(counts.conflict).toBe(4)
+    expect(refused).toMatchObject({ reached: true, status: 409, json: { code: 'refused' } })
+    expect(counts.other).toBe(1)
+  })
 })

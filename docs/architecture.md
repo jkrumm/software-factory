@@ -838,7 +838,7 @@ model, not a signal: an agent-trust signal files an Issue, and no loops page exi
   (`FACTORY_RESTART_WAIT_MS`), 10 minutes while `data/deploy.lock` names a live pid (`FACTORY_DEPLOY_WAIT_MS`), and says
   `server restarting (deploy), waiting` once on stderr; then the usual `server unreachable` (exit 7). A refused connection is
   retried for every verb (nothing reached the server); a reset or a timeout only for a read, since Bun's `ECONNRESET` does not
-  say whether the request was read. `health get` (monitors, `make verify`), and the hook never wait; `slot run` waits a restart out like every other call, then takes a host-local slot. The Console
+  say whether the request was read. An answer of `version_conflict` (409: the Issue moved between the server's read and its rolled-back write) is asked again up to three times, 0.1 s, 0.2 s, 0.3 s apart, for every verb. `health get` (monitors, `make verify`), and the hook never wait; `slot run` waits a restart out like every other call, then takes a host-local slot. The Console
   shows "Server restarting, reconnecting" for up to 3 minutes after the stream drops or a fetch gets no answer, keeps the data
   on screen, retries with a backoff and refetches everything when the stream greets again (`apps/console/src/lib/restart.ts`).
   `scripts/deploy.sh` restarts less: a deploy whose commit is live and healthy restarts nothing (`FACTORY_DEPLOY_FORCE=1`
