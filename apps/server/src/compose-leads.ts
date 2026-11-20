@@ -29,7 +29,7 @@ import type { IdSource } from './kernel/ids.ts'
 import type { PortError, Result } from './kernel/result.ts'
 
 /** The light seat's two readers off one tripwire reading: triage's `small` gate and the hygiene classes that are out. */
-function lightReaders(sql: SQL, clock: Clock): Pick<LeadDeps, 'lightGate' | 'lightClassesOut'> {
+export function lightReaders(sql: SQL, clock: Clock): Pick<LeadDeps, 'lightGate' | 'lightClassesOut'> {
   const tripwire = freshFor(LIGHT_GATE_FRESH_MS, () =>
     readTripwire(sql, { now: clock.now(), cost: (issues) => costOfIssues(sql, issues) }),
   )
@@ -60,6 +60,8 @@ export function composeLeads(input: {
   clock: Clock
   ids: IdSource
   settings: LeadSettings
+  /** the light seat's two readers, one reading shared with the badge's planned seat (`lightReaders`) */
+  light: Pick<LeadDeps, 'lightGate' | 'lightClassesOut'>
   capacity: Pick<LeadDeps, 'seats' | 'claims' | 'windows'>
   /** the project's check tiers (`project.yaml` `checks:`), read from the stored project */
   checks: LeadDeps['checks']
@@ -115,7 +117,7 @@ export function composeLeads(input: {
     processTable: input.host.processTable,
     // The tripwire over the last days is a heavy read (it prices attempts): one answer serves every start of the next minutes.
     // The same reading gives the bound a hygiene class stays under to start light.
-    ...lightReaders(input.sql, input.clock),
+    ...input.light,
     quiesce: {
       afterMs: s.quiesceAfterMs,
       maxReviveTries: s.maxReviveTries,

@@ -81,7 +81,7 @@ export interface Filed {
 /**
  * Files one row as an Issue, if it is still filable in this transaction (decided again, so a replayed pass or a row
  * another pass filed meanwhile files nothing twice): `filed` with the row's key, the row's facts as the first note its
- * lead reads, `settled` (its `after` rows are all closed, so no edge is open), and the row's Issue recorded.
+ * lead reads, and the row's Issue recorded. The row is filed with its edges stated (its `after` rows are all closed, so none is open) and left `settling`: the triage loop takes its size and settles it.
  */
 async function fileRow(
   stores: PlanningStores,
@@ -122,6 +122,8 @@ async function fileFor(
         title: row.title ?? row.key,
         kind: row.kind ?? 'feature',
         origin: 'factory',
+        // the plan states the row's edges (`after` is what holds the row back); the triage loop settles it and takes its size
+        edges: 'stated' as const,
         ...(seat?.ok ? { seat: seat.value } : {}),
         ...(row.lane ? { lane: row.lane } : {}),
         ...(row.checkpoint ? { checkpoint: row.checkpoint } : {}),
@@ -137,12 +139,6 @@ async function fileFor(
     event: { kind: 'noted', payload: { text: factsNote(row) }, actor: 'factory' },
   })
   if (!noted.ok) return err(portError('refused', JSON.stringify(noted.error)))
-  const settled = await recordIn(stores.work, deps, {
-    issueId: issue,
-    key: key('plan', source, row.key, 'settled'),
-    event: { kind: 'settled', payload: {}, actor: 'factory' },
-  })
-  if (!settled.ok) return err(portError('refused', JSON.stringify(settled.error)))
   // The plan is the owner's file, so a row's `prio` is the owner's priority for its Issue; the key makes a replay record nothing twice.
   if (row.prio !== undefined && row.prio !== 0) {
     await stores.planning.recordPrio({

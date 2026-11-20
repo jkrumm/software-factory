@@ -7,11 +7,15 @@ const seat = (
   effort: LeadSeat['effort'],
   role: string | null = 'lead',
   planned = false,
+  rule: string | null = null,
+  sizeKnown = true,
 ): LeadSeat => ({
   tier,
   effort,
   role,
   planned,
+  rule,
+  sizeKnown,
 })
 
 describe('seatCode', () => {
@@ -34,5 +38,14 @@ describe('seatWords', () => {
   test('leaves the role out when none is known, and says a planned seat is not started on yet', () => {
     expect(seatWords(seat('sonnet', 'medium', null))).toBe('Sonnet, medium effort')
     expect(seatWords(seat('haiku', 'high', 'lead', true))).toBe('Will start on Haiku, high effort — lead role')
+  })
+
+  test('names the light rule, and says a planned seat still waits for the size', () => {
+    expect(seatWords(seat('haiku', 'high', 'light', true, 'triage:small'))).toBe(
+      'Will start on Haiku, high effort — light role (rule triage:small)',
+    )
+    expect(seatWords(seat('sonnet', 'high', 'lead', true, null, false))).toBe(
+      'Will start on Sonnet, high effort — lead role; size not known yet, it may still start light',
+    )
   })
 })

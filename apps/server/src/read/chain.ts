@@ -4,7 +4,7 @@ import * as z from 'zod'
 import { FLOW_KINDS, workOf } from '@software-factory/contract'
 import type { ChainEdge, ChainModel, ChainNode } from '@software-factory/contract'
 import type { QueueReasons } from './flow.ts'
-import { type LeadRow, readLeadSeats } from './seats.ts'
+import { type SeatTable, readLeadSeats } from './seats.ts'
 import { plain } from './words.ts'
 import { isWorkRepo, loadOpenProjects, REDACTED_REPO, REDACTED_TITLE } from './work.ts'
 
@@ -70,7 +70,7 @@ export async function readChain(
   options: {
     /** the read token: a work repo's words go */ redact?: boolean
     /** why each queued Issue stays queued */ queue?: QueueReasons
-    /** the role table's lead row, for the seat of an Issue with no lead yet */ leadRow?: LeadRow
+    /** the role table's lead row, for the seat of an Issue with no lead yet */ seatTable?: SeatTable
   } = {},
 ): Promise<ChainModel> {
   const openProjects = options.redact ? await loadOpenProjects(sql) : []
@@ -177,7 +177,7 @@ export async function readChain(
   ]
   const unique = [...new Map(edges.map((edge) => [`${edge.from}>${edge.to}`, edge])).values()]
 
-  const seats = await readLeadSeats(sql, [...issues.keys()], options.leadRow)
+  const seats = await readLeadSeats(sql, [...issues.keys()], options.seatTable)
   const usedClosed = new Set(unique.flatMap((edge) => [edge.from, edge.to]))
   const issueNodes = [...issues.values()]
     .filter((row) => row.state !== 'closed' || usedClosed.has(row.id))

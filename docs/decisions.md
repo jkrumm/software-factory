@@ -451,3 +451,27 @@ Report `docs/archive/strategy/2026-11-next/report.html`, definition `docs/archiv
   send-back fix of 2026-11-15, `34927f43`) is left alone: none since, and it leaves the window on 2026-11-21. Revert: delete the
   `NOT EXISTS` in `read/friction.ts`. Count after a week: `stall:blocked` under 0.05 per Issue closed with the move-up share
   of light starts unchanged in `read finding-classes`.
+- **NL51 An Issue with stated edges is still sized: the light seat's rule can reach it (Issue 2601, 2026-11-20).** The owner saw Issue 2595
+  (three config and doc edits, filed `--alone`) planned on sonnet high. `settleRule` settled any Issue whose filer stated its edges
+  (`--after`, `--alone`) with no triage call, and the planning pass settled every plan row in the transaction that filed it, so
+  neither ever got a size and `triage:small` could not name them. Measured on 2026-11-20 over the first lead starts of the last
+  14 days on the lead row (1,739), by how each was filed: plan row 446, stated edges (`--after`/`--alone`) 206, alert or incident
+  160, other 927; of the 927, 725 had a triage call and no size (they predate the size, kept since 2026-11-17 02:30 UTC), 178 had
+  one and 24 had no call. Since the size exists (2026-11-17, 472 lead-row first starts): plan row 127, stated edges 50, alert or incident 49,
+  other 246 (178 sized, 64 asked with no size in the answer, 4 not asked). So 177 of 472 (37.5 %) were never candidates for the
+  light seat, and 652 of 1,739 over the 14 days (37.5 %); a further 82 plan rows and stated Issues since 2026-11-17 had a filed seat
+  and were never candidates either (by design). The hand-filed Issues had a second hole: `issue new` and a plan row file their words as a first
+  note, not as a signal, so triage and the light rule's out-of-scope words read the title alone. Decision: (1) `settleRule`
+  returns `size` for stated edges: `factory-triage` is asked with no candidates (it can name no edge; any it names is ignored,
+  the stated edges stay final) and only its kind and size are taken, not its Spec flag (the filer decided that); a size-only
+  call, not a new workflow mode, because the call is the same and agw's guard already refuses an edge with no candidates;
+  incidents and alert Issues are still settled by rule, and a failed or late answer is settled by the steward with no size as
+  before. (2) A plan row is filed with `edges: stated` and left `settling`, so the same pass sizes it; calls took 4 s on
+  average (p90 5 s, 341 in 3 days), 20 per pass, so a plan of 40 rows is queued within a minute or so, not instantly. (3) The
+  words triage and the light rule read now include the first note. (4) The planned seat (`readLeadSeats`) runs `lightRule` on
+  the Issue as it stands (kind, size, spec flag, moved up, hygiene, signals and first note) and shows the `light` row with the
+  rule's name, or the `lead` row with `sizeKnown: false` while it is settling with no size. (5) `factory issue schema` and
+  `docs/plan.md` say how the seat is chosen when none is filed. Not changed: the light gate (NL38, NL45), the move-up path,
+  `config/roles.json`. A filed seat, a Spec checkpoint and a move-up still keep an Issue off the light seat; such a stated-edge Issue is sized too (one rule is simpler than a second skip, and the size is read elsewhere). Revert: return
+  `'now'` for `statedEdges` in `settleRule` and restore the plan pass's `settled` event. Count after a week: the share of
+  lead-row starts with no size (above: 37.5 %) near zero outside alerts, and the light share of starts above the 15 % of 2026-11-20.

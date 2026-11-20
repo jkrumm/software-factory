@@ -154,8 +154,11 @@ export function postgresLeadStore(tx: SQL): LeadStore {
           (SELECT key FROM factory.loop_findings WHERE issue_id = ${issue} AND loop = 'hygiene') AS hygiene_key,
           (SELECT class FROM factory.loop_findings WHERE issue_id = ${issue} AND loop = 'hygiene') AS hygiene_class,
           EXISTS (SELECT 1 FROM factory.intake_door_unrouted WHERE filed_issue = ${issue}) AS unrouted,
-          (SELECT string_agg(s.title || ' ' || s.text, ' ' ORDER BY s.received_at, s.id)
-            FROM factory.intake_signals s WHERE s.issue_id = ${issue}) AS text`
+          concat_ws(' ',
+            (SELECT string_agg(s.title || ' ' || s.text, ' ' ORDER BY s.received_at, s.id)
+              FROM factory.intake_signals s WHERE s.issue_id = ${issue}),
+            (SELECT n.payload->>'text' FROM factory.issue_events n
+              WHERE n.issue_id = ${issue} AND n.kind = 'noted' AND n.result = 'applied' ORDER BY n.version LIMIT 1)) AS text`
       const row = z
         .object({
           hygiene_key: z.string().nullable(),

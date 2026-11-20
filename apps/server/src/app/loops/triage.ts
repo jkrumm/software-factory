@@ -128,11 +128,13 @@ async function askTriage(deps: TriageDeps, row: SettlingRow, pass: TriagePass): 
     pass.problems.push(`${row.issue}: ${candidates.error.detail}`)
     return
   }
-  const shown = candidates.value
-  if (settleRule(row, shown) === 'now') {
+  const rule = settleRule(row, candidates.value)
+  if (rule === 'now') {
     await settleWithout(deps, row.issue, pass)
     return
   }
+  // Stated edges are final: triage is shown no Issue to wait for, so it can name no edge, and only its kind and size are taken.
+  const shown = rule === 'size' ? [] : candidates.value
   // The chain as planning checks it, so what is dropped here is what planning would refuse as a cycle.
   const chained = await readChain(deps.planning)
   if (!chained.ok) {

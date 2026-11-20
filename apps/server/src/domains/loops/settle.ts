@@ -37,13 +37,17 @@ export interface Refinement {
 export const MAX_CANDIDATES = 40
 
 /**
- * Deterministic first. An incident, an Issue an alert filed (a failing check, a job, a monitor), an Issue whose filer
- * stated its edges and an Issue with nothing open beside it in its repo need no edges from the model: settle now. Anything else (a person's or an agent's request, a GitHub issue)
- * asks `factory-triage` for the Issues it must wait for. An owner's or an agent's request is asked even with nothing open
- * beside it: triage may refine its kind.
+ * Deterministic first. An incident, an Issue an alert filed (a failing check, a job, a monitor) and an Issue with
+ * nothing open beside it in its repo need no model: settle now. An Issue whose filer stated its edges (`--after`,
+ * `--alone`, a plan row) needs none from the model either, but still needs its size (and kind): the light seat's rule
+ * reads the size, and an Issue settled with none never reached it (NL51). It is `size`: `factory-triage` is asked with
+ * no candidates, so it can name no edge, and its kind and size are taken. Anything else (a person's or an agent's
+ * request, a GitHub issue) asks `factory-triage` for the Issues it must wait for. An owner's or an agent's request is
+ * asked even with nothing open beside it: triage may refine its kind.
  */
-export function settleRule(facts: SettlingFacts, candidates: readonly TriageCandidate[]): 'now' | 'ask' {
-  if (facts.kind === 'incident' || facts.fromAlert || facts.statedEdges) return 'now'
+export function settleRule(facts: SettlingFacts, candidates: readonly TriageCandidate[]): 'now' | 'size' | 'ask' {
+  if (facts.kind === 'incident' || facts.fromAlert) return 'now'
+  if (facts.statedEdges) return 'size'
   if (refinable(facts)) return 'ask'
   return candidates.length === 0 ? 'now' : 'ask'
 }
@@ -117,21 +121,24 @@ function namesIssue(facts: Pick<SettlingFacts, 'title' | 'text'>, blocker: Issue
  */
 export function checkSettle(
   shown: readonly TriageCandidate[],
-  facts: Pick<SettlingFacts, 'issue' | 'kind' | 'origin' | 'fromAlert' | 'title' | 'text' | 'prio'>,
+  facts: Pick<SettlingFacts, 'issue' | 'kind' | 'origin' | 'fromAlert' | 'statedEdges' | 'title' | 'text' | 'prio'>,
   answer: TriageAnswer,
   waitsForIssue: (blocker: IssueId) => boolean,
 ): SettleChecked {
   const issue = facts.issue
   if (answer.amend !== null) return { ok: false, why: 'a settle answer amends nothing' }
+  // Stated edges are final and the answer adds none, whatever it names; the Spec flag is not asked for there (the filer
+  // decided it): only the kind and the size are taken.
+  const stated = facts.statedEdges
   const seen = new Set<string>(shown.map((c) => c.id))
-  for (const id of answer.after) {
+  for (const id of stated ? [] : answer.after) {
     if (id === issue) return { ok: false, why: `${id} cannot wait for itself` }
     if (!seen.has(id)) return { ok: false, why: `${id} is not an Issue it was shown` }
   }
-  if (new Set(answer.after).size !== answer.after.length) return { ok: false, why: 'an edge is named twice' }
+  if (!stated && new Set(answer.after).size !== answer.after.length) return { ok: false, why: 'an edge is named twice' }
   const after: IssueId[] = []
   const dropped: DroppedEdge[] = []
-  for (const id of answer.after as IssueId[]) {
+  for (const id of stated ? [] : (answer.after as IssueId[])) {
     if (issueNumber(id) > issueNumber(issue)) dropped.push({ issue: id, why: `${id} was filed after ${issue}` })
     else if (facts.prio >= RANKED_PRIO) {
       dropped.push({
@@ -151,7 +158,7 @@ export function checkSettle(
       ? (answer.kind as Refined)
       : undefined
   const checkpoint =
-    facts.kind !== 'incident' && answer.checkpoint === 'spec' && SPEC_SIZES.includes(answer.size ?? '')
+    !stated && facts.kind !== 'incident' && answer.checkpoint === 'spec' && SPEC_SIZES.includes(answer.size ?? '')
       ? 'spec'
       : undefined
   return {

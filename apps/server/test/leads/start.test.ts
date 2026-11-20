@@ -178,23 +178,55 @@ const attemptSeat = async (issue: IssueId, attempt: number) => {
 }
 
 describe('the seat badge (leadSeat)', () => {
-  const leadRow = async () => ({ tier: 'sonnet' as const, effort: 'high' as const })
+  const seatTable = { lead: async () => ({ tier: 'sonnet' as const, effort: 'high' as const }) }
   const shown = async (issue: IssueId) =>
-    (await issueDetail({ sql: w.db.sql, clock: w.deps.clock, deriveSession, leadRow }, { id: issue, quota: new Map() }))
-      ?.leadSeat
+    (
+      await issueDetail(
+        { sql: w.db.sql, clock: w.deps.clock, deriveSession, seatTable },
+        { id: issue, quota: new Map() },
+      )
+    )?.leadSeat
 
   test('an Issue with no lead yet shows the lead row as planned; its lead, once started, the seat it started on', async () => {
     const issue = await w.admitted()
-    expect(await shown(issue)).toEqual({ tier: 'sonnet', effort: 'high', role: 'lead', planned: true })
+    expect(await shown(issue)).toEqual({
+      tier: 'sonnet',
+      effort: 'high',
+      role: 'lead',
+      planned: true,
+      rule: null,
+      sizeKnown: true,
+    })
     expect((await startLead(w.deps, effect(issue))).ok).toBe(true)
-    expect(await shown(issue)).toEqual({ tier: 'sonnet', effort: 'high', role: 'lead', planned: false })
+    expect(await shown(issue)).toEqual({
+      tier: 'sonnet',
+      effort: 'high',
+      role: 'lead',
+      planned: false,
+      rule: null,
+      sizeKnown: true,
+    })
   })
 
   test('a filed seat is the planned one before the start and the real one after', async () => {
     const issue = await w.admitted([], { tier: 'opus', effort: 'high' })
-    expect(await shown(issue)).toEqual({ tier: 'opus', effort: 'high', role: null, planned: true })
+    expect(await shown(issue)).toEqual({
+      tier: 'opus',
+      effort: 'high',
+      role: null,
+      planned: true,
+      rule: null,
+      sizeKnown: true,
+    })
     expect((await startLead(w.deps, effect(issue))).ok).toBe(true)
-    expect(await shown(issue)).toEqual({ tier: 'opus', effort: 'high', role: null, planned: false })
+    expect(await shown(issue)).toEqual({
+      tier: 'opus',
+      effort: 'high',
+      role: null,
+      planned: false,
+      rule: null,
+      sizeKnown: true,
+    })
   })
 
   test('with no lead row and no filed seat, nothing is shown', async () => {
@@ -293,6 +325,32 @@ describe('start_lead seats', () => {
     expect((await startLead(w.deps, effect(third))).ok).toBe(true)
     expect(w.terminals.started.at(-1)).toMatchObject({ tier: 'haiku', effort: 'high' })
     delete w.deps.lightClassesOut
+  })
+
+  test("a sized mechanical Issue starts light by triage's small, read from its first note; one that names a migration stays on the lead row", async () => {
+    w.deps.lightGate = async () => true
+    try {
+      const mechanical = await w.admitted(
+        ['Rename the repo in three config files and the doc that names it.'],
+        undefined,
+        'bug',
+        'small',
+      )
+      expect((await startLead(w.deps, effect(mechanical))).ok).toBe(true)
+      expect(w.terminals.started.at(-1)).toMatchObject({ tier: 'haiku', effort: 'high' })
+      expect(w.terminals.started.at(-1)?.prompt).toContain('rule `triage:small`')
+
+      const risky = await w.admitted(['Add a migration that renames the column.'], undefined, 'bug', 'small')
+      expect((await startLead(w.deps, effect(risky))).ok).toBe(true)
+      expect(w.terminals.started.at(-1)).toMatchObject({ tier: 'sonnet', effort: 'high' })
+
+      // no size: the lead row, as before the size was asked for stated edges
+      const unsized = await w.admitted(['Rename the repo in three config files.'])
+      expect((await startLead(w.deps, effect(unsized))).ok).toBe(true)
+      expect(w.terminals.started.at(-1)).toMatchObject({ tier: 'sonnet', effort: 'high' })
+    } finally {
+      delete w.deps.lightGate
+    }
   })
 
   test('a docs Issue with no seat starts light, says so in its brief, and a moved-up one starts on the lead row', async () => {

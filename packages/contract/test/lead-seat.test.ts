@@ -1,7 +1,7 @@
 import { describe, expect, test } from 'bun:test'
 import { ChainNode, FlowClosed, FlowIssue, LeadSeat, NeedItem, ReadIssueCard } from '../src/index.ts'
 
-const seat: LeadSeat = { tier: 'sonnet', effort: 'high', role: 'lead', planned: false }
+const seat: LeadSeat = { tier: 'sonnet', effort: 'high', role: 'lead', planned: false, rule: null, sizeKnown: true }
 
 describe('LeadSeat', () => {
   test('takes a tier and effort of the table, a role or none, and whether it is planned', () => {

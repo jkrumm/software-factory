@@ -17,10 +17,15 @@ const capital = (word: string): string => `${word.charAt(0).toUpperCase()}${word
 export const seatCode = ({ tier, effort }: Pick<LeadSeat, 'tier' | 'effort'>): string =>
   `${TIER_LETTER[tier]}${EFFORT_LETTER[effort]}`
 
-/** The tooltip: `Haiku, high effort — lead role`, with `Will start on ` first for a seat the lead has not started on yet. */
+/**
+ * The tooltip: `Haiku, high effort — light role (rule hygiene:links)`, with `Will start on ` first for a seat the lead has not
+ * started on yet. A planned seat that waits for the Issue's size says so: it may still start light.
+ */
 export function seatWords(seat: LeadSeat): string {
-  const seatWord = `${capital(seat.tier)}, ${EFFORT_WORDS[seat.effort]} effort${seat.role ? ` — ${seat.role} role` : ''}`
-  return seat.planned ? `Will start on ${seatWord}` : seatWord
+  const rule = seat.rule ? ` (rule ${seat.rule})` : ''
+  const seatWord = `${capital(seat.tier)}, ${EFFORT_WORDS[seat.effort]} effort${seat.role ? ` — ${seat.role} role` : ''}${rule}`
+  if (!seat.planned) return seatWord
+  return `Will start on ${seatWord}${seat.sizeKnown ? '' : '; size not known yet, it may still start light'}`
 }
 
 /**

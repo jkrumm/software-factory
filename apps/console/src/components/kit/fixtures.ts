@@ -35,7 +35,7 @@ export const KIT_ISSUES: KitIssue[] = [
     state: 'running',
     reason: null,
     since: ago(42),
-    seat: { tier: 'sonnet', effort: 'high', role: 'lead', planned: false },
+    seat: { tier: 'sonnet', effort: 'high', role: 'lead', planned: false, rule: null, sizeKnown: true },
   },
   {
     key: 'login-crash',
@@ -56,7 +56,7 @@ export const KIT_ISSUES: KitIssue[] = [
     state: 'held',
     reason: 'Behind Choose the export format: the chain is not done',
     since: ago(7),
-    seat: { tier: 'sonnet', effort: 'high', role: 'lead', planned: true },
+    seat: { tier: 'sonnet', effort: 'high', role: 'lead', planned: true, rule: null, sizeKnown: true },
   },
   {
     key: 'export-queue',
@@ -97,7 +97,7 @@ export const KIT_ISSUES: KitIssue[] = [
     state: 'running',
     reason: null,
     since: ago(95),
-    seat: { tier: 'haiku', effort: 'high', role: 'light', planned: false },
+    seat: { tier: 'haiku', effort: 'high', role: 'light', planned: false, rule: 'hygiene:links', sizeKnown: true },
   },
   {
     key: 'old-flags',
