@@ -29,6 +29,7 @@ const Env = z.object({
   FACTORY_PROCESS_CAP: whole(100, 1_000_000).optional(),
   /** the most extra leads per account while the host idles with work queued; 0 turns it off */
   FACTORY_SEATS_MAX_BONUS: whole(0, 4).optional(),
+  /** the base count of test slots the host runs at once */
   FACTORY_SLOTS: whole(1, 64).optional(),
   /** the most test steps at once when memory and load allow; below FACTORY_SLOTS it is FACTORY_SLOTS */
   FACTORY_SLOTS_MAX: whole(1, 64).optional(),
@@ -43,10 +44,15 @@ const Env = z.object({
   FACTORY_STEP_REMOTE_PROJECTS: z.string().optional(),
   /** the host tools the host loop, the reaper and the capacity reads run (a scenario points them at fakes) */
   FACTORY_SYSCTL_BIN: z.string().min(1).optional(),
+  /** the lsof binary the host probe calls */
   FACTORY_LSOF_BIN: z.string().min(1).optional(),
+  /** the ps binary the host probe calls */
   FACTORY_PS_BIN: z.string().min(1).optional(),
+  /** the top binary the host probe calls */
   FACTORY_TOP_BIN: z.string().min(1).optional(),
+  /** the vm_stat binary the host probe calls */
   FACTORY_VM_STAT_BIN: z.string().min(1).optional(),
+  /** the launchctl binary the host probe calls */
   FACTORY_LAUNCHCTL_BIN: z.string().min(1).optional(),
   /** the volume whose use is the host's swap */
   FACTORY_VM_VOLUME: z.string().min(1).optional(),

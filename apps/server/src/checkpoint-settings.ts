@@ -6,6 +6,7 @@ import { loadOwnersLine, type OwnersLine } from './adapters/ntfy/ntfy.ts'
 const Env = z.object({
   /** the factory's data directory; artifact revisions are blobs under `<dir>/blobs`, never in git */
   FACTORY_DATA_DIR: z.string().min(1).optional(),
+  /** the home directory the defaults are built from */
   HOME: z.string().optional(),
 })
 

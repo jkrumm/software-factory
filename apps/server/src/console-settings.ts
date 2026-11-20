@@ -3,6 +3,7 @@ import * as z from 'zod'
 import { parseEnv, type Environment } from './kernel/env.ts'
 
 const Env = z.object({
+  /** the port the Console listens on */
   FACTORY_CONSOLE_PORT: z.coerce.number().int().min(1).max(65535).default(7795),
   /** the Console build; a release has the same layout as the repo */
   FACTORY_CONSOLE_DIR: z.string().min(1).optional(),

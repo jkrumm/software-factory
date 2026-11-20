@@ -24,16 +24,27 @@ const Every = (fallback: string) =>
     })
 
 const Env = z.object({
+  /** the directory a repo name is under; SourceRoot in the home directory when unset */
   FACTORY_SOURCE_ROOT: z.string().min(1).optional(),
+  /** a JSON file of the projects and what each one hears, until the project list comes from project.yaml */
   FACTORY_INTAKE_PROJECTS_FILE: z.string().min(1).optional(),
+  /** the infra table; config/infra.json unless the owner names a copy */
   FACTORY_INFRA_FILE: z.string().min(1).optional(),
+  /** the repo an alert no repo hears is filed to, for the owner to pick its repo */
   FACTORY_HOME_REPO: z.string().min(1).optional(),
+  /** the window in minutes within which alerts count as one incident */
   FACTORY_INCIDENT_WINDOW_MIN: z.coerce.number().int().min(1).default(30),
+  /** the token the GitHub reader uses; without it nothing is read */
   FACTORY_GITHUB_TOKEN: z.string().min(1).optional(),
+  /** the GitHub API base the reader calls; a scenario points it at a fake */
   FACTORY_GITHUB_API_URL: z.string().min(1).default(GITHUB_API),
+  /** how often the GitHub reader polls; off disables it */
   FACTORY_GITHUB_POLL: Every('5m'),
+  /** whether the GitHub reader also takes the backlog (1) or not (0) */
   FACTORY_GITHUB_BACKLOG: z.enum(['0', '1']).default('0'),
+  /** how often the launchd jobs are read; off disables it */
   FACTORY_LAUNCHD_POLL: Every('5m'),
+  /** how often the intake's settle pass runs; off disables it */
   FACTORY_SETTLE_POLL: Every('10s'),
 })
 

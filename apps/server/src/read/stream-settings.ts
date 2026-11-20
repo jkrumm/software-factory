@@ -4,6 +4,7 @@ import { parseEnv, type Environment } from '../kernel/env.ts'
 const DEFAULT_POLL_MS = 1000
 
 const Env = z.object({
+  /** how often the change stream polls, 10 to 60000 ms */
   FACTORY_STREAM_POLL_MS: z.coerce.number().int().min(10).max(60_000).default(DEFAULT_POLL_MS),
 })
 
