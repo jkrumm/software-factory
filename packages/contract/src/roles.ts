@@ -18,7 +18,6 @@ export const RoleEntry = z.object({ role: RoleName, tier: Tier, effort: Effort }
 export type RoleEntry = z.infer<typeof RoleEntry>
 
 export const RoleList = z.object({ roles: z.array(RoleEntry) }).meta({ id: 'RoleList' })
-export type RoleList = z.infer<typeof RoleList>
 
 /** `config/roles.json`: role name to tier and effort. */
 const RoleFile = z.object({ roles: z.record(RoleName, z.object({ tier: Tier, effort: Effort })) })

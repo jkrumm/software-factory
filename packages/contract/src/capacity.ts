@@ -44,12 +44,10 @@ export const QueueEntry = z
     account: z.string().nullable(),
   })
   .meta({ id: 'QueueEntry' })
-export type QueueEntry = z.infer<typeof QueueEntry>
 
 export const QueueOrder = z
   .object({ queue: z.array(QueueEntry), notes: z.array(z.string()) })
   .meta({ id: 'QueueOrder' })
-export type QueueOrder = z.infer<typeof QueueOrder>
 
 export const AdmitAnswer = z
   .object({
@@ -103,7 +101,6 @@ export const QueueSetBody = z
     state: z.enum(['run', 'pace', 'drain']),
   })
   .meta({ id: 'QueueSetBody' })
-export type QueueSetBody = z.infer<typeof QueueSetBody>
 
 export const RelearnBody = z
   .object({
@@ -113,7 +110,6 @@ export const RelearnBody = z
     at: z.string().datetime({ offset: true }).optional(),
   })
   .meta({ id: 'RelearnBody' })
-export type RelearnBody = z.infer<typeof RelearnBody>
 
 export const RelearnView = z
   .object({
@@ -123,7 +119,6 @@ export const RelearnView = z
     setBy: z.string(),
   })
   .meta({ id: 'RelearnView' })
-export type RelearnView = z.infer<typeof RelearnView>
 
 export const CapacityView = z
   .object({
@@ -176,10 +171,8 @@ export const CapacityView = z
     }),
   })
   .meta({ id: 'CapacityView' })
-export type CapacityView = z.infer<typeof CapacityView>
 
 export const RefreshAnswer = z.object({ accounts: z.array(AccountView) }).meta({ id: 'RefreshAnswer' })
-export type RefreshAnswer = z.infer<typeof RefreshAnswer>
 
 /** The default run limit of a test-slot command: 30 minutes. */
 export const DEFAULT_SLOT_RUN_MS = 30 * 60_000
@@ -247,7 +240,6 @@ export const SlotBody = z
     runningOn: z.object({ host: StepHost, slot: z.number().int().min(1) }).optional(),
   })
   .meta({ id: 'SlotBody' })
-export type SlotBody = z.infer<typeof SlotBody>
 
 export const Slot = z
   .object({
@@ -272,7 +264,6 @@ export const Slot = z
 export type Slot = z.infer<typeof Slot>
 
 export const SlotRelease = z.object({ released: z.boolean() }).meta({ id: 'SlotRelease' })
-export type SlotRelease = z.infer<typeof SlotRelease>
 
 /** The most test results one step posts; a run past it keeps the first ones (`factory slot run` cuts the list). */
 export const MAX_TEST_RESULTS = 50_000
@@ -355,4 +346,3 @@ export const MergeWindow = z
     exitCode: z.number().int().nullable(),
   })
   .meta({ id: 'MergeWindow' })
-export type MergeWindow = z.infer<typeof MergeWindow>

@@ -43,10 +43,12 @@ export class FactoryError extends Error {
     this.details = fields.details ?? {}
   }
 
+  // fallow-ignore-next-line unused-class-member -- read in run.ts on a FactoryError narrowed from a union
   get exitCode(): number {
     return EXIT[this.kind]
   }
 
+  // fallow-ignore-next-line unused-class-member -- called in run.ts on a FactoryError narrowed from a union
   toErrorLine(): string {
     const { kind, code, message, hint, details } = this
     return JSON.stringify({ error: { kind, code, message, hint, details } })

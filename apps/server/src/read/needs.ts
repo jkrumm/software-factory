@@ -13,7 +13,6 @@ import { plain } from './words.ts'
 import { isWorkRepo, loadOpenProjects, type OpenProject, REDACTED_SUMMARY, REDACTED_TITLE } from './work.ts'
 
 export { isWorkRepo, REDACTED_SUMMARY, REDACTED_TITLE }
-export type { OpenProject } from './work.ts'
 
 /** Waiting longer than this is stale. */
 const STALE_MS = 24 * 3_600_000

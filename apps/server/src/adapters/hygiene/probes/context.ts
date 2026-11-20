@@ -27,7 +27,7 @@ export interface Section {
 }
 
 /** One tracked AGENTS.md and its size. */
-export interface ContextFile {
+interface ContextFile {
   file: string
   bytes: number
   nested: boolean

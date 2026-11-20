@@ -17,15 +17,7 @@ import {
 import { doorSourceLines, unroutedLines } from '../domains/intake/health.ts'
 import { placeByName } from '../domains/intake/place.ts'
 import { NOT_SCREENED } from '../domains/intake/screen.ts'
-import type {
-  Alert,
-  ClosedIssue,
-  HealRule,
-  OpenIssue,
-  Received,
-  RepoSignals,
-  Triaged,
-} from '../domains/intake/model.ts'
+import type { Alert, ClosedIssue, OpenIssue, Received, RepoSignals, Triaged } from '../domains/intake/model.ts'
 import type {
   Dismissal,
   IntakeSink,
@@ -1525,5 +1517,3 @@ function failureOf(error: IntakeError): PortError {
 
 /** An Issue id read from a request. */
 const issueIdOf = (text: string): IssueId | null => idOf('issue', text)
-
-export type { HealRule }

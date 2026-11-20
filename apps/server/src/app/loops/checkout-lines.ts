@@ -7,7 +7,8 @@ import type { MainCheckoutLine } from '../../domains/loops/checkout.ts'
 export class MainCheckoutLines {
   private lines: MainCheckoutLine[] = []
 
-  /** Replaces the whole set. */
+  /** Replaces the whole set. Called through the `findings` port of the steward pass, not on the class. */
+  // fallow-ignore-next-line unused-class-member -- called through a port
   report(found: MainCheckoutLine[]): void {
     const before = new Map(this.lines.map((line) => [line.repo, line]))
     this.lines = found.map((line) => {

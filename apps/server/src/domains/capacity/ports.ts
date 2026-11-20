@@ -1,6 +1,6 @@
 import type { AccountMode, AccountModeBody, AccountRow, AccountsView } from '@software-factory/contract'
 import type { IssueId } from '../../kernel/ids.ts'
-import type { PortError, Result } from '../../kernel/result.ts'
+import type { Result } from '../../kernel/result.ts'
 import type { AccountReading } from './accounts.ts'
 import type { Claim } from './claims.ts'
 import type { SnapshotProc } from './classes.ts'
@@ -378,8 +378,6 @@ export interface AccountSource {
   /** one poll; `at` is the poll's time, which a reading's `readAt` and `sampledAt` count from */
   read(at: Date): Promise<Result<AccountReading[]>>
 }
-
-export type { PortError }
 
 /** The host's process table with each process's directory; null when it could not be read (never an error). */
 export interface ProcessReader {

@@ -71,7 +71,7 @@ fails on any raw colour.
 ## Check tiers
 
 `make check` runs install (frozen), oxfmt check, oxlint (type-aware), shellcheck, `tsc --noEmit`, the Console's
-typecheck and token, template and InfoHint freshness, the boundary script, the retired-word check, the vocabulary check,
+typecheck and token, template and InfoHint freshness, `fallow audit --only dead-code` against the merge base (fails only on dead code the branch introduces; `.fallowrc.json` names the entry points and the accepted exceptions, and `fallow` is a pinned devDependency so CI runs it), the boundary script, the retired-word check, the vocabulary check,
 `make docs-check` (the README against the code), the public-hygiene scan, the Issue diagram and generated-CLI freshness
 checks, `bun test`, the scenarios (`tests/scenarios`: a real server and Postgres with fake `hc` and `agw`), then builds
 the Console and runs its Playwright suite (`make e2e`, `tests/e2e`) against a seeded server. `make fmt` formats. The tests

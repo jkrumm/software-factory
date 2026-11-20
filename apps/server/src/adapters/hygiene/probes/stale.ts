@@ -41,7 +41,7 @@ export function parseWorktrees(porcelain: string): Worktree[] {
  * the lead's finalization removes it when the work landed, and a lead that waits days for a Decision or a date is idle in it,
  * not done with it. The scan leaves them out, so the probe never flags one and the fix never removes one.
  */
-export const isLeadWorktree = (w: Worktree): boolean =>
+const isLeadWorktree = (w: Worktree): boolean =>
   leadBranchIssue(w.branch ?? '') !== null ||
   /^factory-[1-9][0-9]*-[1-9][0-9]*$/.test(w.path.split(/[\\/]/).filter(Boolean).at(-1) ?? '')
 

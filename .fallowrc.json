@@ -1,8 +1,10 @@
 {
+  // Entry points the package.json files do not name: servers, scripts run by the Makefile or by hand, files a page loads.
   "entry": [
     "apps/server/src/main.ts",
     "apps/server/src/migrate-check.ts",
     "apps/server/scripts/*.ts",
+    "apps/cli/scripts/*.ts",
     "apps/door/src/main.ts",
     "scripts/*.ts",
     "packages/accounts/scripts/*.ts",
@@ -11,5 +13,12 @@
     "docs/guide/.vitepress/config.ts",
     "docs/guide/.vitepress/theme/index.ts",
     "docs/evidence/**/*.mjs"
-  ]
+  ],
+  // Provided by the host that loads the file, or by a package this repo already depends on: gpui-kit, gpui-base and herdr
+  // by the Herdr app that runs integrations/herdr/jk-glance, playwright-core by @playwright/test for docs/evidence.
+  "ignoreDependencies": ["gpui-kit", "gpui-base", "herdr", "playwright-core"],
+  "rules": {
+    // Domain modules name their own words (Breach, Checked, Entry ...); two modules exporting the same name is not dead code.
+    "duplicate-exports": "off"
+  }
 }

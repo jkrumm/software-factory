@@ -168,7 +168,7 @@ export interface QueueEntry {
   readyWithoutEdges?: boolean
 }
 
-export interface Snapshot {
+interface Snapshot {
   now: Date
   projects: StoredProject[]
   issues: (OpenIssueRow & { project: string | null })[]

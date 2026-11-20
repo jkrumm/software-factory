@@ -53,19 +53,16 @@ export const NewIssueBody = z
     alone: z.boolean().optional(),
   })
   .meta({ id: 'NewIssueBody' })
-export type NewIssueBody = z.infer<typeof NewIssueBody>
 
 /** `issue` is the Issue's id as a string; `id` is the same id, the key the other verbs' `issue` object carries (read `.id`). */
 export const NewIssueAnswer = z
   .object({ issue: z.string(), id: z.string(), state: z.string(), filed: z.boolean() })
   .meta({ id: 'NewIssueAnswer' })
-export type NewIssueAnswer = z.infer<typeof NewIssueAnswer>
 
 /** `issue cancel`: the owner ends an Issue; the machine finalizes its lead, worktree and claim. */
 export const CancelBody = z
   .strictObject({ reason: z.string().trim().min(1).max(4_000), call: Call.optional() })
   .meta({ id: 'CancelBody' })
-export type CancelBody = z.infer<typeof CancelBody>
 
 /**
  * `issue withdraw`: the filer of a signal takes back the Issue it made, before a lead takes it. `from` is the source the
@@ -78,7 +75,6 @@ export const WithdrawBody = z
     call: Call.optional(),
   })
   .meta({ id: 'WithdrawBody' })
-export type WithdrawBody = z.infer<typeof WithdrawBody>
 
 /**
  * `issue seat`: sets the lead's seat of an Issue no lead is working: `tier` and `effort` together, or a `role` of the
@@ -92,7 +88,6 @@ export const SeatBody = z
     call: Call.optional(),
   })
   .meta({ id: 'SeatBody' })
-export type SeatBody = z.infer<typeof SeatBody>
 
 /** The orchestrator steering a lead on the owner's token: not an owner touch. */
 const Via = z.enum(['orchestrator'])
@@ -101,7 +96,6 @@ const Via = z.enum(['orchestrator'])
 export const NoteBody = z
   .strictObject({ text: Text, wake: z.boolean().optional(), call: Call.optional(), via: Via.optional() })
   .meta({ id: 'NoteBody' })
-export type NoteBody = z.infer<typeof NoteBody>
 
 /** What a note did: `woken` is false with the machine's reason in `detail` when the wake was refused; the note stays. */
 export const NoteAnswer = z
@@ -112,7 +106,6 @@ export const NoteAnswer = z
     issue: QualityIssue,
   })
   .meta({ id: 'NoteAnswer' })
-export type NoteAnswer = z.infer<typeof NoteAnswer>
 
 /**
  * `issue answer`: the legacy form for an Issue's open Decision. Iris sends `{id: callId, answer}`: `id` is the older
@@ -126,10 +119,8 @@ export const IssueAnswerBody = z
     call: Call.optional(),
   })
   .meta({ id: 'IssueAnswerBody' })
-export type IssueAnswerBody = z.infer<typeof IssueAnswerBody>
 
 /** `session note`: a note typed to a lead by its session key. `id` is the legacy name of `call`. */
 export const SessionNoteBody = z
   .strictObject({ text: Text, call: Call.optional(), id: Call.optional(), via: Via.optional() })
   .meta({ id: 'SessionNoteBody' })
-export type SessionNoteBody = z.infer<typeof SessionNoteBody>

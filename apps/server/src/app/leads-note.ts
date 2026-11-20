@@ -28,7 +28,7 @@ export const HOST_RESTARTED =
   'Check git, the pull request and production before you repeat anything that left the machine, then go on.'
 
 /** What a session resumed in a worktree made again is told first: the old tree was removed while it waited. */
-export const WORKTREE_RESTORED =
+const WORKTREE_RESTORED =
   'Your worktree was removed while you waited and has been made again at the same path, on your branch: from your local branch, ' +
   "else from the remote's copy of it, else cut afresh from the default branch. Look at `git log` and `git status`: uncommitted changes " +
   'are not there, and the tree has the setup a new one gets, nothing you installed since. Then go on.'
