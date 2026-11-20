@@ -110,7 +110,7 @@ export const issuesFiled = (sql: SQL, w: Window): Promise<number> =>
 
 /**
  * Issues filed in the window that no loop of the factory filed: what a person, an agent or an alert asked for. A loop files
- * through intake with a finding, so its Issue's intake subject is a finding key (`finding:<loop>:...`, `findingKeyOf`): the
+ * through intake with a finding, so its Issue's intake subject is a finding key (`finding:`, the `FINDING_PREFIX` of intake's rules, which a test holds equal): the
  * friction patterns and the weekly retro, hygiene, selfwatch and throughput alike; `loop_findings` holds the rows the ledger
  * imported from before. The owner-touch rate divides by these, so a week the loops file hundreds of hygiene Issues does not
  * make the owner's touches look rarer.
@@ -529,7 +529,7 @@ async function kpisOf(
       count: touchCount,
       measured: true,
       definition:
-        'Owner actions in the window on an Issue the factory should have settled, divided by the Issues filed in the window that no loop of the factory filed (a person, an agent or an alert asked for them; the friction, hygiene, selfwatch and throughput loops’ Issues are left out): a Decision the owner answered and did not mark worth asking, an owner note, an owner wake, a cancel, a reopen. The first note of a filing, anything the orchestrator did (its own friction line), a verdict on a Concept or Spec and a done Errand are not counted: those are the request or the owner wanted them. Touches of one kind within a minute of the one before count once: one steer sent to a dozen Issues, or one re-planned batch cancelled, is one action. The parts are the touches by kind, per Issue; the count is beside the rate.',
+        'Owner actions in the window on an Issue the factory should have settled, divided by the Issues filed in the window that no loop of the factory filed (a person, an agent or an alert asked for them; the friction, hygiene, selfwatch and throughput loops’ Issues are left out): a Decision the owner answered and did not mark worth asking, an owner note, an owner wake, a cancel, a reopen. The first note of a filing, anything the orchestrator did (its own friction line), a verdict on a Concept or Spec and a done Errand are not counted: those are the request or the owner wanted them. Touches of one kind within a minute of the one before count once: one steer sent to a dozen Issues, or one re-planned batch cancelled, is one action. A touch on an Issue a loop filed counts too: the factory filed work the owner had to step into. The parts are the touches by kind, per Issue; the count is beside the rate.',
       parts: side?.touchParts ?? [],
       beside: side?.touchBeside ?? [],
     }),

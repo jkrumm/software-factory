@@ -38,7 +38,7 @@ export const KPI_CATALOG: Record<KpiKey, KpiSpec> = {
     targetSource:
       'The owner, 2026-11-07, "Maybe 5% is a good KPI, 7% or so": signed as "at most 0.05 to 0.07" (docs/archive/strategy/2026-11-next/definition.html). Read as at most 0.07',
     numerator:
-      'Owner actions on an Issue the factory should have settled (a Decision answered, a note, a wake, a cancel, a reopen; one burst of a kind counts once)',
+      'Owner actions on an Issue the factory should have settled, a loop’s Issues included (a Decision answered, a note, a wake, a cancel, a reopen; one burst of a kind counts once)',
     denominator:
       'Issues filed in the window by a person, an agent or an alert (the factory’s own loops left out: friction, hygiene, selfwatch, throughput)',
     decision:

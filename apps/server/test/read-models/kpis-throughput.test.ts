@@ -4,6 +4,7 @@ import { startTestCluster, type TestCluster } from '@software-factory/tests/pg'
 import type { SQL } from 'bun'
 import { loadMigrations, migrate } from '../../src/adapters/postgres/migrate.ts'
 import { readKpis } from '../../src/read/kpis.ts'
+import { FINDING_PREFIX } from '../../src/domains/intake/rules.ts'
 
 /** The recommendation taken beside the owner's touches, and the catalog fields every KPI carries. */
 let db: TestCluster
@@ -50,6 +51,8 @@ test('an Issue a loop filed (its intake subject a finding key) is left out of th
   // issue_21 is the weekly retro: the friction loop filed it through intake with its finding
   await sql`INSERT INTO factory.intake_subjects (source, subject, issue_id, filed_at, last_seen)
     VALUES ('agent:software-factory', 'finding:friction:retro:software-factory:retro', 'issue_21', ${ago(3)}, ${ago(3)})`
+  // the read matches the prefix as a literal (read/ imports no domain code): it must be the one intake writes
+  expect(FINDING_PREFIX).toBe('finding:')
   const touches = (await read()).kpis.find((k) => k.key === 'avoidable_touches')
   expect(touches).toMatchObject({ n: 1, count: 3 })
   expect(touches?.beside.find((p) => p.key === 'loop_filed')?.value).toBe(1)
