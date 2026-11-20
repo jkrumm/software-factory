@@ -123,9 +123,13 @@ test('the project filter is in the URL and narrows the nodes to the project and 
   await expect(node(page, 'Draft the export schema')).toHaveCount(0)
 })
 
-test('an Issue node links to its page; a plan row does not link', async ({ page }) => {
+test('an Issue node links to its page; a plan row links only to its project', async ({ page }) => {
   await page.goto('/chain')
-  await expect(node(page, 'Draft the export schema').getByRole('link')).toHaveCount(0)
+  // a plan row has no Issue to link to; its project chip is the card's one link, to the project's page
+  const row = node(page, 'Draft the export schema')
+  await expect(row.locator('a[href^="/issues/"]')).toHaveCount(0)
+  await expect(row.getByRole('link')).toHaveCount(1)
+  await expect(row.getByRole('link')).toHaveAttribute('href', '/projects/quartz')
   await node(page, 'Choose the export format').locator('a[href^="/issues/"]').click()
   // a plain click opens the peek over the graph (peek.e2e.ts); the page is "Open full page"
   const panel = page.getByRole('dialog').and(page.locator('[data-peek-panel]'))
